@@ -65,7 +65,7 @@ python3 scripts/report.py 1 --days 7
 
 ```bash
 # Install from GitHub
-pip install git+https://github.com/kezclaw/kezclaw.git#subdirectory=skills/tuya-irrigation
+pip install git+https://github.com/kezclaw/tuya-irrigation.git
 
 # Use CLI (installed as 'tuya-irrigation')
 tuya-irrigation cluster list
@@ -81,36 +81,59 @@ decision = logic.decide_for_cluster(cluster_id=1, current_temp=23.0)
 print(f"Action: {decision['action']}, Confidence: {decision['confidence']:.0%}")
 ```
 
+### HEARTBEAT Integration (Autonomous Operation)
+
+For fully autonomous irrigation via OpenClaw heartbeat:
+
+```bash
+# Add to HEARTBEAT.md:
+. ~/.openclaw/config/secrets.env && \
+WTTR=$(curl -s "wttr.in/Milano?format=%l:+%c+%t+(%f),+pioggia+%p,+vento+%w") && \
+python3 ~/.openclaw/workspace/skills/tuya-irrigation/scripts/auto_irrigate.py --wttr "$WTTR"
+```
+
+The `auto_irrigate.py` script:
+- Parses feels-like temperature from weather data
+- Makes smart irrigation decisions (logic + confidence scoring)
+- Executes irrigation on physical device
+- Logs all decisions to database (even if device execution fails)
+- Silent on skip, verbose only on irrigate/error
+
 ## Architecture
 
 ```
 tuya-irrigation/
-├── src/tuya_irrigation/     # Core package
-│   ├── cli.py               # Main CLI entry point
-│   ├── db.py                # SQLite database management
-│   ├── logic.py             # Smart irrigation decision engine
-│   ├── devices.py           # Tuya device control
-│   ├── plant_db.py          # Evidence-based plant care database
-│   ├── logger_daemon.py     # Sensor data logging daemon
-│   ├── stats.py             # Statistics module
-│   └── report.py            # Report generator
-├── scripts/                 # OpenClaw compatibility wrappers
-│   ├── main.py              # Wrapper for CLI
-│   ├── logger.py            # Wrapper for logger daemon
-│   ├── stats.py             # Wrapper for stats
-│   └── report.py            # Wrapper for report
-├── tools/                   # Development utilities
-│   ├── setup_kez_cluster.py # Initial cluster setup
-│   ├── sync_plant_data.py   # Sync plants with database
-│   ├── test_trends.py       # Test trend analysis
-│   └── add_test_data.py     # Generate test data
-├── tests/                   # Test suite (28 tests)
-│   ├── test_db.py           # Database tests
-│   ├── test_logic.py        # Logic tests
-│   └── test_devices.py      # Device tests
-└── data/                    # Data files
-    ├── plant_database.json  # Evidence-based plant care data
-    └── irrigation.db        # SQLite database
+├── src/tuya_irrigation/         # Core package
+│   ├── cli.py                   # Main CLI entry point
+│   ├── db.py                    # SQLite database management
+│   ├── logic.py                 # Smart irrigation decision engine
+│   ├── devices.py               # Tuya device control (uses tinytuya)
+│   ├── tuya_irrigation.py       # CLI wrapper for tinytuya device control
+│   ├── plant_db.py              # Evidence-based plant care database
+│   ├── logger_daemon.py         # Sensor data logging daemon
+│   ├── stats.py                 # Statistics module
+│   └── report.py                # Report generator
+├── scripts/                     # OpenClaw compatibility wrappers
+│   ├── main.py                  # Wrapper for CLI
+│   ├── auto_irrigate.py         # HEARTBEAT entrypoint (autonomous operation)
+│   ├── logger.py                # Wrapper for logger daemon
+│   ├── stats.py                 # Wrapper for stats
+│   └── report.py                # Wrapper for report
+├── tools/                       # Development utilities
+│   ├── cluster.local.json.example  # Template for personal config
+│   ├── setup_kez_cluster.py     # Initial cluster setup (reads cluster.local.json)
+│   ├── sync_plant_data.py       # Sync plants with database
+│   ├── test_trends.py           # Test trend analysis
+│   └── add_test_data.py         # Generate test data
+├── tests/                       # Test suite (28 tests)
+│   ├── fake_data.py             # Centralized fake test data (RFC 5737 IPs)
+│   ├── test_db.py               # Database tests (9 tests)
+│   ├── test_logic.py            # Logic tests (11 tests)
+│   └── test_devices.py          # Device tests (8 tests)
+└── data/                        # Data files
+    ├── plant_database.json      # Evidence-based plant care data
+    ├── irrigation.db            # SQLite database (gitignored)
+    └── schema.sql               # Database schema
 
 ```
 
