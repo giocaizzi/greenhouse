@@ -74,29 +74,41 @@ def main():
         print(f"   Reason: {reason}")
         print(f"   Temp: {temp}°C")
 
-        # Actually trigger irrigation
-        from tuya_irrigation.devices import TuyaDeviceManager  # noqa: E402
-
+        # Get irrigator
         irrigators = db.get_irrigators_in_cluster(args.cluster)
         if not irrigators:
             print(f"❌ No irrigators found in cluster {args.cluster}", file=sys.stderr)
             return 1
 
         irrigator = irrigators[0]
-        manager = TuyaDeviceManager()
-        success, output = manager.irrigator_start(irrigator, minutes=duration)
-        if success:
-            db.add_irrigation_event(
-                irrigator_id=irrigator.id,
-                action="start",
-                duration_minutes=duration,
-                triggered_by="auto_heartbeat",
-                notes=f"temp={temp}°C, confidence={confidence:.0%}, reason={reason}",
-            )
+
+        # Try to execute irrigation (log decision even if device control fails)
+        device_success = False
+        device_error = None
+        
+        try:
+            from tuya_irrigation.devices import TuyaDeviceManager  # noqa: E402
+            manager = TuyaDeviceManager()
+            device_success, output = manager.irrigator_start(irrigator, minutes=duration)
+            if not device_success:
+                device_error = output
+        except Exception as e:
+            device_error = str(e)
+        
+        # Always log the decision (even if device execution failed)
+        db.add_irrigation_event(
+            irrigator_id=irrigator.id,
+            action="start" if device_success else "attempted",
+            duration_minutes=duration,
+            triggered_by="auto_heartbeat",
+            notes=f"temp={temp}°C, confidence={confidence:.0%}, reason={reason}, device_success={device_success}",
+        )
+        
+        if device_success:
             print("✅ Irrigation started successfully")
         else:
-            print(f"❌ Irrigation failed: {output}", file=sys.stderr)
-            return 1
+            print(f"⚠️  Decision logged but device execution failed: {device_error}", file=sys.stderr)
+            # Don't return error — we still logged the decision
     elif action == "skip":
         # Silent on skip — heartbeat shouldn't be noisy
         pass

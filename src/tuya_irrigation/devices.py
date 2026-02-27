@@ -98,25 +98,20 @@ class TuyaDeviceManager:
         """Start irrigation with optional duration."""
         use_local = irrigator.type == "tuya_local"
 
-        if use_local and minutes is not None:
-            # For local mode with duration, use "set" command
-            config = json.loads(irrigator.config)
-            interval = config.get("interval_hours", 12)
+        if minutes is not None:
+            # Start with duration (works for both local and cloud)
+            args = ["start", "--minutes", str(minutes)]
+            if use_local:
+                args.insert(0, "local")
+            
             code, output = self._run_tuya_script(
                 irrigator.tuya_device_id,
-                "local",
-                "set",
-                "--minutes",
-                str(minutes),
-                "--every-hours",
-                str(interval),
-                "--auto-run",
-                "true",
-                use_local=True,
+                *args,
+                use_local=use_local,
             )
             return code == 0, output
 
-        # Cloud mode or local without duration
+        # No duration — just turn on
         args = ["start"]
         if minutes:
             args.extend(["--minutes", str(minutes)])
