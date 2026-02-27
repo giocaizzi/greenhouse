@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = {text = "MIT"}
 authors = [
-    {name = "Kezclaw"}
+    {name = "Kezclaw", email = "kezclaw@gmail.com"}
 ]
 keywords = ["irrigation", "smart-home", "tuya", "plant-care", "iot"]
 classifiers = [
