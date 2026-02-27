@@ -93,10 +93,10 @@ def main():
     )
     print("✅ Initial config set (mode: schedule)")
 
-    print(f"\n🎉 Setup complete!")
+    print("\n🎉 Setup complete!")
     print(f"\nCluster ID: {cluster_id}")
     print(f"Irrigator ID: {irrigator_id}")
-    print(f"\nYou can now use:")
+    print("\nYou can now use:")
     print(f"  python3 scripts/main.py analyze {cluster_id}")
     print(f"  python3 scripts/main.py auto-irrigate {cluster_id} --temp <temp>")
 
