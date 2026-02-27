@@ -11,6 +11,10 @@ from tuya_irrigation.models import Irrigator, Sensor
 
 SCRIPT_TUYA = Path(__file__).parent / "tuya_irrigation.py"
 
+# Prefer venv python if available
+VENV_PYTHON = Path(__file__).parent.parent.parent / ".venv" / "bin" / "python3"
+PYTHON_EXEC = str(VENV_PYTHON) if VENV_PYTHON.exists() else sys.executable
+
 
 class TuyaDeviceManager:
     """Manages Tuya irrigators and sensors via existing tuya_irrigation.py script."""
@@ -28,7 +32,7 @@ class TuyaDeviceManager:
         env = os.environ.copy()
         env["TUYA_DEVICE_ID"] = device_id
 
-        cmd = [sys.executable, str(SCRIPT_TUYA)]
+        cmd = [PYTHON_EXEC, str(SCRIPT_TUYA)]
         if use_local:
             cmd.append("local")
         cmd.extend(args)
@@ -100,9 +104,8 @@ class TuyaDeviceManager:
 
         if minutes is not None:
             # Start with duration (works for both local and cloud)
+            # Don't add "local" prefix here — _run_tuya_script handles it
             args = ["start", "--minutes", str(minutes)]
-            if use_local:
-                args.insert(0, "local")
             
             code, output = self._run_tuya_script(
                 irrigator.tuya_device_id,

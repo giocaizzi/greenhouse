@@ -120,35 +120,30 @@ def cmd_start(device, use_local, minutes):
 
 
 def main():
+    # Simple manual parsing for "local" prefix
+    args_list = sys.argv[1:]
+    use_local_mode = False
+    
+    if args_list and args_list[0] == "local":
+        use_local_mode = True
+        args_list = args_list[1:]  # Remove "local" prefix
+    
+    # Now parse the actual command
     parser = argparse.ArgumentParser(description="Tuya device control CLI")
-    parser.add_argument("command", choices=["status", "on", "off", "start", "local"])
-    parser.add_argument("subcommand", nargs="?", help="Subcommand for 'local' mode")
+    parser.add_argument("command", choices=["status", "on", "off", "start"])
     parser.add_argument("--minutes", type=int, help="Duration for 'start' command")
     
-    # Parse known args to handle flexible ordering
-    args, unknown = parser.parse_known_args()
-    
-    # If there are unknown args and --minutes wasn't parsed, try to find it
-    if unknown and not args.minutes:
-        i = 0
-        while i < len(unknown):
-            if unknown[i] == "--minutes" and i + 1 < len(unknown):
-                args.minutes = int(unknown[i + 1])
-                break
-            i += 1
+    args = parser.parse_args(args_list)  # Parse from cleaned args_list
     
     device, use_local = get_device()
     
-    # Handle 'local' mode prefix
-    if args.command == "local":
-        if not args.subcommand:
-            parser.error("'local' requires a subcommand (status, on, off, start)")
-        command = args.subcommand
-        use_local = True  # Force local mode
-    else:
-        command = args.command
+    # Override use_local if "local" prefix was given
+    if use_local_mode:
+        use_local = True
     
     # Execute command
+    command = args.command
+    
     if command == "status":
         return cmd_status(device, use_local)
     elif command == "on":
