@@ -15,14 +15,14 @@ def get_device():
     device_ip = os.environ.get("TUYA_DEVICE_IP")
     local_key = os.environ.get("TUYA_LOCAL_KEY")
     region = os.environ.get("TUYA_REGION", "eu")
-    
+
     if not device_id:
         print("ERROR: TUYA_DEVICE_ID not set", file=sys.stderr)
         sys.exit(1)
-    
+
     # Determine if we should use local or cloud
     use_local = device_ip and local_key
-    
+
     if use_local:
         # Local mode (faster, more reliable)
         device = tinytuya.OutletDevice(device_id, device_ip, local_key)
@@ -31,18 +31,18 @@ def get_device():
         # Cloud mode
         client_id = os.environ.get("TUYA_CLIENT_ID")
         client_secret = os.environ.get("TUYA_CLIENT_SECRET")
-        
+
         if not all([client_id, client_secret]):
             print("ERROR: TUYA_CLIENT_ID or TUYA_CLIENT_SECRET not set", file=sys.stderr)
             sys.exit(1)
-        
+
         cloud = tinytuya.Cloud(
             apiRegion=region,
             apiKey=client_id,
             apiSecret=client_secret,
         )
         device = cloud.getdevice(device_id)
-    
+
     return device, use_local
 
 
@@ -53,9 +53,9 @@ def cmd_status(device, use_local):
             status = device.status()
         else:
             status = device.status()  # Cloud API
-        
+
         print(json.dumps(status, indent=2))
-        
+
         # Parse for human-readable output
         if "dps" in status:
             dps = status["dps"]
@@ -64,7 +64,7 @@ def cmd_status(device, use_local):
             print(f"\nState: {'ON' if switch_on else 'OFF'}")
             if timer_left > 0:
                 print(f"Time remaining: {timer_left // 60} min")
-        
+
         return 0
     except Exception as e:
         print(f"ERROR: {e}", file=sys.stderr)
@@ -111,7 +111,7 @@ def cmd_start(device, use_local, minutes):
             device.turn_on()
             # Cloud API for timer (adjust based on device)
             device.set_value(11, minutes * 60)
-        
+
         print(f"Irrigation started for {minutes} minutes")
         return 0
     except Exception as e:
@@ -123,27 +123,27 @@ def main():
     # Simple manual parsing for "local" prefix
     args_list = sys.argv[1:]
     use_local_mode = False
-    
+
     if args_list and args_list[0] == "local":
         use_local_mode = True
         args_list = args_list[1:]  # Remove "local" prefix
-    
+
     # Now parse the actual command
     parser = argparse.ArgumentParser(description="Tuya device control CLI")
     parser.add_argument("command", choices=["status", "on", "off", "start"])
     parser.add_argument("--minutes", type=int, help="Duration for 'start' command")
-    
+
     args = parser.parse_args(args_list)  # Parse from cleaned args_list
-    
+
     device, use_local = get_device()
-    
+
     # Override use_local if "local" prefix was given
     if use_local_mode:
         use_local = True
-    
+
     # Execute command
     command = args.command
-    
+
     if command == "status":
         return cmd_status(device, use_local)
     elif command == "on":

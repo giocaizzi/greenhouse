@@ -43,3 +43,4 @@ data/*.db-shm
 
 # Local user config (contains personal data)
 tools/cluster.local.json
+node_modules/

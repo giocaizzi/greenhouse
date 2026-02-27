@@ -85,7 +85,7 @@ def main():
         # Try to execute irrigation (log decision even if device control fails)
         device_success = False
         device_error = None
-        
+
         try:
             from tuya_irrigation.devices import TuyaDeviceManager  # noqa: E402
             manager = TuyaDeviceManager()
@@ -94,7 +94,7 @@ def main():
                 device_error = output
         except Exception as e:
             device_error = str(e)
-        
+
         # Always log the decision (even if device execution failed)
         db.add_irrigation_event(
             irrigator_id=irrigator.id,
@@ -103,7 +103,7 @@ def main():
             triggered_by="auto_heartbeat",
             notes=f"temp={temp}°C, confidence={confidence:.0%}, reason={reason}, device_success={device_success}",
         )
-        
+
         if device_success:
             print("✅ Irrigation started successfully")
         else:

@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Device management for Tuya irrigators and sensors."""
 
-import json
 import os
 import subprocess
 import sys
@@ -106,7 +105,7 @@ class TuyaDeviceManager:
             # Start with duration (works for both local and cloud)
             # Don't add "local" prefix here — _run_tuya_script handles it
             args = ["start", "--minutes", str(minutes)]
-            
+
             code, output = self._run_tuya_script(
                 irrigator.tuya_device_id,
                 *args,
