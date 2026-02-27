@@ -26,7 +26,7 @@ def get_device():
     if use_local:
         # Local mode (faster, more reliable)
         device = tinytuya.OutletDevice(device_id, device_ip, local_key)
-        device.set_version(3.3)
+        device.set_version(3.5)  # Rainpoint IK10PW requires protocol v3.5
     else:
         # Cloud mode
         client_id = os.environ.get("TUYA_CLIENT_ID")
