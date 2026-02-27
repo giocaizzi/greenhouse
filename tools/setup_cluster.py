@@ -5,10 +5,10 @@ Usage:
     # Use local config file (recommended, gitignored):
     cp tools/cluster.local.json.example tools/cluster.local.json
     # edit cluster.local.json with your values
-    python3 tools/setup_kez_cluster.py
+    python3 tools/setup_cluster.py
 
     # Or pass env vars directly:
-    TUYA_DEVICE_ID=xxx python3 tools/setup_kez_cluster.py
+    TUYA_DEVICE_ID=xxx python3 tools/setup_cluster.py
 """
 
 import json

@@ -4,12 +4,12 @@ Utility scripts for development, testing, and setup.
 
 ## Scripts
 
-### `setup_kez_cluster.py`
+### `setup_cluster.py`
 
 Initialize your irrigation cluster with plants and irrigator.
 
 ```bash
-python3 tools/setup_kez_cluster.py
+python3 tools/setup_cluster.py
 ```
 
 Creates:
@@ -118,7 +118,7 @@ if __name__ == "__main__":
 
 - All tools modify the database — use with caution in production
 - Test data tools (add_test_data.py) should only be used in dev/test environments
-- setup_kez_cluster.py is idempotent — safe to run multiple times
+- setup_cluster.py is idempotent — safe to run multiple times
 - sync_plant_data.py updates plants in-place — no data loss
 
 ---

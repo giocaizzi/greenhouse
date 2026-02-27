@@ -51,7 +51,7 @@ Run the setup script (pre-configured from `tools/cluster.local.json`):
 
 ```bash
 . ~/.openclaw/config/secrets.env && \
-python3 ~/.openclaw/workspace/skills/tuya-irrigation/scripts/setup_kez_cluster.py
+python3 ~/.openclaw/workspace/skills/tuya-irrigation/scripts/setup_cluster.py
 ```
 
 This creates:
@@ -289,7 +289,7 @@ See legacy `tuya_irrigation.py` docs for detailed DP mappings. Common DPs:
 . ~/.openclaw/config/secrets.env
 
 # Initialize cluster from tools/cluster.local.json
-python3 setup_kez_cluster.py
+python3 setup_cluster.py
 
 # Sync plants with evidence-based data from literature
 python3 sync_plant_data.py

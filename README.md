@@ -121,7 +121,7 @@ tuya-irrigation/
 │   └── report.py                # Wrapper for report
 ├── tools/                       # Development utilities
 │   ├── cluster.local.json.example  # Template for personal config
-│   ├── setup_kez_cluster.py     # Initial cluster setup (reads cluster.local.json)
+│   ├── setup_cluster.py     # Initial cluster setup (reads cluster.local.json)
 │   ├── sync_plant_data.py       # Sync plants with database
 │   ├── test_trends.py           # Test trend analysis
 │   └── add_test_data.py         # Generate test data

@@ -28,7 +28,7 @@
 cd ~/.openclaw/workspace/skills/tuya-irrigation/scripts
 
 # 1. Setup
-python3 setup_kez_cluster.py
+python3 setup_cluster.py
 
 # 2. Verify data
 python3 main.py cluster list
