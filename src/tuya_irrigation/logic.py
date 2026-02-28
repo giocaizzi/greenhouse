@@ -66,7 +66,9 @@ class IrrigationLogic:
 
         # If no sensors, use temperature-based fallback
         if not sensors or not sensor_data:
-            return self._temperature_based_decision(current_temp, water_needs_level, ideal_temp_range, config)
+            return self._temperature_based_decision(
+                current_temp, water_needs_level, ideal_temp_range, config, cluster_id
+            )
 
         # Smart decision based on sensor data + trends
         avg_temp = sensor_data.get("avg_temperature")
@@ -393,6 +395,7 @@ class IrrigationLogic:
         water_needs: str,
         temp_range: tuple[float, float] | None,
         config: IrrigationConfig | None,
+        cluster_id: int,
     ) -> dict:
         """Fallback to temperature-based logic when no sensor data available."""
         if temp is None:
@@ -429,6 +432,22 @@ class IrrigationLogic:
         elif water_needs == "low":
             interval = min(24, interval + 6)
 
+        # CRITICAL: Check last irrigation time to respect cooldown
+        irrigators = self.db.get_irrigators_in_cluster(cluster_id)
+        if irrigators:
+            recent_events = self.db.get_recent_events(irrigators[0].id, hours=interval)
+            irrigation_events = [e for e in recent_events if e.action in ("start", "schedule_updated")]
+            if irrigation_events:
+                # Found recent irrigation → skip
+                return {
+                    "action": "skip",
+                    "duration_minutes": 2,
+                    "interval_hours": interval,
+                    "reason": f"cooldown active (last irrigation < {interval}h ago)",
+                    "confidence": 0.9,
+                }
+
+        # No recent irrigation → irrigate
         return {
             "action": "irrigate",
             "duration_minutes": 2,
