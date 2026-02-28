@@ -8,6 +8,7 @@ from pathlib import Path
 
 from tuya_irrigation.db import IrrigationDB
 from tuya_irrigation.stats import get_irrigation_stats
+from tuya_irrigation.utils import format_timestamp
 
 
 def generate_report(db: IrrigationDB, cluster_id: int, days: int) -> str:
@@ -23,7 +24,7 @@ def generate_report(db: IrrigationDB, cluster_id: int, days: int) -> str:
     # Build report
     lines = []
     lines.append(f"🌱 Irrigation Report: {cluster.name}")
-    lines.append(f"📅 Period: {time.strftime('%Y-%m-%d')} (last {days} days)")
+    lines.append(f"📅 Period: {format_timestamp(time.time(), fmt='%Y-%m-%d')} (last {days} days)")
     lines.append("")
 
     if stats["irrigations"]:
@@ -44,7 +45,7 @@ def generate_report(db: IrrigationDB, cluster_id: int, days: int) -> str:
         # Recent activity
         lines.append("📋 Recent irrigations:")
         for irr in stats["irrigations"][-5:]:
-            ts = time.strftime("%m/%d %H:%M", time.localtime(irr["timestamp"]))
+            ts = format_timestamp(irr["timestamp"], fmt="%m/%d %H:%M")
             lines.append(f"• {ts}: {irr['duration_minutes']}min ({irr['triggered_by']})")
     else:
         lines.append("ℹ️ No irrigations in this period")

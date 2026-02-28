@@ -9,6 +9,7 @@ from pathlib import Path
 from tuya_irrigation.db import IrrigationDB
 from tuya_irrigation.devices import TuyaDeviceManager
 from tuya_irrigation.logic import IrrigationLogic
+from tuya_irrigation.utils import format_timestamp
 
 
 def cmd_cluster_add(args, db: IrrigationDB):
@@ -380,7 +381,7 @@ def cmd_log_readings(args, db: IrrigationDB):
 
         print(f"\n📊 {sensor.name} (last {args.hours}h, {len(readings)} readings):")
         for r in readings[:10]:  # Show last 10
-            ts = time.strftime("%Y-%m-%d %H:%M", time.localtime(r.timestamp))
+            ts = format_timestamp(r.timestamp)
             parts = [ts]
             if r.temperature is not None:
                 parts.append(f"temp={r.temperature:.1f}°C")
@@ -410,7 +411,7 @@ def cmd_log_events(args, db: IrrigationDB):
 
         print(f"\n💧 {irrigator.name} (last {args.hours}h, {len(events)} events):")
         for e in events[:10]:  # Show last 10
-            ts = time.strftime("%Y-%m-%d %H:%M", time.localtime(e.timestamp))
+            ts = format_timestamp(e.timestamp)
             dur = f" ({e.duration_minutes}min)" if e.duration_minutes else ""
             print(f"  {ts} | {e.action}{dur} [{e.triggered_by}]")
             if e.notes:

@@ -7,6 +7,7 @@ from collections import defaultdict
 from pathlib import Path
 
 from tuya_irrigation.db import IrrigationDB
+from tuya_irrigation.utils import format_timestamp
 
 
 def format_duration(minutes: int) -> str:
@@ -97,7 +98,7 @@ def print_stats_report(stats: dict, cluster_name: str):
     if stats["irrigations"]:
         print("\n💧 Recent irrigations:")
         for irr in stats["irrigations"][-5:]:  # Last 5
-            ts = time.strftime("%Y-%m-%d %H:%M", time.localtime(irr["timestamp"]))
+            ts = format_timestamp(irr["timestamp"])
             print(f"   {ts} | {format_duration(irr['duration_minutes'])} | {irr['triggered_by']} | {irr['irrigator']}")
 
 
@@ -119,8 +120,8 @@ def export_csv(db: IrrigationDB, cluster_id: int, days: int, output_path: str):
             for event in events:
                 if event.timestamp < cutoff:
                     continue
-                date_str = time.strftime("%Y-%m-%d", time.localtime(event.timestamp))
-                time_str = time.strftime("%H:%M:%S", time.localtime(event.timestamp))
+                date_str = format_timestamp(event.timestamp, fmt="%Y-%m-%d")
+                time_str = format_timestamp(event.timestamp, fmt="%H:%M:%S")
                 writer.writerow(
                     [
                         event.timestamp,
