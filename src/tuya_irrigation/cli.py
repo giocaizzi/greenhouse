@@ -198,6 +198,24 @@ def cmd_irrigator_start(args, db: IrrigationDB, dm: TuyaDeviceManager):
         return 1
 
 
+def cmd_irrigator_log_manual(args, db: IrrigationDB):
+    """Log a manual irrigation event without device control."""
+    irrigator = db.get_irrigator(args.id)
+    if not irrigator:
+        print(f"❌ Irrigator {args.id} not found")
+        return 1
+
+    notes = args.notes or f"Manual irrigation logged via CLI ({args.minutes} min)"
+    db.add_irrigation_event(
+        irrigator_id=irrigator.id,
+        action="start",
+        duration_minutes=args.minutes,
+        triggered_by="manual",
+        notes=notes,
+    )
+    print(f"✅ Logged manual irrigation: {irrigator.name} for {args.minutes} min")
+
+
 def cmd_sensor_add(args, db: IrrigationDB):
     """Add a sensor device to a cluster."""
     config = {}
@@ -486,6 +504,10 @@ def main():
     p_irr_start = irr_sub.add_parser("start", help="Start irrigation")
     p_irr_start.add_argument("id", type=int, help="Irrigator ID")
     p_irr_start.add_argument("--minutes", type=int, help="Duration in minutes")
+    p_irr_log = irr_sub.add_parser("log-manual", help="Log manual irrigation (without device control)")
+    p_irr_log.add_argument("id", type=int, help="Irrigator ID")
+    p_irr_log.add_argument("--minutes", type=int, required=True, help="Duration in minutes")
+    p_irr_log.add_argument("--notes", help="Optional notes")
 
     # Sensor commands
     p_sensor = sub.add_parser("sensor", help="Manage sensors")
@@ -587,6 +609,8 @@ def main():
                 return cmd_irrigator_off(args, db, dm)
             elif args.irrigator_cmd == "start":
                 return cmd_irrigator_start(args, db, dm)
+            elif args.irrigator_cmd == "log-manual":
+                return cmd_irrigator_log_manual(args, db)
 
         elif args.command == "sensor":
             if args.sensor_cmd == "add":

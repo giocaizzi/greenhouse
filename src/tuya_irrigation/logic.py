@@ -2,6 +2,7 @@
 """Smart irrigation logic based on sensor data, plant needs, and scientific literature."""
 
 import statistics
+import time
 
 from tuya_irrigation.db import IrrigationDB
 from tuya_irrigation.models import IrrigationConfig
@@ -39,6 +40,25 @@ class IrrigationLogic:
 
         sensors = self.db.get_sensors_in_cluster(cluster_id)
         config = self.db.get_irrigation_config(cluster_id)
+
+        # GLOBAL COOLDOWN: Check recent irrigation events from ANY trigger
+        # This prevents over-watering even if manual/test irrigations happened
+        min_interval_hours = 6  # Minimum cooldown between any irrigations
+        irrigators = self.db.get_irrigators_in_cluster(cluster_id)
+        if irrigators:
+            recent_events = self.db.get_recent_events(irrigators[0].id, hours=min_interval_hours)
+            irrigation_events = [e for e in recent_events if e.action == "start"]
+            if irrigation_events:
+                last_event = irrigation_events[0]
+                trigger = last_event.triggered_by
+                hours_ago = (int(time.time()) - last_event.timestamp) / 3600
+                return {
+                    "action": "skip",
+                    "duration_minutes": 2,
+                    "interval_hours": min_interval_hours,
+                    "reason": f"cooldown active (last irrigation {hours_ago:.1f}h ago, trigger: {trigger})",
+                    "confidence": 0.9,
+                }
 
         # Collect recent sensor data
         sensor_data = self._get_recent_sensor_data(cluster_id, hours=24)
