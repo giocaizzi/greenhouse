@@ -2,11 +2,9 @@
 """OpenClaw compatibility wrapper for report generator."""
 
 import sys
-from pathlib import Path
 
-# Add src to path for package imports
-skill_root = Path(__file__).parent.parent
-sys.path.insert(0, str(skill_root / "src"))
+# Initialize path for package imports
+import _init_path  # noqa: F401
 
 # Import and run report
 from tuya_irrigation.report import main  # noqa: E402

@@ -11,6 +11,24 @@ from tuya_irrigation.logic import IrrigationLogic
 from tuya_irrigation.utils import format_timestamp
 
 
+# ── Helper Functions ──────────────────────────────────────────────────────────
+
+
+def _get_irrigator_or_exit(db: IrrigationDB, irrigator_id: int):
+    """Get irrigator by ID or exit with error message.
+    
+    Returns irrigator object on success, exits with code 1 on failure.
+    """
+    irrigator = db.get_irrigator(irrigator_id)
+    if not irrigator:
+        print(f"❌ Irrigator {irrigator_id} not found")
+        sys.exit(1)
+    return irrigator
+
+
+# ── Command Functions ─────────────────────────────────────────────────────────
+
+
 def cmd_cluster_add(args, db: IrrigationDB):
     """Add a new cluster."""
     cluster_id = db.add_cluster(args.name, args.location)
@@ -114,10 +132,7 @@ def cmd_irrigator_list(args, db: IrrigationDB):
 
 def cmd_irrigator_status(args, db: IrrigationDB, dm: TuyaDeviceManager):
     """Get irrigator status."""
-    irrigator = db.get_irrigator(args.id)
-    if not irrigator:
-        print(f"❌ Irrigator {args.id} not found")
-        return 1
+    irrigator = _get_irrigator_or_exit(db, args.id)
 
     print(f"💧 {irrigator.name} status:")
     status = dm.irrigator_status(irrigator)
@@ -134,10 +149,7 @@ def cmd_irrigator_status(args, db: IrrigationDB, dm: TuyaDeviceManager):
 
 def cmd_irrigator_on(args, db: IrrigationDB, dm: TuyaDeviceManager):
     """Turn irrigator ON."""
-    irrigator = db.get_irrigator(args.id)
-    if not irrigator:
-        print(f"❌ Irrigator {args.id} not found")
-        return 1
+    irrigator = _get_irrigator_or_exit(db, args.id)
 
     success, output = dm.irrigator_on(irrigator)
     if success:
@@ -155,10 +167,7 @@ def cmd_irrigator_on(args, db: IrrigationDB, dm: TuyaDeviceManager):
 
 def cmd_irrigator_off(args, db: IrrigationDB, dm: TuyaDeviceManager):
     """Turn irrigator OFF."""
-    irrigator = db.get_irrigator(args.id)
-    if not irrigator:
-        print(f"❌ Irrigator {args.id} not found")
-        return 1
+    irrigator = _get_irrigator_or_exit(db, args.id)
 
     success, output = dm.irrigator_off(irrigator)
     if success:
@@ -176,10 +185,7 @@ def cmd_irrigator_off(args, db: IrrigationDB, dm: TuyaDeviceManager):
 
 def cmd_irrigator_start(args, db: IrrigationDB, dm: TuyaDeviceManager):
     """Start irrigation with optional duration."""
-    irrigator = db.get_irrigator(args.id)
-    if not irrigator:
-        print(f"❌ Irrigator {args.id} not found")
-        return 1
+    irrigator = _get_irrigator_or_exit(db, args.id)
 
     success, output = dm.irrigator_start(irrigator, args.minutes)
     if success:
@@ -199,10 +205,7 @@ def cmd_irrigator_start(args, db: IrrigationDB, dm: TuyaDeviceManager):
 
 def cmd_irrigator_log_manual(args, db: IrrigationDB):
     """Log a manual irrigation event without device control."""
-    irrigator = db.get_irrigator(args.id)
-    if not irrigator:
-        print(f"❌ Irrigator {args.id} not found")
-        return 1
+    irrigator = _get_irrigator_or_exit(db, args.id)
 
     notes = args.notes or f"Manual irrigation logged via CLI ({args.minutes} min)"
     db.add_irrigation_event(

@@ -5,11 +5,9 @@ This script ensures the irrigation logger works seamlessly within OpenClaw skill
 """
 
 import sys
-from pathlib import Path
 
-# Add src to path for package imports
-skill_root = Path(__file__).parent.parent
-sys.path.insert(0, str(skill_root / "src"))
+# Initialize path for package imports
+import _init_path  # noqa: F401
 
 # Import and run logger daemon
 from tuya_irrigation.logger_daemon import main  # noqa: E402

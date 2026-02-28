@@ -11,11 +11,9 @@ Usage (from HEARTBEAT.md):
 import argparse
 import re
 import sys
-from pathlib import Path
 
-# Add src to path for package imports
-skill_root = Path(__file__).parent.parent
-sys.path.insert(0, str(skill_root / "src"))  # noqa: E402
+# Initialize path for package imports
+import _init_path  # noqa: F401
 
 from tuya_irrigation.db import IrrigationDB  # noqa: E402
 from tuya_irrigation.logic import IrrigationLogic  # noqa: E402
