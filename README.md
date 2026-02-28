@@ -16,13 +16,16 @@ Modern Python package for automated plant irrigation using evidence-based plant 
 - Irrigation frequency pattern analysis
 
 🤖 **Smart Decision Engine**
-- Priority system: stress override → sensor logic → temperature fallback
+- Priority system: **global cooldown** → stress override → sensor logic → temperature fallback
+- **Global cooldown enforcement**: minimum 6h between ANY irrigations (auto/manual/test)
 - Confidence scoring (95% with stress detection, 60% fallback)
 - Multi-plant cluster support
 - Temperature-based fallback when no sensors
 
 💧 **Comprehensive Logging**
 - Every irrigation decision logged with full context
+- **Manual irrigation logging** without device control
+- **Timezone-aware timestamps** (Europe/Rome CET/CEST)
 - Statistics and periodic reports
 - CSV export for external analysis
 - Automatic tracking of water usage
@@ -51,7 +54,10 @@ python3 scripts/main.py analyze 1 --temp 23
 . ~/.openclaw/config/secrets.env
 python3 scripts/main.py auto-irrigate 1 --temp 23
 
-# View recent events with summary
+# Log manual irrigation (e.g., you watered by hand)
+python3 scripts/main.py irrigator log-manual 1 --minutes 5 --notes "Watered with watering can"
+
+# View recent events with summary (timestamps in CET/CEST)
 python3 scripts/main.py log events --cluster 1 --hours 48
 
 # Statistics (last 7 days)
@@ -71,6 +77,7 @@ pip install git+https://github.com/kezclaw/tuya-irrigation.git
 tuya-irrigation cluster list
 tuya-irrigation analyze 1 --temp 23
 tuya-irrigation auto-irrigate 1 --temp 23
+tuya-irrigation irrigator log-manual 1 --minutes 5
 
 # Use programmatically (import as 'tuya_irrigation')
 from tuya_irrigation import IrrigationDB, IrrigationLogic, TuyaDeviceManager

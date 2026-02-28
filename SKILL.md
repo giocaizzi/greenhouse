@@ -240,11 +240,11 @@ For continuous logging, run as a background process or via cron:
 
 ## System Status
 
-✅ **Fully Operational** (as of 2026-02-27)
+✅ **Fully Operational** (as of 2026-02-28)
 
 | Component | Status |
 |---|---|
-| Decision logic | ✅ Working (temperature-based + sensor-driven) |
+| Decision logic | ✅ Working (temperature-based + sensor-driven + global cooldown) |
 | Database logging | ✅ Active (all events tracked) |
 | Device execution | ✅ Working (Tuya local mode via tinytuya) |
 | HEARTBEAT integration | ✅ Configured (`auto_irrigate.py`) |
@@ -256,6 +256,54 @@ For continuous logging, run as a background process or via cron:
 - Supports: `status`, `on`, `off`, `start --minutes N`
 - Supports both local and cloud mode (local preferred for speed)
 - Used internally by `devices.py` → `TuyaDeviceManager`
+
+## Recent Updates (2026-02-28)
+
+### 🔒 Global Cooldown Enforcement
+**Minimum 6h between ANY irrigations** (auto/manual/test) to prevent over-watering.
+
+- Pre-check in `decide_for_cluster()` BEFORE all other logic
+- Respects manual/test irrigations from any trigger
+- Prevents stress-override from triggering too soon after manual watering
+- Clear reason: "cooldown active (last irrigation 0.0h ago, trigger: manual)"
+
+**Example workflow:**
+```bash
+# You water by hand
+python3 main.py irrigator log-manual 1 --minutes 5 --notes "Watered with watering can"
+
+# Auto-heartbeat skips for 6h
+→ Action: skip, Reason: cooldown active (trigger: manual)
+```
+
+### 📝 Manual Irrigation Logging
+**New command to log manual irrigations without device control:**
+
+```bash
+python3 main.py irrigator log-manual <id> --minutes <duration> [--notes "..."]
+```
+
+**Use cases:**
+- Just watered by hand with a watering can
+- Someone else watered the plants
+- Rainwater collection was used
+- Manual hose watering
+
+**Why it matters:** Manual irrigations now count toward cooldown, preventing system from over-watering after you've already watered.
+
+### 🕒 Timezone-Aware Timestamps
+**All log outputs now display in Europe/Rome (CET/CEST)** instead of UTC.
+
+- Database continues to store UTC (no breaking changes)
+- All CLI output shows local time
+- Configurable via `IRRIGATION_TZ` environment variable
+- Example: `2026-02-28 10:04` (CET) instead of `2026-02-28 09:04` (UTC)
+
+**Commands affected:**
+- `log events` - irrigation history
+- `log readings` - sensor history
+- `log stats` - statistics summaries
+- `report.py` - periodic reports
 
 ## Database Schema
 

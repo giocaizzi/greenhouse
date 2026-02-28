@@ -3,7 +3,6 @@
 
 import argparse
 import sys
-import time
 from pathlib import Path
 
 from tuya_irrigation.db import IrrigationDB
