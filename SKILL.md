@@ -4,7 +4,7 @@ description: |
   Smart irrigation system for Tuya-based devices with sensor integration.
   Features: cluster management, plant profiles, sensor data logging, smart irrigation logic.
   Use when: managing irrigation, adding plants/sensors, analyzing conditions, auto-watering.
-  Requires: TUYA_CLIENT_ID, TUYA_CLIENT_SECRET in secrets.env.
+  Requires: TUYA_CLIENT_ID, TUYA_CLIENT_SECRET in ~/.openclaw/.env.
 ---
 
 # Tuya Smart Irrigation System
@@ -30,7 +30,7 @@ Complete irrigation management with plant profiles, sensor integration, and smar
 
 ### 1. Environment Variables
 
-Add to `~/.openclaw/config/secrets.env`:
+Add to `~/.openclaw/.env`:
 
 ```bash
 TUYA_CLIENT_ID=your_client_id
@@ -50,7 +50,7 @@ TUYA_LOCAL_KEY=xxxxxxxxxxxxxxxx
 Run the setup script (pre-configured from `tools/cluster.local.json`):
 
 ```bash
-. ~/.openclaw/config/secrets.env && \
+# Env vars loaded automatically by OpenClaw && \
 python3 ~/.openclaw/workspace/skills/tuya-irrigation/scripts/setup_cluster.py
 ```
 
@@ -199,7 +199,7 @@ For fully autonomous irrigation via OpenClaw heartbeat, use the dedicated `auto_
 
 ```bash
 # HEARTBEAT.md entry:
-. ~/.openclaw/config/secrets.env && \
+# Env vars loaded automatically by OpenClaw && \
 WTTR=$(curl -s "wttr.in/Milano?format=%l:+%c+%t+(%f),+pioggia+%p,+vento+%w") && \
 python3 ~/.openclaw/workspace/skills/tuya-irrigation/scripts/auto_irrigate.py --wttr "$WTTR"
 ```
@@ -235,7 +235,7 @@ For continuous logging, run as a background process or via cron:
 
 ```bash
 # Every 30 minutes
-*/30 * * * * . ~/.openclaw/config/secrets.env && python3 ~/.openclaw/workspace/skills/tuya-irrigation/scripts/logger.py
+*/30 * * * * # Env vars loaded automatically by OpenClaw && python3 ~/.openclaw/workspace/skills/tuya-irrigation/scripts/logger.py
 ```
 
 ## System Status
@@ -334,7 +334,7 @@ See legacy `tuya_irrigation.py` docs for detailed DP mappings. Common DPs:
 
 ```bash
 # Source env
-. ~/.openclaw/config/secrets.env
+# Env vars loaded automatically by OpenClaw
 
 # Initialize cluster from tools/cluster.local.json
 python3 setup_cluster.py
@@ -478,7 +478,7 @@ Add to cron for automatic weekly reports:
 
 ## Troubleshooting
 
-- **"Missing TUYA_CLIENT_ID"**: Source `~/.openclaw/config/secrets.env` before running
+- **"Missing TUYA_CLIENT_ID"**: Source `~/.openclaw/.env` before running
 - **"Irrigator not found"**: Run `python3 main.py irrigator list` to get ID
 - **"No sensors found"**: Normal before sensors arrive; system uses temperature fallback
-- **Local mode not working**: Check `TUYA_DEVICE_IP` and `TUYA_LOCAL_KEY` in secrets.env
+- **Local mode not working**: Check `TUYA_DEVICE_IP` and `TUYA_LOCAL_KEY` in ~/.openclaw/.env
