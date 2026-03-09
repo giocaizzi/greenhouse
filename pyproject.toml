@@ -30,7 +30,6 @@ dev = [
 
 [project.scripts]
 tuya-irrigation = "tuya_irrigation.cli:main"
-tuya-irrigation-logger = "tuya_irrigation.logger_daemon:main"
 
 [build-system]
 requires = ["hatchling"]

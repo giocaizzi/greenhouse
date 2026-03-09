@@ -9,7 +9,7 @@
 - Self-learning irrigation profiles (absorption, drainage, efficiency)
 - OpenClaw skill compatible
 
-**Tech Stack:** Python 3.11+, uv, ruff, SQLite, tinytuya, unittest (49 tests)
+**Tech Stack:** Python 3.11+, uv, ruff, SQLite, tinytuya, unittest
 
 ## 🔒 Privacy & Security
 
@@ -37,10 +37,11 @@ All test data uses fake/placeholder values centralized in `tests/fake_data.py`:
 ## 📁 Structure
 
 ```
-src/tuya_irrigation/     # Core package (12 modules)
-scripts/                 # OpenClaw wrappers + auto_irrigate entrypoint
-tests/                   # 49 tests (5 test files)
+src/tuya_irrigation/     # Core package (10 modules)
+scripts/                 # main.py (single entry point) + _init_path.py
+tests/                   # 5 test files
 data/                    # plant_database.json + schema.sql (DB gitignored)
+tools/                   # setup_cluster.py, sync_plant_data.py (one-time setup)
 ```
 
 ## 🔑 Key Technical Decisions

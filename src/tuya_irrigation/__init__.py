@@ -8,7 +8,7 @@ from tuya_irrigation.logic import IrrigationLogic
 from tuya_irrigation.models import Cluster, IrrigationConfig, Irrigator, Plant, Sensor, SensorReading
 from tuya_irrigation.plant_db import get_plant_database
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 __all__ = [
     "IrrigationDB",
     "IrrigationLearner",

@@ -18,30 +18,28 @@ Sensor TR-301Z → Zigbee GW → Tuya Cloud
                                   ↓
                     cloud.py (get_live_reading + get_device_logs)
                                   ↓
-                    logger_daemon.py (sync → SQLite archive)
-                                  ↓
-                    logic.py (multi-sensor decisions)
+                    cli.py irrigate (sync → weather → decide → execute)
                         ↓               ↓
-                 learning.py        auto_irrigate.py
-                 (efficiency)       (HEARTBEAT entry)
+                 learning.py        logic.py
+                 (efficiency)       (multi-sensor decisions)
                         ↓               ↓
                   alerts/reports    Irrigator Rainpoint
 ```
 
-**Package:** `tuya_irrigation` (v0.3.0)
+**Package:** `tuya_irrigation` (v0.4.0)
 
 | Module | Purpose |
 |---|---|
+| `cli.py` | Single entry point: status, irrigate, sync, learn, history, stats |
 | `cloud.py` | Tuya Cloud API client (getstatus, getdevicelog, DP parsing) |
 | `db.py` | SQLite with dedup, bulk insert, readings-around queries |
-| `devices.py` | Physical device control (irrigators + sensor reads) |
+| `devices.py` | Physical device control (irrigators via tinytuya) |
 | `logic.py` | Smart decisions: multi-sensor conflict, trends, stress detection |
 | `learning.py` | Post-irrigation analysis: absorption profiles, efficiency, alerts |
-| `logger_daemon.py` | Cloud → DB sync daemon |
+| `logger_daemon.py` | Cloud → DB sync (used by CLI `sync` + `irrigate`) |
 | `plant_db.py` | Evidence-based plant care data (JSON) |
 | `models.py` | Dataclasses (Cluster, Plant, Sensor, SensorReading, etc.) |
-| `cli.py` | Full CLI interface |
-| `stats.py` / `report.py` | Statistics and periodic reports |
+| `stats.py` | Statistics computation and CSV export |
 | `utils.py` | Timezone-aware timestamp formatting |
 
 ## Setup
@@ -103,7 +101,7 @@ $P config set --cluster 1 --mode smart --minutes 2 --interval 12
 ### Sensor Sync (every 30min via cron)
 
 ```bash
-python3 scripts/logger.py --hours 24
+python3 scripts/main.py sync --hours 24
 ```
 
 1. Pulls `getdevicelog()` from Tuya Cloud (backfills gaps)
@@ -114,7 +112,7 @@ python3 scripts/logger.py --hours 24
 ### Smart Irrigation Decision (7:00 + 20:00 via cron)
 
 ```bash
-python3 scripts/auto_irrigate.py
+python3 scripts/main.py irrigate 1
 ```
 
 1. Syncs sensor data from cloud
