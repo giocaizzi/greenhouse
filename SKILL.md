@@ -9,28 +9,44 @@ description: |
 
 # Tuya Smart Irrigation System
 
-Complete irrigation management with plant profiles, sensor integration, and smart decision logic.
+Evidence-based irrigation with Tuya Cloud sensors, multi-plant conflict resolution, and self-learning efficiency analysis.
 
 ## Architecture
 
-- **Modern Python package** (`uv` + `ruff`, see `PACKAGE.md`)
-- **Package name**: `tuya-irrigation` (PyPI-style) / `tuya_irrigation` (import name)
-- **Database**: SQLite (`~/.openclaw/workspace/skills/tuya-irrigation/data/irrigation.db`)
-- **Plant Database**: JSON (`~/.openclaw/workspace/skills/tuya-irrigation/data/plant_database.json`) - Evidence-based care data from scientific literature
-- **Package structure**:
-  - `src/tuya_irrigation/` - Core package (db, logic, devices, plant_db, models, cli, logger)
-  - `scripts/` - OpenClaw compatibility wrappers
-  - `tests/` - Test suite (28 tests)
-  - `data/` - Plant database + SQLite
-  - Entry points: `tuya-irrigation` CLI, `tuya-irrigation-logger` daemon
+```
+Sensor TR-301Z → Zigbee GW → Tuya Cloud
+                                  ↓
+                    cloud.py (get_live_reading + get_device_logs)
+                                  ↓
+                    logger_daemon.py (sync → SQLite archive)
+                                  ↓
+                    logic.py (multi-sensor decisions)
+                        ↓               ↓
+                 learning.py        auto_irrigate.py
+                 (efficiency)       (HEARTBEAT entry)
+                        ↓               ↓
+                  alerts/reports    Irrigator Rainpoint
+```
 
-**All irrigation decisions are based on scientific literature**, not guesses. See `PLANT_DATABASE.md` for sources and methodology.
+**Package:** `tuya_irrigation` (v0.3.0)
+
+| Module | Purpose |
+|---|---|
+| `cloud.py` | Tuya Cloud API client (getstatus, getdevicelog, DP parsing) |
+| `db.py` | SQLite with dedup, bulk insert, readings-around queries |
+| `devices.py` | Physical device control (irrigators + sensor reads) |
+| `logic.py` | Smart decisions: multi-sensor conflict, trends, stress detection |
+| `learning.py` | Post-irrigation analysis: absorption profiles, efficiency, alerts |
+| `logger_daemon.py` | Cloud → DB sync daemon |
+| `plant_db.py` | Evidence-based plant care data (JSON) |
+| `models.py` | Dataclasses (Cluster, Plant, Sensor, SensorReading, etc.) |
+| `cli.py` | Full CLI interface |
+| `stats.py` / `report.py` | Statistics and periodic reports |
+| `utils.py` | Timezone-aware timestamp formatting |
 
 ## Setup
 
-### 1. Environment Variables
-
-Add to `~/.openclaw/.env`:
+### Environment Variables (`~/.openclaw/.env`)
 
 ```bash
 TUYA_CLIENT_ID=your_client_id
@@ -43,440 +59,156 @@ TUYA_DEVICE_IP=192.0.2.1
 TUYA_LOCAL_KEY=xxxxxxxxxxxxxxxx
 ```
 
-**Get credentials**: [iot.tuya.com](https://iot.tuya.com) → Cloud Projects → Create project → select region → copy Access ID/Key.
-
-### 2. Initialize Your Cluster
-
-Run the setup script (pre-configured from `tools/cluster.local.json`):
+### Initialize Cluster
 
 ```bash
-# Env vars loaded automatically by OpenClaw && \
-python3 ~/.openclaw/workspace/skills/tuya-irrigation/scripts/setup_cluster.py
+cd ~/.openclaw/workspace/skills/tuya-irrigation/scripts
+python3 setup_cluster.py   # From tools/cluster.local.json
 ```
 
-This creates:
-- Cluster: name from your local config
-- Plants: Monstera, Areca/Kentia palm, Dracaena, Nespolo (loquat)
-- Irrigator: Rainpoint IK10PW (auto-detects local/cloud mode)
-- Initial config: temperature-based schedule mode
-
-## CLI Usage
-
-Main CLI: `~/.openclaw/workspace/skills/tuya-irrigation/scripts/main.py`
-
-### Cluster Management
+## CLI Reference
 
 ```bash
-# List clusters
-python3 main.py cluster list
+cd ~/.openclaw/workspace/skills/tuya-irrigation/scripts
+P="python3 main.py"
 
-# Add a new cluster
-python3 main.py cluster add "Outdoor Garden" --location "Backyard"
+# Cluster
+$P cluster list
+$P cluster add "Garden" --location "Backyard"
+
+# Plants
+$P plant list --cluster 1
+$P plant add --cluster 1 "Ficus elastica" --category tropical --water-needs medium
+
+# Irrigators
+$P irrigator list --cluster 1
+$P irrigator status 1
+$P irrigator start 1 --minutes 3
+$P irrigator on 1 / off 1
+$P irrigator log-manual 1 --minutes 5 --notes "Watered by hand"
+
+# Sensors
+$P sensor list --cluster 1
+$P sensor read --cluster 1
+$P sensor add --cluster 1 --device-id XXXX --name "Nespolo" --type soil_moisture --plant-id 4
+
+# Config
+$P config get 1
+$P config set --cluster 1 --mode smart --minutes 2 --interval 12
+
+# Analysis
+$P analyze 1
+$P analyze 1 --temp 22.5
+
+# Logs
+$P log readings --cluster 1 --hours 24
+$P log events --cluster 1 --hours 48
+$P log stats --cluster 1 --days 7 --export data.csv
+
+# Learning
+$P learn report 1    # Absorption profiles, drainage rates
+$P learn alerts 1    # Efficiency issues, conflicts
 ```
 
-### Plant Management
+## Data Flow
+
+### Sensor Sync (every 30min via cron)
 
 ```bash
-# List plants
-python3 main.py plant list
-python3 main.py plant list --cluster 1
-
-# Add a plant
-python3 main.py plant add --cluster 1 \
-  "Ficus elastica" \
-  --category tropical \
-  --water-needs medium \
-  --light-needs high \
-  --temp-min 18 --temp-max 24 \
-  --humidity-min 50 --humidity-max 70 \
-  --notes "Rubber plant, wipe leaves monthly"
+python3 scripts/logger.py --hours 24
 ```
 
-### Irrigator Management
+1. Pulls `getdevicelog()` from Tuya Cloud (backfills gaps)
+2. Gets `getstatus()` for live reading
+3. Deduplicates by `(sensor_id, timestamp)` UNIQUE constraint
+4. Stores in `sensor_readings` table
+
+### Smart Irrigation Decision (7:00 + 20:00 via cron)
 
 ```bash
-# List irrigators
-python3 main.py irrigator list
-python3 main.py irrigator list --cluster 1
-
-# Add an irrigator
-python3 main.py irrigator add \
-  --cluster 1 \
-  --device-id bf123456789abcdef \
-  --name "Main Irrigator" \
-  --type tuya_local \
-  --device-ip 192.0.2.1 \
-  --local-key xxxxxxxxxxxxxxxx \
-  --interval 12
-
-# Control irrigator
-python3 main.py irrigator status 1
-python3 main.py irrigator on 1
-python3 main.py irrigator off 1
-python3 main.py irrigator start 1 --minutes 5
+python3 scripts/auto_irrigate.py
 ```
 
-### Sensor Management
-
-```bash
-# List sensors
-python3 main.py sensor list
-python3 main.py sensor list --cluster 1
-
-# Add a sensor
-python3 main.py sensor add \
-  --cluster 1 \
-  --device-id bf987654321fedcba \
-  --name "Temp/Humidity Sensor" \
-  --type temp_humidity
-
-# Read current sensor data
-python3 main.py sensor read --cluster 1
-```
-
-### Irrigation Configuration
-
-```bash
-# Get current config
-python3 main.py config get 1
-
-# Set config
-python3 main.py config set --cluster 1 \
-  --mode smart \
-  --minutes 2 \
-  --interval 12 \
-  --auto-run true
-
-# Modes:
-#   manual   - No automation
-#   schedule - Fixed schedule (temperature-based)
-#   smart    - Sensor-driven decisions
-```
-
-### Smart Analysis & Auto-Irrigation
-
-```bash
-# Analyze conditions and get recommendation
-python3 main.py analyze 1
-python3 main.py analyze 1 --temp 22.5
-
-# Automatically apply smart logic
-python3 main.py auto-irrigate 1
-python3 main.py auto-irrigate 1 --temp 22.5
-```
-
-**Smart logic considers**:
-- Soil moisture (primary indicator, if sensor present)
-- Temperature (vs ideal range for plants)
-- Humidity (vs ideal range for plants)
-- Plant water needs (low/medium/high)
-- Recent irrigation history
-
-**Confidence levels**:
-- High (>80%): Soil sensor + recent readings
-- Medium (60-80%): Temperature + plant profiles
-- Low (<60%): Minimal data, conservative defaults
-
-### Logging & History
-
-```bash
-# View sensor readings
-python3 main.py log readings --cluster 1 --hours 24
-
-# View irrigation events
-python3 main.py log events --cluster 1 --hours 48
-
-# Run sensor logger once
-python3 logger.py
-
-# Run sensor logger continuously (every 15 min)
-python3 logger.py --interval 15
-```
-
-## Heartbeat Integration
-
-For fully autonomous irrigation via OpenClaw heartbeat, use the dedicated `auto_irrigate.py` entrypoint:
-
-```bash
-# HEARTBEAT.md entry:
-python3 ~/.openclaw/workspace/skills/tuya-irrigation/scripts/auto_irrigate.py
-```
-
-**What it does:**
-- Fetches feels-like temperature from Open-Meteo API (no API key required)
-- Calls `IrrigationLogic.decide_for_cluster()` for smart decision
-- Executes irrigation on physical Tuya device via `TuyaDeviceManager`
-- Logs all decisions to database (action + confidence + metadata)
-- **Silent on skip**, verbose only on irrigate/error (keeps HEARTBEAT clean)
-- Logs decision even if device execution fails (tracks everything)
-
-**Output examples:**
-```
-# When irrigation is needed:
-💧 Irrigating cluster 1: 2min (confidence: 60%)
-   Reason: temperature-based (20°C, medium water needs, evidence-based data)
-   Temp: 20.0°C
-✅ Irrigation started successfully
-
-# When conditions are adequate:
-(silent — no output, returns 0)
-```
-
-**Alternative:** Use `main.py auto-irrigate` for manual temperature override:
-```bash
-python3 scripts/main.py auto-irrigate 1 --temp 22
-```
-
-## Sensor Data Collection
-
-For continuous logging, run as a background process or via cron:
-
-```bash
-# Every 30 minutes
-*/30 * * * * # Env vars loaded automatically by OpenClaw && python3 ~/.openclaw/workspace/skills/tuya-irrigation/scripts/logger.py
-```
-
-## System Status
-
-✅ **Fully Operational** (as of 2026-02-28)
-
-| Component | Status |
-|---|---|
-| Decision logic | ✅ Working (temperature-based + sensor-driven + global cooldown) |
-| Database logging | ✅ Active (all events tracked) |
-| Device execution | ✅ Working (Tuya local mode via tinytuya) |
-| HEARTBEAT integration | ✅ Configured (`auto_irrigate.py`) |
-| Test suite | ✅ 28/28 passing |
-| Code quality | ✅ Ruff clean (0 errors) |
-
-**Device Control:**
-- `src/tuya_irrigation/tuya_irrigation.py` - CLI wrapper for tinytuya
-- Supports: `status`, `on`, `off`, `start --minutes N`
-- Supports both local and cloud mode (local preferred for speed)
-- Used internally by `devices.py` → `TuyaDeviceManager`
-
-## Recent Updates (2026-02-28)
-
-### 🔒 Global Cooldown Enforcement
-**Minimum 6h between ANY irrigations** (auto/manual/test) to prevent over-watering.
-
-- Pre-check in `decide_for_cluster()` BEFORE all other logic
-- Respects manual/test irrigations from any trigger
-- Prevents stress-override from triggering too soon after manual watering
-- Clear reason: "cooldown active (last irrigation 0.0h ago, trigger: manual)"
-
-**Example workflow:**
-```bash
-# You water by hand
-python3 main.py irrigator log-manual 1 --minutes 5 --notes "Watered with watering can"
-
-# Auto-heartbeat skips for 6h
-→ Action: skip, Reason: cooldown active (trigger: manual)
-```
-
-### 📝 Manual Irrigation Logging
-**New command to log manual irrigations without device control:**
-
-```bash
-python3 main.py irrigator log-manual <id> --minutes <duration> [--notes "..."]
-```
-
-**Use cases:**
-- Just watered by hand with a watering can
-- Someone else watered the plants
-- Rainwater collection was used
-- Manual hose watering
-
-**Why it matters:** Manual irrigations now count toward cooldown, preventing system from over-watering after you've already watered.
-
-### 🕒 Timezone-Aware Timestamps
-**All log outputs now display in Europe/Rome (CET/CEST)** instead of UTC.
-
-- Database continues to store UTC (no breaking changes)
-- All CLI output shows local time
-- Configurable via `IRRIGATION_TZ` environment variable
-- Example: `2026-02-28 10:04` (CET) instead of `2026-02-28 09:04` (UTC)
-
-**Commands affected:**
-- `log events` - irrigation history
-- `log readings` - sensor history
-- `log stats` - statistics summaries
-- `report.py` - periodic reports
-
-## Database Schema
-
-See `scripts/db.py` for full schema. Key tables:
-
-- `clusters` - Plant groupings
-- `plants` - Plant species & care profiles
-- `irrigators` - Irrigation devices
-- `sensors` - Sensor devices (temp, humidity, soil moisture, light)
-- `sensor_readings` - Time-series sensor data
-- `irrigation_events` - Irrigation action log
-- `irrigation_configs` - Per-cluster automation settings
-
-## Datapoints Reference (Tuya Devices)
-
-See legacy `tuya_irrigation.py` docs for detailed DP mappings. Common DPs:
-
-- `switch` - Main on/off
-- `start` - Start/stop session
-- `countdown` - Duration in minutes
-- `countdown_left` - Remaining time
-- `battery_percentage` - Battery level
-- `temp_current` / `humidity_current` - Sensor readings (if supported)
-
-## Examples
-
-### Setup and first analysis
-
-```bash
-# Source env
-# Env vars loaded automatically by OpenClaw
-
-# Initialize cluster from tools/cluster.local.json
-python3 setup_cluster.py
-
-# Sync plants with evidence-based data from literature
-python3 sync_plant_data.py
-
-# Check what the smart logic suggests
-python3 main.py analyze 1 --temp 23
-
-# Apply it
-python3 main.py auto-irrigate 1 --temp 23
-
-# View recent events
-python3 main.py log events --cluster 1
-```
-
-### Add sensors when they arrive
-
-```bash
-python3 main.py sensor add \
-  --cluster 1 \
-  --device-id bf111222333444555 \
-  --name "Soil Moisture Sensor" \
-  --type soil_moisture
-
-python3 main.py sensor add \
-  --cluster 1 \
-  --device-id bf666777888999aaa \
-  --name "Temp/Humidity Sensor" \
-  --type temp_humidity
-
-# Start logging
-python3 logger.py --interval 30 &
-```
-
-### Switch to full smart mode
-
-```bash
-# After a few days of sensor data
-python3 main.py config set --cluster 1 --mode smart
-
-# Now auto-irrigate uses sensor data + plant profiles
-python3 main.py auto-irrigate 1
-```
+1. Syncs sensor data from cloud
+2. Determines temperature source based on `cluster.environment`:
+   - **Indoor:** sensor temp primary, Open-Meteo fallback
+   - **Outdoor:** Open-Meteo primary (outdoor temp matters)
+3. Runs `IrrigationLogic.decide_for_cluster()`:
+   - Global 6h cooldown check
+   - Stress detection (water stress, heat, over-watering)
+   - Multi-sensor conflict resolution (driest plant vs wettest)
+   - Trend analysis (48h soil moisture, temperature)
+   - Plant-specific targets from scientific literature
+4. Executes on physical irrigator if `action == "irrigate"`
+5. Logs decision to DB (even on skip or failure)
+
+## Multi-Sensor Logic
+
+With one irrigator serving multiple plants:
+
+| Scenario | Action | Duration | Confidence |
+|---|---|---|---|
+| All adequate (40-65%) | Skip | — | 70% |
+| One dry, none wet | Normal irrigation | 2-3 min | 80-90% |
+| **Conflict:** one dry + one wet | Short burst | 1 min | 65% |
+| All wet | Skip | — | 80% |
+
+Decision uses `min_soil_moisture` (driest sensor), not average.
+
+## Learning Engine
+
+After ≥3 irrigation cycles with sensor data, the system learns:
+
+- **Absorption rate:** +X%/min of irrigation per plant (how much water each receives)
+- **Drainage rate:** -X%/hr natural moisture loss
+- **Efficiency score:** How consistently irrigation increases moisture
+
+### Alert Types
+
+| Alert | Severity | Trigger |
+|---|---|---|
+| 🚫 Blocked drip | Critical | <0.5%/min absorption, <30% efficiency |
+| 💨 Rapid drainage | Warning | >5%/hr moisture loss |
+| 🏜️ Chronic underwatering | Warning | Peak moisture never reaches target (7d) |
+| ⚠️ Unresolvable conflict | Critical | Irrigating for dry plant would bring wet plant >85% |
+
+## Confidence Scoring
+
+| Level | Source | Score |
+|---|---|---|
+| Critical stress override | Sensor + trends | 95% |
+| Sensor-driven (adequate data) | Sensor | 70-90% |
+| Temperature fallback | Open-Meteo | 60% |
+| Minimal data | Config defaults | 20-30% |
 
 ## Testing
 
-Comprehensive test suite covering database, logic, and device management:
-
 ```bash
-# Run all tests (28 tests, ~1s)
-./test.sh
-
-# Or directly
-python3 tests/run_tests.py
-
-# Specific test file
-python3 -m unittest tests.test_db
-python3 -m unittest tests.test_logic
-python3 -m unittest tests.test_devices
+./test.sh    # 49 tests + ruff lint
 ```
 
-See `tests/README.md` for details.
+| Suite | Tests | Coverage |
+|---|---|---|
+| `test_db.py` | 12 | DB operations, dedup, readings-around, bulk insert, environment |
+| `test_logic.py` | 14 | Decisions, multi-sensor conflict, water needs, stress |
+| `test_devices.py` | 8 | Device control, sensor parsing, error handling |
+| `test_cloud.py` | 6 | Cloud API parsing, log grouping, credentials |
+| `test_learning.py` | 9 | Absorption profiles, drainage, reports |
 
-## Logging & Statistics
+## Key Technical Decisions
 
-All irrigation events are automatically logged to the database. View activity and statistics:
-
-```bash
-# Recent events with summary
-python3 main.py log events --cluster 1 --hours 48
-
-# Detailed statistics (last 7 days)
-python3 main.py log stats --cluster 1 --days 7
-
-# Export to CSV for analysis
-python3 main.py log stats --cluster 1 --days 30 --export irrigation_data.csv
-
-# Generate formatted report
-python3 report.py 1 --days 7
-python3 report.py 1 --days 30 --output report.txt
-```
-
-### What Gets Logged
-
-Every irrigation action is logged with:
-- **Timestamp**: when it happened
-- **Action**: start, stop, schedule_updated, skip_decision, error
-- **Duration**: how long (minutes)
-- **Triggered by**: auto, manual, schedule
-- **Notes**: decision reason, confidence, parameters
-- **Irrigator**: which device
-
-### Statistics Include
-
-- Total events and irrigations
-- Total water time
-- Average duration per irrigation
-- Frequency (irrigations per day)
-- Breakdown by trigger type (auto vs manual)
-- Recent irrigation history
-
-### Periodic Reports
-
-For weekly/monthly summaries:
-
-```bash
-# Weekly report (can be automated via cron)
-python3 report.py 1 --days 7
-
-# Monthly report
-python3 report.py 1 --days 30 --output monthly_report.txt
-```
-
-Add to cron for automatic weekly reports:
-```bash
-# Every Monday at 9 AM
-0 9 * * 1 cd ~/.openclaw/workspace/skills/tuya-irrigation/scripts && python3 report.py 1 --days 7 > /tmp/irrigation_report.txt
-```
-
-## Notes
-
-- **Sensors are optional**: System works without them (temperature-based fallback)
-- **Local mode preferred**: Faster response, richer DPs (especially for RainPoint IK10PW)
-- **Database is portable**: Copy `data/irrigation.db` to backup/migrate
-- **Confidence scoring**: Low confidence → conservative defaults; high confidence → sensor-driven decisions
-- **One DB for all clusters**: Multi-cluster support built-in, but each cluster can have its own mode/config
-- **Evidence-based**: All plant care data from scientific literature (see `PLANT_DATABASE.md`)
+- **Protocol v3.5** for Rainpoint IK10PW (not v3.3 — newer firmware)
+- **Tuya Cloud as live source**, local SQLite as permanent archive
+- **Sensor sampling ~10min** (firmware-hardcoded, not configurable)
+- **UNIQUE(sensor_id, timestamp)** for zero-cost dedup on bulk sync
+- **Evidence-based plant care** from scientific literature (see `PLANT_DATABASE.md`)
 
 ## Documentation
 
-- **SKILL.md** (this file) - Overview and commands
-- **PACKAGE.md** - Package structure, development guide, OpenClaw compatibility
-- **TESTING.md** - Test suite and validation
-- **SENSORS.md** - Sensor integration guide
-- **PLANT_DATABASE.md** - Evidence-based plant care data system
-- **LOGGING.md** - Comprehensive logging and reporting guide
-- **TRENDS.md** - Historical trend analysis and stress detection
-- **data/schema.sql** - Database schema reference
-
-## Troubleshooting
-
-- **"Missing TUYA_CLIENT_ID"**: Source `~/.openclaw/.env` before running
-- **"Irrigator not found"**: Run `python3 main.py irrigator list` to get ID
-- **"No sensors found"**: Normal before sensors arrive; system uses temperature fallback
-- **Local mode not working**: Check `TUYA_DEVICE_IP` and `TUYA_LOCAL_KEY` in ~/.openclaw/.env
+| File | Content |
+|---|---|
+| `SKILL.md` | This overview |
+| `AGENTS.md` | Developer/AI guidelines, privacy rules |
+| `PACKAGE.md` | Package structure, uv/ruff setup |
+| `PLANT_DATABASE.md` | Plant care data sources |
+| `data/schema.sql` | Database schema reference |

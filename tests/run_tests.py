@@ -1,24 +1,18 @@
 #!/usr/bin/env python3
-"""Test runner - executes all tests and reports results."""
+"""Auto-discover and run all tests in the test suite."""
 
 import sys
 import unittest
 from pathlib import Path
 
-# Add scripts to path
+# Add src to path
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-
-def run_tests():
-    """Discover and run all tests."""
+if __name__ == "__main__":
     loader = unittest.TestLoader()
-    start_dir = Path(__file__).parent
-    suite = loader.discover(start_dir, pattern="test_*.py")
+    suite = loader.discover(str(Path(__file__).parent), pattern="test_*.py")
 
     runner = unittest.TextTestRunner(verbosity=2)
     result = runner.run(suite)
 
-    return 0 if result.wasSuccessful() else 1
-
-
-if __name__ == "__main__":
-    sys.exit(run_tests())
+    sys.exit(0 if result.wasSuccessful() else 1)

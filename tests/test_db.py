@@ -180,6 +180,79 @@ class TestDatabase(unittest.TestCase):
         self.assertEqual(config.mode, "smart")
         self.assertEqual(config.duration_minutes, 5)
 
+    def test_get_readings_around(self):
+        """Readings before and after a timestamp are correctly split."""
+        cluster_id = self.db.add_cluster(FAKE_CLUSTER_NAME)
+        sensor_id = self.db.add_sensor(
+            cluster_id=cluster_id,
+            tuya_device_id=FAKE_SENSOR_ID,
+            name=FAKE_SENSOR_NAME,
+            sensor_type="soil_moisture",
+            config={},
+        )
+
+        pivot = 100000
+        # 3 readings before, 2 after
+        self.db.add_sensor_reading(sensor_id=sensor_id, timestamp=pivot - 1800, soil_moisture=30.0)
+        self.db.add_sensor_reading(sensor_id=sensor_id, timestamp=pivot - 900, soil_moisture=32.0)
+        self.db.add_sensor_reading(sensor_id=sensor_id, timestamp=pivot - 100, soil_moisture=33.0)
+        self.db.add_sensor_reading(sensor_id=sensor_id, timestamp=pivot + 600, soil_moisture=40.0)
+        self.db.add_sensor_reading(sensor_id=sensor_id, timestamp=pivot + 3600, soil_moisture=45.0)
+        # Outside window (should not appear)
+        self.db.add_sensor_reading(sensor_id=sensor_id, timestamp=pivot - 5000, soil_moisture=20.0)
+        self.db.add_sensor_reading(sensor_id=sensor_id, timestamp=pivot + 10000, soil_moisture=50.0)
+
+        before, after = self.db.get_readings_around(sensor_id, pivot, before_seconds=1800, after_seconds=7200)
+
+        self.assertEqual(len(before), 3)
+        self.assertEqual(len(after), 2)
+        # Ordered ASC
+        self.assertAlmostEqual(before[0].soil_moisture, 30.0)
+        self.assertAlmostEqual(before[-1].soil_moisture, 33.0)
+        self.assertAlmostEqual(after[0].soil_moisture, 40.0)
+
+    def test_bulk_add_deduplicates(self):
+        """Bulk insert skips duplicates and returns correct count."""
+        cluster_id = self.db.add_cluster(FAKE_CLUSTER_NAME)
+        sensor_id = self.db.add_sensor(
+            cluster_id=cluster_id,
+            tuya_device_id=FAKE_SENSOR_ID,
+            name=FAKE_SENSOR_NAME,
+            sensor_type="soil_moisture",
+            config={},
+        )
+
+        # Insert initial reading
+        self.db.add_sensor_reading(sensor_id=sensor_id, timestamp=1000, soil_moisture=30.0)
+
+        # Bulk insert: 1 duplicate + 2 new
+        readings = [
+            (sensor_id, 1000, None, None, 30.0, None),  # Duplicate
+            (sensor_id, 2000, None, None, 35.0, None),  # New
+            (sensor_id, 3000, None, None, 40.0, None),  # New
+        ]
+        inserted = self.db.bulk_add_sensor_readings(readings)
+
+        self.assertEqual(inserted, 2)
+        all_readings = self.db.get_recent_readings(sensor_id, hours=999999)
+        self.assertEqual(len(all_readings), 3)
+
+    def test_cluster_environment(self):
+        """Cluster environment field works correctly."""
+        indoor_id = self.db.add_cluster("Indoor", environment="indoor")
+        outdoor_id = self.db.add_cluster("Outdoor", environment="outdoor")
+
+        indoor = self.db.get_cluster(indoor_id)
+        outdoor = self.db.get_cluster(outdoor_id)
+
+        self.assertEqual(indoor.environment, "indoor")
+        self.assertEqual(outdoor.environment, "outdoor")
+
+        # Default is indoor
+        default_id = self.db.add_cluster("Default")
+        default = self.db.get_cluster(default_id)
+        self.assertEqual(default.environment, "indoor")
+
 
 if __name__ == "__main__":
     unittest.main()

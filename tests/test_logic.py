@@ -143,6 +143,97 @@ class TestIrrigationLogic(unittest.TestCase):
         decision = self.logic.decide_for_cluster(99999)
         self.assertIsNone(decision)
 
+    def test_multi_sensor_driest_triggers(self):
+        """With multiple sensors, driest plant triggers irrigation."""
+        cluster_id = self.db.add_cluster("Multi Sensor Cluster")
+        self.db.add_plant(
+            cluster_id=cluster_id,
+            species=FAKE_PLANT_SPECIES,
+            water_needs="medium",
+        )
+
+        # Sensor A: dry
+        s_a = self.db.add_sensor(
+            cluster_id=cluster_id,
+            tuya_device_id="fake_sensor_a",
+            name="Dry Sensor",
+            sensor_type="soil_moisture",
+            config={},
+        )
+        self.db.add_sensor_reading(sensor_id=s_a, soil_moisture=20.0)
+
+        # Sensor B: adequate
+        s_b = self.db.add_sensor(
+            cluster_id=cluster_id,
+            tuya_device_id="fake_sensor_b",
+            name="OK Sensor",
+            sensor_type="soil_moisture",
+            config={},
+        )
+        self.db.add_sensor_reading(sensor_id=s_b, soil_moisture=50.0)
+
+        decision = self.logic.decide_for_cluster(cluster_id)
+        self.assertEqual(decision["action"], "irrigate")
+        self.assertIn("driest", decision["reason"].lower())
+
+    def test_multi_sensor_conflict_short_burst(self):
+        """Conflicting sensors (one dry, one wet) trigger short burst."""
+        cluster_id = self.db.add_cluster("Conflict Cluster")
+        self.db.add_plant(
+            cluster_id=cluster_id,
+            species=FAKE_PLANT_SPECIES,
+            water_needs="medium",
+        )
+
+        # Sensor A: very dry
+        s_a = self.db.add_sensor(
+            cluster_id=cluster_id,
+            tuya_device_id="fake_sensor_dry",
+            name="Dry Plant",
+            sensor_type="soil_moisture",
+            config={},
+        )
+        self.db.add_sensor_reading(sensor_id=s_a, soil_moisture=15.0)
+
+        # Sensor B: already near saturation
+        s_b = self.db.add_sensor(
+            cluster_id=cluster_id,
+            tuya_device_id="fake_sensor_wet",
+            name="Wet Plant",
+            sensor_type="soil_moisture",
+            config={},
+        )
+        self.db.add_sensor_reading(sensor_id=s_b, soil_moisture=60.0)
+
+        decision = self.logic.decide_for_cluster(cluster_id)
+        self.assertEqual(decision["action"], "irrigate")
+        self.assertEqual(decision["duration_minutes"], 1)  # Short burst
+        self.assertIn("conflict", decision["reason"].lower())
+        self.assertLess(decision["confidence"], 0.7)  # Lower confidence
+
+    def test_all_sensors_adequate_skips(self):
+        """All sensors showing adequate moisture → skip."""
+        cluster_id = self.db.add_cluster("Adequate Cluster")
+        self.db.add_plant(
+            cluster_id=cluster_id,
+            species=FAKE_PLANT_SPECIES,
+            water_needs="medium",
+        )
+
+        for i, name in enumerate(["Sensor A", "Sensor B", "Sensor C"]):
+            sid = self.db.add_sensor(
+                cluster_id=cluster_id,
+                tuya_device_id=f"fake_sensor_{i}",
+                name=name,
+                sensor_type="soil_moisture",
+                config={},
+            )
+            self.db.add_sensor_reading(sensor_id=sid, soil_moisture=55.0 + i)
+
+        decision = self.logic.decide_for_cluster(cluster_id)
+        self.assertEqual(decision["action"], "skip")
+        self.assertIn("adequate", decision["reason"].lower())
+
 
 if __name__ == "__main__":
     unittest.main()
