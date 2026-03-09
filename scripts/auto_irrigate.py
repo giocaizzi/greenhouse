@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
 """HEARTBEAT entrypoint for smart irrigation.
 
-Data flow:
-1. Sync sensor data from Tuya Cloud → local DB (backfill + live)
-2. Read live sensor values for decision (soil moisture + temperature)
-3. Fallback to Open-Meteo temperature if no sensors available
-4. Run smart irrigation logic
-5. Execute on physical device if needed
+Data sources:
+- Tuya Cloud sensors (soil moisture, soil temperature) — always synced
+- Open-Meteo (outdoor temperature, feels-like) — used based on cluster environment
+
+Logic:
+- Indoor cluster: sensors are primary, Open-Meteo only as fallback if sensors offline
+- Outdoor cluster: sensors + Open-Meteo together (outdoor temp is directly relevant)
 
 Usage:
     python3 scripts/auto_irrigate.py
-    python3 scripts/auto_irrigate.py --temp 15.0   # override temp
+    python3 scripts/auto_irrigate.py --temp 15.0   # override temp (skips all fetching)
 """
 
 import argparse
@@ -29,28 +30,31 @@ MILANO_LAT = 45.464
 MILANO_LON = 9.189
 
 
-def fetch_feels_like() -> float | None:
-    """Fetch current feels-like temperature for Milano from Open-Meteo (no API key)."""
+def fetch_open_meteo() -> dict | None:
+    """Fetch current weather from Open-Meteo. Returns dict with temperature fields."""
     url = (
         f"https://api.open-meteo.com/v1/forecast"
         f"?latitude={MILANO_LAT}&longitude={MILANO_LON}"
-        f"&current=apparent_temperature"
+        f"&current=temperature_2m,apparent_temperature,precipitation,relative_humidity_2m"
         f"&timezone=Europe/Rome"
     )
     try:
         with urllib.request.urlopen(url, timeout=8) as resp:
             data = json.loads(resp.read())
-            return float(data["current"]["apparent_temperature"])
+            current = data.get("current", {})
+            return {
+                "temperature": current.get("temperature_2m"),
+                "feels_like": current.get("apparent_temperature"),
+                "precipitation": current.get("precipitation"),
+                "humidity": current.get("relative_humidity_2m"),
+            }
     except Exception as e:
         print(f"⚠️  Open-Meteo fetch failed: {e}", file=sys.stderr)
         return None
 
 
 def sync_sensors(db: IrrigationDB, cluster_id: int) -> dict | None:
-    """Sync sensor data from Tuya Cloud and return live reading.
-
-    Returns dict with sensor values or None if no sensors/cloud unavailable.
-    """
+    """Sync sensor data from Tuya Cloud and return live reading."""
     sensors = db.get_sensors_in_cluster(cluster_id)
     if not sensors:
         return None
@@ -80,7 +84,7 @@ def sync_sensors(db: IrrigationDB, cluster_id: int) -> dict | None:
 
 def main():
     parser = argparse.ArgumentParser(description="HEARTBEAT irrigation entrypoint")
-    parser.add_argument("--temp", type=float, help="Current temperature in °C (overrides all)")
+    parser.add_argument("--temp", type=float, help="Override temperature (skips all fetching)")
     parser.add_argument("--cluster", type=int, default=1, help="Cluster ID (default: 1)")
     parser.add_argument("--db", help="Database path (default: auto)")
     args = parser.parse_args()
@@ -91,23 +95,51 @@ def main():
     db = IrrigationDB(db_path)
     logic = IrrigationLogic(db)
 
-    # Step 1: Sync sensor data from Tuya Cloud
+    # Get cluster info
+    cluster = db.get_cluster(args.cluster)
+    if not cluster:
+        print(f"❌ Cluster {args.cluster} not found", file=sys.stderr)
+        return 1
+
+    is_indoor = cluster.environment == "indoor"
+
+    # Step 1: Always sync sensor data from Tuya Cloud
     sensor_data = None
     if args.temp is None:
         sensor_data = sync_sensors(db, args.cluster)
 
-    # Step 2: Determine temperature
+    # Step 2: Determine temperature based on environment
     temp = args.temp
-    if temp is None and sensor_data and sensor_data.get("temperature"):
-        temp = sensor_data["temperature"]
+    weather = None
+    source = "override"
+
     if temp is None:
-        temp = fetch_feels_like()
+        if is_indoor:
+            # Indoor: use sensor temperature, Open-Meteo only as fallback
+            if sensor_data and sensor_data.get("temperature") is not None:
+                temp = sensor_data["temperature"]
+                source = "sensor"
+            else:
+                weather = fetch_open_meteo()
+                if weather and weather.get("feels_like") is not None:
+                    temp = weather["feels_like"]
+                    source = "open-meteo (fallback)"
+        else:
+            # Outdoor: always use Open-Meteo (outdoor temp matters directly)
+            weather = fetch_open_meteo()
+            if weather and weather.get("feels_like") is not None:
+                temp = weather["feels_like"]
+                source = "open-meteo"
+            elif sensor_data and sensor_data.get("temperature") is not None:
+                temp = sensor_data["temperature"]
+                source = "sensor (weather unavailable)"
+
     if temp is None:
         print("⚠️  No temperature available — using seasonal fallback (20°C)", file=sys.stderr)
         temp = 20.0
+        source = "fallback"
 
     # Step 3: Run decision logic
-    # Note: logic.decide_for_cluster reads from DB, which now has synced sensor data
     decision = logic.decide_for_cluster(args.cluster, current_temp=temp)
     if decision is None:
         print(f"❌ Cluster {args.cluster} not found", file=sys.stderr)
@@ -119,14 +151,13 @@ def main():
     duration = decision.get("duration_minutes", 2)
 
     if action == "irrigate":
-        # Build info line
-        info_parts = [f"Reason: {reason}", f"Temp: {temp}°C"]
-        if sensor_data:
-            if sensor_data.get("soil_moisture") is not None:
-                info_parts.append(f"Soil: {sensor_data['soil_moisture']:.0f}%")
-            info_parts.append("Source: sensor")
-        else:
-            info_parts.append("Source: Open-Meteo")
+        # Build info
+        info_parts = [f"Reason: {reason}", f"Temp: {temp}°C ({source})"]
+        if sensor_data and sensor_data.get("soil_moisture") is not None:
+            info_parts.append(f"Soil: {sensor_data['soil_moisture']:.0f}%")
+        if weather and weather.get("precipitation") and weather["precipitation"] > 0:
+            info_parts.append(f"Rain: {weather['precipitation']}mm")
+        info_parts.append(f"Env: {cluster.environment}")
 
         print(f"💧 Irrigating cluster {args.cluster}: {duration}min (confidence: {confidence:.0%})")
         for part in info_parts:
@@ -154,14 +185,14 @@ def main():
         except Exception as e:
             device_error = str(e)
 
-        # Always log the decision
+        # Log decision
         soil_info = f", soil={sensor_data['soil_moisture']:.0f}%" if sensor_data and sensor_data.get("soil_moisture") is not None else ""
         db.add_irrigation_event(
             irrigator_id=irrigator.id,
             action="start" if device_success else "attempted",
             duration_minutes=duration,
             triggered_by="auto_heartbeat",
-            notes=f"temp={temp}°C{soil_info}, confidence={confidence:.0%}, reason={reason}, device_success={device_success}",
+            notes=f"temp={temp}°C ({source}){soil_info}, confidence={confidence:.0%}, reason={reason}, env={cluster.environment}, device_success={device_success}",
         )
 
         if device_success:
@@ -169,7 +200,7 @@ def main():
         else:
             print(f"⚠️  Decision logged but device execution failed: {device_error}", file=sys.stderr)
     elif action == "skip":
-        # Silent on skip — heartbeat shouldn't be noisy
+        # Silent on skip
         pass
     else:
         print(f"ℹ️  Action: {action} — {reason}")

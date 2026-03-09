@@ -11,6 +11,7 @@ class Cluster:
     name: str
     location: str | None
     created_at: int
+    environment: str = "indoor"  # "indoor" or "outdoor"
 
 
 @dataclass

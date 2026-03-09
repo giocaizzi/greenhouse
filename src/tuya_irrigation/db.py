@@ -37,7 +37,8 @@ class IrrigationDB:
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
             location TEXT,
-            created_at INTEGER NOT NULL
+            created_at INTEGER NOT NULL,
+            environment TEXT DEFAULT 'indoor'
         );
 
         -- Plants
@@ -132,39 +133,35 @@ class IrrigationDB:
 
     # ── Clusters ──────────────────────────────────────────────────────────────
 
-    def add_cluster(self, name: str, location: str | None = None) -> int:
+    def add_cluster(self, name: str, location: str | None = None, environment: str = "indoor") -> int:
         """Add a new cluster and return its ID."""
         cursor = self.conn.execute(
-            "INSERT INTO clusters (name, location, created_at) VALUES (?, ?, ?)",
-            (name, location, int(time.time())),
+            "INSERT INTO clusters (name, location, created_at, environment) VALUES (?, ?, ?, ?)",
+            (name, location, int(time.time()), environment),
         )
         self.conn.commit()
         return cursor.lastrowid
+
+    def _row_to_cluster(self, row) -> Cluster:
+        return Cluster(
+            id=row["id"],
+            name=row["name"],
+            location=row["location"],
+            created_at=row["created_at"],
+            environment=row["environment"] if "environment" in row.keys() else "indoor",
+        )
 
     def get_cluster(self, cluster_id: int) -> Cluster | None:
         """Get a cluster by ID."""
         row = self.conn.execute("SELECT * FROM clusters WHERE id = ?", (cluster_id,)).fetchone()
         if not row:
             return None
-        return Cluster(
-            id=row["id"],
-            name=row["name"],
-            location=row["location"],
-            created_at=row["created_at"],
-        )
+        return self._row_to_cluster(row)
 
     def list_clusters(self) -> list[Cluster]:
         """List all clusters."""
         rows = self.conn.execute("SELECT * FROM clusters ORDER BY name").fetchall()
-        return [
-            Cluster(
-                id=row["id"],
-                name=row["name"],
-                location=row["location"],
-                created_at=row["created_at"],
-            )
-            for row in rows
-        ]
+        return [self._row_to_cluster(row) for row in rows]
 
     # ── Plants ────────────────────────────────────────────────────────────────
 

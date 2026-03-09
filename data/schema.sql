@@ -6,7 +6,8 @@ CREATE TABLE clusters (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     location TEXT,
-    created_at INTEGER NOT NULL
+    created_at INTEGER NOT NULL,
+    environment TEXT DEFAULT 'indoor'  -- "indoor" or "outdoor"
 );
 
 -- Plants in clusters
