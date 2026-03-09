@@ -72,42 +72,30 @@ python3 setup_cluster.py   # From tools/cluster.local.json
 cd ~/.openclaw/workspace/skills/tuya-irrigation/scripts
 P="python3 main.py"
 
-# Cluster
-$P cluster list
-$P cluster add "Garden" --location "Backyard"
+# OPERATIONS (one call = full picture)
+$P status 1              # Full overview: sensors, config, events, smart analysis, alerts
+$P irrigate 1            # Full pipeline: sync → weather → decide → execute
+$P irrigate 1 --dry-run  # Analysis only (no execution)
+$P irrigate 1 --temp 22  # Override temperature (skips sync + weather)
+$P irrigate 1 --no-sync  # Skip sensor sync (use DB data)
+$P sync --hours 6        # Cloud → DB sensor sync
+$P learn 1               # Learning report + efficiency alerts
+$P history 1 --hours 24  # Readings + events combined timeline
+$P stats 1 --days 7      # Statistics + CSV export (--export file.csv)
 
-# Plants
+# SETUP (infrequent, CRUD)
+$P cluster list
+$P cluster add "Garden" --location "Backyard" --environment outdoor
 $P plant list --cluster 1
 $P plant add --cluster 1 "Ficus elastica" --category tropical --water-needs medium
-
-# Irrigators
 $P irrigator list --cluster 1
-$P irrigator status 1
 $P irrigator start 1 --minutes 3
-$P irrigator on 1 / off 1
+$P irrigator stop 1
 $P irrigator log-manual 1 --minutes 5 --notes "Watered by hand"
-
-# Sensors
 $P sensor list --cluster 1
-$P sensor read --cluster 1
 $P sensor add --cluster 1 --device-id XXXX --name "Nespolo" --type soil_moisture --plant-id 4
-
-# Config
 $P config get 1
 $P config set --cluster 1 --mode smart --minutes 2 --interval 12
-
-# Analysis
-$P analyze 1
-$P analyze 1 --temp 22.5
-
-# Logs
-$P log readings --cluster 1 --hours 24
-$P log events --cluster 1 --hours 48
-$P log stats --cluster 1 --days 7 --export data.csv
-
-# Learning
-$P learn report 1    # Absorption profiles, drainage rates
-$P learn alerts 1    # Efficiency issues, conflicts
 ```
 
 ## Data Flow

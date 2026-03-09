@@ -146,13 +146,106 @@ def cmd_status(args, db: IrrigationDB, dm: TuyaDeviceManager | None):
     return 0
 
 
-def cmd_irrigate(args, db: IrrigationDB, dm: TuyaDeviceManager):
-    """Smart irrigation: analyze + optionally execute."""
-    logic = IrrigationLogic(db)
-    decision = logic.decide_for_cluster(args.cluster, args.temp)
+def _fetch_open_meteo(lat: float = 45.464, lon: float = 9.189) -> dict | None:
+    """Fetch current weather from Open-Meteo."""
+    import json
+    import urllib.request
 
+    url = (
+        f"https://api.open-meteo.com/v1/forecast"
+        f"?latitude={lat}&longitude={lon}"
+        f"&current=temperature_2m,apparent_temperature,precipitation,relative_humidity_2m"
+        f"&timezone=Europe/Rome"
+    )
+    try:
+        with urllib.request.urlopen(url, timeout=8) as resp:
+            data = json.loads(resp.read())
+            current = data.get("current", {})
+            return {
+                "temperature": current.get("temperature_2m"),
+                "feels_like": current.get("apparent_temperature"),
+                "precipitation": current.get("precipitation"),
+                "humidity": current.get("relative_humidity_2m"),
+            }
+    except Exception as e:
+        print(f"⚠️  Open-Meteo: {e}", file=sys.stderr)
+        return None
+
+
+def _sync_and_read_sensors(db: IrrigationDB, cluster_id: int) -> dict | None:
+    """Sync sensor data from Tuya Cloud and return live reading."""
+    sensors = db.get_sensors_in_cluster(cluster_id)
+    if not sensors:
+        return None
+    try:
+        from tuya_irrigation.cloud import TuyaCloud
+        from tuya_irrigation.logger_daemon import _sync_single_sensor
+
+        cloud = TuyaCloud()
+        for sensor in sensors:
+            try:
+                _sync_single_sensor(db, cloud, sensor, hours=6)
+            except Exception:
+                pass
+        live = cloud.get_live_reading(sensors[0].tuya_device_id)
+        return live if live else None
+    except Exception as e:
+        print(f"⚠️  Cloud sync: {e}", file=sys.stderr)
+        return None
+
+
+def cmd_irrigate(args, db: IrrigationDB, dm: TuyaDeviceManager):
+    """Full pipeline: sync sensors → fetch weather → decide → execute.
+
+    --temp: override temperature (skips sync + weather)
+    --dry-run: analyze only, don't execute
+    --no-sync: skip sensor sync (use DB data)
+    """
+    cluster = db.get_cluster(args.cluster)
+    if not cluster:
+        print("❌ Cluster not found")
+        return 1
+
+    is_indoor = cluster.environment == "indoor"
+
+    # Step 1: Sync sensors (unless --temp override or --no-sync)
+    sensor_data = None
+    if args.temp is None and not getattr(args, "no_sync", False):
+        sensor_data = _sync_and_read_sensors(db, args.cluster)
+
+    # Step 2: Determine temperature based on environment
+    temp = args.temp
+    weather = None
+    source = "override"
+
+    if temp is None:
+        if is_indoor:
+            if sensor_data and sensor_data.get("temperature") is not None:
+                temp = sensor_data["temperature"]
+                source = "sensor"
+            else:
+                weather = _fetch_open_meteo()
+                if weather and weather.get("feels_like") is not None:
+                    temp = weather["feels_like"]
+                    source = "open-meteo (fallback)"
+        else:
+            weather = _fetch_open_meteo()
+            if weather and weather.get("feels_like") is not None:
+                temp = weather["feels_like"]
+                source = "open-meteo"
+            elif sensor_data and sensor_data.get("temperature") is not None:
+                temp = sensor_data["temperature"]
+                source = "sensor (weather unavailable)"
+
+    if temp is None:
+        temp = 20.0
+        source = "fallback (20°C)"
+
+    # Step 3: Run decision logic
+    logic = IrrigationLogic(db)
+    decision = logic.decide_for_cluster(args.cluster, current_temp=temp)
     if not decision:
-        print("❌ Cluster not found or no data")
+        print("❌ No data for decision")
         return 1
 
     action = decision["action"]
@@ -160,54 +253,52 @@ def cmd_irrigate(args, db: IrrigationDB, dm: TuyaDeviceManager):
     confidence = decision["confidence"]
     duration = decision["duration_minutes"]
 
+    # Step 4: Output
     print(f"🧠 Decision: {action} — {reason}")
-    print(f"   Confidence: {confidence:.0%} | Duration: {duration}min / {decision['interval_hours']}h")
+    info = [f"Temp: {temp:.1f}°C ({source})"]
+    if sensor_data and sensor_data.get("soil_moisture") is not None:
+        info.append(f"Soil: {sensor_data['soil_moisture']:.0f}%")
+    if weather and weather.get("precipitation") and weather["precipitation"] > 0:
+        info.append(f"Rain: {weather['precipitation']}mm")
+    info.append(f"Confidence: {confidence:.0%} | {duration}min / {decision['interval_hours']}h")
+    for line in info:
+        print(f"   {line}")
 
-    # Show stress/trends if present
     stress = decision.get("stress_indicators", {})
     for key in ("water_stress", "heat_stress", "over_watering"):
         if key in stress:
             print(f"   ⚠️ {key}: {stress[key]}")
-    trends = decision.get("trends", {})
-    if trends.get("soil_moisture_trend"):
-        print(f"   📈 Soil trend: {trends['soil_moisture_trend']} ({trends.get('soil_moisture_delta', 0):+.0f}%)")
+    alerts = stress.get("learning_alerts", [])
+    for a in alerts:
+        print(f"   🚨 [{a['severity']}] {a['message']}")
 
     if args.dry_run:
         print("\n⏹️  Dry run — no action taken")
         return 0
 
     if action == "skip":
-        print("⏭️  Skipping")
-        irrigators = db.get_irrigators_in_cluster(args.cluster)
-        for irr in irrigators:
-            db.add_irrigation_event(
-                irrigator_id=irr.id, action="skip_decision", triggered_by="auto",
-                notes=f"Smart: {reason} (confidence: {confidence:.0%})",
-            )
         return 0
 
-    # Execute irrigation
+    # Step 5: Execute
     irrigators = db.get_irrigators_in_cluster(args.cluster)
     if not irrigators:
-        print("❌ No irrigators in cluster")
+        print("❌ No irrigators")
         return 1
 
     for irrigator in irrigators:
-        print(f"\n💧 {irrigator.name}...")
-        success, output = dm.irrigator_start(irrigator, duration)
-
+        success, output = dm.irrigator_start(irrigator, duration) if dm else (False, "No device manager")
+        soil_info = f", soil={sensor_data['soil_moisture']:.0f}%" if sensor_data and sensor_data.get("soil_moisture") is not None else ""
         db.add_irrigation_event(
             irrigator_id=irrigator.id,
             action="start" if success else "attempted",
             duration_minutes=duration,
             triggered_by="auto",
-            notes=f"Smart: {reason} (confidence: {confidence:.0%})",
+            notes=f"temp={temp:.1f}°C ({source}){soil_info}, confidence={confidence:.0%}, reason={reason}",
         )
-
         if success:
-            print(f"   ✅ Started ({duration}min)")
+            print(f"   ✅ {irrigator.name}: started ({duration}min)")
         else:
-            print(f"   ❌ Failed: {output}")
+            print(f"   ❌ {irrigator.name}: {output}")
             return 1
 
     return 0
@@ -486,10 +577,11 @@ Setup (CRUD):
     p_status = sub.add_parser("status", help="Full cluster status")
     p_status.add_argument("cluster", type=int, help="Cluster ID")
 
-    p_irrigate = sub.add_parser("irrigate", help="Smart irrigation (analyze + execute)")
+    p_irrigate = sub.add_parser("irrigate", help="Sync + weather + decide + execute")
     p_irrigate.add_argument("cluster", type=int, help="Cluster ID")
-    p_irrigate.add_argument("--temp", type=float, help="Override temperature (°C)")
+    p_irrigate.add_argument("--temp", type=float, help="Override temperature (skips sync + weather)")
     p_irrigate.add_argument("--dry-run", action="store_true", help="Analyze only, don't execute")
+    p_irrigate.add_argument("--no-sync", action="store_true", help="Skip sensor sync (use DB data)")
 
     p_sync = sub.add_parser("sync", help="Sync sensor data from Tuya Cloud")
     p_sync.add_argument("--hours", type=int, default=24, help="History window (default: 24)")
