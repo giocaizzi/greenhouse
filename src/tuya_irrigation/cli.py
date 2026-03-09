@@ -10,13 +10,12 @@ from tuya_irrigation.devices import TuyaDeviceManager
 from tuya_irrigation.logic import IrrigationLogic
 from tuya_irrigation.utils import format_timestamp
 
-
 # ── Helper Functions ──────────────────────────────────────────────────────────
 
 
 def _get_irrigator_or_exit(db: IrrigationDB, irrigator_id: int):
     """Get irrigator by ID or exit with error message.
-    
+
     Returns irrigator object on success, exits with code 1 on failure.
     """
     irrigator = db.get_irrigator(irrigator_id)
