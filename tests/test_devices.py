@@ -147,7 +147,7 @@ class TestDeviceManager(unittest.TestCase):
         success, msg = dm.irrigator_on(self._make_irrigator())
 
         self.assertFalse(success)
-        self.assertIn("error", msg.lower())
+        self.assertIn("failed", msg.lower())
 
     @patch("tuya_irrigation.cloud.TuyaCloud")
     def test_sensor_reading_parsing(self, mock_cloud_class):

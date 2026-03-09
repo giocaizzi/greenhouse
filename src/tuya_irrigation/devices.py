@@ -25,6 +25,22 @@ class TuyaDeviceManager:
             apiSecret=self.secret,
         )
 
+    def _send_command(self, device_id: str, commands: dict) -> tuple[bool, str]:
+        """Send command to device via Cloud API.
+
+        Args:
+            device_id: Tuya device ID
+            commands: Command dict in format {"commands": [{"code": str, "value": any}, ...]}
+
+        Returns:
+            (success, message) tuple
+        """
+        result = self.cloud.sendcommand(device_id, commands)
+        if result.get("success"):
+            return True, "Command succeeded"
+        else:
+            return False, f"Cloud API error: {result}"
+
     # ── Irrigator Control ─────────────────────────────────────────────────────
 
     def irrigator_status(self, irrigator: Irrigator) -> dict:
@@ -49,71 +65,46 @@ class TuyaDeviceManager:
     def irrigator_on(self, irrigator: Irrigator) -> tuple[bool, str]:
         """Turn irrigator ON."""
         commands = {"commands": [{"code": "switch", "value": True}]}
-        result = self.cloud.sendcommand(irrigator.tuya_device_id, commands)
-
-        if result.get("success"):
-            return True, "Device turned ON"
-        else:
-            return False, f"Cloud API error: {result}"
+        success, _ = self._send_command(irrigator.tuya_device_id, commands)
+        return success, "Device turned ON" if success else "Failed to turn ON device"
 
     def irrigator_off(self, irrigator: Irrigator) -> tuple[bool, str]:
         """Turn irrigator OFF."""
         commands = {"commands": [{"code": "switch", "value": False}]}
-        result = self.cloud.sendcommand(irrigator.tuya_device_id, commands)
-
-        if result.get("success"):
-            return True, "Device turned OFF"
-        else:
-            return False, f"Cloud API error: {result}"
+        success, _ = self._send_command(irrigator.tuya_device_id, commands)
+        return success, "Device turned OFF" if success else "Failed to turn OFF device"
 
     def irrigator_start(self, irrigator: Irrigator, minutes: int | None = None) -> tuple[bool, str]:
         """Start irrigation with optional duration.
 
-        For Tuya irrigators, this typically means:
-        1. Turn on the switch
-        2. Set timer duration (if device supports it)
+        Args:
+            irrigator: Irrigator instance
+            minutes: Duration in minutes (None = just turn on)
 
-        Returns (success, message).
+        Returns:
+            (success, message) tuple
         """
         if minutes is None:
             # Just turn on without timer
             return self.irrigator_on(irrigator)
 
-        # Turn on + set timer
-        # Most Tuya irrigators use these codes:
-        # - "switch": bool (on/off)
-        # - "timer_1" or "countdown_1": int (seconds remaining)
+        # Turn on + set timer (countdown_1 expects seconds)
         commands = {
             "commands": [
                 {"code": "switch", "value": True},
-                {"code": "countdown_1", "value": minutes * 60},  # seconds
+                {"code": "countdown_1", "value": minutes * 60},
             ]
         }
 
-        result = self.cloud.sendcommand(irrigator.tuya_device_id, commands)
-
-        if result.get("success"):
+        success, _ = self._send_command(irrigator.tuya_device_id, commands)
+        if success:
             return True, f"Irrigation started for {minutes} minutes"
         else:
-            return False, f"Cloud API error: {result}"
+            return False, "Failed to start irrigation"
 
     def irrigator_stop(self, irrigator: Irrigator) -> tuple[bool, str]:
         """Stop current irrigation."""
         return self.irrigator_off(irrigator)
-
-    def irrigator_set_schedule(
-        self,
-        irrigator: Irrigator,
-        minutes: int,
-        interval_hours: int,
-        auto_run: bool = True,
-    ) -> tuple[bool, str]:
-        """Set irrigation schedule.
-
-        Note: Schedule management via Cloud API is device-specific and may not
-        be supported by all irrigators. This is a placeholder for future implementation.
-        """
-        return False, "Schedule setting via Cloud API not yet implemented"
 
     # ── Sensor Reading ────────────────────────────────────────────────────────
 
