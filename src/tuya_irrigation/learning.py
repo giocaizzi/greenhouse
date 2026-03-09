@@ -17,6 +17,7 @@ from dataclasses import dataclass
 
 from tuya_irrigation.db import IrrigationDB
 from tuya_irrigation.models import IrrigationEvent, Sensor
+from tuya_irrigation.plant_db import get_plant_database
 
 
 @dataclass
@@ -78,14 +79,7 @@ class IrrigationLearner:
 
         Returns one IrrigationResponse per sensor in the cluster.
         """
-        # Get the irrigator's cluster
-        irrigator = None
-        for cluster in self.db.list_clusters():
-            for irr in self.db.get_irrigators_in_cluster(cluster.id):
-                if irr.id == event.irrigator_id:
-                    irrigator = irr
-                    break
-
+        irrigator = self.db.get_irrigator(event.irrigator_id)
         if not irrigator:
             return []
 
@@ -241,7 +235,6 @@ class IrrigationLearner:
         if not profiles:
             return alerts  # Not enough data yet
 
-        from tuya_irrigation.plant_db import get_plant_database
         plant_db = get_plant_database()
         plants = self.db.get_plants_in_cluster(cluster_id)
         plant_care = {p.id: plant_db.get_care_data(species=p.species, category=p.category) for p in plants}

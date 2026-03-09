@@ -210,7 +210,6 @@ class IrrigationLogic:
                 reasons.append(f"low humidity ({avg_humidity:.0f}%)")
 
         # Water needs adjustment
-        self.plant_db.get_water_needs_info(water_needs_level)
         if water_needs_level == "high":
             decision["duration_minutes"] = max(2, decision["duration_minutes"] + 1)
             decision["interval_hours"] = max(6, decision["interval_hours"] - 2)

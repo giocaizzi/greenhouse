@@ -46,21 +46,16 @@ def get_device():
     return device, use_local
 
 
-def cmd_status(device, use_local):
+def cmd_status(device, _use_local):
     """Get device status."""
     try:
-        if use_local:
-            status = device.status()
-        else:
-            status = device.status()  # Cloud API
-
+        status = device.status()
         print(json.dumps(status, indent=2))
 
-        # Parse for human-readable output
         if "dps" in status:
             dps = status["dps"]
             switch_on = dps.get("1", False)
-            timer_left = dps.get("11", 0)  # Timer remaining in seconds
+            timer_left = dps.get("11", 0)
             print(f"\nState: {'ON' if switch_on else 'OFF'}")
             if timer_left > 0:
                 print(f"Time remaining: {timer_left // 60} min")
@@ -71,13 +66,10 @@ def cmd_status(device, use_local):
         return 1
 
 
-def cmd_on(device, use_local):
+def cmd_on(device, _use_local):
     """Turn device ON."""
     try:
-        if use_local:
-            device.turn_on()
-        else:
-            device.turn_on()
+        device.turn_on()
         print("Device turned ON")
         return 0
     except Exception as e:
@@ -85,13 +77,10 @@ def cmd_on(device, use_local):
         return 1
 
 
-def cmd_off(device, use_local):
+def cmd_off(device, _use_local):
     """Turn device OFF."""
     try:
-        if use_local:
-            device.turn_off()
-        else:
-            device.turn_off()
+        device.turn_off()
         print("Device turned OFF")
         return 0
     except Exception as e:
@@ -102,14 +91,11 @@ def cmd_off(device, use_local):
 def cmd_start(device, use_local, minutes):
     """Start irrigation with timer."""
     try:
-        # Turn on switch (DP 1)
         if use_local:
             device.set_value(1, True)
-            # Set timer in seconds (DP 11)
             device.set_value(11, minutes * 60)
         else:
             device.turn_on()
-            # Cloud API for timer (adjust based on device)
             device.set_value(11, minutes * 60)
 
         print(f"Irrigation started for {minutes} minutes")

@@ -644,11 +644,6 @@ def main():
         elif args.command == "auto-irrigate":
             return cmd_auto_irrigate(args, db, dm)
 
-        elif args.command == "log":
-            if args.log_cmd == "readings":
-                cmd_log_readings(args, db)
-            elif args.log_cmd == "events":
-                cmd_log_events(args, db)
         elif args.command == "learn":
             from tuya_irrigation.learning import IrrigationLearner
 

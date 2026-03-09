@@ -337,13 +337,14 @@ class IrrigationDB:
         """Bulk insert sensor readings with dedup. Returns count of new rows inserted."""
         if not readings:
             return 0
+        before = self.conn.total_changes
         self.conn.executemany(
             """INSERT OR IGNORE INTO sensor_readings
                (sensor_id, timestamp, temperature, humidity, soil_moisture, light)
                VALUES (?, ?, ?, ?, ?, ?)""",
             readings,
         )
-        inserted = self.conn.total_changes
+        inserted = self.conn.total_changes - before
         self.conn.commit()
         return inserted
 

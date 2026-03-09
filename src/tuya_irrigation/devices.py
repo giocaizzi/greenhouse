@@ -100,24 +100,14 @@ class TuyaDeviceManager:
     def irrigator_start(self, irrigator: Irrigator, minutes: int | None = None) -> tuple[bool, str]:
         """Start irrigation with optional duration."""
         use_local = irrigator.type == "tuya_local"
-
-        if minutes is not None:
-            # Start with duration (works for both local and cloud)
-            # Don't add "local" prefix here — _run_tuya_script handles it
-            args = ["start", "--minutes", str(minutes)]
-
-            code, output = self._run_tuya_script(
-                irrigator.tuya_device_id,
-                *args,
-                use_local=use_local,
-            )
-            return code == 0, output
-
-        # No duration — just turn on
         args = ["start"]
-        if minutes:
+        if minutes is not None:
             args.extend(["--minutes", str(minutes)])
-        code, output = self._run_tuya_script(irrigator.tuya_device_id, *args)
+        code, output = self._run_tuya_script(
+            irrigator.tuya_device_id,
+            *args,
+            use_local=use_local,
+        )
         return code == 0, output
 
     def irrigator_stop(self, irrigator: Irrigator) -> tuple[bool, str]:
