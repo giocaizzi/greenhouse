@@ -75,7 +75,9 @@ class IrrigationDB:
             name TEXT NOT NULL,
             type TEXT NOT NULL,
             config TEXT,
-            FOREIGN KEY (cluster_id) REFERENCES clusters(id)
+            plant_id INTEGER,
+            FOREIGN KEY (cluster_id) REFERENCES clusters(id),
+            FOREIGN KEY (plant_id) REFERENCES plants(id)
         );
 
         -- Sensor Readings
@@ -271,11 +273,12 @@ class IrrigationDB:
         name: str,
         sensor_type: str,
         config: dict,
+        plant_id: int | None = None,
     ) -> int:
         """Add a sensor device and return its ID."""
         cursor = self.conn.execute(
-            "INSERT INTO sensors (cluster_id, tuya_device_id, name, type, config) VALUES (?, ?, ?, ?, ?)",
-            (cluster_id, tuya_device_id, name, sensor_type, json.dumps(config)),
+            "INSERT INTO sensors (cluster_id, tuya_device_id, name, type, config, plant_id) VALUES (?, ?, ?, ?, ?, ?)",
+            (cluster_id, tuya_device_id, name, sensor_type, json.dumps(config), plant_id),
         )
         self.conn.commit()
         return cursor.lastrowid
@@ -293,6 +296,7 @@ class IrrigationDB:
             name=row["name"],
             type=row["type"],
             config=row["config"],
+            plant_id=row["plant_id"] if "plant_id" in row.keys() else None,
         )
 
     # ── Sensor Readings ───────────────────────────────────────────────────────

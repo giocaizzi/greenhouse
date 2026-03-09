@@ -52,6 +52,7 @@ class Sensor:
     name: str
     type: str  # "temp_humidity", "soil_moisture", "light"
     config: str  # JSON string
+    plant_id: int | None = None  # Link to specific plant
 
 
 @dataclass

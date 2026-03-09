@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
 """HEARTBEAT entrypoint for smart irrigation.
 
-Parses WTTR weather string to extract feels-like temperature,
+Fetches feels-like temperature from Open-Meteo (no API key required),
 then runs auto-irrigate logic for the indoor cluster.
 
-Usage (from HEARTBEAT.md):
-    python3 scripts/auto_irrigate.py --wttr "$WTTR"
+Usage:
+    python3 scripts/auto_irrigate.py
+    python3 scripts/auto_irrigate.py --temp 15.0   # override temp
 """
 
 import argparse
-import re
 import sys
+import urllib.request
+import json
 
 # Initialize path for package imports
 import _init_path  # noqa: F401
@@ -18,41 +20,45 @@ import _init_path  # noqa: F401
 from tuya_irrigation.db import IrrigationDB  # noqa: E402
 from tuya_irrigation.logic import IrrigationLogic  # noqa: E402
 
+# Milano coordinates
+MILANO_LAT = 45.464
+MILANO_LON = 9.189
 
-def parse_feels_like(wttr: str) -> float | None:
-    """Extract feels-like temperature from wttr format string.
 
-    Example: 'Milano: ⛅ +12°C (+8°C), pioggia 0.0mm, vento 15km/h'
-    Returns the feels-like value in parentheses (8 in the example above).
-    """
-    # Match feels-like in parentheses: (+8°C) or (-2°C) or (8°C)
-    match = re.search(r"\(([+-]?\d+)°C\)", wttr)
-    if match:
-        return float(match.group(1))
-    # Fallback: match first temperature
-    match = re.search(r"([+-]?\d+)°C", wttr)
-    if match:
-        return float(match.group(1))
-    return None
+def fetch_feels_like() -> float | None:
+    """Fetch current feels-like temperature for Milano from Open-Meteo (no API key)."""
+    url = (
+        f"https://api.open-meteo.com/v1/forecast"
+        f"?latitude={MILANO_LAT}&longitude={MILANO_LON}"
+        f"&current=apparent_temperature"
+        f"&timezone=Europe/Rome"
+    )
+    try:
+        with urllib.request.urlopen(url, timeout=8) as resp:
+            data = json.loads(resp.read())
+            return float(data["current"]["apparent_temperature"])
+    except Exception as e:
+        print(f"⚠️  Open-Meteo fetch failed: {e}", file=sys.stderr)
+        return None
 
 
 def main():
     parser = argparse.ArgumentParser(description="HEARTBEAT irrigation entrypoint")
-    parser.add_argument("--wttr", help="WTTR weather string (to extract feels-like temp)")
-    parser.add_argument("--temp", type=float, help="Current temperature in °C (overrides --wttr)")
+    parser.add_argument("--temp", type=float, help="Current temperature in °C (overrides Open-Meteo fetch)")
     parser.add_argument("--cluster", type=int, default=1, help="Cluster ID (default: 1)")
     parser.add_argument("--db", help="Database path (default: auto)")
     args = parser.parse_args()
 
     # Determine temperature
     temp = args.temp
-    if temp is None and args.wttr:
-        temp = parse_feels_like(args.wttr)
+    if temp is None:
+        temp = fetch_feels_like()
     if temp is None:
         print("⚠️  No temperature available — using seasonal fallback (20°C)", file=sys.stderr)
         temp = 20.0
 
     # Run auto-irrigate
+    from pathlib import Path
     db_path = Path(args.db) if args.db else None
     db = IrrigationDB(db_path)
     logic = IrrigationLogic(db)
@@ -106,7 +112,6 @@ def main():
             print("✅ Irrigation started successfully")
         else:
             print(f"⚠️  Decision logged but device execution failed: {device_error}", file=sys.stderr)
-            # Don't return error — we still logged the decision
     elif action == "skip":
         # Silent on skip — heartbeat shouldn't be noisy
         pass

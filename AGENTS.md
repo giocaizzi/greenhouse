@@ -47,7 +47,7 @@ git grep -i "bf60\|192.168\|local_key\|api.*key" -- '*.py' '*.md' '*.json'
 tools/cluster.local.json     # User's personal config (gitignored)
 tools/cluster.local.json.example  # Template (in git, no real data)
 
-~/.openclaw/config/secrets.env    # Credentials (outside repo)
+~/.openclaw/.env    # Credentials (outside repo)
 ```
 
 **Code should:**

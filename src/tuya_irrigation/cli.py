@@ -232,8 +232,10 @@ def cmd_sensor_add(args, db: IrrigationDB):
         name=args.name,
         sensor_type=args.type,
         config=config,
+        plant_id=getattr(args, "plant_id", None),
     )
-    print(f"✅ Sensor added: {args.name} (ID: {sensor_id})")
+    plant_info = f" → plant {args.plant_id}" if getattr(args, "plant_id", None) else ""
+    print(f"✅ Sensor added: {args.name} (ID: {sensor_id}){plant_info}")
 
 
 def cmd_sensor_list(args, db: IrrigationDB):
@@ -521,6 +523,7 @@ def main():
     p_sensor_add.add_argument("--type", required=True, help="Sensor type (temp_humidity, soil_moisture, light)")
     p_sensor_add.add_argument("--device-ip", help="Device IP (for local)")
     p_sensor_add.add_argument("--local-key", help="Local key (for local)")
+    p_sensor_add.add_argument("--plant-id", type=int, help="Link sensor to a specific plant")
     p_sensor_list = sensor_sub.add_parser("list", help="List sensors")
     p_sensor_list.add_argument("--cluster", type=int, help="Filter by cluster ID")
     p_sensor_read = sensor_sub.add_parser("read", help="Read sensor data")

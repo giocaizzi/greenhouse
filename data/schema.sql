@@ -44,7 +44,9 @@ CREATE TABLE sensors (
     name TEXT NOT NULL,
     type TEXT NOT NULL,             -- "temp_humidity", "soil_moisture", "light"
     config TEXT,                    -- JSON: {device_ip, local_key, ...}
-    FOREIGN KEY (cluster_id) REFERENCES clusters(id)
+    plant_id INTEGER,              -- Link to specific plant (optional)
+    FOREIGN KEY (cluster_id) REFERENCES clusters(id),
+    FOREIGN KEY (plant_id) REFERENCES plants(id)
 );
 
 -- Sensor readings (time-series)

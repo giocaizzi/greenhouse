@@ -51,7 +51,7 @@ Modern Python package for automated plant irrigation using evidence-based plant 
 python3 scripts/main.py analyze 1 --temp 23
 
 # Auto-irrigate based on smart logic
-. ~/.openclaw/config/secrets.env
+# Env vars loaded automatically by OpenClaw
 python3 scripts/main.py auto-irrigate 1 --temp 23
 
 # Log manual irrigation (e.g., you watered by hand)
@@ -94,7 +94,7 @@ For fully autonomous irrigation via OpenClaw heartbeat:
 
 ```bash
 # Add to HEARTBEAT.md:
-. ~/.openclaw/config/secrets.env && \
+# Env vars loaded automatically by OpenClaw && \
 WTTR=$(curl -s "wttr.in/Milano?format=%l:+%c+%t+(%f),+pioggia+%p,+vento+%w") && \
 python3 ~/.openclaw/workspace/skills/tuya-irrigation/scripts/auto_irrigate.py --wttr "$WTTR"
 ```

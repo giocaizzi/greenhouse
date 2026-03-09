@@ -19,7 +19,7 @@ From Tuya IoT Platform:
 ### Step 2: Add to Database
 
 ```bash
-. ~/.openclaw/config/secrets.env
+# Env vars loaded automatically by OpenClaw
 cd ~/.openclaw/workspace/skills/tuya-irrigation/scripts
 
 python3 main.py sensor add \

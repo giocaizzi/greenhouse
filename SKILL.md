@@ -199,13 +199,11 @@ For fully autonomous irrigation via OpenClaw heartbeat, use the dedicated `auto_
 
 ```bash
 # HEARTBEAT.md entry:
-# Env vars loaded automatically by OpenClaw && \
-WTTR=$(curl -s "wttr.in/Milano?format=%l:+%c+%t+(%f),+pioggia+%p,+vento+%w") && \
-python3 ~/.openclaw/workspace/skills/tuya-irrigation/scripts/auto_irrigate.py --wttr "$WTTR"
+python3 ~/.openclaw/workspace/skills/tuya-irrigation/scripts/auto_irrigate.py
 ```
 
 **What it does:**
-- Parses feels-like temperature from wttr.in weather string
+- Fetches feels-like temperature from Open-Meteo API (no API key required)
 - Calls `IrrigationLogic.decide_for_cluster()` for smart decision
 - Executes irrigation on physical Tuya device via `TuyaDeviceManager`
 - Logs all decisions to database (action + confidence + metadata)

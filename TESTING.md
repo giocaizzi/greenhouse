@@ -24,7 +24,7 @@
 ### Phase 1: Without Sensors (NOW) ✅
 
 ```bash
-. ~/.openclaw/config/secrets.env
+# Env vars loaded automatically by OpenClaw
 cd ~/.openclaw/workspace/skills/tuya-irrigation/scripts
 
 # 1. Setup
@@ -52,7 +52,7 @@ python3 main.py log events --cluster 1
 ### Phase 2: With Sensors (WHEN THEY ARRIVE)
 
 ```bash
-. ~/.openclaw/config/secrets.env
+# Env vars loaded automatically by OpenClaw
 cd ~/.openclaw/workspace/skills/tuya-irrigation/scripts
 
 # 1. Add sensors
@@ -108,7 +108,7 @@ python3 main.py log readings --cluster 1 --hours 168
 #   python3 main.py auto-irrigate 1
 
 # 2. Add cron for sensor logging (if not using systemd/supervisor)
-# */30 * * * * . ~/.openclaw/config/secrets.env && python3 ~/.openclaw/workspace/skills/tuya-irrigation/scripts/logger.py
+# */30 * * * * # Env vars loaded automatically by OpenClaw && python3 ~/.openclaw/workspace/skills/tuya-irrigation/scripts/logger.py
 
 # 3. Monitor daily for first week
 python3 main.py log events --cluster 1 --hours 24
