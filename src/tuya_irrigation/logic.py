@@ -119,6 +119,9 @@ class IrrigationLogic:
             return decision
 
         # PRIORITY 2: Soil moisture is the primary indicator
+        # With a single irrigator serving multiple plants, we use conservative logic:
+        # - Irrigate if the DRIEST plant needs water AND no plant would be over-watered
+        # - If conflict (one dry, one wet): shorter duration to help dry without flooding wet
         if avg_soil_moisture is not None:
             # Get target soil moisture from plant database
             target_ranges = [
@@ -127,29 +130,51 @@ class IrrigationLogic:
             target_min = min(r[0] for r in target_ranges)
             target_max = max(r[1] for r in target_ranges)
 
-            if avg_soil_moisture < target_min - 10:
-                # Very dry
+            min_soil = sensor_data.get("min_soil_moisture", avg_soil_moisture)
+            max_soil = sensor_data.get("max_soil_moisture", avg_soil_moisture)
+            per_sensor = sensor_data.get("per_sensor", [])
+
+            # Detect conflict: one plant dry, another already wet
+            has_conflict = (min_soil < target_min) and (max_soil > target_max - 10)
+
+            if has_conflict:
+                # Conflict: irrigate conservatively (short burst to help dry plant
+                # without over-watering the wet one)
+                decision["action"] = "irrigate"
+                decision["duration_minutes"] = 1  # Minimal
+                decision["interval_hours"] = 8
+                dry_names = [s["name"] for s in per_sensor
+                             if s.get("avg_soil_moisture") is not None and s["avg_soil_moisture"] < target_min]
+                wet_names = [s["name"] for s in per_sensor
+                             if s.get("avg_soil_moisture") is not None and s["avg_soil_moisture"] > target_max - 10]
+                reasons.append(
+                    f"⚠️ conflict: dry={min_soil:.0f}% ({', '.join(dry_names) or '?'}), "
+                    f"wet={max_soil:.0f}% ({', '.join(wet_names) or '?'}) — short burst"
+                )
+                decision["confidence"] = 0.65
+            elif min_soil < target_min - 10:
+                # Driest plant is very dry, no conflict
                 decision["action"] = "irrigate"
                 decision["duration_minutes"] = 3
                 decision["interval_hours"] = 8
-                reasons.append(f"soil very dry ({avg_soil_moisture:.0f}% < {target_min}%)")
+                reasons.append(f"soil very dry (driest={min_soil:.0f}% < {target_min}%)")
                 decision["confidence"] = 0.9
-            elif avg_soil_moisture < target_min:
-                # Moderately dry
+            elif min_soil < target_min:
+                # Driest plant is moderately dry
                 decision["action"] = "irrigate"
                 decision["duration_minutes"] = 2
                 decision["interval_hours"] = 12
-                reasons.append(f"soil moderately dry ({avg_soil_moisture:.0f}%)")
+                reasons.append(f"soil moderately dry (driest={min_soil:.0f}%)")
                 decision["confidence"] = 0.8
             elif avg_soil_moisture <= target_max:
-                # Adequate
+                # All plants adequate
                 decision["action"] = "skip"
-                reasons.append(f"soil moisture adequate ({avg_soil_moisture:.0f}%)")
+                reasons.append(f"soil moisture adequate (range={min_soil:.0f}-{max_soil:.0f}%)")
                 decision["confidence"] = 0.7
             else:
                 # Too wet
                 decision["action"] = "skip"
-                reasons.append(f"soil too wet ({avg_soil_moisture:.0f}% > {target_max}%)")
+                reasons.append(f"soil too wet (wettest={max_soil:.0f}% > {target_max}%)")
                 decision["confidence"] = 0.8
 
         # Temperature adjustment
@@ -201,7 +226,13 @@ class IrrigationLogic:
         return decision
 
     def _get_recent_sensor_data(self, cluster_id: int, hours: int = 24) -> dict:
-        """Get averaged sensor data from recent readings."""
+        """Get sensor data from recent readings, per-sensor and aggregated.
+
+        Returns dict with:
+        - avg_temperature, avg_humidity, avg_soil_moisture, avg_light (cluster-wide)
+        - min_soil_moisture, max_soil_moisture (for conflict detection)
+        - per_sensor: list of {sensor_id, plant_id, name, avg_soil, avg_temp, ...}
+        """
         sensors = self.db.get_sensors_in_cluster(cluster_id)
         if not sensors:
             return {}
@@ -210,26 +241,49 @@ class IrrigationLogic:
         all_humidity = []
         all_soil = []
         all_light = []
+        per_sensor = []
 
         for sensor in sensors:
             readings = self.db.get_recent_readings(sensor.id, hours=hours)
+            s_temps = []
+            s_humidity = []
+            s_soil = []
+
             for r in readings:
                 if r.temperature is not None:
                     all_temps.append(r.temperature)
+                    s_temps.append(r.temperature)
                 if r.humidity is not None:
                     all_humidity.append(r.humidity)
+                    s_humidity.append(r.humidity)
                 if r.soil_moisture is not None:
                     all_soil.append(r.soil_moisture)
+                    s_soil.append(r.soil_moisture)
                 if r.light is not None:
                     all_light.append(r.light)
 
-        data = {}
+            sensor_info = {
+                "sensor_id": sensor.id,
+                "plant_id": sensor.plant_id,
+                "name": sensor.name,
+            }
+            if s_temps:
+                sensor_info["avg_temperature"] = statistics.mean(s_temps)
+            if s_humidity:
+                sensor_info["avg_humidity"] = statistics.mean(s_humidity)
+            if s_soil:
+                sensor_info["avg_soil_moisture"] = statistics.mean(s_soil)
+            per_sensor.append(sensor_info)
+
+        data = {"per_sensor": per_sensor}
         if all_temps:
             data["avg_temperature"] = statistics.mean(all_temps)
         if all_humidity:
             data["avg_humidity"] = statistics.mean(all_humidity)
         if all_soil:
             data["avg_soil_moisture"] = statistics.mean(all_soil)
+            data["min_soil_moisture"] = min(all_soil)
+            data["max_soil_moisture"] = max(all_soil)
         if all_light:
             data["avg_light"] = statistics.mean(all_light)
 
