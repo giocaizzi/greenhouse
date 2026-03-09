@@ -14,26 +14,31 @@ Evidence-based irrigation with Tuya Cloud sensors, multi-plant conflict resoluti
 ## Architecture
 
 ```
-Sensor TR-301Z → Zigbee GW → Tuya Cloud
+Sensor TR-301Z → Zigbee GW → Tuya Cloud API
                                   ↓
-                    cloud.py (get_live_reading + get_device_logs)
+                    cloud.py (getstatus + getdevicelog + DP parsing)
                                   ↓
                     cli.py irrigate (sync → weather → decide → execute)
                         ↓               ↓
                  learning.py        logic.py
                  (efficiency)       (multi-sensor decisions)
                         ↓               ↓
-                  alerts/reports    Irrigator Rainpoint
+                  alerts/reports    Irrigator → Tuya Cloud API → Device
 ```
 
-**Package:** `tuya_irrigation` (v0.4.0)
+**Device Communication:**
+- **Sensors (Zigbee):** Tuya Cloud API only (required for Zigbee sub-devices)
+- **Irrigators:** Tuya Cloud API (reliable, ~200ms latency)
+- **Local mode deprecated:** Protocol v3.5 error 914 (query commands fail)
+
+**Package:** `tuya_irrigation` (v0.5.0)
 
 | Module | Purpose |
 |---|---|
 | `cli.py` | Single entry point: status, irrigate, sync, learn, history, stats |
 | `cloud.py` | Tuya Cloud API client (getstatus, getdevicelog, DP parsing) |
 | `db.py` | SQLite with dedup, bulk insert, readings-around queries |
-| `devices.py` | Physical device control (irrigators via tinytuya) |
+| `devices.py` | Physical device control via Tuya Cloud API |
 | `logic.py` | Smart decisions: multi-sensor conflict, trends, stress detection |
 | `learning.py` | Post-irrigation analysis: absorption profiles, efficiency, alerts |
 | `logger_daemon.py` | Cloud → DB sync (used by CLI `sync` + `irrigate`) |

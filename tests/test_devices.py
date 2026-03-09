@@ -8,52 +8,51 @@ from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from fake_data import (
-    FAKE_CLIENT_ID,
-    FAKE_CLIENT_SECRET,
-    FAKE_DEVICE_ID,
-    FAKE_DEVICE_IP,
-    FAKE_LOCAL_KEY,
-    FAKE_REGION,
-    FAKE_SENSOR_ID,
-)
+from fake_data import FAKE_CLIENT_ID, FAKE_CLIENT_SECRET, FAKE_DEVICE_ID, FAKE_REGION
 from tuya_irrigation.devices import TuyaDeviceManager
 from tuya_irrigation.models import Irrigator, Sensor
 
 
 class TestDeviceManager(unittest.TestCase):
-    """Test device management with mocked Tuya API."""
+    """Test device management with Cloud API."""
 
     def setUp(self):
-        """Set up device manager with fake credentials (no real API calls)."""
-        with patch.dict(
+        """Mock environment and Cloud API."""
+        self.env_patcher = patch.dict(
             "os.environ",
             {
                 "TUYA_CLIENT_ID": FAKE_CLIENT_ID,
                 "TUYA_CLIENT_SECRET": FAKE_CLIENT_SECRET,
                 "TUYA_REGION": FAKE_REGION,
             },
-        ):
-            self.dm = TuyaDeviceManager()
+        )
+        self.env_patcher.start()
 
-    def _make_irrigator(self, device_type="tuya_cloud", config="{}"):
+    def tearDown(self):
+        """Clean up patches."""
+        self.env_patcher.stop()
+
+    def _make_irrigator(self, device_type="tuya_cloud"):
+        """Helper to create a fake irrigator."""
         return Irrigator(
             id=1,
             cluster_id=1,
             tuya_device_id=FAKE_DEVICE_ID,
             name="Test Irrigator",
             type=device_type,
-            config=config,
+            config={},
         )
 
     def _make_sensor(self):
+        """Helper to create a fake sensor."""
         return Sensor(
             id=1,
             cluster_id=1,
-            tuya_device_id=FAKE_SENSOR_ID,
+            tuya_device_id=FAKE_DEVICE_ID,
             name="Test Sensor",
-            type="temp_humidity",
-            config="{}",
+            type="soil_moisture",
+            plant_id=None,
+            config={},
         )
 
     def test_initialization_requires_credentials(self):
@@ -62,82 +61,107 @@ class TestDeviceManager(unittest.TestCase):
             with self.assertRaises(ValueError):
                 TuyaDeviceManager()
 
-    @patch("tuya_irrigation.devices.subprocess.run")
-    def test_irrigator_status_parsing(self, mock_run):
-        """Device status is correctly parsed from output."""
-        mock_run.return_value = MagicMock(
-            returncode=0,
-            stdout="State: ON\nTime remaining: 15 min\nBattery: 80%\n",
-            stderr="",
-        )
-        status = self.dm.irrigator_status(self._make_irrigator())
-
-        self.assertTrue(status.get("running"))
-        self.assertEqual(status.get("time_remaining_minutes"), 15)
-        self.assertEqual(status.get("battery_percentage"), 80)
-
-    @patch("tuya_irrigation.devices.subprocess.run")
-    def test_irrigator_on_command(self, mock_run):
+    @patch("tuya_irrigation.devices.tinytuya.Cloud")
+    def test_irrigator_on_command(self, mock_cloud_class):
         """Irrigator ON command executes correctly."""
-        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
-        success, _ = self.dm.irrigator_on(self._make_irrigator())
-        self.assertTrue(success)
-        mock_run.assert_called_once()
-
-    @patch("tuya_irrigation.devices.subprocess.run")
-    def test_irrigator_off_command(self, mock_run):
-        """Irrigator OFF command executes correctly."""
-        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
-        success, _ = self.dm.irrigator_off(self._make_irrigator())
-        self.assertTrue(success)
-        mock_run.assert_called_once()
-
-    @patch("tuya_irrigation.devices.subprocess.run")
-    def test_irrigator_start_with_duration(self, mock_run):
-        """Irrigator START with duration passes correct arguments."""
-        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
-        success, _ = self.dm.irrigator_start(self._make_irrigator(), minutes=5)
-
-        self.assertTrue(success)
-        call_args = mock_run.call_args[0][0]
-        self.assertIn("--minutes", call_args)
-        self.assertIn("5", call_args)
-
-    @patch("tuya_irrigation.cloud.TuyaCloud")
-    def test_sensor_reading_parsing(self, mock_cloud_cls):
-        """Sensor data is correctly parsed via Cloud API."""
         mock_cloud = MagicMock()
-        mock_cloud_cls.return_value = mock_cloud
-        mock_cloud.get_live_reading.return_value = {
-            "temperature": 22.5,
-            "soil_moisture": 45.0,
-            "battery_state": "middle",
+        mock_cloud.sendcommand.return_value = {"success": True}
+        mock_cloud_class.return_value = mock_cloud
+
+        dm = TuyaDeviceManager()
+        success, msg = dm.irrigator_on(self._make_irrigator())
+
+        self.assertTrue(success)
+        self.assertIn("ON", msg)
+        mock_cloud.sendcommand.assert_called_once()
+        call_args = mock_cloud.sendcommand.call_args[0]
+        self.assertEqual(call_args[0], FAKE_DEVICE_ID)
+        commands = call_args[1]["commands"]
+        self.assertEqual(commands[0]["code"], "switch")
+        self.assertTrue(commands[0]["value"])
+
+    @patch("tuya_irrigation.devices.tinytuya.Cloud")
+    def test_irrigator_off_command(self, mock_cloud_class):
+        """Irrigator OFF command executes correctly."""
+        mock_cloud = MagicMock()
+        mock_cloud.sendcommand.return_value = {"success": True}
+        mock_cloud_class.return_value = mock_cloud
+
+        dm = TuyaDeviceManager()
+        success, msg = dm.irrigator_off(self._make_irrigator())
+
+        self.assertTrue(success)
+        self.assertIn("OFF", msg)
+        mock_cloud.sendcommand.assert_called_once()
+        call_args = mock_cloud.sendcommand.call_args[0]
+        commands = call_args[1]["commands"]
+        self.assertEqual(commands[0]["code"], "switch")
+        self.assertFalse(commands[0]["value"])
+
+    @patch("tuya_irrigation.devices.tinytuya.Cloud")
+    def test_irrigator_start_with_duration(self, mock_cloud_class):
+        """Irrigator START with duration passes correct arguments."""
+        mock_cloud = MagicMock()
+        mock_cloud.sendcommand.return_value = {"success": True}
+        mock_cloud_class.return_value = mock_cloud
+
+        dm = TuyaDeviceManager()
+        success, msg = dm.irrigator_start(self._make_irrigator(), minutes=5)
+
+        self.assertTrue(success)
+        self.assertIn("5 minutes", msg)
+        mock_cloud.sendcommand.assert_called_once()
+        call_args = mock_cloud.sendcommand.call_args[0]
+        commands = call_args[1]["commands"]
+        # Should have switch ON + countdown
+        self.assertEqual(len(commands), 2)
+        self.assertEqual(commands[0]["code"], "switch")
+        self.assertTrue(commands[0]["value"])
+        self.assertEqual(commands[1]["code"], "countdown_1")
+        self.assertEqual(commands[1]["value"], 300)  # 5 minutes = 300 seconds
+
+    @patch("tuya_irrigation.devices.tinytuya.Cloud")
+    def test_irrigator_status_parsing(self, mock_cloud_class):
+        """Device status is correctly parsed from Cloud API."""
+        mock_cloud = MagicMock()
+        mock_cloud.getstatus.return_value = {
+            "success": True,
+            "result": [{"code": "switch", "value": True}, {"code": "work_state", "value": "watering"}],
         }
-        data = self.dm.read_sensor(self._make_sensor())
+        mock_cloud_class.return_value = mock_cloud
 
-        self.assertAlmostEqual(data.get("temperature"), 22.5)
-        self.assertAlmostEqual(data.get("soil_moisture"), 45.0)
+        dm = TuyaDeviceManager()
+        status = dm.irrigator_status(self._make_irrigator())
 
-    @patch("tuya_irrigation.devices.subprocess.run")
-    def test_device_error_handling(self, mock_run):
+        self.assertTrue(status["running"])
+        self.assertEqual(status["work_state"], "watering")
+
+    @patch("tuya_irrigation.devices.tinytuya.Cloud")
+    def test_device_error_handling(self, mock_cloud_class):
         """Device errors are correctly captured."""
-        mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="Connection failed")
-        success, output = self.dm.irrigator_on(self._make_irrigator())
+        mock_cloud = MagicMock()
+        mock_cloud.sendcommand.return_value = {"success": False, "msg": "Device offline"}
+        mock_cloud_class.return_value = mock_cloud
+
+        dm = TuyaDeviceManager()
+        success, msg = dm.irrigator_on(self._make_irrigator())
 
         self.assertFalse(success)
-        self.assertIn("Connection failed", output)
+        self.assertIn("error", msg.lower())
 
-    @patch("tuya_irrigation.devices.subprocess.run")
-    def test_local_mode_device(self, mock_run):
-        """Local mode devices use correct commands."""
-        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
-        # RFC 5737: 192.0.2.x is reserved for documentation/testing
-        local_config = f'{{"device_ip": "{FAKE_DEVICE_IP}", "local_key": "{FAKE_LOCAL_KEY}"}}'
-        success, _ = self.dm.irrigator_on(self._make_irrigator(device_type="tuya_local", config=local_config))
+    @patch("tuya_irrigation.cloud.TuyaCloud")
+    def test_sensor_reading_parsing(self, mock_cloud_class):
+        """Sensor data is correctly parsed via Cloud API."""
+        mock_cloud = MagicMock()
+        mock_cloud.get_live_reading.return_value = {"temperature": 22.5, "soil_moisture": 45.0}
+        mock_cloud_class.return_value = mock_cloud
 
-        self.assertTrue(success)
-        call_args = mock_run.call_args[0][0]
-        self.assertIn("local", call_args)
+        dm = TuyaDeviceManager()
+        reading = dm.read_sensor(self._make_sensor())
+
+        self.assertIn("temperature", reading)
+        self.assertEqual(reading["temperature"], 22.5)
+        self.assertEqual(reading["soil_moisture"], 45.0)
 
 
 if __name__ == "__main__":
