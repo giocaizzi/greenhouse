@@ -367,6 +367,26 @@ class IrrigationDB:
             light=row["light"],
         )
 
+    def get_readings_around(
+        self, sensor_id: int, timestamp: int, before_seconds: int = 1800, after_seconds: int = 7200
+    ) -> tuple[list[SensorReading], list[SensorReading]]:
+        """Get readings before and after a timestamp.
+
+        Returns (before_readings, after_readings), each ordered by timestamp ASC.
+        """
+        before = self.conn.execute(
+            "SELECT * FROM sensor_readings WHERE sensor_id = ? AND timestamp BETWEEN ? AND ? ORDER BY timestamp ASC",
+            (sensor_id, timestamp - before_seconds, timestamp),
+        ).fetchall()
+        after = self.conn.execute(
+            "SELECT * FROM sensor_readings WHERE sensor_id = ? AND timestamp BETWEEN ? AND ? ORDER BY timestamp ASC",
+            (sensor_id, timestamp, timestamp + after_seconds),
+        ).fetchall()
+        return (
+            [self._row_to_reading(r) for r in before],
+            [self._row_to_reading(r) for r in after],
+        )
+
     # ── Irrigation Events ─────────────────────────────────────────────────────
 
     def add_irrigation_event(

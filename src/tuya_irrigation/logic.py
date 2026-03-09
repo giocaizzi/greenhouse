@@ -67,6 +67,20 @@ class IrrigationLogic:
         trends = self._analyze_historical_trends(cluster_id)
         stress = self._detect_stress_conditions(cluster_id, sensor_data, trends)
 
+        # Check learned efficiency issues (non-blocking, advisory)
+        try:
+            from tuya_irrigation.learning import IrrigationLearner
+
+            learner = IrrigationLearner(self.db)
+            learning_alerts = learner.detect_issues(cluster_id)
+            if learning_alerts:
+                stress["learning_alerts"] = [
+                    {"type": a.alert_type, "severity": a.severity, "message": a.message}
+                    for a in learning_alerts
+                ]
+        except Exception:
+            pass  # Learning is advisory, never blocks decisions
+
         # Get plant requirements from database
         plant_care_data = [self.plant_db.get_care_data(species=p.species, category=p.category) for p in plants]
 

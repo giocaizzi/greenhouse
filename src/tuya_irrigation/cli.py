@@ -564,6 +564,14 @@ def main():
     p_log_stats.add_argument("--days", type=int, default=7, help="Days to analyze")
     p_log_stats.add_argument("--export", help="Export to CSV file")
 
+    # Learn commands
+    p_learn = sub.add_parser("learn", help="Irrigation learning & efficiency analysis")
+    learn_sub = p_learn.add_subparsers(dest="learn_cmd", required=True)
+    p_learn_report = learn_sub.add_parser("report", help="Show learning report")
+    p_learn_report.add_argument("cluster", type=int, help="Cluster ID")
+    p_learn_alerts = learn_sub.add_parser("alerts", help="Show efficiency alerts")
+    p_learn_alerts.add_argument("cluster", type=int, help="Cluster ID")
+
     args = parser.parse_args()
 
     # Initialize DB
@@ -635,6 +643,25 @@ def main():
 
         elif args.command == "auto-irrigate":
             return cmd_auto_irrigate(args, db, dm)
+
+        elif args.command == "log":
+            if args.log_cmd == "readings":
+                cmd_log_readings(args, db)
+            elif args.log_cmd == "events":
+                cmd_log_events(args, db)
+        elif args.command == "learn":
+            from tuya_irrigation.learning import IrrigationLearner
+
+            learner = IrrigationLearner(db)
+            if args.learn_cmd == "report":
+                print(learner.generate_report(args.cluster))
+            elif args.learn_cmd == "alerts":
+                alerts = learner.detect_issues(args.cluster)
+                if not alerts:
+                    print("✅ No issues detected (or insufficient data)")
+                else:
+                    for alert in alerts:
+                        print(f"[{alert.severity.upper()}] {alert.message}")
 
         elif args.command == "log":
             if args.log_cmd == "readings":
