@@ -153,123 +153,22 @@ class TuyaDeviceManager:
     # ── Sensor Reading ────────────────────────────────────────────────────────
 
     def read_sensor(self, sensor: Sensor) -> dict:
-        """Read current sensor values.
+        """Read current sensor values via Tuya Cloud API.
 
-        Supports two modes:
-        1. Cloud API (direct) — for Zigbee sub-devices (no IP/local key)
-        2. tuya_irrigation.py script — for WiFi devices with local mode
+        Uses cloud.py for centralized datapoint parsing.
+        Falls back to tuya_irrigation.py script for legacy devices.
         """
-        # Zigbee sub-devices: use Cloud API directly (no local key/IP)
-        # This is the preferred path for sensors behind a Zigbee gateway
+        # Primary: Cloud API (works for all Tuya devices, required for Zigbee)
         try:
-            return self._read_sensor_cloud(sensor)
+            from tuya_irrigation.cloud import TuyaCloud
+
+            cloud = TuyaCloud(self.client_id, self.secret, self.region)
+            return cloud.get_live_reading(sensor.tuya_device_id)
         except Exception:
             pass
 
-        # Fallback: use tuya_irrigation.py script (text parsing)
-        return self._read_sensor_script(sensor)
-
-    def _read_sensor_cloud(self, sensor: Sensor) -> dict:
-        """Read sensor via Tuya Cloud API (works for Zigbee sub-devices)."""
-        import tinytuya
-
-        cloud = tinytuya.Cloud(
-            apiRegion=self.region,
-            apiKey=self.client_id,
-            apiSecret=self.secret,
-        )
-
-        result = cloud.getstatus(sensor.tuya_device_id)
-
-        if not result.get("success"):
-            raise RuntimeError(f"Cloud API error: {result}")
-
-        data = {}
-        for dp in result.get("result", []):
-            code = dp.get("code", "")
-            value = dp.get("value")
-
-            if code == "temp_current":
-                # Most Tuya temp sensors report value × 10
-                data["temperature"] = float(value) / 10.0
-            elif code == "humidity":
-                data["soil_moisture"] = float(value)
-            elif code == "humidity_value":
-                data["soil_moisture"] = float(value)
-            elif code == "va_temperature":
-                data["temperature"] = float(value) / 10.0
-            elif code == "va_humidity":
-                data["humidity"] = float(value)
-            elif code == "battery_state":
-                data["battery_state"] = value
-            elif code == "battery_percentage":
-                data["battery_percentage"] = int(value)
-            elif code in ("bright_value", "light"):
-                data["light"] = int(value)
-
-        return data
-
-    def _read_sensor_script(self, sensor: Sensor) -> dict:
-        """Read sensor via tuya_irrigation.py script (text parsing fallback)."""
+        # Fallback: tuya_irrigation.py script
         code, output = self._run_tuya_script(sensor.tuya_device_id, "status")
-
         if code != 0:
             return {"error": output}
-
-        # Try JSON parsing first (cloud mode output)
-        try:
-            import json
-            parsed = json.loads(output.split("\n")[0])
-            if "result" in parsed:
-                # Cloud API JSON format
-                data = {}
-                for dp in parsed["result"]:
-                    dp_code = dp.get("code", "")
-                    value = dp.get("value")
-                    if dp_code == "temp_current":
-                        data["temperature"] = float(value) / 10.0
-                    elif dp_code in ("humidity", "humidity_value"):
-                        data["soil_moisture"] = float(value)
-                    elif dp_code == "va_temperature":
-                        data["temperature"] = float(value) / 10.0
-                    elif dp_code == "va_humidity":
-                        data["humidity"] = float(value)
-                return data
-        except Exception:
-            pass
-
-        # Legacy text parsing
-        data = {"raw_output": output}
-
-        for line in output.split("\n"):
-            line_lower = line.lower()
-            if "temperature" in line_lower or "temp" in line_lower:
-                try:
-                    temp = float(
-                        [x for x in line.split() if "°" in x or x.replace(".", "").replace("-", "").isdigit()][0]
-                        .rstrip("°C")
-                        .rstrip("°")
-                    )
-                    data["temperature"] = temp
-                except Exception:
-                    pass
-            elif "humidity" in line_lower:
-                try:
-                    hum = float([x for x in line.split() if "%" in x][0].rstrip("%"))
-                    data["humidity"] = hum
-                except Exception:
-                    pass
-            elif "soil" in line_lower or "moisture" in line_lower:
-                try:
-                    moisture = float([x for x in line.split() if "%" in x][0].rstrip("%"))
-                    data["soil_moisture"] = moisture
-                except Exception:
-                    pass
-            elif "light" in line_lower or "lux" in line_lower:
-                try:
-                    light = int([x for x in line.split() if x.isdigit()][0])
-                    data["light"] = light
-                except Exception:
-                    pass
-
-        return data
+        return {"raw_output": output}

@@ -103,18 +103,19 @@ class TestDeviceManager(unittest.TestCase):
         self.assertIn("--minutes", call_args)
         self.assertIn("5", call_args)
 
-    @patch("tuya_irrigation.devices.subprocess.run")
-    def test_sensor_reading_parsing(self, mock_run):
-        """Sensor data is correctly parsed from output."""
-        mock_run.return_value = MagicMock(
-            returncode=0,
-            stdout="Temperature: 22.5°C\nHumidity: 65%\nSoil moisture: 45%\n",
-            stderr="",
-        )
+    @patch("tuya_irrigation.cloud.TuyaCloud")
+    def test_sensor_reading_parsing(self, mock_cloud_cls):
+        """Sensor data is correctly parsed via Cloud API."""
+        mock_cloud = MagicMock()
+        mock_cloud_cls.return_value = mock_cloud
+        mock_cloud.get_live_reading.return_value = {
+            "temperature": 22.5,
+            "soil_moisture": 45.0,
+            "battery_state": "middle",
+        }
         data = self.dm.read_sensor(self._make_sensor())
 
         self.assertAlmostEqual(data.get("temperature"), 22.5)
-        self.assertAlmostEqual(data.get("humidity"), 65.0)
         self.assertAlmostEqual(data.get("soil_moisture"), 45.0)
 
     @patch("tuya_irrigation.devices.subprocess.run")

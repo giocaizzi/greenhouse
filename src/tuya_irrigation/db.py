@@ -89,7 +89,8 @@ class IrrigationDB:
             humidity REAL,
             soil_moisture REAL,
             light INTEGER,
-            FOREIGN KEY (sensor_id) REFERENCES sensors(id)
+            FOREIGN KEY (sensor_id) REFERENCES sensors(id),
+            UNIQUE (sensor_id, timestamp)
         );
 
         -- Irrigation Events
@@ -309,17 +310,45 @@ class IrrigationDB:
         humidity: float | None = None,
         soil_moisture: float | None = None,
         light: int | None = None,
-    ) -> int:
-        """Add a sensor reading and return its ID."""
+    ) -> int | None:
+        """Add a sensor reading. Deduplicates by (sensor_id, timestamp).
+
+        Returns row ID if inserted, None if duplicate skipped.
+        """
         ts = timestamp or int(time.time())
         cursor = self.conn.execute(
-            """INSERT INTO sensor_readings
+            """INSERT OR IGNORE INTO sensor_readings
                (sensor_id, timestamp, temperature, humidity, soil_moisture, light)
                VALUES (?, ?, ?, ?, ?, ?)""",
             (sensor_id, ts, temperature, humidity, soil_moisture, light),
         )
         self.conn.commit()
-        return cursor.lastrowid
+        return cursor.lastrowid if cursor.rowcount > 0 else None
+
+    def get_last_reading_timestamp(self, sensor_id: int) -> int | None:
+        """Get timestamp of the most recent reading for a sensor."""
+        row = self.conn.execute(
+            "SELECT MAX(timestamp) FROM sensor_readings WHERE sensor_id = ?",
+            (sensor_id,),
+        ).fetchone()
+        return row[0] if row and row[0] else None
+
+    def bulk_add_sensor_readings(
+        self,
+        readings: list[tuple[int, int, float | None, float | None, float | None, int | None]],
+    ) -> int:
+        """Bulk insert sensor readings with dedup. Returns count of new rows inserted."""
+        if not readings:
+            return 0
+        self.conn.executemany(
+            """INSERT OR IGNORE INTO sensor_readings
+               (sensor_id, timestamp, temperature, humidity, soil_moisture, light)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            readings,
+        )
+        inserted = self.conn.total_changes
+        self.conn.commit()
+        return inserted
 
     def get_recent_readings(self, sensor_id: int, hours: int = 24) -> list[SensorReading]:
         """Get recent readings for a sensor."""

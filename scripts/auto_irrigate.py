@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
 """HEARTBEAT entrypoint for smart irrigation.
 
-Fetches feels-like temperature from Open-Meteo (no API key required),
-then runs auto-irrigate logic for the indoor cluster.
+Data flow:
+1. Sync sensor data from Tuya Cloud → local DB (backfill + live)
+2. Read live sensor values for decision (soil moisture + temperature)
+3. Fallback to Open-Meteo temperature if no sensors available
+4. Run smart irrigation logic
+5. Execute on physical device if needed
 
 Usage:
     python3 scripts/auto_irrigate.py
@@ -10,9 +14,9 @@ Usage:
 """
 
 import argparse
+import json
 import sys
 import urllib.request
-import json
 
 # Initialize path for package imports
 import _init_path  # noqa: F401
@@ -42,27 +46,68 @@ def fetch_feels_like() -> float | None:
         return None
 
 
+def sync_sensors(db: IrrigationDB, cluster_id: int) -> dict | None:
+    """Sync sensor data from Tuya Cloud and return live reading.
+
+    Returns dict with sensor values or None if no sensors/cloud unavailable.
+    """
+    sensors = db.get_sensors_in_cluster(cluster_id)
+    if not sensors:
+        return None
+
+    try:
+        from tuya_irrigation.cloud import TuyaCloud  # noqa: E402
+
+        cloud = TuyaCloud()
+
+        # Sync historical logs to DB (backfill any gaps)
+        for sensor in sensors:
+            try:
+                from tuya_irrigation.logger_daemon import _sync_single_sensor
+
+                _sync_single_sensor(db, cloud, sensor, hours=6)
+            except Exception:
+                pass
+
+        # Get live reading from first sensor
+        live = cloud.get_live_reading(sensors[0].tuya_device_id)
+        return live if live else None
+
+    except Exception as e:
+        print(f"⚠️  Cloud sync failed: {e}", file=sys.stderr)
+        return None
+
+
 def main():
     parser = argparse.ArgumentParser(description="HEARTBEAT irrigation entrypoint")
-    parser.add_argument("--temp", type=float, help="Current temperature in °C (overrides Open-Meteo fetch)")
+    parser.add_argument("--temp", type=float, help="Current temperature in °C (overrides all)")
     parser.add_argument("--cluster", type=int, default=1, help="Cluster ID (default: 1)")
     parser.add_argument("--db", help="Database path (default: auto)")
     args = parser.parse_args()
 
-    # Determine temperature
+    from pathlib import Path
+
+    db_path = Path(args.db) if args.db else None
+    db = IrrigationDB(db_path)
+    logic = IrrigationLogic(db)
+
+    # Step 1: Sync sensor data from Tuya Cloud
+    sensor_data = None
+    if args.temp is None:
+        sensor_data = sync_sensors(db, args.cluster)
+
+    # Step 2: Determine temperature
     temp = args.temp
+    if temp is None and sensor_data and sensor_data.get("temperature"):
+        temp = sensor_data["temperature"]
     if temp is None:
         temp = fetch_feels_like()
     if temp is None:
         print("⚠️  No temperature available — using seasonal fallback (20°C)", file=sys.stderr)
         temp = 20.0
 
-    # Run auto-irrigate
-    from pathlib import Path
-    db_path = Path(args.db) if args.db else None
-    db = IrrigationDB(db_path)
-    logic = IrrigationLogic(db)
-
+    # Step 3: Run decision logic
+    # Note: logic.decide_for_cluster reads from DB, which now has synced sensor data
     decision = logic.decide_for_cluster(args.cluster, current_temp=temp)
     if decision is None:
         print(f"❌ Cluster {args.cluster} not found", file=sys.stderr)
@@ -74,9 +119,18 @@ def main():
     duration = decision.get("duration_minutes", 2)
 
     if action == "irrigate":
+        # Build info line
+        info_parts = [f"Reason: {reason}", f"Temp: {temp}°C"]
+        if sensor_data:
+            if sensor_data.get("soil_moisture") is not None:
+                info_parts.append(f"Soil: {sensor_data['soil_moisture']:.0f}%")
+            info_parts.append("Source: sensor")
+        else:
+            info_parts.append("Source: Open-Meteo")
+
         print(f"💧 Irrigating cluster {args.cluster}: {duration}min (confidence: {confidence:.0%})")
-        print(f"   Reason: {reason}")
-        print(f"   Temp: {temp}°C")
+        for part in info_parts:
+            print(f"   {part}")
 
         # Get irrigator
         irrigators = db.get_irrigators_in_cluster(args.cluster)
@@ -86,12 +140,13 @@ def main():
 
         irrigator = irrigators[0]
 
-        # Try to execute irrigation (log decision even if device control fails)
+        # Execute irrigation
         device_success = False
         device_error = None
 
         try:
             from tuya_irrigation.devices import TuyaDeviceManager  # noqa: E402
+
             manager = TuyaDeviceManager()
             device_success, output = manager.irrigator_start(irrigator, minutes=duration)
             if not device_success:
@@ -99,13 +154,14 @@ def main():
         except Exception as e:
             device_error = str(e)
 
-        # Always log the decision (even if device execution failed)
+        # Always log the decision
+        soil_info = f", soil={sensor_data['soil_moisture']:.0f}%" if sensor_data and sensor_data.get("soil_moisture") is not None else ""
         db.add_irrigation_event(
             irrigator_id=irrigator.id,
             action="start" if device_success else "attempted",
             duration_minutes=duration,
             triggered_by="auto_heartbeat",
-            notes=f"temp={temp}°C, confidence={confidence:.0%}, reason={reason}, device_success={device_success}",
+            notes=f"temp={temp}°C{soil_info}, confidence={confidence:.0%}, reason={reason}, device_success={device_success}",
         )
 
         if device_success:

@@ -121,8 +121,10 @@ class TestDatabase(unittest.TestCase):
             config={},
         )
 
-        self.db.add_sensor_reading(sensor_id=sensor_id, temperature=22.5, humidity=65.0)
-        self.db.add_sensor_reading(sensor_id=sensor_id, temperature=23.0, humidity=64.0)
+        import time
+        now = int(time.time())
+        self.db.add_sensor_reading(sensor_id=sensor_id, timestamp=now, temperature=22.5, humidity=65.0)
+        self.db.add_sensor_reading(sensor_id=sensor_id, timestamp=now + 60, temperature=23.0, humidity=64.0)
 
         readings = self.db.get_recent_readings(sensor_id, hours=24)
         self.assertEqual(len(readings), 2)
