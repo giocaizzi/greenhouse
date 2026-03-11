@@ -411,7 +411,7 @@ def cmd_monitor(args, db: IrrigationDB):
 
 
 def _collect_learning_alerts(db: IrrigationDB, cluster_id: int) -> list[dict]:
-    """Return learning alerts for a cluster (advisory, never raises)."""
+    """Return learning alerts for a cluster (efficiency, patterns). Never raises."""
     try:
         from tuya_irrigation.learning import IrrigationLearner
         learner = IrrigationLearner(db)
@@ -419,6 +419,45 @@ def _collect_learning_alerts(db: IrrigationDB, cluster_id: int) -> list[dict]:
         return [{"severity": a.severity, "message": a.message} for a in issues]
     except Exception:
         return []
+
+
+def _collect_maintenance_alerts(db: IrrigationDB, cluster_id: int) -> list[dict]:
+    """Return maintenance alerts for a cluster (hardware, sensors). Never raises.
+
+    Checks:
+    - battery_low: sensor battery state is 'low'
+    - stale_data: sensor has no readings in the last 3h (possible offline/dead battery)
+    """
+    import time
+
+    alerts = []
+    sensors = db.get_sensors_in_cluster(cluster_id)
+    now = int(time.time())
+
+    for sensor in sensors:
+        readings = db.get_recent_readings(sensor.id, hours=24)
+
+        # Battery low
+        latest_bat = next((r.battery_state for r in readings if r.battery_state is not None), None)
+        if latest_bat == "low":
+            alerts.append({
+                "severity": "warning",
+                "type": "battery_low",
+                "message": f"🔋 {sensor.name}: battery low — replace soon or readings may stop",
+            })
+
+        # Stale data: no readings in last 3h
+        latest_ts = readings[0].timestamp if readings else None
+        if latest_ts is None or (now - latest_ts) > 3 * 3600:
+            age_h = (now - latest_ts) / 3600 if latest_ts else None
+            age_str = f"{age_h:.0f}h ago" if age_h else "never"
+            alerts.append({
+                "severity": "warning",
+                "type": "stale_data",
+                "message": f"📡 {sensor.name}: no recent data (last reading: {age_str}) — sensor offline?",
+            })
+
+    return alerts
 
 
 def _check_cluster_irrigated(cluster_id: int, db: IrrigationDB, dm: TuyaDeviceManager | None) -> dict:
@@ -473,14 +512,16 @@ def _check_cluster_irrigated(cluster_id: int, db: IrrigationDB, dm: TuyaDeviceMa
     reason = decision["reason"]
     confidence = decision["confidence"]
 
-    # Learning alerts
+    # Learning + maintenance alerts
     alerts = _collect_learning_alerts(db, cluster_id)
+    maintenance = _collect_maintenance_alerts(db, cluster_id)
 
     if action == "skip":
         return {
             "action": "skipped",
             "notes": f"{reason} (confidence {confidence:.0%})",
             "alerts": alerts,
+            "maintenance": maintenance,
         }
 
     # Execute
@@ -503,7 +544,7 @@ def _check_cluster_irrigated(cluster_id: int, db: IrrigationDB, dm: TuyaDeviceMa
     )
 
     if not success:
-        return {"action": "error", "notes": f"irrigator failed: {output}", "alerts": alerts}
+        return {"action": "error", "notes": f"irrigator failed: {output}", "alerts": alerts, "maintenance": maintenance}
 
     notes_parts = [f"{duration}min", f"temp={temp:.1f}°C", f"confidence={confidence:.0%}"]
     if sensor_live and sensor_live.get("soil_moisture") is not None:
@@ -512,6 +553,7 @@ def _check_cluster_irrigated(cluster_id: int, db: IrrigationDB, dm: TuyaDeviceMa
         "action": "irrigated",
         "notes": "; ".join(notes_parts),
         "alerts": alerts,
+        "maintenance": maintenance,
     }
 
 
@@ -572,7 +614,8 @@ def _check_cluster_monitor(cluster_id: int, db: IrrigationDB) -> dict:
             })
 
     alerts = _collect_learning_alerts(db, cluster_id)
-    return {"action": "monitored", "needs_water": needs_water, "alerts": alerts}
+    maintenance = _collect_maintenance_alerts(db, cluster_id)
+    return {"action": "monitored", "needs_water": needs_water, "alerts": alerts, "maintenance": maintenance}
 
 
 def cmd_check(args, db: IrrigationDB, dm: TuyaDeviceManager | None):
@@ -631,7 +674,7 @@ def cmd_check(args, db: IrrigationDB, dm: TuyaDeviceManager | None):
                 print(f"ALERT_ITEM: {emoji} {item['sensor']} ({item['plant']}): soil {item['soil']:.0f}% (target ≥{item['t_min']:.0f}%)")
             print("ALERT_END")
 
-        # Learning alerts
+        # Learning alerts (efficiency, patterns)
         learning_alerts = result.get("alerts", [])
         if learning_alerts:
             has_alerts = True
@@ -639,6 +682,16 @@ def cmd_check(args, db: IrrigationDB, dm: TuyaDeviceManager | None):
             for a in learning_alerts:
                 emoji = "🚨" if a["severity"] == "critical" else "⚠️"
                 print(f"ALERT_ITEM: {emoji} [{a['severity']}] {a['message']}")
+            print("ALERT_END")
+
+        # Maintenance alerts (hardware, sensors)
+        maintenance_alerts = result.get("maintenance", [])
+        if maintenance_alerts:
+            has_alerts = True
+            print(f"ALERT: {cluster.name} maintenance")
+            for a in maintenance_alerts:
+                emoji = "🚨" if a["severity"] == "critical" else "⚠️"
+                print(f"ALERT_ITEM: {emoji} [{a['type']}] {a['message']}")
             print("ALERT_END")
 
         if result["action"] == "error":

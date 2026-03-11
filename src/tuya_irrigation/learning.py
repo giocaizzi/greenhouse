@@ -220,7 +220,6 @@ class IrrigationLearner:
         - rapid_drainage: plant dries abnormally fast
         - chronic_underwatering: plant never reaches target moisture after irrigation
         - unresolvable_conflict: single irrigator can't satisfy all plants
-        - battery_low: sensor battery critically low
         """
         alerts = []
         sensors = self.db.get_sensors_in_cluster(cluster_id)
@@ -384,23 +383,6 @@ class IrrigationLearner:
                                 "projected_wet": projected_wet,
                             },
                         ))
-
-        # Battery low: check latest reading per sensor
-        for sensor in sensors:
-            readings = self.db.get_recent_readings(sensor.id, hours=24)
-            latest_bat = next(
-                (r.battery_state for r in readings if r.battery_state is not None), None
-            )
-            if latest_bat == "low":
-                alerts.append(Alert(
-                    severity="warning",
-                    alert_type="battery_low",
-                    message=(
-                        f"🔋 {sensor.name}: battery low — replace soon or readings may stop."
-                    ),
-                    sensor_name=sensor.name,
-                    data={"battery_state": latest_bat},
-                ))
 
         return alerts
 
