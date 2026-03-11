@@ -422,22 +422,27 @@ def _collect_learning_alerts(db: IrrigationDB, cluster_id: int) -> list[dict]:
 
 
 def _collect_maintenance_alerts(db: IrrigationDB, cluster_id: int) -> list[dict]:
-    """Return maintenance alerts for a cluster (hardware, sensors). Never raises.
+    """Return maintenance alerts for a cluster (hardware, environment). Never raises.
 
     Checks:
-    - battery_low: sensor battery state is 'low'
-    - stale_data: sensor has no readings in the last 3h (possible offline/dead battery)
+    - battery_low:      sensor battery state is 'low'
+    - stale_data:       no readings in last 3h (possible offline/dead battery)
+    - low_env_humidity: ambient humidity below plant ideal (triggers humidifier/grouping advice)
+    - low_light:        avg lux below plant's minimum need (position/grow light advice)
     """
+    import statistics
     import time
 
     alerts = []
     sensors = db.get_sensors_in_cluster(cluster_id)
+    plants_by_id = {p.id: p for p in db.get_plants_in_cluster(cluster_id)}
     now = int(time.time())
+    plant_db_m = get_plant_database()
 
     for sensor in sensors:
         readings = db.get_recent_readings(sensor.id, hours=24)
 
-        # Battery low
+        # Hardware: battery low
         latest_bat = next((r.battery_state for r in readings if r.battery_state is not None), None)
         if latest_bat == "low":
             alerts.append({
@@ -446,7 +451,7 @@ def _collect_maintenance_alerts(db: IrrigationDB, cluster_id: int) -> list[dict]
                 "message": f"🔋 {sensor.name}: battery low — replace soon or readings may stop",
             })
 
-        # Stale data: no readings in last 3h
+        # Hardware: stale data (no readings in last 3h)
         latest_ts = readings[0].timestamp if readings else None
         if latest_ts is None or (now - latest_ts) > 3 * 3600:
             age_h = (now - latest_ts) / 3600 if latest_ts else None
@@ -456,6 +461,44 @@ def _collect_maintenance_alerts(db: IrrigationDB, cluster_id: int) -> list[dict]
                 "type": "stale_data",
                 "message": f"📡 {sensor.name}: no recent data (last reading: {age_str}) — sensor offline?",
             })
+
+        # Environment: low ambient humidity
+        hum_vals = [r.env_humidity for r in readings if r.env_humidity is not None]
+        if len(hum_vals) >= 3:
+            avg_env_hum = statistics.mean(hum_vals)
+            plant = plants_by_id.get(sensor.plant_id) if sensor.plant_id else None
+            if plant:
+                care = plant_db_m.get_care_data(species=plant.species, category=plant.category)
+                ideal_hum_min = care.get("ideal_humidity_min")
+                if ideal_hum_min and avg_env_hum < ideal_hum_min - 10:
+                    alerts.append({
+                        "severity": "warning",
+                        "type": "low_env_humidity",
+                        "message": (
+                            f"💨 {sensor.name}: ambient humidity {avg_env_hum:.0f}% "
+                            f"(ideal ≥{ideal_hum_min:.0f}%) — consider humidifier or grouping plants"
+                        ),
+                    })
+
+        # Environment: insufficient light
+        lux_vals = [r.light for r in readings if r.light is not None]
+        if len(lux_vals) >= 3:
+            avg_lux = statistics.mean(lux_vals)
+            plant = plants_by_id.get(sensor.plant_id) if sensor.plant_id else None
+            if plant:
+                care = plant_db_m.get_care_data(species=plant.species, category=plant.category)
+                min_lux = care.get("ideal_light_lux_min")
+                if min_lux and avg_lux < min_lux * 0.5:
+                    light_needs = care.get("light_needs", "?")
+                    alerts.append({
+                        "severity": "warning",
+                        "type": "low_light",
+                        "message": (
+                            f"🌑 {sensor.name}: avg {avg_lux:.0f} lux "
+                            f"(needs ≥{min_lux} lux, {light_needs} light) — "
+                            f"move to brighter spot or add grow light"
+                        ),
+                    })
 
     return alerts
 

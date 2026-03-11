@@ -12,7 +12,6 @@
     ],
     "note": "All values are evidence-based from peer-reviewed or professional horticultural sources"
   },
-
   "species": {
     "Monstera deliciosa": {
       "common_name": "Swiss Cheese Plant",
@@ -31,12 +30,15 @@
         "The Spruce: 65-85°F (18-29°C), 60% humidity",
         "Urbane Eight: moderate to high humidity",
         "Reddit r/Monstera: 60-80% humidity optimal"
-      ]
+      ],
+      "ideal_light_lux_min": 150
     },
-
     "Dypsis lutescens": {
       "common_name": "Areca Palm",
-      "aliases": ["Areca palm", "Kentia palm"],
+      "aliases": [
+        "Areca palm",
+        "Kentia palm"
+      ],
       "category": "tropical",
       "native_region": "Madagascar",
       "water_needs": "medium",
@@ -52,12 +54,14 @@
         "Biology Insights: 65-75°F (18-24°C) ideal",
         "Gardenia.net: 65-75°F (18-24°C) preferred",
         "Soltech: water when top inch dry"
-      ]
+      ],
+      "ideal_light_lux_min": 150
     },
-
     "Dracaena marginata": {
       "common_name": "Dragon Tree",
-      "aliases": ["Dracaena"],
+      "aliases": [
+        "Dracaena"
+      ],
       "category": "tropical",
       "native_region": "Madagascar",
       "water_needs": "low",
@@ -74,12 +78,17 @@
         "NY Botanical Garden: 65-75°F (18-24°C)",
         "Plantophiles: 60-80% humidity ideal but adapts to normal household",
         "Petal Republic: average household humidity adequate"
-      ]
+      ],
+      "ideal_light_lux_min": 50
     },
-
     "Alocasia amazonica": {
       "common_name": "African Mask Plant",
-      "aliases": ["Alocasia", "Alocasia polly", "Elephant ear", "African mask"],
+      "aliases": [
+        "Alocasia",
+        "Alocasia polly",
+        "Elephant ear",
+        "African mask"
+      ],
       "category": "tropical",
       "native_region": "Southeast Asia",
       "water_needs": "medium",
@@ -95,12 +104,14 @@
         "The Spruce: 65-85°F (18-29°C), 60%+ humidity",
         "Bloomscape: consistently moist soil, never soggy",
         "Houseplant411: moderate moisture, high humidity"
-      ]
+      ],
+      "ideal_light_lux_min": 150
     },
-
     "Eriobotrya japonica": {
       "common_name": "Loquat",
-      "aliases": ["Nespolo"],
+      "aliases": [
+        "Nespolo"
+      ],
       "category": "fruit_tree",
       "native_region": "China, Japan",
       "water_needs": "medium",
@@ -117,10 +128,10 @@
         "The Spruce: drought-tolerant but productive with regular water",
         "Bee Better Naturally: medium water, drought tolerant once established",
         "DripPro irrigation guide: mulch to retain moisture"
-      ]
+      ],
+      "ideal_light_lux_min": 800
     }
   },
-
   "categories": {
     "tropical": {
       "description": "Plants from tropical rainforest environments",
@@ -139,7 +150,6 @@
         "PLNTS.com: 60-70% ideal for most plants"
       ]
     },
-
     "succulent": {
       "description": "Drought-adapted plants with water-storing tissues",
       "water_needs": "low",
@@ -157,7 +167,6 @@
         "Desert Steel: well-draining soil critical"
       ]
     },
-
     "cacti": {
       "description": "Desert-adapted succulents",
       "water_needs": "low",
@@ -175,7 +184,6 @@
         "Il Fiore tra le Spine: water March-October in Northern hemisphere"
       ]
     },
-
     "fern": {
       "description": "Shade-loving plants preferring consistent moisture",
       "water_needs": "high",
@@ -191,7 +199,6 @@
         "PlantTalk Colorado: native environments 70-90% humidity"
       ]
     },
-
     "fruit_tree": {
       "description": "Fruit-bearing trees and shrubs",
       "water_needs": "medium",
@@ -208,43 +215,70 @@
       ]
     }
   },
-
   "water_needs_mapping": {
     "low": {
       "description": "Drought-tolerant plants",
       "frequency_days": 10,
       "soil_moisture_target": "30-50",
-      "examples": ["Dracaena", "succulents", "cacti"]
+      "examples": [
+        "Dracaena",
+        "succulents",
+        "cacti"
+      ]
     },
     "medium": {
       "description": "Average water requirements",
       "frequency_days": 7,
       "soil_moisture_target": "45-65",
-      "examples": ["Monstera", "Areca palm", "most houseplants"]
+      "examples": [
+        "Monstera",
+        "Areca palm",
+        "most houseplants"
+      ]
     },
     "high": {
       "description": "Moisture-loving plants",
       "frequency_days": 5,
       "soil_moisture_target": "60-75",
-      "examples": ["ferns", "peace lily", "calathea"]
+      "examples": [
+        "ferns",
+        "peace lily",
+        "calathea"
+      ]
     }
   },
-
   "light_needs_mapping": {
     "low": {
       "description": "Shade-tolerant",
-      "examples": ["Dracaena", "pothos", "snake plant"]
+      "examples": [
+        "Dracaena",
+        "pothos",
+        "snake plant"
+      ],
+      "min_adequate_lux": 50,
+      "high_lux_threshold": 800
     },
     "medium": {
       "description": "Bright indirect light",
-      "examples": ["Monstera", "Areca palm", "philodendron"]
+      "examples": [
+        "Monstera",
+        "Areca palm",
+        "philodendron"
+      ],
+      "min_adequate_lux": 150,
+      "high_lux_threshold": 1500
     },
     "high": {
       "description": "Direct sun or very bright light",
-      "examples": ["succulents", "cacti", "fruit trees"]
+      "examples": [
+        "succulents",
+        "cacti",
+        "fruit trees"
+      ],
+      "min_adequate_lux": 800,
+      "high_lux_threshold": 3000
     }
   },
-
   "notes": {
     "soil_moisture": "Values in % represent target soil moisture content for optimal growth",
     "temperature": "All temperatures in Celsius. Plants can tolerate slightly outside ranges but growth may slow",

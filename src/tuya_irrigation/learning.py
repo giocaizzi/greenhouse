@@ -216,10 +216,13 @@ class IrrigationLearner:
         """Detect efficiency issues and unresolvable conflicts.
 
         Alert types:
-        - blocked_drip: sensor shows no moisture change after irrigation
-        - rapid_drainage: plant dries abnormally fast
-        - chronic_underwatering: plant never reaches target moisture after irrigation
-        - unresolvable_conflict: single irrigator can't satisfy all plants
+        - blocked_drip:               sensor shows no moisture change after irrigation
+        - rapid_drainage:             plant dries abnormally fast (soil retention issue)
+        - light_accelerated_drainage: rapid drainage correlated with high lux (transpiration)
+        - chronic_underwatering:      plant never reaches target moisture after irrigation
+        - unresolvable_conflict:      single irrigator can't satisfy all plants
+        - low_light:                  avg lux below plant's minimum need (7d avg)
+        - low_env_humidity:           ambient humidity below ideal for plant type (48h avg)
         """
         alerts = []
         sensors = self.db.get_sensors_in_cluster(cluster_id)
@@ -259,19 +262,42 @@ class IrrigationLearner:
                     data={"absorption": profile.avg_absorption_per_minute, "efficiency": profile.efficiency_score},
                 ))
 
-            # 2. Rapid drainage
+            # 2. Rapid drainage — with light correlation
             if profile.avg_drainage_per_hour < -5:  # Losing >5% per hour
-                alerts.append(Alert(
-                    severity="warning",
-                    alert_type="rapid_drainage",
-                    message=(
-                        f"💨 {sensor.name}: rapid drainage "
-                        f"({profile.avg_drainage_per_hour:.1f}%/hr). "
-                        f"Soil may not retain water well."
-                    ),
-                    sensor_name=sensor.name,
-                    data={"drainage_rate": profile.avg_drainage_per_hour},
-                ))
+                # Check if high light explains the drainage (high transpiration)
+                recent_readings = self.db.get_recent_readings(sensor.id, hours=48)
+                avg_lux = None
+                lux_readings = [r.light for r in recent_readings if r.light is not None]
+                if lux_readings:
+                    import statistics as _stats
+                    avg_lux = _stats.mean(lux_readings)
+
+                if avg_lux is not None and avg_lux > 800:
+                    # High light explains rapid drying → inform but lower severity
+                    alerts.append(Alert(
+                        severity="warning",
+                        alert_type="light_accelerated_drainage",
+                        message=(
+                            f"☀️💨 {sensor.name}: rapid drainage "
+                            f"({profile.avg_drainage_per_hour:.1f}%/hr) correlated with high light "
+                            f"({avg_lux:.0f} lux) — increased transpiration. "
+                            f"Consider more frequent irrigation on bright days."
+                        ),
+                        sensor_name=sensor.name,
+                        data={"drainage_rate": profile.avg_drainage_per_hour, "avg_lux": avg_lux},
+                    ))
+                else:
+                    alerts.append(Alert(
+                        severity="warning",
+                        alert_type="rapid_drainage",
+                        message=(
+                            f"💨 {sensor.name}: rapid drainage "
+                            f"({profile.avg_drainage_per_hour:.1f}%/hr). "
+                            f"Soil may not retain water well."
+                        ),
+                        sensor_name=sensor.name,
+                        data={"drainage_rate": profile.avg_drainage_per_hour},
+                    ))
 
             # 3. Chronic underwatering: max delta never reaches target
             if sensor.plant_id and sensor.plant_id in plant_care:
@@ -383,6 +409,65 @@ class IrrigationLearner:
                                 "projected_wet": projected_wet,
                             },
                         ))
+
+        # 4. Low light: plant gets insufficient lux for its needs
+        plant_db_l = get_plant_database()
+        all_plants = self.db.get_plants_in_cluster(cluster_id)
+        plants_by_id_l = {p.id: p for p in all_plants}
+        for sensor in sensors:
+            plant = plants_by_id_l.get(sensor.plant_id) if sensor.plant_id else None
+            if not plant:
+                continue
+            care = plant_db_l.get_care_data(species=plant.species, category=plant.category)
+            min_lux = care.get("ideal_light_lux_min")
+            if not min_lux:
+                continue
+            readings_7d = self.db.get_recent_readings(sensor.id, hours=168)
+            lux_vals = [r.light for r in readings_7d if r.light is not None]
+            if len(lux_vals) < 5:
+                continue  # Not enough data
+            import statistics as _stats2
+            avg_lux_7d = _stats2.mean(lux_vals)
+            if avg_lux_7d < min_lux * 0.5:
+                alerts.append(Alert(
+                    severity="warning",
+                    alert_type="low_light",
+                    message=(
+                        f"🌑 {sensor.name} ({plant.species}): avg light {avg_lux_7d:.0f} lux "
+                        f"(7d avg) — below minimum {min_lux} lux for this plant. "
+                        f"Move to brighter location or add grow light."
+                    ),
+                    sensor_name=sensor.name,
+                    data={"avg_lux": avg_lux_7d, "min_lux": min_lux},
+                ))
+
+        # 5. Low env humidity: sustained dry air for tropical plants
+        for sensor in sensors:
+            plant = plants_by_id_l.get(sensor.plant_id) if sensor.plant_id else None
+            if not plant:
+                continue
+            care2 = plant_db_l.get_care_data(species=plant.species, category=plant.category)
+            ideal_hum_min = care2.get("ideal_humidity_min")
+            if not ideal_hum_min:
+                continue
+            readings_48h = self.db.get_recent_readings(sensor.id, hours=48)
+            hum_vals = [r.env_humidity for r in readings_48h if r.env_humidity is not None]
+            if len(hum_vals) < 5:
+                continue
+            import statistics as _stats3
+            avg_env_hum = _stats3.mean(hum_vals)
+            if avg_env_hum < ideal_hum_min - 15:
+                alerts.append(Alert(
+                    severity="warning",
+                    alert_type="low_env_humidity",
+                    message=(
+                        f"💨 {sensor.name} ({plant.species}): avg ambient humidity {avg_env_hum:.0f}% "
+                        f"— below ideal {ideal_hum_min:.0f}%. "
+                        f"Increased transpiration; consider humidifier or grouping plants."
+                    ),
+                    sensor_name=sensor.name,
+                    data={"avg_env_humidity": avg_env_hum, "ideal_min": ideal_hum_min},
+                ))
 
         return alerts
 

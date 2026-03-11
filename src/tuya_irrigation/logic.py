@@ -214,12 +214,38 @@ class IrrigationLogic:
                 decision["interval_hours"] = min(24, decision["interval_hours"] + 6)
                 reasons.append(f"temp below ideal ({avg_temp:.0f}°C < {ideal_temp_range[0]:.0f}°C)")
 
-        # Humidity adjustment
+        # Env humidity adjustment
         if avg_humidity is not None and ideal_humidity_range:
-            if avg_humidity < ideal_humidity_range[0] - 10:
-                # Very dry air → increase slightly
+            if avg_humidity < ideal_humidity_range[0] - 20:
+                # Very dry air → high transpiration → irrigate more frequently
+                decision["interval_hours"] = max(6, decision["interval_hours"] - 3)
+                reasons.append(f"💨 very dry air ({avg_humidity:.0f}% << ideal {ideal_humidity_range[0]:.0f}%)")
+            elif avg_humidity < ideal_humidity_range[0] - 5:
+                decision["interval_hours"] = max(6, decision["interval_hours"] - 1)
+                reasons.append(f"💨 dry air ({avg_humidity:.0f}%)")
+            elif avg_humidity > ideal_humidity_range[1] + 10:
+                # Very humid → less transpiration → reduce frequency
+                decision["interval_hours"] = min(24, decision["interval_hours"] + 2)
+                reasons.append(f"💧 high ambient humidity ({avg_humidity:.0f}%)")
+
+        # Light (lux) adjustment
+        avg_light = sensor_data.get("avg_light")
+        if avg_light is not None:
+            if avg_light > 1500:
+                # Very bright → high transpiration → more frequent
                 decision["interval_hours"] = max(6, decision["interval_hours"] - 2)
-                reasons.append(f"low humidity ({avg_humidity:.0f}%)")
+                decision["duration_minutes"] = min(5, decision["duration_minutes"] + 1)
+                reasons.append(f"☀️ very bright ({avg_light:.0f} lux)")
+            elif avg_light > 800:
+                decision["interval_hours"] = max(6, decision["interval_hours"] - 1)
+                reasons.append(f"🌤️ bright ({avg_light:.0f} lux)")
+            elif avg_light < 50:
+                # Very dark → minimal transpiration → less frequent
+                decision["interval_hours"] = min(24, decision["interval_hours"] + 4)
+                reasons.append(f"🌑 very low light ({avg_light:.0f} lux)")
+            elif avg_light < 150:
+                decision["interval_hours"] = min(24, decision["interval_hours"] + 2)
+                reasons.append(f"☁️ low light ({avg_light:.0f} lux)")
 
         # Water needs adjustment
         if water_needs_level == "high":
@@ -453,10 +479,12 @@ class IrrigationLogic:
         Detect stress conditions based on sensor data and trends.
 
         Returns dict with stress indicators:
-        - water_warning: sensor's own soil-dry alert (high confidence)
-        - water_stress: soil moisture consistently low + declining trend
-        - heat_stress: prolonged high temperature
-        - over_watering: soil too wet + high irrigation frequency
+        - water_warning:     sensor's own soil-dry alert (high confidence)
+        - water_stress:      soil moisture consistently low + declining trend
+        - heat_stress:       prolonged high temperature
+        - over_watering:     soil too wet + high irrigation frequency
+        - low_env_humidity:  very dry air → high transpiration
+        - low_light:         insufficient lux for plant type → reduced growth/transpiration
         """
         stress = {}
 
@@ -464,6 +492,36 @@ class IrrigationLogic:
         water_warnings = sensor_data.get("water_warnings", [])
         if water_warnings:
             stress["water_warning"] = f"device alert on: {', '.join(water_warnings)}"
+
+        # Env humidity stress: sustained very dry air for plant type
+        avg_env_hum = sensor_data.get("avg_env_humidity")
+        plants_for_stress = self.db.get_plants_in_cluster(cluster_id)
+        if avg_env_hum is not None and plants_for_stress:
+            plant_care_data_s = [
+                self.plant_db.get_care_data(species=p.species, category=p.category)
+                for p in plants_for_stress
+            ]
+            hum_range = self._get_ideal_humidity_range(plant_care_data_s)
+            if hum_range and avg_env_hum < hum_range[0] - 20:
+                stress["low_env_humidity"] = (
+                    f"very dry air ({avg_env_hum:.0f}% vs ideal ≥{hum_range[0]:.0f}%) — high transpiration"
+                )
+
+        # Light stress: sustained low light for plants that need it
+        avg_light_s = sensor_data.get("avg_light")
+        if avg_light_s is not None and plants_for_stress:
+            plant_care_data_s2 = [
+                self.plant_db.get_care_data(species=p.species, category=p.category)
+                for p in plants_for_stress
+            ]
+            min_lux_needed = max(
+                (d.get("ideal_light_lux_min", 0) for d in plant_care_data_s2), default=0
+            )
+            if min_lux_needed > 0 and avg_light_s < min_lux_needed * 0.4:
+                stress["low_light"] = (
+                    f"insufficient light ({avg_light_s:.0f} lux vs min {min_lux_needed:.0f}) — "
+                    f"reduced transpiration and growth"
+                )
 
         # Water stress: soil moisture consistently low + declining trend
         avg_soil = sensor_data.get("avg_soil_moisture")
