@@ -84,9 +84,10 @@ def _sync_single_sensor(db: IrrigationDB, cloud: TuyaCloud, sensor, hours: int) 
             sensor_id=sensor.id,
             timestamp=ts,
             temperature=reading.get("temperature"),
-            humidity=reading.get("humidity"),
             soil_moisture=reading.get("soil_moisture"),
             light=reading.get("light"),
+            env_humidity=reading.get("env_humidity"),
+            battery_state=reading.get("battery_state"),
         )
         if result is not None:
             new_count += 1
@@ -101,10 +102,11 @@ def _sync_single_sensor(db: IrrigationDB, cloud: TuyaCloud, sensor, hours: int) 
                 sensor_id=sensor.id,
                 timestamp=now,
                 temperature=live.get("temperature"),
-                humidity=live.get("humidity"),
                 soil_moisture=live.get("soil_moisture"),
                 light=live.get("light"),
+                env_humidity=live.get("env_humidity"),
                 battery_state=live.get("battery_state"),
+                water_warning=live.get("water_warning"),
             )
             if result is not None:
                 live_saved = 1

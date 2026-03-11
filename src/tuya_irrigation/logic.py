@@ -106,10 +106,22 @@ class IrrigationLogic:
 
         # Smart decision based on sensor data + trends
         avg_temp = sensor_data.get("avg_temperature")
-        avg_humidity = sensor_data.get("avg_humidity")
+        avg_humidity = sensor_data.get("avg_env_humidity")
         avg_soil_moisture = sensor_data.get("avg_soil_moisture")
 
         reasons = []
+
+        # PRIORITY 0: Device water_warning (sensor's own alert — high confidence)
+        if stress.get("water_warning"):
+            decision["action"] = "irrigate"
+            decision["duration_minutes"] = 3
+            decision["interval_hours"] = 6
+            reasons.append(f"⚠️ sensor alert: {stress['water_warning']}")
+            decision["confidence"] = 0.92
+            decision["reason"] = "; ".join(reasons)
+            decision["stress_indicators"] = stress
+            decision["trends"] = trends
+            return decision
 
         # PRIORITY 1: Critical stress conditions (override everything)
         if stress.get("water_stress"):
@@ -251,9 +263,10 @@ class IrrigationLogic:
             return {}
 
         all_temps = []
-        all_humidity = []
+        all_env_humidity = []
         all_soil = []
         all_light = []
+        water_warnings = []
         per_sensor = []
 
         for sensor in sensors:
@@ -266,14 +279,16 @@ class IrrigationLogic:
                 if r.temperature is not None:
                     all_temps.append(r.temperature)
                     s_temps.append(r.temperature)
-                if r.humidity is not None:
-                    all_humidity.append(r.humidity)
-                    s_humidity.append(r.humidity)
+                if r.env_humidity is not None:
+                    all_env_humidity.append(r.env_humidity)
+                    s_humidity.append(r.env_humidity)
                 if r.soil_moisture is not None:
                     all_soil.append(r.soil_moisture)
                     s_soil.append(r.soil_moisture)
                 if r.light is not None:
                     all_light.append(r.light)
+                if r.water_warning:
+                    water_warnings.append(sensor.name)
 
             sensor_info = {
                 "sensor_id": sensor.id,
@@ -291,8 +306,10 @@ class IrrigationLogic:
         data = {"per_sensor": per_sensor}
         if all_temps:
             data["avg_temperature"] = statistics.mean(all_temps)
-        if all_humidity:
-            data["avg_humidity"] = statistics.mean(all_humidity)
+        if all_env_humidity:
+            data["avg_env_humidity"] = statistics.mean(all_env_humidity)
+        if water_warnings:
+            data["water_warnings"] = list(set(water_warnings))
         if all_soil:
             data["avg_soil_moisture"] = statistics.mean(all_soil)
             data["min_soil_moisture"] = min(all_soil)
@@ -436,11 +453,17 @@ class IrrigationLogic:
         Detect stress conditions based on sensor data and trends.
 
         Returns dict with stress indicators:
-        - water_stress: description if detected
-        - heat_stress: description if detected
-        - over_watering: description if detected
+        - water_warning: sensor's own soil-dry alert (high confidence)
+        - water_stress: soil moisture consistently low + declining trend
+        - heat_stress: prolonged high temperature
+        - over_watering: soil too wet + high irrigation frequency
         """
         stress = {}
+
+        # Device water_warning: sensor's own dry-soil detection (high confidence signal)
+        water_warnings = sensor_data.get("water_warnings", [])
+        if water_warnings:
+            stress["water_warning"] = f"device alert on: {', '.join(water_warnings)}"
 
         # Water stress: soil moisture consistently low + declining trend
         avg_soil = sensor_data.get("avg_soil_moisture")

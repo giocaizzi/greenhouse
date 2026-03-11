@@ -134,11 +134,16 @@ class IrrigationDB:
 
     def _migrate_schema(self):
         """Apply incremental schema migrations for existing databases."""
-        # v0.6: add battery_state to sensor_readings
         cols = {row[1] for row in self.conn.execute("PRAGMA table_info(sensor_readings)").fetchall()}
+        # v0.6: battery_state
         if "battery_state" not in cols:
             self.conn.execute("ALTER TABLE sensor_readings ADD COLUMN battery_state TEXT")
-            self.conn.commit()
+        # v0.7: env_humidity (DP 101), water_warning (DP 111)
+        if "env_humidity" not in cols:
+            self.conn.execute("ALTER TABLE sensor_readings ADD COLUMN env_humidity REAL")
+        if "water_warning" not in cols:
+            self.conn.execute("ALTER TABLE sensor_readings ADD COLUMN water_warning INTEGER")
+        self.conn.commit()
 
     # ── Clusters ──────────────────────────────────────────────────────────────
 
@@ -313,21 +318,25 @@ class IrrigationDB:
         sensor_id: int,
         timestamp: int | None = None,
         temperature: float | None = None,
-        humidity: float | None = None,
         soil_moisture: float | None = None,
         light: int | None = None,
+        env_humidity: float | None = None,
         battery_state: str | None = None,
+        water_warning: bool | None = None,
     ) -> int | None:
         """Add a sensor reading. Deduplicates by (sensor_id, timestamp).
 
         Returns row ID if inserted, None if duplicate skipped.
         """
         ts = timestamp or int(time.time())
+        ww = int(water_warning) if water_warning is not None else None
         cursor = self.conn.execute(
             """INSERT OR IGNORE INTO sensor_readings
-               (sensor_id, timestamp, temperature, humidity, soil_moisture, light, battery_state)
-               VALUES (?, ?, ?, ?, ?, ?, ?)""",
-            (sensor_id, ts, temperature, humidity, soil_moisture, light, battery_state),
+               (sensor_id, timestamp, temperature, soil_moisture, light,
+                env_humidity, battery_state, water_warning)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (sensor_id, ts, temperature, soil_moisture, light,
+             env_humidity, battery_state, ww),
         )
         self.conn.commit()
         return cursor.lastrowid if cursor.rowcount > 0 else None
@@ -369,15 +378,17 @@ class IrrigationDB:
 
     def _row_to_reading(self, row) -> SensorReading:
         keys = row.keys()
+        ww_raw = row["water_warning"] if "water_warning" in keys else None
         return SensorReading(
             id=row["id"],
             sensor_id=row["sensor_id"],
             timestamp=row["timestamp"],
             temperature=row["temperature"],
-            humidity=row["humidity"],
             soil_moisture=row["soil_moisture"],
-            light=row["light"],
+            light=row["light"] if "light" in keys else None,
+            env_humidity=row["env_humidity"] if "env_humidity" in keys else None,
             battery_state=row["battery_state"] if "battery_state" in keys else None,
+            water_warning=bool(ww_raw) if ww_raw is not None else None,
         )
 
     def get_readings_around(

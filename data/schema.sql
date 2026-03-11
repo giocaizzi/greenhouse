@@ -55,11 +55,12 @@ CREATE TABLE IF NOT EXISTS sensor_readings (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     sensor_id INTEGER NOT NULL,
     timestamp INTEGER NOT NULL,
-    temperature REAL,               -- °C
-    humidity REAL,                  -- %
-    soil_moisture REAL,             -- %
-    light INTEGER,                  -- lux
-    battery_state TEXT,             -- "low", "middle", "high" — from Tuya live reading
+    temperature REAL,               -- °C (DP 5 temp_current / 10)
+    soil_moisture REAL,             -- % (DP 3 humidity)
+    light INTEGER,                  -- lux (DP 102 illumiance — v2 shadow only)
+    env_humidity REAL,              -- % ambient air humidity (DP 101 env_humidity — v2 shadow only)
+    battery_state TEXT,             -- "low", "middle", "high" (DP 14)
+    water_warning INTEGER,          -- 0/1 device soil-dry alert (DP 111 — v2 shadow only)
     FOREIGN KEY (sensor_id) REFERENCES sensors(id),
     UNIQUE (sensor_id, timestamp)   -- Dedup: one reading per sensor per second
 );

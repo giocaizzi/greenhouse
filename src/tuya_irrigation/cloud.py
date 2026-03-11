@@ -15,15 +15,21 @@ import tinytuya
 # Known datapoint parsers by sensor category
 # TR-301Z (zwjcy - 土壤温湿度) soil temp/humidity sensor
 DATAPOINT_PARSERS = {
+    # Standard DPs (v1 getstatus / getdevicelog)
     "temp_current": lambda v: ("temperature", float(v) / 10.0),
     "va_temperature": lambda v: ("temperature", float(v) / 10.0),
     "humidity": lambda v: ("soil_moisture", float(v)),
     "humidity_value": lambda v: ("soil_moisture", float(v)),
-    "va_humidity": lambda v: ("humidity", float(v)),
+    "va_humidity": lambda v: ("env_humidity", float(v)),
     "battery_state": lambda v: ("battery_state", v),
     "battery_percentage": lambda v: ("battery_percentage", int(v)),
     "bright_value": lambda v: ("light", int(v)),
     "light": lambda v: ("light", int(v)),
+    # Extended DPs (v2 shadow properties — DP 101+)
+    "env_humidity": lambda v: ("env_humidity", float(v)),        # DP 101: ambient humidity %
+    "illumiance": lambda v: ("light", int(v)),                   # DP 102: lux (typo in Tuya API)
+    "water_warning": lambda v: ("water_warning", bool(v)),       # DP 111: device soil-dry alert
+    "soil_warning": lambda v: ("soil_warning", int(v)),          # DP 110: soil warning code
 }
 
 
@@ -50,17 +56,41 @@ class TuyaCloud:
         )
 
     def get_live_reading(self, device_id: str) -> dict:
-        """Get current sensor values via getstatus().
+        """Get current sensor values via v2.0 shadow properties.
+
+        Uses /v2.0/cloud/thing/{id}/shadow/properties which exposes all DPs
+        including extended ones (env_humidity DP101, lux DP102, water_warning DP111)
+        that are not accessible via the v1.0 getstatus endpoint.
+
+        Falls back to v1.0 getstatus if v2.0 fails.
 
         Returns dict with parsed values:
         - temperature (°C)
         - soil_moisture (%)
-        - humidity (%)
-        - battery_state / battery_percentage
-        - light (lux)
+        - env_humidity (%)         — ambient air humidity
+        - light (lux)              — illuminance
+        - battery_state            — "low" / "middle" / "high"
+        - water_warning (bool)     — device's own soil-dry alert
         """
-        result = self._cloud.getstatus(device_id)
+        # Try v2.0 shadow properties first (full DP set)
+        try:
+            result = self._cloud.cloudrequest(f"/v2.0/cloud/thing/{device_id}/shadow/properties")
+            if result.get("success"):
+                data = {}
+                for prop in result.get("result", {}).get("properties", []):
+                    code = prop.get("code", "")
+                    value = prop.get("value")
+                    parser = DATAPOINT_PARSERS.get(code)
+                    if parser:
+                        key, parsed_value = parser(value)
+                        data[key] = parsed_value
+                if data:
+                    return data
+        except Exception:
+            pass
 
+        # Fallback: v1.0 getstatus (standard DPs only)
+        result = self._cloud.getstatus(device_id)
         if not result.get("success"):
             raise RuntimeError(f"Cloud API error: {result}")
 
