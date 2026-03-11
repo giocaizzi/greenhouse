@@ -130,6 +130,15 @@ class IrrigationDB:
         """
         self.conn.executescript(schema)
         self.conn.commit()
+        self._migrate_schema()
+
+    def _migrate_schema(self):
+        """Apply incremental schema migrations for existing databases."""
+        # v0.6: add battery_state to sensor_readings
+        cols = {row[1] for row in self.conn.execute("PRAGMA table_info(sensor_readings)").fetchall()}
+        if "battery_state" not in cols:
+            self.conn.execute("ALTER TABLE sensor_readings ADD COLUMN battery_state TEXT")
+            self.conn.commit()
 
     # ── Clusters ──────────────────────────────────────────────────────────────
 
@@ -307,6 +316,7 @@ class IrrigationDB:
         humidity: float | None = None,
         soil_moisture: float | None = None,
         light: int | None = None,
+        battery_state: str | None = None,
     ) -> int | None:
         """Add a sensor reading. Deduplicates by (sensor_id, timestamp).
 
@@ -315,9 +325,9 @@ class IrrigationDB:
         ts = timestamp or int(time.time())
         cursor = self.conn.execute(
             """INSERT OR IGNORE INTO sensor_readings
-               (sensor_id, timestamp, temperature, humidity, soil_moisture, light)
-               VALUES (?, ?, ?, ?, ?, ?)""",
-            (sensor_id, ts, temperature, humidity, soil_moisture, light),
+               (sensor_id, timestamp, temperature, humidity, soil_moisture, light, battery_state)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (sensor_id, ts, temperature, humidity, soil_moisture, light, battery_state),
         )
         self.conn.commit()
         return cursor.lastrowid if cursor.rowcount > 0 else None
@@ -358,6 +368,7 @@ class IrrigationDB:
         return [self._row_to_reading(row) for row in rows]
 
     def _row_to_reading(self, row) -> SensorReading:
+        keys = row.keys()
         return SensorReading(
             id=row["id"],
             sensor_id=row["sensor_id"],
@@ -366,6 +377,7 @@ class IrrigationDB:
             humidity=row["humidity"],
             soil_moisture=row["soil_moisture"],
             light=row["light"],
+            battery_state=row["battery_state"] if "battery_state" in keys else None,
         )
 
     def get_readings_around(

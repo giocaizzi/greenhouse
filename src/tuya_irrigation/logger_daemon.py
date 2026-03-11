@@ -104,6 +104,7 @@ def _sync_single_sensor(db: IrrigationDB, cloud: TuyaCloud, sensor, hours: int) 
                 humidity=live.get("humidity"),
                 soil_moisture=live.get("soil_moisture"),
                 light=live.get("light"),
+                battery_state=live.get("battery_state"),
             )
             if result is not None:
                 live_saved = 1

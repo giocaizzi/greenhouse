@@ -403,7 +403,10 @@ def cmd_monitor(args, db: IrrigationDB):
     print(f"ALERT: {cluster.name}")
     for item in needs_water:
         emoji = "🚨" if item["severity"] == "critical" else "⚠️"
-        print(f"ALERT_ITEM: {emoji} {item['sensor']} ({item['plant']}): soil {item['soil']:.0f}% (target ≥{item['t_min']:.0f}%)")
+        if item["severity"] == "battery_low":
+            print(f"ALERT_ITEM: 🔋 {item['sensor']} ({item['plant']}): battery low — replace soon")
+        else:
+            print(f"ALERT_ITEM: {emoji} {item['sensor']} ({item['plant']}): soil {item['soil']:.0f}% (target ≥{item['t_min']:.0f}%)")
     print("ALERT_END")
 
     return 2
@@ -571,6 +574,19 @@ def _check_cluster_monitor(cluster_id: int, db: IrrigationDB) -> dict:
                 "severity": severity,
             })
 
+    # Battery check (monitor clusters don't go through logic.py stress detection)
+    for sensor in sensors:
+        readings = db.get_recent_readings(sensor.id, hours=24)
+        latest_bat = next((r.battery_state for r in readings if r.battery_state is not None), None)
+        if latest_bat == "low":
+            needs_water.append({
+                "sensor": sensor.name,
+                "plant": plants_by_id.get(sensor.plant_id).species if sensor.plant_id and sensor.plant_id in plants_by_id else sensor.name,
+                "soil": None,
+                "t_min": None,
+                "severity": "battery_low",
+            })
+
     alerts = _collect_learning_alerts(db, cluster_id)
     return {"action": "monitored", "needs_water": needs_water, "alerts": alerts}
 
@@ -627,8 +643,11 @@ def cmd_check(args, db: IrrigationDB, dm: TuyaDeviceManager | None):
             has_alerts = True
             print(f"ALERT: {cluster.name} needs_water")
             for item in needs_water:
-                emoji = "🚨" if item["severity"] == "critical" else "⚠️"
-                print(f"ALERT_ITEM: {emoji} {item['sensor']} ({item['plant']}): soil {item['soil']:.0f}% (target ≥{item['t_min']:.0f}%)")
+                if item["severity"] == "battery_low":
+                    print(f"ALERT_ITEM: 🔋 {item['sensor']} ({item['plant']}): battery low — replace soon")
+                else:
+                    emoji = "🚨" if item["severity"] == "critical" else "⚠️"
+                    print(f"ALERT_ITEM: {emoji} {item['sensor']} ({item['plant']}): soil {item['soil']:.0f}% (target ≥{item['t_min']:.0f}%)")
             print("ALERT_END")
 
         # Learning alerts

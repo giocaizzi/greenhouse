@@ -59,6 +59,7 @@ CREATE TABLE IF NOT EXISTS sensor_readings (
     humidity REAL,                  -- %
     soil_moisture REAL,             -- %
     light INTEGER,                  -- lux
+    battery_state TEXT,             -- "low", "middle", "high" — from Tuya live reading
     FOREIGN KEY (sensor_id) REFERENCES sensors(id),
     UNIQUE (sensor_id, timestamp)   -- Dedup: one reading per sensor per second
 );

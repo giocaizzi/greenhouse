@@ -67,6 +67,7 @@ class SensorReading:
     humidity: float | None
     soil_moisture: float | None
     light: int | None
+    battery_state: str | None = None  # "low", "middle", "high" — from Tuya live reading
 
 
 @dataclass
