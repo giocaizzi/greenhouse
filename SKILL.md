@@ -14,17 +14,30 @@ Evidence-based irrigation with Tuya Cloud sensors, multi-plant conflict resoluti
 ## Architecture
 
 ```
-Sensor TR-301Z → Zigbee GW → Tuya Cloud API
-                                  ↓
-                    cloud.py (getstatus + getdevicelog + DP parsing)
-                                  ↓
-                    cli.py irrigate (sync → weather → decide → execute)
-                        ↓               ↓
-                 learning.py        logic.py
-                 (efficiency)       (multi-sensor decisions)
-                        ↓               ↓
-                  alerts/reports    Irrigator → Tuya Cloud API → Device
+Sensors (Zigbee) → Tuya Cloud API
+                          ↓
+                   cloud.py (getstatus + getdevicelog + DP parsing)
+                          ↓
+               cli.py check --all   ← cron entry point
+               ┌──────────┴──────────────┐
+          has irrigator?           no irrigator?
+               ↓                         ↓
+        irrigation logic           monitor logic
+    (sync→weather→decide→exec)   (sync→soil check)
+               ↓                         ↓
+         learning.py              structured output
+      (efficiency alerts)               ↓
+               └──────────┬──────────────┘
+                    structured output
+                  ACTION: / ALERT: lines
+                          ↓
+                   agent parses & forwards
+                   via Telegram (exit 2)
 ```
+
+**Cluster types:**
+- **With irrigator** — automated irrigation + learning alerts
+- **Without irrigator** — moisture monitoring only (manual watering reminders)
 
 **Device Communication:**
 - **Sensors (Zigbee):** Tuya Cloud API only (required for Zigbee sub-devices)
@@ -35,13 +48,13 @@ Sensor TR-301Z → Zigbee GW → Tuya Cloud API
 
 | Module | Purpose |
 |---|---|
-| `cli.py` | Single entry point: status, irrigate, sync, learn, history, stats |
+| `cli.py` | Single entry point: all commands |
 | `cloud.py` | Tuya Cloud API client (getstatus, getdevicelog, DP parsing) |
 | `db.py` | SQLite with dedup, bulk insert, readings-around queries |
 | `devices.py` | Physical device control via Tuya Cloud API |
 | `logic.py` | Smart decisions: multi-sensor conflict, trends, stress detection |
 | `learning.py` | Post-irrigation analysis: absorption profiles, efficiency, alerts |
-| `logger_daemon.py` | Cloud → DB sync (used by CLI `sync` + `irrigate`) |
+| `logger_daemon.py` | Cloud → DB sync (used by CLI `sync` + `check`) |
 | `plant_db.py` | Evidence-based plant care data (JSON) |
 | `models.py` | Dataclasses (Cluster, Plant, Sensor, SensorReading, etc.) |
 | `stats.py` | Statistics computation and CSV export |
@@ -56,10 +69,6 @@ TUYA_CLIENT_ID=your_client_id
 TUYA_CLIENT_SECRET=your_client_secret
 TUYA_DEVICE_ID=your_irrigator_device_id
 TUYA_REGION=eu          # eu | us | cn | in
-
-# Optional (for local/LAN mode)
-TUYA_DEVICE_IP=192.0.2.1
-TUYA_LOCAL_KEY=xxxxxxxxxxxxxxxx
 ```
 
 ### Initialize Cluster
@@ -71,22 +80,48 @@ python3 setup_cluster.py   # From tools/cluster.local.json
 
 ## CLI Reference
 
+All commands via:
 ```bash
-cd ~/.openclaw/workspace/skills/tuya-irrigation/scripts
-P="python3 main.py"
+cd ~/.openclaw/workspace/skills/tuya-irrigation
+P=".venv/bin/python3 scripts/main.py"
+```
 
-# OPERATIONS (one call = full picture)
-$P status 1              # Full overview: sensors, config, events, smart analysis, alerts
-$P irrigate 1            # Full pipeline: sync → weather → decide → execute
-$P irrigate 1 --dry-run  # Analysis only (no execution)
-$P irrigate 1 --temp 22  # Override temperature (skips sync + weather)
+### Primary (cron / automated)
+
+```bash
+$P check --all           # Unified check: all clusters, all alert types
+$P check 1               # Check single cluster
+```
+
+**Output protocol (for agent parsing):**
+```
+ACTION: irrigated|skipped|monitored|error <cluster_name> [— notes]
+ALERT: <cluster_name> <type>          # needs_water | learning
+ALERT_ITEM: <emoji> <message>
+ALERT_END
+```
+
+**Exit codes:** `0` = silent (ok/skip) · `2` = alerts to forward · `1` = error
+
+### Operations (interactive / manual)
+
+```bash
+$P status 1              # Full overview: sensors, config, events, smart analysis
+$P irrigate 1            # Force irrigation pipeline: sync → weather → decide → execute
+$P irrigate 1 --dry-run  # Analysis only, no execution
+$P irrigate 1 --temp 22  # Override temperature (skips weather fetch)
 $P irrigate 1 --no-sync  # Skip sensor sync (use DB data)
+$P monitor 1             # Raw moisture check for sensor-only cluster
+$P monitor 1 --no-sync   # Skip sync
 $P sync --hours 6        # Cloud → DB sensor sync
 $P learn 1               # Learning report + efficiency alerts
 $P history 1 --hours 24  # Readings + events combined timeline
 $P stats 1 --days 7      # Statistics + CSV export (--export file.csv)
+```
 
-# SETUP (infrequent, CRUD)
+### Setup (CRUD — infrequent)
+
+```bash
 $P cluster list
 $P cluster add "Garden" --location "Backyard" --environment outdoor
 $P plant list --cluster 1
@@ -101,37 +136,41 @@ $P config get 1
 $P config set --cluster 1 --mode smart --minutes 2 --interval 12
 ```
 
-## Data Flow
+## Cron Setup
 
-### Sensor Sync (every 30min via cron)
+Two cron jobs manage automated operation:
 
-```bash
-python3 scripts/main.py sync --hours 24
-```
+| Cron | Schedule | Command | Purpose |
+|---|---|---|---|
+| Sensor Sync | every 30min | `sync --hours 24` | Cloud → DB data freshness |
+| Irrigation & Plant Check | 07:00 + 20:00 (Rome) | `check --all` | Irrigate + monitor + alert |
 
-1. Pulls `getdevicelog()` from Tuya Cloud (backfills gaps)
-2. Gets `getstatus()` for live reading
-3. Deduplicates by `(sensor_id, timestamp)` UNIQUE constraint
-4. Stores in `sensor_readings` table
+The **Irrigation & Plant Check** cron runs as an OpenClaw agent job: it executes `check --all`, parses `ALERT_ITEM:` lines (exit code 2), and forwards a single batched Telegram message to Kez.
 
-### Smart Irrigation Decision (7:00 + 20:00 via cron)
+Adding a new cluster (with or without irrigator) is automatically picked up by `check --all` — no cron changes needed.
 
-```bash
-python3 scripts/main.py irrigate 1
-```
+## Check Command: Internal Logic
 
-1. Syncs sensor data from cloud
-2. Determines temperature source based on `cluster.environment`:
-   - **Indoor:** sensor temp primary, Open-Meteo fallback
-   - **Outdoor:** Open-Meteo primary (outdoor temp matters)
-3. Runs `IrrigationLogic.decide_for_cluster()`:
-   - Global 6h cooldown check
+### Cluster with irrigator
+
+1. Sync sensors from Tuya Cloud (last 6h)
+2. Determine temperature (indoor → sensor primary; outdoor → Open-Meteo primary)
+3. Run `IrrigationLogic.decide_for_cluster()`:
+   - 6h global cooldown check
    - Stress detection (water stress, heat, over-watering)
-   - Multi-sensor conflict resolution (driest plant vs wettest)
-   - Trend analysis (48h soil moisture, temperature)
+   - Multi-sensor conflict resolution (driest plant wins)
+   - 48h trend analysis
    - Plant-specific targets from scientific literature
-4. Executes on physical irrigator if `action == "irrigate"`
-5. Logs decision to DB (even on skip or failure)
+4. Execute on irrigator if `action == "irrigate"`
+5. Collect learning alerts (drainage, efficiency)
+6. Output `ACTION:` + any `ALERT:` blocks
+
+### Cluster without irrigator
+
+1. Sync sensors from Tuya Cloud (last 2h)
+2. Compare latest soil moisture vs plant targets
+3. Flag sensors below threshold as `needs_water`
+4. Output `ACTION: monitored` + `ALERT: needs_water` block if dry
 
 ## Multi-Sensor Logic
 
@@ -150,7 +189,7 @@ Decision uses `min_soil_moisture` (driest sensor), not average.
 
 After ≥3 irrigation cycles with sensor data, the system learns:
 
-- **Absorption rate:** +X%/min of irrigation per plant (how much water each receives)
+- **Absorption rate:** +X%/min of irrigation per plant
 - **Drainage rate:** -X%/hr natural moisture loss
 - **Efficiency score:** How consistently irrigation increases moisture
 
@@ -161,7 +200,7 @@ After ≥3 irrigation cycles with sensor data, the system learns:
 | 🚫 Blocked drip | Critical | <0.5%/min absorption, <30% efficiency |
 | 💨 Rapid drainage | Warning | >5%/hr moisture loss |
 | 🏜️ Chronic underwatering | Warning | Peak moisture never reaches target (7d) |
-| ⚠️ Unresolvable conflict | Critical | Irrigating for dry plant would bring wet plant >85% |
+| ⚠️ Unresolvable conflict | Critical | Irrigating dry plant would bring wet plant >85% |
 
 ## Confidence Scoring
 
@@ -175,7 +214,7 @@ After ≥3 irrigation cycles with sensor data, the system learns:
 ## Testing
 
 ```bash
-./test.sh    # 49 tests + ruff lint
+./test.sh    # 48 tests + ruff lint
 ```
 
 | Suite | Tests | Coverage |
@@ -188,6 +227,8 @@ After ≥3 irrigation cycles with sensor data, the system learns:
 
 ## Key Technical Decisions
 
+- **`check --all` as single cron entry point** — auto-detects cluster type, unified output protocol
+- **Agent-side alert forwarding** — scripts never call Telegram directly; output is parsed by the agent
 - **Protocol v3.5** for Rainpoint IK10PW (not v3.3 — newer firmware)
 - **Tuya Cloud as live source**, local SQLite as permanent archive
 - **Sensor sampling ~10min** (firmware-hardcoded, not configurable)

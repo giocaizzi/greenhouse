@@ -27,6 +27,7 @@ from pathlib import Path
 from tuya_irrigation.db import IrrigationDB
 from tuya_irrigation.devices import TuyaDeviceManager
 from tuya_irrigation.logic import IrrigationLogic
+from tuya_irrigation.plant_db import get_plant_database
 from tuya_irrigation.utils import format_timestamp
 
 # ── Helper Functions ──────────────────────────────────────────────────────────
@@ -301,6 +302,352 @@ def cmd_irrigate(args, db: IrrigationDB, dm: TuyaDeviceManager):
             print(f"   ❌ {irrigator.name}: {output}")
             return 1
 
+    return 0
+
+
+
+def cmd_monitor(args, db: IrrigationDB):
+    """Monitor sensor-only cluster — low-level, human-readable output.
+
+    For interactive use. Outputs status per sensor with soil moisture vs target.
+    For automated use (cron), use `check --all` instead.
+
+    Exit codes: 0 = ok, 2 = needs water, 1 = error
+    """
+    cluster = db.get_cluster(args.cluster)
+    if not cluster:
+        print(f"❌ Cluster {args.cluster} not found")
+        return 1
+
+    irrigators = db.get_irrigators_in_cluster(args.cluster)
+    if irrigators:
+        print("⚠️  Cluster has irrigators — use 'irrigate' instead of 'monitor'")
+
+    print(f"🌿 Monitoring: {cluster.name}")
+
+    # Step 1: Sync sensor data
+    if not getattr(args, "no_sync", False):
+        try:
+            from tuya_irrigation.cloud import TuyaCloud
+            from tuya_irrigation.logger_daemon import sync_sensor_data
+            cloud = TuyaCloud()
+            stats = sync_sensor_data(db, cloud, hours=2)
+            new = stats.get("total_new", 0)
+            print(f"   Sync: {new} new readings")
+        except Exception as e:
+            print(f"   ⚠️  Sync failed: {e}")
+
+    # Step 2: Get sensors and recent readings
+    sensors = db.get_sensors_in_cluster(args.cluster)
+    if not sensors:
+        print("❌ No sensors in cluster")
+        return 1
+
+    plant_db_instance = get_plant_database()
+    plants_by_id = {p.id: p for p in db.get_plants_in_cluster(args.cluster)}
+
+    needs_water = []
+
+    for sensor in sensors:
+        readings = db.get_recent_readings(sensor.id, hours=2)
+        if not readings:
+            print(f"   📊 {sensor.name}: no recent data")
+            continue
+
+        latest_soil = next((r.soil_moisture for r in readings if r.soil_moisture is not None), None)
+        latest_temp = next((r.temperature for r in readings if r.temperature is not None), None)
+
+        parts = []
+        if latest_temp is not None:
+            parts.append(f"{latest_temp:.1f}°C")
+        if latest_soil is None:
+            print(f"   📊 {sensor.name}: {' | '.join(parts) or 'no data'}")
+            continue
+        parts.append(f"soil:{latest_soil:.0f}%")
+
+        plant = plants_by_id.get(sensor.plant_id) if sensor.plant_id else None
+        care = plant_db_instance.get_care_data(species=plant.species if plant else None)
+        target_raw = care.get("soil_moisture_target", "45-65")
+        try:
+            t_min, t_max = (float(x) for x in target_raw.split("-"))
+        except Exception:
+            t_min, t_max = 45.0, 65.0
+
+        if latest_soil < t_min - 15:
+            label, severity = "🚨 VERY DRY", "critical"
+        elif latest_soil < t_min:
+            label, severity = "⚠️ dry", "warning"
+        elif latest_soil > t_max + 10:
+            label, severity = "💧 wet", "ok"
+        else:
+            label, severity = "✅ ok", "ok"
+
+        print(f"   📊 {sensor.name}: {' | '.join(parts)} → target {t_min:.0f}-{t_max:.0f}% [{label}]")
+
+        if severity in ("critical", "warning"):
+            plant_name = plant.species if plant else sensor.name
+            needs_water.append({
+                "sensor": sensor.name,
+                "plant": plant_name,
+                "soil": latest_soil,
+                "t_min": t_min,
+                "severity": severity,
+            })
+
+    if not needs_water:
+        print("   ✅ All plants ok")
+        return 0
+
+    # Print structured ALERT lines for the agent to parse and forward
+    print()
+    print(f"ALERT: {cluster.name}")
+    for item in needs_water:
+        emoji = "🚨" if item["severity"] == "critical" else "⚠️"
+        print(f"ALERT_ITEM: {emoji} {item['sensor']} ({item['plant']}): soil {item['soil']:.0f}% (target ≥{item['t_min']:.0f}%)")
+    print("ALERT_END")
+
+    return 2
+
+
+
+def _collect_learning_alerts(db: IrrigationDB, cluster_id: int) -> list[dict]:
+    """Return learning alerts for a cluster (advisory, never raises)."""
+    try:
+        from tuya_irrigation.learning import IrrigationLearner
+        learner = IrrigationLearner(db)
+        issues = learner.detect_issues(cluster_id)
+        return [{"severity": a.severity, "message": a.message} for a in issues]
+    except Exception:
+        return []
+
+
+def _check_cluster_irrigated(cluster_id: int, db: IrrigationDB, dm: TuyaDeviceManager | None) -> dict:
+    """Run irrigation logic for a cluster with irrigator.
+
+    Returns:
+      {"action": "irrigated"|"skipped"|"error", "notes": str, "alerts": [...]}
+    """
+
+    cluster = db.get_cluster(cluster_id)
+    if not cluster:
+        return {"action": "error", "notes": "cluster not found", "alerts": []}
+
+    is_indoor = cluster.environment == "indoor"
+
+    # Sync sensors
+    try:
+        from tuya_irrigation.cloud import TuyaCloud
+        from tuya_irrigation.logger_daemon import _sync_single_sensor
+        cloud = TuyaCloud()
+        for sensor in db.get_sensors_in_cluster(cluster_id):
+            try:
+                _sync_single_sensor(db, cloud, sensor, hours=6)
+            except Exception:
+                pass
+        sensor_live = None
+        sensors = db.get_sensors_in_cluster(cluster_id)
+        if sensors:
+            sensor_live = cloud.get_live_reading(sensors[0].tuya_device_id)
+    except Exception:
+        sensor_live = None
+
+    # Temperature
+    temp, source = None, "unknown"
+    if is_indoor and sensor_live and sensor_live.get("temperature") is not None:
+        temp, source = sensor_live["temperature"], "sensor"
+    else:
+        weather = _fetch_open_meteo()
+        if weather and weather.get("feels_like") is not None:
+            temp, source = weather["feels_like"], "open-meteo"
+    if temp is None:
+        temp, source = 20.0, "fallback"
+
+    # Decide
+    logic = IrrigationLogic(db)
+    decision = logic.decide_for_cluster(cluster_id, current_temp=temp)
+    if not decision:
+        return {"action": "error", "notes": "no data for decision", "alerts": []}
+
+    action = decision["action"]
+    duration = decision["duration_minutes"]
+    reason = decision["reason"]
+    confidence = decision["confidence"]
+
+    # Learning alerts
+    alerts = _collect_learning_alerts(db, cluster_id)
+
+    if action == "skip":
+        return {
+            "action": "skipped",
+            "notes": f"{reason} (confidence {confidence:.0%})",
+            "alerts": alerts,
+        }
+
+    # Execute
+    irrigators = db.get_irrigators_in_cluster(cluster_id)
+    if not irrigators:
+        return {"action": "error", "notes": "no irrigators found", "alerts": alerts}
+
+    if dm is None:
+        return {"action": "error", "notes": "no device manager", "alerts": alerts}
+
+    irrigator = irrigators[0]
+    success, output = dm.irrigator_start(irrigator, duration)
+    soil_note = f", soil={sensor_live['soil_moisture']:.0f}%" if sensor_live and sensor_live.get("soil_moisture") is not None else ""
+    db.add_irrigation_event(
+        irrigator_id=irrigator.id,
+        action="start" if success else "attempted",
+        duration_minutes=duration,
+        triggered_by="auto",
+        notes=f"temp={temp:.1f}°C ({source}){soil_note}, confidence={confidence:.0%}, reason={reason}",
+    )
+
+    if not success:
+        return {"action": "error", "notes": f"irrigator failed: {output}", "alerts": alerts}
+
+    notes_parts = [f"{duration}min", f"temp={temp:.1f}°C", f"confidence={confidence:.0%}"]
+    if sensor_live and sensor_live.get("soil_moisture") is not None:
+        notes_parts.append(f"soil={sensor_live['soil_moisture']:.0f}%")
+    return {
+        "action": "irrigated",
+        "notes": "; ".join(notes_parts),
+        "alerts": alerts,
+    }
+
+
+def _check_cluster_monitor(cluster_id: int, db: IrrigationDB) -> dict:
+    """Run monitor logic for a cluster without irrigator.
+
+    Returns:
+      {"action": "monitored", "needs_water": [...], "alerts": [...]}
+    """
+    # Sync
+    try:
+        from tuya_irrigation.cloud import TuyaCloud
+        from tuya_irrigation.logger_daemon import sync_sensor_data
+        cloud = TuyaCloud()
+        sync_sensor_data(db, cloud, hours=2)
+    except Exception:
+        pass
+
+    sensors = db.get_sensors_in_cluster(cluster_id)
+    if not sensors:
+        return {"action": "monitored", "needs_water": [], "alerts": []}
+
+    plant_db_instance = get_plant_database()
+    plants_by_id = {p.id: p for p in db.get_plants_in_cluster(cluster_id)}
+    needs_water = []
+
+    for sensor in sensors:
+        readings = db.get_recent_readings(sensor.id, hours=2)
+        if not readings:
+            continue
+        latest_soil = next((r.soil_moisture for r in readings if r.soil_moisture is not None), None)
+        if latest_soil is None:
+            continue
+
+        plant = plants_by_id.get(sensor.plant_id) if sensor.plant_id else None
+        care = plant_db_instance.get_care_data(species=plant.species if plant else None)
+        target_raw = care.get("soil_moisture_target", "45-65")
+        try:
+            t_min = float(target_raw.split("-")[0])
+        except Exception:
+            t_min = 45.0
+
+        if latest_soil < t_min - 15:
+            severity = "critical"
+        elif latest_soil < t_min:
+            severity = "warning"
+        else:
+            severity = "ok"
+
+        if severity in ("critical", "warning"):
+            plant_name = plant.species if plant else sensor.name
+            needs_water.append({
+                "sensor": sensor.name,
+                "plant": plant_name,
+                "soil": latest_soil,
+                "t_min": t_min,
+                "severity": severity,
+            })
+
+    alerts = _collect_learning_alerts(db, cluster_id)
+    return {"action": "monitored", "needs_water": needs_water, "alerts": alerts}
+
+
+def cmd_check(args, db: IrrigationDB, dm: TuyaDeviceManager | None):
+    """Unified check: irrigate or monitor all clusters, collect all alerts.
+
+    Auto-detects cluster type:
+      - Has irrigator → irrigation logic
+      - No irrigator  → monitor logic (soil check only)
+    Always collects learning alerts (drainage, efficiency).
+
+    Output format (for agent parsing):
+      ACTION: irrigated|skipped|monitored|error <cluster_name> [<notes>]
+      ALERT: <cluster_name> <type>
+      ALERT_ITEM: <emoji> <message>
+      ALERT_END
+
+    Exit codes:
+      0 = all ok / skipped, nothing to report
+      2 = alerts present (agent should forward)
+      1 = one or more errors
+    """
+    # Determine clusters to check
+    if getattr(args, "all", False):
+        clusters = db.list_clusters()
+    else:
+        c = db.get_cluster(args.cluster)
+        clusters = [c] if c else []
+
+    if not clusters:
+        print("❌ No clusters found")
+        return 1
+
+    has_alerts = False
+    has_errors = False
+
+    for cluster in clusters:
+        irrigators = db.get_irrigators_in_cluster(cluster.id)
+
+        if irrigators:
+            result = _check_cluster_irrigated(cluster.id, db, dm)
+        else:
+            result = _check_cluster_monitor(cluster.id, db)
+
+        # Print ACTION line
+        notes = result.get("notes", "")
+        notes_str = f" — {notes}" if notes else ""
+        print(f"ACTION: {result['action']} {cluster.name}{notes_str}")
+
+        # Watering reminders (monitor clusters)
+        needs_water = result.get("needs_water", [])
+        if needs_water:
+            has_alerts = True
+            print(f"ALERT: {cluster.name} needs_water")
+            for item in needs_water:
+                emoji = "🚨" if item["severity"] == "critical" else "⚠️"
+                print(f"ALERT_ITEM: {emoji} {item['sensor']} ({item['plant']}): soil {item['soil']:.0f}% (target ≥{item['t_min']:.0f}%)")
+            print("ALERT_END")
+
+        # Learning alerts
+        learning_alerts = result.get("alerts", [])
+        if learning_alerts:
+            has_alerts = True
+            print(f"ALERT: {cluster.name} learning")
+            for a in learning_alerts:
+                emoji = "🚨" if a["severity"] == "critical" else "⚠️"
+                print(f"ALERT_ITEM: {emoji} [{a['severity']}] {a['message']}")
+            print("ALERT_END")
+
+        if result["action"] == "error":
+            has_errors = True
+
+    if has_errors:
+        return 1
+    if has_alerts:
+        return 2
     return 0
 
 
@@ -583,6 +930,15 @@ Setup (CRUD):
     p_irrigate.add_argument("--dry-run", action="store_true", help="Analyze only, don't execute")
     p_irrigate.add_argument("--no-sync", action="store_true", help="Skip sensor sync (use DB data)")
 
+    p_check = sub.add_parser("check", help="Unified check: irrigate or monitor all clusters + all alerts")
+    check_group = p_check.add_mutually_exclusive_group(required=True)
+    check_group.add_argument("cluster", nargs="?", type=int, help="Cluster ID")
+    check_group.add_argument("--all", action="store_true", help="Check all clusters")
+
+    p_monitor = sub.add_parser("monitor", help="Monitor sensor-only cluster (low-level, human-readable)")
+    p_monitor.add_argument("cluster", type=int, help="Cluster ID")
+    p_monitor.add_argument("--no-sync", action="store_true", help="Skip sensor sync")
+
     p_sync = sub.add_parser("sync", help="Sync sensor data from Tuya Cloud")
     p_sync.add_argument("--hours", type=int, default=24, help="History window (default: 24)")
 
@@ -686,7 +1042,7 @@ Setup (CRUD):
 
     # Device manager: only init when needed (requires Tuya credentials)
     dm = None
-    needs_dm = args.command in ("status", "irrigate") or (
+    needs_dm = args.command in ("status", "irrigate", "check") or (
         args.command == "irrigator" and args.irrigator_cmd in ("start", "stop")
     )
     if needs_dm:
@@ -703,6 +1059,10 @@ Setup (CRUD):
     try:
         if args.command == "status":
             return cmd_status(args, db, dm)
+        elif args.command == "check":
+            return cmd_check(args, db, dm)
+        elif args.command == "monitor":
+            return cmd_monitor(args, db)
         elif args.command == "irrigate":
             return cmd_irrigate(args, db, dm)
         elif args.command == "sync":

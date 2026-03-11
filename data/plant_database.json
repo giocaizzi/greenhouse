@@ -77,6 +77,27 @@
       ]
     },
 
+    "Alocasia amazonica": {
+      "common_name": "African Mask Plant",
+      "aliases": ["Alocasia", "Alocasia polly", "Elephant ear", "African mask"],
+      "category": "tropical",
+      "native_region": "Southeast Asia",
+      "water_needs": "medium",
+      "water_frequency_days": 7,
+      "water_notes": "Keep soil consistently moist but never waterlogged. Sensitive to both drought and overwatering. Allow top inch to dry between waterings. High humidity essential.",
+      "ideal_temp_min_c": 18,
+      "ideal_temp_max_c": 27,
+      "ideal_humidity_min": 60,
+      "ideal_humidity_max": 80,
+      "light_needs": "medium",
+      "soil_moisture_target": "50-65",
+      "sources": [
+        "The Spruce: 65-85°F (18-29°C), 60%+ humidity",
+        "Bloomscape: consistently moist soil, never soggy",
+        "Houseplant411: moderate moisture, high humidity"
+      ]
+    },
+
     "Eriobotrya japonica": {
       "common_name": "Loquat",
       "aliases": ["Nespolo"],
