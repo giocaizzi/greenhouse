@@ -7,6 +7,7 @@ import time
 from tuya_irrigation.db import IrrigationDB
 from tuya_irrigation.models import IrrigationConfig
 from tuya_irrigation.plant_db import get_plant_database
+from tuya_irrigation.utils import effective_light_threshold, seasonal_light_factor
 
 
 class IrrigationLogic:
@@ -228,24 +229,29 @@ class IrrigationLogic:
                 decision["interval_hours"] = min(24, decision["interval_hours"] + 2)
                 reasons.append(f"💧 high ambient humidity ({avg_humidity:.0f}%)")
 
-        # Light (lux) adjustment
+        # Light (lux) adjustment — thresholds scaled by seasonal factor
         avg_light = sensor_data.get("avg_light")
         if avg_light is not None:
-            if avg_light > 1500:
-                # Very bright → high transpiration → more frequent
+            sf = seasonal_light_factor()  # e.g. 0.50 in Dec, 1.0 in Jun
+            very_bright = 1500 * sf
+            bright = 800 * sf
+            dark = 150 * sf
+            very_dark = 50 * sf
+            if avg_light > very_bright:
+                # Seasonally very bright → high transpiration → more frequent
                 decision["interval_hours"] = max(6, decision["interval_hours"] - 2)
                 decision["duration_minutes"] = min(5, decision["duration_minutes"] + 1)
-                reasons.append(f"☀️ very bright ({avg_light:.0f} lux)")
-            elif avg_light > 800:
+                reasons.append(f"☀️ very bright ({avg_light:.0f} lux, seasonal)")
+            elif avg_light > bright:
                 decision["interval_hours"] = max(6, decision["interval_hours"] - 1)
-                reasons.append(f"🌤️ bright ({avg_light:.0f} lux)")
-            elif avg_light < 50:
-                # Very dark → minimal transpiration → less frequent
+                reasons.append(f"🌤️ bright ({avg_light:.0f} lux, seasonal)")
+            elif avg_light < very_dark:
+                # Seasonally very dark → minimal transpiration → less frequent
                 decision["interval_hours"] = min(24, decision["interval_hours"] + 4)
-                reasons.append(f"🌑 very low light ({avg_light:.0f} lux)")
-            elif avg_light < 150:
+                reasons.append(f"🌑 very low light ({avg_light:.0f} lux, seasonal)")
+            elif avg_light < dark:
                 decision["interval_hours"] = min(24, decision["interval_hours"] + 2)
-                reasons.append(f"☁️ low light ({avg_light:.0f} lux)")
+                reasons.append(f"☁️ low light ({avg_light:.0f} lux, seasonal)")
 
         # Water needs adjustment
         if water_needs_level == "high":
@@ -311,7 +317,7 @@ class IrrigationLogic:
                 if r.soil_moisture is not None:
                     all_soil.append(r.soil_moisture)
                     s_soil.append(r.soil_moisture)
-                if r.light is not None:
+                if r.light is not None and r.light > 15:  # exclude night readings
                     all_light.append(r.light)
                 if r.water_warning:
                     water_warnings.append(sensor.name)
@@ -507,7 +513,7 @@ class IrrigationLogic:
                     f"very dry air ({avg_env_hum:.0f}% vs ideal ≥{hum_range[0]:.0f}%) — high transpiration"
                 )
 
-        # Light stress: sustained low light for plants that need it
+        # Light stress: sustained low light for plants that need it (seasonal threshold)
         avg_light_s = sensor_data.get("avg_light")
         if avg_light_s is not None and plants_for_stress:
             plant_care_data_s2 = [
@@ -517,9 +523,10 @@ class IrrigationLogic:
             min_lux_needed = max(
                 (d.get("ideal_light_lux_min", 0) for d in plant_care_data_s2), default=0
             )
-            if min_lux_needed > 0 and avg_light_s < min_lux_needed * 0.4:
+            seasonal_min = effective_light_threshold(min_lux_needed)
+            if min_lux_needed > 0 and avg_light_s < seasonal_min * 0.4:
                 stress["low_light"] = (
-                    f"insufficient light ({avg_light_s:.0f} lux vs min {min_lux_needed:.0f}) — "
+                    f"insufficient light ({avg_light_s:.0f} lux vs seasonal min {seasonal_min:.0f}) — "
                     f"reduced transpiration and growth"
                 )
 

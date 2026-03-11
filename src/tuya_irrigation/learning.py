@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from tuya_irrigation.db import IrrigationDB
 from tuya_irrigation.models import IrrigationEvent, Sensor
 from tuya_irrigation.plant_db import get_plant_database
+from tuya_irrigation.utils import daytime_lux_readings, effective_light_threshold
 
 
 @dataclass
@@ -264,15 +265,18 @@ class IrrigationLearner:
 
             # 2. Rapid drainage — with light correlation
             if profile.avg_drainage_per_hour < -5:  # Losing >5% per hour
-                # Check if high light explains the drainage (high transpiration)
+                # Check if high light explains the drainage (daytime readings only)
                 recent_readings = self.db.get_recent_readings(sensor.id, hours=48)
                 avg_lux = None
-                lux_readings = [r.light for r in recent_readings if r.light is not None]
+                lux_readings = daytime_lux_readings(recent_readings)
                 if lux_readings:
                     import statistics as _stats
                     avg_lux = _stats.mean(lux_readings)
+                    # Scale threshold by season (bright days cause more transpiration)
 
-                if avg_lux is not None and avg_lux > 800:
+                from tuya_irrigation.utils import seasonal_light_factor as _slf
+                bright_threshold = 800 * _slf()
+                if avg_lux is not None and avg_lux > bright_threshold:
                     # High light explains rapid drying → inform but lower severity
                     alerts.append(Alert(
                         severity="warning",
@@ -423,22 +427,24 @@ class IrrigationLearner:
             if not min_lux:
                 continue
             readings_7d = self.db.get_recent_readings(sensor.id, hours=168)
-            lux_vals = [r.light for r in readings_7d if r.light is not None]
+            lux_vals = daytime_lux_readings(readings_7d)  # exclude night readings
             if len(lux_vals) < 5:
                 continue  # Not enough data
             import statistics as _stats2
             avg_lux_7d = _stats2.mean(lux_vals)
-            if avg_lux_7d < min_lux * 0.5:
+            seasonal_min_lux = effective_light_threshold(min_lux)  # adjusted for current month
+            if avg_lux_7d < seasonal_min_lux * 0.5:
                 alerts.append(Alert(
                     severity="warning",
                     alert_type="low_light",
                     message=(
-                        f"🌑 {sensor.name} ({plant.species}): avg light {avg_lux_7d:.0f} lux "
-                        f"(7d avg) — below minimum {min_lux} lux for this plant. "
+                        f"🌑 {sensor.name} ({plant.species}): avg daytime light {avg_lux_7d:.0f} lux "
+                        f"(7d avg, daytime only) — below seasonal minimum {seasonal_min_lux:.0f} lux "
+                        f"(summer baseline {min_lux} lux). "
                         f"Move to brighter location or add grow light."
                     ),
                     sensor_name=sensor.name,
-                    data={"avg_lux": avg_lux_7d, "min_lux": min_lux},
+                    data={"avg_lux": avg_lux_7d, "min_lux": min_lux, "seasonal_min_lux": seasonal_min_lux},
                 ))
 
         # 5. Low env humidity: sustained dry air for tropical plants

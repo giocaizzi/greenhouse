@@ -28,7 +28,7 @@ from tuya_irrigation.db import IrrigationDB
 from tuya_irrigation.devices import TuyaDeviceManager
 from tuya_irrigation.logic import IrrigationLogic
 from tuya_irrigation.plant_db import get_plant_database
-from tuya_irrigation.utils import format_timestamp
+from tuya_irrigation.utils import daytime_lux_readings, effective_light_threshold, format_timestamp
 
 # ── Helper Functions ──────────────────────────────────────────────────────────
 
@@ -480,25 +480,28 @@ def _collect_maintenance_alerts(db: IrrigationDB, cluster_id: int) -> list[dict]
                         ),
                     })
 
-        # Environment: insufficient light
-        lux_vals = [r.light for r in readings if r.light is not None]
+        # Environment: insufficient light (daytime only, seasonal threshold)
+        lux_vals = daytime_lux_readings(readings)  # exclude night readings
         if len(lux_vals) >= 3:
             avg_lux = statistics.mean(lux_vals)
             plant = plants_by_id.get(sensor.plant_id) if sensor.plant_id else None
             if plant:
                 care = plant_db_m.get_care_data(species=plant.species, category=plant.category)
                 min_lux = care.get("ideal_light_lux_min")
-                if min_lux and avg_lux < min_lux * 0.5:
-                    light_needs = care.get("light_needs", "?")
-                    alerts.append({
-                        "severity": "warning",
-                        "type": "low_light",
-                        "message": (
-                            f"🌑 {sensor.name}: avg {avg_lux:.0f} lux "
-                            f"(needs ≥{min_lux} lux, {light_needs} light) — "
-                            f"move to brighter spot or add grow light"
-                        ),
-                    })
+                if min_lux:
+                    seasonal_min = effective_light_threshold(min_lux)
+                    if avg_lux < seasonal_min * 0.5:
+                        light_needs = care.get("light_needs", "?")
+                        alerts.append({
+                            "severity": "warning",
+                            "type": "low_light",
+                            "message": (
+                                f"🌑 {sensor.name}: avg {avg_lux:.0f} lux (daytime) "
+                                f"— seasonal min {seasonal_min:.0f} lux "
+                                f"({light_needs} light plant, winter-adjusted) "
+                                f"— move to brighter spot or add grow light"
+                            ),
+                        })
 
     return alerts
 
