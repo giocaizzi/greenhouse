@@ -439,7 +439,6 @@ class IrrigationLogic:
         - water_stress: description if detected
         - heat_stress: description if detected
         - over_watering: description if detected
-        - battery_low: comma-separated sensor names with low battery
         """
         stress = {}
 
@@ -474,19 +473,6 @@ class IrrigationLogic:
                 stress["over_watering"] = f"soil saturated ({avg_soil:.0f}%) + high frequency"
             elif trends.get("soil_moisture_trend") == "rising":
                 stress["over_watering"] = f"soil very wet ({avg_soil:.0f}%) + rising"
-
-        # Battery: check most recent reading per sensor for low battery state
-        sensors = self.db.get_sensors_in_cluster(cluster_id)
-        low_battery = []
-        for sensor in sensors:
-            readings = self.db.get_recent_readings(sensor.id, hours=24)
-            latest_bat = next(
-                (r.battery_state for r in readings if r.battery_state is not None), None
-            )
-            if latest_bat == "low":
-                low_battery.append(sensor.name)
-        if low_battery:
-            stress["battery_low"] = f"low battery: {', '.join(low_battery)}"
 
         return stress
 
