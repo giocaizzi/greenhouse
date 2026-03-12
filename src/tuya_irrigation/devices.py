@@ -2,6 +2,7 @@
 """Device management for Tuya irrigators and sensors."""
 
 import os
+import time
 
 import tinytuya
 
@@ -88,19 +89,17 @@ class TuyaDeviceManager:
             # Just turn on without timer
             return self.irrigator_on(irrigator)
 
-        # Turn on + set timer (countdown_1 expects seconds)
-        commands = {
-            "commands": [
-                {"code": "switch", "value": True},
-                {"code": "countdown_1", "value": minutes * 60},
-            ]
-        }
+        # This device (Rainpoint IK10PW, category ggq) only supports the `switch` DP.
+        # countdown_1 is NOT available — we implement the timer ourselves.
+        success, msg = self.irrigator_on(irrigator)
+        if not success:
+            return False, f"Failed to start irrigation: {msg}"
 
-        success, _ = self._send_command(irrigator.tuya_device_id, commands)
-        if success:
-            return True, f"Irrigation started for {minutes} minutes"
-        else:
-            return False, "Failed to start irrigation"
+        # Wait for the requested duration, then stop
+        time.sleep(minutes * 60)
+        self.irrigator_off(irrigator)
+
+        return True, f"Irrigation completed for {minutes} minutes"
 
     def irrigator_stop(self, irrigator: Irrigator) -> tuple[bool, str]:
         """Stop current irrigation."""
