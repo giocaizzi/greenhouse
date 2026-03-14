@@ -1,17 +1,44 @@
 #!/usr/bin/env python3
-"""Device management for Tuya irrigators and sensors."""
+"""Device management for Tuya irrigators and sensors.
+
+Hybrid approach for Rainpoint IK10PW:
+- Cloud API for switch on/off (reliable, works through Zigbee gateway)
+- Local API (v3.5) for custom DPs like Duration (dp_id 102) that the
+  Cloud API won't let us write (error 2008)
+
+The device has a hidden Duration DP (102) that controls how long it
+irrigates per switch-on cycle. Default is 30s. We set it to the
+requested duration via local protocol before activating the switch,
+so the device handles its own timer — no sleep loops needed.
+"""
 
 import os
-import signal
+import sys
 import time
 
 import tinytuya
 
 from tuya_irrigation.models import Irrigator, Sensor
 
+# DP IDs for Rainpoint IK10PW (category ggq, protocol v3.5)
+DP_SWITCH = 1       # bool: on/off
+DP_DURATION = 102   # int: irrigation duration in seconds
+DP_INTERVAL = 103   # int: auto-irrigation interval in hours
+DP_LEFTTIME = 104   # int: remaining seconds (read-only)
+DP_ALARM = 105      # bitmap: alarm flags
+DP_WORKSTATUS = 106  # enum: work status
+DP_NEXT = 107       # int: next irrigation timestamp
+DP_POWERSTATUS = 108  # enum: power status
+DP_AUTORUN = 109    # bool: auto-irrigation enabled
+
+# Default local IP — can be overridden via irrigator config
+DEFAULT_LOCAL_IP = "192.168.1.199"
+LOCAL_PROTOCOL = 3.5
+LOCAL_TIMEOUT = 5
+
 
 class TuyaDeviceManager:
-    """Manages Tuya irrigators and sensors via Tuya Cloud API."""
+    """Manages Tuya irrigators and sensors via Cloud + Local API (hybrid)."""
 
     def __init__(self):
         self.client_id = os.environ.get("TUYA_CLIENT_ID", "")
@@ -27,33 +54,93 @@ class TuyaDeviceManager:
             apiSecret=self.secret,
         )
 
+    # ── Internal helpers ──────────────────────────────────────────────────────
+
     def _send_command(self, device_id: str, commands: dict) -> tuple[bool, str]:
-        """Send command to device via Cloud API.
-
-        Args:
-            device_id: Tuya device ID
-            commands: Command dict in format {"commands": [{"code": str, "value": any}, ...]}
-
-        Returns:
-            (success, message) tuple
-        """
+        """Send command to device via Cloud API."""
         result = self.cloud.sendcommand(device_id, commands)
         if result.get("success"):
             return True, "Command succeeded"
         else:
             return False, f"Cloud API error: {result}"
 
+    def _get_local_device(self, irrigator: Irrigator) -> tinytuya.OutletDevice:
+        """Create a local tinytuya connection to the irrigator.
+
+        Uses local_key from Cloud API device list and local_ip from
+        irrigator config (fallback to DEFAULT_LOCAL_IP).
+        """
+        import json as _json
+
+        # Get local key from cloud
+        devices = self.cloud.getdevices()
+        local_key = None
+        if isinstance(devices, list):
+            for d in devices:
+                if d.get("id") == irrigator.tuya_device_id:
+                    local_key = d.get("key")
+                    break
+
+        if not local_key:
+            raise ConnectionError(f"Could not find local key for device {irrigator.tuya_device_id}")
+
+        # Config may be a JSON string or a dict
+        config = irrigator.config or {}
+        if isinstance(config, str):
+            try:
+                config = _json.loads(config)
+            except (ValueError, TypeError):
+                config = {}
+        local_ip = config.get("device_ip", DEFAULT_LOCAL_IP)
+
+        device = tinytuya.OutletDevice(irrigator.tuya_device_id, local_ip, local_key)
+        device.set_version(LOCAL_PROTOCOL)
+        device.set_socketTimeout(LOCAL_TIMEOUT)
+        return device
+
+    def _set_duration_local(self, irrigator: Irrigator, seconds: int) -> tuple[bool, str]:
+        """Set the Duration DP (102) via local protocol.
+
+        Cloud API returns error 2008 for this custom DP, so we must
+        use local protocol v3.5 which has full DP access.
+        """
+        try:
+            device = self._get_local_device(irrigator)
+            result = device.set_value(DP_DURATION, seconds)
+            if result and result.get("Error"):
+                return False, f"Local API error: {result}"
+            return True, f"Duration set to {seconds}s"
+        except Exception as e:
+            return False, f"Local connection failed: {e}"
+
     # ── Irrigator Control ─────────────────────────────────────────────────────
 
     def irrigator_status(self, irrigator: Irrigator) -> dict:
-        """Get current status of an irrigator."""
-        result = self.cloud.getstatus(irrigator.tuya_device_id)
+        """Get current status of an irrigator.
 
+        Tries local first (full DP access), falls back to cloud.
+        """
+        try:
+            device = self._get_local_device(irrigator)
+            status = device.status()
+            if status and "dps" in status:
+                dps = status["dps"]
+                return {
+                    "running": dps.get(str(DP_SWITCH), False),
+                    "duration": dps.get(str(DP_DURATION)),
+                    "left_time": dps.get(str(DP_LEFTTIME)),
+                    "work_status": dps.get(str(DP_WORKSTATUS)),
+                    "auto_run": dps.get(str(DP_AUTORUN)),
+                    "source": "local",
+                }
+        except Exception:
+            pass  # Fall back to cloud
+
+        result = self.cloud.getstatus(irrigator.tuya_device_id)
         if not result.get("success"):
             return {"error": f"Cloud API error: {result}"}
 
-        # Parse result
-        status = {}
+        status = {"source": "cloud"}
         for item in result.get("result", []):
             code = item.get("code")
             value = item.get("value")
@@ -61,46 +148,67 @@ class TuyaDeviceManager:
                 status["running"] = value
             elif code == "work_state":
                 status["work_state"] = value
-
         return status
 
     def irrigator_on(self, irrigator: Irrigator) -> tuple[bool, str]:
-        """Turn irrigator ON."""
+        """Turn irrigator ON via Cloud API."""
         commands = {"commands": [{"code": "switch", "value": True}]}
         success, _ = self._send_command(irrigator.tuya_device_id, commands)
         return success, "Device turned ON" if success else "Failed to turn ON device"
 
     def irrigator_off(self, irrigator: Irrigator) -> tuple[bool, str]:
-        """Turn irrigator OFF."""
+        """Turn irrigator OFF via Cloud API."""
         commands = {"commands": [{"code": "switch", "value": False}]}
         success, _ = self._send_command(irrigator.tuya_device_id, commands)
         return success, "Device turned OFF" if success else "Failed to turn OFF device"
-
-    # The Rainpoint IK10PW has a hidden DP "Duration" (dp_id 102) set to 30s.
-    # It auto-stops after that interval. Cloud API won't let us change it
-    # (error 2008 — custom DP not writable via standard commands).
-    # Workaround: send keep-alive ON commands every KEEP_ALIVE_INTERVAL_S
-    # to reset the device's internal timer and sustain irrigation.
-    KEEP_ALIVE_INTERVAL_S = 20  # Must be < device Duration (30s)
 
     def irrigator_start(self, irrigator: Irrigator, minutes: int | None = None) -> tuple[bool, str]:
         """Start irrigation with optional duration.
 
         Args:
             irrigator: Irrigator instance
-            minutes: Duration in minutes (None = just turn on)
+            minutes: Duration in minutes (None = just turn on with current Duration DP)
 
         Returns:
             (success, message) tuple
 
-        The Rainpoint IK10PW (category ggq) auto-stops after its internal
-        Duration DP (~30s). We sustain irrigation by sending keep-alive ON
-        commands every 20s. A SIGTERM handler guarantees device shutdown
-        even on cron timeout / kill.
+        Strategy:
+        1. Set Duration DP (102) via local protocol to requested minutes
+        2. Send switch ON via Cloud API
+        3. Device handles its own timer — no sleep/polling needed
+        4. Device auto-stops after Duration seconds
+
+        If local connection fails (e.g. device IP changed), falls back to
+        keep-alive loop (sending switch ON every 20s).
         """
         if minutes is None:
-            # Just turn on without timer
             return self.irrigator_on(irrigator)
+
+        duration_seconds = int(minutes * 60)
+
+        # Step 1: Set Duration DP via local protocol
+        dur_ok, dur_msg = self._set_duration_local(irrigator, duration_seconds)
+
+        if dur_ok:
+            # Step 2: Activate switch — device will auto-stop after duration
+            success, msg = self.irrigator_on(irrigator)
+            if not success:
+                return False, f"Failed to start irrigation: {msg}"
+            return True, f"Irrigation started for {minutes} min (Duration DP set to {duration_seconds}s, device auto-stops)"
+        else:
+            # Fallback: keep-alive loop if local connection fails
+            print(f"⚠️  Local Duration set failed ({dur_msg}), using keep-alive fallback", file=sys.stderr)
+            return self._irrigator_start_keepalive(irrigator, minutes)
+
+    def _irrigator_start_keepalive(self, irrigator: Irrigator, minutes: int) -> tuple[bool, str]:
+        """Fallback: sustain irrigation via keep-alive ON commands.
+
+        Used when local protocol is unavailable (IP changed, network issue).
+        Sends switch ON every 20s to reset the device's internal auto-off timer.
+        """
+        import signal
+
+        KEEP_ALIVE_INTERVAL = 20  # seconds, must be < device Duration (30s)
 
         success, msg = self.irrigator_on(irrigator)
         if not success:
@@ -110,8 +218,6 @@ class TuyaDeviceManager:
         elapsed = 0
         interrupted = False
 
-        # SIGTERM guard: ensure irrigator_off() runs even if the process is
-        # killed (e.g. cron job timeout).
         def _sigterm_cleanup(signum, frame):
             nonlocal interrupted
             interrupted = True
@@ -124,16 +230,14 @@ class TuyaDeviceManager:
         prev_handler = signal.signal(signal.SIGTERM, _sigterm_cleanup)
         try:
             while elapsed < total_seconds and not interrupted:
-                sleep_for = min(self.KEEP_ALIVE_INTERVAL_S, total_seconds - elapsed)
+                sleep_for = min(KEEP_ALIVE_INTERVAL, total_seconds - elapsed)
                 time.sleep(sleep_for)
                 elapsed += sleep_for
-
                 if elapsed < total_seconds and not interrupted:
-                    # Send keep-alive ON to reset device's internal auto-off timer
                     try:
                         self.irrigator_on(irrigator)
                     except Exception:
-                        pass  # Best-effort; device may still be running
+                        pass
         except (SystemExit, KeyboardInterrupt):
             interrupted = True
         finally:
@@ -144,8 +248,8 @@ class TuyaDeviceManager:
                 pass
 
         if interrupted:
-            return True, f"Irrigation interrupted after ~{elapsed}s — device turned off safely (requested {minutes} min)"
-        return True, f"Irrigation completed for {minutes} minutes"
+            return True, f"Irrigation interrupted after ~{elapsed}s — device turned off (requested {minutes} min) [keep-alive mode]"
+        return True, f"Irrigation completed for {minutes} min [keep-alive mode]"
 
     def irrigator_stop(self, irrigator: Irrigator) -> tuple[bool, str]:
         """Stop current irrigation."""
