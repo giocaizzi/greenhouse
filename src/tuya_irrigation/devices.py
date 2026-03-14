@@ -76,6 +76,13 @@ class TuyaDeviceManager:
         success, _ = self._send_command(irrigator.tuya_device_id, commands)
         return success, "Device turned OFF" if success else "Failed to turn OFF device"
 
+    # The Rainpoint IK10PW has a hidden DP "Duration" (dp_id 102) set to 30s.
+    # It auto-stops after that interval. Cloud API won't let us change it
+    # (error 2008 — custom DP not writable via standard commands).
+    # Workaround: send keep-alive ON commands every KEEP_ALIVE_INTERVAL_S
+    # to reset the device's internal timer and sustain irrigation.
+    KEEP_ALIVE_INTERVAL_S = 20  # Must be < device Duration (30s)
+
     def irrigator_start(self, irrigator: Irrigator, minutes: int | None = None) -> tuple[bool, str]:
         """Start irrigation with optional duration.
 
@@ -86,9 +93,10 @@ class TuyaDeviceManager:
         Returns:
             (success, message) tuple
 
-        The Rainpoint IK10PW (category ggq) only supports the `switch` DP —
-        no hardware countdown. Timer is implemented in software with a SIGTERM
-        handler to guarantee device shutdown even on cron timeout / kill.
+        The Rainpoint IK10PW (category ggq) auto-stops after its internal
+        Duration DP (~30s). We sustain irrigation by sending keep-alive ON
+        commands every 20s. A SIGTERM handler guarantees device shutdown
+        even on cron timeout / kill.
         """
         if minutes is None:
             # Just turn on without timer
@@ -98,11 +106,12 @@ class TuyaDeviceManager:
         if not success:
             return False, f"Failed to start irrigation: {msg}"
 
-        # SIGTERM guard: ensure irrigator_off() runs even if the process is
-        # killed (e.g. cron job timeout). Without this, the device stays ON
-        # indefinitely because there's no hardware countdown DP.
+        total_seconds = minutes * 60
+        elapsed = 0
         interrupted = False
 
+        # SIGTERM guard: ensure irrigator_off() runs even if the process is
+        # killed (e.g. cron job timeout).
         def _sigterm_cleanup(signum, frame):
             nonlocal interrupted
             interrupted = True
@@ -114,7 +123,17 @@ class TuyaDeviceManager:
 
         prev_handler = signal.signal(signal.SIGTERM, _sigterm_cleanup)
         try:
-            time.sleep(minutes * 60)
+            while elapsed < total_seconds and not interrupted:
+                sleep_for = min(self.KEEP_ALIVE_INTERVAL_S, total_seconds - elapsed)
+                time.sleep(sleep_for)
+                elapsed += sleep_for
+
+                if elapsed < total_seconds and not interrupted:
+                    # Send keep-alive ON to reset device's internal auto-off timer
+                    try:
+                        self.irrigator_on(irrigator)
+                    except Exception:
+                        pass  # Best-effort; device may still be running
         except (SystemExit, KeyboardInterrupt):
             interrupted = True
         finally:
@@ -125,7 +144,7 @@ class TuyaDeviceManager:
                 pass
 
         if interrupted:
-            return True, f"Irrigation interrupted — device turned off safely (requested {minutes} min)"
+            return True, f"Irrigation interrupted after ~{elapsed}s — device turned off safely (requested {minutes} min)"
         return True, f"Irrigation completed for {minutes} minutes"
 
     def irrigator_stop(self, irrigator: Irrigator) -> tuple[bool, str]:
