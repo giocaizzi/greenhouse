@@ -41,8 +41,8 @@ Sensors (Zigbee) → Tuya Cloud API
 
 **Device Communication:**
 - **Sensors (Zigbee):** Tuya Cloud API only (required for Zigbee sub-devices)
-- **Irrigators:** Tuya Cloud API (reliable, ~200ms latency)
-- **Local mode deprecated:** Protocol v3.5 error 914 (query commands fail)
+- **Irrigators:** Hybrid — Cloud API for switch on/off, Local API (v3.5) for custom DPs (Duration)
+- **Local mode:** Protocol v3.5 operational (device IP: 192.168.1.199)
 
 **Package:** `tuya_irrigation` (v0.5.0)
 
@@ -51,7 +51,7 @@ Sensors (Zigbee) → Tuya Cloud API
 | `cli.py` | Single entry point: all commands |
 | `cloud.py` | Tuya Cloud API client (getstatus, getdevicelog, DP parsing) |
 | `db.py` | SQLite with dedup, bulk insert, readings-around queries |
-| `devices.py` | Physical device control via Tuya Cloud API |
+| `devices.py` | Physical device control — hybrid Cloud + Local (v3.5) |
 | `logic.py` | Smart decisions: multi-sensor conflict, trends, stress detection |
 | `learning.py` | Post-irrigation analysis: absorption profiles, efficiency, alerts |
 | `logger_daemon.py` | Cloud → DB sync (used by CLI `sync` + `check`) |
