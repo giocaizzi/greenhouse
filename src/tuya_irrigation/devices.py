@@ -2,6 +2,7 @@
 """Device management for Tuya irrigators and sensors."""
 
 import os
+import signal
 import time
 
 import tinytuya
@@ -84,21 +85,47 @@ class TuyaDeviceManager:
 
         Returns:
             (success, message) tuple
+
+        The Rainpoint IK10PW (category ggq) only supports the `switch` DP —
+        no hardware countdown. Timer is implemented in software with a SIGTERM
+        handler to guarantee device shutdown even on cron timeout / kill.
         """
         if minutes is None:
             # Just turn on without timer
             return self.irrigator_on(irrigator)
 
-        # This device (Rainpoint IK10PW, category ggq) only supports the `switch` DP.
-        # countdown_1 is NOT available — we implement the timer ourselves.
         success, msg = self.irrigator_on(irrigator)
         if not success:
             return False, f"Failed to start irrigation: {msg}"
 
-        # Wait for the requested duration, then stop
-        time.sleep(minutes * 60)
-        self.irrigator_off(irrigator)
+        # SIGTERM guard: ensure irrigator_off() runs even if the process is
+        # killed (e.g. cron job timeout). Without this, the device stays ON
+        # indefinitely because there's no hardware countdown DP.
+        interrupted = False
 
+        def _sigterm_cleanup(signum, frame):
+            nonlocal interrupted
+            interrupted = True
+            try:
+                self.irrigator_off(irrigator)
+            except Exception:
+                pass
+            raise SystemExit(128 + signum)
+
+        prev_handler = signal.signal(signal.SIGTERM, _sigterm_cleanup)
+        try:
+            time.sleep(minutes * 60)
+        except (SystemExit, KeyboardInterrupt):
+            interrupted = True
+        finally:
+            signal.signal(signal.SIGTERM, prev_handler)
+            try:
+                self.irrigator_off(irrigator)
+            except Exception:
+                pass
+
+        if interrupted:
+            return True, f"Irrigation interrupted — device turned off safely (requested {minutes} min)"
         return True, f"Irrigation completed for {minutes} minutes"
 
     def irrigator_stop(self, irrigator: Irrigator) -> tuple[bool, str]:
