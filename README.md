@@ -17,7 +17,7 @@ Smart irrigation system with Tuya Cloud sensors, evidence-based plant care, and 
 
 ```bash
 # Setup
-cp tools/cluster.local.json.example tools/cluster.local.json
+cp data/cluster.json.example data/cluster.json
 # Edit with your device IDs and Tuya credentials
 
 # Install

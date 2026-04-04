@@ -42,5 +42,6 @@ data/*.db-wal
 data/*.db-shm
 
 # Local user config (contains personal data)
+data/cluster.json
 tools/cluster.local.json
 node_modules/

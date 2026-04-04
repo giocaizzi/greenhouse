@@ -17,8 +17,9 @@ from tuya_irrigation.models import (
     SensorReading,
 )
 
-_DEFAULT_DB_PATH = Path.home() / ".openclaw/workspace/skills/tuya-irrigation/data/irrigation.db"
-DB_PATH = Path(os.environ["IRRIGATION_DB_PATH"]) if os.environ.get("IRRIGATION_DB_PATH") else _DEFAULT_DB_PATH
+_DEFAULT_DATA_DIR = Path.home() / ".openclaw/workspace/skills/tuya-irrigation/data"
+DATA_DIR = Path(os.environ["IRRIGATION_DATA_DIR"]) if os.environ.get("IRRIGATION_DATA_DIR") else _DEFAULT_DATA_DIR
+DB_PATH = Path(os.environ["IRRIGATION_DB_PATH"]) if os.environ.get("IRRIGATION_DB_PATH") else DATA_DIR / "irrigation.db"
 
 
 class IrrigationDB:

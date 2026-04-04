@@ -32,7 +32,7 @@ TUYA_REGION=eu          # eu | us | cn | in
 ### Initialize Cluster
 
 ```bash
-cp tools/cluster.local.json.example tools/cluster.local.json
+cp data/cluster.json.example data/cluster.json
 # Edit with your device IDs and credentials
 tuya-irrigation cluster setup
 ```

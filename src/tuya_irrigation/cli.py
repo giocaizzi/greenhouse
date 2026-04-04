@@ -988,7 +988,9 @@ def cmd_cluster_setup(args, db: IrrigationDB):
     """Initialize a cluster from local config or environment variables."""
     import os
 
-    config_path = Path(args.config) if args.config else Path(__file__).parent.parent.parent / "tools" / "cluster.local.json"
+    from tuya_irrigation.db import DATA_DIR
+
+    config_path = Path(args.config) if args.config else DATA_DIR / "cluster.json"
     local = {}
     if config_path.exists():
         with open(config_path) as f:
@@ -999,8 +1001,8 @@ def cmd_cluster_setup(args, db: IrrigationDB):
     tuya_local_key = os.environ.get("TUYA_LOCAL_KEY")
 
     if not tuya_device_id or tuya_device_id == "YOUR_DEVICE_ID":
-        print("❌ Set TUYA_DEVICE_ID in environment or tools/cluster.local.json")
-        print("   See tools/cluster.local.json.example for reference")
+        print(f"❌ Set TUYA_DEVICE_ID in environment or {config_path}")
+        print("   See data/cluster.json.example for template")
         return 1
 
     cluster_name = local.get("cluster_name", "My Indoor Plants")
@@ -1256,7 +1258,7 @@ Setup (CRUD):
     p_ca.add_argument("--environment", choices=["indoor", "outdoor"], default="indoor")
     cluster_sub.add_parser("list", help="List clusters")
     p_cs_setup = cluster_sub.add_parser("setup", help="Initialize cluster from config file")
-    p_cs_setup.add_argument("--config", help="Path to cluster config JSON (default: tools/cluster.local.json)")
+    p_cs_setup.add_argument("--config", help="Path to cluster config JSON (default: data/cluster.json)")
 
     # ── Setup: Plant ─��
 
