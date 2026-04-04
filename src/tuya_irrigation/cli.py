@@ -825,8 +825,8 @@ def cmd_history(args, db: IrrigationDB):
                 parts.append(f"temp={r.temperature:.1f}°C")
             if r.soil_moisture is not None:
                 parts.append(f"soil={r.soil_moisture:.0f}%")
-            if r.humidity is not None:
-                parts.append(f"hum={r.humidity:.0f}%")
+            if r.env_humidity is not None:
+                parts.append(f"hum={r.env_humidity:.0f}%")
             print(f"  {' | '.join(parts)}")
 
     # Irrigation events
