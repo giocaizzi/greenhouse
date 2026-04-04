@@ -21,15 +21,15 @@ import tinytuya
 from tuya_irrigation.models import Irrigator, Sensor
 
 # DP IDs for Rainpoint IK10PW (category ggq, protocol v3.5)
-DP_SWITCH = 1       # bool: on/off
-DP_DURATION = 102   # int: irrigation duration in seconds
-DP_INTERVAL = 103   # int: auto-irrigation interval in hours
-DP_LEFTTIME = 104   # int: remaining seconds (read-only)
-DP_ALARM = 105      # bitmap: alarm flags
+DP_SWITCH = 1  # bool: on/off
+DP_DURATION = 102  # int: irrigation duration in seconds
+DP_INTERVAL = 103  # int: auto-irrigation interval in hours
+DP_LEFTTIME = 104  # int: remaining seconds (read-only)
+DP_ALARM = 105  # bitmap: alarm flags
 DP_WORKSTATUS = 106  # enum: work status
-DP_NEXT = 107       # int: next irrigation timestamp
+DP_NEXT = 107  # int: next irrigation timestamp
 DP_POWERSTATUS = 108  # enum: power status
-DP_AUTORUN = 109    # bool: auto-irrigation enabled
+DP_AUTORUN = 109  # bool: auto-irrigation enabled
 
 # Default local IP — can be overridden via irrigator config
 DEFAULT_LOCAL_IP = "192.168.1.199"
@@ -194,7 +194,10 @@ class TuyaDeviceManager:
             success, msg = self.irrigator_on(irrigator)
             if not success:
                 return False, f"Failed to start irrigation: {msg}"
-            return True, f"Irrigation started for {minutes} min (Duration DP set to {duration_seconds}s, device auto-stops)"
+            return (
+                True,
+                f"Irrigation started for {minutes} min (Duration DP set to {duration_seconds}s, device auto-stops)",
+            )
         else:
             # Fallback: keep-alive loop if local connection fails
             print(f"⚠️  Local Duration set failed ({dur_msg}), using keep-alive fallback", file=sys.stderr)
@@ -248,7 +251,10 @@ class TuyaDeviceManager:
                 pass
 
         if interrupted:
-            return True, f"Irrigation interrupted after ~{elapsed}s — device turned off (requested {minutes} min) [keep-alive mode]"
+            return (
+                True,
+                f"Irrigation interrupted after ~{elapsed}s — device turned off (requested {minutes} min) [keep-alive mode]",
+            )
         return True, f"Irrigation completed for {minutes} min [keep-alive mode]"
 
     def irrigator_stop(self, irrigator: Irrigator) -> tuple[bool, str]:

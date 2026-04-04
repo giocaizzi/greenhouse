@@ -4,6 +4,45 @@
 import statistics
 import time
 
+from tuya_irrigation.constants import (
+    CONFIDENCE_CONFIG_FALLBACK,
+    CONFIDENCE_CONFLICT,
+    CONFIDENCE_COOLDOWN,
+    CONFIDENCE_CRITICAL_STRESS,
+    CONFIDENCE_NO_DATA,
+    CONFIDENCE_OVER_WATERING,
+    CONFIDENCE_SENSOR_ADEQUATE,
+    CONFIDENCE_SENSOR_DRY,
+    CONFIDENCE_SENSOR_VERY_DRY,
+    CONFIDENCE_SENSOR_WET,
+    CONFIDENCE_TEMP_FALLBACK,
+    CONFIDENCE_WATER_WARNING,
+    CONFLICT_DURATION_MINUTES,
+    CONFLICT_INTERVAL_HOURS,
+    DEFAULT_DURATION_MINUTES,
+    DEFAULT_INTERVAL_HOURS,
+    DEFAULT_SOIL_MOISTURE_MAX,
+    DEFAULT_SOIL_MOISTURE_MIN,
+    LIGHT_BRIGHT,
+    LIGHT_DARK,
+    LIGHT_VERY_BRIGHT,
+    LIGHT_VERY_DARK,
+    MAX_DURATION_MINUTES,
+    MAX_INTERVAL_HOURS,
+    MIN_COOLDOWN_HOURS,
+    MIN_INTERVAL_HOURS,
+    SOIL_MOISTURE_CRITICAL,
+    SOIL_MOISTURE_LOW,
+    SOIL_MOISTURE_SATURATED,
+    STRESS_DURATION_MINUTES,
+    STRESS_INTERVAL_HOURS,
+    TEMP_COLD,
+    TEMP_HOT,
+    TEMP_WARM,
+    TREND_MIN_READINGS,
+    TREND_MOISTURE_THRESHOLD,
+    TREND_TEMP_THRESHOLD,
+)
 from tuya_irrigation.db import IrrigationDB
 from tuya_irrigation.models import IrrigationConfig
 from tuya_irrigation.plant_db import get_plant_database
@@ -44,10 +83,9 @@ class IrrigationLogic:
 
         # GLOBAL COOLDOWN: Check recent irrigation events from ANY trigger
         # This prevents over-watering even if manual/test irrigations happened
-        min_interval_hours = 6  # Minimum cooldown between any irrigations
         irrigators = self.db.get_irrigators_in_cluster(cluster_id)
         if irrigators:
-            recent_events = self.db.get_recent_events(irrigators[0].id, hours=min_interval_hours)
+            recent_events = self.db.get_recent_events(irrigators[0].id, hours=MIN_COOLDOWN_HOURS)
             irrigation_events = [e for e in recent_events if e.action == "start"]
             if irrigation_events:
                 last_event = irrigation_events[0]
@@ -55,10 +93,10 @@ class IrrigationLogic:
                 hours_ago = (int(time.time()) - last_event.timestamp) / 3600
                 return {
                     "action": "skip",
-                    "duration_minutes": 2,
-                    "interval_hours": min_interval_hours,
+                    "duration_minutes": DEFAULT_DURATION_MINUTES,
+                    "interval_hours": MIN_COOLDOWN_HOURS,
                     "reason": f"cooldown active (last irrigation {hours_ago:.1f}h ago, trigger: {trigger})",
-                    "confidence": 0.9,
+                    "confidence": CONFIDENCE_COOLDOWN,
                 }
 
         # Collect recent sensor data
@@ -76,8 +114,7 @@ class IrrigationLogic:
             learning_alerts = learner.detect_issues(cluster_id)
             if learning_alerts:
                 stress["learning_alerts"] = [
-                    {"type": a.alert_type, "severity": a.severity, "message": a.message}
-                    for a in learning_alerts
+                    {"type": a.alert_type, "severity": a.severity, "message": a.message} for a in learning_alerts
                 ]
         except Exception:
             pass  # Learning is advisory, never blocks decisions
@@ -93,8 +130,8 @@ class IrrigationLogic:
         # Decision logic
         decision = {
             "action": "skip",
-            "duration_minutes": 2,  # Default to 2 min (weak drippers)
-            "interval_hours": 12,
+            "duration_minutes": DEFAULT_DURATION_MINUTES,
+            "interval_hours": DEFAULT_INTERVAL_HOURS,
             "reason": "",
             "confidence": 0.5,
         }
@@ -115,10 +152,10 @@ class IrrigationLogic:
         # PRIORITY 0: Device water_warning (sensor's own alert — high confidence)
         if stress.get("water_warning"):
             decision["action"] = "irrigate"
-            decision["duration_minutes"] = 3
-            decision["interval_hours"] = 6
+            decision["duration_minutes"] = STRESS_DURATION_MINUTES
+            decision["interval_hours"] = STRESS_INTERVAL_HOURS
             reasons.append(f"⚠️ sensor alert: {stress['water_warning']}")
-            decision["confidence"] = 0.92
+            decision["confidence"] = CONFIDENCE_WATER_WARNING
             decision["reason"] = "; ".join(reasons)
             decision["stress_indicators"] = stress
             decision["trends"] = trends
@@ -127,19 +164,19 @@ class IrrigationLogic:
         # PRIORITY 1: Critical stress conditions (override everything)
         if stress.get("water_stress"):
             decision["action"] = "irrigate"
-            decision["duration_minutes"] = 3
-            decision["interval_hours"] = 6
+            decision["duration_minutes"] = STRESS_DURATION_MINUTES
+            decision["interval_hours"] = STRESS_INTERVAL_HOURS
             reasons.append(f"⚠️ water stress detected ({stress['water_stress']})")
-            decision["confidence"] = 0.95
+            decision["confidence"] = CONFIDENCE_CRITICAL_STRESS
             decision["reason"] = "; ".join(reasons)
             decision["stress_indicators"] = stress
             decision["trends"] = trends
             return decision
         elif stress.get("over_watering"):
             decision["action"] = "skip"
-            decision["interval_hours"] = 24
+            decision["interval_hours"] = MAX_INTERVAL_HOURS
             reasons.append(f"⚠️ over-watering detected ({stress['over_watering']})")
-            decision["confidence"] = 0.9
+            decision["confidence"] = CONFIDENCE_OVER_WATERING
             decision["reason"] = "; ".join(reasons)
             decision["stress_indicators"] = stress
             decision["trends"] = trends
@@ -168,113 +205,119 @@ class IrrigationLogic:
                 # Conflict: irrigate conservatively (short burst to help dry plant
                 # without over-watering the wet one)
                 decision["action"] = "irrigate"
-                decision["duration_minutes"] = 1  # Minimal
-                decision["interval_hours"] = 8
-                dry_names = [s["name"] for s in per_sensor
-                             if s.get("avg_soil_moisture") is not None and s["avg_soil_moisture"] < target_min]
-                wet_names = [s["name"] for s in per_sensor
-                             if s.get("avg_soil_moisture") is not None and s["avg_soil_moisture"] > target_max - 10]
+                decision["duration_minutes"] = CONFLICT_DURATION_MINUTES
+                decision["interval_hours"] = CONFLICT_INTERVAL_HOURS
+                dry_names = [
+                    s["name"]
+                    for s in per_sensor
+                    if s.get("avg_soil_moisture") is not None and s["avg_soil_moisture"] < target_min
+                ]
+                wet_names = [
+                    s["name"]
+                    for s in per_sensor
+                    if s.get("avg_soil_moisture") is not None and s["avg_soil_moisture"] > target_max - 10
+                ]
                 reasons.append(
                     f"⚠️ conflict: dry={min_soil:.0f}% ({', '.join(dry_names) or '?'}), "
                     f"wet={max_soil:.0f}% ({', '.join(wet_names) or '?'}) — short burst"
                 )
-                decision["confidence"] = 0.65
+                decision["confidence"] = CONFIDENCE_CONFLICT
             elif min_soil < target_min - 10:
                 # Driest plant is very dry, no conflict
                 decision["action"] = "irrigate"
-                decision["duration_minutes"] = 3
-                decision["interval_hours"] = 8
+                decision["duration_minutes"] = STRESS_DURATION_MINUTES
+                decision["interval_hours"] = CONFLICT_INTERVAL_HOURS
                 reasons.append(f"soil very dry (driest={min_soil:.0f}% < {target_min}%)")
-                decision["confidence"] = 0.9
+                decision["confidence"] = CONFIDENCE_SENSOR_VERY_DRY
             elif min_soil < target_min:
                 # Driest plant is moderately dry
                 decision["action"] = "irrigate"
-                decision["duration_minutes"] = 2
-                decision["interval_hours"] = 12
+                decision["duration_minutes"] = DEFAULT_DURATION_MINUTES
+                decision["interval_hours"] = DEFAULT_INTERVAL_HOURS
                 reasons.append(f"soil moderately dry (driest={min_soil:.0f}%)")
-                decision["confidence"] = 0.8
+                decision["confidence"] = CONFIDENCE_SENSOR_DRY
             elif avg_soil_moisture <= target_max:
                 # All plants adequate
                 decision["action"] = "skip"
                 reasons.append(f"soil moisture adequate (range={min_soil:.0f}-{max_soil:.0f}%)")
-                decision["confidence"] = 0.7
+                decision["confidence"] = CONFIDENCE_SENSOR_ADEQUATE
             else:
                 # Too wet
                 decision["action"] = "skip"
                 reasons.append(f"soil too wet (wettest={max_soil:.0f}% > {target_max}%)")
-                decision["confidence"] = 0.8
+                decision["confidence"] = CONFIDENCE_SENSOR_WET
 
         # Temperature adjustment
         if avg_temp is not None and ideal_temp_range:
             if avg_temp > ideal_temp_range[1] + 3:
                 # Hot conditions → increase frequency
-                decision["interval_hours"] = max(6, decision["interval_hours"] - 4)
+                decision["interval_hours"] = max(MIN_INTERVAL_HOURS, decision["interval_hours"] - 4)
                 reasons.append(f"temp above ideal ({avg_temp:.0f}°C > {ideal_temp_range[1]:.0f}°C)")
             elif avg_temp < ideal_temp_range[0] - 3:
                 # Cold conditions → decrease frequency
-                decision["interval_hours"] = min(24, decision["interval_hours"] + 6)
+                decision["interval_hours"] = min(MAX_INTERVAL_HOURS, decision["interval_hours"] + 6)
                 reasons.append(f"temp below ideal ({avg_temp:.0f}°C < {ideal_temp_range[0]:.0f}°C)")
 
         # Env humidity adjustment
         if avg_humidity is not None and ideal_humidity_range:
             if avg_humidity < ideal_humidity_range[0] - 20:
                 # Very dry air → high transpiration → irrigate more frequently
-                decision["interval_hours"] = max(6, decision["interval_hours"] - 3)
+                decision["interval_hours"] = max(MIN_INTERVAL_HOURS, decision["interval_hours"] - 3)
                 reasons.append(f"💨 very dry air ({avg_humidity:.0f}% << ideal {ideal_humidity_range[0]:.0f}%)")
             elif avg_humidity < ideal_humidity_range[0] - 5:
-                decision["interval_hours"] = max(6, decision["interval_hours"] - 1)
+                decision["interval_hours"] = max(MIN_INTERVAL_HOURS, decision["interval_hours"] - 1)
                 reasons.append(f"💨 dry air ({avg_humidity:.0f}%)")
             elif avg_humidity > ideal_humidity_range[1] + 10:
                 # Very humid → less transpiration → reduce frequency
-                decision["interval_hours"] = min(24, decision["interval_hours"] + 2)
+                decision["interval_hours"] = min(MAX_INTERVAL_HOURS, decision["interval_hours"] + 2)
                 reasons.append(f"💧 high ambient humidity ({avg_humidity:.0f}%)")
 
         # Light (lux) adjustment — thresholds scaled by seasonal factor
         avg_light = sensor_data.get("avg_light")
         if avg_light is not None:
-            sf = seasonal_light_factor()  # e.g. 0.50 in Dec, 1.0 in Jun
-            very_bright = 1500 * sf
-            bright = 800 * sf
-            dark = 150 * sf
-            very_dark = 50 * sf
+            sf = seasonal_light_factor()
+            very_bright = LIGHT_VERY_BRIGHT * sf
+            bright = LIGHT_BRIGHT * sf
+            dark = LIGHT_DARK * sf
+            very_dark = LIGHT_VERY_DARK * sf
             if avg_light > very_bright:
                 # Seasonally very bright → high transpiration → more frequent
-                decision["interval_hours"] = max(6, decision["interval_hours"] - 2)
-                decision["duration_minutes"] = min(5, decision["duration_minutes"] + 1)
+                decision["interval_hours"] = max(MIN_INTERVAL_HOURS, decision["interval_hours"] - 2)
+                decision["duration_minutes"] = min(MAX_DURATION_MINUTES, decision["duration_minutes"] + 1)
                 reasons.append(f"☀️ very bright ({avg_light:.0f} lux, seasonal)")
             elif avg_light > bright:
-                decision["interval_hours"] = max(6, decision["interval_hours"] - 1)
+                decision["interval_hours"] = max(MIN_INTERVAL_HOURS, decision["interval_hours"] - 1)
                 reasons.append(f"🌤️ bright ({avg_light:.0f} lux, seasonal)")
             elif avg_light < very_dark:
                 # Seasonally very dark → minimal transpiration → less frequent
-                decision["interval_hours"] = min(24, decision["interval_hours"] + 4)
+                decision["interval_hours"] = min(MAX_INTERVAL_HOURS, decision["interval_hours"] + 4)
                 reasons.append(f"🌑 very low light ({avg_light:.0f} lux, seasonal)")
             elif avg_light < dark:
-                decision["interval_hours"] = min(24, decision["interval_hours"] + 2)
+                decision["interval_hours"] = min(MAX_INTERVAL_HOURS, decision["interval_hours"] + 2)
                 reasons.append(f"☁️ low light ({avg_light:.0f} lux, seasonal)")
 
         # Water needs adjustment
         if water_needs_level == "high":
-            decision["duration_minutes"] = max(2, decision["duration_minutes"] + 1)
-            decision["interval_hours"] = max(6, decision["interval_hours"] - 2)
+            decision["duration_minutes"] = max(DEFAULT_DURATION_MINUTES, decision["duration_minutes"] + 1)
+            decision["interval_hours"] = max(MIN_INTERVAL_HOURS, decision["interval_hours"] - 2)
         elif water_needs_level == "low":
-            decision["duration_minutes"] = max(1, decision["duration_minutes"] - 1)
-            decision["interval_hours"] = min(24, decision["interval_hours"] + 4)
+            decision["duration_minutes"] = max(CONFLICT_DURATION_MINUTES, decision["duration_minutes"] - 1)
+            decision["interval_hours"] = min(MAX_INTERVAL_HOURS, decision["interval_hours"] + 4)
 
         # Apply trend-based adjustments
         if trends.get("soil_moisture_trend") == "declining":
-            decision["interval_hours"] = max(6, decision["interval_hours"] - 2)
+            decision["interval_hours"] = max(MIN_INTERVAL_HOURS, decision["interval_hours"] - 2)
             reasons.append("📉 soil moisture declining")
         elif trends.get("soil_moisture_trend") == "rising":
-            decision["interval_hours"] = min(24, decision["interval_hours"] + 2)
+            decision["interval_hours"] = min(MAX_INTERVAL_HOURS, decision["interval_hours"] + 2)
             reasons.append("📈 soil moisture rising")
 
         if trends.get("temperature_trend") == "rising" and avg_temp and avg_temp > 25:
-            decision["interval_hours"] = max(6, decision["interval_hours"] - 2)
+            decision["interval_hours"] = max(MIN_INTERVAL_HOURS, decision["interval_hours"] - 2)
             reasons.append("🌡️ temperature rising + hot")
 
         if trends.get("irrigation_frequency_low"):
-            decision["duration_minutes"] = min(5, decision["duration_minutes"] + 1)
+            decision["duration_minutes"] = min(MAX_DURATION_MINUTES, decision["duration_minutes"] + 1)
             reasons.append("📊 recent under-watering pattern")
 
         decision["reason"] = "; ".join(reasons) if reasons else "no specific conditions"
@@ -386,7 +429,7 @@ class IrrigationLogic:
             parts = target.split("-")
             return (float(parts[0]), float(parts[1]))
         except Exception:
-            return (45.0, 65.0)  # Default
+            return (DEFAULT_SOIL_MOISTURE_MIN, DEFAULT_SOIL_MOISTURE_MAX)
 
     def _analyze_historical_trends(self, cluster_id: int) -> dict:
         """
@@ -409,7 +452,7 @@ class IrrigationLogic:
                 readings = self.db.get_recent_readings(sensor.id, hours=48)
                 all_readings.extend(readings)
 
-            if len(all_readings) >= 4:  # Need at least 4 readings for trend
+            if len(all_readings) >= TREND_MIN_READINGS:
                 all_readings.sort(key=lambda r: r.timestamp)
 
                 # Soil moisture trend (compare first half vs second half)
@@ -422,10 +465,10 @@ class IrrigationLogic:
                     avg_second = statistics.mean(moisture_second_half)
                     delta = avg_second - avg_first
 
-                    if delta < -5:  # Declining by more than 5%
+                    if delta < -TREND_MOISTURE_THRESHOLD:
                         trends["soil_moisture_trend"] = "declining"
                         trends["soil_moisture_delta"] = delta
-                    elif delta > 5:  # Rising by more than 5%
+                    elif delta > TREND_MOISTURE_THRESHOLD:
                         trends["soil_moisture_trend"] = "rising"
                         trends["soil_moisture_delta"] = delta
                     else:
@@ -441,10 +484,10 @@ class IrrigationLogic:
                     avg_temp_second = statistics.mean(temp_second_half)
                     delta_temp = avg_temp_second - avg_temp_first
 
-                    if delta_temp > 2:
+                    if delta_temp > TREND_TEMP_THRESHOLD:
                         trends["temperature_trend"] = "rising"
                         trends["temperature_delta"] = delta_temp
-                    elif delta_temp < -2:
+                    elif delta_temp < -TREND_TEMP_THRESHOLD:
                         trends["temperature_trend"] = "falling"
                         trends["temperature_delta"] = delta_temp
                     else:
@@ -504,8 +547,7 @@ class IrrigationLogic:
         plants_for_stress = self.db.get_plants_in_cluster(cluster_id)
         if avg_env_hum is not None and plants_for_stress:
             plant_care_data_s = [
-                self.plant_db.get_care_data(species=p.species, category=p.category)
-                for p in plants_for_stress
+                self.plant_db.get_care_data(species=p.species, category=p.category) for p in plants_for_stress
             ]
             hum_range = self._get_ideal_humidity_range(plant_care_data_s)
             if hum_range and avg_env_hum < hum_range[0] - 20:
@@ -517,12 +559,9 @@ class IrrigationLogic:
         avg_light_s = sensor_data.get("avg_light")
         if avg_light_s is not None and plants_for_stress:
             plant_care_data_s2 = [
-                self.plant_db.get_care_data(species=p.species, category=p.category)
-                for p in plants_for_stress
+                self.plant_db.get_care_data(species=p.species, category=p.category) for p in plants_for_stress
             ]
-            min_lux_needed = max(
-                (d.get("ideal_light_lux_min", 0) for d in plant_care_data_s2), default=0
-            )
+            min_lux_needed = max((d.get("ideal_light_lux_min", 0) for d in plant_care_data_s2), default=0)
             seasonal_min = effective_light_threshold(min_lux_needed)
             if min_lux_needed > 0 and avg_light_s < seasonal_min * 0.4:
                 stress["low_light"] = (
@@ -533,12 +572,12 @@ class IrrigationLogic:
         # Water stress: soil moisture consistently low + declining trend
         avg_soil = sensor_data.get("avg_soil_moisture")
         if avg_soil:
-            # Critical: below 30% OR below 40% with steep decline
-            if avg_soil < 30:
+            # Critical: below SOIL_MOISTURE_CRITICAL or below SOIL_MOISTURE_LOW with steep decline
+            if avg_soil < SOIL_MOISTURE_CRITICAL:
                 stress["water_stress"] = f"critical low ({avg_soil:.0f}%)"
                 if trends.get("soil_moisture_trend") == "declining":
                     stress["water_stress"] += " + declining"
-            elif avg_soil < 40 and trends.get("soil_moisture_trend") == "declining":
+            elif avg_soil < SOIL_MOISTURE_LOW and trends.get("soil_moisture_trend") == "declining":
                 delta = trends.get("soil_moisture_delta", 0)
                 if delta < -10:  # Steep decline
                     stress["water_stress"] = f"low ({avg_soil:.0f}%) + steep decline ({delta:.0f}%)"
@@ -556,7 +595,7 @@ class IrrigationLogic:
                     stress["heat_stress"] = f"above ideal ({avg_temp:.0f}°C > {temp_range[1]:.0f}°C)"
 
         # Over-watering: soil consistently wet + high irrigation frequency
-        if avg_soil and avg_soil > 70:  # Above 70% is excessive
+        if avg_soil and avg_soil > SOIL_MOISTURE_SATURATED:
             if trends.get("irrigation_frequency_high"):
                 stress["over_watering"] = f"soil saturated ({avg_soil:.0f}%) + high frequency"
             elif trends.get("soil_moisture_trend") == "rising":
@@ -578,34 +617,34 @@ class IrrigationLogic:
             if config:
                 return {
                     "action": "skip" if config.mode == "manual" else "irrigate",
-                    "duration_minutes": config.duration_minutes or 2,
-                    "interval_hours": config.interval_hours or 12,
+                    "duration_minutes": config.duration_minutes or DEFAULT_DURATION_MINUTES,
+                    "interval_hours": config.interval_hours or DEFAULT_INTERVAL_HOURS,
                     "reason": "using configured schedule (no sensor data)",
-                    "confidence": 0.3,
+                    "confidence": CONFIDENCE_CONFIG_FALLBACK,
                 }
             return {
                 "action": "skip",
-                "duration_minutes": 2,
-                "interval_hours": 12,
+                "duration_minutes": DEFAULT_DURATION_MINUTES,
+                "interval_hours": DEFAULT_INTERVAL_HOURS,
                 "reason": "insufficient data",
-                "confidence": 0.2,
+                "confidence": CONFIDENCE_NO_DATA,
             }
 
         # Temperature-based buckets
-        if temp <= 18:
-            interval = 24
-        elif temp <= 24:
-            interval = 12
-        elif temp <= 28:
-            interval = 8
+        if temp <= TEMP_COLD:
+            interval = MAX_INTERVAL_HOURS
+        elif temp <= TEMP_WARM:
+            interval = DEFAULT_INTERVAL_HOURS
+        elif temp <= TEMP_HOT:
+            interval = CONFLICT_INTERVAL_HOURS
         else:
-            interval = 6
+            interval = MIN_INTERVAL_HOURS
 
         # Adjust for water needs
         if water_needs == "high":
-            interval = max(6, interval - 4)
+            interval = max(MIN_INTERVAL_HOURS, interval - 4)
         elif water_needs == "low":
-            interval = min(24, interval + 6)
+            interval = min(MAX_INTERVAL_HOURS, interval + 6)
 
         # CRITICAL: Check last irrigation time to respect cooldown
         irrigators = self.db.get_irrigators_in_cluster(cluster_id)
@@ -616,17 +655,17 @@ class IrrigationLogic:
                 # Found recent irrigation → skip
                 return {
                     "action": "skip",
-                    "duration_minutes": 2,
+                    "duration_minutes": DEFAULT_DURATION_MINUTES,
                     "interval_hours": interval,
                     "reason": f"cooldown active (last irrigation < {interval}h ago)",
-                    "confidence": 0.9,
+                    "confidence": CONFIDENCE_COOLDOWN,
                 }
 
         # No recent irrigation → irrigate
         return {
             "action": "irrigate",
-            "duration_minutes": 2,
+            "duration_minutes": DEFAULT_DURATION_MINUTES,
             "interval_hours": interval,
             "reason": f"temperature-based ({temp:.0f}°C, {water_needs} water needs, evidence-based data)",
-            "confidence": 0.6,
+            "confidence": CONFIDENCE_TEMP_FALLBACK,
         }

@@ -15,10 +15,18 @@ import statistics
 import time
 from dataclasses import dataclass
 
+from tuya_irrigation.constants import (
+    LEARNING_MIN_ABSORPTION_PER_MIN,
+    LEARNING_MIN_EFFICIENCY,
+    LEARNING_MIN_EVENTS,
+    LEARNING_OVER_WATER_THRESHOLD,
+    LEARNING_RAPID_DRAINAGE_THRESHOLD,
+    LIGHT_BRIGHT,
+)
 from tuya_irrigation.db import IrrigationDB
 from tuya_irrigation.models import IrrigationEvent, Sensor
 from tuya_irrigation.plant_db import get_plant_database
-from tuya_irrigation.utils import daytime_lux_readings, effective_light_threshold
+from tuya_irrigation.utils import daytime_lux_readings, effective_light_threshold, seasonal_light_factor
 
 
 @dataclass
@@ -108,7 +116,8 @@ class IrrigationLearner:
         # Need at least one reading before and after
         pre_moisture_readings = [r for r in before_readings if r.soil_moisture is not None]
         post_moisture_readings = [
-            r for r in after_readings
+            r
+            for r in after_readings
             if r.soil_moisture is not None and (r.timestamp - event.timestamp) >= self.MIN_POST_DELAY_SEC
         ]
 
@@ -150,10 +159,7 @@ class IrrigationLearner:
 
         cutoff = int(time.time()) - (days * 86400)
         all_events = self.db.get_recent_events(irrigators[0].id, hours=days * 24)
-        irrigation_events = [
-            e for e in all_events
-            if e.action == "start" and e.timestamp >= cutoff
-        ]
+        irrigation_events = [e for e in all_events if e.action == "start" and e.timestamp >= cutoff]
 
         if not irrigation_events:
             return None
@@ -245,63 +251,69 @@ class IrrigationLearner:
 
         for sensor in sensors:
             profile = profiles.get(sensor.id)
-            if not profile or profile.response_count < 3:
+            if not profile or profile.response_count < LEARNING_MIN_EVENTS:
                 continue  # Not enough data
 
             # 1. Blocked drip: consistently low response
-            if profile.efficiency_score < 0.3 and profile.avg_absorption_per_minute < 0.5:
-                alerts.append(Alert(
-                    severity="critical",
-                    alert_type="blocked_drip",
-                    message=(
-                        f"🚫 {sensor.name}: minimal response to irrigation "
-                        f"(avg +{profile.avg_absorption_per_minute:.1f}%/min, "
-                        f"efficiency {profile.efficiency_score:.0%}). "
-                        f"Check drip connection."
-                    ),
-                    sensor_name=sensor.name,
-                    data={"absorption": profile.avg_absorption_per_minute, "efficiency": profile.efficiency_score},
-                ))
+            if (
+                profile.efficiency_score < LEARNING_MIN_EFFICIENCY
+                and profile.avg_absorption_per_minute < LEARNING_MIN_ABSORPTION_PER_MIN
+            ):
+                alerts.append(
+                    Alert(
+                        severity="critical",
+                        alert_type="blocked_drip",
+                        message=(
+                            f"🚫 {sensor.name}: minimal response to irrigation "
+                            f"(avg +{profile.avg_absorption_per_minute:.1f}%/min, "
+                            f"efficiency {profile.efficiency_score:.0%}). "
+                            f"Check drip connection."
+                        ),
+                        sensor_name=sensor.name,
+                        data={"absorption": profile.avg_absorption_per_minute, "efficiency": profile.efficiency_score},
+                    )
+                )
 
             # 2. Rapid drainage — with light correlation
-            if profile.avg_drainage_per_hour < -5:  # Losing >5% per hour
+            if profile.avg_drainage_per_hour < LEARNING_RAPID_DRAINAGE_THRESHOLD:
                 # Check if high light explains the drainage (daytime readings only)
                 recent_readings = self.db.get_recent_readings(sensor.id, hours=48)
                 avg_lux = None
                 lux_readings = daytime_lux_readings(recent_readings)
                 if lux_readings:
-                    import statistics as _stats
-                    avg_lux = _stats.mean(lux_readings)
-                    # Scale threshold by season (bright days cause more transpiration)
+                    avg_lux = statistics.mean(lux_readings)
 
-                from tuya_irrigation.utils import seasonal_light_factor as _slf
-                bright_threshold = 800 * _slf()
+                bright_threshold = LIGHT_BRIGHT * seasonal_light_factor()
                 if avg_lux is not None and avg_lux > bright_threshold:
                     # High light explains rapid drying → inform but lower severity
-                    alerts.append(Alert(
-                        severity="warning",
-                        alert_type="light_accelerated_drainage",
-                        message=(
-                            f"☀️💨 {sensor.name}: rapid drainage "
-                            f"({profile.avg_drainage_per_hour:.1f}%/hr) correlated with high light "
-                            f"({avg_lux:.0f} lux) — increased transpiration. "
-                            f"Consider more frequent irrigation on bright days."
-                        ),
-                        sensor_name=sensor.name,
-                        data={"drainage_rate": profile.avg_drainage_per_hour, "avg_lux": avg_lux},
-                    ))
+                    alerts.append(
+                        Alert(
+                            severity="warning",
+                            alert_type="light_accelerated_drainage",
+                            message=(
+                                f"☀️💨 {sensor.name}: rapid drainage "
+                                f"({profile.avg_drainage_per_hour:.1f}%/hr) correlated with high light "
+                                f"({avg_lux:.0f} lux) — increased transpiration. "
+                                f"Consider more frequent irrigation on bright days."
+                            ),
+                            sensor_name=sensor.name,
+                            data={"drainage_rate": profile.avg_drainage_per_hour, "avg_lux": avg_lux},
+                        )
+                    )
                 else:
-                    alerts.append(Alert(
-                        severity="warning",
-                        alert_type="rapid_drainage",
-                        message=(
-                            f"💨 {sensor.name}: rapid drainage "
-                            f"({profile.avg_drainage_per_hour:.1f}%/hr). "
-                            f"Soil may not retain water well."
-                        ),
-                        sensor_name=sensor.name,
-                        data={"drainage_rate": profile.avg_drainage_per_hour},
-                    ))
+                    alerts.append(
+                        Alert(
+                            severity="warning",
+                            alert_type="rapid_drainage",
+                            message=(
+                                f"💨 {sensor.name}: rapid drainage "
+                                f"({profile.avg_drainage_per_hour:.1f}%/hr). "
+                                f"Soil may not retain water well."
+                            ),
+                            sensor_name=sensor.name,
+                            data={"drainage_rate": profile.avg_drainage_per_hour},
+                        )
+                    )
 
             # 3. Chronic underwatering: max delta never reaches target
             if sensor.plant_id and sensor.plant_id in plant_care:
@@ -317,17 +329,19 @@ class IrrigationLearner:
                 if recent:
                     max_recent = max((r.soil_moisture for r in recent if r.soil_moisture is not None), default=0)
                     if max_recent < target_min and profile.response_count >= 5:
-                        alerts.append(Alert(
-                            severity="warning",
-                            alert_type="chronic_underwatering",
-                            message=(
-                                f"🏜️ {sensor.name}: soil never reaches target "
-                                f"({max_recent:.0f}% peak vs {target_min:.0f}% target). "
-                                f"Consider longer irrigation or check drip flow."
-                            ),
-                            sensor_name=sensor.name,
-                            data={"max_recent": max_recent, "target_min": target_min},
-                        ))
+                        alerts.append(
+                            Alert(
+                                severity="warning",
+                                alert_type="chronic_underwatering",
+                                message=(
+                                    f"🏜️ {sensor.name}: soil never reaches target "
+                                    f"({max_recent:.0f}% peak vs {target_min:.0f}% target). "
+                                    f"Consider longer irrigation or check drip flow."
+                                ),
+                                sensor_name=sensor.name,
+                                data={"max_recent": max_recent, "target_min": target_min},
+                            )
+                        )
 
         # 4. Unresolvable conflict: check if profiles show incompatible needs
         if len(profiles) >= 2:
@@ -392,27 +406,29 @@ class IrrigationLearner:
                     wet_gain = wet_profile.avg_absorption_per_minute * needed_minutes
                     projected_wet = wet_m + wet_gain
 
-                    if projected_wet > 85:  # Would severely over-water
-                        alerts.append(Alert(
-                            severity="critical",
-                            alert_type="unresolvable_conflict",
-                            message=(
-                                f"⚠️ Conflitto irrisolvibile: {dry_s.name} ha bisogno di "
-                                f"~{needed_minutes:.0f}min di irrigazione ({dry_m:.0f}%→{dry_target:.0f}%), "
-                                f"ma {wet_s.name} arriverebbe a {projected_wet:.0f}% "
-                                f"(attuale {wet_m:.0f}%, max {wet_target:.0f}%). "
-                                f"Considera: riposizionare drip, vaso separato, o irrigatore dedicato."
-                            ),
-                            sensor_name=f"{dry_s.name} vs {wet_s.name}",
-                            data={
-                                "dry_sensor": dry_s.name,
-                                "dry_moisture": dry_m,
-                                "wet_sensor": wet_s.name,
-                                "wet_moisture": wet_m,
-                                "needed_minutes": needed_minutes,
-                                "projected_wet": projected_wet,
-                            },
-                        ))
+                    if projected_wet > LEARNING_OVER_WATER_THRESHOLD:
+                        alerts.append(
+                            Alert(
+                                severity="critical",
+                                alert_type="unresolvable_conflict",
+                                message=(
+                                    f"⚠️ Unresolvable conflict: {dry_s.name} needs "
+                                    f"~{needed_minutes:.0f}min of irrigation ({dry_m:.0f}%→{dry_target:.0f}%), "
+                                    f"but {wet_s.name} would reach {projected_wet:.0f}% "
+                                    f"(current {wet_m:.0f}%, max {wet_target:.0f}%). "
+                                    f"Consider: repositioning drip, separate pot, or dedicated irrigator."
+                                ),
+                                sensor_name=f"{dry_s.name} vs {wet_s.name}",
+                                data={
+                                    "dry_sensor": dry_s.name,
+                                    "dry_moisture": dry_m,
+                                    "wet_sensor": wet_s.name,
+                                    "wet_moisture": wet_m,
+                                    "needed_minutes": needed_minutes,
+                                    "projected_wet": projected_wet,
+                                },
+                            )
+                        )
 
         # 4. Low light: plant gets insufficient lux for its needs
         plant_db_l = get_plant_database()
@@ -430,22 +446,23 @@ class IrrigationLearner:
             lux_vals = daytime_lux_readings(readings_7d)  # exclude night readings
             if len(lux_vals) < 5:
                 continue  # Not enough data
-            import statistics as _stats2
-            avg_lux_7d = _stats2.mean(lux_vals)
+            avg_lux_7d = statistics.mean(lux_vals)
             seasonal_min_lux = effective_light_threshold(min_lux)  # adjusted for current month
             if avg_lux_7d < seasonal_min_lux * 0.5:
-                alerts.append(Alert(
-                    severity="warning",
-                    alert_type="low_light",
-                    message=(
-                        f"🌑 {sensor.name} ({plant.species}): avg daytime light {avg_lux_7d:.0f} lux "
-                        f"(7d avg, daytime only) — below seasonal minimum {seasonal_min_lux:.0f} lux "
-                        f"(summer baseline {min_lux} lux). "
-                        f"Move to brighter location or add grow light."
-                    ),
-                    sensor_name=sensor.name,
-                    data={"avg_lux": avg_lux_7d, "min_lux": min_lux, "seasonal_min_lux": seasonal_min_lux},
-                ))
+                alerts.append(
+                    Alert(
+                        severity="warning",
+                        alert_type="low_light",
+                        message=(
+                            f"🌑 {sensor.name} ({plant.species}): avg daytime light {avg_lux_7d:.0f} lux "
+                            f"(7d avg, daytime only) — below seasonal minimum {seasonal_min_lux:.0f} lux "
+                            f"(summer baseline {min_lux} lux). "
+                            f"Move to brighter location or add grow light."
+                        ),
+                        sensor_name=sensor.name,
+                        data={"avg_lux": avg_lux_7d, "min_lux": min_lux, "seasonal_min_lux": seasonal_min_lux},
+                    )
+                )
 
         # 5. Low env humidity: sustained dry air for tropical plants
         for sensor in sensors:
@@ -460,20 +477,21 @@ class IrrigationLearner:
             hum_vals = [r.env_humidity for r in readings_48h if r.env_humidity is not None]
             if len(hum_vals) < 5:
                 continue
-            import statistics as _stats3
-            avg_env_hum = _stats3.mean(hum_vals)
+            avg_env_hum = statistics.mean(hum_vals)
             if avg_env_hum < ideal_hum_min - 15:
-                alerts.append(Alert(
-                    severity="warning",
-                    alert_type="low_env_humidity",
-                    message=(
-                        f"💨 {sensor.name} ({plant.species}): avg ambient humidity {avg_env_hum:.0f}% "
-                        f"— below ideal {ideal_hum_min:.0f}%. "
-                        f"Increased transpiration; consider humidifier or grouping plants."
-                    ),
-                    sensor_name=sensor.name,
-                    data={"avg_env_humidity": avg_env_hum, "ideal_min": ideal_hum_min},
-                ))
+                alerts.append(
+                    Alert(
+                        severity="warning",
+                        alert_type="low_env_humidity",
+                        message=(
+                            f"💨 {sensor.name} ({plant.species}): avg ambient humidity {avg_env_hum:.0f}% "
+                            f"— below ideal {ideal_hum_min:.0f}%. "
+                            f"Increased transpiration; consider humidifier or grouping plants."
+                        ),
+                        sensor_name=sensor.name,
+                        data={"avg_env_humidity": avg_env_hum, "ideal_min": ideal_hum_min},
+                    )
+                )
 
         return alerts
 

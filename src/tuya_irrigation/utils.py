@@ -9,8 +9,18 @@ from zoneinfo import ZoneInfo
 # Represents typical ratio of available daylight vs peak summer.
 # June/July = 1.0 (peak). December/January = ~0.55 (shortest days + low sun angle).
 _SEASONAL_LIGHT_FACTOR: dict[int, float] = {
-    1: 0.50, 2: 0.60, 3: 0.72, 4: 0.85, 5: 0.95, 6: 1.00,
-    7: 1.00, 8: 0.95, 9: 0.83, 10: 0.70, 11: 0.58, 12: 0.50,
+    1: 0.50,
+    2: 0.60,
+    3: 0.72,
+    4: 0.85,
+    5: 0.95,
+    6: 1.00,
+    7: 1.00,
+    8: 0.95,
+    9: 0.83,
+    10: 0.70,
+    11: 0.58,
+    12: 0.50,
 }
 
 # Lux threshold below which a reading is considered "nighttime / artificial light only"

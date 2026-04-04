@@ -26,10 +26,10 @@ DATAPOINT_PARSERS = {
     "bright_value": lambda v: ("light", int(v)),
     "light": lambda v: ("light", int(v)),
     # Extended DPs (v2 shadow properties — DP 101+)
-    "env_humidity": lambda v: ("env_humidity", float(v)),        # DP 101: ambient humidity %
-    "illumiance": lambda v: ("light", int(v)),                   # DP 102: lux (typo in Tuya API)
-    "water_warning": lambda v: ("water_warning", bool(v)),       # DP 111: device soil-dry alert
-    "soil_warning": lambda v: ("soil_warning", int(v)),          # DP 110: soil warning code
+    "env_humidity": lambda v: ("env_humidity", float(v)),  # DP 101: ambient humidity %
+    "illumiance": lambda v: ("light", int(v)),  # DP 102: lux (typo in Tuya API)
+    "water_warning": lambda v: ("water_warning", bool(v)),  # DP 111: device soil-dry alert
+    "soil_warning": lambda v: ("soil_warning", int(v)),  # DP 110: soil warning code
 }
 
 

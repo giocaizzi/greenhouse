@@ -2,6 +2,7 @@
 """SQLite database management for irrigation system."""
 
 import json
+import os
 import sqlite3
 import time
 from pathlib import Path
@@ -16,7 +17,8 @@ from tuya_irrigation.models import (
     SensorReading,
 )
 
-DB_PATH = Path.home() / ".openclaw/workspace/skills/tuya-irrigation/data/irrigation.db"
+_DEFAULT_DB_PATH = Path.home() / ".openclaw/workspace/skills/tuya-irrigation/data/irrigation.db"
+DB_PATH = Path(os.environ["IRRIGATION_DB_PATH"]) if os.environ.get("IRRIGATION_DB_PATH") else _DEFAULT_DB_PATH
 
 
 class IrrigationDB:
@@ -335,8 +337,7 @@ class IrrigationDB:
                (sensor_id, timestamp, temperature, soil_moisture, light,
                 env_humidity, battery_state, water_warning)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-            (sensor_id, ts, temperature, soil_moisture, light,
-             env_humidity, battery_state, ww),
+            (sensor_id, ts, temperature, soil_moisture, light, env_humidity, battery_state, ww),
         )
         self.conn.commit()
         return cursor.lastrowid if cursor.rowcount > 0 else None
@@ -351,16 +352,32 @@ class IrrigationDB:
 
     def bulk_add_sensor_readings(
         self,
-        readings: list[tuple[int, int, float | None, float | None, float | None, int | None]],
+        readings: list[
+            tuple[
+                int,
+                int,
+                float | None,
+                float | None,
+                int | None,
+                float | None,
+                str | None,
+                int | None,
+            ]
+        ],
     ) -> int:
-        """Bulk insert sensor readings with dedup. Returns count of new rows inserted."""
+        """Bulk insert sensor readings with dedup. Returns count of new rows inserted.
+
+        Each tuple: (sensor_id, timestamp, temperature, soil_moisture, light,
+                     env_humidity, battery_state, water_warning)
+        """
         if not readings:
             return 0
         before = self.conn.total_changes
         self.conn.executemany(
             """INSERT OR IGNORE INTO sensor_readings
-               (sensor_id, timestamp, temperature, humidity, soil_moisture, light)
-               VALUES (?, ?, ?, ?, ?, ?)""",
+               (sensor_id, timestamp, temperature, soil_moisture, light,
+                env_humidity, battery_state, water_warning)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
             readings,
         )
         inserted = self.conn.total_changes - before

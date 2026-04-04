@@ -5,7 +5,15 @@ from tuya_irrigation.db import IrrigationDB
 from tuya_irrigation.devices import TuyaDeviceManager
 from tuya_irrigation.learning import IrrigationLearner
 from tuya_irrigation.logic import IrrigationLogic
-from tuya_irrigation.models import Cluster, IrrigationConfig, Irrigator, Plant, Sensor, SensorReading
+from tuya_irrigation.models import (
+    Cluster,
+    IrrigationConfig,
+    IrrigationEvent,
+    Irrigator,
+    Plant,
+    Sensor,
+    SensorReading,
+)
 from tuya_irrigation.plant_db import get_plant_database
 
 __version__ = "0.5.0"
@@ -17,6 +25,7 @@ __all__ = [
     "TuyaDeviceManager",
     "Cluster",
     "IrrigationConfig",
+    "IrrigationEvent",
     "Irrigator",
     "Plant",
     "Sensor",

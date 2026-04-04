@@ -1,13 +1,8 @@
-#!/usr/bin/env python3
 """Test suite for irrigation learning engine."""
 
-import sys
-import tempfile
 import time
-import unittest
-from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+import pytest
 
 from fake_data import (
     FAKE_CLUSTER_NAME,
@@ -17,18 +12,15 @@ from fake_data import (
     FAKE_SENSOR_ID,
     FAKE_SENSOR_NAME,
 )
-from tuya_irrigation.db import IrrigationDB
 from tuya_irrigation.learning import IrrigationLearner
 
 
-class TestIrrigationLearner(unittest.TestCase):
+class TestIrrigationLearner:
     """Test learning engine with synthetic irrigation+sensor data."""
 
-    def setUp(self):
-        """Create temp DB with cluster, irrigator, sensor, and plant."""
-        self.temp_db = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
-        self.temp_db.close()
-        self.db = IrrigationDB(Path(self.temp_db.name))
+    @pytest.fixture(autouse=True)
+    def setup(self, tmp_db):
+        self.db = tmp_db
         self.learner = IrrigationLearner(self.db)
 
         self.cluster_id = self.db.add_cluster(FAKE_CLUSTER_NAME)
@@ -53,22 +45,14 @@ class TestIrrigationLearner(unittest.TestCase):
             plant_id=self.plant_id,
         )
 
-    def tearDown(self):
-        self.db.close()
-        Path(self.temp_db.name).unlink()
-
-    def _simulate_irrigation_cycle(
-        self, base_time: int, pre_moisture: float, post_moisture: float, duration: int = 2
-    ):
+    def _simulate_irrigation_cycle(self, base_time: int, pre_moisture: float, post_moisture: float, duration: int = 2):
         """Simulate an irrigation event with pre and post sensor readings."""
-        # Pre-reading: 15min before irrigation
         self.db.add_sensor_reading(
             sensor_id=self.sensor_id,
             timestamp=base_time - 900,
             soil_moisture=pre_moisture,
             temperature=22.0,
         )
-        # Irrigation event
         event_id = self.db.add_irrigation_event(
             irrigator_id=self.irrigator_id,
             action="start",
@@ -76,7 +60,6 @@ class TestIrrigationLearner(unittest.TestCase):
             duration_minutes=duration,
             timestamp=base_time,
         )
-        # Post-reading: 30min after irrigation
         self.db.add_sensor_reading(
             sensor_id=self.sensor_id,
             timestamp=base_time + 1800,
@@ -93,13 +76,13 @@ class TestIrrigationLearner(unittest.TestCase):
         event = self.db.get_recent_events(self.irrigator_id, hours=1)[0]
         responses = self.learner.analyze_irrigation_response(event)
 
-        self.assertEqual(len(responses), 1)
+        assert len(responses) == 1
         r = responses[0]
-        self.assertEqual(r.sensor_id, self.sensor_id)
-        self.assertAlmostEqual(r.pre_moisture, 30.0)
-        self.assertAlmostEqual(r.post_moisture, 50.0)
-        self.assertAlmostEqual(r.delta, 20.0)
-        self.assertAlmostEqual(r.delta_per_minute, 10.0)  # 20% / 2min
+        assert r.sensor_id == self.sensor_id
+        assert r.pre_moisture == pytest.approx(30.0)
+        assert r.post_moisture == pytest.approx(50.0)
+        assert r.delta == pytest.approx(20.0)
+        assert r.delta_per_minute == pytest.approx(10.0)
 
     def test_analyze_response_no_change(self):
         """No moisture change detected (possible blocked drip)."""
@@ -109,15 +92,14 @@ class TestIrrigationLearner(unittest.TestCase):
         event = self.db.get_recent_events(self.irrigator_id, hours=1)[0]
         responses = self.learner.analyze_irrigation_response(event)
 
-        self.assertEqual(len(responses), 1)
-        self.assertAlmostEqual(responses[0].delta, 1.0)
+        assert len(responses) == 1
+        assert responses[0].delta == pytest.approx(1.0)
 
     def test_plant_profile_builds_from_multiple_cycles(self):
         """Plant profile builds correctly from 3+ irrigation cycles."""
         now = int(time.time())
-        # Simulate 4 irrigation cycles over 4 days
         for i in range(4):
-            cycle_time = now - (i * 86400)  # 1 day apart
+            cycle_time = now - (i * 86400)
             self._simulate_irrigation_cycle(
                 cycle_time,
                 pre_moisture=25.0 + i,
@@ -128,26 +110,25 @@ class TestIrrigationLearner(unittest.TestCase):
         sensor = self.db.get_sensors_in_cluster(self.cluster_id)[0]
         profile = self.learner.get_plant_profile(sensor, days=30)
 
-        self.assertIsNotNone(profile)
-        self.assertEqual(profile.response_count, 4)
-        self.assertGreater(profile.avg_absorption_per_minute, 0)
-        self.assertGreater(profile.efficiency_score, 0.5)  # All positive deltas
+        assert profile is not None
+        assert profile.response_count == 4
+        assert profile.avg_absorption_per_minute > 0
+        assert profile.efficiency_score > 0.5
 
     def test_plant_profile_insufficient_data(self):
         """Plant profile returns None with no irrigation history."""
         sensor = self.db.get_sensors_in_cluster(self.cluster_id)[0]
         profile = self.learner.get_plant_profile(sensor, days=30)
-        self.assertIsNone(profile)
+        assert profile is None
 
     def test_detect_no_issues_with_insufficient_data(self):
         """No alerts when not enough data."""
         alerts = self.learner.detect_issues(self.cluster_id)
-        self.assertEqual(len(alerts), 0)
+        assert len(alerts) == 0
 
     def test_drainage_rate_computation(self):
         """Drainage rate computed from declining moisture readings."""
         now = int(time.time())
-        # Simulate natural drying: -4% per hour for 5 hours
         for h in range(6):
             self.db.add_sensor_reading(
                 sensor_id=self.sensor_id,
@@ -158,8 +139,8 @@ class TestIrrigationLearner(unittest.TestCase):
         sensor = self.db.get_sensors_in_cluster(self.cluster_id)[0]
         drainage = self.learner._compute_drainage_rate(sensor, days=1)
 
-        self.assertLess(drainage, 0)  # Negative = losing moisture
-        self.assertAlmostEqual(drainage, -4.0, places=0)
+        assert drainage < 0
+        assert drainage == pytest.approx(-4.0, abs=0.5)
 
     def test_generate_report_with_data(self):
         """Report generates text output with profiles."""
@@ -173,21 +154,17 @@ class TestIrrigationLearner(unittest.TestCase):
 
         report = self.learner.generate_report(self.cluster_id)
 
-        self.assertIn("Irrigation Learning Report", report)
-        self.assertIn(FAKE_SENSOR_NAME, report)
-        self.assertIn("Absorption", report)
+        assert "Irrigation Learning Report" in report
+        assert FAKE_SENSOR_NAME in report
+        assert "Absorption" in report
 
     def test_generate_report_no_data(self):
         """Report shows insufficient data message."""
         report = self.learner.generate_report(self.cluster_id)
-        self.assertIn("insufficient data", report)
+        assert "insufficient data" in report
 
     def test_generate_report_empty_cluster(self):
         """Report handles cluster with no sensors."""
         empty_cluster = self.db.add_cluster("Empty")
         report = self.learner.generate_report(empty_cluster)
-        self.assertIn("No sensors", report)
-
-
-if __name__ == "__main__":
-    unittest.main()
+        assert "No sensors" in report

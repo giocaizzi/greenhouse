@@ -214,16 +214,19 @@ After ≥3 irrigation cycles with sensor data, the system learns:
 ## Testing
 
 ```bash
-./test.sh    # 48 tests + ruff lint
+make check   # 93 tests + ruff lint
 ```
 
 | Suite | Tests | Coverage |
 |---|---|---|
-| `test_db.py` | 12 | DB operations, dedup, readings-around, bulk insert, environment |
-| `test_logic.py` | 14 | Decisions, multi-sensor conflict, water needs, stress |
+| `test_db.py` | 16 | DB operations, dedup, bulk insert, migrations, environment |
+| `test_logic.py` | 16 | Decisions, multi-sensor conflict, water needs, cooldown, stress |
 | `test_devices.py` | 8 | Device control, sensor parsing, error handling |
-| `test_cloud.py` | 6 | Cloud API parsing, log grouping, credentials |
+| `test_cloud.py` | 8 | Cloud API parsing, log grouping, v2 shadow, credentials |
 | `test_learning.py` | 9 | Absorption profiles, drainage, reports |
+| `test_utils.py` | 13 | Seasonal light, timestamp formatting, timezone |
+| `test_plant_db.py` | 12 | Species/category lookup, fallback chain, singleton |
+| `test_stats.py` | 8 | Statistics aggregation, CSV export, duration formatting |
 
 ## Key Technical Decisions
 
@@ -240,7 +243,6 @@ After ≥3 irrigation cycles with sensor data, the system learns:
 | File | Content |
 |---|---|
 | `SKILL.md` | This overview |
-| `AGENTS.md` | Developer/AI guidelines, privacy rules |
-| `PACKAGE.md` | Package structure, uv/ruff setup |
+| `AGENTS.md` | Developer/AI guidelines, package structure, privacy rules |
 | `PLANT_DATABASE.md` | Plant care data sources |
 | `data/schema.sql` | Database schema reference |

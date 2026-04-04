@@ -71,7 +71,7 @@ See `_metadata.sources` in JSON for full list.
 ### Python API
 
 ```python
-from plant_db import get_plant_database
+from tuya_irrigation.plant_db import get_plant_database
 
 db = get_plant_database()
 
@@ -198,7 +198,7 @@ Track database version in `_metadata.version`. Increment when:
 ### Data Integrity
 
 - Validate JSON syntax before commit
-- Test with `python3 -c "from plant_db import get_plant_database; get_plant_database()"`
+- Test with `python3 -c "from tuya_irrigation.plant_db import get_plant_database; get_plant_database()"`
 - Run test suite after database changes
 
 ## Examples

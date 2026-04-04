@@ -136,3 +136,9 @@ def get_plant_database() -> PlantDatabase:
     if _db_instance is None:
         _db_instance = PlantDatabase()
     return _db_instance
+
+
+def reset_plant_database() -> None:
+    """Reset the singleton instance (for testing)."""
+    global _db_instance
+    _db_instance = None

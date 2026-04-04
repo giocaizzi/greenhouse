@@ -2,16 +2,16 @@
 
 ## Project Overview
 
-**tuya-irrigation** is a smart plant irrigation system (v0.3.0) with:
+**tuya-irrigation** is a smart plant irrigation system (v0.5.0) with:
 - Evidence-based plant care from scientific literature
 - Tuya Cloud sensor integration (Zigbee TR-301Z via Cloud API)
 - Multi-sensor conflict resolution for single-irrigator clusters
 - Self-learning irrigation profiles (absorption, drainage, efficiency)
 - OpenClaw skill compatible
 
-**Tech Stack:** Python 3.11+, uv, ruff, SQLite, tinytuya, unittest
+**Tech Stack:** Python 3.11+, uv, ruff, pytest, SQLite, tinytuya
 
-## 🔒 Privacy & Security
+## Privacy & Security
 
 ### NO Personal Data in Git
 
@@ -34,17 +34,37 @@ All test data uses fake/placeholder values centralized in `tests/fake_data.py`:
 - RFC 5737 IPs: `192.0.2.x`
 - Generic names: "Test Cluster", "Test Sensor"
 
-## 📁 Structure
+## Package Structure
 
 ```
-src/tuya_irrigation/     # Core package (10 modules)
-scripts/                 # main.py (single entry point) + _init_path.py
-tests/                   # 5 test files
-data/                    # plant_database.json + schema.sql (DB gitignored)
-tools/                   # setup_cluster.py, sync_plant_data.py (one-time setup)
+tuya-irrigation/
+├── pyproject.toml          # Package config (uv + ruff + pytest)
+├── Makefile                # Dev commands: test, lint, format, check
+├── src/tuya_irrigation/    # Core package (13 modules)
+│   ├── __init__.py         # Package exports
+│   ├── cli.py              # Main CLI entry point
+│   ├── cloud.py            # Tuya Cloud API client
+│   ├── constants.py        # Project-wide thresholds and constants
+│   ├── db.py               # SQLite database management
+│   ├── devices.py          # Device control (hybrid Cloud + Local v3.5)
+│   ├── learning.py         # Post-irrigation analysis and alerts
+│   ├── logger_daemon.py    # Cloud -> DB sensor sync
+│   ├── logic.py            # Smart irrigation decision engine
+│   ├── models.py           # Data models (dataclasses)
+│   ├── plant_db.py         # Evidence-based plant care lookup
+│   ├── stats.py            # Statistics and CSV export
+│   └── utils.py            # Timezone, seasonal light utilities
+├── scripts/main.py         # OpenClaw compatibility wrapper
+├── tests/                  # pytest suite (8 test files + conftest + fake_data)
+├── data/                   # plant_database.json + schema.sql (DB gitignored)
+└── tools/                  # setup_cluster.py, sync_plant_data.py (one-time)
 ```
 
-## 🔑 Key Technical Decisions
+**Naming:**
+- Distribution: `tuya-irrigation` | Import: `tuya_irrigation`
+- Entry points: `tuya-irrigation`, `tuya-irrigation-logger`, `tuya-irrigation-stats`
+
+## Key Technical Decisions
 
 1. **Protocol v3.5** for Rainpoint IK10PW (not 3.3)
 2. **Tuya Cloud as live source**, SQLite as permanent archive
@@ -53,16 +73,48 @@ tools/                   # setup_cluster.py, sync_plant_data.py (one-time setup)
 5. **6h global cooldown** between any irrigations
 6. **Evidence-based** plant care data with source citations
 7. **Learning is advisory** — never blocks irrigation decisions
+8. **All thresholds** centralized in `constants.py`
 
-## 🧪 Development Workflow
+## Development
+
+### Setup
 
 ```bash
-# Run tests + lint
-./test.sh
-
-# Check for data leaks before commit
-git diff --cached | grep -i "bf60\|192.168\|secret"
+uv sync                     # Install deps + create .venv
+uv run tuya-irrigation --help
 ```
+
+### Code Quality
+
+```bash
+make check      # lint + test (single command)
+make test       # uv run pytest
+make lint       # uv run ruff check src/ tests/
+make format     # uv run ruff format src/ tests/
+```
+
+**Ruff config** (in `pyproject.toml`): line-length=120, py311+, rules: E/W/F/I/B/C4/UP
+
+### Testing
+
+```bash
+uv run pytest -v
+```
+
+All tests use `conftest.py` fixtures (`tmp_db`, `fake_tuya_env`, `sample_cluster`) and `fake_data.py`.
+
+### Adding Tests
+
+- DB tests -> `test_db.py`
+- Logic tests -> `test_logic.py`
+- Cloud tests -> `test_cloud.py` (mock tinytuya)
+- Learning tests -> `test_learning.py` (synthetic data)
+- Utils/plant_db/stats -> corresponding `test_*.py`
+
+### OpenClaw Compatibility
+
+**OpenClaw calls:** `python3 scripts/main.py [args]`
+**Package users call:** `tuya-irrigation [args]` (via entry point)
 
 ## Common Tasks
 
@@ -72,10 +124,10 @@ git diff --cached | grep -i "bf60\|192.168\|secret"
 
 ### Add a Sensor
 1. Pair in Tuya Smart app, get device_id from iot.tuya.com
-2. `python3 main.py sensor add --cluster 1 --device-id XXX --name "Name" --type soil_moisture --plant-id N`
+2. `tuya-irrigation sensor add --cluster 1 --device-id XXX --name "Name" --type soil_moisture --plant-id N`
 
-### Add Tests
-- DB tests → `test_db.py`
-- Logic tests → `test_logic.py`
-- Cloud tests → `test_cloud.py` (mock tinytuya)
-- Learning tests → `test_learning.py` (synthetic data)
+### Pre-commit Check
+```bash
+make check
+git diff --cached | grep -i "bf60\|192.168\|secret"
+```

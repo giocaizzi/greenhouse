@@ -1,28 +1,25 @@
-#!/usr/bin/env python3
 """Test suite for Tuya Cloud API client."""
 
-import sys
-import unittest
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+import pytest
 
 from fake_data import FAKE_CLIENT_ID, FAKE_CLIENT_SECRET, FAKE_REGION, FAKE_SENSOR_ID
 
 
-class TestTuyaCloud(unittest.TestCase):
+class TestTuyaCloud:
     """Test Cloud API client with mocked tinytuya."""
 
-    @patch("tuya_irrigation.cloud.tinytuya")
-    def setUp(self, mock_tinytuya):
-        """Set up cloud client with mocked tinytuya."""
-        self.mock_cloud_instance = MagicMock()
-        mock_tinytuya.Cloud.return_value = self.mock_cloud_instance
+    @pytest.fixture(autouse=True)
+    def setup(self):
+        with patch("tuya_irrigation.cloud.tinytuya") as mock_tinytuya:
+            self.mock_cloud_instance = MagicMock()
+            mock_tinytuya.Cloud.return_value = self.mock_cloud_instance
 
-        from tuya_irrigation.cloud import TuyaCloud
+            from tuya_irrigation.cloud import TuyaCloud
 
-        self.cloud = TuyaCloud(FAKE_CLIENT_ID, FAKE_CLIENT_SECRET, FAKE_REGION)
+            self.cloud = TuyaCloud(FAKE_CLIENT_ID, FAKE_CLIENT_SECRET, FAKE_REGION)
+            yield
 
     @patch("tuya_irrigation.cloud.tinytuya")
     @patch.dict("os.environ", {"TUYA_CLIENT_ID": "", "TUYA_CLIENT_SECRET": ""}, clear=False)
@@ -30,7 +27,7 @@ class TestTuyaCloud(unittest.TestCase):
         """Cloud client raises without credentials."""
         from tuya_irrigation.cloud import TuyaCloud
 
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             TuyaCloud("", "", "eu")
 
     def test_get_live_reading_parses_soil_sensor(self):
@@ -45,9 +42,9 @@ class TestTuyaCloud(unittest.TestCase):
         }
         data = self.cloud.get_live_reading(FAKE_SENSOR_ID)
 
-        self.assertAlmostEqual(data["temperature"], 25.1)
-        self.assertEqual(data["soil_moisture"], 45.0)
-        self.assertEqual(data["battery_state"], "middle")
+        assert data["temperature"] == pytest.approx(25.1)
+        assert data["soil_moisture"] == 45.0
+        assert data["battery_state"] == "middle"
 
     def test_get_live_reading_handles_error(self):
         """Live reading raises on API error."""
@@ -55,7 +52,7 @@ class TestTuyaCloud(unittest.TestCase):
             "success": False,
             "msg": "device offline",
         }
-        with self.assertRaises(RuntimeError):
+        with pytest.raises(RuntimeError):
             self.cloud.get_live_reading(FAKE_SENSOR_ID)
 
     def test_get_device_logs_parses_and_sorts(self):
@@ -70,38 +67,66 @@ class TestTuyaCloud(unittest.TestCase):
         }
         logs = self.cloud.get_device_logs(FAKE_SENSOR_ID, hours=1)
 
-        self.assertEqual(len(logs), 2)
-        # Sorted chronologically (oldest first)
-        self.assertEqual(logs[0]["timestamp_ms"], 1000000)
-        self.assertEqual(logs[1]["timestamp_ms"], 2000000)
-        # Parsed values
-        self.assertEqual(logs[0]["key"], "temperature")
-        self.assertAlmostEqual(logs[0]["value"], 22.0)
-        self.assertEqual(logs[1]["key"], "soil_moisture")
-        self.assertEqual(logs[1]["value"], 50.0)
+        assert len(logs) == 2
+        assert logs[0]["timestamp_ms"] == 1000000
+        assert logs[1]["timestamp_ms"] == 2000000
+        assert logs[0]["key"] == "temperature"
+        assert logs[0]["value"] == pytest.approx(22.0)
+        assert logs[1]["key"] == "soil_moisture"
+        assert logs[1]["value"] == 50.0
 
     def test_group_logs_by_timestamp(self):
         """Logs reported within tolerance are grouped into single readings."""
         logs = [
             {"timestamp_ms": 1000, "timestamp": 1, "key": "temperature", "value": 22.0},
             {"timestamp_ms": 2000, "timestamp": 1, "key": "soil_moisture", "value": 45.0},
-            # 10 seconds later — same group (within 5s tolerance)
             {"timestamp_ms": 20000, "timestamp": 20, "key": "temperature", "value": 23.0},
         ]
         grouped = self.cloud.group_logs_by_timestamp(logs, tolerance_ms=5000)
 
-        self.assertEqual(len(grouped), 2)
-        # First group has both temp and soil
-        self.assertAlmostEqual(grouped[0]["temperature"], 22.0)
-        self.assertAlmostEqual(grouped[0]["soil_moisture"], 45.0)
-        # Second group has only temp
-        self.assertAlmostEqual(grouped[1]["temperature"], 23.0)
-        self.assertNotIn("soil_moisture", grouped[1])
+        assert len(grouped) == 2
+        assert grouped[0]["temperature"] == pytest.approx(22.0)
+        assert grouped[0]["soil_moisture"] == pytest.approx(45.0)
+        assert grouped[1]["temperature"] == pytest.approx(23.0)
+        assert "soil_moisture" not in grouped[1]
 
     def test_group_logs_empty(self):
         """Grouping empty logs returns empty list."""
-        self.assertEqual(self.cloud.group_logs_by_timestamp([]), [])
+        assert self.cloud.group_logs_by_timestamp([]) == []
 
+    def test_get_live_reading_v2_shadow(self):
+        """Live reading uses v2.0 shadow properties when available."""
+        self.mock_cloud_instance.cloudrequest.return_value = {
+            "success": True,
+            "result": {
+                "properties": [
+                    {"code": "temp_current", "value": 230},
+                    {"code": "humidity", "value": 55},
+                    {"code": "env_humidity", "value": 72.0},
+                    {"code": "water_warning", "value": True},
+                ],
+            },
+        }
+        data = self.cloud.get_live_reading(FAKE_SENSOR_ID)
 
-if __name__ == "__main__":
-    unittest.main()
+        assert data["temperature"] == pytest.approx(23.0)
+        assert data["soil_moisture"] == 55.0
+        assert data["env_humidity"] == pytest.approx(72.0)
+        assert data["water_warning"] is True
+        # Should NOT have called getstatus (v2 succeeded)
+        self.mock_cloud_instance.getstatus.assert_not_called()
+
+    def test_get_live_reading_v2_fallback_to_v1(self):
+        """Falls back to v1 getstatus when v2 shadow fails."""
+        self.mock_cloud_instance.cloudrequest.side_effect = Exception("v2 not available")
+        self.mock_cloud_instance.getstatus.return_value = {
+            "success": True,
+            "result": [
+                {"code": "temp_current", "value": 220},
+                {"code": "humidity", "value": 50},
+            ],
+        }
+        data = self.cloud.get_live_reading(FAKE_SENSOR_ID)
+
+        assert data["temperature"] == pytest.approx(22.0)
+        assert data["soil_moisture"] == 50.0

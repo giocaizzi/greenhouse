@@ -65,9 +65,9 @@ class SensorReading:
     timestamp: int
     temperature: float | None
     soil_moisture: float | None
-    light: int | None                  # lux (DP 102 illumiance)
+    light: int | None  # lux (DP 102 illumiance)
     env_humidity: float | None = None  # ambient air humidity % (DP 101 env_humidity)
-    battery_state: str | None = None   # "low", "middle", "high" (DP 14)
+    battery_state: str | None = None  # "low", "middle", "high" (DP 14)
     water_warning: bool | None = None  # device soil-dry alert (DP 111)
 
 

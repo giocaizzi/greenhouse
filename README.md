@@ -4,14 +4,14 @@ Smart irrigation system with Tuya Cloud sensors, evidence-based plant care, and 
 
 ## Features
 
-- 🌱 Evidence-based plant care from scientific literature
-- 📊 Tuya Cloud sensor sync (soil moisture, temperature) → local SQLite archive
-- 🧠 Multi-sensor conflict resolution for single-irrigator clusters
-- 📈 Historical trend analysis and stress detection
-- 🔬 Self-learning irrigation profiles (absorption, drainage, efficiency)
-- 🚨 Automatic alerts (blocked drips, under-watering, unresolvable conflicts)
-- 🌡️ Indoor/outdoor cluster support (sensor-primary vs Open-Meteo)
-- 💧 Tuya irrigator control (cloud + local mode)
+- Evidence-based plant care from scientific literature
+- Tuya Cloud sensor sync (soil moisture, temperature) -> local SQLite archive
+- Multi-sensor conflict resolution for single-irrigator clusters
+- Historical trend analysis and stress detection
+- Self-learning irrigation profiles (absorption, drainage, efficiency)
+- Automatic alerts (blocked drips, under-watering, unresolvable conflicts)
+- Indoor/outdoor cluster support (sensor-primary vs Open-Meteo)
+- Tuya irrigator control (cloud + local mode)
 
 ## Quick Start
 
@@ -20,15 +20,17 @@ Smart irrigation system with Tuya Cloud sensors, evidence-based plant care, and 
 cp tools/cluster.local.json.example tools/cluster.local.json
 # Edit with your device IDs and Tuya credentials
 
-# Initialize
-cd scripts && python3 setup_cluster.py
+# Install
+uv sync
 
-# Analyze
-python3 main.py analyze 1
+# Initialize cluster
+python3 tools/setup_cluster.py
 
-# View data
-python3 main.py log readings --cluster 1 --hours 24
-python3 main.py learn report 1
+# Run
+uv run tuya-irrigation status 1
+uv run tuya-irrigation irrigate 1
+uv run tuya-irrigation history 1 --hours 24
+uv run tuya-irrigation learn 1
 ```
 
 ## Documentation
@@ -38,7 +40,7 @@ See **[SKILL.md](SKILL.md)** for full architecture, CLI reference, and configura
 ## Testing
 
 ```bash
-./test.sh   # 49 tests + ruff lint
+make check   # 93 tests + ruff lint
 ```
 
 ## License

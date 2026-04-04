@@ -58,7 +58,9 @@ def cmd_status(args, db: IrrigationDB, dm: TuyaDeviceManager | None):
     # Config
     config = db.get_irrigation_config(args.cluster)
     if config:
-        print(f"\n⚙️  Mode: {config.mode} | {config.duration_minutes}min / {config.interval_hours}h | auto: {'ON' if config.auto_run else 'OFF'}")
+        print(
+            f"\n⚙️  Mode: {config.mode} | {config.duration_minutes}min / {config.interval_hours}h | auto: {'ON' if config.auto_run else 'OFF'}"
+        )
 
     # Plants
     plants = db.get_plants_in_cluster(args.cluster)
@@ -134,7 +136,9 @@ def cmd_status(args, db: IrrigationDB, dm: TuyaDeviceManager | None):
     decision = logic.decide_for_cluster(args.cluster)
     if decision:
         print(f"\n🧠 Smart: {decision['action']} — {decision['reason']}")
-        print(f"   Confidence: {decision['confidence']:.0%} | Duration: {decision['duration_minutes']}min / {decision['interval_hours']}h")
+        print(
+            f"   Confidence: {decision['confidence']:.0%} | Duration: {decision['duration_minutes']}min / {decision['interval_hours']}h"
+        )
 
         # Learning alerts
         stress = decision.get("stress_indicators", {})
@@ -288,7 +292,11 @@ def cmd_irrigate(args, db: IrrigationDB, dm: TuyaDeviceManager):
 
     for irrigator in irrigators:
         success, output = dm.irrigator_start(irrigator, duration) if dm else (False, "No device manager")
-        soil_info = f", soil={sensor_data['soil_moisture']:.0f}%" if sensor_data and sensor_data.get("soil_moisture") is not None else ""
+        soil_info = (
+            f", soil={sensor_data['soil_moisture']:.0f}%"
+            if sensor_data and sensor_data.get("soil_moisture") is not None
+            else ""
+        )
         db.add_irrigation_event(
             irrigator_id=irrigator.id,
             action="start" if success else "attempted",
@@ -303,7 +311,6 @@ def cmd_irrigate(args, db: IrrigationDB, dm: TuyaDeviceManager):
             return 1
 
     return 0
-
 
 
 def cmd_monitor(args, db: IrrigationDB):
@@ -330,6 +337,7 @@ def cmd_monitor(args, db: IrrigationDB):
         try:
             from tuya_irrigation.cloud import TuyaCloud
             from tuya_irrigation.logger_daemon import sync_sensor_data
+
             cloud = TuyaCloud()
             stats = sync_sensor_data(db, cloud, hours=2)
             new = stats.get("total_new", 0)
@@ -386,13 +394,15 @@ def cmd_monitor(args, db: IrrigationDB):
 
         if severity in ("critical", "warning"):
             plant_name = plant.species if plant else sensor.name
-            needs_water.append({
-                "sensor": sensor.name,
-                "plant": plant_name,
-                "soil": latest_soil,
-                "t_min": t_min,
-                "severity": severity,
-            })
+            needs_water.append(
+                {
+                    "sensor": sensor.name,
+                    "plant": plant_name,
+                    "soil": latest_soil,
+                    "t_min": t_min,
+                    "severity": severity,
+                }
+            )
 
     if not needs_water:
         print("   ✅ All plants ok")
@@ -403,17 +413,19 @@ def cmd_monitor(args, db: IrrigationDB):
     print(f"ALERT: {cluster.name}")
     for item in needs_water:
         emoji = "🚨" if item["severity"] == "critical" else "⚠️"
-        print(f"ALERT_ITEM: {emoji} {item['sensor']} ({item['plant']}): soil {item['soil']:.0f}% (target ≥{item['t_min']:.0f}%)")
+        print(
+            f"ALERT_ITEM: {emoji} {item['sensor']} ({item['plant']}): soil {item['soil']:.0f}% (target ≥{item['t_min']:.0f}%)"
+        )
     print("ALERT_END")
 
     return 2
-
 
 
 def _collect_learning_alerts(db: IrrigationDB, cluster_id: int) -> list[dict]:
     """Return learning alerts for a cluster (efficiency, patterns). Never raises."""
     try:
         from tuya_irrigation.learning import IrrigationLearner
+
         learner = IrrigationLearner(db)
         issues = learner.detect_issues(cluster_id)
         return [{"severity": a.severity, "message": a.message} for a in issues]
@@ -445,22 +457,26 @@ def _collect_maintenance_alerts(db: IrrigationDB, cluster_id: int) -> list[dict]
         # Hardware: battery low
         latest_bat = next((r.battery_state for r in readings if r.battery_state is not None), None)
         if latest_bat == "low":
-            alerts.append({
-                "severity": "warning",
-                "type": "battery_low",
-                "message": f"🔋 {sensor.name}: battery low — replace soon or readings may stop",
-            })
+            alerts.append(
+                {
+                    "severity": "warning",
+                    "type": "battery_low",
+                    "message": f"🔋 {sensor.name}: battery low — replace soon or readings may stop",
+                }
+            )
 
         # Hardware: stale data (no readings in last 3h)
         latest_ts = readings[0].timestamp if readings else None
         if latest_ts is None or (now - latest_ts) > 3 * 3600:
             age_h = (now - latest_ts) / 3600 if latest_ts else None
             age_str = f"{age_h:.0f}h ago" if age_h else "never"
-            alerts.append({
-                "severity": "warning",
-                "type": "stale_data",
-                "message": f"📡 {sensor.name}: no recent data (last reading: {age_str}) — sensor offline?",
-            })
+            alerts.append(
+                {
+                    "severity": "warning",
+                    "type": "stale_data",
+                    "message": f"📡 {sensor.name}: no recent data (last reading: {age_str}) — sensor offline?",
+                }
+            )
 
         # Environment: low ambient humidity
         hum_vals = [r.env_humidity for r in readings if r.env_humidity is not None]
@@ -471,14 +487,16 @@ def _collect_maintenance_alerts(db: IrrigationDB, cluster_id: int) -> list[dict]
                 care = plant_db_m.get_care_data(species=plant.species, category=plant.category)
                 ideal_hum_min = care.get("ideal_humidity_min")
                 if ideal_hum_min and avg_env_hum < ideal_hum_min - 10:
-                    alerts.append({
-                        "severity": "warning",
-                        "type": "low_env_humidity",
-                        "message": (
-                            f"💨 {sensor.name}: ambient humidity {avg_env_hum:.0f}% "
-                            f"(ideal ≥{ideal_hum_min:.0f}%) — consider humidifier or grouping plants"
-                        ),
-                    })
+                    alerts.append(
+                        {
+                            "severity": "warning",
+                            "type": "low_env_humidity",
+                            "message": (
+                                f"💨 {sensor.name}: ambient humidity {avg_env_hum:.0f}% "
+                                f"(ideal ≥{ideal_hum_min:.0f}%) — consider humidifier or grouping plants"
+                            ),
+                        }
+                    )
 
         # Environment: insufficient light (daytime only, seasonal threshold)
         lux_vals = daytime_lux_readings(readings)  # exclude night readings
@@ -492,16 +510,18 @@ def _collect_maintenance_alerts(db: IrrigationDB, cluster_id: int) -> list[dict]
                     seasonal_min = effective_light_threshold(min_lux)
                     if avg_lux < seasonal_min * 0.5:
                         light_needs = care.get("light_needs", "?")
-                        alerts.append({
-                            "severity": "warning",
-                            "type": "low_light",
-                            "message": (
-                                f"🌑 {sensor.name}: avg {avg_lux:.0f} lux (daytime) "
-                                f"— seasonal min {seasonal_min:.0f} lux "
-                                f"({light_needs} light plant, winter-adjusted) "
-                                f"— move to brighter spot or add grow light"
-                            ),
-                        })
+                        alerts.append(
+                            {
+                                "severity": "warning",
+                                "type": "low_light",
+                                "message": (
+                                    f"🌑 {sensor.name}: avg {avg_lux:.0f} lux (daytime) "
+                                    f"— seasonal min {seasonal_min:.0f} lux "
+                                    f"({light_needs} light plant, winter-adjusted) "
+                                    f"— move to brighter spot or add grow light"
+                                ),
+                            }
+                        )
 
     return alerts
 
@@ -523,6 +543,7 @@ def _check_cluster_irrigated(cluster_id: int, db: IrrigationDB, dm: TuyaDeviceMa
     try:
         from tuya_irrigation.cloud import TuyaCloud
         from tuya_irrigation.logger_daemon import _sync_single_sensor
+
         cloud = TuyaCloud()
         for sensor in db.get_sensors_in_cluster(cluster_id):
             try:
@@ -580,7 +601,11 @@ def _check_cluster_irrigated(cluster_id: int, db: IrrigationDB, dm: TuyaDeviceMa
 
     irrigator = irrigators[0]
     success, output = dm.irrigator_start(irrigator, duration)
-    soil_note = f", soil={sensor_live['soil_moisture']:.0f}%" if sensor_live and sensor_live.get("soil_moisture") is not None else ""
+    soil_note = (
+        f", soil={sensor_live['soil_moisture']:.0f}%"
+        if sensor_live and sensor_live.get("soil_moisture") is not None
+        else ""
+    )
     db.add_irrigation_event(
         irrigator_id=irrigator.id,
         action="start" if success else "attempted",
@@ -613,6 +638,7 @@ def _check_cluster_monitor(cluster_id: int, db: IrrigationDB) -> dict:
     try:
         from tuya_irrigation.cloud import TuyaCloud
         from tuya_irrigation.logger_daemon import sync_sensor_data
+
         cloud = TuyaCloud()
         sync_sensor_data(db, cloud, hours=2)
     except Exception:
@@ -651,13 +677,15 @@ def _check_cluster_monitor(cluster_id: int, db: IrrigationDB) -> dict:
 
         if severity in ("critical", "warning"):
             plant_name = plant.species if plant else sensor.name
-            needs_water.append({
-                "sensor": sensor.name,
-                "plant": plant_name,
-                "soil": latest_soil,
-                "t_min": t_min,
-                "severity": severity,
-            })
+            needs_water.append(
+                {
+                    "sensor": sensor.name,
+                    "plant": plant_name,
+                    "soil": latest_soil,
+                    "t_min": t_min,
+                    "severity": severity,
+                }
+            )
 
     alerts = _collect_learning_alerts(db, cluster_id)
     maintenance = _collect_maintenance_alerts(db, cluster_id)
@@ -717,7 +745,9 @@ def cmd_check(args, db: IrrigationDB, dm: TuyaDeviceManager | None):
             print(f"ALERT: {cluster.name} needs_water")
             for item in needs_water:
                 emoji = "🚨" if item["severity"] == "critical" else "⚠️"
-                print(f"ALERT_ITEM: {emoji} {item['sensor']} ({item['plant']}): soil {item['soil']:.0f}% (target ≥{item['t_min']:.0f}%)")
+                print(
+                    f"ALERT_ITEM: {emoji} {item['sensor']} ({item['plant']}): soil {item['soil']:.0f}% (target ≥{item['t_min']:.0f}%)"
+                )
             print("ALERT_END")
 
         # Learning alerts (efficiency, patterns)
@@ -785,7 +815,7 @@ def cmd_history(args, db: IrrigationDB):
         if not readings:
             continue
         print(f"📊 {sensor.name} (last {args.hours}h, {len(readings)} readings):")
-        for r in readings[:args.limit]:
+        for r in readings[: args.limit]:
             ts = format_timestamp(r.timestamp)
             parts = [ts]
             if r.temperature is not None:
@@ -805,7 +835,7 @@ def cmd_history(args, db: IrrigationDB):
         if not events:
             continue
         print(f"\n💧 {irrigator.name} (last {args.hours}h, {len(events)} events):")
-        for e in events[:args.limit]:
+        for e in events[: args.limit]:
             ts = format_timestamp(e.timestamp)
             dur = f" ({e.duration_minutes}min)" if e.duration_minutes else ""
             print(f"  {ts} | {e.action}{dur} [{e.triggered_by}]")
@@ -816,7 +846,9 @@ def cmd_history(args, db: IrrigationDB):
                 total_irrigations += 1
 
     if total_irrigations > 0:
-        print(f"\n📊 Summary: {total_irrigations} irrigations, {total_duration}min total, {total_duration / total_irrigations:.1f}min avg")
+        print(
+            f"\n📊 Summary: {total_irrigations} irrigations, {total_duration}min total, {total_duration / total_irrigations:.1f}min avg"
+        )
 
     return 0
 
@@ -859,10 +891,15 @@ def cmd_cluster_list(_args, db: IrrigationDB):
 
 def cmd_plant_add(args, db: IrrigationDB):
     plant_id = db.add_plant(
-        cluster_id=args.cluster, species=args.species, category=args.category,
-        water_needs=args.water_needs, light_needs=args.light_needs,
-        ideal_temp_min=args.temp_min, ideal_temp_max=args.temp_max,
-        ideal_humidity_min=args.humidity_min, ideal_humidity_max=args.humidity_max,
+        cluster_id=args.cluster,
+        species=args.species,
+        category=args.category,
+        water_needs=args.water_needs,
+        light_needs=args.light_needs,
+        ideal_temp_min=args.temp_min,
+        ideal_temp_max=args.temp_max,
+        ideal_humidity_min=args.humidity_min,
+        ideal_humidity_max=args.humidity_max,
         notes=args.notes,
     )
     print(f"✅ Plant added: {args.species} (ID: {plant_id})")
@@ -892,8 +929,11 @@ def cmd_irrigator_add(args, db: IrrigationDB):
     if args.interval:
         config["interval_hours"] = args.interval
     irrigator_id = db.add_irrigator(
-        cluster_id=args.cluster, tuya_device_id=args.device_id,
-        name=args.name, irrigator_type=args.type, config=config,
+        cluster_id=args.cluster,
+        tuya_device_id=args.device_id,
+        name=args.name,
+        irrigator_type=args.type,
+        config=config,
     )
     print(f"✅ Irrigator added: {args.name} (ID: {irrigator_id})")
 
@@ -916,7 +956,9 @@ def cmd_irrigator_start(args, db: IrrigationDB, dm: TuyaDeviceManager):
     success, output = dm.irrigator_start(irrigator, args.minutes)
     if success:
         db.add_irrigation_event(
-            irrigator_id=irrigator.id, action="start", duration_minutes=args.minutes,
+            irrigator_id=irrigator.id,
+            action="start",
+            duration_minutes=args.minutes,
             triggered_by="manual",
             notes=f"Manual START via CLI ({args.minutes} min)" if args.minutes else "Manual START via CLI",
         )
@@ -932,7 +974,10 @@ def cmd_irrigator_stop(args, db: IrrigationDB, dm: TuyaDeviceManager):
     success, output = dm.irrigator_off(irrigator)
     if success:
         db.add_irrigation_event(
-            irrigator_id=irrigator.id, action="off", triggered_by="manual", notes="Manual OFF via CLI",
+            irrigator_id=irrigator.id,
+            action="off",
+            triggered_by="manual",
+            notes="Manual OFF via CLI",
         )
         print(f"✅ {irrigator.name} stopped")
     else:
@@ -943,8 +988,11 @@ def cmd_irrigator_stop(args, db: IrrigationDB, dm: TuyaDeviceManager):
 def cmd_irrigator_log_manual(args, db: IrrigationDB):
     irrigator = _get_irrigator_or_exit(db, args.id)
     db.add_irrigation_event(
-        irrigator_id=irrigator.id, action="start", duration_minutes=args.minutes,
-        triggered_by="manual", notes=args.notes or f"Manual ({args.minutes} min)",
+        irrigator_id=irrigator.id,
+        action="start",
+        duration_minutes=args.minutes,
+        triggered_by="manual",
+        notes=args.notes or f"Manual ({args.minutes} min)",
     )
     print(f"✅ Logged: {irrigator.name} for {args.minutes} min")
 
@@ -956,8 +1004,11 @@ def cmd_sensor_add(args, db: IrrigationDB):
     if getattr(args, "local_key", None):
         config["local_key"] = args.local_key
     sensor_id = db.add_sensor(
-        cluster_id=args.cluster, tuya_device_id=args.device_id,
-        name=args.name, sensor_type=args.type, config=config,
+        cluster_id=args.cluster,
+        tuya_device_id=args.device_id,
+        name=args.name,
+        sensor_type=args.type,
+        config=config,
         plant_id=getattr(args, "plant_id", None),
     )
     plant_info = f" → plant {args.plant_id}" if getattr(args, "plant_id", None) else ""
@@ -980,8 +1031,10 @@ def cmd_sensor_list(args, db: IrrigationDB):
 
 def cmd_config_set(args, db: IrrigationDB):
     db.set_irrigation_config(
-        cluster_id=args.cluster, mode=args.mode,
-        duration_minutes=args.minutes, interval_hours=args.interval,
+        cluster_id=args.cluster,
+        mode=args.mode,
+        duration_minutes=args.minutes,
+        interval_hours=args.interval,
         auto_run=args.auto_run,
     )
     print(f"✅ Config updated: cluster {args.cluster} → mode={args.mode}")
@@ -992,7 +1045,9 @@ def cmd_config_get(args, db: IrrigationDB):
     if not config:
         print(f"No config for cluster {args.cluster}")
         return
-    print(f"⚙️  Cluster {args.cluster}: mode={config.mode} | {config.duration_minutes}min / {config.interval_hours}h | auto={'ON' if config.auto_run else 'OFF'}")
+    print(
+        f"⚙️  Cluster {args.cluster}: mode={config.mode} | {config.duration_minutes}min / {config.interval_hours}h | auto={'ON' if config.auto_run else 'OFF'}"
+    )
 
 
 # ── CLI Parser ────────────────────────────────────────────────────────────────
