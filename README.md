@@ -16,15 +16,15 @@ Smart irrigation system with Tuya Cloud sensors, evidence-based plant care, and 
 ## Quick Start
 
 ```bash
-# Setup
-cp data/cluster.json.example data/cluster.json
-# Edit with your device IDs and Tuya credentials
-
 # Install
 uv sync
 
 # Initialize cluster
-uv run tuya-irrigation cluster setup
+uv run tuya-irrigation cluster add "My Plants" --location "Indoor" --environment indoor
+uv run tuya-irrigation plant add --cluster 1 "Monstera deliciosa" --category tropical --water-needs medium
+uv run tuya-irrigation irrigator add --cluster 1 --device-id YOUR_DEVICE_ID --name "Rainpoint"
+uv run tuya-irrigation sensor add --cluster 1 --device-id SENSOR_ID --name "Monstera" --type soil_moisture --plant-id 1
+uv run tuya-irrigation config set --cluster 1 --mode smart --minutes 2 --interval 12
 
 # Run
 uv run tuya-irrigation status 1

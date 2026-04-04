@@ -47,7 +47,7 @@ git grep -i "bf60\|192.168\|local_key\|api.*key" -- '*.py' '*.md' '*.json'
 ```
 
 **Personal data belongs in:**
-- `data/cluster.json` (gitignored)
+- `data/*.db` (gitignored)
 - `~/.openclaw/.env` (outside repo)
 - `data/*.db` (gitignored)
 
@@ -80,7 +80,7 @@ tuya-irrigation/
 │   └── utils.py            # Timezone, seasonal light utilities
 ├── scripts/main.py         # OpenClaw compatibility wrapper
 ├── tests/                  # pytest suite (8 test files + conftest + fake_data)
-├── data/                   # plant_database.json, schema.sql, cluster.json.example (DB gitignored)
+├── data/                   # plant_database.json, schema.sql (DB gitignored)
 └── references/             # PLANT_DATABASE.md (evidence-based plant care docs)
 ```
 
@@ -165,9 +165,11 @@ All tests use `conftest.py` fixtures (`tmp_db`, `fake_tuya_env`, `sample_cluster
 2. `tuya-irrigation sensor add --cluster 1 --device-id XXX --name "Name" --type soil_moisture --plant-id N`
 
 ### Initialize a Cluster
-1. Copy `data/cluster.json.example` to `data/cluster.json`
-2. Edit with your device IDs and Tuya credentials
-3. `tuya-irrigation cluster setup`
+1. `tuya-irrigation cluster add "Name" --location "..." --environment indoor`
+2. `tuya-irrigation plant add --cluster <id> "Species" --category tropical --water-needs medium`
+3. `tuya-irrigation irrigator add --cluster <id> --device-id XXX --name "Name"`
+4. `tuya-irrigation sensor add --cluster <id> --device-id XXX --name "Name" --type soil_moisture --plant-id N`
+5. `tuya-irrigation config set --cluster <id> --mode smart --minutes 2 --interval 12`
 
 ### Pre-commit Check
 ```bash

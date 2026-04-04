@@ -32,9 +32,20 @@ TUYA_REGION=eu          # eu | us | cn | in
 ### Initialize Cluster
 
 ```bash
-cp data/cluster.json.example data/cluster.json
-# Edit with your device IDs and credentials
-tuya-irrigation cluster setup
+# 1. Create cluster
+tuya-irrigation cluster add "My Plants" --location "Indoor" --environment indoor
+
+# 2. Add plants
+tuya-irrigation plant add --cluster 1 "Monstera deliciosa" --category tropical --water-needs medium
+
+# 3. Add irrigator
+tuya-irrigation irrigator add --cluster 1 --device-id YOUR_DEVICE_ID --name "Rainpoint"
+
+# 4. Add sensors
+tuya-irrigation sensor add --cluster 1 --device-id SENSOR_ID --name "Monstera" --type soil_moisture --plant-id 1
+
+# 5. Set config
+tuya-irrigation config set --cluster 1 --mode smart --minutes 2 --interval 12
 ```
 
 ## CLI Reference
@@ -75,8 +86,6 @@ tuya-irrigation stats 1 --days 7      # Statistics + CSV export (--export file.c
 ### Setup (CRUD)
 
 ```bash
-tuya-irrigation cluster setup                # Initialize cluster from config file
-tuya-irrigation cluster setup --config path  # Custom config path
 tuya-irrigation cluster list
 tuya-irrigation cluster add "Garden" --location "Backyard" --environment outdoor
 tuya-irrigation plant list --cluster 1

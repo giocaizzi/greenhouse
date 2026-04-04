@@ -11,7 +11,7 @@ Command structure:
     learn <cluster>           Learning report + efficiency alerts
 
   SETUP (CRUD)
-    cluster add/list/setup
+    cluster add/list
     plant add/list/sync
     irrigator add/list/start/stop/log-manual
     sensor add/list
@@ -156,7 +156,6 @@ def cmd_status(args, db: IrrigationDB, dm: TuyaDeviceManager | None):
 
 def _fetch_open_meteo(lat: float = 45.464, lon: float = 9.189) -> dict | None:
     """Fetch current weather from Open-Meteo."""
-    import json
     import urllib.request
 
     url = (
@@ -984,75 +983,6 @@ def _sync_single_plant(db: IrrigationDB, plant, plant_db) -> None:
     print(f"     Water: {care_data.get('water_needs')} | Temp: {care_data.get('ideal_temp_min_c')}-{care_data.get('ideal_temp_max_c')}°C")
 
 
-def cmd_cluster_setup(args, db: IrrigationDB):
-    """Initialize a cluster from local config or environment variables."""
-    import os
-
-    from tuya_irrigation.db import DATA_DIR
-
-    config_path = Path(args.config) if args.config else DATA_DIR / "cluster.json"
-    local = {}
-    if config_path.exists():
-        with open(config_path) as f:
-            local = json.load(f)
-
-    tuya_device_id = os.environ.get("TUYA_DEVICE_ID") or local.get("irrigator", {}).get("tuya_device_id")
-    tuya_device_ip = os.environ.get("TUYA_DEVICE_IP")
-    tuya_local_key = os.environ.get("TUYA_LOCAL_KEY")
-
-    if not tuya_device_id or tuya_device_id == "YOUR_DEVICE_ID":
-        print(f"❌ Set TUYA_DEVICE_ID in environment or {config_path}")
-        print("   See data/cluster.json.example for template")
-        return 1
-
-    cluster_name = local.get("cluster_name", "My Indoor Plants")
-    cluster_location = local.get("cluster_location", "Indoor")
-    plants_data = local.get("plants", [
-        {"species": "Monstera deliciosa", "category": "tropical", "water_needs": "medium", "light_needs": "medium", "notes": None},
-    ])
-    irr_cfg = local.get("irrigator", {})
-    schedule_minutes = irr_cfg.get("schedule_minutes", 2)
-    schedule_interval_hours = irr_cfg.get("schedule_interval_hours", 12)
-    irrigator_name = irr_cfg.get("name", "Main Irrigator")
-
-    print(f"🌱 Setting up cluster: {cluster_name!r}...")
-
-    cluster_id = db.add_cluster(name=cluster_name, location=cluster_location)
-    print(f"✅ Cluster created (ID: {cluster_id})")
-
-    for plant in plants_data:
-        plant_id = db.add_plant(cluster_id=cluster_id, **plant)
-        print(f"  🌿 Added {plant['species']} (ID: {plant_id})")
-
-    irrigator_config = {"device_id": tuya_device_id}
-    if tuya_device_ip:
-        irrigator_config["device_ip"] = tuya_device_ip
-    if tuya_local_key:
-        irrigator_config["local_key"] = tuya_local_key
-
-    irrigator_type = "tuya_local" if tuya_device_ip and tuya_local_key else "tuya_cloud"
-    irrigator_id = db.add_irrigator(
-        cluster_id=cluster_id,
-        tuya_device_id=tuya_device_id,
-        name=irrigator_name,
-        irrigator_type=irrigator_type,
-        config=irrigator_config,
-    )
-    print(f"✅ Irrigator added (ID: {irrigator_id}, type: {irrigator_type})")
-
-    db.set_irrigation_config(
-        cluster_id=cluster_id,
-        mode="schedule",
-        duration_minutes=schedule_minutes,
-        interval_hours=schedule_interval_hours,
-        auto_run=True,
-    )
-    print("✅ Initial config set (mode: schedule)")
-
-    print(f"\n🎉 Setup complete! Cluster ID: {cluster_id}, Irrigator ID: {irrigator_id}")
-    print(f"\nNext: tuya-irrigation status {cluster_id}")
-
-
 def cmd_irrigator_add(args, db: IrrigationDB):
     config = {}
     if args.device_ip:
@@ -1202,7 +1132,7 @@ Operations (one call = full picture):
   stats <id>           Statistics + CSV export
 
 Setup (CRUD):
-  cluster              add | list | setup
+  cluster              add | list
   plant                add | list | sync
   irrigator            add | list | start | stop | log-manual
   sensor               add | list
@@ -1257,8 +1187,6 @@ Setup (CRUD):
     p_ca.add_argument("--location", help="Location")
     p_ca.add_argument("--environment", choices=["indoor", "outdoor"], default="indoor")
     cluster_sub.add_parser("list", help="List clusters")
-    p_cs_setup = cluster_sub.add_parser("setup", help="Initialize cluster from config file")
-    p_cs_setup.add_argument("--config", help="Path to cluster config JSON (default: data/cluster.json)")
 
     # ── Setup: Plant ─��
 
@@ -1377,8 +1305,6 @@ Setup (CRUD):
                 cmd_cluster_add(args, db)
             elif args.cluster_cmd == "list":
                 cmd_cluster_list(args, db)
-            elif args.cluster_cmd == "setup":
-                return cmd_cluster_setup(args, db)
 
         elif args.command == "plant":
             if args.plant_cmd == "add":
