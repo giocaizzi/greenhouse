@@ -92,10 +92,10 @@ Update existing plants with evidence-based data:
 
 ```bash
 # Update all plants in database
-python3 sync_plant_data.py
+tuya-irrigation plant sync
 
 # Update specific plant by ID
-python3 sync_plant_data.py --plant-id 1
+tuya-irrigation plant sync --plant-id 1
 ```
 
 ## Data Fields
@@ -168,7 +168,7 @@ Edit `data/plant_database.json`:
 ### 3. Sync Existing Plants
 
 ```bash
-python3 sync_plant_data.py
+tuya-irrigation plant sync
 ```
 
 ## Quality Standards

@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-**tuya-irrigation** is a smart plant irrigation system (v0.5.0) with:
+**tuya-irrigation** is a smart plant irrigation system with:
 - Evidence-based plant care from scientific literature
 - Tuya Cloud sensor integration (Zigbee TR-301Z via Cloud API)
 - Multi-sensor conflict resolution for single-irrigator clusters
@@ -10,6 +10,30 @@
 - OpenClaw skill compatible
 
 **Tech Stack:** Python 3.11+, uv, ruff, pytest, SQLite, tinytuya
+
+### Data Flow
+
+```
+Sensors (Zigbee) → Tuya Cloud API
+                        ↓
+                 cloud.py (getstatus + getdevicelog + DP parsing)
+                        ↓
+             cli.py check --all   ← cron entry point
+             ┌──────────┴──────────────┐
+        has irrigator?           no irrigator?
+             ↓                         ↓
+      irrigation logic           monitor logic
+  (sync→weather→decide→exec)   (sync→soil check)
+             ↓                         ↓
+       learning.py              structured output
+    (efficiency alerts)               ↓
+             └──────────┬──────────────┘
+                  structured output
+                ACTION: / ALERT: lines
+                        ↓
+                 agent parses & forwards
+                 via Telegram (exit 2)
+```
 
 ## Privacy & Security
 
@@ -52,12 +76,13 @@ tuya-irrigation/
 │   ├── logic.py            # Smart irrigation decision engine
 │   ├── models.py           # Data models (dataclasses)
 │   ├── plant_db.py         # Evidence-based plant care lookup
-│   ├── stats.py            # Statistics and CSV export
+│   ├���─ stats.py            # Statistics and CSV export
 │   └── utils.py            # Timezone, seasonal light utilities
 ├── scripts/main.py         # OpenClaw compatibility wrapper
 ├── tests/                  # pytest suite (8 test files + conftest + fake_data)
 ├── data/                   # plant_database.json + schema.sql (DB gitignored)
-└── tools/                  # setup_cluster.py, sync_plant_data.py (one-time)
+├── tools/                  # cluster.local.json.example (config template)
+└── references/             # PLANT_DATABASE.md (evidence-based plant care docs)
 ```
 
 **Naming:**
@@ -103,6 +128,19 @@ uv run pytest -v
 
 All tests use `conftest.py` fixtures (`tmp_db`, `fake_tuya_env`, `sample_cluster`) and `fake_data.py`.
 
+| Suite | Tests | Coverage |
+|---|---|---|
+| `test_db.py` | 16 | DB ops, dedup, readings-around, bulk insert, environment, migrations |
+| `test_logic.py` | 16 | Decisions, multi-sensor conflict, water needs, cooldown, stress |
+| `test_devices.py` | 8 | Device control, sensor parsing, error handling |
+| `test_cloud.py` | 8 | Cloud API parsing, log grouping, v2 shadow, credentials |
+| `test_learning.py` | 9 | Absorption profiles, drainage, reports |
+| `test_utils.py` | 13 | Seasonal light, timestamp formatting, timezone |
+| `test_plant_db.py` | 12 | Species/category lookup, fallback, singleton |
+| `test_stats.py` | 8 | Statistics aggregation, CSV export, duration formatting |
+
+**Total: 93 tests.** All use fake data (no real API calls).
+
 ### Adding Tests
 
 - DB tests -> `test_db.py`
@@ -120,11 +158,17 @@ All tests use `conftest.py` fixtures (`tmp_db`, `fake_tuya_env`, `sample_cluster
 
 ### Add a Plant Species
 1. Research (min 2 sources), update `data/plant_database.json`
-2. Add tests if special behavior needed
+2. Sync with `tuya-irrigation plant sync`
+3. Add tests if special behavior needed
 
 ### Add a Sensor
 1. Pair in Tuya Smart app, get device_id from iot.tuya.com
 2. `tuya-irrigation sensor add --cluster 1 --device-id XXX --name "Name" --type soil_moisture --plant-id N`
+
+### Initialize a Cluster
+1. Copy `tools/cluster.local.json.example` to `tools/cluster.local.json`
+2. Edit with your device IDs and Tuya credentials
+3. `tuya-irrigation cluster setup`
 
 ### Pre-commit Check
 ```bash

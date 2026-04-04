@@ -24,7 +24,7 @@ cp tools/cluster.local.json.example tools/cluster.local.json
 uv sync
 
 # Initialize cluster
-python3 tools/setup_cluster.py
+uv run tuya-irrigation cluster setup
 
 # Run
 uv run tuya-irrigation status 1
@@ -35,7 +35,11 @@ uv run tuya-irrigation learn 1
 
 ## Documentation
 
-See **[SKILL.md](SKILL.md)** for full architecture, CLI reference, and configuration.
+| File | Content |
+|---|---|
+| [SKILL.md](SKILL.md) | Architecture, CLI reference, operational logic |
+| [AGENTS.md](AGENTS.md) | Development guide, package structure, testing |
+| [references/PLANT_DATABASE.md](references/PLANT_DATABASE.md) | Evidence-based plant care data |
 
 ## Testing
 

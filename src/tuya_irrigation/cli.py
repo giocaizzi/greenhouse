@@ -5,13 +5,15 @@ Command structure:
   OPERATIONS (one call = full picture)
     status <cluster>          Full cluster status (sensors, config, history, alerts)
     irrigate <cluster>        Smart irrigation (analyze + execute)
-    sync [cluster]            Sync sensor data from cloud
+    check --all | <cluster>   Unified check: irrigate or monitor + all alerts
+    monitor <cluster>         Raw moisture check for sensor-only clusters
+    sync [--hours N]          Sync sensor data from cloud
     learn <cluster>           Learning report + efficiency alerts
 
-  SETUP (infrequent, CRUD)
-    cluster add/list
-    plant add/list
-    irrigator add/list/start/stop/on/off/log-manual
+  SETUP (CRUD)
+    cluster add/list/setup
+    plant add/list/sync
+    irrigator add/list/start/stop/log-manual
     sensor add/list
     config set/get
 
@@ -21,6 +23,7 @@ Command structure:
 """
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -920,6 +923,134 @@ def cmd_plant_list(args, db: IrrigationDB):
             print(f"  🌿 [{p.id}] {p.species}{cat}{water}")
 
 
+def cmd_plant_sync(args, db: IrrigationDB):
+    """Sync plants with evidence-based data from plant database."""
+    plant_db = get_plant_database()
+
+    if args.plant_id:
+        clusters = db.list_clusters()
+        plant = None
+        for cluster in clusters:
+            for p in db.get_plants_in_cluster(cluster.id):
+                if p.id == args.plant_id:
+                    plant = p
+                    break
+            if plant:
+                break
+        if not plant:
+            print(f"❌ Plant {args.plant_id} not found")
+            return 1
+        _sync_single_plant(db, plant, plant_db)
+        return 0
+
+    clusters = [db.get_cluster(args.cluster)] if args.cluster else db.list_clusters()
+    updated = 0
+    for cluster in clusters:
+        if not cluster:
+            continue
+        plants = db.get_plants_in_cluster(cluster.id)
+        if not plants:
+            continue
+        print(f"\n📦 {cluster.name} ({len(plants)} plants)")
+        for plant in plants:
+            _sync_single_plant(db, plant, plant_db)
+            updated += 1
+    print(f"\n✅ Updated {updated} plants with evidence-based data")
+
+
+def _sync_single_plant(db: IrrigationDB, plant, plant_db) -> None:
+    """Update a single plant with evidence-based care data."""
+    care_data = plant_db.get_care_data(species=plant.species, category=plant.category)
+    db.conn.execute(
+        """UPDATE plants
+           SET water_needs = ?, light_needs = ?,
+               ideal_temp_min = ?, ideal_temp_max = ?,
+               ideal_humidity_min = ?, ideal_humidity_max = ?,
+               notes = ?
+           WHERE id = ?""",
+        (
+            care_data.get("water_needs"),
+            care_data.get("light_needs"),
+            care_data.get("ideal_temp_min_c"),
+            care_data.get("ideal_temp_max_c"),
+            care_data.get("ideal_humidity_min"),
+            care_data.get("ideal_humidity_max"),
+            f"Sources: {', '.join(care_data.get('sources', [])[:2])}",
+            plant.id,
+        ),
+    )
+    db.conn.commit()
+    print(f"  ✅ {plant.species}")
+    print(f"     Water: {care_data.get('water_needs')} | Temp: {care_data.get('ideal_temp_min_c')}-{care_data.get('ideal_temp_max_c')}°C")
+
+
+def cmd_cluster_setup(args, db: IrrigationDB):
+    """Initialize a cluster from local config or environment variables."""
+    import os
+
+    config_path = Path(args.config) if args.config else Path(__file__).parent.parent.parent / "tools" / "cluster.local.json"
+    local = {}
+    if config_path.exists():
+        with open(config_path) as f:
+            local = json.load(f)
+
+    tuya_device_id = os.environ.get("TUYA_DEVICE_ID") or local.get("irrigator", {}).get("tuya_device_id")
+    tuya_device_ip = os.environ.get("TUYA_DEVICE_IP")
+    tuya_local_key = os.environ.get("TUYA_LOCAL_KEY")
+
+    if not tuya_device_id or tuya_device_id == "YOUR_DEVICE_ID":
+        print("❌ Set TUYA_DEVICE_ID in environment or tools/cluster.local.json")
+        print("   See tools/cluster.local.json.example for reference")
+        return 1
+
+    cluster_name = local.get("cluster_name", "My Indoor Plants")
+    cluster_location = local.get("cluster_location", "Indoor")
+    plants_data = local.get("plants", [
+        {"species": "Monstera deliciosa", "category": "tropical", "water_needs": "medium", "light_needs": "medium", "notes": None},
+    ])
+    irr_cfg = local.get("irrigator", {})
+    schedule_minutes = irr_cfg.get("schedule_minutes", 2)
+    schedule_interval_hours = irr_cfg.get("schedule_interval_hours", 12)
+    irrigator_name = irr_cfg.get("name", "Main Irrigator")
+
+    print(f"🌱 Setting up cluster: {cluster_name!r}...")
+
+    cluster_id = db.add_cluster(name=cluster_name, location=cluster_location)
+    print(f"✅ Cluster created (ID: {cluster_id})")
+
+    for plant in plants_data:
+        plant_id = db.add_plant(cluster_id=cluster_id, **plant)
+        print(f"  🌿 Added {plant['species']} (ID: {plant_id})")
+
+    irrigator_config = {"device_id": tuya_device_id}
+    if tuya_device_ip:
+        irrigator_config["device_ip"] = tuya_device_ip
+    if tuya_local_key:
+        irrigator_config["local_key"] = tuya_local_key
+
+    irrigator_type = "tuya_local" if tuya_device_ip and tuya_local_key else "tuya_cloud"
+    irrigator_id = db.add_irrigator(
+        cluster_id=cluster_id,
+        tuya_device_id=tuya_device_id,
+        name=irrigator_name,
+        irrigator_type=irrigator_type,
+        config=irrigator_config,
+    )
+    print(f"✅ Irrigator added (ID: {irrigator_id}, type: {irrigator_type})")
+
+    db.set_irrigation_config(
+        cluster_id=cluster_id,
+        mode="schedule",
+        duration_minutes=schedule_minutes,
+        interval_hours=schedule_interval_hours,
+        auto_run=True,
+    )
+    print("✅ Initial config set (mode: schedule)")
+
+    print(f"\n🎉 Setup complete! Cluster ID: {cluster_id}, Irrigator ID: {irrigator_id}")
+    print(f"\nNext: tuya-irrigation status {cluster_id}")
+
+
 def cmd_irrigator_add(args, db: IrrigationDB):
     config = {}
     if args.device_ip:
@@ -1059,15 +1190,21 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Operations (one call = full picture):
-  status <cluster>     Full cluster overview
-  irrigate <cluster>   Smart irrigation (--dry-run for analysis only)
-  sync                 Sync sensor data from cloud
-  learn <cluster>      Learning report + alerts
-  history <cluster>    Readings + events timeline
-  stats <cluster>      Statistics + CSV export
+  check --all | <id>   Cron entry point: irrigate or monitor + alerts
+  status <id>          Full cluster overview
+  irrigate <id>        Smart irrigation (sync → weather → decide → execute)
+  monitor <id>         Raw moisture check (sensor-only clusters)
+  sync [--hours N]     Cloud → DB sensor sync
+  learn <id>           Learning report + efficiency alerts
+  history <id>         Readings + events timeline
+  stats <id>           Statistics + CSV export
 
 Setup (CRUD):
-  cluster, plant, irrigator, sensor, config
+  cluster              add | list | setup
+  plant                add | list | sync
+  irrigator            add | list | start | stop | log-manual
+  sensor               add | list
+  config               set | get
 """,
     )
     parser.add_argument("--db", help="Database path")
@@ -1078,7 +1215,7 @@ Setup (CRUD):
     p_status = sub.add_parser("status", help="Full cluster status")
     p_status.add_argument("cluster", type=int, help="Cluster ID")
 
-    p_irrigate = sub.add_parser("irrigate", help="Sync + weather + decide + execute")
+    p_irrigate = sub.add_parser("irrigate", help="Smart irrigation: sync → weather → decide → execute")
     p_irrigate.add_argument("cluster", type=int, help="Cluster ID")
     p_irrigate.add_argument("--temp", type=float, help="Override temperature (skips sync + weather)")
     p_irrigate.add_argument("--dry-run", action="store_true", help="Analyze only, don't execute")
@@ -1118,8 +1255,10 @@ Setup (CRUD):
     p_ca.add_argument("--location", help="Location")
     p_ca.add_argument("--environment", choices=["indoor", "outdoor"], default="indoor")
     cluster_sub.add_parser("list", help="List clusters")
+    p_cs_setup = cluster_sub.add_parser("setup", help="Initialize cluster from config file")
+    p_cs_setup.add_argument("--config", help="Path to cluster config JSON (default: tools/cluster.local.json)")
 
-    # ── Setup: Plant ──
+    # ── Setup: Plant ─��
 
     p_plant = sub.add_parser("plant", help="Manage plants")
     plant_sub = p_plant.add_subparsers(dest="plant_cmd", required=True)
@@ -1136,41 +1275,44 @@ Setup (CRUD):
     p_pa.add_argument("--notes")
     p_pl = plant_sub.add_parser("list", help="List plants")
     p_pl.add_argument("--cluster", type=int)
+    p_ps = plant_sub.add_parser("sync", help="Sync plants with evidence-based data from plant database")
+    p_ps.add_argument("--plant-id", type=int, help="Update specific plant by ID (omit to update all)")
+    p_ps.add_argument("--cluster", type=int, dest="cluster", help="Update plants in specific cluster")
 
     # ── Setup: Irrigator ──
 
     p_irr = sub.add_parser("irrigator", help="Manage irrigators")
     irr_sub = p_irr.add_subparsers(dest="irrigator_cmd", required=True)
     p_ia = irr_sub.add_parser("add", help="Add irrigator")
-    p_ia.add_argument("--cluster", type=int, required=True)
-    p_ia.add_argument("--device-id", required=True)
-    p_ia.add_argument("--name", required=True)
-    p_ia.add_argument("--type", required=True, choices=["tuya_cloud", "tuya_local"])
-    p_ia.add_argument("--device-ip")
-    p_ia.add_argument("--local-key")
-    p_ia.add_argument("--interval", type=int)
+    p_ia.add_argument("--cluster", type=int, required=True, help="Cluster ID")
+    p_ia.add_argument("--device-id", required=True, help="Tuya device ID")
+    p_ia.add_argument("--name", required=True, help="Irrigator name")
+    p_ia.add_argument("--type", required=True, choices=["tuya_cloud", "tuya_local"], help="Connection type")
+    p_ia.add_argument("--device-ip", help="Local IP (for tuya_local)")
+    p_ia.add_argument("--local-key", help="Local key (for tuya_local)")
+    p_ia.add_argument("--interval", type=int, help="Interval in hours")
     p_il = irr_sub.add_parser("list", help="List irrigators")
     p_il.add_argument("--cluster", type=int)
-    p_is = irr_sub.add_parser("start", help="Start irrigation")
-    p_is.add_argument("id", type=int)
-    p_is.add_argument("--minutes", type=int)
-    p_ist = irr_sub.add_parser("stop", help="Stop irrigation")
-    p_ist.add_argument("id", type=int)
-    p_ilm = irr_sub.add_parser("log-manual", help="Log manual irrigation (no device)")
-    p_ilm.add_argument("id", type=int)
-    p_ilm.add_argument("--minutes", type=int, required=True)
-    p_ilm.add_argument("--notes")
+    p_is = irr_sub.add_parser("start", help="Turn on irrigator device (raw, no logic)")
+    p_is.add_argument("id", type=int, help="Irrigator ID")
+    p_is.add_argument("--minutes", type=int, help="Duration in minutes")
+    p_ist = irr_sub.add_parser("stop", help="Turn off irrigator device")
+    p_ist.add_argument("id", type=int, help="Irrigator ID")
+    p_ilm = irr_sub.add_parser("log-manual", help="Log manual irrigation event (no device command)")
+    p_ilm.add_argument("id", type=int, help="Irrigator ID")
+    p_ilm.add_argument("--minutes", type=int, required=True, help="Duration in minutes")
+    p_ilm.add_argument("--notes", help="Optional notes")
 
     # ── Setup: Sensor ──
 
     p_sensor = sub.add_parser("sensor", help="Manage sensors")
     sensor_sub = p_sensor.add_subparsers(dest="sensor_cmd", required=True)
     p_sa = sensor_sub.add_parser("add", help="Add sensor")
-    p_sa.add_argument("--cluster", type=int, required=True)
-    p_sa.add_argument("--device-id", required=True)
-    p_sa.add_argument("--name", required=True)
-    p_sa.add_argument("--type", required=True)
-    p_sa.add_argument("--plant-id", type=int)
+    p_sa.add_argument("--cluster", type=int, required=True, help="Cluster ID")
+    p_sa.add_argument("--device-id", required=True, help="Tuya device ID")
+    p_sa.add_argument("--name", required=True, help="Sensor name")
+    p_sa.add_argument("--type", required=True, choices=["soil_moisture", "temp_humidity", "light"], help="Sensor type")
+    p_sa.add_argument("--plant-id", type=int, help="Associated plant ID")
     p_sl = sensor_sub.add_parser("list", help="List sensors")
     p_sl.add_argument("--cluster", type=int)
 
@@ -1179,13 +1321,13 @@ Setup (CRUD):
     p_config = sub.add_parser("config", help="Irrigation config")
     config_sub = p_config.add_subparsers(dest="config_cmd", required=True)
     p_cs = config_sub.add_parser("set", help="Set config")
-    p_cs.add_argument("--cluster", type=int, required=True)
-    p_cs.add_argument("--mode", required=True, choices=["manual", "schedule", "smart"])
-    p_cs.add_argument("--minutes", type=int)
-    p_cs.add_argument("--interval", type=int)
-    p_cs.add_argument("--auto-run", type=bool, default=True)
+    p_cs.add_argument("--cluster", type=int, required=True, help="Cluster ID")
+    p_cs.add_argument("--mode", required=True, choices=["manual", "schedule", "smart"], help="Irrigation mode")
+    p_cs.add_argument("--minutes", type=int, help="Duration in minutes")
+    p_cs.add_argument("--interval", type=int, help="Interval in hours")
+    p_cs.add_argument("--auto-run", type=bool, default=True, help="Enable auto-run")
     p_cg = config_sub.add_parser("get", help="Get config")
-    p_cg.add_argument("cluster", type=int)
+    p_cg.add_argument("--cluster", type=int, required=True, help="Cluster ID")
 
     args = parser.parse_args()
 
@@ -1233,12 +1375,16 @@ Setup (CRUD):
                 cmd_cluster_add(args, db)
             elif args.cluster_cmd == "list":
                 cmd_cluster_list(args, db)
+            elif args.cluster_cmd == "setup":
+                return cmd_cluster_setup(args, db)
 
         elif args.command == "plant":
             if args.plant_cmd == "add":
                 cmd_plant_add(args, db)
             elif args.plant_cmd == "list":
                 cmd_plant_list(args, db)
+            elif args.plant_cmd == "sync":
+                return cmd_plant_sync(args, db)
 
         elif args.command == "irrigator":
             if args.irrigator_cmd == "add":
