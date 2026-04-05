@@ -48,7 +48,7 @@ git grep -i "bf60\|192.168\|local_key\|api.*key" -- '*.py' '*.md' '*.json'
 
 **Personal data belongs in:**
 - `data/*.db` (gitignored)
-- `~/.openclaw/.env` (outside repo)
+- `.env` (outside repo)
 - `data/*.db` (gitignored)
 
 ### Test Data

@@ -49,4 +49,4 @@ make check   # 93 tests + ruff lint
 
 ## License
 
-Private repository.
+MIT — see [LICENSE](LICENSE).

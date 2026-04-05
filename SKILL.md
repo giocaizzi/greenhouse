@@ -4,7 +4,7 @@ description: |
   Smart irrigation system for Tuya-based devices with sensor integration.
   Features: cluster management, plant profiles, sensor data logging, smart irrigation logic.
   Use when: managing irrigation, adding plants/sensors, analyzing conditions, auto-watering.
-  Requires: TUYA_CLIENT_ID, TUYA_CLIENT_SECRET in ~/.openclaw/.env.
+  Requires: TUYA_CLIENT_ID, TUYA_CLIENT_SECRET in .env.
 ---
 
 # Tuya Smart Irrigation System
@@ -20,7 +20,7 @@ Evidence-based irrigation with Tuya Cloud sensors, multi-plant conflict resoluti
 
 ## Setup
 
-### Environment Variables (`~/.openclaw/.env`)
+### Environment Variables (`.env`)
 
 ```bash
 TUYA_CLIENT_ID=your_client_id
