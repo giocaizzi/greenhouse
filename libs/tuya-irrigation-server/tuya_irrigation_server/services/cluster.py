@@ -1,0 +1,121 @@
+"""Cluster status and history services."""
+
+import time
+
+from tuya_irrigation_core.devices import TuyaDeviceManager
+from tuya_irrigation_core.logic import IrrigationLogic
+from tuya_irrigation_core.repository import IrrigationRepository
+
+
+def get_cluster_status(
+    repo: IrrigationRepository,
+    cluster_id: int,
+    dm: TuyaDeviceManager | None = None,
+) -> dict | None:
+    """Full cluster status: config, plants, sensors, irrigators, smart decision."""
+    cluster = repo.get_cluster(cluster_id)
+    if not cluster:
+        return None
+
+    config = repo.get_irrigation_config(cluster_id)
+    plants = repo.get_plants_in_cluster(cluster_id)
+    sensors = repo.get_sensors_in_cluster(cluster_id)
+    irrigators = repo.get_irrigators_in_cluster(cluster_id)
+    now = int(time.time())
+
+    sensor_data = []
+    for sensor in sensors:
+        readings = repo.get_recent_readings(sensor.id, hours=24)
+        last_reading = readings[0] if readings else None
+        age = (now - last_reading.timestamp) if last_reading else None
+        sensor_data.append(
+            {
+                "id": sensor.id,
+                "name": sensor.name,
+                "type": sensor.type,
+                "plant_id": sensor.plant_id,
+                "last_reading": last_reading,
+                "reading_age_seconds": age,
+            }
+        )
+
+    irrigator_data = []
+    for irr in irrigators:
+        events = repo.get_recent_events(irr.id, hours=48)
+        irrigator_data.append(
+            {
+                "id": irr.id,
+                "name": irr.name,
+                "type": irr.type,
+                "recent_event_count": len(events),
+                "last_event": events[0] if events else None,
+            }
+        )
+
+    # Smart decision
+    logic = IrrigationLogic(repo)
+    decision = logic.decide_for_cluster(cluster_id)
+
+    return {
+        "cluster": cluster,
+        "config": config,
+        "plants": plants,
+        "sensors": sensor_data,
+        "irrigators": irrigator_data,
+        "decision": decision,
+    }
+
+
+def get_cluster_history(
+    repo: IrrigationRepository,
+    cluster_id: int,
+    hours: int = 24,
+    limit: int = 50,
+) -> dict | None:
+    """Get sensor readings + irrigation events for a cluster."""
+    cluster = repo.get_cluster(cluster_id)
+    if not cluster:
+        return None
+
+    sensors = repo.get_sensors_in_cluster(cluster_id)
+    sensor_histories = []
+    for sensor in sensors:
+        readings = repo.get_recent_readings(sensor.id, hours=hours)
+        sensor_histories.append(
+            {
+                "sensor_id": sensor.id,
+                "sensor_name": sensor.name,
+                "readings": readings[:limit],
+            }
+        )
+
+    irrigators = repo.get_irrigators_in_cluster(cluster_id)
+    irrigator_histories = []
+    for irr in irrigators:
+        events = repo.get_recent_events(irr.id, hours=hours)
+        irrigator_histories.append(
+            {
+                "irrigator_id": irr.id,
+                "irrigator_name": irr.name,
+                "events": events[:limit],
+            }
+        )
+
+    return {
+        "cluster_name": cluster.name,
+        "sensors": sensor_histories,
+        "irrigators": irrigator_histories,
+    }
+
+
+def sync_plant_with_db(repo: IrrigationRepository, plant, plant_db) -> None:
+    """Update a single plant with evidence-based care data."""
+    care_data = plant_db.get_care_data(species=plant.species, category=plant.category)
+    plant.water_needs = care_data.get("water_needs")
+    plant.light_needs = care_data.get("light_needs")
+    plant.ideal_temp_min = care_data.get("ideal_temp_min_c")
+    plant.ideal_temp_max = care_data.get("ideal_temp_max_c")
+    plant.ideal_humidity_min = care_data.get("ideal_humidity_min")
+    plant.ideal_humidity_max = care_data.get("ideal_humidity_max")
+    plant.notes = f"Sources: {', '.join(care_data.get('sources', [])[:2])}"
+    repo.session.flush()
