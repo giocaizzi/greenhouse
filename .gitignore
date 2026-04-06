@@ -12,9 +12,6 @@ venv/
 ENV/
 env/
 
-# uv
-uv.lock
-
 # Ruff
 .ruff_cache/
 
