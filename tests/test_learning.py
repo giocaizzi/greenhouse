@@ -12,7 +12,7 @@ from fake_data import (
     FAKE_SENSOR_ID,
     FAKE_SENSOR_NAME,
 )
-from tuya_irrigation.learning import IrrigationLearner
+from tuya_irrigation_core.learning import IrrigationLearner
 
 
 class TestIrrigationLearner:

@@ -5,7 +5,7 @@ import time
 import pytest
 
 from fake_data import FAKE_CLUSTER_NAME, FAKE_PLANT_SPECIES, FAKE_SENSOR_ID
-from tuya_irrigation.logic import IrrigationLogic
+from tuya_irrigation_core.logic import IrrigationLogic
 
 
 class TestIrrigationLogic:

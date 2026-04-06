@@ -3,6 +3,8 @@
 import time
 
 import pytest
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
 
 from fake_data import (
     FAKE_CLIENT_ID,
@@ -15,16 +17,20 @@ from fake_data import (
     FAKE_SENSOR_ID,
     FAKE_SENSOR_NAME,
 )
-from tuya_irrigation.db import IrrigationDB
+from tuya_irrigation_core.models import Base
+from tuya_irrigation_core.repository import IrrigationRepository
 
 
 @pytest.fixture
-def tmp_db(tmp_path):
-    """Create a temporary IrrigationDB and clean up after the test."""
-    db_path = tmp_path / "test.db"
-    db = IrrigationDB(db_path)
-    yield db
-    db.close()
+def tmp_db():
+    """Create an in-memory IrrigationRepository for testing."""
+    engine = create_engine("sqlite://", echo=False)
+    Base.metadata.create_all(engine)
+    session = Session(engine)
+    repo = IrrigationRepository(session)
+    yield repo
+    session.close()
+    engine.dispose()
 
 
 @pytest.fixture
@@ -67,6 +73,7 @@ def sample_cluster(tmp_db):
     now = int(time.time())
     tmp_db.add_sensor_reading(sensor_id=sensor_id, timestamp=now, soil_moisture=50.0, temperature=22.0)
     tmp_db.add_sensor_reading(sensor_id=sensor_id, timestamp=now - 3600, soil_moisture=52.0, temperature=21.5)
+    tmp_db.session.commit()
 
     return {
         "db": tmp_db,

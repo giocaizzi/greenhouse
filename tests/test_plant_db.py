@@ -2,7 +2,7 @@
 
 import pytest
 
-from tuya_irrigation.plant_db import get_plant_database, reset_plant_database
+from tuya_irrigation_core.plant_db import get_plant_database, reset_plant_database
 
 
 class TestPlantDatabase:

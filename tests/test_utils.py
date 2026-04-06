@@ -2,7 +2,7 @@
 
 import pytest
 
-from tuya_irrigation.utils import (
+from tuya_irrigation_core.utils import (
     daytime_lux_readings,
     effective_light_threshold,
     format_timestamp,

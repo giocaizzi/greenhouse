@@ -85,9 +85,9 @@ class TestDatabase:
             config={},
         )
 
-        import sqlite3
+        from sqlalchemy.exc import IntegrityError
 
-        with pytest.raises(sqlite3.IntegrityError):
+        with pytest.raises(IntegrityError):
             tmp_db.add_irrigator(
                 cluster_id=cluster_id,
                 tuya_device_id=FAKE_DEVICE_ID,
