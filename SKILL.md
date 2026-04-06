@@ -109,7 +109,7 @@ tuya-irrigation config set --cluster 1 --mode smart --minutes 2 --interval 12
 | Sensor Sync | every 30min | `sync --hours 24` | Cloud → DB data freshness |
 | Irrigation & Plant Check | 07:00 + 20:00 (Rome) | `check --all` | Irrigate + monitor + alert |
 
-The **Irrigation & Plant Check** cron runs as an OpenClaw agent job: it executes `check --all`, parses `ALERT_ITEM:` lines (exit code 2), and forwards a single batched Telegram message to Kez.
+The **Irrigation & Plant Check** cron runs as an agent job: it executes `check --all`, parses `ALERT_ITEM:` lines (exit code 2), and forwards a single batched Telegram message to Kez.
 
 Adding a new cluster (with or without irrigator) is automatically picked up by `check --all` — no cron changes needed.
 

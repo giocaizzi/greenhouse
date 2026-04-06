@@ -8,7 +8,6 @@
 - Multi-sensor conflict resolution for single-irrigator clusters
 - Self-learning irrigation profiles (absorption, drainage, efficiency)
 - Client-server architecture: FastAPI server + Typer CLI client
-- OpenClaw skill compatible
 
 **Tech Stack:** Python 3.11+, uv workspaces, FastAPI, SQLAlchemy v2, Pydantic v2, Typer, ruff, pytest, SQLite, tinytuya
 
@@ -131,7 +130,6 @@ tuya-irrigation/
 │           ├── client.py             # httpx API client
 │           └── main.py               # Typer CLI commands
 │
-├── scripts/main.py                   # OpenClaw compatibility wrapper
 ├── data/                             # plant_database.json, schema.sql (DB gitignored)
 ├── tests/                            # 155 tests
 │   ├── conftest.py                   # Shared fixtures (SQLAlchemy in-memory)
@@ -218,11 +216,6 @@ All tests use `conftest.py` fixtures and `fake_data.py`. Server tests use FastAP
 - Core DB/logic/learning → `tests/test_*.py`
 - Server endpoints → `tests/server/test_*.py` (use TestClient)
 - CLI commands → `tests/cli/test_cli.py` (use CliRunner + MockTransport)
-
-### OpenClaw Compatibility
-
-**OpenClaw calls:** `python3 scripts/main.py [args]`
-**Package users call:** `tuya-irrigation [args]` (via entry point)
 
 ## API Reference
 
