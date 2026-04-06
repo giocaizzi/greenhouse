@@ -1,21 +1,22 @@
-#!/usr/bin/env python3
 """Plant database lookup - Evidence-based plant care data."""
 
 import json
+import os
 from pathlib import Path
 
-# TODO: like database.py, this should be configurable from env or constructor arg, with a default path
-# DB_PATH points to project root data/ directory
-# __file__ = libs/tuya-irrigation-core/tuya_irrigation_core/plant_db.py
-# .parent^3 = libs/tuya-irrigation-core, .parent^4 = project root
-DB_PATH = Path(__file__).resolve().parent.parent.parent.parent / "data" / "plant_database.json"
+_DEFAULT_PLANT_DB_PATH = Path(__file__).resolve().parent.parent.parent.parent / "data" / "plant_database.json"
+PLANT_DB_PATH = (
+    Path(os.environ["IRRIGATION_PLANT_DB_PATH"])
+    if os.environ.get("IRRIGATION_PLANT_DB_PATH")
+    else _DEFAULT_PLANT_DB_PATH
+)
 
 
 class PlantDatabase:
     """Lookup plant care requirements from scientific literature."""
 
     def __init__(self, db_path: Path | None = None):
-        self.db_path = db_path or DB_PATH
+        self.db_path = db_path or PLANT_DB_PATH
         self._data = self._load_database()
 
     def _load_database(self) -> dict:
@@ -139,6 +140,12 @@ def get_plant_database() -> PlantDatabase:
     if _db_instance is None:
         _db_instance = PlantDatabase()
     return _db_instance
+
+
+def set_plant_database(instance: PlantDatabase) -> None:
+    """Set the singleton instance (for custom path configuration)."""
+    global _db_instance
+    _db_instance = instance
 
 
 def reset_plant_database() -> None:

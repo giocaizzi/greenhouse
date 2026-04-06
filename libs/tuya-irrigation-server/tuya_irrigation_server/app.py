@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from sqlalchemy.engine import Engine
 
 from tuya_irrigation_core.database import create_db_engine, create_session_factory, init_db
+from tuya_irrigation_core.plant_db import PlantDatabase, set_plant_database
 from tuya_irrigation_server.config import Settings
 from tuya_irrigation_server.deps import set_session_factory
 from tuya_irrigation_server.routes import clusters, configs, irrigators, operations, plants, scheduler, sensors
@@ -23,6 +24,12 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
     init_db(engine)
     session_factory = create_session_factory(engine)
     set_session_factory(session_factory)
+
+    # Configure plant database path if set
+    if settings.plant_db_path:
+        from pathlib import Path
+
+        set_plant_database(PlantDatabase(db_path=Path(settings.plant_db_path)))
 
     init_scheduler(engine, settings)
 
