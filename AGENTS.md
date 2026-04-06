@@ -60,7 +60,6 @@ tuya-irrigation/
 │       └── tuya_irrigation_cli/
 │           ├── client.py             # httpx API client
 │           └── main.py               # Typer CLI commands
-├── scripts/main.py                   # OpenClaw compatibility wrapper
 ├── data/                             # plant_database.json
 ├── tests/                            # 155 tests (core + server + cli)
 └── references/                       # Reference docs
