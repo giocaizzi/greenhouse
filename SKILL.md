@@ -162,4 +162,3 @@ For detailed information loaded on demand:
 - [API Reference](references/API.md) — Full REST API endpoint documentation
 - [Irrigation Logic](references/LOGIC.md) — Decision engine, multi-sensor conflict, learning engine, confidence scoring
 - [Plant Database](references/PLANT_DATABASE.md) — Evidence-based plant care data and sources
-- [Database Schema](data/schema.sql) — SQLite table definitions
