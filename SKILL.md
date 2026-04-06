@@ -4,7 +4,6 @@ description: |
   Smart irrigation system for Tuya-based devices with sensor integration.
   Features: cluster management, plant profiles, sensor data logging, smart irrigation logic.
   Use when: managing irrigation, adding plants/sensors, analyzing conditions, auto-watering.
-  Requires: TUYA_CLIENT_ID, TUYA_CLIENT_SECRET in .env.
 ---
 
 # Tuya Smart Irrigation System
