@@ -35,7 +35,7 @@ def sync_sensor_data(db: IrrigationRepository, cloud: TuyaCloud, hours: int = 24
 
         for sensor in sensors:
             try:
-                synced, new, live = _sync_single_sensor(db, cloud, sensor, hours)
+                synced, new, live = sync_single_sensor(db, cloud, sensor, hours)
                 stats["total_synced"] += synced
                 stats["total_new"] += new
                 stats["total_live"] += live
@@ -57,7 +57,7 @@ def sync_sensor_data(db: IrrigationRepository, cloud: TuyaCloud, hours: int = 24
     return stats
 
 
-def _sync_single_sensor(db: IrrigationRepository, cloud: TuyaCloud, sensor, hours: int) -> tuple[int, int, int]:
+def sync_single_sensor(db: IrrigationRepository, cloud: TuyaCloud, sensor, hours: int) -> tuple[int, int, int]:
     """Sync a single sensor. Returns (total_processed, new_inserted, live_saved)."""
 
     # 1. Determine sync window

@@ -2,8 +2,8 @@
 
 from tuya_irrigation_core.cloud import TuyaCloud
 from tuya_irrigation_core.repository import IrrigationRepository
-from tuya_irrigation_core.sync import _sync_single_sensor
 from tuya_irrigation_core.sync import sync_sensor_data as core_sync
+from tuya_irrigation_core.sync import sync_single_sensor
 
 
 class SyncService:
@@ -29,7 +29,7 @@ class SyncService:
         try:
             for sensor in sensors:
                 try:
-                    _sync_single_sensor(self._repo, self._cloud, sensor, hours=6)
+                    sync_single_sensor(self._repo, self._cloud, sensor, hours=6)
                 except Exception:
                     pass
             self._repo.session.flush()

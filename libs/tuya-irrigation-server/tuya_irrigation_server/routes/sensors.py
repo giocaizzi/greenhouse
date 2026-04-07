@@ -22,7 +22,7 @@ def add_sensor(cluster_id: int, request: CreateSensorRequest, repo: RepoDep):
             tuya_device_id=request.tuya_device_id,
             name=request.name,
             sensor_type=request.type,
-            config={"config": request.config} if request.config else {},
+            config=request.config or {},
             plant_id=request.plant_id,
         )
         repo.session.commit()

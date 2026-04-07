@@ -34,9 +34,11 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        bg_scheduler.start()
+        if settings.enable_scheduler:
+            bg_scheduler.start()
         yield
-        bg_scheduler.shutdown(wait=False)
+        if settings.enable_scheduler and bg_scheduler.running:
+            bg_scheduler.shutdown(wait=False)
 
     app = FastAPI(
         title="Tuya Irrigation API",

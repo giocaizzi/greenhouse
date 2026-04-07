@@ -19,3 +19,4 @@ class Settings(BaseSettings):
     # Scheduler defaults
     sync_interval_minutes: int = 30
     check_interval_hours: int = 6
+    enable_scheduler: bool = True

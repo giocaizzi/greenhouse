@@ -69,7 +69,7 @@ def _check_job() -> None:
         sync_svc = SyncService(repo, cloud)
         irrigation_svc = IrrigationService(
             repo=repo,
-            dm=None,
+            dm=_app.state.device_manager,
             sync_service=sync_svc,
             weather_client=_app.state.weather_client,
             plant_db=_app.state.plant_db,

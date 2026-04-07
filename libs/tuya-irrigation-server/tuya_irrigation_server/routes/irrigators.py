@@ -23,7 +23,7 @@ def add_irrigator(cluster_id: int, request: CreateIrrigatorRequest, repo: RepoDe
             tuya_device_id=request.tuya_device_id,
             name=request.name,
             irrigator_type=request.type,
-            config={"config": request.config} if request.config else {},
+            config=request.config or {},
         )
         repo.session.commit()
     except IntegrityError:

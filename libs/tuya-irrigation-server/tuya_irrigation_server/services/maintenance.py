@@ -14,7 +14,7 @@ def collect_learning_alerts(repo: IrrigationRepository, cluster_id: int, plant_d
     try:
         learner = IrrigationLearner(repo, plant_db)
         issues = learner.detect_issues(cluster_id)
-        return [{"severity": a.severity, "type": a.type, "message": a.message} for a in issues]
+        return [{"severity": a.severity, "type": a.alert_type, "message": a.message} for a in issues]
     except Exception:
         return []
 

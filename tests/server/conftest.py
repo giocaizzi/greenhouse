@@ -16,7 +16,7 @@ from tuya_irrigation_server.deps import get_device_manager, get_tuya_cloud
 def app():
     """FastAPI app with in-memory SQLite and stubbed device manager."""
     engine = create_engine("sqlite://", echo=False, connect_args={"check_same_thread": False}, poolclass=StaticPool)
-    settings = Settings(db_url="sqlite://")
+    settings = Settings(db_url="sqlite://", enable_scheduler=False)
     application = create_app(settings, engine=engine)
 
     # Stub device manager — returns success for all operations

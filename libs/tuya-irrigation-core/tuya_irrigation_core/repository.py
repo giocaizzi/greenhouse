@@ -332,7 +332,7 @@ class IrrigationRepository:
             mode=mode,
             duration_minutes=duration_minutes,
             interval_hours=interval_hours,
-            auto_run=int(auto_run),
+            auto_run=auto_run,
             last_updated=int(time.time()),
         )
         self.session.add(config)
