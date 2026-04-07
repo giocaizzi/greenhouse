@@ -1,6 +1,9 @@
+<div align="center">
+
 # tuya-irrigation
 
-Smart plant irrigation system with Tuya IoT sensors, evidence-based plant care, and self-learning efficiency analysis.
+
+**Smart plant irrigation system with Tuya IoT sensors, evidence-based plant care, and self-learning efficiency analysis.**
 
 [![CI](https://img.shields.io/github/actions/workflow/status/giocaizzi/tuya-irrigation/ci.yml?branch=main&label=CI)](https://github.com/giocaizzi/tuya-irrigation/actions)
 [![codecov](https://codecov.io/gh/giocaizzi/tuya-irrigation/graph/badge.svg)](https://codecov.io/gh/giocaizzi/tuya-irrigation)
@@ -8,6 +11,8 @@ Smart plant irrigation system with Tuya IoT sensors, evidence-based plant care, 
 [![License](https://img.shields.io/github/license/giocaizzi/tuya-irrigation)](LICENSE)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![uv](https://img.shields.io/badge/uv-DE5FE9?logo=uv&logoColor=white)](https://github.com/astral-sh/uv)
+
+</div>
 
 ## Overview
 
@@ -21,13 +26,13 @@ uv run tuya-irrigation check --all    # check all clusters
 
 ## Features
 
-- **Evidence-based decisions** — plant care data from scientific literature drives moisture targets, temperature thresholds, and watering frequency
-- **Multi-sensor conflict resolution** — handles clusters where one plant is dry and another is wet, using conservative short-burst irrigation
-- **Self-learning profiles** — tracks absorption rates, drainage patterns, and irrigation efficiency per plant over time
-- **7 alert types** — blocked drip, rapid drainage, chronic underwatering, unresolvable conflict, low light, low humidity, light-accelerated drainage
-- **Tuya Cloud + Local protocol** — reads sensors via Cloud API, controls irrigators via local protocol v3.5 for reliable duration control
-- **Background scheduling** — APScheduler syncs sensors every 30 min and checks clusters every 6 hours
-- **REST API + CLI** — full FastAPI server with OpenAPI docs at `/docs`, thin Typer CLI client
+- 🌿 **Evidence-based decisions** — plant care data from scientific literature drives moisture targets, temperature thresholds, and watering frequency
+- ⚖️ **Multi-sensor conflict resolution** — handles clusters where one plant is dry and another is wet, using conservative short-burst irrigation
+- 🧠 **Self-learning profiles** — tracks absorption rates, drainage patterns, and irrigation efficiency per plant over time
+- 🚨 **7 alert types** — blocked drip, rapid drainage, chronic underwatering, unresolvable conflict, low light, low humidity, light-accelerated drainage
+- ☁️ **Tuya Cloud + Local protocol** — reads sensors via Cloud API, controls irrigators via local protocol v3.5 for reliable duration control
+- ⏰ **Background scheduling** — APScheduler syncs sensors every 30 min and checks clusters every 6 hours
+- 🔌 **REST API + CLI** — full FastAPI server with OpenAPI docs at `/docs`, thin Typer CLI client
 
 ## Getting Started
 
