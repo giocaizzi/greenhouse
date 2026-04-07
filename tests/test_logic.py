@@ -256,3 +256,249 @@ class TestIrrigationLogic:
         decision = self.logic.decide_for_cluster(self.cluster_id)
         assert decision["action"] == "skip"
         assert decision["confidence"] <= 0.3
+
+    # ── Humidity-based decision tests ───────────────────────────────────────
+
+    def _add_full_sensor(self, moisture, temperature=22.0, env_humidity=None, light=None, device_id=FAKE_SENSOR_ID):
+        """Helper: add a sensor with full reading data."""
+        sensor_id = self.db.add_sensor(
+            cluster_id=self.cluster_id,
+            tuya_device_id=device_id,
+            name="Full Sensor",
+            sensor_type="soil_moisture",
+            config={},
+        )
+        self.db.add_sensor_reading(
+            sensor_id=sensor_id,
+            soil_moisture=moisture,
+            temperature=temperature,
+            env_humidity=env_humidity,
+            light=light,
+        )
+        return sensor_id
+
+    def test_very_dry_air_increases_frequency(self):
+        """Very dry air (far below ideal) reduces interval."""
+        # Plant ideal_humidity_min=60, so 30% is far below → very dry air
+        self._add_full_sensor(moisture=50.0, env_humidity=30.0)
+        decision = self.logic.decide_for_cluster(self.cluster_id)
+
+        assert decision is not None
+        assert "dry air" in decision["reason"].lower()
+        # Should reduce interval by 3 hours from the default
+        assert decision["interval_hours"] < 12
+
+    def test_humid_air_increases_interval(self):
+        """High ambient humidity increases interval (less transpiration)."""
+        # Plant ideal_humidity_max=80, so 95% is far above → high humidity
+        self._add_full_sensor(moisture=50.0, env_humidity=95.0)
+        decision = self.logic.decide_for_cluster(self.cluster_id)
+
+        assert decision is not None
+        assert "humidity" in decision["reason"].lower()
+        assert decision["interval_hours"] > 12
+
+    def test_moderately_dry_air_adjustment(self):
+        """Slightly dry air has smaller frequency adjustment."""
+        # Plant ideal_humidity_min=60, so 50% is just below (60-5=55 threshold)
+        self._add_full_sensor(moisture=50.0, env_humidity=50.0)
+        decision = self.logic.decide_for_cluster(self.cluster_id)
+
+        assert decision is not None
+        assert "dry air" in decision["reason"].lower()
+
+    # ── Light-based decision tests ──────────────────────────────────────────
+
+    def test_very_bright_light_increases_frequency(self):
+        """Very bright light reduces interval and increases duration."""
+        # LIGHT_VERY_BRIGHT=1500, seasonal factor ~0.85 in April → ~1275
+        self._add_full_sensor(moisture=50.0, light=2000)
+        decision = self.logic.decide_for_cluster(self.cluster_id)
+
+        assert decision is not None
+        assert "bright" in decision["reason"].lower()
+        assert decision["interval_hours"] < 12
+
+    def test_very_dark_light_decreases_frequency(self):
+        """Very dark conditions increase interval."""
+        # LIGHT_VERY_DARK=50 * seasonal ~0.85 = ~42. Use 20 (above night filter of 15)
+        self._add_full_sensor(moisture=50.0, light=20)
+        decision = self.logic.decide_for_cluster(self.cluster_id)
+
+        assert decision is not None
+        assert "light" in decision["reason"].lower()
+        assert decision["interval_hours"] > 12
+
+    # ── Stress detection tests ──────────────────────────────────────────────
+
+    def test_water_warning_highest_priority(self):
+        """Sensor water_warning triggers irrigation with highest confidence."""
+        sensor_id = self.db.add_sensor(
+            cluster_id=self.cluster_id,
+            tuya_device_id=FAKE_SENSOR_ID,
+            name="Warning Sensor",
+            sensor_type="soil_moisture",
+            config={},
+        )
+        self.db.add_sensor_reading(
+            sensor_id=sensor_id,
+            soil_moisture=50.0,
+            water_warning=True,
+        )
+        decision = self.logic.decide_for_cluster(self.cluster_id)
+
+        assert decision["action"] == "irrigate"
+        assert decision["confidence"] >= 0.9
+        assert "sensor alert" in decision["reason"].lower()
+
+    def test_critical_moisture_triggers_stress(self):
+        """Soil moisture below critical (30%) triggers water stress."""
+        self._add_soil_sensor(moisture=20.0)
+        decision = self.logic.decide_for_cluster(self.cluster_id)
+
+        assert decision["action"] == "irrigate"
+        assert decision["confidence"] >= 0.9
+        stress = decision.get("stress_indicators", {})
+        assert "water_stress" in stress
+
+    def test_over_watering_detected(self):
+        """Saturated soil + high irrigation frequency triggers over-watering skip."""
+        cluster_id = self.db.add_cluster("Overwater Cluster")
+        self.db.add_plant(cluster_id=cluster_id, species=FAKE_PLANT_SPECIES, water_needs="medium")
+        irrigator_id = self.db.add_irrigator(
+            cluster_id=cluster_id,
+            tuya_device_id="fake_irr_ow",
+            name="Irrigator",
+            irrigator_type="tuya_cloud",
+            config={},
+        )
+        sensor_id = self.db.add_sensor(
+            cluster_id=cluster_id,
+            tuya_device_id="fake_sensor_ow",
+            name="Wet Sensor",
+            sensor_type="soil_moisture",
+            config={},
+        )
+        now = int(time.time())
+        # Saturated soil readings
+        self.db.add_sensor_reading(sensor_id=sensor_id, soil_moisture=75.0, timestamp=now)
+        # High irrigation frequency: >3 per day over last 7 days (events WITHIN 7 days)
+        for i in range(25):
+            self.db.add_irrigation_event(
+                irrigator_id=irrigator_id,
+                action="start",
+                triggered_by="auto",
+                duration_minutes=2,
+                timestamp=now - (7 * 86400) + i * 3600,  # Within last 7 days, outside cooldown
+            )
+
+        logic = IrrigationLogic(self.db, get_plant_database())
+        decision = logic.decide_for_cluster(cluster_id)
+
+        assert decision["action"] == "skip"
+        stress = decision.get("stress_indicators", {})
+        assert "over_watering" in stress or "over-watering" in decision["reason"].lower()
+
+    def test_heat_stress_above_ideal(self):
+        """Temp far above ideal + rising trend triggers heat stress."""
+        cluster_id = self.db.add_cluster("Heat Cluster")
+        self.db.add_plant(
+            cluster_id=cluster_id,
+            species=FAKE_PLANT_SPECIES,
+            water_needs="medium",
+            ideal_temp_min=18.0,
+            ideal_temp_max=27.0,
+        )
+        sensor_id = self.db.add_sensor(
+            cluster_id=cluster_id,
+            tuya_device_id="fake_sensor_heat",
+            name="Hot Sensor",
+            sensor_type="soil_moisture",
+            config={},
+        )
+        now = int(time.time())
+        # Add readings showing high temp (well above ideal max of 27)
+        self.db.add_sensor_reading(
+            sensor_id=sensor_id,
+            soil_moisture=50.0,
+            temperature=35.0,
+            timestamp=now,
+        )
+
+        logic = IrrigationLogic(self.db, get_plant_database())
+        decision = logic.decide_for_cluster(cluster_id)
+
+        assert decision is not None
+        stress = decision.get("stress_indicators", {})
+        assert "heat_stress" in stress
+
+    # ── Trend-based decision tests ──────────────────────────────────────────
+
+    def test_declining_moisture_trend_reduces_interval(self):
+        """Declining soil moisture trend reduces interval."""
+        sensor_id = self.db.add_sensor(
+            cluster_id=self.cluster_id,
+            tuya_device_id=FAKE_SENSOR_ID,
+            name="Trend Sensor",
+            sensor_type="soil_moisture",
+            config={},
+        )
+        now = int(time.time())
+        # First half: higher moisture, second half: lower moisture (decline > 5%)
+        for i in range(8):
+            moisture = 60.0 - (i * 3)  # 60, 57, 54, 51, 48, 45, 42, 39
+            self.db.add_sensor_reading(
+                sensor_id=sensor_id,
+                soil_moisture=moisture,
+                temperature=22.0,
+                timestamp=now - (7 - i) * 3600,
+            )
+
+        decision = self.logic.decide_for_cluster(self.cluster_id)
+        assert decision is not None
+        assert "declining" in decision["reason"].lower()
+
+    def test_rising_moisture_trend_increases_interval(self):
+        """Rising soil moisture trend increases interval."""
+        sensor_id = self.db.add_sensor(
+            cluster_id=self.cluster_id,
+            tuya_device_id=FAKE_SENSOR_ID,
+            name="Rising Sensor",
+            sensor_type="soil_moisture",
+            config={},
+        )
+        now = int(time.time())
+        # First half: lower moisture, second half: higher moisture (rise > 5%)
+        for i in range(8):
+            moisture = 40.0 + (i * 3)  # 40, 43, 46, 49, 52, 55, 58, 61
+            self.db.add_sensor_reading(
+                sensor_id=sensor_id,
+                soil_moisture=moisture,
+                temperature=22.0,
+                timestamp=now - (7 - i) * 3600,
+            )
+
+        decision = self.logic.decide_for_cluster(self.cluster_id)
+        assert decision is not None
+        assert "rising" in decision["reason"].lower()
+
+    def test_config_fallback_manual_mode(self):
+        """Config in manual mode returns skip with low confidence."""
+        self.db.set_irrigation_config(
+            cluster_id=self.cluster_id,
+            mode="manual",
+            duration_minutes=3,
+            interval_hours=8,
+        )
+        # No sensors, no temp → should use config fallback
+        decision = self.logic.decide_for_cluster(self.cluster_id)
+        assert decision["action"] == "skip"
+        assert decision["confidence"] == pytest.approx(0.3)
+
+    def test_soil_too_wet_skips(self):
+        """Soil moisture above target max skips irrigation."""
+        self._add_soil_sensor(moisture=75.0)
+        decision = self.logic.decide_for_cluster(self.cluster_id)
+
+        assert decision["action"] == "skip"
+        assert "wet" in decision["reason"].lower()

@@ -149,3 +149,57 @@ class TestDeviceManager:
         assert "temperature" in reading
         assert reading["temperature"] == 22.5
         assert reading["soil_moisture"] == 45.0
+
+    # ── Edge case tests ─────────────────────────────────────────────────────
+
+    @patch("tuya_irrigation_core.devices.tinytuya.Cloud")
+    def test_irrigator_start_local_failure_cloud_succeeds(self, mock_cloud_class, fake_tuya_env):
+        """Local DP set fails but cloud switch succeeds (keepalive fallback)."""
+        mock_cloud = MagicMock()
+        mock_cloud.sendcommand.return_value = {"success": True}
+        mock_cloud_class.return_value = mock_cloud
+
+        dm = TuyaDeviceManager()
+        # Local DP set fails → triggers keepalive fallback
+        with patch.object(dm, "_set_duration_local", return_value=(False, "Connection refused")):
+            with patch.object(dm, "_irrigator_start_keepalive", return_value=(True, "Keep-alive started for 3 min")):
+                success, msg = dm.irrigator_start(_make_irrigator(), minutes=3)
+
+        assert success
+        assert "3 min" in msg
+
+    @patch("tuya_irrigation_core.cloud.TuyaCloud")
+    def test_read_sensor_cloud_error_returns_error_dict(self, mock_cloud_class, fake_tuya_env):
+        """Sensor read returns error dict when cloud API fails."""
+        mock_cloud = MagicMock()
+        mock_cloud.get_live_reading.side_effect = RuntimeError("device offline")
+        mock_cloud_class.return_value = mock_cloud
+
+        dm = TuyaDeviceManager()
+        result = dm.read_sensor(_make_sensor())
+
+        assert "error" in result
+        assert "device offline" in result["error"]
+
+    @patch("tuya_irrigation_core.devices.tinytuya.Cloud")
+    def test_irrigator_on_network_exception(self, mock_cloud_class, fake_tuya_env):
+        """Network exception during irrigator_on propagates."""
+        mock_cloud = MagicMock()
+        mock_cloud.sendcommand.side_effect = ConnectionError("Network unreachable")
+        mock_cloud_class.return_value = mock_cloud
+
+        dm = TuyaDeviceManager()
+        with pytest.raises(ConnectionError):
+            dm.irrigator_on(_make_irrigator())
+
+    @patch("tuya_irrigation_core.devices.tinytuya.Cloud")
+    def test_irrigator_start_zero_minutes(self, mock_cloud_class, fake_tuya_env):
+        """Start with minutes=0 is treated as simple ON (no duration)."""
+        mock_cloud = MagicMock()
+        mock_cloud.sendcommand.return_value = {"success": True}
+        mock_cloud_class.return_value = mock_cloud
+
+        dm = TuyaDeviceManager()
+        success, msg = dm.irrigator_start(_make_irrigator(), minutes=0)
+
+        assert success

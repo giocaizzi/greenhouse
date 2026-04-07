@@ -130,3 +130,89 @@ class TestTuyaCloud:
 
         assert data["temperature"] == pytest.approx(22.0)
         assert data["soil_moisture"] == 50.0
+
+    # ── Edge case tests ─────────────────────────────────────────────────────
+
+    def test_get_live_reading_partial_data(self):
+        """Live reading with only temperature (no moisture) parses correctly."""
+        self.mock_cloud_instance.getstatus.return_value = {
+            "success": True,
+            "result": [
+                {"code": "temp_current", "value": 195},
+            ],
+        }
+        data = self.cloud.get_live_reading(FAKE_SENSOR_ID)
+
+        assert data["temperature"] == pytest.approx(19.5)
+        assert "soil_moisture" not in data
+
+    def test_get_device_logs_empty_result(self):
+        """Empty logs list returns empty."""
+        self.mock_cloud_instance.getdevicelog.return_value = {
+            "result": {"logs": []},
+        }
+        logs = self.cloud.get_device_logs(FAKE_SENSOR_ID, hours=1)
+        assert logs == []
+
+    def test_get_device_logs_unknown_code_preserved_raw(self):
+        """Unknown DP codes are preserved with raw key/value."""
+        self.mock_cloud_instance.getdevicelog.return_value = {
+            "result": {
+                "logs": [
+                    {"code": "unknown_dp_code", "value": "42", "event_time": 1000000},
+                    {"code": "temp_current", "value": "220", "event_time": 2000000},
+                ],
+            },
+        }
+        logs = self.cloud.get_device_logs(FAKE_SENSOR_ID, hours=1)
+
+        assert len(logs) == 2
+        # Unknown code preserved as-is
+        assert logs[0]["key"] == "unknown_dp_code"
+        assert logs[0]["value"] == "42"
+        # Known code parsed
+        assert logs[1]["key"] == "temperature"
+        assert logs[1]["value"] == pytest.approx(22.0)
+
+    def test_v2_shadow_partial_properties(self):
+        """V2 shadow with only some properties returns partial data."""
+        self.mock_cloud_instance.cloudrequest.return_value = {
+            "success": True,
+            "result": {
+                "properties": [
+                    {"code": "temp_current", "value": 210},
+                ],
+            },
+        }
+        data = self.cloud.get_live_reading(FAKE_SENSOR_ID)
+
+        assert data["temperature"] == pytest.approx(21.0)
+        assert "soil_moisture" not in data
+        assert "env_humidity" not in data
+
+    def test_group_logs_single_entry(self):
+        """Single log entry groups correctly."""
+        logs = [
+            {"timestamp_ms": 1000, "timestamp": 1, "key": "temperature", "value": 22.0},
+        ]
+        grouped = self.cloud.group_logs_by_timestamp(logs, tolerance_ms=5000)
+
+        assert len(grouped) == 1
+        assert grouped[0]["temperature"] == pytest.approx(22.0)
+
+    def test_v2_shadow_empty_properties(self):
+        """V2 shadow with empty properties falls back to v1."""
+        self.mock_cloud_instance.cloudrequest.return_value = {
+            "success": True,
+            "result": {"properties": []},
+        }
+        self.mock_cloud_instance.getstatus.return_value = {
+            "success": True,
+            "result": [
+                {"code": "temp_current", "value": 200},
+            ],
+        }
+        data = self.cloud.get_live_reading(FAKE_SENSOR_ID)
+
+        assert data["temperature"] == pytest.approx(20.0)
+        self.mock_cloud_instance.getstatus.assert_called_once()

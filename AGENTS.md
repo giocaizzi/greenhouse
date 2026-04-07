@@ -41,8 +41,19 @@ tuya-irrigation/
 │   │       ├── repository.py         # DB operations
 │   │       ├── cloud.py              # Tuya Cloud API client
 │   │       ├── devices.py            # Device control (Cloud + Local v3.5)
-│   │       ├── logic.py              # Irrigation decision engine
-│   │       ├── learning.py           # Post-irrigation analysis
+│   │       ├── logic/                # Irrigation decision engine
+│   │       │   ├── engine.py         #   Decision orchestrator (IrrigationLogic)
+│   │       │   ├── sensors.py        #   Sensor data aggregation
+│   │       │   ├── stress.py         #   Stress condition detection
+│   │       │   ├── trends.py         #   Historical trend analysis
+│   │       │   ├── plant_needs.py    #   Plant care data interpretation
+│   │       │   └── fallback.py       #   Temperature-based fallback logic
+│   │       ├── learning/             # Post-irrigation analysis
+│   │       │   ├── learner.py        #   Facade class (IrrigationLearner)
+│   │       │   ├── models.py         #   Dataclasses (Response, Profile, Alert)
+│   │       │   ├── profiling.py      #   Profile building, drainage rates
+│   │       │   ├── issues.py         #   Issue detection, conflict alerts
+│   │       │   └── report.py         #   Human-readable report generation
 │   │       ├── sync.py               # Cloud → DB sensor sync
 │   │       ├── stats.py              # Statistics and CSV export
 │   │       ├── plant_db.py           # Evidence-based plant care lookup
@@ -59,7 +70,15 @@ tuya-irrigation/
 │   └── tuya-irrigation-cli/          # Typer CLI (NO dependency on core)
 │       └── tuya_irrigation_cli/
 │           ├── client.py             # httpx API client
-│           └── main.py               # Typer CLI commands
+│           ├── main.py               # App entrypoint, sub-app wiring
+│           └── commands/             # Command modules
+│               ├── _helpers.py       #   Shared helpers (client, call, output)
+│               ├── operations.py     #   Top-level commands (status, irrigate, etc.)
+│               ├── clusters.py       #   Cluster CRUD
+│               ├── plants.py         #   Plant CRUD + sync
+│               ├── irrigators.py     #   Irrigator CRUD + control
+│               ├── sensors.py        #   Sensor CRUD
+│               └── configs.py        #   Config get/set
 ├── data/                             # plant_database.json
 ├── tests/                            # 155 tests (core + server + cli)
 └── references/                       # Reference docs
@@ -116,17 +135,17 @@ All tests use `conftest.py` fixtures and `fake_data.py`. Server tests use FastAP
 | Suite | Tests | Scope |
 |---|---|---|
 | `test_db.py` | 16 | Repository ops, dedup, bulk insert |
-| `test_logic.py` | 16 | Decisions, conflict, cooldown, stress |
-| `test_devices.py` | 8 | Device control, sensor parsing |
-| `test_cloud.py` | 8 | Cloud API parsing, v2 shadow |
-| `test_learning.py` | 9 | Absorption, drainage, reports |
-| `test_utils.py` | 13 | Seasonal light, timestamps |
+| `test_logic.py` | 29 | Decisions, conflict, cooldown, stress, humidity, light, trends |
+| `test_devices.py` | 12 | Device control, sensor parsing, error handling |
+| `test_cloud.py` | 14 | Cloud API parsing, v2 shadow, edge cases |
+| `test_learning.py` | 18 | Absorption, drainage, alerts, reports, edge cases |
+| `test_utils.py` | 16 | Seasonal light, timestamps |
 | `test_plant_db.py` | 12 | Species/category lookup |
-| `test_stats.py` | 8 | Stats, CSV export |
+| `test_stats.py` | 12 | Stats, CSV export, header/content validation |
 | `server/test_*.py` | 46 | All API endpoints via HTTP |
 | `cli/test_cli.py` | 16 | CLI commands via mock HTTP |
 
-**Total: 155 tests.** All use fake data (no real API calls).
+**Total: ~191 tests.** All use fake data (no real API calls).
 
 ### Adding Tests
 
