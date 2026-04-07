@@ -6,28 +6,34 @@ from tuya_irrigation_core.sync import _sync_single_sensor
 from tuya_irrigation_core.sync import sync_sensor_data as core_sync
 
 
-def sync_all_sensors(repo: IrrigationRepository, hours: int = 24) -> dict:
-    """Sync all sensor data from Tuya Cloud. Returns stats dict."""
-    cloud = TuyaCloud()
-    stats = core_sync(repo, cloud, hours=hours)
-    repo.session.commit()
-    return stats
+class SyncService:
+    """Orchestrates sensor data synchronization from Tuya Cloud."""
 
+    def __init__(self, repo: IrrigationRepository, cloud: TuyaCloud | None):
+        self._repo = repo
+        self._cloud = cloud
 
-def sync_and_read_sensors(repo: IrrigationRepository, cluster_id: int) -> dict | None:
-    """Sync cluster sensors and return live reading from first sensor."""
-    sensors = repo.get_sensors_in_cluster(cluster_id)
-    if not sensors:
-        return None
-    try:
-        cloud = TuyaCloud()
-        for sensor in sensors:
-            try:
-                _sync_single_sensor(repo, cloud, sensor, hours=6)
-            except Exception:
-                pass
-        repo.session.commit()
-        live = cloud.get_live_reading(sensors[0].tuya_device_id)
-        return live if live else None
-    except Exception:
-        return None
+    def sync_all_sensors(self, hours: int = 24) -> dict:
+        """Sync all sensor data from Tuya Cloud. Returns stats dict."""
+        if self._cloud is None:
+            return {"total_synced": 0, "total_new": 0, "total_live": 0, "errors": ["No cloud connection"]}
+        return core_sync(self._repo, self._cloud, hours=hours)
+
+    def sync_and_read_sensors(self, cluster_id: int) -> dict | None:
+        """Sync cluster sensors and return live reading from first sensor."""
+        if self._cloud is None:
+            return None
+        sensors = self._repo.get_sensors_in_cluster(cluster_id)
+        if not sensors:
+            return None
+        try:
+            for sensor in sensors:
+                try:
+                    _sync_single_sensor(self._repo, self._cloud, sensor, hours=6)
+                except Exception:
+                    pass
+            self._repo.session.flush()
+            live = self._cloud.get_live_reading(sensors[0].tuya_device_id)
+            return live if live else None
+        except Exception:
+            return None

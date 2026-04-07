@@ -44,7 +44,7 @@ from tuya_irrigation_core.constants import (
     TREND_TEMP_THRESHOLD,
 )
 from tuya_irrigation_core.models import IrrigationConfig
-from tuya_irrigation_core.plant_db import get_plant_database
+from tuya_irrigation_core.plant_db import PlantDatabase
 from tuya_irrigation_core.repository import IrrigationRepository
 from tuya_irrigation_core.utils import effective_light_threshold, seasonal_light_factor
 
@@ -52,9 +52,9 @@ from tuya_irrigation_core.utils import effective_light_threshold, seasonal_light
 class IrrigationLogic:
     """Smart irrigation decision engine using evidence-based plant data."""
 
-    def __init__(self, db: IrrigationRepository):
+    def __init__(self, db: IrrigationRepository, plant_db: PlantDatabase):
         self.db = db
-        self.plant_db = get_plant_database()
+        self.plant_db = plant_db
 
     def decide_for_cluster(self, cluster_id: int, current_temp: float | None = None) -> dict | None:
         """
@@ -110,7 +110,7 @@ class IrrigationLogic:
         try:
             from tuya_irrigation_core.learning import IrrigationLearner
 
-            learner = IrrigationLearner(self.db)
+            learner = IrrigationLearner(self.db, self.plant_db)
             learning_alerts = learner.detect_issues(cluster_id)
             if learning_alerts:
                 stress["learning_alerts"] = [

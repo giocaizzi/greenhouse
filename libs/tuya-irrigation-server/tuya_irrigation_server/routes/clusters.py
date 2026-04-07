@@ -1,9 +1,9 @@
 """Cluster CRUD routes."""
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, status
 
 from tuya_irrigation_core.schemas import ClusterResponse, CreateClusterRequest
-from tuya_irrigation_server.deps import RepoDep
+from tuya_irrigation_server.deps import RepoDep, require_cluster
 
 router = APIRouter(prefix="/clusters", tags=["clusters"])
 
@@ -22,7 +22,4 @@ def list_clusters(repo: RepoDep):
 
 @router.get("/{cluster_id}", response_model=ClusterResponse, summary="Get a cluster by ID")
 def get_cluster(cluster_id: int, repo: RepoDep):
-    cluster = repo.get_cluster(cluster_id)
-    if not cluster:
-        raise HTTPException(status_code=404, detail="Cluster not found")
-    return cluster
+    return require_cluster(repo, cluster_id)

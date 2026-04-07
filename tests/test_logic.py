@@ -6,6 +6,7 @@ import pytest
 
 from fake_data import FAKE_CLUSTER_NAME, FAKE_PLANT_SPECIES, FAKE_SENSOR_ID
 from tuya_irrigation_core.logic import IrrigationLogic
+from tuya_irrigation_core.plant_db import get_plant_database
 
 
 class TestIrrigationLogic:
@@ -14,7 +15,7 @@ class TestIrrigationLogic:
     @pytest.fixture(autouse=True)
     def setup(self, tmp_db):
         self.db = tmp_db
-        self.logic = IrrigationLogic(self.db)
+        self.logic = IrrigationLogic(self.db, get_plant_database())
         self.cluster_id = self.db.add_cluster(FAKE_CLUSTER_NAME)
         self.db.add_plant(
             cluster_id=self.cluster_id,
@@ -245,7 +246,7 @@ class TestIrrigationLogic:
         )
         self.db.add_sensor_reading(sensor_id=sensor_id, soil_moisture=20.0)
 
-        logic = IrrigationLogic(self.db)
+        logic = IrrigationLogic(self.db, get_plant_database())
         decision = logic.decide_for_cluster(cluster_id)
         assert decision["action"] == "skip"
         assert "cooldown" in decision["reason"].lower()

@@ -3,16 +3,14 @@
 from fastapi import APIRouter, HTTPException
 
 from tuya_irrigation_core.schemas import ConfigResponse, SetConfigRequest
-from tuya_irrigation_server.deps import RepoDep
+from tuya_irrigation_server.deps import RepoDep, require_cluster
 
 router = APIRouter(tags=["configs"])
 
 
 @router.put("/clusters/{cluster_id}/config", response_model=ConfigResponse)
 def set_config(cluster_id: int, request: SetConfigRequest, repo: RepoDep):
-    cluster = repo.get_cluster(cluster_id)
-    if not cluster:
-        raise HTTPException(status_code=404, detail="Cluster not found")
+    require_cluster(repo, cluster_id)
     repo.set_irrigation_config(
         cluster_id=cluster_id,
         mode=request.mode,

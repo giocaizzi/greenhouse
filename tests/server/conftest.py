@@ -9,7 +9,7 @@ from sqlalchemy.pool import StaticPool
 
 from tuya_irrigation_server.app import create_app
 from tuya_irrigation_server.config import Settings
-from tuya_irrigation_server.deps import get_device_manager
+from tuya_irrigation_server.deps import get_device_manager, get_tuya_cloud
 
 
 @pytest.fixture
@@ -27,7 +27,12 @@ def app():
 
     application.dependency_overrides[get_device_manager] = lambda: mock_dm
 
-    return application
+    # Stub cloud — not available in tests
+    application.dependency_overrides[get_tuya_cloud] = lambda: None
+
+    yield application
+
+    engine.dispose()
 
 
 @pytest.fixture

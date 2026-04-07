@@ -12,13 +12,15 @@ requested duration via local protocol before activating the switch,
 so the device handles its own timer — no sleep loops needed.
 """
 
+import logging
 import os
-import sys
 import time
 
 import tinytuya
 
 from tuya_irrigation_core.models import Irrigator, Sensor
+
+logger = logging.getLogger(__name__)
 
 # DP IDs for Rainpoint IK10PW (category ggq, protocol v3.5)
 DP_SWITCH = 1  # bool: on/off
@@ -205,7 +207,7 @@ class TuyaDeviceManager:
             )
         else:
             # Fallback: keep-alive loop if local connection fails
-            print(f"⚠️  Local Duration set failed ({dur_msg}), using keep-alive fallback", file=sys.stderr)
+            logger.warning("Local Duration set failed (%s), using keep-alive fallback", dur_msg)
             return self._irrigator_start_keepalive(irrigator, minutes)
 
     def _irrigator_start_keepalive(self, irrigator: Irrigator, minutes: int) -> tuple[bool, str]:

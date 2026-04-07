@@ -13,6 +13,7 @@ from fake_data import (
     FAKE_SENSOR_NAME,
 )
 from tuya_irrigation_core.learning import IrrigationLearner
+from tuya_irrigation_core.plant_db import get_plant_database
 
 
 class TestIrrigationLearner:
@@ -21,7 +22,7 @@ class TestIrrigationLearner:
     @pytest.fixture(autouse=True)
     def setup(self, tmp_db):
         self.db = tmp_db
-        self.learner = IrrigationLearner(self.db)
+        self.learner = IrrigationLearner(self.db, get_plant_database())
 
         self.cluster_id = self.db.add_cluster(FAKE_CLUSTER_NAME)
         self.plant_id = self.db.add_plant(

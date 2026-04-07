@@ -12,6 +12,10 @@ class Settings(BaseSettings):
     debug: bool = False
     plant_db_path: str | None = None
 
+    # Weather API
+    weather_lat: float = 45.464
+    weather_lon: float = 9.189
+
     # Scheduler defaults
     sync_interval_minutes: int = 30
     check_interval_hours: int = 6

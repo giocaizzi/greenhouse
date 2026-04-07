@@ -9,16 +9,14 @@ from tuya_irrigation_core.schemas import (
     LogManualRequest,
     StartIrrigatorRequest,
 )
-from tuya_irrigation_server.deps import DeviceManagerDep, RepoDep
+from tuya_irrigation_server.deps import DeviceManagerDep, RepoDep, require_cluster
 
 router = APIRouter(tags=["irrigators"])
 
 
 @router.post("/clusters/{cluster_id}/irrigators", response_model=IrrigatorResponse, status_code=status.HTTP_201_CREATED)
 def add_irrigator(cluster_id: int, request: CreateIrrigatorRequest, repo: RepoDep):
-    cluster = repo.get_cluster(cluster_id)
-    if not cluster:
-        raise HTTPException(status_code=404, detail="Cluster not found")
+    require_cluster(repo, cluster_id)
     try:
         irrigator_id = repo.add_irrigator(
             cluster_id=cluster_id,

@@ -9,10 +9,13 @@ Tuya Cloud is the source of truth for sensor data.
 Local DB is our permanent archive.
 """
 
+import logging
 import time
 
 from tuya_irrigation_core.cloud import TuyaCloud
 from tuya_irrigation_core.repository import IrrigationRepository
+
+logger = logging.getLogger(__name__)
 
 
 def sync_sensor_data(db: IrrigationRepository, cloud: TuyaCloud, hours: int = 24) -> dict:
@@ -28,7 +31,7 @@ def sync_sensor_data(db: IrrigationRepository, cloud: TuyaCloud, hours: int = 24
         if not sensors:
             continue
 
-        print(f"[{cluster.name}] Syncing {len(sensors)} sensor(s)...")
+        logger.info("[%s] Syncing %d sensor(s)...", cluster.name, len(sensors))
 
         for sensor in sensors:
             try:
@@ -45,11 +48,11 @@ def sync_sensor_data(db: IrrigationRepository, cloud: TuyaCloud, hours: int = 24
                 if not parts:
                     parts.append("up to date")
 
-                print(f"  ✅ {sensor.name}: {', '.join(parts)}")
+                logger.info("  %s: %s", sensor.name, ", ".join(parts))
 
             except Exception as e:
                 stats["errors"].append(f"{sensor.name}: {e}")
-                print(f"  ❌ {sensor.name}: {e}")
+                logger.error("  %s: %s", sensor.name, e)
 
     return stats
 

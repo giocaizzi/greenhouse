@@ -4,28 +4,27 @@ import statistics
 import time
 
 from tuya_irrigation_core.learning import IrrigationLearner
-from tuya_irrigation_core.plant_db import get_plant_database
+from tuya_irrigation_core.plant_db import PlantDatabase
 from tuya_irrigation_core.repository import IrrigationRepository
 from tuya_irrigation_core.utils import daytime_lux_readings, effective_light_threshold
 
 
-def collect_learning_alerts(repo: IrrigationRepository, cluster_id: int) -> list[dict]:
+def collect_learning_alerts(repo: IrrigationRepository, cluster_id: int, plant_db: PlantDatabase) -> list[dict]:
     """Return learning alerts for a cluster (efficiency, patterns). Never raises."""
     try:
-        learner = IrrigationLearner(repo)
+        learner = IrrigationLearner(repo, plant_db)
         issues = learner.detect_issues(cluster_id)
         return [{"severity": a.severity, "type": a.type, "message": a.message} for a in issues]
     except Exception:
         return []
 
 
-def collect_maintenance_alerts(repo: IrrigationRepository, cluster_id: int) -> list[dict]:
+def collect_maintenance_alerts(repo: IrrigationRepository, cluster_id: int, plant_db: PlantDatabase) -> list[dict]:
     """Return maintenance alerts (hardware, environment). Never raises."""
     alerts = []
     sensors = repo.get_sensors_in_cluster(cluster_id)
     plants_by_id = {p.id: p for p in repo.get_plants_in_cluster(cluster_id)}
     now = int(time.time())
-    plant_db = get_plant_database()
 
     for sensor in sensors:
         readings = repo.get_recent_readings(sensor.id, hours=24)
@@ -93,7 +92,7 @@ def collect_maintenance_alerts(repo: IrrigationRepository, cluster_id: int) -> l
     return alerts
 
 
-def generate_learning_report(repo: IrrigationRepository, cluster_id: int) -> str:
+def generate_learning_report(repo: IrrigationRepository, cluster_id: int, plant_db: PlantDatabase) -> str:
     """Generate a full learning report for a cluster."""
-    learner = IrrigationLearner(repo)
+    learner = IrrigationLearner(repo, plant_db)
     return learner.generate_report(cluster_id)

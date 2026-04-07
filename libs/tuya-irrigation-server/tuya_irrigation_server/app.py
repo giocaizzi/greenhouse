@@ -6,12 +6,21 @@ from fastapi import FastAPI
 from sqlalchemy.engine import Engine
 
 from tuya_irrigation_core.database import create_db_engine, create_session_factory, init_db
-from tuya_irrigation_core.plant_db import PlantDatabase, set_plant_database
+from tuya_irrigation_core.devices import TuyaDeviceManager
+from tuya_irrigation_core.plant_db import PlantDatabase
 from tuya_irrigation_server.config import Settings
-from tuya_irrigation_server.deps import set_session_factory
 from tuya_irrigation_server.routes import clusters, configs, irrigators, operations, plants, scheduler, sensors
 from tuya_irrigation_server.scheduler import init_scheduler
 from tuya_irrigation_server.scheduler import scheduler as bg_scheduler
+from tuya_irrigation_server.services.weather import WeatherClient
+
+
+def _init_device_manager() -> TuyaDeviceManager | None:
+    """Initialize device manager, returning None if credentials are missing."""
+    try:
+        return TuyaDeviceManager()
+    except (ValueError, Exception):
+        return None
 
 
 def create_app(settings: Settings | None = None, engine: Engine | None = None) -> FastAPI:
@@ -22,16 +31,6 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
     if engine is None:
         engine = create_db_engine(settings.db_url)
     init_db(engine)
-    session_factory = create_session_factory(engine)
-    set_session_factory(session_factory)
-
-    # Configure plant database path if set
-    if settings.plant_db_path:
-        from pathlib import Path
-
-        set_plant_database(PlantDatabase(db_path=Path(settings.plant_db_path)))
-
-    init_scheduler(engine, settings)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -58,6 +57,14 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
         ],
     )
 
+    # Store dependencies on app.state (accessed by deps.py)
+    app.state.session_factory = create_session_factory(engine)
+    app.state.device_manager = _init_device_manager()
+    app.state.weather_client = WeatherClient(lat=settings.weather_lat, lon=settings.weather_lon)
+    app.state.plant_db = _init_plant_db(settings)
+
+    init_scheduler(app, settings)
+
     # Register routes
     prefix = "/api/v1"
     app.include_router(clusters.router, prefix=prefix)
@@ -69,6 +76,15 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
     app.include_router(scheduler.router, prefix=prefix)
 
     return app
+
+
+def _init_plant_db(settings: Settings) -> PlantDatabase:
+    """Initialize plant database from settings or default."""
+    if settings.plant_db_path:
+        from pathlib import Path
+
+        return PlantDatabase(db_path=Path(settings.plant_db_path))
+    return PlantDatabase()
 
 
 def main():

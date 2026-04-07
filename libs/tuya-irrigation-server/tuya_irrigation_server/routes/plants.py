@@ -2,19 +2,15 @@
 
 from fastapi import APIRouter, HTTPException, status
 
-from tuya_irrigation_core.plant_db import get_plant_database
 from tuya_irrigation_core.schemas import CreatePlantRequest, PlantResponse, SyncPlantsRequest, SyncPlantsResponse
-from tuya_irrigation_server.deps import RepoDep
-from tuya_irrigation_server.services.cluster import sync_plant_with_db
+from tuya_irrigation_server.deps import ClusterServiceDep, RepoDep, require_cluster
 
 router = APIRouter(tags=["plants"])
 
 
 @router.post("/clusters/{cluster_id}/plants", response_model=PlantResponse, status_code=status.HTTP_201_CREATED)
 def add_plant(cluster_id: int, request: CreatePlantRequest, repo: RepoDep):
-    cluster = repo.get_cluster(cluster_id)
-    if not cluster:
-        raise HTTPException(status_code=404, detail="Cluster not found")
+    require_cluster(repo, cluster_id)
     plant_id = repo.add_plant(
         cluster_id=cluster_id,
         species=request.species,
@@ -28,7 +24,6 @@ def add_plant(cluster_id: int, request: CreatePlantRequest, repo: RepoDep):
         notes=request.notes,
     )
     repo.session.commit()
-    # Re-fetch to get the committed state
     plants = repo.get_plants_in_cluster(cluster_id)
     return next(p for p in plants if p.id == plant_id)
 
@@ -39,13 +34,11 @@ def list_plants(cluster_id: int, repo: RepoDep):
 
 
 @router.post("/plants/sync", response_model=SyncPlantsResponse)
-def sync_plants(request: SyncPlantsRequest, repo: RepoDep):
-    plant_db = get_plant_database()
+def sync_plants(request: SyncPlantsRequest, repo: RepoDep, cluster_svc: ClusterServiceDep):
     errors = []
     synced = 0
 
     if request.plant_id:
-        # Find specific plant
         clusters = repo.list_clusters()
         plant = None
         for cluster in clusters:
@@ -57,7 +50,7 @@ def sync_plants(request: SyncPlantsRequest, repo: RepoDep):
                 break
         if not plant:
             raise HTTPException(status_code=404, detail=f"Plant {request.plant_id} not found")
-        sync_plant_with_db(repo, plant, plant_db)
+        cluster_svc.sync_plant_with_db(plant)
         synced = 1
     else:
         clusters = [repo.get_cluster(request.cluster_id)] if request.cluster_id else repo.list_clusters()
@@ -66,7 +59,7 @@ def sync_plants(request: SyncPlantsRequest, repo: RepoDep):
                 continue
             for plant in repo.get_plants_in_cluster(cluster.id):
                 try:
-                    sync_plant_with_db(repo, plant, plant_db)
+                    cluster_svc.sync_plant_with_db(plant)
                     synced += 1
                 except Exception as e:
                     errors.append(f"{plant.species}: {e}")

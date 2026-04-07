@@ -24,7 +24,7 @@ from tuya_irrigation_core.constants import (
     LIGHT_BRIGHT,
 )
 from tuya_irrigation_core.models import IrrigationEvent, Sensor
-from tuya_irrigation_core.plant_db import get_plant_database
+from tuya_irrigation_core.plant_db import PlantDatabase
 from tuya_irrigation_core.repository import IrrigationRepository
 from tuya_irrigation_core.utils import daytime_lux_readings, effective_light_threshold, seasonal_light_factor
 
@@ -80,8 +80,9 @@ class IrrigationLearner:
     POST_WINDOW_SEC = 7200  # 2h after irrigation (water needs time to soak)
     MIN_POST_DELAY_SEC = 600  # Ignore readings < 10min after (water still distributing)
 
-    def __init__(self, db: IrrigationRepository):
+    def __init__(self, db: IrrigationRepository, plant_db: PlantDatabase):
         self.db = db
+        self.plant_db = plant_db
 
     def analyze_irrigation_response(self, event: IrrigationEvent) -> list[IrrigationResponse]:
         """Analyze soil moisture changes for all sensors after an irrigation event.
@@ -245,9 +246,8 @@ class IrrigationLearner:
         if not profiles:
             return alerts  # Not enough data yet
 
-        plant_db = get_plant_database()
         plants = self.db.get_plants_in_cluster(cluster_id)
-        plant_care = {p.id: plant_db.get_care_data(species=p.species, category=p.category) for p in plants}
+        plant_care = {p.id: self.plant_db.get_care_data(species=p.species, category=p.category) for p in plants}
 
         for sensor in sensors:
             profile = profiles.get(sensor.id)
@@ -431,14 +431,13 @@ class IrrigationLearner:
                         )
 
         # 4. Low light: plant gets insufficient lux for its needs
-        plant_db_l = get_plant_database()
         all_plants = self.db.get_plants_in_cluster(cluster_id)
-        plants_by_id_l = {p.id: p for p in all_plants}
+        plants_by_id = {p.id: p for p in all_plants}
         for sensor in sensors:
-            plant = plants_by_id_l.get(sensor.plant_id) if sensor.plant_id else None
+            plant = plants_by_id.get(sensor.plant_id) if sensor.plant_id else None
             if not plant:
                 continue
-            care = plant_db_l.get_care_data(species=plant.species, category=plant.category)
+            care = self.plant_db.get_care_data(species=plant.species, category=plant.category)
             min_lux = care.get("ideal_light_lux_min")
             if not min_lux:
                 continue
@@ -466,10 +465,10 @@ class IrrigationLearner:
 
         # 5. Low env humidity: sustained dry air for tropical plants
         for sensor in sensors:
-            plant = plants_by_id_l.get(sensor.plant_id) if sensor.plant_id else None
+            plant = plants_by_id.get(sensor.plant_id) if sensor.plant_id else None
             if not plant:
                 continue
-            care2 = plant_db_l.get_care_data(species=plant.species, category=plant.category)
+            care2 = self.plant_db.get_care_data(species=plant.species, category=plant.category)
             ideal_hum_min = care2.get("ideal_humidity_min")
             if not ideal_hum_min:
                 continue

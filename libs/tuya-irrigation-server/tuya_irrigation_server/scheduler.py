@@ -1,19 +1,25 @@
 """APScheduler integration for background tasks."""
 
-from apscheduler.schedulers.background import BackgroundScheduler
+import logging
 
-from tuya_irrigation_core.database import create_session_factory
+from apscheduler.schedulers.background import BackgroundScheduler
+from fastapi import FastAPI
+
+from tuya_irrigation_core.cloud import TuyaCloud
 from tuya_irrigation_core.repository import IrrigationRepository
+from tuya_irrigation_server.config import Settings
+
+logger = logging.getLogger(__name__)
 
 scheduler = BackgroundScheduler()
 
-_engine = None
+_app: FastAPI | None = None
 
 
-def init_scheduler(engine, settings) -> None:
-    """Register default jobs and store engine reference."""
-    global _engine
-    _engine = engine
+def init_scheduler(app: FastAPI, settings: Settings) -> None:
+    """Register default jobs and store app reference for state access."""
+    global _app
+    _app = app
 
     scheduler.add_job(
         _sync_job,
@@ -35,49 +41,56 @@ def init_scheduler(engine, settings) -> None:
 
 def _sync_job() -> None:
     """Background job: sync all sensor data."""
-    from tuya_irrigation_server.services.sync import sync_all_sensors
+    from tuya_irrigation_server.services.sync import SyncService
 
-    factory = create_session_factory(_engine)
-    session = factory()
+    session = _app.state.session_factory()
     try:
         repo = IrrigationRepository(session)
-        sync_all_sensors(repo, hours=6)
+        cloud = TuyaCloud()
+        sync_svc = SyncService(repo, cloud)
+        sync_svc.sync_all_sensors(hours=6)
         session.commit()
-    except Exception as e:
+    except Exception:
         session.rollback()
-        print(f"Sync job error: {e}")
+        logger.exception("Sync job failed")
     finally:
         session.close()
 
 
 def _check_job() -> None:
     """Background job: check all clusters."""
-    from tuya_irrigation_server.services.irrigation import check_all_clusters
+    from tuya_irrigation_server.services.irrigation import IrrigationService
+    from tuya_irrigation_server.services.sync import SyncService
 
-    factory = create_session_factory(_engine)
-    session = factory()
+    session = _app.state.session_factory()
     try:
         repo = IrrigationRepository(session)
-        check_all_clusters(repo, dm=None)
+        cloud = TuyaCloud()
+        sync_svc = SyncService(repo, cloud)
+        irrigation_svc = IrrigationService(
+            repo=repo,
+            dm=None,
+            sync_service=sync_svc,
+            weather_client=_app.state.weather_client,
+            plant_db=_app.state.plant_db,
+        )
+        irrigation_svc.check_all_clusters()
         session.commit()
-    except Exception as e:
+    except Exception:
         session.rollback()
-        print(f"Check job error: {e}")
+        logger.exception("Check job failed")
     finally:
         session.close()
 
 
 def get_jobs() -> list[dict]:
     """List all scheduled jobs."""
-    jobs = []
-    for job in scheduler.get_jobs():
-        next_run = getattr(job, "next_run_time", None)
-        jobs.append(
-            {
-                "id": job.id,
-                "name": job.name,
-                "trigger": str(job.trigger),
-                "next_run_time": str(next_run) if next_run else None,
-            }
-        )
-    return jobs
+    return [
+        {
+            "id": job.id,
+            "name": job.name,
+            "trigger": str(job.trigger),
+            "next_run_time": str(next_run) if (next_run := getattr(job, "next_run_time", None)) else None,
+        }
+        for job in scheduler.get_jobs()
+    ]
