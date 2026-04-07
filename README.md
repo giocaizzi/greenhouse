@@ -29,47 +29,6 @@ uv run tuya-irrigation check --all    # check all clusters
 - **Background scheduling** — APScheduler syncs sensors every 30 min and checks clusters every 6 hours
 - **REST API + CLI** — full FastAPI server with OpenAPI docs at `/docs`, thin Typer CLI client
 
-## Architecture
-
-```
-CLI (Typer) ──── HTTP ────→ Server (FastAPI) ──→ Core (logic, learning, repository)
-                                │                        │
-                                ├── APScheduler          ├── SQLAlchemy v2 → SQLite
-                                └── Weather (Open-Meteo)  └── tinytuya → Tuya Cloud
-```
-
-<details>
-<summary>Package structure</summary>
-
-```
-tuya-irrigation/
-├── libs/
-│   ├── tuya-irrigation-core/         # Domain models, business logic, device control
-│   │   └── tuya_irrigation_core/
-│   │       ├── logic/                # Decision engine (6 modules)
-│   │       ├── learning/             # Efficiency analysis (5 modules)
-│   │       ├── models.py             # SQLAlchemy v2 ORM
-│   │       ├── repository.py         # Data access layer
-│   │       ├── schemas.py            # Pydantic v2 request/response
-│   │       ├── cloud.py              # Tuya Cloud API client
-│   │       ├── devices.py            # Device control (Cloud + Local v3.5)
-│   │       └── ...
-│   ├── tuya-irrigation-server/       # FastAPI REST API
-│   │   └── tuya_irrigation_server/
-│   │       ├── routes/               # 7 route modules
-│   │       ├── services/             # 5 service modules
-│   │       ├── deps.py               # Dependency injection
-│   │       └── scheduler.py          # Background jobs
-│   └── tuya-irrigation-cli/          # Typer CLI (server-only)
-│       └── tuya_irrigation_cli/
-│           ├── commands/             # 7 command modules
-│           └── client.py             # httpx API client
-├── data/                             # plant_database.json
-└── tests/                            # ~191 tests
-```
-
-</details>
-
 ## Getting Started
 
 ### Prerequisites
@@ -119,16 +78,6 @@ uv run tuya-irrigation irrigate 1        # smart irrigation pipeline
 uv run tuya-irrigation check --all       # check all clusters + alerts
 uv run tuya-irrigation learn 1           # learning report
 uv run tuya-irrigation stats 1 --days 7  # irrigation statistics
-```
-
-## Development
-
-```bash
-make check      # lint + test
-make test       # uv run pytest
-make lint       # uv run ruff check libs/ tests/
-make format     # uv run ruff format libs/ tests/
-make coverage   # pytest with coverage (60% threshold)
 ```
 
 ## License
