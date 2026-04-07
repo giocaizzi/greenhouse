@@ -1,6 +1,5 @@
 """Irrigator management and control commands."""
 
-import json
 from typing import Annotated
 
 import typer
@@ -33,7 +32,7 @@ def irrigator_add(
             tuya_device_id=device_id,
             name=name,
             type=type,
-            config=json.dumps(config) if config else None,
+            config=config if config else None,
         ),
     )
     output(data)

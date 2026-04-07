@@ -39,14 +39,26 @@ def init_scheduler(app: FastAPI, settings: Settings) -> None:
     )
 
 
+def _get_cloud() -> TuyaCloud | None:
+    """Create TuyaCloud client, returning None if credentials are missing."""
+    try:
+        return TuyaCloud()
+    except (ValueError, Exception):
+        return None
+
+
 def _sync_job() -> None:
     """Background job: sync all sensor data."""
     from tuya_irrigation_server.services.sync import SyncService
 
+    cloud = _get_cloud()
+    if cloud is None:
+        logger.debug("Sync job skipped: no Tuya credentials")
+        return
+
     session = _app.state.session_factory()
     try:
         repo = IrrigationRepository(session)
-        cloud = TuyaCloud()
         sync_svc = SyncService(repo, cloud)
         sync_svc.sync_all_sensors(hours=6)
         session.commit()
@@ -62,10 +74,11 @@ def _check_job() -> None:
     from tuya_irrigation_server.services.irrigation import IrrigationService
     from tuya_irrigation_server.services.sync import SyncService
 
+    cloud = _get_cloud()
+
     session = _app.state.session_factory()
     try:
         repo = IrrigationRepository(session)
-        cloud = TuyaCloud()
         sync_svc = SyncService(repo, cloud)
         irrigation_svc = IrrigationService(
             repo=repo,

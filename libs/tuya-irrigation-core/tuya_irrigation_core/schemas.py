@@ -65,7 +65,7 @@ class IrrigatorBase(BaseModel):
     tuya_device_id: str
     name: str
     type: str
-    config: str | None = None
+    config: dict | None = None
 
 
 class CreateIrrigatorRequest(IrrigatorBase):
@@ -95,7 +95,7 @@ class SensorBase(BaseModel):
     tuya_device_id: str
     name: str
     type: str
-    config: str | None = None
+    config: dict | None = None
     plant_id: int | None = None
 
 

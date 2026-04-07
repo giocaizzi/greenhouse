@@ -189,7 +189,7 @@ def stats_export(cluster_id: int, repo: RepoDep, days: int = Query(default=7, ge
 
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(["timestamp", "date", "time", "irrigator", "action", "duration_min", "trigger", "notes"])
+    writer.writerow(["timestamp", "date", "time", "irrigator", "action", "duration_minutes", "triggered_by", "notes"])
     irrigators = repo.get_irrigators_in_cluster(cluster_id)
     for irrigator in irrigators:
         events = repo.get_recent_events(irrigator.id, hours=days * 24)
