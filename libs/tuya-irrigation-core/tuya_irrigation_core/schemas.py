@@ -1,6 +1,8 @@
 """Pydantic v2 request/response schemas for the irrigation API."""
 
-from pydantic import BaseModel, ConfigDict
+import json
+
+from pydantic import BaseModel, ConfigDict, field_validator
 
 # --- Cluster ---
 
@@ -78,6 +80,13 @@ class IrrigatorResponse(IrrigatorBase):
     id: int
     cluster_id: int
 
+    @field_validator("config", mode="before")
+    @classmethod
+    def parse_config(cls, v):
+        if isinstance(v, str):
+            return json.loads(v)
+        return v
+
 
 class StartIrrigatorRequest(BaseModel):
     minutes: int | None = None
@@ -108,6 +117,13 @@ class SensorResponse(SensorBase):
 
     id: int
     cluster_id: int
+
+    @field_validator("config", mode="before")
+    @classmethod
+    def parse_config(cls, v):
+        if isinstance(v, str):
+            return json.loads(v)
+        return v
 
 
 # --- Sensor Reading ---
