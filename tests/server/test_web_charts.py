@@ -80,3 +80,28 @@ def test_plant_chart_fragment(seeded_client):
 def test_plant_chart_fragment_invalid_metric(seeded_client):
     resp = seeded_client.get("/clusters/1/plants/1/chart-fragment?metric=bogus")
     assert resp.status_code == 400
+
+
+def test_cluster_detail_includes_chart_payloads(seeded_client):
+    resp = seeded_client.get("/clusters/1")
+    assert resp.status_code == 200
+    # Inline chart JSON blocks for each metric
+    for metric in ("soil_moisture", "temperature", "light", "env_humidity"):
+        assert f'id="chart-data-{metric}"' in resp.text
+
+
+def test_cluster_chart_fragment(seeded_client):
+    resp = seeded_client.get("/clusters/1/chart-fragment?metric=temperature&hours=168")
+    assert resp.status_code == 200
+    assert "canvas" in resp.text.lower()
+    assert 'id="chart-data-temperature"' in resp.text
+
+
+def test_cluster_chart_fragment_invalid_metric(seeded_client):
+    resp = seeded_client.get("/clusters/1/chart-fragment?metric=bogus")
+    assert resp.status_code == 400
+
+
+def test_cluster_chart_fragment_404(client):
+    resp = client.get("/clusters/9999/chart-fragment")
+    assert resp.status_code == 404

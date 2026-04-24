@@ -69,6 +69,32 @@
   <div id="action-result" aria-live="polite"></div>
 </article>
 
+<article>
+  <header>
+    <strong>Charts</strong>
+    <nav>
+      <ul>
+        {% for h in allowed_hours %}
+          <li>
+            {% if h == hours %}
+              <strong>{{ h }}h</strong>
+            {% else %}
+              <a href="/clusters/{{ cluster.id }}?hours={{ h }}">{{ h }}h</a>
+            {% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+    </nav>
+  </header>
+  {% for metric in metrics %}
+    <section>
+      <h4>{{ metric.replace("_", " ") | title }}</h4>
+      {% set payload_json = chart_payloads[metric] %}
+      {% include "partials/_chart_panel.html" %}
+    </section>
+  {% endfor %}
+</article>
+
 {% if status.plants %}
 <article>
   <header><strong>Plants</strong></header>
