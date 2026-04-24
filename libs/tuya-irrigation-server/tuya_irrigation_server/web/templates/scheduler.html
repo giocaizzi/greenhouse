@@ -1,0 +1,35 @@
+{% extends "_base.html" %}
+{% block title %}Scheduler · Tuya Irrigation{% endblock %}
+{% block content %}
+<h1>Scheduler</h1>
+
+{% if not scheduler_running %}
+  <p>Scheduler is not running. Start the server with <code>enable_scheduler=True</code>.</p>
+{% elif not jobs %}
+  <p>Scheduler running. No jobs currently scheduled.</p>
+{% else %}
+<article>
+  <header><strong>{{ jobs|length }} scheduled job{{ "" if jobs|length == 1 else "s" }}</strong></header>
+  <table role="grid">
+    <thead><tr><th>ID</th><th>Name</th><th>Trigger</th><th>Next run</th><th></th></tr></thead>
+    <tbody>
+      {% for job in jobs %}
+      <tr>
+        <td><code>{{ job.id }}</code></td>
+        <td>{{ job.name }}</td>
+        <td><small>{{ job.trigger }}</small></td>
+        <td><small>{{ job.next_run_time or "—" }}</small></td>
+        <td>
+          <button hx-post="/scheduler/jobs/{{ job.id }}/delete"
+                  hx-target="closest tr"
+                  hx-swap="outerHTML swap:200ms"
+                  hx-confirm="Delete job {{ job.id }}?"
+                  class="secondary">Delete</button>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</article>
+{% endif %}
+{% endblock %}

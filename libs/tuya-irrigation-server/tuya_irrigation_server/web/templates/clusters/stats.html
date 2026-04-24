@@ -1,0 +1,64 @@
+{% extends "_base.html" %}
+{% block title %}Stats · {{ cluster.name }}{% endblock %}
+{% block content %}
+<hgroup>
+  <h1>Stats</h1>
+  <p><a href="/clusters/{{ cluster.id }}">{{ cluster.name }}</a> · last {{ days }} day{{ "" if days == 1 else "s" }}</p>
+</hgroup>
+
+<form method="get" action="/clusters/{{ cluster.id }}/stats">
+  <div class="grid">
+    <label>Days <input type="number" name="days" value="{{ days }}" min="1" max="365"></label>
+    <button type="submit">Apply</button>
+    <a href="/clusters/{{ cluster.id }}/stats/export?days={{ days }}" role="button" class="secondary" download>Export CSV</a>
+  </div>
+</form>
+
+{% if stats.get("error") %}
+  <p>{{ stats.error }}</p>
+{% else %}
+<article>
+  <header><strong>Summary</strong></header>
+  <div class="grid">
+    <div>
+      <small>Total events</small>
+      <h3>{{ stats.total_events }}</h3>
+    </div>
+    <div>
+      <small>Total duration</small>
+      <h3>{{ stats.total_duration_minutes | format_minutes }}</h3>
+    </div>
+    <div>
+      <small>Avg per run</small>
+      <h3>{{ "%.1f min" | format(stats.avg_duration_minutes) }}</h3>
+    </div>
+    <div>
+      <small>Frequency</small>
+      <h3>{{ "%.2f/day" | format(stats.frequency_per_day) }}</h3>
+    </div>
+  </div>
+</article>
+
+{% if stats.events_by_type %}
+<article>
+  <header><strong>By action</strong></header>
+  <table><tbody>
+    {% for action, count in stats.events_by_type.items() %}
+      <tr><td>{{ action }}</td><td><strong>{{ count }}</strong></td></tr>
+    {% endfor %}
+  </tbody></table>
+</article>
+{% endif %}
+
+{% if stats.events_by_trigger %}
+<article>
+  <header><strong>By trigger</strong></header>
+  <table><tbody>
+    {% for trigger, count in stats.events_by_trigger.items() %}
+      <tr><td>{{ trigger }}</td><td><strong>{{ count }}</strong></td></tr>
+    {% endfor %}
+  </tbody></table>
+</article>
+{% endif %}
+{% endif %}
+{% endblock %}

@@ -3,6 +3,7 @@
 from fastapi import APIRouter
 
 from tuya_irrigation_server.web.routes import (
+    analytics,
     clusters,
     configs,
     fragments,
@@ -22,3 +23,4 @@ web_router.include_router(sensors.router)
 web_router.include_router(irrigators.router)
 web_router.include_router(configs.router)
 web_router.include_router(operations.router)
+web_router.include_router(analytics.router)

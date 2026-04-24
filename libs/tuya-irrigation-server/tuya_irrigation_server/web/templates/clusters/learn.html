@@ -1,0 +1,27 @@
+{% extends "_base.html" %}
+{% block title %}Learning report · {{ cluster.name }}{% endblock %}
+{% block content %}
+<hgroup>
+  <h1>Learning report</h1>
+  <p><a href="/clusters/{{ cluster.id }}">{{ cluster.name }}</a></p>
+</hgroup>
+
+{% if alerts %}
+<article>
+  <header><strong>Alerts</strong> ({{ alerts|length }})</header>
+  <ul>
+    {% for a in alerts %}
+      <li>
+        <span class="badge-{{ a.severity | severity_class }}">{{ a.severity }}</span>
+        <strong>{{ a.type }}</strong> — {{ a.message }}
+      </li>
+    {% endfor %}
+  </ul>
+</article>
+{% endif %}
+
+<article>
+  <header><strong>Report</strong></header>
+  <pre style="white-space: pre-wrap">{{ report }}</pre>
+</article>
+{% endblock %}

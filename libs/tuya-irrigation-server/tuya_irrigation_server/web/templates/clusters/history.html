@@ -1,0 +1,71 @@
+{% extends "_base.html" %}
+{% block title %}History · {{ history.cluster_name }}{% endblock %}
+{% block content %}
+<hgroup>
+  <h1>History</h1>
+  <p><a href="/clusters/{{ cluster_id }}">{{ history.cluster_name }}</a></p>
+</hgroup>
+
+<form method="get" action="/clusters/{{ cluster_id }}/history">
+  <div class="grid">
+    <label>Hours back <input type="number" name="hours" value="{{ hours }}" min="1"></label>
+    <label>Limit per sensor <input type="number" name="limit" value="{{ limit }}" min="1"></label>
+    <button type="submit">Apply</button>
+  </div>
+</form>
+
+<article>
+  <header><strong>Sensor readings</strong></header>
+  {% for sensor in history.sensors %}
+    <h4>{{ sensor.sensor_name }} <small>({{ sensor.readings|length }})</small></h4>
+    {% if sensor.readings %}
+    <div class="scrollable">
+    <table>
+      <thead><tr><th>Time</th><th>Soil</th><th>Temp</th><th>Humidity</th><th>Light</th><th>Battery</th></tr></thead>
+      <tbody>
+        {% for r in sensor.readings %}
+        <tr>
+          <td><small>{{ r.timestamp | format_ts }}</small></td>
+          <td>{% if r.soil_moisture is not none %}{{ "%.0f%%" | format(r.soil_moisture) }}{% else %}—{% endif %}</td>
+          <td>{% if r.temperature is not none %}{{ "%.1f°C" | format(r.temperature) }}{% else %}—{% endif %}</td>
+          <td>{% if r.env_humidity is not none %}{{ "%.0f%%" | format(r.env_humidity) }}{% else %}—{% endif %}</td>
+          <td>{% if r.light is not none %}{{ r.light }}{% else %}—{% endif %}</td>
+          <td><small>{{ r.battery_state or "—" }}</small></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    {% else %}
+      <p><small>No readings in window.</small></p>
+    {% endif %}
+  {% endfor %}
+</article>
+
+<article>
+  <header><strong>Irrigation events</strong></header>
+  {% for irr in history.irrigators %}
+    <h4>{{ irr.irrigator_name }} <small>({{ irr.events|length }})</small></h4>
+    {% if irr.events %}
+    <div class="scrollable">
+    <table>
+      <thead><tr><th>Time</th><th>Action</th><th>Duration</th><th>Triggered by</th><th>Notes</th></tr></thead>
+      <tbody>
+        {% for e in irr.events %}
+        <tr>
+          <td><small>{{ e.timestamp | format_ts }}</small></td>
+          <td>{{ e.action }}</td>
+          <td>{{ e.duration_minutes | format_minutes }}</td>
+          <td><small>{{ e.triggered_by }}</small></td>
+          <td><small>{{ e.notes or "—" }}</small></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    {% else %}
+      <p><small>No events in window.</small></p>
+    {% endif %}
+  {% endfor %}
+</article>
+{% endblock %}
