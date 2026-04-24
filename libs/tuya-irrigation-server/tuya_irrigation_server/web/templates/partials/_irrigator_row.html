@@ -9,4 +9,26 @@
       <small>—</small>
     {% endif %}
   </td>
+  <td>
+    <form hx-post="/irrigators/{{ irr.id }}/start"
+          hx-target="#irr-action-{{ irr.id }}"
+          hx-swap="innerHTML"
+          hx-indicator="#irr-spin-{{ irr.id }}"
+          hx-confirm="Start {{ irr.name }} now?"
+          style="display:inline">
+      <input type="number" name="minutes" placeholder="min" min="1" style="width:5rem">
+      <button type="submit">▶ Start</button>
+    </form>
+    <form hx-post="/irrigators/{{ irr.id }}/stop"
+          hx-target="#irr-action-{{ irr.id }}"
+          hx-swap="innerHTML"
+          hx-indicator="#irr-spin-{{ irr.id }}"
+          hx-confirm="Stop {{ irr.name }}?"
+          style="display:inline">
+      <button type="submit" class="secondary">■ Stop</button>
+    </form>
+    <a href="/irrigators/{{ irr.id }}/log-manual" role="button" class="secondary">Log manual</a>
+    <span id="irr-spin-{{ irr.id }}" class="htmx-indicator" aria-busy="true"></span>
+    <div id="irr-action-{{ irr.id }}" style="display:inline"></div>
+  </td>
 </tr>

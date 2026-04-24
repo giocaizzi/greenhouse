@@ -29,5 +29,43 @@
     {% endfor %}
   </div>
   <p><a href="/clusters/new" role="button" class="secondary">+ Add cluster</a></p>
+
+  <article>
+    <header><strong>Global actions</strong></header>
+    <div class="grid">
+      <form hx-post="/sync"
+            hx-target="#dashboard-action-result"
+            hx-indicator="#spin-sync"
+            hx-swap="innerHTML">
+        <fieldset>
+          <legend>Sync sensors</legend>
+          <label>Hours back <input type="number" name="hours" value="24" min="1" style="width:6rem"></label>
+          <button type="submit" class="secondary">Sync</button>
+          <span id="spin-sync" class="htmx-indicator" aria-busy="true"></span>
+        </fieldset>
+      </form>
+      <form hx-post="/check"
+            hx-target="#dashboard-action-result"
+            hx-indicator="#spin-checkall"
+            hx-swap="innerHTML">
+        <fieldset>
+          <legend>Check all</legend>
+          <button type="submit" class="secondary">Run all-cluster check</button>
+          <span id="spin-checkall" class="htmx-indicator" aria-busy="true"></span>
+        </fieldset>
+      </form>
+      <form hx-post="/plants/sync"
+            hx-target="#dashboard-action-result"
+            hx-indicator="#spin-plants"
+            hx-swap="innerHTML">
+        <fieldset>
+          <legend>Sync plant care data</legend>
+          <button type="submit" class="secondary">Sync all plants</button>
+          <span id="spin-plants" class="htmx-indicator" aria-busy="true"></span>
+        </fieldset>
+      </form>
+    </div>
+    <div id="dashboard-action-result" aria-live="polite"></div>
+  </article>
 {% endif %}
 {% endblock %}

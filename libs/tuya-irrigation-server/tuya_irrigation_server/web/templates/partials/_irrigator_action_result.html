@@ -1,0 +1,8 @@
+<article>
+  {% if success %}
+    <header><strong>✓ {{ action }}</strong></header>
+  {% else %}
+    <header><span class="badge-danger">✗ {{ action }} failed</span></header>
+  {% endif %}
+  <p><small>{{ message }}</small></p>
+</article>

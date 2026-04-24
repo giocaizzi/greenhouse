@@ -27,6 +27,48 @@
   </div>
 </article>
 
+<article>
+  <header><strong>Actions</strong></header>
+  <div class="grid">
+    <form hx-post="/clusters/{{ cluster.id }}/irrigate"
+          hx-target="#action-result"
+          hx-swap="innerHTML"
+          hx-indicator="#spin-irrigate">
+      <fieldset>
+        <legend>Irrigate</legend>
+        <label><input type="checkbox" name="dry_run" value="on" checked> Dry run</label>
+        <label><input type="checkbox" name="no_sync" value="on"> Skip sync</label>
+        <label>Temp override (°C) <input type="number" step="0.1" name="temp_override"></label>
+        <button type="submit">Run</button>
+        <span id="spin-irrigate" class="htmx-indicator" aria-busy="true"></span>
+      </fieldset>
+    </form>
+
+    <form hx-get="/clusters/{{ cluster.id }}/monitor"
+          hx-target="#action-result"
+          hx-swap="innerHTML"
+          hx-indicator="#spin-monitor">
+      <fieldset>
+        <legend>Monitor sensors</legend>
+        <button type="submit" class="secondary">Run monitor</button>
+        <span id="spin-monitor" class="htmx-indicator" aria-busy="true"></span>
+      </fieldset>
+    </form>
+
+    <form hx-post="/clusters/{{ cluster.id }}/check"
+          hx-target="#action-result"
+          hx-swap="innerHTML"
+          hx-indicator="#spin-check">
+      <fieldset>
+        <legend>Check</legend>
+        <button type="submit" class="secondary">Check this cluster</button>
+        <span id="spin-check" class="htmx-indicator" aria-busy="true"></span>
+      </fieldset>
+    </form>
+  </div>
+  <div id="action-result" aria-live="polite"></div>
+</article>
+
 {% if status.plants %}
 <article>
   <header><strong>Plants</strong></header>
@@ -45,7 +87,7 @@
 <article>
   <header><strong>Irrigators</strong></header>
   <table>
-    <thead><tr><th>Name</th><th>Type</th><th>Recent events (48h)</th><th>Last action</th></tr></thead>
+    <thead><tr><th>Name</th><th>Type</th><th>Recent events (48h)</th><th>Last action</th><th>Controls</th></tr></thead>
     <tbody>
       {% for irr in status.irrigators %}
         {% include "partials/_irrigator_row.html" %}

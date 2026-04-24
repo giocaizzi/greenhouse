@@ -1,0 +1,17 @@
+<article>
+  <header><strong>Sync result</strong>{% if result.kind %} · {{ result.kind }}{% endif %}</header>
+  {% if "total_synced" in result %}
+    <p>
+      Synced {{ result.total_synced or 0 }} readings
+      ({{ result.total_new or 0 }} new, {{ result.total_live or 0 }} live)
+    </p>
+  {% elif "synced" in result %}
+    <p>Synced {{ result.synced }} plant{{ "" if result.synced == 1 else "s" }}</p>
+  {% endif %}
+  {% if result.errors %}
+    <details>
+      <summary><span class="badge-warning">{{ result.errors|length }} error{{ "" if result.errors|length == 1 else "s" }}</span></summary>
+      <ul>{% for e in result.errors %}<li>{{ e }}</li>{% endfor %}</ul>
+    </details>
+  {% endif %}
+</article>

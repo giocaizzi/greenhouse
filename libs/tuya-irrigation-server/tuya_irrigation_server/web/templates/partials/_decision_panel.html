@@ -1,0 +1,23 @@
+<article>
+  <header>
+    <strong>Irrigation decision:</strong>
+    <span class="badge-{{ result.action | decision_badge }}">{{ result.action }}</span>
+    {% if result.confidence is not none %}
+      · confidence {{ "%.0f%%" | format(result.confidence * 100) }}
+    {% endif %}
+  </header>
+  {% if result.reason %}
+    <p>{{ result.reason }}</p>
+  {% endif %}
+  <dl>
+    {% if result.duration_minutes %}<dt>Duration</dt><dd>{{ result.duration_minutes | format_minutes }}</dd>{% endif %}
+    {% if result.interval_hours %}<dt>Interval</dt><dd>every {{ result.interval_hours }}h</dd>{% endif %}
+    {% if result.temperature is not none %}<dt>Temperature</dt><dd>{{ "%.1f°C" | format(result.temperature) }} <small>({{ result.temperature_source or "—" }})</small></dd>{% endif %}
+  </dl>
+  {% if result.stress_indicators %}
+    <details>
+      <summary>Stress indicators</summary>
+      <pre><code>{{ result.stress_indicators }}</code></pre>
+    </details>
+  {% endif %}
+</article>

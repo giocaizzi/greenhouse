@@ -1,0 +1,30 @@
+<article>
+  <header>
+    <strong>Check result</strong>
+    {% if has_alerts %}<span class="badge-warning">· alerts</span>{% endif %}
+  </header>
+  {% for r in results %}
+    <section>
+      <h4>{{ r.cluster_name or "cluster " ~ r.cluster_id }}</h4>
+      {% if r.action %}
+        <p>
+          <span class="badge-{{ r.action | decision_badge }}">{{ r.action }}</span>
+          {% if r.notes %}<small>— {{ r.notes }}</small>{% endif %}
+        </p>
+      {% endif %}
+      {% if r.alerts %}
+        <ul>
+          {% for a in r.alerts %}
+            <li><span class="badge-{{ a.severity | severity_class }}">{{ a.severity }}</span> {{ a.message }}</li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+      {% if r.maintenance %}
+        <details>
+          <summary>Maintenance ({{ r.maintenance | length }})</summary>
+          <ul>{% for m in r.maintenance %}<li>{{ m.message }}</li>{% endfor %}</ul>
+        </details>
+      {% endif %}
+    </section>
+  {% endfor %}
+</article>
