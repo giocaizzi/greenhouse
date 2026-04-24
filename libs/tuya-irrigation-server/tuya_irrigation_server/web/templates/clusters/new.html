@@ -1,0 +1,23 @@
+{% extends "_base.html" %}
+{% block title %}New cluster · Tuya Irrigation{% endblock %}
+{% block content %}
+<h1>New cluster</h1>
+
+<form method="post" action="/clusters">
+  <label for="name">Name
+    <input type="text" id="name" name="name" placeholder="Living room" required>
+  </label>
+  <label for="location">Location <small>(optional)</small>
+    <input type="text" id="location" name="location" placeholder="South window">
+  </label>
+  <label for="environment">Environment
+    <select id="environment" name="environment" required>
+      <option value="indoor" selected>Indoor</option>
+      <option value="outdoor">Outdoor</option>
+      <option value="greenhouse">Greenhouse</option>
+    </select>
+  </label>
+  <button type="submit">Create cluster</button>
+  <a href="/clusters" role="button" class="secondary">Cancel</a>
+</form>
+{% endblock %}

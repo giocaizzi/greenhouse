@@ -1,0 +1,54 @@
+{% extends "_base.html" %}
+{% block title %}Add plant · {{ cluster.name }}{% endblock %}
+{% block content %}
+<hgroup>
+  <h1>Add plant</h1>
+  <p>to cluster <a href="/clusters/{{ cluster.id }}">{{ cluster.name }}</a></p>
+</hgroup>
+
+<form method="post" action="/clusters/{{ cluster.id }}/plants">
+  <label for="species">Species
+    <input type="text" id="species" name="species" placeholder="Monstera deliciosa" required>
+  </label>
+  <div class="grid">
+    <label for="category">Category
+      <input type="text" id="category" name="category" placeholder="tropical">
+    </label>
+    <label for="water_needs">Water needs
+      <select id="water_needs" name="water_needs">
+        <option value="">—</option>
+        <option value="low">low</option>
+        <option value="medium">medium</option>
+        <option value="high">high</option>
+      </select>
+    </label>
+    <label for="light_needs">Light needs
+      <select id="light_needs" name="light_needs">
+        <option value="">—</option>
+        <option value="low">low</option>
+        <option value="medium">medium</option>
+        <option value="high">high</option>
+      </select>
+    </label>
+  </div>
+  <fieldset>
+    <legend>Ideal temperature (°C)</legend>
+    <div class="grid">
+      <label for="ideal_temp_min">Min <input type="number" step="0.1" id="ideal_temp_min" name="ideal_temp_min"></label>
+      <label for="ideal_temp_max">Max <input type="number" step="0.1" id="ideal_temp_max" name="ideal_temp_max"></label>
+    </div>
+  </fieldset>
+  <fieldset>
+    <legend>Ideal humidity (%)</legend>
+    <div class="grid">
+      <label for="ideal_humidity_min">Min <input type="number" step="1" id="ideal_humidity_min" name="ideal_humidity_min"></label>
+      <label for="ideal_humidity_max">Max <input type="number" step="1" id="ideal_humidity_max" name="ideal_humidity_max"></label>
+    </div>
+  </fieldset>
+  <label for="notes">Notes <small>(optional)</small>
+    <textarea id="notes" name="notes" rows="3"></textarea>
+  </label>
+  <button type="submit">Add plant</button>
+  <a href="/clusters/{{ cluster.id }}/plants" role="button" class="secondary">Cancel</a>
+</form>
+{% endblock %}

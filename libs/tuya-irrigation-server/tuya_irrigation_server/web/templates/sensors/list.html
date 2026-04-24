@@ -1,0 +1,31 @@
+{% extends "_base.html" %}
+{% block title %}Sensors · {{ cluster.name }}{% endblock %}
+{% block content %}
+<hgroup>
+  <h1>Sensors</h1>
+  <p><a href="/clusters/{{ cluster.id }}">{{ cluster.name }}</a> · {{ sensors|length }} sensor{{ "" if sensors|length == 1 else "s" }}</p>
+</hgroup>
+
+{% if not sensors %}
+  <p>No sensors yet.</p>
+{% else %}
+<table role="grid">
+  <thead><tr><th>Name</th><th>Type</th><th>Device ID</th><th>Plant</th></tr></thead>
+  <tbody>
+    {% for sensor in sensors %}
+    <tr>
+      <td><strong>{{ sensor.name }}</strong></td>
+      <td><small>{{ sensor.type }}</small></td>
+      <td><code>{{ sensor.tuya_device_id }}</code></td>
+      <td>
+        {% if sensor.plant_id and sensor.plant_id in plants %}
+          <a href="/clusters/{{ cluster.id }}/plants/{{ sensor.plant_id }}">{{ plants[sensor.plant_id].species }}</a>
+        {% else %}—{% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+<p><a href="/clusters/{{ cluster.id }}/sensors/new" role="button">+ Add sensor</a></p>
+{% endblock %}

@@ -2,9 +2,13 @@
 
 from fastapi import APIRouter
 
-from tuya_irrigation_server.web.routes import clusters, fragments, pages
+from tuya_irrigation_server.web.routes import clusters, configs, fragments, irrigators, pages, plants, sensors
 
 web_router = APIRouter(include_in_schema=False)
 web_router.include_router(pages.router)
 web_router.include_router(fragments.router)
 web_router.include_router(clusters.router)
+web_router.include_router(plants.router)
+web_router.include_router(sensors.router)
+web_router.include_router(irrigators.router)
+web_router.include_router(configs.router)

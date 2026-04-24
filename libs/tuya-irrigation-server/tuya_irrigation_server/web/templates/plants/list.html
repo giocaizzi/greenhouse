@@ -1,0 +1,38 @@
+{% extends "_base.html" %}
+{% block title %}Plants · {{ cluster.name }}{% endblock %}
+{% block content %}
+<hgroup>
+  <h1>Plants</h1>
+  <p><a href="/clusters/{{ cluster.id }}">{{ cluster.name }}</a> · {{ plants|length }} plant{{ "" if plants|length == 1 else "s" }}</p>
+</hgroup>
+
+{% if not plants %}
+  <p>No plants yet.</p>
+{% else %}
+<table role="grid">
+  <thead><tr><th>Species</th><th>Category</th><th>Water</th><th>Light</th><th>Temp</th><th>Humidity</th><th></th></tr></thead>
+  <tbody>
+    {% for plant in plants %}
+    <tr>
+      <td><strong>{{ plant.species }}</strong></td>
+      <td>{{ plant.category or "—" }}</td>
+      <td>{{ plant.water_needs or "—" }}</td>
+      <td>{{ plant.light_needs or "—" }}</td>
+      <td>
+        {% if plant.ideal_temp_min is not none or plant.ideal_temp_max is not none %}
+          {{ plant.ideal_temp_min or "?" }}–{{ plant.ideal_temp_max or "?" }}°C
+        {% else %}—{% endif %}
+      </td>
+      <td>
+        {% if plant.ideal_humidity_min is not none or plant.ideal_humidity_max is not none %}
+          {{ plant.ideal_humidity_min or "?" }}–{{ plant.ideal_humidity_max or "?" }}%
+        {% else %}—{% endif %}
+      </td>
+      <td><a href="/clusters/{{ cluster.id }}/plants/{{ plant.id }}" role="button" class="secondary">Dashboard</a></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+<p><a href="/clusters/{{ cluster.id }}/plants/new" role="button">+ Add plant</a></p>
+{% endblock %}

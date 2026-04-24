@@ -1,0 +1,26 @@
+{% extends "_base.html" %}
+{% block title %}Irrigators · {{ cluster.name }}{% endblock %}
+{% block content %}
+<hgroup>
+  <h1>Irrigators</h1>
+  <p><a href="/clusters/{{ cluster.id }}">{{ cluster.name }}</a> · {{ irrigators|length }} device{{ "" if irrigators|length == 1 else "s" }}</p>
+</hgroup>
+
+{% if not irrigators %}
+  <p>No irrigators yet.</p>
+{% else %}
+<table role="grid">
+  <thead><tr><th>Name</th><th>Type</th><th>Device ID</th></tr></thead>
+  <tbody>
+    {% for irr in irrigators %}
+    <tr>
+      <td><strong>{{ irr.name }}</strong></td>
+      <td><small>{{ irr.type }}</small></td>
+      <td><code>{{ irr.tuya_device_id }}</code></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+<p><a href="/clusters/{{ cluster.id }}/irrigators/new" role="button">+ Add irrigator</a></p>
+{% endblock %}
