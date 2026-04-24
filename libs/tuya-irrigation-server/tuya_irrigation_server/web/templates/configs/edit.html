@@ -1,36 +1,57 @@
 {% extends "_base.html" %}
 {% block title %}Config · {{ cluster.name }}{% endblock %}
 {% block content %}
-<hgroup>
-  <h1>Irrigation config</h1>
-  <p><a href="/clusters/{{ cluster.id }}">{{ cluster.name }}</a></p>
-</hgroup>
+{% set current_tab = "config" %}
 
-<form method="post" action="/clusters/{{ cluster.id }}/config">
-  <label for="mode">Mode
-    <select id="mode" name="mode" required>
-      {% set current_mode = config.mode if config else "smart" %}
-      <option value="manual" {% if current_mode == "manual" %}selected{% endif %}>manual</option>
-      <option value="schedule" {% if current_mode == "schedule" %}selected{% endif %}>schedule</option>
-      <option value="smart" {% if current_mode == "smart" %}selected{% endif %}>smart</option>
-    </select>
-  </label>
-  <div class="grid">
-    <label for="duration_minutes">Duration (min)
-      <input type="number" id="duration_minutes" name="duration_minutes" min="1" step="1"
-             value="{{ config.duration_minutes if config and config.duration_minutes is not none else '' }}">
-    </label>
-    <label for="interval_hours">Interval (hours)
-      <input type="number" id="interval_hours" name="interval_hours" min="1" step="1"
-             value="{{ config.interval_hours if config and config.interval_hours is not none else '' }}">
-    </label>
+<div class="crumb">
+  <a href="/">home</a><span class="sep">/</span>
+  <a href="/clusters">clusters</a><span class="sep">/</span>
+  <a href="/clusters/{{ cluster.id }}">{{ cluster.name | lower }}</a><span class="sep">/</span>
+  <span class="here">config</span>
+</div>
+
+<section class="page-head">
+  <div class="page-head__title">
+    <h1>Irrigation config</h1>
+    <div class="page-head__meta">
+      <span>{{ cluster.name }}</span>
+    </div>
   </div>
-  <label>
-    <input type="checkbox" name="auto_run" value="on"
-           {% if not config or config.auto_run %}checked{% endif %}>
-    Auto-run enabled
-  </label>
-  <button type="submit">Save config</button>
-  <a href="/clusters/{{ cluster.id }}" role="button" class="secondary">Cancel</a>
-</form>
+</section>
+
+{% include "partials/_cluster_tabs.html" %}
+
+<article class="card form-card">
+  <form method="post" action="/clusters/{{ cluster.id }}/config">
+    <label for="mode">Mode
+      <select id="mode" name="mode" required>
+        {% set current_mode = config.mode if config else "smart" %}
+        <option value="manual" {% if current_mode == "manual" %}selected{% endif %}>manual</option>
+        <option value="schedule" {% if current_mode == "schedule" %}selected{% endif %}>schedule</option>
+        <option value="smart" {% if current_mode == "smart" %}selected{% endif %}>smart</option>
+      </select>
+      <small class="muted">smart = sensor-driven · schedule = time-based · manual = no auto-run</small>
+    </label>
+    <div class="grid">
+      <label for="duration_minutes">Duration (min)
+        <input type="number" id="duration_minutes" name="duration_minutes" min="1" step="1"
+               value="{{ config.duration_minutes if config and config.duration_minutes is not none else '' }}">
+      </label>
+      <label for="interval_hours">Interval (hours)
+        <input type="number" id="interval_hours" name="interval_hours" min="1" step="1"
+               value="{{ config.interval_hours if config and config.interval_hours is not none else '' }}">
+      </label>
+    </div>
+    <label>
+      <input type="checkbox" name="auto_run" value="on"
+             {% if not config or config.auto_run %}checked{% endif %}>
+      Auto-run enabled
+      <small class="muted">scheduler can trigger irrigation when this is on</small>
+    </label>
+    <div class="form-actions">
+      <a href="/clusters/{{ cluster.id }}" class="btn secondary">Cancel</a>
+      <button type="submit">Save config</button>
+    </div>
+  </form>
+</article>
 {% endblock %}

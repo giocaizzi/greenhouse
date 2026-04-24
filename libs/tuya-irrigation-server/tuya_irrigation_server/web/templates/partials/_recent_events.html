@@ -1,18 +1,21 @@
-<article>
-  <header><strong>Recent irrigation events</strong></header>
+<article class="card card--flush">
+  <div class="card__head">
+    <h3 class="card__title">Recent irrigation events</h3>
+    {% if recent_events %}<small class="muted">{{ recent_events|length }} in window</small>{% endif %}
+  </div>
   {% if not recent_events %}
-    <p><small>No events in the window.</small></p>
+    <div class="card__body"><p class="muted"><small>No events in the window.</small></p></div>
   {% else %}
-    <table role="grid">
-      <thead><tr><th>Time</th><th>Action</th><th>Duration</th><th>By</th><th>Notes</th></tr></thead>
+    <table>
+      <thead><tr><th>Time</th><th>Action</th><th class="num">Duration</th><th>By</th><th>Notes</th></tr></thead>
       <tbody>
         {% for e in recent_events %}
         <tr>
-          <td><small>{{ e.timestamp | format_ts }}</small></td>
-          <td>{{ e.action }}</td>
-          <td>{{ e.duration_minutes | format_minutes }}</td>
-          <td><small>{{ e.triggered_by }}</small></td>
-          <td><small>{{ e.notes or "—" }}</small></td>
+          <td data-th="Time"><small class="mono">{{ e.timestamp | format_ts }}</small></td>
+          <td data-th="Action">{{ e.action }}</td>
+          <td data-th="Duration" class="num">{{ e.duration_minutes | format_minutes }}</td>
+          <td data-th="By"><small class="muted">{{ e.triggered_by }}</small></td>
+          <td data-th="Notes"><small>{{ e.notes or "—" }}</small></td>
         </tr>
         {% endfor %}
       </tbody>

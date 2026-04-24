@@ -1,31 +1,66 @@
 {% extends "_base.html" %}
 {% block title %}Sensors · {{ cluster.name }}{% endblock %}
 {% block content %}
-<hgroup>
-  <h1>Sensors</h1>
-  <p><a href="/clusters/{{ cluster.id }}">{{ cluster.name }}</a> · {{ sensors|length }} sensor{{ "" if sensors|length == 1 else "s" }}</p>
-</hgroup>
+{% set current_tab = "sensors" %}
+{% set sensor_count = sensors|length %}
+
+<div class="crumb">
+  <a href="/">home</a><span class="sep">/</span>
+  <a href="/clusters">clusters</a><span class="sep">/</span>
+  <a href="/clusters/{{ cluster.id }}">{{ cluster.name | lower }}</a><span class="sep">/</span>
+  <span class="here">sensors</span>
+</div>
+
+<section class="page-head">
+  <div class="page-head__title">
+    <h1>{{ cluster.name }}</h1>
+    <div class="page-head__meta">
+      <span>{{ sensor_count }} sensor{{ "" if sensor_count == 1 else "s" }}</span>
+    </div>
+  </div>
+  <div class="page-head__actions">
+    <a href="/clusters/{{ cluster.id }}/sensors/new" class="btn">
+      <svg class="icon"><use href="/static/icons/sprite.svg#i-plus"></use></svg>
+      Add sensor
+    </a>
+  </div>
+</section>
+
+{% include "partials/_cluster_tabs.html" %}
 
 {% if not sensors %}
-  <p>No sensors yet.</p>
+  <article class="empty">
+    <span class="empty__icon"><svg class="icon"><use href="/static/icons/sprite.svg#i-pulse"></use></svg></span>
+    <h2>No sensors yet</h2>
+    <p>Pair a Tuya sensor to read soil, temperature, humidity, or light.</p>
+    <a href="/clusters/{{ cluster.id }}/sensors/new" role="button">Add sensor</a>
+  </article>
 {% else %}
-<table role="grid">
-  <thead><tr><th>Name</th><th>Type</th><th>Device ID</th><th>Plant</th></tr></thead>
-  <tbody>
-    {% for sensor in sensors %}
-    <tr>
-      <td><strong>{{ sensor.name }}</strong></td>
-      <td><small>{{ sensor.type }}</small></td>
-      <td><code>{{ sensor.tuya_device_id }}</code></td>
-      <td>
-        {% if sensor.plant_id and sensor.plant_id in plants %}
-          <a href="/clusters/{{ cluster.id }}/plants/{{ sensor.plant_id }}">{{ plants[sensor.plant_id].species }}</a>
-        {% else %}—{% endif %}
-      </td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
+<article class="card card--flush">
+  <table>
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Type</th>
+        <th>Device ID</th>
+        <th>Plant</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for sensor in sensors %}
+      <tr>
+        <td data-th="Name"><strong>{{ sensor.name }}</strong></td>
+        <td data-th="Type"><small class="muted">{{ sensor.type }}</small></td>
+        <td data-th="Device ID"><code>{{ sensor.tuya_device_id }}</code></td>
+        <td data-th="Plant">
+          {% if sensor.plant_id and sensor.plant_id in plants %}
+            <a href="/clusters/{{ cluster.id }}/plants/{{ sensor.plant_id }}"><i class="species">{{ plants[sensor.plant_id].species }}</i></a>
+          {% else %}<span class="muted">—</span>{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</article>
 {% endif %}
-<p><a href="/clusters/{{ cluster.id }}/sensors/new" role="button">+ Add sensor</a></p>
 {% endblock %}

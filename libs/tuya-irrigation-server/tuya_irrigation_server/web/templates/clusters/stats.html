@@ -1,64 +1,104 @@
 {% extends "_base.html" %}
 {% block title %}Stats · {{ cluster.name }}{% endblock %}
 {% block content %}
-<hgroup>
-  <h1>Stats</h1>
-  <p><a href="/clusters/{{ cluster.id }}">{{ cluster.name }}</a> · last {{ days }} day{{ "" if days == 1 else "s" }}</p>
-</hgroup>
+{% set current_tab = "stats" %}
 
-<form method="get" action="/clusters/{{ cluster.id }}/stats">
-  <div class="grid">
-    <label>Days <input type="number" name="days" value="{{ days }}" min="1" max="365"></label>
-    <button type="submit">Apply</button>
-    <a href="/clusters/{{ cluster.id }}/stats/export?days={{ days }}" role="button" class="secondary" download>Export CSV</a>
+<div class="crumb">
+  <a href="/">home</a><span class="sep">/</span>
+  <a href="/clusters">clusters</a><span class="sep">/</span>
+  <a href="/clusters/{{ cluster.id }}">{{ cluster.name | lower }}</a><span class="sep">/</span>
+  <span class="here">stats</span>
+</div>
+
+<section class="page-head">
+  <div class="page-head__title">
+    <h1>Stats</h1>
+    <div class="page-head__meta">
+      <span>{{ cluster.name }}</span>
+      <span class="dot"></span>
+      <span>last {{ days }} day{{ "" if days == 1 else "s" }}</span>
+    </div>
   </div>
-</form>
+  <div class="page-head__actions">
+    <a href="/clusters/{{ cluster.id }}/stats/export?days={{ days }}" class="btn secondary" download>
+      <svg class="icon"><use href="/static/icons/sprite.svg#i-download"></use></svg>
+      Export CSV
+    </a>
+  </div>
+</section>
+
+{% include "partials/_cluster_tabs.html" %}
+
+<article class="card form-card" style="max-width: none; margin-bottom: var(--sp-5);">
+  <form method="get" action="/clusters/{{ cluster.id }}/stats">
+    <div class="row">
+      <label style="margin: 0;">Days <input type="number" name="days" value="{{ days }}" min="1" max="365" style="width: 100px; margin: 0;"></label>
+      <button type="submit">Apply</button>
+    </div>
+  </form>
+</article>
 
 {% if stats.get("error") %}
-  <p>{{ stats.error }}</p>
+  <article class="card error-panel">
+    <p>{{ stats.error }}</p>
+  </article>
 {% else %}
-<article>
-  <header><strong>Summary</strong></header>
-  <div class="grid">
-    <div>
-      <small>Total events</small>
-      <h3>{{ stats.total_events }}</h3>
-    </div>
-    <div>
-      <small>Total duration</small>
-      <h3>{{ stats.total_duration_minutes | format_minutes }}</h3>
-    </div>
-    <div>
-      <small>Avg per run</small>
-      <h3>{{ "%.1f min" | format(stats.avg_duration_minutes) }}</h3>
-    </div>
-    <div>
-      <small>Frequency</small>
-      <h3>{{ "%.2f/day" | format(stats.frequency_per_day) }}</h3>
-    </div>
-  </div>
-</article>
 
+<section class="stat-grid">
+  <div class="stat">
+    <div class="stat__row"><span class="stat__label">Total events</span></div>
+    <div class="stat__value">{{ stats.total_events }}</div>
+    <div class="stat__hint"><span>over {{ days }}d</span></div>
+  </div>
+  <div class="stat">
+    <div class="stat__row"><span class="stat__label">Total duration</span></div>
+    <div class="stat__value">{{ stats.total_duration_minutes }}<span class="unit">min</span></div>
+    <div class="stat__hint"><span>{{ stats.total_duration_minutes | format_minutes }}</span></div>
+  </div>
+  <div class="stat">
+    <div class="stat__row"><span class="stat__label">Avg per run</span></div>
+    <div class="stat__value">{{ "%.1f" | format(stats.avg_duration_minutes) }}<span class="unit">min</span></div>
+    <div class="stat__hint"><span>per event</span></div>
+  </div>
+  <div class="stat">
+    <div class="stat__row"><span class="stat__label">Frequency</span></div>
+    <div class="stat__value">{{ "%.2f" | format(stats.frequency_per_day) }}<span class="unit">/day</span></div>
+    <div class="stat__hint"><span>events / day</span></div>
+  </div>
+</section>
+
+<div class="grid">
 {% if stats.events_by_type %}
-<article>
-  <header><strong>By action</strong></header>
-  <table><tbody>
-    {% for action, count in stats.events_by_type.items() %}
-      <tr><td>{{ action }}</td><td><strong>{{ count }}</strong></td></tr>
-    {% endfor %}
-  </tbody></table>
-</article>
+  <article class="card card--flush">
+    <div class="card__head"><h3 class="card__title">By action</h3></div>
+    <table>
+      <tbody>
+        {% for action, count in stats.events_by_type.items() %}
+          <tr>
+            <td>{{ action }}</td>
+            <td class="num"><strong>{{ count }}</strong></td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </article>
 {% endif %}
 
 {% if stats.events_by_trigger %}
-<article>
-  <header><strong>By trigger</strong></header>
-  <table><tbody>
-    {% for trigger, count in stats.events_by_trigger.items() %}
-      <tr><td>{{ trigger }}</td><td><strong>{{ count }}</strong></td></tr>
-    {% endfor %}
-  </tbody></table>
-</article>
+  <article class="card card--flush">
+    <div class="card__head"><h3 class="card__title">By trigger</h3></div>
+    <table>
+      <tbody>
+        {% for trigger, count in stats.events_by_trigger.items() %}
+          <tr>
+            <td>{{ trigger }}</td>
+            <td class="num"><strong>{{ count }}</strong></td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </article>
 {% endif %}
+</div>
 {% endif %}
 {% endblock %}

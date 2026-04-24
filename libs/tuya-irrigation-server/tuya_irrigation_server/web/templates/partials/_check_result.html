@@ -1,30 +1,36 @@
-<article>
-  <header>
-    <strong>Check result</strong>
-    {% if has_alerts %}<span class="badge-warning">· alerts</span>{% endif %}
-  </header>
-  {% for r in results %}
-    <section>
-      <h4>{{ r.cluster_name or "cluster " ~ r.cluster_id }}</h4>
-      {% if r.action %}
-        <p>
-          <span class="badge-{{ r.action | decision_badge }}">{{ r.action }}</span>
-          {% if r.notes %}<small>— {{ r.notes }}</small>{% endif %}
-        </p>
-      {% endif %}
-      {% if r.alerts %}
-        <ul>
-          {% for a in r.alerts %}
-            <li><span class="badge-{{ a.severity | severity_class }}">{{ a.severity }}</span> {{ a.message }}</li>
-          {% endfor %}
-        </ul>
-      {% endif %}
-      {% if r.maintenance %}
-        <details>
-          <summary>Maintenance ({{ r.maintenance | length }})</summary>
-          <ul>{% for m in r.maintenance %}<li>{{ m.message }}</li>{% endfor %}</ul>
-        </details>
-      {% endif %}
-    </section>
-  {% endfor %}
+<article class="card card--flush result-panel">
+  <div class="card__head">
+    <h3 class="card__title">Check result</h3>
+    {% if has_alerts %}<span class="badge-warning">alerts</span>{% endif %}
+  </div>
+  <div class="card__body" style="display:flex; flex-direction:column; gap: var(--sp-4);">
+    {% for r in results %}
+      <section>
+        <h4 style="display:flex; align-items:center; gap: var(--sp-3); margin-bottom: var(--sp-2);">
+          {{ r.cluster_name or "cluster " ~ r.cluster_id }}
+          {% if r.action %}<span class="badge-{{ r.action | decision_badge }}">{{ r.action }}</span>{% endif %}
+        </h4>
+        {% if r.notes %}<p class="muted"><small>{{ r.notes }}</small></p>{% endif %}
+        {% if r.alerts %}
+          <div style="display:flex; flex-direction:column; gap: var(--sp-2); margin-top: var(--sp-3);">
+            {% for a in r.alerts %}
+              <div class="alert alert--{{ a.severity | severity_class }}">
+                <span class="alert__icon"><svg class="icon"><use href="/static/icons/sprite.svg#i-warning"></use></svg></span>
+                <div>
+                  <p class="alert__title">{{ a.severity | title }}</p>
+                  <p class="alert__body">{{ a.message }}</p>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        {% endif %}
+        {% if r.maintenance %}
+          <details style="margin-top: var(--sp-3);">
+            <summary>Maintenance ({{ r.maintenance | length }})</summary>
+            <ul>{% for m in r.maintenance %}<li>{{ m.message }}</li>{% endfor %}</ul>
+          </details>
+        {% endif %}
+      </section>
+    {% endfor %}
+  </div>
 </article>

@@ -1,34 +1,52 @@
 {% extends "_base.html" %}
 {% block title %}Add sensor · {{ cluster.name }}{% endblock %}
 {% block content %}
-<hgroup>
-  <h1>Add sensor</h1>
-  <p>to cluster <a href="/clusters/{{ cluster.id }}">{{ cluster.name }}</a></p>
-</hgroup>
 
-<form method="post" action="/clusters/{{ cluster.id }}/sensors">
-  <label for="tuya_device_id">Tuya device ID
-    <input type="text" id="tuya_device_id" name="tuya_device_id" required>
-  </label>
-  <label for="name">Name
-    <input type="text" id="name" name="name" placeholder="Monstera moisture" required>
-  </label>
-  <label for="type">Type
-    <select id="type" name="type" required>
-      <option value="soil_moisture" selected>soil_moisture</option>
-      <option value="temp_humidity">temp_humidity</option>
-      <option value="light">light</option>
-    </select>
-  </label>
-  <label for="plant_id">Plant <small>(optional)</small>
-    <select id="plant_id" name="plant_id">
-      <option value="">— none —</option>
-      {% for plant in plants %}
-        <option value="{{ plant.id }}">{{ plant.species }}</option>
-      {% endfor %}
-    </select>
-  </label>
-  <button type="submit">Add sensor</button>
-  <a href="/clusters/{{ cluster.id }}/sensors" role="button" class="secondary">Cancel</a>
-</form>
+<div class="crumb">
+  <a href="/">home</a><span class="sep">/</span>
+  <a href="/clusters">clusters</a><span class="sep">/</span>
+  <a href="/clusters/{{ cluster.id }}">{{ cluster.name | lower }}</a><span class="sep">/</span>
+  <a href="/clusters/{{ cluster.id }}/sensors">sensors</a><span class="sep">/</span>
+  <span class="here">add</span>
+</div>
+
+<section class="page-head">
+  <div class="page-head__title">
+    <h1>Add sensor</h1>
+    <div class="page-head__meta">
+      <span>to <a href="/clusters/{{ cluster.id }}">{{ cluster.name }}</a></span>
+    </div>
+  </div>
+</section>
+
+<article class="card form-card">
+  <form method="post" action="/clusters/{{ cluster.id }}/sensors">
+    <label for="tuya_device_id">Tuya device ID
+      <input type="text" id="tuya_device_id" name="tuya_device_id" required autofocus>
+      <small class="muted">From the Tuya/SmartLife app device info</small>
+    </label>
+    <label for="name">Name
+      <input type="text" id="name" name="name" placeholder="Monstera moisture" required>
+    </label>
+    <label for="type">Type
+      <select id="type" name="type" required>
+        <option value="soil_moisture" selected>soil_moisture</option>
+        <option value="temp_humidity">temp_humidity</option>
+        <option value="light">light</option>
+      </select>
+    </label>
+    <label for="plant_id">Plant <small class="muted">(optional)</small>
+      <select id="plant_id" name="plant_id">
+        <option value="">— none —</option>
+        {% for plant in plants %}
+          <option value="{{ plant.id }}">{{ plant.species }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <div class="form-actions">
+      <a href="/clusters/{{ cluster.id }}/sensors" class="btn secondary">Cancel</a>
+      <button type="submit">Add sensor</button>
+    </div>
+  </form>
+</article>
 {% endblock %}

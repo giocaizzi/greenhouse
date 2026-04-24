@@ -1,7 +1,7 @@
 <tr>
-  <td>{{ plant.species }}</td>
-  <td>{{ plant.category or "—" }}</td>
-  <td>{{ plant.water_needs or "—" }}</td>
-  <td>{{ plant.light_needs or "—" }}</td>
-  <td><a href="/clusters/{{ plant.cluster_id }}/plants/{{ plant.id }}" role="button" class="secondary">Dashboard</a></td>
+  <td data-th="Species"><i class="species">{{ plant.species }}</i></td>
+  <td data-th="Category">{{ plant.category or "—" }}</td>
+  <td data-th="Water">{{ plant.water_needs or "—" }}</td>
+  <td data-th="Light">{{ plant.light_needs or "—" }}</td>
+  <td><a href="/clusters/{{ plant.cluster_id }}/plants/{{ plant.id }}" class="btn secondary btn-sm">Open<svg class="icon" style="width:13px;height:13px;"><use href="/static/icons/sprite.svg#i-arrow-right"></use></svg></a></td>
 </tr>

@@ -1,27 +1,53 @@
 {% extends "_base.html" %}
 {% block title %}Learning report · {{ cluster.name }}{% endblock %}
 {% block content %}
-<hgroup>
-  <h1>Learning report</h1>
-  <p><a href="/clusters/{{ cluster.id }}">{{ cluster.name }}</a></p>
-</hgroup>
+{% set current_tab = "learn" %}
+
+<div class="crumb">
+  <a href="/">home</a><span class="sep">/</span>
+  <a href="/clusters">clusters</a><span class="sep">/</span>
+  <a href="/clusters/{{ cluster.id }}">{{ cluster.name | lower }}</a><span class="sep">/</span>
+  <span class="here">learn</span>
+</div>
+
+<section class="page-head">
+  <div class="page-head__title">
+    <h1>Learning report</h1>
+    <div class="page-head__meta">
+      <span>{{ cluster.name }}</span>
+      {% if alerts %}<span class="dot"></span><span>{{ alerts|length }} alert{{ "" if alerts|length == 1 else "s" }}</span>{% endif %}
+    </div>
+  </div>
+</section>
+
+{% include "partials/_cluster_tabs.html" %}
 
 {% if alerts %}
-<article>
-  <header><strong>Alerts</strong> ({{ alerts|length }})</header>
-  <ul>
+<article class="card card--flush">
+  <div class="card__head">
+    <h3 class="card__title">Alerts <span class="n">{{ alerts|length }}</span></h3>
+  </div>
+  <div class="card__body" style="display: flex; flex-direction: column; gap: var(--sp-2);">
     {% for a in alerts %}
-      <li>
+      <div class="alert alert--{{ a.severity | severity_class }}">
+        <span class="alert__icon"><svg class="icon"><use href="/static/icons/sprite.svg#i-warning"></use></svg></span>
+        <div>
+          <p class="alert__title">{{ a.type | replace("_", " ") | title }}</p>
+          <p class="alert__body">{{ a.message }}</p>
+        </div>
         <span class="badge-{{ a.severity | severity_class }}">{{ a.severity }}</span>
-        <strong>{{ a.type }}</strong> — {{ a.message }}
-      </li>
+      </div>
     {% endfor %}
-  </ul>
+  </div>
 </article>
 {% endif %}
 
-<article>
-  <header><strong>Report</strong></header>
-  <pre style="white-space: pre-wrap">{{ report }}</pre>
+<article class="card card--flush">
+  <div class="card__head">
+    <h3 class="card__title">Report</h3>
+  </div>
+  <div class="card__body">
+    <pre class="report">{{ report }}</pre>
+  </div>
 </article>
 {% endblock %}

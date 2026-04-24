@@ -1,38 +1,76 @@
 {% extends "_base.html" %}
 {% block title %}Plants · {{ cluster.name }}{% endblock %}
 {% block content %}
-<hgroup>
-  <h1>Plants</h1>
-  <p><a href="/clusters/{{ cluster.id }}">{{ cluster.name }}</a> · {{ plants|length }} plant{{ "" if plants|length == 1 else "s" }}</p>
-</hgroup>
+{% set current_tab = "plants" %}
+{% set plant_count = plants|length %}
+
+<div class="crumb">
+  <a href="/">home</a><span class="sep">/</span>
+  <a href="/clusters">clusters</a><span class="sep">/</span>
+  <a href="/clusters/{{ cluster.id }}">{{ cluster.name | lower }}</a><span class="sep">/</span>
+  <span class="here">plants</span>
+</div>
+
+<section class="page-head">
+  <div class="page-head__title">
+    <h1>{{ cluster.name }}</h1>
+    <div class="page-head__meta">
+      <span>{{ plant_count }} plant{{ "" if plant_count == 1 else "s" }}</span>
+    </div>
+  </div>
+  <div class="page-head__actions">
+    <a href="/clusters/{{ cluster.id }}/plants/new" class="btn">
+      <svg class="icon"><use href="/static/icons/sprite.svg#i-plus"></use></svg>
+      Add plant
+    </a>
+  </div>
+</section>
+
+{% include "partials/_cluster_tabs.html" %}
 
 {% if not plants %}
-  <p>No plants yet.</p>
+  <article class="empty">
+    <span class="empty__icon"><svg class="icon"><use href="/static/icons/sprite.svg#i-flower"></use></svg></span>
+    <h2>No plants yet</h2>
+    <p>Add your first plant to this cluster.</p>
+    <a href="/clusters/{{ cluster.id }}/plants/new" role="button">Add plant</a>
+  </article>
 {% else %}
-<table role="grid">
-  <thead><tr><th>Species</th><th>Category</th><th>Water</th><th>Light</th><th>Temp</th><th>Humidity</th><th></th></tr></thead>
-  <tbody>
-    {% for plant in plants %}
-    <tr>
-      <td><strong>{{ plant.species }}</strong></td>
-      <td>{{ plant.category or "—" }}</td>
-      <td>{{ plant.water_needs or "—" }}</td>
-      <td>{{ plant.light_needs or "—" }}</td>
-      <td>
-        {% if plant.ideal_temp_min is not none or plant.ideal_temp_max is not none %}
-          {{ plant.ideal_temp_min or "?" }}–{{ plant.ideal_temp_max or "?" }}°C
-        {% else %}—{% endif %}
-      </td>
-      <td>
-        {% if plant.ideal_humidity_min is not none or plant.ideal_humidity_max is not none %}
-          {{ plant.ideal_humidity_min or "?" }}–{{ plant.ideal_humidity_max or "?" }}%
-        {% else %}—{% endif %}
-      </td>
-      <td><a href="/clusters/{{ cluster.id }}/plants/{{ plant.id }}" role="button" class="secondary">Dashboard</a></td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
+<article class="card card--flush">
+  <table>
+    <thead>
+      <tr>
+        <th>Species</th>
+        <th>Category</th>
+        <th>Water</th>
+        <th>Light</th>
+        <th>Temp</th>
+        <th>Humidity</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for plant in plants %}
+      <tr>
+        <td data-th="Species"><i class="species">{{ plant.species }}</i></td>
+        <td data-th="Category">{{ plant.category or "—" }}</td>
+        <td data-th="Water">{{ plant.water_needs or "—" }}</td>
+        <td data-th="Light">{{ plant.light_needs or "—" }}</td>
+        <td data-th="Temp">
+          {% if plant.ideal_temp_min is not none or plant.ideal_temp_max is not none %}
+            <span class="mono">{{ plant.ideal_temp_min or "?" }}–{{ plant.ideal_temp_max or "?" }}°C</span>
+          {% else %}—{% endif %}
+        </td>
+        <td data-th="Humidity">
+          {% if plant.ideal_humidity_min is not none or plant.ideal_humidity_max is not none %}
+            <span class="mono">{{ plant.ideal_humidity_min or "?" }}–{{ plant.ideal_humidity_max or "?" }}%</span>
+          {% else %}—{% endif %}
+        </td>
+        <td><a href="/clusters/{{ cluster.id }}/plants/{{ plant.id }}" class="btn secondary btn-sm">Open<svg class="icon" style="width:13px;height:13px;"><use href="/static/icons/sprite.svg#i-arrow-right"></use></svg></a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</article>
 {% endif %}
-<p><a href="/clusters/{{ cluster.id }}/plants/new" role="button">+ Add plant</a></p>
 {% endblock %}

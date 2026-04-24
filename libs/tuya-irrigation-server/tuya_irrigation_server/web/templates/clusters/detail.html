@@ -2,24 +2,203 @@
 {% block title %}{{ status.cluster.name }} · Tuya Irrigation{% endblock %}
 {% block content %}
 {% set cluster = status.cluster %}
-<hgroup>
-  <h1>{{ cluster.name }}</h1>
-  <p>{{ cluster.environment or "—" }} · {{ cluster.location or "no location" }}</p>
-</hgroup>
+{% set decision = status.decision %}
+{% set config = status.config %}
+{% set current_tab = "overview" %}
+{% set plant_count = status.plants|length %}
+{% set sensor_count = status.sensors|length %}
+{% set irrigator_count = status.irrigators|length %}
 
-<nav><ul>
-  <li><a href="/">← Dashboard</a></li>
-  <li><a href="/clusters/{{ cluster.id }}/plants">Plants ({{ status.plants|length }})</a></li>
-  <li><a href="/clusters/{{ cluster.id }}/sensors">Sensors ({{ status.sensors|length }})</a></li>
-  <li><a href="/clusters/{{ cluster.id }}/irrigators">Irrigators ({{ status.irrigators|length }})</a></li>
-  <li><a href="/clusters/{{ cluster.id }}/config">Config</a></li>
-  <li><a href="/clusters/{{ cluster.id }}/history">History</a></li>
-  <li><a href="/clusters/{{ cluster.id }}/stats">Stats</a></li>
-  <li><a href="/clusters/{{ cluster.id }}/learn">Learn</a></li>
-</ul></nav>
+{# Pre-compute a representative reading per metric type from any sensor that has one. #}
+{% set soil_reading = namespace(value=none) %}
+{% set temp_reading = namespace(value=none) %}
+{% set hum_reading = namespace(value=none) %}
+{% set light_reading = namespace(value=none) %}
+{% for s in status.sensors if s.last_reading %}
+  {% if soil_reading.value is none and s.last_reading.soil_moisture is not none %}{% set soil_reading.value = s.last_reading.soil_moisture %}{% endif %}
+  {% if temp_reading.value is none and s.last_reading.temperature is not none %}{% set temp_reading.value = s.last_reading.temperature %}{% endif %}
+  {% if hum_reading.value is none and s.last_reading.env_humidity is not none %}{% set hum_reading.value = s.last_reading.env_humidity %}{% endif %}
+  {% if light_reading.value is none and s.last_reading.light is not none %}{% set light_reading.value = s.last_reading.light %}{% endif %}
+{% endfor %}
 
+<div class="crumb">
+  <a href="/">home</a><span class="sep">/</span>
+  <a href="/clusters">clusters</a><span class="sep">/</span>
+  <span class="here">{{ cluster.name | lower }}</span>
+</div>
+
+<section class="page-head">
+  <div class="page-head__title">
+    <h1>{{ cluster.name }}</h1>
+    <div class="page-head__meta">
+      {% if cluster.environment %}<span>{{ cluster.environment }}</span><span class="dot"></span>{% endif %}
+      <span>{{ cluster.location or "no location" }}</span>
+      <span class="dot"></span>
+      <span>{{ plant_count }} plant{{ "" if plant_count == 1 else "s" }}</span>
+      <span class="dot"></span>
+      <span>{{ sensor_count }} sensor{{ "" if sensor_count == 1 else "s" }}</span>
+      {% if config %}
+        <span class="dot"></span>
+        <span class="badge-{{ 'ok' if config.auto_run else 'muted' }}">auto {{ config.auto_run | yesno("on", "off") }}</span>
+      {% endif %}
+    </div>
+  </div>
+</section>
+
+{% include "partials/_cluster_tabs.html" %}
+
+{# Decision hero — large, server-rendered from status #}
+{% if decision %}
+<section class="decision">
+  <div class="decision__left">
+    <span class="decision__pill">Decision · live</span>
+    <h2 class="decision__verb">
+      {{ decision.action | title }}<span class="muted">.</span>
+    </h2>
+    {% if decision.reason %}
+      <p class="decision__why">{{ decision.reason }}</p>
+    {% endif %}
+    <div class="row" style="gap: var(--sp-2); flex-wrap: wrap;">
+      <span class="badge-{{ decision.action | decision_badge }}">
+        {{- decision.action | upper -}}
+        {%- if decision.confidence is not none %} · {{ "%.0f%%" | format(decision.confidence * 100) }}{% endif -%}
+      </span>
+      {% if decision.get("duration_minutes") %}<span class="badge-muted">{{ decision.duration_minutes | format_minutes }}</span>{% endif %}
+      {% if decision.get("temperature") is not none %}<span class="badge-muted">{{ "%.1f°C" | format(decision.temperature) }}</span>{% endif %}
+    </div>
+  </div>
+  {% if config %}
+  <aside class="decision__side">
+    <h3>Schedule</h3>
+    <dl>
+      <dt>Mode</dt><dd><kbd>{{ config.mode }}</kbd></dd>
+      {% if config.duration_minutes %}<dt>Duration</dt><dd>{{ config.duration_minutes | format_minutes }}</dd>{% endif %}
+      {% if config.interval_hours %}<dt>Interval</dt><dd>every {{ config.interval_hours }}h</dd>{% endif %}
+      <dt>Auto-run</dt><dd>{{ config.auto_run | yesno("on", "off") }}</dd>
+      <dt>Sensors</dt><dd>{{ sensor_count }}</dd>
+      <dt>Irrigators</dt><dd>{{ irrigator_count }}</dd>
+    </dl>
+    <a href="/clusters/{{ cluster.id }}/config" class="btn secondary" style="margin-top: var(--sp-2);">Edit config</a>
+  </aside>
+  {% endif %}
+</section>
+{% endif %}
+
+{# Live readings — 4 stat tiles #}
+{% if status.sensors %}
+<section class="stat-grid">
+  <div class="stat">
+    <div class="stat__row">
+      <span class="stat__label"><svg class="icon"><use href="/static/icons/sprite.svg#i-drop"></use></svg>Soil moisture</span>
+    </div>
+    <div class="stat__value">
+      {% if soil_reading.value is not none %}{{ "%.1f" | format(soil_reading.value) }}<span class="unit">%</span>{% else %}<span class="muted">—</span>{% endif %}
+    </div>
+    <div class="stat__hint"><span>across {{ sensor_count }} sensor{{ "" if sensor_count == 1 else "s" }}</span></div>
+  </div>
+  <div class="stat">
+    <div class="stat__row">
+      <span class="stat__label"><svg class="icon"><use href="/static/icons/sprite.svg#i-thermometer-simple"></use></svg>Temperature</span>
+    </div>
+    <div class="stat__value">
+      {% if temp_reading.value is not none %}{{ "%.1f" | format(temp_reading.value) }}<span class="unit">°C</span>{% else %}<span class="muted">—</span>{% endif %}
+    </div>
+    <div class="stat__hint"><span>ambient</span></div>
+  </div>
+  <div class="stat">
+    <div class="stat__row">
+      <span class="stat__label"><svg class="icon"><use href="/static/icons/sprite.svg#i-drop"></use></svg>Humidity</span>
+    </div>
+    <div class="stat__value">
+      {% if hum_reading.value is not none %}{{ "%.0f" | format(hum_reading.value) }}<span class="unit">%</span>{% else %}<span class="muted">—</span>{% endif %}
+    </div>
+    <div class="stat__hint"><span>relative</span></div>
+  </div>
+  <div class="stat">
+    <div class="stat__row">
+      <span class="stat__label"><svg class="icon"><use href="/static/icons/sprite.svg#i-sun"></use></svg>Light</span>
+    </div>
+    <div class="stat__value">
+      {% if light_reading.value is not none %}{{ light_reading.value }}<span class="unit">lx</span>{% else %}<span class="muted">—</span>{% endif %}
+    </div>
+    <div class="stat__hint"><span>illuminance</span></div>
+  </div>
+</section>
+{% endif %}
+
+{# Action bar — Irrigate / Monitor / Check #}
+<article class="action-bar" aria-labelledby="cluster-actions">
+  <header>
+    <strong id="cluster-actions">Actions</strong>
+    <small>Run irrigation logic, monitor sensors, or audit cluster.</small>
+  </header>
+  <div class="action-bar__row">
+    <form hx-post="/clusters/{{ cluster.id }}/irrigate"
+          hx-target="#action-result"
+          hx-swap="innerHTML"
+          hx-indicator="#spin-irrigate"
+          class="action-bar__form">
+      <span class="action-bar__label">
+        <svg class="icon"><use href="/static/icons/sprite.svg#i-drop"></use></svg>
+        Irrigate
+      </span>
+      <div class="action-bar__inputs" style="flex-direction: column; align-items: stretch; gap: var(--sp-2);">
+        <label style="display: flex; gap: var(--sp-2); margin: 0; font-weight: 400;">
+          <input type="checkbox" name="dry_run" value="on" checked> <small>Dry run (don't actuate)</small>
+        </label>
+        <label style="display: flex; gap: var(--sp-2); margin: 0; font-weight: 400;">
+          <input type="checkbox" name="no_sync" value="on"> <small>Skip cloud sync</small>
+        </label>
+        <label style="display: flex; gap: var(--sp-2); align-items: center; margin: 0; font-weight: 400;">
+          <small>Temp override</small>
+          <input type="number" step="0.1" name="temp_override" placeholder="°C" class="action-bar__num" style="width: 90px;">
+        </label>
+        <div class="row" style="gap: var(--sp-2);">
+          <button type="submit">Run</button>
+          <span id="spin-irrigate" class="htmx-indicator" aria-busy="true"></span>
+        </div>
+      </div>
+    </form>
+
+    <form hx-get="/clusters/{{ cluster.id }}/monitor"
+          hx-target="#action-result"
+          hx-swap="innerHTML"
+          hx-indicator="#spin-monitor"
+          class="action-bar__form">
+      <span class="action-bar__label">
+        <svg class="icon"><use href="/static/icons/sprite.svg#i-magnifying-glass"></use></svg>
+        Monitor sensors
+      </span>
+      <div class="action-bar__inputs">
+        <button type="submit" class="secondary">Run monitor</button>
+        <span id="spin-monitor" class="htmx-indicator" aria-busy="true"></span>
+      </div>
+    </form>
+
+    <form hx-post="/clusters/{{ cluster.id }}/check"
+          hx-target="#action-result"
+          hx-swap="innerHTML"
+          hx-indicator="#spin-check"
+          class="action-bar__form">
+      <span class="action-bar__label">
+        <svg class="icon"><use href="/static/icons/sprite.svg#i-check"></use></svg>
+        Audit cluster
+      </span>
+      <div class="action-bar__inputs">
+        <button type="submit" class="secondary">Check</button>
+        <span id="spin-check" class="htmx-indicator" aria-busy="true"></span>
+      </div>
+    </form>
+  </div>
+  <div id="action-result" aria-live="polite"></div>
+</article>
+
+{# Live status panel (HTMX polled, refreshes every 30s) #}
 <article>
-  <header><strong>Live status</strong> <small>(refreshes every 30s)</small></header>
+  <header>
+    <strong>Live status</strong>
+    <small>auto-refresh 30s</small>
+  </header>
   <div hx-get="/clusters/{{ cluster.id }}/status-fragment"
        hx-trigger="load, every 30s"
        hx-swap="innerHTML">
@@ -27,79 +206,47 @@
   </div>
 </article>
 
-<article>
-  <header><strong>Actions</strong></header>
-  <div class="grid">
-    <form hx-post="/clusters/{{ cluster.id }}/irrigate"
-          hx-target="#action-result"
-          hx-swap="innerHTML"
-          hx-indicator="#spin-irrigate">
-      <fieldset>
-        <legend>Irrigate</legend>
-        <label><input type="checkbox" name="dry_run" value="on" checked> Dry run</label>
-        <label><input type="checkbox" name="no_sync" value="on"> Skip sync</label>
-        <label>Temp override (°C) <input type="number" step="0.1" name="temp_override"></label>
-        <button type="submit">Run</button>
-        <span id="spin-irrigate" class="htmx-indicator" aria-busy="true"></span>
-      </fieldset>
-    </form>
-
-    <form hx-get="/clusters/{{ cluster.id }}/monitor"
-          hx-target="#action-result"
-          hx-swap="innerHTML"
-          hx-indicator="#spin-monitor">
-      <fieldset>
-        <legend>Monitor sensors</legend>
-        <button type="submit" class="secondary">Run monitor</button>
-        <span id="spin-monitor" class="htmx-indicator" aria-busy="true"></span>
-      </fieldset>
-    </form>
-
-    <form hx-post="/clusters/{{ cluster.id }}/check"
-          hx-target="#action-result"
-          hx-swap="innerHTML"
-          hx-indicator="#spin-check">
-      <fieldset>
-        <legend>Check</legend>
-        <button type="submit" class="secondary">Check this cluster</button>
-        <span id="spin-check" class="htmx-indicator" aria-busy="true"></span>
-      </fieldset>
-    </form>
-  </div>
-  <div id="action-result" aria-live="polite"></div>
-</article>
-
-<article>
-  <header>
-    <strong>Charts</strong>
-    <nav>
-      <ul>
-        {% for h in allowed_hours %}
-          <li>
-            {% if h == hours %}
-              <strong>{{ h }}h</strong>
-            {% else %}
-              <a href="/clusters/{{ cluster.id }}?hours={{ h }}">{{ h }}h</a>
-            {% endif %}
-          </li>
-        {% endfor %}
-      </ul>
+{# Chart section — per-metric chart-card with hour seg #}
+<section class="chart-section">
+  <header class="chart-section__head">
+    <h2>Charts</h2>
+    <nav class="seg" aria-label="Time range">
+      {% for h in allowed_hours %}
+        {% if h == hours %}
+          <strong>{{ h }}h</strong>
+        {% else %}
+          <a href="/clusters/{{ cluster.id }}?hours={{ h }}">{{ h }}h</a>
+        {% endif %}
+      {% endfor %}
     </nav>
   </header>
   {% for metric in metrics %}
-    <section>
-      <h4>{{ metric.replace("_", " ") | title }}</h4>
-      {% set payload_json = chart_payloads[metric] %}
-      {% include "partials/_chart_panel.html" %}
-    </section>
+    {% set payload_json = chart_payloads[metric] %}
+    <article class="card chart-card">
+      <header class="chart-head">
+        <div class="chart-title">
+          <h3>{{ metric.replace("_", " ") | title }}</h3>
+        </div>
+      </header>
+      <div class="chart-body">
+        {% include "partials/_chart_panel.html" %}
+      </div>
+    </article>
   {% endfor %}
-</article>
+</section>
 
+{# Plants table #}
 {% if status.plants %}
-<article>
-  <header><strong>Plants</strong></header>
+<article class="card card--flush">
+  <div class="card__head">
+    <h3 class="card__title">Plants <span class="n">{{ plant_count }}</span></h3>
+    <a href="/clusters/{{ cluster.id }}/plants/new" class="btn secondary">
+      <svg class="icon"><use href="/static/icons/sprite.svg#i-plus"></use></svg>
+      Add plant
+    </a>
+  </div>
   <table>
-    <thead><tr><th>Species</th><th>Category</th><th>Water needs</th><th>Light</th><th></th></tr></thead>
+    <thead><tr><th>Species</th><th>Category</th><th>Water</th><th>Light</th><th></th></tr></thead>
     <tbody>
       {% for plant in status.plants %}
         {% include "partials/_plant_row.html" %}
@@ -109,11 +256,18 @@
 </article>
 {% endif %}
 
+{# Irrigators table #}
 {% if status.irrigators %}
-<article>
-  <header><strong>Irrigators</strong></header>
+<article class="card card--flush">
+  <div class="card__head">
+    <h3 class="card__title">Irrigators <span class="n">{{ irrigator_count }}</span></h3>
+    <a href="/clusters/{{ cluster.id }}/irrigators/new" class="btn secondary">
+      <svg class="icon"><use href="/static/icons/sprite.svg#i-plus"></use></svg>
+      Add irrigator
+    </a>
+  </div>
   <table>
-    <thead><tr><th>Name</th><th>Type</th><th>Recent events (48h)</th><th>Last action</th><th>Controls</th></tr></thead>
+    <thead><tr><th>Name</th><th>Type</th><th>Recent (48h)</th><th>Last action</th><th>Controls</th></tr></thead>
     <tbody>
       {% for irr in status.irrigators %}
         {% include "partials/_irrigator_row.html" %}

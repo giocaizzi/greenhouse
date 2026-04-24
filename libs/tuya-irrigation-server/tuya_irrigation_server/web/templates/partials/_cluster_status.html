@@ -1,37 +1,56 @@
 {% set decision = status.decision %}
 {% set config = status.config %}
 
-{% if decision %}
-<div>
-  <strong>Decision:</strong>
-  <span class="badge-{{ decision.action | decision_badge }}">{{ decision.action }}</span>
-  {% if decision.confidence is not none %}
-    · confidence {{ "%.0f%%" | format(decision.confidence * 100) }}
+<div class="status-panel">
+  {% if decision %}
+    <div class="status-panel__verdict">
+      <span class="status-panel__label">Decision</span>
+      <span class="badge-{{ decision.action | decision_badge }}">
+        {{- decision.action | upper -}}
+        {%- if decision.confidence is not none %} · {{ "%.0f%%" | format(decision.confidence * 100) }}{% endif -%}
+      </span>
+      {% if decision.reason %}
+        <p class="status-panel__reason">{{ decision.reason }}</p>
+      {% endif %}
+    </div>
   {% endif %}
-  {% if decision.reason %}<br><small>{{ decision.reason }}</small>{% endif %}
-</div>
-{% endif %}
 
-{% if config %}
-<div>
-  <small>
-    Config: <kbd>{{ config.mode }}</kbd>
-    {% if config.duration_minutes %} · {{ config.duration_minutes | format_minutes }} per run{% endif %}
-    {% if config.interval_hours %} · every {{ config.interval_hours }}h{% endif %}
-    · auto-run: {{ config.auto_run | yesno }}
-  </small>
-</div>
-{% endif %}
+  {% if status.sensors %}
+    <ul class="sensor-list">
+      {% for sensor in status.sensors %}
+        <li class="sensor-list__row">
+          <span class="sensor-list__name">{{ sensor.name }}</span>
+          <span class="sensor-list__reading mono">
+            {% if sensor.last_reading %}
+              {%- if sensor.last_reading.soil_moisture is not none -%}
+                {{ "%.0f%%" | format(sensor.last_reading.soil_moisture) }}
+              {%- elif sensor.last_reading.temperature is not none -%}
+                {{ "%.1f°C" | format(sensor.last_reading.temperature) }}
+              {%- elif sensor.last_reading.humidity is not none -%}
+                {{ "%.0f%% RH" | format(sensor.last_reading.humidity) }}
+              {%- elif sensor.last_reading.illuminance is not none -%}
+                {{ "%.0f lx" | format(sensor.last_reading.illuminance) }}
+              {%- else -%}
+                <span class="muted">—</span>
+              {%- endif -%}
+            {% else %}<span class="muted">no data</span>{% endif %}
+          </span>
+          <span class="sensor-list__age">
+            {{ sensor.reading_age_seconds | age_seconds if sensor.reading_age_seconds is not none else "—" }}
+          </span>
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="muted"><small>No sensors linked.</small></p>
+  {% endif %}
 
-{% if status.sensors %}
-<table role="grid">
-  <thead><tr><th>Sensor</th><th>Type</th><th>Reading</th><th>Age</th></tr></thead>
-  <tbody>
-    {% for sensor in status.sensors %}
-      {% include "partials/_sensor_row.html" %}
-    {% endfor %}
-  </tbody>
-</table>
-{% else %}
-<p><small>No sensors yet.</small></p>
-{% endif %}
+  {% if config %}
+    <div class="status-panel__config">
+      <span><kbd>{{ config.mode }}</kbd></span>
+      {% if config.interval_hours %}<span>every {{ config.interval_hours }}h</span>{% endif %}
+      {% if config.duration_minutes %}<span>{{ config.duration_minutes | format_minutes }}/run</span>{% endif %}
+      <span class="muted">auto&nbsp;{{ config.auto_run | yesno("on", "off") }}</span>
+    </div>
+  {% endif %}
+</div>

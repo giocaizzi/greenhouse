@@ -1,56 +1,78 @@
 {% extends "_base.html" %}
 {% block title %}{{ plant.species }} · {{ cluster.name }}{% endblock %}
 {% block content %}
-<hgroup>
-  <h1>{{ plant.species }}</h1>
-  <p>
-    <a href="/clusters/{{ cluster.id }}">← {{ cluster.name }}</a>
-    {% if plant.category %} · <small><kbd>{{ plant.category }}</kbd></small>{% endif %}
-  </p>
-</hgroup>
+
+<div class="crumb">
+  <a href="/">home</a><span class="sep">/</span>
+  <a href="/clusters">clusters</a><span class="sep">/</span>
+  <a href="/clusters/{{ cluster.id }}">{{ cluster.name | lower }}</a><span class="sep">/</span>
+  <a href="/clusters/{{ cluster.id }}/plants">plants</a><span class="sep">/</span>
+  <span class="here">{{ plant.species | lower }}</span>
+</div>
+
+<section class="page-head">
+  <div class="page-head__title">
+    <h1><i class="species">{{ plant.species }}</i></h1>
+    <div class="page-head__meta">
+      <span>{{ cluster.name }}</span>
+      {% if plant.category %}<span class="dot"></span><span>{{ plant.category }}</span>{% endif %}
+      {% if plant.water_needs %}<span class="dot"></span><span>water · {{ plant.water_needs }}</span>{% endif %}
+      {% if plant.light_needs %}<span class="dot"></span><span>light · {{ plant.light_needs }}</span>{% endif %}
+    </div>
+  </div>
+</section>
 
 <div class="grid">
   {% include "partials/_plant_latest_card.html" %}
   {% include "partials/_plant_care_panel.html" %}
 </div>
 
-<article>
-  <header>
-    <strong>Charts</strong>
-    <nav>
-      <ul>
-        {% for h in allowed_hours %}
-          <li>
-            {% if h == hours %}
-              <strong>{{ h }}h</strong>
-            {% else %}
-              <a href="/clusters/{{ cluster.id }}/plants/{{ plant.id }}?hours={{ h }}">{{ h }}h</a>
-            {% endif %}
-          </li>
-        {% endfor %}
-      </ul>
+<section class="chart-section">
+  <header class="chart-section__head">
+    <h2>Charts</h2>
+    <nav class="seg" aria-label="Time range">
+      {% for h in allowed_hours %}
+        {% if h == hours %}
+          <strong>{{ h }}h</strong>
+        {% else %}
+          <a href="/clusters/{{ cluster.id }}/plants/{{ plant.id }}?hours={{ h }}">{{ h }}h</a>
+        {% endif %}
+      {% endfor %}
     </nav>
   </header>
-
   {% for metric in metrics %}
-    <section>
-      <h4>{{ metric.replace("_", " ") | title }}</h4>
-      {% set payload_json = chart_payloads[metric] %}
-      {% include "partials/_chart_panel.html" %}
-    </section>
+    {% set payload_json = chart_payloads[metric] %}
+    <article class="card chart-card">
+      <header class="chart-head">
+        <div class="chart-title">
+          <h3>{{ metric.replace("_", " ") | title }}</h3>
+        </div>
+      </header>
+      <div class="chart-body">
+        {% include "partials/_chart_panel.html" %}
+      </div>
+    </article>
   {% endfor %}
-</article>
+</section>
 
 {% include "partials/_recent_events.html" %}
 
 {% if alerts %}
-<article>
-  <header><strong>Learning alerts about this plant</strong></header>
-  <ul>
+<article class="card card--flush">
+  <div class="card__head">
+    <h3 class="card__title">Learning alerts <span class="n">{{ alerts|length }}</span></h3>
+  </div>
+  <div class="card__body">
     {% for a in alerts %}
-      <li><span class="badge-{{ a.severity | severity_class }}">{{ a.severity }}</span> {{ a.message }}</li>
+      <div class="alert alert--{{ a.severity | severity_class }}">
+        <span class="alert__icon"><svg class="icon"><use href="/static/icons/sprite.svg#i-warning"></use></svg></span>
+        <div>
+          <p class="alert__title">{{ a.severity | title }}</p>
+          <p class="alert__body">{{ a.message }}</p>
+        </div>
+      </div>
     {% endfor %}
-  </ul>
+  </div>
 </article>
 {% endif %}
 {% endblock %}

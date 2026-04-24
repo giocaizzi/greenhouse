@@ -1,8 +1,14 @@
-<article>
+<div class="irr-result {% if not success %}irr-result--err{% endif %}">
   {% if success %}
-    <header><strong>✓ {{ action }}</strong></header>
+    <span class="badge-ok">
+      <svg class="icon" style="width:11px;height:11px;"><use href="/static/icons/sprite.svg#i-check"></use></svg>
+      {{ action }}
+    </span>
   {% else %}
-    <header><span class="badge-danger">✗ {{ action }} failed</span></header>
+    <span class="badge-danger">
+      <svg class="icon" style="width:11px;height:11px;"><use href="/static/icons/sprite.svg#i-x"></use></svg>
+      {{ action }} failed
+    </span>
   {% endif %}
-  <p><small>{{ message }}</small></p>
-</article>
+  <small class="muted">{{ message }}</small>
+</div>
