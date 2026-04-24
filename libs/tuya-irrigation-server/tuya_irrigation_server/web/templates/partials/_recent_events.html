@@ -1,0 +1,21 @@
+<article>
+  <header><strong>Recent irrigation events</strong></header>
+  {% if not recent_events %}
+    <p><small>No events in the window.</small></p>
+  {% else %}
+    <table role="grid">
+      <thead><tr><th>Time</th><th>Action</th><th>Duration</th><th>By</th><th>Notes</th></tr></thead>
+      <tbody>
+        {% for e in recent_events %}
+        <tr>
+          <td><small>{{ e.timestamp | format_ts }}</small></td>
+          <td>{{ e.action }}</td>
+          <td>{{ e.duration_minutes | format_minutes }}</td>
+          <td><small>{{ e.triggered_by }}</small></td>
+          <td><small>{{ e.notes or "—" }}</small></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% endif %}
+</article>

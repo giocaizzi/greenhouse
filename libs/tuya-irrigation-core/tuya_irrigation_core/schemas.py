@@ -332,3 +332,32 @@ class HealthResponse(BaseModel):
     status: str
     scheduler_running: bool
     jobs: list[SchedulerJobResponse]
+
+
+# --- Chart data (for Chart.js) ---
+
+
+class ChartDatasetResponse(BaseModel):
+    sensor_id: int
+    sensor_name: str
+    points: list[tuple[int, float]]
+
+
+class ChartEventResponse(BaseModel):
+    timestamp: int
+    action: str
+    duration_minutes: int | None = None
+
+
+class ChartThresholdResponse(BaseModel):
+    min: float | None = None
+    max: float | None = None
+    source: str = "none"
+
+
+class ChartPayloadResponse(BaseModel):
+    metric: str
+    hours: int
+    datasets: list[ChartDatasetResponse]
+    events: list[ChartEventResponse]
+    threshold: ChartThresholdResponse

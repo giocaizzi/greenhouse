@@ -1,0 +1,56 @@
+{% extends "_base.html" %}
+{% block title %}{{ plant.species }} · {{ cluster.name }}{% endblock %}
+{% block content %}
+<hgroup>
+  <h1>{{ plant.species }}</h1>
+  <p>
+    <a href="/clusters/{{ cluster.id }}">← {{ cluster.name }}</a>
+    {% if plant.category %} · <small><kbd>{{ plant.category }}</kbd></small>{% endif %}
+  </p>
+</hgroup>
+
+<div class="grid">
+  {% include "partials/_plant_latest_card.html" %}
+  {% include "partials/_plant_care_panel.html" %}
+</div>
+
+<article>
+  <header>
+    <strong>Charts</strong>
+    <nav>
+      <ul>
+        {% for h in allowed_hours %}
+          <li>
+            {% if h == hours %}
+              <strong>{{ h }}h</strong>
+            {% else %}
+              <a href="/clusters/{{ cluster.id }}/plants/{{ plant.id }}?hours={{ h }}">{{ h }}h</a>
+            {% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+    </nav>
+  </header>
+
+  {% for metric in metrics %}
+    <section>
+      <h4>{{ metric.replace("_", " ") | title }}</h4>
+      {% set payload_json = chart_payloads[metric] %}
+      {% include "partials/_chart_panel.html" %}
+    </section>
+  {% endfor %}
+</article>
+
+{% include "partials/_recent_events.html" %}
+
+{% if alerts %}
+<article>
+  <header><strong>Learning alerts about this plant</strong></header>
+  <ul>
+    {% for a in alerts %}
+      <li><span class="badge-{{ a.severity | severity_class }}">{{ a.severity }}</span> {{ a.message }}</li>
+    {% endfor %}
+  </ul>
+</article>
+{% endif %}
+{% endblock %}

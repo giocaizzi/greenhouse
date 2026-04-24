@@ -11,7 +11,7 @@ from tuya_irrigation_core.database import create_db_engine, create_session_facto
 from tuya_irrigation_core.devices import TuyaDeviceManager
 from tuya_irrigation_core.plant_db import PlantDatabase
 from tuya_irrigation_server.config import Settings
-from tuya_irrigation_server.routes import clusters, configs, irrigators, operations, plants, scheduler, sensors
+from tuya_irrigation_server.routes import charts, clusters, configs, irrigators, operations, plants, scheduler, sensors
 from tuya_irrigation_server.scheduler import init_scheduler
 from tuya_irrigation_server.scheduler import scheduler as bg_scheduler
 from tuya_irrigation_server.services.weather import WeatherClient
@@ -79,6 +79,7 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
     app.include_router(configs.router, prefix=prefix)
     app.include_router(operations.router, prefix=prefix)
     app.include_router(scheduler.router, prefix=prefix)
+    app.include_router(charts.router, prefix=prefix)
 
     # Web frontend
     static_dir = Path(__file__).parent / "web" / "static"

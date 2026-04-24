@@ -1,0 +1,21 @@
+<div id="chart-container-{{ metric }}" class="chart-container">
+  <div style="position: relative; height: 320px">
+    <canvas id="chart-{{ metric }}"></canvas>
+  </div>
+  <script type="application/json" id="chart-data-{{ metric }}">{{ payload_json | safe }}</script>
+  <script>
+    (function () {
+      var el = document.getElementById('chart-{{ metric }}');
+      var raw = document.getElementById('chart-data-{{ metric }}');
+      if (!el || !raw) return;
+      var data = JSON.parse(raw.textContent);
+      function draw() {
+        if (typeof window.renderIrrigationChart === 'function') {
+          window.renderIrrigationChart(el, data);
+        }
+      }
+      if (window.Chart) { draw(); }
+      else { window.addEventListener('load', draw); }
+    })();
+  </script>
+</div>
