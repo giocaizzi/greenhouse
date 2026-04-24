@@ -23,3 +23,22 @@ table.scrollable {
 .badge-ok { color: var(--pico-color-green-500); }
 .badge-high { color: var(--pico-color-amber-500); }
 .badge-muted { color: var(--pico-muted-color); }
+.badge-danger { color: var(--pico-color-red-500); font-weight: 600; }
+.badge-warning { color: var(--pico-color-amber-500); font-weight: 600; }
+.badge-info { color: var(--pico-color-azure-500); }
+.badge-primary { color: var(--pico-color-green-500); font-weight: 600; }
+
+.chart-container {
+  margin-bottom: 1rem;
+}
+
+article table { overflow-x: auto; }
+
+.error-panel {
+  border-left: 4px solid var(--pico-color-red-500);
+}
+
+#theme-toggle {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.9rem;
+}

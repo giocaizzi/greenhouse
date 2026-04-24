@@ -15,6 +15,7 @@ from tuya_irrigation_server.routes import charts, clusters, configs, irrigators,
 from tuya_irrigation_server.scheduler import init_scheduler
 from tuya_irrigation_server.scheduler import scheduler as bg_scheduler
 from tuya_irrigation_server.services.weather import WeatherClient
+from tuya_irrigation_server.web.exception_handlers import register_web_exception_handlers
 from tuya_irrigation_server.web.router import web_router
 
 
@@ -85,6 +86,7 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
     static_dir = Path(__file__).parent / "web" / "static"
     app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
     app.include_router(web_router)
+    register_web_exception_handlers(app)
 
     return app
 

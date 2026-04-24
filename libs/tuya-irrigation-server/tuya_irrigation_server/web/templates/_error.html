@@ -1,0 +1,7 @@
+<article class="error-panel">
+  <header><strong>Error {{ status_code }}</strong></header>
+  <p>{{ detail or "Something went wrong." }}</p>
+  {% if not is_hx %}
+    <p><a href="/" role="button" class="secondary">Back to dashboard</a></p>
+  {% endif %}
+</article>

@@ -19,9 +19,22 @@
       <li><a href="/">Dashboard</a></li>
       <li><a href="/scheduler">Scheduler</a></li>
       <li><a href="/health">Health</a></li>
+      <li>
+        <button id="theme-toggle" class="secondary outline"
+                onclick="(function(){var h=document.documentElement;var t=h.getAttribute('data-theme')==='dark'?'light':'dark';h.setAttribute('data-theme',t);try{localStorage.setItem('theme',t);}catch(e){}}())"
+                aria-label="Toggle theme">◐</button>
+      </li>
     </ul>
   </nav>
 </header>
+<script>
+  (function() {
+    try {
+      var t = localStorage.getItem('theme');
+      if (t) document.documentElement.setAttribute('data-theme', t);
+    } catch (e) {}
+  })();
+</script>
 <main class="container">
   {% block content %}{% endblock %}
 </main>
