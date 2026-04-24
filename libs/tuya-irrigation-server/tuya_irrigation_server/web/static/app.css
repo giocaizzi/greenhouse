@@ -1,0 +1,25 @@
+/* Custom tweaks on top of Pico.css. */
+
+.cluster-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
+}
+
+.htmx-indicator {
+  display: none;
+}
+.htmx-request .htmx-indicator,
+.htmx-request.htmx-indicator {
+  display: inline-block;
+}
+
+table.scrollable {
+  overflow-x: auto;
+  display: block;
+}
+
+.badge-low { color: var(--pico-color-red-500); }
+.badge-ok { color: var(--pico-color-green-500); }
+.badge-high { color: var(--pico-color-amber-500); }
+.badge-muted { color: var(--pico-muted-color); }

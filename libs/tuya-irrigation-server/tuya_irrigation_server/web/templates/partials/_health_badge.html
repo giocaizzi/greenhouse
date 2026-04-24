@@ -1,0 +1,5 @@
+{% if scheduler_running %}
+  <span aria-label="scheduler running">● scheduler · {{ job_count }} job{{ "" if job_count == 1 else "s" }}</span>
+{% else %}
+  <span aria-label="scheduler stopped">○ scheduler stopped</span>
+{% endif %}

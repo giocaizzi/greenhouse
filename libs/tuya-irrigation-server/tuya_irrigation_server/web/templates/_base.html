@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="auto">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Tuya Irrigation{% endblock %}</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+  <link rel="stylesheet" href="/static/app.css">
+  <script src="https://unpkg.com/htmx.org@2.0.3" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js" defer></script>
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+<header class="container">
+  <nav>
+    <ul><li><strong><a href="/">Irrigation</a></strong></li></ul>
+    <ul>
+      <li><a href="/">Dashboard</a></li>
+      <li><a href="/scheduler">Scheduler</a></li>
+      <li><a href="/health">Health</a></li>
+    </ul>
+  </nav>
+</header>
+<main class="container">
+  {% block content %}{% endblock %}
+</main>
+<footer class="container">
+  <small>
+    <span id="health-badge"
+          hx-get="/health/badge"
+          hx-trigger="load, every 60s"
+          hx-swap="innerHTML">…</span>
+  </small>
+</footer>
+</body>
+</html>

@@ -1,8 +1,10 @@
 """FastAPI application factory."""
 
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy.engine import Engine
 
 from tuya_irrigation_core.database import create_db_engine, create_session_factory, init_db
@@ -13,6 +15,7 @@ from tuya_irrigation_server.routes import clusters, configs, irrigators, operati
 from tuya_irrigation_server.scheduler import init_scheduler
 from tuya_irrigation_server.scheduler import scheduler as bg_scheduler
 from tuya_irrigation_server.services.weather import WeatherClient
+from tuya_irrigation_server.web.router import web_router
 
 
 def _init_device_manager() -> TuyaDeviceManager | None:
@@ -76,6 +79,11 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
     app.include_router(configs.router, prefix=prefix)
     app.include_router(operations.router, prefix=prefix)
     app.include_router(scheduler.router, prefix=prefix)
+
+    # Web frontend
+    static_dir = Path(__file__).parent / "web" / "static"
+    app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+    app.include_router(web_router)
 
     return app
 

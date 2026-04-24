@@ -1,0 +1,33 @@
+{% extends "_base.html" %}
+{% block title %}Dashboard · Tuya Irrigation{% endblock %}
+{% block content %}
+<hgroup>
+  <h1>Dashboard</h1>
+  <p>{{ clusters|length }} cluster{{ "" if clusters|length == 1 else "s" }} configured.</p>
+</hgroup>
+
+{% if not clusters %}
+  <article>
+    <header><strong>No clusters yet</strong></header>
+    <p>Create your first cluster to get started.</p>
+    <a href="/clusters/new" role="button">Create cluster</a>
+  </article>
+{% else %}
+  <div class="cluster-grid">
+    {% for cluster in clusters %}
+      <article id="cluster-card-{{ cluster.id }}">
+        <header>
+          <h3><a href="/clusters/{{ cluster.id }}">{{ cluster.name }}</a></h3>
+          <small>{{ cluster.environment or "—" }} · {{ cluster.location or "no location" }}</small>
+        </header>
+        <div hx-get="/clusters/{{ cluster.id }}/status-fragment"
+             hx-trigger="load, every 30s"
+             hx-swap="innerHTML">
+          <progress></progress>
+        </div>
+      </article>
+    {% endfor %}
+  </div>
+  <p><a href="/clusters/new" role="button" class="secondary">+ Add cluster</a></p>
+{% endif %}
+{% endblock %}

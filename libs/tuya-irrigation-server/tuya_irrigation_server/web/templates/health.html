@@ -1,0 +1,33 @@
+{% extends "_base.html" %}
+{% block title %}Health · Tuya Irrigation{% endblock %}
+{% block content %}
+<h1>System Health</h1>
+
+<article>
+  <header><strong>Scheduler</strong></header>
+  {% if scheduler_running %}
+    <p>Status: <mark>running</mark> · {{ jobs|length }} job{{ "" if jobs|length == 1 else "s" }}</p>
+  {% else %}
+    <p>Status: <kbd>stopped</kbd></p>
+  {% endif %}
+</article>
+
+{% if jobs %}
+<article>
+  <header><strong>Background jobs</strong></header>
+  <table>
+    <thead><tr><th>ID</th><th>Name</th><th>Trigger</th><th>Next run</th></tr></thead>
+    <tbody>
+      {% for job in jobs %}
+      <tr>
+        <td><code>{{ job.id }}</code></td>
+        <td>{{ job.name }}</td>
+        <td>{{ job.trigger }}</td>
+        <td>{{ job.next_run_time or "—" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</article>
+{% endif %}
+{% endblock %}
