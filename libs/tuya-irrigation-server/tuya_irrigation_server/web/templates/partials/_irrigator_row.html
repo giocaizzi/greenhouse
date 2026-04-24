@@ -1,0 +1,12 @@
+<tr id="irrigator-row-{{ irr.id }}">
+  <td>{{ irr.name }}</td>
+  <td><small>{{ irr.type }}</small></td>
+  <td>{{ irr.recent_event_count }}</td>
+  <td>
+    {% if irr.last_event %}
+      <small>{{ irr.last_event.action }} · {{ irr.last_event.timestamp | format_ts }}</small>
+    {% else %}
+      <small>—</small>
+    {% endif %}
+  </td>
+</tr>

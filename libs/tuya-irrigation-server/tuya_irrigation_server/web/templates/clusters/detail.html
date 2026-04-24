@@ -1,0 +1,57 @@
+{% extends "_base.html" %}
+{% block title %}{{ status.cluster.name }} · Tuya Irrigation{% endblock %}
+{% block content %}
+{% set cluster = status.cluster %}
+<hgroup>
+  <h1>{{ cluster.name }}</h1>
+  <p>{{ cluster.environment or "—" }} · {{ cluster.location or "no location" }}</p>
+</hgroup>
+
+<nav><ul>
+  <li><a href="/">← Dashboard</a></li>
+  <li><a href="/clusters/{{ cluster.id }}/plants">Plants ({{ status.plants|length }})</a></li>
+  <li><a href="/clusters/{{ cluster.id }}/sensors">Sensors ({{ status.sensors|length }})</a></li>
+  <li><a href="/clusters/{{ cluster.id }}/irrigators">Irrigators ({{ status.irrigators|length }})</a></li>
+  <li><a href="/clusters/{{ cluster.id }}/config">Config</a></li>
+  <li><a href="/clusters/{{ cluster.id }}/history">History</a></li>
+  <li><a href="/clusters/{{ cluster.id }}/stats">Stats</a></li>
+  <li><a href="/clusters/{{ cluster.id }}/learn">Learn</a></li>
+</ul></nav>
+
+<article>
+  <header><strong>Live status</strong> <small>(refreshes every 30s)</small></header>
+  <div hx-get="/clusters/{{ cluster.id }}/status-fragment"
+       hx-trigger="load, every 30s"
+       hx-swap="innerHTML">
+    <progress></progress>
+  </div>
+</article>
+
+{% if status.plants %}
+<article>
+  <header><strong>Plants</strong></header>
+  <table>
+    <thead><tr><th>Species</th><th>Category</th><th>Water needs</th><th>Light</th><th></th></tr></thead>
+    <tbody>
+      {% for plant in status.plants %}
+        {% include "partials/_plant_row.html" %}
+      {% endfor %}
+    </tbody>
+  </table>
+</article>
+{% endif %}
+
+{% if status.irrigators %}
+<article>
+  <header><strong>Irrigators</strong></header>
+  <table>
+    <thead><tr><th>Name</th><th>Type</th><th>Recent events (48h)</th><th>Last action</th></tr></thead>
+    <tbody>
+      {% for irr in status.irrigators %}
+        {% include "partials/_irrigator_row.html" %}
+      {% endfor %}
+    </tbody>
+  </table>
+</article>
+{% endif %}
+{% endblock %}

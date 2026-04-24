@@ -1,0 +1,37 @@
+{% set decision = status.decision %}
+{% set config = status.config %}
+
+{% if decision %}
+<div>
+  <strong>Decision:</strong>
+  <span class="badge-{{ decision.action | decision_badge }}">{{ decision.action }}</span>
+  {% if decision.confidence is not none %}
+    · confidence {{ "%.0f%%" | format(decision.confidence * 100) }}
+  {% endif %}
+  {% if decision.reason %}<br><small>{{ decision.reason }}</small>{% endif %}
+</div>
+{% endif %}
+
+{% if config %}
+<div>
+  <small>
+    Config: <kbd>{{ config.mode }}</kbd>
+    {% if config.duration_minutes %} · {{ config.duration_minutes | format_minutes }} per run{% endif %}
+    {% if config.interval_hours %} · every {{ config.interval_hours }}h{% endif %}
+    · auto-run: {{ config.auto_run | yesno }}
+  </small>
+</div>
+{% endif %}
+
+{% if status.sensors %}
+<table role="grid">
+  <thead><tr><th>Sensor</th><th>Type</th><th>Reading</th><th>Age</th></tr></thead>
+  <tbody>
+    {% for sensor in status.sensors %}
+      {% include "partials/_sensor_row.html" %}
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p><small>No sensors yet.</small></p>
+{% endif %}

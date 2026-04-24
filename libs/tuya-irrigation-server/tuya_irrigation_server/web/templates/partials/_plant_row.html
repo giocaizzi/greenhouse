@@ -1,0 +1,7 @@
+<tr>
+  <td>{{ plant.species }}</td>
+  <td>{{ plant.category or "—" }}</td>
+  <td>{{ plant.water_needs or "—" }}</td>
+  <td>{{ plant.light_needs or "—" }}</td>
+  <td><a href="/clusters/{{ plant.cluster_id }}/plants/{{ plant.id }}" role="button" class="secondary">Dashboard</a></td>
+</tr>

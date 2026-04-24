@@ -1,0 +1,25 @@
+{% extends "_base.html" %}
+{% block title %}Clusters · Tuya Irrigation{% endblock %}
+{% block content %}
+<h1>Clusters</h1>
+
+{% if not clusters %}
+  <p>No clusters yet. <a href="/clusters/new" role="button">Create cluster</a></p>
+{% else %}
+<table>
+  <thead><tr><th>Name</th><th>Environment</th><th>Location</th><th>Created</th><th></th></tr></thead>
+  <tbody>
+    {% for cluster in clusters %}
+    <tr>
+      <td><a href="/clusters/{{ cluster.id }}">{{ cluster.name }}</a></td>
+      <td>{{ cluster.environment or "—" }}</td>
+      <td>{{ cluster.location or "—" }}</td>
+      <td><small>{{ cluster.created_at | format_ts }}</small></td>
+      <td><a href="/clusters/{{ cluster.id }}" role="button" class="secondary">Open</a></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+<p><a href="/clusters/new" role="button">+ Add cluster</a></p>
+{% endif %}
+{% endblock %}
