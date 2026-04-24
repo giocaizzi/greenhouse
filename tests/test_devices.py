@@ -136,8 +136,9 @@ class TestDeviceManager:
         assert not success
         assert "failed" in msg.lower()
 
+    @patch("tuya_irrigation_core.devices.tinytuya.Cloud")
     @patch("tuya_irrigation_core.cloud.TuyaCloud")
-    def test_sensor_reading_parsing(self, mock_cloud_class, fake_tuya_env):
+    def test_sensor_reading_parsing(self, mock_cloud_class, _mock_tinytuya_cloud, fake_tuya_env):
         """Sensor data is correctly parsed via Cloud API."""
         mock_cloud = MagicMock()
         mock_cloud.get_live_reading.return_value = {"temperature": 22.5, "soil_moisture": 45.0}
@@ -168,8 +169,9 @@ class TestDeviceManager:
         assert success
         assert "3 min" in msg
 
+    @patch("tuya_irrigation_core.devices.tinytuya.Cloud")
     @patch("tuya_irrigation_core.cloud.TuyaCloud")
-    def test_read_sensor_cloud_error_returns_error_dict(self, mock_cloud_class, fake_tuya_env):
+    def test_read_sensor_cloud_error_returns_error_dict(self, mock_cloud_class, _mock_tinytuya_cloud, fake_tuya_env):
         """Sensor read returns error dict when cloud API fails."""
         mock_cloud = MagicMock()
         mock_cloud.get_live_reading.side_effect = RuntimeError("device offline")
