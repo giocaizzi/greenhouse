@@ -18,6 +18,12 @@ def test_dashboard_lists_seeded_cluster(seeded_client):
 
 def test_dashboard_includes_chart_assets(client):
     resp = client.get("/")
-    assert "chart.js" in resp.text.lower()
-    assert "htmx" in resp.text.lower()
+    text_lc = resp.text.lower()
+    assert "chart.js" in text_lc
+    assert "htmx" in text_lc
     assert "/static/app.css" in resp.text
+    # Chart.js v4 time-scale axes need a date adapter — without it, no chart renders.
+    assert "chartjs-adapter-date-fns" in text_lc, (
+        "Chart.js requires a date adapter; see libs/.../web/templates/_base.html"
+    )
+    assert "chartjs-plugin-annotation" in text_lc
