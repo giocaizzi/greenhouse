@@ -1,12 +1,26 @@
 """Polish: HX-aware error partial, dark-mode toggle, API still returns JSON."""
 
 
-def test_html_404_returns_error_partial(client):
+def test_html_404_returns_full_error_page(client):
     resp = client.get("/clusters/9999")
     assert resp.status_code == 404
     assert "text/html" in resp.headers["content-type"]
     assert "Error 404" in resp.text
     assert "Cluster not found" in resp.text
+    # Non-HX requests get the base layout wrapper (nav, title), not a bare partial.
+    assert "<!DOCTYPE html>" in resp.text
+    assert "<title>Error 404" in resp.text
+    assert '<a href="/scheduler">Scheduler</a>' in resp.text  # nav present
+
+
+def test_hx_404_returns_bare_partial(client):
+    resp = client.get("/clusters/9999", headers={"HX-Request": "true"})
+    assert resp.status_code == 404
+    assert "text/html" in resp.headers["content-type"]
+    assert "Error 404" in resp.text
+    # HX swaps into an existing target — no layout wrapper.
+    assert "<!DOCTYPE html>" not in resp.text
+    assert "<html" not in resp.text.lower()
 
 
 def test_api_404_still_returns_json(client):

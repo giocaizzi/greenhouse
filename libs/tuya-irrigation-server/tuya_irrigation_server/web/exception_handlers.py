@@ -10,7 +10,7 @@ from __future__ import annotations
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 
-from tuya_irrigation_server.web.context import base_context
+from tuya_irrigation_server.web.context import base_context, is_hx
 from tuya_irrigation_server.web.templating import templates
 
 
@@ -19,17 +19,22 @@ def _is_html_request(request: Request) -> bool:
     return not request.url.path.startswith("/api/")
 
 
+def _error_template(request: Request) -> str:
+    # HTMX swaps fragments into existing targets, so return the bare partial.
+    # Full-page errors need the base layout (nav, title, footer).
+    return "_error.html" if is_hx(request) else "error_page.html"
+
+
 def register_web_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(HTTPException)
     async def handle_http_exc(request: Request, exc: HTTPException):
         if not _is_html_request(request):
-            # Preserve the API JSON error shape.
             from fastapi.responses import JSONResponse
 
             return JSONResponse({"detail": exc.detail}, status_code=exc.status_code)
         return templates.TemplateResponse(
             request,
-            "_error.html",
+            _error_template(request),
             base_context(request, status_code=exc.status_code, detail=exc.detail),
             status_code=exc.status_code,
         )
@@ -42,7 +47,7 @@ def register_web_exception_handlers(app: FastAPI) -> None:
             return JSONResponse({"detail": exc.errors()}, status_code=422)
         return templates.TemplateResponse(
             request,
-            "_error.html",
+            _error_template(request),
             base_context(request, status_code=422, detail="Form validation failed."),
             status_code=422,
         )
