@@ -21,6 +21,23 @@
 It exposes a FastAPI server (JSON API + HTMX web UI), a Typer CLI client, and
 runs sync + check jobs in the background via APScheduler.
 
+### Interfaces — three ways in, one source of truth
+
+The server is the only thing that touches the DB and the devices. There are
+three ways to talk to it:
+
+1. **JSON REST API** at `/api/v1` — the authoritative entry point. OpenAPI
+   docs at `/docs`.
+2. **HTMX web UI** at `/` — same FastAPI app, server-rendered. Calls the
+   service layer **in-process** (not over HTTP), so it shares code with the
+   API but isn't itself a client of it.
+3. **CLI** (`tuya-irrigation`) — a thin `httpx`-based client that builds
+   requests against `/api/v1`. It does **not** import `tuya-irrigation-core`
+   and has no DB access; if the server isn't running, the CLI does nothing.
+
+Stop the server and both the UI and the CLI go dark. Anything new the CLI
+should be able to do must first exist as an API endpoint.
+
 **Tech Stack:** Python 3.11+, uv workspaces, FastAPI, SQLAlchemy v2, Pydantic v2, Typer, ruff, pytest, SQLite, tinytuya, APScheduler, Jinja2 + HTMX + Chart.js + Pico.css (server-rendered web UI, no build step)
 
 ## Privacy & Security
@@ -89,8 +106,7 @@ Other top-level dirs: `data/` (gitignored runtime + `plant_database.json`),
 7. **Evidence-based** plant care data with source citations
 8. **Learning is advisory** — never blocks irrigation decisions
 9. **All thresholds** centralized in `constants.py`
-10. **CLI is server-only** — always talks to API, no direct DB access
-11. **Web UI is server-rendered** (HTMX + Jinja2, no SPA, no build step) and lives in the same FastAPI app — `/api/v1` returns JSON, `/` returns HTML (full pages or HX fragments)
+10. **Server is the only thing with DB and device access** — UI and CLI go through it (see "Interfaces" above). Web UI is HTMX + Jinja2 server-rendered (no SPA, no build step) and lives in the same FastAPI app.
 
 ## Development
 

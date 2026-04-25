@@ -32,7 +32,7 @@ uv run tuya-irrigation check --all    # check all clusters
 - 🚨 **7 alert types** — blocked drip, rapid drainage, chronic underwatering, unresolvable conflict, low light, low humidity, light-accelerated drainage
 - ☁️ **Tuya Cloud + Local protocol** — reads sensors via Cloud API, controls irrigators via local protocol v3.5 for reliable duration control
 - ⏰ **Background scheduling** — APScheduler syncs sensors every 30 min and checks clusters every 6 hours
-- 🔌 **REST API + CLI** — full FastAPI server with OpenAPI docs at `/docs`, thin Typer CLI client
+- 🔌 **Three ways in** — JSON REST API (OpenAPI docs at `/docs`), server-rendered HTMX web UI at `/`, and a thin Typer CLI client. The CLI is just an HTTP client to the same API — no direct DB access.
 
 ## Getting Started
 
@@ -84,6 +84,11 @@ uv run tuya-irrigation check --all       # check all clusters + alerts
 uv run tuya-irrigation learn 1           # learning report
 uv run tuya-irrigation stats 1 --days 7  # irrigation statistics
 ```
+
+Same data is also available via:
+
+- **Web UI** — open `http://localhost:8000/` for the HTMX dashboard (clusters, per-plant charts, irrigators, history, scheduler).
+- **REST API** — `http://localhost:8000/api/v1/...`; OpenAPI docs at `http://localhost:8000/docs`.
 
 ## License
 
