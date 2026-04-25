@@ -2,9 +2,26 @@
 
 ## Project Overview
 
-**tuya-irrigation** is a smart plant irrigation system with a client-server architecture.
+**tuya-irrigation** is a smart plant irrigation system that:
 
-**Tech Stack:** Python 3.11+, uv workspaces, FastAPI, SQLAlchemy v2, Pydantic v2, Typer, ruff, pytest, SQLite, tinytuya
+1. **Reads** soil moisture / temperature / humidity / light from Tuya-compatible
+   sensors via the Tuya Cloud API.
+2. **Decides** when and how long to irrigate per *cluster* (a group of plants
+   irrigated together) using evidence-based plant care data, multi-sensor
+   conflict resolution (driest plant drives the call), and a 6h global cooldown.
+3. **Acts** by controlling Tuya irrigators directly over the local protocol
+   (v3.5) for reliable duration control — never via the Cloud for actuation.
+4. **Learns** from each irrigation cycle: builds per-plant absorption /
+   drainage profiles and raises advisory alerts (blocked drip, rapid drainage,
+   chronic underwatering, unresolvable conflict, etc.). Learning never blocks
+   decisions.
+5. **Persists** every sensor reading and irrigation event into a local SQLite
+   archive — Tuya Cloud is the live source, SQLite is the permanent record.
+
+It exposes a FastAPI server (JSON API + HTMX web UI), a Typer CLI client, and
+runs sync + check jobs in the background via APScheduler.
+
+**Tech Stack:** Python 3.11+, uv workspaces, FastAPI, SQLAlchemy v2, Pydantic v2, Typer, ruff, pytest, SQLite, tinytuya, APScheduler, Jinja2 + HTMX + Chart.js + Pico.css (server-rendered web UI, no build step)
 
 ## Privacy & Security
 
@@ -28,66 +45,30 @@ All test data uses fake/placeholder values centralized in `tests/fake_data.py`:
 
 ## Package Structure
 
-```
-tuya-irrigation/
-├── pyproject.toml                    # Workspace root (uv + ruff + pytest)
-├── Makefile                          # Dev commands
-├── libs/
-│   ├── tuya-irrigation-core/         # Models, repository, business logic
-│   │   └── tuya_irrigation_core/
-│   │       ├── models.py             # SQLAlchemy v2 ORM models
-│   │       ├── schemas.py            # Pydantic v2 request/response schemas
-│   │       ├── database.py           # Engine, session factory
-│   │       ├── repository.py         # DB operations
-│   │       ├── cloud.py              # Tuya Cloud API client
-│   │       ├── devices.py            # Device control (Cloud + Local v3.5)
-│   │       ├── logic/                # Irrigation decision engine
-│   │       │   ├── engine.py         #   Decision orchestrator (IrrigationLogic)
-│   │       │   ├── sensors.py        #   Sensor data aggregation
-│   │       │   ├── stress.py         #   Stress condition detection
-│   │       │   ├── trends.py         #   Historical trend analysis
-│   │       │   ├── plant_needs.py    #   Plant care data interpretation
-│   │       │   └── fallback.py       #   Temperature-based fallback logic
-│   │       ├── learning/             # Post-irrigation analysis
-│   │       │   ├── learner.py        #   Facade class (IrrigationLearner)
-│   │       │   ├── models.py         #   Dataclasses (Response, Profile, Alert)
-│   │       │   ├── profiling.py      #   Profile building, drainage rates
-│   │       │   ├── issues.py         #   Issue detection, conflict alerts
-│   │       │   └── report.py         #   Human-readable report generation
-│   │       ├── sync.py               # Cloud → DB sensor sync
-│   │       ├── stats.py              # Statistics and CSV export
-│   │       ├── plant_db.py           # Evidence-based plant care lookup
-│   │       ├── constants.py          # Project-wide thresholds
-│   │       └── utils.py              # Timezone, seasonal light
-│   ├── tuya-irrigation-server/       # FastAPI server
-│   │   └── tuya_irrigation_server/
-│   │       ├── app.py                # App factory, lifespan
-│   │       ├── config.py             # Pydantic BaseSettings
-│   │       ├── deps.py               # Dependency injection
-│   │       ├── scheduler.py          # APScheduler background jobs
-│   │       ├── services/             # Orchestration (cluster, irrigation, sync, maintenance)
-│   │       └── routes/               # API endpoints
-│   └── tuya-irrigation-cli/          # Typer CLI (NO dependency on core)
-│       └── tuya_irrigation_cli/
-│           ├── client.py             # httpx API client
-│           ├── main.py               # App entrypoint, sub-app wiring
-│           └── commands/             # Command modules
-│               ├── _helpers.py       #   Shared helpers (client, call, output)
-│               ├── operations.py     #   Top-level commands (status, irrigate, etc.)
-│               ├── clusters.py       #   Cluster CRUD
-│               ├── plants.py         #   Plant CRUD + sync
-│               ├── irrigators.py     #   Irrigator CRUD + control
-│               ├── sensors.py        #   Sensor CRUD
-│               └── configs.py        #   Config get/set
-├── data/                             # plant_database.json
-├── tests/                            # 155 tests (core + server + cli)
-└── references/                       # Reference docs
-```
+uv workspace with three packages under `libs/`. Strict dependency direction:
+**core ← server ← cli** (CLI never imports core, only the HTTP API).
+
+- **`tuya-irrigation-core`** — domain. SQLAlchemy v2 models, Pydantic v2 schemas,
+  repository, Tuya Cloud + local device adapters, irrigation decision engine
+  (`logic/`), post-irrigation learning (`learning/`), plant-care DB, project-wide
+  thresholds (`constants.py`).
+- **`tuya-irrigation-server`** — FastAPI app exposing both:
+  - **JSON API** under `/api/v1` (`routes/`).
+  - **Web UI** at `/` (`web/`): HTMX + Jinja2 server-rendered, served by the
+    same app. No SPA, no build step.
+
+  Orchestration lives in `services/` (cluster, irrigation, sync, maintenance,
+  charts, weather). Background jobs use APScheduler (`scheduler.py`).
+- **`tuya-irrigation-cli`** — Typer CLI. Talks to the API over HTTP; no DB or
+  core imports.
 
 **Naming:**
 - Distribution: `tuya-irrigation-core`, `tuya-irrigation-server`, `tuya-irrigation-cli`
 - Import: `tuya_irrigation_core`, `tuya_irrigation_server`, `tuya_irrigation_cli`
 - Entry points: `tuya-irrigation` (CLI), `tuya-irrigation-server` (server)
+
+Other top-level dirs: `data/` (gitignored runtime + `plant_database.json`),
+`tests/` (mirrors package layout: root = core, `server/`, `cli/`), `references/`.
 
 ## Key Technical Decisions
 
@@ -101,6 +82,7 @@ tuya-irrigation/
 8. **Learning is advisory** — never blocks irrigation decisions
 9. **All thresholds** centralized in `constants.py`
 10. **CLI is server-only** — always talks to API, no direct DB access
+11. **Web UI is server-rendered** (HTMX + Jinja2, no SPA, no build step) and lives in the same FastAPI app — `/api/v1` returns JSON, `/` returns HTML (full pages or HX fragments)
 
 ## Development
 
@@ -108,8 +90,9 @@ tuya-irrigation/
 
 ```bash
 uv sync
-uv run tuya-irrigation-server    # Start server
+uv run tuya-irrigation-server    # Start server (API at /api/v1, web UI at /)
 uv run tuya-irrigation --help    # CLI help
+make serve                       # Same as uv run tuya-irrigation-server
 ```
 
 ### Code Quality
@@ -130,27 +113,13 @@ make coverage   # pytest with coverage (60% threshold)
 uv run pytest -v
 ```
 
-All tests use `conftest.py` fixtures and `fake_data.py`. Server tests use FastAPI TestClient with in-memory SQLite. CLI tests use Typer CliRunner with httpx MockTransport.
-
-| Suite | Tests | Scope |
-|---|---|---|
-| `test_db.py` | 16 | Repository ops, dedup, bulk insert |
-| `test_logic.py` | 29 | Decisions, conflict, cooldown, stress, humidity, light, trends |
-| `test_devices.py` | 12 | Device control, sensor parsing, error handling |
-| `test_cloud.py` | 14 | Cloud API parsing, v2 shadow, edge cases |
-| `test_learning.py` | 18 | Absorption, drainage, alerts, reports, edge cases |
-| `test_utils.py` | 16 | Seasonal light, timestamps |
-| `test_plant_db.py` | 12 | Species/category lookup |
-| `test_stats.py` | 12 | Stats, CSV export, header/content validation |
-| `server/test_*.py` | 46 | All API endpoints via HTTP |
-| `cli/test_cli.py` | 16 | CLI commands via mock HTTP |
-
-**Total: ~191 tests.** All use fake data (no real API calls).
+All tests use `conftest.py` fixtures and `fake_data.py`. Server + web tests use FastAPI TestClient with in-memory SQLite. CLI tests use Typer CliRunner with httpx MockTransport. Web tests assert on rendered HTML / fragment markers, not on visual layout. All use fake data — no real API calls.
 
 ### Adding Tests
 
 - Core → `tests/test_*.py`
-- Server endpoints → `tests/server/test_*.py` (use TestClient)
+- JSON API endpoints → `tests/server/test_<resource>.py` (use TestClient)
+- Web pages / HX fragments / template filters → `tests/server/test_web_*.py` (use TestClient, assert on HTML markers)
 - CLI → `tests/cli/test_cli.py` (use CliRunner + MockTransport)
 
 ### Add a Plant Species
