@@ -59,8 +59,16 @@ uv workspace with three packages under `libs/`. Strict dependency direction:
 
   Orchestration lives in `services/` (cluster, irrigation, sync, maintenance,
   charts, weather). Background jobs use APScheduler (`scheduler.py`).
-- **`tuya-irrigation-cli`** — Typer CLI. Talks to the API over HTTP; no DB or
-  core imports.
+- **`tuya-irrigation-cli`** — Typer CLI. Talks to the API over HTTP via an
+  `httpx`-based `IrrigationClient` (in `client.py`); no DB or core imports.
+
+  Surface: top-level **operation** commands registered directly on the root app
+  (`status`, `irrigate`, `sync`, `stats`, etc. — see
+  `commands/operations.py`) plus per-resource **sub-apps**: `cluster`, `plant`,
+  `irrigator`, `sensor`, `config`. Server URL resolves in order:
+  `--server` flag → `$IRRIGATION_SERVER_URL` → `http://localhost:8000`.
+  Output is JSON via `rich.print_json`; `ServerError` maps to a non-zero exit
+  through the shared `call()` helper in `commands/_helpers.py`.
 
 **Naming:**
 - Distribution: `tuya-irrigation-core`, `tuya-irrigation-server`, `tuya-irrigation-cli`
