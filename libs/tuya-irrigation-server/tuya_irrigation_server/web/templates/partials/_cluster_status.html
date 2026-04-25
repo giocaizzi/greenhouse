@@ -10,7 +10,7 @@
         {%- if decision.confidence is not none %} · {{ "%.0f%%" | format(decision.confidence * 100) }}{% endif -%}
       </span>
       {% if decision.reason %}
-        <p class="status-panel__reason">{{ decision.reason }}</p>
+        <p class="status-panel__reason">{{ decision.reason | strip_emoji }}</p>
       {% endif %}
     </div>
   {% endif %}

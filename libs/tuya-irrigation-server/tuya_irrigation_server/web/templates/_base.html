@@ -64,7 +64,11 @@
           hx-get="/health/badge"
           hx-trigger="load, every 60s"
           hx-swap="innerHTML">…</span>
-    <span style="margin-left:auto; color: var(--text-dim); font-family: var(--font-mono);">tuya-irrigation</span>
+    <span class="footer__meta">
+      <span>tuya-irrigation</span>
+      <span class="sep" aria-hidden="true"></span>
+      <span title="Page rendered">{{ now_text or "" }}</span>
+    </span>
   </div>
 </footer>
 

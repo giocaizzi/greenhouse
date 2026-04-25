@@ -60,6 +60,8 @@ def cluster_detail(
         for metric in CLUSTER_METRICS
     }
     chart_payloads_json = {metric: json.dumps(payload) for metric, payload in chart_payloads.items()}
+    # Threshold per metric is reused by stat tiles to render the range indicator.
+    chart_thresholds = {metric: payload.get("threshold", {}) for metric, payload in chart_payloads.items()}
 
     return templates.TemplateResponse(
         request,
@@ -72,6 +74,7 @@ def cluster_detail(
             allowed_hours=sorted(ALLOWED_HOURS),
             metrics=CLUSTER_METRICS,
             chart_payloads=chart_payloads_json,
+            chart_thresholds=chart_thresholds,
         ),
     )
 

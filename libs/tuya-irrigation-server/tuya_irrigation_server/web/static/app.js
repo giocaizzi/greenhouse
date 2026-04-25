@@ -135,7 +135,15 @@
             type: "time",
             time: {
               tooltipFormat: "MMM d HH:mm",
-              displayFormats: { hour: "HH:mm", day: "MMM d" },
+              displayFormats: {
+                millisecond: "HH:mm:ss",
+                second: "HH:mm:ss",
+                minute: "HH:mm",
+                hour: "HH:mm",
+                day: "MMM d",
+                week: "MMM d",
+                month: "MMM yyyy",
+              },
             },
             grid: { display: false },
             border: { color: grid },

@@ -10,7 +10,7 @@
   </div>
   <div class="card__body">
     {% if result.reason %}
-      <p>{{ result.reason }}</p>
+      <p>{{ result.reason | strip_emoji }}</p>
     {% endif %}
     {% if result.duration_minutes or result.interval_hours or result.temperature is not none %}
       <dl>

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import time
+
 from fastapi import Request
 
 
@@ -10,4 +12,9 @@ def is_hx(request: Request) -> bool:
 
 
 def base_context(request: Request, **extra) -> dict:
-    return {"request": request, "is_hx": is_hx(request), **extra}
+    return {
+        "request": request,
+        "is_hx": is_hx(request),
+        "now_text": time.strftime("%Y-%m-%d %H:%M"),
+        **extra,
+    }

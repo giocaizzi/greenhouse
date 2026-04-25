@@ -26,6 +26,19 @@
   </div>
 </section>
 
+{% if clusters %}
+<section class="dash-hero"
+         hx-get="/dashboard/hero"
+         hx-trigger="load, every 60s"
+         hx-swap="innerHTML">
+  <span class="dash-hero__eyebrow">Right now</span>
+  <div class="skeleton">
+    <div class="skeleton__line med"></div>
+    <div class="skeleton__line short"></div>
+  </div>
+</section>
+{% endif %}
+
 {% if not clusters %}
   <article class="empty">
     <span class="empty__icon"><svg class="icon"><use href="/static/icons/sprite.svg#i-leaf"></use></svg></span>
@@ -49,7 +62,12 @@
              hx-get="/clusters/{{ cluster.id }}/status-fragment"
              hx-trigger="load, every 30s"
              hx-swap="innerHTML">
-          <progress></progress>
+          <div class="skeleton">
+            <div class="skeleton__line short"></div>
+            <div class="skeleton__line med"></div>
+            <div class="skeleton__line"></div>
+            <div class="skeleton__line med"></div>
+          </div>
         </div>
       </article>
     {% endfor %}

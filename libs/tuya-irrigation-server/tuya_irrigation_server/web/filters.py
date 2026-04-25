@@ -2,9 +2,21 @@
 
 from __future__ import annotations
 
+import re
 import time
 
 from tuya_irrigation_core.utils import format_timestamp
+
+# Matches common Unicode emoji ranges. Used to scrub decorative glyphs out of
+# server-emitted reason strings so the UI's icon system stays the only voice.
+_EMOJI_RE = re.compile(
+    "[\U0001f300-\U0001f6ff\U0001f900-\U0001f9ff\U0001fa70-\U0001faff\U00002600-\U000027bf\U0001f000-\U0001f02f✀-➿️]+",
+    flags=re.UNICODE,
+)
+
+# Past this age we treat readings as "stale" — avoids absurd values like
+# "20567d ago" leaking into the UI from seed data or long-offline sensors.
+_AGE_STALE_SECONDS = 7 * 86400
 
 
 def format_ts(ts: int | float | None, fmt: str = "%Y-%m-%d %H:%M") -> str:
@@ -23,7 +35,31 @@ def age_seconds(ts: int | float | None) -> str:
         return f"{delta // 60}m ago"
     if delta < 86400:
         return f"{delta // 3600}h ago"
-    return f"{delta // 86400}d ago"
+    if delta < _AGE_STALE_SECONDS:
+        return f"{delta // 86400}d ago"
+    return "stale"
+
+
+def strip_emoji(text: str | None) -> str:
+    """Remove decorative emoji from a string and collapse leftover whitespace."""
+    if not text:
+        return ""
+    cleaned = _EMOJI_RE.sub("", text)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    cleaned = re.sub(r"\s*;\s*", "; ", cleaned)
+    return cleaned
+
+
+def stat_position(value: float | None, lo: float | None, hi: float | None) -> str:
+    """Return the position of value as a 0–100 percent within [lo, hi].
+
+    Used by the stat tile range indicator. Falls back to 50 when bounds are
+    missing or value is out of range, so the marker stays visible.
+    """
+    if value is None or lo is None or hi is None or hi <= lo:
+        return "50"
+    pct = (float(value) - float(lo)) / (float(hi) - float(lo)) * 100
+    return f"{max(0, min(100, pct)):.0f}"
 
 
 def moisture_badge(value: float | None, target_min: float | None, target_max: float | None) -> str:
@@ -67,4 +103,6 @@ ALL_FILTERS = {
     "decision_badge": decision_badge,
     "format_minutes": format_minutes,
     "yesno": yesno,
+    "strip_emoji": strip_emoji,
+    "stat_position": stat_position,
 }

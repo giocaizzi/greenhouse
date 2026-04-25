@@ -56,7 +56,7 @@
       {{ decision.action | title }}<span class="muted">.</span>
     </h2>
     {% if decision.reason %}
-      <p class="decision__why">{{ decision.reason }}</p>
+      <p class="decision__why">{{ decision.reason | strip_emoji }}</p>
     {% endif %}
     <div class="row" style="gap: var(--sp-2); flex-wrap: wrap;">
       <span class="badge-{{ decision.action | decision_badge }}">
@@ -84,36 +84,125 @@
 </section>
 {% endif %}
 
-{# Live readings — 4 stat tiles #}
+{# Live readings — 4 stat tiles, each with a threshold-aware range indicator #}
 {% if status.sensors %}
+{% set soil_t = chart_thresholds.get('soil_moisture', {}) %}
+{% set temp_t = chart_thresholds.get('temperature', {}) %}
+{% set hum_t  = chart_thresholds.get('env_humidity', {}) %}
+{# Display range padding around the band so the marker has room outside [min, max] #}
+{% macro range_window(t, value, pad_lo, pad_hi) -%}
+  {%- set tmin = t.get('min') -%}
+  {%- set tmax = t.get('max') -%}
+  {%- if tmin is not none and tmax is not none -%}
+    {%- set lo = tmin - pad_lo -%}
+    {%- set hi = tmax + pad_hi -%}
+    {%- if value is not none -%}
+      {%- if value < lo -%}{%- set lo = value - pad_lo -%}{%- endif -%}
+      {%- if value > hi -%}{%- set hi = value + pad_hi -%}{%- endif -%}
+    {%- endif -%}
+    {{ lo }}|{{ hi }}
+  {%- endif -%}
+{%- endmacro %}
+
+{% set soil_w = range_window(soil_t, soil_reading.value, 10, 10) %}
+{% set temp_w = range_window(temp_t, temp_reading.value, 5, 5) %}
+{% set hum_w  = range_window(hum_t,  hum_reading.value,  10, 10) %}
+
 <section class="stat-grid">
-  <div class="stat">
+  {# Soil moisture #}
+  {% set v = soil_reading.value %}
+  {% set tmin = soil_t.get('min') %}
+  {% set tmax = soil_t.get('max') %}
+  {% set status_class = 'stat--ok' %}
+  {% if v is not none and tmin is not none and v < tmin %}{% set status_class = 'stat--danger' %}{% endif %}
+  {% if v is not none and tmax is not none and v > tmax %}{% set status_class = 'stat--warn' %}{% endif %}
+  <div class="stat {{ status_class }}">
     <div class="stat__row">
       <span class="stat__label"><svg class="icon"><use href="/static/icons/sprite.svg#i-drop"></use></svg>Soil moisture</span>
     </div>
     <div class="stat__value">
-      {% if soil_reading.value is not none %}{{ "%.1f" | format(soil_reading.value) }}<span class="unit">%</span>{% else %}<span class="muted">—</span>{% endif %}
+      {% if v is not none %}{{ "%.1f" | format(v) }}<span class="unit">%</span>{% else %}<span class="muted">—</span>{% endif %}
     </div>
-    <div class="stat__hint"><span>across {{ sensor_count }} sensor{{ "" if sensor_count == 1 else "s" }}</span></div>
+    {% if soil_w %}
+      {% set lo, hi = soil_w.split('|') | map('float') | list %}
+      <div class="stat__range" style="
+        --from: {{ ((tmin - lo) / (hi - lo) * 100) | round(0) }}%;
+        --to:   {{ ((tmax - lo) / (hi - lo) * 100) | round(0) }}%;
+        --at:   {% if v is not none %}{{ v | stat_position(lo, hi) }}%{% else %}50%{% endif %};
+      "></div>
+      <div class="stat__hint">
+        <span>{{ "%.0f" | format(lo) }}%</span>
+        <span class="target">target {{ "%.0f" | format(tmin) }}–{{ "%.0f" | format(tmax) }}%</span>
+        <span>{{ "%.0f" | format(hi) }}%</span>
+      </div>
+    {% else %}
+      <div class="stat__hint"><span>across {{ sensor_count }} sensor{{ "" if sensor_count == 1 else "s" }}</span></div>
+    {% endif %}
   </div>
-  <div class="stat">
+
+  {# Temperature #}
+  {% set v = temp_reading.value %}
+  {% set tmin = temp_t.get('min') %}
+  {% set tmax = temp_t.get('max') %}
+  {% set status_class = 'stat--ok' %}
+  {% if v is not none and tmin is not none and v < tmin %}{% set status_class = 'stat--warn' %}{% endif %}
+  {% if v is not none and tmax is not none and v > tmax %}{% set status_class = 'stat--danger' %}{% endif %}
+  <div class="stat {{ status_class }}">
     <div class="stat__row">
       <span class="stat__label"><svg class="icon"><use href="/static/icons/sprite.svg#i-thermometer-simple"></use></svg>Temperature</span>
     </div>
     <div class="stat__value">
-      {% if temp_reading.value is not none %}{{ "%.1f" | format(temp_reading.value) }}<span class="unit">°C</span>{% else %}<span class="muted">—</span>{% endif %}
+      {% if v is not none %}{{ "%.1f" | format(v) }}<span class="unit">°C</span>{% else %}<span class="muted">—</span>{% endif %}
     </div>
-    <div class="stat__hint"><span>ambient</span></div>
+    {% if temp_w %}
+      {% set lo, hi = temp_w.split('|') | map('float') | list %}
+      <div class="stat__range" style="
+        --from: {{ ((tmin - lo) / (hi - lo) * 100) | round(0) }}%;
+        --to:   {{ ((tmax - lo) / (hi - lo) * 100) | round(0) }}%;
+        --at:   {% if v is not none %}{{ v | stat_position(lo, hi) }}%{% else %}50%{% endif %};
+      "></div>
+      <div class="stat__hint">
+        <span>{{ "%.0f" | format(lo) }}°</span>
+        <span class="target">target {{ "%.0f" | format(tmin) }}–{{ "%.0f" | format(tmax) }}°</span>
+        <span>{{ "%.0f" | format(hi) }}°</span>
+      </div>
+    {% else %}
+      <div class="stat__hint"><span>ambient</span></div>
+    {% endif %}
   </div>
-  <div class="stat">
+
+  {# Humidity #}
+  {% set v = hum_reading.value %}
+  {% set tmin = hum_t.get('min') %}
+  {% set tmax = hum_t.get('max') %}
+  {% set status_class = 'stat--ok' %}
+  {% if v is not none and tmin is not none and v < tmin %}{% set status_class = 'stat--warn' %}{% endif %}
+  {% if v is not none and tmax is not none and v > tmax %}{% set status_class = 'stat--warn' %}{% endif %}
+  <div class="stat {{ status_class }}">
     <div class="stat__row">
       <span class="stat__label"><svg class="icon"><use href="/static/icons/sprite.svg#i-drop"></use></svg>Humidity</span>
     </div>
     <div class="stat__value">
-      {% if hum_reading.value is not none %}{{ "%.0f" | format(hum_reading.value) }}<span class="unit">%</span>{% else %}<span class="muted">—</span>{% endif %}
+      {% if v is not none %}{{ "%.0f" | format(v) }}<span class="unit">%</span>{% else %}<span class="muted">—</span>{% endif %}
     </div>
-    <div class="stat__hint"><span>relative</span></div>
+    {% if hum_w %}
+      {% set lo, hi = hum_w.split('|') | map('float') | list %}
+      <div class="stat__range" style="
+        --from: {{ ((tmin - lo) / (hi - lo) * 100) | round(0) }}%;
+        --to:   {{ ((tmax - lo) / (hi - lo) * 100) | round(0) }}%;
+        --at:   {% if v is not none %}{{ v | stat_position(lo, hi) }}%{% else %}50%{% endif %};
+      "></div>
+      <div class="stat__hint">
+        <span>{{ "%.0f" | format(lo) }}%</span>
+        <span class="target">target {{ "%.0f" | format(tmin) }}–{{ "%.0f" | format(tmax) }}%</span>
+        <span>{{ "%.0f" | format(hi) }}%</span>
+      </div>
+    {% else %}
+      <div class="stat__hint"><span>relative</span></div>
+    {% endif %}
   </div>
+
+  {# Light — no per-plant threshold available; just display reading #}
   <div class="stat">
     <div class="stat__row">
       <span class="stat__label"><svg class="icon"><use href="/static/icons/sprite.svg#i-sun"></use></svg>Light</span>

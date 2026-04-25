@@ -1,0 +1,24 @@
+{% set irrigate = counts.get('irrigate', 0) %}
+{% set skip = counts.get('skip', 0) %}
+{% set hold = counts.get('hold', 0) %}
+{% set error = counts.get('error', 0) %}
+{% set unknown = counts.get('unknown', 0) %}
+{% set quiet = skip + hold %}
+
+<span class="dash-hero__eyebrow">Right now</span>
+<p class="dash-hero__line">
+  {%- if total == 0 -%}
+    <em>No clusters configured.</em>
+  {%- elif irrigate > 0 and quiet > 0 -%}
+    <span class="accent">{{ irrigate }} cluster{{ "" if irrigate == 1 else "s" }} want{{ "s" if irrigate == 1 else "" }} water</span>,
+    <span class="muted">{{ quiet }} holding steady</span>{% if error %}, <span class="muted">{{ error }} in error</span>{% endif %}.
+  {%- elif irrigate > 0 -%}
+    <span class="accent">{{ irrigate }} cluster{{ "" if irrigate == 1 else "s" }} want{{ "s" if irrigate == 1 else "" }} water.</span>
+  {%- elif quiet > 0 -%}
+    <span class="muted">All {{ quiet }} cluster{{ "" if quiet == 1 else "s" }} holding steady.</span>
+  {%- elif error > 0 -%}
+    <span class="muted">{{ error }} cluster{{ "" if error == 1 else "s" }} reporting errors.</span>
+  {%- else -%}
+    <em>Awaiting first decision.</em>
+  {%- endif -%}
+</p>
