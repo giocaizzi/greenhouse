@@ -32,7 +32,7 @@ uv run tuya-irrigation check --all    # check all clusters
 - 🚨 **7 alert types** — blocked drip, rapid drainage, chronic underwatering, unresolvable conflict, low light, low humidity, light-accelerated drainage
 - ☁️ **Tuya Cloud + Local protocol** — reads sensors via Cloud API, controls irrigators via local protocol v3.5 for reliable duration control
 - ⏰ **Background scheduling** — APScheduler syncs sensors every 30 min and checks clusters every 6 hours
-- 🔌 **Three ways in** — JSON REST API (OpenAPI docs at `/docs`), server-rendered HTMX web UI at `/`, and a thin Typer CLI client. The CLI is just an HTTP client to the same API — no direct DB access.
+- 🔌 **Four ways in** — JSON REST API (OpenAPI docs at `/docs`), server-rendered HTMX web UI at `/`, a thin Typer CLI client, and an MCP server at `/mcp` (every API endpoint is auto-published as an MCP tool via [`fastapi-mcp`](https://github.com/tadata-org/fastapi_mcp)). All four share the same source of truth — the API.
 
 ## Getting Started
 
@@ -89,6 +89,7 @@ Same data is also available via:
 
 - **Web UI** — open `http://localhost:8000/` for the HTMX dashboard (clusters, per-plant charts, irrigators, history, scheduler).
 - **REST API** — `http://localhost:8000/api/v1/...`; OpenAPI docs at `http://localhost:8000/docs`.
+- **MCP server** — `http://localhost:8000/mcp` (streamable HTTP). Point an MCP client (e.g. Claude Desktop) at it and every API endpoint shows up as a tool. **Auth is currently deferred — keep the server localhost-only.** Note that the MCP surface includes write tools (irrigate, irrigator start/stop), which lets a connected LLM actuate physical irrigation hardware.
 
 ## License
 

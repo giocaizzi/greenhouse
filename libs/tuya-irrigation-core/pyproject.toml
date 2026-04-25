@@ -1,6 +1,6 @@
 [project]
 name = "tuya-irrigation-core"
-version = "1.0.0"
+version = "1.1.0"
 description = "Core library for tuya-irrigation: models, repository, business logic"
 requires-python = ">=3.11"
 license = {text = "MIT"}

@@ -21,10 +21,10 @@
 It exposes a FastAPI server (JSON API + HTMX web UI), a Typer CLI client, and
 runs sync + check jobs in the background via APScheduler.
 
-### Interfaces — three ways in, one source of truth
+### Interfaces — four ways in, one source of truth
 
 The server is the only thing that touches the DB and the devices. There are
-three ways to talk to it:
+four ways to talk to it:
 
 1. **JSON REST API** at `/api/v1` — the authoritative entry point. OpenAPI
    docs at `/docs`.
@@ -34,11 +34,23 @@ three ways to talk to it:
 3. **CLI** (`tuya-irrigation`) — a thin `httpx`-based client that builds
    requests against `/api/v1`. It does **not** import `tuya-irrigation-core`
    and has no DB access; if the server isn't running, the CLI does nothing.
+4. **MCP server** at `/mcp` — same FastAPI app, exposed via
+   [`fastapi-mcp`](https://github.com/tadata-org/fastapi_mcp). Every
+   `/api/v1` endpoint is auto-published as an MCP tool over streamable HTTP;
+   web routes are excluded automatically because they set
+   `include_in_schema=False`. **Auth is intentionally deferred** — treat
+   `/mcp` as localhost-only until that lands. Wired in `app.py` after all
+   routers are registered; the live `FastApiMCP` instance is stored on
+   `app.state.mcp` for introspection in tests.
 
-Stop the server and both the UI and the CLI go dark. Anything new the CLI
-should be able to do must first exist as an API endpoint.
+Stop the server and the UI, CLI, and MCP all go dark. Anything new the CLI
+or an MCP tool should be able to do must first exist as an API endpoint.
 
-**Tech Stack:** Python 3.11+, uv workspaces, FastAPI, SQLAlchemy v2, Pydantic v2, Typer, ruff, pytest, SQLite, tinytuya, APScheduler, Jinja2 + HTMX + Chart.js + Pico.css (server-rendered web UI, no build step)
+> ⚠️ **MCP gives an LLM the ability to actuate physical irrigation hardware**
+> (`/clusters/{id}/irrigate`, `/irrigators/{id}/start`, etc.). Until auth is
+> added, only run the server somewhere an LLM you trust can reach it.
+
+**Tech Stack:** Python 3.11+, uv workspaces, FastAPI, SQLAlchemy v2, Pydantic v2, Typer, ruff, pytest, SQLite, tinytuya, APScheduler, Jinja2 + HTMX + Chart.js + Pico.css (server-rendered web UI, no build step), `fastapi-mcp` (MCP server mounted on the same FastAPI app)
 
 ## Privacy & Security
 
@@ -106,7 +118,8 @@ Other top-level dirs: `data/` (gitignored runtime + `plant_database.json`),
 7. **Evidence-based** plant care data with source citations
 8. **Learning is advisory** — never blocks irrigation decisions
 9. **All thresholds** centralized in `constants.py`
-10. **Server is the only thing with DB and device access** — UI and CLI go through it (see "Interfaces" above). Web UI is HTMX + Jinja2 server-rendered (no SPA, no build step) and lives in the same FastAPI app.
+10. **Server is the only thing with DB and device access** — UI, CLI, and MCP all go through it (see "Interfaces" above). Web UI is HTMX + Jinja2 server-rendered (no SPA, no build step) and lives in the same FastAPI app.
+11. **Every `/api/v1` route must declare `response_model=`, a Pydantic request body, and a Google-style docstring** — fastapi-mcp builds MCP tool schemas from the OpenAPI schema and uses the route's docstring as the tool description an LLM reads when picking tools. Untyped or undocumented routes produce tools the LLM cannot reason about safely. Enforced by `tests/server/test_mcp.py` (binary downloads like CSV export are exempted explicitly there). Docstring style: imperative summary, then `Args:` / `Returns:` / `Raises:` sections — skip framework-level params (`repo`, dependency injectables) since they only add noise to the MCP tool schema.
 
 ## Development
 

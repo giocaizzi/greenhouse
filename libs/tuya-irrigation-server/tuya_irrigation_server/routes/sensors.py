@@ -11,6 +11,23 @@ router = APIRouter(tags=["sensors"])
 
 @router.post("/clusters/{cluster_id}/sensors", response_model=SensorResponse, status_code=status.HTTP_201_CREATED)
 def add_sensor(cluster_id: int, request: CreateSensorRequest, repo: RepoDep):
+    """Register a Tuya sensor under a cluster.
+
+    A sensor may optionally be linked to a specific plant; otherwise it is
+    treated as a cluster-level reading.
+
+    Args:
+        cluster_id: Cluster the sensor belongs to.
+        request: Tuya device ID, sensor name, type (e.g. `soil_moisture`),
+            optional config dict, and optional `plant_id` for per-plant linking.
+
+    Raises:
+        HTTPException: 404 if the cluster (or referenced plant) is missing,
+            409 if the Tuya device ID is already registered.
+
+    Returns:
+        The created sensor record.
+    """
     require_cluster(repo, cluster_id)
     if request.plant_id:
         plants = repo.get_plants_in_cluster(cluster_id)
@@ -35,4 +52,9 @@ def add_sensor(cluster_id: int, request: CreateSensorRequest, repo: RepoDep):
 
 @router.get("/clusters/{cluster_id}/sensors", response_model=list[SensorResponse])
 def list_sensors(cluster_id: int, repo: RepoDep):
+    """List every sensor registered to a cluster.
+
+    Args:
+        cluster_id: ID of the cluster to enumerate.
+    """
     return repo.get_sensors_in_cluster(cluster_id)

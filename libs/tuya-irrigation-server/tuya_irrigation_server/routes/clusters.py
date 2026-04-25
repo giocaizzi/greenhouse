@@ -10,6 +10,18 @@ router = APIRouter(prefix="/clusters", tags=["clusters"])
 
 @router.post("", response_model=ClusterResponse, status_code=status.HTTP_201_CREATED, summary="Create a cluster")
 def create_cluster(request: CreateClusterRequest, repo: RepoDep):
+    """Create a new plant cluster.
+
+    A cluster groups plants that share an irrigator and are watered together;
+    irrigation decisions are made per-cluster, driven by the driest plant.
+
+    Args:
+        request: Cluster name, optional location label, and `environment`
+            (`indoor` or `outdoor`; affects how temperature is resolved).
+
+    Returns:
+        The newly created cluster including its assigned ID.
+    """
     cluster_id = repo.add_cluster(request.name, request.location, request.environment)
     repo.session.commit()
     return repo.get_cluster(cluster_id)
@@ -17,9 +29,18 @@ def create_cluster(request: CreateClusterRequest, repo: RepoDep):
 
 @router.get("", response_model=list[ClusterResponse], summary="List all clusters")
 def list_clusters(repo: RepoDep):
+    """List every cluster in the system."""
     return repo.list_clusters()
 
 
 @router.get("/{cluster_id}", response_model=ClusterResponse, summary="Get a cluster by ID")
 def get_cluster(cluster_id: int, repo: RepoDep):
+    """Fetch a single cluster by ID.
+
+    Args:
+        cluster_id: Numeric cluster identifier.
+
+    Raises:
+        HTTPException: 404 if no cluster with that ID exists.
+    """
     return require_cluster(repo, cluster_id)

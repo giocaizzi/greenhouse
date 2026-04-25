@@ -5,6 +5,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
+from fastapi_mcp import FastApiMCP
 from sqlalchemy.engine import Engine
 
 from tuya_irrigation_core.database import create_db_engine, create_session_factory, init_db
@@ -87,6 +88,22 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
     app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
     app.include_router(web_router)
     register_web_exception_handlers(app)
+
+    # MCP server — exposes every JSON API endpoint as an MCP tool at /mcp
+    # over streamable HTTP. Web routes are auto-excluded because they set
+    # include_in_schema=False. Auth is intentionally deferred; mount
+    # accordingly (localhost-only).
+    mcp = FastApiMCP(
+        app,
+        name="tuya-irrigation",
+        description=(
+            "Smart plant irrigation system — manage clusters, plants, sensors, "
+            "irrigators, configs; run smart-irrigation decisions; read history, "
+            "stats, and learning reports."
+        ),
+    )
+    mcp.mount_http()
+    app.state.mcp = mcp
 
     return app
 

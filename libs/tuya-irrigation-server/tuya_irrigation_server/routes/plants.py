@@ -10,6 +10,22 @@ router = APIRouter(tags=["plants"])
 
 @router.post("/clusters/{cluster_id}/plants", response_model=PlantResponse, status_code=status.HTTP_201_CREATED)
 def add_plant(cluster_id: int, request: CreatePlantRequest, repo: RepoDep):
+    """Add a plant to a cluster.
+
+    Care thresholds (water needs, temperature/humidity ranges) can be supplied
+    directly or left null to be filled in later via `POST /plants/sync`, which
+    looks them up in the evidence-based plant database.
+
+    Args:
+        cluster_id: ID of the cluster the plant belongs to.
+        request: Species and optional plant-care fields.
+
+    Raises:
+        HTTPException: 404 if the cluster does not exist.
+
+    Returns:
+        The created plant including its ID and parent cluster.
+    """
     require_cluster(repo, cluster_id)
     plant_id = repo.add_plant(
         cluster_id=cluster_id,
@@ -30,11 +46,34 @@ def add_plant(cluster_id: int, request: CreatePlantRequest, repo: RepoDep):
 
 @router.get("/clusters/{cluster_id}/plants", response_model=list[PlantResponse])
 def list_plants(cluster_id: int, repo: RepoDep):
+    """List every plant in a cluster.
+
+    Args:
+        cluster_id: ID of the cluster to enumerate.
+    """
     return repo.get_plants_in_cluster(cluster_id)
 
 
 @router.post("/plants/sync", response_model=SyncPlantsResponse)
 def sync_plants(request: SyncPlantsRequest, repo: RepoDep, cluster_svc: ClusterServiceDep):
+    """Refresh plant care thresholds from the evidence-based plant database.
+
+    Resolves species → care data lookup and writes the result onto the matching
+    plant rows. Use this after editing `data/plant_database.json` or after
+    adding plants without explicit care fields. Scope is widening: single plant
+    → cluster → entire database, depending on which field is set.
+
+    Args:
+        request: One of `plant_id` (single plant), `cluster_id` (all plants in
+            that cluster), or neither (every plant in every cluster).
+
+    Returns:
+        Count of plants successfully synced and a list of error messages for
+        any that failed (failures do not abort the rest of the run).
+
+    Raises:
+        HTTPException: 404 if `plant_id` is set and no such plant exists.
+    """
     errors = []
     synced = 0
 

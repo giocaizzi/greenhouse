@@ -97,6 +97,26 @@ class LogManualRequest(BaseModel):
     notes: str | None = None
 
 
+class IrrigatorActionResponse(BaseModel):
+    """Result of a manual irrigator command (start/stop)."""
+
+    success: bool
+    message: str
+
+
+class LogManualResponse(BaseModel):
+    """Result of logging a manual irrigation event."""
+
+    success: bool
+    event_id: int
+
+
+class SuccessResponse(BaseModel):
+    """Generic success acknowledgement."""
+
+    success: bool
+
+
 # --- Sensor ---
 
 
@@ -204,6 +224,8 @@ class IrrigateResponse(BaseModel):
     interval_hours: int | None = None
     stress_indicators: dict | None = None
     learning_alerts: list[AlertResponse] = []
+    temperature: float | None = None
+    temperature_source: str | None = None
 
 
 class SensorStatusResponse(BaseModel):
@@ -229,6 +251,7 @@ class CheckClusterResponse(BaseModel):
     notes: str | None = None
     alerts: list[AlertResponse] = []
     maintenance: list[AlertResponse] = []
+    needs_water: list[str] = []
 
 
 class CheckAllResponse(BaseModel):
