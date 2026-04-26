@@ -92,6 +92,8 @@ def cluster_status(cluster_id: int, cluster_svc: ClusterServiceDep):
                 confidence=decision["confidence"],
                 duration_minutes=decision["duration_minutes"],
                 interval_hours=decision["interval_hours"],
+                stress_indicators=decision.get("stress_indicators"),
+                reasons=decision.get("reasons", []),
             )
             if decision
             else None

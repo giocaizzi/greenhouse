@@ -2,9 +2,22 @@
 
 import time
 
-from tuya_irrigation_core.logic import IrrigationLogic
+from tuya_irrigation_core.logic import IrrigationDecision, IrrigationLogic
 from tuya_irrigation_core.plant_db import PlantDatabase
 from tuya_irrigation_core.repository import IrrigationRepository
+
+
+def decision_to_view(decision: IrrigationDecision) -> dict:
+    """Render a decision for templates and JSON responses.
+
+    Templates and the legacy JSON shape consume the decision via dict
+    access (``decision["action"]``); model_dump preserves that contract
+    while keeping the engine and persistence layers strictly typed.
+    """
+    payload = decision.model_dump(mode="json")
+    payload["reason"] = decision.reason_text
+    payload["primary_code"] = decision.primary_code.value if decision.primary_code else None
+    return payload
 
 
 class ClusterService:
@@ -57,6 +70,7 @@ class ClusterService:
 
         logic = IrrigationLogic(self._repo, self._plant_db)
         decision = logic.decide_for_cluster(cluster_id)
+        decision_dict = decision_to_view(decision) if decision else None
 
         return {
             "cluster": cluster,
@@ -64,7 +78,7 @@ class ClusterService:
             "plants": plants,
             "sensors": sensor_data,
             "irrigators": irrigator_data,
-            "decision": decision,
+            "decision": decision_dict,
         }
 
     def get_cluster_history(self, cluster_id: int, hours: int = 24, limit: int = 50) -> dict | None:

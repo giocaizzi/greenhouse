@@ -76,17 +76,18 @@ class IrrigationService:
             return {"action": "error", "reason": "no data for decision", "confidence": 0}
 
         result = {
-            "action": decision["action"],
-            "reason": decision["reason"],
-            "confidence": decision["confidence"],
-            "duration_minutes": decision["duration_minutes"],
-            "interval_hours": decision["interval_hours"],
-            "stress_indicators": decision.get("stress_indicators"),
+            "action": decision.action.value,
+            "reason": decision.reason_text,
+            "confidence": decision.confidence,
+            "duration_minutes": decision.duration_minutes,
+            "interval_hours": decision.interval_hours,
+            "stress_indicators": decision.stress_indicators.model_dump(exclude_none=True),
+            "reasons": [r.model_dump() for r in decision.reasons],
             "temperature": temp,
             "temperature_source": source,
         }
 
-        if dry_run or decision["action"] == "skip":
+        if dry_run or decision.action.value == "skip":
             return result
 
         # Execute
@@ -101,7 +102,7 @@ class IrrigationService:
             return result
 
         irrigator = irrigators[0]
-        duration = decision["duration_minutes"]
+        duration = decision.duration_minutes
         success, output = self._dm.irrigator_start(irrigator, duration)
 
         soil_note = (
@@ -114,7 +115,10 @@ class IrrigationService:
             action="start" if success else "attempted",
             duration_minutes=duration,
             triggered_by="auto",
-            notes=f"temp={temp:.1f}C ({source}){soil_note}, confidence={decision['confidence']:.0%}, reason={decision['reason']}",
+            notes=(
+                f"temp={temp:.1f}C ({source}){soil_note}, "
+                f"confidence={decision.confidence:.0%}, reason={decision.reason_text}"
+            ),
         )
 
         if not success:

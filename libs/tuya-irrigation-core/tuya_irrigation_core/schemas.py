@@ -216,6 +216,17 @@ class AlertResponse(BaseModel):
     data: dict | None = None
 
 
+class ReasonResponse(BaseModel):
+    """A single line in the decision's structured explanation trail."""
+
+    code: str
+    message: str
+    severity: str = "info"
+    icon: str | None = None
+    duration_delta: int = 0
+    interval_delta: int = 0
+
+
 class IrrigateResponse(BaseModel):
     action: str
     reason: str
@@ -223,6 +234,7 @@ class IrrigateResponse(BaseModel):
     duration_minutes: int | None = None
     interval_hours: int | None = None
     stress_indicators: dict | None = None
+    reasons: list[ReasonResponse] = []
     learning_alerts: list[AlertResponse] = []
     temperature: float | None = None
     temperature_source: str | None = None

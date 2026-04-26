@@ -44,36 +44,36 @@ class TestIrrigationLogic:
         decision = self.logic.decide_for_cluster(self.cluster_id, current_temp=15.0)
 
         assert decision is not None
-        assert decision["action"] == "irrigate"
-        assert decision["interval_hours"] > 18
-        assert "temperature-based" in decision["reason"]
+        assert decision.action.value == "irrigate"
+        assert decision.interval_hours > 18
+        assert "temperature-based" in decision.reason_text
 
     def test_temperature_fallback_hot(self):
         """Hot temperature suggests shorter interval."""
         decision = self.logic.decide_for_cluster(self.cluster_id, current_temp=30.0)
 
         assert decision is not None
-        assert decision["action"] == "irrigate"
-        assert decision["interval_hours"] < 8
-        assert "temperature-based" in decision["reason"]
+        assert decision.action.value == "irrigate"
+        assert decision.interval_hours < 8
+        assert "temperature-based" in decision.reason_text
 
     def test_temperature_fallback_moderate(self):
         """Moderate temperature suggests medium interval."""
         decision = self.logic.decide_for_cluster(self.cluster_id, current_temp=22.0)
 
         assert decision is not None
-        assert decision["action"] == "irrigate"
-        assert decision["interval_hours"] > 10
-        assert decision["interval_hours"] < 14
+        assert decision.action.value == "irrigate"
+        assert decision.interval_hours > 10
+        assert decision.interval_hours < 14
 
     def test_soil_moisture_dry(self):
         """Dry soil triggers irrigation."""
         self._add_soil_sensor(moisture=25.0)
         decision = self.logic.decide_for_cluster(self.cluster_id)
 
-        assert decision["action"] == "irrigate"
-        assert decision["confidence"] > 0.8
-        reason_lower = decision["reason"].lower()
+        assert decision.action.value == "irrigate"
+        assert decision.confidence > 0.8
+        reason_lower = decision.reason_text.lower()
         assert "soil" in reason_lower or "stress" in reason_lower
 
     def test_soil_moisture_adequate(self):
@@ -81,19 +81,19 @@ class TestIrrigationLogic:
         self._add_soil_sensor(moisture=55.0)
         decision = self.logic.decide_for_cluster(self.cluster_id)
 
-        assert decision["action"] == "skip"
-        assert "adequate" in decision["reason"].lower()
+        assert decision.action.value == "skip"
+        assert "adequate" in decision.reason_text.lower()
 
     def test_confidence_without_sensors(self):
         """Temperature-based decision has lower confidence."""
         decision = self.logic.decide_for_cluster(self.cluster_id, current_temp=22.0)
-        assert decision["confidence"] < 0.7
+        assert decision.confidence < 0.7
 
     def test_confidence_with_sensors(self):
         """Sensor-based decision has higher confidence."""
         self._add_soil_sensor(moisture=30.0)
         decision = self.logic.decide_for_cluster(self.cluster_id)
-        assert decision["confidence"] > 0.7
+        assert decision.confidence > 0.7
 
     def test_high_water_needs_adjustment(self):
         """High water needs plants get more frequent irrigation."""
@@ -105,7 +105,7 @@ class TestIrrigationLogic:
             water_needs="high",
         )
         decision = self.logic.decide_for_cluster(cluster_id, current_temp=22.0)
-        assert decision["interval_hours"] <= 8
+        assert decision.interval_hours <= 8
 
     def test_low_water_needs_adjustment(self):
         """Low water needs plants get less frequent irrigation."""
@@ -117,14 +117,14 @@ class TestIrrigationLogic:
             water_needs="low",
         )
         decision = self.logic.decide_for_cluster(cluster_id, current_temp=22.0)
-        assert decision["interval_hours"] > 14
+        assert decision.interval_hours > 14
 
     def test_no_plants_returns_skip(self):
         """Cluster with no plants returns skip action."""
         empty_cluster = self.db.add_cluster("Empty Cluster")
         decision = self.logic.decide_for_cluster(empty_cluster)
-        assert decision["action"] == "skip"
-        assert "no plants" in decision["reason"].lower()
+        assert decision.action.value == "skip"
+        assert "no plants" in decision.reason_text.lower()
 
     def test_nonexistent_cluster(self):
         """Nonexistent cluster returns None."""
@@ -159,8 +159,8 @@ class TestIrrigationLogic:
         self.db.add_sensor_reading(sensor_id=s_b, soil_moisture=50.0)
 
         decision = self.logic.decide_for_cluster(cluster_id)
-        assert decision["action"] == "irrigate"
-        assert "driest" in decision["reason"].lower()
+        assert decision.action.value == "irrigate"
+        assert "driest" in decision.reason_text.lower()
 
     def test_multi_sensor_conflict_short_burst(self):
         """Conflicting sensors (one dry, one wet) trigger short burst."""
@@ -190,10 +190,10 @@ class TestIrrigationLogic:
         self.db.add_sensor_reading(sensor_id=s_b, soil_moisture=60.0)
 
         decision = self.logic.decide_for_cluster(cluster_id)
-        assert decision["action"] == "irrigate"
-        assert decision["duration_minutes"] == 1  # Short burst
-        assert "conflict" in decision["reason"].lower()
-        assert decision["confidence"] < 0.7
+        assert decision.action.value == "irrigate"
+        assert decision.duration_minutes == 1  # Short burst
+        assert "conflict" in decision.reason_text.lower()
+        assert decision.confidence < 0.7
 
     def test_all_sensors_adequate_skips(self):
         """All sensors showing adequate moisture skips irrigation."""
@@ -215,8 +215,8 @@ class TestIrrigationLogic:
             self.db.add_sensor_reading(sensor_id=sid, soil_moisture=55.0 + i)
 
         decision = self.logic.decide_for_cluster(cluster_id)
-        assert decision["action"] == "skip"
-        assert "adequate" in decision["reason"].lower()
+        assert decision.action.value == "skip"
+        assert "adequate" in decision.reason_text.lower()
 
     def test_cooldown_blocks_irrigation(self):
         """Recent irrigation triggers cooldown — skips even if dry."""
@@ -248,14 +248,14 @@ class TestIrrigationLogic:
 
         logic = IrrigationLogic(self.db, get_plant_database())
         decision = logic.decide_for_cluster(cluster_id)
-        assert decision["action"] == "skip"
-        assert "cooldown" in decision["reason"].lower()
+        assert decision.action.value == "skip"
+        assert "cooldown" in decision.reason_text.lower()
 
     def test_no_data_returns_low_confidence(self):
         """No sensors and no temp returns low confidence skip."""
         decision = self.logic.decide_for_cluster(self.cluster_id)
-        assert decision["action"] == "skip"
-        assert decision["confidence"] <= 0.3
+        assert decision.action.value == "skip"
+        assert decision.confidence <= 0.3
 
     # ── Humidity-based decision tests ───────────────────────────────────────
 
@@ -284,9 +284,9 @@ class TestIrrigationLogic:
         decision = self.logic.decide_for_cluster(self.cluster_id)
 
         assert decision is not None
-        assert "dry air" in decision["reason"].lower()
+        assert "dry air" in decision.reason_text.lower()
         # Should reduce interval by 3 hours from the default
-        assert decision["interval_hours"] < 12
+        assert decision.interval_hours < 12
 
     def test_humid_air_increases_interval(self):
         """High ambient humidity increases interval (less transpiration)."""
@@ -295,8 +295,8 @@ class TestIrrigationLogic:
         decision = self.logic.decide_for_cluster(self.cluster_id)
 
         assert decision is not None
-        assert "humidity" in decision["reason"].lower()
-        assert decision["interval_hours"] > 12
+        assert "humidity" in decision.reason_text.lower()
+        assert decision.interval_hours > 12
 
     def test_moderately_dry_air_adjustment(self):
         """Slightly dry air has smaller frequency adjustment."""
@@ -305,7 +305,7 @@ class TestIrrigationLogic:
         decision = self.logic.decide_for_cluster(self.cluster_id)
 
         assert decision is not None
-        assert "dry air" in decision["reason"].lower()
+        assert "dry air" in decision.reason_text.lower()
 
     # ── Light-based decision tests ──────────────────────────────────────────
 
@@ -316,8 +316,8 @@ class TestIrrigationLogic:
         decision = self.logic.decide_for_cluster(self.cluster_id)
 
         assert decision is not None
-        assert "bright" in decision["reason"].lower()
-        assert decision["interval_hours"] < 12
+        assert "bright" in decision.reason_text.lower()
+        assert decision.interval_hours < 12
 
     def test_very_dark_light_decreases_frequency(self):
         """Very dark conditions increase interval."""
@@ -326,8 +326,8 @@ class TestIrrigationLogic:
         decision = self.logic.decide_for_cluster(self.cluster_id)
 
         assert decision is not None
-        assert "light" in decision["reason"].lower()
-        assert decision["interval_hours"] > 12
+        assert "light" in decision.reason_text.lower()
+        assert decision.interval_hours > 12
 
     # ── Stress detection tests ──────────────────────────────────────────────
 
@@ -347,18 +347,18 @@ class TestIrrigationLogic:
         )
         decision = self.logic.decide_for_cluster(self.cluster_id)
 
-        assert decision["action"] == "irrigate"
-        assert decision["confidence"] >= 0.9
-        assert "sensor alert" in decision["reason"].lower()
+        assert decision.action.value == "irrigate"
+        assert decision.confidence >= 0.9
+        assert "sensor alert" in decision.reason_text.lower()
 
     def test_critical_moisture_triggers_stress(self):
         """Soil moisture below critical (30%) triggers water stress."""
         self._add_soil_sensor(moisture=20.0)
         decision = self.logic.decide_for_cluster(self.cluster_id)
 
-        assert decision["action"] == "irrigate"
-        assert decision["confidence"] >= 0.9
-        stress = decision.get("stress_indicators", {})
+        assert decision.action.value == "irrigate"
+        assert decision.confidence >= 0.9
+        stress = decision.stress_indicators.model_dump(exclude_none=True)
         assert "water_stress" in stress
 
     def test_over_watering_detected(self):
@@ -395,9 +395,9 @@ class TestIrrigationLogic:
         logic = IrrigationLogic(self.db, get_plant_database())
         decision = logic.decide_for_cluster(cluster_id)
 
-        assert decision["action"] == "skip"
-        stress = decision.get("stress_indicators", {})
-        assert "over_watering" in stress or "over-watering" in decision["reason"].lower()
+        assert decision.action.value == "skip"
+        stress = decision.stress_indicators.model_dump(exclude_none=True)
+        assert "over_watering" in stress or "over-watering" in decision.reason_text.lower()
 
     def test_heat_stress_above_ideal(self):
         """Temp far above ideal + rising trend triggers heat stress."""
@@ -429,7 +429,7 @@ class TestIrrigationLogic:
         decision = logic.decide_for_cluster(cluster_id)
 
         assert decision is not None
-        stress = decision.get("stress_indicators", {})
+        stress = decision.stress_indicators.model_dump(exclude_none=True)
         assert "heat_stress" in stress
 
     # ── Trend-based decision tests ──────────────────────────────────────────
@@ -456,7 +456,7 @@ class TestIrrigationLogic:
 
         decision = self.logic.decide_for_cluster(self.cluster_id)
         assert decision is not None
-        assert "declining" in decision["reason"].lower()
+        assert "declining" in decision.reason_text.lower()
 
     def test_rising_moisture_trend_increases_interval(self):
         """Rising soil moisture trend increases interval."""
@@ -480,7 +480,7 @@ class TestIrrigationLogic:
 
         decision = self.logic.decide_for_cluster(self.cluster_id)
         assert decision is not None
-        assert "rising" in decision["reason"].lower()
+        assert "rising" in decision.reason_text.lower()
 
     def test_config_fallback_manual_mode(self):
         """Config in manual mode returns skip with low confidence."""
@@ -492,13 +492,13 @@ class TestIrrigationLogic:
         )
         # No sensors, no temp → should use config fallback
         decision = self.logic.decide_for_cluster(self.cluster_id)
-        assert decision["action"] == "skip"
-        assert decision["confidence"] == pytest.approx(0.3)
+        assert decision.action.value == "skip"
+        assert decision.confidence == pytest.approx(0.3)
 
     def test_soil_too_wet_skips(self):
         """Soil moisture above target max skips irrigation."""
         self._add_soil_sensor(moisture=75.0)
         decision = self.logic.decide_for_cluster(self.cluster_id)
 
-        assert decision["action"] == "skip"
-        assert "wet" in decision["reason"].lower()
+        assert decision.action.value == "skip"
+        assert "wet" in decision.reason_text.lower()

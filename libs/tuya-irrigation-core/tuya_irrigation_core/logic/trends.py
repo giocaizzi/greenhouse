@@ -3,72 +3,47 @@
 import statistics
 
 from tuya_irrigation_core.constants import TREND_MIN_READINGS, TREND_MOISTURE_THRESHOLD, TREND_TEMP_THRESHOLD
+from tuya_irrigation_core.logic.decision import Trends
 from tuya_irrigation_core.repository import IrrigationRepository
 
 
-def analyze_historical_trends(db: IrrigationRepository, cluster_id: int) -> dict:
-    """Analyze historical sensor and irrigation data to detect trends.
+def analyze_historical_trends(db: IrrigationRepository, cluster_id: int) -> Trends:
+    """Detect 48h moisture/temperature trends and 7d irrigation cadence."""
+    trends = Trends()
 
-    Returns dict with:
-    - soil_moisture_trend: "rising", "declining", "stable", or absent
-    - temperature_trend: "rising", "falling", "stable", or absent
-    - irrigation_frequency_low: bool (under-watering pattern)
-    - irrigation_frequency_high: bool (over-watering pattern)
-    """
-    trends = {}
-
-    # Get sensor readings for last 48h
     sensors = db.get_sensors_in_cluster(cluster_id)
     if sensors:
-        # Collect soil moisture history
         all_readings = []
         for sensor in sensors:
-            readings = db.get_recent_readings(sensor.id, hours=48)
-            all_readings.extend(readings)
+            all_readings.extend(db.get_recent_readings(sensor.id, hours=48))
 
         if len(all_readings) >= TREND_MIN_READINGS:
             all_readings.sort(key=lambda r: r.timestamp)
-
-            # Soil moisture trend (compare first half vs second half)
             mid = len(all_readings) // 2
-            moisture_first_half = [r.soil_moisture for r in all_readings[:mid] if r.soil_moisture]
-            moisture_second_half = [r.soil_moisture for r in all_readings[mid:] if r.soil_moisture]
 
-            if moisture_first_half and moisture_second_half:
-                avg_first = statistics.mean(moisture_first_half)
-                avg_second = statistics.mean(moisture_second_half)
-                delta = avg_second - avg_first
-
+            moisture_first = [r.soil_moisture for r in all_readings[:mid] if r.soil_moisture]
+            moisture_second = [r.soil_moisture for r in all_readings[mid:] if r.soil_moisture]
+            if moisture_first and moisture_second:
+                delta = statistics.mean(moisture_second) - statistics.mean(moisture_first)
+                trends.soil_moisture_delta = delta
                 if delta < -TREND_MOISTURE_THRESHOLD:
-                    trends["soil_moisture_trend"] = "declining"
-                    trends["soil_moisture_delta"] = delta
+                    trends.soil_moisture_trend = "declining"
                 elif delta > TREND_MOISTURE_THRESHOLD:
-                    trends["soil_moisture_trend"] = "rising"
-                    trends["soil_moisture_delta"] = delta
+                    trends.soil_moisture_trend = "rising"
                 else:
-                    trends["soil_moisture_trend"] = "stable"
-                    trends["soil_moisture_delta"] = delta
+                    trends.soil_moisture_trend = "stable"
 
-            # Temperature trend
-            temp_first_half = [r.temperature for r in all_readings[:mid] if r.temperature]
-            temp_second_half = [r.temperature for r in all_readings[mid:] if r.temperature]
-
-            if temp_first_half and temp_second_half:
-                avg_temp_first = statistics.mean(temp_first_half)
-                avg_temp_second = statistics.mean(temp_second_half)
-                delta_temp = avg_temp_second - avg_temp_first
-
+            temp_first = [r.temperature for r in all_readings[:mid] if r.temperature]
+            temp_second = [r.temperature for r in all_readings[mid:] if r.temperature]
+            if temp_first and temp_second:
+                delta_temp = statistics.mean(temp_second) - statistics.mean(temp_first)
                 if delta_temp > TREND_TEMP_THRESHOLD:
-                    trends["temperature_trend"] = "rising"
-                    trends["temperature_delta"] = delta_temp
+                    trends.temperature_trend = "rising"
                 elif delta_temp < -TREND_TEMP_THRESHOLD:
-                    trends["temperature_trend"] = "falling"
-                    trends["temperature_delta"] = delta_temp
+                    trends.temperature_trend = "falling"
                 else:
-                    trends["temperature_trend"] = "stable"
-                    trends["temperature_delta"] = delta_temp
+                    trends.temperature_trend = "stable"
 
-    # Analyze irrigation frequency (last 7 days)
     irrigators = db.get_irrigators_in_cluster(cluster_id)
     if irrigators:
         total_events = 0
@@ -82,15 +57,9 @@ def analyze_historical_trends(db: IrrigationRepository, cluster_id: int) -> dict
         if total_events > 0:
             avg_per_day = total_events / 7
             avg_duration = total_duration / total_events
-
-            # Low frequency: less than 1 irrigation per day with short durations
             if avg_per_day < 1 and avg_duration < 2:
-                trends["irrigation_frequency_low"] = True
-            # High frequency: more than 3 irrigations per day
+                trends.irrigation_frequency_low = True
             elif avg_per_day > 3:
-                trends["irrigation_frequency_high"] = True
-
-            trends["irrigation_avg_per_day"] = avg_per_day
-            trends["irrigation_avg_duration"] = avg_duration
+                trends.irrigation_frequency_high = True
 
     return trends

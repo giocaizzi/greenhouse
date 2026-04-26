@@ -1,8 +1,7 @@
-"""Temperature-based fallback logic when no sensor data is available."""
+"""Temperature-based fallback when the cluster has no live sensor data."""
 
 from tuya_irrigation_core.constants import (
     CONFIDENCE_CONFIG_FALLBACK,
-    CONFIDENCE_COOLDOWN,
     CONFIDENCE_NO_DATA,
     CONFIDENCE_TEMP_FALLBACK,
     CONFLICT_INTERVAL_HOURS,
@@ -14,38 +13,63 @@ from tuya_irrigation_core.constants import (
     TEMP_HOT,
     TEMP_WARM,
 )
+from tuya_irrigation_core.logic.decision import (
+    Action,
+    IrrigationDecision,
+    Severity,
+    StressIndicators,
+    Trends,
+    TriggerCode,
+)
 from tuya_irrigation_core.models import IrrigationConfig
 from tuya_irrigation_core.repository import IrrigationRepository
 
 
 def temperature_based_decision(
     db: IrrigationRepository,
+    cluster_id: int,
+    evaluated_at: int,
+    *,
     temp: float | None,
     water_needs: str,
     temp_range: tuple[float, float] | None,
     config: IrrigationConfig | None,
-    cluster_id: int,
-) -> dict:
-    """Fallback to temperature-based logic when no sensor data available."""
-    if temp is None:
-        # No data at all → use config or conservative default
-        if config:
-            return {
-                "action": "skip" if config.mode == "manual" else "irrigate",
-                "duration_minutes": config.duration_minutes or DEFAULT_DURATION_MINUTES,
-                "interval_hours": config.interval_hours or DEFAULT_INTERVAL_HOURS,
-                "reason": "using configured schedule (no sensor data)",
-                "confidence": CONFIDENCE_CONFIG_FALLBACK,
-            }
-        return {
-            "action": "skip",
-            "duration_minutes": DEFAULT_DURATION_MINUTES,
-            "interval_hours": DEFAULT_INTERVAL_HOURS,
-            "reason": "insufficient data",
-            "confidence": CONFIDENCE_NO_DATA,
-        }
+    trends: Trends | None = None,
+    stress: StressIndicators | None = None,
+) -> IrrigationDecision:
+    """Build a typed decision when there is no usable sensor data."""
+    base = IrrigationDecision(
+        cluster_id=cluster_id,
+        evaluated_at=evaluated_at,
+        action=Action.SKIP,
+        duration_minutes=DEFAULT_DURATION_MINUTES,
+        interval_hours=DEFAULT_INTERVAL_HOURS,
+        confidence=CONFIDENCE_NO_DATA,
+        stress_indicators=stress or StressIndicators(),
+        trends=trends or Trends(),
+    )
 
-    # Temperature-based buckets
+    if temp is None:
+        if config:
+            base.action = Action.SKIP if config.mode == "manual" else Action.IRRIGATE
+            base.duration_minutes = config.duration_minutes or DEFAULT_DURATION_MINUTES
+            base.interval_hours = config.interval_hours or DEFAULT_INTERVAL_HOURS
+            base.confidence = CONFIDENCE_CONFIG_FALLBACK
+            base.add_reason(
+                code=TriggerCode.CONFIG_FALLBACK,
+                message="using configured schedule (no sensor data)",
+                severity=Severity.WARNING,
+                icon="gear",
+            )
+            return base
+        base.add_reason(
+            code=TriggerCode.NO_DATA,
+            message="insufficient data",
+            severity=Severity.WARNING,
+            icon="question",
+        )
+        return base
+
     if temp <= TEMP_COLD:
         interval = MAX_INTERVAL_HOURS
     elif temp <= TEMP_WARM:
@@ -55,32 +79,41 @@ def temperature_based_decision(
     else:
         interval = MIN_INTERVAL_HOURS
 
-    # Adjust for water needs
     if water_needs == "high":
         interval = max(MIN_INTERVAL_HOURS, interval - 4)
     elif water_needs == "low":
         interval = min(MAX_INTERVAL_HOURS, interval + 6)
 
-    # CRITICAL: Check last irrigation time to respect cooldown
     irrigators = db.get_irrigators_in_cluster(cluster_id)
-    if irrigators:
-        recent_events = db.get_recent_events(irrigators[0].id, hours=interval)
-        irrigation_events = [e for e in recent_events if e.action in ("start", "schedule_updated")]
-        if irrigation_events:
-            # Found recent irrigation → skip
-            return {
-                "action": "skip",
-                "duration_minutes": DEFAULT_DURATION_MINUTES,
-                "interval_hours": interval,
-                "reason": f"cooldown active (last irrigation < {interval}h ago)",
-                "confidence": CONFIDENCE_COOLDOWN,
-            }
+    latest_event = None
+    for irr in irrigators:
+        events = db.get_recent_events(irr.id, hours=interval)
+        for event in events:
+            if event.action not in ("start", "schedule_updated"):
+                continue
+            if latest_event is None or event.timestamp > latest_event.timestamp:
+                latest_event = event
 
-    # No recent irrigation → irrigate
-    return {
-        "action": "irrigate",
-        "duration_minutes": DEFAULT_DURATION_MINUTES,
-        "interval_hours": interval,
-        "reason": f"temperature-based ({temp:.0f}°C, {water_needs} water needs, evidence-based data)",
-        "confidence": CONFIDENCE_TEMP_FALLBACK,
-    }
+    if latest_event is not None:
+        base.action = Action.SKIP
+        base.duration_minutes = DEFAULT_DURATION_MINUTES
+        base.interval_hours = interval
+        base.confidence = CONFIDENCE_TEMP_FALLBACK
+        base.add_reason(
+            code=TriggerCode.COOLDOWN,
+            message=f"cooldown active (last irrigation < {interval}h ago)",
+            severity=Severity.INFO,
+            icon="hourglass",
+        )
+        return base
+
+    base.action = Action.IRRIGATE
+    base.duration_minutes = DEFAULT_DURATION_MINUTES
+    base.interval_hours = interval
+    base.confidence = CONFIDENCE_TEMP_FALLBACK
+    base.add_reason(
+        code=TriggerCode.TEMP_FALLBACK,
+        message=f"temperature-based ({temp:.0f}°C, {water_needs} water needs)",
+        icon="thermometer",
+    )
+    return base
