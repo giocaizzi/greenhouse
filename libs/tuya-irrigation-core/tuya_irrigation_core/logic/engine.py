@@ -71,6 +71,9 @@ class IrrigationLogic:
         self,
         cluster_id: int,
         current_temp: float | None = None,
+        *,
+        persist: bool = False,
+        triggered_by: str = "auto",
     ) -> IrrigationDecision | None:
         """Run the rule pipeline for a cluster and return a typed decision.
 
@@ -85,7 +88,7 @@ class IrrigationLogic:
         evaluated_at = int(time.time())
         plants = self.db.get_plants_in_cluster(cluster_id)
         if not plants:
-            return _decision_with_reason(
+            decision = _decision_with_reason(
                 cluster_id,
                 evaluated_at,
                 Action.SKIP,
@@ -95,9 +98,14 @@ class IrrigationLogic:
                 code=TriggerCode.NO_PLANTS,
                 message="no plants in cluster",
             )
+            if persist:
+                self._persist(decision, triggered_by)
+            return decision
 
         cooldown = self._enforce_cooldown(cluster_id, evaluated_at)
         if cooldown is not None:
+            if persist:
+                self._persist(cooldown, triggered_by)
             return cooldown
 
         snapshot = get_recent_sensor_data(self.db, cluster_id, hours=24)
@@ -112,7 +120,7 @@ class IrrigationLogic:
 
         sensors = self.db.get_sensors_in_cluster(cluster_id)
         if not sensors or not snapshot.has_data:
-            return temperature_based_decision(
+            fallback = temperature_based_decision(
                 self.db,
                 cluster_id,
                 evaluated_at,
@@ -123,6 +131,9 @@ class IrrigationLogic:
                 trends=trends,
                 stress=stress,
             )
+            if persist:
+                self._persist(fallback, triggered_by)
+            return fallback
 
         decision = IrrigationDecision(
             cluster_id=cluster_id,
@@ -148,7 +159,29 @@ class IrrigationLogic:
         _apply_water_needs_adjustment(decision, water_needs)
         _apply_trend_adjustment(decision)
 
+        if persist:
+            self._persist(decision, triggered_by)
         return decision
+
+    def _persist(self, decision: IrrigationDecision, triggered_by: str) -> None:
+        """Best-effort persistence — never blocks the decision."""
+        try:
+            payload = decision.model_dump(mode="json")
+            self.db.add_decision_log(
+                cluster_id=decision.cluster_id,
+                evaluated_at=decision.evaluated_at,
+                action=decision.action.value,
+                duration_minutes=decision.duration_minutes,
+                interval_hours=decision.interval_hours,
+                confidence=decision.confidence,
+                primary_code=decision.primary_code.value if decision.primary_code else None,
+                reason_text=decision.reason_text,
+                payload=payload,
+                triggered_by=triggered_by,
+                actuated=False,
+            )
+        except Exception:
+            log.warning("failed to persist decision log", exc_info=True)
 
     def _enforce_cooldown(self, cluster_id: int, now: int) -> IrrigationDecision | None:
         """Skip when ANY irrigator in the cluster fired within the cooldown window."""

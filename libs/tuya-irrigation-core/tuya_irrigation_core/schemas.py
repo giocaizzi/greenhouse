@@ -396,3 +396,284 @@ class ChartPayloadResponse(BaseModel):
     datasets: list[ChartDatasetResponse]
     events: list[ChartEventResponse]
     threshold: ChartThresholdResponse
+
+
+# --- Alerts ------------------------------------------------------------------
+
+
+class AlertSummary(BaseModel):
+    """Persisted alert row exposed via the inbox API."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    source: str
+    code: str
+    severity: str
+    entity_type: str
+    entity_id: int | None
+    cluster_id: int | None
+    plant_id: int | None
+    title: str
+    message: str
+    status: str
+    first_seen_at: int
+    last_seen_at: int
+    occurrence_count: int
+    acknowledged_at: int | None = None
+    resolved_at: int | None = None
+
+
+class AlertListResponse(BaseModel):
+    open_count: int
+    items: list[AlertSummary]
+
+
+# --- Activity log ------------------------------------------------------------
+
+
+class ActivityEventResponse(BaseModel):
+    """One row in the cross-cutting activity stream."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    timestamp: int
+    source: str
+    entity_type: str
+    entity_id: int | None
+    severity: str
+    code: str
+    message: str
+
+
+class ActivityListResponse(BaseModel):
+    items: list[ActivityEventResponse]
+    next_cursor: int | None = None
+
+
+# --- Decisions ---------------------------------------------------------------
+
+
+class DecisionLogResponse(BaseModel):
+    """A single persisted decision evaluation."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    cluster_id: int
+    evaluated_at: int
+    action: str
+    duration_minutes: int
+    interval_hours: int
+    confidence: float
+    primary_code: str | None
+    reason_text: str
+    triggered_by: str
+    actuated: bool
+
+
+class DecisionLogListResponse(BaseModel):
+    cluster_id: int
+    items: list[DecisionLogResponse]
+
+
+# --- Forecast ---------------------------------------------------------------
+
+
+class ForecastResponse(BaseModel):
+    """Predicted-next-irrigation forecast for a cluster."""
+
+    cluster_id: int
+    next_predicted_at: int | None
+    hours_until_next: float | None
+    projected_min_moisture: float | None
+    method: str
+    confidence: float
+    explanation: str
+    weather_skip: bool = False
+    weather_reason: str | None = None
+    precipitation_next_6h_mm: float | None = None
+
+
+# --- Plant health ----------------------------------------------------------
+
+
+class PlantHealthDailyResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    date_key: str
+    timestamp: int
+    score: float
+    soil_in_band_pct: float | None = None
+    temp_in_band_pct: float | None = None
+    humidity_in_band_pct: float | None = None
+    efficiency: float | None = None
+    sample_count: int
+
+
+class PlantHealthResponse(BaseModel):
+    plant_id: int
+    species: str
+    current_score: float | None
+    history: list[PlantHealthDailyResponse]
+
+
+# --- System health pulse ---------------------------------------------------
+
+
+class SystemHealthDevice(BaseModel):
+    id: int
+    name: str
+    status: str
+    age_seconds: int | None = None
+    note: str | None = None
+
+
+class SystemHealthResponse(BaseModel):
+    status: str
+    scheduler_running: bool
+    cloud_reachable: bool
+    last_sync_at: int | None
+    sensors_total: int
+    sensors_stale: int
+    sensors_fresh: int
+    irrigators_total: int
+    open_alerts: int
+    devices: list[SystemHealthDevice]
+
+
+# --- Data quality ----------------------------------------------------------
+
+
+class DataQualityIssue(BaseModel):
+    code: str
+    severity: str
+    entity_type: str
+    entity_id: int | None
+    label: str
+    message: str
+
+
+class DataQualityReport(BaseModel):
+    issues: list[DataQualityIssue]
+    counts: dict[str, int]
+
+
+# --- Vacation --------------------------------------------------------------
+
+
+class VacationCreateRequest(BaseModel):
+    starts_at: int
+    ends_at: int
+    contact_email: str | None = None
+    notes: str | None = None
+
+
+class VacationResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    starts_at: int
+    ends_at: int
+    contact_email: str | None
+    notes: str | None
+    created_at: int
+
+
+class VacationListResponse(BaseModel):
+    active: VacationResponse | None
+    items: list[VacationResponse]
+
+
+# --- Preferences -----------------------------------------------------------
+
+
+class PreferencesResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    units: str
+    timezone: str
+    theme: str
+    default_cluster_id: int | None
+    refresh_interval_seconds: int
+    dry_run_global: bool
+
+
+class PreferencesUpdateRequest(BaseModel):
+    units: str | None = None
+    timezone: str | None = None
+    theme: str | None = None
+    default_cluster_id: int | None = None
+    refresh_interval_seconds: int | None = None
+    dry_run_global: bool | None = None
+
+
+# --- Edit/Delete bodies ---------------------------------------------------
+
+
+class UpdateClusterRequest(BaseModel):
+    name: str | None = None
+    location: str | None = None
+    environment: str | None = None
+
+
+class UpdatePlantRequest(BaseModel):
+    species: str | None = None
+    category: str | None = None
+    water_needs: str | None = None
+    light_needs: str | None = None
+    ideal_temp_min: float | None = None
+    ideal_temp_max: float | None = None
+    ideal_humidity_min: float | None = None
+    ideal_humidity_max: float | None = None
+    notes: str | None = None
+
+
+class UpdateSensorRequest(BaseModel):
+    name: str | None = None
+    type: str | None = None
+    config: dict | None = None
+    plant_id: int | None = None
+
+
+class UpdateIrrigatorRequest(BaseModel):
+    name: str | None = None
+    type: str | None = None
+    config: dict | None = None
+
+
+# --- Search ----------------------------------------------------------------
+
+
+class SearchHit(BaseModel):
+    entity_type: str
+    entity_id: int
+    label: str
+    sublabel: str | None = None
+    href: str
+
+
+class SearchResponse(BaseModel):
+    query: str
+    hits: list[SearchHit]
+
+
+# --- Insights ---------------------------------------------------------------
+
+
+class CareInsight(BaseModel):
+    """A single actionable insight surfaced in the UI."""
+
+    code: str
+    severity: str
+    title: str
+    message: str
+    suggestion: str | None = None
+
+
+class ClusterInsightsResponse(BaseModel):
+    cluster_id: int
+    cluster_name: str
+    insights: list[CareInsight]
+    forecast: ForecastResponse | None = None
