@@ -1,9 +1,16 @@
 """Plant CRUD routes."""
 
 from fastapi import APIRouter, HTTPException, status
+from pydantic import BaseModel
 
-from tuya_irrigation_core.schemas import CreatePlantRequest, PlantResponse, SyncPlantsRequest, SyncPlantsResponse
-from tuya_irrigation_server.deps import ClusterServiceDep, RepoDep, require_cluster
+from tuya_irrigation_core.schemas import (
+    CreatePlantRequest,
+    PlantHealthResponse,
+    PlantResponse,
+    SyncPlantsRequest,
+    SyncPlantsResponse,
+)
+from tuya_irrigation_server.deps import ClusterServiceDep, PlantHealthServiceDep, RepoDep, require_cluster
 
 router = APIRouter(tags=["plants"])
 
@@ -105,3 +112,55 @@ def sync_plants(request: SyncPlantsRequest, repo: RepoDep, cluster_svc: ClusterS
 
     repo.session.commit()
     return SyncPlantsResponse(synced=synced, errors=errors)
+
+
+class SnapshotResponse(BaseModel):
+    """Result of a manual health-snapshot run."""
+
+    rows_written: int
+
+
+@router.get("/plants/{plant_id}/health", response_model=PlantHealthResponse)
+def get_plant_health(plant_id: int, repo: RepoDep, health_svc: PlantHealthServiceDep):
+    """Return the current health score and 90-day history for a plant.
+
+    Computes a fresh 0–100 composite score from readings over the last 14 days
+    (soil/temp/humidity in-band fractions + irrigation efficiency) and returns
+    the stored daily snapshots for charting.
+
+    Args:
+        plant_id: Database ID of the plant.
+
+    Returns:
+        Current score (None when no data), per-component breakdowns, and the
+        list of daily snapshots ordered oldest-first.
+
+    Raises:
+        HTTPException: 404 if the plant does not exist.
+    """
+    plant = repo.get_plant(plant_id)
+    if not plant:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plant not found")
+    result = health_svc.compute_score(plant_id)
+    history = repo.list_plant_health_history(plant_id, days=90)
+    return PlantHealthResponse(
+        plant_id=plant_id,
+        species=plant.species,
+        current_score=result["score"],
+        history=history,
+    )
+
+
+@router.post("/plants/health/snapshot", response_model=SnapshotResponse)
+def trigger_health_snapshot(health_svc: PlantHealthServiceDep, repo: RepoDep):
+    """Compute today's health score for every plant and persist the daily snapshots.
+
+    Intended for manual ops and testing. The scheduler calls this automatically
+    at 00:30 UTC every day.
+
+    Returns:
+        Number of plant rows written (plants with no data are skipped).
+    """
+    rows = health_svc.snapshot_daily()
+    repo.session.commit()
+    return SnapshotResponse(rows_written=rows)
