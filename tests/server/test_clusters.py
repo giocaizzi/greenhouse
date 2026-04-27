@@ -45,6 +45,51 @@ class TestClusterCRUD:
         resp = client.get("/api/v1/clusters")
         assert len(resp.json()) == 2
 
+    def test_update_name_and_location(self, client):
+        client.post("/api/v1/clusters", json={"name": "Original", "environment": "indoor"})
+        resp = client.put("/api/v1/clusters/1", json={"name": "Renamed", "location": "Shelf"})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["name"] == "Renamed"
+        assert data["location"] == "Shelf"
+        assert data["environment"] == "indoor"  # unchanged
+
+    def test_update_reflects_on_get(self, client):
+        client.post("/api/v1/clusters", json={"name": "Before"})
+        client.put("/api/v1/clusters/1", json={"name": "After"})
+        resp = client.get("/api/v1/clusters/1")
+        assert resp.json()["name"] == "After"
+
+    def test_update_not_found(self, client):
+        resp = client.put("/api/v1/clusters/999", json={"name": "X"})
+        assert resp.status_code == 404
+
+    def test_delete_cluster(self, client):
+        client.post("/api/v1/clusters", json={"name": "ToDelete"})
+        resp = client.delete("/api/v1/clusters/1")
+        assert resp.status_code == 200
+        assert resp.json()["success"] is True
+
+        resp = client.get("/api/v1/clusters/1")
+        assert resp.status_code == 404
+
+    def test_delete_cascades_to_plants(self, client):
+        client.post("/api/v1/clusters", json={"name": "C"})
+        client.post("/api/v1/clusters/1/plants", json={"species": "Fern"})
+        client.delete("/api/v1/clusters/1")
+        resp = client.get("/api/v1/clusters/1")
+        assert resp.status_code == 404
+
+    def test_delete_not_found(self, client):
+        resp = client.delete("/api/v1/clusters/999")
+        assert resp.status_code == 404
+
+    def test_double_delete_returns_404(self, client):
+        client.post("/api/v1/clusters", json={"name": "Once"})
+        client.delete("/api/v1/clusters/1")
+        resp = client.delete("/api/v1/clusters/1")
+        assert resp.status_code == 404
+
 
 class TestClusterStatus:
     def test_status_seeded(self, seeded_client):

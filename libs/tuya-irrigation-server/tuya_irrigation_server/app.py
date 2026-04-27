@@ -17,11 +17,15 @@ from tuya_irrigation_server.routes import (
     charts,
     clusters,
     configs,
+    efficacy,
     forecast,
+    health,
+    insights,
     irrigators,
     operations,
     plants,
     preferences,
+    quality,
     scheduler,
     search,
     sensors,
@@ -105,6 +109,10 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
     app.include_router(vacation.router, prefix=prefix)
     app.include_router(search.router, prefix=prefix)
     app.include_router(bulk.router, prefix=prefix)
+    app.include_router(insights.router, prefix=prefix)
+    app.include_router(health.router, prefix=prefix)
+    app.include_router(quality.router, prefix=prefix)
+    app.include_router(efficacy.router, prefix=prefix)
 
     # Web frontend
     static_dir = Path(__file__).parent / "web" / "static"

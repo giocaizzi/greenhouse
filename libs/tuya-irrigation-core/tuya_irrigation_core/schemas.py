@@ -687,3 +687,24 @@ class StopAllResponse(BaseModel):
 
     stopped: int
     errors: list[str]
+
+
+# --- Irrigation efficacy ----------------------------------------------------
+
+
+class EfficacyItemResponse(BaseModel):
+    """Scored outcome for a single completed irrigation event."""
+
+    event_id: int
+    timestamp: int
+    irrigator_name: str
+    duration_minutes: int
+    before_pct: float | None
+    after_pct: float | None
+    score: float | None
+
+
+class EfficacyListResponse(BaseModel):
+    cluster_id: int
+    days: int
+    items: list[EfficacyItemResponse]
