@@ -229,3 +229,106 @@
   window.renderIrrigationChart = renderIrrigationChart;
   window.__rerenderCharts = rerenderAllCharts;
 })();
+
+/* 2026 UI primitives — toasts, top-of-page progress, command-K, sheet helpers. */
+(function () {
+  const progress = () => document.getElementById("page-progress");
+  document.addEventListener("htmx:beforeRequest", () => {
+    const p = progress();
+    if (p) { p.classList.remove("is-done"); p.classList.add("is-active"); }
+  });
+  document.addEventListener("htmx:afterOnLoad", () => {
+    const p = progress();
+    if (!p) return;
+    p.classList.remove("is-active"); p.classList.add("is-done");
+    setTimeout(() => p.classList.remove("is-done"), 250);
+  });
+  document.addEventListener("htmx:responseError", () => {
+    const p = progress();
+    if (p) p.classList.remove("is-active");
+    showToast({ severity: "danger", title: "Request failed", message: "Server returned an error." });
+  });
+
+  function showToast({ severity = "info", title = "", message = "", duration = 4000, action } = {}) {
+    const host = document.getElementById("toasts");
+    if (!host) return;
+    const node = document.createElement("div");
+    node.className = "toast toast--" + severity;
+    node.setAttribute("role", severity === "danger" ? "alert" : "status");
+    const iconName = { info: "i-info", warning: "i-warning", danger: "i-x-circle", success: "i-check" }[severity] || "i-info";
+    node.innerHTML = `
+      <span class="toast__icon"><svg class="icon"><use href="/static/icons/sprite.svg#${iconName}"></use></svg></span>
+      <div>
+        ${title ? `<div class="toast__title"></div>` : ""}
+        <div class="toast__msg"></div>
+        ${action ? `<button type="button" class="toast__action" data-toast-action></button>` : ""}
+      </div>
+      <button type="button" class="toast__close" aria-label="Dismiss">×</button>
+    `;
+    if (title) node.querySelector(".toast__title").textContent = title;
+    node.querySelector(".toast__msg").textContent = message;
+    if (action) node.querySelector("[data-toast-action]").textContent = action.label;
+    host.appendChild(node);
+    let timer = null;
+    const close = () => {
+      if (timer) clearTimeout(timer);
+      node.classList.add("is-leaving");
+      node.addEventListener("animationend", () => node.remove(), { once: true });
+    };
+    node.querySelector(".toast__close").addEventListener("click", close);
+    if (action && typeof action.onClick === "function") {
+      node.querySelector("[data-toast-action]").addEventListener("click", () => {
+        try { action.onClick(); } catch (e) {}
+        close();
+      });
+    }
+    if (duration > 0) timer = setTimeout(close, duration);
+  }
+  window.showToast = showToast;
+  document.body.addEventListener("toast", (ev) => { if (ev.detail) showToast(ev.detail); });
+  document.body.addEventListener("htmx:afterRequest", (ev) => {
+    const xhr = ev.detail.xhr;
+    if (!xhr) return;
+    const toastHdr = xhr.getResponseHeader("HX-Toast");
+    if (toastHdr) { try { showToast(JSON.parse(toastHdr)); } catch (e) {} }
+  });
+
+  function getPalette() { return document.getElementById("cmdk-dialog"); }
+  function openPalette() {
+    const dlg = getPalette();
+    if (!dlg) return;
+    dlg.showModal();
+    const input = dlg.querySelector("input");
+    if (input) { input.value = ""; input.focus(); }
+    const list = dlg.querySelector(".cmdk__list");
+    if (list) list.innerHTML = "";
+  }
+  function closePalette() {
+    const dlg = getPalette();
+    if (dlg && dlg.open) dlg.close();
+  }
+  document.addEventListener("keydown", (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+      e.preventDefault();
+      const dlg = getPalette();
+      if (dlg && dlg.open) closePalette(); else openPalette();
+    }
+  });
+  window.openCmdK = openPalette;
+  window.closeCmdK = closePalette;
+
+  document.addEventListener("click", (e) => {
+    const opener = e.target.closest("[data-sheet-open]");
+    if (opener) {
+      const id = opener.getAttribute("data-sheet-open");
+      const dlg = document.getElementById(id);
+      if (dlg && typeof dlg.showModal === "function") dlg.showModal();
+      return;
+    }
+    const closer = e.target.closest("[data-sheet-close]");
+    if (closer) {
+      const dlg = closer.closest("dialog");
+      if (dlg) dlg.close();
+    }
+  });
+})();

@@ -28,6 +28,15 @@
 </head>
 <body>
 
+<div id="page-progress" class="page-progress" aria-hidden="true"></div>
+
+{% if dry_run_global %}
+<div class="dryrun-banner" role="status">
+  <svg class="icon" aria-hidden="true"><use href="/static/icons/sprite.svg#i-warning"></use></svg>
+  <span>Dry-run mode is on — no hardware will fire.</span>
+</div>
+{% endif %}
+
 <header class="topbar">
   <div class="container topbar__inner">
     <a href="/" class="brand" aria-label="Irrigation home">
@@ -35,12 +44,30 @@
       Irrigation
     </a>
     <nav class="topnav" aria-label="Primary">
-      <a href="/">Dashboard</a>
-      <a href="/clusters">Clusters</a>
+      <a href="/">Today</a>
+      <a href="/clusters">Spaces</a>
+      <a href="/activity">Activity</a>
       <a href="/scheduler">Scheduler</a>
-      <a href="/health">Health</a>
     </nav>
     <span class="topbar__spacer"></span>
+    <button
+      class="bell"
+      type="button"
+      aria-label="Open alerts"
+      hx-get="/alerts/badge"
+      hx-trigger="load, every 60s"
+      hx-swap="innerHTML"
+      onclick="window.location.href='/alerts'">
+      <svg class="icon" aria-hidden="true"><use href="/static/icons/sprite.svg#i-bell"></use></svg>
+    </button>
+    <button
+      class="icon-btn"
+      type="button"
+      aria-label="Open command palette"
+      title="Search (⌘K)"
+      onclick="window.openCmdK && window.openCmdK()">
+      <svg class="icon" aria-hidden="true"><use href="/static/icons/sprite.svg#i-magnifying-glass"></use></svg>
+    </button>
     <button
       id="theme-toggle"
       class="icon-btn"
@@ -57,6 +84,29 @@
 <main class="container">
   {% block content %}{% endblock %}
 </main>
+
+<dialog id="cmdk-dialog" class="cmdk" aria-label="Command palette">
+  <div class="cmdk__panel" role="dialog" aria-modal="true">
+    <input
+      type="search"
+      class="cmdk__input"
+      placeholder="Search clusters, plants, sensors…"
+      autocomplete="off" autocorrect="off" spellcheck="false"
+      hx-get="/api/v1/search"
+      hx-trigger="keyup changed delay:120ms"
+      hx-target="#cmdk-list"
+      hx-swap="innerHTML"
+      name="q"
+      aria-label="Search">
+    <div id="cmdk-list" class="cmdk__list" role="listbox"></div>
+    <div class="cmdk__hint">
+      <span><span class="cmdk__kbd">↵</span> open</span>
+      <span><span class="cmdk__kbd">esc</span> close</span>
+    </div>
+  </div>
+</dialog>
+
+<div id="toasts" class="toasts" aria-live="polite" aria-atomic="false"></div>
 
 <footer class="container">
   <div class="footer__row">
