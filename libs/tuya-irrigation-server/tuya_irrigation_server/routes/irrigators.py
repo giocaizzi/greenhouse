@@ -3,6 +3,7 @@
 from fastapi import APIRouter, HTTPException, status
 from sqlalchemy.exc import IntegrityError
 
+from tuya_irrigation_core.repository import IrrigationRepository
 from tuya_irrigation_core.schemas import (
     CreateIrrigatorRequest,
     IrrigatorActionResponse,
@@ -16,6 +17,42 @@ from tuya_irrigation_core.schemas import (
 from tuya_irrigation_server.deps import DeviceManagerDep, RepoDep, require_cluster
 
 router = APIRouter(tags=["irrigators"])
+
+
+def _check_rate_limits(repo: IrrigationRepository, cluster_id: int, irrigator_id: int, minutes: int | None) -> None:
+    """Raise 409 if daily-cap or max-events-per-day thresholds are exceeded.
+
+    Args:
+        repo: Active repository session.
+        cluster_id: Cluster whose config holds the caps.
+        irrigator_id: Irrigator being started (duration cap is per-irrigator).
+        minutes: Requested duration; ``None`` counts as 0 for the duration cap.
+
+    Raises:
+        HTTPException: 409 if ``max_events_per_day`` or ``daily_cap_minutes``
+            would be exceeded.
+    """
+    config = repo.get_irrigation_config(cluster_id)
+    if not config:
+        return
+
+    requested = minutes or 0
+
+    if config.max_events_per_day is not None:
+        # Count "start" events in the last 24 h across all irrigators in the cluster
+        all_irrigators = repo.get_irrigators_in_cluster(cluster_id)
+        total_starts = sum(
+            sum(1 for e in repo.get_recent_events(irr.id, hours=24) if e.action == "start")
+            for irr in all_irrigators
+        )
+        if total_starts >= config.max_events_per_day:
+            raise HTTPException(status_code=409, detail="cluster max_events_per_day reached")
+
+    if config.daily_cap_minutes is not None:
+        recent = repo.get_recent_events(irrigator_id, hours=24)
+        minutes_used = sum(e.duration_minutes or 0 for e in recent if e.action == "start")
+        if minutes_used + requested > config.daily_cap_minutes:
+            raise HTTPException(status_code=409, detail="irrigator daily cap reached")
 
 
 @router.post("/clusters/{cluster_id}/irrigators", response_model=IrrigatorResponse, status_code=status.HTTP_201_CREATED)
@@ -88,7 +125,7 @@ def get_irrigator(cluster_id: int, irrigator_id: int, repo: RepoDep):
     summary="Update an irrigator",
 )
 def update_irrigator(cluster_id: int, irrigator_id: int, request: UpdateIrrigatorRequest, repo: RepoDep):
-    """Partially update an irrigator metadata.
+    """Partially update an irrigator's metadata.
 
     Only fields present in the request body are modified; omitted fields are
     left unchanged. The irrigator must belong to the specified cluster.
@@ -96,7 +133,7 @@ def update_irrigator(cluster_id: int, irrigator_id: int, request: UpdateIrrigato
     Args:
         cluster_id: Cluster the irrigator belongs to.
         irrigator_id: Numeric irrigator identifier.
-        request: Fields to update — any subset of name, type, and config.
+        request: Fields to update — any subset of `name`, `type`, and `config`.
 
     Returns:
         The updated irrigator.
@@ -129,7 +166,7 @@ def delete_irrigator(cluster_id: int, irrigator_id: int, repo: RepoDep):
         irrigator_id: Numeric irrigator identifier.
 
     Returns:
-        success=True on successful deletion.
+        `{"success": true}` on successful deletion.
 
     Raises:
         HTTPException: 404 if the irrigator does not exist or belongs to a
@@ -153,23 +190,24 @@ def start_irrigator(
     """Manually start an irrigator over the Tuya local protocol.
 
     Side effects: actuates physical hardware and records a `start` irrigation
-    event with `triggered_by="manual"`. Bypasses the smart-decision engine
-    and the global cooldown.
+    event with `triggered_by="manual"`. Bypasses the smart-decision engine.
 
     Args:
         irrigator_id: Irrigator to actuate.
-        request: Optional `minutes` for run duration; some irrigator firmware
-            ignores duration and runs until explicitly stopped.
+        request: Optional `minutes` for run duration.
 
     Raises:
-        HTTPException: 404 if the irrigator is unknown, 503 if Tuya
-            credentials are missing, 502 if the device fails to start.
+        HTTPException: 404 if the irrigator is unknown, 409 if the cluster
+            daily cap or max-events-per-day limit would be exceeded, 503 if
+            Tuya credentials are missing, 502 if the device fails to start.
     """
     irrigator = repo.get_irrigator(irrigator_id)
     if not irrigator:
         raise HTTPException(status_code=404, detail="Irrigator not found")
     if dm is None:
         raise HTTPException(status_code=503, detail="No device manager (missing Tuya credentials)")
+
+    _check_rate_limits(repo, irrigator.cluster_id, irrigator_id, request.minutes)
 
     success, output = dm.irrigator_start(irrigator, request.minutes)
     if success:
@@ -230,11 +268,13 @@ def log_manual(irrigator_id: int, request: LogManualRequest, repo: RepoDep) -> L
         request: Duration in minutes plus optional notes.
 
     Raises:
-        HTTPException: 404 if the irrigator is unknown.
+        HTTPException: 404 if the irrigator is unknown, 409 if the cluster
+            daily cap or max-events-per-day limit would be exceeded.
     """
     irrigator = repo.get_irrigator(irrigator_id)
     if not irrigator:
         raise HTTPException(status_code=404, detail="Irrigator not found")
+    _check_rate_limits(repo, irrigator.cluster_id, irrigator_id, request.minutes)
     event_id = repo.add_irrigation_event(
         irrigator_id=irrigator.id,
         action="start",

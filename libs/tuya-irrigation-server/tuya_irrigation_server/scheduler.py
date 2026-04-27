@@ -46,6 +46,14 @@ def init_scheduler(app: FastAPI, settings: Settings) -> None:
         name="Daily plant health snapshot",
         replace_existing=True,
     )
+    scheduler.add_job(
+        _anomaly_job,
+        "interval",
+        minutes=15,
+        id="sensor_anomaly",
+        name="Sensor anomaly scan",
+        replace_existing=True,
+    )
 
 
 def _get_cloud() -> TuyaCloud | None:
@@ -120,6 +128,22 @@ def _check_job() -> None:
     except Exception:
         session.rollback()
         logger.exception("Check job failed")
+    finally:
+        session.close()
+
+
+def _anomaly_job() -> None:
+    """Background job: scan all sensors for staleness and drift anomalies."""
+    from tuya_irrigation_server.services.anomaly import SensorAnomalyService
+
+    session = _app.state.session_factory()
+    try:
+        repo = IrrigationRepository(session)
+        SensorAnomalyService(repo).scan()
+        session.commit()
+    except Exception:
+        session.rollback()
+        logger.exception("Anomaly scan job failed")
     finally:
         session.close()
 

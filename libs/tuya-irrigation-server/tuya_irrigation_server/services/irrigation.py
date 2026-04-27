@@ -1,5 +1,9 @@
 """Irrigation and monitoring orchestration."""
 
+import logging
+import time as _time
+from datetime import UTC, datetime
+
 from tuya_irrigation_core.devices import TuyaDeviceManager
 from tuya_irrigation_core.logic import IrrigationLogic
 from tuya_irrigation_core.plant_db import PlantDatabase
@@ -7,6 +11,55 @@ from tuya_irrigation_core.repository import IrrigationRepository
 from tuya_irrigation_server.services.maintenance import collect_learning_alerts, collect_maintenance_alerts
 from tuya_irrigation_server.services.sync import SyncService
 from tuya_irrigation_server.services.weather import WeatherClient
+
+logger = logging.getLogger(__name__)
+
+_LEAK_CHECK_DELAY_SECONDS = 1800  # 30 minutes
+
+
+def _schedule_leak_check(cluster_id: int, started_at: int) -> None:
+    """Schedule a one-shot leak detection check 30 minutes after an irrigation start.
+
+    Skips silently when the scheduler is not running (test environments).
+    Tests should call ``LeakDetectionService.check_after_irrigation`` directly.
+    """
+    try:
+        from tuya_irrigation_server.scheduler import _app, scheduler
+
+        if not scheduler.running:
+            return
+
+        run_date = datetime.fromtimestamp(started_at + _LEAK_CHECK_DELAY_SECONDS, tz=UTC)
+        job_id = f"leak-check-{cluster_id}-{started_at}"
+
+        def _run() -> None:
+            if _app is None:
+                return
+            from tuya_irrigation_core.repository import IrrigationRepository
+            from tuya_irrigation_server.services.leak import LeakDetectionService
+
+            session = _app.state.session_factory()
+            try:
+                repo = IrrigationRepository(session)
+                LeakDetectionService(repo, _app.state.plant_db).check_after_irrigation(cluster_id, started_at)
+                session.commit()
+            except Exception:
+                session.rollback()
+                logger.exception("Leak check job failed for cluster %d", cluster_id)
+            finally:
+                session.close()
+
+        scheduler.add_job(
+            _run,
+            "date",
+            run_date=run_date,
+            id=job_id,
+            name=f"Leak check cluster {cluster_id}",
+            replace_existing=True,
+        )
+    except Exception:
+        # Scheduling must never block irrigation
+        logger.debug("Could not schedule leak check for cluster %d", cluster_id, exc_info=True)
 
 
 class IrrigationService:
@@ -120,6 +173,10 @@ class IrrigationService:
                 f"confidence={decision.confidence:.0%}, reason={decision.reason_text}"
             ),
         )
+
+        if success:
+            started_at = int(_time.time())
+            _schedule_leak_check(cluster_id, started_at)
 
         if not success:
             result["action"] = "error"
