@@ -12,7 +12,19 @@ from tuya_irrigation_core.database import create_db_engine, create_session_facto
 from tuya_irrigation_core.devices import TuyaDeviceManager
 from tuya_irrigation_core.plant_db import PlantDatabase
 from tuya_irrigation_server.config import Settings
-from tuya_irrigation_server.routes import charts, clusters, configs, irrigators, operations, plants, scheduler, sensors
+from tuya_irrigation_server.routes import (
+    activity,
+    alerts,
+    charts,
+    clusters,
+    configs,
+    decisions,
+    irrigators,
+    operations,
+    plants,
+    scheduler,
+    sensors,
+)
 from tuya_irrigation_server.scheduler import init_scheduler
 from tuya_irrigation_server.scheduler import scheduler as bg_scheduler
 from tuya_irrigation_server.services.weather import WeatherClient
@@ -61,6 +73,9 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
             {"name": "configs", "description": "Irrigation configuration per cluster"},
             {"name": "operations", "description": "Smart irrigation, monitoring, sync, stats, and analytics"},
             {"name": "scheduler", "description": "Background job management and health checks"},
+            {"name": "alerts", "description": "Alert inbox with deduplication and ack/resolve lifecycle"},
+            {"name": "activity", "description": "Cross-cutting activity timeline"},
+            {"name": "decisions", "description": "Irrigation decision audit log"},
         ],
     )
 
@@ -82,6 +97,9 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
     app.include_router(operations.router, prefix=prefix)
     app.include_router(scheduler.router, prefix=prefix)
     app.include_router(charts.router, prefix=prefix)
+    app.include_router(alerts.router, prefix=prefix)
+    app.include_router(activity.router, prefix=prefix)
+    app.include_router(decisions.router, prefix=prefix)
 
     # Web frontend
     static_dir = Path(__file__).parent / "web" / "static"

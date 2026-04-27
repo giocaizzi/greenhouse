@@ -2,8 +2,10 @@
 
 from tuya_irrigation_core.devices import TuyaDeviceManager
 from tuya_irrigation_core.logic import IrrigationLogic
+from tuya_irrigation_core.models import ENTITY_CLUSTER
 from tuya_irrigation_core.plant_db import PlantDatabase
 from tuya_irrigation_core.repository import IrrigationRepository
+from tuya_irrigation_server.services.alerts import raise_alert, sync_cluster_alerts
 from tuya_irrigation_server.services.maintenance import collect_learning_alerts, collect_maintenance_alerts
 from tuya_irrigation_server.services.sync import SyncService
 from tuya_irrigation_server.services.weather import WeatherClient
@@ -71,7 +73,7 @@ class IrrigationService:
         temp, source, sensor_data = self._resolve_temperature(cluster_id, is_indoor, temp_override, no_sync)
 
         logic = IrrigationLogic(self._repo, self._plant_db)
-        decision = logic.decide_for_cluster(cluster_id, current_temp=temp)
+        decision = logic.decide_for_cluster(cluster_id, current_temp=temp, persist=True)
         if not decision:
             return {"action": "error", "reason": "no data for decision", "confidence": 0}
 
@@ -88,6 +90,15 @@ class IrrigationService:
         }
 
         if dry_run or decision.action.value == "skip":
+            if not dry_run:
+                self._repo.add_activity_event(
+                    source="irrigation",
+                    entity_type=ENTITY_CLUSTER,
+                    entity_id=cluster_id,
+                    code="decision_skip",
+                    message=decision.reason_text,
+                    severity="info",
+                )
             return result
 
         # Execute
@@ -121,11 +132,42 @@ class IrrigationService:
             ),
         )
 
-        if not success:
+        if success:
+            self._repo.add_activity_event(
+                source="irrigation",
+                entity_type=ENTITY_CLUSTER,
+                entity_id=cluster_id,
+                code="irrigated",
+                message=f"irrigated for {duration}min (confidence={decision.confidence:.0%})",
+                severity="info",
+                payload={
+                    "irrigator_id": irrigator.id,
+                    "duration_minutes": duration,
+                    "confidence": decision.confidence,
+                },
+            )
+            result["action"] = "irrigated"
+        else:
+            self._repo.add_activity_event(
+                source="irrigation",
+                entity_type=ENTITY_CLUSTER,
+                entity_id=cluster_id,
+                code="actuation_failed",
+                message=f"irrigator failed: {output}",
+                severity="warning",
+            )
+            raise_alert(
+                self._repo,
+                source="irrigation",
+                code="actuation_failed",
+                title="Irrigation Actuation Failed",
+                message=f"Irrigator '{irrigator.name}' failed to start: {output}",
+                severity="warning",
+                cluster_id=cluster_id,
+            )
             result["action"] = "error"
             result["reason"] = f"irrigator failed: {output}"
 
-        result["action"] = "irrigated" if success else "error"
         return result
 
     def monitor_cluster(self, cluster_id: int, no_sync: bool = False) -> dict:
@@ -202,6 +244,7 @@ class IrrigationService:
         if irrigators:
             config = self._repo.get_irrigation_config(cluster_id)
             if config and not config.auto_run:
+                sync_cluster_alerts(self._repo, cluster_id, self._plant_db)
                 return {
                     "cluster_id": cluster_id,
                     "cluster_name": cluster.name,
@@ -212,6 +255,7 @@ class IrrigationService:
                 }
 
             result = self.run_irrigation_pipeline(cluster_id)
+            sync_cluster_alerts(self._repo, cluster_id, self._plant_db)
             return {
                 "cluster_id": cluster_id,
                 "cluster_name": cluster.name,
@@ -222,6 +266,7 @@ class IrrigationService:
             }
         else:
             monitor = self.monitor_cluster(cluster_id)
+            sync_cluster_alerts(self._repo, cluster_id, self._plant_db)
             return {
                 "cluster_id": cluster_id,
                 "cluster_name": cluster.name,
