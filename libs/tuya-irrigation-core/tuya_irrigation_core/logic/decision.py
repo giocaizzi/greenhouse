@@ -131,8 +131,7 @@ class StressIndicators(BaseModel):
     def any_critical(self) -> bool:
         """True when at least one critical-class stress is set."""
         return any(
-            value is not None
-            for value in (self.water_warning, self.water_stress, self.over_watering, self.heat_stress)
+            value is not None for value in (self.water_warning, self.water_stress, self.over_watering, self.heat_stress)
         )
 
 

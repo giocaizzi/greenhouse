@@ -502,3 +502,103 @@ class TestIrrigationLogic:
 
         assert decision.action.value == "skip"
         assert "wet" in decision.reason_text.lower()
+
+
+class _StubWeatherClient:
+    """Minimal weather client stub for engine tests."""
+
+    def __init__(self, precipitation_mm: float = 0.0, current: dict | None = None):
+        self._precip = precipitation_mm
+        self._current = current or {}
+
+    def get_forecast(self, hours: int = 6) -> dict:
+        return {"precipitation_mm": self._precip, "max_temp": 20.0, "min_temp": 10.0, "avg_humidity": 70.0}
+
+    def get_current(self) -> dict:
+        return self._current
+
+
+class TestWeatherSkipRule:
+    """Tests for the weather-skip rule in the irrigation engine."""
+
+    @pytest.fixture(autouse=True)
+    def setup(self, tmp_db):
+        self.db = tmp_db
+        self.plant_db = get_plant_database()
+
+    def _make_outdoor_cluster_with_sensor(self, moisture: float = 30.0) -> tuple[int, int]:
+        cluster_id = self.db.add_cluster("Outdoor Cluster", environment="outdoor")
+        self.db.add_plant(cluster_id=cluster_id, species=FAKE_PLANT_SPECIES, water_needs="medium")
+        sensor_id = self.db.add_sensor(
+            cluster_id=cluster_id,
+            tuya_device_id=FAKE_SENSOR_ID,
+            name="Outdoor Sensor",
+            sensor_type="soil_moisture",
+            config={},
+        )
+        self.db.add_sensor_reading(sensor_id=sensor_id, soil_moisture=moisture)
+        return cluster_id, sensor_id
+
+    def test_weather_skip_fires_on_outdoor_cluster_with_heavy_rain(self):
+        """Significant rain forecast skips irrigation on outdoor cluster."""
+        cluster_id, _ = self._make_outdoor_cluster_with_sensor(moisture=20.0)
+        logic = IrrigationLogic(self.db, self.plant_db, weather_client=_StubWeatherClient(precipitation_mm=5.0))
+
+        decision = logic.decide_for_cluster(cluster_id)
+
+        assert decision is not None
+        assert decision.action.value == "skip"
+        assert decision.primary_code.value == "weather_skip"
+        assert "rain forecast" in decision.reason_text.lower()
+
+    def test_weather_skip_does_not_fire_below_threshold(self):
+        """Light rain (<= 2mm) does not trigger weather-skip."""
+        cluster_id, _ = self._make_outdoor_cluster_with_sensor(moisture=20.0)
+        logic = IrrigationLogic(self.db, self.plant_db, weather_client=_StubWeatherClient(precipitation_mm=1.0))
+
+        decision = logic.decide_for_cluster(cluster_id)
+
+        assert decision is not None
+        # Dry soil (20%) should still trigger irrigation, not weather-skip
+        assert decision.action.value == "irrigate"
+
+    def test_weather_skip_does_not_fire_on_indoor_cluster(self):
+        """Indoor clusters are exempt from weather-skip regardless of forecast."""
+        cluster_id = self.db.add_cluster("Indoor Cluster", environment="indoor")
+        self.db.add_plant(cluster_id=cluster_id, species=FAKE_PLANT_SPECIES, water_needs="medium")
+        sensor_id = self.db.add_sensor(
+            cluster_id=cluster_id,
+            tuya_device_id=FAKE_SENSOR_ID,
+            name="Indoor Sensor",
+            sensor_type="soil_moisture",
+            config={},
+        )
+        self.db.add_sensor_reading(sensor_id=sensor_id, soil_moisture=20.0)
+        logic = IrrigationLogic(self.db, self.plant_db, weather_client=_StubWeatherClient(precipitation_mm=10.0))
+
+        decision = logic.decide_for_cluster(cluster_id)
+
+        assert decision is not None
+        assert decision.action.value != "skip" or decision.primary_code.value != "weather_skip"
+        # The engine should decide normally (irrigation, given dry soil)
+        assert decision.action.value == "irrigate"
+
+    def test_weather_skip_noop_when_no_weather_client(self):
+        """No weather client → rule is skipped; engine proceeds normally."""
+        cluster_id, _ = self._make_outdoor_cluster_with_sensor(moisture=20.0)
+        logic = IrrigationLogic(self.db, self.plant_db)  # no weather_client
+
+        decision = logic.decide_for_cluster(cluster_id)
+
+        assert decision is not None
+        assert decision.action.value == "irrigate"
+
+    def test_weather_skip_sets_weather_snapshot(self):
+        """Weather snapshot is populated on a weather-skip decision."""
+        cluster_id, _ = self._make_outdoor_cluster_with_sensor(moisture=20.0)
+        logic = IrrigationLogic(self.db, self.plant_db, weather_client=_StubWeatherClient(precipitation_mm=5.0))
+
+        decision = logic.decide_for_cluster(cluster_id)
+
+        assert decision.weather is not None
+        assert decision.weather.precipitation_next_6h_mm == pytest.approx(5.0)
