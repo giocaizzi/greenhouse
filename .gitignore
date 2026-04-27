@@ -42,3 +42,4 @@ data/*.db-shm
 data/cluster.json
 tools/cluster.local.json
 node_modules/
+.claude/
