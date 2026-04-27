@@ -12,7 +12,20 @@ from tuya_irrigation_core.database import create_db_engine, create_session_facto
 from tuya_irrigation_core.devices import TuyaDeviceManager
 from tuya_irrigation_core.plant_db import PlantDatabase
 from tuya_irrigation_server.config import Settings
-from tuya_irrigation_server.routes import charts, clusters, configs, irrigators, operations, plants, scheduler, sensors
+from tuya_irrigation_server.routes import (
+    bulk,
+    charts,
+    clusters,
+    configs,
+    irrigators,
+    operations,
+    plants,
+    preferences,
+    scheduler,
+    search,
+    sensors,
+    vacation,
+)
 from tuya_irrigation_server.scheduler import init_scheduler
 from tuya_irrigation_server.scheduler import scheduler as bg_scheduler
 from tuya_irrigation_server.services.weather import WeatherClient
@@ -61,6 +74,10 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
             {"name": "configs", "description": "Irrigation configuration per cluster"},
             {"name": "operations", "description": "Smart irrigation, monitoring, sync, stats, and analytics"},
             {"name": "scheduler", "description": "Background job management and health checks"},
+            {"name": "preferences", "description": "User preferences (units, timezone, theme, dry-run flag)"},
+            {"name": "vacation", "description": "Vacation windows — pause irrigation while away"},
+            {"name": "search", "description": "Global search across clusters, plants, sensors, and irrigators"},
+            {"name": "bulk", "description": "Bulk operations — emergency stop all irrigators"},
         ],
     )
 
@@ -82,6 +99,10 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
     app.include_router(operations.router, prefix=prefix)
     app.include_router(scheduler.router, prefix=prefix)
     app.include_router(charts.router, prefix=prefix)
+    app.include_router(preferences.router, prefix=prefix)
+    app.include_router(vacation.router, prefix=prefix)
+    app.include_router(search.router, prefix=prefix)
+    app.include_router(bulk.router, prefix=prefix)
 
     # Web frontend
     static_dir = Path(__file__).parent / "web" / "static"
