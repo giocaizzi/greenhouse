@@ -13,10 +13,13 @@ from tuya_irrigation_core.devices import TuyaDeviceManager
 from tuya_irrigation_core.plant_db import PlantDatabase
 from tuya_irrigation_server.config import Settings
 from tuya_irrigation_server.routes import (
+    activity,
+    alerts,
     bulk,
     charts,
     clusters,
     configs,
+    decisions,
     efficacy,
     forecast,
     health,
@@ -79,6 +82,9 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
             {"name": "configs", "description": "Irrigation configuration per cluster"},
             {"name": "operations", "description": "Smart irrigation, monitoring, sync, stats, and analytics"},
             {"name": "scheduler", "description": "Background job management and health checks"},
+            {"name": "alerts", "description": "Alert inbox with deduplication and ack/resolve lifecycle"},
+            {"name": "activity", "description": "Cross-cutting activity timeline"},
+            {"name": "decisions", "description": "Irrigation decision audit log"},
             {"name": "preferences", "description": "User preferences (units, timezone, theme, dry-run flag)"},
             {"name": "vacation", "description": "Vacation windows — pause irrigation while away"},
             {"name": "search", "description": "Global search across clusters, plants, sensors, and irrigators"},
@@ -104,6 +110,9 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
     app.include_router(operations.router, prefix=prefix)
     app.include_router(scheduler.router, prefix=prefix)
     app.include_router(charts.router, prefix=prefix)
+    app.include_router(alerts.router, prefix=prefix)
+    app.include_router(activity.router, prefix=prefix)
+    app.include_router(decisions.router, prefix=prefix)
     app.include_router(forecast.router, prefix=prefix)
     app.include_router(preferences.router, prefix=prefix)
     app.include_router(vacation.router, prefix=prefix)
