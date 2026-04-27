@@ -677,3 +677,13 @@ class ClusterInsightsResponse(BaseModel):
     cluster_name: str
     insights: list[CareInsight]
     forecast: ForecastResponse | None = None
+
+
+# --- Bulk operations --------------------------------------------------------
+
+
+class StopAllResponse(BaseModel):
+    """Result of a bulk emergency stop of all irrigators."""
+
+    stopped: int
+    errors: list[str]
