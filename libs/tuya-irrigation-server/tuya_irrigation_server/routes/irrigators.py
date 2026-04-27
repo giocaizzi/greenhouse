@@ -10,6 +10,8 @@ from tuya_irrigation_core.schemas import (
     LogManualRequest,
     LogManualResponse,
     StartIrrigatorRequest,
+    SuccessResponse,
+    UpdateIrrigatorRequest,
 )
 from tuya_irrigation_server.deps import DeviceManagerDep, RepoDep, require_cluster
 
@@ -53,6 +55,92 @@ def list_irrigators(cluster_id: int, repo: RepoDep):
         cluster_id: ID of the cluster to enumerate.
     """
     return repo.get_irrigators_in_cluster(cluster_id)
+
+
+@router.get(
+    "/clusters/{cluster_id}/irrigators/{irrigator_id}",
+    response_model=IrrigatorResponse,
+    summary="Get an irrigator by ID",
+)
+def get_irrigator(cluster_id: int, irrigator_id: int, repo: RepoDep):
+    """Fetch a single irrigator by ID.
+
+    Args:
+        cluster_id: Cluster the irrigator belongs to.
+        irrigator_id: Numeric irrigator identifier.
+
+    Returns:
+        The irrigator record.
+
+    Raises:
+        HTTPException: 404 if the irrigator does not exist or belongs to a
+            different cluster.
+    """
+    irrigator = repo.get_irrigator(irrigator_id)
+    if not irrigator or irrigator.cluster_id != cluster_id:
+        raise HTTPException(status_code=404, detail="Irrigator not found in cluster")
+    return irrigator
+
+
+@router.put(
+    "/clusters/{cluster_id}/irrigators/{irrigator_id}",
+    response_model=IrrigatorResponse,
+    summary="Update an irrigator",
+)
+def update_irrigator(cluster_id: int, irrigator_id: int, request: UpdateIrrigatorRequest, repo: RepoDep):
+    """Partially update an irrigator metadata.
+
+    Only fields present in the request body are modified; omitted fields are
+    left unchanged. The irrigator must belong to the specified cluster.
+
+    Args:
+        cluster_id: Cluster the irrigator belongs to.
+        irrigator_id: Numeric irrigator identifier.
+        request: Fields to update — any subset of name, type, and config.
+
+    Returns:
+        The updated irrigator.
+
+    Raises:
+        HTTPException: 404 if the irrigator does not exist or belongs to a
+            different cluster.
+    """
+    irrigator = repo.get_irrigator(irrigator_id)
+    if not irrigator or irrigator.cluster_id != cluster_id:
+        raise HTTPException(status_code=404, detail="Irrigator not found in cluster")
+    updated = repo.update_irrigator(irrigator_id, **request.model_dump(exclude_none=True))
+    repo.session.commit()
+    return updated
+
+
+@router.delete(
+    "/clusters/{cluster_id}/irrigators/{irrigator_id}",
+    response_model=SuccessResponse,
+    summary="Delete an irrigator",
+)
+def delete_irrigator(cluster_id: int, irrigator_id: int, repo: RepoDep):
+    """Delete an irrigator and all its historical events.
+
+    This operation is irreversible. The irrigator must belong to the specified
+    cluster.
+
+    Args:
+        cluster_id: Cluster the irrigator belongs to.
+        irrigator_id: Numeric irrigator identifier.
+
+    Returns:
+        success=True on successful deletion.
+
+    Raises:
+        HTTPException: 404 if the irrigator does not exist or belongs to a
+            different cluster.
+    """
+    irrigator = repo.get_irrigator(irrigator_id)
+    if not irrigator or irrigator.cluster_id != cluster_id:
+        raise HTTPException(status_code=404, detail="Irrigator not found in cluster")
+    repo.delete_irrigator(irrigator_id)
+    repo.session.commit()
+    return SuccessResponse(success=True)
 
 
 @router.post("/irrigators/{irrigator_id}/start", response_model=IrrigatorActionResponse)

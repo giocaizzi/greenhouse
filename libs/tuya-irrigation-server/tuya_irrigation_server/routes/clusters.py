@@ -1,8 +1,8 @@
 """Cluster CRUD routes."""
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, HTTPException, status
 
-from tuya_irrigation_core.schemas import ClusterResponse, CreateClusterRequest
+from tuya_irrigation_core.schemas import ClusterResponse, CreateClusterRequest, SuccessResponse, UpdateClusterRequest
 from tuya_irrigation_server.deps import RepoDep, require_cluster
 
 router = APIRouter(prefix="/clusters", tags=["clusters"])
@@ -44,3 +44,51 @@ def get_cluster(cluster_id: int, repo: RepoDep):
         HTTPException: 404 if no cluster with that ID exists.
     """
     return require_cluster(repo, cluster_id)
+
+
+@router.put("/{cluster_id}", response_model=ClusterResponse, summary="Update a cluster")
+def update_cluster(cluster_id: int, request: UpdateClusterRequest, repo: RepoDep):
+    """Partially update a cluster metadata.
+
+    Only fields present in the request body are modified; omitted fields are
+    left unchanged.
+
+    Args:
+        cluster_id: Numeric cluster identifier.
+        request: Fields to update — any combination of name, location, and
+            environment.
+
+    Returns:
+        The updated cluster.
+
+    Raises:
+        HTTPException: 404 if no cluster with that ID exists.
+    """
+    cluster = repo.update_cluster(cluster_id, **request.model_dump(exclude_none=True))
+    if not cluster:
+        raise HTTPException(status_code=404, detail="Cluster not found")
+    repo.session.commit()
+    return cluster
+
+
+@router.delete("/{cluster_id}", response_model=SuccessResponse, summary="Delete a cluster")
+def delete_cluster(cluster_id: int, repo: RepoDep):
+    """Delete a cluster and all its associated data.
+
+    Cascades to plants, sensors, irrigators, and irrigation config. This
+    operation is irreversible.
+
+    Args:
+        cluster_id: Numeric cluster identifier.
+
+    Returns:
+        success=True on successful deletion.
+
+    Raises:
+        HTTPException: 404 if no cluster with that ID exists.
+    """
+    deleted = repo.delete_cluster(cluster_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Cluster not found")
+    repo.session.commit()
+    return SuccessResponse(success=True)

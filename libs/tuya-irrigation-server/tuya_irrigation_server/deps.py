@@ -11,6 +11,7 @@ from tuya_irrigation_core.devices import TuyaDeviceManager
 from tuya_irrigation_core.plant_db import PlantDatabase
 from tuya_irrigation_core.repository import IrrigationRepository
 from tuya_irrigation_server.services.cluster import ClusterService
+from tuya_irrigation_server.services.health import PlantHealthService
 from tuya_irrigation_server.services.irrigation import IrrigationService
 from tuya_irrigation_server.services.sync import SyncService
 from tuya_irrigation_server.services.weather import WeatherClient
@@ -80,6 +81,13 @@ def get_cluster_service(
     return ClusterService(repo, plant_db)
 
 
+def get_plant_health_service(
+    repo: Annotated[IrrigationRepository, Depends(get_repository)],
+    plant_db: Annotated[PlantDatabase, Depends(get_plant_db)],
+) -> PlantHealthService:
+    return PlantHealthService(repo, plant_db)
+
+
 def get_irrigation_service(
     repo: Annotated[IrrigationRepository, Depends(get_repository)],
     dm: Annotated[TuyaDeviceManager | None, Depends(get_device_manager)],
@@ -101,3 +109,4 @@ PlantDbDep = Annotated[PlantDatabase, Depends(get_plant_db)]
 SyncServiceDep = Annotated[SyncService, Depends(get_sync_service)]
 ClusterServiceDep = Annotated[ClusterService, Depends(get_cluster_service)]
 IrrigationServiceDep = Annotated[IrrigationService, Depends(get_irrigation_service)]
+PlantHealthServiceDep = Annotated[PlantHealthService, Depends(get_plant_health_service)]

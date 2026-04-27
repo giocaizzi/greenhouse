@@ -1,16 +1,18 @@
 """Plant CRUD routes."""
 
 from fastapi import APIRouter, HTTPException, status
+from pydantic import BaseModel
 
 from tuya_irrigation_core.schemas import (
     CreatePlantRequest,
+    PlantHealthResponse,
     PlantResponse,
     SuccessResponse,
     SyncPlantsRequest,
     SyncPlantsResponse,
     UpdatePlantRequest,
 )
-from tuya_irrigation_server.deps import ClusterServiceDep, RepoDep, require_cluster
+from tuya_irrigation_server.deps import ClusterServiceDep, PlantHealthServiceDep, RepoDep, require_cluster
 
 router = APIRouter(tags=["plants"])
 
@@ -20,7 +22,7 @@ def add_plant(cluster_id: int, request: CreatePlantRequest, repo: RepoDep):
     """Add a plant to a cluster.
 
     Care thresholds (water needs, temperature/humidity ranges) can be supplied
-    directly or left null to be filled in later via `POST /plants/sync`, which
+    directly or left null to be filled in later via POST /plants/sync, which
     looks them up in the evidence-based plant database.
 
     Args:
@@ -63,7 +65,7 @@ def list_plants(cluster_id: int, repo: RepoDep):
 
 @router.put("/clusters/{cluster_id}/plants/{plant_id}", response_model=PlantResponse, summary="Update a plant")
 def update_plant(cluster_id: int, plant_id: int, request: UpdatePlantRequest, repo: RepoDep):
-    """Partially update a plant's care metadata.
+    """Partially update a plant care metadata.
 
     Only fields present in the request body are modified; omitted fields are
     left unchanged. The plant must belong to the specified cluster.
@@ -93,14 +95,14 @@ def delete_plant(cluster_id: int, plant_id: int, repo: RepoDep):
     """Delete a plant from a cluster.
 
     Sensors previously linked to this plant retain their cluster membership
-    but have their `plant_id` set to `null`. This operation is irreversible.
+    but have their plant_id set to null. This operation is irreversible.
 
     Args:
         cluster_id: Cluster the plant belongs to.
         plant_id: Numeric plant identifier.
 
     Returns:
-        `{"success": true}` on successful deletion.
+        success=True on successful deletion.
 
     Raises:
         HTTPException: 404 if the plant does not exist or belongs to a
@@ -118,13 +120,13 @@ def delete_plant(cluster_id: int, plant_id: int, repo: RepoDep):
 def sync_plants(request: SyncPlantsRequest, repo: RepoDep, cluster_svc: ClusterServiceDep):
     """Refresh plant care thresholds from the evidence-based plant database.
 
-    Resolves species → care data lookup and writes the result onto the matching
-    plant rows. Use this after editing `data/plant_database.json` or after
+    Resolves species to care data lookup and writes the result onto the matching
+    plant rows. Use this after editing data/plant_database.json or after
     adding plants without explicit care fields. Scope is widening: single plant
-    → cluster → entire database, depending on which field is set.
+    to cluster to entire database, depending on which field is set.
 
     Args:
-        request: One of `plant_id` (single plant), `cluster_id` (all plants in
+        request: One of plant_id (single plant), cluster_id (all plants in
             that cluster), or neither (every plant in every cluster).
 
     Returns:
@@ -132,7 +134,7 @@ def sync_plants(request: SyncPlantsRequest, repo: RepoDep, cluster_svc: ClusterS
         any that failed (failures do not abort the rest of the run).
 
     Raises:
-        HTTPException: 404 if `plant_id` is set and no such plant exists.
+        HTTPException: 404 if plant_id is set and no such plant exists.
     """
     errors = []
     synced = 0
@@ -165,3 +167,55 @@ def sync_plants(request: SyncPlantsRequest, repo: RepoDep, cluster_svc: ClusterS
 
     repo.session.commit()
     return SyncPlantsResponse(synced=synced, errors=errors)
+
+
+class SnapshotResponse(BaseModel):
+    """Result of a manual health-snapshot run."""
+
+    rows_written: int
+
+
+@router.get("/plants/{plant_id}/health", response_model=PlantHealthResponse)
+def get_plant_health(plant_id: int, repo: RepoDep, health_svc: PlantHealthServiceDep):
+    """Return the current health score and 90-day history for a plant.
+
+    Computes a fresh 0–100 composite score from readings over the last 14 days
+    (soil/temp/humidity in-band fractions + irrigation efficiency) and returns
+    the stored daily snapshots for charting.
+
+    Args:
+        plant_id: Database ID of the plant.
+
+    Returns:
+        Current score (None when no data), per-component breakdowns, and the
+        list of daily snapshots ordered oldest-first.
+
+    Raises:
+        HTTPException: 404 if the plant does not exist.
+    """
+    plant = repo.get_plant(plant_id)
+    if not plant:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plant not found")
+    result = health_svc.compute_score(plant_id)
+    history = repo.list_plant_health_history(plant_id, days=90)
+    return PlantHealthResponse(
+        plant_id=plant_id,
+        species=plant.species,
+        current_score=result["score"],
+        history=history,
+    )
+
+
+@router.post("/plants/health/snapshot", response_model=SnapshotResponse)
+def trigger_health_snapshot(health_svc: PlantHealthServiceDep, repo: RepoDep):
+    """Compute today's health score for every plant and persist the daily snapshots.
+
+    Intended for manual ops and testing. The scheduler calls this automatically
+    at 00:30 UTC every day.
+
+    Returns:
+        Number of plant rows written (plants with no data are skipped).
+    """
+    rows = health_svc.snapshot_daily()
+    repo.session.commit()
+    return SnapshotResponse(rows_written=rows)

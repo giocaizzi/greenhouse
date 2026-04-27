@@ -37,6 +37,15 @@ def init_scheduler(app: FastAPI, settings: Settings) -> None:
         name="Check all clusters",
         replace_existing=True,
     )
+    scheduler.add_job(
+        _health_snapshot_job,
+        "cron",
+        hour=0,
+        minute=30,
+        id="plant_health_snapshot",
+        name="Daily plant health snapshot",
+        replace_existing=True,
+    )
 
 
 def _get_cloud() -> TuyaCloud | None:
@@ -65,6 +74,25 @@ def _sync_job() -> None:
     except Exception:
         session.rollback()
         logger.exception("Sync job failed")
+    finally:
+        session.close()
+
+
+def _health_snapshot_job() -> None:
+    """Background job: compute and persist daily plant health snapshots."""
+    from tuya_irrigation_server.services.health import PlantHealthService
+
+    session = _app.state.session_factory()
+    try:
+        from tuya_irrigation_core.repository import IrrigationRepository
+
+        repo = IrrigationRepository(session)
+        svc = PlantHealthService(repo, _app.state.plant_db)
+        svc.snapshot_daily()
+        session.commit()
+    except Exception:
+        session.rollback()
+        logger.exception("Plant health snapshot job failed")
     finally:
         session.close()
 
