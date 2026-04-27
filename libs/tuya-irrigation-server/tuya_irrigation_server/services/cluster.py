@@ -69,7 +69,7 @@ class ClusterService:
             )
 
         logic = IrrigationLogic(self._repo, self._plant_db)
-        decision = logic.decide_for_cluster(cluster_id)
+        decision = logic.decide_for_cluster(cluster_id)  # no weather_client: status snapshot stays fast
         decision_dict = decision_to_view(decision) if decision else None
 
         return {

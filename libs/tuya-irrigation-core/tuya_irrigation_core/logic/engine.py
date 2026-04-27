@@ -42,6 +42,7 @@ from tuya_irrigation_core.logic.decision import (
     StressIndicators,
     Trends,
     TriggerCode,
+    WeatherSnapshot,
 )
 from tuya_irrigation_core.logic.fallback import temperature_based_decision
 from tuya_irrigation_core.logic.plant_needs import (
@@ -63,9 +64,10 @@ log = logging.getLogger(__name__)
 class IrrigationLogic:
     """Smart irrigation decision engine using evidence-based plant data."""
 
-    def __init__(self, db: IrrigationRepository, plant_db: PlantDatabase):
+    def __init__(self, db: IrrigationRepository, plant_db: PlantDatabase, *, weather_client=None):
         self.db = db
         self.plant_db = plant_db
+        self._weather = weather_client
 
     def decide_for_cluster(
         self,
@@ -107,6 +109,12 @@ class IrrigationLogic:
             if persist:
                 self._persist(cooldown, triggered_by)
             return cooldown
+
+        weather_skip = self._apply_weather_skip_rule(cluster, cluster_id, evaluated_at)
+        if weather_skip is not None:
+            if persist:
+                self._persist(weather_skip, triggered_by)
+            return weather_skip
 
         snapshot = get_recent_sensor_data(self.db, cluster_id, hours=24)
         trends = analyze_historical_trends(self.db, cluster_id)
@@ -212,6 +220,39 @@ class IrrigationLogic:
             code=TriggerCode.COOLDOWN,
             message=f"cooldown active (last irrigation {hours_ago:.1f}h ago, trigger: {latest_event.triggered_by})",
         )
+
+    def _apply_weather_skip_rule(self, cluster, cluster_id: int, evaluated_at: int) -> IrrigationDecision | None:
+        """Skip irrigation for outdoor clusters when significant rain is forecast.
+
+        No-ops when weather_client is not configured or the cluster is indoor.
+        """
+        if self._weather is None or cluster.environment == "indoor":
+            return None
+
+        forecast = self._weather.get_forecast(hours=6)
+        if forecast is None:
+            return None
+
+        precip = forecast.get("precipitation_mm", 0.0) or 0.0
+        if precip <= 2.0:
+            return None
+
+        decision = _decision_with_reason(
+            cluster_id,
+            evaluated_at,
+            Action.SKIP,
+            DEFAULT_DURATION_MINUTES,
+            MAX_INTERVAL_HOURS,
+            confidence=CONFIDENCE_OVER_WATERING,
+            code=TriggerCode.WEATHER_SKIP,
+            message=f"rain forecast ({precip:.1f}mm in next 6h) — skipping to avoid over-watering",
+            severity=Severity.WARNING,
+        )
+        decision.weather = WeatherSnapshot(
+            precipitation_next_6h_mm=precip,
+            source="open-meteo",
+        )
+        return decision
 
     def _attach_learning_alerts(self, cluster_id: int, stress: StressIndicators) -> None:
         """Best-effort learning alert collection — never blocks the decision."""
@@ -406,9 +447,7 @@ def _apply_temperature_adjustment(decision: IrrigationDecision, temp_range: tupl
         )
 
 
-def _apply_humidity_adjustment(
-    decision: IrrigationDecision, humidity_range: tuple[float, float] | None
-) -> None:
+def _apply_humidity_adjustment(decision: IrrigationDecision, humidity_range: tuple[float, float] | None) -> None:
     avg_hum = decision.sensor_snapshot.avg_env_humidity if decision.sensor_snapshot else None
     if avg_hum is None or not humidity_range:
         return

@@ -569,9 +569,7 @@ class IrrigationRepository:
     ) -> PlantHealthDaily:
         """Idempotent upsert for the per-plant daily health snapshot."""
         existing = self.session.scalar(
-            select(PlantHealthDaily).where(
-                PlantHealthDaily.plant_id == plant_id, PlantHealthDaily.date_key == date_key
-            )
+            select(PlantHealthDaily).where(PlantHealthDaily.plant_id == plant_id, PlantHealthDaily.date_key == date_key)
         )
         if existing:
             existing.score = score

@@ -2,7 +2,14 @@
 
 from fastapi import APIRouter, HTTPException, status
 
-from tuya_irrigation_core.schemas import CreatePlantRequest, PlantResponse, SyncPlantsRequest, SyncPlantsResponse
+from tuya_irrigation_core.schemas import (
+    CreatePlantRequest,
+    PlantResponse,
+    SuccessResponse,
+    SyncPlantsRequest,
+    SyncPlantsResponse,
+    UpdatePlantRequest,
+)
 from tuya_irrigation_server.deps import ClusterServiceDep, RepoDep, require_cluster
 
 router = APIRouter(tags=["plants"])
@@ -52,6 +59,59 @@ def list_plants(cluster_id: int, repo: RepoDep):
         cluster_id: ID of the cluster to enumerate.
     """
     return repo.get_plants_in_cluster(cluster_id)
+
+
+@router.put("/clusters/{cluster_id}/plants/{plant_id}", response_model=PlantResponse, summary="Update a plant")
+def update_plant(cluster_id: int, plant_id: int, request: UpdatePlantRequest, repo: RepoDep):
+    """Partially update a plant's care metadata.
+
+    Only fields present in the request body are modified; omitted fields are
+    left unchanged. The plant must belong to the specified cluster.
+
+    Args:
+        cluster_id: Cluster the plant belongs to.
+        plant_id: Numeric plant identifier.
+        request: Fields to update — any subset of care metadata fields.
+
+    Returns:
+        The updated plant.
+
+    Raises:
+        HTTPException: 404 if the plant does not exist or belongs to a
+            different cluster.
+    """
+    plant = repo.get_plant(plant_id)
+    if not plant or plant.cluster_id != cluster_id:
+        raise HTTPException(status_code=404, detail="Plant not found in cluster")
+    updated = repo.update_plant(plant_id, **request.model_dump(exclude_none=True))
+    repo.session.commit()
+    return updated
+
+
+@router.delete("/clusters/{cluster_id}/plants/{plant_id}", response_model=SuccessResponse, summary="Delete a plant")
+def delete_plant(cluster_id: int, plant_id: int, repo: RepoDep):
+    """Delete a plant from a cluster.
+
+    Sensors previously linked to this plant retain their cluster membership
+    but have their `plant_id` set to `null`. This operation is irreversible.
+
+    Args:
+        cluster_id: Cluster the plant belongs to.
+        plant_id: Numeric plant identifier.
+
+    Returns:
+        `{"success": true}` on successful deletion.
+
+    Raises:
+        HTTPException: 404 if the plant does not exist or belongs to a
+            different cluster.
+    """
+    plant = repo.get_plant(plant_id)
+    if not plant or plant.cluster_id != cluster_id:
+        raise HTTPException(status_code=404, detail="Plant not found in cluster")
+    repo.delete_plant(plant_id)
+    repo.session.commit()
+    return SuccessResponse(success=True)
 
 
 @router.post("/plants/sync", response_model=SyncPlantsResponse)

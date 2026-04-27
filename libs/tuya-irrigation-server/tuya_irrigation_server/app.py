@@ -17,6 +17,7 @@ from tuya_irrigation_server.routes import (
     charts,
     clusters,
     configs,
+    forecast,
     irrigators,
     operations,
     plants,
@@ -99,6 +100,7 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
     app.include_router(operations.router, prefix=prefix)
     app.include_router(scheduler.router, prefix=prefix)
     app.include_router(charts.router, prefix=prefix)
+    app.include_router(forecast.router, prefix=prefix)
     app.include_router(preferences.router, prefix=prefix)
     app.include_router(vacation.router, prefix=prefix)
     app.include_router(search.router, prefix=prefix)

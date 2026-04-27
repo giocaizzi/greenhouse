@@ -70,7 +70,7 @@ class IrrigationService:
         is_indoor = cluster.environment == "indoor"
         temp, source, sensor_data = self._resolve_temperature(cluster_id, is_indoor, temp_override, no_sync)
 
-        logic = IrrigationLogic(self._repo, self._plant_db)
+        logic = IrrigationLogic(self._repo, self._plant_db, weather_client=self._weather)
         decision = logic.decide_for_cluster(cluster_id, current_temp=temp)
         if not decision:
             return {"action": "error", "reason": "no data for decision", "confidence": 0}
