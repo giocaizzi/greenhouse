@@ -26,6 +26,9 @@ _MIN_READINGS = 10
 _WINDOW = 50
 _Z_THRESHOLD = 4.0
 _STALE_MULTIPLIER = 2.0
+# Minimum std to use for z-score; prevents false alarms on near-constant series
+# while still catching large absolute deviations (e.g. 95% vs 50% baseline).
+_MIN_STD = 1.0
 
 
 def _median_interval(timestamps: list[int]) -> float | None:
@@ -34,13 +37,6 @@ def _median_interval(timestamps: list[int]) -> float | None:
         return None
     gaps = [timestamps[i + 1] - timestamps[i] for i in range(len(timestamps) - 1)]
     return statistics.median(gaps)
-
-
-def _z_score(value: float, mean: float, std: float) -> float | None:
-    """Compute z-score; returns None when std is zero (constant series)."""
-    if std == 0:
-        return None
-    return (value - mean) / std
 
 
 class SensorAnomalyService:
@@ -57,6 +53,8 @@ class SensorAnomalyService:
         - **Stale**: ``(now - latest_ts) > 2 × median_interval``.
         - **Drift**: ``|z-score of latest soil_moisture| > 4`` versus the
           rolling mean and std of the last 50 soil-moisture readings.
+          A minimum std of 1.0 % is applied to avoid false alarms on near-constant
+          series where tiny rounding differences would appear as infinite outliers.
 
         Returns:
             List of Alert rows that were upserted.
@@ -123,10 +121,10 @@ class SensorAnomalyService:
                 continue
 
             mean = statistics.mean(baseline)
-            std = statistics.pstdev(baseline)
-            z = _z_score(latest_soil, mean, std)
+            std = max(statistics.pstdev(baseline), _MIN_STD)
+            z = (latest_soil - mean) / std
 
-            if z is not None and abs(z) > _Z_THRESHOLD:
+            if abs(z) > _Z_THRESHOLD:
                 alert = raise_alert(
                     self._repo,
                     source=SOURCE_ANOMALY,
