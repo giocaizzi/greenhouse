@@ -12,6 +12,8 @@ from tuya_irrigation_server.services.charts import ALLOWED_HOURS, build_cluster_
 from tuya_irrigation_server.web.context import base_context
 from tuya_irrigation_server.web.templating import templates
 
+_EMPTY_RATIONALE: list[dict] = []
+
 router = APIRouter(include_in_schema=False)
 
 CLUSTER_METRICS = ("soil_moisture", "temperature", "env_humidity", "light")
@@ -63,6 +65,17 @@ def cluster_detail(
     # Threshold per metric is reused by stat tiles to render the range indicator.
     chart_thresholds = {metric: payload.get("threshold", {}) for metric, payload in chart_payloads.items()}
 
+    # Decision rationale: latest persisted DecisionLog with decoded reasons[]
+    rationale_reasons: list[dict] = _EMPTY_RATIONALE
+    logs = repo.list_decision_logs(cluster_id, limit=1)
+    if logs:
+        log = logs[0]
+        try:
+            payload = json.loads(log.payload_json)
+            rationale_reasons = payload.get("reasons", [])
+        except (json.JSONDecodeError, TypeError):
+            rationale_reasons = _EMPTY_RATIONALE
+
     return templates.TemplateResponse(
         request,
         "clusters/detail.html",
@@ -75,6 +88,7 @@ def cluster_detail(
             metrics=CLUSTER_METRICS,
             chart_payloads=chart_payloads_json,
             chart_thresholds=chart_thresholds,
+            rationale_reasons=rationale_reasons,
         ),
     )
 

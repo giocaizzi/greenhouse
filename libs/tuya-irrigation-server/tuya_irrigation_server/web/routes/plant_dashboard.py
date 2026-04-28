@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import json
+import time
 
 from fastapi import APIRouter, HTTPException, Query, Request
 
 from tuya_irrigation_core.models import Plant
-from tuya_irrigation_server.deps import PlantDbDep, RepoDep
+from tuya_irrigation_server.deps import PlantDbDep, PlantHealthServiceDep, RepoDep
 from tuya_irrigation_server.services.charts import (
     ALLOWED_HOURS,
     build_plant_chart_payload,
@@ -35,6 +36,7 @@ def plant_dashboard(
     plant_id: int,
     repo: RepoDep,
     plant_db: PlantDbDep,
+    health_svc: PlantHealthServiceDep,
     hours: int = Query(24, ge=1, le=8760),
 ):
     plant = _get_plant_or_404(repo, plant_id, cluster_id)
@@ -67,6 +69,20 @@ def plant_dashboard(
     chart_payloads = {metric: build_plant_chart_payload(repo, plant_db, plant_id, hours, metric) for metric in METRICS}
     chart_payloads_json = {metric: json.dumps(payload) for metric, payload in chart_payloads.items()}
 
+    # Health score + 90-day history for the hero card
+    health_result = health_svc.compute_score(plant_id)
+    health_score: float | None = health_result["score"]
+    health_history = repo.list_plant_health_history(plant_id, days=90)
+
+    # Last-irrigated relative timestamp (newest event across all irrigators)
+    last_irrigated_ts: int | None = None
+    for irr in repo.get_irrigators_in_cluster(cluster_id):
+        events = repo.get_recent_events(irr.id, hours=90 * 24)
+        for ev in events:
+            if last_irrigated_ts is None or ev.timestamp > last_irrigated_ts:
+                last_irrigated_ts = ev.timestamp
+    last_irrigated_relative: str = _relative_time(last_irrigated_ts)
+
     return templates.TemplateResponse(
         request,
         "plants/dashboard.html",
@@ -83,8 +99,23 @@ def plant_dashboard(
             allowed_hours=sorted(ALLOWED_HOURS),
             metrics=METRICS,
             chart_payloads=chart_payloads_json,
+            health_score=health_score,
+            health_history=health_history,
+            last_irrigated_relative=last_irrigated_relative,
         ),
     )
+
+
+def _relative_time(ts: int | None) -> str:
+    """Return a human-readable relative time string for a Unix timestamp."""
+    if ts is None:
+        return "never"
+    delta = max(0, int(time.time() - ts))
+    if delta < 3600:
+        return f"{delta // 60}m ago"
+    if delta < 86400:
+        return f"{delta // 3600}h ago"
+    return f"{delta // 86400}d ago"
 
 
 @router.get("/clusters/{cluster_id}/plants/{plant_id}/chart-fragment")
