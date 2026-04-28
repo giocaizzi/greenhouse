@@ -1,0 +1,49 @@
+{% if alert %}
+{% set sev = alert.severity | lower %}
+{% set cls = {"critical": "alert--danger", "warning": "alert--warn", "info": "alert--info"}.get(sev, "") %}
+<div class="alert {{ cls }}" id="alert-{{ alert.id }}">
+  <div class="alert__icon" aria-hidden="true">
+    {% if sev == "critical" %}
+      <svg class="icon"><use href="/static/icons/sprite.svg#i-x-circle"></use></svg>
+    {% elif sev == "warning" %}
+      <svg class="icon"><use href="/static/icons/sprite.svg#i-warning"></use></svg>
+    {% else %}
+      <svg class="icon"><use href="/static/icons/sprite.svg#i-info"></use></svg>
+    {% endif %}
+  </div>
+  <div>
+    <p class="alert__title">
+      {{ alert.title }}
+      <span class="badge-{{ {"critical":"danger","warning":"warning","info":"info"}.get(sev, "muted") }}" style="margin-left:6px;">{{ alert.status }}</span>
+      {% if alert.occurrence_count > 1 %}
+        <span class="badge" style="margin-left:4px;">×{{ alert.occurrence_count }}</span>
+      {% endif %}
+    </p>
+    <p class="alert__body">{{ alert.message }}</p>
+    <p class="alert__body" style="margin-top:4px;">
+      <small class="mono muted">{{ alert.source }} · {{ alert.code }}</small>
+      <span class="dot" style="margin:0 6px;"></span>
+      <small class="mono muted">{{ alert.first_seen_at | format_ts }} → {{ alert.last_seen_at | format_ts }}</small>
+    </p>
+    <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
+      {% if alert.status == "open" %}
+        <form method="post" action="/alerts/{{ alert.id }}/ack" style="margin:0;">
+          <button type="submit" class="secondary btn-sm"
+            hx-post="/alerts/{{ alert.id }}/ack"
+            hx-target="closest .alert"
+            hx-swap="outerHTML">Acknowledge</button>
+        </form>
+      {% endif %}
+      {% if alert.status != "resolved" %}
+        <form method="post" action="/alerts/{{ alert.id }}/resolve" style="margin:0;">
+          <button type="submit" class="secondary btn-sm"
+            hx-post="/alerts/{{ alert.id }}/resolve"
+            hx-target="closest .alert"
+            hx-swap="outerHTML">Resolve</button>
+        </form>
+      {% endif %}
+    </div>
+  </div>
+  <span class="alert__time">{{ alert.last_seen_at | age_seconds }}</span>
+</div>
+{% endif %}

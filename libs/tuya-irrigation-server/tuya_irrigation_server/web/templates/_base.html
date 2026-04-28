@@ -36,6 +36,12 @@
   <span>Dry-run mode is on — no hardware will fire.</span>
 </div>
 {% endif %}
+{% if active_vacation %}
+<div class="dryrun-banner" role="status">
+  <svg class="icon" aria-hidden="true"><use href="/static/icons/sprite.svg#i-leaf"></use></svg>
+  <span>Vacation mode is on until {{ active_vacation.ends_at | format_ts }}.</span>
+</div>
+{% endif %}
 
 <header class="topbar">
   <div class="container topbar__inner">
