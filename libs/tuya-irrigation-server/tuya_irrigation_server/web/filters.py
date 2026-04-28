@@ -95,6 +95,55 @@ def yesno(value, yes: str = "Yes", no: str = "No") -> str:
     return yes if value else no
 
 
+_TRIGGER_CODE_ICONS: dict[str, str] = {
+    # Terminal triggers
+    "no_plants": "leaf",
+    "cooldown": "clock",
+    "water_warning": "warning",
+    "water_stress": "drop",
+    "over_watering": "drop",
+    "sensor_very_dry": "drop",
+    "sensor_dry": "drop",
+    "sensor_adequate": "check",
+    "sensor_wet": "drop",
+    "conflict": "scales",
+    "weather_skip": "cloud-rain",
+    "temp_fallback": "thermometer-simple",
+    "config_fallback": "gear-six",
+    "no_data": "x-circle",
+    "daily_cap_hit": "x-circle",
+    # Adjustments
+    "temp_high": "thermometer-hot",
+    "temp_low": "thermometer-simple",
+    "humidity_very_low": "warning",
+    "humidity_low": "warning",
+    "humidity_high": "cloud-rain",
+    "light_very_bright": "sun",
+    "light_bright": "sun",
+    "light_dark": "moon",
+    "light_very_dark": "moon",
+    "water_needs_high": "drop",
+    "water_needs_low": "drop",
+    "trend_moisture_declining": "trend-down",
+    "trend_moisture_rising": "chart-line-up",
+    "trend_temp_rising": "thermometer-hot",
+    "underwatering_pattern": "warning",
+    "learning_alert": "info",
+}
+
+# Severity-to-icon fallback used for CareInsight cards
+_SEVERITY_ICONS: dict[str, str] = {
+    "critical": "x-circle",
+    "warning": "warning",
+    "info": "info",
+}
+
+
+def icon_for_code(code: str) -> str:
+    """Map a TriggerCode value to a sprite icon id (without the ``i-`` prefix)."""
+    return _TRIGGER_CODE_ICONS.get(code, _SEVERITY_ICONS.get(code, "info"))
+
+
 ALL_FILTERS = {
     "format_ts": format_ts,
     "age_seconds": age_seconds,
@@ -105,4 +154,5 @@ ALL_FILTERS = {
     "yesno": yesno,
     "strip_emoji": strip_emoji,
     "stat_position": stat_position,
+    "icon_for_code": icon_for_code,
 }

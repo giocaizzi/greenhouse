@@ -10,17 +10,61 @@
   <span class="here">{{ plant.species | lower }}</span>
 </div>
 
-<section class="page-head">
-  <div class="page-head__title">
-    <h1><i class="species">{{ plant.species }}</i></h1>
-    <div class="page-head__meta">
-      <span>{{ cluster.name }}</span>
-      {% if plant.category %}<span class="dot"></span><span>{{ plant.category }}</span>{% endif %}
-      {% if plant.water_needs %}<span class="dot"></span><span>water · {{ plant.water_needs }}</span>{% endif %}
-      {% if plant.light_needs %}<span class="dot"></span><span>light · {{ plant.light_needs }}</span>{% endif %}
+{# ── Plant hero card ─────────────────────────────────────────────────────────── #}
+<section class="plant-hero">
+  <div class="plant-hero__art">
+    <svg class="icon"><use href="/static/icons/sprite.svg#i-flower"></use></svg>
+  </div>
+  <div class="plant-hero__main">
+    <h1 class="plant-hero__name">{{ plant.notes or plant.species }}</h1>
+    <div class="plant-hero__species"><i>{{ plant.species }}</i></div>
+    <p class="plant-hero__line">
+      {% if plant.notes and plant.notes != plant.species %}{{ plant.notes }}{% else %}Monitored and irrigated.{% endif %}
+    </p>
+    <div class="plant-hero__chips">
+      {% if plant.category %}<span class="pill">{{ plant.category }}</span>{% endif %}
+      {% if plant.water_needs %}<span class="pill">water · {{ plant.water_needs }}</span>{% endif %}
+      {% if plant.light_needs %}<span class="pill">light · {{ plant.light_needs }}</span>{% endif %}
+      <span class="pill">{{ cluster.name }}</span>
     </div>
   </div>
+  <aside class="plant-hero__side">
+    {% if health_score is not none %}
+      <div class="health-ring" style="--score: {{ health_score | round }}">
+        <span class="health-ring__value">{{ health_score | round | int }}</span>
+        <span class="health-ring__label">health</span>
+      </div>
+    {% else %}
+      <div class="health-ring health-ring--empty">
+        <span class="health-ring__value">—</span>
+        <span class="health-ring__label">health</span>
+      </div>
+    {% endif %}
+    <span class="muted" style="font-size: var(--fs-xs); text-align: center;">irrigated {{ last_irrigated_relative }}</span>
+  </aside>
 </section>
+
+{# ── 90-day health sparkline ─────────────────────────────────────────────────── #}
+{% if health_history %}
+  {% set pts = health_history %}
+  {% set n = pts | length %}
+  {% set w = 280 %}
+  {% set h = 56 %}
+  {% set x_step = (w / (n - 1)) if n > 1 else w %}
+  <div class="sparkline-wrap" title="90-day health score trend">
+    <svg class="sparkline" viewBox="0 0 {{ w }} {{ h }}" preserveAspectRatio="none" aria-hidden="true">
+      <polyline
+        fill="none"
+        stroke="var(--accent)"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        points="{% for p in pts %}{{ loop.index0 * x_step | round(1) }},{{ (h - p.score / 100 * h) | round(1) }}{% if not loop.last %} {% endif %}{% endfor %}"
+      />
+    </svg>
+    <span class="sparkline__label">{{ pts | length }}d of health data</span>
+  </div>
+{% endif %}
 
 <div class="grid">
   {% include "partials/_plant_latest_card.html" %}
