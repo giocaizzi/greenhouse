@@ -8,15 +8,22 @@
    sensors via the Tuya Cloud API.
 2. **Decides** when and how long to irrigate per *cluster* (a group of plants
    irrigated together) using evidence-based plant care data, multi-sensor
-   conflict resolution (driest plant drives the call), and a 6h global cooldown.
+   conflict resolution (driest plant drives the call), a 6h global cooldown,
+   per-day rate cap, and a weather-aware precipitation skip rule. Every
+   evaluation produces a typed `IrrigationDecision` with a structured `Reason`
+   trail keyed by stable `TriggerCode` enums, and is persisted to
+   `decision_logs` whether or not it was acted on.
 3. **Acts** by controlling Tuya irrigators directly over the local protocol
    (v3.5) for reliable duration control — never via the Cloud for actuation.
+   A trust layer runs a leak/stuck-valve detector and sensor anomaly scan
+   (drift + stale) before each actuation.
 4. **Learns** from each irrigation cycle: builds per-plant absorption /
-   drainage profiles and raises advisory alerts (blocked drip, rapid drainage,
-   chronic underwatering, unresolvable conflict, etc.). Learning never blocks
-   decisions.
-5. **Persists** every sensor reading and irrigation event into a local SQLite
-   archive — Tuya Cloud is the live source, SQLite is the permanent record.
+   drainage profiles, computes a daily 0–100 health score per plant, and raises
+   advisory alerts (blocked drip, rapid drainage, chronic underwatering,
+   unresolvable conflict, etc.). Learning never blocks decisions.
+5. **Persists** every sensor reading, irrigation event, decision log, alert,
+   and activity event into a local SQLite archive — Tuya Cloud is the live
+   source, SQLite is the permanent record.
 
 It exposes a FastAPI server (JSON API + HTMX web UI), a Typer CLI client, and
 runs sync + check jobs in the background via APScheduler.
@@ -27,7 +34,7 @@ The server is the only thing that touches the DB and the devices. There are
 four ways to talk to it:
 
 1. **JSON REST API** at `/api/v1` — the authoritative entry point. OpenAPI
-   docs at `/docs`.
+   docs at `/docs`. Full endpoint inventory: [references/API.md](references/API.md).
 2. **HTMX web UI** at `/` — same FastAPI app, server-rendered. Calls the
    service layer **in-process** (not over HTTP), so it shares code with the
    API but isn't itself a client of it.
@@ -49,6 +56,22 @@ or an MCP tool should be able to do must first exist as an API endpoint.
 > ⚠️ **MCP gives an LLM the ability to actuate physical irrigation hardware**
 > (`/clusters/{id}/irrigate`, `/irrigators/{id}/start`, etc.). Until auth is
 > added, only run the server somewhere an LLM you trust can reach it.
+
+**New API surface in 1.2.0** (all under `/api/v1`):
+
+- Decisions audit log: `GET /clusters/{id}/decisions`
+- Alert inbox: `GET /alerts`, `GET /alerts/{id}`, `POST /alerts/{id}/acknowledge`, `POST /alerts/{id}/resolve`, `POST /clusters/{id}/alerts/sync`, `POST /alerts/sync`
+- Activity timeline: `GET /activity`
+- Forecast: `GET /clusters/{id}/forecast`
+- Plant health: `GET /plants/{id}/health`, `POST /plants/health/snapshot`
+- Insights: `GET /clusters/{id}/insights`
+- System health: `GET /health/system`
+- Data quality: `GET /quality/report`
+- Efficacy: `GET /clusters/{id}/efficacy`
+- Preferences: `GET /preferences`, `PUT /preferences`
+- Vacation: `GET /vacation`, `POST /vacation`, `DELETE /vacation/{id}`
+- Search: `GET /search`
+- Bulk stop: `POST /bulk/stop-all`
 
 **Tech Stack:** Python 3.11+, uv workspaces, FastAPI, SQLAlchemy v2, Pydantic v2, Typer, ruff, pytest, SQLite, tinytuya, APScheduler, Jinja2 + HTMX + Chart.js + Pico.css (server-rendered web UI, no build step), `fastapi-mcp` (MCP server mounted on the same FastAPI app)
 
@@ -120,6 +143,7 @@ Other top-level dirs: `data/` (gitignored runtime + `plant_database.json`),
 9. **All thresholds** centralized in `constants.py`
 10. **Server is the only thing with DB and device access** — UI, CLI, and MCP all go through it (see "Interfaces" above). Web UI is HTMX + Jinja2 server-rendered (no SPA, no build step) and lives in the same FastAPI app.
 11. **Every `/api/v1` route must declare `response_model=`, a Pydantic request body, and a Google-style docstring** — fastapi-mcp builds MCP tool schemas from the OpenAPI schema and uses the route's docstring as the tool description an LLM reads when picking tools. Untyped or undocumented routes produce tools the LLM cannot reason about safely. Enforced by `tests/server/test_mcp.py` (binary downloads like CSV export are exempted explicitly there). Docstring style: imperative summary, then `Args:` / `Returns:` / `Raises:` sections — skip framework-level params (`repo`, dependency injectables) since they only add noise to the MCP tool schema.
+12. **`IrrigationDecision` is the canonical engine output** — a typed Pydantic model carrying `action`, `duration_minutes`, `interval_hours`, `confidence`, and a `reasons: list[Reason]` trail. Each `Reason` carries a stable `TriggerCode` enum value so the UI, MCP, and audit log can key on it without parsing free text. The decision is persisted to `decision_logs` for every evaluation (acted-on or not) — the `DecisionLog` record stores `primary_code`, `reason_text`, `actuated`, and the full `payload_json`.
 
 ## Development
 

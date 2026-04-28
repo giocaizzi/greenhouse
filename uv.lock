@@ -1413,7 +1413,7 @@ wheels = [
 
 [[package]]
 name = "tuya-irrigation"
-version = "1.1.0"
+version = "1.2.0"
 source = { virtual = "." }
 dependencies = [
     { name = "tuya-irrigation-cli" },
@@ -1444,7 +1444,7 @@ dev = [
 
 [[package]]
 name = "tuya-irrigation-cli"
-version = "1.1.0"
+version = "1.2.0"
 source = { editable = "libs/tuya-irrigation-cli" }
 dependencies = [
     { name = "httpx" },
@@ -1459,7 +1459,7 @@ requires-dist = [
 
 [[package]]
 name = "tuya-irrigation-core"
-version = "1.1.0"
+version = "1.2.0"
 source = { editable = "libs/tuya-irrigation-core" }
 dependencies = [
     { name = "alembic" },
@@ -1478,7 +1478,7 @@ requires-dist = [
 
 [[package]]
 name = "tuya-irrigation-server"
-version = "1.1.0"
+version = "1.2.0"
 source = { editable = "libs/tuya-irrigation-server" }
 dependencies = [
     { name = "apscheduler" },

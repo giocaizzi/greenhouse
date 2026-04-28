@@ -14,25 +14,49 @@
 
 </div>
 
+## What's new in 1.2.0
+
+- **Typed decision pipeline** — `IrrigationDecision` is the typed output of the engine. Every evaluation is persisted in `decision_logs` with a structured `Reason` trail keyed by stable `TriggerCode` enums (`GET /api/v1/clusters/{id}/decisions`).
+- **Alert inbox** — deduplicated upsert with `open → acknowledged → resolved` lifecycle (`GET /api/v1/alerts`, `POST /api/v1/alerts/{id}/acknowledge`, `POST /api/v1/alerts/{id}/resolve`, `POST /api/v1/clusters/{id}/alerts/sync`).
+- **Activity timeline** — cross-cutting event stream (`GET /api/v1/activity`).
+- **Forecast + weather-aware skip** — next-irrigation forecast and precipitation-based skip rule (`GET /api/v1/clusters/{id}/forecast`).
+- **Plant health score** — daily 0–100 composite (in-band soil/temp/humidity time + learning efficiency) with snapshot job (`GET /api/v1/plants/{id}/health`).
+- **Trust layer** — leak/stuck-valve detector, per-cluster per-day rate limit, sensor anomaly scan (drift + stale).
+- **Cluster insights, system health pulse, data quality report, irrigation efficacy scorer** — `GET /api/v1/clusters/{id}/insights`, `GET /api/v1/health/system`, `GET /api/v1/quality/report`, `GET /api/v1/clusters/{id}/efficacy`.
+- **User preferences, vacation windows, global search, emergency stop-all** — `GET/PUT /api/v1/preferences`, `GET/POST/DELETE /api/v1/vacation/{id}`, `GET /api/v1/search`, `POST /api/v1/bulk/stop-all`.
+- **Full CRUD** — edit/delete for cluster, plant, sensor, and irrigator; GET-by-id for sensor and irrigator.
+- **2026 design system** — elevation/motion/z tokens, progress bar, toasts, command-K palette, bottom-sheet, plant hero card, health ring, insight cards, decision-rationale rows, dry-run and vacation banners.
+
 ## Overview
 
 **tuya-irrigation** monitors soil moisture, temperature, humidity, and light from Tuya-compatible sensors and makes smart irrigation decisions based on evidence-based plant care data. It learns from past irrigation cycles to detect efficiency issues, blocked drips, and unresolvable plant conflicts.
 
 ```bash
 uv sync
-uv run tuya-irrigation-server        # start REST API
-uv run tuya-irrigation check --all    # check all clusters
+uv run tuya-irrigation-server        # start REST API + web UI
+uv run tuya-irrigation check --all   # check all clusters
 ```
 
-## Features
+## How it decides
 
-- 🌿 **Evidence-based decisions** — plant care data from scientific literature drives moisture targets, temperature thresholds, and watering frequency
-- ⚖️ **Multi-sensor conflict resolution** — handles clusters where one plant is dry and another is wet, using conservative short-burst irrigation
-- 🧠 **Self-learning profiles** — tracks absorption rates, drainage patterns, and irrigation efficiency per plant over time
-- 🚨 **7 alert types** — blocked drip, rapid drainage, chronic underwatering, unresolvable conflict, low light, low humidity, light-accelerated drainage
-- ☁️ **Tuya Cloud + Local protocol** — reads sensors via Cloud API, controls irrigators via local protocol v3.5 for reliable duration control
-- ⏰ **Background scheduling** — APScheduler syncs sensors every 30 min and checks clusters every 6 hours
-- 🔌 **Four ways in** — JSON REST API (OpenAPI docs at `/docs`), server-rendered HTMX web UI at `/`, a thin Typer CLI client, and an MCP server at `/mcp` (every API endpoint is auto-published as an MCP tool via [`fastapi-mcp`](https://github.com/tadata-org/fastapi_mcp)). All four share the same source of truth — the API.
+1. **Reads** sensor data from Tuya Cloud, synced to a local SQLite archive.
+2. **Decides** using a typed `IrrigationDecision` pipeline: cooldown check, stress detection, multi-sensor conflict resolution, trend analysis, evidence-based moisture targets. Every evaluation produces a structured `Reason` trail and is persisted whether or not it was acted on.
+3. **Acts** by controlling Tuya irrigators over local protocol v3.5.
+4. **Learns** — builds per-plant absorption/drainage profiles; raises advisory alerts (blocked drip, rapid drainage, chronic underwatering, unresolvable conflict). Learning never blocks decisions.
+5. **Persists** sensor readings, irrigation events, decision logs, alerts, and activity events in a local SQLite archive. Tuya Cloud is the live source; SQLite is the permanent record.
+
+## Interfaces — four ways in, one source of truth
+
+| Interface | URL | Notes |
+|-----------|-----|-------|
+| **JSON REST API** | `/api/v1` | Authoritative entry point. OpenAPI docs at `/docs`. |
+| **Web UI** | `/` | HTMX + Jinja2 server-rendered. Shares service layer with the API. |
+| **CLI** | `tuya-irrigation` | Thin `httpx` client against `/api/v1`. No DB access. |
+| **MCP server** | `/mcp` | Every `/api/v1` endpoint as an MCP tool via `fastapi-mcp`. Auth deferred — localhost-only. |
+
+Stop the server and all four go dark. Anything new the CLI or an MCP tool should be able to do must first exist as an API endpoint.
+
+> **Warning:** MCP gives a connected LLM the ability to actuate physical irrigation hardware (`/clusters/{id}/irrigate`, `/irrigators/{id}/start`, etc.). Keep the server localhost-only until auth is added.
 
 ## Getting Started
 
@@ -69,7 +93,7 @@ cp .env.example .env
 ### Usage
 
 ```bash
-# Start the server
+# Start the server (API at /api/v1, web UI at /)
 uv run tuya-irrigation-server
 
 # Set up a cluster
@@ -87,9 +111,21 @@ uv run tuya-irrigation stats 1 --days 7  # irrigation statistics
 
 Same data is also available via:
 
-- **Web UI** — open `http://localhost:8000/` for the HTMX dashboard (clusters, per-plant charts, irrigators, history, scheduler).
+- **Web UI** — open `http://localhost:8000/` for the HTMX dashboard (clusters, per-plant charts, irrigators, history, scheduler, alerts, health).
 - **REST API** — `http://localhost:8000/api/v1/...`; OpenAPI docs at `http://localhost:8000/docs`.
-- **MCP server** — `http://localhost:8000/mcp` (streamable HTTP). Point an MCP client (e.g. Claude Desktop) at it and every API endpoint shows up as a tool. **Auth is currently deferred — keep the server localhost-only.** Note that the MCP surface includes write tools (irrigate, irrigator start/stop), which lets a connected LLM actuate physical irrigation hardware.
+- **MCP server** — `http://localhost:8000/mcp` (streamable HTTP). Point an MCP client (e.g. Claude Desktop) at it and every API endpoint shows up as a tool.
+
+## Development
+
+```bash
+make check      # lint + test
+make test       # uv run pytest
+make lint       # uv run ruff check libs/ tests/
+make format     # uv run ruff format libs/ tests/
+make coverage   # pytest with coverage (60% threshold)
+```
+
+See [AGENTS.md](AGENTS.md) for full developer guide, package structure, and testing conventions.
 
 ## License
 
