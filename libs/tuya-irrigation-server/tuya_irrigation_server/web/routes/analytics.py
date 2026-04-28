@@ -10,9 +10,10 @@ from fastapi.responses import StreamingResponse
 
 from tuya_irrigation_core.stats import get_irrigation_stats
 from tuya_irrigation_core.utils import format_timestamp
-from tuya_irrigation_server.deps import ClusterServiceDep, PlantDbDep, RepoDep, require_cluster
+from tuya_irrigation_server.deps import ClusterServiceDep, PlantDbDep, RepoDep, WeatherClientDep, require_cluster
 from tuya_irrigation_server.scheduler import scheduler as bg_scheduler
-from tuya_irrigation_server.services.maintenance import collect_learning_alerts, generate_learning_report
+from tuya_irrigation_server.services.forecast import ForecastService
+from tuya_irrigation_server.services.insights import InsightsService
 from tuya_irrigation_server.web.context import base_context
 from tuya_irrigation_server.web.templating import templates
 
@@ -88,14 +89,20 @@ def cluster_stats_export(
 
 
 @router.get("/clusters/{cluster_id}/learn")
-def cluster_learn(request: Request, cluster_id: int, repo: RepoDep, plant_db: PlantDbDep):
+def cluster_learn(
+    request: Request,
+    cluster_id: int,
+    repo: RepoDep,
+    plant_db: PlantDbDep,
+    weather: WeatherClientDep,
+):
     cluster = require_cluster(repo, cluster_id)
-    report = generate_learning_report(repo, cluster_id, plant_db)
-    alerts = collect_learning_alerts(repo, cluster_id, plant_db)
+    insights_resp = InsightsService(repo, plant_db).cluster_insights(cluster_id)
+    forecast = ForecastService(repo, plant_db, weather_client=weather).predict_next_irrigation(cluster_id)
     return templates.TemplateResponse(
         request,
         "clusters/learn.html",
-        base_context(request, cluster=cluster, report=report, alerts=alerts),
+        base_context(request, cluster=cluster, insights=insights_resp, forecast=forecast),
     )
 
 

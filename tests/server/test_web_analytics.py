@@ -32,7 +32,7 @@ def test_stats_export_returns_csv(seeded_client):
 def test_learn_page_renders(seeded_client):
     resp = seeded_client.get("/clusters/1/learn")
     assert resp.status_code == 200
-    assert "Learning report" in resp.text
+    assert "Insights" in resp.text
 
 
 def test_scheduler_page_renders(client):

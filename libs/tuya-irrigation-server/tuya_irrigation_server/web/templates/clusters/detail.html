@@ -84,6 +84,34 @@
 </section>
 {% endif %}
 
+{# Why this decision — rationale panel #}
+<article class="card rationale" style="margin-bottom: var(--sp-6);">
+  <div class="card__head">
+    <h3 class="card__title">Why this decision</h3>
+    <a href="/clusters/{{ cluster.id }}/learn" class="btn secondary" style="font-size: var(--fs-xs);">All insights</a>
+  </div>
+  <div class="card__body" style="padding: var(--sp-3) var(--sp-5);">
+    {% if rationale_reasons %}
+      {% for r in rationale_reasons %}
+        {% set sev = r.get("severity", "info") | lower %}
+        {% set icon_id = r.get("code", "") | icon_for_code %}
+        {% set interval_delta = r.get("interval_delta", 0) %}
+        <div class="rationale__row" data-severity="{{ sev }}">
+          <span class="rationale__icon">
+            <svg class="icon"><use href="/static/icons/sprite.svg#i-{{ icon_id }}"></use></svg>
+          </span>
+          <span class="rationale__msg">{{ r.get("message", "") | strip_emoji }}</span>
+          {% if interval_delta %}
+            <span class="rationale__delta">interval {{ "%+d" | format(interval_delta) }}h</span>
+          {% endif %}
+        </div>
+      {% endfor %}
+    {% else %}
+      <p class="muted" style="font-size: var(--fs-sm); margin: 0; padding: var(--sp-2) 0;">No decisions yet. Run irrigation to generate a rationale.</p>
+    {% endif %}
+  </div>
+</article>
+
 {# Live readings — 4 stat tiles, each with a threshold-aware range indicator #}
 {% if status.sensors %}
 {% set soil_t = chart_thresholds.get('soil_moisture', {}) %}
