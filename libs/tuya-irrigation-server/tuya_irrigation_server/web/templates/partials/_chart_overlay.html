@@ -1,0 +1,19 @@
+<div id="chart-container-overlay" class="chart-container">
+  <canvas id="chart-overlay"></canvas>
+  <script type="application/json" id="chart-data-overlay">{{ payload_json | safe }}</script>
+  <script>
+    (function () {
+      var el = document.getElementById('chart-overlay');
+      var raw = document.getElementById('chart-data-overlay');
+      if (!el || !raw) return;
+      var data = JSON.parse(raw.textContent);
+      function draw() {
+        if (typeof window.renderMultiMetricChart === 'function') {
+          window.renderMultiMetricChart(el, data);
+        }
+      }
+      if (window.Chart) { draw(); }
+      else { window.addEventListener('load', draw); }
+    })();
+  </script>
+</div>

@@ -1,0 +1,35 @@
+{% set days_label = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] %}
+{% set max_count = namespace(value=1) %}
+{% for cell in payload.cells %}
+  {% if cell.count > max_count.value %}{% set max_count.value = cell.count %}{% endif %}
+{% endfor %}
+
+{# Build a lookup dict: (weekday, hour) → cell #}
+{% set cell_map = {} %}
+{% for cell in payload.cells %}
+  {% set _ = cell_map.update({(cell.weekday, cell.hour): cell}) %}
+{% endfor %}
+
+<div class="heatmap" aria-label="Irrigation frequency heatmap">
+  {# Hour axis header #}
+  <span class="heatmap__axis-label"></span>
+  {% for h in range(24) %}
+    <span class="heatmap__hour-label">{% if h % 6 == 0 %}{{ "%02d"|format(h) }}{% endif %}</span>
+  {% endfor %}
+
+  {# Rows: one per weekday #}
+  {% for wd in range(7) %}
+    <span class="heatmap__day-label">{{ days_label[wd] }}</span>
+    {% for h in range(24) %}
+      {% set cell = cell_map.get((wd, h)) %}
+      {% if cell and cell.count > 0 %}
+        {% set alpha = (cell.count / max_count.value) | round(2) %}
+        <span class="heatmap__cell heatmap__cell--active"
+              style="background: rgba(124, 201, 143, {{ alpha }});"
+              title="{{ cell.count }} event{{ 's' if cell.count != 1 else '' }}, {{ cell.total_minutes }} min — {{ days_label[wd] }} {{ '%02d:00'|format(h) }} UTC"></span>
+      {% else %}
+        <span class="heatmap__cell" title="{{ days_label[wd] }} {{ '%02d:00'|format(h) }} UTC — no events"></span>
+      {% endif %}
+    {% endfor %}
+  {% endfor %}
+</div>

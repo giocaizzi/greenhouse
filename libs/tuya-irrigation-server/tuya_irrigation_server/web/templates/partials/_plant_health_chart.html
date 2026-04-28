@@ -1,0 +1,19 @@
+<div id="chart-container-health" class="chart-container">
+  <canvas id="chart-health-{{ plant.id }}"></canvas>
+  <script type="application/json" id="chart-data-health-{{ plant.id }}">{{ payload_json | safe }}</script>
+  <script>
+    (function () {
+      var el = document.getElementById('chart-health-{{ plant.id }}');
+      var raw = document.getElementById('chart-data-health-{{ plant.id }}');
+      if (!el || !raw) return;
+      var data = JSON.parse(raw.textContent);
+      function draw() {
+        if (typeof window.renderHealthTimeline === 'function') {
+          window.renderHealthTimeline(el, data);
+        }
+      }
+      if (window.Chart) { draw(); }
+      else { window.addEventListener('load', draw); }
+    })();
+  </script>
+</div>
