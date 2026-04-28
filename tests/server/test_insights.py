@@ -1,7 +1,6 @@
 """Tests for GET /api/v1/clusters/{cluster_id}/insights."""
 
 
-
 class TestClusterInsights:
     def test_insights_not_found(self, client):
         resp = client.get("/api/v1/clusters/999/insights")
@@ -26,9 +25,7 @@ class TestClusterInsights:
         from tuya_irrigation_server.config import Settings
         from tuya_irrigation_server.deps import get_device_manager, get_tuya_cloud
 
-        engine = create_engine(
-            "sqlite://", echo=False, connect_args={"check_same_thread": False}, poolclass=StaticPool
-        )
+        engine = create_engine("sqlite://", echo=False, connect_args={"check_same_thread": False}, poolclass=StaticPool)
         settings = Settings(db_url="sqlite://", enable_scheduler=False)
         application = create_app(settings, engine=engine)
         application.dependency_overrides[get_device_manager] = lambda: None
@@ -40,7 +37,12 @@ class TestClusterInsights:
         client.post("/api/v1/clusters/1/plants", json={"species": "Monstera deliciosa", "water_needs": "medium"})
         client.post(
             "/api/v1/clusters/1/sensors",
-            json={"tuya_device_id": "fake_stale_sensor", "name": "Stale Sensor", "type": "soil_moisture", "plant_id": 1},
+            json={
+                "tuya_device_id": "fake_stale_sensor",
+                "name": "Stale Sensor",
+                "type": "soil_moisture",
+                "plant_id": 1,
+            },
         )
 
         resp = client.get("/api/v1/clusters/1/insights")

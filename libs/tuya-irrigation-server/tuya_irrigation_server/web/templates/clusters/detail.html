@@ -322,6 +322,22 @@
       </div>
     </article>
   {% endfor %}
+
+  <article class="card chart-card"
+           hx-get="/clusters/{{ cluster.id }}/overlay-fragment?hours=72"
+           hx-trigger="load"
+           hx-swap="innerHTML">
+    <header class="chart-head"><h3>Multi-metric overlay (72h)</h3></header>
+    <div class="chart-body skeleton"><div class="skeleton__line med"></div><div class="skeleton__line short"></div></div>
+  </article>
+
+  <article class="card chart-card"
+           hx-get="/clusters/{{ cluster.id }}/heatmap-fragment?days=30"
+           hx-trigger="load"
+           hx-swap="innerHTML">
+    <header class="chart-head"><h3>Irrigation heatmap (30d)</h3></header>
+    <div class="chart-body skeleton"><div class="skeleton__line med"></div></div>
+  </article>
 </section>
 
 {# Plants table #}

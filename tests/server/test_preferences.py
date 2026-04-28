@@ -50,8 +50,8 @@ class TestUpdatePreferences:
         resp = client.put("/api/v1/preferences", json={"timezone": "Europe/Rome"})
         assert resp.status_code == 200
         data = resp.json()
-        assert data["units"] == "imperial"   # preserved
-        assert data["theme"] == "dark"        # preserved
+        assert data["units"] == "imperial"  # preserved
+        assert data["theme"] == "dark"  # preserved
         assert data["timezone"] == "Europe/Rome"
 
     def test_get_reflects_put(self, client):

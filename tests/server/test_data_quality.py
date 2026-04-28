@@ -1,6 +1,5 @@
 """Tests for GET /api/v1/quality/report."""
 
-
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.pool import StaticPool

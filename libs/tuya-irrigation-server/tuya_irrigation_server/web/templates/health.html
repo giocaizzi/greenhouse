@@ -1,5 +1,5 @@
 {% extends "_base.html" %}
-{% block title %}Health · Tuya Irrigation{% endblock %}
+{% block title %}System Health · Tuya Irrigation{% endblock %}
 {% block content %}
 
 <div class="crumb">
@@ -11,52 +11,98 @@
   <div class="page-head__title">
     <h1>System Health</h1>
     <div class="page-head__meta">
-      {% if scheduler_running %}
-        <span class="badge-ok">scheduler running</span>
-      {% else %}
-        <span class="badge-warning">scheduler stopped</span>
-      {% endif %}
-      {% if jobs %}
-        <span class="dot"></span>
-        <span>{{ jobs|length }} job{{ "" if jobs|length == 1 else "s" }}</span>
-      {% endif %}
+      <span class="badge-{% if pulse.status == 'ok' %}ok{% elif pulse.status == 'degraded' %}warning{% else %}danger{% endif %}">
+        {{ pulse.status }}
+      </span>
+      <span class="dot"></span>
+      <span>{{ pulse.open_alerts }} open alert{{ "" if pulse.open_alerts == 1 else "s" }}</span>
     </div>
   </div>
 </section>
 
-<article class="card card--flush">
-  <div class="card__head">
-    <h3 class="card__title">Scheduler</h3>
+<section class="stat-grid">
+  <div class="stat">
+    <div class="stat__row">
+      <span class="stat__label">Sensors total</span>
+    </div>
+    <div class="stat__value">{{ pulse.sensors_total }}</div>
+    <div class="stat__hint"><span>{{ pulse.sensors_fresh }} fresh · {{ pulse.sensors_stale }} stale</span></div>
   </div>
-  <div class="card__body">
-    {% if scheduler_running %}
-      <p>Status: <span class="badge-ok">running</span></p>
-      <p class="muted"><small>{{ jobs|length }} job{{ "" if jobs|length == 1 else "s" }} registered</small></p>
-    {% else %}
-      <p>Status: <span class="badge-muted">stopped</span></p>
-      <p class="muted"><small>Start the server with <kbd>enable_scheduler=True</kbd> to run scheduled jobs.</small></p>
-    {% endif %}
-  </div>
-</article>
 
-{% if jobs %}
+  <div class="stat {% if pulse.sensors_stale > 0 %}stat--warn{% else %}stat--ok{% endif %}">
+    <div class="stat__row">
+      <span class="stat__label">Sensors stale</span>
+    </div>
+    <div class="stat__value">{{ pulse.sensors_stale }}</div>
+    <div class="stat__hint"><span>no reading for ≥ 3 h</span></div>
+  </div>
+
+  <div class="stat">
+    <div class="stat__row">
+      <span class="stat__label">Irrigators</span>
+    </div>
+    <div class="stat__value">{{ pulse.irrigators_total }}</div>
+    <div class="stat__hint"><span>registered</span></div>
+  </div>
+
+  <div class="stat {% if pulse.open_alerts >= 3 %}stat--warn{% elif pulse.open_alerts > 0 %}stat--warn{% else %}stat--ok{% endif %}">
+    <div class="stat__row">
+      <span class="stat__label">Open alerts</span>
+    </div>
+    <div class="stat__value">{{ pulse.open_alerts }}</div>
+    <div class="stat__hint"><span>unresolved</span></div>
+  </div>
+</section>
+
+<div class="grid" style="margin-bottom: var(--sp-6);">
+  <article class="card">
+    <h3>Cloud</h3>
+    {% if pulse.cloud_reachable %}
+      <span class="badge-ok">reachable</span>
+    {% else %}
+      <span class="badge-danger">unreachable</span>
+    {% endif %}
+    <p class="muted" style="margin-top: var(--sp-2);">
+      Last sync: <span class="mono">{{ pulse.last_sync_at | format_ts }}</span>
+    </p>
+  </article>
+
+  <article class="card">
+    <h3>Scheduler</h3>
+    {% if pulse.scheduler_running %}
+      <span class="badge-ok">running</span>
+    {% else %}
+      <span class="badge-muted">stopped</span>
+    {% endif %}
+  </article>
+</div>
+
+{% if pulse.devices %}
 <article class="card card--flush">
   <div class="card__head">
-    <h3 class="card__title">Background jobs <span class="n">{{ jobs|length }}</span></h3>
+    <h3 class="card__title">Devices <span class="n">{{ pulse.devices | length }}</span></h3>
   </div>
   <table>
-    <thead><tr><th>ID</th><th>Name</th><th>Trigger</th><th>Next run</th></tr></thead>
+    <thead>
+      <tr><th>Name</th><th>Status</th><th>Last seen</th></tr>
+    </thead>
     <tbody>
-      {% for job in jobs %}
+      {% for dev in pulse.devices %}
       <tr>
-        <td data-th="ID"><code>{{ job.id }}</code></td>
-        <td data-th="Name">{{ job.name }}</td>
-        <td data-th="Trigger"><small class="mono">{{ job.trigger }}</small></td>
-        <td data-th="Next run"><small class="mono">{{ job.next_run_time or "—" }}</small></td>
+        <td data-th="Name">{{ dev.name }}</td>
+        <td data-th="Status">
+          <span class="badge-{% if dev.status == 'ok' %}ok{% elif dev.status == 'stale' %}warning{% else %}danger{% endif %}">
+            {{ dev.status }}
+          </span>
+        </td>
+        <td data-th="Last seen">
+          <small class="mono muted">{{ dev.age_seconds | age_seconds if dev.age_seconds is not none else "—" }}</small>
+        </td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
 </article>
 {% endif %}
+
 {% endblock %}

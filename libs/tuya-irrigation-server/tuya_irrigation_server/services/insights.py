@@ -49,7 +49,9 @@ class InsightsService:
             severity = meta[0] if meta else alert.get("severity", "warning")
             title = meta[1] if meta else code.replace("_", " ").title()
             suggestion = meta[2] if meta else None
-            insights.append(CareInsight(code=code, severity=severity, title=title, message=alert["message"], suggestion=suggestion))
+            insights.append(
+                CareInsight(code=code, severity=severity, title=title, message=alert["message"], suggestion=suggestion)
+            )
 
         for alert in collect_learning_alerts(self._repo, cluster_id, self._plant_db):
             code = alert["type"]
@@ -60,7 +62,9 @@ class InsightsService:
             severity = meta[0] if meta else alert.get("severity", "warning")
             title = meta[1] if meta else code.replace("_", " ").title()
             suggestion = meta[2] if meta else None
-            insights.append(CareInsight(code=code, severity=severity, title=title, message=alert["message"], suggestion=suggestion))
+            insights.append(
+                CareInsight(code=code, severity=severity, title=title, message=alert["message"], suggestion=suggestion)
+            )
 
         logs = self._repo.list_decision_logs(cluster_id, limit=1)
         if logs:

@@ -21,7 +21,9 @@ def list_vacation_windows(repo: RepoDep):
     )
 
 
-@router.post("", response_model=VacationResponse, status_code=status.HTTP_201_CREATED, summary="Create a vacation window")
+@router.post(
+    "", response_model=VacationResponse, status_code=status.HTTP_201_CREATED, summary="Create a vacation window"
+)
 def create_vacation_window(request: VacationCreateRequest, repo: RepoDep):
     """Schedule a vacation window during which the irrigation engine will hold.
 

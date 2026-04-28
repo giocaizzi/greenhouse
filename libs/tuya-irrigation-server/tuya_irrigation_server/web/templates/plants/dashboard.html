@@ -53,6 +53,14 @@
       </div>
     </article>
   {% endfor %}
+
+  <article class="card chart-card"
+           hx-get="/clusters/{{ cluster.id }}/plants/{{ plant.id }}/health-fragment"
+           hx-trigger="load"
+           hx-swap="innerHTML">
+    <header class="chart-head"><h3>Plant health (90d)</h3></header>
+    <div class="chart-body skeleton"><div class="skeleton__line med"></div></div>
+  </article>
 </section>
 
 {% include "partials/_recent_events.html" %}

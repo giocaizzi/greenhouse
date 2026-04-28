@@ -708,3 +708,49 @@ class EfficacyListResponse(BaseModel):
     cluster_id: int
     days: int
     items: list[EfficacyItemResponse]
+
+
+# --- Premium viz schemas ---
+
+
+class OverlayDataset(BaseModel):
+    """One normalised series in the multi-metric overlay chart."""
+
+    metric: str
+    points: list[tuple[int, float]]
+    original_max: float | None = None
+
+
+class MultiMetricOverlayResponse(BaseModel):
+    """Payload for the multi-metric overlay chart (soil, humidity, light)."""
+
+    cluster_id: int
+    hours: int
+    datasets: list[OverlayDataset]
+    events: list[ChartEventResponse]
+    normalised: bool = True
+
+
+class HeatmapCell(BaseModel):
+    """A single cell in the irrigation heatmap grid."""
+
+    weekday: int
+    hour: int
+    count: int
+    total_minutes: int
+
+
+class HeatmapResponse(BaseModel):
+    """Payload for the 7x24 irrigation heatmap."""
+
+    cluster_id: int
+    days: int
+    cells: list[HeatmapCell]
+
+
+class PlantHealthTimelineResponse(BaseModel):
+    """90-day daily health score timeline for a single plant."""
+
+    plant_id: int
+    points: list[tuple[int, float]]
+    thresholds: dict[str, float] = {"good": 80.0, "ok": 50.0}

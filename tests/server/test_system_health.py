@@ -156,8 +156,17 @@ class TestSystemHealthPulse:
     def test_response_schema(self, client):
         resp = client.get("/api/v1/health/system")
         data = resp.json()
-        required = {"status", "scheduler_running", "cloud_reachable", "last_sync_at",
-                    "sensors_total", "sensors_stale", "sensors_fresh", "irrigators_total",
-                    "open_alerts", "devices"}
+        required = {
+            "status",
+            "scheduler_running",
+            "cloud_reachable",
+            "last_sync_at",
+            "sensors_total",
+            "sensors_stale",
+            "sensors_fresh",
+            "irrigators_total",
+            "open_alerts",
+            "devices",
+        }
         assert required <= data.keys()
         assert isinstance(data["devices"], list)

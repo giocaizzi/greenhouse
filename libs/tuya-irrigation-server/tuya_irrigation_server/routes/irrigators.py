@@ -42,8 +42,7 @@ def _check_rate_limits(repo: IrrigationRepository, cluster_id: int, irrigator_id
         # Count "start" events in the last 24 h across all irrigators in the cluster
         all_irrigators = repo.get_irrigators_in_cluster(cluster_id)
         total_starts = sum(
-            sum(1 for e in repo.get_recent_events(irr.id, hours=24) if e.action == "start")
-            for irr in all_irrigators
+            sum(1 for e in repo.get_recent_events(irr.id, hours=24) if e.action == "start") for irr in all_irrigators
         )
         if total_starts >= config.max_events_per_day:
             raise HTTPException(status_code=409, detail="cluster max_events_per_day reached")

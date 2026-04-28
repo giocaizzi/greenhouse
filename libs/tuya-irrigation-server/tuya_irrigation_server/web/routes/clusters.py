@@ -8,7 +8,12 @@ from fastapi import APIRouter, Form, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
 
 from tuya_irrigation_server.deps import ClusterServiceDep, PlantDbDep, RepoDep
-from tuya_irrigation_server.services.charts import ALLOWED_HOURS, build_cluster_chart_payload
+from tuya_irrigation_server.services.charts import (
+    ALLOWED_HOURS,
+    build_cluster_chart_payload,
+    build_heatmap_payload,
+    build_overlay_payload,
+)
 from tuya_irrigation_server.web.context import base_context
 from tuya_irrigation_server.web.templating import templates
 
@@ -107,4 +112,38 @@ def cluster_chart_fragment(
         request,
         "partials/_chart_panel.html",
         base_context(request, metric=metric, hours=hours, payload_json=json.dumps(payload)),
+    )
+
+
+@router.get("/clusters/{cluster_id}/overlay-fragment")
+def cluster_overlay_fragment(
+    request: Request,
+    cluster_id: int,
+    repo: RepoDep,
+    hours: int = Query(72, ge=1, le=8760),
+):
+    payload = build_overlay_payload(repo, cluster_id, hours)
+    if payload is None:
+        raise HTTPException(404, "Cluster not found")
+    return templates.TemplateResponse(
+        request,
+        "partials/_chart_overlay.html",
+        base_context(request, cluster_id=cluster_id, hours=hours, payload_json=payload.model_dump_json()),
+    )
+
+
+@router.get("/clusters/{cluster_id}/heatmap-fragment")
+def cluster_heatmap_fragment(
+    request: Request,
+    cluster_id: int,
+    repo: RepoDep,
+    days: int = Query(30, ge=1, le=365),
+):
+    payload = build_heatmap_payload(repo, cluster_id, days)
+    if payload is None:
+        raise HTTPException(404, "Cluster not found")
+    return templates.TemplateResponse(
+        request,
+        "partials/_heatmap_panel.html",
+        base_context(request, cluster_id=cluster_id, days=days, payload=payload),
     )
