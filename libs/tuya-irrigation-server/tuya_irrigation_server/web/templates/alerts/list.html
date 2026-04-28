@@ -1,0 +1,46 @@
+{% extends "_base.html" %}
+{% block title %}Alerts · Tuya Irrigation{% endblock %}
+{% block content %}
+
+<div class="crumb">
+  <a href="/">home</a><span class="sep">/</span>
+  <span class="here">alerts</span>
+</div>
+
+<section class="page-head">
+  <div class="page-head__title">
+    <h1>Alerts</h1>
+    <div class="page-head__meta">
+      <span>{{ open_count }} open</span>
+    </div>
+  </div>
+  <div class="page-head__actions">
+    <form method="post" action="/alerts/sync" style="margin:0;"
+      hx-post="/alerts/sync"
+      hx-target="#alert-list-body"
+      hx-swap="innerHTML">
+      <button type="submit" class="secondary btn-sm">
+        <svg class="icon"><use href="/static/icons/sprite.svg#i-refresh"></use></svg>
+        Sync
+      </button>
+    </form>
+  </div>
+</section>
+
+{# Filter chips #}
+<div class="seg" style="margin-bottom:var(--sp-5);" role="group" aria-label="Filter by status">
+  <a href="/alerts"
+    {% if not current_status %}aria-current="page"{% endif %}>All</a>
+  <a href="/alerts?status=open"
+    {% if current_status == "open" %}aria-current="page"{% endif %}>Open</a>
+  <a href="/alerts?status=acknowledged"
+    {% if current_status == "acknowledged" %}aria-current="page"{% endif %}>Acknowledged</a>
+  <a href="/alerts?status=resolved"
+    {% if current_status == "resolved" %}aria-current="page"{% endif %}>Resolved</a>
+</div>
+
+<div id="alert-list-body">
+  {% include "partials/_alert_list_body.html" %}
+</div>
+
+{% endblock %}

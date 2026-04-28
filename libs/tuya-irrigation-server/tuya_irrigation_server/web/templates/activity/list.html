@@ -1,0 +1,54 @@
+{% extends "_base.html" %}
+{% block title %}Activity · Tuya Irrigation{% endblock %}
+{% block content %}
+
+<div class="crumb">
+  <a href="/">home</a><span class="sep">/</span>
+  <span class="here">activity</span>
+</div>
+
+<section class="page-head">
+  <div class="page-head__title">
+    <h1>Activity</h1>
+    <div class="page-head__meta">
+      <span>event timeline</span>
+    </div>
+  </div>
+  <div class="page-head__actions">
+    <nav class="tabs" style="border: none; margin: 0; gap: var(--sp-2);">
+      <a href="/activity"{% if not source %} aria-current="page"{% endif %}>All</a>
+      <a href="/activity?source=irrigation"{% if source == 'irrigation' %} aria-current="page"{% endif %}>Irrigation</a>
+      <a href="/activity?source=learning"{% if source == 'learning' %} aria-current="page"{% endif %}>Learning</a>
+      <a href="/activity?source=system"{% if source == 'system' %} aria-current="page"{% endif %}>System</a>
+    </nav>
+  </div>
+</section>
+
+{% if items %}
+<article class="card card--flush">
+  <table>
+    <thead>
+      <tr>
+        <th>Time</th>
+        <th>Source</th>
+        <th>Code</th>
+        <th>Entity</th>
+        <th>Message</th>
+      </tr>
+    </thead>
+    <tbody id="activity-rows">
+      {% include "partials/_activity_rows.html" %}
+    </tbody>
+  </table>
+</article>
+{% else %}
+<div class="empty">
+  <div class="empty__icon">
+    <svg class="icon"><use href="/static/icons/sprite.svg#i-clock"></use></svg>
+  </div>
+  <h2>No activity yet</h2>
+  <p>Events appear here as the system runs sync, irrigation, and learning jobs.</p>
+</div>
+{% endif %}
+
+{% endblock %}
