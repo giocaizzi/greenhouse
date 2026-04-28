@@ -384,3 +384,49 @@ class ChartPayloadResponse(BaseModel):
     datasets: list[ChartDatasetResponse]
     events: list[ChartEventResponse]
     threshold: ChartThresholdResponse
+
+
+# --- Premium viz schemas ---
+
+
+class OverlayDataset(BaseModel):
+    """One normalised series in the multi-metric overlay chart."""
+
+    metric: str  # "soil" | "humidity" | "light"
+    points: list[tuple[int, float]]  # (unix_timestamp, scaled_value 0-100)
+    original_max: float | None = None  # only set for light (lux → 0-100 scaling factor)
+
+
+class MultiMetricOverlayResponse(BaseModel):
+    """Payload for the multi-metric overlay chart (soil moisture, humidity, light)."""
+
+    cluster_id: int
+    hours: int
+    datasets: list[OverlayDataset]
+    events: list[ChartEventResponse]
+    normalised: bool = True
+
+
+class HeatmapCell(BaseModel):
+    """A single cell in the irrigation heatmap grid."""
+
+    weekday: int  # 0 = Monday, 6 = Sunday
+    hour: int  # 0-23 UTC hour
+    count: int
+    total_minutes: int
+
+
+class HeatmapResponse(BaseModel):
+    """Payload for the 7×24 irrigation heatmap."""
+
+    cluster_id: int
+    days: int
+    cells: list[HeatmapCell]
+
+
+class PlantHealthTimelineResponse(BaseModel):
+    """90-day daily health score timeline for a single plant."""
+
+    plant_id: int
+    points: list[tuple[int, float]]  # (unix_timestamp of bucket start, health_score 0-100)
+    thresholds: dict[str, float] = {"good": 80.0, "ok": 50.0}

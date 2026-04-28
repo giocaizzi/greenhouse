@@ -11,6 +11,7 @@ from tuya_irrigation_server.deps import PlantDbDep, RepoDep
 from tuya_irrigation_server.services.charts import (
     ALLOWED_HOURS,
     build_plant_chart_payload,
+    build_plant_health_timeline_payload,
 )
 from tuya_irrigation_server.services.maintenance import collect_learning_alerts
 from tuya_irrigation_server.web.context import base_context
@@ -107,4 +108,22 @@ def plant_chart_fragment(
         request,
         "partials/_chart_panel.html",
         base_context(request, metric=metric, hours=hours, payload_json=json.dumps(payload)),
+    )
+
+
+@router.get("/clusters/{cluster_id}/plants/{plant_id}/health-fragment")
+def plant_health_fragment(
+    request: Request,
+    cluster_id: int,
+    plant_id: int,
+    repo: RepoDep,
+):
+    plant = _get_plant_or_404(repo, plant_id, cluster_id)
+    payload = build_plant_health_timeline_payload(repo, plant_id)
+    if payload is None:
+        raise HTTPException(404, "Plant not found")
+    return templates.TemplateResponse(
+        request,
+        "partials/_plant_health_chart.html",
+        base_context(request, plant=plant, payload_json=payload.model_dump_json()),
     )

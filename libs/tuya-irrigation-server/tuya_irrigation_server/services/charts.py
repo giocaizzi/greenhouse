@@ -3,12 +3,23 @@
 from __future__ import annotations
 
 import time
+from collections import defaultdict
+from datetime import UTC, datetime
 from typing import Literal
 
+from sqlalchemy import select
+
 from tuya_irrigation_core.constants import DEFAULT_SOIL_MOISTURE_MAX, DEFAULT_SOIL_MOISTURE_MIN
-from tuya_irrigation_core.models import Plant, Sensor
+from tuya_irrigation_core.models import IrrigationEvent, Plant, Sensor, SensorReading
 from tuya_irrigation_core.plant_db import PlantDatabase
 from tuya_irrigation_core.repository import IrrigationRepository
+from tuya_irrigation_core.schemas import (
+    HeatmapCell,
+    HeatmapResponse,
+    MultiMetricOverlayResponse,
+    OverlayDataset,
+    PlantHealthTimelineResponse,
+)
 
 Metric = Literal["soil_moisture", "temperature", "light", "env_humidity"]
 ALLOWED_HOURS = {24, 168, 720}
@@ -177,3 +188,150 @@ def _threshold_for_cluster(
                 "source": "plant_aggregate",
             }
     return {"min": None, "max": None, "source": "none"}
+
+
+# ---------------------------------------------------------------------------
+# Premium viz builders
+# ---------------------------------------------------------------------------
+
+_LIGHT_MAX_LUX = 10_000.0  # scaling ceiling for light → 0-100 normalisation
+
+
+def build_overlay_payload(
+    repo: IrrigationRepository,
+    cluster_id: int,
+    hours: int,
+) -> MultiMetricOverlayResponse | None:
+    """Build the multi-metric overlay payload for a cluster.
+
+    Collects soil moisture, env humidity, and light readings across all sensors
+    in the cluster, normalises each series to 0-100, and merges irrigation events.
+    Returns None if the cluster does not exist.
+    """
+    cluster = repo.get_cluster(cluster_id)
+    if cluster is None:
+        return None
+
+    sensors = repo.get_sensors_in_cluster(cluster_id)
+    cutoff = int(time.time()) - hours * 3600
+
+    # Aggregate per-metric points: take mean across sensors per timestamp bucket (nearest minute).
+    soil_buckets: dict[int, list[float]] = defaultdict(list)
+    humidity_buckets: dict[int, list[float]] = defaultdict(list)
+    light_buckets: dict[int, list[float]] = defaultdict(list)
+
+    for sensor in sensors:
+        for r in repo.get_recent_readings(sensor.id, hours=hours):
+            ts = (r.timestamp // 60) * 60  # bucket to minute
+            if r.soil_moisture is not None:
+                soil_buckets[ts].append(float(r.soil_moisture))
+            if r.env_humidity is not None:
+                humidity_buckets[ts].append(float(r.env_humidity))
+            if r.light is not None:
+                light_buckets[ts].append(float(r.light))
+
+    def _to_points(buckets: dict[int, list[float]], scale: float = 1.0) -> list[tuple[int, float]]:
+        return sorted((ts, min(100.0, sum(v) / len(v) * scale)) for ts, v in buckets.items() if ts >= cutoff)
+
+    datasets: list[OverlayDataset] = []
+    if soil_buckets:
+        datasets.append(OverlayDataset(metric="soil", points=_to_points(soil_buckets)))
+    if humidity_buckets:
+        datasets.append(OverlayDataset(metric="humidity", points=_to_points(humidity_buckets)))
+    if light_buckets:
+        scale = 100.0 / _LIGHT_MAX_LUX
+        datasets.append(
+            OverlayDataset(
+                metric="light",
+                points=_to_points(light_buckets, scale=scale),
+                original_max=_LIGHT_MAX_LUX,
+            )
+        )
+
+    raw_events = _build_event_list(repo, cluster_id, hours)
+
+    return MultiMetricOverlayResponse(
+        cluster_id=cluster_id,
+        hours=hours,
+        datasets=datasets,
+        events=raw_events,  # type: ignore[arg-type]
+        normalised=True,
+    )
+
+
+def build_heatmap_payload(
+    repo: IrrigationRepository,
+    cluster_id: int,
+    days: int,
+) -> HeatmapResponse | None:
+    """Build the 7×24 irrigation heatmap payload for a cluster.
+
+    Counts irrigation events per (weekday, hour) cell over the given look-back
+    window. Returns None if the cluster does not exist.
+    """
+    cluster = repo.get_cluster(cluster_id)
+    if cluster is None:
+        return None
+
+    cutoff = int(time.time()) - days * 86400
+    irrigators = repo.get_irrigators_in_cluster(cluster_id)
+
+    counts: dict[tuple[int, int], int] = defaultdict(int)
+    minutes_map: dict[tuple[int, int], int] = defaultdict(int)
+
+    for irr in irrigators:
+        events = repo.session.scalars(
+            select(IrrigationEvent).where(IrrigationEvent.irrigator_id == irr.id, IrrigationEvent.timestamp >= cutoff)
+        )
+        for ev in events:
+            dt = datetime.fromtimestamp(ev.timestamp, tz=UTC)
+            key = (dt.weekday(), dt.hour)
+            counts[key] += 1
+            minutes_map[key] += ev.duration_minutes or 0
+
+    cells = [
+        HeatmapCell(weekday=wd, hour=h, count=counts[(wd, h)], total_minutes=minutes_map[(wd, h)])
+        for wd in range(7)
+        for h in range(24)
+        if counts[(wd, h)] > 0
+    ]
+
+    return HeatmapResponse(cluster_id=cluster_id, days=days, cells=cells)
+
+
+def build_plant_health_timeline_payload(
+    repo: IrrigationRepository,
+    plant_id: int,
+) -> PlantHealthTimelineResponse | None:
+    """Build the 90-day daily health score timeline for a single plant.
+
+    Health score per day is derived from the mean soil moisture reading clamped
+    to [0, 100]. Returns None if the plant is not found.
+    """
+    plant: Plant | None = repo.session.get(Plant, plant_id)
+    if plant is None:
+        return None
+
+    sensors = [s for s in repo.get_sensors_in_cluster(plant.cluster_id) if s.plant_id == plant_id]
+    if not sensors:
+        return PlantHealthTimelineResponse(plant_id=plant_id, points=[])
+
+    cutoff = int(time.time()) - 90 * 86400
+    daily_buckets: dict[int, list[float]] = defaultdict(list)
+
+    for sensor in sensors:
+        readings = repo.session.scalars(
+            select(SensorReading)
+            .where(SensorReading.sensor_id == sensor.id, SensorReading.timestamp >= cutoff)
+            .order_by(SensorReading.timestamp.asc())
+        )
+        for r in readings:
+            if r.soil_moisture is None:
+                continue
+            dt = datetime.fromtimestamp(r.timestamp, tz=UTC)
+            day_start = int(dt.replace(hour=0, minute=0, second=0, microsecond=0).timestamp())
+            daily_buckets[day_start].append(float(r.soil_moisture))
+
+    points = sorted((day_ts, min(100.0, max(0.0, sum(v) / len(v)))) for day_ts, v in daily_buckets.items())
+
+    return PlantHealthTimelineResponse(plant_id=plant_id, points=points)
