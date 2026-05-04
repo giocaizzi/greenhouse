@@ -43,3 +43,8 @@ data/cluster.json
 tools/cluster.local.json
 node_modules/
 .claude/
+
+# Environment files (contain Tuya credentials)
+.env
+.env.local
+.env.*.local

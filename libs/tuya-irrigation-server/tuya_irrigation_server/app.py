@@ -160,7 +160,9 @@ def _init_plant_db(settings: Settings) -> PlantDatabase:
 def main():
     """Entry point for tuya-irrigation-server command."""
     import uvicorn
+    from dotenv import load_dotenv
 
+    load_dotenv()
     settings = Settings()
     app = create_app(settings)
     uvicorn.run(app, host=settings.host, port=settings.port)

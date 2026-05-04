@@ -4,7 +4,12 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="IRRIGATION_", env_file=".env", case_sensitive=False)
+    model_config = SettingsConfigDict(
+        env_prefix="IRRIGATION_",
+        env_file=".env",
+        case_sensitive=False,
+        extra="ignore",
+    )
 
     db_url: str = "sqlite:///data/irrigation.db"
     host: str = "0.0.0.0"
