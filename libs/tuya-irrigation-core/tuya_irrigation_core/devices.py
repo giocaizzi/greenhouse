@@ -33,8 +33,6 @@ DP_NEXT = 107  # int: next irrigation timestamp
 DP_POWERSTATUS = 108  # enum: power status
 DP_AUTORUN = 109  # bool: auto-irrigation enabled
 
-# Default local IP — set via TUYA_DEVICE_IP env var or irrigator config
-DEFAULT_LOCAL_IP = os.environ.get("TUYA_DEVICE_IP")
 LOCAL_PROTOCOL = 3.5
 LOCAL_TIMEOUT = 5
 
@@ -70,7 +68,7 @@ class TuyaDeviceManager:
         """Create a local tinytuya connection to the irrigator.
 
         Uses local_key from Cloud API device list and local_ip from
-        irrigator config (fallback to DEFAULT_LOCAL_IP).
+        irrigator config.
         """
         import json as _json
 
@@ -93,11 +91,10 @@ class TuyaDeviceManager:
                 config = _json.loads(config)
             except (ValueError, TypeError):
                 config = {}
-        local_ip = config.get("device_ip") or DEFAULT_LOCAL_IP
+        local_ip = config.get("device_ip")
         if not local_ip:
             raise ConnectionError(
-                f"No local IP for device {irrigator.tuya_device_id}. "
-                "Set TUYA_DEVICE_IP env var or device_ip in irrigator config."
+                f"No device_ip in config for irrigator {irrigator.tuya_device_id}."
             )
 
         device = tinytuya.OutletDevice(irrigator.tuya_device_id, local_ip, local_key)
