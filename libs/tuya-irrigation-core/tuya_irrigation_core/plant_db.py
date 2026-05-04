@@ -2,9 +2,10 @@
 
 import json
 import os
+from importlib.resources import files
 from pathlib import Path
 
-_DEFAULT_PLANT_DB_PATH = Path(__file__).resolve().parent.parent.parent.parent / "data" / "plant_database.json"
+_DEFAULT_PLANT_DB_PATH = Path(str(files("tuya_irrigation_core") / "data" / "plant_database.json"))
 PLANT_DB_PATH = (
     Path(os.environ["IRRIGATION_PLANT_DB_PATH"])
     if os.environ.get("IRRIGATION_PLANT_DB_PATH")

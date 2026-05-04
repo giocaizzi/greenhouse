@@ -127,8 +127,10 @@ uv workspace with three packages under `libs/`. Strict dependency direction:
 - Import: `tuya_irrigation_core`, `tuya_irrigation_server`, `tuya_irrigation_cli`
 - Entry points: `tuya-irrigation` (CLI), `tuya-irrigation-server` (server)
 
-Other top-level dirs: `data/` (gitignored runtime + `plant_database.json`),
+Other top-level dirs: `data/` (gitignored runtime SQLite),
 `tests/` (mirrors package layout: root = core, `server/`, `cli/`), `references/`.
+The curated `plant_database.json` ships inside the core package at
+`libs/tuya-irrigation-core/tuya_irrigation_core/data/`.
 
 ## Key Technical Decisions
 
@@ -185,7 +187,7 @@ All tests use `conftest.py` fixtures and `fake_data.py`. Server + web tests use 
 
 ### Add a Plant Species
 
-1. Research (min 2 sources), update `data/plant_database.json`
+1. Research (min 2 sources), update `libs/tuya-irrigation-core/tuya_irrigation_core/data/plant_database.json`
 2. Sync with `tuya-irrigation plant sync`
 
 ### Pre-commit Check

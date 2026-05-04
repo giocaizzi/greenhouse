@@ -121,7 +121,7 @@ def sync_plants(request: SyncPlantsRequest, repo: RepoDep, cluster_svc: ClusterS
     """Refresh plant care thresholds from the evidence-based plant database.
 
     Resolves species to care data lookup and writes the result onto the matching
-    plant rows. Use this after editing data/plant_database.json or after
+    plant rows. Use this after editing the bundled plant_database.json or after
     adding plants without explicit care fields. Scope is widening: single plant
     to cluster to entire database, depending on which field is set.
 
