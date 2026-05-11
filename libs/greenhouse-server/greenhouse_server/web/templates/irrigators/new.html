@@ -1,0 +1,51 @@
+{% extends "_base.html" %}
+{% block title %}Add irrigator · {{ cluster.name }}{% endblock %}
+{% block content %}
+
+<div class="crumb">
+  <a href="/">home</a><span class="sep">/</span>
+  <a href="/clusters">clusters</a><span class="sep">/</span>
+  <a href="/clusters/{{ cluster.id }}">{{ cluster.name | lower }}</a><span class="sep">/</span>
+  <a href="/clusters/{{ cluster.id }}/irrigators">irrigators</a><span class="sep">/</span>
+  <span class="here">add</span>
+</div>
+
+<section class="page-head">
+  <div class="page-head__title">
+    <h1>Add irrigator</h1>
+    <div class="page-head__meta">
+      <span>to <a href="/clusters/{{ cluster.id }}">{{ cluster.name }}</a></span>
+    </div>
+  </div>
+</section>
+
+<article class="card form-card">
+  <form method="post" action="/clusters/{{ cluster.id }}/irrigators">
+    <label for="tuya_device_id">Tuya device ID
+      <input type="text" id="tuya_device_id" name="tuya_device_id" required autofocus>
+    </label>
+    <label for="name">Name
+      <input type="text" id="name" name="name" placeholder="Pump A" required>
+    </label>
+    <label for="type">Type
+      <select id="type" name="type" required>
+        <option value="tuya_cloud" selected>tuya_cloud</option>
+        <option value="tuya_local">tuya_local</option>
+      </select>
+    </label>
+    <fieldset>
+      <legend>Local protocol <small class="muted">(tuya_local only)</small></legend>
+      <label for="device_ip">Device IP
+        <input type="text" id="device_ip" name="device_ip" placeholder="192.168.1.42">
+      </label>
+      <label for="local_key">Local key
+        <input type="text" id="local_key" name="local_key">
+      </label>
+    </fieldset>
+    <div class="form-actions">
+      <a href="/clusters/{{ cluster.id }}/irrigators" class="btn secondary">Cancel</a>
+      <button type="submit">Add irrigator</button>
+    </div>
+  </form>
+</article>
+{% endblock %}

@@ -1,0 +1,16 @@
+{% for event in items %}
+{% set last = loop.last and next_cursor is not none %}
+<tr
+  {% if last %}
+  hx-get="/activity/page?before={{ next_cursor }}{% if entity_type %}&amp;entity_type={{ entity_type }}{% endif %}{% if source %}&amp;source={{ source }}{% endif %}{% if severity %}&amp;severity={{ severity }}{% endif %}"
+  hx-trigger="revealed"
+  hx-swap="outerHTML"
+  {% endif %}
+>
+  <td data-th="Time"><small class="mono muted">{{ event.timestamp | format_ts }}</small></td>
+  <td data-th="Source"><span class="badge-{{ event.severity | severity_class }}">{{ event.source }}</span></td>
+  <td data-th="Code"><code>{{ event.code }}</code></td>
+  <td data-th="Entity"><small class="muted">{{ event.entity_type }}{% if event.entity_id is not none %} #{{ event.entity_id }}{% endif %}</small></td>
+  <td data-th="Message">{{ event.message }}</td>
+</tr>
+{% endfor %}

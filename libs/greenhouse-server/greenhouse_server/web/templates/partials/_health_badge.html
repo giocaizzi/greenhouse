@@ -1,0 +1,11 @@
+{% if scheduler_running %}
+  <span class="health-badge health-badge--ok" aria-label="scheduler running">
+    <span class="footer__dot" aria-hidden="true"></span>
+    scheduler · {{ job_count }} job{{ "" if job_count == 1 else "s" }}
+  </span>
+{% else %}
+  <span class="health-badge health-badge--off" aria-label="scheduler stopped">
+    <span class="footer__dot" aria-hidden="true" style="background: var(--text-dim); animation: none;"></span>
+    scheduler stopped
+  </span>
+{% endif %}

@@ -1,0 +1,36 @@
+{% extends "_base.html" %}
+{% block title %}Log manual irrigation · {{ irrigator.name }}{% endblock %}
+{% block content %}
+
+<div class="crumb">
+  <a href="/">home</a><span class="sep">/</span>
+  <a href="/clusters/{{ irrigator.cluster_id }}/irrigators">irrigators</a><span class="sep">/</span>
+  <span class="here">log manual</span>
+</div>
+
+<section class="page-head">
+  <div class="page-head__title">
+    <h1>Log manual irrigation</h1>
+    <div class="page-head__meta">
+      <span><strong>{{ irrigator.name }}</strong></span>
+      <span class="dot"></span>
+      <span>logs an event without triggering the device</span>
+    </div>
+  </div>
+</section>
+
+<article class="card form-card">
+  <form method="post" action="/irrigators/{{ irrigator.id }}/log-manual">
+    <label for="minutes">Duration (minutes)
+      <input type="number" id="minutes" name="minutes" min="1" required autofocus>
+    </label>
+    <label for="notes">Notes <small class="muted">(optional)</small>
+      <textarea id="notes" name="notes" rows="3"></textarea>
+    </label>
+    <div class="form-actions">
+      <a href="/clusters/{{ irrigator.cluster_id }}/irrigators" class="btn secondary">Cancel</a>
+      <button type="submit">Log event</button>
+    </div>
+  </form>
+</article>
+{% endblock %}

@@ -1,0 +1,19 @@
+<tr id="sensor-row-{{ sensor.id }}">
+  <td data-th="Sensor">{{ sensor.name }}</td>
+  <td data-th="Type"><small class="muted">{{ sensor.type }}</small></td>
+  <td data-th="Reading">
+    {% if sensor.last_reading %}
+      {% if sensor.last_reading.soil_moisture is not none %}
+        <span class="badge-{{ sensor.last_reading.soil_moisture | moisture_badge(45, 65) }}">
+          {{ "%.0f%%" | format(sensor.last_reading.soil_moisture) }}
+        </span>
+      {% endif %}
+      {% if sensor.last_reading.temperature is not none %}
+        <span class="mono">· {{ "%.1f°C" | format(sensor.last_reading.temperature) }}</span>
+      {% endif %}
+    {% else %}
+      <small class="muted">no reading</small>
+    {% endif %}
+  </td>
+  <td data-th="Age"><small class="mono muted">{{ sensor.reading_age_seconds | age_seconds if sensor.reading_age_seconds is not none else "—" }}</small></td>
+</tr>

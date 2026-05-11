@@ -1,0 +1,43 @@
+<tr id="irrigator-row-{{ irr.id }}">
+  <td data-th="Name"><strong>{{ irr.name }}</strong></td>
+  <td data-th="Type"><small class="muted">{{ irr.type }}</small></td>
+  <td data-th="Recent (48h)"><span class="mono">{{ irr.recent_event_count }}</span></td>
+  <td data-th="Last action">
+    {% if irr.last_event %}
+      <small class="mono">{{ irr.last_event.action }}</small>
+      <small class="muted"> · {{ irr.last_event.timestamp | format_ts }}</small>
+    {% else %}
+      <small class="muted">—</small>
+    {% endif %}
+  </td>
+  <td data-th="Controls">
+    <div class="irr-controls">
+      <form hx-post="/irrigators/{{ irr.id }}/start"
+            hx-target="#irr-action-{{ irr.id }}"
+            hx-swap="innerHTML"
+            hx-indicator="#irr-spin-{{ irr.id }}"
+            hx-confirm="Start {{ irr.name }} now?"
+            class="irr-controls__form">
+        <input type="number" name="minutes" placeholder="min" min="1" class="irr-controls__num" aria-label="Minutes">
+        <button type="submit" class="btn-sm">
+          <svg class="icon" style="width:12px;height:12px;"><use href="/static/icons/sprite.svg#i-play"></use></svg>
+          Start
+        </button>
+      </form>
+      <form hx-post="/irrigators/{{ irr.id }}/stop"
+            hx-target="#irr-action-{{ irr.id }}"
+            hx-swap="innerHTML"
+            hx-indicator="#irr-spin-{{ irr.id }}"
+            hx-confirm="Stop {{ irr.name }}?"
+            class="irr-controls__form">
+        <button type="submit" class="secondary btn-sm">
+          <svg class="icon" style="width:12px;height:12px;"><use href="/static/icons/sprite.svg#i-stop"></use></svg>
+          Stop
+        </button>
+      </form>
+      <a href="/irrigators/{{ irr.id }}/log-manual" class="btn secondary btn-sm">Log</a>
+      <span id="irr-spin-{{ irr.id }}" class="htmx-indicator" aria-busy="true"></span>
+      <div id="irr-action-{{ irr.id }}" class="irr-controls__result"></div>
+    </div>
+  </td>
+</tr>

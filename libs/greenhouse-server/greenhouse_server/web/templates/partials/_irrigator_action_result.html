@@ -1,0 +1,14 @@
+<div class="irr-result {% if not success %}irr-result--err{% endif %}">
+  {% if success %}
+    <span class="badge-ok">
+      <svg class="icon" style="width:11px;height:11px;"><use href="/static/icons/sprite.svg#i-check"></use></svg>
+      {{ action }}
+    </span>
+  {% else %}
+    <span class="badge-danger">
+      <svg class="icon" style="width:11px;height:11px;"><use href="/static/icons/sprite.svg#i-x"></use></svg>
+      {{ action }} failed
+    </span>
+  {% endif %}
+  <small class="muted">{{ message }}</small>
+</div>

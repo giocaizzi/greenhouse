@@ -1,0 +1,18 @@
+<article class="card error-panel">
+  <div class="card__head">
+    <h3 class="card__title">
+      <span class="badge-danger">Error {{ status_code }}</span>
+    </h3>
+  </div>
+  <div class="card__body">
+    <p>{{ detail or "Something went wrong." }}</p>
+    {% if not is_hx %}
+      <div style="margin-top: var(--sp-4);">
+        <a href="/" class="btn">
+          <svg class="icon"><use href="/static/icons/sprite.svg#i-arrow-right"></use></svg>
+          Back to dashboard
+        </a>
+      </div>
+    {% endif %}
+  </div>
+</article>

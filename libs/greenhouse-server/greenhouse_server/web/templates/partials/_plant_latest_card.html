@@ -1,0 +1,40 @@
+<article class="card card--flush">
+  <div class="card__head">
+    <h3 class="card__title">Latest readings</h3>
+    {% if plant_sensors %}<small class="muted">{{ plant_sensors|length }} sensor{{ "" if plant_sensors|length == 1 else "s" }}</small>{% endif %}
+  </div>
+  <div class="card__body">
+    {% if not plant_sensors %}
+      <p class="muted"><small>No sensors linked to this plant.</small></p>
+    {% else %}
+      <div style="display: flex; flex-direction: column; gap: var(--sp-4);">
+        {% for sensor in plant_sensors %}
+          {% set r = latest_readings.get(sensor.id) %}
+          <section>
+            <header style="display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-3); margin-bottom: var(--sp-3);">
+              <strong>{{ sensor.name }}</strong>
+              <small class="muted">{{ sensor.type }}{% if r %} · updated {{ r.timestamp | age_seconds }}{% endif %}</small>
+            </header>
+            {% if r %}
+              <dl>
+                {% if r.soil_moisture is not none %}
+                  <dt>Soil</dt>
+                  <dd>
+                    <span class="badge-{{ r.soil_moisture | moisture_badge(45, 65) }}">{{ "%.1f%%" | format(r.soil_moisture) }}</span>
+                  </dd>
+                {% endif %}
+                {% if r.temperature is not none %}<dt>Temperature</dt><dd>{{ "%.1f°C" | format(r.temperature) }}</dd>{% endif %}
+                {% if r.env_humidity is not none %}<dt>Humidity</dt><dd>{{ "%.0f%%" | format(r.env_humidity) }}</dd>{% endif %}
+                {% if r.light is not none %}<dt>Light</dt><dd>{{ r.light }} lux</dd>{% endif %}
+                {% if r.battery_state %}<dt>Battery</dt><dd>{{ r.battery_state }}</dd>{% endif %}
+                {% if r.water_warning %}<dt>Water warning</dt><dd><span class="badge-danger">yes</span></dd>{% endif %}
+              </dl>
+            {% else %}
+              <p class="muted"><small>No readings yet.</small></p>
+            {% endif %}
+          </section>
+        {% endfor %}
+      </div>
+    {% endif %}
+  </div>
+</article>

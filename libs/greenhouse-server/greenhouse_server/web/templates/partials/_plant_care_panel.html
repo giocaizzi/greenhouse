@@ -1,0 +1,38 @@
+<article class="card card--flush">
+  <div class="card__head">
+    <h3 class="card__title">Plant care</h3>
+  </div>
+  <div class="card__body">
+    <dl>
+      <dt>Species</dt><dd><i class="species">{{ plant.species }}</i></dd>
+      <dt>Category</dt><dd>{{ plant.category or "—" }}</dd>
+      <dt>Water</dt><dd>{{ plant.water_needs or "—" }}</dd>
+      <dt>Light</dt><dd>{{ plant.light_needs or "—" }}</dd>
+      <dt>Ideal temp</dt>
+      <dd>
+        {% if plant.ideal_temp_min is not none or plant.ideal_temp_max is not none %}
+          {{ plant.ideal_temp_min or "?" }} – {{ plant.ideal_temp_max or "?" }}°C
+        {% else %}—{% endif %}
+      </dd>
+      <dt>Ideal humidity</dt>
+      <dd>
+        {% if plant.ideal_humidity_min is not none or plant.ideal_humidity_max is not none %}
+          {{ plant.ideal_humidity_min or "?" }} – {{ plant.ideal_humidity_max or "?" }}%
+        {% else %}—{% endif %}
+      </dd>
+      {% if plant.notes %}
+        <dt>Notes</dt><dd style="font-family: var(--font-sans); font-variant-numeric: normal;">{{ plant.notes }}</dd>
+      {% endif %}
+    </dl>
+    {% if care_info %}
+      <details style="margin-top: var(--sp-4);">
+        <summary>Evidence-based data</summary>
+        <dl style="margin-top: var(--sp-3);">
+          {% if care_info.soil_moisture_target %}<dt>Soil moisture target</dt><dd>{{ care_info.soil_moisture_target }}%</dd>{% endif %}
+          {% if care_info.water_frequency_days %}<dt>Water frequency</dt><dd>every {{ care_info.water_frequency_days }} day{{ "" if care_info.water_frequency_days == 1 else "s" }}</dd>{% endif %}
+          {% if care_info.sources %}<dt>Sources</dt><dd style="font-family: var(--font-sans); font-variant-numeric: normal;"><small>{{ care_info.sources | join(", ") }}</small></dd>{% endif %}
+        </dl>
+      </details>
+    {% endif %}
+  </div>
+</article>

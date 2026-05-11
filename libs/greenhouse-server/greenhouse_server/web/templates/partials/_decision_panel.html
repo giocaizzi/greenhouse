@@ -1,0 +1,29 @@
+<article class="card card--flush result-panel">
+  <div class="card__head">
+    <div class="row" style="gap: var(--sp-3);">
+      <span class="badge-{{ result.action | decision_badge }}">
+        {{- result.action | upper -}}
+        {%- if result.confidence is not none %} · {{ "%.0f%%" | format(result.confidence * 100) }}{% endif -%}
+      </span>
+      <h3 class="card__title">Irrigation decision</h3>
+    </div>
+  </div>
+  <div class="card__body">
+    {% if result.reason %}
+      <p>{{ result.reason | strip_emoji }}</p>
+    {% endif %}
+    {% if result.duration_minutes or result.interval_hours or result.temperature is not none %}
+      <dl>
+        {% if result.duration_minutes %}<dt>Duration</dt><dd>{{ result.duration_minutes | format_minutes }}</dd>{% endif %}
+        {% if result.interval_hours %}<dt>Interval</dt><dd>every {{ result.interval_hours }}h</dd>{% endif %}
+        {% if result.temperature is not none %}<dt>Temperature</dt><dd>{{ "%.1f°C" | format(result.temperature) }} <small class="muted">({{ result.temperature_source or "—" }})</small></dd>{% endif %}
+      </dl>
+    {% endif %}
+    {% if result.stress_indicators %}
+      <details>
+        <summary>Stress indicators</summary>
+        <pre>{{ result.stress_indicators }}</pre>
+      </details>
+    {% endif %}
+  </div>
+</article>

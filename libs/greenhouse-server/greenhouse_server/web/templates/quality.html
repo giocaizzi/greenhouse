@@ -1,0 +1,64 @@
+{% extends "_base.html" %}
+{% block title %}Data Quality · Greenhouse{% endblock %}
+{% block content %}
+
+<div class="crumb">
+  <a href="/">home</a><span class="sep">/</span>
+  <span class="here">quality</span>
+</div>
+
+<section class="page-head">
+  <div class="page-head__title">
+    <h1>Data Quality</h1>
+    <div class="page-head__meta">
+      {% set total = report.issues | length %}
+      {% if total == 0 %}
+        <span class="badge-ok">all clear</span>
+      {% else %}
+        <span class="badge-warning">{{ total }} issue{{ "" if total == 1 else "s" }}</span>
+      {% endif %}
+    </div>
+  </div>
+</section>
+
+{% if not report.issues %}
+<div class="empty">
+  <div class="empty__icon">
+    <svg class="icon"><use href="/static/icons/sprite.svg#i-check"></use></svg>
+  </div>
+  <h2>No issues found</h2>
+  <p>All sensors, plants, clusters, and device IDs look clean.</p>
+</div>
+
+{% else %}
+
+{% for code, issues in grouped.items() %}
+{% set first = issues[0] %}
+<article class="card card--flush" style="margin-bottom: var(--sp-4);">
+  <div class="card__head">
+    <div class="row" style="gap: var(--sp-3);">
+      <span class="badge-{{ first.severity | severity_class }}">{{ first.severity }}</span>
+      <h3 class="card__title"><code>{{ code }}</code></h3>
+      <span class="n muted" style="font-family: var(--font-mono); font-size: var(--fs-xs);">{{ issues | length }}</span>
+    </div>
+  </div>
+  <table>
+    <thead>
+      <tr><th>Entity</th><th>Label</th><th>Message</th></tr>
+    </thead>
+    <tbody>
+      {% for issue in issues %}
+      <tr>
+        <td data-th="Entity"><small class="muted">{{ issue.entity_type }}{% if issue.entity_id is not none %} #{{ issue.entity_id }}{% endif %}</small></td>
+        <td data-th="Label"><strong>{{ issue.label }}</strong></td>
+        <td data-th="Message">{{ issue.message }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</article>
+{% endfor %}
+
+{% endif %}
+
+{% endblock %}

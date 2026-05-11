@@ -1,0 +1,101 @@
+{% extends "_base.html" %}
+{% block title %}Insights · {{ cluster.name }}{% endblock %}
+{% block content %}
+{% set current_tab = "learn" %}
+
+<div class="crumb">
+  <a href="/">home</a><span class="sep">/</span>
+  <a href="/clusters">clusters</a><span class="sep">/</span>
+  <a href="/clusters/{{ cluster.id }}">{{ cluster.name | lower }}</a><span class="sep">/</span>
+  <span class="here">insights</span>
+</div>
+
+<section class="page-head">
+  <div class="page-head__title">
+    <h1>Insights</h1>
+    <div class="page-head__meta">
+      <span>{{ cluster.name }}</span>
+      {% if insights and insights.insights %}
+        <span class="dot"></span>
+        <span>{{ insights.insights|length }} insight{{ "" if insights.insights|length == 1 else "s" }}</span>
+      {% endif %}
+    </div>
+  </div>
+</section>
+
+{% include "partials/_cluster_tabs.html" %}
+
+{# ── Forecast banner ────────────────────────────────────────────────────────── #}
+{% if forecast %}
+  {% if forecast.weather_skip %}
+  <div class="alert alert--info" style="margin-bottom: var(--sp-5);">
+    <span class="alert__icon"><svg class="icon"><use href="/static/icons/sprite.svg#i-cloud-rain"></use></svg></span>
+    <div>
+      <p class="alert__title">Weather skip active</p>
+      <p class="alert__body">{{ forecast.weather_reason or "Rain is forecast — irrigation will be skipped automatically." }}</p>
+    </div>
+  </div>
+  {% endif %}
+
+  <article class="card" style="margin-bottom: var(--sp-6);">
+    <div class="card__head">
+      <h3 class="card__title">
+        <svg class="icon" style="color:var(--accent)"><use href="/static/icons/sprite.svg#i-clock"></use></svg>
+        Forecast
+      </h3>
+      {% if forecast.weather_skip %}
+        <span class="badge-info">weather skip</span>
+      {% endif %}
+    </div>
+    <div class="card__body">
+      <dl>
+        {% if forecast.hours_until_next is not none %}
+          <dt>Next irrigation in</dt>
+          <dd>{{ "%.1f" | format(forecast.hours_until_next) }}h</dd>
+        {% endif %}
+        {% if forecast.projected_min_moisture is not none %}
+          <dt>Projected min moisture</dt>
+          <dd>{{ "%.1f" | format(forecast.projected_min_moisture) }}%</dd>
+        {% endif %}
+        <dt>Method</dt>
+        <dd>{{ forecast.method }}</dd>
+        <dt>Confidence</dt>
+        <dd>{{ "%.0f%%" | format(forecast.confidence * 100) }}</dd>
+        {% if forecast.explanation %}
+          <dt>Detail</dt>
+          <dd style="font-family: var(--font-sans); font-variant-numeric: normal; font-size: var(--fs-sm);">{{ forecast.explanation }}</dd>
+        {% endif %}
+      </dl>
+    </div>
+  </article>
+{% endif %}
+
+{# ── Insight cards ──────────────────────────────────────────────────────────── #}
+{% if insights and insights.insights %}
+  <div class="insight-grid">
+    {% for item in insights.insights %}
+      {% set sev = item.severity | lower %}
+      {% set icon_id = item.code | icon_for_code %}
+      <article class="insight insight--{{ sev }}">
+        <span class="insight__icon">
+          <svg class="icon"><use href="/static/icons/sprite.svg#i-{{ icon_id }}"></use></svg>
+        </span>
+        <div class="insight__body">
+          <p class="insight__title">{{ item.title }}</p>
+          <p class="insight__msg">{{ item.message | strip_emoji }}</p>
+          {% if item.suggestion %}
+            <p class="insight__suggestion">{{ item.suggestion }}</p>
+          {% endif %}
+        </div>
+        <span class="badge-{{ sev | severity_class }}">{{ sev }}</span>
+      </article>
+    {% endfor %}
+  </div>
+{% else %}
+  <div class="empty">
+    <span class="empty__icon"><svg class="icon"><use href="/static/icons/sprite.svg#i-leaf"></use></svg></span>
+    <h2>All good</h2>
+    <p>No insights for this cluster right now. Keep irrigating!</p>
+  </div>
+{% endif %}
+{% endblock %}

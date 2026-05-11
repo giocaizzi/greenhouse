@@ -1,0 +1,32 @@
+<article class="card card--flush result-panel">
+  <div class="card__head">
+    <h3 class="card__title">Monitor · {{ result.cluster_name }}</h3>
+    {% if result.needs_water %}
+      <span class="badge-warning">{{ result.needs_water | length }} need water</span>
+    {% endif %}
+  </div>
+  {% if result.sensors %}
+  <table>
+    <thead><tr><th>Sensor</th><th>Plant</th><th class="num">Soil</th><th>Status</th><th>Target</th></tr></thead>
+    <tbody>
+      {% for s in result.sensors %}
+      <tr>
+        <td data-th="Sensor">{{ s.sensor_name }}</td>
+        <td data-th="Plant"><i class="species">{{ s.plant_species or "—" }}</i></td>
+        <td data-th="Soil" class="num">{% if s.soil_moisture is not none %}{{ "%.0f%%" | format(s.soil_moisture) }}{% else %}—{% endif %}</td>
+        <td data-th="Status"><span class="badge-{{ s.status }}">{{ s.status }}</span></td>
+        <td data-th="Target"><small class="muted">{% if s.target_min is not none %}{{ s.target_min }}–{{ s.target_max }}%{% else %}—{% endif %}</small></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="card__body"><p class="muted"><small>No sensors in this cluster.</small></p></div>
+  {% endif %}
+  {% if result.needs_water %}
+    <div class="card__body" style="border-top: 1px solid var(--border);">
+      <strong>Plants needing water:</strong>
+      {% for p in result.needs_water %}<i class="species">{{ p }}</i>{% if not loop.last %}, {% endif %}{% endfor %}
+    </div>
+  {% endif %}
+</article>

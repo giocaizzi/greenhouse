@@ -1,0 +1,101 @@
+{% extends "_base.html" %}
+{% block title %}History · {{ history.cluster_name }}{% endblock %}
+{% block content %}
+{% set current_tab = "history" %}
+{% set cluster = {"id": cluster_id, "name": history.cluster_name} %}
+
+<div class="crumb">
+  <a href="/">home</a><span class="sep">/</span>
+  <a href="/clusters">clusters</a><span class="sep">/</span>
+  <a href="/clusters/{{ cluster_id }}">{{ history.cluster_name | lower }}</a><span class="sep">/</span>
+  <span class="here">history</span>
+</div>
+
+<section class="page-head">
+  <div class="page-head__title">
+    <h1>History</h1>
+    <div class="page-head__meta">
+      <span>{{ history.cluster_name }}</span>
+      <span class="dot"></span>
+      <span>last {{ hours }}h</span>
+    </div>
+  </div>
+</section>
+
+{% include "partials/_cluster_tabs.html" %}
+
+<article class="card form-card" style="max-width: none; margin-bottom: var(--sp-5);">
+  <form method="get" action="/clusters/{{ cluster_id }}/history">
+    <div class="grid" style="margin-bottom: 0;">
+      <label>Hours back <input type="number" name="hours" value="{{ hours }}" min="1"></label>
+      <label>Limit per sensor <input type="number" name="limit" value="{{ limit }}" min="1"></label>
+    </div>
+    <div class="form-actions" style="border: 0; padding: 0; justify-content: flex-start;">
+      <button type="submit">Apply</button>
+    </div>
+  </form>
+</article>
+
+<article class="card card--flush">
+  <div class="card__head">
+    <h3 class="card__title">Sensor readings</h3>
+  </div>
+  <div class="card__body" style="display: flex; flex-direction: column; gap: var(--sp-5);">
+    {% for sensor in history.sensors %}
+      <section>
+        <h4 style="margin-bottom: var(--sp-2);">{{ sensor.sensor_name }} <small class="muted">({{ sensor.readings|length }})</small></h4>
+        {% if sensor.readings %}
+        <table class="scrollable">
+          <thead><tr><th>Time</th><th class="num">Soil</th><th class="num">Temp</th><th class="num">Humidity</th><th class="num">Light</th><th>Battery</th></tr></thead>
+          <tbody>
+            {% for r in sensor.readings %}
+            <tr>
+              <td><small class="mono">{{ r.timestamp | format_ts }}</small></td>
+              <td class="num">{% if r.soil_moisture is not none %}{{ "%.0f%%" | format(r.soil_moisture) }}{% else %}—{% endif %}</td>
+              <td class="num">{% if r.temperature is not none %}{{ "%.1f°C" | format(r.temperature) }}{% else %}—{% endif %}</td>
+              <td class="num">{% if r.env_humidity is not none %}{{ "%.0f%%" | format(r.env_humidity) }}{% else %}—{% endif %}</td>
+              <td class="num">{% if r.light is not none %}{{ r.light }}{% else %}—{% endif %}</td>
+              <td><small class="muted">{{ r.battery_state or "—" }}</small></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+          <p class="muted"><small>No readings in window.</small></p>
+        {% endif %}
+      </section>
+    {% endfor %}
+  </div>
+</article>
+
+<article class="card card--flush">
+  <div class="card__head">
+    <h3 class="card__title">Irrigation events</h3>
+  </div>
+  <div class="card__body" style="display: flex; flex-direction: column; gap: var(--sp-5);">
+    {% for irr in history.irrigators %}
+      <section>
+        <h4 style="margin-bottom: var(--sp-2);">{{ irr.irrigator_name }} <small class="muted">({{ irr.events|length }})</small></h4>
+        {% if irr.events %}
+        <table class="scrollable">
+          <thead><tr><th>Time</th><th>Action</th><th class="num">Duration</th><th>Triggered by</th><th>Notes</th></tr></thead>
+          <tbody>
+            {% for e in irr.events %}
+            <tr>
+              <td><small class="mono">{{ e.timestamp | format_ts }}</small></td>
+              <td>{{ e.action }}</td>
+              <td class="num">{{ e.duration_minutes | format_minutes }}</td>
+              <td><small class="muted">{{ e.triggered_by }}</small></td>
+              <td><small>{{ e.notes or "—" }}</small></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+          <p class="muted"><small>No events in window.</small></p>
+        {% endif %}
+      </section>
+    {% endfor %}
+  </div>
+</article>
+{% endblock %}
