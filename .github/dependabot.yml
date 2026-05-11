@@ -1,0 +1,63 @@
+version: 2
+updates:
+  # Python dependencies — uv workspace (root + workspace packages)
+  - package-ecosystem: uv
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "07:00"
+      timezone: Europe/Rome
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      python-runtime:
+        patterns:
+          - "fastapi"
+          - "uvicorn*"
+          - "pydantic*"
+          - "sqlalchemy"
+          - "alembic"
+          - "apscheduler"
+          - "tinytuya"
+          - "jinja2"
+          - "httpx"
+          - "fastapi-mcp"
+          - "python-dotenv"
+          - "python-multipart"
+      python-dev:
+        patterns:
+          - "pytest*"
+          - "ruff"
+
+  # GitHub Actions
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "07:00"
+      timezone: Europe/Rome
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: ci
+      include: scope
+    groups:
+      actions:
+        patterns:
+          - "*"
+
+  # Docker base image
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "07:00"
+      timezone: Europe/Rome
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: chore
+      include: scope
