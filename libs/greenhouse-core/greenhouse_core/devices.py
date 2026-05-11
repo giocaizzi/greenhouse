@@ -93,9 +93,7 @@ class TuyaDeviceManager:
                 config = {}
         local_ip = config.get("device_ip")
         if not local_ip:
-            raise ConnectionError(
-                f"No device_ip in config for irrigator {irrigator.tuya_device_id}."
-            )
+            raise ConnectionError(f"No device_ip in config for irrigator {irrigator.tuya_device_id}.")
 
         device = tinytuya.OutletDevice(irrigator.tuya_device_id, local_ip, local_key)
         device.set_version(LOCAL_PROTOCOL)
