@@ -1,4 +1,6 @@
-.PHONY: help install test lint format check coverage serve clean
+.PHONY: help install test lint format check coverage serve clean \
+        docker-build docker-up docker-down docker-logs docker-shell \
+        pre-commit-install pre-commit-run
 
 .DEFAULT_GOAL := help
 
@@ -28,3 +30,24 @@ serve: ## Start the FastAPI server (API + web UI)
 clean: ## Remove caches and build artifacts
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
 	rm -rf .pytest_cache .ruff_cache htmlcov .coverage coverage.xml
+
+docker-build: ## Build the runtime image
+	docker compose build
+
+docker-up: ## Start the server in the background
+	docker compose up -d
+
+docker-down: ## Stop and remove the server container
+	docker compose down
+
+docker-logs: ## Tail server logs
+	docker compose logs -f --tail=100 server
+
+docker-shell: ## Open a shell in the running server container
+	docker compose exec server /bin/bash
+
+pre-commit-install: ## Install pre-commit git hooks
+	uvx pre-commit install
+
+pre-commit-run: ## Run pre-commit on all tracked files
+	uvx pre-commit run --all-files
