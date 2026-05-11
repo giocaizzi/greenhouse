@@ -72,7 +72,7 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
             "Smart plant irrigation system with evidence-based plant care, "
             "multi-sensor conflict resolution, and self-learning irrigation profiles.\n\n"
         ),
-        version="1.2.0",
+        version="1.0.0",
         lifespan=lifespan,
         openapi_tags=[
             {"name": "clusters", "description": "Manage plant clusters (groups irrigated together)"},

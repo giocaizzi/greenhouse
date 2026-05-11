@@ -52,10 +52,10 @@ def test_idempotent_upgrade(file_db):
 
 
 def test_legacy_partial_db_gets_repaired(file_db):
-    """A v1.1.x-style DB (missing the new v1.2.0 columns) is repaired and stamped."""
+    """A partial pre-baseline DB (missing newer columns) is repaired and stamped."""
     engine = create_engine(file_db)
-    # Simulate a v1.1.x DB: irrigation_configs without daily_cap_minutes / max_events_per_day,
-    # no alembic_version, no v1.2.0 tables.
+    # Simulate a partial DB: irrigation_configs without daily_cap_minutes / max_events_per_day,
+    # no alembic_version, missing baseline tables.
     with engine.begin() as conn:
         conn.execute(
             text(

@@ -14,19 +14,6 @@
 
 </div>
 
-## What's new in 1.2.0
-
-- **Typed decision pipeline** — `IrrigationDecision` is the typed output of the engine. Every evaluation is persisted in `decision_logs` with a structured `Reason` trail keyed by stable `TriggerCode` enums (`GET /api/v1/clusters/{id}/decisions`).
-- **Alert inbox** — deduplicated upsert with `open → acknowledged → resolved` lifecycle (`GET /api/v1/alerts`, `POST /api/v1/alerts/{id}/acknowledge`, `POST /api/v1/alerts/{id}/resolve`, `POST /api/v1/clusters/{id}/alerts/sync`).
-- **Activity timeline** — cross-cutting event stream (`GET /api/v1/activity`).
-- **Forecast + weather-aware skip** — next-irrigation forecast and precipitation-based skip rule (`GET /api/v1/clusters/{id}/forecast`).
-- **Plant health score** — daily 0–100 composite (in-band soil/temp/humidity time + learning efficiency) with snapshot job (`GET /api/v1/plants/{id}/health`).
-- **Trust layer** — leak/stuck-valve detector, per-cluster per-day rate limit, sensor anomaly scan (drift + stale).
-- **Cluster insights, system health pulse, data quality report, irrigation efficacy scorer** — `GET /api/v1/clusters/{id}/insights`, `GET /api/v1/health/system`, `GET /api/v1/quality/report`, `GET /api/v1/clusters/{id}/efficacy`.
-- **User preferences, vacation windows, global search, emergency stop-all** — `GET/PUT /api/v1/preferences`, `GET/POST/DELETE /api/v1/vacation/{id}`, `GET /api/v1/search`, `POST /api/v1/bulk/stop-all`.
-- **Full CRUD** — edit/delete for cluster, plant, sensor, and irrigator; GET-by-id for sensor and irrigator.
-- **2026 design system** — elevation/motion/z tokens, progress bar, toasts, command-K palette, bottom-sheet, plant hero card, health ring, insight cards, decision-rationale rows, dry-run and vacation banners.
-
 ## Overview
 
 **tuya-irrigation** monitors soil moisture, temperature, humidity, and light from Tuya-compatible sensors and makes smart irrigation decisions based on evidence-based plant care data. It learns from past irrigation cycles to detect efficiency issues, blocked drips, and unresolvable plant conflicts.
@@ -126,6 +113,18 @@ make coverage   # pytest with coverage (60% threshold)
 ```
 
 See [AGENTS.md](AGENTS.md) for full developer guide, package structure, and testing conventions.
+
+## Releases
+
+Versioning is automated by [release-please](https://github.com/googleapis/release-please).
+Push [Conventional Commits](https://www.conventionalcommits.org/) to `main` and
+the bot will keep a Release PR open; merging it bumps `pyproject.toml` (root +
+all three workspace packages), regenerates `CHANGELOG.md`, tags `vX.Y.Z`, and
+publishes the GitHub Release. The new tag then triggers
+`.github/workflows/cd.yml` to build and push the signed Docker image to GHCR.
+
+Do not hand-edit `CHANGELOG.md` or `version` fields — release-please owns them.
+See [AGENTS.md → Releases & Versioning](AGENTS.md#releases--versioning) for details.
 
 ## License
 

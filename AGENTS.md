@@ -57,7 +57,7 @@ or an MCP tool should be able to do must first exist as an API endpoint.
 > (`/clusters/{id}/irrigate`, `/irrigators/{id}/start`, etc.). Until auth is
 > added, only run the server somewhere an LLM you trust can reach it.
 
-**New API surface in 1.2.0** (all under `/api/v1`):
+**API surface in 1.0.0** (all under `/api/v1`):
 
 - Decisions audit log: `GET /clusters/{id}/decisions`
 - Alert inbox: `GET /alerts`, `GET /alerts/{id}`, `POST /alerts/{id}/acknowledge`, `POST /alerts/{id}/resolve`, `POST /clusters/{id}/alerts/sync`, `POST /alerts/sync`
@@ -196,3 +196,64 @@ All tests use `conftest.py` fixtures and `fake_data.py`. Server + web tests use 
 make check
 git diff --cached | grep -i "bf60\|192.168\|secret"
 ```
+
+## Releases & Versioning
+
+Releases are automated by [release-please](https://github.com/googleapis/release-please)
+running in `.github/workflows/release-please.yml`. **Do not hand-edit
+`CHANGELOG.md` or version strings** — release-please owns them.
+
+### How it works
+
+1. Push commits to `main` using [Conventional Commits](https://www.conventionalcommits.org/).
+   The commit `type` decides the bump:
+   - `feat:` → minor bump (e.g. `1.0.0 → 1.1.0`), `Added` section
+   - `fix:` / `perf:` → patch bump (e.g. `1.0.0 → 1.0.1`), `Fixed` / `Performance`
+   - `refactor:` → patch bump, `Changed`
+   - `<type>!:` or `BREAKING CHANGE:` footer → major bump (e.g. `1.0.0 → 2.0.0`)
+   - `docs:` / `chore:` / `test:` / `build:` / `ci:` / `style:` → no bump
+     (hidden from the changelog by `release-please-config.json`)
+2. release-please opens (or updates) a **Release PR** titled
+   `chore(release): X.Y.Z` that batches every release-worthy commit. Merging
+   the PR is the release.
+3. On merge, release-please:
+   - bumps `version` in the root `pyproject.toml` **and** in all three
+     `libs/*/pyproject.toml` files (kept in lockstep via `extra-files`)
+   - regenerates `CHANGELOG.md` from the Conventional Commits
+   - tags `vX.Y.Z` and creates the GitHub Release
+4. The `v*` tag triggers `.github/workflows/cd.yml`, which builds and
+   pushes the Docker image to GHCR with cosign signing, SBOM, and Trivy scan.
+
+### Files involved
+
+| File | Purpose |
+|------|---------|
+| `release-please-config.json` | Release-type, changelog sections, packages, `extra-files` for workspace `pyproject.toml`s |
+| `.release-please-manifest.json` | Current released version — release-please's source of truth, **not** the `pyproject.toml`s |
+| `.github/workflows/release-please.yml` | Runs the action on every push to `main` |
+| `CHANGELOG.md` | Generated; do not edit by hand |
+| `pyproject.toml` (root + 3 workspace) | Version mirrored from the manifest on each release |
+
+### Version source of truth
+
+`.release-please-manifest.json` is canonical. The four `pyproject.toml` files
+must always match it. If they drift (e.g. someone edits a `version` by hand),
+release-please will still bump from the manifest and overwrite them on the
+next release — but the drift will confuse `uv` and anyone reading the source,
+so don't.
+
+### Cutting a release manually (escape hatch)
+
+If release-please is broken or you need an emergency cut, you can still
+release by hand:
+
+```bash
+# 1. Set the same version in all four pyproject.toml files and the manifest
+# 2. Update CHANGELOG.md by hand
+# 3. Tag and create the GitHub Release — this triggers the Docker build
+git tag -a vX.Y.Z -m "vX.Y.Z"
+git push origin vX.Y.Z
+gh release create vX.Y.Z --notes-from-tag
+```
+
+This is a last resort; prefer the Release PR flow.

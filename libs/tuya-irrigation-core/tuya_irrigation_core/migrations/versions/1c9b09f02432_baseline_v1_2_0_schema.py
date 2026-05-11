@@ -1,4 +1,4 @@
-"""baseline v1.2.0 schema
+"""baseline v1.0.0 schema
 
 Revision ID: 1c9b09f02432
 Revises:
