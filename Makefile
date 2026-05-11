@@ -22,7 +22,7 @@ format: ## Apply ruff formatter
 check: lint test ## Lint then test (CI gate)
 
 coverage: ## Run tests with coverage report (fails under 60%)
-	uv run pytest --cov=greenhouse_core --cov=greenhouse_server --cov=greenhouse_cli --cov-report=term-missing --cov-fail-under=60
+	uv run pytest --cov=greenhouse_core --cov=greenhouse_server --cov=greenhouse_cli --cov-report=term-missing --cov-report=xml --cov-fail-under=60
 
 serve: ## Start the FastAPI server (API + web UI)
 	uv run greenhouse-server

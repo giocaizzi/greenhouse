@@ -23,14 +23,11 @@ jobs:
       - name: Install dependencies
         run: uv sync
 
-      - name: Lint
-        run: uv run ruff check libs/ tests/
-
-      - name: Format check
-        run: uv run ruff format --check libs/ tests/
+      - name: Pre-commit (lint, format, hadolint, gitleaks, file hygiene)
+        run: make pre-commit-run
 
       - name: Test with coverage
-        run: uv run pytest --cov=greenhouse_core --cov=greenhouse_server --cov=greenhouse_cli --cov-report=term-missing --cov-report=xml --cov-fail-under=60
+        run: make coverage
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
@@ -38,13 +35,3 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: coverage.xml
           fail_ci_if_error: false
-
-  dockerfile-lint:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Lint Dockerfile
-        uses: hadolint/hadolint-action@v3.1.0
-        with:
-          dockerfile: Dockerfile
-          ignore: DL3008,DL3013
