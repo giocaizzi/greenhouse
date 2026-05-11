@@ -5,7 +5,7 @@ import time
 import sqlalchemy
 from sqlalchemy.orm import Session
 
-from tuya_irrigation_core.repository import IrrigationRepository
+from greenhouse_core.repository import IrrigationRepository
 
 
 def test_plant_hero_renders(seeded_client):

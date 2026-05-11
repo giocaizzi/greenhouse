@@ -7,9 +7,9 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.pool import StaticPool
 
-from tuya_irrigation_server.app import create_app
-from tuya_irrigation_server.config import Settings
-from tuya_irrigation_server.deps import get_device_manager, get_tuya_cloud
+from greenhouse_server.app import create_app
+from greenhouse_server.config import Settings
+from greenhouse_server.deps import get_device_manager, get_tuya_cloud
 
 
 @pytest.fixture

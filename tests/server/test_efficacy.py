@@ -7,10 +7,10 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
-from tuya_irrigation_core.models import IrrigationEvent, Sensor, SensorReading
-from tuya_irrigation_server.app import create_app
-from tuya_irrigation_server.config import Settings
-from tuya_irrigation_server.deps import get_device_manager, get_tuya_cloud
+from greenhouse_core.models import IrrigationEvent, Sensor, SensorReading
+from greenhouse_server.app import create_app
+from greenhouse_server.config import Settings
+from greenhouse_server.deps import get_device_manager, get_tuya_cloud
 
 
 def _make_client():

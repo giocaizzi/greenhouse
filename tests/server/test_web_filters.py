@@ -2,7 +2,7 @@
 
 import time
 
-from tuya_irrigation_server.web.filters import (
+from greenhouse_server.web.filters import (
     age_seconds,
     decision_badge,
     moisture_badge,

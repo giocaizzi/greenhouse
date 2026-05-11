@@ -1,5 +1,5 @@
 ---
-name: tuya-irrigation
+name: greenhouse
 description: |
   Smart irrigation system with Tuya IoT sensors and evidence-based plant care.
   Client-server architecture: FastAPI REST API + Typer CLI.
@@ -7,7 +7,7 @@ description: |
   moisture monitoring, learning analytics, maintenance alerts.
   Use when: managing irrigation, adding plants/sensors, analyzing soil conditions,
   automated watering, checking plant health, viewing sensor history or stats.
-compatibility: Requires tuya-irrigation-server running. Python 3.11+, uv.
+compatibility: Requires greenhouse-server running. Python 3.11+, uv.
 metadata:
   author: kezclaw
   version: "1.0"
@@ -22,11 +22,11 @@ Evidence-based irrigation with Tuya Cloud sensors, multi-plant conflict resoluti
 The system runs as a **server + CLI client**. The server handles all business logic, scheduling, and device control. The CLI sends HTTP requests and outputs JSON.
 
 ```
-CLI (tuya-irrigation) → HTTP → Server (tuya-irrigation-server) → SQLite + Tuya Cloud
+CLI (greenhouse) → HTTP → Server (greenhouse-server) → SQLite + Tuya Cloud
 ```
 
-- **Server**: `tuya-irrigation-server` — FastAPI at `http://localhost:8000`, OpenAPI docs at `/docs`
-- **CLI**: `tuya-irrigation` — Typer CLI, all output is JSON
+- **Server**: `greenhouse-server` — FastAPI at `http://localhost:8000`, OpenAPI docs at `/docs`
+- **CLI**: `greenhouse` — Typer CLI, all output is JSON
 - **Background**: APScheduler runs sensor sync (30min) and check-all (6h)
 
 ## Setup
@@ -60,17 +60,17 @@ CLI (tuya-irrigation) → HTTP → Server (tuya-irrigation-server) → SQLite + 
 ### Start Server
 
 ```bash
-uv run tuya-irrigation-server
+uv run greenhouse-server
 ```
 
 ### Initialize a Cluster
 
 ```bash
-tuya-irrigation cluster add "My Plants" --location "Indoor" --environment indoor
-tuya-irrigation plant add --cluster 1 "Monstera deliciosa" --category tropical --water-needs medium
-tuya-irrigation irrigator add --cluster 1 --device-id YOUR_DEVICE_ID --name "Rainpoint" --type tuya_cloud
-tuya-irrigation sensor add --cluster 1 --device-id SENSOR_ID --name "Monstera" --type soil_moisture --plant-id 1
-tuya-irrigation config set --cluster 1 --mode smart --minutes 2 --interval 12
+greenhouse cluster add "My Plants" --location "Indoor" --environment indoor
+greenhouse plant add --cluster 1 "Monstera deliciosa" --category tropical --water-needs medium
+greenhouse irrigator add --cluster 1 --device-id YOUR_DEVICE_ID --name "Rainpoint" --type tuya_cloud
+greenhouse sensor add --cluster 1 --device-id SENSOR_ID --name "Monstera" --type soil_moisture --plant-id 1
+greenhouse config set --cluster 1 --mode smart --minutes 2 --interval 12
 ```
 
 ## CLI Reference
@@ -78,8 +78,8 @@ tuya-irrigation config set --cluster 1 --mode smart --minutes 2 --interval 12
 ### Primary (automated / cron replacement)
 
 ```bash
-tuya-irrigation check --all           # Check all clusters (irrigate or monitor)
-tuya-irrigation check 1               # Check single cluster
+greenhouse check --all           # Check all clusters (irrigate or monitor)
+greenhouse check 1               # Check single cluster
 ```
 
 All output is JSON. Exit codes: `0` = ok/skip, `2` = alerts present, `1` = error.
@@ -87,52 +87,52 @@ All output is JSON. Exit codes: `0` = ok/skip, `2` = alerts present, `1` = error
 ### Operations
 
 ```bash
-tuya-irrigation status 1              # Full cluster overview
-tuya-irrigation irrigate 1            # Smart irrigation pipeline
-tuya-irrigation irrigate 1 --dry-run  # Analysis only
-tuya-irrigation irrigate 1 --temp 22  # Override temperature
-tuya-irrigation irrigate 1 --no-sync  # Skip sensor sync
-tuya-irrigation monitor 1             # Raw moisture check
-tuya-irrigation sync --hours 6        # Manual sensor sync
-tuya-irrigation learn 1               # Learning report + alerts
-tuya-irrigation history 1 --hours 24  # Readings + events timeline
-tuya-irrigation stats 1 --days 7      # Statistics
-tuya-irrigation stats 1 --export f.csv # CSV export
-tuya-irrigation health                # Server health + scheduler
+greenhouse status 1              # Full cluster overview
+greenhouse irrigate 1            # Smart irrigation pipeline
+greenhouse irrigate 1 --dry-run  # Analysis only
+greenhouse irrigate 1 --temp 22  # Override temperature
+greenhouse irrigate 1 --no-sync  # Skip sensor sync
+greenhouse monitor 1             # Raw moisture check
+greenhouse sync --hours 6        # Manual sensor sync
+greenhouse learn 1               # Learning report + alerts
+greenhouse history 1 --hours 24  # Readings + events timeline
+greenhouse stats 1 --days 7      # Statistics
+greenhouse stats 1 --export f.csv # CSV export
+greenhouse health                # Server health + scheduler
 ```
 
 ### CRUD
 
 ```bash
 # Clusters
-tuya-irrigation cluster list
-tuya-irrigation cluster add "Garden" --location "Backyard" --environment outdoor
+greenhouse cluster list
+greenhouse cluster add "Garden" --location "Backyard" --environment outdoor
 
 # Plants
-tuya-irrigation plant list --cluster 1
-tuya-irrigation plant add --cluster 1 "Ficus elastica" --category tropical --water-needs medium
-tuya-irrigation plant sync                  # Sync all with evidence-based data
-tuya-irrigation plant sync --plant-id 1     # Sync specific plant
+greenhouse plant list --cluster 1
+greenhouse plant add --cluster 1 "Ficus elastica" --category tropical --water-needs medium
+greenhouse plant sync                  # Sync all with evidence-based data
+greenhouse plant sync --plant-id 1     # Sync specific plant
 
 # Irrigators
-tuya-irrigation irrigator list --cluster 1
-tuya-irrigation irrigator start 1 --minutes 3
-tuya-irrigation irrigator stop 1
-tuya-irrigation irrigator log-manual 1 --minutes 5 --notes "Watered by hand"
+greenhouse irrigator list --cluster 1
+greenhouse irrigator start 1 --minutes 3
+greenhouse irrigator stop 1
+greenhouse irrigator log-manual 1 --minutes 5 --notes "Watered by hand"
 
 # Sensors
-tuya-irrigation sensor list --cluster 1
-tuya-irrigation sensor add --cluster 1 --device-id XXX --name "Sensor" --type soil_moisture --plant-id 1
+greenhouse sensor list --cluster 1
+greenhouse sensor add --cluster 1 --device-id XXX --name "Sensor" --type soil_moisture --plant-id 1
 
 # Config
-tuya-irrigation config get --cluster 1
-tuya-irrigation config set --cluster 1 --mode smart --minutes 2 --interval 12
+greenhouse config get --cluster 1
+greenhouse config set --cluster 1 --mode smart --minutes 2 --interval 12
 ```
 
 ### Server URL
 
 ```bash
-tuya-irrigation --server http://192.168.1.50:8000 cluster list
+greenhouse --server http://192.168.1.50:8000 cluster list
 # or
 export IRRIGATION_SERVER_URL=http://192.168.1.50:8000
 ```

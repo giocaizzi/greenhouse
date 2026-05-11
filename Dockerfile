@@ -16,9 +16,9 @@ WORKDIR /app
 
 # Resolve dependencies first (no source) for cache efficiency.
 COPY pyproject.toml uv.lock ./
-COPY libs/tuya-irrigation-core/pyproject.toml ./libs/tuya-irrigation-core/
-COPY libs/tuya-irrigation-server/pyproject.toml ./libs/tuya-irrigation-server/
-COPY libs/tuya-irrigation-cli/pyproject.toml ./libs/tuya-irrigation-cli/
+COPY libs/greenhouse-core/pyproject.toml ./libs/greenhouse-core/
+COPY libs/greenhouse-server/pyproject.toml ./libs/greenhouse-server/
+COPY libs/greenhouse-cli/pyproject.toml ./libs/greenhouse-cli/
 
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --no-install-workspace
@@ -61,4 +61,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
     CMD python -c "import urllib.request,sys; \
 sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/v1/clusters', timeout=3).status < 500 else 1)"
 
-CMD ["tuya-irrigation-server"]
+CMD ["greenhouse-server"]

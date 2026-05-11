@@ -1,0 +1,111 @@
+{% extends "_base.html" %}
+{% block title %}Vacation · Greenhouse{% endblock %}
+{% block content %}
+
+<div class="crumb">
+  <a href="/">home</a><span class="sep">/</span>
+  <span class="here">vacation</span>
+</div>
+
+<section class="page-head">
+  <div class="page-head__title">
+    <h1>Vacation</h1>
+    <div class="page-head__meta">
+      <span>Schedule pauses in automatic irrigation</span>
+    </div>
+  </div>
+</section>
+
+{% if active %}
+<div class="alert alert--warn" style="margin-bottom:var(--sp-5);">
+  <div class="alert__icon" aria-hidden="true">
+    <svg class="icon"><use href="/static/icons/sprite.svg#i-leaf"></use></svg>
+  </div>
+  <div>
+    <p class="alert__title">Vacation in effect</p>
+    <p class="alert__body">Active until {{ active.ends_at | format_ts }}.</p>
+    {% if active.contact_email %}
+      <p class="alert__body"><small>Contact: {{ active.contact_email }}</small></p>
+    {% endif %}
+  </div>
+  <form method="post" action="/vacation/{{ active.id }}/delete" style="margin:0;align-self:center;">
+    <button type="submit" class="secondary btn-sm">Cancel</button>
+  </form>
+</div>
+{% endif %}
+
+{# Add window form #}
+<article class="card form-card" style="margin-bottom:var(--sp-6);">
+  <div class="card__head">
+    <h2 class="card__title">Schedule vacation</h2>
+  </div>
+  <div class="card__body">
+    <form method="post" action="/vacation">
+      <div class="grid">
+        <label>Start date
+          <input type="date" name="starts_at" required>
+        </label>
+        <label>End date
+          <input type="date" name="ends_at" required>
+        </label>
+      </div>
+      <label>Contact email <small>(optional)</small>
+        <input type="email" name="contact_email" placeholder="person@example.com">
+      </label>
+      <label>Notes <small>(optional)</small>
+        <textarea name="notes" placeholder="Trip notes…"></textarea>
+      </label>
+      <div class="form-actions">
+        <button type="submit">Schedule</button>
+      </div>
+    </form>
+  </div>
+</article>
+
+{# Windows table #}
+{% if windows %}
+<article class="card card--flush">
+  <table>
+    <thead>
+      <tr>
+        <th>Starts</th>
+        <th>Ends</th>
+        <th>Contact</th>
+        <th>Notes</th>
+        <th>Status</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for w in windows %}
+      <tr>
+        <td data-th="Starts"><span class="mono">{{ w.starts_at | format_ts }}</span></td>
+        <td data-th="Ends"><span class="mono">{{ w.ends_at | format_ts }}</span></td>
+        <td data-th="Contact">{{ w.contact_email or "—" }}</td>
+        <td data-th="Notes">{{ w.notes or "—" }}</td>
+        <td data-th="Status">
+          {% if active and w.id == active.id %}
+            <span class="badge-warning">active</span>
+          {% else %}
+            <span class="badge-muted">scheduled</span>
+          {% endif %}
+        </td>
+        <td>
+          <form method="post" action="/vacation/{{ w.id }}/delete" style="margin:0;">
+            <button type="submit" class="secondary btn-sm">Delete</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</article>
+{% else %}
+<div class="empty">
+  <span class="empty__icon"><svg class="icon"><use href="/static/icons/sprite.svg#i-leaf"></use></svg></span>
+  <h2>No vacation windows</h2>
+  <p>Schedule one above to pause automatic irrigation while you're away.</p>
+</div>
+{% endif %}
+
+{% endblock %}

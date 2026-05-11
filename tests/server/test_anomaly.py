@@ -7,9 +7,9 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
-from tuya_irrigation_core.database import init_db
-from tuya_irrigation_core.repository import IrrigationRepository
-from tuya_irrigation_server.services.anomaly import SensorAnomalyService
+from greenhouse_core.database import init_db
+from greenhouse_core.repository import IrrigationRepository
+from greenhouse_server.services.anomaly import SensorAnomalyService
 
 
 @pytest.fixture

@@ -1,4 +1,4 @@
-"""Shared fake test data for the tuya_irrigation test suite.
+"""Shared fake test data for the greenhouse test suite.
 
 All values here are deliberately fake/placeholder.
 RFC 5737 IPs (192.0.2.x) are reserved for documentation and testing.

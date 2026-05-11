@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-**tuya-irrigation** is a smart plant irrigation system that:
+**greenhouse** is a smart plant irrigation system that:
 
 1. **Reads** soil moisture / temperature / humidity / light from Tuya-compatible
    sensors via the Tuya Cloud API.
@@ -38,8 +38,8 @@ four ways to talk to it:
 2. **HTMX web UI** at `/` — same FastAPI app, server-rendered. Calls the
    service layer **in-process** (not over HTTP), so it shares code with the
    API but isn't itself a client of it.
-3. **CLI** (`tuya-irrigation`) — a thin `httpx`-based client that builds
-   requests against `/api/v1`. It does **not** import `tuya-irrigation-core`
+3. **CLI** (`greenhouse`) — a thin `httpx`-based client that builds
+   requests against `/api/v1`. It does **not** import `greenhouse-core`
    and has no DB access; if the server isn't running, the CLI does nothing.
 4. **MCP server** at `/mcp` — same FastAPI app, exposed via
    [`fastapi-mcp`](https://github.com/tadata-org/fastapi_mcp). Every
@@ -100,18 +100,18 @@ All test data uses fake/placeholder values centralized in `tests/fake_data.py`:
 uv workspace with three packages under `libs/`. Strict dependency direction:
 **core ← server ← cli** (CLI never imports core, only the HTTP API).
 
-- **`tuya-irrigation-core`** — domain. SQLAlchemy v2 models, Pydantic v2 schemas,
+- **`greenhouse-core`** — domain. SQLAlchemy v2 models, Pydantic v2 schemas,
   repository, Tuya Cloud + local device adapters, irrigation decision engine
   (`logic/`), post-irrigation learning (`learning/`), plant-care DB, project-wide
   thresholds (`constants.py`).
-- **`tuya-irrigation-server`** — FastAPI app exposing both:
+- **`greenhouse-server`** — FastAPI app exposing both:
   - **JSON API** under `/api/v1` (`routes/`).
   - **Web UI** at `/` (`web/`): HTMX + Jinja2 server-rendered, served by the
     same app. No SPA, no build step.
 
   Orchestration lives in `services/` (cluster, irrigation, sync, maintenance,
   charts, weather). Background jobs use APScheduler (`scheduler.py`).
-- **`tuya-irrigation-cli`** — Typer CLI. Talks to the API over HTTP via an
+- **`greenhouse-cli`** — Typer CLI. Talks to the API over HTTP via an
   `httpx`-based `IrrigationClient` (in `client.py`); no DB or core imports.
 
   Surface: top-level **operation** commands registered directly on the root app
@@ -123,14 +123,14 @@ uv workspace with three packages under `libs/`. Strict dependency direction:
   through the shared `call()` helper in `commands/_helpers.py`.
 
 **Naming:**
-- Distribution: `tuya-irrigation-core`, `tuya-irrigation-server`, `tuya-irrigation-cli`
-- Import: `tuya_irrigation_core`, `tuya_irrigation_server`, `tuya_irrigation_cli`
-- Entry points: `tuya-irrigation` (CLI), `tuya-irrigation-server` (server)
+- Distribution: `greenhouse-core`, `greenhouse-server`, `greenhouse-cli`
+- Import: `greenhouse_core`, `greenhouse_server`, `greenhouse_cli`
+- Entry points: `greenhouse` (CLI), `greenhouse-server` (server)
 
 Other top-level dirs: `data/` (gitignored runtime SQLite),
 `tests/` (mirrors package layout: root = core, `server/`, `cli/`), `references/`.
 The curated `plant_database.json` ships inside the core package at
-`libs/tuya-irrigation-core/tuya_irrigation_core/data/`.
+`libs/greenhouse-core/greenhouse_core/data/`.
 
 ## Key Technical Decisions
 
@@ -153,9 +153,9 @@ The curated `plant_database.json` ships inside the core package at
 
 ```bash
 uv sync
-uv run tuya-irrigation-server    # Start server (API at /api/v1, web UI at /)
-uv run tuya-irrigation --help    # CLI help
-make serve                       # Same as uv run tuya-irrigation-server
+uv run greenhouse-server    # Start server (API at /api/v1, web UI at /)
+uv run greenhouse --help    # CLI help
+make serve                       # Same as uv run greenhouse-server
 ```
 
 ### Code Quality
@@ -187,8 +187,8 @@ All tests use `conftest.py` fixtures and `fake_data.py`. Server + web tests use 
 
 ### Add a Plant Species
 
-1. Research (min 2 sources), update `libs/tuya-irrigation-core/tuya_irrigation_core/data/plant_database.json`
-2. Sync with `tuya-irrigation plant sync`
+1. Research (min 2 sources), update `libs/greenhouse-core/greenhouse_core/data/plant_database.json`
+2. Sync with `greenhouse plant sync`
 
 ### Pre-commit Check
 

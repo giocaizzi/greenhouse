@@ -1,14 +1,14 @@
 <div align="center">
 
-# tuya-irrigation
+# greenhouse
 
 
 **Smart plant irrigation system with Tuya IoT sensors, evidence-based plant care, and self-learning efficiency analysis.**
 
-[![CI](https://img.shields.io/github/actions/workflow/status/giocaizzi/tuya-irrigation/ci.yml?branch=main&label=CI)](https://github.com/giocaizzi/tuya-irrigation/actions)
-[![codecov](https://codecov.io/gh/giocaizzi/tuya-irrigation/graph/badge.svg)](https://codecov.io/gh/giocaizzi/tuya-irrigation)
+[![CI](https://img.shields.io/github/actions/workflow/status/giocaizzi/greenhouse/ci.yml?branch=main&label=CI)](https://github.com/giocaizzi/greenhouse/actions)
+[![codecov](https://codecov.io/gh/giocaizzi/greenhouse/graph/badge.svg)](https://codecov.io/gh/giocaizzi/greenhouse)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue)](https://www.python.org)
-[![License](https://img.shields.io/github/license/giocaizzi/tuya-irrigation)](LICENSE)
+[![License](https://img.shields.io/github/license/giocaizzi/greenhouse)](LICENSE)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![uv](https://img.shields.io/badge/uv-DE5FE9?logo=uv&logoColor=white)](https://github.com/astral-sh/uv)
 
@@ -16,12 +16,12 @@
 
 ## Overview
 
-**tuya-irrigation** monitors soil moisture, temperature, humidity, and light from Tuya-compatible sensors and makes smart irrigation decisions based on evidence-based plant care data. It learns from past irrigation cycles to detect efficiency issues, blocked drips, and unresolvable plant conflicts.
+**greenhouse** monitors soil moisture, temperature, humidity, and light from Tuya-compatible sensors and makes smart irrigation decisions based on evidence-based plant care data. It learns from past irrigation cycles to detect efficiency issues, blocked drips, and unresolvable plant conflicts.
 
 ```bash
 uv sync
-uv run tuya-irrigation-server        # start REST API + web UI
-uv run tuya-irrigation check --all   # check all clusters
+uv run greenhouse-server        # start REST API + web UI
+uv run greenhouse check --all   # check all clusters
 ```
 
 ## How it decides
@@ -38,7 +38,7 @@ uv run tuya-irrigation check --all   # check all clusters
 |-----------|-----|-------|
 | **JSON REST API** | `/api/v1` | Authoritative entry point. OpenAPI docs at `/docs`. |
 | **Web UI** | `/` | HTMX + Jinja2 server-rendered. Shares service layer with the API. |
-| **CLI** | `tuya-irrigation` | Thin `httpx` client against `/api/v1`. No DB access. |
+| **CLI** | `greenhouse` | Thin `httpx` client against `/api/v1`. No DB access. |
 | **MCP server** | `/mcp` | Every `/api/v1` endpoint as an MCP tool via `fastapi-mcp`. Auth deferred — localhost-only. |
 
 Stop the server and all four go dark. Anything new the CLI or an MCP tool should be able to do must first exist as an API endpoint.
@@ -56,8 +56,8 @@ Stop the server and all four go dark. Anything new the CLI or an MCP tool should
 ### Installation
 
 ```bash
-git clone https://github.com/giocaizzi/tuya-irrigation.git
-cd tuya-irrigation
+git clone https://github.com/giocaizzi/greenhouse.git
+cd greenhouse
 uv sync
 ```
 
@@ -81,19 +81,19 @@ cp .env.example .env
 
 ```bash
 # Start the server (API at /api/v1, web UI at /)
-uv run tuya-irrigation-server
+uv run greenhouse-server
 
 # Set up a cluster
-uv run tuya-irrigation cluster add "Living Room" --environment indoor
-uv run tuya-irrigation plant add "Monstera deliciosa" --cluster 1
-uv run tuya-irrigation sensor add --cluster 1 --device-id YOUR_DEVICE_ID --name "Monstera Sensor" --type soil_moisture
+uv run greenhouse cluster add "Living Room" --environment indoor
+uv run greenhouse plant add "Monstera deliciosa" --cluster 1
+uv run greenhouse sensor add --cluster 1 --device-id YOUR_DEVICE_ID --name "Monstera Sensor" --type soil_moisture
 
 # Operations
-uv run tuya-irrigation status 1          # full cluster overview
-uv run tuya-irrigation irrigate 1        # smart irrigation pipeline
-uv run tuya-irrigation check --all       # check all clusters + alerts
-uv run tuya-irrigation learn 1           # learning report
-uv run tuya-irrigation stats 1 --days 7  # irrigation statistics
+uv run greenhouse status 1          # full cluster overview
+uv run greenhouse irrigate 1        # smart irrigation pipeline
+uv run greenhouse check --all       # check all clusters + alerts
+uv run greenhouse learn 1           # learning report
+uv run greenhouse stats 1 --days 7  # irrigation statistics
 ```
 
 Same data is also available via:

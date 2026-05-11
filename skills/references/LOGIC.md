@@ -172,7 +172,7 @@ Stored in `plant_health_daily` for long-horizon trend plotting. Snapshot job run
 
 ## Constants
 
-All thresholds in `libs/tuya-irrigation-core/tuya_irrigation_core/constants.py`:
+All thresholds in `libs/greenhouse-core/greenhouse_core/constants.py`:
 
 - Cooldown: 6h between irrigations
 - Soil moisture: critical 30%, low 40%, saturated 70%

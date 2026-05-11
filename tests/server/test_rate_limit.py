@@ -2,7 +2,7 @@
 
 from sqlalchemy.orm import Session
 
-from tuya_irrigation_core.models import IrrigationConfig
+from greenhouse_core.models import IrrigationConfig
 
 
 def _set_cap(client, cluster_id: int, *, max_events_per_day: int | None = None, daily_cap_minutes: int | None = None):

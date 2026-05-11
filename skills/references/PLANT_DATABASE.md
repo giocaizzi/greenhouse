@@ -71,7 +71,7 @@ See `_metadata.sources` in JSON for full list.
 ### Python API
 
 ```python
-from tuya_irrigation.plant_db import get_plant_database
+from greenhouse.plant_db import get_plant_database
 
 db = get_plant_database()
 
@@ -92,10 +92,10 @@ Update existing plants with evidence-based data:
 
 ```bash
 # Update all plants in database
-tuya-irrigation plant sync
+greenhouse plant sync
 
 # Update specific plant by ID
-tuya-irrigation plant sync --plant-id 1
+greenhouse plant sync --plant-id 1
 ```
 
 ## Data Fields
@@ -168,7 +168,7 @@ Edit `data/plant_database.json`:
 ### 3. Sync Existing Plants
 
 ```bash
-tuya-irrigation plant sync
+greenhouse plant sync
 ```
 
 ## Quality Standards
@@ -198,7 +198,7 @@ Track database version in `_metadata.version`. Increment when:
 ### Data Integrity
 
 - Validate JSON syntax before commit
-- Test with `python3 -c "from tuya_irrigation.plant_db import get_plant_database; get_plant_database()"`
+- Test with `python3 -c "from greenhouse.plant_db import get_plant_database; get_plant_database()"`
 - Run test suite after database changes
 
 ## Examples

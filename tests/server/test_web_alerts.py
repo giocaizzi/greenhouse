@@ -5,7 +5,7 @@ def _seed_alert(app, *, dedup_key="test::web::1", severity="warning", status="op
     """Helper: insert an alert directly via the repo and return its id."""
     session = app.state.session_factory()
     try:
-        from tuya_irrigation_core.repository import IrrigationRepository
+        from greenhouse_core.repository import IrrigationRepository
 
         repo = IrrigationRepository(session)
         alert = repo.upsert_alert(

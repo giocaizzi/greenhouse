@@ -12,20 +12,20 @@ class TestTuyaCloud:
 
     @pytest.fixture(autouse=True)
     def setup(self):
-        with patch("tuya_irrigation_core.cloud.tinytuya") as mock_tinytuya:
+        with patch("greenhouse_core.cloud.tinytuya") as mock_tinytuya:
             self.mock_cloud_instance = MagicMock()
             mock_tinytuya.Cloud.return_value = self.mock_cloud_instance
 
-            from tuya_irrigation_core.cloud import TuyaCloud
+            from greenhouse_core.cloud import TuyaCloud
 
             self.cloud = TuyaCloud(FAKE_CLIENT_ID, FAKE_CLIENT_SECRET, FAKE_REGION)
             yield
 
-    @patch("tuya_irrigation_core.cloud.tinytuya")
+    @patch("greenhouse_core.cloud.tinytuya")
     @patch.dict("os.environ", {"TUYA_CLIENT_ID": "", "TUYA_CLIENT_SECRET": ""}, clear=False)
     def test_init_requires_credentials(self, _mock_tinytuya):
         """Cloud client raises without credentials."""
-        from tuya_irrigation_core.cloud import TuyaCloud
+        from greenhouse_core.cloud import TuyaCloud
 
         with pytest.raises(ValueError):
             TuyaCloud("", "", "eu")

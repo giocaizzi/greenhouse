@@ -31,7 +31,7 @@ class TestAlertGetById:
         with TestClient(app, raise_server_exceptions=False) as client:
             session = app.state.session_factory()
             try:
-                from tuya_irrigation_core.repository import IrrigationRepository
+                from greenhouse_core.repository import IrrigationRepository
 
                 repo = IrrigationRepository(session)
                 alert = repo.upsert_alert(
@@ -68,7 +68,7 @@ class TestAlertAcknowledge:
         with TestClient(app, raise_server_exceptions=False) as client:
             session = app.state.session_factory()
             try:
-                from tuya_irrigation_core.repository import IrrigationRepository
+                from greenhouse_core.repository import IrrigationRepository
 
                 repo = IrrigationRepository(session)
                 alert = repo.upsert_alert(
@@ -109,7 +109,7 @@ class TestAlertResolve:
         with TestClient(app, raise_server_exceptions=False) as client:
             session = app.state.session_factory()
             try:
-                from tuya_irrigation_core.repository import IrrigationRepository
+                from greenhouse_core.repository import IrrigationRepository
 
                 repo = IrrigationRepository(session)
                 alert = repo.upsert_alert(
@@ -184,7 +184,7 @@ class TestAlertSyncAll:
         with TestClient(app, raise_server_exceptions=False) as client:
             session = app.state.session_factory()
             try:
-                from tuya_irrigation_core.repository import IrrigationRepository
+                from greenhouse_core.repository import IrrigationRepository
 
                 repo = IrrigationRepository(session)
                 repo.upsert_alert(

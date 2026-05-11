@@ -71,7 +71,7 @@ def test_every_api_route_has_a_docstring():
     selection. This is enforced statically by walking the route source so
     that adding a new endpoint without a docstring breaks CI before it
     ever ships."""
-    route_dir = Path(__file__).resolve().parents[2] / "libs/tuya-irrigation-server/tuya_irrigation_server/routes"
+    route_dir = Path(__file__).resolve().parents[2] / "libs/greenhouse-server/greenhouse_server/routes"
     missing = []
     for path in sorted(route_dir.glob("*.py")):
         if path.name == "__init__.py":

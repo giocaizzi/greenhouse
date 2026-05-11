@@ -5,8 +5,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from fake_data import FAKE_DEVICE_ID
-from tuya_irrigation_core.devices import TuyaDeviceManager
-from tuya_irrigation_core.models import Irrigator, Sensor
+from greenhouse_core.devices import TuyaDeviceManager
+from greenhouse_core.models import Irrigator, Sensor
 
 
 def _make_irrigator(device_type="tuya_cloud"):
@@ -41,7 +41,7 @@ class TestDeviceManager:
             with pytest.raises(ValueError):
                 TuyaDeviceManager()
 
-    @patch("tuya_irrigation_core.devices.tinytuya.Cloud")
+    @patch("greenhouse_core.devices.tinytuya.Cloud")
     def test_irrigator_on_command(self, mock_cloud_class, fake_tuya_env):
         """Irrigator ON command executes correctly."""
         mock_cloud = MagicMock()
@@ -60,7 +60,7 @@ class TestDeviceManager:
         assert commands[0]["code"] == "switch"
         assert commands[0]["value"] is True
 
-    @patch("tuya_irrigation_core.devices.tinytuya.Cloud")
+    @patch("greenhouse_core.devices.tinytuya.Cloud")
     def test_irrigator_off_command(self, mock_cloud_class, fake_tuya_env):
         """Irrigator OFF command executes correctly."""
         mock_cloud = MagicMock()
@@ -78,7 +78,7 @@ class TestDeviceManager:
         assert commands[0]["code"] == "switch"
         assert commands[0]["value"] is False
 
-    @patch("tuya_irrigation_core.devices.tinytuya.Cloud")
+    @patch("greenhouse_core.devices.tinytuya.Cloud")
     def test_irrigator_start_with_duration(self, mock_cloud_class, fake_tuya_env):
         """Irrigator START with duration attempts local DP set + cloud switch."""
         mock_cloud = MagicMock()
@@ -94,7 +94,7 @@ class TestDeviceManager:
         assert "5 min" in msg
         mock_cloud.sendcommand.assert_called_once()
 
-    @patch("tuya_irrigation_core.devices.tinytuya.Cloud")
+    @patch("greenhouse_core.devices.tinytuya.Cloud")
     def test_irrigator_start_without_duration(self, mock_cloud_class, fake_tuya_env):
         """Irrigator START without duration just turns on."""
         mock_cloud = MagicMock()
@@ -107,7 +107,7 @@ class TestDeviceManager:
         assert success
         assert "ON" in msg
 
-    @patch("tuya_irrigation_core.devices.tinytuya.Cloud")
+    @patch("greenhouse_core.devices.tinytuya.Cloud")
     def test_irrigator_status_parsing(self, mock_cloud_class, fake_tuya_env):
         """Device status is correctly parsed from Cloud API."""
         mock_cloud = MagicMock()
@@ -123,7 +123,7 @@ class TestDeviceManager:
         assert status["running"] is True
         assert status["work_state"] == "watering"
 
-    @patch("tuya_irrigation_core.devices.tinytuya.Cloud")
+    @patch("greenhouse_core.devices.tinytuya.Cloud")
     def test_device_error_handling(self, mock_cloud_class, fake_tuya_env):
         """Device errors are correctly captured."""
         mock_cloud = MagicMock()
@@ -136,8 +136,8 @@ class TestDeviceManager:
         assert not success
         assert "failed" in msg.lower()
 
-    @patch("tuya_irrigation_core.devices.tinytuya.Cloud")
-    @patch("tuya_irrigation_core.cloud.TuyaCloud")
+    @patch("greenhouse_core.devices.tinytuya.Cloud")
+    @patch("greenhouse_core.cloud.TuyaCloud")
     def test_sensor_reading_parsing(self, mock_cloud_class, _mock_tinytuya_cloud, fake_tuya_env):
         """Sensor data is correctly parsed via Cloud API."""
         mock_cloud = MagicMock()
@@ -153,7 +153,7 @@ class TestDeviceManager:
 
     # ── Edge case tests ─────────────────────────────────────────────────────
 
-    @patch("tuya_irrigation_core.devices.tinytuya.Cloud")
+    @patch("greenhouse_core.devices.tinytuya.Cloud")
     def test_irrigator_start_local_failure_cloud_succeeds(self, mock_cloud_class, fake_tuya_env):
         """Local DP set fails but cloud switch succeeds (keepalive fallback)."""
         mock_cloud = MagicMock()
@@ -169,8 +169,8 @@ class TestDeviceManager:
         assert success
         assert "3 min" in msg
 
-    @patch("tuya_irrigation_core.devices.tinytuya.Cloud")
-    @patch("tuya_irrigation_core.cloud.TuyaCloud")
+    @patch("greenhouse_core.devices.tinytuya.Cloud")
+    @patch("greenhouse_core.cloud.TuyaCloud")
     def test_read_sensor_cloud_error_returns_error_dict(self, mock_cloud_class, _mock_tinytuya_cloud, fake_tuya_env):
         """Sensor read returns error dict when cloud API fails."""
         mock_cloud = MagicMock()
@@ -183,7 +183,7 @@ class TestDeviceManager:
         assert "error" in result
         assert "device offline" in result["error"]
 
-    @patch("tuya_irrigation_core.devices.tinytuya.Cloud")
+    @patch("greenhouse_core.devices.tinytuya.Cloud")
     def test_irrigator_on_network_exception(self, mock_cloud_class, fake_tuya_env):
         """Network exception during irrigator_on propagates."""
         mock_cloud = MagicMock()
@@ -194,7 +194,7 @@ class TestDeviceManager:
         with pytest.raises(ConnectionError):
             dm.irrigator_on(_make_irrigator())
 
-    @patch("tuya_irrigation_core.devices.tinytuya.Cloud")
+    @patch("greenhouse_core.devices.tinytuya.Cloud")
     def test_irrigator_start_zero_minutes(self, mock_cloud_class, fake_tuya_env):
         """Start with minutes=0 is treated as simple ON (no duration)."""
         mock_cloud = MagicMock()

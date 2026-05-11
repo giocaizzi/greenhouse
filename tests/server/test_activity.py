@@ -14,7 +14,7 @@ class TestActivityList:
     def _seed_events(self, app, count: int = 5) -> list[int]:
         session = app.state.session_factory()
         try:
-            from tuya_irrigation_core.repository import IrrigationRepository
+            from greenhouse_core.repository import IrrigationRepository
 
             repo = IrrigationRepository(session)
             now = int(time.time())
@@ -53,7 +53,7 @@ class TestActivityList:
         with TestClient(app, raise_server_exceptions=False) as client:
             session = app.state.session_factory()
             try:
-                from tuya_irrigation_core.repository import IrrigationRepository
+                from greenhouse_core.repository import IrrigationRepository
 
                 repo = IrrigationRepository(session)
                 repo.add_activity_event(
@@ -78,7 +78,7 @@ class TestActivityList:
         with TestClient(app, raise_server_exceptions=False) as client:
             session = app.state.session_factory()
             try:
-                from tuya_irrigation_core.repository import IrrigationRepository
+                from greenhouse_core.repository import IrrigationRepository
 
                 repo = IrrigationRepository(session)
                 repo.add_activity_event(source="irrigation", entity_type="cluster", code="irrigated", message="a")
@@ -97,7 +97,7 @@ class TestActivityList:
         with TestClient(app, raise_server_exceptions=False) as client:
             session = app.state.session_factory()
             try:
-                from tuya_irrigation_core.repository import IrrigationRepository
+                from greenhouse_core.repository import IrrigationRepository
 
                 repo = IrrigationRepository(session)
                 repo.add_activity_event(

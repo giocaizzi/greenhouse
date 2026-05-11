@@ -14,7 +14,7 @@ import tempfile
 import pytest
 from sqlalchemy import create_engine, inspect, text
 
-from tuya_irrigation_core.database import head_revision, init_db
+from greenhouse_core.database import head_revision, init_db
 
 
 @pytest.fixture

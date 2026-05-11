@@ -4,10 +4,10 @@ requires-python = ">=3.11"
 
 [manifest]
 members = [
-    "tuya-irrigation",
-    "tuya-irrigation-cli",
-    "tuya-irrigation-core",
-    "tuya-irrigation-server",
+    "greenhouse",
+    "greenhouse-cli",
+    "greenhouse-core",
+    "greenhouse-server",
 ]
 
 [[package]]
@@ -1412,13 +1412,13 @@ wheels = [
 ]
 
 [[package]]
-name = "tuya-irrigation"
+name = "greenhouse"
 version = "1.0.0"
 source = { virtual = "." }
 dependencies = [
-    { name = "tuya-irrigation-cli" },
-    { name = "tuya-irrigation-core" },
-    { name = "tuya-irrigation-server" },
+    { name = "greenhouse-cli" },
+    { name = "greenhouse-core" },
+    { name = "greenhouse-server" },
 ]
 
 [package.dev-dependencies]
@@ -1430,9 +1430,9 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "tuya-irrigation-cli", editable = "libs/tuya-irrigation-cli" },
-    { name = "tuya-irrigation-core", editable = "libs/tuya-irrigation-core" },
-    { name = "tuya-irrigation-server", editable = "libs/tuya-irrigation-server" },
+    { name = "greenhouse-cli", editable = "libs/greenhouse-cli" },
+    { name = "greenhouse-core", editable = "libs/greenhouse-core" },
+    { name = "greenhouse-server", editable = "libs/greenhouse-server" },
 ]
 
 [package.metadata.requires-dev]
@@ -1443,9 +1443,9 @@ dev = [
 ]
 
 [[package]]
-name = "tuya-irrigation-cli"
+name = "greenhouse-cli"
 version = "1.0.0"
-source = { editable = "libs/tuya-irrigation-cli" }
+source = { editable = "libs/greenhouse-cli" }
 dependencies = [
     { name = "httpx" },
     { name = "typer" },
@@ -1458,9 +1458,9 @@ requires-dist = [
 ]
 
 [[package]]
-name = "tuya-irrigation-core"
+name = "greenhouse-core"
 version = "1.0.0"
-source = { editable = "libs/tuya-irrigation-core" }
+source = { editable = "libs/greenhouse-core" }
 dependencies = [
     { name = "alembic" },
     { name = "pydantic" },
@@ -1477,9 +1477,9 @@ requires-dist = [
 ]
 
 [[package]]
-name = "tuya-irrigation-server"
+name = "greenhouse-server"
 version = "1.0.0"
-source = { editable = "libs/tuya-irrigation-server" }
+source = { editable = "libs/greenhouse-server" }
 dependencies = [
     { name = "apscheduler" },
     { name = "fastapi" },
@@ -1489,7 +1489,7 @@ dependencies = [
     { name = "pydantic-settings" },
     { name = "python-dotenv" },
     { name = "python-multipart" },
-    { name = "tuya-irrigation-core" },
+    { name = "greenhouse-core" },
     { name = "uvicorn", extra = ["standard"] },
 ]
 
@@ -1503,7 +1503,7 @@ requires-dist = [
     { name = "pydantic-settings", specifier = ">=2.0" },
     { name = "python-dotenv", specifier = ">=1.0" },
     { name = "python-multipart", specifier = ">=0.0.9" },
-    { name = "tuya-irrigation-core", editable = "libs/tuya-irrigation-core" },
+    { name = "greenhouse-core", editable = "libs/greenhouse-core" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.30" },
 ]
 

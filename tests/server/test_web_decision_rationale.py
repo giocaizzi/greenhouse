@@ -4,7 +4,7 @@ import time
 
 from sqlalchemy.orm import Session
 
-from tuya_irrigation_core.repository import IrrigationRepository
+from greenhouse_core.repository import IrrigationRepository
 
 
 def test_rationale_panel_renders_without_decisions(seeded_client):

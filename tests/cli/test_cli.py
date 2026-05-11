@@ -10,7 +10,7 @@ import httpx
 import pytest
 from typer.testing import CliRunner
 
-from tuya_irrigation_cli.main import app
+from greenhouse_cli.main import app
 
 runner = CliRunner()
 

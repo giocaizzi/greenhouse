@@ -30,7 +30,7 @@ jobs:
         run: uv run ruff format --check libs/ tests/
 
       - name: Test with coverage
-        run: uv run pytest --cov=tuya_irrigation_core --cov=tuya_irrigation_server --cov=tuya_irrigation_cli --cov-report=term-missing --cov-report=xml --cov-fail-under=60
+        run: uv run pytest --cov=greenhouse_core --cov=greenhouse_server --cov=greenhouse_cli --cov-report=term-missing --cov-report=xml --cov-fail-under=60
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5

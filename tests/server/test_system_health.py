@@ -6,9 +6,9 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.pool import StaticPool
 
-from tuya_irrigation_server.app import create_app
-from tuya_irrigation_server.config import Settings
-from tuya_irrigation_server.deps import get_device_manager, get_tuya_cloud
+from greenhouse_server.app import create_app
+from greenhouse_server.config import Settings
+from greenhouse_server.deps import get_device_manager, get_tuya_cloud
 
 
 def _make_app():
@@ -44,7 +44,7 @@ class TestSystemHealthPulse:
 
             from sqlalchemy.orm import Session
 
-            from tuya_irrigation_core.models import Sensor, SensorReading
+            from greenhouse_core.models import Sensor, SensorReading
 
             with Session(engine) as session:
                 sensor = session.get(Sensor, 1)
@@ -73,7 +73,7 @@ class TestSystemHealthPulse:
 
             from sqlalchemy.orm import Session
 
-            from tuya_irrigation_core.models import Sensor, SensorReading
+            from greenhouse_core.models import Sensor, SensorReading
 
             with Session(engine) as session:
                 sensor = session.get(Sensor, 1)
@@ -120,7 +120,7 @@ class TestSystemHealthPulse:
 
             from sqlalchemy.orm import Session
 
-            from tuya_irrigation_core.models import Alert, Sensor, SensorReading
+            from greenhouse_core.models import Alert, Sensor, SensorReading
 
             now = int(time.time())
             with Session(engine) as session:

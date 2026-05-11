@@ -42,9 +42,9 @@ def test_heatmap_with_events(app):
     from sqlalchemy import create_engine
     from sqlalchemy.pool import StaticPool
 
-    from tuya_irrigation_core.models import Base
-    from tuya_irrigation_core.repository import IrrigationRepository
-    from tuya_irrigation_server.deps import get_repository
+    from greenhouse_core.models import Base
+    from greenhouse_core.repository import IrrigationRepository
+    from greenhouse_server.deps import get_repository
 
     engine = create_engine("sqlite://", echo=False, connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(engine)

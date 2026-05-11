@@ -5,7 +5,7 @@ import time
 import pytest
 
 from fake_data import FAKE_CLUSTER_NAME, FAKE_DEVICE_ID, FAKE_IRRIGATOR_NAME
-from tuya_irrigation_core.stats import export_csv, format_duration, get_irrigation_stats
+from greenhouse_core.stats import export_csv, format_duration, get_irrigation_stats
 
 
 class TestFormatDuration:

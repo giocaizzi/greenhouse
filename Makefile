@@ -22,10 +22,10 @@ format: ## Apply ruff formatter
 check: lint test ## Lint then test (CI gate)
 
 coverage: ## Run tests with coverage report (fails under 60%)
-	uv run pytest --cov=tuya_irrigation_core --cov=tuya_irrigation_server --cov=tuya_irrigation_cli --cov-report=term-missing --cov-fail-under=60
+	uv run pytest --cov=greenhouse_core --cov=greenhouse_server --cov=greenhouse_cli --cov-report=term-missing --cov-fail-under=60
 
 serve: ## Start the FastAPI server (API + web UI)
-	uv run tuya-irrigation-server
+	uv run greenhouse-server
 
 clean: ## Remove caches and build artifacts
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true

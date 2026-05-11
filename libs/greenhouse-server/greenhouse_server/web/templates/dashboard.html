@@ -1,0 +1,133 @@
+{% extends "_base.html" %}
+{% block title %}Dashboard · Greenhouse{% endblock %}
+{% block content %}
+
+<section class="page-head">
+  <div class="page-head__title">
+    <h1>Dashboard</h1>
+    <div class="page-head__meta">
+      {% if clusters %}
+        <span>{{ clusters|length }} cluster{{ "" if clusters|length == 1 else "s" }}</span>
+        <span class="dot"></span>
+        <span>auto-refresh 30s</span>
+      {% else %}
+        <span>No clusters yet</span>
+      {% endif %}
+    </div>
+  </div>
+  <div class="page-head__actions">
+    {% if clusters %}
+      <a href="/clusters" class="btn secondary">All clusters</a>
+    {% endif %}
+    <a href="/clusters/new" class="btn">
+      <svg class="icon"><use href="/static/icons/sprite.svg#i-plus"></use></svg>
+      New cluster
+    </a>
+  </div>
+</section>
+
+{% if clusters %}
+<section class="dash-hero"
+         hx-get="/dashboard/hero"
+         hx-trigger="load, every 60s"
+         hx-swap="innerHTML">
+  <span class="dash-hero__eyebrow">Right now</span>
+  <div class="skeleton">
+    <div class="skeleton__line med"></div>
+    <div class="skeleton__line short"></div>
+  </div>
+</section>
+{% endif %}
+
+{% if not clusters %}
+  <article class="empty">
+    <span class="empty__icon"><svg class="icon"><use href="/static/icons/sprite.svg#i-leaf"></use></svg></span>
+    <h2>No clusters yet</h2>
+    <p>Create your first irrigation cluster to bring sensors and plants together.</p>
+    <a href="/clusters/new" role="button">Create cluster</a>
+  </article>
+{% else %}
+  <div class="cluster-grid">
+    {% for cluster in clusters %}
+      <article class="cluster-card" id="cluster-card-{{ cluster.id }}">
+        <a class="cluster-card__title" href="/clusters/{{ cluster.id }}">
+          <h3>{{ cluster.name }}</h3>
+          <svg class="icon"><use href="/static/icons/sprite.svg#i-arrow-right"></use></svg>
+        </a>
+        <div class="cluster-card__meta">
+          {% if cluster.environment %}<span>{{ cluster.environment }}</span><span class="dot"></span>{% endif %}
+          <span>{{ cluster.location or "no location" }}</span>
+        </div>
+        <div class="cluster-card__status"
+             hx-get="/clusters/{{ cluster.id }}/status-fragment"
+             hx-trigger="load, every 30s"
+             hx-swap="innerHTML">
+          <div class="skeleton">
+            <div class="skeleton__line short"></div>
+            <div class="skeleton__line med"></div>
+            <div class="skeleton__line"></div>
+            <div class="skeleton__line med"></div>
+          </div>
+        </div>
+      </article>
+    {% endfor %}
+  </div>
+
+  <article class="action-bar" aria-labelledby="global-actions">
+    <header>
+      <strong id="global-actions">Global actions</strong>
+      <small>Run across every cluster.</small>
+    </header>
+    <div class="action-bar__row">
+      <form hx-post="/sync"
+            hx-target="#dashboard-action-result"
+            hx-indicator="#spin-sync"
+            hx-swap="innerHTML"
+            class="action-bar__form">
+        <label for="sync-hours" class="action-bar__label">
+          <svg class="icon"><use href="/static/icons/sprite.svg#i-cloud-arrow-down"></use></svg>
+          Sync sensors
+        </label>
+        <div class="action-bar__inputs">
+          <input id="sync-hours" type="number" name="hours" value="24" min="1" max="720"
+                 aria-label="Hours back" class="action-bar__num" title="Hours back">
+          <button type="submit" class="secondary">Sync</button>
+          <span id="spin-sync" class="htmx-indicator" aria-busy="true"></span>
+        </div>
+      </form>
+
+      <form hx-post="/check"
+            hx-target="#dashboard-action-result"
+            hx-indicator="#spin-checkall"
+            hx-swap="innerHTML"
+            class="action-bar__form">
+        <label class="action-bar__label">
+          <svg class="icon"><use href="/static/icons/sprite.svg#i-check"></use></svg>
+          Check all clusters
+        </label>
+        <div class="action-bar__inputs">
+          <button type="submit" class="secondary">Run check</button>
+          <span id="spin-checkall" class="htmx-indicator" aria-busy="true"></span>
+        </div>
+      </form>
+
+      <form hx-post="/plants/sync"
+            hx-target="#dashboard-action-result"
+            hx-indicator="#spin-plants"
+            hx-swap="innerHTML"
+            class="action-bar__form">
+        <label class="action-bar__label">
+          <svg class="icon"><use href="/static/icons/sprite.svg#i-flower"></use></svg>
+          Sync plant care data
+        </label>
+        <div class="action-bar__inputs">
+          <button type="submit" class="secondary">Sync plants</button>
+          <span id="spin-plants" class="htmx-indicator" aria-busy="true"></span>
+        </div>
+      </form>
+    </div>
+    <div id="dashboard-action-result" aria-live="polite"></div>
+  </article>
+{% endif %}
+
+{% endblock %}

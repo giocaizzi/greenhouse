@@ -1,5 +1,5 @@
 [project]
-name = "tuya-irrigation"
+name = "greenhouse"
 version = "1.0.0"
 description = "Smart irrigation system with evidence-based plant care and trend analysis"
 readme = "README.md"
@@ -20,18 +20,18 @@ classifiers = [
 ]
 
 dependencies = [
-    "tuya-irrigation-core",
-    "tuya-irrigation-server",
-    "tuya-irrigation-cli",
+    "greenhouse-core",
+    "greenhouse-server",
+    "greenhouse-cli",
 ]
 
 [tool.uv.workspace]
 members = ["libs/*"]
 
 [tool.uv.sources]
-tuya-irrigation-core = { workspace = true }
-tuya-irrigation-server = { workspace = true }
-tuya-irrigation-cli = { workspace = true }
+greenhouse-core = { workspace = true }
+greenhouse-server = { workspace = true }
+greenhouse-cli = { workspace = true }
 
 [tool.uv]
 default-groups = ["dev"]
@@ -45,12 +45,12 @@ dev = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["libs/tuya-irrigation-core", "libs/tuya-irrigation-server", "libs/tuya-irrigation-cli", "tests"]
+pythonpath = ["libs/greenhouse-core", "libs/greenhouse-server", "libs/greenhouse-cli", "tests"]
 
 [tool.ruff]
 line-length = 120
 target-version = "py311"
-src = ["libs/tuya-irrigation-core", "libs/tuya-irrigation-server", "libs/tuya-irrigation-cli", "tests"]
+src = ["libs/greenhouse-core", "libs/greenhouse-server", "libs/greenhouse-cli", "tests"]
 
 [tool.ruff.lint]
 select = [

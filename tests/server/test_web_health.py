@@ -39,7 +39,7 @@ class TestHealthPage:
                 json={"tuya_device_id": "fake_health_s2", "name": "Fresh Sensor", "type": "soil_moisture"},
             )
 
-            from tuya_irrigation_core.models import Sensor, SensorReading
+            from greenhouse_core.models import Sensor, SensorReading
 
             now = int(time.time())
             session = app.state.session_factory()

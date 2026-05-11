@@ -21,9 +21,9 @@ class TestClusterInsights:
         from sqlalchemy import create_engine
         from sqlalchemy.pool import StaticPool
 
-        from tuya_irrigation_server.app import create_app
-        from tuya_irrigation_server.config import Settings
-        from tuya_irrigation_server.deps import get_device_manager, get_tuya_cloud
+        from greenhouse_server.app import create_app
+        from greenhouse_server.config import Settings
+        from greenhouse_server.deps import get_device_manager, get_tuya_cloud
 
         engine = create_engine("sqlite://", echo=False, connect_args={"check_same_thread": False}, poolclass=StaticPool)
         settings = Settings(db_url="sqlite://", enable_scheduler=False)

@@ -2,7 +2,7 @@
 
 from sqlalchemy import select
 
-from tuya_irrigation_core.models import IrrigationEvent
+from greenhouse_core.models import IrrigationEvent
 
 
 def _seed_irrigators(client):

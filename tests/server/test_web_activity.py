@@ -6,7 +6,7 @@ import time
 def _seed_events(app, count: int, *, base_ts: int | None = None) -> list[int]:
     session = app.state.session_factory()
     try:
-        from tuya_irrigation_core.repository import IrrigationRepository
+        from greenhouse_core.repository import IrrigationRepository
 
         repo = IrrigationRepository(session)
         now = base_ts or int(time.time())
@@ -56,7 +56,7 @@ class TestActivityListPage:
         with TestClient(app, raise_server_exceptions=False) as client:
             session = app.state.session_factory()
             try:
-                from tuya_irrigation_core.repository import IrrigationRepository
+                from greenhouse_core.repository import IrrigationRepository
 
                 repo = IrrigationRepository(session)
                 repo.add_activity_event(source="learning", entity_type="cluster", code="insight", message="learn msg")

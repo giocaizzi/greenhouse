@@ -4,7 +4,7 @@ import time
 
 import pytest
 
-from tuya_irrigation_core.repository import IrrigationRepository
+from greenhouse_core.repository import IrrigationRepository
 
 
 def _seed_plant_with_sensor(client) -> tuple[int, int]:

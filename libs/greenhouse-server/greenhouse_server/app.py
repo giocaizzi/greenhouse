@@ -1,0 +1,172 @@
+"""FastAPI application factory."""
+
+from contextlib import asynccontextmanager
+from pathlib import Path
+
+from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
+from fastapi_mcp import FastApiMCP
+from sqlalchemy.engine import Engine
+
+from greenhouse_core.database import create_db_engine, create_session_factory, init_db
+from greenhouse_core.devices import TuyaDeviceManager
+from greenhouse_core.plant_db import PlantDatabase
+from greenhouse_server.config import Settings
+from greenhouse_server.routes import (
+    activity,
+    alerts,
+    bulk,
+    charts,
+    clusters,
+    configs,
+    decisions,
+    efficacy,
+    forecast,
+    health,
+    insights,
+    irrigators,
+    operations,
+    plants,
+    preferences,
+    quality,
+    scheduler,
+    search,
+    sensors,
+    vacation,
+)
+from greenhouse_server.scheduler import init_scheduler
+from greenhouse_server.scheduler import scheduler as bg_scheduler
+from greenhouse_server.services.weather import WeatherClient
+from greenhouse_server.web.exception_handlers import register_web_exception_handlers
+from greenhouse_server.web.router import web_router
+
+
+def _init_device_manager() -> TuyaDeviceManager | None:
+    """Initialize device manager, returning None if credentials are missing."""
+    try:
+        return TuyaDeviceManager()
+    except (ValueError, Exception):
+        return None
+
+
+def create_app(settings: Settings | None = None, engine: Engine | None = None) -> FastAPI:
+    """Create and configure the FastAPI application."""
+    if settings is None:
+        settings = Settings()
+
+    if engine is None:
+        engine = create_db_engine(settings.db_url)
+    init_db(engine)
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        if settings.enable_scheduler:
+            bg_scheduler.start()
+        yield
+        if settings.enable_scheduler and bg_scheduler.running:
+            bg_scheduler.shutdown(wait=False)
+
+    app = FastAPI(
+        title="Greenhouse API",
+        description=(
+            "Smart plant irrigation system with evidence-based plant care, "
+            "multi-sensor conflict resolution, and self-learning irrigation profiles.\n\n"
+        ),
+        version="1.0.0",
+        lifespan=lifespan,
+        openapi_tags=[
+            {"name": "clusters", "description": "Manage plant clusters (groups irrigated together)"},
+            {"name": "plants", "description": "Manage plants within clusters"},
+            {"name": "irrigators", "description": "Manage and control irrigation devices"},
+            {"name": "sensors", "description": "Manage sensor devices"},
+            {"name": "configs", "description": "Irrigation configuration per cluster"},
+            {"name": "operations", "description": "Smart irrigation, monitoring, sync, stats, and analytics"},
+            {"name": "scheduler", "description": "Background job management and health checks"},
+            {"name": "alerts", "description": "Alert inbox with deduplication and ack/resolve lifecycle"},
+            {"name": "activity", "description": "Cross-cutting activity timeline"},
+            {"name": "decisions", "description": "Irrigation decision audit log"},
+            {"name": "preferences", "description": "User preferences (units, timezone, theme, dry-run flag)"},
+            {"name": "vacation", "description": "Vacation windows — pause irrigation while away"},
+            {"name": "search", "description": "Global search across clusters, plants, sensors, and irrigators"},
+            {"name": "bulk", "description": "Bulk operations — emergency stop all irrigators"},
+        ],
+    )
+
+    # Store dependencies on app.state (accessed by deps.py)
+    app.state.session_factory = create_session_factory(engine)
+    app.state.device_manager = _init_device_manager()
+    app.state.weather_client = WeatherClient(lat=settings.weather_lat, lon=settings.weather_lon)
+    app.state.plant_db = _init_plant_db(settings)
+
+    init_scheduler(app, settings)
+
+    # Register routes
+    prefix = "/api/v1"
+    app.include_router(clusters.router, prefix=prefix)
+    app.include_router(plants.router, prefix=prefix)
+    app.include_router(irrigators.router, prefix=prefix)
+    app.include_router(sensors.router, prefix=prefix)
+    app.include_router(configs.router, prefix=prefix)
+    app.include_router(operations.router, prefix=prefix)
+    app.include_router(scheduler.router, prefix=prefix)
+    app.include_router(charts.router, prefix=prefix)
+    app.include_router(alerts.router, prefix=prefix)
+    app.include_router(activity.router, prefix=prefix)
+    app.include_router(decisions.router, prefix=prefix)
+    app.include_router(forecast.router, prefix=prefix)
+    app.include_router(preferences.router, prefix=prefix)
+    app.include_router(vacation.router, prefix=prefix)
+    app.include_router(search.router, prefix=prefix)
+    app.include_router(bulk.router, prefix=prefix)
+    app.include_router(insights.router, prefix=prefix)
+    app.include_router(health.router, prefix=prefix)
+    app.include_router(quality.router, prefix=prefix)
+    app.include_router(efficacy.router, prefix=prefix)
+
+    # Web frontend
+    static_dir = Path(__file__).parent / "web" / "static"
+    app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+    app.include_router(web_router)
+    register_web_exception_handlers(app)
+
+    # MCP server — exposes every JSON API endpoint as an MCP tool at /mcp
+    # over streamable HTTP. Web routes are auto-excluded because they set
+    # include_in_schema=False. Auth is intentionally deferred; mount
+    # accordingly (localhost-only).
+    mcp = FastApiMCP(
+        app,
+        name="greenhouse",
+        description=(
+            "Smart plant irrigation system — manage clusters, plants, sensors, "
+            "irrigators, configs; run smart-irrigation decisions; read history, "
+            "stats, and learning reports."
+        ),
+    )
+    mcp.mount_http()
+    app.state.mcp = mcp
+
+    return app
+
+
+def _init_plant_db(settings: Settings) -> PlantDatabase:
+    """Initialize plant database from settings or default."""
+    if settings.plant_db_path:
+        from pathlib import Path
+
+        return PlantDatabase(db_path=Path(settings.plant_db_path))
+    return PlantDatabase()
+
+
+def main():
+    """Entry point for greenhouse-server command."""
+    import uvicorn
+    from dotenv import load_dotenv
+
+    load_dotenv()
+    settings = Settings()
+    app = create_app(settings)
+    uvicorn.run(app, host=settings.host, port=settings.port)
+
+
+if __name__ == "__main__":
+    main()

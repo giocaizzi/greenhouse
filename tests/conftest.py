@@ -1,4 +1,4 @@
-"""Shared pytest fixtures for tuya_irrigation test suite."""
+"""Shared pytest fixtures for greenhouse test suite."""
 
 import time
 
@@ -17,8 +17,8 @@ from fake_data import (
     FAKE_SENSOR_ID,
     FAKE_SENSOR_NAME,
 )
-from tuya_irrigation_core.models import Base
-from tuya_irrigation_core.repository import IrrigationRepository
+from greenhouse_core.models import Base
+from greenhouse_core.repository import IrrigationRepository
 
 
 @pytest.fixture

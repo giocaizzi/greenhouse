@@ -12,8 +12,8 @@ from fake_data import (
     FAKE_SENSOR_ID,
     FAKE_SENSOR_NAME,
 )
-from tuya_irrigation_core.learning import IrrigationLearner
-from tuya_irrigation_core.plant_db import get_plant_database
+from greenhouse_core.learning import IrrigationLearner
+from greenhouse_core.plant_db import get_plant_database
 
 
 class TestIrrigationLearner:
@@ -138,7 +138,7 @@ class TestIrrigationLearner:
             )
 
         sensor = self.db.get_sensors_in_cluster(self.cluster_id)[0]
-        from tuya_irrigation_core.learning.profiling import compute_drainage_rate
+        from greenhouse_core.learning.profiling import compute_drainage_rate
 
         drainage = compute_drainage_rate(self.db, sensor, days=1)
 
@@ -229,7 +229,7 @@ class TestIrrigationLearner:
             )
 
         sensor = self.db.get_sensors_in_cluster(self.cluster_id)[0]
-        from tuya_irrigation_core.learning.profiling import compute_drainage_rate
+        from greenhouse_core.learning.profiling import compute_drainage_rate
 
         drainage = compute_drainage_rate(self.db, sensor, days=1)
         assert drainage == 0.0
@@ -291,7 +291,7 @@ class TestIrrigationLearner:
 
     def test_analyze_response_no_irrigator(self):
         """Analyze response returns empty list for deleted irrigator."""
-        from tuya_irrigation_core.models import IrrigationEvent
+        from greenhouse_core.models import IrrigationEvent
 
         fake_event = IrrigationEvent(
             id=999,

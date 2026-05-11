@@ -3,8 +3,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: tuya-irrigation-server:latest
-    container_name: tuya-irrigation
+    image: greenhouse-server:latest
+    container_name: greenhouse
     restart: unless-stopped
     env_file:
       - .env

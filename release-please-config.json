@@ -20,21 +20,21 @@
   ],
   "packages": {
     ".": {
-      "package-name": "tuya-irrigation",
+      "package-name": "greenhouse",
       "extra-files": [
         {
           "type": "toml",
-          "path": "libs/tuya-irrigation-core/pyproject.toml",
+          "path": "libs/greenhouse-core/pyproject.toml",
           "jsonpath": "$.project.version"
         },
         {
           "type": "toml",
-          "path": "libs/tuya-irrigation-server/pyproject.toml",
+          "path": "libs/greenhouse-server/pyproject.toml",
           "jsonpath": "$.project.version"
         },
         {
           "type": "toml",
-          "path": "libs/tuya-irrigation-cli/pyproject.toml",
+          "path": "libs/greenhouse-cli/pyproject.toml",
           "jsonpath": "$.project.version"
         }
       ]
