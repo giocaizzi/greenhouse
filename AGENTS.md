@@ -111,6 +111,10 @@ uv workspace with three packages under `libs/`. Strict dependency direction:
 
   Orchestration lives in `services/` (cluster, irrigation, sync, maintenance,
   charts, weather). Background jobs use APScheduler (`scheduler.py`).
+  `check_all` runs on a cron trigger driven by `IRRIGATION_CHECK_CRON_HOURS`
+  (default `"*"` = every hour at :00). Check cadence ≠ irrigation cadence —
+  engine cooldown (`MIN_COOLDOWN_HOURS=6` in `constants.py`) gates actuation;
+  the scheduler just decides how often to observe.
 - **`greenhouse-cli`** — Typer CLI. Talks to the API over HTTP via an
   `httpx`-based `IrrigationClient` (in `client.py`); no DB or core imports.
 

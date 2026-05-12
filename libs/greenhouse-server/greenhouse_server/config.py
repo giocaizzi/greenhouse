@@ -23,5 +23,9 @@ class Settings(BaseSettings):
 
     # Scheduler defaults
     sync_interval_minutes: int = 30
-    check_interval_hours: int = 6
+    # Cron `hour` field for the check_all job (e.g. "*", "0,6,12,18").
+    # Cadence ≠ irrigation cadence — engine cooldown
+    # (`MIN_COOLDOWN_HOURS` in `greenhouse_core.constants`) gates actuation;
+    # the scheduler decides how often to observe.
+    check_cron_hours: str = "*"
     enable_scheduler: bool = True

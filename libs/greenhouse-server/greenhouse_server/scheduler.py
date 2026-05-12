@@ -31,8 +31,9 @@ def init_scheduler(app: FastAPI, settings: Settings) -> None:
     )
     scheduler.add_job(
         _check_job,
-        "interval",
-        hours=settings.check_interval_hours,
+        "cron",
+        hour=settings.check_cron_hours,
+        minute=0,
         id="check_all",
         name="Check all clusters",
         replace_existing=True,
