@@ -125,9 +125,7 @@ class TestCooldownGatesActuation:
                     monkeypatch.setattr(repo_mod.time, "time", lambda now=now: now)
                     # Reading at "now" — always very dry, so absent the cooldown
                     # gate the engine would irrigate every hour.
-                    repo.add_sensor_reading(
-                        sensor_id=sensor_id, timestamp=now, soil_moisture=20.0
-                    )
+                    repo.add_sensor_reading(sensor_id=sensor_id, timestamp=now, soil_moisture=20.0)
                     decision = logic.decide_for_cluster(cluster_id)
                     if decision.action.value == "irrigate":
                         repo.add_irrigation_event(
