@@ -351,6 +351,7 @@ class SchedulerJobResponse(BaseModel):
     name: str
     trigger: str
     next_run_time: str | None
+    paused: bool = False
 
 
 class CreateSchedulerJobRequest(BaseModel):
@@ -358,6 +359,12 @@ class CreateSchedulerJobRequest(BaseModel):
     job_type: str
     cron_expression: str | None = None
     interval_minutes: int | None = None
+
+
+class SchedulerStateResponse(BaseModel):
+    """Runtime state of the check_all scheduler job."""
+
+    paused: bool
 
 
 # --- Health ---
@@ -598,6 +605,7 @@ class PreferencesResponse(BaseModel):
     default_cluster_id: int | None
     refresh_interval_seconds: int
     dry_run_global: bool
+    scheduler_paused: bool
 
 
 class PreferencesUpdateRequest(BaseModel):

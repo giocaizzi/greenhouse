@@ -244,3 +244,58 @@ class TestServerFlag:
         )
         result = runner.invoke(app, ["--server", "http://192.168.1.50:8000", "cluster", "list"])
         assert result.exit_code == 0
+
+
+class TestSchedulerCommands:
+    def test_pause(self, _patch_client):
+        _patch_client(
+            {
+                ("POST", "/api/v1/scheduler/pause"): (200, {"paused": True}),
+            }
+        )
+        result = runner.invoke(app, ["scheduler", "pause"])
+        assert result.exit_code == 0
+        assert json.loads(result.stdout) == {"paused": True}
+
+    def test_resume(self, _patch_client):
+        _patch_client(
+            {
+                ("POST", "/api/v1/scheduler/resume"): (200, {"paused": False}),
+            }
+        )
+        result = runner.invoke(app, ["scheduler", "resume"])
+        assert result.exit_code == 0
+        assert json.loads(result.stdout) == {"paused": False}
+
+    def test_status_lists_jobs(self, _patch_client):
+        _patch_client(
+            {
+                ("GET", "/api/v1/scheduler/jobs"): (
+                    200,
+                    [
+                        {
+                            "id": "check_all",
+                            "name": "Check all clusters",
+                            "trigger": "interval[6:00:00]",
+                            "next_run_time": None,
+                            "paused": True,
+                        }
+                    ],
+                ),
+            }
+        )
+        result = runner.invoke(app, ["scheduler", "status"])
+        assert result.exit_code == 0
+        data = json.loads(result.stdout)
+        assert data[0]["id"] == "check_all"
+        assert data[0]["paused"] is True
+
+    def test_pause_server_error_exits_1(self, _patch_client):
+        _patch_client(
+            {
+                ("POST", "/api/v1/scheduler/pause"): (404, {"detail": "Job check_all not found"}),
+            }
+        )
+        result = runner.invoke(app, ["scheduler", "pause"])
+        assert result.exit_code == 1
+        assert "not found" in result.output.lower()

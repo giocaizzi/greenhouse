@@ -148,14 +148,50 @@ def _anomaly_job() -> None:
         session.close()
 
 
+CHECK_ALL_JOB_ID = "check_all"
+
+
 def get_jobs() -> list[dict]:
-    """List all scheduled jobs."""
+    """List all scheduled jobs.
+
+    APScheduler marks a paused job by clearing its ``next_run_time``; we
+    surface that as a ``paused`` flag so the UI/CLI/MCP do not have to
+    introspect the trigger.
+    """
     return [
         {
             "id": job.id,
             "name": job.name,
             "trigger": str(job.trigger),
             "next_run_time": str(next_run) if (next_run := getattr(job, "next_run_time", None)) else None,
+            "paused": getattr(job, "next_run_time", None) is None,
         }
         for job in scheduler.get_jobs()
     ]
+
+
+def is_check_all_paused() -> bool:
+    """True when the `check_all` job is currently paused."""
+    job = scheduler.get_job(CHECK_ALL_JOB_ID)
+    if job is None:
+        return False
+    return getattr(job, "next_run_time", None) is None
+
+
+def apply_persisted_pause(persisted_paused: bool) -> None:
+    """Re-apply the persisted pause flag to the live scheduler.
+
+    Called once on startup after `init_scheduler` has registered jobs so
+    the pause survives a process restart. The scheduler does not have to
+    be running yet — APScheduler honors `pause_job` on stopped schedulers
+    by clearing the job's `next_run_time`.
+    """
+    if not persisted_paused:
+        return
+    job = scheduler.get_job(CHECK_ALL_JOB_ID)
+    if job is None:
+        return
+    try:
+        scheduler.pause_job(CHECK_ALL_JOB_ID)
+    except Exception:
+        logger.exception("Failed to re-apply persisted scheduler pause")
