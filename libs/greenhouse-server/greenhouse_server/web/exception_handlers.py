@@ -15,8 +15,11 @@ from greenhouse_server.web.templating import templates
 
 
 def _is_html_request(request: Request) -> bool:
-    # API routes keep JSON error shape; everything else is rendered as HTML.
-    return not request.url.path.startswith("/api/")
+    # API and MCP routes keep JSON error shape; everything else is rendered
+    # as HTML. /mcp is a machine endpoint — MCP clients (and the auth gate in
+    # front of it) must always see structured JSON errors, never an HTML page.
+    path = request.url.path
+    return not (path.startswith("/api/") or path.startswith("/mcp"))
 
 
 def _error_template(request: Request) -> str:

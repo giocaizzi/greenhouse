@@ -3,9 +3,10 @@
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI, HTTPException, Request, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.staticfiles import StaticFiles
-from fastapi_mcp import FastApiMCP
+from fastapi_mcp import AuthConfig, FastApiMCP
 from sqlalchemy.engine import Engine
 
 from greenhouse_core.database import create_db_engine, create_session_factory, init_db
@@ -47,6 +48,40 @@ def _init_device_manager() -> TuyaDeviceManager | None:
         return TuyaDeviceManager()
     except (ValueError, Exception):
         return None
+
+
+_mcp_bearer = HTTPBearer(auto_error=False)
+
+
+def _get_settings(request: Request) -> Settings:
+    """Resolve the live Settings from app.state."""
+    return request.app.state.settings
+
+
+def require_mcp_token(
+    creds: HTTPAuthorizationCredentials | None = Depends(_mcp_bearer),
+    settings: Settings = Depends(_get_settings),
+) -> None:
+    """Gate `/mcp` behind a static bearer token.
+
+    Fail-closed: when `settings.mcp_token` is unset the endpoint returns 503,
+    so a misconfigured deployment never silently leaves MCP open. With the
+    token configured, missing or wrong `Authorization: Bearer <token>` yields
+    401. The token has full reach over every `/api/v1` route exposed as an MCP
+    tool — including irrigation actuation — so it MUST be a high-entropy
+    secret (generate with `openssl rand -hex 32`).
+    """
+    if settings.mcp_token is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="MCP auth not configured",
+        )
+    if creds is None or creds.credentials != settings.mcp_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid MCP token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
 
 def create_app(settings: Settings | None = None, engine: Engine | None = None) -> FastAPI:
@@ -93,6 +128,7 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
     )
 
     # Store dependencies on app.state (accessed by deps.py)
+    app.state.settings = settings
     app.state.session_factory = create_session_factory(engine)
     app.state.device_manager = _init_device_manager()
     app.state.weather_client = WeatherClient(lat=settings.weather_lat, lon=settings.weather_lon)
@@ -131,8 +167,9 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
 
     # MCP server — exposes every JSON API endpoint as an MCP tool at /mcp
     # over streamable HTTP. Web routes are auto-excluded because they set
-    # include_in_schema=False. Auth is intentionally deferred; mount
-    # accordingly (localhost-only).
+    # include_in_schema=False. Bearer-token auth gates the mount: with no
+    # GREENHOUSE_MCP_TOKEN configured the endpoint fails closed with 503; with
+    # a token configured, MCP clients must send `Authorization: Bearer <token>`.
     mcp = FastApiMCP(
         app,
         name="greenhouse",
@@ -141,6 +178,7 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
             "irrigators, configs; run smart-irrigation decisions; read history, "
             "stats, and learning reports."
         ),
+        auth_config=AuthConfig(dependencies=[Depends(require_mcp_token)]),
     )
     mcp.mount_http()
     app.state.mcp = mcp

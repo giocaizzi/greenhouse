@@ -1,5 +1,6 @@
 """Server configuration via Pydantic BaseSettings."""
 
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -9,6 +10,7 @@ class Settings(BaseSettings):
         env_file=".env",
         case_sensitive=False,
         extra="ignore",
+        populate_by_name=True,
     )
 
     db_url: str = "sqlite:///data/irrigation.db"
@@ -25,3 +27,10 @@ class Settings(BaseSettings):
     sync_interval_minutes: int = 30
     check_interval_hours: int = 6
     enable_scheduler: bool = True
+
+    # MCP bearer token (fail-closed: unset -> /mcp returns 503).
+    # Lives outside the IRRIGATION_ prefix to match the public deployment contract.
+    mcp_token: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("GREENHOUSE_MCP_TOKEN", "mcp_token"),
+    )

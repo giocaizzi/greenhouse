@@ -45,8 +45,12 @@ four ways to talk to it:
    [`fastapi-mcp`](https://github.com/tadata-org/fastapi_mcp). Every
    `/api/v1` endpoint is auto-published as an MCP tool over streamable HTTP;
    web routes are excluded automatically because they set
-   `include_in_schema=False`. **Auth is intentionally deferred** — treat
-   `/mcp` as localhost-only until that lands. Wired in `app.py` after all
+   `include_in_schema=False`. **Auth is bearer-token, fail-closed**: the
+   `require_mcp_token` dependency in `app.py` is wired into `FastApiMCP` via
+   `AuthConfig(dependencies=[...])`. With `GREENHOUSE_MCP_TOKEN` unset the
+   endpoint returns 503; with it set, clients must send
+   `Authorization: Bearer <token>` or get 401. The token is checked against
+   `settings.mcp_token` on every request. Wired in `app.py` after all
    routers are registered; the live `FastApiMCP` instance is stored on
    `app.state.mcp` for introspection in tests.
 
@@ -54,8 +58,10 @@ Stop the server and the UI, CLI, and MCP all go dark. Anything new the CLI
 or an MCP tool should be able to do must first exist as an API endpoint.
 
 > ⚠️ **MCP gives an LLM the ability to actuate physical irrigation hardware**
-> (`/clusters/{id}/irrigate`, `/irrigators/{id}/start`, etc.). Until auth is
-> added, only run the server somewhere an LLM you trust can reach it.
+> (`/clusters/{id}/irrigate`, `/irrigators/{id}/start`, etc.). The bearer
+> token is therefore equivalent to full physical-actuation authority — treat
+> it like a root credential: high entropy (`openssl rand -hex 32`), unique
+> per deployment, never committed, rotated on suspicion of compromise.
 
 **API surface in 1.0.0** (all under `/api/v1`):
 
