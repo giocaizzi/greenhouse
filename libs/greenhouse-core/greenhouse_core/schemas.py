@@ -55,6 +55,12 @@ class SyncPlantsRequest(BaseModel):
     cluster_id: int | None = None
 
 
+class MovePlantRequest(BaseModel):
+    """Body for POST /plants/{plant_id}/move."""
+
+    target_cluster_id: int
+
+
 class SyncPlantsResponse(BaseModel):
     synced: int
     errors: list[str]

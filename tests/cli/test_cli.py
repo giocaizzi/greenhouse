@@ -194,6 +194,46 @@ class TestOperationCommands:
         assert "ok" in result.stdout
 
 
+class TestPlantCommands:
+    def test_plant_move_happy_path(self, _patch_client):
+        _patch_client(
+            {
+                ("POST", "/api/v1/plants/7/move"): (
+                    200,
+                    {"id": 7, "cluster_id": 3, "species": "Fern"},
+                ),
+            }
+        )
+        result = runner.invoke(app, ["plant", "move", "7", "--to-cluster", "3"])
+        assert result.exit_code == 0
+        data = json.loads(result.stdout)
+        assert data["id"] == 7
+        assert data["cluster_id"] == 3
+
+    def test_plant_move_missing_plant(self, _patch_client):
+        _patch_client(
+            {
+                ("POST", "/api/v1/plants/999/move"): (404, {"detail": "Plant not found"}),
+            }
+        )
+        result = runner.invoke(app, ["plant", "move", "999", "--to-cluster", "3"])
+        assert result.exit_code == 1
+        assert "not found" in result.output.lower()
+
+    def test_plant_move_same_cluster(self, _patch_client):
+        _patch_client(
+            {
+                ("POST", "/api/v1/plants/7/move"): (
+                    400,
+                    {"detail": "Plant 7 already belongs to cluster 3"},
+                ),
+            }
+        )
+        result = runner.invoke(app, ["plant", "move", "7", "--to-cluster", "3"])
+        assert result.exit_code == 1
+        assert "already" in result.output.lower()
+
+
 class TestErrorHandling:
     def test_server_404(self, _patch_client):
         _patch_client(

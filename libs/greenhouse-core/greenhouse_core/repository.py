@@ -8,6 +8,7 @@ from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
 
 from greenhouse_core.models import (
+    ENTITY_PLANT,
     ActivityEvent,
     Alert,
     Cluster,
@@ -22,6 +23,10 @@ from greenhouse_core.models import (
     UserPreferences,
     VacationWindow,
 )
+
+
+class SameClusterMoveError(ValueError):
+    """Raised when a plant move targets its current cluster (no-op move)."""
 
 
 class IrrigationRepository:
@@ -733,6 +738,51 @@ class IrrigationRepository:
         self.session.delete(plant)
         self.session.flush()
         return True
+
+    def move_plant(self, plant_id: int, target_cluster_id: int) -> Plant | None:
+        """Reassign a plant to a different cluster.
+
+        Updates ``plants.cluster_id`` only — decision_logs, irrigation_events,
+        and alerts are deliberately left attached to the original cluster so
+        the audit trail reflects where the plant actually was at the time.
+        Plant identity, plant_health_daily history, and learning profiles
+        follow the plant because they key off ``plant_id``. Writes a
+        ``plant_moved`` activity event with the before/after cluster ids.
+
+        Args:
+            plant_id: Database id of the plant to move.
+            target_cluster_id: Cluster the plant should belong to after the
+                move.
+
+        Returns:
+            The updated ``Plant`` row, or ``None`` if either the plant or the
+            target cluster does not exist.
+
+        Raises:
+            SameClusterMoveError: If the plant already belongs to
+                ``target_cluster_id``.
+        """
+        plant = self.session.get(Plant, plant_id)
+        if not plant:
+            return None
+        target = self.session.get(Cluster, target_cluster_id)
+        if not target:
+            return None
+        if plant.cluster_id == target_cluster_id:
+            raise SameClusterMoveError(f"Plant {plant_id} already belongs to cluster {target_cluster_id}")
+        from_cluster_id = plant.cluster_id
+        plant.cluster_id = target_cluster_id
+        self.session.flush()
+        self.add_activity_event(
+            source="plant",
+            entity_type=ENTITY_PLANT,
+            entity_id=plant_id,
+            code="plant_moved",
+            message=f"moved plant {plant_id} from cluster {from_cluster_id} to cluster {target_cluster_id}",
+            severity="info",
+            payload={"from_cluster_id": from_cluster_id, "to_cluster_id": target_cluster_id},
+        )
+        return plant
 
     def update_sensor(self, sensor_id: int, **fields) -> Sensor | None:
         """Patch sensor fields; ``config`` is JSON-serialised if a dict."""

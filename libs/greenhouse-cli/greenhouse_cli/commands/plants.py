@@ -66,3 +66,17 @@ def plant_sync(
 ):
     """Sync plants with evidence-based care data."""
     output(call(ctx, lambda c: c.sync_plants(plant_id=plant_id, cluster_id=cluster)))
+
+
+@plant_app.command("move")
+def plant_move(
+    ctx: typer.Context,
+    plant_id: Annotated[int, typer.Argument(help="Plant ID to move")],
+    to_cluster: Annotated[int, typer.Option("--to-cluster", help="Target cluster ID")],
+):
+    """Move a plant to a different cluster.
+
+    Plant identity, health history, and learning profile follow the plant.
+    Decision logs, irrigation events, and alerts stay with the original cluster.
+    """
+    output(call(ctx, lambda c: c.move_plant(plant_id, to_cluster)))
