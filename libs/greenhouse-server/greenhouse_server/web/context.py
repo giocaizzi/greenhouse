@@ -3,8 +3,19 @@
 from __future__ import annotations
 
 import time
+from importlib.metadata import PackageNotFoundError, version
 
 from fastapi import Request
+
+
+def _app_version() -> str:
+    try:
+        return version("greenhouse-server")
+    except PackageNotFoundError:
+        return "unknown"
+
+
+APP_VERSION = _app_version()
 
 
 def is_hx(request: Request) -> bool:
@@ -46,5 +57,6 @@ def base_context(request: Request, **extra) -> dict:
         "dry_run_global": dry_run_global,
         "active_vacation": active_vacation,
         "scheduler_paused": scheduler_paused,
+        "app_version": APP_VERSION,
         **extra,
     }
