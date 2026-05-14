@@ -742,12 +742,18 @@ class IrrigationRepository:
     def move_plant(self, plant_id: int, target_cluster_id: int) -> Plant | None:
         """Reassign a plant to a different cluster.
 
-        Updates ``plants.cluster_id`` only — decision_logs, irrigation_events,
-        and alerts are deliberately left attached to the original cluster so
-        the audit trail reflects where the plant actually was at the time.
-        Plant identity, plant_health_daily history, and learning profiles
-        follow the plant because they key off ``plant_id``. Writes a
-        ``plant_moved`` activity event with the before/after cluster ids.
+        Updates ``plants.cluster_id`` and reassigns every sensor linked to the
+        plant (``sensors.plant_id == plant_id``) to the target cluster so the
+        sensor readings — which key off ``sensor_id`` — surface under the new
+        cluster's charts instead of the old one. Sensor probes are physically
+        stuck in the plant's soil; in the real world they travel with the
+        plant. Decision logs, irrigation events, and alerts are deliberately
+        left attached to the original cluster so the audit trail reflects
+        where the plant actually was at the time. Plant identity,
+        plant_health_daily history, and learning profiles follow the plant
+        because they key off ``plant_id``. Writes a ``plant_moved`` activity
+        event with the before/after cluster ids and the list of sensor ids
+        that travelled with the plant.
 
         Args:
             plant_id: Database id of the plant to move.
@@ -772,6 +778,9 @@ class IrrigationRepository:
             raise SameClusterMoveError(f"Plant {plant_id} already belongs to cluster {target_cluster_id}")
         from_cluster_id = plant.cluster_id
         plant.cluster_id = target_cluster_id
+        moved_sensors = list(self.session.scalars(select(Sensor).where(Sensor.plant_id == plant_id)))
+        for sensor in moved_sensors:
+            sensor.cluster_id = target_cluster_id
         self.session.flush()
         self.add_activity_event(
             source="plant",
@@ -780,7 +789,11 @@ class IrrigationRepository:
             code="plant_moved",
             message=f"moved plant {plant_id} from cluster {from_cluster_id} to cluster {target_cluster_id}",
             severity="info",
-            payload={"from_cluster_id": from_cluster_id, "to_cluster_id": target_cluster_id},
+            payload={
+                "from_cluster_id": from_cluster_id,
+                "to_cluster_id": target_cluster_id,
+                "sensor_ids": [s.id for s in moved_sensors],
+            },
         )
         return plant
 

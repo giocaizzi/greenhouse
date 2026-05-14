@@ -152,7 +152,110 @@ class TestPlantMove:
             rows = repo.list_activity_events(entity_type="plant", entity_id=plant_id)
             moved_rows = [r for r in rows if r.code == "plant_moved"]
             assert len(moved_rows) == 1
-            assert _json.loads(moved_rows[0].payload_json) == {"from_cluster_id": 1, "to_cluster_id": 2}
+            assert _json.loads(moved_rows[0].payload_json) == {
+                "from_cluster_id": 1,
+                "to_cluster_id": 2,
+                "sensor_ids": [],
+            }
+
+    def test_move_reassigns_plant_sensors_to_target_cluster(self, client):
+        """A sensor attached to the plant is a probe in its soil — it must
+        physically follow the plant to the new cluster, otherwise its
+        historical readings vanish from the new cluster's charts and keep
+        showing up under the old one."""
+        plant_id = self._seed_two_clusters_one_plant(client)
+
+        # Attach a sensor to the plant on the source cluster (id=1).
+        client.post(
+            "/api/v1/clusters/1/sensors",
+            json={
+                "tuya_device_id": "fake_tuya_device_aabbccdd",
+                "name": "Soil probe",
+                "type": "soil_moisture",
+                "plant_id": plant_id,
+            },
+        )
+        # Also a free sensor that is NOT linked to the plant — must stay put.
+        client.post(
+            "/api/v1/clusters/1/sensors",
+            json={
+                "tuya_device_id": "fake_tuya_device_eeff0011",
+                "name": "Ambient",
+                "type": "environment",
+            },
+        )
+
+        resp = client.post(f"/api/v1/plants/{plant_id}/move", json={"target_cluster_id": 2})
+        assert resp.status_code == 200
+
+        # The plant-linked sensor now belongs to cluster 2; the free sensor stays on 1.
+        target_sensors = client.get("/api/v1/clusters/2/sensors").json()
+        assert [s["tuya_device_id"] for s in target_sensors] == ["fake_tuya_device_aabbccdd"]
+        assert [s["plant_id"] for s in target_sensors] == [plant_id]
+
+        source_sensors = client.get("/api/v1/clusters/1/sensors").json()
+        assert [s["tuya_device_id"] for s in source_sensors] == ["fake_tuya_device_eeff0011"]
+
+    def test_move_sensor_readings_follow_via_sensor(self, app, client):
+        """SensorReading rows key off sensor_id, so once the sensor moves with
+        the plant the historical readings surface under the new cluster."""
+        plant_id = self._seed_two_clusters_one_plant(client)
+        client.post(
+            "/api/v1/clusters/1/sensors",
+            json={
+                "tuya_device_id": "fake_tuya_device_aabbccdd",
+                "name": "Soil probe",
+                "type": "soil_moisture",
+                "plant_id": plant_id,
+            },
+        )
+
+        with app.state.session_factory() as session:
+            from greenhouse_core.repository import IrrigationRepository
+
+            repo = IrrigationRepository(session)
+            repo.add_sensor_reading(sensor_id=1, timestamp=1700000000, soil_moisture=42.0)
+            session.commit()
+
+        resp = client.post(f"/api/v1/plants/{plant_id}/move", json={"target_cluster_id": 2})
+        assert resp.status_code == 200
+
+        # Same sensor, same readings — now reachable via the new cluster.
+        with app.state.session_factory() as session:
+            from greenhouse_core.repository import IrrigationRepository
+
+            repo = IrrigationRepository(session)
+            assert [s.id for s in repo.get_sensors_in_cluster(2)] == [1]
+            assert repo.get_sensors_in_cluster(1) == []
+
+    def test_move_activity_payload_lists_moved_sensor_ids(self, app, client):
+        """The plant_moved activity payload must list which sensors travelled."""
+        plant_id = self._seed_two_clusters_one_plant(client)
+        client.post(
+            "/api/v1/clusters/1/sensors",
+            json={
+                "tuya_device_id": "fake_tuya_device_aabbccdd",
+                "name": "Soil probe",
+                "type": "soil_moisture",
+                "plant_id": plant_id,
+            },
+        )
+
+        client.post(f"/api/v1/plants/{plant_id}/move", json={"target_cluster_id": 2})
+
+        import json as _json
+
+        with app.state.session_factory() as session:
+            from greenhouse_core.repository import IrrigationRepository
+
+            repo = IrrigationRepository(session)
+            rows = repo.list_activity_events(entity_type="plant", entity_id=plant_id)
+            moved_rows = [r for r in rows if r.code == "plant_moved"]
+            assert _json.loads(moved_rows[0].payload_json) == {
+                "from_cluster_id": 1,
+                "to_cluster_id": 2,
+                "sensor_ids": [1],
+            }
 
     def test_move_preserves_decision_logs_on_old_cluster(self, app, client):
         """Decision logs written BEFORE the move stay attached to the original cluster."""
