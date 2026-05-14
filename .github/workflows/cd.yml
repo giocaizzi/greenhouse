@@ -11,7 +11,7 @@ env:
 
 concurrency:
   group: cd-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false  # never cancel a tag build mid-flight; release artifacts must be reproducible
 
 jobs:
   build:
