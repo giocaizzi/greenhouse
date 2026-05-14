@@ -16,24 +16,54 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      # Detect whether this PR has any "real" code change, or only the
+      # mechanical CHANGELOG / version-bump edits that release-please
+      # generates. The filter is "everything except those files" — so a
+      # release-please PR (CHANGELOG + version-only pyproject.toml edits +
+      # release-please-manifest.json) yields code=false and we short-circuit.
+      # `predicate-quantifier: every` is required for `!negation` rules to
+      # bite against a leading `**`; without it, `**` matches everything and
+      # the negations are silently ignored.
+      - id: changes
+        uses: dorny/paths-filter@v4.0.1
+        with:
+          predicate-quantifier: "every"
+          filters: |
+            code:
+              - "**"
+              - "!CHANGELOG.md"
+              - "!.release-please-manifest.json"
+              - "!**/pyproject.toml"
+
+      - name: Mechanical-only PR — skipping lint, format, and test
+        if: steps.changes.outputs.code != 'true'
+        run: |
+          echo "::notice::Only release-please mechanical files changed (CHANGELOG / version bumps). Skipping CI."
+
       - uses: actions/setup-python@v6
+        if: steps.changes.outputs.code == 'true'
         with:
           python-version: "3.13"
 
       - uses: astral-sh/setup-uv@v7
+        if: steps.changes.outputs.code == 'true'
         with:
           enable-cache: true
 
       - name: Install dependencies
+        if: steps.changes.outputs.code == 'true'
         run: uv sync
 
       - name: Pre-commit (lint, format, hadolint, gitleaks, file hygiene)
+        if: steps.changes.outputs.code == 'true'
         run: make pre-commit-run
 
       - name: Test with coverage
+        if: steps.changes.outputs.code == 'true'
         run: make coverage
 
       - name: Upload coverage to Codecov
+        if: steps.changes.outputs.code == 'true'
         uses: codecov/codecov-action@v6
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
