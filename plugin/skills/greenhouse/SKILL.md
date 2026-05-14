@@ -47,7 +47,7 @@ Every `/api/v1` endpoint on the server is exposed as an MCP tool by `fastapi-mcp
 | "How healthy is my monstera?" | `plants/{id}/health` |
 | "Emergency — stop everything" | `bulk/stop-all` |
 
-For the full endpoint catalog see [references/API.md](references/API.md).
+For the full surface, list the MCP tools at the start of the session — every `/api/v1` endpoint is exposed as one. If you need the raw OpenAPI, the server publishes it at `/docs`.
 
 ## Invariants — do not fight these
 
@@ -76,12 +76,11 @@ If tools fail with 401 or 503, the most likely cause is a missing/mismatched tok
 
 ## When to load each reference
 
-- [references/API.md](references/API.md) — full endpoint inventory grouped by resource. Load when the user asks "what can the server do?" or you need to confirm an endpoint exists.
-- [references/LOGIC.md](references/LOGIC.md) — decision pipeline, complete `TriggerCode` enum, trust layer, learning engine, confidence scoring, threshold constants. Load when the user asks *why* the engine did or didn't do something, or when interpreting a `DecisionLog`.
-- [references/PLANT_DATABASE.md](references/PLANT_DATABASE.md) — evidence-based plant care data structure, current species coverage, how to add a new species (min 2 sources). Load when the user is adding plants, asking about targets, or wants to extend coverage.
+- [references/LOGIC.md](references/LOGIC.md) — decision pipeline, complete `TriggerCode` enum, trust layer, learning engine, confidence scoring, threshold constants. Load when the user asks *why* the engine did or didn't do something, or when interpreting a `DecisionLog`. The `TriggerCode` values returned by MCP tools are stable identifiers — this file is how you turn them into human explanations.
+- [references/PLANT_DATABASE.md](references/PLANT_DATABASE.md) — the plant-care data schema and the species → category → defaults fallback rule. Load when the user is adding a plant, asking about target moisture/temperature for a species, or extending the database.
 - [references/CLI.md](references/CLI.md) — `greenhouse` CLI surface, server URL resolution, JSON-stdout + exit-code contract, common shell workflows. Load when the user asks for a shell command, wants to write a cron / bash script, or when MCP isn't reachable and the CLI is the fallback transport.
 
-Don't preload these — they're large and most sessions only need one.
+Don't preload these. The endpoint catalogue isn't here on purpose — the MCP tool list is the source of truth and won't drift, so consult that for "does the server have an endpoint for X?" questions.
 
 ## Common pitfalls
 

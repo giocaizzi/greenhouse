@@ -14,7 +14,7 @@ The **server** is the only thing that touches the DB and the devices. Four ways 
 
 | Interface | URL | Notes |
 |-----------|-----|-------|
-| REST API | `/api/v1` | Authoritative entry point. OpenAPI at `/docs`. Full inventory: [plugin/skills/greenhouse/references/API.md](plugin/skills/greenhouse/references/API.md). |
+| REST API | `/api/v1` | Authoritative entry point. OpenAPI schema and interactive docs at `/docs` — that's the source of truth, not a hand-maintained list. |
 | Web UI | `/` | HTMX + Jinja2, server-rendered. Calls the service layer **in-process** — shares code with the API, not a client of it. |
 | CLI (`greenhouse`) | — | Thin `httpx` client against `/api/v1`. Does not import core, has no DB access; useless when the server is down. |
 | MCP | `/mcp` | Every `/api/v1` endpoint auto-published via `fastapi-mcp`. Web routes excluded (they set `include_in_schema=False`). Bearer-token auth, fail-closed. |
