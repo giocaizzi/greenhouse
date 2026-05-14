@@ -1,6 +1,6 @@
 [project]
 name = "greenhouse-core"
-version = "2.0.0"
+version = "2.1.0"
 description = "Core library for greenhouse: models, repository, business logic"
 requires-python = ">=3.11"
 license = {text = "MIT"}
