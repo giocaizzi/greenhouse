@@ -2,8 +2,17 @@
 
 import ast
 from pathlib import Path
+from unittest.mock import MagicMock
 
+import pytest
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.pool import StaticPool
 from starlette.routing import Mount, Route
+
+from greenhouse_server.app import create_app
+from greenhouse_server.config import Settings
+from greenhouse_server.deps import get_device_manager, get_tuya_cloud
 
 
 def test_mcp_endpoint_is_mounted(app):
@@ -120,3 +129,73 @@ def test_mcp_request_bodies_carry_their_field_schemas(app):
         assert expected_field in props, (
             f"MCP tool for {path} missing request-body field {expected_field!r}; got {props!r}"
         )
+
+
+# --- /mcp bearer-token auth ---------------------------------------------------
+
+
+_VALID_TOKEN = "test-mcp-bearer-token"
+
+
+def _build_mcp_client(*, mcp_token: str | None) -> TestClient:
+    """Build a TestClient bound to a fresh app configured with the given MCP token."""
+    engine = create_engine("sqlite://", echo=False, connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    settings = Settings(db_url="sqlite://", enable_scheduler=False, mcp_token=mcp_token)
+    application = create_app(settings, engine=engine)
+
+    mock_dm = MagicMock()
+    mock_dm.irrigator_start.return_value = (True, "Started OK")
+    mock_dm.irrigator_off.return_value = (True, "Stopped OK")
+    mock_dm.read_sensor.return_value = {"temperature": 22.0, "soil_moisture": 50.0}
+    application.dependency_overrides[get_device_manager] = lambda: mock_dm
+    application.dependency_overrides[get_tuya_cloud] = lambda: None
+
+    return TestClient(application, raise_server_exceptions=False)
+
+
+@pytest.fixture
+def mcp_client_with_token() -> TestClient:
+    """Client backed by an app with `mcp_token` set — the normal deployment path."""
+    return _build_mcp_client(mcp_token=_VALID_TOKEN)
+
+
+@pytest.fixture
+def mcp_client_unconfigured() -> TestClient:
+    """Client backed by an app with `mcp_token=None` — the fail-closed default."""
+    return _build_mcp_client(mcp_token=None)
+
+
+def test_mcp_rejects_request_without_authorization_header(mcp_client_with_token: TestClient):
+    """Hitting /mcp without an Authorization header must 401, never pass through."""
+    resp = mcp_client_with_token.get("/mcp")
+    assert resp.status_code == 401, resp.text
+    assert resp.json()["detail"] == "Invalid MCP token"
+
+
+def test_mcp_rejects_request_with_wrong_token(mcp_client_with_token: TestClient):
+    """A bearer token that doesn't match the configured value must 401."""
+    resp = mcp_client_with_token.get("/mcp", headers={"Authorization": "Bearer not-the-right-token"})
+    assert resp.status_code == 401, resp.text
+    assert resp.json()["detail"] == "Invalid MCP token"
+
+
+def test_mcp_accepts_request_with_correct_token(mcp_client_with_token: TestClient):
+    """With the correct bearer token, the auth gate is transparent — the request
+    reaches the MCP transport (whose handling of a bare GET isn't auth's concern).
+    We assert only that the response is not 401/503, i.e. auth did not block it."""
+    resp = mcp_client_with_token.get("/mcp", headers={"Authorization": f"Bearer {_VALID_TOKEN}"})
+    assert resp.status_code not in (401, 503), (
+        f"Valid token was rejected by the auth layer (status={resp.status_code}): {resp.text}"
+    )
+
+
+def test_mcp_returns_503_when_token_setting_is_unset(mcp_client_unconfigured: TestClient):
+    """Fail-closed: with no MCP token configured, /mcp must NOT silently be open —
+    every request, with or without an Authorization header, gets 503."""
+    resp = mcp_client_unconfigured.get("/mcp")
+    assert resp.status_code == 503, resp.text
+    assert resp.json()["detail"] == "MCP auth not configured"
+
+    # Even with what would have been a valid token, an unconfigured server must 503.
+    resp = mcp_client_unconfigured.get("/mcp", headers={"Authorization": f"Bearer {_VALID_TOKEN}"})
+    assert resp.status_code == 503, resp.text
