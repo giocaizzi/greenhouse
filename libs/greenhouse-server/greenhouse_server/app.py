@@ -35,7 +35,7 @@ from greenhouse_server.routes import (
     sensors,
     vacation,
 )
-from greenhouse_server.scheduler import init_scheduler
+from greenhouse_server.scheduler import apply_persisted_pause, init_scheduler
 from greenhouse_server.scheduler import scheduler as bg_scheduler
 from greenhouse_server.services.weather import WeatherClient
 from greenhouse_server.web.exception_handlers import register_web_exception_handlers
@@ -135,6 +135,7 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
     app.state.plant_db = _init_plant_db(settings)
 
     init_scheduler(app, settings)
+    _restore_persisted_scheduler_pause(app)
 
     # Register routes
     prefix = "/api/v1"
@@ -184,6 +185,27 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
     app.state.mcp = mcp
 
     return app
+
+
+def _restore_persisted_scheduler_pause(app: FastAPI) -> None:
+    """If `user_preferences.scheduler_paused` is True, re-pause check_all.
+
+    Runs once on startup after `init_scheduler` so a pause survives a
+    container restart. Silently skipped if preferences cannot be read.
+    """
+    try:
+        session = app.state.session_factory()
+        try:
+            from greenhouse_core.repository import IrrigationRepository
+
+            repo = IrrigationRepository(session)
+            paused = repo.get_preferences().scheduler_paused
+            session.commit()
+        finally:
+            session.close()
+        apply_persisted_pause(paused)
+    except Exception:
+        pass
 
 
 def _init_plant_db(settings: Settings) -> PlantDatabase:

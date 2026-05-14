@@ -143,3 +143,9 @@ class IrrigationClient:
 
     def scheduler_jobs(self) -> list:
         return self._request("GET", "/api/v1/scheduler/jobs")
+
+    def scheduler_pause(self) -> dict:
+        return self._request("POST", "/api/v1/scheduler/pause")
+
+    def scheduler_resume(self) -> dict:
+        return self._request("POST", "/api/v1/scheduler/resume")

@@ -297,3 +297,7 @@ class UserPreferences(Base):
     default_cluster_id: Mapped[int | None] = mapped_column(Integer)
     refresh_interval_seconds: Mapped[int] = mapped_column(Integer, nullable=False, default=30)
     dry_run_global: Mapped[bool] = mapped_column(nullable=False, default=False)
+    # Runtime kill switch for the APScheduler `check_all` job. Mutated by
+    # the /scheduler/pause and /scheduler/resume endpoints and re-applied on
+    # server startup so the pause survives a container restart.
+    scheduler_paused: Mapped[bool] = mapped_column(nullable=False, default=False)

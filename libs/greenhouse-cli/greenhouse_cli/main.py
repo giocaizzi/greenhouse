@@ -9,6 +9,7 @@ from greenhouse_cli.commands.configs import config_app
 from greenhouse_cli.commands.irrigators import irrigator_app
 from greenhouse_cli.commands.operations import register as register_operations
 from greenhouse_cli.commands.plants import plant_app
+from greenhouse_cli.commands.scheduler import scheduler_app
 from greenhouse_cli.commands.sensors import sensor_app
 
 app = typer.Typer(
@@ -40,3 +41,4 @@ app.add_typer(plant_app, name="plant")
 app.add_typer(irrigator_app, name="irrigator")
 app.add_typer(sensor_app, name="sensor")
 app.add_typer(config_app, name="config")
+app.add_typer(scheduler_app, name="scheduler")

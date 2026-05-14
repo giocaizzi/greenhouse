@@ -42,6 +42,12 @@
   <span>Vacation mode is on until {{ active_vacation.ends_at | format_ts }}.</span>
 </div>
 {% endif %}
+{% if scheduler_paused %}
+<div class="dryrun-banner" data-banner="scheduler-paused" role="status">
+  <svg class="icon" aria-hidden="true"><use href="/static/icons/sprite.svg#i-warning"></use></svg>
+  <span>Auto-irrigation paused &mdash; <code>check_all</code> will not run.</span>
+</div>
+{% endif %}
 
 <header class="topbar">
   <div class="container topbar__inner">

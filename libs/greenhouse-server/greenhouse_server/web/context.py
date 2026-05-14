@@ -27,9 +27,12 @@ def base_context(request: Request, **extra) -> dict:
     repo, session = _repo_from_request(request)
     dry_run_global = False
     active_vacation = None
+    scheduler_paused = False
     if repo is not None:
         try:
-            dry_run_global = repo.get_preferences().dry_run_global
+            prefs = repo.get_preferences()
+            dry_run_global = prefs.dry_run_global
+            scheduler_paused = prefs.scheduler_paused
             active_vacation = repo.get_active_vacation()
         except Exception:
             pass
@@ -42,5 +45,6 @@ def base_context(request: Request, **extra) -> dict:
         "now_text": time.strftime("%Y-%m-%d %H:%M"),
         "dry_run_global": dry_run_global,
         "active_vacation": active_vacation,
+        "scheduler_paused": scheduler_paused,
         **extra,
     }
