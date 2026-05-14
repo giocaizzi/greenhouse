@@ -34,6 +34,7 @@ from greenhouse_server.routes import (
     search,
     sensors,
     vacation,
+    well_known,
 )
 from greenhouse_server.scheduler import apply_persisted_pause, init_scheduler
 from greenhouse_server.scheduler import scheduler as bg_scheduler
@@ -159,6 +160,12 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
     app.include_router(health.router, prefix=prefix)
     app.include_router(quality.router, prefix=prefix)
     app.include_router(efficacy.router, prefix=prefix)
+
+    # OAuth discovery stubs at root (not /api/v1) so MCP HTTP clients that
+    # probe RFC 9728 / RFC 8414 before applying the bearer header don't crash
+    # on FastAPI's default 404 body. See routes/well_known.py for the
+    # upstream Claude Code regression this works around.
+    app.include_router(well_known.router)
 
     # Web frontend
     static_dir = Path(__file__).parent / "web" / "static"
