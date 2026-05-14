@@ -61,9 +61,6 @@ def oauth_authorization_server() -> JSONResponse:
         status_code=404,
         content={
             "error": "not_an_authorization_server",
-            "error_description": (
-                "greenhouse uses static bearer auth; see "
-                ".well-known/oauth-protected-resource"
-            ),
+            "error_description": ("greenhouse uses static bearer auth; see .well-known/oauth-protected-resource"),
         },
     )
