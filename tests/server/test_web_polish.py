@@ -52,3 +52,12 @@ def test_html_422_returns_error_partial(client):
     assert resp.status_code == 422
     assert "text/html" in resp.headers["content-type"]
     assert "Error 422" in resp.text
+
+
+def test_footer_shows_app_version(client):
+    from greenhouse_server.web.context import APP_VERSION
+
+    resp = client.get("/")
+    assert resp.status_code == 200
+    assert f"v{APP_VERSION}" in resp.text
+    assert 'title="App version"' in resp.text

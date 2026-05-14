@@ -128,6 +128,10 @@
           hx-swap="innerHTML">…</span>
     <span class="footer__meta">
       <span>greenhouse</span>
+      {% if app_version %}
+      <span class="sep" aria-hidden="true"></span>
+      <span title="App version">v{{ app_version }}</span>
+      {% endif %}
       <span class="sep" aria-hidden="true"></span>
       <span title="Page rendered">{{ now_text or "" }}</span>
     </span>
