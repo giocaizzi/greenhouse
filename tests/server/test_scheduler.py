@@ -20,7 +20,7 @@ from greenhouse_server.config import Settings
 from greenhouse_server.scheduler import scheduler as bg_scheduler
 
 
-def _build_app(cron_hours: str = "*"):
+def _build_app(cron_hours: str = "*", interval_hours: int | None = None):
     engine = create_engine(
         "sqlite://",
         echo=False,
@@ -31,6 +31,7 @@ def _build_app(cron_hours: str = "*"):
         db_url="sqlite://",
         enable_scheduler=False,
         check_cron_hours=cron_hours,
+        check_interval_hours=interval_hours,
     )
     create_app(settings, engine=engine)
     return engine
@@ -69,6 +70,41 @@ class TestCheckAllCronRegistration:
             fields = {f.name: str(f) for f in job.trigger.fields}
             assert fields["hour"] == "0,6,12,18"
             assert fields["minute"] == "0"
+        finally:
+            engine.dispose()
+
+
+class TestLegacyIntervalShim:
+    """`IRRIGATION_CHECK_INTERVAL_HOURS` is honored and translated to `*/N` cron."""
+
+    def test_interval_translates_to_step_cron(self, monkeypatch):
+        """When only the legacy var is set, the trigger becomes `*/N` and a warning fires."""
+        from greenhouse_server import scheduler as sched_mod
+
+        warnings_seen: list[str] = []
+        monkeypatch.setattr(sched_mod.logger, "warning", lambda msg, *a, **kw: warnings_seen.append(msg % a))
+        engine = _build_app(cron_hours="*", interval_hours=2)
+        try:
+            job = bg_scheduler.get_job("check_all")
+            fields = {f.name: str(f) for f in job.trigger.fields}
+            assert fields["hour"] == "*/2"
+            assert fields["minute"] == "0"
+            assert any("IRRIGATION_CHECK_INTERVAL_HOURS is deprecated" in msg for msg in warnings_seen)
+        finally:
+            engine.dispose()
+
+    def test_explicit_cron_hours_wins_over_legacy_interval(self, monkeypatch):
+        """If both are set, the new cron var wins and no shim warning is emitted."""
+        from greenhouse_server import scheduler as sched_mod
+
+        warnings_seen: list[str] = []
+        monkeypatch.setattr(sched_mod.logger, "warning", lambda msg, *a, **kw: warnings_seen.append(msg % a))
+        engine = _build_app(cron_hours="0,12", interval_hours=6)
+        try:
+            job = bg_scheduler.get_job("check_all")
+            fields = {f.name: str(f) for f in job.trigger.fields}
+            assert fields["hour"] == "0,12"
+            assert not any("IRRIGATION_CHECK_INTERVAL_HOURS is deprecated" in msg for msg in warnings_seen)
         finally:
             engine.dispose()
 

@@ -42,6 +42,7 @@ CLI (greenhouse) → HTTP → Server (greenhouse-server) → SQLite + Tuya Cloud
 | `IRRIGATION_PORT` | `8000` | Server port |
 | `IRRIGATION_SYNC_INTERVAL_MINUTES` | `30` | Sensor sync frequency |
 | `IRRIGATION_CHECK_CRON_HOURS` | `*` | Check-all cron hours (e.g. `*`, `0,6,12,18`) — runs at :00 |
+| `IRRIGATION_CHECK_INTERVAL_HOURS` | _(deprecated)_ | Legacy interval-trigger config. If set, translated to `*/N` cron and warned on startup. Migrate to `IRRIGATION_CHECK_CRON_HOURS`. |
 
 **Tuya Cloud** (required for sensor/device operations):
 
