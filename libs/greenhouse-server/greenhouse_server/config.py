@@ -43,3 +43,20 @@ class Settings(BaseSettings):
         default=None,
         validation_alias=AliasChoices("GREENHOUSE_MCP_TOKEN", "mcp_token"),
     )
+
+    # Pump dry-run watcher. During every active irrigation a background job
+    # polls DP 105 (water-shortage alarm) over the local Tuya protocol and
+    # immediately stops the pump on the first positive reading. Disable only
+    # if your hardware doesn't expose the flag.
+    pump_watcher_enabled: bool = True
+    # Seconds between alarm polls. Lower = faster detection, more local
+    # network traffic. The firmware itself debounces dry-run detection over
+    # several seconds, so going below ~1s gains little.
+    pump_watcher_poll_seconds: float = 2.0
+    # Grace window at the start of each irrigation before the watcher will
+    # trip. Avoids false positives during pump prime / initial suction.
+    pump_watcher_warmup_seconds: float = 5.0
+    # Cap on consecutive local-read failures tolerated before the watcher
+    # gives up and exits (logging a warning). Does NOT stop the pump — a
+    # broken local socket is not by itself evidence of a dry pump.
+    pump_watcher_max_read_failures: int = 5

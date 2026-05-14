@@ -1,5 +1,7 @@
 """Irrigator CRUD + control routes."""
 
+import time
+
 from fastapi import APIRouter, HTTPException, status
 from sqlalchemy.exc import IntegrityError
 
@@ -15,6 +17,7 @@ from greenhouse_core.schemas import (
     UpdateIrrigatorRequest,
 )
 from greenhouse_server.deps import DeviceManagerDep, RepoDep, require_cluster
+from greenhouse_server.services.irrigation import schedule_pump_watcher
 
 router = APIRouter(tags=["irrigators"])
 
@@ -210,14 +213,18 @@ def start_irrigator(
 
     success, output = dm.irrigator_start(irrigator, request.minutes)
     if success:
+        started_at = int(time.time())
         repo.add_irrigation_event(
             irrigator_id=irrigator.id,
             action="start",
             duration_minutes=request.minutes,
             triggered_by="manual",
             notes=f"Manual start via API ({request.minutes} min)" if request.minutes else "Manual start via API",
+            timestamp=started_at,
         )
         repo.session.commit()
+        if request.minutes:
+            schedule_pump_watcher(irrigator.id, request.minutes, started_at)
         return IrrigatorActionResponse(success=True, message=output)
     raise HTTPException(status_code=502, detail=output)
 
