@@ -25,7 +25,16 @@ class Settings(BaseSettings):
 
     # Scheduler defaults
     sync_interval_minutes: int = 30
-    check_interval_hours: int = 6
+    # Cron `hour` field for the check_all job (e.g. "*", "0,6,12,18").
+    # Cadence ≠ irrigation cadence — engine cooldown
+    # (`MIN_COOLDOWN_HOURS` in `greenhouse_core.constants`) gates actuation;
+    # the scheduler decides how often to observe.
+    check_cron_hours: str = "*"
+    # Deprecated alias for the old interval-trigger config. When set and
+    # `check_cron_hours` is at its default, it is translated to `*/N` on
+    # startup with a one-time warning. Slated for removal — prefer
+    # IRRIGATION_CHECK_CRON_HOURS.
+    check_interval_hours: int | None = None
     enable_scheduler: bool = True
 
     # MCP bearer token (fail-closed: unset -> /mcp returns 503).

@@ -27,7 +27,7 @@ CLI (greenhouse) → HTTP → Server (greenhouse-server) → SQLite + Tuya Cloud
 
 - **Server**: `greenhouse-server` — FastAPI at `http://localhost:8000`, OpenAPI docs at `/docs`
 - **CLI**: `greenhouse` — Typer CLI, all output is JSON
-- **Background**: APScheduler runs sensor sync (30min) and check-all (6h)
+- **Background**: APScheduler runs sensor sync (30min) and check-all (cron, default hourly)
 
 ## Setup
 
@@ -41,7 +41,8 @@ CLI (greenhouse) → HTTP → Server (greenhouse-server) → SQLite + Tuya Cloud
 | `IRRIGATION_HOST` | `0.0.0.0` | Server bind host |
 | `IRRIGATION_PORT` | `8000` | Server port |
 | `IRRIGATION_SYNC_INTERVAL_MINUTES` | `30` | Sensor sync frequency |
-| `IRRIGATION_CHECK_INTERVAL_HOURS` | `6` | Check-all frequency |
+| `IRRIGATION_CHECK_CRON_HOURS` | `*` | Check-all cron hours (e.g. `*`, `0,6,12,18`) — runs at :00 |
+| `IRRIGATION_CHECK_INTERVAL_HOURS` | _(deprecated)_ | Legacy interval-trigger config. If set, translated to `*/N` cron and warned on startup. Migrate to `IRRIGATION_CHECK_CRON_HOURS`. |
 
 **Tuya Cloud** (required for sensor/device operations):
 
@@ -148,10 +149,14 @@ export IRRIGATION_SERVER_URL=http://192.168.1.50:8000
 
 The server runs two background jobs by default:
 
-| Job | Interval | Purpose |
+| Job | Schedule | Purpose |
 |-----|----------|---------|
-| Sensor sync | every 30min | Cloud → DB data freshness |
-| Check all | every 6h | Irrigate + monitor + collect alerts |
+| Sensor sync | every 30min (interval) | Cloud → DB data freshness |
+| Check all | cron, every hour at :00 (default) | Irrigate + monitor + collect alerts |
+
+The check cadence is independent of irrigation cadence — the engine
+cooldown (`MIN_COOLDOWN_HOURS=6` in `constants.py`) gates actuation
+spacing. Tune via `IRRIGATION_CHECK_CRON_HOURS` (cron `hour` field).
 
 Manage via API: `GET /api/v1/scheduler/jobs`, `DELETE /api/v1/scheduler/jobs/{id}`
 

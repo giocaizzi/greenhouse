@@ -16,6 +16,27 @@ scheduler = BackgroundScheduler()
 _app: FastAPI | None = None
 
 
+def _resolve_check_cron_hours(settings: Settings) -> str:
+    """Pick the cron `hour` field, honoring the deprecated interval var.
+
+    Why a shim: the project switched check_all from APScheduler's `interval`
+    trigger to `cron` for predictable wall-clock fires. Operators with
+    `IRRIGATION_CHECK_INTERVAL_HOURS=N` already set in their .env shouldn't
+    silently lose their cadence — translate `N` to `*/N` cron syntax and
+    warn once. An explicit `IRRIGATION_CHECK_CRON_HOURS` always wins.
+    """
+    if settings.check_interval_hours is not None and settings.check_cron_hours == "*":
+        n = settings.check_interval_hours
+        logger.warning(
+            "IRRIGATION_CHECK_INTERVAL_HOURS is deprecated; set "
+            "IRRIGATION_CHECK_CRON_HOURS instead. Translating value %d to '*/%d'.",
+            n,
+            n,
+        )
+        return f"*/{n}"
+    return settings.check_cron_hours
+
+
 def init_scheduler(app: FastAPI, settings: Settings) -> None:
     """Register default jobs and store app reference for state access."""
     global _app
@@ -31,8 +52,9 @@ def init_scheduler(app: FastAPI, settings: Settings) -> None:
     )
     scheduler.add_job(
         _check_job,
-        "interval",
-        hours=settings.check_interval_hours,
+        "cron",
+        hour=_resolve_check_cron_hours(settings),
+        minute=0,
         id="check_all",
         name="Check all clusters",
         replace_existing=True,
