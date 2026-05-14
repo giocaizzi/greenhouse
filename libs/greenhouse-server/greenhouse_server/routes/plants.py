@@ -123,10 +123,13 @@ def move_plant(plant_id: int, request: MovePlantRequest, repo: RepoDep):
     """Move a plant from its current cluster to a different cluster.
 
     The plant keeps its id, its plant_health_daily history, and its learning
-    profile because those key off plant_id. Decision logs, irrigation events,
-    and alerts stay attached to the original cluster so the audit trail
-    reflects where the plant actually was at the time. An activity event of
-    type ``plant_moved`` is recorded with the before/after cluster ids.
+    profile because those key off plant_id. Sensors linked to the plant are
+    reassigned to the target cluster so their readings travel with the plant
+    — the soil probes are physically stuck in the plant's pot. Decision logs,
+    irrigation events, and alerts stay attached to the original cluster so
+    the audit trail reflects where the plant actually was at the time. An
+    activity event of type ``plant_moved`` is recorded with the before/after
+    cluster ids and the ids of the sensors that moved with the plant.
 
     Args:
         plant_id: Database id of the plant to move.
