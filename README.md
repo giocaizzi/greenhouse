@@ -124,7 +124,7 @@ publishes the GitHub Release. The new tag then triggers
 `.github/workflows/cd.yml` to build and push the signed Docker image to GHCR.
 
 Do not hand-edit `CHANGELOG.md` or `version` fields — release-please owns them.
-See [AGENTS.md → Releases & Versioning](AGENTS.md#releases--versioning) for details.
+See [AGENTS.md → Releases — project-specific facts only](AGENTS.md#releases--project-specific-facts-only) for details.
 
 ## License
 
