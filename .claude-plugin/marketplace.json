@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
+  "name": "greenhouse",
+  "description": "Plugins for the greenhouse smart-irrigation system.",
+  "owner": {
+    "name": "giocaizzi",
+    "email": "giocaizzi@gmail.com"
+  },
+  "plugins": [
+    {
+      "name": "greenhouse",
+      "source": "./plugin",
+      "description": "Talk to a running greenhouse-server: read sensors, drive irrigators, review decisions and alerts. Bundles a skill and an MCP client that connects to your server's /mcp endpoint.",
+      "homepage": "https://github.com/giocaizzi/greenhouse",
+      "repository": "https://github.com/giocaizzi/greenhouse",
+      "license": "MIT",
+      "keywords": ["irrigation", "iot", "tuya", "plants", "home-automation", "mcp"],
+      "category": "home-automation",
+      "tags": ["greenhouse", "irrigation", "tuya", "plants"]
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin.json",
+  "name": "greenhouse",
+  "description": "Smart plant irrigation control. Talks to a running greenhouse-server over MCP to read soil moisture / temperature / humidity / light, drive irrigators (start, stop, log manual watering, emergency stop-all), inspect typed decision logs, manage the alert inbox, and tune per-cluster irrigation config. Trigger whenever the user asks anything about their plants, soil, watering, irrigation schedule, sensor readings, irrigator status, blocked drips, leaks, or alerts — even when they don't say 'greenhouse'.",
+  "version": "1.0.0",
+  "author": {
+    "name": "giocaizzi",
+    "email": "giocaizzi@gmail.com"
+  },
+  "homepage": "https://github.com/giocaizzi/greenhouse",
+  "repository": "https://github.com/giocaizzi/greenhouse",
+  "license": "MIT",
+  "keywords": ["irrigation", "iot", "tuya", "plants", "home-automation", "mcp"]
+}
