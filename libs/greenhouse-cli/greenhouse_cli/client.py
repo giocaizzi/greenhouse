@@ -60,6 +60,10 @@ class IrrigationClient:
         body = {"plant_id": plant_id, "cluster_id": cluster_id}
         return self._request("POST", "/api/v1/plants/sync", json=body)
 
+    def move_plant(self, plant_id: int, target_cluster_id: int) -> dict:
+        body = {"target_cluster_id": target_cluster_id}
+        return self._request("POST", f"/api/v1/plants/{plant_id}/move", json=body)
+
     # ── Irrigators ──
 
     def add_irrigator(self, cluster_id: int, **kwargs) -> dict:

@@ -3,8 +3,10 @@
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 
+from greenhouse_core.repository import SameClusterMoveError
 from greenhouse_core.schemas import (
     CreatePlantRequest,
+    MovePlantRequest,
     PlantHealthResponse,
     PlantResponse,
     SuccessResponse,
@@ -114,6 +116,41 @@ def delete_plant(cluster_id: int, plant_id: int, repo: RepoDep):
     repo.delete_plant(plant_id)
     repo.session.commit()
     return SuccessResponse(success=True)
+
+
+@router.post("/plants/{plant_id}/move", response_model=PlantResponse)
+def move_plant(plant_id: int, request: MovePlantRequest, repo: RepoDep):
+    """Move a plant from its current cluster to a different cluster.
+
+    The plant keeps its id, its plant_health_daily history, and its learning
+    profile because those key off plant_id. Decision logs, irrigation events,
+    and alerts stay attached to the original cluster so the audit trail
+    reflects where the plant actually was at the time. An activity event of
+    type ``plant_moved`` is recorded with the before/after cluster ids.
+
+    Args:
+        plant_id: Database id of the plant to move.
+        request: Target cluster the plant should belong to after the move.
+
+    Returns:
+        The updated plant with its new cluster_id.
+
+    Raises:
+        HTTPException: 404 if the plant or the target cluster does not exist,
+            400 if ``target_cluster_id`` equals the plant's current cluster
+            (no-op move).
+    """
+    plant = repo.get_plant(plant_id)
+    if not plant:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plant not found")
+    if not repo.get_cluster(request.target_cluster_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Target cluster not found")
+    try:
+        moved = repo.move_plant(plant_id, request.target_cluster_id)
+    except SameClusterMoveError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    repo.session.commit()
+    return moved
 
 
 @router.post("/plants/sync", response_model=SyncPlantsResponse)

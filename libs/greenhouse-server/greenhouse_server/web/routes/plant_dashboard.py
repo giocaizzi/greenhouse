@@ -5,9 +5,11 @@ from __future__ import annotations
 import json
 import time
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Form, HTTPException, Query, Request
+from fastapi.responses import RedirectResponse
 
 from greenhouse_core.models import Plant
+from greenhouse_core.repository import SameClusterMoveError
 from greenhouse_server.deps import PlantDbDep, PlantHealthServiceDep, RepoDep
 from greenhouse_server.services.charts import (
     ALLOWED_HOURS,
@@ -42,6 +44,7 @@ def plant_dashboard(
 ):
     plant = _get_plant_or_404(repo, plant_id, cluster_id)
     cluster = repo.get_cluster(cluster_id)
+    other_clusters = [c for c in repo.list_clusters() if c.id != cluster_id]
 
     sensors_all = repo.get_sensors_in_cluster(cluster_id)
     plant_sensors = [s for s in sensors_all if s.plant_id == plant_id]
@@ -90,6 +93,7 @@ def plant_dashboard(
         base_context(
             request,
             cluster=cluster,
+            other_clusters=other_clusters,
             plant=plant,
             plant_sensors=plant_sensors,
             latest_readings=latest_readings,
@@ -158,3 +162,23 @@ def plant_health_fragment(
         "partials/_plant_health_chart.html",
         base_context(request, plant=plant, payload_json=payload.model_dump_json()),
     )
+
+
+@router.post("/clusters/{cluster_id}/plants/{plant_id}/move")
+def move_plant_web(
+    request: Request,
+    cluster_id: int,
+    plant_id: int,
+    repo: RepoDep,
+    target_cluster_id: int = Form(...),
+):
+    """Move a plant to a different cluster (server-rendered form submit)."""
+    _get_plant_or_404(repo, plant_id, cluster_id)
+    if not repo.get_cluster(target_cluster_id):
+        raise HTTPException(404, "Target cluster not found")
+    try:
+        repo.move_plant(plant_id, target_cluster_id)
+    except SameClusterMoveError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    repo.session.commit()
+    return RedirectResponse(url=f"/clusters/{target_cluster_id}/plants/{plant_id}", status_code=303)
