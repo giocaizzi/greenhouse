@@ -19,6 +19,94 @@ logger = logging.getLogger(__name__)
 _LEAK_CHECK_DELAY_SECONDS = 1800  # 30 minutes
 
 
+def schedule_pump_watcher(irrigator_id: int, duration_minutes: int, started_at: int) -> bool:
+    """Schedule a dry-run watcher to run for the duration of an irrigation.
+
+    Spawns a one-shot APScheduler ``date`` job that opens its own DB session,
+    instantiates ``PumpWatcherService``, and polls DP 105 until the cycle is
+    over or a dry-run trip fires. Skips silently when the scheduler isn't
+    running (test environments) or when the feature is disabled in settings.
+
+    Args:
+        irrigator_id: Irrigator to watch.
+        duration_minutes: Requested irrigation duration; watcher exits at the
+            same wall-clock as the device's auto-off timer.
+        started_at: Unix timestamp of the start event (recorded in the
+            aborted-event row if the watcher trips).
+
+    Returns:
+        True if a job was scheduled, False if the scheduler is unavailable,
+        the watcher is disabled, the irrigator has no device manager, or the
+        duration is non-positive.
+    """
+    if duration_minutes <= 0:
+        return False
+    try:
+        from greenhouse_server.config import Settings
+        from greenhouse_server.scheduler import _app, scheduler
+
+        if not scheduler.running or _app is None:
+            return False
+
+        settings: Settings = getattr(_app.state, "settings", None)
+        if settings is not None and not settings.pump_watcher_enabled:
+            return False
+
+        dm = getattr(_app.state, "device_manager", None)
+        if dm is None:
+            return False
+
+        run_date = datetime.fromtimestamp(started_at, tz=UTC)
+        job_id = f"pump-watcher-{irrigator_id}-{started_at}"
+        duration_seconds = int(duration_minutes * 60)
+
+        def _run() -> None:
+            from greenhouse_core.repository import IrrigationRepository
+            from greenhouse_server.services.pump_watcher import PumpWatcherService
+
+            session = _app.state.session_factory()
+            try:
+                repo = IrrigationRepository(session)
+                irrigator = repo.get_irrigator(irrigator_id)
+                if irrigator is None:
+                    return
+                watcher_settings = getattr(_app.state, "settings", None)
+                if watcher_settings is None:
+                    poll = 2.0
+                    warmup = 5.0
+                    max_failures = 5
+                else:
+                    poll = watcher_settings.pump_watcher_poll_seconds
+                    warmup = watcher_settings.pump_watcher_warmup_seconds
+                    max_failures = watcher_settings.pump_watcher_max_read_failures
+                watcher = PumpWatcherService(
+                    repo,
+                    dm,
+                    poll_seconds=poll,
+                    warmup_seconds=warmup,
+                    max_read_failures=max_failures,
+                )
+                watcher.watch(irrigator, duration_seconds, started_at=started_at)
+            except Exception:
+                session.rollback()
+                logger.exception("Pump watcher job failed for irrigator %d", irrigator_id)
+            finally:
+                session.close()
+
+        scheduler.add_job(
+            _run,
+            "date",
+            run_date=run_date,
+            id=job_id,
+            name=f"Pump watcher irrigator {irrigator_id}",
+            replace_existing=True,
+        )
+        return True
+    except Exception:
+        logger.debug("Could not schedule pump watcher for irrigator %d", irrigator_id, exc_info=True)
+        return False
+
+
 def _schedule_leak_check(cluster_id: int, started_at: int) -> None:
     """Schedule a one-shot leak detection check 30 minutes after an irrigation start.
 
@@ -201,6 +289,7 @@ class IrrigationService:
             )
             started_at = int(_time.time())
             _schedule_leak_check(cluster_id, started_at)
+            schedule_pump_watcher(irrigator.id, duration, started_at)
             result["action"] = "irrigated"
         else:
             self._repo.add_activity_event(

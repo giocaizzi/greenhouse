@@ -27,14 +27,51 @@ DP_SWITCH = 1  # bool: on/off
 DP_DURATION = 102  # int: irrigation duration in seconds
 DP_INTERVAL = 103  # int: auto-irrigation interval in hours
 DP_LEFTTIME = 104  # int: remaining seconds (read-only)
-DP_ALARM = 105  # bitmap: alarm flags
-DP_WORKSTATUS = 106  # enum: work status
+DP_ALARM = 105  # bitmap/enum: fault flags; bit 0 = no_water (water shortage)
+DP_WORKSTATUS = 106  # enum: 0=idle, 1=auto, 2=manual
 DP_NEXT = 107  # int: next irrigation timestamp
 DP_POWERSTATUS = 108  # enum: power status
 DP_AUTORUN = 109  # bool: auto-irrigation enabled
 
+# DP 105 (DP_ALARM) is a Tuya "fault" datapoint. The schema permits a bitmap
+# of concurrent flags, but the IK10PW firmware only populates one in practice:
+# bit 0 (== integer value 1) means "no water". Detection is motor-current
+# based — when the pump runs dry, current drops below threshold and the bit
+# is raised. The same low-current condition can be triggered by a clogged or
+# missing filter on the water intake, so false positives are possible. False
+# positives are safe (we stop early); the pump-protection concern is false
+# negatives, which appear to be rare in practice but argue for adding a
+# hardware float switch as a belt-and-suspenders independent safeguard.
+DP_ALARM_BIT_NO_WATER = 0x01
+
 LOCAL_PROTOCOL = 3.5
 LOCAL_TIMEOUT = 5
+
+
+def alarm_indicates_no_water(value: object) -> bool:
+    """True when a DP 105 reading indicates the reservoir is empty / dry pump.
+
+    Accepts the multiple shapes a Tuya fault DP can take: an int bitmap (we
+    AND against bit 0), a bool (truthy means fault), a string (decoded as an
+    int when it looks numeric — Tuya local protocol sometimes returns DP
+    values as strings). Returns False for None, empty strings, and any
+    unrecognised type, so callers never treat "unknown" as "dry".
+    """
+    if value is None:
+        return False
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        return bool(value & DP_ALARM_BIT_NO_WATER)
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return False
+        try:
+            return bool(int(text) & DP_ALARM_BIT_NO_WATER)
+        except ValueError:
+            return False
+    return False
 
 
 class TuyaDeviceManager:
@@ -262,6 +299,59 @@ class TuyaDeviceManager:
     def irrigator_stop(self, irrigator: Irrigator) -> tuple[bool, str]:
         """Stop current irrigation."""
         return self.irrigator_off(irrigator)
+
+    def read_irrigator_alarm(self, irrigator: Irrigator) -> dict:
+        """Read the dry-run / water-shortage alarm state for an irrigator.
+
+        Reads DP 105 (DP_ALARM) over the local protocol v3.5. On the
+        Rainpoint IK10PW this flag is the only signal the firmware exposes
+        for "the pump is running but no water is moving", which is the
+        condition that damages the pump.
+
+        Local-only by design — the Cloud API does not expose DP 105, and the
+        cloud round-trip latency (>1 s) would defeat the purpose for a
+        pump-safety check. Returns ``no_water=None`` when the device cannot
+        be reached so callers can distinguish "no fault" from "no signal".
+
+        Args:
+            irrigator: Irrigator to query.
+
+        Returns:
+            Dict with:
+              - ``no_water``: bool | None — True if DP 105 raised the
+                no-water bit; None when the read failed.
+              - ``alarm_raw``: int | object | None — raw DP 105 value.
+              - ``running``: bool | None — current switch state (DP 1).
+              - ``left_time``: int | None — DP 104 seconds remaining.
+              - ``work_status``: int | None — DP 106 state enum.
+              - ``source``: ``"local"`` | ``None``.
+              - ``error``: str | None — populated when the read failed.
+        """
+        try:
+            device = self._get_local_device(irrigator)
+            status = device.status()
+        except Exception as exc:
+            return {
+                "no_water": None,
+                "alarm_raw": None,
+                "running": None,
+                "left_time": None,
+                "work_status": None,
+                "source": None,
+                "error": f"local read failed: {exc}",
+            }
+
+        dps = (status or {}).get("dps") or {}
+        alarm_raw = dps.get(str(DP_ALARM))
+        return {
+            "no_water": alarm_indicates_no_water(alarm_raw),
+            "alarm_raw": alarm_raw,
+            "running": dps.get(str(DP_SWITCH)),
+            "left_time": dps.get(str(DP_LEFTTIME)),
+            "work_status": dps.get(str(DP_WORKSTATUS)),
+            "source": "local",
+            "error": None,
+        }
 
     # ── Sensor Reading ────────────────────────────────────────────────────────
 

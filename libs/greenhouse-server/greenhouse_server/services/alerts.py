@@ -25,6 +25,7 @@ SOURCE_DECISION = "decision"
 SOURCE_LEAK = "leak"
 SOURCE_ANOMALY = "anomaly"
 SOURCE_SYSTEM = "system"
+SOURCE_PUMP = "pump"
 
 
 def _dedup_key(source: str, code: str, cluster_id: int | None, message: str) -> str:
