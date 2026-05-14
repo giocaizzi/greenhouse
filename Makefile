@@ -19,7 +19,7 @@ lint: ## Run ruff lint
 format: ## Apply ruff formatter
 	uv run ruff format libs/ tests/
 
-check: lint test ## Lint then test (CI gate)
+check: pre-commit-run coverage ## CI parity: pre-commit hooks (lint/format/hygiene) + coverage gate
 
 coverage: ## Run tests with coverage report (fails under 60%)
 	uv run pytest --cov=greenhouse_core --cov=greenhouse_server --cov=greenhouse_cli --cov-report=term-missing --cov-report=xml --cov-fail-under=60
