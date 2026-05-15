@@ -288,7 +288,9 @@ class IrrigationLogic:
         )
         if multiplier == 1.0:
             return
-        new_interval = int(round(decision.interval_hours * multiplier))
+        # Multiplier is a frequency factor (water N× as often), not an interval
+        # factor — so divide the baseline interval by it to get the new cadence.
+        new_interval = int(round(decision.interval_hours / multiplier))
         new_interval = max(MIN_INTERVAL_HOURS, min(MAX_INTERVAL_HOURS, new_interval))
         decision.interval_hours = new_interval
         decision.reasons = (
