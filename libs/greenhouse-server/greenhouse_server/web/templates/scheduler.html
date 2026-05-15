@@ -17,9 +17,49 @@
         <span class="badge-warning">stopped</span>
       {% endif %}
       {% if jobs %}<span class="dot"></span><span>{{ jobs|length }} job{{ "" if jobs|length == 1 else "s" }}</span>{% endif %}
+      {% if check_all_paused %}<span class="dot"></span><span class="badge-warning">check_all paused</span>{% endif %}
     </div>
   </div>
+  {% if scheduler_running %}
+  <div class="page-head__actions">
+    {% if check_all_paused %}
+      <form method="post" action="/scheduler/resume" style="display:inline;">
+        <button type="submit" class="btn">
+          <svg class="icon" style="width:13px;height:13px;"><use href="/static/icons/sprite.svg#i-play"></use></svg>
+          Resume check_all
+        </button>
+      </form>
+    {% else %}
+      <form method="post" action="/scheduler/pause" style="display:inline;">
+        <button type="submit" class="btn secondary">
+          <svg class="icon" style="width:13px;height:13px;"><use href="/static/icons/sprite.svg#i-stop"></use></svg>
+          Pause check_all
+        </button>
+      </form>
+    {% endif %}
+  </div>
+  {% endif %}
 </section>
+
+<article class="card" style="border-color: color-mix(in srgb, var(--danger) 30%, var(--border)); margin-bottom: var(--sp-6);">
+  <header style="display:flex; align-items:center; justify-content:space-between; gap: var(--sp-4); flex-wrap: wrap;">
+    <div>
+      <strong>Emergency stop</strong>
+      <small class="muted"> &mdash; sends OFF to every irrigator in every cluster.</small>
+    </div>
+    <button type="button"
+            class="btn"
+            style="background: var(--danger); border-color: var(--danger); color: white;"
+            hx-post="/bulk/stop-all"
+            hx-target="#emergency-stop-result"
+            hx-swap="innerHTML"
+            hx-confirm="Stop ALL irrigators across every cluster? This is a kill switch.">
+      <svg class="icon" style="width:13px;height:13px;"><use href="/static/icons/sprite.svg#i-warning"></use></svg>
+      Stop all irrigators
+    </button>
+  </header>
+  <div id="emergency-stop-result" aria-live="polite"></div>
+</article>
 
 {% if not scheduler_running %}
   <article class="empty">
@@ -38,8 +78,8 @@
   <div class="card__head">
     <h3 class="card__title">{{ jobs|length }} scheduled job{{ "" if jobs|length == 1 else "s" }}</h3>
   </div>
-  <table>
-    <thead><tr><th>ID</th><th>Name</th><th>Trigger</th><th>Next run</th><th></th></tr></thead>
+  <table aria-label="Scheduled jobs">
+    <thead><tr><th scope="col">ID</th><th scope="col">Name</th><th scope="col">Trigger</th><th scope="col">Next run</th><th scope="col"><span class="visually-hidden">Actions</span></th></tr></thead>
     <tbody>
       {% for job in jobs %}
       <tr>

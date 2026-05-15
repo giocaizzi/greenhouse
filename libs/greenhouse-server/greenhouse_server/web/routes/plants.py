@@ -1,9 +1,9 @@
-"""Plant web routes: list, create form, create."""
+"""Plant web routes: list, create form, create, edit, delete."""
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Form, Request
-from fastapi.responses import RedirectResponse
+from fastapi import APIRouter, Form, HTTPException, Request
+from fastapi.responses import HTMLResponse, RedirectResponse
 
 from greenhouse_server.deps import RepoDep, require_cluster
 from greenhouse_server.web.context import base_context
@@ -16,6 +16,13 @@ def _opt_float(value: str | None) -> float | None:
     if value is None or value.strip() == "":
         return None
     return float(value)
+
+
+def _get_plant_in_cluster(repo, cluster_id: int, plant_id: int):
+    plant = repo.get_plant(plant_id)
+    if not plant or plant.cluster_id != cluster_id:
+        raise HTTPException(404, "Plant not found in cluster")
+    return plant
 
 
 @router.get("/clusters/{cluster_id}/plants")
@@ -63,3 +70,52 @@ def create_plant(
     )
     repo.session.commit()
     return RedirectResponse(url=f"/clusters/{cluster_id}/plants", status_code=303)
+
+
+@router.get("/clusters/{cluster_id}/plants/{plant_id}/edit")
+def edit_plant_form(request: Request, cluster_id: int, plant_id: int, repo: RepoDep):
+    cluster = require_cluster(repo, cluster_id)
+    plant = _get_plant_in_cluster(repo, cluster_id, plant_id)
+    return templates.TemplateResponse(request, "plants/edit.html", base_context(request, cluster=cluster, plant=plant))
+
+
+@router.post("/clusters/{cluster_id}/plants/{plant_id}/edit")
+def update_plant(
+    request: Request,
+    cluster_id: int,
+    plant_id: int,
+    repo: RepoDep,
+    species: str = Form(...),
+    category: str = Form(""),
+    water_needs: str = Form(""),
+    light_needs: str = Form(""),
+    ideal_temp_min: str = Form(""),
+    ideal_temp_max: str = Form(""),
+    ideal_humidity_min: str = Form(""),
+    ideal_humidity_max: str = Form(""),
+    notes: str = Form(""),
+):
+    _get_plant_in_cluster(repo, cluster_id, plant_id)
+    repo.update_plant(
+        plant_id,
+        species=species,
+        category=category or None,
+        water_needs=water_needs or None,
+        light_needs=light_needs or None,
+        ideal_temp_min=_opt_float(ideal_temp_min),
+        ideal_temp_max=_opt_float(ideal_temp_max),
+        ideal_humidity_min=_opt_float(ideal_humidity_min),
+        ideal_humidity_max=_opt_float(ideal_humidity_max),
+        notes=notes or None,
+    )
+    repo.session.commit()
+    return RedirectResponse(url=f"/clusters/{cluster_id}/plants", status_code=303)
+
+
+@router.delete("/clusters/{cluster_id}/plants/{plant_id}", response_class=HTMLResponse)
+def delete_plant(cluster_id: int, plant_id: int, repo: RepoDep):
+    """HTMX-targeted delete; returns an empty HTML body so the row is removed."""
+    _get_plant_in_cluster(repo, cluster_id, plant_id)
+    repo.delete_plant(plant_id)
+    repo.session.commit()
+    return HTMLResponse("")

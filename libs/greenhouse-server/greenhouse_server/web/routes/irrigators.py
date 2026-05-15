@@ -1,9 +1,11 @@
-"""Irrigator web routes: list, create form, create, start/stop/log-manual."""
+"""Irrigator web routes: list, create form, create, edit, delete, start/stop/log-manual."""
 
 from __future__ import annotations
 
+import json
+
 from fastapi import APIRouter, Form, HTTPException, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 
 from greenhouse_server.deps import DeviceManagerDep, RepoDep, require_cluster
 from greenhouse_server.web.context import base_context
@@ -12,10 +14,43 @@ from greenhouse_server.web.templating import templates
 router = APIRouter(include_in_schema=False)
 
 
+def _get_irrigator_in_cluster(repo, cluster_id: int, irrigator_id: int):
+    irr = repo.get_irrigator(irrigator_id)
+    if not irr or irr.cluster_id != cluster_id:
+        raise HTTPException(404, "Irrigator not found in cluster")
+    return irr
+
+
+def _parse_config(raw: str | dict | None) -> dict:
+    if isinstance(raw, dict):
+        return raw
+    if raw is None or raw == "":
+        return {}
+    try:
+        return json.loads(raw)
+    except (TypeError, json.JSONDecodeError):
+        return {}
+
+
 @router.get("/clusters/{cluster_id}/irrigators")
 def list_irrigators(request: Request, cluster_id: int, repo: RepoDep):
     cluster = require_cluster(repo, cluster_id)
-    irrigators = repo.get_irrigators_in_cluster(cluster_id)
+    raw = repo.get_irrigators_in_cluster(cluster_id)
+    # Build the same shape as cluster status so partials/_irrigator_row.html
+    # can be reused as-is (it accesses recent_event_count / last_event).
+    irrigators = []
+    for irr in raw:
+        events = repo.get_recent_events(irr.id, hours=48)
+        irrigators.append(
+            {
+                "id": irr.id,
+                "name": irr.name,
+                "type": irr.type,
+                "cluster_id": irr.cluster_id,
+                "recent_event_count": len(events),
+                "last_event": events[0] if events else None,
+            }
+        )
     return templates.TemplateResponse(
         request, "irrigators/list.html", base_context(request, cluster=cluster, irrigators=irrigators)
     )
@@ -53,6 +88,49 @@ def create_irrigator(
     )
     repo.session.commit()
     return RedirectResponse(url=f"/clusters/{cluster_id}/irrigators", status_code=303)
+
+
+@router.get("/clusters/{cluster_id}/irrigators/{irrigator_id}/edit")
+def edit_irrigator_form(request: Request, cluster_id: int, irrigator_id: int, repo: RepoDep):
+    cluster = require_cluster(repo, cluster_id)
+    irrigator = _get_irrigator_in_cluster(repo, cluster_id, irrigator_id)
+    config = _parse_config(irrigator.config)
+    return templates.TemplateResponse(
+        request,
+        "irrigators/edit.html",
+        base_context(request, cluster=cluster, irrigator=irrigator, config=config),
+    )
+
+
+@router.post("/clusters/{cluster_id}/irrigators/{irrigator_id}/edit")
+def update_irrigator(
+    request: Request,
+    cluster_id: int,
+    irrigator_id: int,
+    repo: RepoDep,
+    name: str = Form(...),
+    type: str = Form(...),
+    device_ip: str = Form(""),
+    local_key: str = Form(""),
+):
+    _get_irrigator_in_cluster(repo, cluster_id, irrigator_id)
+    config: dict = {}
+    if device_ip.strip():
+        config["device_ip"] = device_ip.strip()
+    if local_key.strip():
+        config["local_key"] = local_key.strip()
+    repo.update_irrigator(irrigator_id, name=name, type=type, config=config)
+    repo.session.commit()
+    return RedirectResponse(url=f"/clusters/{cluster_id}/irrigators", status_code=303)
+
+
+@router.delete("/clusters/{cluster_id}/irrigators/{irrigator_id}", response_class=HTMLResponse)
+def delete_irrigator(cluster_id: int, irrigator_id: int, repo: RepoDep):
+    """HTMX-targeted delete; returns an empty HTML body so the row is removed."""
+    _get_irrigator_in_cluster(repo, cluster_id, irrigator_id)
+    repo.delete_irrigator(irrigator_id)
+    repo.session.commit()
+    return HTMLResponse("")
 
 
 def _get_irrigator_or_404(repo: RepoDep, irrigator_id: int):

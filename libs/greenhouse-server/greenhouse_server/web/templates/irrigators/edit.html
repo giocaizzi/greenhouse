@@ -1,0 +1,53 @@
+{% extends "_base.html" %}
+{% block title %}Edit {{ irrigator.name }} · Greenhouse{% endblock %}
+{% block content %}
+
+<div class="crumb">
+  <a href="/">home</a><span class="sep">/</span>
+  <a href="/clusters">clusters</a><span class="sep">/</span>
+  <a href="/clusters/{{ cluster.id }}">{{ cluster.name | lower }}</a><span class="sep">/</span>
+  <a href="/clusters/{{ cluster.id }}/irrigators">irrigators</a><span class="sep">/</span>
+  <span class="here">edit</span>
+</div>
+
+<section class="page-head">
+  <div class="page-head__title">
+    <h1>Edit irrigator</h1>
+    <div class="page-head__meta">
+      <span>in <a href="/clusters/{{ cluster.id }}">{{ cluster.name }}</a></span>
+    </div>
+  </div>
+</section>
+
+<article class="card form-card">
+  <form method="post" action="/clusters/{{ cluster.id }}/irrigators/{{ irrigator.id }}/edit">
+    <label>
+      Tuya device ID
+      <input type="text" value="{{ irrigator.tuya_device_id }}" disabled>
+      <small class="muted">Device id cannot be changed.</small>
+    </label>
+    <label for="name">Name
+      <input type="text" id="name" name="name" value="{{ irrigator.name }}" required autofocus>
+    </label>
+    <label for="type">Type
+      <select id="type" name="type" required>
+        <option value="tuya_cloud"{% if irrigator.type == "tuya_cloud" %} selected{% endif %}>tuya_cloud</option>
+        <option value="tuya_local"{% if irrigator.type == "tuya_local" %} selected{% endif %}>tuya_local</option>
+      </select>
+    </label>
+    <fieldset>
+      <legend>Local protocol <small class="muted">(tuya_local only)</small></legend>
+      <label for="device_ip">Device IP
+        <input type="text" id="device_ip" name="device_ip" value="{{ config.get('device_ip', '') }}" placeholder="192.168.1.42">
+      </label>
+      <label for="local_key">Local key
+        <input type="text" id="local_key" name="local_key" value="{{ config.get('local_key', '') }}">
+      </label>
+    </fieldset>
+    <div class="form-actions">
+      <a href="/clusters/{{ cluster.id }}/irrigators" class="btn secondary">Cancel</a>
+      <button type="submit">Save changes</button>
+    </div>
+  </form>
+</article>
+{% endblock %}

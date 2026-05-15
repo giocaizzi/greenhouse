@@ -63,6 +63,7 @@ class ClusterService:
                     "id": irr.id,
                     "name": irr.name,
                     "type": irr.type,
+                    "cluster_id": irr.cluster_id,
                     "recent_event_count": len(events),
                     "last_event": events[0] if events else None,
                 }

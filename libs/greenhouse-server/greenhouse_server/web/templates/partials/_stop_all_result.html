@@ -1,0 +1,19 @@
+{% if errors %}
+<article class="alert alert--danger" role="alert">
+  <span class="alert__icon"><svg class="icon"><use href="/static/icons/sprite.svg#i-warning"></use></svg></span>
+  <div>
+    <strong>Stopped {{ stopped }} irrigator{{ "" if stopped == 1 else "s" }} with errors.</strong>
+    <ul style="margin: var(--sp-2) 0 0; padding-left: var(--sp-4);">
+      {% for err in errors %}<li><small class="mono">{{ err }}</small></li>{% endfor %}
+    </ul>
+  </div>
+</article>
+{% else %}
+<article class="alert alert--ok" role="status">
+  <span class="alert__icon"><svg class="icon"><use href="/static/icons/sprite.svg#i-check"></use></svg></span>
+  <div>
+    <strong>Stopped {{ stopped }} irrigator{{ "" if stopped == 1 else "s" }}.</strong>
+    <small class="muted"> All devices ordered to OFF.</small>
+  </div>
+</article>
+{% endif %}
