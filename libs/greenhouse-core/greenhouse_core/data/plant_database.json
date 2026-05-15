@@ -1,16 +1,108 @@
 {
   "_metadata": {
-    "version": "1.0",
+    "version": "1.1",
     "description": "Plant care database compiled from horticultural literature and scientific sources",
-    "last_updated": "2026-02-27",
+    "last_updated": "2026-05-15",
     "sources": [
       "The Spruce (thespruce.com) - Horticultural guides",
       "New York Botanical Garden (libguides.nybg.org) - Scientific plant care",
       "Biology Insights (biologyinsights.com) - Plant physiology",
       "Gardenia.net - Professional horticulture database",
-      "PlantTalk Colorado State University - Extension research"
+      "PlantTalk Colorado State University - Extension research",
+      "UC ANR / Sunset Western Garden Book - Outdoor fruit tree timing",
+      "Webb 2003 / PMC8997731 - Circadian water uptake and morning irrigation"
     ],
-    "note": "All values are evidence-based from peer-reviewed or professional horticultural sources"
+    "note": "All values are evidence-based from peer-reviewed or professional horticultural sources. 2026-05-15: added preferred_water_hours_local and season_frequency_multiplier(_outdoor) per category and per species where literature shows a real deviation from category defaults; species without an override inherit from _category_defaults."
+  },
+  "_category_defaults": {
+    "tropical": {
+      "preferred_water_hours_local": [7, 10],
+      "season_frequency_multiplier": {
+        "winter": 0.5,
+        "spring": 1.0,
+        "summer": 1.2,
+        "autumn": 0.8
+      },
+      "sources": [
+        "Webb 2003 / PMC8997731: stomatal conductance peaks mid-morning, irrigate before peak transpiration",
+        "PLNTS.com / UConn Extension: indoor tropicals slow growth in winter (lower light + cooler nights), 40-50% reduction in watering frequency typical",
+        "The Spruce: water Monstera/Philodendron/Alocasia 'less in winter, more in summer growing season'"
+      ]
+    },
+    "fern": {
+      "preferred_water_hours_local": [6, 9],
+      "season_frequency_multiplier": {
+        "winter": 0.7,
+        "spring": 1.0,
+        "summer": 1.3,
+        "autumn": 0.9
+      },
+      "sources": [
+        "PlantTalk Colorado: ferns require consistent moisture year-round; never let dry out fully",
+        "RHS fern guidance: reduce but do not halt watering in winter; growth continues at low rate indoors",
+        "Webb 2003: early-morning watering minimizes fungal pressure on dense fronds"
+      ]
+    },
+    "fruit_tree": {
+      "preferred_water_hours_local": [5, 9],
+      "season_frequency_multiplier": {
+        "winter": 1.0,
+        "spring": 1.0,
+        "summer": 1.5,
+        "autumn": 0.7
+      },
+      "season_frequency_multiplier_outdoor": {
+        "winter": 0.3,
+        "spring": 1.0,
+        "summer": 1.6,
+        "autumn": 0.6
+      },
+      "sources": [
+        "UC ANR Home Orchard guide: deciduous fruit trees enter dormancy in winter; minimal supplemental water needed outside drought",
+        "Sunset Western Garden Book: deep, infrequent summer irrigation; pre-dawn or early-morning preferred to minimize evaporative loss",
+        "DripPro irrigation guide: peak demand June-August for stone/pome fruit"
+      ]
+    },
+    "succulent": {
+      "preferred_water_hours_local": [8, 11],
+      "season_frequency_multiplier": {
+        "winter": 0.3,
+        "spring": 1.0,
+        "summer": 1.2,
+        "autumn": 0.7
+      },
+      "season_frequency_multiplier_outdoor": {
+        "winter": 0.2,
+        "spring": 1.0,
+        "summer": 1.3,
+        "autumn": 0.5
+      },
+      "sources": [
+        "PLNTS.com: most succulents go dormant in winter; reduce watering to once per month or less",
+        "Ottershaw Cacti: late-morning watering allows surface to dry fully before nightfall, preventing rot",
+        "Desert Steel: summer is peak growth for most CAM succulents but they still tolerate longer intervals than mesic plants"
+      ]
+    },
+    "cacti": {
+      "preferred_water_hours_local": [8, 11],
+      "season_frequency_multiplier": {
+        "winter": 0.2,
+        "spring": 0.9,
+        "summer": 1.1,
+        "autumn": 0.6
+      },
+      "season_frequency_multiplier_outdoor": {
+        "winter": 0.1,
+        "spring": 1.0,
+        "summer": 1.4,
+        "autumn": 0.5
+      },
+      "sources": [
+        "Il Fiore tra le Spine: 'water March-October in Northern hemisphere' — winter rest is essential to induce flowering",
+        "Cactus en Ligne: winter watering risks root rot at low temps; suspend or apply minimal moisture only",
+        "Ottershaw Cacti: morning watering with warmer (room-temp) water in active growing season"
+      ]
+    }
   },
   "species": {
     "Monstera deliciosa": {
@@ -77,9 +169,17 @@
         "The Spruce: 70-80°F (21-27°C) preferred",
         "NY Botanical Garden: 65-75°F (18-24°C)",
         "Plantophiles: 60-80% humidity ideal but adapts to normal household",
-        "Petal Republic: average household humidity adequate"
+        "Petal Republic: average household humidity adequate",
+        "The Spruce / NYBG: 'water less in winter, allow soil to dry between waterings year-round' — overwater risk dominates over drought stress"
       ],
-      "ideal_light_lux_min": 50
+      "ideal_light_lux_min": 50,
+      "season_frequency_multiplier": {
+        "winter": 0.4,
+        "spring": 1.0,
+        "summer": 1.0,
+        "autumn": 0.7
+      },
+      "timing_notes": "Drought-tolerant Madagascan species — primary risk is root rot, not desiccation. Damp down summer boost relative to tropical default and reduce winter further; do not increase frequency in heat."
     },
     "Alocasia amazonica": {
       "common_name": "African Mask Plant",
@@ -103,9 +203,17 @@
       "sources": [
         "The Spruce: 65-85°F (18-29°C), 60%+ humidity",
         "Bloomscape: consistently moist soil, never soggy",
-        "Houseplant411: moderate moisture, high humidity"
+        "Houseplant411: moderate moisture, high humidity",
+        "Bloomscape / Plantura: 'Alocasia may go dormant and shed leaves in winter — reduce watering significantly until new growth appears in spring'"
       ],
-      "ideal_light_lux_min": 150
+      "ideal_light_lux_min": 150,
+      "season_frequency_multiplier": {
+        "winter": 0.4,
+        "spring": 1.1,
+        "summer": 1.3,
+        "autumn": 0.7
+      },
+      "timing_notes": "Pronounced winter dormancy with leaf loss is normal — sustained high-frequency winter watering is the leading cause of corm rot. Spring restart is rapid once new growth emerges."
     },
     "Eriobotrya japonica": {
       "common_name": "Loquat",
@@ -127,9 +235,19 @@
         "PictureThis AI: 15-38°C (59-100.4°F) native range",
         "The Spruce: drought-tolerant but productive with regular water",
         "Bee Better Naturally: medium water, drought tolerant once established",
-        "DripPro irrigation guide: mulch to retain moisture"
+        "DripPro irrigation guide: mulch to retain moisture",
+        "UC ANR / California Rare Fruit Growers: loquat flowers Oct-Feb and fruits Mar-Jun — autumn/winter water demand is NOT dormant unlike pome/stone fruit",
+        "Sunset Western Garden Book: 'water regularly in dry autumn and winter to support bloom and fruit set'"
       ],
-      "ideal_light_lux_min": 800
+      "ideal_light_lux_min": 800,
+      "preferred_water_hours_local": [5, 9],
+      "season_frequency_multiplier_outdoor": {
+        "winter": 0.6,
+        "spring": 1.3,
+        "summer": 1.5,
+        "autumn": 1.0
+      },
+      "timing_notes": "Phenology is inverted vs other temperate fruit trees: flowers in autumn, fruits in spring. Do not apply the deep winter cutback typical of pome/stone fruit; sustain water through bloom and fruit fill."
     }
   },
   "categories": {
