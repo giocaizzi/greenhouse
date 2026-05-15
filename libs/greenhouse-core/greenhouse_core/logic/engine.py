@@ -53,6 +53,12 @@ from greenhouse_core.logic.plant_needs import (
 )
 from greenhouse_core.logic.sensors import get_recent_sensor_data
 from greenhouse_core.logic.stress import detect_stress_conditions
+from greenhouse_core.logic.timing import (
+    is_within_irrigation_window,
+    is_within_preferred_hours,
+    season_for,
+    seasonal_multiplier,
+)
 from greenhouse_core.logic.trends import analyze_historical_trends
 from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_core.repository import IrrigationRepository
@@ -160,6 +166,14 @@ class IrrigationLogic:
         if _apply_critical_stress_rule(decision):
             return decision
 
+        # Cluster-level timing gate — checked AFTER stress overrides on purpose:
+        # a wilting plant still gets water at 2am, a healthy one doesn't.
+        window_skip = self._apply_window_rule(cluster, cluster_id, evaluated_at, decision)
+        if window_skip is not None:
+            if persist:
+                self._persist(window_skip, triggered_by)
+            return window_skip
+
         _apply_soil_moisture_rule(decision, plant_care)
         _apply_temperature_adjustment(decision, ideal_temp_range)
         _apply_humidity_adjustment(decision, ideal_humidity_range)
@@ -167,9 +181,91 @@ class IrrigationLogic:
         _apply_water_needs_adjustment(decision, water_needs)
         _apply_trend_adjustment(decision)
 
+        # Seasonal interval scaling — multiplies the engine-chosen cadence by a
+        # plant-aware factor so winter intervals stretch and summer intervals
+        # tighten. Cooldown remains the safety floor (see MIN_COOLDOWN_HOURS).
+        self._apply_seasonal_multiplier(cluster, decision, plant_care, evaluated_at)
+
         if persist:
             self._persist(decision, triggered_by)
         return decision
+
+    def _apply_window_rule(self, cluster, cluster_id, evaluated_at, decision):
+        """Return a SKIP decision when the current local time is outside the
+        cluster's irrigation windows. Falls back to global preferred hours when
+        no per-cluster windows are configured. Stress overrides have already
+        returned early before reaching this rule.
+        """
+        windows = self.db.list_irrigation_windows(cluster_id)
+        prefs = self.db.get_preferences()
+        tz_name = prefs.timezone if prefs else None
+
+        if windows:
+            allowed = is_within_irrigation_window(windows, now_unix=evaluated_at, tz_name=tz_name)
+        else:
+            # No per-cluster windows. Stay permissive but respect the morning-
+            # only default so the engine doesn't pick 3am out of nowhere.
+            allowed = is_within_preferred_hours(now_unix=evaluated_at, tz_name=tz_name)
+
+        if allowed:
+            return None
+        return _decision_with_reason(
+            cluster_id,
+            evaluated_at,
+            Action.SKIP,
+            DEFAULT_DURATION_MINUTES,
+            DEFAULT_INTERVAL_HOURS,
+            confidence=CONFIDENCE_COOLDOWN,
+            code=TriggerCode.OUTSIDE_WINDOW,
+            message="outside configured watering window",
+        )
+
+    def _apply_seasonal_multiplier(self, cluster, decision, plant_care, evaluated_at):
+        """Scale ``decision.interval_hours`` by a seasonal multiplier and append
+        a ``SEASONAL_HOLD`` / ``SEASONAL_BOOST`` reason when the multiplier is
+        not 1.0. Clamps to [MIN_INTERVAL_HOURS, MAX_INTERVAL_HOURS]."""
+        prefs = self.db.get_preferences()
+        tz_name = prefs.timezone if prefs else None
+        environment = cluster.environment or "indoor"
+        season = season_for(evaluated_at, tz_name=tz_name)
+
+        # Pick the first plant_care entry's overrides if present. The decision
+        # is per-cluster, so a single representative is fine; a cluster mixing
+        # cacti and ferns should have been split in the first place.
+        plant_override = None
+        category_override = None
+        for care in plant_care:
+            data = care if isinstance(care, dict) else {}
+            if data.get("season_frequency_multiplier"):
+                plant_override = data["season_frequency_multiplier"]
+                break
+        # plant_care entries can also carry a category-level fallback under a
+        # secondary key when the species-level value is missing.
+        for care in plant_care:
+            data = care if isinstance(care, dict) else {}
+            if data.get("category_season_frequency_multiplier"):
+                category_override = data["category_season_frequency_multiplier"]
+                break
+
+        multiplier = seasonal_multiplier(
+            season,
+            environment=environment,
+            plant_override=plant_override,
+            category_override=category_override,
+        )
+        if multiplier == 1.0:
+            return
+        new_interval = int(round(decision.interval_hours * multiplier))
+        new_interval = max(MIN_INTERVAL_HOURS, min(MAX_INTERVAL_HOURS, new_interval))
+        decision.interval_hours = new_interval
+        decision.reasons = (
+            *decision.reasons,
+            Reason(
+                code=TriggerCode.SEASONAL_HOLD if multiplier < 1.0 else TriggerCode.SEASONAL_BOOST,
+                message=f"{season} multiplier {multiplier:g}× for {environment} cluster",
+                severity=Severity.INFO,
+            ),
+        )
 
     def _persist(self, decision: IrrigationDecision, triggered_by: str) -> None:
         """Best-effort persistence — never blocks the decision."""

@@ -301,6 +301,29 @@ class PlantHealthDaily(Base):
     sample_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
 
+class IrrigationWindow(Base):
+    """Per-cluster preferred watering window.
+
+    Plants want water in the morning so foliage dries before nightfall and
+    the root zone is moist before peak transpiration. The decision engine
+    skips actuation outside any configured window unless a stress trigger
+    overrides it. ``start_hour`` and ``end_hour`` are integers 0–23 in the
+    user's local time (UserPreferences.timezone). ``weekday_mask`` is a
+    Mon-bit-1 bitmask: 1=Mon, 2=Tue, 4=Wed, 8=Thu, 16=Fri, 32=Sat, 64=Sun;
+    127 = every day. Multiple windows per cluster are allowed (e.g. AM + PM).
+    """
+
+    __tablename__ = "irrigation_windows"
+    __table_args__ = (Index("idx_irrigation_windows_cluster", "cluster_id"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    cluster_id: Mapped[int] = mapped_column(ForeignKey("clusters.id", ondelete="CASCADE"), nullable=False)
+    weekday_mask: Mapped[int] = mapped_column(Integer, nullable=False, default=127)
+    start_hour: Mapped[int] = mapped_column(Integer, nullable=False)
+    end_hour: Mapped[int] = mapped_column(Integer, nullable=False)
+    label: Mapped[str | None] = mapped_column(String)
+
+
 class VacationWindow(Base):
     """Active vacation window — the engine and digest channels honor it."""
 
