@@ -104,10 +104,11 @@ def _sync_job() -> None:
         logger.debug("Sync job skipped: no Tuya credentials")
         return
 
+    registry = getattr(_app.state, "device_registry", None)
     session = _app.state.session_factory()
     try:
         repo = IrrigationRepository(session)
-        sync_svc = SyncService(repo, cloud)
+        sync_svc = SyncService(repo, registry, cloud)
         sync_svc.sync_all_sensors(hours=6)
         session.commit()
     except Exception:
@@ -142,17 +143,18 @@ def _check_job() -> None:
     from greenhouse_server.services.sync import SyncService
 
     cloud = _get_cloud()
+    registry = getattr(_app.state, "device_registry", None)
 
     session = _app.state.session_factory()
     try:
         repo = IrrigationRepository(session)
-        sync_svc = SyncService(repo, cloud)
+        sync_svc = SyncService(repo, registry, cloud)
         monitor = getattr(_app.state, "health_monitor", None)
         if monitor is not None:
             monitor.bind_repo(repo)
         irrigation_svc = IrrigationService(
             repo=repo,
-            dm=_app.state.device_manager,
+            registry=registry,
             sync_service=sync_svc,
             weather_client=_app.state.weather_client,
             plant_db=_app.state.plant_db,
@@ -218,21 +220,12 @@ def init_health_monitor(app: FastAPI, settings: Settings) -> None:
     Stored on ``app.state.health_monitor`` so dependency-injection wiring
     (:func:`greenhouse_server.deps.get_health_monitor`) and the scheduler
     job share one instance — its cache is the engine's source of truth
-    for actuation gating. Falls open if there is no device manager wired
+    for actuation gating. Falls open if there is no device registry wired
     (tests usually omit it).
     """
-    from greenhouse_core.devices import build_default_registry
     from greenhouse_server.services.health_monitor import DeviceHealthMonitor
 
-    dm = getattr(app.state, "device_manager", None)
     registry = getattr(app.state, "device_registry", None)
-    if registry is None and dm is not None:
-        try:
-            registry = build_default_registry(dm._transport)
-        except Exception:
-            logger.exception("Failed to build default device registry; health monitor disabled")
-            return
-
     if registry is None:
         logger.debug("Health monitor init skipped: no device registry")
         return
@@ -251,7 +244,6 @@ def init_health_monitor(app: FastAPI, settings: Settings) -> None:
             session.rollback()
             logger.exception("Health monitor startup hooks failed")
         app.state.health_monitor = monitor
-        app.state.device_registry = registry
     finally:
         session.close()
 

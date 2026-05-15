@@ -5,6 +5,7 @@ import time
 from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy.exc import IntegrityError
 
+from greenhouse_core.devices import UnknownDeviceModel
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_core.schemas import (
     CreateIrrigatorRequest,
@@ -17,7 +18,7 @@ from greenhouse_core.schemas import (
     SuccessResponse,
     UpdateIrrigatorRequest,
 )
-from greenhouse_server.deps import DeviceManagerDep, RepoDep, require_cluster
+from greenhouse_server.deps import DeviceRegistryDep, RepoDep, require_cluster
 from greenhouse_server.services.irrigation import schedule_pump_watcher
 
 router = APIRouter(tags=["irrigators"])
@@ -215,7 +216,7 @@ def start_irrigator(
     irrigator_id: int,
     request: StartIrrigatorRequest,
     repo: RepoDep,
-    dm: DeviceManagerDep,
+    registry: DeviceRegistryDep,
 ) -> IrrigatorActionResponse:
     """Manually start an irrigator over the Tuya local protocol.
 
@@ -229,17 +230,23 @@ def start_irrigator(
     Raises:
         HTTPException: 404 if the irrigator is unknown, 409 if the cluster
             daily cap or max-events-per-day limit would be exceeded, 503 if
-            Tuya credentials are missing, 502 if the device fails to start.
+            Tuya credentials are missing or the irrigator model has no
+            adapter, 502 if the device fails to start.
     """
     irrigator = repo.get_irrigator(irrigator_id)
     if not irrigator:
         raise HTTPException(status_code=404, detail="Irrigator not found")
-    if dm is None:
-        raise HTTPException(status_code=503, detail="No device manager (missing Tuya credentials)")
+    if registry is None:
+        raise HTTPException(status_code=503, detail="No device registry (missing Tuya credentials)")
 
     _check_rate_limits(repo, irrigator.cluster_id, irrigator_id, request.minutes)
 
-    success, output = dm.irrigator_start(irrigator, request.minutes)
+    try:
+        adapter = registry.get_irrigator(irrigator)
+    except UnknownDeviceModel as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    success, output = adapter.start(irrigator, request.minutes)
     if success:
         started_at = int(time.time())
         repo.add_irrigation_event(
@@ -258,7 +265,7 @@ def start_irrigator(
 
 
 @router.post("/irrigators/{irrigator_id}/stop", response_model=IrrigatorActionResponse)
-def stop_irrigator(irrigator_id: int, repo: RepoDep, dm: DeviceManagerDep) -> IrrigatorActionResponse:
+def stop_irrigator(irrigator_id: int, repo: RepoDep, registry: DeviceRegistryDep) -> IrrigatorActionResponse:
     """Manually stop a running irrigator over the Tuya local protocol.
 
     Side effects: actuates physical hardware and records an `off` irrigation
@@ -269,15 +276,21 @@ def stop_irrigator(irrigator_id: int, repo: RepoDep, dm: DeviceManagerDep) -> Ir
 
     Raises:
         HTTPException: 404 if the irrigator is unknown, 503 if Tuya
-            credentials are missing, 502 if the device fails to stop.
+            credentials are missing or the irrigator model has no adapter,
+            502 if the device fails to stop.
     """
     irrigator = repo.get_irrigator(irrigator_id)
     if not irrigator:
         raise HTTPException(status_code=404, detail="Irrigator not found")
-    if dm is None:
-        raise HTTPException(status_code=503, detail="No device manager (missing Tuya credentials)")
+    if registry is None:
+        raise HTTPException(status_code=503, detail="No device registry (missing Tuya credentials)")
 
-    success, output = dm.irrigator_off(irrigator)
+    try:
+        adapter = registry.get_irrigator(irrigator)
+    except UnknownDeviceModel as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    success, output = adapter.stop(irrigator)
     if success:
         repo.add_irrigation_event(
             irrigator_id=irrigator.id,

@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
-
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.pool import StaticPool
 
+from fake_devices import FakeIrrigatorAdapter
+from greenhouse_core.devices import DeviceRegistry
 from greenhouse_server.app import create_app
 from greenhouse_server.config import Settings
-from greenhouse_server.deps import get_device_manager, get_tuya_cloud
+from greenhouse_server.deps import get_device_registry, get_tuya_cloud
 
 from .conftest import TEST_ADMIN_PASSWORD, TEST_ADMIN_USERNAME, TEST_AUTH_SECRET
 
@@ -32,10 +32,11 @@ def _build_app(**override):
     }
     base.update(override)
     app = create_app(Settings(**base), engine=engine)
-    mock_dm = MagicMock()
-    mock_dm.irrigator_start.return_value = (True, "ok")
-    mock_dm.irrigator_off.return_value = (True, "ok")
-    app.dependency_overrides[get_device_manager] = lambda: mock_dm
+    fake = FakeIrrigatorAdapter()
+    registry = DeviceRegistry()
+    for key in ("rainpoint.ik10pw", "tuya_cloud", "tuya_local", ""):
+        registry.register_irrigator(key, lambda adapter=fake: adapter)
+    app.dependency_overrides[get_device_registry] = lambda: registry
     app.dependency_overrides[get_tuya_cloud] = lambda: None
     return app, engine
 

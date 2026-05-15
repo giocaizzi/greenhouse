@@ -12,7 +12,7 @@ from greenhouse_core.stats import get_irrigation_stats
 from greenhouse_core.utils import format_timestamp
 from greenhouse_server.deps import (
     ClusterServiceDep,
-    DeviceManagerDep,
+    DeviceRegistryDep,
     PlantDbDep,
     RepoDep,
     WeatherClientDep,
@@ -180,13 +180,13 @@ def scheduler_resume(request: Request, repo: RepoDep):
 
 
 @router.post("/bulk/stop-all")
-def bulk_stop_all_web(request: Request, repo: RepoDep, dm: DeviceManagerDep):
+def bulk_stop_all_web(request: Request, repo: RepoDep, registry: DeviceRegistryDep):
     """Emergency stop — invoked from dashboard / scheduler.
 
     HTMX target receives a one-line status fragment so the action is
     auditable inline.
     """
-    stopped, errors = stop_all_irrigators(repo, dm)
+    stopped, errors = stop_all_irrigators(repo, registry)
     return templates.TemplateResponse(
         request,
         "partials/_stop_all_result.html",

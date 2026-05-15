@@ -13,23 +13,58 @@ Two app fixtures exist:
 `client` fixture builds a TestClient on `app` (auth bypassed via override).
 `anonymous_client` uses `app_real_auth` and sends no credentials — so it
 actually triggers 401 / login-redirect.
-"""
 
-from unittest.mock import MagicMock
+Device wiring: a real :class:`DeviceRegistry` is registered for the canonical
+``rainpoint.ik10pw`` / ``tuya.tr301z`` model keys plus the legacy aliases
+(``tuya_cloud`` etc.) — its factories build :class:`FakeIrrigatorAdapter` /
+:class:`FakeSensorAdapter` instances from ``tests/fake_devices.py``. The
+registry is stored on ``app.state.fake_devices`` so tests can fetch the
+per-irrigator fake and assert on its recorded ``calls``.
+"""
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.pool import StaticPool
 
+from fake_devices import FakeIrrigatorAdapter, FakeSensorAdapter
+from greenhouse_core.devices import DeviceRegistry
 from greenhouse_server.app import create_app
 from greenhouse_server.auth import AuthenticatedUser, require_user, require_web_user
 from greenhouse_server.config import Settings
-from greenhouse_server.deps import get_device_manager, get_tuya_cloud
+from greenhouse_server.deps import get_device_registry, get_tuya_cloud
 
 TEST_ADMIN_USERNAME = "test-admin"
 TEST_ADMIN_PASSWORD = "test-admin-pw-123"
 TEST_AUTH_SECRET = "unit-test-jwt-secret-do-not-use-in-prod-please"
+
+
+class FakeDeviceWiring:
+    """Holds the shared fakes alongside the registry that resolves them.
+
+    Tests grab ``wiring.irrigator`` to assert on ``start_calls`` / ``stop_calls``
+    and ``wiring.sensor`` to inspect or drive sensor reads.
+    """
+
+    def __init__(self) -> None:
+        self.irrigator = FakeIrrigatorAdapter()
+        self.sensor = FakeSensorAdapter()
+        self.registry = DeviceRegistry()
+        # Register the production model keys + all legacy aliases. The fixtures
+        # exercise routes whose seed data uses ``type="tuya_cloud"`` and
+        # ``type="soil_moisture"``; we want one fake shared across keys so a
+        # test can run the engine and inspect the same adapter.
+        for key in ("rainpoint.ik10pw", "tuya_cloud", "tuya_local", "fake.irrigator", ""):
+            self.registry.register_irrigator(key, lambda adapter=self.irrigator: adapter)
+        for key in (
+            "tuya.tr301z",
+            "soil_moisture",
+            "temp_humidity",
+            "light",
+            "fake.sensor",
+            "",
+        ):
+            self.registry.register_sensor(key, lambda adapter=self.sensor: adapter)
 
 
 def _make_stubbed_app(*, bypass_auth: bool, **settings_override):
@@ -58,11 +93,9 @@ def _make_stubbed_app(*, bypass_auth: bool, **settings_override):
     base.update(settings_override)
     application = create_app(Settings(**base), engine=engine)
 
-    mock_dm = MagicMock()
-    mock_dm.irrigator_start.return_value = (True, "Started OK")
-    mock_dm.irrigator_off.return_value = (True, "Stopped OK")
-    mock_dm.read_sensor.return_value = {"temperature": 22.0, "soil_moisture": 50.0}
-    application.dependency_overrides[get_device_manager] = lambda: mock_dm
+    wiring = FakeDeviceWiring()
+    application.state.fake_devices = wiring
+    application.dependency_overrides[get_device_registry] = lambda: wiring.registry
     application.dependency_overrides[get_tuya_cloud] = lambda: None
 
     if bypass_auth:

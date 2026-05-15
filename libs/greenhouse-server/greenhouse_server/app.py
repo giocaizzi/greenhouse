@@ -10,7 +10,8 @@ from fastapi_mcp import AuthConfig, FastApiMCP
 from sqlalchemy.engine import Engine
 
 from greenhouse_core.database import create_db_engine, create_session_factory, init_db
-from greenhouse_core.devices import TuyaDeviceManager
+from greenhouse_core.devices import DeviceRegistry, build_default_registry
+from greenhouse_core.devices.tuya_transport import TuyaTransport
 from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_server.auth import bootstrap_admin, require_user
 from greenhouse_server.config import Settings
@@ -48,12 +49,18 @@ from greenhouse_server.web.exception_handlers import register_web_exception_hand
 from greenhouse_server.web.router import web_router
 
 
-def _init_device_manager() -> TuyaDeviceManager | None:
-    """Initialize device manager, returning None if credentials are missing."""
+def _init_device_registry() -> DeviceRegistry | None:
+    """Build the default device registry from environment Tuya credentials.
+
+    Returns ``None`` when credentials are missing or transport construction
+    fails, so the server still starts in degraded mode for tests and
+    credential-less environments.
+    """
     try:
-        return TuyaDeviceManager()
+        transport = TuyaTransport()
     except (ValueError, Exception):
         return None
+    return build_default_registry(transport)
 
 
 _mcp_bearer = HTTPBearer(auto_error=False)
@@ -136,7 +143,7 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
     # Store dependencies on app.state (accessed by deps.py)
     app.state.settings = settings
     app.state.session_factory = create_session_factory(engine)
-    app.state.device_manager = _init_device_manager()
+    app.state.device_registry = _init_device_registry()
     app.state.weather_client = WeatherClient(lat=settings.weather_lat, lon=settings.weather_lon)
     app.state.plant_db = _init_plant_db(settings)
 

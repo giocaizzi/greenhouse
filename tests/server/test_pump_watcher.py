@@ -2,17 +2,17 @@
 
 The watcher polls DP 105 over the Tuya local protocol during an active
 irrigation and aborts the pump on the first positive reading. Tests inject a
-fake device manager (in lieu of tinytuya) plus a fake clock/sleep so each
-case runs instantly.
+:class:`FakeIrrigatorAdapter` (in lieu of tinytuya) into a real
+:class:`DeviceRegistry`, plus a fake clock/sleep so each case runs instantly.
 """
 
 import time as _time
-from unittest.mock import MagicMock
 
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
+from fake_devices import FakeIrrigatorAdapter
 from greenhouse_core.devices import DeviceRegistry
 from greenhouse_core.devices.health import DeviceHealthState, HealthAlarm
 from greenhouse_core.models import Base, Irrigator
@@ -26,8 +26,16 @@ from greenhouse_server.services.pump_watcher import (
 )
 
 
+def _make_registry(adapter: FakeIrrigatorAdapter) -> DeviceRegistry:
+    """Build a registry that resolves every legacy irrigator type to ``adapter``."""
+    registry = DeviceRegistry()
+    for key in ("rainpoint.ik10pw", "tuya_cloud", "tuya_local", "fake.irrigator", ""):
+        registry.register_irrigator(key, lambda a=adapter: a)
+    return registry
+
+
 def _make_monitor(repo: IrrigationRepository) -> DeviceHealthMonitor:
-    """Build a no-registry monitor for tests — record() doesn't need a registry."""
+    """Build a no-op-registry monitor — record() doesn't traverse the registry."""
     return DeviceHealthMonitor(repo=repo, registry=DeviceRegistry())
 
 
@@ -94,11 +102,29 @@ def _alarm(no_water: bool, alarm_raw: object = None, error: str | None = None) -
     )
 
 
-def _make_dm(reads: list[DeviceHealthState]) -> MagicMock:
-    dm = MagicMock()
-    dm.read_irrigator_health.side_effect = list(reads)
-    dm.irrigator_off.return_value = (True, "Stopped OK")
-    return dm
+def _make_fake_adapter(reads: list[DeviceHealthState]) -> FakeIrrigatorAdapter:
+    """Build a fake adapter whose ``read_health`` walks ``reads`` in order.
+
+    Once the script is exhausted the last entry is returned indefinitely
+    (or the dataclass default, if the script is empty). Avoids StopIteration
+    when the watcher legitimately reads past the trip.
+    """
+    adapter = FakeIrrigatorAdapter()
+    script = list(reads)
+    sentinel = script[-1] if script else adapter.health_state
+
+    def _read_health(irrigator):
+        adapter.calls.append(("read_health", irrigator.id))
+        if script:
+            return script.pop(0)
+        return sentinel
+
+    adapter.read_health = _read_health  # type: ignore[method-assign]
+    return adapter
+
+
+def _stop_calls(adapter: FakeIrrigatorAdapter) -> list[tuple]:
+    return [c for c in adapter.calls if c[0] == "stop"]
 
 
 def _completed_alarms() -> list[DeviceHealthState]:
@@ -110,10 +136,10 @@ class TestWatcherHappyPaths:
     def test_completes_when_alarm_never_fires(self, repo, irrigator):
         """No alarm bit set across the cycle → outcome=completed, pump untouched."""
         clock = FakeClock(step=1.0)
-        dm = _make_dm(_completed_alarms())
+        adapter = _make_fake_adapter(_completed_alarms())
         watcher = PumpWatcherService(
             repo,
-            dm,
+            _make_registry(adapter),
             poll_seconds=1.0,
             warmup_seconds=0.0,
             max_read_failures=5,
@@ -124,7 +150,7 @@ class TestWatcherHappyPaths:
         result = watcher.watch(irrigator, duration_seconds=5)
 
         assert result["outcome"] == "completed"
-        dm.irrigator_off.assert_not_called()
+        assert _stop_calls(adapter) == []
         # No abort events should have been recorded
         events = repo.get_recent_events(irrigator.id, hours=1)
         assert all(e.action != EVENT_ACTION_ABORTED for e in events)
@@ -133,10 +159,10 @@ class TestWatcherHappyPaths:
     def test_completes_when_duration_is_zero(self, repo, irrigator):
         """Duration 0 means there's nothing to watch — exit immediately."""
         clock = FakeClock(step=1.0)
-        dm = _make_dm(_completed_alarms())
+        adapter = _make_fake_adapter(_completed_alarms())
         watcher = PumpWatcherService(
             repo,
-            dm,
+            _make_registry(adapter),
             poll_seconds=1.0,
             warmup_seconds=0.0,
             clock=clock,
@@ -147,7 +173,7 @@ class TestWatcherHappyPaths:
 
         assert result["outcome"] == "completed"
         assert result["polls"] == 0
-        dm.read_irrigator_health.assert_not_called()
+        assert not any(c[0] == "read_health" for c in adapter.calls)
 
 
 class TestWatcherTrips:
@@ -162,11 +188,11 @@ class TestWatcherTrips:
             _alarm(no_water=False, alarm_raw=0),
             _alarm(no_water=True, alarm_raw=1),
         ] + _completed_alarms()
-        dm = _make_dm(reads)
+        adapter = _make_fake_adapter(reads)
         monitor = _make_monitor(repo)
         watcher = PumpWatcherService(
             repo,
-            dm,
+            _make_registry(adapter),
             poll_seconds=1.0,
             warmup_seconds=0.0,
             clock=clock,
@@ -178,7 +204,7 @@ class TestWatcherTrips:
 
         assert result["outcome"] == "tripped"
         assert result["alarm_raw"] == 1
-        dm.irrigator_off.assert_called_once_with(irrigator)
+        assert _stop_calls(adapter) == [("stop", irrigator.id)]
 
         # Abort event recorded
         events = repo.get_recent_events(irrigator.id, hours=1)
@@ -199,10 +225,10 @@ class TestWatcherTrips:
         """Alarm bit set from t=0 must not trip until warmup elapses."""
         clock = FakeClock(step=1.0)
         # Every read shows the alarm bit
-        dm = _make_dm([_alarm(no_water=True, alarm_raw=1) for _ in range(20)])
+        adapter = _make_fake_adapter([_alarm(no_water=True, alarm_raw=1) for _ in range(20)])
         watcher = PumpWatcherService(
             repo,
-            dm,
+            _make_registry(adapter),
             poll_seconds=1.0,
             warmup_seconds=5.0,
             clock=clock,
@@ -220,10 +246,10 @@ class TestWatcherTrips:
     def test_trip_records_payload_with_alarm_value(self, repo, irrigator):
         """The activity event records the raw DP 105 value for forensics."""
         clock = FakeClock(step=1.0)
-        dm = _make_dm([_alarm(no_water=True, alarm_raw=1)] + _completed_alarms())
+        adapter = _make_fake_adapter([_alarm(no_water=True, alarm_raw=1)] + _completed_alarms())
         watcher = PumpWatcherService(
             repo,
-            dm,
+            _make_registry(adapter),
             poll_seconds=1.0,
             warmup_seconds=0.0,
             clock=clock,
@@ -254,10 +280,10 @@ class TestWatcherDegradedSignals:
             _alarm(no_water=False, alarm_raw=0),
             _alarm(no_water=False, alarm_raw=0),
         ] + _completed_alarms()
-        dm = _make_dm(reads)
+        adapter = _make_fake_adapter(reads)
         watcher = PumpWatcherService(
             repo,
-            dm,
+            _make_registry(adapter),
             poll_seconds=1.0,
             warmup_seconds=0.0,
             max_read_failures=3,
@@ -268,16 +294,16 @@ class TestWatcherDegradedSignals:
         result = watcher.watch(irrigator, duration_seconds=5)
 
         assert result["outcome"] == "completed"
-        dm.irrigator_off.assert_not_called()
+        assert _stop_calls(adapter) == []
 
     def test_abandons_after_consecutive_failures(self, repo, irrigator):
         """Persistent local-read failures abandon the watch without stopping the pump."""
         clock = FakeClock(step=1.0)
         reads = [_alarm(no_water=False, error="local read failed: timeout") for _ in range(10)]
-        dm = _make_dm(reads)
+        adapter = _make_fake_adapter(reads)
         watcher = PumpWatcherService(
             repo,
-            dm,
+            _make_registry(adapter),
             poll_seconds=1.0,
             warmup_seconds=0.0,
             max_read_failures=3,
@@ -289,7 +315,7 @@ class TestWatcherDegradedSignals:
 
         assert result["outcome"] == "abandoned"
         assert result["read_failures"] == 3
-        dm.irrigator_off.assert_not_called()
+        assert _stop_calls(adapter) == []
         events = repo.get_recent_events(irrigator.id, hours=1)
         assert all(e.action != EVENT_ACTION_ABORTED for e in events)
 
@@ -298,11 +324,15 @@ class TestWatcherTripSideEffectsAreRobust:
     def test_trip_proceeds_even_if_irrigator_off_raises(self, repo, irrigator):
         """If the stop call raises, the alert and event are still recorded."""
         clock = FakeClock(step=1.0)
-        dm = _make_dm([_alarm(no_water=True, alarm_raw=1)] + _completed_alarms())
-        dm.irrigator_off.side_effect = ConnectionError("device offline")
+        adapter = _make_fake_adapter([_alarm(no_water=True, alarm_raw=1)] + _completed_alarms())
+
+        def _raising_stop(_irrigator):
+            raise ConnectionError("device offline")
+
+        adapter.stop = _raising_stop  # type: ignore[method-assign]
         watcher = PumpWatcherService(
             repo,
-            dm,
+            _make_registry(adapter),
             poll_seconds=1.0,
             warmup_seconds=0.0,
             clock=clock,
@@ -331,11 +361,11 @@ class TestWatcherRoutesThroughMonitor:
         from greenhouse_core.models import ENTITY_IRRIGATOR
 
         clock = FakeClock(step=1.0)
-        dm = _make_dm([_alarm(no_water=True, alarm_raw=1)] + _completed_alarms())
+        adapter = _make_fake_adapter([_alarm(no_water=True, alarm_raw=1)] + _completed_alarms())
         monitor = _make_monitor(repo)
         watcher = PumpWatcherService(
             repo,
-            dm,
+            _make_registry(adapter),
             poll_seconds=1.0,
             warmup_seconds=0.0,
             clock=clock,
@@ -382,10 +412,10 @@ class TestWatcherIrrigatorModel:
         irrigator_b: Irrigator = repo.get_irrigator(irrigator_b_id)
 
         clock = FakeClock(step=1.0)
-        dm = _make_dm([_alarm(no_water=True, alarm_raw=1)] + _completed_alarms())
+        adapter = _make_fake_adapter([_alarm(no_water=True, alarm_raw=1)] + _completed_alarms())
         watcher = PumpWatcherService(
             repo,
-            dm,
+            _make_registry(adapter),
             poll_seconds=1.0,
             warmup_seconds=0.0,
             clock=clock,
