@@ -375,8 +375,9 @@ class TestEngineActuationBlock:
             )
         repo.session.commit()
 
-        dm = MagicMock()
-        dm.irrigator_start.return_value = (True, "Started OK")
+        # Reuse the fake adapter already registered on the monitor's registry
+        # so the irrigation service resolves through the same fake.
+        registry = monitor_._registry  # noqa: SLF001 — same registry as the monitor
         sync_service = MagicMock()
         sync_service.sync_and_read_sensors.return_value = {
             "temperature": 22.0,
@@ -393,7 +394,7 @@ class TestEngineActuationBlock:
 
         service = IrrigationService(
             repo=repo,
-            dm=dm,
+            registry=registry,
             sync_service=sync_service,
             weather_client=weather,
             plant_db=plant_db,
@@ -405,4 +406,4 @@ class TestEngineActuationBlock:
         assert result["action"] == "skip"
         assert any(r["code"] == TriggerCode.DEVICE_NO_WATER.value for r in result["reasons"]), result["reasons"]
         # The blocked device must not have been actuated.
-        dm.irrigator_start.assert_not_called()
+        assert not any(c[0] == "start" for c in irr_adapter.calls)

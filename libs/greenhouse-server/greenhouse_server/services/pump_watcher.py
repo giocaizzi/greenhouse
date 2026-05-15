@@ -32,7 +32,7 @@ import logging
 import time
 from collections.abc import Callable
 
-from greenhouse_core.devices import DeviceRegistry, TuyaDeviceManager
+from greenhouse_core.devices import DeviceRegistry
 from greenhouse_core.devices.health import HealthAlarm
 from greenhouse_core.models import ENTITY_IRRIGATOR, Irrigator
 from greenhouse_core.repository import IrrigationRepository
@@ -54,24 +54,22 @@ class PumpWatcherService:
     def __init__(
         self,
         repo: IrrigationRepository,
-        dm: TuyaDeviceManager,
+        registry: DeviceRegistry,
         *,
         poll_seconds: float = 2.0,
         warmup_seconds: float = 5.0,
         max_read_failures: int = 5,
         clock: Callable[[], float] = time.monotonic,
         sleep: Callable[[float], None] = time.sleep,
-        registry: DeviceRegistry | None = None,
         monitor: DeviceHealthMonitor | None = None,
     ):
         self._repo = repo
-        self._dm = dm
+        self._registry = registry
         self._poll = max(0.1, float(poll_seconds))
         self._warmup = max(0.0, float(warmup_seconds))
         self._max_read_failures = max(1, int(max_read_failures))
         self._clock = clock
         self._sleep = sleep
-        self._registry = registry
         self._monitor = monitor
 
     def watch(
@@ -164,17 +162,13 @@ class PumpWatcherService:
     # ── Internals ─────────────────────────────────────────────────────────
 
     def _read_health(self, irrigator: Irrigator):
-        """Read the device's health surface.
+        """Read the device's health surface via the registry-resolved adapter.
 
-        Prefers the registry-backed adapter when available so the watcher
-        and the slow-path monitor share one code path. Falls back to the
-        legacy ``TuyaDeviceManager`` shim — tests inject a MagicMock dm
-        whose ``read_irrigator_health`` returns a canned state.
+        Watcher and slow-path monitor share this code path so a single
+        adapter implementation drives both safety surfaces.
         """
-        if self._registry is not None:
-            adapter = self._registry.get_irrigator(irrigator)
-            return adapter.read_health(irrigator)
-        return self._dm.read_irrigator_health(irrigator)
+        adapter = self._registry.get_irrigator(irrigator)
+        return adapter.read_health(irrigator)
 
     def _handle_trip(
         self,
@@ -199,9 +193,10 @@ class PumpWatcherService:
         stop_ok = False
         stop_msg = ""
         try:
-            stop_ok, stop_msg = self._dm.irrigator_off(irrigator)
+            adapter = self._registry.get_irrigator(irrigator)
+            stop_ok, stop_msg = adapter.stop(irrigator)
         except Exception as exc:
-            stop_msg = f"irrigator_off raised: {exc}"
+            stop_msg = f"adapter.stop raised: {exc}"
             logger.exception("Pump watcher could not stop irrigator %d", irrigator.id)
 
         alarm_raw = state.raw.get("alarm_raw") if isinstance(state.raw, dict) else None
@@ -284,12 +279,10 @@ class PumpWatcherService:
     def _lazy_monitor(self) -> DeviceHealthMonitor | None:
         """Build a transient monitor when one wasn't injected.
 
-        Test harness path: callers that don't pass a registry or monitor
-        get a no-op write through ``upsert_alert`` keyed on
+        Test harness path: callers that don't pass a monitor get a no-op
+        write through ``upsert_alert`` keyed on
         ``health:irrigator:{id}:no_water``. The slow-path scheduler still
-        owns the long-lived cache; this transient instance only writes
-        the alert row and exits.
+        owns the long-lived cache; this transient instance only writes the
+        alert row and exits.
         """
-        if self._registry is None:
-            return None
         return DeviceHealthMonitor(repo=self._repo, registry=self._registry)

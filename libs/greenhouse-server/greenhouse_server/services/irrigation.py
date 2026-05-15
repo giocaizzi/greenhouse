@@ -4,7 +4,7 @@ import logging
 import time as _time
 from datetime import UTC, datetime
 
-from greenhouse_core.devices import TuyaDeviceManager
+from greenhouse_core.devices import DeviceRegistry, UnknownDeviceModel
 from greenhouse_core.logic import IrrigationLogic
 from greenhouse_core.logic.decision import Action, Severity
 from greenhouse_core.models import ENTITY_CLUSTER
@@ -38,8 +38,8 @@ def schedule_pump_watcher(irrigator_id: int, duration_minutes: int, started_at: 
 
     Returns:
         True if a job was scheduled, False if the scheduler is unavailable,
-        the watcher is disabled, the irrigator has no device manager, or the
-        duration is non-positive.
+        the watcher is disabled, the irrigator has no device registry, or
+        the duration is non-positive.
     """
     if duration_minutes <= 0:
         return False
@@ -54,8 +54,8 @@ def schedule_pump_watcher(irrigator_id: int, duration_minutes: int, started_at: 
         if settings is not None and not settings.pump_watcher_enabled:
             return False
 
-        dm = getattr(_app.state, "device_manager", None)
-        if dm is None:
+        registry: DeviceRegistry | None = getattr(_app.state, "device_registry", None)
+        if registry is None:
             return False
 
         run_date = datetime.fromtimestamp(started_at, tz=UTC)
@@ -86,11 +86,10 @@ def schedule_pump_watcher(irrigator_id: int, duration_minutes: int, started_at: 
                     monitor.bind_repo(repo)
                 watcher = PumpWatcherService(
                     repo,
-                    dm,
+                    registry,
                     poll_seconds=poll,
                     warmup_seconds=warmup,
                     max_read_failures=max_failures,
-                    registry=getattr(_app.state, "device_registry", None),
                     monitor=monitor,
                 )
                 watcher.watch(irrigator, duration_seconds, started_at=started_at)
@@ -165,14 +164,14 @@ class IrrigationService:
     def __init__(
         self,
         repo: IrrigationRepository,
-        dm: TuyaDeviceManager | None,
+        registry: DeviceRegistry | None,
         sync_service: SyncService,
         weather_client: WeatherClient,
         plant_db: PlantDatabase,
         health_monitor: DeviceHealthMonitor | None = None,
     ):
         self._repo = repo
-        self._dm = dm
+        self._registry = registry
         self._sync = sync_service
         self._weather = weather_client
         self._plant_db = plant_db
@@ -257,12 +256,18 @@ class IrrigationService:
             result["action"] = "error"
             result["reason"] = "no irrigators found"
             return result
-        if self._dm is None:
+        if self._registry is None:
             result["action"] = "error"
-            result["reason"] = "no device manager"
+            result["reason"] = "no device registry"
             return result
 
         irrigator = irrigators[0]
+        try:
+            adapter = self._registry.get_irrigator(irrigator)
+        except UnknownDeviceModel as exc:
+            result["action"] = "error"
+            result["reason"] = f"no adapter for irrigator: {exc}"
+            return result
 
         # Device-health gate: if a NO_WATER / RAIN / OFFLINE alarm is open
         # for this irrigator, append a typed Reason and short-circuit to
@@ -299,7 +304,7 @@ class IrrigationService:
                 return result
 
         duration = decision.duration_minutes
-        success, output = self._dm.irrigator_start(irrigator, duration)
+        success, output = adapter.start(irrigator, duration)
 
         soil_note = (
             f", soil={sensor_data['soil_moisture']:.0f}%"

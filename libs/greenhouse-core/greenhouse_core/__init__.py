@@ -2,7 +2,7 @@
 
 from greenhouse_core.cloud import TuyaCloud
 from greenhouse_core.database import create_db_engine, create_session_factory, init_db
-from greenhouse_core.devices import TuyaDeviceManager
+from greenhouse_core.devices import DeviceRegistry, build_default_registry
 from greenhouse_core.learning import IrrigationLearner
 from greenhouse_core.logic import IrrigationLogic
 from greenhouse_core.models import (
@@ -19,6 +19,7 @@ from greenhouse_core.repository import IrrigationRepository
 
 __all__ = [
     "Cluster",
+    "DeviceRegistry",
     "IrrigationConfig",
     "IrrigationEvent",
     "IrrigationLearner",
@@ -30,7 +31,7 @@ __all__ = [
     "Sensor",
     "SensorReading",
     "TuyaCloud",
-    "TuyaDeviceManager",
+    "build_default_registry",
     "create_db_engine",
     "create_session_factory",
     "init_db",

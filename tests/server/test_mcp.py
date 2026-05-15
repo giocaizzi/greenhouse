@@ -4,7 +4,6 @@ import ast
 import asyncio
 import json
 from pathlib import Path
-from unittest.mock import MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
@@ -13,9 +12,11 @@ from sqlalchemy import create_engine
 from sqlalchemy.pool import StaticPool
 from starlette.routing import Mount, Route
 
+from fake_devices import FakeIrrigatorAdapter, FakeSensorAdapter
+from greenhouse_core.devices import DeviceRegistry
 from greenhouse_server.app import create_app
 from greenhouse_server.config import Settings
-from greenhouse_server.deps import get_device_manager, get_tuya_cloud
+from greenhouse_server.deps import get_device_registry, get_tuya_cloud
 
 
 def test_mcp_endpoint_is_mounted(app):
@@ -160,11 +161,14 @@ def _build_mcp_client(*, mcp_token: str | None) -> TestClient:
     )
     application = create_app(settings, engine=engine)
 
-    mock_dm = MagicMock()
-    mock_dm.irrigator_start.return_value = (True, "Started OK")
-    mock_dm.irrigator_off.return_value = (True, "Stopped OK")
-    mock_dm.read_sensor.return_value = {"temperature": 22.0, "soil_moisture": 50.0}
-    application.dependency_overrides[get_device_manager] = lambda: mock_dm
+    fake_irrigator = FakeIrrigatorAdapter()
+    fake_sensor = FakeSensorAdapter()
+    registry = DeviceRegistry()
+    for key in ("rainpoint.ik10pw", "tuya_cloud", "tuya_local", ""):
+        registry.register_irrigator(key, lambda adapter=fake_irrigator: adapter)
+    for key in ("tuya.tr301z", "soil_moisture", "temp_humidity", "light", ""):
+        registry.register_sensor(key, lambda adapter=fake_sensor: adapter)
+    application.dependency_overrides[get_device_registry] = lambda: registry
     application.dependency_overrides[get_tuya_cloud] = lambda: None
 
     return TestClient(application, raise_server_exceptions=False)

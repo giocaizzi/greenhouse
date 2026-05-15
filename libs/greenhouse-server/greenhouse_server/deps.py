@@ -7,7 +7,7 @@ from fastapi import Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from greenhouse_core.cloud import TuyaCloud
-from greenhouse_core.devices import TuyaDeviceManager
+from greenhouse_core.devices import DeviceRegistry
 from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.services.cluster import ClusterService
@@ -33,8 +33,8 @@ def get_repository(session: Annotated[Session, Depends(get_session)]) -> Irrigat
     return IrrigationRepository(session)
 
 
-def get_device_manager(request: Request) -> TuyaDeviceManager | None:
-    return getattr(request.app.state, "device_manager", None)
+def get_device_registry(request: Request) -> DeviceRegistry | None:
+    return getattr(request.app.state, "device_registry", None)
 
 
 def get_health_monitor(request: Request) -> DeviceHealthMonitor | None:
@@ -83,9 +83,10 @@ def require_cluster(repo: IrrigationRepository, cluster_id: int):
 
 def get_sync_service(
     repo: Annotated[IrrigationRepository, Depends(get_repository)],
+    registry: Annotated[DeviceRegistry | None, Depends(get_device_registry)],
     cloud: Annotated[TuyaCloud | None, Depends(get_tuya_cloud)],
 ) -> SyncService:
-    return SyncService(repo, cloud)
+    return SyncService(repo, registry, cloud)
 
 
 def get_cluster_service(
@@ -104,20 +105,20 @@ def get_plant_health_service(
 
 def get_irrigation_service(
     repo: Annotated[IrrigationRepository, Depends(get_repository)],
-    dm: Annotated[TuyaDeviceManager | None, Depends(get_device_manager)],
+    registry: Annotated[DeviceRegistry | None, Depends(get_device_registry)],
     sync_service: Annotated[SyncService, Depends(get_sync_service)],
     weather: Annotated[WeatherClient, Depends(get_weather_client)],
     plant_db: Annotated[PlantDatabase, Depends(get_plant_db)],
     health_monitor: Annotated[DeviceHealthMonitor | None, Depends(get_health_monitor)],
 ) -> IrrigationService:
-    return IrrigationService(repo, dm, sync_service, weather, plant_db, health_monitor=health_monitor)
+    return IrrigationService(repo, registry, sync_service, weather, plant_db, health_monitor=health_monitor)
 
 
 # --- Type aliases for route injection ---
 
 SessionDep = Annotated[Session, Depends(get_session)]
 RepoDep = Annotated[IrrigationRepository, Depends(get_repository)]
-DeviceManagerDep = Annotated[TuyaDeviceManager | None, Depends(get_device_manager)]
+DeviceRegistryDep = Annotated[DeviceRegistry | None, Depends(get_device_registry)]
 TuyaCloudDep = Annotated[TuyaCloud | None, Depends(get_tuya_cloud)]
 WeatherClientDep = Annotated[WeatherClient, Depends(get_weather_client)]
 PlantDbDep = Annotated[PlantDatabase, Depends(get_plant_db)]

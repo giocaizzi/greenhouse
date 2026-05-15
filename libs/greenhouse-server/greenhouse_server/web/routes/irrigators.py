@@ -7,7 +7,8 @@ import json
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-from greenhouse_server.deps import DeviceManagerDep, RepoDep, require_cluster
+from greenhouse_core.devices import UnknownDeviceModel
+from greenhouse_server.deps import DeviceRegistryDep, RepoDep, require_cluster
 from greenhouse_server.web.context import base_context
 from greenhouse_server.web.templating import templates
 
@@ -145,12 +146,12 @@ def start_irrigator(
     request: Request,
     irrigator_id: int,
     repo: RepoDep,
-    dm: DeviceManagerDep,
+    registry: DeviceRegistryDep,
     minutes: str = Form(""),
 ):
     irr = _get_irrigator_or_404(repo, irrigator_id)
-    if dm is None:
-        raise HTTPException(503, "No device manager configured")
+    if registry is None:
+        raise HTTPException(503, "No device registry configured")
     mins: int | None = None
     if minutes.strip():
         try:
@@ -158,7 +159,11 @@ def start_irrigator(
         except ValueError as exc:
             raise HTTPException(400, "Invalid minutes") from exc
 
-    success, message = dm.irrigator_start(irr, mins)
+    try:
+        adapter = registry.get_irrigator(irr)
+    except UnknownDeviceModel as exc:
+        raise HTTPException(503, str(exc)) from exc
+    success, message = adapter.start(irr, mins)
     repo.add_irrigation_event(
         irrigator_id=irr.id,
         action="start" if success else "attempted",
@@ -179,12 +184,16 @@ def stop_irrigator(
     request: Request,
     irrigator_id: int,
     repo: RepoDep,
-    dm: DeviceManagerDep,
+    registry: DeviceRegistryDep,
 ):
     irr = _get_irrigator_or_404(repo, irrigator_id)
-    if dm is None:
-        raise HTTPException(503, "No device manager configured")
-    success, message = dm.irrigator_off(irr)
+    if registry is None:
+        raise HTTPException(503, "No device registry configured")
+    try:
+        adapter = registry.get_irrigator(irr)
+    except UnknownDeviceModel as exc:
+        raise HTTPException(503, str(exc)) from exc
+    success, message = adapter.stop(irr)
     repo.add_irrigation_event(
         irrigator_id=irr.id,
         action="stop" if success else "attempted",
