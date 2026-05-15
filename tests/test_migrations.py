@@ -62,12 +62,7 @@ def test_device_type_backfill_rewrites_legacy_values(file_db):
     init_db(engine)
 
     with engine.begin() as conn:
-        conn.execute(
-            text(
-                "INSERT INTO clusters (id, name, environment, created_at) "
-                "VALUES (1, 'C', 'indoor', 0)"
-            )
-        )
+        conn.execute(text("INSERT INTO clusters (id, name, environment, created_at) VALUES (1, 'C', 'indoor', 0)"))
         conn.execute(
             text(
                 "INSERT INTO irrigators (id, cluster_id, tuya_device_id, name, type) "
@@ -89,9 +84,7 @@ def test_device_type_backfill_rewrites_legacy_values(file_db):
     # Re-applying the backfill UPDATEs is idempotent — rows already on the
     # new form should not change.
     with engine.begin() as conn:
-        conn.execute(
-            text("UPDATE irrigators SET type = 'rainpoint.ik10pw' WHERE type IN ('tuya_cloud', 'tuya_local')")
-        )
+        conn.execute(text("UPDATE irrigators SET type = 'rainpoint.ik10pw' WHERE type IN ('tuya_cloud', 'tuya_local')"))
         conn.execute(
             text("UPDATE sensors SET type = 'tuya.tr301z' WHERE type IN ('soil_moisture', 'temp_humidity', 'light')")
         )
