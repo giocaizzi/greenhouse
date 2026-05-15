@@ -1,4 +1,10 @@
-"""Test suite for irrigation system - Device management."""
+"""Tests for the IK10PW irrigator adapter and the legacy ``TuyaDeviceManager`` shim.
+
+The shim is preserved verbatim in PR 1 so existing call sites (server,
+deps, pump watcher, bulk) keep working unchanged. Once PR 2 wires the
+:class:`DeviceRegistry` through ``IrrigationService`` we'll move the
+adapter-level assertions out of the shim and onto the adapter directly.
+"""
 
 from unittest.mock import MagicMock, patch
 

@@ -1,0 +1,26 @@
+{
+  "model_key": "rainpoint.ik10pw",
+  "vendor": "rainpoint",
+  "transport": "tuya_hybrid",
+  "protocol_version": 3.5,
+  "duration_unit": "seconds",
+  "alarm_bitmask": 1,
+  "dp_map": {
+    "switch": 1,
+    "duration": 102,
+    "interval": 103,
+    "left_time": 104,
+    "alarm": 105,
+    "work_status": 106,
+    "next_run": 107,
+    "power_status": 108,
+    "auto_run": 109
+  },
+  "capabilities": [
+    "has_local_duration_dp",
+    "has_water_shortage_dp",
+    "needs_keepalive_fallback",
+    "supports_local_status",
+    "supports_cloud_switch"
+  ]
+}
