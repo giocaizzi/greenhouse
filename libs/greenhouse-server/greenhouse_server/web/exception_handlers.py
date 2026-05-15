@@ -10,6 +10,7 @@ from __future__ import annotations
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 
+from greenhouse_server.auth import _RedirectAuthError, render_login_redirect
 from greenhouse_server.web.context import base_context, is_hx
 from greenhouse_server.web.templating import templates
 
@@ -31,6 +32,12 @@ def _error_template(request: Request) -> str:
 def register_web_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(HTTPException)
     async def handle_http_exc(request: Request, exc: HTTPException):
+        # Auth redirect sentinel — always convert to a 303 to /login, even on
+        # API paths so a stale browser tab fetching /api/v1 also gets bounced
+        # to the form. CLI clients should be using the bearer header, not
+        # following redirects, so this only affects browsers.
+        if isinstance(exc, _RedirectAuthError):
+            return render_login_redirect(exc)
         if not _is_html_request(request):
             from fastapi.responses import JSONResponse
 

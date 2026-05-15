@@ -26,7 +26,7 @@ class TestClusterInsights:
         from greenhouse_server.deps import get_device_manager, get_tuya_cloud
 
         engine = create_engine("sqlite://", echo=False, connect_args={"check_same_thread": False}, poolclass=StaticPool)
-        settings = Settings(db_url="sqlite://", enable_scheduler=False)
+        settings = Settings(db_url="sqlite://", enable_scheduler=False, auth_enabled=False)
         application = create_app(settings, engine=engine)
         application.dependency_overrides[get_device_manager] = lambda: None
         application.dependency_overrides[get_tuya_cloud] = lambda: None

@@ -50,6 +50,14 @@ def base_context(request: Request, **extra) -> dict:
         finally:
             session.close()
 
+    # auth_enabled is read off app.state so the topbar can hide the Sign out
+    # button when running in the no-auth dev mode.
+    auth_enabled = True
+    try:
+        auth_enabled = bool(request.app.state.settings.auth_enabled)
+    except AttributeError:
+        pass
+
     return {
         "request": request,
         "is_hx": is_hx(request),
@@ -58,5 +66,6 @@ def base_context(request: Request, **extra) -> dict:
         "active_vacation": active_vacation,
         "scheduler_paused": scheduler_paused,
         "app_version": APP_VERSION,
+        "auth_enabled": auth_enabled,
         **extra,
     }

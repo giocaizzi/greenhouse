@@ -15,7 +15,7 @@ from greenhouse_server.scheduler import scheduler as bg_scheduler
 
 def _new_app_with_engine(engine):
     """Build an app bound to a specific engine (so restart simulations share state)."""
-    settings = Settings(db_url="sqlite://", enable_scheduler=False)
+    settings = Settings(db_url="sqlite://", enable_scheduler=False, auth_enabled=False)
     application = create_app(settings, engine=engine)
 
     mock_dm = MagicMock()
