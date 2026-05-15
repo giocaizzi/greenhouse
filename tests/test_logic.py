@@ -1,6 +1,8 @@
 """Test suite for irrigation system - Smart logic."""
 
 import time
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -8,9 +10,24 @@ from fake_data import FAKE_CLUSTER_NAME, FAKE_PLANT_SPECIES, FAKE_SENSOR_ID
 from greenhouse_core.logic import IrrigationLogic
 from greenhouse_core.plant_db import get_plant_database
 
+# Wed 2026-04-08 07:00 UTC — inside the engine's default 06–10 preferred-hours
+# window so `_apply_window_rule` does not short-circuit to OUTSIDE_WINDOW before
+# the soil / temp / light / trend rules under test get a chance to fire.
+_FROZEN_TS = int(datetime(2026, 4, 8, 7, 0, tzinfo=ZoneInfo("UTC")).timestamp())
+
 
 class TestIrrigationLogic:
     """Test smart irrigation decision logic."""
+
+    @pytest.fixture(autouse=True)
+    def _freeze_clock(self, monkeypatch):
+        """Pin ``time.time`` so the engine's window gate is deterministic.
+
+        Without this, tests that don't configure an IrrigationWindow row hit the
+        default 06–10 preferred-hours fallback and skip with OUTSIDE_WINDOW
+        whenever the wall clock is outside that range.
+        """
+        monkeypatch.setattr(time, "time", lambda: _FROZEN_TS)
 
     @pytest.fixture(autouse=True)
     def setup(self, tmp_db):
