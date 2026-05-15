@@ -10,7 +10,7 @@ from typing import Literal
 from sqlalchemy import select
 
 from greenhouse_core.constants import DEFAULT_SOIL_MOISTURE_MAX, DEFAULT_SOIL_MOISTURE_MIN
-from greenhouse_core.models import IrrigationEvent, Plant, Sensor, SensorReading
+from greenhouse_core.models import IrrigationEvent, Plant, Sensor
 from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_core.schemas import (
@@ -51,8 +51,11 @@ def build_plant_chart_payload(
     if plant is None:
         return {}
 
-    sensors = [s for s in repo.get_sensors_in_cluster(plant.cluster_id) if s.plant_id == plant_id]
-    datasets = _build_sensor_datasets(repo, sensors, hours, metric)
+    # Use assignment-aware reading lookup so historical readings stay attributed
+    # to the plant that actually owned the sensor at reading time. Filtering
+    # by current `sensor.plant_id` re-attributes prior history whenever a
+    # sensor is reassigned, producing misleading trends.
+    datasets = _build_plant_sensor_datasets(repo, plant_id, hours, metric)
     events = _build_event_list(repo, plant.cluster_id, hours)
     threshold = _threshold_for_plant(plant, plant_db, metric)
 
@@ -88,6 +91,43 @@ def build_cluster_chart_payload(
         "events": events,
         "threshold": threshold,
     }
+
+
+def _build_plant_sensor_datasets(
+    repo: IrrigationRepository,
+    plant_id: int,
+    hours: int,
+    metric: Metric,
+) -> list[dict]:
+    """Assignment-aware variant: readings are filtered to windows when the
+    sensor was actually linked to this plant. One dataset per sensor that ever
+    served this plant within the lookback window."""
+    field = _metric_field(metric)
+    since = int(time.time()) - hours * 3600
+    readings = repo.readings_for_plant(plant_id, since_ts=since)
+    by_sensor: dict[int, list[tuple[int, float]]] = defaultdict(list)
+    for r in readings:
+        val = getattr(r, field, None)
+        if val is None:
+            continue
+        by_sensor[r.sensor_id].append((r.timestamp, float(val)))
+
+    sensor_names: dict[int, str] = {}
+    if by_sensor:
+        for s in repo.session.scalars(select(Sensor).where(Sensor.id.in_(by_sensor.keys()))):
+            sensor_names[s.id] = s.name
+
+    datasets = []
+    for sensor_id, points in by_sensor.items():
+        points.sort(key=lambda p: p[0])
+        datasets.append(
+            {
+                "sensor_id": sensor_id,
+                "sensor_name": sensor_names.get(sensor_id, f"sensor#{sensor_id}"),
+                "points": points,
+            }
+        )
+    return datasets
 
 
 def _build_sensor_datasets(
@@ -312,25 +352,22 @@ def build_plant_health_timeline_payload(
     if plant is None:
         return None
 
-    sensors = [s for s in repo.get_sensors_in_cluster(plant.cluster_id) if s.plant_id == plant_id]
-    if not sensors:
+    cutoff = int(time.time()) - 90 * 86400
+    # Assignment-aware: include only readings that belonged to this plant at
+    # reading time. A sensor that was on this plant 30 days ago and is now on
+    # a different one still contributes its 30-days-ago readings; readings
+    # taken after the reassignment do not.
+    readings = repo.readings_for_plant(plant_id, since_ts=cutoff)
+    if not readings:
         return PlantHealthTimelineResponse(plant_id=plant_id, points=[])
 
-    cutoff = int(time.time()) - 90 * 86400
     daily_buckets: dict[int, list[float]] = defaultdict(list)
-
-    for sensor in sensors:
-        readings = repo.session.scalars(
-            select(SensorReading)
-            .where(SensorReading.sensor_id == sensor.id, SensorReading.timestamp >= cutoff)
-            .order_by(SensorReading.timestamp.asc())
-        )
-        for r in readings:
-            if r.soil_moisture is None:
-                continue
-            dt = datetime.fromtimestamp(r.timestamp, tz=UTC)
-            day_start = int(dt.replace(hour=0, minute=0, second=0, microsecond=0).timestamp())
-            daily_buckets[day_start].append(float(r.soil_moisture))
+    for r in readings:
+        if r.soil_moisture is None:
+            continue
+        dt = datetime.fromtimestamp(r.timestamp, tz=UTC)
+        day_start = int(dt.replace(hour=0, minute=0, second=0, microsecond=0).timestamp())
+        daily_buckets[day_start].append(float(r.soil_moisture))
 
     points = sorted((day_ts, min(100.0, max(0.0, sum(v) / len(v)))) for day_ts, v in daily_buckets.items())
 

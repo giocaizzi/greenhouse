@@ -93,6 +93,39 @@ class Sensor(Base):
     readings: Mapped[list["SensorReading"]] = relationship(back_populates="sensor", cascade="all, delete-orphan")
 
 
+class SensorAssignment(Base):
+    """Time-bounded link between a sensor and a plant.
+
+    ``Sensor.plant_id`` keeps the *current* pointer (fast path for decisions
+    and forward-looking queries). This table records *when* each link was
+    active so historical queries — plant charts, health timelines, learning
+    profiles — can attribute each reading to the plant the sensor was actually
+    measuring at reading time, even after the sensor is reassigned.
+
+    Lifecycle:
+    - One open row per sensor at any time (``ended_at IS NULL`` means current).
+    - Assignment opens when a sensor is created with ``plant_id`` set OR when a
+      PUT changes its ``plant_id`` to a non-NULL value.
+    - Assignment closes (``ended_at`` is stamped) when ``plant_id`` changes
+      again or is cleared. The migration backfills a single open row per
+      already-assigned sensor with ``started_at=0`` so existing history stays
+      attributed to the current plant.
+    """
+
+    __tablename__ = "sensor_assignments"
+    __table_args__ = (
+        Index("idx_sensor_assignments_sensor", "sensor_id"),
+        Index("idx_sensor_assignments_plant", "plant_id"),
+        Index("idx_sensor_assignments_time", "started_at", "ended_at"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    sensor_id: Mapped[int] = mapped_column(ForeignKey("sensors.id", ondelete="CASCADE"), nullable=False)
+    plant_id: Mapped[int] = mapped_column(ForeignKey("plants.id", ondelete="CASCADE"), nullable=False)
+    started_at: Mapped[int] = mapped_column(Integer, nullable=False)
+    ended_at: Mapped[int | None] = mapped_column(Integer)
+
+
 class SensorReading(Base):
     """A sensor reading (time-series, deduplicated)."""
 
