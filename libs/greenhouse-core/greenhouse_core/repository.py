@@ -19,6 +19,7 @@ from greenhouse_core.models import (
     Plant,
     PlantHealthDaily,
     Sensor,
+    SensorAssignment,
     SensorReading,
     UserPreferences,
     VacationWindow,
@@ -130,8 +131,16 @@ class IrrigationRepository:
         sensor_type: str,
         config: dict,
         plant_id: int | None = None,
+        assignment_started_at: int | None = None,
     ) -> int:
-        """Add a sensor device and return its ID."""
+        """Add a sensor device and return its ID.
+
+        When ``plant_id`` is set, opens a sensor_assignment so historical
+        attribution starts at ``assignment_started_at`` (defaults to "now").
+        Pass ``assignment_started_at=0`` (or any earlier timestamp) when
+        importing a sensor whose existing readings predate this row — the
+        migration backfill uses the same convention.
+        """
         sensor = Sensor(
             cluster_id=cluster_id,
             tuya_device_id=tuya_device_id,
@@ -142,7 +151,97 @@ class IrrigationRepository:
         )
         self.session.add(sensor)
         self.session.flush()
+        if plant_id is not None:
+            ts = assignment_started_at if assignment_started_at is not None else int(time.time())
+            self._open_sensor_assignment(sensor.id, plant_id, when=ts)
         return sensor.id
+
+    # ── Sensor assignment history ────────────────────────────────────────────
+    # Sensor.plant_id is the current pointer; SensorAssignment is the history.
+    # The two are kept in lock-step by reassign_sensor_to_plant() — never
+    # mutate Sensor.plant_id directly outside this module.
+
+    def _open_sensor_assignment(self, sensor_id: int, plant_id: int, *, when: int) -> SensorAssignment:
+        row = SensorAssignment(sensor_id=sensor_id, plant_id=plant_id, started_at=when, ended_at=None)
+        self.session.add(row)
+        self.session.flush()
+        return row
+
+    def _close_open_sensor_assignment(self, sensor_id: int, *, when: int) -> None:
+        open_row = self.session.scalars(
+            select(SensorAssignment).where(
+                SensorAssignment.sensor_id == sensor_id,
+                SensorAssignment.ended_at.is_(None),
+            )
+        ).first()
+        if open_row is not None and open_row.ended_at is None:
+            open_row.ended_at = when
+            self.session.flush()
+
+    def reassign_sensor_to_plant(self, sensor_id: int, new_plant_id: int | None, *, when: int | None = None) -> None:
+        """Atomically move a sensor to ``new_plant_id`` (or detach with None).
+
+        Closes any open assignment row for the sensor and, when ``new_plant_id``
+        is not None, opens a fresh one. The sensor's ``plant_id`` pointer is
+        updated to match. No-ops when the requested plant is already the
+        current assignment, so callers can use this as an idempotent setter.
+        """
+        sensor = self.session.get(Sensor, sensor_id)
+        if sensor is None:
+            return
+        if sensor.plant_id == new_plant_id:
+            return
+        ts = when if when is not None else int(time.time())
+        self._close_open_sensor_assignment(sensor_id, when=ts)
+        sensor.plant_id = new_plant_id
+        if new_plant_id is not None:
+            self._open_sensor_assignment(sensor_id, new_plant_id, when=ts)
+        self.session.flush()
+
+    def sensor_assignments_for_plant(self, plant_id: int) -> list[SensorAssignment]:
+        """All assignment rows (open or closed) ever linking sensors to this plant."""
+        return list(
+            self.session.scalars(
+                select(SensorAssignment)
+                .where(SensorAssignment.plant_id == plant_id)
+                .order_by(SensorAssignment.started_at)
+            )
+        )
+
+    def list_sensor_assignments(self, sensor_id: int) -> list[SensorAssignment]:
+        """All assignment rows for one sensor, oldest first."""
+        return list(
+            self.session.scalars(
+                select(SensorAssignment)
+                .where(SensorAssignment.sensor_id == sensor_id)
+                .order_by(SensorAssignment.started_at)
+            )
+        )
+
+    def readings_for_plant(self, plant_id: int, *, since_ts: int, until_ts: int | None = None) -> list[SensorReading]:
+        """Return SensorReading rows attributed to ``plant_id`` over the window.
+
+        Joins via SensorAssignment so a reading is included only when the
+        sensor it came from was actually assigned to this plant at the reading
+        timestamp. Replaces the brittle `sensor.plant_id == plant_id` filter
+        used to lump historical readings under whichever plant the sensor
+        currently points at.
+        """
+        upper = until_ts if until_ts is not None else int(time.time())
+        stmt = (
+            select(SensorReading)
+            .join(SensorAssignment, SensorAssignment.sensor_id == SensorReading.sensor_id)
+            .where(
+                SensorAssignment.plant_id == plant_id,
+                SensorReading.timestamp >= SensorAssignment.started_at,
+                # Reading must fall inside the assignment window. NULL ended_at = still open.
+                (SensorAssignment.ended_at.is_(None)) | (SensorReading.timestamp < SensorAssignment.ended_at),
+                SensorReading.timestamp >= since_ts,
+                SensorReading.timestamp <= upper,
+            )
+            .order_by(SensorReading.timestamp)
+        )
+        return list(self.session.scalars(stmt))
 
     def get_sensors_in_cluster(self, cluster_id: int) -> list[Sensor]:
         """Get all sensors in a cluster ordered by name."""
@@ -729,11 +828,15 @@ class IrrigationRepository:
         return plant
 
     def delete_plant(self, plant_id: int) -> bool:
-        """Delete a plant (sensors retain their cluster; plant_id becomes NULL)."""
+        """Delete a plant. Sensors retain their cluster; any open assignment to
+        the plant is closed so historical readings stay attributed correctly."""
         plant = self.session.get(Plant, plant_id)
         if not plant:
             return False
-        for sensor in plant.sensors:
+        when = int(time.time())
+        for sensor in list(plant.sensors):
+            # Close the open assignment before clearing the FK pointer.
+            self._close_open_sensor_assignment(sensor.id, when=when)
             sensor.plant_id = None
         self.session.delete(plant)
         self.session.flush()
@@ -798,10 +901,18 @@ class IrrigationRepository:
         return plant
 
     def update_sensor(self, sensor_id: int, **fields) -> Sensor | None:
-        """Patch sensor fields; ``config`` is JSON-serialised if a dict."""
+        """Patch sensor fields. ``plant_id`` changes are routed through
+        ``reassign_sensor_to_plant`` so the assignment history stays in sync.
+        ``config`` is JSON-serialised if a dict.
+        """
         sensor = self.session.get(Sensor, sensor_id)
         if not sensor:
             return None
+        # Pull plant_id out and apply it via the assignment-aware path. Plant
+        # reassignment must NOT be possible via a raw setattr — that would
+        # silently lose history.
+        plant_id_in_fields = "plant_id" in fields
+        new_plant_id = fields.pop("plant_id", None) if plant_id_in_fields else None
         for key, value in fields.items():
             if value is None:
                 continue
@@ -809,6 +920,8 @@ class IrrigationRepository:
                 sensor.config = json.dumps(value)
             elif hasattr(sensor, key):
                 setattr(sensor, key, value)
+        if plant_id_in_fields:
+            self.reassign_sensor_to_plant(sensor_id, new_plant_id)
         self.session.flush()
         return sensor
 

@@ -57,6 +57,9 @@ def test_health_timeline_points_match_seeded_readings(app):
         sensor_type="soil",
         config={},
         plant_id=plant_id,
+        # Open the assignment retroactively so the seeded multi-day reading
+        # history all falls inside the plant's attribution window.
+        assignment_started_at=0,
     )
 
     # Seed readings on 5 distinct days within the last 90 days

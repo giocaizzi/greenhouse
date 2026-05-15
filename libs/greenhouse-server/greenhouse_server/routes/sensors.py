@@ -3,7 +3,14 @@
 from fastapi import APIRouter, HTTPException, status
 from sqlalchemy.exc import IntegrityError
 
-from greenhouse_core.schemas import CreateSensorRequest, SensorResponse, SuccessResponse, UpdateSensorRequest
+from greenhouse_core.schemas import (
+    CreateSensorRequest,
+    SensorAssignmentListResponse,
+    SensorAssignmentResponse,
+    SensorResponse,
+    SuccessResponse,
+    UpdateSensorRequest,
+)
 from greenhouse_server.deps import RepoDep, require_cluster
 
 router = APIRouter(tags=["sensors"])
@@ -107,6 +114,38 @@ def update_sensor(cluster_id: int, sensor_id: int, request: UpdateSensorRequest,
     updated = repo.update_sensor(sensor_id, **request.model_dump(exclude_none=True))
     repo.session.commit()
     return updated
+
+
+@router.get(
+    "/sensors/{sensor_id}/assignments",
+    response_model=SensorAssignmentListResponse,
+    summary="List the sensor's plant-assignment history",
+)
+def list_sensor_assignments(sensor_id: int, repo: RepoDep):
+    """Return every plant this sensor has ever been linked to, oldest first.
+
+    Each row covers the interval ``[started_at, ended_at)``. ``ended_at=None``
+    on the latest row means the sensor is currently assigned. Used by the UI
+    to explain why a plant's history changes shape when a sensor is moved,
+    and by audit tooling to verify attribution.
+
+    Args:
+        sensor_id: Numeric sensor identifier.
+
+    Returns:
+        Full assignment list (possibly empty if the sensor was never linked).
+
+    Raises:
+        HTTPException: 404 if the sensor does not exist.
+    """
+    sensor = repo.get_sensor(sensor_id)
+    if sensor is None:
+        raise HTTPException(status_code=404, detail="Sensor not found")
+    rows = repo.list_sensor_assignments(sensor_id)
+    return SensorAssignmentListResponse(
+        sensor_id=sensor_id,
+        assignments=[SensorAssignmentResponse.model_validate(r) for r in rows],
+    )
 
 
 @router.delete("/clusters/{cluster_id}/sensors/{sensor_id}", response_model=SuccessResponse, summary="Delete a sensor")

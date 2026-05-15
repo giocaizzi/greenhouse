@@ -152,6 +152,29 @@ class SensorResponse(SensorBase):
         return v
 
 
+# --- Sensor Assignment History ---
+
+
+class SensorAssignmentResponse(BaseModel):
+    """One row from a sensor's plant-assignment history. ``ended_at=None``
+    means the row is currently active."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    sensor_id: int
+    plant_id: int
+    started_at: int
+    ended_at: int | None
+
+
+class SensorAssignmentListResponse(BaseModel):
+    """Full assignment history for a sensor, oldest first."""
+
+    sensor_id: int
+    assignments: list[SensorAssignmentResponse]
+
+
 # --- Sensor Reading ---
 
 
