@@ -76,29 +76,33 @@ class PlantDatabase:
 
     def get_care_data(self, species: str | None = None, category: str | None = None) -> dict:
         """
-        Get care data with fallback: species → category → defaults.
+        Resolve plant care data with three-layer precedence.
+
+        Layered merge (least → most specific): ultimate defaults < ``categories[c]``
+        biology basics < ``_category_defaults[c]`` timing fields < ``species[s]``
+        species-specific overrides. ``_category_defaults`` is also exposed
+        verbatim under the ``_category_defaults`` key so the decision engine
+        can keep the category layer distinct (needed by
+        :func:`greenhouse_core.logic.timing.seasonal_multiplier` for per-season
+        fallback).
 
         Args:
-            species: Scientific or common name
-            category: Category name
+            species: Scientific or common name. Resolved species short-circuits
+                the category lookup for the biology-basics layer.
+            category: Category name. Used to source both ``categories[c]`` and
+                ``_category_defaults[c]``. When ``species`` resolves, the
+                resolved species' own ``category`` field is preferred over the
+                argument.
 
         Returns:
-            dict with care requirements (always returns data, with fallback)
+            Merged care dict — always populated. Includes ``category`` (resolved
+            category name, when known) and ``_category_defaults`` (the
+            category's timing override block, or ``{}``).
         """
-        # Try species-specific first
-        if species:
-            data = self.lookup_species(species)
-            if data:
-                return data
+        species_data = self.lookup_species(species) if species else None
+        resolved_category = (species_data or {}).get("category") or category
 
-        # Fall back to category
-        if category:
-            data = self.lookup_category(category)
-            if data:
-                return data
-
-        # Ultimate fallback: medium tropical (safest default)
-        return {
+        merged: dict = {
             "water_needs": "medium",
             "water_frequency_days": 7,
             "ideal_temp_min_c": 18,
@@ -109,6 +113,26 @@ class PlantDatabase:
             "soil_moisture_target": "45-65",
             "sources": ["fallback default"],
         }
+
+        if resolved_category:
+            cat_basics = self.lookup_category(resolved_category)
+            if cat_basics:
+                merged.update(cat_basics)
+            cat_defaults = self._data.get("_category_defaults", {}).get(resolved_category, {})
+            merged.update(cat_defaults)
+            merged["_category_defaults"] = cat_defaults
+            merged["category"] = resolved_category
+        else:
+            merged["_category_defaults"] = {}
+
+        if species_data:
+            cat_defaults_snapshot = merged.get("_category_defaults", {})
+            merged.update(species_data)
+            merged["_category_defaults"] = cat_defaults_snapshot
+            if resolved_category:
+                merged["category"] = resolved_category
+
+        return merged
 
     def get_water_needs_info(self, water_needs: str) -> dict:
         """Get detailed info for a water_needs level."""

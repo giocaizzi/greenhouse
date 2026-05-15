@@ -54,6 +54,40 @@ class TestPlantDatabase:
         assert data["ideal_temp_min_c"] == 18
         assert data["soil_moisture_target"] == "45-65"
 
+    def test_category_defaults_surface_for_unknown_species(self):
+        """Unknown species + known category → timing fields come from _category_defaults."""
+        data = self.db.get_care_data(species="Some-Unknown-Species", category="tropical")
+        assert data["category"] == "tropical"
+        # The tropical category default has a preferred-hours window and a
+        # seasonal multiplier — both must appear in the merged dict.
+        assert "preferred_water_hours_local" in data
+        assert isinstance(data["preferred_water_hours_local"], list)
+        assert len(data["preferred_water_hours_local"]) == 2
+        assert "season_frequency_multiplier" in data
+        # The raw category-default block is also exposed so the engine can use
+        # it as a distinct override layer.
+        assert "preferred_water_hours_local" in data["_category_defaults"]
+
+    def test_species_overrides_category_defaults(self):
+        """Species-level timing fields take precedence over _category_defaults values."""
+        data = self.db.get_care_data(species="Eriobotrya japonica")
+        # Loquat sets species-level preferred hours [5,9] in plant_database.json.
+        assert data["preferred_water_hours_local"] == [5, 9]
+        # And a species-level outdoor multiplier that differs from the
+        # fruit_tree category default.
+        species_outdoor = data["season_frequency_multiplier_outdoor"]
+        cat_outdoor = data["_category_defaults"].get("season_frequency_multiplier_outdoor")
+        assert species_outdoor != cat_outdoor
+
+    def test_category_defaults_inherited_when_species_silent(self):
+        """Species with no timing override inherits both timing fields from category defaults."""
+        data = self.db.get_care_data(species="Monstera deliciosa")
+        # Monstera carries only ``category: tropical`` — timing fields must
+        # flow through from _category_defaults.
+        cat_defaults = data["_category_defaults"]
+        assert data["preferred_water_hours_local"] == cat_defaults["preferred_water_hours_local"]
+        assert data["season_frequency_multiplier"] == cat_defaults["season_frequency_multiplier"]
+
     def test_list_species(self):
         """Species list is not empty."""
         species = self.db.list_species()
