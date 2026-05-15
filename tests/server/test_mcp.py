@@ -1,11 +1,14 @@
 """Smoke tests for the MCP interface mounted at /mcp."""
 
 import ast
+import asyncio
+import json
 from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
+from fastapi_mcp.types import HTTPRequestInfo
 from sqlalchemy import create_engine
 from sqlalchemy.pool import StaticPool
 from starlette.routing import Mount, Route
@@ -138,9 +141,23 @@ _VALID_TOKEN = "test-mcp-bearer-token"
 
 
 def _build_mcp_client(*, mcp_token: str | None) -> TestClient:
-    """Build a TestClient bound to a fresh app configured with the given MCP token."""
+    """Build a TestClient bound to a fresh app configured with the given MCP token.
+
+    Auth is fully wired (secret key + an admin bootstrap) so we can test how
+    `require_user` behaves on the inner /api/v1 routes when fastapi-mcp
+    forwards the MCP bearer header — including the negative case where a
+    JWT-decode failure must still return 401, not 503.
+    """
     engine = create_engine("sqlite://", echo=False, connect_args={"check_same_thread": False}, poolclass=StaticPool)
-    settings = Settings(db_url="sqlite://", enable_scheduler=False, mcp_token=mcp_token)
+    settings = Settings(
+        db_url="sqlite://",
+        enable_scheduler=False,
+        mcp_token=mcp_token,
+        auth_enabled=True,
+        auth_secret_key="unit-test-jwt-secret-do-not-use-in-prod-please",
+        auth_admin_username="mcp-test-admin",
+        auth_admin_password="mcp-test-admin-pw-123",
+    )
     application = create_app(settings, engine=engine)
 
     mock_dm = MagicMock()
@@ -199,3 +216,84 @@ def test_mcp_returns_503_when_token_setting_is_unset(mcp_client_unconfigured: Te
     # Even with what would have been a valid token, an unconfigured server must 503.
     resp = mcp_client_unconfigured.get("/mcp", headers={"Authorization": f"Bearer {_VALID_TOKEN}"})
     assert resp.status_code == 503, resp.text
+
+
+# --- end-to-end tool invocation through the MCP bridge -----------------------
+#
+# Regression for the bug fixed in fix(auth): an MCP `tools/call` would 401
+# because fastapi-mcp forwards the inbound `Authorization: Bearer <MCP_TOKEN>`
+# header to the inner `/api/v1` endpoint, but `require_user` only knew how to
+# decode JWTs and rejected the static MCP token as "Invalid session".
+#
+# The schema-only tests above pass even when tools/call is broken, so we
+# explicitly exercise the inner HTTP call that fastapi-mcp performs on every
+# tool invocation. This is the exact code path users hit from Claude / any
+# MCP client — see fastapi_mcp.server.FastApiMCP._execute_api_tool.
+
+
+def _invoke_mcp_tool(
+    mcp_client: TestClient,
+    *,
+    tool_name: str,
+    arguments: dict | None = None,
+    bearer: str,
+):
+    """Drive the same code path fastapi-mcp executes on a real tools/call.
+
+    Returns the list of content parts from `_execute_api_tool` — or re-raises
+    whatever exception that method raised (e.g. inner endpoint 4xx/5xx, which
+    `_execute_api_tool` converts to a generic Exception containing the status
+    code and body for the MCP error envelope).
+    """
+    app = mcp_client.app
+    mcp = app.state.mcp
+    http_request_info = HTTPRequestInfo(
+        method="POST",
+        path="/mcp",
+        headers={"authorization": f"Bearer {bearer}"},
+        cookies={},
+        query_params={},
+        body=None,
+    )
+    return asyncio.run(
+        mcp._execute_api_tool(
+            client=mcp._http_client,
+            tool_name=tool_name,
+            arguments=arguments or {},
+            operation_map=mcp.operation_map,
+            http_request_info=http_request_info,
+        )
+    )
+
+
+def test_mcp_tool_invocation_reaches_inner_endpoint(mcp_client_with_token: TestClient):
+    """End-to-end: a forwarded MCP bearer must let the inner /api/v1 route serve
+    a real response, not 401.
+
+    Picks the `list_clusters` tool because it's a pure GET with no path/body
+    params, so failure modes here are pinned to auth — not to argument
+    marshalling. With an empty DB it must return an empty JSON array.
+    """
+    result = _invoke_mcp_tool(
+        mcp_client_with_token,
+        tool_name="list_clusters_api_v1_clusters_get",
+        bearer=_VALID_TOKEN,
+    )
+    assert len(result) == 1
+    payload = json.loads(result[0].text)
+    # What matters here is that the inner call returned a 2xx body, not an
+    # MCP error envelope containing "Invalid session" / "401".
+    assert payload == [], f"Expected empty cluster list, got: {payload!r}"
+
+
+def test_mcp_tool_invocation_rejects_garbage_bearer(mcp_client_with_token: TestClient):
+    """A forwarded header that is neither a valid JWT nor the MCP token must
+    still 401 at the inner endpoint — the MCP-token short-circuit must not
+    accidentally accept arbitrary bearers."""
+    with pytest.raises(Exception) as excinfo:
+        _invoke_mcp_tool(
+            mcp_client_with_token,
+            tool_name="list_clusters_api_v1_clusters_get",
+            bearer="not-the-real-token",
+        )
+    assert "401" in str(excinfo.value), f"Expected inner 401 in error, got: {excinfo.value!s}"
