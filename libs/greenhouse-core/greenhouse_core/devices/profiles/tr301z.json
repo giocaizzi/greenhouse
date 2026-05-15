@@ -1,0 +1,27 @@
+{
+  "model_key": "tuya.tr301z",
+  "vendor": "tuya",
+  "transport": "tuya_cloud",
+  "capabilities": [
+    "reports_temperature",
+    "reports_soil_moisture",
+    "reports_env_humidity",
+    "reports_lux",
+    "reports_battery"
+  ],
+  "_parser_codes": [
+    "temp_current",
+    "va_temperature",
+    "humidity",
+    "humidity_value",
+    "va_humidity",
+    "battery_state",
+    "battery_percentage",
+    "bright_value",
+    "light",
+    "env_humidity",
+    "illumiance",
+    "water_warning",
+    "soil_warning"
+  ]
+}

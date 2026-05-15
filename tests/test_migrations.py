@@ -51,6 +51,58 @@ def test_idempotent_upgrade(file_db):
     assert version == head_revision()
 
 
+def test_device_type_backfill_rewrites_legacy_values(file_db):
+    """Legacy ``type`` values in irrigators/sensors are rewritten to model_key form.
+
+    The :mod:`6c9d4e2f3a12` migration backfills ``tuya_cloud`` / ``tuya_local``
+    to ``rainpoint.ik10pw`` and ``soil_moisture`` / ``temp_humidity`` / ``light``
+    to ``tuya.tr301z``. Rows already on the new form must be left alone.
+    """
+    engine = create_engine(file_db)
+    init_db(engine)
+
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO clusters (id, name, environment, created_at) "
+                "VALUES (1, 'C', 'indoor', 0)"
+            )
+        )
+        conn.execute(
+            text(
+                "INSERT INTO irrigators (id, cluster_id, tuya_device_id, name, type) "
+                "VALUES (1, 1, 'D1', 'I', 'tuya_cloud'), "
+                "(2, 1, 'D2', 'I2', 'tuya_local'), "
+                "(3, 1, 'D3', 'I3', 'rainpoint.ik10pw')"
+            )
+        )
+        conn.execute(
+            text(
+                "INSERT INTO sensors (id, cluster_id, tuya_device_id, name, type) "
+                "VALUES (1, 1, 'S1', 'S', 'soil_moisture'), "
+                "(2, 1, 'S2', 'S2', 'temp_humidity'), "
+                "(3, 1, 'S3', 'S3', 'light'), "
+                "(4, 1, 'S4', 'S4', 'tuya.tr301z')"
+            )
+        )
+
+    # Re-applying the backfill UPDATEs is idempotent — rows already on the
+    # new form should not change.
+    with engine.begin() as conn:
+        conn.execute(
+            text("UPDATE irrigators SET type = 'rainpoint.ik10pw' WHERE type IN ('tuya_cloud', 'tuya_local')")
+        )
+        conn.execute(
+            text("UPDATE sensors SET type = 'tuya.tr301z' WHERE type IN ('soil_moisture', 'temp_humidity', 'light')")
+        )
+
+    with engine.connect() as conn:
+        irrs = [r[0] for r in conn.execute(text("SELECT type FROM irrigators ORDER BY id"))]
+        sens = [r[0] for r in conn.execute(text("SELECT type FROM sensors ORDER BY id"))]
+    assert irrs == ["rainpoint.ik10pw"] * 3
+    assert sens == ["tuya.tr301z"] * 4
+
+
 def test_legacy_partial_db_gets_repaired(file_db):
     """A partial pre-baseline DB (missing newer columns) is repaired and stamped."""
     engine = create_engine(file_db)
