@@ -192,8 +192,9 @@ class IrrigationLogic:
 
     def _apply_window_rule(self, cluster, cluster_id, evaluated_at, decision):
         """Return a SKIP decision when the current local time is outside the
-        cluster's irrigation windows. Falls back to global preferred hours when
-        no per-cluster windows are configured. Stress overrides have already
+        cluster's irrigation windows. Falls back to the per-plant / per-category
+        ``preferred_water_hours_local`` (resolved through ``plant_db``), then to
+        the global default in :mod:`constants`. Stress overrides have already
         returned early before reaching this rule.
         """
         windows = self.db.list_irrigation_windows(cluster_id)
@@ -203,9 +204,13 @@ class IrrigationLogic:
         if windows:
             allowed = is_within_irrigation_window(windows, now_unix=evaluated_at, tz_name=tz_name)
         else:
-            # No per-cluster windows. Stay permissive but respect the morning-
-            # only default so the engine doesn't pick 3am out of nowhere.
-            allowed = is_within_preferred_hours(now_unix=evaluated_at, tz_name=tz_name)
+            # No per-cluster windows. Resolve preferred hours from the first
+            # plant's species → category data so an Alocasia (06–10) doesn't
+            # get watered at 14:00 just because the cluster owner hasn't filled
+            # in a window. Engine is per-cluster; mixed-species clusters use
+            # the first plant by insertion order.
+            preferred = self._resolve_preferred_hours(cluster_id)
+            allowed = is_within_preferred_hours(now_unix=evaluated_at, tz_name=tz_name, preferred=preferred)
 
         if allowed:
             return None
@@ -220,31 +225,59 @@ class IrrigationLogic:
             message="outside configured watering window",
         )
 
+    def _resolve_preferred_hours(self, cluster_id: int) -> tuple[int, int] | None:
+        """Resolve ``preferred_water_hours_local`` for a cluster.
+
+        Walks plants in insertion order; returns the first plant's value via
+        the merged ``plant_db.get_care_data`` lookup (species > category-default
+        > built-in). Returns ``None`` when no plant is present, letting
+        :func:`is_within_preferred_hours` apply its global default.
+        """
+        plants = self.db.get_plants_in_cluster(cluster_id)
+        for plant in plants:
+            care = self.plant_db.get_care_data(species=plant.species, category=plant.category)
+            hours = care.get("preferred_water_hours_local")
+            if hours and len(hours) == 2:
+                return (int(hours[0]), int(hours[1]))
+        return None
+
     def _apply_seasonal_multiplier(self, cluster, decision, plant_care, evaluated_at):
         """Scale ``decision.interval_hours`` by a seasonal multiplier and append
         a ``SEASONAL_HOLD`` / ``SEASONAL_BOOST`` reason when the multiplier is
-        not 1.0. Clamps to [MIN_INTERVAL_HOURS, MAX_INTERVAL_HOURS]."""
+        not 1.0. Clamps to [MIN_INTERVAL_HOURS, MAX_INTERVAL_HOURS].
+
+        Layers (most → least specific): species-level
+        ``season_frequency_multiplier{,_outdoor}`` from the plant DB, then the
+        category-level value exposed under ``_category_defaults``, then the
+        built-in default tables in :mod:`constants`. The ``_outdoor`` variant
+        is used when ``cluster.environment == "outdoor"`` and present; when
+        missing for outdoor we fall to the next layer rather than silently
+        reading the indoor key (avoids surprising mixed-env scaling).
+        """
         prefs = self.db.get_preferences()
         tz_name = prefs.timezone if prefs else None
         environment = cluster.environment or "indoor"
         season = season_for(evaluated_at, tz_name=tz_name)
 
-        # Pick the first plant_care entry's overrides if present. The decision
-        # is per-cluster, so a single representative is fine; a cluster mixing
-        # cacti and ferns should have been split in the first place.
+        season_key = (
+            "season_frequency_multiplier_outdoor" if environment == "outdoor" else "season_frequency_multiplier"
+        )
+
+        # Engine is per-cluster, so a single representative plant drives the
+        # multiplier. ``plant_db.get_care_data`` merges species fields over
+        # category defaults at the top level, while ``_category_defaults`` stays
+        # available verbatim — so we can ask :func:`seasonal_multiplier` to
+        # respect both layers' per-season fallback semantics.
         plant_override = None
         category_override = None
         for care in plant_care:
             data = care if isinstance(care, dict) else {}
-            if data.get("season_frequency_multiplier"):
-                plant_override = data["season_frequency_multiplier"]
-                break
-        # plant_care entries can also carry a category-level fallback under a
-        # secondary key when the species-level value is missing.
-        for care in plant_care:
-            data = care if isinstance(care, dict) else {}
-            if data.get("category_season_frequency_multiplier"):
-                category_override = data["category_season_frequency_multiplier"]
+            if plant_override is None:
+                plant_override = data.get(season_key)
+            if category_override is None:
+                cat_defaults = data.get("_category_defaults") or {}
+                category_override = cat_defaults.get(season_key)
+            if plant_override is not None and category_override is not None:
                 break
 
         multiplier = seasonal_multiplier(
