@@ -123,3 +123,52 @@ class TestClusterHistory:
     def test_history_not_found(self, client):
         resp = client.get("/api/v1/clusters/999/history")
         assert resp.status_code == 404
+
+
+class TestClusterDetail:
+    def test_detail_inlines_children(self, seeded_client):
+        """GET /clusters/{id}/detail returns plants/sensors/irrigators/config/windows."""
+        resp = seeded_client.get("/api/v1/clusters/1/detail")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["cluster"]["name"] == "Test Cluster"
+        assert len(data["plants"]) == 1
+        assert data["plants"][0]["species"] == "Monstera deliciosa"
+        assert len(data["sensors"]) == 1
+        assert len(data["irrigators"]) == 1
+        assert data["config"] is not None
+        assert data["config"]["mode"] == "smart"
+        assert data["windows"] == []
+
+    def test_detail_includes_windows(self, seeded_client):
+        """Configured irrigation windows show up in the detail payload."""
+        seeded_client.post(
+            "/api/v1/clusters/1/windows",
+            json={"start_hour": 6, "end_hour": 9, "weekday_mask": 127, "label": "AM"},
+        )
+        resp = seeded_client.get("/api/v1/clusters/1/detail")
+        windows = resp.json()["windows"]
+        assert len(windows) == 1
+        assert windows[0]["start_hour"] == 6
+
+    def test_detail_not_found(self, client):
+        resp = client.get("/api/v1/clusters/999/detail")
+        assert resp.status_code == 404
+
+    def test_plain_get_unchanged(self, seeded_client):
+        """GET /clusters/{id} still returns the flat ClusterResponse shape."""
+        resp = seeded_client.get("/api/v1/clusters/1")
+        assert resp.status_code == 200
+        data = resp.json()
+        # Flat: top-level id/name, not nested under 'cluster'
+        assert "cluster" not in data
+        assert data["id"] == 1
+        assert data["name"] == "Test Cluster"
+
+    def test_detail_cross_cluster_isolation(self, seeded_client):
+        """Detail for cluster A must not leak rows from cluster B."""
+        seeded_client.post("/api/v1/clusters", json={"name": "Other"})
+        seeded_client.post("/api/v1/clusters/2/plants", json={"species": "Other Plant"})
+        resp = seeded_client.get("/api/v1/clusters/1/detail")
+        plant_species = [p["species"] for p in resp.json()["plants"]]
+        assert "Other Plant" not in plant_species

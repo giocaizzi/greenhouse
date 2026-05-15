@@ -1,6 +1,6 @@
 """Plant CRUD routes."""
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel
 
 from greenhouse_core.repository import SameClusterMoveError
@@ -8,6 +8,7 @@ from greenhouse_core.schemas import (
     CreatePlantRequest,
     MovePlantRequest,
     PlantHealthResponse,
+    PlantListResponse,
     PlantResponse,
     SuccessResponse,
     SyncPlantsRequest,
@@ -17,6 +18,44 @@ from greenhouse_core.schemas import (
 from greenhouse_server.deps import ClusterServiceDep, PlantHealthServiceDep, RepoDep, require_cluster
 
 router = APIRouter(tags=["plants"])
+
+
+@router.get("/plants", response_model=PlantListResponse, summary="List plants across all clusters")
+def list_all_plants(
+    repo: RepoDep,
+    cluster_id: int | None = Query(default=None, description="Restrict results to a specific cluster"),
+    category: str | None = Query(default=None, description="Restrict results to a plant category"),
+    limit: int = Query(default=100, ge=1, le=500),
+    cursor: int | None = Query(default=None, description="Id cursor — return rows with id > cursor"),
+):
+    """List every plant across all clusters, with optional filters and cursor pagination.
+
+    The cluster-scoped list at ``/clusters/{id}/plants`` is unchanged; this
+    endpoint exists so MCP tools, dashboards, and the global search can walk
+    the full plant collection without enumerating clusters first.
+
+    Args:
+        cluster_id: Restrict to a single cluster.
+        category: Restrict to plants whose ``category`` matches exactly.
+        limit: Page size (default 100, max 500).
+        cursor: Id-based cursor — pass the previous response's ``next_cursor``
+            to fetch the next page.
+
+    Returns:
+        The page of plants plus a ``next_cursor`` (None when the page was not
+        full and there are no more rows to fetch).
+    """
+    rows = repo.list_all_plants(
+        filter_cluster_id=cluster_id,
+        filter_category=category,
+        limit=limit,
+        after_id=cursor,
+    )
+    next_cursor = rows[-1].id if len(rows) == limit else None
+    return PlantListResponse(
+        plants=[PlantResponse.model_validate(p) for p in rows],
+        next_cursor=next_cursor,
+    )
 
 
 @router.post("/clusters/{cluster_id}/plants", response_model=PlantResponse, status_code=status.HTTP_201_CREATED)

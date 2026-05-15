@@ -24,6 +24,23 @@ class ClusterResponse(ClusterBase):
     created_at: int
 
 
+# Forward references to schemas defined further down — populated via
+# model_rebuild() at the end of this module.
+class ClusterDetailResponse(BaseModel):
+    """Cluster plus its child resources (plants, sensors, irrigators, config, windows).
+
+    Returned by GET /clusters/{id}?expand=children. Plain GET without the
+    expand flag continues to return ClusterResponse for back-compat.
+    """
+
+    cluster: "ClusterResponse"
+    plants: list["PlantResponse"]
+    sensors: list["SensorResponse"]
+    irrigators: list["IrrigatorResponse"]
+    config: "ConfigResponse | None"
+    windows: list["IrrigationWindowResponse"]
+
+
 # --- Plant ---
 
 
@@ -48,6 +65,13 @@ class PlantResponse(PlantBase):
 
     id: int
     cluster_id: int
+
+
+class PlantListResponse(BaseModel):
+    """Paginated top-level plant listing across all clusters."""
+
+    plants: list[PlantResponse]
+    next_cursor: int | None = None
 
 
 class SyncPlantsRequest(BaseModel):
@@ -92,6 +116,13 @@ class IrrigatorResponse(IrrigatorBase):
         if isinstance(v, str):
             return json.loads(v)
         return v
+
+
+class IrrigatorListResponse(BaseModel):
+    """Paginated top-level irrigator listing across all clusters."""
+
+    irrigators: list[IrrigatorResponse]
+    next_cursor: int | None = None
 
 
 class StartIrrigatorRequest(BaseModel):
@@ -150,6 +181,13 @@ class SensorResponse(SensorBase):
         if isinstance(v, str):
             return json.loads(v)
         return v
+
+
+class SensorListResponse(BaseModel):
+    """Paginated top-level sensor listing across all clusters."""
+
+    sensors: list[SensorResponse]
+    next_cursor: int | None = None
 
 
 # --- Sensor Assignment History ---
@@ -502,6 +540,7 @@ class AlertSummary(BaseModel):
 class AlertListResponse(BaseModel):
     open_count: int
     items: list[AlertSummary]
+    next_cursor: int | None = None
 
 
 # --- Activity log ------------------------------------------------------------
@@ -641,6 +680,15 @@ class DataQualityReport(BaseModel):
 class VacationCreateRequest(BaseModel):
     starts_at: int
     ends_at: int
+    contact_email: str | None = None
+    notes: str | None = None
+
+
+class UpdateVacationWindowRequest(BaseModel):
+    """Partial-update body for a vacation window. All fields optional."""
+
+    starts_at: int | None = None
+    ends_at: int | None = None
     contact_email: str | None = None
     notes: str | None = None
 
@@ -830,3 +878,10 @@ class PlantHealthTimelineResponse(BaseModel):
     plant_id: int
     points: list[tuple[int, float]]
     thresholds: dict[str, float] = {"good": 80.0, "ok": 50.0}
+
+
+# Resolve forward references on schemas that compose types defined later in
+# the module (ClusterDetailResponse points at PlantResponse, SensorResponse,
+# IrrigatorResponse, ConfigResponse, IrrigationWindowResponse, all of which
+# live further down).
+ClusterDetailResponse.model_rebuild()

@@ -2,13 +2,14 @@
 
 import time
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy.exc import IntegrityError
 
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_core.schemas import (
     CreateIrrigatorRequest,
     IrrigatorActionResponse,
+    IrrigatorListResponse,
     IrrigatorResponse,
     LogManualRequest,
     LogManualResponse,
@@ -20,6 +21,33 @@ from greenhouse_server.deps import DeviceManagerDep, RepoDep, require_cluster
 from greenhouse_server.services.irrigation import schedule_pump_watcher
 
 router = APIRouter(tags=["irrigators"])
+
+
+@router.get("/irrigators", response_model=IrrigatorListResponse, summary="List irrigators across all clusters")
+def list_all_irrigators(
+    repo: RepoDep,
+    cluster_id: int | None = Query(default=None, description="Restrict results to a specific cluster"),
+    limit: int = Query(default=100, ge=1, le=500),
+    cursor: int | None = Query(default=None, description="Id cursor — return rows with id > cursor"),
+):
+    """List every irrigator across all clusters with optional cluster filter and cursor pagination.
+
+    Args:
+        cluster_id: Restrict to a single cluster.
+        limit: Page size (default 100, max 500).
+        cursor: Id-based cursor — pass the previous response's ``next_cursor``
+            to fetch the next page.
+
+    Returns:
+        The page of irrigators plus a ``next_cursor`` (None when the page was
+        not full and there are no more rows to fetch).
+    """
+    rows = repo.list_all_irrigators(filter_cluster_id=cluster_id, limit=limit, after_id=cursor)
+    next_cursor = rows[-1].id if len(rows) == limit else None
+    return IrrigatorListResponse(
+        irrigators=[IrrigatorResponse.model_validate(r) for r in rows],
+        next_cursor=next_cursor,
+    )
 
 
 def _check_rate_limits(repo: IrrigationRepository, cluster_id: int, irrigator_id: int, minutes: int | None) -> None:

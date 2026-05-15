@@ -143,3 +143,68 @@ class TestIrrigatorControl:
     def test_log_manual_requires_minutes(self, seeded_client):
         resp = seeded_client.post("/api/v1/irrigators/1/log-manual", json={})
         assert resp.status_code == 422
+
+
+class TestListAllIrrigatorsTopLevel:
+    def test_list_empty(self, client):
+        """GET /irrigators with no rows returns empty list and null cursor."""
+        resp = client.get("/api/v1/irrigators")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["irrigators"] == []
+        assert data["next_cursor"] is None
+
+    def test_list_across_clusters(self, client):
+        """GET /irrigators returns every irrigator regardless of cluster."""
+        client.post("/api/v1/clusters", json={"name": "A"})
+        client.post("/api/v1/clusters", json={"name": "B"})
+        client.post(
+            "/api/v1/clusters/1/irrigators",
+            json={"tuya_device_id": "dev_a", "name": "A1", "type": "tuya_cloud"},
+        )
+        client.post(
+            "/api/v1/clusters/2/irrigators",
+            json={"tuya_device_id": "dev_b", "name": "B1", "type": "tuya_cloud"},
+        )
+        resp = client.get("/api/v1/irrigators")
+        names = sorted(i["name"] for i in resp.json()["irrigators"])
+        assert names == ["A1", "B1"]
+
+    def test_filter_by_cluster_id(self, client):
+        """cluster_id filter restricts to one cluster."""
+        client.post("/api/v1/clusters", json={"name": "A"})
+        client.post("/api/v1/clusters", json={"name": "B"})
+        client.post(
+            "/api/v1/clusters/1/irrigators",
+            json={"tuya_device_id": "dev_a", "name": "A1", "type": "tuya_cloud"},
+        )
+        client.post(
+            "/api/v1/clusters/2/irrigators",
+            json={"tuya_device_id": "dev_b", "name": "B1", "type": "tuya_cloud"},
+        )
+        resp = client.get("/api/v1/irrigators?cluster_id=2")
+        names = [i["name"] for i in resp.json()["irrigators"]]
+        assert names == ["B1"]
+
+    def test_pagination(self, client):
+        """limit + cursor walks the rows id-ascending."""
+        client.post("/api/v1/clusters", json={"name": "A"})
+        for n in range(3):
+            client.post(
+                "/api/v1/clusters/1/irrigators",
+                json={"tuya_device_id": f"dev_{n}", "name": f"I{n}", "type": "tuya_cloud"},
+            )
+        resp = client.get("/api/v1/irrigators?limit=2")
+        data = resp.json()
+        assert len(data["irrigators"]) == 2
+        assert data["next_cursor"] is not None
+        resp = client.get(f"/api/v1/irrigators?limit=2&cursor={data['next_cursor']}")
+        data2 = resp.json()
+        assert len(data2["irrigators"]) == 1
+        assert data2["next_cursor"] is None
+
+    def test_get_not_found_on_unknown_cluster(self, client):
+        """Filter by an unknown cluster returns an empty page, not a 404."""
+        resp = client.get("/api/v1/irrigators?cluster_id=999")
+        assert resp.status_code == 200
+        assert resp.json()["irrigators"] == []

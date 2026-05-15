@@ -2,7 +2,13 @@
 
 from fastapi import APIRouter, HTTPException, status
 
-from greenhouse_core.schemas import SuccessResponse, VacationCreateRequest, VacationListResponse, VacationResponse
+from greenhouse_core.schemas import (
+    SuccessResponse,
+    UpdateVacationWindowRequest,
+    VacationCreateRequest,
+    VacationListResponse,
+    VacationResponse,
+)
 from greenhouse_server.deps import RepoDep
 
 router = APIRouter(prefix="/vacation", tags=["vacation"])
@@ -42,6 +48,40 @@ def create_vacation_window(request: VacationCreateRequest, repo: RepoDep):
     )
     repo.session.commit()
     return window
+
+
+@router.put("/{window_id}", response_model=VacationResponse, summary="Update a vacation window")
+def update_vacation_window(window_id: int, request: UpdateVacationWindowRequest, repo: RepoDep):
+    """Partially update a vacation window.
+
+    Only fields present in the request body are modified; omitted fields are
+    left unchanged. The effective ``starts_at`` and ``ends_at`` after the patch
+    must satisfy ``starts_at < ends_at`` — otherwise the request is rejected
+    so the vacation gate can never end up reversed.
+
+    Args:
+        window_id: Numeric ID of the vacation window to update.
+        request: Any subset of starts_at, ends_at, contact_email, notes.
+
+    Returns:
+        The updated vacation window.
+
+    Raises:
+        HTTPException: 404 if no window with that ID exists, 400 if the
+            resulting ``starts_at`` is not strictly before ``ends_at``.
+    """
+    from greenhouse_core.models import VacationWindow
+
+    row = repo.session.get(VacationWindow, window_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Vacation window not found")
+    effective_start = request.starts_at if request.starts_at is not None else row.starts_at
+    effective_end = request.ends_at if request.ends_at is not None else row.ends_at
+    if effective_start >= effective_end:
+        raise HTTPException(status_code=400, detail="starts_at must be < ends_at")
+    updated = repo.update_vacation_window(window_id, **request.model_dump(exclude_unset=True))
+    repo.session.commit()
+    return updated
 
 
 @router.delete("/{window_id}", response_model=SuccessResponse, summary="Delete a vacation window")

@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from greenhouse_core.models import (
     ENTITY_PLANT,
+    ENTITY_SENSOR,
     ActivityEvent,
     Alert,
     Cluster,
@@ -186,6 +187,9 @@ class IrrigationRepository:
         is not None, opens a fresh one. The sensor's ``plant_id`` pointer is
         updated to match. No-ops when the requested plant is already the
         current assignment, so callers can use this as an idempotent setter.
+        Emits a ``sensor_reassigned`` activity event with the before/after plant
+        ids so the timeline can explain why a plant's chart suddenly changes
+        shape after a sensor move.
         """
         sensor = self.session.get(Sensor, sensor_id)
         if sensor is None:
@@ -193,11 +197,22 @@ class IrrigationRepository:
         if sensor.plant_id == new_plant_id:
             return
         ts = when if when is not None else int(time.time())
+        from_plant_id = sensor.plant_id
         self._close_open_sensor_assignment(sensor_id, when=ts)
         sensor.plant_id = new_plant_id
         if new_plant_id is not None:
             self._open_sensor_assignment(sensor_id, new_plant_id, when=ts)
         self.session.flush()
+        self.add_activity_event(
+            source="sensor",
+            entity_type=ENTITY_SENSOR,
+            entity_id=sensor_id,
+            code="sensor_reassigned",
+            message=f"reassigned sensor {sensor_id} from plant {from_plant_id} to plant {new_plant_id}",
+            severity="info",
+            payload={"from_plant_id": from_plant_id, "to_plant_id": new_plant_id},
+            timestamp=ts,
+        )
 
     def sensor_assignments_for_plant(self, plant_id: int) -> list[SensorAssignment]:
         """All assignment rows (open or closed) ever linking sensors to this plant."""
@@ -617,15 +632,28 @@ class IrrigationRepository:
         cluster_id: int | None = None,
         plant_id: int | None = None,
         limit: int = 100,
+        after_id: int | None = None,
     ) -> list[Alert]:
-        """List alerts ordered by last_seen_at desc with optional filters."""
-        stmt = select(Alert).order_by(Alert.last_seen_at.desc()).limit(limit)
+        """List alerts ordered by last_seen_at desc with optional filters.
+
+        Args:
+            status: Filter by lifecycle status.
+            cluster_id: Restrict to alerts attached to one cluster.
+            plant_id: Restrict to alerts attached to one plant.
+            limit: Maximum rows to return.
+            after_id: Id-based cursor — return only rows with ``id < after_id``.
+                Combined with the ``last_seen_at desc`` ordering this gives a
+                stable backward-walk for paging through the inbox.
+        """
+        stmt = select(Alert).order_by(Alert.last_seen_at.desc(), Alert.id.desc()).limit(limit)
         if status:
             stmt = stmt.where(Alert.status == status)
         if cluster_id is not None:
             stmt = stmt.where(Alert.cluster_id == cluster_id)
         if plant_id is not None:
             stmt = stmt.where(Alert.plant_id == plant_id)
+        if after_id is not None:
+            stmt = stmt.where(Alert.id < after_id)
         return list(self.session.scalars(stmt))
 
     def get_alert(self, alert_id: int) -> Alert | None:
@@ -743,6 +771,23 @@ class IrrigationRepository:
             select(VacationWindow).where(VacationWindow.starts_at <= now, VacationWindow.ends_at >= now)
         )
 
+    def update_vacation_window(self, window_id: int, **fields) -> VacationWindow | None:
+        """Patch a vacation window's fields; returns the updated row or None.
+
+        Only keys with non-None values are applied — the route layer is
+        responsible for validating semantics (e.g. ``starts_at < ends_at``).
+        """
+        row = self.session.get(VacationWindow, window_id)
+        if not row:
+            return None
+        for key, value in fields.items():
+            if value is None:
+                continue
+            if hasattr(row, key):
+                setattr(row, key, value)
+        self.session.flush()
+        return row
+
     def delete_vacation_window(self, window_id: int) -> bool:
         """Delete a vacation window; returns True if a row was removed."""
         row = self.session.get(VacationWindow, window_id)
@@ -828,17 +873,88 @@ class IrrigationRepository:
 
     # ── Generic helpers used by health / quality services ─────────────────────
 
-    def list_all_sensors(self) -> list[Sensor]:
-        """All sensors regardless of cluster (used by health pulse, anomaly)."""
-        return list(self.session.scalars(select(Sensor).order_by(Sensor.name)))
+    def list_all_sensors(
+        self,
+        *,
+        filter_cluster_id: int | None = None,
+        limit: int | None = None,
+        after_id: int | None = None,
+    ) -> list[Sensor]:
+        """All sensors regardless of cluster (used by health pulse, anomaly).
 
-    def list_all_irrigators(self) -> list[Irrigator]:
-        """All irrigators regardless of cluster."""
-        return list(self.session.scalars(select(Irrigator).order_by(Irrigator.name)))
+        Args:
+            filter_cluster_id: Restrict results to one cluster.
+            limit: Maximum rows to return; ``None`` means no cap.
+            after_id: Id-based cursor — return only rows with ``id > after_id``.
 
-    def list_all_plants(self) -> list[Plant]:
-        """All plants regardless of cluster."""
-        return list(self.session.scalars(select(Plant).order_by(Plant.species)))
+        Returns:
+            Sensors ordered by id ascending so cursor pagination is stable.
+        """
+        stmt = select(Sensor).order_by(Sensor.id)
+        if filter_cluster_id is not None:
+            stmt = stmt.where(Sensor.cluster_id == filter_cluster_id)
+        if after_id is not None:
+            stmt = stmt.where(Sensor.id > after_id)
+        if limit is not None:
+            stmt = stmt.limit(limit)
+        return list(self.session.scalars(stmt))
+
+    def list_all_irrigators(
+        self,
+        *,
+        filter_cluster_id: int | None = None,
+        limit: int | None = None,
+        after_id: int | None = None,
+    ) -> list[Irrigator]:
+        """All irrigators regardless of cluster.
+
+        Args:
+            filter_cluster_id: Restrict results to one cluster.
+            limit: Maximum rows to return; ``None`` means no cap.
+            after_id: Id-based cursor — return only rows with ``id > after_id``.
+
+        Returns:
+            Irrigators ordered by id ascending so cursor pagination is stable.
+        """
+        stmt = select(Irrigator).order_by(Irrigator.id)
+        if filter_cluster_id is not None:
+            stmt = stmt.where(Irrigator.cluster_id == filter_cluster_id)
+        if after_id is not None:
+            stmt = stmt.where(Irrigator.id > after_id)
+        if limit is not None:
+            stmt = stmt.limit(limit)
+        return list(self.session.scalars(stmt))
+
+    def list_all_plants(
+        self,
+        *,
+        filter_cluster_id: int | None = None,
+        filter_category: str | None = None,
+        limit: int | None = None,
+        after_id: int | None = None,
+    ) -> list[Plant]:
+        """All plants regardless of cluster, with optional filters and pagination.
+
+        Args:
+            filter_cluster_id: Restrict results to one cluster.
+            filter_category: Restrict results to one plant category
+                (e.g. ``"tropical"``).
+            limit: Maximum rows to return; ``None`` means no cap.
+            after_id: Id-based cursor — return only rows with ``id > after_id``.
+
+        Returns:
+            Plants ordered by id ascending so cursor pagination is stable.
+        """
+        stmt = select(Plant).order_by(Plant.id)
+        if filter_cluster_id is not None:
+            stmt = stmt.where(Plant.cluster_id == filter_cluster_id)
+        if filter_category is not None:
+            stmt = stmt.where(Plant.category == filter_category)
+        if after_id is not None:
+            stmt = stmt.where(Plant.id > after_id)
+        if limit is not None:
+            stmt = stmt.limit(limit)
+        return list(self.session.scalars(stmt))
 
     def get_plant(self, plant_id: int) -> Plant | None:
         """Fetch a plant by id."""

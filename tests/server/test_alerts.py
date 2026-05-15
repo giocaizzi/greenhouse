@@ -212,3 +212,59 @@ class TestAlertSyncAll:
             resp = client.get("/api/v1/alerts")
             data = resp.json()
             assert data["open_count"] == len([a for a in data["items"] if a["status"] == "open"])
+
+
+class TestAlertListPagination:
+    """Cursor pagination on GET /alerts."""
+
+    def _seed_alerts(self, app, count: int):
+        from greenhouse_core.repository import IrrigationRepository
+
+        ids = []
+        with app.state.session_factory() as session:
+            repo = IrrigationRepository(session)
+            for n in range(count):
+                row = repo.upsert_alert(
+                    dedup_key=f"test::pag::{n}",
+                    source="test",
+                    code="test_alert",
+                    title=f"Alert {n}",
+                    message=f"msg {n}",
+                    severity="info",
+                    entity_type="cluster",
+                    cluster_id=1,
+                    seen_at=1_700_000_000 + n,
+                )
+                session.commit()
+                ids.append(row.id)
+        return ids
+
+    def test_pagination_walks_inbox_newest_first(self, app, client):
+        """Iterating with cursor visits each alert exactly once, newest first."""
+        ids = self._seed_alerts(app, 5)
+        seen: list[int] = []
+        cursor: int | None = None
+        for _ in range(5):
+            url = "/api/v1/alerts?limit=2"
+            if cursor is not None:
+                url += f"&cursor={cursor}"
+            resp = client.get(url)
+            data = resp.json()
+            page = [a["id"] for a in data["items"]]
+            seen.extend(page)
+            cursor = data["next_cursor"]
+            if cursor is None:
+                break
+        # All 5 ids visited.
+        assert sorted(seen) == sorted(ids)
+        # Newest first within pages.
+        assert seen == sorted(seen, reverse=True)
+
+    def test_next_cursor_is_null_when_page_is_partial(self, app, client):
+        """The last (partial) page must return ``next_cursor=None``."""
+        self._seed_alerts(app, 3)
+        resp = client.get("/api/v1/alerts?limit=5")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data["items"]) == 3
+        assert data["next_cursor"] is None

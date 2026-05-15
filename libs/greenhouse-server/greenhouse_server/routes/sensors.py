@@ -1,12 +1,13 @@
 """Sensor CRUD routes."""
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy.exc import IntegrityError
 
 from greenhouse_core.schemas import (
     CreateSensorRequest,
     SensorAssignmentListResponse,
     SensorAssignmentResponse,
+    SensorListResponse,
     SensorResponse,
     SuccessResponse,
     UpdateSensorRequest,
@@ -14,6 +15,33 @@ from greenhouse_core.schemas import (
 from greenhouse_server.deps import RepoDep, require_cluster
 
 router = APIRouter(tags=["sensors"])
+
+
+@router.get("/sensors", response_model=SensorListResponse, summary="List sensors across all clusters")
+def list_all_sensors(
+    repo: RepoDep,
+    cluster_id: int | None = Query(default=None, description="Restrict results to a specific cluster"),
+    limit: int = Query(default=100, ge=1, le=500),
+    cursor: int | None = Query(default=None, description="Id cursor — return rows with id > cursor"),
+):
+    """List every sensor across all clusters with optional cluster filter and cursor pagination.
+
+    Args:
+        cluster_id: Restrict to a single cluster.
+        limit: Page size (default 100, max 500).
+        cursor: Id-based cursor — pass the previous response's ``next_cursor``
+            to fetch the next page.
+
+    Returns:
+        The page of sensors plus a ``next_cursor`` (None when the page was not
+        full and there are no more rows to fetch).
+    """
+    rows = repo.list_all_sensors(filter_cluster_id=cluster_id, limit=limit, after_id=cursor)
+    next_cursor = rows[-1].id if len(rows) == limit else None
+    return SensorListResponse(
+        sensors=[SensorResponse.model_validate(r) for r in rows],
+        next_cursor=next_cursor,
+    )
 
 
 @router.post("/clusters/{cluster_id}/sensors", response_model=SensorResponse, status_code=status.HTTP_201_CREATED)
