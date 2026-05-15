@@ -47,9 +47,7 @@ def cluster_update(
     output(
         call(
             ctx,
-            lambda c: c.update_cluster(
-                cluster_id, name=name, location=location, environment=environment
-            ),
+            lambda c: c.update_cluster(cluster_id, name=name, location=location, environment=environment),
         )
     )
 

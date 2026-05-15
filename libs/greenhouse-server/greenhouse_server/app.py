@@ -41,9 +41,6 @@ from greenhouse_server.routes import (
 from greenhouse_server.routes import (
     auth as auth_routes,
 )
-from greenhouse_server.routes import (
-    auth as auth_routes,
-)
 from greenhouse_server.scheduler import apply_persisted_pause, init_scheduler
 from greenhouse_server.scheduler import scheduler as bg_scheduler
 from greenhouse_server.services.weather import WeatherClient
