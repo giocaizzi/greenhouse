@@ -1398,3 +1398,61 @@ body > footer small, .footer small { color: inherit; font-size: inherit; }
 .heatmap__cell--active:hover {
   opacity: 0.8;
 }
+
+/* a11y: visually-hidden utility for screen-reader-only text */
+.visually-hidden {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* List row action clusters — keeps Open / Edit / Delete on one line */
+.row-actions {
+  display: inline-flex; gap: var(--sp-1, 4px);
+  flex-wrap: wrap; align-items: center;
+}
+.row-actions__danger:hover {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 40%, var(--border));
+  background: var(--danger-soft);
+}
+
+/* "More" overflow menu in the primary topnav */
+.topnav__more { position: relative; }
+.topnav__more > summary {
+  list-style: none;
+  cursor: pointer;
+  color: var(--text-muted); font-size: var(--fs-sm); font-weight: 500;
+  padding: 4px 0;
+  border-bottom: 2px solid transparent;
+}
+.topnav__more > summary::-webkit-details-marker { display: none; }
+.topnav__more[open] > summary { color: var(--text); }
+.topnav__menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  min-width: 160px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+  padding: var(--sp-2);
+  display: flex; flex-direction: column; gap: 2px;
+  z-index: 10;
+}
+.topnav__menu a {
+  padding: 6px 10px;
+  border-radius: 4px;
+  color: var(--text);
+  font-size: var(--fs-sm);
+  border-bottom: 0;
+}
+.topnav__menu a:hover {
+  background: var(--surface-2, var(--bg, transparent));
+  color: var(--text);
+}

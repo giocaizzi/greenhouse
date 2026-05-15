@@ -37,21 +37,20 @@
   </article>
 {% else %}
 <article class="card card--flush">
-  <table>
+  <table aria-label="Irrigators in {{ cluster.name }}">
     <thead>
       <tr>
-        <th>Name</th>
-        <th>Type</th>
-        <th>Device ID</th>
+        <th scope="col">Name</th>
+        <th scope="col">Type</th>
+        <th scope="col">Recent (48h)</th>
+        <th scope="col">Last action</th>
+        <th scope="col">Controls</th>
+        <th scope="col"><span class="visually-hidden">Manage</span></th>
       </tr>
     </thead>
     <tbody>
       {% for irr in irrigators %}
-      <tr>
-        <td data-th="Name"><strong>{{ irr.name }}</strong></td>
-        <td data-th="Type"><small class="muted">{{ irr.type }}</small></td>
-        <td data-th="Device ID"><code>{{ irr.tuya_device_id }}</code></td>
-      </tr>
+        {% include "partials/_irrigator_row.html" %}
       {% endfor %}
     </tbody>
   </table>

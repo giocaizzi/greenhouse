@@ -1,7 +1,22 @@
-<tr>
+<tr id="plant-row-{{ plant.id }}">
   <td data-th="Species"><i class="species">{{ plant.species }}</i></td>
   <td data-th="Category">{{ plant.category or "—" }}</td>
   <td data-th="Water">{{ plant.water_needs or "—" }}</td>
   <td data-th="Light">{{ plant.light_needs or "—" }}</td>
-  <td><a href="/clusters/{{ plant.cluster_id }}/plants/{{ plant.id }}" class="btn secondary btn-sm">Open<svg class="icon" style="width:13px;height:13px;"><use href="/static/icons/sprite.svg#i-arrow-right"></use></svg></a></td>
+  <td data-th="Actions">
+    <div class="row-actions">
+      <a href="/clusters/{{ plant.cluster_id }}/plants/{{ plant.id }}" class="btn secondary btn-sm" aria-label="Open {{ plant.species }}">Open<svg class="icon" style="width:13px;height:13px;"><use href="/static/icons/sprite.svg#i-arrow-right"></use></svg></a>
+      <a href="/clusters/{{ plant.cluster_id }}/plants/{{ plant.id }}/edit" class="btn secondary btn-sm" aria-label="Edit {{ plant.species }}">Edit</a>
+      <button class="btn secondary btn-sm row-actions__danger"
+              type="button"
+              aria-label="Delete {{ plant.species }}"
+              hx-delete="/clusters/{{ plant.cluster_id }}/plants/{{ plant.id }}"
+              hx-target="#plant-row-{{ plant.id }}"
+              hx-swap="outerHTML swap:200ms"
+              hx-confirm="Delete plant &quot;{{ plant.species }}&quot;?">
+        <svg class="icon" style="width:13px;height:13px;"><use href="/static/icons/sprite.svg#i-trash"></use></svg>
+        Delete
+      </button>
+    </div>
+  </td>
 </tr>

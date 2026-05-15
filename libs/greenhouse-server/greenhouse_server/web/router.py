@@ -14,6 +14,8 @@ from greenhouse_server.web.routes import (
     analytics,
     clusters,
     configs,
+    decisions,
+    efficacy,
     fragments,
     health_page,
     irrigators,
@@ -21,6 +23,7 @@ from greenhouse_server.web.routes import (
     pages,
     plant_dashboard,
     plants,
+    preferences,
     quality,
     sensors,
     vacation,
@@ -41,6 +44,8 @@ web_router.include_router(alerts.router, dependencies=protected)
 web_router.include_router(analytics.router, dependencies=protected)
 web_router.include_router(clusters.router, dependencies=protected)
 web_router.include_router(configs.router, dependencies=protected)
+web_router.include_router(decisions.router, dependencies=protected)
+web_router.include_router(efficacy.router, dependencies=protected)
 web_router.include_router(fragments.router, dependencies=protected)
 web_router.include_router(health_page.router, dependencies=protected)
 web_router.include_router(irrigators.router, dependencies=protected)
@@ -48,6 +53,7 @@ web_router.include_router(operations.router, dependencies=protected)
 web_router.include_router(pages.router, dependencies=protected)
 web_router.include_router(plants.router, dependencies=protected)
 web_router.include_router(plant_dashboard.router, dependencies=protected)
+web_router.include_router(preferences.router, dependencies=protected)
 web_router.include_router(quality.router, dependencies=protected)
 web_router.include_router(sensors.router, dependencies=protected)
 web_router.include_router(vacation.router, dependencies=protected)

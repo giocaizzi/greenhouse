@@ -60,18 +60,26 @@
       <a href="/clusters">Spaces</a>
       <a href="/activity">Activity</a>
       <a href="/scheduler">Scheduler</a>
+      <details class="topnav__more">
+        <summary aria-label="More pages">More</summary>
+        <div class="topnav__menu" role="menu">
+          <a href="/vacation" role="menuitem">Vacation</a>
+          <a href="/health" role="menuitem">Health</a>
+          <a href="/quality" role="menuitem">Data quality</a>
+          <a href="/preferences" role="menuitem">Preferences</a>
+        </div>
+      </details>
     </nav>
     <span class="topbar__spacer"></span>
-    <button
+    <a
       class="bell"
-      type="button"
+      href="/alerts"
       aria-label="Open alerts"
       hx-get="/alerts/badge"
       hx-trigger="load, every 60s"
-      hx-swap="innerHTML"
-      onclick="window.location.href='/alerts'">
+      hx-swap="innerHTML">
       <svg class="icon" aria-hidden="true"><use href="/static/icons/sprite.svg#i-bell"></use></svg>
-    </button>
+    </a>
     <button
       class="icon-btn"
       type="button"
@@ -130,10 +138,12 @@
 
 <footer class="container">
   <div class="footer__row">
-    <span id="health-badge"
-          hx-get="/health/badge"
-          hx-trigger="load, every 60s"
-          hx-swap="innerHTML">…</span>
+    <a id="health-badge"
+       href="/health"
+       aria-label="System health"
+       hx-get="/health/badge"
+       hx-trigger="load, every 60s"
+       hx-swap="innerHTML">…</a>
     <span class="footer__meta">
       <span>greenhouse</span>
       {% if app_version %}

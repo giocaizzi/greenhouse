@@ -37,18 +37,19 @@
   </article>
 {% else %}
 <article class="card card--flush">
-  <table>
+  <table aria-label="Sensors in {{ cluster.name }}">
     <thead>
       <tr>
-        <th>Name</th>
-        <th>Type</th>
-        <th>Device ID</th>
-        <th>Plant</th>
+        <th scope="col">Name</th>
+        <th scope="col">Type</th>
+        <th scope="col">Device ID</th>
+        <th scope="col">Plant</th>
+        <th scope="col"><span class="visually-hidden">Actions</span></th>
       </tr>
     </thead>
     <tbody>
       {% for sensor in sensors %}
-      <tr>
+      <tr id="sensor-list-row-{{ sensor.id }}">
         <td data-th="Name"><strong>{{ sensor.name }}</strong></td>
         <td data-th="Type"><small class="muted">{{ sensor.type }}</small></td>
         <td data-th="Device ID"><code>{{ sensor.tuya_device_id }}</code></td>
@@ -56,6 +57,21 @@
           {% if sensor.plant_id and sensor.plant_id in plants %}
             <a href="/clusters/{{ cluster.id }}/plants/{{ sensor.plant_id }}"><i class="species">{{ plants[sensor.plant_id].species }}</i></a>
           {% else %}<span class="muted">—</span>{% endif %}
+        </td>
+        <td data-th="Actions">
+          <div class="row-actions">
+            <a href="/clusters/{{ cluster.id }}/sensors/{{ sensor.id }}/edit" class="btn secondary btn-sm" aria-label="Edit {{ sensor.name }}">Edit</a>
+            <button class="btn secondary btn-sm row-actions__danger"
+                    type="button"
+                    aria-label="Delete {{ sensor.name }}"
+                    hx-delete="/clusters/{{ cluster.id }}/sensors/{{ sensor.id }}"
+                    hx-target="#sensor-list-row-{{ sensor.id }}"
+                    hx-swap="outerHTML swap:200ms"
+                    hx-confirm="Delete sensor &quot;{{ sensor.name }}&quot;? Its readings will be removed.">
+              <svg class="icon" style="width:13px;height:13px;"><use href="/static/icons/sprite.svg#i-trash"></use></svg>
+              Delete
+            </button>
+          </div>
         </td>
       </tr>
       {% endfor %}

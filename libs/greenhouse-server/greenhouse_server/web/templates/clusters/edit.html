@@ -1,0 +1,42 @@
+{% extends "_base.html" %}
+{% block title %}Edit {{ cluster.name }} · Greenhouse{% endblock %}
+{% block content %}
+
+<div class="crumb">
+  <a href="/">home</a><span class="sep">/</span>
+  <a href="/clusters">clusters</a><span class="sep">/</span>
+  <a href="/clusters/{{ cluster.id }}">{{ cluster.name | lower }}</a><span class="sep">/</span>
+  <span class="here">edit</span>
+</div>
+
+<section class="page-head">
+  <div class="page-head__title">
+    <h1>Edit cluster</h1>
+    <div class="page-head__meta">
+      <span>Update name, location, or environment.</span>
+    </div>
+  </div>
+</section>
+
+<article class="card form-card">
+  <form method="post" action="/clusters/{{ cluster.id }}/edit">
+    <label for="name">Name
+      <input type="text" id="name" name="name" value="{{ cluster.name }}" required autofocus>
+    </label>
+    <label for="location">Location <small class="muted">(optional)</small>
+      <input type="text" id="location" name="location" value="{{ cluster.location or '' }}" placeholder="South window">
+    </label>
+    <label for="environment">Environment
+      <select id="environment" name="environment" required>
+        <option value="indoor"{% if cluster.environment == "indoor" %} selected{% endif %}>Indoor</option>
+        <option value="outdoor"{% if cluster.environment == "outdoor" %} selected{% endif %}>Outdoor</option>
+        <option value="greenhouse"{% if cluster.environment == "greenhouse" %} selected{% endif %}>Greenhouse</option>
+      </select>
+    </label>
+    <div class="form-actions">
+      <a href="/clusters/{{ cluster.id }}" class="btn secondary">Cancel</a>
+      <button type="submit">Save changes</button>
+    </div>
+  </form>
+</article>
+{% endblock %}
