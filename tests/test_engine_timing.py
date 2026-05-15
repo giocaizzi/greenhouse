@@ -157,3 +157,78 @@ class TestSeasonalMultiplier:
         assert decision is not None
         codes = [r.code for r in decision.reasons]
         assert TriggerCode.SEASONAL_HOLD in codes
+
+    def test_winter_multiplier_lengthens_interval(self, tmp_db, logic, monkeypatch):
+        """Indoor tropical: winter (0.5× frequency) → interval STRICTLY GREATER than spring baseline.
+
+        Multiplier semantics are *frequency × baseline* — water 0.5× as often
+        means double the interval. This guards the inversion bug that previously
+        had winter shortening the interval.
+        """
+        cluster_id = tmp_db.add_cluster("Indoor Tropical Seasonal", environment="indoor")
+        tmp_db.add_plant(cluster_id=cluster_id, species="Monstera deliciosa", category="tropical")
+        sensor_id = tmp_db.add_sensor(
+            cluster_id=cluster_id,
+            tuya_device_id="fake_soil_winter",
+            name="Fake Soil",
+            sensor_type="soil_moisture",
+            config={},
+        )
+
+        # Spring baseline (multiplier == 1.0 for tropical category) at 08:00,
+        # inside the tropical 07–10 window.
+        _freeze(monkeypatch, _ts(2026, 4, 15, 8))
+        tmp_db.add_sensor_reading(sensor_id=sensor_id, soil_moisture=55.0)
+        spring_decision = logic.decide_for_cluster(cluster_id)
+        assert spring_decision is not None
+        baseline_interval = spring_decision.interval_hours
+
+        # Same cluster, same sensors, January (winter 0.5× frequency → double interval).
+        _freeze(monkeypatch, _ts(2026, 1, 15, 8))
+        tmp_db.add_sensor_reading(sensor_id=sensor_id, soil_moisture=55.0)
+        winter_decision = logic.decide_for_cluster(cluster_id)
+        assert winter_decision is not None
+        codes = [r.code for r in winter_decision.reasons]
+        assert TriggerCode.SEASONAL_HOLD in codes
+        assert winter_decision.interval_hours > baseline_interval, (
+            f"winter interval {winter_decision.interval_hours}h must be GREATER than "
+            f"spring baseline {baseline_interval}h — multiplier 0.5 = water HALF as often = "
+            f"interval should DOUBLE (got {winter_decision.interval_hours / baseline_interval:.2f}×)"
+        )
+
+    def test_summer_multiplier_shortens_interval(self, tmp_db, logic, monkeypatch):
+        """Outdoor fruit tree: summer (1.5× frequency) → interval STRICTLY LESS than spring baseline.
+
+        Multiplier semantics are *frequency × baseline* — water 1.5× as often
+        means 2/3 the interval. Inverse of the winter case.
+        """
+        cluster_id = tmp_db.add_cluster("Garden Loquat Seasonal", environment="outdoor")
+        tmp_db.add_plant(cluster_id=cluster_id, species="Eriobotrya japonica", category="fruit_tree")
+        sensor_id = tmp_db.add_sensor(
+            cluster_id=cluster_id,
+            tuya_device_id="fake_soil_summer",
+            name="Fake Soil",
+            sensor_type="soil_moisture",
+            config={},
+        )
+
+        # Spring baseline (outdoor 1.0× for fruit_tree). Loquat preferred 05–09;
+        # 07:00 stays inside.
+        _freeze(monkeypatch, _ts(2026, 4, 15, 7))
+        tmp_db.add_sensor_reading(sensor_id=sensor_id, soil_moisture=55.0)
+        spring_decision = logic.decide_for_cluster(cluster_id)
+        assert spring_decision is not None
+        baseline_interval = spring_decision.interval_hours
+
+        # July — loquat outdoor summer multiplier 1.6× → interval shrinks.
+        _freeze(monkeypatch, _ts(2026, 7, 15, 7))
+        tmp_db.add_sensor_reading(sensor_id=sensor_id, soil_moisture=55.0)
+        summer_decision = logic.decide_for_cluster(cluster_id)
+        assert summer_decision is not None
+        codes = [r.code for r in summer_decision.reasons]
+        assert TriggerCode.SEASONAL_BOOST in codes
+        assert summer_decision.interval_hours < baseline_interval, (
+            f"summer interval {summer_decision.interval_hours}h must be LESS than "
+            f"spring baseline {baseline_interval}h — multiplier >1.0 = water MORE often = "
+            f"interval should SHRINK"
+        )
