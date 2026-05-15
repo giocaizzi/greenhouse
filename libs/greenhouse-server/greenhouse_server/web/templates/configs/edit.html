@@ -2,6 +2,7 @@
 {% block title %}Config · {{ cluster.name }}{% endblock %}
 {% block content %}
 {% set current_tab = "config" %}
+{% set weekday_labels = weekday_labels or ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun") %}
 
 <div class="crumb">
   <a href="/">home</a><span class="sep">/</span>
@@ -53,5 +54,84 @@
       <button type="submit">Save config</button>
     </div>
   </form>
+</article>
+
+{# ── Watering schedule ─────────────────────────────────────────────── #}
+<article class="card" style="margin-top:var(--sp-6);">
+  <div class="card__head">
+    <h2 class="card__title">Watering schedule</h2>
+    <small class="muted">Hours are local time. Half-open: start inclusive, end exclusive. Wrap-around (start &gt; end) crosses midnight.</small>
+  </div>
+
+  {% if windows %}
+  <table aria-label="Irrigation windows for {{ cluster.name }}">
+    <thead>
+      <tr>
+        <th scope="col">Label</th>
+        <th scope="col">Hours</th>
+        <th scope="col">Days</th>
+        <th scope="col"><span class="visually-hidden">Actions</span></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for w in windows %}
+      <tr id="window-row-{{ w.id }}">
+        <td data-th="Label">{{ w.label or "—" }}</td>
+        <td data-th="Hours"><span class="mono">{{ "%02d"|format(w.start_hour) }}:00–{{ "%02d"|format(w.end_hour) }}:00</span></td>
+        <td data-th="Days">{{ w.weekday_label }}</td>
+        <td data-th="Actions">
+          <div class="row-actions">
+            <a href="/clusters/{{ cluster.id }}/windows/{{ w.id }}/edit" class="btn secondary btn-sm" aria-label="Edit window {{ w.id }}">Edit</a>
+            <button class="btn secondary btn-sm row-actions__danger"
+                    type="button"
+                    aria-label="Delete window {{ w.id }}"
+                    hx-delete="/clusters/{{ cluster.id }}/windows/{{ w.id }}"
+                    hx-target="#window-row-{{ w.id }}"
+                    hx-swap="outerHTML swap:200ms"
+                    hx-confirm="Delete this watering window?">
+              Delete
+            </button>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="card__body">
+    <p class="muted">No windows configured. Add one below or leave empty to use the global default preferred hours.</p>
+  </div>
+  {% endif %}
+
+  <div class="card__body">
+    <form method="post" action="/clusters/{{ cluster.id }}/windows">
+      <div class="grid">
+        <label for="new_start_hour">Start hour (0–23)
+          <input type="number" id="new_start_hour" name="start_hour" min="0" max="23" step="1" required>
+        </label>
+        <label for="new_end_hour">End hour (0–23)
+          <input type="number" id="new_end_hour" name="end_hour" min="0" max="23" step="1" required>
+        </label>
+      </div>
+      <fieldset>
+        <legend>Days</legend>
+        <div class="weekday-checks" role="group" aria-label="Weekday selection">
+          {% for bit in weekday_bits %}
+            {% set wid = "new_dow_" ~ bit %}
+            <label for="{{ wid }}" style="display:inline-flex;align-items:center;gap:var(--sp-1);margin-right:var(--sp-3);">
+              <input type="checkbox" id="{{ wid }}" name="weekday_mask" value="{{ bit }}" checked>
+              {{ weekday_labels[loop.index0] }}
+            </label>
+          {% endfor %}
+        </div>
+      </fieldset>
+      <label for="new_label">Label <small class="muted">(optional)</small>
+        <input type="text" id="new_label" name="label" placeholder="Morning AM">
+      </label>
+      <div class="form-actions">
+        <button type="submit">Add window</button>
+      </div>
+    </form>
+  </div>
 </article>
 {% endblock %}

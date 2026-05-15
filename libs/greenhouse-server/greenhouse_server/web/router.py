@@ -27,6 +27,7 @@ from greenhouse_server.web.routes import (
     quality,
     sensors,
     vacation,
+    windows,
 )
 from greenhouse_server.web.routes import (
     auth as web_auth,
@@ -57,3 +58,4 @@ web_router.include_router(preferences.router, dependencies=protected)
 web_router.include_router(quality.router, dependencies=protected)
 web_router.include_router(sensors.router, dependencies=protected)
 web_router.include_router(vacation.router, dependencies=protected)
+web_router.include_router(windows.router, dependencies=protected)

@@ -91,9 +91,12 @@
           {% endif %}
         </td>
         <td>
-          <form method="post" action="/vacation/{{ w.id }}/delete" style="margin:0;">
-            <button type="submit" class="secondary btn-sm">Delete</button>
-          </form>
+          <div class="row-actions">
+            <a href="/vacation/{{ w.id }}/edit" class="btn secondary btn-sm" aria-label="Edit vacation window {{ w.id }}">Edit</a>
+            <form method="post" action="/vacation/{{ w.id }}/delete" style="margin:0;">
+              <button type="submit" class="secondary btn-sm">Delete</button>
+            </form>
+          </div>
         </td>
       </tr>
       {% endfor %}

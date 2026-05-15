@@ -68,6 +68,48 @@ def create_vacation(
     return RedirectResponse(url="/vacation", status_code=303)
 
 
+@router.get("/vacation/{window_id}/edit")
+def edit_vacation_form(request: Request, window_id: int, repo: RepoDep):
+    window = next((w for w in repo.list_vacation_windows() if w.id == window_id), None)
+    if window is None:
+        raise HTTPException(404, "Vacation window not found.")
+    return templates.TemplateResponse(
+        request,
+        "vacation/edit.html",
+        base_context(request, window=window),
+    )
+
+
+@router.post("/vacation/{window_id}/edit")
+def update_vacation(
+    request: Request,
+    window_id: int,
+    repo: RepoDep,
+    starts_at: str = Form(...),
+    ends_at: str = Form(...),
+    contact_email: str = Form(""),
+    notes: str = Form(""),
+):
+    try:
+        starts_ts = _parse_ts(starts_at)
+        ends_ts = _parse_ts(ends_at)
+    except ValueError as exc:
+        raise HTTPException(400, "Invalid date format. Use YYYY-MM-DD or Unix timestamp.") from exc
+    if ends_ts <= starts_ts:
+        raise HTTPException(400, "ends_at must be after starts_at.")
+    updated = repo.update_vacation_window(
+        window_id,
+        starts_at=starts_ts,
+        ends_at=ends_ts,
+        contact_email=contact_email.strip() or None,
+        notes=notes.strip() or None,
+    )
+    if updated is None:
+        raise HTTPException(404, "Vacation window not found.")
+    repo.session.commit()
+    return RedirectResponse(url="/vacation", status_code=303)
+
+
 @router.post("/vacation/{window_id}/delete")
 def delete_vacation(request: Request, window_id: int, repo: RepoDep):
     deleted = repo.delete_vacation_window(window_id)
