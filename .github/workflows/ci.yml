@@ -11,19 +11,18 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  check:
+  # ────────────────────────────────────────────────────────────────────────────
+  # detect-changes: short-circuits the rest of the workflow when a PR only
+  # touches release-please-mechanical files (CHANGELOG + version-only
+  # pyproject.toml edits + manifest). `predicate-quantifier: every` is
+  # required so the `!negation` rules actually bite against the leading `**`.
+  # ────────────────────────────────────────────────────────────────────────────
+  detect-changes:
     runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.changes.outputs.code }}
     steps:
       - uses: actions/checkout@v6
-
-      # Detect whether this PR has any "real" code change, or only the
-      # mechanical CHANGELOG / version-bump edits that release-please
-      # generates. The filter is "everything except those files" — so a
-      # release-please PR (CHANGELOG + version-only pyproject.toml edits +
-      # release-please-manifest.json) yields code=false and we short-circuit.
-      # `predicate-quantifier: every` is required for `!negation` rules to
-      # bite against a leading `**`; without it, `**` matches everything and
-      # the negations are silently ignored.
       - id: changes
         uses: dorny/paths-filter@v4.0.1
         with:
@@ -34,38 +33,143 @@ jobs:
               - "!CHANGELOG.md"
               - "!.release-please-manifest.json"
               - "!**/pyproject.toml"
+      - if: steps.changes.outputs.code != 'true'
+        run: echo "::notice::Only release-please mechanical files changed (CHANGELOG / version bumps). Skipping CI jobs."
 
-      - name: Mechanical-only PR — skipping lint, format, and test
-        if: steps.changes.outputs.code != 'true'
-        run: |
-          echo "::notice::Only release-please mechanical files changed (CHANGELOG / version bumps). Skipping CI."
-
+  # ────────────────────────────────────────────────────────────────────────────
+  # lint — fastest signal. Pure ruff: check + format --check.
+  # ────────────────────────────────────────────────────────────────────────────
+  lint:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
-        if: steps.changes.outputs.code == 'true'
         with:
           python-version: "3.13"
-
       - uses: astral-sh/setup-uv@v7
-        if: steps.changes.outputs.code == 'true'
         with:
           enable-cache: true
+      - run: uv sync
+      - name: ruff check
+        run: uv run ruff check libs/ tests/
+      - name: ruff format --check
+        run: uv run ruff format --check libs/ tests/
 
-      - name: Install dependencies
-        if: steps.changes.outputs.code == 'true'
-        run: uv sync
+  # ────────────────────────────────────────────────────────────────────────────
+  # hygiene — pre-commit's file-hygiene hooks (trailing whitespace, EOF, yaml,
+  # toml, merge conflicts, large files, private keys, mixed line endings).
+  # Skips ruff/hadolint/gitleaks since they have their own jobs.
+  # ────────────────────────────────────────────────────────────────────────────
+  hygiene:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    env:
+      SKIP: ruff,ruff-format,hadolint-docker,gitleaks
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - run: uvx pre-commit run --all-files
 
-      - name: Pre-commit (lint, format, hadolint, gitleaks, file hygiene)
-        if: steps.changes.outputs.code == 'true'
-        run: make pre-commit-run
+  # ────────────────────────────────────────────────────────────────────────────
+  # dockerfile — hadolint via pre-commit (needs Docker on the runner, which
+  # ubuntu-latest provides). Isolated job so a Dockerfile lint failure does
+  # not show up as "tests failed".
+  # ────────────────────────────────────────────────────────────────────────────
+  dockerfile:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: Dockerfile
 
-      - name: Test with coverage
-        if: steps.changes.outputs.code == 'true'
+  # ────────────────────────────────────────────────────────────────────────────
+  # secrets — gitleaks scan. Failing here means a credential probably leaked
+  # into the diff; isolating the signal makes that obvious in PR review.
+  # ────────────────────────────────────────────────────────────────────────────
+  secrets:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # test — pytest with coverage gate. Uploads to Codecov. Slowest job.
+  # ────────────────────────────────────────────────────────────────────────────
+  test:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - run: uv sync
+      - name: Test with coverage (60% gate)
         run: make coverage
-
       - name: Upload coverage to Codecov
-        if: steps.changes.outputs.code == 'true'
         uses: codecov/codecov-action@v6
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: coverage.xml
           fail_ci_if_error: false
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # check — required-status-check umbrella. Branch protection points at this
+  # one job; renaming/splitting the work above does NOT require an admin to
+  # touch repo settings. Always runs (`if: always()`) so it can report green
+  # even when upstream jobs were *skipped* on a mechanical-only PR.
+  # ────────────────────────────────────────────────────────────────────────────
+  check:
+    needs: [detect-changes, lint, hygiene, dockerfile, secrets, test]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Aggregate job results
+        env:
+          R_DETECT: ${{ needs.detect-changes.result }}
+          R_LINT: ${{ needs.lint.result }}
+          R_HYGIENE: ${{ needs.hygiene.result }}
+          R_DOCKERFILE: ${{ needs.dockerfile.result }}
+          R_SECRETS: ${{ needs.secrets.result }}
+          R_TEST: ${{ needs.test.result }}
+        run: |
+          echo "Job results:"
+          printf '  detect-changes: %s\n' "$R_DETECT"
+          printf '  lint:           %s\n' "$R_LINT"
+          printf '  hygiene:        %s\n' "$R_HYGIENE"
+          printf '  dockerfile:     %s\n' "$R_DOCKERFILE"
+          printf '  secrets:        %s\n' "$R_SECRETS"
+          printf '  test:           %s\n' "$R_TEST"
+          fail=0
+          for r in "$R_DETECT" "$R_LINT" "$R_HYGIENE" "$R_DOCKERFILE" "$R_SECRETS" "$R_TEST"; do
+            case "$r" in
+              success|skipped) ;;
+              *) fail=1 ;;
+            esac
+          done
+          if [ "$fail" -eq 1 ]; then
+            echo "::error::At least one upstream job failed or was cancelled."
+            exit 1
+          fi
+          echo "All upstream jobs OK (success or skipped)."
