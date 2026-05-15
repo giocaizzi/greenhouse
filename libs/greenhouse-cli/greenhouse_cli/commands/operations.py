@@ -100,3 +100,16 @@ def register(app: typer.Typer) -> None:
     def health(ctx: typer.Context):
         """Server health and scheduler status."""
         output(call(ctx, lambda c: c.health()))
+
+    @app.command("stop-all")
+    def stop_all(
+        ctx: typer.Context,
+        yes: Annotated[bool, typer.Option("--yes", "-y", help="Skip confirmation prompt")] = False,
+    ):
+        """Emergency kill switch: stop every irrigator in the system."""
+        if not yes:
+            typer.confirm(
+                "Send emergency stop to ALL irrigators in the system?",
+                abort=True,
+            )
+        output(call(ctx, lambda c: c.bulk_stop_all()))

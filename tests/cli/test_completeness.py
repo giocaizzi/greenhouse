@@ -684,3 +684,71 @@ class TestResourceCrud:
         )
         result = runner.invoke(app, ["sensor", "delete", "3", "--cluster", "1", "--yes"])
         assert result.exit_code == 0
+
+
+# ─────────────────────────── stop-all ──────────────────────────
+
+
+class TestStopAllCommand:
+    def test_stop_all_with_yes(self, patch_client):
+        captured: list = []
+        patch_client(
+            {
+                ("POST", "/api/v1/bulk/stop-all"): (200, {"stopped": 3, "errors": []}),
+            },
+            captured,
+        )
+        result = runner.invoke(app, ["stop-all", "--yes"])
+        assert result.exit_code == 0
+        assert captured[0]["method"] == "POST"
+        assert captured[0]["path"] == "/api/v1/bulk/stop-all"
+        data = json.loads(result.stdout)
+        assert data == {"stopped": 3, "errors": []}
+
+    def test_stop_all_short_flag(self, patch_client):
+        captured: list = []
+        patch_client(
+            {
+                ("POST", "/api/v1/bulk/stop-all"): (200, {"stopped": 0, "errors": []}),
+            },
+            captured,
+        )
+        result = runner.invoke(app, ["stop-all", "-y"])
+        assert result.exit_code == 0
+        assert captured[0]["path"] == "/api/v1/bulk/stop-all"
+
+    def test_stop_all_prompt_aborts_without_yes(self, patch_client):
+        captured: list = []
+        patch_client(
+            {
+                ("POST", "/api/v1/bulk/stop-all"): (200, {"stopped": 1, "errors": []}),
+            },
+            captured,
+        )
+        result = runner.invoke(app, ["stop-all"], input="n\n")
+        assert result.exit_code != 0
+        assert captured == []
+
+    def test_stop_all_prompt_confirmed(self, patch_client):
+        captured: list = []
+        patch_client(
+            {
+                ("POST", "/api/v1/bulk/stop-all"): (200, {"stopped": 2, "errors": ["irrigator 5: timeout"]}),
+            },
+            captured,
+        )
+        result = runner.invoke(app, ["stop-all"], input="y\n")
+        assert result.exit_code == 0
+        assert captured[0]["path"] == "/api/v1/bulk/stop-all"
+        assert '"stopped": 2' in result.stdout
+        assert "irrigator 5: timeout" in result.stdout
+
+    def test_stop_all_server_error_exits_1(self, patch_client):
+        patch_client(
+            {
+                ("POST", "/api/v1/bulk/stop-all"): (500, {"detail": "Device manager down"}),
+            }
+        )
+        result = runner.invoke(app, ["stop-all", "--yes"])
+        assert result.exit_code == 1
+        assert "device manager down" in result.output.lower()
