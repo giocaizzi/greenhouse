@@ -12,12 +12,44 @@ from greenhouse_server.web.templating import templates
 router = APIRouter(include_in_schema=False)
 
 
+_WEEKDAY_BITS: tuple[int, ...] = (1, 2, 4, 8, 16, 32, 64)
+_WEEKDAY_LABELS: tuple[str, ...] = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+_FULL_MASK = 127
+
+
+def _format_weekday_mask(mask: int) -> str:
+    """Render a weekday bitmask as a human label (e.g. 'Mon, Wed, Fri')."""
+    if mask & _FULL_MASK == _FULL_MASK:
+        return "Every day"
+    return ", ".join(label for bit, label in zip(_WEEKDAY_BITS, _WEEKDAY_LABELS, strict=True) if mask & bit)
+
+
 @router.get("/clusters/{cluster_id}/config")
 def config_form(request: Request, cluster_id: int, repo: RepoDep):
     cluster = require_cluster(repo, cluster_id)
     config = repo.get_irrigation_config(cluster_id)
+    windows = [
+        {
+            "id": w.id,
+            "start_hour": w.start_hour,
+            "end_hour": w.end_hour,
+            "weekday_mask": w.weekday_mask,
+            "weekday_label": _format_weekday_mask(w.weekday_mask),
+            "label": w.label,
+        }
+        for w in repo.list_irrigation_windows(cluster_id)
+    ]
     return templates.TemplateResponse(
-        request, "configs/edit.html", base_context(request, cluster=cluster, config=config)
+        request,
+        "configs/edit.html",
+        base_context(
+            request,
+            cluster=cluster,
+            config=config,
+            windows=windows,
+            weekday_bits=_WEEKDAY_BITS,
+            weekday_labels=_WEEKDAY_LABELS,
+        ),
     )
 
 

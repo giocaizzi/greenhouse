@@ -1,0 +1,56 @@
+{% extends "_base.html" %}
+{% block title %}Edit window · {{ cluster.name }}{% endblock %}
+{% block content %}
+
+<div class="crumb">
+  <a href="/">home</a><span class="sep">/</span>
+  <a href="/clusters">clusters</a><span class="sep">/</span>
+  <a href="/clusters/{{ cluster.id }}">{{ cluster.name | lower }}</a><span class="sep">/</span>
+  <a href="/clusters/{{ cluster.id }}/config">config</a><span class="sep">/</span>
+  <span class="here">edit window</span>
+</div>
+
+<section class="page-head">
+  <div class="page-head__title">
+    <h1>Edit watering window</h1>
+    <div class="page-head__meta">
+      <span>{{ cluster.name }} · Window #{{ window.id }}</span>
+    </div>
+  </div>
+</section>
+
+<article class="card form-card">
+  <form method="post" action="/clusters/{{ cluster.id }}/windows/{{ window.id }}/edit">
+    <div class="grid">
+      <label for="start_hour">Start hour (0–23)
+        <input type="number" id="start_hour" name="start_hour" min="0" max="23" step="1"
+               value="{{ window.start_hour }}" required>
+      </label>
+      <label for="end_hour">End hour (0–23)
+        <input type="number" id="end_hour" name="end_hour" min="0" max="23" step="1"
+               value="{{ window.end_hour }}" required>
+      </label>
+    </div>
+    <fieldset>
+      <legend>Days</legend>
+      <div class="weekday-checks" role="group" aria-label="Weekday selection">
+        {% for check in weekday_checks %}
+          {% set wid = "dow_" ~ check.bit %}
+          <label for="{{ wid }}" style="display:inline-flex;align-items:center;gap:var(--sp-1);margin-right:var(--sp-3);">
+            <input type="checkbox" id="{{ wid }}" name="weekday_mask" value="{{ check.bit }}"
+                   {% if check.checked %}checked{% endif %}>
+            {{ check.label }}
+          </label>
+        {% endfor %}
+      </div>
+    </fieldset>
+    <label for="label">Label <small class="muted">(optional)</small>
+      <input type="text" id="label" name="label" value="{{ window.label or '' }}" placeholder="Morning AM">
+    </label>
+    <div class="form-actions">
+      <a href="/clusters/{{ cluster.id }}/config" class="btn secondary">Cancel</a>
+      <button type="submit">Save window</button>
+    </div>
+  </form>
+</article>
+{% endblock %}
