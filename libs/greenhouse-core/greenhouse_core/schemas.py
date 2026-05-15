@@ -175,6 +175,45 @@ class SensorAssignmentListResponse(BaseModel):
     assignments: list[SensorAssignmentResponse]
 
 
+# --- Irrigation Window ---
+
+
+class IrrigationWindowBase(BaseModel):
+    """Common shape for create/update of a per-cluster watering window.
+
+    Hours are local-time integers 0–23, end-exclusive. ``weekday_mask`` is a
+    Mon-bit-1 bitmask (Mon=1, Tue=2, …, Sun=64); 127 = every day.
+    """
+
+    start_hour: int
+    end_hour: int
+    weekday_mask: int = 127
+    label: str | None = None
+
+
+class CreateIrrigationWindowRequest(IrrigationWindowBase):
+    pass
+
+
+class UpdateIrrigationWindowRequest(BaseModel):
+    start_hour: int | None = None
+    end_hour: int | None = None
+    weekday_mask: int | None = None
+    label: str | None = None
+
+
+class IrrigationWindowResponse(IrrigationWindowBase):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    cluster_id: int
+
+
+class IrrigationWindowListResponse(BaseModel):
+    cluster_id: int
+    windows: list[IrrigationWindowResponse]
+
+
 # --- Sensor Reading ---
 
 

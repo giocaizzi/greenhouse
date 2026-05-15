@@ -60,6 +60,10 @@ class TriggerCode(StrEnum):
     TREND_TEMP_RISING = "trend_temp_rising"
     UNDERWATERING_PATTERN = "underwatering_pattern"
     LEARNING_ALERT = "learning_alert"
+    # Timing: cluster-level preferred-hour gate and seasonal frequency scaling.
+    OUTSIDE_WINDOW = "outside_window"
+    SEASONAL_HOLD = "seasonal_hold"
+    SEASONAL_BOOST = "seasonal_boost"
 
 
 class Reason(BaseModel):

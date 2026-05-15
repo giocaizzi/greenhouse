@@ -77,3 +77,28 @@ LIGHT_VERY_BRIGHT = 1500
 LIGHT_BRIGHT = 800
 LIGHT_DARK = 150
 LIGHT_VERY_DARK = 50
+
+# ── Irrigation timing — preferred windows + seasonal multipliers ─────────────
+# Defaults applied when neither a per-cluster IrrigationWindow nor a per-species
+# / per-category override is present. Hours are local-time integers 0–23,
+# end-exclusive. The biology evidence behind these numbers lives in the team
+# audit report (Webb 2003 / PMC8997731 / extension service guidance): water
+# in the morning so foliage dries before nightfall and the root zone is moist
+# before peak transpiration.
+DEFAULT_PREFERRED_WATER_HOURS = (6, 10)
+# Indoor cluster — heated/cooled, photoperiod near-constant. Halve in winter
+# (dormancy + low light), +20% in summer (peak transpiration), 0.8× autumn.
+DEFAULT_SEASON_MULTIPLIER_INDOOR = {
+    "winter": 0.5,
+    "spring": 1.0,
+    "summer": 1.2,
+    "autumn": 0.8,
+}
+# Outdoor cluster — driven by temperature + photoperiod. Big summer ramp for
+# fruit trees / vegetables, true winter dormancy in temperate zones.
+DEFAULT_SEASON_MULTIPLIER_OUTDOOR = {
+    "winter": 0.3,
+    "spring": 1.0,
+    "summer": 1.5,
+    "autumn": 0.7,
+}

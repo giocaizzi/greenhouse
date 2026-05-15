@@ -36,6 +36,7 @@ from greenhouse_server.routes import (
     sensors,
     vacation,
     well_known,
+    windows,
 )
 from greenhouse_server.routes import (
     auth as auth_routes,
@@ -171,6 +172,7 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
     app.include_router(health.router, prefix=prefix, dependencies=protected)
     app.include_router(quality.router, prefix=prefix, dependencies=protected)
     app.include_router(efficacy.router, prefix=prefix, dependencies=protected)
+    app.include_router(windows.router, prefix=prefix, dependencies=protected)
 
     # OAuth discovery stubs at root (not /api/v1) so MCP HTTP clients that
     # probe RFC 9728 / RFC 8414 before applying the bearer header don't crash

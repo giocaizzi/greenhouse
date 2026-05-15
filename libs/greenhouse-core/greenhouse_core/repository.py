@@ -15,6 +15,7 @@ from greenhouse_core.models import (
     DecisionLog,
     IrrigationConfig,
     IrrigationEvent,
+    IrrigationWindow,
     Irrigator,
     Plant,
     PlantHealthDaily,
@@ -746,6 +747,59 @@ class IrrigationRepository:
         """Delete a vacation window; returns True if a row was removed."""
         row = self.session.get(VacationWindow, window_id)
         if not row:
+            return False
+        self.session.delete(row)
+        self.session.flush()
+        return True
+
+    # ── Irrigation Windows ────────────────────────────────────────────────────
+
+    def list_irrigation_windows(self, cluster_id: int) -> list[IrrigationWindow]:
+        """All windows configured for a cluster, oldest first."""
+        return list(
+            self.session.scalars(
+                select(IrrigationWindow).where(IrrigationWindow.cluster_id == cluster_id).order_by(IrrigationWindow.id)
+            )
+        )
+
+    def get_irrigation_window(self, window_id: int) -> IrrigationWindow | None:
+        return self.session.get(IrrigationWindow, window_id)
+
+    def add_irrigation_window(
+        self,
+        cluster_id: int,
+        *,
+        start_hour: int,
+        end_hour: int,
+        weekday_mask: int = 127,
+        label: str | None = None,
+    ) -> IrrigationWindow:
+        row = IrrigationWindow(
+            cluster_id=cluster_id,
+            start_hour=start_hour,
+            end_hour=end_hour,
+            weekday_mask=weekday_mask,
+            label=label,
+        )
+        self.session.add(row)
+        self.session.flush()
+        return row
+
+    def update_irrigation_window(self, window_id: int, **fields) -> IrrigationWindow | None:
+        row = self.session.get(IrrigationWindow, window_id)
+        if row is None:
+            return None
+        for key, value in fields.items():
+            if value is None:
+                continue
+            if hasattr(row, key):
+                setattr(row, key, value)
+        self.session.flush()
+        return row
+
+    def delete_irrigation_window(self, window_id: int) -> bool:
+        row = self.session.get(IrrigationWindow, window_id)
+        if row is None:
             return False
         self.session.delete(row)
         self.session.flush()
