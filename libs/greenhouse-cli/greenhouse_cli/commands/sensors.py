@@ -38,3 +38,34 @@ def sensor_list(
             sensors = call(ctx, lambda c, cid=cl["id"]: c.list_sensors(cid))
             if sensors:
                 output({"cluster": cl["name"], "sensors": sensors})
+
+
+@sensor_app.command("update")
+def sensor_update(
+    ctx: typer.Context,
+    id: Annotated[int, typer.Argument(help="Sensor ID")],
+    cluster: Annotated[int, typer.Option(help="Cluster the sensor belongs to")],
+    name: Annotated[str | None, typer.Option(help="New sensor name")] = None,
+    type: Annotated[str | None, typer.Option(help="soil_moisture, temp_humidity, or light")] = None,
+    plant_id: Annotated[int | None, typer.Option(help="Reassign to a different plant")] = None,
+):
+    """Patch sensor metadata. Only the supplied fields are sent."""
+    output(
+        call(
+            ctx,
+            lambda c: c.update_sensor(cluster, id, name=name, type=type, plant_id=plant_id),
+        )
+    )
+
+
+@sensor_app.command("delete")
+def sensor_delete(
+    ctx: typer.Context,
+    id: Annotated[int, typer.Argument(help="Sensor ID")],
+    cluster: Annotated[int, typer.Option(help="Cluster the sensor belongs to")],
+    yes: Annotated[bool, typer.Option("--yes", "-y", help="Skip confirmation prompt")] = False,
+):
+    """Delete a sensor. Historic readings stay attached to the cluster."""
+    if not yes:
+        typer.confirm(f"Delete sensor {id} from cluster {cluster}?", abort=True)
+    output(call(ctx, lambda c: c.delete_sensor(cluster, id)))
