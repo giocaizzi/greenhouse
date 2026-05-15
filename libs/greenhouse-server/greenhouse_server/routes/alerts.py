@@ -16,21 +16,38 @@ def list_alerts(
     cluster_id: int | None = Query(default=None),
     plant_id: int | None = Query(default=None),
     limit: int = Query(default=100, ge=1, le=500),
+    cursor: int | None = Query(default=None, description="Id cursor — return alerts with id < cursor"),
 ) -> AlertListResponse:
-    """List persisted alerts from the inbox with optional filters.
+    """List persisted alerts from the inbox with optional filters and cursor pagination.
+
+    Walks the inbox newest-first. To fetch the next page, pass the previous
+    response's ``next_cursor`` (the last alert id seen) as ``cursor``.
 
     Args:
         status: Filter by alert lifecycle status (`open`, `acknowledged`, `resolved`).
         cluster_id: Restrict to alerts for a specific cluster.
         plant_id: Restrict to alerts for a specific plant.
         limit: Maximum number of items to return (default 100, max 500).
+        cursor: Id-based cursor — return only rows with ``id < cursor``.
 
     Returns:
-        Open-alert badge count and the filtered alert list, newest-seen first.
+        Open-alert badge count, the filtered alert list newest-seen first,
+        and a ``next_cursor`` (None when the page was not full).
     """
-    items = repo.list_alerts(status=status, cluster_id=cluster_id, plant_id=plant_id, limit=limit)
+    items = repo.list_alerts(
+        status=status,
+        cluster_id=cluster_id,
+        plant_id=plant_id,
+        limit=limit,
+        after_id=cursor,
+    )
     open_count = repo.count_open_alerts()
-    return AlertListResponse(open_count=open_count, items=[AlertSummary.model_validate(a) for a in items])
+    next_cursor = items[-1].id if len(items) == limit else None
+    return AlertListResponse(
+        open_count=open_count,
+        items=[AlertSummary.model_validate(a) for a in items],
+        next_cursor=next_cursor,
+    )
 
 
 @router.get("/alerts/{alert_id}", response_model=AlertSummary)

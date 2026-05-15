@@ -353,3 +353,71 @@ class TestPlantMove:
             history = repo.list_plant_health_history(plant_id, days=365 * 100)
             assert len(history) == 1
             assert history[0].score == 72.5
+
+
+class TestListAllPlantsTopLevel:
+    def test_list_empty(self, client):
+        """GET /plants with no plants returns empty list and null cursor."""
+        resp = client.get("/api/v1/plants")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["plants"] == []
+        assert data["next_cursor"] is None
+
+    def test_list_across_clusters(self, client):
+        """GET /plants returns every plant regardless of cluster."""
+        client.post("/api/v1/clusters", json={"name": "A"})
+        client.post("/api/v1/clusters", json={"name": "B"})
+        client.post("/api/v1/clusters/1/plants", json={"species": "Fern"})
+        client.post("/api/v1/clusters/2/plants", json={"species": "Monstera"})
+        resp = client.get("/api/v1/plants")
+        assert resp.status_code == 200
+        species = sorted(p["species"] for p in resp.json()["plants"])
+        assert species == ["Fern", "Monstera"]
+
+    def test_filter_by_cluster_id(self, client):
+        """cluster_id query param restricts results to one cluster."""
+        client.post("/api/v1/clusters", json={"name": "A"})
+        client.post("/api/v1/clusters", json={"name": "B"})
+        client.post("/api/v1/clusters/1/plants", json={"species": "Fern"})
+        client.post("/api/v1/clusters/2/plants", json={"species": "Monstera"})
+        resp = client.get("/api/v1/plants?cluster_id=2")
+        species = [p["species"] for p in resp.json()["plants"]]
+        assert species == ["Monstera"]
+
+    def test_filter_by_category(self, client):
+        """category query param restricts results to one category."""
+        client.post("/api/v1/clusters", json={"name": "A"})
+        client.post("/api/v1/clusters/1/plants", json={"species": "Fern", "category": "tropical"})
+        client.post("/api/v1/clusters/1/plants", json={"species": "Cactus", "category": "succulent"})
+        resp = client.get("/api/v1/plants?category=succulent")
+        species = [p["species"] for p in resp.json()["plants"]]
+        assert species == ["Cactus"]
+
+    def test_pagination_with_cursor(self, client):
+        """limit + cursor walks the rows id-ascending."""
+        client.post("/api/v1/clusters", json={"name": "A"})
+        for n in range(5):
+            client.post("/api/v1/clusters/1/plants", json={"species": f"P{n}"})
+        # First page of 2
+        resp = client.get("/api/v1/plants?limit=2")
+        data = resp.json()
+        assert len(data["plants"]) == 2
+        assert data["next_cursor"] == data["plants"][-1]["id"]
+        # Second page using cursor
+        resp = client.get(f"/api/v1/plants?limit=2&cursor={data['next_cursor']}")
+        data2 = resp.json()
+        assert len(data2["plants"]) == 2
+        assert data2["plants"][0]["id"] > data["plants"][-1]["id"]
+        # Last page is partial, no cursor.
+        resp = client.get(f"/api/v1/plants?limit=2&cursor={data2['next_cursor']}")
+        data3 = resp.json()
+        assert len(data3["plants"]) == 1
+        assert data3["next_cursor"] is None
+
+    def test_limit_validation(self, client):
+        """limit must be 1..500."""
+        resp = client.get("/api/v1/plants?limit=0")
+        assert resp.status_code == 422
+        resp = client.get("/api/v1/plants?limit=501")
+        assert resp.status_code == 422

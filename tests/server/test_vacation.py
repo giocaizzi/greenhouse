@@ -80,6 +80,59 @@ class TestActiveVacationFlag:
         assert len(resp.json()["items"]) == 2
 
 
+class TestUpdateVacationWindow:
+    def test_update_partial_changes(self, client):
+        """PUT applies only the supplied fields and leaves the rest untouched."""
+        now = int(time.time())
+        client.post(
+            "/api/v1/vacation",
+            json={"starts_at": now + 100, "ends_at": now + 200, "contact_email": "old@example.com"},
+        )
+        resp = client.put(
+            "/api/v1/vacation/1",
+            json={"contact_email": "new@example.com", "notes": "Updated trip"},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["contact_email"] == "new@example.com"
+        assert data["notes"] == "Updated trip"
+        # Untouched fields preserved.
+        assert data["starts_at"] == now + 100
+        assert data["ends_at"] == now + 200
+
+    def test_update_dates(self, client):
+        """PUT can move the window in time as long as start < end."""
+        now = int(time.time())
+        client.post("/api/v1/vacation", json={"starts_at": now + 100, "ends_at": now + 200})
+        resp = client.put(
+            "/api/v1/vacation/1",
+            json={"starts_at": now + 500, "ends_at": now + 1000},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["starts_at"] == now + 500
+        assert data["ends_at"] == now + 1000
+
+    def test_update_rejects_inverted_dates(self, client):
+        """starts_at >= ends_at after the patch must return 400."""
+        now = int(time.time())
+        client.post("/api/v1/vacation", json={"starts_at": now + 100, "ends_at": now + 200})
+        resp = client.put(
+            "/api/v1/vacation/1",
+            json={"starts_at": now + 300},  # would push start past existing end
+        )
+        assert resp.status_code == 400
+
+    def test_update_not_found(self, client):
+        """PUT on a missing ID returns 404."""
+        now = int(time.time())
+        resp = client.put(
+            "/api/v1/vacation/999",
+            json={"starts_at": now, "ends_at": now + 10},
+        )
+        assert resp.status_code == 404
+
+
 class TestDeleteVacationWindow:
     def test_delete_existing(self, client):
         """DELETE removes the window and returns success."""
