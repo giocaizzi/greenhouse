@@ -1,0 +1,61 @@
+{% extends "_base.html" %}
+{% block title %}Preferences · Greenhouse{% endblock %}
+{% block content %}
+
+<div class="crumb">
+  <a href="/">home</a><span class="sep">/</span>
+  <span class="here">preferences</span>
+</div>
+
+<section class="page-head">
+  <div class="page-head__title">
+    <h1>Preferences</h1>
+    <div class="page-head__meta">
+      <span>UI defaults and global safety switches.</span>
+    </div>
+  </div>
+</section>
+
+<article class="card form-card">
+  <form method="post" action="/preferences">
+    <label for="units">Units
+      <select id="units" name="units" required>
+        <option value="metric"{% if prefs.units == "metric" %} selected{% endif %}>Metric (°C, mm)</option>
+        <option value="imperial"{% if prefs.units == "imperial" %} selected{% endif %}>Imperial (°F, in)</option>
+      </select>
+    </label>
+    <label for="timezone">Timezone
+      <input type="text" id="timezone" name="timezone" value="{{ prefs.timezone }}" required placeholder="UTC">
+      <small class="muted">IANA name, e.g. <code>UTC</code>, <code>Europe/Rome</code>.</small>
+    </label>
+    <label for="theme">Theme
+      <select id="theme" name="theme" required>
+        <option value="auto"{% if prefs.theme == "auto" %} selected{% endif %}>Auto (follow system)</option>
+        <option value="light"{% if prefs.theme == "light" %} selected{% endif %}>Light</option>
+        <option value="dark"{% if prefs.theme == "dark" %} selected{% endif %}>Dark</option>
+      </select>
+    </label>
+    <label for="refresh_interval_seconds">Refresh interval (seconds)
+      <input type="number" id="refresh_interval_seconds" name="refresh_interval_seconds"
+             value="{{ prefs.refresh_interval_seconds }}" min="5" max="3600" step="5" required>
+    </label>
+    <label for="default_cluster_id">Default cluster
+      <select id="default_cluster_id" name="default_cluster_id">
+        <option value="">— none —</option>
+        {% for cluster in clusters %}
+          <option value="{{ cluster.id }}"{% if prefs.default_cluster_id == cluster.id %} selected{% endif %}>{{ cluster.name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label for="dry_run_global" style="display:flex; align-items:center; gap: var(--sp-2);">
+      <input type="checkbox" id="dry_run_global" name="dry_run_global" value="on"
+             {% if prefs.dry_run_global %}checked{% endif %}>
+      <span>Global dry-run <small class="muted">— irrigators will never actuate while this is on.</small></span>
+    </label>
+    <div class="form-actions">
+      <a href="/" class="btn secondary">Cancel</a>
+      <button type="submit">Save preferences</button>
+    </div>
+  </form>
+</article>
+{% endblock %}

@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 
 from fastapi import APIRouter, Form, HTTPException, Query, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 
 from greenhouse_server.deps import ClusterServiceDep, PlantDbDep, RepoDep
 from greenhouse_server.services.charts import (
@@ -46,6 +46,45 @@ def create_cluster(
     cluster_id = repo.add_cluster(name=name, location=location or None, environment=environment)
     repo.session.commit()
     return RedirectResponse(url=f"/clusters/{cluster_id}", status_code=303)
+
+
+@router.get("/clusters/{cluster_id}/edit")
+def edit_cluster_form(request: Request, cluster_id: int, repo: RepoDep):
+    cluster = repo.get_cluster(cluster_id)
+    if not cluster:
+        raise HTTPException(404, "Cluster not found")
+    return templates.TemplateResponse(request, "clusters/edit.html", base_context(request, cluster=cluster))
+
+
+@router.post("/clusters/{cluster_id}/edit")
+def update_cluster(
+    request: Request,
+    cluster_id: int,
+    repo: RepoDep,
+    name: str = Form(...),
+    location: str = Form(""),
+    environment: str = Form("indoor"),
+):
+    updated = repo.update_cluster(
+        cluster_id,
+        name=name,
+        location=location or None,
+        environment=environment,
+    )
+    if not updated:
+        raise HTTPException(404, "Cluster not found")
+    repo.session.commit()
+    return RedirectResponse(url=f"/clusters/{cluster_id}", status_code=303)
+
+
+@router.delete("/clusters/{cluster_id}", response_class=HTMLResponse)
+def delete_cluster(cluster_id: int, repo: RepoDep):
+    """HTMX-targeted delete; returns an empty HTML body so the row is removed."""
+    deleted = repo.delete_cluster(cluster_id)
+    if not deleted:
+        raise HTTPException(404, "Cluster not found")
+    repo.session.commit()
+    return HTMLResponse("")
 
 
 @router.get("/clusters/{cluster_id}")

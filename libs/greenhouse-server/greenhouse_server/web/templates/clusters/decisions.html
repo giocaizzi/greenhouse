@@ -1,0 +1,62 @@
+{% extends "_base.html" %}
+{% block title %}Decisions · {{ cluster.name }}{% endblock %}
+{% block content %}
+{% set current_tab = "decisions" %}
+
+<div class="crumb">
+  <a href="/">home</a><span class="sep">/</span>
+  <a href="/clusters">clusters</a><span class="sep">/</span>
+  <a href="/clusters/{{ cluster.id }}">{{ cluster.name | lower }}</a><span class="sep">/</span>
+  <span class="here">decisions</span>
+</div>
+
+<section class="page-head">
+  <div class="page-head__title">
+    <h1>{{ cluster.name }}</h1>
+    <div class="page-head__meta">
+      <span>Decision log &mdash; last {{ logs|length }} of up to {{ limit }} evaluations</span>
+    </div>
+  </div>
+</section>
+
+{% include "partials/_cluster_tabs.html" %}
+
+{% if not logs %}
+  <article class="empty">
+    <span class="empty__icon"><svg class="icon"><use href="/static/icons/sprite.svg#i-list"></use></svg></span>
+    <h2>No decisions yet</h2>
+    <p>The engine writes a row here every time it evaluates this cluster.</p>
+  </article>
+{% else %}
+<article class="card card--flush">
+  <table aria-label="Decision log for {{ cluster.name }}">
+    <thead>
+      <tr>
+        <th scope="col">When</th>
+        <th scope="col">Action</th>
+        <th scope="col">Duration</th>
+        <th scope="col">Interval</th>
+        <th scope="col">Confidence</th>
+        <th scope="col">Primary code</th>
+        <th scope="col">Actuated</th>
+        <th scope="col">Reason</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for log in logs %}
+      <tr>
+        <td data-th="When"><small class="mono muted">{{ log.evaluated_at | format_ts }}</small></td>
+        <td data-th="Action"><span class="badge-{{ log.action | decision_badge }}">{{ log.action | upper }}</span></td>
+        <td data-th="Duration"><span class="mono">{{ log.duration_minutes | format_minutes }}</span></td>
+        <td data-th="Interval"><span class="mono">{{ log.interval_hours }}h</span></td>
+        <td data-th="Confidence"><span class="mono">{{ "%.0f%%" | format(log.confidence * 100) }}</span></td>
+        <td data-th="Primary code">{% if log.primary_code %}<code>{{ log.primary_code }}</code>{% else %}<span class="muted">—</span>{% endif %}</td>
+        <td data-th="Actuated">{% if log.actuated %}<span class="badge-ok">yes</span>{% else %}<span class="muted">no</span>{% endif %}</td>
+        <td data-th="Reason"><small>{{ log.reason_text | strip_emoji }}</small></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</article>
+{% endif %}
+{% endblock %}

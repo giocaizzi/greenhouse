@@ -1,0 +1,81 @@
+{% extends "_base.html" %}
+{% block title %}Efficacy · {{ cluster.name }}{% endblock %}
+{% block content %}
+{% set current_tab = "efficacy" %}
+
+<div class="crumb">
+  <a href="/">home</a><span class="sep">/</span>
+  <a href="/clusters">clusters</a><span class="sep">/</span>
+  <a href="/clusters/{{ cluster.id }}">{{ cluster.name | lower }}</a><span class="sep">/</span>
+  <span class="here">efficacy</span>
+</div>
+
+<section class="page-head">
+  <div class="page-head__title">
+    <h1>{{ cluster.name }}</h1>
+    <div class="page-head__meta">
+      <span>Soil-moisture rise per irrigation event &mdash; last {{ days }} days</span>
+    </div>
+  </div>
+  <div class="page-head__actions">
+    <nav class="seg" aria-label="Look-back window">
+      {% for d in [7, 14, 30, 90] %}
+        {% if d == days %}
+          <strong>{{ d }}d</strong>
+        {% else %}
+          <a href="/clusters/{{ cluster.id }}/efficacy?days={{ d }}">{{ d }}d</a>
+        {% endif %}
+      {% endfor %}
+    </nav>
+  </div>
+</section>
+
+{% include "partials/_cluster_tabs.html" %}
+
+{% if not result.items %}
+  <article class="empty">
+    <span class="empty__icon"><svg class="icon"><use href="/static/icons/sprite.svg#i-scales"></use></svg></span>
+    <h2>No scored events yet</h2>
+    <p>Scores need at least one completed irrigation with sensor data 30&nbsp;min before and 90&nbsp;min after.</p>
+  </article>
+{% else %}
+<article class="card card--flush">
+  <table aria-label="Irrigation efficacy for {{ cluster.name }}">
+    <thead>
+      <tr>
+        <th scope="col">When</th>
+        <th scope="col">Irrigator</th>
+        <th scope="col">Duration</th>
+        <th scope="col">Before</th>
+        <th scope="col">After</th>
+        <th scope="col">Δ</th>
+        <th scope="col">Score</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in result.items %}
+      <tr>
+        <td data-th="When"><small class="mono muted">{{ item.timestamp | format_ts }}</small></td>
+        <td data-th="Irrigator">{{ item.irrigator_name }}</td>
+        <td data-th="Duration"><span class="mono">{{ item.duration_minutes | format_minutes }}</span></td>
+        <td data-th="Before">{% if item.before_pct is not none %}<span class="mono">{{ "%.1f%%" | format(item.before_pct) }}</span>{% else %}<span class="muted">—</span>{% endif %}</td>
+        <td data-th="After">{% if item.after_pct is not none %}<span class="mono">{{ "%.1f%%" | format(item.after_pct) }}</span>{% else %}<span class="muted">—</span>{% endif %}</td>
+        <td data-th="Δ">
+          {% if item.before_pct is not none and item.after_pct is not none %}
+            {% set delta = item.after_pct - item.before_pct %}
+            <span class="mono">{{ "%+.1f" | format(delta) }}</span>
+          {% else %}<span class="muted">—</span>{% endif %}
+        </td>
+        <td data-th="Score">
+          {% if item.score is not none %}
+            {% set score_class = "ok" if item.score >= 60 else ("warning" if item.score >= 20 else "low") %}
+            <span class="badge-{{ score_class }}">{{ "%.0f" | format(item.score) }}</span>
+          {% else %}<span class="muted">—</span>{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</article>
+{% endif %}
+{% endblock %}

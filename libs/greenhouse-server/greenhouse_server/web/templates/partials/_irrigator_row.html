@@ -18,7 +18,8 @@
             hx-indicator="#irr-spin-{{ irr.id }}"
             hx-confirm="Start {{ irr.name }} now?"
             class="irr-controls__form">
-        <input type="number" name="minutes" placeholder="min" min="1" class="irr-controls__num" aria-label="Minutes">
+        <label for="irr-mins-{{ irr.id }}" class="visually-hidden">Minutes</label>
+        <input id="irr-mins-{{ irr.id }}" type="number" name="minutes" placeholder="min" min="1" class="irr-controls__num" aria-label="Minutes">
         <button type="submit" class="btn-sm">
           <svg class="icon" style="width:12px;height:12px;"><use href="/static/icons/sprite.svg#i-play"></use></svg>
           Start
@@ -30,7 +31,7 @@
             hx-indicator="#irr-spin-{{ irr.id }}"
             hx-confirm="Stop {{ irr.name }}?"
             class="irr-controls__form">
-        <button type="submit" class="secondary btn-sm">
+        <button type="submit" class="secondary btn-sm" aria-label="Stop {{ irr.name }}">
           <svg class="icon" style="width:12px;height:12px;"><use href="/static/icons/sprite.svg#i-stop"></use></svg>
           Stop
         </button>
@@ -38,6 +39,21 @@
       <a href="/irrigators/{{ irr.id }}/log-manual" class="btn secondary btn-sm">Log</a>
       <span id="irr-spin-{{ irr.id }}" class="htmx-indicator" aria-busy="true"></span>
       <div id="irr-action-{{ irr.id }}" class="irr-controls__result"></div>
+    </div>
+  </td>
+  <td data-th="Manage">
+    <div class="row-actions">
+      <a href="/clusters/{{ irr.cluster_id }}/irrigators/{{ irr.id }}/edit" class="btn secondary btn-sm" aria-label="Edit {{ irr.name }}">Edit</a>
+      <button class="btn secondary btn-sm row-actions__danger"
+              type="button"
+              aria-label="Delete {{ irr.name }}"
+              hx-delete="/clusters/{{ irr.cluster_id }}/irrigators/{{ irr.id }}"
+              hx-target="#irrigator-row-{{ irr.id }}"
+              hx-swap="outerHTML swap:200ms"
+              hx-confirm="Delete irrigator &quot;{{ irr.name }}&quot;? Its event log will be removed.">
+        <svg class="icon" style="width:12px;height:12px;"><use href="/static/icons/sprite.svg#i-trash"></use></svg>
+        Delete
+      </button>
     </div>
   </td>
 </tr>

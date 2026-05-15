@@ -379,7 +379,7 @@
     </a>
   </div>
   <table>
-    <thead><tr><th>Species</th><th>Category</th><th>Water</th><th>Light</th><th></th></tr></thead>
+    <thead><tr><th scope="col">Species</th><th scope="col">Category</th><th scope="col">Water</th><th scope="col">Light</th><th scope="col"><span class="visually-hidden">Actions</span></th></tr></thead>
     <tbody>
       {% for plant in status.plants %}
         {% include "partials/_plant_row.html" %}
@@ -400,7 +400,7 @@
     </a>
   </div>
   <table>
-    <thead><tr><th>Name</th><th>Type</th><th>Recent (48h)</th><th>Last action</th><th>Controls</th></tr></thead>
+    <thead><tr><th scope="col">Name</th><th scope="col">Type</th><th scope="col">Recent (48h)</th><th scope="col">Last action</th><th scope="col">Controls</th><th scope="col"><span class="visually-hidden">Manage</span></th></tr></thead>
     <tbody>
       {% for irr in status.irrigators %}
         {% include "partials/_irrigator_row.html" %}
