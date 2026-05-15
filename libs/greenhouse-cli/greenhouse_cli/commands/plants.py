@@ -80,3 +80,52 @@ def plant_move(
     Decision logs, irrigation events, and alerts stay with the original cluster.
     """
     output(call(ctx, lambda c: c.move_plant(plant_id, to_cluster)))
+
+
+@plant_app.command("update")
+def plant_update(
+    ctx: typer.Context,
+    plant_id: Annotated[int, typer.Argument(help="Plant ID")],
+    cluster: Annotated[int, typer.Option(help="Cluster the plant belongs to")],
+    species: Annotated[str | None, typer.Option()] = None,
+    category: Annotated[str | None, typer.Option()] = None,
+    water_needs: Annotated[str | None, typer.Option(help="low/medium/high")] = None,
+    light_needs: Annotated[str | None, typer.Option(help="low/medium/high")] = None,
+    temp_min: Annotated[float | None, typer.Option()] = None,
+    temp_max: Annotated[float | None, typer.Option()] = None,
+    humidity_min: Annotated[float | None, typer.Option()] = None,
+    humidity_max: Annotated[float | None, typer.Option()] = None,
+    notes: Annotated[str | None, typer.Option()] = None,
+):
+    """Patch plant metadata. Only the supplied fields are sent."""
+    output(
+        call(
+            ctx,
+            lambda c: c.update_plant(
+                cluster,
+                plant_id,
+                species=species,
+                category=category,
+                water_needs=water_needs,
+                light_needs=light_needs,
+                ideal_temp_min=temp_min,
+                ideal_temp_max=temp_max,
+                ideal_humidity_min=humidity_min,
+                ideal_humidity_max=humidity_max,
+                notes=notes,
+            ),
+        )
+    )
+
+
+@plant_app.command("delete")
+def plant_delete(
+    ctx: typer.Context,
+    plant_id: Annotated[int, typer.Argument(help="Plant ID")],
+    cluster: Annotated[int, typer.Option(help="Cluster the plant belongs to")],
+    yes: Annotated[bool, typer.Option("--yes", "-y", help="Skip confirmation prompt")] = False,
+):
+    """Delete a plant and its health / learning history."""
+    if not yes:
+        typer.confirm(f"Delete plant {plant_id} from cluster {cluster}?", abort=True)
+    output(call(ctx, lambda c: c.delete_plant(cluster, plant_id)))
