@@ -231,6 +231,9 @@ class IrrigationClient:
     def sync(self, hours: int = 24) -> dict:
         return self._request("POST", "/api/v1/sync", json={"hours": hours})
 
+    def bulk_stop_all(self) -> dict:
+        return self._request("POST", "/api/v1/bulk/stop-all")
+
     def learn(self, cluster_id: int) -> dict:
         return self._request("GET", f"/api/v1/clusters/{cluster_id}/learn")
 
