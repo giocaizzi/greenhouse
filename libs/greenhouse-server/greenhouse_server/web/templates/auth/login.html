@@ -1,0 +1,35 @@
+{% extends "_base.html" %}
+{% block title %}Sign in · Greenhouse{% endblock %}
+{% block content %}
+<section class="hero" style="max-width: 26rem; margin: 4rem auto;">
+  <header>
+    <h1>Sign in</h1>
+    <p class="muted">Use the admin credentials configured for this deployment.</p>
+  </header>
+
+  {% if error %}
+    <p role="alert" class="error" style="color: var(--pico-color-red-500, #c33);">{{ error }}</p>
+  {% endif %}
+
+  <form method="post" action="/login" autocomplete="on" novalidate>
+    <input type="hidden" name="next" value="{{ next_url or '/' }}">
+
+    <label for="login-username">Username
+      <input id="login-username" name="username" type="text"
+             autocomplete="username" required autofocus
+             aria-describedby="login-username-hint">
+    </label>
+
+    <label for="login-password">Password
+      <input id="login-password" name="password" type="password"
+             autocomplete="current-password" required>
+    </label>
+
+    <button type="submit">Sign in</button>
+  </form>
+
+  {% if not auth_enabled %}
+    <p class="muted" style="margin-top: 1rem;">Authentication is currently disabled in server settings — any credentials will let you in.</p>
+  {% endif %}
+</section>
+{% endblock %}

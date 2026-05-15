@@ -90,6 +90,14 @@
       <svg class="icon icon-moon" aria-hidden="true"><use href="/static/icons/sprite.svg#i-moon"></use></svg>
       <svg class="icon icon-sun" aria-hidden="true"><use href="/static/icons/sprite.svg#i-sun"></use></svg>
     </button>
+    {% if auth_enabled %}
+    <form method="post" action="/logout" style="display:inline; margin:0;">
+      <button class="icon-btn" type="submit" aria-label="Sign out" title="Sign out">
+        <svg class="icon" aria-hidden="true"><use href="/static/icons/sprite.svg#i-warning"></use></svg>
+        <span class="visually-hidden">Sign out</span>
+      </button>
+    </form>
+    {% endif %}
   </div>
 </header>
 

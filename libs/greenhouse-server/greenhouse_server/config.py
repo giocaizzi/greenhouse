@@ -44,6 +44,34 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("GREENHOUSE_MCP_TOKEN", "mcp_token"),
     )
 
+    # ── Authentication ──────────────────────────────────────────────────────
+    # When True (default) every /api/v1 route and the web UI require a valid
+    # session. The login endpoint issues a JWT signed with `auth_secret_key`.
+    # MCP keeps its own bearer token (`mcp_token`) — this auth covers humans
+    # and CLI clients, MCP covers agent-driven actuation.
+    auth_enabled: bool = True
+    # HS256 signing key for the session JWT. REQUIRED when auth_enabled.
+    # Rotate by changing it (all sessions invalidate). Lives outside the
+    # IRRIGATION_ prefix to mirror the deployment-secret convention.
+    auth_secret_key: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("GREENHOUSE_AUTH_SECRET_KEY", "auth_secret_key"),
+    )
+    auth_token_ttl_minutes: int = 60 * 24  # 24h
+    auth_cookie_name: str = "greenhouse_session"
+    auth_cookie_secure: bool = False  # set True behind HTTPS
+    # First-run bootstrap: when no user row exists at startup, create one
+    # with these credentials. Outside IRRIGATION_ prefix to match the
+    # deployment-secret convention.
+    auth_admin_username: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("GREENHOUSE_AUTH_ADMIN_USERNAME", "auth_admin_username"),
+    )
+    auth_admin_password: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("GREENHOUSE_AUTH_ADMIN_PASSWORD", "auth_admin_password"),
+    )
+
     # Pump dry-run watcher. During every active irrigation a background job
     # polls DP 105 (water-shortage alarm) over the local Tuya protocol and
     # immediately stops the pump on the first positive reading. Disable only

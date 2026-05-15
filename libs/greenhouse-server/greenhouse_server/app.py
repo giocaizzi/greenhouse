@@ -12,6 +12,7 @@ from sqlalchemy.engine import Engine
 from greenhouse_core.database import create_db_engine, create_session_factory, init_db
 from greenhouse_core.devices import TuyaDeviceManager
 from greenhouse_core.plant_db import PlantDatabase
+from greenhouse_server.auth import bootstrap_admin, require_user
 from greenhouse_server.config import Settings
 from greenhouse_server.routes import (
     activity,
@@ -35,6 +36,9 @@ from greenhouse_server.routes import (
     sensors,
     vacation,
     well_known,
+)
+from greenhouse_server.routes import (
+    auth as auth_routes,
 )
 from greenhouse_server.scheduler import apply_persisted_pause, init_scheduler
 from greenhouse_server.scheduler import scheduler as bg_scheduler
@@ -138,28 +142,35 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
     init_scheduler(app, settings)
     _restore_persisted_scheduler_pause(app)
 
-    # Register routes
+    # Bootstrap the admin user from env vars before serving requests, so the
+    # operator never sees a working API that rejects every call with 401.
+    bootstrap_admin(engine, settings)
+
+    # /auth/login is the only unauthenticated /api/v1 entry point. Everything
+    # else is gated by `require_user` via include_router(..., dependencies=).
     prefix = "/api/v1"
-    app.include_router(clusters.router, prefix=prefix)
-    app.include_router(plants.router, prefix=prefix)
-    app.include_router(irrigators.router, prefix=prefix)
-    app.include_router(sensors.router, prefix=prefix)
-    app.include_router(configs.router, prefix=prefix)
-    app.include_router(operations.router, prefix=prefix)
-    app.include_router(scheduler.router, prefix=prefix)
-    app.include_router(charts.router, prefix=prefix)
-    app.include_router(alerts.router, prefix=prefix)
-    app.include_router(activity.router, prefix=prefix)
-    app.include_router(decisions.router, prefix=prefix)
-    app.include_router(forecast.router, prefix=prefix)
-    app.include_router(preferences.router, prefix=prefix)
-    app.include_router(vacation.router, prefix=prefix)
-    app.include_router(search.router, prefix=prefix)
-    app.include_router(bulk.router, prefix=prefix)
-    app.include_router(insights.router, prefix=prefix)
-    app.include_router(health.router, prefix=prefix)
-    app.include_router(quality.router, prefix=prefix)
-    app.include_router(efficacy.router, prefix=prefix)
+    app.include_router(auth_routes.router, prefix=prefix)
+    protected = [Depends(require_user)]
+    app.include_router(clusters.router, prefix=prefix, dependencies=protected)
+    app.include_router(plants.router, prefix=prefix, dependencies=protected)
+    app.include_router(irrigators.router, prefix=prefix, dependencies=protected)
+    app.include_router(sensors.router, prefix=prefix, dependencies=protected)
+    app.include_router(configs.router, prefix=prefix, dependencies=protected)
+    app.include_router(operations.router, prefix=prefix, dependencies=protected)
+    app.include_router(scheduler.router, prefix=prefix, dependencies=protected)
+    app.include_router(charts.router, prefix=prefix, dependencies=protected)
+    app.include_router(alerts.router, prefix=prefix, dependencies=protected)
+    app.include_router(activity.router, prefix=prefix, dependencies=protected)
+    app.include_router(decisions.router, prefix=prefix, dependencies=protected)
+    app.include_router(forecast.router, prefix=prefix, dependencies=protected)
+    app.include_router(preferences.router, prefix=prefix, dependencies=protected)
+    app.include_router(vacation.router, prefix=prefix, dependencies=protected)
+    app.include_router(search.router, prefix=prefix, dependencies=protected)
+    app.include_router(bulk.router, prefix=prefix, dependencies=protected)
+    app.include_router(insights.router, prefix=prefix, dependencies=protected)
+    app.include_router(health.router, prefix=prefix, dependencies=protected)
+    app.include_router(quality.router, prefix=prefix, dependencies=protected)
+    app.include_router(efficacy.router, prefix=prefix, dependencies=protected)
 
     # OAuth discovery stubs at root (not /api/v1) so MCP HTTP clients that
     # probe RFC 9728 / RFC 8414 before applying the bearer header don't crash

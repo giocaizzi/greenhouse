@@ -281,6 +281,19 @@ class VacationWindow(Base):
     created_at: Mapped[int] = mapped_column(Integer, nullable=False)
 
 
+class User(Base):
+    """Login user (single-user app, but modeled as a table for hashed password storage)."""
+
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    username: Mapped[str] = mapped_column(String, nullable=False, unique=True)
+    hashed_password: Mapped[str] = mapped_column(String, nullable=False)
+    is_active: Mapped[bool] = mapped_column(nullable=False, default=True)
+    created_at: Mapped[int] = mapped_column(Integer, nullable=False)
+    last_login_at: Mapped[int | None] = mapped_column(Integer)
+
+
 class UserPreferences(Base):
     """Single-row preferences table (single-user app).
 
