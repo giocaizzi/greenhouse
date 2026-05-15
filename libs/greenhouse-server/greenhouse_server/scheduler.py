@@ -6,6 +6,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi import FastAPI
 
 from greenhouse_core.cloud import TuyaCloud
+from greenhouse_core.constants import HEALTH_POLL_IDLE_MINUTES
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.config import Settings
 
@@ -76,6 +77,14 @@ def init_scheduler(app: FastAPI, settings: Settings) -> None:
         name="Sensor anomaly scan",
         replace_existing=True,
     )
+    scheduler.add_job(
+        _health_monitor_job,
+        "interval",
+        minutes=HEALTH_POLL_IDLE_MINUTES,
+        id="device_health_monitor",
+        name="Device health monitor",
+        replace_existing=True,
+    )
 
 
 def _get_cloud() -> TuyaCloud | None:
@@ -138,12 +147,16 @@ def _check_job() -> None:
     try:
         repo = IrrigationRepository(session)
         sync_svc = SyncService(repo, cloud)
+        monitor = getattr(_app.state, "health_monitor", None)
+        if monitor is not None:
+            monitor.bind_repo(repo)
         irrigation_svc = IrrigationService(
             repo=repo,
             dm=_app.state.device_manager,
             sync_service=sync_svc,
             weather_client=_app.state.weather_client,
             plant_db=_app.state.plant_db,
+            health_monitor=monitor,
         )
         irrigation_svc.check_all_clusters()
         session.commit()
@@ -166,6 +179,79 @@ def _anomaly_job() -> None:
     except Exception:
         session.rollback()
         logger.exception("Anomaly scan job failed")
+    finally:
+        session.close()
+
+
+def _health_monitor_job() -> None:
+    """Background job: poll every device's health surface, diff, alert.
+
+    Reuses the singleton :class:`DeviceHealthMonitor` stored on
+    ``app.state.health_monitor`` (built at startup by
+    :func:`init_health_monitor`) so the in-memory transition cache
+    survives across ticks. Falls open silently when no registry is wired.
+    """
+    if _app is None:
+        return
+
+    monitor = getattr(_app.state, "health_monitor", None)
+    if monitor is None:
+        logger.debug("Health monitor job skipped: no monitor wired")
+        return
+
+    session = _app.state.session_factory()
+    try:
+        repo = IrrigationRepository(session)
+        monitor.bind_repo(repo)
+        monitor.poll_all()
+        session.commit()
+    except Exception:
+        session.rollback()
+        logger.exception("Device health monitor job failed")
+    finally:
+        session.close()
+
+
+def init_health_monitor(app: FastAPI, settings: Settings) -> None:
+    """Build the long-lived :class:`DeviceHealthMonitor` for this app.
+
+    Stored on ``app.state.health_monitor`` so dependency-injection wiring
+    (:func:`greenhouse_server.deps.get_health_monitor`) and the scheduler
+    job share one instance — its cache is the engine's source of truth
+    for actuation gating. Falls open if there is no device manager wired
+    (tests usually omit it).
+    """
+    from greenhouse_core.devices import build_default_registry
+    from greenhouse_server.services.health_monitor import DeviceHealthMonitor
+
+    dm = getattr(app.state, "device_manager", None)
+    registry = getattr(app.state, "device_registry", None)
+    if registry is None and dm is not None:
+        try:
+            registry = build_default_registry(dm._transport)
+        except Exception:
+            logger.exception("Failed to build default device registry; health monitor disabled")
+            return
+
+    if registry is None:
+        logger.debug("Health monitor init skipped: no device registry")
+        return
+
+    session = app.state.session_factory()
+    try:
+        repo = IrrigationRepository(session)
+        monitor = DeviceHealthMonitor(repo=repo, registry=registry)
+        try:
+            migrated = monitor.migrate_legacy_pump_alerts()
+            if migrated:
+                logger.info("Migrated %d legacy pump_dry_run alerts to health: keys", migrated)
+            monitor.backfill_from_history()
+            session.commit()
+        except Exception:
+            session.rollback()
+            logger.exception("Health monitor startup hooks failed")
+        app.state.health_monitor = monitor
+        app.state.device_registry = registry
     finally:
         session.close()
 

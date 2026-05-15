@@ -6,10 +6,12 @@ from datetime import UTC, datetime
 
 from greenhouse_core.devices import TuyaDeviceManager
 from greenhouse_core.logic import IrrigationLogic
+from greenhouse_core.logic.decision import Action, Severity
 from greenhouse_core.models import ENTITY_CLUSTER
 from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.services.alerts import raise_alert, sync_cluster_alerts
+from greenhouse_server.services.health_monitor import HEALTH_ALARM_TO_TRIGGER, DeviceHealthMonitor
 from greenhouse_server.services.maintenance import collect_learning_alerts, collect_maintenance_alerts
 from greenhouse_server.services.sync import SyncService
 from greenhouse_server.services.weather import WeatherClient
@@ -79,12 +81,17 @@ def schedule_pump_watcher(irrigator_id: int, duration_minutes: int, started_at: 
                     poll = watcher_settings.pump_watcher_poll_seconds
                     warmup = watcher_settings.pump_watcher_warmup_seconds
                     max_failures = watcher_settings.pump_watcher_max_read_failures
+                monitor = getattr(_app.state, "health_monitor", None)
+                if monitor is not None:
+                    monitor.bind_repo(repo)
                 watcher = PumpWatcherService(
                     repo,
                     dm,
                     poll_seconds=poll,
                     warmup_seconds=warmup,
                     max_read_failures=max_failures,
+                    registry=getattr(_app.state, "device_registry", None),
+                    monitor=monitor,
                 )
                 watcher.watch(irrigator, duration_seconds, started_at=started_at)
             except Exception:
@@ -162,12 +169,14 @@ class IrrigationService:
         sync_service: SyncService,
         weather_client: WeatherClient,
         plant_db: PlantDatabase,
+        health_monitor: DeviceHealthMonitor | None = None,
     ):
         self._repo = repo
         self._dm = dm
         self._sync = sync_service
         self._weather = weather_client
         self._plant_db = plant_db
+        self._health_monitor = health_monitor
 
     def _resolve_temperature(
         self,
@@ -254,6 +263,41 @@ class IrrigationService:
             return result
 
         irrigator = irrigators[0]
+
+        # Device-health gate: if a NO_WATER / RAIN / OFFLINE alarm is open
+        # for this irrigator, append a typed Reason and short-circuit to
+        # Action.SKIP. Same audit-trail path as the engine's existing skip
+        # flow — the decision is re-persisted so decision_logs reflects the
+        # block, then the run is treated as a skip.
+        if self._health_monitor is not None:
+            blocked, blocking_alarms = self._health_monitor.is_actuation_blocked(irrigator)
+            if blocked:
+                primary = blocking_alarms[0]
+                trigger = HEALTH_ALARM_TO_TRIGGER[primary]
+                decision.add_reason(
+                    code=trigger,
+                    message=(f"Actuation blocked by device health: {primary.value} on '{irrigator.name}'"),
+                    severity=Severity.CRITICAL,
+                )
+                decision.action = Action.SKIP
+                self._repo.add_activity_event(
+                    source="irrigation",
+                    entity_type=ENTITY_CLUSTER,
+                    entity_id=cluster_id,
+                    code="decision_skip",
+                    message=decision.reason_text,
+                    severity="warning",
+                    payload={
+                        "blocking_alarms": [a.value for a in blocking_alarms],
+                        "irrigator_id": irrigator.id,
+                    },
+                )
+                result["action"] = "skip"
+                result["reason"] = decision.reason_text
+                result["reasons"] = [r.model_dump() for r in decision.reasons]
+                result["blocking_alarms"] = [a.value for a in blocking_alarms]
+                return result
+
         duration = decision.duration_minutes
         success, output = self._dm.irrigator_start(irrigator, duration)
 

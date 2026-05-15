@@ -41,7 +41,7 @@ from greenhouse_server.routes import (
 from greenhouse_server.routes import (
     auth as auth_routes,
 )
-from greenhouse_server.scheduler import apply_persisted_pause, init_scheduler
+from greenhouse_server.scheduler import apply_persisted_pause, init_health_monitor, init_scheduler
 from greenhouse_server.scheduler import scheduler as bg_scheduler
 from greenhouse_server.services.weather import WeatherClient
 from greenhouse_server.web.exception_handlers import register_web_exception_handlers
@@ -141,6 +141,7 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
     app.state.plant_db = _init_plant_db(settings)
 
     init_scheduler(app, settings)
+    init_health_monitor(app, settings)
     _restore_persisted_scheduler_pause(app)
 
     # Bootstrap the admin user from env vars before serving requests, so the

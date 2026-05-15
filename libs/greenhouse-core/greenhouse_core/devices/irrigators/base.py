@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
+from greenhouse_core.devices.health import DeviceHealthState, HealthAlarm
 from greenhouse_core.devices.profile import IrrigatorProfile
 from greenhouse_core.models import Irrigator
 
@@ -17,13 +18,14 @@ class AbstractIrrigatorAdapter(ABC):
     """Contract for any irrigator driver.
 
     Methods must be safe to call against offline / unreachable hardware:
-    they return ``(False, msg)`` or a status dict with an ``error`` /
-    ``no_water=None`` field rather than raising. Raising is reserved for
-    programmer errors (e.g. unknown DP request on a model that doesn't
-    declare the capability).
+    actuation returns ``(False, msg)``, status returns a dict with an
+    ``error`` key, and ``read_health`` sets ``offline=True`` rather than
+    raising. Raising is reserved for programmer errors (e.g. unknown DP
+    request on a model that doesn't declare the capability).
     """
 
     profile: IrrigatorProfile
+    health_capabilities: frozenset[HealthAlarm] = frozenset()
 
     @abstractmethod
     def start(self, irrigator: Irrigator, minutes: int | None = None) -> tuple[bool, str]:
@@ -38,11 +40,11 @@ class AbstractIrrigatorAdapter(ABC):
         """Return a status dict; shape is per-model but always JSON-serialisable."""
 
     @abstractmethod
-    def read_alarm(self, irrigator: Irrigator) -> dict:
-        """Return the dry-run / fault state.
+    def read_health(self, irrigator: Irrigator) -> DeviceHealthState:
+        """Read the current health/safety surface.
 
-        Result dict always contains ``no_water`` (``bool | None`` — ``None``
-        when the read failed) and ``error`` (``str | None``). Models without
-        a water-shortage DP report ``no_water=False`` and a stable shape so
-        the pump watcher can treat them uniformly.
+        MUST NOT raise on offline / unreachable devices — set
+        ``offline=True`` and return. MUST only populate ``alarms`` whose
+        codes are in :attr:`health_capabilities`; the monitor relies on
+        this invariant to skip unsupported checks for a given model.
         """

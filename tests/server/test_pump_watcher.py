@@ -6,20 +6,29 @@ fake device manager (in lieu of tinytuya) plus a fake clock/sleep so each
 case runs instantly.
 """
 
+import time as _time
 from unittest.mock import MagicMock
 
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
+from greenhouse_core.devices import DeviceRegistry
+from greenhouse_core.devices.health import DeviceHealthState, HealthAlarm
 from greenhouse_core.models import Base, Irrigator
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.services.alerts import SOURCE_PUMP
+from greenhouse_server.services.health_monitor import SOURCE_HEALTH, DeviceHealthMonitor
 from greenhouse_server.services.pump_watcher import (
     ALERT_CODE,
     EVENT_ACTION_ABORTED,
     PumpWatcherService,
 )
+
+
+def _make_monitor(repo: IrrigationRepository) -> DeviceHealthMonitor:
+    """Build a no-registry monitor for tests — record() doesn't need a registry."""
+    return DeviceHealthMonitor(repo=repo, registry=DeviceRegistry())
 
 
 @pytest.fixture
@@ -62,26 +71,37 @@ class FakeClock:
         self.now += self.step
 
 
-def _alarm(no_water: bool, alarm_raw: object = None, error: str | None = None) -> dict:
-    return {
-        "no_water": no_water if error is None else None,
-        "alarm_raw": alarm_raw,
-        "running": True,
-        "left_time": 60,
-        "work_status": 2,
-        "source": "local" if error is None else None,
-        "error": error,
-    }
+def _alarm(no_water: bool, alarm_raw: object = None, error: str | None = None) -> DeviceHealthState:
+    """Build a DeviceHealthState matching the watcher's read_health contract."""
+    if error is not None:
+        return DeviceHealthState(
+            observed_at=int(_time.time()),
+            offline=True,
+            alarms=frozenset(),
+            raw={"error": error},
+        )
+    return DeviceHealthState(
+        observed_at=int(_time.time()),
+        offline=False,
+        alarms=frozenset({HealthAlarm.NO_WATER}) if no_water else frozenset(),
+        raw={
+            "alarm_raw": alarm_raw,
+            "running": True,
+            "left_time": 60,
+            "work_status": 2,
+            "source": "local",
+        },
+    )
 
 
-def _make_dm(reads: list[dict]) -> MagicMock:
+def _make_dm(reads: list[DeviceHealthState]) -> MagicMock:
     dm = MagicMock()
-    dm.read_irrigator_alarm.side_effect = list(reads)
+    dm.read_irrigator_health.side_effect = list(reads)
     dm.irrigator_off.return_value = (True, "Stopped OK")
     return dm
 
 
-def _completed_alarms() -> list[dict]:
+def _completed_alarms() -> list[DeviceHealthState]:
     # Plenty of "all clear" reads so the watcher can run until its deadline.
     return [_alarm(no_water=False, alarm_raw=0) for _ in range(50)]
 
@@ -127,7 +147,7 @@ class TestWatcherHappyPaths:
 
         assert result["outcome"] == "completed"
         assert result["polls"] == 0
-        dm.read_irrigator_alarm.assert_not_called()
+        dm.read_irrigator_health.assert_not_called()
 
 
 class TestWatcherTrips:
@@ -143,6 +163,7 @@ class TestWatcherTrips:
             _alarm(no_water=True, alarm_raw=1),
         ] + _completed_alarms()
         dm = _make_dm(reads)
+        monitor = _make_monitor(repo)
         watcher = PumpWatcherService(
             repo,
             dm,
@@ -150,6 +171,7 @@ class TestWatcherTrips:
             warmup_seconds=0.0,
             clock=clock,
             sleep=clock.sleep,
+            monitor=monitor,
         )
 
         result = watcher.watch(irrigator, duration_seconds=30, started_at=100)
@@ -164,12 +186,14 @@ class TestWatcherTrips:
         assert len(aborted) == 1
         assert aborted[0].triggered_by == "pump_watcher"
 
-        # Critical alert raised under SOURCE_PUMP / pump_dry_run
+        # Critical alert raised under SOURCE_HEALTH / no_water — unified
+        # dedup_key replaces the legacy pump_dry_run alias.
         open_alerts = repo.list_alerts(limit=10)
-        pump_alerts = [a for a in open_alerts if a.source == SOURCE_PUMP and a.code == ALERT_CODE]
-        assert len(pump_alerts) == 1
-        assert pump_alerts[0].severity == "critical"
-        assert pump_alerts[0].cluster_id == irrigator.cluster_id
+        health_alerts = [a for a in open_alerts if a.source == SOURCE_HEALTH and a.code == ALERT_CODE]
+        assert len(health_alerts) == 1
+        assert health_alerts[0].severity == "critical"
+        assert health_alerts[0].cluster_id == irrigator.cluster_id
+        assert health_alerts[0].dedup_key == f"health:irrigator:{irrigator.id}:no_water"
 
     def test_respects_warmup_window(self, repo, irrigator):
         """Alarm bit set from t=0 must not trip until warmup elapses."""
@@ -283,6 +307,7 @@ class TestWatcherTripSideEffectsAreRobust:
             warmup_seconds=0.0,
             clock=clock,
             sleep=clock.sleep,
+            monitor=_make_monitor(repo),
         )
 
         result = watcher.watch(irrigator, duration_seconds=10)
@@ -296,6 +321,42 @@ class TestWatcherTripSideEffectsAreRobust:
         events = repo.get_recent_events(irrigator.id, hours=1)
         aborted = [e for e in events if e.action == EVENT_ACTION_ABORTED]
         assert len(aborted) == 1
+
+
+class TestWatcherRoutesThroughMonitor:
+    """The watcher feeds its trip observation back into DeviceHealthMonitor."""
+
+    def test_trip_records_into_monitor_cache(self, repo, irrigator):
+        """After a trip, the monitor's cache reflects NO_WATER for the irrigator."""
+        from greenhouse_core.models import ENTITY_IRRIGATOR
+
+        clock = FakeClock(step=1.0)
+        dm = _make_dm([_alarm(no_water=True, alarm_raw=1)] + _completed_alarms())
+        monitor = _make_monitor(repo)
+        watcher = PumpWatcherService(
+            repo,
+            dm,
+            poll_seconds=1.0,
+            warmup_seconds=0.0,
+            clock=clock,
+            sleep=clock.sleep,
+            monitor=monitor,
+        )
+
+        watcher.watch(irrigator, duration_seconds=5)
+
+        blocked, alarms = monitor.is_actuation_blocked(irrigator)
+        assert blocked is True
+        assert HealthAlarm.NO_WATER in alarms
+        # And the unified health: alert key is set
+        from sqlalchemy import select
+
+        from greenhouse_core.models import Alert
+
+        key = f"health:{ENTITY_IRRIGATOR}:{irrigator.id}:no_water"
+        alert = repo.session.scalar(select(Alert).where(Alert.dedup_key == key))
+        assert alert is not None
+        assert alert.status == "open"
 
 
 class TestWatcherIrrigatorModel:
@@ -329,6 +390,7 @@ class TestWatcherIrrigatorModel:
             warmup_seconds=0.0,
             clock=clock,
             sleep=clock.sleep,
+            monitor=_make_monitor(repo),
         )
 
         watcher.watch(irrigator_b, duration_seconds=5)

@@ -1,9 +1,10 @@
 """Pump dry-run watcher.
 
 Runs for the duration of an active irrigation. Polls DP 105 (the IK10PW's
-water-shortage alarm) over the Tuya local protocol; on the first positive
-reading it immediately stops the pump, raises a critical alert, and records
-an ``aborted`` irrigation event.
+water-shortage alarm) via the adapter's ``read_health`` surface; on the
+first ``NO_WATER`` reading it immediately stops the pump, raises a typed
+health alert through :class:`DeviceHealthMonitor`, and records an
+``aborted`` irrigation event.
 
 Why polling and not a persistent socket. The local protocol can push DP
 changes asynchronously, but Tuya devices only accept one local TCP
@@ -12,6 +13,13 @@ transiently; juggling a persistent socket alongside cloud-API commands adds
 reconnection logic without a meaningful latency win — the firmware itself
 debounces dry-run detection over several seconds, so a 2 s poll is well
 inside its own resolution.
+
+Why we record through the monitor. PR 1.5 unified the slow ambient
+observer and the fast in-flight watchdog onto a single dedup_key scheme
+(``health:irrigator:{id}:no_water``). The watcher trips first (sub-2s
+response is the safety story); the monitor's cache absorbs the
+transition so the engine's actuation gate stays consistent with what the
+watcher just observed.
 
 False positives are safe (we stop before the pump is damaged); false
 negatives are the danger. The signal is motor-current-based and has
@@ -24,14 +32,18 @@ import logging
 import time
 from collections.abc import Callable
 
-from greenhouse_core.devices import TuyaDeviceManager
+from greenhouse_core.devices import DeviceRegistry, TuyaDeviceManager
+from greenhouse_core.devices.health import HealthAlarm
 from greenhouse_core.models import ENTITY_IRRIGATOR, Irrigator
 from greenhouse_core.repository import IrrigationRepository
-from greenhouse_server.services.alerts import SOURCE_PUMP, raise_alert
+from greenhouse_server.services.health_monitor import DeviceHealthMonitor
 
 logger = logging.getLogger(__name__)
 
-ALERT_CODE = "pump_dry_run"
+# The watcher's externally-visible alert code now mirrors the canonical
+# health alarm so the inbox has one row per condition. Tests + integrations
+# can keep importing ``ALERT_CODE`` from this module.
+ALERT_CODE = HealthAlarm.NO_WATER.value  # "no_water"
 EVENT_ACTION_ABORTED = "aborted"
 ACTIVITY_CODE = "pump_dry_run"
 
@@ -49,6 +61,8 @@ class PumpWatcherService:
         max_read_failures: int = 5,
         clock: Callable[[], float] = time.monotonic,
         sleep: Callable[[float], None] = time.sleep,
+        registry: DeviceRegistry | None = None,
+        monitor: DeviceHealthMonitor | None = None,
     ):
         self._repo = repo
         self._dm = dm
@@ -57,6 +71,8 @@ class PumpWatcherService:
         self._max_read_failures = max(1, int(max_read_failures))
         self._clock = clock
         self._sleep = sleep
+        self._registry = registry
+        self._monitor = monitor
 
     def watch(
         self,
@@ -100,11 +116,12 @@ class PumpWatcherService:
                 }
 
             polls += 1
-            reading = self._dm.read_irrigator_alarm(irrigator)
+            state = self._read_health(irrigator)
+            read_error = state.raw.get("error") if isinstance(state.raw, dict) else None
 
-            if reading.get("error"):
+            if read_error or state.offline:
                 consecutive_failures += 1
-                last_failure_msg = reading.get("error")
+                last_failure_msg = read_error or "device offline"
                 if consecutive_failures >= self._max_read_failures:
                     logger.warning(
                         "Pump watcher abandoning irrigator %d after %d read failures "
@@ -125,11 +142,11 @@ class PumpWatcherService:
                 # Only trip after the warm-up window has elapsed. A pump that's
                 # still priming naturally draws lower current and can briefly
                 # set the bit before water reaches the impeller.
-                if reading.get("no_water") and now >= warmup_until:
+                if HealthAlarm.NO_WATER in state.alarms and now >= warmup_until:
                     self._handle_trip(
                         irrigator=irrigator,
                         cluster_id=cluster_id,
-                        reading=reading,
+                        state=state,
                         started_at=started_at,
                         polls=polls,
                         duration_seconds=duration_seconds,
@@ -138,28 +155,47 @@ class PumpWatcherService:
                         "outcome": "tripped",
                         "polls": polls,
                         "read_failures": 0,
-                        "alarm_raw": reading.get("alarm_raw"),
+                        "alarm_raw": state.raw.get("alarm_raw") if isinstance(state.raw, dict) else None,
                         "elapsed_seconds": self._clock() - (deadline - duration_seconds),
                     }
 
             self._sleep(self._poll)
+
+    # ── Internals ─────────────────────────────────────────────────────────
+
+    def _read_health(self, irrigator: Irrigator):
+        """Read the device's health surface.
+
+        Prefers the registry-backed adapter when available so the watcher
+        and the slow-path monitor share one code path. Falls back to the
+        legacy ``TuyaDeviceManager`` shim — tests inject a MagicMock dm
+        whose ``read_irrigator_health`` returns a canned state.
+        """
+        if self._registry is not None:
+            adapter = self._registry.get_irrigator(irrigator)
+            return adapter.read_health(irrigator)
+        return self._dm.read_irrigator_health(irrigator)
 
     def _handle_trip(
         self,
         *,
         irrigator: Irrigator,
         cluster_id: int,
-        reading: dict,
+        state,
         started_at: int,
         polls: int,
         duration_seconds: int,
     ) -> None:
-        """Stop the pump, raise the alert, and record the abort.
+        """Stop the pump, record activity / event, and route the alert through the monitor.
 
         Best-effort by design: each side effect is wrapped so a failure in
         one does not block the others. Stopping the pump is the top priority
-        — if the alert or event logging fails, the pump is still off.
+        — if the activity log or monitor record fails, the pump is still off.
+        The alert itself is raised by :meth:`DeviceHealthMonitor.record`,
+        which uses the unified ``health:irrigator:{id}:no_water`` dedup_key.
         """
+        from greenhouse_server.services.alerts import SOURCE_PUMP
+
         stop_ok = False
         stop_msg = ""
         try:
@@ -168,17 +204,17 @@ class PumpWatcherService:
             stop_msg = f"irrigator_off raised: {exc}"
             logger.exception("Pump watcher could not stop irrigator %d", irrigator.id)
 
+        alarm_raw = state.raw.get("alarm_raw") if isinstance(state.raw, dict) else None
         logger.critical(
             "Pump dry-run detected on irrigator %d (cluster %d) after %d polls: alarm_raw=%r, stop_ok=%s, stop_msg=%s",
             irrigator.id,
             cluster_id,
             polls,
-            reading.get("alarm_raw"),
+            alarm_raw,
             stop_ok,
             stop_msg,
         )
 
-        alarm_raw = reading.get("alarm_raw")
         elapsed_estimate = int(time.time()) - started_at
         payload = {
             "irrigator_id": irrigator.id,
@@ -220,23 +256,21 @@ class PumpWatcherService:
         except Exception:
             logger.exception("Failed to log activity event for pump dry-run on irrigator %d", irrigator.id)
 
+        # Route through the monitor so the inbox + cache + slow-path
+        # observer all see the same NO_WATER transition. The monitor owns
+        # the unified ``health:irrigator:{id}:no_water`` dedup_key.
         try:
-            raise_alert(
-                self._repo,
-                source=SOURCE_PUMP,
-                code=ALERT_CODE,
-                severity="critical",
-                title=f"Pump dry-run · {irrigator.name}",
-                message=(
-                    f"Irrigator '{irrigator.name}' reported water shortage "
-                    f"(DP 105={alarm_raw!r}) after ~{elapsed_estimate}s. "
-                    "Pump stopped to prevent damage; refill the reservoir before resuming."
-                ),
-                cluster_id=cluster_id,
-                payload=payload,
-            )
+            monitor = self._monitor or self._lazy_monitor()
+            if monitor is not None:
+                monitor.record(
+                    ENTITY_IRRIGATOR,
+                    irrigator.id,
+                    state,
+                    label=irrigator.name,
+                    cluster_id=cluster_id,
+                )
         except Exception:
-            logger.exception("Failed to raise pump dry-run alert for irrigator %d", irrigator.id)
+            logger.exception("Failed to record dry-run state into health monitor for irrigator %d", irrigator.id)
 
         try:
             self._repo.session.commit()
@@ -246,3 +280,16 @@ class PumpWatcherService:
                 self._repo.session.rollback()
             except Exception:
                 pass
+
+    def _lazy_monitor(self) -> DeviceHealthMonitor | None:
+        """Build a transient monitor when one wasn't injected.
+
+        Test harness path: callers that don't pass a registry or monitor
+        get a no-op write through ``upsert_alert`` keyed on
+        ``health:irrigator:{id}:no_water``. The slow-path scheduler still
+        owns the long-lived cache; this transient instance only writes
+        the alert row and exits.
+        """
+        if self._registry is None:
+            return None
+        return DeviceHealthMonitor(repo=self._repo, registry=self._registry)

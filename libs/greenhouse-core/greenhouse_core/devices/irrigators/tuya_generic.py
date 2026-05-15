@@ -2,11 +2,14 @@
 
 Profile-driven default behaviour: cloud switch on/off, status reads via
 local then cloud, no alarm DP. Model-specific subclasses override ``start``
-or ``read_alarm`` for firmware-specific recipes.
+or ``read_health`` for firmware-specific recipes.
 """
 
 from __future__ import annotations
 
+import time
+
+from greenhouse_core.devices.health import DeviceHealthState
 from greenhouse_core.devices.irrigators.base import AbstractIrrigatorAdapter
 from greenhouse_core.devices.profile import IrrigatorProfile
 from greenhouse_core.devices.tuya_transport import TuyaTransport
@@ -93,18 +96,15 @@ class TuyaIrrigatorAdapter(AbstractIrrigatorAdapter):
         # status dict shape consumers expect.
         return "running" if profile_key == "switch" else profile_key
 
-    def read_alarm(self, irrigator: Irrigator) -> dict:
-        """Default: no alarm DP — always report a clear, well-formed dict.
+    def read_health(self, irrigator: Irrigator) -> DeviceHealthState:
+        """Default: no health surface — return a clean snapshot.
 
-        Subclasses with a water-shortage DP (e.g. IK10PW DP 105) override
-        this to do a real read.
+        Subclasses with a water-shortage DP, battery, or signal report
+        override this to do a real read. Generic Tuya cloud-only models
+        have no health surface beyond reachability, which the monitor
+        derives from the broader sync cycle.
         """
-        return {
-            "no_water": False,
-            "alarm_raw": None,
-            "running": None,
-            "left_time": None,
-            "work_status": None,
-            "source": None,
-            "error": None,
-        }
+        return DeviceHealthState(
+            observed_at=int(time.time()),
+            alarms=frozenset(),
+        )
