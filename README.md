@@ -27,23 +27,30 @@ uv run greenhouse check --all   # check all clusters
 ## How it decides
 
 1. **Reads** sensor data from Tuya Cloud, synced to a local SQLite archive.
-2. **Decides** using a typed `IrrigationDecision` pipeline: cooldown check, stress detection, multi-sensor conflict resolution, trend analysis, evidence-based moisture targets. Every evaluation produces a structured `Reason` trail and is persisted whether or not it was acted on.
+2. **Decides** using a typed `IrrigationDecision` pipeline: cooldown check, stress detection, multi-sensor conflict resolution, trend analysis, preferred irrigation windows, evidence-based moisture targets. Every evaluation produces a structured `Reason` trail and is persisted whether or not it was acted on.
 3. **Acts** by controlling Tuya irrigators over local protocol v3.5.
 4. **Learns** — builds per-plant absorption/drainage profiles; raises advisory alerts (blocked drip, rapid drainage, chronic underwatering, unresolvable conflict). Learning never blocks decisions.
-5. **Persists** sensor readings, irrigation events, decision logs, alerts, and activity events in a local SQLite archive. Tuya Cloud is the live source; SQLite is the permanent record.
+5. **Persists** sensor readings, irrigation events, decision logs, alerts, activity events, and sensor-to-plant assignment history in a local SQLite archive. Tuya Cloud is the live source; SQLite is the permanent record.
+
+The `irrigation_windows` table holds per-cluster preferred watering hours (with a weekday bitmask) so the engine waters in the morning by default; stress overrides still fire outside windows. The `sensor_assignments` table records every time a probe is moved between plants, so historical readings remain attributed to the plant they were actually measuring — not whichever plant the sensor currently points at.
 
 ## Interfaces — four ways in, one source of truth
 
 | Interface | URL | Notes |
 |-----------|-----|-------|
-| **JSON REST API** | `/api/v1` | Authoritative entry point. OpenAPI docs at `/docs`. |
-| **Web UI** | `/` | HTMX + Jinja2 server-rendered. Shares service layer with the API. |
+| **JSON REST API** | `/api/v1` | Authoritative entry point. JWT-bearer auth (`POST /api/v1/auth/login`). OpenAPI docs at `/docs`. |
+| **Web UI** | `/` | HTMX + Jinja2 server-rendered. Session cookie auth via `/login`. Pages cover dashboard, per-plant charts, irrigators, history, decisions, scheduler, alerts, **vacation**, **irrigation windows**, and health. |
 | **CLI** | `greenhouse` | Thin `httpx` client against `/api/v1`. No DB access. |
-| **MCP server** | `/mcp` | Every `/api/v1` endpoint as an MCP tool via `fastapi-mcp`. Auth deferred — localhost-only. |
+| **MCP server** | `/mcp` | Every `/api/v1` endpoint as an MCP tool via `fastapi-mcp`. Bearer-token auth (`GREENHOUSE_MCP_TOKEN`). Fails closed: unset token → 503. |
 
 Stop the server and all four go dark. Anything new the CLI or an MCP tool should be able to do must first exist as an API endpoint.
 
-> **Warning:** MCP gives a connected LLM the ability to actuate physical irrigation hardware (`/clusters/{id}/irrigate`, `/irrigators/{id}/start`, etc.). Keep the server localhost-only until auth is added.
+### Authentication
+
+- **API and Web UI**: a single admin user is bootstrapped from `GREENHOUSE_AUTH_ADMIN_USERNAME` / `GREENHOUSE_AUTH_ADMIN_PASSWORD` on first boot. `POST /api/v1/auth/login` returns a JWT signed with `GREENHOUSE_AUTH_SECRET_KEY`; pass it as `Authorization: Bearer …`. The web UI sets a cookie. For local development, set `IRRIGATION_AUTH_ENABLED=false` to disable auth entirely (never do this in production).
+- **MCP**: gated by a separate static bearer token (`GREENHOUSE_MCP_TOKEN`). Generate with `openssl rand -hex 32`. The MCP layer can actuate physical hardware (`/clusters/{id}/irrigate`, `/irrigators/{id}/start`, bulk emergency stop), so treat the token like a root credential, never commit it, and rotate on suspected compromise.
+
+> **Warning:** Both auth boundaries are mandatory in production. The MCP token is not the API token — they protect different surfaces and must be set independently.
 
 ## Getting Started
 
@@ -74,6 +81,11 @@ cp .env.example .env
 | `TUYA_CLIENT_ID` | Yes | Tuya IoT Platform client ID |
 | `TUYA_CLIENT_SECRET` | Yes | Tuya IoT Platform client secret |
 | `TUYA_REGION` | Yes | `eu`, `us`, `cn`, or `in` |
+| `GREENHOUSE_AUTH_SECRET_KEY` | Yes (prod) | JWT signing key for API/Web auth. Generate with `openssl rand -hex 32`. |
+| `GREENHOUSE_AUTH_ADMIN_USERNAME` | Yes (prod) | Admin username bootstrapped on first boot. |
+| `GREENHOUSE_AUTH_ADMIN_PASSWORD` | Yes (prod) | Admin password (hashed at rest). |
+| `GREENHOUSE_MCP_TOKEN` | Yes (for MCP) | Static bearer token for `/mcp`. Unset → MCP fails closed with 503. |
+| `IRRIGATION_AUTH_ENABLED` | No | Set to `false` to disable API/Web auth in local dev. Default: `true`. |
 | `IRRIGATION_DB_URL` | No | SQLite URL (default: `sqlite:///data/irrigation.db`) |
 | `IRRIGATION_SERVER_URL` | No | CLI server URL (default: `http://localhost:8000`) |
 
@@ -98,9 +110,9 @@ uv run greenhouse stats 1 --days 7  # irrigation statistics
 
 Same data is also available via:
 
-- **Web UI** — open `http://localhost:8000/` for the HTMX dashboard (clusters, per-plant charts, irrigators, history, scheduler, alerts, health).
-- **REST API** — `http://localhost:8000/api/v1/...`; OpenAPI docs at `http://localhost:8000/docs`.
-- **MCP server** — `http://localhost:8000/mcp` (streamable HTTP). Point an MCP client (e.g. Claude Desktop) at it and every API endpoint shows up as a tool.
+- **Web UI** — open `http://localhost:8000/` for the HTMX dashboard: clusters, per-plant charts, irrigators, history, decisions, scheduler, alerts, vacation windows, irrigation windows, system health.
+- **REST API** — `http://localhost:8000/api/v1/...`; OpenAPI docs at `http://localhost:8000/docs`. Authenticate via `POST /api/v1/auth/login` to obtain a JWT.
+- **MCP server** — `http://localhost:8000/mcp` (streamable HTTP). Set `GREENHOUSE_MCP_TOKEN` and pass it as a bearer token; point an MCP client (e.g. Claude Desktop) at it and every API endpoint shows up as a tool.
 
 ## Development
 
