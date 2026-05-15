@@ -64,6 +64,25 @@ class TriggerCode(StrEnum):
     OUTSIDE_WINDOW = "outside_window"
     SEASONAL_HOLD = "seasonal_hold"
     SEASONAL_BOOST = "seasonal_boost"
+    # Device-health gates — populated by DeviceHealthMonitor when an
+    # adapter's read_health reports a corresponding HealthAlarm. Codes
+    # listed in DEVICE_BLOCKING_CODES force Action.SKIP; the rest are
+    # advisory and surface as warnings in the decision trail.
+    DEVICE_NO_WATER = "device_no_water"
+    DEVICE_RAIN_DETECTED = "device_rain_detected"
+    DEVICE_BATTERY_LOW = "device_battery_low"
+    DEVICE_BATTERY_CRITICAL = "device_battery_critical"
+    DEVICE_SIGNAL_LOSS = "device_signal_loss"
+    DEVICE_OFFLINE = "device_offline"
+
+
+DEVICE_BLOCKING_CODES: frozenset[TriggerCode] = frozenset(
+    {
+        TriggerCode.DEVICE_NO_WATER,
+        TriggerCode.DEVICE_RAIN_DETECTED,
+        TriggerCode.DEVICE_OFFLINE,
+    }
+)
 
 
 class Reason(BaseModel):

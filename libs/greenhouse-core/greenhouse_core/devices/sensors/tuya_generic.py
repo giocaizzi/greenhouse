@@ -9,7 +9,10 @@ parser table via the profile JSON; behaviour stays here.
 
 from __future__ import annotations
 
+import time
+
 from greenhouse_core.cloud import TuyaCloud
+from greenhouse_core.devices.health import DeviceHealthState
 from greenhouse_core.devices.profile import SensorProfile
 from greenhouse_core.devices.sensors.base import AbstractSensorAdapter
 from greenhouse_core.models import Sensor
@@ -38,3 +41,14 @@ class TuyaSensorAdapter(AbstractSensorAdapter):
             return self._cloud.get_live_reading(sensor.tuya_device_id)
         except Exception as e:
             return {"error": str(e)}
+
+    def read_health(self, sensor: Sensor) -> DeviceHealthState:
+        """Default: no health surface beyond reachability.
+
+        Subclasses with battery / water-warning DPs override this to do a
+        real read.
+        """
+        return DeviceHealthState(
+            observed_at=int(time.time()),
+            alarms=frozenset(),
+        )

@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import tinytuya  # re-exported for tests that patch greenhouse_core.devices.tinytuya.Cloud
 
+from greenhouse_core.devices.health import DeviceHealthState, HealthAlarm
 from greenhouse_core.devices.irrigators.base import AbstractIrrigatorAdapter
 from greenhouse_core.devices.irrigators.ik10pw import IK10PW_PROFILE, IK10PWAdapter, alarm_indicates_no_water
 from greenhouse_core.devices.irrigators.tuya_generic import TuyaIrrigatorAdapter
@@ -204,43 +205,48 @@ class TuyaDeviceManager:
     def irrigator_stop(self, irrigator: Irrigator) -> tuple[bool, str]:
         return self._irrigator(irrigator).stop(irrigator)
 
-    def read_irrigator_alarm(self, irrigator: Irrigator) -> dict:
-        """Read DP 105 (no-water bit).
+    def read_irrigator_health(self, irrigator: Irrigator) -> DeviceHealthState:
+        """Read the irrigator's health snapshot.
 
-        Routes through :meth:`_get_local_device` so tests that monkey-patch
-        the local-device factory drive the read. Same dict shape as the
-        adapter contract.
+        Routes through :meth:`_get_local_device` for IK10PW so tests that
+        monkey-patch the local-device factory drive the read; delegates to
+        the adapter for every other model.
         """
         adapter = self._irrigator(irrigator)
         if not isinstance(adapter, IK10PWAdapter):
-            # No alarm DP on this model.
-            return adapter.read_alarm(irrigator)
+            return adapter.read_health(irrigator)
+        import time as _time
+
+        now = int(_time.time())
         try:
             device = self._get_local_device(irrigator)
             status = device.status()
         except Exception as exc:
-            return {
-                "no_water": None,
-                "alarm_raw": None,
-                "running": None,
-                "left_time": None,
-                "work_status": None,
-                "source": None,
-                "error": f"local read failed: {exc}",
-            }
+            return DeviceHealthState(
+                observed_at=now,
+                offline=True,
+                alarms=frozenset(),
+                raw={"error": f"local read failed: {exc}"},
+            )
 
         dps = (status or {}).get("dps") or {}
         alarm_raw = dps.get(str(adapter.profile.dp("alarm")))
         bitmask = adapter.profile.alarm_bitmask or 0x01
-        return {
-            "no_water": alarm_indicates_no_water(alarm_raw, bitmask),
-            "alarm_raw": alarm_raw,
-            "running": dps.get(str(adapter.profile.dp("switch"))),
-            "left_time": dps.get(str(adapter.profile.dp("left_time"))),
-            "work_status": dps.get(str(adapter.profile.dp("work_status"))),
-            "source": "local",
-            "error": None,
-        }
+        alarms: set[HealthAlarm] = set()
+        if alarm_indicates_no_water(alarm_raw, bitmask):
+            alarms.add(HealthAlarm.NO_WATER)
+        return DeviceHealthState(
+            observed_at=now,
+            offline=False,
+            alarms=frozenset(alarms),
+            raw={
+                "alarm_raw": alarm_raw,
+                "running": dps.get(str(adapter.profile.dp("switch"))),
+                "left_time": dps.get(str(adapter.profile.dp("left_time"))),
+                "work_status": dps.get(str(adapter.profile.dp("work_status"))),
+                "source": "local",
+            },
+        )
 
     def read_sensor(self, sensor: Sensor) -> dict:
         adapter = self._registry.get_sensor(sensor)
@@ -252,7 +258,9 @@ class TuyaDeviceManager:
 __all__ = [
     "AbstractIrrigatorAdapter",
     "AbstractSensorAdapter",
+    "DeviceHealthState",
     "DeviceRegistry",
+    "HealthAlarm",
     "IK10PWAdapter",
     "IK10PW_PROFILE",
     "IrrigatorProfile",

@@ -58,6 +58,17 @@ TREND_MOISTURE_THRESHOLD = 5  # % delta for rising/declining
 TREND_TEMP_THRESHOLD = 2  # °C delta for rising/falling
 TREND_MIN_READINGS = 4  # Minimum readings for trend analysis
 
+# ── Device Health Monitor ────────────────────────────────────────────────────
+# Battery thresholds + offline / signal cut-offs consumed by DeviceHealthMonitor
+# (adapters report raw percent and last-seen-ts; the monitor decides what
+# counts as "low" so thresholds stay tunable without touching device code).
+BATTERY_LOW_PCT = 20
+BATTERY_CRITICAL_PCT = 5
+OFFLINE_AFTER_MINUTES = 30
+SIGNAL_LOSS_THRESHOLD = 30  # 0-100 link quality
+HEALTH_POLL_IDLE_MINUTES = 5
+SENSOR_HEALTH_BACKFILL_WINDOW = 5  # consecutive readings
+
 # ── Open-Meteo Defaults (can be overridden via env vars) ─────────────────────
 
 DEFAULT_LATITUDE = 45.464  # Milan

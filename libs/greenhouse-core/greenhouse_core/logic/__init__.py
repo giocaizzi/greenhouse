@@ -1,6 +1,7 @@
 """Smart irrigation logic — decision engine, trend analysis, stress detection."""
 
 from greenhouse_core.logic.decision import (
+    DEVICE_BLOCKING_CODES,
     Action,
     IrrigationDecision,
     PerSensorSnapshot,
@@ -15,6 +16,7 @@ from greenhouse_core.logic.decision import (
 from greenhouse_core.logic.engine import IrrigationLogic
 
 __all__ = [
+    "DEVICE_BLOCKING_CODES",
     "Action",
     "IrrigationDecision",
     "IrrigationLogic",

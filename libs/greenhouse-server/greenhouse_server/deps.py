@@ -12,6 +12,7 @@ from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.services.cluster import ClusterService
 from greenhouse_server.services.health import PlantHealthService
+from greenhouse_server.services.health_monitor import DeviceHealthMonitor
 from greenhouse_server.services.irrigation import IrrigationService
 from greenhouse_server.services.sync import SyncService
 from greenhouse_server.services.weather import WeatherClient
@@ -34,6 +35,19 @@ def get_repository(session: Annotated[Session, Depends(get_session)]) -> Irrigat
 
 def get_device_manager(request: Request) -> TuyaDeviceManager | None:
     return getattr(request.app.state, "device_manager", None)
+
+
+def get_health_monitor(request: Request) -> DeviceHealthMonitor | None:
+    """Return the per-app device-health monitor, if wired.
+
+    The monitor is instantiated in :mod:`greenhouse_server.scheduler` and
+    stashed on ``app.state.health_monitor``; tests that don't need the
+    health gate leave it unset and the irrigation service falls open.
+    The monitor is constructed per-request because it caches state in
+    process memory tied to the active session.
+    """
+    factory: DeviceHealthMonitor | None = getattr(request.app.state, "health_monitor", None)
+    return factory
 
 
 def get_tuya_cloud() -> TuyaCloud | None:
@@ -94,8 +108,9 @@ def get_irrigation_service(
     sync_service: Annotated[SyncService, Depends(get_sync_service)],
     weather: Annotated[WeatherClient, Depends(get_weather_client)],
     plant_db: Annotated[PlantDatabase, Depends(get_plant_db)],
+    health_monitor: Annotated[DeviceHealthMonitor | None, Depends(get_health_monitor)],
 ) -> IrrigationService:
-    return IrrigationService(repo, dm, sync_service, weather, plant_db)
+    return IrrigationService(repo, dm, sync_service, weather, plant_db, health_monitor=health_monitor)
 
 
 # --- Type aliases for route injection ---

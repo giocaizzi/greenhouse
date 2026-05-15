@@ -15,7 +15,9 @@ from fake_data import FAKE_DEVICE_ID
 from greenhouse_core.devices import (
     AbstractIrrigatorAdapter,
     AbstractSensorAdapter,
+    DeviceHealthState,
     DeviceRegistry,
+    HealthAlarm,
     IK10PWAdapter,
     TR301ZAdapter,
     TuyaTransport,
@@ -79,19 +81,30 @@ class TestIrrigatorContract:
 
     @pytest.mark.parametrize("model_key", ["rainpoint.ik10pw"])
     def test_offline_calls_do_not_raise(self, registry: DeviceRegistry, model_key: str):
-        """Hardware-offline calls return error dicts, never raise."""
+        """Hardware-offline calls never raise — they surface offline=True."""
         adapter = registry.get_irrigator(_make_irrigator(model_key))
         irr = _make_irrigator(model_key)
 
         # ``open_local`` will fail because config has no device_ip — that's
         # the canonical "offline" condition we care about.
-        alarm = adapter.read_alarm(irr)
-        assert "no_water" in alarm
-        assert "error" in alarm
-        # On a failed read, no_water must be None, not False — callers
-        # distinguish "no fault" from "no signal".
-        assert alarm["no_water"] is None
-        assert alarm["error"]
+        state = adapter.read_health(irr)
+        assert isinstance(state, DeviceHealthState)
+        assert state.offline is True
+        # No alarms — the monitor decides what offline means.
+        assert state.alarms == frozenset()
+
+    @pytest.mark.parametrize("model_key", ["rainpoint.ik10pw"])
+    def test_health_capabilities_constrain_alarms(self, registry: DeviceRegistry, model_key: str):
+        """``alarms`` is always a subset of ``health_capabilities``."""
+        adapter = registry.get_irrigator(_make_irrigator(model_key))
+        state = adapter.read_health(_make_irrigator(model_key))
+        assert state.alarms <= adapter.health_capabilities
+
+    @pytest.mark.parametrize("model_key", ["rainpoint.ik10pw"])
+    def test_ik10pw_health_capabilities(self, registry: DeviceRegistry, model_key: str):
+        adapter = registry.get_irrigator(_make_irrigator(model_key))
+        assert HealthAlarm.NO_WATER in adapter.health_capabilities
+        assert HealthAlarm.DEVICE_OFFLINE in adapter.health_capabilities
 
     @pytest.mark.parametrize("model_key", ["rainpoint.ik10pw"])
     def test_status_returns_dict(self, registry: DeviceRegistry, model_key: str):
@@ -122,6 +135,25 @@ class TestSensorContract:
         # never raise.
         out = adapter.read_live(_make_sensor(model_key))
         assert out is not None
+
+    @pytest.mark.parametrize("model_key", ["tuya.tr301z"])
+    def test_read_health_returns_state_on_cloud_failure(self, registry: DeviceRegistry, model_key: str):
+        """A cloud failure surfaces offline=True without raising."""
+        adapter = registry.get_sensor(_make_sensor(model_key))
+        # Force the cloud client to raise so the adapter must absorb it.
+        adapter._cloud.get_live_reading = MagicMock(side_effect=RuntimeError("offline"))  # type: ignore[attr-defined]
+        state = adapter.read_health(_make_sensor(model_key))
+        assert isinstance(state, DeviceHealthState)
+        assert state.offline is True
+        assert state.alarms <= adapter.health_capabilities
+
+    @pytest.mark.parametrize("model_key", ["tuya.tr301z"])
+    def test_tr301z_health_capabilities(self, registry: DeviceRegistry, model_key: str):
+        adapter = registry.get_sensor(_make_sensor(model_key))
+        assert HealthAlarm.LOW_BATTERY in adapter.health_capabilities
+        assert HealthAlarm.BATTERY_CRITICAL in adapter.health_capabilities
+        assert HealthAlarm.SENSOR_FAULT in adapter.health_capabilities
+        assert HealthAlarm.DEVICE_OFFLINE in adapter.health_capabilities
 
 
 class TestRegistryFailureModes:

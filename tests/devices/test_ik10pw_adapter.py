@@ -11,7 +11,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from fake_data import FAKE_DEVICE_ID
-from greenhouse_core.devices import TuyaDeviceManager, alarm_indicates_no_water
+from greenhouse_core.devices import HealthAlarm, TuyaDeviceManager, alarm_indicates_no_water
 from greenhouse_core.models import Irrigator, Sensor
 
 
@@ -238,12 +238,12 @@ class TestAlarmParser:
         assert alarm_indicates_no_water(value) is expected
 
 
-class TestReadIrrigatorAlarm:
-    """read_irrigator_alarm wraps the local DP 105 read into a structured dict."""
+class TestReadIrrigatorHealth:
+    """read_irrigator_health wraps the local DP 105 read into a DeviceHealthState."""
 
     @patch("greenhouse_core.devices.tinytuya.Cloud")
-    def test_alarm_read_no_water(self, mock_cloud_class, fake_tuya_env):
-        """Local read with DP 105 == 1 surfaces no_water=True and the raw value."""
+    def test_health_read_no_water(self, mock_cloud_class, fake_tuya_env):
+        """Local read with DP 105 == 1 surfaces a NO_WATER alarm."""
         mock_cloud_class.return_value = MagicMock()
         dm = TuyaDeviceManager()
         fake_local = MagicMock()
@@ -251,53 +251,52 @@ class TestReadIrrigatorAlarm:
             "dps": {"1": True, "104": 42, "105": 1, "106": 2},
         }
         with patch.object(dm, "_get_local_device", return_value=fake_local):
-            result = dm.read_irrigator_alarm(_make_irrigator())
+            state = dm.read_irrigator_health(_make_irrigator())
 
-        assert result["no_water"] is True
-        assert result["alarm_raw"] == 1
-        assert result["running"] is True
-        assert result["left_time"] == 42
-        assert result["work_status"] == 2
-        assert result["source"] == "local"
-        assert result["error"] is None
+        assert state.offline is False
+        assert HealthAlarm.NO_WATER in state.alarms
+        assert state.raw["alarm_raw"] == 1
+        assert state.raw["running"] is True
+        assert state.raw["left_time"] == 42
+        assert state.raw["work_status"] == 2
+        assert state.raw["source"] == "local"
 
     @patch("greenhouse_core.devices.tinytuya.Cloud")
-    def test_alarm_read_clear(self, mock_cloud_class, fake_tuya_env):
-        """DP 105 == 0 surfaces no_water=False."""
+    def test_health_read_clear(self, mock_cloud_class, fake_tuya_env):
+        """DP 105 == 0 surfaces an empty alarm set."""
         mock_cloud_class.return_value = MagicMock()
         dm = TuyaDeviceManager()
         fake_local = MagicMock()
         fake_local.status.return_value = {"dps": {"1": True, "105": 0}}
         with patch.object(dm, "_get_local_device", return_value=fake_local):
-            result = dm.read_irrigator_alarm(_make_irrigator())
+            state = dm.read_irrigator_health(_make_irrigator())
 
-        assert result["no_water"] is False
-        assert result["alarm_raw"] == 0
-        assert result["error"] is None
+        assert state.offline is False
+        assert HealthAlarm.NO_WATER not in state.alarms
+        assert state.raw["alarm_raw"] == 0
 
     @patch("greenhouse_core.devices.tinytuya.Cloud")
-    def test_alarm_read_missing_dp(self, mock_cloud_class, fake_tuya_env):
-        """A device that omits DP 105 is reported as no_water=False, not as an error."""
+    def test_health_read_missing_dp(self, mock_cloud_class, fake_tuya_env):
+        """A device that omits DP 105 surfaces neither offline nor NO_WATER."""
         mock_cloud_class.return_value = MagicMock()
         dm = TuyaDeviceManager()
         fake_local = MagicMock()
         fake_local.status.return_value = {"dps": {"1": True}}
         with patch.object(dm, "_get_local_device", return_value=fake_local):
-            result = dm.read_irrigator_alarm(_make_irrigator())
+            state = dm.read_irrigator_health(_make_irrigator())
 
-        assert result["no_water"] is False
-        assert result["alarm_raw"] is None
-        assert result["error"] is None
+        assert state.offline is False
+        assert HealthAlarm.NO_WATER not in state.alarms
+        assert state.raw["alarm_raw"] is None
 
     @patch("greenhouse_core.devices.tinytuya.Cloud")
-    def test_alarm_read_local_failure(self, mock_cloud_class, fake_tuya_env):
-        """Local read failure returns no_water=None plus an error message."""
+    def test_health_read_local_failure(self, mock_cloud_class, fake_tuya_env):
+        """Local read failure surfaces offline=True with no alarms."""
         mock_cloud_class.return_value = MagicMock()
         dm = TuyaDeviceManager()
         with patch.object(dm, "_get_local_device", side_effect=ConnectionError("no route")):
-            result = dm.read_irrigator_alarm(_make_irrigator())
+            state = dm.read_irrigator_health(_make_irrigator())
 
-        assert result["no_water"] is None
-        assert result["alarm_raw"] is None
-        assert result["source"] is None
-        assert "no route" in result["error"]
+        assert state.offline is True
+        assert state.alarms == frozenset()
+        assert "no route" in state.raw["error"]

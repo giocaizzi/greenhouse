@@ -22,6 +22,7 @@ import signal
 import time
 from typing import Any
 
+from greenhouse_core.devices.health import DeviceHealthState, HealthAlarm
 from greenhouse_core.devices.irrigators.tuya_generic import TuyaIrrigatorAdapter
 from greenhouse_core.devices.profile import IrrigatorProfile, load_profile_json
 from greenhouse_core.devices.tuya_transport import TuyaTransport
@@ -88,9 +89,11 @@ class IK10PWAdapter(TuyaIrrigatorAdapter):
     """Rainpoint IK10PW driver.
 
     Overrides :meth:`start` for the local-Duration-DP + cloud-switch recipe
-    and :meth:`read_alarm` for the DP 105 bitmask. Status reads inherit the
-    base implementation; the profile's DP map drives the field shape.
+    and :meth:`read_health` for the DP 105 bitmask. Status reads inherit
+    the base implementation; the profile's DP map drives the field shape.
     """
+
+    health_capabilities = frozenset({HealthAlarm.NO_WATER, HealthAlarm.DEVICE_OFFLINE})
 
     def __init__(self, transport: TuyaTransport, profile: IrrigatorProfile | None = None):
         super().__init__(profile or IK10PW_PROFILE, transport)
@@ -198,9 +201,9 @@ class IK10PWAdapter(TuyaIrrigatorAdapter):
             )
         return True, f"Irrigation completed for {minutes} min [keep-alive mode]"
 
-    # ── Alarm read ────────────────────────────────────────────────────────
+    # ── Health read ───────────────────────────────────────────────────────
 
-    def read_alarm(self, irrigator: Irrigator) -> dict:
+    def read_health(self, irrigator: Irrigator) -> DeviceHealthState:
         """Read the dry-run / water-shortage alarm state.
 
         Reads DP 105 over local protocol v3.5. On the Rainpoint IK10PW this
@@ -210,35 +213,41 @@ class IK10PWAdapter(TuyaIrrigatorAdapter):
 
         Local-only by design — the Cloud API does not expose DP 105, and
         the cloud round-trip latency (>1 s) would defeat the purpose for a
-        pump-safety check. Returns ``no_water=None`` when the device cannot
-        be reached so callers can distinguish "no fault" from "no signal".
+        pump-safety check. On a failed read returns ``offline=True`` with
+        an empty alarm set so callers distinguish "no fault" from "no
+        signal" — the monitor maps ``offline`` to
+        :attr:`HealthAlarm.DEVICE_OFFLINE`.
         """
+        now = int(time.time())
         try:
             device = self._tx.open_local(irrigator, self.profile.protocol_version)
             status = device.status()
         except Exception as exc:
-            return {
-                "no_water": None,
-                "alarm_raw": None,
-                "running": None,
-                "left_time": None,
-                "work_status": None,
-                "source": None,
-                "error": f"local read failed: {exc}",
-            }
+            return DeviceHealthState(
+                observed_at=now,
+                offline=True,
+                alarms=frozenset(),
+                raw={"error": f"local read failed: {exc}"},
+            )
 
         dps = (status or {}).get("dps") or {}
         alarm_raw = dps.get(str(self.profile.dp("alarm")))
         bitmask = self.profile.alarm_bitmask or 0x01
-        return {
-            "no_water": alarm_indicates_no_water(alarm_raw, bitmask),
-            "alarm_raw": alarm_raw,
-            "running": dps.get(str(self.profile.dp("switch"))),
-            "left_time": dps.get(str(self.profile.dp("left_time"))),
-            "work_status": dps.get(str(self.profile.dp("work_status"))),
-            "source": "local",
-            "error": None,
-        }
+        alarms: set[HealthAlarm] = set()
+        if alarm_indicates_no_water(alarm_raw, bitmask):
+            alarms.add(HealthAlarm.NO_WATER)
+        return DeviceHealthState(
+            observed_at=now,
+            offline=False,
+            alarms=frozenset(alarms),
+            raw={
+                "alarm_raw": alarm_raw,
+                "running": dps.get(str(self.profile.dp("switch"))),
+                "left_time": dps.get(str(self.profile.dp("left_time"))),
+                "work_status": dps.get(str(self.profile.dp("work_status"))),
+                "source": "local",
+            },
+        )
 
 
 __all__ = ["IK10PWAdapter", "IK10PW_PROFILE", "alarm_indicates_no_water"]
