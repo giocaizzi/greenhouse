@@ -10,8 +10,12 @@ The auth model is single-user with optional multi-user expansion later:
   so the same login works for API clients and browser sessions.
 - Web routes use the same dependency but redirect to /login on missing/invalid
   credentials instead of returning 401 JSON.
-- /mcp keeps its own bearer token (`require_mcp_token` in app.py) — that path
-  is for agent-driven actuation and stays isolated.
+- /mcp keeps its own bearer token (`require_mcp_token` in app.py) for the
+  outer gate. fastapi-mcp then re-issues each tools/call as an inner
+  /api/v1 request, forwarding the same `Authorization: Bearer <MCP_TOKEN>`
+  header, so `require_user` ALSO accepts that token (as a synthetic `mcp`
+  principal) — otherwise every MCP tool would 401 trying to decode the
+  static token as a JWT.
 
 When `Settings.auth_enabled` is False the dependency short-circuits to a
 synthetic system user. The flag exists so a single-process restart can
@@ -22,6 +26,7 @@ re-enable) — not as a permanent state.
 
 from __future__ import annotations
 
+import hmac
 import logging
 import time
 from collections.abc import Generator
@@ -51,6 +56,10 @@ JWT_ALGORITHM = "HS256"
 JWT_AUDIENCE = "greenhouse-session"
 SYSTEM_USER_ID = -1
 SYSTEM_USER_NAME = "system"
+# MCP gets its own synthetic principal so audit logs can tell apart
+# "auth disabled, falling back to system" from "real MCP tool call".
+MCP_USER_ID = -2
+MCP_USER_NAME = "mcp"
 
 
 class AuthError(HTTPException):
@@ -164,6 +173,18 @@ def _resolve_user(token: str, settings: Settings, session: Session) -> Authentic
     return AuthenticatedUser(id=user.id, username=user.username)
 
 
+def _is_mcp_token(token: str, settings: Settings) -> bool:
+    """Constant-time check of `token` against `settings.mcp_token`.
+
+    Returns False when the MCP token is unconfigured so a missing setting can
+    never accidentally satisfy this gate.
+    """
+    expected = settings.mcp_token
+    if not expected:
+        return False
+    return hmac.compare_digest(token, expected)
+
+
 def require_user(
     request: Request,
     creds: HTTPAuthorizationCredentials | None = Depends(_bearer),
@@ -172,16 +193,30 @@ def require_user(
 ) -> AuthenticatedUser:
     """API dependency — returns the authenticated user or raises 401.
 
+    Two authentication modes are accepted on `/api/v1` routes:
+
+    1. The session JWT issued by `/api/v1/auth/login` (bearer header or
+       session cookie). This is the human/API client path.
+    2. The static MCP bearer token. `fastapi-mcp` reuses the `/api/v1` routes
+       internally to fulfil `tools/call`, forwarding the inbound MCP
+       `Authorization` header onto each inner request. The outer `/mcp` mount
+       is already gated by `require_mcp_token`, so a request that reaches
+       this dependency carrying the MCP token has already passed that gate;
+       we accept it here as a synthetic `mcp` principal (id `MCP_USER_ID`)
+       so audit logs can distinguish MCP-driven calls from the
+       `auth_enabled=False` system fallback.
+
     Skips entirely when `auth_enabled` is False, returning a synthetic system
-    user so route code can keep depending on the principal without conditional
-    branches. MCP paths bypass this dependency by design (they have their own
-    token check).
+    user so route code can keep depending on the principal without
+    conditional branches.
     """
     if not settings.auth_enabled:
         return AuthenticatedUser(id=SYSTEM_USER_ID, username=SYSTEM_USER_NAME, is_system=True)
     token = _extract_token(request, creds, settings)
     if not token:
         raise AuthError()
+    if _is_mcp_token(token, settings):
+        return AuthenticatedUser(id=MCP_USER_ID, username=MCP_USER_NAME, is_system=True)
     return _resolve_user(token, settings, session)
 
 
