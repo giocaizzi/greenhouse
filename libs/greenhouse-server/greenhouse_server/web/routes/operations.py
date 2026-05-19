@@ -27,13 +27,24 @@ def irrigate(
     dry_run: str = Form(""),
     no_sync: str = Form(""),
     temp_override: str = Form(""),
+    force: str = Form(""),
 ):
+    """Run the irrigation pipeline from the inline action bar on the cluster
+    detail page.
+
+    ``force`` is set to ``"true"`` when the user clicks Irrigate during quiet
+    hours and confirms the hx-confirm prompt. It plumbs through to the
+    engine as ``bypass_quiet_hours``; the decision still logs a warning
+    Reason so the override is in the audit trail.
+    """
     temp = float(temp_override) if temp_override.strip() else None
+    forced = force.strip().lower() in ("true", "on", "1")
     result = svc.run_irrigation_pipeline(
         cluster_id=cluster_id,
         temp_override=temp,
         dry_run=bool(dry_run),
         no_sync=bool(no_sync),
+        force=forced,
     )
     session.commit()
     return templates.TemplateResponse(

@@ -196,6 +196,78 @@ class TestSeasonalMultiplier:
             f"interval should DOUBLE (got {winter_decision.interval_hours / baseline_interval:.2f}×)"
         )
 
+    def test_quiet_hours_skip_at_night(self, tmp_db, logic, monkeypatch):
+        """Cluster inside the global quiet window must SKIP with QUIET_HOURS code."""
+        _freeze(monkeypatch, _ts(2026, 5, 14, 2))  # 02:00 UTC, inside 0..5
+        cluster_id = tmp_db.add_cluster("Indoor Late Night", environment="indoor")
+        tmp_db.add_plant(cluster_id=cluster_id, species="Monstera deliciosa", category="tropical")
+        _add_soil(tmp_db, cluster_id, moisture=30.0)  # very dry — would otherwise irrigate
+        # Seed the global quiet window 0..5 (the migration would normally do this).
+        tmp_db.update_global_irrigation_config(quiet_start_hour=0, quiet_end_hour=5)
+
+        decision = logic.decide_for_cluster(cluster_id)
+
+        assert decision is not None
+        assert decision.action.value == "skip"
+        assert decision.primary_code == TriggerCode.QUIET_HOURS
+
+    def test_quiet_hours_cluster_override_disables(self, tmp_db, logic, monkeypatch):
+        """``start == end`` at the cluster level disables an inherited global window."""
+        _freeze(monkeypatch, _ts(2026, 5, 14, 2))
+        cluster_id = tmp_db.add_cluster("Outdoor Night Run", environment="outdoor")
+        tmp_db.add_plant(cluster_id=cluster_id, species="Eriobotrya japonica", category="fruit_tree")
+        _add_soil(tmp_db, cluster_id, moisture=30.0)
+        # Global says quiet 0..5; cluster opts out with 0..0 (disabled).
+        tmp_db.update_global_irrigation_config(quiet_start_hour=0, quiet_end_hour=5)
+        tmp_db.set_irrigation_config(cluster_id=cluster_id, quiet_start_hour=0, quiet_end_hour=0)
+
+        decision = logic.decide_for_cluster(cluster_id)
+
+        assert decision is not None
+        codes = [r.code for r in decision.reasons]
+        assert TriggerCode.QUIET_HOURS not in codes
+
+    def test_quiet_hours_bypass_attaches_override_warning(self, tmp_db, logic, monkeypatch):
+        """``bypass_quiet_hours=True`` skips the SKIP but logs the override reason."""
+        _freeze(monkeypatch, _ts(2026, 5, 14, 2))
+        cluster_id = tmp_db.add_cluster("Indoor Manual Override", environment="indoor")
+        tmp_db.add_plant(cluster_id=cluster_id, species="Monstera deliciosa", category="tropical")
+        _add_soil(tmp_db, cluster_id, moisture=55.0)  # adequate
+        tmp_db.update_global_irrigation_config(quiet_start_hour=0, quiet_end_hour=5)
+
+        decision = logic.decide_for_cluster(cluster_id, bypass_quiet_hours=True)
+
+        assert decision is not None
+        assert decision.primary_code != TriggerCode.QUIET_HOURS
+        codes = [r.code for r in decision.reasons]
+        assert TriggerCode.MANUAL_OVERRIDE_QUIET_HOURS in codes
+
+    def test_cooldown_beats_quiet_hours(self, tmp_db, logic, monkeypatch):
+        """Cooldown is the earlier gate — it must take precedence over quiet hours."""
+        import time as _time
+
+        _freeze(monkeypatch, _ts(2026, 5, 14, 2))
+        cluster_id = tmp_db.add_cluster("Indoor Cooldown First", environment="indoor")
+        tmp_db.add_plant(cluster_id=cluster_id, species="Monstera deliciosa", category="tropical")
+        _add_soil(tmp_db, cluster_id, moisture=30.0)
+        tmp_db.update_global_irrigation_config(quiet_start_hour=0, quiet_end_hour=5)
+        # Recent irrigation event within cooldown window.
+        irrigator_id = tmp_db.add_irrigator(
+            cluster_id=cluster_id, tuya_device_id="fake_pump", name="Pump", irrigator_type="tuya_cloud", config={}
+        )
+        tmp_db.add_irrigation_event(
+            irrigator_id=irrigator_id,
+            action="start",
+            triggered_by="auto",
+            duration_minutes=3,
+            timestamp=int(_time.time()) - 3600,
+        )
+
+        decision = logic.decide_for_cluster(cluster_id)
+
+        assert decision is not None
+        assert decision.primary_code == TriggerCode.COOLDOWN
+
     def test_summer_multiplier_shortens_interval(self, tmp_db, logic, monkeypatch):
         """Outdoor fruit tree: summer (1.5× frequency) → interval STRICTLY LESS than spring baseline.
 

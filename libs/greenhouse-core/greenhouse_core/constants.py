@@ -4,6 +4,20 @@
 
 MIN_COOLDOWN_HOURS = 6
 
+# ── Quiet Hours — hard gate against actuation during user-defined windows ────
+# Default applies to every cluster that hasn't overridden. Indoor irrigators
+# tend to make pump noise at night, so the baseline blocks 00:00–05:00 local
+# time. Start/end are integers 0–23, end-exclusive, wrap-around supported.
+# A row with start == end means "explicitly disabled at this level" (e.g. an
+# outdoor cluster that should be allowed to run overnight).
+DEFAULT_QUIET_START_HOUR = 0
+DEFAULT_QUIET_END_HOUR = 5
+
+# ── Irrigation Config — hierarchical defaults ────────────────────────────────
+# Built-in fallbacks for fields that resolve cluster → global → here.
+DEFAULT_IRRIGATION_MODE = "smart"
+DEFAULT_AUTO_RUN = True
+
 # ── Soil Moisture Defaults (when plant-specific data unavailable) ────────────
 
 DEFAULT_SOIL_MOISTURE_MIN = 45.0

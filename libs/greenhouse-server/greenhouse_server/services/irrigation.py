@@ -212,8 +212,15 @@ class IrrigationService:
         temp_override: float | None = None,
         dry_run: bool = False,
         no_sync: bool = False,
+        force: bool = False,
     ) -> dict:
-        """Full pipeline: sync -> weather -> decide -> execute. Returns result dict."""
+        """Full pipeline: sync -> weather -> decide -> execute. Returns result dict.
+
+        ``force=True`` bypasses the quiet-hours gate inside the decision
+        engine; a ``MANUAL_OVERRIDE_QUIET_HOURS`` warning Reason is still
+        attached to the resulting decision so the audit log records that
+        the user pushed past the deny window.
+        """
         cluster = self._repo.get_cluster(cluster_id)
         if not cluster:
             return {"action": "error", "reason": "cluster not found", "confidence": 0}
@@ -222,7 +229,13 @@ class IrrigationService:
         temp, source, sensor_data = self._resolve_temperature(cluster_id, is_indoor, temp_override, no_sync)
 
         logic = IrrigationLogic(self._repo, self._plant_db, weather_client=self._weather)
-        decision = logic.decide_for_cluster(cluster_id, current_temp=temp, persist=True)
+        decision = logic.decide_for_cluster(
+            cluster_id,
+            current_temp=temp,
+            persist=True,
+            triggered_by="manual" if force else "auto",
+            bypass_quiet_hours=force,
+        )
         if not decision:
             return {"action": "error", "reason": "no data for decision", "confidence": 0}
 
@@ -435,8 +448,8 @@ class IrrigationService:
         maintenance = collect_maintenance_alerts(self._repo, cluster_id, self._plant_db)
 
         if irrigators:
-            config = self._repo.get_irrigation_config(cluster_id)
-            if config and not config.auto_run:
+            effective = self._repo.get_effective_config(cluster_id)
+            if not effective["auto_run"]["value"]:
                 sync_cluster_alerts(self._repo, cluster_id, self._plant_db)
                 return {
                     "cluster_id": cluster_id,

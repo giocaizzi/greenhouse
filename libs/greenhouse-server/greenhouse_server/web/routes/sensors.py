@@ -30,13 +30,11 @@ def _parse_optional_plant_id(plant_id: str) -> int | None:
 
 
 @router.get("/clusters/{cluster_id}/sensors")
-def list_sensors(request: Request, cluster_id: int, repo: RepoDep):
-    cluster = require_cluster(repo, cluster_id)
-    sensors = repo.get_sensors_in_cluster(cluster_id)
-    plants = {p.id: p for p in repo.get_plants_in_cluster(cluster_id)}
-    return templates.TemplateResponse(
-        request, "sensors/list.html", base_context(request, cluster=cluster, sensors=sensors, plants=plants)
-    )
+def list_sensors(cluster_id: int, repo: RepoDep):
+    """Legacy URL — sensors are rendered inline on the unified cluster detail
+    page. The 301 keeps old bookmarks working."""
+    require_cluster(repo, cluster_id)
+    return RedirectResponse(url=f"/clusters/{cluster_id}#sensors", status_code=301)
 
 
 @router.get("/clusters/{cluster_id}/sensors/new")
@@ -69,7 +67,7 @@ def create_sensor(
         plant_id=pid,
     )
     repo.session.commit()
-    return RedirectResponse(url=f"/clusters/{cluster_id}/sensors", status_code=303)
+    return RedirectResponse(url=f"/clusters/{cluster_id}#sensors", status_code=303)
 
 
 @router.get("/clusters/{cluster_id}/sensors/{sensor_id}/edit")
@@ -98,7 +96,7 @@ def update_sensor(
     # path. Pass plant_id explicitly even when None so an empty form unassigns.
     repo.update_sensor(sensor_id, name=name, type=type, plant_id=pid)
     repo.session.commit()
-    return RedirectResponse(url=f"/clusters/{cluster_id}/sensors", status_code=303)
+    return RedirectResponse(url=f"/clusters/{cluster_id}#sensors", status_code=303)
 
 
 @router.delete("/clusters/{cluster_id}/sensors/{sensor_id}", response_class=HTMLResponse)

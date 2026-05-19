@@ -26,7 +26,8 @@ def test_create_plant(seeded_client):
         follow_redirects=False,
     )
     assert resp.status_code == 303
-    assert resp.headers["location"] == "/clusters/1/plants"
+    # Plants live inline on the unified detail page now — POST lands at #plants.
+    assert resp.headers["location"] == "/clusters/1#plants"
 
     resp2 = seeded_client.get("/clusters/1/plants")
     assert "Ficus lyrata" in resp2.text

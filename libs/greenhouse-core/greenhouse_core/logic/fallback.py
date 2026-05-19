@@ -51,9 +51,15 @@ def temperature_based_decision(
 
     if temp is None:
         if config:
-            base.action = Action.SKIP if config.mode == "manual" else Action.IRRIGATE
-            base.duration_minutes = config.duration_minutes or DEFAULT_DURATION_MINUTES
-            base.interval_hours = config.interval_hours or DEFAULT_INTERVAL_HOURS
+            # Honor the *effective* mode/duration/interval so a global-only
+            # override (cluster row leaves them null) still drives the
+            # fallback. Local raw config keeps the row alive but defers to
+            # global defaults via the resolver.
+            effective = db.get_effective_config(cluster_id)
+            effective_mode = effective["mode"]["value"]
+            base.action = Action.SKIP if effective_mode == "manual" else Action.IRRIGATE
+            base.duration_minutes = int(effective["duration_minutes"]["value"] or DEFAULT_DURATION_MINUTES)
+            base.interval_hours = int(effective["interval_hours"]["value"] or DEFAULT_INTERVAL_HOURS)
             base.confidence = CONFIDENCE_CONFIG_FALLBACK
             base.add_reason(
                 code=TriggerCode.CONFIG_FALLBACK,

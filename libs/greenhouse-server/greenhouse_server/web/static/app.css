@@ -1456,3 +1456,105 @@ body > footer small, .footer small { color: inherit; font-size: inherit; }
   background: var(--surface-2, var(--bg, transparent));
   color: var(--text);
 }
+
+/* ── Unified design: relationship glyph, status dots, hierarchical config ── */
+
+/* `↳` arrow used to indicate hierarchy ("points up to a parent"):
+   on the home view it connects a plant to the sensor it depends on;
+   in the config form it tags inherited fields. */
+.rel-arrow {
+  color: var(--text-muted);
+  font-family: var(--font-mono, monospace);
+  margin: 0 var(--sp-1);
+  font-weight: 400;
+}
+.rel-arrow.muted { opacity: 0.6; }
+
+/* Inline status dots for cluster ↔ irrigator health. Colors track the existing
+   badge palette so dots and badges read as the same vocabulary. */
+.dot {
+  display: inline-block;
+  width: 0.75em;
+  text-align: center;
+  font-weight: 700;
+}
+.dot--ok { color: var(--accent); }
+.dot--warn { color: var(--warn); }
+.dot--danger { color: var(--danger); }
+.dot--muted { color: var(--text-muted); }
+
+/* Cluster card inline layout used by the home dashboard.
+   `cluster-card__inner` wraps the HTMX-swapped content; the outer
+   `.cluster-card` already provides padding/border from earlier CSS. */
+.cluster-card__inner { display: flex; flex-direction: column; gap: var(--sp-3); }
+.cluster-card__verdict {
+  display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-2);
+}
+.cluster-card__why { color: var(--text-muted); font-size: var(--fs-sm); }
+.cluster-card__rel {
+  list-style: none; padding: 0; margin: 0;
+  display: flex; flex-direction: column; gap: var(--sp-1);
+}
+.cluster-card__rel-row {
+  display: flex; align-items: baseline; gap: var(--sp-1);
+  font-size: var(--fs-sm);
+}
+.cluster-card__plant { font-weight: 500; }
+.cluster-card__sensor { color: var(--text-muted); }
+.cluster-card__reading { margin-left: auto; }
+.cluster-card__irrigator {
+  display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-2);
+  font-size: var(--fs-sm);
+}
+.cluster-card__irr-name { font-weight: 500; }
+.cluster-card__config {
+  display: flex; flex-wrap: wrap; gap: var(--sp-2);
+  font-size: var(--fs-xs); color: var(--text-muted);
+  padding-top: var(--sp-2);
+  border-top: 1px dashed var(--border);
+}
+
+/* Hierarchical config rows — one per field, with a source badge that makes
+   inheritance state visible without a tooltip. */
+.config-form {
+  display: flex; flex-direction: column; gap: var(--sp-3);
+}
+.config-field {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr;
+  gap: var(--sp-3);
+  align-items: center;
+}
+.config-field__label {
+  display: flex; flex-direction: column; gap: var(--sp-1);
+  margin: 0;
+  font-weight: 500;
+}
+.config-field__name { color: var(--text); }
+.config-field__source {
+  font-size: var(--fs-xs);
+  font-weight: 400;
+  align-self: flex-start;
+  padding: 1px 6px;
+}
+.config-field[data-source="default"] input,
+.config-field[data-source="global"] input,
+.config-field[data-source="default"] select,
+.config-field[data-source="global"] select {
+  /* Inherited values render with a subtler border to differentiate from
+     overrides without hiding the placeholder text that shows the resolved
+     value the engine actually uses. */
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--border) 100%, transparent);
+}
+.config-field[data-source="cluster"] input,
+.config-field[data-source="cluster"] select {
+  border-style: solid;
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
+}
+@media (max-width: 600px) {
+  .config-field {
+    grid-template-columns: 1fr;
+    gap: var(--sp-1);
+  }
+}

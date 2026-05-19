@@ -1,0 +1,100 @@
+{# Rich cluster card rendered on the home dashboard.
+
+   Required context:
+     status      cluster_status dict (cluster + plants + sensors + irrigators + decision + config).
+     plants_by_id dict[plant_id -> Plant] so the inline plant↔sensor rollup can name plants.
+
+   Polls /clusters/{id}/card-fragment every 30s for live state — replaces the
+   thinner /status-fragment that only carried decision + sensor list.
+#}
+{% set cluster = status.cluster %}
+{% set decision = status.decision %}
+{% set config = status.config %}
+{% set plant_count = status.plants | length %}
+{% set sensor_count = status.sensors | length %}
+{% set irrigator_count = status.irrigators | length %}
+
+<div class="cluster-card__inner">
+  {% if decision %}
+    <div class="cluster-card__verdict">
+      <span class="badge-{{ decision.action | decision_badge }}">
+        {{- decision.action | upper -}}
+        {%- if decision.confidence is not none %} · {{ "%.0f%%" | format(decision.confidence * 100) }}{% endif -%}
+      </span>
+      {% if decision.reason %}
+        <span class="cluster-card__why">{{ decision.reason | strip_emoji }}</span>
+      {% endif %}
+    </div>
+  {% endif %}
+
+  {# Plants ↔ sensors rollup. Each plant lines up with the sensor that drives
+     its decisions via the ``↳`` glyph; sensors without a plant are surfaced
+     below so they remain visible. #}
+  {% if status.plants %}
+    <ul class="cluster-card__rel">
+      {% for plant in status.plants %}
+        {# Find the sensor linked to this plant, if any. #}
+        {% set sensor = namespace(found=none) %}
+        {% for s in status.sensors %}
+          {% if s.plant_id == plant.id and sensor.found is none %}{% set sensor.found = s %}{% endif %}
+        {% endfor %}
+        <li class="cluster-card__rel-row">
+          <span class="cluster-card__plant">{{ plant.species }}</span>
+          {% if sensor.found %}
+            <span class="rel-arrow" aria-hidden="true">↳</span>
+            <span class="cluster-card__sensor">{{ sensor.found.name }}</span>
+            <span class="cluster-card__reading mono">
+              {%- if sensor.found.last_reading and sensor.found.last_reading.soil_moisture is not none -%}
+                {{ "%.0f%%" | format(sensor.found.last_reading.soil_moisture) }}
+              {%- else -%}<span class="muted">—</span>{%- endif -%}
+            </span>
+          {% else %}
+            <span class="rel-arrow muted" aria-hidden="true">↳</span>
+            <span class="muted">no sensor</span>
+          {% endif %}
+        </li>
+      {% endfor %}
+      {# Unlinked sensors (sensor.plant_id is null) — keep them visible so the
+         user can spot orphans without leaving the home view. #}
+      {% for s in status.sensors if not s.plant_id %}
+        <li class="cluster-card__rel-row">
+          <span class="cluster-card__sensor">{{ s.name }}</span>
+          <span class="badge-warning" style="font-size: var(--fs-xs);">unlinked</span>
+          <span class="cluster-card__reading mono">
+            {%- if s.last_reading and s.last_reading.soil_moisture is not none -%}
+              {{ "%.0f%%" | format(s.last_reading.soil_moisture) }}
+            {%- else -%}<span class="muted">—</span>{%- endif -%}
+          </span>
+        </li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+
+  {# Cluster ↔ irrigator status. Dot summarises adapter health: present + recent
+     OK = green; offline-ish = amber; none assigned = grey ring. #}
+  <div class="cluster-card__irrigator">
+    {% if irrigator_count == 0 %}
+      <span class="dot dot--muted" aria-hidden="true">○</span>
+      <span class="muted">no irrigator</span>
+    {% else %}
+      {% for irr in status.irrigators %}
+        {% set last = irr.last_event %}
+        {% set state_class = "dot--muted" %}
+        {% if last and last.action in ("start", "schedule_updated") %}{% set state_class = "dot--ok" %}{% endif %}
+        {% if last and last.action == "attempted" %}{% set state_class = "dot--warn" %}{% endif %}
+        <span class="dot {{ state_class }}" aria-hidden="true">●</span>
+        <span class="cluster-card__irr-name">{{ irr.name }}</span>
+        {% if last %}<span class="muted">last {{ last.action }}</span>{% endif %}
+      {% endfor %}
+    {% endif %}
+  </div>
+
+  {% if config %}
+    <div class="cluster-card__config">
+      <span><kbd>{{ config.mode or "inherit" }}</kbd></span>
+      {% if config.interval_hours %}<span>every {{ config.interval_hours }}h</span>{% endif %}
+      {% if config.duration_minutes %}<span>{{ config.duration_minutes | format_minutes }}/run</span>{% endif %}
+      <span class="muted">auto&nbsp;{% if config.auto_run is none %}inherit{% else %}{{ config.auto_run | yesno("on", "off") }}{% endif %}</span>
+    </div>
+  {% endif %}
+</div>

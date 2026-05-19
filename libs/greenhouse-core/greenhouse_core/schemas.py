@@ -288,31 +288,129 @@ class IrrigationEventResponse(BaseModel):
 
 
 class SetConfigRequest(BaseModel):
-    mode: str
+    """Partial update for a cluster's irrigation config.
+
+    Every field is optional and nullable: null means "inherit from the
+    global default." Omitting a field leaves the current value unchanged
+    so the form can PATCH a single override without round-tripping the
+    whole config.
+
+    Quiet hours: ``quiet_start_hour == quiet_end_hour`` means quiet hours
+    are explicitly disabled at the cluster level (opt out of an inherited
+    global window). Both null = inherit.
+    """
+
+    mode: str | None = None
     duration_minutes: int | None = None
     interval_hours: int | None = None
-    auto_run: bool = True
+    auto_run: bool | None = None
+    daily_cap_minutes: int | None = None
+    max_events_per_day: int | None = None
+    quiet_start_hour: int | None = None
+    quiet_end_hour: int | None = None
 
 
 class ConfigResponse(BaseModel):
+    """Declared (raw) cluster config — nulls represent inherited values."""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: int
     cluster_id: int
-    mode: str
+    mode: str | None
     duration_minutes: int | None
     interval_hours: int | None
-    auto_run: bool
+    auto_run: bool | None
     last_updated: int
+    daily_cap_minutes: int | None = None
+    max_events_per_day: int | None = None
+    quiet_start_hour: int | None = None
+    quiet_end_hour: int | None = None
+
+
+class GlobalConfigResponse(BaseModel):
+    """Singleton global irrigation defaults.
+
+    Same field set as :class:`ConfigResponse` minus the cluster pointer.
+    Every field nullable; a null here means "fall through to the
+    project-wide constant in :mod:`constants`."
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    mode: str | None
+    duration_minutes: int | None
+    interval_hours: int | None
+    auto_run: bool | None
+    daily_cap_minutes: int | None
+    max_events_per_day: int | None
+    quiet_start_hour: int | None
+    quiet_end_hour: int | None
+    last_updated: int
+
+
+class UpdateGlobalConfigRequest(BaseModel):
+    """Partial update for the singleton global irrigation config.
+
+    Omitted fields leave the stored value unchanged; pass null explicitly
+    only when you want to clear a previously set default (falling back to
+    the project-wide constant).
+    """
+
+    mode: str | None = None
+    duration_minutes: int | None = None
+    interval_hours: int | None = None
+    auto_run: bool | None = None
+    daily_cap_minutes: int | None = None
+    max_events_per_day: int | None = None
+    quiet_start_hour: int | None = None
+    quiet_end_hour: int | None = None
+
+
+class ResolvedConfigField(BaseModel):
+    """A single field's resolved value plus its provenance.
+
+    ``source`` is one of ``"cluster"`` (overridden at the cluster level),
+    ``"global"`` (inherited from the global defaults row) or ``"default"``
+    (no value set at either level, falling back to a project-wide constant).
+    """
+
+    value: int | float | str | bool | None
+    source: str
+
+
+class EffectiveConfigResponse(BaseModel):
+    """Cluster config merged with global defaults and built-in constants.
+
+    ``declared`` is the raw per-cluster row (with nulls preserved so the UI
+    can show inheritance state). ``effective`` is the merged view: every
+    field carries the resolved value and the source level so the UI can
+    render the "↳ default" / "override" badge without re-querying.
+    """
+
+    cluster_id: int
+    declared: ConfigResponse | None
+    effective: dict[str, ResolvedConfigField]
 
 
 # --- Operations ---
 
 
 class IrrigateRequest(BaseModel):
+    """Body for POST /clusters/{id}/irrigate.
+
+    ``force=True`` is the explicit override switch used when the caller
+    wants to bypass the quiet-hours deny window. The decision engine still
+    runs every other rule (cooldown, stress, weather, sensors) and the
+    final decision is tagged with a ``manual_override_quiet_hours`` warning
+    Reason so the audit log records the override.
+    """
+
     temp_override: float | None = None
     dry_run: bool = False
     no_sync: bool = False
+    force: bool = False
 
 
 class AlertResponse(BaseModel):

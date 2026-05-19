@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import json
+import time
 
 from fastapi import APIRouter, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
+from greenhouse_core.logic.timing import is_within_quiet_hours
 from greenhouse_server.deps import ClusterServiceDep, PlantDbDep, RepoDep
 from greenhouse_server.services.charts import (
     ALLOWED_HOURS,
@@ -87,6 +89,21 @@ def delete_cluster(cluster_id: int, repo: RepoDep):
     return HTMLResponse("")
 
 
+_WEEKDAY_BITS: tuple[int, ...] = (1, 2, 4, 8, 16, 32, 64)
+_WEEKDAY_LABELS: tuple[str, ...] = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+_FULL_WEEKDAY_MASK = 127
+
+
+def _format_weekday_mask(mask: int) -> str:
+    if mask & _FULL_WEEKDAY_MASK == _FULL_WEEKDAY_MASK:
+        return "Every day"
+    return ", ".join(label for bit, label in zip(_WEEKDAY_BITS, _WEEKDAY_LABELS, strict=True) if mask & bit)
+
+
+def _plants_by_id(repo, cluster_id: int) -> dict[int, object]:
+    return {p.id: p for p in repo.get_plants_in_cluster(cluster_id)}
+
+
 @router.get("/clusters/{cluster_id}")
 def cluster_detail(
     request: Request,
@@ -120,6 +137,47 @@ def cluster_detail(
         except (json.JSONDecodeError, TypeError):
             rationale_reasons = _EMPTY_RATIONALE
 
+    # Inline-config section data: the declared row (nullable per-field
+    # overrides) plus the effective resolved view used by the engine. Both
+    # shapes feed ``partials/_config_field.html`` so it can render the
+    # current value next to its source badge.
+    declared_config = repo.get_irrigation_config(cluster_id)
+    effective_config = repo.get_effective_config(cluster_id)
+    windows = [
+        {
+            "id": w.id,
+            "start_hour": w.start_hour,
+            "end_hour": w.end_hour,
+            "weekday_mask": w.weekday_mask,
+            "weekday_label": _format_weekday_mask(w.weekday_mask),
+            "label": w.label,
+        }
+        for w in repo.list_irrigation_windows(cluster_id)
+    ]
+
+    # Sensor → plant lookup so the inline #sensors table can render the
+    # plant↔sensor relationship with the ``↳`` glyph without extra queries.
+    plants_by_id = _plants_by_id(repo, cluster_id)
+
+    # "Are we in quiet hours right now?" — drives the hx-confirm guard on
+    # the manual irrigate button. Uses the same effective resolution the
+    # engine uses, so the UI never disagrees with the engine.
+    prefs = repo.get_preferences()
+    quiet_active_now = is_within_quiet_hours(
+        start_hour=(
+            int(effective_config["quiet_start_hour"]["value"])
+            if effective_config["quiet_start_hour"]["value"] is not None
+            else None
+        ),
+        end_hour=(
+            int(effective_config["quiet_end_hour"]["value"])
+            if effective_config["quiet_end_hour"]["value"] is not None
+            else None
+        ),
+        now_unix=int(time.time()),
+        tz_name=prefs.timezone if prefs else None,
+    )
+
     return templates.TemplateResponse(
         request,
         "clusters/detail.html",
@@ -133,17 +191,47 @@ def cluster_detail(
             chart_payloads=chart_payloads_json,
             chart_thresholds=chart_thresholds,
             rationale_reasons=rationale_reasons,
+            declared_config=declared_config,
+            effective_config=effective_config,
+            windows=windows,
+            weekday_bits=_WEEKDAY_BITS,
+            weekday_labels=_WEEKDAY_LABELS,
+            plants_by_id=plants_by_id,
+            quiet_active_now=quiet_active_now,
         ),
     )
 
 
 @router.get("/clusters/{cluster_id}/status-fragment")
 def cluster_status_fragment(request: Request, cluster_id: int, svc: ClusterServiceDep):
+    """Live status fragment used by the cluster detail page's "Live status" panel.
+
+    Retained alongside the richer ``card-fragment`` endpoint so existing
+    bookmarks and the cluster detail page keep working unchanged.
+    """
     status = svc.get_cluster_status(cluster_id)
     if status is None:
         raise HTTPException(404, "Cluster not found")
     return templates.TemplateResponse(
         request, "partials/_cluster_status.html", base_context(request, status=status, cluster_id=cluster_id)
+    )
+
+
+@router.get("/clusters/{cluster_id}/card-fragment")
+def cluster_card_fragment(request: Request, cluster_id: int, svc: ClusterServiceDep, repo: RepoDep):
+    """Rich cluster card body used by the cluster-centric home view.
+
+    Returns ``partials/_cluster_card.html`` with plants/sensors/irrigators
+    rolled up inline so the relationship between them is visible without
+    drilling into the cluster detail page.
+    """
+    status = svc.get_cluster_status(cluster_id)
+    if status is None:
+        raise HTTPException(404, "Cluster not found")
+    return templates.TemplateResponse(
+        request,
+        "partials/_cluster_card.html",
+        base_context(request, status=status, plants_by_id=_plants_by_id(repo, cluster_id)),
     )
 
 

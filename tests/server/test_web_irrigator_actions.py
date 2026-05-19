@@ -28,7 +28,8 @@ def test_log_manual_submit_redirects(seeded_client):
         follow_redirects=False,
     )
     assert resp.status_code == 303
-    assert resp.headers["location"] == "/clusters/1/irrigators"
+    # Irrigators are inline on the unified detail page now — land at #irrigators.
+    assert resp.headers["location"] == "/clusters/1#irrigators"
 
 
 def test_irrigator_missing_404(client):

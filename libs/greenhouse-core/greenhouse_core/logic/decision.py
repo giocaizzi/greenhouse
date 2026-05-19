@@ -64,6 +64,12 @@ class TriggerCode(StrEnum):
     OUTSIDE_WINDOW = "outside_window"
     SEASONAL_HOLD = "seasonal_hold"
     SEASONAL_BOOST = "seasonal_boost"
+    # Quiet hours: hard deny window from the hierarchical irrigation config.
+    # ``QUIET_HOURS`` is a terminal SKIP; ``MANUAL_OVERRIDE_QUIET_HOURS`` is
+    # an advisory warning appended when a manual trigger fires during a
+    # quiet window so the audit log still records the override.
+    QUIET_HOURS = "quiet_hours"
+    MANUAL_OVERRIDE_QUIET_HOURS = "manual_override_quiet_hours"
     # Device-health gates — populated by DeviceHealthMonitor when an
     # adapter's read_health reports a corresponding HealthAlarm. Codes
     # listed in DEVICE_BLOCKING_CODES force Action.SKIP; the rest are

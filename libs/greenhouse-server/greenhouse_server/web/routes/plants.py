@@ -26,12 +26,12 @@ def _get_plant_in_cluster(repo, cluster_id: int, plant_id: int):
 
 
 @router.get("/clusters/{cluster_id}/plants")
-def list_plants(request: Request, cluster_id: int, repo: RepoDep):
-    cluster = require_cluster(repo, cluster_id)
-    plants = repo.get_plants_in_cluster(cluster_id)
-    return templates.TemplateResponse(
-        request, "plants/list.html", base_context(request, cluster=cluster, plants=plants)
-    )
+def list_plants(cluster_id: int, repo: RepoDep):
+    """Legacy URL — plants are rendered inline on the unified cluster detail
+    page. A 301 keeps old bookmarks working and drops them at the right
+    section anchor."""
+    require_cluster(repo, cluster_id)
+    return RedirectResponse(url=f"/clusters/{cluster_id}#plants", status_code=301)
 
 
 @router.get("/clusters/{cluster_id}/plants/new")
@@ -69,7 +69,7 @@ def create_plant(
         notes=notes or None,
     )
     repo.session.commit()
-    return RedirectResponse(url=f"/clusters/{cluster_id}/plants", status_code=303)
+    return RedirectResponse(url=f"/clusters/{cluster_id}#plants", status_code=303)
 
 
 @router.get("/clusters/{cluster_id}/plants/{plant_id}/edit")
@@ -109,7 +109,7 @@ def update_plant(
         notes=notes or None,
     )
     repo.session.commit()
-    return RedirectResponse(url=f"/clusters/{cluster_id}/plants", status_code=303)
+    return RedirectResponse(url=f"/clusters/{cluster_id}#plants", status_code=303)
 
 
 @router.delete("/clusters/{cluster_id}/plants/{plant_id}", response_class=HTMLResponse)

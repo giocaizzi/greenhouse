@@ -56,6 +56,7 @@ from greenhouse_core.logic.stress import detect_stress_conditions
 from greenhouse_core.logic.timing import (
     is_within_irrigation_window,
     is_within_preferred_hours,
+    is_within_quiet_hours,
     season_for,
     seasonal_multiplier,
 )
@@ -82,12 +83,17 @@ class IrrigationLogic:
         *,
         persist: bool = False,
         triggered_by: str = "auto",
+        bypass_quiet_hours: bool = False,
     ) -> IrrigationDecision | None:
         """Run the rule pipeline for a cluster and return a typed decision.
 
         Returns ``None`` if the cluster does not exist; returns a decision
         with ``action == SKIP`` and an explanatory reason for empty
         clusters, cooldown windows, or insufficient data.
+
+        ``bypass_quiet_hours`` is set by manual-trigger callers (force-flag
+        on ``/irrigate``, UI confirm) so the engine still records the
+        override in the decision trail but does not produce a SKIP.
         """
         cluster = self.db.get_cluster(cluster_id)
         if not cluster:
@@ -116,11 +122,44 @@ class IrrigationLogic:
                 self._persist(cooldown, triggered_by)
             return cooldown
 
+        # Quiet hours run after cooldown (cooldown is the cheaper, more
+        # decisive gate) and before the weather rule so the audit trail
+        # reflects the highest-priority reason for skipping. Manual
+        # triggers bypass the SKIP but still leave a warning Reason on the
+        # final decision so the audit log records the override.
+        quiet_window = self._resolve_quiet_window(cluster_id, evaluated_at)
+        if quiet_window is not None and not bypass_quiet_hours:
+            skip = _decision_with_reason(
+                cluster_id,
+                evaluated_at,
+                Action.SKIP,
+                DEFAULT_DURATION_MINUTES,
+                DEFAULT_INTERVAL_HOURS,
+                confidence=CONFIDENCE_COOLDOWN,
+                code=TriggerCode.QUIET_HOURS,
+                message=(f"quiet hours active ({quiet_window[0]:02d}:00–{quiet_window[1]:02d}:00 local)"),
+                severity=Severity.INFO,
+            )
+            if persist:
+                self._persist(skip, triggered_by)
+            return skip
+
+        def _finalize(decision: IrrigationDecision) -> IrrigationDecision:
+            if quiet_window is not None and bypass_quiet_hours:
+                decision.add_reason(
+                    code=TriggerCode.MANUAL_OVERRIDE_QUIET_HOURS,
+                    message=(
+                        f"manual override of quiet hours ({quiet_window[0]:02d}:00–{quiet_window[1]:02d}:00 local)"
+                    ),
+                    severity=Severity.WARNING,
+                )
+            if persist:
+                self._persist(decision, triggered_by)
+            return decision
+
         weather_skip = self._apply_weather_skip_rule(cluster, cluster_id, evaluated_at)
         if weather_skip is not None:
-            if persist:
-                self._persist(weather_skip, triggered_by)
-            return weather_skip
+            return _finalize(weather_skip)
 
         snapshot = get_recent_sensor_data(self.db, cluster_id, hours=24)
         trends = analyze_historical_trends(self.db, cluster_id)
@@ -145,9 +184,7 @@ class IrrigationLogic:
                 trends=trends,
                 stress=stress,
             )
-            if persist:
-                self._persist(fallback, triggered_by)
-            return fallback
+            return _finalize(fallback)
 
         decision = IrrigationDecision(
             cluster_id=cluster_id,
@@ -162,17 +199,15 @@ class IrrigationLogic:
         )
 
         if _apply_water_warning_rule(decision):
-            return decision
+            return _finalize(decision)
         if _apply_critical_stress_rule(decision):
-            return decision
+            return _finalize(decision)
 
         # Cluster-level timing gate — checked AFTER stress overrides on purpose:
         # a wilting plant still gets water at 2am, a healthy one doesn't.
         window_skip = self._apply_window_rule(cluster, cluster_id, evaluated_at, decision)
         if window_skip is not None:
-            if persist:
-                self._persist(window_skip, triggered_by)
-            return window_skip
+            return _finalize(window_skip)
 
         _apply_soil_moisture_rule(decision, plant_care)
         _apply_temperature_adjustment(decision, ideal_temp_range)
@@ -186,9 +221,31 @@ class IrrigationLogic:
         # tighten. Cooldown remains the safety floor (see MIN_COOLDOWN_HOURS).
         self._apply_seasonal_multiplier(cluster, decision, plant_care, evaluated_at)
 
-        if persist:
-            self._persist(decision, triggered_by)
-        return decision
+        return _finalize(decision)
+
+    def _resolve_quiet_window(self, cluster_id: int, evaluated_at: int) -> tuple[int, int] | None:
+        """Return the effective quiet-hours window for a cluster if it is
+        currently inside one, else ``None``.
+
+        Resolves quiet-hour bounds via the hierarchical config (cluster →
+        global → built-in default in :mod:`constants`) and tests the current
+        local hour against the resolved window. Wrap-around windows
+        (start > end) cross midnight; ``start == end`` at any level means
+        quiet hours are disabled there.
+        """
+        effective = self.db.get_effective_config(cluster_id)
+        start = effective["quiet_start_hour"]["value"]
+        end = effective["quiet_end_hour"]["value"]
+        prefs = self.db.get_preferences()
+        tz_name = prefs.timezone if prefs else None
+        if is_within_quiet_hours(
+            start_hour=int(start) if start is not None else None,
+            end_hour=int(end) if end is not None else None,
+            now_unix=evaluated_at,
+            tz_name=tz_name,
+        ):
+            return (int(start), int(end))
+        return None
 
     def _apply_window_rule(self, cluster, cluster_id, evaluated_at, decision):
         """Return a SKIP decision when the current local time is outside the

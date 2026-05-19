@@ -7,6 +7,12 @@ from sqlalchemy import func, select
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
 
+from greenhouse_core.constants import (
+    DEFAULT_AUTO_RUN,
+    DEFAULT_DURATION_MINUTES,
+    DEFAULT_INTERVAL_HOURS,
+    DEFAULT_IRRIGATION_MODE,
+)
 from greenhouse_core.models import (
     ENTITY_PLANT,
     ENTITY_SENSOR,
@@ -14,6 +20,7 @@ from greenhouse_core.models import (
     Alert,
     Cluster,
     DecisionLog,
+    GlobalIrrigationConfig,
     IrrigationConfig,
     IrrigationEvent,
     IrrigationWindow,
@@ -26,6 +33,21 @@ from greenhouse_core.models import (
     UserPreferences,
     VacationWindow,
 )
+
+_GLOBAL_CONFIG_DEFAULTS: dict[str, int | str | bool | None] = {
+    "mode": DEFAULT_IRRIGATION_MODE,
+    "duration_minutes": DEFAULT_DURATION_MINUTES,
+    "interval_hours": DEFAULT_INTERVAL_HOURS,
+    "auto_run": DEFAULT_AUTO_RUN,
+    "daily_cap_minutes": None,
+    "max_events_per_day": None,
+    # Quiet hours have no built-in fallback — the production migration seeds
+    # the global row with the canonical 00:00–05:00 window, and fresh-DB flows
+    # (tests, dev installs) start with quiet hours disabled until explicitly
+    # configured. See ``get_global_irrigation_config``.
+    "quiet_start_hour": None,
+    "quiet_end_hour": None,
+}
 
 
 class SameClusterMoveError(ValueError):
@@ -434,40 +456,108 @@ class IrrigationRepository:
 
     # ── Irrigation Configs ────────────────────────────────────────────────────
 
-    def set_irrigation_config(
-        self,
-        cluster_id: int,
-        mode: str,
-        duration_minutes: int | None = None,
-        interval_hours: int | None = None,
-        auto_run: bool = True,
-    ) -> int:
-        """Set or update irrigation config for a cluster and return its ID."""
+    _CONFIG_PATCHABLE_FIELDS = (
+        "mode",
+        "duration_minutes",
+        "interval_hours",
+        "auto_run",
+        "daily_cap_minutes",
+        "max_events_per_day",
+        "quiet_start_hour",
+        "quiet_end_hour",
+    )
+
+    def set_irrigation_config(self, cluster_id: int, **fields) -> int:
+        """Upsert a cluster's irrigation config; only the fields provided in
+        ``fields`` are mutated.
+
+        Every field is nullable: passing ``None`` clears the cluster-level
+        override (the effective resolver will then fall through to the
+        global default). Fields omitted entirely retain their stored value
+        — so callers acting on a single form input do not need to round-trip
+        every column.
+        """
         existing = self.session.scalar(select(IrrigationConfig).where(IrrigationConfig.cluster_id == cluster_id))
         if existing:
-            existing.mode = mode
-            existing.duration_minutes = duration_minutes
-            existing.interval_hours = interval_hours
-            existing.auto_run = auto_run
+            for key in self._CONFIG_PATCHABLE_FIELDS:
+                if key in fields:
+                    setattr(existing, key, fields[key])
             existing.last_updated = int(time.time())
             self.session.flush()
             return existing.id
 
         config = IrrigationConfig(
             cluster_id=cluster_id,
-            mode=mode,
-            duration_minutes=duration_minutes,
-            interval_hours=interval_hours,
-            auto_run=auto_run,
             last_updated=int(time.time()),
+            **{k: v for k, v in fields.items() if k in self._CONFIG_PATCHABLE_FIELDS},
         )
         self.session.add(config)
         self.session.flush()
         return config.id
 
     def get_irrigation_config(self, cluster_id: int) -> IrrigationConfig | None:
-        """Get irrigation config for a cluster."""
+        """Get the declared (raw, possibly partial) config for a cluster."""
         return self.session.scalar(select(IrrigationConfig).where(IrrigationConfig.cluster_id == cluster_id))
+
+    # ── Global Irrigation Config (singleton) ─────────────────────────────────
+
+    def get_global_irrigation_config(self) -> GlobalIrrigationConfig:
+        """Return the singleton global config row, creating one if missing.
+
+        Production deployments get the canonical seed (quiet hours 00:00–05:00,
+        ``auto_run`` defaulting to True) from the migration. This auto-create
+        path covers fresh-DB scenarios that bypass migrations — primarily the
+        test suite, which calls ``Base.metadata.create_all`` and then immediately
+        starts asserting against the engine. Seeding ``quiet_start = quiet_end =
+        None`` here means quiet hours are *off* by default in those flows; tests
+        that need the production quiet window opt into it explicitly.
+        """
+        row = self.session.scalar(select(GlobalIrrigationConfig).limit(1))
+        if row:
+            return row
+        row = GlobalIrrigationConfig(last_updated=int(time.time()))
+        self.session.add(row)
+        self.session.flush()
+        return row
+
+    def update_global_irrigation_config(self, **fields) -> GlobalIrrigationConfig:
+        """Patch the singleton global config; only the supplied keys are set.
+
+        Pass ``None`` to clear a previously set field (the effective resolver
+        then falls through to the project-wide constant). Omit a key entirely
+        to leave its stored value untouched.
+        """
+        row = self.get_global_irrigation_config()
+        for key in self._CONFIG_PATCHABLE_FIELDS:
+            if key in fields:
+                setattr(row, key, fields[key])
+        row.last_updated = int(time.time())
+        self.session.flush()
+        return row
+
+    # ── Effective config resolution ──────────────────────────────────────────
+
+    def get_effective_config(self, cluster_id: int) -> dict[str, dict[str, object]]:
+        """Resolve every config field walking cluster → global → constants.
+
+        Returns a dict keyed by field name; each value is
+        ``{"value": resolved, "source": "cluster" | "global" | "default"}``
+        so the API/UI can render inheritance state without re-querying.
+        """
+        cluster_cfg = self.get_irrigation_config(cluster_id)
+        global_cfg = self.get_global_irrigation_config()
+        out: dict[str, dict[str, object]] = {}
+        for field in self._CONFIG_PATCHABLE_FIELDS:
+            cluster_value = getattr(cluster_cfg, field, None) if cluster_cfg else None
+            if cluster_value is not None:
+                out[field] = {"value": cluster_value, "source": "cluster"}
+                continue
+            global_value = getattr(global_cfg, field, None)
+            if global_value is not None:
+                out[field] = {"value": global_value, "source": "global"}
+                continue
+            out[field] = {"value": _GLOBAL_CONFIG_DEFAULTS.get(field), "source": "default"}
+        return out
 
     # ── Decision Log ──────────────────────────────────────────────────────────
 

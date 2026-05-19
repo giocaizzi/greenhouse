@@ -18,6 +18,44 @@ class TestIrrigate:
         resp = seeded_client.post("/api/v1/clusters/1/irrigate", json={"temp_override": 30.0, "dry_run": True})
         assert resp.status_code == 200
 
+    def test_irrigate_blocked_by_quiet_hours(self, seeded_client):
+        """When quiet hours cover the current time, /irrigate returns SKIP with QUIET_HOURS."""
+        import datetime as _dt
+
+        hour = _dt.datetime.now(_dt.UTC).hour
+        end = (hour + 1) % 24
+        if end == hour:
+            end = (end + 1) % 24
+        seeded_client.put("/api/v1/config/global", json={"quiet_start_hour": hour, "quiet_end_hour": end})
+
+        resp = seeded_client.post("/api/v1/clusters/1/irrigate", json={"dry_run": True, "no_sync": True})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["action"] == "skip"
+        codes = [r["code"] for r in data.get("reasons", [])]
+        assert "quiet_hours" in codes
+
+    def test_irrigate_force_bypasses_quiet_hours(self, seeded_client):
+        """``force=true`` runs the engine; the decision logs the override warning."""
+        import datetime as _dt
+
+        hour = _dt.datetime.now(_dt.UTC).hour
+        end = (hour + 1) % 24
+        if end == hour:
+            end = (end + 1) % 24
+        seeded_client.put("/api/v1/config/global", json={"quiet_start_hour": hour, "quiet_end_hour": end})
+
+        resp = seeded_client.post(
+            "/api/v1/clusters/1/irrigate",
+            json={"dry_run": True, "no_sync": True, "force": True},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        codes = [r["code"] for r in data.get("reasons", [])]
+        # SKIP-via-quiet-hours is bypassed, but the warning is recorded.
+        assert "quiet_hours" not in codes
+        assert "manual_override_quiet_hours" in codes
+
 
 class TestMonitor:
     def test_monitor(self, seeded_client):

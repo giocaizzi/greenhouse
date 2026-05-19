@@ -59,7 +59,7 @@
           <span>{{ cluster.location or "no location" }}</span>
         </div>
         <div class="cluster-card__status"
-             hx-get="/clusters/{{ cluster.id }}/status-fragment"
+             hx-get="/clusters/{{ cluster.id }}/card-fragment"
              hx-trigger="load, every 30s"
              hx-swap="innerHTML">
           <div class="skeleton">

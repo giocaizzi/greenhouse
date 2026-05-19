@@ -49,7 +49,7 @@
 
 {# Decision hero — large, server-rendered from status #}
 {% if decision %}
-<section class="decision">
+<section class="decision" id="decision">
   <div class="decision__left">
     <span class="decision__pill">Decision · live</span>
     <h2 class="decision__verb">
@@ -248,12 +248,22 @@
   <header>
     <strong id="cluster-actions">Actions</strong>
     <small>Run irrigation logic, monitor sensors, or audit cluster.</small>
+    {% if quiet_active_now %}
+      {% set qstart = effective_config['quiet_start_hour']['value'] %}
+      {% set qend = effective_config['quiet_end_hour']['value'] %}
+      <span class="badge-warning" style="margin-left: var(--sp-2);" title="Manual irrigation prompts a confirmation while quiet hours are active.">
+        quiet hours active ({{ "%02d:00"|format(qstart|int) }}–{{ "%02d:00"|format(qend|int) }})
+      </span>
+    {% endif %}
   </header>
   <div class="action-bar__row">
     <form hx-post="/clusters/{{ cluster.id }}/irrigate"
           hx-target="#action-result"
           hx-swap="innerHTML"
           hx-indicator="#spin-irrigate"
+          {% if quiet_active_now %}
+          hx-confirm="Quiet hours are active right now ({{ '%02d:00'|format(effective_config['quiet_start_hour']['value']|int) }}–{{ '%02d:00'|format(effective_config['quiet_end_hour']['value']|int) }}). Irrigate anyway?"
+          {% endif %}
           class="action-bar__form">
       <span class="action-bar__label">
         <svg class="icon"><use href="/static/icons/sprite.svg#i-drop"></use></svg>
@@ -270,6 +280,9 @@
           <small>Temp override</small>
           <input type="number" step="0.1" name="temp_override" placeholder="°C" class="action-bar__num" style="width: 90px;">
         </label>
+        {# Engine bypass for quiet hours — checked-by-default when quiet hours
+           are active so the button does the obvious thing after the confirm. #}
+        <input type="hidden" name="force" value="{% if quiet_active_now %}true{% else %}false{% endif %}">
         <div class="row" style="gap: var(--sp-2);">
           <button type="submit">Run</button>
           <span id="spin-irrigate" class="htmx-indicator" aria-busy="true"></span>
@@ -368,9 +381,8 @@
   </article>
 </section>
 
-{# Plants table #}
-{% if status.plants %}
-<article class="card card--flush">
+{# Plants table — unified section (was previously a separate /plants page) #}
+<article class="card card--flush" id="plants">
   <div class="card__head">
     <h3 class="card__title">Plants <span class="n">{{ plant_count }}</span></h3>
     <a href="/clusters/{{ cluster.id }}/plants/new" class="btn secondary">
@@ -378,6 +390,7 @@
       Add plant
     </a>
   </div>
+  {% if status.plants %}
   <table>
     <thead><tr><th scope="col">Species</th><th scope="col">Category</th><th scope="col">Water</th><th scope="col">Light</th><th scope="col"><span class="visually-hidden">Actions</span></th></tr></thead>
     <tbody>
@@ -386,12 +399,91 @@
       {% endfor %}
     </tbody>
   </table>
+  {% else %}
+  <div class="card__body"><p class="muted">No plants yet. Add the first to start tracking.</p></div>
+  {% endif %}
 </article>
-{% endif %}
 
-{# Irrigators table #}
-{% if status.irrigators %}
-<article class="card card--flush">
+{# Sensors table — unified section. Renders the plant↔sensor link via ``↳``
+   so the relationship the user asked to see is visible at-a-glance. #}
+<article class="card card--flush" id="sensors">
+  <div class="card__head">
+    <h3 class="card__title">Sensors <span class="n">{{ sensor_count }}</span></h3>
+    <a href="/clusters/{{ cluster.id }}/sensors/new" class="btn secondary">
+      <svg class="icon"><use href="/static/icons/sprite.svg#i-plus"></use></svg>
+      Add sensor
+    </a>
+  </div>
+  {% if status.sensors %}
+  <table aria-label="Sensors in {{ cluster.name }}">
+    <thead>
+      <tr>
+        <th scope="col">Name</th>
+        <th scope="col">Type</th>
+        <th scope="col">Linked plant</th>
+        <th scope="col">Latest reading</th>
+        <th scope="col">Age</th>
+        <th scope="col"><span class="visually-hidden">Actions</span></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for sensor in status.sensors %}
+        {% set plant = plants_by_id.get(sensor.plant_id) if sensor.plant_id else none %}
+        <tr id="sensor-row-{{ sensor.id }}">
+          <td data-th="Name">{{ sensor.name }}</td>
+          <td data-th="Type"><kbd>{{ sensor.type }}</kbd></td>
+          <td data-th="Linked plant">
+            {% if plant %}
+              <span class="rel-arrow" aria-hidden="true">↳</span>
+              <a href="/clusters/{{ cluster.id }}/plants/{{ plant.id }}">{{ plant.species }}</a>
+            {% else %}
+              <span class="muted">— unlinked</span>
+            {% endif %}
+          </td>
+          <td data-th="Latest reading" class="mono">
+            {% if sensor.last_reading %}
+              {%- if sensor.last_reading.soil_moisture is not none -%}
+                {{ "%.0f%%" | format(sensor.last_reading.soil_moisture) }}
+              {%- elif sensor.last_reading.temperature is not none -%}
+                {{ "%.1f°C" | format(sensor.last_reading.temperature) }}
+              {%- elif sensor.last_reading.env_humidity is not none -%}
+                {{ "%.0f%% RH" | format(sensor.last_reading.env_humidity) }}
+              {%- elif sensor.last_reading.light is not none -%}
+                {{ "%.0f lx" | format(sensor.last_reading.light) }}
+              {%- else -%}
+                <span class="muted">—</span>
+              {%- endif -%}
+            {% else %}<span class="muted">no data</span>{% endif %}
+          </td>
+          <td data-th="Age">
+            {{ sensor.reading_age_seconds | age_seconds if sensor.reading_age_seconds is not none else "—" }}
+          </td>
+          <td data-th="Actions">
+            <div class="row-actions">
+              <a href="/clusters/{{ cluster.id }}/sensors/{{ sensor.id }}/edit" class="btn secondary btn-sm" aria-label="Edit sensor {{ sensor.id }}">Edit</a>
+              <button class="btn secondary btn-sm row-actions__danger"
+                      type="button"
+                      aria-label="Delete sensor {{ sensor.id }}"
+                      hx-delete="/clusters/{{ cluster.id }}/sensors/{{ sensor.id }}"
+                      hx-target="#sensor-row-{{ sensor.id }}"
+                      hx-swap="outerHTML swap:200ms"
+                      hx-confirm="Delete sensor {{ sensor.name }}?">
+                Delete
+              </button>
+            </div>
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="card__body"><p class="muted">No sensors linked yet. Add one so the engine has data to reason about.</p></div>
+  {% endif %}
+</article>
+
+{# Irrigators table — unified section. The cluster↔irrigator status dot
+   surfaces health right next to the device name. #}
+<article class="card card--flush" id="irrigators">
   <div class="card__head">
     <h3 class="card__title">Irrigators <span class="n">{{ irrigator_count }}</span></h3>
     <a href="/clusters/{{ cluster.id }}/irrigators/new" class="btn secondary">
@@ -399,6 +491,7 @@
       Add irrigator
     </a>
   </div>
+  {% if status.irrigators %}
   <table>
     <thead><tr><th scope="col">Name</th><th scope="col">Type</th><th scope="col">Recent (48h)</th><th scope="col">Last action</th><th scope="col">Controls</th><th scope="col"><span class="visually-hidden">Manage</span></th></tr></thead>
     <tbody>
@@ -407,6 +500,118 @@
       {% endfor %}
     </tbody>
   </table>
+  {% else %}
+  <div class="card__body"><p class="muted"><span class="dot dot--muted" aria-hidden="true">○</span> No irrigator assigned — this cluster is sensor-only.</p></div>
+  {% endif %}
 </article>
-{% endif %}
+
+{# Config section — hierarchical view of mode/duration/interval/auto-run +
+   quiet-hours editor + watering windows. Inline so the user never leaves
+   the cluster context to tune behaviour. #}
+<article class="card" id="config">
+  <div class="card__head">
+    <h3 class="card__title">Config</h3>
+    <small class="muted">Blank = inherit from global default</small>
+  </div>
+  <div class="card__body">
+    <form method="post" action="/clusters/{{ cluster.id }}/config" class="config-form">
+      {% set fields = [
+        {"name": "mode", "label": "Mode", "kind": "select",
+         "options": [("smart", "smart (sensor-driven)"), ("schedule", "schedule (time-based)"), ("manual", "manual (no auto-run)")]},
+        {"name": "duration_minutes", "label": "Duration (min)", "kind": "number", "min": 1},
+        {"name": "interval_hours", "label": "Interval (hours)", "kind": "number", "min": 1},
+        {"name": "auto_run", "label": "Auto-run", "kind": "tri_bool"},
+        {"name": "quiet_start_hour", "label": "Quiet start (hour 0–23)", "kind": "number", "min": 0, "max": 23},
+        {"name": "quiet_end_hour", "label": "Quiet end (hour 0–23)", "kind": "number", "min": 0, "max": 23},
+      ] %}
+      {% for field in fields %}
+        {% include "partials/_config_field.html" %}
+      {% endfor %}
+      <p class="muted" style="margin: var(--sp-2) 0 var(--sp-3); font-size: var(--fs-sm);">
+        Quiet hours block automated irrigation between start and end (local time, end-exclusive,
+        wrap-around supported). Set start equal to end to disable quiet hours at this level.
+        Manual irrigation prompts a confirmation but is always allowed.
+      </p>
+      <div class="form-actions">
+        <button type="submit">Save config</button>
+        <a href="#decision" class="btn secondary">Cancel</a>
+      </div>
+    </form>
+  </div>
+
+  <div class="card__head" style="border-top: 1px solid var(--border); margin-top: var(--sp-4);">
+    <h3 class="card__title">Watering windows</h3>
+    <small class="muted">Allow-windows for the engine. No windows = always allowed (subject to quiet hours).</small>
+  </div>
+  {% if not windows %}
+  <div class="card__body">
+    <p class="muted">No windows configured. Add one below or leave empty to use the global default preferred hours.</p>
+  </div>
+  {% endif %}
+  {% if windows %}
+  <table aria-label="Watering windows for {{ cluster.name }}">
+    <thead>
+      <tr>
+        <th scope="col">Label</th>
+        <th scope="col">Hours</th>
+        <th scope="col">Days</th>
+        <th scope="col"><span class="visually-hidden">Actions</span></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for w in windows %}
+      <tr id="window-row-{{ w.id }}">
+        <td data-th="Label">{{ w.label or "—" }}</td>
+        <td data-th="Hours"><span class="mono">{{ "%02d"|format(w.start_hour) }}:00–{{ "%02d"|format(w.end_hour) }}:00</span></td>
+        <td data-th="Days">{{ w.weekday_label }}</td>
+        <td data-th="Actions">
+          <div class="row-actions">
+            <a href="/clusters/{{ cluster.id }}/windows/{{ w.id }}/edit" class="btn secondary btn-sm" aria-label="Edit window {{ w.id }}">Edit</a>
+            <button class="btn secondary btn-sm row-actions__danger"
+                    type="button"
+                    aria-label="Delete window {{ w.id }}"
+                    hx-delete="/clusters/{{ cluster.id }}/windows/{{ w.id }}"
+                    hx-target="#window-row-{{ w.id }}"
+                    hx-swap="outerHTML swap:200ms"
+                    hx-confirm="Delete this watering window?">
+              Delete
+            </button>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+  <div class="card__body">
+    <form method="post" action="/clusters/{{ cluster.id }}/windows">
+      <div class="grid">
+        <label for="new_start_hour">Start hour (0–23)
+          <input type="number" id="new_start_hour" name="start_hour" min="0" max="23" step="1" required>
+        </label>
+        <label for="new_end_hour">End hour (0–23)
+          <input type="number" id="new_end_hour" name="end_hour" min="0" max="23" step="1" required>
+        </label>
+      </div>
+      <fieldset>
+        <legend>Days</legend>
+        <div class="weekday-checks" role="group" aria-label="Weekday selection">
+          {% for bit in weekday_bits %}
+            {% set wid = "new_dow_" ~ bit %}
+            <label for="{{ wid }}" style="display:inline-flex;align-items:center;gap:var(--sp-1);margin-right:var(--sp-3);">
+              <input type="checkbox" id="{{ wid }}" name="weekday_mask" value="{{ bit }}" checked>
+              {{ weekday_labels[loop.index0] }}
+            </label>
+          {% endfor %}
+        </div>
+      </fieldset>
+      <label for="new_label">Label <small class="muted">(optional)</small>
+        <input type="text" id="new_label" name="label" placeholder="Morning AM">
+      </label>
+      <div class="form-actions">
+        <button type="submit">Add window</button>
+      </div>
+    </form>
+  </div>
+</article>
 {% endblock %}
