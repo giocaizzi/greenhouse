@@ -15,7 +15,7 @@ jobs:
       # Mint a short-lived token from the release-please GitHub App. Pushes made
       # with this token DO trigger other workflows (CI on the release PR), unlike
       # the default GITHUB_TOKEN — which is what keeps the release PR mergeable.
-      - uses: actions/create-github-app-token@v2
+      - uses: actions/create-github-app-token@v3
         id: app-token
         with:
           app-id: ${{ secrets.RP_APP_ID }}
