@@ -82,6 +82,25 @@ Add tests in the matching tree:
 1. Research with at least 2 sources, then update `libs/greenhouse-core/greenhouse_core/data/plant_database.json`.
 2. Apply with `greenhouse plant sync`.
 
+## Bundled plugin — keep the skill docs in sync
+
+The repo ships a Claude Code plugin under `plugin/` (marketplace entry in `.claude-plugin/marketplace.json`): a `greenhouse` skill plus an MCP client (`plugin/.mcp.json`) that points at a running server's `/mcp`. The MCP **tool schemas auto-derive from the OpenAPI spec** — no manual upkeep. The **hand-written skill docs do not**, and silently drift:
+
+- `plugin/skills/greenhouse/SKILL.md` — capabilities overview + trigger guidance
+- `plugin/skills/greenhouse/references/CLI.md` — CLI command reference
+- `plugin/skills/greenhouse/references/LOGIC.md` — decision-engine behavior
+- `plugin/skills/greenhouse/references/PLANT_DATABASE.md` — plant-DB schema/fields
+- `plugin/.claude-plugin/plugin.json` — plugin description
+
+**Invariant: any change to the surfaces below MUST update the matching plugin doc in the same PR** — treat it like updating a test, not optional follow-up:
+
+| You change… | Update… |
+|---|---|
+| CLI commands / sub-apps / flags (`libs/greenhouse-cli`) | `references/CLI.md` |
+| decision engine / `logic/` / `learning/` / `constants.py` | `references/LOGIC.md` |
+| `data/plant_database.json` or `plant_db.py` fields | `references/PLANT_DATABASE.md` |
+| new/changed `/api/v1` capabilities (hence MCP tools) | `SKILL.md` + `plugin.json` description |
+
 ## Privacy
 
 **Never commit** device IDs, IP addresses, local keys, API credentials, database files, or personal configs. Live data lives in `data/*.db` (gitignored) and `.env` (outside repo). Test data uses the fakes in `tests/fake_data.py`.
