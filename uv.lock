@@ -609,7 +609,7 @@ requires-dist = [
     { name = "pyjwt", specifier = ">=2.9" },
     { name = "python-dotenv", specifier = ">=1.0" },
     { name = "python-multipart", specifier = ">=0.0.9" },
-    { name = "uvicorn", extras = ["standard"], specifier = ">=0.30" },
+    { name = "uvicorn", extras = ["standard"], specifier = ">=0.48.0" },
 ]
 
 [[package]]
