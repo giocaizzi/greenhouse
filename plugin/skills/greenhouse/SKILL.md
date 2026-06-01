@@ -3,9 +3,11 @@ name: greenhouse
 description: |
   Talk to a running greenhouse-server over MCP to read sensors (soil moisture, temperature, humidity, light),
   drive irrigators (start, stop, log manual, emergency stop-all), review typed irrigation decisions, manage
-  the alert inbox, inspect plant health, and tune per-cluster config. Use this skill whenever the user asks
-  anything about their plants, soil, watering, irrigation schedule, sensor readings, irrigator status,
-  blocked drips, leaks, alerts, or plant health — even when they don't say "greenhouse" or "irrigation".
+  the alert inbox, inspect plant health and its timeline, monitor device and system health, set vacation and
+  per-cluster irrigation windows, run data-quality reports, and tune per-cluster config. Use this skill
+  whenever the user asks anything about their plants, soil, watering, irrigation schedule, sensor readings,
+  irrigator status, blocked drips, leaks, alerts, plant health, or system health — even when they don't say
+  "greenhouse" or "irrigation".
   Example triggers: "is my monstera thirsty?", "water the living room cluster", "why did it skip the last
   cycle?", "did anything irrigate last night?", "check my plants", "what's the moisture in the kitchen".
 metadata:
@@ -44,7 +46,14 @@ Every `/api/v1` endpoint on the server is exposed as an MCP tool by `fastapi-mcp
 | "I just watered by hand" | `irrigators/{id}/log-manual` |
 | "Show me trends" | `clusters/{id}/chart-data` or `plants/{id}/chart-data` |
 | "I'll be away next week" | Create a `vacation` window |
-| "How healthy is my monstera?" | `plants/{id}/health` |
+| "Only water at night / set allowed hours" | Per-cluster irrigation `windows` (CRUD under `clusters/{id}/windows`) |
+| "How healthy is my monstera?" | `plants/{id}/health`; `plants/{id}/health-timeline` for the trend |
+| "Refresh the health scores now" | `plants/health/snapshot` (trigger a snapshot) |
+| "When will it next water?" | `clusters/{id}/forecast` |
+| "How well is irrigation working?" | `clusters/{id}/efficacy` or `clusters/{id}/insights` |
+| "Is anything offline / are sensors stale?" | `health/system` (device + cloud + scheduler pulse) |
+| "Is my setup configured right?" | `quality/report` (config gaps, stale sensors, duplicate device IDs) |
+| "Find …" / search across resources | `search` |
 | "Emergency — stop everything" | `bulk/stop-all` |
 
 For the full surface, list the MCP tools at the start of the session — every `/api/v1` endpoint is exposed as one. If you need the raw OpenAPI, the server publishes it at `/docs`.
@@ -87,4 +96,4 @@ Don't preload these. The endpoint catalogue isn't here on purpose — the MCP to
 - **"It silently failed"** is almost never silent. Check `clusters/{id}/decisions` for the latest evaluation — the engine writes a log row even when it skips. If there's no row in the expected window, the scheduler didn't fire — check `health/system` and `scheduler/jobs`.
 - **Don't average sensors in a cluster** when interpreting state — the engine uses the minimum, and so should you when explaining results back to the user.
 - **CSV export is binary**. The `clusters/{id}/stats/export` endpoint returns a file, not JSON. If you call it through MCP, expect a blob you'll need to save and tell the user where it landed.
-- **Plant health is a daily snapshot**, not a live read. If the user wants live conditions, look at sensor readings, not the health score.
+- **Plant health is a daily snapshot**, not a live read. If the user wants live conditions, look at sensor readings, not the health score. Use `plants/{id}/health-timeline` for the trend, and `plants/health/snapshot` to force a fresh snapshot on demand.
