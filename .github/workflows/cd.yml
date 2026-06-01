@@ -16,6 +16,13 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # Bind the publish to the `production` environment: records a deployment and
+    # enforces the v*-tag deployment policy configured on the environment, so
+    # only release tags can push/sign images. No reviewers — release-please
+    # cutting a tag publishes hands-off.
+    environment:
+      name: production
+      url: https://github.com/${{ github.repository }}/pkgs/container/greenhouse
     permissions:
       contents: read
       packages: write
