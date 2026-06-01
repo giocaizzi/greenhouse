@@ -32,24 +32,28 @@ Every rule function appends a `Reason` to the decision's trail via `decision.add
 | Code | Effect |
 |------|--------|
 | `no_plants` | Skip — cluster has no plants |
-| `cooldown` | Skip — last irrigation within 6h |
-| `daily_cap_hit` | Skip — per-day rate limit reached |
-| `water_warning` | Irrigate — device DP 111 triggered |
+| `cooldown` | Skip — any irrigator in cluster fired within 6h |
+| `water_warning` | Irrigate — sensor DP 111 water-warning set |
 | `water_stress` | Irrigate — critical low moisture |
 | `over_watering` | Skip — soil saturated |
+| `outside_window` | Skip — local time outside the cluster's irrigation window / preferred hours |
 | `sensor_very_dry` | Irrigate — below critical threshold |
 | `sensor_dry` | Irrigate — below low threshold |
 | `sensor_adequate` | Skip — moisture in target band |
 | `sensor_wet` | Skip — moisture above saturation |
 | `conflict` | Short burst — one dry, one wet |
-| `weather_skip` | Skip — precipitation forecast ≥ threshold |
+| `weather_skip` | Skip — rain forecast > 2mm/6h (outdoor clusters only) |
 | `temp_fallback` | Decide from temperature alone (no sensor) |
 | `config_fallback` | Decide from config interval alone |
 | `no_data` | Skip — no usable data |
 
+`daily_cap_hit` is defined in the enum but is **not** emitted by the decision engine. Per-day rate limits (`max_events_per_day`, `daily_cap_minutes`) are enforced at the API actuation routes (HTTP 409), not inside `decide_for_cluster`.
+
+**Device-health gate codes** force `Action.SKIP` at actuation time (applied by the irrigation service, not the engine — see Device-Health Gate below): `device_no_water`, `device_rain_detected`, `device_offline`. Advisory (non-blocking) device codes also exist: `device_battery_low`, `device_battery_critical`, `device_signal_loss`.
+
 **Adjustment codes** (modify duration/interval delta, don't override action):
 
-`temp_high`, `temp_low`, `humidity_very_low`, `humidity_low`, `humidity_high`, `light_very_bright`, `light_bright`, `light_dark`, `light_very_dark`, `water_needs_high`, `water_needs_low`, `trend_moisture_declining`, `trend_moisture_rising`, `trend_temp_rising`, `underwatering_pattern`, `learning_alert`
+`temp_high`, `temp_low`, `humidity_very_low`, `humidity_low`, `humidity_high`, `light_very_bright`, `light_bright`, `light_dark`, `light_very_dark`, `water_needs_high`, `water_needs_low`, `trend_moisture_declining`, `trend_moisture_rising`, `trend_temp_rising`, `underwatering_pattern`, `learning_alert`, `seasonal_hold`, `seasonal_boost`
 
 ### Decision persistence
 
@@ -71,7 +75,39 @@ Accessible via `GET /api/v1/clusters/{id}/decisions`.
 
 ### Weather-skip rule
 
-If the `WeatherClient` returns `precipitation_next_6h_mm` above a configured threshold, the engine appends a `weather_skip` reason and returns `action=SKIP` before evaluating sensor data. This runs after cooldown and rate-cap checks, before stress detection.
+For **outdoor** clusters only, if a weather client is configured and the 6h forecast reports `precipitation_mm > 2.0`, the engine appends a `weather_skip` reason and returns `action=SKIP` before fetching sensor data. No-ops for indoor clusters or when no weather client is wired. Runs after the cooldown check, before stress detection.
+
+### Irrigation-window / preferred-hours gate
+
+After the terminal stress overrides (`water_warning`, `water_stress`, `over_watering`) — so a wilting plant still gets water at 2am — the engine applies a local-time gate before the soil-moisture rule:
+
+- If the cluster has `IrrigationWindow` rows, the current local time must fall inside at least one window (weekday mask + `[start_hour, end_hour)`, wrap-around supported).
+- If it has none, the engine falls back to `preferred_water_hours_local`, resolved from the first plant's species → category data via `plant_db.get_care_data` (precedence species > `_category_defaults[category]` > built-in). With no plant value it uses the global default `DEFAULT_PREFERRED_WATER_HOURS = (6, 10)`.
+
+Outside the allowed hours it emits `outside_window` and skips. Timezone comes from `preferences.timezone` (UTC fallback).
+
+### Seasonal frequency multiplier
+
+After all sensor/temperature/humidity/light/trend adjustments, `decision.interval_hours` is scaled by a plant-aware seasonal multiplier (a *frequency* factor: the interval is divided by it, then clamped to `[MIN_INTERVAL_HOURS, MAX_INTERVAL_HOURS]`). When the multiplier ≠ 1.0 it appends `seasonal_hold` (factor < 1.0, stretch interval) or `seasonal_boost` (factor > 1.0, tighten interval).
+
+Precedence (most → least specific): species-level `season_frequency_multiplier{,_outdoor}` → category-level value under `_category_defaults` → built-in default table. The `_outdoor` key is used when `cluster.environment == "outdoor"`; per-season keys missing at one layer fall through to the next. Built-in defaults:
+
+| Season | Indoor | Outdoor |
+|---|---|---|
+| winter | 0.5 | 0.3 |
+| spring | 1.0 | 1.0 |
+| summer | 1.2 | 1.5 |
+| autumn | 0.8 | 0.7 |
+
+The 6h cooldown remains the hard floor regardless of multiplier.
+
+### Device-health gate (actuation-time)
+
+Separate from the engine: when the irrigation **service** is about to actuate, it consults the cached `DeviceHealthMonitor` state via `is_actuation_blocked`. If a blocking alarm (`device_no_water`, `device_rain_detected`, `device_offline`) is open for the target irrigator, it appends a `CRITICAL` reason, flips the decision to `Action.SKIP`, re-persists the `DecisionLog`, and records a `decision_skip` activity event — no water is dispensed.
+
+### Pump dry-run abort (DP 105)
+
+While an irrigation is running, `PumpWatcherService` polls the IK10PW's DP 105 water-shortage alarm (~2s cadence, local protocol v3.5) after a short warmup. On the first `NO_WATER` reading it immediately stops the pump, raises a `no_water` health alert through `DeviceHealthMonitor` (dedup key `health:irrigator:{id}:no_water`), and records an `aborted` irrigation event. False positives are safe (stop early); the alarm is motor-current-based, so a hardware float switch is still recommended for unattended use.
 
 ## Check Command Pipeline
 
@@ -80,16 +116,18 @@ If the `WeatherClient` returns `precipitation_next_6h_mm` above a configured thr
 1. Sync sensors from Tuya Cloud (last 6h)
 2. Determine temperature (indoor → sensor primary; outdoor → Open-Meteo primary)
 3. Run trust layer: sensor anomaly scan (drift + stale), leak/stuck-valve detector
-4. Run `IrrigationEngine.decide_for_cluster()` → typed `IrrigationDecision`:
-   - 6h global cooldown check
-   - Per-day rate cap check
-   - Weather-aware precipitation skip
-   - Stress detection (water stress, heat, over-watering)
-   - Multi-sensor conflict resolution (driest plant wins)
-   - 48h trend analysis
-   - Plant-specific targets from scientific literature
+4. Run `decide_for_cluster()` → typed `IrrigationDecision`, in order:
+   - `no_plants` short-circuit
+   - 6h global cooldown check (any irrigator in cluster)
+   - Weather-aware precipitation skip (outdoor only, > 2mm/6h)
+   - Terminal stress overrides (`water_warning`, then `water_stress` / `over_watering`)
+   - Irrigation-window / preferred-hours gate (runs *after* stress overrides)
+   - Soil-moisture rule (driest plant wins) + conflict resolution
+   - Temperature / humidity / light / water-needs / 48h-trend adjustments
+   - Seasonal frequency multiplier on the interval
+   - (No sensor data → temperature/config fallback path instead)
 5. Persist `DecisionLog`
-6. Execute on irrigator if `action == "irrigate"` and not dry-run / vacation window
+6. If `action == "irrigate"` and not dry-run / vacation window: device-health actuation gate (may flip to skip), then execute on the irrigator; `PumpWatcherService` watches DP 105 for the run's duration
 7. Emit `ActivityEvent`; reconcile alert inbox
 
 ### Cluster without irrigator
@@ -118,7 +156,8 @@ Runs before the decision engine on every evaluation:
 - **Sensor anomaly scan** — per-sensor drift detection (std dev floor 1.0% to avoid false positives on near-constant series) and stale-data check (no readings in last 3h). Raises `sensor_drift` / `stale_data` alerts.
 - **Leak detector** — flags irrigators where recent moisture stayed low after a recorded irrigation (possible blocked drip or failed actuation).
 - **Stuck-valve detector** — flags irrigators that show unexplained moisture rise without a logged irrigation event.
-- **Rate limit** — per-cluster daily cap (configurable); logs `daily_cap_hit` reason and skips if exceeded.
+
+Per-day rate limits (`max_events_per_day`, `daily_cap_minutes`) are **not** part of the decision engine or trust layer — they are enforced at the API actuation routes, which return HTTP 409 when a manual or scheduled start would exceed the cap.
 
 ## Learning Engine
 
@@ -174,7 +213,9 @@ Stored in `plant_health_daily` for long-horizon trend plotting. Snapshot job run
 
 All thresholds in `libs/greenhouse-core/greenhouse_core/constants.py`:
 
-- Cooldown: 6h between irrigations
+- Cooldown: 6h between irrigations (`MIN_COOLDOWN_HOURS`)
 - Soil moisture: critical 30%, low 40%, saturated 70%
 - Duration: default 2min, conflict 1min, stress 3min, max 5min
-- Intervals: min 6h, max 24h, default 12h
+- Intervals: min 6h, max 24h, default 12h (conflict 8h, stress 6h)
+- Preferred watering window default: 06:00–10:00 local (`DEFAULT_PREFERRED_WATER_HOURS`)
+- Seasonal multipliers: indoor {winter 0.5, spring 1.0, summer 1.2, autumn 0.8}, outdoor {0.3, 1.0, 1.5, 0.7}

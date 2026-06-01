@@ -58,6 +58,10 @@ greenhouse learn    <cluster>                           Learning report (efficie
 greenhouse history  <cluster> [--hours 24] [--limit 50] Readings + events timeline
 greenhouse stats    <cluster> [--days 7] [--export f.csv]  Stats; --export writes CSV
 greenhouse health                                       Server health + scheduler status
+greenhouse stop-all [--yes/-y]                          Emergency kill switch (every irrigator)
+greenhouse login    [--print-token]                     Exchange credentials for a session JWT
+greenhouse logout                                       Clear the cached session token
+greenhouse whoami                                       Print the authenticated user
 ```
 
 Notable flags:
@@ -66,26 +70,42 @@ Notable flags:
 - `irrigate --no-sync` skips the Tuya Cloud fetch and decides on stored readings. Faster, but only safe when sync ran recently.
 - `irrigate --temp <F>` overrides temperature input — useful for what-if analysis.
 - `check` accepts either a cluster ID or `--all`; supplying neither errors with exit 1.
-- `stats --export <path>` writes binary CSV to disk and echoes the path; no JSON to stdout in that mode.
+- `stats --export <path>` writes CSV to disk and echoes the path; no JSON to stdout in that mode.
+- `stop-all` fires `POST /bulk/stop-all` — it stops *every* irrigator in the system. Interactive by default; pass `--yes`/`-y` to skip the confirmation prompt (required in scripts). Reach for this on a visible leak or any "stop everything now" request.
+
+### Auth
+
+`login` prompts for `--username` / `--password` (password hidden), POSTs `/auth/login`, and stores the returned JWT at `~/.config/greenhouse/token` (mode 600; honours `$XDG_CONFIG_HOME`). Subsequent commands send it as a bearer token automatically. `--print-token` skips persistence and emits the JWT to stdout for piping into `$GREENHOUSE_API_TOKEN`. `$GREENHOUSE_API_TOKEN` overrides the on-disk token when set. `logout` deletes the cached token (best-effort server logout). Auth is only needed when the server enforces it; against an open server these are no-ops.
 
 ## Resource sub-apps
 
 ```
-greenhouse cluster    add | list
-greenhouse plant      add | list | sync [--plant-id N] | move
-greenhouse irrigator  add | list | start <id> | stop <id> | log-manual
-greenhouse sensor     add | list
-greenhouse config     get --cluster N | set --cluster N --mode smart --minutes 2 --interval 12
+greenhouse cluster    add | list | get <id> | update <id> | delete <id> [--yes]
+greenhouse plant      add | list | sync [--plant-id N] | move | update <id> | delete <id> [--yes]
+greenhouse irrigator  add | list | start <id> | stop <id> | log-manual | update <id> | delete <id> [--yes]
+greenhouse sensor     add | list | update <id> | delete <id> [--yes]
+greenhouse config     get --cluster N | set --cluster N --mode smart --minutes 2 --interval 12 [--auto-run]
 greenhouse scheduler  pause | resume | status
+greenhouse alerts     list | get <id> | ack <id> | resolve <id> | sync [--cluster N]
+greenhouse decisions  list --cluster N [--limit 50]
+greenhouse prefs      get | set [--units …] [--timezone …] [--theme …] [--default-cluster N] …
+greenhouse vacation   list | add --starts-at <ts> --ends-at <ts> | update <id> | delete <id> [--yes]
+greenhouse windows    list --cluster N | add --cluster N --start-hour H --end-hour H | update <id> | delete <id> [--yes]
 ```
 
 Patterns to know:
 
 - **Add commands require explicit `--cluster` or positional args** — there's no interactive prompting. The CLI is non-interactive by design.
+- **`update` / `delete`** exist on every resource sub-app (cluster, plant, irrigator, sensor) plus `vacation` and `windows`; only `cluster` also has a single-item `get`. `update` is a partial patch — only the flags you pass are sent. `delete` prompts for confirmation unless you pass `--yes`/`-y`, and on clusters it cascades to all children (plants, sensors, irrigators, history).
+- **`config set`** takes `--mode manual|schedule|smart`, optional `--minutes` / `--interval`, and `--auto-run/--no-auto-run` (defaults on).
 - **`plant sync`** rewrites plant care fields from `plant_database.json`. Run it after editing the database or after `plant add` for a species that needs evidence-based defaults.
+- **`plant move`** takes `--to-cluster N`; health and learning history follow the plant, decision/event/alert logs stay with the source cluster.
 - **`irrigator start`** takes a duration (`--minutes`) and bypasses cooldown / engine checks — it's the manual escape hatch. Document this to the user when you reach for it.
 - **`irrigator log-manual`** records that the user watered by hand; it doesn't actuate anything, just feeds the audit log and absorption learning.
-- **`scheduler pause` / `resume`** toggles the `check_all` cron job at runtime. The pause is in-memory — server restart clears it.
+- **`scheduler pause` / `resume`** toggles the `check_all` cron job at runtime. The pause is **persisted** — it survives a server restart; other jobs (sensor sync, anomaly scan, health snapshot) keep running.
+- **`alerts`** drives the inbox: `list` (filter by `--status` / `--cluster` / `--plant`), `get`, `ack`, `resolve`, and `sync` (recompute; `--cluster` scopes to one cluster, default all).
+- **`vacation add`** takes `--starts-at` / `--ends-at` as Unix-second timestamps; the engine holds during an active window.
+- **`windows add`** takes `--start-hour` / `--end-hour` (0–23, end exclusive) and `--weekday-mask` (Mon=1 … Sun=64, 127 = every day, default). An empty window list means global defaults apply.
 
 ## Common workflows in shell
 
@@ -98,12 +118,10 @@ Patterns to know:
 **Stop everything in an emergency** (e.g. visible leak):
 
 ```bash
-greenhouse irrigator list --cluster 1 | jq -r '.[].id' | xargs -n1 greenhouse irrigator stop
-# or just hit the bulk endpoint via the API directly:
-curl -X POST $IRRIGATION_SERVER_URL/api/v1/bulk/stop-all
+greenhouse stop-all --yes
 ```
 
-The bulk stop-all endpoint isn't exposed as a CLI subcommand (yet). For one-off shell use, `curl` against the API is fine.
+`stop-all` hits `POST /bulk/stop-all` and stops every irrigator in the system. Pass `--yes`/`-y` in scripts to skip the interactive confirmation.
 
 **Backfill a week of stats as CSV**:
 
@@ -121,17 +139,12 @@ while :; do greenhouse check 1 | jq '{action, primary_code: .reasons[0].code}'; 
 
 These exist as API endpoints / MCP tools but have **no dedicated CLI subcommand**. If the user needs them in a shell, point them at `curl` against `/api/v1` or suggest using the MCP tools instead:
 
-- Alert inbox lifecycle (`/alerts`, `/alerts/{id}/acknowledge`, `/alerts/{id}/resolve`)
-- Decision audit log (`/clusters/{id}/decisions`)
 - Activity timeline (`/activity`)
 - Forecast (`/clusters/{id}/forecast`)
 - Plant health (`/plants/{id}/health`)
 - Insights (`/clusters/{id}/insights`)
 - Data quality report (`/quality/report`)
 - Efficacy (`/clusters/{id}/efficacy`)
-- Preferences (`/preferences`)
-- Vacation windows (`/vacation`)
-- Bulk stop-all (`/bulk/stop-all`)
 - Global search (`/search`)
 
 This gap is intentional — the CLI prioritizes the high-frequency operational commands; everything else is one HTTP call away.
