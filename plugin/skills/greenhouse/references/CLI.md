@@ -49,7 +49,7 @@ Registered directly on the root app — no sub-app prefix.
 
 ```
 greenhouse status   <cluster>                           Full cluster overview
-greenhouse irrigate <cluster> [--dry-run] [--no-sync] [--temp F]
+greenhouse irrigate <cluster> [--dry-run] [--no-sync] [--temp F] [--force]
                                                         Smart irrigation pipeline
 greenhouse check    [<cluster>] [--all]                 Irrigate or monitor + collect alerts
 greenhouse monitor  <cluster>                           Raw moisture check (sensor-only clusters)
@@ -69,6 +69,7 @@ Notable flags:
 - `irrigate --dry-run` analyzes without actuating. Use this when the user asks "what would it do?".
 - `irrigate --no-sync` skips the Tuya Cloud fetch and decides on stored readings. Faster, but only safe when sync ran recently.
 - `irrigate --temp <F>` overrides temperature input — useful for what-if analysis.
+- `irrigate --force` bypasses the quiet-hours gate (the decision is tagged `manual_override_quiet_hours`). It does **not** bypass cooldown or any other rule.
 - `check` accepts either a cluster ID or `--all`; supplying neither errors with exit 1.
 - `stats --export <path>` writes CSV to disk and echoes the path; no JSON to stdout in that mode.
 - `stop-all` fires `POST /bulk/stop-all` — it stops *every* irrigator in the system. Interactive by default; pass `--yes`/`-y` to skip the confirmation prompt (required in scripts). Reach for this on a visible leak or any "stop everything now" request.
@@ -84,7 +85,8 @@ greenhouse cluster    add | list | get <id> | update <id> | delete <id> [--yes]
 greenhouse plant      add | list | sync [--plant-id N] | move | update <id> | delete <id> [--yes]
 greenhouse irrigator  add | list | start <id> | stop <id> | log-manual | update <id> | delete <id> [--yes]
 greenhouse sensor     add | list | update <id> | delete <id> [--yes]
-greenhouse config     get --cluster N | set --cluster N --mode smart --minutes 2 --interval 12 [--auto-run]
+greenhouse config     get --cluster N | effective --cluster N | set --cluster N [--mode smart] [--minutes 2] [--interval 12] [--auto-run] [--quiet-start H] [--quiet-end H] [--daily-cap M] [--max-events N]
+greenhouse config global  get | set [--mode …] [--quiet-start H] [--quiet-end H] [--auto-run] …
 greenhouse scheduler  pause | resume | status
 greenhouse alerts     list | get <id> | ack <id> | resolve <id> | sync [--cluster N]
 greenhouse decisions  list --cluster N [--limit 50]
@@ -97,7 +99,9 @@ Patterns to know:
 
 - **Add commands require explicit `--cluster` or positional args** — there's no interactive prompting. The CLI is non-interactive by design.
 - **`update` / `delete`** exist on every resource sub-app (cluster, plant, irrigator, sensor) plus `vacation` and `windows`; only `cluster` also has a single-item `get`. `update` is a partial patch — only the flags you pass are sent. `delete` prompts for confirmation unless you pass `--yes`/`-y`, and on clusters it cascades to all children (plants, sensors, irrigators, history).
-- **`config set`** takes `--mode manual|schedule|smart`, optional `--minutes` / `--interval`, and `--auto-run/--no-auto-run` (defaults on).
+- **`config set`** patches a cluster's config; every flag is optional and **omitted flags are left unchanged** (no longer forces `--mode`). Fields: `--mode manual|schedule|smart`, `--minutes`, `--interval`, `--auto-run/--no-auto-run`, `--daily-cap`, `--max-events`, and quiet hours `--quiet-start` / `--quiet-end` (0–23, end exclusive; equal values disable quiet hours at the cluster level). Config is hierarchical — a field left unset inherits the global default, then the built-in constant.
+- **`config effective`** shows the merged view: each field's resolved value and its `source` (`cluster` / `global` / `default`). Use it to answer "what config actually applies here?".
+- **`config global get` / `config global set`** read and patch the singleton global defaults inherited by every cluster (same field set as `config set`, no `--cluster`). Setting a field to blank/clearing it falls through to the built-in constant.
 - **`plant sync`** rewrites plant care fields from `plant_database.json`. Run it after editing the database or after `plant add` for a species that needs evidence-based defaults.
 - **`plant move`** takes `--to-cluster N`; health and learning history follow the plant, decision/event/alert logs stay with the source cluster.
 - **`irrigator start`** takes a duration (`--minutes`) and bypasses cooldown / engine checks — it's the manual escape hatch. Document this to the user when you reach for it.

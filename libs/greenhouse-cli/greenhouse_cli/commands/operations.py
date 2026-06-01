@@ -22,9 +22,12 @@ def register(app: typer.Typer) -> None:
         temp: Annotated[float | None, typer.Option(help="Override temperature (skips sync + weather)")] = None,
         dry_run: Annotated[bool, typer.Option("--dry-run", help="Analyze only, don't execute")] = False,
         no_sync: Annotated[bool, typer.Option("--no-sync", help="Skip sensor sync")] = False,
+        force: Annotated[bool, typer.Option("--force", help="Bypass the quiet-hours gate (logs an override)")] = False,
     ):
         """Smart irrigation: sync sensors → fetch weather → decide → execute."""
-        data = call(ctx, lambda c: c.irrigate(cluster, temp_override=temp, dry_run=dry_run, no_sync=no_sync))
+        data = call(
+            ctx, lambda c: c.irrigate(cluster, temp_override=temp, dry_run=dry_run, no_sync=no_sync, force=force)
+        )
         output(data)
         if data.get("action") == "error":
             raise typer.Exit(1)

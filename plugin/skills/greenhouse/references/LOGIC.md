@@ -33,6 +33,7 @@ Every rule function appends a `Reason` to the decision's trail via `decision.add
 |------|--------|
 | `no_plants` | Skip — cluster has no plants |
 | `cooldown` | Skip — any irrigator in cluster fired within 6h |
+| `quiet_hours` | Skip — current local time is inside the configured quiet-hours window (auto runs only) |
 | `water_warning` | Irrigate — sensor DP 111 water-warning set |
 | `water_stress` | Irrigate — critical low moisture |
 | `over_watering` | Skip — soil saturated |
@@ -73,9 +74,26 @@ Every evaluation is persisted to `decision_logs` (whether acted-on or not) via `
 
 Accessible via `GET /api/v1/clusters/{id}/decisions`.
 
+### Quiet-hours gate
+
+A hard gate against automatic actuation during user-defined quiet windows (indoor pumps are noisy at night). It runs **after the cooldown check and before the weather-skip rule**, so cooldown is still the most decisive skip reason.
+
+- The window is resolved through the hierarchical config (see below): `quiet_start_hour` / `quiet_end_hour` are integers 0–23, end-exclusive, wrap-around supported (`start > end` crosses midnight). Timezone comes from `preferences.timezone` (UTC fallback).
+- `start == end` at a level means quiet hours are **explicitly disabled** there — e.g. an outdoor cluster opting out of an inherited indoor window.
+- When the current local hour is inside the window and the run is automatic, the engine emits `quiet_hours` and returns `action=SKIP`.
+- **Manual override:** a manual trigger with `force=true` (REST `POST /clusters/{id}/irrigate` body, or the UI confirm) bypasses the SKIP. Every other rule still runs, and the final decision carries a `manual_override_quiet_hours` reason (severity WARNING) so the audit log records that the gate was overridden.
+
+Quiet hours have **no built-in default** in the resolver: production deployments are seeded with the canonical `00:00–05:00` window by the Alembic migration, while fresh databases (tests, dev installs) start with quiet hours **off** until configured at the global or cluster level.
+
+### Hierarchical irrigation config
+
+Each `IrrigationConfig` field resolves **cluster → global → built-in constant**. A `null` at a level means "inherit from the next level down." `Repository.get_effective_config(cluster_id)` returns, per field, `{value, source}` where `source ∈ {"cluster", "global", "default"}` so the UI/CLI can render inheritance state. The engine reads quiet-hours bounds through this same resolver.
+
+Surfaces: `GET/PUT /api/v1/config/global` (the singleton global defaults), `GET /api/v1/clusters/{id}/config/effective` (merged view), `PUT /api/v1/clusters/{id}/config` (per-cluster partial override). In the web UI the global defaults live on `/preferences`; per-cluster overrides render inline on `/clusters/{id}#config` with source badges.
+
 ### Weather-skip rule
 
-For **outdoor** clusters only, if a weather client is configured and the 6h forecast reports `precipitation_mm > 2.0`, the engine appends a `weather_skip` reason and returns `action=SKIP` before fetching sensor data. No-ops for indoor clusters or when no weather client is wired. Runs after the cooldown check, before stress detection.
+For **outdoor** clusters only, if a weather client is configured and the 6h forecast reports `precipitation_mm > 2.0`, the engine appends a `weather_skip` reason and returns `action=SKIP` before fetching sensor data. No-ops for indoor clusters or when no weather client is wired. Runs after the cooldown and quiet-hours checks, before stress detection.
 
 ### Irrigation-window / preferred-hours gate
 
@@ -119,6 +137,7 @@ While an irrigation is running, `PumpWatcherService` polls the IK10PW's DP 105 w
 4. Run `decide_for_cluster()` → typed `IrrigationDecision`, in order:
    - `no_plants` short-circuit
    - 6h global cooldown check (any irrigator in cluster)
+   - Quiet-hours gate (auto runs skip inside the window; manual `force=true` bypasses with a `manual_override_quiet_hours` warning)
    - Weather-aware precipitation skip (outdoor only, > 2mm/6h)
    - Terminal stress overrides (`water_warning`, then `water_stress` / `over_watering`)
    - Irrigation-window / preferred-hours gate (runs *after* stress overrides)
@@ -219,3 +238,5 @@ All thresholds in `libs/greenhouse-core/greenhouse_core/constants.py`:
 - Intervals: min 6h, max 24h, default 12h (conflict 8h, stress 6h)
 - Preferred watering window default: 06:00–10:00 local (`DEFAULT_PREFERRED_WATER_HOURS`)
 - Seasonal multipliers: indoor {winter 0.5, spring 1.0, summer 1.2, autumn 0.8}, outdoor {0.3, 1.0, 1.5, 0.7}
+- Quiet-hours seed window: 00:00–05:00 local (`DEFAULT_QUIET_START_HOUR` / `DEFAULT_QUIET_END_HOUR`) — used by the migration seed only, **not** as a resolver fallback (unconfigured = off)
+- Hierarchical config built-ins: `DEFAULT_IRRIGATION_MODE = "smart"`, `DEFAULT_AUTO_RUN = True`
