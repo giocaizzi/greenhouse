@@ -159,6 +159,7 @@ def _check_job() -> None:
             weather_client=_app.state.weather_client,
             plant_db=_app.state.plant_db,
             health_monitor=monitor,
+            notifier=getattr(_app.state, "ntfy_notifier", None),
         )
         irrigation_svc.check_all_clusters()
         session.commit()
@@ -176,7 +177,7 @@ def _anomaly_job() -> None:
     session = _app.state.session_factory()
     try:
         repo = IrrigationRepository(session)
-        SensorAnomalyService(repo).scan()
+        SensorAnomalyService(repo, notifier=getattr(_app.state, "ntfy_notifier", None)).scan()
         session.commit()
     except Exception:
         session.rollback()
@@ -233,7 +234,7 @@ def init_health_monitor(app: FastAPI, settings: Settings) -> None:
     session = app.state.session_factory()
     try:
         repo = IrrigationRepository(session)
-        monitor = DeviceHealthMonitor(repo=repo, registry=registry)
+        monitor = DeviceHealthMonitor(repo=repo, registry=registry, notifier=getattr(app.state, "ntfy_notifier", None))
         try:
             migrated = monitor.migrate_legacy_pump_alerts()
             if migrated:

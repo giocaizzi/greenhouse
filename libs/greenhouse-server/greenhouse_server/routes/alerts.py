@@ -3,7 +3,7 @@
 from fastapi import APIRouter, HTTPException, Query
 
 from greenhouse_core.schemas import AlertListResponse, AlertSummary
-from greenhouse_server.deps import PlantDbDep, RepoDep, SessionDep
+from greenhouse_server.deps import NtfyNotifierDep, PlantDbDep, RepoDep, SessionDep
 from greenhouse_server.services.alerts import sync_all_alerts, sync_cluster_alerts
 
 router = APIRouter(tags=["alerts"])
@@ -117,6 +117,7 @@ def sync_cluster_alerts_route(
     repo: RepoDep,
     plant_db: PlantDbDep,
     session: SessionDep,
+    notifier: NtfyNotifierDep,
 ) -> AlertListResponse:
     """Recompute alerts for a single cluster and reconcile the inbox.
 
@@ -136,7 +137,7 @@ def sync_cluster_alerts_route(
     cluster = repo.get_cluster(cluster_id)
     if not cluster:
         raise HTTPException(status_code=404, detail="Cluster not found")
-    alerts = sync_cluster_alerts(repo, cluster_id, plant_db)
+    alerts = sync_cluster_alerts(repo, cluster_id, plant_db, notifier=notifier)
     open_count = repo.count_open_alerts()
     session.commit()
     return AlertListResponse(open_count=open_count, items=[AlertSummary.model_validate(a) for a in alerts])
@@ -147,6 +148,7 @@ def sync_all_alerts_route(
     repo: RepoDep,
     plant_db: PlantDbDep,
     session: SessionDep,
+    notifier: NtfyNotifierDep,
 ) -> AlertListResponse:
     """Recompute and reconcile alerts across all clusters.
 
@@ -156,7 +158,7 @@ def sync_all_alerts_route(
     Returns:
         Open-alert badge count and the full post-sync alert list.
     """
-    sync_all_alerts(repo, plant_db)
+    sync_all_alerts(repo, plant_db, notifier=notifier)
     items = repo.list_alerts(limit=500)
     open_count = repo.count_open_alerts()
     session.commit()

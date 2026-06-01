@@ -4,7 +4,8 @@ description: |
   Talk to a running greenhouse-server over MCP to read sensors (soil moisture, temperature, humidity, light),
   drive irrigators (start, stop, log manual, emergency stop-all), review typed irrigation decisions, manage
   the alert inbox, inspect plant health and its timeline, monitor device and system health, set vacation and
-  per-cluster irrigation windows, run data-quality reports, and tune per-cluster config. Use this skill
+  per-cluster irrigation windows, run data-quality reports, tune per-cluster config, and toggle push-notification
+  (ntfy) preferences. Use this skill
   whenever the user asks anything about their plants, soil, watering, irrigation schedule, sensor readings,
   irrigator status, blocked drips, leaks, alerts, plant health, or system health — even when they don't say
   "greenhouse" or "irrigation".
@@ -57,9 +58,12 @@ Every `/api/v1` endpoint on the server is exposed as an MCP tool by `fastapi-mcp
 | "Is anything offline / are sensors stale?" | `health/system` (device + cloud + scheduler pulse) |
 | "Is my setup configured right?" | `quality/report` (config gaps, stale sensors, duplicate device IDs) |
 | "Find …" / search across resources | `search` |
+| "Stop / start push alerts" / "notify me when it waters" | `preferences` — `notify_manual` / `notify_emergency` / `notify_alerts` / `notify_auto` toggles |
 | "Emergency — stop everything" | `bulk/stop-all` |
 
 For the full surface, list the MCP tools at the start of the session — every `/api/v1` endpoint is exposed as one. If you need the raw OpenAPI, the server publishes it at `/docs`.
+
+**Push notifications (ntfy):** the server can push to a phone on manual/emergency/auto irrigations and new (warning/critical) alerts. Delivery is enabled by server-side env config (`GREENHOUSE_NTFY_SERVER_URL` + `_TOPIC`); the per-category toggles in `preferences` (`notify_*`) only gate *which* categories fire. You don't send notifications — you can read/flip those toggles. If a user says "I'm not getting alerts," check the toggles, but the env config is the on/off switch and lives outside the API.
 
 ## Invariants — do not fight these
 

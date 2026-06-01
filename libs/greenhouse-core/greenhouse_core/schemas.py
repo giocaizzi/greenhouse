@@ -820,6 +820,10 @@ class PreferencesResponse(BaseModel):
     refresh_interval_seconds: int
     dry_run_global: bool
     scheduler_paused: bool
+    notify_manual: bool
+    notify_emergency: bool
+    notify_alerts: bool
+    notify_auto: bool
 
 
 class PreferencesUpdateRequest(BaseModel):
@@ -829,6 +833,10 @@ class PreferencesUpdateRequest(BaseModel):
     default_cluster_id: int | None = None
     refresh_interval_seconds: int | None = None
     dry_run_global: bool | None = None
+    notify_manual: bool | None = None
+    notify_emergency: bool | None = None
+    notify_alerts: bool | None = None
+    notify_auto: bool | None = None
 
 
 # --- Edit/Delete bodies ---------------------------------------------------

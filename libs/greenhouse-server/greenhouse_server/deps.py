@@ -14,6 +14,7 @@ from greenhouse_server.services.cluster import ClusterService
 from greenhouse_server.services.health import PlantHealthService
 from greenhouse_server.services.health_monitor import DeviceHealthMonitor
 from greenhouse_server.services.irrigation import IrrigationService
+from greenhouse_server.services.notify import NtfyClient
 from greenhouse_server.services.sync import SyncService
 from greenhouse_server.services.weather import WeatherClient
 
@@ -59,6 +60,11 @@ def get_tuya_cloud() -> TuyaCloud | None:
 
 def get_weather_client(request: Request) -> WeatherClient:
     return request.app.state.weather_client
+
+
+def get_ntfy_notifier(request: Request) -> NtfyClient | None:
+    """Return the ntfy client, or ``None`` when notifications are unconfigured."""
+    return getattr(request.app.state, "ntfy_notifier", None)
 
 
 def get_plant_db(request: Request) -> PlantDatabase:
@@ -110,8 +116,17 @@ def get_irrigation_service(
     weather: Annotated[WeatherClient, Depends(get_weather_client)],
     plant_db: Annotated[PlantDatabase, Depends(get_plant_db)],
     health_monitor: Annotated[DeviceHealthMonitor | None, Depends(get_health_monitor)],
+    notifier: Annotated[NtfyClient | None, Depends(get_ntfy_notifier)],
 ) -> IrrigationService:
-    return IrrigationService(repo, registry, sync_service, weather, plant_db, health_monitor=health_monitor)
+    return IrrigationService(
+        repo,
+        registry,
+        sync_service,
+        weather,
+        plant_db,
+        health_monitor=health_monitor,
+        notifier=notifier,
+    )
 
 
 # --- Type aliases for route injection ---
@@ -121,6 +136,7 @@ RepoDep = Annotated[IrrigationRepository, Depends(get_repository)]
 DeviceRegistryDep = Annotated[DeviceRegistry | None, Depends(get_device_registry)]
 TuyaCloudDep = Annotated[TuyaCloud | None, Depends(get_tuya_cloud)]
 WeatherClientDep = Annotated[WeatherClient, Depends(get_weather_client)]
+NtfyNotifierDep = Annotated[NtfyClient | None, Depends(get_ntfy_notifier)]
 PlantDbDep = Annotated[PlantDatabase, Depends(get_plant_db)]
 SyncServiceDep = Annotated[SyncService, Depends(get_sync_service)]
 ClusterServiceDep = Annotated[ClusterService, Depends(get_cluster_service)]

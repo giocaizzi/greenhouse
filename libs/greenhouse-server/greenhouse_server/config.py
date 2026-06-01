@@ -44,6 +44,25 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("GREENHOUSE_MCP_TOKEN", "mcp_token"),
     )
 
+    # ── ntfy.sh push notifications ──────────────────────────────────────────
+    # Outbound push for manual/emergency/auto irrigations and new alerts.
+    # Feature is enabled only when BOTH server_url and topic are set (mirrors
+    # the mcp_token fail-closed pattern). Token is optional — public topics
+    # need none. Lives outside the IRRIGATION_ prefix to match the
+    # deployment-secret convention.
+    ntfy_server_url: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("GREENHOUSE_NTFY_SERVER_URL", "ntfy_server_url"),
+    )
+    ntfy_topic: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("GREENHOUSE_NTFY_TOPIC", "ntfy_topic"),
+    )
+    ntfy_token: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("GREENHOUSE_NTFY_TOKEN", "ntfy_token"),
+    )
+
     # ── Authentication ──────────────────────────────────────────────────────
     # When True (default) every /api/v1 route and the web UI require a valid
     # session. The login endpoint issues a JWT signed with `auth_secret_key`.

@@ -52,6 +52,39 @@
              {% if prefs.dry_run_global %}checked{% endif %}>
       <span>Global dry-run <small class="muted">— irrigators will never actuate while this is on.</small></span>
     </label>
+
+    <fieldset style="margin-top: var(--sp-3);">
+      <legend>Push notifications (ntfy)</legend>
+      <p class="muted" style="margin-top: 0;">
+        {% if ntfy_configured %}
+          <strong>Configured</strong> — delivery is enabled; toggle categories below.
+        {% else %}
+          <strong>Not configured</strong> — set <code>GREENHOUSE_NTFY_SERVER_URL</code> and
+          <code>GREENHOUSE_NTFY_TOPIC</code> to enable delivery. Toggles below take effect once configured.
+        {% endif %}
+      </p>
+      <label for="notify_manual" style="display:flex; align-items:center; gap: var(--sp-2);">
+        <input type="checkbox" id="notify_manual" name="notify_manual" value="on"
+               {% if prefs.notify_manual %}checked{% endif %}>
+        <span>Manual irrigations <small class="muted">— start / stop / log by hand.</small></span>
+      </label>
+      <label for="notify_emergency" style="display:flex; align-items:center; gap: var(--sp-2);">
+        <input type="checkbox" id="notify_emergency" name="notify_emergency" value="on"
+               {% if prefs.notify_emergency %}checked{% endif %}>
+        <span>Emergency stop-all <small class="muted">— the kill switch.</small></span>
+      </label>
+      <label for="notify_alerts" style="display:flex; align-items:center; gap: var(--sp-2);">
+        <input type="checkbox" id="notify_alerts" name="notify_alerts" value="on"
+               {% if prefs.notify_alerts %}checked{% endif %}>
+        <span>New alerts <small class="muted">— warnings &amp; critical only (leaks, low battery, …).</small></span>
+      </label>
+      <label for="notify_auto" style="display:flex; align-items:center; gap: var(--sp-2);">
+        <input type="checkbox" id="notify_auto" name="notify_auto" value="on"
+               {% if prefs.notify_auto %}checked{% endif %}>
+        <span>Automated cycles <small class="muted">— scheduler-driven watering.</small></span>
+      </label>
+    </fieldset>
+
     <div class="form-actions">
       <a href="/" class="btn secondary">Cancel</a>
       <button type="submit">Save preferences</button>

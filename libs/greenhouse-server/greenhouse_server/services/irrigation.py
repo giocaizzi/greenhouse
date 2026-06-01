@@ -13,6 +13,7 @@ from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.services.alerts import raise_alert, sync_cluster_alerts
 from greenhouse_server.services.health_monitor import HEALTH_ALARM_TO_TRIGGER, DeviceHealthMonitor
 from greenhouse_server.services.maintenance import collect_learning_alerts, collect_maintenance_alerts
+from greenhouse_server.services.notify import NtfyClient, maybe_notify
 from greenhouse_server.services.sync import SyncService
 from greenhouse_server.services.weather import WeatherClient
 
@@ -137,7 +138,9 @@ def _schedule_leak_check(cluster_id: int, started_at: int) -> None:
             session = _app.state.session_factory()
             try:
                 repo = IrrigationRepository(session)
-                LeakDetectionService(repo, _app.state.plant_db).check_after_irrigation(cluster_id, started_at)
+                LeakDetectionService(
+                    repo, _app.state.plant_db, notifier=getattr(_app.state, "ntfy_notifier", None)
+                ).check_after_irrigation(cluster_id, started_at)
                 session.commit()
             except Exception:
                 session.rollback()
@@ -169,6 +172,7 @@ class IrrigationService:
         weather_client: WeatherClient,
         plant_db: PlantDatabase,
         health_monitor: DeviceHealthMonitor | None = None,
+        notifier: NtfyClient | None = None,
     ):
         self._repo = repo
         self._registry = registry
@@ -176,6 +180,7 @@ class IrrigationService:
         self._weather = weather_client
         self._plant_db = plant_db
         self._health_monitor = health_monitor
+        self._notifier = notifier
 
     def _resolve_temperature(
         self,
@@ -349,10 +354,23 @@ class IrrigationService:
                     "confidence": decision.confidence,
                 },
             )
+            if decision.decision_log_id is not None:
+                self._repo.set_decision_actuated(decision.decision_log_id)
             started_at = int(_time.time())
             _schedule_leak_check(cluster_id, started_at)
             schedule_pump_watcher(irrigator.id, duration, started_at)
             result["action"] = "irrigated"
+            maybe_notify(
+                self._notifier,
+                self._repo.get_preferences(),
+                "auto",
+                lambda: self._notifier.notify_irrigation(
+                    triggered_by="auto",
+                    irrigator_name=irrigator.name,
+                    duration_minutes=duration,
+                    detail=f"confidence={decision.confidence:.0%}",
+                ),
+            )
         else:
             self._repo.add_activity_event(
                 source="irrigation",
@@ -370,6 +388,7 @@ class IrrigationService:
                 message=f"Irrigator '{irrigator.name}' failed to start: {output}",
                 severity="warning",
                 cluster_id=cluster_id,
+                notifier=self._notifier,
             )
             result["action"] = "error"
             result["reason"] = f"irrigator failed: {output}"
@@ -450,7 +469,7 @@ class IrrigationService:
         if irrigators:
             effective = self._repo.get_effective_config(cluster_id)
             if not effective["auto_run"]["value"]:
-                sync_cluster_alerts(self._repo, cluster_id, self._plant_db)
+                sync_cluster_alerts(self._repo, cluster_id, self._plant_db, notifier=self._notifier)
                 return {
                     "cluster_id": cluster_id,
                     "cluster_name": cluster.name,
@@ -461,7 +480,7 @@ class IrrigationService:
                 }
 
             result = self.run_irrigation_pipeline(cluster_id)
-            sync_cluster_alerts(self._repo, cluster_id, self._plant_db)
+            sync_cluster_alerts(self._repo, cluster_id, self._plant_db, notifier=self._notifier)
             return {
                 "cluster_id": cluster_id,
                 "cluster_name": cluster.name,
@@ -472,7 +491,7 @@ class IrrigationService:
             }
         else:
             monitor = self.monitor_cluster(cluster_id)
-            sync_cluster_alerts(self._repo, cluster_id, self._plant_db)
+            sync_cluster_alerts(self._repo, cluster_id, self._plant_db, notifier=self._notifier)
             return {
                 "cluster_id": cluster_id,
                 "cluster_name": cluster.name,
