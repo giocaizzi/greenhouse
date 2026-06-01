@@ -363,7 +363,7 @@ class IrrigationLogic:
         """Best-effort persistence — never blocks the decision."""
         try:
             payload = decision.model_dump(mode="json")
-            self.db.add_decision_log(
+            decision.decision_log_id = self.db.add_decision_log(
                 cluster_id=decision.cluster_id,
                 evaluated_at=decision.evaluated_at,
                 action=decision.action.value,

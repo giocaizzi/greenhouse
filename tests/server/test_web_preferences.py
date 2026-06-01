@@ -92,6 +92,37 @@ def test_global_config_blank_fields_clear_to_inherit(client):
     assert body["quiet_end_hour"] is None
 
 
+def test_preferences_renders_notification_toggles(client):
+    resp = client.get("/preferences")
+    assert resp.status_code == 200
+    for name in ("notify_manual", "notify_emergency", "notify_alerts", "notify_auto"):
+        assert f'name="{name}"' in resp.text
+    # Default (no ntfy env configured) shows the not-configured hint.
+    assert "Not configured" in resp.text
+
+
+def test_preferences_post_updates_notification_toggles(client):
+    # All four start enabled; submit with only notify_manual checked.
+    resp = client.post(
+        "/preferences",
+        data={
+            "units": "metric",
+            "timezone": "UTC",
+            "theme": "auto",
+            "refresh_interval_seconds": "30",
+            "notify_manual": "on",
+        },
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303
+    body = client.get("/api/v1/preferences").json()
+    assert body["notify_manual"] is True
+    # Unchecked categories are absent from the POST and persist as False.
+    assert body["notify_emergency"] is False
+    assert body["notify_alerts"] is False
+    assert body["notify_auto"] is False
+
+
 def test_preferences_clearing_dry_run_persists_false(client):
     # First turn it on
     client.post(

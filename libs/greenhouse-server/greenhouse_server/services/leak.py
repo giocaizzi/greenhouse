@@ -12,6 +12,7 @@ from greenhouse_core.models import Alert
 from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.services.alerts import SOURCE_LEAK, raise_alert
+from greenhouse_server.services.notify import NtfyClient
 
 logger = logging.getLogger(__name__)
 
@@ -24,9 +25,10 @@ _RISING_DELTA = 30.0
 class LeakDetectionService:
     """Post-irrigation leak and stuck-valve detector."""
 
-    def __init__(self, repo: IrrigationRepository, plant_db: PlantDatabase):
+    def __init__(self, repo: IrrigationRepository, plant_db: PlantDatabase, notifier: NtfyClient | None = None):
         self._repo = repo
         self._plant_db = plant_db
+        self._notifier = notifier
 
     def check_after_irrigation(self, cluster_id: int, started_at: int) -> list[Alert]:
         """Raise critical alerts when a sensor shows signs of a leak or stuck valve.
@@ -82,6 +84,7 @@ class LeakDetectionService:
 
             alert = raise_alert(
                 self._repo,
+                notifier=self._notifier,
                 source=SOURCE_LEAK,
                 code="leak_or_stuck_valve",
                 severity="critical",

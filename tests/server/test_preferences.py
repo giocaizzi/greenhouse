@@ -13,6 +13,11 @@ class TestGetPreferences:
         assert data["default_cluster_id"] is None
         assert data["refresh_interval_seconds"] == 30
         assert data["dry_run_global"] is False
+        # ntfy per-category toggles default ON.
+        assert data["notify_manual"] is True
+        assert data["notify_emergency"] is True
+        assert data["notify_alerts"] is True
+        assert data["notify_auto"] is True
 
     def test_idempotent(self, client):
         """Multiple GET calls return the same defaults without creating duplicates."""
@@ -59,3 +64,14 @@ class TestUpdatePreferences:
         client.put("/api/v1/preferences", json={"dry_run_global": True})
         resp = client.get("/api/v1/preferences")
         assert resp.json()["dry_run_global"] is True
+
+    def test_put_notify_flags(self, client):
+        """PUT can toggle individual ntfy notification categories."""
+        resp = client.put("/api/v1/preferences", json={"notify_auto": False, "notify_alerts": False})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["notify_auto"] is False
+        assert data["notify_alerts"] is False
+        # Untouched categories stay enabled.
+        assert data["notify_manual"] is True
+        assert data["notify_emergency"] is True

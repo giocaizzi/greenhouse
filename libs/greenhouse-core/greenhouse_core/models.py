@@ -405,3 +405,10 @@ class UserPreferences(Base):
     # the /scheduler/pause and /scheduler/resume endpoints and re-applied on
     # server startup so the pause survives a container restart.
     scheduler_paused: Mapped[bool] = mapped_column(nullable=False, default=False)
+    # Per-category ntfy push toggles. Editable in the web UI; default ON. The
+    # env-level ntfy config (GREENHOUSE_NTFY_*) governs whether anything is
+    # delivered at all — these govern intent per event category.
+    notify_manual: Mapped[bool] = mapped_column(nullable=False, default=True)
+    notify_emergency: Mapped[bool] = mapped_column(nullable=False, default=True)
+    notify_alerts: Mapped[bool] = mapped_column(nullable=False, default=True)
+    notify_auto: Mapped[bool] = mapped_column(nullable=False, default=True)

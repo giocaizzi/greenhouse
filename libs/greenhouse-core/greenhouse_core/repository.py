@@ -593,6 +593,13 @@ class IrrigationRepository:
         self.session.flush()
         return row.id
 
+    def set_decision_actuated(self, log_id: int, actuated: bool = True) -> None:
+        """Mark a persisted decision log as having driven (or not) real actuation."""
+        row = self.session.get(DecisionLog, log_id)
+        if row is not None:
+            row.actuated = actuated
+            self.session.flush()
+
     def list_decision_logs(self, cluster_id: int, limit: int = 50) -> list[DecisionLog]:
         """Recent decisions for a cluster, newest first."""
         return list(

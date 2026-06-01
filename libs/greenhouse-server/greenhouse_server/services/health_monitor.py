@@ -40,6 +40,8 @@ from greenhouse_core.devices.health import DeviceHealthState, HealthAlarm
 from greenhouse_core.logic.decision import TriggerCode
 from greenhouse_core.models import ENTITY_IRRIGATOR, ENTITY_SENSOR, Irrigator, Sensor
 from greenhouse_core.repository import IrrigationRepository
+from greenhouse_server.services.alerts import notify_if_new_alert
+from greenhouse_server.services.notify import NtfyClient
 
 logger = logging.getLogger(__name__)
 
@@ -110,9 +112,11 @@ class DeviceHealthMonitor:
         offline_after_minutes: int = OFFLINE_AFTER_MINUTES,
         signal_loss_threshold: int = SIGNAL_LOSS_THRESHOLD,
         clock: Callable[[], int] = lambda: int(time.time()),
+        notifier: NtfyClient | None = None,
     ) -> None:
         self._repo = repo
         self._registry = registry
+        self._notifier = notifier
         self._battery_low_pct = battery_low_pct
         self._battery_critical_pct = battery_critical_pct
         self._offline_after_seconds = offline_after_minutes * 60
@@ -332,7 +336,7 @@ class DeviceHealthMonitor:
             "offline": state.offline,
         }
         try:
-            self._repo.upsert_alert(
+            alert = self._repo.upsert_alert(
                 dedup_key=key,
                 source=SOURCE_HEALTH,
                 code=alarm.value,
@@ -344,6 +348,7 @@ class DeviceHealthMonitor:
                 cluster_id=cluster_id,
                 payload=payload,
             )
+            notify_if_new_alert(self._repo, self._notifier, alert)
         except Exception:
             logger.exception("Failed to raise health alert %s for %s %d", alarm.value, entity_type, entity_id)
 

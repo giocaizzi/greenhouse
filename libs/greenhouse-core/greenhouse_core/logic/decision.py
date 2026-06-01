@@ -209,6 +209,11 @@ class IrrigationDecision(BaseModel):
     stress_indicators: StressIndicators = Field(default_factory=StressIndicators)
     trends: Trends = Field(default_factory=Trends)
     weather: WeatherSnapshot | None = None
+    # Transient: id of the decision_logs row written by the engine when
+    # persist=True. Used by the service layer to flip `actuated` to True after
+    # a successful actuation. Excluded from serialization so the audit payload
+    # is unchanged.
+    decision_log_id: int | None = Field(default=None, exclude=True)
 
     @property
     def reason_text(self) -> str:

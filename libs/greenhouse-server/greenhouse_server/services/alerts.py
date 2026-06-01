@@ -18,6 +18,10 @@ from greenhouse_core.models import (
 from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.services.maintenance import collect_learning_alerts, collect_maintenance_alerts
+from greenhouse_server.services.notify import NtfyClient, maybe_notify
+
+# Alert severities that warrant a push (info is suppressed).
+_NOTIFY_SEVERITIES = ("warning", "critical")
 
 SOURCE_LEARNING = "learning"
 SOURCE_MAINTENANCE = "maintenance"
@@ -48,10 +52,33 @@ def _title_for(code: str, message: str) -> str:
     return code.replace("_", " ").title()
 
 
+def notify_if_new_alert(repo: IrrigationRepository, notifier: NtfyClient | None, alert: Alert) -> None:
+    """Push a notification for a genuinely-new warning/critical alert.
+
+    Gated to ``occurrence_count == 1`` so a re-raised (repeating) alert never
+    re-notifies, and to warning/critical severities so ``info`` advisories stay
+    silent. The ``notify_alerts`` preference toggle is honoured via
+    :func:`maybe_notify`.
+    """
+    if notifier is None:
+        return
+    if alert.severity not in _NOTIFY_SEVERITIES:
+        return
+    if alert.occurrence_count != 1:
+        return
+    maybe_notify(
+        notifier,
+        repo.get_preferences(),
+        "alerts",
+        lambda: notifier.notify_alert(severity=alert.severity, title=alert.title, message=alert.message),
+    )
+
+
 def sync_cluster_alerts(
     repo: IrrigationRepository,
     cluster_id: int,
     plant_db: PlantDatabase,
+    notifier: NtfyClient | None = None,
 ) -> list[Alert]:
     """Recompute alerts for a cluster and reconcile with the inbox.
 
@@ -77,7 +104,7 @@ def sync_cluster_alerts(
         severity = raw.get("severity", "info")
         key = _dedup_key(source, code, cluster_id, message)
         seen_keys.add(key)
-        repo.upsert_alert(
+        alert = repo.upsert_alert(
             dedup_key=key,
             source=source,
             code=code,
@@ -89,6 +116,7 @@ def sync_cluster_alerts(
             cluster_id=cluster_id,
             seen_at=now,
         )
+        notify_if_new_alert(repo, notifier, alert)
 
     auto_resolve_cleared(repo, cluster_id, sources=(SOURCE_LEARNING, SOURCE_MAINTENANCE), seen_keys=seen_keys)
     return repo.list_alerts(cluster_id=cluster_id, limit=200)
@@ -108,11 +136,15 @@ def auto_resolve_cleared(
             repo.resolve_alert(alert.id)
 
 
-def sync_all_alerts(repo: IrrigationRepository, plant_db: PlantDatabase) -> int:
+def sync_all_alerts(
+    repo: IrrigationRepository,
+    plant_db: PlantDatabase,
+    notifier: NtfyClient | None = None,
+) -> int:
     """Run sync_cluster_alerts across every cluster; returns total open count."""
     clusters: list[Cluster] = repo.list_clusters()
     for c in clusters:
-        sync_cluster_alerts(repo, c.id, plant_db)
+        sync_cluster_alerts(repo, c.id, plant_db, notifier=notifier)
     return repo.count_open_alerts()
 
 
@@ -128,12 +160,13 @@ def raise_alert(
     plant_id: int | None = None,
     sensor_id: int | None = None,
     payload: dict | None = None,
+    notifier: NtfyClient | None = None,
 ) -> Alert:
     """Convenience wrapper: build a dedup_key and upsert an alert."""
     entity_type = ENTITY_SENSOR if sensor_id else ENTITY_CLUSTER
     entity_id = sensor_id or cluster_id
     key = _dedup_key(source, code, cluster_id, f"{entity_type}{entity_id or 0}")
-    return repo.upsert_alert(
+    alert = repo.upsert_alert(
         dedup_key=key,
         source=source,
         code=code,
@@ -146,3 +179,5 @@ def raise_alert(
         plant_id=plant_id,
         payload=payload,
     )
+    notify_if_new_alert(repo, notifier, alert)
+    return alert

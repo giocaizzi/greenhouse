@@ -44,6 +44,7 @@ from greenhouse_server.routes import (
 )
 from greenhouse_server.scheduler import apply_persisted_pause, init_health_monitor, init_scheduler
 from greenhouse_server.scheduler import scheduler as bg_scheduler
+from greenhouse_server.services.notify import NtfyClient
 from greenhouse_server.services.weather import WeatherClient
 from greenhouse_server.web.exception_handlers import register_web_exception_handlers
 from greenhouse_server.web.router import web_router
@@ -61,6 +62,17 @@ def _init_device_registry() -> DeviceRegistry | None:
     except (ValueError, Exception):
         return None
     return build_default_registry(transport)
+
+
+def _init_ntfy_notifier(settings: Settings) -> NtfyClient | None:
+    """Build the ntfy client from settings, or ``None`` when unconfigured.
+
+    Enabled only when both ``ntfy_server_url`` and ``ntfy_topic`` are set
+    (mirrors the fail-closed pattern of the MCP token and device registry).
+    """
+    if not settings.ntfy_server_url or not settings.ntfy_topic:
+        return None
+    return NtfyClient(settings.ntfy_server_url, settings.ntfy_topic, settings.ntfy_token)
 
 
 _mcp_bearer = HTTPBearer(auto_error=False)
@@ -145,6 +157,7 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
     app.state.session_factory = create_session_factory(engine)
     app.state.device_registry = _init_device_registry()
     app.state.weather_client = WeatherClient(lat=settings.weather_lat, lon=settings.weather_lon)
+    app.state.ntfy_notifier = _init_ntfy_notifier(settings)
     app.state.plant_db = _init_plant_db(settings)
 
     init_scheduler(app, settings)

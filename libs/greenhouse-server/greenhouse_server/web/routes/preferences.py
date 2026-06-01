@@ -18,10 +18,18 @@ def preferences_page(request: Request, repo: RepoDep):
     global_config = repo.get_global_irrigation_config()
     repo.session.commit()
     clusters = repo.list_clusters()
+    settings = request.app.state.settings
+    ntfy_configured = bool(settings.ntfy_server_url and settings.ntfy_topic)
     return templates.TemplateResponse(
         request,
         "preferences.html",
-        base_context(request, prefs=prefs, clusters=clusters, global_config=global_config),
+        base_context(
+            request,
+            prefs=prefs,
+            clusters=clusters,
+            global_config=global_config,
+            ntfy_configured=ntfy_configured,
+        ),
     )
 
 
@@ -35,6 +43,10 @@ def update_preferences(
     refresh_interval_seconds: int = Form(...),
     default_cluster_id: str = Form(""),
     dry_run_global: str = Form(""),
+    notify_manual: str = Form(""),
+    notify_emergency: str = Form(""),
+    notify_alerts: str = Form(""),
+    notify_auto: str = Form(""),
 ):
     default_cluster: int | None = None
     if default_cluster_id.strip():
@@ -49,6 +61,10 @@ def update_preferences(
         refresh_interval_seconds=refresh_interval_seconds,
         default_cluster_id=default_cluster,
         dry_run_global=bool(dry_run_global),
+        notify_manual=bool(notify_manual),
+        notify_emergency=bool(notify_emergency),
+        notify_alerts=bool(notify_alerts),
+        notify_auto=bool(notify_auto),
     )
     repo.session.commit()
     return RedirectResponse(url="/preferences", status_code=303)

@@ -18,8 +18,9 @@ from greenhouse_core.schemas import (
     SuccessResponse,
     UpdateIrrigatorRequest,
 )
-from greenhouse_server.deps import DeviceRegistryDep, RepoDep, require_cluster
+from greenhouse_server.deps import DeviceRegistryDep, NtfyNotifierDep, RepoDep, require_cluster
 from greenhouse_server.services.irrigation import schedule_pump_watcher
+from greenhouse_server.services.notify import maybe_notify
 
 router = APIRouter(tags=["irrigators"])
 
@@ -217,6 +218,7 @@ def start_irrigator(
     request: StartIrrigatorRequest,
     repo: RepoDep,
     registry: DeviceRegistryDep,
+    notifier: NtfyNotifierDep,
 ) -> IrrigatorActionResponse:
     """Manually start an irrigator over the Tuya local protocol.
 
@@ -260,12 +262,25 @@ def start_irrigator(
         repo.session.commit()
         if request.minutes:
             schedule_pump_watcher(irrigator.id, request.minutes, started_at)
+        maybe_notify(
+            notifier,
+            repo.get_preferences(),
+            "manual",
+            lambda: notifier.notify_irrigation(
+                triggered_by="manual",
+                irrigator_name=irrigator.name,
+                duration_minutes=request.minutes,
+                detail="started",
+            ),
+        )
         return IrrigatorActionResponse(success=True, message=output)
     raise HTTPException(status_code=502, detail=output)
 
 
 @router.post("/irrigators/{irrigator_id}/stop", response_model=IrrigatorActionResponse)
-def stop_irrigator(irrigator_id: int, repo: RepoDep, registry: DeviceRegistryDep) -> IrrigatorActionResponse:
+def stop_irrigator(
+    irrigator_id: int, repo: RepoDep, registry: DeviceRegistryDep, notifier: NtfyNotifierDep
+) -> IrrigatorActionResponse:
     """Manually stop a running irrigator over the Tuya local protocol.
 
     Side effects: actuates physical hardware and records an `off` irrigation
@@ -299,12 +314,24 @@ def stop_irrigator(irrigator_id: int, repo: RepoDep, registry: DeviceRegistryDep
             notes="Manual stop via API",
         )
         repo.session.commit()
+        maybe_notify(
+            notifier,
+            repo.get_preferences(),
+            "manual",
+            lambda: notifier.notify_irrigation(
+                triggered_by="manual",
+                irrigator_name=irrigator.name,
+                detail="stopped",
+            ),
+        )
         return IrrigatorActionResponse(success=True, message=output)
     raise HTTPException(status_code=502, detail=output)
 
 
 @router.post("/irrigators/{irrigator_id}/log-manual", response_model=LogManualResponse)
-def log_manual(irrigator_id: int, request: LogManualRequest, repo: RepoDep) -> LogManualResponse:
+def log_manual(
+    irrigator_id: int, request: LogManualRequest, repo: RepoDep, notifier: NtfyNotifierDep
+) -> LogManualResponse:
     """Record a manually executed irrigation that did not go through the API.
 
     Useful when the user watered by hand but wants the learning engine and
@@ -330,4 +357,15 @@ def log_manual(irrigator_id: int, request: LogManualRequest, repo: RepoDep) -> L
         notes=request.notes or f"Manual ({request.minutes} min)",
     )
     repo.session.commit()
+    maybe_notify(
+        notifier,
+        repo.get_preferences(),
+        "manual",
+        lambda: notifier.notify_irrigation(
+            triggered_by="manual",
+            irrigator_name=irrigator.name,
+            duration_minutes=request.minutes,
+            detail="logged (watered by hand)",
+        ),
+    )
     return LogManualResponse(success=True, event_id=event_id)

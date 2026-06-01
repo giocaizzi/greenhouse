@@ -19,6 +19,7 @@ import time
 from greenhouse_core.models import Alert
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.services.alerts import SOURCE_ANOMALY, raise_alert
+from greenhouse_server.services.notify import NtfyClient
 
 logger = logging.getLogger(__name__)
 
@@ -42,8 +43,9 @@ def _median_interval(timestamps: list[int]) -> float | None:
 class SensorAnomalyService:
     """Rolling z-score and max-gap anomaly detector for all sensors."""
 
-    def __init__(self, repo: IrrigationRepository):
+    def __init__(self, repo: IrrigationRepository, notifier: NtfyClient | None = None):
         self._repo = repo
+        self._notifier = notifier
 
     def scan(self) -> list[Alert]:
         """Detect stale and drifting sensors across the entire fleet.
@@ -81,6 +83,7 @@ class SensorAnomalyService:
                 gap_seconds = now - latest_ts
                 alert = raise_alert(
                     self._repo,
+                    notifier=self._notifier,
                     source=SOURCE_ANOMALY,
                     code="sensor_stale",
                     severity="warning",
@@ -127,6 +130,7 @@ class SensorAnomalyService:
             if abs(z) > _Z_THRESHOLD:
                 alert = raise_alert(
                     self._repo,
+                    notifier=self._notifier,
                     source=SOURCE_ANOMALY,
                     code="sensor_drift",
                     severity="warning",
