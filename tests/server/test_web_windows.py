@@ -3,9 +3,10 @@
 
 class TestConfigPageWindowsSection:
     def test_renders_empty_state_when_no_windows(self, seeded_client):
+        # /clusters/{id}/config is 301'd to the unified detail page.
         resp = seeded_client.get("/clusters/1/config")
         assert resp.status_code == 200
-        assert "Watering schedule" in resp.text
+        assert "Watering windows" in resp.text
         assert "No windows configured" in resp.text
 
     def test_add_form_has_all_labelled_fields(self, seeded_client):

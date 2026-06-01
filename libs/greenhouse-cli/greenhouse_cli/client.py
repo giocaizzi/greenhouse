@@ -200,10 +200,21 @@ class IrrigationClient:
     # ── Config ──
 
     def set_config(self, cluster_id: int, **kwargs) -> dict:
-        return self._request("PUT", f"/api/v1/clusters/{cluster_id}/config", json=kwargs)
+        body = {k: v for k, v in kwargs.items() if v is not None}
+        return self._request("PUT", f"/api/v1/clusters/{cluster_id}/config", json=body)
 
     def get_config(self, cluster_id: int) -> dict:
         return self._request("GET", f"/api/v1/clusters/{cluster_id}/config")
+
+    def get_effective_config(self, cluster_id: int) -> dict:
+        return self._request("GET", f"/api/v1/clusters/{cluster_id}/config/effective")
+
+    def get_global_config(self) -> dict:
+        return self._request("GET", "/api/v1/config/global")
+
+    def update_global_config(self, **kwargs) -> dict:
+        body = {k: v for k, v in kwargs.items() if v is not None}
+        return self._request("PUT", "/api/v1/config/global", json=body)
 
     # ── Operations ──
 
@@ -216,8 +227,9 @@ class IrrigationClient:
         temp_override: float | None = None,
         dry_run: bool = False,
         no_sync: bool = False,
+        force: bool = False,
     ) -> dict:
-        body = {"temp_override": temp_override, "dry_run": dry_run, "no_sync": no_sync}
+        body = {"temp_override": temp_override, "dry_run": dry_run, "no_sync": no_sync, "force": force}
         return self._request("POST", f"/api/v1/clusters/{cluster_id}/irrigate", json=body)
 
     def monitor(self, cluster_id: int) -> dict:

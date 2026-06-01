@@ -1,10 +1,11 @@
-{# Sub-navigation tabs shown on every cluster-scoped page. Set `current_tab` in context. #}
+{# Sub-navigation tabs shown on cluster-scoped analytics pages.
+
+Plants / sensors / irrigators / config used to live behind their own tabs;
+they now render inline on the detail page (see ``clusters/detail.html``).
+This strip is kept for the analytics views which remain on their own pages.
+#}
 <nav class="tabs" aria-label="Cluster sections">
   <a href="/clusters/{{ cluster.id }}"{% if current_tab == "overview" %} aria-current="page"{% endif %}>Overview</a>
-  <a href="/clusters/{{ cluster.id }}/plants"{% if current_tab == "plants" %} aria-current="page"{% endif %}>Plants{% if plant_count is defined %} <span class="count">{{ plant_count }}</span>{% endif %}</a>
-  <a href="/clusters/{{ cluster.id }}/sensors"{% if current_tab == "sensors" %} aria-current="page"{% endif %}>Sensors{% if sensor_count is defined %} <span class="count">{{ sensor_count }}</span>{% endif %}</a>
-  <a href="/clusters/{{ cluster.id }}/irrigators"{% if current_tab == "irrigators" %} aria-current="page"{% endif %}>Irrigators{% if irrigator_count is defined %} <span class="count">{{ irrigator_count }}</span>{% endif %}</a>
-  <a href="/clusters/{{ cluster.id }}/config"{% if current_tab == "config" %} aria-current="page"{% endif %}>Config</a>
   <a href="/clusters/{{ cluster.id }}/history"{% if current_tab == "history" %} aria-current="page"{% endif %}>History</a>
   <a href="/clusters/{{ cluster.id }}/stats"{% if current_tab == "stats" %} aria-current="page"{% endif %}>Stats</a>
   <a href="/clusters/{{ cluster.id }}/decisions"{% if current_tab == "decisions" %} aria-current="page"{% endif %}>Decisions</a>

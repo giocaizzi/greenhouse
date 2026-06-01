@@ -15,10 +15,13 @@ router = APIRouter(include_in_schema=False)
 @router.get("/preferences")
 def preferences_page(request: Request, repo: RepoDep):
     prefs = repo.get_preferences()
+    global_config = repo.get_global_irrigation_config()
     repo.session.commit()
     clusters = repo.list_clusters()
     return templates.TemplateResponse(
-        request, "preferences.html", base_context(request, prefs=prefs, clusters=clusters)
+        request,
+        "preferences.html",
+        base_context(request, prefs=prefs, clusters=clusters, global_config=global_config),
     )
 
 

@@ -96,6 +96,28 @@ def is_within_preferred_hours(
     return _hour_in_range(dt.hour, start, end)
 
 
+def is_within_quiet_hours(
+    *,
+    start_hour: int | None,
+    end_hour: int | None,
+    now_unix: int,
+    tz_name: str | None,
+) -> bool:
+    """True if the current local hour falls inside the quiet-hours window.
+
+    ``start_hour == end_hour`` (including the common 0/0 case from disabled
+    overrides) means quiet hours are switched off — returns False. None for
+    either bound also means "no window" and returns False. Wrap-around
+    (start > end) is supported, so 22..6 spans 22, 23, 0, 1, …, 5.
+    """
+    if start_hour is None or end_hour is None:
+        return False
+    if start_hour == end_hour:
+        return False
+    dt = local_now(now_unix, tz_name)
+    return _hour_in_range(dt.hour, start_hour, end_hour)
+
+
 def season_for(unix_ts: int, *, tz_name: str | None, hemisphere: Hemisphere = "northern") -> Season:
     """Meteorological season from a unix timestamp.
 

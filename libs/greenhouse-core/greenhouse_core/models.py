@@ -170,21 +170,56 @@ class IrrigationEvent(Base):
 
 
 class IrrigationConfig(Base):
-    """Irrigation configuration for a cluster."""
+    """Per-cluster irrigation configuration.
+
+    Hierarchical: every field is nullable so a null at this level inherits
+    from :class:`GlobalIrrigationConfig`, which in turn falls back to
+    project-wide defaults in :mod:`constants`. Resolve the effective view
+    via ``IrrigationRepository.get_effective_config``.
+
+    ``quiet_start_hour`` and ``quiet_end_hour`` define a deny window for
+    irrigation in local time (end-exclusive). ``start == end`` means
+    quiet hours are explicitly disabled at this level (used to opt an
+    outdoor cluster out of an inherited global quiet window).
+    """
 
     __tablename__ = "irrigation_configs"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     cluster_id: Mapped[int] = mapped_column(ForeignKey("clusters.id"), nullable=False, unique=True)
-    mode: Mapped[str] = mapped_column(String, nullable=False)
+    mode: Mapped[str | None] = mapped_column(String)
     duration_minutes: Mapped[int | None] = mapped_column(Integer)
     interval_hours: Mapped[int | None] = mapped_column(Integer)
-    auto_run: Mapped[bool] = mapped_column(nullable=False)
+    auto_run: Mapped[bool | None] = mapped_column()
     last_updated: Mapped[int] = mapped_column(Integer, nullable=False)
     daily_cap_minutes: Mapped[int | None] = mapped_column(Integer)
     max_events_per_day: Mapped[int | None] = mapped_column(Integer)
+    quiet_start_hour: Mapped[int | None] = mapped_column(Integer)
+    quiet_end_hour: Mapped[int | None] = mapped_column(Integer)
 
     cluster: Mapped["Cluster"] = relationship(back_populates="config")
+
+
+class GlobalIrrigationConfig(Base):
+    """Singleton irrigation defaults shared by every cluster.
+
+    Each :class:`IrrigationConfig` field with a null value resolves to the
+    matching field here; nulls at this level fall through to the
+    project-wide constants. The migration seeds exactly one row.
+    """
+
+    __tablename__ = "global_irrigation_config"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    mode: Mapped[str | None] = mapped_column(String)
+    duration_minutes: Mapped[int | None] = mapped_column(Integer)
+    interval_hours: Mapped[int | None] = mapped_column(Integer)
+    auto_run: Mapped[bool | None] = mapped_column()
+    daily_cap_minutes: Mapped[int | None] = mapped_column(Integer)
+    max_events_per_day: Mapped[int | None] = mapped_column(Integer)
+    quiet_start_hour: Mapped[int | None] = mapped_column(Integer)
+    quiet_end_hour: Mapped[int | None] = mapped_column(Integer)
+    last_updated: Mapped[int] = mapped_column(Integer, nullable=False)
 
 
 class DecisionLog(Base):

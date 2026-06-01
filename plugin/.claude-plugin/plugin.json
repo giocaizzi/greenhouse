@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-plugin.json",
   "name": "greenhouse",
-  "description": "Smart plant irrigation control. Talks to a running greenhouse-server over MCP to read soil moisture / temperature / humidity / light, drive irrigators (start, stop, log manual watering, emergency stop-all), inspect typed decision logs, manage the alert inbox, track plant health and its timeline, monitor device and system health, set vacation and per-cluster irrigation windows, run data-quality reports, and tune per-cluster irrigation config. Trigger whenever the user asks anything about their plants, soil, watering, irrigation schedule, sensor readings, irrigator status, blocked drips, leaks, alerts, plant health, or system health — even when they don't say 'greenhouse'.",
+  "description": "Smart plant irrigation control. Talks to a running greenhouse-server over MCP to read soil moisture / temperature / humidity / light, drive irrigators (start, stop, log manual watering, emergency stop-all), inspect typed decision logs, manage the alert inbox, track plant health and its timeline, monitor device and system health, set vacation and per-cluster irrigation windows, run data-quality reports, set quiet hours, and tune irrigation config (per-cluster overrides inheriting global defaults). Trigger whenever the user asks anything about their plants, soil, watering, irrigation schedule, quiet hours, sensor readings, irrigator status, blocked drips, leaks, alerts, plant health, or system health — even when they don't say 'greenhouse'.",
   "version": "1.0.0",
   "author": {
     "name": "giocaizzi",

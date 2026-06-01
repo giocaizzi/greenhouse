@@ -34,27 +34,11 @@ def _parse_config(raw: str | dict | None) -> dict:
 
 
 @router.get("/clusters/{cluster_id}/irrigators")
-def list_irrigators(request: Request, cluster_id: int, repo: RepoDep):
-    cluster = require_cluster(repo, cluster_id)
-    raw = repo.get_irrigators_in_cluster(cluster_id)
-    # Build the same shape as cluster status so partials/_irrigator_row.html
-    # can be reused as-is (it accesses recent_event_count / last_event).
-    irrigators = []
-    for irr in raw:
-        events = repo.get_recent_events(irr.id, hours=48)
-        irrigators.append(
-            {
-                "id": irr.id,
-                "name": irr.name,
-                "type": irr.type,
-                "cluster_id": irr.cluster_id,
-                "recent_event_count": len(events),
-                "last_event": events[0] if events else None,
-            }
-        )
-    return templates.TemplateResponse(
-        request, "irrigators/list.html", base_context(request, cluster=cluster, irrigators=irrigators)
-    )
+def list_irrigators(cluster_id: int, repo: RepoDep):
+    """Legacy URL — irrigators are rendered inline on the unified cluster
+    detail page. The 301 keeps old bookmarks working."""
+    require_cluster(repo, cluster_id)
+    return RedirectResponse(url=f"/clusters/{cluster_id}#irrigators", status_code=301)
 
 
 @router.get("/clusters/{cluster_id}/irrigators/new")
@@ -88,7 +72,7 @@ def create_irrigator(
         config=config,
     )
     repo.session.commit()
-    return RedirectResponse(url=f"/clusters/{cluster_id}/irrigators", status_code=303)
+    return RedirectResponse(url=f"/clusters/{cluster_id}#irrigators", status_code=303)
 
 
 @router.get("/clusters/{cluster_id}/irrigators/{irrigator_id}/edit")
@@ -122,7 +106,7 @@ def update_irrigator(
         config["local_key"] = local_key.strip()
     repo.update_irrigator(irrigator_id, name=name, type=type, config=config)
     repo.session.commit()
-    return RedirectResponse(url=f"/clusters/{cluster_id}/irrigators", status_code=303)
+    return RedirectResponse(url=f"/clusters/{cluster_id}#irrigators", status_code=303)
 
 
 @router.delete("/clusters/{cluster_id}/irrigators/{irrigator_id}", response_class=HTMLResponse)
@@ -231,4 +215,4 @@ def log_manual_submit(
         notes=notes or None,
     )
     repo.session.commit()
-    return RedirectResponse(url=f"/clusters/{irr.cluster_id}/irrigators", status_code=303)
+    return RedirectResponse(url=f"/clusters/{irr.cluster_id}#irrigators", status_code=303)

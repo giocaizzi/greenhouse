@@ -41,6 +41,57 @@ def test_preferences_includes_default_cluster_options(seeded_client):
     assert "Test Cluster" in resp.text
 
 
+def test_preferences_renders_global_config_form(client):
+    resp = client.get("/preferences")
+    assert resp.status_code == 200
+    assert "Global irrigation defaults" in resp.text
+    assert 'action="/config/global"' in resp.text
+    assert 'name="quiet_start_hour"' in resp.text
+    assert 'name="quiet_end_hour"' in resp.text
+
+
+def test_global_config_post_persists(client):
+    resp = client.post(
+        "/config/global",
+        data={
+            "mode": "smart",
+            "duration_minutes": "3",
+            "interval_hours": "12",
+            "auto_run": "true",
+            "quiet_start_hour": "0",
+            "quiet_end_hour": "5",
+        },
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303
+
+    body = client.get("/api/v1/config/global").json()
+    assert body["mode"] == "smart"
+    assert body["duration_minutes"] == 3
+    assert body["quiet_start_hour"] == 0
+    assert body["quiet_end_hour"] == 5
+    assert body["auto_run"] is True
+
+
+def test_global_config_blank_fields_clear_to_inherit(client):
+    # Set values first
+    client.post(
+        "/config/global",
+        data={"mode": "smart", "quiet_start_hour": "1", "quiet_end_hour": "6"},
+        follow_redirects=False,
+    )
+    # Resubmit with blanks → null (fall through to constants)
+    client.post(
+        "/config/global",
+        data={"mode": "", "quiet_start_hour": "", "quiet_end_hour": ""},
+        follow_redirects=False,
+    )
+    body = client.get("/api/v1/config/global").json()
+    assert body["mode"] is None
+    assert body["quiet_start_hour"] is None
+    assert body["quiet_end_hour"] is None
+
+
 def test_preferences_clearing_dry_run_persists_false(client):
     # First turn it on
     client.post(

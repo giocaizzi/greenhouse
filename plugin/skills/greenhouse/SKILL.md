@@ -47,6 +47,9 @@ Every `/api/v1` endpoint on the server is exposed as an MCP tool by `fastapi-mcp
 | "Show me trends" | `clusters/{id}/chart-data` or `plants/{id}/chart-data` |
 | "I'll be away next week" | Create a `vacation` window |
 | "Only water at night / set allowed hours" | Per-cluster irrigation `windows` (CRUD under `clusters/{id}/windows`) |
+| "Don't water overnight / set quiet hours" | `quiet_start_hour`/`quiet_end_hour` on `clusters/{id}/config` (per cluster) or `config/global` (everywhere) |
+| "Set system-wide defaults" / "what's inherited?" | `config/global` (read/write defaults); `clusters/{id}/config/effective` (merged view, source per field) |
+| "Water it now even though it's quiet hours" | `clusters/{id}/irrigate` with `force=true` — bypasses the quiet gate, logs `manual_override_quiet_hours` |
 | "How healthy is my monstera?" | `plants/{id}/health`; `plants/{id}/health-timeline` for the trend |
 | "Refresh the health scores now" | `plants/health/snapshot` (trigger a snapshot) |
 | "When will it next water?" | `clusters/{id}/forecast` |
@@ -69,6 +72,7 @@ The engine enforces several rules. Respect them when reasoning; don't try to byp
 5. **Trust layer runs before every actuation** — sensor drift / stale data / leak / stuck-valve detection. If actuation fails or is blocked, check `alerts` to see why.
 6. **Learning is advisory** — alerts like `blocked_drip` or `chronic_underwatering` inform; they do not block irrigation.
 7. **Vacation windows pause everything** — check before assuming the system is broken.
+8. **Quiet hours are a hard gate on auto runs** — if a decision says `quiet_hours`, the engine skipped because the local time is inside the configured window (cluster → global config). It only affects automatic runs; a manual `irrigate` with `force=true` (or `irrigators/{id}/start`) overrides it and the decision is tagged `manual_override_quiet_hours`. Config is hierarchical (cluster overrides global overrides built-in); use `config/effective` to see what actually applies.
 
 When summarizing decisions, lead with the `primary_code` and the human-readable `reason_text`. Don't paraphrase — those codes are stable identifiers the user can search for and the developer documents.
 

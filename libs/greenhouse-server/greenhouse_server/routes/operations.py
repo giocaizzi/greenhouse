@@ -122,7 +122,9 @@ def irrigate(
         cluster_id: Cluster to irrigate.
         request: `temp_override` to bypass sensor/weather resolution,
             `dry_run=True` to compute the decision without actuating,
-            `no_sync=True` to skip the sensor refresh.
+            `no_sync=True` to skip the sensor refresh, `force=True` to
+            bypass the quiet-hours deny window (the decision still records
+            a `manual_override_quiet_hours` warning Reason).
 
     Returns:
         Decision details (`action`, `reason`, `confidence`, optional
@@ -137,6 +139,7 @@ def irrigate(
         temp_override=request.temp_override,
         dry_run=request.dry_run,
         no_sync=request.no_sync,
+        force=request.force,
     )
     if result.get("action") == "error" and result.get("reason") == "cluster not found":
         raise HTTPException(status_code=404, detail="Cluster not found")

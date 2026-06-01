@@ -339,3 +339,97 @@ class TestSchedulerCommands:
         result = runner.invoke(app, ["scheduler", "pause"])
         assert result.exit_code == 1
         assert "not found" in result.output.lower()
+
+
+@pytest.fixture
+def _patch_capture(monkeypatch):
+    """Patch IrrigationClient and capture each request's (method, path, json body).
+
+    Returns the list the handler appends to so a test can assert exactly which
+    fields the CLI forwarded to the server.
+    """
+    captured: list[dict] = []
+
+    def _patch(routes: dict):
+        def handler(request: httpx.Request) -> httpx.Response:
+            body = None
+            if request.content:
+                body = json.loads(request.content)
+            captured.append({"method": request.method, "path": request.url.path, "json": body})
+            status, payload = routes.get((request.method, request.url.path), (404, {"detail": "Not found"}))
+            return httpx.Response(status, json=payload)
+
+        transport = httpx.MockTransport(handler)
+        original_init = httpx.Client.__init__
+
+        def patched_init(self, *args, **kwargs):
+            kwargs.pop("base_url", None)
+            kwargs.pop("timeout", None)
+            original_init(self, base_url="http://test", transport=transport, timeout=30.0)
+
+        monkeypatch.setattr(httpx.Client, "__init__", patched_init)
+        return captured
+
+    return _patch
+
+
+class TestConfigCommands:
+    def test_set_forwards_quiet_hours_and_caps(self, _patch_capture):
+        captured = _patch_capture({("PUT", "/api/v1/clusters/1/config"): (200, {"id": 1, "cluster_id": 1})})
+        result = runner.invoke(
+            app,
+            ["config", "set", "--cluster", "1", "--quiet-start", "0", "--quiet-end", "5", "--daily-cap", "30"],
+        )
+        assert result.exit_code == 0
+        assert captured[0]["json"] == {"quiet_start_hour": 0, "quiet_end_hour": 5, "daily_cap_minutes": 30}
+
+    def test_set_omits_unset_fields(self, _patch_capture):
+        captured = _patch_capture({("PUT", "/api/v1/clusters/1/config"): (200, {"id": 1, "cluster_id": 1})})
+        result = runner.invoke(app, ["config", "set", "--cluster", "1", "--mode", "smart"])
+        assert result.exit_code == 0
+        # null-valued options are dropped so the server leaves them unchanged
+        assert captured[0]["json"] == {"mode": "smart"}
+
+    def test_effective_reads_merged_config(self, _patch_client):
+        _patch_client(
+            {
+                ("GET", "/api/v1/clusters/1/config/effective"): (
+                    200,
+                    {
+                        "cluster_id": 1,
+                        "declared": None,
+                        "effective": {"quiet_start_hour": {"value": 0, "source": "global"}},
+                    },
+                ),
+            }
+        )
+        result = runner.invoke(app, ["config", "effective", "--cluster", "1"])
+        assert result.exit_code == 0
+        data = json.loads(result.stdout)
+        assert data["effective"]["quiet_start_hour"]["source"] == "global"
+
+    def test_global_get(self, _patch_client):
+        _patch_client({("GET", "/api/v1/config/global"): (200, {"id": 1, "quiet_start_hour": 0, "quiet_end_hour": 5})})
+        result = runner.invoke(app, ["config", "global", "get"])
+        assert result.exit_code == 0
+        assert json.loads(result.stdout)["quiet_end_hour"] == 5
+
+    def test_global_set_forwards_only_given_fields(self, _patch_capture):
+        captured = _patch_capture({("PUT", "/api/v1/config/global"): (200, {"id": 1})})
+        result = runner.invoke(app, ["config", "global", "set", "--quiet-start", "1", "--quiet-end", "6"])
+        assert result.exit_code == 0
+        assert captured[0]["json"] == {"quiet_start_hour": 1, "quiet_end_hour": 6}
+
+
+class TestIrrigateForce:
+    def test_force_flag_forwarded(self, _patch_capture):
+        captured = _patch_capture({("POST", "/api/v1/clusters/1/irrigate"): (200, {"action": "irrigate"})})
+        result = runner.invoke(app, ["irrigate", "1", "--force"])
+        assert result.exit_code == 0
+        assert captured[0]["json"]["force"] is True
+
+    def test_force_defaults_false(self, _patch_capture):
+        captured = _patch_capture({("POST", "/api/v1/clusters/1/irrigate"): (200, {"action": "skip"})})
+        result = runner.invoke(app, ["irrigate", "1"])
+        assert result.exit_code == 0
+        assert captured[0]["json"]["force"] is False

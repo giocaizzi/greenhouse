@@ -58,4 +58,57 @@
     </div>
   </form>
 </article>
+
+<section class="page-head" id="global-config">
+  <div class="page-head__title">
+    <h2>Global irrigation defaults</h2>
+    <div class="page-head__meta">
+      <span>Inherited by every cluster. Leave a field blank to fall through to the built-in default.</span>
+    </div>
+  </div>
+</section>
+
+<article class="card form-card">
+  <form method="post" action="/config/global">
+    <label for="g_mode">Mode
+      <select id="g_mode" name="mode">
+        <option value="">— built-in default —</option>
+        <option value="smart"{% if global_config.mode == "smart" %} selected{% endif %}>Smart</option>
+        <option value="schedule"{% if global_config.mode == "schedule" %} selected{% endif %}>Schedule</option>
+        <option value="manual"{% if global_config.mode == "manual" %} selected{% endif %}>Manual</option>
+      </select>
+    </label>
+    <label for="g_duration_minutes">Duration (minutes)
+      <input type="number" id="g_duration_minutes" name="duration_minutes" min="1" max="60"
+             value="{{ global_config.duration_minutes if global_config.duration_minutes is not none else '' }}"
+             placeholder="built-in default">
+    </label>
+    <label for="g_interval_hours">Interval (hours)
+      <input type="number" id="g_interval_hours" name="interval_hours" min="1" max="168"
+             value="{{ global_config.interval_hours if global_config.interval_hours is not none else '' }}"
+             placeholder="built-in default">
+    </label>
+    <label for="g_auto_run">Auto-run
+      <select id="g_auto_run" name="auto_run">
+        <option value="">— built-in default —</option>
+        <option value="true"{% if global_config.auto_run is true %} selected{% endif %}>On</option>
+        <option value="false"{% if global_config.auto_run is false %} selected{% endif %}>Off</option>
+      </select>
+    </label>
+    <label for="g_quiet_start_hour">Quiet hours start (0–23)
+      <input type="number" id="g_quiet_start_hour" name="quiet_start_hour" min="0" max="23"
+             value="{{ global_config.quiet_start_hour if global_config.quiet_start_hour is not none else '' }}"
+             placeholder="off">
+      <small class="muted">Blank = off. Equal start/end disables quiet hours globally.</small>
+    </label>
+    <label for="g_quiet_end_hour">Quiet hours end (0–23, exclusive)
+      <input type="number" id="g_quiet_end_hour" name="quiet_end_hour" min="0" max="23"
+             value="{{ global_config.quiet_end_hour if global_config.quiet_end_hour is not none else '' }}"
+             placeholder="off">
+    </label>
+    <div class="form-actions">
+      <button type="submit">Save global defaults</button>
+    </div>
+  </form>
+</article>
 {% endblock %}

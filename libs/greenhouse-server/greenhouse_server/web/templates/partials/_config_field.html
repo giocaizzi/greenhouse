@@ -1,0 +1,65 @@
+{# One row of the hierarchical config form.
+
+   Required context:
+     field            dict with keys: name, label, kind (select|number|tri_bool),
+                       and kind-specific extras (options, min, max).
+     declared_config  the raw IrrigationConfig row for this cluster (may be None).
+     effective_config dict[field_name] -> {value, source}; "source" is one of
+                       "cluster" | "global" | "default".
+
+   The visible <input>/<select> sends the raw cluster-level value. An empty
+   value means "inherit"; the server PATCHes the cluster row with that
+   field set to None.
+
+   The source badge ("↳ default", "↳ global", "override") makes the
+   inheritance state visible without re-querying.
+#}
+{% set declared_value = (declared_config|attr(field.name)) if declared_config is not none else none %}
+{% set resolved = effective_config.get(field.name, {}) %}
+{% set source = resolved.get('source', 'default') %}
+{% set effective_value = resolved.get('value') %}
+{% set is_override = source == 'cluster' %}
+
+<div class="config-field" data-source="{{ source }}" id="config-field-{{ field.name }}">
+  <label for="cfg-{{ field.name }}" class="config-field__label">
+    <span class="config-field__name">{{ field.label }}</span>
+    {% if is_override %}
+      <span class="badge-ok config-field__source" title="Overridden at the cluster level">override</span>
+    {% else %}
+      <span class="badge-muted config-field__source" title="Inherited from {{ source }}">
+        <span class="rel-arrow" aria-hidden="true">↳</span>
+        {{ "global" if source == "global" else "default" }}
+      </span>
+    {% endif %}
+  </label>
+
+  {% if field.kind == 'select' %}
+    <select id="cfg-{{ field.name }}" name="{{ field.name }}">
+      <option value=""{% if declared_value is none %} selected{% endif %}>
+        Inherit{% if effective_value is not none %} ({{ effective_value }}){% endif %}
+      </option>
+      {% for value, label in field.options %}
+        <option value="{{ value }}"{% if declared_value == value %} selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  {% elif field.kind == 'tri_bool' %}
+    {# null = inherit, "true" = enabled, "false" = disabled. The save route
+       interprets empty string as None (inherit). #}
+    <select id="cfg-{{ field.name }}" name="{{ field.name }}">
+      <option value=""{% if declared_value is none %} selected{% endif %}>
+        Inherit{% if effective_value is not none %} ({{ "on" if effective_value else "off" }}){% endif %}
+      </option>
+      <option value="true"{% if declared_value is true %} selected{% endif %}>On</option>
+      <option value="false"{% if declared_value is false %} selected{% endif %}>Off</option>
+    </select>
+  {% else %}
+    <input type="number"
+           id="cfg-{{ field.name }}"
+           name="{{ field.name }}"
+           {% if field.min is defined %}min="{{ field.min }}"{% endif %}
+           {% if field.max is defined %}max="{{ field.max }}"{% endif %}
+           step="1"
+           placeholder="{% if effective_value is not none %}inherit ({{ effective_value }}){% else %}inherit{% endif %}"
+           value="{{ declared_value if declared_value is not none else '' }}">
+  {% endif %}
+</div>
