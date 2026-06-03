@@ -2,7 +2,7 @@
 
 import json
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 # --- Cluster ---
 
@@ -98,6 +98,8 @@ class IrrigatorBase(BaseModel):
     name: str
     type: str
     config: dict | None = None
+    reservoir_l: float | None = Field(default=None, ge=0)
+    flow_rate_l_per_min: float | None = Field(default=None, ge=0)
 
 
 class CreateIrrigatorRequest(IrrigatorBase):
@@ -871,6 +873,8 @@ class UpdateIrrigatorRequest(BaseModel):
     name: str | None = None
     type: str | None = None
     config: dict | None = None
+    reservoir_l: float | None = Field(default=None, ge=0)
+    flow_rate_l_per_min: float | None = Field(default=None, ge=0)
 
 
 # --- Search ----------------------------------------------------------------

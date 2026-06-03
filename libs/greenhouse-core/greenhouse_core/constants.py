@@ -4,6 +4,13 @@
 
 MIN_COOLDOWN_HOURS = 6
 
+# ── Vacation Rationing — reservoir burn-down envelope ─────────────────────────
+# When a vacation window is active and an irrigator has reservoir/flow capacity
+# configured, the engine rations each cycle against a daily budget so the tank
+# lasts the whole trip (see logic/engine.py:_apply_vacation_budget).
+VACATION_RESERVOIR_USABLE_FRACTION = 0.95  # reserve 5% so the pump never runs dry
+VACATION_MIN_RUN_MINUTES = 1  # below this, skip instead of a token dribble
+
 # ── Quiet Hours — hard gate against actuation during user-defined windows ────
 # Default applies to every cluster that hasn't overridden. Indoor irrigators
 # tend to make pump noise at night, so the baseline blocks 00:00–05:00 local

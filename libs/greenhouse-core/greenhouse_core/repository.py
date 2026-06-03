@@ -454,6 +454,27 @@ class IrrigationRepository:
             )
         )
 
+    def irrigator_consumption_liters(self, irrigator_id: int, since: int, until: int) -> float:
+        """Liters dispensed by an irrigator over ``[since, until]`` (inclusive).
+
+        Sums ``duration_minutes`` across ``action == "start"`` events in the
+        window and multiplies by the irrigator's ``flow_rate_l_per_min``.
+        Returns ``0.0`` when the irrigator is unknown or has no flow rate
+        configured (so an uncapped irrigator never spuriously consumes budget).
+        """
+        irrigator = self.session.get(Irrigator, irrigator_id)
+        if irrigator is None or irrigator.flow_rate_l_per_min is None:
+            return 0.0
+        total_minutes = self.session.scalar(
+            select(func.coalesce(func.sum(IrrigationEvent.duration_minutes), 0)).where(
+                IrrigationEvent.irrigator_id == irrigator_id,
+                IrrigationEvent.action == "start",
+                IrrigationEvent.timestamp >= since,
+                IrrigationEvent.timestamp <= until,
+            )
+        )
+        return float(total_minutes or 0) * irrigator.flow_rate_l_per_min
+
     # ── Irrigation Configs ────────────────────────────────────────────────────
 
     _CONFIG_PATCHABLE_FIELDS = (

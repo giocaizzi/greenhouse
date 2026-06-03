@@ -1,6 +1,6 @@
 """SQLAlchemy v2 ORM models for the irrigation system."""
 
-from sqlalchemy import ForeignKey, Index, Integer, String, UniqueConstraint
+from sqlalchemy import Float, ForeignKey, Index, Integer, String, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -70,6 +70,12 @@ class Irrigator(Base):
     name: Mapped[str] = mapped_column(String, nullable=False)
     type: Mapped[str] = mapped_column(String, nullable=False)
     config: Mapped[str | None] = mapped_column(String)
+    # Reservoir/pump capacity for vacation rationing. Both nullable: when
+    # unset the engine treats the irrigator as uncapped and behaves exactly as
+    # before (no budget envelope). reservoir_l = usable tank volume in liters;
+    # flow_rate_l_per_min = measured pump throughput in liters per minute.
+    reservoir_l: Mapped[float | None] = mapped_column(Float)
+    flow_rate_l_per_min: Mapped[float | None] = mapped_column(Float)
 
     cluster: Mapped["Cluster"] = relationship(back_populates="irrigators")
     events: Mapped[list["IrrigationEvent"]] = relationship(back_populates="irrigator", cascade="all, delete-orphan")
@@ -360,7 +366,18 @@ class IrrigationWindow(Base):
 
 
 class VacationWindow(Base):
-    """Active vacation window — the engine and digest channels honor it."""
+    """Active vacation window honored by the decision engine.
+
+    While ``now`` falls within ``[starts_at, ends_at]`` the engine's
+    ``_apply_vacation_budget`` step runs as the final adjustment: it appends a
+    ``VACATION_ACTIVE`` reason to every decision for audit and, for clusters
+    whose irrigators have ``reservoir_l`` and ``flow_rate_l_per_min`` set,
+    rations the shared irrigation duration against a burn-down envelope so the
+    reservoir lasts the whole vacation (trimming to ``VACATION_RATIONING`` or
+    flipping to SKIP with ``VACATION_BUDGET_EXHAUSTED``). Irrigators with no
+    capacity configured are left untouched (normal irrigation). Digest
+    channels also surface the active window.
+    """
 
     __tablename__ = "vacation_windows"
 
