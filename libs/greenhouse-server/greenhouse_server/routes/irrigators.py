@@ -94,7 +94,8 @@ def add_irrigator(cluster_id: int, request: CreateIrrigatorRequest, repo: RepoDe
     Args:
         cluster_id: Cluster the irrigator belongs to.
         request: Tuya device ID, irrigator name, type (e.g. `tuya_cloud`),
-            and optional config dict.
+            optional config dict, and optional `reservoir_l` /
+            `flow_rate_l_per_min` capacity used for vacation rationing.
 
     Raises:
         HTTPException: 404 if the cluster does not exist, 409 if the Tuya
@@ -109,6 +110,13 @@ def add_irrigator(cluster_id: int, request: CreateIrrigatorRequest, repo: RepoDe
             irrigator_type=request.type,
             config=request.config or {},
         )
+        # add_irrigator does not accept capacity columns; persist them here if supplied.
+        if request.reservoir_l is not None or request.flow_rate_l_per_min is not None:
+            repo.update_irrigator(
+                irrigator_id,
+                reservoir_l=request.reservoir_l,
+                flow_rate_l_per_min=request.flow_rate_l_per_min,
+            )
         repo.session.commit()
     except IntegrityError:
         repo.session.rollback()
@@ -165,7 +173,8 @@ def update_irrigator(cluster_id: int, irrigator_id: int, request: UpdateIrrigato
     Args:
         cluster_id: Cluster the irrigator belongs to.
         irrigator_id: Numeric irrigator identifier.
-        request: Fields to update — any subset of `name`, `type`, and `config`.
+        request: Fields to update — any subset of `name`, `type`, `config`,
+            `reservoir_l`, and `flow_rate_l_per_min`.
 
     Returns:
         The updated irrigator.

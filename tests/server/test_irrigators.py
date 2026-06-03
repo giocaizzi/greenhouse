@@ -81,6 +81,70 @@ class TestIrrigatorCRUD:
         resp = client.put("/api/v1/clusters/1/irrigators/999", json={"name": "X"})
         assert resp.status_code == 404
 
+    def test_create_with_capacity_round_trips(self, client):
+        """POST with reservoir_l/flow_rate_l_per_min persists and is returned."""
+        client.post("/api/v1/clusters", json={"name": "C1"})
+        resp = client.post(
+            "/api/v1/clusters/1/irrigators",
+            json={
+                "tuya_device_id": "dev001",
+                "name": "Pump",
+                "type": "tuya_cloud",
+                "reservoir_l": 12.5,
+                "flow_rate_l_per_min": 1.5,
+            },
+        )
+        assert resp.status_code == 201
+        data = resp.json()
+        assert data["reservoir_l"] == 12.5
+        assert data["flow_rate_l_per_min"] == 1.5
+
+        # Persisted: a fresh GET returns the same values.
+        got = client.get("/api/v1/clusters/1/irrigators/1").json()
+        assert got["reservoir_l"] == 12.5
+        assert got["flow_rate_l_per_min"] == 1.5
+
+    def test_create_without_capacity_defaults_none(self, client):
+        """Capacity fields are optional and default to None."""
+        client.post("/api/v1/clusters", json={"name": "C1"})
+        resp = client.post(
+            "/api/v1/clusters/1/irrigators",
+            json={"tuya_device_id": "dev001", "name": "Pump", "type": "tuya_cloud"},
+        )
+        data = resp.json()
+        assert data["reservoir_l"] is None
+        assert data["flow_rate_l_per_min"] is None
+
+    def test_update_capacity_round_trips(self, client):
+        """PUT with capacity fields updates and returns the new values."""
+        client.post("/api/v1/clusters", json={"name": "C1"})
+        client.post(
+            "/api/v1/clusters/1/irrigators",
+            json={"tuya_device_id": "dev001", "name": "Pump", "type": "tuya_cloud"},
+        )
+        resp = client.put(
+            "/api/v1/clusters/1/irrigators/1",
+            json={"reservoir_l": 20.0, "flow_rate_l_per_min": 2.0},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["reservoir_l"] == 20.0
+        assert data["flow_rate_l_per_min"] == 2.0
+
+        got = client.get("/api/v1/clusters/1/irrigators/1").json()
+        assert got["reservoir_l"] == 20.0
+        assert got["flow_rate_l_per_min"] == 2.0
+
+    def test_update_rejects_negative_capacity(self, client):
+        """Negative capacity values are rejected by schema validation (ge=0)."""
+        client.post("/api/v1/clusters", json={"name": "C1"})
+        client.post(
+            "/api/v1/clusters/1/irrigators",
+            json={"tuya_device_id": "dev001", "name": "Pump", "type": "tuya_cloud"},
+        )
+        resp = client.put("/api/v1/clusters/1/irrigators/1", json={"reservoir_l": -1.0})
+        assert resp.status_code == 422
+
     def test_delete_irrigator(self, client):
         client.post("/api/v1/clusters", json={"name": "C1"})
         client.post(

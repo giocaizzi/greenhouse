@@ -47,6 +47,20 @@ def new_irrigator_form(request: Request, cluster_id: int, repo: RepoDep):
     return templates.TemplateResponse(request, "irrigators/new.html", base_context(request, cluster=cluster))
 
 
+def _parse_capacity(raw: str) -> float | None:
+    """Parse an optional non-negative float from a form field; blank -> None."""
+    raw = raw.strip()
+    if not raw:
+        return None
+    try:
+        value = float(raw)
+    except ValueError as exc:
+        raise HTTPException(400, "Capacity values must be numbers") from exc
+    if value < 0:
+        raise HTTPException(400, "Capacity values must be >= 0")
+    return value
+
+
 @router.post("/clusters/{cluster_id}/irrigators")
 def create_irrigator(
     request: Request,
@@ -57,6 +71,8 @@ def create_irrigator(
     type: str = Form(...),
     device_ip: str = Form(""),
     local_key: str = Form(""),
+    reservoir_l: str = Form(""),
+    flow_rate_l_per_min: str = Form(""),
 ):
     require_cluster(repo, cluster_id)
     config: dict = {}
@@ -64,13 +80,17 @@ def create_irrigator(
         config["device_ip"] = device_ip.strip()
     if local_key.strip():
         config["local_key"] = local_key.strip()
-    repo.add_irrigator(
+    reservoir = _parse_capacity(reservoir_l)
+    flow_rate = _parse_capacity(flow_rate_l_per_min)
+    irrigator_id = repo.add_irrigator(
         cluster_id=cluster_id,
         tuya_device_id=tuya_device_id,
         name=name,
         irrigator_type=type,
         config=config,
     )
+    if reservoir is not None or flow_rate is not None:
+        repo.update_irrigator(irrigator_id, reservoir_l=reservoir, flow_rate_l_per_min=flow_rate)
     repo.session.commit()
     return RedirectResponse(url=f"/clusters/{cluster_id}#irrigators", status_code=303)
 
@@ -97,6 +117,8 @@ def update_irrigator(
     type: str = Form(...),
     device_ip: str = Form(""),
     local_key: str = Form(""),
+    reservoir_l: str = Form(""),
+    flow_rate_l_per_min: str = Form(""),
 ):
     _get_irrigator_in_cluster(repo, cluster_id, irrigator_id)
     config: dict = {}
@@ -104,7 +126,14 @@ def update_irrigator(
         config["device_ip"] = device_ip.strip()
     if local_key.strip():
         config["local_key"] = local_key.strip()
-    repo.update_irrigator(irrigator_id, name=name, type=type, config=config)
+    repo.update_irrigator(
+        irrigator_id,
+        name=name,
+        type=type,
+        config=config,
+        reservoir_l=_parse_capacity(reservoir_l),
+        flow_rate_l_per_min=_parse_capacity(flow_rate_l_per_min),
+    )
     repo.session.commit()
     return RedirectResponse(url=f"/clusters/{cluster_id}#irrigators", status_code=303)
 

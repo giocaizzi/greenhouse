@@ -8,12 +8,14 @@ Date strings are interpreted as UTC midnight. The parsing priority is:
 
 from __future__ import annotations
 
+import time
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse
 
 from greenhouse_server.deps import RepoDep
+from greenhouse_server.services.vacation import cluster_budgets
 from greenhouse_server.web.context import base_context
 from greenhouse_server.web.templating import templates
 
@@ -35,11 +37,26 @@ def _parse_ts(value: str) -> int:
 def vacation_list(request: Request, repo: RepoDep):
     active = repo.get_active_vacation()
     windows = repo.list_vacation_windows()
+    # Project the per-cluster water budget for the window that matters most:
+    # the active one, else the next scheduled one. Only clusters with capacity
+    # configured produce a readout (the helper omits the rest), matching the
+    # engine's no-op behavior when no reservoir/flow is set.
+    budget_window = active or _next_window(windows)
+    budgets = cluster_budgets(repo, budget_window.starts_at, budget_window.ends_at) if budget_window is not None else []
     return templates.TemplateResponse(
         request,
         "vacation/list.html",
-        base_context(request, active=active, windows=windows),
+        base_context(request, active=active, windows=windows, budgets=budgets, budget_window=budget_window),
     )
+
+
+def _next_window(windows):
+    """Return the soonest-starting future window, or None when none are scheduled."""
+    now = int(time.time())
+    upcoming = [w for w in windows if w.starts_at > now]
+    if not upcoming:
+        return None
+    return min(upcoming, key=lambda w: w.starts_at)
 
 
 @router.post("/vacation")
