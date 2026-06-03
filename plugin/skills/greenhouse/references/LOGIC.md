@@ -47,6 +47,7 @@ Every rule function appends a `Reason` to the decision's trail via `decision.add
 | `temp_fallback` | Decide from temperature alone (no sensor) |
 | `config_fallback` | Decide from config interval alone |
 | `no_data` | Skip — no usable data |
+| `vacation_budget_exhausted` | Skip — vacation reservoir budget is spent this cycle (see Vacation rationing below) |
 
 `daily_cap_hit` is defined in the enum but is **not** emitted by the decision engine. Per-day rate limits (`max_events_per_day`, `daily_cap_minutes`) are enforced at the API actuation routes (HTTP 409), not inside `decide_for_cluster`.
 
@@ -54,7 +55,11 @@ Every rule function appends a `Reason` to the decision's trail via `decision.add
 
 **Adjustment codes** (modify duration/interval delta, don't override action):
 
-`temp_high`, `temp_low`, `humidity_very_low`, `humidity_low`, `humidity_high`, `light_very_bright`, `light_bright`, `light_dark`, `light_very_dark`, `water_needs_high`, `water_needs_low`, `trend_moisture_declining`, `trend_moisture_rising`, `trend_temp_rising`, `underwatering_pattern`, `learning_alert`, `seasonal_hold`, `seasonal_boost`
+`temp_high`, `temp_low`, `humidity_very_low`, `humidity_low`, `humidity_high`, `light_very_bright`, `light_bright`, `light_dark`, `light_very_dark`, `water_needs_high`, `water_needs_low`, `trend_moisture_declining`, `trend_moisture_rising`, `trend_temp_rising`, `underwatering_pattern`, `learning_alert`, `seasonal_hold`, `seasonal_boost`, `vacation_rationing`
+
+**Informational codes** (audit-only, never change action or dosage):
+
+`vacation_active` — appended to *every* decision while a vacation window is active, so logs always record vacation status (even on SKIP).
 
 ### Decision persistence
 
@@ -119,6 +124,38 @@ Precedence (most → least specific): species-level `season_frequency_multiplier
 
 The 6h cooldown remains the hard floor regardless of multiplier.
 
+### Vacation rationing (final adjustment)
+
+`_apply_vacation_budget` is the **last** engine adjustment — it runs after the seasonal multiplier, so it clamps the final dosage. It makes vacation windows genuinely *enforced*: rather than a blanket hold, the engine rations a configured reservoir so the water lasts the trip.
+
+Behaviour by case:
+
+- **No active vacation** → no-op, decision returned unchanged.
+- **Vacation active** → appends an informational `vacation_active` reason (with the window dates) to *every* decision, including SKIPs, for the audit trail.
+- **Vacation active, but no capacity configured** → normal irrigation. Rationing only engages for clusters whose irrigators have **both** `reservoir_l` (usable tank volume, liters) and `flow_rate_l_per_min` (pump throughput, L/min) set. Unset capacity = today's behavior.
+- **Vacation active, capacity set, action is not `irrigate`** → no-op (only real irrigations are throttled).
+
+Budget-envelope math (per capacity-bearing irrigator), applied when a vacation is active and the decision is to irrigate:
+
+```
+usable_l       = reservoir_l * VACATION_RESERVOIR_USABLE_FRACTION   # 0.95 — reserve 5% so the pump never runs dry
+D_days         = max(1, ceil((ends_at - starts_at) / 86400))        # vacation length in days
+day_index      = floor((now - starts_at) / 86400)                   # 0-based current day
+daily_budget_l = usable_l / D_days
+allowed_cum_l  = min(usable_l, daily_budget_l * (day_index + 1))     # cumulative allowance through today
+spent_l        = consumption so far this vacation (Σ start-event minutes × flow_rate, [starts_at, now])
+headroom_l     = max(0, allowed_cum_l - spent_l)
+max_run_min_i  = headroom_l / flow_rate_l_per_min
+```
+
+The **tightest tank binds the shared run duration**: `binding_max_min = floor(min(max_run_min_i over all capacity irrigators))`. Then:
+
+- `binding_max_min >= decision.duration_minutes` → within budget, duration unchanged.
+- `VACATION_MIN_RUN_MINUTES (1) <= binding_max_min < decision.duration_minutes` → trim `duration_minutes` to `binding_max_min`, append `vacation_rationing`.
+- `binding_max_min < VACATION_MIN_RUN_MINUTES` → no meaningful budget left this cycle: flip to `Action.SKIP`, `duration_minutes = 0`, append `vacation_budget_exhausted`, confidence set to the cooldown level.
+
+The tank is assumed full at vacation start; consumption is derived by summing recorded `start` irrigation-event durations × flow rate within the window. Relevant constants live in `constants.py`: `VACATION_RESERVOIR_USABLE_FRACTION = 0.95`, `VACATION_MIN_RUN_MINUTES = 1`.
+
 ### Device-health gate (actuation-time)
 
 Separate from the engine: when the irrigation **service** is about to actuate, it consults the cached `DeviceHealthMonitor` state via `is_actuation_blocked`. If a blocking alarm (`device_no_water`, `device_rain_detected`, `device_offline`) is open for the target irrigator, it appends a `CRITICAL` reason, flips the decision to `Action.SKIP`, re-persists the `DecisionLog`, and records a `decision_skip` activity event — no water is dispensed.
@@ -144,9 +181,10 @@ While an irrigation is running, `PumpWatcherService` polls the IK10PW's DP 105 w
    - Soil-moisture rule (driest plant wins) + conflict resolution
    - Temperature / humidity / light / water-needs / 48h-trend adjustments
    - Seasonal frequency multiplier on the interval
+   - Vacation rationing (final adjustment): when a vacation is active, append `vacation_active`; if cluster irrigators have reservoir + flow capacity, clamp/skip the run to fit the burn-down budget (`vacation_rationing` / `vacation_budget_exhausted`)
    - (No sensor data → temperature/config fallback path instead)
 5. Persist `DecisionLog`
-6. If `action == "irrigate"` and not dry-run / vacation window: device-health actuation gate (may flip to skip), then execute on the irrigator; `PumpWatcherService` watches DP 105 for the run's duration
+6. If `action == "irrigate"` and not dry-run: device-health actuation gate (may flip to skip), then execute on the irrigator for `decision.duration_minutes` (already rationed by the vacation rule if a vacation is active); `PumpWatcherService` watches DP 105 for the run's duration
 7. Emit `ActivityEvent`; reconcile alert inbox
 
 ### Cluster without irrigator
@@ -240,3 +278,4 @@ All thresholds in `libs/greenhouse-core/greenhouse_core/constants.py`:
 - Seasonal multipliers: indoor {winter 0.5, spring 1.0, summer 1.2, autumn 0.8}, outdoor {0.3, 1.0, 1.5, 0.7}
 - Quiet-hours seed window: 00:00–05:00 local (`DEFAULT_QUIET_START_HOUR` / `DEFAULT_QUIET_END_HOUR`) — used by the migration seed only, **not** as a resolver fallback (unconfigured = off)
 - Hierarchical config built-ins: `DEFAULT_IRRIGATION_MODE = "smart"`, `DEFAULT_AUTO_RUN = True`
+- Vacation rationing: `VACATION_RESERVOIR_USABLE_FRACTION = 0.95` (reserve 5% so the pump never runs dry), `VACATION_MIN_RUN_MINUTES = 1` (below this, skip instead of a token dribble)

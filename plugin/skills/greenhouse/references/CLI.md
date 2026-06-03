@@ -83,7 +83,7 @@ Notable flags:
 ```
 greenhouse cluster    add | list | get <id> | update <id> | delete <id> [--yes]
 greenhouse plant      add | list | sync [--plant-id N] | move | update <id> | delete <id> [--yes]
-greenhouse irrigator  add | list | start <id> | stop <id> | log-manual | update <id> | delete <id> [--yes]
+greenhouse irrigator  add [--reservoir-l L] [--flow-rate-l-per-min R] | list | start <id> | stop <id> | log-manual | update <id> [--reservoir-l L] [--flow-rate-l-per-min R] | delete <id> [--yes]
 greenhouse sensor     add | list | update <id> | delete <id> [--yes]
 greenhouse config     get --cluster N | effective --cluster N | set --cluster N [--mode smart] [--minutes 2] [--interval 12] [--auto-run] [--quiet-start H] [--quiet-end H] [--daily-cap M] [--max-events N]
 greenhouse config global  get | set [--mode …] [--quiet-start H] [--quiet-end H] [--auto-run] …
@@ -104,11 +104,12 @@ Patterns to know:
 - **`config global get` / `config global set`** read and patch the singleton global defaults inherited by every cluster (same field set as `config set`, no `--cluster`). Setting a field to blank/clearing it falls through to the built-in constant.
 - **`plant sync`** rewrites plant care fields from `plant_database.json`. Run it after editing the database or after `plant add` for a species that needs evidence-based defaults.
 - **`plant move`** takes `--to-cluster N`; health and learning history follow the plant, decision/event/alert logs stay with the source cluster.
+- **`irrigator add` / `irrigator update`** accept two optional capacity flags: `--reservoir-l` (usable tank volume in liters) and `--flow-rate-l-per-min` (measured pump throughput in L/min), both floats. They're optional and additive — leaving them unset keeps today's behavior. When **both** are set on a cluster's irrigators, the decision engine can ration runs during an active vacation window so the water lasts (see references/LOGIC.md).
 - **`irrigator start`** takes a duration (`--minutes`) and bypasses cooldown / engine checks — it's the manual escape hatch. Document this to the user when you reach for it.
 - **`irrigator log-manual`** records that the user watered by hand; it doesn't actuate anything, just feeds the audit log and absorption learning.
 - **`scheduler pause` / `resume`** toggles the `check_all` cron job at runtime. The pause is **persisted** — it survives a server restart; other jobs (sensor sync, anomaly scan, health snapshot) keep running.
 - **`alerts`** drives the inbox: `list` (filter by `--status` / `--cluster` / `--plant`), `get`, `ack`, `resolve`, and `sync` (recompute; `--cluster` scopes to one cluster, default all).
-- **`vacation add`** takes `--starts-at` / `--ends-at` as Unix-second timestamps; the engine holds during an active window.
+- **`vacation add`** takes `--starts-at` / `--ends-at` as Unix-second timestamps. During an active window the engine rations irrigation against each irrigator's configured reservoir/flow capacity (see references/LOGIC.md); clusters with no capacity configured irrigate normally.
 - **`windows add`** takes `--start-hour` / `--end-hour` (0–23, end exclusive) and `--weekday-mask` (Mon=1 … Sun=64, 127 = every day, default). An empty window list means global defaults apply.
 
 ## Common workflows in shell
