@@ -18,6 +18,12 @@ def irrigator_add(
     type: Annotated[str, typer.Option(help="tuya_cloud or tuya_local")],
     device_ip: Annotated[str | None, typer.Option(help="Local IP")] = None,
     local_key: Annotated[str | None, typer.Option(help="Local key")] = None,
+    reservoir_l: Annotated[
+        float | None, typer.Option(help="Usable reservoir/tank volume in liters (for vacation rationing)")
+    ] = None,
+    flow_rate_l_per_min: Annotated[
+        float | None, typer.Option(help="Measured pump throughput in liters per minute (for vacation rationing)")
+    ] = None,
 ):
     """Add an irrigator to a cluster."""
     config = {}
@@ -33,6 +39,8 @@ def irrigator_add(
             name=name,
             type=type,
             config=config if config else None,
+            reservoir_l=reservoir_l,
+            flow_rate_l_per_min=flow_rate_l_per_min,
         ),
     )
     output(data)
@@ -90,6 +98,12 @@ def irrigator_update(
     type: Annotated[str | None, typer.Option(help="tuya_cloud or tuya_local")] = None,
     device_ip: Annotated[str | None, typer.Option(help="Local IP")] = None,
     local_key: Annotated[str | None, typer.Option(help="Local key")] = None,
+    reservoir_l: Annotated[
+        float | None, typer.Option(help="Usable reservoir/tank volume in liters (for vacation rationing)")
+    ] = None,
+    flow_rate_l_per_min: Annotated[
+        float | None, typer.Option(help="Measured pump throughput in liters per minute (for vacation rationing)")
+    ] = None,
 ):
     """Patch irrigator metadata. Only the supplied fields are sent.
 
@@ -106,7 +120,15 @@ def irrigator_update(
     output(
         call(
             ctx,
-            lambda c: c.update_irrigator(cluster, id, name=name, type=type, config=config),
+            lambda c: c.update_irrigator(
+                cluster,
+                id,
+                name=name,
+                type=type,
+                config=config,
+                reservoir_l=reservoir_l,
+                flow_rate_l_per_min=flow_rate_l_per_min,
+            ),
         )
     )
 

@@ -433,3 +433,83 @@ class TestIrrigateForce:
         result = runner.invoke(app, ["irrigate", "1"])
         assert result.exit_code == 0
         assert captured[0]["json"]["force"] is False
+
+
+class TestIrrigatorCapacity:
+    """Irrigator add/update forward the reservoir + flow-rate capacity fields."""
+
+    def test_add_forwards_capacity_fields(self, _patch_capture):
+        captured = _patch_capture({("POST", "/api/v1/clusters/1/irrigators"): (201, {"id": 7})})
+        result = runner.invoke(
+            app,
+            [
+                "irrigator",
+                "add",
+                "--cluster",
+                "1",
+                "--device-id",
+                "fake_tuya_device_aabbccdd",
+                "--name",
+                "Tank pump",
+                "--type",
+                "tuya_local",
+                "--reservoir-l",
+                "20",
+                "--flow-rate-l-per-min",
+                "1.5",
+            ],
+        )
+        assert result.exit_code == 0
+        body = captured[0]["json"]
+        assert body["reservoir_l"] == 20
+        assert body["flow_rate_l_per_min"] == 1.5
+
+    def test_add_omits_capacity_when_unset(self, _patch_capture):
+        captured = _patch_capture({("POST", "/api/v1/clusters/1/irrigators"): (201, {"id": 7})})
+        result = runner.invoke(
+            app,
+            [
+                "irrigator",
+                "add",
+                "--cluster",
+                "1",
+                "--device-id",
+                "fake_tuya_device_aabbccdd",
+                "--name",
+                "Tank pump",
+                "--type",
+                "tuya_local",
+            ],
+        )
+        assert result.exit_code == 0
+        body = captured[0]["json"]
+        assert "reservoir_l" not in body
+        assert "flow_rate_l_per_min" not in body
+
+    def test_update_forwards_capacity_fields(self, _patch_capture):
+        captured = _patch_capture({("PUT", "/api/v1/clusters/1/irrigators/7"): (200, {"id": 7})})
+        result = runner.invoke(
+            app,
+            [
+                "irrigator",
+                "update",
+                "7",
+                "--cluster",
+                "1",
+                "--reservoir-l",
+                "15.5",
+                "--flow-rate-l-per-min",
+                "2",
+            ],
+        )
+        assert result.exit_code == 0
+        body = captured[0]["json"]
+        assert body["reservoir_l"] == 15.5
+        assert body["flow_rate_l_per_min"] == 2
+
+    def test_update_omits_capacity_when_unset(self, _patch_capture):
+        captured = _patch_capture({("PUT", "/api/v1/clusters/1/irrigators/7"): (200, {"id": 7})})
+        result = runner.invoke(app, ["irrigator", "update", "7", "--cluster", "1", "--name", "Renamed"])
+        assert result.exit_code == 0
+        body = captured[0]["json"]
+        assert body == {"name": "Renamed"}

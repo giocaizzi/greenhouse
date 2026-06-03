@@ -159,7 +159,8 @@ class IrrigationClient:
     # ── Irrigators ──
 
     def add_irrigator(self, cluster_id: int, **kwargs) -> dict:
-        return self._request("POST", f"/api/v1/clusters/{cluster_id}/irrigators", json=kwargs)
+        body = {k: v for k, v in kwargs.items() if v is not None}
+        return self._request("POST", f"/api/v1/clusters/{cluster_id}/irrigators", json=body)
 
     def list_irrigators(self, cluster_id: int) -> list:
         return self._request("GET", f"/api/v1/clusters/{cluster_id}/irrigators")
