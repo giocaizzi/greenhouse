@@ -132,10 +132,10 @@ Behaviour by case:
 
 - **No active vacation** → no-op, decision returned unchanged.
 - **Vacation active** → appends an informational `vacation_active` reason (with the window dates) to *every* decision, including SKIPs, for the audit trail.
-- **Vacation active, but no capacity configured** → normal irrigation. Rationing only engages when the cluster's **actuating irrigator** has **both** `reservoir_l` (usable tank volume, liters) and `flow_rate_l_per_min` (pump throughput, L/min) set. Unset capacity = today's behavior.
+- **Vacation active, but no capacity configured** → normal irrigation. Rationing only engages when the cluster's **irrigator** has **both** `reservoir_l` (usable tank volume, liters) and `flow_rate_l_per_min` (pump throughput, L/min) set. Unset capacity = today's behavior.
 - **Vacation active, capacity set, action is not `irrigate`** → no-op (only real irrigations are throttled).
 
-A cluster is irrigated by a single device: `run_irrigation_pipeline` actuates `irrigators[0]`, so rationing tracks **that same tank** — any additional irrigator rows never dispense water and are ignored. Budget-envelope math for the actuating irrigator, applied when a vacation is active and the decision is to irrigate:
+A cluster is irrigated by a single device (strict 0:1): `run_irrigation_pipeline` actuates the cluster's irrigator, so rationing tracks **that same tank**. Budget-envelope math for the cluster's irrigator, applied when a vacation is active and the decision is to irrigate:
 
 ```
 usable_l       = reservoir_l * VACATION_RESERVOIR_USABLE_FRACTION   # 0.95 — reserve 5% so the pump never runs dry
@@ -181,7 +181,7 @@ While an irrigation is running, `PumpWatcherService` polls the IK10PW's DP 105 w
    - Soil-moisture rule (driest plant wins) + conflict resolution
    - Temperature / humidity / light / water-needs / 48h-trend adjustments
    - Seasonal frequency multiplier on the interval
-   - Vacation rationing (final adjustment): when a vacation is active, append `vacation_active`; if cluster irrigators have reservoir + flow capacity, clamp/skip the run to fit the burn-down budget (`vacation_rationing` / `vacation_budget_exhausted`)
+   - Vacation rationing (final adjustment): when a vacation is active, append `vacation_active`; if the cluster's irrigator has reservoir + flow capacity, clamp/skip the run to fit the burn-down budget (`vacation_rationing` / `vacation_budget_exhausted`)
    - (No sensor data → temperature/config fallback path instead)
 5. Persist `DecisionLog`
 6. If `action == "irrigate"` and not dry-run: device-health actuation gate (may flip to skip), then execute on the irrigator for `decision.duration_minutes` (already rationed by the vacation rule if a vacation is active); `PumpWatcherService` watches DP 105 for the run's duration

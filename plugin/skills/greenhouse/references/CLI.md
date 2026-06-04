@@ -83,7 +83,7 @@ Notable flags:
 ```
 greenhouse cluster    add | list | get <id> | update <id> | delete <id> [--yes]
 greenhouse plant      add | list | sync [--plant-id N] | move | update <id> | delete <id> [--yes]
-greenhouse irrigator  add [--reservoir-l L] [--flow-rate-l-per-min R] | list | start <id> | stop <id> | log-manual | update <id> [--reservoir-l L] [--flow-rate-l-per-min R] | delete <id> [--yes]
+greenhouse irrigator  add --cluster <id> [--reservoir-l L] [--flow-rate-l-per-min R] | list | show <cluster> | update <cluster> [--reservoir-l L] [--flow-rate-l-per-min R] | delete <cluster> [--yes] | start <irrigator_id> | stop <irrigator_id> | log-manual <irrigator_id>
 greenhouse sensor     add | list | update <id> | delete <id> [--yes]
 greenhouse config     get --cluster N | effective --cluster N | set --cluster N [--mode smart] [--minutes 2] [--interval 12] [--auto-run] [--quiet-start H] [--quiet-end H] [--daily-cap M] [--max-events N]
 greenhouse config global  get | set [--mode …] [--quiet-start H] [--quiet-end H] [--auto-run] …
@@ -98,18 +98,19 @@ greenhouse windows    list --cluster N | add --cluster N --start-hour H --end-ho
 Patterns to know:
 
 - **Add commands require explicit `--cluster` or positional args** — there's no interactive prompting. The CLI is non-interactive by design.
-- **`update` / `delete`** exist on every resource sub-app (cluster, plant, irrigator, sensor) plus `vacation` and `windows`; only `cluster` also has a single-item `get`. `update` is a partial patch — only the flags you pass are sent. `delete` prompts for confirmation unless you pass `--yes`/`-y`, and on clusters it cascades to all children (plants, sensors, irrigators, history).
+- **`update` / `delete`** exist on every resource sub-app (cluster, plant, irrigator, sensor) plus `vacation` and `windows`; only `cluster` also has a single-item `get`. `update` is a partial patch — only the flags you pass are sent. `delete` prompts for confirmation unless you pass `--yes`/`-y`, and on clusters it cascades to all children (plants, sensors, the irrigator, history).
+- **A cluster has at most one irrigator** (strict 0:1 — at most one device irrigates a cluster). So the irrigator CRUD sub-app is keyed by **cluster id**, not irrigator id: `irrigator add --cluster <id>` (errors with a non-zero exit if the cluster already has one), `irrigator show <cluster>` (the one irrigator, or an error if none), `irrigator update <cluster>` (partial patch), `irrigator delete <cluster> [--yes]`. The global `irrigator list` is unchanged. The device-action commands (`start` / `stop` / `log-manual`) stay keyed by **irrigator id**.
 - **`config set`** patches a cluster's config; every flag is optional and **omitted flags are left unchanged** (no longer forces `--mode`). Fields: `--mode manual|schedule|smart`, `--minutes`, `--interval`, `--auto-run/--no-auto-run`, `--daily-cap`, `--max-events`, and quiet hours `--quiet-start` / `--quiet-end` (0–23, end exclusive; equal values disable quiet hours at the cluster level). Config is hierarchical — a field left unset inherits the global default, then the built-in constant.
 - **`config effective`** shows the merged view: each field's resolved value and its `source` (`cluster` / `global` / `default`). Use it to answer "what config actually applies here?".
 - **`config global get` / `config global set`** read and patch the singleton global defaults inherited by every cluster (same field set as `config set`, no `--cluster`). Setting a field to blank/clearing it falls through to the built-in constant.
 - **`plant sync`** rewrites plant care fields from `plant_database.json`. Run it after editing the database or after `plant add` for a species that needs evidence-based defaults.
 - **`plant move`** takes `--to-cluster N`; health and learning history follow the plant, decision/event/alert logs stay with the source cluster.
-- **`irrigator add` / `irrigator update`** accept two optional capacity flags: `--reservoir-l` (usable tank volume in liters) and `--flow-rate-l-per-min` (measured pump throughput in L/min), both floats. They're optional and additive — leaving them unset keeps today's behavior. When **both** are set on a cluster's irrigators, the decision engine can ration runs during an active vacation window so the water lasts (see references/LOGIC.md).
+- **`irrigator add` / `irrigator update`** accept two optional capacity flags: `--reservoir-l` (usable tank volume in liters) and `--flow-rate-l-per-min` (measured pump throughput in L/min), both floats. They're optional and additive — leaving them unset keeps today's behavior. When **both** are set on a cluster's irrigator, the decision engine can ration runs during an active vacation window so the water lasts (see references/LOGIC.md). `add` is keyed by `--cluster`; `update` is keyed by the cluster id.
 - **`irrigator start`** takes a duration (`--minutes`) and bypasses cooldown / engine checks — it's the manual escape hatch. Document this to the user when you reach for it.
 - **`irrigator log-manual`** records that the user watered by hand; it doesn't actuate anything, just feeds the audit log and absorption learning.
 - **`scheduler pause` / `resume`** toggles the `check_all` cron job at runtime. The pause is **persisted** — it survives a server restart; other jobs (sensor sync, anomaly scan, health snapshot) keep running.
 - **`alerts`** drives the inbox: `list` (filter by `--status` / `--cluster` / `--plant`), `get`, `ack`, `resolve`, and `sync` (recompute; `--cluster` scopes to one cluster, default all).
-- **`vacation add`** takes `--starts-at` / `--ends-at` as Unix-second timestamps. During an active window the engine rations irrigation against each irrigator's configured reservoir/flow capacity (see references/LOGIC.md); clusters with no capacity configured irrigate normally.
+- **`vacation add`** takes `--starts-at` / `--ends-at` as Unix-second timestamps. During an active window the engine rations irrigation against the cluster's irrigator's configured reservoir/flow capacity (see references/LOGIC.md); clusters with no capacity configured irrigate normally.
 - **`windows add`** takes `--start-hour` / `--end-hour` (0–23, end exclusive) and `--weekday-mask` (Mon=1 … Sun=64, 127 = every day, default). An empty window list means global defaults apply.
 
 ## Common workflows in shell

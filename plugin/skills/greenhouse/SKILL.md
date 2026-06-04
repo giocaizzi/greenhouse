@@ -25,12 +25,14 @@ A smart plant irrigation system. **Tuya Cloud is the live source for sensor data
 ```
 Cluster ─┬─ Plants (1..N)        ← species-specific care data drives targets
          ├─ Sensors (0..N)       ← soil moisture / temp / humidity / light
-         └─ Irrigators (0..1)    ← Tuya device, local protocol;
+         └─ Irrigator (0..1)     ← at most one Tuya device, local protocol;
                                    optional reservoir_l + flow_rate_l_per_min capacity
               │
               ▼
          Decision engine ─→ IrrigationDecision (typed) ─→ DecisionLog (persisted, every eval)
 ```
+
+A cluster has **at most one irrigator** (strict 0:1 — the cluster is irrigated by a single device, DB-enforced). The irrigator is a singular, cluster-keyed resource: `GET/POST/PUT/DELETE clusters/{id}/irrigator` manage the one device (POST 409s if one already exists; GET/PUT/DELETE 404 if none), while `irrigators` is the global list and device actions (`irrigators/{id}/start|stop|log-manual`) stay keyed by device id. Cluster `status` and `monitor` expose a single `irrigator` field (object or null), not a list.
 
 Every check produces one `IrrigationDecision` with a `reasons: list[Reason]` trail. Each `Reason` carries a stable `TriggerCode` enum (e.g. `cooldown`, `sensor_dry`, `weather_skip`, `conflict`). **The decision is persisted whether or not it actuated** — that audit trail is your friend when the user asks "why didn't anything happen?".
 
@@ -47,7 +49,7 @@ Every `/api/v1` endpoint on the server is exposed as an MCP tool by `fastapi-mcp
 | "What's wrong?" | `alerts` inbox (filter by `status=open`) |
 | "I just watered by hand" | `irrigators/{id}/log-manual` |
 | "Show me trends" | `clusters/{id}/chart-data` or `plants/{id}/chart-data` |
-| "I'll be away next week" | Create a `vacation` window; set irrigator `reservoir_l` + `flow_rate_l_per_min` so the engine rations the tank across the trip |
+| "I'll be away next week" | Create a `vacation` window; set the cluster's irrigator `reservoir_l` + `flow_rate_l_per_min` so the engine rations the tank across the trip |
 | "Only water at night / set allowed hours" | Per-cluster irrigation `windows` (CRUD under `clusters/{id}/windows`) |
 | "Don't water overnight / set quiet hours" | `quiet_start_hour`/`quiet_end_hour` on `clusters/{id}/config` (per cluster) or `config/global` (everywhere) |
 | "Set system-wide defaults" / "what's inherited?" | `config/global` (read/write defaults); `clusters/{id}/config/effective` (merged view, source per field) |
@@ -76,7 +78,7 @@ The engine enforces several rules. Respect them when reasoning; don't try to byp
 4. **Weather skip**: if forecast precipitation ≥ threshold in the next 6h, the engine skips with `weather_skip` and that's correct.
 5. **Trust layer runs before every actuation** — sensor drift / stale data / leak / stuck-valve detection. If actuation fails or is blocked, check `alerts` to see why.
 6. **Learning is advisory** — alerts like `blocked_drip` or `chronic_underwatering` inform; they do not block irrigation.
-7. **Vacation windows ration, not just pause** — during an active vacation the engine is genuinely enforced. If a cluster's irrigators carry both `reservoir_l` and `flow_rate_l_per_min`, the engine burns the tank down over the trip: it trims a run's duration to fit the per-day budget (`vacation_rationing`) or skips when the budget is spent (`vacation_budget_exhausted`), and tags every decision `vacation_active`. Clusters with no capacity configured irrigate normally. Check the decision reasons before assuming the system is broken; see references/LOGIC.md for the budget math.
+7. **Vacation windows ration, not just pause** — during an active vacation the engine is genuinely enforced. If a cluster's irrigator carries both `reservoir_l` and `flow_rate_l_per_min`, the engine burns the tank down over the trip: it trims a run's duration to fit the per-day budget (`vacation_rationing`) or skips when the budget is spent (`vacation_budget_exhausted`), and tags every decision `vacation_active`. Clusters with no capacity configured irrigate normally. Check the decision reasons before assuming the system is broken; see references/LOGIC.md for the budget math.
 8. **Quiet hours are a hard gate on auto runs** — if a decision says `quiet_hours`, the engine skipped because the local time is inside the configured window (cluster → global config). It only affects automatic runs; a manual `irrigate` with `force=true` (or `irrigators/{id}/start`) overrides it and the decision is tagged `manual_override_quiet_hours`. Config is hierarchical (cluster overrides global overrides built-in); use `config/effective` to see what actually applies.
 
 When summarizing decisions, lead with the `primary_code` and the human-readable `reason_text`. Don't paraphrase — those codes are stable identifiers the user can search for and the developer documents.
