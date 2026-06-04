@@ -10,7 +10,7 @@ def _seed(client):
         json={"tuya_device_id": "fake_soil_sensor_001", "name": "soil-1", "type": "soil_moisture"},
     )
     client.post(
-        "/api/v1/clusters/1/irrigators",
+        "/api/v1/clusters/1/irrigator",
         json={"tuya_device_id": "fake_irrigator_drip_001", "name": "drip-1", "type": "tuya_cloud"},
     )
 

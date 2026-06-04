@@ -155,11 +155,11 @@ def _build_sensor_datasets(
 
 
 def _build_event_list(repo: IrrigationRepository, cluster_id: int, hours: int) -> list[dict]:
-    irrigators = repo.get_irrigators_in_cluster(cluster_id)
+    irrigator = repo.get_irrigator_for_cluster(cluster_id)
     cutoff = int(time.time()) - (hours * 3600)
     events: list[dict] = []
-    for irr in irrigators:
-        for e in repo.get_recent_events(irr.id, hours=hours):
+    if irrigator is not None:
+        for e in repo.get_recent_events(irrigator.id, hours=hours):
             if e.timestamp < cutoff:
                 continue
             events.append(
@@ -314,14 +314,16 @@ def build_heatmap_payload(
         return None
 
     cutoff = int(time.time()) - days * 86400
-    irrigators = repo.get_irrigators_in_cluster(cluster_id)
+    irrigator = repo.get_irrigator_for_cluster(cluster_id)
 
     counts: dict[tuple[int, int], int] = defaultdict(int)
     minutes_map: dict[tuple[int, int], int] = defaultdict(int)
 
-    for irr in irrigators:
+    if irrigator is not None:
         events = repo.session.scalars(
-            select(IrrigationEvent).where(IrrigationEvent.irrigator_id == irr.id, IrrigationEvent.timestamp >= cutoff)
+            select(IrrigationEvent).where(
+                IrrigationEvent.irrigator_id == irrigator.id, IrrigationEvent.timestamp >= cutoff
+            )
         )
         for ev in events:
             dt = datetime.fromtimestamp(ev.timestamp, tz=UTC)

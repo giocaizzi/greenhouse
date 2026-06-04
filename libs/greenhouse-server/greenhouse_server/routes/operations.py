@@ -75,16 +75,21 @@ def cluster_status(cluster_id: int, cluster_svc: ClusterServiceDep):
             )
             for s in result["sensors"]
         ],
-        irrigators=[
+        irrigator=(
             ClusterStatusIrrigatorResponse(
-                id=i["id"],
-                name=i["name"],
-                type=i["type"],
-                recent_event_count=i["recent_event_count"],
-                last_event=IrrigationEventResponse.model_validate(i["last_event"]) if i["last_event"] else None,
+                id=result["irrigator"]["id"],
+                name=result["irrigator"]["name"],
+                type=result["irrigator"]["type"],
+                recent_event_count=result["irrigator"]["recent_event_count"],
+                last_event=(
+                    IrrigationEventResponse.model_validate(result["irrigator"]["last_event"])
+                    if result["irrigator"]["last_event"]
+                    else None
+                ),
             )
-            for i in result["irrigators"]
-        ],
+            if result["irrigator"]
+            else None
+        ),
         decision=(
             IrrigateResponse(
                 action=decision["action"],
@@ -355,8 +360,8 @@ def stats_export(cluster_id: int, repo: RepoDep, days: int = Query(default=7, ge
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(["timestamp", "date", "time", "irrigator", "action", "duration_minutes", "triggered_by", "notes"])
-    irrigators = repo.get_irrigators_in_cluster(cluster_id)
-    for irrigator in irrigators:
+    irrigator = repo.get_irrigator_for_cluster(cluster_id)
+    if irrigator is not None:
         events = repo.get_recent_events(irrigator.id, hours=days * 24)
         for event in events:
             ts_str = format_timestamp(event.timestamp)

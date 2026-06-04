@@ -45,12 +45,12 @@ def vacation_days(starts_at: int, ends_at: int) -> int:
 def cluster_budgets(repo: IrrigationRepository, starts_at: int, ends_at: int) -> list[ClusterBudget]:
     """Project the per-day water budget for every capacity-configured cluster.
 
-    A cluster contributes a readout only when at least one of its irrigators
-    has both ``reservoir_l`` and ``flow_rate_l_per_min`` set. Usable volume is
-    ``reservoir_l * VACATION_RESERVOIR_USABLE_FRACTION`` summed across those
-    irrigators; the daily budget is that usable volume divided by the vacation
-    span in days. Clusters with no configured capacity are omitted (the caller
-    renders nothing for them, matching the engine's no-op behavior).
+    A cluster contributes a readout only when its irrigator has both
+    ``reservoir_l`` and ``flow_rate_l_per_min`` set. Usable volume is
+    ``reservoir_l * VACATION_RESERVOIR_USABLE_FRACTION``; the daily budget is
+    that usable volume divided by the vacation span in days. Clusters with no
+    irrigator or no configured capacity are omitted (the caller renders nothing
+    for them, matching the engine's no-op behavior).
 
     Args:
         repo: Active repository session.
@@ -64,11 +64,10 @@ def cluster_budgets(repo: IrrigationRepository, starts_at: int, ends_at: int) ->
     days = vacation_days(starts_at, ends_at)
     budgets: list[ClusterBudget] = []
     for cluster in repo.list_clusters():
-        irrigators = repo.get_irrigators_in_cluster(cluster.id)
-        cap = [i for i in irrigators if i.reservoir_l and i.flow_rate_l_per_min]
-        if not cap:
+        irrigator = repo.get_irrigator_for_cluster(cluster.id)
+        if not irrigator or not (irrigator.reservoir_l and irrigator.flow_rate_l_per_min):
             continue
-        total = sum(i.reservoir_l for i in cap)
+        total = irrigator.reservoir_l
         usable = total * VACATION_RESERVOIR_USABLE_FRACTION
         budgets.append(
             ClusterBudget(

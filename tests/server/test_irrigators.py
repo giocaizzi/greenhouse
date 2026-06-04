@@ -1,64 +1,66 @@
-"""Functional tests for irrigator CRUD + control via HTTP."""
+"""Functional tests for the singular cluster-keyed irrigator CRUD + control via HTTP.
+
+A cluster has at most one irrigator (strict 0:1). CRUD is keyed by cluster
+(``/clusters/{id}/irrigator``); device-action endpoints stay keyed by
+irrigator id (``/irrigators/{id}/start`` etc.).
+"""
 
 
 class TestIrrigatorCRUD:
-    def test_add_and_list(self, client):
+    def test_add_and_get(self, client):
         client.post("/api/v1/clusters", json={"name": "C1"})
         resp = client.post(
-            "/api/v1/clusters/1/irrigators",
+            "/api/v1/clusters/1/irrigator",
             json={"tuya_device_id": "dev001", "name": "Pump", "type": "tuya_cloud"},
         )
         assert resp.status_code == 201
         assert resp.json()["name"] == "Pump"
 
-        resp = client.get("/api/v1/clusters/1/irrigators")
-        assert len(resp.json()) == 1
+        resp = client.get("/api/v1/clusters/1/irrigator")
+        assert resp.status_code == 200
+        assert resp.json()["name"] == "Pump"
+
+    def test_add_second_irrigator_conflicts(self, client):
+        """A cluster may have at most one irrigator — a second POST returns 409."""
+        client.post("/api/v1/clusters", json={"name": "C1"})
+        first = client.post(
+            "/api/v1/clusters/1/irrigator",
+            json={"tuya_device_id": "dev001", "name": "A", "type": "tuya_cloud"},
+        )
+        assert first.status_code == 201
+        resp = client.post(
+            "/api/v1/clusters/1/irrigator",
+            json={"tuya_device_id": "dev002", "name": "B", "type": "tuya_cloud"},
+        )
+        assert resp.status_code == 409
 
     def test_add_duplicate_device(self, client):
+        """Re-using a Tuya device id (here, on another cluster) returns 409."""
         client.post("/api/v1/clusters", json={"name": "C1"})
+        client.post("/api/v1/clusters", json={"name": "C2"})
         client.post(
-            "/api/v1/clusters/1/irrigators",
+            "/api/v1/clusters/1/irrigator",
             json={"tuya_device_id": "dev001", "name": "A", "type": "tuya_cloud"},
         )
         resp = client.post(
-            "/api/v1/clusters/1/irrigators",
+            "/api/v1/clusters/2/irrigator",
             json={"tuya_device_id": "dev001", "name": "B", "type": "tuya_cloud"},
         )
         assert resp.status_code == 409
 
-    def test_get_by_id(self, client):
+    def test_get_no_irrigator_returns_404(self, client):
         client.post("/api/v1/clusters", json={"name": "C1"})
-        client.post(
-            "/api/v1/clusters/1/irrigators",
-            json={"tuya_device_id": "dev001", "name": "Pump", "type": "tuya_cloud"},
-        )
-        resp = client.get("/api/v1/clusters/1/irrigators/1")
-        assert resp.status_code == 200
-        assert resp.json()["name"] == "Pump"
-
-    def test_get_wrong_cluster_returns_404(self, client):
-        client.post("/api/v1/clusters", json={"name": "C1"})
-        client.post("/api/v1/clusters", json={"name": "C2"})
-        client.post(
-            "/api/v1/clusters/1/irrigators",
-            json={"tuya_device_id": "dev001", "name": "Pump", "type": "tuya_cloud"},
-        )
-        resp = client.get("/api/v1/clusters/2/irrigators/1")
-        assert resp.status_code == 404
-
-    def test_get_not_found(self, client):
-        client.post("/api/v1/clusters", json={"name": "C1"})
-        resp = client.get("/api/v1/clusters/1/irrigators/999")
+        resp = client.get("/api/v1/clusters/1/irrigator")
         assert resp.status_code == 404
 
     def test_update_name_and_config(self, client):
         client.post("/api/v1/clusters", json={"name": "C1"})
         client.post(
-            "/api/v1/clusters/1/irrigators",
+            "/api/v1/clusters/1/irrigator",
             json={"tuya_device_id": "dev001", "name": "Old Pump", "type": "tuya_cloud"},
         )
         resp = client.put(
-            "/api/v1/clusters/1/irrigators/1",
+            "/api/v1/clusters/1/irrigator",
             json={"name": "New Pump", "config": {"key": "value"}},
         )
         assert resp.status_code == 200
@@ -66,26 +68,16 @@ class TestIrrigatorCRUD:
         assert data["name"] == "New Pump"
         assert data["config"] == {"key": "value"}
 
-    def test_update_wrong_cluster_returns_404(self, client):
+    def test_update_no_irrigator_returns_404(self, client):
         client.post("/api/v1/clusters", json={"name": "C1"})
-        client.post("/api/v1/clusters", json={"name": "C2"})
-        client.post(
-            "/api/v1/clusters/1/irrigators",
-            json={"tuya_device_id": "dev001", "name": "Pump", "type": "tuya_cloud"},
-        )
-        resp = client.put("/api/v1/clusters/2/irrigators/1", json={"name": "X"})
-        assert resp.status_code == 404
-
-    def test_update_not_found(self, client):
-        client.post("/api/v1/clusters", json={"name": "C1"})
-        resp = client.put("/api/v1/clusters/1/irrigators/999", json={"name": "X"})
+        resp = client.put("/api/v1/clusters/1/irrigator", json={"name": "X"})
         assert resp.status_code == 404
 
     def test_create_with_capacity_round_trips(self, client):
         """POST with reservoir_l/flow_rate_l_per_min persists and is returned."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         resp = client.post(
-            "/api/v1/clusters/1/irrigators",
+            "/api/v1/clusters/1/irrigator",
             json={
                 "tuya_device_id": "dev001",
                 "name": "Pump",
@@ -100,7 +92,7 @@ class TestIrrigatorCRUD:
         assert data["flow_rate_l_per_min"] == 1.5
 
         # Persisted: a fresh GET returns the same values.
-        got = client.get("/api/v1/clusters/1/irrigators/1").json()
+        got = client.get("/api/v1/clusters/1/irrigator").json()
         assert got["reservoir_l"] == 12.5
         assert got["flow_rate_l_per_min"] == 1.5
 
@@ -108,7 +100,7 @@ class TestIrrigatorCRUD:
         """Capacity fields are optional and default to None."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         resp = client.post(
-            "/api/v1/clusters/1/irrigators",
+            "/api/v1/clusters/1/irrigator",
             json={"tuya_device_id": "dev001", "name": "Pump", "type": "tuya_cloud"},
         )
         data = resp.json()
@@ -119,11 +111,11 @@ class TestIrrigatorCRUD:
         """PUT with capacity fields updates and returns the new values."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         client.post(
-            "/api/v1/clusters/1/irrigators",
+            "/api/v1/clusters/1/irrigator",
             json={"tuya_device_id": "dev001", "name": "Pump", "type": "tuya_cloud"},
         )
         resp = client.put(
-            "/api/v1/clusters/1/irrigators/1",
+            "/api/v1/clusters/1/irrigator",
             json={"reservoir_l": 20.0, "flow_rate_l_per_min": 2.0},
         )
         assert resp.status_code == 200
@@ -131,7 +123,7 @@ class TestIrrigatorCRUD:
         assert data["reservoir_l"] == 20.0
         assert data["flow_rate_l_per_min"] == 2.0
 
-        got = client.get("/api/v1/clusters/1/irrigators/1").json()
+        got = client.get("/api/v1/clusters/1/irrigator").json()
         assert got["reservoir_l"] == 20.0
         assert got["flow_rate_l_per_min"] == 2.0
 
@@ -139,49 +131,53 @@ class TestIrrigatorCRUD:
         """Negative capacity values are rejected by schema validation (ge=0)."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         client.post(
-            "/api/v1/clusters/1/irrigators",
+            "/api/v1/clusters/1/irrigator",
             json={"tuya_device_id": "dev001", "name": "Pump", "type": "tuya_cloud"},
         )
-        resp = client.put("/api/v1/clusters/1/irrigators/1", json={"reservoir_l": -1.0})
+        resp = client.put("/api/v1/clusters/1/irrigator", json={"reservoir_l": -1.0})
         assert resp.status_code == 422
 
     def test_delete_irrigator(self, client):
         client.post("/api/v1/clusters", json={"name": "C1"})
         client.post(
-            "/api/v1/clusters/1/irrigators",
+            "/api/v1/clusters/1/irrigator",
             json={"tuya_device_id": "dev001", "name": "Pump", "type": "tuya_cloud"},
         )
-        resp = client.delete("/api/v1/clusters/1/irrigators/1")
+        resp = client.delete("/api/v1/clusters/1/irrigator")
         assert resp.status_code == 200
         assert resp.json()["success"] is True
 
-        resp = client.get("/api/v1/clusters/1/irrigators/1")
+        resp = client.get("/api/v1/clusters/1/irrigator")
         assert resp.status_code == 404
 
-    def test_delete_wrong_cluster_returns_404(self, client):
+    def test_delete_no_irrigator_returns_404(self, client):
         client.post("/api/v1/clusters", json={"name": "C1"})
-        client.post("/api/v1/clusters", json={"name": "C2"})
-        client.post(
-            "/api/v1/clusters/1/irrigators",
-            json={"tuya_device_id": "dev001", "name": "Pump", "type": "tuya_cloud"},
-        )
-        resp = client.delete("/api/v1/clusters/2/irrigators/1")
-        assert resp.status_code == 404
-
-    def test_delete_not_found(self, client):
-        client.post("/api/v1/clusters", json={"name": "C1"})
-        resp = client.delete("/api/v1/clusters/1/irrigators/999")
+        resp = client.delete("/api/v1/clusters/1/irrigator")
         assert resp.status_code == 404
 
     def test_double_delete_returns_404(self, client):
         client.post("/api/v1/clusters", json={"name": "C1"})
         client.post(
-            "/api/v1/clusters/1/irrigators",
+            "/api/v1/clusters/1/irrigator",
             json={"tuya_device_id": "dev001", "name": "Pump", "type": "tuya_cloud"},
         )
-        client.delete("/api/v1/clusters/1/irrigators/1")
-        resp = client.delete("/api/v1/clusters/1/irrigators/1")
+        client.delete("/api/v1/clusters/1/irrigator")
+        resp = client.delete("/api/v1/clusters/1/irrigator")
         assert resp.status_code == 404
+
+    def test_can_recreate_after_delete(self, client):
+        """Deleting frees the 0:1 slot so a new irrigator can be added."""
+        client.post("/api/v1/clusters", json={"name": "C1"})
+        client.post(
+            "/api/v1/clusters/1/irrigator",
+            json={"tuya_device_id": "dev001", "name": "Pump", "type": "tuya_cloud"},
+        )
+        client.delete("/api/v1/clusters/1/irrigator")
+        resp = client.post(
+            "/api/v1/clusters/1/irrigator",
+            json={"tuya_device_id": "dev002", "name": "Pump2", "type": "tuya_cloud"},
+        )
+        assert resp.status_code == 201
 
 
 class TestIrrigatorControl:
@@ -223,11 +219,11 @@ class TestListAllIrrigatorsTopLevel:
         client.post("/api/v1/clusters", json={"name": "A"})
         client.post("/api/v1/clusters", json={"name": "B"})
         client.post(
-            "/api/v1/clusters/1/irrigators",
+            "/api/v1/clusters/1/irrigator",
             json={"tuya_device_id": "dev_a", "name": "A1", "type": "tuya_cloud"},
         )
         client.post(
-            "/api/v1/clusters/2/irrigators",
+            "/api/v1/clusters/2/irrigator",
             json={"tuya_device_id": "dev_b", "name": "B1", "type": "tuya_cloud"},
         )
         resp = client.get("/api/v1/irrigators")
@@ -239,11 +235,11 @@ class TestListAllIrrigatorsTopLevel:
         client.post("/api/v1/clusters", json={"name": "A"})
         client.post("/api/v1/clusters", json={"name": "B"})
         client.post(
-            "/api/v1/clusters/1/irrigators",
+            "/api/v1/clusters/1/irrigator",
             json={"tuya_device_id": "dev_a", "name": "A1", "type": "tuya_cloud"},
         )
         client.post(
-            "/api/v1/clusters/2/irrigators",
+            "/api/v1/clusters/2/irrigator",
             json={"tuya_device_id": "dev_b", "name": "B1", "type": "tuya_cloud"},
         )
         resp = client.get("/api/v1/irrigators?cluster_id=2")
@@ -251,11 +247,11 @@ class TestListAllIrrigatorsTopLevel:
         assert names == ["B1"]
 
     def test_pagination(self, client):
-        """limit + cursor walks the rows id-ascending."""
-        client.post("/api/v1/clusters", json={"name": "A"})
+        """limit + cursor walks the rows id-ascending across clusters."""
         for n in range(3):
+            client.post("/api/v1/clusters", json={"name": f"C{n}"})
             client.post(
-                "/api/v1/clusters/1/irrigators",
+                f"/api/v1/clusters/{n + 1}/irrigator",
                 json={"tuya_device_id": f"dev_{n}", "name": f"I{n}", "type": "tuya_cloud"},
             )
         resp = client.get("/api/v1/irrigators?limit=2")

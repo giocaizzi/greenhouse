@@ -73,7 +73,8 @@
     <h3 class="card__title">Irrigation events</h3>
   </div>
   <div class="card__body" style="display: flex; flex-direction: column; gap: var(--sp-5);">
-    {% for irr in history.irrigators %}
+    {% set irr = history.irrigators[0] if history.irrigators else none %}
+    {% if irr %}
       <section>
         <h4 style="margin-bottom: var(--sp-2);">{{ irr.irrigator_name }} <small class="muted">({{ irr.events|length }})</small></h4>
         {% if irr.events %}
@@ -95,7 +96,9 @@
           <p class="muted"><small>No events in window.</small></p>
         {% endif %}
       </section>
-    {% endfor %}
+    {% else %}
+      <p class="muted"><small>No irrigator assigned — this cluster is sensor-only.</small></p>
+    {% endif %}
   </div>
 </article>
 {% endblock %}

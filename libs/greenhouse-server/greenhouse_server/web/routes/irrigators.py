@@ -8,6 +8,7 @@ from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from greenhouse_core.devices import UnknownDeviceModel
+from greenhouse_core.repository import IrrigatorExistsError
 from greenhouse_server.deps import DeviceRegistryDep, RepoDep, require_cluster
 from greenhouse_server.web.context import base_context
 from greenhouse_server.web.templating import templates
@@ -15,10 +16,10 @@ from greenhouse_server.web.templating import templates
 router = APIRouter(include_in_schema=False)
 
 
-def _get_irrigator_in_cluster(repo, cluster_id: int, irrigator_id: int):
-    irr = repo.get_irrigator(irrigator_id)
-    if not irr or irr.cluster_id != cluster_id:
-        raise HTTPException(404, "Irrigator not found in cluster")
+def _require_cluster_irrigator(repo, cluster_id: int):
+    irr = repo.get_irrigator_for_cluster(cluster_id)
+    if not irr:
+        raise HTTPException(404, "Cluster has no irrigator")
     return irr
 
 
@@ -44,6 +45,10 @@ def list_irrigators(cluster_id: int, repo: RepoDep):
 @router.get("/clusters/{cluster_id}/irrigators/new")
 def new_irrigator_form(request: Request, cluster_id: int, repo: RepoDep):
     cluster = require_cluster(repo, cluster_id)
+    # A cluster has at most one irrigator. If one already exists, send the user
+    # back to the detail page instead of offering an "add" form they cannot use.
+    if repo.get_irrigator_for_cluster(cluster_id) is not None:
+        return RedirectResponse(url=f"/clusters/{cluster_id}#irrigators", status_code=303)
     return templates.TemplateResponse(request, "irrigators/new.html", base_context(request, cluster=cluster))
 
 
@@ -74,7 +79,7 @@ def create_irrigator(
     reservoir_l: str = Form(""),
     flow_rate_l_per_min: str = Form(""),
 ):
-    require_cluster(repo, cluster_id)
+    cluster = require_cluster(repo, cluster_id)
     config: dict = {}
     if device_ip.strip():
         config["device_ip"] = device_ip.strip()
@@ -82,23 +87,38 @@ def create_irrigator(
         config["local_key"] = local_key.strip()
     reservoir = _parse_capacity(reservoir_l)
     flow_rate = _parse_capacity(flow_rate_l_per_min)
-    irrigator_id = repo.add_irrigator(
-        cluster_id=cluster_id,
-        tuya_device_id=tuya_device_id,
-        name=name,
-        irrigator_type=type,
-        config=config,
-    )
+    try:
+        irrigator_id = repo.add_irrigator(
+            cluster_id=cluster_id,
+            tuya_device_id=tuya_device_id,
+            name=name,
+            irrigator_type=type,
+            config=config,
+        )
+    except IrrigatorExistsError:
+        repo.session.rollback()
+        # Re-render the form with a user-facing error instead of a redirect; a
+        # cluster may have at most one irrigator.
+        return templates.TemplateResponse(
+            request,
+            "irrigators/new.html",
+            base_context(
+                request,
+                cluster=cluster,
+                error="This cluster already has an irrigator. A cluster can have at most one.",
+            ),
+            status_code=409,
+        )
     if reservoir is not None or flow_rate is not None:
         repo.update_irrigator(irrigator_id, reservoir_l=reservoir, flow_rate_l_per_min=flow_rate)
     repo.session.commit()
     return RedirectResponse(url=f"/clusters/{cluster_id}#irrigators", status_code=303)
 
 
-@router.get("/clusters/{cluster_id}/irrigators/{irrigator_id}/edit")
-def edit_irrigator_form(request: Request, cluster_id: int, irrigator_id: int, repo: RepoDep):
+@router.get("/clusters/{cluster_id}/irrigators/edit")
+def edit_irrigator_form(request: Request, cluster_id: int, repo: RepoDep):
     cluster = require_cluster(repo, cluster_id)
-    irrigator = _get_irrigator_in_cluster(repo, cluster_id, irrigator_id)
+    irrigator = _require_cluster_irrigator(repo, cluster_id)
     config = _parse_config(irrigator.config)
     return templates.TemplateResponse(
         request,
@@ -107,11 +127,10 @@ def edit_irrigator_form(request: Request, cluster_id: int, irrigator_id: int, re
     )
 
 
-@router.post("/clusters/{cluster_id}/irrigators/{irrigator_id}/edit")
+@router.post("/clusters/{cluster_id}/irrigators/edit")
 def update_irrigator(
     request: Request,
     cluster_id: int,
-    irrigator_id: int,
     repo: RepoDep,
     name: str = Form(...),
     type: str = Form(...),
@@ -120,14 +139,14 @@ def update_irrigator(
     reservoir_l: str = Form(""),
     flow_rate_l_per_min: str = Form(""),
 ):
-    _get_irrigator_in_cluster(repo, cluster_id, irrigator_id)
+    irrigator = _require_cluster_irrigator(repo, cluster_id)
     config: dict = {}
     if device_ip.strip():
         config["device_ip"] = device_ip.strip()
     if local_key.strip():
         config["local_key"] = local_key.strip()
     repo.update_irrigator(
-        irrigator_id,
+        irrigator.id,
         name=name,
         type=type,
         config=config,
@@ -138,11 +157,11 @@ def update_irrigator(
     return RedirectResponse(url=f"/clusters/{cluster_id}#irrigators", status_code=303)
 
 
-@router.delete("/clusters/{cluster_id}/irrigators/{irrigator_id}", response_class=HTMLResponse)
-def delete_irrigator(cluster_id: int, irrigator_id: int, repo: RepoDep):
+@router.delete("/clusters/{cluster_id}/irrigators", response_class=HTMLResponse)
+def delete_irrigator(cluster_id: int, repo: RepoDep):
     """HTMX-targeted delete; returns an empty HTML body so the row is removed."""
-    _get_irrigator_in_cluster(repo, cluster_id, irrigator_id)
-    repo.delete_irrigator(irrigator_id)
+    irrigator = _require_cluster_irrigator(repo, cluster_id)
+    repo.delete_irrigator(irrigator.id)
     repo.session.commit()
     return HTMLResponse("")
 

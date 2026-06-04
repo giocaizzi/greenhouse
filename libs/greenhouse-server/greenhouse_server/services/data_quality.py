@@ -86,8 +86,8 @@ def build_report(repo: IrrigationRepository, plant_db: PlantDatabase) -> DataQua
 
     for cluster in clusters:
         cluster_plants = repo.get_plants_in_cluster(cluster.id)
-        cluster_irrigators = repo.get_irrigators_in_cluster(cluster.id)
-        if cluster_irrigators and not cluster_plants:
+        cluster_irrigator = repo.get_irrigator_for_cluster(cluster.id)
+        if cluster_irrigator and not cluster_plants:
             issues.append(
                 DataQualityIssue(
                     code="irrigator_in_empty_cluster",

@@ -9,12 +9,12 @@ def _seed_irrigators(client):
     """Seed two clusters each with one irrigator."""
     client.post("/api/v1/clusters", json={"name": "Cluster A"})
     client.post(
-        "/api/v1/clusters/1/irrigators",
+        "/api/v1/clusters/1/irrigator",
         json={"tuya_device_id": "fake_irrigator_bulk_001", "name": "Irrigator A1", "type": "tuya_cloud"},
     )
     client.post("/api/v1/clusters", json={"name": "Cluster B"})
     client.post(
-        "/api/v1/clusters/2/irrigators",
+        "/api/v1/clusters/2/irrigator",
         json={"tuya_device_id": "fake_irrigator_bulk_002", "name": "Irrigator B1", "type": "tuya_cloud"},
     )
 

@@ -87,7 +87,7 @@ class TestVacationWaterBudget:
     def _make_cluster_with_capacity(self, client, reservoir_l, flow_rate_l_per_min):
         client.post("/api/v1/clusters", json={"name": "Budget Cluster"})
         client.post(
-            "/api/v1/clusters/1/irrigators",
+            "/api/v1/clusters/1/irrigator",
             json={
                 "tuya_device_id": "fake_budget_irr",
                 "name": "Budget Pump",
@@ -116,7 +116,7 @@ class TestVacationWaterBudget:
         """A cluster with no capacity configured renders no budget readout, no crash."""
         client.post("/api/v1/clusters", json={"name": "Plain Cluster"})
         client.post(
-            "/api/v1/clusters/1/irrigators",
+            "/api/v1/clusters/1/irrigator",
             json={"tuya_device_id": "fake_plain_irr", "name": "Plain Pump", "type": "tuya_cloud"},
         )
         now = int(time.time())

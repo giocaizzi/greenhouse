@@ -31,12 +31,12 @@ def score_cluster(repo: IrrigationRepository, cluster_id: int, days: int = 14) -
         EfficacyListResponse with one scored item per qualifying event, newest-first.
     """
     cutoff = int(time.time()) - days * 86400
-    irrigators = repo.get_irrigators_in_cluster(cluster_id)
+    irrigator = repo.get_irrigator_for_cluster(cluster_id)
     sensors = repo.get_sensors_in_cluster(cluster_id)
 
     items: list[EfficacyItemResponse] = []
 
-    for irrigator in irrigators:
+    if irrigator is not None:
         events = list(
             repo.session.scalars(
                 select(IrrigationEvent)

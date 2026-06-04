@@ -295,7 +295,7 @@ class TestPlantMove:
         on the original cluster (audit integrity)."""
         plant_id = self._seed_two_clusters_one_plant(client)
         client.post(
-            "/api/v1/clusters/1/irrigators",
+            "/api/v1/clusters/1/irrigator",
             json={"tuya_device_id": "fake_tuya_irrigator_aabb", "name": "Source Irrigator", "type": "tuya_cloud"},
         )
 

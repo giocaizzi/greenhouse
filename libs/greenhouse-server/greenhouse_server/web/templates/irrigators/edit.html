@@ -6,7 +6,7 @@
   <a href="/">home</a><span class="sep">/</span>
   <a href="/clusters">clusters</a><span class="sep">/</span>
   <a href="/clusters/{{ cluster.id }}">{{ cluster.name | lower }}</a><span class="sep">/</span>
-  <a href="/clusters/{{ cluster.id }}/irrigators">irrigators</a><span class="sep">/</span>
+  <a href="/clusters/{{ cluster.id }}#irrigators">irrigator</a><span class="sep">/</span>
   <span class="here">edit</span>
 </div>
 
@@ -20,7 +20,7 @@
 </section>
 
 <article class="card form-card">
-  <form method="post" action="/clusters/{{ cluster.id }}/irrigators/{{ irrigator.id }}/edit">
+  <form method="post" action="/clusters/{{ cluster.id }}/irrigators/edit">
     <label>
       Tuya device ID
       <input type="text" value="{{ irrigator.tuya_device_id }}" disabled>
@@ -56,7 +56,7 @@
       </label>
     </fieldset>
     <div class="form-actions">
-      <a href="/clusters/{{ cluster.id }}/irrigators" class="btn secondary">Cancel</a>
+      <a href="/clusters/{{ cluster.id }}#irrigators" class="btn secondary">Cancel</a>
       <button type="submit">Save changes</button>
     </div>
   </form>
