@@ -373,12 +373,13 @@ class IrrigationLogic:
 
         Runs as the engine's last adjustment while a :class:`VacationWindow` is
         active. Always appends a ``VACATION_ACTIVE`` reason (even on SKIP) so the
-        audit log records the vacation status. For clusters whose irrigators have
-        both ``reservoir_l`` and ``flow_rate_l_per_min`` configured, the tank is
-        assumed full at the vacation start and consumption is summed from the
-        ``start`` events since then. A linear daily budget (cumulative through
-        the current vacation day) bounds how many minutes each capacity irrigator
-        may still run; the tightest tank binds the shared cluster duration.
+        audit log records the vacation status. Rationing tracks the cluster's
+        actuating irrigator (``irrigators[0]`` — the one
+        ``run_irrigation_pipeline`` drives); when it has both ``reservoir_l`` and
+        ``flow_rate_l_per_min`` set, the tank is assumed full at the vacation
+        start and consumption is summed from the ``start`` events since then. A
+        linear daily budget (cumulative through the current vacation day) bounds
+        how many minutes it may still run.
 
         - Within budget → unchanged.
         - Partial budget (>= ``VACATION_MIN_RUN_MINUTES``) → duration trimmed and
@@ -400,10 +401,15 @@ class IrrigationLogic:
             icon="airplane",
         )
 
-        cap_irrigators = [
-            i for i in self.db.get_irrigators_in_cluster(cluster_id) if i.reservoir_l and i.flow_rate_l_per_min
-        ]
-        if not cap_irrigators:
+        # Ration against the irrigator the pipeline actually actuates. A cluster
+        # is "irrigated by the same device": run_irrigation_pipeline drives
+        # irrigators[0], so the budget must track that same tank. Other irrigator
+        # rows never dispense water and must not influence the dosage.
+        irrigators = self.db.get_irrigators_in_cluster(cluster_id)
+        if not irrigators:
+            return
+        irr = irrigators[0]
+        if not (irr.reservoir_l and irr.flow_rate_l_per_min):
             return
         if decision.action is not Action.IRRIGATE:
             return
@@ -413,17 +419,12 @@ class IrrigationLogic:
         d_days = max(1, math.ceil((vac.ends_at - vac.starts_at) / 86400))
         day_index = math.floor((now - vac.starts_at) / 86400)
 
-        max_run_minutes = []
-        for irr in cap_irrigators:
-            usable_l = irr.reservoir_l * VACATION_RESERVOIR_USABLE_FRACTION
-            daily_budget_l = usable_l / d_days
-            allowed_cum_l = min(usable_l, daily_budget_l * (day_index + 1))
-            spent_l = self.db.irrigator_consumption_liters(irr.id, since=vac.starts_at, until=now)
-            headroom_l = max(0.0, allowed_cum_l - spent_l)
-            max_run_minutes.append(headroom_l / irr.flow_rate_l_per_min)
-
-        # Tightest tank binds the shared cluster duration; floor to whole minutes.
-        binding_max_min = math.floor(min(max_run_minutes))
+        usable_l = irr.reservoir_l * VACATION_RESERVOIR_USABLE_FRACTION
+        daily_budget_l = usable_l / d_days
+        allowed_cum_l = min(usable_l, daily_budget_l * (day_index + 1))
+        spent_l = self.db.irrigator_consumption_liters(irr.id, since=vac.starts_at, until=now)
+        headroom_l = max(0.0, allowed_cum_l - spent_l)
+        binding_max_min = math.floor(headroom_l / irr.flow_rate_l_per_min)
 
         if binding_max_min >= decision.duration_minutes:
             return
