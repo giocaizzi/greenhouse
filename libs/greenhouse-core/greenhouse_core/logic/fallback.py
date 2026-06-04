@@ -90,9 +90,9 @@ def temperature_based_decision(
     elif water_needs == "low":
         interval = min(MAX_INTERVAL_HOURS, interval + 6)
 
-    irrigators = db.get_irrigators_in_cluster(cluster_id)
+    irr = db.get_irrigator_for_cluster(cluster_id)
     latest_event = None
-    for irr in irrigators:
+    if irr is not None:
         events = db.get_recent_events(irr.id, hours=interval)
         for event in events:
             if event.action not in ("start", "schedule_updated"):

@@ -374,8 +374,8 @@ class IrrigationLogic:
         Runs as the engine's last adjustment while a :class:`VacationWindow` is
         active. Always appends a ``VACATION_ACTIVE`` reason (even on SKIP) so the
         audit log records the vacation status. Rationing tracks the cluster's
-        actuating irrigator (``irrigators[0]`` — the one
-        ``run_irrigation_pipeline`` drives); when it has both ``reservoir_l`` and
+        irrigator (the one ``run_irrigation_pipeline`` drives); when it has both
+        ``reservoir_l`` and
         ``flow_rate_l_per_min`` set, the tank is assumed full at the vacation
         start and consumption is summed from the ``start`` events since then. A
         linear daily budget (cumulative through the current vacation day) bounds
@@ -402,13 +402,10 @@ class IrrigationLogic:
         )
 
         # Ration against the irrigator the pipeline actually actuates. A cluster
-        # is "irrigated by the same device": run_irrigation_pipeline drives
-        # irrigators[0], so the budget must track that same tank. Other irrigator
-        # rows never dispense water and must not influence the dosage.
-        irrigators = self.db.get_irrigators_in_cluster(cluster_id)
-        if not irrigators:
+        # is "irrigated by the same device", so the budget tracks that one tank.
+        irr = self.db.get_irrigator_for_cluster(cluster_id)
+        if irr is None:
             return
-        irr = irrigators[0]
         if not (irr.reservoir_l and irr.flow_rate_l_per_min):
             return
         if decision.action is not Action.IRRIGATE:
@@ -470,19 +467,18 @@ class IrrigationLogic:
             log.warning("failed to persist decision log", exc_info=True)
 
     def _enforce_cooldown(self, cluster_id: int, now: int) -> IrrigationDecision | None:
-        """Skip when ANY irrigator in the cluster fired within the cooldown window."""
-        irrigators = self.db.get_irrigators_in_cluster(cluster_id)
-        if not irrigators:
+        """Skip when the cluster's irrigator fired within the cooldown window."""
+        irr = self.db.get_irrigator_for_cluster(cluster_id)
+        if irr is None:
             return None
 
         latest_event = None
-        for irr in irrigators:
-            events = self.db.get_recent_events(irr.id, hours=MIN_COOLDOWN_HOURS)
-            for event in events:
-                if event.action != "start":
-                    continue
-                if latest_event is None or event.timestamp > latest_event.timestamp:
-                    latest_event = event
+        events = self.db.get_recent_events(irr.id, hours=MIN_COOLDOWN_HOURS)
+        for event in events:
+            if event.action != "start":
+                continue
+            if latest_event is None or event.timestamp > latest_event.timestamp:
+                latest_event = event
 
         if latest_event is None:
             return None

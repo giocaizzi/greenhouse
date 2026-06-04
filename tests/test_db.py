@@ -75,7 +75,34 @@ class TestDatabase:
         assert irrigator.tuya_device_id == FAKE_DEVICE_ID
 
     def test_unique_device_constraint(self, tmp_db):
-        """Same Tuya device ID cannot be added twice."""
+        """Same Tuya device ID cannot be added twice (across clusters)."""
+        cluster_a = tmp_db.add_cluster(FAKE_CLUSTER_NAME)
+        cluster_b = tmp_db.add_cluster("Second cluster")
+        tmp_db.add_irrigator(
+            cluster_id=cluster_a,
+            tuya_device_id=FAKE_DEVICE_ID,
+            name="First",
+            irrigator_type="tuya_cloud",
+            config={},
+        )
+
+        from sqlalchemy.exc import IntegrityError
+
+        # Distinct cluster avoids the one-irrigator-per-cluster guard; the
+        # duplicate device id must still trip the DB unique constraint.
+        with pytest.raises(IntegrityError):
+            tmp_db.add_irrigator(
+                cluster_id=cluster_b,
+                tuya_device_id=FAKE_DEVICE_ID,
+                name="Second",
+                irrigator_type="tuya_cloud",
+                config={},
+            )
+
+    def test_one_irrigator_per_cluster(self, tmp_db):
+        """A cluster holds at most one irrigator — a second add raises IrrigatorExistsError."""
+        from greenhouse_core.repository import IrrigatorExistsError
+
         cluster_id = tmp_db.add_cluster(FAKE_CLUSTER_NAME)
         tmp_db.add_irrigator(
             cluster_id=cluster_id,
@@ -85,12 +112,10 @@ class TestDatabase:
             config={},
         )
 
-        from sqlalchemy.exc import IntegrityError
-
-        with pytest.raises(IntegrityError):
+        with pytest.raises(IrrigatorExistsError):
             tmp_db.add_irrigator(
                 cluster_id=cluster_id,
-                tuya_device_id=FAKE_DEVICE_ID,
+                tuya_device_id="fake_other_device",
                 name="Second",
                 irrigator_type="tuya_cloud",
                 config={},

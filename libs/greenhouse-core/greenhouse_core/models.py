@@ -31,7 +31,9 @@ class Cluster(Base):
     environment: Mapped[str] = mapped_column(String, default="indoor")
 
     plants: Mapped[list["Plant"]] = relationship(back_populates="cluster", cascade="all, delete-orphan")
-    irrigators: Mapped[list["Irrigator"]] = relationship(back_populates="cluster", cascade="all, delete-orphan")
+    irrigator: Mapped["Irrigator | None"] = relationship(
+        back_populates="cluster", cascade="all, delete-orphan", uselist=False
+    )
     sensors: Mapped[list["Sensor"]] = relationship(back_populates="cluster", cascade="all, delete-orphan")
     config: Mapped["IrrigationConfig | None"] = relationship(
         back_populates="cluster", cascade="all, delete-orphan", uselist=False
@@ -65,7 +67,7 @@ class Irrigator(Base):
     __tablename__ = "irrigators"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    cluster_id: Mapped[int] = mapped_column(ForeignKey("clusters.id"), nullable=False)
+    cluster_id: Mapped[int] = mapped_column(ForeignKey("clusters.id"), nullable=False, unique=True)
     tuya_device_id: Mapped[str] = mapped_column(String, nullable=False, unique=True)
     name: Mapped[str] = mapped_column(String, nullable=False)
     type: Mapped[str] = mapped_column(String, nullable=False)
@@ -77,7 +79,7 @@ class Irrigator(Base):
     reservoir_l: Mapped[float | None] = mapped_column(Float)
     flow_rate_l_per_min: Mapped[float | None] = mapped_column(Float)
 
-    cluster: Mapped["Cluster"] = relationship(back_populates="irrigators")
+    cluster: Mapped["Cluster"] = relationship(back_populates="irrigator")
     events: Mapped[list["IrrigationEvent"]] = relationship(back_populates="irrigator", cascade="all, delete-orphan")
 
 

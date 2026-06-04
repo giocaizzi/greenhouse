@@ -36,7 +36,7 @@ class ClusterDetailResponse(BaseModel):
     cluster: "ClusterResponse"
     plants: list["PlantResponse"]
     sensors: list["SensorResponse"]
-    irrigators: list["IrrigatorResponse"]
+    irrigator: "IrrigatorResponse | None"
     config: "ConfigResponse | None"
     windows: list["IrrigationWindowResponse"]
 
@@ -545,7 +545,7 @@ class ClusterStatusResponse(BaseModel):
     config: ConfigResponse | None
     plants: list[PlantResponse]
     sensors: list[ClusterStatusSensorResponse]
-    irrigators: list[ClusterStatusIrrigatorResponse]
+    irrigator: ClusterStatusIrrigatorResponse | None
     decision: IrrigateResponse | None
 
 

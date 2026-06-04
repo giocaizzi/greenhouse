@@ -205,62 +205,62 @@ def test_spent_consumption_reduces_headroom(tmp_db, logic, monkeypatch):
 
 
 def test_only_actuating_irrigator_governs_budget(tmp_db, logic, monkeypatch):
-    """A cluster is irrigated by its first irrigator; extra rows never dispense.
+    """The cluster's single irrigator governs the rationing budget.
 
-    Pump A (irrigators[0], the actuated device): reservoir 1000 (effectively
-    unlimited). Pump B (a second, never-actuated row): reservoir 10 → would, on
-    its own, cap the run at 1 min. Because only Pump A actually waters, the
-    budget tracks Pump A alone and the dosage is left untouched at 2 min — the
-    small phantom tank must NOT constrain it.
+    A cluster is irrigated by exactly one device. With a large reservoir (1000 L,
+    effectively unlimited) the burn-down envelope leaves the 2-min dose untouched
+    and no rationing reason is appended.
     """
     starts = _ts(2026, 5, 14, 0)
     now = _ts(2026, 5, 14, 8)
     _freeze(monkeypatch, now)
-    ctx = _make_cluster(tmp_db)  # Pump A added first → irrigators[0]
+    ctx = _make_cluster(tmp_db)
     _set_capacity(tmp_db, ctx["irrigator_id"], reservoir_l=1000.0, flow_rate_l_per_min=1.0)
-    pump_b = tmp_db.add_irrigator(
-        cluster_id=ctx["cluster_id"],
-        tuya_device_id="fake_pump_b",
-        name="Pump B",
-        irrigator_type="tuya_cloud",
-        config={},
-    )
-    _set_capacity(tmp_db, pump_b, reservoir_l=10.0, flow_rate_l_per_min=1.0)
     tmp_db.add_vacation_window(starts_at=starts, ends_at=starts + 5 * DAY)
 
     decision = logic.decide_for_cluster(ctx["cluster_id"])
 
     assert decision is not None
     assert decision.action is Action.IRRIGATE
-    assert decision.duration_minutes == 2  # Pump B's tiny tank is ignored
+    assert decision.duration_minutes == 2  # unlimited tank → no trim
     assert TriggerCode.VACATION_ACTIVE in _codes(decision)
     assert TriggerCode.VACATION_RATIONING not in _codes(decision)
 
 
 def test_uncapped_actuating_irrigator_skips_rationing(tmp_db, logic, monkeypatch):
-    """If irrigators[0] has no capacity, watering is uncapped even when a later
-    row does have capacity — only the actuated device's config matters.
+    """If the cluster's irrigator has no capacity configured, watering is uncapped.
+
+    Without ``reservoir_l``/``flow_rate_l_per_min`` the budget envelope does not
+    apply, so the dose stays at 2 min and no rationing reason is appended.
     """
     starts = _ts(2026, 5, 14, 0)
     now = _ts(2026, 5, 14, 8)
     _freeze(monkeypatch, now)
-    ctx = _make_cluster(tmp_db)  # Pump A added first, left capacity-less
-    pump_b = tmp_db.add_irrigator(
-        cluster_id=ctx["cluster_id"],
-        tuya_device_id="fake_pump_b",
-        name="Pump B",
-        irrigator_type="tuya_cloud",
-        config={},
-    )
-    _set_capacity(tmp_db, pump_b, reservoir_l=10.0, flow_rate_l_per_min=1.0)
+    ctx = _make_cluster(tmp_db)  # left capacity-less
     tmp_db.add_vacation_window(starts_at=starts, ends_at=starts + 5 * DAY)
 
     decision = logic.decide_for_cluster(ctx["cluster_id"])
 
     assert decision is not None
     assert decision.action is Action.IRRIGATE
-    assert decision.duration_minutes == 2  # actuating Pump A is uncapped
+    assert decision.duration_minutes == 2  # uncapped irrigator
     assert TriggerCode.VACATION_RATIONING not in _codes(decision)
+
+
+def test_second_irrigator_add_rejected(tmp_db):
+    """A cluster holds at most one irrigator — a second add raises IrrigatorExistsError."""
+    from greenhouse_core.repository import IrrigatorExistsError
+
+    ctx = _make_cluster(tmp_db)  # Pump A already added
+
+    with pytest.raises(IrrigatorExistsError):
+        tmp_db.add_irrigator(
+            cluster_id=ctx["cluster_id"],
+            tuya_device_id="fake_pump_b",
+            name="Pump B",
+            irrigator_type="tuya_cloud",
+            config={},
+        )
 
 
 def test_cluster_with_no_irrigators_does_not_crash(tmp_db, logic, monkeypatch):
