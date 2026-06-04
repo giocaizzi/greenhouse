@@ -47,19 +47,18 @@ def irrigator_add(
 
 
 @irrigator_app.command("list")
-def irrigator_list(
+def irrigator_list(ctx: typer.Context):
+    """List every irrigator across all clusters."""
+    output(call(ctx, lambda c: c.list_irrigators()))
+
+
+@irrigator_app.command("show")
+def irrigator_show(
     ctx: typer.Context,
-    cluster: Annotated[int | None, typer.Option(help="Filter by cluster ID")] = None,
+    cluster: Annotated[int, typer.Argument(help="Cluster ID")],
 ):
-    """List irrigators."""
-    if cluster:
-        output(call(ctx, lambda c: c.list_irrigators(cluster)))
-    else:
-        clusters = call(ctx, lambda c: c.list_clusters())
-        for cl in clusters:
-            irrigators = call(ctx, lambda c, cid=cl["id"]: c.list_irrigators(cid))
-            if irrigators:
-                output({"cluster": cl["name"], "irrigators": irrigators})
+    """Show the cluster's irrigator. Exits non-zero if the cluster has none."""
+    output(call(ctx, lambda c: c.get_irrigator(cluster)))
 
 
 @irrigator_app.command("start")
@@ -92,8 +91,7 @@ def irrigator_log_manual(
 @irrigator_app.command("update")
 def irrigator_update(
     ctx: typer.Context,
-    id: Annotated[int, typer.Argument(help="Irrigator ID")],
-    cluster: Annotated[int, typer.Option(help="Cluster the irrigator belongs to")],
+    cluster: Annotated[int, typer.Argument(help="Cluster ID")],
     name: Annotated[str | None, typer.Option(help="New irrigator name")] = None,
     type: Annotated[str | None, typer.Option(help="tuya_cloud or tuya_local")] = None,
     device_ip: Annotated[str | None, typer.Option(help="Local IP")] = None,
@@ -105,7 +103,7 @@ def irrigator_update(
         float | None, typer.Option(help="Measured pump throughput in liters per minute (for vacation rationing)")
     ] = None,
 ):
-    """Patch irrigator metadata. Only the supplied fields are sent.
+    """Patch the cluster's irrigator. Only the supplied fields are sent.
 
     ``--device-ip`` or ``--local-key`` overwrite the ``config`` blob; pass both
     when switching a device to local control.
@@ -122,7 +120,6 @@ def irrigator_update(
             ctx,
             lambda c: c.update_irrigator(
                 cluster,
-                id,
                 name=name,
                 type=type,
                 config=config,
@@ -136,11 +133,10 @@ def irrigator_update(
 @irrigator_app.command("delete")
 def irrigator_delete(
     ctx: typer.Context,
-    id: Annotated[int, typer.Argument(help="Irrigator ID")],
-    cluster: Annotated[int, typer.Option(help="Cluster the irrigator belongs to")],
+    cluster: Annotated[int, typer.Argument(help="Cluster ID")],
     yes: Annotated[bool, typer.Option("--yes", "-y", help="Skip confirmation prompt")] = False,
 ):
-    """Delete an irrigator. Historic events stay attached to the cluster."""
+    """Delete the cluster's irrigator. Historic events stay attached to the cluster."""
     if not yes:
-        typer.confirm(f"Delete irrigator {id} from cluster {cluster}?", abort=True)
-    output(call(ctx, lambda c: c.delete_irrigator(cluster, id)))
+        typer.confirm(f"Delete the irrigator from cluster {cluster}?", abort=True)
+    output(call(ctx, lambda c: c.delete_irrigator(cluster)))
