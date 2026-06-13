@@ -119,4 +119,5 @@ What's specific to this repo:
 
 - **`.release-please-manifest.json` is canonical.** The four `pyproject.toml` files (root + `libs/greenhouse-{core,server,cli}/pyproject.toml`) mirror it via `extra-files` in `release-please-config.json` — release-please overwrites them on every release. Do not hand-edit versions; drift will confuse `uv`.
 - **`CHANGELOG.md` is generated** — do not hand-edit.
+- **`pull-request-title-pattern` in `release-please-config.json` MUST include `${version}` — do not remove it.** For this single-root-package manifest, with no override release-please *generates* a version-less title (`chore: release main`) but its release phase *parses* merged PR titles expecting a version; the mismatch silently skips tagging, so no `vX.Y.Z` tag is cut and CD never fires. This broke v2.1.0 (introduced by #16, mis-"fixed" by removal in #24) and again v3.0.0 (both hand-recovered with `git tag … && gh release create …`). The current value `chore(release): ${version}` round-trips (same logic generates and parses it).
 - The `vX.Y.Z` tag created by release-please triggers `.github/workflows/cd.yml`: Docker build → GHCR push, cosign signing, SBOM, Trivy scan.

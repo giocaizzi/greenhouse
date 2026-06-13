@@ -156,6 +156,38 @@ def test_form_login_rejects_external_next(anonymous_client: TestClient):
     assert resp.headers["location"] == "/"
 
 
+def test_login_page_has_no_chrome_pollers(anonymous_client: TestClient):
+    """The login page must not carry the authenticated chrome's auto-pollers.
+
+    `_base.html` fires `hx-get="/alerts/badge"` and `/health/badge` on
+    `hx-trigger="load"`. Rendered on /login (unauthenticated) they redirect
+    back to /login and recurse, cascading the page. show_chrome=False strips
+    them. Regression test for the v3.0.0 login-page infinite-render bug.
+    """
+    resp = anonymous_client.get("/login")
+    assert resp.status_code == 200
+    assert b"/alerts/badge" not in resp.content
+    assert b"/health/badge" not in resp.content
+    # The top nav (which only makes sense once signed in) is gone too.
+    assert b'class="topbar"' not in resp.content
+
+
+def test_hx_request_unauthenticated_returns_hx_redirect(anonymous_client: TestClient):
+    """An HTMX request to a protected web route while logged out must return
+    an HX-Redirect header (full-page nav), not a 303 whose body HTMX would
+    swap into the triggering fragment. Pairs with the login-page fix above so
+    a session expiring mid-page bounces cleanly to /login."""
+    resp = anonymous_client.get(
+        "/clusters",
+        headers={"HX-Request": "true"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 204
+    assert resp.headers["HX-Redirect"].startswith("/login")
+    # No login HTML in the body — that is the whole point.
+    assert resp.content == b""
+
+
 def test_auth_disabled_grants_anonymous_access(auth_disabled_app):
     tc = TestClient(auth_disabled_app, raise_server_exceptions=False)
     resp = tc.get("/api/v1/clusters")

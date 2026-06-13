@@ -37,7 +37,7 @@ def register_web_exception_handlers(app: FastAPI) -> None:
         # to the form. CLI clients should be using the bearer header, not
         # following redirects, so this only affects browsers.
         if isinstance(exc, _RedirectAuthError):
-            return render_login_redirect(exc)
+            return render_login_redirect(exc, request)
         if not _is_html_request(request):
             from fastapi.responses import JSONResponse
 

@@ -49,6 +49,7 @@
 </div>
 {% endif %}
 
+{% if show_chrome %}
 <header class="topbar">
   <div class="container topbar__inner">
     <a href="/" class="brand" aria-label="Irrigation home">
@@ -108,11 +109,13 @@
     {% endif %}
   </div>
 </header>
+{% endif %}
 
 <main class="container">
   {% block content %}{% endblock %}
 </main>
 
+{% if show_chrome %}
 <dialog id="cmdk-dialog" class="cmdk" aria-label="Command palette">
   <div class="cmdk__panel" role="dialog" aria-modal="true">
     <input
@@ -133,17 +136,20 @@
     </div>
   </div>
 </dialog>
+{% endif %}
 
 <div id="toasts" class="toasts" aria-live="polite" aria-atomic="false"></div>
 
 <footer class="container">
   <div class="footer__row">
+    {% if show_chrome %}
     <a id="health-badge"
        href="/health"
        aria-label="System health"
        hx-get="/health/badge"
        hx-trigger="load, every 60s"
        hx-swap="innerHTML">…</a>
+    {% endif %}
     <span class="footer__meta">
       <span>greenhouse</span>
       {% if app_version %}
