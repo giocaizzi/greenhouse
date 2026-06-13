@@ -126,7 +126,7 @@ jobs:
       - name: Test with coverage (60% gate)
         run: make coverage
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v6
+        uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: coverage.xml
