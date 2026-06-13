@@ -150,6 +150,7 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
             {"name": "search", "description": "Global search across clusters, plants, sensors, and irrigators"},
             {"name": "bulk", "description": "Bulk operations — emergency stop all irrigators"},
         ],
+        generate_unique_id_function=lambda route: route.name,
     )
 
     # Store dependencies on app.state (accessed by deps.py)
