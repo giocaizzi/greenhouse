@@ -4,6 +4,13 @@ All notable changes to this project are tracked here. Managed automatically by
 [release-please](https://github.com/googleapis/release-please) from
 [Conventional Commits](https://www.conventionalcommits.org/) — do not hand-edit.
 
+## [3.0.2](https://github.com/giocaizzi/greenhouse/compare/v3.0.1...v3.0.2) (2026-06-13)
+
+
+### Fixed
+
+* **mcp:** shorten tool names to pass Claude.ai 64-char limit ([#66](https://github.com/giocaizzi/greenhouse/issues/66)) ([e62d4ab](https://github.com/giocaizzi/greenhouse/commit/e62d4abbe0246f5316c84eaf40747d49c67e0b59)), closes [#62](https://github.com/giocaizzi/greenhouse/issues/62)
+
 ## [3.0.1](https://github.com/giocaizzi/greenhouse/compare/v3.0.0...v3.0.1) (2026-06-13)
 
 
