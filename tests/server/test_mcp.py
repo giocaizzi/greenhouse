@@ -49,6 +49,19 @@ def test_mcp_exposes_every_api_operation_as_a_tool(app):
         assert tool.inputSchema is not None, f"MCP tool {tool.name} has no input schema"
 
 
+def test_mcp_tool_names_fit_within_64_chars(app):
+    """All MCP tool names must be ≤ 64 characters.
+
+    Claude.ai connectors enforce a hard 64-char limit on tool names and reject
+    the entire tools/list when any name exceeds it.  This test runs at CI time
+    so a new route with a long function name never ships."""
+    mcp = app.state.mcp
+    over_limit = [tool.name for tool in mcp.tools if len(tool.name) > 64]
+    assert not over_limit, "MCP tool names exceed the 64-character Claude.ai limit:\n  " + "\n  ".join(
+        f"{name!r} ({len(name)} chars)" for name in over_limit
+    )
+
+
 def test_mcp_every_api_route_has_a_response_model(app):
     """Every /api/v1 endpoint must declare a response_model so MCP tools advertise a
     typed output. fastapi-mcp emits an "Example Response:" JSON block in the tool
@@ -280,7 +293,7 @@ def test_mcp_tool_invocation_reaches_inner_endpoint(mcp_client_with_token: TestC
     """
     result = _invoke_mcp_tool(
         mcp_client_with_token,
-        tool_name="list_clusters_api_v1_clusters_get",
+        tool_name="list_clusters",
         bearer=_VALID_TOKEN,
     )
     assert len(result) == 1
@@ -297,7 +310,7 @@ def test_mcp_tool_invocation_rejects_garbage_bearer(mcp_client_with_token: TestC
     with pytest.raises(Exception) as excinfo:
         _invoke_mcp_tool(
             mcp_client_with_token,
-            tool_name="list_clusters_api_v1_clusters_get",
+            tool_name="list_clusters",
             bearer="not-the-real-token",
         )
     assert "401" in str(excinfo.value), f"Expected inner 401 in error, got: {excinfo.value!s}"

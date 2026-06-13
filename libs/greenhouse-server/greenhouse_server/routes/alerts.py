@@ -112,7 +112,7 @@ def resolve_alert(alert_id: int, repo: RepoDep, session: SessionDep) -> AlertSum
 
 
 @router.post("/clusters/{cluster_id}/alerts/sync", response_model=AlertListResponse)
-def sync_cluster_alerts_route(
+def refresh_cluster_alerts(
     cluster_id: int,
     repo: RepoDep,
     plant_db: PlantDbDep,
@@ -144,7 +144,7 @@ def sync_cluster_alerts_route(
 
 
 @router.post("/alerts/sync", response_model=AlertListResponse)
-def sync_all_alerts_route(
+def refresh_all_alerts(
     repo: RepoDep,
     plant_db: PlantDbDep,
     session: SessionDep,
