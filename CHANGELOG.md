@@ -4,6 +4,13 @@ All notable changes to this project are tracked here. Managed automatically by
 [release-please](https://github.com/googleapis/release-please) from
 [Conventional Commits](https://www.conventionalcommits.org/) — do not hand-edit.
 
+## [3.0.1](https://github.com/giocaizzi/greenhouse/compare/v3.0.0...v3.0.1) (2026-06-13)
+
+
+### Fixed
+
+* **web:** stop login page infinite-render loop under session auth ([#63](https://github.com/giocaizzi/greenhouse/issues/63)) ([8e0e17b](https://github.com/giocaizzi/greenhouse/commit/8e0e17b4d864bb18b21b753248a245756ebc151b))
+
 ## [3.0.0](https://github.com/giocaizzi/greenhouse/compare/v2.1.0...v3.0.0) (2026-06-13)
 
 
