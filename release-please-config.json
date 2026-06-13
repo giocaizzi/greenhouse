@@ -22,6 +22,7 @@
   "packages": {
     ".": {
       "package-name": "greenhouse",
+      "component": "",
       "extra-files": [
         {
           "type": "toml",
