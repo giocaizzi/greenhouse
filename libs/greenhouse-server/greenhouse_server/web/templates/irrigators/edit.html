@@ -31,9 +31,10 @@
     </label>
     <label for="type">Type
       <select id="type" name="type" required>
-        <option value="tuya_cloud"{% if irrigator.type == "tuya_cloud" %} selected{% endif %}>tuya_cloud</option>
-        <option value="tuya_local"{% if irrigator.type == "tuya_local" %} selected{% endif %}>tuya_local</option>
+        <option value="tuya_cloud"{% if irrigator.type == "tuya_cloud" %} selected{% endif %}>Tuya Cloud</option>
+        <option value="tuya_local"{% if irrigator.type == "tuya_local" %} selected{% endif %}>Tuya local (LAN)</option>
       </select>
+      <small class="muted">Local (LAN) actuation needs the device IP and local key below.</small>
     </label>
     <fieldset>
       <legend>Local protocol <small class="muted">(tuya_local only)</small></legend>
@@ -41,7 +42,8 @@
         <input type="text" id="device_ip" name="device_ip" value="{{ config.get('device_ip', '') }}" placeholder="192.168.1.42">
       </label>
       <label for="local_key">Local key
-        <input type="text" id="local_key" name="local_key" value="{{ config.get('local_key', '') }}">
+        <input type="text" id="local_key" name="local_key" value="{{ config.get('local_key', '') }}"
+               autocomplete="off" spellcheck="false">
       </label>
     </fieldset>
     <fieldset>

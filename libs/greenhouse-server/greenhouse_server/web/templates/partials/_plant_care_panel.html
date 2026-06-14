@@ -21,16 +21,16 @@
         {% else %}—{% endif %}
       </dd>
       {% if plant.notes %}
-        <dt>Notes</dt><dd style="font-family: var(--font-sans); font-variant-numeric: normal;">{{ plant.notes }}</dd>
+        <dt>Notes</dt><dd class="font-sans">{{ plant.notes }}</dd>
       {% endif %}
     </dl>
     {% if care_info %}
-      <details style="margin-top: var(--sp-4);">
+      <details class="mt-4">
         <summary>Evidence-based data</summary>
-        <dl style="margin-top: var(--sp-3);">
+        <dl class="mt-3">
           {% if care_info.soil_moisture_target %}<dt>Soil moisture target</dt><dd>{{ care_info.soil_moisture_target }}%</dd>{% endif %}
           {% if care_info.water_frequency_days %}<dt>Water frequency</dt><dd>every {{ care_info.water_frequency_days }} day{{ "" if care_info.water_frequency_days == 1 else "s" }}</dd>{% endif %}
-          {% if care_info.sources %}<dt>Sources</dt><dd style="font-family: var(--font-sans); font-variant-numeric: normal;"><small>{{ care_info.sources | join(", ") }}</small></dd>{% endif %}
+          {% if care_info.sources %}<dt>Sources</dt><dd class="font-sans"><small>{{ care_info.sources | join(", ") }}</small></dd>{% endif %}
         </dl>
       </details>
     {% endif %}

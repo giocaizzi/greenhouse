@@ -11,24 +11,24 @@
   <div class="page-head__title">
     <h1>Alerts</h1>
     <div class="page-head__meta">
-      <span>{{ open_count }} open</span>
+      <span>{{ open_count }} open alert{{ "" if open_count == 1 else "s" }}</span>
     </div>
   </div>
   <div class="page-head__actions">
-    <form method="post" action="/alerts/sync" style="margin:0;"
+    <form method="post" action="/alerts/sync" class="m-0"
       hx-post="/alerts/sync"
       hx-target="#alert-list-body"
       hx-swap="innerHTML">
-      <button type="submit" class="secondary btn-sm">
-        <svg class="icon"><use href="/static/icons/sprite.svg#i-refresh"></use></svg>
-        Sync
+      <button type="submit" class="btn-sm secondary">
+        <svg class="icon" aria-hidden="true"><use href="/static/icons/sprite.svg#i-arrows-clockwise"></use></svg>
+        Refresh alerts
       </button>
     </form>
   </div>
 </section>
 
 {# Filter chips #}
-<div class="seg" style="margin-bottom:var(--sp-5);" role="group" aria-label="Filter by status">
+<div class="seg mb-5" role="group" aria-label="Filter by status">
   <a href="/alerts"
     {% if not current_status %}aria-current="page"{% endif %}>All</a>
   <a href="/alerts?status=open"
@@ -39,7 +39,7 @@
     {% if current_status == "resolved" %}aria-current="page"{% endif %}>Resolved</a>
 </div>
 
-<div id="alert-list-body">
+<div id="alert-list-body" aria-live="polite">
   {% include "partials/_alert_list_body.html" %}
 </div>
 

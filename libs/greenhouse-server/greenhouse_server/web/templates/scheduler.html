@@ -23,16 +23,16 @@
   {% if scheduler_running %}
   <div class="page-head__actions">
     {% if check_all_paused %}
-      <form method="post" action="/scheduler/resume" style="display:inline;">
+      <form method="post" action="/scheduler/resume">
         <button type="submit" class="btn">
-          <svg class="icon" style="width:13px;height:13px;"><use href="/static/icons/sprite.svg#i-play"></use></svg>
+          <svg class="icon" aria-hidden="true"><use href="/static/icons/sprite.svg#i-play"></use></svg>
           Resume check_all
         </button>
       </form>
     {% else %}
-      <form method="post" action="/scheduler/pause" style="display:inline;">
+      <form method="post" action="/scheduler/pause">
         <button type="submit" class="btn secondary">
-          <svg class="icon" style="width:13px;height:13px;"><use href="/static/icons/sprite.svg#i-stop"></use></svg>
+          <svg class="icon" aria-hidden="true"><use href="/static/icons/sprite.svg#i-stop"></use></svg>
           Pause check_all
         </button>
       </form>
@@ -41,37 +41,38 @@
   {% endif %}
 </section>
 
-<article class="card" style="border-color: color-mix(in srgb, var(--danger) 30%, var(--border)); margin-bottom: var(--sp-6);">
-  <header style="display:flex; align-items:center; justify-content:space-between; gap: var(--sp-4); flex-wrap: wrap;">
-    <div>
-      <strong>Emergency stop</strong>
-      <small class="muted"> &mdash; sends OFF to every irrigator in every cluster.</small>
-    </div>
-    <button type="button"
-            class="btn"
-            style="background: var(--danger); border-color: var(--danger); color: white;"
-            hx-post="/bulk/stop-all"
-            hx-target="#emergency-stop-result"
-            hx-swap="innerHTML"
-            hx-confirm="Stop ALL irrigators across every cluster? This is a kill switch.">
-      <svg class="icon" style="width:13px;height:13px;"><use href="/static/icons/sprite.svg#i-warning"></use></svg>
-      Stop all irrigators
-    </button>
+<article class="action-bar action-bar--danger" aria-labelledby="emergency-actions">
+  <header>
+    <strong id="emergency-actions">Emergency stop</strong>
+    <small>Kill switch &mdash; sends OFF to every irrigator in every cluster.</small>
   </header>
+  <div class="action-bar__row">
+    <div class="action-bar__form">
+      <button type="button"
+              class="danger"
+              hx-post="/bulk/stop-all"
+              hx-target="#emergency-stop-result"
+              hx-swap="innerHTML"
+              hx-confirm="Stop every irrigator in every cluster now? Watering in progress will be cut off.">
+        <svg class="icon" aria-hidden="true"><use href="/static/icons/sprite.svg#i-warning"></use></svg>
+        Stop all irrigators
+      </button>
+    </div>
+  </div>
   <div id="emergency-stop-result" aria-live="polite"></div>
 </article>
 
 {% if not scheduler_running %}
   <article class="empty">
-    <span class="empty__icon"><svg class="icon"><use href="/static/icons/sprite.svg#i-clock"></use></svg></span>
+    <span class="empty__icon"><svg class="icon" aria-hidden="true"><use href="/static/icons/sprite.svg#i-clock"></use></svg></span>
     <h2>Scheduler is not running</h2>
-    <p>Start the server with <kbd>enable_scheduler=True</kbd> to enable background jobs.</p>
+    <p>Background jobs are off. Start the server with <kbd>enable_scheduler=True</kbd> to run automatic checks and irrigation.</p>
   </article>
 {% elif not jobs %}
   <article class="empty">
-    <span class="empty__icon"><svg class="icon"><use href="/static/icons/sprite.svg#i-clock"></use></svg></span>
+    <span class="empty__icon"><svg class="icon" aria-hidden="true"><use href="/static/icons/sprite.svg#i-clock"></use></svg></span>
     <h2>No jobs scheduled</h2>
-    <p>Scheduler is running. Configure clusters to add scheduled jobs.</p>
+    <p>The scheduler is running but has no jobs yet. Jobs are added automatically once clusters are configured.</p>
   </article>
 {% else %}
 <article class="card card--flush">
@@ -79,23 +80,42 @@
     <h3 class="card__title">{{ jobs|length }} scheduled job{{ "" if jobs|length == 1 else "s" }}</h3>
   </div>
   <table aria-label="Scheduled jobs">
-    <thead><tr><th scope="col">ID</th><th scope="col">Name</th><th scope="col">Trigger</th><th scope="col">Next run</th><th scope="col"><span class="visually-hidden">Actions</span></th></tr></thead>
+    <thead>
+      <tr>
+        <th scope="col">Status</th>
+        <th scope="col">ID</th>
+        <th scope="col">Name</th>
+        <th scope="col">Trigger</th>
+        <th scope="col">Next run</th>
+        <th scope="col"><span class="visually-hidden">Actions</span></th>
+      </tr>
+    </thead>
     <tbody>
       {% for job in jobs %}
       <tr>
+        <td data-th="Status">
+          {% if job.paused %}
+            <span class="badge-warning">paused</span>
+          {% else %}
+            <span class="badge-ok">active</span>
+          {% endif %}
+        </td>
         <td data-th="ID"><code>{{ job.id }}</code></td>
         <td data-th="Name">{{ job.name }}</td>
         <td data-th="Trigger"><small class="mono">{{ job.trigger }}</small></td>
         <td data-th="Next run"><small class="mono">{{ job.next_run_time or "—" }}</small></td>
         <td>
-          <button hx-post="/scheduler/jobs/{{ job.id }}/delete"
-                  hx-target="closest tr"
-                  hx-swap="outerHTML swap:200ms"
-                  hx-confirm="Delete job {{ job.id }}?"
-                  class="secondary btn-sm">
-            <svg class="icon" style="width:13px;height:13px;"><use href="/static/icons/sprite.svg#i-trash"></use></svg>
-            Delete
-          </button>
+          <div class="row-actions">
+            <button hx-post="/scheduler/jobs/{{ job.id }}/delete"
+                    hx-target="closest tr"
+                    hx-swap="outerHTML swap:200ms"
+                    hx-confirm="Delete the scheduled job {{ job.id }}? It will stop running until reconfigured."
+                    class="btn-sm secondary row-actions__danger"
+                    aria-label="Delete scheduled job {{ job.id }}">
+              <svg class="icon" aria-hidden="true"><use href="/static/icons/sprite.svg#i-trash"></use></svg>
+              Delete
+            </button>
+          </div>
         </td>
       </tr>
       {% endfor %}

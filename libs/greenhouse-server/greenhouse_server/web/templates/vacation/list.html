@@ -17,7 +17,7 @@
 </section>
 
 {% if active %}
-<div class="alert alert--warn" style="margin-bottom:var(--sp-5);">
+<div class="alert alert--warn mb-5">
   <div class="alert__icon" aria-hidden="true">
     <svg class="icon"><use href="/static/icons/sprite.svg#i-leaf"></use></svg>
   </div>
@@ -28,8 +28,9 @@
       <p class="alert__body"><small>Contact: {{ active.contact_email }}</small></p>
     {% endif %}
   </div>
-  <form method="post" action="/vacation/{{ active.id }}/delete" style="margin:0;align-self:center;">
-    <button type="submit" class="secondary btn-sm">Cancel</button>
+  <form method="post" action="/vacation/{{ active.id }}/delete" class="m-0" style="align-self:center;"
+        onsubmit="return confirm('End the active vacation now? Automatic irrigation will resume immediately.');">
+    <button type="submit" class="secondary btn-sm">End vacation now</button>
   </form>
 </div>
 {% endif %}
@@ -67,7 +68,7 @@
 {% endif %}
 
 {# Add window form #}
-<article class="card form-card" style="margin-bottom:var(--sp-6);">
+<article class="card form-card mb-6">
   <div class="card__head">
     <h2 class="card__title">Schedule vacation</h2>
   </div>
@@ -81,10 +82,11 @@
           <input type="date" name="ends_at" required>
         </label>
       </div>
-      <label>Contact email <small>(optional)</small>
+      <label>Contact email <small class="muted">(optional)</small>
         <input type="email" name="contact_email" placeholder="person@example.com">
+        <small class="muted">Who to reach about the plants while you're away.</small>
       </label>
-      <label>Notes <small>(optional)</small>
+      <label>Notes <small class="muted">(optional)</small>
         <textarea name="notes" placeholder="Trip notes…"></textarea>
       </label>
       <div class="form-actions">
@@ -100,12 +102,12 @@
   <table>
     <thead>
       <tr>
-        <th>Starts</th>
-        <th>Ends</th>
-        <th>Contact</th>
-        <th>Notes</th>
-        <th>Status</th>
-        <th></th>
+        <th scope="col">Starts</th>
+        <th scope="col">Ends</th>
+        <th scope="col">Contact</th>
+        <th scope="col">Notes</th>
+        <th scope="col">Status</th>
+        <th scope="col"><span class="visually-hidden">Actions</span></th>
       </tr>
     </thead>
     <tbody>
@@ -125,8 +127,10 @@
         <td>
           <div class="row-actions">
             <a href="/vacation/{{ w.id }}/edit" class="btn secondary btn-sm" aria-label="Edit vacation window {{ w.id }}">Edit</a>
-            <form method="post" action="/vacation/{{ w.id }}/delete" style="margin:0;">
-              <button type="submit" class="secondary btn-sm">Delete</button>
+            <form method="post" action="/vacation/{{ w.id }}/delete" class="m-0"
+                  onsubmit="return confirm('Delete this vacation window?');">
+              <button type="submit" class="secondary btn-sm row-actions__danger"
+                      aria-label="Delete vacation window {{ w.id }}">Delete</button>
             </form>
           </div>
         </td>

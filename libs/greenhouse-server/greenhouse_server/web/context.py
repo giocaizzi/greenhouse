@@ -67,5 +67,10 @@ def base_context(request: Request, **extra) -> dict:
         "scheduler_paused": scheduler_paused,
         "app_version": APP_VERSION,
         "auth_enabled": auth_enabled,
+        # Authenticated chrome (top nav, command palette, status pollers) is on
+        # by default. Unauthenticated pages like /login pass show_chrome=False:
+        # the chrome's `hx-trigger="load"` pollers would otherwise fire while
+        # logged out, get redirected to /login, and recurse. See login routes.
+        "show_chrome": True,
         **extra,
     }

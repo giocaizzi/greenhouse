@@ -29,15 +29,17 @@
   <form method="post" action="/clusters/{{ cluster.id }}/irrigators">
     <label for="tuya_device_id">Tuya device ID
       <input type="text" id="tuya_device_id" name="tuya_device_id" required autofocus>
+      <small class="muted">From the Tuya/SmartLife app device info</small>
     </label>
     <label for="name">Name
       <input type="text" id="name" name="name" placeholder="Pump A" required>
     </label>
     <label for="type">Type
       <select id="type" name="type" required>
-        <option value="tuya_cloud" selected>tuya_cloud</option>
-        <option value="tuya_local">tuya_local</option>
+        <option value="tuya_cloud" selected>Tuya Cloud</option>
+        <option value="tuya_local">Tuya local (LAN)</option>
       </select>
+      <small class="muted">Local (LAN) actuation needs the device IP and local key below.</small>
     </label>
     <fieldset>
       <legend>Local protocol <small class="muted">(tuya_local only)</small></legend>
@@ -45,7 +47,7 @@
         <input type="text" id="device_ip" name="device_ip" placeholder="192.168.1.42">
       </label>
       <label for="local_key">Local key
-        <input type="text" id="local_key" name="local_key">
+        <input type="text" id="local_key" name="local_key" autocomplete="off" spellcheck="false">
       </label>
     </fieldset>
     <fieldset>

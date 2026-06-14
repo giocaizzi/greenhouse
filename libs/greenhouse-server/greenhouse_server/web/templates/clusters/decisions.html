@@ -23,9 +23,10 @@
 
 {% if not logs %}
   <article class="empty">
-    <span class="empty__icon"><svg class="icon"><use href="/static/icons/sprite.svg#i-list"></use></svg></span>
+    <span class="empty__icon"><svg class="icon" aria-hidden="true"><use href="/static/icons/sprite.svg#i-list"></use></svg></span>
     <h2>No decisions yet</h2>
-    <p>The engine writes a row here every time it evaluates this cluster.</p>
+    <p>The engine records a row here every time it evaluates this cluster. Run it from the cluster overview to populate the log.</p>
+    <a href="/clusters/{{ cluster.id }}#actions" role="button" class="secondary">Go to cluster actions</a>
   </article>
 {% else %}
 <article class="card card--flush">

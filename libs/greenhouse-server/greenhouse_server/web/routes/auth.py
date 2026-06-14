@@ -49,6 +49,7 @@ def login_form(
         request,
         next_url=_safe_next(next),
         auth_enabled=settings.auth_enabled,
+        show_chrome=False,
     )
     return templates.TemplateResponse(request, "auth/login.html", ctx)
 
@@ -73,6 +74,7 @@ def login_submit(
             next_url=target,
             error="Invalid username or password.",
             auth_enabled=settings.auth_enabled,
+            show_chrome=False,
         )
         return templates.TemplateResponse(
             request,

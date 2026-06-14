@@ -34,9 +34,9 @@
 
 {% if not result.items %}
   <article class="empty">
-    <span class="empty__icon"><svg class="icon"><use href="/static/icons/sprite.svg#i-scales"></use></svg></span>
+    <span class="empty__icon"><svg class="icon" aria-hidden="true"><use href="/static/icons/sprite.svg#i-scales"></use></svg></span>
     <h2>No scored events yet</h2>
-    <p>Scores need at least one completed irrigation with sensor data 30&nbsp;min before and 90&nbsp;min after.</p>
+    <p>Each score compares soil moisture 30&nbsp;min before and 90&nbsp;min after a completed irrigation. Once the cluster waters with a sensor attached, results appear here.</p>
   </article>
 {% else %}
 <article class="card card--flush">
@@ -48,7 +48,7 @@
         <th scope="col">Duration</th>
         <th scope="col">Before</th>
         <th scope="col">After</th>
-        <th scope="col">Δ</th>
+        <th scope="col"><span aria-hidden="true">Δ</span><span class="visually-hidden">Change</span></th>
         <th scope="col">Score</th>
       </tr>
     </thead>

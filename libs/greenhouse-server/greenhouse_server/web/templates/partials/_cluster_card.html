@@ -59,7 +59,7 @@
       {% for s in status.sensors if not s.plant_id %}
         <li class="cluster-card__rel-row">
           <span class="cluster-card__sensor">{{ s.name }}</span>
-          <span class="badge-warning" style="font-size: var(--fs-xs);">unlinked</span>
+          <span class="badge-warning fs-xs">unlinked</span>
           <span class="cluster-card__reading mono">
             {%- if s.last_reading and s.last_reading.soil_moisture is not none -%}
               {{ "%.0f%%" | format(s.last_reading.soil_moisture) }}

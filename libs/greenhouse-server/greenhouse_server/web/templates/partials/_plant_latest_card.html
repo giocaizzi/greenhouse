@@ -7,7 +7,7 @@
     {% if not plant_sensors %}
       <p class="muted"><small>No sensors linked to this plant.</small></p>
     {% else %}
-      <div style="display: flex; flex-direction: column; gap: var(--sp-4);">
+      <div class="col col--g4">
         {% for sensor in plant_sensors %}
           {% set r = latest_readings.get(sensor.id) %}
           <section>

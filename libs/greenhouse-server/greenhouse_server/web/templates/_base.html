@@ -28,6 +28,8 @@
 </head>
 <body>
 
+<a class="skip-link" href="#main">Skip to content</a>
+
 <div id="page-progress" class="page-progress" aria-hidden="true"></div>
 
 {% if dry_run_global %}
@@ -49,6 +51,7 @@
 </div>
 {% endif %}
 
+{% if show_chrome %}
 <header class="topbar">
   <div class="container topbar__inner">
     <a href="/" class="brand" aria-label="Irrigation home">
@@ -62,11 +65,11 @@
       <a href="/scheduler">Scheduler</a>
       <details class="topnav__more">
         <summary aria-label="More pages">More</summary>
-        <div class="topnav__menu" role="menu">
-          <a href="/vacation" role="menuitem">Vacation</a>
-          <a href="/health" role="menuitem">Health</a>
-          <a href="/quality" role="menuitem">Data quality</a>
-          <a href="/preferences" role="menuitem">Preferences</a>
+        <div class="topnav__menu">
+          <a href="/vacation">Vacation</a>
+          <a href="/health">Health</a>
+          <a href="/quality">Data quality</a>
+          <a href="/preferences">Preferences</a>
         </div>
       </details>
     </nav>
@@ -99,20 +102,22 @@
       <svg class="icon icon-sun" aria-hidden="true"><use href="/static/icons/sprite.svg#i-sun"></use></svg>
     </button>
     {% if auth_enabled %}
-    <form method="post" action="/logout" style="display:inline; margin:0;">
+    <form method="post" action="/logout" class="inline">
       <button class="icon-btn" type="submit" aria-label="Sign out" title="Sign out">
-        <svg class="icon" aria-hidden="true"><use href="/static/icons/sprite.svg#i-warning"></use></svg>
+        <svg class="icon" aria-hidden="true"><use href="/static/icons/sprite.svg#i-x"></use></svg>
         <span class="visually-hidden">Sign out</span>
       </button>
     </form>
     {% endif %}
   </div>
 </header>
+{% endif %}
 
-<main class="container">
+<main class="container" id="main">
   {% block content %}{% endblock %}
 </main>
 
+{% if show_chrome %}
 <dialog id="cmdk-dialog" class="cmdk" aria-label="Command palette">
   <div class="cmdk__panel" role="dialog" aria-modal="true">
     <input
@@ -133,17 +138,20 @@
     </div>
   </div>
 </dialog>
+{% endif %}
 
 <div id="toasts" class="toasts" aria-live="polite" aria-atomic="false"></div>
 
 <footer class="container">
   <div class="footer__row">
+    {% if show_chrome %}
     <a id="health-badge"
        href="/health"
        aria-label="System health"
        hx-get="/health/badge"
        hx-trigger="load, every 60s"
        hx-swap="innerHTML">…</a>
+    {% endif %}
     <span class="footer__meta">
       <span>greenhouse</span>
       {% if app_version %}
@@ -155,6 +163,51 @@
     </span>
   </div>
 </footer>
+
+{% if show_chrome %}
+<nav class="mobile-nav" aria-label="Mobile navigation">
+  <a class="mobile-nav__item" href="/">
+    <svg class="icon" aria-hidden="true"><use href="/static/icons/sprite.svg#i-pulse"></use></svg>
+    Today
+  </a>
+  <a class="mobile-nav__item" href="/clusters">
+    <svg class="icon" aria-hidden="true"><use href="/static/icons/sprite.svg#i-leaf"></use></svg>
+    Spaces
+  </a>
+  <a class="mobile-nav__item" href="/activity">
+    <svg class="icon" aria-hidden="true"><use href="/static/icons/sprite.svg#i-clock"></use></svg>
+    Activity
+  </a>
+  <a class="mobile-nav__item" href="/alerts">
+    <svg class="icon" aria-hidden="true"><use href="/static/icons/sprite.svg#i-bell"></use></svg>
+    Alerts
+  </a>
+  <details class="mobile-nav__more">
+    <summary class="mobile-nav__item">
+      <svg class="icon" aria-hidden="true"><use href="/static/icons/sprite.svg#i-list"></use></svg>
+      More
+    </summary>
+    <div class="mobile-nav__sheet" aria-label="More pages">
+      <a href="/scheduler">Scheduler</a>
+      <a href="/vacation">Vacation</a>
+      <a href="/health">Health</a>
+      <a href="/quality">Data quality</a>
+      <a href="/preferences">Preferences</a>
+    </div>
+  </details>
+</nav>
+<script>
+  (function () {
+    var path = location.pathname;
+    document.querySelectorAll('.mobile-nav__item').forEach(function (a) {
+      var href = a.getAttribute('href');
+      if (href === '/' ? path === '/' : path === href || path.startsWith(href + '/')) {
+        a.setAttribute('aria-current', 'page');
+      }
+    });
+  })();
+</script>
+{% endif %}
 
 </body>
 </html>

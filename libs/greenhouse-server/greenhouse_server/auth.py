@@ -257,11 +257,24 @@ class _RedirectAuthError(HTTPException):
         self.next_url = next_url
 
 
-def render_login_redirect(err: _RedirectAuthError) -> RedirectResponse:
-    """Convert the sentinel into a 303 to /login?next=<original-path>."""
+def render_login_redirect(err: _RedirectAuthError, request: Request) -> Response:
+    """Convert the sentinel into a redirect to /login?next=<original-path>.
+
+    A plain 303 is correct for full-page browser navigation, but HTMX follows
+    a 303 via AJAX and swaps the *body* (the login page) into the triggering
+    target. On pages whose chrome auto-polls (``hx-trigger="load"``), that
+    injects the login page into a fragment and recurses. For HTMX requests we
+    instead return an empty 204 carrying ``HX-Redirect`` so HTMX performs a
+    top-level browser navigation. Non-HTMX requests keep the 303.
+    """
     from urllib.parse import quote
 
-    return RedirectResponse(url=f"/login?next={quote(err.next_url)}", status_code=303)
+    target = f"/login?next={quote(err.next_url)}"
+    if request.headers.get("HX-Request", "").lower() == "true":
+        response = Response(status_code=204)
+        response.headers["HX-Redirect"] = target
+        return response
+    return RedirectResponse(url=target, status_code=303)
 
 
 # ── Cookie helpers ──────────────────────────────────────────────────────────

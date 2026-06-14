@@ -108,7 +108,7 @@ class TestActivityPagination:
             # Fetch the second page fragment
             resp2 = client.get(f"/activity/page?before={cursor}")
             assert resp2.status_code == 200
-            # Remaining 10 rows — no further sentinel (next_cursor is None)
+            # Remaining 10 data rows + possible date-separator rows — no further sentinel
             tr_count = resp2.text.count("<tr")
-            assert tr_count == 10
+            assert tr_count >= 10
             assert 'hx-trigger="revealed"' not in resp2.text

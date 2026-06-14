@@ -3,6 +3,8 @@
   "release-type": "python",
   "include-component-in-tag": false,
   "separate-pull-requests": false,
+  "pull-request-title-pattern": "chore(release): ${version}",
+  "group-pull-request-title-pattern": "chore(release): ${version}",
   "changelog-path": "CHANGELOG.md",
   "changelog-sections": [
     { "type": "feat", "section": "Added" },
@@ -19,8 +21,12 @@
   ],
   "packages": {
     ".": {
-      "package-name": "greenhouse",
       "extra-files": [
+        {
+          "type": "toml",
+          "path": "pyproject.toml",
+          "jsonpath": "$.project.version"
+        },
         {
           "type": "toml",
           "path": "libs/greenhouse-core/pyproject.toml",

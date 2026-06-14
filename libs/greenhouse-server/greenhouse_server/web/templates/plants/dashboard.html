@@ -10,19 +10,49 @@
   <span class="here">{{ plant.species | lower }}</span>
 </div>
 
+{# ── Page head with actions ──────────────────────────────────────────────────── #}
+<section class="page-head">
+  <div class="page-head__title">
+    <h1>{{ plant.notes or plant.species }}</h1>
+    <div class="page-head__meta">
+      <i class="species">{{ plant.species }}</i>
+      {% if plant.category %}<span class="dot"></span><span>{{ plant.category }}</span>{% endif %}
+      {% if health_score is not none %}
+        <span class="dot"></span>
+        <span class="badge-{% if health_score >= 70 %}ok{% elif health_score >= 40 %}warning{% else %}danger{% endif %}">
+          health {{ health_score | round | int }}
+        </span>
+      {% endif %}
+    </div>
+  </div>
+  <div class="page-head__actions">
+    <a href="/clusters/{{ cluster.id }}/plants/{{ plant.id }}/edit" class="btn secondary btn-sm">Edit plant</a>
+    {% if other_clusters %}
+      <button type="button"
+              class="btn secondary btn-sm"
+              onclick="document.getElementById('move-plant-dialog').showModal()">
+        Move…
+      </button>
+    {% endif %}
+    <button type="button"
+            class="btn secondary btn-sm row-actions__danger"
+            aria-label="Delete {{ plant.species }}"
+            hx-delete="/clusters/{{ cluster.id }}/plants/{{ plant.id }}"
+            hx-confirm="Delete plant &quot;{{ plant.species }}&quot;? This cannot be undone."
+            hx-target="body"
+            hx-push-url="/clusters/{{ cluster.id }}">
+      Delete plant
+    </button>
+  </div>
+</section>
+
 {# ── Plant hero card ─────────────────────────────────────────────────────────── #}
 <section class="plant-hero">
   <div class="plant-hero__art">
     <svg class="icon"><use href="/static/icons/sprite.svg#i-flower"></use></svg>
   </div>
   <div class="plant-hero__main">
-    <h1 class="plant-hero__name">{{ plant.notes or plant.species }}</h1>
-    <div class="plant-hero__species"><i>{{ plant.species }}</i></div>
-    <p class="plant-hero__line">
-      {% if plant.notes and plant.notes != plant.species %}{{ plant.notes }}{% else %}Monitored and irrigated.{% endif %}
-    </p>
     <div class="plant-hero__chips">
-      {% if plant.category %}<span class="pill">{{ plant.category }}</span>{% endif %}
       {% if plant.water_needs %}<span class="pill">water · {{ plant.water_needs }}</span>{% endif %}
       {% if plant.light_needs %}<span class="pill">light · {{ plant.light_needs }}</span>{% endif %}
       <span class="pill">{{ cluster.name }}</span>
@@ -41,13 +71,6 @@
       </div>
     {% endif %}
     <span class="muted" style="font-size: var(--fs-xs); text-align: center;">irrigated {{ last_irrigated_relative }}</span>
-    {% if other_clusters %}
-      <button type="button"
-              class="btn btn--sm"
-              onclick="document.getElementById('move-plant-dialog').showModal()">
-        Move to cluster…
-      </button>
-    {% endif %}
   </aside>
 </section>
 
@@ -92,6 +115,9 @@
   {% set w = 280 %}
   {% set h = 56 %}
   {% set x_step = (w / (n - 1)) if n > 1 else w %}
+  <div class="chart-section__head" style="margin-bottom: var(--sp-3);">
+    <h2>90-day health trend</h2>
+  </div>
   <div class="sparkline-wrap" title="90-day health score trend">
     <svg class="sparkline" viewBox="0 0 {{ w }} {{ h }}" preserveAspectRatio="none" aria-hidden="true">
       <polyline
@@ -114,7 +140,7 @@
 
 <section class="chart-section">
   <header class="chart-section__head">
-    <h2>Charts</h2>
+    <h2>Sensor data</h2>
     <nav class="seg" aria-label="Time range">
       {% for h in allowed_hours %}
         {% if h == hours %}

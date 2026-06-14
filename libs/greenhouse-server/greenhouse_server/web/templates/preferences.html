@@ -16,8 +16,20 @@
   </div>
 </section>
 
+{% if saved %}
+<div class="alert alert--ok mb-5" role="status">
+  <span class="alert__icon" aria-hidden="true"><svg class="icon"><use href="/static/icons/sprite.svg#i-check"></use></svg></span>
+  <div><p class="alert__title">{{ "Global irrigation defaults saved." if saved == "global" else "Preferences saved." }}</p></div>
+</div>
+{% endif %}
+
+<hgroup>
+  <h2>Interface &amp; safety</h2>
+  <p>Display defaults and the global dry-run kill switch.</p>
+</hgroup>
+
 <article class="card form-card">
-  <form method="post" action="/preferences">
+  <form method="post" action="/preferences" id="prefs-form">
     <label for="units">Units
       <select id="units" name="units" required>
         <option value="metric"{% if prefs.units == "metric" %} selected{% endif %}>Metric (°C, mm)</option>
@@ -47,38 +59,45 @@
         {% endfor %}
       </select>
     </label>
-    <label for="dry_run_global" style="display:flex; align-items:center; gap: var(--sp-2);">
-      <input type="checkbox" id="dry_run_global" name="dry_run_global" value="on"
-             {% if prefs.dry_run_global %}checked{% endif %}>
-      <span>Global dry-run <small class="muted">— irrigators will never actuate while this is on.</small></span>
-    </label>
+    <fieldset class="fieldset--safety{% if prefs.dry_run_global %} is-active{% endif %}">
+      <legend>Safety</legend>
+      <label for="dry_run_global" class="check-label">
+        <input type="checkbox" id="dry_run_global" name="dry_run_global" value="on"
+               aria-describedby="dry_run_global_help"
+               {% if prefs.dry_run_global %}checked{% endif %}>
+        <span>Global dry-run
+          {% if prefs.dry_run_global %}<span class="badge-warning">on</span>{% else %}<span class="badge-muted">off</span>{% endif %}
+        </span>
+      </label>
+      <small id="dry_run_global_help" class="muted">While on, no irrigator ever actuates — the scheduler still evaluates and logs decisions, but water never runs. Turning it off re-arms real irrigation.</small>
+    </fieldset>
 
-    <fieldset style="margin-top: var(--sp-3);">
+    <fieldset class="mt-3">
       <legend>Push notifications (ntfy)</legend>
-      <p class="muted" style="margin-top: 0;">
+      <p class="muted mt-0">
         {% if ntfy_configured %}
           <strong>Configured</strong> — delivery is enabled; toggle categories below.
         {% else %}
-          <strong>Not configured</strong> — set <code>GREENHOUSE_NTFY_SERVER_URL</code> and
-          <code>GREENHOUSE_NTFY_TOPIC</code> to enable delivery. Toggles below take effect once configured.
+          <strong>Not configured</strong> — push delivery isn't set up on the server yet. Toggles below
+          take effect once it is.
         {% endif %}
       </p>
-      <label for="notify_manual" style="display:flex; align-items:center; gap: var(--sp-2);">
+      <label for="notify_manual" class="check-label">
         <input type="checkbox" id="notify_manual" name="notify_manual" value="on"
                {% if prefs.notify_manual %}checked{% endif %}>
         <span>Manual irrigations <small class="muted">— start / stop / log by hand.</small></span>
       </label>
-      <label for="notify_emergency" style="display:flex; align-items:center; gap: var(--sp-2);">
+      <label for="notify_emergency" class="check-label">
         <input type="checkbox" id="notify_emergency" name="notify_emergency" value="on"
                {% if prefs.notify_emergency %}checked{% endif %}>
         <span>Emergency stop-all <small class="muted">— the kill switch.</small></span>
       </label>
-      <label for="notify_alerts" style="display:flex; align-items:center; gap: var(--sp-2);">
+      <label for="notify_alerts" class="check-label">
         <input type="checkbox" id="notify_alerts" name="notify_alerts" value="on"
                {% if prefs.notify_alerts %}checked{% endif %}>
         <span>New alerts <small class="muted">— warnings &amp; critical only (leaks, low battery, …).</small></span>
       </label>
-      <label for="notify_auto" style="display:flex; align-items:center; gap: var(--sp-2);">
+      <label for="notify_auto" class="check-label">
         <input type="checkbox" id="notify_auto" name="notify_auto" value="on"
                {% if prefs.notify_auto %}checked{% endif %}>
         <span>Automated cycles <small class="muted">— scheduler-driven watering.</small></span>
@@ -91,15 +110,26 @@
     </div>
   </form>
 </article>
+{# Disarming the global dry-run re-arms real irrigation — confirm that transition. #}
+<script>
+  (function () {
+    var cb = document.getElementById('dry_run_global');
+    var form = document.getElementById('prefs-form');
+    if (!cb || !form) return;
+    var wasOn = cb.checked;
+    form.addEventListener('submit', function (e) {
+      if (wasOn && !cb.checked &&
+          !window.confirm('Turning Global dry-run OFF re-arms real irrigation — irrigators can actuate again. Save this change?')) {
+        e.preventDefault();
+      }
+    });
+  })();
+</script>
 
-<section class="page-head" id="global-config">
-  <div class="page-head__title">
-    <h2>Global irrigation defaults</h2>
-    <div class="page-head__meta">
-      <span>Inherited by every cluster. Leave a field blank to fall through to the built-in default.</span>
-    </div>
-  </div>
-</section>
+<hgroup id="global-config">
+  <h2>Global irrigation defaults</h2>
+  <p>Inherited by every cluster. Leave a field blank to fall through to the built-in default.</p>
+</hgroup>
 
 <article class="card form-card">
   <form method="post" action="/config/global">
@@ -140,6 +170,7 @@
              placeholder="off">
     </label>
     <div class="form-actions">
+      <a href="/" class="btn secondary">Cancel</a>
       <button type="submit">Save global defaults</button>
     </div>
   </form>

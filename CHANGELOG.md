@@ -4,6 +4,64 @@ All notable changes to this project are tracked here. Managed automatically by
 [release-please](https://github.com/googleapis/release-please) from
 [Conventional Commits](https://www.conventionalcommits.org/) — do not hand-edit.
 
+## [3.0.2](https://github.com/giocaizzi/greenhouse/compare/v3.0.1...v3.0.2) (2026-06-13)
+
+
+### Fixed
+
+* **mcp:** shorten tool names to pass Claude.ai 64-char limit ([#66](https://github.com/giocaizzi/greenhouse/issues/66)) ([e62d4ab](https://github.com/giocaizzi/greenhouse/commit/e62d4abbe0246f5316c84eaf40747d49c67e0b59)), closes [#62](https://github.com/giocaizzi/greenhouse/issues/62)
+
+## [3.0.1](https://github.com/giocaizzi/greenhouse/compare/v3.0.0...v3.0.1) (2026-06-13)
+
+
+### Fixed
+
+* **web:** stop login page infinite-render loop under session auth ([#63](https://github.com/giocaizzi/greenhouse/issues/63)) ([8e0e17b](https://github.com/giocaizzi/greenhouse/commit/8e0e17b4d864bb18b21b753248a245756ebc151b))
+
+## [3.0.0](https://github.com/giocaizzi/greenhouse/compare/v2.1.0...v3.0.0) (2026-06-13)
+
+
+### ⚠ BREAKING CHANGES
+
+* **engine,web,cli:** `IrrigationConfig.mode` and `auto_run` are now nullable (null = inherit from global). Existing rows are unaffected by the migration; new rows from the partial-PATCH config endpoint may omit fields. The legacy /clusters/{id}/{plants,sensors,irrigators,config} URLs return 301 redirects to the unified detail page anchors instead of rendering their own pages; old templates removed.
+* **devices:** wire DeviceRegistry through services; remove TuyaDeviceManager shim ([#43](https://github.com/giocaizzi/greenhouse/issues/43))
+* **api:** every /api/v1 route (except /api/v1/auth/login) and every web page now requires a valid session. Set GREENHOUSE_AUTH_SECRET_KEY plus GREENHOUSE_AUTH_ADMIN_USERNAME / _PASSWORD to bootstrap an admin on first run, or set IRRIGATION_AUTH_ENABLED=false to opt out (dev/migration only). MCP keeps its existing bearer token — these two auth surfaces stay isolated.
+* **web:** every /api/v1 route (except /api/v1/auth/login) and every web page now requires a valid session. Set GREENHOUSE_AUTH_SECRET_KEY plus GREENHOUSE_AUTH_ADMIN_USERNAME / _PASSWORD to bootstrap an admin on first run, or set IRRIGATION_AUTH_ENABLED=false to opt out (dev/migration only). MCP keeps its existing bearer token — these two auth surfaces stay isolated.
+* **cli:** every /api/v1 route (except /api/v1/auth/login) and every web page now requires a valid session. Set GREENHOUSE_AUTH_SECRET_KEY plus GREENHOUSE_AUTH_ADMIN_USERNAME / _PASSWORD to bootstrap an admin on first run, or set IRRIGATION_AUTH_ENABLED=false to opt out (dev/migration only). MCP keeps its existing bearer token — these two auth surfaces stay isolated.
+* **engine:** every /api/v1 route (except /api/v1/auth/login) and every web page now requires a valid session. Set GREENHOUSE_AUTH_SECRET_KEY plus GREENHOUSE_AUTH_ADMIN_USERNAME / _PASSWORD to bootstrap an admin on first run, or set IRRIGATION_AUTH_ENABLED=false to opt out (dev/migration only). MCP keeps its existing bearer token — these two auth surfaces stay isolated.
+* **sensors:** every /api/v1 route (except /api/v1/auth/login) and every web page now requires a valid session. Set GREENHOUSE_AUTH_SECRET_KEY plus GREENHOUSE_AUTH_ADMIN_USERNAME / _PASSWORD to bootstrap an admin on first run, or set IRRIGATION_AUTH_ENABLED=false to opt out (dev/migration only). MCP keeps its existing bearer token — these two auth surfaces stay isolated.
+* **auth:** every /api/v1 route (except /api/v1/auth/login) and every web page now requires a valid session. Set GREENHOUSE_AUTH_SECRET_KEY plus GREENHOUSE_AUTH_ADMIN_USERNAME / _PASSWORD to bootstrap an admin on first run, or set IRRIGATION_AUTH_ENABLED=false to opt out (dev/migration only). MCP keeps its existing bearer token — these two auth surfaces stay isolated.
+
+### Added
+
+* **api:** close CRUD/pagination asymmetries + README drift ([#31](https://github.com/giocaizzi/greenhouse/issues/31)) ([f9d5333](https://github.com/giocaizzi/greenhouse/commit/f9d53334127a09ea9164b6c7cca87a7ef503188a))
+* **auth:** add username/password authentication to API and web UI ([#27](https://github.com/giocaizzi/greenhouse/issues/27)) ([37eb5f1](https://github.com/giocaizzi/greenhouse/commit/37eb5f17a192db15a18850c4c7118816a98c8157))
+* **cli:** add 'greenhouse stop-all' emergency kill switch ([#34](https://github.com/giocaizzi/greenhouse/issues/34)) ([24836c2](https://github.com/giocaizzi/greenhouse/commit/24836c268f9aeb86a786253663b8747cfb92bf27))
+* **cli:** close API/CLI gaps ([#30](https://github.com/giocaizzi/greenhouse/issues/30)) ([e0343f1](https://github.com/giocaizzi/greenhouse/commit/e0343f17fd3addd940736cc8f4303211dcdb21e1))
+* **devices:** unified DeviceHealthState + DeviceHealthMonitor across all adapters ([#42](https://github.com/giocaizzi/greenhouse/issues/42)) ([39d8eea](https://github.com/giocaizzi/greenhouse/commit/39d8eea7b0f69cf9eff4f2e178d900dde59d3cef))
+* **engine,web,cli:** quiet-hours rule + hierarchical config + unified cluster view ([#57](https://github.com/giocaizzi/greenhouse/issues/57)) ([0ab9323](https://github.com/giocaizzi/greenhouse/commit/0ab9323832c711c928d312cafd9983cad5d76c51))
+* **engine:** irrigation windows + seasonal frequency multiplier ([#29](https://github.com/giocaizzi/greenhouse/issues/29)) ([9293c24](https://github.com/giocaizzi/greenhouse/commit/9293c24c35089ab145b151537d53f1c8bfe3d637))
+* **engine:** plant DB timing fields wired end-to-end + integration tests ([#38](https://github.com/giocaizzi/greenhouse/issues/38)) ([f17a31e](https://github.com/giocaizzi/greenhouse/commit/f17a31ee2e71b423cf8ae88aa27b6c523c612925))
+* **notify:** ntfy push notifications for irrigation + alerts ([#58](https://github.com/giocaizzi/greenhouse/issues/58)) ([fc2ec09](https://github.com/giocaizzi/greenhouse/commit/fc2ec09593cc9312d4b6eadacbed92b980ee69a1))
+* **plants:** add preferred watering hours + seasonal frequency multipliers per species/category ([#36](https://github.com/giocaizzi/greenhouse/issues/36)) ([b7c41f1](https://github.com/giocaizzi/greenhouse/commit/b7c41f1d6715ff556a01bcb6eed0165acae739a2))
+* **pump:** detect empty reservoir via DP 105 and abort to protect pump ([#25](https://github.com/giocaizzi/greenhouse/issues/25)) ([2a06679](https://github.com/giocaizzi/greenhouse/commit/2a066791162157c658ec453ecf703c4d33a935fc))
+* **sensors:** track sensor-plant assignment history ([#28](https://github.com/giocaizzi/greenhouse/issues/28)) ([52c24dd](https://github.com/giocaizzi/greenhouse/commit/52c24dd33c0f791f1b82d7b61ab208e28ff24a1b))
+* **web:** close UX/CRUD gaps ([#32](https://github.com/giocaizzi/greenhouse/issues/32)) ([c4e6681](https://github.com/giocaizzi/greenhouse/commit/c4e66814b322a01c505279738fdca7e9561b0125))
+* **web:** vacation edit + cluster irrigation windows UI ([#37](https://github.com/giocaizzi/greenhouse/issues/37)) ([5e785d9](https://github.com/giocaizzi/greenhouse/commit/5e785d9f5b8eae17ee8e3a939ae27e3a22d146f9))
+
+
+### Fixed
+
+* **auth:** accept MCP token in require_user so tool invocation works end-to-end ([#35](https://github.com/giocaizzi/greenhouse/issues/35)) ([4608966](https://github.com/giocaizzi/greenhouse/commit/4608966bbe6ded7bcfb8b2d800555d55bf494888))
+* **engine:** seasonal multiplier was inverting interval direction ([#39](https://github.com/giocaizzi/greenhouse/issues/39)) ([ad5e21e](https://github.com/giocaizzi/greenhouse/commit/ad5e21edc556bd1888cb2775a7d9e3473451daaf))
+* **tests:** make test_logic.py deterministic against irrigation-window gate ([#41](https://github.com/giocaizzi/greenhouse/issues/41)) ([fecdfa7](https://github.com/giocaizzi/greenhouse/commit/fecdfa7e68e20b3a721d66049edb0580ace60bf9))
+
+
+### Changed
+
+* **devices:** introduce DeviceRegistry + per-model adapters (no-op refactor) ([#40](https://github.com/giocaizzi/greenhouse/issues/40)) ([83fb233](https://github.com/giocaizzi/greenhouse/commit/83fb233c34294e69612f478c75e32038fe3e3c32))
+* **devices:** wire DeviceRegistry through services; remove TuyaDeviceManager shim ([#43](https://github.com/giocaizzi/greenhouse/issues/43)) ([7fc303b](https://github.com/giocaizzi/greenhouse/commit/7fc303b79aeb4ec7a0c8e1ca50f30c0dbbf0a14d))
+
 ## [2.1.0](https://github.com/giocaizzi/greenhouse/compare/v2.0.0...v2.1.0) (2026-05-14)
 
 

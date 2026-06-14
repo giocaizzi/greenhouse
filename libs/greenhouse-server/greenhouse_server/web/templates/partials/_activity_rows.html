@@ -1,4 +1,14 @@
+{% set ns = namespace(current_date="") %}
 {% for event in items %}
+{% set event_date = event.timestamp | format_ts("%Y-%m-%d") %}
+{% if event_date != ns.current_date %}
+{% set ns.current_date = event_date %}
+<tr class="activity-date-row" style="background: var(--bg-2); pointer-events: none;">
+  <td colspan="5" data-th="" style="padding: var(--sp-2) var(--sp-5); border-bottom: 1px solid var(--border);">
+    <span class="mono" style="font-size: 11px; color: var(--text-dim); letter-spacing: 0.04em; text-transform: uppercase;">{{ event.timestamp | format_ts("%d %b %Y") }}</span>
+  </td>
+</tr>
+{% endif %}
 {% set last = loop.last and next_cursor is not none %}
 <tr
   {% if last %}
@@ -7,7 +17,7 @@
   hx-swap="outerHTML"
   {% endif %}
 >
-  <td data-th="Time"><small class="mono muted">{{ event.timestamp | format_ts }}</small></td>
+  <td data-th="Time"><small class="mono muted">{{ event.timestamp | format_ts("%H:%M") }}</small></td>
   <td data-th="Source"><span class="badge-{{ event.severity | severity_class }}">{{ event.source }}</span></td>
   <td data-th="Code"><code>{{ event.code }}</code></td>
   <td data-th="Entity"><small class="muted">{{ event.entity_type }}{% if event.entity_id is not none %} #{{ event.entity_id }}{% endif %}</small></td>
