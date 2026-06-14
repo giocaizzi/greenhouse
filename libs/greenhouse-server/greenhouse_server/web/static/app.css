@@ -1762,6 +1762,12 @@ body > footer small, .footer small { color: inherit; font-size: inherit; }
   display: flex; align-items: flex-start; justify-content: center;
   padding-top: 14vh; z-index: 300;
 }
+/* The display:flex above (centering the panel when open) is an author rule, so
+   it overrides the UA `dialog:not([open]){display:none}` and would otherwise
+   keep the CLOSED palette laid out as a full-viewport, transparent layer at
+   z-index 300 — rendering its panel over the page and swallowing taps meant for
+   the mobile bottom nav (z-index 50). Re-assert the hidden state when closed. */
+.cmdk:not([open]) { display: none; }
 .cmdk::backdrop {
   background: rgba(0,0,0,0.40);
   backdrop-filter: blur(3px);
