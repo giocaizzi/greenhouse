@@ -4,6 +4,13 @@ All notable changes to this project are tracked here. Managed automatically by
 [release-please](https://github.com/googleapis/release-please) from
 [Conventional Commits](https://www.conventionalcommits.org/) — do not hand-edit.
 
+## [3.1.1](https://github.com/giocaizzi/greenhouse/compare/v3.1.0...v3.1.1) (2026-06-14)
+
+
+### Fixed
+
+* **web:** stop closed command palette from blocking mobile taps ([805405d](https://github.com/giocaizzi/greenhouse/commit/805405d0d73ac5e30daa965eb5d3ef5cac09be13)), closes [#74](https://github.com/giocaizzi/greenhouse/issues/74)
+
 ## [3.1.0](https://github.com/giocaizzi/greenhouse/compare/v3.0.2...v3.1.0) (2026-06-14)
 
 
