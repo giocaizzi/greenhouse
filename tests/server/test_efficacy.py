@@ -45,7 +45,7 @@ class TestClusterEfficacy:
                 json={"tuya_device_id": "fake_eff_sensor", "name": "Eff Sensor", "type": "soil_moisture"},
             )
             client.post(
-                "/api/v1/clusters/1/irrigators",
+                "/api/v1/clusters/1/irrigator",
                 json={"tuya_device_id": "fake_eff_irrigator", "name": "Eff Pump", "type": "tuya_cloud"},
             )
 
@@ -97,7 +97,7 @@ class TestClusterEfficacy:
                 json={"tuya_device_id": "fake_score_sensor", "name": "S Sensor", "type": "soil_moisture"},
             )
             client.post(
-                "/api/v1/clusters/1/irrigators",
+                "/api/v1/clusters/1/irrigator",
                 json={"tuya_device_id": "fake_score_pump", "name": "S Pump", "type": "tuya_cloud"},
             )
 

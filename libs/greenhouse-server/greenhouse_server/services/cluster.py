@@ -36,7 +36,7 @@ class ClusterService:
         config = self._repo.get_irrigation_config(cluster_id)
         plants = self._repo.get_plants_in_cluster(cluster_id)
         sensors = self._repo.get_sensors_in_cluster(cluster_id)
-        irrigators = self._repo.get_irrigators_in_cluster(cluster_id)
+        irrigator = self._repo.get_irrigator_for_cluster(cluster_id)
         now = int(time.time())
 
         sensor_data = []
@@ -55,19 +55,17 @@ class ClusterService:
                 }
             )
 
-        irrigator_data = []
-        for irr in irrigators:
-            events = self._repo.get_recent_events(irr.id, hours=48)
-            irrigator_data.append(
-                {
-                    "id": irr.id,
-                    "name": irr.name,
-                    "type": irr.type,
-                    "cluster_id": irr.cluster_id,
-                    "recent_event_count": len(events),
-                    "last_event": events[0] if events else None,
-                }
-            )
+        irrigator_data = None
+        if irrigator is not None:
+            events = self._repo.get_recent_events(irrigator.id, hours=48)
+            irrigator_data = {
+                "id": irrigator.id,
+                "name": irrigator.name,
+                "type": irrigator.type,
+                "cluster_id": irrigator.cluster_id,
+                "recent_event_count": len(events),
+                "last_event": events[0] if events else None,
+            }
 
         logic = IrrigationLogic(self._repo, self._plant_db)
         decision = logic.decide_for_cluster(cluster_id)  # no weather_client: status snapshot stays fast
@@ -78,7 +76,7 @@ class ClusterService:
             "config": config,
             "plants": plants,
             "sensors": sensor_data,
-            "irrigators": irrigator_data,
+            "irrigator": irrigator_data,
             "decision": decision_dict,
         }
 
@@ -100,14 +98,14 @@ class ClusterService:
                 }
             )
 
-        irrigators = self._repo.get_irrigators_in_cluster(cluster_id)
+        irrigator = self._repo.get_irrigator_for_cluster(cluster_id)
         irrigator_histories = []
-        for irr in irrigators:
-            events = self._repo.get_recent_events(irr.id, hours=hours)
+        if irrigator is not None:
+            events = self._repo.get_recent_events(irrigator.id, hours=hours)
             irrigator_histories.append(
                 {
-                    "irrigator_id": irr.id,
-                    "irrigator_name": irr.name,
+                    "irrigator_id": irrigator.id,
+                    "irrigator_name": irrigator.name,
                     "events": events[:limit],
                 }
             )

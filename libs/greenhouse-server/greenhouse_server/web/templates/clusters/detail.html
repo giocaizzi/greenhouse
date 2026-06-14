@@ -7,7 +7,7 @@
 {% set current_tab = "overview" %}
 {% set plant_count = status.plants|length %}
 {% set sensor_count = status.sensors|length %}
-{% set irrigator_count = status.irrigators|length %}
+{% set irrigator_count = 1 if status.irrigator else 0 %}
 
 {# Pre-compute a representative reading per metric type from any sensor that has one. #}
 {% set soil_reading = namespace(value=none) %}
@@ -533,19 +533,20 @@
    surfaces health right next to the device name. #}
 <article class="card card--flush" id="irrigators">
   <div class="card__head">
-    <h3 class="card__title">Irrigators <span class="n">{{ irrigator_count }}</span></h3>
+    <h3 class="card__title">Irrigator <span class="n">{{ irrigator_count }}</span></h3>
+    {% if not status.irrigator %}
     <a href="/clusters/{{ cluster.id }}/irrigators/new" class="btn secondary">
       <svg class="icon" aria-hidden="true"><use href="/static/icons/sprite.svg#i-plus"></use></svg>
       Add irrigator
     </a>
+    {% endif %}
   </div>
-  {% if status.irrigators %}
+  {% if status.irrigator %}
   <table>
     <thead><tr><th scope="col">Name</th><th scope="col">Type</th><th scope="col">Recent (48h)</th><th scope="col">Last action</th><th scope="col">Controls</th><th scope="col"><span class="visually-hidden">Manage</span></th></tr></thead>
     <tbody>
-      {% for irr in status.irrigators %}
-        {% include "partials/_irrigator_row.html" %}
-      {% endfor %}
+      {% set irr = status.irrigator %}
+      {% include "partials/_irrigator_row.html" %}
     </tbody>
   </table>
   {% else %}

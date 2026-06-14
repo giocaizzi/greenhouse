@@ -64,7 +64,7 @@ class TestDataQualityReport:
                 json={"tuya_device_id": "shared_id_aabbcc", "name": "Sensor A", "type": "soil_moisture"},
             )
             client.post(
-                "/api/v1/clusters/1/irrigators",
+                "/api/v1/clusters/1/irrigator",
                 json={"tuya_device_id": "shared_id_aabbcc", "name": "Irrigator A", "type": "tuya_cloud"},
             )
             resp = client.get("/api/v1/quality/report")

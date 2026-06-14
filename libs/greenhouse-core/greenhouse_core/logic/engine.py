@@ -6,6 +6,7 @@ testable and contributes structured ``Reason`` entries to the trail.
 """
 
 import logging
+import math
 import time
 
 from greenhouse_core.constants import (
@@ -32,6 +33,8 @@ from greenhouse_core.constants import (
     MIN_INTERVAL_HOURS,
     STRESS_DURATION_MINUTES,
     STRESS_INTERVAL_HOURS,
+    VACATION_MIN_RUN_MINUTES,
+    VACATION_RESERVOIR_USABLE_FRACTION,
 )
 from greenhouse_core.logic.decision import (
     Action,
@@ -221,6 +224,12 @@ class IrrigationLogic:
         # tighten. Cooldown remains the safety floor (see MIN_COOLDOWN_HOURS).
         self._apply_seasonal_multiplier(cluster, decision, plant_care, evaluated_at)
 
+        # Vacation rationing — the LAST adjustment so it clamps the final dosage
+        # against the reservoir burn-down envelope (appends VACATION_ACTIVE for
+        # audit; trims to VACATION_RATIONING or flips to SKIP with
+        # VACATION_BUDGET_EXHAUSTED).
+        self._apply_vacation_budget(decision, cluster_id, evaluated_at)
+
         return _finalize(decision)
 
     def _resolve_quiet_window(self, cluster_id: int, evaluated_at: int) -> tuple[int, int] | None:
@@ -359,6 +368,84 @@ class IrrigationLogic:
             ),
         )
 
+    def _apply_vacation_budget(self, decision: IrrigationDecision, cluster_id: int, now: int) -> None:
+        """Clamp the final dosage against the reservoir burn-down envelope.
+
+        Runs as the engine's last adjustment while a :class:`VacationWindow` is
+        active. Always appends a ``VACATION_ACTIVE`` reason (even on SKIP) so the
+        audit log records the vacation status. Rationing tracks the cluster's
+        irrigator (the one ``run_irrigation_pipeline`` drives); when it has both
+        ``reservoir_l`` and
+        ``flow_rate_l_per_min`` set, the tank is assumed full at the vacation
+        start and consumption is summed from the ``start`` events since then. A
+        linear daily budget (cumulative through the current vacation day) bounds
+        how many minutes it may still run.
+
+        - Within budget → unchanged.
+        - Partial budget (>= ``VACATION_MIN_RUN_MINUTES``) → duration trimmed and
+          a ``VACATION_RATIONING`` reason appended.
+        - No meaningful budget → flipped to SKIP with ``VACATION_BUDGET_EXHAUSTED``.
+
+        Mutates ``decision`` in place; no-ops (apart from VACATION_ACTIVE) when no
+        vacation is active, no capacity is configured, or the decision is not an
+        IRRIGATE.
+        """
+        vac = self.db.get_active_vacation(at=now)
+        if vac is None:
+            return
+
+        decision.add_reason(
+            code=TriggerCode.VACATION_ACTIVE,
+            message=f"vacation active (returns in {max(0, math.ceil((vac.ends_at - now) / 86400))}d)",
+            severity=Severity.INFO,
+            icon="airplane",
+        )
+
+        # Ration against the irrigator the pipeline actually actuates. A cluster
+        # is "irrigated by the same device", so the budget tracks that one tank.
+        irr = self.db.get_irrigator_for_cluster(cluster_id)
+        if irr is None:
+            return
+        if not (irr.reservoir_l and irr.flow_rate_l_per_min):
+            return
+        if decision.action is not Action.IRRIGATE:
+            return
+
+        # Vacation length in whole days (at least 1) and the 0-based index of the
+        # day we are currently in; the cumulative allowance grows day by day.
+        d_days = max(1, math.ceil((vac.ends_at - vac.starts_at) / 86400))
+        day_index = math.floor((now - vac.starts_at) / 86400)
+
+        usable_l = irr.reservoir_l * VACATION_RESERVOIR_USABLE_FRACTION
+        daily_budget_l = usable_l / d_days
+        allowed_cum_l = min(usable_l, daily_budget_l * (day_index + 1))
+        spent_l = self.db.irrigator_consumption_liters(irr.id, since=vac.starts_at, until=now)
+        headroom_l = max(0.0, allowed_cum_l - spent_l)
+        binding_max_min = math.floor(headroom_l / irr.flow_rate_l_per_min)
+
+        if binding_max_min >= decision.duration_minutes:
+            return
+
+        if binding_max_min >= VACATION_MIN_RUN_MINUTES:
+            decision.duration_minutes = binding_max_min
+            decision.add_reason(
+                code=TriggerCode.VACATION_RATIONING,
+                message=f"trimmed to {binding_max_min} min so reservoir lasts the vacation",
+                severity=Severity.WARNING,
+                icon="drop-half",
+            )
+            return
+
+        decision.action = Action.SKIP
+        decision.duration_minutes = 0
+        decision.confidence = CONFIDENCE_COOLDOWN
+        decision.add_reason(
+            code=TriggerCode.VACATION_BUDGET_EXHAUSTED,
+            message="vacation water budget exhausted this cycle — skipping to conserve reservoir",
+            severity=Severity.WARNING,
+            icon="drop-slash",
+        )
+
     def _persist(self, decision: IrrigationDecision, triggered_by: str) -> None:
         """Best-effort persistence — never blocks the decision."""
         try:
@@ -380,19 +467,18 @@ class IrrigationLogic:
             log.warning("failed to persist decision log", exc_info=True)
 
     def _enforce_cooldown(self, cluster_id: int, now: int) -> IrrigationDecision | None:
-        """Skip when ANY irrigator in the cluster fired within the cooldown window."""
-        irrigators = self.db.get_irrigators_in_cluster(cluster_id)
-        if not irrigators:
+        """Skip when the cluster's irrigator fired within the cooldown window."""
+        irr = self.db.get_irrigator_for_cluster(cluster_id)
+        if irr is None:
             return None
 
         latest_event = None
-        for irr in irrigators:
-            events = self.db.get_recent_events(irr.id, hours=MIN_COOLDOWN_HOURS)
-            for event in events:
-                if event.action != "start":
-                    continue
-                if latest_event is None or event.timestamp > latest_event.timestamp:
-                    latest_event = event
+        events = self.db.get_recent_events(irr.id, hours=MIN_COOLDOWN_HOURS)
+        for event in events:
+            if event.action != "start":
+                continue
+            if latest_event is None or event.timestamp > latest_event.timestamp:
+                latest_event = event
 
         if latest_event is None:
             return None

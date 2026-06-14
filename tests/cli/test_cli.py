@@ -93,7 +93,7 @@ class TestOperationCommands:
                         "config": None,
                         "plants": [],
                         "sensors": [],
-                        "irrigators": [],
+                        "irrigator": None,
                         "decision": None,
                     },
                 ),
@@ -176,7 +176,7 @@ class TestOperationCommands:
             {
                 ("GET", "/api/v1/clusters/1/history"): (
                     200,
-                    {"cluster_name": "C1", "sensors": [], "irrigators": []},
+                    {"cluster_name": "C1", "sensors": [], "irrigator": None},
                 ),
             }
         )
@@ -433,3 +433,157 @@ class TestIrrigateForce:
         result = runner.invoke(app, ["irrigate", "1"])
         assert result.exit_code == 0
         assert captured[0]["json"]["force"] is False
+
+
+class TestIrrigatorCapacity:
+    """Irrigator add/update forward the reservoir + flow-rate capacity fields."""
+
+    def test_add_forwards_capacity_fields(self, _patch_capture):
+        captured = _patch_capture({("POST", "/api/v1/clusters/1/irrigator"): (201, {"id": 7})})
+        result = runner.invoke(
+            app,
+            [
+                "irrigator",
+                "add",
+                "--cluster",
+                "1",
+                "--device-id",
+                "fake_tuya_device_aabbccdd",
+                "--name",
+                "Tank pump",
+                "--type",
+                "tuya_local",
+                "--reservoir-l",
+                "20",
+                "--flow-rate-l-per-min",
+                "1.5",
+            ],
+        )
+        assert result.exit_code == 0
+        body = captured[0]["json"]
+        assert body["reservoir_l"] == 20
+        assert body["flow_rate_l_per_min"] == 1.5
+
+    def test_add_omits_capacity_when_unset(self, _patch_capture):
+        captured = _patch_capture({("POST", "/api/v1/clusters/1/irrigator"): (201, {"id": 7})})
+        result = runner.invoke(
+            app,
+            [
+                "irrigator",
+                "add",
+                "--cluster",
+                "1",
+                "--device-id",
+                "fake_tuya_device_aabbccdd",
+                "--name",
+                "Tank pump",
+                "--type",
+                "tuya_local",
+            ],
+        )
+        assert result.exit_code == 0
+        body = captured[0]["json"]
+        assert "reservoir_l" not in body
+        assert "flow_rate_l_per_min" not in body
+
+    def test_update_forwards_capacity_fields(self, _patch_capture):
+        captured = _patch_capture({("PUT", "/api/v1/clusters/1/irrigator"): (200, {"id": 7})})
+        result = runner.invoke(
+            app,
+            [
+                "irrigator",
+                "update",
+                "1",
+                "--reservoir-l",
+                "15.5",
+                "--flow-rate-l-per-min",
+                "2",
+            ],
+        )
+        assert result.exit_code == 0
+        body = captured[0]["json"]
+        assert body["reservoir_l"] == 15.5
+        assert body["flow_rate_l_per_min"] == 2
+
+    def test_update_omits_capacity_when_unset(self, _patch_capture):
+        captured = _patch_capture({("PUT", "/api/v1/clusters/1/irrigator"): (200, {"id": 7})})
+        result = runner.invoke(app, ["irrigator", "update", "1", "--name", "Renamed"])
+        assert result.exit_code == 0
+        body = captured[0]["json"]
+        assert body == {"name": "Renamed"}
+
+
+class TestIrrigatorCommands:
+    """Cluster-keyed irrigator CRUD hits the singular routes."""
+
+    def test_list_global(self, _patch_client):
+        _patch_client({("GET", "/api/v1/irrigators"): (200, [{"id": 7, "name": "Pump", "cluster_id": 1}])})
+        result = runner.invoke(app, ["irrigator", "list"])
+        assert result.exit_code == 0
+        data = json.loads(result.stdout)
+        assert data[0]["id"] == 7
+
+    def test_show(self, _patch_capture):
+        captured = _patch_capture({("GET", "/api/v1/clusters/1/irrigator"): (200, {"id": 7, "name": "Pump"})})
+        result = runner.invoke(app, ["irrigator", "show", "1"])
+        assert result.exit_code == 0
+        assert captured[0]["path"] == "/api/v1/clusters/1/irrigator"
+        assert captured[0]["method"] == "GET"
+        assert "Pump" in result.stdout
+
+    def test_show_404_exits_nonzero(self, _patch_capture):
+        _patch_capture({("GET", "/api/v1/clusters/9/irrigator"): (404, {"detail": "no irrigator"})})
+        result = runner.invoke(app, ["irrigator", "show", "9"])
+        assert result.exit_code == 1
+        assert "no irrigator" in result.stderr
+
+    def test_add_conflict_exits_nonzero(self, _patch_capture):
+        _patch_capture(
+            {("POST", "/api/v1/clusters/1/irrigator"): (409, {"detail": "cluster already has an irrigator"})}
+        )
+        result = runner.invoke(
+            app,
+            [
+                "irrigator",
+                "add",
+                "--cluster",
+                "1",
+                "--device-id",
+                "fake_tuya_device_aabbccdd",
+                "--name",
+                "Second pump",
+                "--type",
+                "tuya_local",
+            ],
+        )
+        assert result.exit_code == 1
+        assert "already has an irrigator" in result.stderr
+
+    def test_update_targets_cluster_path(self, _patch_capture):
+        captured = _patch_capture({("PUT", "/api/v1/clusters/1/irrigator"): (200, {"id": 7})})
+        result = runner.invoke(app, ["irrigator", "update", "1", "--name", "Renamed"])
+        assert result.exit_code == 0
+        assert captured[0]["path"] == "/api/v1/clusters/1/irrigator"
+
+    def test_update_404_exits_nonzero(self, _patch_capture):
+        _patch_capture({("PUT", "/api/v1/clusters/9/irrigator"): (404, {"detail": "no irrigator"})})
+        result = runner.invoke(app, ["irrigator", "update", "9", "--name", "Renamed"])
+        assert result.exit_code == 1
+
+    def test_delete_targets_cluster_path(self, _patch_capture):
+        captured = _patch_capture({("DELETE", "/api/v1/clusters/1/irrigator"): (200, {"deleted": True})})
+        result = runner.invoke(app, ["irrigator", "delete", "1", "--yes"])
+        assert result.exit_code == 0
+        assert captured[0]["method"] == "DELETE"
+        assert captured[0]["path"] == "/api/v1/clusters/1/irrigator"
+
+    def test_delete_404_exits_nonzero(self, _patch_capture):
+        _patch_capture({("DELETE", "/api/v1/clusters/9/irrigator"): (404, {"detail": "no irrigator"})})
+        result = runner.invoke(app, ["irrigator", "delete", "9", "--yes"])
+        assert result.exit_code == 1
+
+    def test_start_unchanged_by_id(self, _patch_capture):
+        captured = _patch_capture({("POST", "/api/v1/irrigators/7/start"): (200, {"status": "ok"})})
+        result = runner.invoke(app, ["irrigator", "start", "7", "--minutes", "5"])
+        assert result.exit_code == 0
+        assert captured[0]["path"] == "/api/v1/irrigators/7/start"

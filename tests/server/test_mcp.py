@@ -127,7 +127,7 @@ def test_mcp_request_bodies_carry_their_field_schemas(app):
         "/api/v1/clusters": "name",
         "/api/v1/clusters/{cluster_id}/plants": "species",
         "/api/v1/clusters/{cluster_id}/sensors": "tuya_device_id",
-        "/api/v1/clusters/{cluster_id}/irrigators": "tuya_device_id",
+        "/api/v1/clusters/{cluster_id}/irrigator": "tuya_device_id",
         "/api/v1/clusters/{cluster_id}/config": "mode",
         "/api/v1/clusters/{cluster_id}/irrigate": "dry_run",
         "/api/v1/sync": "hours",

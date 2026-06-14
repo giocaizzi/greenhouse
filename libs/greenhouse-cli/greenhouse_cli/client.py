@@ -158,18 +158,22 @@ class IrrigationClient:
 
     # ── Irrigators ──
 
+    def list_irrigators(self) -> list:
+        return self._request("GET", "/api/v1/irrigators")
+
     def add_irrigator(self, cluster_id: int, **kwargs) -> dict:
-        return self._request("POST", f"/api/v1/clusters/{cluster_id}/irrigators", json=kwargs)
-
-    def list_irrigators(self, cluster_id: int) -> list:
-        return self._request("GET", f"/api/v1/clusters/{cluster_id}/irrigators")
-
-    def update_irrigator(self, cluster_id: int, irrigator_id: int, **kwargs) -> dict:
         body = {k: v for k, v in kwargs.items() if v is not None}
-        return self._request("PUT", f"/api/v1/clusters/{cluster_id}/irrigators/{irrigator_id}", json=body)
+        return self._request("POST", f"/api/v1/clusters/{cluster_id}/irrigator", json=body)
 
-    def delete_irrigator(self, cluster_id: int, irrigator_id: int) -> dict:
-        return self._request("DELETE", f"/api/v1/clusters/{cluster_id}/irrigators/{irrigator_id}")
+    def get_irrigator(self, cluster_id: int) -> dict:
+        return self._request("GET", f"/api/v1/clusters/{cluster_id}/irrigator")
+
+    def update_irrigator(self, cluster_id: int, **kwargs) -> dict:
+        body = {k: v for k, v in kwargs.items() if v is not None}
+        return self._request("PUT", f"/api/v1/clusters/{cluster_id}/irrigator", json=body)
+
+    def delete_irrigator(self, cluster_id: int) -> dict:
+        return self._request("DELETE", f"/api/v1/clusters/{cluster_id}/irrigator")
 
     def start_irrigator(self, irrigator_id: int, minutes: int | None = None) -> dict:
         return self._request("POST", f"/api/v1/irrigators/{irrigator_id}/start", json={"minutes": minutes})

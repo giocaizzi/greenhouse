@@ -620,7 +620,7 @@ class TestResourceCrud:
         captured: list = []
         patch_client(
             {
-                ("PUT", "/api/v1/clusters/1/irrigators/4"): (
+                ("PUT", "/api/v1/clusters/1/irrigator"): (
                     200,
                     {"id": 4, "cluster_id": 1, "name": "renamed"},
                 ),
@@ -632,8 +632,6 @@ class TestResourceCrud:
             [
                 "irrigator",
                 "update",
-                "4",
-                "--cluster",
                 "1",
                 "--name",
                 "renamed",
@@ -652,10 +650,10 @@ class TestResourceCrud:
     def test_irrigator_delete(self, patch_client):
         patch_client(
             {
-                ("DELETE", "/api/v1/clusters/1/irrigators/4"): (200, {"success": True}),
+                ("DELETE", "/api/v1/clusters/1/irrigator"): (200, {"success": True}),
             }
         )
-        result = runner.invoke(app, ["irrigator", "delete", "4", "--cluster", "1", "--yes"])
+        result = runner.invoke(app, ["irrigator", "delete", "1", "--yes"])
         assert result.exit_code == 0
 
     def test_sensor_update(self, patch_client):

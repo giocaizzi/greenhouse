@@ -191,7 +191,7 @@ def seeded_client(client):
 
     # Add irrigator
     resp = client.post(
-        "/api/v1/clusters/1/irrigators",
+        "/api/v1/clusters/1/irrigator",
         json={
             "tuya_device_id": "fake_irrigator_001",
             "name": "Test Irrigator",

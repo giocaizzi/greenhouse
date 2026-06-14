@@ -62,13 +62,20 @@ def test_device_type_backfill_rewrites_legacy_values(file_db):
     init_db(engine)
 
     with engine.begin() as conn:
-        conn.execute(text("INSERT INTO clusters (id, name, environment, created_at) VALUES (1, 'C', 'indoor', 0)"))
+        # One irrigator per cluster (irrigators.cluster_id is unique); the
+        # backfill exercises the legacy ``type`` rewrite across distinct rows.
+        conn.execute(
+            text(
+                "INSERT INTO clusters (id, name, environment, created_at) "
+                "VALUES (1, 'C', 'indoor', 0), (2, 'C2', 'indoor', 0), (3, 'C3', 'indoor', 0)"
+            )
+        )
         conn.execute(
             text(
                 "INSERT INTO irrigators (id, cluster_id, tuya_device_id, name, type) "
                 "VALUES (1, 1, 'D1', 'I', 'tuya_cloud'), "
-                "(2, 1, 'D2', 'I2', 'tuya_local'), "
-                "(3, 1, 'D3', 'I3', 'rainpoint.ik10pw')"
+                "(2, 2, 'D2', 'I2', 'tuya_local'), "
+                "(3, 3, 'D3', 'I3', 'rainpoint.ik10pw')"
             )
         )
         conn.execute(

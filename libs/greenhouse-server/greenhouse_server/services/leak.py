@@ -51,7 +51,7 @@ class LeakDetectionService:
             List of Alert rows that were created or refreshed.
         """
         sensors = self._repo.get_sensors_in_cluster(cluster_id)
-        irrigators = self._repo.get_irrigators_in_cluster(cluster_id)
+        irrigator = self._repo.get_irrigator_for_cluster(cluster_id)
         alerts: list[Alert] = []
 
         for sensor in sensors:
@@ -104,18 +104,18 @@ class LeakDetectionService:
             )
             alerts.append(alert)
 
-        if alerts:
-            # Log a cooldown anchor for every irrigator so the decision engine's
-            # existing cooldown window treats this cluster as recently irrigated.
+        if alerts and irrigator is not None:
+            # Log a cooldown anchor for the cluster's irrigator so the decision
+            # engine's existing cooldown window treats this cluster as recently
+            # irrigated.
             now = int(time.time())
-            for irrigator in irrigators:
-                self._repo.add_irrigation_event(
-                    irrigator_id=irrigator.id,
-                    action="schedule_updated",
-                    triggered_by="leak_detector",
-                    duration_minutes=0,
-                    notes="auto-cancel 24h: possible leak or stuck valve",
-                    timestamp=now,
-                )
+            self._repo.add_irrigation_event(
+                irrigator_id=irrigator.id,
+                action="schedule_updated",
+                triggered_by="leak_detector",
+                duration_minutes=0,
+                notes="auto-cancel 24h: possible leak or stuck valve",
+                timestamp=now,
+            )
 
         return alerts

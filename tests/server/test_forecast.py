@@ -52,7 +52,7 @@ class TestForecastEndpoint:
 
         # Add irrigator (needed so get_plant_profile can find irrigation events)
         resp = client.post(
-            f"/api/v1/clusters/{cluster_id}/irrigators",
+            f"/api/v1/clusters/{cluster_id}/irrigator",
             json={
                 "tuya_device_id": FAKE_DEVICE_ID,
                 "name": "Test Irrigator",

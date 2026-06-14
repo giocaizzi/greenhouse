@@ -35,6 +35,38 @@
 </div>
 {% endif %}
 
+{% if budgets %}
+<article class="card" style="margin-bottom:var(--sp-6);">
+  <div class="card__head">
+    <h2 class="card__title">Water budget</h2>
+    <small class="muted">Projected over {{ budget_window.starts_at | format_ts }} → {{ budget_window.ends_at | format_ts }}</small>
+  </div>
+  <div class="card__body">
+    <table>
+      <thead>
+        <tr>
+          <th>Cluster</th>
+          <th>Usable reservoir</th>
+          <th>Daily budget</th>
+          <th>Lasts</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for b in budgets %}
+        <tr>
+          <td data-th="Cluster">{{ b.cluster_name }}</td>
+          <td data-th="Usable reservoir"><span class="mono">{{ b.usable_reservoir_l }} L</span>
+            <small class="muted">of {{ b.total_reservoir_l }} L</small></td>
+          <td data-th="Daily budget"><span class="mono">{{ b.daily_budget_l }} L/day</span></td>
+          <td data-th="Lasts">designed to last {{ b.vacation_days }} day{{ "s" if b.vacation_days != 1 else "" }} (the full trip)</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</article>
+{% endif %}
+
 {# Add window form #}
 <article class="card form-card mb-6">
   <div class="card__head">

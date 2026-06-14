@@ -269,8 +269,8 @@ class IrrigationService:
             return result
 
         # Execute
-        irrigators = self._repo.get_irrigators_in_cluster(cluster_id)
-        if not irrigators:
+        irrigator = self._repo.get_irrigator_for_cluster(cluster_id)
+        if not irrigator:
             result["action"] = "error"
             result["reason"] = "no irrigators found"
             return result
@@ -279,7 +279,6 @@ class IrrigationService:
             result["reason"] = "no device registry"
             return result
 
-        irrigator = irrigators[0]
         try:
             adapter = self._registry.get_irrigator(irrigator)
         except UnknownDeviceModel as exc:
@@ -462,11 +461,11 @@ class IrrigationService:
         if not cluster:
             return {"cluster_id": cluster_id, "cluster_name": "unknown", "action": "error", "notes": "not found"}
 
-        irrigators = self._repo.get_irrigators_in_cluster(cluster_id)
+        irrigator = self._repo.get_irrigator_for_cluster(cluster_id)
         alerts = collect_learning_alerts(self._repo, cluster_id, self._plant_db)
         maintenance = collect_maintenance_alerts(self._repo, cluster_id, self._plant_db)
 
-        if irrigators:
+        if irrigator:
             effective = self._repo.get_effective_config(cluster_id)
             if not effective["auto_run"]["value"]:
                 sync_cluster_alerts(self._repo, cluster_id, self._plant_db, notifier=self._notifier)

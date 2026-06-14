@@ -60,8 +60,9 @@ def plant_dashboard(
 
     # Recent irrigation events across the cluster (plant inherits cluster events)
     recent_events: list = []
-    for irr in repo.get_irrigators_in_cluster(cluster_id):
-        recent_events.extend(repo.get_recent_events(irr.id, hours=hours))
+    cluster_irrigator = repo.get_irrigator_for_cluster(cluster_id)
+    if cluster_irrigator is not None:
+        recent_events.extend(repo.get_recent_events(cluster_irrigator.id, hours=hours))
     recent_events.sort(key=lambda e: e.timestamp, reverse=True)
     recent_events = recent_events[:10]
 
@@ -78,10 +79,10 @@ def plant_dashboard(
     health_score: float | None = health_result["score"]
     health_history = repo.list_plant_health_history(plant_id, days=90)
 
-    # Last-irrigated relative timestamp (newest event across all irrigators)
+    # Last-irrigated relative timestamp (newest event on the cluster's irrigator)
     last_irrigated_ts: int | None = None
-    for irr in repo.get_irrigators_in_cluster(cluster_id):
-        events = repo.get_recent_events(irr.id, hours=90 * 24)
+    if cluster_irrigator is not None:
+        events = repo.get_recent_events(cluster_irrigator.id, hours=90 * 24)
         for ev in events:
             if last_irrigated_ts is None or ev.timestamp > last_irrigated_ts:
                 last_irrigated_ts = ev.timestamp

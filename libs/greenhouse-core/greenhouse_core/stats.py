@@ -20,8 +20,8 @@ def get_irrigation_stats(db: IrrigationRepository, cluster_id: int, days: int = 
     """Get irrigation statistics for a cluster."""
     cutoff = int(time.time()) - (days * 24 * 3600)
 
-    irrigators = db.get_irrigators_in_cluster(cluster_id)
-    if not irrigators:
+    irrigator = db.get_irrigator_for_cluster(cluster_id)
+    if irrigator is None:
         return {"error": "No irrigators in cluster"}
 
     stats = {
@@ -35,27 +35,26 @@ def get_irrigation_stats(db: IrrigationRepository, cluster_id: int, days: int = 
         "frequency_per_day": 0,
     }
 
-    for irrigator in irrigators:
-        events = db.get_recent_events(irrigator.id, hours=days * 24)
+    events = db.get_recent_events(irrigator.id, hours=days * 24)
 
-        for event in events:
-            if event.timestamp < cutoff:
-                continue
+    for event in events:
+        if event.timestamp < cutoff:
+            continue
 
-            stats["total_events"] += 1
-            stats["events_by_type"][event.action] += 1
-            stats["events_by_trigger"][event.triggered_by] += 1
+        stats["total_events"] += 1
+        stats["events_by_type"][event.action] += 1
+        stats["events_by_trigger"][event.triggered_by] += 1
 
-            if event.duration_minutes:
-                stats["total_duration_minutes"] += event.duration_minutes
-                stats["irrigations"].append(
-                    {
-                        "timestamp": event.timestamp,
-                        "duration_minutes": event.duration_minutes,
-                        "triggered_by": event.triggered_by,
-                        "irrigator": irrigator.name,
-                    }
-                )
+        if event.duration_minutes:
+            stats["total_duration_minutes"] += event.duration_minutes
+            stats["irrigations"].append(
+                {
+                    "timestamp": event.timestamp,
+                    "duration_minutes": event.duration_minutes,
+                    "triggered_by": event.triggered_by,
+                    "irrigator": irrigator.name,
+                }
+            )
 
     # Calculate averages
     if stats["irrigations"]:
@@ -104,7 +103,7 @@ def export_csv(db: IrrigationRepository, cluster_id: int, days: int, output_path
     import csv
 
     cutoff = int(time.time()) - (days * 24 * 3600)
-    irrigators = db.get_irrigators_in_cluster(cluster_id)
+    irrigator = db.get_irrigator_for_cluster(cluster_id)
 
     with open(output_path, "w", newline="") as f:
         writer = csv.writer(f)
@@ -112,7 +111,7 @@ def export_csv(db: IrrigationRepository, cluster_id: int, days: int, output_path
             ["timestamp", "date", "time", "irrigator", "action", "duration_minutes", "triggered_by", "notes"]
         )
 
-        for irrigator in irrigators:
+        if irrigator is not None:
             events = db.get_recent_events(irrigator.id, hours=days * 24)
             for event in events:
                 if event.timestamp < cutoff:

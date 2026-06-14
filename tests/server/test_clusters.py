@@ -100,7 +100,7 @@ class TestClusterStatus:
         assert data["config"] is not None
         assert len(data["plants"]) == 1
         assert len(data["sensors"]) == 1
-        assert len(data["irrigators"]) == 1
+        assert data["irrigator"] is not None
 
     def test_status_not_found(self, client):
         resp = client.get("/api/v1/clusters/999/status")
@@ -135,7 +135,8 @@ class TestClusterDetail:
         assert len(data["plants"]) == 1
         assert data["plants"][0]["species"] == "Monstera deliciosa"
         assert len(data["sensors"]) == 1
-        assert len(data["irrigators"]) == 1
+        assert data["irrigator"] is not None
+        assert data["irrigator"]["name"]
         assert data["config"] is not None
         assert data["config"]["mode"] == "smart"
         assert data["windows"] == []

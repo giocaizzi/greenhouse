@@ -43,11 +43,11 @@
   </td>
   <td data-th="Manage">
     <div class="row-actions">
-      <a href="/clusters/{{ irr.cluster_id }}/irrigators/{{ irr.id }}/edit" class="btn secondary btn-sm" aria-label="Edit {{ irr.name }}">Edit</a>
+      <a href="/clusters/{{ irr.cluster_id }}/irrigators/edit" class="btn secondary btn-sm" aria-label="Edit {{ irr.name }}">Edit</a>
       <button class="btn secondary btn-sm row-actions__danger"
               type="button"
               aria-label="Delete {{ irr.name }}"
-              hx-delete="/clusters/{{ irr.cluster_id }}/irrigators/{{ irr.id }}"
+              hx-delete="/clusters/{{ irr.cluster_id }}/irrigators"
               hx-target="#irrigator-row-{{ irr.id }}"
               hx-swap="outerHTML swap:200ms"
               hx-confirm="Delete irrigator &quot;{{ irr.name }}&quot;? Its event log will be removed.">

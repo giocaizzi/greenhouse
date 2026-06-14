@@ -23,7 +23,7 @@ def _setup_cluster_irrigator_config(client, *, tuya_id: str = "fake_rl_001") -> 
     """Create cluster + irrigator + base config; return irrigator id."""
     client.post("/api/v1/clusters", json={"name": "Rate Limit Cluster"})
     resp = client.post(
-        "/api/v1/clusters/1/irrigators",
+        "/api/v1/clusters/1/irrigator",
         json={"tuya_device_id": tuya_id, "name": "Pump", "type": "tuya_cloud"},
     )
     assert resp.status_code == 201
@@ -65,7 +65,7 @@ class TestMaxEventsPerDay:
         """Without a config, no cap is enforced."""
         client.post("/api/v1/clusters", json={"name": "No Config Cluster"})
         client.post(
-            "/api/v1/clusters/1/irrigators",
+            "/api/v1/clusters/1/irrigator",
             json={"tuya_device_id": "fake_nc_001", "name": "Pump", "type": "tuya_cloud"},
         )
 

@@ -31,7 +31,16 @@ def list_vacation_windows(repo: RepoDep):
     "", response_model=VacationResponse, status_code=status.HTTP_201_CREATED, summary="Create a vacation window"
 )
 def create_vacation_window(request: VacationCreateRequest, repo: RepoDep):
-    """Schedule a vacation window during which the irrigation engine will hold.
+    """Schedule a vacation window that makes the engine ration water to last the trip.
+
+    While the window is active the decision engine appends a
+    ``VACATION_ACTIVE`` reason to every decision and, for clusters whose
+    irrigators have both ``reservoir_l`` and ``flow_rate_l_per_min`` set,
+    enforces a per-day burn-down budget: each irrigation's duration is trimmed
+    to fit the remaining tank allowance (``VACATION_RATIONING``), or flipped to
+    SKIP when no usable water remains this cycle (``VACATION_BUDGET_EXHAUSTED``).
+    When no irrigator in a cluster has capacity configured the window is purely
+    informational and irrigation proceeds exactly as it would normally.
 
     Args:
         request: Window start and end as Unix timestamps, optional contact email

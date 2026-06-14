@@ -64,6 +64,14 @@ class TriggerCode(StrEnum):
     OUTSIDE_WINDOW = "outside_window"
     SEASONAL_HOLD = "seasonal_hold"
     SEASONAL_BOOST = "seasonal_boost"
+    # Vacation rationing: appended by the engine's final budget step while a
+    # VacationWindow is active. ``VACATION_ACTIVE`` is always present for audit;
+    # ``VACATION_RATIONING`` marks a duration trimmed to fit the burn-down
+    # envelope; ``VACATION_BUDGET_EXHAUSTED`` is a terminal SKIP when no budget
+    # remains this cycle.
+    VACATION_ACTIVE = "vacation_active"
+    VACATION_RATIONING = "vacation_rationing"
+    VACATION_BUDGET_EXHAUSTED = "vacation_budget_exhausted"
     # Quiet hours: hard deny window from the hierarchical irrigation config.
     # ``QUIET_HOURS`` is a terminal SKIP; ``MANUAL_OVERRIDE_QUIET_HOURS`` is
     # an advisory warning appended when a manual trigger fires during a

@@ -100,11 +100,12 @@ def get_cluster_detail(
     # one meaningful value; anything else is treated as ``children``.
     _ = expand
     config = repo.get_irrigation_config(cluster_id)
+    irrigator = repo.get_irrigator_for_cluster(cluster_id)
     return ClusterDetailResponse(
         cluster=ClusterResponse.model_validate(cluster),
         plants=[PlantResponse.model_validate(p) for p in repo.get_plants_in_cluster(cluster_id)],
         sensors=[SensorResponse.model_validate(s) for s in repo.get_sensors_in_cluster(cluster_id)],
-        irrigators=[IrrigatorResponse.model_validate(i) for i in repo.get_irrigators_in_cluster(cluster_id)],
+        irrigator=IrrigatorResponse.model_validate(irrigator) if irrigator else None,
         config=ConfigResponse.model_validate(config) if config else None,
         windows=[IrrigationWindowResponse.model_validate(w) for w in repo.list_irrigation_windows(cluster_id)],
     )

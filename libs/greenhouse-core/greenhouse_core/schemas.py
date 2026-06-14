@@ -2,7 +2,7 @@
 
 import json
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 # --- Cluster ---
 
@@ -36,7 +36,7 @@ class ClusterDetailResponse(BaseModel):
     cluster: "ClusterResponse"
     plants: list["PlantResponse"]
     sensors: list["SensorResponse"]
-    irrigators: list["IrrigatorResponse"]
+    irrigator: "IrrigatorResponse | None"
     config: "ConfigResponse | None"
     windows: list["IrrigationWindowResponse"]
 
@@ -98,6 +98,8 @@ class IrrigatorBase(BaseModel):
     name: str
     type: str
     config: dict | None = None
+    reservoir_l: float | None = Field(default=None, ge=0)
+    flow_rate_l_per_min: float | None = Field(default=None, ge=0)
 
 
 class CreateIrrigatorRequest(IrrigatorBase):
@@ -543,7 +545,7 @@ class ClusterStatusResponse(BaseModel):
     config: ConfigResponse | None
     plants: list[PlantResponse]
     sensors: list[ClusterStatusSensorResponse]
-    irrigators: list[ClusterStatusIrrigatorResponse]
+    irrigator: ClusterStatusIrrigatorResponse | None
     decision: IrrigateResponse | None
 
 
@@ -871,6 +873,8 @@ class UpdateIrrigatorRequest(BaseModel):
     name: str | None = None
     type: str | None = None
     config: dict | None = None
+    reservoir_l: float | None = Field(default=None, ge=0)
+    flow_rate_l_per_min: float | None = Field(default=None, ge=0)
 
 
 # --- Search ----------------------------------------------------------------

@@ -157,7 +157,7 @@ class TestFullLifecycle:
             json={"tuya_device_id": "s1", "name": "S1", "type": "soil_moisture", "plant_id": 1},
         )
         client.post(
-            "/api/v1/clusters/1/irrigators",
+            "/api/v1/clusters/1/irrigator",
             json={"tuya_device_id": "i1", "name": "Pump", "type": "tuya_cloud"},
         )
         client.put(
@@ -171,7 +171,7 @@ class TestFullLifecycle:
         status = resp.json()
         assert len(status["plants"]) == 1
         assert len(status["sensors"]) == 1
-        assert len(status["irrigators"]) == 1
+        assert status["irrigator"] is not None
 
         # Dry-run irrigate
         resp = client.post("/api/v1/clusters/1/irrigate", json={"dry_run": True, "no_sync": True})

@@ -4,7 +4,7 @@
 
 <div class="crumb">
   <a href="/">home</a><span class="sep">/</span>
-  <a href="/clusters/{{ irrigator.cluster_id }}/irrigators">irrigators</a><span class="sep">/</span>
+  <a href="/clusters/{{ irrigator.cluster_id }}#irrigators">irrigator</a><span class="sep">/</span>
   <span class="here">log manual</span>
 </div>
 
@@ -29,7 +29,7 @@
       <textarea id="notes" name="notes" rows="3"></textarea>
     </label>
     <div class="form-actions">
-      <a href="/clusters/{{ irrigator.cluster_id }}/irrigators" class="btn secondary">Cancel</a>
+      <a href="/clusters/{{ irrigator.cluster_id }}#irrigators" class="btn secondary">Cancel</a>
       <button type="submit">Log event</button>
     </div>
   </form>

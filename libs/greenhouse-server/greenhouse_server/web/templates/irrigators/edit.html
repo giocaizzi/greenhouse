@@ -6,7 +6,7 @@
   <a href="/">home</a><span class="sep">/</span>
   <a href="/clusters">clusters</a><span class="sep">/</span>
   <a href="/clusters/{{ cluster.id }}">{{ cluster.name | lower }}</a><span class="sep">/</span>
-  <a href="/clusters/{{ cluster.id }}/irrigators">irrigators</a><span class="sep">/</span>
+  <a href="/clusters/{{ cluster.id }}#irrigators">irrigator</a><span class="sep">/</span>
   <span class="here">edit</span>
 </div>
 
@@ -20,7 +20,7 @@
 </section>
 
 <article class="card form-card">
-  <form method="post" action="/clusters/{{ cluster.id }}/irrigators/{{ irrigator.id }}/edit">
+  <form method="post" action="/clusters/{{ cluster.id }}/irrigators/edit">
     <label>
       Tuya device ID
       <input type="text" value="{{ irrigator.tuya_device_id }}" disabled>
@@ -46,8 +46,19 @@
                autocomplete="off" spellcheck="false">
       </label>
     </fieldset>
+    <fieldset>
+      <legend>Capacity <small class="muted">(optional — enables vacation rationing)</small></legend>
+      <label for="reservoir_l">Reservoir (L)
+        <input type="number" id="reservoir_l" name="reservoir_l" step="0.1" min="0"
+               value="{{ irrigator.reservoir_l if irrigator.reservoir_l is not none else '' }}" placeholder="e.g. 10">
+      </label>
+      <label for="flow_rate_l_per_min">Pump flow (L/min)
+        <input type="number" id="flow_rate_l_per_min" name="flow_rate_l_per_min" step="0.1" min="0"
+               value="{{ irrigator.flow_rate_l_per_min if irrigator.flow_rate_l_per_min is not none else '' }}" placeholder="e.g. 1.5">
+      </label>
+    </fieldset>
     <div class="form-actions">
-      <a href="/clusters/{{ cluster.id }}/irrigators" class="btn secondary">Cancel</a>
+      <a href="/clusters/{{ cluster.id }}#irrigators" class="btn secondary">Cancel</a>
       <button type="submit">Save changes</button>
     </div>
   </form>

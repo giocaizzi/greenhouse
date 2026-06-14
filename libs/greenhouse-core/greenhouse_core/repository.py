@@ -54,6 +54,14 @@ class SameClusterMoveError(ValueError):
     """Raised when a plant move targets its current cluster (no-op move)."""
 
 
+class IrrigatorExistsError(ValueError):
+    """Raised when adding an irrigator to a cluster that already has one.
+
+    A cluster has at most one irrigator (strict 0:1). The API layer maps this
+    to HTTP 409 Conflict.
+    """
+
+
 class IrrigationRepository:
     """Repository for irrigation system data access."""
 
@@ -123,7 +131,13 @@ class IrrigationRepository:
         irrigator_type: str,
         config: dict,
     ) -> int:
-        """Add an irrigator device and return its ID."""
+        """Add an irrigator device and return its ID.
+
+        A cluster has at most one irrigator. Raises IrrigatorExistsError when
+        the cluster already has one.
+        """
+        if self.get_irrigator_for_cluster(cluster_id) is not None:
+            raise IrrigatorExistsError(f"cluster {cluster_id} already has an irrigator")
         irrigator = Irrigator(
             cluster_id=cluster_id,
             tuya_device_id=tuya_device_id,
@@ -139,11 +153,9 @@ class IrrigationRepository:
         """Get an irrigator by ID."""
         return self.session.get(Irrigator, irrigator_id)
 
-    def get_irrigators_in_cluster(self, cluster_id: int) -> list[Irrigator]:
-        """Get all irrigators in a cluster ordered by name."""
-        return list(
-            self.session.scalars(select(Irrigator).where(Irrigator.cluster_id == cluster_id).order_by(Irrigator.name))
-        )
+    def get_irrigator_for_cluster(self, cluster_id: int) -> Irrigator | None:
+        """Get the cluster's single irrigator, or None if it has none."""
+        return self.session.scalars(select(Irrigator).where(Irrigator.cluster_id == cluster_id)).first()
 
     # ── Sensors ───────────────────────────────────────────────────────────────
 
@@ -453,6 +465,27 @@ class IrrigationRepository:
                 .order_by(IrrigationEvent.timestamp.desc())
             )
         )
+
+    def irrigator_consumption_liters(self, irrigator_id: int, since: int, until: int) -> float:
+        """Liters dispensed by an irrigator over ``[since, until]`` (inclusive).
+
+        Sums ``duration_minutes`` across ``action == "start"`` events in the
+        window and multiplies by the irrigator's ``flow_rate_l_per_min``.
+        Returns ``0.0`` when the irrigator is unknown or has no flow rate
+        configured (so an uncapped irrigator never spuriously consumes budget).
+        """
+        irrigator = self.session.get(Irrigator, irrigator_id)
+        if irrigator is None or irrigator.flow_rate_l_per_min is None:
+            return 0.0
+        total_minutes = self.session.scalar(
+            select(func.coalesce(func.sum(IrrigationEvent.duration_minutes), 0)).where(
+                IrrigationEvent.irrigator_id == irrigator_id,
+                IrrigationEvent.action == "start",
+                IrrigationEvent.timestamp >= since,
+                IrrigationEvent.timestamp <= until,
+            )
+        )
+        return float(total_minutes or 0) * irrigator.flow_rate_l_per_min
 
     # ── Irrigation Configs ────────────────────────────────────────────────────
 

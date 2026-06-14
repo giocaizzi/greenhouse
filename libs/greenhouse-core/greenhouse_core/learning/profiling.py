@@ -92,12 +92,12 @@ def get_plant_profile(
 
     Needs at least 3 irrigation events with sensor data to be meaningful.
     """
-    irrigators = db.get_irrigators_in_cluster(sensor.cluster_id)
-    if not irrigators:
+    irrigator = db.get_irrigator_for_cluster(sensor.cluster_id)
+    if irrigator is None:
         return None
 
     cutoff = int(time.time()) - (days * 86400)
-    all_events = db.get_recent_events(irrigators[0].id, hours=days * 24)
+    all_events = db.get_recent_events(irrigator.id, hours=days * 24)
     irrigation_events = [e for e in all_events if e.action == "start" and e.timestamp >= cutoff]
 
     if not irrigation_events:

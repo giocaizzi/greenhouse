@@ -123,35 +123,35 @@ def test_sensor_delete_removes_row(seeded_client):
 
 
 def test_irrigator_list_now_shows_controls_and_edit_delete(seeded_client):
-    resp = seeded_client.get("/clusters/1/irrigators")
+    resp = seeded_client.get("/clusters/1")
     assert resp.status_code == 200
     # start/stop controls reused via partial
     assert 'hx-post="/irrigators/1/start"' in resp.text
     assert 'hx-post="/irrigators/1/stop"' in resp.text
-    # edit + delete
-    assert 'href="/clusters/1/irrigators/1/edit"' in resp.text
-    assert 'hx-delete="/clusters/1/irrigators/1"' in resp.text
+    # edit + delete (cluster-keyed singular paths)
+    assert 'href="/clusters/1/irrigators/edit"' in resp.text
+    assert 'hx-delete="/clusters/1/irrigators"' in resp.text
 
 
 def test_irrigator_edit_form_renders(seeded_client):
-    resp = seeded_client.get("/clusters/1/irrigators/1/edit")
+    resp = seeded_client.get("/clusters/1/irrigators/edit")
     assert resp.status_code == 200
     assert 'value="Test Irrigator"' in resp.text
 
 
 def test_irrigator_edit_updates(seeded_client):
     resp = seeded_client.post(
-        "/clusters/1/irrigators/1/edit",
+        "/clusters/1/irrigators/edit",
         data={"name": "Pump X", "type": "tuya_cloud"},
         follow_redirects=False,
     )
     assert resp.status_code == 303
-    resp2 = seeded_client.get("/clusters/1/irrigators")
+    resp2 = seeded_client.get("/clusters/1")
     assert "Pump X" in resp2.text
 
 
 def test_irrigator_delete_removes_row(seeded_client):
-    resp = seeded_client.delete("/clusters/1/irrigators/1")
+    resp = seeded_client.delete("/clusters/1/irrigators")
     assert resp.status_code == 200
-    resp2 = seeded_client.get("/clusters/1/irrigators")
+    resp2 = seeded_client.get("/clusters/1")
     assert "Test Irrigator" not in resp2.text

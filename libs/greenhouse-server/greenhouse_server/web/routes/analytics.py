@@ -73,7 +73,8 @@ def cluster_stats_export(
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(["timestamp", "date", "time", "irrigator", "action", "duration_minutes", "triggered_by", "notes"])
-    for irrigator in repo.get_irrigators_in_cluster(cluster_id):
+    irrigator = repo.get_irrigator_for_cluster(cluster_id)
+    if irrigator is not None:
         for event in repo.get_recent_events(irrigator.id, hours=days * 24):
             ts_str = format_timestamp(event.timestamp)
             date, _, time_part = ts_str.partition(" ")
