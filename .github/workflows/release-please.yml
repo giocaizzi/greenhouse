@@ -2,7 +2,10 @@ name: Release Please
 
 on:
   push:
-    branches: [main]
+    # `main` is the primary release line; `release/*.*.x` branches are long-lived
+    # maintenance lines that cut hotfix patches off an already-released minor
+    # (e.g. release/3.1.x → v3.1.1) while main moves on to the next minor/major.
+    branches: [main, "release/**"]
 
 permissions:
   contents: write
@@ -23,5 +26,10 @@ jobs:
       - uses: googleapis/release-please-action@v5
         with:
           token: ${{ steps.app-token.outputs.token }}
+          # Run release-please against whichever branch triggered the workflow.
+          # On main this is main (the default); on a maintenance branch it keeps
+          # that branch's release line independent — config + manifest are read
+          # from the target branch, so each line discovers its own baseline tag.
+          target-branch: ${{ github.ref_name }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
