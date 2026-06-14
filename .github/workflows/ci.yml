@@ -2,7 +2,11 @@ name: CI
 
 on:
   pull_request:
-    branches: [main]
+    # `main` plus the long-lived `release/*.*.x` maintenance lines, so backport
+    # PRs into a hotfix branch get the same lint/test/hygiene gate as main.
+    # pull_request reads this workflow from the PR's BASE branch, so this filter
+    # must be present on both main and each release/* branch to take effect.
+    branches: [main, "release/**"]
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
