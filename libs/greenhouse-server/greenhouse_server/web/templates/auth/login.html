@@ -1,14 +1,23 @@
 {% extends "_base.html" %}
 {% block title %}Sign in · Greenhouse{% endblock %}
 {% block content %}
-<section class="hero" style="max-width: 26rem; margin: 4rem auto;">
-  <header>
-    <h1>Sign in</h1>
-    <p class="muted">Use the admin credentials configured for this deployment.</p>
-  </header>
+<div style="min-height: 80svh; display: grid; place-items: center; padding: var(--sp-6) 0;">
+<section style="width: 100%; max-width: 26rem;">
+
+  <div style="display: flex; flex-direction: column; align-items: center; gap: var(--sp-3); margin-bottom: var(--sp-7); text-align: center;">
+    <span class="brand__mark" style="width: 48px; height: 48px; border-radius: 14px;">
+      <svg class="icon" style="width: 26px; height: 26px;" aria-hidden="true"><use href="/static/icons/sprite.svg#i-leaf"></use></svg>
+    </span>
+    <div>
+      <h1 style="font-size: var(--fs-lg); font-weight: 600; letter-spacing: -0.02em; margin: 0;">Greenhouse</h1>
+      <div style="font-size: var(--fs-sm); color: var(--text-muted); margin-top: 2px;">Sign in to continue</div>
+    </div>
+  </div>
 
   {% if error %}
-    <p role="alert" class="error" style="color: var(--pico-color-red-500, #c33);">{{ error }}</p>
+  <div role="alert" class="alert alert--danger" style="margin-bottom: var(--sp-5);">
+    <div class="alert__body">{{ error }}</div>
+  </div>
   {% endif %}
 
   <form method="post" action="/login" autocomplete="on" novalidate>
@@ -16,8 +25,7 @@
 
     <label for="login-username">Username
       <input id="login-username" name="username" type="text"
-             autocomplete="username" required autofocus
-             aria-describedby="login-username-hint">
+             autocomplete="username" required autofocus>
     </label>
 
     <label for="login-password">Password
@@ -25,11 +33,13 @@
              autocomplete="current-password" required>
     </label>
 
-    <button type="submit">Sign in</button>
+    <button type="submit" style="width: 100%;">Sign in</button>
   </form>
 
   {% if not auth_enabled %}
-    <p class="muted" style="margin-top: 1rem;">Authentication is currently disabled in server settings — any credentials will let you in.</p>
+    <p style="margin-top: var(--sp-5); font-size: var(--fs-sm); color: var(--text-muted); text-align: center;">Authentication is currently disabled — any credentials will work.</p>
   {% endif %}
+
 </section>
+</div>
 {% endblock %}

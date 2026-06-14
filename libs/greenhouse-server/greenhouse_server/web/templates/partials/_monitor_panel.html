@@ -7,7 +7,7 @@
   </div>
   {% if result.sensors %}
   <table>
-    <thead><tr><th>Sensor</th><th>Plant</th><th class="num">Soil</th><th>Status</th><th>Target</th></tr></thead>
+    <thead><tr><th scope="col">Sensor</th><th scope="col">Plant</th><th scope="col" class="num">Soil</th><th scope="col">Status</th><th scope="col">Target</th></tr></thead>
     <tbody>
       {% for s in result.sensors %}
       <tr>

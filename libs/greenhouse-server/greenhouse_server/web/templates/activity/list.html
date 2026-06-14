@@ -15,7 +15,7 @@
     </div>
   </div>
   <div class="page-head__actions">
-    <nav class="tabs" style="border: none; margin: 0; gap: var(--sp-2);">
+    <nav class="tabs mb-0" style="border-bottom: none;">
       <a href="/activity"{% if not source %} aria-current="page"{% endif %}>All</a>
       <a href="/activity?source=irrigation"{% if source == 'irrigation' %} aria-current="page"{% endif %}>Irrigation</a>
       <a href="/activity?source=learning"{% if source == 'learning' %} aria-current="page"{% endif %}>Learning</a>
@@ -26,14 +26,21 @@
 
 {% if items %}
 <article class="card card--flush">
+  <header class="card__head">
+    <h2 class="card__title">
+      Events
+      {% if source %}<span class="n">{{ source }}</span>{% endif %}
+    </h2>
+    <small class="muted">newest first · scroll for more</small>
+  </header>
   <table>
     <thead>
       <tr>
-        <th>Time</th>
-        <th>Source</th>
-        <th>Code</th>
-        <th>Entity</th>
-        <th>Message</th>
+        <th scope="col">Time</th>
+        <th scope="col">Source</th>
+        <th scope="col">Code</th>
+        <th scope="col">Entity</th>
+        <th scope="col">Message</th>
       </tr>
     </thead>
     <tbody id="activity-rows">
@@ -44,10 +51,10 @@
 {% else %}
 <div class="empty">
   <div class="empty__icon">
-    <svg class="icon"><use href="/static/icons/sprite.svg#i-clock"></use></svg>
+    <svg class="icon" aria-hidden="true"><use href="/static/icons/sprite.svg#i-clock"></use></svg>
   </div>
   <h2>No activity yet</h2>
-  <p>Events appear here as the system runs sync, irrigation, and learning jobs.</p>
+  <p>Sensor syncs, irrigation runs, and learning updates will be logged here as the system runs.</p>
 </div>
 {% endif %}
 

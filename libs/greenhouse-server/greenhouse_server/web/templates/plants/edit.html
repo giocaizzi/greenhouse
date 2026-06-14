@@ -31,17 +31,17 @@
       <label for="water_needs">Water needs
         <select id="water_needs" name="water_needs">
           <option value=""{% if not plant.water_needs %} selected{% endif %}>—</option>
-          <option value="low"{% if plant.water_needs == "low" %} selected{% endif %}>low</option>
-          <option value="medium"{% if plant.water_needs == "medium" %} selected{% endif %}>medium</option>
-          <option value="high"{% if plant.water_needs == "high" %} selected{% endif %}>high</option>
+          <option value="low"{% if plant.water_needs == "low" %} selected{% endif %}>Low</option>
+          <option value="medium"{% if plant.water_needs == "medium" %} selected{% endif %}>Medium</option>
+          <option value="high"{% if plant.water_needs == "high" %} selected{% endif %}>High</option>
         </select>
       </label>
       <label for="light_needs">Light needs
         <select id="light_needs" name="light_needs">
           <option value=""{% if not plant.light_needs %} selected{% endif %}>—</option>
-          <option value="low"{% if plant.light_needs == "low" %} selected{% endif %}>low</option>
-          <option value="medium"{% if plant.light_needs == "medium" %} selected{% endif %}>medium</option>
-          <option value="high"{% if plant.light_needs == "high" %} selected{% endif %}>high</option>
+          <option value="low"{% if plant.light_needs == "low" %} selected{% endif %}>Low</option>
+          <option value="medium"{% if plant.light_needs == "medium" %} selected{% endif %}>Medium</option>
+          <option value="high"{% if plant.light_needs == "high" %} selected{% endif %}>High</option>
         </select>
       </label>
     </div>

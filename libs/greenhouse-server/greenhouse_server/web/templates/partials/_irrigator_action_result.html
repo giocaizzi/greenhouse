@@ -1,12 +1,12 @@
-<div class="irr-result {% if not success %}irr-result--err{% endif %}">
+<div class="irr-result {% if not success %}irr-result--err{% endif %}" role="{{ 'status' if success else 'alert' }}">
   {% if success %}
     <span class="badge-ok">
-      <svg class="icon" style="width:11px;height:11px;"><use href="/static/icons/sprite.svg#i-check"></use></svg>
+      <svg class="icon" style="width:11px;height:11px;" aria-hidden="true"><use href="/static/icons/sprite.svg#i-check"></use></svg>
       {{ action }}
     </span>
   {% else %}
     <span class="badge-danger">
-      <svg class="icon" style="width:11px;height:11px;"><use href="/static/icons/sprite.svg#i-x"></use></svg>
+      <svg class="icon" style="width:11px;height:11px;" aria-hidden="true"><use href="/static/icons/sprite.svg#i-x"></use></svg>
       {{ action }} failed
     </span>
   {% endif %}

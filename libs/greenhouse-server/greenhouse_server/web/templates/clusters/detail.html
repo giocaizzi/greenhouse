@@ -43,6 +43,13 @@
       {% endif %}
     </div>
   </div>
+  <div class="page-head__actions">
+    <a href="/clusters/{{ cluster.id }}/edit" class="btn secondary btn-sm">Edit</a>
+    <a href="#actions" class="btn secondary btn-sm">
+      <svg class="icon" aria-hidden="true"><use href="/static/icons/sprite.svg#i-drop"></use></svg>
+      Jump to actions
+    </a>
+  </div>
 </section>
 
 {% include "partials/_cluster_tabs.html" %}
@@ -58,10 +65,9 @@
     {% if decision.reason %}
       <p class="decision__why">{{ decision.reason | strip_emoji }}</p>
     {% endif %}
-    <div class="row" style="gap: var(--sp-2); flex-wrap: wrap;">
+    <div class="row row--g2">
       <span class="badge-{{ decision.action | decision_badge }}">
-        {{- decision.action | upper -}}
-        {%- if decision.confidence is not none %} · {{ "%.0f%%" | format(decision.confidence * 100) }}{% endif -%}
+        {%- if decision.confidence is not none %}{{ "%.0f%% confidence" | format(decision.confidence * 100) }}{%- else %}no score{% endif -%}
       </span>
       {% if decision.get("duration_minutes") %}<span class="badge-muted">{{ decision.duration_minutes | format_minutes }}</span>{% endif %}
       {% if decision.get("temperature") is not none %}<span class="badge-muted">{{ "%.1f°C" | format(decision.temperature) }}</span>{% endif %}
@@ -78,17 +84,17 @@
       <dt>Sensors</dt><dd>{{ sensor_count }}</dd>
       <dt>Irrigators</dt><dd>{{ irrigator_count }}</dd>
     </dl>
-    <a href="/clusters/{{ cluster.id }}/config" class="btn secondary" style="margin-top: var(--sp-2);">Edit config</a>
+    <a href="/clusters/{{ cluster.id }}/config" class="btn secondary mt-2">Edit config</a>
   </aside>
   {% endif %}
 </section>
 {% endif %}
 
 {# Why this decision — rationale panel #}
-<article class="card rationale" style="margin-bottom: var(--sp-6);">
+<article class="card rationale mb-6">
   <div class="card__head">
     <h3 class="card__title">Why this decision</h3>
-    <a href="/clusters/{{ cluster.id }}/learn" class="btn secondary" style="font-size: var(--fs-xs);">All insights</a>
+    <a href="/clusters/{{ cluster.id }}/learn" class="btn secondary fs-xs">All insights</a>
   </div>
   <div class="card__body" style="padding: var(--sp-3) var(--sp-5);">
     {% if rationale_reasons %}
@@ -98,7 +104,7 @@
         {% set interval_delta = r.get("interval_delta", 0) %}
         <div class="rationale__row" data-severity="{{ sev }}">
           <span class="rationale__icon">
-            <svg class="icon"><use href="/static/icons/sprite.svg#i-{{ icon_id }}"></use></svg>
+            <svg class="icon" aria-hidden="true"><use href="/static/icons/sprite.svg#i-{{ icon_id }}"></use></svg>
           </span>
           <span class="rationale__msg">{{ r.get("message", "") | strip_emoji }}</span>
           {% if interval_delta %}
@@ -107,7 +113,7 @@
         </div>
       {% endfor %}
     {% else %}
-      <p class="muted" style="font-size: var(--fs-sm); margin: 0; padding: var(--sp-2) 0;">No decisions yet. Run irrigation to generate a rationale.</p>
+      <p class="muted fs-sm m-0" style="padding: var(--sp-2) 0;">No decisions yet. Run the irrigation engine above to record the reasoning here.</p>
     {% endif %}
   </div>
 </article>
@@ -142,11 +148,13 @@
   {% set tmin = soil_t.get('min') %}
   {% set tmax = soil_t.get('max') %}
   {% set status_class = 'stat--ok' %}
-  {% if v is not none and tmin is not none and v < tmin %}{% set status_class = 'stat--danger' %}{% endif %}
-  {% if v is not none and tmax is not none and v > tmax %}{% set status_class = 'stat--warn' %}{% endif %}
+  {% set state_label = 'in range' if v is not none else '' %}
+  {% if v is not none and tmin is not none and v < tmin %}{% set status_class = 'stat--danger' %}{% set state_label = 'below target' %}{% endif %}
+  {% if v is not none and tmax is not none and v > tmax %}{% set status_class = 'stat--warn' %}{% set state_label = 'above target' %}{% endif %}
   <div class="stat {{ status_class }}">
     <div class="stat__row">
-      <span class="stat__label"><svg class="icon"><use href="/static/icons/sprite.svg#i-drop"></use></svg>Soil moisture</span>
+      <span class="stat__label"><svg class="icon" aria-hidden="true"><use href="/static/icons/sprite.svg#i-drop"></use></svg>Soil moisture</span>
+      {% if state_label %}<span class="stat__state">{{ state_label }}</span>{% endif %}
     </div>
     <div class="stat__value">
       {% if v is not none %}{{ "%.1f" | format(v) }}<span class="unit">%</span>{% else %}<span class="muted">—</span>{% endif %}
@@ -173,11 +181,13 @@
   {% set tmin = temp_t.get('min') %}
   {% set tmax = temp_t.get('max') %}
   {% set status_class = 'stat--ok' %}
-  {% if v is not none and tmin is not none and v < tmin %}{% set status_class = 'stat--warn' %}{% endif %}
-  {% if v is not none and tmax is not none and v > tmax %}{% set status_class = 'stat--danger' %}{% endif %}
+  {% set state_label = 'in range' if v is not none else '' %}
+  {% if v is not none and tmin is not none and v < tmin %}{% set status_class = 'stat--warn' %}{% set state_label = 'below target' %}{% endif %}
+  {% if v is not none and tmax is not none and v > tmax %}{% set status_class = 'stat--danger' %}{% set state_label = 'above target' %}{% endif %}
   <div class="stat {{ status_class }}">
     <div class="stat__row">
-      <span class="stat__label"><svg class="icon"><use href="/static/icons/sprite.svg#i-thermometer-simple"></use></svg>Temperature</span>
+      <span class="stat__label"><svg class="icon" aria-hidden="true"><use href="/static/icons/sprite.svg#i-thermometer-simple"></use></svg>Temperature</span>
+      {% if state_label %}<span class="stat__state">{{ state_label }}</span>{% endif %}
     </div>
     <div class="stat__value">
       {% if v is not none %}{{ "%.1f" | format(v) }}<span class="unit">°C</span>{% else %}<span class="muted">—</span>{% endif %}
@@ -204,11 +214,13 @@
   {% set tmin = hum_t.get('min') %}
   {% set tmax = hum_t.get('max') %}
   {% set status_class = 'stat--ok' %}
-  {% if v is not none and tmin is not none and v < tmin %}{% set status_class = 'stat--warn' %}{% endif %}
-  {% if v is not none and tmax is not none and v > tmax %}{% set status_class = 'stat--warn' %}{% endif %}
+  {% set state_label = 'in range' if v is not none else '' %}
+  {% if v is not none and tmin is not none and v < tmin %}{% set status_class = 'stat--warn' %}{% set state_label = 'below target' %}{% endif %}
+  {% if v is not none and tmax is not none and v > tmax %}{% set status_class = 'stat--warn' %}{% set state_label = 'above target' %}{% endif %}
   <div class="stat {{ status_class }}">
     <div class="stat__row">
-      <span class="stat__label"><svg class="icon"><use href="/static/icons/sprite.svg#i-drop"></use></svg>Humidity</span>
+      <span class="stat__label"><svg class="icon" aria-hidden="true"><use href="/static/icons/sprite.svg#i-drop"></use></svg>Humidity</span>
+      {% if state_label %}<span class="stat__state">{{ state_label }}</span>{% endif %}
     </div>
     <div class="stat__value">
       {% if v is not none %}{{ "%.0f" | format(v) }}<span class="unit">%</span>{% else %}<span class="muted">—</span>{% endif %}
@@ -233,7 +245,7 @@
   {# Light — no per-plant threshold available; just display reading #}
   <div class="stat">
     <div class="stat__row">
-      <span class="stat__label"><svg class="icon"><use href="/static/icons/sprite.svg#i-sun"></use></svg>Light</span>
+      <span class="stat__label"><svg class="icon" aria-hidden="true"><use href="/static/icons/sprite.svg#i-sun"></use></svg>Light</span>
     </div>
     <div class="stat__value">
       {% if light_reading.value is not none %}{{ light_reading.value }}<span class="unit">lx</span>{% else %}<span class="muted">—</span>{% endif %}
@@ -244,51 +256,86 @@
 {% endif %}
 
 {# Action bar — Irrigate / Monitor / Check #}
-<article class="action-bar" aria-labelledby="cluster-actions">
+<article class="action-bar" id="actions" aria-labelledby="cluster-actions">
   <header>
     <strong id="cluster-actions">Actions</strong>
-    <small>Run irrigation logic, monitor sensors, or audit cluster.</small>
+    <small>Run the irrigation engine, refresh sensor readings, or re-evaluate this cluster.</small>
     {% if quiet_active_now %}
       {% set qstart = effective_config['quiet_start_hour']['value'] %}
       {% set qend = effective_config['quiet_end_hour']['value'] %}
-      <span class="badge-warning" style="margin-left: var(--sp-2);" title="Manual irrigation prompts a confirmation while quiet hours are active.">
-        quiet hours active ({{ "%02d:00"|format(qstart|int) }}–{{ "%02d:00"|format(qend|int) }})
+      <span class="badge-warning" style="margin-left: var(--sp-2);" title="Manual irrigation asks for confirmation while quiet hours are active.">
+        Quiet hours active ({{ "%02d:00"|format(qstart|int) }}–{{ "%02d:00"|format(qend|int) }})
       </span>
     {% endif %}
   </header>
   <div class="action-bar__row">
-    <form hx-post="/clusters/{{ cluster.id }}/irrigate"
+    <form id="irrigate-form"
+          hx-post="/clusters/{{ cluster.id }}/irrigate"
           hx-target="#action-result"
           hx-swap="innerHTML"
           hx-indicator="#spin-irrigate"
-          {% if quiet_active_now %}
-          hx-confirm="Quiet hours are active right now ({{ '%02d:00'|format(effective_config['quiet_start_hour']['value']|int) }}–{{ '%02d:00'|format(effective_config['quiet_end_hour']['value']|int) }}). Irrigate anyway?"
-          {% endif %}
-          class="action-bar__form">
+          hx-confirm="{% if quiet_active_now %}Quiet hours are active ({{ '%02d:00'|format(effective_config['quiet_start_hour']['value']|int) }}–{{ '%02d:00'|format(effective_config['quiet_end_hour']['value']|int) }}); confirming overrides them. {% endif %}Run irrigation on {{ cluster.name }}? With dry-run off this actuates hardware and waters for real."
+          class="action-bar__form action-bar__form--primary">
       <span class="action-bar__label">
-        <svg class="icon"><use href="/static/icons/sprite.svg#i-drop"></use></svg>
+        <svg class="icon" aria-hidden="true"><use href="/static/icons/sprite.svg#i-drop"></use></svg>
         Irrigate
       </span>
-      <div class="action-bar__inputs" style="flex-direction: column; align-items: stretch; gap: var(--sp-2);">
-        <label style="display: flex; gap: var(--sp-2); margin: 0; font-weight: 400;">
-          <input type="checkbox" name="dry_run" value="on" checked> <small>Dry run (don't actuate)</small>
+      <div class="action-bar__inputs col col--g2" style="align-items: stretch;">
+        <label class="check-label m-0">
+          <input type="checkbox" id="irrigate-dry" name="dry_run" value="on" checked> <small>Dry run — preview the decision without watering</small>
         </label>
-        <label style="display: flex; gap: var(--sp-2); margin: 0; font-weight: 400;">
-          <input type="checkbox" name="no_sync" value="on"> <small>Skip cloud sync</small>
+        <label class="check-label m-0">
+          <input type="checkbox" name="no_sync" value="on"> <small>Skip cloud sync before deciding</small>
         </label>
-        <label style="display: flex; gap: var(--sp-2); align-items: center; margin: 0; font-weight: 400;">
-          <small>Temp override</small>
-          <input type="number" step="0.1" name="temp_override" placeholder="°C" class="action-bar__num" style="width: 90px;">
+        <label class="check-label m-0">
+          <small>Temperature override (°C)</small>
+          <input type="number" step="0.1" name="temp_override" placeholder="°C" aria-label="Temperature override in degrees Celsius" class="action-bar__num" style="width: 90px;">
         </label>
         {# Engine bypass for quiet hours — checked-by-default when quiet hours
            are active so the button does the obvious thing after the confirm. #}
         <input type="hidden" name="force" value="{% if quiet_active_now %}true{% else %}false{% endif %}">
-        <div class="row" style="gap: var(--sp-2);">
-          <button type="submit">Run</button>
+        <div class="row row--g2">
+          <button type="submit" id="irrigate-submit"
+                  data-dry-label="Preview decision" data-live-label="Irrigate now">Preview decision</button>
           <span id="spin-irrigate" class="htmx-indicator" aria-busy="true"></span>
         </div>
+        <small id="irrigate-state" class="fs-xs muted" aria-live="polite">Dry-run is on — previews the decision, no watering.</small>
       </div>
     </form>
+    {# Progressive enhancement only — the form's hx-confirm is the real safety
+       gate and works without JS. This mirrors dry-run vs live into the button
+       label + an aria-live note so the consequence is never color-only. #}
+    <script>
+      (function () {
+        var form = document.getElementById('irrigate-form');
+        var dry = document.getElementById('irrigate-dry');
+        var btn = document.getElementById('irrigate-submit');
+        var state = document.getElementById('irrigate-state');
+        if (!dry || !btn) return;
+        function sync() {
+          var live = !dry.checked;
+          btn.textContent = live ? btn.dataset.liveLabel : btn.dataset.dryLabel;
+          btn.classList.toggle('danger', live);
+          if (state) {
+            state.textContent = live
+              ? 'Dry-run is off — this will run real irrigation now.'
+              : 'Dry-run is on — previews the decision, no watering.';
+          }
+        }
+        dry.addEventListener('change', sync);
+        sync();
+        // Precise per-state confirm when JS is available; the form's static
+        // hx-confirm stays the safe-side fallback when it is not.
+        if (form) form.addEventListener('htmx:confirm', function (e) {
+          e.preventDefault();
+          var msg = dry.checked
+            ? 'Preview the decision for {{ cluster.name }}? No water will run.'
+            : 'Run real irrigation on {{ cluster.name }} now? This actuates hardware.';
+          {% if quiet_active_now %}msg = 'Quiet hours are active — confirming overrides them. ' + msg;{% endif %}
+          if (window.confirm(msg)) e.detail.issueRequest(true);
+        });
+      })();
+    </script>
 
     <form hx-get="/clusters/{{ cluster.id }}/monitor"
           hx-target="#action-result"
@@ -296,11 +343,11 @@
           hx-indicator="#spin-monitor"
           class="action-bar__form">
       <span class="action-bar__label">
-        <svg class="icon"><use href="/static/icons/sprite.svg#i-magnifying-glass"></use></svg>
-        Monitor sensors
+        <svg class="icon" aria-hidden="true"><use href="/static/icons/sprite.svg#i-magnifying-glass"></use></svg>
+        Refresh sensors
       </span>
       <div class="action-bar__inputs">
-        <button type="submit" class="secondary">Run monitor</button>
+        <button type="submit" class="secondary">Refresh readings</button>
         <span id="spin-monitor" class="htmx-indicator" aria-busy="true"></span>
       </div>
     </form>
@@ -311,11 +358,11 @@
           hx-indicator="#spin-check"
           class="action-bar__form">
       <span class="action-bar__label">
-        <svg class="icon"><use href="/static/icons/sprite.svg#i-check"></use></svg>
-        Audit cluster
+        <svg class="icon" aria-hidden="true"><use href="/static/icons/sprite.svg#i-check"></use></svg>
+        Re-evaluate
       </span>
       <div class="action-bar__inputs">
-        <button type="submit" class="secondary">Check</button>
+        <button type="submit" class="secondary">Evaluate now</button>
         <span id="spin-check" class="htmx-indicator" aria-busy="true"></span>
       </div>
     </form>
@@ -324,14 +371,15 @@
 </article>
 
 {# Live status panel (HTMX polled, refreshes every 30s) #}
-<article>
-  <header>
-    <strong>Live status</strong>
-    <small>auto-refresh 30s</small>
-  </header>
+<article class="card mb-6">
+  <div class="card__head">
+    <h3 class="card__title">Live status</h3>
+    <small class="muted">auto-refresh 30s</small>
+  </div>
   <div hx-get="/clusters/{{ cluster.id }}/status-fragment"
        hx-trigger="load, every 30s"
-       hx-swap="innerHTML">
+       hx-swap="innerHTML"
+       style="padding: var(--sp-4) var(--sp-5);">
     <progress></progress>
   </div>
 </article>
@@ -386,7 +434,7 @@
   <div class="card__head">
     <h3 class="card__title">Plants <span class="n">{{ plant_count }}</span></h3>
     <a href="/clusters/{{ cluster.id }}/plants/new" class="btn secondary">
-      <svg class="icon"><use href="/static/icons/sprite.svg#i-plus"></use></svg>
+      <svg class="icon" aria-hidden="true"><use href="/static/icons/sprite.svg#i-plus"></use></svg>
       Add plant
     </a>
   </div>
@@ -400,7 +448,7 @@
     </tbody>
   </table>
   {% else %}
-  <div class="card__body"><p class="muted">No plants yet. Add the first to start tracking.</p></div>
+  <div class="card__body"><p class="muted">No plants in this cluster yet. Add a plant so its species sets the watering targets.</p></div>
   {% endif %}
 </article>
 
@@ -410,7 +458,7 @@
   <div class="card__head">
     <h3 class="card__title">Sensors <span class="n">{{ sensor_count }}</span></h3>
     <a href="/clusters/{{ cluster.id }}/sensors/new" class="btn secondary">
-      <svg class="icon"><use href="/static/icons/sprite.svg#i-plus"></use></svg>
+      <svg class="icon" aria-hidden="true"><use href="/static/icons/sprite.svg#i-plus"></use></svg>
       Add sensor
     </a>
   </div>
@@ -477,7 +525,7 @@
     </tbody>
   </table>
   {% else %}
-  <div class="card__body"><p class="muted">No sensors linked yet. Add one so the engine has data to reason about.</p></div>
+  <div class="card__body"><p class="muted">No sensors linked yet. Add a sensor so the engine has soil and climate readings to decide on.</p></div>
   {% endif %}
 </article>
 
@@ -487,7 +535,7 @@
   <div class="card__head">
     <h3 class="card__title">Irrigators <span class="n">{{ irrigator_count }}</span></h3>
     <a href="/clusters/{{ cluster.id }}/irrigators/new" class="btn secondary">
-      <svg class="icon"><use href="/static/icons/sprite.svg#i-plus"></use></svg>
+      <svg class="icon" aria-hidden="true"><use href="/static/icons/sprite.svg#i-plus"></use></svg>
       Add irrigator
     </a>
   </div>
@@ -501,7 +549,7 @@
     </tbody>
   </table>
   {% else %}
-  <div class="card__body"><p class="muted"><span class="dot dot--muted" aria-hidden="true">○</span> No irrigator assigned — this cluster is sensor-only.</p></div>
+  <div class="card__body"><p class="muted"><span class="dot dot--muted" aria-hidden="true">○</span> No irrigator assigned. This cluster is sensor-only and will not water until you add one.</p></div>
   {% endif %}
 </article>
 
@@ -527,7 +575,7 @@
       {% for field in fields %}
         {% include "partials/_config_field.html" %}
       {% endfor %}
-      <p class="muted" style="margin: var(--sp-2) 0 var(--sp-3); font-size: var(--fs-sm);">
+      <p class="muted fs-sm" style="margin: var(--sp-2) 0 var(--sp-3);">
         Quiet hours block automated irrigation between start and end (local time, end-exclusive,
         wrap-around supported). Set start equal to end to disable quiet hours at this level.
         Manual irrigation prompts a confirmation but is always allowed.
@@ -539,13 +587,13 @@
     </form>
   </div>
 
-  <div class="card__head" style="border-top: 1px solid var(--border); margin-top: var(--sp-4);">
+  <div class="card__head mt-4" style="border-top: 1px solid var(--border);">
     <h3 class="card__title">Watering windows</h3>
     <small class="muted">Allow-windows for the engine. No windows = always allowed (subject to quiet hours).</small>
   </div>
   {% if not windows %}
   <div class="card__body">
-    <p class="muted">No windows configured. Add one below or leave empty to use the global default preferred hours.</p>
+    <p class="muted">No windows configured. Add one below, or leave this empty to allow watering at any hour (subject to quiet hours).</p>
   </div>
   {% endif %}
   {% if windows %}

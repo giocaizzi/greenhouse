@@ -24,33 +24,35 @@
 {% if not report.issues %}
 <div class="empty">
   <div class="empty__icon">
-    <svg class="icon"><use href="/static/icons/sprite.svg#i-check"></use></svg>
+    <svg class="icon" aria-hidden="true"><use href="/static/icons/sprite.svg#i-check"></use></svg>
   </div>
   <h2>No issues found</h2>
-  <p>All sensors, plants, clusters, and device IDs look clean.</p>
+  <p>Sensors, plants, clusters, and device IDs all passed the latest data-quality checks.</p>
 </div>
 
 {% else %}
 
 {% for code, issues in grouped.items() %}
 {% set first = issues[0] %}
-<article class="card card--flush" style="margin-bottom: var(--sp-4);">
+<article class="card card--flush">
   <div class="card__head">
-    <div class="row" style="gap: var(--sp-3);">
+    <div class="row">
       <span class="badge-{{ first.severity | severity_class }}">{{ first.severity }}</span>
       <h3 class="card__title"><code>{{ code }}</code></h3>
-      <span class="n muted" style="font-family: var(--font-mono); font-size: var(--fs-xs);">{{ issues | length }}</span>
+      <span class="n">{{ issues | length }}</span>
     </div>
   </div>
   <table>
     <thead>
-      <tr><th>Entity</th><th>Label</th><th>Message</th></tr>
+      <tr><th scope="col">Entity</th><th scope="col">Label</th><th scope="col">Message</th></tr>
     </thead>
     <tbody>
       {% for issue in issues %}
       <tr>
         <td data-th="Entity"><small class="muted">{{ issue.entity_type }}{% if issue.entity_id is not none %} #{{ issue.entity_id }}{% endif %}</small></td>
-        <td data-th="Label"><strong>{{ issue.label }}</strong></td>
+        <td data-th="Label">
+          <span class="badge-{{ issue.severity | severity_class }}">{{ issue.label }}</span>
+        </td>
         <td data-th="Message">{{ issue.message }}</td>
       </tr>
       {% endfor %}

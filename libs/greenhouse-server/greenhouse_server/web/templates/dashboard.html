@@ -20,7 +20,7 @@
       <a href="/clusters" class="btn secondary">All clusters</a>
     {% endif %}
     <a href="/clusters/new" class="btn">
-      <svg class="icon"><use href="/static/icons/sprite.svg#i-plus"></use></svg>
+      <svg class="icon" aria-hidden="true"><use href="/static/icons/sprite.svg#i-plus"></use></svg>
       New cluster
     </a>
   </div>
@@ -41,9 +41,9 @@
 
 {% if not clusters %}
   <article class="empty">
-    <span class="empty__icon"><svg class="icon"><use href="/static/icons/sprite.svg#i-leaf"></use></svg></span>
+    <span class="empty__icon"><svg class="icon" aria-hidden="true"><use href="/static/icons/sprite.svg#i-leaf"></use></svg></span>
     <h2>No clusters yet</h2>
-    <p>Create your first irrigation cluster to bring sensors and plants together.</p>
+    <p>A cluster groups the plants, sensors, and irrigator for one space. Create your first one to start monitoring and watering.</p>
     <a href="/clusters/new" role="button">Create cluster</a>
   </article>
 {% else %}
@@ -52,7 +52,7 @@
       <article class="cluster-card" id="cluster-card-{{ cluster.id }}">
         <a class="cluster-card__title" href="/clusters/{{ cluster.id }}">
           <h3>{{ cluster.name }}</h3>
-          <svg class="icon"><use href="/static/icons/sprite.svg#i-arrow-right"></use></svg>
+          <svg class="icon" aria-hidden="true"><use href="/static/icons/sprite.svg#i-arrow-right"></use></svg>
         </a>
         <div class="cluster-card__meta">
           {% if cluster.environment %}<span>{{ cluster.environment }}</span><span class="dot"></span>{% endif %}
@@ -85,7 +85,7 @@
             hx-swap="innerHTML"
             class="action-bar__form">
         <label for="sync-hours" class="action-bar__label">
-          <svg class="icon"><use href="/static/icons/sprite.svg#i-cloud-arrow-down"></use></svg>
+          <svg class="icon" aria-hidden="true"><use href="/static/icons/sprite.svg#i-cloud-arrow-down"></use></svg>
           Sync sensors
         </label>
         <div class="action-bar__inputs">
@@ -101,12 +101,12 @@
             hx-indicator="#spin-checkall"
             hx-swap="innerHTML"
             class="action-bar__form">
-        <label class="action-bar__label">
-          <svg class="icon"><use href="/static/icons/sprite.svg#i-check"></use></svg>
+        <span class="action-bar__label">
+          <svg class="icon" aria-hidden="true"><use href="/static/icons/sprite.svg#i-check"></use></svg>
           Check all clusters
-        </label>
+        </span>
         <div class="action-bar__inputs">
-          <button type="submit" class="secondary">Run check</button>
+          <button type="submit" class="secondary">Check all</button>
           <span id="spin-checkall" class="htmx-indicator" aria-busy="true"></span>
         </div>
       </form>
@@ -116,10 +116,10 @@
             hx-indicator="#spin-plants"
             hx-swap="innerHTML"
             class="action-bar__form">
-        <label class="action-bar__label">
-          <svg class="icon"><use href="/static/icons/sprite.svg#i-flower"></use></svg>
+        <span class="action-bar__label">
+          <svg class="icon" aria-hidden="true"><use href="/static/icons/sprite.svg#i-flower"></use></svg>
           Sync plant care data
-        </label>
+        </span>
         <div class="action-bar__inputs">
           <button type="submit" class="secondary">Sync plants</button>
           <span id="spin-plants" class="htmx-indicator" aria-busy="true"></span>
@@ -129,8 +129,7 @@
     <div id="dashboard-action-result" aria-live="polite"></div>
   </article>
 
-  <article class="action-bar" aria-labelledby="emergency-actions"
-           style="margin-top: var(--sp-4); border-color: color-mix(in srgb, var(--danger) 30%, var(--border));">
+  <article class="action-bar action-bar--danger mt-4" aria-labelledby="emergency-actions">
     <header>
       <strong id="emergency-actions">Emergency stop</strong>
       <small>Kill switch &mdash; sends OFF to every irrigator across every cluster.</small>
@@ -138,12 +137,12 @@
     <div class="action-bar__row">
       <div class="action-bar__form">
         <button type="button"
-                style="background: var(--danger); border-color: var(--danger); color: white;"
+                class="danger"
                 hx-post="/bulk/stop-all"
                 hx-target="#emergency-stop-dashboard"
                 hx-swap="innerHTML"
-                hx-confirm="Stop ALL irrigators across every cluster? This is a kill switch.">
-          <svg class="icon"><use href="/static/icons/sprite.svg#i-warning"></use></svg>
+                hx-confirm="Stop every irrigator in every cluster now? Watering in progress will be cut off.">
+          <svg class="icon" aria-hidden="true"><use href="/static/icons/sprite.svg#i-warning"></use></svg>
           Stop all irrigators
         </button>
       </div>

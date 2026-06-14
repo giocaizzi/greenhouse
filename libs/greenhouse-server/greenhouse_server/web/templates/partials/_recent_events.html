@@ -7,7 +7,7 @@
     <div class="card__body"><p class="muted"><small>No events in the window.</small></p></div>
   {% else %}
     <table>
-      <thead><tr><th>Time</th><th>Action</th><th class="num">Duration</th><th>By</th><th>Notes</th></tr></thead>
+      <thead><tr><th scope="col">Time</th><th scope="col">Action</th><th scope="col" class="num">Duration</th><th scope="col">By</th><th scope="col">Notes</th></tr></thead>
       <tbody>
         {% for e in recent_events %}
         <tr>
