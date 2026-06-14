@@ -50,7 +50,7 @@
         <td data-th="Created"><small class="mono muted">{{ cluster.created_at | format_ts }}</small></td>
         <td data-th="Actions">
           <div class="row-actions">
-            <a href="/clusters/{{ cluster.id }}" class="btn secondary btn-sm" aria-label="Open {{ cluster.name }}">Open<svg class="icon" style="width:13px;height:13px;"><use href="/static/icons/sprite.svg#i-arrow-right"></use></svg></a>
+            <a href="/clusters/{{ cluster.id }}" class="btn secondary btn-sm" aria-label="Open {{ cluster.name }}">Open<svg class="icon icon--sm"><use href="/static/icons/sprite.svg#i-arrow-right"></use></svg></a>
             <a href="/clusters/{{ cluster.id }}/edit" class="btn secondary btn-sm" aria-label="Edit {{ cluster.name }}">Edit</a>
             <button class="btn secondary btn-sm row-actions__danger"
                     type="button"
@@ -59,7 +59,7 @@
                     hx-target="#cluster-row-{{ cluster.id }}"
                     hx-swap="outerHTML swap:200ms"
                     hx-confirm="Delete cluster &quot;{{ cluster.name }}&quot;? This cascades to plants, sensors and irrigators.">
-              <svg class="icon" style="width:13px;height:13px;"><use href="/static/icons/sprite.svg#i-trash"></use></svg>
+              <svg class="icon icon--sm"><use href="/static/icons/sprite.svg#i-trash"></use></svg>
               Delete
             </button>
           </div>

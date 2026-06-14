@@ -28,8 +28,8 @@
 {# ── Forecast banner ────────────────────────────────────────────────────────── #}
 {% if forecast %}
   {% if forecast.weather_skip %}
-  <div class="alert alert--info" style="margin-bottom: var(--sp-5);">
-    <span class="alert__icon"><svg class="icon"><use href="/static/icons/sprite.svg#i-cloud-rain"></use></svg></span>
+  <div class="alert alert--info mb-5">
+    <span class="alert__icon"><svg class="icon" aria-hidden="true"><use href="/static/icons/sprite.svg#i-cloud-rain"></use></svg></span>
     <div>
       <p class="alert__title">Weather skip active</p>
       <p class="alert__body">{{ forecast.weather_reason or "Rain is forecast — irrigation will be skipped automatically." }}</p>
@@ -37,10 +37,10 @@
   </div>
   {% endif %}
 
-  <article class="card" style="margin-bottom: var(--sp-6);">
+  <article class="card mb-6">
     <div class="card__head">
       <h3 class="card__title">
-        <svg class="icon" style="color:var(--accent)"><use href="/static/icons/sprite.svg#i-clock"></use></svg>
+        <svg class="icon" style="color:var(--accent)" aria-hidden="true"><use href="/static/icons/sprite.svg#i-clock"></use></svg>
         Forecast
       </h3>
       {% if forecast.weather_skip %}
@@ -63,7 +63,7 @@
         <dd>{{ "%.0f%%" | format(forecast.confidence * 100) }}</dd>
         {% if forecast.explanation %}
           <dt>Detail</dt>
-          <dd style="font-family: var(--font-sans); font-variant-numeric: normal; font-size: var(--fs-sm);">{{ forecast.explanation }}</dd>
+          <dd class="font-sans fs-sm">{{ forecast.explanation }}</dd>
         {% endif %}
       </dl>
     </div>
@@ -78,7 +78,7 @@
       {% set icon_id = item.code | icon_for_code %}
       <article class="insight insight--{{ sev }}">
         <span class="insight__icon">
-          <svg class="icon"><use href="/static/icons/sprite.svg#i-{{ icon_id }}"></use></svg>
+          <svg class="icon" aria-hidden="true"><use href="/static/icons/sprite.svg#i-{{ icon_id }}"></use></svg>
         </span>
         <div class="insight__body">
           <p class="insight__title">{{ item.title }}</p>
@@ -93,9 +93,9 @@
   </div>
 {% else %}
   <div class="empty">
-    <span class="empty__icon"><svg class="icon"><use href="/static/icons/sprite.svg#i-leaf"></use></svg></span>
+    <span class="empty__icon"><svg class="icon" aria-hidden="true"><use href="/static/icons/sprite.svg#i-leaf"></use></svg></span>
     <h2>All good</h2>
-    <p>No insights for this cluster right now. Keep irrigating!</p>
+    <p>No insights for this cluster right now. The engine surfaces tuning suggestions here as it learns from each cycle.</p>
   </div>
 {% endif %}
 {% endblock %}

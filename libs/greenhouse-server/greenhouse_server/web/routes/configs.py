@@ -112,4 +112,4 @@ def save_global_config(
         quiet_end_hour=_parse_optional_hour(quiet_end_hour),
     )
     repo.session.commit()
-    return RedirectResponse(url="/preferences#global-config", status_code=303)
+    return RedirectResponse(url="/preferences?saved=global#global-config", status_code=303)

@@ -29,6 +29,7 @@ def preferences_page(request: Request, repo: RepoDep):
             clusters=clusters,
             global_config=global_config,
             ntfy_configured=ntfy_configured,
+            saved=request.query_params.get("saved"),
         ),
     )
 
@@ -67,4 +68,4 @@ def update_preferences(
         notify_auto=bool(notify_auto),
     )
     repo.session.commit()
-    return RedirectResponse(url="/preferences", status_code=303)
+    return RedirectResponse(url="/preferences?saved=1", status_code=303)

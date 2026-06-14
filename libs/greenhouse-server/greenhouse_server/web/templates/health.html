@@ -21,23 +21,18 @@
 </section>
 
 <section class="stat-grid">
-  <div class="stat">
+  <div class="stat {% if pulse.sensors_stale > 0 or pulse.sensors_total == 0 %}stat--warn{% else %}stat--ok{% endif %}">
     <div class="stat__row">
-      <span class="stat__label">Sensors total</span>
+      <span class="stat__label">Sensors</span>
     </div>
     <div class="stat__value">{{ pulse.sensors_total }}</div>
-    <div class="stat__hint"><span>{{ pulse.sensors_fresh }} fresh · {{ pulse.sensors_stale }} stale</span></div>
-  </div>
-
-  <div class="stat {% if pulse.sensors_stale > 0 %}stat--warn{% else %}stat--ok{% endif %}">
-    <div class="stat__row">
-      <span class="stat__label">Sensors stale</span>
+    <div class="stat__hint">
+      <span>{{ pulse.sensors_fresh }} fresh</span>
+      <span class="{% if pulse.sensors_stale > 0 %}stat__trend down{% endif %}">{{ pulse.sensors_stale }} stale</span>
     </div>
-    <div class="stat__value">{{ pulse.sensors_stale }}</div>
-    <div class="stat__hint"><span>no reading for ≥ 3 h</span></div>
   </div>
 
-  <div class="stat">
+  <div class="stat {% if pulse.irrigators_total == 0 %}stat--warn{% else %}stat--ok{% endif %}">
     <div class="stat__row">
       <span class="stat__label">Irrigators</span>
     </div>
@@ -45,7 +40,7 @@
     <div class="stat__hint"><span>registered</span></div>
   </div>
 
-  <div class="stat {% if pulse.open_alerts >= 3 %}stat--warn{% elif pulse.open_alerts > 0 %}stat--warn{% else %}stat--ok{% endif %}">
+  <div class="stat {% if pulse.open_alerts > 0 %}stat--warn{% else %}stat--ok{% endif %}">
     <div class="stat__row">
       <span class="stat__label">Open alerts</span>
     </div>
@@ -54,26 +49,33 @@
   </div>
 </section>
 
-<div class="grid" style="margin-bottom: var(--sp-6);">
+<div class="grid">
   <article class="card">
-    <h3>Cloud</h3>
-    {% if pulse.cloud_reachable %}
-      <span class="badge-ok">reachable</span>
-    {% else %}
-      <span class="badge-danger">unreachable</span>
-    {% endif %}
-    <p class="muted" style="margin-top: var(--sp-2);">
-      Last sync: <span class="mono">{{ pulse.last_sync_at | format_ts }}</span>
-    </p>
+    <h3>Connectivity</h3>
+    <dl>
+      <dt>Tuya Cloud</dt>
+      <dd>
+        <span class="badge-{% if pulse.cloud_reachable %}ok{% else %}danger{% endif %}">
+          {% if pulse.cloud_reachable %}reachable{% else %}unreachable{% endif %}
+        </span>
+      </dd>
+      <dt>Last sync</dt>
+      <dd><span class="mono">{{ pulse.last_sync_at | format_ts }}</span></dd>
+    </dl>
   </article>
 
   <article class="card">
     <h3>Scheduler</h3>
-    {% if pulse.scheduler_running %}
-      <span class="badge-ok">running</span>
-    {% else %}
-      <span class="badge-muted">stopped</span>
-    {% endif %}
+    <dl>
+      <dt>Status</dt>
+      <dd>
+        {% if pulse.scheduler_running %}
+          <span class="badge-ok">running</span>
+        {% else %}
+          <span class="badge-warning">stopped</span>
+        {% endif %}
+      </dd>
+    </dl>
   </article>
 </div>
 
@@ -81,10 +83,16 @@
 <article class="card card--flush">
   <div class="card__head">
     <h3 class="card__title">Devices <span class="n">{{ pulse.devices | length }}</span></h3>
+    {% set bad = pulse.devices | selectattr('status', 'ne', 'ok') | list %}
+    {% if bad %}
+      <span class="badge-warning">{{ bad | length }} degraded</span>
+    {% else %}
+      <span class="badge-ok">all ok</span>
+    {% endif %}
   </div>
   <table>
     <thead>
-      <tr><th>Name</th><th>Status</th><th>Last seen</th></tr>
+      <tr><th scope="col">Name</th><th scope="col">Status</th><th scope="col">Last seen</th></tr>
     </thead>
     <tbody>
       {% for dev in pulse.devices %}

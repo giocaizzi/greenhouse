@@ -5,7 +5,7 @@
   <td data-th="Light">{{ plant.light_needs or "—" }}</td>
   <td data-th="Actions">
     <div class="row-actions">
-      <a href="/clusters/{{ plant.cluster_id }}/plants/{{ plant.id }}" class="btn secondary btn-sm" aria-label="Open {{ plant.species }}">Open<svg class="icon" style="width:13px;height:13px;"><use href="/static/icons/sprite.svg#i-arrow-right"></use></svg></a>
+      <a href="/clusters/{{ plant.cluster_id }}/plants/{{ plant.id }}" class="btn secondary btn-sm" aria-label="Open {{ plant.species }}">Open<svg class="icon icon--sm"><use href="/static/icons/sprite.svg#i-arrow-right"></use></svg></a>
       <a href="/clusters/{{ plant.cluster_id }}/plants/{{ plant.id }}/edit" class="btn secondary btn-sm" aria-label="Edit {{ plant.species }}">Edit</a>
       <button class="btn secondary btn-sm row-actions__danger"
               type="button"
@@ -14,7 +14,7 @@
               hx-target="#plant-row-{{ plant.id }}"
               hx-swap="outerHTML swap:200ms"
               hx-confirm="Delete plant &quot;{{ plant.species }}&quot;?">
-        <svg class="icon" style="width:13px;height:13px;"><use href="/static/icons/sprite.svg#i-trash"></use></svg>
+        <svg class="icon icon--sm"><use href="/static/icons/sprite.svg#i-trash"></use></svg>
         Delete
       </button>
     </div>

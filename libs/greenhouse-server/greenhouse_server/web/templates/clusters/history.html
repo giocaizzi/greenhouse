@@ -24,9 +24,9 @@
 
 {% include "partials/_cluster_tabs.html" %}
 
-<article class="card form-card" style="max-width: none; margin-bottom: var(--sp-5);">
+<article class="card form-card mb-5" style="max-width: none;">
   <form method="get" action="/clusters/{{ cluster_id }}/history">
-    <div class="grid" style="margin-bottom: 0;">
+    <div class="grid mb-0">
       <label>Hours back <input type="number" name="hours" value="{{ hours }}" min="1"></label>
       <label>Limit per sensor <input type="number" name="limit" value="{{ limit }}" min="1"></label>
     </div>
@@ -40,13 +40,16 @@
   <div class="card__head">
     <h3 class="card__title">Sensor readings</h3>
   </div>
-  <div class="card__body" style="display: flex; flex-direction: column; gap: var(--sp-5);">
+  <div class="card__body col col--g5">
+    {% if not history.sensors %}
+      <p class="muted">No sensors in this cluster yet. Add a sensor to start recording readings.</p>
+    {% endif %}
     {% for sensor in history.sensors %}
       <section>
-        <h4 style="margin-bottom: var(--sp-2);">{{ sensor.sensor_name }} <small class="muted">({{ sensor.readings|length }})</small></h4>
+        <h4 class="mb-2">{{ sensor.sensor_name }} <small class="muted">({{ sensor.readings|length }})</small></h4>
         {% if sensor.readings %}
         <table class="scrollable">
-          <thead><tr><th>Time</th><th class="num">Soil</th><th class="num">Temp</th><th class="num">Humidity</th><th class="num">Light</th><th>Battery</th></tr></thead>
+          <thead><tr><th scope="col">Time</th><th scope="col" class="num">Soil</th><th scope="col" class="num">Temp</th><th scope="col" class="num">Humidity</th><th scope="col" class="num">Light</th><th scope="col">Battery</th></tr></thead>
           <tbody>
             {% for r in sensor.readings %}
             <tr>
@@ -61,7 +64,7 @@
           </tbody>
         </table>
         {% else %}
-          <p class="muted"><small>No readings in window.</small></p>
+          <p class="muted"><small>No readings in the last {{ hours }}h.</small></p>
         {% endif %}
       </section>
     {% endfor %}
@@ -72,13 +75,16 @@
   <div class="card__head">
     <h3 class="card__title">Irrigation events</h3>
   </div>
-  <div class="card__body" style="display: flex; flex-direction: column; gap: var(--sp-5);">
+  <div class="card__body col col--g5">
+    {% if not history.irrigators %}
+      <p class="muted">No irrigators in this cluster yet. Add an irrigator to record watering events.</p>
+    {% endif %}
     {% for irr in history.irrigators %}
       <section>
-        <h4 style="margin-bottom: var(--sp-2);">{{ irr.irrigator_name }} <small class="muted">({{ irr.events|length }})</small></h4>
+        <h4 class="mb-2">{{ irr.irrigator_name }} <small class="muted">({{ irr.events|length }})</small></h4>
         {% if irr.events %}
         <table class="scrollable">
-          <thead><tr><th>Time</th><th>Action</th><th class="num">Duration</th><th>Triggered by</th><th>Notes</th></tr></thead>
+          <thead><tr><th scope="col">Time</th><th scope="col">Action</th><th scope="col" class="num">Duration</th><th scope="col">Triggered by</th><th scope="col">Notes</th></tr></thead>
           <tbody>
             {% for e in irr.events %}
             <tr>
@@ -92,7 +98,7 @@
           </tbody>
         </table>
         {% else %}
-          <p class="muted"><small>No events in window.</small></p>
+          <p class="muted"><small>No watering events in the last {{ hours }}h.</small></p>
         {% endif %}
       </section>
     {% endfor %}

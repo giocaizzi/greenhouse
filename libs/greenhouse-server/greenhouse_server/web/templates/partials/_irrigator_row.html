@@ -21,7 +21,7 @@
         <label for="irr-mins-{{ irr.id }}" class="visually-hidden">Minutes</label>
         <input id="irr-mins-{{ irr.id }}" type="number" name="minutes" placeholder="min" min="1" class="irr-controls__num" aria-label="Minutes">
         <button type="submit" class="btn-sm">
-          <svg class="icon" style="width:12px;height:12px;"><use href="/static/icons/sprite.svg#i-play"></use></svg>
+          <svg class="icon icon--xs"><use href="/static/icons/sprite.svg#i-play"></use></svg>
           Start
         </button>
       </form>
@@ -32,7 +32,7 @@
             hx-confirm="Stop {{ irr.name }}?"
             class="irr-controls__form">
         <button type="submit" class="secondary btn-sm" aria-label="Stop {{ irr.name }}">
-          <svg class="icon" style="width:12px;height:12px;"><use href="/static/icons/sprite.svg#i-stop"></use></svg>
+          <svg class="icon icon--xs"><use href="/static/icons/sprite.svg#i-stop"></use></svg>
           Stop
         </button>
       </form>
@@ -51,7 +51,7 @@
               hx-target="#irrigator-row-{{ irr.id }}"
               hx-swap="outerHTML swap:200ms"
               hx-confirm="Delete irrigator &quot;{{ irr.name }}&quot;? Its event log will be removed.">
-        <svg class="icon" style="width:12px;height:12px;"><use href="/static/icons/sprite.svg#i-trash"></use></svg>
+        <svg class="icon icon--xs"><use href="/static/icons/sprite.svg#i-trash"></use></svg>
         Delete
       </button>
     </div>

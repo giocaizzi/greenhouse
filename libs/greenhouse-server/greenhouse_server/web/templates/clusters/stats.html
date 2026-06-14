@@ -21,7 +21,7 @@
   </div>
   <div class="page-head__actions">
     <a href="/clusters/{{ cluster.id }}/stats/export?days={{ days }}" class="btn secondary" download>
-      <svg class="icon"><use href="/static/icons/sprite.svg#i-download"></use></svg>
+      <svg class="icon" aria-hidden="true"><use href="/static/icons/sprite.svg#i-download"></use></svg>
       Export CSV
     </a>
   </div>
@@ -29,10 +29,10 @@
 
 {% include "partials/_cluster_tabs.html" %}
 
-<article class="card form-card" style="max-width: none; margin-bottom: var(--sp-5);">
+<article class="card form-card mb-5" style="max-width: none;">
   <form method="get" action="/clusters/{{ cluster.id }}/stats">
     <div class="row">
-      <label style="margin: 0;">Days <input type="number" name="days" value="{{ days }}" min="1" max="365" style="width: 100px; margin: 0;"></label>
+      <label class="m-0">Days <input type="number" name="days" value="{{ days }}" min="1" max="365" class="m-0" style="width: 100px;"></label>
       <button type="submit">Apply</button>
     </div>
   </form>
@@ -100,5 +100,10 @@
   </article>
 {% endif %}
 </div>
+{% if not stats.events_by_type and not stats.events_by_trigger %}
+  <article class="card">
+    <p class="muted m-0">No watering events in the last {{ days }} day{{ "" if days == 1 else "s" }}. Run the irrigation engine or widen the window above to see a breakdown.</p>
+  </article>
+{% endif %}
 {% endif %}
 {% endblock %}
