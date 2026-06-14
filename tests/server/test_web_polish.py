@@ -61,3 +61,14 @@ def test_footer_shows_app_version(client):
     assert resp.status_code == 200
     assert f"v{APP_VERSION}" in resp.text
     assert 'title="App version"' in resp.text
+
+
+def test_closed_command_palette_is_hidden(client):
+    # Regression: `.cmdk` sets display:flex (to center the panel when open),
+    # which—being an author rule—overrides the UA `dialog:not([open])` reset and
+    # leaves the CLOSED palette as a full-viewport z-index:300 layer that renders
+    # over the page and swallows taps meant for the mobile bottom nav (issue #74).
+    # The guard re-asserts the hidden state when the dialog has no `open` attr.
+    resp = client.get("/static/app.css")
+    assert resp.status_code == 200
+    assert ".cmdk:not([open]) { display: none; }" in resp.text
