@@ -4,6 +4,7 @@ import time
 
 from greenhouse_server.web.filters import (
     age_seconds,
+    cluster_caps,
     decision_badge,
     moisture_badge,
     stat_position,
@@ -92,3 +93,59 @@ class TestExistingFiltersStillWork:
         assert moisture_badge(50, 30, 70) == "ok"
         assert moisture_badge(20, 30, 70) == "low"
         assert moisture_badge(80, 30, 70) == "high"
+
+
+class TestClusterCaps:
+    """The capability tier that drives feature gating across the web UI."""
+
+    @staticmethod
+    def _status(*, plants, sensors, irrigator):
+        return {
+            "plants": [object()] * plants,
+            "sensors": [object()] * sensors,
+            "irrigator": {"id": 1} if irrigator else None,
+        }
+
+    def test_empty_cluster(self):
+        caps = cluster_caps(self._status(plants=0, sensors=0, irrigator=False))
+        assert caps["tier"] == "empty"
+        assert not caps["can_monitor"] and not caps["can_decide"] and not caps["can_actuate"]
+        assert caps["missing"] == ["irrigator", "sensors", "plants"]
+
+    def test_sensor_only_is_full_monitoring_without_actuation(self):
+        caps = cluster_caps(self._status(plants=2, sensors=1, irrigator=False))
+        assert caps["tier"] == "sensor_only"
+        assert caps["can_monitor"] and caps["can_decide"]
+        assert not caps["can_actuate"]
+        assert caps["missing"] == ["irrigator"]
+
+    def test_plants_only_cannot_monitor(self):
+        caps = cluster_caps(self._status(plants=1, sensors=0, irrigator=False))
+        assert caps["tier"] == "sensor_only"
+        assert not caps["can_monitor"] and not caps["can_decide"]
+
+    def test_operational_full_stack(self):
+        caps = cluster_caps(self._status(plants=1, sensors=1, irrigator=True))
+        assert caps["tier"] == "operational"
+        assert caps["can_decide"] and caps["can_actuate"]
+        assert caps["missing"] == []
+
+    def test_operational_but_degraded_without_sensors(self):
+        caps = cluster_caps(self._status(plants=1, sensors=0, irrigator=True))
+        assert caps["tier"] == "operational"
+        assert caps["can_actuate"]
+        assert not caps["can_decide"]  # drives the "schedule/manual only" notice
+
+    def test_accepts_orm_like_object(self):
+        class _Cluster:
+            plants = [object()]
+            sensors = []
+            irrigator = object()
+
+        caps = cluster_caps(_Cluster())
+        assert caps["tier"] == "operational"
+        assert caps["has_plants"] and not caps["has_sensors"] and caps["has_irrigator"]
+
+    def test_handles_none(self):
+        caps = cluster_caps(None)
+        assert caps["tier"] == "empty"

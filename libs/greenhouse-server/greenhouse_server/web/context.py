@@ -39,11 +39,16 @@ def base_context(request: Request, **extra) -> dict:
     dry_run_global = False
     active_vacation = None
     scheduler_paused = False
+    # Server-rendered initial theme so a reload — or a fresh browser / second
+    # device with empty localStorage — paints the persisted preference. The
+    # early-apply script still prefers localStorage for instant client paint.
+    theme = "auto"
     if repo is not None:
         try:
             prefs = repo.get_preferences()
             dry_run_global = prefs.dry_run_global
             scheduler_paused = prefs.scheduler_paused
+            theme = prefs.theme or "auto"
             active_vacation = repo.get_active_vacation()
         except Exception:
             pass
@@ -65,6 +70,7 @@ def base_context(request: Request, **extra) -> dict:
         "dry_run_global": dry_run_global,
         "active_vacation": active_vacation,
         "scheduler_paused": scheduler_paused,
+        "theme": theme,
         "app_version": APP_VERSION,
         "auth_enabled": auth_enabled,
         # Authenticated chrome (top nav, command palette, status pollers) is on

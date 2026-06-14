@@ -1,6 +1,7 @@
 {% extends "_base.html" %}
 {% block title %}{{ plant.species }} · {{ cluster.name }}{% endblock %}
 {% block content %}
+{% set caps = cluster | cluster_caps %}
 
 <div class="crumb">
   <a href="/">home</a><span class="sep">/</span>
@@ -22,6 +23,9 @@
         <span class="badge-{% if health_score >= 70 %}ok{% elif health_score >= 40 %}warning{% else %}danger{% endif %}">
           health {{ health_score | round | int }}
         </span>
+      {% endif %}
+      {% if not caps.can_actuate %}
+        <span class="dot"></span><span class="badge-muted">sensor-only cluster</span>
       {% endif %}
     </div>
   </div>
@@ -70,7 +74,11 @@
         <span class="health-ring__label">health</span>
       </div>
     {% endif %}
-    <span class="muted" style="font-size: var(--fs-xs); text-align: center;">irrigated {{ last_irrigated_relative }}</span>
+    {% if caps.can_actuate %}
+      <span class="muted" style="font-size: var(--fs-xs); text-align: center;">irrigated {{ last_irrigated_relative }}</span>
+    {% else %}
+      <span class="muted" style="font-size: var(--fs-xs); text-align: center;">sensor-only cluster</span>
+    {% endif %}
   </aside>
 </section>
 
@@ -80,7 +88,7 @@
         action="/clusters/{{ cluster.id }}/plants/{{ plant.id }}/move"
         class="modal__panel">
     <header class="modal__head">
-      <h3>Move {{ plant.species }}</h3>
+      <h2>Move {{ plant.species }}</h2>
       <button type="button"
               class="modal__close"
               aria-label="Close"
@@ -151,32 +159,44 @@
       {% endfor %}
     </nav>
   </header>
-  {% for metric in metrics %}
-    {% set payload_json = chart_payloads[metric] %}
-    <article class="card chart-card">
-      <header class="chart-head">
-        <div class="chart-title">
-          <h3>{{ metric.replace("_", " ") | title }}</h3>
+  {% if plant_sensors %}
+    {% for metric in metrics %}
+      {% set payload_json = chart_payloads[metric] %}
+      <article class="card chart-card">
+        <header class="chart-head">
+          <div class="chart-title">
+            <h3>{{ metric.replace("_", " ") | title }}</h3>
+          </div>
+        </header>
+        <div class="chart-body">
+          {% include "partials/_chart_panel.html" %}
         </div>
-      </header>
-      <div class="chart-body">
-        {% include "partials/_chart_panel.html" %}
-      </div>
-    </article>
-  {% endfor %}
+      </article>
+    {% endfor %}
 
-  <article class="card chart-card"
-           hx-get="/clusters/{{ cluster.id }}/plants/{{ plant.id }}/health-fragment"
-           hx-trigger="load"
-           hx-swap="innerHTML">
-    <header class="chart-head"><h3>Plant health (90d)</h3></header>
-    <div class="chart-body skeleton"><div class="skeleton__line med"></div></div>
-  </article>
+    <article class="card chart-card"
+             hx-get="/clusters/{{ cluster.id }}/plants/{{ plant.id }}/health-fragment"
+             hx-trigger="load"
+             hx-swap="innerHTML">
+      <header class="chart-head"><h3>Plant health (90d)</h3></header>
+      <div class="chart-body skeleton"><div class="skeleton__line med"></div></div>
+    </article>
+  {% else %}
+    <div class="alert alert--info">
+      <span class="alert__icon"><svg class="icon"><use href="/static/icons/sprite.svg#i-info"></use></svg></span>
+      <div>
+        <p class="alert__title">No sensor linked</p>
+        <p class="alert__body">Link a sensor to this plant to see soil and climate readings and a health score.</p>
+      </div>
+    </div>
+  {% endif %}
 </section>
 
-{% include "partials/_recent_events.html" %}
+{% if caps.can_actuate %}
+  {% include "partials/_recent_events.html" %}
+{% endif %}
 
-{% if alerts %}
+{% if alerts and caps.can_actuate %}
 <article class="card card--flush">
   <div class="card__head">
     <h3 class="card__title">Learning alerts <span class="n">{{ alerts|length }}</span></h3>

@@ -49,7 +49,8 @@
 {% else %}
   <div class="cluster-grid">
     {% for cluster in clusters %}
-      <article class="cluster-card" id="cluster-card-{{ cluster.id }}">
+      {% set caps = cluster | cluster_caps %}
+      <article class="cluster-card{% if not caps.can_actuate %} cluster-card--sensor-only{% endif %}" id="cluster-card-{{ cluster.id }}">
         <a class="cluster-card__title" href="/clusters/{{ cluster.id }}">
           <h3>{{ cluster.name }}</h3>
           <svg class="icon" aria-hidden="true"><use href="/static/icons/sprite.svg#i-arrow-right"></use></svg>
@@ -57,6 +58,8 @@
         <div class="cluster-card__meta">
           {% if cluster.environment %}<span>{{ cluster.environment }}</span><span class="dot"></span>{% endif %}
           <span>{{ cluster.location or "no location" }}</span>
+          {% if caps.tier == "sensor_only" %}<span class="dot"></span><span class="badge-muted">sensor-only</span>
+          {% elif caps.tier == "empty" %}<span class="dot"></span><span class="badge-muted">empty</span>{% endif %}
         </div>
         <div class="cluster-card__status"
              hx-get="/clusters/{{ cluster.id }}/card-fragment"

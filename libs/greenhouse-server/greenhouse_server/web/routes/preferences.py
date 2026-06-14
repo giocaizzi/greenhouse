@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Form, Request
-from fastapi.responses import RedirectResponse
+from fastapi import APIRouter, Form, HTTPException, Request, status
+from fastapi.responses import RedirectResponse, Response
 
 from greenhouse_server.deps import RepoDep
 from greenhouse_server.web.context import base_context
 from greenhouse_server.web.templating import templates
 
 router = APIRouter(include_in_schema=False)
+
+_ALLOWED_THEMES = {"auto", "light", "dark"}
 
 
 @router.get("/preferences")
@@ -69,3 +71,30 @@ def update_preferences(
     )
     repo.session.commit()
     return RedirectResponse(url="/preferences?saved=1", status_code=303)
+
+
+@router.post("/preferences/theme")
+def update_theme(repo: RepoDep, theme: str = Form(...)) -> Response:
+    """Persist just the theme preference for the header light/dark toggle.
+
+    The header toggle paints instantly from ``localStorage``; this fire-and-forget
+    endpoint records the same choice server-side so a reload renders the matching
+    theme instead of falling back to the stale stored preference.
+
+    Args:
+        theme: One of ``auto``, ``light``, or ``dark`` (the Preferences select's values).
+
+    Returns:
+        An empty ``204 No Content`` response on success.
+
+    Raises:
+        HTTPException: ``400`` if ``theme`` is not an allowed value.
+    """
+    if theme not in _ALLOWED_THEMES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid theme: {theme!r}",
+        )
+    repo.update_preferences(theme=theme)
+    repo.session.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

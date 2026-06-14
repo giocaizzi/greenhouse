@@ -1126,6 +1126,28 @@ body > footer small, .footer small { color: inherit; font-size: inherit; }
 }
 .cluster-card__status { margin-top: var(--sp-2); }
 
+/* ── Capability gating ────────────────────────────────────────────────────
+   Sensor-only / empty / degraded states. The notice itself reuses .alert;
+   these rules lay out its CTA column and let a cluster that can't water
+   recede, so "less" reads visually — not just as missing controls.        */
+.capability-notice__actions {
+  display: flex; flex-direction: column; gap: var(--sp-2);
+  align-self: center; flex: none;
+}
+.capability-notice__actions .btn { justify-content: center; white-space: nowrap; }
+@media (max-width: 560px) {
+  .capability-notice { grid-template-columns: auto 1fr; }
+  .capability-notice__actions {
+    grid-column: 1 / -1; flex-direction: row; flex-wrap: wrap;
+    align-self: stretch; margin-top: var(--sp-1);
+  }
+}
+/* A cluster with no irrigator can't water: its verdict/config slots mute so
+   operational clusters are where the eye lands first. The sensor-only chip
+   (a .badge-muted) still names the state in text, never colour alone. */
+.cluster-card--sensor-only .cluster-card__verdict,
+.cluster-card--sensor-only .cluster-card__config { opacity: 0.65; }
+
 /* Action bar (global actions on dashboard) */
 .action-bar { padding: 0; margin-top: var(--sp-6); }
 .action-bar > header {
@@ -2035,3 +2057,38 @@ form.inline { display: inline; margin: 0; }
 .fs-sm { font-size: var(--fs-sm); }
 /* Undo tabular-mono on a span that inherits it from a mono parent.         */
 .font-sans { font-family: var(--font-sans); font-variant-numeric: normal; }
+
+/* ── Touch targets (coarse pointer) ──────────────────────────────────────
+   Used one-handed near the plants. Lift the dense row actions to a tappable
+   floor on touch/stylus without bloating the fine-pointer desktop view.
+   Detect the input method, not the screen size — a wide tablet is still touch.
+*/
+@media (pointer: coarse) {
+  /* Compact row buttons (Start/Stop/Log, Open/Edit/Delete, capability CTAs)
+     sit beside a destructive Delete — give them room to miss it. */
+  .btn-sm, button.sm, [role="button"].sm {
+    min-height: 40px; padding: var(--sp-2) 14px;
+  }
+
+  /* Square glyph buttons → the 44px touch floor. */
+  .icon-btn, .bell { width: 44px; height: 44px; }
+  .bell .icon, .icon-btn .icon { width: 19px; height: 19px; }
+
+  /* Dismiss affordances are easy to fat-finger past — size them up. */
+  .modal__close, .toast__close {
+    min-width: 40px; min-height: 40px;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .modal__close { width: 40px; height: 40px; }
+
+  /* More breathing room between packed actions so Delete isn't a mis-tap. */
+  .row-actions { gap: var(--sp-2); }
+
+  /* Inputs are tapped, not clicked — taller hit area. */
+  input[type="text"], input[type="number"], input[type="email"],
+  input[type="password"], input[type="url"], input[type="search"],
+  input[type="tel"], input[type="date"], input[type="time"],
+  input[type="datetime-local"], textarea, select {
+    min-height: 40px;
+  }
+}

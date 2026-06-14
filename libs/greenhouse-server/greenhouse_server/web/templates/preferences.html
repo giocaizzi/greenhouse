@@ -144,12 +144,12 @@
     <label for="g_duration_minutes">Duration (minutes)
       <input type="number" id="g_duration_minutes" name="duration_minutes" min="1" max="60"
              value="{{ global_config.duration_minutes if global_config.duration_minutes is not none else '' }}"
-             placeholder="built-in default">
+             placeholder="— built-in default —">
     </label>
     <label for="g_interval_hours">Interval (hours)
       <input type="number" id="g_interval_hours" name="interval_hours" min="1" max="168"
              value="{{ global_config.interval_hours if global_config.interval_hours is not none else '' }}"
-             placeholder="built-in default">
+             placeholder="— built-in default —">
     </label>
     <label for="g_auto_run">Auto-run
       <select id="g_auto_run" name="auto_run">
@@ -158,11 +158,23 @@
         <option value="false"{% if global_config.auto_run is false %} selected{% endif %}>Off</option>
       </select>
     </label>
+    <label for="g_daily_cap_minutes">Daily cap (minutes)
+      <input type="number" id="g_daily_cap_minutes" name="daily_cap_minutes" min="0" max="1440"
+             value="{{ global_config.daily_cap_minutes if global_config.daily_cap_minutes is not none else '' }}"
+             placeholder="— no cap —">
+      <small class="muted">Max total watering minutes per irrigator per 24 h. Leave blank for no cap.</small>
+    </label>
+    <label for="g_max_events_per_day">Max events per day
+      <input type="number" id="g_max_events_per_day" name="max_events_per_day" min="0" max="100"
+             value="{{ global_config.max_events_per_day if global_config.max_events_per_day is not none else '' }}"
+             placeholder="— no cap —">
+      <small class="muted">Max irrigation starts per cluster per 24 h. Leave blank for no cap.</small>
+    </label>
     <label for="g_quiet_start_hour">Quiet hours start (0–23)
       <input type="number" id="g_quiet_start_hour" name="quiet_start_hour" min="0" max="23"
              value="{{ global_config.quiet_start_hour if global_config.quiet_start_hour is not none else '' }}"
-             placeholder="off">
-      <small class="muted">Blank = off. Equal start/end disables quiet hours globally.</small>
+             placeholder="— built-in default —">
+      <small class="muted">Leave blank to fall through to the built-in default. Equal start/end disables quiet hours globally.</small>
     </label>
     <label for="g_quiet_end_hour">Quiet hours end (0–23, exclusive)
       <input type="number" id="g_quiet_end_hour" name="quiet_end_hour" min="0" max="23"

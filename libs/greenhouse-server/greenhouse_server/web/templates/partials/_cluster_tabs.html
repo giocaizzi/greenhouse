@@ -4,11 +4,14 @@ Plants / sensors / irrigators / config used to live behind their own tabs;
 they now render inline on the detail page (see ``clusters/detail.html``).
 This strip is kept for the analytics views which remain on their own pages.
 #}
+{% set caps = cluster | cluster_caps %}
 <nav class="tabs" aria-label="Cluster sections">
   <a href="/clusters/{{ cluster.id }}"{% if current_tab == "overview" %} aria-current="page"{% endif %}>Overview</a>
   <a href="/clusters/{{ cluster.id }}/history"{% if current_tab == "history" %} aria-current="page"{% endif %}>History</a>
+  {% if caps.can_actuate %}
   <a href="/clusters/{{ cluster.id }}/stats"{% if current_tab == "stats" %} aria-current="page"{% endif %}>Stats</a>
   <a href="/clusters/{{ cluster.id }}/decisions"{% if current_tab == "decisions" %} aria-current="page"{% endif %}>Decisions</a>
   <a href="/clusters/{{ cluster.id }}/efficacy"{% if current_tab == "efficacy" %} aria-current="page"{% endif %}>Efficacy</a>
   <a href="/clusters/{{ cluster.id }}/learn"{% if current_tab == "learn" %} aria-current="page"{% endif %}>Learn</a>
+  {% endif %}
 </nav>

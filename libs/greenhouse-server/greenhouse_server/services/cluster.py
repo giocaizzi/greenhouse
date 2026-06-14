@@ -65,6 +65,10 @@ class ClusterService:
                 "cluster_id": irrigator.cluster_id,
                 "recent_event_count": len(events),
                 "last_event": events[0] if events else None,
+                # Hardware capacity drives vacation rationing; surface it so the
+                # cluster detail irrigator row can show it without a refetch.
+                "reservoir_l": irrigator.reservoir_l,
+                "flow_rate_l_per_min": irrigator.flow_rate_l_per_min,
             }
 
         logic = IrrigationLogic(self._repo, self._plant_db)

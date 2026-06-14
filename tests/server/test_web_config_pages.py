@@ -30,11 +30,29 @@ def test_save_config_redirects_to_inline_section(seeded_client):
     assert 'value="5"' in resp2.text
 
 
-def test_config_form_for_new_cluster_renders_inherit_state(client):
-    """A cluster with no config row yet renders all fields as inherited."""
-    client.post("/clusters", data={"name": "Empty", "environment": "indoor"}, follow_redirects=False)
+def test_config_section_hidden_without_irrigator(client):
+    """Irrigation config is gated on actuation — a sensor-only cluster hides it.
+
+    Mode/duration/interval/quiet-hours/windows only mean something with an
+    irrigator, so an irrigator-less cluster shows no Config section at all.
+    """
+    client.post("/clusters", data={"name": "Sensor-only", "environment": "indoor"}, follow_redirects=False)
     resp = client.get("/clusters/1")
     assert resp.status_code == 200
+    assert 'id="config"' not in resp.text
+
+
+def test_config_form_renders_inherit_state_with_irrigator(client):
+    """With an irrigator and no config row, every field renders as inherited."""
+    client.post("/clusters", data={"name": "Empty", "environment": "indoor"}, follow_redirects=False)
+    resp = client.post(
+        "/api/v1/clusters/1/irrigator",
+        json={"tuya_device_id": "fake_irrigator_001", "name": "Test Irrigator", "type": "tuya_cloud"},
+    )
+    assert resp.status_code == 201
+    resp = client.get("/clusters/1")
+    assert resp.status_code == 200
+    assert 'id="config"' in resp.text
     # Without a declared row, every field shows the "↳ default" / "↳ global"
     # badge from _config_field.html.
     assert "↳" in resp.text

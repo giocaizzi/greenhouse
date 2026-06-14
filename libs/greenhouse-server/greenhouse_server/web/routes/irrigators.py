@@ -140,7 +140,11 @@ def update_irrigator(
     flow_rate_l_per_min: str = Form(""),
 ):
     irrigator = _require_cluster_irrigator(repo, cluster_id)
-    config: dict = {}
+    # Merge into the stored config so a blank field PRESERVES the current value
+    # rather than wiping it. The local key is a root-level credential — a blank
+    # submit must never silently erase it (the form intentionally renders it
+    # masked and empty, so most saves arrive blank).
+    config = _parse_config(irrigator.config)
     if device_ip.strip():
         config["device_ip"] = device_ip.strip()
     if local_key.strip():

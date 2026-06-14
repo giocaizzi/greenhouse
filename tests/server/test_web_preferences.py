@@ -35,6 +35,54 @@ def test_preferences_post_updates(client):
     assert body["dry_run_global"] is True
 
 
+def test_theme_endpoint_persists_value(client):
+    resp = client.post(
+        "/preferences/theme",
+        data={"theme": "light"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 204
+    assert client.get("/api/v1/preferences").json()["theme"] == "light"
+
+
+def test_theme_endpoint_only_touches_theme(client):
+    # Set non-default neighbours, then flip the theme alone.
+    client.post(
+        "/preferences",
+        data={
+            "units": "imperial",
+            "timezone": "Europe/Rome",
+            "theme": "auto",
+            "refresh_interval_seconds": "90",
+        },
+        follow_redirects=False,
+    )
+    resp = client.post("/preferences/theme", data={"theme": "dark"})
+    assert resp.status_code == 204
+    body = client.get("/api/v1/preferences").json()
+    assert body["theme"] == "dark"
+    # Other prefs are undisturbed.
+    assert body["units"] == "imperial"
+    assert body["timezone"] == "Europe/Rome"
+    assert body["refresh_interval_seconds"] == 90
+
+
+def test_theme_endpoint_rejects_invalid_value(client):
+    resp = client.post("/preferences/theme", data={"theme": "neon"})
+    assert resp.status_code == 400
+    # Persisted theme is untouched by the rejected request.
+    assert client.get("/api/v1/preferences").json()["theme"] != "neon"
+
+
+def test_persisted_theme_renders_into_html_tag(client):
+    # After persisting via the toggle endpoint, a fresh page load (no client
+    # localStorage server-side) must paint the saved theme on the <html> tag,
+    # so a reload / second device agrees with the stored preference.
+    client.post("/preferences/theme", data={"theme": "light"})
+    page = client.get("/preferences")
+    assert 'data-theme="light"' in page.text
+
+
 def test_preferences_includes_default_cluster_options(seeded_client):
     resp = seeded_client.get("/preferences")
     assert resp.status_code == 200
@@ -48,6 +96,8 @@ def test_preferences_renders_global_config_form(client):
     assert 'action="/config/global"' in resp.text
     assert 'name="quiet_start_hour"' in resp.text
     assert 'name="quiet_end_hour"' in resp.text
+    assert 'name="daily_cap_minutes"' in resp.text
+    assert 'name="max_events_per_day"' in resp.text
 
 
 def test_global_config_post_persists(client):
@@ -90,6 +140,50 @@ def test_global_config_blank_fields_clear_to_inherit(client):
     assert body["mode"] is None
     assert body["quiet_start_hour"] is None
     assert body["quiet_end_hour"] is None
+
+
+def test_global_config_caps_persist(client):
+    resp = client.post(
+        "/config/global",
+        data={"daily_cap_minutes": "45", "max_events_per_day": "3"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303
+
+    body = client.get("/api/v1/config/global").json()
+    assert body["daily_cap_minutes"] == 45
+    assert body["max_events_per_day"] == 3
+
+    # Stored values render back into the form inputs.
+    page = client.get("/preferences").text
+    assert 'value="45"' in page
+    assert 'value="3"' in page
+
+
+def test_global_config_caps_blank_clears_to_inherit(client):
+    # Set caps first, then resubmit with blanks → null (no cap enforced).
+    client.post(
+        "/config/global",
+        data={"daily_cap_minutes": "45", "max_events_per_day": "3"},
+        follow_redirects=False,
+    )
+    client.post(
+        "/config/global",
+        data={"daily_cap_minutes": "", "max_events_per_day": ""},
+        follow_redirects=False,
+    )
+    body = client.get("/api/v1/config/global").json()
+    assert body["daily_cap_minutes"] is None
+    assert body["max_events_per_day"] is None
+
+
+def test_global_config_caps_reject_negative(client):
+    resp = client.post(
+        "/config/global",
+        data={"daily_cap_minutes": "-1"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 400
 
 
 def test_preferences_renders_notification_toggles(client):

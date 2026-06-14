@@ -48,17 +48,17 @@
       <section>
         <h4 class="mb-2">{{ sensor.sensor_name }} <small class="muted">({{ sensor.readings|length }})</small></h4>
         {% if sensor.readings %}
-        <table class="scrollable">
+        <table>
           <thead><tr><th scope="col">Time</th><th scope="col" class="num">Soil</th><th scope="col" class="num">Temp</th><th scope="col" class="num">Humidity</th><th scope="col" class="num">Light</th><th scope="col">Battery</th></tr></thead>
           <tbody>
             {% for r in sensor.readings %}
             <tr>
-              <td><small class="mono">{{ r.timestamp | format_ts }}</small></td>
-              <td class="num">{% if r.soil_moisture is not none %}{{ "%.0f%%" | format(r.soil_moisture) }}{% else %}—{% endif %}</td>
-              <td class="num">{% if r.temperature is not none %}{{ "%.1f°C" | format(r.temperature) }}{% else %}—{% endif %}</td>
-              <td class="num">{% if r.env_humidity is not none %}{{ "%.0f%%" | format(r.env_humidity) }}{% else %}—{% endif %}</td>
-              <td class="num">{% if r.light is not none %}{{ r.light }}{% else %}—{% endif %}</td>
-              <td><small class="muted">{{ r.battery_state or "—" }}</small></td>
+              <td data-th="Time"><small class="mono">{{ r.timestamp | format_ts }}</small></td>
+              <td data-th="Soil" class="num">{% if r.soil_moisture is not none %}{{ "%.0f%%" | format(r.soil_moisture) }}{% else %}—{% endif %}</td>
+              <td data-th="Temp" class="num">{% if r.temperature is not none %}{{ "%.1f°C" | format(r.temperature) }}{% else %}—{% endif %}</td>
+              <td data-th="Humidity" class="num">{% if r.env_humidity is not none %}{{ "%.0f%%" | format(r.env_humidity) }}{% else %}—{% endif %}</td>
+              <td data-th="Light" class="num">{% if r.light is not none %}{{ r.light }}{% else %}—{% endif %}</td>
+              <td data-th="Battery"><small class="muted">{{ r.battery_state or "—" }}</small></td>
             </tr>
             {% endfor %}
           </tbody>
@@ -81,16 +81,16 @@
       <section>
         <h4 class="mb-2">{{ irr.irrigator_name }} <small class="muted">({{ irr.events|length }})</small></h4>
         {% if irr.events %}
-        <table class="scrollable">
+        <table>
           <thead><tr><th scope="col">Time</th><th scope="col">Action</th><th scope="col" class="num">Duration</th><th scope="col">Triggered by</th><th scope="col">Notes</th></tr></thead>
           <tbody>
             {% for e in irr.events %}
             <tr>
-              <td><small class="mono">{{ e.timestamp | format_ts }}</small></td>
-              <td>{{ e.action }}</td>
-              <td class="num">{{ e.duration_minutes | format_minutes }}</td>
-              <td><small class="muted">{{ e.triggered_by }}</small></td>
-              <td><small>{{ e.notes or "—" }}</small></td>
+              <td data-th="Time"><small class="mono">{{ e.timestamp | format_ts }}</small></td>
+              <td data-th="Action">{{ e.action }}</td>
+              <td data-th="Duration" class="num">{{ e.duration_minutes | format_minutes }}</td>
+              <td data-th="Triggered by"><small class="muted">{{ e.triggered_by }}</small></td>
+              <td data-th="Notes"><small>{{ e.notes or "—" }}</small></td>
             </tr>
             {% endfor %}
           </tbody>

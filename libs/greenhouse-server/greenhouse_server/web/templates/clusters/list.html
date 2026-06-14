@@ -43,8 +43,13 @@
     </thead>
     <tbody>
       {% for cluster in clusters %}
+      {% set caps = cluster | cluster_caps %}
       <tr id="cluster-row-{{ cluster.id }}">
-        <td data-th="Name"><a href="/clusters/{{ cluster.id }}"><strong>{{ cluster.name }}</strong></a></td>
+        <td data-th="Name">
+          <a href="/clusters/{{ cluster.id }}"><strong>{{ cluster.name }}</strong></a>
+          {% if caps.tier == "sensor_only" %}<span class="badge-muted">sensor-only</span>
+          {% elif caps.tier == "empty" %}<span class="badge-muted">empty</span>{% endif %}
+        </td>
         <td data-th="Environment">{{ cluster.environment or "—" }}</td>
         <td data-th="Location">{{ cluster.location or "—" }}</td>
         <td data-th="Created"><small class="mono muted">{{ cluster.created_at | format_ts }}</small></td>
