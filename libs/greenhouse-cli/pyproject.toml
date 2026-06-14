@@ -1,6 +1,6 @@
 [project]
 name = "greenhouse-cli"
-version = "3.0.2"
+version = "3.1.0"
 description = "CLI client for greenhouse server"
 requires-python = ">=3.11"
 license = {text = "MIT"}
