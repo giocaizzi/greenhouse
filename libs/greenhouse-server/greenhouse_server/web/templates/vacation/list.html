@@ -54,7 +54,10 @@
       <tbody>
         {% for b in budgets %}
         <tr>
-          <td data-th="Cluster">{{ b.cluster_name }}</td>
+          <td data-th="Cluster">
+            <a href="/clusters/{{ b.cluster_id }}/irrigators/edit"
+               aria-label="Edit {{ b.cluster_name }} irrigator capacity">{{ b.cluster_name }}</a>
+          </td>
           <td data-th="Usable reservoir"><span class="mono">{{ b.usable_reservoir_l }} L</span>
             <small class="muted">of {{ b.total_reservoir_l }} L</small></td>
           <td data-th="Daily budget"><span class="mono">{{ b.daily_budget_l }} L/day</span></td>

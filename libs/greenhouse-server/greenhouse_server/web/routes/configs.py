@@ -41,6 +41,20 @@ def _parse_optional_hour(raw: str) -> int | None:
         raise HTTPException(400, "Invalid hour value") from exc
 
 
+def _parse_non_negative_int(raw: str) -> int | None:
+    """Form helper: empty string → None (no cap), otherwise a non-negative int."""
+    raw = raw.strip()
+    if not raw:
+        return None
+    try:
+        value = int(raw)
+    except ValueError as exc:
+        raise HTTPException(400, "Invalid numeric value") from exc
+    if value < 0:
+        raise HTTPException(400, "Value must be non-negative")
+    return value
+
+
 def _parse_tri_bool(raw: str) -> bool | None:
     """Form tri-state: ``""`` = inherit, ``"true"`` = on, ``"false"`` = off."""
     value = raw.strip().lower()
@@ -93,6 +107,8 @@ def save_global_config(
     duration_minutes: str = Form(""),
     interval_hours: str = Form(""),
     auto_run: str = Form(""),
+    daily_cap_minutes: str = Form(""),
+    max_events_per_day: str = Form(""),
     quiet_start_hour: str = Form(""),
     quiet_end_hour: str = Form(""),
 ):
@@ -101,13 +117,16 @@ def save_global_config(
     Empty fields write null — the effective resolver then falls through to the
     project-wide constants. Quiet hours follow the same rule; equal start/end
     values disable the global quiet window. Caps (``daily_cap_minutes`` /
-    ``max_events_per_day``) are not in this form and are left untouched.
+    ``max_events_per_day``) write null when blank, which leaves them
+    unenforced (no daily ceiling).
     """
     repo.update_global_irrigation_config(
         mode=mode or None,
         duration_minutes=int(duration_minutes) if duration_minutes.strip() else None,
         interval_hours=int(interval_hours) if interval_hours.strip() else None,
         auto_run=_parse_tri_bool(auto_run),
+        daily_cap_minutes=_parse_non_negative_int(daily_cap_minutes),
+        max_events_per_day=_parse_non_negative_int(max_events_per_day),
         quiet_start_hour=_parse_optional_hour(quiet_start_hour),
         quiet_end_hour=_parse_optional_hour(quiet_end_hour),
     )

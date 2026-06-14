@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="{{ theme | default('auto') }}">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="color-scheme" content="light dark">
   <title>{% block title %}Greenhouse{% endblock %}</title>
 
@@ -12,6 +12,8 @@
 
   <script>
     // Early theme application — runs before body paint to avoid flash.
+    // The <html> tag is already server-rendered with the persisted preference;
+    // localStorage (if present) takes precedence for instant client paint.
     (function () {
       try {
         var t = localStorage.getItem('theme');
@@ -97,7 +99,7 @@
       type="button"
       aria-label="Toggle theme"
       title="Toggle theme"
-      onclick="(function(){var h=document.documentElement;var cur=h.getAttribute('data-theme');var next=cur==='light'?'dark':(cur==='dark'?'light':(window.matchMedia('(prefers-color-scheme: light)').matches?'dark':'light'));h.setAttribute('data-theme',next);try{localStorage.setItem('theme',next);}catch(e){}if(window.__rerenderCharts){window.__rerenderCharts();}})()">
+      onclick="(function(){var h=document.documentElement;var cur=h.getAttribute('data-theme');var next=cur==='light'?'dark':(cur==='dark'?'light':(window.matchMedia('(prefers-color-scheme: light)').matches?'dark':'light'));h.setAttribute('data-theme',next);try{localStorage.setItem('theme',next);}catch(e){}if(window.__rerenderCharts){window.__rerenderCharts();}try{fetch('/preferences/theme',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'theme='+encodeURIComponent(next)});}catch(e){}})()">
       <svg class="icon icon-moon" aria-hidden="true"><use href="/static/icons/sprite.svg#i-moon"></use></svg>
       <svg class="icon icon-sun" aria-hidden="true"><use href="/static/icons/sprite.svg#i-sun"></use></svg>
     </button>

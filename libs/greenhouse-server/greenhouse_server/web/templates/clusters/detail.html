@@ -5,6 +5,7 @@
 {% set decision = status.decision %}
 {% set config = status.config %}
 {% set current_tab = "overview" %}
+{% set caps = status | cluster_caps %}
 {% set plant_count = status.plants|length %}
 {% set sensor_count = status.sensors|length %}
 {% set irrigator_count = 1 if status.irrigator else 0 %}
@@ -37,6 +38,13 @@
       <span>{{ plant_count }} plant{{ "" if plant_count == 1 else "s" }}</span>
       <span class="dot"></span>
       <span>{{ sensor_count }} sensor{{ "" if sensor_count == 1 else "s" }}</span>
+      {% if caps.tier == "sensor_only" %}
+        <span class="dot"></span>
+        <span class="badge-muted">sensor-only</span>
+      {% elif caps.tier == "empty" %}
+        <span class="dot"></span>
+        <span class="badge-muted">empty</span>
+      {% endif %}
       {% if config %}
         <span class="dot"></span>
         <span class="badge-{{ 'ok' if config.auto_run else 'muted' }}">auto {{ config.auto_run | yesno("on", "off") }}</span>
@@ -45,17 +53,23 @@
   </div>
   <div class="page-head__actions">
     <a href="/clusters/{{ cluster.id }}/edit" class="btn secondary btn-sm">Edit</a>
+    {% if caps.can_monitor or caps.can_actuate %}
     <a href="#actions" class="btn secondary btn-sm">
       <svg class="icon" aria-hidden="true"><use href="/static/icons/sprite.svg#i-drop"></use></svg>
       Jump to actions
     </a>
+    {% endif %}
   </div>
 </section>
 
 {% include "partials/_cluster_tabs.html" %}
 
+{# Single state explainer — what's missing and the next step. Renders nothing
+   for a fully operational cluster. #}
+{% include "partials/_capability_notice.html" %}
+
 {# Decision hero — large, server-rendered from status #}
-{% if decision %}
+{% if decision and caps.can_actuate and caps.can_decide %}
 <section class="decision" id="decision">
   <div class="decision__left">
     <span class="decision__pill">Decision · live</span>
@@ -91,6 +105,7 @@
 {% endif %}
 
 {# Why this decision — rationale panel #}
+{% if caps.can_actuate and caps.can_decide %}
 <article class="card rationale mb-6">
   <div class="card__head">
     <h3 class="card__title">Why this decision</h3>
@@ -117,6 +132,7 @@
     {% endif %}
   </div>
 </article>
+{% endif %}
 
 {# Live readings — 4 stat tiles, each with a threshold-aware range indicator #}
 {% if status.sensors %}
@@ -256,6 +272,7 @@
 {% endif %}
 
 {# Action bar — Irrigate / Monitor / Check #}
+{% if caps.can_monitor or caps.can_actuate %}
 <article class="action-bar" id="actions" aria-labelledby="cluster-actions">
   <header>
     <strong id="cluster-actions">Actions</strong>
@@ -269,6 +286,7 @@
     {% endif %}
   </header>
   <div class="action-bar__row">
+    {% if caps.can_actuate %}
     <form id="irrigate-form"
           hx-post="/clusters/{{ cluster.id }}/irrigate"
           hx-target="#action-result"
@@ -336,7 +354,9 @@
         });
       })();
     </script>
+    {% endif %}
 
+    {% if caps.can_monitor %}
     <form hx-get="/clusters/{{ cluster.id }}/monitor"
           hx-target="#action-result"
           hx-swap="innerHTML"
@@ -351,7 +371,9 @@
         <span id="spin-monitor" class="htmx-indicator" aria-busy="true"></span>
       </div>
     </form>
+    {% endif %}
 
+    {% if caps.can_actuate %}
     <form hx-post="/clusters/{{ cluster.id }}/check"
           hx-target="#action-result"
           hx-swap="innerHTML"
@@ -366,11 +388,14 @@
         <span id="spin-check" class="htmx-indicator" aria-busy="true"></span>
       </div>
     </form>
+    {% endif %}
   </div>
   <div id="action-result" aria-live="polite"></div>
 </article>
+{% endif %}
 
 {# Live status panel (HTMX polled, refreshes every 30s) #}
+{% if caps.can_monitor %}
 <article class="card mb-6">
   <div class="card__head">
     <h3 class="card__title">Live status</h3>
@@ -383,8 +408,10 @@
     <progress></progress>
   </div>
 </article>
+{% endif %}
 
 {# Chart section — per-metric chart-card with hour seg #}
+{% if caps.can_monitor %}
 <section class="chart-section">
   <header class="chart-section__head">
     <h2>Charts</h2>
@@ -420,6 +447,7 @@
     <div class="chart-body skeleton"><div class="skeleton__line med"></div><div class="skeleton__line short"></div></div>
   </article>
 
+  {% if caps.can_actuate %}
   <article class="card chart-card"
            hx-get="/clusters/{{ cluster.id }}/heatmap-fragment?days=30"
            hx-trigger="load"
@@ -427,7 +455,9 @@
     <header class="chart-head"><h3>Irrigation heatmap (30d)</h3></header>
     <div class="chart-body skeleton"><div class="skeleton__line med"></div></div>
   </article>
+  {% endif %}
 </section>
+{% endif %}
 
 {# Plants table — unified section (was previously a separate /plants page) #}
 <article class="card card--flush" id="plants">
@@ -557,6 +587,7 @@
 {# Config section — hierarchical view of mode/duration/interval/auto-run +
    quiet-hours editor + watering windows. Inline so the user never leaves
    the cluster context to tune behaviour. #}
+{% if caps.can_actuate %}
 <article class="card" id="config">
   <div class="card__head">
     <h3 class="card__title">Config</h3>
@@ -663,4 +694,5 @@
     </form>
   </div>
 </article>
+{% endif %}
 {% endblock %}

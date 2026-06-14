@@ -1,0 +1,74 @@
+{# Capability notice — the single source of truth for "what's missing and what
+   to do next" messaging across the web UI.
+
+   Required context:
+     caps     dict from the ``cluster_caps`` filter (tier + can_* booleans).
+     cluster  object with ``.id`` (ORM Cluster or status.cluster) for CTA links.
+
+   Renders nothing for a fully operational cluster (tier == operational and
+   can_decide). Reuses the shared ``.alert`` component so it needs no bespoke
+   CSS; the calm ``--info`` voice keeps it ambient, never alarmist. #}
+{% set _new = "/clusters/" ~ cluster.id %}
+{% if caps.tier == "empty" %}
+  <div class="alert alert--info capability-notice" role="status">
+    <span class="alert__icon" aria-hidden="true"><svg class="icon"><use href="/static/icons/sprite.svg#i-leaf"></use></svg></span>
+    <div>
+      <p class="alert__title">Empty cluster</p>
+      <p class="alert__body">Nothing to monitor or water yet. Add a plant to set watering targets, a sensor to read soil and climate, then an irrigator to water.</p>
+    </div>
+    <div class="capability-notice__actions">
+      <a href="{{ _new }}/plants/new" class="btn btn-sm">Add plant</a>
+      <a href="{{ _new }}/sensors/new" class="btn secondary btn-sm">Add sensor</a>
+      <a href="{{ _new }}/irrigators/new" class="btn secondary btn-sm">Add irrigator</a>
+    </div>
+  </div>
+{% elif caps.tier == "sensor_only" %}
+  {% if not caps.has_sensors %}
+    {# Plants but no sensors and no irrigator — can't monitor or water. #}
+    <div class="alert alert--info capability-notice" role="status">
+      <span class="alert__icon" aria-hidden="true"><svg class="icon"><use href="/static/icons/sprite.svg#i-magnifying-glass"></use></svg></span>
+      <div>
+        <p class="alert__title">No sensors yet</p>
+        <p class="alert__body">This cluster has plants but no readings. Add a sensor to start monitoring, then an irrigator to water.</p>
+      </div>
+      <div class="capability-notice__actions">
+        <a href="{{ _new }}/sensors/new" class="btn btn-sm">Add sensor</a>
+        <a href="{{ _new }}/irrigators/new" class="btn secondary btn-sm">Add irrigator</a>
+      </div>
+    </div>
+  {% else %}
+    {# The canonical sensor-only cluster: monitors, but can't water. #}
+    <div class="alert alert--info capability-notice" role="status">
+      <span class="alert__icon" aria-hidden="true"><svg class="icon"><use href="/static/icons/sprite.svg#i-drop"></use></svg></span>
+      <div>
+        <p class="alert__title">Sensor-only cluster</p>
+        <p class="alert__body">This cluster monitors soil and climate but won't water until an irrigator is added.{% if not caps.has_plants %} Add a plant too, so readings have watering targets.{% endif %}</p>
+      </div>
+      <div class="capability-notice__actions">
+        <a href="{{ _new }}/irrigators/new" class="btn btn-sm">Add irrigator</a>
+        {% if not caps.has_plants %}<a href="{{ _new }}/plants/new" class="btn secondary btn-sm">Add plant</a>{% endif %}
+      </div>
+    </div>
+  {% endif %}
+{% elif caps.tier == "operational" and not caps.can_decide %}
+  {# Has an irrigator but can't make smart decisions — schedule/manual only. #}
+  <div class="alert alert--info capability-notice" role="status">
+    <span class="alert__icon" aria-hidden="true"><svg class="icon"><use href="/static/icons/sprite.svg#i-info"></use></svg></span>
+    <div>
+      <p class="alert__title">Schedule &amp; manual only</p>
+      <p class="alert__body">
+        {%- if not caps.has_sensors and not caps.has_plants -%}
+          No sensors or plants, so the engine can't make sensor-driven decisions. This cluster waters on schedule or manually. Add a sensor and a plant to enable smart mode.
+        {%- elif not caps.has_sensors -%}
+          No sensor readings, so smart decisions are unavailable — this cluster waters on schedule or manually. Add a sensor to enable sensor-driven decisions.
+        {%- else -%}
+          No plants, so readings have no watering targets. Add a plant so the engine can decide by species.
+        {%- endif -%}
+      </p>
+    </div>
+    <div class="capability-notice__actions">
+      {% if not caps.has_sensors %}<a href="{{ _new }}/sensors/new" class="btn secondary btn-sm">Add sensor</a>{% endif %}
+      {% if not caps.has_plants %}<a href="{{ _new }}/plants/new" class="btn secondary btn-sm">Add plant</a>{% endif %}
+    </div>
+  </div>
+{% endif %}

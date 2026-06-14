@@ -144,6 +144,88 @@ def icon_for_code(code: str) -> str:
     return _TRIGGER_CODE_ICONS.get(code, _SEVERITY_ICONS.get(code, "info"))
 
 
+def _present(value) -> bool:
+    """True when a child collection/relationship holds at least one item.
+
+    Accepts the shapes the web layer passes around: ``status`` lists, a single
+    ORM object or ``None`` (the ``uselist=False`` irrigator), or an ORM
+    relationship collection. ``None`` and empty collections are absent.
+    """
+    if value is None:
+        return False
+    try:
+        return len(value) > 0
+    except TypeError:
+        return bool(value)
+
+
+def cluster_caps(obj) -> dict:
+    """Derive a cluster's capability tier from what it contains.
+
+    The single source of truth for feature gating across the web UI. Accepts
+    either a ``get_cluster_status`` dict (``plants``/``sensors``/``irrigator``
+    keys) or a plain ``Cluster`` ORM object (same-named relationships), so the
+    detail page, the home cards, and the clusters list all gate identically.
+
+    The tier is driven by the actuation axis (irrigator present); the
+    ``can_*`` booleans gate sub-sections so the cascade composes:
+
+    - ``can_monitor`` (≥1 sensor) → live readings, charts, live-status panel.
+    - ``can_target`` (≥1 plant) → target bands on tiles, health scoring.
+    - ``can_decide`` (sensors ∧ plants) → decision hero, rationale, re-evaluate.
+    - ``can_actuate`` (irrigator) → Irrigate, config behaviour, windows,
+      irrigation heatmap, and the Stats/Decisions/Efficacy/Learn tabs.
+
+    Args:
+        obj: A cluster-status dict, a ``Cluster`` ORM object, or ``None``.
+
+    Returns:
+        Dict with ``has_plants``/``has_sensors``/``has_irrigator``, the four
+        ``can_*`` booleans, ``tier`` (``"empty"``/``"sensor_only"``/
+        ``"operational"``), and ``missing`` — prerequisites ordered by impact
+        for the next-step notice.
+    """
+    if isinstance(obj, dict):
+        plants, sensors, irrigator = obj.get("plants"), obj.get("sensors"), obj.get("irrigator")
+    elif obj is None:
+        plants = sensors = irrigator = None
+    else:  # Cluster ORM object
+        plants = getattr(obj, "plants", None)
+        sensors = getattr(obj, "sensors", None)
+        irrigator = getattr(obj, "irrigator", None)
+
+    has_plants, has_sensors, has_irrigator = _present(plants), _present(sensors), _present(irrigator)
+
+    if has_irrigator:
+        tier = "operational"
+    elif has_plants or has_sensors:
+        tier = "sensor_only"
+    else:
+        tier = "empty"
+
+    # Ordered by what unblocks the most: actuation first (the cluster can't
+    # water at all without it), then monitoring, then targets.
+    missing = []
+    if not has_irrigator:
+        missing.append("irrigator")
+    if not has_sensors:
+        missing.append("sensors")
+    if not has_plants:
+        missing.append("plants")
+
+    return {
+        "has_plants": has_plants,
+        "has_sensors": has_sensors,
+        "has_irrigator": has_irrigator,
+        "can_monitor": has_sensors,
+        "can_target": has_plants,
+        "can_decide": has_sensors and has_plants,
+        "can_actuate": has_irrigator,
+        "tier": tier,
+        "missing": missing,
+    }
+
+
 ALL_FILTERS = {
     "format_ts": format_ts,
     "age_seconds": age_seconds,
@@ -155,4 +237,5 @@ ALL_FILTERS = {
     "strip_emoji": strip_emoji,
     "stat_position": stat_position,
     "icon_for_code": icon_for_code,
+    "cluster_caps": cluster_caps,
 }

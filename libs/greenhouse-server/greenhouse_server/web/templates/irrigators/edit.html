@@ -36,14 +36,19 @@
       </select>
       <small class="muted">Local (LAN) actuation needs the device IP and local key below.</small>
     </label>
-    <fieldset>
+    <fieldset id="local-protocol">
       <legend>Local protocol <small class="muted">(tuya_local only)</small></legend>
       <label for="device_ip">Device IP
         <input type="text" id="device_ip" name="device_ip" value="{{ config.get('device_ip', '') }}" placeholder="192.168.1.42">
       </label>
       <label for="local_key">Local key
-        <input type="text" id="local_key" name="local_key" value="{{ config.get('local_key', '') }}"
-               autocomplete="off" spellcheck="false">
+        {# The local key is a root-level credential. Never echo it back into the
+           page source: render the field masked and blank, and treat a blank
+           submit as "keep the stored key" (handled in update_irrigator). #}
+        <input type="password" id="local_key" name="local_key" value=""
+               autocomplete="off" spellcheck="false"
+               placeholder="{% if config.get('local_key') %}••••••••{% endif %}">
+        <small class="muted">Leave blank to keep the current key.</small>
       </label>
     </fieldset>
     <fieldset>
@@ -63,4 +68,19 @@
     </div>
   </form>
 </article>
+{# Progressive enhancement only — the local-protocol fields are inert for a
+   tuya_cloud irrigator, so hiding them when JS runs reduces noise. With JS off
+   the fieldset stays visible (harmless) and the server ignores the fields. #}
+<script>
+  (function () {
+    var typeSel = document.getElementById('type');
+    var fieldset = document.getElementById('local-protocol');
+    if (!typeSel || !fieldset) return;
+    function sync() {
+      fieldset.hidden = typeSel.value !== 'tuya_local';
+    }
+    typeSel.addEventListener('change', sync);
+    sync();
+  })();
+</script>
 {% endblock %}

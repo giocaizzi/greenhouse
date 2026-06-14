@@ -13,9 +13,10 @@
 {% set plant_count = status.plants | length %}
 {% set sensor_count = status.sensors | length %}
 {% set irrigator_count = 1 if status.irrigator else 0 %}
+{% set caps = status | cluster_caps %}
 
 <div class="cluster-card__inner">
-  {% if decision %}
+  {% if decision and caps.can_actuate %}
     <div class="cluster-card__verdict">
       <span class="badge-{{ decision.action | decision_badge }}">
         {{- decision.action | upper -}}
@@ -75,7 +76,7 @@
   <div class="cluster-card__irrigator">
     {% if irrigator_count == 0 %}
       <span class="dot dot--muted" aria-hidden="true">○</span>
-      <span class="muted">no irrigator</span>
+      <span class="muted">sensor-only · no irrigator</span>
     {% else %}
       {% set irr = status.irrigator %}
       {% set last = irr.last_event %}
