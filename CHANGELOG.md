@@ -4,6 +4,13 @@ All notable changes to this project are tracked here. Managed automatically by
 [release-please](https://github.com/googleapis/release-please) from
 [Conventional Commits](https://www.conventionalcommits.org/) — do not hand-edit.
 
+## [3.1.0](https://github.com/giocaizzi/greenhouse/compare/v3.0.2...v3.1.0) (2026-06-14)
+
+
+### Added
+
+* **web:** redesign UI for clarity, safety, and accessibility ([#70](https://github.com/giocaizzi/greenhouse/issues/70)) ([f38e659](https://github.com/giocaizzi/greenhouse/commit/f38e659e85474f02c79ba55ff7d316032f4a1076))
+
 ## [3.0.2](https://github.com/giocaizzi/greenhouse/compare/v3.0.1...v3.0.2) (2026-06-13)
 
 

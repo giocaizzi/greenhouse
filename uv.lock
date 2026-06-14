@@ -514,7 +514,7 @@ wheels = [
 
 [[package]]
 name = "greenhouse"
-version = "3.0.2"
+version = "3.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "greenhouse-cli" },
@@ -545,7 +545,7 @@ dev = [
 
 [[package]]
 name = "greenhouse-cli"
-version = "3.0.2"
+version = "3.1.0"
 source = { editable = "libs/greenhouse-cli" }
 dependencies = [
     { name = "httpx" },
@@ -560,7 +560,7 @@ requires-dist = [
 
 [[package]]
 name = "greenhouse-core"
-version = "3.0.2"
+version = "3.1.0"
 source = { editable = "libs/greenhouse-core" }
 dependencies = [
     { name = "alembic" },
@@ -581,7 +581,7 @@ requires-dist = [
 
 [[package]]
 name = "greenhouse-server"
-version = "3.0.2"
+version = "3.1.0"
 source = { editable = "libs/greenhouse-server" }
 dependencies = [
     { name = "apscheduler" },
