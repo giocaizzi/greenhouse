@@ -410,9 +410,7 @@ class TestIssueHeuristics:
     def _care_map(self):
         """Build the plant_care map exactly as detect_issues does, for direct calls."""
         plants = self.db.get_plants_in_cluster(self.cluster_id)
-        return {
-            p.id: self.learner.plant_db.get_care_data(species=p.species, category=p.category) for p in plants
-        }
+        return {p.id: self.learner.plant_db.get_care_data(species=p.species, category=p.category) for p in plants}
 
     # ── light_accelerated_drainage vs rapid_drainage ────────────────────────
 
@@ -633,9 +631,7 @@ class TestIssueHeuristics:
         from greenhouse_core.learning.issues import detect_conflicts
 
         alerts = detect_conflicts(self.db, self.learner.plant_db, self.cluster_id, profiles, self._care_map())
-        sensor1_low_light = [
-            a for a in alerts if a.alert_type == "low_light" and a.sensor_name == FAKE_SENSOR_NAME
-        ]
+        sensor1_low_light = [a for a in alerts if a.alert_type == "low_light" and a.sensor_name == FAKE_SENSOR_NAME]
         assert not sensor1_low_light
 
     # ── low_env_humidity ────────────────────────────────────────────────────
@@ -691,7 +687,5 @@ class TestIssueHeuristics:
         from greenhouse_core.learning.issues import detect_conflicts
 
         alerts = detect_conflicts(self.db, self.learner.plant_db, self.cluster_id, profiles, self._care_map())
-        sensor1_hum = [
-            a for a in alerts if a.alert_type == "low_env_humidity" and a.sensor_name == FAKE_SENSOR_NAME
-        ]
+        sensor1_hum = [a for a in alerts if a.alert_type == "low_env_humidity" and a.sensor_name == FAKE_SENSOR_NAME]
         assert not sensor1_hum
