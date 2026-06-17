@@ -424,11 +424,12 @@ class TestIssueHeuristics:
         now = int(time.time())
         self._build_profile(self.sensor_id, self.irrigator_id, now - 7 * 86400)
         # Steeply declining moisture (< -5 %/hr) plus bright light (> 800 lux).
+        # Older readings (larger h) are wetter so moisture falls ~7 %/hr in time.
         for h in range(10):
             self.db.add_sensor_reading(
                 sensor_id=self.sensor_id,
                 timestamp=now - h * 3600,
-                soil_moisture=70.0 - (h * 7),  # ~-7 %/hr
+                soil_moisture=5.0 + (h * 7),  # chronologically ~-7 %/hr
                 light=20000,  # well above 800 and above NIGHT_LUX_THRESHOLD
             )
 
@@ -450,7 +451,7 @@ class TestIssueHeuristics:
             self.db.add_sensor_reading(
                 sensor_id=self.sensor_id,
                 timestamp=now - h * 3600,
-                soil_moisture=70.0 - (h * 7),  # ~-7 %/hr
+                soil_moisture=5.0 + (h * 7),  # chronologically ~-7 %/hr
                 light=100,  # daytime but below the 800-lux bright threshold
             )
 
@@ -463,12 +464,12 @@ class TestIssueHeuristics:
         """Stable moisture (drainage above -5 %/hr) fires no drainage alert."""
         now = int(time.time())
         self._build_profile(self.sensor_id, self.irrigator_id, now - 7 * 86400)
-        # Gentle decline ~-1 %/hr, well above the -5 threshold.
+        # Gentle decline ~-1 %/hr (older wetter), well above the -5 threshold.
         for h in range(10):
             self.db.add_sensor_reading(
                 sensor_id=self.sensor_id,
                 timestamp=now - h * 3600,
-                soil_moisture=55.0 - h,
+                soil_moisture=45.0 + h,  # chronologically ~-1 %/hr
                 light=20000,
             )
 
