@@ -21,20 +21,43 @@ from greenhouse_core.constants import (
     CONFIDENCE_WATER_WARNING,
     CONFLICT_DURATION_MINUTES,
     CONFLICT_INTERVAL_HOURS,
+    CONFLICT_WET_MARGIN,
     DEFAULT_DURATION_MINUTES,
     DEFAULT_INTERVAL_HOURS,
+    HUMIDITY_HIGH_INTERVAL_STEP,
+    HUMIDITY_HIGH_OFFSET,
+    HUMIDITY_LOW_INTERVAL_STEP,
+    HUMIDITY_LOW_OFFSET,
+    HUMIDITY_VERY_LOW_INTERVAL_STEP,
+    HUMIDITY_VERY_LOW_OFFSET,
     LIGHT_BRIGHT,
+    LIGHT_BRIGHT_INTERVAL_STEP,
     LIGHT_DARK,
+    LIGHT_DARK_INTERVAL_STEP,
     LIGHT_VERY_BRIGHT,
+    LIGHT_VERY_BRIGHT_DURATION_STEP,
+    LIGHT_VERY_BRIGHT_INTERVAL_STEP,
     LIGHT_VERY_DARK,
+    LIGHT_VERY_DARK_INTERVAL_STEP,
     MAX_DURATION_MINUTES,
     MAX_INTERVAL_HOURS,
     MIN_COOLDOWN_HOURS,
     MIN_INTERVAL_HOURS,
     STRESS_DURATION_MINUTES,
     STRESS_INTERVAL_HOURS,
+    TEMP_ADJUST_OFFSET,
+    TEMP_HIGH_INTERVAL_STEP,
+    TEMP_LOW_INTERVAL_STEP,
+    TREND_MOISTURE_INTERVAL_STEP,
+    TREND_TEMP_RISING_HOT_C,
+    TREND_TEMP_RISING_INTERVAL_STEP,
+    TREND_UNDERWATERING_DURATION_STEP,
     VACATION_MIN_RUN_MINUTES,
     VACATION_RESERVOIR_USABLE_FRACTION,
+    VERY_DRY_MARGIN,
+    WATER_NEEDS_DURATION_STEP,
+    WATER_NEEDS_HIGH_INTERVAL_STEP,
+    WATER_NEEDS_LOW_INTERVAL_STEP,
 )
 from greenhouse_core.logic.decision import (
     Action,
@@ -614,11 +637,13 @@ def _apply_soil_moisture_rule(decision: IrrigationDecision, plant_care: list[dic
     min_soil = snapshot.min_soil_moisture if snapshot.min_soil_moisture is not None else snapshot.avg_soil_moisture
     max_soil = snapshot.max_soil_moisture if snapshot.max_soil_moisture is not None else snapshot.avg_soil_moisture
 
-    has_conflict = (min_soil < target_min) and (max_soil > target_max - 10)
+    has_conflict = (min_soil < target_min) and (max_soil > target_max - CONFLICT_WET_MARGIN)
     if has_conflict:
         dry_names = [s.name for s in snapshot.per_sensor if s.avg_soil_moisture and s.avg_soil_moisture < target_min]
         wet_names = [
-            s.name for s in snapshot.per_sensor if s.avg_soil_moisture and s.avg_soil_moisture > target_max - 10
+            s.name
+            for s in snapshot.per_sensor
+            if s.avg_soil_moisture and s.avg_soil_moisture > target_max - CONFLICT_WET_MARGIN
         ]
         decision.action = Action.IRRIGATE
         decision.duration_minutes = CONFLICT_DURATION_MINUTES
@@ -635,7 +660,7 @@ def _apply_soil_moisture_rule(decision: IrrigationDecision, plant_care: list[dic
         )
         return
 
-    if min_soil < target_min - 10:
+    if min_soil < target_min - VERY_DRY_MARGIN:
         decision.action = Action.IRRIGATE
         decision.duration_minutes = STRESS_DURATION_MINUTES
         decision.interval_hours = CONFLICT_INTERVAL_HOURS
@@ -678,18 +703,18 @@ def _apply_temperature_adjustment(decision: IrrigationDecision, temp_range: tupl
     avg_temp = decision.sensor_snapshot.avg_temperature if decision.sensor_snapshot else None
     if avg_temp is None or not temp_range:
         return
-    if avg_temp > temp_range[1] + 3:
-        delta = -(decision.interval_hours - max(MIN_INTERVAL_HOURS, decision.interval_hours - 4))
-        decision.interval_hours = max(MIN_INTERVAL_HOURS, decision.interval_hours - 4)
+    if avg_temp > temp_range[1] + TEMP_ADJUST_OFFSET:
+        delta = -(decision.interval_hours - max(MIN_INTERVAL_HOURS, decision.interval_hours - TEMP_HIGH_INTERVAL_STEP))
+        decision.interval_hours = max(MIN_INTERVAL_HOURS, decision.interval_hours - TEMP_HIGH_INTERVAL_STEP)
         decision.add_reason(
             code=TriggerCode.TEMP_HIGH,
             message=f"temp above ideal ({avg_temp:.0f}°C > {temp_range[1]:.0f}°C)",
             icon="thermometer-hot",
             interval_delta=delta,
         )
-    elif avg_temp < temp_range[0] - 3:
-        delta = min(MAX_INTERVAL_HOURS, decision.interval_hours + 6) - decision.interval_hours
-        decision.interval_hours = min(MAX_INTERVAL_HOURS, decision.interval_hours + 6)
+    elif avg_temp < temp_range[0] - TEMP_ADJUST_OFFSET:
+        delta = min(MAX_INTERVAL_HOURS, decision.interval_hours + TEMP_LOW_INTERVAL_STEP) - decision.interval_hours
+        decision.interval_hours = min(MAX_INTERVAL_HOURS, decision.interval_hours + TEMP_LOW_INTERVAL_STEP)
         decision.add_reason(
             code=TriggerCode.TEMP_LOW,
             message=f"temp below ideal ({avg_temp:.0f}°C < {temp_range[0]:.0f}°C)",
@@ -702,29 +727,29 @@ def _apply_humidity_adjustment(decision: IrrigationDecision, humidity_range: tup
     avg_hum = decision.sensor_snapshot.avg_env_humidity if decision.sensor_snapshot else None
     if avg_hum is None or not humidity_range:
         return
-    if avg_hum < humidity_range[0] - 20:
-        decision.interval_hours = max(MIN_INTERVAL_HOURS, decision.interval_hours - 3)
+    if avg_hum < humidity_range[0] - HUMIDITY_VERY_LOW_OFFSET:
+        decision.interval_hours = max(MIN_INTERVAL_HOURS, decision.interval_hours - HUMIDITY_VERY_LOW_INTERVAL_STEP)
         decision.add_reason(
             code=TriggerCode.HUMIDITY_VERY_LOW,
             message=f"very dry air ({avg_hum:.0f}% << ideal {humidity_range[0]:.0f}%)",
             icon="wind",
-            interval_delta=-3,
+            interval_delta=-HUMIDITY_VERY_LOW_INTERVAL_STEP,
         )
-    elif avg_hum < humidity_range[0] - 5:
-        decision.interval_hours = max(MIN_INTERVAL_HOURS, decision.interval_hours - 1)
+    elif avg_hum < humidity_range[0] - HUMIDITY_LOW_OFFSET:
+        decision.interval_hours = max(MIN_INTERVAL_HOURS, decision.interval_hours - HUMIDITY_LOW_INTERVAL_STEP)
         decision.add_reason(
             code=TriggerCode.HUMIDITY_LOW,
             message=f"dry air ({avg_hum:.0f}%)",
             icon="wind",
-            interval_delta=-1,
+            interval_delta=-HUMIDITY_LOW_INTERVAL_STEP,
         )
-    elif avg_hum > humidity_range[1] + 10:
-        decision.interval_hours = min(MAX_INTERVAL_HOURS, decision.interval_hours + 2)
+    elif avg_hum > humidity_range[1] + HUMIDITY_HIGH_OFFSET:
+        decision.interval_hours = min(MAX_INTERVAL_HOURS, decision.interval_hours + HUMIDITY_HIGH_INTERVAL_STEP)
         decision.add_reason(
             code=TriggerCode.HUMIDITY_HIGH,
             message=f"high ambient humidity ({avg_hum:.0f}%)",
             icon="cloud-rain",
-            interval_delta=2,
+            interval_delta=HUMIDITY_HIGH_INTERVAL_STEP,
         )
 
 
@@ -734,87 +759,93 @@ def _apply_light_adjustment(decision: IrrigationDecision) -> None:
         return
     sf = seasonal_light_factor()
     if avg_light > LIGHT_VERY_BRIGHT * sf:
-        decision.interval_hours = max(MIN_INTERVAL_HOURS, decision.interval_hours - 2)
-        decision.duration_minutes = min(MAX_DURATION_MINUTES, decision.duration_minutes + 1)
+        decision.interval_hours = max(MIN_INTERVAL_HOURS, decision.interval_hours - LIGHT_VERY_BRIGHT_INTERVAL_STEP)
+        decision.duration_minutes = min(
+            MAX_DURATION_MINUTES, decision.duration_minutes + LIGHT_VERY_BRIGHT_DURATION_STEP
+        )
         decision.add_reason(
             code=TriggerCode.LIGHT_VERY_BRIGHT,
             message=f"very bright ({avg_light:.0f} lux, seasonal)",
             icon="sun",
-            interval_delta=-2,
-            duration_delta=1,
+            interval_delta=-LIGHT_VERY_BRIGHT_INTERVAL_STEP,
+            duration_delta=LIGHT_VERY_BRIGHT_DURATION_STEP,
         )
     elif avg_light > LIGHT_BRIGHT * sf:
-        decision.interval_hours = max(MIN_INTERVAL_HOURS, decision.interval_hours - 1)
+        decision.interval_hours = max(MIN_INTERVAL_HOURS, decision.interval_hours - LIGHT_BRIGHT_INTERVAL_STEP)
         decision.add_reason(
             code=TriggerCode.LIGHT_BRIGHT,
             message=f"bright ({avg_light:.0f} lux, seasonal)",
             icon="sun-dim",
-            interval_delta=-1,
+            interval_delta=-LIGHT_BRIGHT_INTERVAL_STEP,
         )
     elif avg_light < LIGHT_VERY_DARK * sf:
-        decision.interval_hours = min(MAX_INTERVAL_HOURS, decision.interval_hours + 4)
+        decision.interval_hours = min(MAX_INTERVAL_HOURS, decision.interval_hours + LIGHT_VERY_DARK_INTERVAL_STEP)
         decision.add_reason(
             code=TriggerCode.LIGHT_VERY_DARK,
             message=f"very low light ({avg_light:.0f} lux, seasonal)",
             icon="moon",
-            interval_delta=4,
+            interval_delta=LIGHT_VERY_DARK_INTERVAL_STEP,
         )
     elif avg_light < LIGHT_DARK * sf:
-        decision.interval_hours = min(MAX_INTERVAL_HOURS, decision.interval_hours + 2)
+        decision.interval_hours = min(MAX_INTERVAL_HOURS, decision.interval_hours + LIGHT_DARK_INTERVAL_STEP)
         decision.add_reason(
             code=TriggerCode.LIGHT_DARK,
             message=f"low light ({avg_light:.0f} lux, seasonal)",
             icon="cloud",
-            interval_delta=2,
+            interval_delta=LIGHT_DARK_INTERVAL_STEP,
         )
 
 
 def _apply_water_needs_adjustment(decision: IrrigationDecision, water_needs: str) -> None:
     if water_needs == "high":
-        decision.duration_minutes = max(DEFAULT_DURATION_MINUTES, decision.duration_minutes + 1)
-        decision.interval_hours = max(MIN_INTERVAL_HOURS, decision.interval_hours - 2)
+        decision.duration_minutes = max(DEFAULT_DURATION_MINUTES, decision.duration_minutes + WATER_NEEDS_DURATION_STEP)
+        decision.interval_hours = max(MIN_INTERVAL_HOURS, decision.interval_hours - WATER_NEEDS_HIGH_INTERVAL_STEP)
     elif water_needs == "low":
-        decision.duration_minutes = max(CONFLICT_DURATION_MINUTES, decision.duration_minutes - 1)
-        decision.interval_hours = min(MAX_INTERVAL_HOURS, decision.interval_hours + 4)
+        decision.duration_minutes = max(
+            CONFLICT_DURATION_MINUTES, decision.duration_minutes - WATER_NEEDS_DURATION_STEP
+        )
+        decision.interval_hours = min(MAX_INTERVAL_HOURS, decision.interval_hours + WATER_NEEDS_LOW_INTERVAL_STEP)
 
 
 def _apply_trend_adjustment(decision: IrrigationDecision) -> None:
     trends = decision.trends
     snapshot = decision.sensor_snapshot
     if trends.soil_moisture_trend == "declining":
-        decision.interval_hours = max(MIN_INTERVAL_HOURS, decision.interval_hours - 2)
+        decision.interval_hours = max(MIN_INTERVAL_HOURS, decision.interval_hours - TREND_MOISTURE_INTERVAL_STEP)
         decision.add_reason(
             code=TriggerCode.TREND_MOISTURE_DECLINING,
             message="soil moisture declining",
             icon="trend-down",
-            interval_delta=-2,
+            interval_delta=-TREND_MOISTURE_INTERVAL_STEP,
         )
     elif trends.soil_moisture_trend == "rising":
-        decision.interval_hours = min(MAX_INTERVAL_HOURS, decision.interval_hours + 2)
+        decision.interval_hours = min(MAX_INTERVAL_HOURS, decision.interval_hours + TREND_MOISTURE_INTERVAL_STEP)
         decision.add_reason(
             code=TriggerCode.TREND_MOISTURE_RISING,
             message="soil moisture rising",
             icon="trend-up",
-            interval_delta=2,
+            interval_delta=TREND_MOISTURE_INTERVAL_STEP,
         )
 
     avg_temp = snapshot.avg_temperature if snapshot else None
-    if trends.temperature_trend == "rising" and avg_temp and avg_temp > 25:
-        decision.interval_hours = max(MIN_INTERVAL_HOURS, decision.interval_hours - 2)
+    if trends.temperature_trend == "rising" and avg_temp and avg_temp > TREND_TEMP_RISING_HOT_C:
+        decision.interval_hours = max(MIN_INTERVAL_HOURS, decision.interval_hours - TREND_TEMP_RISING_INTERVAL_STEP)
         decision.add_reason(
             code=TriggerCode.TREND_TEMP_RISING,
             message="temperature rising + hot",
             icon="thermometer-hot",
-            interval_delta=-2,
+            interval_delta=-TREND_TEMP_RISING_INTERVAL_STEP,
         )
 
     if trends.irrigation_frequency_low:
-        decision.duration_minutes = min(MAX_DURATION_MINUTES, decision.duration_minutes + 1)
+        decision.duration_minutes = min(
+            MAX_DURATION_MINUTES, decision.duration_minutes + TREND_UNDERWATERING_DURATION_STEP
+        )
         decision.add_reason(
             code=TriggerCode.UNDERWATERING_PATTERN,
             message="recent under-watering pattern",
             icon="chart-line-down",
-            duration_delta=1,
+            duration_delta=TREND_UNDERWATERING_DURATION_STEP,
         )
 
 

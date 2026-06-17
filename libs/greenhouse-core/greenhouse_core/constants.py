@@ -67,6 +67,50 @@ TEMP_COLD = 18
 TEMP_WARM = 24
 TEMP_HOT = 28
 
+# ── Engine adjustment tuning — interval/duration deltas per rule ──────────────
+# Named knobs for the sensor-driven adjustment rules in logic/engine.py. Kept
+# here so the engine carries no bare magic numbers (invariant #5). All interval
+# values are hours, durations are minutes; the engine clamps to
+# [MIN_INTERVAL_HOURS, MAX_INTERVAL_HOURS] / MAX_DURATION_MINUTES afterwards.
+
+# Soil-moisture rule — conflict + very-dry banding (percent moisture).
+# A "wet" sensor is one within CONFLICT_WET_MARGIN of its target max; a conflict
+# is the driest sensor below target_min while the wettest is still in that wet
+# band.
+CONFLICT_WET_MARGIN = 10  # % below target_max that still counts as "wet"
+VERY_DRY_MARGIN = 10  # % below target_min that escalates to SENSOR_VERY_DRY
+
+# Temperature adjustment — band offsets and interval steps.
+TEMP_ADJUST_OFFSET = 3  # °C above/below the ideal band before adjusting
+TEMP_HIGH_INTERVAL_STEP = 4  # shorten interval (hot)
+TEMP_LOW_INTERVAL_STEP = 6  # lengthen interval (cold)
+
+# Humidity adjustment — band offsets and interval steps.
+HUMIDITY_VERY_LOW_OFFSET = 20  # % below ideal min → "very dry air"
+HUMIDITY_LOW_OFFSET = 5  # % below ideal min → "dry air"
+HUMIDITY_HIGH_OFFSET = 10  # % above ideal max → "high humidity"
+HUMIDITY_VERY_LOW_INTERVAL_STEP = 3
+HUMIDITY_LOW_INTERVAL_STEP = 1
+HUMIDITY_HIGH_INTERVAL_STEP = 2
+
+# Light adjustment — interval/duration steps (thresholds are LIGHT_* below).
+LIGHT_VERY_BRIGHT_INTERVAL_STEP = 2
+LIGHT_VERY_BRIGHT_DURATION_STEP = 1
+LIGHT_BRIGHT_INTERVAL_STEP = 1
+LIGHT_VERY_DARK_INTERVAL_STEP = 4
+LIGHT_DARK_INTERVAL_STEP = 2
+
+# Water-needs adjustment — duration/interval steps by plant water demand.
+WATER_NEEDS_DURATION_STEP = 1
+WATER_NEEDS_HIGH_INTERVAL_STEP = 2  # shorten (high demand)
+WATER_NEEDS_LOW_INTERVAL_STEP = 4  # lengthen (low demand)
+
+# Trend adjustment — moisture/temperature trend steps and the hot-temp gate.
+TREND_MOISTURE_INTERVAL_STEP = 2  # declining shortens / rising lengthens
+TREND_TEMP_RISING_HOT_C = 25  # only boost on a rising trend above this temp
+TREND_TEMP_RISING_INTERVAL_STEP = 2
+TREND_UNDERWATERING_DURATION_STEP = 1
+
 # ── Soil Moisture Thresholds ─────────────────────────────────────────────────
 
 SOIL_MOISTURE_CRITICAL = 30
