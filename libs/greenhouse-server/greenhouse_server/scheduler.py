@@ -1,6 +1,7 @@
 """APScheduler integration for background tasks."""
 
 import logging
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi import FastAPI
@@ -15,6 +16,25 @@ logger = logging.getLogger(__name__)
 scheduler = BackgroundScheduler()
 
 _app: FastAPI | None = None
+
+# Cron jobs that gate wall-clock-sensitive work and therefore MUST fire on the
+# same clock the engine reasons in (UserPreferences.timezone). These are
+# re-added by `reschedule_for_timezone` whenever the preference changes.
+_TZ_BOUND_CRON_JOBS = ("check_all", "plant_health_snapshot")
+
+
+def _resolve_zoneinfo(tz_name: str | None) -> ZoneInfo:
+    """Resolve a tz name to a ZoneInfo, falling back to UTC on bad input.
+
+    Mirrors `greenhouse_core.logic.timing._resolve_tz` so the scheduler and the
+    engine agree on the same fallback when a preference holds an unknown zone.
+    """
+    if not tz_name:
+        return ZoneInfo("UTC")
+    try:
+        return ZoneInfo(tz_name)
+    except ZoneInfoNotFoundError:
+        return ZoneInfo("UTC")
 
 
 def _resolve_check_cron_hours(settings: Settings) -> str:
@@ -38,10 +58,22 @@ def _resolve_check_cron_hours(settings: Settings) -> str:
     return settings.check_cron_hours
 
 
-def init_scheduler(app: FastAPI, settings: Settings) -> None:
-    """Register default jobs and store app reference for state access."""
+def init_scheduler(app: FastAPI, settings: Settings, tz_name: str | None = None) -> None:
+    """Register default jobs and store app reference for state access.
+
+    Args:
+        app: The FastAPI app whose ``state`` the jobs read.
+        settings: Server settings (intervals, cron cadence).
+        tz_name: The authoritative timezone (``UserPreferences.timezone``).
+            The scheduler is configured to this zone so the wall-clock cron
+            jobs (``check_all``, the daily health snapshot) fire on the same
+            clock the engine gates windows against. Falls back to UTC when
+            unset or unknown — never the host zone.
+    """
     global _app
     _app = app
+
+    scheduler.configure(timezone=_resolve_zoneinfo(tz_name))
 
     scheduler.add_job(
         _sync_job,
@@ -51,6 +83,33 @@ def init_scheduler(app: FastAPI, settings: Settings) -> None:
         name="Sensor data sync",
         replace_existing=True,
     )
+    _add_tz_bound_cron_jobs(settings)
+    scheduler.add_job(
+        _anomaly_job,
+        "interval",
+        minutes=15,
+        id="sensor_anomaly",
+        name="Sensor anomaly scan",
+        replace_existing=True,
+    )
+    scheduler.add_job(
+        _health_monitor_job,
+        "interval",
+        minutes=HEALTH_POLL_IDLE_MINUTES,
+        id="device_health_monitor",
+        name="Device health monitor",
+        replace_existing=True,
+    )
+
+
+def _add_tz_bound_cron_jobs(settings: Settings) -> None:
+    """(Re-)register the wall-clock cron jobs against the scheduler's timezone.
+
+    APScheduler binds a cron trigger's timezone at add-time, so changing the
+    scheduler's configured zone only takes effect for jobs added afterwards.
+    Both registration (`init_scheduler`) and the on-preference-change reschedule
+    (`reschedule_for_timezone`) route through here so the two stay identical.
+    """
     scheduler.add_job(
         _check_job,
         "cron",
@@ -69,21 +128,63 @@ def init_scheduler(app: FastAPI, settings: Settings) -> None:
         name="Daily plant health snapshot",
         replace_existing=True,
     )
-    scheduler.add_job(
-        _anomaly_job,
-        "interval",
-        minutes=15,
-        id="sensor_anomaly",
-        name="Sensor anomaly scan",
-        replace_existing=True,
-    )
-    scheduler.add_job(
-        _health_monitor_job,
-        "interval",
-        minutes=HEALTH_POLL_IDLE_MINUTES,
-        id="device_health_monitor",
-        name="Device health monitor",
-        replace_existing=True,
+
+
+def reschedule_for_timezone(tz_name: str | None, settings: Settings) -> None:
+    """Re-point the scheduler at ``tz_name`` and rebuild the cron jobs.
+
+    Called when ``UserPreferences.timezone`` changes so the wall-clock cron
+    jobs keep firing on the same clock the engine reasons in. A paused
+    ``check_all`` stays paused — the re-add preserves nothing about run state,
+    so the persisted-pause flag is re-applied afterward.
+
+    Args:
+        tz_name: The new authoritative timezone (``UserPreferences.timezone``).
+        settings: Server settings (supplies the cron cadence).
+    """
+    paused = is_check_all_paused()
+    # Assign the attribute directly rather than calling ``configure()``: the
+    # scheduler is already running here and ``configure()`` raises in that
+    # state. ``_create_trigger`` reads ``scheduler.timezone`` at add-time.
+    scheduler.timezone = _resolve_zoneinfo(tz_name)
+    # Remove-then-add (not ``replace_existing``) so the cron triggers are
+    # rebuilt from the new zone — APScheduler's replace path leaves a stopped
+    # scheduler's pending trigger bound to the old tz.
+    for job_id in _TZ_BOUND_CRON_JOBS:
+        if scheduler.get_job(job_id) is not None:
+            scheduler.remove_job(job_id)
+    _add_tz_bound_cron_jobs(settings)
+    if paused:
+        apply_persisted_pause(True)
+
+
+def apply_timezone_preference(request, tz_name: str | None) -> None:
+    """Re-sync every clock to ``UserPreferences.timezone`` after it changes.
+
+    Keeps the three formerly-competing clocks in lockstep with the engine:
+    the scheduler's wall-clock cron jobs, the weather forecast localization,
+    and the display formatter. A no-op when the timezone is unchanged.
+
+    Args:
+        request: The active FastAPI request (carries ``app.state`` and
+            ``app.state.settings``).
+        tz_name: The new ``UserPreferences.timezone`` value.
+    """
+    from greenhouse_core.utils import get_display_timezone, set_display_timezone
+    from greenhouse_server.services.weather import WeatherClient
+
+    if (tz_name or "UTC") == get_display_timezone():
+        return
+
+    app = request.app
+    settings = app.state.settings
+
+    set_display_timezone(tz_name)
+    reschedule_for_timezone(tz_name, settings)
+    app.state.weather_client = WeatherClient(
+        lat=settings.weather_lat,
+        lon=settings.weather_lon,
+        tz=tz_name or "UTC",
     )
 
 
