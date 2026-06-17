@@ -231,6 +231,8 @@ class TestIrrigationLogic:
             sensor_type="soil_moisture",
             config={},
         )
+        # Monstera target is 45–60; with CONFLICT_WET_MARGIN=5 the wet band is
+        # >55, so 60 is a genuinely wet sensor against a dry 15 → true conflict.
         self.db.add_sensor_reading(sensor_id=s_b, soil_moisture=60.0)
 
         decision = self.logic.decide_for_cluster(cluster_id)
@@ -238,6 +240,46 @@ class TestIrrigationLogic:
         assert decision.duration_minutes == 1  # Short burst
         assert "conflict" in decision.reason_text.lower()
         assert decision.confidence < 0.7
+
+    def test_healthy_spread_is_not_flagged_as_conflict(self):
+        """A normal spread within the band must NOT be a conflict (driest drives it).
+
+        Unknown species + no category → default 45–65 target. Driest 44 (just
+        below min) with wettest 56 used to trip the old wet band (target_max−10
+        = 55 → 56>55), forcing a spurious short-burst. With the re-derived band
+        (target_max−5 = 60 → 56<60) it is treated as ordinarily dry instead.
+        """
+        cluster_id = self.db.add_cluster("Healthy Spread Cluster")
+        self.db.add_plant(
+            cluster_id=cluster_id,
+            species="Whateverium fake",
+            category=None,
+            water_needs="medium",
+        )
+
+        s_dry = self.db.add_sensor(
+            cluster_id=cluster_id,
+            tuya_device_id="fake_sensor_h_dry",
+            name="Driest",
+            sensor_type="soil_moisture",
+            config={},
+        )
+        self.db.add_sensor_reading(sensor_id=s_dry, soil_moisture=44.0)
+
+        s_wet = self.db.add_sensor(
+            cluster_id=cluster_id,
+            tuya_device_id="fake_sensor_h_wet",
+            name="Wettest",
+            sensor_type="soil_moisture",
+            config={},
+        )
+        self.db.add_sensor_reading(sensor_id=s_wet, soil_moisture=56.0)
+
+        decision = self.logic.decide_for_cluster(cluster_id)
+
+        codes = [r.code for r in decision.reasons]
+        assert TriggerCode.CONFLICT not in codes
+        assert decision.primary_code == TriggerCode.SENSOR_DRY
 
     def test_all_sensors_adequate_skips(self):
         """All sensors showing adequate moisture skips irrigation."""

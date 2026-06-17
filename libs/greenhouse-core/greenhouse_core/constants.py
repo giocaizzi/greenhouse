@@ -76,8 +76,11 @@ TEMP_HOT = 28
 # Soil-moisture rule — conflict + very-dry banding (percent moisture).
 # A "wet" sensor is one within CONFLICT_WET_MARGIN of its target max; a conflict
 # is the driest sensor below target_min while the wettest is still in that wet
-# band.
-CONFLICT_WET_MARGIN = 10  # % below target_max that still counts as "wet"
+# band. The margin must be narrow enough that the wet band does NOT overlap the
+# healthy range: with defaults 45–65 and margin 5, "wet" means >60, so a normal
+# spread like driest 44 / wettest 56 is treated as ordinarily dry (driest drives
+# the call), not an unresolvable conflict that forces a short burst.
+CONFLICT_WET_MARGIN = 5  # % below target_max that still counts as "wet"
 VERY_DRY_MARGIN = 10  # % below target_min that escalates to SENSOR_VERY_DRY
 
 # Temperature adjustment — band offsets and interval steps.

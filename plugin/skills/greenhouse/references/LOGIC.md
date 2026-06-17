@@ -206,6 +206,8 @@ With one irrigator serving multiple plants:
 
 Decision uses `min_soil_moisture` (driest sensor), not average. Code: `TriggerCode.CONFLICT`.
 
+A conflict fires only when the driest sensor is below `target_min` **and** the wettest is within `CONFLICT_WET_MARGIN` (5%) of `target_max`. The margin is deliberately narrow so the wet band does not overlap the healthy range: a normal spread such as driest 44 / wettest 56 against a 45–65 target is treated as ordinarily dry (driest drives the call), not a spurious unresolvable conflict.
+
 ## Trust Layer
 
 Runs before the decision engine on every evaluation:
