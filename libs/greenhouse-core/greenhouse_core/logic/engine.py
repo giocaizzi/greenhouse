@@ -797,14 +797,45 @@ def _apply_light_adjustment(decision: IrrigationDecision) -> None:
 
 
 def _apply_water_needs_adjustment(decision: IrrigationDecision, water_needs: str) -> None:
+    """Nudge dosage by the plants' water demand and record an auditable reason.
+
+    Emits ``WATER_NEEDS_HIGH`` / ``WATER_NEEDS_LOW`` whenever the adjustment
+    actually changes the duration or interval (clamping can make it a no-op, in
+    which case no reason is added).
+    """
+    if water_needs not in ("high", "low"):
+        return
+
+    prev_duration = decision.duration_minutes
+    prev_interval = decision.interval_hours
+
     if water_needs == "high":
         decision.duration_minutes = max(DEFAULT_DURATION_MINUTES, decision.duration_minutes + WATER_NEEDS_DURATION_STEP)
         decision.interval_hours = max(MIN_INTERVAL_HOURS, decision.interval_hours - WATER_NEEDS_HIGH_INTERVAL_STEP)
-    elif water_needs == "low":
+        code = TriggerCode.WATER_NEEDS_HIGH
+        message = "high water-needs plants — more water, shorter interval"
+        icon = "drop"
+    else:
         decision.duration_minutes = max(
             CONFLICT_DURATION_MINUTES, decision.duration_minutes - WATER_NEEDS_DURATION_STEP
         )
         decision.interval_hours = min(MAX_INTERVAL_HOURS, decision.interval_hours + WATER_NEEDS_LOW_INTERVAL_STEP)
+        code = TriggerCode.WATER_NEEDS_LOW
+        message = "low water-needs plants — less water, longer interval"
+        icon = "drop-half"
+
+    duration_delta = decision.duration_minutes - prev_duration
+    interval_delta = decision.interval_hours - prev_interval
+    if duration_delta == 0 and interval_delta == 0:
+        return
+
+    decision.add_reason(
+        code=code,
+        message=message,
+        icon=icon,
+        duration_delta=duration_delta,
+        interval_delta=interval_delta,
+    )
 
 
 def _apply_trend_adjustment(decision: IrrigationDecision) -> None:

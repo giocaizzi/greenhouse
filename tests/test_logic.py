@@ -126,6 +126,31 @@ class TestIrrigationLogic:
         decision = self.logic.decide_for_cluster(cluster_id, current_temp=22.0)
         assert decision.interval_hours <= 8
 
+    def test_water_needs_emits_reason_in_sensor_path(self):
+        """High water needs nudges dosage AND records an auditable WATER_NEEDS_HIGH reason."""
+        cluster_id = self.db.add_cluster("High Water Sensor Cluster")
+        self.db.add_plant(
+            cluster_id=cluster_id,
+            species="Nephrolepis exaltata",
+            category="fern",
+            water_needs="high",
+        )
+        # Adequate moisture so the pipeline runs every adjustment rule rather
+        # than terminating early on a dry/stress override.
+        sensor_id = self.db.add_sensor(
+            cluster_id=cluster_id,
+            tuya_device_id="fake_sensor_wn",
+            name="Soil",
+            sensor_type="soil_moisture",
+            config={},
+        )
+        self.db.add_sensor_reading(sensor_id=sensor_id, soil_moisture=55.0)
+
+        decision = self.logic.decide_for_cluster(cluster_id)
+
+        codes = [r.code for r in decision.reasons]
+        assert TriggerCode.WATER_NEEDS_HIGH in codes
+
     def test_low_water_needs_adjustment(self):
         """Low water needs plants get less frequent irrigation."""
         cluster_id = self.db.add_cluster("Succulent Cluster")
