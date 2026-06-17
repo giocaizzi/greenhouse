@@ -10,9 +10,10 @@ from fake_data import FAKE_CLUSTER_NAME, FAKE_PLANT_SPECIES, FAKE_SENSOR_ID
 from greenhouse_core.logic import IrrigationLogic
 from greenhouse_core.plant_db import get_plant_database
 
-# Wed 2026-04-08 07:00 UTC — inside the engine's default 06–10 preferred-hours
-# window so `_apply_window_rule` does not short-circuit to OUTSIDE_WINDOW before
-# the soil / temp / light / trend rules under test get a chance to fire.
+# Wed 2026-04-08 07:00 UTC — a fixed daytime instant outside any quiet-hours
+# window. These tests configure no IrrigationWindow rows, so `_apply_window_rule`
+# is a no-op (issue #83) and the soil / temp / light / trend rules under test
+# fire regardless of the hour; the pin only keeps seasonal logic deterministic.
 _FROZEN_TS = int(datetime(2026, 4, 8, 7, 0, tzinfo=ZoneInfo("UTC")).timestamp())
 
 

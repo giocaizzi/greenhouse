@@ -100,14 +100,14 @@ Surfaces: `GET/PUT /api/v1/config/global` (the singleton global defaults), `GET 
 
 For **outdoor** clusters only, if a weather client is configured and the 6h forecast reports `precipitation_mm > 2.0`, the engine appends a `weather_skip` reason and returns `action=SKIP` before fetching sensor data. No-ops for indoor clusters or when no weather client is wired. Runs after the cooldown and quiet-hours checks, before stress detection.
 
-### Irrigation-window / preferred-hours gate
+### Irrigation-window gate
 
 After the terminal stress overrides (`water_warning`, `water_stress`, `over_watering`) — so a wilting plant still gets water at 2am — the engine applies a local-time gate before the soil-moisture rule:
 
-- If the cluster has `IrrigationWindow` rows, the current local time must fall inside at least one window (weekday mask + `[start_hour, end_hour)`, wrap-around supported).
-- If it has none, the engine falls back to `preferred_water_hours_local`, resolved from the first plant's species → category data via `plant_db.get_care_data` (precedence species > `_category_defaults[category]` > built-in). With no plant value it uses the global default `DEFAULT_PREFERRED_WATER_HOURS = (6, 10)`.
+- If the cluster has `IrrigationWindow` rows, the current local time must fall inside at least one window (weekday mask + `[start_hour, end_hour)`, wrap-around supported). Outside the allowed hours it emits `outside_window` and skips.
+- **If it has none, all hours are allowed** (issue #83) — the gate is a no-op. Night protection comes from quiet hours, not this rule. `preferred_water_hours_local` remains advisory plant data (still merged by `plant_db.get_care_data` and surfaced in plant care info) but no longer gates actuation.
 
-Outside the allowed hours it emits `outside_window` and skips. Timezone comes from `preferences.timezone` (UTC fallback).
+Timezone comes from `preferences.timezone` (UTC fallback).
 
 ### Seasonal frequency multiplier
 

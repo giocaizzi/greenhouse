@@ -58,7 +58,6 @@ from greenhouse_core.logic.sensors import get_recent_sensor_data
 from greenhouse_core.logic.stress import detect_stress_conditions
 from greenhouse_core.logic.timing import (
     is_within_irrigation_window,
-    is_within_preferred_hours,
     is_within_quiet_hours,
     season_for,
     seasonal_multiplier,
@@ -258,27 +257,21 @@ class IrrigationLogic:
 
     def _apply_window_rule(self, cluster, cluster_id, evaluated_at, decision):
         """Return a SKIP decision when the current local time is outside the
-        cluster's irrigation windows. Falls back to the per-plant / per-category
-        ``preferred_water_hours_local`` (resolved through ``plant_db``), then to
-        the global default in :mod:`constants`. Stress overrides have already
-        returned early before reaching this rule.
+        cluster's irrigation windows.
+
+        A cluster with NO configured ``IrrigationWindow`` rows allows watering at
+        any hour — night protection is the job of quiet hours, not this rule (see
+        issue #83). ``preferred_water_hours_local`` is still surfaced as advisory
+        plant data via ``plant_db`` but no longer gates actuation. Stress
+        overrides have already returned early before reaching this rule.
         """
         windows = self.db.list_irrigation_windows(cluster_id)
+        if not windows:
+            return None
+
         prefs = self.db.get_preferences()
         tz_name = prefs.timezone if prefs else None
-
-        if windows:
-            allowed = is_within_irrigation_window(windows, now_unix=evaluated_at, tz_name=tz_name)
-        else:
-            # No per-cluster windows. Resolve preferred hours from the first
-            # plant's species → category data so an Alocasia (06–10) doesn't
-            # get watered at 14:00 just because the cluster owner hasn't filled
-            # in a window. Engine is per-cluster; mixed-species clusters use
-            # the first plant by insertion order.
-            preferred = self._resolve_preferred_hours(cluster_id)
-            allowed = is_within_preferred_hours(now_unix=evaluated_at, tz_name=tz_name, preferred=preferred)
-
-        if allowed:
+        if is_within_irrigation_window(windows, now_unix=evaluated_at, tz_name=tz_name):
             return None
         return _decision_with_reason(
             cluster_id,
@@ -290,22 +283,6 @@ class IrrigationLogic:
             code=TriggerCode.OUTSIDE_WINDOW,
             message="outside configured watering window",
         )
-
-    def _resolve_preferred_hours(self, cluster_id: int) -> tuple[int, int] | None:
-        """Resolve ``preferred_water_hours_local`` for a cluster.
-
-        Walks plants in insertion order; returns the first plant's value via
-        the merged ``plant_db.get_care_data`` lookup (species > category-default
-        > built-in). Returns ``None`` when no plant is present, letting
-        :func:`is_within_preferred_hours` apply its global default.
-        """
-        plants = self.db.get_plants_in_cluster(cluster_id)
-        for plant in plants:
-            care = self.plant_db.get_care_data(species=plant.species, category=plant.category)
-            hours = care.get("preferred_water_hours_local")
-            if hours and len(hours) == 2:
-                return (int(hours[0]), int(hours[1]))
-        return None
 
     def _apply_seasonal_multiplier(self, cluster, decision, plant_care, evaluated_at):
         """Scale ``decision.interval_hours`` by a seasonal multiplier and append
