@@ -95,6 +95,19 @@ class TestIrrigationLogic:
         reason_lower = decision.reason_text.lower()
         assert "soil" in reason_lower or "stress" in reason_lower
 
+    def test_zero_soil_moisture_is_treated_as_present(self):
+        """A 0.0% reading (bone-dry / disconnected probe) must irrigate, not be dropped.
+
+        Truthiness would treat 0.0 as "no reading" and fall through to the
+        no-data path; `is not None` keeps it as a real, very-dry value.
+        """
+        self._add_soil_sensor(moisture=0.0)
+        decision = self.logic.decide_for_cluster(self.cluster_id)
+
+        assert decision.action.value == "irrigate"
+        # NO_DATA fallback would report ~0.2 confidence; a real reading is higher.
+        assert decision.confidence > 0.3
+
     def test_soil_moisture_adequate(self):
         """Adequate soil moisture skips irrigation."""
         self._add_soil_sensor(moisture=55.0)

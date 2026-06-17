@@ -639,11 +639,13 @@ def _apply_soil_moisture_rule(decision: IrrigationDecision, plant_care: list[dic
 
     has_conflict = (min_soil < target_min) and (max_soil > target_max - CONFLICT_WET_MARGIN)
     if has_conflict:
-        dry_names = [s.name for s in snapshot.per_sensor if s.avg_soil_moisture and s.avg_soil_moisture < target_min]
+        dry_names = [
+            s.name for s in snapshot.per_sensor if s.avg_soil_moisture is not None and s.avg_soil_moisture < target_min
+        ]
         wet_names = [
             s.name
             for s in snapshot.per_sensor
-            if s.avg_soil_moisture and s.avg_soil_moisture > target_max - CONFLICT_WET_MARGIN
+            if s.avg_soil_moisture is not None and s.avg_soil_moisture > target_max - CONFLICT_WET_MARGIN
         ]
         decision.action = Action.IRRIGATE
         decision.duration_minutes = CONFLICT_DURATION_MINUTES

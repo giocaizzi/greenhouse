@@ -21,8 +21,10 @@ def analyze_historical_trends(db: IrrigationRepository, cluster_id: int) -> Tren
             all_readings.sort(key=lambda r: r.timestamp)
             mid = len(all_readings) // 2
 
-            moisture_first = [r.soil_moisture for r in all_readings[:mid] if r.soil_moisture]
-            moisture_second = [r.soil_moisture for r in all_readings[mid:] if r.soil_moisture]
+            # `is not None`, not truthiness: a genuine 0.0% reading (bone-dry or
+            # disconnected probe) must count, not be silently dropped.
+            moisture_first = [r.soil_moisture for r in all_readings[:mid] if r.soil_moisture is not None]
+            moisture_second = [r.soil_moisture for r in all_readings[mid:] if r.soil_moisture is not None]
             if moisture_first and moisture_second:
                 delta = statistics.mean(moisture_second) - statistics.mean(moisture_first)
                 trends.soil_moisture_delta = delta
