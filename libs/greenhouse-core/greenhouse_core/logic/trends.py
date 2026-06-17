@@ -47,7 +47,9 @@ def analyze_historical_trends(db: IrrigationRepository, cluster_id: int) -> Tren
     irrigator = db.get_irrigator_for_cluster(cluster_id)
     if irrigator is not None:
         events = db.get_recent_events(irrigator.id, hours=7 * 24)
-        irrigation_events = [e for e in events if e.action in ("start", "schedule_updated") and e.duration_minutes]
+        # Only real actuation (`start`) counts as irrigation. `schedule_updated`
+        # is a config change, not water, so it must not inflate the cadence.
+        irrigation_events = [e for e in events if e.action == "start" and e.duration_minutes]
         total_events = len(irrigation_events)
         total_duration = sum(e.duration_minutes for e in irrigation_events)
 

@@ -90,29 +90,11 @@ def temperature_based_decision(
     elif water_needs == "low":
         interval = min(MAX_INTERVAL_HOURS, interval + 6)
 
-    irr = db.get_irrigator_for_cluster(cluster_id)
-    latest_event = None
-    if irr is not None:
-        events = db.get_recent_events(irr.id, hours=interval)
-        for event in events:
-            if event.action not in ("start", "schedule_updated"):
-                continue
-            if latest_event is None or event.timestamp > latest_event.timestamp:
-                latest_event = event
-
-    if latest_event is not None:
-        base.action = Action.SKIP
-        base.duration_minutes = DEFAULT_DURATION_MINUTES
-        base.interval_hours = interval
-        base.confidence = CONFIDENCE_TEMP_FALLBACK
-        base.add_reason(
-            code=TriggerCode.COOLDOWN,
-            message=f"cooldown active (last irrigation < {interval}h ago)",
-            severity=Severity.INFO,
-            icon="hourglass",
-        )
-        return base
-
+    # Cooldown is NOT re-checked here: the engine runs `_enforce_cooldown`
+    # (single source of truth — `start` events over a fixed 6h window) before
+    # ever reaching this fallback, so a duplicate gate over a variable window
+    # that also counted `schedule_updated` only diverged from it. This path is
+    # only reached when no cooldown applies.
     base.action = Action.IRRIGATE
     base.duration_minutes = DEFAULT_DURATION_MINUTES
     base.interval_hours = interval

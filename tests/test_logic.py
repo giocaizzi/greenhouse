@@ -8,6 +8,7 @@ import pytest
 
 from fake_data import FAKE_CLUSTER_NAME, FAKE_PLANT_SPECIES, FAKE_SENSOR_ID
 from greenhouse_core.logic import IrrigationLogic
+from greenhouse_core.logic.decision import TriggerCode
 from greenhouse_core.plant_db import get_plant_database
 
 # Wed 2026-04-08 07:00 UTC — a fixed daytime instant outside any quiet-hours
@@ -520,6 +521,73 @@ class TestIrrigationLogic:
 
         assert decision.action.value == "skip"
         assert "wet" in decision.reason_text.lower()
+
+
+class TestCooldownSemantics:
+    """`start` is the single source of truth for "irrigation happened".
+
+    A `schedule_updated` event is a config change, not water — it must neither
+    suppress the no-sensor fallback (the engine already gates cooldown on
+    `start` before fallback runs) nor inflate the frequency trend.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _freeze_clock(self, monkeypatch):
+        monkeypatch.setattr(time, "time", lambda: _FROZEN_TS)
+
+    @pytest.fixture(autouse=True)
+    def setup(self, tmp_db):
+        self.db = tmp_db
+        self.logic = IrrigationLogic(self.db, get_plant_database())
+        self.cluster_id = self.db.add_cluster("Cooldown Semantics")
+        self.db.add_plant(cluster_id=self.cluster_id, species=FAKE_PLANT_SPECIES, water_needs="medium")
+        self.irrigator_id = self.db.add_irrigator(
+            cluster_id=self.cluster_id,
+            tuya_device_id="fake_irr_sem",
+            name="Irrigator",
+            irrigator_type="tuya_cloud",
+            config={},
+        )
+
+    def test_schedule_updated_does_not_suppress_fallback(self):
+        """A recent `schedule_updated` must not block the temperature fallback.
+
+        With no sensors and a hot temp, the fallback irrigates. Previously the
+        fallback re-implemented a cooldown that also counted `schedule_updated`,
+        so a config change wrongly produced a COOLDOWN skip.
+        """
+        self.db.add_irrigation_event(
+            irrigator_id=self.irrigator_id,
+            action="schedule_updated",
+            triggered_by="auto",
+            duration_minutes=3,
+            timestamp=_FROZEN_TS - 3600,
+        )
+
+        decision = self.logic.decide_for_cluster(self.cluster_id, current_temp=30.0)
+
+        assert decision.action.value == "irrigate"
+        codes = [r.code for r in decision.reasons]
+        assert TriggerCode.COOLDOWN not in codes
+
+    def test_schedule_updated_does_not_inflate_frequency_trend(self):
+        """Many `schedule_updated` events must not flag a high-frequency cadence."""
+        from greenhouse_core.logic.trends import analyze_historical_trends
+
+        # 28 config changes over the 7-day window — would be avg 4/day if counted.
+        for i in range(28):
+            self.db.add_irrigation_event(
+                irrigator_id=self.irrigator_id,
+                action="schedule_updated",
+                triggered_by="auto",
+                duration_minutes=3,
+                timestamp=_FROZEN_TS - (i * 3600),
+            )
+
+        trends = analyze_historical_trends(self.db, self.cluster_id)
+
+        assert trends.irrigation_frequency_high is False
+        assert trends.irrigation_frequency_low is False
 
 
 class _StubWeatherClient:
