@@ -65,8 +65,9 @@ def is_within_irrigation_window(
 ) -> bool:
     """Return True if at least one configured window matches the current local time.
 
-    A cluster with NO windows configured is treated as "always allowed" — the
-    caller layers default preferred-hours on top via ``is_within_preferred_hours``.
+    A cluster with NO windows configured is treated as "always allowed": the
+    engine does not gate by preferred hours (see issue #83), so night protection
+    comes from quiet hours instead.
     """
     if not windows:
         return True

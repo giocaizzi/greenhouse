@@ -8,11 +8,13 @@ import pytest
 
 from fake_data import FAKE_CLUSTER_NAME, FAKE_PLANT_SPECIES, FAKE_SENSOR_ID
 from greenhouse_core.logic import IrrigationLogic
+from greenhouse_core.logic.decision import TriggerCode
 from greenhouse_core.plant_db import get_plant_database
 
-# Wed 2026-04-08 07:00 UTC — inside the engine's default 06–10 preferred-hours
-# window so `_apply_window_rule` does not short-circuit to OUTSIDE_WINDOW before
-# the soil / temp / light / trend rules under test get a chance to fire.
+# Wed 2026-04-08 07:00 UTC — a fixed daytime instant outside any quiet-hours
+# window. These tests configure no IrrigationWindow rows, so `_apply_window_rule`
+# is a no-op (issue #83) and the soil / temp / light / trend rules under test
+# fire regardless of the hour; the pin only keeps seasonal logic deterministic.
 _FROZEN_TS = int(datetime(2026, 4, 8, 7, 0, tzinfo=ZoneInfo("UTC")).timestamp())
 
 
@@ -93,6 +95,19 @@ class TestIrrigationLogic:
         reason_lower = decision.reason_text.lower()
         assert "soil" in reason_lower or "stress" in reason_lower
 
+    def test_zero_soil_moisture_is_treated_as_present(self):
+        """A 0.0% reading (bone-dry / disconnected probe) must irrigate, not be dropped.
+
+        Truthiness would treat 0.0 as "no reading" and fall through to the
+        no-data path; `is not None` keeps it as a real, very-dry value.
+        """
+        self._add_soil_sensor(moisture=0.0)
+        decision = self.logic.decide_for_cluster(self.cluster_id)
+
+        assert decision.action.value == "irrigate"
+        # NO_DATA fallback would report ~0.2 confidence; a real reading is higher.
+        assert decision.confidence > 0.3
+
     def test_soil_moisture_adequate(self):
         """Adequate soil moisture skips irrigation."""
         self._add_soil_sensor(moisture=55.0)
@@ -123,6 +138,31 @@ class TestIrrigationLogic:
         )
         decision = self.logic.decide_for_cluster(cluster_id, current_temp=22.0)
         assert decision.interval_hours <= 8
+
+    def test_water_needs_emits_reason_in_sensor_path(self):
+        """High water needs nudges dosage AND records an auditable WATER_NEEDS_HIGH reason."""
+        cluster_id = self.db.add_cluster("High Water Sensor Cluster")
+        self.db.add_plant(
+            cluster_id=cluster_id,
+            species="Nephrolepis exaltata",
+            category="fern",
+            water_needs="high",
+        )
+        # Adequate moisture so the pipeline runs every adjustment rule rather
+        # than terminating early on a dry/stress override.
+        sensor_id = self.db.add_sensor(
+            cluster_id=cluster_id,
+            tuya_device_id="fake_sensor_wn",
+            name="Soil",
+            sensor_type="soil_moisture",
+            config={},
+        )
+        self.db.add_sensor_reading(sensor_id=sensor_id, soil_moisture=55.0)
+
+        decision = self.logic.decide_for_cluster(cluster_id)
+
+        codes = [r.code for r in decision.reasons]
+        assert TriggerCode.WATER_NEEDS_HIGH in codes
 
     def test_low_water_needs_adjustment(self):
         """Low water needs plants get less frequent irrigation."""
@@ -204,6 +244,8 @@ class TestIrrigationLogic:
             sensor_type="soil_moisture",
             config={},
         )
+        # Monstera target is 45–60; with CONFLICT_WET_MARGIN=5 the wet band is
+        # >55, so 60 is a genuinely wet sensor against a dry 15 → true conflict.
         self.db.add_sensor_reading(sensor_id=s_b, soil_moisture=60.0)
 
         decision = self.logic.decide_for_cluster(cluster_id)
@@ -211,6 +253,46 @@ class TestIrrigationLogic:
         assert decision.duration_minutes == 1  # Short burst
         assert "conflict" in decision.reason_text.lower()
         assert decision.confidence < 0.7
+
+    def test_healthy_spread_is_not_flagged_as_conflict(self):
+        """A normal spread within the band must NOT be a conflict (driest drives it).
+
+        Unknown species + no category → default 45–65 target. Driest 44 (just
+        below min) with wettest 56 used to trip the old wet band (target_max−10
+        = 55 → 56>55), forcing a spurious short-burst. With the re-derived band
+        (target_max−5 = 60 → 56<60) it is treated as ordinarily dry instead.
+        """
+        cluster_id = self.db.add_cluster("Healthy Spread Cluster")
+        self.db.add_plant(
+            cluster_id=cluster_id,
+            species="Whateverium fake",
+            category=None,
+            water_needs="medium",
+        )
+
+        s_dry = self.db.add_sensor(
+            cluster_id=cluster_id,
+            tuya_device_id="fake_sensor_h_dry",
+            name="Driest",
+            sensor_type="soil_moisture",
+            config={},
+        )
+        self.db.add_sensor_reading(sensor_id=s_dry, soil_moisture=44.0)
+
+        s_wet = self.db.add_sensor(
+            cluster_id=cluster_id,
+            tuya_device_id="fake_sensor_h_wet",
+            name="Wettest",
+            sensor_type="soil_moisture",
+            config={},
+        )
+        self.db.add_sensor_reading(sensor_id=s_wet, soil_moisture=56.0)
+
+        decision = self.logic.decide_for_cluster(cluster_id)
+
+        codes = [r.code for r in decision.reasons]
+        assert TriggerCode.CONFLICT not in codes
+        assert decision.primary_code == TriggerCode.SENSOR_DRY
 
     def test_all_sensors_adequate_skips(self):
         """All sensors showing adequate moisture skips irrigation."""
@@ -519,6 +601,73 @@ class TestIrrigationLogic:
 
         assert decision.action.value == "skip"
         assert "wet" in decision.reason_text.lower()
+
+
+class TestCooldownSemantics:
+    """`start` is the single source of truth for "irrigation happened".
+
+    A `schedule_updated` event is a config change, not water — it must neither
+    suppress the no-sensor fallback (the engine already gates cooldown on
+    `start` before fallback runs) nor inflate the frequency trend.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _freeze_clock(self, monkeypatch):
+        monkeypatch.setattr(time, "time", lambda: _FROZEN_TS)
+
+    @pytest.fixture(autouse=True)
+    def setup(self, tmp_db):
+        self.db = tmp_db
+        self.logic = IrrigationLogic(self.db, get_plant_database())
+        self.cluster_id = self.db.add_cluster("Cooldown Semantics")
+        self.db.add_plant(cluster_id=self.cluster_id, species=FAKE_PLANT_SPECIES, water_needs="medium")
+        self.irrigator_id = self.db.add_irrigator(
+            cluster_id=self.cluster_id,
+            tuya_device_id="fake_irr_sem",
+            name="Irrigator",
+            irrigator_type="tuya_cloud",
+            config={},
+        )
+
+    def test_schedule_updated_does_not_suppress_fallback(self):
+        """A recent `schedule_updated` must not block the temperature fallback.
+
+        With no sensors and a hot temp, the fallback irrigates. Previously the
+        fallback re-implemented a cooldown that also counted `schedule_updated`,
+        so a config change wrongly produced a COOLDOWN skip.
+        """
+        self.db.add_irrigation_event(
+            irrigator_id=self.irrigator_id,
+            action="schedule_updated",
+            triggered_by="auto",
+            duration_minutes=3,
+            timestamp=_FROZEN_TS - 3600,
+        )
+
+        decision = self.logic.decide_for_cluster(self.cluster_id, current_temp=30.0)
+
+        assert decision.action.value == "irrigate"
+        codes = [r.code for r in decision.reasons]
+        assert TriggerCode.COOLDOWN not in codes
+
+    def test_schedule_updated_does_not_inflate_frequency_trend(self):
+        """Many `schedule_updated` events must not flag a high-frequency cadence."""
+        from greenhouse_core.logic.trends import analyze_historical_trends
+
+        # 28 config changes over the 7-day window — would be avg 4/day if counted.
+        for i in range(28):
+            self.db.add_irrigation_event(
+                irrigator_id=self.irrigator_id,
+                action="schedule_updated",
+                triggered_by="auto",
+                duration_minutes=3,
+                timestamp=_FROZEN_TS - (i * 3600),
+            )
+
+        trends = analyze_historical_trends(self.db, self.cluster_id)
+
+        assert trends.irrigation_frequency_high is False
+        assert trends.irrigation_frequency_low is False
 
 
 class _StubWeatherClient:
