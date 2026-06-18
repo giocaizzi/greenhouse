@@ -3,9 +3,10 @@
 Covers the fallback chain that joins ``plant_database.json`` to
 :class:`greenhouse_core.logic.IrrigationLogic`:
 
-* ``preferred_water_hours_local`` (species > category default > built-in) is
-  consulted by ``_apply_window_rule`` when a cluster has no SQL windows.
-* ``season_frequency_multiplier{,_outdoor}`` (same precedence) is consulted by
+* With no SQL windows, ``_apply_window_rule`` is a no-op — watering is allowed at
+  any hour (issue #83); ``preferred_water_hours_local`` is advisory only.
+* ``season_frequency_multiplier{,_outdoor}`` (species > category default >
+  built-in) is consulted by
   ``_apply_seasonal_multiplier`` and the engine picks the ``_outdoor`` variant
   when ``cluster.environment == "outdoor"``.
 
@@ -53,15 +54,20 @@ def logic(tmp_db):
     return IrrigationLogic(tmp_db, get_plant_database())
 
 
-class TestPreferredHoursFallback:
-    """``preferred_water_hours_local`` resolves species → category-default → builtin."""
+class TestNoWindowsAllowAllHours:
+    """With no IrrigationWindow rows, the engine allows watering at any hour.
 
-    def test_alocasia_outside_category_window_skips(self, tmp_db, logic, monkeypatch):
-        """Alocasia inherits the tropical category window (07–10); 14:00 must skip.
+    ``preferred_water_hours_local`` is advisory plant data only — it no longer
+    gates actuation (issue #83). Night protection is delegated to quiet hours.
+    """
+
+    def test_alocasia_no_windows_does_not_skip_at_14h(self, tmp_db, logic, monkeypatch):
+        """Alocasia at 14:00 with no windows must NOT skip with OUTSIDE_WINDOW.
 
         Soil is held *moderately* dry (35%) — below the adequate band but above
         ``SOIL_MOISTURE_CRITICAL`` so the critical-stress override does not
-        bypass the window rule on the way down.
+        short-circuit; the decision still flows through the (now no-op) window
+        rule rather than being forced by stress.
         """
         _freeze(monkeypatch, _ts(2026, 5, 14, 14))
         cluster_id = tmp_db.add_cluster("Indoor Tropical")
@@ -71,11 +77,11 @@ class TestPreferredHoursFallback:
         decision = logic.decide_for_cluster(cluster_id)
 
         assert decision is not None
-        assert decision.action.value == "skip"
-        assert decision.primary_code == TriggerCode.OUTSIDE_WINDOW
+        codes = [r.code for r in decision.reasons]
+        assert TriggerCode.OUTSIDE_WINDOW not in codes
 
-    def test_alocasia_inside_category_window_no_window_skip(self, tmp_db, logic, monkeypatch):
-        """At 08:00 (inside tropical 07–10), OUTSIDE_WINDOW must not appear."""
+    def test_alocasia_no_windows_no_window_skip_at_08h(self, tmp_db, logic, monkeypatch):
+        """At 08:00 with no windows, OUTSIDE_WINDOW must not appear either."""
         _freeze(monkeypatch, _ts(2026, 5, 14, 8))
         cluster_id = tmp_db.add_cluster("Indoor Tropical")
         tmp_db.add_plant(cluster_id=cluster_id, species="Alocasia amazonica", category="tropical")
@@ -87,8 +93,8 @@ class TestPreferredHoursFallback:
         codes = [r.code for r in decision.reasons]
         assert TriggerCode.OUTSIDE_WINDOW not in codes
 
-    def test_unknown_species_falls_through_to_global_default(self, tmp_db, logic, monkeypatch):
-        """No species + no category resolves preferred=None → global default 06–10 applies."""
+    def test_unknown_species_no_windows_does_not_skip(self, tmp_db, logic, monkeypatch):
+        """No species + no category + no windows → no OUTSIDE_WINDOW gate at any hour."""
         _freeze(monkeypatch, _ts(2026, 5, 14, 5))
         cluster_id = tmp_db.add_cluster("Mystery Plant Cluster")
         tmp_db.add_plant(
@@ -102,8 +108,29 @@ class TestPreferredHoursFallback:
         decision = logic.decide_for_cluster(cluster_id)
 
         assert decision is not None
-        assert decision.action.value == "skip"
-        assert decision.primary_code == TriggerCode.OUTSIDE_WINDOW
+        codes = [r.code for r in decision.reasons]
+        assert TriggerCode.OUTSIDE_WINDOW not in codes
+
+    def test_dry_soil_no_windows_midday_no_quiet_hours_irrigates(self, tmp_db, logic, monkeypatch):
+        """Dry soil + no windows + 13:00 local + no quiet hours → irrigate, no OUTSIDE_WINDOW.
+
+        Directly exercises the #83 fix: previously the preferred-hours fallback
+        silently skipped ~21h/day. Quiet hours are explicitly disabled (0..0) so
+        only the window rule could have blocked.
+        """
+        _freeze(monkeypatch, _ts(2026, 5, 14, 13))
+        cluster_id = tmp_db.add_cluster("Midday Dry", environment="indoor")
+        tmp_db.add_plant(cluster_id=cluster_id, species="Monstera deliciosa", category="tropical")
+        # Disable quiet hours so the only possible gate is the window rule.
+        tmp_db.update_global_irrigation_config(quiet_start_hour=0, quiet_end_hour=0)
+        _add_soil(tmp_db, cluster_id, moisture=20.0)  # well below target → dry
+
+        decision = logic.decide_for_cluster(cluster_id)
+
+        assert decision is not None
+        assert decision.action.value == "irrigate"
+        codes = [r.code for r in decision.reasons]
+        assert TriggerCode.OUTSIDE_WINDOW not in codes
 
 
 class TestSeasonalMultiplier:

@@ -6,6 +6,7 @@ from fastapi import APIRouter, Form, HTTPException, Request, status
 from fastapi.responses import RedirectResponse, Response
 
 from greenhouse_server.deps import RepoDep
+from greenhouse_server.scheduler import apply_timezone_preference
 from greenhouse_server.web.context import base_context
 from greenhouse_server.web.templating import templates
 
@@ -57,7 +58,7 @@ def update_preferences(
             default_cluster = int(default_cluster_id)
         except ValueError:
             default_cluster = None
-    repo.update_preferences(
+    prefs = repo.update_preferences(
         units=units,
         timezone=timezone,
         theme=theme,
@@ -70,6 +71,7 @@ def update_preferences(
         notify_auto=bool(notify_auto),
     )
     repo.session.commit()
+    apply_timezone_preference(request, prefs.timezone)
     return RedirectResponse(url="/preferences?saved=1", status_code=303)
 
 

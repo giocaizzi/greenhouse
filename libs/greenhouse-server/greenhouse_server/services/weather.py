@@ -10,10 +10,15 @@ _FORECAST_CACHE_TTL = 600  # 10 minutes
 class WeatherClient:
     """Fetches current weather from Open-Meteo API."""
 
-    def __init__(self, lat: float = 45.464, lon: float = 9.189, timeout: int = 8):
+    def __init__(self, lat: float = 45.464, lon: float = 9.189, timeout: int = 8, tz: str = "UTC"):
         self._lat = lat
         self._lon = lon
         self._timeout = timeout
+        # Open-Meteo localizes its hourly timestamps to this zone. It must match
+        # the single authoritative tz (UserPreferences.timezone) so "next 6
+        # hours" aligns with the clock the engine reasons in, not a hardcoded
+        # Europe/Rome.
+        self._tz = tz
         self._get_current_cache: tuple[float, dict] | None = None
         self._get_forecast_cache: tuple[float, dict] | None = None
 
@@ -28,7 +33,7 @@ class WeatherClient:
             f"https://api.open-meteo.com/v1/forecast"
             f"?latitude={self._lat}&longitude={self._lon}"
             f"&current=temperature_2m,apparent_temperature,precipitation,relative_humidity_2m"
-            f"&timezone=Europe/Rome"
+            f"&timezone={self._tz}"
         )
         try:
             with urllib.request.urlopen(url, timeout=self._timeout) as resp:
@@ -61,7 +66,7 @@ class WeatherClient:
             f"?latitude={self._lat}&longitude={self._lon}"
             f"&hourly=precipitation,temperature_2m,relative_humidity_2m"
             f"&forecast_days=2"
-            f"&timezone=Europe/Rome"
+            f"&timezone={self._tz}"
         )
         try:
             with urllib.request.urlopen(url, timeout=self._timeout) as resp:

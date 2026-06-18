@@ -21,8 +21,10 @@ def analyze_historical_trends(db: IrrigationRepository, cluster_id: int) -> Tren
             all_readings.sort(key=lambda r: r.timestamp)
             mid = len(all_readings) // 2
 
-            moisture_first = [r.soil_moisture for r in all_readings[:mid] if r.soil_moisture]
-            moisture_second = [r.soil_moisture for r in all_readings[mid:] if r.soil_moisture]
+            # `is not None`, not truthiness: a genuine 0.0% reading (bone-dry or
+            # disconnected probe) must count, not be silently dropped.
+            moisture_first = [r.soil_moisture for r in all_readings[:mid] if r.soil_moisture is not None]
+            moisture_second = [r.soil_moisture for r in all_readings[mid:] if r.soil_moisture is not None]
             if moisture_first and moisture_second:
                 delta = statistics.mean(moisture_second) - statistics.mean(moisture_first)
                 trends.soil_moisture_delta = delta
@@ -47,7 +49,9 @@ def analyze_historical_trends(db: IrrigationRepository, cluster_id: int) -> Tren
     irrigator = db.get_irrigator_for_cluster(cluster_id)
     if irrigator is not None:
         events = db.get_recent_events(irrigator.id, hours=7 * 24)
-        irrigation_events = [e for e in events if e.action in ("start", "schedule_updated") and e.duration_minutes]
+        # Only real actuation (`start`) counts as irrigation. `schedule_updated`
+        # is a config change, not water, so it must not inflate the cadence.
+        irrigation_events = [e for e in events if e.action == "start" and e.duration_minutes]
         total_events = len(irrigation_events)
         total_duration = sum(e.duration_minutes for e in irrigation_events)
 

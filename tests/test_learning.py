@@ -7,6 +7,7 @@ import pytest
 from fake_data import (
     FAKE_CLUSTER_NAME,
     FAKE_DEVICE_ID,
+    FAKE_DEVICE_ID_2,
     FAKE_IRRIGATOR_NAME,
     FAKE_PLANT_SPECIES,
     FAKE_SENSOR_ID,
@@ -309,3 +310,382 @@ class TestIrrigationLearner:
         empty_cluster = self.db.add_cluster("Empty Alert Cluster")
         alerts = self.learner.detect_issues(empty_cluster)
         assert alerts == []
+
+
+class TestIssueHeuristics:
+    """Behavior tests for the advisory issue-detection heuristics in issues.py.
+
+    Each test drives ``detect_issues`` (or ``detect_conflicts`` directly for the
+    multi-sensor heuristics that live inside it) with synthetic readings crafted
+    to sit on the firing / non-firing side of each constant threshold:
+
+    - LEARNING_RAPID_DRAINAGE_THRESHOLD = -5 %/hr
+    - LEARNING_OVER_WATER_THRESHOLD     = 85 % moisture
+    - LIGHT_BRIGHT                      = 800 lux (× seasonal factor)
+    - low_light fires at avg_lux < effective_threshold * 0.5
+    - low_env_humidity fires at avg < ideal_humidity_min - 15
+    """
+
+    @pytest.fixture(autouse=True)
+    def setup(self, tmp_db):
+        self.db = tmp_db
+        self.learner = IrrigationLearner(self.db, get_plant_database())
+
+        self.cluster_id = self.db.add_cluster(FAKE_CLUSTER_NAME)
+        self.plant_id = self.db.add_plant(
+            cluster_id=self.cluster_id,
+            species=FAKE_PLANT_SPECIES,  # Monstera deliciosa: target 45-60, hum_min 60, lux_min 150
+            water_needs="medium",
+        )
+        self.irrigator_id = self.db.add_irrigator(
+            cluster_id=self.cluster_id,
+            tuya_device_id=FAKE_DEVICE_ID,
+            name=FAKE_IRRIGATOR_NAME,
+            irrigator_type="tuya_cloud",
+            config={},
+        )
+        self.sensor_id = self.db.add_sensor(
+            cluster_id=self.cluster_id,
+            tuya_device_id=FAKE_SENSOR_ID,
+            name=FAKE_SENSOR_NAME,
+            sensor_type="soil_moisture",
+            config={},
+            plant_id=self.plant_id,
+        )
+
+    # ── helpers ─────────────────────────────────────────────────────────────
+
+    def _build_profile(self, sensor_id: int, irrigator_id: int, base_time: int, cycles: int = 5):
+        """Create ``cycles`` healthy irrigation cycles so a PlantProfile builds.
+
+        Each cycle is a +20% absorption event, spaced one day apart, which yields
+        avg_absorption_per_minute ~ 10%/min and an efficiency_score of 1.0 — well
+        above LEARNING_MIN_EVENTS / LEARNING_MIN_EFFICIENCY so the profile is used
+        by the per-sensor heuristics.
+
+        ``base_time`` should sit at least a week in the past for tests that also
+        seed recent (≤6h / ≤48h) readings, so these profile readings don't leak
+        into the moisture/drainage windows the heuristics scan.
+        """
+        for i in range(cycles):
+            ts = base_time - (i * 86400)
+            self.db.add_sensor_reading(sensor_id=sensor_id, timestamp=ts - 900, soil_moisture=30.0)
+            self.db.add_irrigation_event(
+                irrigator_id=irrigator_id,
+                action="start",
+                triggered_by="auto",
+                duration_minutes=2,
+                timestamp=ts,
+            )
+            self.db.add_sensor_reading(sensor_id=sensor_id, timestamp=ts + 1800, soil_moisture=50.0)
+
+    def _add_second_sensor(self):
+        """Add a second plant+sensor to the same cluster (shared single irrigator)."""
+        plant2 = self.db.add_plant(
+            cluster_id=self.cluster_id,
+            species=FAKE_PLANT_SPECIES,
+            water_needs="medium",
+        )
+        sensor2 = self.db.add_sensor(
+            cluster_id=self.cluster_id,
+            tuya_device_id=FAKE_DEVICE_ID_2,
+            name="Test Sensor 2",
+            sensor_type="soil_moisture",
+            config={},
+            plant_id=plant2,
+        )
+        return plant2, sensor2
+
+    def _seed_recent_moisture(self, both: tuple[int, int], moisture: float, now: int):
+        """Give both sensors a single recent in-range moisture reading.
+
+        ``detect_conflicts`` returns early when fewer than two sensors have a
+        recent (≤6h) moisture reading, which would skip the low_light /
+        low_env_humidity loops that live after that guard. Seeding one in-range
+        reading per sensor reaches those loops without creating a dry/wet conflict.
+        """
+        for sid in both:
+            self.db.add_sensor_reading(sensor_id=sid, timestamp=now - 300, soil_moisture=moisture)
+
+    def _care_map(self):
+        """Build the plant_care map exactly as detect_issues does, for direct calls."""
+        plants = self.db.get_plants_in_cluster(self.cluster_id)
+        return {p.id: self.learner.plant_db.get_care_data(species=p.species, category=p.category) for p in plants}
+
+    # ── light_accelerated_drainage vs rapid_drainage ────────────────────────
+
+    def test_light_accelerated_drainage_alert(self, monkeypatch):
+        """Rapid drainage under bright daytime light fires light_accelerated_drainage."""
+        # Pin the seasonal factor so the 800-lux bright threshold is deterministic.
+        monkeypatch.setattr("greenhouse_core.learning.issues.seasonal_light_factor", lambda *a, **k: 1.0)
+
+        now = int(time.time())
+        self._build_profile(self.sensor_id, self.irrigator_id, now - 7 * 86400)
+        # Steeply declining moisture (< -5 %/hr) plus bright light (> 800 lux).
+        # Older readings (larger h) are wetter so moisture falls ~7 %/hr in time.
+        for h in range(10):
+            self.db.add_sensor_reading(
+                sensor_id=self.sensor_id,
+                timestamp=now - h * 3600,
+                soil_moisture=5.0 + (h * 7),  # chronologically ~-7 %/hr
+                light=20000,  # well above 800 and above NIGHT_LUX_THRESHOLD
+            )
+
+        alerts = self.learner.detect_issues(self.cluster_id)
+        types = [a.alert_type for a in alerts]
+        assert "light_accelerated_drainage" in types
+        assert "rapid_drainage" not in types
+        alert = next(a for a in alerts if a.alert_type == "light_accelerated_drainage")
+        assert alert.severity == "warning"
+        assert alert.data["avg_lux"] > 800
+
+    def test_rapid_drainage_without_bright_light(self, monkeypatch):
+        """Rapid drainage in dim light fires plain rapid_drainage, not the light variant."""
+        monkeypatch.setattr("greenhouse_core.learning.issues.seasonal_light_factor", lambda *a, **k: 1.0)
+
+        now = int(time.time())
+        self._build_profile(self.sensor_id, self.irrigator_id, now - 7 * 86400)
+        for h in range(10):
+            self.db.add_sensor_reading(
+                sensor_id=self.sensor_id,
+                timestamp=now - h * 3600,
+                soil_moisture=5.0 + (h * 7),  # chronologically ~-7 %/hr
+                light=100,  # daytime but below the 800-lux bright threshold
+            )
+
+        alerts = self.learner.detect_issues(self.cluster_id)
+        types = [a.alert_type for a in alerts]
+        assert "rapid_drainage" in types
+        assert "light_accelerated_drainage" not in types
+
+    def test_no_drainage_alert_when_retention_healthy(self):
+        """Stable moisture (drainage above -5 %/hr) fires no drainage alert."""
+        now = int(time.time())
+        self._build_profile(self.sensor_id, self.irrigator_id, now - 7 * 86400)
+        # Gentle decline ~-1 %/hr (older wetter), well above the -5 threshold.
+        for h in range(10):
+            self.db.add_sensor_reading(
+                sensor_id=self.sensor_id,
+                timestamp=now - h * 3600,
+                soil_moisture=45.0 + h,  # chronologically ~-1 %/hr
+                light=20000,
+            )
+
+        alerts = self.learner.detect_issues(self.cluster_id)
+        types = [a.alert_type for a in alerts]
+        assert "rapid_drainage" not in types
+        assert "light_accelerated_drainage" not in types
+
+    # ── chronic_underwatering ───────────────────────────────────────────────
+
+    def test_chronic_underwatering_alert(self):
+        """Soil that never reaches target_min over 7d fires chronic_underwatering."""
+        now = int(time.time())
+        # >=5 cycles required (response_count >= 5). Keep post-moisture below the
+        # 45% Monstera target_min so the 7d peak stays under target.
+        for i in range(6):
+            ts = now - (i * 86400)
+            self.db.add_sensor_reading(sensor_id=self.sensor_id, timestamp=ts - 900, soil_moisture=20.0)
+            self.db.add_irrigation_event(
+                irrigator_id=self.irrigator_id,
+                action="start",
+                triggered_by="auto",
+                duration_minutes=2,
+                timestamp=ts,
+            )
+            self.db.add_sensor_reading(sensor_id=self.sensor_id, timestamp=ts + 1800, soil_moisture=35.0)
+
+        alerts = self.learner.detect_issues(self.cluster_id)
+        types = [a.alert_type for a in alerts]
+        assert "chronic_underwatering" in types
+        alert = next(a for a in alerts if a.alert_type == "chronic_underwatering")
+        assert alert.data["max_recent"] < alert.data["target_min"]
+
+    def test_no_chronic_underwatering_when_target_reached(self):
+        """Soil that reaches target_min does not fire chronic_underwatering."""
+        now = int(time.time())
+        for i in range(6):
+            ts = now - (i * 86400)
+            self.db.add_sensor_reading(sensor_id=self.sensor_id, timestamp=ts - 900, soil_moisture=40.0)
+            self.db.add_irrigation_event(
+                irrigator_id=self.irrigator_id,
+                action="start",
+                triggered_by="auto",
+                duration_minutes=2,
+                timestamp=ts,
+            )
+            self.db.add_sensor_reading(sensor_id=self.sensor_id, timestamp=ts + 1800, soil_moisture=58.0)
+
+        alerts = self.learner.detect_issues(self.cluster_id)
+        assert "chronic_underwatering" not in [a.alert_type for a in alerts]
+
+    # ── unresolvable_conflict ───────────────────────────────────────────────
+
+    def test_unresolvable_conflict_alert(self):
+        """Dry plant needing long irrigation that would over-saturate a wet plant."""
+        now = int(time.time())
+        _plant2, sensor2 = self._add_second_sensor()
+        # Both sensors need profiles (avg_absorption_per_minute drives the projection).
+        self._build_profile(self.sensor_id, self.irrigator_id, now - 7 * 86400)
+        self._build_profile(sensor2, self.irrigator_id, now - 7 * 86400)
+
+        # Sensor 1 dry (below target_min - 5 = 40), sensor 2 already wet (above
+        # target_max = 60). Watering sensor 1 up to 60 takes many minutes; at
+        # ~10%/min absorption sensor 2 would blow past LEARNING_OVER_WATER_THRESHOLD (85).
+        self.db.add_sensor_reading(sensor_id=self.sensor_id, timestamp=now - 600, soil_moisture=20.0)
+        self.db.add_sensor_reading(sensor_id=sensor2, timestamp=now - 600, soil_moisture=80.0)
+
+        profiles = {
+            self.sensor_id: self.learner.get_plant_profile(self.db.get_sensor(self.sensor_id)),
+            sensor2: self.learner.get_plant_profile(self.db.get_sensor(sensor2)),
+        }
+        from greenhouse_core.learning.issues import detect_conflicts
+
+        alerts = detect_conflicts(self.db, self.learner.plant_db, self.cluster_id, profiles, self._care_map())
+        types = [a.alert_type for a in alerts]
+        assert "unresolvable_conflict" in types
+        alert = next(a for a in alerts if a.alert_type == "unresolvable_conflict")
+        assert alert.severity == "critical"
+        assert alert.data["projected_wet"] > 85
+
+    def test_no_conflict_when_both_plants_in_range(self):
+        """No conflict when neither plant is dry nor over-saturated."""
+        now = int(time.time())
+        _plant2, sensor2 = self._add_second_sensor()
+        self._build_profile(self.sensor_id, self.irrigator_id, now - 7 * 86400)
+        self._build_profile(sensor2, self.irrigator_id, now - 7 * 86400)
+
+        # Both comfortably inside the 45-60 band → no dry, no wet sensors.
+        self.db.add_sensor_reading(sensor_id=self.sensor_id, timestamp=now - 600, soil_moisture=50.0)
+        self.db.add_sensor_reading(sensor_id=sensor2, timestamp=now - 600, soil_moisture=52.0)
+
+        profiles = {
+            self.sensor_id: self.learner.get_plant_profile(self.db.get_sensor(self.sensor_id)),
+            sensor2: self.learner.get_plant_profile(self.db.get_sensor(sensor2)),
+        }
+        from greenhouse_core.learning.issues import detect_conflicts
+
+        alerts = detect_conflicts(self.db, self.learner.plant_db, self.cluster_id, profiles, self._care_map())
+        assert "unresolvable_conflict" not in [a.alert_type for a in alerts]
+
+    # ── low_light ───────────────────────────────────────────────────────────
+
+    def test_low_light_alert(self, monkeypatch):
+        """Sustained daytime light below half the seasonal minimum fires low_light."""
+        # Pin threshold: effective(150) = 150, fires below 75 lux.
+        monkeypatch.setattr(
+            "greenhouse_core.learning.issues.effective_light_threshold", lambda base, *a, **k: float(base)
+        )
+        now = int(time.time())
+        _plant2, sensor2 = self._add_second_sensor()  # need >=2 profiles to reach detect_conflicts
+        self._build_profile(self.sensor_id, self.irrigator_id, now - 7 * 86400)
+        self._build_profile(sensor2, self.irrigator_id, now - 7 * 86400)
+
+        # The low_light loop sits after detect_conflicts' `len(sensor_moisture) < 2`
+        # early return, so both sensors need a recent (≤6h) in-range moisture
+        # reading for it to be reached. Keep both inside the 45-60 band → no conflict.
+        self._seed_recent_moisture(both=(self.sensor_id, sensor2), moisture=50.0, now=now)
+
+        # >=5 daytime readings (light > 15) averaging well under 75 lux.
+        for h in range(8):
+            self.db.add_sensor_reading(
+                sensor_id=self.sensor_id,
+                timestamp=now - h * 3600 - 60,
+                light=40,
+            )
+
+        profiles = {
+            self.sensor_id: self.learner.get_plant_profile(self.db.get_sensor(self.sensor_id)),
+            sensor2: self.learner.get_plant_profile(self.db.get_sensor(sensor2)),
+        }
+        from greenhouse_core.learning.issues import detect_conflicts
+
+        alerts = detect_conflicts(self.db, self.learner.plant_db, self.cluster_id, profiles, self._care_map())
+        low_light = [a for a in alerts if a.alert_type == "low_light" and a.sensor_name == FAKE_SENSOR_NAME]
+        assert low_light
+        assert low_light[0].severity == "warning"
+        assert low_light[0].data["avg_lux"] < 75
+
+    def test_no_low_light_when_bright_enough(self, monkeypatch):
+        """Adequate daytime light does not fire low_light."""
+        monkeypatch.setattr(
+            "greenhouse_core.learning.issues.effective_light_threshold", lambda base, *a, **k: float(base)
+        )
+        now = int(time.time())
+        _plant2, sensor2 = self._add_second_sensor()
+        self._build_profile(self.sensor_id, self.irrigator_id, now - 7 * 86400)
+        self._build_profile(sensor2, self.irrigator_id, now - 7 * 86400)
+        self._seed_recent_moisture(both=(self.sensor_id, sensor2), moisture=50.0, now=now)
+
+        for h in range(8):
+            self.db.add_sensor_reading(
+                sensor_id=self.sensor_id,
+                timestamp=now - h * 3600 - 60,
+                light=5000,  # far above the 75-lux floor
+            )
+
+        profiles = {
+            self.sensor_id: self.learner.get_plant_profile(self.db.get_sensor(self.sensor_id)),
+            sensor2: self.learner.get_plant_profile(self.db.get_sensor(sensor2)),
+        }
+        from greenhouse_core.learning.issues import detect_conflicts
+
+        alerts = detect_conflicts(self.db, self.learner.plant_db, self.cluster_id, profiles, self._care_map())
+        sensor1_low_light = [a for a in alerts if a.alert_type == "low_light" and a.sensor_name == FAKE_SENSOR_NAME]
+        assert not sensor1_low_light
+
+    # ── low_env_humidity ────────────────────────────────────────────────────
+
+    def test_low_env_humidity_alert(self):
+        """Ambient humidity far below ideal (ideal_min - 15) fires low_env_humidity."""
+        now = int(time.time())
+        _plant2, sensor2 = self._add_second_sensor()
+        self._build_profile(self.sensor_id, self.irrigator_id, now - 7 * 86400)
+        self._build_profile(sensor2, self.irrigator_id, now - 7 * 86400)
+        self._seed_recent_moisture(both=(self.sensor_id, sensor2), moisture=50.0, now=now)
+
+        # Monstera ideal_humidity_min = 60 → fires below 45. Use ~30%.
+        for h in range(8):
+            self.db.add_sensor_reading(
+                sensor_id=self.sensor_id,
+                timestamp=now - h * 3600 - 60,
+                env_humidity=30.0,
+            )
+
+        profiles = {
+            self.sensor_id: self.learner.get_plant_profile(self.db.get_sensor(self.sensor_id)),
+            sensor2: self.learner.get_plant_profile(self.db.get_sensor(sensor2)),
+        }
+        from greenhouse_core.learning.issues import detect_conflicts
+
+        alerts = detect_conflicts(self.db, self.learner.plant_db, self.cluster_id, profiles, self._care_map())
+        hum = [a for a in alerts if a.alert_type == "low_env_humidity" and a.sensor_name == FAKE_SENSOR_NAME]
+        assert hum
+        assert hum[0].severity == "warning"
+        assert hum[0].data["avg_env_humidity"] < hum[0].data["ideal_min"] - 15
+
+    def test_no_low_env_humidity_when_humid_enough(self):
+        """Humidity within ~15% of ideal does not fire low_env_humidity."""
+        now = int(time.time())
+        _plant2, sensor2 = self._add_second_sensor()
+        self._build_profile(self.sensor_id, self.irrigator_id, now - 7 * 86400)
+        self._build_profile(sensor2, self.irrigator_id, now - 7 * 86400)
+        self._seed_recent_moisture(both=(self.sensor_id, sensor2), moisture=50.0, now=now)
+
+        # 55% is within ideal_min(60) - 15 = 45, so no alert.
+        for h in range(8):
+            self.db.add_sensor_reading(
+                sensor_id=self.sensor_id,
+                timestamp=now - h * 3600 - 60,
+                env_humidity=55.0,
+            )
+
+        profiles = {
+            self.sensor_id: self.learner.get_plant_profile(self.db.get_sensor(self.sensor_id)),
+            sensor2: self.learner.get_plant_profile(self.db.get_sensor(sensor2)),
+        }
+        from greenhouse_core.learning.issues import detect_conflicts
+
+        alerts = detect_conflicts(self.db, self.learner.plant_db, self.cluster_id, profiles, self._care_map())
+        sensor1_hum = [a for a in alerts if a.alert_type == "low_env_humidity" and a.sensor_name == FAKE_SENSOR_NAME]
+        assert not sensor1_hum
