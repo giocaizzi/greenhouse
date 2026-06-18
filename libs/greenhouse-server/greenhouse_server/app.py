@@ -13,6 +13,7 @@ from greenhouse_core.database import create_db_engine, create_session_factory, i
 from greenhouse_core.devices import DeviceRegistry, build_default_registry
 from greenhouse_core.devices.tuya_transport import TuyaTransport
 from greenhouse_core.plant_db import PlantDatabase
+from greenhouse_core.utils import set_display_timezone
 from greenhouse_server.auth import bootstrap_admin, require_user
 from greenhouse_server.config import Settings
 from greenhouse_server.routes import (
@@ -157,11 +158,23 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
     app.state.settings = settings
     app.state.session_factory = create_session_factory(engine)
     app.state.device_registry = _init_device_registry()
-    app.state.weather_client = WeatherClient(lat=settings.weather_lat, lon=settings.weather_lon)
+
+    # UserPreferences.timezone is the single authoritative clock: the engine
+    # gates windows against it, so the scheduler's wall-clock cron jobs, the
+    # weather forecast localization, and the display formatter must all read it
+    # too. Resolve it once here and thread it into every consumer.
+    tz_name = _startup_timezone(app)
+    set_display_timezone(tz_name)
+
+    app.state.weather_client = WeatherClient(
+        lat=settings.weather_lat,
+        lon=settings.weather_lon,
+        tz=tz_name,
+    )
     app.state.ntfy_notifier = _init_ntfy_notifier(settings)
     app.state.plant_db = _init_plant_db(settings)
 
-    init_scheduler(app, settings)
+    init_scheduler(app, settings, tz_name=tz_name)
     init_health_monitor(app, settings)
     _restore_persisted_scheduler_pause(app)
 
@@ -227,6 +240,28 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
     app.state.mcp = mcp
 
     return app
+
+
+def _startup_timezone(app: FastAPI) -> str:
+    """Read ``UserPreferences.timezone`` at startup, defaulting to UTC.
+
+    The preferences row is created on first access, so this also seeds the
+    singleton. Falls back to ``"UTC"`` (matching the column default) if the
+    DB cannot be read yet.
+    """
+    try:
+        session = app.state.session_factory()
+        try:
+            from greenhouse_core.repository import IrrigationRepository
+
+            repo = IrrigationRepository(session)
+            tz = repo.get_preferences().timezone
+            session.commit()
+            return tz or "UTC"
+        finally:
+            session.close()
+    except Exception:
+        return "UTC"
 
 
 def _restore_persisted_scheduler_pause(app: FastAPI) -> None:

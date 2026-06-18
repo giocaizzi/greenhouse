@@ -8,7 +8,16 @@ from greenhouse_core.utils import (
     format_timestamp,
     get_display_timezone,
     seasonal_light_factor,
+    set_display_timezone,
 )
+
+
+@pytest.fixture(autouse=True)
+def _reset_display_tz():
+    """Keep the process-level display tz from leaking across tests."""
+    set_display_timezone(None)
+    yield
+    set_display_timezone(None)
 
 
 class TestSeasonalLightFactor:
@@ -99,19 +108,25 @@ class TestFormatTimestamp:
 
 
 class TestGetDisplayTimezone:
-    def test_default_timezone(self):
-        """Default timezone is Europe/Rome."""
-        import os
+    def test_default_timezone(self, monkeypatch):
+        """With no preference set and no env override, the default is UTC."""
+        monkeypatch.delenv("IRRIGATION_TZ", raising=False)
+        assert get_display_timezone() == "UTC"
 
-        # Clear env var if set
-        old = os.environ.pop("IRRIGATION_TZ", None)
-        try:
-            assert get_display_timezone() == "Europe/Rome"
-        finally:
-            if old is not None:
-                os.environ["IRRIGATION_TZ"] = old
-
-    def test_custom_timezone(self, monkeypatch):
-        """Custom timezone from env var is returned."""
+    def test_env_fallback(self, monkeypatch):
+        """IRRIGATION_TZ is the fallback when no preference is recorded."""
         monkeypatch.setenv("IRRIGATION_TZ", "America/New_York")
+        assert get_display_timezone() == "America/New_York"
+
+    def test_preference_wins_over_env(self, monkeypatch):
+        """A recorded UserPreferences.timezone outranks the env fallback."""
+        monkeypatch.setenv("IRRIGATION_TZ", "America/New_York")
+        set_display_timezone("Asia/Tokyo")
+        assert get_display_timezone() == "Asia/Tokyo"
+
+    def test_clearing_preference_falls_back(self, monkeypatch):
+        """Clearing the preference re-exposes the env fallback."""
+        monkeypatch.setenv("IRRIGATION_TZ", "America/New_York")
+        set_display_timezone("Asia/Tokyo")
+        set_display_timezone(None)
         assert get_display_timezone() == "America/New_York"
