@@ -120,6 +120,33 @@ SOIL_MOISTURE_CRITICAL = 30
 SOIL_MOISTURE_LOW = 40
 SOIL_MOISTURE_SATURATED = 70
 
+# ── Sensor Data Cleaning ─────────────────────────────────────────────────────
+# Raw readings are noisy: capacitive soil probes glitch to single-sample spikes,
+# comms errors inject out-of-range values, and a wedged probe reports a flat run.
+# The decision snapshot and trend analysis consume a *cleaned view*
+# (logic/cleaning.py) so "the driest plant drives the call" (invariant #2) is not
+# tripped by a lone bad sample. Raw rows in sensor_readings are never mutated.
+
+# Physical plausibility bounds per metric (inclusive); values outside are dropped
+# as dirty. 0.0 is in-range for soil_moisture/humidity — a genuine bone-dry probe
+# must survive the gate (the Hampel filter still rejects a lone 0 among healthy
+# readings as a spike).
+SENSOR_PHYSICAL_RANGES = {
+    "temperature": (-40.0, 80.0),  # °C — beyond any greenhouse/outdoor reality
+    "soil_moisture": (0.0, 100.0),  # % volumetric
+    "env_humidity": (0.0, 100.0),  # % relative
+    "light": (0.0, 200_000.0),  # lux — direct midday sun tops out ~120k
+}
+
+# Hampel spike filter (rolling median ± n·MAD) — the robust time-series outlier
+# test. Window radius 3 → 7 samples; on hourly Tuya logs that's a ~7h context,
+# wide enough to ride out a slow dry-down yet reject a single revert spike.
+CLEANING_HAMPEL_WINDOW_RADIUS = 3  # window = 2*radius + 1 samples
+CLEANING_HAMPEL_N_SIGMA = 3.0  # deviation beyond this many scaled MADs is a spike
+CLEANING_HAMPEL_MIN_READINGS = 5  # fewer points than this: too short to judge spikes
+CLEANING_MAD_SCALE = 1.4826  # MAD→σ consistency factor for Gaussian noise
+CLEANING_MAD_FLOOR = 1.0  # min σ (%) so a flat run isn't hyper-sensitive to change
+
 # ── Trend Analysis ───────────────────────────────────────────────────────────
 
 TREND_MOISTURE_THRESHOLD = 5  # % delta for rising/declining
