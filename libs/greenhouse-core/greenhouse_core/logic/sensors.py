@@ -2,6 +2,7 @@
 
 import statistics
 
+from greenhouse_core.logic.cleaning import clean_readings
 from greenhouse_core.logic.decision import PerSensorSnapshot, SensorSnapshot
 from greenhouse_core.repository import IrrigationRepository
 
@@ -24,7 +25,10 @@ def get_recent_sensor_data(db: IrrigationRepository, cluster_id: int, hours: int
     per_sensor: list[PerSensorSnapshot] = []
 
     for sensor in sensors:
-        readings = db.get_recent_readings(sensor.id, hours=hours)
+        # Clean per sensor (range-gate + spike-reject) so spurious samples don't
+        # drag the cluster aggregates — especially min_soil_moisture, which the
+        # engine uses as "the driest plant drives the call".
+        readings = clean_readings(db.get_recent_readings(sensor.id, hours=hours))
         s_temps: list[float] = []
         s_humidity: list[float] = []
         s_soil: list[float] = []

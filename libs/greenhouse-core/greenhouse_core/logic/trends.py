@@ -3,6 +3,7 @@
 import statistics
 
 from greenhouse_core.constants import TREND_MIN_READINGS, TREND_MOISTURE_THRESHOLD, TREND_TEMP_THRESHOLD
+from greenhouse_core.logic.cleaning import clean_readings
 from greenhouse_core.logic.decision import Trends
 from greenhouse_core.repository import IrrigationRepository
 
@@ -15,7 +16,9 @@ def analyze_historical_trends(db: IrrigationRepository, cluster_id: int) -> Tren
     if sensors:
         all_readings = []
         for sensor in sensors:
-            all_readings.extend(db.get_recent_readings(sensor.id, hours=48))
+            # Clean each sensor's series before pooling — the Hampel filter is
+            # only valid within one sensor's own timeline, not across sensors.
+            all_readings.extend(clean_readings(db.get_recent_readings(sensor.id, hours=48)))
 
         if len(all_readings) >= TREND_MIN_READINGS:
             all_readings.sort(key=lambda r: r.timestamp)

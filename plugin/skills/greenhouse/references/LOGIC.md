@@ -172,6 +172,7 @@ While an irrigation is running, `PumpWatcherService` polls the IK10PW's DP 105 w
 2. Determine temperature (indoor → sensor primary; outdoor → Open-Meteo primary)
 3. Run trust layer: sensor anomaly scan (drift + stale), leak/stuck-valve detector
 4. Run `decide_for_cluster()` → typed `IrrigationDecision`, in order:
+   - Sensor snapshot + trends are built from a **cleaned view** of each sensor's series (range-gate + Hampel spike filter; see Sensor Data Cleaning)
    - `no_plants` short-circuit
    - 6h global cooldown check (any irrigator in cluster)
    - Quiet-hours gate (auto runs skip inside the window; manual `force=true` bypasses with a `manual_override_quiet_hours` warning)
@@ -207,6 +208,19 @@ With one irrigator serving multiple plants:
 Decision uses `min_soil_moisture` (driest sensor), not average. Code: `TriggerCode.CONFLICT`.
 
 A conflict fires only when the driest sensor is below `target_min` **and** the wettest is within `CONFLICT_WET_MARGIN` (5%) of `target_max`. The margin is deliberately narrow so the wet band does not overlap the healthy range: a normal spread such as driest 44 / wettest 56 against a 45–65 target is treated as ordinarily dry (driest drives the call), not a spurious unresolvable conflict.
+
+## Sensor Data Cleaning
+
+Raw Tuya readings are noisy — capacitive soil probes glitch to single-sample **spikes** that revert one reading later, a wedged probe reports a **flat run**, and comms errors inject **dirty out-of-range** values. Because the soil-moisture rule keys on `min_soil_moisture` (the driest sensor), a single spurious low sample is otherwise enough to trigger a needless irrigation.
+
+`logic/cleaning.py:clean_readings()` produces a *cleaned view* of one sensor's series at read time. It is consumed by the decision snapshot (`logic/sensors.py:get_recent_sensor_data`) and the 48h trend analysis (`logic/trends.py`), applied **per sensor** before aggregation. **Raw rows in `sensor_readings` are never mutated** — they remain the permanent record, and charts / anomaly detection still see the unfiltered signal.
+
+Two stages, applied independently per numeric metric (`temperature`, `soil_moisture`, `env_humidity`, `light`):
+
+1. **Range gate** — values outside the per-metric physical bounds in `SENSOR_PHYSICAL_RANGES` are dropped as dirty (e.g. humidity 250%, a negative-temperature blip). `0.0` stays in-range so a genuinely bone-dry probe survives.
+2. **Hampel spike filter** — the standard robust time-series test: a point is rejected when it deviates from its rolling-window median (radius 3 → 7 samples) by more than `CLEANING_HAMPEL_N_SIGMA` (3.0) scaled MADs (`× 1.4826`). The MAD scale is floored at `CLEANING_MAD_FLOOR` (1.0%) so a flat run (MAD ≈ 0) does **not** flag a later genuine step change (e.g. a real post-irrigation jump) as an outlier. Series shorter than `CLEANING_HAMPEL_MIN_READINGS` (5) are left untouched — too little context to judge spikes.
+
+Cleaning is field-independent (a `soil_moisture` spike does not discard that reading's `temperature`) and advisory (rejected values become `None`, so existing `is not None` filters skip them). This complements the trust layer's `sensor_drift` scan, which intentionally runs on the *raw* series to detect the drift cleaning would otherwise mask.
 
 ## Trust Layer
 
@@ -273,6 +287,7 @@ Stored in `plant_health_daily` for long-horizon trend plotting. Snapshot job run
 All thresholds in `libs/greenhouse-core/greenhouse_core/constants.py`:
 
 - Cooldown: 6h between irrigations (`MIN_COOLDOWN_HOURS`)
+- Sensor cleaning: physical ranges `SENSOR_PHYSICAL_RANGES`; Hampel spike filter `CLEANING_HAMPEL_WINDOW_RADIUS = 3`, `CLEANING_HAMPEL_N_SIGMA = 3.0`, `CLEANING_HAMPEL_MIN_READINGS = 5`, `CLEANING_MAD_SCALE = 1.4826`, `CLEANING_MAD_FLOOR = 1.0`
 - Soil moisture: critical 30%, low 40%, saturated 70%
 - Duration: default 2min, conflict 1min, stress 3min, max 5min
 - Intervals: min 6h, max 24h, default 12h (conflict 8h, stress 6h)
