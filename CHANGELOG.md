@@ -4,6 +4,26 @@ All notable changes to this project are tracked here. Managed automatically by
 [release-please](https://github.com/googleapis/release-please) from
 [Conventional Commits](https://www.conventionalcommits.org/) — do not hand-edit.
 
+## [4.0.0](https://github.com/giocaizzi/greenhouse/compare/v3.1.0...v4.0.0) (2026-06-22)
+
+
+### ⚠ BREAKING CHANGES
+
+* per-cluster irrigator CRUD is now the singular resource /clusters/{id}/irrigator (POST 409 / GET-PUT-DELETE 404); cluster detail/status expose a single `irrigator | null`; CLI irrigator update/delete are cluster-keyed and `irrigator show` replaces per-cluster list. Global /irrigators and device-action endpoints are unchanged.
+
+### Added
+
+* **logic:** clean noisy sensor series before decisions ([#90](https://github.com/giocaizzi/greenhouse/issues/90)) ([c934079](https://github.com/giocaizzi/greenhouse/commit/c9340790bb69c4a24dbf84ba5a529aa4190b3228))
+* vacation reservoir rationing + strict 0:1 cluster↔irrigator ([#72](https://github.com/giocaizzi/greenhouse/issues/72)) ([79157fc](https://github.com/giocaizzi/greenhouse/commit/79157fc127eaae332ebca13dac4581c85104394e))
+* **web:** gate UI by cluster capability and add settings/mobile/a11y polish ([#80](https://github.com/giocaizzi/greenhouse/issues/80)) ([cc3be7f](https://github.com/giocaizzi/greenhouse/commit/cc3be7f977c21e8ed33863fe4b3beae15fd78b82))
+
+
+### Fixed
+
+* **engine:** water any hour when no windows are configured ([#83](https://github.com/giocaizzi/greenhouse/issues/83)) + engine hardening ([#84](https://github.com/giocaizzi/greenhouse/issues/84)) ([e7f7525](https://github.com/giocaizzi/greenhouse/commit/e7f7525bee8e39e0057f0777a980ad7bcd5f96c1))
+* **scheduler:** make UserPreferences.timezone the single source of truth ([#85](https://github.com/giocaizzi/greenhouse/issues/85)) ([f0d4e8b](https://github.com/giocaizzi/greenhouse/commit/f0d4e8bdee0b094876c22c244eec3d4bcfa087a7))
+* **web:** stop closed command palette from blocking mobile taps ([#76](https://github.com/giocaizzi/greenhouse/issues/76)) ([2e239d0](https://github.com/giocaizzi/greenhouse/commit/2e239d09c327d9344bdded7e8edf01d55faabd54))
+
 ## [3.1.0](https://github.com/giocaizzi/greenhouse/compare/v3.0.2...v3.1.0) (2026-06-14)
 
 
