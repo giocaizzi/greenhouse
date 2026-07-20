@@ -6,8 +6,8 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi import FastAPI
 
-from greenhouse_core.cloud import TuyaCloud
 from greenhouse_core.constants import HEALTH_POLL_IDLE_MINUTES
+from greenhouse_core.devices import DeviceGateway
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.config import Settings
 
@@ -188,12 +188,14 @@ def apply_timezone_preference(request, tz_name: str | None) -> None:
     )
 
 
-def _get_cloud() -> TuyaCloud | None:
-    """Create TuyaCloud client, returning None if credentials are missing."""
-    try:
-        return TuyaCloud()
-    except (ValueError, Exception):
-        return None
+def _get_cloud() -> DeviceGateway | None:
+    """Return the one app-scoped Tuya gateway (shared client/token), or None.
+
+    Background jobs borrow ``app.state.device_gateway`` rather than building a
+    fresh client per tick — so a sync/check run costs no extra ``/v1.0/token``
+    call, and the local-key cache warmed by one job is seen by the others.
+    """
+    return getattr(_app.state, "device_gateway", None) if _app is not None else None
 
 
 def _sync_job() -> None:

@@ -6,8 +6,7 @@ from typing import Annotated
 from fastapi import Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
-from greenhouse_core.cloud import TuyaCloud
-from greenhouse_core.devices import DeviceRegistry
+from greenhouse_core.devices import DeviceGateway, DeviceRegistry
 from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.services.cluster import ClusterService
@@ -51,11 +50,14 @@ def get_health_monitor(request: Request) -> DeviceHealthMonitor | None:
     return factory
 
 
-def get_tuya_cloud() -> TuyaCloud | None:
-    try:
-        return TuyaCloud()
-    except Exception:
-        return None
+def get_device_gateway(request: Request) -> DeviceGateway | None:
+    """Return the one app-scoped Tuya gateway, or ``None`` in degraded mode.
+
+    Built once at startup (``app.state.device_gateway``) so every request
+    borrows the single Cloud client and its token — never constructs a new
+    one. ``None`` when credentials were absent at startup.
+    """
+    return getattr(request.app.state, "device_gateway", None)
 
 
 def get_weather_client(request: Request) -> WeatherClient:
@@ -90,9 +92,9 @@ def require_cluster(repo: IrrigationRepository, cluster_id: int):
 def get_sync_service(
     repo: Annotated[IrrigationRepository, Depends(get_repository)],
     registry: Annotated[DeviceRegistry | None, Depends(get_device_registry)],
-    cloud: Annotated[TuyaCloud | None, Depends(get_tuya_cloud)],
+    gateway: Annotated[DeviceGateway | None, Depends(get_device_gateway)],
 ) -> SyncService:
-    return SyncService(repo, registry, cloud)
+    return SyncService(repo, registry, gateway)
 
 
 def get_cluster_service(
@@ -134,7 +136,7 @@ def get_irrigation_service(
 SessionDep = Annotated[Session, Depends(get_session)]
 RepoDep = Annotated[IrrigationRepository, Depends(get_repository)]
 DeviceRegistryDep = Annotated[DeviceRegistry | None, Depends(get_device_registry)]
-TuyaCloudDep = Annotated[TuyaCloud | None, Depends(get_tuya_cloud)]
+DeviceGatewayDep = Annotated[DeviceGateway | None, Depends(get_device_gateway)]
 WeatherClientDep = Annotated[WeatherClient, Depends(get_weather_client)]
 NtfyNotifierDep = Annotated[NtfyClient | None, Depends(get_ntfy_notifier)]
 PlantDbDep = Annotated[PlantDatabase, Depends(get_plant_db)]
