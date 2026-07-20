@@ -103,7 +103,7 @@ class FakeSensorAdapter(AbstractSensorAdapter):
         self.calls.append(("read_live", sensor.id))
         return dict(self.reading)
 
-    def read_health(self, sensor: Sensor) -> DeviceHealthState:
+    def read_health(self, sensor: Sensor, latest=None) -> DeviceHealthState:
         self.calls.append(("read_health", sensor.id))
         return self.health_state
 

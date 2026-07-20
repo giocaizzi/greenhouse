@@ -12,13 +12,13 @@ Local DB is our permanent archive.
 import logging
 import time
 
-from greenhouse_core.cloud import TuyaCloud
+from greenhouse_core.devices.gateway import DeviceGateway
 from greenhouse_core.repository import IrrigationRepository
 
 logger = logging.getLogger(__name__)
 
 
-def sync_sensor_data(db: IrrigationRepository, cloud: TuyaCloud, hours: int = 24) -> dict:
+def sync_sensor_data(db: IrrigationRepository, cloud: DeviceGateway, hours: int = 24) -> dict:
     """Sync all sensor data from Tuya Cloud to local DB.
 
     Returns dict with sync stats per cluster.
@@ -57,7 +57,7 @@ def sync_sensor_data(db: IrrigationRepository, cloud: TuyaCloud, hours: int = 24
     return stats
 
 
-def sync_single_sensor(db: IrrigationRepository, cloud: TuyaCloud, sensor, hours: int) -> tuple[int, int, int]:
+def sync_single_sensor(db: IrrigationRepository, cloud: DeviceGateway, sensor, hours: int) -> tuple[int, int, int]:
     """Sync a single sensor. Returns (total_processed, new_inserted, live_saved)."""
 
     # 1. Determine sync window

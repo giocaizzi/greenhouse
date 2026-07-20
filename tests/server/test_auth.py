@@ -10,7 +10,7 @@ from fake_devices import FakeIrrigatorAdapter
 from greenhouse_core.devices import DeviceRegistry
 from greenhouse_server.app import create_app
 from greenhouse_server.config import Settings
-from greenhouse_server.deps import get_device_registry, get_tuya_cloud
+from greenhouse_server.deps import get_device_gateway, get_device_registry
 
 from .conftest import TEST_ADMIN_PASSWORD, TEST_ADMIN_USERNAME, TEST_AUTH_SECRET
 
@@ -37,7 +37,7 @@ def _build_app(**override):
     for key in ("rainpoint.ik10pw", "tuya_cloud", "tuya_local", ""):
         registry.register_irrigator(key, lambda adapter=fake: adapter)
     app.dependency_overrides[get_device_registry] = lambda: registry
-    app.dependency_overrides[get_tuya_cloud] = lambda: None
+    app.dependency_overrides[get_device_gateway] = lambda: None
     return app, engine
 
 

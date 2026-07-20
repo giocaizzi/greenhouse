@@ -15,12 +15,12 @@ from fake_data import FAKE_DEVICE_ID
 from greenhouse_core.devices import (
     AbstractIrrigatorAdapter,
     AbstractSensorAdapter,
+    DeviceGateway,
     DeviceHealthState,
     DeviceRegistry,
     HealthAlarm,
     IK10PWAdapter,
     TR301ZAdapter,
-    TuyaTransport,
     build_default_registry,
 )
 from greenhouse_core.models import Irrigator, Sensor
@@ -53,15 +53,12 @@ def _make_sensor(model_key: str) -> Sensor:
 def registry(fake_tuya_env, monkeypatch):
     """A registry wired with the default adapter set against a mocked Tuya
     cloud — no real network. ``tinytuya.Cloud`` is patched to a MagicMock so
-    every cloud call inside the adapters becomes a no-op that returns mocks.
+    every cloud call inside the one shared gateway becomes a no-op.
     """
     with patch("greenhouse_core.devices.tinytuya.Cloud") as cloud_class:
         cloud_class.return_value = MagicMock()
-        transport = TuyaTransport()
-        # cloud.py also instantiates tinytuya.Cloud; reuse the same patch.
-        with patch("greenhouse_core.cloud.tinytuya.Cloud") as cloud_class2:
-            cloud_class2.return_value = MagicMock()
-            yield build_default_registry(transport)
+        gateway = DeviceGateway()
+        yield build_default_registry(gateway)
 
 
 class TestIrrigatorContract:
@@ -137,12 +134,12 @@ class TestSensorContract:
         assert out is not None
 
     @pytest.mark.parametrize("model_key", ["tuya.tr301z"])
-    def test_read_health_returns_state_on_cloud_failure(self, registry: DeviceRegistry, model_key: str):
-        """A cloud failure surfaces offline=True without raising."""
+    def test_read_health_no_reading_surfaces_offline(self, registry: DeviceRegistry, model_key: str):
+        """With no persisted reading, health derivation surfaces offline=True."""
         adapter = registry.get_sensor(_make_sensor(model_key))
-        # Force the cloud client to raise so the adapter must absorb it.
-        adapter._cloud.get_live_reading = MagicMock(side_effect=RuntimeError("offline"))  # type: ignore[attr-defined]
-        state = adapter.read_health(_make_sensor(model_key))
+        # No live Cloud read — health derives from the latest persisted row,
+        # and its absence is the "offline" condition.
+        state = adapter.read_health(_make_sensor(model_key), None)
         assert isinstance(state, DeviceHealthState)
         assert state.offline is True
         assert state.alarms <= adapter.health_capabilities
