@@ -10,8 +10,7 @@ from fastapi_mcp import AuthConfig, FastApiMCP
 from sqlalchemy.engine import Engine
 
 from greenhouse_core.database import create_db_engine, create_session_factory, init_db
-from greenhouse_core.devices import DeviceRegistry, build_default_registry
-from greenhouse_core.devices.tuya_transport import TuyaTransport
+from greenhouse_core.devices import DeviceGateway, build_default_registry
 from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_core.utils import set_display_timezone
 from greenhouse_server.auth import bootstrap_admin, require_user
@@ -51,18 +50,23 @@ from greenhouse_server.web.exception_handlers import register_web_exception_hand
 from greenhouse_server.web.router import web_router
 
 
-def _init_device_registry() -> DeviceRegistry | None:
-    """Build the default device registry from environment Tuya credentials.
+def _init_tuya(app: FastAPI) -> None:
+    """Build the one shared Tuya gateway and the registry that wraps it.
 
-    Returns ``None`` when credentials are missing or transport construction
-    fails, so the server still starts in degraded mode for tests and
-    credential-less environments.
+    Stores ``app.state.device_gateway`` (a single ``DeviceGateway`` — one Cloud
+    client, one token) and ``app.state.device_registry`` (adapters bound to it).
+    Both are set to ``None`` when credentials are missing or construction fails,
+    so the server still starts in degraded mode for tests and credential-less
+    environments.
     """
     try:
-        transport = TuyaTransport()
+        gateway = DeviceGateway()
     except (ValueError, Exception):
-        return None
-    return build_default_registry(transport)
+        app.state.device_gateway = None
+        app.state.device_registry = None
+        return
+    app.state.device_gateway = gateway
+    app.state.device_registry = build_default_registry(gateway)
 
 
 def _init_ntfy_notifier(settings: Settings) -> NtfyClient | None:
@@ -157,7 +161,7 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
     # Store dependencies on app.state (accessed by deps.py)
     app.state.settings = settings
     app.state.session_factory = create_session_factory(engine)
-    app.state.device_registry = _init_device_registry()
+    _init_tuya(app)
 
     # UserPreferences.timezone is the single authoritative clock: the engine
     # gates windows against it, so the scheduler's wall-clock cron jobs, the

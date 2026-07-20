@@ -10,7 +10,7 @@ from sqlalchemy.pool import StaticPool
 from greenhouse_core.models import IrrigationEvent, Sensor, SensorReading
 from greenhouse_server.app import create_app
 from greenhouse_server.config import Settings
-from greenhouse_server.deps import get_device_registry, get_tuya_cloud
+from greenhouse_server.deps import get_device_gateway, get_device_registry
 
 
 def _make_client():
@@ -18,7 +18,7 @@ def _make_client():
     settings = Settings(db_url="sqlite://", enable_scheduler=False, auth_enabled=False)
     app = create_app(settings, engine=engine)
     app.dependency_overrides[get_device_registry] = lambda: None
-    app.dependency_overrides[get_tuya_cloud] = lambda: None
+    app.dependency_overrides[get_device_gateway] = lambda: None
     return TestClient(app, raise_server_exceptions=False), engine
 
 

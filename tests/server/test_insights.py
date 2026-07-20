@@ -23,13 +23,13 @@ class TestClusterInsights:
 
         from greenhouse_server.app import create_app
         from greenhouse_server.config import Settings
-        from greenhouse_server.deps import get_device_registry, get_tuya_cloud
+        from greenhouse_server.deps import get_device_gateway, get_device_registry
 
         engine = create_engine("sqlite://", echo=False, connect_args={"check_same_thread": False}, poolclass=StaticPool)
         settings = Settings(db_url="sqlite://", enable_scheduler=False, auth_enabled=False)
         application = create_app(settings, engine=engine)
         application.dependency_overrides[get_device_registry] = lambda: None
-        application.dependency_overrides[get_tuya_cloud] = lambda: None
+        application.dependency_overrides[get_device_gateway] = lambda: None
 
         client = TestClient(application, raise_server_exceptions=False)
 

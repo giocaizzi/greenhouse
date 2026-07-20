@@ -143,11 +143,17 @@ class DeviceHealthMonitor:
         return state
 
     def poll_sensor(self, sensor: Sensor) -> DeviceHealthState:
-        """Read the sensor's health surface and reconcile alerts."""
+        """Reconcile a sensor's health from its latest persisted reading.
+
+        The sync job is the sole Cloud writer of sensor readings; the adapter
+        derives battery / water-warning / recency from the row we pass in, so
+        this poll issues no Cloud call.
+        """
         adapter = self._registry.get_sensor(sensor)
         if adapter is None:
             return DeviceHealthState(observed_at=self._clock(), offline=False)
-        state = adapter.read_health(sensor)
+        latest = self._repo.get_latest_reading(sensor.id)
+        state = adapter.read_health(sensor, latest)
         self.record(ENTITY_SENSOR, sensor.id, state, label=sensor.name)
         return state
 

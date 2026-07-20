@@ -164,6 +164,15 @@ SIGNAL_LOSS_THRESHOLD = 30  # 0-100 link quality
 HEALTH_POLL_IDLE_MINUTES = 5
 SENSOR_HEALTH_BACKFILL_WINDOW = 5  # consecutive readings
 
+# ── Read-model freshness contract ────────────────────────────────────────────
+# The sync job is the sole Cloud writer of sensor_readings; every other consumer
+# reads the latest persisted row. If the reading feeding an actuation decision
+# is older than this, the pipeline forces ONE targeted sync (per stale sensor)
+# before deciding — never N redundant live reads. Sized above the default sync
+# cadence + a typical sensor report gap so a healthy feed never trips it, well
+# inside the 6h actuation cooldown.
+SENSOR_READING_STALE_SECONDS = 14400  # 4h
+
 # ── Open-Meteo Defaults (can be overridden via env vars) ─────────────────────
 
 DEFAULT_LATITUDE = 45.464  # Milan

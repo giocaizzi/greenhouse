@@ -1,10 +1,8 @@
 """Tests for the IK10PW irrigator adapter and the TR-301Z sensor adapter.
 
-These exercise the adapters directly — the legacy ``TuyaDeviceManager`` shim
-was removed in PR 2 once :class:`IrrigationService`, :class:`SyncService`,
-:class:`PumpWatcherService`, and the routes layer started consulting the
-registry. Tests still patch ``greenhouse_core.devices.tinytuya.Cloud`` because
-that is how :class:`TuyaTransport` constructs its cloud client.
+These exercise the adapters directly against the one shared
+:class:`DeviceGateway`. Tests patch ``greenhouse_core.devices.tinytuya.Cloud``
+because that is how the gateway constructs its single cloud client.
 """
 
 from unittest.mock import MagicMock, patch
@@ -13,11 +11,11 @@ import pytest
 
 from fake_data import FAKE_DEVICE_ID
 from greenhouse_core.devices import (
+    DeviceGateway,
     DeviceRegistry,
     HealthAlarm,
     IK10PWAdapter,
     TR301ZAdapter,
-    TuyaTransport,
     alarm_indicates_no_water,
     build_default_registry,
 )
@@ -50,31 +48,26 @@ def _make_sensor():
 
 @pytest.fixture
 def fake_cloud(fake_tuya_env):
-    """Patch ``tinytuya.Cloud`` so the transport never hits a real network."""
+    """Patch ``tinytuya.Cloud`` so the gateway never hits a real network."""
     with patch("greenhouse_core.devices.tinytuya.Cloud") as cloud_class:
         cloud = MagicMock()
         cloud_class.return_value = cloud
-        # cloud.py also instantiates tinytuya.Cloud — the TR-301Z adapter
-        # depends on TuyaCloud, which build_default_registry creates from the
-        # transport's credentials.
-        with patch("greenhouse_core.cloud.tinytuya.Cloud") as cloud_class2:
-            cloud_class2.return_value = cloud
-            yield cloud
+        yield cloud
 
 
 @pytest.fixture
-def transport(fake_cloud):
-    return TuyaTransport()
+def gateway(fake_cloud):
+    return DeviceGateway()
 
 
 @pytest.fixture
-def adapter(transport):
-    return IK10PWAdapter(transport)
+def adapter(gateway):
+    return IK10PWAdapter(gateway)
 
 
 @pytest.fixture
-def registry(transport):
-    return build_default_registry(transport)
+def registry(gateway):
+    return build_default_registry(gateway)
 
 
 class TestIK10PWAdapterActuation:
@@ -155,7 +148,7 @@ class TestIK10PWAdapterStatus:
             ],
         }
         # Force the local path to fail so the adapter falls back to cloud.
-        with patch.object(adapter._tx, "open_local", side_effect=ConnectionError("no route")):
+        with patch.object(adapter._gateway, "open_local", side_effect=ConnectionError("no route")):
             status = adapter.status(_make_irrigator())
 
         assert status["running"] is True
@@ -167,7 +160,7 @@ class TestTR301ZAdapterReadLive:
 
     def test_read_live_returns_parsed_dict(self, registry, fake_cloud):
         adapter = registry.get_sensor(_make_sensor())
-        adapter._cloud.get_live_reading = MagicMock(  # type: ignore[attr-defined]
+        adapter._gateway.get_live_reading = MagicMock(  # type: ignore[attr-defined]
             return_value={"temperature": 22.5, "soil_moisture": 45.0}
         )
         reading = adapter.read_live(_make_sensor())
@@ -176,7 +169,7 @@ class TestTR301ZAdapterReadLive:
 
     def test_read_live_cloud_failure_returns_error_dict(self, registry):
         adapter = registry.get_sensor(_make_sensor())
-        adapter._cloud.get_live_reading = MagicMock(  # type: ignore[attr-defined]
+        adapter._gateway.get_live_reading = MagicMock(  # type: ignore[attr-defined]
             side_effect=RuntimeError("device offline")
         )
         out = adapter.read_live(_make_sensor())
@@ -219,7 +212,7 @@ class TestIK10PWReadHealth:
 
     def test_no_water_alarm_surfaces(self, adapter):
         fake_local = self._make_local_status(dps={"1": True, "104": 42, "105": 1, "106": 2})
-        with patch.object(adapter._tx, "open_local", return_value=fake_local):
+        with patch.object(adapter._gateway, "open_local", return_value=fake_local):
             state = adapter.read_health(_make_irrigator())
 
         assert state.offline is False
@@ -232,7 +225,7 @@ class TestIK10PWReadHealth:
 
     def test_clear_alarm(self, adapter):
         fake_local = self._make_local_status(dps={"1": True, "105": 0})
-        with patch.object(adapter._tx, "open_local", return_value=fake_local):
+        with patch.object(adapter._gateway, "open_local", return_value=fake_local):
             state = adapter.read_health(_make_irrigator())
 
         assert state.offline is False
@@ -241,7 +234,7 @@ class TestIK10PWReadHealth:
 
     def test_missing_dp(self, adapter):
         fake_local = self._make_local_status(dps={"1": True})
-        with patch.object(adapter._tx, "open_local", return_value=fake_local):
+        with patch.object(adapter._gateway, "open_local", return_value=fake_local):
             state = adapter.read_health(_make_irrigator())
 
         assert state.offline is False
@@ -249,7 +242,7 @@ class TestIK10PWReadHealth:
         assert state.raw["alarm_raw"] is None
 
     def test_local_failure_marks_offline(self, adapter):
-        with patch.object(adapter._tx, "open_local", side_effect=ConnectionError("no route")):
+        with patch.object(adapter._gateway, "open_local", side_effect=ConnectionError("no route")):
             state = adapter.read_health(_make_irrigator())
 
         assert state.offline is True

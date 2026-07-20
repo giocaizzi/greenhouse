@@ -8,7 +8,7 @@ from fake_devices import FakeIrrigatorAdapter
 from greenhouse_core.devices import DeviceRegistry
 from greenhouse_server.app import create_app
 from greenhouse_server.config import Settings
-from greenhouse_server.deps import get_device_registry, get_tuya_cloud
+from greenhouse_server.deps import get_device_gateway, get_device_registry
 from greenhouse_server.scheduler import CHECK_ALL_JOB_ID
 from greenhouse_server.scheduler import scheduler as bg_scheduler
 
@@ -23,7 +23,7 @@ def _new_app_with_engine(engine):
     for key in ("rainpoint.ik10pw", "tuya_cloud", "tuya_local", ""):
         registry.register_irrigator(key, lambda adapter=fake: adapter)
     application.dependency_overrides[get_device_registry] = lambda: registry
-    application.dependency_overrides[get_tuya_cloud] = lambda: None
+    application.dependency_overrides[get_device_gateway] = lambda: None
     return application
 
 
