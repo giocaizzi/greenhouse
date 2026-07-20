@@ -1,9 +1,11 @@
 """Sensor sync orchestration service."""
 
 import logging
+import time
 
-from greenhouse_core.cloud import TuyaCloud
+from greenhouse_core.constants import SENSOR_READING_STALE_SECONDS
 from greenhouse_core.devices import DeviceRegistry
+from greenhouse_core.devices.gateway import DeviceGateway
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_core.sync import sync_sensor_data as core_sync
 from greenhouse_core.sync import sync_single_sensor
@@ -12,59 +14,64 @@ logger = logging.getLogger(__name__)
 
 
 class SyncService:
-    """Orchestrates sensor data synchronization from Tuya Cloud."""
+    """Orchestrates sensor data synchronization from the Tuya Cloud gateway.
+
+    The sync job is the **sole** Cloud writer of sensor readings. Every other
+    consumer (health monitor, irrigation pipeline) reads the persisted rows;
+    the only Cloud escape hatch here is :meth:`ensure_fresh_and_read`, which
+    forces a single targeted sync when a reading is too stale to actuate on.
+    """
 
     def __init__(
         self,
         repo: IrrigationRepository,
         registry: DeviceRegistry | None,
-        cloud: TuyaCloud | None,
+        cloud: DeviceGateway | None,
     ):
         self._repo = repo
         self._registry = registry
         self._cloud = cloud
 
     def sync_all_sensors(self, hours: int = 24) -> dict:
-        """Sync all sensor data from Tuya Cloud. Returns stats dict."""
+        """Sync all sensor data from the Cloud gateway. Returns stats dict."""
         if self._cloud is None:
             return {"total_synced": 0, "total_new": 0, "total_live": 0, "errors": ["No cloud connection"]}
         return core_sync(self._repo, self._cloud, hours=hours)
 
-    def sync_and_read_sensors(self, cluster_id: int) -> dict | None:
-        """Sync cluster sensors and return live reading from first sensor.
+    def ensure_fresh_and_read(self, cluster_id: int) -> dict | None:
+        """Return the cluster's current sensor snapshot from SQLite.
 
-        Backfill of historical logs still goes through ``TuyaCloud`` (the
-        Cloud API is the source of truth for sensor history). The live read
-        is delegated to the per-sensor adapter resolved via
-        :class:`DeviceRegistry`, which encapsulates the parser table.
+        Reads the latest persisted reading for each sensor (no Cloud call). If
+        any sensor's row is missing or older than ``SENSOR_READING_STALE_SECONDS``,
+        forces **one** targeted sync for those sensors only — never the old
+        "live-read every sensor twice" burst — then re-reads. Returns the first
+        sensor's canonical values (temperature/soil/env_humidity/light) for the
+        irrigation pipeline, or ``None`` when the cluster has no readable data.
         """
-        if self._cloud is None:
-            return None
         sensors = self._repo.get_sensors_in_cluster(cluster_id)
         if not sensors:
             return None
-        try:
-            for sensor in sensors:
+
+        now = int(time.time())
+        latest = {s.id: self._repo.get_latest_reading(s.id) for s in sensors}
+        stale = [
+            s for s in sensors if latest[s.id] is None or now - latest[s.id].timestamp > SENSOR_READING_STALE_SECONDS
+        ]
+        if stale and self._cloud is not None:
+            for sensor in stale:
                 try:
                     sync_single_sensor(self._repo, self._cloud, sensor, hours=6)
                 except Exception:
-                    pass
+                    logger.debug("Freshness sync failed for sensor %s", sensor.name, exc_info=True)
             self._repo.session.flush()
-            return self._read_live(sensors[0])
-        except Exception:
-            return None
+            latest = {s.id: self._repo.get_latest_reading(s.id) for s in sensors}
 
-    def _read_live(self, sensor) -> dict | None:
-        """Route the live read through the registry-resolved adapter.
-
-        Unmapped sensors degrade silently — log a warning and return ``None``
-        rather than blocking the cluster's irrigation pipeline.
-        """
-        if self._registry is None:
+        row = latest.get(sensors[0].id)
+        if row is None:
             return None
-        adapter = self._registry.get_sensor(sensor)
-        if adapter is None:
-            logger.warning("No adapter for sensor %r — skipping live read", sensor.name)
-            return None
-        live = adapter.read_live(sensor)
-        return live if live else None
+        return {
+            "temperature": row.temperature,
+            "soil_moisture": row.soil_moisture,
+            "env_humidity": row.env_humidity,
+            "light": row.light,
+        }

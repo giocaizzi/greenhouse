@@ -24,7 +24,11 @@ class Settings(BaseSettings):
     weather_lon: float = 9.189
 
     # Scheduler defaults
-    sync_interval_minutes: int = 30
+    # Sync is the sole Cloud reader of sensor data. Sensors push their own
+    # readings to Tuya; one getdevicelog per interval backfills the whole
+    # window at full granularity, so a multi-hour cadence loses no data — only
+    # dashboard freshness. Default 3h sits well inside the 6h actuation cooldown.
+    sync_interval_minutes: int = 180
     # Cron `hour` field for the check_all job (e.g. "*", "0,6,12,18").
     # Cadence ≠ irrigation cadence — engine cooldown
     # (`MIN_COOLDOWN_HOURS` in `greenhouse_core.constants`) gates actuation;

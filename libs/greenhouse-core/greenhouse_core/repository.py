@@ -345,6 +345,20 @@ class IrrigationRepository:
             select(func.max(SensorReading.timestamp)).where(SensorReading.sensor_id == sensor_id)
         )
 
+    def get_latest_reading(self, sensor_id: int) -> SensorReading | None:
+        """Return the sensor's most recent persisted reading, or ``None``.
+
+        The single read-model entry point for consumers that need a sensor's
+        current state (health derivation, pipeline freshness) without touching
+        the Cloud — the sync job is the sole writer of these rows.
+        """
+        return self.session.scalar(
+            select(SensorReading)
+            .where(SensorReading.sensor_id == sensor_id)
+            .order_by(SensorReading.timestamp.desc())
+            .limit(1)
+        )
+
     def bulk_add_sensor_readings(
         self,
         readings: list[

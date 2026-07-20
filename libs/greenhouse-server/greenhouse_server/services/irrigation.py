@@ -193,7 +193,7 @@ class IrrigationService:
         if temp_override is not None:
             return temp_override, "override", None
 
-        sensor_data = None if no_sync else self._sync.sync_and_read_sensors(cluster_id)
+        sensor_data = None if no_sync else self._sync.ensure_fresh_and_read(cluster_id)
         weather = None
 
         if is_indoor:
@@ -401,7 +401,7 @@ class IrrigationService:
             return {"cluster_name": "unknown", "sensors": [], "needs_water": []}
 
         if not no_sync:
-            self._sync.sync_and_read_sensors(cluster_id)
+            self._sync.ensure_fresh_and_read(cluster_id)
 
         sensors = self._repo.get_sensors_in_cluster(cluster_id)
         plants_by_id = {p.id: p for p in self._repo.get_plants_in_cluster(cluster_id)}

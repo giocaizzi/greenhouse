@@ -379,7 +379,7 @@ class TestEngineActuationBlock:
         # so the irrigation service resolves through the same fake.
         registry = monitor_._registry  # noqa: SLF001 — same registry as the monitor
         sync_service = MagicMock()
-        sync_service.sync_and_read_sensors.return_value = {
+        sync_service.ensure_fresh_and_read.return_value = {
             "temperature": 22.0,
             "soil_moisture": 20.0,
         }

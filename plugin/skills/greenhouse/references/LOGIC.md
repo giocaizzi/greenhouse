@@ -168,7 +168,7 @@ While an irrigation is running, `PumpWatcherService` polls the IK10PW's DP 105 w
 
 ### Cluster with irrigator
 
-1. Sync sensors from Tuya Cloud (last 6h)
+1. Read the cluster's latest persisted sensor snapshot (`SyncService.ensure_fresh_and_read`); this hits SQLite, and force-syncs from the Tuya Cloud **only** for a sensor whose newest reading is staler than `SENSOR_READING_STALE_SECONDS` (4h). The background sync job (default every 3h) is the routine Cloud writer; the pipeline no longer syncs every sensor on every check.
 2. Determine temperature (indoor → sensor primary; outdoor → Open-Meteo primary)
 3. Run trust layer: sensor anomaly scan (drift + stale), leak/stuck-valve detector
 4. Run `decide_for_cluster()` → typed `IrrigationDecision`, in order:
@@ -190,7 +190,7 @@ While an irrigation is running, `PumpWatcherService` polls the IK10PW's DP 105 w
 
 ### Cluster without irrigator
 
-1. Sync sensors from Tuya Cloud (last 2h)
+1. Read the latest persisted sensor snapshot (`ensure_fresh_and_read`; SQLite, force-syncing only a stale sensor)
 2. Compare latest soil moisture vs plant targets
 3. Flag sensors below threshold as `needs_water`
 

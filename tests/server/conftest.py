@@ -32,7 +32,7 @@ from greenhouse_core.devices import DeviceRegistry
 from greenhouse_server.app import create_app
 from greenhouse_server.auth import AuthenticatedUser, require_user, require_web_user
 from greenhouse_server.config import Settings
-from greenhouse_server.deps import get_device_registry, get_tuya_cloud
+from greenhouse_server.deps import get_device_gateway, get_device_registry
 
 TEST_ADMIN_USERNAME = "test-admin"
 TEST_ADMIN_PASSWORD = "test-admin-pw-123"
@@ -96,7 +96,7 @@ def _make_stubbed_app(*, bypass_auth: bool, **settings_override):
     wiring = FakeDeviceWiring()
     application.state.fake_devices = wiring
     application.dependency_overrides[get_device_registry] = lambda: wiring.registry
-    application.dependency_overrides[get_tuya_cloud] = lambda: None
+    application.dependency_overrides[get_device_gateway] = lambda: None
 
     if bypass_auth:
         synthetic = AuthenticatedUser(id=1, username=TEST_ADMIN_USERNAME)

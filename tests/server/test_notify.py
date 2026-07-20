@@ -318,7 +318,7 @@ def _build_service(repo, notifier):
     for key in ("soil_moisture", "tuya.tr301z"):
         registry.register_sensor(key, lambda a=sensor: a)
     sync_service = MagicMock()
-    sync_service.sync_and_read_sensors.return_value = {"temperature": 24.0, "soil_moisture": 35.0}
+    sync_service.ensure_fresh_and_read.return_value = {"temperature": 24.0, "soil_moisture": 35.0}
     weather = MagicMock()
     weather.get_current.return_value = {"feels_like": 24.0}
     service = IrrigationService(

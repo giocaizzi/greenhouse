@@ -1,4 +1,4 @@
-"""Test suite for Tuya Cloud API client."""
+"""Test suite for the Tuya DeviceGateway cloud-read surface."""
 
 from unittest.mock import MagicMock, patch
 
@@ -7,31 +7,35 @@ import pytest
 from fake_data import FAKE_CLIENT_ID, FAKE_CLIENT_SECRET, FAKE_REGION, FAKE_SENSOR_ID
 
 
-class TestTuyaCloud:
-    """Test Cloud API client with mocked tinytuya."""
+class TestDeviceGateway:
+    """Test the gateway's cloud reads with a mocked tinytuya client."""
 
     @pytest.fixture(autouse=True)
     def setup(self):
-        with patch("greenhouse_core.cloud.tinytuya") as mock_tinytuya:
+        with patch("greenhouse_core.devices.gateway.tinytuya") as mock_tinytuya:
             self.mock_cloud_instance = MagicMock()
             mock_tinytuya.Cloud.return_value = self.mock_cloud_instance
+            # Default: v2.0 shadow "unavailable" so tests exercising the v1.0
+            # getstatus path fall through deliberately. Tests of the v2.0 path
+            # override cloudrequest with a real payload.
+            self.mock_cloud_instance.cloudrequest.return_value = {"success": False}
 
-            from greenhouse_core.cloud import TuyaCloud
+            from greenhouse_core.devices.gateway import DeviceGateway
 
-            self.cloud = TuyaCloud(FAKE_CLIENT_ID, FAKE_CLIENT_SECRET, FAKE_REGION)
+            self.cloud = DeviceGateway(FAKE_CLIENT_ID, FAKE_CLIENT_SECRET, FAKE_REGION)
             yield
 
-    @patch("greenhouse_core.cloud.tinytuya")
+    @patch("greenhouse_core.devices.gateway.tinytuya")
     @patch.dict("os.environ", {"TUYA_CLIENT_ID": "", "TUYA_CLIENT_SECRET": ""}, clear=False)
     def test_init_requires_credentials(self, _mock_tinytuya):
-        """Cloud client raises without credentials."""
-        from greenhouse_core.cloud import TuyaCloud
+        """Gateway raises without credentials."""
+        from greenhouse_core.devices.gateway import DeviceGateway
 
         with pytest.raises(ValueError):
-            TuyaCloud("", "", "eu")
+            DeviceGateway("", "", "eu")
 
     def test_get_live_reading_parses_soil_sensor(self):
-        """Live reading correctly parses TR-301Z soil sensor DPs."""
+        """Live reading correctly parses TR-301Z soil sensor DPs (v1 path)."""
         self.mock_cloud_instance.getstatus.return_value = {
             "success": True,
             "result": [
@@ -47,7 +51,7 @@ class TestTuyaCloud:
         assert data["battery_state"] == "middle"
 
     def test_get_live_reading_handles_error(self):
-        """Live reading raises on API error."""
+        """Live reading raises on API error when both v2 and v1 fail."""
         self.mock_cloud_instance.getstatus.return_value = {
             "success": False,
             "msg": "device offline",
@@ -117,7 +121,7 @@ class TestTuyaCloud:
         self.mock_cloud_instance.getstatus.assert_not_called()
 
     def test_get_live_reading_v2_fallback_to_v1(self):
-        """Falls back to v1 getstatus when v2 shadow fails."""
+        """Falls back to v1 getstatus when the v2 shadow endpoint fails."""
         self.mock_cloud_instance.cloudrequest.side_effect = Exception("v2 not available")
         self.mock_cloud_instance.getstatus.return_value = {
             "success": True,
@@ -200,19 +204,41 @@ class TestTuyaCloud:
         assert len(grouped) == 1
         assert grouped[0]["temperature"] == pytest.approx(22.0)
 
-    def test_v2_shadow_empty_properties(self):
-        """V2 shadow with empty properties falls back to v1."""
+    def test_v2_shadow_empty_is_authoritative_no_fallback(self):
+        """A successful-but-empty v2 shadow read is authoritative.
+
+        The deliberate-fallback contract: v1 getstatus fires ONLY when v2 fails,
+        never merely because the parsed set is empty. So a healthy device is
+        read exactly once, and an empty v2 result returns ``{}`` without a
+        second Cloud call.
+        """
         self.mock_cloud_instance.cloudrequest.return_value = {
             "success": True,
             "result": {"properties": []},
         }
-        self.mock_cloud_instance.getstatus.return_value = {
-            "success": True,
-            "result": [
-                {"code": "temp_current", "value": 200},
-            ],
-        }
         data = self.cloud.get_live_reading(FAKE_SENSOR_ID)
 
-        assert data["temperature"] == pytest.approx(20.0)
-        self.mock_cloud_instance.getstatus.assert_called_once()
+        assert data == {}
+        self.mock_cloud_instance.getstatus.assert_not_called()
+
+    def test_open_local_uses_cached_config_key_no_getdevices(self):
+        """open_local resolves local_key from config without a Cloud getdevices."""
+        irr = MagicMock()
+        irr.tuya_device_id = FAKE_SENSOR_ID
+        irr.config = {"device_ip": "192.0.2.10", "local_key": "cfgkey123"}
+        with patch("greenhouse_core.devices.gateway.tinytuya.OutletDevice") as outlet:
+            self.cloud.open_local(irr, 3.5)
+        outlet.assert_called_once_with(FAKE_SENSOR_ID, "192.0.2.10", "cfgkey123")
+        self.mock_cloud_instance.getdevices.assert_not_called()
+
+    def test_open_local_cold_lookup_then_cached(self):
+        """A missing config key triggers exactly one getdevices, then caches."""
+        irr = MagicMock()
+        irr.tuya_device_id = FAKE_SENSOR_ID
+        irr.config = {"device_ip": "192.0.2.10"}  # no local_key
+        self.mock_cloud_instance.getdevices.return_value = [{"id": FAKE_SENSOR_ID, "key": "discovered"}]
+        with patch("greenhouse_core.devices.gateway.tinytuya.OutletDevice"):
+            self.cloud.open_local(irr, 3.5)
+            self.cloud.open_local(irr, 3.5)
+        # Second open reuses the process cache — only one Cloud lookup total.
+        self.mock_cloud_instance.getdevices.assert_called_once()

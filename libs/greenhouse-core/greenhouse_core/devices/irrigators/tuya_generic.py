@@ -9,10 +9,10 @@ from __future__ import annotations
 
 import time
 
+from greenhouse_core.devices.gateway import DeviceGateway
 from greenhouse_core.devices.health import DeviceHealthState
 from greenhouse_core.devices.irrigators.base import AbstractIrrigatorAdapter
 from greenhouse_core.devices.profile import IrrigatorProfile
-from greenhouse_core.devices.tuya_transport import TuyaTransport
 from greenhouse_core.models import Irrigator
 
 
@@ -24,15 +24,15 @@ class TuyaIrrigatorAdapter(AbstractIrrigatorAdapter):
     override the relevant method while reusing the cloud helpers.
     """
 
-    def __init__(self, profile: IrrigatorProfile, transport: TuyaTransport):
+    def __init__(self, profile: IrrigatorProfile, gateway: DeviceGateway):
         self.profile = profile
-        self._tx = transport
+        self._gateway = gateway
 
     # ── Helpers ───────────────────────────────────────────────────────────
 
     def _send_switch(self, irrigator: Irrigator, value: bool) -> tuple[bool, str]:
         commands = {"commands": [{"code": "switch", "value": value}]}
-        success, _ = self._tx.send_command(irrigator.tuya_device_id, commands)
+        success, _ = self._gateway.send_command(irrigator.tuya_device_id, commands)
         word = "ON" if value else "OFF"
         return success, f"Device turned {word}" if success else f"Failed to turn {word} device"
 
@@ -64,7 +64,7 @@ class TuyaIrrigatorAdapter(AbstractIrrigatorAdapter):
         proto = self.profile.protocol_version
         if proto is not None and self.profile.has_capability("supports_local_status"):
             try:
-                device = self._tx.open_local(irrigator, proto)
+                device = self._gateway.open_local(irrigator, proto)
                 live = device.status()
                 if live and "dps" in live:
                     dps = live["dps"]
@@ -76,7 +76,7 @@ class TuyaIrrigatorAdapter(AbstractIrrigatorAdapter):
             except Exception:
                 pass  # fall back to cloud
 
-        result = self._tx.get_status(irrigator.tuya_device_id)
+        result = self._gateway.get_status(irrigator.tuya_device_id)
         if not result.get("success"):
             return {"error": f"Cloud API error: {result}"}
 
