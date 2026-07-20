@@ -16,7 +16,7 @@ from fake_devices import FakeIrrigatorAdapter, FakeSensorAdapter
 from greenhouse_core.devices import DeviceRegistry
 from greenhouse_server.app import create_app
 from greenhouse_server.config import Settings
-from greenhouse_server.deps import get_device_registry, get_tuya_cloud
+from greenhouse_server.deps import get_device_gateway, get_device_registry
 
 
 def test_mcp_endpoint_is_mounted(app):
@@ -182,7 +182,7 @@ def _build_mcp_client(*, mcp_token: str | None) -> TestClient:
     for key in ("tuya.tr301z", "soil_moisture", "temp_humidity", "light", ""):
         registry.register_sensor(key, lambda adapter=fake_sensor: adapter)
     application.dependency_overrides[get_device_registry] = lambda: registry
-    application.dependency_overrides[get_tuya_cloud] = lambda: None
+    application.dependency_overrides[get_device_gateway] = lambda: None
 
     return TestClient(application, raise_server_exceptions=False)
 

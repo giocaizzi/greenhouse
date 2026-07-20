@@ -22,10 +22,10 @@ import signal
 import time
 from typing import Any
 
+from greenhouse_core.devices.gateway import DeviceGateway
 from greenhouse_core.devices.health import DeviceHealthState, HealthAlarm
 from greenhouse_core.devices.irrigators.tuya_generic import TuyaIrrigatorAdapter
 from greenhouse_core.devices.profile import IrrigatorProfile, load_profile_json
-from greenhouse_core.devices.tuya_transport import TuyaTransport
 from greenhouse_core.models import Irrigator
 
 logger = logging.getLogger(__name__)
@@ -95,8 +95,8 @@ class IK10PWAdapter(TuyaIrrigatorAdapter):
 
     health_capabilities = frozenset({HealthAlarm.NO_WATER, HealthAlarm.DEVICE_OFFLINE})
 
-    def __init__(self, transport: TuyaTransport, profile: IrrigatorProfile | None = None):
-        super().__init__(profile or IK10PW_PROFILE, transport)
+    def __init__(self, gateway: DeviceGateway, profile: IrrigatorProfile | None = None):
+        super().__init__(profile or IK10PW_PROFILE, gateway)
 
     # ── Cycle start ───────────────────────────────────────────────────────
 
@@ -107,7 +107,7 @@ class IK10PWAdapter(TuyaIrrigatorAdapter):
         path is the only way to control the on-device countdown.
         """
         try:
-            device = self._tx.open_local(irrigator, self.profile.protocol_version)
+            device = self._gateway.open_local(irrigator, self.profile.protocol_version)
             result = device.set_value(self.profile.dp("duration"), seconds)
             if result and result.get("Error"):
                 return False, f"Local API error: {result}"
@@ -220,7 +220,7 @@ class IK10PWAdapter(TuyaIrrigatorAdapter):
         """
         now = int(time.time())
         try:
-            device = self._tx.open_local(irrigator, self.profile.protocol_version)
+            device = self._gateway.open_local(irrigator, self.profile.protocol_version)
             status = device.status()
         except Exception as exc:
             return DeviceHealthState(
