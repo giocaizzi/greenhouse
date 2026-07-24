@@ -1,6 +1,6 @@
 [project]
 name = "greenhouse"
-version = "4.0.0"
+version = "5.0.0"
 description = "Smart irrigation system with evidence-based plant care and trend analysis"
 readme = "README.md"
 requires-python = ">=3.11"

@@ -4,6 +4,17 @@ All notable changes to this project are tracked here. Managed automatically by
 [release-please](https://github.com/googleapis/release-please) from
 [Conventional Commits](https://www.conventionalcommits.org/) — do not hand-edit.
 
+## [5.0.0](https://github.com/giocaizzi/greenhouse/compare/v4.0.0...v5.0.0) (2026-07-20)
+
+
+### ⚠ BREAKING CHANGES
+
+* **devices:** greenhouse_core.TuyaCloud and greenhouse_core.devices.tuya_transport.TuyaTransport are removed — use greenhouse_core.devices.DeviceGateway. AbstractSensorAdapter.read_health now takes an optional `latest` SensorReading. SyncService.sync_and_read_sensors is renamed to ensure_fresh_and_read.
+
+### Performance
+
+* **devices:** unify Tuya access behind DeviceGateway and cut IoT Core calls ([#95](https://github.com/giocaizzi/greenhouse/issues/95)) ([70b35d4](https://github.com/giocaizzi/greenhouse/commit/70b35d411ff6138a85f5e7137f4a3b284e390f29))
+
 ## [4.0.0](https://github.com/giocaizzi/greenhouse/compare/v3.1.0...v4.0.0) (2026-06-22)
 
 

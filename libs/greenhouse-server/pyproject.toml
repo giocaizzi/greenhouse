@@ -1,6 +1,6 @@
 [project]
 name = "greenhouse-server"
-version = "4.0.0"
+version = "5.0.0"
 description = "FastAPI server for greenhouse"
 requires-python = ">=3.11"
 license = {text = "MIT"}
