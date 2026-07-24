@@ -38,9 +38,9 @@ default-groups = ["dev"]
 
 [dependency-groups]
 dev = [
-    "pytest>=9.1.0",
+    "pytest>=9.1.1",
     "pytest-cov>=5.0",
-    "ruff>=0.15.17",
+    "ruff>=0.15.19",
 ]
 
 [tool.pytest.ini_options]
