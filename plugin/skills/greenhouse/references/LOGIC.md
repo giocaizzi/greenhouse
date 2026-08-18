@@ -33,6 +33,7 @@ Every rule function appends a `Reason` to the decision's trail via `decision.add
 |------|--------|
 | `no_plants` | Skip — cluster has no plants |
 | `cooldown` | Skip — any irrigator in cluster fired within 6h |
+| `leak_hold` | Skip — a confirmed leak / stuck valve is unresolved on the cluster (24h hold, see Trust Layer) |
 | `quiet_hours` | Skip — current local time is inside the configured quiet-hours window (auto runs only) |
 | `water_warning` | Irrigate — sensor DP 111 water-warning set |
 | `water_stress` | Irrigate — critical low moisture |
@@ -174,6 +175,7 @@ While an irrigation is running, `PumpWatcherService` polls the IK10PW's DP 105 w
 4. Run `decide_for_cluster()` → typed `IrrigationDecision`, in order:
    - Sensor snapshot + trends are built from a **cleaned view** of each sensor's series (range-gate + Hampel spike filter; see Sensor Data Cleaning)
    - `no_plants` short-circuit
+   - Leak / stuck-valve hold (safety gate — runs *before* cooldown so the audit trail names the hardware fault, not the routine skip)
    - 6h global cooldown check (any irrigator in cluster)
    - Quiet-hours gate (auto runs skip inside the window; manual `force=true` bypasses with a `manual_override_quiet_hours` warning)
    - Weather-aware precipitation skip (outdoor only, > 2mm/6h)
@@ -213,7 +215,14 @@ A conflict fires only when the driest sensor is below `target_min` **and** the w
 
 Raw Tuya readings are noisy — capacitive soil probes glitch to single-sample **spikes** that revert one reading later, a wedged probe reports a **flat run**, and comms errors inject **dirty out-of-range** values. Because the soil-moisture rule keys on `min_soil_moisture` (the driest sensor), a single spurious low sample is otherwise enough to trigger a needless irrigation.
 
-`logic/cleaning.py:clean_readings()` produces a *cleaned view* of one sensor's series at read time. It is consumed by the decision snapshot (`logic/sensors.py:get_recent_sensor_data`) and the 48h trend analysis (`logic/trends.py`), applied **per sensor** before aggregation. **Raw rows in `sensor_readings` are never mutated** — they remain the permanent record, and charts / anomaly detection still see the unfiltered signal.
+`logic/cleaning.py:clean_readings()` produces a *cleaned view* of one sensor's series at read time, applied **per sensor** before aggregation. **Raw rows in `sensor_readings` are never mutated** — they remain the permanent record.
+
+The line is drawn by what the caller does with the data:
+
+- **Judgements read the cleaned view** — decision snapshot (`logic/sensors.py`), 48h trends (`logic/trends.py`), leak detection (`services/leak.py`), efficacy scoring (`services/efficacy.py`), plant health scores (`services/health.py`), next-irrigation forecast (`services/forecast.py`), learned profiles and issue heuristics (`learning/profiling.py`, `learning/issues.py`).
+- **Archive and display read raw** — charts, cluster history, data-quality reports, the maintenance battery/staleness checks, and the `sensor_drift` anomaly scan (which must see the drift cleaning would mask).
+
+Two ordering helpers keep that switch cheap: `clean_readings_desc()` mirrors `get_recent_readings`' newest-first ordering, and `clean_readings_around()` cleans a before/after pair as one series before splitting it back, so a spike sitting at the event boundary is judged against neighbours on both sides.
 
 Two stages, applied independently per numeric metric (`temperature`, `soil_moisture`, `env_humidity`, `light`):
 
@@ -226,9 +235,30 @@ Cleaning is field-independent (a `soil_moisture` spike does not discard that rea
 
 Runs before the decision engine on every evaluation:
 
-- **Sensor anomaly scan** — per-sensor drift detection (std dev floor 1.0% to avoid false positives on near-constant series) and stale-data check (no readings in last 3h). Raises `sensor_drift` / `stale_data` alerts.
-- **Leak detector** — flags irrigators where recent moisture stayed low after a recorded irrigation (possible blocked drip or failed actuation).
-- **Stuck-valve detector** — flags irrigators that show unexplained moisture rise without a logged irrigation event.
+- **Sensor anomaly scan** — per-sensor drift detection (std dev floor 1.0% to avoid false positives on near-constant series) and stale-data check (no readings in last 3h). Raises `sensor_drift` / `stale_data` alerts. Runs on the *raw* series (see Sensor Data Cleaning).
+
+### Leak / stuck-valve detector
+
+Not part of the pre-decision scan: it is scheduled per irrigation, running `LEAK_CHECK_DELAY_SECONDS` (30 min) **after** a start event, and asks one question per sensor — *did the soil settle, or is water still arriving?* Readings come from the **cleaned view**, same as the engine.
+
+Three verdicts per sensor:
+
+| Verdict | Condition | Effect |
+|---|---|---|
+| **Inconclusive** | fewer than `LEAK_MIN_AFTER_SAMPLES` (3) samples in the 30-min window, or fewer than `LEAK_MIN_BEFORE_SAMPLES` (2) in the `LEAK_BEFORE_WINDOW_SECONDS` (3h) baseline | nothing raised, nothing resolved |
+| **Pinned** | the last `LEAK_PINNED_MIN_SAMPLES` (2) samples are all above `LEAK_PINNED_THRESHOLD` (95%) | critical alert + hold (needs no baseline) |
+| **Never settled** | moisture is still at its peak when the window closes (within `LEAK_SETTLE_TOLERANCE`, 2pp), climbed across the window, **and** sits `LEAK_RISING_DELTA` (30pp) above the baseline median | critical alert + hold |
+
+Anything else is **settled** — a successful dose — and *resolves* that sensor's open leak alert.
+
+A successful irrigation legitimately clears a 30pp before/after delta, which is why the delta alone is never sufficient: the shape of the after-window (jump-then-plateau vs. never turns over) is what separates a working valve from a stuck one. Baseline windows are routinely empty because sensor rows land in SQLite at sync time (default every 3h) — an empty baseline means *unknown*, never 0%.
+
+**The hold is the alert.** A confirmed finding raises one critical `leak_or_stuck_valve` alert per offending sensor; `IrrigationLogic._enforce_leak_hold` skips automatic irrigation for `LEAK_HOLD_HOURS` (24h) while that alert is unresolved, emitting the `leak_hold` terminal code into the decision trail and `decision_logs`. Two ways out:
+
+- **resolve the alert** (`POST /api/v1/alerts/{id}/resolve`, or a later check finding the sensor settled) — releases the hold immediately;
+- **wait it out** — the hold expires 24h after the last detection.
+
+Acknowledging an alert does *not* release the hold, and `force=true` does not bypass it (a stuck valve is a hardware fault, like the device-health alarms). The deliberate escape hatch is the direct irrigator route, `POST /api/v1/irrigators/{id}/start`.
 
 Per-day rate limits (`max_events_per_day`, `daily_cap_minutes`) are **not** part of the decision engine or trust layer — they are enforced at the API actuation routes, which return HTTP 409 when a manual or scheduled start would exceed the cap.
 

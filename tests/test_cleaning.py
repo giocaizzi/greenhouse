@@ -7,7 +7,12 @@ import pytest
 
 from fake_data import FAKE_CLUSTER_NAME, FAKE_PLANT_SPECIES, FAKE_SENSOR_ID, FAKE_SENSOR_NAME
 from greenhouse_core.constants import CLEANING_HAMPEL_MIN_READINGS
-from greenhouse_core.logic.cleaning import CleanedReading, clean_readings
+from greenhouse_core.logic.cleaning import (
+    CleanedReading,
+    clean_readings,
+    clean_readings_around,
+    clean_readings_desc,
+)
 from greenhouse_core.logic.sensors import get_recent_sensor_data
 
 
@@ -141,3 +146,60 @@ def test_snapshot_min_soil_ignores_spike(cluster_with_sensor):
     # Without cleaning min would be 3.0; cleaned it tracks the real driest sample.
     assert snapshot.min_soil_moisture >= 49.0
     assert 49.0 <= snapshot.avg_soil_moisture <= 52.0
+
+
+# ── Ordering / windowed helpers ──────────────────────────────────────────────
+
+
+def test_clean_readings_desc_returns_newest_first():
+    """Mirrors get_recent_readings' DESC ordering so "latest" stays latest."""
+    raw = _series([40.0, 45.0, 50.0])
+
+    cleaned = clean_readings_desc(raw)
+
+    assert [c.timestamp for c in cleaned] == sorted((r.timestamp for r in raw), reverse=True)
+    assert _vals(cleaned) == [50.0, 45.0, 40.0]
+
+
+def test_clean_readings_desc_still_drops_spikes():
+    raw = _series([50.0, 51.0, 49.0, 50.0, 99.0, 51.0, 50.0])
+
+    cleaned = clean_readings_desc(raw)
+
+    assert None in _vals(cleaned)
+    assert 99.0 not in _vals(cleaned)
+
+
+def test_clean_readings_around_preserves_the_partition():
+    """A row handed in as "before" comes back in before — cleaned, not moved."""
+    before = _series([40.0, 41.0], step=600)
+    after = [_Raw(timestamp=before[-1].timestamp + 600 + i * 300, soil_moisture=v) for i, v in enumerate([65.0, 66.0])]
+
+    cleaned_before, cleaned_after = clean_readings_around(before, after)
+
+    assert [c.timestamp for c in cleaned_before] == [r.timestamp for r in before]
+    assert [c.timestamp for c in cleaned_after] == [r.timestamp for r in after]
+
+
+def test_clean_readings_around_judges_a_boundary_spike_with_both_sides():
+    """Cleaning the halves separately is blind; folded, the spike is obvious.
+
+    Each window here holds three samples — below CLEANING_HAMPEL_MIN_READINGS,
+    so neither half can judge a spike on its own. Together they are six.
+    """
+    before = _series([40.0, 41.0, 40.0], step=600)
+    start = before[-1].timestamp + 600
+    after = [_Raw(timestamp=start + i * 300, soil_moisture=v) for i, v in enumerate([99.0, 41.0, 40.0])]
+
+    assert _vals(clean_readings(after)) == [99.0, 41.0, 40.0]  # too short alone
+
+    _cleaned_before, cleaned_after = clean_readings_around(before, after)
+
+    assert _vals(cleaned_after) == [None, 41.0, 40.0]
+
+
+def test_clean_readings_around_handles_empty_windows():
+    cleaned_before, cleaned_after = clean_readings_around([], _series([50.0, 51.0]))
+
+    assert cleaned_before == []
+    assert _vals(cleaned_after) == [50.0, 51.0]

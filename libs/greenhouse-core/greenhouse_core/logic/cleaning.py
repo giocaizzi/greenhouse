@@ -137,3 +137,48 @@ def clean_readings(readings) -> list[CleanedReading]:
                 setattr(cleaned[indices[position]], field, None)
 
     return cleaned
+
+
+def clean_readings_desc(readings) -> list[CleanedReading]:
+    """Cleaned view of one sensor's series, newest-first.
+
+    Mirrors :func:`IrrigationRepository.get_recent_readings`'s ordering so
+    callers that key on "the latest reading" keep working after switching to
+    the cleaned view.
+
+    Args:
+        readings: ``SensorReading`` rows (any order) for one sensor.
+
+    Returns:
+        ``CleanedReading`` items sorted newest→oldest.
+    """
+    return list(reversed(clean_readings(readings)))
+
+
+def clean_readings_around(before, after) -> tuple[list[CleanedReading], list[CleanedReading]]:
+    """Clean a before/after pair as ONE series, then split it back.
+
+    Post-irrigation analysis (leak detection, efficacy scoring, learning
+    profiles) reads two short windows around an event. Cleaning them
+    separately would judge each half in isolation — and a window of two or
+    three samples is too short for the Hampel filter to say anything. Folding
+    them into a single chronological series gives every point its real
+    temporal neighbours on both sides of the event, which is the only way a
+    spike sitting right at the boundary can be recognised.
+
+    Args:
+        before: ``SensorReading`` rows before the event (same sensor).
+        after: ``SensorReading`` rows at/after the event (same sensor).
+
+    Returns:
+        ``(cleaned_before, cleaned_after)``, each chronological. The split
+        preserves the input partition: a row handed in as "before" comes back
+        in ``cleaned_before``, cleaned but never reassigned.
+    """
+    ordered_before = sorted(before, key=lambda r: r.timestamp)
+    ordered_after = sorted(after, key=lambda r: r.timestamp)
+    cleaned = clean_readings(list(ordered_before) + list(ordered_after))
+    # clean_readings sorts by timestamp; a row shared by both windows (an exact
+    # event-timestamp hit) would otherwise be ambiguous, so split by count.
+    split = len(ordered_before)
+    return cleaned[:split], cleaned[split:]

@@ -99,6 +99,7 @@ _TRIGGER_CODE_ICONS: dict[str, str] = {
     # Terminal triggers
     "no_plants": "leaf",
     "cooldown": "clock",
+    "leak_hold": "x-circle",
     "water_warning": "warning",
     "water_stress": "drop",
     "over_watering": "drop",

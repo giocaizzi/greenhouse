@@ -81,7 +81,7 @@
       {% set irr = status.irrigator %}
       {% set last = irr.last_event %}
       {% set state_class = "dot--muted" %}
-      {% if last and last.action in ("start", "schedule_updated") %}{% set state_class = "dot--ok" %}{% endif %}
+      {% if last and last.action == "start" %}{% set state_class = "dot--ok" %}{% endif %}
       {% if last and last.action == "attempted" %}{% set state_class = "dot--warn" %}{% endif %}
       <span class="dot {{ state_class }}" aria-hidden="true">●</span>
       <span class="cluster-card__irr-name">{{ irr.name }}</span>

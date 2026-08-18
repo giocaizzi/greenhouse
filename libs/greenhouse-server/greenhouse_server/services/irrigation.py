@@ -4,8 +4,10 @@ import logging
 import time as _time
 from datetime import UTC, datetime
 
+from greenhouse_core.constants import LEAK_CHECK_DELAY_SECONDS
 from greenhouse_core.devices import DeviceRegistry, UnknownDeviceModel
 from greenhouse_core.logic import IrrigationLogic
+from greenhouse_core.logic.cleaning import clean_readings_desc
 from greenhouse_core.logic.decision import Action, Severity
 from greenhouse_core.models import ENTITY_CLUSTER
 from greenhouse_core.plant_db import PlantDatabase
@@ -18,8 +20,6 @@ from greenhouse_server.services.sync import SyncService
 from greenhouse_server.services.weather import WeatherClient
 
 logger = logging.getLogger(__name__)
-
-_LEAK_CHECK_DELAY_SECONDS = 1800  # 30 minutes
 
 
 def schedule_pump_watcher(irrigator_id: int, duration_minutes: int, started_at: int) -> bool:
@@ -126,7 +126,7 @@ def _schedule_leak_check(cluster_id: int, started_at: int) -> None:
         if not scheduler.running:
             return
 
-        run_date = datetime.fromtimestamp(started_at + _LEAK_CHECK_DELAY_SECONDS, tz=UTC)
+        run_date = datetime.fromtimestamp(started_at + LEAK_CHECK_DELAY_SECONDS, tz=UTC)
         job_id = f"leak-check-{cluster_id}-{started_at}"
 
         def _run() -> None:
@@ -323,8 +323,10 @@ class IrrigationService:
         duration = decision.duration_minutes
         success, output = adapter.start(irrigator, duration)
 
+        # The snapshot's soil value is the cluster's driest sensor (invariant #2),
+        # so label it as such — an unqualified "soil=" reads as "this plant's".
         soil_note = (
-            f", soil={sensor_data['soil_moisture']:.0f}%"
+            f", soil={sensor_data['soil_moisture']:.0f}% (driest)"
             if sensor_data and sensor_data.get("soil_moisture") is not None
             else ""
         )
@@ -410,7 +412,9 @@ class IrrigationService:
         needs_water = []
 
         for sensor in sensors:
-            readings = self._repo.get_recent_readings(sensor.id, hours=2)
+            # Cleaned view: monitor classifies each sensor as dry/ok/wet, and a
+            # sensor-only cluster has no engine to sanity-check that call.
+            readings = clean_readings_desc(self._repo.get_recent_readings(sensor.id, hours=2))
             latest_soil = (
                 next((r.soil_moisture for r in readings if r.soil_moisture is not None), None) if readings else None
             )

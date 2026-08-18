@@ -30,6 +30,8 @@ from greenhouse_core.constants import (
     HUMIDITY_LOW_OFFSET,
     HUMIDITY_VERY_LOW_INTERVAL_STEP,
     HUMIDITY_VERY_LOW_OFFSET,
+    LEAK_ALERT_CODE,
+    LEAK_HOLD_HOURS,
     LIGHT_BRIGHT,
     LIGHT_BRIGHT_INTERVAL_STEP,
     LIGHT_DARK,
@@ -140,6 +142,15 @@ class IrrigationLogic:
             if persist:
                 self._persist(decision, triggered_by)
             return decision
+
+        # Safety gate first: a confirmed leak / stuck valve outranks every other
+        # reason to skip, and saying so plainly beats reporting a cooldown that
+        # happens to also be active.
+        leak_hold = self._enforce_leak_hold(cluster_id, evaluated_at)
+        if leak_hold is not None:
+            if persist:
+                self._persist(leak_hold, triggered_by)
+            return leak_hold
 
         cooldown = self._enforce_cooldown(cluster_id, evaluated_at)
         if cooldown is not None:
@@ -465,6 +476,49 @@ class IrrigationLogic:
             )
         except Exception:
             log.warning("failed to persist decision log", exc_info=True)
+
+    def _enforce_leak_hold(self, cluster_id: int, now: int) -> IrrigationDecision | None:
+        """Skip while a confirmed leak / stuck valve is unresolved on this cluster.
+
+        The hold is derived from the alert inbox rather than a separate table:
+        ``LeakDetectionService`` raises one critical ``leak_or_stuck_valve``
+        alert per offending sensor, and this gate blocks automatic actuation
+        for as long as that alert is unresolved and no older than
+        ``LEAK_HOLD_HOURS``. Two ways out, both operator-visible: resolve the
+        alert once the hardware is checked, or let the hold age out.
+
+        Deliberately not bypassable by ``force`` — a stuck valve is a hardware
+        fault like the device-health alarms, so the escape hatch is the direct
+        irrigator start endpoint, not the cluster pipeline.
+
+        Args:
+            cluster_id: Cluster being evaluated.
+            now: Evaluation timestamp (Unix seconds).
+
+        Returns:
+            A terminal SKIP decision carrying ``TriggerCode.LEAK_HOLD``, or
+            ``None`` when no hold is active.
+        """
+        hold_seconds = LEAK_HOLD_HOURS * 3600
+        alert = self.db.get_active_alert(LEAK_ALERT_CODE, cluster_id=cluster_id, since=now - hold_seconds)
+        if alert is None:
+            return None
+
+        hours_left = max(0.0, (alert.last_seen_at + hold_seconds - now) / 3600)
+        return _decision_with_reason(
+            cluster_id,
+            now,
+            Action.SKIP,
+            0,
+            LEAK_HOLD_HOURS,
+            confidence=CONFIDENCE_COOLDOWN,
+            code=TriggerCode.LEAK_HOLD,
+            message=(
+                f"leak/stuck-valve hold active ({hours_left:.1f}h left) — {alert.message}; "
+                f"resolve alert #{alert.id} to release"
+            ),
+            severity=Severity.CRITICAL,
+        )
 
     def _enforce_cooldown(self, cluster_id: int, now: int) -> IrrigationDecision | None:
         """Skip when the cluster's irrigator fired within the cooldown window."""

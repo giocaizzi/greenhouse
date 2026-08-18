@@ -147,6 +147,43 @@ CLEANING_HAMPEL_MIN_READINGS = 5  # fewer points than this: too short to judge s
 CLEANING_MAD_SCALE = 1.4826  # MAD→σ consistency factor for Gaussian noise
 CLEANING_MAD_FLOOR = 1.0  # min σ (%) so a flat run isn't hyper-sensitive to change
 
+# ── Leak / stuck-valve detection ─────────────────────────────────────────────
+# A post-irrigation sanity check: 30 min after a start event the detector asks
+# "did the soil settle, or is water still arriving?". Getting this wrong in the
+# alarming direction is expensive — it fires a critical alert AND holds the
+# cluster (see LEAK_HOLD_HOURS) — so every rule below is written to stay silent
+# on thin data rather than guess (issue #103).
+LEAK_ALERT_CODE = "leak_or_stuck_valve"
+LEAK_CHECK_DELAY_SECONDS = 1800  # run the check 30 min after the start event
+
+# Baseline window BEFORE the start event. Sized well above the sync cadence
+# (IRRIGATION_SYNC_INTERVAL_MINUTES, default 3h) because sensor rows land in
+# SQLite at sync time, not at reading time: a 10-minute window is empty on most
+# cycles, and an empty baseline must never be read as "soil was at 0%".
+LEAK_BEFORE_WINDOW_SECONDS = 10800  # 3h — still inside the 6h cooldown
+LEAK_AFTER_WINDOW_SECONDS = 1800  # observation window after the start event
+
+# Sample floors. Below these the verdict is "not enough data" — no alert, no
+# hold. The rising test needs a real baseline AND enough after-samples to see a
+# shape (a jump that settles vs. a climb that never turns over).
+LEAK_MIN_BEFORE_SAMPLES = 2
+LEAK_MIN_AFTER_SAMPLES = 3
+LEAK_PINNED_MIN_SAMPLES = 2  # consecutive pinned samples before we believe it
+
+LEAK_PINNED_THRESHOLD = 95.0  # % soil moisture that counts as "pinned high"
+# Rise over baseline that is too much to be this cycle's dose. Only consulted
+# together with the never-settled shape test — a successful irrigation legitimately
+# clears this delta, which is exactly why the old delta-only rule cried wolf.
+LEAK_RISING_DELTA = 30.0
+# Slack (percentage points) when judging "still climbing at the end of the
+# window": absorbs probe jitter around a genuine plateau.
+LEAK_SETTLE_TOLERANCE = 2.0
+
+# How long a confirmed leak holds the cluster's automatic irrigation. The hold
+# is derived from the open alert (lifted by resolving it) and expires on its own
+# this long after the last detection.
+LEAK_HOLD_HOURS = 24
+
 # ── Trend Analysis ───────────────────────────────────────────────────────────
 
 TREND_MOISTURE_THRESHOLD = 5  # % delta for rising/declining

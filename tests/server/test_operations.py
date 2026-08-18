@@ -57,6 +57,59 @@ class TestIrrigate:
         assert "manual_override_quiet_hours" in codes
 
 
+class TestLeakHold:
+    """End-to-end: a confirmed leak holds /irrigate until the alert is resolved."""
+
+    def _raise_leak(self, app, cluster_id: int = 1, sensor_id: int = 1):
+        from greenhouse_core.constants import LEAK_ALERT_CODE
+        from greenhouse_core.repository import IrrigationRepository
+
+        session = app.state.session_factory()
+        repo = IrrigationRepository(session)
+        alert = repo.upsert_alert(
+            dedup_key=f"leak::{LEAK_ALERT_CODE}::{cluster_id}::sensor{sensor_id}",
+            source="leak",
+            code=LEAK_ALERT_CODE,
+            title="Possible leak or stuck valve detected",
+            message="Test Sensor: soil moisture still rising after irrigation (latest=78.0%)",
+            severity="critical",
+            entity_type="sensor",
+            entity_id=sensor_id,
+            cluster_id=cluster_id,
+        )
+        session.commit()
+        alert_id = alert.id
+        session.close()
+        return alert_id
+
+    def test_irrigate_is_held_by_an_open_leak_alert(self, seeded_client, app):
+        self._raise_leak(app)
+
+        resp = seeded_client.post("/api/v1/clusters/1/irrigate", json={"dry_run": True, "no_sync": True})
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["action"] == "skip"
+        assert "leak_hold" in [r["code"] for r in data["reasons"]]
+
+    def test_force_does_not_bypass_the_leak_hold(self, seeded_client, app):
+        self._raise_leak(app)
+
+        resp = seeded_client.post("/api/v1/clusters/1/irrigate", json={"dry_run": True, "no_sync": True, "force": True})
+
+        data = resp.json()
+        assert data["action"] == "skip"
+        assert "leak_hold" in [r["code"] for r in data["reasons"]]
+
+    def test_resolving_the_alert_releases_the_hold(self, seeded_client, app):
+        alert_id = self._raise_leak(app)
+
+        seeded_client.post(f"/api/v1/alerts/{alert_id}/resolve")
+        resp = seeded_client.post("/api/v1/clusters/1/irrigate", json={"dry_run": True, "no_sync": True})
+
+        assert "leak_hold" not in [r["code"] for r in resp.json()["reasons"]]
+
+
 class TestMonitor:
     def test_monitor(self, seeded_client):
         resp = seeded_client.get("/api/v1/clusters/1/monitor")

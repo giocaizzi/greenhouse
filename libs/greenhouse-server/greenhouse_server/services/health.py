@@ -4,6 +4,7 @@ import time
 from datetime import UTC, datetime
 
 from greenhouse_core.learning.profiling import get_plant_profile
+from greenhouse_core.logic.cleaning import clean_readings
 from greenhouse_core.logic.plant_needs import parse_moisture_target
 from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_core.repository import IrrigationRepository
@@ -57,7 +58,10 @@ class PlantHealthService:
         sensors = list(plant.sensors)
         all_readings = []
         for sensor in sensors:
-            all_readings.extend(self._repo.get_recent_readings(sensor.id, hours=days * 24))
+            # Cleaned view, per sensor, before pooling: the score is a judgement
+            # about how much time the plant spent in band, and a probe glitch
+            # must not cost (or buy) the plant health points.
+            all_readings.extend(clean_readings(self._repo.get_recent_readings(sensor.id, hours=days * 24)))
 
         sample_count = len(all_readings)
 

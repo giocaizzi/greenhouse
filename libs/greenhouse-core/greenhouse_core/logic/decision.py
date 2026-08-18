@@ -88,6 +88,11 @@ class TriggerCode(StrEnum):
     DEVICE_BATTERY_CRITICAL = "device_battery_critical"
     DEVICE_SIGNAL_LOSS = "device_signal_loss"
     DEVICE_OFFLINE = "device_offline"
+    # Leak / stuck-valve hold — terminal SKIP while a confirmed leak alert is
+    # open on the cluster (see LEAK_HOLD_HOURS). Lifts when the alert is
+    # resolved or the hold ages out; `force` does NOT bypass it, the same way
+    # the device-health gate is not bypassable.
+    LEAK_HOLD = "leak_hold"
 
 
 DEVICE_BLOCKING_CODES: frozenset[TriggerCode] = frozenset(

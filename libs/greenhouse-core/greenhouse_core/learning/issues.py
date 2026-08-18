@@ -12,6 +12,7 @@ from greenhouse_core.constants import (
 )
 from greenhouse_core.learning.models import Alert
 from greenhouse_core.learning.profiling import get_plant_profile
+from greenhouse_core.logic.cleaning import clean_readings, clean_readings_desc
 from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_core.utils import daytime_lux_readings, effective_light_threshold, seasonal_light_factor
@@ -78,7 +79,7 @@ def detect_issues(
         # 2. Rapid drainage — with light correlation
         if profile.avg_drainage_per_hour < LEARNING_RAPID_DRAINAGE_THRESHOLD:
             # Check if high light explains the drainage (daytime readings only)
-            recent_readings = db.get_recent_readings(sensor.id, hours=48)
+            recent_readings = clean_readings(db.get_recent_readings(sensor.id, hours=48))
             avg_lux = None
             lux_readings = daytime_lux_readings(recent_readings)
             if lux_readings:
@@ -125,7 +126,7 @@ def detect_issues(
                 target_min = 45.0
 
             # Check if recent readings ever reach target
-            recent = db.get_recent_readings(sensor.id, hours=168)  # 7 days
+            recent = clean_readings(db.get_recent_readings(sensor.id, hours=168))  # 7 days
             if recent:
                 max_recent = max((r.soil_moisture for r in recent if r.soil_moisture is not None), default=0)
                 if max_recent < target_min and profile.response_count >= 5:
@@ -164,10 +165,13 @@ def detect_conflicts(
     # Get current moisture levels
     sensor_moisture = {}
     for sensor in sensors:
-        readings = db.get_recent_readings(sensor.id, hours=6)
+        # Newest-first cleaned view. `get_recent_readings` returns DESC, so the
+        # *first* three entries are the latest three — slicing from the tail
+        # would have averaged the OLDEST samples in the window instead.
+        readings = clean_readings_desc(db.get_recent_readings(sensor.id, hours=6))
         moisture_values = [r.soil_moisture for r in readings if r.soil_moisture is not None]
         if moisture_values:
-            sensor_moisture[sensor.id] = statistics.mean(moisture_values[-3:])  # Last 3 readings
+            sensor_moisture[sensor.id] = statistics.mean(moisture_values[:3])  # latest 3 readings
 
     if len(sensor_moisture) < 2:
         return alerts
@@ -246,7 +250,7 @@ def detect_conflicts(
         min_lux = care.get("ideal_light_lux_min")
         if not min_lux:
             continue
-        readings_7d = db.get_recent_readings(sensor.id, hours=168)
+        readings_7d = clean_readings(db.get_recent_readings(sensor.id, hours=168))
         lux_vals = daytime_lux_readings(readings_7d)  # exclude night readings
         if len(lux_vals) < 5:
             continue  # Not enough data
@@ -277,7 +281,7 @@ def detect_conflicts(
         ideal_hum_min = care2.get("ideal_humidity_min")
         if not ideal_hum_min:
             continue
-        readings_48h = db.get_recent_readings(sensor.id, hours=48)
+        readings_48h = clean_readings(db.get_recent_readings(sensor.id, hours=48))
         hum_vals = [r.env_humidity for r in readings_48h if r.env_humidity is not None]
         if len(hum_vals) < 5:
             continue
