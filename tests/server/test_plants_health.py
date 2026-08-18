@@ -36,6 +36,26 @@ def _repo(app) -> IrrigationRepository:
 class TestPlantHealthEndpoints:
     """GET /plants/{id}/health and POST /plants/health/snapshot."""
 
+    def test_spike_readings_do_not_move_the_in_band_ratio(self, client, app):
+        """Health is a judgement, so it reads the cleaned view like the engine.
+
+        Eight in-band samples plus one 2% glitch: counted raw the plant loses
+        ~11 points of in-band time for a reading the anomaly scan already flags
+        as drift.
+        """
+        plant_id, sensor_id = _seed_plant_with_sensor(client)
+        now = int(time.time())
+
+        repo = _repo(app)
+        for i, moisture in enumerate([55.0, 54.0, 56.0, 55.0, 2.0, 54.0, 55.0, 56.0, 55.0]):
+            repo.add_sensor_reading(sensor_id=sensor_id, timestamp=now - 3600 * i, soil_moisture=moisture)
+        repo.session.commit()
+
+        client.post("/api/v1/plants/health/snapshot")
+        history = client.get(f"/api/v1/plants/{plant_id}/health").json()["history"]
+
+        assert history[0]["soil_in_band_pct"] == pytest.approx(100.0)
+
     def test_get_health_score_in_band(self, client, app):
         """Score is between 0 and 100; snapshot soil_in_band_pct reflects in-band ratio."""
         plant_id, sensor_id = _seed_plant_with_sensor(client)

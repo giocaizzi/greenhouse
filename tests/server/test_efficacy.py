@@ -87,6 +87,53 @@ class TestClusterEfficacy:
         finally:
             engine.dispose()
 
+    def test_spike_reading_does_not_inflate_the_score(self):
+        """Efficacy is rise × 5, so one glitch sample is worth 100 phantom points.
+
+        The event below is a dud — moisture sat at 30% before and after — with a
+        single spurious 95% sample in the after-window. Read through the cleaned
+        view that spike is dropped and the score stays at the floor.
+        """
+        client, engine = _make_client()
+        try:
+            client.post("/api/v1/clusters", json={"name": "Efficacy Cluster"})
+            client.post(
+                "/api/v1/clusters/1/sensors",
+                json={"tuya_device_id": "fake_eff_sensor", "name": "Eff Sensor", "type": "soil_moisture"},
+            )
+            client.post(
+                "/api/v1/clusters/1/irrigator",
+                json={"tuya_device_id": "fake_eff_irrigator", "name": "Eff Pump", "type": "tuya_cloud"},
+            )
+
+            now = int(time.time())
+            event_ts = now - 3600
+
+            with Session(engine) as session:
+                for offset in (-1500, -900, -300):
+                    session.add(SensorReading(sensor_id=1, timestamp=event_ts + offset, soil_moisture=30.0))
+                for offset, moisture in ((300, 30.0), (900, 95.0), (1500, 31.0), (2100, 30.0)):
+                    session.add(SensorReading(sensor_id=1, timestamp=event_ts + offset, soil_moisture=moisture))
+                session.add(
+                    IrrigationEvent(
+                        irrigator_id=1,
+                        timestamp=event_ts,
+                        action="start",
+                        duration_minutes=2,
+                        triggered_by="auto",
+                    )
+                )
+                session.commit()
+
+            resp = client.get("/api/v1/clusters/1/efficacy")
+            item = resp.json()["items"][0]
+
+            assert item["after_pct"] < 35.0
+            assert item["score"] < 25.0
+        finally:
+            client.close()
+            engine.dispose()
+
     def test_score_formula(self):
         """Exactly 20% rise should yield score 100."""
         client, engine = _make_client()

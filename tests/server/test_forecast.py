@@ -201,3 +201,37 @@ class TestForecastEndpoint:
         }
         assert required_fields.issubset(body.keys())
         assert body["weather_skip"] is False
+
+
+class TestForecastCleaning:
+    """The forecast extrapolates from "current moisture" — a judgement call."""
+
+    def test_latest_spike_does_not_drive_the_eta(self, tmp_db):
+        """A 2% glitch as the newest sample must not report an instant drought.
+
+        Read raw, ``current_moisture`` would be the spike and the ETA would
+        collapse to 0h; through the cleaned view the real ~55% level stands.
+        """
+        from greenhouse_core.plant_db import get_plant_database
+        from greenhouse_server.services.forecast import ForecastService
+
+        cluster_id = tmp_db.add_cluster("Forecast Cleaning Cluster")
+        plant_id = tmp_db.add_plant(cluster_id=cluster_id, species=FAKE_PLANT_SPECIES, water_needs="medium")
+        sensor_id = tmp_db.add_sensor(
+            cluster_id=cluster_id,
+            tuya_device_id=FAKE_SENSOR_ID,
+            name="Forecast Sensor",
+            sensor_type="soil_moisture",
+            config={},
+            plant_id=plant_id,
+        )
+        now = int(time.time())
+        # Newest sample first in the list below; the 2.0 lands as "current".
+        for i, moisture in enumerate([2.0, 55.0, 54.0, 56.0, 55.0, 54.0, 55.0]):
+            tmp_db.add_sensor_reading(sensor_id=sensor_id, timestamp=now - i * 3600, soil_moisture=moisture)
+        tmp_db.session.commit()
+
+        forecast = ForecastService(tmp_db, get_plant_database()).predict_next_irrigation(cluster_id)
+
+        assert forecast.hours_until_next is not None
+        assert forecast.hours_until_next > 0

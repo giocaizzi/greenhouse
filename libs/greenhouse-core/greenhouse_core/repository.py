@@ -804,6 +804,42 @@ class IrrigationRepository:
         """Fetch a single alert by id."""
         return self.session.get(Alert, alert_id)
 
+    def get_active_alert(
+        self,
+        code: str,
+        *,
+        cluster_id: int | None = None,
+        since: int | None = None,
+    ) -> Alert | None:
+        """Return the most recently-seen unresolved alert for ``code``, if any.
+
+        "Unresolved" means ``open`` or ``acknowledged``: acknowledging says the
+        operator has seen the alert, not that the condition is gone, so only an
+        explicit resolve clears it. Callers that gate behaviour on an alert
+        (the engine's leak hold) pass ``since`` to bound how long a stale
+        detection may keep gating.
+
+        Args:
+            code: Alert code to look for (e.g. ``LEAK_ALERT_CODE``).
+            cluster_id: Restrict to one cluster.
+            since: Only consider alerts whose ``last_seen_at`` is at or after
+                this Unix timestamp.
+
+        Returns:
+            The matching Alert with the newest ``last_seen_at``, or ``None``.
+        """
+        stmt = (
+            select(Alert)
+            .where(Alert.code == code, Alert.status != "resolved")
+            .order_by(Alert.last_seen_at.desc(), Alert.id.desc())
+            .limit(1)
+        )
+        if cluster_id is not None:
+            stmt = stmt.where(Alert.cluster_id == cluster_id)
+        if since is not None:
+            stmt = stmt.where(Alert.last_seen_at >= since)
+        return self.session.scalar(stmt)
+
     def acknowledge_alert(self, alert_id: int) -> Alert | None:
         """Move an open alert to ``acknowledged``; returns the updated row."""
         alert = self.session.get(Alert, alert_id)

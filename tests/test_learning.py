@@ -97,6 +97,32 @@ class TestIrrigationLearner:
         assert len(responses) == 1
         assert responses[0].delta == pytest.approx(1.0)
 
+    def test_response_peak_ignores_a_spike_reading(self):
+        """The post value is the window's *maximum* — exactly what a spike wins.
+
+        A blocked drip (30% → 31%) with one 99% glitch in the after-window must
+        not be learned as a 69-point absorption event.
+        """
+        now = int(time.time())
+        self.db.add_sensor_reading(sensor_id=self.sensor_id, timestamp=now - 1500, soil_moisture=30.0)
+        self.db.add_sensor_reading(sensor_id=self.sensor_id, timestamp=now - 900, soil_moisture=30.0)
+        self.db.add_irrigation_event(
+            irrigator_id=self.irrigator_id,
+            action="start",
+            triggered_by="auto",
+            duration_minutes=2,
+            timestamp=now,
+        )
+        for offset, moisture in ((900, 31.0), (1800, 99.0), (2700, 30.0), (3600, 31.0)):
+            self.db.add_sensor_reading(sensor_id=self.sensor_id, timestamp=now + offset, soil_moisture=moisture)
+
+        event = self.db.get_recent_events(self.irrigator_id, hours=1)[0]
+        responses = self.learner.analyze_irrigation_response(event)
+
+        assert len(responses) == 1
+        assert responses[0].post_moisture == pytest.approx(31.0)
+        assert responses[0].delta == pytest.approx(1.0)
+
     def test_plant_profile_builds_from_multiple_cycles(self):
         """Plant profile builds correctly from 3+ irrigation cycles."""
         now = int(time.time())
@@ -547,6 +573,40 @@ class TestIssueHeuristics:
         alert = next(a for a in alerts if a.alert_type == "unresolvable_conflict")
         assert alert.severity == "critical"
         assert alert.data["projected_wet"] > 85
+
+    def test_conflict_keys_on_the_latest_readings_not_the_oldest(self):
+        """The dry/wet snapshot must average the *newest* samples in the window.
+
+        ``get_recent_readings`` returns newest-first, so slicing the tail of
+        that list averaged the OLDEST readings in the 6h window — a plant that
+        had just been watered still counted as dry (issue #103 family: values
+        attributed to the wrong point in time).
+        """
+        now = int(time.time())
+        _plant2, sensor2 = self._add_second_sensor()
+        self._build_profile(self.sensor_id, self.irrigator_id, now - 7 * 86400)
+        self._build_profile(sensor2, self.irrigator_id, now - 7 * 86400)
+
+        # Sensor 1: dry hours ago, comfortably in range now. Sensor 2 wet
+        # throughout. Judged on the latest samples there is no dry plant, so no
+        # conflict; judged on the oldest ones sensor 1 still looks parched.
+        for i, moisture in enumerate([20.0, 21.0, 22.0]):
+            self.db.add_sensor_reading(
+                sensor_id=self.sensor_id, timestamp=now - 5 * 3600 + i * 60, soil_moisture=moisture
+            )
+        for i, moisture in enumerate([52.0, 53.0, 54.0]):
+            self.db.add_sensor_reading(sensor_id=self.sensor_id, timestamp=now - 600 + i * 60, soil_moisture=moisture)
+        self.db.add_sensor_reading(sensor_id=sensor2, timestamp=now - 600, soil_moisture=80.0)
+
+        profiles = {
+            self.sensor_id: self.learner.get_plant_profile(self.db.get_sensor(self.sensor_id)),
+            sensor2: self.learner.get_plant_profile(self.db.get_sensor(sensor2)),
+        }
+        from greenhouse_core.learning.issues import detect_conflicts
+
+        alerts = detect_conflicts(self.db, self.learner.plant_db, self.cluster_id, profiles, self._care_map())
+
+        assert "unresolvable_conflict" not in [a.alert_type for a in alerts]
 
     def test_no_conflict_when_both_plants_in_range(self):
         """No conflict when neither plant is dry nor over-saturated."""

@@ -4,6 +4,7 @@ import time
 from dataclasses import dataclass
 
 from greenhouse_core.learning import IrrigationLearner
+from greenhouse_core.logic.cleaning import clean_readings_desc
 from greenhouse_core.logic.plant_needs import parse_moisture_target
 from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_core.repository import IrrigationRepository
@@ -49,7 +50,9 @@ class ForecastService:
         sensor_forecasts: list[_SensorForecast] = []
 
         for sensor in sensors:
-            readings = self._repo.get_recent_readings(sensor.id, hours=24)
+            # Newest-first cleaned view: the forecast extrapolates from "current
+            # moisture", so a spike as the latest sample would shift every ETA.
+            readings = clean_readings_desc(self._repo.get_recent_readings(sensor.id, hours=24))
             current_moisture = next((r.soil_moisture for r in readings if r.soil_moisture is not None), None)
             if current_moisture is None:
                 continue

@@ -4,6 +4,7 @@ import statistics
 import time
 
 from greenhouse_core.learning.models import IrrigationResponse, PlantProfile
+from greenhouse_core.logic.cleaning import clean_readings, clean_readings_around
 from greenhouse_core.models import IrrigationEvent, Sensor
 from greenhouse_core.repository import IrrigationRepository
 
@@ -19,12 +20,15 @@ def compute_sensor_response(
     event: IrrigationEvent,
 ) -> IrrigationResponse | None:
     """Compute moisture delta for a single sensor around an irrigation event."""
-    before_readings, after_readings = db.get_readings_around(
+    before_rows, after_rows = db.get_readings_around(
         sensor.id,
         event.timestamp,
         before_seconds=PRE_WINDOW_SEC,
         after_seconds=POST_WINDOW_SEC,
     )
+    # Cleaned view — the post reading is picked as the window's *maximum*
+    # (peak absorption), which is precisely the sample a spike would win.
+    before_readings, after_readings = clean_readings_around(before_rows, after_rows)
 
     # Need at least one reading before and after
     pre_moisture_readings = [r for r in before_readings if r.soil_moisture is not None]
@@ -141,8 +145,9 @@ def compute_drainage_rate(db: IrrigationRepository, sensor: Sensor, days: int = 
 
     Looks at periods between irrigations where moisture is declining.
     """
-    readings = db.get_recent_readings(sensor.id, hours=days * 24)
-    readings.sort(key=lambda r: r.timestamp)
+    # Cleaned view, chronological: drainage is read off consecutive deltas, so
+    # a spike would register as both an impossible gain and a fake steep loss.
+    readings = clean_readings(db.get_recent_readings(sensor.id, hours=days * 24))
 
     # Find consecutive readings where moisture is declining
     declines = []
