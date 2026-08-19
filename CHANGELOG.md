@@ -4,6 +4,13 @@ All notable changes to this project are tracked here. Managed automatically by
 [release-please](https://github.com/googleapis/release-please) from
 [Conventional Commits](https://www.conventionalcommits.org/) — do not hand-edit.
 
+## [5.0.1](https://github.com/giocaizzi/greenhouse/compare/v5.0.0...v5.0.1) (2026-08-18)
+
+
+### Fixed
+
+* **leak:** stop false-positive leak alerts and make the 24h hold real ([#104](https://github.com/giocaizzi/greenhouse/issues/104)) ([de4bae8](https://github.com/giocaizzi/greenhouse/commit/de4bae801638068365fab0f6c33642483be4afc8)), closes [#103](https://github.com/giocaizzi/greenhouse/issues/103)
+
 ## [5.0.0](https://github.com/giocaizzi/greenhouse/compare/v4.0.0...v5.0.0) (2026-07-20)
 
 
