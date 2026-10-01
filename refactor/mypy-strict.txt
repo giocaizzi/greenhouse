@@ -12,6 +12,7 @@ libs/greenhouse-core/greenhouse_core/devices/registry.py
 libs/greenhouse-core/greenhouse_core/devices/sensors/tr301z.py
 libs/greenhouse-core/greenhouse_core/learning/learner.py
 libs/greenhouse-core/greenhouse_core/learning/report.py
+libs/greenhouse-core/greenhouse_core/logic/plant_needs.py
 libs/greenhouse-core/greenhouse_core/logic/sensors.py
 libs/greenhouse-core/greenhouse_core/logic/stress.py
 libs/greenhouse-core/greenhouse_core/models.py
