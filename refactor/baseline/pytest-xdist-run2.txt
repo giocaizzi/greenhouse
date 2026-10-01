@@ -1,0 +1,40 @@
+bringing up nodes...
+bringing up nodes...
+
+........................................................................ [  6%]
+........................................................................ [ 12%]
+........................................................................ [ 18%]
+........................................................................ [ 24%]
+........................................................................ [ 30%]
+........................................................................ [ 36%]
+........................................................................ [ 42%]
+........................................................................ [ 48%]
+........................................................................ [ 54%]
+........................................................................ [ 60%]
+........................................................................ [ 67%]
+........................................................................ [ 73%]
+........................................................................ [ 79%]
+........................................................................ [ 85%]
+........................................................................ [ 91%]
+........................................................................ [ 97%]
+..............................                                           [100%]
+=============================== warnings summary ===============================
+.venv/lib/python3.11/site-packages/pydantic/_internal/_generate_schema.py:2423
+.venv/lib/python3.11/site-packages/pydantic/_internal/_generate_schema.py:2423
+.venv/lib/python3.11/site-packages/pydantic/_internal/_generate_schema.py:2423
+.venv/lib/python3.11/site-packages/pydantic/_internal/_generate_schema.py:2423
+  /home/user/greenhouse/.venv/lib/python3.11/site-packages/pydantic/_internal/_generate_schema.py:2423: PydanticDeprecatedSince211: The `__get_pydantic_core_schema__` method of the `BaseModel` class is deprecated. If you are calling `super().__get_pydantic_core_schema__` when overriding the method on a Pydantic model, consider using `handler(source)` instead. However, note that overriding this method on models can lead to unexpected side effects. Deprecated in Pydantic V2.11 to be removed in V3.0.
+    schema = annotation_get_schema(source, get_inner_schema)
+
+tests/cli/test_tui.py::TestClusterCrud::test_plant_add_edit_move_delete
+  /usr/lib/python3.11/asyncio/locks.py:168: RuntimeWarning: coroutine 'ClusterScreen._load_plant_health' was never awaited
+    self._waiters = collections.deque()
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+1182 passed, 5 warnings in 257.95s (0:04:17)
+
+real	4m19.229s
+user	11m59.697s
+sys	0m37.924s
