@@ -950,6 +950,10 @@ class IrrigationRepository:
         """All vacation windows ordered by start time desc."""
         return list(self.session.scalars(select(VacationWindow).order_by(VacationWindow.starts_at.desc())))
 
+    def get_vacation_window(self, window_id: int) -> VacationWindow | None:
+        """Fetch a vacation window by id."""
+        return self.session.get(VacationWindow, window_id)
+
     def get_active_vacation(self, at: int | None = None) -> VacationWindow | None:
         """The currently-active vacation window, if any."""
         now = at or int(time.time())
