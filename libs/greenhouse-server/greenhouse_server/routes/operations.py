@@ -189,7 +189,8 @@ def check_all(irrigation_svc: IrrigationServiceDep, session: SessionDep) -> Chec
 
     Side effects: may actuate physical hardware on any cluster whose decision
     engine says `irrigate` and whose config has `auto_run=True`. This is the
-    same call the background scheduler makes every 6 hours.
+    same call the background `check_all` job makes on its cron schedule
+    (`IRRIGATION_CHECK_CRON_HOURS`, default hourly at :00).
 
     Returns:
         Per-cluster results plus a `has_alerts` flag that is true if any
@@ -232,7 +233,8 @@ def check_single(
 def sync(request: SyncRequest, sync_svc: SyncServiceDep, session: SessionDep) -> SyncResponse:
     """Pull recent sensor readings from the Tuya Cloud into the local SQLite archive.
 
-    This is the same job the background scheduler runs every 30 minutes; call
+    This is the same job the background scheduler runs every
+    `IRRIGATION_SYNC_INTERVAL_MINUTES` (default 180); call
     this manually after registering a new sensor or to backfill after an
     outage. No hardware is actuated.
 

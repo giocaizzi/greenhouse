@@ -15,6 +15,7 @@ from greenhouse_cli.commands.plants import plant_app
 from greenhouse_cli.commands.preferences import prefs_app
 from greenhouse_cli.commands.scheduler import scheduler_app
 from greenhouse_cli.commands.sensors import sensor_app
+from greenhouse_cli.commands.tui import register as register_tui
 from greenhouse_cli.commands.vacation import vacation_app
 from greenhouse_cli.commands.windows import windows_app
 
@@ -41,6 +42,7 @@ def main(
 # Register operation + auth commands directly on app
 register_operations(app)
 register_auth(app)
+register_tui(app)
 
 # Register sub-apps
 app.add_typer(cluster_app, name="cluster")

@@ -174,6 +174,25 @@ def test_vacation_budget_exhausted_flips_to_skip(tmp_db, logic, monkeypatch):
     assert TriggerCode.VACATION_ACTIVE in _codes(decision)
 
 
+def test_vacation_in_off_season_does_not_crash(tmp_db, logic, monkeypatch):
+    """Regression: vacation during a non-neutral season (January → SEASONAL_HOLD).
+
+    The seasonal rule used to rebind ``reasons`` to a tuple, so the vacation
+    rule's ``add_reason`` raised AttributeError and the whole evaluation
+    failed — no decision, no audit row, for every vacation outside spring.
+    """
+    now = _ts(2026, 1, 14, 8)
+    _freeze(monkeypatch, now)
+    ctx = _make_cluster(tmp_db)
+    tmp_db.add_vacation_window(starts_at=now - DAY, ends_at=now + 5 * DAY)
+
+    decision = logic.decide_for_cluster(ctx["cluster_id"])
+
+    assert decision is not None
+    assert TriggerCode.SEASONAL_HOLD in _codes(decision)
+    assert TriggerCode.VACATION_ACTIVE in _codes(decision)
+
+
 def test_spent_consumption_reduces_headroom(tmp_db, logic, monkeypatch):
     """Prior in-window consumption eats the cumulative allowance and forces a SKIP.
 

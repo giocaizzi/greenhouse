@@ -156,6 +156,28 @@ def auth_disabled_app():
 
 
 @pytest.fixture
+def running_scheduler(app):
+    """Start the process-wide APScheduler for one test, without firing any job.
+
+    Apps are built with ``enable_scheduler=False`` so the scheduler normally
+    stays stopped and every job is merely *pending*. Tests that need the real
+    running-scheduler semantics (job stores, computed ``next_run_time``, the
+    running-only web controls) request this fixture: it starts the scheduler in
+    APScheduler's ``paused`` state — ``scheduler.running`` is True but the main
+    loop processes nothing — and shuts it down afterwards. Depends on ``app``
+    so the app's ``init_scheduler`` (which needs a stopped scheduler) runs first.
+    """
+    from greenhouse_server.scheduler import scheduler as bg_scheduler
+    from greenhouse_server.scheduler import start_scheduler, stop_scheduler
+
+    start_scheduler(paused=True)
+    try:
+        yield bg_scheduler
+    finally:
+        stop_scheduler()
+
+
+@pytest.fixture
 def seeded_client(client):
     """Client with a pre-populated cluster, plant, sensor, irrigator, and config."""
     # Create cluster

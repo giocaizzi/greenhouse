@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) and other coding age
 
 **greenhouse** — smart plant irrigation. Reads Tuya sensors → decides per cluster → acts on Tuya irrigators (local protocol v3.5) → learns from each cycle → persists everything to local SQLite. **Tuya Cloud is the live source; SQLite is the permanent record.** Actuation is **local-first**: cycle bounding (Duration DP 102) and the dry-run safety read (DP 105) are local-only v3.5, and device discovery / `local_key` lookup never touch the Cloud in steady state (keys resolve from `irrigator.config` or the gateway's process cache). The on/off **switch pulse** does go via the Cloud API, because the Zigbee-gateway pump can't be reliably kept awake over LAN — this is the one deliberate Cloud actuation call, with a local keep-alive fallback.
 
-Stack: Python 3.11+, uv workspaces, FastAPI + Pydantic v2 + SQLAlchemy v2, Typer CLI, APScheduler, tinytuya, Jinja2 + HTMX + Chart.js + Pico.css (no build step), `fastapi-mcp`.
+Stack: Python 3.11+, uv workspaces, FastAPI + Pydantic v2 + SQLAlchemy v2, Typer CLI + Textual TUI, APScheduler, tinytuya, Jinja2 + HTMX + Chart.js + Pico.css (no build step), `fastapi-mcp`.
 
 ## Architecture — four interfaces, one server
 
@@ -37,7 +37,7 @@ uv workspace, three packages under `libs/`. Dependency direction is strict; the 
 
 - **`greenhouse-core`** — SQLAlchemy v2 models, Pydantic v2 schemas, repository, the unified **`DeviceGateway`** (one `tinytuya.Cloud` client + local-device factory; merges the former `TuyaCloud`/`TuyaTransport`) and profile-driven device adapters, decision engine (`logic/`), post-irrigation learning (`learning/`), curated `plant_database.json` (in `data/`), project-wide thresholds (`constants.py`).
 - **`greenhouse-server`** — FastAPI app. JSON API under `/api/v1` (`routes/`), HTMX/Jinja2 web UI at `/` (`web/`), orchestration in `services/` (cluster, irrigation, sync, maintenance, charts, weather), background jobs via APScheduler (`scheduler.py`). `check_all` is a cron trigger driven by `IRRIGATION_CHECK_CRON_HOURS` (default `"*"` = top of every hour).
-- **`greenhouse-cli`** — Typer CLI. Talks to API over HTTP via `IrrigationClient` (`client.py`). Top-level operation commands (`status`, `irrigate`, `sync`, …) plus per-resource sub-apps (`cluster`, `plant`, `irrigator`, `sensor`, `config`). Server URL resolves: `--server` → `$IRRIGATION_SERVER_URL` → `http://localhost:8000`. Output is JSON via `rich.print_json`; `ServerError` → non-zero exit through `commands/_helpers.py:call()`.
+- **`greenhouse-cli`** — Typer CLI. Talks to API over HTTP via `IrrigationClient` (`client.py`). Top-level operation commands (`status`, `irrigate`, `sync`, …) plus per-resource sub-apps (`cluster`, `plant`, `irrigator`, `sensor`, `config`). Server URL resolves: `--server` → `$IRRIGATION_SERVER_URL` → `http://localhost:8000`. Output is JSON via `rich.print_json`; `ServerError` → non-zero exit through `commands/_helpers.py:call()`. `greenhouse tui` launches a Textual full-screen UI (`tui/`): screens in `tui/screens/`, half-block pixel-art sprites in `tui/sprites.py`, pure payload → view logic in `tui/model.py`. Still HTTP-only — blocking client calls run in threads via `GreenhouseApp.api()`; every actuating key goes through `ConfirmScreen`.
 
 Distribution / import / entry-point: `greenhouse-{core,server,cli}` / `greenhouse_{core,server,cli}` / `greenhouse` (CLI), `greenhouse-server` (server). Tests mirror packages: `tests/test_*.py` (core), `tests/server/`, `tests/cli/`.
 
@@ -81,6 +81,7 @@ Add tests in the matching tree:
 - JSON API → `tests/server/test_<resource>.py`
 - Web pages / HX fragments / template filters → `tests/server/test_web_*.py`
 - CLI → `tests/cli/test_cli.py`
+- TUI → `tests/cli/test_tui.py` (Textual `Pilot` against the real app, seeded by `tests/cli/tui_fixtures.py`)
 
 ### Adding a plant species
 
