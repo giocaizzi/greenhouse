@@ -4,6 +4,13 @@ All notable changes to this project are tracked here. Managed automatically by
 [release-please](https://github.com/googleapis/release-please) from
 [Conventional Commits](https://www.conventionalcommits.org/) — do not hand-edit.
 
+## [5.1.0](https://github.com/giocaizzi/greenhouse/compare/v5.0.1...v5.1.0) (2026-10-01)
+
+
+### Added
+
+* **cli:** add full-screen TUI (greenhouse tui) + scheduler, engine and manual-control fixes ([#106](https://github.com/giocaizzi/greenhouse/issues/106)) ([a1b2622](https://github.com/giocaizzi/greenhouse/commit/a1b26221ad157454ce8aa35619afeb047b06dd21))
+
 ## [5.0.1](https://github.com/giocaizzi/greenhouse/compare/v5.0.0...v5.0.1) (2026-08-18)
 
 
