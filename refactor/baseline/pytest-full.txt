@@ -1,0 +1,195 @@
+........................................................................ [  6%]
+........................................................................ [ 12%]
+........................................................................ [ 18%]
+........................................................................ [ 24%]
+........................................................................ [ 30%]
+........................................................................ [ 36%]
+........................................................................ [ 42%]
+........................................................................ [ 48%]
+........................................................................ [ 54%]
+........................................................................ [ 60%]
+........................................................................ [ 67%]
+........................................................................ [ 73%]
+........................................................................ [ 79%]
+........................................................................ [ 85%]
+........................................................................ [ 91%]
+........................................................................ [ 97%]
+..............................                                           [100%]
+=============================== warnings summary ===============================
+.venv/lib/python3.11/site-packages/pydantic/_internal/_generate_schema.py:2423
+  /home/user/greenhouse/.venv/lib/python3.11/site-packages/pydantic/_internal/_generate_schema.py:2423: PydanticDeprecatedSince211: The `__get_pydantic_core_schema__` method of the `BaseModel` class is deprecated. If you are calling `super().__get_pydantic_core_schema__` when overriding the method on a Pydantic model, consider using `handler(source)` instead. However, note that overriding this method on models can lead to unexpected side effects. Deprecated in Pydantic V2.11 to be removed in V3.0.
+    schema = annotation_get_schema(source, get_inner_schema)
+
+tests/cli/test_tui.py::TestClusterCrud::test_plant_add_edit_move_delete
+  /home/user/greenhouse/.venv/lib/python3.11/site-packages/textual/cache.py:226: RuntimeWarning: coroutine 'ClusterScreen._load_plant_health' was never awaited
+    def __init__(self, maxsize: int) -> None:
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+================================ tests coverage ================================
+_______________ coverage: platform linux, python 3.11.15-final-0 _______________
+
+Name                                                                      Stmts   Miss Branch BrPart  Cover   Missing
+---------------------------------------------------------------------------------------------------------------------
+libs/greenhouse-cli/greenhouse_cli/__init__.py                                0      0      0      0   100%
+libs/greenhouse-cli/greenhouse_cli/client.py                                258      8     40      4    96%   32-33, 94-95, 145, 198, 214, 344->346, 349, 415->417, 459->461
+libs/greenhouse-cli/greenhouse_cli/commands/__init__.py                       0      0      0      0   100%
+libs/greenhouse-cli/greenhouse_cli/commands/_helpers.py                      16      0      0      0   100%
+libs/greenhouse-cli/greenhouse_cli/commands/alerts.py                        20      0      0      0   100%
+libs/greenhouse-cli/greenhouse_cli/commands/auth.py                          39      2      6      1    93%   70-71
+libs/greenhouse-cli/greenhouse_cli/commands/clusters.py                      21      0      2      0   100%
+libs/greenhouse-cli/greenhouse_cli/commands/configs.py                       23      1      0      0    96%   58
+libs/greenhouse-cli/greenhouse_cli/commands/decisions.py                      8      0      0      0   100%
+libs/greenhouse-cli/greenhouse_cli/commands/irrigators.py                    43      5     12      5    82%   31, 33, 77, 88, 114->116, 116->118, 141
+libs/greenhouse-cli/greenhouse_cli/commands/operations.py                    56     11     16      4    76%   33, 43-44, 49->exit, 53, 74, 94-100
+libs/greenhouse-cli/greenhouse_cli/commands/plants.py                        31     11      8      1    54%   27-42, 51-58, 68, 130
+libs/greenhouse-cli/greenhouse_cli/commands/preferences.py                   11      0      0      0   100%
+libs/greenhouse-cli/greenhouse_cli/commands/scheduler.py                     12      0      0      0   100%
+libs/greenhouse-cli/greenhouse_cli/commands/sensors.py                       24      9      8      1    50%   22, 33-40, 70
+libs/greenhouse-cli/greenhouse_cli/commands/tui.py                           10      0      0      0   100%
+libs/greenhouse-cli/greenhouse_cli/commands/vacation.py                      19      1      2      1    90%   80
+libs/greenhouse-cli/greenhouse_cli/commands/windows.py                       19      1      2      1    90%   93
+libs/greenhouse-cli/greenhouse_cli/main.py                                   35      0      0      0   100%
+libs/greenhouse-cli/greenhouse_cli/tui/__init__.py                            3      1      0      0    67%   12
+libs/greenhouse-cli/greenhouse_cli/tui/app.py                                73      1     14      4    94%   101->exit, 112->114, 124, 133->exit
+libs/greenhouse-cli/greenhouse_cli/tui/formatting.py                         66      1     30      1    98%   79
+libs/greenhouse-cli/greenhouse_cli/tui/model.py                              91      1     30      3    97%   105->109, 109->111, 137
+libs/greenhouse-cli/greenhouse_cli/tui/resources.py                          38      0      4      0   100%
+libs/greenhouse-cli/greenhouse_cli/tui/screens/__init__.py                    0      0      0      0   100%
+libs/greenhouse-cli/greenhouse_cli/tui/screens/activity.py                   44      1      6      1    96%   48
+libs/greenhouse-cli/greenhouse_cli/tui/screens/alerts.py                     69      3     14      6    89%   49, 74, 79, 83->85, 100->exit, 105->exit
+libs/greenhouse-cli/greenhouse_cli/tui/screens/base.py                       33      0      8      1    98%   91->94
+libs/greenhouse-cli/greenhouse_cli/tui/screens/cluster.py                   432     21    142     30    91%   37, 156, 172, 198, 226, 231->233, 240, 247-248, 255, 257, 335, 446->442, 449, 500->502, 554, 571, 633->exit, 642->exit, 651->exit, 661-662, 685->exit, 694->exit, 703->exit, 712->exit, 726, 732, 739-740, 760->exit, 783->exit, 794
+libs/greenhouse-cli/greenhouse_cli/tui/screens/dashboard.py                  55      0      4      0   100%
+libs/greenhouse-cli/greenhouse_cli/tui/screens/forms.py                      97      2     36      1    98%   125, 128
+libs/greenhouse-cli/greenhouse_cli/tui/screens/modals.py                     99      8     12      4    87%   66-67, 102, 108, 140-143, 149, 154->exit
+libs/greenhouse-cli/greenhouse_cli/tui/screens/search.py                     52      5     10      3    84%   46-48, 55-56, 63->65, 70->exit
+libs/greenhouse-cli/greenhouse_cli/tui/screens/settings.py                   82      4     12      5    90%   91, 93, 133-134, 147->exit, 157->exit
+libs/greenhouse-cli/greenhouse_cli/tui/screens/system.py                     79      1     12      1    98%   163
+libs/greenhouse-cli/greenhouse_cli/tui/sprites.py                           124      0     42      0   100%
+libs/greenhouse-cli/greenhouse_cli/tui/widgets.py                           226     11     62      8    93%   39->exit, 135, 137->142, 149, 201, 232, 243->242, 261-266, 310
+libs/greenhouse-core/greenhouse_core/__init__.py                              8      0      0      0   100%
+libs/greenhouse-core/greenhouse_core/auth.py                                 37      5      2      1    85%   24, 40-41, 69-70
+libs/greenhouse-core/greenhouse_core/constants.py                           100      0      0      0   100%
+libs/greenhouse-core/greenhouse_core/database.py                             55      2     10      1    95%   21, 82
+libs/greenhouse-core/greenhouse_core/devices/__init__.py                     18      0      0      0   100%
+libs/greenhouse-core/greenhouse_core/devices/gateway.py                     146     17     56     13    84%   61-67, 89->83, 93->96, 166->164, 180->178, 198->201, 230-232, 276->284, 285->292, 288-291, 299->298, 301, 305, 328
+libs/greenhouse-core/greenhouse_core/devices/health.py                       21      0      0      0   100%
+libs/greenhouse-core/greenhouse_core/devices/irrigators/__init__.py           4      0      0      0   100%
+libs/greenhouse-core/greenhouse_core/devices/irrigators/base.py              16      0      0      0   100%
+libs/greenhouse-core/greenhouse_core/devices/irrigators/ik10pw.py           107     43     28      1    60%   109-116, 143, 160-202
+libs/greenhouse-core/greenhouse_core/devices/irrigators/tuya_generic.py      56     13     16      3    69%   51, 55, 65->79, 68-75, 81, 89->84, 97, 107
+libs/greenhouse-core/greenhouse_core/devices/profile.py                      36      1      0      0    97%   94
+libs/greenhouse-core/greenhouse_core/devices/registry.py                     43      0      4      0   100%
+libs/greenhouse-core/greenhouse_core/devices/sensors/__init__.py              4      0      0      0   100%
+libs/greenhouse-core/greenhouse_core/devices/sensors/base.py                 12      0      0      0   100%
+libs/greenhouse-core/greenhouse_core/devices/sensors/tr301z.py               30      8      6      1    64%   82-91
+libs/greenhouse-core/greenhouse_core/devices/sensors/tuya_generic.py         18      1      0      0    94%   45
+libs/greenhouse-core/greenhouse_core/learning/__init__.py                     3      0      0      0   100%
+libs/greenhouse-core/greenhouse_core/learning/issues.py                     131      8     76      6    93%   125-126, 130->54, 177, 194-195, 207, 214, 218->211, 283
+libs/greenhouse-core/greenhouse_core/learning/learner.py                     19      0      0      0   100%
+libs/greenhouse-core/greenhouse_core/learning/models.py                      32      0      0      0   100%
+libs/greenhouse-core/greenhouse_core/learning/profiling.py                   69      1     28      2    97%   79, 84->82
+libs/greenhouse-core/greenhouse_core/learning/report.py                      31      0     12      0   100%
+libs/greenhouse-core/greenhouse_core/logic/__init__.py                        3      0      0      0   100%
+libs/greenhouse-core/greenhouse_core/logic/cleaning.py                       53      0     16      0   100%
+libs/greenhouse-core/greenhouse_core/logic/decision.py                      133      1      0      0    99%   175
+libs/greenhouse-core/greenhouse_core/logic/engine.py                        355     22    134     14    92%   143, 158, 352->354, 354->357, 420, 474-475, 531->528, 559, 593-594, 682, 769-771, 827-828, 842-844, 883, 916-917, 925-928
+libs/greenhouse-core/greenhouse_core/logic/fallback.py                       35      1     14      1    96%   84
+libs/greenhouse-core/greenhouse_core/logic/plant_needs.py                    31      3     10      1    90%   31-32, 40
+libs/greenhouse-core/greenhouse_core/logic/sensors.py                        35      0     16      0   100%
+libs/greenhouse-core/greenhouse_core/logic/stress.py                         42      5     32      4    85%   47, 49-50, 56, 64
+libs/greenhouse-core/greenhouse_core/logic/timing.py                         68      4     34      3    93%   33, 36-37, 53, 156->158
+libs/greenhouse-core/greenhouse_core/logic/trends.py                         48      3     26      4    91%   31->41, 46, 48, 65
+libs/greenhouse-core/greenhouse_core/models.py                              217      0      0      0   100%
+libs/greenhouse-core/greenhouse_core/plant_db.py                             72      6     26      5    89%   26, 49, 56, 61, 132->135, 143, 173
+libs/greenhouse-core/greenhouse_core/repository.py                          479     19    172     24    93%   230, 253, 383, 646->exit, 747-748, 798, 837->839, 966->963, 1016, 1019, 1020->1017, 1028, 1155->1154, 1173, 1185, 1226, 1229, 1260, 1268, 1270, 1271->1266, 1282, 1291, 1297->1292, 1306
+libs/greenhouse-core/greenhouse_core/schemas.py                             573      2      4      2    99%   120, 185
+libs/greenhouse-core/greenhouse_core/stats.py                                72     27     34      4    56%   42, 48->40, 69-98, 114->134, 118
+libs/greenhouse-core/greenhouse_core/sync.py                                 57     50     24      0     9%   26-57, 64-115
+libs/greenhouse-core/greenhouse_core/utils.py                                29      3      4      0    91%   114-117
+libs/greenhouse-server/greenhouse_server/__init__.py                          0      0      0      0   100%
+libs/greenhouse-server/greenhouse_server/app.py                             140     18     18      5    85%   74-75, 86, 126, 129, 275-276, 296-297, 303-305, 311-317, 321
+libs/greenhouse-server/greenhouse_server/auth.py                            148      9     34      4    93%   128, 168-169, 172, 234, 240-241, 248, 312
+libs/greenhouse-server/greenhouse_server/config.py                           61      0     10      0   100%
+libs/greenhouse-server/greenhouse_server/deps.py                             60      2      2      0    97%   37, 60
+libs/greenhouse-server/greenhouse_server/routes/__init__.py                   0      0      0      0   100%
+libs/greenhouse-server/greenhouse_server/routes/activity.py                   9      0      0      0   100%
+libs/greenhouse-server/greenhouse_server/routes/alerts.py                    47      0      8      0   100%
+libs/greenhouse-server/greenhouse_server/routes/auth.py                      41      1      4      1    96%   73
+libs/greenhouse-server/greenhouse_server/routes/bulk.py                      11      0      0      0   100%
+libs/greenhouse-server/greenhouse_server/routes/charts.py                    47      3     16      3    90%   69, 93, 96
+libs/greenhouse-server/greenhouse_server/routes/clusters.py                  36      0      4      0   100%
+libs/greenhouse-server/greenhouse_server/routes/configs.py                   32      0      2      0   100%
+libs/greenhouse-server/greenhouse_server/routes/decisions.py                  9      0      0      0   100%
+libs/greenhouse-server/greenhouse_server/routes/efficacy.py                   9      0      0      0   100%
+libs/greenhouse-server/greenhouse_server/routes/forecast.py                  13      0      0      0   100%
+libs/greenhouse-server/greenhouse_server/routes/health.py                     9      0      0      0   100%
+libs/greenhouse-server/greenhouse_server/routes/insights.py                  12      0      2      0   100%
+libs/greenhouse-server/greenhouse_server/routes/irrigators.py                79      5     14      3    91%   213, 240, 243-244, 267
+libs/greenhouse-server/greenhouse_server/routes/operations.py                79      0     10      1    99%   366->384
+libs/greenhouse-server/greenhouse_server/routes/plants.py                    95     16     28      2    77%   222-234, 239, 244-245
+libs/greenhouse-server/greenhouse_server/routes/preferences.py               16      0      0      0   100%
+libs/greenhouse-server/greenhouse_server/routes/quality.py                    8      0      0      0   100%
+libs/greenhouse-server/greenhouse_server/routes/scheduler.py                 35      5      0      0    86%   83-87
+libs/greenhouse-server/greenhouse_server/routes/search.py                     9      0      0      0   100%
+libs/greenhouse-server/greenhouse_server/routes/sensors.py                   57      1     12      1    97%   70
+libs/greenhouse-server/greenhouse_server/routes/vacation.py                  32      0      6      0   100%
+libs/greenhouse-server/greenhouse_server/routes/well_known.py                10      0      0      0   100%
+libs/greenhouse-server/greenhouse_server/routes/windows.py                   47      0     10      0   100%
+libs/greenhouse-server/greenhouse_server/scheduler.py                       222     97     42      5    58%   42, 47, 65->exit, 109, 112-113, 289, 294-312, 317-331, 336-364, 369-380, 391-409, 428-443, 492, 556, 559-560
+libs/greenhouse-server/greenhouse_server/services/__init__.py                 0      0      0      0   100%
+libs/greenhouse-server/greenhouse_server/services/alerts.py                  69      3     24      3    94%   52, 91, 136
+libs/greenhouse-server/greenhouse_server/services/anomaly.py                 54      3     14      3    91%   38, 117, 124
+libs/greenhouse-server/greenhouse_server/services/bulk.py                    22      5      4      1    77%   34->42, 37-39, 50-51
+libs/greenhouse-server/greenhouse_server/services/charts.py                 181      7     86     11    93%   30, 34-35, 52, 147, 164, 181->183, 189->191, 192->198, 266->268, 268->270, 270->264, 369
+libs/greenhouse-server/greenhouse_server/services/cluster.py                 61      0     12      0   100%
+libs/greenhouse-server/greenhouse_server/services/data_quality.py            46      0     24      0   100%
+libs/greenhouse-server/greenhouse_server/services/efficacy.py                37      2     10      3    89%   19, 40->85, 56
+libs/greenhouse-server/greenhouse_server/services/forecast.py                75      7     20      3    87%   71, 107, 129-133
+libs/greenhouse-server/greenhouse_server/services/health.py                  68      1     26      4    95%   41, 74->78, 78->84, 84->90
+libs/greenhouse-server/greenhouse_server/services/health_monitor.py         191     36     68     12    77%   134, 154, 162-171, 246, 252->264, 254->264, 265-267, 319, 358-359, 366, 369-370, 385, 393, 396-398, 407, 410-416, 422
+libs/greenhouse-server/greenhouse_server/services/insights.py                40      3     12      2    90%   46, 71-72
+libs/greenhouse-server/greenhouse_server/services/irrigation.py             316     59    102     18    80%   69-70, 117-118, 148, 158, 178-208, 221-223, 245, 247->241, 249-250, 267, 326-328, 363-364, 416, 417->420, 453, 482-484, 486-488, 492-495, 504->531, 570->572, 587-606, 614, 638-639, 644, 677, 686-687
+libs/greenhouse-server/greenhouse_server/services/leak.py                    70      0     22      0   100%
+libs/greenhouse-server/greenhouse_server/services/maintenance.py             52      4     20      4    89%   18-19, 35, 61->74, 78->29, 84
+libs/greenhouse-server/greenhouse_server/services/manual_control.py          63      5     20      3    90%   78, 81-82, 115, 175
+libs/greenhouse-server/greenhouse_server/services/notify.py                  42      1      8      1    96%   78
+libs/greenhouse-server/greenhouse_server/services/pump_watcher.py            92     12     12      1    88%   256-257, 271-272, 279->290, 287-288, 292-297
+libs/greenhouse-server/greenhouse_server/services/search.py                  26      0     10      0   100%
+libs/greenhouse-server/greenhouse_server/services/sync.py                    50      7     16      2    83%   45, 68-74
+libs/greenhouse-server/greenhouse_server/services/system_health.py           41      0     10      1    98%   40->42
+libs/greenhouse-server/greenhouse_server/services/vacation.py                28      0      4      0   100%
+libs/greenhouse-server/greenhouse_server/services/weather.py                 51     25     10      2    46%   28-30, 40-49, 60-62, 73-95
+libs/greenhouse-server/greenhouse_server/web/__init__.py                      0      0      0      0   100%
+libs/greenhouse-server/greenhouse_server/web/context.py                      42      8      2      1    80%   14-15, 33-34, 46->60, 53-54, 63-64
+libs/greenhouse-server/greenhouse_server/web/exception_handlers.py           26      0      6      0   100%
+libs/greenhouse-server/greenhouse_server/web/filters.py                      90      4     42      3    95%   67, 87, 90-91
+libs/greenhouse-server/greenhouse_server/web/router.py                       26      0      0      0   100%
+libs/greenhouse-server/greenhouse_server/web/routes/__init__.py               0      0      0      0   100%
+libs/greenhouse-server/greenhouse_server/web/routes/activity.py              21      0      0      0   100%
+libs/greenhouse-server/greenhouse_server/web/routes/alerts.py                39      5      2      0    88%   70-74
+libs/greenhouse-server/greenhouse_server/web/routes/analytics.py             79      3      8      2    94%   85->101, 87-89
+libs/greenhouse-server/greenhouse_server/web/routes/auth.py                  42      6      8      2    84%   69, 72-79, 98-100
+libs/greenhouse-server/greenhouse_server/web/routes/clusters.py             110      5     24      3    94%   57, 77, 137-138, 285
+libs/greenhouse-server/greenhouse_server/web/routes/configs.py               56     10     14      1    79%   20-22, 40-41, 51-52, 65-67
+libs/greenhouse-server/greenhouse_server/web/routes/decisions.py             11      0      0      0   100%
+libs/greenhouse-server/greenhouse_server/web/routes/efficacy.py              12      0      0      0   100%
+libs/greenhouse-server/greenhouse_server/web/routes/fragments.py             22      9      4      0    50%   39-47
+libs/greenhouse-server/greenhouse_server/web/routes/health_page.py           12      0      0      0   100%
+libs/greenhouse-server/greenhouse_server/web/routes/irrigators.py           126     11     28      6    89%   22, 28, 30, 33-34, 62-63, 65, 191, 213->218, 216-217
+libs/greenhouse-server/greenhouse_server/web/routes/operations.py            70     17     18      2    67%   96-97, 117-128, 133, 138-139
+libs/greenhouse-server/greenhouse_server/web/routes/pages.py                 10      0      0      0   100%
+libs/greenhouse-server/greenhouse_server/web/routes/plant_dashboard.py       88     19     26      6    71%   64->66, 84->89, 87-88, 119-124, 142, 160, 177-185
+libs/greenhouse-server/greenhouse_server/web/routes/plants.py                47      1      4      1    96%   18
+libs/greenhouse-server/greenhouse_server/web/routes/preferences.py           37      4      4      1    88%   57-60
+libs/greenhouse-server/greenhouse_server/web/routes/quality.py               14      0      2      0   100%
+libs/greenhouse-server/greenhouse_server/web/routes/sensors.py               55      4      4      2    90%   18, 25, 28-29
+libs/greenhouse-server/greenhouse_server/web/routes/vacation.py              70      3     12      1    95%   74-75, 77
+libs/greenhouse-server/greenhouse_server/web/routes/windows.py               60      3     12      1    94%   28-29, 38
+libs/greenhouse-server/greenhouse_server/web/templating.py                    7      0      2      0   100%
+---------------------------------------------------------------------------------------------------------------------
+TOTAL                                                                      9826    803   2296    307    90%
+Coverage JSON written to file refactor/baseline/coverage.json
+1182 passed, 2 warnings in 1168.30s (0:19:28)
