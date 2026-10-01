@@ -49,6 +49,7 @@ from greenhouse_server.scheduler import (
     start_scheduler,
     stop_scheduler,
 )
+from greenhouse_server.services.irrigation import rearm_leak_checks
 from greenhouse_server.services.notify import NtfyClient
 from greenhouse_server.services.weather import WeatherClient
 from greenhouse_server.web.exception_handlers import register_web_exception_handlers
@@ -132,6 +133,8 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
     async def lifespan(app: FastAPI):
         if settings.enable_scheduler:
             start_scheduler()
+            # Leak-check jobs are in-memory: restore any a restart dropped.
+            rearm_leak_checks()
         yield
         if settings.enable_scheduler:
             stop_scheduler()

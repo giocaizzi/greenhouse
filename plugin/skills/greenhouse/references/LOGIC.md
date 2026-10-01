@@ -241,6 +241,8 @@ Runs before the decision engine on every evaluation:
 
 Not part of the pre-decision scan: it is scheduled per irrigation, running `LEAK_CHECK_DELAY_SECONDS` (30 min) **after** a start event, and asks one question per sensor — *did the soil settle, or is water still arriving?* Readings come from the **cleaned view**, same as the engine.
 
+It is scheduled only for **auto** starts (manual starts get the dry-run watcher, not a leak check). Every completed check writes a `leak_check` activity row (source `leak`, payload `started_at`) — the durable "already checked" marker, committed with the check's own effects. Scheduler jobs are in-memory, so on startup `rearm_leak_checks` re-schedules every auto start from the last `LEAK_HOLD_HOURS` (24h) whose check has no `leak_check` (or `leak_hold`) row: at its normal due time if still ahead, otherwise immediately. The job itself skips a start that is already marked, so a restart never produces a duplicate check or alert; a check that fails leaves no marker and is re-armed on the next start.
+
 Three verdicts per sensor:
 
 | Verdict | Condition | Effect |
