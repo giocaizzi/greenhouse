@@ -1,0 +1,442 @@
+{
+ "chart": {
+  "datasets": [
+   {
+    "points": [
+     [
+      1776247080,
+      150.0
+     ]
+    ],
+    "sensor_id": 2,
+    "sensor_name": "Glitchy"
+   },
+   {
+    "points": [
+     [
+      1776230940,
+      45.0
+     ],
+     [
+      1776232740,
+      46.0
+     ],
+     [
+      1776234540,
+      45.0
+     ],
+     [
+      1776236340,
+      44.0
+     ],
+     [
+      1776238140,
+      45.0
+     ],
+     [
+      1776239940,
+      46.0
+     ],
+     [
+      1776241740,
+      45.0
+     ],
+     [
+      1776243540,
+      44.0
+     ],
+     [
+      1776245340,
+      45.0
+     ],
+     [
+      1776247140,
+      5.0
+     ]
+    ],
+    "sensor_id": 1,
+    "sensor_name": "Sensor 1"
+   }
+  ],
+  "events": [],
+  "hours": 24,
+  "metric": "soil_moisture",
+  "threshold": {
+   "max": 65.0,
+   "min": 45.0,
+   "source": "default"
+  }
+ },
+ "decision_log_snapshot": {
+  "avg_env_humidity": null,
+  "avg_light": null,
+  "avg_soil_moisture": 45.0,
+  "avg_temperature": 22.0,
+  "max_soil_moisture": 46.0,
+  "min_soil_moisture": 44.0,
+  "per_sensor": [
+   {
+    "avg_humidity": null,
+    "avg_soil_moisture": null,
+    "avg_temperature": null,
+    "name": "Glitchy",
+    "plant_id": null,
+    "sensor_id": 2
+   },
+   {
+    "avg_humidity": null,
+    "avg_soil_moisture": 45.0,
+    "avg_temperature": 22.0,
+    "name": "Sensor 1",
+    "plant_id": 1,
+    "sensor_id": 1
+   }
+  ],
+  "water_warnings": []
+ },
+ "dry_run": {
+  "action": "irrigate",
+  "confidence": 0.8,
+  "duration_minutes": 2,
+  "interval_hours": 12,
+  "learning_alerts": [],
+  "reason": "soil moderately dry (driest=44%)",
+  "reasons": [
+   {
+    "code": "sensor_dry",
+    "duration_delta": 0,
+    "icon": "drop",
+    "interval_delta": 0,
+    "message": "soil moderately dry (driest=44%)",
+    "severity": "info"
+   }
+  ],
+  "stress_indicators": {
+   "learning_alerts": []
+  },
+  "temperature": 22.0,
+  "temperature_source": "sensor"
+ },
+ "history": {
+  "cluster_name": "Golden Cluster",
+  "irrigators": [
+   {
+    "events": [],
+    "irrigator_id": 1,
+    "irrigator_name": "Irrigator 1"
+   }
+  ],
+  "sensors": [
+   {
+    "readings": [
+     {
+      "battery_state": null,
+      "env_humidity": null,
+      "id": 12,
+      "light": null,
+      "sensor_id": 2,
+      "soil_moisture": 150.0,
+      "temperature": null,
+      "timestamp": 1776247080,
+      "water_warning": null
+     },
+     {
+      "battery_state": null,
+      "env_humidity": null,
+      "id": 11,
+      "light": null,
+      "sensor_id": 2,
+      "soil_moisture": 50.0,
+      "temperature": null,
+      "timestamp": 1776139200,
+      "water_warning": null
+     }
+    ],
+    "sensor_id": 2,
+    "sensor_name": "Glitchy"
+   },
+   {
+    "readings": [
+     {
+      "battery_state": null,
+      "env_humidity": null,
+      "id": 10,
+      "light": null,
+      "sensor_id": 1,
+      "soil_moisture": 5.0,
+      "temperature": 22.0,
+      "timestamp": 1776247140,
+      "water_warning": null
+     },
+     {
+      "battery_state": null,
+      "env_humidity": null,
+      "id": 9,
+      "light": null,
+      "sensor_id": 1,
+      "soil_moisture": 45.0,
+      "temperature": 22.0,
+      "timestamp": 1776245340,
+      "water_warning": null
+     },
+     {
+      "battery_state": null,
+      "env_humidity": null,
+      "id": 8,
+      "light": null,
+      "sensor_id": 1,
+      "soil_moisture": 44.0,
+      "temperature": 22.0,
+      "timestamp": 1776243540,
+      "water_warning": null
+     },
+     {
+      "battery_state": null,
+      "env_humidity": null,
+      "id": 7,
+      "light": null,
+      "sensor_id": 1,
+      "soil_moisture": 45.0,
+      "temperature": 22.0,
+      "timestamp": 1776241740,
+      "water_warning": null
+     },
+     {
+      "battery_state": null,
+      "env_humidity": null,
+      "id": 6,
+      "light": null,
+      "sensor_id": 1,
+      "soil_moisture": 46.0,
+      "temperature": 22.0,
+      "timestamp": 1776239940,
+      "water_warning": null
+     },
+     {
+      "battery_state": null,
+      "env_humidity": null,
+      "id": 5,
+      "light": null,
+      "sensor_id": 1,
+      "soil_moisture": 45.0,
+      "temperature": 22.0,
+      "timestamp": 1776238140,
+      "water_warning": null
+     },
+     {
+      "battery_state": null,
+      "env_humidity": null,
+      "id": 4,
+      "light": null,
+      "sensor_id": 1,
+      "soil_moisture": 44.0,
+      "temperature": 22.0,
+      "timestamp": 1776236340,
+      "water_warning": null
+     },
+     {
+      "battery_state": null,
+      "env_humidity": null,
+      "id": 3,
+      "light": null,
+      "sensor_id": 1,
+      "soil_moisture": 45.0,
+      "temperature": 22.0,
+      "timestamp": 1776234540,
+      "water_warning": null
+     },
+     {
+      "battery_state": null,
+      "env_humidity": null,
+      "id": 2,
+      "light": null,
+      "sensor_id": 1,
+      "soil_moisture": 46.0,
+      "temperature": 22.0,
+      "timestamp": 1776232740,
+      "water_warning": null
+     },
+     {
+      "battery_state": null,
+      "env_humidity": null,
+      "id": 1,
+      "light": null,
+      "sensor_id": 1,
+      "soil_moisture": 45.0,
+      "temperature": 22.0,
+      "timestamp": 1776230940,
+      "water_warning": null
+     }
+    ],
+    "sensor_id": 1,
+    "sensor_name": "Sensor 1"
+   }
+  ]
+ },
+ "monitor": {
+  "cluster_name": "Golden Cluster",
+  "needs_water": [
+   "Sensor 1 (Monstera deliciosa): 5%"
+  ],
+  "sensors": [
+   {
+    "plant_species": null,
+    "sensor_id": 2,
+    "sensor_name": "Glitchy",
+    "soil_moisture": null,
+    "status": "no_data",
+    "target_max": 65.0,
+    "target_min": 45.0
+   },
+   {
+    "plant_species": "Monstera deliciosa",
+    "sensor_id": 1,
+    "sensor_name": "Sensor 1",
+    "soil_moisture": 5.0,
+    "status": "very_dry",
+    "target_max": 60.0,
+    "target_min": 45.0
+   }
+  ]
+ },
+ "plant_chart": {
+  "datasets": [
+   {
+    "points": [
+     [
+      1776230940,
+      45.0
+     ],
+     [
+      1776232740,
+      46.0
+     ],
+     [
+      1776234540,
+      45.0
+     ],
+     [
+      1776236340,
+      44.0
+     ],
+     [
+      1776238140,
+      45.0
+     ],
+     [
+      1776239940,
+      46.0
+     ],
+     [
+      1776241740,
+      45.0
+     ],
+     [
+      1776243540,
+      44.0
+     ],
+     [
+      1776245340,
+      45.0
+     ],
+     [
+      1776247140,
+      5.0
+     ]
+    ],
+    "sensor_id": 1,
+    "sensor_name": "Sensor 1"
+   }
+  ],
+  "events": [],
+  "hours": 24,
+  "metric": "soil_moisture",
+  "threshold": {
+   "max": 65.0,
+   "min": 45.0,
+   "source": "water_needs:medium"
+  }
+ },
+ "quality": {
+  "counts": {
+   "sensor_without_plant": 1
+  },
+  "issues": [
+   {
+    "code": "sensor_without_plant",
+    "entity_id": 2,
+    "entity_type": "sensor",
+    "label": "Glitchy",
+    "message": "Sensor 'Glitchy' is not assigned to any plant.",
+    "severity": "warning"
+   }
+  ]
+ },
+ "status_decision": {
+  "action": "irrigate",
+  "confidence": 0.8,
+  "duration_minutes": 2,
+  "interval_hours": 12,
+  "learning_alerts": [],
+  "reason": "soil moderately dry (driest=44%)",
+  "reasons": [
+   {
+    "code": "sensor_dry",
+    "duration_delta": 0,
+    "icon": "drop",
+    "interval_delta": 0,
+    "message": "soil moderately dry (driest=44%)",
+    "severity": "info"
+   }
+  ],
+  "stress_indicators": {
+   "heat_stress": null,
+   "learning_alerts": [],
+   "low_env_humidity": null,
+   "low_light": null,
+   "over_watering": null,
+   "water_stress": null,
+   "water_warning": null
+  },
+  "temperature": null,
+  "temperature_source": null
+ },
+ "status_sensors": [
+  {
+   "id": 2,
+   "last_reading": {
+    "battery_state": null,
+    "env_humidity": null,
+    "id": 12,
+    "light": null,
+    "sensor_id": 2,
+    "soil_moisture": 150.0,
+    "temperature": null,
+    "timestamp": 1776247080,
+    "water_warning": null
+   },
+   "name": "Glitchy",
+   "plant_id": null,
+   "reading_age_seconds": 120,
+   "type": "soil_moisture"
+  },
+  {
+   "id": 1,
+   "last_reading": {
+    "battery_state": null,
+    "env_humidity": null,
+    "id": 10,
+    "light": null,
+    "sensor_id": 1,
+    "soil_moisture": 5.0,
+    "temperature": 22.0,
+    "timestamp": 1776247140,
+    "water_warning": null
+   },
+   "name": "Sensor 1",
+   "plant_id": 1,
+   "reading_age_seconds": 60,
+   "type": "soil_moisture"
+  }
+ ]
+}

@@ -1,0 +1,155 @@
+{
+ "calls": [
+  {
+   "body": {},
+   "request": "POST /api/v1/clusters/1/irrigate",
+   "response": {
+    "action": "skip",
+    "confidence": 0.9,
+    "duration_minutes": 0,
+    "interval_hours": 12,
+    "learning_alerts": [],
+    "reason": "soil moderately dry (driest=35%); vacation active (returns in 10d); vacation water budget exhausted this cycle — skipping to conserve reservoir",
+    "reasons": [
+     {
+      "code": "sensor_dry",
+      "duration_delta": 0,
+      "icon": "drop",
+      "interval_delta": 0,
+      "message": "soil moderately dry (driest=35%)",
+      "severity": "info"
+     },
+     {
+      "code": "vacation_active",
+      "duration_delta": 0,
+      "icon": "airplane",
+      "interval_delta": 0,
+      "message": "vacation active (returns in 10d)",
+      "severity": "info"
+     },
+     {
+      "code": "vacation_budget_exhausted",
+      "duration_delta": 0,
+      "icon": "drop-slash",
+      "interval_delta": 0,
+      "message": "vacation water budget exhausted this cycle — skipping to conserve reservoir",
+      "severity": "warning"
+     }
+    ],
+    "stress_indicators": {
+     "learning_alerts": []
+    },
+    "temperature": 24.0,
+    "temperature_source": "sensor"
+   },
+   "status": 200
+  }
+ ],
+ "db_writes": {
+  "activity_events": [
+   {
+    "code": "decision_skip",
+    "entity_id": 1,
+    "entity_type": "cluster",
+    "id": 1,
+    "message": "soil moderately dry (driest=35%); vacation active (returns in 10d); vacation water budget exhausted this cycle — skipping to conserve reservoir",
+    "payload_json": null,
+    "severity": "info",
+    "source": "irrigation",
+    "timestamp": 1776247200
+   }
+  ],
+  "alerts": [],
+  "decision_logs": [
+   {
+    "action": "skip",
+    "actuated": false,
+    "cluster_id": 1,
+    "confidence": 0.9,
+    "duration_minutes": 0,
+    "evaluated_at": 1776247200,
+    "id": 1,
+    "interval_hours": 12,
+    "payload_json": {
+     "action": "skip",
+     "cluster_id": 1,
+     "confidence": 0.9,
+     "duration_minutes": 0,
+     "evaluated_at": 1776247200,
+     "interval_hours": 12,
+     "reasons": [
+      {
+       "code": "sensor_dry",
+       "duration_delta": 0,
+       "icon": "drop",
+       "interval_delta": 0,
+       "message": "soil moderately dry (driest=35%)",
+       "severity": "info"
+      },
+      {
+       "code": "vacation_active",
+       "duration_delta": 0,
+       "icon": "airplane",
+       "interval_delta": 0,
+       "message": "vacation active (returns in 10d)",
+       "severity": "info"
+      },
+      {
+       "code": "vacation_budget_exhausted",
+       "duration_delta": 0,
+       "icon": "drop-slash",
+       "interval_delta": 0,
+       "message": "vacation water budget exhausted this cycle — skipping to conserve reservoir",
+       "severity": "warning"
+      }
+     ],
+     "sensor_snapshot": {
+      "avg_env_humidity": null,
+      "avg_light": null,
+      "avg_soil_moisture": 35.0,
+      "avg_temperature": 24.0,
+      "max_soil_moisture": 35.0,
+      "min_soil_moisture": 35.0,
+      "per_sensor": [
+       {
+        "avg_humidity": null,
+        "avg_soil_moisture": 35.0,
+        "avg_temperature": 24.0,
+        "name": "Sensor 1",
+        "plant_id": 1,
+        "sensor_id": 1
+       }
+      ],
+      "water_warnings": []
+     },
+     "stress_indicators": {
+      "heat_stress": null,
+      "learning_alerts": [],
+      "low_env_humidity": null,
+      "low_light": null,
+      "over_watering": null,
+      "water_stress": null,
+      "water_warning": null
+     },
+     "trends": {
+      "irrigation_frequency_high": false,
+      "irrigation_frequency_low": false,
+      "soil_moisture_delta": 0.0,
+      "soil_moisture_trend": null,
+      "temperature_trend": null
+     },
+     "weather": null
+    },
+    "primary_code": "sensor_dry",
+    "reason_text": "soil moderately dry (driest=35%); vacation active (returns in 10d); vacation water budget exhausted this cycle — skipping to conserve reservoir",
+    "triggered_by": "auto"
+   }
+  ],
+  "irrigation_events": [],
+  "sensor_readings": []
+ },
+ "gateway_calls": null,
+ "irrigator_adapter_calls": [],
+ "notifications": [],
+ "sensor_adapter_calls": []
+}

@@ -1,0 +1,305 @@
+{
+ "activity": [
+  [
+   1,
+   "irrigated"
+  ],
+  [
+   3,
+   "irrigated"
+  ],
+  [
+   1,
+   "decision_skip"
+  ],
+  [
+   2,
+   "irrigated"
+  ],
+  [
+   3,
+   "decision_skip"
+  ],
+  [
+   1,
+   "decision_skip"
+  ],
+  [
+   3,
+   "decision_skip"
+  ]
+ ],
+ "alerts": [
+  {
+   "acknowledged_at": null,
+   "cluster_id": 2,
+   "code": "check_failed",
+   "dedup_key": "check_failed:cluster:2",
+   "entity_id": 2,
+   "entity_type": "cluster",
+   "first_seen_at": 1776247200,
+   "id": 1,
+   "last_seen_at": 1776247200,
+   "message": "The scheduled check crashed and was skipped for this cluster: Boom('cluster 2 crashed after writing')",
+   "occurrence_count": 2,
+   "payload_json": null,
+   "plant_id": null,
+   "resolved_at": null,
+   "severity": "error",
+   "source": "irrigation",
+   "status": "open",
+   "title": "Check failed: Bravo"
+  }
+ ],
+ "calls": [
+  {
+   "body": null,
+   "request": "POST /api/v1/check",
+   "response": {
+    "has_alerts": false,
+    "results": [
+     {
+      "action": "irrigated",
+      "alerts": [],
+      "cluster_id": 1,
+      "cluster_name": "Alpha",
+      "maintenance": [],
+      "needs_water": [],
+      "notes": "soil moderately dry (driest=35%)"
+     },
+     {
+      "action": "error",
+      "alerts": [],
+      "cluster_id": 2,
+      "cluster_name": "Bravo",
+      "maintenance": [],
+      "needs_water": [],
+      "notes": "check failed: Boom('cluster 2 crashed after writing')"
+     },
+     {
+      "action": "irrigated",
+      "alerts": [],
+      "cluster_id": 3,
+      "cluster_name": "Charlie",
+      "maintenance": [],
+      "needs_water": [],
+      "notes": "soil moderately dry (driest=35%)"
+     }
+    ]
+   },
+   "status": 200
+  },
+  {
+   "body": null,
+   "request": "POST /api/v1/check",
+   "response": {
+    "has_alerts": false,
+    "results": [
+     {
+      "action": "skip",
+      "alerts": [],
+      "cluster_id": 1,
+      "cluster_name": "Alpha",
+      "maintenance": [],
+      "needs_water": [],
+      "notes": "cooldown active (last irrigation 0.0h ago, trigger: auto)"
+     },
+     {
+      "action": "irrigated",
+      "alerts": [],
+      "cluster_id": 2,
+      "cluster_name": "Bravo",
+      "maintenance": [],
+      "needs_water": [],
+      "notes": "soil moderately dry (driest=35%)"
+     },
+     {
+      "action": "skip",
+      "alerts": [],
+      "cluster_id": 3,
+      "cluster_name": "Charlie",
+      "maintenance": [],
+      "needs_water": [],
+      "notes": "cooldown active (last irrigation 0.0h ago, trigger: auto)"
+     }
+    ]
+   },
+   "status": 200
+  },
+  {
+   "body": null,
+   "request": "POST /api/v1/check",
+   "response": {
+    "has_alerts": false,
+    "results": [
+     {
+      "action": "skip",
+      "alerts": [],
+      "cluster_id": 1,
+      "cluster_name": "Alpha",
+      "maintenance": [],
+      "needs_water": [],
+      "notes": "cooldown active (last irrigation 0.0h ago, trigger: auto)"
+     },
+     {
+      "action": "error",
+      "alerts": [],
+      "cluster_id": 2,
+      "cluster_name": "Bravo",
+      "maintenance": [],
+      "needs_water": [],
+      "notes": "check failed: Boom('cluster 2 crashed after writing')"
+     },
+     {
+      "action": "skip",
+      "alerts": [],
+      "cluster_id": 3,
+      "cluster_name": "Charlie",
+      "maintenance": [],
+      "needs_water": [],
+      "notes": "cooldown active (last irrigation 0.0h ago, trigger: auto)"
+     }
+    ]
+   },
+   "status": 200
+  }
+ ],
+ "decision_logs": [
+  [
+   1,
+   "irrigate",
+   "sensor_dry",
+   true
+  ],
+  [
+   3,
+   "irrigate",
+   "sensor_dry",
+   true
+  ],
+  [
+   1,
+   "skip",
+   "cooldown",
+   false
+  ],
+  [
+   2,
+   "irrigate",
+   "sensor_dry",
+   true
+  ],
+  [
+   3,
+   "skip",
+   "cooldown",
+   false
+  ],
+  [
+   1,
+   "skip",
+   "cooldown",
+   false
+  ],
+  [
+   3,
+   "skip",
+   "cooldown",
+   false
+  ]
+ ],
+ "irrigator_adapter_calls": [
+  [
+   "start",
+   1,
+   2
+  ],
+  [
+   "start",
+   2,
+   2
+  ],
+  [
+   "start",
+   3,
+   2
+  ],
+  [
+   "start",
+   2,
+   2
+  ]
+ ],
+ "notifications": [
+  {
+   "detail": "confidence=80%",
+   "duration_minutes": 2,
+   "irrigator_name": "Irrigator 1",
+   "kind": "irrigation",
+   "triggered_by": "auto"
+  },
+  {
+   "detail": "confidence=80%",
+   "duration_minutes": 2,
+   "irrigator_name": "Irrigator 2",
+   "kind": "irrigation",
+   "triggered_by": "auto"
+  },
+  {
+   "detail": "confidence=80%",
+   "duration_minutes": 2,
+   "irrigator_name": "Irrigator 3",
+   "kind": "irrigation",
+   "triggered_by": "auto"
+  },
+  {
+   "detail": "confidence=80%",
+   "duration_minutes": 2,
+   "irrigator_name": "Irrigator 2",
+   "kind": "irrigation",
+   "triggered_by": "auto"
+  }
+ ],
+ "start_events_by_irrigator": [
+  [
+   1,
+   "start",
+   "auto"
+  ],
+  [
+   3,
+   "start",
+   "auto"
+  ],
+  [
+   2,
+   "start",
+   "auto"
+  ]
+ ],
+ "transactions": [
+  "check:1",
+  "commit",
+  "check:2",
+  "rollback",
+  "commit",
+  "check:3",
+  "commit",
+  "commit",
+  "check:1",
+  "commit",
+  "check:2",
+  "commit",
+  "check:3",
+  "commit",
+  "commit",
+  "check:1",
+  "commit",
+  "check:2",
+  "rollback",
+  "commit",
+  "check:3",
+  "commit",
+  "commit"
+ ]
+}

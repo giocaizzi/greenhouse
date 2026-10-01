@@ -1,0 +1,133 @@
+{
+ "calls": [
+  {
+   "body": {},
+   "request": "POST /api/v1/clusters/1/irrigate",
+   "response": {
+    "action": "irrigated",
+    "confidence": 0.6,
+    "duration_minutes": 2,
+    "interval_hours": 12,
+    "learning_alerts": [],
+    "reason": "temperature-based (20°C, medium water needs)",
+    "reasons": [
+     {
+      "code": "temp_fallback",
+      "duration_delta": 0,
+      "icon": "thermometer",
+      "interval_delta": 0,
+      "message": "temperature-based (20°C, medium water needs)",
+      "severity": "info"
+     }
+    ],
+    "stress_indicators": {
+     "learning_alerts": []
+    },
+    "temperature": 20.0,
+    "temperature_source": "fallback (20C)"
+   },
+   "status": 200
+  }
+ ],
+ "db_writes": {
+  "activity_events": [
+   {
+    "code": "irrigated",
+    "entity_id": 1,
+    "entity_type": "cluster",
+    "id": 1,
+    "message": "irrigated for 2min (confidence=60%)",
+    "payload_json": {
+     "confidence": 0.6,
+     "duration_minutes": 2,
+     "irrigator_id": 1
+    },
+    "severity": "info",
+    "source": "irrigation",
+    "timestamp": 1776247200
+   }
+  ],
+  "alerts": [],
+  "decision_logs": [
+   {
+    "action": "irrigate",
+    "actuated": true,
+    "cluster_id": 1,
+    "confidence": 0.6,
+    "duration_minutes": 2,
+    "evaluated_at": 1776247200,
+    "id": 1,
+    "interval_hours": 12,
+    "payload_json": {
+     "action": "irrigate",
+     "cluster_id": 1,
+     "confidence": 0.6,
+     "duration_minutes": 2,
+     "evaluated_at": 1776247200,
+     "interval_hours": 12,
+     "reasons": [
+      {
+       "code": "temp_fallback",
+       "duration_delta": 0,
+       "icon": "thermometer",
+       "interval_delta": 0,
+       "message": "temperature-based (20°C, medium water needs)",
+       "severity": "info"
+      }
+     ],
+     "sensor_snapshot": null,
+     "stress_indicators": {
+      "heat_stress": null,
+      "learning_alerts": [],
+      "low_env_humidity": null,
+      "low_light": null,
+      "over_watering": null,
+      "water_stress": null,
+      "water_warning": null
+     },
+     "trends": {
+      "irrigation_frequency_high": false,
+      "irrigation_frequency_low": false,
+      "soil_moisture_delta": 0.0,
+      "soil_moisture_trend": null,
+      "temperature_trend": null
+     },
+     "weather": null
+    },
+    "primary_code": "temp_fallback",
+    "reason_text": "temperature-based (20°C, medium water needs)",
+    "triggered_by": "auto"
+   }
+  ],
+  "irrigation_events": [
+   {
+    "action": "start",
+    "duration_minutes": 2,
+    "id": 1,
+    "irrigator_id": 1,
+    "notes": "temp=20.0C (fallback (20C)), confidence=60%, reason=temperature-based (20°C, medium water needs)",
+    "timestamp": 1776247200,
+    "triggered_by": "auto"
+   }
+  ],
+  "sensor_readings": []
+ },
+ "gateway_calls": null,
+ "irrigator_adapter_calls": [
+  [
+   "start",
+   1,
+   2
+  ]
+ ],
+ "notifications": [
+  {
+   "detail": "confidence=60%",
+   "duration_minutes": 2,
+   "irrigator_name": "Irrigator 1",
+   "kind": "irrigation",
+   "triggered_by": "auto"
+  }
+ ],
+ "sensor_adapter_calls": []
+}

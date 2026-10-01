@@ -1,0 +1,128 @@
+{
+ "calls": [
+  {
+   "body": {
+    "force": true
+   },
+   "request": "POST /api/v1/clusters/1/irrigate",
+   "response": {
+    "action": "skip",
+    "confidence": 0.9,
+    "duration_minutes": 0,
+    "interval_hours": 24,
+    "learning_alerts": [],
+    "reason": "leak/stuck-valve hold active (23.0h left) — Sensor 1: soil moisture still rising after irrigation (latest=78.0%); resolve alert #1 to release",
+    "reasons": [
+     {
+      "code": "leak_hold",
+      "duration_delta": 0,
+      "icon": null,
+      "interval_delta": 0,
+      "message": "leak/stuck-valve hold active (23.0h left) — Sensor 1: soil moisture still rising after irrigation (latest=78.0%); resolve alert #1 to release",
+      "severity": "critical"
+     }
+    ],
+    "stress_indicators": {
+     "learning_alerts": []
+    },
+    "temperature": 24.0,
+    "temperature_source": "sensor"
+   },
+   "status": 200
+  }
+ ],
+ "db_writes": {
+  "activity_events": [
+   {
+    "code": "decision_skip",
+    "entity_id": 1,
+    "entity_type": "cluster",
+    "id": 1,
+    "message": "leak/stuck-valve hold active (23.0h left) — Sensor 1: soil moisture still rising after irrigation (latest=78.0%); resolve alert #1 to release",
+    "payload_json": null,
+    "severity": "info",
+    "source": "irrigation",
+    "timestamp": 1776247200
+   }
+  ],
+  "alerts": [
+   {
+    "acknowledged_at": null,
+    "cluster_id": 1,
+    "code": "leak_or_stuck_valve",
+    "dedup_key": "leak::leak_or_stuck_valve::1::sensor1",
+    "entity_id": 1,
+    "entity_type": "sensor",
+    "first_seen_at": 1776243600,
+    "id": 1,
+    "last_seen_at": 1776243600,
+    "message": "Sensor 1: soil moisture still rising after irrigation (latest=78.0%)",
+    "occurrence_count": 1,
+    "payload_json": null,
+    "plant_id": null,
+    "resolved_at": null,
+    "severity": "critical",
+    "source": "leak",
+    "status": "open",
+    "title": "Possible leak or stuck valve detected"
+   }
+  ],
+  "decision_logs": [
+   {
+    "action": "skip",
+    "actuated": false,
+    "cluster_id": 1,
+    "confidence": 0.9,
+    "duration_minutes": 0,
+    "evaluated_at": 1776247200,
+    "id": 1,
+    "interval_hours": 24,
+    "payload_json": {
+     "action": "skip",
+     "cluster_id": 1,
+     "confidence": 0.9,
+     "duration_minutes": 0,
+     "evaluated_at": 1776247200,
+     "interval_hours": 24,
+     "reasons": [
+      {
+       "code": "leak_hold",
+       "duration_delta": 0,
+       "icon": null,
+       "interval_delta": 0,
+       "message": "leak/stuck-valve hold active (23.0h left) — Sensor 1: soil moisture still rising after irrigation (latest=78.0%); resolve alert #1 to release",
+       "severity": "critical"
+      }
+     ],
+     "sensor_snapshot": null,
+     "stress_indicators": {
+      "heat_stress": null,
+      "learning_alerts": [],
+      "low_env_humidity": null,
+      "low_light": null,
+      "over_watering": null,
+      "water_stress": null,
+      "water_warning": null
+     },
+     "trends": {
+      "irrigation_frequency_high": false,
+      "irrigation_frequency_low": false,
+      "soil_moisture_delta": 0.0,
+      "soil_moisture_trend": null,
+      "temperature_trend": null
+     },
+     "weather": null
+    },
+    "primary_code": "leak_hold",
+    "reason_text": "leak/stuck-valve hold active (23.0h left) — Sensor 1: soil moisture still rising after irrigation (latest=78.0%); resolve alert #1 to release",
+    "triggered_by": "manual"
+   }
+  ],
+  "irrigation_events": [],
+  "sensor_readings": []
+ },
+ "gateway_calls": null,
+ "irrigator_adapter_calls": [],
+ "notifications": [],
+ "sensor_adapter_calls": []
+}

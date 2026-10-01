@@ -1,0 +1,177 @@
+{
+ "calls": [
+  {
+   "body": {},
+   "request": "POST /api/v1/clusters/1/irrigate",
+   "response": {
+    "action": "irrigated",
+    "confidence": 0.9,
+    "duration_minutes": 3,
+    "interval_hours": 8,
+    "learning_alerts": [],
+    "reason": "soil very dry (driest=30% < 45.0%)",
+    "reasons": [
+     {
+      "code": "sensor_very_dry",
+      "duration_delta": 0,
+      "icon": "drop",
+      "interval_delta": 0,
+      "message": "soil very dry (driest=30% < 45.0%)",
+      "severity": "warning"
+     }
+    ],
+    "stress_indicators": {
+     "learning_alerts": []
+    },
+    "temperature": 23.0,
+    "temperature_source": "sensor"
+   },
+   "status": 200
+  }
+ ],
+ "db_writes": {
+  "activity_events": [
+   {
+    "code": "irrigated",
+    "entity_id": 1,
+    "entity_type": "cluster",
+    "id": 1,
+    "message": "irrigated for 3min (confidence=90%)",
+    "payload_json": {
+     "confidence": 0.9,
+     "duration_minutes": 3,
+     "irrigator_id": 1
+    },
+    "severity": "info",
+    "source": "irrigation",
+    "timestamp": 1776247200
+   }
+  ],
+  "alerts": [],
+  "decision_logs": [
+   {
+    "action": "irrigate",
+    "actuated": true,
+    "cluster_id": 1,
+    "confidence": 0.9,
+    "duration_minutes": 3,
+    "evaluated_at": 1776247200,
+    "id": 1,
+    "interval_hours": 8,
+    "payload_json": {
+     "action": "irrigate",
+     "cluster_id": 1,
+     "confidence": 0.9,
+     "duration_minutes": 3,
+     "evaluated_at": 1776247200,
+     "interval_hours": 8,
+     "reasons": [
+      {
+       "code": "sensor_very_dry",
+       "duration_delta": 0,
+       "icon": "drop",
+       "interval_delta": 0,
+       "message": "soil very dry (driest=30% < 45.0%)",
+       "severity": "warning"
+      }
+     ],
+     "sensor_snapshot": {
+      "avg_env_humidity": null,
+      "avg_light": null,
+      "avg_soil_moisture": 33.333333333333336,
+      "avg_temperature": 23.666666666666668,
+      "max_soil_moisture": 35.0,
+      "min_soil_moisture": 30.0,
+      "per_sensor": [
+       {
+        "avg_humidity": null,
+        "avg_soil_moisture": 33.333333333333336,
+        "avg_temperature": 23.666666666666668,
+        "name": "Sensor 1",
+        "plant_id": 1,
+        "sensor_id": 1
+       }
+      ],
+      "water_warnings": []
+     },
+     "stress_indicators": {
+      "heat_stress": null,
+      "learning_alerts": [],
+      "low_env_humidity": null,
+      "low_light": null,
+      "over_watering": null,
+      "water_stress": null,
+      "water_warning": null
+     },
+     "trends": {
+      "irrigation_frequency_high": false,
+      "irrigation_frequency_low": false,
+      "soil_moisture_delta": 0.0,
+      "soil_moisture_trend": null,
+      "temperature_trend": null
+     },
+     "weather": null
+    },
+    "primary_code": "sensor_very_dry",
+    "reason_text": "soil very dry (driest=30% < 45.0%)",
+    "triggered_by": "auto"
+   }
+  ],
+  "irrigation_events": [
+   {
+    "action": "start",
+    "duration_minutes": 3,
+    "id": 1,
+    "irrigator_id": 1,
+    "notes": "temp=23.0C (sensor), soil=30% (driest), confidence=90%, reason=soil very dry (driest=30% < 45.0%)",
+    "timestamp": 1776247200,
+    "triggered_by": "auto"
+   }
+  ],
+  "sensor_readings": [
+   {
+    "battery_state": null,
+    "env_humidity": null,
+    "id": 3,
+    "light": null,
+    "sensor_id": 1,
+    "soil_moisture": 30.0,
+    "temperature": 23.0,
+    "timestamp": 1776247200,
+    "water_warning": null
+   }
+  ]
+ },
+ "gateway_calls": [
+  [
+   "get_device_logs",
+   "fake_sensor_001",
+   1776229140000
+  ],
+  [
+   "group_logs_by_timestamp",
+   0
+  ],
+  [
+   "get_live_reading",
+   "fake_sensor_001"
+  ]
+ ],
+ "irrigator_adapter_calls": [
+  [
+   "start",
+   1,
+   3
+  ]
+ ],
+ "notifications": [
+  {
+   "detail": "confidence=90%",
+   "duration_minutes": 3,
+   "irrigator_name": "Irrigator 1",
+   "kind": "irrigation",
+   "triggered_by": "auto"
+  }
+ ],
+ "sensor_adapter_calls": []
+}

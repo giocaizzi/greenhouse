@@ -1,0 +1,236 @@
+{
+ "calls": [
+  {
+   "body": {
+    "minutes": 3
+   },
+   "request": "POST /api/v1/irrigators/1/start",
+   "response": {
+    "message": "fake start ok",
+    "success": true
+   },
+   "status": 200
+  },
+  {
+   "body": {},
+   "request": "POST /api/v1/irrigators/1/start",
+   "response": {
+    "message": "fake start ok",
+    "success": true
+   },
+   "status": 200
+  },
+  {
+   "body": null,
+   "request": "POST /api/v1/irrigators/1/stop",
+   "response": {
+    "message": "fake stop ok",
+    "success": true
+   },
+   "status": 200
+  },
+  {
+   "body": {
+    "minutes": 4,
+    "notes": "by hand"
+   },
+   "request": "POST /api/v1/irrigators/1/log-manual",
+   "response": {
+    "event_id": 4,
+    "success": true
+   },
+   "status": 200
+  },
+  {
+   "body": {
+    "minutes": 3
+   },
+   "request": "POST /api/v1/irrigators/99/start",
+   "response": {
+    "detail": "Irrigator not found"
+   },
+   "status": 404
+  },
+  {
+   "body": {},
+   "request": "POST /api/v1/clusters/1/irrigate",
+   "response": {
+    "action": "skip",
+    "confidence": 0.9,
+    "duration_minutes": 2,
+    "interval_hours": 6,
+    "learning_alerts": [],
+    "reason": "cooldown active (last irrigation 0.0h ago, trigger: manual)",
+    "reasons": [
+     {
+      "code": "cooldown",
+      "duration_delta": 0,
+      "icon": null,
+      "interval_delta": 0,
+      "message": "cooldown active (last irrigation 0.0h ago, trigger: manual)",
+      "severity": "info"
+     }
+    ],
+    "stress_indicators": {
+     "learning_alerts": []
+    },
+    "temperature": 24.0,
+    "temperature_source": "sensor"
+   },
+   "status": 200
+  }
+ ],
+ "db_writes": {
+  "activity_events": [
+   {
+    "code": "decision_skip",
+    "entity_id": 1,
+    "entity_type": "cluster",
+    "id": 1,
+    "message": "cooldown active (last irrigation 0.0h ago, trigger: manual)",
+    "payload_json": null,
+    "severity": "info",
+    "source": "irrigation",
+    "timestamp": 1776247200
+   }
+  ],
+  "alerts": [],
+  "decision_logs": [
+   {
+    "action": "skip",
+    "actuated": false,
+    "cluster_id": 1,
+    "confidence": 0.9,
+    "duration_minutes": 2,
+    "evaluated_at": 1776247200,
+    "id": 1,
+    "interval_hours": 6,
+    "payload_json": {
+     "action": "skip",
+     "cluster_id": 1,
+     "confidence": 0.9,
+     "duration_minutes": 2,
+     "evaluated_at": 1776247200,
+     "interval_hours": 6,
+     "reasons": [
+      {
+       "code": "cooldown",
+       "duration_delta": 0,
+       "icon": null,
+       "interval_delta": 0,
+       "message": "cooldown active (last irrigation 0.0h ago, trigger: manual)",
+       "severity": "info"
+      }
+     ],
+     "sensor_snapshot": null,
+     "stress_indicators": {
+      "heat_stress": null,
+      "learning_alerts": [],
+      "low_env_humidity": null,
+      "low_light": null,
+      "over_watering": null,
+      "water_stress": null,
+      "water_warning": null
+     },
+     "trends": {
+      "irrigation_frequency_high": false,
+      "irrigation_frequency_low": false,
+      "soil_moisture_delta": 0.0,
+      "soil_moisture_trend": null,
+      "temperature_trend": null
+     },
+     "weather": null
+    },
+    "primary_code": "cooldown",
+    "reason_text": "cooldown active (last irrigation 0.0h ago, trigger: manual)",
+    "triggered_by": "auto"
+   }
+  ],
+  "irrigation_events": [
+   {
+    "action": "start",
+    "duration_minutes": 3,
+    "id": 1,
+    "irrigator_id": 1,
+    "notes": "Manual start via API (3 min)",
+    "timestamp": 1776247200,
+    "triggered_by": "manual"
+   },
+   {
+    "action": "start",
+    "duration_minutes": null,
+    "id": 2,
+    "irrigator_id": 1,
+    "notes": "Manual start via API",
+    "timestamp": 1776247200,
+    "triggered_by": "manual"
+   },
+   {
+    "action": "off",
+    "duration_minutes": null,
+    "id": 3,
+    "irrigator_id": 1,
+    "notes": "Manual stop via API",
+    "timestamp": 1776247200,
+    "triggered_by": "manual"
+   },
+   {
+    "action": "start",
+    "duration_minutes": 4,
+    "id": 4,
+    "irrigator_id": 1,
+    "notes": "by hand",
+    "timestamp": 1776247200,
+    "triggered_by": "manual"
+   }
+  ],
+  "sensor_readings": []
+ },
+ "gateway_calls": null,
+ "irrigator_adapter_calls": [
+  [
+   "start",
+   1,
+   3
+  ],
+  [
+   "start",
+   1,
+   null
+  ],
+  [
+   "stop",
+   1
+  ]
+ ],
+ "notifications": [
+  {
+   "detail": "started",
+   "duration_minutes": 3,
+   "irrigator_name": "Irrigator 1",
+   "kind": "irrigation",
+   "triggered_by": "manual"
+  },
+  {
+   "detail": "started",
+   "duration_minutes": null,
+   "irrigator_name": "Irrigator 1",
+   "kind": "irrigation",
+   "triggered_by": "manual"
+  },
+  {
+   "detail": "stopped",
+   "irrigator_name": "Irrigator 1",
+   "kind": "irrigation",
+   "triggered_by": "manual"
+  },
+  {
+   "detail": "logged (watered by hand)",
+   "duration_minutes": 4,
+   "irrigator_name": "Irrigator 1",
+   "kind": "irrigation",
+   "triggered_by": "manual"
+  }
+ ],
+ "sensor_adapter_calls": []
+}
