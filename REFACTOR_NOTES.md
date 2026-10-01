@@ -39,6 +39,23 @@ device id in web create routes, vacation end < start accepted by the API, `local
 listed with file:line evidence in `refactor/00-smells.md` ("Observed bugs"). They are recorded, not fixed; each one that a
 refactored module touches gets a characterization test pinning current behavior.
 
+## Test-suite hazards found at baseline (recorded)
+
+- **Real network in the existing suite.** `get_weather_client` is never overridden in test fixtures, so ~19 tests call the
+  live Open-Meteo API through `services/weather.py:WeatherClient` (or fall back to 20 °C after a timeout when offline).
+  Their assertions are loose enough to pass either way. New safety-net tests are hermetic (weather stubbed).
+- **Wall clock everywhere.** The engine reads `time.time()` directly (`logic/engine.py:129`); the baseline migration
+  seeds quiet hours 00:00–05:00 UTC into every app. Snapshot/golden tests freeze the clock.
+- `test_cli.py` can read the real CLI token from the user config dir; `Settings` reads `.env` / `IRRIGATION_*` /
+  `GREENHOUSE_*` from the environment.
+
+## Doc/code mismatches and dead code noticed (not changed)
+
+- `DEFAULT_QUIET_START_HOUR` / `DEFAULT_QUIET_END_HOUR` in `constants.py` are unused; the live 00–05 default is a
+  literal inside the baseline Alembic migration (out of scope: migrations are frozen).
+- CLAUDE.md says every actuating TUI key goes through `ConfirmScreen`; in code `i` (irrigate) and `w` (water now) open
+  their own dialogs, and scheduler resume (`p`) / sync (`S`) run without confirmation. Current behavior is pinned as is.
+
 ## Baseline warnings (recorded, not fixed)
 
 Gate 0 run on `a1b2622`, Python 3.11.15: **1182 passed, 2 warnings, 1168 s** (slowed by concurrent recon agents);
