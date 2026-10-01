@@ -1,5 +1,6 @@
 """Scheduler management routes."""
 
+from apscheduler.jobstores.base import JobLookupError
 from fastapi import APIRouter, HTTPException
 
 from greenhouse_core.schemas import (
@@ -40,7 +41,10 @@ def list_jobs() -> list[SchedulerJobResponse]:
 
     Returns:
         One entry per job with its id, name, trigger description,
-        next_run_time (null when paused), and a `paused` flag.
+        `next_run_time` (null when the job is paused or the scheduler is not
+        running — see `scheduler_running` on GET /health), and a `paused`
+        flag that is true only for an explicitly paused job (`check_all`
+        after POST /scheduler/pause, mirroring the persisted preference).
     """
     return [SchedulerJobResponse(**j) for j in get_jobs()]
 
@@ -52,27 +56,33 @@ def delete_job(job_id: str) -> SuccessResponse:
     Side effects: the job stops firing immediately. Any in-flight execution
     is allowed to complete; deleting a job mid-run does not abort it.
 
+    The removal is in-memory only: the default jobs are re-registered on the
+    next server start. Works whether or not the scheduler is running.
+
     Args:
         job_id: APScheduler job identifier (see GET /scheduler/jobs).
+
+    Returns:
+        `success=True` once the job is unregistered.
 
     Raises:
         HTTPException: 404 if no job with that ID is registered.
     """
     try:
         scheduler.remove_job(job_id)
-        return SuccessResponse(success=True)
-    except Exception:
+    except JobLookupError:
         raise HTTPException(status_code=404, detail=f"Job {job_id} not found") from None
+    return SuccessResponse(success=True)
 
 
 @router.post("/scheduler/pause", response_model=SchedulerStateResponse)
 def pause_scheduler(repo: RepoDep) -> SchedulerStateResponse:
     """Pause the `check_all` scheduler job and persist the flag.
 
-    Stops new check-all runs from firing. Sensor sync, anomaly scan, and
-    plant-health snapshot jobs are unaffected. The pause flag is persisted
-    to `user_preferences.scheduler_paused` so the pause survives a server
-    restart — see startup wiring in `app.py`.
+    Stops new check-all runs from firing. Sensor sync, anomaly scan,
+    device-health monitor, and plant-health snapshot jobs are unaffected.
+    The pause flag is persisted to `user_preferences.scheduler_paused` so the
+    pause survives a server restart — see startup wiring in `app.py`.
 
     Returns:
         Current paused state of the `check_all` job (always True on success).

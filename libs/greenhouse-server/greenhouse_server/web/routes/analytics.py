@@ -5,6 +5,7 @@ from __future__ import annotations
 import csv
 import io
 
+from apscheduler.jobstores.base import JobLookupError
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 
@@ -18,7 +19,7 @@ from greenhouse_server.deps import (
     WeatherClientDep,
     require_cluster,
 )
-from greenhouse_server.scheduler import CHECK_ALL_JOB_ID, is_check_all_paused
+from greenhouse_server.scheduler import CHECK_ALL_JOB_ID, get_jobs, is_check_all_paused
 from greenhouse_server.scheduler import scheduler as bg_scheduler
 from greenhouse_server.services.bulk import stop_all_irrigators
 from greenhouse_server.services.forecast import ForecastService
@@ -118,17 +119,10 @@ def cluster_learn(
 
 @router.get("/scheduler")
 def scheduler_page(request: Request):
-    jobs: list[dict] = []
-    if bg_scheduler.running:
-        for job in bg_scheduler.get_jobs():
-            jobs.append(
-                {
-                    "id": job.id,
-                    "name": job.name or job.id,
-                    "trigger": str(job.trigger),
-                    "next_run_time": job.next_run_time.isoformat() if job.next_run_time else None,
-                }
-            )
+    # Share the API's job serializer so the per-row `paused` badge the
+    # template renders is actually populated (it was missing, so a paused
+    # check_all always read "active").
+    jobs = [{**job, "name": job["name"] or job["id"]} for job in get_jobs()] if bg_scheduler.running else []
     check_paused = is_check_all_paused() if bg_scheduler.running else False
     return templates.TemplateResponse(
         request,
@@ -148,7 +142,7 @@ def scheduler_delete_job(request: Request, job_id: str):
         raise HTTPException(503, "Scheduler not running")
     try:
         bg_scheduler.remove_job(job_id)
-    except Exception as exc:
+    except JobLookupError as exc:
         raise HTTPException(404, f"Job not found: {exc}") from exc
     # HTMX swap target is `closest tr` — return empty body to remove the row.
     return HTMLResponse("")

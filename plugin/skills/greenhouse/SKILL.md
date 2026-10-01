@@ -105,7 +105,7 @@ Don't preload these. The endpoint catalogue isn't here on purpose — the MCP to
 
 ## Common pitfalls
 
-- **"It silently failed"** is almost never silent. Check `clusters/{id}/decisions` for the latest evaluation — the engine writes a log row even when it skips. If there's no row in the expected window, the scheduler didn't fire — check `health/system` and `scheduler/jobs`.
+- **"It silently failed"** is almost never silent. Check `clusters/{id}/decisions` for the latest evaluation — the engine writes a log row even when it skips. If there's no row in the expected window, the scheduler didn't fire — check `health/system` and `scheduler/jobs`. In `scheduler/jobs`, `paused: true` means explicitly paused (only `check_all`, via `scheduler/pause`, mirrored by `preferences.scheduler_paused`); a null `next_run_time` on an un-paused job means the scheduler itself isn't running (`scheduler_running: false` on `health`), not that the job is paused.
 - **Don't average sensors in a cluster** when interpreting state — the engine uses the minimum, and so should you when explaining results back to the user.
 - **CSV export is binary**. The `clusters/{id}/stats/export` endpoint returns a file, not JSON. If you call it through MCP, expect a blob you'll need to save and tell the user where it landed.
 - **Plant health is a daily snapshot**, not a live read. If the user wants live conditions, look at sensor readings, not the health score. Use `plants/{id}/health-timeline` for the trend, and `plants/health/snapshot` to force a fresh snapshot on demand.

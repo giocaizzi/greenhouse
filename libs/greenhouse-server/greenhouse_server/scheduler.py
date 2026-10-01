@@ -13,7 +13,17 @@ from greenhouse_server.config import Settings
 
 logger = logging.getLogger(__name__)
 
-scheduler = BackgroundScheduler()
+# Defaults for every job, periodic and one-shot alike. APScheduler's stock
+# ``misfire_grace_time`` is 1 second: a run whose dispatch is even slightly late
+# is *dropped* with only a warning. That silently skipped every pump watcher
+# (its ``date`` run is the already-elapsed start timestamp) and can skip a
+# check_all tick under load or after a host suspend. ``None`` = run however
+# late; ``coalesce`` collapses a backlog to one run; ``max_instances=1`` keeps
+# the stock no-overlap guarantee. Passed to both the constructor and every
+# ``configure()`` call, because ``configure()`` resets unspecified defaults.
+_JOB_DEFAULTS = {"misfire_grace_time": None, "coalesce": True, "max_instances": 1}
+
+scheduler = BackgroundScheduler(job_defaults=_JOB_DEFAULTS)
 
 _app: FastAPI | None = None
 
@@ -73,7 +83,17 @@ def init_scheduler(app: FastAPI, settings: Settings, tz_name: str | None = None)
     global _app
     _app = app
 
-    scheduler.configure(timezone=_resolve_zoneinfo(tz_name))
+    # ``configure()`` requires a stopped scheduler (it raises otherwise, before
+    # touching anything) and wipes the job stores.
+    scheduler.configure(timezone=_resolve_zoneinfo(tz_name), job_defaults=_JOB_DEFAULTS)
+    # The scheduler is process-wide, so a second ``create_app`` in the same
+    # process (tests, embedding) re-runs this. Jobs added before ``start()``
+    # sit in APScheduler's pending list, which ``replace_existing`` does NOT
+    # dedupe — every rebuild appended another copy of each job, and a
+    # persisted pause re-applied to the first (stale) copy was undone at
+    # start by the newest one. Clear it so registration is idempotent and the
+    # jobs belong to this app only.
+    scheduler.remove_all_jobs()
 
     scheduler.add_job(
         _sync_job,
@@ -151,7 +171,8 @@ def reschedule_for_timezone(tz_name: str | None, settings: Settings) -> None:
     # rebuilt from the new zone — APScheduler's replace path leaves a stopped
     # scheduler's pending trigger bound to the old tz.
     for job_id in _TZ_BOUND_CRON_JOBS:
-        if scheduler.get_job(job_id) is not None:
+        # Loop: on a stopped scheduler pending jobs are not deduped by id.
+        while scheduler.get_job(job_id) is not None:
             scheduler.remove_job(job_id)
     _add_tz_bound_cron_jobs(settings)
     if paused:
@@ -355,31 +376,50 @@ def init_health_monitor(app: FastAPI, settings: Settings) -> None:
 CHECK_ALL_JOB_ID = "check_all"
 
 
-def get_jobs() -> list[dict]:
-    """List all scheduled jobs.
+def _is_paused(job) -> bool:
+    """True only when ``job`` was explicitly paused.
 
-    APScheduler marks a paused job by clearing its ``next_run_time``; we
-    surface that as a ``paused`` flag so the UI/CLI/MCP do not have to
-    introspect the trigger.
+    APScheduler pauses a job by setting ``next_run_time`` to ``None``. A job
+    added before the scheduler starts has *no* ``next_run_time`` attribute at
+    all — it is computed on ``start()`` — so "not scheduled yet" must not be
+    read as "paused". (Reading it that way reported every job paused on a
+    stopped scheduler, and made ``reschedule_for_timezone`` re-pause an
+    un-paused ``check_all`` behind the persisted preference's back.)
     """
-    return [
-        {
-            "id": job.id,
-            "name": job.name,
-            "trigger": str(job.trigger),
-            "next_run_time": str(next_run) if (next_run := getattr(job, "next_run_time", None)) else None,
-            "paused": getattr(job, "next_run_time", None) is None,
-        }
-        for job in scheduler.get_jobs()
-    ]
+    return hasattr(job, "next_run_time") and job.next_run_time is None
+
+
+def get_jobs() -> list[dict]:
+    """List all registered jobs.
+
+    ``paused`` is True only for an explicitly paused job (only ``check_all``
+    can be paused, and that state mirrors ``user_preferences.scheduler_paused``).
+    ``next_run_time`` is the next fire time, or None when the job is paused
+    or the scheduler is not running (nothing will fire). Pair with the
+    ``scheduler_running`` flag on ``/health`` to tell the two apart.
+    """
+    running = scheduler.running
+    jobs = []
+    for job in scheduler.get_jobs():
+        next_run = getattr(job, "next_run_time", None) if running else None
+        jobs.append(
+            {
+                "id": job.id,
+                "name": job.name,
+                "trigger": str(job.trigger),
+                "next_run_time": str(next_run) if next_run else None,
+                "paused": _is_paused(job),
+            }
+        )
+    return jobs
 
 
 def is_check_all_paused() -> bool:
-    """True when the `check_all` job is currently paused."""
+    """True when the `check_all` job is currently (explicitly) paused."""
     job = scheduler.get_job(CHECK_ALL_JOB_ID)
     if job is None:
         return False
-    return getattr(job, "next_run_time", None) is None
+    return _is_paused(job)
 
 
 def apply_persisted_pause(persisted_paused: bool) -> None:
