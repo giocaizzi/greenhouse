@@ -951,7 +951,7 @@ Names only. *Consumers* = internal modules importing it (any form, incl. lazy) a
 - ← tests (0): —
 
 **`cli.main`**
-- functions: main‡
+- functions: main
 - constants: app
 - ← prod (0): —
 - ← tests (3): cli/test_cli.py, cli/test_completeness.py, cli/test_tui.py
@@ -1608,7 +1608,7 @@ Function length distribution by package (count / median / p90 / max):
 
 ## Appendix — `‡` names with no reference anywhere (dead-code candidates)
 
-`core.models.ENTITY_SYSTEM`, `core.plant_db.set_plant_database`, `core.schemas.CreateSchedulerJobRequest`, `core.stats.print_stats_report`, `server.auth.AuthUserDep`, `server.deps.DeviceGatewayDep`, `server.services.alerts.SOURCE_DECISION`, `server.services.alerts.SOURCE_SYSTEM`, `cli.main.main`
+`core.models.ENTITY_SYSTEM`, `core.plant_db.set_plant_database`, `core.schemas.CreateSchedulerJobRequest`, `core.stats.print_stats_report`, `server.auth.AuthUserDep`, `server.deps.DeviceGatewayDep`, `server.services.alerts.SOURCE_DECISION`, `server.services.alerts.SOURCE_SYSTEM`
 
 `§` internal-only public names: 108 (see per-module lists in §2).
 
