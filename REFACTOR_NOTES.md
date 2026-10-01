@@ -16,7 +16,11 @@ Running log for the behavior-preserving refactor on `claude/focused-hawking-7to7
 
 ## Observed bugs (not fixed)
 
-_None recorded yet._
+1. **`WWW-Authenticate` header dropped on JSON 401s.** `greenhouse_server/web/exception_handlers.py:41-44` — the global
+   `HTTPException` handler returns `JSONResponse({"detail": exc.detail}, status_code=exc.status_code)` without
+   `headers=exc.headers`, so the `WWW-Authenticate: Bearer` header raised for 401s on `/api/v1` and `/mcp` never reaches
+   the client. Found by the contract extractor (probe script in the scratchpad). To be pinned by a characterization test
+   in Phase 1 (asserting the header is **absent**). Not fixed.
 
 ## Baseline warnings (recorded, not fixed)
 
