@@ -285,3 +285,67 @@ Re-checked against code at `aaf5a5f`. Probes are in the session scratchpad: `il_
   `stop_all_irrigators` and `FormScreen.compose`.
 
 Everything else from round 1 is resolved. The minors and nits do not block.
+
+---
+
+# Round 3 — Revision 2 (`0a5e1ea`)
+
+## M-R2-1 (rerun rule can mask a real regression) — **resolved**
+- **Hash seed pinned.** Plan L102–104 set `PYTHONHASHSEED="${GH_SEED:-0}"` inside both `t` and `FULL`. xdist workers
+  inherit the environment. `FULL_SEED2` (seed 12345) runs at:
+  - every WP gate (T7.∑, T8.∑ and the others);
+  - the integration gate;
+  - I5.
+- **Rerun rule.** A red is re-run with the *identical* command. It counts as flaky only if the test is on
+  `refactor/gate1/flaky-tests.txt` (the file exists and is orchestrator-owned) or the failure reproduces on the parent
+  commit. Otherwise the commit is reverted. This closes both the hash-order hole and the isolated-rerun hole.
+
+## M-R2-2 (no nesting column in §3.12) — **resolved**
+- **Scan re-run.** I re-ran `nest.py` (same definition as §3.12: `if/for/while/with/try/match`, `elif` not counted)
+  against the revised table.
+- **Result.** All **14** functions with nesting > 3 have a row, and the table's Nesting value equals my scan for every
+  one of them:
+
+  | Function | Nesting | Verdict |
+  |---|---|---|
+  | `ClusterScreen.compose` | 4 | EXC |
+  | `FormScreen.compose` | 5 | EXC |
+  | `_start_keepalive` | 4 | EXC |
+  | `tuya_generic.status` | 5 | EXC |
+  | `detect_conflicts` | 4 | T6.8 |
+  | `detect_issues` | 4 | T6.9 |
+  | `analyze_historical_trends` | 4 | T6.5 |
+  | `export_csv` | 4 | T6.12 |
+  | `sync_sensor_data` | 4 | T8.18 |
+  | `routes/plants.sync_plants` | 4 | T5.7 |
+  | `bulk.stop_all_irrigators` | 4 | EXC (the wrong OK is fixed) |
+  | `rearm_leak_checks` | 4 | T7.22 |
+  | `collect_maintenance_alerts` | 5 | T4.5 |
+  | `web/routes/operations.sync_plants` | 4 | T5.8 |
+
+- **Seams in the new tasks.**
+  - T7.22 keeps `now = int(_time.time())`, the try/except/finally block and both log lines in `rearm_leak_checks`.
+    `_add_leak_check_job` and `_leak_check_done` are still module globals resolved at call time.
+  - T8.18 is G+ with `C(gc.sync)`, and its subset includes `D(gc.sync)`.
+
+## Round-2 minors — all addressed
+- The size-exception register is now approval-gated.
+- Mutant identity is keyed on (operator, snippet, qualname).
+- The T5.18 / T7.20–21 / T8.17–18 subsets now include `D(...)`.
+- `sync.py` is on the mutation list.
+- The probe mutates in place and restores with `git checkout` in `finally`.
+
+## New findings (none blocking)
+- **minor — T6.12 targets `stats.export_csv`, which no test covers.** `grep -rn export_csv tests` finds nothing, and
+  REFACTOR_NOTES calls the function dead. G-step 1 (the coverage precondition) will therefore stop T6.12 until a
+  characterization test exists. Fix: commission that test together with the other mutation-gap tests, before
+  `refactor-gate1`, or make `export_csv` an EXC entry (dead public function, frozen import path).
+- **nit — reverting in an implementer's worktree is destructive.** The probe now mutates in place in the
+  implementer's own worktree. Run it only on a clean tree (`git status --porcelain` empty), so the `git checkout --`
+  restore cannot discard uncommitted work.
+
+## Round-3 verdict
+
+**APPROVE.** No blocker or major remains. One condition stays open from earlier rounds: the orchestrator creates
+`refactor-gate1` (after the mutation-gap tests land) before WP0 starts. The T6.12 characterization test should land
+in the same batch.
