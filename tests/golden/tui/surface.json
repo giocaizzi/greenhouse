@@ -1,0 +1,1644 @@
+{
+ "classes": {
+  "greenhouse_cli.tui.app:GreenhouseApp": {
+   "BINDINGS": [
+    {
+     "action": "switch_mode('dashboard')",
+     "description": "Dashboard",
+     "key": "d",
+     "priority": false,
+     "show": true
+    },
+    {
+     "action": "switch_mode('alerts')",
+     "description": "Alerts",
+     "key": "a",
+     "priority": false,
+     "show": true
+    },
+    {
+     "action": "switch_mode('activity')",
+     "description": "Activity",
+     "key": "l",
+     "priority": false,
+     "show": true
+    },
+    {
+     "action": "switch_mode('system')",
+     "description": "System",
+     "key": "s",
+     "priority": false,
+     "show": true
+    },
+    {
+     "action": "switch_mode('settings')",
+     "description": "Settings",
+     "key": "o",
+     "priority": false,
+     "show": true
+    },
+    {
+     "action": "search",
+     "description": "Search",
+     "key": "slash",
+     "priority": false,
+     "show": true
+    },
+    {
+     "action": "refresh",
+     "description": "Refresh",
+     "key": "r",
+     "priority": false,
+     "show": true
+    },
+    {
+     "action": "show_help_panel",
+     "description": "Keys",
+     "key": "question_mark",
+     "priority": false,
+     "show": false
+    },
+    {
+     "action": "quit",
+     "description": "Quit",
+     "key": "q",
+     "priority": false,
+     "show": true
+    }
+   ],
+   "CSS_PATH": "app.tcss",
+   "DEFAULT_MODE": "dashboard",
+   "MODES": {
+    "activity": "<class greenhouse_cli.tui.screens.activity.ActivityScreen>",
+    "alerts": "<class greenhouse_cli.tui.screens.alerts.AlertsScreen>",
+    "dashboard": "<class greenhouse_cli.tui.screens.dashboard.DashboardScreen>",
+    "settings": "<class greenhouse_cli.tui.screens.settings.SettingsScreen>",
+    "system": "<class greenhouse_cli.tui.screens.system.SystemScreen>"
+   },
+   "TITLE": "greenhouse",
+   "bases": [
+    "textual.app.App"
+   ],
+   "handlers": [
+    "_on_login",
+    "action_refresh",
+    "action_search"
+   ]
+  },
+  "greenhouse_cli.tui.screens.activity:ActivityScreen": {
+   "AUTO_REFRESH": true,
+   "BINDINGS": [
+    {
+     "action": "cycle_filter",
+     "description": "Severity",
+     "key": "f",
+     "priority": false,
+     "show": true
+    },
+    {
+     "action": "more",
+     "description": "Older",
+     "key": "n",
+     "priority": false,
+     "show": true
+    }
+   ],
+   "bases": [
+    "greenhouse_cli.tui.screens.base.DataScreen"
+   ],
+   "can_focus": false,
+   "handlers": [
+    "action_cycle_filter",
+    "action_more",
+    "on_mount"
+   ]
+  },
+  "greenhouse_cli.tui.screens.alerts:AlertsScreen": {
+   "AUTO_REFRESH": true,
+   "BINDINGS": [
+    {
+     "action": "cycle_filter",
+     "description": "Filter",
+     "key": "f",
+     "priority": false,
+     "show": true
+    },
+    {
+     "action": "acknowledge",
+     "description": "Acknowledge",
+     "key": "k",
+     "priority": false,
+     "show": true
+    },
+    {
+     "action": "resolve",
+     "description": "Resolve",
+     "key": "v",
+     "priority": false,
+     "show": true
+    },
+    {
+     "action": "sync_alerts",
+     "description": "Re-scan",
+     "key": "y",
+     "priority": false,
+     "show": true
+    }
+   ],
+   "bases": [
+    "greenhouse_cli.tui.screens.base.DataScreen"
+   ],
+   "can_focus": false,
+   "handlers": [
+    "action_acknowledge",
+    "action_cycle_filter",
+    "action_resolve",
+    "action_sync_alerts",
+    "on_data_table_row_highlighted",
+    "on_mount"
+   ]
+  },
+  "greenhouse_cli.tui.screens.base:DataScreen": {
+   "AUTO_REFRESH": false,
+   "bases": [
+    "textual.screen.Screen"
+   ],
+   "can_focus": false,
+   "handlers": [
+    "on_mount"
+   ]
+  },
+  "greenhouse_cli.tui.screens.cluster:ClusterScreen": {
+   "AUTO_REFRESH": true,
+   "BINDINGS": [
+    {
+     "action": "app.pop_screen",
+     "description": "Back",
+     "key": "escape",
+     "priority": false,
+     "show": true
+    },
+    {
+     "action": "irrigate",
+     "description": "Irrigate",
+     "key": "i",
+     "priority": false,
+     "show": true
+    },
+    {
+     "action": "water_now",
+     "description": "Water now",
+     "key": "w",
+     "priority": false,
+     "show": true
+    },
+    {
+     "action": "stop",
+     "description": "Stop",
+     "key": "x",
+     "priority": false,
+     "show": true
+    },
+    {
+     "action": "check",
+     "description": "Check",
+     "key": "c",
+     "priority": false,
+     "show": true
+    },
+    {
+     "action": "new",
+     "description": "New",
+     "key": "n",
+     "priority": false,
+     "show": true
+    },
+    {
+     "action": "edit",
+     "description": "Edit",
+     "key": "u",
+     "priority": false,
+     "show": true
+    },
+    {
+     "action": "delete",
+     "description": "Delete",
+     "key": "delete",
+     "priority": false,
+     "show": true
+    },
+    {
+     "action": "cycle_metric",
+     "description": "Metric",
+     "key": "m",
+     "priority": false,
+     "show": false
+    },
+    {
+     "action": "range(-1)",
+     "description": "Range -",
+     "key": "[",
+     "priority": false,
+     "show": false
+    },
+    {
+     "action": "range(1)",
+     "description": "Range +",
+     "key": "]",
+     "priority": false,
+     "show": false
+    },
+    {
+     "action": "log_manual",
+     "description": "Log manual",
+     "key": "L",
+     "priority": false,
+     "show": false
+    },
+    {
+     "action": "move_plant",
+     "description": "Move plant",
+     "key": "M",
+     "priority": false,
+     "show": false
+    },
+    {
+     "action": "plant_sync",
+     "description": "Plant-DB sync",
+     "key": "P",
+     "priority": false,
+     "show": false
+    },
+    {
+     "action": "edit_cluster",
+     "description": "Edit cluster",
+     "key": "e",
+     "priority": false,
+     "show": false
+    },
+    {
+     "action": "delete_cluster",
+     "description": "Delete cluster",
+     "key": "D",
+     "priority": false,
+     "show": false
+    },
+    {
+     "action": "export_stats",
+     "description": "Export CSV",
+     "key": "E",
+     "priority": false,
+     "show": false
+    }
+   ],
+   "bases": [
+    "greenhouse_cli.tui.screens.base.DataScreen"
+   ],
+   "can_focus": false,
+   "handlers": [
+    "action_check",
+    "action_cycle_metric",
+    "action_delete",
+    "action_delete_cluster",
+    "action_edit",
+    "action_edit_cluster",
+    "action_export_stats",
+    "action_irrigate",
+    "action_log_manual",
+    "action_move_plant",
+    "action_new",
+    "action_plant_sync",
+    "action_range",
+    "action_stop",
+    "action_water_now",
+    "on_data_table_row_highlighted",
+    "on_mount",
+    "on_tabbed_content_tab_activated"
+   ]
+  },
+  "greenhouse_cli.tui.screens.dashboard:DashboardScreen": {
+   "AUTO_REFRESH": true,
+   "BINDINGS": [
+    {
+     "action": "new_cluster",
+     "description": "New cluster",
+     "key": "n",
+     "priority": false,
+     "show": true
+    },
+    {
+     "action": "sync",
+     "description": "Sync sensors",
+     "key": "S",
+     "priority": false,
+     "show": true
+    },
+    {
+     "action": "check_all",
+     "description": "Check all",
+     "key": "c",
+     "priority": false,
+     "show": true
+    },
+    {
+     "action": "stop_all",
+     "description": "STOP ALL",
+     "key": "X",
+     "priority": false,
+     "show": true
+    },
+    {
+     "action": "app.focus_next",
+     "description": "Next",
+     "key": "right,down,j",
+     "priority": false,
+     "show": false
+    },
+    {
+     "action": "app.focus_previous",
+     "description": "Previous",
+     "key": "left,up,k",
+     "priority": false,
+     "show": false
+    }
+   ],
+   "bases": [
+    "greenhouse_cli.tui.screens.base.DataScreen"
+   ],
+   "can_focus": false,
+   "handlers": [
+    "action_check_all",
+    "action_new_cluster",
+    "action_stop_all",
+    "action_sync",
+    "on_cluster_card_selected"
+   ]
+  },
+  "greenhouse_cli.tui.screens.forms:FormScreen": {
+   "BINDINGS": [
+    {
+     "action": "dismiss(None)",
+     "description": "Cancel",
+     "key": "escape",
+     "priority": false,
+     "show": true
+    },
+    {
+     "action": "submit",
+     "description": "Save",
+     "key": "ctrl+s",
+     "priority": false,
+     "show": true
+    }
+   ],
+   "bases": [
+    "textual.screen.ModalScreen"
+   ],
+   "can_focus": false,
+   "handlers": [
+    "action_submit",
+    "on_button_pressed",
+    "on_input_submitted"
+   ]
+  },
+  "greenhouse_cli.tui.screens.modals:ConfirmScreen": {
+   "BINDINGS": [
+    {
+     "action": "dismiss(False)",
+     "description": "Cancel",
+     "key": "escape",
+     "priority": false,
+     "show": true
+    },
+    {
+     "action": "dismiss(True)",
+     "description": "Yes",
+     "key": "y",
+     "priority": false,
+     "show": true
+    },
+    {
+     "action": "dismiss(False)",
+     "description": "No",
+     "key": "n",
+     "priority": false,
+     "show": true
+    }
+   ],
+   "bases": [
+    "textual.screen.ModalScreen"
+   ],
+   "can_focus": false,
+   "handlers": [
+    "on_button_pressed",
+    "on_mount"
+   ]
+  },
+  "greenhouse_cli.tui.screens.modals:IrrigateScreen": {
+   "BINDINGS": [
+    {
+     "action": "dismiss(None)",
+     "description": "Cancel",
+     "key": "escape",
+     "priority": false,
+     "show": true
+    }
+   ],
+   "bases": [
+    "textual.screen.ModalScreen"
+   ],
+   "can_focus": false,
+   "handlers": [
+    "on_button_pressed"
+   ]
+  },
+  "greenhouse_cli.tui.screens.modals:LoginScreen": {
+   "BINDINGS": [
+    {
+     "action": "dismiss(None)",
+     "description": "Cancel",
+     "key": "escape",
+     "priority": false,
+     "show": true
+    }
+   ],
+   "bases": [
+    "textual.screen.ModalScreen"
+   ],
+   "can_focus": false,
+   "handlers": [
+    "on_button_pressed",
+    "on_input_submitted"
+   ]
+  },
+  "greenhouse_cli.tui.screens.modals:WaterNowScreen": {
+   "BINDINGS": [
+    {
+     "action": "dismiss(None)",
+     "description": "Cancel",
+     "key": "escape",
+     "priority": false,
+     "show": true
+    }
+   ],
+   "bases": [
+    "textual.screen.ModalScreen"
+   ],
+   "can_focus": false,
+   "handlers": [
+    "on_button_pressed",
+    "on_input_submitted"
+   ]
+  },
+  "greenhouse_cli.tui.screens.search:SearchScreen": {
+   "BINDINGS": [
+    {
+     "action": "dismiss(None)",
+     "description": "Close",
+     "key": "escape",
+     "priority": false,
+     "show": true
+    }
+   ],
+   "bases": [
+    "textual.screen.ModalScreen"
+   ],
+   "can_focus": false,
+   "handlers": [
+    "on_mount"
+   ],
+   "on_decorated": [
+    {
+     "message": "DataTable.RowSelected",
+     "selectors": {}
+    },
+    {
+     "message": "Input.Changed",
+     "selectors": {}
+    },
+    {
+     "message": "Input.Submitted",
+     "selectors": {}
+    }
+   ]
+  },
+  "greenhouse_cli.tui.screens.settings:SettingsScreen": {
+   "BINDINGS": [
+    {
+     "action": "edit_preferences",
+     "description": "Preferences",
+     "key": "p",
+     "priority": false,
+     "show": true
+    },
+    {
+     "action": "edit_global",
+     "description": "Global config",
+     "key": "g",
+     "priority": false,
+     "show": true
+    },
+    {
+     "action": "new_vacation",
+     "description": "New vacation",
+     "key": "n",
+     "priority": false,
+     "show": true
+    },
+    {
+     "action": "edit_vacation",
+     "description": "Edit vacation",
+     "key": "u",
+     "priority": false,
+     "show": true
+    },
+    {
+     "action": "delete_vacation",
+     "description": "Delete vacation",
+     "key": "delete",
+     "priority": false,
+     "show": true
+    },
+    {
+     "action": "logout",
+     "description": "Log out",
+     "key": "O",
+     "priority": false,
+     "show": true
+    }
+   ],
+   "bases": [
+    "greenhouse_cli.tui.screens.base.DataScreen"
+   ],
+   "can_focus": false,
+   "handlers": [
+    "action_delete_vacation",
+    "action_edit_global",
+    "action_edit_preferences",
+    "action_edit_vacation",
+    "action_logout",
+    "action_new_vacation",
+    "on_mount"
+   ]
+  },
+  "greenhouse_cli.tui.screens.system:SystemScreen": {
+   "AUTO_REFRESH": true,
+   "BINDINGS": [
+    {
+     "action": "toggle_scheduler",
+     "description": "Pause/resume",
+     "key": "p",
+     "priority": false,
+     "show": true
+    },
+    {
+     "action": "sync",
+     "description": "Sync sensors",
+     "key": "S",
+     "priority": false,
+     "show": true
+    },
+    {
+     "action": "plant_sync",
+     "description": "Plant-DB sync",
+     "key": "P",
+     "priority": false,
+     "show": true
+    },
+    {
+     "action": "health_snapshot",
+     "description": "Health snapshot",
+     "key": "H",
+     "priority": false,
+     "show": true
+    },
+    {
+     "action": "delete_job",
+     "description": "Remove job",
+     "key": "delete",
+     "priority": false,
+     "show": true
+    }
+   ],
+   "bases": [
+    "greenhouse_cli.tui.screens.base.DataScreen"
+   ],
+   "can_focus": false,
+   "handlers": [
+    "action_delete_job",
+    "action_health_snapshot",
+    "action_plant_sync",
+    "action_sync",
+    "action_toggle_scheduler",
+    "on_mount"
+   ]
+  },
+  "greenhouse_cli.tui.widgets:Banner": {
+   "bases": [
+    "textual.widgets._static.Static"
+   ],
+   "can_focus": false,
+   "handlers": []
+  },
+  "greenhouse_cli.tui.widgets:ClusterCard": {
+   "BINDINGS": [
+    {
+     "action": "select",
+     "description": "Open",
+     "key": "enter",
+     "priority": false,
+     "show": true
+    }
+   ],
+   "bases": [
+    "textual.containers.Vertical"
+   ],
+   "can_focus": true,
+   "handlers": [
+    "action_select",
+    "on_click"
+   ]
+  },
+  "greenhouse_cli.tui.widgets:Heatmap": {
+   "DAYS": [
+    "Mon",
+    "Tue",
+    "Wed",
+    "Thu",
+    "Fri",
+    "Sat",
+    "Sun"
+   ],
+   "RAMP": [
+    "#1f2a1f",
+    "#1d4d6b",
+    "#2271a8",
+    "#2f95d6",
+    "#4fb3ff",
+    "#9ad7ff"
+   ],
+   "bases": [
+    "textual.widgets._static.Static"
+   ],
+   "can_focus": false,
+   "handlers": []
+  },
+  "greenhouse_cli.tui.widgets:KeyValue": {
+   "bases": [
+    "textual.widgets._static.Static"
+   ],
+   "can_focus": false,
+   "handlers": []
+  },
+  "greenhouse_cli.tui.widgets:MetricChart": {
+   "bases": [
+    "textual_plotext.plotext_plot.PlotextPlot"
+   ],
+   "can_focus": false,
+   "handlers": []
+  },
+  "greenhouse_cli.tui.widgets:PlantTile": {
+   "bases": [
+    "textual.containers.Vertical"
+   ],
+   "can_focus": false,
+   "handlers": []
+  },
+  "greenhouse_cli.tui.widgets:SpriteView": {
+   "DEFAULT_CSS_sha256": "e711647a98e497ea708fdbfef8752d1022fcb6b0dcce121ea63c4f4b5cbc1aa3",
+   "bases": [
+    "textual.widgets._static.Static"
+   ],
+   "can_focus": false,
+   "handlers": [
+    "on_mount"
+   ]
+  }
+ },
+ "module_constants": {
+  "greenhouse_cli.tui.formatting": {
+   "ACTION_STYLES": {
+    "irrigate": "bold #4fb3ff",
+    "monitor": "#9bcf5a",
+    "skip": "#9a9a9a",
+    "start": "bold #4fb3ff",
+    "stop": "#e0663f"
+   },
+   "METRICS": {
+    "env_humidity": [
+     "Air humidity",
+     "%"
+    ],
+    "light": [
+     "Light",
+     "lx"
+    ],
+    "soil_moisture": [
+     "Soil moisture",
+     "%"
+    ],
+    "temperature": [
+     "Temperature",
+     "°C"
+    ]
+   },
+   "SEVERITY_STYLES": {
+    "critical": "bold #ff5f5f",
+    "error": "bold #ff5f5f",
+    "info": "#6fb7ff",
+    "success": "#7ed957",
+    "warning": "#e0c341"
+   },
+   "STATUS_STYLES": {
+    "acknowledged": "#e0c341",
+    "cold": "#ff5f5f",
+    "degraded": "bold #e0c341",
+    "down": "bold #ff5f5f",
+    "fresh": "#7ed957",
+    "ok": "bold #7ed957",
+    "open": "bold #ff5f5f",
+    "resolved": "#7ed957",
+    "stale": "#e0c341"
+   }
+  },
+  "greenhouse_cli.tui.resources": {
+   "CATEGORIES": [
+    [
+     "tropical",
+     "tropical"
+    ],
+    [
+     "fern",
+     "fern"
+    ],
+    [
+     "succulent",
+     "succulent"
+    ],
+    [
+     "cacti",
+     "cacti"
+    ],
+    [
+     "fruit_tree",
+     "fruit_tree"
+    ]
+   ],
+   "ENVIRONMENTS": [
+    [
+     "indoor",
+     "indoor"
+    ],
+    [
+     "outdoor",
+     "outdoor"
+    ]
+   ],
+   "MODES": [
+    [
+     "smart",
+     "smart"
+    ],
+    [
+     "schedule",
+     "schedule"
+    ],
+    [
+     "manual",
+     "manual"
+    ]
+   ],
+   "NEEDS": [
+    [
+     "low",
+     "low"
+    ],
+    [
+     "medium",
+     "medium"
+    ],
+    [
+     "high",
+     "high"
+    ]
+   ]
+  },
+  "greenhouse_cli.tui.screens.activity": {
+   "PAGE": 100,
+   "SEVERITY_FILTERS": [
+    null,
+    "warning",
+    "error",
+    "info"
+   ]
+  },
+  "greenhouse_cli.tui.screens.alerts": {
+   "STATUS_FILTERS": [
+    "open",
+    "acknowledged",
+    "resolved",
+    null
+   ]
+  },
+  "greenhouse_cli.tui.screens.cluster": {
+   "METRIC_ORDER": [
+    "soil_moisture",
+    "temperature",
+    "env_humidity",
+    "light",
+    "overlay"
+   ],
+   "RANGES": [
+    6,
+    24,
+    72,
+    168,
+    720
+   ],
+   "STATS_DAYS": 7
+  },
+  "greenhouse_cli.tui.screens.forms": {
+   "DATETIME_FORMAT": "%Y-%m-%d %H:%M"
+  },
+  "greenhouse_cli.tui.screens.search": {
+   "CLUSTER_HREF": {
+    "regex": "/clusters/(\\d+)"
+   }
+  },
+  "greenhouse_cli.tui.sprites": {
+   "CATEGORY_ALIASES": {
+    "cactus": "cacti",
+    "fruit": "fruit_tree",
+    "herb": "generic",
+    "tree": "fruit_tree"
+   },
+   "FALLBACK_MOISTURE_MAX": 70.0,
+   "FALLBACK_MOISTURE_MIN": 40.0,
+   "FOLIAGE": {
+    "ok": {
+     "G": "#5c9e3f",
+     "L": "#a3d160",
+     "g": "#3f7a2e"
+    },
+    "soaked": {
+     "G": "#3f8f7a",
+     "L": "#70c8b5",
+     "g": "#2c6b5c"
+    },
+    "thirsty": {
+     "G": "#a7a43c",
+     "L": "#d6cf66",
+     "g": "#7c7a2a"
+    },
+    "thriving": {
+     "G": "#3fa34d",
+     "L": "#86e05e",
+     "g": "#2a7a36"
+    },
+    "unknown": {
+     "G": "#7d7d7d",
+     "L": "#a8a8a8",
+     "S": "#6e6e6e",
+     "g": "#5c5c5c"
+    },
+    "wilting": {
+     "G": "#8b6b3a",
+     "L": "#b58d4f",
+     "S": "#7a5a30",
+     "g": "#664a26"
+    }
+   },
+   "LOGO": [
+    [
+     "........RR..........",
+     "......RRccRR........",
+     "....RRccccccRR......",
+     "..RRccccccccccRR....",
+     "RRRRRRRRRRRRRRRRRR..",
+     ".Rcc.cRccc.Rcc.cR...",
+     ".R.GG.R.LG.R.GL.R...",
+     ".RGGLGRGGGGRGGGGR...",
+     ".RGgGGRGgGGRGgGGR...",
+     ".RRRRRRRRRRRRRRRRR.."
+    ],
+    {
+     "G": "#3fa34d",
+     "L": "#86e05e",
+     "R": "#e6e6e6",
+     "c": "#9fd8f5",
+     "g": "#2a7a36"
+    }
+   ],
+   "MOOD_COLORS": {
+    "ok": "#9bcf5a",
+    "soaked": "#4fb3ff",
+    "thirsty": "#e0c341",
+    "thriving": "#7ed957",
+    "unknown": "#8a8a8a",
+    "wilting": "#e0663f"
+   },
+   "MOOD_LABELS": {
+    "ok": "happy",
+    "soaked": "soaked",
+    "thirsty": "thirsty",
+    "thriving": "thriving",
+    "unknown": "no data",
+    "wilting": "wilting!"
+   },
+   "POT_PALETTE": {
+    "P": "#a8552c",
+    "R": "#d2744a",
+    "S": "#5b7f3a",
+    "p": "#7a3b1e"
+   },
+   "SOAK_MARGIN": 5.0,
+   "SPARKLE": "#fff6a8",
+   "TRANSPARENT": ".",
+   "WATER": "#4fb3ff",
+   "WATERING_CAN": [
+    [
+     "....MMMMM.......",
+     "...M.....M......",
+     "..MCCCCCCCM....N",
+     "..MCCCCCCCM...N.",
+     "MMMCCCCCCCMMMN..",
+     "M.MCCCCCCCM.....",
+     "..MCCCCCCCM.....",
+     "..MMMMMMMMM....."
+    ],
+    {
+     "C": "#88aabf",
+     "M": "#5d7a8c",
+     "N": "#5d7a8c",
+     "W": "#4fb3ff"
+    }
+   ],
+   "WILT_MARGIN": 10.0
+  },
+  "greenhouse_cli.tui.widgets": {
+   "ANIMATION_INTERVAL": 0.7,
+   "SERIES_COLORS": [
+    "green+",
+    "cyan+",
+    "magenta+",
+    "yellow+",
+    "blue+",
+    "red+",
+    "white"
+   ]
+  }
+ },
+ "resource_fields": {
+  "cluster_fields()": [
+   {
+    "kind": "text",
+    "label": "Name",
+    "name": "name",
+    "options": [],
+    "placeholder": "",
+    "required": true,
+    "value": null
+   },
+   {
+    "kind": "text",
+    "label": "Location",
+    "name": "location",
+    "options": [],
+    "placeholder": "",
+    "required": false,
+    "value": null
+   },
+   {
+    "kind": "select",
+    "label": "Environment",
+    "name": "environment",
+    "options": [
+     [
+      "indoor",
+      "indoor"
+     ],
+     [
+      "outdoor",
+      "outdoor"
+     ]
+    ],
+    "placeholder": "",
+    "required": true,
+    "value": "indoor"
+   }
+  ],
+  "config_fields()": [
+   {
+    "kind": "select",
+    "label": "Mode",
+    "name": "mode",
+    "options": [
+     [
+      "smart",
+      "smart"
+     ],
+     [
+      "schedule",
+      "schedule"
+     ],
+     [
+      "manual",
+      "manual"
+     ]
+    ],
+    "placeholder": "",
+    "required": false,
+    "value": null
+   },
+   {
+    "kind": "int",
+    "label": "Duration (min)",
+    "name": "duration_minutes",
+    "options": [],
+    "placeholder": "",
+    "required": false,
+    "value": null
+   },
+   {
+    "kind": "int",
+    "label": "Interval (h)",
+    "name": "interval_hours",
+    "options": [],
+    "placeholder": "",
+    "required": false,
+    "value": null
+   },
+   {
+    "kind": "bool",
+    "label": "Auto-run",
+    "name": "auto_run",
+    "options": [],
+    "placeholder": "",
+    "required": false,
+    "value": null
+   },
+   {
+    "kind": "int",
+    "label": "Daily cap (min)",
+    "name": "daily_cap_minutes",
+    "options": [],
+    "placeholder": "",
+    "required": false,
+    "value": null
+   },
+   {
+    "kind": "int",
+    "label": "Max events / day",
+    "name": "max_events_per_day",
+    "options": [],
+    "placeholder": "",
+    "required": false,
+    "value": null
+   },
+   {
+    "kind": "int",
+    "label": "Quiet from (0-23)",
+    "name": "quiet_start_hour",
+    "options": [],
+    "placeholder": "",
+    "required": false,
+    "value": null
+   },
+   {
+    "kind": "int",
+    "label": "Quiet until (0-23)",
+    "name": "quiet_end_hour",
+    "options": [],
+    "placeholder": "",
+    "required": false,
+    "value": null
+   }
+  ],
+  "irrigator_fields()": [
+   {
+    "kind": "text",
+    "label": "Tuya device ID",
+    "name": "tuya_device_id",
+    "options": [],
+    "placeholder": "",
+    "required": true,
+    "value": null
+   },
+   {
+    "kind": "text",
+    "label": "Name",
+    "name": "name",
+    "options": [],
+    "placeholder": "",
+    "required": true,
+    "value": null
+   },
+   {
+    "kind": "text",
+    "label": "Model / type",
+    "name": "type",
+    "options": [],
+    "placeholder": "rainpoint.ik10pw",
+    "required": true,
+    "value": null
+   },
+   {
+    "kind": "float",
+    "label": "Reservoir (L)",
+    "name": "reservoir_l",
+    "options": [],
+    "placeholder": "",
+    "required": false,
+    "value": null
+   },
+   {
+    "kind": "float",
+    "label": "Flow (L/min)",
+    "name": "flow_rate_l_per_min",
+    "options": [],
+    "placeholder": "",
+    "required": false,
+    "value": null
+   },
+   {
+    "kind": "json",
+    "label": "Config (JSON)",
+    "name": "config",
+    "options": [],
+    "placeholder": "{\"ip\": \"…\", \"version\": \"3.5\"}",
+    "required": false,
+    "value": null
+   }
+  ],
+  "irrigator_fields(irrigator)": [
+   {
+    "kind": "text",
+    "label": "Name",
+    "name": "name",
+    "options": [],
+    "placeholder": "",
+    "required": false,
+    "value": "pump"
+   },
+   {
+    "kind": "text",
+    "label": "Model / type",
+    "name": "type",
+    "options": [],
+    "placeholder": "rainpoint.ik10pw",
+    "required": false,
+    "value": null
+   },
+   {
+    "kind": "float",
+    "label": "Reservoir (L)",
+    "name": "reservoir_l",
+    "options": [],
+    "placeholder": "",
+    "required": false,
+    "value": null
+   },
+   {
+    "kind": "float",
+    "label": "Flow (L/min)",
+    "name": "flow_rate_l_per_min",
+    "options": [],
+    "placeholder": "",
+    "required": false,
+    "value": null
+   },
+   {
+    "kind": "json",
+    "label": "Config (JSON)",
+    "name": "config",
+    "options": [],
+    "placeholder": "{\"ip\": \"…\", \"version\": \"3.5\"}",
+    "required": false,
+    "value": {
+     "version": "3.5"
+    }
+   }
+  ],
+  "plant_fields()": [
+   {
+    "kind": "text",
+    "label": "Species",
+    "name": "species",
+    "options": [],
+    "placeholder": "Monstera deliciosa",
+    "required": true,
+    "value": null
+   },
+   {
+    "kind": "select",
+    "label": "Category",
+    "name": "category",
+    "options": [
+     [
+      "tropical",
+      "tropical"
+     ],
+     [
+      "fern",
+      "fern"
+     ],
+     [
+      "succulent",
+      "succulent"
+     ],
+     [
+      "cacti",
+      "cacti"
+     ],
+     [
+      "fruit_tree",
+      "fruit_tree"
+     ]
+    ],
+    "placeholder": "",
+    "required": false,
+    "value": null
+   },
+   {
+    "kind": "select",
+    "label": "Water needs",
+    "name": "water_needs",
+    "options": [
+     [
+      "low",
+      "low"
+     ],
+     [
+      "medium",
+      "medium"
+     ],
+     [
+      "high",
+      "high"
+     ]
+    ],
+    "placeholder": "",
+    "required": false,
+    "value": null
+   },
+   {
+    "kind": "select",
+    "label": "Light needs",
+    "name": "light_needs",
+    "options": [
+     [
+      "low",
+      "low"
+     ],
+     [
+      "medium",
+      "medium"
+     ],
+     [
+      "high",
+      "high"
+     ]
+    ],
+    "placeholder": "",
+    "required": false,
+    "value": null
+   },
+   {
+    "kind": "float",
+    "label": "Temp min °C",
+    "name": "ideal_temp_min",
+    "options": [],
+    "placeholder": "",
+    "required": false,
+    "value": null
+   },
+   {
+    "kind": "float",
+    "label": "Temp max °C",
+    "name": "ideal_temp_max",
+    "options": [],
+    "placeholder": "",
+    "required": false,
+    "value": null
+   },
+   {
+    "kind": "float",
+    "label": "Humidity min %",
+    "name": "ideal_humidity_min",
+    "options": [],
+    "placeholder": "",
+    "required": false,
+    "value": null
+   },
+   {
+    "kind": "float",
+    "label": "Humidity max %",
+    "name": "ideal_humidity_max",
+    "options": [],
+    "placeholder": "",
+    "required": false,
+    "value": null
+   },
+   {
+    "kind": "text",
+    "label": "Notes",
+    "name": "notes",
+    "options": [],
+    "placeholder": "",
+    "required": false,
+    "value": null
+   }
+  ],
+  "preference_fields({})": [
+   {
+    "kind": "select",
+    "label": "Units",
+    "name": "units",
+    "options": [
+     [
+      "metric",
+      "metric"
+     ],
+     [
+      "imperial",
+      "imperial"
+     ]
+    ],
+    "placeholder": "",
+    "required": false,
+    "value": null
+   },
+   {
+    "kind": "text",
+    "label": "Timezone",
+    "name": "timezone",
+    "options": [],
+    "placeholder": "",
+    "required": false,
+    "value": null
+   },
+   {
+    "kind": "text",
+    "label": "Web theme",
+    "name": "theme",
+    "options": [],
+    "placeholder": "",
+    "required": false,
+    "value": null
+   },
+   {
+    "kind": "int",
+    "label": "Default cluster ID",
+    "name": "default_cluster_id",
+    "options": [],
+    "placeholder": "",
+    "required": false,
+    "value": null
+   },
+   {
+    "kind": "int",
+    "label": "Web refresh (s)",
+    "name": "refresh_interval_seconds",
+    "options": [],
+    "placeholder": "",
+    "required": false,
+    "value": null
+   },
+   {
+    "kind": "bool",
+    "label": "Global dry-run (never actuate)",
+    "name": "dry_run_global",
+    "options": [],
+    "placeholder": "",
+    "required": false,
+    "value": null
+   },
+   {
+    "kind": "bool",
+    "label": "Notify: manual runs",
+    "name": "notify_manual",
+    "options": [],
+    "placeholder": "",
+    "required": false,
+    "value": null
+   },
+   {
+    "kind": "bool",
+    "label": "Notify: emergencies",
+    "name": "notify_emergency",
+    "options": [],
+    "placeholder": "",
+    "required": false,
+    "value": null
+   },
+   {
+    "kind": "bool",
+    "label": "Notify: alerts",
+    "name": "notify_alerts",
+    "options": [],
+    "placeholder": "",
+    "required": false,
+    "value": null
+   },
+   {
+    "kind": "bool",
+    "label": "Notify: auto runs",
+    "name": "notify_auto",
+    "options": [],
+    "placeholder": "",
+    "required": false,
+    "value": null
+   }
+  ],
+  "sensor_fields(None, plants)": [
+   {
+    "kind": "text",
+    "label": "Tuya device ID",
+    "name": "tuya_device_id",
+    "options": [],
+    "placeholder": "",
+    "required": true,
+    "value": null
+   },
+   {
+    "kind": "text",
+    "label": "Name",
+    "name": "name",
+    "options": [],
+    "placeholder": "",
+    "required": true,
+    "value": null
+   },
+   {
+    "kind": "text",
+    "label": "Model / type",
+    "name": "type",
+    "options": [],
+    "placeholder": "tuya.tr301z",
+    "required": true,
+    "value": null
+   },
+   {
+    "kind": "select",
+    "label": "Plant",
+    "name": "plant_id",
+    "options": [
+     [
+      "Monstera deliciosa (#1)",
+      1
+     ],
+     [
+      "Citrus limon (#2)",
+      2
+     ]
+    ],
+    "placeholder": "",
+    "required": false,
+    "value": null
+   }
+  ],
+  "sensor_fields(sensor, plants)": [
+   {
+    "kind": "text",
+    "label": "Name",
+    "name": "name",
+    "options": [],
+    "placeholder": "",
+    "required": false,
+    "value": "p"
+   },
+   {
+    "kind": "text",
+    "label": "Model / type",
+    "name": "type",
+    "options": [],
+    "placeholder": "tuya.tr301z",
+    "required": false,
+    "value": "t"
+   },
+   {
+    "kind": "select",
+    "label": "Plant",
+    "name": "plant_id",
+    "options": [],
+    "placeholder": "",
+    "required": false,
+    "value": 2
+   }
+  ],
+  "vacation_fields()": [
+   {
+    "kind": "datetime",
+    "label": "Starts",
+    "name": "starts_at",
+    "options": [],
+    "placeholder": "",
+    "required": true,
+    "value": null
+   },
+   {
+    "kind": "datetime",
+    "label": "Ends",
+    "name": "ends_at",
+    "options": [],
+    "placeholder": "",
+    "required": true,
+    "value": null
+   },
+   {
+    "kind": "text",
+    "label": "Contact email",
+    "name": "contact_email",
+    "options": [],
+    "placeholder": "",
+    "required": false,
+    "value": null
+   },
+   {
+    "kind": "text",
+    "label": "Notes",
+    "name": "notes",
+    "options": [],
+    "placeholder": "",
+    "required": false,
+    "value": null
+   }
+  ],
+  "vacation_fields(window)": [
+   {
+    "kind": "datetime",
+    "label": "Starts",
+    "name": "starts_at",
+    "options": [],
+    "placeholder": "",
+    "required": false,
+    "value": 1
+   },
+   {
+    "kind": "datetime",
+    "label": "Ends",
+    "name": "ends_at",
+    "options": [],
+    "placeholder": "",
+    "required": false,
+    "value": 2
+   },
+   {
+    "kind": "text",
+    "label": "Contact email",
+    "name": "contact_email",
+    "options": [],
+    "placeholder": "",
+    "required": false,
+    "value": null
+   },
+   {
+    "kind": "text",
+    "label": "Notes",
+    "name": "notes",
+    "options": [],
+    "placeholder": "",
+    "required": false,
+    "value": null
+   }
+  ],
+  "window_fields()": [
+   {
+    "kind": "int",
+    "label": "Start hour (0-23)",
+    "name": "start_hour",
+    "options": [],
+    "placeholder": "",
+    "required": true,
+    "value": null
+   },
+   {
+    "kind": "int",
+    "label": "End hour (excl.)",
+    "name": "end_hour",
+    "options": [],
+    "placeholder": "",
+    "required": true,
+    "value": null
+   },
+   {
+    "kind": "int",
+    "label": "Weekday mask",
+    "name": "weekday_mask",
+    "options": [],
+    "placeholder": "Mon=1 … Sun=64; 127=all",
+    "required": false,
+    "value": 127
+   },
+   {
+    "kind": "text",
+    "label": "Label",
+    "name": "label",
+    "options": [],
+    "placeholder": "",
+    "required": false,
+    "value": null
+   }
+  ]
+ }
+}

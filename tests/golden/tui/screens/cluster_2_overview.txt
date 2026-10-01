@@ -1,0 +1,40 @@
+ ⭘                                     greenhouse · Balcony — http://testserver                                10:00:00
+ Overview  Charts  Plants  Sensors  Insights  Decisions  History  Windows  Config
+╸━━━━━━━━╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+╭────────────────────╮
+│    ▄▄▀▀▀▀▀▄▄       │
+│  ▄▀▀▀▀▀▀▀▀▀▀▀▄▀    │
+│  ▀▀▀▀▀▀▀▀▀▀▀▀▀     │
+│    ▀▀▀▀▀▀▀▀▀       │
+│        ▀           │
+│  ▄▄▄▄▄▀▀▀▄▄▄▄▄▄    │
+│   ▀▀▀▀▀▀▀▀▀▀▀▀     │
+│    ▀▀▀▀▀▀▀▀▀▀      │
+│ Citrus limon       │
+│ wilting! 22.0%     │
+│ ████░░░┊░░┊░░░░░   │
+╰────────────────────╯
+
+╭────────────────────────────────╮╭────────────────────────────────────────╮╭──────────────────────────────────────────╮
+│    ▄▀▀▀▀▀▄                     ││ Decision engine                        ││ Forecast                                 │
+│   ▀▀▀▀▀▀▀▀▀   ▄▀               ││ skip · every 24h  confidence 90%       ││ next water     due now                   │
+│ ▀▀▀▀▀▀▀▀▀▀▀▀▀▀                 ││ • leak/stuck-valve hold active (24.0h  ││ projected min  16.6%                     │
+│   ▀▀▀▀▀▀▀▀▀                    ││ left) — Moisture kept rising 30 min    ││ method         drainage_slope (40%)      │
+│                                ││ after the pump stopped.; resolve alert ││                Citrus limon will hit its │
+│ Balcony pump                   ││ #1 to release [leak_hold]              ││                40% min in ~0.0h based on │
+│ idle                           ││                                        ││                -1.1%/h drainage.         │
+│ last start 8h00m ago · 3m      │╰────────────────────────────────────────╯╰──────────────────────────────────────────╯
+│ by auto                        │
+│ u edit · del detach            │
+╰────────────────────────────────╯
+
+
+
+
+
+
+
+
+
+ esc Back  i Irrigate  w Water now  x Stop  c Check  n New  u Edit  del Delete  d Dashboard  a Alerts  l Act▏^p palette

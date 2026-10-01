@@ -1,0 +1,40 @@
+ ⭘                                   greenhouse · Living Room — http://testserver                              10:00:00
+ Overview  Charts  Plants  Sensors  Insights  Decisions  History  Windows  Config
+━━━━━━━━━━━━━━━━━━━━━━━━━━╸━━━━━━━╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ n add · u edit · del delete
+ ID  Name               Type           Plant                 Soil   Temp    Humidity  Light    Battery  Age
+ 1   Monstera probe     soil_moisture  Monstera deliciosa    58.0%  19.1°C  45%       3695 lx  high     5m ago
+ 2   Nephrolepis probe  soil_moisture  Nephrolepis exaltata  38.0%  19.1°C  45%       3695 lx  high     5m ago
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ esc Back  i Irrigate  w Water now  x Stop  c Check  n New  u Edit  del Delete  d Dashboard  a Alerts  l Act▏^p palette

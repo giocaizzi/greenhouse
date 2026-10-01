@@ -1,0 +1,40 @@
+ ⭘                                   greenhouse · Living Room — http://testserver                              10:00:00
+ Overview  Charts  Plants  Sensors  Insights  Decisions  History  Windows  Config
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╸━━━━━━━━╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ E export stats CSV · learning report runs on open
+╭────────────────────────────────────────────────────────────────────╮╭──────────────────────────────────────────────╮
+│ Care insights                                                      ││ Stats — last 7 days                          │
+│ ● Low ambient humidity                                             ││ events      3                                │
+│   Nephrolepis probe: humidity 57% (ideal >=70%)                    ││ total       9 min                            │
+│   → Move a humidifier closer or mist leaves regularly.             ││ average     3.0 min                          │
+│ ● Blocked drip detected                                            ││ per day     0.43                             │
+│   🚫 Monstera probe: minimal response to irrigation (avg           ││ by type     start 3                          │
+│ +-0.1%/min, efficiency 0%). Check drip connection.                 ││ by trigger  auto 3                           │
+│   → Inspect and clear the drip emitter or nozzle.                  │╰──────────────────────────────────────────────╯
+│                                                                    │
+│ Needs water: Nephrolepis probe (Nephrolepis exaltata): 38%         │
+╰────────────────────────────────────────────────────────────────────╯
+ Irrigation efficacy (14 days)
+ When              Irrigator         Min  Before  After  Score
+ 2026-04-15 02:00  Living Room pump  3    49.6%   48.7%  0.00
+ 2026-04-14 10:00  Living Room pump  3    48.0%   46.4%  0.00
+ 2026-04-13 18:00  Living Room pump  3    46.8%   46.8%  0.00
+╭────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ Learning report                                                                                                    │
+│ 📊 Irrigation Learning Report                                                                                      │
+│ ========================================                                                                           │
+│                                                                                                                    │
+│ 🌱 Monstera probe                                                                                                  │
+│    Data points: 3 irrigation events                                                                                │
+│    Absorption: -0.1%/min of irrigation                                                                             │
+│    Drainage: -1.1%/hr (natural drying)                                                                             │
+│    Response range: -1% to +0%                                                                                      │
+│    Efficiency: 0%                                                                                                  │
+│    ⚠️ Low efficiency — check drip positioning                                                                      │
+│                                                                                                                    │
+│ 🌱 Nephrolepis probe                                                                                               │
+│    Data points: 3 irrigation events                                                                                │
+│    Absorption: -0.1%/min of irrigation                                                                             │
+│    Drainage: -1.1%/hr (natural drying)                                                                             │
+│    Response range: -1% to +0%                                                                                      │
+ esc Back  i Irrigate  w Water now  x Stop  c Check  n New  u Edit  del Delete  d Dashboard  a Alerts  l Act▏^p palette

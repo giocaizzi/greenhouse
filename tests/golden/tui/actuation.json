@@ -1,0 +1,1590 @@
+[
+ {
+  "dialog": "ConfirmScreen",
+  "dialog_detail": {
+   "confirm_label": "Check all",
+   "danger": true,
+   "message": "Run the check on [b]every[/b] cluster?\nClusters with auto-run enabled may irrigate."
+  },
+  "key": "c",
+  "screen": "dashboard",
+  "tab": null,
+  "toasts": [
+   [
+    "information",
+    "Check complete — alerts raised"
+   ]
+  ],
+  "writes": [
+   [
+    "POST",
+    "/api/v1/check",
+    null
+   ]
+  ]
+ },
+ {
+  "dialog": null,
+  "dialog_detail": null,
+  "key": "S",
+  "screen": "dashboard",
+  "tab": null,
+  "toasts": [
+   [
+    "information",
+    "Syncing sensors from the cloud…"
+   ],
+   [
+    "information",
+    "Sync done: 0 new readings, 1 errors"
+   ]
+  ],
+  "writes": [
+   [
+    "POST",
+    "/api/v1/sync",
+    {
+     "hours": 24
+    }
+   ]
+  ]
+ },
+ {
+  "dialog": "FormScreen",
+  "dialog_detail": {
+   "fields": [
+    "name",
+    "location",
+    "environment"
+   ],
+   "note": null,
+   "prefilled": {
+    "environment": "indoor"
+   },
+   "submit_label": "Create",
+   "title": "New cluster"
+  },
+  "filled": {
+   "location": "sill",
+   "name": "Kitchen"
+  },
+  "key": "n",
+  "screen": "dashboard",
+  "tab": null,
+  "toasts": [
+   [
+    "information",
+    "Created Kitchen — open it and add plants with n"
+   ]
+  ],
+  "writes": [
+   [
+    "POST",
+    "/api/v1/clusters",
+    {
+     "environment": "indoor",
+     "location": "sill",
+     "name": "Kitchen"
+    }
+   ]
+  ]
+ },
+ {
+  "dialog": "ConfirmScreen",
+  "dialog_detail": {
+   "confirm_label": "STOP ALL",
+   "danger": true,
+   "message": "[b red]Emergency stop[/b red] — stop every irrigator now?"
+  },
+  "key": "X",
+  "screen": "dashboard",
+  "tab": null,
+  "toasts": [
+   [
+    "information",
+    "Stop-all sent"
+   ]
+  ],
+  "writes": [
+   [
+    "POST",
+    "/api/v1/bulk/stop-all",
+    null
+   ]
+  ]
+ },
+ {
+  "dialog": "IrrigateScreen",
+  "dialog_detail": {
+   "cluster_name": "Living Room"
+  },
+  "key": "i",
+  "screen": "cluster",
+  "tab": "tab-overview",
+  "toasts": [
+   [
+    "information",
+    "Dry run: skip — cooldown active (last irrigation 0.0h ago, trigger: auto)"
+   ]
+  ],
+  "writes": [
+   [
+    "POST",
+    "/api/v1/clusters/1/irrigate",
+    {
+     "dry_run": true,
+     "force": false,
+     "no_sync": false,
+     "temp_override": null
+    }
+   ]
+  ]
+ },
+ {
+  "dialog": "WaterNowScreen",
+  "dialog_detail": {
+   "irrigator_name": "Living Room pump"
+  },
+  "key": "w",
+  "screen": "cluster",
+  "tab": "tab-overview",
+  "toasts": [
+   [
+    "information",
+    "fake start ok"
+   ]
+  ],
+  "writes": [
+   [
+    "POST",
+    "/api/v1/irrigators/1/start",
+    {
+     "minutes": null
+    }
+   ]
+  ]
+ },
+ {
+  "dialog": "ConfirmScreen",
+  "dialog_detail": {
+   "confirm_label": "Stop",
+   "danger": true,
+   "message": "Stop [b]Living Room pump[/b] now?"
+  },
+  "key": "x",
+  "screen": "cluster",
+  "tab": "tab-overview",
+  "toasts": [
+   [
+    "information",
+    "fake stop ok"
+   ]
+  ],
+  "writes": [
+   [
+    "POST",
+    "/api/v1/irrigators/1/stop",
+    null
+   ]
+  ]
+ },
+ {
+  "dialog": "ConfirmScreen",
+  "dialog_detail": {
+   "confirm_label": "Check",
+   "danger": true,
+   "message": "Run the scheduled check for this cluster now?\nIf auto-run is enabled it may irrigate."
+  },
+  "key": "c",
+  "screen": "cluster",
+  "tab": "tab-overview",
+  "toasts": [
+   [
+    "information",
+    "Check: skip — cooldown active (last irrigation 0.0h ago, trigger: auto)"
+   ]
+  ],
+  "writes": [
+   [
+    "POST",
+    "/api/v1/clusters/1/check",
+    null
+   ]
+  ]
+ },
+ {
+  "dialog": null,
+  "dialog_detail": null,
+  "key": "n",
+  "note": "cluster already has an irrigator",
+  "screen": "cluster",
+  "tab": "tab-overview",
+  "toasts": [
+   [
+    "warning",
+    "This cluster already has an irrigator — press u to edit it."
+   ]
+  ],
+  "writes": []
+ },
+ {
+  "dialog": "FormScreen",
+  "dialog_detail": {
+   "fields": [
+    "name",
+    "type",
+    "reservoir_l",
+    "flow_rate_l_per_min",
+    "config"
+   ],
+   "note": null,
+   "prefilled": {
+    "config": {},
+    "name": "Living Room pump",
+    "type": "tuya_cloud"
+   },
+   "submit_label": "Save",
+   "title": "Edit irrigator — Living Room pump"
+  },
+  "key": "u",
+  "screen": "cluster",
+  "tab": "tab-overview",
+  "toasts": [
+   [
+    "information",
+    "Irrigator updated"
+   ]
+  ],
+  "writes": [
+   [
+    "PUT",
+    "/api/v1/clusters/1/irrigator",
+    {
+     "config": {},
+     "name": "Living Room pump",
+     "type": "tuya_cloud"
+    }
+   ]
+  ]
+ },
+ {
+  "dialog": "FormScreen",
+  "dialog_detail": {
+   "fields": [
+    "minutes",
+    "notes"
+   ],
+   "note": "Records an event you did by hand (feeds cooldown + learning). Nothing is actuated.",
+   "prefilled": {},
+   "submit_label": "Log",
+   "title": "Log a manual watering — Living Room pump"
+  },
+  "filled": {
+   "minutes": "4",
+   "notes": "watering can"
+  },
+  "key": "L",
+  "screen": "cluster",
+  "tab": "tab-overview",
+  "toasts": [
+   [
+    "information",
+    "Manual watering logged"
+   ]
+  ],
+  "writes": [
+   [
+    "POST",
+    "/api/v1/irrigators/1/log-manual",
+    {
+     "minutes": 4,
+     "notes": "watering can"
+    }
+   ]
+  ]
+ },
+ {
+  "dialog": null,
+  "dialog_detail": null,
+  "key": "P",
+  "screen": "cluster",
+  "tab": "tab-overview",
+  "toasts": [
+   [
+    "information",
+    "Plant DB sync: 2 updated, 0 errors"
+   ]
+  ],
+  "writes": [
+   [
+    "POST",
+    "/api/v1/plants/sync",
+    {
+     "cluster_id": 1,
+     "plant_id": null
+    }
+   ]
+  ]
+ },
+ {
+  "dialog": null,
+  "dialog_detail": null,
+  "key": "E",
+  "note": "GET stats export only; CSV written to cwd",
+  "screen": "cluster",
+  "tab": "tab-overview",
+  "toasts": [
+   [
+    "information",
+    "Exported <CWD>/greenhouse-living-room-stats-30d.csv"
+   ]
+  ],
+  "writes": []
+ },
+ {
+  "dialog": "FormScreen",
+  "dialog_detail": {
+   "fields": [
+    "name",
+    "location",
+    "environment"
+   ],
+   "note": null,
+   "prefilled": {
+    "environment": "indoor",
+    "location": "north window",
+    "name": "Living Room"
+   },
+   "submit_label": "Save",
+   "title": "Edit cluster"
+  },
+  "key": "e",
+  "screen": "cluster",
+  "tab": "tab-overview",
+  "toasts": [
+   [
+    "information",
+    "Cluster updated"
+   ]
+  ],
+  "writes": [
+   [
+    "PUT",
+    "/api/v1/clusters/1",
+    {
+     "environment": "indoor",
+     "location": "north window",
+     "name": "Living Room"
+    }
+   ]
+  ]
+ },
+ {
+  "dialog": "FormScreen",
+  "dialog_detail": {
+   "fields": [
+    "species",
+    "category",
+    "water_needs",
+    "light_needs",
+    "ideal_temp_min",
+    "ideal_temp_max",
+    "ideal_humidity_min",
+    "ideal_humidity_max",
+    "notes"
+   ],
+   "note": "Blank care fields are filled from the plant DB when the species is known.",
+   "prefilled": {},
+   "submit_label": "Add",
+   "title": "Add plant"
+  },
+  "filled": {
+   "category": "tropical",
+   "species": "Ficus lyrata"
+  },
+  "key": "n",
+  "screen": "cluster",
+  "tab": "tab-plants",
+  "toasts": [
+   [
+    "information",
+    "Added Ficus lyrata"
+   ]
+  ],
+  "writes": [
+   [
+    "POST",
+    "/api/v1/clusters/1/plants",
+    {
+     "category": "tropical",
+     "ideal_humidity_max": null,
+     "ideal_humidity_min": null,
+     "ideal_temp_max": null,
+     "ideal_temp_min": null,
+     "light_needs": null,
+     "notes": null,
+     "species": "Ficus lyrata",
+     "water_needs": null
+    }
+   ]
+  ]
+ },
+ {
+  "dialog": "FormScreen",
+  "dialog_detail": {
+   "fields": [
+    "species",
+    "category",
+    "water_needs",
+    "light_needs",
+    "ideal_temp_min",
+    "ideal_temp_max",
+    "ideal_humidity_min",
+    "ideal_humidity_max",
+    "notes"
+   ],
+   "note": null,
+   "prefilled": {
+    "category": "tropical",
+    "ideal_humidity_max": 80.0,
+    "ideal_humidity_min": 60.0,
+    "ideal_temp_max": 29.0,
+    "ideal_temp_min": 18.0,
+    "light_needs": "medium",
+    "notes": "Sources: The Spruce: 65-85°F (18-29°C), 60% humidity, Urbane Eight: moderate to high humidity",
+    "species": "Monstera deliciosa",
+    "water_needs": "medium"
+   },
+   "submit_label": "Save",
+   "title": "Edit plant #1"
+  },
+  "key": "u",
+  "screen": "cluster",
+  "tab": "tab-plants",
+  "toasts": [
+   [
+    "information",
+    "Plant updated"
+   ]
+  ],
+  "writes": [
+   [
+    "PUT",
+    "/api/v1/clusters/1/plants/1",
+    {
+     "category": "tropical",
+     "ideal_humidity_max": 80.0,
+     "ideal_humidity_min": 60.0,
+     "ideal_temp_max": 29.0,
+     "ideal_temp_min": 18.0,
+     "light_needs": "medium",
+     "notes": "Sources: The Spruce: 65-85°F (18-29°C), 60% humidity, Urbane Eight: moderate to high humidity",
+     "species": "Monstera deliciosa",
+     "water_needs": "medium"
+    }
+   ]
+  ]
+ },
+ {
+  "dialog": "FormScreen",
+  "dialog_detail": {
+   "fields": [
+    "target_cluster_id"
+   ],
+   "note": null,
+   "prefilled": {},
+   "submit_label": "Move",
+   "title": "Move Monstera deliciosa"
+  },
+  "filled": {
+   "target_cluster_id": 3
+  },
+  "key": "M",
+  "screen": "cluster",
+  "tab": "tab-plants",
+  "toasts": [
+   [
+    "information",
+    "Plant moved"
+   ]
+  ],
+  "writes": [
+   [
+    "POST",
+    "/api/v1/plants/1/move",
+    {
+     "target_cluster_id": 3
+    }
+   ]
+  ]
+ },
+ {
+  "dialog": "ConfirmScreen",
+  "dialog_detail": {
+   "confirm_label": "Delete",
+   "danger": true,
+   "message": "Delete plant [b]Nephrolepis exaltata[/b]?"
+  },
+  "key": "delete",
+  "screen": "cluster",
+  "tab": "tab-plants",
+  "toasts": [
+   [
+    "information",
+    "Plant deleted"
+   ]
+  ],
+  "writes": [
+   [
+    "DELETE",
+    "/api/v1/clusters/1/plants/2",
+    null
+   ]
+  ]
+ },
+ {
+  "dialog": null,
+  "dialog_detail": null,
+  "key": "m",
+  "note": "toggles plant chart, read-only",
+  "screen": "cluster",
+  "tab": "tab-plants",
+  "toasts": [],
+  "writes": []
+ },
+ {
+  "dialog": "FormScreen",
+  "dialog_detail": {
+   "fields": [
+    "tuya_device_id",
+    "name",
+    "type",
+    "plant_id"
+   ],
+   "note": null,
+   "prefilled": {},
+   "submit_label": "Add",
+   "title": "Add sensor"
+  },
+  "filled": {
+   "name": "Spare probe",
+   "tuya_device_id": "fake_tuya_device_aabbccdd",
+   "type": "x"
+  },
+  "key": "n",
+  "screen": "cluster",
+  "tab": "tab-sensors",
+  "toasts": [
+   [
+    "information",
+    "Added sensor Spare probe"
+   ]
+  ],
+  "writes": [
+   [
+    "POST",
+    "/api/v1/clusters/1/sensors",
+    {
+     "name": "Spare probe",
+     "plant_id": null,
+     "tuya_device_id": "fake_tuya_device_aabbccdd",
+     "type": "x"
+    }
+   ]
+  ]
+ },
+ {
+  "dialog": "FormScreen",
+  "dialog_detail": {
+   "fields": [
+    "name",
+    "type",
+    "plant_id"
+   ],
+   "note": null,
+   "prefilled": {
+    "name": "Nephrolepis probe",
+    "type": "soil_moisture"
+   },
+   "submit_label": "Save",
+   "title": "Edit sensor #2"
+  },
+  "key": "u",
+  "screen": "cluster",
+  "tab": "tab-sensors",
+  "toasts": [
+   [
+    "information",
+    "Sensor updated"
+   ]
+  ],
+  "writes": [
+   [
+    "PUT",
+    "/api/v1/clusters/1/sensors/2",
+    {
+     "name": "Nephrolepis probe",
+     "type": "soil_moisture"
+    }
+   ]
+  ]
+ },
+ {
+  "dialog": "ConfirmScreen",
+  "dialog_detail": {
+   "confirm_label": "Delete",
+   "danger": true,
+   "message": "Delete sensor [b]Nephrolepis probe[/b]? Its readings are kept."
+  },
+  "key": "delete",
+  "screen": "cluster",
+  "tab": "tab-sensors",
+  "toasts": [
+   [
+    "information",
+    "Sensor deleted"
+   ]
+  ],
+  "writes": [
+   [
+    "DELETE",
+    "/api/v1/clusters/1/sensors/2",
+    null
+   ]
+  ]
+ },
+ {
+  "dialog": null,
+  "dialog_detail": null,
+  "key": "delete",
+  "note": "empty table: no selection",
+  "screen": "cluster",
+  "tab": "tab-windows",
+  "toasts": [
+   [
+    "warning",
+    "Select a row first."
+   ]
+  ],
+  "writes": []
+ },
+ {
+  "dialog": null,
+  "dialog_detail": null,
+  "key": "u",
+  "note": "empty table: no selection",
+  "screen": "cluster",
+  "tab": "tab-windows",
+  "toasts": [
+   [
+    "warning",
+    "Select a row first."
+   ]
+  ],
+  "writes": []
+ },
+ {
+  "dialog": "FormScreen",
+  "dialog_detail": {
+   "fields": [
+    "start_hour",
+    "end_hour",
+    "weekday_mask",
+    "label"
+   ],
+   "note": null,
+   "prefilled": {
+    "weekday_mask": 127
+   },
+   "submit_label": "Add",
+   "title": "Add irrigation window"
+  },
+  "filled": {
+   "end_hour": "9",
+   "label": "morning",
+   "start_hour": "6"
+  },
+  "key": "n",
+  "screen": "cluster",
+  "tab": "tab-windows",
+  "toasts": [
+   [
+    "information",
+    "Window added"
+   ]
+  ],
+  "writes": [
+   [
+    "POST",
+    "/api/v1/clusters/1/windows",
+    {
+     "end_hour": 9,
+     "label": "morning",
+     "start_hour": 6,
+     "weekday_mask": 127
+    }
+   ]
+  ]
+ },
+ {
+  "dialog": "FormScreen",
+  "dialog_detail": {
+   "fields": [
+    "start_hour",
+    "end_hour",
+    "weekday_mask",
+    "label"
+   ],
+   "note": null,
+   "prefilled": {
+    "end_hour": 9,
+    "label": "morning",
+    "start_hour": 6,
+    "weekday_mask": 127
+   },
+   "submit_label": "Save",
+   "title": "Edit window #1"
+  },
+  "key": "u",
+  "screen": "cluster",
+  "tab": "tab-windows",
+  "toasts": [
+   [
+    "information",
+    "Window updated"
+   ]
+  ],
+  "writes": [
+   [
+    "PUT",
+    "/api/v1/clusters/1/windows/1",
+    {
+     "end_hour": 9,
+     "label": "morning",
+     "start_hour": 6,
+     "weekday_mask": 127
+    }
+   ]
+  ]
+ },
+ {
+  "dialog": "ConfirmScreen",
+  "dialog_detail": {
+   "confirm_label": "Delete",
+   "danger": true,
+   "message": "Delete window 06–09h?"
+  },
+  "key": "delete",
+  "screen": "cluster",
+  "tab": "tab-windows",
+  "toasts": [
+   [
+    "information",
+    "Window deleted"
+   ]
+  ],
+  "writes": [
+   [
+    "DELETE",
+    "/api/v1/clusters/1/windows/1",
+    null
+   ]
+  ]
+ },
+ {
+  "dialog": null,
+  "dialog_detail": null,
+  "key": "n",
+  "screen": "cluster",
+  "tab": "tab-charts",
+  "toasts": [
+   [
+    "information",
+    "Nothing to add here — try the Plants, Sensors, Windows or Overview tab."
+   ]
+  ],
+  "writes": []
+ },
+ {
+  "dialog": null,
+  "dialog_detail": null,
+  "key": "u",
+  "screen": "cluster",
+  "tab": "tab-charts",
+  "toasts": [
+   [
+    "information",
+    "Nothing to edit here — try Plants, Sensors, Windows, Overview or Config."
+   ]
+  ],
+  "writes": []
+ },
+ {
+  "dialog": null,
+  "dialog_detail": null,
+  "key": "delete",
+  "screen": "cluster",
+  "tab": "tab-charts",
+  "toasts": [
+   [
+    "information",
+    "Nothing to delete here — use D to delete the whole cluster."
+   ]
+  ],
+  "writes": []
+ },
+ {
+  "dialog": null,
+  "dialog_detail": null,
+  "key": "n",
+  "screen": "cluster",
+  "tab": "tab-insights",
+  "toasts": [
+   [
+    "information",
+    "Nothing to add here — try the Plants, Sensors, Windows or Overview tab."
+   ]
+  ],
+  "writes": []
+ },
+ {
+  "dialog": null,
+  "dialog_detail": null,
+  "key": "u",
+  "screen": "cluster",
+  "tab": "tab-insights",
+  "toasts": [
+   [
+    "information",
+    "Nothing to edit here — try Plants, Sensors, Windows, Overview or Config."
+   ]
+  ],
+  "writes": []
+ },
+ {
+  "dialog": null,
+  "dialog_detail": null,
+  "key": "delete",
+  "screen": "cluster",
+  "tab": "tab-insights",
+  "toasts": [
+   [
+    "information",
+    "Nothing to delete here — use D to delete the whole cluster."
+   ]
+  ],
+  "writes": []
+ },
+ {
+  "dialog": null,
+  "dialog_detail": null,
+  "key": "n",
+  "screen": "cluster",
+  "tab": "tab-decisions",
+  "toasts": [
+   [
+    "information",
+    "Nothing to add here — try the Plants, Sensors, Windows or Overview tab."
+   ]
+  ],
+  "writes": []
+ },
+ {
+  "dialog": null,
+  "dialog_detail": null,
+  "key": "u",
+  "screen": "cluster",
+  "tab": "tab-decisions",
+  "toasts": [
+   [
+    "information",
+    "Nothing to edit here — try Plants, Sensors, Windows, Overview or Config."
+   ]
+  ],
+  "writes": []
+ },
+ {
+  "dialog": null,
+  "dialog_detail": null,
+  "key": "delete",
+  "screen": "cluster",
+  "tab": "tab-decisions",
+  "toasts": [
+   [
+    "information",
+    "Nothing to delete here — use D to delete the whole cluster."
+   ]
+  ],
+  "writes": []
+ },
+ {
+  "dialog": null,
+  "dialog_detail": null,
+  "key": "n",
+  "screen": "cluster",
+  "tab": "tab-history",
+  "toasts": [
+   [
+    "information",
+    "Nothing to add here — try the Plants, Sensors, Windows or Overview tab."
+   ]
+  ],
+  "writes": []
+ },
+ {
+  "dialog": null,
+  "dialog_detail": null,
+  "key": "u",
+  "screen": "cluster",
+  "tab": "tab-history",
+  "toasts": [
+   [
+    "information",
+    "Nothing to edit here — try Plants, Sensors, Windows, Overview or Config."
+   ]
+  ],
+  "writes": []
+ },
+ {
+  "dialog": null,
+  "dialog_detail": null,
+  "key": "delete",
+  "screen": "cluster",
+  "tab": "tab-history",
+  "toasts": [
+   [
+    "information",
+    "Nothing to delete here — use D to delete the whole cluster."
+   ]
+  ],
+  "writes": []
+ },
+ {
+  "dialog": null,
+  "dialog_detail": null,
+  "key": "m",
+  "screen": "cluster",
+  "tab": "tab-charts",
+  "toasts": [],
+  "writes": []
+ },
+ {
+  "dialog": null,
+  "dialog_detail": null,
+  "key": "]",
+  "screen": "cluster",
+  "tab": "tab-charts",
+  "toasts": [],
+  "writes": []
+ },
+ {
+  "dialog": null,
+  "dialog_detail": null,
+  "key": "[",
+  "screen": "cluster",
+  "tab": "tab-charts",
+  "toasts": [],
+  "writes": []
+ },
+ {
+  "dialog": "FormScreen",
+  "dialog_detail": {
+   "fields": [
+    "mode",
+    "duration_minutes",
+    "interval_hours",
+    "auto_run",
+    "daily_cap_minutes",
+    "max_events_per_day",
+    "quiet_start_hour",
+    "quiet_end_hour"
+   ],
+   "note": "Blank = keep the current value. Global defaults live on the Settings screen (o).",
+   "prefilled": {
+    "duration_minutes": 3,
+    "interval_hours": 12,
+    "mode": "smart"
+   },
+   "submit_label": "Save",
+   "title": "Edit irrigation config"
+  },
+  "key": "u",
+  "screen": "cluster",
+  "tab": "tab-config",
+  "toasts": [
+   [
+    "information",
+    "Config saved"
+   ]
+  ],
+  "writes": [
+   [
+    "PUT",
+    "/api/v1/clusters/1/config",
+    {
+     "auto_run": false,
+     "duration_minutes": 3,
+     "interval_hours": 12,
+     "mode": "smart"
+    }
+   ]
+  ]
+ },
+ {
+  "dialog": "ConfirmScreen",
+  "dialog_detail": {
+   "confirm_label": "Detach",
+   "danger": true,
+   "message": "Detach irrigator [b]Living Room pump[/b] from this cluster?"
+  },
+  "key": "delete",
+  "screen": "cluster",
+  "tab": "tab-overview",
+  "toasts": [
+   [
+    "information",
+    "Irrigator detached"
+   ]
+  ],
+  "writes": [
+   [
+    "DELETE",
+    "/api/v1/clusters/1/irrigator",
+    null
+   ]
+  ]
+ },
+ {
+  "dialog": null,
+  "dialog_detail": null,
+  "key": "w",
+  "note": "no irrigator after detach",
+  "screen": "cluster",
+  "tab": "tab-overview",
+  "toasts": [
+   [
+    "warning",
+    "This cluster has no irrigator."
+   ]
+  ],
+  "writes": []
+ },
+ {
+  "dialog": "FormScreen",
+  "dialog_detail": {
+   "fields": [
+    "tuya_device_id",
+    "name",
+    "type",
+    "reservoir_l",
+    "flow_rate_l_per_min",
+    "config"
+   ],
+   "note": null,
+   "prefilled": {},
+   "submit_label": "Attach",
+   "title": "Attach irrigator"
+  },
+  "filled": {
+   "name": "New pump",
+   "tuya_device_id": "fake_tuya_device_00112233",
+   "type": "t"
+  },
+  "key": "n",
+  "screen": "cluster",
+  "tab": "tab-overview",
+  "toasts": [
+   [
+    "information",
+    "Attached New pump"
+   ]
+  ],
+  "writes": [
+   [
+    "POST",
+    "/api/v1/clusters/1/irrigator",
+    {
+     "name": "New pump",
+     "tuya_device_id": "fake_tuya_device_00112233",
+     "type": "t"
+    }
+   ]
+  ]
+ },
+ {
+  "dialog": "ConfirmScreen",
+  "dialog_detail": {
+   "confirm_label": "Delete",
+   "danger": true,
+   "message": "[b red]Delete cluster Living Room[/b red] with all its plants, sensors and irrigator?"
+  },
+  "key": "D",
+  "screen": "cluster",
+  "tab": "tab-overview",
+  "toasts": [
+   [
+    "information",
+    "Cluster deleted"
+   ]
+  ],
+  "writes": [
+   [
+    "DELETE",
+    "/api/v1/clusters/1",
+    null
+   ]
+  ]
+ },
+ {
+  "dialog": null,
+  "dialog_detail": null,
+  "key": "k",
+  "screen": "alerts",
+  "tab": null,
+  "toasts": [
+   [
+    "information",
+    "Alert 7 acknowledged"
+   ]
+  ],
+  "writes": [
+   [
+    "POST",
+    "/api/v1/alerts/7/acknowledge",
+    null
+   ]
+  ]
+ },
+ {
+  "dialog": null,
+  "dialog_detail": null,
+  "key": "v",
+  "screen": "alerts",
+  "tab": null,
+  "toasts": [
+   [
+    "information",
+    "Alert 6 resolved"
+   ]
+  ],
+  "writes": [
+   [
+    "POST",
+    "/api/v1/alerts/6/resolve",
+    null
+   ]
+  ]
+ },
+ {
+  "dialog": null,
+  "dialog_detail": null,
+  "key": "y",
+  "screen": "alerts",
+  "tab": null,
+  "toasts": [
+   [
+    "information",
+    "Alert re-scan complete"
+   ]
+  ],
+  "writes": [
+   [
+    "POST",
+    "/api/v1/alerts/sync",
+    null
+   ]
+  ]
+ },
+ {
+  "dialog": null,
+  "dialog_detail": null,
+  "key": "f",
+  "screen": "alerts",
+  "tab": null,
+  "toasts": [],
+  "writes": []
+ },
+ {
+  "dialog": null,
+  "dialog_detail": null,
+  "key": "delete",
+  "note": "cursor on a built-in job",
+  "screen": "system",
+  "tab": null,
+  "toasts": [
+   [
+    "warning",
+    "sensor_sync is a built-in job and can't be removed — press p to pause automatic irrigation instead."
+   ]
+  ],
+  "writes": []
+ },
+ {
+  "dialog": "ConfirmScreen",
+  "dialog_detail": {
+   "confirm_label": "Pause",
+   "danger": true,
+   "message": "Pause automatic irrigation? Sensor sync and monitoring keep running."
+  },
+  "key": "p",
+  "note": "pause (scheduler active)",
+  "screen": "system",
+  "tab": null,
+  "toasts": [
+   [
+    "information",
+    "Scheduler paused"
+   ]
+  ],
+  "writes": [
+   [
+    "POST",
+    "/api/v1/scheduler/pause",
+    null
+   ]
+  ]
+ },
+ {
+  "dialog": null,
+  "dialog_detail": null,
+  "key": "p",
+  "note": "resume (scheduler paused)",
+  "screen": "system",
+  "tab": null,
+  "toasts": [
+   [
+    "information",
+    "Scheduler resumed"
+   ]
+  ],
+  "writes": [
+   [
+    "POST",
+    "/api/v1/scheduler/resume",
+    null
+   ]
+  ]
+ },
+ {
+  "dialog": null,
+  "dialog_detail": null,
+  "key": "S",
+  "screen": "system",
+  "tab": null,
+  "toasts": [
+   [
+    "information",
+    "Syncing sensors from the cloud…"
+   ],
+   [
+    "information",
+    "Sync done: 0 new readings"
+   ]
+  ],
+  "writes": [
+   [
+    "POST",
+    "/api/v1/sync",
+    {
+     "hours": 24
+    }
+   ]
+  ]
+ },
+ {
+  "dialog": null,
+  "dialog_detail": null,
+  "key": "P",
+  "screen": "system",
+  "tab": null,
+  "toasts": [
+   [
+    "information",
+    "Plant DB sync: 4 plants updated, 0 errors"
+   ]
+  ],
+  "writes": [
+   [
+    "POST",
+    "/api/v1/plants/sync",
+    {
+     "cluster_id": null,
+     "plant_id": null
+    }
+   ]
+  ]
+ },
+ {
+  "dialog": null,
+  "dialog_detail": null,
+  "key": "H",
+  "screen": "system",
+  "tab": null,
+  "toasts": [
+   [
+    "information",
+    "Plant health snapshot recorded"
+   ]
+  ],
+  "writes": [
+   [
+    "POST",
+    "/api/v1/plants/health/snapshot",
+    null
+   ]
+  ]
+ },
+ {
+  "dialog": null,
+  "dialog_detail": null,
+  "key": "u",
+  "note": "no vacation windows yet",
+  "screen": "settings",
+  "tab": null,
+  "toasts": [
+   [
+    "warning",
+    "Select a vacation window first."
+   ]
+  ],
+  "writes": []
+ },
+ {
+  "dialog": null,
+  "dialog_detail": null,
+  "key": "delete",
+  "note": "no vacation windows yet",
+  "screen": "settings",
+  "tab": null,
+  "toasts": [
+   [
+    "warning",
+    "Select a vacation window first."
+   ]
+  ],
+  "writes": []
+ },
+ {
+  "dialog": "FormScreen",
+  "dialog_detail": {
+   "fields": [
+    "units",
+    "timezone",
+    "theme",
+    "default_cluster_id",
+    "refresh_interval_seconds",
+    "dry_run_global",
+    "notify_manual",
+    "notify_emergency",
+    "notify_alerts",
+    "notify_auto"
+   ],
+   "note": null,
+   "prefilled": {
+    "dry_run_global": false,
+    "notify_alerts": true,
+    "notify_auto": true,
+    "notify_emergency": true,
+    "notify_manual": true,
+    "refresh_interval_seconds": 30,
+    "theme": "auto",
+    "timezone": "UTC",
+    "units": "metric"
+   },
+   "submit_label": "Save",
+   "title": "Preferences"
+  },
+  "key": "p",
+  "screen": "settings",
+  "tab": null,
+  "toasts": [
+   [
+    "information",
+    "Preferences saved"
+   ]
+  ],
+  "writes": [
+   [
+    "PUT",
+    "/api/v1/preferences",
+    {
+     "dry_run_global": false,
+     "notify_alerts": true,
+     "notify_auto": true,
+     "notify_emergency": true,
+     "notify_manual": true,
+     "refresh_interval_seconds": 30,
+     "theme": "auto",
+     "timezone": "UTC",
+     "units": "metric"
+    }
+   ]
+  ]
+ },
+ {
+  "dialog": "FormScreen",
+  "dialog_detail": {
+   "fields": [
+    "mode",
+    "duration_minutes",
+    "interval_hours",
+    "auto_run",
+    "daily_cap_minutes",
+    "max_events_per_day",
+    "quiet_start_hour",
+    "quiet_end_hour"
+   ],
+   "note": "Clusters inherit these unless they override a field. Blank = keep current.",
+   "prefilled": {
+    "quiet_end_hour": 5,
+    "quiet_start_hour": 0
+   },
+   "submit_label": "Save",
+   "title": "Global irrigation defaults"
+  },
+  "key": "g",
+  "screen": "settings",
+  "tab": null,
+  "toasts": [
+   [
+    "information",
+    "Global config saved"
+   ]
+  ],
+  "writes": [
+   [
+    "PUT",
+    "/api/v1/config/global",
+    {
+     "auto_run": false,
+     "quiet_end_hour": 5,
+     "quiet_start_hour": 0
+    }
+   ]
+  ]
+ },
+ {
+  "dialog": "FormScreen",
+  "dialog_detail": {
+   "fields": [
+    "starts_at",
+    "ends_at",
+    "contact_email",
+    "notes"
+   ],
+   "note": null,
+   "prefilled": {},
+   "submit_label": "Add",
+   "title": "New vacation window"
+  },
+  "filled": {
+   "ends_at": "2030-07-15 20:00",
+   "notes": "sea",
+   "starts_at": "2030-07-01 08:00"
+  },
+  "key": "n",
+  "screen": "settings",
+  "tab": null,
+  "toasts": [
+   [
+    "information",
+    "Vacation window added"
+   ]
+  ],
+  "writes": [
+   [
+    "POST",
+    "/api/v1/vacation",
+    {
+     "contact_email": null,
+     "ends_at": 1910376000,
+     "notes": "sea",
+     "starts_at": 1909123200
+    }
+   ]
+  ]
+ },
+ {
+  "dialog": "FormScreen",
+  "dialog_detail": {
+   "fields": [
+    "starts_at",
+    "ends_at",
+    "contact_email",
+    "notes"
+   ],
+   "note": null,
+   "prefilled": {
+    "ends_at": 1910376000,
+    "notes": "sea",
+    "starts_at": 1909123200
+   },
+   "submit_label": "Save",
+   "title": "Edit vacation #1"
+  },
+  "key": "u",
+  "screen": "settings",
+  "tab": null,
+  "toasts": [
+   [
+    "information",
+    "Vacation window updated"
+   ]
+  ],
+  "writes": [
+   [
+    "PUT",
+    "/api/v1/vacation/1",
+    {
+     "ends_at": 1910376000,
+     "notes": "sea",
+     "starts_at": 1909123200
+    }
+   ]
+  ]
+ },
+ {
+  "dialog": "ConfirmScreen",
+  "dialog_detail": {
+   "confirm_label": "Delete",
+   "danger": true,
+   "message": "Delete vacation window #1?"
+  },
+  "key": "delete",
+  "screen": "settings",
+  "tab": null,
+  "toasts": [
+   [
+    "information",
+    "Vacation window deleted"
+   ]
+  ],
+  "writes": [
+   [
+    "DELETE",
+    "/api/v1/vacation/1",
+    null
+   ]
+  ]
+ },
+ {
+  "dialog": null,
+  "dialog_detail": null,
+  "key": "O",
+  "screen": "settings",
+  "tab": null,
+  "toasts": [
+   [
+    "information",
+    "Logged out"
+   ]
+  ],
+  "writes": [
+   [
+    "POST",
+    "/api/v1/auth/logout",
+    null
+   ]
+  ]
+ }
+]
