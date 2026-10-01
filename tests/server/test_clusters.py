@@ -102,6 +102,34 @@ class TestClusterStatus:
         assert len(data["sensors"]) == 1
         assert data["irrigator"] is not None
 
+    def test_status_off_season_reasons_serialize_without_warning(self, app, seeded_client, monkeypatch):
+        """Regression: an off-season SEASONAL_* reason must not trip the Pydantic serializer.
+
+        The seasonal rule used to rebind ``decision.reasons`` to a tuple, so
+        ``model_dump`` in ``decision_to_view`` emitted
+        ``PydanticSerializationUnexpectedValue`` on every status call.
+        """
+        import warnings
+
+        from greenhouse_core.repository import IrrigationRepository
+
+        monkeypatch.setattr("greenhouse_core.logic.engine.season_for", lambda *_a, **_k: "winter")
+        # Opt this cluster out of any inherited quiet window so the wall-clock
+        # hour cannot short-circuit the pipeline before the seasonal rule.
+        resp = seeded_client.put("/api/v1/clusters/1/config", json={"quiet_start_hour": 0, "quiet_end_hour": 0})
+        assert resp.status_code == 200
+        with app.state.session_factory() as session:
+            IrrigationRepository(session).add_sensor_reading(sensor_id=1, soil_moisture=55.0)
+            session.commit()
+
+        with warnings.catch_warnings():
+            warnings.filterwarnings("error", message="Pydantic serializer warnings")
+            resp = seeded_client.get("/api/v1/clusters/1/status")
+
+        assert resp.status_code == 200, resp.text
+        codes = [r["code"] for r in resp.json()["decision"]["reasons"]]
+        assert "seasonal_hold" in codes
+
     def test_status_not_found(self, client):
         resp = client.get("/api/v1/clusters/999/status")
         assert resp.status_code == 404

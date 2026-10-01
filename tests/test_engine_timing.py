@@ -223,6 +223,52 @@ class TestSeasonalMultiplier:
             f"interval should DOUBLE (got {winter_decision.interval_hours / baseline_interval:.2f}×)"
         )
 
+    def test_seasonal_reason_keeps_reasons_a_list(self, tmp_db, logic, monkeypatch):
+        """Regression: the seasonal rule must append to ``reasons``, not rebind it to a tuple.
+
+        A tuple in the ``list[Reason]`` field made every ``model_dump`` emit
+        ``PydanticSerializationUnexpectedValue`` (status endpoint, decision_logs
+        persist) and broke any later ``add_reason`` with ``AttributeError``.
+        """
+        import warnings
+
+        _freeze(monkeypatch, _ts(2026, 1, 15, 8))
+        cluster_id = tmp_db.add_cluster("Indoor Monstera Room", environment="indoor")
+        tmp_db.add_plant(cluster_id=cluster_id, species="Monstera deliciosa", category="tropical")
+        _add_soil(tmp_db, cluster_id, moisture=55.0)
+
+        decision = logic.decide_for_cluster(cluster_id)
+
+        assert decision is not None
+        assert TriggerCode.SEASONAL_HOLD in [r.code for r in decision.reasons]
+        assert isinstance(decision.reasons, list)
+        with warnings.catch_warnings():
+            warnings.filterwarnings("error", message="Pydantic serializer warnings")
+            payload = decision.model_dump(mode="json")
+            decision.model_dump()
+        assert [r["code"] for r in payload["reasons"]] == [r.code.value for r in decision.reasons]
+        decision.add_reason(code=TriggerCode.VACATION_ACTIVE, message="later rule")  # must not raise
+
+    def test_seasonal_multiplier_with_quiet_hours_bypass(self, tmp_db, logic, monkeypatch):
+        """Regression: off-season + forced run during quiet hours must not crash ``_finalize``.
+
+        ``_finalize`` appends ``MANUAL_OVERRIDE_QUIET_HOURS`` after the seasonal
+        rule ran; with ``reasons`` rebound to a tuple that raised AttributeError.
+        """
+        _freeze(monkeypatch, _ts(2026, 1, 15, 2))
+        cluster_id = tmp_db.add_cluster("Indoor Winter Override", environment="indoor")
+        tmp_db.add_plant(cluster_id=cluster_id, species="Monstera deliciosa", category="tropical")
+        _add_soil(tmp_db, cluster_id, moisture=55.0)
+        tmp_db.update_global_irrigation_config(quiet_start_hour=0, quiet_end_hour=5)
+
+        decision = logic.decide_for_cluster(cluster_id, bypass_quiet_hours=True, persist=True)
+
+        assert decision is not None
+        codes = [r.code for r in decision.reasons]
+        assert TriggerCode.SEASONAL_HOLD in codes
+        assert TriggerCode.MANUAL_OVERRIDE_QUIET_HOURS in codes
+        assert decision.decision_log_id is not None
+
     def test_quiet_hours_skip_at_night(self, tmp_db, logic, monkeypatch):
         """Cluster inside the global quiet window must SKIP with QUIET_HOURS code."""
         _freeze(monkeypatch, _ts(2026, 5, 14, 2))  # 02:00 UTC, inside 0..5
