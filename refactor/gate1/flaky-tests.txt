@@ -1,8 +1,4 @@
 # Tests allowed to be treated as flaky (frozen at Gate 1). One pytest node id per line, with evidence.
 # Initially empty: no flakiness was reproduced in 2 full Gate 1 runs + 6 targeted TUI runs.
-# TEMPORARY (orchestrator, during WP0 merge) — remove once the TUI hardening commit lands.
-# Evidence: WP0 changes no TUI code; on tag refactor-gate1 two identical full runs (-n 4, seed 12345) showed
-# search_citrus failing once; WP0's seed-12345 run showed the alerts cursor test failing once (identical rerun green).
-# Root cause class: Textual worker / screen-switch timing under CPU load.
-tests/cli/test_contract_tui_runtime.py::test_alerts_cursor_stays_on_record_across_auto_refresh
-tests/cli/test_contract_tui_screens.py::test_screen_render_golden[search_citrus]
+# (2026-10-01) The two temporary TUI entries were removed after the TUI hardening commit (second reviewer: APPROVE,
+# 4/4 production mutations still caught; 16/16 green under artificial load). List is empty again.
