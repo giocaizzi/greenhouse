@@ -1,6 +1,7 @@
 """Pydantic v2 request/response schemas for the irrigation API."""
 
 import json
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -97,7 +98,7 @@ class IrrigatorBase(BaseModel):
     tuya_device_id: str
     name: str
     type: str
-    config: dict | None = None
+    config: dict | None = None  # type: ignore[type-arg]  # contract: OpenAPI
     reservoir_l: float | None = Field(default=None, ge=0)
     flow_rate_l_per_min: float | None = Field(default=None, ge=0)
 
@@ -114,7 +115,7 @@ class IrrigatorResponse(IrrigatorBase):
 
     @field_validator("config", mode="before")
     @classmethod
-    def parse_config(cls, v):
+    def parse_config(cls, v: Any) -> Any:
         if isinstance(v, str):
             return json.loads(v)
         return v
@@ -163,7 +164,7 @@ class SensorBase(BaseModel):
     tuya_device_id: str
     name: str
     type: str
-    config: dict | None = None
+    config: dict | None = None  # type: ignore[type-arg]  # contract: OpenAPI
     plant_id: int | None = None
 
 
@@ -179,7 +180,7 @@ class SensorResponse(SensorBase):
 
     @field_validator("config", mode="before")
     @classmethod
-    def parse_config(cls, v):
+    def parse_config(cls, v: Any) -> Any:
         if isinstance(v, str):
             return json.loads(v)
         return v
@@ -419,7 +420,7 @@ class AlertResponse(BaseModel):
     type: str
     severity: str
     message: str
-    data: dict | None = None
+    data: dict | None = None  # type: ignore[type-arg]  # contract: OpenAPI
 
 
 class ReasonResponse(BaseModel):
@@ -439,7 +440,7 @@ class IrrigateResponse(BaseModel):
     confidence: float
     duration_minutes: int | None = None
     interval_hours: int | None = None
-    stress_indicators: dict | None = None
+    stress_indicators: dict | None = None  # type: ignore[type-arg]  # contract: OpenAPI
     reasons: list[ReasonResponse] = []
     learning_alerts: list[AlertResponse] = []
     temperature: float | None = None
@@ -867,14 +868,14 @@ class UpdatePlantRequest(BaseModel):
 class UpdateSensorRequest(BaseModel):
     name: str | None = None
     type: str | None = None
-    config: dict | None = None
+    config: dict | None = None  # type: ignore[type-arg]  # contract: OpenAPI
     plant_id: int | None = None
 
 
 class UpdateIrrigatorRequest(BaseModel):
     name: str | None = None
     type: str | None = None
-    config: dict | None = None
+    config: dict | None = None  # type: ignore[type-arg]  # contract: OpenAPI
     reservoir_l: float | None = Field(default=None, ge=0)
     flow_rate_l_per_min: float | None = Field(default=None, ge=0)
 
