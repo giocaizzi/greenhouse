@@ -1,4 +1,4 @@
-# 20 — Execution plan (Revision 1)
+# 20 — Execution plan (Revision 2)
 
 This plan is executable. Each task is **one small behavior-preserving commit**. The design behind each task (signatures,
 order guarantees, why) is in `refactor/20-target-architecture.md`; task rows cite the section (§n). Read that section
@@ -6,7 +6,8 @@ before you start a task. Do not re-derive the design. If the code contradicts th
 than improvise.
 
 **Revision 1** applies the Gate-2 critique (`refactor/50-adversary-plan-critic.md`) and the orchestrator's binding
-decisions. §5 lists every change, and target §13 "Revision 1" gives the design side.
+decisions. **Revision 2** applies the round-2 critique ("Round 2" section of the same file). §5 lists every change,
+and target §13 "Revision 1" / "Revision 2" give the design side.
 
 ## 0. Ground rules for implementers
 
@@ -21,14 +22,23 @@ decisions. §5 lists every change, and target §13 "Revision 1" gives the design
 
 - **At most 2 implementer worktrees are active at once.** The two must have disjoint files, and they are **never both
   high-risk**. The waves are fixed in §1.
-- **Every test command runs under one machine-wide lock with 2 xdist workers:**
-  `flock /tmp/greenhouse-tests.lock uv run pytest -q -n "${GH_XDIST:-2}" …`. With 4 cores and 2 worktrees, runs queue
-  instead of overlapping. Use the `t` helper from §0.3; it already does this.
-- **When a test goes red unexpectedly, rerun before reverting.** Rerun the failing tests once, under the lock, with
-  `-n 0` (the box is idle then, because you hold the lock).
-  - Red again → revert (`git reset --hard HEAD`) and report.
-  - Green on rerun → record it as flaky in the hand-off and continue.
-  - Never fix forward. Never edit a test or golden.
+- **Every test command runs under one machine-wide lock, with 2 xdist workers and a pinned hash seed** *(Rev 2)*:
+  `PYTHONHASHSEED=0 flock /tmp/greenhouse-tests.lock uv run pytest -q -n "${GH_XDIST:-2}" …`. With 4 cores and 2
+  worktrees, runs queue instead of overlapping, and set-iteration order is reproducible. Use the `t` / `FULL` helpers
+  from §0.3; they already do this.
+- **Second seed.** WP gates and the integration gate add **one extra full run with `PYTHONHASHSEED=12345`**
+  (`FULL_SEED2`). This catches output that depends on hash order.
+- **Red-test policy** *(Rev 2; replaces the Rev 1 rerun rule)*.
+  1. Re-run the **identical command**: same subset, same `-n`, same seed. Never re-run the failing tests in
+     isolation.
+  2. Red again → revert (`git reset --hard HEAD`) and report.
+  3. Green on the re-run → you may call it **flaky** only if:
+     - (a) the test is on the flaky list frozen at Gate 1, `refactor/gate1/flaky-tests.txt`. That list is
+       orchestrator-owned, **initially empty**, and seeded only with evidence; or
+     - (b) the same failure reproduces on the **parent commit** with the identical command (check out the parent in
+       the same worktree, run, return).
+  4. Otherwise treat it as a regression and revert.
+  5. Never fix forward. Never edit a test or golden.
 
 ```bash
 git worktree add ../gh-wp4 -b refactor/wp4-services <wave-base>     # one worktree per WP
@@ -40,8 +50,11 @@ git fetch && git rebase <integration-branch>                      # before hand-
 **File ownership:**
 - After WP0, only the integrator edits `pyproject.toml`, `uv.lock`, `Makefile` and `REFACTOR_NOTES.md`. Implementers
   never edit those, `tests/golden/**` or any existing test.
-- Two files are **shared, append-only**, and every task may append to them: `refactor/mypy-strict.txt` and
-  `refactor/size-exceptions.txt`. Resolve rebase conflicts in them with **union + sort**.
+- `refactor/mypy-strict.txt` is **shared and append-only**; every task may append to it. Resolve rebase conflicts with
+  **union + sort**.
+- *(Rev 2)* `refactor/size-exceptions.txt` is **integrator-only**. Implementers **propose** entries in the hand-off
+  note (`path::qualname — reason`). The integrator commits approved entries as
+  `… — reason — approved: <orchestrator>` before merging the WP. I1 rejects unapproved lines.
 - Each WP owns a disjoint set of production files (§1). Touch nothing outside it.
 
 **Commit message format:**
@@ -50,7 +63,7 @@ refactor(<area>): <technique> — <what>
 
 Behavior: none. <why equivalent, e.g. "same call order: A → B → C">
 Evidence: <exact t … commands, results>; lint-imports OK; mypy <files> OK; tests/golden unchanged.
-DoD: <each decomposed function: body lines / CC / nesting> | exceptions: <register lines added, with reason> | none
+DoD: <each decomposed function: body lines / CC / nesting> | proposed exceptions: <path::qualname — reason> | none
 Bugs touched (preserved): B-n … | none
 ```
 End it with the attribution lines from the session's system reminder.
@@ -86,8 +99,9 @@ print(" ".join(json.load(open(f))[mod]))
 EOF
 }
 D() { tmap D "$1"; }; C() { tmap C "$1"; }
-t() { flock /tmp/greenhouse-tests.lock uv run pytest -q -n "${GH_XDIST:-2}" $(echo "$@" | tr ' ' '\n' | sort -u); }
-FULL() { flock /tmp/greenhouse-tests.lock uv run pytest -q -n "${GH_XDIST:-2}"; }
+t() { PYTHONHASHSEED="${GH_SEED:-0}" flock /tmp/greenhouse-tests.lock uv run pytest -q -n "${GH_XDIST:-2}" $(echo "$@" | tr ' ' '\n' | sort -u); }
+FULL() { PYTHONHASHSEED="${GH_SEED:-0}" flock /tmp/greenhouse-tests.lock uv run pytest -q -n "${GH_XDIST:-2}"; }
+FULL_SEED2() { GH_SEED=12345 FULL; }                                                   # WP + integration gates only
 # example: t $ENGINE $RENDER $(D gc.logic.trends)
 ```
 
@@ -145,8 +159,8 @@ the real numbers.
   7. **Task DoD:** every function the task decomposes, and every helper it creates, has ≤ 40 body lines and nesting
      ≤ 3 (`uv run python refactor/scripts/sizecheck.py <files>` does not list them) and **CC ≤ 8**
      (`uv run ruff check --isolated --select C90 --config "lint.mccabe.max-complexity=8" <files>` does not list them).
-     Otherwise the commit message's DoD line states the reason, and the task appends `path::qualname — reason` to
-     `refactor/size-exceptions.txt`.
+     Otherwise the commit message's DoD line states the reason, and the entry is **proposed** in the hand-off. The
+     integrator commits it only after orchestrator approval (Rev 2).
 - **G+ (high-risk: engine, scheduler, `services/irrigation.py`, `services/leak.py`, pump-watcher trip/watch, devices,
   `core/sync.py`, `app.py`/auth wiring, `logic/stress.py`).** Typical test time is 20–25 min.
   1. G, plus the conservative map `t $(C <module>)` once at the end of the task. Use `FULL` for T5.15 and for any
@@ -154,28 +168,37 @@ the real numbers.
   2. Two reviewers, one of them an adversary who tries to construct an input that distinguishes old from new (target
      §12 checklist).
 - **WP DoD + gate (before hand-back, after rebase).**
-  1. `t` over the union of all task subsets in the WP, plus `$CORE`. WP7 and WP8 use `FULL` instead.
+  1. `t` over the union of all task subsets in the WP, plus `$CORE`. WP7 and WP8 use `FULL` instead. *(Rev 2)* Plus
+     **`FULL_SEED2`** for every WP.
   2. Every file the WP touched is clean under all three checks below, or has register entries:
      - `sizecheck` on the whole file;
      - ruff `C90/PLR0911/PLR0912/PLR0915` at max-complexity 8 with `--isolated`;
      - `mypy`.
   3. A mutation post-run (§0.5) for every module the WP touched that is on the mutation list.
-- **Integration gate (integrator, after each merge).** `FULL`, one more run with `TZ=America/New_York`,
+  4. *(Rev 2)* The function map (old qualname → new helper qualnames) for every decomposed function goes in the
+     hand-off. It is needed for the mutant-identity comparison.
+- **Integration gate (integrator, after each merge).** `FULL`, `FULL_SEED2` (Rev 2), one more run with
+  `TZ=America/New_York`,
   `uv run lint-imports`, `make typecheck`, `uv run ruff check libs/ tests/`, `make sizecheck`; then I1.
 
 ### 0.5 Mutation passes (m3)
 
 - **Which modules.** `logic/{engine,stress,trends,sensors,fallback}.py`, `learning/issues.py`,
-  `services/{irrigation,leak,pump_watcher}.py` and `scheduler.py`.
+  `services/{irrigation,leak,pump_watcher}.py`, `scheduler.py` and *(Rev 2)* `greenhouse_core/sync.py`.
 - **M-pre.** Before a WP's first commit on such a module, run `uv run mutmut run` on the **unmodified** module (config
   from T0.10). Use the WP's subsets, restricted to the "mutation targets" lines in `refactor/10-safety-*.md`.
   Survivors go to the orchestrator, who kills them with characterization tests or justifies them before the WP
   starts.
-- **M-post.** In the WP gate. Pass condition: ≥ 75 % killed on touched lines, and no target line that was killed in
-  M-pre survives.
+- **M-post.** In the WP gate. Pass condition: ≥ 75 % killed on touched code, and **no mutant killed in M-pre
+  survives in M-post**.
+  - *(Rev 2)* Mutants are matched by **identity**: (operator, original snippet → replacement snippet, enclosing
+    function qualname), translated through the WP's function map. Line numbers are never used.
 - **Budget and fallback.** ≤ 45 min per module per run, under the test lock with `--max-children 2`. Over budget, use
-  a seeded sample of 150 mutants. If T0.10 found mutmut unusable, use the `refactor/scripts/mutate_probe.py`
-  fallback.
+  a seeded sample of 150 mutants. All runs use `PYTHONHASHSEED=0`.
+- **Fallback.** If T0.10 found mutmut unusable, use `refactor/scripts/mutate_probe.py`. *(Rev 2)* It mutates **in
+  place in the implementer's own worktree** (the editable install points at `libs/`, so temp copies would never be
+  imported). It restores each file with `git checkout -- <file>` in a `finally`, and refuses to run on a dirty target
+  file.
 
 ## 1. Work packages and waves
 
@@ -198,7 +221,7 @@ the real numbers.
 |---|---|---|---|
 | 0 | WP0 (solo, serial) | WP0 | ≈ ½ day |
 | A | WP3 (med) ∥ WP4 (med) | WP3 → WP4 | ≈ 1½ days |
-| B | WP7 (**high**) ∥ WP5 (med) | WP7 → WP5 (T5.13 already has WP3) | ≈ 2½ days |
+| B | WP7 (**high**) ∥ WP5 (med) | WP7 → WP5 (T5.13 already has WP3) | ≈ 2½ days. *(Rev 2 nit)* T5.15 (auth wiring) gets **its own** two reviewers, separate from WP7's. |
 | C | WP1 (low) ∥ WP2 (med) | WP1 → WP2 | ≈ 1½ days |
 | D | WP6 (med) — solo, so that the engine-adjacent logic lands before the engine | WP6 | ≈ 1 day |
 | E | WP8 (**high**) — solo, last | WP8 → then I2, I3, I5 | ≈ 2 days |
@@ -221,12 +244,12 @@ Rev 1 and are kept for traceability.
 | T0.2 | `build(lint): add import-linter contracts — encode today's layering` | `pyproject.toml` | `uv run lint-imports` | low | G0 | Target §11 **as written, without** `greenhouse_cli.tui.render` (I1 adds it). These are the 10 contracts the critic verified pass. Never change code here. |
 | T0.3 | `build(lint): add ruff complexity ratchet — C90 at 8, PLR0911/12/15, per-file ignores, tests exempt` | `pyproject.toml` | `uv run ruff check libs/ tests/` | low | G0 | `max-complexity = 8`. Per-file ignores = today's `libs/` offenders at 8 (the 27 C901 hits in target §3.12, plus the PLR hits in `refactor/baseline/ruff-complexity-rules.txt`), plus `"tests/**" = ["C90","PLR0911","PLR0912","PLR0915"]` (M2). The repo must be clean afterwards. |
 | T0.4 | `build(types): add mypy strict ratchet — project config, boundary profile, strict list file, make typecheck` | `pyproject.toml`, `Makefile`, `refactor/mypy-strict.txt` (new) | `make typecheck` | low | G0 | Target §10.13 and §11. Seed list = the 35 modules clean at baseline (verified by the critic): `greenhouse_cli/tui/{formatting,sprites,screens/activity,screens/dashboard,screens/search}.py`; `greenhouse_core/{auth,constants,models}.py`, `devices/registry.py`, `devices/sensors/tr301z.py`, `learning/{learner,report}.py`, `logic/{sensors,stress}.py`; `greenhouse_server/config.py`, `routes/{activity,alerts,auth,decisions,efficacy,forecast,health,insights,quality,well_known}.py`, `services/{anomaly,bulk,data_quality,efficacy,insights,search,system_health,vacation}.py`, `web/{router,templating}.py`. Boundary override modules: `greenhouse_server.routes.*`, `greenhouse_server.web.routes.*`, `greenhouse_cli.commands.*`, `greenhouse_cli.main`. `check:` gains `lint-imports`, `typecheck` and `sizecheck`. |
-| T0.5 | `test: add refactor guard tests — CLI import without textual, no "from time import time", no new public TUI constants, no Textual shadowing` | `tests/test_refactor_guards.py` (new) | that file, run twice, plus `-n 2` | low | G | Target §11 guards 1–4. Guard 1 runs in a **subprocess**. Guard 4's allow-list is the baseline overlaps, captured once and hard-coded. |
+| T0.5 | `test: add refactor guard tests — CLI import without textual, no "from time import time", no new public TUI constants, no Textual shadowing, annotated boundary helpers` | `tests/test_refactor_guards.py` (new) | that file, run twice, plus `-n 2` | low | G | Target §11 guards 1–5. Guard 1 runs in a **subprocess**. The allow-lists for guards 4 and 5 are the baseline state, captured once and hard-coded (guard 5's list only shrinks). |
 | T0.6 | `refactor(core): introduce constant — new named thresholds (definitions only)` | `greenhouse_core/constants.py` | `$CORE` | low | G | Target §9: each value **and** type copied from its literal; grep for collisions first. |
 | T0.7 | `refactor(types): add type annotations — strict-clean logic/plant_needs` | `logic/plant_needs.py`, `refactor/mypy-strict.txt` | `$CORE $ENGINE $RENDER D(gc.logic.plant_needs)` | low | G | 9 strict errors at baseline. Annotations only. Strict: `plant_needs`. |
 | T0.8 | `refactor(logic): extract function — moisture_target_range(care) (definition only)` | `logic/plant_needs.py`, `tests/test_moisture_target_range.py` (new) | new test + `$ENGINE` | low | G | `def moisture_target_range(care: Mapping[str, Any]) -> tuple[float, float]: return parse_moisture_target(care.get("soil_moisture_target", DEFAULT_SOIL_MOISTURE_TARGET))`. The test is a Hypothesis equivalence check against the inline expression (`derandomize=True`). |
-| T0.9 | `build(lint): add size checker — refactor/scripts/sizecheck.py, size-exceptions register, make sizecheck` | `refactor/scripts/sizecheck.py` (new), `refactor/size-exceptions.txt` (new), `Makefile` | `make sizecheck` lists exactly the baseline offenders | low | G0 | Target §3.12 metrics. Seed the register with the **EXC** rows of target §3.12 (function and file rows, each with its reason). After that, `make sizecheck` lists only functions that have a task. |
-| T0.10 | `build(test): configure mutation testing — mutmut targets, budget, fallback probe` | `pyproject.toml` (`[tool.mutmut]`), `refactor/scripts/mutate_probe.py` (new) | M-pre run on `logic/stress.py` with `$ENGINE` | low | G0 | Validate on `stress.py`: record its runtime and kill rate in the commit body. If mutmut cannot run against the `libs/` layout, commit the probe as the official tool and say so. Target §11. |
+| T0.9 | `build(lint): add size checker — refactor/scripts/sizecheck.py, size-exceptions register, make sizecheck` | `refactor/scripts/sizecheck.py` (new), `refactor/size-exceptions.txt` (new), `Makefile` | `make sizecheck` before and after seeding | low | G0 | Target §3.12 metrics (nesting: `elif` at the same depth; nested defs measured separately). Seed the register with every **EXC** row of target §3.12 (function and file rows, each with its reason and `approved: orchestrator (Gate 2)`). *(Rev 2)* **Assert in the commit body** that, after seeding, the set of functions `make sizecheck` lists equals the set of §3.12 rows whose verdict is a task. Any extra hit → stop and report. |
+| T0.10 | `build(test): configure mutation testing — mutmut targets, budget, fallback probe` | `pyproject.toml` (`[tool.mutmut]`), `refactor/scripts/mutate_probe.py` (new) | M-pre run on `logic/stress.py` with `$ENGINE` | low | G0 | Targets include `sync.py` (Rev 2). Validate on `stress.py`: record runtime and kill rate in the commit body. If mutmut cannot run against the `libs/` layout, commit the probe as the official tool and say so. The probe works in place and restores via `git checkout -- <file>` (Rev 2). Both tools report mutant **identity** (target §11). |
 | T0.11 | `docs(refactor): record measured alias timings` | `refactor/gate2/timings.md` (new) | each alias once under `t` | low | G0 | Replaces the §0.3 estimates; the integrator re-plans waves if they are off by more than 2×. |
 
 ### WP3 — Data types + repository (wave A)
@@ -298,9 +321,10 @@ M-pre for `scheduler.py`, `services/irrigation.py` and `services/leak.py` before
 | T7.17 | `refactor(pipeline): extract method — _resolve_stale_check_alert and _record_check_failure in check_all_clusters` | `services/irrigation.py` | `$PIPE $SCHED` | high | G+ | Called from inside the `except`. |
 | T7.18 | `refactor(pipeline): extract function — _stop_auto_cycle and _left_running_message in handle_watcher_interrupted` | `services/irrigation.py` | `$SCHED tests/server/test_pump_watcher.py` | high | G+ | Must end ≤ 40 body lines. |
 | T7.19 | `refactor(pipeline): extract function — _watcher_tuning and _run_pump_watcher behind a thin closure in schedule_pump_watcher` | `services/irrigation.py` | `$SCHED $PIPE tests/server/test_pump_watcher.py` | high | G+ | Target §3.1: schedule-time captures vs run-time reads. Both functions end ≤ 40 body lines. |
-| T7.20 | `refactor(pipeline): extract method — per-sensor verdict + _record_hold in LeakDetectionService.check_after_irrigation` | `services/leak.py` | `$SCHED $CHECK $RENDER tests/server/test_leak_detection.py tests/test_leak_hold.py` | high | G+ (`C(gs.services.leak)`) | New. Invariant 11. `check_after_irrigation` stays a class attribute. |
+| T7.20 | `refactor(pipeline): extract method — per-sensor verdict + _record_hold in LeakDetectionService.check_after_irrigation` | `services/leak.py` | `$SCHED $CHECK $RENDER D(gs.services.leak) tests/test_leak_hold.py` | high | G+ (`C(gs.services.leak)`) | New. Invariant 11. `check_after_irrigation` stays a class attribute. |
 | T7.21 | `refactor(pipeline): extract method — _moisture_series, _pinned_high, _still_rising in LeakDetectionService._evaluate_sensor` | `services/leak.py` | same as T7.20 | high | G+ | New. Rule order and messages are verbatim. |
-| T7.∑ | WP gate + DoD + M-post (scheduler, irrigation, leak) | — | `FULL` | — | WP | Two reviewers. `scheduler.py` and `irrigation.py` are > 400-line register entries. |
+| T7.22 | `refactor(pipeline): extract function — _rearm_from_events in rearm_leak_checks` | `services/irrigation.py` | `$SCHED $CHECK D(gs.services.irrigation)` | high | G+ (`C(gs.services.irrigation)`) | New in Rev 2 (nesting 4). Target §3.1: `now = int(_time.time())`, the `try`/`except`/`finally` and both log lines stay in `rearm_leak_checks`. |
+| T7.∑ | WP gate + DoD + M-post (scheduler, irrigation, leak) | — | `FULL` + `FULL_SEED2` | — | WP | Two reviewers. `scheduler.py` and `irrigation.py` are > 400-line register entries. |
 
 ### WP5 — Route/web glue + app factory (wave B)
 
@@ -322,7 +346,7 @@ M-pre for `scheduler.py`, `services/irrigation.py` and `services/leak.py` before
 | T5.10 | `refactor(web): extract function — _rationale_reasons, _window_rows (+ helpers until ≤ 40) in cluster_detail` | `web/routes/clusters.py` | `$WEB tests/server/test_web_cluster_pages.py tests/server/test_web_decision_rationale.py tests/server/test_web_windows.py` | low | G | The quiet flag is left for I2. If the function is still > 40 lines because of the quiet block, the register entry is removed by I2. |
 | T5.11 | `refactor(web): introduce parameter object — _plant_form_fields for plant create/update` | `web/routes/plants.py` | `$WEB tests/server/test_web_plant_pages.py tests/server/test_web_crud_actions.py` | low | G | |
 | T5.12 | `refactor(api): consolidate duplicate — repo.get_plant instead of session.get(Plant, …)` | `routes/charts.py`, `web/routes/plant_dashboard.py` | `$API $RENDER tests/server/test_charts_plant_health_timeline.py tests/server/test_web_plant_hero.py` | low | G | |
-| T5.18 | `refactor(web): extract function — context-section helpers in plant_dashboard` | `web/routes/plant_dashboard.py` | `$WEB tests/server/test_web_plant_pages.py tests/server/test_web_plant_hero.py` | med | G | New in Rev 1. Coverage precondition (it was 46 % branch at baseline; Gate 1 raised coverage overall). Context keys are verbatim. |
+| T5.18 | `refactor(web): extract function — context-section helpers in plant_dashboard` | `web/routes/plant_dashboard.py` | `$WEB D(gs.web.routes.plant_dashboard)` *(Rev 2: full direct map, which includes test_web_charts, test_web_charts_overlay, test_search and test_web_crud_actions)* | med | G | New in Rev 1. Coverage precondition (it was 46 % branch at baseline; Gate 1 raised coverage overall). Context keys are verbatim. |
 | T5.17 | `refactor(web): extract function — _preference_flags / _auth_enabled in base_context` | `web/context.py` | `$WEB D(gs.web.context)` | med | G | New in Rev 1. The swallow and the `session.close()` placement are kept. |
 | T5.13 | `refactor(api): consolidate duplicate — repo.get_vacation_window in routes/vacation` | `routes/vacation.py` | `$API $WEB tests/server/test_vacation.py tests/cli/test_tui.py` | low | G | Needs WP3 merged (wave A). |
 | T5.14a–h | `refactor(api\|web): consolidate duplicate — deps.require_cluster for exact-form 404 lookups in <module>` | one module per commit: `routes/{alerts,charts,clusters,insights,operations}.py`, `web/routes/{analytics,clusters}.py` | that module's `D(…)` + `$API` or `$WEB` + `tests/cli/test_tui.py` | low | G | **Optional, last.** Exact form only. |
@@ -375,11 +399,12 @@ M-pre for `logic/{stress,trends,sensors,fallback}.py` and `learning/issues.py` f
 | T6.9 | `refactor(learning): extract function — per-sensor alert helpers in detect_issues` | `issues.py` | same as T6.8 | med | G | |
 | T6.10 | `refactor(learning): extract function — phase helpers in compute_sensor_response and get_plant_profile` | `learning/profiling.py` | `$ENGINE $RENDER tests/test_learning.py D(gc.learning.profiling)` | med | G | New in Rev 1. Cleaned-view reads stay put. |
 | T6.11 | `refactor(core): extract function — aggregation helpers in get_irrigation_stats; section helper in print_stats_report` | `stats.py` | `$CORE $RENDER $TUI D(gc.stats)` | low | G | New in Rev 1. Public signatures and printed text are unchanged. |
+| T6.12 | `refactor(core): extract function — _csv_event_row and _write_event_rows in export_csv` | `stats.py` | `$CORE D(gc.stats)` | low | G | New in Rev 2 (nesting 4). A dead public function with a frozen import path. The CSV bytes and the printed line are verbatim. |
 | T6.∑ | WP gate + DoD + M-post | — | `$ENGINE $RENDER $CORE tests/test_learning.py tests/test_cleaning.py tests/test_utils.py tests/test_stats.py` + `t $(C gc.logic.trends)` | — | WP | |
 
 ### WP8 — Engine + sync + devices (wave E, HIGH RISK, last; every task G+ with `C(gc.logic.engine)` unless noted)
 
-M-pre for `logic/engine.py` first.
+M-pre for `logic/engine.py` and *(Rev 2)* `greenhouse_core/sync.py` first.
 
 | ID | Title | Files | Tests | Risk | Gate | Notes |
 |---|---|---|---|---|---|---|
@@ -399,24 +424,27 @@ M-pre for `logic/engine.py` first.
 | ~~T8.13~~ / ~~T8.14~~ | **Dropped (Rev 1, B1).** No `logic/rules.py`. | — | — | — | — | `engine.py` > 400 lines is a register entry. |
 | T8.16 | `refactor(types): add type annotations — strict-clean core sync and the three docstring-touched device modules` | `sync.py`, `devices/profile.py`, `devices/sensors/tuya_generic.py`, `devices/sensors/tr301z.py` | `$DEV $CORE $SCHED` | med | G+ (`C(gc.sync)`, `C(gc.devices.gateway)`) | 6 + 2 + 1 + 0 errors. Annotations only. Strict: all 4. |
 | T8.15 | `refactor(devices): add docstrings — correct stale dp_parsers docstrings` | `devices/profile.py`, `devices/sensors/tuya_generic.py`, `devices/sensors/tr301z.py` | `$DEV` | low | G+ | `git diff -w` shows only docstring/comment lines. |
-| T8.17 | `refactor(core): extract function — _sync_window_start, _store_history, _store_live_reading in sync_single_sensor` | `sync.py` | `$DEV $SCHED $CORE $RENDER` | high | G+ (`C(gc.sync)`) | New in Rev 1. Invariant 8: no extra Cloud call; logger unchanged. |
-| T8.∑ | WP gate + DoD + M-post (engine) | — | `FULL` + `TZ=America/New_York t $ENGINE` | — | WP | Two reviewers. |
+| T8.17 | `refactor(core): extract function — _sync_window_start, _store_history, _store_live_reading in sync_single_sensor` | `sync.py` | `$DEV $SCHED $CORE $RENDER D(gc.sync)` | high | G+ (`C(gc.sync)`) | New in Rev 1. Invariant 8: no extra Cloud call; logger unchanged. |
+| T8.18 | `refactor(core): extract function — _sync_logged and _sync_summary in sync_sensor_data` | `sync.py` | `$DEV $SCHED $CORE $RENDER D(gc.sync)` | high | G+ (`C(gc.sync)`) | New in Rev 2 (nesting 4). Per-sensor `try/except` and every log text verbatim. The stats dict key order is unchanged. |
+| T8.∑ | WP gate + DoD + M-post (engine, sync) | — | `FULL` + `FULL_SEED2` + `TZ=America/New_York t $ENGINE` | — | WP | Two reviewers. |
 
 ### INT — Integrator tasks (serial, on the integration branch)
 
 | ID | Title | Files | Tests | When |
 |---|---|---|---|---|
-| I1 | `build(lint): ratchet — drop cleared per-file ignores; register new modules in contracts` | `pyproject.toml` | `uv run ruff check libs/ tests/`, `uv run lint-imports`, `make typecheck`, `make sizecheck` | After every WP merge. Adds `greenhouse_cli.tui.render` to the TUI view-model contract after WP2. Ignores only shrink, and the strict list only grows. |
+| I1 | `build(lint): ratchet — drop cleared per-file ignores; register new modules in contracts; commit approved size exceptions` | `pyproject.toml`, `refactor/size-exceptions.txt` | `uv run ruff check libs/ tests/`, `uv run lint-imports`, `make typecheck`, `make sizecheck` | After every WP merge. Adds `greenhouse_cli.tui.render` to the TUI view-model contract after WP2. Ignores only shrink, and the strict list only grows. |
 | I2 | `refactor(web): consolidate duplicate — cluster_detail quiet flag via active_quiet_window` | `web/routes/clusters.py` | `$WEB tests/server/test_web_cluster_pages.py tests/server/test_web_irrigator_actions.py` | After WP5 + WP8. `is_within_quiet_hours` returns a real `bool` (verified). Removes `cluster_detail`'s register entry if it now fits the DoD. |
 | I3 | `refactor(types): add type annotations — ForecastService weather_client: RainForecast \| None` | `services/forecast.py` | `$RENDER D(gs.services.forecast)` | After WP4 + WP8. |
 | I4 | `docs(refactor): update REFACTOR_NOTES` | `REFACTOR_NOTES.md` | — | Continuous. Record: the size-exception register (mirror it, one line per entry); the B-6 comment rewrite; that the plugin `LOGIC.md` needs no change; the deferred repository split. **Flag the CLAUDE.md-vs-BRIEF plugin-docs conflict for the PR body.** |
-| I5 | Final gate / final DoD | — | `FULL` twice (`-n 2` and `-n 0`), a `TZ=America/New_York` run, `lint-imports`, `make typecheck`, `ruff check`, **`make sizecheck` silent except register entries**, mutation post-runs complete, radon/xenon vs `refactor/baseline/` (report) | After the last merge. |
+| I5 | Final gate / final DoD | — | `FULL` twice (`-n 2` and `-n 0`), `FULL_SEED2`, a `TZ=America/New_York` run, `lint-imports`, `make typecheck`, `ruff check`, **`make sizecheck` silent except register entries**, mutation post-runs complete, radon/xenon vs `refactor/baseline/` (report) | After the last merge. |
 
 ## 3. Per-WP hand-off note (what every implementer returns)
 
 1. Commits (hash + subject), each green under its gate, rebased on the integration branch.
 2. The exact test commands and results of the WP gate, plus any flaky reruns.
-3. The DoD table for every function the WP decomposed (body lines / CC / nesting), and the register lines added.
+3. The DoD table for every function the WP decomposed (body lines / CC / nesting), the **proposed** register entries
+   with reasons (Rev 2: the integrator commits them only after approval), and the function map (old qualname → new
+   qualnames).
 4. Modules appended to `refactor/mypy-strict.txt`, and files now clean of the ruff complexity rules (for I1).
 5. M-pre and M-post results for mutation-list modules.
 6. Anything that contradicted the target doc, any stopped task, any bug site touched (with its B-number), and any
@@ -429,12 +457,12 @@ M-pre for `logic/engine.py` first.
 | WP0 | 11 |
 | WP3 | 10 |
 | WP4 | 18 |
-| WP7 | 22 (incl. T7.12 dropped) |
+| WP7 | 23 (incl. T7.12 dropped) |
 | WP5 | 21 (plus up to 8 optional) |
 | WP1 | 3 |
 | WP2 | 12 |
-| WP6 | 12 |
-| WP8 | 15 |
+| WP6 | 13 |
+| WP8 | 16 |
 | INT | 5 |
 
 ## 5. Revision 1 — changes to this plan
@@ -454,3 +482,17 @@ M-pre for `logic/engine.py` first.
 | m4 | T5.15 is G+ with `FULL` and two reviewers. |
 | m5 | T7.12 dropped. The health gate stays inline (register entry). |
 | nits | T7.7 passes `app`; T8.7 keeps two `if`s; guard 1 runs in a subprocess; guard 4 covers Textual shadowing and the `key_` prefix; I4 flags the plugin-docs conflict for the PR. |
+
+### Revision 2 — changes to this plan
+
+| Finding | Change |
+|---|---|
+| M-R2-1 | `PYTHONHASHSEED=0` in `t` / `FULL` and every gate. `FULL_SEED2` (`PYTHONHASHSEED=12345`) added to every WP gate, the integration gate and I5. Red-test policy (§0.2): re-run the identical command, never in isolation. Flaky only via the Gate-1 list `refactor/gate1/flaky-tests.txt` (orchestrator-owned, initially empty) or a reproduction on the parent commit; otherwise revert. |
+| M-R2-2 | Target §3.12 gains a Nesting column and a re-scan (14 functions with nesting > 3, all covered). New tasks T6.12 (`export_csv`), T7.22 (`rearm_leak_checks`) and T8.18 (`sync_sensor_data`). New EXC rows for `bulk.stop_all_irrigators` (the wrong OK is fixed) and `FormScreen.compose`. T0.9 asserts the seeded checker lists only functions with a task. |
+| m-R2-1 | `refactor/size-exceptions.txt` is integrator-only. Implementers propose entries; orchestrator approval is required; I1 rejects unapproved lines. |
+| m-R2-2 | The M-post comparison keys on mutant identity (operator + original/replacement snippet + enclosing function), mapped through each WP's function map. |
+| m-R2-3 | T5.18 uses `D(gs.web.routes.plant_dashboard)`. T7.20/T7.21 add `D(gs.services.leak)`; T8.17/T8.18 add `D(gc.sync)`. |
+| m-R2-4 | `greenhouse_core/sync.py` added to the mutation list (M-pre in WP8). |
+| m-R2-5 | The probe mutates in place in the implementer's own worktree and restores via `git checkout -- <file>` in `finally`. |
+| nits | Imports added only for typing go under `TYPE_CHECKING` (target §10.13b). Guard test 5 checks annotations on boundary-module helpers. T5.15 gets its own two reviewers in wave B. |
+

@@ -12,6 +12,10 @@ The executable task list is `refactor/20-plan.md`.
 > - an enforceable Definition of Done (≤ 40 body lines, CC ≤ 8, nesting ≤ 3, strict mypy on every touched module);
 > - a verdict for every long function and large file (§3.12);
 > - a tighter test-subset rule and 2-worktree concurrency (plan §0).
+>
+> **Revision 2** (Gate 2 round 2): pinned hash seeds and a strict flaky policy (plan §0.2); a nesting column and five
+> new verdicts in §3.12; register approval by the integrator; mutant-identity comparison; `sync.py` added to the
+> mutation list; the in-place probe. See §13 "Revision 2".
 
 ## 0. Thesis
 
@@ -244,8 +248,17 @@ return self._actuate(_Actuation(cluster_id, irrigator, adapter, decision, temp, 
   - The lazy `IrrigationRepository` / `PumpWatcherService` imports stay inside `_run_pump_watcher`, so they are still
     resolved through `services.pump_watcher`, which tests patch.
   - Both functions must end ≤ 40 body lines.
-- **`_run_leak_check`, `_add_leak_check_job`, `_schedule_leak_check`, `rearm_leak_checks`:** unchanged. In
-  `_leak_check_done`, `limit=500` → `LEAK_CHECK_ACTIVITY_SCAN_LIMIT` (bug B-23 preserved).
+- **`_run_leak_check`, `_add_leak_check_job`, `_schedule_leak_check`:** unchanged. In `_leak_check_done`,
+  `limit=500` → `LEAK_CHECK_ACTIVITY_SCAN_LIMIT` (bug B-23 preserved).
+- **`rearm_leak_checks`** *(Rev 2, T7.22; nesting 4 → ≤ 3)*. Extract `_rearm_from_events(repo: IrrigationRepository, now: int) -> int`,
+  which holds the irrigator/event double loop with its two `continue` guards, `_add_leak_check_job(...)`, and the
+  count. What stays in `rearm_leak_checks`:
+  - the lazy `from greenhouse_server.scheduler import _app, scheduler`, and the running / `_app` guard;
+  - `now = int(_time.time())` (`_time` seam);
+  - session open, `try` / `except` (`logger.exception` text) / `finally: close`;
+  - the `logger.info` line.
+  
+  Tests call it by path 10×, and its name and signature are unchanged.
 
 ### 3.2 `IrrigationLogic.decide_for_cluster` (logic/engine.py:106-266, CC 18) — high risk, two reviewers
 
@@ -445,7 +458,7 @@ Per-sensor append order stays blocked → drainage → chronic. Conflicts are ap
 | `leak.LeakDetectionService._evaluate_sensor` (62 lines) / `check_after_irrigation` (63 lines) *(Rev 1, WP7, G+; invariant 11)* | `_evaluate_sensor`: `_moisture_series(before_rows, after_rows) -> tuple[list[float], list[float]]`, `_pinned_high(tail) -> bool`, `_still_rising(before, after) -> bool`, with rule order, thresholds (`LEAK_*`) and message strings verbatim. `check_after_irrigation`: a per-sensor verdict helper plus `_record_hold(...)` for the hold activity row. Alert raise/resolve order and the 1-alert-per-sensor rule are unchanged. `LeakDetectionService.check_after_irrigation` stays a class attribute (test patch target). |
 | `services/cluster.ClusterService.get_cluster_status` (56 lines) *(Rev 1, WP5)* | `_sensor_status_rows(sensors) -> list[dict[str, Any]]` and `_irrigator_status(irrigator) -> dict[str, Any] \| None`. Dict key order and repo read order are unchanged. |
 | `web/context.base_context` (46 lines) / `web/routes/plant_dashboard.plant_dashboard` (77 lines) *(Rev 1, WP5)* | `base_context`: `_preference_flags(request) -> tuple[bool, VacationWindow \| None, bool, str]` (keeps the `try/except/finally: session.close()` and the swallow) and `_auth_enabled(request) -> bool`. Returned key order is verbatim. `plant_dashboard`: context-section helpers; route name/params untouched; context keys verbatim (`web/template_context.json` golden). |
-| `manual_control.*`, `bulk.stop_all_irrigators`, `weather.get_forecast`, `alerts.sync_cluster_alerts`, `sync._cluster_snapshot` | Already ≤ 40 body lines and CC ≤ 8: **OK**, no task. |
+| `manual_control.*`, `weather.get_forecast`, `alerts.sync_cluster_alerts`, `sync._cluster_snapshot` | Already ≤ 40 body lines, CC ≤ 8 and nesting ≤ 3: **OK**, no task. *(Rev 2: `bulk.stop_all_irrigators` was wrongly listed here; it has nesting 4 and is a register entry, §3.12.)* |
 
 ### 3.7 `create_app` (app.py:123-254, 132 lines)
 
@@ -593,6 +606,8 @@ class IrrigationClient:
 **Per-task DoD.** Every function the task decomposes, and every helper it creates, ends with ≤ 40 body lines,
 `ruff C90 max-complexity=8` silent, and nesting ≤ 3. Otherwise the commit message gives the reason and the task appends
 a line to the exception register `refactor/size-exceptions.txt` (format `path::qualname — reason`).
+*(Rev 2)* Implementers only **propose** register entries, in the hand-off note. Only the integrator commits them, after
+orchestrator approval (`… — reason — approved: <orchestrator>`). I1 rejects any unapproved line.
 
 **Per-WP DoD.** Every file the WP touched passes all of the following, or has register entries:
 - `sizecheck` silent on the whole file (every function);
@@ -602,99 +617,113 @@ a line to the exception register `refactor/size-exceptions.txt` (format `path::q
 **Final DoD (I5).** `make sizecheck` over all of `libs/` (excluding `migrations/versions/`) is silent except register
 entries. Every register entry carries a reason, and REFACTOR_NOTES lists it.
 
-**Every production function > 40 total lines, or with CC > 8.** Size is shown as total/body lines; 82 + 4 rows (`register.login` is a nested def listed separately), from
-an AST scan at `6994bc0`. Verdicts: `OK` = already within the DoD by the body metric; `T…` = the plan task that brings
-it within the DoD; `EXC` = a register entry with this reason.
+**Every production function > 40 total lines, or CC > 8, or nesting > 3** *(nesting column and 5 verdicts added in
+Rev 2)*. There are 90 rows: 82 functions over 40 total lines (the nested `register.login` is listed separately), 4
+more with CC > 8 only, and 4 more with nesting > 3 only. Size is total/body lines. The data comes from an AST scan at
+`6994bc0`; nesting uses the definition above, with `elif` at the same depth as its `if` and nested `def`s measured
+separately.
 
-| Function | Size | CC | Verdict | How / why |
-|---|---|---|---|---|
-| `commands/auth.py::register` | 68/64 | 9 | **EXC** | Typer declarative registration block: CC/length come from the nested command defs, whose decorators/params/docstrings are the frozen `--help` contract; each nested command ≤ 20 body lines, CC ≤ 4; module untouched (B2) |
-| `commands/auth.py::register.login` | 41/17 | ≤8 | **OK** | body ≤ 40 |
-| `commands/operations.py::register` | 109/105 | 19 | **EXC** | same as `auth.register` (10 nested commands, each ≤ 12 body lines, CC ≤ 5); module untouched |
-| `tui/model.py::summarize` | 69/61 | 12 | **T2.10** | `_band`, `_plant_views` (+ further private helpers until ≤ 40 / CC ≤ 8) |
-| `tui/screens/cluster.py::ClusterScreen._load_insights` | 63/62 | ≤8 | **T2.4** | builders → `render.py` |
-| `tui/screens/cluster.py::ClusterScreen._render_overview` | 63/62 | 11 | **T2.3** | builders → `render.py` |
-| `tui/screens/cluster.py::ClusterScreen.action_delete` | 41/40 | 9 | **T2.7** | dict dispatch + per-tab handlers |
-| `tui/screens/cluster.py::ClusterScreen.action_edit` | 51/50 | 10 | **T2.6** | dict dispatch + per-tab handlers |
-| `tui/screens/cluster.py::ClusterScreen.action_new` | 43/42 | ≤8 | **T2.5** | dict dispatch + per-tab handlers |
-| `tui/screens/cluster.py::ClusterScreen.compose` | 50/49 | ≤8 | **EXC** | single declarative widget tree, CC 1; order = focus order + `app.tcss` selectors + screen goldens; splitting scatters the DOM picture (C §8.2) |
-| `tui/screens/forms.py::parse_value` | ≤40 | 11 | **EXC** | ≤ 40 lines; CC 11 is a flat type-dispatch ladder over field kinds; module untouched by any WP |
-| `tui/screens/settings.py::SettingsScreen.load` | 55/54 | ≤8 | **T2.9** | builders → `render.py` |
-| `tui/screens/system.py::SystemScreen.load` | 80/79 | ≤8 | **T2.8** | builders → `render.py` |
-| `tui/widgets.py::show_payload` | ≤40 | 9 | **T2.11** | `_draw_event_lines` / `_set_x_ticks` |
-| `devices/gateway.py::DeviceGateway.get_device_logs` | 56/43 | ≤8 | **EXC** | devices = high risk; v1/v2 DPS parsing differs in `ValueError` handling (D29) — a merged helper is a behaviour fork; module untouched |
-| `devices/gateway.py::DeviceGateway.get_live_reading` | 43/28 | ≤8 | **OK** | body ≤ 40 |
-| `devices/irrigators/ik10pw.py::IK10PWAdapter._start_keepalive` | 51/43 | 10 | **EXC** | actuation safety path holding REFACTOR_NOTES safety bug #3 (`signal.signal` off main thread); any restructuring belongs to the dedicated fix PR |
-| `devices/irrigators/ik10pw.py::IK10PWAdapter.read_health` | 45/30 | ≤8 | **OK** | body ≤ 40 |
-| `devices/irrigators/tuya_generic.py::status` | ≤40 | 10 | **EXC** | ≤ 40 lines; CC 10 DPS-decoding ladder in a device adapter (high risk, untouched) |
-| `devices/sensors/tr301z.py::TR301ZAdapter.read_health` | 44/31 | ≤8 | **OK** | body ≤ 40 |
-| `learning/issues.py::detect_conflicts` | 151/143 | 26 | **T6.8** | per-check helpers |
-| `learning/issues.py::detect_issues` | 131/115 | 16 | **T6.9** | per-sensor alert helpers |
-| `learning/profiling.py::compute_sensor_response` | 49/43 | ≤8 | **T6.10** | phase helpers (before/after series, response metrics) |
-| `learning/profiling.py::get_plant_profile` | 51/42 | ≤8 | **T6.10** | phase helpers (event responses, aggregate profile) |
-| `logic/cleaning.py::clean_readings` | 46/32 | ≤8 | **OK** | body ≤ 40 |
-| `logic/engine.py::IrrigationLogic._apply_seasonal_multiplier` | 57/44 | ≤8 | **T8.10** | `_seasonal_overrides` (+ `_scaled_interval`) |
-| `logic/engine.py::IrrigationLogic._apply_vacation_budget` | 77/55 | ≤8 | **T8.10** | `_vacation_days_left`, `_binding_max_minutes` |
-| `logic/engine.py::IrrigationLogic._enforce_leak_hold` | 42/20 | ≤8 | **OK** | body ≤ 40 |
-| `logic/engine.py::IrrigationLogic.decide_for_cluster` | 161/142 | 18 | **T8.2–T8.7** | §3.2 |
-| `logic/engine.py::_apply_light_adjustment` | 41/40 | ≤8 | **OK** | body = 40 |
-| `logic/engine.py::_apply_soil_moisture_rule` | 75/73 | ≤8 | **T8.9** | §3.3 (helpers stay in engine.py) |
-| `logic/fallback.py::temperature_based_decision` | 80/67 | ≤8 | **T6.7** | `_config_fallback`, `_temperature_interval` |
-| `logic/sensors.py::get_recent_sensor_data` | 62/56 | 9 | **T6.4** | `_mean_or_none` + `_per_sensor_snapshot` |
-| `logic/stress.py::detect_stress_conditions` | 56/48 | 17 | **T6.6** | six pure detectors |
-| `logic/trends.py::analyze_historical_trends` | 59/57 | 14 | **T6.5** | functional core |
-| `plant_db.py::PlantDatabase.get_care_data` | 59/34 | ≤8 | **OK** | body ≤ 40 |
-| `repository.py::IrrigationRepository.bulk_add_sensor_readings` | 42/22 | ≤8 | **OK** | body ≤ 40 |
-| `repository.py::IrrigationRepository.move_plant` | 57/28 | ≤8 | **OK** | body ≤ 40 |
-| `repository.py::IrrigationRepository.upsert_alert` | 55/33 | ≤8 | **OK** | body ≤ 40 |
-| `stats.py::get_irrigation_stats` | 46/44 | ≤8 | **T6.11** | aggregation helpers |
-| `stats.py::print_stats_report` | ≤40 | 9 | **T6.11** | section helper |
-| `sync.py::sync_single_sensor` | 56/52 | ≤8 | **T8.17** | `_sync_window_start`, `_store_history`, `_store_live_reading` |
-| `app.py::create_app` | 132/130 | ≤8 | **T5.15** | §3.7 |
-| `routes/auth.py::login` | 47/26 | ≤8 | **OK** | body ≤ 40 (frozen docstring not counted) |
-| `routes/clusters.py::get_cluster_detail` | 42/14 | ≤8 | **OK** | body ≤ 40 |
-| `routes/irrigators.py::add_irrigator` | 44/24 | ≤8 | **OK** | body ≤ 40 |
-| `routes/operations.py::cluster_status` | 63/51 | ≤8 | **T5.9** | response mappers |
-| `routes/operations.py::irrigate` | 43/11 | ≤8 | **OK** | body ≤ 40 |
-| `routes/operations.py::stats_export` | 50/35 | ≤8 | **T5.5** | body → `cluster_events_csv` |
-| `routes/plants.py::sync_plants` | 50/31 | 11 | **T5.7** | body → `ClusterService.sync_plants` |
-| `scheduler.py::init_scheduler` | 49/37 | ≤8 | **OK** | body ≤ 40 |
-| `services/alerts.py::sync_cluster_alerts` | 46/34 | ≤8 | **OK** | body ≤ 40 |
-| `services/anomaly.py::SensorAnomalyService.scan` | 115/101 | ≤8 | **T4.14** | `_stale_alert`, `_drift_alert` |
-| `services/bulk.py::stop_all_irrigators` | 46/27 | ≤8 | **OK** | body ≤ 40 |
-| `services/charts.py::build_overlay_payload` | 60/49 | 11 | **T4.17** | `_bucket_readings`, `_overlay_datasets` |
-| `services/cluster.py::ClusterService.get_cluster_status` | 56/54 | ≤8 | **T5.16** | `_sensor_status_rows`, `_irrigator_status` |
-| `services/data_quality.py::build_report` | 124/114 | 13 | **T4.6** | per-entity collectors |
-| `services/efficacy.py::score_cluster` | 63/53 | ≤8 | **T4.15** | `_event_items` |
-| `services/forecast.py::ForecastService.predict_next_irrigation` | 112/105 | 11 | **T4.4** | §3.6 |
-| `services/health.py::PlantHealthService.compute_score` | 100/81 | 12 | **T4.3** | §3.6 |
-| `services/insights.py::InsightsService.cluster_insights` | 61/52 | ≤8 | **T4.9** | `_insight_from_alert` (+ helpers until ≤ 40) |
-| `services/irrigation.py::IrrigationService.check_all_clusters` | 43/33 | ≤8 | **OK** | body ≤ 40 (T7.17 still extracts for CC/readability) |
-| `services/irrigation.py::IrrigationService.check_cluster` | 44/42 | ≤8 | **T7.16** | `_check_result` |
-| `services/irrigation.py::IrrigationService.monitor_cluster` | 62/60 | 10 | **T7.15** | `_latest_soil`, `_monitor_target_band`, `_soil_status` |
-| `services/irrigation.py::IrrigationService.run_irrigation_pipeline` | 187/172 | 12 | **T7.10–T7.14 + EXC** | helpers per §3.1; the health-gate block stays inline (Rev-1 m5: T7.12 dropped), so the body ends ≈ 45 lines → register entry |
-| `services/irrigation.py::_run_leak_check` | 42/33 | ≤8 | **OK** | body ≤ 40 |
-| `services/irrigation.py::handle_watcher_interrupted` | 89/56 | ≤8 | **T7.18** | `_stop_auto_cycle`, `_left_running_message` |
-| `services/irrigation.py::schedule_pump_watcher` | 102/77 | 12 | **T7.19** | `_watcher_tuning` + `_run_pump_watcher`; thin closure kept |
-| `services/leak.py::LeakDetectionService._evaluate_sensor` | 62/50 | ≤8 | **T7.21** | `_moisture_series`, `_pinned_high`, `_still_rising` |
-| `services/leak.py::LeakDetectionService.check_after_irrigation` | 63/42 | ≤8 | **T7.20** | `_hold_activity` / per-sensor verdict helpers |
-| `services/maintenance.py::collect_maintenance_alerts` | 71/69 | 11 | **T4.5** | per-check helpers |
-| `services/manual_control.py::manual_log` | 47/21 | ≤8 | **OK** | body ≤ 40 |
-| `services/manual_control.py::manual_start` | 62/33 | ≤8 | **OK** | body ≤ 40 |
-| `services/manual_control.py::manual_stop` | 46/23 | ≤8 | **OK** | body ≤ 40 |
-| `services/pump_watcher.py::PumpWatcherService._handle_trip` | 105/87 | ≤8 | **T4.12** | one private method per best-effort step |
-| `services/pump_watcher.py::PumpWatcherService.watch` | 96/73 | ≤8 | **T4.10** | `_outcome` + `_poll_step` (caller keeps clock reads) |
-| `services/search.py::search` | 118/103 | ≤8 | **T4.13** | `_cluster_hits`, `_plant_hits`, `_sensor_hits`, `_irrigator_hits` |
-| `services/sync.py::SyncService._cluster_snapshot` | 49/26 | ≤8 | **OK** | body ≤ 40 |
-| `services/system_health.py::SystemHealthService.pulse` | 57/50 | ≤8 | **T4.16** | `_sensor_devices`, `_overall_status` |
-| `services/weather.py::WeatherClient.get_forecast` | 45/39 | ≤8 | **OK** | body ≤ 40 |
-| `web/context.py::base_context` | 46/45 | ≤8 | **T5.17** | `_preference_flags`, `_auth_enabled` |
-| `web/filters.py::cluster_caps` | 65/39 | ≤8 | **OK** | body ≤ 40 |
-| `web/routes/clusters.py::cluster_detail` | 95/87 | ≤8 | **T5.10 + I2** | `_rationale_reasons`, `_window_rows` (+ helpers until ≤ 40) |
-| `web/routes/irrigators.py::create_irrigator` | 46/34 | ≤8 | **OK** | body ≤ 40 |
-| `web/routes/operations.py::sync_plants` | 43/36 | 11 | **T5.8** | body → `ClusterService.sync_plants` |
-| `web/routes/plant_dashboard.py::plant_dashboard` | 77/68 | ≤8 | **T5.18** | context-section helpers |
-MISSING []
+Verdicts:
+- `OK` = already within the DoD by all three metrics;
+- `T…` = the plan task that brings it within the DoD;
+- `EXC` = a register entry with this reason.
+
+**Re-scan for nesting > 3 (Rev 2).** Exactly 14 functions exceed it. Each has a task (T2.x/T4.5/T5.7/T5.8/T6.5/T6.8/
+T6.9/T6.12/T7.22/T8.18) or an EXC row (`ClusterScreen.compose`, `FormScreen.compose`, `_start_keepalive`,
+`TuyaIrrigatorAdapter.status`, `bulk.stop_all_irrigators`). So T0.9's seeded checker lists only functions with a task.
+
+| Function | Size | CC | Nesting | Verdict | How / why |
+|---|---|---|---|---|---|
+| `commands/auth.py::register` | 68/64 | 9 | 0 | **EXC** | Typer declarative registration block: CC/length come from the nested command defs, whose decorators/params/docstrings are the frozen `--help` contract; each nested command ≤ 20 body lines, CC ≤ 4; module untouched (B2) |
+| `commands/auth.py::register.login` | 41/17 | ≤8 | 1 | **OK** | body ≤ 40 |
+| `commands/operations.py::register` | 109/105 | 19 | 0 | **EXC** | same as `auth.register` (10 nested commands, each ≤ 12 body lines, CC ≤ 5); module untouched |
+| `tui/model.py::summarize` | 69/61 | 12 | 3 | **T2.10** | `_band`, `_plant_views` (+ further private helpers until ≤ 40 / CC ≤ 8) |
+| `tui/screens/cluster.py::ClusterScreen._load_insights` | 63/62 | ≤8 | 2 | **T2.4** | builders → `render.py` |
+| `tui/screens/cluster.py::ClusterScreen._render_overview` | 63/62 | 11 | 3 | **T2.3** | builders → `render.py` |
+| `tui/screens/cluster.py::ClusterScreen.action_delete` | 41/40 | 9 | 2 | **T2.7** | dict dispatch + per-tab handlers |
+| `tui/screens/cluster.py::ClusterScreen.action_edit` | 51/50 | 10 | 2 | **T2.6** | dict dispatch + per-tab handlers |
+| `tui/screens/cluster.py::ClusterScreen.action_new` | 43/42 | ≤8 | 2 | **T2.5** | dict dispatch + per-tab handlers |
+| `tui/screens/cluster.py::ClusterScreen.compose` | 50/49 | ≤8 | 4 | **EXC** | single declarative widget tree, CC 1; order = focus order + `app.tcss` selectors + screen goldens; splitting scatters the DOM picture (C §8.2) |
+| `tui/screens/forms.py::FormScreen.compose` | ≤40 | ≤8 | 5 | **EXC** | nesting 5 from nested `with` widget containers: declarative Textual tree whose order is focus order + tcss + form-screen goldens; module untouched (Rev 2) |
+| `tui/screens/forms.py::parse_value` | ≤40 | 11 | 3 | **EXC** | ≤ 40 lines; CC 11 is a flat type-dispatch ladder over field kinds; module untouched by any WP |
+| `tui/screens/settings.py::SettingsScreen.load` | 55/54 | ≤8 | 2 | **T2.9** | builders → `render.py` |
+| `tui/screens/system.py::SystemScreen.load` | 80/79 | ≤8 | 1 | **T2.8** | builders → `render.py` |
+| `tui/widgets.py::show_payload` | ≤40 | 9 | 2 | **T2.11** | `_draw_event_lines` / `_set_x_ticks` |
+| `devices/gateway.py::DeviceGateway.get_device_logs` | 56/43 | ≤8 | 3 | **EXC** | devices = high risk; v1/v2 DPS parsing differs in `ValueError` handling (D29) — a merged helper is a behaviour fork; module untouched |
+| `devices/gateway.py::DeviceGateway.get_live_reading` | 43/28 | ≤8 | 3 | **OK** | body ≤ 40 |
+| `devices/irrigators/ik10pw.py::IK10PWAdapter._start_keepalive` | 51/43 | 10 | 4 | **EXC** | actuation safety path holding REFACTOR_NOTES safety bug #3 (`signal.signal` off main thread); any restructuring belongs to the dedicated fix PR |
+| `devices/irrigators/ik10pw.py::IK10PWAdapter.read_health` | 45/30 | ≤8 | 1 | **OK** | body ≤ 40 |
+| `devices/irrigators/tuya_generic.py::status` | ≤40 | 10 | 5 | **EXC** | ≤ 40 lines; CC 10 and nesting 5: DPS-decoding ladder in a device adapter (high risk, untouched) |
+| `devices/sensors/tr301z.py::TR301ZAdapter.read_health` | 44/31 | ≤8 | 1 | **OK** | body ≤ 40 |
+| `learning/issues.py::detect_conflicts` | 151/143 | 26 | 4 | **T6.8** | per-check helpers |
+| `learning/issues.py::detect_issues` | 131/115 | 16 | 4 | **T6.9** | per-sensor alert helpers |
+| `learning/profiling.py::compute_sensor_response` | 49/43 | ≤8 | 1 | **T6.10** | phase helpers (before/after series, response metrics) |
+| `learning/profiling.py::get_plant_profile` | 51/42 | ≤8 | 2 | **T6.10** | phase helpers (event responses, aggregate profile) |
+| `logic/cleaning.py::clean_readings` | 46/32 | ≤8 | 3 | **OK** | body ≤ 40 |
+| `logic/engine.py::IrrigationLogic._apply_seasonal_multiplier` | 57/44 | ≤8 | 2 | **T8.10** | `_seasonal_overrides` (+ `_scaled_interval`) |
+| `logic/engine.py::IrrigationLogic._apply_vacation_budget` | 77/55 | ≤8 | 1 | **T8.10** | `_vacation_days_left`, `_binding_max_minutes` |
+| `logic/engine.py::IrrigationLogic._enforce_leak_hold` | 42/20 | ≤8 | 1 | **OK** | body ≤ 40 |
+| `logic/engine.py::IrrigationLogic.decide_for_cluster` | 161/142 | 18 | 2 | **T8.2–T8.7** | §3.2 |
+| `logic/engine.py::_apply_light_adjustment` | 41/40 | ≤8 | 1 | **OK** | body = 40 |
+| `logic/engine.py::_apply_soil_moisture_rule` | 75/73 | ≤8 | 1 | **T8.9** | §3.3 (helpers stay in engine.py) |
+| `logic/fallback.py::temperature_based_decision` | 80/67 | ≤8 | 2 | **T6.7** | `_config_fallback`, `_temperature_interval` |
+| `logic/sensors.py::get_recent_sensor_data` | 62/56 | 9 | 3 | **T6.4** | `_mean_or_none` + `_per_sensor_snapshot` |
+| `logic/stress.py::detect_stress_conditions` | 56/48 | 17 | 3 | **T6.6** | six pure detectors |
+| `logic/trends.py::analyze_historical_trends` | 59/57 | 14 | 4 | **T6.5** | functional core |
+| `plant_db.py::PlantDatabase.get_care_data` | 59/34 | ≤8 | 2 | **OK** | body ≤ 40 |
+| `repository.py::IrrigationRepository.bulk_add_sensor_readings` | 42/22 | ≤8 | 1 | **OK** | body ≤ 40 |
+| `repository.py::IrrigationRepository.move_plant` | 57/28 | ≤8 | 1 | **OK** | body ≤ 40 |
+| `repository.py::IrrigationRepository.upsert_alert` | 55/33 | ≤8 | 2 | **OK** | body ≤ 40 |
+| `stats.py::export_csv` | ≤40 | ≤8 | 4 | **T6.12** | nesting 4 → `_csv_event_row(event, irrigator) -> list[object]` + `_write_event_rows(writer, events, irrigator, cutoff)`; printed text verbatim (Rev 2) |
+| `stats.py::get_irrigation_stats` | 46/44 | ≤8 | 2 | **T6.11** | aggregation helpers |
+| `stats.py::print_stats_report` | ≤40 | 9 | 2 | **T6.11** | section helper |
+| `sync.py::sync_sensor_data` | ≤40 | ≤8 | 4 | **T8.18** | nesting 4 → `_sync_logged(db, cloud, sensor, hours, stats) -> None` (the per-sensor try/except) + `_sync_summary(new, live) -> str`; log texts verbatim (Rev 2) |
+| `sync.py::sync_single_sensor` | 56/52 | ≤8 | 3 | **T8.17** | `_sync_window_start`, `_store_history`, `_store_live_reading` |
+| `app.py::create_app` | 132/130 | ≤8 | 1 | **T5.15** | §3.7 |
+| `routes/auth.py::login` | 47/26 | ≤8 | 1 | **OK** | body ≤ 40 (frozen docstring not counted) |
+| `routes/clusters.py::get_cluster_detail` | 42/14 | ≤8 | 0 | **OK** | body ≤ 40 |
+| `routes/irrigators.py::add_irrigator` | 44/24 | ≤8 | 2 | **OK** | body ≤ 40 |
+| `routes/operations.py::cluster_status` | 63/51 | ≤8 | 1 | **T5.9** | response mappers |
+| `routes/operations.py::irrigate` | 43/11 | ≤8 | 1 | **OK** | body ≤ 40 |
+| `routes/operations.py::stats_export` | 50/35 | ≤8 | 2 | **T5.5** | body → `cluster_events_csv` |
+| `routes/plants.py::sync_plants` | 50/31 | 11 | 4 | **T5.7** | body → `ClusterService.sync_plants` |
+| `scheduler.py::init_scheduler` | 49/37 | ≤8 | 0 | **OK** | body ≤ 40 |
+| `services/alerts.py::sync_cluster_alerts` | 46/34 | ≤8 | 1 | **OK** | body ≤ 40 |
+| `services/anomaly.py::SensorAnomalyService.scan` | 115/101 | ≤8 | 2 | **T4.14** | `_stale_alert`, `_drift_alert` |
+| `services/bulk.py::stop_all_irrigators` | 46/27 | ≤8 | 4 | **EXC** | nesting 4 (for→try→if→try): emergency kill-switch actuation path, each irrigator isolated in its own try so one failure cannot stop the others; B-4 neighbourhood; module untouched (Rev 2 — was wrongly OK) |
+| `services/charts.py::build_overlay_payload` | 60/49 | 11 | 3 | **T4.17** | `_bucket_readings`, `_overlay_datasets` |
+| `services/cluster.py::ClusterService.get_cluster_status` | 56/54 | ≤8 | 1 | **T5.16** | `_sensor_status_rows`, `_irrigator_status` |
+| `services/data_quality.py::build_report` | 124/114 | 13 | 2 | **T4.6** | per-entity collectors |
+| `services/efficacy.py::score_cluster` | 63/53 | ≤8 | 3 | **T4.15** | `_event_items` |
+| `services/forecast.py::ForecastService.predict_next_irrigation` | 112/105 | 11 | 3 | **T4.4** | §3.6 |
+| `services/health.py::PlantHealthService.compute_score` | 100/81 | 12 | 3 | **T4.3** | §3.6 |
+| `services/insights.py::InsightsService.cluster_insights` | 61/52 | ≤8 | 2 | **T4.9** | `_insight_from_alert` (+ helpers until ≤ 40) |
+| `services/irrigation.py::IrrigationService.check_all_clusters` | 43/33 | ≤8 | 3 | **OK** | body ≤ 40 (T7.17 still extracts for CC/readability) |
+| `services/irrigation.py::IrrigationService.check_cluster` | 44/42 | ≤8 | 2 | **T7.16** | `_check_result` |
+| `services/irrigation.py::IrrigationService.monitor_cluster` | 62/60 | 10 | 2 | **T7.15** | `_latest_soil`, `_monitor_target_band`, `_soil_status` |
+| `services/irrigation.py::IrrigationService.run_irrigation_pipeline` | 187/172 | 12 | 2 | **T7.10–T7.14 + EXC** | helpers per §3.1; the health-gate block stays inline (Rev-1 m5: T7.12 dropped), so the body ends ≈ 45 lines → register entry |
+| `services/irrigation.py::_run_leak_check` | 42/33 | ≤8 | 2 | **OK** | body ≤ 40 |
+| `services/irrigation.py::handle_watcher_interrupted` | 89/56 | ≤8 | 2 | **T7.18** | `_stop_auto_cycle`, `_left_running_message` |
+| `services/irrigation.py::rearm_leak_checks` | ≤40 | ≤8 | 4 | **T7.22** | nesting 4 → `_rearm_from_events(repo, now) -> int` (the two loops + guards); try/except/finally, `now = int(_time.time())` and both log lines stay in `rearm_leak_checks` (Rev 2) |
+| `services/irrigation.py::schedule_pump_watcher` | 102/77 | 12 | 2 | **T7.19** | `_watcher_tuning` + `_run_pump_watcher`; thin closure kept |
+| `services/leak.py::LeakDetectionService._evaluate_sensor` | 62/50 | ≤8 | 1 | **T7.21** | `_moisture_series`, `_pinned_high`, `_still_rising` |
+| `services/leak.py::LeakDetectionService.check_after_irrigation` | 63/42 | ≤8 | 2 | **T7.20** | `_hold_activity` / per-sensor verdict helpers |
+| `services/maintenance.py::collect_maintenance_alerts` | 71/69 | 11 | 5 | **T4.5** | per-check helpers |
+| `services/manual_control.py::manual_log` | 47/21 | ≤8 | 0 | **OK** | body ≤ 40 |
+| `services/manual_control.py::manual_start` | 62/33 | ≤8 | 1 | **OK** | body ≤ 40 |
+| `services/manual_control.py::manual_stop` | 46/23 | ≤8 | 1 | **OK** | body ≤ 40 |
+| `services/pump_watcher.py::PumpWatcherService._handle_trip` | 105/87 | ≤8 | 2 | **T4.12** | one private method per best-effort step |
+| `services/pump_watcher.py::PumpWatcherService.watch` | 96/73 | ≤8 | 3 | **T4.10** | `_outcome` + `_poll_step` (caller keeps clock reads) |
+| `services/search.py::search` | 118/103 | ≤8 | 1 | **T4.13** | `_cluster_hits`, `_plant_hits`, `_sensor_hits`, `_irrigator_hits` |
+| `services/sync.py::SyncService._cluster_snapshot` | 49/26 | ≤8 | 3 | **OK** | body ≤ 40 |
+| `services/system_health.py::SystemHealthService.pulse` | 57/50 | ≤8 | 2 | **T4.16** | `_sensor_devices`, `_overall_status` |
+| `services/weather.py::WeatherClient.get_forecast` | 45/39 | ≤8 | 2 | **OK** | body ≤ 40 |
+| `web/context.py::base_context` | 46/45 | ≤8 | 2 | **T5.17** | `_preference_flags`, `_auth_enabled` |
+| `web/filters.py::cluster_caps` | 65/39 | ≤8 | 1 | **OK** | body ≤ 40 |
+| `web/routes/clusters.py::cluster_detail` | 95/87 | ≤8 | 2 | **T5.10 + I2** | `_rationale_reasons`, `_window_rows` (+ helpers until ≤ 40) |
+| `web/routes/irrigators.py::create_irrigator` | 46/34 | ≤8 | 1 | **OK** | body ≤ 40 |
+| `web/routes/operations.py::sync_plants` | 43/36 | 11 | 4 | **T5.8** | body → `ClusterService.sync_plants` |
+| `web/routes/plant_dashboard.py::plant_dashboard` | 77/68 | ≤8 | 3 | **T5.18** | context-section helpers |
 
 **Files > 400 lines** (all become register entries; none is split; the reason is given per file):
 
@@ -934,6 +963,10 @@ changes, so `LOGIC.md` stays correct (note it in REFACTOR_NOTES).
       and `disallow_any_generics = false`. Everything else stays strict.
     - Route and command signatures are **never** edited. Every helper in those modules is fully annotated (review
       rule). The rule is strengthened by `check_untyped_defs = true`, which `strict` already sets.
+13b. *(Rev 2 nit)* **Annotation-only changes must not change import-time behaviour.** Put an import added only for
+    typing under `if TYPE_CHECKING:` and use a string annotation, or use `from __future__ import annotations` (not in
+    Pydantic/FastAPI modules, §10.11). Example: `Settings` stays lazily imported in `services/irrigation.py`, so
+    `_watcher_tuning(settings: "Settings | None")` uses a string annotation with a `TYPE_CHECKING` import.
 14. *(Rev 1)* **When strictness collides with a frozen contract** (a Pydantic field type, a route signature, a Textual
     override), do not change the contract. Use a narrowly scoped `# type: ignore[<code>]  # contract: <what is frozen>`
     (never a bare `type: ignore`). Each one is listed in the commit body.
@@ -1066,22 +1099,32 @@ with **`max-complexity = 8`**. `PLR0913` is not enabled: 61 hits, mostly frozen 
 
 **Size checker** *(Rev 1)*. `refactor/scripts/sizecheck.py` (plan T0.9) is AST-based and reports functions over 40
 body lines or nesting deeper than 3 in the given files. It skips entries listed in `refactor/size-exceptions.txt` and
-prints them as "excepted: reason". `make sizecheck FILES=…` defaults to all of `libs/`.
+prints them as "excepted: reason". `make sizecheck FILES=…` defaults to all of `libs/`. *(Rev 2)* T0.9 asserts that
+the seeded register plus the task list cover every hit: after seeding, `make sizecheck` lists only functions that have
+a task in the plan (T0.9 checks the list against §3.12).
 
 **Mutation testing** *(Rev 1)*. `mutmut` is added to the dev group (T0.1) and configured in T0.10 for the
 decision-critical modules: `logic/{engine,stress,trends,sensors,fallback}.py`, `learning/issues.py`,
-`services/{irrigation,leak,pump_watcher}.py` and `scheduler.py`.
+`services/{irrigation,leak,pump_watcher}.py`, `scheduler.py` and *(Rev 2)* `greenhouse_core/sync.py` (invariant 8;
+targets in `10-safety-ingress-devices.md`).
 - **Two runs per module.** One on the **pre-refactor** module, before the WP touches it; one after the WP. Each run
   uses the WP's task subsets and is restricted to the "mutation targets" lines in `refactor/10-safety-*.md`.
-- **Threshold.** At least **75 % killed on touched lines**, and no target line that was killed before survives after.
+- **Threshold.** At least **75 % killed on touched code**, and no mutant killed in M-pre survives in M-post.
+  *(Rev 2)* Mutants are compared by **identity**, not line number. The identity is (mutation operator, original
+  snippet → replacement snippet, enclosing function qualname). The WP records a function map (old qualname → new
+  qualname(s)) in its hand-off note, so an identity whose code moved into an extracted helper is matched through the
+  map.
   Surviving baseline mutants are killed by new characterization tests (orchestrator-owned) or justified in writing
   before the WP starts.
 - **Budget.** ≤ 45 min wall per module per run (`--max-children 2`, under the test lock). Over budget, use a seeded
   sample of 150 mutants from the target lines.
 - **Fallback** if mutmut cannot run against the `libs/` workspace layout (T0.10 decides on `logic/stress.py`):
-  `refactor/scripts/mutate_probe.py`. It applies a fixed catalogue of single-token mutations, one at a time, in a temp
-  copy: comparison flip, `and`↔`or`, ±1 on numeric literals, `True`↔`False`, statement deletion. It runs the subset
-  with `-x` and reports killed/survived. The same thresholds apply.
+  `refactor/scripts/mutate_probe.py`. It applies a fixed catalogue of single-token mutations, one at a time: comparison
+  flip, `and`↔`or`, ±1 on numeric literals, `True`↔`False`, statement deletion. *(Rev 2)* It mutates **in place, in
+  the implementer's own worktree**: the editable install points at `libs/`, so temp copies would never be imported.
+  It restores each file with `git checkout -- <file>` in a `finally`, and refuses to start if `git status --porcelain`
+  for the target file is not clean. It runs the subset with `-x`, `PYTHONHASHSEED=0`, under the test lock, and reports
+  killed/survived per identity. The same thresholds apply.
 
 **Guard tests** (new, test-only, `tests/test_refactor_guards.py`):
 1. Importing `greenhouse_cli.main` does not put `textual` into `sys.modules`. This runs **in a subprocess**
@@ -1091,6 +1134,10 @@ decision-critical modules: `logic/{engine,stress,trends,sensors,fallback}.py`, `
    already in `tests/golden/tui/surface.json` (it fails fast, before the golden does).
 4. *(Rev 1)* No TUI `DOMNode` subclass defines a name that shadows `dir()` of its Textual base class (`App`, `Screen`,
    `ModalScreen`, `Widget`), beyond an allow-list hard-coded from the baseline overlaps.
+5. *(Rev 2 nit)* Every `_`-prefixed function in the boundary-profile modules (`greenhouse_server.routes.*`,
+   `greenhouse_server.web.routes.*`, `greenhouse_cli.commands.*`) is fully annotated (all params + return). This turns
+   §10.13's review rule into a gate. Helpers already unannotated at baseline go in a hard-coded allow-list that only
+   shrinks.
 
 ## 12. Seam and invariant checklist (reviewers tick this per commit)
 
@@ -1177,4 +1224,17 @@ decision-critical modules: `logic/{engine,stress,trends,sensors,fallback}.py`, `
 | R12 | **m5:** T7.12 `if alarms:` vs `if blocked:` | **T7.12 is dropped.** The health gate stays inline and verbatim. `run_irrigation_pipeline` ends ≈ 45 body lines, which is a register entry (§3.1, §3.12). |
 | R13 | Nits | The two sequential terminal `if`s are kept, with no `or` (§3 rules, §3.2). `_build_irrigation_service(app, …)` takes `app` explicitly (§3.8). Guard #1 runs in a subprocess, and guard #4 (Textual shadowing) and the `key_` prefix are added (§8, §11). The CLAUDE.md-vs-BRIEF plugin-docs conflict is flagged for the PR body (plan I4). |
 | R14 | Found while revising | `schedule_pump_watcher` reads its tuning at **run** time and captures `wait_for_shutdown` / `shutdown_requested` at **schedule** time. `_run_pump_watcher` preserves both (§3.1). The forecast `weather_client` is typed `Any` until I3 (§4). |
+
+### Revision 2 (Gate 2 round 2 — `refactor/50-adversary-plan-critic.md` "Round 2")
+
+| # | Finding | Change made |
+|---|---|---|
+| R2-1 | **M-R2-1:** "rerun once" can launder a real regression; hash seed unpinned | Plan §0.2/§0.3/§0.4: every `t` / `FULL` / gate run has `PYTHONHASHSEED=0`. WP gates and the integration gate add one extra `FULL` with `PYTHONHASHSEED=12345`. A red is re-run with the **identical** command (same subset, `-n`, seed), never isolated. It counts as flaky only if the test is on the Gate-1 flaky list (orchestrator-owned, initially empty) or the same failure reproduces on the parent commit with the same command. Otherwise revert. |
+| R2-2 | **M-R2-2:** no nesting axis in §3.12 | §3.12 gets a Nesting column and a full re-scan (14 functions with nesting > 3, all covered). New verdicts: `rearm_leak_checks` → T7.22 (§3.1); `sync.sync_sensor_data` → T8.18; `stats.export_csv` → T6.12; `bulk.stop_all_irrigators` → EXC (the wrong OK is fixed, §3.6); `FormScreen.compose` → EXC. T0.9 asserts the seeded checker lists only functions with a task. |
+| R2-3 | m-R2-1: self-certifying register | Implementers only propose entries; the integrator commits them after orchestrator approval; I1 rejects unapproved lines (§3.12). |
+| R2-4 | m-R2-2: M-post compared by line | Mutant identity = (operator, original → replacement snippet, enclosing function qualname), matched through the WP's function map (§11). |
+| R2-5 | m-R2-3: subset slips | Plan T5.18, T7.20/T7.21 and T8.17 now include `D(<module>)`, following the §0.3 rule. |
+| R2-6 | m-R2-4: `sync.py` mutation | Added to the mutation list (§11, plan §0.5). |
+| R2-7 | m-R2-5: probe temp copies | The probe mutates in place in the implementer's own worktree and restores via `git checkout -- <file>` in `finally` (§11). |
+| R2-8 | Nits | §10.13b: imports added only for typing go under `TYPE_CHECKING` or future annotations. Guard test 5 checks annotations on boundary-module helpers (§11). Wave B: T5.15 gets its own two reviewers in addition to WP7's (plan §1). |
 

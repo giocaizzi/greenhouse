@@ -1,0 +1,2 @@
+# Tests allowed to be treated as flaky (frozen at Gate 1). One pytest node id per line, with evidence.
+# Initially empty: no flakiness was reproduced in 2 full Gate 1 runs + 6 targeted TUI runs.
