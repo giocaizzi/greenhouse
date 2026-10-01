@@ -136,3 +136,20 @@ def test_legacy_partial_db_gets_repaired(file_db):
     with engine.connect() as conn:
         version = conn.execute(text("SELECT version_num FROM alembic_version")).scalar()
     assert version == head_revision()
+
+
+def test_init_db_does_not_disable_application_loggers():
+    """Regression: alembic's env.py ran ``fileConfig`` with the default
+    ``disable_existing_loggers=True``, so every logger created before
+    ``init_db`` (i.e. every server module imported before ``create_app``)
+    was silently muted for the life of the process — scheduler job failures,
+    pump-watcher warnings and deprecation notices never reached the log."""
+    import logging
+
+    app_logger = logging.getLogger("greenhouse_server.services.irrigation")
+    engine = create_engine("sqlite://")
+    try:
+        init_db(engine)
+    finally:
+        engine.dispose()
+    assert app_logger.disabled is False
