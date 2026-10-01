@@ -41,4 +41,10 @@ refactored module touches gets a characterization test pinning current behavior.
 
 ## Baseline warnings (recorded, not fixed)
 
-_To be filled from the Gate 0 baseline run._
+Gate 0 run on `a1b2622`, Python 3.11.15: **1182 passed, 2 warnings, 1168 s** (slowed by concurrent recon agents);
+total coverage 90% (line+branch). Both warnings are pre-existing and left as is:
+
+1. `PydanticDeprecatedSince211`: `BaseModel.__get_pydantic_core_schema__` deprecated — raised from inside pydantic's
+   schema generation (dependency path), not from repo code.
+2. `RuntimeWarning: coroutine 'ClusterScreen._load_plant_health' was never awaited` in
+   `tests/cli/test_tui.py::TestClusterCrud::test_plant_add_edit_move_delete` (Textual cache path).
