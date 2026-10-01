@@ -39,6 +39,25 @@ device id in web create routes, vacation end < start accepted by the API, `local
 listed with file:line evidence in `refactor/00-smells.md` ("Observed bugs"). They are recorded, not fixed; each one that a
 refactored module touches gets a characterization test pinning current behavior.
 
+CLI (pinned in `tests/cli/test_contract_json_output.py`, details in `refactor/10-safety-cli.md`):
+- a whitespace-only `GREENHOUSE_API_TOKEN` disables the token file fallback;
+- only connection errors are turned into a clean error — a timeout or an empty 2xx body crashes with a traceback (exit 1);
+- a 422 validation error is printed as a Python repr;
+- id `0` is treated as "not given" by `check`, `plant list`, `sensor list`;
+- `stats --export` with a non-CSV response writes an empty file and reports success;
+- scheduler job ids are interpolated into the URL path unescaped;
+- empty `--device-ip` on `irrigator add` is dropped while empty `--local-key` on `irrigator update` is sent;
+- each call opens an `httpx` client that is never closed.
+
+## Golden-test policy (orchestrator decision)
+
+- OpenAPI, routes, MCP tools, settings, DDL, scheduler registry, package data, web HTML, CLI help/output, TUI renders,
+  decision grid: **strict** equality.
+- Public import surfaces, `constants.py` values and logger names: **compatibility (superset)** — every golden name must
+  still resolve with an equal value (loggers: same name for modules that still exist); additions are allowed because
+  they break no consumer, and rule 8 forbids editing goldens after Gate 1. Enum members (`TriggerCode`, …) stay strict.
+- `tests/golden/` is excluded from the pre-commit whitespace fixers so snapshots stay byte-exact; goldens stay < 400 KB.
+
 ## Test-suite hazards found at baseline (recorded)
 
 - **Real network in the existing suite.** `get_weather_client` is never overridden in test fixtures, so ~19 tests call the
