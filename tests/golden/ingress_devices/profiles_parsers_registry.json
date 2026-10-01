@@ -1,0 +1,1030 @@
+{
+ "constants": {
+  "KEEP_ALIVE_INTERVAL": 20,
+  "LOCAL_TIMEOUT": 5
+ },
+ "datapoint_parser_codes_in_order": [
+  "temp_current",
+  "va_temperature",
+  "humidity",
+  "humidity_value",
+  "va_humidity",
+  "battery_state",
+  "battery_percentage",
+  "bright_value",
+  "light",
+  "env_humidity",
+  "illumiance",
+  "water_warning",
+  "soil_warning"
+ ],
+ "datapoint_parsers": {
+  "battery_percentage": [
+   {
+    "key": "battery_percentage",
+    "raw": 0,
+    "type": "int",
+    "value": 0
+   },
+   {
+    "key": "battery_percentage",
+    "raw": 1,
+    "type": "int",
+    "value": 1
+   },
+   {
+    "key": "battery_percentage",
+    "raw": 251,
+    "type": "int",
+    "value": 251
+   },
+   {
+    "key": "battery_percentage",
+    "raw": -15,
+    "type": "int",
+    "value": -15
+   },
+   {
+    "key": "battery_percentage",
+    "raw": 12.7,
+    "type": "int",
+    "value": 12
+   },
+   {
+    "key": "battery_percentage",
+    "raw": "220",
+    "type": "int",
+    "value": 220
+   },
+   {
+    "raises": "ValueError",
+    "raw": "12.7"
+   },
+   {
+    "raises": "ValueError",
+    "raw": "abc"
+   },
+   {
+    "raises": "ValueError",
+    "raw": "false"
+   },
+   {
+    "raises": "ValueError",
+    "raw": ""
+   },
+   {
+    "raises": "TypeError",
+    "raw": null
+   },
+   {
+    "key": "battery_percentage",
+    "raw": true,
+    "type": "int",
+    "value": 1
+   }
+  ],
+  "battery_state": [
+   {
+    "key": "battery_state",
+    "raw": 0,
+    "type": "int",
+    "value": 0
+   },
+   {
+    "key": "battery_state",
+    "raw": 1,
+    "type": "int",
+    "value": 1
+   },
+   {
+    "key": "battery_state",
+    "raw": 251,
+    "type": "int",
+    "value": 251
+   },
+   {
+    "key": "battery_state",
+    "raw": -15,
+    "type": "int",
+    "value": -15
+   },
+   {
+    "key": "battery_state",
+    "raw": 12.7,
+    "type": "float",
+    "value": 12.7
+   },
+   {
+    "key": "battery_state",
+    "raw": "220",
+    "type": "str",
+    "value": "220"
+   },
+   {
+    "key": "battery_state",
+    "raw": "12.7",
+    "type": "str",
+    "value": "12.7"
+   },
+   {
+    "key": "battery_state",
+    "raw": "abc",
+    "type": "str",
+    "value": "abc"
+   },
+   {
+    "key": "battery_state",
+    "raw": "false",
+    "type": "str",
+    "value": "false"
+   },
+   {
+    "key": "battery_state",
+    "raw": "",
+    "type": "str",
+    "value": ""
+   },
+   {
+    "key": "battery_state",
+    "raw": null,
+    "type": "NoneType",
+    "value": null
+   },
+   {
+    "key": "battery_state",
+    "raw": true,
+    "type": "bool",
+    "value": true
+   }
+  ],
+  "bright_value": [
+   {
+    "key": "light",
+    "raw": 0,
+    "type": "int",
+    "value": 0
+   },
+   {
+    "key": "light",
+    "raw": 1,
+    "type": "int",
+    "value": 1
+   },
+   {
+    "key": "light",
+    "raw": 251,
+    "type": "int",
+    "value": 251
+   },
+   {
+    "key": "light",
+    "raw": -15,
+    "type": "int",
+    "value": -15
+   },
+   {
+    "key": "light",
+    "raw": 12.7,
+    "type": "int",
+    "value": 12
+   },
+   {
+    "key": "light",
+    "raw": "220",
+    "type": "int",
+    "value": 220
+   },
+   {
+    "raises": "ValueError",
+    "raw": "12.7"
+   },
+   {
+    "raises": "ValueError",
+    "raw": "abc"
+   },
+   {
+    "raises": "ValueError",
+    "raw": "false"
+   },
+   {
+    "raises": "ValueError",
+    "raw": ""
+   },
+   {
+    "raises": "TypeError",
+    "raw": null
+   },
+   {
+    "key": "light",
+    "raw": true,
+    "type": "int",
+    "value": 1
+   }
+  ],
+  "env_humidity": [
+   {
+    "key": "env_humidity",
+    "raw": 0,
+    "type": "float",
+    "value": 0.0
+   },
+   {
+    "key": "env_humidity",
+    "raw": 1,
+    "type": "float",
+    "value": 1.0
+   },
+   {
+    "key": "env_humidity",
+    "raw": 251,
+    "type": "float",
+    "value": 251.0
+   },
+   {
+    "key": "env_humidity",
+    "raw": -15,
+    "type": "float",
+    "value": -15.0
+   },
+   {
+    "key": "env_humidity",
+    "raw": 12.7,
+    "type": "float",
+    "value": 12.7
+   },
+   {
+    "key": "env_humidity",
+    "raw": "220",
+    "type": "float",
+    "value": 220.0
+   },
+   {
+    "key": "env_humidity",
+    "raw": "12.7",
+    "type": "float",
+    "value": 12.7
+   },
+   {
+    "raises": "ValueError",
+    "raw": "abc"
+   },
+   {
+    "raises": "ValueError",
+    "raw": "false"
+   },
+   {
+    "raises": "ValueError",
+    "raw": ""
+   },
+   {
+    "raises": "TypeError",
+    "raw": null
+   },
+   {
+    "key": "env_humidity",
+    "raw": true,
+    "type": "float",
+    "value": 1.0
+   }
+  ],
+  "humidity": [
+   {
+    "key": "soil_moisture",
+    "raw": 0,
+    "type": "float",
+    "value": 0.0
+   },
+   {
+    "key": "soil_moisture",
+    "raw": 1,
+    "type": "float",
+    "value": 1.0
+   },
+   {
+    "key": "soil_moisture",
+    "raw": 251,
+    "type": "float",
+    "value": 251.0
+   },
+   {
+    "key": "soil_moisture",
+    "raw": -15,
+    "type": "float",
+    "value": -15.0
+   },
+   {
+    "key": "soil_moisture",
+    "raw": 12.7,
+    "type": "float",
+    "value": 12.7
+   },
+   {
+    "key": "soil_moisture",
+    "raw": "220",
+    "type": "float",
+    "value": 220.0
+   },
+   {
+    "key": "soil_moisture",
+    "raw": "12.7",
+    "type": "float",
+    "value": 12.7
+   },
+   {
+    "raises": "ValueError",
+    "raw": "abc"
+   },
+   {
+    "raises": "ValueError",
+    "raw": "false"
+   },
+   {
+    "raises": "ValueError",
+    "raw": ""
+   },
+   {
+    "raises": "TypeError",
+    "raw": null
+   },
+   {
+    "key": "soil_moisture",
+    "raw": true,
+    "type": "float",
+    "value": 1.0
+   }
+  ],
+  "humidity_value": [
+   {
+    "key": "soil_moisture",
+    "raw": 0,
+    "type": "float",
+    "value": 0.0
+   },
+   {
+    "key": "soil_moisture",
+    "raw": 1,
+    "type": "float",
+    "value": 1.0
+   },
+   {
+    "key": "soil_moisture",
+    "raw": 251,
+    "type": "float",
+    "value": 251.0
+   },
+   {
+    "key": "soil_moisture",
+    "raw": -15,
+    "type": "float",
+    "value": -15.0
+   },
+   {
+    "key": "soil_moisture",
+    "raw": 12.7,
+    "type": "float",
+    "value": 12.7
+   },
+   {
+    "key": "soil_moisture",
+    "raw": "220",
+    "type": "float",
+    "value": 220.0
+   },
+   {
+    "key": "soil_moisture",
+    "raw": "12.7",
+    "type": "float",
+    "value": 12.7
+   },
+   {
+    "raises": "ValueError",
+    "raw": "abc"
+   },
+   {
+    "raises": "ValueError",
+    "raw": "false"
+   },
+   {
+    "raises": "ValueError",
+    "raw": ""
+   },
+   {
+    "raises": "TypeError",
+    "raw": null
+   },
+   {
+    "key": "soil_moisture",
+    "raw": true,
+    "type": "float",
+    "value": 1.0
+   }
+  ],
+  "illumiance": [
+   {
+    "key": "light",
+    "raw": 0,
+    "type": "int",
+    "value": 0
+   },
+   {
+    "key": "light",
+    "raw": 1,
+    "type": "int",
+    "value": 1
+   },
+   {
+    "key": "light",
+    "raw": 251,
+    "type": "int",
+    "value": 251
+   },
+   {
+    "key": "light",
+    "raw": -15,
+    "type": "int",
+    "value": -15
+   },
+   {
+    "key": "light",
+    "raw": 12.7,
+    "type": "int",
+    "value": 12
+   },
+   {
+    "key": "light",
+    "raw": "220",
+    "type": "int",
+    "value": 220
+   },
+   {
+    "raises": "ValueError",
+    "raw": "12.7"
+   },
+   {
+    "raises": "ValueError",
+    "raw": "abc"
+   },
+   {
+    "raises": "ValueError",
+    "raw": "false"
+   },
+   {
+    "raises": "ValueError",
+    "raw": ""
+   },
+   {
+    "raises": "TypeError",
+    "raw": null
+   },
+   {
+    "key": "light",
+    "raw": true,
+    "type": "int",
+    "value": 1
+   }
+  ],
+  "light": [
+   {
+    "key": "light",
+    "raw": 0,
+    "type": "int",
+    "value": 0
+   },
+   {
+    "key": "light",
+    "raw": 1,
+    "type": "int",
+    "value": 1
+   },
+   {
+    "key": "light",
+    "raw": 251,
+    "type": "int",
+    "value": 251
+   },
+   {
+    "key": "light",
+    "raw": -15,
+    "type": "int",
+    "value": -15
+   },
+   {
+    "key": "light",
+    "raw": 12.7,
+    "type": "int",
+    "value": 12
+   },
+   {
+    "key": "light",
+    "raw": "220",
+    "type": "int",
+    "value": 220
+   },
+   {
+    "raises": "ValueError",
+    "raw": "12.7"
+   },
+   {
+    "raises": "ValueError",
+    "raw": "abc"
+   },
+   {
+    "raises": "ValueError",
+    "raw": "false"
+   },
+   {
+    "raises": "ValueError",
+    "raw": ""
+   },
+   {
+    "raises": "TypeError",
+    "raw": null
+   },
+   {
+    "key": "light",
+    "raw": true,
+    "type": "int",
+    "value": 1
+   }
+  ],
+  "soil_warning": [
+   {
+    "key": "soil_warning",
+    "raw": 0,
+    "type": "int",
+    "value": 0
+   },
+   {
+    "key": "soil_warning",
+    "raw": 1,
+    "type": "int",
+    "value": 1
+   },
+   {
+    "key": "soil_warning",
+    "raw": 251,
+    "type": "int",
+    "value": 251
+   },
+   {
+    "key": "soil_warning",
+    "raw": -15,
+    "type": "int",
+    "value": -15
+   },
+   {
+    "key": "soil_warning",
+    "raw": 12.7,
+    "type": "int",
+    "value": 12
+   },
+   {
+    "key": "soil_warning",
+    "raw": "220",
+    "type": "int",
+    "value": 220
+   },
+   {
+    "raises": "ValueError",
+    "raw": "12.7"
+   },
+   {
+    "raises": "ValueError",
+    "raw": "abc"
+   },
+   {
+    "raises": "ValueError",
+    "raw": "false"
+   },
+   {
+    "raises": "ValueError",
+    "raw": ""
+   },
+   {
+    "raises": "TypeError",
+    "raw": null
+   },
+   {
+    "key": "soil_warning",
+    "raw": true,
+    "type": "int",
+    "value": 1
+   }
+  ],
+  "temp_current": [
+   {
+    "key": "temperature",
+    "raw": 0,
+    "type": "float",
+    "value": 0.0
+   },
+   {
+    "key": "temperature",
+    "raw": 1,
+    "type": "float",
+    "value": 0.1
+   },
+   {
+    "key": "temperature",
+    "raw": 251,
+    "type": "float",
+    "value": 25.1
+   },
+   {
+    "key": "temperature",
+    "raw": -15,
+    "type": "float",
+    "value": -1.5
+   },
+   {
+    "key": "temperature",
+    "raw": 12.7,
+    "type": "float",
+    "value": 1.27
+   },
+   {
+    "key": "temperature",
+    "raw": "220",
+    "type": "float",
+    "value": 22.0
+   },
+   {
+    "key": "temperature",
+    "raw": "12.7",
+    "type": "float",
+    "value": 1.27
+   },
+   {
+    "raises": "ValueError",
+    "raw": "abc"
+   },
+   {
+    "raises": "ValueError",
+    "raw": "false"
+   },
+   {
+    "raises": "ValueError",
+    "raw": ""
+   },
+   {
+    "raises": "TypeError",
+    "raw": null
+   },
+   {
+    "key": "temperature",
+    "raw": true,
+    "type": "float",
+    "value": 0.1
+   }
+  ],
+  "va_humidity": [
+   {
+    "key": "env_humidity",
+    "raw": 0,
+    "type": "float",
+    "value": 0.0
+   },
+   {
+    "key": "env_humidity",
+    "raw": 1,
+    "type": "float",
+    "value": 1.0
+   },
+   {
+    "key": "env_humidity",
+    "raw": 251,
+    "type": "float",
+    "value": 251.0
+   },
+   {
+    "key": "env_humidity",
+    "raw": -15,
+    "type": "float",
+    "value": -15.0
+   },
+   {
+    "key": "env_humidity",
+    "raw": 12.7,
+    "type": "float",
+    "value": 12.7
+   },
+   {
+    "key": "env_humidity",
+    "raw": "220",
+    "type": "float",
+    "value": 220.0
+   },
+   {
+    "key": "env_humidity",
+    "raw": "12.7",
+    "type": "float",
+    "value": 12.7
+   },
+   {
+    "raises": "ValueError",
+    "raw": "abc"
+   },
+   {
+    "raises": "ValueError",
+    "raw": "false"
+   },
+   {
+    "raises": "ValueError",
+    "raw": ""
+   },
+   {
+    "raises": "TypeError",
+    "raw": null
+   },
+   {
+    "key": "env_humidity",
+    "raw": true,
+    "type": "float",
+    "value": 1.0
+   }
+  ],
+  "va_temperature": [
+   {
+    "key": "temperature",
+    "raw": 0,
+    "type": "float",
+    "value": 0.0
+   },
+   {
+    "key": "temperature",
+    "raw": 1,
+    "type": "float",
+    "value": 0.1
+   },
+   {
+    "key": "temperature",
+    "raw": 251,
+    "type": "float",
+    "value": 25.1
+   },
+   {
+    "key": "temperature",
+    "raw": -15,
+    "type": "float",
+    "value": -1.5
+   },
+   {
+    "key": "temperature",
+    "raw": 12.7,
+    "type": "float",
+    "value": 1.27
+   },
+   {
+    "key": "temperature",
+    "raw": "220",
+    "type": "float",
+    "value": 22.0
+   },
+   {
+    "key": "temperature",
+    "raw": "12.7",
+    "type": "float",
+    "value": 1.27
+   },
+   {
+    "raises": "ValueError",
+    "raw": "abc"
+   },
+   {
+    "raises": "ValueError",
+    "raw": "false"
+   },
+   {
+    "raises": "ValueError",
+    "raw": ""
+   },
+   {
+    "raises": "TypeError",
+    "raw": null
+   },
+   {
+    "key": "temperature",
+    "raw": true,
+    "type": "float",
+    "value": 0.1
+   }
+  ],
+  "water_warning": [
+   {
+    "key": "water_warning",
+    "raw": 0,
+    "type": "bool",
+    "value": false
+   },
+   {
+    "key": "water_warning",
+    "raw": 1,
+    "type": "bool",
+    "value": true
+   },
+   {
+    "key": "water_warning",
+    "raw": 251,
+    "type": "bool",
+    "value": true
+   },
+   {
+    "key": "water_warning",
+    "raw": -15,
+    "type": "bool",
+    "value": true
+   },
+   {
+    "key": "water_warning",
+    "raw": 12.7,
+    "type": "bool",
+    "value": true
+   },
+   {
+    "key": "water_warning",
+    "raw": "220",
+    "type": "bool",
+    "value": true
+   },
+   {
+    "key": "water_warning",
+    "raw": "12.7",
+    "type": "bool",
+    "value": true
+   },
+   {
+    "key": "water_warning",
+    "raw": "abc",
+    "type": "bool",
+    "value": true
+   },
+   {
+    "key": "water_warning",
+    "raw": "false",
+    "type": "bool",
+    "value": true
+   },
+   {
+    "key": "water_warning",
+    "raw": "",
+    "type": "bool",
+    "value": false
+   },
+   {
+    "key": "water_warning",
+    "raw": null,
+    "type": "bool",
+    "value": false
+   },
+   {
+    "key": "water_warning",
+    "raw": true,
+    "type": "bool",
+    "value": true
+   }
+  ]
+ },
+ "health_capabilities": {
+  "IK10PWAdapter": [
+   "device_offline",
+   "no_water"
+  ],
+  "TR301ZAdapter": [
+   "battery_critical",
+   "device_offline",
+   "low_battery",
+   "sensor_fault"
+  ],
+  "TuyaIrrigatorAdapter": [],
+  "TuyaSensorAdapter": []
+ },
+ "profile_json": {
+  "ik10pw.json": {
+   "alarm_bitmask": 1,
+   "capabilities": [
+    "has_local_duration_dp",
+    "has_water_shortage_dp",
+    "needs_keepalive_fallback",
+    "supports_local_status",
+    "supports_cloud_switch"
+   ],
+   "dp_map": {
+    "alarm": 105,
+    "auto_run": 109,
+    "duration": 102,
+    "interval": 103,
+    "left_time": 104,
+    "next_run": 107,
+    "power_status": 108,
+    "switch": 1,
+    "work_status": 106
+   },
+   "duration_unit": "seconds",
+   "model_key": "rainpoint.ik10pw",
+   "protocol_version": 3.5,
+   "transport": "tuya_hybrid",
+   "vendor": "rainpoint"
+  },
+  "tr301z.json": {
+   "_parser_codes": [
+    "temp_current",
+    "va_temperature",
+    "humidity",
+    "humidity_value",
+    "va_humidity",
+    "battery_state",
+    "battery_percentage",
+    "bright_value",
+    "light",
+    "env_humidity",
+    "illumiance",
+    "water_warning",
+    "soil_warning"
+   ],
+   "capabilities": [
+    "reports_temperature",
+    "reports_soil_moisture",
+    "reports_env_humidity",
+    "reports_lux",
+    "reports_battery"
+   ],
+   "model_key": "tuya.tr301z",
+   "transport": "tuya_cloud",
+   "vendor": "tuya"
+  }
+ },
+ "registry": {
+  "irrigator_keys": [
+   "rainpoint.ik10pw"
+  ],
+  "legacy_irrigator_aliases": {
+   "": "rainpoint.ik10pw",
+   "tuya_cloud": "rainpoint.ik10pw",
+   "tuya_local": "rainpoint.ik10pw"
+  },
+  "legacy_sensor_aliases": {
+   "": "tuya.tr301z",
+   "light": "tuya.tr301z",
+   "soil_moisture": "tuya.tr301z",
+   "temp_humidity": "tuya.tr301z"
+  },
+  "sensor_keys": [
+   "tuya.tr301z"
+  ]
+ },
+ "typed_profiles": {
+  "IK10PW_PROFILE": {
+   "alarm_bitmask": 1,
+   "capabilities": [
+    "has_local_duration_dp",
+    "has_water_shortage_dp",
+    "needs_keepalive_fallback",
+    "supports_cloud_switch",
+    "supports_local_status"
+   ],
+   "dp_map": {
+    "alarm": 105,
+    "auto_run": 109,
+    "duration": 102,
+    "interval": 103,
+    "left_time": 104,
+    "next_run": 107,
+    "power_status": 108,
+    "switch": 1,
+    "work_status": 106
+   },
+   "duration_unit": "seconds",
+   "model_key": "rainpoint.ik10pw",
+   "protocol_version": 3.5,
+   "transport": "tuya_hybrid",
+   "vendor": "rainpoint"
+  },
+  "TR301Z_PROFILE": {
+   "capabilities": [
+    "reports_battery",
+    "reports_env_humidity",
+    "reports_lux",
+    "reports_soil_moisture",
+    "reports_temperature"
+   ],
+   "dp_parsers": [
+    "temp_current",
+    "va_temperature",
+    "humidity",
+    "humidity_value",
+    "va_humidity",
+    "battery_state",
+    "battery_percentage",
+    "bright_value",
+    "light",
+    "env_humidity",
+    "illumiance",
+    "water_warning",
+    "soil_warning"
+   ],
+   "model_key": "tuya.tr301z",
+   "transport": "tuya_cloud",
+   "vendor": "tuya"
+  }
+ }
+}

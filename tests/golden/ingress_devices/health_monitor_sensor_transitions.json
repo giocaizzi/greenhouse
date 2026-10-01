@@ -1,0 +1,434 @@
+[
+ {
+  "alerts": [],
+  "derived_alarms": [],
+  "notifications": [],
+  "now": 1776247200,
+  "step": "healthy"
+ },
+ {
+  "alerts": [
+   {
+    "cluster_id": 1,
+    "code": "low_battery",
+    "dedup_key": "health:sensor:1:low_battery",
+    "entity_id": 1,
+    "entity_type": "sensor",
+    "message": "'Probe One' battery is low (10%). Replace soon to keep readings flowing.",
+    "occurrence_count": 1,
+    "payload": {
+     "alarm": "low_battery",
+     "battery_pct": 10,
+     "entity_id": 1,
+     "entity_type": "sensor",
+     "last_seen_ts": 1776247800,
+     "observed_at": 1776247800,
+     "offline": false,
+     "signal_quality": null
+    },
+    "severity": "warning",
+    "source": "health",
+    "status": "open",
+    "title": "Low Battery · Probe One"
+   }
+  ],
+  "derived_alarms": [
+   "low_battery"
+  ],
+  "notifications": [
+   {
+    "message": "'Probe One' battery is low (10%). Replace soon to keep readings flowing.",
+    "severity": "warning",
+    "title": "Low Battery · Probe One"
+   }
+  ],
+  "now": 1776247800,
+  "step": "battery_low"
+ },
+ {
+  "alerts": [
+   {
+    "cluster_id": 1,
+    "code": "low_battery",
+    "dedup_key": "health:sensor:1:low_battery",
+    "entity_id": 1,
+    "entity_type": "sensor",
+    "message": "'Probe One' battery is low (10%). Replace soon to keep readings flowing.",
+    "occurrence_count": 1,
+    "payload": {
+     "alarm": "low_battery",
+     "battery_pct": 10,
+     "entity_id": 1,
+     "entity_type": "sensor",
+     "last_seen_ts": 1776247800,
+     "observed_at": 1776247800,
+     "offline": false,
+     "signal_quality": null
+    },
+    "severity": "warning",
+    "source": "health",
+    "status": "open",
+    "title": "Low Battery · Probe One"
+   },
+   {
+    "cluster_id": 1,
+    "code": "sensor_fault",
+    "dedup_key": "health:sensor:1:sensor_fault",
+    "entity_id": 1,
+    "entity_type": "sensor",
+    "message": "'Probe One' is reporting a sensor fault. Cross-check the probe placement.",
+    "occurrence_count": 1,
+    "payload": {
+     "alarm": "sensor_fault",
+     "battery_pct": 10,
+     "entity_id": 1,
+     "entity_type": "sensor",
+     "last_seen_ts": 1776248400,
+     "observed_at": 1776248400,
+     "offline": false,
+     "signal_quality": null
+    },
+    "severity": "warning",
+    "source": "health",
+    "status": "open",
+    "title": "Sensor Fault · Probe One"
+   }
+  ],
+  "derived_alarms": [
+   "low_battery",
+   "sensor_fault"
+  ],
+  "notifications": [
+   {
+    "message": "'Probe One' battery is low (10%). Replace soon to keep readings flowing.",
+    "severity": "warning",
+    "title": "Low Battery · Probe One"
+   },
+   {
+    "message": "'Probe One' is reporting a sensor fault. Cross-check the probe placement.",
+    "severity": "warning",
+    "title": "Sensor Fault · Probe One"
+   }
+  ],
+  "now": 1776248400,
+  "step": "water_warning_on_top"
+ },
+ {
+  "alerts": [
+   {
+    "cluster_id": 1,
+    "code": "low_battery",
+    "dedup_key": "health:sensor:1:low_battery",
+    "entity_id": 1,
+    "entity_type": "sensor",
+    "message": "'Probe One' battery is low (10%). Replace soon to keep readings flowing.",
+    "occurrence_count": 1,
+    "payload": {
+     "alarm": "low_battery",
+     "battery_pct": 10,
+     "entity_id": 1,
+     "entity_type": "sensor",
+     "last_seen_ts": 1776247800,
+     "observed_at": 1776247800,
+     "offline": false,
+     "signal_quality": null
+    },
+    "severity": "warning",
+    "source": "health",
+    "status": "resolved",
+    "title": "Low Battery · Probe One"
+   },
+   {
+    "cluster_id": 1,
+    "code": "sensor_fault",
+    "dedup_key": "health:sensor:1:sensor_fault",
+    "entity_id": 1,
+    "entity_type": "sensor",
+    "message": "'Probe One' is reporting a sensor fault. Cross-check the probe placement.",
+    "occurrence_count": 1,
+    "payload": {
+     "alarm": "sensor_fault",
+     "battery_pct": 10,
+     "entity_id": 1,
+     "entity_type": "sensor",
+     "last_seen_ts": 1776248400,
+     "observed_at": 1776248400,
+     "offline": false,
+     "signal_quality": null
+    },
+    "severity": "warning",
+    "source": "health",
+    "status": "resolved",
+    "title": "Sensor Fault · Probe One"
+   }
+  ],
+  "derived_alarms": [],
+  "notifications": [
+   {
+    "message": "'Probe One' battery is low (10%). Replace soon to keep readings flowing.",
+    "severity": "warning",
+    "title": "Low Battery · Probe One"
+   },
+   {
+    "message": "'Probe One' is reporting a sensor fault. Cross-check the probe placement.",
+    "severity": "warning",
+    "title": "Sensor Fault · Probe One"
+   }
+  ],
+  "now": 1776249000,
+  "step": "all_recovered"
+ },
+ {
+  "alerts": [
+   {
+    "cluster_id": 1,
+    "code": "low_battery",
+    "dedup_key": "health:sensor:1:low_battery",
+    "entity_id": 1,
+    "entity_type": "sensor",
+    "message": "'Probe One' battery is low (10%). Replace soon to keep readings flowing.",
+    "occurrence_count": 1,
+    "payload": {
+     "alarm": "low_battery",
+     "battery_pct": 10,
+     "entity_id": 1,
+     "entity_type": "sensor",
+     "last_seen_ts": 1776247800,
+     "observed_at": 1776247800,
+     "offline": false,
+     "signal_quality": null
+    },
+    "severity": "warning",
+    "source": "health",
+    "status": "resolved",
+    "title": "Low Battery · Probe One"
+   },
+   {
+    "cluster_id": 1,
+    "code": "sensor_fault",
+    "dedup_key": "health:sensor:1:sensor_fault",
+    "entity_id": 1,
+    "entity_type": "sensor",
+    "message": "'Probe One' is reporting a sensor fault. Cross-check the probe placement.",
+    "occurrence_count": 1,
+    "payload": {
+     "alarm": "sensor_fault",
+     "battery_pct": 10,
+     "entity_id": 1,
+     "entity_type": "sensor",
+     "last_seen_ts": 1776248400,
+     "observed_at": 1776248400,
+     "offline": false,
+     "signal_quality": null
+    },
+    "severity": "warning",
+    "source": "health",
+    "status": "resolved",
+    "title": "Sensor Fault · Probe One"
+   }
+  ],
+  "derived_alarms": [],
+  "notifications": [
+   {
+    "message": "'Probe One' battery is low (10%). Replace soon to keep readings flowing.",
+    "severity": "warning",
+    "title": "Low Battery · Probe One"
+   },
+   {
+    "message": "'Probe One' is reporting a sensor fault. Cross-check the probe placement.",
+    "severity": "warning",
+    "title": "Sensor Fault · Probe One"
+   }
+  ],
+  "now": 1776250800,
+  "step": "stale_exactly_30min"
+ },
+ {
+  "alerts": [
+   {
+    "cluster_id": 1,
+    "code": "device_offline",
+    "dedup_key": "health:sensor:1:device_offline",
+    "entity_id": 1,
+    "entity_type": "sensor",
+    "message": "'Probe One' is unreachable. Actuation is blocked until the device comes back online.",
+    "occurrence_count": 1,
+    "payload": {
+     "alarm": "device_offline",
+     "battery_pct": 90,
+     "entity_id": 1,
+     "entity_type": "sensor",
+     "last_seen_ts": 1776249000,
+     "observed_at": 1776250801,
+     "offline": false,
+     "signal_quality": null
+    },
+    "severity": "warning",
+    "source": "health",
+    "status": "open",
+    "title": "Device Offline · Probe One"
+   },
+   {
+    "cluster_id": 1,
+    "code": "low_battery",
+    "dedup_key": "health:sensor:1:low_battery",
+    "entity_id": 1,
+    "entity_type": "sensor",
+    "message": "'Probe One' battery is low (10%). Replace soon to keep readings flowing.",
+    "occurrence_count": 1,
+    "payload": {
+     "alarm": "low_battery",
+     "battery_pct": 10,
+     "entity_id": 1,
+     "entity_type": "sensor",
+     "last_seen_ts": 1776247800,
+     "observed_at": 1776247800,
+     "offline": false,
+     "signal_quality": null
+    },
+    "severity": "warning",
+    "source": "health",
+    "status": "resolved",
+    "title": "Low Battery · Probe One"
+   },
+   {
+    "cluster_id": 1,
+    "code": "sensor_fault",
+    "dedup_key": "health:sensor:1:sensor_fault",
+    "entity_id": 1,
+    "entity_type": "sensor",
+    "message": "'Probe One' is reporting a sensor fault. Cross-check the probe placement.",
+    "occurrence_count": 1,
+    "payload": {
+     "alarm": "sensor_fault",
+     "battery_pct": 10,
+     "entity_id": 1,
+     "entity_type": "sensor",
+     "last_seen_ts": 1776248400,
+     "observed_at": 1776248400,
+     "offline": false,
+     "signal_quality": null
+    },
+    "severity": "warning",
+    "source": "health",
+    "status": "resolved",
+    "title": "Sensor Fault · Probe One"
+   }
+  ],
+  "derived_alarms": [
+   "device_offline"
+  ],
+  "notifications": [
+   {
+    "message": "'Probe One' battery is low (10%). Replace soon to keep readings flowing.",
+    "severity": "warning",
+    "title": "Low Battery · Probe One"
+   },
+   {
+    "message": "'Probe One' is reporting a sensor fault. Cross-check the probe placement.",
+    "severity": "warning",
+    "title": "Sensor Fault · Probe One"
+   },
+   {
+    "message": "'Probe One' is unreachable. Actuation is blocked until the device comes back online.",
+    "severity": "warning",
+    "title": "Device Offline · Probe One"
+   }
+  ],
+  "now": 1776250801,
+  "step": "stale_30min_plus_1s"
+ },
+ {
+  "alerts": [
+   {
+    "cluster_id": 1,
+    "code": "device_offline",
+    "dedup_key": "health:sensor:1:device_offline",
+    "entity_id": 1,
+    "entity_type": "sensor",
+    "message": "'Probe One' is unreachable. Actuation is blocked until the device comes back online.",
+    "occurrence_count": 1,
+    "payload": {
+     "alarm": "device_offline",
+     "battery_pct": 90,
+     "entity_id": 1,
+     "entity_type": "sensor",
+     "last_seen_ts": 1776249000,
+     "observed_at": 1776250801,
+     "offline": false,
+     "signal_quality": null
+    },
+    "severity": "warning",
+    "source": "health",
+    "status": "resolved",
+    "title": "Device Offline · Probe One"
+   },
+   {
+    "cluster_id": 1,
+    "code": "low_battery",
+    "dedup_key": "health:sensor:1:low_battery",
+    "entity_id": 1,
+    "entity_type": "sensor",
+    "message": "'Probe One' battery is low (10%). Replace soon to keep readings flowing.",
+    "occurrence_count": 1,
+    "payload": {
+     "alarm": "low_battery",
+     "battery_pct": 10,
+     "entity_id": 1,
+     "entity_type": "sensor",
+     "last_seen_ts": 1776247800,
+     "observed_at": 1776247800,
+     "offline": false,
+     "signal_quality": null
+    },
+    "severity": "warning",
+    "source": "health",
+    "status": "resolved",
+    "title": "Low Battery · Probe One"
+   },
+   {
+    "cluster_id": 1,
+    "code": "sensor_fault",
+    "dedup_key": "health:sensor:1:sensor_fault",
+    "entity_id": 1,
+    "entity_type": "sensor",
+    "message": "'Probe One' is reporting a sensor fault. Cross-check the probe placement.",
+    "occurrence_count": 1,
+    "payload": {
+     "alarm": "sensor_fault",
+     "battery_pct": 10,
+     "entity_id": 1,
+     "entity_type": "sensor",
+     "last_seen_ts": 1776248400,
+     "observed_at": 1776248400,
+     "offline": false,
+     "signal_quality": null
+    },
+    "severity": "warning",
+    "source": "health",
+    "status": "resolved",
+    "title": "Sensor Fault · Probe One"
+   }
+  ],
+  "derived_alarms": [],
+  "notifications": [
+   {
+    "message": "'Probe One' battery is low (10%). Replace soon to keep readings flowing.",
+    "severity": "warning",
+    "title": "Low Battery · Probe One"
+   },
+   {
+    "message": "'Probe One' is reporting a sensor fault. Cross-check the probe placement.",
+    "severity": "warning",
+    "title": "Sensor Fault · Probe One"
+   },
+   {
+    "message": "'Probe One' is unreachable. Actuation is blocked until the device comes back online.",
+    "severity": "warning",
+    "title": "Device Offline · Probe One"
+   }
+  ],
+  "now": 1776250900,
+  "step": "back_online"
+ }
+]

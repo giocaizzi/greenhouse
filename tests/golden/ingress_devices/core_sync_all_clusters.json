@@ -1,0 +1,143 @@
+{
+ "gateway_calls": [
+  [
+   "get_device_logs",
+   "dev_aloe",
+   {
+    "hours": 24,
+    "max_records": 100,
+    "since_ms": 1776204000000
+   }
+  ],
+  [
+   "group_logs_by_timestamp",
+   0
+  ],
+  [
+   "get_live_reading",
+   "dev_aloe"
+  ],
+  [
+   "get_device_logs",
+   "dev_basil",
+   {
+    "hours": 24,
+    "max_records": 100,
+    "since_ms": 1776204000000
+   }
+  ],
+  [
+   "group_logs_by_timestamp",
+   3
+  ],
+  [
+   "get_live_reading",
+   "dev_basil"
+  ],
+  [
+   "get_device_logs",
+   "dev_broken",
+   {
+    "hours": 24,
+    "max_records": 100,
+    "since_ms": 1776204000000
+   }
+  ],
+  [
+   "get_device_logs",
+   "dev_idle",
+   {
+    "hours": 24,
+    "max_records": 100,
+    "since_ms": 1776246240000
+   }
+  ],
+  [
+   "group_logs_by_timestamp",
+   1
+  ],
+  [
+   "get_live_reading",
+   "dev_idle"
+  ]
+ ],
+ "log": [
+  [
+   "INFO",
+   "[Alpha Kitchen] Syncing 2 sensor(s)..."
+  ],
+  [
+   "INFO",
+   "  Aloe Probe: live ✓"
+  ],
+  [
+   "INFO",
+   "  Basil Probe: 2 new from logs"
+  ],
+  [
+   "INFO",
+   "[Zeta Balcony] Syncing 2 sensor(s)..."
+  ],
+  [
+   "ERROR",
+   "  Broken Probe: bad payload"
+  ],
+  [
+   "INFO",
+   "  Idle Probe: up to date"
+  ]
+ ],
+ "rows": {
+  "Aloe Probe": [
+   {
+    "battery_state": null,
+    "env_humidity": null,
+    "light": null,
+    "soil_moisture": 25.0,
+    "temperature": 23.0,
+    "timestamp": 1776247200,
+    "water_warning": null
+   }
+  ],
+  "Basil Probe": [
+   {
+    "battery_state": null,
+    "env_humidity": null,
+    "light": null,
+    "soil_moisture": 38.0,
+    "temperature": 19.5,
+    "timestamp": 1776245400,
+    "water_warning": null
+   },
+   {
+    "battery_state": null,
+    "env_humidity": null,
+    "light": null,
+    "soil_moisture": 37.0,
+    "temperature": null,
+    "timestamp": 1776246300,
+    "water_warning": null
+   }
+  ],
+  "Broken Probe": [],
+  "Idle Probe": [
+   {
+    "battery_state": null,
+    "env_humidity": null,
+    "light": null,
+    "soil_moisture": 40.0,
+    "temperature": null,
+    "timestamp": 1776246300,
+    "water_warning": null
+   }
+  ]
+ },
+ "stats": {
+  "errors": [
+   "Broken Probe: bad payload"
+  ],
+  "total_live": 1,
+  "total_new": 2,
+  "total_synced": 3
+ }
+}
