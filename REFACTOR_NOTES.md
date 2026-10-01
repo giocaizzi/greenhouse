@@ -107,6 +107,9 @@ TUI (pinned; details in `refactor/10-safety-tui.md`):
   table (`S`, `P`, `H`, alert `k`/`v`/`y`, scheduler resume run without a dialog);
 - TUI renders are tied to the locked Textual / plotext / rich versions — a dependency bump regenerates those goldens in
   its own commit; the `system` render reads the process-wide scheduler.
+- **Overlapping dashboard reloads can crash the TUI**: when a load takes longer than the refresh period, two loads
+  interleave in `DashboardScreen._render_cards` and the app dies with `WorkerFailed: NoMatches('#cluster-card-2')`
+  (`.first()` at `tui/screens/dashboard.py:68`). Found while hardening the TUI tests; not fixed.
 - One TUI contract test failed once under heavy machine load (4 cores shared by several agents) and passed in 6
   subsequent runs; watched at Gate 1.
 
