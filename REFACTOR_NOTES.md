@@ -79,6 +79,15 @@ Decision engine (pinned; details in `refactor/10-safety-engine.md`):
 - critical stress, water warning and the no-sensor fallback bypass vacation rationing;
 - light thresholds use the UTC month while seasons use the preferences timezone.
 
+Orchestration (pinned; details in `refactor/10-safety-orchestration.md`):
+- B-1 (`dry_run_global` ignored), B-4 (caps not checked in the automatic pipeline; global caps ignored), B-5 (re-raised
+  alert not re-notified), B-6 (device-health block not written to `decision_logs`), B-8 (vacation end < start accepted)
+  — each pinned by a `test_*_current_behavior_*` test.
+- **SAFETY:** a cluster that crashes *after* actuating in `check_all_clusters` is rolled back including its `start`
+  event, so the cooldown can't see that pump run (a second irrigation can follow sooner than 6 h).
+- `/monitor` cleans only a 2 h slice — too few samples for the spike filter — so a single spike reports `very_dry`.
+- `force=true` records the start event and push as `auto` and schedules a leak check, while the decision log says manual.
+
 ## Golden-test policy (orchestrator decision)
 
 - OpenAPI, routes, MCP tools, settings, DDL, scheduler registry, package data, web HTML, CLI help/output, TUI renders,
