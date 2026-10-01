@@ -479,6 +479,7 @@ def get_jobs() -> list[dict]:
                 "trigger": str(job.trigger),
                 "next_run_time": str(next_run) if next_run else None,
                 "paused": _is_paused(job),
+                "core": job.id in _CORE_JOB_IDS,
             }
         )
     return jobs

@@ -956,11 +956,23 @@ class TestSearchAndSystem:
         _run(scenario())
 
     def test_remove_scheduler_job(self):
-        """Uses a mock server: the real APScheduler is a process-wide singleton shared by all tests."""
+        """Mock server: the real APScheduler is a process-wide singleton shared by all tests."""
         jobs = [
-            {"id": "sensor_sync", "name": "Sensor data sync", "trigger": "interval", "next_run_time": None},
-            {"id": "sensor_sync", "name": "Sensor data sync", "trigger": "interval", "next_run_time": None},
-            {"id": "check_all", "name": "Check all clusters", "trigger": "cron", "next_run_time": None},
+            {
+                "id": "sensor_sync",
+                "name": "Sensor data sync",
+                "trigger": "interval",
+                "next_run_time": None,
+                "core": True,
+            },
+            {
+                "id": "sensor_sync",
+                "name": "Sensor data sync",
+                "trigger": "interval",
+                "next_run_time": None,
+                "core": True,
+            },
+            {"id": "pump_watch_3", "name": "Pump watcher", "trigger": "date", "next_run_time": None, "core": False},
         ]
         seen: list = []
 
@@ -977,16 +989,27 @@ class TestSearchAndSystem:
 
         async def scenario():
             tui = GreenhouseApp("http://mock", client_factory=factory, refresh_seconds=0)
-            async with tui.run_test(size=SIZE) as pilot:
+            async with tui.run_test(size=SIZE, notifications=True) as pilot:
                 await pilot.press("s")
                 await _settle(pilot, tui)
                 table = tui.screen.query_one("#jobs-table", DataTable)
                 assert table.row_count == 2  # duplicate pending job collapsed
-                table.move_cursor(row=1)
+                assert "built-in" in str(table.get_row("sensor_sync")[0])
+
+                # Built-in job: refused client-side, no dialog, no request.
+                table.move_cursor(row=table.get_row_index("sensor_sync"))
+                await pilot.press("delete")
+                await pilot.pause()
+                assert not isinstance(tui.screen, ConfirmScreen)
+                assert not [r for r in seen if r[0] == "DELETE"]
+                assert any("built-in job" in n.message for n in tui._notifications)
+
+                # Ad-hoc job: confirm → DELETE.
+                table.move_cursor(row=table.get_row_index("pump_watch_3"))
                 await pilot.press("delete")
                 await pilot.pause()
                 await _confirm(pilot, tui)
-                assert ("DELETE", "/api/v1/scheduler/jobs/check_all") in seen
+                assert ("DELETE", "/api/v1/scheduler/jobs/pump_watch_3") in seen
 
         _run(scenario())
 

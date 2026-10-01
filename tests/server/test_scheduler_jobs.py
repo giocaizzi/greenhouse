@@ -169,6 +169,11 @@ class TestDeleteJob:
             assert "/scheduler/pause" in resp.json()["detail"]
         assert _job_ids(client) == DEFAULT_JOB_IDS  # nothing removed
 
+    def test_listing_flags_core_jobs(self, client):
+        """`core` lets clients (TUI, MCP) know which jobs DELETE will refuse."""
+        jobs = client.get("/api/v1/scheduler/jobs").json()
+        assert sorted(j["id"] for j in jobs if j["core"]) == sorted(DEFAULT_JOB_IDS)
+
     def test_core_job_set_matches_registration(self, client):
         """The protected set is derived from registration, not a hand-kept list."""
         from greenhouse_server.scheduler import core_job_ids

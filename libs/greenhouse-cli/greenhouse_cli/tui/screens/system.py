@@ -30,6 +30,7 @@ class SystemScreen(DataScreen):
     def __init__(self) -> None:
         super().__init__()
         self.paused: bool | None = None
+        self.core_jobs: set[str] = set()
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
@@ -76,13 +77,14 @@ class SystemScreen(DataScreen):
         table = self.query_one("#jobs-table", DataTable)
         # One row per job id: an unstarted APScheduler can report a pending job twice.
         unique_jobs = {job["id"]: job for job in jobs or []}.values()
+        self.core_jobs = {job["id"] for job in unique_jobs if job.get("core")}
         job_rows: list = []
         for job in unique_jobs:
             job_rows.append(
                 (
                     job["id"],
                     [
-                        job["name"],
+                        Text.assemble(job["name"], (" · built-in", "dim") if job.get("core") else ""),
                         job["trigger"],
                         job.get("next_run_time") or "—",
                         Text("paused", style="#e0c341") if job.get("paused") else Text("active", style="#7ed957"),
@@ -159,8 +161,14 @@ class SystemScreen(DataScreen):
         job_id = selected_key(self.query_one("#jobs-table", DataTable))
         if job_id is None:
             return
+        if job_id in self.core_jobs:
+            self.notify(
+                f"{job_id} is a built-in job and can't be removed — press p to pause automatic irrigation instead.",
+                severity="warning",
+            )
+            return
         self.confirm_then(
-            f"Remove scheduler job [b]{job_id}[/b]? It stops firing until the server restarts.",
+            f"Remove scheduler job [b]{job_id}[/b]? It won't fire again.",
             lambda c: c.delete_scheduler_job(job_id),
             f"Job {job_id} removed",
             "Remove",

@@ -558,6 +558,8 @@ class SchedulerJobResponse(BaseModel):
     trigger: str
     next_run_time: str | None
     paused: bool = False
+    # Built-in job registered at startup: cannot be deleted (409) — pause instead.
+    core: bool = False
 
 
 class CreateSchedulerJobRequest(BaseModel):
