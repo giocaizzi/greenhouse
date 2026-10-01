@@ -1,0 +1,406 @@
+{
+ "fields": [
+  {
+   "alias": null,
+   "annotation": "str",
+   "default": "sqlite:///data/irrigation.db",
+   "name": "db_url",
+   "validation_alias_choices": null
+  },
+  {
+   "alias": null,
+   "annotation": "str",
+   "default": "0.0.0.0",
+   "name": "host",
+   "validation_alias_choices": null
+  },
+  {
+   "alias": null,
+   "annotation": "int",
+   "default": 8000,
+   "name": "port",
+   "validation_alias_choices": null
+  },
+  {
+   "alias": null,
+   "annotation": "bool",
+   "default": false,
+   "name": "debug",
+   "validation_alias_choices": null
+  },
+  {
+   "alias": null,
+   "annotation": "str | None",
+   "default": null,
+   "name": "plant_db_path",
+   "validation_alias_choices": null
+  },
+  {
+   "alias": null,
+   "annotation": "float",
+   "default": 45.464,
+   "name": "weather_lat",
+   "validation_alias_choices": null
+  },
+  {
+   "alias": null,
+   "annotation": "float",
+   "default": 9.189,
+   "name": "weather_lon",
+   "validation_alias_choices": null
+  },
+  {
+   "alias": null,
+   "annotation": "int",
+   "default": 180,
+   "name": "sync_interval_minutes",
+   "validation_alias_choices": null
+  },
+  {
+   "alias": null,
+   "annotation": "str",
+   "default": "*",
+   "name": "check_cron_hours",
+   "validation_alias_choices": null
+  },
+  {
+   "alias": null,
+   "annotation": "int | None",
+   "default": null,
+   "name": "check_interval_hours",
+   "validation_alias_choices": null
+  },
+  {
+   "alias": null,
+   "annotation": "bool",
+   "default": true,
+   "name": "enable_scheduler",
+   "validation_alias_choices": null
+  },
+  {
+   "alias": null,
+   "annotation": "str | None",
+   "default": null,
+   "name": "mcp_token",
+   "validation_alias_choices": [
+    "GREENHOUSE_MCP_TOKEN",
+    "mcp_token"
+   ]
+  },
+  {
+   "alias": null,
+   "annotation": "str | None",
+   "default": null,
+   "name": "ntfy_server_url",
+   "validation_alias_choices": [
+    "GREENHOUSE_NTFY_SERVER_URL",
+    "ntfy_server_url"
+   ]
+  },
+  {
+   "alias": null,
+   "annotation": "str | None",
+   "default": null,
+   "name": "ntfy_topic",
+   "validation_alias_choices": [
+    "GREENHOUSE_NTFY_TOPIC",
+    "ntfy_topic"
+   ]
+  },
+  {
+   "alias": null,
+   "annotation": "str | None",
+   "default": null,
+   "name": "ntfy_token",
+   "validation_alias_choices": [
+    "GREENHOUSE_NTFY_TOKEN",
+    "ntfy_token"
+   ]
+  },
+  {
+   "alias": null,
+   "annotation": "bool",
+   "default": true,
+   "name": "auth_enabled",
+   "validation_alias_choices": null
+  },
+  {
+   "alias": null,
+   "annotation": "str | None",
+   "default": null,
+   "name": "auth_secret_key",
+   "validation_alias_choices": [
+    "GREENHOUSE_AUTH_SECRET_KEY",
+    "auth_secret_key"
+   ]
+  },
+  {
+   "alias": null,
+   "annotation": "int",
+   "default": 1440,
+   "name": "auth_token_ttl_minutes",
+   "validation_alias_choices": null
+  },
+  {
+   "alias": null,
+   "annotation": "str",
+   "default": "greenhouse_session",
+   "name": "auth_cookie_name",
+   "validation_alias_choices": null
+  },
+  {
+   "alias": null,
+   "annotation": "bool",
+   "default": false,
+   "name": "auth_cookie_secure",
+   "validation_alias_choices": null
+  },
+  {
+   "alias": null,
+   "annotation": "str | None",
+   "default": null,
+   "name": "auth_admin_username",
+   "validation_alias_choices": [
+    "GREENHOUSE_AUTH_ADMIN_USERNAME",
+    "auth_admin_username"
+   ]
+  },
+  {
+   "alias": null,
+   "annotation": "str | None",
+   "default": null,
+   "name": "auth_admin_password",
+   "validation_alias_choices": [
+    "GREENHOUSE_AUTH_ADMIN_PASSWORD",
+    "auth_admin_password"
+   ]
+  },
+  {
+   "alias": null,
+   "annotation": "bool",
+   "default": true,
+   "name": "pump_watcher_enabled",
+   "validation_alias_choices": null
+  },
+  {
+   "alias": null,
+   "annotation": "float",
+   "default": 2.0,
+   "name": "pump_watcher_poll_seconds",
+   "validation_alias_choices": null
+  },
+  {
+   "alias": null,
+   "annotation": "float",
+   "default": 5.0,
+   "name": "pump_watcher_warmup_seconds",
+   "validation_alias_choices": null
+  },
+  {
+   "alias": null,
+   "annotation": "int",
+   "default": 5,
+   "name": "pump_watcher_max_read_failures",
+   "validation_alias_choices": null
+  }
+ ],
+ "json_schema": {
+  "properties": {
+   "GREENHOUSE_AUTH_ADMIN_PASSWORD": {
+    "anyOf": [
+     {
+      "type": "string"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "title": "Greenhouse Auth Admin Password"
+   },
+   "GREENHOUSE_AUTH_ADMIN_USERNAME": {
+    "anyOf": [
+     {
+      "type": "string"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "title": "Greenhouse Auth Admin Username"
+   },
+   "GREENHOUSE_AUTH_SECRET_KEY": {
+    "anyOf": [
+     {
+      "type": "string"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "title": "Greenhouse Auth Secret Key"
+   },
+   "GREENHOUSE_MCP_TOKEN": {
+    "anyOf": [
+     {
+      "type": "string"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "title": "Greenhouse Mcp Token"
+   },
+   "GREENHOUSE_NTFY_SERVER_URL": {
+    "anyOf": [
+     {
+      "type": "string"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "title": "Greenhouse Ntfy Server Url"
+   },
+   "GREENHOUSE_NTFY_TOKEN": {
+    "anyOf": [
+     {
+      "type": "string"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "title": "Greenhouse Ntfy Token"
+   },
+   "GREENHOUSE_NTFY_TOPIC": {
+    "anyOf": [
+     {
+      "type": "string"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "title": "Greenhouse Ntfy Topic"
+   },
+   "auth_cookie_name": {
+    "default": "greenhouse_session",
+    "title": "Auth Cookie Name",
+    "type": "string"
+   },
+   "auth_cookie_secure": {
+    "default": false,
+    "title": "Auth Cookie Secure",
+    "type": "boolean"
+   },
+   "auth_enabled": {
+    "default": true,
+    "title": "Auth Enabled",
+    "type": "boolean"
+   },
+   "auth_token_ttl_minutes": {
+    "default": 1440,
+    "title": "Auth Token Ttl Minutes",
+    "type": "integer"
+   },
+   "check_cron_hours": {
+    "default": "*",
+    "title": "Check Cron Hours",
+    "type": "string"
+   },
+   "check_interval_hours": {
+    "anyOf": [
+     {
+      "type": "integer"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "title": "Check Interval Hours"
+   },
+   "db_url": {
+    "default": "sqlite:///data/irrigation.db",
+    "title": "Db Url",
+    "type": "string"
+   },
+   "debug": {
+    "default": false,
+    "title": "Debug",
+    "type": "boolean"
+   },
+   "enable_scheduler": {
+    "default": true,
+    "title": "Enable Scheduler",
+    "type": "boolean"
+   },
+   "host": {
+    "default": "0.0.0.0",
+    "title": "Host",
+    "type": "string"
+   },
+   "plant_db_path": {
+    "anyOf": [
+     {
+      "type": "string"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "title": "Plant Db Path"
+   },
+   "port": {
+    "default": 8000,
+    "title": "Port",
+    "type": "integer"
+   },
+   "pump_watcher_enabled": {
+    "default": true,
+    "title": "Pump Watcher Enabled",
+    "type": "boolean"
+   },
+   "pump_watcher_max_read_failures": {
+    "default": 5,
+    "title": "Pump Watcher Max Read Failures",
+    "type": "integer"
+   },
+   "pump_watcher_poll_seconds": {
+    "default": 2.0,
+    "title": "Pump Watcher Poll Seconds",
+    "type": "number"
+   },
+   "pump_watcher_warmup_seconds": {
+    "default": 5.0,
+    "title": "Pump Watcher Warmup Seconds",
+    "type": "number"
+   },
+   "sync_interval_minutes": {
+    "default": 180,
+    "title": "Sync Interval Minutes",
+    "type": "integer"
+   },
+   "weather_lat": {
+    "default": 45.464,
+    "title": "Weather Lat",
+    "type": "number"
+   },
+   "weather_lon": {
+    "default": 9.189,
+    "title": "Weather Lon",
+    "type": "number"
+   }
+  },
+  "title": "Settings",
+  "type": "object"
+ }
+}

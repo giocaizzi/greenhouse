@@ -1,0 +1,107 @@
+{
+ "cron=*/0": [
+  {
+   "loc": [
+    "check_cron_hours"
+   ],
+   "msg": "Value error, IRRIGATION_CHECK_CRON_HOURS='*/0' is not a valid cron hour expression (e.g. '*', '0,6,12,18', '*/3', '6-20/2'): Increment must be higher than 0",
+   "type": "value_error"
+  }
+ ],
+ "cron=0,6,": [
+  {
+   "loc": [
+    "check_cron_hours"
+   ],
+   "msg": "Value error, IRRIGATION_CHECK_CRON_HOURS='0,6,' is not a valid cron hour expression (e.g. '*', '0,6,12,18', '*/3', '6-20/2'): Unrecognized expression \"\" for field \"hour\"",
+   "type": "value_error"
+  }
+ ],
+ "cron=25": [
+  {
+   "loc": [
+    "check_cron_hours"
+   ],
+   "msg": "Value error, IRRIGATION_CHECK_CRON_HOURS='25' is not a valid cron hour expression (e.g. '*', '0,6,12,18', '*/3', '6-20/2'): Error validating expression '25': the last value (25) is higher than the maximum value (23)",
+   "type": "value_error"
+  }
+ ],
+ "cron=bogus": [
+  {
+   "loc": [
+    "check_cron_hours"
+   ],
+   "msg": "Value error, IRRIGATION_CHECK_CRON_HOURS='bogus' is not a valid cron hour expression (e.g. '*', '0,6,12,18', '*/3', '6-20/2'): Unrecognized expression \"bogus\" for field \"hour\"",
+   "type": "value_error"
+  }
+ ],
+ "cron=empty": [
+  {
+   "loc": [
+    "check_cron_hours"
+   ],
+   "msg": "Value error, IRRIGATION_CHECK_CRON_HOURS='' is not a valid cron hour expression (e.g. '*', '0,6,12,18', '*/3', '6-20/2'): Unrecognized expression \"\" for field \"hour\"",
+   "type": "value_error"
+  }
+ ],
+ "legacy=-3": [
+  {
+   "loc": [],
+   "msg": "Value error, IRRIGATION_CHECK_INTERVAL_HOURS=-3 is not supported: it is translated to the cron hour step '*/N', so N must be 1-23 and divide 24 evenly (1, 2, 3, 4, 6, 8, 12). Set the hours explicitly instead, e.g. IRRIGATION_CHECK_CRON_HOURS=*",
+   "type": "value_error"
+  }
+ ],
+ "legacy=0": [
+  {
+   "loc": [],
+   "msg": "Value error, IRRIGATION_CHECK_INTERVAL_HOURS=0 is not supported: it is translated to the cron hour step '*/N', so N must be 1-23 and divide 24 evenly (1, 2, 3, 4, 6, 8, 12). Set the hours explicitly instead, e.g. IRRIGATION_CHECK_CRON_HOURS=*",
+   "type": "value_error"
+  }
+ ],
+ "legacy=24": [
+  {
+   "loc": [],
+   "msg": "Value error, IRRIGATION_CHECK_INTERVAL_HOURS=24 is not supported: it is translated to the cron hour step '*/N', so N must be 1-23 and divide 24 evenly (1, 2, 3, 4, 6, 8, 12). Set the hours explicitly instead, e.g. IRRIGATION_CHECK_CRON_HOURS=0",
+   "type": "value_error"
+  }
+ ],
+ "legacy=48": [
+  {
+   "loc": [],
+   "msg": "Value error, IRRIGATION_CHECK_INTERVAL_HOURS=48 is not supported: it is translated to the cron hour step '*/N', so N must be 1-23 and divide 24 evenly (1, 2, 3, 4, 6, 8, 12). Set the hours explicitly instead, e.g. IRRIGATION_CHECK_CRON_HOURS=0",
+   "type": "value_error"
+  }
+ ],
+ "legacy=5": [
+  {
+   "loc": [],
+   "msg": "Value error, IRRIGATION_CHECK_INTERVAL_HOURS=5 is not supported: it is translated to the cron hour step '*/N', so N must be 1-23 and divide 24 evenly (1, 2, 3, 4, 6, 8, 12). Set the hours explicitly instead, e.g. IRRIGATION_CHECK_CRON_HOURS=0,5,10,15,20",
+   "type": "value_error"
+  }
+ ],
+ "legacy=7": [
+  {
+   "loc": [],
+   "msg": "Value error, IRRIGATION_CHECK_INTERVAL_HOURS=7 is not supported: it is translated to the cron hour step '*/N', so N must be 1-23 and divide 24 evenly (1, 2, 3, 4, 6, 8, 12). Set the hours explicitly instead, e.g. IRRIGATION_CHECK_CRON_HOURS=0,7,14,21",
+   "type": "value_error"
+  }
+ ],
+ "sync_interval=-1": [
+  {
+   "loc": [
+    "sync_interval_minutes"
+   ],
+   "msg": "Value error, IRRIGATION_SYNC_INTERVAL_MINUTES must be a positive number of minutes, got -1",
+   "type": "value_error"
+  }
+ ],
+ "sync_interval=0": [
+  {
+   "loc": [
+    "sync_interval_minutes"
+   ],
+   "msg": "Value error, IRRIGATION_SYNC_INTERVAL_MINUTES must be a positive number of minutes, got 0",
+   "type": "value_error"
+  }
+ ]
+}

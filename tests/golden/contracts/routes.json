@@ -1,0 +1,2954 @@
+[
+ {
+  "include_in_schema": false,
+  "kind": "Route",
+  "methods": [
+   "GET",
+   "HEAD"
+  ],
+  "name": "openapi",
+  "path": "/openapi.json"
+ },
+ {
+  "include_in_schema": false,
+  "kind": "Route",
+  "methods": [
+   "GET",
+   "HEAD"
+  ],
+  "name": "swagger_ui_html",
+  "path": "/docs"
+ },
+ {
+  "include_in_schema": false,
+  "kind": "Route",
+  "methods": [
+   "GET",
+   "HEAD"
+  ],
+  "name": "swagger_ui_redirect",
+  "path": "/docs/oauth2-redirect"
+ },
+ {
+  "include_in_schema": false,
+  "kind": "Route",
+  "methods": [
+   "GET",
+   "HEAD"
+  ],
+  "name": "redoc_html",
+  "path": "/redoc"
+ },
+ {
+  "dependencies": [],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "POST"
+  ],
+  "name": "login",
+  "path": "/api/v1/auth/login",
+  "response_class": "JSONResponse",
+  "response_model": "LoginResponse",
+  "status_code": 200,
+  "tags": [
+   "auth"
+  ]
+ },
+ {
+  "dependencies": [],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "POST"
+  ],
+  "name": "logout",
+  "path": "/api/v1/auth/logout",
+  "response_class": "JSONResponse",
+  "response_model": "LogoutResponse",
+  "status_code": null,
+  "tags": [
+   "auth"
+  ]
+ },
+ {
+  "dependencies": [],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "whoami",
+  "path": "/api/v1/auth/me",
+  "response_class": "JSONResponse",
+  "response_model": "WhoAmIResponse",
+  "status_code": null,
+  "tags": [
+   "auth"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "POST"
+  ],
+  "name": "create_cluster",
+  "path": "/api/v1/clusters",
+  "response_class": "JSONResponse",
+  "response_model": "ClusterResponse",
+  "status_code": 201,
+  "tags": [
+   "clusters"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "list_clusters",
+  "path": "/api/v1/clusters",
+  "response_class": "JSONResponse",
+  "response_model": "list[ClusterResponse]",
+  "status_code": null,
+  "tags": [
+   "clusters"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "get_cluster",
+  "path": "/api/v1/clusters/{cluster_id}",
+  "response_class": "JSONResponse",
+  "response_model": "ClusterResponse",
+  "status_code": null,
+  "tags": [
+   "clusters"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "get_cluster_detail",
+  "path": "/api/v1/clusters/{cluster_id}/detail",
+  "response_class": "JSONResponse",
+  "response_model": "ClusterDetailResponse",
+  "status_code": null,
+  "tags": [
+   "clusters"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "PUT"
+  ],
+  "name": "update_cluster",
+  "path": "/api/v1/clusters/{cluster_id}",
+  "response_class": "JSONResponse",
+  "response_model": "ClusterResponse",
+  "status_code": null,
+  "tags": [
+   "clusters"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "DELETE"
+  ],
+  "name": "delete_cluster",
+  "path": "/api/v1/clusters/{cluster_id}",
+  "response_class": "JSONResponse",
+  "response_model": "SuccessResponse",
+  "status_code": null,
+  "tags": [
+   "clusters"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "list_all_plants",
+  "path": "/api/v1/plants",
+  "response_class": "JSONResponse",
+  "response_model": "PlantListResponse",
+  "status_code": null,
+  "tags": [
+   "plants"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "POST"
+  ],
+  "name": "add_plant",
+  "path": "/api/v1/clusters/{cluster_id}/plants",
+  "response_class": "JSONResponse",
+  "response_model": "PlantResponse",
+  "status_code": 201,
+  "tags": [
+   "plants"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "list_plants",
+  "path": "/api/v1/clusters/{cluster_id}/plants",
+  "response_class": "JSONResponse",
+  "response_model": "list[PlantResponse]",
+  "status_code": null,
+  "tags": [
+   "plants"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "PUT"
+  ],
+  "name": "update_plant",
+  "path": "/api/v1/clusters/{cluster_id}/plants/{plant_id}",
+  "response_class": "JSONResponse",
+  "response_model": "PlantResponse",
+  "status_code": null,
+  "tags": [
+   "plants"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "DELETE"
+  ],
+  "name": "delete_plant",
+  "path": "/api/v1/clusters/{cluster_id}/plants/{plant_id}",
+  "response_class": "JSONResponse",
+  "response_model": "SuccessResponse",
+  "status_code": null,
+  "tags": [
+   "plants"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "POST"
+  ],
+  "name": "move_plant",
+  "path": "/api/v1/plants/{plant_id}/move",
+  "response_class": "JSONResponse",
+  "response_model": "PlantResponse",
+  "status_code": null,
+  "tags": [
+   "plants"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "POST"
+  ],
+  "name": "sync_plants",
+  "path": "/api/v1/plants/sync",
+  "response_class": "JSONResponse",
+  "response_model": "SyncPlantsResponse",
+  "status_code": null,
+  "tags": [
+   "plants"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "get_plant_health",
+  "path": "/api/v1/plants/{plant_id}/health",
+  "response_class": "JSONResponse",
+  "response_model": "PlantHealthResponse",
+  "status_code": null,
+  "tags": [
+   "plants"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "POST"
+  ],
+  "name": "trigger_health_snapshot",
+  "path": "/api/v1/plants/health/snapshot",
+  "response_class": "JSONResponse",
+  "response_model": "SnapshotResponse",
+  "status_code": null,
+  "tags": [
+   "plants"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "list_all_irrigators",
+  "path": "/api/v1/irrigators",
+  "response_class": "JSONResponse",
+  "response_model": "IrrigatorListResponse",
+  "status_code": null,
+  "tags": [
+   "irrigators"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "POST"
+  ],
+  "name": "add_irrigator",
+  "path": "/api/v1/clusters/{cluster_id}/irrigator",
+  "response_class": "JSONResponse",
+  "response_model": "IrrigatorResponse",
+  "status_code": 201,
+  "tags": [
+   "irrigators"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "get_irrigator",
+  "path": "/api/v1/clusters/{cluster_id}/irrigator",
+  "response_class": "JSONResponse",
+  "response_model": "IrrigatorResponse",
+  "status_code": null,
+  "tags": [
+   "irrigators"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "PUT"
+  ],
+  "name": "update_irrigator",
+  "path": "/api/v1/clusters/{cluster_id}/irrigator",
+  "response_class": "JSONResponse",
+  "response_model": "IrrigatorResponse",
+  "status_code": null,
+  "tags": [
+   "irrigators"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "DELETE"
+  ],
+  "name": "delete_irrigator",
+  "path": "/api/v1/clusters/{cluster_id}/irrigator",
+  "response_class": "JSONResponse",
+  "response_model": "SuccessResponse",
+  "status_code": null,
+  "tags": [
+   "irrigators"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "POST"
+  ],
+  "name": "start_irrigator",
+  "path": "/api/v1/irrigators/{irrigator_id}/start",
+  "response_class": "JSONResponse",
+  "response_model": "IrrigatorActionResponse",
+  "status_code": null,
+  "tags": [
+   "irrigators"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "POST"
+  ],
+  "name": "stop_irrigator",
+  "path": "/api/v1/irrigators/{irrigator_id}/stop",
+  "response_class": "JSONResponse",
+  "response_model": "IrrigatorActionResponse",
+  "status_code": null,
+  "tags": [
+   "irrigators"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "POST"
+  ],
+  "name": "log_manual",
+  "path": "/api/v1/irrigators/{irrigator_id}/log-manual",
+  "response_class": "JSONResponse",
+  "response_model": "LogManualResponse",
+  "status_code": null,
+  "tags": [
+   "irrigators"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "list_all_sensors",
+  "path": "/api/v1/sensors",
+  "response_class": "JSONResponse",
+  "response_model": "SensorListResponse",
+  "status_code": null,
+  "tags": [
+   "sensors"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "POST"
+  ],
+  "name": "add_sensor",
+  "path": "/api/v1/clusters/{cluster_id}/sensors",
+  "response_class": "JSONResponse",
+  "response_model": "SensorResponse",
+  "status_code": 201,
+  "tags": [
+   "sensors"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "list_sensors",
+  "path": "/api/v1/clusters/{cluster_id}/sensors",
+  "response_class": "JSONResponse",
+  "response_model": "list[SensorResponse]",
+  "status_code": null,
+  "tags": [
+   "sensors"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "get_sensor",
+  "path": "/api/v1/clusters/{cluster_id}/sensors/{sensor_id}",
+  "response_class": "JSONResponse",
+  "response_model": "SensorResponse",
+  "status_code": null,
+  "tags": [
+   "sensors"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "PUT"
+  ],
+  "name": "update_sensor",
+  "path": "/api/v1/clusters/{cluster_id}/sensors/{sensor_id}",
+  "response_class": "JSONResponse",
+  "response_model": "SensorResponse",
+  "status_code": null,
+  "tags": [
+   "sensors"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "list_sensor_assignments",
+  "path": "/api/v1/sensors/{sensor_id}/assignments",
+  "response_class": "JSONResponse",
+  "response_model": "SensorAssignmentListResponse",
+  "status_code": null,
+  "tags": [
+   "sensors"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "DELETE"
+  ],
+  "name": "delete_sensor",
+  "path": "/api/v1/clusters/{cluster_id}/sensors/{sensor_id}",
+  "response_class": "JSONResponse",
+  "response_model": "SuccessResponse",
+  "status_code": null,
+  "tags": [
+   "sensors"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "PUT"
+  ],
+  "name": "set_config",
+  "path": "/api/v1/clusters/{cluster_id}/config",
+  "response_class": "JSONResponse",
+  "response_model": "ConfigResponse",
+  "status_code": null,
+  "tags": [
+   "configs"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "get_config",
+  "path": "/api/v1/clusters/{cluster_id}/config",
+  "response_class": "JSONResponse",
+  "response_model": "ConfigResponse",
+  "status_code": null,
+  "tags": [
+   "configs"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "get_effective_config",
+  "path": "/api/v1/clusters/{cluster_id}/config/effective",
+  "response_class": "JSONResponse",
+  "response_model": "EffectiveConfigResponse",
+  "status_code": null,
+  "tags": [
+   "configs"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "get_global_config",
+  "path": "/api/v1/config/global",
+  "response_class": "JSONResponse",
+  "response_model": "GlobalConfigResponse",
+  "status_code": null,
+  "tags": [
+   "configs"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "PUT"
+  ],
+  "name": "update_global_config",
+  "path": "/api/v1/config/global",
+  "response_class": "JSONResponse",
+  "response_model": "GlobalConfigResponse",
+  "status_code": null,
+  "tags": [
+   "configs"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "cluster_status",
+  "path": "/api/v1/clusters/{cluster_id}/status",
+  "response_class": "JSONResponse",
+  "response_model": "ClusterStatusResponse",
+  "status_code": null,
+  "tags": [
+   "operations"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "POST"
+  ],
+  "name": "irrigate",
+  "path": "/api/v1/clusters/{cluster_id}/irrigate",
+  "response_class": "JSONResponse",
+  "response_model": "IrrigateResponse",
+  "status_code": null,
+  "tags": [
+   "operations"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "monitor",
+  "path": "/api/v1/clusters/{cluster_id}/monitor",
+  "response_class": "JSONResponse",
+  "response_model": "MonitorResponse",
+  "status_code": null,
+  "tags": [
+   "operations"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "POST"
+  ],
+  "name": "check_all",
+  "path": "/api/v1/check",
+  "response_class": "JSONResponse",
+  "response_model": "CheckAllResponse",
+  "status_code": null,
+  "tags": [
+   "operations"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "POST"
+  ],
+  "name": "check_single",
+  "path": "/api/v1/clusters/{cluster_id}/check",
+  "response_class": "JSONResponse",
+  "response_model": "CheckClusterResponse",
+  "status_code": null,
+  "tags": [
+   "operations"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "POST"
+  ],
+  "name": "sync",
+  "path": "/api/v1/sync",
+  "response_class": "JSONResponse",
+  "response_model": "SyncResponse",
+  "status_code": null,
+  "tags": [
+   "operations"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "learn",
+  "path": "/api/v1/clusters/{cluster_id}/learn",
+  "response_class": "JSONResponse",
+  "response_model": "LearnResponse",
+  "status_code": null,
+  "tags": [
+   "operations"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "history",
+  "path": "/api/v1/clusters/{cluster_id}/history",
+  "response_class": "JSONResponse",
+  "response_model": "HistoryResponse",
+  "status_code": null,
+  "tags": [
+   "operations"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "stats",
+  "path": "/api/v1/clusters/{cluster_id}/stats",
+  "response_class": "JSONResponse",
+  "response_model": "StatsResponse",
+  "status_code": null,
+  "tags": [
+   "operations"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "stats_export",
+  "path": "/api/v1/clusters/{cluster_id}/stats/export",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": [
+   "operations"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "health",
+  "path": "/api/v1/health",
+  "response_class": "JSONResponse",
+  "response_model": "HealthResponse",
+  "status_code": null,
+  "tags": [
+   "scheduler"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "list_jobs",
+  "path": "/api/v1/scheduler/jobs",
+  "response_class": "JSONResponse",
+  "response_model": "list[SchedulerJobResponse]",
+  "status_code": null,
+  "tags": [
+   "scheduler"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "DELETE"
+  ],
+  "name": "delete_job",
+  "path": "/api/v1/scheduler/jobs/{job_id}",
+  "response_class": "JSONResponse",
+  "response_model": "SuccessResponse",
+  "status_code": null,
+  "tags": [
+   "scheduler"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "POST"
+  ],
+  "name": "pause_scheduler",
+  "path": "/api/v1/scheduler/pause",
+  "response_class": "JSONResponse",
+  "response_model": "SchedulerStateResponse",
+  "status_code": null,
+  "tags": [
+   "scheduler"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "POST"
+  ],
+  "name": "resume_scheduler",
+  "path": "/api/v1/scheduler/resume",
+  "response_class": "JSONResponse",
+  "response_model": "SchedulerStateResponse",
+  "status_code": null,
+  "tags": [
+   "scheduler"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "get_plant",
+  "path": "/api/v1/plants/{plant_id}",
+  "response_class": "JSONResponse",
+  "response_model": "PlantResponse",
+  "status_code": null,
+  "tags": [
+   "charts"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "plant_chart_data",
+  "path": "/api/v1/plants/{plant_id}/chart-data",
+  "response_class": "JSONResponse",
+  "response_model": "ChartPayloadResponse",
+  "status_code": null,
+  "tags": [
+   "charts"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "cluster_chart_data",
+  "path": "/api/v1/clusters/{cluster_id}/chart-data",
+  "response_class": "JSONResponse",
+  "response_model": "ChartPayloadResponse",
+  "status_code": null,
+  "tags": [
+   "charts"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "cluster_overlay",
+  "path": "/api/v1/clusters/{cluster_id}/overlay",
+  "response_class": "JSONResponse",
+  "response_model": "MultiMetricOverlayResponse",
+  "status_code": null,
+  "tags": [
+   "charts"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "cluster_heatmap",
+  "path": "/api/v1/clusters/{cluster_id}/heatmap",
+  "response_class": "JSONResponse",
+  "response_model": "HeatmapResponse",
+  "status_code": null,
+  "tags": [
+   "charts"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "plant_health_timeline",
+  "path": "/api/v1/plants/{plant_id}/health-timeline",
+  "response_class": "JSONResponse",
+  "response_model": "PlantHealthTimelineResponse",
+  "status_code": null,
+  "tags": [
+   "charts"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "list_alerts",
+  "path": "/api/v1/alerts",
+  "response_class": "JSONResponse",
+  "response_model": "AlertListResponse",
+  "status_code": null,
+  "tags": [
+   "alerts"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "get_alert",
+  "path": "/api/v1/alerts/{alert_id}",
+  "response_class": "JSONResponse",
+  "response_model": "AlertSummary",
+  "status_code": null,
+  "tags": [
+   "alerts"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "POST"
+  ],
+  "name": "acknowledge_alert",
+  "path": "/api/v1/alerts/{alert_id}/acknowledge",
+  "response_class": "JSONResponse",
+  "response_model": "AlertSummary",
+  "status_code": null,
+  "tags": [
+   "alerts"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "POST"
+  ],
+  "name": "resolve_alert",
+  "path": "/api/v1/alerts/{alert_id}/resolve",
+  "response_class": "JSONResponse",
+  "response_model": "AlertSummary",
+  "status_code": null,
+  "tags": [
+   "alerts"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "POST"
+  ],
+  "name": "refresh_cluster_alerts",
+  "path": "/api/v1/clusters/{cluster_id}/alerts/sync",
+  "response_class": "JSONResponse",
+  "response_model": "AlertListResponse",
+  "status_code": null,
+  "tags": [
+   "alerts"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "POST"
+  ],
+  "name": "refresh_all_alerts",
+  "path": "/api/v1/alerts/sync",
+  "response_class": "JSONResponse",
+  "response_model": "AlertListResponse",
+  "status_code": null,
+  "tags": [
+   "alerts"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "list_activity",
+  "path": "/api/v1/activity",
+  "response_class": "JSONResponse",
+  "response_model": "ActivityListResponse",
+  "status_code": null,
+  "tags": [
+   "activity"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "list_decisions",
+  "path": "/api/v1/clusters/{cluster_id}/decisions",
+  "response_class": "JSONResponse",
+  "response_model": "DecisionLogListResponse",
+  "status_code": null,
+  "tags": [
+   "decisions"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "get_cluster_forecast",
+  "path": "/api/v1/clusters/{cluster_id}/forecast",
+  "response_class": "JSONResponse",
+  "response_model": "ForecastResponse",
+  "status_code": null,
+  "tags": [
+   "operations"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "get_preferences",
+  "path": "/api/v1/preferences",
+  "response_class": "JSONResponse",
+  "response_model": "PreferencesResponse",
+  "status_code": null,
+  "tags": [
+   "preferences"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "PUT"
+  ],
+  "name": "update_preferences",
+  "path": "/api/v1/preferences",
+  "response_class": "JSONResponse",
+  "response_model": "PreferencesResponse",
+  "status_code": null,
+  "tags": [
+   "preferences"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "list_vacation_windows",
+  "path": "/api/v1/vacation",
+  "response_class": "JSONResponse",
+  "response_model": "VacationListResponse",
+  "status_code": null,
+  "tags": [
+   "vacation"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "POST"
+  ],
+  "name": "create_vacation_window",
+  "path": "/api/v1/vacation",
+  "response_class": "JSONResponse",
+  "response_model": "VacationResponse",
+  "status_code": 201,
+  "tags": [
+   "vacation"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "PUT"
+  ],
+  "name": "update_vacation_window",
+  "path": "/api/v1/vacation/{window_id}",
+  "response_class": "JSONResponse",
+  "response_model": "VacationResponse",
+  "status_code": null,
+  "tags": [
+   "vacation"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "DELETE"
+  ],
+  "name": "delete_vacation_window",
+  "path": "/api/v1/vacation/{window_id}",
+  "response_class": "JSONResponse",
+  "response_model": "SuccessResponse",
+  "status_code": null,
+  "tags": [
+   "vacation"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "global_search",
+  "path": "/api/v1/search",
+  "response_class": "JSONResponse",
+  "response_model": "SearchResponse",
+  "status_code": null,
+  "tags": [
+   "search"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "POST"
+  ],
+  "name": "bulk_stop_all",
+  "path": "/api/v1/bulk/stop-all",
+  "response_class": "JSONResponse",
+  "response_model": "StopAllResponse",
+  "status_code": null,
+  "tags": [
+   "bulk"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "cluster_insights",
+  "path": "/api/v1/clusters/{cluster_id}/insights",
+  "response_class": "JSONResponse",
+  "response_model": "ClusterInsightsResponse",
+  "status_code": null,
+  "tags": [
+   "operations"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "system_health",
+  "path": "/api/v1/health/system",
+  "response_class": "JSONResponse",
+  "response_model": "SystemHealthResponse",
+  "status_code": null,
+  "tags": [
+   "scheduler"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "quality_report",
+  "path": "/api/v1/quality/report",
+  "response_class": "JSONResponse",
+  "response_model": "DataQualityReport",
+  "status_code": null,
+  "tags": [
+   "operations"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "cluster_efficacy",
+  "path": "/api/v1/clusters/{cluster_id}/efficacy",
+  "response_class": "JSONResponse",
+  "response_model": "EfficacyListResponse",
+  "status_code": null,
+  "tags": [
+   "operations"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "list_windows",
+  "path": "/api/v1/clusters/{cluster_id}/windows",
+  "response_class": "JSONResponse",
+  "response_model": "IrrigationWindowListResponse",
+  "status_code": null,
+  "tags": [
+   "windows"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "POST"
+  ],
+  "name": "add_window",
+  "path": "/api/v1/clusters/{cluster_id}/windows",
+  "response_class": "JSONResponse",
+  "response_model": "IrrigationWindowResponse",
+  "status_code": 201,
+  "tags": [
+   "windows"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "PUT"
+  ],
+  "name": "update_window",
+  "path": "/api/v1/clusters/{cluster_id}/windows/{window_id}",
+  "response_class": "JSONResponse",
+  "response_model": "IrrigationWindowResponse",
+  "status_code": null,
+  "tags": [
+   "windows"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "DELETE"
+  ],
+  "name": "delete_window",
+  "path": "/api/v1/clusters/{cluster_id}/windows/{window_id}",
+  "response_class": "JSONResponse",
+  "response_model": "SuccessResponse",
+  "status_code": null,
+  "tags": [
+   "windows"
+  ]
+ },
+ {
+  "dependencies": [],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "oauth_protected_resource",
+  "path": "/.well-known/oauth-protected-resource",
+  "response_class": "JSONResponse",
+  "response_model": "dict[str, object]",
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "oauth_authorization_server",
+  "path": "/.well-known/oauth-authorization-server",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "app": "StaticFiles",
+  "kind": "Mount",
+  "name": "static",
+  "path": "/static"
+ },
+ {
+  "dependencies": [],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "login_form",
+  "path": "/login",
+  "response_class": "HTMLResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "POST"
+  ],
+  "name": "login_submit",
+  "path": "/login",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "POST"
+  ],
+  "name": "logout_submit",
+  "path": "/logout",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "activity_list",
+  "path": "/activity",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "activity_page",
+  "path": "/activity/page",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "alert_list",
+  "path": "/alerts",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "POST"
+  ],
+  "name": "ack_alert",
+  "path": "/alerts/{alert_id}/ack",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "POST"
+  ],
+  "name": "resolve_alert",
+  "path": "/alerts/{alert_id}/resolve",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "POST"
+  ],
+  "name": "sync_alerts",
+  "path": "/alerts/sync",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "alert_badge",
+  "path": "/alerts/badge",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "cluster_history",
+  "path": "/clusters/{cluster_id}/history",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "cluster_stats",
+  "path": "/clusters/{cluster_id}/stats",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "cluster_stats_export",
+  "path": "/clusters/{cluster_id}/stats/export",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "cluster_learn",
+  "path": "/clusters/{cluster_id}/learn",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "scheduler_page",
+  "path": "/scheduler",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "POST"
+  ],
+  "name": "scheduler_delete_job",
+  "path": "/scheduler/jobs/{job_id}/delete",
+  "response_class": "HTMLResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "POST"
+  ],
+  "name": "scheduler_pause",
+  "path": "/scheduler/pause",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "POST"
+  ],
+  "name": "scheduler_resume",
+  "path": "/scheduler/resume",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "POST"
+  ],
+  "name": "bulk_stop_all_web",
+  "path": "/bulk/stop-all",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "list_clusters",
+  "path": "/clusters",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "new_cluster_form",
+  "path": "/clusters/new",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "POST"
+  ],
+  "name": "create_cluster",
+  "path": "/clusters",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "edit_cluster_form",
+  "path": "/clusters/{cluster_id}/edit",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "POST"
+  ],
+  "name": "update_cluster",
+  "path": "/clusters/{cluster_id}/edit",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "DELETE"
+  ],
+  "name": "delete_cluster",
+  "path": "/clusters/{cluster_id}",
+  "response_class": "HTMLResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "cluster_detail",
+  "path": "/clusters/{cluster_id}",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "cluster_status_fragment",
+  "path": "/clusters/{cluster_id}/status-fragment",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "cluster_card_fragment",
+  "path": "/clusters/{cluster_id}/card-fragment",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "cluster_chart_fragment",
+  "path": "/clusters/{cluster_id}/chart-fragment",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "cluster_overlay_fragment",
+  "path": "/clusters/{cluster_id}/overlay-fragment",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "cluster_heatmap_fragment",
+  "path": "/clusters/{cluster_id}/heatmap-fragment",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "config_form",
+  "path": "/clusters/{cluster_id}/config",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "POST"
+  ],
+  "name": "save_config",
+  "path": "/clusters/{cluster_id}/config",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "POST"
+  ],
+  "name": "save_global_config",
+  "path": "/config/global",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "cluster_decisions",
+  "path": "/clusters/{cluster_id}/decisions",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "cluster_efficacy_page",
+  "path": "/clusters/{cluster_id}/efficacy",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "health_badge",
+  "path": "/health/badge",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "dashboard_hero",
+  "path": "/dashboard/hero",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "health_page",
+  "path": "/health",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "list_irrigators",
+  "path": "/clusters/{cluster_id}/irrigators",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "new_irrigator_form",
+  "path": "/clusters/{cluster_id}/irrigators/new",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "POST"
+  ],
+  "name": "create_irrigator",
+  "path": "/clusters/{cluster_id}/irrigators",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "edit_irrigator_form",
+  "path": "/clusters/{cluster_id}/irrigators/edit",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "POST"
+  ],
+  "name": "update_irrigator",
+  "path": "/clusters/{cluster_id}/irrigators/edit",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "DELETE"
+  ],
+  "name": "delete_irrigator",
+  "path": "/clusters/{cluster_id}/irrigators",
+  "response_class": "HTMLResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "POST"
+  ],
+  "name": "start_irrigator",
+  "path": "/irrigators/{irrigator_id}/start",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "POST"
+  ],
+  "name": "stop_irrigator",
+  "path": "/irrigators/{irrigator_id}/stop",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "log_manual_form",
+  "path": "/irrigators/{irrigator_id}/log-manual",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "POST"
+  ],
+  "name": "log_manual_submit",
+  "path": "/irrigators/{irrigator_id}/log-manual",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "POST"
+  ],
+  "name": "irrigate",
+  "path": "/clusters/{cluster_id}/irrigate",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "monitor",
+  "path": "/clusters/{cluster_id}/monitor",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "POST"
+  ],
+  "name": "check_single",
+  "path": "/clusters/{cluster_id}/check",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "POST"
+  ],
+  "name": "check_all",
+  "path": "/check",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "POST"
+  ],
+  "name": "sync_all",
+  "path": "/sync",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "POST"
+  ],
+  "name": "sync_plants",
+  "path": "/plants/sync",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "dashboard",
+  "path": "/",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "list_plants",
+  "path": "/clusters/{cluster_id}/plants",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "new_plant_form",
+  "path": "/clusters/{cluster_id}/plants/new",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "POST"
+  ],
+  "name": "create_plant",
+  "path": "/clusters/{cluster_id}/plants",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "edit_plant_form",
+  "path": "/clusters/{cluster_id}/plants/{plant_id}/edit",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "POST"
+  ],
+  "name": "update_plant",
+  "path": "/clusters/{cluster_id}/plants/{plant_id}/edit",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "DELETE"
+  ],
+  "name": "delete_plant",
+  "path": "/clusters/{cluster_id}/plants/{plant_id}",
+  "response_class": "HTMLResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "plant_dashboard",
+  "path": "/clusters/{cluster_id}/plants/{plant_id}",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "plant_chart_fragment",
+  "path": "/clusters/{cluster_id}/plants/{plant_id}/chart-fragment",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "plant_health_fragment",
+  "path": "/clusters/{cluster_id}/plants/{plant_id}/health-fragment",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "POST"
+  ],
+  "name": "move_plant_web",
+  "path": "/clusters/{cluster_id}/plants/{plant_id}/move",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "preferences_page",
+  "path": "/preferences",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "POST"
+  ],
+  "name": "update_preferences",
+  "path": "/preferences",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "POST"
+  ],
+  "name": "update_theme",
+  "path": "/preferences/theme",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "quality_page",
+  "path": "/quality",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "list_sensors",
+  "path": "/clusters/{cluster_id}/sensors",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "new_sensor_form",
+  "path": "/clusters/{cluster_id}/sensors/new",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "POST"
+  ],
+  "name": "create_sensor",
+  "path": "/clusters/{cluster_id}/sensors",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "edit_sensor_form",
+  "path": "/clusters/{cluster_id}/sensors/{sensor_id}/edit",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "POST"
+  ],
+  "name": "update_sensor",
+  "path": "/clusters/{cluster_id}/sensors/{sensor_id}/edit",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "DELETE"
+  ],
+  "name": "delete_sensor",
+  "path": "/clusters/{cluster_id}/sensors/{sensor_id}",
+  "response_class": "HTMLResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "vacation_list",
+  "path": "/vacation",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "POST"
+  ],
+  "name": "create_vacation",
+  "path": "/vacation",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "edit_vacation_form",
+  "path": "/vacation/{window_id}/edit",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "POST"
+  ],
+  "name": "update_vacation",
+  "path": "/vacation/{window_id}/edit",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "POST"
+  ],
+  "name": "delete_vacation",
+  "path": "/vacation/{window_id}/delete",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "POST"
+  ],
+  "name": "create_window",
+  "path": "/clusters/{cluster_id}/windows",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "GET"
+  ],
+  "name": "edit_window_form",
+  "path": "/clusters/{cluster_id}/windows/{window_id}/edit",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "POST"
+  ],
+  "name": "update_window",
+  "path": "/clusters/{cluster_id}/windows/{window_id}/edit",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "DELETE"
+  ],
+  "name": "delete_window",
+  "path": "/clusters/{cluster_id}/windows/{window_id}",
+  "response_class": "HTMLResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "require_mcp_token"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "DELETE",
+   "GET",
+   "POST"
+  ],
+  "name": "handle_mcp_streamable_http",
+  "path": "/mcp",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ }
+]

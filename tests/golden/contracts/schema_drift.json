@@ -1,0 +1,182 @@
+{
+ "tables": {
+  "irrigation_windows": {
+   "columns": {
+    "weekday_mask": {
+     "create_all": {
+      "default": null,
+      "name": "weekday_mask",
+      "nullable": false,
+      "primary_key": 0,
+      "type": "INTEGER"
+     },
+     "migrated": {
+      "default": "'127'",
+      "name": "weekday_mask",
+      "nullable": false,
+      "primary_key": 0,
+      "type": "INTEGER"
+     }
+    }
+   }
+  },
+  "irrigators": {
+   "unique_constraints": {
+    "create_all": [
+     {
+      "column_names": [
+       "cluster_id"
+      ],
+      "name": null
+     },
+     {
+      "column_names": [
+       "tuya_device_id"
+      ],
+      "name": null
+     }
+    ],
+    "migrated": [
+     {
+      "column_names": [
+       "tuya_device_id"
+      ],
+      "name": null
+     },
+     {
+      "column_names": [
+       "cluster_id"
+      ],
+      "name": "uq_irrigators_cluster_id"
+     }
+    ]
+   }
+  },
+  "user_preferences": {
+   "columns": {
+    "notify_alerts": {
+     "create_all": {
+      "default": null,
+      "name": "notify_alerts",
+      "nullable": false,
+      "primary_key": 0,
+      "type": "BOOLEAN"
+     },
+     "migrated": {
+      "default": "1",
+      "name": "notify_alerts",
+      "nullable": false,
+      "primary_key": 0,
+      "type": "BOOLEAN"
+     }
+    },
+    "notify_auto": {
+     "create_all": {
+      "default": null,
+      "name": "notify_auto",
+      "nullable": false,
+      "primary_key": 0,
+      "type": "BOOLEAN"
+     },
+     "migrated": {
+      "default": "1",
+      "name": "notify_auto",
+      "nullable": false,
+      "primary_key": 0,
+      "type": "BOOLEAN"
+     }
+    },
+    "notify_emergency": {
+     "create_all": {
+      "default": null,
+      "name": "notify_emergency",
+      "nullable": false,
+      "primary_key": 0,
+      "type": "BOOLEAN"
+     },
+     "migrated": {
+      "default": "1",
+      "name": "notify_emergency",
+      "nullable": false,
+      "primary_key": 0,
+      "type": "BOOLEAN"
+     }
+    },
+    "notify_manual": {
+     "create_all": {
+      "default": null,
+      "name": "notify_manual",
+      "nullable": false,
+      "primary_key": 0,
+      "type": "BOOLEAN"
+     },
+     "migrated": {
+      "default": "1",
+      "name": "notify_manual",
+      "nullable": false,
+      "primary_key": 0,
+      "type": "BOOLEAN"
+     }
+    },
+    "scheduler_paused": {
+     "create_all": {
+      "default": null,
+      "name": "scheduler_paused",
+      "nullable": false,
+      "primary_key": 0,
+      "type": "BOOLEAN"
+     },
+     "migrated": {
+      "default": "0",
+      "name": "scheduler_paused",
+      "nullable": false,
+      "primary_key": 0,
+      "type": "BOOLEAN"
+     }
+    }
+   }
+  },
+  "users": {
+   "columns": {
+    "is_active": {
+     "create_all": {
+      "default": null,
+      "name": "is_active",
+      "nullable": false,
+      "primary_key": 0,
+      "type": "BOOLEAN"
+     },
+     "migrated": {
+      "default": "1",
+      "name": "is_active",
+      "nullable": false,
+      "primary_key": 0,
+      "type": "BOOLEAN"
+     }
+    }
+   },
+   "unique_constraints": {
+    "create_all": [
+     {
+      "column_names": [
+       "username"
+      ],
+      "name": null
+     }
+    ],
+    "migrated": [
+     {
+      "column_names": [
+       "username"
+      ],
+      "name": "uq_users_username"
+     }
+    ]
+   }
+  }
+ },
+ "tables_only_in_create_all": [],
+ "tables_only_in_migrated": [
+  "alembic_version"
+ ]
+}

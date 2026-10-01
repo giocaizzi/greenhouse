@@ -1,0 +1,351 @@
+{
+ "DEVICE_BLOCKING_CODES": [
+  "device_no_water",
+  "device_offline",
+  "device_rain_detected"
+ ],
+ "constants": {
+  "BATTERY_CRITICAL_PCT": "5",
+  "BATTERY_LOW_PCT": "20",
+  "CLEANING_HAMPEL_MIN_READINGS": "5",
+  "CLEANING_HAMPEL_N_SIGMA": "3.0",
+  "CLEANING_HAMPEL_WINDOW_RADIUS": "3",
+  "CLEANING_MAD_FLOOR": "1.0",
+  "CLEANING_MAD_SCALE": "1.4826",
+  "CONFIDENCE_CONFIG_FALLBACK": "0.3",
+  "CONFIDENCE_CONFLICT": "0.65",
+  "CONFIDENCE_COOLDOWN": "0.9",
+  "CONFIDENCE_CRITICAL_STRESS": "0.95",
+  "CONFIDENCE_NO_DATA": "0.2",
+  "CONFIDENCE_OVER_WATERING": "0.9",
+  "CONFIDENCE_SENSOR_ADEQUATE": "0.7",
+  "CONFIDENCE_SENSOR_DRY": "0.8",
+  "CONFIDENCE_SENSOR_VERY_DRY": "0.9",
+  "CONFIDENCE_SENSOR_WET": "0.8",
+  "CONFIDENCE_TEMP_FALLBACK": "0.6",
+  "CONFIDENCE_WATER_WARNING": "0.92",
+  "CONFLICT_DURATION_MINUTES": "1",
+  "CONFLICT_INTERVAL_HOURS": "8",
+  "CONFLICT_WET_MARGIN": "5",
+  "DEFAULT_AUTO_RUN": "True",
+  "DEFAULT_DURATION_MINUTES": "2",
+  "DEFAULT_INTERVAL_HOURS": "12",
+  "DEFAULT_IRRIGATION_MODE": "'smart'",
+  "DEFAULT_LATITUDE": "45.464",
+  "DEFAULT_LONGITUDE": "9.189",
+  "DEFAULT_PREFERRED_WATER_HOURS": "(6, 10)",
+  "DEFAULT_QUIET_END_HOUR": "5",
+  "DEFAULT_QUIET_START_HOUR": "0",
+  "DEFAULT_SEASON_MULTIPLIER_INDOOR": "{'winter': 0.5, 'spring': 1.0, 'summer': 1.2, 'autumn': 0.8}",
+  "DEFAULT_SEASON_MULTIPLIER_OUTDOOR": "{'winter': 0.3, 'spring': 1.0, 'summer': 1.5, 'autumn': 0.7}",
+  "DEFAULT_SOIL_MOISTURE_MAX": "65.0",
+  "DEFAULT_SOIL_MOISTURE_MIN": "45.0",
+  "HEALTH_POLL_IDLE_MINUTES": "5",
+  "HUMIDITY_HIGH_INTERVAL_STEP": "2",
+  "HUMIDITY_HIGH_OFFSET": "10",
+  "HUMIDITY_LOW_INTERVAL_STEP": "1",
+  "HUMIDITY_LOW_OFFSET": "5",
+  "HUMIDITY_VERY_LOW_INTERVAL_STEP": "3",
+  "HUMIDITY_VERY_LOW_OFFSET": "20",
+  "LEAK_AFTER_WINDOW_SECONDS": "1800",
+  "LEAK_ALERT_CODE": "'leak_or_stuck_valve'",
+  "LEAK_BEFORE_WINDOW_SECONDS": "10800",
+  "LEAK_CHECK_DELAY_SECONDS": "1800",
+  "LEAK_HOLD_HOURS": "24",
+  "LEAK_MIN_AFTER_SAMPLES": "3",
+  "LEAK_MIN_BEFORE_SAMPLES": "2",
+  "LEAK_PINNED_MIN_SAMPLES": "2",
+  "LEAK_PINNED_THRESHOLD": "95.0",
+  "LEAK_RISING_DELTA": "30.0",
+  "LEAK_SETTLE_TOLERANCE": "2.0",
+  "LEARNING_MIN_ABSORPTION_PER_MIN": "0.5",
+  "LEARNING_MIN_EFFICIENCY": "0.3",
+  "LEARNING_MIN_EVENTS": "3",
+  "LEARNING_OVER_WATER_THRESHOLD": "85",
+  "LEARNING_RAPID_DRAINAGE_THRESHOLD": "-5",
+  "LIGHT_BRIGHT": "800",
+  "LIGHT_BRIGHT_INTERVAL_STEP": "1",
+  "LIGHT_DARK": "150",
+  "LIGHT_DARK_INTERVAL_STEP": "2",
+  "LIGHT_VERY_BRIGHT": "1500",
+  "LIGHT_VERY_BRIGHT_DURATION_STEP": "1",
+  "LIGHT_VERY_BRIGHT_INTERVAL_STEP": "2",
+  "LIGHT_VERY_DARK": "50",
+  "LIGHT_VERY_DARK_INTERVAL_STEP": "4",
+  "MAX_DURATION_MINUTES": "5",
+  "MAX_INTERVAL_HOURS": "24",
+  "MIN_COOLDOWN_HOURS": "6",
+  "MIN_INTERVAL_HOURS": "6",
+  "OFFLINE_AFTER_MINUTES": "30",
+  "SENSOR_HEALTH_BACKFILL_WINDOW": "5",
+  "SENSOR_PHYSICAL_RANGES": "{'temperature': (-40.0, 80.0), 'soil_moisture': (0.0, 100.0), 'env_humidity': (0.0, 100.0), 'light': (0.0, 200000.0)}",
+  "SENSOR_READING_STALE_SECONDS": "14400",
+  "SIGNAL_LOSS_THRESHOLD": "30",
+  "SOIL_MOISTURE_CRITICAL": "30",
+  "SOIL_MOISTURE_LOW": "40",
+  "SOIL_MOISTURE_SATURATED": "70",
+  "STRESS_DURATION_MINUTES": "3",
+  "STRESS_INTERVAL_HOURS": "6",
+  "TEMP_ADJUST_OFFSET": "3",
+  "TEMP_COLD": "18",
+  "TEMP_HIGH_INTERVAL_STEP": "4",
+  "TEMP_HOT": "28",
+  "TEMP_LOW_INTERVAL_STEP": "6",
+  "TEMP_WARM": "24",
+  "TREND_MIN_READINGS": "4",
+  "TREND_MOISTURE_INTERVAL_STEP": "2",
+  "TREND_MOISTURE_THRESHOLD": "5",
+  "TREND_TEMP_RISING_HOT_C": "25",
+  "TREND_TEMP_RISING_INTERVAL_STEP": "2",
+  "TREND_TEMP_THRESHOLD": "2",
+  "TREND_UNDERWATERING_DURATION_STEP": "1",
+  "VACATION_MIN_RUN_MINUTES": "1",
+  "VACATION_RESERVOIR_USABLE_FRACTION": "0.95",
+  "VERY_DRY_MARGIN": "10",
+  "WATER_NEEDS_DURATION_STEP": "1",
+  "WATER_NEEDS_HIGH_INTERVAL_STEP": "2",
+  "WATER_NEEDS_LOW_INTERVAL_STEP": "4"
+ },
+ "enums": {
+  "Action": [
+   [
+    "IRRIGATE",
+    "irrigate"
+   ],
+   [
+    "SKIP",
+    "skip"
+   ]
+  ],
+  "HealthAlarm": [
+   [
+    "NO_WATER",
+    "no_water"
+   ],
+   [
+    "RAIN_DETECTED",
+    "rain_detected"
+   ],
+   [
+    "LOW_BATTERY",
+    "low_battery"
+   ],
+   [
+    "BATTERY_CRITICAL",
+    "battery_critical"
+   ],
+   [
+    "SIGNAL_LOSS",
+    "signal_loss"
+   ],
+   [
+    "DEVICE_OFFLINE",
+    "device_offline"
+   ],
+   [
+    "SENSOR_FAULT",
+    "sensor_fault"
+   ]
+  ],
+  "Severity": [
+   [
+    "INFO",
+    "info"
+   ],
+   [
+    "WARNING",
+    "warning"
+   ],
+   [
+    "CRITICAL",
+    "critical"
+   ]
+  ],
+  "TriggerCode": [
+   [
+    "NO_PLANTS",
+    "no_plants"
+   ],
+   [
+    "COOLDOWN",
+    "cooldown"
+   ],
+   [
+    "WATER_WARNING",
+    "water_warning"
+   ],
+   [
+    "WATER_STRESS",
+    "water_stress"
+   ],
+   [
+    "OVER_WATERING",
+    "over_watering"
+   ],
+   [
+    "SENSOR_VERY_DRY",
+    "sensor_very_dry"
+   ],
+   [
+    "SENSOR_DRY",
+    "sensor_dry"
+   ],
+   [
+    "SENSOR_ADEQUATE",
+    "sensor_adequate"
+   ],
+   [
+    "SENSOR_WET",
+    "sensor_wet"
+   ],
+   [
+    "CONFLICT",
+    "conflict"
+   ],
+   [
+    "WEATHER_SKIP",
+    "weather_skip"
+   ],
+   [
+    "TEMP_FALLBACK",
+    "temp_fallback"
+   ],
+   [
+    "CONFIG_FALLBACK",
+    "config_fallback"
+   ],
+   [
+    "NO_DATA",
+    "no_data"
+   ],
+   [
+    "DAILY_CAP_HIT",
+    "daily_cap_hit"
+   ],
+   [
+    "TEMP_HIGH",
+    "temp_high"
+   ],
+   [
+    "TEMP_LOW",
+    "temp_low"
+   ],
+   [
+    "HUMIDITY_VERY_LOW",
+    "humidity_very_low"
+   ],
+   [
+    "HUMIDITY_LOW",
+    "humidity_low"
+   ],
+   [
+    "HUMIDITY_HIGH",
+    "humidity_high"
+   ],
+   [
+    "LIGHT_VERY_BRIGHT",
+    "light_very_bright"
+   ],
+   [
+    "LIGHT_BRIGHT",
+    "light_bright"
+   ],
+   [
+    "LIGHT_DARK",
+    "light_dark"
+   ],
+   [
+    "LIGHT_VERY_DARK",
+    "light_very_dark"
+   ],
+   [
+    "WATER_NEEDS_HIGH",
+    "water_needs_high"
+   ],
+   [
+    "WATER_NEEDS_LOW",
+    "water_needs_low"
+   ],
+   [
+    "TREND_MOISTURE_DECLINING",
+    "trend_moisture_declining"
+   ],
+   [
+    "TREND_MOISTURE_RISING",
+    "trend_moisture_rising"
+   ],
+   [
+    "TREND_TEMP_RISING",
+    "trend_temp_rising"
+   ],
+   [
+    "UNDERWATERING_PATTERN",
+    "underwatering_pattern"
+   ],
+   [
+    "LEARNING_ALERT",
+    "learning_alert"
+   ],
+   [
+    "OUTSIDE_WINDOW",
+    "outside_window"
+   ],
+   [
+    "SEASONAL_HOLD",
+    "seasonal_hold"
+   ],
+   [
+    "SEASONAL_BOOST",
+    "seasonal_boost"
+   ],
+   [
+    "VACATION_ACTIVE",
+    "vacation_active"
+   ],
+   [
+    "VACATION_RATIONING",
+    "vacation_rationing"
+   ],
+   [
+    "VACATION_BUDGET_EXHAUSTED",
+    "vacation_budget_exhausted"
+   ],
+   [
+    "QUIET_HOURS",
+    "quiet_hours"
+   ],
+   [
+    "MANUAL_OVERRIDE_QUIET_HOURS",
+    "manual_override_quiet_hours"
+   ],
+   [
+    "DEVICE_NO_WATER",
+    "device_no_water"
+   ],
+   [
+    "DEVICE_RAIN_DETECTED",
+    "device_rain_detected"
+   ],
+   [
+    "DEVICE_BATTERY_LOW",
+    "device_battery_low"
+   ],
+   [
+    "DEVICE_BATTERY_CRITICAL",
+    "device_battery_critical"
+   ],
+   [
+    "DEVICE_SIGNAL_LOSS",
+    "device_signal_loss"
+   ],
+   [
+    "DEVICE_OFFLINE",
+    "device_offline"
+   ],
+   [
+    "LEAK_HOLD",
+    "leak_hold"
+   ]
+  ]
+ }
+}

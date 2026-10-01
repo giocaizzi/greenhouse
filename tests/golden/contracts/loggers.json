@@ -1,0 +1,47 @@
+{
+ "greenhouse_core.database": {
+  "log": "greenhouse_core.database"
+ },
+ "greenhouse_core.devices.gateway": {
+  "logger": "greenhouse_core.devices.gateway"
+ },
+ "greenhouse_core.devices.irrigators.ik10pw": {
+  "logger": "greenhouse_core.devices.irrigators.ik10pw"
+ },
+ "greenhouse_core.devices.registry": {
+  "logger": "greenhouse_core.devices.registry"
+ },
+ "greenhouse_core.logic.engine": {
+  "log": "greenhouse_core.logic.engine"
+ },
+ "greenhouse_core.sync": {
+  "logger": "greenhouse_core.sync"
+ },
+ "greenhouse_server.auth": {
+  "logger": "greenhouse_server.auth"
+ },
+ "greenhouse_server.scheduler": {
+  "logger": "greenhouse_server.scheduler"
+ },
+ "greenhouse_server.services.anomaly": {
+  "logger": "greenhouse_server.services.anomaly"
+ },
+ "greenhouse_server.services.health_monitor": {
+  "logger": "greenhouse_server.services.health_monitor"
+ },
+ "greenhouse_server.services.irrigation": {
+  "logger": "greenhouse_server.services.irrigation"
+ },
+ "greenhouse_server.services.leak": {
+  "logger": "greenhouse_server.services.leak"
+ },
+ "greenhouse_server.services.notify": {
+  "log": "greenhouse_server.services.notify"
+ },
+ "greenhouse_server.services.pump_watcher": {
+  "logger": "greenhouse_server.services.pump_watcher"
+ },
+ "greenhouse_server.services.sync": {
+  "logger": "greenhouse_server.services.sync"
+ }
+}

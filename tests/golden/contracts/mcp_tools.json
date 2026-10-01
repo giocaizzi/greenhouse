@@ -1,0 +1,2979 @@
+{
+ "server": {
+  "name": "greenhouse",
+  "description": "Smart plant irrigation system — manage clusters, plants, sensors, irrigators, configs; run smart-irrigation decisions; read history, stats, and learning reports.",
+  "server_name": "greenhouse",
+  "describe_all_responses": false,
+  "describe_full_response_schema": false,
+  "include_operations": null,
+  "exclude_operations": null,
+  "include_tags": null,
+  "exclude_tags": null
+ },
+ "tools": [
+  {
+   "name": "login",
+   "description": "Login\n\nExchange a username and password for a session JWT.\n\nThe token is returned in the JSON body for API/CLI clients AND set as an\nHTTPOnly cookie for browser sessions, so the same login serves both.\n\nArgs:\n    body: username + password.\n\nReturns:\n    JSON with access_token, token_type, expires_in (seconds), username.\n\nRaises:\n    HTTPException 401 if credentials are invalid or the user is inactive.\n    HTTPException 503 if auth is enabled but no secret key is configured.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"access_token\": \"Access Token\",\n  \"token_type\": \"Token Type\",\n  \"expires_in\": 1,\n  \"username\": \"Username\"\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "username": {
+      "type": "string",
+      "maxLength": 128,
+      "minLength": 1,
+      "title": "username"
+     },
+     "password": {
+      "type": "string",
+      "maxLength": 512,
+      "minLength": 1,
+      "title": "password"
+     }
+    },
+    "title": "loginArguments",
+    "required": [
+     "username",
+     "password"
+    ]
+   }
+  },
+  {
+   "name": "logout",
+   "description": "Logout\n\nClear the session cookie. JWT bearer tokens remain valid until expiry.\n\nReturns:\n    Confirmation payload.\n\nRaises:\n    HTTPException 401 when called without an active session.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"detail\": \"Detail\"\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {},
+    "title": "logoutArguments"
+   }
+  },
+  {
+   "name": "whoami",
+   "description": "Whoami\n\nReturn the currently authenticated user.\n\nReturns:\n    Authenticated user's id and username.\n\nRaises:\n    HTTPException 401 if no valid session is present.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"id\": 1,\n  \"username\": \"Username\"\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {},
+    "title": "whoamiArguments"
+   }
+  },
+  {
+   "name": "list_clusters",
+   "description": "List all clusters\n\nList every cluster in the system.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n[\n  {\n    \"name\": \"Name\",\n    \"environment\": \"Environment\",\n    \"id\": 1,\n    \"created_at\": 1\n  }\n]\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {},
+    "title": "list_clustersArguments"
+   }
+  },
+  {
+   "name": "create_cluster",
+   "description": "Create a cluster\n\nCreate a new plant cluster.\n\nA cluster groups plants that share an irrigator and are watered together;\nirrigation decisions are made per-cluster, driven by the driest plant.\n\nArgs:\n    request: Cluster name, optional location label, and `environment`\n        (`indoor` or `outdoor`; affects how temperature is resolved).\n\nReturns:\n    The newly created cluster including its assigned ID.\n\n### Responses:\n\n**201**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"name\": \"Name\",\n  \"environment\": \"Environment\",\n  \"id\": 1,\n  \"created_at\": 1\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string",
+      "title": "name"
+     },
+     "location": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "location",
+      "type": "string"
+     },
+     "environment": {
+      "type": "string",
+      "title": "environment",
+      "default": "indoor"
+     }
+    },
+    "title": "create_clusterArguments",
+    "required": [
+     "name"
+    ]
+   }
+  },
+  {
+   "name": "get_cluster",
+   "description": "Get a cluster by ID\n\nFetch a single cluster by ID.\n\nArgs:\n    cluster_id: Numeric cluster identifier.\n\nReturns:\n    The cluster row. Use ``GET /clusters/{cluster_id}/detail`` to inline\n    the cluster's plants, sensors, irrigators, config, and windows in a\n    single round-trip.\n\nRaises:\n    HTTPException: 404 if no cluster with that ID exists.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"name\": \"Name\",\n  \"environment\": \"Environment\",\n  \"id\": 1,\n  \"created_at\": 1\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "cluster_id": {
+      "type": "integer",
+      "title": "cluster_id"
+     }
+    },
+    "title": "get_clusterArguments",
+    "required": [
+     "cluster_id"
+    ]
+   }
+  },
+  {
+   "name": "update_cluster",
+   "description": "Update a cluster\n\nPartially update a cluster metadata.\n\nOnly fields present in the request body are modified; omitted fields are\nleft unchanged.\n\nArgs:\n    cluster_id: Numeric cluster identifier.\n    request: Fields to update — any combination of name, location, and\n        environment.\n\nReturns:\n    The updated cluster.\n\nRaises:\n    HTTPException: 404 if no cluster with that ID exists.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"name\": \"Name\",\n  \"environment\": \"Environment\",\n  \"id\": 1,\n  \"created_at\": 1\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "cluster_id": {
+      "type": "integer",
+      "title": "cluster_id"
+     },
+     "name": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "name",
+      "type": "string"
+     },
+     "location": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "location",
+      "type": "string"
+     },
+     "environment": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "environment",
+      "type": "string"
+     }
+    },
+    "title": "update_clusterArguments",
+    "required": [
+     "cluster_id"
+    ]
+   }
+  },
+  {
+   "name": "delete_cluster",
+   "description": "Delete a cluster\n\nDelete a cluster and all its associated data.\n\nCascades to plants, sensors, irrigators, and irrigation config. This\noperation is irreversible.\n\nArgs:\n    cluster_id: Numeric cluster identifier.\n\nReturns:\n    success=True on successful deletion.\n\nRaises:\n    HTTPException: 404 if no cluster with that ID exists.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"success\": true\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "cluster_id": {
+      "type": "integer",
+      "title": "cluster_id"
+     }
+    },
+    "title": "delete_clusterArguments",
+    "required": [
+     "cluster_id"
+    ]
+   }
+  },
+  {
+   "name": "get_cluster_detail",
+   "description": "Get a cluster with its child resources inlined\n\nReturn a cluster together with every child resource in one round-trip.\n\nInlines the cluster's plants, sensors, irrigators, irrigation config, and\nirrigation windows so a UI or MCP tool can render a full cluster view\nwithout issuing a fan-out of follow-up requests. The plain\n``GET /clusters/{cluster_id}`` endpoint remains unchanged for clients that\nonly need the cluster row itself.\n\nArgs:\n    cluster_id: Numeric cluster identifier.\n    expand: Reserved for future expansion variants — currently only\n        ``children`` is honored (and is also the default).\n\nReturns:\n    The cluster wrapped together with plants, sensors, irrigators,\n    irrigation config, and irrigation windows.\n\nRaises:\n    HTTPException: 404 if no cluster with that ID exists.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"cluster\": {\n    \"name\": \"Name\",\n    \"environment\": \"Environment\",\n    \"id\": 1,\n    \"created_at\": 1\n  },\n  \"plants\": [\n    {\n      \"species\": \"Species\",\n      \"id\": 1,\n      \"cluster_id\": 1\n    }\n  ],\n  \"sensors\": [\n    {\n      \"tuya_device_id\": \"Tuya Device Id\",\n      \"name\": \"Name\",\n      \"type\": \"Type\",\n      \"id\": 1,\n      \"cluster_id\": 1\n    }\n  ],\n  \"windows\": [\n    {\n      \"start_hour\": 1,\n      \"end_hour\": 1,\n      \"weekday_mask\": 1,\n      \"id\": 1,\n      \"cluster_id\": 1\n    }\n  ]\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "cluster_id": {
+      "type": "integer",
+      "title": "cluster_id"
+     },
+     "expand": {
+      "type": "string",
+      "description": "Reserved for future expansion levels — currently must be ``children`` (the default).",
+      "default": "children",
+      "title": "expand"
+     }
+    },
+    "title": "get_cluster_detailArguments",
+    "required": [
+     "cluster_id"
+    ]
+   }
+  },
+  {
+   "name": "list_all_plants",
+   "description": "List plants across all clusters\n\nList every plant across all clusters, with optional filters and cursor pagination.\n\nThe cluster-scoped list at ``/clusters/{id}/plants`` is unchanged; this\nendpoint exists so MCP tools, dashboards, and the global search can walk\nthe full plant collection without enumerating clusters first.\n\nArgs:\n    cluster_id: Restrict to a single cluster.\n    category: Restrict to plants whose ``category`` matches exactly.\n    limit: Page size (default 100, max 500).\n    cursor: Id-based cursor — pass the previous response's ``next_cursor``\n        to fetch the next page.\n\nReturns:\n    The page of plants plus a ``next_cursor`` (None when the page was not\n    full and there are no more rows to fetch).\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"plants\": [\n    {\n      \"species\": \"Species\",\n      \"id\": 1,\n      \"cluster_id\": 1\n    }\n  ]\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "cluster_id": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "description": "Restrict results to a specific cluster",
+      "title": "cluster_id",
+      "type": "integer"
+     },
+     "category": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "description": "Restrict results to a plant category",
+      "title": "category",
+      "type": "string"
+     },
+     "limit": {
+      "type": "integer",
+      "maximum": 500,
+      "minimum": 1,
+      "default": 100,
+      "title": "limit"
+     },
+     "cursor": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "description": "Id cursor — return rows with id > cursor",
+      "title": "cursor",
+      "type": "integer"
+     }
+    },
+    "title": "list_all_plantsArguments"
+   }
+  },
+  {
+   "name": "add_plant",
+   "description": "Add Plant\n\nAdd a plant to a cluster.\n\nCare thresholds (water needs, temperature/humidity ranges) can be supplied\ndirectly or left null to be filled in later via POST /plants/sync, which\nlooks them up in the evidence-based plant database.\n\nArgs:\n    cluster_id: ID of the cluster the plant belongs to.\n    request: Species and optional plant-care fields.\n\nRaises:\n    HTTPException: 404 if the cluster does not exist.\n\nReturns:\n    The created plant including its ID and parent cluster.\n\n### Responses:\n\n**201**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"species\": \"Species\",\n  \"id\": 1,\n  \"cluster_id\": 1\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "cluster_id": {
+      "type": "integer",
+      "title": "cluster_id"
+     },
+     "species": {
+      "type": "string",
+      "title": "species"
+     },
+     "category": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "category",
+      "type": "string"
+     },
+     "water_needs": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "water_needs",
+      "type": "string"
+     },
+     "light_needs": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "light_needs",
+      "type": "string"
+     },
+     "ideal_temp_min": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "ideal_temp_min",
+      "type": "number"
+     },
+     "ideal_temp_max": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "ideal_temp_max",
+      "type": "number"
+     },
+     "ideal_humidity_min": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "ideal_humidity_min",
+      "type": "number"
+     },
+     "ideal_humidity_max": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "ideal_humidity_max",
+      "type": "number"
+     },
+     "notes": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "notes",
+      "type": "string"
+     }
+    },
+    "title": "add_plantArguments",
+    "required": [
+     "cluster_id",
+     "species"
+    ]
+   }
+  },
+  {
+   "name": "list_plants",
+   "description": "List Plants\n\nList every plant in a cluster.\n\nArgs:\n    cluster_id: ID of the cluster to enumerate.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n[\n  {\n    \"species\": \"Species\",\n    \"id\": 1,\n    \"cluster_id\": 1\n  }\n]\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "cluster_id": {
+      "type": "integer",
+      "title": "cluster_id"
+     }
+    },
+    "title": "list_plantsArguments",
+    "required": [
+     "cluster_id"
+    ]
+   }
+  },
+  {
+   "name": "update_plant",
+   "description": "Update a plant\n\nPartially update a plant care metadata.\n\nOnly fields present in the request body are modified; omitted fields are\nleft unchanged. The plant must belong to the specified cluster.\n\nArgs:\n    cluster_id: Cluster the plant belongs to.\n    plant_id: Numeric plant identifier.\n    request: Fields to update — any subset of care metadata fields.\n\nReturns:\n    The updated plant.\n\nRaises:\n    HTTPException: 404 if the plant does not exist or belongs to a\n        different cluster.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"species\": \"Species\",\n  \"id\": 1,\n  \"cluster_id\": 1\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "cluster_id": {
+      "type": "integer",
+      "title": "cluster_id"
+     },
+     "plant_id": {
+      "type": "integer",
+      "title": "plant_id"
+     },
+     "species": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "species",
+      "type": "string"
+     },
+     "category": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "category",
+      "type": "string"
+     },
+     "water_needs": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "water_needs",
+      "type": "string"
+     },
+     "light_needs": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "light_needs",
+      "type": "string"
+     },
+     "ideal_temp_min": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "ideal_temp_min",
+      "type": "number"
+     },
+     "ideal_temp_max": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "ideal_temp_max",
+      "type": "number"
+     },
+     "ideal_humidity_min": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "ideal_humidity_min",
+      "type": "number"
+     },
+     "ideal_humidity_max": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "ideal_humidity_max",
+      "type": "number"
+     },
+     "notes": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "notes",
+      "type": "string"
+     }
+    },
+    "title": "update_plantArguments",
+    "required": [
+     "cluster_id",
+     "plant_id"
+    ]
+   }
+  },
+  {
+   "name": "delete_plant",
+   "description": "Delete a plant\n\nDelete a plant from a cluster.\n\nSensors previously linked to this plant retain their cluster membership\nbut have their plant_id set to null. This operation is irreversible.\n\nArgs:\n    cluster_id: Cluster the plant belongs to.\n    plant_id: Numeric plant identifier.\n\nReturns:\n    success=True on successful deletion.\n\nRaises:\n    HTTPException: 404 if the plant does not exist or belongs to a\n        different cluster.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"success\": true\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "cluster_id": {
+      "type": "integer",
+      "title": "cluster_id"
+     },
+     "plant_id": {
+      "type": "integer",
+      "title": "plant_id"
+     }
+    },
+    "title": "delete_plantArguments",
+    "required": [
+     "cluster_id",
+     "plant_id"
+    ]
+   }
+  },
+  {
+   "name": "move_plant",
+   "description": "Move Plant\n\nMove a plant from its current cluster to a different cluster.\n\nThe plant keeps its id, its plant_health_daily history, and its learning\nprofile because those key off plant_id. Sensors linked to the plant are\nreassigned to the target cluster so their readings travel with the plant\n— the soil probes are physically stuck in the plant's pot. Decision logs,\nirrigation events, and alerts stay attached to the original cluster so\nthe audit trail reflects where the plant actually was at the time. An\nactivity event of type ``plant_moved`` is recorded with the before/after\ncluster ids and the ids of the sensors that moved with the plant.\n\nArgs:\n    plant_id: Database id of the plant to move.\n    request: Target cluster the plant should belong to after the move.\n\nReturns:\n    The updated plant with its new cluster_id.\n\nRaises:\n    HTTPException: 404 if the plant or the target cluster does not exist,\n        400 if ``target_cluster_id`` equals the plant's current cluster\n        (no-op move).\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"species\": \"Species\",\n  \"id\": 1,\n  \"cluster_id\": 1\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "plant_id": {
+      "type": "integer",
+      "title": "plant_id"
+     },
+     "target_cluster_id": {
+      "type": "integer",
+      "title": "target_cluster_id"
+     }
+    },
+    "title": "move_plantArguments",
+    "required": [
+     "plant_id",
+     "target_cluster_id"
+    ]
+   }
+  },
+  {
+   "name": "sync_plants",
+   "description": "Sync Plants\n\nRefresh plant care thresholds from the evidence-based plant database.\n\nResolves species to care data lookup and writes the result onto the matching\nplant rows. Use this after editing the bundled plant_database.json or after\nadding plants without explicit care fields. Scope is widening: single plant\nto cluster to entire database, depending on which field is set.\n\nArgs:\n    request: One of plant_id (single plant), cluster_id (all plants in\n        that cluster), or neither (every plant in every cluster).\n\nReturns:\n    Count of plants successfully synced and a list of error messages for\n    any that failed (failures do not abort the rest of the run).\n\nRaises:\n    HTTPException: 404 if plant_id is set and no such plant exists.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"synced\": 1,\n  \"errors\": [\n    \"string\"\n  ]\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "plant_id": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "plant_id",
+      "type": "integer"
+     },
+     "cluster_id": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "cluster_id",
+      "type": "integer"
+     }
+    },
+    "title": "sync_plantsArguments"
+   }
+  },
+  {
+   "name": "get_plant_health",
+   "description": "Get Plant Health\n\nReturn the current health score and 90-day history for a plant.\n\nComputes a fresh 0–100 composite score from readings over the last 14 days\n(soil/temp/humidity in-band fractions + irrigation efficiency) and returns\nthe stored daily snapshots for charting.\n\nArgs:\n    plant_id: Database ID of the plant.\n\nReturns:\n    Current score (None when no data), per-component breakdowns, and the\n    list of daily snapshots ordered oldest-first.\n\nRaises:\n    HTTPException: 404 if the plant does not exist.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"plant_id\": 1,\n  \"species\": \"Species\",\n  \"history\": [\n    {\n      \"date_key\": \"Date Key\",\n      \"timestamp\": 1,\n      \"score\": 1.0,\n      \"sample_count\": 1\n    }\n  ]\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "plant_id": {
+      "type": "integer",
+      "title": "plant_id"
+     }
+    },
+    "title": "get_plant_healthArguments",
+    "required": [
+     "plant_id"
+    ]
+   }
+  },
+  {
+   "name": "trigger_health_snapshot",
+   "description": "Trigger Health Snapshot\n\nCompute today's health score for every plant and persist the daily snapshots.\n\nIntended for manual ops and testing. The scheduler calls this automatically\nat 00:30 UTC every day.\n\nReturns:\n    Number of plant rows written (plants with no data are skipped).\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"rows_written\": 1\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {},
+    "title": "trigger_health_snapshotArguments"
+   }
+  },
+  {
+   "name": "list_all_irrigators",
+   "description": "List irrigators across all clusters\n\nList every irrigator across all clusters with optional cluster filter and cursor pagination.\n\nArgs:\n    cluster_id: Restrict to a single cluster.\n    limit: Page size (default 100, max 500).\n    cursor: Id-based cursor — pass the previous response's ``next_cursor``\n        to fetch the next page.\n\nReturns:\n    The page of irrigators plus a ``next_cursor`` (None when the page was\n    not full and there are no more rows to fetch).\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"irrigators\": [\n    {\n      \"tuya_device_id\": \"Tuya Device Id\",\n      \"name\": \"Name\",\n      \"type\": \"Type\",\n      \"id\": 1,\n      \"cluster_id\": 1\n    }\n  ]\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "cluster_id": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "description": "Restrict results to a specific cluster",
+      "title": "cluster_id",
+      "type": "integer"
+     },
+     "limit": {
+      "type": "integer",
+      "maximum": 500,
+      "minimum": 1,
+      "default": 100,
+      "title": "limit"
+     },
+     "cursor": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "description": "Id cursor — return rows with id > cursor",
+      "title": "cursor",
+      "type": "integer"
+     }
+    },
+    "title": "list_all_irrigatorsArguments"
+   }
+  },
+  {
+   "name": "add_irrigator",
+   "description": "Register the cluster's irrigator\n\nRegister the Tuya irrigator for a cluster.\n\nA cluster has at most one irrigator (strict 0:1). Registering a second one\nis rejected.\n\nArgs:\n    cluster_id: Cluster the irrigator belongs to.\n    request: Tuya device ID, irrigator name, type (e.g. `tuya_cloud`),\n        optional config dict, and optional `reservoir_l` /\n        `flow_rate_l_per_min` capacity used for vacation rationing.\n\nReturns:\n    The newly created irrigator.\n\nRaises:\n    HTTPException: 404 if the cluster does not exist, 409 if the cluster\n        already has an irrigator or the Tuya device ID is already\n        registered.\n\n### Responses:\n\n**201**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"tuya_device_id\": \"Tuya Device Id\",\n  \"name\": \"Name\",\n  \"type\": \"Type\",\n  \"id\": 1,\n  \"cluster_id\": 1\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "cluster_id": {
+      "type": "integer",
+      "title": "cluster_id"
+     },
+     "tuya_device_id": {
+      "type": "string",
+      "title": "tuya_device_id"
+     },
+     "name": {
+      "type": "string",
+      "title": "name"
+     },
+     "type": {
+      "type": "string",
+      "title": "type"
+     },
+     "config": {
+      "anyOf": [
+       {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "config",
+      "type": "object"
+     },
+     "reservoir_l": {
+      "anyOf": [
+       {
+        "type": "number",
+        "minimum": 0.0
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "reservoir_l",
+      "type": "number"
+     },
+     "flow_rate_l_per_min": {
+      "anyOf": [
+       {
+        "type": "number",
+        "minimum": 0.0
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "flow_rate_l_per_min",
+      "type": "number"
+     }
+    },
+    "title": "add_irrigatorArguments",
+    "required": [
+     "cluster_id",
+     "tuya_device_id",
+     "name",
+     "type"
+    ]
+   }
+  },
+  {
+   "name": "get_irrigator",
+   "description": "Get the cluster's irrigator\n\nFetch the cluster's single irrigator.\n\nArgs:\n    cluster_id: Cluster whose irrigator to fetch.\n\nReturns:\n    The cluster's irrigator record.\n\nRaises:\n    HTTPException: 404 if the cluster has no irrigator.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"tuya_device_id\": \"Tuya Device Id\",\n  \"name\": \"Name\",\n  \"type\": \"Type\",\n  \"id\": 1,\n  \"cluster_id\": 1\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "cluster_id": {
+      "type": "integer",
+      "title": "cluster_id"
+     }
+    },
+    "title": "get_irrigatorArguments",
+    "required": [
+     "cluster_id"
+    ]
+   }
+  },
+  {
+   "name": "update_irrigator",
+   "description": "Update the cluster's irrigator\n\nPartially update the cluster's irrigator metadata.\n\nOnly fields present in the request body are modified; omitted fields are\nleft unchanged.\n\nArgs:\n    cluster_id: Cluster whose irrigator to update.\n    request: Fields to update — any subset of `name`, `type`, `config`,\n        `reservoir_l`, and `flow_rate_l_per_min`.\n\nReturns:\n    The updated irrigator.\n\nRaises:\n    HTTPException: 404 if the cluster has no irrigator.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"tuya_device_id\": \"Tuya Device Id\",\n  \"name\": \"Name\",\n  \"type\": \"Type\",\n  \"id\": 1,\n  \"cluster_id\": 1\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "cluster_id": {
+      "type": "integer",
+      "title": "cluster_id"
+     },
+     "name": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "name",
+      "type": "string"
+     },
+     "type": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "type",
+      "type": "string"
+     },
+     "config": {
+      "anyOf": [
+       {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "config",
+      "type": "object"
+     },
+     "reservoir_l": {
+      "anyOf": [
+       {
+        "type": "number",
+        "minimum": 0.0
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "reservoir_l",
+      "type": "number"
+     },
+     "flow_rate_l_per_min": {
+      "anyOf": [
+       {
+        "type": "number",
+        "minimum": 0.0
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "flow_rate_l_per_min",
+      "type": "number"
+     }
+    },
+    "title": "update_irrigatorArguments",
+    "required": [
+     "cluster_id"
+    ]
+   }
+  },
+  {
+   "name": "delete_irrigator",
+   "description": "Delete the cluster's irrigator\n\nDelete the cluster's irrigator and all its historical events.\n\nThis operation is irreversible.\n\nArgs:\n    cluster_id: Cluster whose irrigator to delete.\n\nReturns:\n    `{\"success\": true}` on successful deletion.\n\nRaises:\n    HTTPException: 404 if the cluster has no irrigator.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"success\": true\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "cluster_id": {
+      "type": "integer",
+      "title": "cluster_id"
+     }
+    },
+    "title": "delete_irrigatorArguments",
+    "required": [
+     "cluster_id"
+    ]
+   }
+  },
+  {
+   "name": "start_irrigator",
+   "description": "Start Irrigator\n\nManually start an irrigator over the Tuya local protocol.\n\nSide effects: actuates physical hardware and records a `start` irrigation\nevent with `triggered_by=\"manual\"`. Bypasses the smart-decision engine.\n\nArgs:\n    irrigator_id: Irrigator to actuate.\n    request: Optional `minutes` for run duration.\n\nRaises:\n    HTTPException: 404 if the irrigator is unknown, 409 if the cluster\n        daily cap or max-events-per-day limit would be exceeded, 503 if\n        Tuya credentials are missing or the irrigator model has no\n        adapter, 502 if the device fails to start.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"success\": true,\n  \"message\": \"Message\"\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "irrigator_id": {
+      "type": "integer",
+      "title": "irrigator_id"
+     },
+     "minutes": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "minutes",
+      "type": "integer"
+     }
+    },
+    "title": "start_irrigatorArguments",
+    "required": [
+     "irrigator_id"
+    ]
+   }
+  },
+  {
+   "name": "stop_irrigator",
+   "description": "Stop Irrigator\n\nManually stop a running irrigator over the Tuya local protocol.\n\nSide effects: actuates physical hardware and records an `off` irrigation\nevent with `triggered_by=\"manual\"`.\n\nArgs:\n    irrigator_id: Irrigator to stop.\n\nRaises:\n    HTTPException: 404 if the irrigator is unknown, 503 if Tuya\n        credentials are missing or the irrigator model has no adapter,\n        502 if the device fails to stop.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"success\": true,\n  \"message\": \"Message\"\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "irrigator_id": {
+      "type": "integer",
+      "title": "irrigator_id"
+     }
+    },
+    "title": "stop_irrigatorArguments",
+    "required": [
+     "irrigator_id"
+    ]
+   }
+  },
+  {
+   "name": "log_manual",
+   "description": "Log Manual\n\nRecord a manually executed irrigation that did not go through the API.\n\nUseful when the user watered by hand but wants the learning engine and\nhistory to know about it. No hardware is actuated.\n\nArgs:\n    irrigator_id: Irrigator the manual run is attributed to.\n    request: Duration in minutes plus optional notes.\n\nRaises:\n    HTTPException: 404 if the irrigator is unknown, 409 if the cluster\n        daily cap or max-events-per-day limit would be exceeded.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"success\": true,\n  \"event_id\": 1\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "irrigator_id": {
+      "type": "integer",
+      "title": "irrigator_id"
+     },
+     "minutes": {
+      "type": "integer",
+      "title": "minutes"
+     },
+     "notes": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "notes",
+      "type": "string"
+     }
+    },
+    "title": "log_manualArguments",
+    "required": [
+     "irrigator_id",
+     "minutes"
+    ]
+   }
+  },
+  {
+   "name": "list_all_sensors",
+   "description": "List sensors across all clusters\n\nList every sensor across all clusters with optional cluster filter and cursor pagination.\n\nArgs:\n    cluster_id: Restrict to a single cluster.\n    limit: Page size (default 100, max 500).\n    cursor: Id-based cursor — pass the previous response's ``next_cursor``\n        to fetch the next page.\n\nReturns:\n    The page of sensors plus a ``next_cursor`` (None when the page was not\n    full and there are no more rows to fetch).\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"sensors\": [\n    {\n      \"tuya_device_id\": \"Tuya Device Id\",\n      \"name\": \"Name\",\n      \"type\": \"Type\",\n      \"id\": 1,\n      \"cluster_id\": 1\n    }\n  ]\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "cluster_id": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "description": "Restrict results to a specific cluster",
+      "title": "cluster_id",
+      "type": "integer"
+     },
+     "limit": {
+      "type": "integer",
+      "maximum": 500,
+      "minimum": 1,
+      "default": 100,
+      "title": "limit"
+     },
+     "cursor": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "description": "Id cursor — return rows with id > cursor",
+      "title": "cursor",
+      "type": "integer"
+     }
+    },
+    "title": "list_all_sensorsArguments"
+   }
+  },
+  {
+   "name": "add_sensor",
+   "description": "Add Sensor\n\nRegister a Tuya sensor under a cluster.\n\nA sensor may optionally be linked to a specific plant; otherwise it is\ntreated as a cluster-level reading.\n\nArgs:\n    cluster_id: Cluster the sensor belongs to.\n    request: Tuya device ID, sensor name, type (e.g. soil_moisture),\n        optional config dict, and optional plant_id for per-plant linking.\n\nRaises:\n    HTTPException: 404 if the cluster (or referenced plant) is missing,\n        409 if the Tuya device ID is already registered.\n\nReturns:\n    The created sensor record.\n\n### Responses:\n\n**201**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"tuya_device_id\": \"Tuya Device Id\",\n  \"name\": \"Name\",\n  \"type\": \"Type\",\n  \"id\": 1,\n  \"cluster_id\": 1\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "cluster_id": {
+      "type": "integer",
+      "title": "cluster_id"
+     },
+     "tuya_device_id": {
+      "type": "string",
+      "title": "tuya_device_id"
+     },
+     "name": {
+      "type": "string",
+      "title": "name"
+     },
+     "type": {
+      "type": "string",
+      "title": "type"
+     },
+     "config": {
+      "anyOf": [
+       {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "config",
+      "type": "object"
+     },
+     "plant_id": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "plant_id",
+      "type": "integer"
+     }
+    },
+    "title": "add_sensorArguments",
+    "required": [
+     "cluster_id",
+     "tuya_device_id",
+     "name",
+     "type"
+    ]
+   }
+  },
+  {
+   "name": "list_sensors",
+   "description": "List Sensors\n\nList every sensor registered to a cluster.\n\nArgs:\n    cluster_id: ID of the cluster to enumerate.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n[\n  {\n    \"tuya_device_id\": \"Tuya Device Id\",\n    \"name\": \"Name\",\n    \"type\": \"Type\",\n    \"id\": 1,\n    \"cluster_id\": 1\n  }\n]\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "cluster_id": {
+      "type": "integer",
+      "title": "cluster_id"
+     }
+    },
+    "title": "list_sensorsArguments",
+    "required": [
+     "cluster_id"
+    ]
+   }
+  },
+  {
+   "name": "get_sensor",
+   "description": "Get a sensor by ID\n\nFetch a single sensor by ID.\n\nArgs:\n    cluster_id: Cluster the sensor belongs to.\n    sensor_id: Numeric sensor identifier.\n\nReturns:\n    The sensor record.\n\nRaises:\n    HTTPException: 404 if the sensor does not exist or belongs to a\n        different cluster.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"tuya_device_id\": \"Tuya Device Id\",\n  \"name\": \"Name\",\n  \"type\": \"Type\",\n  \"id\": 1,\n  \"cluster_id\": 1\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "cluster_id": {
+      "type": "integer",
+      "title": "cluster_id"
+     },
+     "sensor_id": {
+      "type": "integer",
+      "title": "sensor_id"
+     }
+    },
+    "title": "get_sensorArguments",
+    "required": [
+     "cluster_id",
+     "sensor_id"
+    ]
+   }
+  },
+  {
+   "name": "update_sensor",
+   "description": "Update a sensor\n\nPartially update a sensor metadata.\n\nOnly fields present in the request body are modified; omitted fields are\nleft unchanged. The sensor must belong to the specified cluster.\n\nArgs:\n    cluster_id: Cluster the sensor belongs to.\n    sensor_id: Numeric sensor identifier.\n    request: Fields to update — any subset of name, type, config,\n        and plant_id.\n\nReturns:\n    The updated sensor.\n\nRaises:\n    HTTPException: 404 if the sensor does not exist or belongs to a\n        different cluster.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"tuya_device_id\": \"Tuya Device Id\",\n  \"name\": \"Name\",\n  \"type\": \"Type\",\n  \"id\": 1,\n  \"cluster_id\": 1\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "cluster_id": {
+      "type": "integer",
+      "title": "cluster_id"
+     },
+     "sensor_id": {
+      "type": "integer",
+      "title": "sensor_id"
+     },
+     "name": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "name",
+      "type": "string"
+     },
+     "type": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "type",
+      "type": "string"
+     },
+     "config": {
+      "anyOf": [
+       {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "config",
+      "type": "object"
+     },
+     "plant_id": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "plant_id",
+      "type": "integer"
+     }
+    },
+    "title": "update_sensorArguments",
+    "required": [
+     "cluster_id",
+     "sensor_id"
+    ]
+   }
+  },
+  {
+   "name": "delete_sensor",
+   "description": "Delete a sensor\n\nDelete a sensor and all its historical readings.\n\nThis operation is irreversible. The sensor must belong to the specified\ncluster.\n\nArgs:\n    cluster_id: Cluster the sensor belongs to.\n    sensor_id: Numeric sensor identifier.\n\nReturns:\n    success=True on successful deletion.\n\nRaises:\n    HTTPException: 404 if the sensor does not exist or belongs to a\n        different cluster.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"success\": true\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "cluster_id": {
+      "type": "integer",
+      "title": "cluster_id"
+     },
+     "sensor_id": {
+      "type": "integer",
+      "title": "sensor_id"
+     }
+    },
+    "title": "delete_sensorArguments",
+    "required": [
+     "cluster_id",
+     "sensor_id"
+    ]
+   }
+  },
+  {
+   "name": "list_sensor_assignments",
+   "description": "List the sensor's plant-assignment history\n\nReturn every plant this sensor has ever been linked to, oldest first.\n\nEach row covers the interval ``[started_at, ended_at)``. ``ended_at=None``\non the latest row means the sensor is currently assigned. Used by the UI\nto explain why a plant's history changes shape when a sensor is moved,\nand by audit tooling to verify attribution.\n\nArgs:\n    sensor_id: Numeric sensor identifier.\n\nReturns:\n    Full assignment list (possibly empty if the sensor was never linked).\n\nRaises:\n    HTTPException: 404 if the sensor does not exist.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"sensor_id\": 1,\n  \"assignments\": [\n    {\n      \"id\": 1,\n      \"sensor_id\": 1,\n      \"plant_id\": 1,\n      \"started_at\": 1\n    }\n  ]\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "sensor_id": {
+      "type": "integer",
+      "title": "sensor_id"
+     }
+    },
+    "title": "list_sensor_assignmentsArguments",
+    "required": [
+     "sensor_id"
+    ]
+   }
+  },
+  {
+   "name": "set_config",
+   "description": "Set Config\n\nPatch a cluster's irrigation config.\n\nEvery field is optional and nullable: omit a field to leave it unchanged,\nset it to a value to override the global default, or set it to ``null`` to\nclear an existing override and re-inherit. Quiet hours follow the same\npattern; passing ``quiet_start_hour == quiet_end_hour`` switches quiet\nhours off at the cluster level (useful for outdoor clusters that should\nignore an inherited indoor-friendly window).\n\nArgs:\n    cluster_id: Cluster to configure.\n    request: Partial config payload — only the fields the client sets are\n        applied.\n\nReturns:\n    The declared (raw) config row after the patch.\n\nRaises:\n    HTTPException: 404 if the cluster does not exist.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"id\": 1,\n  \"cluster_id\": 1,\n  \"last_updated\": 1\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "cluster_id": {
+      "type": "integer",
+      "title": "cluster_id"
+     },
+     "mode": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "mode",
+      "type": "string"
+     },
+     "duration_minutes": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "duration_minutes",
+      "type": "integer"
+     },
+     "interval_hours": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "interval_hours",
+      "type": "integer"
+     },
+     "auto_run": {
+      "anyOf": [
+       {
+        "type": "boolean"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "auto_run",
+      "type": "boolean"
+     },
+     "daily_cap_minutes": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "daily_cap_minutes",
+      "type": "integer"
+     },
+     "max_events_per_day": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "max_events_per_day",
+      "type": "integer"
+     },
+     "quiet_start_hour": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "quiet_start_hour",
+      "type": "integer"
+     },
+     "quiet_end_hour": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "quiet_end_hour",
+      "type": "integer"
+     }
+    },
+    "title": "set_configArguments",
+    "required": [
+     "cluster_id"
+    ]
+   }
+  },
+  {
+   "name": "get_config",
+   "description": "Get Config\n\nRead a cluster's declared (raw) irrigation config.\n\nNulls represent inherited values — call ``GET .../config/effective`` for\nthe merged view used by the decision engine.\n\nArgs:\n    cluster_id: Cluster to inspect.\n\nRaises:\n    HTTPException: 404 if the cluster has no config row yet.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"id\": 1,\n  \"cluster_id\": 1,\n  \"last_updated\": 1\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "cluster_id": {
+      "type": "integer",
+      "title": "cluster_id"
+     }
+    },
+    "title": "get_configArguments",
+    "required": [
+     "cluster_id"
+    ]
+   }
+  },
+  {
+   "name": "get_effective_config",
+   "description": "Get Effective Config\n\nRead a cluster's effective irrigation config (resolved across levels).\n\nWalks cluster → global defaults → built-in constants and reports both\nthe resolved value and the source level per field, so the UI can render\ninheritance state (``override`` vs ``↳ default``) without re-querying.\n\nArgs:\n    cluster_id: Cluster to inspect.\n\nReturns:\n    Declared per-cluster row plus a ``effective`` map of\n    ``field → {value, source}`` covering every configurable field.\n\nRaises:\n    HTTPException: 404 if the cluster does not exist.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"cluster_id\": 1,\n  \"effective\": {}\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "cluster_id": {
+      "type": "integer",
+      "title": "cluster_id"
+     }
+    },
+    "title": "get_effective_configArguments",
+    "required": [
+     "cluster_id"
+    ]
+   }
+  },
+  {
+   "name": "get_global_config",
+   "description": "Get Global Config\n\nRead the singleton global irrigation defaults row.\n\nReturns:\n    The current global defaults; nulls mean \"fall through to the\n    project-wide constant in :mod:`greenhouse_core.constants`.\"\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"id\": 1,\n  \"last_updated\": 1\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {},
+    "title": "get_global_configArguments"
+   }
+  },
+  {
+   "name": "update_global_config",
+   "description": "Update Global Config\n\nPatch the singleton global irrigation defaults.\n\nOmitted fields stay unchanged; pass ``null`` to clear a previously set\ndefault so the project-wide constant takes over. Quiet hours are part of\nthis surface — change ``quiet_start_hour`` / ``quiet_end_hour`` here to\nmove the system-wide window; set both to the same value to disable quiet\nhours globally (per-cluster overrides remain in effect).\n\nReturns:\n    The updated global defaults row.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"id\": 1,\n  \"last_updated\": 1\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "mode": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "mode",
+      "type": "string"
+     },
+     "duration_minutes": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "duration_minutes",
+      "type": "integer"
+     },
+     "interval_hours": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "interval_hours",
+      "type": "integer"
+     },
+     "auto_run": {
+      "anyOf": [
+       {
+        "type": "boolean"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "auto_run",
+      "type": "boolean"
+     },
+     "daily_cap_minutes": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "daily_cap_minutes",
+      "type": "integer"
+     },
+     "max_events_per_day": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "max_events_per_day",
+      "type": "integer"
+     },
+     "quiet_start_hour": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "quiet_start_hour",
+      "type": "integer"
+     },
+     "quiet_end_hour": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "quiet_end_hour",
+      "type": "integer"
+     }
+    },
+    "title": "update_global_configArguments"
+   }
+  },
+  {
+   "name": "cluster_status",
+   "description": "Cluster Status\n\nFull cluster snapshot: config, plants, sensors (latest reading + age),\nirrigators (last event), and the current decision-engine recommendation.\n\nRead-only — does not actuate hardware or modify the database.\n\nArgs:\n    cluster_id: Cluster to inspect.\n\nRaises:\n    HTTPException: 404 if the cluster does not exist.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"cluster\": {\n    \"name\": \"Name\",\n    \"environment\": \"Environment\",\n    \"id\": 1,\n    \"created_at\": 1\n  },\n  \"plants\": [\n    {\n      \"species\": \"Species\",\n      \"id\": 1,\n      \"cluster_id\": 1\n    }\n  ],\n  \"sensors\": [\n    {\n      \"id\": 1,\n      \"name\": \"Name\",\n      \"type\": \"Type\"\n    }\n  ]\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "cluster_id": {
+      "type": "integer",
+      "title": "cluster_id"
+     }
+    },
+    "title": "cluster_statusArguments",
+    "required": [
+     "cluster_id"
+    ]
+   }
+  },
+  {
+   "name": "irrigate",
+   "description": "Irrigate\n\nRun the full smart-irrigation pipeline for a cluster.\n\nSequence: sync sensors → resolve temperature (sensor / weather / fallback)\n→ run the decision engine → if not skipped and not a dry run, actuate the\ncluster's irrigator and record an `auto`-triggered event. Honors the\ncluster's irrigation config and the global 6h cooldown.\n\nSide effects: actuates physical hardware unless `dry_run=True`; writes a\nsensor sync and an irrigation event.\n\nArgs:\n    cluster_id: Cluster to irrigate.\n    request: `temp_override` to bypass sensor/weather resolution,\n        `dry_run=True` to compute the decision without actuating,\n        `no_sync=True` to skip the sensor refresh, `force=True` to\n        bypass the quiet-hours deny window (the decision still records\n        a `manual_override_quiet_hours` warning Reason).\n\nReturns:\n    Decision details (`action`, `reason`, `confidence`, optional\n    `duration_minutes`/`interval_hours`, plus the temperature used and its\n    source). `action` is one of `irrigated`, `skip`, or `error`.\n\nRaises:\n    HTTPException: 404 if the cluster does not exist.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"action\": \"Action\",\n  \"reason\": \"Reason\",\n  \"confidence\": 1.0,\n  \"reasons\": [\n    {\n      \"code\": \"Code\",\n      \"message\": \"Message\",\n      \"severity\": \"Severity\",\n      \"duration_delta\": 1,\n      \"interval_delta\": 1\n    }\n  ],\n  \"learning_alerts\": [\n    {\n      \"type\": \"Type\",\n      \"severity\": \"Severity\",\n      \"message\": \"Message\"\n    }\n  ]\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "cluster_id": {
+      "type": "integer",
+      "title": "cluster_id"
+     },
+     "temp_override": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "temp_override",
+      "type": "number"
+     },
+     "dry_run": {
+      "type": "boolean",
+      "title": "dry_run",
+      "default": false
+     },
+     "no_sync": {
+      "type": "boolean",
+      "title": "no_sync",
+      "default": false
+     },
+     "force": {
+      "type": "boolean",
+      "title": "force",
+      "default": false
+     }
+    },
+    "title": "irrigateArguments",
+    "required": [
+     "cluster_id"
+    ]
+   }
+  },
+  {
+   "name": "monitor",
+   "description": "Monitor\n\nPer-sensor soil-moisture status for a cluster, plus a list of plants\nthat currently need water.\n\nUse this for sensor-only clusters (no irrigators) where you want to know\nwhich plants are dry without running the decision engine. Read-only.\n\nArgs:\n    cluster_id: Cluster to monitor.\n\nReturns:\n    Each sensor's current soil moisture, the plant's target band, and a\n    status (`ok` / `dry` / `very_dry` / `wet` / `no_data`), plus a flat\n    `needs_water` list of plant labels for the dry/very_dry sensors.\n\nRaises:\n    HTTPException: 404 if the cluster does not exist.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"cluster_name\": \"Cluster Name\",\n  \"sensors\": [\n    {\n      \"sensor_id\": 1,\n      \"sensor_name\": \"Sensor Name\",\n      \"status\": \"Status\"\n    }\n  ],\n  \"needs_water\": [\n    \"string\"\n  ]\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "cluster_id": {
+      "type": "integer",
+      "title": "cluster_id"
+     }
+    },
+    "title": "monitorArguments",
+    "required": [
+     "cluster_id"
+    ]
+   }
+  },
+  {
+   "name": "check_all",
+   "description": "Check All\n\nRun a check across every cluster.\n\nFor each cluster: irrigate (if it has irrigators and `auto_run` is on) or\nmonitor (sensor-only). Collects learning + maintenance alerts per cluster.\n\nSide effects: may actuate physical hardware on any cluster whose decision\nengine says `irrigate` and whose config has `auto_run=True`. This is the\nsame call the background `check_all` job makes on its cron schedule\n(`IRRIGATION_CHECK_CRON_HOURS`, default hourly at :00).\n\nReturns:\n    Per-cluster results plus a `has_alerts` flag that is true if any\n    cluster has alerts, maintenance items, or thirsty plants.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"results\": [\n    {\n      \"cluster_id\": 1,\n      \"cluster_name\": \"Cluster Name\",\n      \"action\": \"Action\",\n      \"alerts\": [\n        {\n          \"type\": \"Type\",\n          \"severity\": \"Severity\",\n          \"message\": \"Message\"\n        }\n      ],\n      \"maintenance\": [\n        {\n          \"type\": \"Type\",\n          \"severity\": \"Severity\",\n          \"message\": \"Message\"\n        }\n      ],\n      \"needs_water\": [\n        \"string\"\n      ]\n    }\n  ],\n  \"has_alerts\": true\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {},
+    "title": "check_allArguments"
+   }
+  },
+  {
+   "name": "check_single",
+   "description": "Check Single\n\nRun a check for a single cluster (irrigate or monitor + collect alerts).\n\nSide effects: may actuate physical hardware if the cluster has irrigators\nand `auto_run=True`. Same semantics as POST /check, scoped to one cluster.\n\nArgs:\n    cluster_id: Cluster to check.\n\nRaises:\n    HTTPException: 404 if the cluster does not exist.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"cluster_id\": 1,\n  \"cluster_name\": \"Cluster Name\",\n  \"action\": \"Action\",\n  \"alerts\": [\n    {\n      \"type\": \"Type\",\n      \"severity\": \"Severity\",\n      \"message\": \"Message\"\n    }\n  ],\n  \"maintenance\": [\n    {\n      \"type\": \"Type\",\n      \"severity\": \"Severity\",\n      \"message\": \"Message\"\n    }\n  ],\n  \"needs_water\": [\n    \"string\"\n  ]\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "cluster_id": {
+      "type": "integer",
+      "title": "cluster_id"
+     }
+    },
+    "title": "check_singleArguments",
+    "required": [
+     "cluster_id"
+    ]
+   }
+  },
+  {
+   "name": "sync",
+   "description": "Sync\n\nPull recent sensor readings from the Tuya Cloud into the local SQLite archive.\n\nThis is the same job the background scheduler runs every\n`IRRIGATION_SYNC_INTERVAL_MINUTES` (default 180); call\nthis manually after registering a new sensor or to backfill after an\noutage. No hardware is actuated.\n\nArgs:\n    request: `hours` of look-back to fetch (default 24).\n\nReturns:\n    Counts of total readings synced, new vs. duplicate-skipped, live\n    readings hit, and any per-sensor error messages.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"total_synced\": 1,\n  \"total_new\": 1,\n  \"total_live\": 1,\n  \"errors\": [\n    \"string\"\n  ]\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "hours": {
+      "type": "integer",
+      "title": "hours",
+      "default": 24
+     }
+    },
+    "title": "syncArguments"
+   }
+  },
+  {
+   "name": "learn",
+   "description": "Learn\n\nHuman-readable learning report for a cluster.\n\nSummarises absorption rates, drainage profiles, and any advisory alerts\n(blocked drip, rapid drainage, chronic underwatering, etc.) the learner\nhas detected. Read-only and never blocks irrigation.\n\nArgs:\n    cluster_id: Cluster to analyse.\n\nRaises:\n    HTTPException: 404 if the cluster does not exist.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"cluster_name\": \"Cluster Name\",\n  \"report\": \"Report\",\n  \"alerts\": [\n    {\n      \"type\": \"Type\",\n      \"severity\": \"Severity\",\n      \"message\": \"Message\"\n    }\n  ]\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "cluster_id": {
+      "type": "integer",
+      "title": "cluster_id"
+     }
+    },
+    "title": "learnArguments",
+    "required": [
+     "cluster_id"
+    ]
+   }
+  },
+  {
+   "name": "history",
+   "description": "History\n\nRecent sensor readings and irrigation events for a cluster.\n\nArgs:\n    cluster_id: Cluster to inspect.\n    hours: Look-back window in hours (default 24).\n    limit: Maximum readings/events per sensor or irrigator (default 50).\n\nRaises:\n    HTTPException: 404 if the cluster does not exist.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"cluster_name\": \"Cluster Name\",\n  \"sensors\": [\n    {\n      \"sensor_id\": 1,\n      \"sensor_name\": \"Sensor Name\",\n      \"readings\": [\n        {\n          \"id\": 1,\n          \"sensor_id\": 1,\n          \"timestamp\": 1\n        }\n      ]\n    }\n  ],\n  \"irrigators\": [\n    {\n      \"irrigator_id\": 1,\n      \"irrigator_name\": \"Irrigator Name\",\n      \"events\": [\n        {\n          \"id\": 1,\n          \"irrigator_id\": 1,\n          \"timestamp\": 1,\n          \"action\": \"Action\",\n          \"triggered_by\": \"Triggered By\"\n        }\n      ]\n    }\n  ]\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "cluster_id": {
+      "type": "integer",
+      "title": "cluster_id"
+     },
+     "hours": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 24,
+      "title": "hours"
+     },
+     "limit": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 50,
+      "title": "limit"
+     }
+    },
+    "title": "historyArguments",
+    "required": [
+     "cluster_id"
+    ]
+   }
+  },
+  {
+   "name": "stats",
+   "description": "Stats\n\nAggregate irrigation statistics for a cluster.\n\nArgs:\n    cluster_id: Cluster to compute stats for.\n    days: Look-back window in days (default 7).\n\nReturns:\n    Total event count, total + average duration, frequency per day, and\n    breakdowns by event type and trigger source.\n\nRaises:\n    HTTPException: 404 if the cluster does not exist.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"cluster_name\": \"Cluster Name\",\n  \"period_days\": 1,\n  \"total_events\": 1,\n  \"total_duration_minutes\": 1,\n  \"avg_duration_minutes\": 1.0,\n  \"frequency_per_day\": 1.0,\n  \"events_by_type\": {},\n  \"events_by_trigger\": {}\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "cluster_id": {
+      "type": "integer",
+      "title": "cluster_id"
+     },
+     "days": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 7,
+      "title": "days"
+     }
+    },
+    "title": "statsArguments",
+    "required": [
+     "cluster_id"
+    ]
+   }
+  },
+  {
+   "name": "stats_export",
+   "description": "Stats Export\n\nExport raw irrigation events for a cluster as a CSV download.\n\nThe CSV columns are: timestamp, date, time, irrigator, action,\nduration_minutes, triggered_by, notes. This route returns a binary\n`text/csv` stream and is therefore exempt from the response_model\ntyping requirement that the rest of the API follows.\n\nArgs:\n    cluster_id: Cluster to export.\n    days: Look-back window in days (default 7).\n\nRaises:\n    HTTPException: 404 if the cluster does not exist.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "cluster_id": {
+      "type": "integer",
+      "title": "cluster_id"
+     },
+     "days": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 7,
+      "title": "days"
+     }
+    },
+    "title": "stats_exportArguments",
+    "required": [
+     "cluster_id"
+    ]
+   }
+  },
+  {
+   "name": "health",
+   "description": "Health\n\nLiveness probe: server status, scheduler state, and registered jobs.\n\nReturns:\n    `status=\"ok\"` and a snapshot of the APScheduler jobs the server\n    currently has registered.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"status\": \"Status\",\n  \"scheduler_running\": true,\n  \"jobs\": [\n    {\n      \"id\": \"Id\",\n      \"name\": \"Name\",\n      \"trigger\": \"Trigger\",\n      \"paused\": true,\n      \"core\": true\n    }\n  ]\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {},
+    "title": "healthArguments"
+   }
+  },
+  {
+   "name": "list_jobs",
+   "description": "List Jobs\n\nList every background job registered with APScheduler.\n\nReturns:\n    One entry per job with its id, name, trigger description,\n    `next_run_time` (null when the job is paused or the scheduler is not\n    running — see `scheduler_running` on GET /health), and a `paused`\n    flag that is true only for an explicitly paused job (`check_all`\n    after POST /scheduler/pause, mirroring the persisted preference).\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n[\n  {\n    \"id\": \"Id\",\n    \"name\": \"Name\",\n    \"trigger\": \"Trigger\",\n    \"paused\": true,\n    \"core\": true\n  }\n]\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {},
+    "title": "list_jobsArguments"
+   }
+  },
+  {
+   "name": "delete_job",
+   "description": "Delete Job\n\nUnregister an ad-hoc background job by ID.\n\nOnly ad-hoc one-shot jobs (per-irrigation pump watchers and leak checks)\ncan be deleted. The built-in jobs registered at startup (`check_all`,\nsensor sync, anomaly scan, device-health monitor, plant-health snapshot)\nare refused with 409: to stop automatic irrigation checks, use\nPOST /scheduler/pause instead.\n\nSide effects: the job stops firing immediately. Any in-flight execution\nis allowed to complete; deleting a job mid-run does not abort it. Works\nwhether or not the scheduler is running.\n\nArgs:\n    job_id: APScheduler job identifier (see GET /scheduler/jobs).\n\nReturns:\n    `success=True` once the job is unregistered.\n\nRaises:\n    HTTPException: 404 if no job with that ID is registered, 409 if the\n        job is a built-in scheduler job.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"success\": true\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "job_id": {
+      "type": "string",
+      "title": "job_id"
+     }
+    },
+    "title": "delete_jobArguments",
+    "required": [
+     "job_id"
+    ]
+   }
+  },
+  {
+   "name": "pause_scheduler",
+   "description": "Pause Scheduler\n\nPause the `check_all` scheduler job and persist the flag.\n\nStops new check-all runs from firing. Sensor sync, anomaly scan,\ndevice-health monitor, and plant-health snapshot jobs are unaffected.\nThe pause flag is persisted to `user_preferences.scheduler_paused` so the\npause survives a server restart — see startup wiring in `app.py`. Works\nwhether or not the background scheduler is running.\n\nReturns:\n    Current paused state of the `check_all` job (always True on success).\n\nRaises:\n    HTTPException: 404 if the `check_all` job is not registered.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"paused\": true\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {},
+    "title": "pause_schedulerArguments"
+   }
+  },
+  {
+   "name": "resume_scheduler",
+   "description": "Resume Scheduler\n\nResume the `check_all` scheduler job and clear the persisted pause.\n\nReverses a prior /scheduler/pause. Has no effect if the job was already\nrunning. Other background jobs are not touched. Works whether or not the\nbackground scheduler is running.\n\nReturns:\n    Current paused state of the `check_all` job (always False on success).\n\nRaises:\n    HTTPException: 404 if the `check_all` job is not registered.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"paused\": true\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {},
+    "title": "resume_schedulerArguments"
+   }
+  },
+  {
+   "name": "get_plant",
+   "description": "Get Plant\n\nFetch a single plant by ID across all clusters.\n\nArgs:\n    plant_id: Numeric plant identifier.\n\nRaises:\n    HTTPException: 404 if no plant with that ID exists.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"species\": \"Species\",\n  \"id\": 1,\n  \"cluster_id\": 1\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "plant_id": {
+      "type": "integer",
+      "title": "plant_id"
+     }
+    },
+    "title": "get_plantArguments",
+    "required": [
+     "plant_id"
+    ]
+   }
+  },
+  {
+   "name": "plant_chart_data",
+   "description": "Plant Chart Data\n\nTime-series chart payload for a single plant.\n\nReturns sensor readings, irrigation events, and the plant-care threshold\nband so the caller can render a Chart.js time-scale chart.\n\nArgs:\n    plant_id: Plant whose sensors to chart.\n    hours: Look-back window (1–8760).\n    metric: One of `soil_moisture`, `temperature`, `light`, `env_humidity`.\n\nRaises:\n    HTTPException: 400 if the metric is unsupported, 404 if the plant\n        does not exist.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"metric\": \"Metric\",\n  \"hours\": 1,\n  \"datasets\": [\n    {\n      \"sensor_id\": 1,\n      \"sensor_name\": \"Sensor Name\",\n      \"points\": [\n        []\n      ]\n    }\n  ],\n  \"events\": [\n    {\n      \"timestamp\": 1,\n      \"action\": \"Action\"\n    }\n  ],\n  \"threshold\": {\n    \"source\": \"Source\"\n  }\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "plant_id": {
+      "type": "integer",
+      "title": "plant_id"
+     },
+     "hours": {
+      "type": "integer",
+      "maximum": 8760,
+      "minimum": 1,
+      "default": 24,
+      "title": "hours"
+     },
+     "metric": {
+      "type": "string",
+      "default": "soil_moisture",
+      "title": "metric"
+     }
+    },
+    "title": "plant_chart_dataArguments",
+    "required": [
+     "plant_id"
+    ]
+   }
+  },
+  {
+   "name": "cluster_chart_data",
+   "description": "Cluster Chart Data\n\nTime-series chart payload aggregated across every sensor in a cluster.\n\nArgs:\n    cluster_id: Cluster whose sensors to chart.\n    hours: Look-back window (1–8760).\n    metric: One of `soil_moisture`, `temperature`, `light`, `env_humidity`.\n\nRaises:\n    HTTPException: 400 if the metric is unsupported, 404 if the cluster\n        does not exist.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"metric\": \"Metric\",\n  \"hours\": 1,\n  \"datasets\": [\n    {\n      \"sensor_id\": 1,\n      \"sensor_name\": \"Sensor Name\",\n      \"points\": [\n        []\n      ]\n    }\n  ],\n  \"events\": [\n    {\n      \"timestamp\": 1,\n      \"action\": \"Action\"\n    }\n  ],\n  \"threshold\": {\n    \"source\": \"Source\"\n  }\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "cluster_id": {
+      "type": "integer",
+      "title": "cluster_id"
+     },
+     "hours": {
+      "type": "integer",
+      "maximum": 8760,
+      "minimum": 1,
+      "default": 24,
+      "title": "hours"
+     },
+     "metric": {
+      "type": "string",
+      "default": "soil_moisture",
+      "title": "metric"
+     }
+    },
+    "title": "cluster_chart_dataArguments",
+    "required": [
+     "cluster_id"
+    ]
+   }
+  },
+  {
+   "name": "cluster_overlay",
+   "description": "Cluster Overlay\n\nMulti-metric overlay payload with soil moisture, humidity, and light normalised to 0-100.\n\nAll three series share a common Y axis (0-100) so they can be overlaid on one chart.\nLight is rescaled from lux using a 10 000 lx ceiling; the original ceiling is\nreturned as `original_max` on the light dataset for tooltip back-conversion.\n\nArgs:\n    cluster_id: Cluster to summarise.\n    hours: Look-back window (1–8760, default 72).\n\nReturns:\n    MultiMetricOverlayResponse with normalised datasets and irrigation event markers.\n\nRaises:\n    HTTPException: 404 if the cluster does not exist.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"cluster_id\": 1,\n  \"hours\": 1,\n  \"datasets\": [\n    {\n      \"metric\": \"Metric\",\n      \"points\": [\n        []\n      ]\n    }\n  ],\n  \"events\": [\n    {\n      \"timestamp\": 1,\n      \"action\": \"Action\"\n    }\n  ],\n  \"normalised\": true\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "cluster_id": {
+      "type": "integer",
+      "title": "cluster_id"
+     },
+     "hours": {
+      "type": "integer",
+      "maximum": 8760,
+      "minimum": 1,
+      "default": 72,
+      "title": "hours"
+     }
+    },
+    "title": "cluster_overlayArguments",
+    "required": [
+     "cluster_id"
+    ]
+   }
+  },
+  {
+   "name": "cluster_heatmap",
+   "description": "Cluster Heatmap\n\nIrrigation frequency heatmap cells for a 7×24 weekday-by-hour grid.\n\nEach non-zero cell records the count of irrigation events and the total\nirrigated minutes for that (weekday, hour) combination within the look-back\nwindow. Zero-count cells are omitted to keep the payload compact.\n\nArgs:\n    cluster_id: Cluster to summarise.\n    days: Look-back window in days (1–365, default 30).\n\nReturns:\n    HeatmapResponse with a sparse list of HeatmapCell objects.\n\nRaises:\n    HTTPException: 404 if the cluster does not exist.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"cluster_id\": 1,\n  \"days\": 1,\n  \"cells\": [\n    {\n      \"weekday\": 1,\n      \"hour\": 1,\n      \"count\": 1,\n      \"total_minutes\": 1\n    }\n  ]\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "cluster_id": {
+      "type": "integer",
+      "title": "cluster_id"
+     },
+     "days": {
+      "type": "integer",
+      "maximum": 365,
+      "minimum": 1,
+      "default": 30,
+      "title": "days"
+     }
+    },
+    "title": "cluster_heatmapArguments",
+    "required": [
+     "cluster_id"
+    ]
+   }
+  },
+  {
+   "name": "plant_health_timeline",
+   "description": "Plant Health Timeline\n\n90-day daily health score timeline for a single plant.\n\nHealth score per day (0–100) is the mean soil moisture across all sensors\nlinked to the plant. Points are (unix_timestamp_of_day_start, score) tuples\nin ascending time order. Days with no readings are omitted.\n\nArgs:\n    plant_id: Plant to chart.\n\nReturns:\n    PlantHealthTimelineResponse with daily score points and threshold levels.\n\nRaises:\n    HTTPException: 404 if the plant does not exist.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"plant_id\": 1,\n  \"points\": [\n    []\n  ],\n  \"thresholds\": {}\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "plant_id": {
+      "type": "integer",
+      "title": "plant_id"
+     }
+    },
+    "title": "plant_health_timelineArguments",
+    "required": [
+     "plant_id"
+    ]
+   }
+  },
+  {
+   "name": "list_alerts",
+   "description": "List Alerts\n\nList persisted alerts from the inbox with optional filters and cursor pagination.\n\nWalks the inbox newest-first. To fetch the next page, pass the previous\nresponse's ``next_cursor`` (the last alert id seen) as ``cursor``.\n\nArgs:\n    status: Filter by alert lifecycle status (`open`, `acknowledged`, `resolved`).\n    cluster_id: Restrict to alerts for a specific cluster.\n    plant_id: Restrict to alerts for a specific plant.\n    limit: Maximum number of items to return (default 100, max 500).\n    cursor: Id-based cursor — return only rows with ``id < cursor``.\n\nReturns:\n    Open-alert badge count, the filtered alert list newest-seen first,\n    and a ``next_cursor`` (None when the page was not full).\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"open_count\": 1,\n  \"items\": [\n    {\n      \"id\": 1,\n      \"source\": \"Source\",\n      \"code\": \"Code\",\n      \"severity\": \"Severity\",\n      \"entity_type\": \"Entity Type\",\n      \"title\": \"Title\",\n      \"message\": \"Message\",\n      \"status\": \"Status\",\n      \"first_seen_at\": 1,\n      \"last_seen_at\": 1,\n      \"occurrence_count\": 1\n    }\n  ]\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "status": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "status",
+      "type": "string"
+     },
+     "cluster_id": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "cluster_id",
+      "type": "integer"
+     },
+     "plant_id": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "plant_id",
+      "type": "integer"
+     },
+     "limit": {
+      "type": "integer",
+      "maximum": 500,
+      "minimum": 1,
+      "default": 100,
+      "title": "limit"
+     },
+     "cursor": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "description": "Id cursor — return alerts with id < cursor",
+      "title": "cursor",
+      "type": "integer"
+     }
+    },
+    "title": "list_alertsArguments"
+   }
+  },
+  {
+   "name": "get_alert",
+   "description": "Get Alert\n\nFetch a single alert by ID.\n\nArgs:\n    alert_id: Numeric alert identifier.\n\nReturns:\n    The alert row with full lifecycle metadata.\n\nRaises:\n    HTTPException: 404 if no alert with that ID exists.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"id\": 1,\n  \"source\": \"Source\",\n  \"code\": \"Code\",\n  \"severity\": \"Severity\",\n  \"entity_type\": \"Entity Type\",\n  \"title\": \"Title\",\n  \"message\": \"Message\",\n  \"status\": \"Status\",\n  \"first_seen_at\": 1,\n  \"last_seen_at\": 1,\n  \"occurrence_count\": 1\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "alert_id": {
+      "type": "integer",
+      "title": "alert_id"
+     }
+    },
+    "title": "get_alertArguments",
+    "required": [
+     "alert_id"
+    ]
+   }
+  },
+  {
+   "name": "acknowledge_alert",
+   "description": "Acknowledge Alert\n\nMove an open alert to the acknowledged state.\n\nIdempotent: acknowledging an already-acknowledged alert leaves it unchanged.\n\nArgs:\n    alert_id: Numeric alert identifier.\n\nReturns:\n    The updated alert row.\n\nRaises:\n    HTTPException: 404 if no alert with that ID exists.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"id\": 1,\n  \"source\": \"Source\",\n  \"code\": \"Code\",\n  \"severity\": \"Severity\",\n  \"entity_type\": \"Entity Type\",\n  \"title\": \"Title\",\n  \"message\": \"Message\",\n  \"status\": \"Status\",\n  \"first_seen_at\": 1,\n  \"last_seen_at\": 1,\n  \"occurrence_count\": 1\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "alert_id": {
+      "type": "integer",
+      "title": "alert_id"
+     }
+    },
+    "title": "acknowledge_alertArguments",
+    "required": [
+     "alert_id"
+    ]
+   }
+  },
+  {
+   "name": "resolve_alert",
+   "description": "Resolve Alert\n\nMark an alert as resolved, closing the inbox entry.\n\nArgs:\n    alert_id: Numeric alert identifier.\n\nReturns:\n    The updated alert row with `resolved_at` set.\n\nRaises:\n    HTTPException: 404 if no alert with that ID exists.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"id\": 1,\n  \"source\": \"Source\",\n  \"code\": \"Code\",\n  \"severity\": \"Severity\",\n  \"entity_type\": \"Entity Type\",\n  \"title\": \"Title\",\n  \"message\": \"Message\",\n  \"status\": \"Status\",\n  \"first_seen_at\": 1,\n  \"last_seen_at\": 1,\n  \"occurrence_count\": 1\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "alert_id": {
+      "type": "integer",
+      "title": "alert_id"
+     }
+    },
+    "title": "resolve_alertArguments",
+    "required": [
+     "alert_id"
+    ]
+   }
+  },
+  {
+   "name": "refresh_cluster_alerts",
+   "description": "Refresh Cluster Alerts\n\nRecompute alerts for a single cluster and reconcile the inbox.\n\nEvaluates learning and maintenance findings for the cluster, upserts new\nalerts, and auto-resolves any previously-open alerts whose triggering\ncondition has cleared.\n\nArgs:\n    cluster_id: Cluster to sync alerts for.\n\nReturns:\n    Open-alert badge count and the cluster's current alert list.\n\nRaises:\n    HTTPException: 404 if the cluster does not exist.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"open_count\": 1,\n  \"items\": [\n    {\n      \"id\": 1,\n      \"source\": \"Source\",\n      \"code\": \"Code\",\n      \"severity\": \"Severity\",\n      \"entity_type\": \"Entity Type\",\n      \"title\": \"Title\",\n      \"message\": \"Message\",\n      \"status\": \"Status\",\n      \"first_seen_at\": 1,\n      \"last_seen_at\": 1,\n      \"occurrence_count\": 1\n    }\n  ]\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "cluster_id": {
+      "type": "integer",
+      "title": "cluster_id"
+     }
+    },
+    "title": "refresh_cluster_alertsArguments",
+    "required": [
+     "cluster_id"
+    ]
+   }
+  },
+  {
+   "name": "refresh_all_alerts",
+   "description": "Refresh All Alerts\n\nRecompute and reconcile alerts across all clusters.\n\nRuns sync_cluster_alerts for every cluster. Returns the full alert list\nacross all clusters after reconciliation.\n\nReturns:\n    Open-alert badge count and the full post-sync alert list.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"open_count\": 1,\n  \"items\": [\n    {\n      \"id\": 1,\n      \"source\": \"Source\",\n      \"code\": \"Code\",\n      \"severity\": \"Severity\",\n      \"entity_type\": \"Entity Type\",\n      \"title\": \"Title\",\n      \"message\": \"Message\",\n      \"status\": \"Status\",\n      \"first_seen_at\": 1,\n      \"last_seen_at\": 1,\n      \"occurrence_count\": 1\n    }\n  ]\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {},
+    "title": "refresh_all_alertsArguments"
+   }
+  },
+  {
+   "name": "list_activity",
+   "description": "List Activity\n\nList the cross-cutting activity timeline, newest events first.\n\nSupports cursor-based pagination: pass `before` as the Unix timestamp of\nthe last item received to fetch the next page. A `next_cursor` is included\nin the response when more items may exist.\n\nArgs:\n    entity_type: Filter by entity type (e.g. `cluster`, `plant`, `sensor`).\n    entity_id: Filter by numeric entity identifier.\n    source: Filter by event source (e.g. `irrigation`, `learning`).\n    severity: Filter by severity level (`info`, `warning`, `error`).\n    limit: Maximum number of items per page (default 100, max 500).\n    before: Cursor timestamp — return only events older than this value.\n\nReturns:\n    Ordered activity items and a `next_cursor` timestamp when more pages exist.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"items\": [\n    {\n      \"id\": 1,\n      \"timestamp\": 1,\n      \"source\": \"Source\",\n      \"entity_type\": \"Entity Type\",\n      \"severity\": \"Severity\",\n      \"code\": \"Code\",\n      \"message\": \"Message\"\n    }\n  ]\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "entity_type": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "entity_type",
+      "type": "string"
+     },
+     "entity_id": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "entity_id",
+      "type": "integer"
+     },
+     "source": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "source",
+      "type": "string"
+     },
+     "severity": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "severity",
+      "type": "string"
+     },
+     "limit": {
+      "type": "integer",
+      "maximum": 500,
+      "minimum": 1,
+      "default": 100,
+      "title": "limit"
+     },
+     "before": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "before",
+      "type": "integer"
+     }
+    },
+    "title": "list_activityArguments"
+   }
+  },
+  {
+   "name": "list_decisions",
+   "description": "List Decisions\n\nReturn the persisted irrigation decision log for a cluster, newest first.\n\nEvery call to the decision engine with `persist=True` writes a row here,\nwhether or not the decision was acted on. Use this to audit \"why did you\nskip at 3am?\" or replay the reasoning trail in the UI.\n\nArgs:\n    cluster_id: Cluster whose decision log to query.\n    limit: Maximum number of entries to return (default 50, max 200).\n\nReturns:\n    Cluster ID and ordered decision log entries including action, confidence,\n    reason text, and whether the decision was actuated.\n\nRaises:\n    HTTPException: 404 if the cluster does not exist.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"cluster_id\": 1,\n  \"items\": [\n    {\n      \"id\": 1,\n      \"cluster_id\": 1,\n      \"evaluated_at\": 1,\n      \"action\": \"Action\",\n      \"duration_minutes\": 1,\n      \"interval_hours\": 1,\n      \"confidence\": 1.0,\n      \"reason_text\": \"Reason Text\",\n      \"triggered_by\": \"Triggered By\",\n      \"actuated\": true\n    }\n  ]\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "cluster_id": {
+      "type": "integer",
+      "title": "cluster_id"
+     },
+     "limit": {
+      "type": "integer",
+      "maximum": 200,
+      "minimum": 1,
+      "default": 50,
+      "title": "limit"
+     }
+    },
+    "title": "list_decisionsArguments",
+    "required": [
+     "cluster_id"
+    ]
+   }
+  },
+  {
+   "name": "get_cluster_forecast",
+   "description": "Get Cluster Forecast\n\nPredict when a cluster will next need irrigation.\n\nUses per-plant drainage profiles learned from historical irrigation events\nto project the time until the driest plant's soil moisture crosses its\ntarget-minimum. Falls back to a constant -2.0 %/h rate when no learned\nprofile is available. For outdoor clusters, fetches the next-6h precipitation\nforecast and sets `weather_skip=True` when significant rain (>2mm) is expected.\n\nArgs:\n    cluster_id: Cluster to forecast.\n\nReturns:\n    Forecast including `next_predicted_at` (Unix timestamp), `hours_until_next`,\n    `method` (`drainage_slope` or `fallback_constant`), `confidence` (0–1),\n    a human-readable `explanation`, and optional weather context\n    (`precipitation_next_6h_mm`, `weather_skip`, `weather_reason`).\n    `next_predicted_at` and `hours_until_next` are `null` when no sensor\n    data is available.\n\nRaises:\n    HTTPException: 404 if the cluster does not exist.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"cluster_id\": 1,\n  \"method\": \"Method\",\n  \"confidence\": 1.0,\n  \"explanation\": \"Explanation\",\n  \"weather_skip\": true\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "cluster_id": {
+      "type": "integer",
+      "title": "cluster_id"
+     }
+    },
+    "title": "get_cluster_forecastArguments",
+    "required": [
+     "cluster_id"
+    ]
+   }
+  },
+  {
+   "name": "get_preferences",
+   "description": "Get user preferences\n\nReturn the current user preferences, creating defaults on first access.\n\nReturns:\n    The singleton preferences row with units, timezone, theme, default cluster,\n    refresh interval, and dry-run flag.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"units\": \"Units\",\n  \"timezone\": \"Timezone\",\n  \"theme\": \"Theme\",\n  \"refresh_interval_seconds\": 1,\n  \"dry_run_global\": true,\n  \"scheduler_paused\": true,\n  \"notify_manual\": true,\n  \"notify_emergency\": true,\n  \"notify_alerts\": true,\n  \"notify_auto\": true\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {},
+    "title": "get_preferencesArguments"
+   }
+  },
+  {
+   "name": "update_preferences",
+   "description": "Update user preferences\n\nPatch user preferences; omitted fields are left unchanged.\n\nChanging the timezone re-syncs the scheduler, weather, and display clocks to\nthe new zone so they keep agreeing with the decision engine.\n\nArgs:\n    request: Partial update — any combination of units, timezone, theme,\n        default_cluster_id, refresh_interval_seconds, or dry_run_global.\n        Fields set to null are ignored.\n\nReturns:\n    The updated preferences row.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"units\": \"Units\",\n  \"timezone\": \"Timezone\",\n  \"theme\": \"Theme\",\n  \"refresh_interval_seconds\": 1,\n  \"dry_run_global\": true,\n  \"scheduler_paused\": true,\n  \"notify_manual\": true,\n  \"notify_emergency\": true,\n  \"notify_alerts\": true,\n  \"notify_auto\": true\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "units": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "units",
+      "type": "string"
+     },
+     "timezone": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "timezone",
+      "type": "string"
+     },
+     "theme": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "theme",
+      "type": "string"
+     },
+     "default_cluster_id": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "default_cluster_id",
+      "type": "integer"
+     },
+     "refresh_interval_seconds": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "refresh_interval_seconds",
+      "type": "integer"
+     },
+     "dry_run_global": {
+      "anyOf": [
+       {
+        "type": "boolean"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "dry_run_global",
+      "type": "boolean"
+     },
+     "notify_manual": {
+      "anyOf": [
+       {
+        "type": "boolean"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "notify_manual",
+      "type": "boolean"
+     },
+     "notify_emergency": {
+      "anyOf": [
+       {
+        "type": "boolean"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "notify_emergency",
+      "type": "boolean"
+     },
+     "notify_alerts": {
+      "anyOf": [
+       {
+        "type": "boolean"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "notify_alerts",
+      "type": "boolean"
+     },
+     "notify_auto": {
+      "anyOf": [
+       {
+        "type": "boolean"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "notify_auto",
+      "type": "boolean"
+     }
+    },
+    "title": "update_preferencesArguments"
+   }
+  },
+  {
+   "name": "list_vacation_windows",
+   "description": "List vacation windows\n\nReturn all vacation windows together with the currently active one.\n\nReturns:\n    A list of all windows and the active window (spanning now), if any.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"items\": [\n    {\n      \"id\": 1,\n      \"starts_at\": 1,\n      \"ends_at\": 1,\n      \"created_at\": 1\n    }\n  ]\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {},
+    "title": "list_vacation_windowsArguments"
+   }
+  },
+  {
+   "name": "create_vacation_window",
+   "description": "Create a vacation window\n\nSchedule a vacation window that makes the engine ration water to last the trip.\n\nWhile the window is active the decision engine appends a\n``VACATION_ACTIVE`` reason to every decision and, for clusters whose\nirrigators have both ``reservoir_l`` and ``flow_rate_l_per_min`` set,\nenforces a per-day burn-down budget: each irrigation's duration is trimmed\nto fit the remaining tank allowance (``VACATION_RATIONING``), or flipped to\nSKIP when no usable water remains this cycle (``VACATION_BUDGET_EXHAUSTED``).\nWhen no irrigator in a cluster has capacity configured the window is purely\ninformational and irrigation proceeds exactly as it would normally.\n\nArgs:\n    request: Window start and end as Unix timestamps, optional contact email\n        and free-text notes.\n\nReturns:\n    The newly created vacation window.\n\n### Responses:\n\n**201**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"id\": 1,\n  \"starts_at\": 1,\n  \"ends_at\": 1,\n  \"created_at\": 1\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "starts_at": {
+      "type": "integer",
+      "title": "starts_at"
+     },
+     "ends_at": {
+      "type": "integer",
+      "title": "ends_at"
+     },
+     "contact_email": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "contact_email",
+      "type": "string"
+     },
+     "notes": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "notes",
+      "type": "string"
+     }
+    },
+    "title": "create_vacation_windowArguments",
+    "required": [
+     "starts_at",
+     "ends_at"
+    ]
+   }
+  },
+  {
+   "name": "update_vacation_window",
+   "description": "Update a vacation window\n\nPartially update a vacation window.\n\nOnly fields present in the request body are modified; omitted fields are\nleft unchanged. The effective ``starts_at`` and ``ends_at`` after the patch\nmust satisfy ``starts_at < ends_at`` — otherwise the request is rejected\nso the vacation gate can never end up reversed.\n\nArgs:\n    window_id: Numeric ID of the vacation window to update.\n    request: Any subset of starts_at, ends_at, contact_email, notes.\n\nReturns:\n    The updated vacation window.\n\nRaises:\n    HTTPException: 404 if no window with that ID exists, 400 if the\n        resulting ``starts_at`` is not strictly before ``ends_at``.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"id\": 1,\n  \"starts_at\": 1,\n  \"ends_at\": 1,\n  \"created_at\": 1\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "window_id": {
+      "type": "integer",
+      "title": "window_id"
+     },
+     "starts_at": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "starts_at",
+      "type": "integer"
+     },
+     "ends_at": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "ends_at",
+      "type": "integer"
+     },
+     "contact_email": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "contact_email",
+      "type": "string"
+     },
+     "notes": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "notes",
+      "type": "string"
+     }
+    },
+    "title": "update_vacation_windowArguments",
+    "required": [
+     "window_id"
+    ]
+   }
+  },
+  {
+   "name": "delete_vacation_window",
+   "description": "Delete a vacation window\n\nRemove a vacation window by ID.\n\nArgs:\n    window_id: Numeric ID of the vacation window to delete.\n\nReturns:\n    Success acknowledgement.\n\nRaises:\n    HTTPException: 404 if no window with that ID exists.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"success\": true\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "window_id": {
+      "type": "integer",
+      "title": "window_id"
+     }
+    },
+    "title": "delete_vacation_windowArguments",
+    "required": [
+     "window_id"
+    ]
+   }
+  },
+  {
+   "name": "global_search",
+   "description": "Global search across all resources\n\nSearch clusters, plants, sensors, and irrigators by name or device ID prefix.\n\nCase-insensitive LIKE match on cluster name/location, plant species/notes,\nand sensor/irrigator name and Tuya device ID prefix. Results are capped at\n5 hits per entity type and then trimmed to ``limit`` total.\n\nArgs:\n    q: Free-text search query. Empty string returns no results.\n    limit: Maximum total hits (default 20, max 100).\n\nReturns:\n    The query string echoed back and a ranked list of matching hits with\n    entity type, label, sublabel, and deep-link href.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"query\": \"Query\",\n  \"hits\": [\n    {\n      \"entity_type\": \"Entity Type\",\n      \"entity_id\": 1,\n      \"label\": \"Label\",\n      \"href\": \"Href\"\n    }\n  ]\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "q": {
+      "type": "string",
+      "description": "Search query",
+      "default": "",
+      "title": "q"
+     },
+     "limit": {
+      "type": "integer",
+      "maximum": 100,
+      "minimum": 1,
+      "description": "Maximum number of hits to return",
+      "default": 20,
+      "title": "limit"
+     }
+    },
+    "title": "global_searchArguments"
+   }
+  },
+  {
+   "name": "bulk_stop_all",
+   "description": "Emergency stop all irrigators\n\nSend an emergency stop command to every irrigator in the system.\n\nIterates all irrigators regardless of cluster, calls the per-adapter\nstop command for each, and logs an IrrigationEvent with\n``triggered_by=\"emergency\"`` and ``notes=\"kill switch\"``. When the device\nregistry is unavailable the event is still logged and the irrigator is\ncounted as stopped. Per-irrigator errors are collected rather than aborting\nthe whole batch.\n\nReturns:\n    Count of irrigators successfully stopped and a list of per-device\n    error strings for any that raised an exception.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"stopped\": 1,\n  \"errors\": [\n    \"string\"\n  ]\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {},
+    "title": "bulk_stop_allArguments"
+   }
+  },
+  {
+   "name": "cluster_insights",
+   "description": "Cluster Insights\n\nReturn actionable care insights for a cluster.\n\nAggregates stale-data warnings, battery alerts, humidity and light issues\nfrom the maintenance layer, chronic underwatering and absorption anomalies\nfrom the learning layer, and a summary of the most recent decision-engine\nevaluation.\n\nArgs:\n    cluster_id: Cluster to analyse.\n\nReturns:\n    List of CareInsight items ordered by discovery (maintenance first, then\n    learning, then last decision), with severity, a short title, the raw\n    alert message, and an imperative suggestion.\n\nRaises:\n    HTTPException: 404 if the cluster does not exist.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"cluster_id\": 1,\n  \"cluster_name\": \"Cluster Name\",\n  \"insights\": [\n    {\n      \"code\": \"Code\",\n      \"severity\": \"Severity\",\n      \"title\": \"Title\",\n      \"message\": \"Message\"\n    }\n  ]\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "cluster_id": {
+      "type": "integer",
+      "title": "cluster_id"
+     }
+    },
+    "title": "cluster_insightsArguments",
+    "required": [
+     "cluster_id"
+    ]
+   }
+  },
+  {
+   "name": "system_health",
+   "description": "System Health\n\nDetailed system health pulse: sensor freshness, irrigator inventory, and cloud reachability.\n\nA richer sibling of GET /health. Checks every sensor's most recent reading\ntimestamp to classify devices as ok / stale / cold, infers cloud\nreachability from recent data, counts open alerts, and reports whether the\nbackground scheduler is running.\n\nReturns:\n    SystemHealthResponse with status (\"ok\" / \"degraded\" / \"down\"),\n    sensor and irrigator counts, open alert count, last sync timestamp,\n    and a per-device status list (up to 20 devices).\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"status\": \"Status\",\n  \"scheduler_running\": true,\n  \"cloud_reachable\": true,\n  \"sensors_total\": 1,\n  \"sensors_stale\": 1,\n  \"sensors_fresh\": 1,\n  \"irrigators_total\": 1,\n  \"open_alerts\": 1,\n  \"devices\": [\n    {\n      \"id\": 1,\n      \"name\": \"Name\",\n      \"status\": \"Status\"\n    }\n  ]\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {},
+    "title": "system_healthArguments"
+   }
+  },
+  {
+   "name": "quality_report",
+   "description": "Quality Report\n\nScan the database and return a structured data-quality report.\n\nDetects: sensors with no plant assignment, plants with no sensor, irrigators\nin plant-less clusters, clusters without an irrigation config, sensors with\nno reading in the last 24 hours, duplicate Tuya device IDs (critical), and\nplant species absent from the plant database.\n\nReturns:\n    DataQualityReport with a flat list of DataQualityIssue items and a\n    per-code count dict summarising how many instances of each issue type\n    were found.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"issues\": [\n    {\n      \"code\": \"Code\",\n      \"severity\": \"Severity\",\n      \"entity_type\": \"Entity Type\",\n      \"label\": \"Label\",\n      \"message\": \"Message\"\n    }\n  ],\n  \"counts\": {}\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {},
+    "title": "quality_reportArguments"
+   }
+  },
+  {
+   "name": "cluster_efficacy",
+   "description": "Cluster Efficacy\n\nScore completed irrigation events by post-irrigation soil-moisture rise.\n\nFor each `start` event with a positive `duration_minutes`, compares the\naverage soil moisture across all cluster sensors in the 30 minutes before\nthe event against the 90-minute window after. Score = clamp((after - before)\n× 5, 0, 100): a 20 percentage-point rise yields score 100; less than\n0 percentage-point rise yields 0. Score is None when sensor data is\ninsufficient around the event.\n\nArgs:\n    cluster_id: Cluster to score.\n    days: Look-back window in days (default 14).\n\nReturns:\n    EfficacyListResponse with one EfficacyItemResponse per qualifying event,\n    ordered newest-first.\n\nRaises:\n    HTTPException: 404 if the cluster does not exist.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"cluster_id\": 1,\n  \"days\": 1,\n  \"items\": [\n    {\n      \"event_id\": 1,\n      \"timestamp\": 1,\n      \"irrigator_name\": \"Irrigator Name\",\n      \"duration_minutes\": 1\n    }\n  ]\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "cluster_id": {
+      "type": "integer",
+      "title": "cluster_id"
+     },
+     "days": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 14,
+      "title": "days"
+     }
+    },
+    "title": "cluster_efficacyArguments",
+    "required": [
+     "cluster_id"
+    ]
+   }
+  },
+  {
+   "name": "list_windows",
+   "description": "List a cluster's irrigation windows\n\nReturn every configured watering window for the cluster, oldest first.\n\nArgs:\n    cluster_id: Cluster the windows belong to.\n\nReturns:\n    ``IrrigationWindowListResponse`` — may have an empty ``windows`` list\n    when no per-cluster windows are configured (the engine then falls back\n    to the global default preferred hours).\n\nRaises:\n    HTTPException: 404 if the cluster does not exist.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"cluster_id\": 1,\n  \"windows\": [\n    {\n      \"start_hour\": 1,\n      \"end_hour\": 1,\n      \"weekday_mask\": 1,\n      \"id\": 1,\n      \"cluster_id\": 1\n    }\n  ]\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "cluster_id": {
+      "type": "integer",
+      "title": "cluster_id"
+     }
+    },
+    "title": "list_windowsArguments",
+    "required": [
+     "cluster_id"
+    ]
+   }
+  },
+  {
+   "name": "add_window",
+   "description": "Create an irrigation window\n\nRegister a new local-time window during which this cluster may irrigate.\n\nMultiple windows per cluster are allowed (e.g. a morning + a backup\nevening). Half-open: ``start_hour`` inclusive, ``end_hour`` exclusive.\nWrap-around windows (start > end) cross midnight.\n\nArgs:\n    cluster_id: Cluster the window belongs to.\n    request: Window definition — start/end hour, weekday bitmask, label.\n\nReturns:\n    The persisted window.\n\nRaises:\n    HTTPException: 404 if the cluster does not exist, 400 if hours or mask\n        are out of range.\n\n### Responses:\n\n**201**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"start_hour\": 1,\n  \"end_hour\": 1,\n  \"weekday_mask\": 1,\n  \"id\": 1,\n  \"cluster_id\": 1\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "cluster_id": {
+      "type": "integer",
+      "title": "cluster_id"
+     },
+     "start_hour": {
+      "type": "integer",
+      "title": "start_hour"
+     },
+     "end_hour": {
+      "type": "integer",
+      "title": "end_hour"
+     },
+     "weekday_mask": {
+      "type": "integer",
+      "title": "weekday_mask",
+      "default": 127
+     },
+     "label": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "label",
+      "type": "string"
+     }
+    },
+    "title": "add_windowArguments",
+    "required": [
+     "cluster_id",
+     "start_hour",
+     "end_hour"
+    ]
+   }
+  },
+  {
+   "name": "update_window",
+   "description": "Update an irrigation window\n\nPatch a window's hours, weekday mask, or label.\n\nArgs:\n    cluster_id: Cluster the window belongs to.\n    window_id: Numeric window identifier.\n    request: Any subset of start_hour, end_hour, weekday_mask, label.\n\nReturns:\n    The updated window.\n\nRaises:\n    HTTPException: 404 if the window does not exist or belongs to a\n        different cluster, 400 if the resulting hours or mask are invalid.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"start_hour\": 1,\n  \"end_hour\": 1,\n  \"weekday_mask\": 1,\n  \"id\": 1,\n  \"cluster_id\": 1\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "cluster_id": {
+      "type": "integer",
+      "title": "cluster_id"
+     },
+     "window_id": {
+      "type": "integer",
+      "title": "window_id"
+     },
+     "start_hour": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "start_hour",
+      "type": "integer"
+     },
+     "end_hour": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "end_hour",
+      "type": "integer"
+     },
+     "weekday_mask": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "weekday_mask",
+      "type": "integer"
+     },
+     "label": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "label",
+      "type": "string"
+     }
+    },
+    "title": "update_windowArguments",
+    "required": [
+     "cluster_id",
+     "window_id"
+    ]
+   }
+  },
+  {
+   "name": "delete_window",
+   "description": "Delete an irrigation window\n\nRemove a watering window.\n\nArgs:\n    cluster_id: Cluster the window belongs to.\n    window_id: Numeric window identifier.\n\nReturns:\n    ``success=True``.\n\nRaises:\n    HTTPException: 404 if the window does not exist or belongs to a\n        different cluster.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"success\": true\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "cluster_id": {
+      "type": "integer",
+      "title": "cluster_id"
+     },
+     "window_id": {
+      "type": "integer",
+      "title": "window_id"
+     }
+    },
+    "title": "delete_windowArguments",
+    "required": [
+     "cluster_id",
+     "window_id"
+    ]
+   }
+  }
+ ],
+ "operation_map": {
+  "login": {
+   "method": "post",
+   "path": "/api/v1/auth/login"
+  },
+  "logout": {
+   "method": "post",
+   "path": "/api/v1/auth/logout"
+  },
+  "whoami": {
+   "method": "get",
+   "path": "/api/v1/auth/me"
+  },
+  "list_clusters": {
+   "method": "get",
+   "path": "/api/v1/clusters"
+  },
+  "create_cluster": {
+   "method": "post",
+   "path": "/api/v1/clusters"
+  },
+  "get_cluster": {
+   "method": "get",
+   "path": "/api/v1/clusters/{cluster_id}"
+  },
+  "update_cluster": {
+   "method": "put",
+   "path": "/api/v1/clusters/{cluster_id}"
+  },
+  "delete_cluster": {
+   "method": "delete",
+   "path": "/api/v1/clusters/{cluster_id}"
+  },
+  "get_cluster_detail": {
+   "method": "get",
+   "path": "/api/v1/clusters/{cluster_id}/detail"
+  },
+  "list_all_plants": {
+   "method": "get",
+   "path": "/api/v1/plants"
+  },
+  "add_plant": {
+   "method": "post",
+   "path": "/api/v1/clusters/{cluster_id}/plants"
+  },
+  "list_plants": {
+   "method": "get",
+   "path": "/api/v1/clusters/{cluster_id}/plants"
+  },
+  "update_plant": {
+   "method": "put",
+   "path": "/api/v1/clusters/{cluster_id}/plants/{plant_id}"
+  },
+  "delete_plant": {
+   "method": "delete",
+   "path": "/api/v1/clusters/{cluster_id}/plants/{plant_id}"
+  },
+  "move_plant": {
+   "method": "post",
+   "path": "/api/v1/plants/{plant_id}/move"
+  },
+  "sync_plants": {
+   "method": "post",
+   "path": "/api/v1/plants/sync"
+  },
+  "get_plant_health": {
+   "method": "get",
+   "path": "/api/v1/plants/{plant_id}/health"
+  },
+  "trigger_health_snapshot": {
+   "method": "post",
+   "path": "/api/v1/plants/health/snapshot"
+  },
+  "list_all_irrigators": {
+   "method": "get",
+   "path": "/api/v1/irrigators"
+  },
+  "add_irrigator": {
+   "method": "post",
+   "path": "/api/v1/clusters/{cluster_id}/irrigator"
+  },
+  "get_irrigator": {
+   "method": "get",
+   "path": "/api/v1/clusters/{cluster_id}/irrigator"
+  },
+  "update_irrigator": {
+   "method": "put",
+   "path": "/api/v1/clusters/{cluster_id}/irrigator"
+  },
+  "delete_irrigator": {
+   "method": "delete",
+   "path": "/api/v1/clusters/{cluster_id}/irrigator"
+  },
+  "start_irrigator": {
+   "method": "post",
+   "path": "/api/v1/irrigators/{irrigator_id}/start"
+  },
+  "stop_irrigator": {
+   "method": "post",
+   "path": "/api/v1/irrigators/{irrigator_id}/stop"
+  },
+  "log_manual": {
+   "method": "post",
+   "path": "/api/v1/irrigators/{irrigator_id}/log-manual"
+  },
+  "list_all_sensors": {
+   "method": "get",
+   "path": "/api/v1/sensors"
+  },
+  "add_sensor": {
+   "method": "post",
+   "path": "/api/v1/clusters/{cluster_id}/sensors"
+  },
+  "list_sensors": {
+   "method": "get",
+   "path": "/api/v1/clusters/{cluster_id}/sensors"
+  },
+  "get_sensor": {
+   "method": "get",
+   "path": "/api/v1/clusters/{cluster_id}/sensors/{sensor_id}"
+  },
+  "update_sensor": {
+   "method": "put",
+   "path": "/api/v1/clusters/{cluster_id}/sensors/{sensor_id}"
+  },
+  "delete_sensor": {
+   "method": "delete",
+   "path": "/api/v1/clusters/{cluster_id}/sensors/{sensor_id}"
+  },
+  "list_sensor_assignments": {
+   "method": "get",
+   "path": "/api/v1/sensors/{sensor_id}/assignments"
+  },
+  "set_config": {
+   "method": "put",
+   "path": "/api/v1/clusters/{cluster_id}/config"
+  },
+  "get_config": {
+   "method": "get",
+   "path": "/api/v1/clusters/{cluster_id}/config"
+  },
+  "get_effective_config": {
+   "method": "get",
+   "path": "/api/v1/clusters/{cluster_id}/config/effective"
+  },
+  "get_global_config": {
+   "method": "get",
+   "path": "/api/v1/config/global"
+  },
+  "update_global_config": {
+   "method": "put",
+   "path": "/api/v1/config/global"
+  },
+  "cluster_status": {
+   "method": "get",
+   "path": "/api/v1/clusters/{cluster_id}/status"
+  },
+  "irrigate": {
+   "method": "post",
+   "path": "/api/v1/clusters/{cluster_id}/irrigate"
+  },
+  "monitor": {
+   "method": "get",
+   "path": "/api/v1/clusters/{cluster_id}/monitor"
+  },
+  "check_all": {
+   "method": "post",
+   "path": "/api/v1/check"
+  },
+  "check_single": {
+   "method": "post",
+   "path": "/api/v1/clusters/{cluster_id}/check"
+  },
+  "sync": {
+   "method": "post",
+   "path": "/api/v1/sync"
+  },
+  "learn": {
+   "method": "get",
+   "path": "/api/v1/clusters/{cluster_id}/learn"
+  },
+  "history": {
+   "method": "get",
+   "path": "/api/v1/clusters/{cluster_id}/history"
+  },
+  "stats": {
+   "method": "get",
+   "path": "/api/v1/clusters/{cluster_id}/stats"
+  },
+  "stats_export": {
+   "method": "get",
+   "path": "/api/v1/clusters/{cluster_id}/stats/export"
+  },
+  "health": {
+   "method": "get",
+   "path": "/api/v1/health"
+  },
+  "list_jobs": {
+   "method": "get",
+   "path": "/api/v1/scheduler/jobs"
+  },
+  "delete_job": {
+   "method": "delete",
+   "path": "/api/v1/scheduler/jobs/{job_id}"
+  },
+  "pause_scheduler": {
+   "method": "post",
+   "path": "/api/v1/scheduler/pause"
+  },
+  "resume_scheduler": {
+   "method": "post",
+   "path": "/api/v1/scheduler/resume"
+  },
+  "get_plant": {
+   "method": "get",
+   "path": "/api/v1/plants/{plant_id}"
+  },
+  "plant_chart_data": {
+   "method": "get",
+   "path": "/api/v1/plants/{plant_id}/chart-data"
+  },
+  "cluster_chart_data": {
+   "method": "get",
+   "path": "/api/v1/clusters/{cluster_id}/chart-data"
+  },
+  "cluster_overlay": {
+   "method": "get",
+   "path": "/api/v1/clusters/{cluster_id}/overlay"
+  },
+  "cluster_heatmap": {
+   "method": "get",
+   "path": "/api/v1/clusters/{cluster_id}/heatmap"
+  },
+  "plant_health_timeline": {
+   "method": "get",
+   "path": "/api/v1/plants/{plant_id}/health-timeline"
+  },
+  "list_alerts": {
+   "method": "get",
+   "path": "/api/v1/alerts"
+  },
+  "get_alert": {
+   "method": "get",
+   "path": "/api/v1/alerts/{alert_id}"
+  },
+  "acknowledge_alert": {
+   "method": "post",
+   "path": "/api/v1/alerts/{alert_id}/acknowledge"
+  },
+  "resolve_alert": {
+   "method": "post",
+   "path": "/api/v1/alerts/{alert_id}/resolve"
+  },
+  "refresh_cluster_alerts": {
+   "method": "post",
+   "path": "/api/v1/clusters/{cluster_id}/alerts/sync"
+  },
+  "refresh_all_alerts": {
+   "method": "post",
+   "path": "/api/v1/alerts/sync"
+  },
+  "list_activity": {
+   "method": "get",
+   "path": "/api/v1/activity"
+  },
+  "list_decisions": {
+   "method": "get",
+   "path": "/api/v1/clusters/{cluster_id}/decisions"
+  },
+  "get_cluster_forecast": {
+   "method": "get",
+   "path": "/api/v1/clusters/{cluster_id}/forecast"
+  },
+  "get_preferences": {
+   "method": "get",
+   "path": "/api/v1/preferences"
+  },
+  "update_preferences": {
+   "method": "put",
+   "path": "/api/v1/preferences"
+  },
+  "list_vacation_windows": {
+   "method": "get",
+   "path": "/api/v1/vacation"
+  },
+  "create_vacation_window": {
+   "method": "post",
+   "path": "/api/v1/vacation"
+  },
+  "update_vacation_window": {
+   "method": "put",
+   "path": "/api/v1/vacation/{window_id}"
+  },
+  "delete_vacation_window": {
+   "method": "delete",
+   "path": "/api/v1/vacation/{window_id}"
+  },
+  "global_search": {
+   "method": "get",
+   "path": "/api/v1/search"
+  },
+  "bulk_stop_all": {
+   "method": "post",
+   "path": "/api/v1/bulk/stop-all"
+  },
+  "cluster_insights": {
+   "method": "get",
+   "path": "/api/v1/clusters/{cluster_id}/insights"
+  },
+  "system_health": {
+   "method": "get",
+   "path": "/api/v1/health/system"
+  },
+  "quality_report": {
+   "method": "get",
+   "path": "/api/v1/quality/report"
+  },
+  "cluster_efficacy": {
+   "method": "get",
+   "path": "/api/v1/clusters/{cluster_id}/efficacy"
+  },
+  "list_windows": {
+   "method": "get",
+   "path": "/api/v1/clusters/{cluster_id}/windows"
+  },
+  "add_window": {
+   "method": "post",
+   "path": "/api/v1/clusters/{cluster_id}/windows"
+  },
+  "update_window": {
+   "method": "put",
+   "path": "/api/v1/clusters/{cluster_id}/windows/{window_id}"
+  },
+  "delete_window": {
+   "method": "delete",
+   "path": "/api/v1/clusters/{cluster_id}/windows/{window_id}"
+  }
+ }
+}

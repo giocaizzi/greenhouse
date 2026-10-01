@@ -1,0 +1,74 @@
+[
+ {
+  "call": "os.environ.get",
+  "default": null,
+  "module": "greenhouse_cli.client",
+  "var": "GREENHOUSE_API_TOKEN"
+ },
+ {
+  "call": "os.environ.get",
+  "default": null,
+  "module": "greenhouse_cli.client",
+  "var": "XDG_CONFIG_HOME"
+ },
+ {
+  "call": "os.environ.get",
+  "default": "http://localhost:8000",
+  "module": "greenhouse_cli.commands._helpers",
+  "var": "IRRIGATION_SERVER_URL"
+ },
+ {
+  "call": "os.environ.get",
+  "default": "http://localhost:8000",
+  "module": "greenhouse_cli.commands.auth",
+  "var": "IRRIGATION_SERVER_URL"
+ },
+ {
+  "call": "os.environ.get",
+  "default": "http://localhost:8000",
+  "module": "greenhouse_cli.commands.tui",
+  "var": "IRRIGATION_SERVER_URL"
+ },
+ {
+  "call": "os.environ.get",
+  "default": "",
+  "module": "greenhouse_core.devices.gateway",
+  "var": "TUYA_CLIENT_ID"
+ },
+ {
+  "call": "os.environ.get",
+  "default": "",
+  "module": "greenhouse_core.devices.gateway",
+  "var": "TUYA_CLIENT_SECRET"
+ },
+ {
+  "call": "os.environ.get",
+  "default": "eu",
+  "module": "greenhouse_core.devices.gateway",
+  "var": "TUYA_REGION"
+ },
+ {
+  "call": "os.environ.get",
+  "default": "sqlite:///data/irrigation.db",
+  "module": "greenhouse_core.migrations.env",
+  "var": "IRRIGATION_DB_URL"
+ },
+ {
+  "call": "os.environ.get",
+  "default": null,
+  "module": "greenhouse_core.plant_db",
+  "var": "IRRIGATION_PLANT_DB_PATH"
+ },
+ {
+  "call": "os.environ[]",
+  "default": null,
+  "module": "greenhouse_core.plant_db",
+  "var": "IRRIGATION_PLANT_DB_PATH"
+ },
+ {
+  "call": "os.getenv",
+  "default": "UTC",
+  "module": "greenhouse_core.utils",
+  "var": "IRRIGATION_TZ"
+ }
+]
