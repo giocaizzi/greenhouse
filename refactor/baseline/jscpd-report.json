@@ -1,0 +1,2401 @@
+{
+  "statistics": {
+    "detectionDate": "2026-10-01T13:01:11.139Z",
+    "formats": {
+      "python": {
+        "sources": {
+          "libs/greenhouse-cli/greenhouse_cli/tui/screens/system.py": {
+            "lines": 175,
+            "tokens": 1825,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-cli/greenhouse_cli/tui/screens/settings.py": {
+            "lines": 173,
+            "tokens": 1756,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-cli/greenhouse_cli/tui/screens/search.py": {
+            "lines": 71,
+            "tokens": 736,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-cli/greenhouse_cli/tui/screens/modals.py": {
+            "lines": 155,
+            "tokens": 1544,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-cli/greenhouse_cli/tui/screens/forms.py": {
+            "lines": 139,
+            "tokens": 1351,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-cli/greenhouse_cli/tui/screens/dashboard.py": {
+            "lines": 109,
+            "tokens": 1152,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-cli/greenhouse_cli/tui/screens/cluster.py": {
+            "lines": 800,
+            "tokens": 9372,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-cli/greenhouse_cli/tui/screens/base.py": {
+            "lines": 94,
+            "tokens": 729,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-cli/greenhouse_cli/tui/screens/alerts.py": {
+            "lines": 109,
+            "tokens": 1225,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-cli/greenhouse_cli/tui/screens/activity.py": {
+            "lines": 72,
+            "tokens": 753,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-cli/greenhouse_cli/tui/widgets.py": {
+            "lines": 342,
+            "tokens": 4004,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-cli/greenhouse_cli/tui/sprites.py": {
+            "lines": 386,
+            "tokens": 3076,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-cli/greenhouse_cli/tui/resources.py": {
+            "lines": 118,
+            "tokens": 1749,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-cli/greenhouse_cli/tui/model.py": {
+            "lines": 145,
+            "tokens": 1466,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-cli/greenhouse_cli/tui/formatting.py": {
+            "lines": 136,
+            "tokens": 1303,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-cli/greenhouse_cli/tui/app.py": {
+            "lines": 134,
+            "tokens": 1155,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-cli/greenhouse_cli/tui/__init__.py": {
+            "lines": 12,
+            "tokens": 74,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-cli/greenhouse_cli/commands/windows.py": {
+            "lines": 94,
+            "tokens": 802,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-cli/greenhouse_cli/commands/vacation.py": {
+            "lines": 81,
+            "tokens": 631,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-cli/greenhouse_cli/commands/tui.py": {
+            "lines": 36,
+            "tokens": 201,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-cli/greenhouse_cli/commands/sensors.py": {
+            "lines": 71,
+            "tokens": 759,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-cli/greenhouse_cli/commands/scheduler.py": {
+            "lines": 30,
+            "tokens": 178,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-cli/greenhouse_cli/commands/preferences.py": {
+            "lines": 52,
+            "tokens": 397,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-cli/greenhouse_cli/commands/plants.py": {
+            "lines": 131,
+            "tokens": 1348,
+            "sources": 1,
+            "clones": 2,
+            "duplicatedLines": 20,
+            "duplicatedTokens": 424,
+            "percentage": 15.27,
+            "percentageTokens": 31.45,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-cli/greenhouse_cli/commands/operations.py": {
+            "lines": 118,
+            "tokens": 1302,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-cli/greenhouse_cli/commands/irrigators.py": {
+            "lines": 142,
+            "tokens": 1312,
+            "sources": 1,
+            "clones": 2,
+            "duplicatedLines": 28,
+            "duplicatedTokens": 252,
+            "percentage": 19.72,
+            "percentageTokens": 19.21,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-cli/greenhouse_cli/commands/decisions.py": {
+            "lines": 25,
+            "tokens": 168,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-cli/greenhouse_cli/commands/configs.py": {
+            "lines": 101,
+            "tokens": 993,
+            "sources": 1,
+            "clones": 2,
+            "duplicatedLines": 24,
+            "duplicatedTokens": 498,
+            "percentage": 23.76,
+            "percentageTokens": 50.15,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-cli/greenhouse_cli/commands/clusters.py": {
+            "lines": 67,
+            "tokens": 604,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-cli/greenhouse_cli/commands/auth.py": {
+            "lines": 97,
+            "tokens": 557,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-cli/greenhouse_cli/commands/alerts.py": {
+            "lines": 68,
+            "tokens": 548,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-cli/greenhouse_cli/commands/_helpers.py": {
+            "lines": 29,
+            "tokens": 211,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-cli/greenhouse_cli/main.py": {
+            "lines": 58,
+            "tokens": 458,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-cli/greenhouse_cli/client.py": {
+            "lines": 464,
+            "tokens": 5212,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-server/greenhouse_server/web/routes/windows.py": {
+            "lines": 125,
+            "tokens": 1138,
+            "sources": 1,
+            "clones": 4,
+            "duplicatedLines": 38,
+            "duplicatedTokens": 348,
+            "percentage": 30.4,
+            "percentageTokens": 30.58,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-server/greenhouse_server/web/routes/vacation.py": {
+            "lines": 136,
+            "tokens": 1153,
+            "sources": 1,
+            "clones": 2,
+            "duplicatedLines": 28,
+            "duplicatedTokens": 286,
+            "percentage": 20.59,
+            "percentageTokens": 24.8,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-server/greenhouse_server/web/routes/sensors.py": {
+            "lines": 108,
+            "tokens": 936,
+            "sources": 1,
+            "clones": 1,
+            "duplicatedLines": 12,
+            "duplicatedTokens": 91,
+            "percentage": 11.11,
+            "percentageTokens": 9.72,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-server/greenhouse_server/web/routes/quality.py": {
+            "lines": 28,
+            "tokens": 217,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-server/greenhouse_server/web/routes/preferences.py": {
+            "lines": 102,
+            "tokens": 745,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-server/greenhouse_server/web/routes/plants.py": {
+            "lines": 121,
+            "tokens": 1117,
+            "sources": 1,
+            "clones": 5,
+            "duplicatedLines": 66,
+            "duplicatedTokens": 613,
+            "percentage": 54.55,
+            "percentageTokens": 54.88,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-server/greenhouse_server/web/routes/plant_dashboard.py": {
+            "lines": 185,
+            "tokens": 1656,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-server/greenhouse_server/web/routes/pages.py": {
+            "lines": 17,
+            "tokens": 131,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-server/greenhouse_server/web/routes/operations.py": {
+            "lines": 146,
+            "tokens": 1206,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-server/greenhouse_server/web/routes/irrigators.py": {
+            "lines": 258,
+            "tokens": 2196,
+            "sources": 1,
+            "clones": 2,
+            "duplicatedLines": 16,
+            "duplicatedTokens": 188,
+            "percentage": 6.2,
+            "percentageTokens": 8.56,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-server/greenhouse_server/web/routes/health_page.py": {
+            "lines": 23,
+            "tokens": 170,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-server/greenhouse_server/web/routes/fragments.py": {
+            "lines": 51,
+            "tokens": 356,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-server/greenhouse_server/web/routes/efficacy.py": {
+            "lines": 28,
+            "tokens": 222,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-server/greenhouse_server/web/routes/decisions.py": {
+            "lines": 27,
+            "tokens": 209,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-server/greenhouse_server/web/routes/configs.py": {
+            "lines": 134,
+            "tokens": 1139,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-server/greenhouse_server/web/routes/clusters.py": {
+            "lines": 290,
+            "tokens": 2395,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-server/greenhouse_server/web/routes/auth.py": {
+            "lines": 100,
+            "tokens": 717,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-server/greenhouse_server/web/routes/analytics.py": {
+            "lines": 199,
+            "tokens": 1535,
+            "sources": 1,
+            "clones": 1,
+            "duplicatedLines": 21,
+            "duplicatedTokens": 146,
+            "percentage": 10.55,
+            "percentageTokens": 9.51,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-server/greenhouse_server/web/routes/alerts.py": {
+            "lines": 87,
+            "tokens": 739,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-server/greenhouse_server/web/routes/activity.py": {
+            "lines": 82,
+            "tokens": 698,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-server/greenhouse_server/web/templating.py": {
+            "lines": 14,
+            "tokens": 95,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-server/greenhouse_server/web/router.py": {
+            "lines": 61,
+            "tokens": 439,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-server/greenhouse_server/web/filters.py": {
+            "lines": 242,
+            "tokens": 1716,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-server/greenhouse_server/web/exception_handlers.py": {
+            "lines": 63,
+            "tokens": 472,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-server/greenhouse_server/web/context.py": {
+            "lines": 82,
+            "tokens": 513,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-server/greenhouse_server/services/weather.py": {
+            "lines": 97,
+            "tokens": 847,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-server/greenhouse_server/services/vacation.py": {
+            "lines": 83,
+            "tokens": 395,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-server/greenhouse_server/services/system_health.py": {
+            "lines": 79,
+            "tokens": 661,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-server/greenhouse_server/services/sync.py": {
+            "lines": 126,
+            "tokens": 888,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-server/greenhouse_server/services/search.py": {
+            "lines": 136,
+            "tokens": 855,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-server/greenhouse_server/services/pump_watcher.py": {
+            "lines": 308,
+            "tokens": 1828,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-server/greenhouse_server/services/notify.py": {
+            "lines": 110,
+            "tokens": 801,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-server/greenhouse_server/services/manual_control.py": {
+            "lines": 243,
+            "tokens": 1272,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-server/greenhouse_server/services/maintenance.py": {
+            "lines": 98,
+            "tokens": 926,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-server/greenhouse_server/services/leak.py": {
+            "lines": 236,
+            "tokens": 1530,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-server/greenhouse_server/services/irrigation.py": {
+            "lines": 760,
+            "tokens": 5507,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-server/greenhouse_server/services/insights.py": {
+            "lines": 87,
+            "tokens": 820,
+            "sources": 1,
+            "clones": 2,
+            "duplicatedLines": 26,
+            "duplicatedTokens": 348,
+            "percentage": 29.89,
+            "percentageTokens": 42.44,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-server/greenhouse_server/services/health_monitor.py": {
+            "lines": 431,
+            "tokens": 3281,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-server/greenhouse_server/services/health.py": {
+            "lines": 149,
+            "tokens": 1218,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-server/greenhouse_server/services/forecast.py": {
+            "lines": 146,
+            "tokens": 1157,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-server/greenhouse_server/services/efficacy.py": {
+            "lines": 86,
+            "tokens": 711,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-server/greenhouse_server/services/data_quality.py": {
+            "lines": 136,
+            "tokens": 1013,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-server/greenhouse_server/services/cluster.py": {
+            "lines": 133,
+            "tokens": 1133,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-server/greenhouse_server/services/charts.py": {
+            "lines": 376,
+            "tokens": 3552,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-server/greenhouse_server/services/bulk.py": {
+            "lines": 54,
+            "tokens": 274,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-server/greenhouse_server/services/anomaly.py": {
+            "lines": 164,
+            "tokens": 1001,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-server/greenhouse_server/services/alerts.py": {
+            "lines": 183,
+            "tokens": 1370,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-server/greenhouse_server/routes/windows.py": {
+            "lines": 159,
+            "tokens": 858,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-server/greenhouse_server/routes/well_known.py": {
+            "lines": 66,
+            "tokens": 180,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-server/greenhouse_server/routes/vacation.py": {
+            "lines": 113,
+            "tokens": 553,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-server/greenhouse_server/routes/sensors.py": {
+            "lines": 202,
+            "tokens": 1087,
+            "sources": 1,
+            "clones": 1,
+            "duplicatedLines": 17,
+            "duplicatedTokens": 89,
+            "percentage": 8.42,
+            "percentageTokens": 8.19,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-server/greenhouse_server/routes/search.py": {
+            "lines": 33,
+            "tokens": 186,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-server/greenhouse_server/routes/scheduler.py": {
+            "lines": 123,
+            "tokens": 553,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-server/greenhouse_server/routes/quality.py": {
+            "lines": 26,
+            "tokens": 109,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-server/greenhouse_server/routes/preferences.py": {
+            "lines": 43,
+            "tokens": 213,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-server/greenhouse_server/routes/plants.py": {
+            "lines": 300,
+            "tokens": 1570,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-server/greenhouse_server/routes/operations.py": {
+            "lines": 389,
+            "tokens": 2116,
+            "sources": 1,
+            "clones": 1,
+            "duplicatedLines": 21,
+            "duplicatedTokens": 146,
+            "percentage": 5.4,
+            "percentageTokens": 6.9,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-server/greenhouse_server/routes/irrigators.py": {
+            "lines": 272,
+            "tokens": 1456,
+            "sources": 1,
+            "clones": 1,
+            "duplicatedLines": 17,
+            "duplicatedTokens": 89,
+            "percentage": 6.25,
+            "percentageTokens": 6.11,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-server/greenhouse_server/routes/insights.py": {
+            "lines": 36,
+            "tokens": 162,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-server/greenhouse_server/routes/health.py": {
+            "lines": 27,
+            "tokens": 120,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-server/greenhouse_server/routes/forecast.py": {
+            "lines": 50,
+            "tokens": 210,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-server/greenhouse_server/routes/efficacy.py": {
+            "lines": 39,
+            "tokens": 152,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-server/greenhouse_server/routes/decisions.py": {
+            "lines": 39,
+            "tokens": 187,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-server/greenhouse_server/routes/configs.py": {
+            "lines": 130,
+            "tokens": 509,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-server/greenhouse_server/routes/clusters.py": {
+            "lines": 159,
+            "tokens": 748,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-server/greenhouse_server/routes/charts.py": {
+            "lines": 179,
+            "tokens": 834,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-server/greenhouse_server/routes/bulk.py": {
+            "lines": 39,
+            "tokens": 225,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-server/greenhouse_server/routes/auth.py": {
+            "lines": 126,
+            "tokens": 697,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-server/greenhouse_server/routes/alerts.py": {
+            "lines": 165,
+            "tokens": 930,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-server/greenhouse_server/routes/activity.py": {
+            "lines": 50,
+            "tokens": 326,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-server/greenhouse_server/scheduler.py": {
+            "lines": 560,
+            "tokens": 2962,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-server/greenhouse_server/deps.py": {
+            "lines": 146,
+            "tokens": 1162,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-server/greenhouse_server/config.py": {
+            "lines": 163,
+            "tokens": 1066,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-server/greenhouse_server/auth.py": {
+            "lines": 351,
+            "tokens": 2204,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-server/greenhouse_server/app.py": {
+            "lines": 321,
+            "tokens": 2331,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-core/greenhouse_core/devices/sensors/tuya_generic.py": {
+            "lines": 48,
+            "tokens": 264,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-core/greenhouse_core/devices/sensors/tr301z.py": {
+            "lines": 106,
+            "tokens": 653,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-core/greenhouse_core/devices/sensors/base.py": {
+            "lines": 38,
+            "tokens": 165,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-core/greenhouse_core/devices/sensors/__init__.py": {
+            "lines": 7,
+            "tokens": 58,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-core/greenhouse_core/devices/irrigators/tuya_generic.py": {
+            "lines": 110,
+            "tokens": 886,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-core/greenhouse_core/devices/irrigators/ik10pw.py": {
+            "lines": 253,
+            "tokens": 1543,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-core/greenhouse_core/devices/irrigators/base.py": {
+            "lines": 50,
+            "tokens": 228,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-core/greenhouse_core/devices/irrigators/__init__.py": {
+            "lines": 7,
+            "tokens": 58,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-core/greenhouse_core/migrations/env.py": {
+            "lines": 84,
+            "tokens": 429,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-core/greenhouse_core/logic/trends.py": {
+            "lines": 69,
+            "tokens": 716,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-core/greenhouse_core/logic/timing.py": {
+            "lines": 159,
+            "tokens": 1014,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-core/greenhouse_core/logic/stress.py": {
+            "lines": 66,
+            "tokens": 647,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-core/greenhouse_core/logic/sensors.py": {
+            "lines": 71,
+            "tokens": 677,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-core/greenhouse_core/logic/plant_needs.py": {
+            "lines": 46,
+            "tokens": 503,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-core/greenhouse_core/logic/fallback.py": {
+            "lines": 107,
+            "tokens": 730,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-core/greenhouse_core/logic/engine.py": {
+            "lines": 936,
+            "tokens": 6708,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-core/greenhouse_core/logic/decision.py": {
+            "lines": 264,
+            "tokens": 1721,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-core/greenhouse_core/logic/cleaning.py": {
+            "lines": 184,
+            "tokens": 943,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-core/greenhouse_core/logic/__init__.py": {
+            "lines": 31,
+            "tokens": 128,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-core/greenhouse_core/learning/report.py": {
+            "lines": 48,
+            "tokens": 332,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-core/greenhouse_core/learning/profiling.py": {
+            "lines": 165,
+            "tokens": 1318,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-core/greenhouse_core/learning/models.py": {
+            "lines": 46,
+            "tokens": 248,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-core/greenhouse_core/learning/learner.py": {
+            "lines": 33,
+            "tokens": 322,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-core/greenhouse_core/learning/issues.py": {
+            "lines": 304,
+            "tokens": 2330,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-core/greenhouse_core/learning/__init__.py": {
+            "lines": 6,
+            "tokens": 49,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-core/greenhouse_core/devices/registry.py": {
+            "lines": 119,
+            "tokens": 694,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-core/greenhouse_core/devices/profile.py": {
+            "lines": 105,
+            "tokens": 477,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-core/greenhouse_core/devices/health.py": {
+            "lines": 66,
+            "tokens": 216,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-core/greenhouse_core/devices/gateway.py": {
+            "lines": 336,
+            "tokens": 2504,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-core/greenhouse_core/devices/__init__.py": {
+            "lines": 75,
+            "tokens": 341,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-core/greenhouse_core/utils.py": {
+            "lines": 117,
+            "tokens": 576,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-core/greenhouse_core/sync.py": {
+            "lines": 115,
+            "tokens": 893,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-core/greenhouse_core/stats.py": {
+            "lines": 134,
+            "tokens": 1083,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-core/greenhouse_core/schemas.py": {
+            "lines": 999,
+            "tokens": 5696,
+            "sources": 1,
+            "clones": 6,
+            "duplicatedLines": 68,
+            "duplicatedTokens": 634,
+            "percentage": 6.81,
+            "percentageTokens": 11.13,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-core/greenhouse_core/plant_db.py": {
+            "lines": 179,
+            "tokens": 1173,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-core/greenhouse_core/models.py": {
+            "lines": 433,
+            "tokens": 4307,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-core/greenhouse_core/database.py": {
+            "lines": 97,
+            "tokens": 696,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-core/greenhouse_core/constants.py": {
+            "lines": 256,
+            "tokens": 1030,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-core/greenhouse_core/auth.py": {
+            "lines": 76,
+            "tokens": 530,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          },
+          "libs/greenhouse-core/greenhouse_core/__init__.py": {
+            "lines": 37,
+            "tokens": 190,
+            "sources": 1,
+            "clones": 0,
+            "duplicatedLines": 0,
+            "duplicatedTokens": 0,
+            "percentage": 0,
+            "percentageTokens": 0,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          }
+        },
+        "total": {
+          "lines": 22452,
+          "tokens": 168683,
+          "sources": 149,
+          "clones": 16,
+          "duplicatedLines": 201,
+          "duplicatedTokens": 2076,
+          "percentage": 0.9,
+          "percentageTokens": 1.23,
+          "newDuplicatedLines": 0,
+          "newClones": 0
+        }
+      }
+    },
+    "total": {
+      "lines": 22452,
+      "tokens": 168683,
+      "sources": 149,
+      "clones": 16,
+      "duplicatedLines": 201,
+      "duplicatedTokens": 2076,
+      "percentage": 0.9,
+      "percentageTokens": 1.23,
+      "newDuplicatedLines": 0,
+      "newClones": 0
+    }
+  },
+  "duplicates": [
+    {
+      "format": "python",
+      "lines": 11,
+      "fragment": ",\n    category: Annotated[str | None, typer.Option()] = None,\n    water_needs: Annotated[str | None, typer.Option(help=\"low/medium/high\")] = None,\n    light_needs: Annotated[str | None, typer.Option(help=\"low/medium/high\")] = None,\n    temp_min: Annotated[float | None, typer.Option()] = None,\n    temp_max: Annotated[float | None, typer.Option()] = None,\n    humidity_min: Annotated[float | None, typer.Option()] = None,\n    humidity_max: Annotated[float | None, typer.Option()] = None,\n    notes: Annotated[str | None, typer.Option()] = None,\n):\n    \"\"\"Patch plant metadata. Only the supplied fields are sent.\"\"\"",
+      "tokens": 212,
+      "firstFile": {
+        "name": "libs/greenhouse-cli/greenhouse_cli/commands/plants.py",
+        "start": 90,
+        "end": 100,
+        "startLoc": {
+          "line": 90,
+          "column": 58,
+          "position": 895
+        },
+        "endLoc": {
+          "line": 100,
+          "column": 67,
+          "position": 1107
+        }
+      },
+      "secondFile": {
+        "name": "libs/greenhouse-cli/greenhouse_cli/commands/plants.py",
+        "start": 16,
+        "end": 26,
+        "startLoc": {
+          "line": 16,
+          "column": 61,
+          "position": 112
+        },
+        "endLoc": {
+          "line": 26,
+          "column": 36,
+          "position": 324
+        }
+      }
+    },
+    {
+      "format": "python",
+      "lines": 15,
+      "fragment": ",\n    device_ip: Annotated[str | None, typer.Option(help=\"Local IP\")] = None,\n    local_key: Annotated[str | None, typer.Option(help=\"Local key\")] = None,\n    reservoir_l: Annotated[\n        float | None, typer.Option(help=\"Usable reservoir/tank volume in liters (for vacation rationing)\")\n    ] = None,\n    flow_rate_l_per_min: Annotated[\n        float | None, typer.Option(help=\"Measured pump throughput in liters per minute (for vacation rationing)\")\n    ] = None,\n):\n    \"\"\"Patch the cluster's irrigator. Only the supplied fields are sent.\n\n    ``--device-ip`` or ``--local-key`` overwrite the ``config`` blob; pass both\n    when switching a device to local control.\n    \"\"\"",
+      "tokens": 126,
+      "firstFile": {
+        "name": "libs/greenhouse-cli/greenhouse_cli/commands/irrigators.py",
+        "start": 96,
+        "end": 110,
+        "startLoc": {
+          "line": 96,
+          "column": 86,
+          "position": 908
+        },
+        "endLoc": {
+          "line": 110,
+          "column": 8,
+          "position": 1034
+        }
+      },
+      "secondFile": {
+        "name": "libs/greenhouse-cli/greenhouse_cli/commands/irrigators.py",
+        "start": 18,
+        "end": 28,
+        "startLoc": {
+          "line": 18,
+          "column": 72,
+          "position": 152
+        },
+        "endLoc": {
+          "line": 28,
+          "column": 41,
+          "position": 278
+        }
+      }
+    },
+    {
+      "format": "python",
+      "lines": 13,
+      "fragment": ",\n    mode: Annotated[str | None, typer.Option(help=\"manual, schedule, or smart\")] = None,\n    minutes: Annotated[int | None, typer.Option(help=\"Duration in minutes\")] = None,\n    interval: Annotated[int | None, typer.Option(help=\"Interval in hours\")] = None,\n    auto_run: Annotated[bool | None, typer.Option(\"--auto-run/--no-auto-run\", help=\"Enable auto-run\")] = None,\n    daily_cap: Annotated[int | None, typer.Option(\"--daily-cap\", help=\"Daily cap in minutes\")] = None,\n    max_events: Annotated[int | None, typer.Option(\"--max-events\", help=\"Max irrigation events per day\")] = None,\n    quiet_start: Annotated[\n        int | None, typer.Option(\"--quiet-start\", help=\"Quiet-hours start (0-23); equal to end = disabled\")\n    ] = None,\n    quiet_end: Annotated[int | None, typer.Option(\"--quiet-end\", help=\"Quiet-hours end (0-23, exclusive)\")] = None,\n):\n    \"\"\"Patch the global irrigation defaults. Omitted options are left unchanged.\"\"\"",
+      "tokens": 249,
+      "firstFile": {
+        "name": "libs/greenhouse-cli/greenhouse_cli/commands/configs.py",
+        "start": 75,
+        "end": 87,
+        "startLoc": {
+          "line": 75,
+          "column": 23,
+          "position": 660
+        },
+        "endLoc": {
+          "line": 87,
+          "column": 84,
+          "position": 909
+        }
+      },
+      "secondFile": {
+        "name": "libs/greenhouse-cli/greenhouse_cli/commands/configs.py",
+        "start": 25,
+        "end": 37,
+        "startLoc": {
+          "line": 25,
+          "column": 61,
+          "position": 122
+        },
+        "endLoc": {
+          "line": 37,
+          "column": 83,
+          "position": 371
+        }
+      }
+    },
+    {
+      "format": "python",
+      "lines": 8,
+      "fragment": ": int,\n    repo: RepoDep,\n    start_hour: int = Form(...),\n    end_hour: int = Form(...),\n    weekday_mask: list[str] = Form(default=[]),\n    label: str = Form(\"\"),\n):\n    _get_window_in_cluster",
+      "tokens": 82,
+      "firstFile": {
+        "name": "libs/greenhouse-server/greenhouse_server/web/routes/windows.py",
+        "start": 98,
+        "end": 105,
+        "startLoc": {
+          "line": 98,
+          "column": 14,
+          "position": 878
+        },
+        "endLoc": {
+          "line": 105,
+          "column": 27,
+          "position": 960
+        }
+      },
+      "secondFile": {
+        "name": "libs/greenhouse-server/greenhouse_server/web/routes/windows.py",
+        "start": 55,
+        "end": 62,
+        "startLoc": {
+          "line": 55,
+          "column": 15,
+          "position": 457
+        },
+        "endLoc": {
+          "line": 62,
+          "column": 20,
+          "position": 539
+        }
+      }
+    },
+    {
+      "format": "python",
+      "lines": 15,
+      "fragment": ",\n    repo: RepoDep,\n    starts_at: str = Form(...),\n    ends_at: str = Form(...),\n    contact_email: str = Form(\"\"),\n    notes: str = Form(\"\"),\n):\n    try:\n        starts_ts = _parse_ts(starts_at)\n        ends_ts = _parse_ts(ends_at)\n    except ValueError as exc:\n        raise HTTPException(400, \"Invalid date format. Use YYYY-MM-DD or Unix timestamp.\") from exc\n    if ends_ts <= starts_ts:\n        raise HTTPException(400, \"ends_at must be after starts_at.\")\n    updated",
+      "tokens": 143,
+      "firstFile": {
+        "name": "libs/greenhouse-server/greenhouse_server/web/routes/vacation.py",
+        "start": 103,
+        "end": 117,
+        "startLoc": {
+          "line": 103,
+          "column": 19,
+          "position": 824
+        },
+        "endLoc": {
+          "line": 117,
+          "column": 12,
+          "position": 967
+        }
+      },
+      "secondFile": {
+        "name": "libs/greenhouse-server/greenhouse_server/web/routes/vacation.py",
+        "start": 64,
+        "end": 78,
+        "startLoc": {
+          "line": 64,
+          "column": 21,
+          "position": 462
+        },
+        "endLoc": {
+          "line": 78,
+          "column": 9,
+          "position": 605
+        }
+      }
+    },
+    {
+      "format": "python",
+      "lines": 13,
+      "fragment": "from __future__ import annotations\n\nfrom fastapi import APIRouter, Form, HTTPException, Request\nfrom fastapi.responses import HTMLResponse, RedirectResponse\n\nfrom greenhouse_server.deps import RepoDep, require_cluster\nfrom greenhouse_server.web.context import base_context\nfrom greenhouse_server.web.templating import templates\n\nrouter = APIRouter(include_in_schema=False)\n\n\ndef",
+      "tokens": 91,
+      "firstFile": {
+        "name": "libs/greenhouse-server/greenhouse_server/web/routes/sensors.py",
+        "start": 3,
+        "end": 15,
+        "startLoc": {
+          "line": 3,
+          "column": 1,
+          "position": 3
+        },
+        "endLoc": {
+          "line": 15,
+          "column": 4,
+          "position": 94
+        }
+      },
+      "secondFile": {
+        "name": "libs/greenhouse-server/greenhouse_server/web/routes/windows.py",
+        "start": 9,
+        "end": 20,
+        "startLoc": {
+          "line": 9,
+          "column": 1,
+          "position": 3
+        },
+        "endLoc": {
+          "line": 20,
+          "column": 14,
+          "position": 93
+        }
+      }
+    },
+    {
+      "format": "python",
+      "lines": 13,
+      "fragment": "from __future__ import annotations\n\nfrom fastapi import APIRouter, Form, HTTPException, Request\nfrom fastapi.responses import HTMLResponse, RedirectResponse\n\nfrom greenhouse_server.deps import RepoDep, require_cluster\nfrom greenhouse_server.web.context import base_context\nfrom greenhouse_server.web.templating import templates\n\nrouter = APIRouter(include_in_schema=False)\n\n\ndef _opt_float",
+      "tokens": 93,
+      "firstFile": {
+        "name": "libs/greenhouse-server/greenhouse_server/web/routes/plants.py",
+        "start": 3,
+        "end": 15,
+        "startLoc": {
+          "line": 3,
+          "column": 1,
+          "position": 3
+        },
+        "endLoc": {
+          "line": 15,
+          "column": 15,
+          "position": 96
+        }
+      },
+      "secondFile": {
+        "name": "libs/greenhouse-server/greenhouse_server/web/routes/windows.py",
+        "start": 9,
+        "end": 15,
+        "startLoc": {
+          "line": 9,
+          "column": 1,
+          "position": 3
+        },
+        "endLoc": {
+          "line": 15,
+          "column": 27,
+          "position": 96
+        }
+      }
+    },
+    {
+      "format": "python",
+      "lines": 13,
+      "fragment": ": int,\n    repo: RepoDep,\n    species: str = Form(...),\n    category: str = Form(\"\"),\n    water_needs: str = Form(\"\"),\n    light_needs: str = Form(\"\"),\n    ideal_temp_min: str = Form(\"\"),\n    ideal_temp_max: str = Form(\"\"),\n    ideal_humidity_min: str = Form(\"\"),\n    ideal_humidity_max: str = Form(\"\"),\n    notes: str = Form(\"\"),\n):\n    _get_plant_in_cluster",
+      "tokens": 144,
+      "firstFile": {
+        "name": "libs/greenhouse-server/greenhouse_server/web/routes/plants.py",
+        "start": 86,
+        "end": 98,
+        "startLoc": {
+          "line": 86,
+          "column": 13,
+          "position": 767
+        },
+        "endLoc": {
+          "line": 98,
+          "column": 26,
+          "position": 911
+        }
+      },
+      "secondFile": {
+        "name": "libs/greenhouse-server/greenhouse_server/web/routes/plants.py",
+        "start": 46,
+        "end": 58,
+        "startLoc": {
+          "line": 46,
+          "column": 15,
+          "position": 367
+        },
+        "endLoc": {
+          "line": 58,
+          "column": 20,
+          "position": 511
+        }
+      }
+    },
+    {
+      "format": "python",
+      "lines": 16,
+      "fragment": ",\n        species=species,\n        category=category or None,\n        water_needs=water_needs or None,\n        light_needs=light_needs or None,\n        ideal_temp_min=_opt_float(ideal_temp_min),\n        ideal_temp_max=_opt_float(ideal_temp_max),\n        ideal_humidity_min=_opt_float(ideal_humidity_min),\n        ideal_humidity_max=_opt_float(ideal_humidity_max),\n        notes=notes or None,\n    )\n    repo.session.commit()\n    return RedirectResponse(url=f\"/clusters/{cluster_id}#plants\", status_code=303)\n\n\n@router.delete",
+      "tokens": 116,
+      "firstFile": {
+        "name": "libs/greenhouse-server/greenhouse_server/web/routes/plants.py",
+        "start": 100,
+        "end": 115,
+        "startLoc": {
+          "line": 100,
+          "column": 17,
+          "position": 930
+        },
+        "endLoc": {
+          "line": 115,
+          "column": 15,
+          "position": 1046
+        }
+      },
+      "secondFile": {
+        "name": "libs/greenhouse-server/greenhouse_server/web/routes/plants.py",
+        "start": 60,
+        "end": 75,
+        "startLoc": {
+          "line": 60,
+          "column": 30,
+          "position": 529
+        },
+        "endLoc": {
+          "line": 75,
+          "column": 12,
+          "position": 645
+        }
+      }
+    },
+    {
+      "format": "python",
+      "lines": 9,
+      "fragment": ",\n    name: str = Form(...),\n    type: str = Form(...),\n    device_ip: str = Form(\"\"),\n    local_key: str = Form(\"\"),\n    reservoir_l: str = Form(\"\"),\n    flow_rate_l_per_min: str = Form(\"\"),\n):\n    irrigator",
+      "tokens": 94,
+      "firstFile": {
+        "name": "libs/greenhouse-server/greenhouse_server/web/routes/irrigators.py",
+        "start": 134,
+        "end": 142,
+        "startLoc": {
+          "line": 134,
+          "column": 18,
+          "position": 1122
+        },
+        "endLoc": {
+          "line": 142,
+          "column": 14,
+          "position": 1216
+        }
+      },
+      "secondFile": {
+        "name": "libs/greenhouse-server/greenhouse_server/web/routes/irrigators.py",
+        "start": 74,
+        "end": 82,
+        "startLoc": {
+          "line": 74,
+          "column": 36,
+          "position": 611
+        },
+        "endLoc": {
+          "line": 82,
+          "column": 12,
+          "position": 705
+        }
+      }
+    },
+    {
+      "format": "python",
+      "lines": 14,
+      "fragment": "(self._repo, cluster_id, self._plant_db):\n            code = alert[\"type\"]\n            if code in seen_codes:\n                continue\n            seen_codes.add(code)\n            meta = _ALERT_TYPE_META.get(code)\n            severity = meta[0] if meta else alert.get(\"severity\", \"warning\")\n            title = meta[1] if meta else code.replace(\"_\", \" \").title()\n            suggestion = meta[2] if meta else None\n            insights.append(\n                CareInsight(code=code, severity=severity, title=title, message=alert[\"message\"], suggestion=suggestion)\n            )\n\n        logs",
+      "tokens": 174,
+      "firstFile": {
+        "name": "libs/greenhouse-server/greenhouse_server/services/insights.py",
+        "start": 56,
+        "end": 69,
+        "startLoc": {
+          "line": 56,
+          "column": 45,
+          "position": 523
+        },
+        "endLoc": {
+          "line": 69,
+          "column": 13,
+          "position": 697
+        }
+      },
+      "secondFile": {
+        "name": "libs/greenhouse-server/greenhouse_server/services/insights.py",
+        "start": 43,
+        "end": 56,
+        "startLoc": {
+          "line": 43,
+          "column": 48,
+          "position": 342
+        },
+        "endLoc": {
+          "line": 56,
+          "column": 12,
+          "position": 516
+        }
+      }
+    },
+    {
+      "format": "python",
+      "lines": 22,
+      "fragment": ":\n            ts_str = format_timestamp(event.timestamp)\n            date, _, time_part = ts_str.partition(\" \")\n            writer.writerow(\n                [\n                    event.timestamp,\n                    date,\n                    time_part,\n                    irrigator.name,\n                    event.action,\n                    event.duration_minutes or \"\",\n                    event.triggered_by,\n                    event.notes or \"\",\n                ]\n            )\n\n    output.seek(0)\n    return StreamingResponse(\n        iter([output.getvalue()]),\n        media_type=\"text/csv\",\n        headers={\"Content-Disposition\": f\"attachment; filename=cluster_{cluster.id}_stats.csv\"},\n    )",
+      "tokens": 146,
+      "firstFile": {
+        "name": "libs/greenhouse-server/greenhouse_server/routes/operations.py",
+        "start": 368,
+        "end": 389,
+        "startLoc": {
+          "line": 368,
+          "column": 28,
+          "position": 1970
+        },
+        "endLoc": {
+          "line": 389,
+          "column": 6,
+          "position": 2116
+        }
+      },
+      "secondFile": {
+        "name": "libs/greenhouse-server/greenhouse_server/web/routes/analytics.py",
+        "start": 86,
+        "end": 106,
+        "startLoc": {
+          "line": 86,
+          "column": 75,
+          "position": 700
+        },
+        "endLoc": {
+          "line": 106,
+          "column": 6,
+          "position": 845
+        }
+      }
+    },
+    {
+      "format": "python",
+      "lines": 18,
+      "fragment": "(\n    repo: RepoDep,\n    cluster_id: int | None = Query(default=None, description=\"Restrict results to a specific cluster\"),\n    limit: int = Query(default=100, ge=1, le=500),\n    cursor: int | None = Query(default=None, description=\"Id cursor — return rows with id > cursor\"),\n):\n    \"\"\"List every irrigator across all clusters with optional cluster filter and cursor pagination.\n\n    Args:\n        cluster_id: Restrict to a single cluster.\n        limit: Page size (default 100, max 500).\n        cursor: Id-based cursor — pass the previous response's ``next_cursor``\n            to fetch the next page.\n\n    Returns:\n        The page of irrigators plus a ``next_cursor`` (None when the page was\n        not full and there are no more rows to fetch).\n    \"\"\"",
+      "tokens": 89,
+      "firstFile": {
+        "name": "libs/greenhouse-server/greenhouse_server/routes/irrigators.py",
+        "start": 30,
+        "end": 47,
+        "startLoc": {
+          "line": 30,
+          "column": 24,
+          "position": 174
+        },
+        "endLoc": {
+          "line": 47,
+          "column": 8,
+          "position": 263
+        }
+      },
+      "secondFile": {
+        "name": "libs/greenhouse-server/greenhouse_server/routes/sensors.py",
+        "start": 21,
+        "end": 38,
+        "startLoc": {
+          "line": 21,
+          "column": 21,
+          "position": 120
+        },
+        "endLoc": {
+          "line": 38,
+          "column": 8,
+          "position": 209
+        }
+      }
+    },
+    {
+      "format": "python",
+      "lines": 15,
+      "fragment": "):\n    model_config = ConfigDict(from_attributes=True)\n\n    id: int\n    cluster_id: int\n\n    @field_validator(\"config\", mode=\"before\")\n    @classmethod\n    def parse_config(cls, v):\n        if isinstance(v, str):\n            return json.loads(v)\n        return v\n\n\nclass SensorListResponse",
+      "tokens": 87,
+      "firstFile": {
+        "name": "libs/greenhouse-core/greenhouse_core/schemas.py",
+        "start": 174,
+        "end": 188,
+        "startLoc": {
+          "line": 174,
+          "column": 32,
+          "position": 919
+        },
+        "endLoc": {
+          "line": 188,
+          "column": 25,
+          "position": 1006
+        }
+      },
+      "secondFile": {
+        "name": "libs/greenhouse-core/greenhouse_core/schemas.py",
+        "start": 109,
+        "end": 123,
+        "startLoc": {
+          "line": 109,
+          "column": 38,
+          "position": 593
+        },
+        "endLoc": {
+          "line": 123,
+          "column": 28,
+          "position": 680
+        }
+      }
+    },
+    {
+      "format": "python",
+      "lines": 11,
+      "fragment": "mode: str | None = None\n    duration_minutes: int | None = None\n    interval_hours: int | None = None\n    auto_run: bool | None = None\n    daily_cap_minutes: int | None = None\n    max_events_per_day: int | None = None\n    quiet_start_hour: int | None = None\n    quiet_end_hour: int | None = None\n\n\nclass ResolvedConfigField",
+      "tokens": 115,
+      "firstFile": {
+        "name": "libs/greenhouse-core/greenhouse_core/schemas.py",
+        "start": 363,
+        "end": 373,
+        "startLoc": {
+          "line": 363,
+          "column": 5,
+          "position": 1913
+        },
+        "endLoc": {
+          "line": 373,
+          "column": 26,
+          "position": 2028
+        }
+      },
+      "secondFile": {
+        "name": "libs/greenhouse-core/greenhouse_core/schemas.py",
+        "start": 305,
+        "end": 315,
+        "startLoc": {
+          "line": 305,
+          "column": 5,
+          "position": 1527
+        },
+        "endLoc": {
+          "line": 315,
+          "column": 21,
+          "position": 1642
+        }
+      }
+    },
+    {
+      "format": "python",
+      "lines": 11,
+      "fragment": "category: str | None = None\n    water_needs: str | None = None\n    light_needs: str | None = None\n    ideal_temp_min: float | None = None\n    ideal_temp_max: float | None = None\n    ideal_humidity_min: float | None = None\n    ideal_humidity_max: float | None = None\n    notes: str | None = None\n\n\nclass UpdateSensorRequest",
+      "tokens": 115,
+      "firstFile": {
+        "name": "libs/greenhouse-core/greenhouse_core/schemas.py",
+        "start": 857,
+        "end": 867,
+        "startLoc": {
+          "line": 857,
+          "column": 5,
+          "position": 4849
+        },
+        "endLoc": {
+          "line": 867,
+          "column": 26,
+          "position": 4964
+        }
+      },
+      "secondFile": {
+        "name": "libs/greenhouse-core/greenhouse_core/schemas.py",
+        "start": 49,
+        "end": 59,
+        "startLoc": {
+          "line": 49,
+          "column": 5,
+          "position": 200
+        },
+        "endLoc": {
+          "line": 59,
+          "column": 25,
+          "position": 315
+        }
+      }
+    }
+  ]
+}

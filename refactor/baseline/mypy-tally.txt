@@ -1,0 +1,69 @@
+## mypy default: 176 errors
+per package: {'greenhouse-core': 56, 'greenhouse-cli': 85, 'greenhouse-server': 35}
+per code: [('return-value', 83), ('union-attr', 26), ('arg-type', 25), ('call-overload', 12), ('operator', 9), ('attr-defined', 5), ('type-var', 4), ('index', 4), ('assignment', 3), ('misc', 2), ('var-annotated', 2), ('list-item', 1)]
+per module (top 30):
+    79 greenhouse-cli/greenhouse_cli/client.py
+    17 greenhouse-core/greenhouse_core/devices/gateway.py
+    12 greenhouse-server/greenhouse_server/scheduler.py
+    10 greenhouse-core/greenhouse_core/stats.py
+     7 greenhouse-core/greenhouse_core/learning/profiling.py
+     6 greenhouse-core/greenhouse_core/logic/plant_needs.py
+     4 greenhouse-core/greenhouse_core/sync.py
+     4 greenhouse-server/greenhouse_server/services/irrigation.py
+     3 greenhouse-cli/greenhouse_cli/tui/screens/cluster.py
+     3 greenhouse-core/greenhouse_core/logic/engine.py
+     3 greenhouse-server/greenhouse_server/services/manual_control.py
+     2 greenhouse-cli/greenhouse_cli/tui/model.py
+     2 greenhouse-core/greenhouse_core/devices/irrigators/ik10pw.py
+     2 greenhouse-core/greenhouse_core/repository.py
+     2 greenhouse-core/greenhouse_core/logic/fallback.py
+     2 greenhouse-core/greenhouse_core/learning/issues.py
+     2 greenhouse-server/greenhouse_server/web/routes/plant_dashboard.py
+     2 greenhouse-server/greenhouse_server/web/routes/clusters.py
+     2 greenhouse-server/greenhouse_server/routes/vacation.py
+     2 greenhouse-server/greenhouse_server/routes/plants.py
+     2 greenhouse-server/greenhouse_server/routes/configs.py
+     1 greenhouse-core/greenhouse_core/logic/trends.py
+     1 greenhouse-cli/greenhouse_cli/tui/widgets.py
+     1 greenhouse-server/greenhouse_server/services/sync.py
+     1 greenhouse-server/greenhouse_server/services/forecast.py
+     1 greenhouse-server/greenhouse_server/services/health_monitor.py
+     1 greenhouse-server/greenhouse_server/web/routes/operations.py
+     1 greenhouse-server/greenhouse_server/routes/operations.py
+     1 greenhouse-server/greenhouse_server/routes/bulk.py
+
+## mypy strict: 769 errors
+per package: {'greenhouse-core': 143, 'greenhouse-server': 264, 'greenhouse-cli': 362}
+per code: [('no-untyped-def', 279), ('type-arg', 226), ('return-value', 83), ('no-untyped-call', 64), ('arg-type', 26), ('union-attr', 26), ('no-any-return', 23), ('call-overload', 12), ('operator', 9), ('attr-defined', 5), ('type-var', 4), ('index', 4), ('assignment', 3), ('misc', 2), ('var-annotated', 2), ('list-item', 1)]
+per module (top 30):
+   174 greenhouse-cli/greenhouse_cli/client.py
+    28 greenhouse-core/greenhouse_core/devices/gateway.py
+    20 greenhouse-cli/greenhouse_cli/commands/operations.py
+    19 greenhouse-cli/greenhouse_cli/tui/screens/cluster.py
+    17 greenhouse-core/greenhouse_core/plant_db.py
+    17 greenhouse-cli/greenhouse_cli/commands/irrigators.py
+    17 greenhouse-server/greenhouse_server/web/routes/clusters.py
+    17 greenhouse-server/greenhouse_server/web/routes/irrigators.py
+    16 greenhouse-core/greenhouse_core/repository.py
+    16 greenhouse-server/greenhouse_server/scheduler.py
+    14 greenhouse-core/greenhouse_core/stats.py
+    13 greenhouse-cli/greenhouse_cli/commands/plants.py
+    11 greenhouse-cli/greenhouse_cli/tui/widgets.py
+    11 greenhouse-core/greenhouse_core/logic/engine.py
+    11 greenhouse-server/greenhouse_server/routes/plants.py
+    10 greenhouse-cli/greenhouse_cli/commands/configs.py
+    10 greenhouse-cli/greenhouse_cli/commands/clusters.py
+    10 greenhouse-cli/greenhouse_cli/commands/alerts.py
+    10 greenhouse-server/greenhouse_server/services/irrigation.py
+    10 greenhouse-server/greenhouse_server/web/routes/analytics.py
+     9 greenhouse-core/greenhouse_core/logic/plant_needs.py
+     9 greenhouse-cli/greenhouse_cli/commands/sensors.py
+     8 greenhouse-core/greenhouse_core/schemas.py
+     8 greenhouse-cli/greenhouse_cli/tui/model.py
+     8 greenhouse-cli/greenhouse_cli/tui/resources.py
+     8 greenhouse-server/greenhouse_server/services/charts.py
+     8 greenhouse-cli/greenhouse_cli/commands/windows.py
+     8 greenhouse-cli/greenhouse_cli/commands/vacation.py
+     8 greenhouse-server/greenhouse_server/web/routes/sensors.py
+     8 greenhouse-server/greenhouse_server/web/routes/plants.py
+

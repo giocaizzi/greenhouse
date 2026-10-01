@@ -1,0 +1,64 @@
+Downloading pygments (1.2MiB)
+Downloading pip (1.7MiB)
+ Downloading pygments
+ Downloading pip
+Installed 29 packages in 18ms
+WARNING:pip_audit._cli:--no-deps is supported, but users are encouraged to fully hash their pinned dependencies
+WARNING:pip_audit._cli:Consider using a tool like `pip-compile`: https://pip-tools.readthedocs.io/en/latest/#using-hashes
+Found 53 known vulnerabilities in 10 packages
+Name              Version ID                  Fix Versions
+----------------- ------- ------------------- ------------
+anyio             4.13.0  CVE-2026-63374      4.14.2
+anyio             4.13.0  CVE-2026-64847      4.14.2
+click             8.3.2   PYSEC-2026-2132     8.3.3
+cryptography      46.0.6  PYSEC-2026-36       46.0.7
+cryptography      46.0.6  PYSEC-2026-36       46.0.7
+cryptography      46.0.6  PYSEC-2026-3554     49.0.0
+cryptography      46.0.6  PYSEC-2026-3552     50.0.0
+cryptography      46.0.6  PYSEC-2026-3553     49.0.0
+cryptography      46.0.6  PYSEC-2026-3552     50.0.0
+cryptography      46.0.6  PYSEC-2026-3553     49.0.0
+cryptography      46.0.6  PYSEC-2026-3554     49.0.0
+cryptography      46.0.6  GHSA-537c-gmf6-5ccf 48.0.1
+idna              3.11    PYSEC-2026-215      3.15
+idna              3.11    PYSEC-2026-215      3.15
+mako              1.3.10  PYSEC-2026-2617     1.3.12
+mako              1.3.10  PYSEC-2026-2617     1.3.12
+mcp               1.27.0  PYSEC-2026-3481     1.27.2
+mcp               1.27.0  PYSEC-2026-3482     1.27.2
+mcp               1.27.0  PYSEC-2026-3483     1.28.1
+mcp               1.27.0  PYSEC-2026-3482     1.27.2
+mcp               1.27.0  PYSEC-2026-3483     1.28.1
+mcp               1.27.0  PYSEC-2026-3481     1.27.2
+pydantic-settings 2.14.1  CVE-2026-58203      2.14.2
+pyjwt             2.13.0  CVE-2026-102274     2.14.0
+pyjwt             2.13.0  CVE-2026-101917     2.14.0
+pyjwt             2.13.0  CVE-2026-102273     2.14.0
+pyjwt             2.13.0  CVE-2026-102269     2.14.0
+pyjwt             2.13.0  CVE-2026-102267     2.14.0
+pyjwt             2.13.0  CVE-2026-102268     2.14.0
+pyjwt             2.13.0  CVE-2026-102272     2.14.0
+pyjwt             2.13.0  CVE-2026-102271     2.14.0
+pyjwt             2.13.0  CVE-2026-102265     2.14.0
+pyjwt             2.13.0  CVE-2026-102266     2.14.0
+pyjwt             2.13.0  CVE-2026-102270     2.14.0
+pyjwt             2.13.0  CVE-2026-101918     2.15.0
+pyjwt             2.13.0  CVE-2026-103001
+starlette         1.0.0   PYSEC-2026-161      1.0.1
+starlette         1.0.0   PYSEC-2026-161      1.0.1
+starlette         1.0.0   PYSEC-2026-2281     1.1.0
+starlette         1.0.0   PYSEC-2026-2280     1.1.0
+starlette         1.0.0   PYSEC-2026-249      1.3.1
+starlette         1.0.0   PYSEC-2026-248      1.3.0
+starlette         1.0.0   PYSEC-2026-249      1.3.1
+starlette         1.0.0   PYSEC-2026-248      1.3.0
+starlette         1.0.0   PYSEC-2026-2281     1.1.0
+starlette         1.0.0   PYSEC-2026-2280     1.1.0
+urllib3           2.6.3   PYSEC-2026-141      2.7.0
+urllib3           2.6.3   PYSEC-2026-142      2.7.0
+urllib3           2.6.3   PYSEC-2026-142      2.7.0
+urllib3           2.6.3   PYSEC-2026-141      2.7.0
+urllib3           2.6.3   CVE-2026-97687      2.8.0
+urllib3           2.6.3   CVE-2026-97688      2.8.0
+urllib3           2.6.3   CVE-2026-97689      2.8.0
+exit=1

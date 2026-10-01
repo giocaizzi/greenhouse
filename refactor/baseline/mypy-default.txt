@@ -1,0 +1,221 @@
+Downloading mypy (14.4MiB)
+Downloading ast-serialize (1.3MiB)
+ Downloading ast-serialize
+ Downloading mypy
+Installed 6 packages in 30ms
+libs/greenhouse-core/greenhouse_core/logic/plant_needs.py:14: error: Incompatible return value type (got "tuple[Any | None, Any | None]", expected "tuple[float, float] | None")  [return-value]
+libs/greenhouse-core/greenhouse_core/logic/plant_needs.py:14: error: Value of type variable "SupportsRichComparisonT" of "min" cannot be "Any | None"  [type-var]
+libs/greenhouse-core/greenhouse_core/logic/plant_needs.py:14: error: Value of type variable "SupportsRichComparisonT" of "max" cannot be "Any | None"  [type-var]
+libs/greenhouse-core/greenhouse_core/logic/plant_needs.py:23: error: Incompatible return value type (got "tuple[Any | None, Any | None]", expected "tuple[float, float] | None")  [return-value]
+libs/greenhouse-core/greenhouse_core/logic/plant_needs.py:23: error: Value of type variable "SupportsRichComparisonT" of "min" cannot be "Any | None"  [type-var]
+libs/greenhouse-core/greenhouse_core/logic/plant_needs.py:23: error: Value of type variable "SupportsRichComparisonT" of "max" cannot be "Any | None"  [type-var]
+libs/greenhouse-cli/greenhouse_cli/tui/model.py:135: error: Argument "key" to "min" has incompatible type "Callable[[PlantView], float | None]"; expected "Callable[[PlantView], SupportsDunderLT[Any] | SupportsDunderGT[Any]]"  [arg-type]
+libs/greenhouse-cli/greenhouse_cli/tui/model.py:135: error: Incompatible return value type (got "float | None", expected "SupportsDunderLT[Any] | SupportsDunderGT[Any]")  [return-value]
+libs/greenhouse-core/greenhouse_core/devices/gateway.py:40: error: Argument 1 to "float" has incompatible type "object"; expected "str | Buffer | SupportsFloat | SupportsIndex"  [arg-type]
+libs/greenhouse-core/greenhouse_core/devices/gateway.py:41: error: Argument 1 to "float" has incompatible type "object"; expected "str | Buffer | SupportsFloat | SupportsIndex"  [arg-type]
+libs/greenhouse-core/greenhouse_core/devices/gateway.py:42: error: Argument 1 to "float" has incompatible type "object"; expected "str | Buffer | SupportsFloat | SupportsIndex"  [arg-type]
+libs/greenhouse-core/greenhouse_core/devices/gateway.py:43: error: Argument 1 to "float" has incompatible type "object"; expected "str | Buffer | SupportsFloat | SupportsIndex"  [arg-type]
+libs/greenhouse-core/greenhouse_core/devices/gateway.py:44: error: Argument 1 to "float" has incompatible type "object"; expected "str | Buffer | SupportsFloat | SupportsIndex"  [arg-type]
+libs/greenhouse-core/greenhouse_core/devices/gateway.py:46: error: No overload variant of "int" matches argument type "object"  [call-overload]
+libs/greenhouse-core/greenhouse_core/devices/gateway.py:46: note: Possible overload variants:
+libs/greenhouse-core/greenhouse_core/devices/gateway.py:46: note:     def int(str | Buffer | SupportsInt | SupportsIndex | SupportsTrunc = ..., /) -> int
+libs/greenhouse-core/greenhouse_core/devices/gateway.py:46: note:     def int(str | bytes | bytearray, /, base: SupportsIndex) -> int
+libs/greenhouse-core/greenhouse_core/devices/gateway.py:47: error: No overload variant of "int" matches argument type "object"  [call-overload]
+libs/greenhouse-core/greenhouse_core/devices/gateway.py:47: note: Possible overload variants:
+libs/greenhouse-core/greenhouse_core/devices/gateway.py:47: note:     def int(str | Buffer | SupportsInt | SupportsIndex | SupportsTrunc = ..., /) -> int
+libs/greenhouse-core/greenhouse_core/devices/gateway.py:47: note:     def int(str | bytes | bytearray, /, base: SupportsIndex) -> int
+libs/greenhouse-core/greenhouse_core/devices/gateway.py:48: error: No overload variant of "int" matches argument type "object"  [call-overload]
+libs/greenhouse-core/greenhouse_core/devices/gateway.py:48: note: Possible overload variants:
+libs/greenhouse-core/greenhouse_core/devices/gateway.py:48: note:     def int(str | Buffer | SupportsInt | SupportsIndex | SupportsTrunc = ..., /) -> int
+libs/greenhouse-core/greenhouse_core/devices/gateway.py:48: note:     def int(str | bytes | bytearray, /, base: SupportsIndex) -> int
+libs/greenhouse-core/greenhouse_core/devices/gateway.py:50: error: Argument 1 to "float" has incompatible type "object"; expected "str | Buffer | SupportsFloat | SupportsIndex"  [arg-type]
+libs/greenhouse-core/greenhouse_core/devices/gateway.py:51: error: No overload variant of "int" matches argument type "object"  [call-overload]
+libs/greenhouse-core/greenhouse_core/devices/gateway.py:51: note: Possible overload variants:
+libs/greenhouse-core/greenhouse_core/devices/gateway.py:51: note:     def int(str | Buffer | SupportsInt | SupportsIndex | SupportsTrunc = ..., /) -> int
+libs/greenhouse-core/greenhouse_core/devices/gateway.py:51: note:     def int(str | bytes | bytearray, /, base: SupportsIndex) -> int
+libs/greenhouse-core/greenhouse_core/devices/gateway.py:53: error: No overload variant of "int" matches argument type "object"  [call-overload]
+libs/greenhouse-core/greenhouse_core/devices/gateway.py:53: note: Possible overload variants:
+libs/greenhouse-core/greenhouse_core/devices/gateway.py:53: note:     def int(str | Buffer | SupportsInt | SupportsIndex | SupportsTrunc = ..., /) -> int
+libs/greenhouse-core/greenhouse_core/devices/gateway.py:53: note:     def int(str | bytes | bytearray, /, base: SupportsIndex) -> int
+libs/greenhouse-core/greenhouse_core/devices/gateway.py:158: error: Item "object" of "object | Any" has no attribute "cloudrequest"  [union-attr]
+libs/greenhouse-core/greenhouse_core/devices/gateway.py:173: error: Item "object" of "object | Any" has no attribute "getstatus"  [union-attr]
+libs/greenhouse-core/greenhouse_core/devices/gateway.py:201: error: Item "object" of "object | Any" has no attribute "getdevicelog"  [union-attr]
+libs/greenhouse-core/greenhouse_core/devices/gateway.py:251: error: Item "object" of "object | Any" has no attribute "sendcommand"  [union-attr]
+libs/greenhouse-core/greenhouse_core/devices/gateway.py:258: error: Item "object" of "object | Any" has no attribute "getstatus"  [union-attr]
+libs/greenhouse-core/greenhouse_core/devices/gateway.py:296: error: Item "object" of "object | Any" has no attribute "getdevices"  [union-attr]
+libs/greenhouse-core/greenhouse_core/devices/irrigators/ik10pw.py:110: error: Argument 2 to "open_local" of "DeviceGateway" has incompatible type "float | None"; expected "float"  [arg-type]
+libs/greenhouse-core/greenhouse_core/devices/irrigators/ik10pw.py:223: error: Argument 2 to "open_local" of "DeviceGateway" has incompatible type "float | None"; expected "float"  [arg-type]
+libs/greenhouse-core/greenhouse_core/repository.py:334: error: "Result[Any]" has no attribute "rowcount"  [attr-defined]
+libs/greenhouse-core/greenhouse_core/repository.py:401: error: "Result[Any]" has no attribute "rowcount"  [attr-defined]
+libs/greenhouse-cli/greenhouse_cli/client.py:107: error: Incompatible return value type (got "dict[Any, Any] | list[Any]", expected "dict[Any, Any]")  [return-value]
+libs/greenhouse-cli/greenhouse_cli/client.py:111: error: Incompatible return value type (got "dict[Any, Any] | list[Any]", expected "dict[Any, Any]")  [return-value]
+libs/greenhouse-cli/greenhouse_cli/client.py:115: error: Incompatible return value type (got "dict[Any, Any] | list[Any]", expected "dict[Any, Any]")  [return-value]
+libs/greenhouse-cli/greenhouse_cli/client.py:121: error: Incompatible return value type (got "dict[Any, Any] | list[Any]", expected "dict[Any, Any]")  [return-value]
+libs/greenhouse-cli/greenhouse_cli/client.py:124: error: Incompatible return value type (got "dict[Any, Any] | list[Any]", expected "list[Any]")  [return-value]
+libs/greenhouse-cli/greenhouse_cli/client.py:127: error: Incompatible return value type (got "dict[Any, Any] | list[Any]", expected "dict[Any, Any]")  [return-value]
+libs/greenhouse-cli/greenhouse_cli/client.py:130: error: Incompatible return value type (got "dict[Any, Any] | list[Any]", expected "dict[Any, Any]")  [return-value]
+libs/greenhouse-cli/greenhouse_cli/client.py:134: error: Incompatible return value type (got "dict[Any, Any] | list[Any]", expected "dict[Any, Any]")  [return-value]
+libs/greenhouse-cli/greenhouse_cli/client.py:137: error: Incompatible return value type (got "dict[Any, Any] | list[Any]", expected "dict[Any, Any]")  [return-value]
+libs/greenhouse-cli/greenhouse_cli/client.py:142: error: Incompatible return value type (got "dict[Any, Any] | list[Any]", expected "dict[Any, Any]")  [return-value]
+libs/greenhouse-cli/greenhouse_cli/client.py:145: error: Incompatible return value type (got "dict[Any, Any] | list[Any]", expected "list[Any]")  [return-value]
+libs/greenhouse-cli/greenhouse_cli/client.py:149: error: Incompatible return value type (got "dict[Any, Any] | list[Any]", expected "dict[Any, Any]")  [return-value]
+libs/greenhouse-cli/greenhouse_cli/client.py:152: error: Incompatible return value type (got "dict[Any, Any] | list[Any]", expected "dict[Any, Any]")  [return-value]
+libs/greenhouse-cli/greenhouse_cli/client.py:156: error: Incompatible return value type (got "dict[Any, Any] | list[Any]", expected "dict[Any, Any]")  [return-value]
+libs/greenhouse-cli/greenhouse_cli/client.py:160: error: Incompatible return value type (got "dict[Any, Any] | list[Any]", expected "dict[Any, Any]")  [return-value]
+libs/greenhouse-cli/greenhouse_cli/client.py:165: error: Incompatible return value type (got "dict[Any, Any] | list[Any]", expected "list[Any]")  [return-value]
+libs/greenhouse-cli/greenhouse_cli/client.py:169: error: Incompatible return value type (got "dict[Any, Any] | list[Any]", expected "dict[Any, Any]")  [return-value]
+libs/greenhouse-cli/greenhouse_cli/client.py:172: error: Incompatible return value type (got "dict[Any, Any] | list[Any]", expected "dict[Any, Any]")  [return-value]
+libs/greenhouse-cli/greenhouse_cli/client.py:176: error: Incompatible return value type (got "dict[Any, Any] | list[Any]", expected "dict[Any, Any]")  [return-value]
+libs/greenhouse-cli/greenhouse_cli/client.py:179: error: Incompatible return value type (got "dict[Any, Any] | list[Any]", expected "dict[Any, Any]")  [return-value]
+libs/greenhouse-cli/greenhouse_cli/client.py:182: error: Incompatible return value type (got "dict[Any, Any] | list[Any]", expected "dict[Any, Any]")  [return-value]
+libs/greenhouse-cli/greenhouse_cli/client.py:185: error: Incompatible return value type (got "dict[Any, Any] | list[Any]", expected "dict[Any, Any]")  [return-value]
+libs/greenhouse-cli/greenhouse_cli/client.py:188: error: Incompatible return value type (got "dict[Any, Any] | list[Any]", expected "dict[Any, Any]")  [return-value]
+libs/greenhouse-cli/greenhouse_cli/client.py:195: error: Incompatible return value type (got "dict[Any, Any] | list[Any]", expected "dict[Any, Any]")  [return-value]
+libs/greenhouse-cli/greenhouse_cli/client.py:198: error: Incompatible return value type (got "dict[Any, Any] | list[Any]", expected "list[Any]")  [return-value]
+libs/greenhouse-cli/greenhouse_cli/client.py:202: error: Incompatible return value type (got "dict[Any, Any] | list[Any]", expected "dict[Any, Any]")  [return-value]
+libs/greenhouse-cli/greenhouse_cli/client.py:205: error: Incompatible return value type (got "dict[Any, Any] | list[Any]", expected "dict[Any, Any]")  [return-value]
+libs/greenhouse-cli/greenhouse_cli/client.py:211: error: Incompatible return value type (got "dict[Any, Any] | list[Any]", expected "dict[Any, Any]")  [return-value]
+libs/greenhouse-cli/greenhouse_cli/client.py:214: error: Incompatible return value type (got "dict[Any, Any] | list[Any]", expected "dict[Any, Any]")  [return-value]
+libs/greenhouse-cli/greenhouse_cli/client.py:217: error: Incompatible return value type (got "dict[Any, Any] | list[Any]", expected "dict[Any, Any]")  [return-value]
+libs/greenhouse-cli/greenhouse_cli/client.py:220: error: Incompatible return value type (got "dict[Any, Any] | list[Any]", expected "dict[Any, Any]")  [return-value]
+libs/greenhouse-cli/greenhouse_cli/client.py:224: error: Incompatible return value type (got "dict[Any, Any] | list[Any]", expected "dict[Any, Any]")  [return-value]
+libs/greenhouse-cli/greenhouse_cli/client.py:229: error: Incompatible return value type (got "dict[Any, Any] | list[Any]", expected "dict[Any, Any]")  [return-value]
+libs/greenhouse-cli/greenhouse_cli/client.py:240: error: Incompatible return value type (got "dict[Any, Any] | list[Any]", expected "dict[Any, Any]")  [return-value]
+libs/greenhouse-cli/greenhouse_cli/client.py:243: error: Incompatible return value type (got "dict[Any, Any] | list[Any]", expected "dict[Any, Any]")  [return-value]
+libs/greenhouse-cli/greenhouse_cli/client.py:247: error: Incompatible return value type (got "dict[Any, Any] | list[Any]", expected "dict[Any, Any]")  [return-value]
+libs/greenhouse-cli/greenhouse_cli/client.py:248: error: Incompatible return value type (got "dict[Any, Any] | list[Any]", expected "dict[Any, Any]")  [return-value]
+libs/greenhouse-cli/greenhouse_cli/client.py:251: error: Incompatible return value type (got "dict[Any, Any] | list[Any]", expected "dict[Any, Any]")  [return-value]
+libs/greenhouse-cli/greenhouse_cli/client.py:254: error: Incompatible return value type (got "dict[Any, Any] | list[Any]", expected "dict[Any, Any]")  [return-value]
+libs/greenhouse-cli/greenhouse_cli/client.py:257: error: Incompatible return value type (got "dict[Any, Any] | list[Any]", expected "dict[Any, Any]")  [return-value]
+libs/greenhouse-cli/greenhouse_cli/client.py:260: error: Incompatible return value type (got "dict[Any, Any] | list[Any]", expected "dict[Any, Any]")  [return-value]
+libs/greenhouse-cli/greenhouse_cli/client.py:263: error: Incompatible return value type (got "dict[Any, Any] | list[Any]", expected "dict[Any, Any]")  [return-value]
+libs/greenhouse-cli/greenhouse_cli/client.py:267: error: Item "list[Any]" of "dict[Any, Any] | list[Any]" has no attribute "get"  [union-attr]
+libs/greenhouse-cli/greenhouse_cli/client.py:270: error: Incompatible return value type (got "dict[Any, Any] | list[Any]", expected "dict[Any, Any]")  [return-value]
+libs/greenhouse-cli/greenhouse_cli/client.py:273: error: Incompatible return value type (got "dict[Any, Any] | list[Any]", expected "list[Any]")  [return-value]
+libs/greenhouse-cli/greenhouse_cli/client.py:276: error: Incompatible return value type (got "dict[Any, Any] | list[Any]", expected "dict[Any, Any]")  [return-value]
+libs/greenhouse-cli/greenhouse_cli/client.py:279: error: Incompatible return value type (got "dict[Any, Any] | list[Any]", expected "dict[Any, Any]")  [return-value]
+libs/greenhouse-cli/greenhouse_cli/client.py:282: error: Incompatible return value type (got "dict[Any, Any] | list[Any]", expected "dict[Any, Any]")  [return-value]
+libs/greenhouse-cli/greenhouse_cli/client.py:285: error: Incompatible return value type (got "dict[Any, Any] | list[Any]", expected "dict[Any, Any]")  [return-value]
+libs/greenhouse-cli/greenhouse_cli/client.py:288: error: Incompatible return value type (got "dict[Any, Any] | list[Any]", expected "dict[Any, Any]")  [return-value]
+libs/greenhouse-cli/greenhouse_cli/client.py:295: error: Incompatible return value type (got "dict[Any, Any] | list[Any]", expected "dict[Any, Any]")  [return-value]
+libs/greenhouse-cli/greenhouse_cli/client.py:298: error: Incompatible return value type (got "dict[Any, Any] | list[Any]", expected "dict[Any, Any]")  [return-value]
+libs/greenhouse-cli/greenhouse_cli/client.py:301: error: Incompatible return value type (got "dict[Any, Any] | list[Any]", expected "dict[Any, Any]")  [return-value]
+libs/greenhouse-cli/greenhouse_cli/client.py:304: error: Incompatible return value type (got "dict[Any, Any] | list[Any]", expected "dict[Any, Any]")  [return-value]
+libs/greenhouse-cli/greenhouse_cli/client.py:307: error: Incompatible return value type (got "dict[Any, Any] | list[Any]", expected "dict[Any, Any]")  [return-value]
+libs/greenhouse-cli/greenhouse_cli/client.py:310: error: Incompatible return value type (got "dict[Any, Any] | list[Any]", expected "dict[Any, Any]")  [return-value]
+libs/greenhouse-cli/greenhouse_cli/client.py:313: error: Incompatible return value type (got "dict[Any, Any] | list[Any]", expected "dict[Any, Any]")  [return-value]
+libs/greenhouse-cli/greenhouse_cli/client.py:318: error: Incompatible return value type (got "dict[Any, Any] | list[Any]", expected "dict[Any, Any]")  [return-value]
+libs/greenhouse-cli/greenhouse_cli/client.py:323: error: Incompatible return value type (got "dict[Any, Any] | list[Any]", expected "dict[Any, Any]")  [return-value]
+libs/greenhouse-cli/greenhouse_cli/client.py:326: error: Incompatible return value type (got "dict[Any, Any] | list[Any]", expected "dict[Any, Any]")  [return-value]
+libs/greenhouse-cli/greenhouse_cli/client.py:329: error: Incompatible return value type (got "dict[Any, Any] | list[Any]", expected "dict[Any, Any]")  [return-value]
+libs/greenhouse-cli/greenhouse_cli/client.py:332: error: Incompatible return value type (got "dict[Any, Any] | list[Any]", expected "dict[Any, Any]")  [return-value]
+libs/greenhouse-cli/greenhouse_cli/client.py:350: error: Incompatible return value type (got "dict[Any, Any] | list[Any]", expected "dict[Any, Any]")  [return-value]
+libs/greenhouse-cli/greenhouse_cli/client.py:353: error: Incompatible return value type (got "dict[Any, Any] | list[Any]", expected "dict[Any, Any]")  [return-value]
+libs/greenhouse-cli/greenhouse_cli/client.py:356: error: Incompatible return value type (got "dict[Any, Any] | list[Any]", expected "dict[Any, Any]")  [return-value]
+libs/greenhouse-cli/greenhouse_cli/client.py:359: error: Incompatible return value type (got "dict[Any, Any] | list[Any]", expected "dict[Any, Any]")  [return-value]
+libs/greenhouse-cli/greenhouse_cli/client.py:363: error: Incompatible return value type (got "dict[Any, Any] | list[Any]", expected "dict[Any, Any]")  [return-value]
+libs/greenhouse-cli/greenhouse_cli/client.py:364: error: Incompatible return value type (got "dict[Any, Any] | list[Any]", expected "dict[Any, Any]")  [return-value]
+libs/greenhouse-cli/greenhouse_cli/client.py:369: error: Incompatible return value type (got "dict[Any, Any] | list[Any]", expected "dict[Any, Any]")  [return-value]
+libs/greenhouse-cli/greenhouse_cli/client.py:374: error: Incompatible return value type (got "dict[Any, Any] | list[Any]", expected "dict[Any, Any]")  [return-value]
+libs/greenhouse-cli/greenhouse_cli/client.py:378: error: Incompatible return value type (got "dict[Any, Any] | list[Any]", expected "dict[Any, Any]")  [return-value]
+libs/greenhouse-cli/greenhouse_cli/client.py:383: error: Incompatible return value type (got "dict[Any, Any] | list[Any]", expected "dict[Any, Any]")  [return-value]
+libs/greenhouse-cli/greenhouse_cli/client.py:398: error: Incompatible return value type (got "dict[Any, Any] | list[Any]", expected "dict[Any, Any]")  [return-value]
+libs/greenhouse-cli/greenhouse_cli/client.py:417: error: Incompatible return value type (got "dict[Any, Any] | list[Any]", expected "dict[Any, Any]")  [return-value]
+libs/greenhouse-cli/greenhouse_cli/client.py:420: error: Incompatible return value type (got "dict[Any, Any] | list[Any]", expected "dict[Any, Any]")  [return-value]
+libs/greenhouse-cli/greenhouse_cli/client.py:425: error: Incompatible return value type (got "dict[Any, Any] | list[Any]", expected "dict[Any, Any]")  [return-value]
+libs/greenhouse-cli/greenhouse_cli/client.py:441: error: Incompatible return value type (got "dict[Any, Any] | list[Any]", expected "dict[Any, Any]")  [return-value]
+libs/greenhouse-cli/greenhouse_cli/client.py:461: error: Incompatible return value type (got "dict[Any, Any] | list[Any]", expected "dict[Any, Any]")  [return-value]
+libs/greenhouse-cli/greenhouse_cli/client.py:464: error: Incompatible return value type (got "dict[Any, Any] | list[Any]", expected "dict[Any, Any]")  [return-value]
+libs/greenhouse-core/greenhouse_core/sync.py:39: error: Unsupported operand types for + ("object" and "int")  [operator]
+libs/greenhouse-core/greenhouse_core/sync.py:40: error: Unsupported operand types for + ("object" and "int")  [operator]
+libs/greenhouse-core/greenhouse_core/sync.py:41: error: Unsupported operand types for + ("object" and "int")  [operator]
+libs/greenhouse-core/greenhouse_core/sync.py:54: error: "object" has no attribute "append"  [attr-defined]
+libs/greenhouse-core/greenhouse_core/stats.py:44: error: Unsupported operand types for + ("object" and "int")  [operator]
+libs/greenhouse-core/greenhouse_core/stats.py:45: error: Value of type "object" is not indexable  [index]
+libs/greenhouse-core/greenhouse_core/stats.py:45: error: Unsupported target for indexed assignment ("object")  [index]
+libs/greenhouse-core/greenhouse_core/stats.py:46: error: Value of type "object" is not indexable  [index]
+libs/greenhouse-core/greenhouse_core/stats.py:46: error: Unsupported target for indexed assignment ("object")  [index]
+libs/greenhouse-core/greenhouse_core/stats.py:49: error: Unsupported operand types for + ("object" and "int")  [operator]
+libs/greenhouse-core/greenhouse_core/stats.py:50: error: "object" has no attribute "append"  [attr-defined]
+libs/greenhouse-core/greenhouse_core/stats.py:61: error: Unsupported operand types for / ("object" and "int")  [operator]
+libs/greenhouse-core/greenhouse_core/stats.py:61: error: Argument 1 to "len" has incompatible type "object"; expected "Sized"  [arg-type]
+libs/greenhouse-core/greenhouse_core/stats.py:62: error: Argument 1 to "len" has incompatible type "object"; expected "Sized"  [arg-type]
+libs/greenhouse-core/greenhouse_core/logic/trends.py:59: error: Generator has incompatible item type "int | None"; expected "bool"  [misc]
+libs/greenhouse-core/greenhouse_core/logic/fallback.py:61: error: No overload variant of "int" matches argument type "object"  [call-overload]
+libs/greenhouse-core/greenhouse_core/logic/fallback.py:61: note: Possible overload variants:
+libs/greenhouse-core/greenhouse_core/logic/fallback.py:61: note:     def int(str | Buffer | SupportsInt | SupportsIndex | SupportsTrunc = ..., /) -> int
+libs/greenhouse-core/greenhouse_core/logic/fallback.py:61: note:     def int(str | bytes | bytearray, /, base: SupportsIndex) -> int
+libs/greenhouse-core/greenhouse_core/logic/fallback.py:62: error: No overload variant of "int" matches argument type "object"  [call-overload]
+libs/greenhouse-core/greenhouse_core/logic/fallback.py:62: note: Possible overload variants:
+libs/greenhouse-core/greenhouse_core/logic/fallback.py:62: note:     def int(str | Buffer | SupportsInt | SupportsIndex | SupportsTrunc = ..., /) -> int
+libs/greenhouse-core/greenhouse_core/logic/fallback.py:62: note:     def int(str | bytes | bytearray, /, base: SupportsIndex) -> int
+libs/greenhouse-core/greenhouse_core/learning/profiling.py:48: error: Argument "key" to "max" has incompatible type "Callable[[CleanedReading], float | None]"; expected "Callable[[CleanedReading], SupportsDunderLT[Any] | SupportsDunderGT[Any]]"  [arg-type]
+libs/greenhouse-core/greenhouse_core/learning/profiling.py:48: error: Incompatible return value type (got "float | None", expected "SupportsDunderLT[Any] | SupportsDunderGT[Any]")  [return-value]
+libs/greenhouse-core/greenhouse_core/learning/profiling.py:51: error: Unsupported operand types for - ("float" and "None")  [operator]
+libs/greenhouse-core/greenhouse_core/learning/profiling.py:51: error: Unsupported operand types for - ("None" and "float")  [operator]
+libs/greenhouse-core/greenhouse_core/learning/profiling.py:51: error: Unsupported left operand type for - ("None")  [operator]
+libs/greenhouse-core/greenhouse_core/learning/profiling.py:51: note: Both left and right operands are unions
+libs/greenhouse-core/greenhouse_core/learning/profiling.py:60: error: Argument "pre_moisture" to "IrrigationResponse" has incompatible type "float | None"; expected "float"  [arg-type]
+libs/greenhouse-core/greenhouse_core/learning/profiling.py:61: error: Argument "post_moisture" to "IrrigationResponse" has incompatible type "float | None"; expected "float"  [arg-type]
+libs/greenhouse-cli/greenhouse_cli/tui/widgets.py:36: error: Incompatible types in assignment (expression has type "bool", variable has type "BoundAnimator | None")  [assignment]
+libs/greenhouse-cli/greenhouse_cli/tui/screens/cluster.py:259: error: Argument 1 to "show" of "KeyValue" has incompatible type "list[tuple[str, str | Text]]"; expected "list[tuple[str, ConsoleRenderable | RichCast | str | str]]"  [arg-type]
+libs/greenhouse-cli/greenhouse_cli/tui/screens/cluster.py:259: note: "list" is invariant -- see https://mypy.readthedocs.io/en/stable/common_issues.html#variance
+libs/greenhouse-cli/greenhouse_cli/tui/screens/cluster.py:259: note: Consider using "Sequence" instead, which is covariant
+libs/greenhouse-cli/greenhouse_cli/tui/screens/cluster.py:414: error: Argument 1 to "show" of "KeyValue" has incompatible type "list[tuple[str, str | Text]] | list[tuple[str, str]]"; expected "list[tuple[str, ConsoleRenderable | RichCast | str | str]]"  [arg-type]
+libs/greenhouse-cli/greenhouse_cli/tui/screens/cluster.py:786: error: "App[Any]" has no attribute "action_refresh"  [attr-defined]
+libs/greenhouse-server/greenhouse_server/services/sync.py:65: error: Item "None" of "SensorReading | None" has no attribute "timestamp"  [union-attr]
+libs/greenhouse-core/greenhouse_core/learning/issues.py:37: error: Need type annotation for "alerts" (hint: "alerts: list[<type>] = ...")  [var-annotated]
+libs/greenhouse-core/greenhouse_core/learning/issues.py:162: error: Need type annotation for "alerts" (hint: "alerts: list[<type>] = ...")  [var-annotated]
+libs/greenhouse-server/greenhouse_server/services/forecast.py:69: error: Item "None" of "PlantProfile | None" has no attribute "avg_drainage_per_hour"  [union-attr]
+libs/greenhouse-core/greenhouse_core/logic/engine.py:284: error: No overload variant of "int" matches argument type "object"  [call-overload]
+libs/greenhouse-core/greenhouse_core/logic/engine.py:284: note: Possible overload variants:
+libs/greenhouse-core/greenhouse_core/logic/engine.py:284: note:     def int(str | Buffer | SupportsInt | SupportsIndex | SupportsTrunc = ..., /) -> int
+libs/greenhouse-core/greenhouse_core/logic/engine.py:284: note:     def int(str | bytes | bytearray, /, base: SupportsIndex) -> int
+libs/greenhouse-core/greenhouse_core/logic/engine.py:285: error: No overload variant of "int" matches argument type "object"  [call-overload]
+libs/greenhouse-core/greenhouse_core/logic/engine.py:285: note: Possible overload variants:
+libs/greenhouse-core/greenhouse_core/logic/engine.py:285: note:     def int(str | Buffer | SupportsInt | SupportsIndex | SupportsTrunc = ..., /) -> int
+libs/greenhouse-core/greenhouse_core/logic/engine.py:285: note:     def int(str | bytes | bytearray, /, base: SupportsIndex) -> int
+libs/greenhouse-core/greenhouse_core/logic/engine.py:289: error: No overload variant of "int" matches argument type "object"  [call-overload]
+libs/greenhouse-core/greenhouse_core/logic/engine.py:289: note: Possible overload variants:
+libs/greenhouse-core/greenhouse_core/logic/engine.py:289: note:     def int(str | Buffer | SupportsInt | SupportsIndex | SupportsTrunc = ..., /) -> int
+libs/greenhouse-core/greenhouse_core/logic/engine.py:289: note:     def int(str | bytes | bytearray, /, base: SupportsIndex) -> int
+libs/greenhouse-server/greenhouse_server/services/health_monitor.py:232: error: Incompatible return value type (got "tuple[bool, list[Literal[HealthAlarm.NO_WATER, HealthAlarm.RAIN_DETECTED, HealthAlarm.DEVICE_OFFLINE]]]", expected "tuple[bool, list[HealthAlarm]]")  [return-value]
+libs/greenhouse-server/greenhouse_server/scheduler.py:301: error: Item "None" of "FastAPI | None" has no attribute "state"  [union-attr]
+libs/greenhouse-server/greenhouse_server/scheduler.py:302: error: Item "None" of "FastAPI | None" has no attribute "state"  [union-attr]
+libs/greenhouse-server/greenhouse_server/scheduler.py:319: error: Item "None" of "FastAPI | None" has no attribute "state"  [union-attr]
+libs/greenhouse-server/greenhouse_server/scheduler.py:324: error: Item "None" of "FastAPI | None" has no attribute "state"  [union-attr]
+libs/greenhouse-server/greenhouse_server/scheduler.py:340: error: Item "None" of "FastAPI | None" has no attribute "state"  [union-attr]
+libs/greenhouse-server/greenhouse_server/scheduler.py:342: error: Item "None" of "FastAPI | None" has no attribute "state"  [union-attr]
+libs/greenhouse-server/greenhouse_server/scheduler.py:346: error: Item "None" of "FastAPI | None" has no attribute "state"  [union-attr]
+libs/greenhouse-server/greenhouse_server/scheduler.py:353: error: Item "None" of "FastAPI | None" has no attribute "state"  [union-attr]
+libs/greenhouse-server/greenhouse_server/scheduler.py:354: error: Item "None" of "FastAPI | None" has no attribute "state"  [union-attr]
+libs/greenhouse-server/greenhouse_server/scheduler.py:356: error: Item "None" of "FastAPI | None" has no attribute "state"  [union-attr]
+libs/greenhouse-server/greenhouse_server/scheduler.py:371: error: Item "None" of "FastAPI | None" has no attribute "state"  [union-attr]
+libs/greenhouse-server/greenhouse_server/scheduler.py:374: error: Item "None" of "FastAPI | None" has no attribute "state"  [union-attr]
+libs/greenhouse-server/greenhouse_server/services/irrigation.py:156: error: Incompatible types in assignment (expression has type "Any | None", variable has type "Settings")  [assignment]
+libs/greenhouse-server/greenhouse_server/services/irrigation.py:197: error: Argument "sleep" to "PumpWatcherService" has incompatible type "Callable[[float], bool]"; expected "Callable[[float], None]"  [arg-type]
+libs/greenhouse-server/greenhouse_server/services/irrigation.py:528: error: List comprehension has incompatible type List[str]; expected List[dict[str, Any]]  [misc]
+libs/greenhouse-server/greenhouse_server/services/irrigation.py:579: error: Item "None" of "NtfyClient | None" has no attribute "notify_irrigation"  [union-attr]
+libs/greenhouse-server/greenhouse_server/services/manual_control.py:139: error: Item "None" of "NtfyClient | None" has no attribute "notify_irrigation"  [union-attr]
+libs/greenhouse-server/greenhouse_server/services/manual_control.py:188: error: Item "None" of "NtfyClient | None" has no attribute "notify_irrigation"  [union-attr]
+libs/greenhouse-server/greenhouse_server/services/manual_control.py:236: error: Item "None" of "NtfyClient | None" has no attribute "notify_irrigation"  [union-attr]
+libs/greenhouse-server/greenhouse_server/web/routes/plant_dashboard.py:74: error: Argument 5 to "build_plant_chart_payload" has incompatible type "str"; expected "Literal['soil_moisture', 'temperature', 'light', 'env_humidity']"  [arg-type]
+libs/greenhouse-server/greenhouse_server/web/routes/plant_dashboard.py:140: error: Argument 5 to "build_plant_chart_payload" has incompatible type "str"; expected "Literal['soil_moisture', 'temperature', 'light', 'env_humidity']"  [arg-type]
+libs/greenhouse-server/greenhouse_server/web/routes/operations.py:131: error: Incompatible types in assignment (expression has type "Cluster | None", variable has type "Cluster")  [assignment]
+libs/greenhouse-server/greenhouse_server/web/routes/clusters.py:168: error: No overload variant of "int" matches argument type "object"  [call-overload]
+libs/greenhouse-server/greenhouse_server/web/routes/clusters.py:168: note: Possible overload variants:
+libs/greenhouse-server/greenhouse_server/web/routes/clusters.py:168: note:     def int(str | Buffer | SupportsInt | SupportsIndex | SupportsTrunc = ..., /) -> int
+libs/greenhouse-server/greenhouse_server/web/routes/clusters.py:168: note:     def int(str | bytes | bytearray, /, base: SupportsIndex) -> int
+libs/greenhouse-server/greenhouse_server/web/routes/clusters.py:173: error: No overload variant of "int" matches argument type "object"  [call-overload]
+libs/greenhouse-server/greenhouse_server/web/routes/clusters.py:173: note: Possible overload variants:
+libs/greenhouse-server/greenhouse_server/web/routes/clusters.py:173: note:     def int(str | Buffer | SupportsInt | SupportsIndex | SupportsTrunc = ..., /) -> int
+libs/greenhouse-server/greenhouse_server/web/routes/clusters.py:173: note:     def int(str | bytes | bytearray, /, base: SupportsIndex) -> int
+libs/greenhouse-server/greenhouse_server/routes/vacation.py:25: error: Argument "active" to "VacationListResponse" has incompatible type "VacationWindow | None"; expected "VacationResponse | None"  [arg-type]
+libs/greenhouse-server/greenhouse_server/routes/vacation.py:26: error: Argument "items" to "VacationListResponse" has incompatible type "list[VacationWindow]"; expected "list[VacationResponse]"  [arg-type]
+libs/greenhouse-server/greenhouse_server/routes/plants.py:236: error: List item 0 has incompatible type "Cluster | None"; expected "Cluster"  [list-item]
+libs/greenhouse-server/greenhouse_server/routes/plants.py:284: error: Argument "history" to "PlantHealthResponse" has incompatible type "list[PlantHealthDaily]"; expected "list[PlantHealthDailyResponse]"  [arg-type]
+libs/greenhouse-server/greenhouse_server/routes/operations.py:275: error: Argument "alerts" to "LearnResponse" has incompatible type "list[dict[Any, Any]]"; expected "list[AlertResponse]"  [arg-type]
+libs/greenhouse-server/greenhouse_server/routes/configs.py:100: error: Argument 1 to "ResolvedConfigField" has incompatible type "**dict[str, object]"; expected "int | float | str | bool | None"  [arg-type]
+libs/greenhouse-server/greenhouse_server/routes/configs.py:100: error: Argument 1 to "ResolvedConfigField" has incompatible type "**dict[str, object]"; expected "str"  [arg-type]
+libs/greenhouse-server/greenhouse_server/routes/bulk.py:33: error: Item "None" of "NtfyClient | None" has no attribute "notify_irrigation"  [union-attr]
+Found 176 errors in 29 files (checked 158 source files)

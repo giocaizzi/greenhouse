@@ -1,0 +1,33 @@
+Downloading isort (1.5MiB)
+ Downloading isort
+Installed 8 packages in 7ms
+************* Module greenhouse_cli.commands.alerts
+libs/greenhouse-cli/greenhouse_cli/commands/alerts.py:1:0: R0801: Similar lines in 2 files
+==greenhouse_server.routes.operations:[368:389]
+==greenhouse_server.web.routes.analytics:[86:116]
+            ts_str = format_timestamp(event.timestamp)
+            date, _, time_part = ts_str.partition(" ")
+            writer.writerow(
+                [
+                    event.timestamp,
+                    date,
+                    time_part,
+                    irrigator.name,
+                    event.action,
+                    event.duration_minutes or "",
+                    event.triggered_by,
+                    event.notes or "",
+                ]
+            )
+
+    output.seek(0)
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=cluster_{cluster.id}_stats.csv"},
+    ) (duplicate-code)
+
+------------------------------------
+Your code has been rated at 10.00/10
+
+exit=8

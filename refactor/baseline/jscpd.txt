@@ -1,0 +1,83 @@
+Clone found (python):
+ - libs/greenhouse-cli/greenhouse_cli/commands/plants.py [90:58 - 100:67] (10 lines, 212 tokens)
+   libs/greenhouse-cli/greenhouse_cli/commands/plants.py [16:61 - 26:36]
+
+Clone found (python):
+ - libs/greenhouse-cli/greenhouse_cli/commands/irrigators.py [96:86 - 110:8] (14 lines, 126 tokens)
+   libs/greenhouse-cli/greenhouse_cli/commands/irrigators.py [18:72 - 28:41]
+
+Clone found (python):
+ - libs/greenhouse-cli/greenhouse_cli/commands/configs.py [75:23 - 87:84] (12 lines, 249 tokens)
+   libs/greenhouse-cli/greenhouse_cli/commands/configs.py [25:61 - 37:83]
+
+Clone found (python):
+ - libs/greenhouse-server/greenhouse_server/web/routes/windows.py [98:14 - 105:27] (7 lines, 82 tokens)
+   libs/greenhouse-server/greenhouse_server/web/routes/windows.py [55:15 - 62:20]
+
+Clone found (python):
+ - libs/greenhouse-server/greenhouse_server/web/routes/vacation.py [103:19 - 117:12] (14 lines, 143 tokens)
+   libs/greenhouse-server/greenhouse_server/web/routes/vacation.py [64:21 - 78:9]
+
+Clone found (python):
+ - libs/greenhouse-server/greenhouse_server/web/routes/sensors.py [3:1 - 15:4] (12 lines, 91 tokens)
+   libs/greenhouse-server/greenhouse_server/web/routes/windows.py [9:1 - 20:14]
+
+Clone found (python):
+ - libs/greenhouse-server/greenhouse_server/web/routes/plants.py [3:1 - 15:15] (12 lines, 93 tokens)
+   libs/greenhouse-server/greenhouse_server/web/routes/windows.py [9:1 - 15:27]
+
+Clone found (python):
+ - libs/greenhouse-server/greenhouse_server/web/routes/plants.py [86:13 - 98:26] (12 lines, 144 tokens)
+   libs/greenhouse-server/greenhouse_server/web/routes/plants.py [46:15 - 58:20]
+
+Clone found (python):
+ - libs/greenhouse-server/greenhouse_server/web/routes/plants.py [100:17 - 115:15] (15 lines, 116 tokens)
+   libs/greenhouse-server/greenhouse_server/web/routes/plants.py [60:30 - 75:12]
+
+Clone found (python):
+ - libs/greenhouse-server/greenhouse_server/web/routes/irrigators.py [134:18 - 142:14] (8 lines, 94 tokens)
+   libs/greenhouse-server/greenhouse_server/web/routes/irrigators.py [74:36 - 82:12]
+
+Clone found (python):
+ - libs/greenhouse-server/greenhouse_server/services/insights.py [56:45 - 69:13] (13 lines, 174 tokens)
+   libs/greenhouse-server/greenhouse_server/services/insights.py [43:48 - 56:12]
+
+Clone found (python):
+ - libs/greenhouse-server/greenhouse_server/routes/operations.py [368:28 - 389:6] (21 lines, 146 tokens)
+   libs/greenhouse-server/greenhouse_server/web/routes/analytics.py [86:75 - 106:6]
+
+Clone found (python):
+ - libs/greenhouse-server/greenhouse_server/routes/irrigators.py [30:24 - 47:8] (17 lines, 89 tokens)
+   libs/greenhouse-server/greenhouse_server/routes/sensors.py [21:21 - 38:8]
+
+Clone found (python):
+ - libs/greenhouse-core/greenhouse_core/schemas.py [174:32 - 188:25] (14 lines, 87 tokens)
+   libs/greenhouse-core/greenhouse_core/schemas.py [109:38 - 123:28]
+
+Clone found (python):
+ - libs/greenhouse-core/greenhouse_core/schemas.py [363:5 - 373:26] (10 lines, 115 tokens)
+   libs/greenhouse-core/greenhouse_core/schemas.py [305:5 - 315:21]
+
+Clone found (python):
+ - libs/greenhouse-core/greenhouse_core/schemas.py [857:5 - 867:26] (10 lines, 115 tokens)
+   libs/greenhouse-core/greenhouse_core/schemas.py [49:5 - 59:25]
+
+┌────────┬────────────────┬─────────────┬──────────────┬──────────────┬──────────────────┬───────────────────┐
+│ Format │ Files analyzed │ Total lines │ Total tokens │ Clones found │ Duplicated lines │ Duplicated tokens │
+├────────┼────────────────┼─────────────┼──────────────┼──────────────┼──────────────────┼───────────────────┤
+│ python │ 149            │ 22452       │ 168683       │ 16           │ 201 (0.9%)       │ 2076 (1.23%)      │
+├────────┼────────────────┼─────────────┼──────────────┼──────────────┼──────────────────┼───────────────────┤
+│ Total: │ 149            │ 22452       │ 168683       │ 16           │ 201 (0.9%)       │ 2076 (1.23%)      │
+└────────┴────────────────┴─────────────┴──────────────┴──────────────┴──────────────────┴───────────────────┘
+Found 16 clones.
+JSON report saved to /tmp/claude-0/-home-user-greenhouse/13425f2d-7c47-5b83-96d4-7045d3907ad2/scratchpad/jscpd/jscpd-report.json
+time: 1.789s
+
+💡 Auto-refactor with AI: npx skills add kucherenko/jscpd
+🎩 New: Gangsta Agents — discipline your AI coding → gangsta.page
+💖 Support jscpd project → https://opencollective.com/jscpd
+npm notice
+npm notice New major version of npm available! 10.9.4 -> 12.2.0
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.0
+npm notice To update run: npm install -g npm@12.2.0
+npm notice
