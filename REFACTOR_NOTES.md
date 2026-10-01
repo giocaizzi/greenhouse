@@ -67,6 +67,18 @@ Settings / schema (pinned; details in `refactor/10-safety-contracts-static.md`):
 - Pre-existing pytest quirk: `tests/server/X tests/<core file> tests/server/Y` on one command line → "fixture 'client'
   not found" for Y; group test paths by directory.
 
+Decision engine (pinned; details in `refactor/10-safety-engine.md`):
+- a decision can end with zero reasons (temperature-only data): skip, confidence 0.5, `primary_code` NULL in the log;
+- critical stress keys on the **average** soil moisture, not the driest plant (contrast with invariant #2);
+- `constants.py` values are bound by name at import (`from … import`), so patching `constants.X` does not affect the
+  engine — only patching the name inside `engine.py` does (relevant to how invariant #5 can be tested);
+- cleaning readings twice can drop more values than once (not idempotent);
+- with < 5 readings a spike is not filtered and can trigger very-dry irrigation;
+- `parse_moisture_target` does no validation; 0 °C / 0 % plant bounds are treated as missing;
+- cooldown (6 h) and leak hold (24 h) are inclusive at the exact edge;
+- critical stress, water warning and the no-sensor fallback bypass vacation rationing;
+- light thresholds use the UTC month while seasons use the preferences timezone.
+
 ## Golden-test policy (orchestrator decision)
 
 - OpenAPI, routes, MCP tools, settings, DDL, scheduler registry, package data, web HTML, CLI help/output, TUI renders,
