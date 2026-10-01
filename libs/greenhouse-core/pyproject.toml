@@ -5,7 +5,7 @@ description = "Core library for greenhouse: models, repository, business logic"
 requires-python = ">=3.11"
 license = {text = "MIT"}
 dependencies = [
-    "sqlalchemy>=2.0.51",
+    "sqlalchemy>=2.0.52",
     "pydantic>=2.0",
     "tinytuya>=1.14.0",
     "alembic>=1.13",
