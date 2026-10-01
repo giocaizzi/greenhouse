@@ -618,7 +618,7 @@ orchestrator approval (`… — reason — approved: <orchestrator>`). I1 reject
 entries. Every register entry carries a reason, and REFACTOR_NOTES lists it.
 
 **Every production function > 40 total lines, or CC > 8, or nesting > 3** *(nesting column and 5 verdicts added in
-Rev 2)*. There are 90 rows: 82 functions over 40 total lines (the nested `register.login` is listed separately), 4
+Rev 2)*. There are 90 rows (91 with the nested `schedule_pump_watcher._run` added at T0.9): 82 functions over 40 total lines (the nested `register.login` is listed separately), 4
 more with CC > 8 only, and 4 more with nesting > 3 only. Size is total/body lines. The data comes from an AST scan at
 `6994bc0`; nesting uses the definition above, with `elif` at the same depth as its `if` and nested `def`s measured
 separately.
@@ -706,6 +706,7 @@ T6.9/T6.12/T7.22/T8.18) or an EXC row (`ClusterScreen.compose`, `FormScreen.comp
 | `services/irrigation.py::handle_watcher_interrupted` | 89/56 | ≤8 | 2 | **T7.18** | `_stop_auto_cycle`, `_left_running_message` |
 | `services/irrigation.py::rearm_leak_checks` | ≤40 | ≤8 | 4 | **T7.22** | nesting 4 → `_rearm_from_events(repo, now) -> int` (the two loops + guards); try/except/finally, `now = int(_time.time())` and both log lines stay in `rearm_leak_checks` (Rev 2) |
 | `services/irrigation.py::schedule_pump_watcher` | 102/77 | 12 | 2 | **T7.19** | `_watcher_tuning` + `_run_pump_watcher`; thin closure kept |
+| `services/irrigation.py::schedule_pump_watcher._run` | 43/42 | ≤8 | 2 | **T7.19** | nested closure, measured separately; its body moves into `_run_pump_watcher`, the thin closure that stays must be ≤ 40 body lines (added at T0.9: the WP0 `sizecheck` found it missing from this table — orchestrator decision) |
 | `services/leak.py::LeakDetectionService._evaluate_sensor` | 62/50 | ≤8 | 1 | **T7.21** | `_moisture_series`, `_pinned_high`, `_still_rising` |
 | `services/leak.py::LeakDetectionService.check_after_irrigation` | 63/42 | ≤8 | 2 | **T7.20** | `_hold_activity` / per-sensor verdict helpers |
 | `services/maintenance.py::collect_maintenance_alerts` | 71/69 | 11 | 5 | **T4.5** | per-check helpers |
