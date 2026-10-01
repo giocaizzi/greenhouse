@@ -27,6 +27,11 @@ Behavior-preserving refactor: make the codebase cleaner, more readable, better o
 - Out of scope, do not touch: `migrations/versions/*`, `plant_database.json`, `devices/profiles/*.json`, `web/static/*`, templates' rendered output, `plugin/`, `.claude-plugin/`, `CHANGELOG.md`, `release-please-*`, `uv.lock` (except dev-group tooling), `Dockerfile`, `docker-compose.yml`, `.github/workflows/*`.
 - High risk (two reviewers, explicit adversary coverage): `devices/`, `logic/engine.py`, auth paths, scheduler.
 
+## Owner decisions (binding)
+- **Layout: keep the `libs/` uv workspace as is — NO `src/` layout migration.** Packages stay at
+  `libs/greenhouse-{core,server,cli}/greenhouse_{core,server,cli}/`; hatch `packages` and pytest `pythonpath` are unchanged.
+  Structural work happens *inside* each package only.
+
 ## Test suite
 `uv run pytest` — ~1160 tests, ~12 min full. Use targeted paths / `-x` for inner loops. No real network/hardware ever;
 fakes in `tests/fake_devices.py`, `tests/fake_data.py`, fixtures in `tests/conftest.py`, TUI fixtures in `tests/cli/tui_fixtures.py`.
