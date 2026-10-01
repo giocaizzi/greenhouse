@@ -31,6 +31,13 @@ Behavior-preserving refactor: make the codebase cleaner, more readable, better o
 - **Layout: keep the `libs/` uv workspace as is — NO `src/` layout migration.** Packages stay at
   `libs/greenhouse-{core,server,cli}/greenhouse_{core,server,cli}/`; hatch `packages` and pytest `pythonpath` are unchanged.
   Structural work happens *inside* each package only.
+- **Method-level cleanup is first-class scope, not just module moves.** The plan must include a method-by-method pass:
+  small single-purpose functions (≤ ~20–40 lines, CC ≤ 8, nesting ≤ 2–3), guard clauses, intention-revealing names,
+  clear typed interfaces (explicit params instead of `**kwargs`/dict bags, keyword-only args where call sites are
+  ambiguous, parameter objects for long lists, precise return types, Command–Query Separation), and why-docstrings.
+  Limits: frozen contracts still win — route function names/docstrings/`response_model`s, public import paths,
+  Pydantic class/field names, Textual `action_*`/`on_*`/ids and CLI options do not change. Internal (non-contract)
+  method signatures MAY be redesigned when every call site is updated in the same commit and tests prove no change.
 
 ## Test suite
 `uv run pytest` — ~1160 tests, ~12 min full. Use targeted paths / `-x` for inner loops. No real network/hardware ever;
