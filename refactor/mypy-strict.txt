@@ -16,6 +16,7 @@ libs/greenhouse-core/greenhouse_core/logic/plant_needs.py
 libs/greenhouse-core/greenhouse_core/logic/sensors.py
 libs/greenhouse-core/greenhouse_core/logic/stress.py
 libs/greenhouse-core/greenhouse_core/models.py
+libs/greenhouse-core/greenhouse_core/repository.py
 libs/greenhouse-core/greenhouse_core/schemas.py
 libs/greenhouse-server/greenhouse_server/config.py
 libs/greenhouse-server/greenhouse_server/routes/activity.py

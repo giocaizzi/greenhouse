@@ -2,6 +2,7 @@
 
 import json
 import time
+from typing import TYPE_CHECKING, Any, cast
 
 from sqlalchemy import func, select
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
@@ -33,6 +34,9 @@ from greenhouse_core.models import (
     UserPreferences,
     VacationWindow,
 )
+
+if TYPE_CHECKING:
+    from sqlalchemy.engine import CursorResult
 
 _GLOBAL_CONFIG_DEFAULTS: dict[str, int | str | bool | None] = {
     "mode": DEFAULT_IRRIGATION_MODE,
@@ -129,7 +133,7 @@ class IrrigationRepository:
         tuya_device_id: str,
         name: str,
         irrigator_type: str,
-        config: dict,
+        config: dict[str, Any],
     ) -> int:
         """Add an irrigator device and return its ID.
 
@@ -165,7 +169,7 @@ class IrrigationRepository:
         tuya_device_id: str,
         name: str,
         sensor_type: str,
-        config: dict,
+        config: dict[str, Any],
         plant_id: int | None = None,
         assignment_started_at: int | None = None,
     ) -> int:
@@ -329,7 +333,7 @@ class IrrigationRepository:
             )
             .on_conflict_do_nothing(index_elements=["sensor_id", "timestamp"])
         )
-        result = self.session.execute(stmt)
+        result = cast("CursorResult[Any]", self.session.execute(stmt))
         self.session.flush()
         if result.rowcount > 0:
             # Fetch the inserted row's ID
@@ -397,7 +401,7 @@ class IrrigationRepository:
                 )
                 .on_conflict_do_nothing(index_elements=["sensor_id", "timestamp"])
             )
-            result = self.session.execute(stmt)
+            result = cast("CursorResult[Any]", self.session.execute(stmt))
             inserted += result.rowcount
         self.session.flush()
         return inserted
@@ -514,7 +518,7 @@ class IrrigationRepository:
         "quiet_end_hour",
     )
 
-    def set_irrigation_config(self, cluster_id: int, **fields) -> int:
+    def set_irrigation_config(self, cluster_id: int, **fields: Any) -> int:
         """Upsert a cluster's irrigation config; only the fields provided in
         ``fields`` are mutated.
 
@@ -567,7 +571,7 @@ class IrrigationRepository:
         self.session.flush()
         return row
 
-    def update_global_irrigation_config(self, **fields) -> GlobalIrrigationConfig:
+    def update_global_irrigation_config(self, **fields: Any) -> GlobalIrrigationConfig:
         """Patch the singleton global config; only the supplied keys are set.
 
         Pass ``None`` to clear a previously set field (the effective resolver
@@ -618,7 +622,7 @@ class IrrigationRepository:
         confidence: float,
         primary_code: str | None,
         reason_text: str,
-        payload: dict,
+        payload: dict[str, Any],
         triggered_by: str = "auto",
         actuated: bool = False,
     ) -> int:
@@ -669,7 +673,7 @@ class IrrigationRepository:
         *,
         entity_id: int | None = None,
         severity: str = "info",
-        payload: dict | None = None,
+        payload: dict[str, Any] | None = None,
         timestamp: int | None = None,
     ) -> int:
         """Append a polymorphic activity event; returns the new row id."""
@@ -726,7 +730,7 @@ class IrrigationRepository:
         entity_id: int | None = None,
         cluster_id: int | None = None,
         plant_id: int | None = None,
-        payload: dict | None = None,
+        payload: dict[str, Any] | None = None,
         seen_at: int | None = None,
     ) -> Alert:
         """Insert or refresh an alert keyed by ``dedup_key``.
@@ -951,7 +955,7 @@ class IrrigationRepository:
             select(VacationWindow).where(VacationWindow.starts_at <= now, VacationWindow.ends_at >= now)
         )
 
-    def update_vacation_window(self, window_id: int, **fields) -> VacationWindow | None:
+    def update_vacation_window(self, window_id: int, **fields: Any) -> VacationWindow | None:
         """Patch a vacation window's fields; returns the updated row or None.
 
         Only keys with non-None values are applied — the route layer is
@@ -1010,7 +1014,7 @@ class IrrigationRepository:
         self.session.flush()
         return row
 
-    def update_irrigation_window(self, window_id: int, **fields) -> IrrigationWindow | None:
+    def update_irrigation_window(self, window_id: int, **fields: Any) -> IrrigationWindow | None:
         row = self.session.get(IrrigationWindow, window_id)
         if row is None:
             return None
@@ -1042,7 +1046,7 @@ class IrrigationRepository:
         self.session.flush()
         return prefs
 
-    def update_preferences(self, **fields) -> UserPreferences:
+    def update_preferences(self, **fields: Any) -> UserPreferences:
         """Patch preferences with the provided keyword args; unknown keys are ignored."""
         prefs = self.get_preferences()
         for key, value in fields.items():
@@ -1146,7 +1150,7 @@ class IrrigationRepository:
 
     # ── Mutations for CRUD edit/delete ────────────────────────────────────────
 
-    def update_cluster(self, cluster_id: int, **fields) -> Cluster | None:
+    def update_cluster(self, cluster_id: int, **fields: Any) -> Cluster | None:
         """Patch cluster fields; returns the updated row or None if missing."""
         cluster = self.session.get(Cluster, cluster_id)
         if not cluster:
@@ -1166,7 +1170,7 @@ class IrrigationRepository:
         self.session.flush()
         return True
 
-    def update_plant(self, plant_id: int, **fields) -> Plant | None:
+    def update_plant(self, plant_id: int, **fields: Any) -> Plant | None:
         """Patch plant fields; returns the updated row or None."""
         plant = self.session.get(Plant, plant_id)
         if not plant:
@@ -1250,7 +1254,7 @@ class IrrigationRepository:
         )
         return plant
 
-    def update_sensor(self, sensor_id: int, **fields) -> Sensor | None:
+    def update_sensor(self, sensor_id: int, **fields: Any) -> Sensor | None:
         """Patch sensor fields. ``plant_id`` changes are routed through
         ``reassign_sensor_to_plant`` so the assignment history stays in sync.
         ``config`` is JSON-serialised if a dict.
@@ -1284,7 +1288,7 @@ class IrrigationRepository:
         self.session.flush()
         return True
 
-    def update_irrigator(self, irrigator_id: int, **fields) -> Irrigator | None:
+    def update_irrigator(self, irrigator_id: int, **fields: Any) -> Irrigator | None:
         """Patch irrigator fields; ``config`` is JSON-serialised if a dict."""
         irrigator = self.session.get(Irrigator, irrigator_id)
         if not irrigator:
