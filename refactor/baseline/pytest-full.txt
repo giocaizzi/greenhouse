@@ -193,3 +193,7 @@ libs/greenhouse-server/greenhouse_server/web/templating.py                    7 
 TOTAL                                                                      9826    803   2296    307    90%
 Coverage JSON written to file refactor/baseline/coverage.json
 1182 passed, 2 warnings in 1168.30s (0:19:28)
+
+real	21m6.356s
+user	20m33.238s
+sys	0m49.838s
