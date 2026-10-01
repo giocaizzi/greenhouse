@@ -80,3 +80,82 @@ indent-style = "space"
 "__init__.py" = ["F401"]  # unused imports in __init__
 "tests/*" = ["B011"]  # assert False check
 "scripts/*" = ["E402"]  # intentional sys.path before import
+
+[tool.importlinter]
+root_packages = ["greenhouse_core", "greenhouse_server", "greenhouse_cli"]
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "CLI is HTTP-only"
+type = "forbidden"
+source_modules = ["greenhouse_cli"]
+forbidden_modules = ["greenhouse_core", "greenhouse_server", "sqlalchemy", "fastapi"]
+
+[[tool.importlinter.contracts]]
+name = "Core never imports server or CLI"
+type = "forbidden"
+source_modules = ["greenhouse_core"]
+forbidden_modules = ["greenhouse_server", "greenhouse_cli"]
+
+[[tool.importlinter.contracts]]
+name = "Server layers: app > routes|web > deps|auth > scheduler > services > config"
+type = "layers"
+layers = [
+  "greenhouse_server.app",
+  "greenhouse_server.routes | greenhouse_server.web",
+  "greenhouse_server.deps | greenhouse_server.auth",
+  "greenhouse_server.scheduler",
+  "greenhouse_server.services",
+  "greenhouse_server.config",
+]
+ignore_imports = [
+  "greenhouse_server.services.irrigation -> greenhouse_server.scheduler",     # lazy; _app trap (§6)
+  "greenhouse_server.services.system_health -> greenhouse_server.scheduler",
+]
+
+[[tool.importlinter.contracts]]
+name = "API routes and web routes are independent"
+type = "independence"
+modules = ["greenhouse_server.routes", "greenhouse_server.web"]
+
+[[tool.importlinter.contracts]]
+name = "Devices do not depend on decision logic, learning or persistence"
+type = "forbidden"
+source_modules = ["greenhouse_core.devices"]
+forbidden_modules = ["greenhouse_core.logic", "greenhouse_core.learning", "greenhouse_core.repository",
+                     "greenhouse_core.schemas", "greenhouse_core.sync"]
+
+[[tool.importlinter.contracts]]
+name = "Data definitions stay below behaviour"
+type = "forbidden"
+source_modules = ["greenhouse_core.models", "greenhouse_core.schemas", "greenhouse_core.constants"]
+forbidden_modules = ["greenhouse_core.logic", "greenhouse_core.learning", "greenhouse_core.repository",
+                     "greenhouse_core.devices", "greenhouse_core.sync"]
+
+[[tool.importlinter.contracts]]
+name = "Learning builds on logic; engine's advisory hook is the only way back"
+type = "layers"
+layers = ["greenhouse_core.learning", "greenhouse_core.logic"]
+ignore_imports = ["greenhouse_core.logic.engine -> greenhouse_core.learning"]
+
+[[tool.importlinter.contracts]]
+name = "Inside logic: engine orchestrates; helpers/values never import it"
+type = "layers"
+layers = [
+  "greenhouse_core.logic.engine",
+  "greenhouse_core.logic.fallback | greenhouse_core.logic.sensors | greenhouse_core.logic.stress | greenhouse_core.logic.trends",
+  "greenhouse_core.logic.timing | greenhouse_core.logic.cleaning | greenhouse_core.logic.plant_needs",
+  "greenhouse_core.logic.decision",
+]
+
+[[tool.importlinter.contracts]]
+name = "Logic never drives devices"
+type = "forbidden"
+source_modules = ["greenhouse_core.logic"]
+forbidden_modules = ["greenhouse_core.devices", "greenhouse_core.sync"]
+
+[[tool.importlinter.contracts]]
+name = "TUI view-model modules stay widget-free and I/O-free"
+type = "forbidden"
+source_modules = ["greenhouse_cli.tui.model", "greenhouse_cli.tui.formatting"]
+forbidden_modules = ["textual", "greenhouse_cli.tui.screens", "greenhouse_cli.tui.widgets", "greenhouse_cli.client", "httpx"]
