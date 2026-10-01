@@ -1,8 +1,10 @@
 """Shared pytest fixtures for greenhouse test suite."""
 
+import os
 import time
 
 import pytest
+import time_machine
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
@@ -17,6 +19,7 @@ from fake_data import (
     FAKE_SENSOR_ID,
     FAKE_SENSOR_NAME,
 )
+from golden import ENV_PREFIXES, FROZEN_INSTANT
 from greenhouse_core.models import Base
 from greenhouse_core.repository import IrrigationRepository
 
@@ -82,3 +85,35 @@ def sample_cluster(tmp_db):
         "irrigator_id": irrigator_id,
         "sensor_id": sensor_id,
     }
+
+
+# ── Determinism kit for the characterization / golden suite (see tests/golden.py) ──
+
+
+@pytest.fixture
+def frozen_clock():
+    """Freeze wall-clock time (``time.time``, ``datetime.now``) at ``FROZEN_INSTANT``.
+
+    Monotonic clocks keep running, so asyncio / Textual timers still work.
+    """
+    with time_machine.travel(FROZEN_INSTANT, tick=False) as traveller:
+        yield traveller
+
+
+@pytest.fixture
+def clean_env(monkeypatch, tmp_path):
+    """Hermetic environment: no app env vars, no ``.env`` file in cwd, UTC local time, plain terminal."""
+    for name in list(os.environ):
+        if name.startswith(ENV_PREFIXES):
+            monkeypatch.delenv(name, raising=False)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
+    monkeypatch.setenv("TZ", "UTC")
+    monkeypatch.setenv("COLUMNS", "100")
+    monkeypatch.setenv("TERM", "dumb")
+    monkeypatch.setenv("NO_COLOR", "1")
+    time.tzset()
+    yield tmp_path
+    monkeypatch.undo()
+    time.tzset()
