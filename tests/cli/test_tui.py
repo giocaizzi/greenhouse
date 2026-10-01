@@ -72,18 +72,27 @@ def _app(http: TestClient, log: list | None = None, refresh_seconds: float = 0) 
     )
 
 
-async def _settle(pilot, tui: GreenhouseApp) -> None:
-    """Let workers finish and the DOM catch up.
+async def _settle(pilot, tui: GreenhouseApp, timeout: float = 10.0) -> None:
+    """Wait until no worker is running and the DOM has caught up.
 
-    Exclusive workers (reloads, chart loads) legitimately cancel the run they
-    supersede, so a cancelled worker is not a failure here.
+    Workers chain (an action's worker starts a reload worker when it ends), so
+    keep waiting until a pass finds nothing running — a fixed number of rounds
+    is not enough on a slow CI runner. Exclusive workers legitimately cancel
+    the run they supersede, so a cancelled worker is not a failure here.
     """
-    for _ in range(3):
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + timeout
+    idle_passes = 0
+    while idle_passes < 2:
         await pilot.pause()
         try:
             await tui.workers.wait_for_complete()
         except WorkerCancelled:
             pass
+        busy = any(w.is_running for w in tui.workers)
+        idle_passes = 0 if busy else idle_passes + 1
+        if loop.time() > deadline:
+            raise AssertionError(f"workers still running after {timeout}s: {list(tui.workers)}")
     await pilot.pause()
 
 
@@ -265,6 +274,25 @@ class TestDashboard:
                 await pilot.press("escape")
                 await pilot.pause()
                 assert isinstance(tui.screen, DashboardScreen)
+
+        _run(scenario())
+
+    def test_rapid_reloads_never_duplicate_cards(self, greenhouse):
+        """Regression: overlapping reloads raced remove/mount and mounted two
+        cards with the same ID (MountError) when a superseded worker was
+        cancelled mid-render."""
+        http, _ = greenhouse
+
+        async def scenario():
+            tui = _app(http)
+            async with tui.run_test(size=SIZE) as pilot:
+                await _settle(pilot, tui)
+                for _ in range(12):
+                    tui.screen.reload()
+                    await pilot.pause(0.01)
+                await _settle(pilot, tui)
+                ids = [c.id for c in tui.screen.query(ClusterCard)]
+                assert sorted(ids) == ["cluster-card-1", "cluster-card-2", "cluster-card-3"]
 
         _run(scenario())
 
@@ -1261,8 +1289,7 @@ class TestResilience:
         async def scenario():
             tui = _mock_app(handler, refresh_seconds=0.2)
             async with tui.run_test(size=SIZE) as pilot:
-                await pilot.pause(0.9)
-                await _settle(pilot, tui)
+                await pilot.pause(1.2)  # never idle by design, so no _settle here
                 assert len(hits) >= 3
 
         _run(scenario())

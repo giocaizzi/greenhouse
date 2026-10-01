@@ -9,6 +9,7 @@ against hand-written mocks.
 from __future__ import annotations
 
 import math
+import threading
 import time
 
 from fastapi.testclient import TestClient
@@ -170,24 +171,36 @@ def seed_greenhouse(http: TestClient, engine) -> None:
 def tui_client_factory(http: TestClient, log: list | None = None):
     """Build ``IrrigationClient`` instances whose transport is the in-process app.
 
+    The TUI legitimately issues requests concurrently from worker threads. The
+    stubbed test app runs every request on ONE in-memory SQLite connection
+    (``StaticPool``), which cannot serve concurrent statements — it raises
+    ``sqlite3.InterfaceError`` or hands one request another's rows. The real
+    server (file SQLite, ``QueuePool``) gives each request its own connection,
+    so requests are serialized here to model that isolation.
+
     When ``log`` is given, every request the TUI makes is appended to it as
     ``(method, path, json_body, params)`` so tests can assert exact API calls.
     """
+    lock = _app_locks.setdefault(id(http), threading.Lock())
 
     def factory(token: str | None) -> IrrigationClient:
         client = IrrigationClient(base_url="http://testserver", token=token or "")
         client.http = http
-        if log is not None:
-            original = client._request
+        original = client._request
 
-            def recording(method, path, **kwargs):
+        def serialized(method, path, **kwargs):
+            if log is not None:
                 log.append((method, path, kwargs.get("json"), kwargs.get("params")))
+            with lock:
                 return original(method, path, **kwargs)
 
-            client._request = recording
+        client._request = serialized
         return client
 
     return factory
+
+
+_app_locks: dict[int, threading.Lock] = {}
 
 
 def writes(log: list) -> list[tuple]:
