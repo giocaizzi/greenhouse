@@ -1,0 +1,13 @@
+
+ Usage: greenhouse windows delete [OPTIONS] {window_id}
+
+ Remove an irrigation window.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────╮
+│ *    window_id      <int>  Window ID [required]                                                  │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  --cluster          <int>  Cluster the window belongs to [required]                            │
+│    --yes      -y             Skip confirmation prompt                                            │
+│    --help                    Show this message and exit.                                         │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

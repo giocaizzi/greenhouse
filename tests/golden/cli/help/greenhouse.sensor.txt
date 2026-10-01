@@ -1,0 +1,14 @@
+
+ Usage: greenhouse sensor [OPTIONS] COMMAND [ARGS]...
+
+ Manage sensors
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                                      │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────────────────────────╮
+│ add     Add a sensor to a cluster.                                                               │
+│ list    List sensors.                                                                            │
+│ update  Patch sensor metadata. Only the supplied fields are sent.                                │
+│ delete  Delete a sensor. Historic readings stay attached to the cluster.                         │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

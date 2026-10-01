@@ -1,0 +1,13 @@
+
+ Usage: greenhouse scheduler [OPTIONS] COMMAND [ARGS]...
+
+ Manage background scheduler jobs
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                                      │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────────────────────────╮
+│ pause   Pause the `check_all` scheduler job.                                                     │
+│ resume  Resume the `check_all` scheduler job after a pause.                                      │
+│ status  List every background job with its trigger and pause state.                              │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

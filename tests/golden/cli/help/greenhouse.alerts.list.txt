@@ -1,0 +1,12 @@
+
+ Usage: greenhouse alerts list [OPTIONS]
+
+ List persisted alerts. Newest-seen first.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ --status         <str>                    Filter by status: open / acknowledged / resolved       │
+│ --cluster        <int>                    Filter by cluster ID                                   │
+│ --plant          <int>                    Filter by plant ID                                     │
+│ --limit          <int range> [1<=x<=500]  Max number of items [default: 100]                     │
+│ --help                                    Show this message and exit.                            │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

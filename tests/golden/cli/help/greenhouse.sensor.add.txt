@@ -1,0 +1,13 @@
+
+ Usage: greenhouse sensor add [OPTIONS]
+
+ Add a sensor to a cluster.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  --cluster          <int>  Cluster ID [required]                                               │
+│ *  --device-id        <str>  Tuya device ID [required]                                           │
+│ *  --name             <str>  Sensor name [required]                                              │
+│ *  --type             <str>  soil_moisture, temp_humidity, or light [required]                   │
+│    --plant-id         <int>  Associated plant ID                                                 │
+│    --help                    Show this message and exit.                                         │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

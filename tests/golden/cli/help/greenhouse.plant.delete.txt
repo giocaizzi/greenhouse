@@ -1,0 +1,13 @@
+
+ Usage: greenhouse plant delete [OPTIONS] {plant_id}
+
+ Delete a plant and its health / learning history.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────╮
+│ *    plant_id      <int>  Plant ID [required]                                                    │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  --cluster          <int>  Cluster the plant belongs to [required]                             │
+│    --yes      -y             Skip confirmation prompt                                            │
+│    --help                    Show this message and exit.                                         │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

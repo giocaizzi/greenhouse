@@ -1,0 +1,15 @@
+
+ Usage: greenhouse cluster [OPTIONS] COMMAND [ARGS]...
+
+ Manage plant clusters
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                                      │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────────────────────────╮
+│ add     Add a new cluster.                                                                       │
+│ list    List all clusters.                                                                       │
+│ get     Fetch one cluster by ID.                                                                 │
+│ update  Update cluster metadata. Only the supplied fields are sent.                              │
+│ delete  Delete a cluster and all of its children (plants, sensors, irrigators, history).         │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

@@ -1,0 +1,9 @@
+
+ Usage: greenhouse windows list [OPTIONS]
+
+ List configured windows for a cluster. Empty list = global defaults apply.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  --cluster        <int>  Cluster ID [required]                                                 │
+│    --help                  Show this message and exit.                                           │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

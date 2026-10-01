@@ -1,0 +1,21 @@
+
+ Usage: greenhouse plant update [OPTIONS] {plant_id}
+
+ Patch plant metadata. Only the supplied fields are sent.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────╮
+│ *    plant_id      <int>  Plant ID [required]                                                    │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  --cluster             <int>    Cluster the plant belongs to [required]                        │
+│    --species             <str>                                                                   │
+│    --category            <str>                                                                   │
+│    --water-needs         <str>    low/medium/high                                                │
+│    --light-needs         <str>    low/medium/high                                                │
+│    --temp-min            <float>                                                                 │
+│    --temp-max            <float>                                                                 │
+│    --humidity-min        <float>                                                                 │
+│    --humidity-max        <float>                                                                 │
+│    --notes               <str>                                                                   │
+│    --help                         Show this message and exit.                                    │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
