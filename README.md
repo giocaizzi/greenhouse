@@ -40,7 +40,7 @@ The `irrigation_windows` table holds per-cluster preferred watering hours (with 
 |-----------|-----|-------|
 | **JSON REST API** | `/api/v1` | Authoritative entry point. JWT-bearer auth (`POST /api/v1/auth/login`). OpenAPI docs at `/docs`. |
 | **Web UI** | `/` | HTMX + Jinja2 server-rendered. Session cookie auth via `/login`. Pages cover dashboard, per-plant charts, irrigators, history, decisions, scheduler, alerts, **vacation**, **irrigation windows**, and health. |
-| **CLI** | `greenhouse` | Thin `httpx` client against `/api/v1`. No DB access. |
+| **CLI** | `greenhouse` | Thin `httpx` client against `/api/v1`. No DB access. `greenhouse tui` opens an interactive terminal dashboard. |
 | **MCP server** | `/mcp` | Every `/api/v1` endpoint as an MCP tool via `fastapi-mcp`. Bearer-token auth (`GREENHOUSE_MCP_TOKEN`). Fails closed: unset token → 503. |
 
 Stop the server and all four go dark. Anything new the CLI or an MCP tool should be able to do must first exist as an API endpoint.
@@ -106,6 +106,23 @@ uv run greenhouse irrigate 1        # smart irrigation pipeline
 uv run greenhouse check --all       # check all clusters + alerts
 uv run greenhouse learn 1           # learning report
 uv run greenhouse stats 1 --days 7  # irrigation statistics
+```
+
+### Terminal UI
+
+```bash
+uv run greenhouse tui                                   # local server
+greenhouse --server http://greenhouse.lan:8000 tui      # any reachable server
+```
+
+A full-screen dashboard in the terminal that covers the whole system: animated pixel-art plants that wilt, sparkle and get rained on as moisture changes; live charts, overlay and heatmap; decision trails, forecast, insights, learning report and efficacy; alerts, activity, data quality and system health; and every action and edit — irrigate / water-now / stop / check / sync, clusters, plants, sensors, irrigators, windows, config, vacation and preferences — behind forms and confirmation dialogs. Press `d` `a` `l` `s` `o` to switch screens, `/` to search, `enter` to open a cluster, `?` for keys, `q` to quit.
+
+To use it from another machine, install just the client (it has no server dependencies and talks HTTP only):
+
+```bash
+uv tool install "greenhouse-cli @ git+https://github.com/giocaizzi/greenhouse#subdirectory=libs/greenhouse-cli"
+export IRRIGATION_SERVER_URL=http://greenhouse.lan:8000
+greenhouse login && greenhouse tui
 ```
 
 Same data is also available via:
