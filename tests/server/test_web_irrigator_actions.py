@@ -134,3 +134,36 @@ def test_api_start_caps_still_409(app, seeded_client):
     resp = seeded_client.post("/api/v1/irrigators/1/start", json={"minutes": 2})
     assert resp.status_code == 409
     assert resp.json()["detail"] == "cluster max_events_per_day reached"
+
+
+# ── Web "log manual watering" shares the API's path too ──────────────────────
+
+
+def test_web_log_manual_records_same_event_as_api(app, seeded_client):
+    """Regression: the web form recorded action="manual", which cooldown, caps,
+    learning and efficacy (all keyed on action == "start") never saw."""
+    seeded_client.post("/irrigators/1/log-manual", data={"minutes": "4"}, follow_redirects=False)
+    seeded_client.post("/api/v1/irrigators/1/log-manual", json={"minutes": 4})
+    web, api = _events(app)
+    for field in ("action", "triggered_by", "duration_minutes"):
+        assert getattr(web, field) == getattr(api, field), field
+    assert (web.action, web.triggered_by) == ("start", "manual")
+    assert not app.state.fake_devices.irrigator.calls, "logging never actuates"
+
+
+def test_web_log_manual_enforces_daily_caps(app, seeded_client):
+    _set_max_events(app, 1)
+    first = seeded_client.post("/irrigators/1/log-manual", data={"minutes": "2"}, follow_redirects=False)
+    assert first.status_code == 303
+    resp = seeded_client.post("/irrigators/1/log-manual", data={"minutes": "2"}, follow_redirects=False)
+    assert resp.status_code == 409
+    assert "max_events_per_day" in resp.text
+    assert 'name="minutes"' in resp.text  # the form is re-rendered with the error
+    assert len(_events(app)) == 1
+
+
+def test_web_log_manual_notifies(app, seeded_client):
+    rec = _RecordingNotifier()
+    app.state.ntfy_notifier = rec
+    seeded_client.post("/irrigators/1/log-manual", data={"minutes": "3"}, follow_redirects=False)
+    assert [(n["triggered_by"], n["detail"]) for n in rec.irrigations] == [("manual", "logged (watered by hand)")]

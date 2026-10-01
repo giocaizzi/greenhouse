@@ -9,7 +9,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 
 from greenhouse_core.repository import IrrigatorExistsError
 from greenhouse_server.deps import DeviceRegistryDep, NtfyNotifierDep, RepoDep, require_cluster
-from greenhouse_server.services.manual_control import ManualActionError, manual_start, manual_stop
+from greenhouse_server.services.manual_control import ManualActionError, manual_log, manual_start, manual_stop
 from greenhouse_server.web.context import base_context
 from greenhouse_server.web.templating import templates
 
@@ -241,16 +241,18 @@ def log_manual_submit(
     request: Request,
     irrigator_id: int,
     repo: RepoDep,
+    notifier: NtfyNotifierDep,
     minutes: int = Form(...),
     notes: str = Form(""),
 ):
     irr = _get_irrigator_or_404(repo, irrigator_id)
-    repo.add_irrigation_event(
-        irrigator_id=irr.id,
-        action="manual",
-        duration_minutes=minutes,
-        triggered_by="manual",
-        notes=notes or None,
-    )
-    repo.session.commit()
+    try:
+        manual_log(repo, notifier, irr, minutes, notes or None)
+    except ManualActionError as e:
+        return templates.TemplateResponse(
+            request,
+            "irrigators/log_manual.html",
+            base_context(request, irrigator=irr, error=e.detail, minutes=minutes, notes=notes),
+            status_code=e.status_code,
+        )
     return RedirectResponse(url=f"/clusters/{irr.cluster_id}#irrigators", status_code=303)

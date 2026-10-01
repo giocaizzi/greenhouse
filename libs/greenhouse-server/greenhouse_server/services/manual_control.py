@@ -1,10 +1,12 @@
-"""Manual irrigator start/stop: the one code path behind the API and the web UI.
+"""Manual irrigator start/stop/log: the one code path behind the API and the web UI.
 
-Both front doors (``POST /api/v1/irrigators/{id}/start|stop`` and the HTMX
-``/irrigators/{id}/start|stop`` actions) call these functions, so a manual
-actuation always gets the same safety rails no matter where it came from:
-per-day caps, the dry-run pump watcher, the event row, and the notification.
-(The web routes used to drive the adapter directly and skipped all of them.)
+Both front doors (``POST /api/v1/irrigators/{id}/start|stop|log-manual`` and
+the web ``/irrigators/{id}/start|stop|log-manual`` actions) call these
+functions, so a manual action always gets the same rails no matter where it
+came from: per-day caps, the dry-run pump watcher, the event row, and the
+notification. (The web routes used to drive the adapter directly — or, for
+log-manual, record an ``action="manual"`` row that cooldown, caps and
+learning never counted — and skipped all of them.)
 
 Errors are raised as :class:`ManualActionError` carrying the HTTP status the
 JSON API returns; each route maps it to its own response shape.
@@ -190,3 +192,52 @@ def manual_stop(
         ),
     )
     return output
+
+
+def manual_log(
+    repo: IrrigationRepository,
+    notifier: NtfyClient | None,
+    irrigator: Irrigator,
+    minutes: int,
+    notes: str | None = None,
+) -> int:
+    """Record a watering done by hand — no hardware is touched.
+
+    Recorded as a ``start`` event (``triggered_by="manual"``) so the cooldown,
+    per-day caps, learning and efficacy all see it, exactly like a manual
+    start; the per-day caps apply.
+
+    Args:
+        repo: Active repository session (committed here on success).
+        notifier: ntfy client, or None when notifications are unconfigured.
+        irrigator: Irrigator the hand-watering is attributed to.
+        minutes: How long the user watered.
+        notes: Optional free-text note.
+
+    Returns:
+        The new irrigation event id.
+
+    Raises:
+        ManualActionError: 409 if the cluster's per-day caps would be exceeded.
+    """
+    check_rate_limits(repo, irrigator.cluster_id, irrigator.id, minutes)
+    event_id = repo.add_irrigation_event(
+        irrigator_id=irrigator.id,
+        action="start",
+        duration_minutes=minutes,
+        triggered_by="manual",
+        notes=notes or f"Manual ({minutes} min)",
+    )
+    repo.session.commit()
+    maybe_notify(
+        notifier,
+        repo.get_preferences(),
+        "manual",
+        lambda: notifier.notify_irrigation(
+            triggered_by="manual",
+            irrigator_name=irrigator.name,
+            duration_minutes=minutes,
+            detail="logged (watered by hand)",
+        ),
+    )
+    return event_id

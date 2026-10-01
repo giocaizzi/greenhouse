@@ -3,7 +3,7 @@
 from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy.exc import IntegrityError
 
-from greenhouse_core.repository import IrrigationRepository, IrrigatorExistsError
+from greenhouse_core.repository import IrrigatorExistsError
 from greenhouse_core.schemas import (
     CreateIrrigatorRequest,
     IrrigatorActionResponse,
@@ -18,11 +18,10 @@ from greenhouse_core.schemas import (
 from greenhouse_server.deps import DeviceRegistryDep, NtfyNotifierDep, RepoDep, require_cluster
 from greenhouse_server.services.manual_control import (
     ManualActionError,
-    check_rate_limits,
+    manual_log,
     manual_start,
     manual_stop,
 )
-from greenhouse_server.services.notify import maybe_notify
 
 router = APIRouter(tags=["irrigators"])
 
@@ -52,22 +51,6 @@ def list_all_irrigators(
         irrigators=[IrrigatorResponse.model_validate(r) for r in rows],
         next_cursor=next_cursor,
     )
-
-
-def _check_rate_limits(repo: IrrigationRepository, cluster_id: int, irrigator_id: int, minutes: int | None) -> None:
-    """Raise 409 if daily-cap or max-events-per-day thresholds are exceeded.
-
-    Thin HTTP wrapper over :func:`manual_control.check_rate_limits` for the
-    log-manual route; start goes through :func:`manual_control.manual_start`.
-
-    Raises:
-        HTTPException: 409 if ``max_events_per_day`` or ``daily_cap_minutes``
-            would be exceeded.
-    """
-    try:
-        check_rate_limits(repo, cluster_id, irrigator_id, minutes)
-    except ManualActionError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from None
 
 
 @router.post(
@@ -282,24 +265,8 @@ def log_manual(
     irrigator = repo.get_irrigator(irrigator_id)
     if not irrigator:
         raise HTTPException(status_code=404, detail="Irrigator not found")
-    _check_rate_limits(repo, irrigator.cluster_id, irrigator_id, request.minutes)
-    event_id = repo.add_irrigation_event(
-        irrigator_id=irrigator.id,
-        action="start",
-        duration_minutes=request.minutes,
-        triggered_by="manual",
-        notes=request.notes or f"Manual ({request.minutes} min)",
-    )
-    repo.session.commit()
-    maybe_notify(
-        notifier,
-        repo.get_preferences(),
-        "manual",
-        lambda: notifier.notify_irrigation(
-            triggered_by="manual",
-            irrigator_name=irrigator.name,
-            duration_minutes=request.minutes,
-            detail="logged (watered by hand)",
-        ),
-    )
+    try:
+        event_id = manual_log(repo, notifier, irrigator, request.minutes, request.notes)
+    except ManualActionError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.detail) from None
     return LogManualResponse(success=True, event_id=event_id)
