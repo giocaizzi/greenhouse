@@ -1,9 +1,14 @@
 """Pure functions for plant care data interpretation."""
 
 import statistics
+from collections.abc import Mapping
 from typing import Any
 
-from greenhouse_core.constants import DEFAULT_SOIL_MOISTURE_MAX, DEFAULT_SOIL_MOISTURE_MIN
+from greenhouse_core.constants import (
+    DEFAULT_SOIL_MOISTURE_MAX,
+    DEFAULT_SOIL_MOISTURE_MIN,
+    DEFAULT_SOIL_MOISTURE_TARGET,
+)
 
 
 def get_ideal_temp_range(plant_care_data: list[dict[str, Any]]) -> tuple[float, float] | None:
@@ -31,6 +36,11 @@ def parse_moisture_target(target: str) -> tuple[float, float]:
         return (float(parts[0]), float(parts[1]))
     except Exception:
         return (DEFAULT_SOIL_MOISTURE_MIN, DEFAULT_SOIL_MOISTURE_MAX)
+
+
+def moisture_target_range(care: Mapping[str, Any]) -> tuple[float, float]:
+    """Return a plant's soil-moisture band; one home for the "45-65" fallback six call sites repeat."""
+    return parse_moisture_target(care.get("soil_moisture_target", DEFAULT_SOIL_MOISTURE_TARGET))
 
 
 def analyze_water_needs(plant_care_data: list[dict[str, Any]]) -> str:
