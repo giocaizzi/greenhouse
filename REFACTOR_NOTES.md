@@ -22,6 +22,23 @@ Running log for the behavior-preserving refactor on `claude/focused-hawking-7to7
    the client. Found by the contract extractor (probe script in the scratchpad). To be pinned by a characterization test
    in Phase 1 (asserting the header is **absent**). Not fixed.
 
+2. **SAFETY — `dry_run_global` is never enforced.** The preference (labelled "Global dry-run (never actuate)" in the TUI,
+   `tui/resources.py:113`) is stored (`models.py:422`), editable via API/web/CLI/TUI and shown in the web context
+   (`web/context.py:49`), but no actuation path reads it (`grep -rn dry_run_global libs/` — only storage/display hits).
+   Verified by the orchestrator. Not fixed (behavior change); recommend a dedicated fix PR.
+3. **SAFETY — IK10PW keep-alive fallback can leave the pump on until the device's own auto-off.**
+   `devices/irrigators/ik10pw.py:160-177`: `self.on()` runs first, then `signal.signal(SIGTERM, …)` is called *outside*
+   the `try`. `signal.signal` raises `ValueError` when called off the main thread (APScheduler worker / FastAPI
+   threadpool), so the `finally` that sends `off()` never runs and the error propagates with the pump ON. Bounded by the
+   firmware auto-off timer the keep-alive is meant to refresh. Verified by reading; to be pinned by a characterization
+   test. Not fixed; recommend a dedicated fix PR.
+
+Further suspected bugs (B-3…B-25: offline flag after every sync, caps never checked in the automatic pipeline,
+re-raised alerts not re-notified, `water_warning` meaning differs between engine and health monitor, 500 on duplicate
+device id in web create routes, vacation end < start accepted by the API, `local_key` returned in plain text, …) are
+listed with file:line evidence in `refactor/00-smells.md` ("Observed bugs"). They are recorded, not fixed; each one that a
+refactored module touches gets a characterization test pinning current behavior.
+
 ## Baseline warnings (recorded, not fixed)
 
 _To be filled from the Gate 0 baseline run._
