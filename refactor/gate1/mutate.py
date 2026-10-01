@@ -21,6 +21,27 @@ Usage (from the repo root)::
     uv run python refactor/gate1/mutate.py --area logic --resume  # skip ids already recorded
     uv run python refactor/gate1/mutate.py --report               # summary table from results
 
+Per-WP mode (plan §0.5, M-pre / M-post) — operator-generated mutants for one module::
+
+    uv run python refactor/gate1/mutate.py --targets                          # the mutation-list modules
+    uv run python refactor/gate1/mutate.py --module logic/stress.py --list    # generated catalogue
+    uv run python refactor/gate1/mutate.py --module logic/stress.py \
+        --results refactor/wp-handoff/mutation/stress-pre.jsonl              # M-pre (default tests: target map)
+    uv run python refactor/gate1/mutate.py --module logic/stress.py --function detect_stress_conditions \
+        --tests "tests/test_logic.py ..." --sample 150 --seed 0              # narrowed / sampled run
+    uv run python refactor/gate1/mutate.py --module logic/stress.py --summary --results post.jsonl \
+        --compare pre.jsonl --map function-map.json                          # M-post verdict
+
+Generated operators (target §11): comparison flip, ``and``<->``or``, +/-1 on numeric literals,
+``True``<->``False``, statement deletion (-> ``pass``). Only code inside functions is mutated
+(docstrings and annotations are skipped). Mutant **identity** = (operator, original snippet ->
+replacement snippet, enclosing function qualname[, occurrence]); line numbers are never part of it,
+so M-pre and M-post results match across refactors through a WP function map (JSON
+``{"old.qualname": ["new.qualname", ...]}``). Mutation is in place; each file is restored with
+``git checkout -- <file>`` in a ``finally`` (verified byte-for-byte) and the runner refuses to start
+on a dirty worktree. Every pytest run uses ``PYTHONHASHSEED=0`` and the machine-wide test lock
+``/tmp/greenhouse-tests.lock`` (``MUTATE_NO_LOCK=1`` disables it).
+
 Results are appended to ``--results`` (JSON lines, default in ``$TMPDIR``) so an
 interrupted campaign can be resumed. The production tree is verified clean
 (``git diff --quiet -- libs/``) before and after the run.
@@ -35,8 +56,10 @@ from the denominator; still run so the claim is checked).
 from __future__ import annotations
 
 import argparse
+import ast
 import json
 import os
+import random
 import re
 import subprocess
 import sys
@@ -49,6 +72,7 @@ ROOT = Path(__file__).resolve().parents[2]
 CORE = "libs/greenhouse-core/greenhouse_core/"
 SRV = "libs/greenhouse-server/greenhouse_server/"
 CLI = "libs/greenhouse-cli/greenhouse_cli/"
+TEST_LOCK = "/tmp/greenhouse-tests.lock"
 
 # ── Test target sets ────────────────────────────────────────────────────────
 # Each group = the contract goldens for the area + the existing tests that the
@@ -224,6 +248,10 @@ class Mutant:
     area: str
     occurrence: int = 0  # 0 = snippet must be unique; N = replace the N-th match (1-based)
     equivalent: str | None = None  # proof that the mutant cannot change behavior
+    offset: int | None = None  # generated mutants: exact character offset of ``old``
+    operator: str | None = None  # generated mutants: operator name (identity part)
+    qualname: str | None = None  # generated mutants: enclosing function (identity part)
+    identity: str | None = None  # operator | original -> replacement | qualname[#n]
 
 
 CATALOGUE: list[Mutant] = []
@@ -268,10 +296,19 @@ class Result:
     tail: str = ""
     equivalent: str | None = None
     tests: list[str] = field(default_factory=list)
+    operator: str | None = None
+    qualname: str | None = None
+    original: str | None = None
+    replacement: str | None = None
+    identity: str | None = None
 
 
 def _locate(src: str, m: Mutant) -> int:
     """Return the character offset of the snippet to replace (validated)."""
+    if m.offset is not None:
+        if src[m.offset : m.offset + len(m.old)] != m.old:
+            raise ValueError("snippet not at its recorded offset (file changed since generation)")
+        return m.offset
     count = src.count(m.old)
     if count == 0:
         raise ValueError("snippet not found")
@@ -290,7 +327,16 @@ def _git_clean() -> bool:
     # campaign shard in parallel; the runner restores original bytes either way.
     if os.environ.get("MUTATE_NO_GIT") == "1":
         return True
-    return subprocess.run(["git", "diff", "--quiet", "--", "libs/"], cwd=ROOT).returncode == 0
+    status = subprocess.run(["git", "status", "--porcelain"], cwd=ROOT, capture_output=True, text=True, check=True)
+    return status.stdout.strip() == ""
+
+
+def _restore(path: Path, original: bytes) -> None:
+    """Put the file back: ``git checkout -- <file>`` (plan §0.5), verified byte-for-byte."""
+    if os.environ.get("MUTATE_NO_GIT") != "1":
+        subprocess.run(["git", "checkout", "--", str(path.relative_to(ROOT))], cwd=ROOT, check=True)
+    if path.read_bytes() != original:
+        path.write_bytes(original)
 
 
 def _tests_for(m: Mutant, with_gaps: bool) -> list[str]:
@@ -310,8 +356,10 @@ def _tests_for(m: Mutant, with_gaps: bool) -> list[str]:
 
 
 def run_pytest(tests: list[str], workers: int, timeout: int) -> tuple[int | None, str, float]:
-    env = dict(os.environ, PYTHONDONTWRITEBYTECODE="1")
+    env = dict(os.environ, PYTHONDONTWRITEBYTECODE="1", PYTHONHASHSEED="0")
     cmd = [sys.executable, "-m", "pytest", "-x", "-q", "-p", "no:cacheprovider", "--no-header", "-o", "addopts="]
+    if os.environ.get("MUTATE_NO_LOCK") != "1":
+        cmd = ["flock", TEST_LOCK, *cmd]
     if workers:
         cmd += ["-p", "xdist", "-n", str(workers)]
     cmd += tests
@@ -339,14 +387,33 @@ def run_mutant(m: Mutant, workers: int, timeout: int, with_gaps: bool) -> Result
             compile(mutated, str(path), "exec")
     except SyntaxError as exc:
         return Result(m.id, m.area, m.file, line, m.desc, "INVALID", None, 0.0, f"syntax: {exc}", m.equivalent)
-    tests = _tests_for(m, with_gaps)
+    tests = m_tests if (m_tests := _TEST_OVERRIDE.get(m.id)) else _tests_for(m, with_gaps)
     try:
         path.write_text(mutated)
         code, tail, secs = run_pytest(tests, workers, timeout)
     finally:
-        path.write_bytes(original)
+        _restore(path, original)
     status = classify(code, tail)
-    return Result(m.id, m.area, m.file, line, m.desc, status, code, round(secs, 1), tail, m.equivalent, tests)
+    operator = m.operator or "curated"
+    qualname = m.qualname or (enclosing_qualname(src, line) if m.file.endswith(".py") else None)
+    return Result(
+        m.id,
+        m.area,
+        m.file,
+        line,
+        m.desc,
+        status,
+        code,
+        round(secs, 1),
+        tail,
+        m.equivalent,
+        tests,
+        operator=operator,
+        qualname=qualname,
+        original=_norm(m.old),
+        replacement=_norm(m.new),
+        identity=m.identity or _identity(operator, m.old, m.new, qualname),
+    )
 
 
 def classify(code: int | None, tail: str) -> str:
@@ -427,6 +494,424 @@ def report(results: dict[str, dict], after: dict[str, dict] | None = None) -> st
     return "\n".join(lines)
 
 
+# ── Per-WP mode: operator-generated mutants (plan §0.5, target §11) ─────────
+
+# The decision-critical modules on the mutation list (plan §0.5, incl. Rev 2 core sync.py),
+# each with the test group used when ``--tests`` is not given. ``plan-engine`` is the
+# plan's $ENGINE alias; WPs normally pass their own subset with ``--tests``.
+PLAN_ENGINE_TESTS = [
+    "tests/test_contract_decision_grid.py",
+    "tests/test_engine_timing.py",
+    "tests/test_invariants_engine.py",
+    "tests/test_leak_hold.py",
+    "tests/test_logic.py",
+    "tests/test_properties_logic.py",
+    "tests/test_timing.py",
+    "tests/test_vacation_rationing.py",
+    "tests/server/test_contract_check_all.py",
+    "tests/server/test_contract_pipeline.py",
+]
+GROUPS["plan-engine"] = PLAN_ENGINE_TESTS
+
+MUTATION_TARGETS: dict[str, str] = {
+    CORE + "logic/engine.py": "plan-engine",
+    CORE + "logic/stress.py": "plan-engine",
+    CORE + "logic/trends.py": "plan-engine",
+    CORE + "logic/sensors.py": "plan-engine",
+    CORE + "logic/fallback.py": "plan-engine",
+    CORE + "learning/issues.py": "learning",
+    CORE + "sync.py": "devices",
+    SRV + "services/irrigation.py": "irrigation",
+    SRV + "services/leak.py": "leak",
+    SRV + "services/pump_watcher.py": "pump",
+    SRV + "scheduler.py": "scheduler",
+}
+
+# mutant id -> explicit test list (set by --tests for generated runs)
+_TEST_OVERRIDE: dict[str, list[str]] = {}
+
+_CMP_FLIP: dict[type, tuple[type, str, str]] = {
+    # op -> (replacement op, regex matching the original token in the gap, replacement token)
+    ast.Lt: (ast.LtE, r"(?<![<>=!])<(?![<=])", "<="),
+    ast.LtE: (ast.Lt, r"<=", "<"),
+    ast.Gt: (ast.GtE, r"(?<![<>=!-])>(?![>=])", ">="),
+    ast.GtE: (ast.Gt, r">=", ">"),
+    ast.Eq: (ast.NotEq, r"==", "!="),
+    ast.NotEq: (ast.Eq, r"!=", "=="),
+    ast.Is: (ast.IsNot, r"\bis\b(?!\s+not\b)", "is not"),
+    ast.IsNot: (ast.Is, r"\bis\s+not\b", "is"),
+    ast.In: (ast.NotIn, r"(?<!\bnot\s)\bin\b", "not in"),
+    ast.NotIn: (ast.In, r"\bnot\s+in\b", "in"),
+}
+_DELETABLE = (ast.Expr, ast.Assign, ast.AugAssign, ast.AnnAssign, ast.Return, ast.Raise)
+
+
+def _norm(snippet: str) -> str:
+    return " ".join(snippet.split())
+
+
+def _identity(operator: str, old: str, new: str, qualname: str | None) -> str:
+    return f"{operator} | {_norm(old)} -> {_norm(new)} | {qualname or '<module>'}"
+
+
+def _function_spans(tree: ast.AST) -> list[tuple[str, int, int]]:
+    spans: list[tuple[str, int, int]] = []
+
+    def walk(node: ast.AST, prefix: str) -> None:
+        for child in ast.iter_child_nodes(node):
+            if isinstance(child, ast.FunctionDef | ast.AsyncFunctionDef):
+                qual = f"{prefix}{child.name}"
+                spans.append((qual, child.lineno, child.end_lineno or child.lineno))
+                walk(child, f"{qual}.")
+            elif isinstance(child, ast.ClassDef):
+                walk(child, f"{prefix}{child.name}.")
+            else:
+                walk(child, prefix)
+
+    walk(tree, "")
+    return spans
+
+
+def enclosing_qualname(src: str, line: int) -> str | None:
+    """Innermost function containing ``line`` (None at module level)."""
+    best: tuple[str, int, int] | None = None
+    for span in _function_spans(ast.parse(src)):
+        if span[1] <= line <= span[2] and (best is None or span[1] >= best[1]):
+            best = span
+    return best[0] if best else None
+
+
+class _Source:
+    """Character offsets for ast (line, utf-8 byte column) positions."""
+
+    def __init__(self, src: str) -> None:
+        self.src = src
+        self.lines = src.splitlines(keepends=True)
+        self.starts = [0]
+        for text in self.lines:
+            self.starts.append(self.starts[-1] + len(text))
+
+    def offset(self, lineno: int, col: int) -> int:
+        line = self.lines[lineno - 1]
+        return self.starts[lineno - 1] + len(line.encode()[:col].decode())
+
+    def span(self, node: ast.AST) -> tuple[int, int]:
+        start = self.offset(node.lineno, node.col_offset)  # type: ignore[attr-defined]
+        end = self.offset(node.end_lineno, node.end_col_offset)  # type: ignore[attr-defined]
+        return start, end
+
+
+def _skip_ids(func: ast.AST) -> set[int]:
+    """Node ids never mutated: docstrings, annotations, nested defs' signatures."""
+    skip: set[int] = set()
+    for node in ast.walk(func):
+        body = getattr(node, "body", None)
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef) and body:
+            first = body[0]
+            if (
+                isinstance(first, ast.Expr)
+                and isinstance(first.value, ast.Constant)
+                and isinstance(first.value.value, str)
+            ):
+                skip.update(id(n) for n in ast.walk(first))
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+            for part in (node.args, node.returns, *node.decorator_list):
+                if part is not None:
+                    skip.update(id(n) for n in ast.walk(part))
+        if isinstance(node, ast.AnnAssign):
+            skip.update(id(n) for n in ast.walk(node.annotation))
+        if isinstance(node, ast.arg) and node.annotation is not None:
+            skip.update(id(n) for n in ast.walk(node.annotation))
+    return skip
+
+
+def _gap_mutant(text: str, pattern: str, token: str) -> str | None:
+    matches = list(re.finditer(pattern, text))
+    if len(matches) != 1:
+        return None
+    m = matches[0]
+    return text[: m.start()] + token + text[m.end() :]
+
+
+def _compare_mutants(node: ast.Compare, source: _Source) -> list[tuple[str, int, str, str]]:
+    out = []
+    start, end = source.span(node)
+    operands = [node.left, *node.comparators]
+    for i, op in enumerate(node.ops):
+        flip = _CMP_FLIP.get(type(op))
+        if flip is None:
+            continue
+        g0 = source.span(operands[i])[1]
+        g1 = source.span(operands[i + 1])[0]
+        new_gap = _gap_mutant(source.src[g0:g1], flip[1], flip[2])
+        if new_gap is None:
+            continue
+        old = source.src[start:end]
+        new = source.src[start:g0] + new_gap + source.src[g1:end]
+        out.append(("cmp-flip", start, old, new))
+    return out
+
+
+def _boolop_mutants(node: ast.BoolOp, source: _Source) -> list[tuple[str, int, str, str]]:
+    start, end = source.span(node)
+    src_from, to = ("and", "or") if isinstance(node.op, ast.And) else ("or", "and")
+    pieces, cursor = [], start
+    for left, right in zip(node.values, node.values[1:], strict=False):
+        g0, g1 = source.span(left)[1], source.span(right)[0]
+        new_gap = _gap_mutant(source.src[g0:g1], rf"\b{src_from}\b", to)
+        if new_gap is None:
+            return []
+        pieces += [source.src[cursor:g0], new_gap]
+        cursor = g1
+    pieces.append(source.src[cursor:end])
+    return [("bool-flip", start, source.src[start:end], "".join(pieces))]
+
+
+def _constant_mutants(node: ast.Constant, source: _Source, context: ast.AST) -> list[tuple[str, int, str, str]]:
+    """Flip a bool / shift a number by one; the snippet is the enclosing expression, for a stable identity."""
+    if isinstance(node.value, bool):
+        replacements = [("bool-const", "False" if node.value else "True")]
+    elif isinstance(node.value, int | float):
+        replacements = [("num-plus1", repr(node.value + 1)), ("num-minus1", repr(node.value - 1))]
+    else:
+        return []
+    c_start, c_end = source.span(node)
+    start, end = source.span(context)
+    old = source.src[start:end]
+    return [(op, start, old, source.src[start:c_start] + new + source.src[c_end:end]) for op, new in replacements]
+
+
+def _context(node: ast.AST, parents: dict[int, ast.AST]) -> ast.AST:
+    """Nearest enclosing expression other than a unary sign (or the statement) — the constant's context."""
+    current = parents.get(id(node), node)
+    while isinstance(current, ast.UnaryOp | ast.keyword) or not isinstance(current, ast.expr | ast.stmt):
+        nxt = parents.get(id(current))
+        if nxt is None:
+            break
+        current = nxt
+    if isinstance(current, ast.stmt) and not isinstance(current, _DELETABLE):
+        return node  # e.g. a compound statement header: keep the bare literal
+    return current
+
+
+def _statement_mutants(node: ast.stmt, source: _Source) -> list[tuple[str, int, str, str]]:
+    start, end = source.span(node)
+    rest = source.src[end:].split("\n", 1)[0].strip()
+    if rest and not rest.startswith("#"):
+        return []  # another statement shares the line (`;`)
+    return [("stmt-delete", start, source.src[start:end], "pass")]
+
+
+def generate_mutants(file: str) -> list[Mutant]:
+    """Operator-generated mutants for every function body in ``file`` (repo-relative)."""
+    src = (ROOT / file).read_text()
+    source = _Source(src)
+    tree = ast.parse(src)
+    stem = Path(file).stem
+    raw: list[tuple[str, int, str, str, str]] = []
+    for qual, func in _iter_functions(tree):
+        skip = _skip_ids(func)
+        parents = {id(child): parent for parent in ast.walk(func) for child in ast.iter_child_nodes(parent)}
+        nested = {
+            id(n)
+            for child in ast.walk(func)
+            if child is not func and isinstance(child, ast.FunctionDef | ast.AsyncFunctionDef)
+            for n in ast.walk(child)
+        }
+        for node in ast.walk(func):
+            if node is func or id(node) in skip or id(node) in nested:
+                continue
+            found: list[tuple[str, int, str, str]] = []
+            if isinstance(node, ast.Compare):
+                found = _compare_mutants(node, source)
+            elif isinstance(node, ast.BoolOp):
+                found = _boolop_mutants(node, source)
+            elif isinstance(node, ast.Constant):
+                found = _constant_mutants(node, source, _context(node, parents))
+            elif isinstance(node, _DELETABLE):
+                found = _statement_mutants(node, source)
+            raw += [(op, pos, old, new, qual) for op, pos, old, new in found]
+    raw.sort(key=lambda r: (r[1], r[0], r[3]))
+    mutants: list[Mutant] = []
+    seen: dict[str, int] = {}
+    for op, pos, old, new, qual in raw:
+        ident = _identity(op, old, new, qual)
+        seen[ident] = seen.get(ident, 0) + 1
+        if seen[ident] > 1:
+            ident = f"{ident}#{seen[ident]}"
+        mutants.append(
+            Mutant(
+                id=f"{stem}:{qual}:{op}:{len(mutants) + 1:03d}",
+                file=file,
+                old=old,
+                new=new,
+                desc=f"{op}: {_norm(old)[:60]} -> {_norm(new)[:40]}",
+                group=MUTATION_TARGETS.get(file, "engine"),
+                area=f"gen-{stem}",
+                offset=pos,
+                operator=op,
+                qualname=qual,
+                identity=ident,
+            )
+        )
+    return mutants
+
+
+def _iter_functions(tree: ast.AST) -> list[tuple[str, ast.FunctionDef | ast.AsyncFunctionDef]]:
+    out: list[tuple[str, ast.FunctionDef | ast.AsyncFunctionDef]] = []
+
+    def walk(node: ast.AST, prefix: str) -> None:
+        for child in ast.iter_child_nodes(node):
+            if isinstance(child, ast.FunctionDef | ast.AsyncFunctionDef):
+                qual = f"{prefix}{child.name}"
+                out.append((qual, child))
+                walk(child, f"{qual}.")
+            elif isinstance(child, ast.ClassDef):
+                walk(child, f"{prefix}{child.name}.")
+            else:
+                walk(child, prefix)
+
+    walk(tree, "")
+    return out
+
+
+def resolve_module(spec: str) -> str:
+    """Accept ``logic/stress.py``, ``greenhouse_core/logic/stress.py``, a repo path or a dotted name."""
+    candidates = [spec]
+    if not spec.endswith(".py"):
+        candidates.append(spec.replace(".", "/") + ".py")
+    found = []
+    for cand in candidates:
+        cand = cand.lstrip("./")
+        for base in ("", "libs/greenhouse-core/", "libs/greenhouse-server/", "libs/greenhouse-cli/", CORE, SRV, CLI):
+            if (ROOT / base / cand).is_file():
+                found.append((Path(base) / cand).as_posix())
+    found = sorted(set(found))
+    if len(found) != 1:
+        raise SystemExit(f"--module {spec!r}: {'no match' if not found else 'ambiguous: ' + ', '.join(found)}")
+    return found[0]
+
+
+def _in_lines(m: Mutant, src: str, ranges: list[tuple[int, int]]) -> bool:
+    line = src.count("\n", 0, m.offset or 0) + 1
+    return any(a <= line <= b for a, b in ranges)
+
+
+def select_generated(args: argparse.Namespace) -> list[Mutant]:
+    file = resolve_module(args.module)
+    mutants = generate_mutants(file)
+    if args.function:
+        mutants = [
+            m for m in mutants if any(m.qualname == f or (m.qualname or "").startswith(f + ".") for f in args.function)
+        ]
+    if args.lines:
+        ranges = [tuple(int(x) for x in r.split("-", 1)) if "-" in r else (int(r), int(r)) for r in args.lines]
+        src = (ROOT / file).read_text()
+        mutants = [m for m in mutants if _in_lines(m, src, ranges)]  # type: ignore[arg-type]
+    if args.operator:
+        mutants = [m for m in mutants if m.operator in args.operator]
+    if args.sample and len(mutants) > args.sample:
+        chosen = set(random.Random(args.seed).sample(range(len(mutants)), args.sample))
+        mutants = [m for i, m in enumerate(mutants) if i in chosen]
+    if args.tests:
+        tests = [t for chunk in args.tests for t in chunk.split()]
+        for m in mutants:
+            _TEST_OVERRIDE[m.id] = tests
+    return mutants
+
+
+def _translate(identity: str, fmap: dict[str, list[str]]) -> set[str]:
+    """All identities an M-pre identity may have after the WP's function moves."""
+    head, _, qual = identity.rpartition(" | ")
+    qual, hash_, occ = qual.partition("#")
+    targets = fmap.get(qual, [qual])
+    return {f"{head} | {t}{hash_}{occ}" for t in targets}
+
+
+def summarize_generated(
+    results: dict[str, dict], compare: dict[str, dict] | None, fmap: dict[str, list[str]]
+) -> tuple[str, bool]:
+    """Killed/survived per identity; with ``compare`` (M-pre results) also the M-post verdict."""
+    recs = [r for r in results.values() if r.get("identity")]
+    killed = [r for r in recs if r["status"] in KILLED_STATES]
+    survived = [r for r in recs if r["status"] == "SURVIVED"]
+    invalid = [r for r in recs if r["status"] == "INVALID"]
+    denom = len(killed) + len(survived)
+    rate = 100 * len(killed) / denom if denom else 0.0
+    secs = sum(r.get("seconds") or 0 for r in recs)
+    lines = [
+        f"mutants {len(recs)} | killed {len(killed)} | survived {len(survived)} | invalid {len(invalid)} | "
+        f"kill rate {rate:.1f}% | test time {secs / 60:.1f} min",
+    ]
+    lines += [f"  SURVIVED {r['identity']}" for r in sorted(survived, key=lambda r: r["identity"])]
+    ok = True
+    if compare is not None:
+        post = {r["identity"]: r for r in recs}
+        regressions, unmatched = [], []
+        for pre in compare.values():
+            if not pre.get("identity") or pre["status"] not in KILLED_STATES:
+                continue
+            matches = [post[i] for i in _translate(pre["identity"], fmap) if i in post]
+            if not matches:
+                unmatched.append(pre["identity"])
+            elif any(m["status"] == "SURVIVED" for m in matches):
+                regressions.append(pre["identity"])
+        ok = rate >= 75.0 and not regressions
+        lines.append(
+            f"M-post: kill rate {'OK' if rate >= 75.0 else 'BELOW 75%'}; killed-in-pre now surviving: {len(regressions)}"
+        )
+        lines += [f"  REGRESSION {i}" for i in regressions]
+        lines.append(
+            f"  (killed-in-pre identities with no post counterpart — code removed/rewritten: {len(unmatched)})"
+        )
+        lines += [f"  UNMATCHED {i}" for i in unmatched]
+    return "\n".join(lines), ok
+
+
+def run_generated(args: argparse.Namespace) -> int:
+    mutants = select_generated(args)
+    if args.list:
+        for m in mutants:
+            print(f"{m.id:58} {m.identity}")
+        print(f"{len(mutants)} mutants")
+        return 0
+    if args.summary:
+        compare = load_results(args.compare) if args.compare else None
+        fmap = json.loads(args.map.read_text()) if args.map else {}
+        text, ok = summarize_generated(load_results(args.results), compare, fmap)
+        print(text)
+        return 0 if ok else 1
+    if not _git_clean():
+        print("refusing to run: the worktree is dirty (git status --porcelain is not empty)", file=sys.stderr)
+        return 2
+    if not mutants:
+        print("no mutants selected")
+        return 0
+    tests = _TEST_OVERRIDE.get(mutants[0].id) or GROUPS[mutants[0].group]
+    if not args.skip_baseline:
+        code, tail, secs = run_pytest(tests, args.workers, args.timeout)
+        print(f"baseline exit={code} {secs:.1f}s {tail.splitlines()[-1] if tail else ''}", flush=True)
+        if code != 0:
+            print("refusing to run: the test set is not green on unmutated code", file=sys.stderr)
+            return 2
+    done = load_results(args.results) if args.resume else {}
+    t0 = time.monotonic()
+    with args.results.open("a") as fh:
+        for i, m in enumerate(mutants, 1):
+            if m.id in done:
+                continue
+            res = run_mutant(m, args.workers, args.timeout, with_gaps=False)
+            fh.write(json.dumps(asdict(res)) + "\n")
+            fh.flush()
+            print(f"[{i}/{len(mutants)}] {res.status:12} {res.seconds:6.1f}s {m.identity}", flush=True)
+    print(f"wall time {(time.monotonic() - t0) / 60:.1f} min")
+    text, _ = summarize_generated(load_results(args.results), None, {})
+    print(text)
+    clean = _git_clean()
+    print("worktree clean:", clean)
+    return 0 if clean else 1
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--list", action="store_true", help="print the catalogue and exit")
@@ -438,7 +923,7 @@ def main() -> int:
     ap.add_argument("--area", action="append", default=[], help="area name (repeatable)")
     ap.add_argument("--resume", action="store_true", help="skip ids already in the results file")
     ap.add_argument("--with-gaps", action="store_true", help="also run the gap-test files")
-    ap.add_argument("--workers", type=int, default=3, help="pytest-xdist workers (0 = in-process)")
+    ap.add_argument("--workers", type=int, default=2, help="pytest-xdist workers (0 = in-process)")
     ap.add_argument("--timeout", type=int, default=1200, help="per-mutant pytest timeout (s)")
     ap.add_argument(
         "--results",
@@ -446,7 +931,27 @@ def main() -> int:
         default=Path(tempfile.gettempdir()) / "greenhouse-mutation-results.jsonl",
         help="JSON-lines results file",
     )
+    gen = ap.add_argument_group("per-WP mode (generated mutants for one module)")
+    gen.add_argument("--targets", action="store_true", help="print the mutation-list modules and their test groups")
+    gen.add_argument("--module", help="module to mutate (e.g. logic/stress.py, greenhouse_core.sync)")
+    gen.add_argument("--function", action="append", default=[], help="enclosing qualname (repeatable; prefix.)")
+    gen.add_argument("--lines", action="append", default=[], help="line range A-B (repeatable)")
+    gen.add_argument("--operator", action="append", default=[], help="operator name (repeatable)")
+    gen.add_argument("--tests", action="append", default=[], help="explicit test paths (space-separated, repeatable)")
+    gen.add_argument("--sample", type=int, default=0, help="seeded sample size (budget fallback, plan: 150)")
+    gen.add_argument("--seed", type=int, default=0, help="sample seed")
+    gen.add_argument("--skip-baseline", action="store_true", help="do not check the test set on unmutated code")
+    gen.add_argument("--summary", action="store_true", help="killed/survived per identity from --results")
+    gen.add_argument("--compare", type=Path, help="M-pre results for the M-post verdict (with --summary)")
+    gen.add_argument("--map", type=Path, help='WP function map JSON {"old.qualname": ["new.qualname", ...]}')
     args = ap.parse_args()
+
+    if args.targets:
+        for file, group in MUTATION_TARGETS.items():
+            print(f"{file:60} {group:12} {' '.join(GROUPS[group])}")
+        return 0
+    if args.module:
+        return run_generated(args)
 
     selected = [
         m
@@ -489,7 +994,7 @@ def main() -> int:
         return 0
 
     if not _git_clean():
-        print("refusing to run: libs/ has uncommitted changes", file=sys.stderr)
+        print("refusing to run: the worktree is dirty (git status --porcelain is not empty)", file=sys.stderr)
         return 2
     done = load_results(args.results) if args.resume else {}
     with args.results.open("a") as fh:
@@ -503,7 +1008,7 @@ def main() -> int:
             if res.status == "INVALID":
                 print(f"    -> {res.tail}", flush=True)
     clean = _git_clean()
-    print("production tree clean:", clean)
+    print("worktree clean:", clean)
     return 0 if clean else 1
 
 
