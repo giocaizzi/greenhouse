@@ -182,3 +182,106 @@ Scratch configs are in the session scratchpad (`il.toml`, `il2.toml`, `fnlen.py`
 then **M1** (rules layer contract), **M2** (ruff ratchet on `tests/`), **M3** (WP4 golden-blind subsets), **M4**
 (enforceable Definition of Done, plus verdicts for the unaddressed long functions and big files, plus strict typing
 of touched modules) and **M5** (test concurrency).
+
+---
+
+# Round 2 — revised plan (Rev 1, `aaf5a5f`)
+
+Re-checked against code at `aaf5a5f`. Probes are in the session scratchpad: `il_r2.toml`, `body.py`, `nest.py`, `mypy.ini`, `cc8.txt`.
+
+## Round-1 findings: resolution status
+
+| Finding | Status | Evidence |
+|---|---|---|
+| B1 | **Resolved** | T8.13/T8.14 are struck. T8.0 says "every constant import stays (≥ 50 rule)". No WP8 task removes a constant use. |
+| B2 | **Resolved** | T1.1 is struck, WP1 owns only `client.py`, and `$CLI` now includes `$SETTINGS`. |
+| M1 | **Resolved** | Re-ran the revised §11 TOML (minus `tui.render`): `Contracts: 10 kept, 0 broken`. |
+| M2 | **Resolved** | T0.3 adds the `tests/**` per-file ignore. At threshold 8, `libs/` has exactly 27 C901 hits, matching §3.12. |
+| M3 | **Resolved** | Every WP4/WP6/WP8 row carries `$RENDER` / `$CHECK`, and the subset rule is written down. One residual slip is m-R2-3. |
+| M4 | **Mostly resolved** | My AST scan matches the table's sizes: all 51 functions over 40 body lines and all 27 with CC > 8 have a verdict in §3.12, and the `OK` rows agree. Strict mypy is now a per-task gate. The boundary profile is feasible: with the §10.13 override, the 15 T5.0b/T5.0c route files show only 2 `arg-type` errors (in `plant_dashboard.py`), so no signature needs editing. **But the nesting axis was left out** (see M-R2-2). |
+| M5 | **Resolved** | ≤ 2 worktrees, `flock`, `-n 2`, waves. **But the rerun rule adds a hole** (see M-R2-1). |
+| m1–m5 and nits | **Resolved** | `cast` with a reason; the TEMP block is removed from `.git/info/exclude`; mutmut is added; T5.15 runs `FULL`; T7.12 is dropped; `app` is passed explicitly; two `if`s are kept; guard 1 runs in a subprocess; guard 4 is added. The `refactor-gate1` tag still does not exist (`git tag` is empty); the orchestrator must create it before WP0. |
+
+## New findings
+
+### M-R2-1 (major) — "rerun once" can turn a real regression into a "flaky" pass (§0.2)
+- **Hash-seed-dependent output.** Nothing pins `PYTHONHASHSEED`: there is no hit for `PYTHONHASHSEED` or `randomly` in
+  `pyproject.toml`, `tests/conftest.py`, the Makefile or CI. String-set iteration order changes per process:
+  `python -c "print(list({'soil','temp','light','humidity'}))"` printed `['light','humidity','temp','soil']` on one
+  run and `['soil','light','temp','humidity']` on the next. Iteration order is exactly the drift class this refactor
+  must catch. A helper that builds an output through a `set` makes a strict golden fail only *sometimes*, and §0.2
+  then rules "green on rerun → flaky, continue".
+- **Order- and state-dependent regressions.** The rerun runs only the failing tests, alone and with `-n 0`. That hides
+  any regression that depends on other tests' leftover state. This suite has plenty of such state: process-wide
+  `set_display_timezone`, scheduler module globals, root log handlers replaced by `create_app`.
+- **Fix.**
+  1. `export PYTHONHASHSEED=0` inside `t` and `FULL`. Add one extra `PYTHONHASHSEED=1` run of the WP-gate union, and
+     of I5.
+  2. The rerun must be the **identical subset command**, not just the failing tests.
+  3. "Flaky" requires either that the test is on a known-flaky list frozen at Gate 1 (today: the one TUI contract
+     test), or that the same failure reproduces on the parent commit under the same command. Anything else is red →
+     revert.
+  4. Frozen-clock goldens and the decision grid are never eligible for "flaky".
+
+### M-R2-2 (major) — the DoD table has no nesting column, so T0.9 and the WP/final DoDs are inconsistent
+- **The checker includes nesting.** §3.12 and §11 define sizecheck as "body > 40 **or nesting > 3**". But the verdict
+  table only lists functions over 40 lines or with CC > 8.
+- **Uncovered functions.** By the §3.12 nesting definition (`if/for/while/with/try/match`; `elif` not counted), these
+  functions have nesting > 3 and no task or EXC row:
+  - `services/irrigation.py::rearm_leak_checks`: try→for→for→if = 4. WP7 touches the file, the WP DoD requires the
+    whole file to pass, and §3.1 says rearm stays "unchanged".
+  - `sync.py::sync_sensor_data`: for→for→try→if = 4. WP8 touches the file.
+  - `stats.py::export_csv`: with→…→for→if ≥ 4. WP6 touches the file.
+  - `services/bulk.py::stop_all_irrigators`: for→try→if→try = 4. The table marks it **OK**, which is wrong under the
+    nesting rule.
+  - `tui/screens/forms.py::FormScreen.compose`: with→with→for→with→if = 5.
+- **Consequences.**
+  - T0.9's claim that "after seeding, `make sizecheck` lists only functions that have a task" is false on day 1.
+  - The WP7, WP6 and WP8 DoD gates fail on functions nobody was told to touch, so the implementer has to "stop and
+    report".
+  - I5 fails on `bulk.py` and `forms.py`.
+- **Fix.** Add a nesting column to §3.12, and give the five rows a verdict. Suggested verdicts:
+  - EXC for `compose` (declarative tree) and for `bulk` (actuation; B-list `services/bulk.py`);
+  - a task or EXC for the other three.
+  
+  T0.9 should assert the seeded register reproduces `make sizecheck` silence.
+
+### Minor
+- **m-R2-1 — the size-exception register is self-certifying.** Implementers append to `refactor/size-exceptions.txt`,
+  and sizecheck then skips those entries; nothing requires approval. Fix: any entry not seeded by T0.9 needs the second
+  reviewer's or the orchestrator's initials on the line, and I1 rejects entries without them.
+- **m-R2-2 — the M-post pass condition cannot be computed.** "No target line killed in M-pre survives" (§0.5) breaks
+  once code moves into helpers, because line identity is lost. Fix: key mutants on (original function, operator,
+  token) via a mapping the implementer records. Alternatively, require "M-post kill rate on the target behaviours ≥
+  M-pre, and ≥ 75 %".
+- **m-R2-3 — subset slips.**
+  - T5.18 (`plant_dashboard`) omits members of `D(gs.web.routes.plant_dashboard)`: `test_web_charts`,
+    `test_web_charts_overlay`, `test_search`, `test_web_crud_actions`. That violates §0.3's own rule.
+  - T7.20/T7.21 omit `D(gs.services.leak)` (20 files), and T8.17 omits `D(gc.sync)` (23 files). For these the
+    end-of-task C-map runs, but per-commit feedback is late.
+- **m-R2-4 — `core/sync.py` is missing from the mutation list.** It is G+, carries invariant 8 and has mutation
+  targets in `10-safety-ingress-devices.md`, yet it is not on the §0.5 list. Add it.
+- **m-R2-5 — the `mutate_probe.py` "temp copy" won't be imported.** The editable install's `.pth` points at `libs/…`.
+  Fix: mutate in place in a dedicated throwaway worktree, never the implementer's, and restore with
+  `git checkout -- <file>` in a `finally`.
+
+### Nits
+- **Annotation-only tasks may add runtime imports.** Example: `_watcher_tuning(settings: Settings | None)` at module
+  level in `services/irrigation.py`, which has no `from __future__ import annotations`, while `Settings` is imported
+  lazily today. Require `TYPE_CHECKING` or future annotations for any import added only for typing, so import-time
+  behaviour is unchanged.
+- **Helpers in boundary-profile modules lose the strict-typing gate.** `disallow_untyped_defs = false` covers the whole
+  module, so helpers there are checked only by review. A 10-line AST guard ("every `_`-prefixed def in
+  routes/web.routes/commands is fully annotated") would make it a gate.
+- **Wave B pairs WP7 (high) with T5.15.** T5.15 is auth wiring, which BRIEF lists as high risk. Book reviewers for both,
+  or move T5.15 to wave C.
+
+## Round-2 verdict
+
+**REVISE.** Two majors block, and both are cheap to fix:
+- **M-R2-1:** pin `PYTHONHASHSEED`, rerun the identical command, and accept "flaky" only via the Gate-1 list or a
+  parent-commit reproduction.
+- **M-R2-2:** add a nesting column and verdicts for `rearm_leak_checks`, `sync_sensor_data`, `export_csv`,
+  `stop_all_irrigators` and `FormScreen.compose`.
+
+Everything else from round 1 is resolved. The minors and nits do not block.
