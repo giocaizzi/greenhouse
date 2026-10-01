@@ -22,9 +22,9 @@ from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 from textual.widgets import DataTable, Static
 
-from cli.test_contract_tui import SERVER_URL, make_seeded_app, make_tui
+from cli.test_contract_tui import SERVER_URL, make_seeded_app, make_tui, settle, wait_until
 from cli.test_contract_tui_actuation import _record_toasts
-from cli.test_tui import _settle, _text
+from cli.test_tui import _text
 from cli.tui_fixtures import _app_locks, tui_client_factory, writes
 from golden import FROZEN_TS
 from greenhouse_cli.client import IrrigationClient
@@ -86,22 +86,22 @@ def test_client_calls_run_off_the_event_loop_thread(seeded):
         loop_thread.append(threading.get_ident())
         tui = make_tui(http, factory=_thread_recording_factory(http, calls))
         async with tui.run_test(size=SIZE) as pilot:
-            await _settle(pilot, tui)
+            await settle(pilot, tui)
             for key in ("a", "l", "s", "o", "d"):
                 await pilot.press(key)
-                await _settle(pilot, tui)
+                await settle(pilot, tui)
             await tui.push_screen(ClusterScreen(1))
-            await _settle(pilot, tui)
+            await settle(pilot, tui)
             for tab in ("tab-insights", "tab-plants"):
                 tui.screen.query_one("TabbedContent").active = tab
-                await _settle(pilot, tui)
+                await settle(pilot, tui)
             await pilot.press("P")
-            await _settle(pilot, tui)
+            await settle(pilot, tui)
             await pilot.press("escape")
             await pilot.press("slash")
             await pilot.press(*"fern")
             await pilot.pause(0.4)
-            await _settle(pilot, tui)
+            await settle(pilot, tui)
 
     _run(scenario())
     methods = {name for name, _ in calls}
@@ -114,14 +114,18 @@ def test_client_calls_run_off_the_event_loop_thread(seeded):
 # ── G14: cursor stays on the same record across a real auto-refresh ─────────
 
 
-async def _wait_until(pilot, predicate, timeout: float = 10.0) -> None:
-    loop = asyncio.get_running_loop()
-    deadline = loop.time() + timeout
-    while not predicate():
-        if loop.time() > deadline:
-            raise AssertionError("condition not reached before timeout")
-        # Plain sleep: ``pilot.pause`` waits for the screen to go idle, which a ticking refresh timer may prevent.
-        await asyncio.sleep(0.05)
+async def _open_auto_refreshing(pilot, tui, key: str, screen_type: type) -> None:
+    """Switch to ``screen_type`` with ``key`` once the dashboard has settled, with only that screen auto-refreshing.
+
+    The app starts with ``refresh_seconds=0`` so the dashboard (the start screen, not under test) installs no
+    timer: at a 0.5 s period a slow dashboard load overlaps the next tick's load and the two interleave in
+    ``_render_cards`` (``NoMatches('#cluster-card-2')`` → ``WorkerFailed``). ``refresh_seconds`` is set before
+    the key, so the target screen — mounted on its first ``switch_mode`` — installs the real ``set_interval``.
+    """
+    await settle(pilot, tui)
+    tui.refresh_seconds = REFRESH
+    await pilot.press(key)
+    await wait_until(lambda: isinstance(tui.screen, screen_type), f"`{key}` to switch to {screen_type.__name__}")
 
 
 def test_alerts_cursor_stays_on_record_across_auto_refresh(seeded):
@@ -129,13 +133,13 @@ def test_alerts_cursor_stays_on_record_across_auto_refresh(seeded):
     http, engine = seeded
 
     async def scenario():
-        tui = make_tui(http, refresh_seconds=REFRESH)
+        tui = make_tui(http)
         async with tui.run_test(size=SIZE) as pilot:
-            await pilot.press("a")
+            await _open_auto_refreshing(pilot, tui, "a", AlertsScreen)
             screen = tui.screen
             assert isinstance(screen, AlertsScreen)
             table = screen.query_one("#alerts-table", DataTable)
-            await _wait_until(pilot, lambda: table.row_count == 2)
+            await wait_until(lambda: table.row_count == 2, "the first alerts load (2 open alerts)")
             table.move_cursor(row=1)
             chosen = selected_key(table)
             keys_before = [table.coordinate_to_cell_key((i, 0))[0].value for i in range(table.row_count)]
@@ -152,7 +156,7 @@ def test_alerts_cursor_stays_on_record_across_auto_refresh(seeded):
                     cluster_id=3,
                 )
                 session.commit()
-            await _wait_until(pilot, lambda: table.row_count == 3)
+            await wait_until(lambda: table.row_count == 3, "an auto-refresh showing the inserted alert")
             keys_after = [table.coordinate_to_cell_key((i, 0))[0].value for i in range(table.row_count)]
             assert selected_key(table) == chosen
             assert table.cursor_row == keys_after.index(chosen)
@@ -174,19 +178,19 @@ def test_plants_cursor_stays_on_record_across_refresh(seeded):
     async def scenario():
         tui = make_tui(http)
         async with tui.run_test(size=SIZE) as pilot:
-            await _settle(pilot, tui)
+            await settle(pilot, tui)
             await tui.push_screen(ClusterScreen(1))
-            await _settle(pilot, tui)
+            await settle(pilot, tui)
             screen = tui.screen
             screen.query_one("TabbedContent").active = "tab-plants"
-            await _settle(pilot, tui)
+            await settle(pilot, tui)
             table = screen.query_one("#plants-table", DataTable)
             table.move_cursor(row=1)
-            await _settle(pilot, tui)
+            await settle(pilot, tui)
             assert selected_key(table) == "2"
             assert http.post("/api/v1/clusters/1/plants", json={"species": "Ficus lyrata"}).status_code == 201
             await pilot.press("r")
-            await _settle(pilot, tui)
+            await settle(pilot, tui)
             # Pin today's row order (plants come back sorted by species, so "Ficus" lands on top): the selected
             # record moved from row 1 to row 2 and the cursor followed it.
             assert [table.coordinate_to_cell_key((i, 0))[0].value for i in range(table.row_count)] == ["6", "1", "2"]
@@ -204,20 +208,20 @@ def test_activity_cursor_current_behavior_resets_to_top_on_refresh(seeded):
     http, engine = seeded
 
     async def scenario():
-        tui = make_tui(http, refresh_seconds=REFRESH)
+        tui = make_tui(http)
         async with tui.run_test(size=SIZE) as pilot:
-            await pilot.press("l")
+            await _open_auto_refreshing(pilot, tui, "l", ActivityScreen)
             screen = tui.screen
             assert isinstance(screen, ActivityScreen)
             table = screen.query_one("#activity-table", DataTable)
-            await _wait_until(pilot, lambda: table.row_count == 3)
+            await wait_until(lambda: table.row_count == 3, "the first activity load (3 events)")
             table.move_cursor(row=2)
             with _app_locks[id(http)], Session(engine) as session:
                 IrrigationRepository(session).add_activity_event(
                     "sync", "system", "sync_completed", "fresh event", severity="info", timestamp=FROZEN_TS
                 )
                 session.commit()
-            await _wait_until(pilot, lambda: table.row_count == 4)
+            await wait_until(lambda: table.row_count == 4, "an auto-refresh showing the inserted event")
             assert table.cursor_row == 0
             assert table.get_row_at(0)[-1] == "fresh event"
 
@@ -253,7 +257,7 @@ def test_401_opens_one_sign_in_dialog_then_logs_in(clean_env, frozen_clock):
         tui = make_tui(None, factory=factory)
         toasts = _record_toasts(tui)
         async with tui.run_test(size=SIZE) as pilot:
-            await _settle(pilot, tui)
+            await settle(pilot, tui)
             assert isinstance(tui.screen, LoginScreen)
             assert sum(isinstance(s, LoginScreen) for s in tui.screen_stack) == 1
             assert toasts == []
@@ -262,7 +266,7 @@ def test_401_opens_one_sign_in_dialog_then_logs_in(clean_env, frozen_clock):
             tui.screen.query_one("#username").value = TEST_ADMIN_USERNAME
             tui.screen.query_one("#password").value = TEST_ADMIN_PASSWORD
             await pilot.click("#login")
-            await _settle(pilot, tui)
+            await settle(pilot, tui)
             assert writes(log) == [
                 ("POST", "/api/v1/auth/login", {"username": TEST_ADMIN_USERNAME, "password": TEST_ADMIN_PASSWORD})
             ]
@@ -290,7 +294,7 @@ def test_401_current_behavior_dashboard_says_cannot_reach_server(clean_env, froz
     async def scenario():
         tui = make_tui(None, factory=factory)
         async with tui.run_test(size=SIZE) as pilot:
-            await _settle(pilot, tui)
+            await settle(pilot, tui)
             assert isinstance(tui.screen, LoginScreen)
             dashboard = tui.screen_stack[-2]
             assert isinstance(dashboard, DashboardScreen)

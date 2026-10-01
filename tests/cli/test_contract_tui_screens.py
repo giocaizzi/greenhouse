@@ -23,8 +23,7 @@ from pathlib import Path
 import pytest
 import time_machine
 
-from cli.test_contract_tui import make_seeded_app, make_tui, screen_text
-from cli.test_tui import _settle
+from cli.test_contract_tui import make_seeded_app, make_tui, screen_text, settle
 from golden import ENV_PREFIXES, FROZEN_INSTANT, assert_golden, assert_golden_json
 from greenhouse_cli import tui as tui_pkg
 from greenhouse_cli.tui.screens.cluster import ClusterScreen
@@ -81,66 +80,66 @@ async def _tour(http, captures: dict[str, tuple[str, list[str]]]) -> None:
         captures[name] = (screen_text(tui), _dom_ids(tui.screen))
 
     async with tui.run_test(size=SIZE) as pilot:
-        await _settle(pilot, tui)
+        await settle(pilot, tui)
         snap("dashboard")
 
         await pilot.press("X")
-        await _settle(pilot, tui)
+        await settle(pilot, tui)
         snap("confirm_stop_all")
         await pilot.press("n")
-        await _settle(pilot, tui)
+        await settle(pilot, tui)
 
         await pilot.press("n")
-        await _settle(pilot, tui)
+        await settle(pilot, tui)
         snap("form_new_cluster")
         await pilot.press("escape")
-        await _settle(pilot, tui)
+        await settle(pilot, tui)
 
         await pilot.press("slash")
-        await _settle(pilot, tui)
+        await settle(pilot, tui)
         await pilot.press(*"citrus")
         await pilot.pause(0.4)
-        await _settle(pilot, tui)
+        await settle(pilot, tui)
         snap("search_citrus")
         await pilot.press("escape")
-        await _settle(pilot, tui)
+        await settle(pilot, tui)
 
         for key, name in (("a", "alerts"), ("l", "activity"), ("s", "system"), ("o", "settings")):
             await pilot.press(key)
-            await _settle(pilot, tui)
+            await settle(pilot, tui)
             snap(name)
         await pilot.press("d")
-        await _settle(pilot, tui)
+        await settle(pilot, tui)
 
         await tui.push_screen(ClusterScreen(1))
-        await _settle(pilot, tui)
+        await settle(pilot, tui)
         for tab in CLUSTER_TABS:
             tui.screen.query_one("TabbedContent").active = tab
-            await _settle(pilot, tui)
+            await settle(pilot, tui)
             snap(f"cluster_1_{tab.removeprefix('tab-')}")
         tui.screen.query_one("TabbedContent").active = "tab-overview"
-        await _settle(pilot, tui)
+        await settle(pilot, tui)
         for key, name in (("i", "irrigate"), ("w", "water_now")):
             await pilot.press(key)
-            await _settle(pilot, tui)
+            await settle(pilot, tui)
             snap(name)
             await pilot.press("escape")
-            await _settle(pilot, tui)
+            await settle(pilot, tui)
         tui.pop_screen()
-        await _settle(pilot, tui)
+        await settle(pilot, tui)
 
         for cluster_id in (2, 3):
             await tui.push_screen(ClusterScreen(cluster_id))
-            await _settle(pilot, tui)
+            await settle(pilot, tui)
             snap(f"cluster_{cluster_id}_overview")
             tui.pop_screen()
-            await _settle(pilot, tui)
+            await settle(pilot, tui)
 
 
 async def _login_tour(http, captures) -> None:
     tui = make_tui(http)
     async with tui.run_test(size=SIZE) as pilot:
-        await _settle(pilot, tui)
+        await settle(pilot, tui)
         assert isinstance(tui.screen, LoginScreen)
         captures["login"] = (screen_text(tui), _dom_ids(tui.screen))
 

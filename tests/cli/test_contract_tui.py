@@ -15,12 +15,14 @@ depends on:
   keyed pixel rows) for every category, mood and animation frame.
 
 This module also hosts the small kit shared by ``test_contract_tui_*.py``
-(seeded app builder, TUI factory, plain-text screen export).
+(seeded app builder, TUI factory, plain-text screen export, and the ``settle`` /
+``wait_until`` helpers that wait for real conditions instead of timing).
 """
 
 from __future__ import annotations
 
 import ast
+import asyncio
 import enum
 import hashlib
 import importlib
@@ -37,6 +39,8 @@ from rich.console import Console
 from textual.app import App
 from textual.binding import Binding
 from textual.dom import DOMNode
+from textual.widgets import DataTable
+from textual.worker import WorkerCancelled
 
 from cli.tui_fixtures import seed_greenhouse, tui_client_factory
 from golden import assert_golden_json, install_offline_weather
@@ -45,7 +49,7 @@ from greenhouse_cli.tui import resources, sprites
 from greenhouse_cli.tui.app import GreenhouseApp
 from server.conftest import _make_stubbed_app
 
-# ── Shared kit (imported by test_contract_tui_screens / _actuation) ─────────
+# ── Shared kit (imported by test_contract_tui_screens / _actuation / _runtime) ─
 
 SERVER_URL = "http://testserver"
 
@@ -98,6 +102,82 @@ def screen_text(app: App) -> str:
     console.print(update)
     lines = [line.rstrip() for line in console.export_text(styles=False).splitlines()]
     return "\n".join(lines).rstrip("\n") + "\n"
+
+
+# ── Synchronization (shared by test_contract_tui_*) ─────────────────────────
+
+
+def _pending_tui_work(tui: App) -> list[str]:
+    """Everything the app still has to process: unfinished workers, queued messages, deferred callbacks,
+    running or scheduled animations (e.g. the 0.3 s slide of the active-tab underline), an open update batch
+    (``switch_mode`` → ``delay_update``), layout/repaint the visible screen still owes, and ``DataTable`` rows
+    whose column widths are only measured on the table's next idle.
+
+    Looks at *every* mode's screen stack, not just the active screen, so a worker or a message still
+    in flight on a suspended screen (e.g. the dashboard after ``switch_mode``) counts as pending.
+    """
+    pending = [f"worker {w.description!r} ({w.state.name})" for w in tui.workers if not w.is_finished]
+    nodes: list[Any] = [tui]
+    for stack in tui._screen_stacks.values():
+        for screen in stack:
+            nodes.extend(screen.walk_children(with_self=True))
+    for node in nodes:
+        if not node._message_queue.empty() or node._next_callbacks:
+            pending.append(f"messages queued on {node!r}")
+    animator = tui.animator
+    pending += [f"animation of {attr!r}" for _, attr in [*animator._animations, *animator._scheduled]]
+    if tui._batch_count:
+        pending.append("update batch still open")
+    screen = tui.screen
+    if screen._callbacks:  # call_after_refresh work; only the active screen refreshes
+        pending.append(f"after-refresh callbacks on {screen!r}")
+    if screen._layout_required or screen._repaint_required or screen._recompose_required or screen._dirty_widgets:
+        pending.append(f"layout/repaint pending on {screen!r}")
+    for visible in [*tui._background_screens, screen]:  # what ``screen_text`` renders
+        for table in visible.query(DataTable):
+            if table._require_update_dimensions or table._updated_cells:
+                pending.append(f"column widths not yet measured on {table!r}")
+                table.check_idle()  # Textual measures them on the table's next idle; prompt that idle
+    return pending
+
+
+async def settle(pilot, tui: App, timeout: float = 60.0) -> None:
+    """Wait until the TUI has finished reacting: no worker unfinished, no message or callback queued
+    anywhere, on two consecutive passes. Fails with what is still pending if that never happens.
+
+    Stricter than ``test_tui._settle``: a key press travels app → focused widget → back up to the app's
+    bindings through several message queues, and a busy CPU can leave part of that trip (or the worker it
+    starts, the tab-underline animation, or a table's column measurement) still pending after Textual's
+    ``pilot.pause()`` idle heuristic returns.
+    """
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + timeout
+    quiet_passes = 0
+    while quiet_passes < 2:
+        await pilot.pause()
+        try:
+            await tui.workers.wait_for_complete()
+        except WorkerCancelled:
+            pass  # an exclusive worker legitimately cancels the run it supersedes
+        await tui.animator.wait_until_complete()
+        pending = _pending_tui_work(tui)
+        quiet_passes = 0 if pending else quiet_passes + 1
+        if pending and loop.time() > deadline:
+            raise AssertionError(f"TUI did not settle within {timeout}s; still pending: {pending}")
+    await pilot.pause()
+
+
+async def wait_until(predicate, what: str, timeout: float = 60.0) -> None:
+    """Poll ``predicate`` with plain ``asyncio.sleep`` until it holds; fail naming ``what`` after ``timeout``.
+
+    For screens with a ticking auto-refresh timer, where ``settle`` / ``pilot.pause()`` may never see an idle app.
+    """
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + timeout
+    while not predicate():
+        if loop.time() > deadline:
+            raise AssertionError(f"timed out after {timeout}s waiting for: {what}")
+        await asyncio.sleep(0.05)
 
 
 # ── Static surface ──────────────────────────────────────────────────────────

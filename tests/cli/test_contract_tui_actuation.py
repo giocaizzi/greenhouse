@@ -22,8 +22,7 @@ from pathlib import Path
 
 import pytest
 
-from cli.test_contract_tui import make_seeded_app, make_tui
-from cli.test_tui import _settle
+from cli.test_contract_tui import make_seeded_app, make_tui, settle
 from cli.tui_fixtures import writes
 from golden import assert_golden_json
 from greenhouse_cli.tui.screens.cluster import ClusterScreen
@@ -89,7 +88,7 @@ class _Recorder:
 
     async def tab(self, tab: str) -> None:
         self.tui.screen.query_one("TabbedContent").active = tab
-        await _settle(self.pilot, self.tui)
+        await settle(self.pilot, self.tui)
 
     async def key(self, key: str, fill: dict | None = None, note: str | None = None) -> dict:
         pilot, tui = self.pilot, self.tui
@@ -97,7 +96,7 @@ class _Recorder:
         tab = base.active_tab if isinstance(base, ClusterScreen) else None
         start_log, start_toasts = len(self.log), len(self.toasts)
         await pilot.press(key)
-        await _settle(pilot, tui)
+        await settle(pilot, tui)
         dialog_screen = tui.screen if tui.screen is not base else None
         row = {
             "screen": self.label,
@@ -120,7 +119,7 @@ class _Recorder:
             await pilot.click("#run")  # defaults: dry run on, sync on, no force
         elif isinstance(dialog_screen, WaterNowScreen):
             await pilot.click("#start")  # blank minutes = device default
-        await _settle(pilot, tui)
+        await settle(pilot, tui)
         assert tui.screen is not dialog_screen or dialog_screen is None, f"{self.label}/{key}: dialog still open"
         row["writes"] = [list(w) for w in writes(self.log[start_log:])]
         # The only normalization: ``E`` toasts the export path, which lives in pytest's random tmp cwd.
@@ -134,7 +133,7 @@ async def _dashboard(http, rows: list) -> None:
     log: list = []
     tui = make_tui(http, log)
     async with tui.run_test(size=SIZE) as pilot:
-        await _settle(pilot, tui)
+        await settle(pilot, tui)
         rec = _Recorder(pilot, tui, log, "dashboard")
         await rec.key("c")
         await rec.key("S")
@@ -147,9 +146,9 @@ async def _cluster(http, rows: list) -> None:
     log: list = []
     tui = make_tui(http, log)
     async with tui.run_test(size=SIZE) as pilot:
-        await _settle(pilot, tui)
+        await settle(pilot, tui)
         await tui.push_screen(ClusterScreen(1))
-        await _settle(pilot, tui)
+        await settle(pilot, tui)
         rec = _Recorder(pilot, tui, log, "cluster")
         for key in ("i", "w", "x", "c"):
             await rec.key(key)
@@ -204,7 +203,7 @@ async def _alerts(http, rows: list) -> None:
     tui = make_tui(http, log)
     async with tui.run_test(size=SIZE) as pilot:
         await pilot.press("a")
-        await _settle(pilot, tui)
+        await settle(pilot, tui)
         rec = _Recorder(pilot, tui, log, "alerts")
         for key in ("k", "v", "y", "f"):
             await rec.key(key)
@@ -216,7 +215,7 @@ async def _system(http, rows: list) -> None:
     tui = make_tui(http, log)
     async with tui.run_test(size=SIZE) as pilot:
         await pilot.press("s")
-        await _settle(pilot, tui)
+        await settle(pilot, tui)
         rec = _Recorder(pilot, tui, log, "system")
         await rec.key("delete", note="cursor on a built-in job")
         await rec.key("p", note="pause (scheduler active)")
@@ -231,7 +230,7 @@ async def _settings(http, rows: list) -> None:
     tui = make_tui(http, log)
     async with tui.run_test(size=SIZE) as pilot:
         await pilot.press("o")
-        await _settle(pilot, tui)
+        await settle(pilot, tui)
         rec = _Recorder(pilot, tui, log, "settings")
         await rec.key("u", note="no vacation windows yet")
         await rec.key("delete", note="no vacation windows yet")
