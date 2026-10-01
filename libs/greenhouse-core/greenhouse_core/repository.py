@@ -36,7 +36,9 @@ from greenhouse_core.models import (
 )
 
 if TYPE_CHECKING:
+    from sqlalchemy import Select
     from sqlalchemy.engine import CursorResult
+    from sqlalchemy.orm import InstrumentedAttribute
 
 _GLOBAL_CONFIG_DEFAULTS: dict[str, int | str | bool | None] = {
     "mode": DEFAULT_IRRIGATION_MODE,
@@ -1057,6 +1059,21 @@ class IrrigationRepository:
 
     # ── Generic helpers used by health / quality services ─────────────────────
 
+    @staticmethod
+    def _page(
+        stmt: "Select[Any]",
+        id_column: "InstrumentedAttribute[int]",
+        *,
+        limit: int | None,
+        after_id: int | None,
+    ) -> "Select[Any]":
+        """Id-cursor pagination, applied after the caller's own filters so the WHERE order is unchanged."""
+        if after_id is not None:
+            stmt = stmt.where(id_column > after_id)
+        if limit is not None:
+            stmt = stmt.limit(limit)
+        return stmt
+
     def list_all_sensors(
         self,
         *,
@@ -1077,11 +1094,7 @@ class IrrigationRepository:
         stmt = select(Sensor).order_by(Sensor.id)
         if filter_cluster_id is not None:
             stmt = stmt.where(Sensor.cluster_id == filter_cluster_id)
-        if after_id is not None:
-            stmt = stmt.where(Sensor.id > after_id)
-        if limit is not None:
-            stmt = stmt.limit(limit)
-        return list(self.session.scalars(stmt))
+        return list(self.session.scalars(self._page(stmt, Sensor.id, limit=limit, after_id=after_id)))
 
     def list_all_irrigators(
         self,
@@ -1103,11 +1116,7 @@ class IrrigationRepository:
         stmt = select(Irrigator).order_by(Irrigator.id)
         if filter_cluster_id is not None:
             stmt = stmt.where(Irrigator.cluster_id == filter_cluster_id)
-        if after_id is not None:
-            stmt = stmt.where(Irrigator.id > after_id)
-        if limit is not None:
-            stmt = stmt.limit(limit)
-        return list(self.session.scalars(stmt))
+        return list(self.session.scalars(self._page(stmt, Irrigator.id, limit=limit, after_id=after_id)))
 
     def list_all_plants(
         self,
@@ -1134,11 +1143,7 @@ class IrrigationRepository:
             stmt = stmt.where(Plant.cluster_id == filter_cluster_id)
         if filter_category is not None:
             stmt = stmt.where(Plant.category == filter_category)
-        if after_id is not None:
-            stmt = stmt.where(Plant.id > after_id)
-        if limit is not None:
-            stmt = stmt.limit(limit)
-        return list(self.session.scalars(stmt))
+        return list(self.session.scalars(self._page(stmt, Plant.id, limit=limit, after_id=after_id)))
 
     def get_plant(self, plant_id: int) -> Plant | None:
         """Fetch a plant by id."""
