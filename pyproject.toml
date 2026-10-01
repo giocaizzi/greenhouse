@@ -67,10 +67,16 @@ select = [
     "C4",  # flake8-comprehensions
     "UP",  # pyupgrade
 ]
+# Complexity ratchet (refactor plan T0.3 / target §11): today's offenders are listed in
+# per-file-ignores below; the integrator removes each entry once its file is clean (I1).
+extend-select = ["C90", "PLR0911", "PLR0912", "PLR0915"]
 ignore = [
     "E501",  # line too long (handled by formatter)
     "B008",  # function call in argument defaults
 ]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 8
 
 [tool.ruff.format]
 quote-style = "double"
@@ -80,6 +86,33 @@ indent-style = "space"
 "__init__.py" = ["F401"]  # unused imports in __init__
 "tests/*" = ["B011"]  # assert False check
 "scripts/*" = ["E402"]  # intentional sys.path before import
+"tests/**" = ["C90", "PLR0911", "PLR0912", "PLR0915"]  # frozen safety net exceeds the limits
+"refactor/**" = ["C90", "PLR0911", "PLR0912", "PLR0915"]  # refactor tooling scripts, not shipped code
+# Complexity offenders at max-complexity 8 (baseline refactor-gate1); only shrinks.
+"libs/greenhouse-cli/greenhouse_cli/commands/auth.py" = ["C901"]
+"libs/greenhouse-cli/greenhouse_cli/commands/operations.py" = ["C901", "PLR0915"]
+"libs/greenhouse-cli/greenhouse_cli/tui/model.py" = ["C901"]
+"libs/greenhouse-cli/greenhouse_cli/tui/screens/cluster.py" = ["C901", "PLR0912"]
+"libs/greenhouse-cli/greenhouse_cli/tui/screens/forms.py" = ["C901", "PLR0911"]
+"libs/greenhouse-cli/greenhouse_cli/tui/widgets.py" = ["C901"]
+"libs/greenhouse-core/greenhouse_core/devices/irrigators/ik10pw.py" = ["C901", "PLR0911"]
+"libs/greenhouse-core/greenhouse_core/devices/irrigators/tuya_generic.py" = ["C901"]
+"libs/greenhouse-core/greenhouse_core/learning/issues.py" = ["C901", "PLR0912", "PLR0915"]
+"libs/greenhouse-core/greenhouse_core/logic/engine.py" = ["C901", "PLR0911", "PLR0912", "PLR0915"]
+"libs/greenhouse-core/greenhouse_core/logic/sensors.py" = ["C901"]
+"libs/greenhouse-core/greenhouse_core/logic/stress.py" = ["C901", "PLR0912"]
+"libs/greenhouse-core/greenhouse_core/logic/trends.py" = ["C901", "PLR0912"]
+"libs/greenhouse-core/greenhouse_core/stats.py" = ["C901"]
+"libs/greenhouse-server/greenhouse_server/app.py" = ["PLR0915"]
+"libs/greenhouse-server/greenhouse_server/routes/plants.py" = ["C901"]
+"libs/greenhouse-server/greenhouse_server/services/charts.py" = ["C901"]
+"libs/greenhouse-server/greenhouse_server/services/data_quality.py" = ["C901", "PLR0912"]
+"libs/greenhouse-server/greenhouse_server/services/forecast.py" = ["C901", "PLR0915"]
+"libs/greenhouse-server/greenhouse_server/services/health.py" = ["C901"]
+"libs/greenhouse-server/greenhouse_server/services/health_monitor.py" = ["PLR0911"]
+"libs/greenhouse-server/greenhouse_server/services/irrigation.py" = ["C901", "PLR0911", "PLR0915"]
+"libs/greenhouse-server/greenhouse_server/services/maintenance.py" = ["C901"]
+"libs/greenhouse-server/greenhouse_server/web/routes/operations.py" = ["C901"]
 
 [tool.importlinter]
 root_packages = ["greenhouse_core", "greenhouse_server", "greenhouse_cli"]
