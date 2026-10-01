@@ -163,7 +163,7 @@ Separate from the engine: when the irrigation **service** is about to actuate, i
 
 ### Pump dry-run abort (DP 105)
 
-While an irrigation is running, `PumpWatcherService` polls the IK10PW's DP 105 water-shortage alarm (~2s cadence, local protocol v3.5) after a short warmup. On the first `NO_WATER` reading it immediately stops the pump, raises a `no_water` health alert through `DeviceHealthMonitor` (dedup key `health:irrigator:{id}:no_water`), and records an `aborted` irrigation event. False positives are safe (stop early); the alarm is motor-current-based, so a hardware float switch is still recommended for unattended use.
+While an irrigation is running, `PumpWatcherService` polls the IK10PW's DP 105 water-shortage alarm (~2s cadence, local protocol v3.5) after a short warmup. On the first `NO_WATER` reading it immediately stops the pump, raises a `no_water` health alert through `DeviceHealthMonitor` (dedup key `health:irrigator:{id}:no_water`), and records an `aborted` irrigation event. False positives are safe (stop early); the alarm is motor-current-based, so a hardware float switch is still recommended for unattended use. If the server shuts down mid-irrigation the watcher is interrupted (shutdown no longer waits out the cycle): an **auto** cycle is stopped (`stop` event, `triggered_by="shutdown"`); a **manual** cycle is left running on the device's own DP 102 timer without dry-run protection. Both log a `pump_watcher_shutdown` activity event.
 
 ## Check Command Pipeline
 

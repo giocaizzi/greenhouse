@@ -168,13 +168,13 @@ def running_scheduler(app):
     so the app's ``init_scheduler`` (which needs a stopped scheduler) runs first.
     """
     from greenhouse_server.scheduler import scheduler as bg_scheduler
+    from greenhouse_server.scheduler import start_scheduler, stop_scheduler
 
-    bg_scheduler.start(paused=True)
+    start_scheduler(paused=True)
     try:
         yield bg_scheduler
     finally:
-        if bg_scheduler.running:
-            bg_scheduler.shutdown(wait=False)
+        stop_scheduler()
 
 
 @pytest.fixture

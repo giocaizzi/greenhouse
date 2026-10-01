@@ -42,8 +42,13 @@ from greenhouse_server.routes import (
 from greenhouse_server.routes import (
     auth as auth_routes,
 )
-from greenhouse_server.scheduler import apply_persisted_pause, init_health_monitor, init_scheduler
-from greenhouse_server.scheduler import scheduler as bg_scheduler
+from greenhouse_server.scheduler import (
+    apply_persisted_pause,
+    init_health_monitor,
+    init_scheduler,
+    start_scheduler,
+    stop_scheduler,
+)
 from greenhouse_server.services.notify import NtfyClient
 from greenhouse_server.services.weather import WeatherClient
 from greenhouse_server.web.exception_handlers import register_web_exception_handlers
@@ -126,10 +131,10 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         if settings.enable_scheduler:
-            bg_scheduler.start()
+            start_scheduler()
         yield
-        if settings.enable_scheduler and bg_scheduler.running:
-            bg_scheduler.shutdown(wait=False)
+        if settings.enable_scheduler:
+            stop_scheduler()
 
     app = FastAPI(
         title="Greenhouse API",

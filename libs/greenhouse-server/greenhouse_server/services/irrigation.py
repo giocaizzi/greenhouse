@@ -9,7 +9,7 @@ from greenhouse_core.devices import DeviceRegistry, UnknownDeviceModel
 from greenhouse_core.logic import IrrigationLogic
 from greenhouse_core.logic.cleaning import clean_readings_desc
 from greenhouse_core.logic.decision import Action, Severity
-from greenhouse_core.models import ENTITY_CLUSTER
+from greenhouse_core.models import ENTITY_CLUSTER, ENTITY_IRRIGATOR
 from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.services.alerts import raise_alert, sync_cluster_alerts
@@ -24,7 +24,103 @@ logger = logging.getLogger(__name__)
 CHECK_FAILED_ALERT_CODE = "check_failed"
 
 
-def schedule_pump_watcher(irrigator_id: int, duration_minutes: int, started_at: int) -> bool:
+WATCHER_SHUTDOWN_ACTIVITY_CODE = "pump_watcher_shutdown"
+
+
+def handle_watcher_interrupted(
+    repo: IrrigationRepository,
+    registry: DeviceRegistry,
+    irrigator,
+    *,
+    triggered_by: str,
+    started_at: int,
+) -> bool:
+    """Shutdown policy for a pump whose dry-run watcher was cut short.
+
+    The server is going down mid-irrigation, so nothing will watch DP 105 for
+    the rest of the cycle. The device's own duration timer (DP 102) still
+    bounds the run either way; what changes is dry-run protection:
+
+    * ``auto`` cycles are **stopped** — the server started them, and leaving
+      a pump running unwatched trades a short watering (safe; the engine
+      re-evaluates after restart) for possible dry-run damage.
+    * ``manual`` cycles are **left running**: the user explicitly asked for
+      that duration, and the watcher's own precedent for losing its signal
+      ("abandoned" after read failures) is to warn, not stop. Logged loudly.
+
+    Best-effort: a failed stop is logged, never raised.
+
+    Args:
+        repo: Repository bound to the watcher job's session (caller commits).
+        registry: Device registry resolving the irrigator's adapter.
+        irrigator: The irrigator whose watcher was interrupted.
+        triggered_by: ``"auto"`` or ``"manual"`` — who started the cycle.
+        started_at: Unix timestamp of the start event.
+
+    Returns:
+        True if the pump was stopped successfully, False otherwise.
+    """
+    stop_ok = False
+    if triggered_by == "auto":
+        stop_msg = ""
+        try:
+            stop_ok, stop_msg = registry.get_irrigator(irrigator).stop(irrigator)
+        except Exception as exc:  # noqa: BLE001 — best-effort during shutdown
+            stop_msg = f"adapter.stop raised: {exc}"
+        if stop_ok:
+            logger.warning(
+                "Server shutting down mid-irrigation: stopped auto cycle on irrigator %d "
+                "(dry-run watcher can no longer protect it)",
+                irrigator.id,
+            )
+            repo.add_irrigation_event(
+                irrigator_id=irrigator.id,
+                action="stop",
+                triggered_by="shutdown",
+                notes="server shutdown: dry-run watcher interrupted, auto cycle stopped",
+                timestamp=int(_time.time()),
+            )
+            message = f"Server shutdown stopped the auto irrigation on '{irrigator.name}' (watcher interrupted)"
+        else:
+            logger.error(
+                "Server shutting down mid-irrigation: FAILED to stop auto cycle on irrigator %d (%s) — "
+                "it continues unprotected until the device timer ends it",
+                irrigator.id,
+                stop_msg,
+            )
+            message = (
+                f"Server shutdown could not stop the auto irrigation on '{irrigator.name}' ({stop_msg}); "
+                "it continues without dry-run protection"
+            )
+    else:
+        logger.warning(
+            "Server shutting down mid-irrigation: %s cycle on irrigator %d left running "
+            "unprotected (no dry-run watcher) until the device timer ends it",
+            triggered_by,
+            irrigator.id,
+        )
+        message = (
+            f"Server shutdown: {triggered_by} irrigation on '{irrigator.name}' continues "
+            "without dry-run protection until the device timer ends it"
+        )
+    try:
+        repo.add_activity_event(
+            source="irrigation",
+            entity_type=ENTITY_IRRIGATOR,
+            entity_id=irrigator.id,
+            code=WATCHER_SHUTDOWN_ACTIVITY_CODE,
+            message=message,
+            severity="warning",
+            payload={"triggered_by": triggered_by, "started_at": started_at, "stopped": stop_ok},
+        )
+    except Exception:  # noqa: BLE001
+        logger.exception("Failed to record watcher-shutdown activity for irrigator %d", irrigator.id)
+    return stop_ok
+
+
+def schedule_pump_watcher(
+    irrigator_id: int, duration_minutes: int, started_at: int, *, triggered_by: str = "auto"
+) -> bool:
     """Schedule a dry-run watcher to run for the duration of an irrigation.
 
     Spawns a one-shot APScheduler ``date`` job that opens its own DB session,
@@ -38,6 +134,9 @@ def schedule_pump_watcher(irrigator_id: int, duration_minutes: int, started_at: 
             same wall-clock as the device's auto-off timer.
         started_at: Unix timestamp of the start event (recorded in the
             aborted-event row if the watcher trips).
+        triggered_by: Who started the cycle (``"auto"`` / ``"manual"``);
+            decides what server shutdown does to the still-running pump —
+            see :func:`handle_watcher_interrupted`.
 
     Returns:
         True if a job was scheduled, False if the scheduler is unavailable,
@@ -48,7 +147,7 @@ def schedule_pump_watcher(irrigator_id: int, duration_minutes: int, started_at: 
         return False
     try:
         from greenhouse_server.config import Settings
-        from greenhouse_server.scheduler import _app, scheduler
+        from greenhouse_server.scheduler import _app, scheduler, shutdown_requested, wait_for_shutdown
 
         if not scheduler.running or _app is None:
             return False
@@ -94,8 +193,15 @@ def schedule_pump_watcher(irrigator_id: int, duration_minutes: int, started_at: 
                     warmup_seconds=warmup,
                     max_read_failures=max_failures,
                     monitor=monitor,
+                    sleep=wait_for_shutdown,
+                    stop_requested=shutdown_requested,
                 )
-                watcher.watch(irrigator, duration_seconds, started_at=started_at)
+                result = watcher.watch(irrigator, duration_seconds, started_at=started_at)
+                if result["outcome"] == "interrupted":
+                    handle_watcher_interrupted(
+                        repo, registry, irrigator, triggered_by=triggered_by, started_at=started_at
+                    )
+                    session.commit()
             except Exception:
                 session.rollback()
                 logger.exception("Pump watcher job failed for irrigator %d", irrigator_id)

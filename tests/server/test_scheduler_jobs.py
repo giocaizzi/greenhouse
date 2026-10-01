@@ -147,26 +147,62 @@ class TestRunningScheduler:
         assert EVENT_JOB_EXECUTED in codes
 
 
-class TestDeleteJob:
-    """DELETE /scheduler/jobs/{job_id}."""
+def _noop() -> None:
+    """Stand-in callable for ad-hoc test jobs."""
 
-    def test_delete_removes_job_from_listing(self):
+
+def _add_adhoc_job(job_id: str = "pump-watcher-1-123") -> str:
+    """Register a one-shot job like the per-irrigation watchers do."""
+    bg_scheduler.add_job(_noop, "date", run_date="2099-01-01", id=job_id, name="ad-hoc", replace_existing=True)
+    return job_id
+
+
+class TestDeleteJob:
+    """DELETE /scheduler/jobs/{job_id}: core jobs are protected, ad-hoc jobs are not."""
+
+    def test_every_startup_job_is_refused_with_409(self, client):
+        startup_ids = _job_ids(client)
+        assert startup_ids == DEFAULT_JOB_IDS
+        for job_id in startup_ids:
+            resp = client.delete(f"/api/v1/scheduler/jobs/{job_id}")
+            assert resp.status_code == 409, job_id
+            assert "/scheduler/pause" in resp.json()["detail"]
+        assert _job_ids(client) == DEFAULT_JOB_IDS  # nothing removed
+
+    def test_core_job_set_matches_registration(self, client):
+        """The protected set is derived from registration, not a hand-kept list."""
+        from greenhouse_server.scheduler import core_job_ids
+
+        assert sorted(core_job_ids()) == _job_ids(client)
+
+    def test_core_jobs_refused_on_running_scheduler(self, client, running_scheduler):
+        assert client.delete(f"/api/v1/scheduler/jobs/{CHECK_ALL_JOB_ID}").status_code == 409
+        assert running_scheduler.get_job(CHECK_ALL_JOB_ID) is not None
+
+    def test_adhoc_job_is_deletable(self, client):
+        job_id = _add_adhoc_job()
+        assert client.delete(f"/api/v1/scheduler/jobs/{job_id}").json() == {"success": True}
+        assert job_id not in _job_ids(client)
+        assert client.delete(f"/api/v1/scheduler/jobs/{job_id}").status_code == 404
+
+    def test_adhoc_job_deletable_on_running_scheduler(self, client, running_scheduler):
+        job_id = _add_adhoc_job()
+        assert client.delete(f"/api/v1/scheduler/jobs/{job_id}").status_code == 200
+        assert running_scheduler.get_job(job_id) is None
+        assert client.delete(f"/api/v1/scheduler/jobs/{job_id}").status_code == 404
+
+    def test_delete_after_rebuild_removes_job_from_listing(self):
         # Build twice: duplicated pending jobs used to survive a single delete.
         app1, engine1 = _make_stubbed_app(bypass_auth=True)
         app2, engine2 = _make_stubbed_app(bypass_auth=True)
         try:
             c = TestClient(app2)
-            assert c.delete("/api/v1/scheduler/jobs/sensor_anomaly").json() == {"success": True}
-            assert "sensor_anomaly" not in _job_ids(c)
-            assert c.delete("/api/v1/scheduler/jobs/sensor_anomaly").status_code == 404
+            job_id = _add_adhoc_job()
+            assert c.delete(f"/api/v1/scheduler/jobs/{job_id}").status_code == 200
+            assert job_id not in _job_ids(c)
         finally:
             engine1.dispose()
             engine2.dispose()
 
     def test_delete_unknown_job_404(self, client):
         assert client.delete("/api/v1/scheduler/jobs/nope").status_code == 404
-
-    def test_delete_on_running_scheduler(self, client, running_scheduler):
-        assert client.delete("/api/v1/scheduler/jobs/sensor_anomaly").status_code == 200
-        assert running_scheduler.get_job("sensor_anomaly") is None
-        assert client.delete("/api/v1/scheduler/jobs/sensor_anomaly").status_code == 404

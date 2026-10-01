@@ -270,7 +270,7 @@ def start_irrigator(
         )
         repo.session.commit()
         if request.minutes:
-            schedule_pump_watcher(irrigator.id, request.minutes, started_at)
+            schedule_pump_watcher(irrigator.id, request.minutes, started_at, triggered_by="manual")
         maybe_notify(
             notifier,
             repo.get_preferences(),
