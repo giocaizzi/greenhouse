@@ -288,6 +288,7 @@ After ≥3 irrigation cycles with sensor data, the system learns:
 | `sensor_drift` | Sensor readings anomalously constant |
 | `low_env_humidity` | Ambient humidity below plant ideal - 10% |
 | `low_light` | Daytime avg lux below seasonal plant minimum * 0.5 |
+| `check_failed` | The scheduled/`POST /check` run crashed for this cluster (error). Each cluster is checked and committed on its own, so one failure never rolls back another cluster's recorded pump runs; the next successful check resolves it |
 
 ### Alert inbox lifecycle
 

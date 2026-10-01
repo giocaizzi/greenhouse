@@ -377,3 +377,30 @@ class TestSeasonalMultiplier:
             f"spring baseline {baseline_interval}h — multiplier >1.0 = water MORE often = "
             f"interval should SHRINK"
         )
+
+
+class TestDecisionAssignmentValidation:
+    """IrrigationDecision re-validates assignments (validate_assignment=True)."""
+
+    def _decision(self):
+        from greenhouse_core.logic.decision import Action, IrrigationDecision
+
+        return IrrigationDecision(
+            cluster_id=1, evaluated_at=0, action=Action.SKIP, duration_minutes=0, interval_hours=12, confidence=0.5
+        )
+
+    def test_tuple_reasons_are_coerced_to_list(self):
+        from greenhouse_core.logic.decision import Reason, TriggerCode
+
+        decision = self._decision()
+        decision.reasons = (Reason(code=TriggerCode.SEASONAL_HOLD, message="x"),)
+        assert isinstance(decision.reasons, list)
+        decision.add_reason(code=TriggerCode.SEASONAL_BOOST, message="y")  # would AttributeError on a tuple
+        assert [r.code for r in decision.reasons] == [TriggerCode.SEASONAL_HOLD, TriggerCode.SEASONAL_BOOST]
+
+    def test_wrong_type_fails_at_the_assignment(self):
+        import pydantic
+
+        decision = self._decision()
+        with pytest.raises(pydantic.ValidationError):
+            decision.duration_minutes = "a lot"

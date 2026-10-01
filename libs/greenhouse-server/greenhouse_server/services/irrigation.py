@@ -21,6 +21,8 @@ from greenhouse_server.services.weather import WeatherClient
 
 logger = logging.getLogger(__name__)
 
+CHECK_FAILED_ALERT_CODE = "check_failed"
+
 
 def schedule_pump_watcher(irrigator_id: int, duration_minutes: int, started_at: int) -> bool:
     """Schedule a dry-run watcher to run for the duration of an irrigation.
@@ -505,6 +507,45 @@ class IrrigationService:
             }
 
     def check_all_clusters(self) -> list[dict]:
-        """Check all clusters."""
-        clusters = self._repo.list_clusters()
-        return [self.check_cluster(c.id) for c in clusters]
+        """Check every cluster, isolating each one in its own transaction.
+
+        Each cluster's work is committed as soon as it finishes, so a crash in
+        one cluster can never roll back the ``start`` events of pumps that
+        already ran for earlier clusters (the cooldown would not see them and
+        they could water again on the next tick). A failing cluster is rolled
+        back on its own, reported as ``action="error"`` and raises a
+        ``check_failed`` alert, which the next successful check resolves.
+        """
+        clusters = [(c.id, c.name) for c in self._repo.list_clusters()]
+        results = []
+        for cluster_id, cluster_name in clusters:
+            session = self._repo.session
+            try:
+                result = self.check_cluster(cluster_id)
+                stale = self._repo.get_active_alert(CHECK_FAILED_ALERT_CODE, cluster_id=cluster_id)
+                if stale is not None:
+                    self._repo.resolve_alert(stale.id)
+                session.commit()
+            except Exception as e:
+                session.rollback()
+                logger.exception("Check failed for cluster %s", cluster_id)
+                self._repo.upsert_alert(
+                    f"{CHECK_FAILED_ALERT_CODE}:cluster:{cluster_id}",
+                    "irrigation",
+                    CHECK_FAILED_ALERT_CODE,
+                    f"Check failed: {cluster_name}",
+                    f"The scheduled check crashed and was skipped for this cluster: {e!r}",
+                    severity="error",
+                    entity_type="cluster",
+                    entity_id=cluster_id,
+                    cluster_id=cluster_id,
+                )
+                session.commit()
+                result = {
+                    "cluster_id": cluster_id,
+                    "cluster_name": cluster_name,
+                    "action": "error",
+                    "notes": f"check failed: {e!r}",
+                }
+            results.append(result)
+        return results

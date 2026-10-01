@@ -209,7 +209,10 @@ class IrrigationDecision(BaseModel):
     every evaluation (acted-on or not).
     """
 
-    model_config = ConfigDict(from_attributes=True)
+    # validate_assignment: rules mutate the decision in place; re-validating
+    # each assignment keeps fields their declared types (a rule once rebound
+    # ``reasons`` to a tuple, which later crashed ``add_reason``).
+    model_config = ConfigDict(from_attributes=True, validate_assignment=True)
 
     cluster_id: int
     evaluated_at: int
