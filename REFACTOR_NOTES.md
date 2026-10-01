@@ -114,6 +114,16 @@ Safety-net hygiene: test session JWTs in `set-cookie` goldens are stored as `<JW
 gitleaks stays clean; gitleaks' pre-commit hook only scans staged changes, so the branch was also scanned with
 `gitleaks detect --log-opts=a1b2622..HEAD` (no leaks).
 
+Mutation campaign (Gate 1; details in `refactor/gate1/mutation.md`):
+- the spike filter drops the first sample of a genuine step change (e.g. 40,40,40,60,60) — pinned as
+  `…_current_behavior`;
+- equivalent mutants exposed dead/redundant code: `StressIndicators.any_critical()` has no caller; the
+  `start == end` guard in `is_within_quiet_hours` duplicates `_hour_in_range`. Candidates for dead-code removal in
+  dedicated, test-backed commits.
+- mutmut 3 cannot run on this layout (it keys mutants by file path `libs.greenhouse-core.…` while tests import
+  `greenhouse_core.…` via pytest `pythonpath`); the scripted runner `refactor/gate1/mutate.py` (473-mutant catalogue)
+  is the reusable mutation tool for Phase 3/5.
+
 ## Golden-test policy (orchestrator decision)
 
 - OpenAPI, routes, MCP tools, settings, DDL, scheduler registry, package data, web HTML, CLI help/output, TUI renders,
