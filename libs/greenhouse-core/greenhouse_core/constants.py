@@ -254,3 +254,109 @@ DEFAULT_SEASON_MULTIPLIER_OUTDOOR = {
     "summer": 1.5,
     "autumn": 0.7,
 }
+
+# ── Time units ───────────────────────────────────────────────────────────────
+
+SECONDS_PER_HOUR = 3600
+SECONDS_PER_DAY = 86400
+
+# ── Decision engine — lookbacks, baseline and weather skip ───────────────────
+
+SNAPSHOT_LOOKBACK_HOURS = 24  # sensor history feeding the decision snapshot
+CONFIDENCE_BASELINE = 0.5  # starting confidence before any rule fires
+WEATHER_FORECAST_HOURS = 6  # rain-forecast horizon consulted before irrigating
+WEATHER_SKIP_PRECIP_MM = 2.0  # forecast precipitation at or below this does not skip
+DEFAULT_SOIL_MOISTURE_TARGET = "45-65"  # plant care fallback when no target is known
+
+# ── Stress detection ─────────────────────────────────────────────────────────
+
+STRESS_HUMIDITY_DEFICIT = 20  # % below the ideal humidity minimum
+STRESS_LOW_LIGHT_FRACTION = 0.4  # fraction of the seasonal light minimum
+STRESS_STEEP_DECLINE_DELTA = -10  # soil-moisture delta that counts as a steep decline
+STRESS_HEAT_OFFSET_C = 5  # °C above the ideal temperature maximum
+
+# ── Trend analysis — lookback and irrigation cadence ─────────────────────────
+
+TREND_LOOKBACK_HOURS = 48
+CADENCE_WINDOW_DAYS = 7
+CADENCE_LOW_EVENTS_PER_DAY = 1
+CADENCE_LOW_AVG_MINUTES = 2
+CADENCE_HIGH_EVENTS_PER_DAY = 3
+
+# ── Temperature fallback — interval steps by plant water needs ───────────────
+
+FALLBACK_HIGH_NEEDS_INTERVAL_STEP = 4  # shorten (high demand)
+FALLBACK_LOW_NEEDS_INTERVAL_STEP = 6  # lengthen (low demand)
+
+# ── Daylight ─────────────────────────────────────────────────────────────────
+
+NIGHT_LUX_THRESHOLD = 15  # readings at or below this lux are treated as night
+# Seasonal light factor per calendar month (Northern-hemisphere daylight curve).
+SEASONAL_LIGHT_FACTOR_BY_MONTH: dict[int, float] = {
+    1: 0.50,
+    2: 0.60,
+    3: 0.72,
+    4: 0.85,
+    5: 0.95,
+    6: 1.00,
+    7: 1.00,
+    8: 0.95,
+    9: 0.83,
+    10: 0.70,
+    11: 0.58,
+    12: 0.50,
+}
+
+# ── Learning issue / conflict detection ──────────────────────────────────────
+
+LEARNING_CONFLICT_LOOKBACK_HOURS = 6
+LEARNING_DRAINAGE_LUX_LOOKBACK_HOURS = 48
+LEARNING_WEEK_HOURS = 168
+LEARNING_LATEST_SAMPLES = 3  # latest readings averaged per sensor
+LEARNING_CHRONIC_MIN_RESPONSES = 5
+LEARNING_CONFLICT_DRY_MARGIN = 5  # % below target minimum
+LEARNING_MIN_ENV_SAMPLES = 5
+LEARNING_HUMIDITY_DEFICIT = 15  # % below the ideal humidity minimum
+LOW_LIGHT_ALERT_FRACTION = 0.5  # fraction of the seasonal light minimum
+
+# ── Maintenance alerts ───────────────────────────────────────────────────────
+
+MAINTENANCE_LOOKBACK_HOURS = 24
+MAINTENANCE_STALE_SECONDS = 3 * SECONDS_PER_HOUR
+MAINTENANCE_MIN_SAMPLES = 3
+MAINTENANCE_HUMIDITY_DEFICIT = 10  # % below the ideal humidity minimum
+
+# ── Irrigation pipeline — monitor bands and fallbacks ────────────────────────
+
+MONITOR_LOOKBACK_HOURS = 2
+MONITOR_VERY_DRY_MARGIN = 15  # % below target minimum
+MONITOR_WET_MARGIN = 10  # % above target maximum
+FALLBACK_TEMPERATURE_C = 20.0  # used when no temperature source is available
+LEAK_CHECK_ACTIVITY_SCAN_LIMIT = 500
+
+# ── Pump watcher defaults ────────────────────────────────────────────────────
+
+PUMP_WATCHER_POLL_SECONDS = 2.0
+PUMP_WATCHER_WARMUP_SECONDS = 5.0
+PUMP_WATCHER_MAX_READ_FAILURES = 5
+
+# ── Scheduler jobs ───────────────────────────────────────────────────────────
+
+ANOMALY_SCAN_INTERVAL_MINUTES = 15
+HEALTH_SNAPSHOT_HOUR = 0
+HEALTH_SNAPSHOT_MINUTE = 30
+SYNC_JOB_BACKFILL_HOURS = 6
+SENSOR_HEALTH_BACKFILL_HOURS = 24 * 7
+
+# ── Forecast and plant health scoring ────────────────────────────────────────
+
+FORECAST_CONFIDENCE_HIGH = 0.7
+FORECAST_CONFIDENCE_MEDIUM = 0.4
+FORECAST_CONFIDENCE_LOW = 0.2
+FORECAST_HIGH_CONFIDENCE_PROFILES = 3  # profiled sensors needed for high confidence
+HEALTH_SCORE_WINDOW_DAYS = 14
+
+# ── Irrigation windows ───────────────────────────────────────────────────────
+
+WINDOW_HOUR_MAX = 23
+FULL_WEEKDAY_MASK = 127  # Monday..Sunday bits all set
