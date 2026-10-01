@@ -31,7 +31,8 @@ Nothing in the repo was modified by these runs (`pyproject.toml` / `uv.lock` unt
 | pip-audit (locked env, 243 pins) | 53 advisory rows / 10 packages (pyjwt 13, starlette 5, urllib3 5, cryptography 5, mcp 3, anyio 2, pydantic-settings, mako, idna, click 1 each) — rows include alias duplicates | `pip-audit.txt` |
 | Import wall time, `import greenhouse_server.app` | **1.784 s** (min of 3: 1.784/1.853/1.811) | `import-walltime.txt`, `importtime-server.txt` |
 | Import wall time, `import greenhouse_cli.main` | **0.204 s** (min of 3); `greenhouse --help` 0.255 s; bare interpreter 0.012 s | `import-walltime.txt`, `importtime-cli.txt` |
-| Test coverage (branch) | see "Coverage" section | `coverage.json`, `pytest-full.txt` |
+| Test suite (baseline) | 1182 passed, 2 warnings, 19:28 | `pytest-full.txt` |
+| Coverage | line 91.8 % · **branch 79.7 %** · combined 89.5 % (9 826 stmts, 2 296 branches) | `coverage.json` |
 
 Note: import-time runs happened while the baseline pytest run was executing in parallel (loadavg ≈ 1.6 on 4 cores) — treat as
 an upper bound; re-measure on an idle box when comparing.
@@ -248,7 +249,180 @@ fastapi ≈ 286 ms, `greenhouse_server.web.router` ≈ 117 ms, sqlalchemy.engine
 
 ## Coverage
 
-COVERAGE_SECTION_PLACEHOLDER
+Source: `refactor/baseline/coverage.json` from the baseline run (`uv run pytest -p no:cacheprovider --cov=greenhouse_core --cov=greenhouse_server --cov=greenhouse_cli --cov-branch --cov-report=json:refactor/baseline/coverage.json -q -W default`, log in `pytest-full.txt`): **1182 passed, 2 warnings in 1168 s (19:28; 21:06 wall incl. startup)**. Migrations/versions excluded from the tables below. Generated from the json with a small script (stmts/branches as reported by coverage.py).
+
+Totals: statements 9826, covered 9023, line % 91.8; branches 2296, covered 1829, branch % 79.7; combined (coverage.py) 89.52 %.
+
+High-risk modules (BRIEF): `greenhouse_server/scheduler.py` line 56.3 % / branch 64.3 % (weakest), `greenhouse_core/auth.py` 86.5 / 50.0, `devices/gateway.py` 88.4 / 73.2, `services/irrigation.py` 81.3 / 76.5, `logic/engine.py` 93.8 / 88.1, `greenhouse_server/auth.py` 93.9 / 88.2. Characterization tests should target these gaps before any move. Near-uncovered: `greenhouse_core/sync.py` (12.3 % line, 0 % branch), `services/weather.py` (51 %), `web/routes/fragments.py` (59 %).
+
+| Package | stmts | line % | branches | branch % |
+|---|---|---|---|---|
+| greenhouse_cli | 2308 | 95.3 | 534 | 80.1 |
+| greenhouse_core | 3298 | 92.6 | 784 | 80.1 |
+| greenhouse_server | 4220 | 89.4 | 978 | 79.0 |
+
+Per module, sorted by branch % ascending (modules with no branches last):
+
+| Module | stmts | branch % | line % |
+|---|---|---|---|
+| `greenhouse_core/sync.py` | 57 | 0.0 | 12.3 |
+| `greenhouse_server/web/routes/fragments.py` | 22 | 0.0 | 59.1 |
+| `greenhouse_cli/commands/sensors.py` | 24 | 12.5 | 62.5 |
+| `greenhouse_cli/commands/plants.py` | 31 | 12.5 | 64.5 |
+| `greenhouse_core/devices/sensors/tr301z.py` | 30 | 16.7 | 73.3 |
+| `greenhouse_server/services/weather.py` | 51 | 20.0 | 51.0 |
+| `greenhouse_server/web/routes/operations.py` | 70 | 33.3 | 75.7 |
+| `greenhouse_core/stats.py` | 72 | 41.2 | 62.5 |
+| `greenhouse_core/devices/irrigators/tuya_generic.py` | 56 | 43.8 | 76.8 |
+| `greenhouse_server/web/routes/plant_dashboard.py` | 88 | 46.2 | 78.4 |
+| `greenhouse_server/web/context.py` | 42 | 50.0 | 81.0 |
+| `greenhouse_core/auth.py` | 37 | 50.0 | 86.5 |
+| `greenhouse_cli/tui/screens/search.py` | 52 | 50.0 | 90.4 |
+| `greenhouse_cli/tui/screens/modals.py` | 99 | 50.0 | 91.9 |
+| `greenhouse_server/web/routes/sensors.py` | 55 | 50.0 | 92.7 |
+| `greenhouse_cli/commands/vacation.py` | 19 | 50.0 | 94.7 |
+| `greenhouse_cli/commands/windows.py` | 19 | 50.0 | 94.7 |
+| `greenhouse_core/schemas.py` | 573 | 50.0 | 99.7 |
+| `greenhouse_server/routes/plants.py` | 95 | 57.1 | 83.2 |
+| `greenhouse_cli/tui/screens/alerts.py` | 69 | 57.1 | 95.7 |
+| `greenhouse_cli/commands/irrigators.py` | 43 | 58.3 | 88.4 |
+| `greenhouse_cli/tui/screens/settings.py` | 82 | 58.3 | 95.1 |
+| `greenhouse_core/devices/irrigators/ik10pw.py` | 107 | 60.7 | 59.8 |
+| `greenhouse_cli/commands/operations.py` | 56 | 62.5 | 80.4 |
+| `greenhouse_server/scheduler.py` | 222 | 64.3 | 56.3 |
+| `greenhouse_server/web/routes/configs.py` | 56 | 64.3 | 82.1 |
+| `greenhouse_server/services/health_monitor.py` | 191 | 64.7 | 81.2 |
+| `greenhouse_server/services/efficacy.py` | 37 | 70.0 | 94.6 |
+| `greenhouse_cli/tui/app.py` | 73 | 71.4 | 98.6 |
+| `greenhouse_server/app.py` | 140 | 72.2 | 87.1 |
+| `greenhouse_core/devices/gateway.py` | 146 | 73.2 | 88.4 |
+| `greenhouse_server/services/bulk.py` | 22 | 75.0 | 77.3 |
+| `greenhouse_server/web/routes/auth.py` | 42 | 75.0 | 85.7 |
+| `greenhouse_server/services/sync.py` | 50 | 75.0 | 86.0 |
+| `greenhouse_server/web/routes/preferences.py` | 37 | 75.0 | 89.2 |
+| `greenhouse_server/services/forecast.py` | 75 | 75.0 | 90.7 |
+| `greenhouse_server/web/routes/analytics.py` | 79 | 75.0 | 96.2 |
+| `greenhouse_server/routes/auth.py` | 41 | 75.0 | 97.6 |
+| `greenhouse_server/web/routes/plants.py` | 47 | 75.0 | 97.9 |
+| `greenhouse_server/services/irrigation.py` | 316 | 76.5 | 81.3 |
+| `greenhouse_server/web/routes/irrigators.py` | 126 | 78.6 | 91.3 |
+| `greenhouse_server/routes/irrigators.py` | 79 | 78.6 | 93.7 |
+| `greenhouse_server/services/anomaly.py` | 54 | 78.6 | 94.4 |
+| `greenhouse_cli/tui/screens/cluster.py` | 432 | 78.9 | 95.1 |
+| `greenhouse_server/services/maintenance.py` | 52 | 80.0 | 92.3 |
+| `greenhouse_core/plant_db.py` | 72 | 80.8 | 91.7 |
+| `greenhouse_core/logic/stress.py` | 42 | 81.2 | 88.1 |
+| `greenhouse_server/routes/charts.py` | 47 | 81.2 | 93.6 |
+| `greenhouse_server/services/insights.py` | 40 | 83.3 | 92.5 |
+| `greenhouse_cli/commands/auth.py` | 39 | 83.3 | 94.9 |
+| `greenhouse_cli/tui/screens/activity.py` | 44 | 83.3 | 97.7 |
+| `greenhouse_cli/tui/widgets.py` | 226 | 83.9 | 95.1 |
+| `greenhouse_core/logic/trends.py` | 48 | 84.6 | 93.8 |
+| `greenhouse_server/services/health.py` | 68 | 84.6 | 98.5 |
+| `greenhouse_server/services/manual_control.py` | 63 | 85.0 | 92.1 |
+| `greenhouse_core/repository.py` | 479 | 86.0 | 96.0 |
+| `greenhouse_server/services/charts.py` | 181 | 87.2 | 96.1 |
+| `greenhouse_server/web/routes/clusters.py` | 110 | 87.5 | 95.5 |
+| `greenhouse_server/services/alerts.py` | 69 | 87.5 | 95.7 |
+| `greenhouse_server/services/notify.py` | 42 | 87.5 | 97.6 |
+| `greenhouse_cli/tui/screens/base.py` | 33 | 87.5 | 100.0 |
+| `greenhouse_core/logic/engine.py` | 355 | 88.1 | 93.8 |
+| `greenhouse_server/auth.py` | 148 | 88.2 | 93.9 |
+| `greenhouse_core/logic/plant_needs.py` | 31 | 90.0 | 90.3 |
+| `greenhouse_core/database.py` | 55 | 90.0 | 96.4 |
+| `greenhouse_cli/client.py` | 258 | 90.0 | 96.9 |
+| `greenhouse_cli/tui/model.py` | 91 | 90.0 | 98.9 |
+| `greenhouse_server/routes/operations.py` | 79 | 90.0 | 100.0 |
+| `greenhouse_server/services/system_health.py` | 41 | 90.0 | 100.0 |
+| `greenhouse_core/logic/timing.py` | 68 | 91.2 | 94.1 |
+| `greenhouse_server/services/pump_watcher.py` | 92 | 91.7 | 87.0 |
+| `greenhouse_server/web/routes/windows.py` | 60 | 91.7 | 95.0 |
+| `greenhouse_server/web/routes/vacation.py` | 70 | 91.7 | 95.7 |
+| `greenhouse_server/routes/sensors.py` | 57 | 91.7 | 98.2 |
+| `greenhouse_cli/tui/screens/system.py` | 79 | 91.7 | 98.7 |
+| `greenhouse_core/learning/issues.py` | 131 | 92.1 | 93.9 |
+| `greenhouse_server/web/filters.py` | 90 | 92.9 | 95.6 |
+| `greenhouse_core/logic/fallback.py` | 35 | 92.9 | 97.1 |
+| `greenhouse_core/learning/profiling.py` | 69 | 92.9 | 98.6 |
+| `greenhouse_cli/tui/formatting.py` | 66 | 96.7 | 98.5 |
+| `greenhouse_cli/tui/screens/forms.py` | 97 | 97.2 | 97.9 |
+| `greenhouse_server/web/routes/alerts.py` | 39 | 100.0 | 87.2 |
+| `greenhouse_core/utils.py` | 29 | 100.0 | 89.7 |
+| `greenhouse_server/deps.py` | 60 | 100.0 | 96.7 |
+| `greenhouse_cli/commands/clusters.py` | 21 | 100.0 | 100.0 |
+| `greenhouse_cli/tui/resources.py` | 38 | 100.0 | 100.0 |
+| `greenhouse_cli/tui/screens/dashboard.py` | 55 | 100.0 | 100.0 |
+| `greenhouse_cli/tui/sprites.py` | 124 | 100.0 | 100.0 |
+| `greenhouse_core/devices/registry.py` | 43 | 100.0 | 100.0 |
+| `greenhouse_core/learning/report.py` | 31 | 100.0 | 100.0 |
+| `greenhouse_core/logic/cleaning.py` | 53 | 100.0 | 100.0 |
+| `greenhouse_core/logic/sensors.py` | 35 | 100.0 | 100.0 |
+| `greenhouse_server/config.py` | 61 | 100.0 | 100.0 |
+| `greenhouse_server/routes/alerts.py` | 47 | 100.0 | 100.0 |
+| `greenhouse_server/routes/clusters.py` | 36 | 100.0 | 100.0 |
+| `greenhouse_server/routes/configs.py` | 32 | 100.0 | 100.0 |
+| `greenhouse_server/routes/insights.py` | 12 | 100.0 | 100.0 |
+| `greenhouse_server/routes/vacation.py` | 32 | 100.0 | 100.0 |
+| `greenhouse_server/routes/windows.py` | 47 | 100.0 | 100.0 |
+| `greenhouse_server/services/cluster.py` | 61 | 100.0 | 100.0 |
+| `greenhouse_server/services/data_quality.py` | 46 | 100.0 | 100.0 |
+| `greenhouse_server/services/leak.py` | 70 | 100.0 | 100.0 |
+| `greenhouse_server/services/search.py` | 26 | 100.0 | 100.0 |
+| `greenhouse_server/services/vacation.py` | 28 | 100.0 | 100.0 |
+| `greenhouse_server/web/exception_handlers.py` | 26 | 100.0 | 100.0 |
+| `greenhouse_server/web/routes/quality.py` | 14 | 100.0 | 100.0 |
+| `greenhouse_server/web/templating.py` | 7 | 100.0 | 100.0 |
+| `greenhouse_cli/tui/__init__.py` | 3 | n/a | 66.7 |
+| `greenhouse_server/routes/scheduler.py` | 35 | n/a | 85.7 |
+| `greenhouse_core/devices/sensors/tuya_generic.py` | 18 | n/a | 94.4 |
+| `greenhouse_cli/commands/configs.py` | 23 | n/a | 95.7 |
+| `greenhouse_core/devices/profile.py` | 36 | n/a | 97.2 |
+| `greenhouse_core/logic/decision.py` | 133 | n/a | 99.2 |
+| `greenhouse_cli/__init__.py` | 0 | n/a | 100.0 |
+| `greenhouse_cli/commands/__init__.py` | 0 | n/a | 100.0 |
+| `greenhouse_cli/commands/_helpers.py` | 16 | n/a | 100.0 |
+| `greenhouse_cli/commands/alerts.py` | 20 | n/a | 100.0 |
+| `greenhouse_cli/commands/decisions.py` | 8 | n/a | 100.0 |
+| `greenhouse_cli/commands/preferences.py` | 11 | n/a | 100.0 |
+| `greenhouse_cli/commands/scheduler.py` | 12 | n/a | 100.0 |
+| `greenhouse_cli/commands/tui.py` | 10 | n/a | 100.0 |
+| `greenhouse_cli/main.py` | 35 | n/a | 100.0 |
+| `greenhouse_cli/tui/screens/__init__.py` | 0 | n/a | 100.0 |
+| `greenhouse_core/__init__.py` | 8 | n/a | 100.0 |
+| `greenhouse_core/constants.py` | 100 | n/a | 100.0 |
+| `greenhouse_core/devices/__init__.py` | 18 | n/a | 100.0 |
+| `greenhouse_core/devices/health.py` | 21 | n/a | 100.0 |
+| `greenhouse_core/devices/irrigators/__init__.py` | 4 | n/a | 100.0 |
+| `greenhouse_core/devices/irrigators/base.py` | 16 | n/a | 100.0 |
+| `greenhouse_core/devices/sensors/__init__.py` | 4 | n/a | 100.0 |
+| `greenhouse_core/devices/sensors/base.py` | 12 | n/a | 100.0 |
+| `greenhouse_core/learning/__init__.py` | 3 | n/a | 100.0 |
+| `greenhouse_core/learning/learner.py` | 19 | n/a | 100.0 |
+| `greenhouse_core/learning/models.py` | 32 | n/a | 100.0 |
+| `greenhouse_core/logic/__init__.py` | 3 | n/a | 100.0 |
+| `greenhouse_core/models.py` | 217 | n/a | 100.0 |
+| `greenhouse_server/__init__.py` | 0 | n/a | 100.0 |
+| `greenhouse_server/routes/__init__.py` | 0 | n/a | 100.0 |
+| `greenhouse_server/routes/activity.py` | 9 | n/a | 100.0 |
+| `greenhouse_server/routes/bulk.py` | 11 | n/a | 100.0 |
+| `greenhouse_server/routes/decisions.py` | 9 | n/a | 100.0 |
+| `greenhouse_server/routes/efficacy.py` | 9 | n/a | 100.0 |
+| `greenhouse_server/routes/forecast.py` | 13 | n/a | 100.0 |
+| `greenhouse_server/routes/health.py` | 9 | n/a | 100.0 |
+| `greenhouse_server/routes/preferences.py` | 16 | n/a | 100.0 |
+| `greenhouse_server/routes/quality.py` | 8 | n/a | 100.0 |
+| `greenhouse_server/routes/search.py` | 9 | n/a | 100.0 |
+| `greenhouse_server/routes/well_known.py` | 10 | n/a | 100.0 |
+| `greenhouse_server/services/__init__.py` | 0 | n/a | 100.0 |
+| `greenhouse_server/web/__init__.py` | 0 | n/a | 100.0 |
+| `greenhouse_server/web/router.py` | 26 | n/a | 100.0 |
+| `greenhouse_server/web/routes/__init__.py` | 0 | n/a | 100.0 |
+| `greenhouse_server/web/routes/activity.py` | 21 | n/a | 100.0 |
+| `greenhouse_server/web/routes/decisions.py` | 11 | n/a | 100.0 |
+| `greenhouse_server/web/routes/efficacy.py` | 12 | n/a | 100.0 |
+| `greenhouse_server/web/routes/health_page.py` | 12 | n/a | 100.0 |
+| `greenhouse_server/web/routes/pages.py` | 10 | n/a | 100.0 |
+
 
 ## Housekeeping
 
