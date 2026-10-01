@@ -49,6 +49,24 @@ CLI (pinned in `tests/cli/test_contract_json_output.py`, details in `refactor/10
 - empty `--device-ip` on `irrigator add` is dropped while empty `--local-key` on `irrigator update` is sent;
 - each call opens an `httpx` client that is never closed.
 
+Devices / ingress / auth (pinned; details in `refactor/10-safety-ingress-devices.md`):
+- B-2 confirmed by test: `test_keepalive_off_main_thread_current_behavior_leaves_pump_on`,
+  `test_start_off_main_thread_current_behavior_raises_after_switching_on` (ON sent, `ValueError`, OFF never sent).
+- B-3 reproduced: a healthy sensor is flagged offline 31 min after every sync; the alert re-opens and only notifies the
+  first time (`test_sensor_offline_flap_current_behavior_flags_offline_31min_after_every_sync`).
+- B-21: a humidity-only live environment reading is dropped.
+- `verify_password` raises `VerificationError` on a truncated stored hash instead of returning `False` (login → 500).
+- The weather forecast cache ignores `hours` within its 600 s window.
+
+Settings / schema (pinned; details in `refactor/10-safety-contracts-static.md`):
+- `GREENHOUSE_*`-aliased settings (MCP token, ntfy, auth secret/admin) are also read from the bare field name and from
+  `IRRIGATION_<FIELD>` (e.g. `MCP_TOKEN` or `IRRIGATION_AUTH_SECRET_KEY` configure the server).
+- The migrated schema differs from `Base.metadata.create_all`: migrations add four server defaults and two named unique
+  constraints, so `tmp_db`-based tests run on a slightly different schema than production.
+- Test infra: every `create_app` replaces root log handlers, so `caplog` sees nothing afterwards.
+- Pre-existing pytest quirk: `tests/server/X tests/<core file> tests/server/Y` on one command line → "fixture 'client'
+  not found" for Y; group test paths by directory.
+
 ## Golden-test policy (orchestrator decision)
 
 - OpenAPI, routes, MCP tools, settings, DDL, scheduler registry, package data, web HTML, CLI help/output, TUI renders,
