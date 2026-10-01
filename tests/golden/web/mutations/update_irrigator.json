@@ -1,0 +1,42 @@
+{
+ "body_lines": [
+  ""
+ ],
+ "db_effect": {
+  "irrigators": {
+   "changed": {
+    "1": {
+     "config": [
+      "{\"device_ip\": \"192.0.2.1\", \"local_key\": \"fakelocalkeyxxxx\"}",
+      "{\"device_ip\": \"192.0.2.9\", \"local_key\": \"fakelocalkeyxxxx\"}"
+     ],
+     "name": [
+      "Jungle Pump",
+      "Jungle Pump v2"
+     ]
+    }
+   }
+  }
+ },
+ "device_calls": {
+  "irrigator": [],
+  "sensor": []
+ },
+ "headers": {
+  "location": "/clusters/1#irrigators"
+ },
+ "request": {
+  "form": {
+   "device_ip": "192.0.2.9",
+   "local_key": "",
+   "name": "Jungle Pump v2",
+   "reservoir_l": "",
+   "type": "rainpoint.ik10pw"
+  },
+  "headers": {},
+  "method": "POST",
+  "url": "/clusters/1/irrigators/edit"
+ },
+ "status": 303,
+ "templates": []
+}

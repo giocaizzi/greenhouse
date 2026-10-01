@@ -1,0 +1,59 @@
+{
+ "body_lines": [
+  "<article class=\"card error-panel\">",
+  "  <div class=\"card__head\">",
+  "    <h3 class=\"card__title\">",
+  "      <span class=\"badge-danger\">Error 409</span>",
+  "    </h3>",
+  "  </div>",
+  "  <div class=\"card__body\">",
+  "    <p>Job check_all is a built-in scheduler job and cannot be deleted. To stop automatic irrigation checks use POST /api/v1/scheduler/pause (resume with POST /api/v1/scheduler/resume).</p>",
+  "    ",
+  "  </div>",
+  "</article>"
+ ],
+ "db_effect": {},
+ "device_calls": {
+  "irrigator": [],
+  "sensor": []
+ },
+ "headers": {
+  "content-type": "text/html; charset=utf-8"
+ },
+ "request": {
+  "form": null,
+  "headers": {
+   "HX-Request": "true"
+  },
+  "method": "POST",
+  "url": "/scheduler/jobs/check_all/delete"
+ },
+ "scheduler_jobs_after": [
+  "adhoc_contract_job",
+  "check_all",
+  "device_health_monitor",
+  "plant_health_snapshot",
+  "sensor_anomaly",
+  "sensor_sync"
+ ],
+ "status": 409,
+ "templates": [
+  [
+   "_error.html",
+   [
+    "active_vacation",
+    "app_version",
+    "auth_enabled",
+    "detail",
+    "dry_run_global",
+    "is_hx",
+    "now_text",
+    "request",
+    "scheduler_paused",
+    "show_chrome",
+    "status_code",
+    "theme"
+   ]
+  ]
+ ]
+}

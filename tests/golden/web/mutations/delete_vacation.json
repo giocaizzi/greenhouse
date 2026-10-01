@@ -1,0 +1,27 @@
+{
+ "body_lines": [
+  ""
+ ],
+ "db_effect": {
+  "vacation_windows": {
+   "removed": [
+    "2"
+   ]
+  }
+ },
+ "device_calls": {
+  "irrigator": [],
+  "sensor": []
+ },
+ "headers": {
+  "location": "/vacation"
+ },
+ "request": {
+  "form": null,
+  "headers": {},
+  "method": "POST",
+  "url": "/vacation/2/delete"
+ },
+ "status": 303,
+ "templates": []
+}

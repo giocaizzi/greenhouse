@@ -1,0 +1,49 @@
+{
+ "body_lines": [
+  ""
+ ],
+ "db_effect": {
+  "plants": {
+   "removed": [
+    "3"
+   ]
+  },
+  "sensor_assignments": {
+   "changed": {
+    "3": {
+     "ended_at": [
+      null,
+      1776247200
+     ]
+    }
+   }
+  },
+  "sensors": {
+   "changed": {
+    "3": {
+     "plant_id": [
+      3,
+      null
+     ]
+    }
+   }
+  }
+ },
+ "device_calls": {
+  "irrigator": [],
+  "sensor": []
+ },
+ "headers": {
+  "content-type": "text/html; charset=utf-8"
+ },
+ "request": {
+  "form": null,
+  "headers": {
+   "HX-Request": "true"
+  },
+  "method": "DELETE",
+  "url": "/clusters/2/plants/3"
+ },
+ "status": 200,
+ "templates": []
+}

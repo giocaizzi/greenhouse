@@ -1,0 +1,23 @@
+<!-- GET /clusters/1/chart-fragment -->
+<!-- status: 200 -->
+<!-- content-type: text/html; charset=utf-8 -->
+
+<div id="chart-container-soil_moisture" class="chart-container">
+  <canvas id="chart-soil_moisture"></canvas>
+  <script type="application/json" id="chart-data-soil_moisture">{"metric": "soil_moisture", "hours": 24, "datasets": [{"sensor_id": 2, "sensor_name": "Alocasia Probe", "points": [[1776166200, 12.4], [1776173400, 12.0], [1776180600, 11.6], [1776187800, 11.2], [1776195000, 10.8], [1776202200, 10.4], [1776209400, 10.0], [1776216600, 9.6], [1776223800, 9.2], [1776231000, 8.8], [1776238200, 8.4], [1776245400, 8.0]]}, {"sensor_id": 1, "sensor_name": "Monstera Probe", "points": [[1776166200, 55.5], [1776173400, 55.0], [1776180600, 54.5], [1776187800, 54.0], [1776195000, 53.5], [1776202200, 53.0], [1776209400, 97.0], [1776216600, 52.0], [1776223800, 51.5], [1776231000, 51.0], [1776238200, 50.5], [1776245400, 50.0]]}], "events": [{"timestamp": 1776218400, "action": "start", "duration_minutes": 2}, {"timestamp": 1776218520, "action": "off", "duration_minutes": null}], "threshold": {"min": 45.0, "max": 65.0, "source": "default"}}</script>
+  <script>
+    (function () {
+      var el = document.getElementById('chart-soil_moisture');
+      var raw = document.getElementById('chart-data-soil_moisture');
+      if (!el || !raw) return;
+      var data = JSON.parse(raw.textContent);
+      function draw() {
+        if (typeof window.renderIrrigationChart === 'function') {
+          window.renderIrrigationChart(el, data);
+        }
+      }
+      if (window.Chart) { draw(); }
+      else { window.addEventListener('load', draw); }
+    })();
+  </script>
+</div>

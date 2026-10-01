@@ -1,0 +1,29 @@
+{
+ "body_lines": [
+  ""
+ ],
+ "db_effect": {
+  "irrigation_windows": {
+   "removed": [
+    "1"
+   ]
+  }
+ },
+ "device_calls": {
+  "irrigator": [],
+  "sensor": []
+ },
+ "headers": {
+  "content-type": "text/html; charset=utf-8"
+ },
+ "request": {
+  "form": null,
+  "headers": {
+   "HX-Request": "true"
+  },
+  "method": "DELETE",
+  "url": "/clusters/2/windows/1"
+ },
+ "status": 200,
+ "templates": []
+}

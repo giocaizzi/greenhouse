@@ -1,0 +1,23 @@
+{
+ "body_lines": [
+  "Internal Server Error"
+ ],
+ "db_effect": {},
+ "device_calls": {
+  "irrigator": [],
+  "sensor": []
+ },
+ "headers": {
+  "content-type": "text/plain; charset=utf-8"
+ },
+ "request": {
+  "form": {
+   "duration_minutes": "abc"
+  },
+  "headers": {},
+  "method": "POST",
+  "url": "/clusters/1/config"
+ },
+ "status": 500,
+ "templates": []
+}

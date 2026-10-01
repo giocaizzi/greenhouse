@@ -1,0 +1,1219 @@
+<!-- GET /clusters/2 -->
+<!-- status: 200 -->
+<!-- content-type: text/html; charset=utf-8 -->
+
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <title>Balcony Orchard · Greenhouse</title>
+
+  <link rel="preload" href="/static/fonts/Geist[wght].woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/static/fonts/GeistMono[wght].woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/static/app.css">
+
+  <script>
+    // Early theme application — runs before body paint to avoid flash.
+    // The <html> tag is already server-rendered with the persisted preference;
+    // localStorage (if present) takes precedence for instant client paint.
+    (function () {
+      try {
+        var t = localStorage.getItem('theme');
+        if (t) document.documentElement.setAttribute('data-theme', t);
+      } catch (e) {}
+    })();
+  </script>
+
+  <script src="https://unpkg.com/htmx.org@2.0.3" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js" defer></script>
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+
+<a class="skip-link" href="#main">Skip to content</a>
+
+<div id="page-progress" class="page-progress" aria-hidden="true"></div>
+
+
+
+
+
+
+<header class="topbar">
+  <div class="container topbar__inner">
+    <a href="/" class="brand" aria-label="Irrigation home">
+      <span class="brand__mark"><svg class="icon"><use href="/static/icons/sprite.svg#i-leaf"></use></svg></span>
+      Irrigation
+    </a>
+    <nav class="topnav" aria-label="Primary">
+      <a href="/">Today</a>
+      <a href="/clusters">Spaces</a>
+      <a href="/activity">Activity</a>
+      <a href="/scheduler">Scheduler</a>
+      <details class="topnav__more">
+        <summary aria-label="More pages">More</summary>
+        <div class="topnav__menu">
+          <a href="/vacation">Vacation</a>
+          <a href="/health">Health</a>
+          <a href="/quality">Data quality</a>
+          <a href="/preferences">Preferences</a>
+        </div>
+      </details>
+    </nav>
+    <span class="topbar__spacer"></span>
+    <a
+      class="bell"
+      href="/alerts"
+      aria-label="Open alerts"
+      hx-get="/alerts/badge"
+      hx-trigger="load, every 60s"
+      hx-swap="innerHTML">
+      <svg class="icon" aria-hidden="true"><use href="/static/icons/sprite.svg#i-bell"></use></svg>
+    </a>
+    <button
+      class="icon-btn"
+      type="button"
+      aria-label="Open command palette"
+      title="Search (⌘K)"
+      onclick="window.openCmdK && window.openCmdK()">
+      <svg class="icon" aria-hidden="true"><use href="/static/icons/sprite.svg#i-magnifying-glass"></use></svg>
+    </button>
+    <button
+      id="theme-toggle"
+      class="icon-btn"
+      type="button"
+      aria-label="Toggle theme"
+      title="Toggle theme"
+      onclick="(function(){var h=document.documentElement;var cur=h.getAttribute('data-theme');var next=cur==='light'?'dark':(cur==='dark'?'light':(window.matchMedia('(prefers-color-scheme: light)').matches?'dark':'light'));h.setAttribute('data-theme',next);try{localStorage.setItem('theme',next);}catch(e){}if(window.__rerenderCharts){window.__rerenderCharts();}try{fetch('/preferences/theme',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'theme='+encodeURIComponent(next)});}catch(e){}})()">
+      <svg class="icon icon-moon" aria-hidden="true"><use href="/static/icons/sprite.svg#i-moon"></use></svg>
+      <svg class="icon icon-sun" aria-hidden="true"><use href="/static/icons/sprite.svg#i-sun"></use></svg>
+    </button>
+    
+    <form method="post" action="/logout" class="inline">
+      <button class="icon-btn" type="submit" aria-label="Sign out" title="Sign out">
+        <svg class="icon" aria-hidden="true"><use href="/static/icons/sprite.svg#i-x"></use></svg>
+        <span class="visually-hidden">Sign out</span>
+      </button>
+    </form>
+    
+  </div>
+</header>
+
+
+<main class="container" id="main">
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+  
+  
+
+
+<div class="crumb">
+  <a href="/">home</a><span class="sep">/</span>
+  <a href="/clusters">clusters</a><span class="sep">/</span>
+  <span class="here">balcony orchard</span>
+</div>
+
+<section class="page-head">
+  <div class="page-head__title">
+    <h1>Balcony Orchard</h1>
+    <div class="page-head__meta">
+      <span>outdoor</span><span class="dot"></span>
+      <span>Balcony</span>
+      <span class="dot"></span>
+      <span>1 plant</span>
+      <span class="dot"></span>
+      <span>1 sensor</span>
+      
+      
+        <span class="dot"></span>
+        <span class="badge-muted">auto off</span>
+      
+    </div>
+  </div>
+  <div class="page-head__actions">
+    <a href="/clusters/2/edit" class="btn secondary btn-sm">Edit</a>
+    
+    <a href="#actions" class="btn secondary btn-sm">
+      <svg class="icon" aria-hidden="true"><use href="/static/icons/sprite.svg#i-drop"></use></svg>
+      Jump to actions
+    </a>
+    
+  </div>
+</section>
+
+
+
+<nav class="tabs" aria-label="Cluster sections">
+  <a href="/clusters/2" aria-current="page">Overview</a>
+  <a href="/clusters/2/history">History</a>
+  
+  <a href="/clusters/2/stats">Stats</a>
+  <a href="/clusters/2/decisions">Decisions</a>
+  <a href="/clusters/2/efficacy">Efficacy</a>
+  <a href="/clusters/2/learn">Learn</a>
+  
+</nav>
+
+
+
+
+
+
+
+
+<section class="decision" id="decision">
+  <div class="decision__left">
+    <span class="decision__pill">Decision · live</span>
+    <h2 class="decision__verb">
+      Skip<span class="muted">.</span>
+    </h2>
+    
+      <p class="decision__why">outside configured watering window</p>
+    
+    <div class="row row--g2">
+      <span class="badge-muted">90% confidence</span>
+      <span class="badge-muted">2 min</span>
+      
+    </div>
+  </div>
+  
+  <aside class="decision__side">
+    <h3>Schedule</h3>
+    <dl>
+      <dt>Mode</dt><dd><kbd>None</kbd></dd>
+      <dt>Duration</dt><dd>5 min</dd>
+      
+      <dt>Auto-run</dt><dd>off</dd>
+      <dt>Sensors</dt><dd>1</dd>
+      <dt>Irrigators</dt><dd>1</dd>
+    </dl>
+    <a href="/clusters/2/config" class="btn secondary mt-2">Edit config</a>
+  </aside>
+  
+</section>
+
+
+
+
+<article class="card rationale mb-6">
+  <div class="card__head">
+    <h3 class="card__title">Why this decision</h3>
+    <a href="/clusters/2/learn" class="btn secondary fs-xs">All insights</a>
+  </div>
+  <div class="card__body" style="padding: var(--sp-3) var(--sp-5);">
+    
+      
+        
+        
+        
+        <div class="rationale__row" data-severity="info">
+          <span class="rationale__icon">
+            <svg class="icon" aria-hidden="true"><use href="/static/icons/sprite.svg#i-check"></use></svg>
+          </span>
+          <span class="rationale__msg">Soil moisture adequate</span>
+          
+        </div>
+      
+    
+  </div>
+</article>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<section class="stat-grid">
+  
+  
+  
+  
+  
+  
+  
+  
+  <div class="stat stat--danger">
+    <div class="stat__row">
+      <span class="stat__label"><svg class="icon" aria-hidden="true"><use href="/static/icons/sprite.svg#i-drop"></use></svg>Soil moisture</span>
+      <span class="stat__state">below target</span>
+    </div>
+    <div class="stat__value">
+      35.0<span class="unit">%</span>
+    </div>
+    
+      
+      <div class="stat__range" style="
+        --from: 25.0%;
+        --to:   75.0%;
+        --at:   0%;
+      "></div>
+      <div class="stat__hint">
+        <span>35%</span>
+        <span class="target">target 45–65%</span>
+        <span>75%</span>
+      </div>
+    
+  </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  <div class="stat stat--ok">
+    <div class="stat__row">
+      <span class="stat__label"><svg class="icon" aria-hidden="true"><use href="/static/icons/sprite.svg#i-thermometer-simple"></use></svg>Temperature</span>
+      <span class="stat__state">in range</span>
+    </div>
+    <div class="stat__value">
+      16.0<span class="unit">°C</span>
+    </div>
+    
+      <div class="stat__hint"><span>ambient</span></div>
+    
+  </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  <div class="stat stat--ok">
+    <div class="stat__row">
+      <span class="stat__label"><svg class="icon" aria-hidden="true"><use href="/static/icons/sprite.svg#i-drop"></use></svg>Humidity</span>
+      <span class="stat__state">in range</span>
+    </div>
+    <div class="stat__value">
+      70<span class="unit">%</span>
+    </div>
+    
+      <div class="stat__hint"><span>relative</span></div>
+    
+  </div>
+
+  
+  <div class="stat">
+    <div class="stat__row">
+      <span class="stat__label"><svg class="icon" aria-hidden="true"><use href="/static/icons/sprite.svg#i-sun"></use></svg>Light</span>
+    </div>
+    <div class="stat__value">
+      20000<span class="unit">lx</span>
+    </div>
+    <div class="stat__hint"><span>illuminance</span></div>
+  </div>
+</section>
+
+
+
+
+<article class="action-bar" id="actions" aria-labelledby="cluster-actions">
+  <header>
+    <strong id="cluster-actions">Actions</strong>
+    <small>Run the irrigation engine, refresh sensor readings, or re-evaluate this cluster.</small>
+    
+  </header>
+  <div class="action-bar__row">
+    
+    <form id="irrigate-form"
+          hx-post="/clusters/2/irrigate"
+          hx-target="#action-result"
+          hx-swap="innerHTML"
+          hx-indicator="#spin-irrigate"
+          hx-confirm="Run irrigation on Balcony Orchard? With dry-run off this actuates hardware and waters for real."
+          class="action-bar__form action-bar__form--primary">
+      <span class="action-bar__label">
+        <svg class="icon" aria-hidden="true"><use href="/static/icons/sprite.svg#i-drop"></use></svg>
+        Irrigate
+      </span>
+      <div class="action-bar__inputs col col--g2" style="align-items: stretch;">
+        <label class="check-label m-0">
+          <input type="checkbox" id="irrigate-dry" name="dry_run" value="on" checked> <small>Dry run — preview the decision without watering</small>
+        </label>
+        <label class="check-label m-0">
+          <input type="checkbox" name="no_sync" value="on"> <small>Skip cloud sync before deciding</small>
+        </label>
+        <label class="check-label m-0">
+          <small>Temperature override (°C)</small>
+          <input type="number" step="0.1" name="temp_override" placeholder="°C" aria-label="Temperature override in degrees Celsius" class="action-bar__num" style="width: 90px;">
+        </label>
+        
+        <input type="hidden" name="force" value="false">
+        <div class="row row--g2">
+          <button type="submit" id="irrigate-submit"
+                  data-dry-label="Preview decision" data-live-label="Irrigate now">Preview decision</button>
+          <span id="spin-irrigate" class="htmx-indicator" aria-busy="true"></span>
+        </div>
+        <small id="irrigate-state" class="fs-xs muted" aria-live="polite">Dry-run is on — previews the decision, no watering.</small>
+      </div>
+    </form>
+    
+    <script>
+      (function () {
+        var form = document.getElementById('irrigate-form');
+        var dry = document.getElementById('irrigate-dry');
+        var btn = document.getElementById('irrigate-submit');
+        var state = document.getElementById('irrigate-state');
+        if (!dry || !btn) return;
+        function sync() {
+          var live = !dry.checked;
+          btn.textContent = live ? btn.dataset.liveLabel : btn.dataset.dryLabel;
+          btn.classList.toggle('danger', live);
+          if (state) {
+            state.textContent = live
+              ? 'Dry-run is off — this will run real irrigation now.'
+              : 'Dry-run is on — previews the decision, no watering.';
+          }
+        }
+        dry.addEventListener('change', sync);
+        sync();
+        // Precise per-state confirm when JS is available; the form's static
+        // hx-confirm stays the safe-side fallback when it is not.
+        if (form) form.addEventListener('htmx:confirm', function (e) {
+          e.preventDefault();
+          var msg = dry.checked
+            ? 'Preview the decision for Balcony Orchard? No water will run.'
+            : 'Run real irrigation on Balcony Orchard now? This actuates hardware.';
+          
+          if (window.confirm(msg)) e.detail.issueRequest(true);
+        });
+      })();
+    </script>
+    
+
+    
+    <form hx-get="/clusters/2/monitor"
+          hx-target="#action-result"
+          hx-swap="innerHTML"
+          hx-indicator="#spin-monitor"
+          class="action-bar__form">
+      <span class="action-bar__label">
+        <svg class="icon" aria-hidden="true"><use href="/static/icons/sprite.svg#i-magnifying-glass"></use></svg>
+        Refresh sensors
+      </span>
+      <div class="action-bar__inputs">
+        <button type="submit" class="secondary">Refresh readings</button>
+        <span id="spin-monitor" class="htmx-indicator" aria-busy="true"></span>
+      </div>
+    </form>
+    
+
+    
+    <form hx-post="/clusters/2/check"
+          hx-target="#action-result"
+          hx-swap="innerHTML"
+          hx-indicator="#spin-check"
+          class="action-bar__form">
+      <span class="action-bar__label">
+        <svg class="icon" aria-hidden="true"><use href="/static/icons/sprite.svg#i-check"></use></svg>
+        Re-evaluate
+      </span>
+      <div class="action-bar__inputs">
+        <button type="submit" class="secondary">Evaluate now</button>
+        <span id="spin-check" class="htmx-indicator" aria-busy="true"></span>
+      </div>
+    </form>
+    
+  </div>
+  <div id="action-result" aria-live="polite"></div>
+</article>
+
+
+
+
+<article class="card mb-6">
+  <div class="card__head">
+    <h3 class="card__title">Live status</h3>
+    <small class="muted">auto-refresh 30s</small>
+  </div>
+  <div hx-get="/clusters/2/status-fragment"
+       hx-trigger="load, every 30s"
+       hx-swap="innerHTML"
+       style="padding: var(--sp-4) var(--sp-5);">
+    <progress></progress>
+  </div>
+</article>
+
+
+
+
+<section class="chart-section">
+  <header class="chart-section__head">
+    <h2>Charts</h2>
+    <nav class="seg" aria-label="Time range">
+      
+        
+          <strong>24h</strong>
+        
+      
+        
+          <a href="/clusters/2?hours=168">168h</a>
+        
+      
+        
+          <a href="/clusters/2?hours=720">720h</a>
+        
+      
+    </nav>
+  </header>
+  
+    
+    <article class="card chart-card">
+      <header class="chart-head">
+        <div class="chart-title">
+          <h3>Soil Moisture</h3>
+        </div>
+      </header>
+      <div class="chart-body">
+        <div id="chart-container-soil_moisture" class="chart-container">
+  <canvas id="chart-soil_moisture"></canvas>
+  <script type="application/json" id="chart-data-soil_moisture">{"metric": "soil_moisture", "hours": 24, "datasets": [{"sensor_id": 3, "sensor_name": "Loquat Probe", "points": [[1776166200, 38.3], [1776173400, 38.0], [1776180600, 37.7], [1776187800, 37.4], [1776195000, 37.1], [1776202200, 36.8], [1776209400, 36.5], [1776216600, 36.2], [1776223800, 35.9], [1776231000, 35.6], [1776238200, 35.3], [1776245400, 35.0]]}], "events": [{"timestamp": 1776175200, "action": "start", "duration_minutes": 5}, {"timestamp": 1776175205, "action": "schedule_updated", "duration_minutes": null}], "threshold": {"min": 45.0, "max": 65.0, "source": "default"}}</script>
+  <script>
+    (function () {
+      var el = document.getElementById('chart-soil_moisture');
+      var raw = document.getElementById('chart-data-soil_moisture');
+      if (!el || !raw) return;
+      var data = JSON.parse(raw.textContent);
+      function draw() {
+        if (typeof window.renderIrrigationChart === 'function') {
+          window.renderIrrigationChart(el, data);
+        }
+      }
+      if (window.Chart) { draw(); }
+      else { window.addEventListener('load', draw); }
+    })();
+  </script>
+</div>
+      </div>
+    </article>
+  
+    
+    <article class="card chart-card">
+      <header class="chart-head">
+        <div class="chart-title">
+          <h3>Temperature</h3>
+        </div>
+      </header>
+      <div class="chart-body">
+        <div id="chart-container-temperature" class="chart-container">
+  <canvas id="chart-temperature"></canvas>
+  <script type="application/json" id="chart-data-temperature">{"metric": "temperature", "hours": 24, "datasets": [{"sensor_id": 3, "sensor_name": "Loquat Probe", "points": [[1776166200, 17.0], [1776173400, 16.0], [1776180600, 20.0], [1776187800, 19.0], [1776195000, 18.0], [1776202200, 17.0], [1776209400, 16.0], [1776216600, 20.0], [1776223800, 19.0], [1776231000, 18.0], [1776238200, 17.0], [1776245400, 16.0]]}], "events": [{"timestamp": 1776175200, "action": "start", "duration_minutes": 5}, {"timestamp": 1776175205, "action": "schedule_updated", "duration_minutes": null}], "threshold": {"min": null, "max": null, "source": "none"}}</script>
+  <script>
+    (function () {
+      var el = document.getElementById('chart-temperature');
+      var raw = document.getElementById('chart-data-temperature');
+      if (!el || !raw) return;
+      var data = JSON.parse(raw.textContent);
+      function draw() {
+        if (typeof window.renderIrrigationChart === 'function') {
+          window.renderIrrigationChart(el, data);
+        }
+      }
+      if (window.Chart) { draw(); }
+      else { window.addEventListener('load', draw); }
+    })();
+  </script>
+</div>
+      </div>
+    </article>
+  
+    
+    <article class="card chart-card">
+      <header class="chart-head">
+        <div class="chart-title">
+          <h3>Env Humidity</h3>
+        </div>
+      </header>
+      <div class="chart-body">
+        <div id="chart-container-env_humidity" class="chart-container">
+  <canvas id="chart-env_humidity"></canvas>
+  <script type="application/json" id="chart-data-env_humidity">{"metric": "env_humidity", "hours": 24, "datasets": [{"sensor_id": 3, "sensor_name": "Loquat Probe", "points": [[1776166200, 65.0], [1776173400, 66.0], [1776180600, 67.0], [1776187800, 68.0], [1776195000, 69.0], [1776202200, 70.0], [1776209400, 65.0], [1776216600, 66.0], [1776223800, 67.0], [1776231000, 68.0], [1776238200, 69.0], [1776245400, 70.0]]}], "events": [{"timestamp": 1776175200, "action": "start", "duration_minutes": 5}, {"timestamp": 1776175205, "action": "schedule_updated", "duration_minutes": null}], "threshold": {"min": null, "max": null, "source": "none"}}</script>
+  <script>
+    (function () {
+      var el = document.getElementById('chart-env_humidity');
+      var raw = document.getElementById('chart-data-env_humidity');
+      if (!el || !raw) return;
+      var data = JSON.parse(raw.textContent);
+      function draw() {
+        if (typeof window.renderIrrigationChart === 'function') {
+          window.renderIrrigationChart(el, data);
+        }
+      }
+      if (window.Chart) { draw(); }
+      else { window.addEventListener('load', draw); }
+    })();
+  </script>
+</div>
+      </div>
+    </article>
+  
+    
+    <article class="card chart-card">
+      <header class="chart-head">
+        <div class="chart-title">
+          <h3>Light</h3>
+        </div>
+      </header>
+      <div class="chart-body">
+        <div id="chart-container-light" class="chart-container">
+  <canvas id="chart-light"></canvas>
+  <script type="application/json" id="chart-data-light">{"metric": "light", "hours": 24, "datasets": [{"sensor_id": 3, "sensor_name": "Loquat Probe", "points": [[1776166200, 18900.0], [1776173400, 19000.0], [1776180600, 19100.0], [1776187800, 19200.0], [1776195000, 19300.0], [1776202200, 19400.0], [1776209400, 19500.0], [1776216600, 19600.0], [1776223800, 19700.0], [1776231000, 19800.0], [1776238200, 19900.0], [1776245400, 20000.0]]}], "events": [{"timestamp": 1776175200, "action": "start", "duration_minutes": 5}, {"timestamp": 1776175205, "action": "schedule_updated", "duration_minutes": null}], "threshold": {"min": null, "max": null, "source": "none"}}</script>
+  <script>
+    (function () {
+      var el = document.getElementById('chart-light');
+      var raw = document.getElementById('chart-data-light');
+      if (!el || !raw) return;
+      var data = JSON.parse(raw.textContent);
+      function draw() {
+        if (typeof window.renderIrrigationChart === 'function') {
+          window.renderIrrigationChart(el, data);
+        }
+      }
+      if (window.Chart) { draw(); }
+      else { window.addEventListener('load', draw); }
+    })();
+  </script>
+</div>
+      </div>
+    </article>
+  
+
+  <article class="card chart-card"
+           hx-get="/clusters/2/overlay-fragment?hours=72"
+           hx-trigger="load"
+           hx-swap="innerHTML">
+    <header class="chart-head"><h3>Multi-metric overlay (72h)</h3></header>
+    <div class="chart-body skeleton"><div class="skeleton__line med"></div><div class="skeleton__line short"></div></div>
+  </article>
+
+  
+  <article class="card chart-card"
+           hx-get="/clusters/2/heatmap-fragment?days=30"
+           hx-trigger="load"
+           hx-swap="innerHTML">
+    <header class="chart-head"><h3>Irrigation heatmap (30d)</h3></header>
+    <div class="chart-body skeleton"><div class="skeleton__line med"></div></div>
+  </article>
+  
+</section>
+
+
+
+<article class="card card--flush" id="plants">
+  <div class="card__head">
+    <h3 class="card__title">Plants <span class="n">1</span></h3>
+    <a href="/clusters/2/plants/new" class="btn secondary">
+      <svg class="icon" aria-hidden="true"><use href="/static/icons/sprite.svg#i-plus"></use></svg>
+      Add plant
+    </a>
+  </div>
+  
+  <table>
+    <thead><tr><th scope="col">Species</th><th scope="col">Category</th><th scope="col">Water</th><th scope="col">Light</th><th scope="col"><span class="visually-hidden">Actions</span></th></tr></thead>
+    <tbody>
+      
+        <tr id="plant-row-3">
+  <td data-th="Species"><i class="species">Eriobotrya japonica</i></td>
+  <td data-th="Category">fruit_tree</td>
+  <td data-th="Water">medium</td>
+  <td data-th="Light">—</td>
+  <td data-th="Actions">
+    <div class="row-actions">
+      <a href="/clusters/2/plants/3" class="btn secondary btn-sm" aria-label="Open Eriobotrya japonica">Open<svg class="icon icon--sm"><use href="/static/icons/sprite.svg#i-arrow-right"></use></svg></a>
+      <a href="/clusters/2/plants/3/edit" class="btn secondary btn-sm" aria-label="Edit Eriobotrya japonica">Edit</a>
+      <button class="btn secondary btn-sm row-actions__danger"
+              type="button"
+              aria-label="Delete Eriobotrya japonica"
+              hx-delete="/clusters/2/plants/3"
+              hx-target="#plant-row-3"
+              hx-swap="outerHTML swap:200ms"
+              hx-confirm="Delete plant &quot;Eriobotrya japonica&quot;?">
+        <svg class="icon icon--sm"><use href="/static/icons/sprite.svg#i-trash"></use></svg>
+        Delete
+      </button>
+    </div>
+  </td>
+</tr>
+      
+    </tbody>
+  </table>
+  
+</article>
+
+
+<article class="card card--flush" id="sensors">
+  <div class="card__head">
+    <h3 class="card__title">Sensors <span class="n">1</span></h3>
+    <a href="/clusters/2/sensors/new" class="btn secondary">
+      <svg class="icon" aria-hidden="true"><use href="/static/icons/sprite.svg#i-plus"></use></svg>
+      Add sensor
+    </a>
+  </div>
+  
+  <table aria-label="Sensors in Balcony Orchard">
+    <thead>
+      <tr>
+        <th scope="col">Name</th>
+        <th scope="col">Type</th>
+        <th scope="col">Linked plant</th>
+        <th scope="col">Latest reading</th>
+        <th scope="col">Age</th>
+        <th scope="col"><span class="visually-hidden">Actions</span></th>
+      </tr>
+    </thead>
+    <tbody>
+      
+        
+        <tr id="sensor-row-3">
+          <td data-th="Name">Loquat Probe</td>
+          <td data-th="Type"><kbd>soil_moisture</kbd></td>
+          <td data-th="Linked plant">
+            
+              <span class="rel-arrow" aria-hidden="true">↳</span>
+              <a href="/clusters/2/plants/3">Eriobotrya japonica</a>
+            
+          </td>
+          <td data-th="Latest reading" class="mono">
+            35%
+          </td>
+          <td data-th="Age">
+            stale
+          </td>
+          <td data-th="Actions">
+            <div class="row-actions">
+              <a href="/clusters/2/sensors/3/edit" class="btn secondary btn-sm" aria-label="Edit sensor 3">Edit</a>
+              <button class="btn secondary btn-sm row-actions__danger"
+                      type="button"
+                      aria-label="Delete sensor 3"
+                      hx-delete="/clusters/2/sensors/3"
+                      hx-target="#sensor-row-3"
+                      hx-swap="outerHTML swap:200ms"
+                      hx-confirm="Delete sensor Loquat Probe?">
+                Delete
+              </button>
+            </div>
+          </td>
+        </tr>
+      
+    </tbody>
+  </table>
+  
+</article>
+
+
+<article class="card card--flush" id="irrigators">
+  <div class="card__head">
+    <h3 class="card__title">Irrigator <span class="n">1</span></h3>
+    
+  </div>
+  
+  <table>
+    <thead><tr><th scope="col">Name</th><th scope="col">Type</th><th scope="col">Recent (48h)</th><th scope="col">Last action</th><th scope="col">Controls</th><th scope="col"><span class="visually-hidden">Manage</span></th></tr></thead>
+    <tbody>
+      
+      <tr id="irrigator-row-2">
+  <td data-th="Name">
+    <strong>Balcony Valve</strong>
+    
+      <small class="muted" style="display:block;">— no reservoir set</small>
+    
+  </td>
+  <td data-th="Type"><small class="muted">tuya_cloud</small></td>
+  <td data-th="Recent (48h)"><span class="mono">2</span></td>
+  <td data-th="Last action">
+    
+      <small class="mono">schedule_updated</small>
+      <small class="muted"> · 2026-04-14 14:00</small>
+    
+  </td>
+  <td data-th="Controls">
+    <div class="irr-controls">
+      <form hx-post="/irrigators/2/start"
+            hx-target="#irr-action-2"
+            hx-swap="innerHTML"
+            hx-indicator="#irr-spin-2"
+            hx-confirm="Start Balcony Valve now?"
+            class="irr-controls__form">
+        <label for="irr-mins-2" class="visually-hidden">Minutes</label>
+        <input id="irr-mins-2" type="number" name="minutes" placeholder="min" min="1" class="irr-controls__num" aria-label="Minutes">
+        <button type="submit" class="btn-sm">
+          <svg class="icon icon--xs"><use href="/static/icons/sprite.svg#i-play"></use></svg>
+          Start
+        </button>
+      </form>
+      <form hx-post="/irrigators/2/stop"
+            hx-target="#irr-action-2"
+            hx-swap="innerHTML"
+            hx-indicator="#irr-spin-2"
+            hx-confirm="Stop Balcony Valve?"
+            class="irr-controls__form">
+        <button type="submit" class="secondary btn-sm" aria-label="Stop Balcony Valve">
+          <svg class="icon icon--xs"><use href="/static/icons/sprite.svg#i-stop"></use></svg>
+          Stop
+        </button>
+      </form>
+      <a href="/irrigators/2/log-manual" class="btn secondary btn-sm">Log</a>
+      <span id="irr-spin-2" class="htmx-indicator" aria-busy="true"></span>
+      <div id="irr-action-2" class="irr-controls__result"></div>
+    </div>
+  </td>
+  <td data-th="Manage">
+    <div class="row-actions">
+      <a href="/clusters/2/irrigators/edit" class="btn secondary btn-sm" aria-label="Edit Balcony Valve">Edit</a>
+      <button class="btn secondary btn-sm row-actions__danger"
+              type="button"
+              aria-label="Delete Balcony Valve"
+              hx-delete="/clusters/2/irrigators"
+              hx-target="#irrigator-row-2"
+              hx-swap="outerHTML swap:200ms"
+              hx-confirm="Delete irrigator &quot;Balcony Valve&quot;? Its event log will be removed.">
+        <svg class="icon icon--xs"><use href="/static/icons/sprite.svg#i-trash"></use></svg>
+        Delete
+      </button>
+    </div>
+  </td>
+</tr>
+    </tbody>
+  </table>
+  
+</article>
+
+
+
+<article class="card" id="config">
+  <div class="card__head">
+    <h3 class="card__title">Config</h3>
+    <small class="muted">Blank = inherit from global default</small>
+  </div>
+  <div class="card__body">
+    <form method="post" action="/clusters/2/config" class="config-form">
+      
+      
+        
+
+
+
+
+
+
+<div class="config-field" data-source="default" id="config-field-mode">
+  <label for="cfg-mode" class="config-field__label">
+    <span class="config-field__name">Mode</span>
+    
+      <span class="badge-muted config-field__source" title="Inherited from default">
+        <span class="rel-arrow" aria-hidden="true">↳</span>
+        default
+      </span>
+    
+  </label>
+
+  
+    <select id="cfg-mode" name="mode">
+      <option value="" selected>
+        Inherit (smart)
+      </option>
+      
+        <option value="smart">smart (sensor-driven)</option>
+      
+        <option value="schedule">schedule (time-based)</option>
+      
+        <option value="manual">manual (no auto-run)</option>
+      
+    </select>
+  
+</div>
+      
+        
+
+
+
+
+
+
+<div class="config-field" data-source="cluster" id="config-field-duration_minutes">
+  <label for="cfg-duration_minutes" class="config-field__label">
+    <span class="config-field__name">Duration (min)</span>
+    
+      <span class="badge-ok config-field__source" title="Overridden at the cluster level">override</span>
+    
+  </label>
+
+  
+    <input type="number"
+           id="cfg-duration_minutes"
+           name="duration_minutes"
+           min="1"
+           
+           step="1"
+           placeholder="inherit (5)"
+           value="5">
+  
+</div>
+      
+        
+
+
+
+
+
+
+<div class="config-field" data-source="default" id="config-field-interval_hours">
+  <label for="cfg-interval_hours" class="config-field__label">
+    <span class="config-field__name">Interval (hours)</span>
+    
+      <span class="badge-muted config-field__source" title="Inherited from default">
+        <span class="rel-arrow" aria-hidden="true">↳</span>
+        default
+      </span>
+    
+  </label>
+
+  
+    <input type="number"
+           id="cfg-interval_hours"
+           name="interval_hours"
+           min="1"
+           
+           step="1"
+           placeholder="inherit (12)"
+           value="">
+  
+</div>
+      
+        
+
+
+
+
+
+
+<div class="config-field" data-source="cluster" id="config-field-auto_run">
+  <label for="cfg-auto_run" class="config-field__label">
+    <span class="config-field__name">Auto-run</span>
+    
+      <span class="badge-ok config-field__source" title="Overridden at the cluster level">override</span>
+    
+  </label>
+
+  
+    
+    <select id="cfg-auto_run" name="auto_run">
+      <option value="">
+        Inherit (off)
+      </option>
+      <option value="true">On</option>
+      <option value="false" selected>Off</option>
+    </select>
+  
+</div>
+      
+        
+
+
+
+
+
+
+<div class="config-field" data-source="global" id="config-field-quiet_start_hour">
+  <label for="cfg-quiet_start_hour" class="config-field__label">
+    <span class="config-field__name">Quiet start (hour 0–23)</span>
+    
+      <span class="badge-muted config-field__source" title="Inherited from global">
+        <span class="rel-arrow" aria-hidden="true">↳</span>
+        global
+      </span>
+    
+  </label>
+
+  
+    <input type="number"
+           id="cfg-quiet_start_hour"
+           name="quiet_start_hour"
+           min="0"
+           max="23"
+           step="1"
+           placeholder="inherit (0)"
+           value="">
+  
+</div>
+      
+        
+
+
+
+
+
+
+<div class="config-field" data-source="global" id="config-field-quiet_end_hour">
+  <label for="cfg-quiet_end_hour" class="config-field__label">
+    <span class="config-field__name">Quiet end (hour 0–23)</span>
+    
+      <span class="badge-muted config-field__source" title="Inherited from global">
+        <span class="rel-arrow" aria-hidden="true">↳</span>
+        global
+      </span>
+    
+  </label>
+
+  
+    <input type="number"
+           id="cfg-quiet_end_hour"
+           name="quiet_end_hour"
+           min="0"
+           max="23"
+           step="1"
+           placeholder="inherit (5)"
+           value="">
+  
+</div>
+      
+      <p class="muted fs-sm" style="margin: var(--sp-2) 0 var(--sp-3);">
+        Quiet hours block automated irrigation between start and end (local time, end-exclusive,
+        wrap-around supported). Set start equal to end to disable quiet hours at this level.
+        Manual irrigation prompts a confirmation but is always allowed.
+      </p>
+      <div class="form-actions">
+        <button type="submit">Save config</button>
+        <a href="#decision" class="btn secondary">Cancel</a>
+      </div>
+    </form>
+  </div>
+
+  <div class="card__head mt-4" style="border-top: 1px solid var(--border);">
+    <h3 class="card__title">Watering windows</h3>
+    <small class="muted">Allow-windows for the engine. No windows = always allowed (subject to quiet hours).</small>
+  </div>
+  
+  
+  <table aria-label="Watering windows for Balcony Orchard">
+    <thead>
+      <tr>
+        <th scope="col">Label</th>
+        <th scope="col">Hours</th>
+        <th scope="col">Days</th>
+        <th scope="col"><span class="visually-hidden">Actions</span></th>
+      </tr>
+    </thead>
+    <tbody>
+      
+      <tr id="window-row-1">
+        <td data-th="Label">Morning</td>
+        <td data-th="Hours"><span class="mono">06:00–09:00</span></td>
+        <td data-th="Days">Mon, Wed, Fri</td>
+        <td data-th="Actions">
+          <div class="row-actions">
+            <a href="/clusters/2/windows/1/edit" class="btn secondary btn-sm" aria-label="Edit window 1">Edit</a>
+            <button class="btn secondary btn-sm row-actions__danger"
+                    type="button"
+                    aria-label="Delete window 1"
+                    hx-delete="/clusters/2/windows/1"
+                    hx-target="#window-row-1"
+                    hx-swap="outerHTML swap:200ms"
+                    hx-confirm="Delete this watering window?">
+              Delete
+            </button>
+          </div>
+        </td>
+      </tr>
+      
+    </tbody>
+  </table>
+  
+  <div class="card__body">
+    <form method="post" action="/clusters/2/windows">
+      <div class="grid">
+        <label for="new_start_hour">Start hour (0–23)
+          <input type="number" id="new_start_hour" name="start_hour" min="0" max="23" step="1" required>
+        </label>
+        <label for="new_end_hour">End hour (0–23)
+          <input type="number" id="new_end_hour" name="end_hour" min="0" max="23" step="1" required>
+        </label>
+      </div>
+      <fieldset>
+        <legend>Days</legend>
+        <div class="weekday-checks" role="group" aria-label="Weekday selection">
+          
+            
+            <label for="new_dow_1" style="display:inline-flex;align-items:center;gap:var(--sp-1);margin-right:var(--sp-3);">
+              <input type="checkbox" id="new_dow_1" name="weekday_mask" value="1" checked>
+              Mon
+            </label>
+          
+            
+            <label for="new_dow_2" style="display:inline-flex;align-items:center;gap:var(--sp-1);margin-right:var(--sp-3);">
+              <input type="checkbox" id="new_dow_2" name="weekday_mask" value="2" checked>
+              Tue
+            </label>
+          
+            
+            <label for="new_dow_4" style="display:inline-flex;align-items:center;gap:var(--sp-1);margin-right:var(--sp-3);">
+              <input type="checkbox" id="new_dow_4" name="weekday_mask" value="4" checked>
+              Wed
+            </label>
+          
+            
+            <label for="new_dow_8" style="display:inline-flex;align-items:center;gap:var(--sp-1);margin-right:var(--sp-3);">
+              <input type="checkbox" id="new_dow_8" name="weekday_mask" value="8" checked>
+              Thu
+            </label>
+          
+            
+            <label for="new_dow_16" style="display:inline-flex;align-items:center;gap:var(--sp-1);margin-right:var(--sp-3);">
+              <input type="checkbox" id="new_dow_16" name="weekday_mask" value="16" checked>
+              Fri
+            </label>
+          
+            
+            <label for="new_dow_32" style="display:inline-flex;align-items:center;gap:var(--sp-1);margin-right:var(--sp-3);">
+              <input type="checkbox" id="new_dow_32" name="weekday_mask" value="32" checked>
+              Sat
+            </label>
+          
+            
+            <label for="new_dow_64" style="display:inline-flex;align-items:center;gap:var(--sp-1);margin-right:var(--sp-3);">
+              <input type="checkbox" id="new_dow_64" name="weekday_mask" value="64" checked>
+              Sun
+            </label>
+          
+        </div>
+      </fieldset>
+      <label for="new_label">Label <small class="muted">(optional)</small>
+        <input type="text" id="new_label" name="label" placeholder="Morning AM">
+      </label>
+      <div class="form-actions">
+        <button type="submit">Add window</button>
+      </div>
+    </form>
+  </div>
+</article>
+
+
+</main>
+
+
+<dialog id="cmdk-dialog" class="cmdk" aria-label="Command palette">
+  <div class="cmdk__panel" role="dialog" aria-modal="true">
+    <input
+      type="search"
+      class="cmdk__input"
+      placeholder="Search clusters, plants, sensors…"
+      autocomplete="off" autocorrect="off" spellcheck="false"
+      hx-get="/api/v1/search"
+      hx-trigger="keyup changed delay:120ms"
+      hx-target="#cmdk-list"
+      hx-swap="innerHTML"
+      name="q"
+      aria-label="Search">
+    <div id="cmdk-list" class="cmdk__list" role="listbox"></div>
+    <div class="cmdk__hint">
+      <span><span class="cmdk__kbd">↵</span> open</span>
+      <span><span class="cmdk__kbd">esc</span> close</span>
+    </div>
+  </div>
+</dialog>
+
+
+<div id="toasts" class="toasts" aria-live="polite" aria-atomic="false"></div>
+
+<footer class="container">
+  <div class="footer__row">
+    
+    <a id="health-badge"
+       href="/health"
+       aria-label="System health"
+       hx-get="/health/badge"
+       hx-trigger="load, every 60s"
+       hx-swap="innerHTML">…</a>
+    
+    <span class="footer__meta">
+      <span>greenhouse</span>
+      
+      <span class="sep" aria-hidden="true"></span>
+      <span title="App version">v<VERSION></span>
+      
+      <span class="sep" aria-hidden="true"></span>
+      <span title="Page rendered">2026-04-15 10:00</span>
+    </span>
+  </div>
+</footer>
+
+
+<nav class="mobile-nav" aria-label="Mobile navigation">
+  <a class="mobile-nav__item" href="/">
+    <svg class="icon" aria-hidden="true"><use href="/static/icons/sprite.svg#i-pulse"></use></svg>
+    Today
+  </a>
+  <a class="mobile-nav__item" href="/clusters">
+    <svg class="icon" aria-hidden="true"><use href="/static/icons/sprite.svg#i-leaf"></use></svg>
+    Spaces
+  </a>
+  <a class="mobile-nav__item" href="/activity">
+    <svg class="icon" aria-hidden="true"><use href="/static/icons/sprite.svg#i-clock"></use></svg>
+    Activity
+  </a>
+  <a class="mobile-nav__item" href="/alerts">
+    <svg class="icon" aria-hidden="true"><use href="/static/icons/sprite.svg#i-bell"></use></svg>
+    Alerts
+  </a>
+  <details class="mobile-nav__more">
+    <summary class="mobile-nav__item">
+      <svg class="icon" aria-hidden="true"><use href="/static/icons/sprite.svg#i-list"></use></svg>
+      More
+    </summary>
+    <div class="mobile-nav__sheet" aria-label="More pages">
+      <a href="/scheduler">Scheduler</a>
+      <a href="/vacation">Vacation</a>
+      <a href="/health">Health</a>
+      <a href="/quality">Data quality</a>
+      <a href="/preferences">Preferences</a>
+    </div>
+  </details>
+</nav>
+<script>
+  (function () {
+    var path = location.pathname;
+    document.querySelectorAll('.mobile-nav__item').forEach(function (a) {
+      var href = a.getAttribute('href');
+      if (href === '/' ? path === '/' : path === href || path.startsWith(href + '/')) {
+        a.setAttribute('aria-current', 'page');
+      }
+    });
+  })();
+</script>
+
+
+</body>
+</html>

@@ -1,0 +1,44 @@
+{
+ "body_lines": [
+  ""
+ ],
+ "db_effect": {
+  "irrigators": {
+   "added": [
+    {
+     "cluster_id": 3,
+     "config": "{\"device_ip\": \"192.0.2.7\", \"local_key\": \"fakelocalkeyyyyy\"}",
+     "flow_rate_l_per_min": 0.25,
+     "id": 3,
+     "name": "Shelf Pump",
+     "reservoir_l": 5.0,
+     "tuya_device_id": "fake_tuya_device_00000003",
+     "type": "rainpoint.ik10pw"
+    }
+   ]
+  }
+ },
+ "device_calls": {
+  "irrigator": [],
+  "sensor": []
+ },
+ "headers": {
+  "location": "/clusters/3#irrigators"
+ },
+ "request": {
+  "form": {
+   "device_ip": " 192.0.2.7 ",
+   "flow_rate_l_per_min": "0.25",
+   "local_key": "fakelocalkeyyyyy",
+   "name": "Shelf Pump",
+   "reservoir_l": "5",
+   "tuya_device_id": "fake_tuya_device_00000003",
+   "type": "rainpoint.ik10pw"
+  },
+  "headers": {},
+  "method": "POST",
+  "url": "/clusters/3/irrigators"
+ },
+ "status": 303,
+ "templates": []
+}

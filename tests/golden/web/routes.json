@@ -1,0 +1,1016 @@
+[
+ {
+  "dependencies": [],
+  "endpoint": "greenhouse_server.web.routes.auth.login_form",
+  "include_in_schema": false,
+  "methods": [
+   "GET"
+  ],
+  "name": "login_form",
+  "path": "/login"
+ },
+ {
+  "dependencies": [],
+  "endpoint": "greenhouse_server.web.routes.auth.login_submit",
+  "include_in_schema": false,
+  "methods": [
+   "POST"
+  ],
+  "name": "login_submit",
+  "path": "/login"
+ },
+ {
+  "dependencies": [],
+  "endpoint": "greenhouse_server.web.routes.auth.logout_submit",
+  "include_in_schema": false,
+  "methods": [
+   "POST"
+  ],
+  "name": "logout_submit",
+  "path": "/logout"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.activity.activity_list",
+  "include_in_schema": false,
+  "methods": [
+   "GET"
+  ],
+  "name": "activity_list",
+  "path": "/activity"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.activity.activity_page",
+  "include_in_schema": false,
+  "methods": [
+   "GET"
+  ],
+  "name": "activity_page",
+  "path": "/activity/page"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.alerts.alert_list",
+  "include_in_schema": false,
+  "methods": [
+   "GET"
+  ],
+  "name": "alert_list",
+  "path": "/alerts"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.alerts.ack_alert",
+  "include_in_schema": false,
+  "methods": [
+   "POST"
+  ],
+  "name": "ack_alert",
+  "path": "/alerts/{alert_id}/ack"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.alerts.resolve_alert",
+  "include_in_schema": false,
+  "methods": [
+   "POST"
+  ],
+  "name": "resolve_alert",
+  "path": "/alerts/{alert_id}/resolve"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.alerts.sync_alerts",
+  "include_in_schema": false,
+  "methods": [
+   "POST"
+  ],
+  "name": "sync_alerts",
+  "path": "/alerts/sync"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.alerts.alert_badge",
+  "include_in_schema": false,
+  "methods": [
+   "GET"
+  ],
+  "name": "alert_badge",
+  "path": "/alerts/badge"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.analytics.cluster_history",
+  "include_in_schema": false,
+  "methods": [
+   "GET"
+  ],
+  "name": "cluster_history",
+  "path": "/clusters/{cluster_id}/history"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.analytics.cluster_stats",
+  "include_in_schema": false,
+  "methods": [
+   "GET"
+  ],
+  "name": "cluster_stats",
+  "path": "/clusters/{cluster_id}/stats"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.analytics.cluster_stats_export",
+  "include_in_schema": false,
+  "methods": [
+   "GET"
+  ],
+  "name": "cluster_stats_export",
+  "path": "/clusters/{cluster_id}/stats/export"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.analytics.cluster_learn",
+  "include_in_schema": false,
+  "methods": [
+   "GET"
+  ],
+  "name": "cluster_learn",
+  "path": "/clusters/{cluster_id}/learn"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.analytics.scheduler_page",
+  "include_in_schema": false,
+  "methods": [
+   "GET"
+  ],
+  "name": "scheduler_page",
+  "path": "/scheduler"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.analytics.scheduler_delete_job",
+  "include_in_schema": false,
+  "methods": [
+   "POST"
+  ],
+  "name": "scheduler_delete_job",
+  "path": "/scheduler/jobs/{job_id}/delete"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.analytics.scheduler_pause",
+  "include_in_schema": false,
+  "methods": [
+   "POST"
+  ],
+  "name": "scheduler_pause",
+  "path": "/scheduler/pause"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.analytics.scheduler_resume",
+  "include_in_schema": false,
+  "methods": [
+   "POST"
+  ],
+  "name": "scheduler_resume",
+  "path": "/scheduler/resume"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.analytics.bulk_stop_all_web",
+  "include_in_schema": false,
+  "methods": [
+   "POST"
+  ],
+  "name": "bulk_stop_all_web",
+  "path": "/bulk/stop-all"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.clusters.list_clusters",
+  "include_in_schema": false,
+  "methods": [
+   "GET"
+  ],
+  "name": "list_clusters",
+  "path": "/clusters"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.clusters.new_cluster_form",
+  "include_in_schema": false,
+  "methods": [
+   "GET"
+  ],
+  "name": "new_cluster_form",
+  "path": "/clusters/new"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.clusters.create_cluster",
+  "include_in_schema": false,
+  "methods": [
+   "POST"
+  ],
+  "name": "create_cluster",
+  "path": "/clusters"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.clusters.edit_cluster_form",
+  "include_in_schema": false,
+  "methods": [
+   "GET"
+  ],
+  "name": "edit_cluster_form",
+  "path": "/clusters/{cluster_id}/edit"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.clusters.update_cluster",
+  "include_in_schema": false,
+  "methods": [
+   "POST"
+  ],
+  "name": "update_cluster",
+  "path": "/clusters/{cluster_id}/edit"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.clusters.delete_cluster",
+  "include_in_schema": false,
+  "methods": [
+   "DELETE"
+  ],
+  "name": "delete_cluster",
+  "path": "/clusters/{cluster_id}"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.clusters.cluster_detail",
+  "include_in_schema": false,
+  "methods": [
+   "GET"
+  ],
+  "name": "cluster_detail",
+  "path": "/clusters/{cluster_id}"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.clusters.cluster_status_fragment",
+  "include_in_schema": false,
+  "methods": [
+   "GET"
+  ],
+  "name": "cluster_status_fragment",
+  "path": "/clusters/{cluster_id}/status-fragment"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.clusters.cluster_card_fragment",
+  "include_in_schema": false,
+  "methods": [
+   "GET"
+  ],
+  "name": "cluster_card_fragment",
+  "path": "/clusters/{cluster_id}/card-fragment"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.clusters.cluster_chart_fragment",
+  "include_in_schema": false,
+  "methods": [
+   "GET"
+  ],
+  "name": "cluster_chart_fragment",
+  "path": "/clusters/{cluster_id}/chart-fragment"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.clusters.cluster_overlay_fragment",
+  "include_in_schema": false,
+  "methods": [
+   "GET"
+  ],
+  "name": "cluster_overlay_fragment",
+  "path": "/clusters/{cluster_id}/overlay-fragment"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.clusters.cluster_heatmap_fragment",
+  "include_in_schema": false,
+  "methods": [
+   "GET"
+  ],
+  "name": "cluster_heatmap_fragment",
+  "path": "/clusters/{cluster_id}/heatmap-fragment"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.configs.config_form",
+  "include_in_schema": false,
+  "methods": [
+   "GET"
+  ],
+  "name": "config_form",
+  "path": "/clusters/{cluster_id}/config"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.configs.save_config",
+  "include_in_schema": false,
+  "methods": [
+   "POST"
+  ],
+  "name": "save_config",
+  "path": "/clusters/{cluster_id}/config"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.configs.save_global_config",
+  "include_in_schema": false,
+  "methods": [
+   "POST"
+  ],
+  "name": "save_global_config",
+  "path": "/config/global"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.decisions.cluster_decisions",
+  "include_in_schema": false,
+  "methods": [
+   "GET"
+  ],
+  "name": "cluster_decisions",
+  "path": "/clusters/{cluster_id}/decisions"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.efficacy.cluster_efficacy_page",
+  "include_in_schema": false,
+  "methods": [
+   "GET"
+  ],
+  "name": "cluster_efficacy_page",
+  "path": "/clusters/{cluster_id}/efficacy"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.fragments.health_badge",
+  "include_in_schema": false,
+  "methods": [
+   "GET"
+  ],
+  "name": "health_badge",
+  "path": "/health/badge"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.fragments.dashboard_hero",
+  "include_in_schema": false,
+  "methods": [
+   "GET"
+  ],
+  "name": "dashboard_hero",
+  "path": "/dashboard/hero"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.health_page.health_page",
+  "include_in_schema": false,
+  "methods": [
+   "GET"
+  ],
+  "name": "health_page",
+  "path": "/health"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.irrigators.list_irrigators",
+  "include_in_schema": false,
+  "methods": [
+   "GET"
+  ],
+  "name": "list_irrigators",
+  "path": "/clusters/{cluster_id}/irrigators"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.irrigators.new_irrigator_form",
+  "include_in_schema": false,
+  "methods": [
+   "GET"
+  ],
+  "name": "new_irrigator_form",
+  "path": "/clusters/{cluster_id}/irrigators/new"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.irrigators.create_irrigator",
+  "include_in_schema": false,
+  "methods": [
+   "POST"
+  ],
+  "name": "create_irrigator",
+  "path": "/clusters/{cluster_id}/irrigators"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.irrigators.edit_irrigator_form",
+  "include_in_schema": false,
+  "methods": [
+   "GET"
+  ],
+  "name": "edit_irrigator_form",
+  "path": "/clusters/{cluster_id}/irrigators/edit"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.irrigators.update_irrigator",
+  "include_in_schema": false,
+  "methods": [
+   "POST"
+  ],
+  "name": "update_irrigator",
+  "path": "/clusters/{cluster_id}/irrigators/edit"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.irrigators.delete_irrigator",
+  "include_in_schema": false,
+  "methods": [
+   "DELETE"
+  ],
+  "name": "delete_irrigator",
+  "path": "/clusters/{cluster_id}/irrigators"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.irrigators.start_irrigator",
+  "include_in_schema": false,
+  "methods": [
+   "POST"
+  ],
+  "name": "start_irrigator",
+  "path": "/irrigators/{irrigator_id}/start"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.irrigators.stop_irrigator",
+  "include_in_schema": false,
+  "methods": [
+   "POST"
+  ],
+  "name": "stop_irrigator",
+  "path": "/irrigators/{irrigator_id}/stop"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.irrigators.log_manual_form",
+  "include_in_schema": false,
+  "methods": [
+   "GET"
+  ],
+  "name": "log_manual_form",
+  "path": "/irrigators/{irrigator_id}/log-manual"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.irrigators.log_manual_submit",
+  "include_in_schema": false,
+  "methods": [
+   "POST"
+  ],
+  "name": "log_manual_submit",
+  "path": "/irrigators/{irrigator_id}/log-manual"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.operations.irrigate",
+  "include_in_schema": false,
+  "methods": [
+   "POST"
+  ],
+  "name": "irrigate",
+  "path": "/clusters/{cluster_id}/irrigate"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.operations.monitor",
+  "include_in_schema": false,
+  "methods": [
+   "GET"
+  ],
+  "name": "monitor",
+  "path": "/clusters/{cluster_id}/monitor"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.operations.check_single",
+  "include_in_schema": false,
+  "methods": [
+   "POST"
+  ],
+  "name": "check_single",
+  "path": "/clusters/{cluster_id}/check"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.operations.check_all",
+  "include_in_schema": false,
+  "methods": [
+   "POST"
+  ],
+  "name": "check_all",
+  "path": "/check"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.operations.sync_all",
+  "include_in_schema": false,
+  "methods": [
+   "POST"
+  ],
+  "name": "sync_all",
+  "path": "/sync"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.operations.sync_plants",
+  "include_in_schema": false,
+  "methods": [
+   "POST"
+  ],
+  "name": "sync_plants",
+  "path": "/plants/sync"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.pages.dashboard",
+  "include_in_schema": false,
+  "methods": [
+   "GET"
+  ],
+  "name": "dashboard",
+  "path": "/"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.plants.list_plants",
+  "include_in_schema": false,
+  "methods": [
+   "GET"
+  ],
+  "name": "list_plants",
+  "path": "/clusters/{cluster_id}/plants"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.plants.new_plant_form",
+  "include_in_schema": false,
+  "methods": [
+   "GET"
+  ],
+  "name": "new_plant_form",
+  "path": "/clusters/{cluster_id}/plants/new"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.plants.create_plant",
+  "include_in_schema": false,
+  "methods": [
+   "POST"
+  ],
+  "name": "create_plant",
+  "path": "/clusters/{cluster_id}/plants"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.plants.edit_plant_form",
+  "include_in_schema": false,
+  "methods": [
+   "GET"
+  ],
+  "name": "edit_plant_form",
+  "path": "/clusters/{cluster_id}/plants/{plant_id}/edit"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.plants.update_plant",
+  "include_in_schema": false,
+  "methods": [
+   "POST"
+  ],
+  "name": "update_plant",
+  "path": "/clusters/{cluster_id}/plants/{plant_id}/edit"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.plants.delete_plant",
+  "include_in_schema": false,
+  "methods": [
+   "DELETE"
+  ],
+  "name": "delete_plant",
+  "path": "/clusters/{cluster_id}/plants/{plant_id}"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.plant_dashboard.plant_dashboard",
+  "include_in_schema": false,
+  "methods": [
+   "GET"
+  ],
+  "name": "plant_dashboard",
+  "path": "/clusters/{cluster_id}/plants/{plant_id}"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.plant_dashboard.plant_chart_fragment",
+  "include_in_schema": false,
+  "methods": [
+   "GET"
+  ],
+  "name": "plant_chart_fragment",
+  "path": "/clusters/{cluster_id}/plants/{plant_id}/chart-fragment"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.plant_dashboard.plant_health_fragment",
+  "include_in_schema": false,
+  "methods": [
+   "GET"
+  ],
+  "name": "plant_health_fragment",
+  "path": "/clusters/{cluster_id}/plants/{plant_id}/health-fragment"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.plant_dashboard.move_plant_web",
+  "include_in_schema": false,
+  "methods": [
+   "POST"
+  ],
+  "name": "move_plant_web",
+  "path": "/clusters/{cluster_id}/plants/{plant_id}/move"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.preferences.preferences_page",
+  "include_in_schema": false,
+  "methods": [
+   "GET"
+  ],
+  "name": "preferences_page",
+  "path": "/preferences"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.preferences.update_preferences",
+  "include_in_schema": false,
+  "methods": [
+   "POST"
+  ],
+  "name": "update_preferences",
+  "path": "/preferences"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.preferences.update_theme",
+  "include_in_schema": false,
+  "methods": [
+   "POST"
+  ],
+  "name": "update_theme",
+  "path": "/preferences/theme"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.quality.quality_page",
+  "include_in_schema": false,
+  "methods": [
+   "GET"
+  ],
+  "name": "quality_page",
+  "path": "/quality"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.sensors.list_sensors",
+  "include_in_schema": false,
+  "methods": [
+   "GET"
+  ],
+  "name": "list_sensors",
+  "path": "/clusters/{cluster_id}/sensors"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.sensors.new_sensor_form",
+  "include_in_schema": false,
+  "methods": [
+   "GET"
+  ],
+  "name": "new_sensor_form",
+  "path": "/clusters/{cluster_id}/sensors/new"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.sensors.create_sensor",
+  "include_in_schema": false,
+  "methods": [
+   "POST"
+  ],
+  "name": "create_sensor",
+  "path": "/clusters/{cluster_id}/sensors"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.sensors.edit_sensor_form",
+  "include_in_schema": false,
+  "methods": [
+   "GET"
+  ],
+  "name": "edit_sensor_form",
+  "path": "/clusters/{cluster_id}/sensors/{sensor_id}/edit"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.sensors.update_sensor",
+  "include_in_schema": false,
+  "methods": [
+   "POST"
+  ],
+  "name": "update_sensor",
+  "path": "/clusters/{cluster_id}/sensors/{sensor_id}/edit"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.sensors.delete_sensor",
+  "include_in_schema": false,
+  "methods": [
+   "DELETE"
+  ],
+  "name": "delete_sensor",
+  "path": "/clusters/{cluster_id}/sensors/{sensor_id}"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.vacation.vacation_list",
+  "include_in_schema": false,
+  "methods": [
+   "GET"
+  ],
+  "name": "vacation_list",
+  "path": "/vacation"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.vacation.create_vacation",
+  "include_in_schema": false,
+  "methods": [
+   "POST"
+  ],
+  "name": "create_vacation",
+  "path": "/vacation"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.vacation.edit_vacation_form",
+  "include_in_schema": false,
+  "methods": [
+   "GET"
+  ],
+  "name": "edit_vacation_form",
+  "path": "/vacation/{window_id}/edit"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.vacation.update_vacation",
+  "include_in_schema": false,
+  "methods": [
+   "POST"
+  ],
+  "name": "update_vacation",
+  "path": "/vacation/{window_id}/edit"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.vacation.delete_vacation",
+  "include_in_schema": false,
+  "methods": [
+   "POST"
+  ],
+  "name": "delete_vacation",
+  "path": "/vacation/{window_id}/delete"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.windows.create_window",
+  "include_in_schema": false,
+  "methods": [
+   "POST"
+  ],
+  "name": "create_window",
+  "path": "/clusters/{cluster_id}/windows"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.windows.edit_window_form",
+  "include_in_schema": false,
+  "methods": [
+   "GET"
+  ],
+  "name": "edit_window_form",
+  "path": "/clusters/{cluster_id}/windows/{window_id}/edit"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.windows.update_window",
+  "include_in_schema": false,
+  "methods": [
+   "POST"
+  ],
+  "name": "update_window",
+  "path": "/clusters/{cluster_id}/windows/{window_id}/edit"
+ },
+ {
+  "dependencies": [
+   "require_web_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.windows.delete_window",
+  "include_in_schema": false,
+  "methods": [
+   "DELETE"
+  ],
+  "name": "delete_window",
+  "path": "/clusters/{cluster_id}/windows/{window_id}"
+ }
+]

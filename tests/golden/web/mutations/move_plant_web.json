@@ -1,0 +1,59 @@
+{
+ "body_lines": [
+  ""
+ ],
+ "db_effect": {
+  "activity_events": {
+   "added": [
+    {
+     "code": "plant_moved",
+     "entity_id": 1,
+     "entity_type": "plant",
+     "id": 5,
+     "message": "moved plant 1 from cluster 1 to cluster 2",
+     "payload_json": "{\"from_cluster_id\": 1, \"to_cluster_id\": 2, \"sensor_ids\": [1]}",
+     "severity": "info",
+     "source": "plant",
+     "timestamp": 1776247200
+    }
+   ]
+  },
+  "plants": {
+   "changed": {
+    "1": {
+     "cluster_id": [
+      1,
+      2
+     ]
+    }
+   }
+  },
+  "sensors": {
+   "changed": {
+    "1": {
+     "cluster_id": [
+      1,
+      2
+     ]
+    }
+   }
+  }
+ },
+ "device_calls": {
+  "irrigator": [],
+  "sensor": []
+ },
+ "headers": {
+  "location": "/clusters/2/plants/1"
+ },
+ "request": {
+  "form": {
+   "target_cluster_id": "2"
+  },
+  "headers": {},
+  "method": "POST",
+  "url": "/clusters/1/plants/1/move"
+ },
+ "status": 303,
+ "templates": []
+}

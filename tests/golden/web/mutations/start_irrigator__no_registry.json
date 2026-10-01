@@ -1,0 +1,53 @@
+{
+ "body_lines": [
+  "<article class=\"card error-panel\">",
+  "  <div class=\"card__head\">",
+  "    <h3 class=\"card__title\">",
+  "      <span class=\"badge-danger\">Error 503</span>",
+  "    </h3>",
+  "  </div>",
+  "  <div class=\"card__body\">",
+  "    <p>No device registry (missing Tuya credentials)</p>",
+  "    ",
+  "  </div>",
+  "</article>"
+ ],
+ "db_effect": {},
+ "device_calls": {
+  "irrigator": [],
+  "sensor": []
+ },
+ "headers": {
+  "content-type": "text/html; charset=utf-8"
+ },
+ "request": {
+  "form": {
+   "minutes": "2"
+  },
+  "headers": {
+   "HX-Request": "true"
+  },
+  "method": "POST",
+  "url": "/irrigators/1/start"
+ },
+ "status": 503,
+ "templates": [
+  [
+   "_error.html",
+   [
+    "active_vacation",
+    "app_version",
+    "auth_enabled",
+    "detail",
+    "dry_run_global",
+    "is_hx",
+    "now_text",
+    "request",
+    "scheduler_paused",
+    "show_chrome",
+    "status_code",
+    "theme"
+   ]
+  ]
+ ]
+}

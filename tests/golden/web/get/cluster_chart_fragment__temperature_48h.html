@@ -1,0 +1,23 @@
+<!-- GET /clusters/1/chart-fragment?metric=temperature&hours=48 -->
+<!-- status: 200 -->
+<!-- content-type: text/html; charset=utf-8 -->
+
+<div id="chart-container-temperature" class="chart-container">
+  <canvas id="chart-temperature"></canvas>
+  <script type="application/json" id="chart-data-temperature">{"metric": "temperature", "hours": 48, "datasets": [{"sensor_id": 2, "sensor_name": "Alocasia Probe", "points": [[1776079800, 23.5], [1776087000, 23.0], [1776094200, 23.5], [1776101400, 23.0], [1776108600, 23.5], [1776115800, 23.0], [1776123000, 23.5], [1776130200, 23.0], [1776137400, 23.5], [1776144600, 23.0], [1776151800, 23.5], [1776159000, 23.0], [1776166200, 23.5], [1776173400, 23.0], [1776180600, 23.5], [1776187800, 23.0], [1776195000, 23.5], [1776202200, 23.0], [1776209400, 23.5], [1776216600, 23.0], [1776223800, 23.5], [1776231000, 23.0], [1776238200, 23.5], [1776245400, 23.0]]}, {"sensor_id": 1, "sensor_name": "Monstera Probe", "points": [[1776079800, 23.0], [1776087000, 22.5], [1776094200, 22.0], [1776101400, 23.0], [1776108600, 22.5], [1776115800, 22.0], [1776123000, 23.0], [1776130200, 22.5], [1776137400, 22.0], [1776144600, 23.0], [1776151800, 22.5], [1776159000, 22.0], [1776166200, 23.0], [1776173400, 22.5], [1776180600, 22.0], [1776187800, 23.0], [1776195000, 22.5], [1776202200, 22.0], [1776209400, 23.0], [1776216600, 22.5], [1776223800, 22.0], [1776231000, 23.0], [1776238200, 22.5], [1776245400, 22.0]]}, {"sensor_id": 4, "sensor_name": "Room Climate", "points": [[1776101400, 23.0], [1776130200, 22.6], [1776159000, 22.2], [1776187800, 21.8], [1776216600, 21.4], [1776245400, 21.0]]}], "events": [{"timestamp": 1776139200, "action": "start", "duration_minutes": 3}, {"timestamp": 1776139380, "action": "off", "duration_minutes": null}, {"timestamp": 1776218400, "action": "start", "duration_minutes": 2}, {"timestamp": 1776218520, "action": "off", "duration_minutes": null}], "threshold": {"min": 18.0, "max": 29.0, "source": "plant_aggregate"}}</script>
+  <script>
+    (function () {
+      var el = document.getElementById('chart-temperature');
+      var raw = document.getElementById('chart-data-temperature');
+      if (!el || !raw) return;
+      var data = JSON.parse(raw.textContent);
+      function draw() {
+        if (typeof window.renderIrrigationChart === 'function') {
+          window.renderIrrigationChart(el, data);
+        }
+      }
+      if (window.Chart) { draw(); }
+      else { window.addEventListener('load', draw); }
+    })();
+  </script>
+</div>

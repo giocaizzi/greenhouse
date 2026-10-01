@@ -1,0 +1,23 @@
+<!-- GET /clusters/1/plants/1/health-fragment -->
+<!-- status: 200 -->
+<!-- content-type: text/html; charset=utf-8 -->
+
+<div id="chart-container-health" class="chart-container">
+  <canvas id="chart-health-1"></canvas>
+  <script type="application/json" id="chart-data-health-1">{"plant_id":1,"points":[[1776038400,60.25],[1776124800,58.958333333333336],[1776211200,51.0]],"thresholds":{"good":80.0,"ok":50.0}}</script>
+  <script>
+    (function () {
+      var el = document.getElementById('chart-health-1');
+      var raw = document.getElementById('chart-data-health-1');
+      if (!el || !raw) return;
+      var data = JSON.parse(raw.textContent);
+      function draw() {
+        if (typeof window.renderHealthTimeline === 'function') {
+          window.renderHealthTimeline(el, data);
+        }
+      }
+      if (window.Chart) { draw(); }
+      else { window.addEventListener('load', draw); }
+    })();
+  </script>
+</div>
