@@ -1,0 +1,38 @@
+# Modules that must stay mypy-strict clean (`make typecheck`). One source path per line, sorted.
+# Append-only: each "add type annotations" task appends the modules it made clean; never remove a line.
+# On a rebase conflict, resolve with union + sort.
+libs/greenhouse-cli/greenhouse_cli/tui/formatting.py
+libs/greenhouse-cli/greenhouse_cli/tui/screens/activity.py
+libs/greenhouse-cli/greenhouse_cli/tui/screens/dashboard.py
+libs/greenhouse-cli/greenhouse_cli/tui/screens/search.py
+libs/greenhouse-cli/greenhouse_cli/tui/sprites.py
+libs/greenhouse-core/greenhouse_core/auth.py
+libs/greenhouse-core/greenhouse_core/constants.py
+libs/greenhouse-core/greenhouse_core/devices/registry.py
+libs/greenhouse-core/greenhouse_core/devices/sensors/tr301z.py
+libs/greenhouse-core/greenhouse_core/learning/learner.py
+libs/greenhouse-core/greenhouse_core/learning/report.py
+libs/greenhouse-core/greenhouse_core/logic/sensors.py
+libs/greenhouse-core/greenhouse_core/logic/stress.py
+libs/greenhouse-core/greenhouse_core/models.py
+libs/greenhouse-server/greenhouse_server/config.py
+libs/greenhouse-server/greenhouse_server/routes/activity.py
+libs/greenhouse-server/greenhouse_server/routes/alerts.py
+libs/greenhouse-server/greenhouse_server/routes/auth.py
+libs/greenhouse-server/greenhouse_server/routes/decisions.py
+libs/greenhouse-server/greenhouse_server/routes/efficacy.py
+libs/greenhouse-server/greenhouse_server/routes/forecast.py
+libs/greenhouse-server/greenhouse_server/routes/health.py
+libs/greenhouse-server/greenhouse_server/routes/insights.py
+libs/greenhouse-server/greenhouse_server/routes/quality.py
+libs/greenhouse-server/greenhouse_server/routes/well_known.py
+libs/greenhouse-server/greenhouse_server/services/anomaly.py
+libs/greenhouse-server/greenhouse_server/services/bulk.py
+libs/greenhouse-server/greenhouse_server/services/data_quality.py
+libs/greenhouse-server/greenhouse_server/services/efficacy.py
+libs/greenhouse-server/greenhouse_server/services/insights.py
+libs/greenhouse-server/greenhouse_server/services/search.py
+libs/greenhouse-server/greenhouse_server/services/system_health.py
+libs/greenhouse-server/greenhouse_server/services/vacation.py
+libs/greenhouse-server/greenhouse_server/web/router.py
+libs/greenhouse-server/greenhouse_server/web/templating.py

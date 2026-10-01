@@ -52,6 +52,30 @@ dev = [
 testpaths = ["tests"]
 pythonpath = ["libs/greenhouse-core", "libs/greenhouse-server", "libs/greenhouse-cli", "tests"]
 
+[tool.mypy]
+# Strict ratchet (refactor plan T0.4 / target §10.13, §11). No `files` key: `make typecheck`
+# checks the modules listed in refactor/mypy-strict.txt (append-only).
+python_version = "3.11"
+strict = true
+ignore_missing_imports = true
+follow_imports = "silent"
+# The workspace packages ship no py.typed, so without this their imports resolve through the
+# editable .pth files as "missing" and silently become Any. Source paths make them typed.
+mypy_path = ["libs/greenhouse-core", "libs/greenhouse-server", "libs/greenhouse-cli"]
+
+[[tool.mypy.overrides]]
+# Framework-boundary profile: FastAPI route / Typer command signatures are introspected
+# (OpenAPI, response_model inference, --help) and are never edited; helpers stay fully typed.
+module = [
+    "greenhouse_server.routes.*",
+    "greenhouse_server.web.routes.*",
+    "greenhouse_cli.commands.*",
+    "greenhouse_cli.main",
+]
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+disallow_any_generics = false
+
 [tool.ruff]
 line-length = 120
 target-version = "py311"
