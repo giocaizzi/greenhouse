@@ -88,6 +88,32 @@ Orchestration (pinned; details in `refactor/10-safety-orchestration.md`):
 - `/monitor` cleans only a 2 h slice — too few samples for the spike filter — so a single spike reports `very_dry`.
 - `force=true` records the start event and push as `auto` and schedules a leak check, while the decision log says manual.
 
+Web UI (pinned; details in `refactor/10-safety-web.md`):
+- bulk stop-all reports "Every device is now off." even when a device reports a failed stop (`services/bulk.py`);
+- ack/resolve of a missing alert returns 200 with a success toast instead of 404;
+- bare `int()`/`float()` on form fields → unhandled plain-text 500 (config, global config, plants, `temp_override`,
+  plants/sync);
+- `POST /clusters/999/irrigate` → 500 (decision panel template crashes);
+- deleting a populated cluster leaves orphan windows, decision logs, alerts and sensor assignments;
+- unknown paths and 405s return JSON even to browsers: the handler picks HTML vs JSON by path, not by `Accept` as its
+  docstring says;
+- `now_text` uses the process-local timezone (stable in tests only because `clean_env` sets `TZ=UTC`).
+
+TUI (pinned; details in `refactor/10-safety-tui.md`):
+- on a 401 the dashboard shows "Cannot reach the server" behind the sign-in dialog;
+- `app.tcss` `#global-config` matches no widget (dead CSS);
+- the Activity table cursor jumps to the top row on every refresh (harmless: no row actions);
+- the `ConfirmScreen` docstring / CLAUDE.md claim every actuating key confirms — see the actuation golden for the real
+  table (`S`, `P`, `H`, alert `k`/`v`/`y`, scheduler resume run without a dialog);
+- TUI renders are tied to the locked Textual / plotext / rich versions — a dependency bump regenerates those goldens in
+  its own commit; the `system` render reads the process-wide scheduler.
+- One TUI contract test failed once under heavy machine load (4 cores shared by several agents) and passed in 6
+  subsequent runs; watched at Gate 1.
+
+Safety-net hygiene: test session JWTs in `set-cookie` goldens are stored as `<JWT sha256=…>` (still exact) so
+gitleaks stays clean; gitleaks' pre-commit hook only scans staged changes, so the branch was also scanned with
+`gitleaks detect --log-opts=a1b2622..HEAD` (no leaks).
+
 ## Golden-test policy (orchestrator decision)
 
 - OpenAPI, routes, MCP tools, settings, DDL, scheduler registry, package data, web HTML, CLI help/output, TUI renders,
