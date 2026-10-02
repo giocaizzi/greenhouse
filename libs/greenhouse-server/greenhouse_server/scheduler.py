@@ -334,17 +334,9 @@ def _sync_job() -> None:
         return
 
     registry = getattr(_app.state, "device_registry", None)  # type: ignore[union-attr]  # None _app escapes as AttributeError (pinned)
-    session = _app.state.session_factory()  # type: ignore[union-attr]  # None _app escapes as AttributeError (pinned)
-    try:
-        repo = IrrigationRepository(session)
+    with _job_session(_app, "Sync job failed") as repo:
         sync_svc = SyncService(repo, registry, cloud)
         sync_svc.sync_all_sensors(hours=SYNC_JOB_BACKFILL_HOURS)
-        session.commit()
-    except Exception:
-        session.rollback()
-        logger.exception("Sync job failed")
-    finally:
-        session.close()
 
 
 def _health_snapshot_job() -> None:
