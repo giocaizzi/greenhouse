@@ -37,6 +37,8 @@ from greenhouse_server.services.weather import WeatherClient
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
+    from sqlalchemy.orm import Session
+
     from greenhouse_core.devices import AbstractIrrigatorAdapter
     from greenhouse_core.logic.cleaning import CleanedReading
     from greenhouse_core.logic.decision import IrrigationDecision
@@ -884,30 +886,43 @@ class IrrigationService:
             session = self._repo.session
             try:
                 result = self.check_cluster(cluster_id)
-                stale = self._repo.get_active_alert(CHECK_FAILED_ALERT_CODE, cluster_id=cluster_id)
-                if stale is not None:
-                    self._repo.resolve_alert(stale.id)
+                self._resolve_stale_check_alert(cluster_id)
                 session.commit()
             except Exception as e:
-                session.rollback()
-                logger.exception("Check failed for cluster %s", cluster_id)
-                self._repo.upsert_alert(
-                    f"{CHECK_FAILED_ALERT_CODE}:cluster:{cluster_id}",
-                    "irrigation",
-                    CHECK_FAILED_ALERT_CODE,
-                    f"Check failed: {cluster_name}",
-                    f"The scheduled check crashed and was skipped for this cluster: {e!r}",
-                    severity="error",
-                    entity_type="cluster",
-                    entity_id=cluster_id,
-                    cluster_id=cluster_id,
-                )
-                session.commit()
-                result = {
-                    "cluster_id": cluster_id,
-                    "cluster_name": cluster_name,
-                    "action": "error",
-                    "notes": f"check failed: {e!r}",
-                }
+                result = self._record_check_failure(session, cluster_id, cluster_name, e)
             results.append(result)
         return results
+
+    def _resolve_stale_check_alert(self, cluster_id: int) -> None:
+        """A cluster that checked cleanly resolves its open ``check_failed`` alert."""
+        stale = self._repo.get_active_alert(CHECK_FAILED_ALERT_CODE, cluster_id=cluster_id)
+        if stale is not None:
+            self._repo.resolve_alert(stale.id)
+
+    def _record_check_failure(
+        self, session: "Session", cluster_id: int, cluster_name: str, exc: Exception
+    ) -> CheckResult:
+        """Roll back the crashed cluster alone, log it, raise ``check_failed`` and commit.
+
+        Called from inside the ``except`` block, so ``logger.exception`` still sees the exception.
+        """
+        session.rollback()
+        logger.exception("Check failed for cluster %s", cluster_id)
+        self._repo.upsert_alert(
+            f"{CHECK_FAILED_ALERT_CODE}:cluster:{cluster_id}",
+            "irrigation",
+            CHECK_FAILED_ALERT_CODE,
+            f"Check failed: {cluster_name}",
+            f"The scheduled check crashed and was skipped for this cluster: {exc!r}",
+            severity="error",
+            entity_type="cluster",
+            entity_id=cluster_id,
+            cluster_id=cluster_id,
+        )
+        session.commit()
+        return {
+            "cluster_id": cluster_id,
+            "cluster_name": cluster_name,
+            "action": "error",
+            "notes": f"check failed: {exc!r}",
+        }
