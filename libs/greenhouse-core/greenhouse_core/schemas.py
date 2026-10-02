@@ -5,6 +5,14 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+
+def _parse_json_config(v: object) -> object:
+    """Decode a JSON-string ``config`` (as stored on the ORM row); pass anything else through."""
+    if isinstance(v, str):
+        return json.loads(v)
+    return v
+
+
 # --- Cluster ---
 
 
@@ -116,9 +124,7 @@ class IrrigatorResponse(IrrigatorBase):
     @field_validator("config", mode="before")
     @classmethod
     def parse_config(cls, v: Any) -> Any:
-        if isinstance(v, str):
-            return json.loads(v)
-        return v
+        return _parse_json_config(v)
 
 
 class IrrigatorListResponse(BaseModel):
@@ -181,9 +187,7 @@ class SensorResponse(SensorBase):
     @field_validator("config", mode="before")
     @classmethod
     def parse_config(cls, v: Any) -> Any:
-        if isinstance(v, str):
-            return json.loads(v)
-        return v
+        return _parse_json_config(v)
 
 
 class SensorListResponse(BaseModel):
