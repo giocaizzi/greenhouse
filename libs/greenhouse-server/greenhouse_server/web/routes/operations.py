@@ -12,6 +12,7 @@ from greenhouse_server.deps import (
     SyncServiceDep,
     require_cluster,
 )
+from greenhouse_server.services.cluster import PlantNotFoundError
 from greenhouse_server.web.context import base_context
 from greenhouse_server.web.templating import templates
 
@@ -108,36 +109,12 @@ def sync_plants(
     plant_id: str = Form(""),
     cluster_id: str = Form(""),
 ):
-    errors: list[str] = []
-    synced = 0
     pid = int(plant_id) if plant_id.strip() else None
     cid = int(cluster_id) if cluster_id.strip() else None
-
-    if pid:
-        plant = None
-        for c in repo.list_clusters():
-            for p in repo.get_plants_in_cluster(c.id):
-                if p.id == pid:
-                    plant = p
-                    break
-            if plant:
-                break
-        if not plant:
-            raise HTTPException(404, f"Plant {pid} not found")
-        svc.sync_plant_with_db(plant)
-        synced = 1
-    else:
-        clusters = [repo.get_cluster(cid)] if cid else repo.list_clusters()
-        # contract: route body kept verbatim until T5.8 moves it into ClusterService.sync_plants.
-        for c in clusters:  # type: ignore[assignment]
-            if not c:
-                continue
-            for p in repo.get_plants_in_cluster(c.id):
-                try:
-                    svc.sync_plant_with_db(p)
-                    synced += 1
-                except Exception as exc:
-                    errors.append(f"{p.species}: {exc}")
+    try:
+        synced, errors = svc.sync_plants(plant_id=pid, cluster_id=cid)
+    except PlantNotFoundError:
+        raise HTTPException(404, f"Plant {pid} not found") from None
 
     repo.session.commit()
     return templates.TemplateResponse(
