@@ -5,6 +5,12 @@ Every pytest run used `PYTHONHASHSEED=<seed> flock /tmp/greenhouse-tests.lock uv
 
 This note supersedes the partial hand-off committed at `72f26ba`.
 
+**T4.12 review history.** The first T4.12 commit, `931ad9b`, was **rejected** by the second reviewer (R2). It read
+`irrigator.id` before the commit instead of in the except handler, and it moved the `SOURCE_PUMP` import. Following
+the red-test policy it was reverted as its own commit, `6134bf0`. T4.11, T4.14 and T4.15 touch other files and do not
+depend on it. T4.12 was redone as `3a01c4b`, which keeps every attribute read and the import at their original point
+in time. T4.10 was approved by both reviewers.
+
 **Path on its first use:** `G = tests/server/test_contract_services_gaps.py`. The note writes `G` after that. Every
 restructuring task after `acc4c05` had `G` added to its subset.
 
@@ -34,7 +40,7 @@ No logger moved module, and every log text is identical.
 | T4.9 `cluster_insights` | `088632c` | `$RENDER D(insights) G` → 450 passed | cluster_insights 40/7/2; _insight_from_alert 6/1/0 |
 | **T4.10** `watch` (G+) | `6a06507` | `$SCHED $CHECK D(pump_watcher) G` → 549 passed; `C(gs.services.pump_watcher)` + `G` → 848 passed | watch 40/7/3; _outcome 7/1/0; _poll_step 5/2/1; _log_abandoned 6/1/0 |
 | T4.11 `backfill_from_history` (hardware-adjacent) | `440f4a6` | `$RENDER $CHECK D(health_monitor) test_contract_health_monitor G` → 781 passed; `C(gs.services.health_monitor)` + `G` → 888 passed | backfill_from_history 14/6/2; _raise_if_not_open 10/2/1 |
-| **T4.12** `_handle_trip` (G+) | `931ad9b` | `$SCHED $CHECK D(pump_watcher) G` → 549 passed; `C(gs.services.pump_watcher)` + `G` → 848 passed | _handle_trip 31/1/0; _trip_payload 13/1/0; _stop_pump 9/2/1; _log_aborted_event 10/2/1; _log_trip_activity 16/2/1; _record_trip_state 12/3/2; _commit_trip 8/3/2 |
+| **T4.12** `_handle_trip` (G+) | ~~`931ad9b`~~ (rejected, reverted by `6134bf0`) → **`3a01c4b`** | `$SCHED $CHECK D(pump_watcher) G` → 549 passed; `C(gs.services.pump_watcher)` + `G` → 848 passed; R2 differential harness: 0 differences (see below) | _handle_trip 33/1/0; _trip_payload 13/1/0; _stop_pump 9/2/1; _log_aborted_event 10/2/1; _log_trip_activity 14/2/1; _record_trip_state 12/3/2; _commit_trip 8/3/2 |
 | T4.13 `search` | `84dd177` | `$RENDER tests/server/test_search.py tests/cli/test_tui.py` → 408 passed | search 10/2/1; four `_*_hits` 22/1/0 each |
 | T4.14 `anomaly.scan` | `afa3a1d` | `$RENDER D(anomaly) test_contract_scheduler G` → 373 passed | scan 25/5/2; _stale_alert 33/2/1; _drift_alert 39/3/1; _latest_soil_zscore 15/3/1 |
 | T4.15 `efficacy.score_cluster` | `a9fe7c7` | `$RENDER D(efficacy) G` → 442 passed | score_cluster 26/4/3; _event_item 28/3/1 |
@@ -88,10 +94,11 @@ completes at once with `elapsed_seconds == -5.0`.
 | M-pre #1 (unmodified file) | lines 77-83, 117-180, 213-297 | pump group | 74 | 62 | 12 |
 | M-post #1 (after T4.0/T4.1) | functions `__init__`, `watch`, `_handle_trip` | pump group | 90 | 74 | 16 (0 regressions) |
 | **M-pre #2 (after `acc4c05`, before T4.10)** | the same 3 functions | pump group + `G` | 90 | **88** | **2 (both equivalent)** |
-| **M-post #2 (after T4.12)** | the 12 new functions | pump group + `G` | 106 | **105** | **1 (equivalent)** |
+| M-post #2 (after the rejected `931ad9b`) | the 12 new functions | pump group + `G` | 106 | 105 | 1 (equivalent) |
+| **M-post #3 (after the redo `3a01c4b`)** | the same 12 functions | pump group + `G` | 106 | **105** | **1 (equivalent)** |
 
 The pump group is `test_contract_pump_watcher`, `test_pump_watcher`, `test_contract_pipeline` and `test_irrigators`.
-The results are in `refactor/wp-handoff/mutation/pump_watcher-{pre,post,pre2,post2}.jsonl`.
+The results are in `refactor/wp-handoff/mutation/pump_watcher-{pre,post,pre2,post2,post3}.jsonl`.
 
 **Equivalence proofs for the two survivors left in M-pre #2:**
 - `watch`: deleting `last_failure_msg: str | None = None` is **equivalent**. The variable's only read is the abandon
@@ -102,7 +109,10 @@ The results are in `refactor/wp-handoff/mutation/pump_watcher-{pre,post,pre2,pos
   - success: `stop_ok, stop_msg = adapter.stop(...)`;
   - any exception, including a failed unpack: `stop_msg = f"adapter.stop raised: {exc}"`.
 
-**M-post #2 verdict** (`--compare pump_watcher-pre2.jsonl --map <function map below>`):
+**M-post #3 verdict, on `3a01c4b`.** M-post #2 had the same numbers.
+- Results: `pump_watcher-post3.jsonl`. All 4 chunks finished before the container restart; the log is kept at
+  `scratchpad/wp4/mpost3.log`.
+- Comparison: `--compare pump_watcher-pre2.jsonl --map <function map below>`.
 - **kill rate 99.1 %: OK**;
 - **killed-in-pre identities now surviving: 0**;
 - summary exit code 0.
@@ -114,16 +124,44 @@ The one survivor is the same equivalent mutant, moved: `stop_msg = ""` deleted, 
 - the old result dict literals, which became `_outcome(...)`;
 - `last_failure_msg`, which was removed;
 - the payload literal, which became `_trip_payload`;
-- `irrigator.id` in the commit log, which became `irrigator_id`.
 
 For each one the post run contains the rewritten counterpart, and that counterpart is killed: the only post survivor
 is the equivalent `stop_msg = ""`.
 
-## WP gate
+## R2 differential harness — old `6a06507` vs redo `3a01c4b`
 
-- Union of all task subsets plus `$CORE` (`scratchpad/wp4/gate-union2.txt`): **1175 passed** (6m17s).
-- `FULL` (`-n 2`, `PYTHONHASHSEED=0`): **2824 passed** (9m25s). That is 2797 existing tests plus the 27 in `G`.
-- `FULL_SEED2` (`PYTHONHASHSEED=12345`): **2824 passed** (9m24s).
+This is the reviewer's harness, copied to `scratchpad/wp4/diff2/`. `pw_new.py` is byte-identical to `3a01c4b`'s
+`pump_watcher.py`. The comparison is strict: the full ordered call log (including every irrigator attribute read),
+results, exceptions and log records.
+
+| Script | Scenarios | Differences |
+|---|---|---|
+| `run_diff.py 6000` | 6045, including the 45 hand-picked edges: `trip_id_raise_at_1..9`, `trip_commit_fail_id_raise_at_1..9`, `alerts_import_broken` | **0** |
+| `run_trip.py 2500` (trip-biased) | 2500 | **0** |
+| `realstack.py` (real SQLite / SQLAlchemy, every SQL statement and params, final rows, logs) | 432 | **0** |
+| `realistic_locked.py` | 12 | **0** |
+
+`repro_commit_flush.py` gives the same result for old and new: CRITICAL is logged, then `PendingRollbackError` is
+raised.
+
+The outputs are in `diff2/out_general.txt` and `out_trip.txt`. The same evidence is in the body of `3a01c4b`.
+
+## WP gate (final, on `3a01c4b`)
+
+The container restart killed the first final-gate attempt. It was re-run in the foreground in bounded shards, each
+shard holding the lock for at most 5 minutes (`timeout 300`). Every shard is tee'd to
+`scratchpad/wp4/gate-{union,full,seed2}-<i>.log`, and every shard had rc=0.
+
+| Run | Shards | Result |
+|---|---|---|
+| Union of all task subsets plus `$CORE` | 5 | **1175 passed** |
+| `FULL` (`PYTHONHASHSEED=0`) | 8, contiguous slices of the 130 sorted test files | **2824 passed** |
+| `FULL_SEED2` (`PYTHONHASHSEED=12345`) | 8, same slices | **2824 passed** |
+
+The FULL total is 2797 existing tests plus the 27 in `G`.
+
+**Extra lint, as the orchestrator asked:** `uv run ruff check --select ERA,PGH,SLF,PLE
+libs/greenhouse-server/greenhouse_server/services/` reports **no hits**.
 - Static checks: `make typecheck` OK, `lint-imports` OK, `ruff check libs/ tests/` and `ruff format --check` clean.
 - **Per-WP DoD.** All 12 WP4 files are clean under:
   - `sizecheck` (only `health_monitor.py` > 400 lines, already in the register);
@@ -185,11 +223,14 @@ approved: orchestrator (wave A)`
    - `(deadline - duration_seconds)` is still evaluated at each exit, not hoisted. Hoisting would raise earlier for a
      non-numeric duration that `float()` accepts.
 5. **T4.11**: `_raise_if_not_open(alarm, sensor, *, cluster_id)` passes the `cluster_id` the loop read once.
-6. **T4.12**:
+6. **T4.12** (redo `3a01c4b`):
    - `_trip_payload` is extracted as module-level with keyword-only inputs, as the orchestrator asked.
-   - The lazy `SOURCE_PUMP` import moves into `_log_trip_activity`. `services.alerts` is already loaded through
-     health_monitor's top-level import, so the move has no side effect.
-   - `_commit_trip` receives `irrigator.id` read before the commit.
+   - The `SOURCE_PUMP` import stays the first statement of `_handle_trip`, so it still executes before
+     `adapter.stop`. Its value is passed in as `source=`.
+   - `_commit_trip(irrigator)` reads `irrigator.id` only inside its except handler, as before. There is no extra
+     read anywhere.
+   - `931ad9b`'s claim that "the attribute is loaded and the value identical" was false: a failed flush expires the
+     identity map.
 7. **T4.14**: it adds the pure `_latest_soil_zscore` so that `_drift_alert` stays ≤ 40 body lines.
 8. **T4.15**: `_event_item -> EfficacyItemResponse | None` instead of `_event_items -> list`.
 9. **T4.17**: one blank line was removed after the test run to keep `charts.py` at 400 lines. The file's `ast.dump`
@@ -217,6 +258,11 @@ approved: orchestrator (wave A)`
 ```
 
 ## Bugs touched (preserved)
+
+- **For REFACTOR_NOTES (pre-existing, found by review R2, preserved by `3a01c4b`).** Suppose any write fails during
+  a pump-watcher trip (a failed flush). The session then expires `irrigator`. The watcher's own except handlers read
+  `irrigator.id`, raise `PendingRollbackError` out of `watch()`, and the commit/rollback steps never run. The pump is
+  already stopped by then.
 
 - The `water_warning` meaning mismatch: health_monitor's `water_warning is True` → SENSOR_FAULT is moved verbatim
   (T4.11).
