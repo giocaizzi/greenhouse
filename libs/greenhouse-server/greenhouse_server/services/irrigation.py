@@ -6,7 +6,19 @@ import time as _time
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-from greenhouse_core.constants import LEAK_CHECK_DELAY_SECONDS, LEAK_HOLD_HOURS
+from greenhouse_core.constants import (
+    DEFAULT_SOIL_MOISTURE_TARGET,
+    FALLBACK_TEMPERATURE_C,
+    LEAK_CHECK_ACTIVITY_SCAN_LIMIT,
+    LEAK_CHECK_DELAY_SECONDS,
+    LEAK_HOLD_HOURS,
+    MONITOR_LOOKBACK_HOURS,
+    MONITOR_VERY_DRY_MARGIN,
+    MONITOR_WET_MARGIN,
+    PUMP_WATCHER_MAX_READ_FAILURES,
+    PUMP_WATCHER_POLL_SECONDS,
+    PUMP_WATCHER_WARMUP_SECONDS,
+)
 from greenhouse_core.devices import DeviceRegistry, UnknownDeviceModel
 from greenhouse_core.logic import IrrigationLogic
 from greenhouse_core.logic.cleaning import clean_readings_desc
@@ -181,9 +193,9 @@ def schedule_pump_watcher(
                     return
                 watcher_settings = getattr(_app.state, "settings", None)
                 if watcher_settings is None:
-                    poll = 2.0
-                    warmup = 5.0
-                    max_failures = 5
+                    poll = PUMP_WATCHER_POLL_SECONDS
+                    warmup = PUMP_WATCHER_WARMUP_SECONDS
+                    max_failures = PUMP_WATCHER_MAX_READ_FAILURES
                 else:
                     poll = watcher_settings.pump_watcher_poll_seconds
                     warmup = watcher_settings.pump_watcher_warmup_seconds
@@ -243,7 +255,7 @@ def _leak_check_done(repo: IrrigationRepository, cluster_id: int, started_at: in
     ``leak_hold`` row — both carry ``started_at`` in their payload.
     """
     for event in repo.list_activity_events(
-        entity_type=ENTITY_CLUSTER, entity_id=cluster_id, source=SOURCE_LEAK, limit=500
+        entity_type=ENTITY_CLUSTER, entity_id=cluster_id, source=SOURCE_LEAK, limit=LEAK_CHECK_ACTIVITY_SCAN_LIMIT
     ):
         if event.code not in _LEAK_CHECK_DONE_CODES or not event.payload_json:
             continue
@@ -421,7 +433,7 @@ class IrrigationService:
             if sensor_data and sensor_data.get("temperature") is not None:
                 return sensor_data["temperature"], "sensor (weather unavailable)", sensor_data
 
-        return 20.0, "fallback (20C)", sensor_data
+        return FALLBACK_TEMPERATURE_C, "fallback (20C)", sensor_data
 
     def run_irrigation_pipeline(
         self,
@@ -629,14 +641,14 @@ class IrrigationService:
         for sensor in sensors:
             # Cleaned view: monitor classifies each sensor as dry/ok/wet, and a
             # sensor-only cluster has no engine to sanity-check that call.
-            readings = clean_readings_desc(self._repo.get_recent_readings(sensor.id, hours=2))
+            readings = clean_readings_desc(self._repo.get_recent_readings(sensor.id, hours=MONITOR_LOOKBACK_HOURS))
             latest_soil = (
                 next((r.soil_moisture for r in readings if r.soil_moisture is not None), None) if readings else None
             )
 
             plant = plants_by_id.get(sensor.plant_id) if sensor.plant_id else None
             care = self._plant_db.get_care_data(species=plant.species if plant else None)
-            target_raw = care.get("soil_moisture_target", "45-65")
+            target_raw = care.get("soil_moisture_target", DEFAULT_SOIL_MOISTURE_TARGET)
             try:
                 t_min, t_max = (float(x) for x in target_raw.split("-"))
             except Exception:
@@ -644,11 +656,11 @@ class IrrigationService:
 
             if latest_soil is None:
                 status = "no_data"
-            elif latest_soil < t_min - 15:
+            elif latest_soil < t_min - MONITOR_VERY_DRY_MARGIN:
                 status = "very_dry"
             elif latest_soil < t_min:
                 status = "dry"
-            elif latest_soil > t_max + 10:
+            elif latest_soil > t_max + MONITOR_WET_MARGIN:
                 status = "wet"
             else:
                 status = "ok"
