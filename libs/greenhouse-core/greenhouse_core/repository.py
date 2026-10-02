@@ -37,6 +37,8 @@ from greenhouse_core.models import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from sqlalchemy import Select
     from sqlalchemy.engine import CursorResult
     from sqlalchemy.orm import InstrumentedAttribute
@@ -973,11 +975,7 @@ class IrrigationRepository:
         row = self.session.get(VacationWindow, window_id)
         if not row:
             return None
-        for key, value in fields.items():
-            if value is None:
-                continue
-            if hasattr(row, key):
-                setattr(row, key, value)
+        self._patch_fields(row, fields)
         self.session.flush()
         return row
 
@@ -1022,11 +1020,7 @@ class IrrigationRepository:
         row = self.session.get(IrrigationWindow, window_id)
         if row is None:
             return None
-        for key, value in fields.items():
-            if value is None:
-                continue
-            if hasattr(row, key):
-                setattr(row, key, value)
+        self._patch_fields(row, fields)
         self.session.flush()
         return row
 
@@ -1151,6 +1145,22 @@ class IrrigationRepository:
         return self.session.get(Sensor, sensor_id)
 
     # ── Mutations for CRUD edit/delete ────────────────────────────────────────
+
+    def _patch_fields(
+        self,
+        row: "Base",
+        fields: "Mapping[str, Any]",
+        *,
+        json_fields: frozenset[str] = frozenset(),
+    ) -> None:
+        """None-first PATCH: skip None, JSON-encode dict values of ``json_fields``, set only existing attributes."""
+        for key, value in fields.items():
+            if value is None:
+                continue
+            if key in json_fields and isinstance(value, dict):
+                setattr(row, key, json.dumps(value))
+            elif hasattr(row, key):
+                setattr(row, key, value)
 
     def _delete_by_id(self, model: "type[Base]", row_id: int) -> bool:
         """Delete one row by primary key; ``False`` when it does not exist (shared by the plain deletes)."""
