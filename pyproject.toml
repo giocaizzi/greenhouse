@@ -93,7 +93,13 @@ select = [
 ]
 # Complexity ratchet (refactor plan T0.3 / target §11): today's offenders are listed in
 # per-file-ignores below; the integrator removes each entry once its file is clean (I1).
-extend-select = ["C90", "PLR0911", "PLR0912", "PLR0915"]
+extend-select = [
+    "C90", "PLR0911", "PLR0912", "PLR0915",
+    "ERA",  # eradicate: commented-out code
+    "PGH",  # pygrep-hooks: blanket noqa / type: ignore without codes
+    "SLF",  # flake8-self: private member access across objects
+    "PLE",  # pylint errors
+]
 ignore = [
     "E501",  # line too long (handled by formatter)
     "B008",  # function call in argument defaults
@@ -110,7 +116,7 @@ indent-style = "space"
 "__init__.py" = ["F401"]  # unused imports in __init__
 "tests/*" = ["B011"]  # assert False check
 "scripts/*" = ["E402"]  # intentional sys.path before import
-"tests/**" = ["C90", "PLR0911", "PLR0912", "PLR0915"]  # frozen safety net exceeds the limits
+"tests/**" = ["C90", "PLR0911", "PLR0912", "PLR0915", "ERA001", "SLF001"]  # frozen safety net: exceeds limits, pokes privates
 "refactor/**" = ["C90", "PLR0911", "PLR0912", "PLR0915"]  # refactor tooling scripts, not shipped code
 # Complexity offenders at max-complexity 8 (baseline refactor-gate1); only shrinks.
 "libs/greenhouse-cli/greenhouse_cli/commands/auth.py" = ["C901"]
