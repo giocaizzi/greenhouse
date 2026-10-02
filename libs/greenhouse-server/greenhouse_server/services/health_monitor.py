@@ -257,28 +257,23 @@ class DeviceHealthMonitor:
             cluster_id = sensor.cluster_id
 
             if all(_is_low_battery_state(r.battery_state) for r in recent):
-                key = _dedup_key(ENTITY_SENSOR, sensor.id, HealthAlarm.LOW_BATTERY)
-                if not self._repo.session.scalar(self._open_alert_stmt(key)):
-                    self._raise_health_alert(
-                        entity_type=ENTITY_SENSOR,
-                        entity_id=sensor.id,
-                        alarm=HealthAlarm.LOW_BATTERY,
-                        state=DeviceHealthState(observed_at=self._clock()),
-                        label=sensor.name,
-                        cluster_id=cluster_id,
-                    )
+                self._raise_if_not_open(HealthAlarm.LOW_BATTERY, sensor, cluster_id=cluster_id)
 
             if all(r.water_warning is True for r in recent):
-                key = _dedup_key(ENTITY_SENSOR, sensor.id, HealthAlarm.SENSOR_FAULT)
-                if not self._repo.session.scalar(self._open_alert_stmt(key)):
-                    self._raise_health_alert(
-                        entity_type=ENTITY_SENSOR,
-                        entity_id=sensor.id,
-                        alarm=HealthAlarm.SENSOR_FAULT,
-                        state=DeviceHealthState(observed_at=self._clock()),
-                        label=sensor.name,
-                        cluster_id=cluster_id,
-                    )
+                self._raise_if_not_open(HealthAlarm.SENSOR_FAULT, sensor, cluster_id=cluster_id)
+
+    def _raise_if_not_open(self, alarm: HealthAlarm, sensor: Sensor, *, cluster_id: int | None) -> None:
+        """Raise a back-filled sensor alarm unless its alert is already open (no duplicate on restart)."""
+        key = _dedup_key(ENTITY_SENSOR, sensor.id, alarm)
+        if not self._repo.session.scalar(self._open_alert_stmt(key)):
+            self._raise_health_alert(
+                entity_type=ENTITY_SENSOR,
+                entity_id=sensor.id,
+                alarm=alarm,
+                state=DeviceHealthState(observed_at=self._clock()),
+                label=sensor.name,
+                cluster_id=cluster_id,
+            )
 
     # ── Legacy alias migration (startup hook) ─────────────────────────────
 
