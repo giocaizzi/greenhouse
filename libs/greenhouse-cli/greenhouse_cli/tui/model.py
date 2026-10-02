@@ -76,6 +76,54 @@ def sparkline_points(chart: dict[str, Any] | None) -> list[float]:
     return [merged[ts] for ts in sorted(merged)]
 
 
+def _band(chart: dict[str, Any] | None) -> tuple[float | None, float | None]:
+    """The chart's ideal soil-moisture band ``(min, max)``; ``(None, None)`` without a threshold."""
+    threshold = (chart or {}).get("threshold") or {}
+    return threshold.get("min"), threshold.get("max")
+
+
+def _present(readings: list[dict[str, Any]], key: str) -> list[float]:
+    """The ``key`` values of the readings that carry one, in sensor order."""
+    return [reading[key] for reading in readings if reading.get(key) is not None]
+
+
+def _moisture_by_plant(sensors: list[dict[str, Any]]) -> dict[int, float]:
+    """Latest soil moisture per plant, from the sensors bound to a plant (a later sensor wins)."""
+    moisture: dict[int, float] = {}
+    for sensor in sensors:
+        reading = sensor.get("last_reading")
+        if reading and reading.get("soil_moisture") is not None and sensor.get("plant_id") is not None:
+            moisture[sensor["plant_id"]] = reading["soil_moisture"]
+    return moisture
+
+
+def _plant_views(
+    plants: list[dict[str, Any]], moisture_by_plant: dict[int, float], band: tuple[float | None, float | None]
+) -> list[PlantView]:
+    """One :class:`PlantView` per plant, its mood judged against the band."""
+    views: list[PlantView] = []
+    for plant in plants:
+        moisture = moisture_by_plant.get(plant["id"])
+        views.append(
+            PlantView(
+                id=plant["id"],
+                species=plant["species"],
+                category=plant.get("category"),
+                moisture=moisture,
+                mood=mood_for(moisture, band[0], band[1]),
+            )
+        )
+    return views
+
+
+def _driest(plants: list[PlantView]) -> PlantView | None:
+    """The plant with the lowest moisture ("driest plant drives the call"); the first plant when none has data."""
+    with_data = [p for p in plants if p.moisture is not None]
+    if with_data:
+        return min(with_data, key=lambda p: cast(float, p.moisture))
+    return plants[0] if plants else None
+
+
 def summarize(status: dict[str, Any], chart: dict[str, Any] | None = None) -> ClusterSummary:
     """Build a :class:`ClusterSummary` from ``GET /clusters/{id}/status`` (+ optional chart-data).
 
@@ -85,58 +133,30 @@ def summarize(status: dict[str, Any], chart: dict[str, Any] | None = None) -> Cl
             band and the sparkline.
     """
     cluster = status["cluster"]
-    threshold = (chart or {}).get("threshold") or {}
+    band_min, band_max = _band(chart)
     summary = ClusterSummary(
         id=cluster["id"],
         name=cluster["name"],
         environment=cluster.get("environment", "indoor"),
         location=cluster.get("location"),
-        band_min=threshold.get("min"),
-        band_max=threshold.get("max"),
+        band_min=band_min,
+        band_max=band_max,
         decision=status.get("decision"),
         sparkline=sparkline_points(chart),
     )
 
-    moisture_by_plant: dict[int, float] = {}
-    moistures, temps, hums, lights, stamps = [], [], [], [], []
-    for sensor in status.get("sensors", []):
-        reading = sensor.get("last_reading")
-        if not reading:
-            continue
-        stamps.append(reading["timestamp"])
-        if reading.get("soil_moisture") is not None:
-            moistures.append(reading["soil_moisture"])
-            if sensor.get("plant_id") is not None:
-                moisture_by_plant[sensor["plant_id"]] = reading["soil_moisture"]
-        if reading.get("temperature") is not None:
-            temps.append(reading["temperature"])
-        if reading.get("env_humidity") is not None:
-            hums.append(reading["env_humidity"])
-        if reading.get("light") is not None:
-            lights.append(reading["light"])
-
+    sensors = status.get("sensors", [])
+    readings = [sensor["last_reading"] for sensor in sensors if sensor.get("last_reading")]
+    stamps = [reading["timestamp"] for reading in readings]
+    moistures = _present(readings, "soil_moisture")
     summary.min_moisture = min(moistures) if moistures else None
-    summary.temperature = _mean(temps)
-    summary.humidity = _mean(hums)
-    summary.light = _mean(lights)
+    summary.temperature = _mean(_present(readings, "temperature"))
+    summary.humidity = _mean(_present(readings, "env_humidity"))
+    summary.light = _mean(_present(readings, "light"))
     summary.newest_reading_at = max(stamps) if stamps else None
 
-    for plant in status.get("plants", []):
-        moisture = moisture_by_plant.get(plant["id"])
-        summary.plants.append(
-            PlantView(
-                id=plant["id"],
-                species=plant["species"],
-                category=plant.get("category"),
-                moisture=moisture,
-                mood=mood_for(moisture, summary.band_min, summary.band_max),
-            )
-        )
-    with_data = [p for p in summary.plants if p.moisture is not None]
-    if with_data:
-        summary.driest = min(with_data, key=lambda p: cast(float, p.moisture))
-    elif summary.plants:
-        summary.driest = summary.plants[0]
+    summary.plants = _plant_views(status.get("plants", []), _moisture_by_plant(sensors), (band_min, band_max))
+    summary.driest = _driest(summary.plants)
 
     irrigator = status.get("irrigator")
     if irrigator:
