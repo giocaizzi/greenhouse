@@ -31,7 +31,7 @@ METRICS: tuple[Metric, ...] = ("soil_moisture", "temperature", "env_humidity", "
 
 
 def _get_plant_or_404(repo: IrrigationRepository, plant_id: int, cluster_id: int) -> Plant:
-    plant: Plant | None = repo.session.get(Plant, plant_id)
+    plant: Plant | None = repo.get_plant(plant_id)
     if plant is None or plant.cluster_id != cluster_id:
         raise HTTPException(404, "Plant not found")
     return plant

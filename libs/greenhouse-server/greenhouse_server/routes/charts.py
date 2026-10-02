@@ -34,7 +34,7 @@ def get_plant(plant_id: int, repo: RepoDep):
     Raises:
         HTTPException: 404 if no plant with that ID exists.
     """
-    plant: Plant | None = repo.session.get(Plant, plant_id)
+    plant: Plant | None = repo.get_plant(plant_id)
     if plant is None:
         raise HTTPException(404, "Plant not found")
     return plant
