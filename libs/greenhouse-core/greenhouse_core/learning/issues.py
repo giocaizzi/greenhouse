@@ -4,12 +4,22 @@ import statistics
 from typing import Any
 
 from greenhouse_core.constants import (
+    DEFAULT_SOIL_MOISTURE_TARGET,
+    LEARNING_CHRONIC_MIN_RESPONSES,
+    LEARNING_CONFLICT_DRY_MARGIN,
+    LEARNING_CONFLICT_LOOKBACK_HOURS,
+    LEARNING_DRAINAGE_LUX_LOOKBACK_HOURS,
+    LEARNING_HUMIDITY_DEFICIT,
+    LEARNING_LATEST_SAMPLES,
     LEARNING_MIN_ABSORPTION_PER_MIN,
     LEARNING_MIN_EFFICIENCY,
+    LEARNING_MIN_ENV_SAMPLES,
     LEARNING_MIN_EVENTS,
     LEARNING_OVER_WATER_THRESHOLD,
     LEARNING_RAPID_DRAINAGE_THRESHOLD,
+    LEARNING_WEEK_HOURS,
     LIGHT_BRIGHT,
+    LOW_LIGHT_ALERT_FRACTION,
 )
 from greenhouse_core.learning.models import Alert, PlantProfile
 from greenhouse_core.learning.profiling import get_plant_profile
@@ -80,7 +90,9 @@ def detect_issues(
         # 2. Rapid drainage — with light correlation
         if profile.avg_drainage_per_hour < LEARNING_RAPID_DRAINAGE_THRESHOLD:
             # Check if high light explains the drainage (daytime readings only)
-            recent_readings = clean_readings(db.get_recent_readings(sensor.id, hours=48))
+            recent_readings = clean_readings(
+                db.get_recent_readings(sensor.id, hours=LEARNING_DRAINAGE_LUX_LOOKBACK_HOURS)
+            )
             avg_lux = None
             lux_readings = daytime_lux_readings(recent_readings)
             if lux_readings:
@@ -120,17 +132,17 @@ def detect_issues(
         # 3. Chronic underwatering: max delta never reaches target
         if sensor.plant_id and sensor.plant_id in plant_care:
             care = plant_care[sensor.plant_id]
-            target = care.get("soil_moisture_target", "45-65")
+            target = care.get("soil_moisture_target", DEFAULT_SOIL_MOISTURE_TARGET)
             try:
                 target_min = float(target.split("-")[0])
             except (ValueError, IndexError):
                 target_min = 45.0
 
             # Check if recent readings ever reach target
-            recent = clean_readings(db.get_recent_readings(sensor.id, hours=168))  # 7 days
+            recent = clean_readings(db.get_recent_readings(sensor.id, hours=LEARNING_WEEK_HOURS))  # 7 days
             if recent:
                 max_recent = max((r.soil_moisture for r in recent if r.soil_moisture is not None), default=0)
-                if max_recent < target_min and profile.response_count >= 5:
+                if max_recent < target_min and profile.response_count >= LEARNING_CHRONIC_MIN_RESPONSES:
                     alerts.append(
                         Alert(
                             severity="warning",
@@ -169,10 +181,10 @@ def detect_conflicts(
         # Newest-first cleaned view. `get_recent_readings` returns DESC, so the
         # *first* three entries are the latest three — slicing from the tail
         # would have averaged the OLDEST samples in the window instead.
-        readings = clean_readings_desc(db.get_recent_readings(sensor.id, hours=6))
+        readings = clean_readings_desc(db.get_recent_readings(sensor.id, hours=LEARNING_CONFLICT_LOOKBACK_HOURS))
         moisture_values = [r.soil_moisture for r in readings if r.soil_moisture is not None]
         if moisture_values:
-            sensor_moisture[sensor.id] = statistics.mean(moisture_values[:3])  # latest 3 readings
+            sensor_moisture[sensor.id] = statistics.mean(moisture_values[:LEARNING_LATEST_SAMPLES])  # latest 3 readings
 
     if len(sensor_moisture) < 2:
         return alerts
@@ -188,14 +200,14 @@ def detect_conflicts(
         # Determine target for this plant
         target_min, target_max = 45.0, 65.0
         if sensor.plant_id and sensor.plant_id in plant_care:
-            target_str = plant_care[sensor.plant_id].get("soil_moisture_target", "45-65")
+            target_str = plant_care[sensor.plant_id].get("soil_moisture_target", DEFAULT_SOIL_MOISTURE_TARGET)
             try:
                 parts = target_str.split("-")
                 target_min, target_max = float(parts[0]), float(parts[1])
             except (ValueError, IndexError):
                 pass
 
-        if moisture < target_min - 5:
+        if moisture < target_min - LEARNING_CONFLICT_DRY_MARGIN:
             dry_sensors.append((sensor, moisture, target_min))
         elif moisture > target_max:
             wet_sensors.append((sensor, moisture, target_max))
@@ -251,13 +263,13 @@ def detect_conflicts(
         min_lux = care.get("ideal_light_lux_min")
         if not min_lux:
             continue
-        readings_7d = clean_readings(db.get_recent_readings(sensor.id, hours=168))
+        readings_7d = clean_readings(db.get_recent_readings(sensor.id, hours=LEARNING_WEEK_HOURS))
         lux_vals = daytime_lux_readings(readings_7d)  # exclude night readings
-        if len(lux_vals) < 5:
+        if len(lux_vals) < LEARNING_MIN_ENV_SAMPLES:
             continue  # Not enough data
         avg_lux_7d = statistics.mean(lux_vals)
         seasonal_min_lux = effective_light_threshold(min_lux)  # adjusted for current month
-        if avg_lux_7d < seasonal_min_lux * 0.5:
+        if avg_lux_7d < seasonal_min_lux * LOW_LIGHT_ALERT_FRACTION:
             alerts.append(
                 Alert(
                     severity="warning",
@@ -282,12 +294,12 @@ def detect_conflicts(
         ideal_hum_min = care2.get("ideal_humidity_min")
         if not ideal_hum_min:
             continue
-        readings_48h = clean_readings(db.get_recent_readings(sensor.id, hours=48))
+        readings_48h = clean_readings(db.get_recent_readings(sensor.id, hours=LEARNING_DRAINAGE_LUX_LOOKBACK_HOURS))
         hum_vals = [r.env_humidity for r in readings_48h if r.env_humidity is not None]
-        if len(hum_vals) < 5:
+        if len(hum_vals) < LEARNING_MIN_ENV_SAMPLES:
             continue
         avg_env_hum = statistics.mean(hum_vals)
-        if avg_env_hum < ideal_hum_min - 15:
+        if avg_env_hum < ideal_hum_min - LEARNING_HUMIDITY_DEFICIT:
             alerts.append(
                 Alert(
                     severity="warning",
