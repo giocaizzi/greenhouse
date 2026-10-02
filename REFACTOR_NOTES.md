@@ -127,6 +127,15 @@ Mutation campaign (Gate 1; details in `refactor/gate1/mutation.md`):
   `greenhouse_core.…` via pytest `pythonpath`); the scripted runner `refactor/gate1/mutate.py` (473-mutant catalogue)
   is the reusable mutation tool for Phase 3/5.
 
+Pump watcher (found by the WP4 reviewers; pre-existing, not fixed):
+- if any DB write fails during a trip, the watcher's own except handlers raise `PendingRollbackError` (expired ORM
+  state), so the commit/rollback steps never run (the pump is already stopped);
+- if the health monitor swallows a failed flush (e.g. SQLite "database is locked"), `_handle_trip` still raises.
+
+Process note: Reviewer 2's differential harness (real SQLAlchemy) caught a behavior difference in WP4's first T4.12
+attempt (an `irrigator.id` read moved before `commit()`); T4.12 was reverted and redone. See
+`refactor/reviews/wp4-pump-watcher-r2.md`.
+
 ## Golden-test policy (orchestrator decision)
 
 - OpenAPI, routes, MCP tools, settings, DDL, scheduler registry, package data, web HTML, CLI help/output, TUI renders,
