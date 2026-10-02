@@ -435,56 +435,73 @@ class ClusterScreen(DataScreen):
         )
 
     def action_edit(self) -> None:
-        cid = self.cluster_id
-        tab = self.active_tab
-        if tab == "tab-plants":
-            plant = self._selected("#plants-table", self.status.get("plants", []))
-            if plant:
-                self.form_then(
-                    f"Edit plant #{plant['id']}",
-                    resources.plant_fields(plant),
-                    lambda v: lambda c: c.update_plant(cid, plant["id"], **v),
-                    "Plant updated",
-                )
-        elif tab == "tab-sensors":
-            sensor = self._selected("#sensors-table", self.detail.get("sensors", []))
-            if sensor:
-                self.form_then(
-                    f"Edit sensor #{sensor['id']}",
-                    resources.sensor_fields(sensor, self.status.get("plants", [])),
-                    lambda v: lambda c: c.update_sensor(cid, sensor["id"], **v),
-                    "Sensor updated",
-                )
-        elif tab == "tab-windows":
-            window = self._selected("#windows-table", self.detail.get("windows", []))
-            if window:
-                self.form_then(
-                    f"Edit window #{window['id']}",
-                    resources.window_fields(window),
-                    lambda v: lambda c: c.update_window(cid, window["id"], **v),
-                    "Window updated",
-                )
-        elif tab == "tab-overview":
-            irrigator = self.detail.get("irrigator")
-            if not irrigator:
-                self.notify("No irrigator — press n to attach one.", severity="warning")
-                return
-            self.form_then(
-                f"Edit irrigator — {irrigator['name']}",
-                resources.irrigator_fields(irrigator),
-                lambda v: lambda c: c.update_irrigator(cid, **v),
-                "Irrigator updated",
-            )
-        elif tab == "tab-config":
-            self.form_then(
-                "Edit irrigation config",
-                resources.config_fields(self.detail.get("config")),
-                lambda v: lambda c: c.set_config(cid, **v),
-                "Config saved",
-                note="Blank = keep the current value. Global defaults live on the Settings screen (o).",
-            )
-        else:
+        handler = {
+            "tab-plants": self._edit_plant,
+            "tab-sensors": self._edit_sensor,
+            "tab-windows": self._edit_window,
+            "tab-overview": self._edit_irrigator,
+            "tab-config": self._edit_config,
+        }.get(self.active_tab)
+        if handler is None:
             self.notify("Nothing to edit here — try Plants, Sensors, Windows, Overview or Config.")
+            return
+        handler()
+
+    def _edit_plant(self) -> None:
+        cid = self.cluster_id
+        plant = self._selected("#plants-table", self.status.get("plants", []))
+        if plant:
+            self.form_then(
+                f"Edit plant #{plant['id']}",
+                resources.plant_fields(plant),
+                lambda v: lambda c: c.update_plant(cid, plant["id"], **v),
+                "Plant updated",
+            )
+
+    def _edit_sensor(self) -> None:
+        cid = self.cluster_id
+        sensor = self._selected("#sensors-table", self.detail.get("sensors", []))
+        if sensor:
+            self.form_then(
+                f"Edit sensor #{sensor['id']}",
+                resources.sensor_fields(sensor, self.status.get("plants", [])),
+                lambda v: lambda c: c.update_sensor(cid, sensor["id"], **v),
+                "Sensor updated",
+            )
+
+    def _edit_window(self) -> None:
+        cid = self.cluster_id
+        window = self._selected("#windows-table", self.detail.get("windows", []))
+        if window:
+            self.form_then(
+                f"Edit window #{window['id']}",
+                resources.window_fields(window),
+                lambda v: lambda c: c.update_window(cid, window["id"], **v),
+                "Window updated",
+            )
+
+    def _edit_irrigator(self) -> None:
+        cid = self.cluster_id
+        irrigator = self.detail.get("irrigator")
+        if not irrigator:
+            self.notify("No irrigator — press n to attach one.", severity="warning")
+            return
+        self.form_then(
+            f"Edit irrigator — {irrigator['name']}",
+            resources.irrigator_fields(irrigator),
+            lambda v: lambda c: c.update_irrigator(cid, **v),
+            "Irrigator updated",
+        )
+
+    def _edit_config(self) -> None:
+        cid = self.cluster_id
+        self.form_then(
+            "Edit irrigation config",
+            resources.config_fields(self.detail.get("config")),
+            lambda v: lambda c: c.set_config(cid, **v),
+            "Config saved",
+            note="Blank = keep the current value. Global defaults live on the Settings screen (o).",
+        )
 
     def action_delete(self) -> None:
         cid = self.cluster_id
