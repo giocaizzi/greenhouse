@@ -35,15 +35,6 @@ RANGES = [6, 24, 72, 168, 720]
 STATS_DAYS = 7
 
 
-def _next_water(forecast: dict[str, Any]) -> str | Text:
-    hours = forecast.get("hours_until_next")
-    if hours is None:
-        return "—"
-    if hours <= 0:
-        return Text("due now", style="bold #e0c341")
-    return f"{fmt.ago(forecast.get('next_predicted_at'))} ({fmt.clock(forecast.get('next_predicted_at'))})"
-
-
 class ClusterScreen(DataScreen):
     """Everything about one cluster, in tabs."""
 
@@ -204,45 +195,8 @@ class ClusterScreen(DataScreen):
             )
 
         self.query_one("#can", SpriteView).set_factory(lambda f: watering_can_sprite(s.watering, f))
-        info = Text()
-        if s.irrigator_id is None:
-            info.append("No irrigator\n", style="bold")
-            info.append("sensor-only cluster\n", style="dim")
-            info.append("n: attach an irrigator", style="dim")
-        else:
-            info.append(f"{s.irrigator_name}\n", style="bold")
-            if s.watering:
-                info.append("● watering now\n", style="bold #4fb3ff")
-            else:
-                info.append("idle\n", style="dim")
-            ev = s.last_event
-            if ev:
-                info.append(f"last {ev['action']} {fmt.ago(ev['timestamp'])}")
-                if ev.get("duration_minutes"):
-                    info.append(f" · {ev['duration_minutes']}m")
-                info.append(f"\nby {ev.get('triggered_by', '?')}", style="dim")
-            info.append("\nu edit · del detach", style="dim")
-        self.query_one("#irrigator-info", Static).update(info)
-
-        decision = status.get("decision") or {}
-        text = Text.assemble(("Decision engine\n", "bold"))
-        if not decision:
-            text.append("no decision available", style="dim")
-        else:
-            text.append_text(fmt.styled(decision.get("action"), fmt.ACTION_STYLES))
-            if decision.get("duration_minutes"):
-                text.append(f"  {decision['duration_minutes']} min")
-            if decision.get("interval_hours"):
-                text.append(f" · every {decision['interval_hours']}h")
-            text.append(f"  confidence {decision.get('confidence', 0):.0%}\n", style="dim")
-            for reason in decision.get("reasons", []):
-                sev = reason.get("severity", "info")
-                text.append(f"{reason.get('icon') or '•'} ", style=fmt.SEVERITY_STYLES.get(sev, ""))
-                text.append(f"{reason.get('message', '')} ")
-                text.append(f"[{reason.get('code', '')}]\n", style="dim")
-            if not decision.get("reasons"):
-                text.append(decision.get("reason", ""))
-        self.query_one("#decision-panel", Static).update(text)
+        self.query_one("#irrigator-info", Static).update(render.irrigator_info(s))
+        self.query_one("#decision-panel", Static).update(render.decision_panel(status.get("decision") or {}))
 
     async def _load_forecast(self) -> None:
         f = await self.gh.api(lambda c: c.forecast(self.cluster_id), quiet=True)
@@ -250,17 +204,7 @@ class ClusterScreen(DataScreen):
         if not f:
             panel.show([("forecast", "unavailable")], title="Forecast")
             return
-        rows: list[tuple[str, str | Text]] = [
-            ("next water", _next_water(f)),
-            ("projected min", fmt.num(f.get("projected_min_moisture"), "%")),
-            ("method", f"{f.get('method', '?')} ({f.get('confidence', 0):.0%})"),
-        ]
-        if f.get("precipitation_next_6h_mm") is not None:
-            rows.append(("rain 6h", fmt.num(f["precipitation_next_6h_mm"], " mm")))
-        if f.get("weather_skip"):
-            rows.append(("weather", Text(f.get("weather_reason") or "skip — rain expected", style="#4fb3ff")))
-        rows.append(("", Text(f.get("explanation", ""), style="dim")))
-        panel.show(rows, title="Forecast")
+        panel.show(render.forecast_rows(f), title="Forecast")
 
     async def _load_chart(self, payload: dict[str, Any] | None = None) -> None:
         label = "Overlay: soil / humidity / light (0-100)" if self.metric == "overlay" else fmt.METRICS[self.metric][0]

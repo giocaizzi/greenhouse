@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from rich.console import RenderableType
 from rich.text import Text
 
 from greenhouse_cli.tui import formatting as fmt
+
+if TYPE_CHECKING:
+    from greenhouse_cli.tui.model import ClusterSummary
 
 Row = tuple[str | None, list[RenderableType | str]]
 """One ``DataTable`` row for :func:`greenhouse_cli.tui.widgets.refill`: ``(row key or None, cells)``."""
@@ -139,4 +142,75 @@ def window_rows(windows: list[dict[str, Any]]) -> list[Row]:
                 ],
             )
         )
+    return rows
+
+
+def irrigator_info(summary: ClusterSummary) -> Text:
+    """Overview irrigator panel: name, watering state and last event, or the sensor-only hint."""
+    s = summary
+    info = Text()
+    if s.irrigator_id is None:
+        info.append("No irrigator\n", style="bold")
+        info.append("sensor-only cluster\n", style="dim")
+        info.append("n: attach an irrigator", style="dim")
+        return info
+    info.append(f"{s.irrigator_name}\n", style="bold")
+    if s.watering:
+        info.append("● watering now\n", style="bold #4fb3ff")
+    else:
+        info.append("idle\n", style="dim")
+    ev = s.last_event
+    if ev:
+        info.append(f"last {ev['action']} {fmt.ago(ev['timestamp'])}")
+        if ev.get("duration_minutes"):
+            info.append(f" · {ev['duration_minutes']}m")
+        info.append(f"\nby {ev.get('triggered_by', '?')}", style="dim")
+    info.append("\nu edit · del detach", style="dim")
+    return info
+
+
+def decision_panel(decision: dict[str, Any]) -> Text:
+    """Overview decision panel: action, duration/interval, confidence and the reason trail (``{}`` = none yet)."""
+    text = Text.assemble(("Decision engine\n", "bold"))
+    if not decision:
+        text.append("no decision available", style="dim")
+        return text
+    text.append_text(fmt.styled(decision.get("action"), fmt.ACTION_STYLES))
+    if decision.get("duration_minutes"):
+        text.append(f"  {decision['duration_minutes']} min")
+    if decision.get("interval_hours"):
+        text.append(f" · every {decision['interval_hours']}h")
+    text.append(f"  confidence {decision.get('confidence', 0):.0%}\n", style="dim")
+    for reason in decision.get("reasons", []):
+        sev = reason.get("severity", "info")
+        text.append(f"{reason.get('icon') or '•'} ", style=fmt.SEVERITY_STYLES.get(sev, ""))
+        text.append(f"{reason.get('message', '')} ")
+        text.append(f"[{reason.get('code', '')}]\n", style="dim")
+    if not decision.get("reasons"):
+        text.append(decision.get("reason", ""))
+    return text
+
+
+def _next_water(forecast: dict[str, Any]) -> str | Text:
+    hours = forecast.get("hours_until_next")
+    if hours is None:
+        return "—"
+    if hours <= 0:
+        return Text("due now", style="bold #e0c341")
+    return f"{fmt.ago(forecast.get('next_predicted_at'))} ({fmt.clock(forecast.get('next_predicted_at'))})"
+
+
+def forecast_rows(forecast: dict[str, Any]) -> list[tuple[str, str | Text]]:
+    """Forecast panel rows: next watering, projected minimum, method, then rain / weather-skip notes when present."""
+    f = forecast
+    rows: list[tuple[str, str | Text]] = [
+        ("next water", _next_water(f)),
+        ("projected min", fmt.num(f.get("projected_min_moisture"), "%")),
+        ("method", f"{f.get('method', '?')} ({f.get('confidence', 0):.0%})"),
+    ]
+    if f.get("precipitation_next_6h_mm") is not None:
+        rows.append(("rain 6h", fmt.num(f["precipitation_next_6h_mm"], " mm")))
+    if f.get("weather_skip"):
+        rows.append(("weather", Text(f.get("weather_reason") or "skip — rain expected", style="#4fb3ff")))
+    rows.append(("", Text(f.get("explanation", ""), style="dim")))
     return rows
