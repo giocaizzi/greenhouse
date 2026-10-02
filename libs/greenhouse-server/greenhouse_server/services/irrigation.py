@@ -52,6 +52,54 @@ CHECK_FAILED_ALERT_CODE = "check_failed"
 WATCHER_SHUTDOWN_ACTIVITY_CODE = "pump_watcher_shutdown"
 
 
+def _stop_auto_cycle(repo: IrrigationRepository, registry: DeviceRegistry, irrigator: "Irrigator") -> tuple[bool, str]:
+    """Best-effort stop of an auto cycle at shutdown; returns ``(stop_ok, activity message)``."""
+    stop_ok = False
+    stop_msg = ""
+    try:
+        stop_ok, stop_msg = registry.get_irrigator(irrigator).stop(irrigator)
+    except Exception as exc:  # noqa: BLE001 — best-effort during shutdown
+        stop_msg = f"adapter.stop raised: {exc}"
+    if stop_ok:
+        logger.warning(
+            "Server shutting down mid-irrigation: stopped auto cycle on irrigator %d "
+            "(dry-run watcher can no longer protect it)",
+            irrigator.id,
+        )
+        repo.add_irrigation_event(
+            irrigator_id=irrigator.id,
+            action="stop",
+            triggered_by="shutdown",
+            notes="server shutdown: dry-run watcher interrupted, auto cycle stopped",
+            timestamp=int(_time.time()),
+        )
+        return stop_ok, f"Server shutdown stopped the auto irrigation on '{irrigator.name}' (watcher interrupted)"
+    logger.error(
+        "Server shutting down mid-irrigation: FAILED to stop auto cycle on irrigator %d (%s) — "
+        "it continues unprotected until the device timer ends it",
+        irrigator.id,
+        stop_msg,
+    )
+    return stop_ok, (
+        f"Server shutdown could not stop the auto irrigation on '{irrigator.name}' ({stop_msg}); "
+        "it continues without dry-run protection"
+    )
+
+
+def _left_running_message(irrigator: "Irrigator", triggered_by: str) -> str:
+    """Warn that a non-auto cycle keeps running unwatched; returns the activity message."""
+    logger.warning(
+        "Server shutting down mid-irrigation: %s cycle on irrigator %d left running "
+        "unprotected (no dry-run watcher) until the device timer ends it",
+        triggered_by,
+        irrigator.id,
+    )
+    return (
+        f"Server shutdown: {triggered_by} irrigation on '{irrigator.name}' continues "
+        "without dry-run protection until the device timer ends it"
+    )
+
+
 def handle_watcher_interrupted(
     repo: IrrigationRepository,
     registry: DeviceRegistry,
@@ -87,47 +135,9 @@ def handle_watcher_interrupted(
     """
     stop_ok = False
     if triggered_by == "auto":
-        stop_msg = ""
-        try:
-            stop_ok, stop_msg = registry.get_irrigator(irrigator).stop(irrigator)
-        except Exception as exc:  # noqa: BLE001 — best-effort during shutdown
-            stop_msg = f"adapter.stop raised: {exc}"
-        if stop_ok:
-            logger.warning(
-                "Server shutting down mid-irrigation: stopped auto cycle on irrigator %d "
-                "(dry-run watcher can no longer protect it)",
-                irrigator.id,
-            )
-            repo.add_irrigation_event(
-                irrigator_id=irrigator.id,
-                action="stop",
-                triggered_by="shutdown",
-                notes="server shutdown: dry-run watcher interrupted, auto cycle stopped",
-                timestamp=int(_time.time()),
-            )
-            message = f"Server shutdown stopped the auto irrigation on '{irrigator.name}' (watcher interrupted)"
-        else:
-            logger.error(
-                "Server shutting down mid-irrigation: FAILED to stop auto cycle on irrigator %d (%s) — "
-                "it continues unprotected until the device timer ends it",
-                irrigator.id,
-                stop_msg,
-            )
-            message = (
-                f"Server shutdown could not stop the auto irrigation on '{irrigator.name}' ({stop_msg}); "
-                "it continues without dry-run protection"
-            )
+        stop_ok, message = _stop_auto_cycle(repo, registry, irrigator)
     else:
-        logger.warning(
-            "Server shutting down mid-irrigation: %s cycle on irrigator %d left running "
-            "unprotected (no dry-run watcher) until the device timer ends it",
-            triggered_by,
-            irrigator.id,
-        )
-        message = (
-            f"Server shutdown: {triggered_by} irrigation on '{irrigator.name}' continues "
-            "without dry-run protection until the device timer ends it"
-        )
+        message = _left_running_message(irrigator, triggered_by)
     try:
         repo.add_activity_event(
             source="irrigation",
