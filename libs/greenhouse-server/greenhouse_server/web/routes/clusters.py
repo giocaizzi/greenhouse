@@ -19,6 +19,7 @@ from greenhouse_server.services.charts import (
 )
 from greenhouse_server.web.context import base_context
 from greenhouse_server.web.templating import templates
+from greenhouse_server.web.weekdays import WEEKDAY_BITS, WEEKDAY_LABELS, format_weekday_mask
 
 if TYPE_CHECKING:
     from greenhouse_core.repository import IrrigationRepository
@@ -93,17 +94,6 @@ def delete_cluster(cluster_id: int, repo: RepoDep):
     return HTMLResponse("")
 
 
-_WEEKDAY_BITS: tuple[int, ...] = (1, 2, 4, 8, 16, 32, 64)
-_WEEKDAY_LABELS: tuple[str, ...] = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
-_FULL_WEEKDAY_MASK = 127
-
-
-def _format_weekday_mask(mask: int) -> str:
-    if mask & _FULL_WEEKDAY_MASK == _FULL_WEEKDAY_MASK:
-        return "Every day"
-    return ", ".join(label for bit, label in zip(_WEEKDAY_BITS, _WEEKDAY_LABELS, strict=True) if mask & bit)
-
-
 def _plants_by_id(repo: IrrigationRepository, cluster_id: int) -> dict[int, object]:
     return {p.id: p for p in repo.get_plants_in_cluster(cluster_id)}
 
@@ -153,7 +143,7 @@ def cluster_detail(
             "start_hour": w.start_hour,
             "end_hour": w.end_hour,
             "weekday_mask": w.weekday_mask,
-            "weekday_label": _format_weekday_mask(w.weekday_mask),
+            "weekday_label": format_weekday_mask(w.weekday_mask),
             "label": w.label,
         }
         for w in repo.list_irrigation_windows(cluster_id)
@@ -198,8 +188,8 @@ def cluster_detail(
             declared_config=declared_config,
             effective_config=effective_config,
             windows=windows,
-            weekday_bits=_WEEKDAY_BITS,
-            weekday_labels=_WEEKDAY_LABELS,
+            weekday_bits=WEEKDAY_BITS,
+            weekday_labels=WEEKDAY_LABELS,
             plants_by_id=plants_by_id,
             quiet_active_now=quiet_active_now,
         ),

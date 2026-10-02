@@ -55,3 +55,4 @@ libs/greenhouse-server/greenhouse_server/web/routes/plant_dashboard.py
 libs/greenhouse-server/greenhouse_server/web/routes/plants.py
 libs/greenhouse-server/greenhouse_server/web/routes/windows.py
 libs/greenhouse-server/greenhouse_server/web/templating.py
+libs/greenhouse-server/greenhouse_server/web/weekdays.py
