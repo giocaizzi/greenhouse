@@ -14,6 +14,10 @@ suggested follow-up. Details/evidence: `REFACTOR_NOTES.md` and the `refactor/10-
 | S5 | Pump watcher: a failed write during a trip makes its own except handlers raise `PendingRollbackError` (commit/rollback never run; pump already stopped) | `services/pump_watcher.py` | WP4 reviewers |
 | B | ~60 further observed bugs (offline flap every sync, caps never checked in the automatic pipeline, re-raised alerts not re-notified, `water_warning` meaning mismatch, web 500s on bad input, `WWW-Authenticate` dropped on JSON 401, `verify_password` raising on truncated hash, `local_key` returned in plain text, settings read from unintended env names, migrated schema ≠ `create_all`, CLI timeout tracebacks, …) | see `REFACTOR_NOTES.md` "Observed bugs" | `*_current_behavior` tests |
 
+- **Security:** the MCP bearer-token check (`require_mcp_token`, `greenhouse_server/app.py`) compares tokens with
+  `!=`, not constant-time (`hmac.compare_digest`) — timing side channel on the credential that grants actuation
+  authority. Found by the WP5 reviewer; not a regression.
+
 ## 2. Dependencies / supply chain
 - `pip-audit`: 53 advisory rows across 10 locked packages (pyjwt, starlette, urllib3, cryptography, …) —
   `refactor/baseline/pip-audit.txt`. Needs a dependency-bump PR (runtime deps are frozen in this refactor).
