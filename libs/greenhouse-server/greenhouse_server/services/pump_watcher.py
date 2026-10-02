@@ -31,12 +31,16 @@ recommended belt-and-suspenders safeguard.
 import logging
 import time
 from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 from greenhouse_core.devices import DeviceRegistry
 from greenhouse_core.devices.health import HealthAlarm
 from greenhouse_core.models import ENTITY_IRRIGATOR, Irrigator
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.services.health_monitor import DeviceHealthMonitor
+
+if TYPE_CHECKING:
+    from greenhouse_core.devices.health import DeviceHealthState
 
 logger = logging.getLogger(__name__)
 
@@ -88,7 +92,7 @@ class PumpWatcherService:
         duration_seconds: int,
         *,
         started_at: int | None = None,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Poll the dry-run alarm for the duration of an active irrigation.
 
         Args:
@@ -181,7 +185,7 @@ class PumpWatcherService:
 
     # ── Internals ─────────────────────────────────────────────────────────
 
-    def _read_health(self, irrigator: Irrigator):
+    def _read_health(self, irrigator: Irrigator) -> "DeviceHealthState":
         """Read the device's health surface via the registry-resolved adapter.
 
         Watcher and slow-path monitor share this code path so a single
@@ -195,7 +199,7 @@ class PumpWatcherService:
         *,
         irrigator: Irrigator,
         cluster_id: int,
-        state,
+        state: "DeviceHealthState",
         started_at: int,
         polls: int,
         duration_seconds: int,

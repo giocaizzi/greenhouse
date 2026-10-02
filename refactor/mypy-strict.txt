@@ -29,9 +29,15 @@ libs/greenhouse-server/greenhouse_server/routes/quality.py
 libs/greenhouse-server/greenhouse_server/routes/well_known.py
 libs/greenhouse-server/greenhouse_server/services/anomaly.py
 libs/greenhouse-server/greenhouse_server/services/bulk.py
+libs/greenhouse-server/greenhouse_server/services/charts.py
 libs/greenhouse-server/greenhouse_server/services/data_quality.py
 libs/greenhouse-server/greenhouse_server/services/efficacy.py
+libs/greenhouse-server/greenhouse_server/services/forecast.py
+libs/greenhouse-server/greenhouse_server/services/health.py
+libs/greenhouse-server/greenhouse_server/services/health_monitor.py
 libs/greenhouse-server/greenhouse_server/services/insights.py
+libs/greenhouse-server/greenhouse_server/services/maintenance.py
+libs/greenhouse-server/greenhouse_server/services/pump_watcher.py
 libs/greenhouse-server/greenhouse_server/services/search.py
 libs/greenhouse-server/greenhouse_server/services/system_health.py
 libs/greenhouse-server/greenhouse_server/services/vacation.py

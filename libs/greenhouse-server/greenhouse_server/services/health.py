@@ -2,6 +2,7 @@
 
 import time
 from datetime import UTC, datetime
+from typing import Any
 
 from greenhouse_core.learning.profiling import get_plant_profile
 from greenhouse_core.logic.cleaning import clean_readings
@@ -17,7 +18,7 @@ class PlantHealthService:
         self._repo = repo
         self._plant_db = plant_db
 
-    def compute_score(self, plant_id: int, *, days: int = 14) -> dict:
+    def compute_score(self, plant_id: int, *, days: int = 14) -> dict[str, Any]:
         """Compute the composite health score for a single plant over the last ``days``.
 
         Score formula (0–100): mean of whichever subset of the four components

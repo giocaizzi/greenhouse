@@ -27,6 +27,7 @@ import logging
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from greenhouse_core.constants import (
     BATTERY_CRITICAL_PCT,
@@ -42,6 +43,11 @@ from greenhouse_core.models import ENTITY_IRRIGATOR, ENTITY_SENSOR, Irrigator, S
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.services.alerts import notify_if_new_alert
 from greenhouse_server.services.notify import NtfyClient
+
+if TYPE_CHECKING:
+    from sqlalchemy import Select
+
+    from greenhouse_core.models import Alert
 
 logger = logging.getLogger(__name__)
 
@@ -224,7 +230,7 @@ class DeviceHealthMonitor:
         cached = self._cache.get((ENTITY_IRRIGATOR, irrigator.id))
         if cached is None:
             return False, []
-        blocking = [
+        blocking: list[HealthAlarm] = [
             alarm
             for alarm in cached.derived_alarms
             if alarm in (HealthAlarm.NO_WATER, HealthAlarm.RAIN_DETECTED, HealthAlarm.DEVICE_OFFLINE)
@@ -370,7 +376,7 @@ class DeviceHealthMonitor:
             logger.exception("Failed to resolve health alert %s for %s %d", alarm.value, entity_type, entity_id)
 
     @staticmethod
-    def _open_alert_stmt(dedup_key: str):
+    def _open_alert_stmt(dedup_key: str) -> Select[tuple[Alert]]:
         from sqlalchemy import select
 
         from greenhouse_core.models import Alert

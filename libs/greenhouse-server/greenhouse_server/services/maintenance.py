@@ -2,6 +2,7 @@
 
 import statistics
 import time
+from typing import Any
 
 from greenhouse_core.learning import IrrigationLearner
 from greenhouse_core.plant_db import PlantDatabase
@@ -9,7 +10,9 @@ from greenhouse_core.repository import IrrigationRepository
 from greenhouse_core.utils import daytime_lux_readings, effective_light_threshold
 
 
-def collect_learning_alerts(repo: IrrigationRepository, cluster_id: int, plant_db: PlantDatabase) -> list[dict]:
+def collect_learning_alerts(
+    repo: IrrigationRepository, cluster_id: int, plant_db: PlantDatabase
+) -> list[dict[str, Any]]:
     """Return learning alerts for a cluster (efficiency, patterns). Never raises."""
     try:
         learner = IrrigationLearner(repo, plant_db)
@@ -19,7 +22,9 @@ def collect_learning_alerts(repo: IrrigationRepository, cluster_id: int, plant_d
         return []
 
 
-def collect_maintenance_alerts(repo: IrrigationRepository, cluster_id: int, plant_db: PlantDatabase) -> list[dict]:
+def collect_maintenance_alerts(
+    repo: IrrigationRepository, cluster_id: int, plant_db: PlantDatabase
+) -> list[dict[str, Any]]:
     """Return maintenance alerts (hardware, environment). Never raises."""
     alerts = []
     sensors = repo.get_sensors_in_cluster(cluster_id)

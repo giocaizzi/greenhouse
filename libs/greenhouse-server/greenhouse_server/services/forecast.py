@@ -2,6 +2,7 @@
 
 import time
 from dataclasses import dataclass
+from typing import Any
 
 from greenhouse_core.learning import IrrigationLearner
 from greenhouse_core.logic.cleaning import clean_readings_desc
@@ -27,7 +28,7 @@ class _SensorForecast:
 class ForecastService:
     """Predicts when a cluster will next need irrigation."""
 
-    def __init__(self, repo: IrrigationRepository, plant_db: PlantDatabase, weather_client=None):
+    def __init__(self, repo: IrrigationRepository, plant_db: PlantDatabase, weather_client: Any = None):
         self._repo = repo
         self._plant_db = plant_db
         self._weather = weather_client
@@ -66,7 +67,7 @@ class ForecastService:
 
             profile = learner.get_plant_profile(sensor)
             has_profile = profile is not None
-            drainage = profile.avg_drainage_per_hour if has_profile else _FALLBACK_DRAINAGE_PER_HOUR
+            drainage = profile.avg_drainage_per_hour if profile is not None else _FALLBACK_DRAINAGE_PER_HOUR
             if drainage >= 0:
                 drainage = _FALLBACK_DRAINAGE_PER_HOUR
 

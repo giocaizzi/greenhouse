@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 from collections import defaultdict
 from datetime import UTC, datetime
-from typing import Literal
+from typing import Any, Literal
 
 from sqlalchemy import select
 
@@ -46,7 +46,7 @@ def build_plant_chart_payload(
     plant_id: int,
     hours: int,
     metric: Metric,
-) -> dict:
+) -> dict[str, Any]:
     plant: Plant | None = repo.session.get(Plant, plant_id)
     if plant is None:
         return {}
@@ -74,7 +74,7 @@ def build_cluster_chart_payload(
     cluster_id: int,
     hours: int,
     metric: Metric,
-) -> dict:
+) -> dict[str, Any]:
     cluster = repo.get_cluster(cluster_id)
     if cluster is None:
         return {}
@@ -98,7 +98,7 @@ def _build_plant_sensor_datasets(
     plant_id: int,
     hours: int,
     metric: Metric,
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """Assignment-aware variant: readings are filtered to windows when the
     sensor was actually linked to this plant. One dataset per sensor that ever
     served this plant within the lookback window."""
@@ -135,7 +135,7 @@ def _build_sensor_datasets(
     sensors: list[Sensor],
     hours: int,
     metric: Metric,
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     datasets = []
     field = _metric_field(metric)
     for sensor in sensors:
@@ -154,10 +154,10 @@ def _build_sensor_datasets(
     return datasets
 
 
-def _build_event_list(repo: IrrigationRepository, cluster_id: int, hours: int) -> list[dict]:
+def _build_event_list(repo: IrrigationRepository, cluster_id: int, hours: int) -> list[dict[str, Any]]:
     irrigator = repo.get_irrigator_for_cluster(cluster_id)
     cutoff = int(time.time()) - (hours * 3600)
-    events: list[dict] = []
+    events: list[dict[str, Any]] = []
     if irrigator is not None:
         for e in repo.get_recent_events(irrigator.id, hours=hours):
             if e.timestamp < cutoff:
@@ -173,7 +173,7 @@ def _build_event_list(repo: IrrigationRepository, cluster_id: int, hours: int) -
     return events
 
 
-def _threshold_for_plant(plant: Plant, plant_db: PlantDatabase, metric: Metric) -> dict:
+def _threshold_for_plant(plant: Plant, plant_db: PlantDatabase, metric: Metric) -> dict[str, Any]:
     if metric == "soil_moisture":
         if plant.water_needs:
             info = plant_db.get_water_needs_info(plant.water_needs)
@@ -200,7 +200,7 @@ def _threshold_for_plant(plant: Plant, plant_db: PlantDatabase, metric: Metric) 
 
 def _threshold_for_cluster(
     repo: IrrigationRepository, plant_db: PlantDatabase, cluster_id: int, metric: Metric
-) -> dict:
+) -> dict[str, Any]:
     if metric == "soil_moisture":
         return {
             "min": float(DEFAULT_SOIL_MOISTURE_MIN),
