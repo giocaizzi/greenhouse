@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Sequence
+from typing import Any
 
 from rich.console import Group, RenderableType
 from rich.table import Table
@@ -29,11 +30,11 @@ class SpriteView(Static):
     SpriteView { width: auto; height: auto; }
     """
 
-    def __init__(self, factory: SpriteFactory, animate: bool = True, **kwargs) -> None:
+    def __init__(self, factory: SpriteFactory, animate: bool = True, **kwargs: Any) -> None:
         super().__init__(factory(0), **kwargs)
         self._factory = factory
         self._frame = 0
-        self._animate = animate
+        self._animate = animate  # type: ignore[assignment]  # shadows DOMNode._animate (pre-existing, kept)
 
     def on_mount(self) -> None:
         if self._animate and getattr(self.app, "animations", True):
@@ -55,7 +56,7 @@ def plant_factory(category: str | None, mood: Mood, watering: bool = False) -> S
 class Banner(Static):
     """Greenhouse logo + system health pulse."""
 
-    def update_health(self, health: dict | None, server: str) -> None:
+    def update_health(self, health: dict[str, Any] | None, server: str) -> None:
         table = Table.grid(padding=(0, 2))
         table.add_column()
         table.add_column()
@@ -93,7 +94,7 @@ class ClusterCard(Vertical, can_focus=True):
 
     BINDINGS = [("enter", "select", "Open")]
 
-    def __init__(self, summary: ClusterSummary, **kwargs) -> None:
+    def __init__(self, summary: ClusterSummary, **kwargs: Any) -> None:
         super().__init__(id=f"cluster-card-{summary.id}", classes="cluster-card", **kwargs)
         self.summary = summary
 
@@ -160,8 +161,8 @@ class PlantTile(Vertical):
         mood: Mood,
         watering: bool,
         band: tuple[float | None, float | None] = (None, None),
-        **kw,
-    ):
+        **kw: Any,
+    ) -> None:
         super().__init__(classes="plant-tile", **kw)
         self._args = (species, category, moisture, mood, watering, band)
 
@@ -182,7 +183,7 @@ class MetricChart(PlotextPlot):
     """A plotext line chart fed by a ``chart-data`` / ``health-timeline`` payload."""
 
     def show_payload(
-        self, payload: dict | None, metric: str = "soil_moisture", hours: int = 24, title: str | None = None
+        self, payload: dict[str, Any] | None, metric: str = "soil_moisture", hours: int = 24, title: str | None = None
     ) -> None:
         """Plot every sensor series, the ideal band and irrigation events.
 
@@ -219,7 +220,7 @@ class MetricChart(PlotextPlot):
             plt.title(f"{label} — no readings in the last {hours}h")
         self.refresh()
 
-    def show_overlay(self, payload: dict | None, hours: int) -> None:
+    def show_overlay(self, payload: dict[str, Any] | None, hours: int) -> None:
         """Plot the normalised soil / humidity / light overlay (shared 0–100 axis)."""
         plt = self.plt
         plt.clear_figure()
@@ -251,7 +252,7 @@ class MetricChart(PlotextPlot):
         plt.xticks(ticks, [fmt.clock(reference + t * 3600, with_date=hours > 24) for t in ticks])
         self.refresh()
 
-    def show_timeline(self, payload: dict | None, title: str) -> None:
+    def show_timeline(self, payload: dict[str, Any] | None, title: str) -> None:
         """Plot a ``(timestamp, score)`` timeline such as plant health."""
         plt = self.plt
         plt.clear_figure()
@@ -274,7 +275,7 @@ class Heatmap(Static):
     RAMP = ["#1f2a1f", "#1d4d6b", "#2271a8", "#2f95d6", "#4fb3ff", "#9ad7ff"]
     DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
-    def show(self, payload: dict | None) -> None:
+    def show(self, payload: dict[str, Any] | None) -> None:
         cells = {(c["weekday"], c["hour"]): c for c in (payload or {}).get("cells", [])}
         peak = max((c["count"] for c in cells.values()), default=0)
         text = Text()
@@ -298,7 +299,7 @@ class Heatmap(Static):
 class KeyValue(Static):
     """A two-column key/value panel."""
 
-    def show(self, rows: list[tuple[str, RenderableType | str]], title: str | None = None) -> None:
+    def show(self, rows: Sequence[tuple[str, RenderableType | str]], title: str | None = None) -> None:
         table = Table.grid(padding=(0, 2))
         table.add_column(style="dim", no_wrap=True)
         table.add_column()
@@ -310,7 +311,7 @@ class KeyValue(Static):
             self.update(table)
 
 
-def selected_key(table: DataTable) -> str | None:
+def selected_key(table: DataTable[Any]) -> str | None:
     """Row key under the cursor, or ``None`` for an empty table."""
     if not table.row_count:
         return None
@@ -318,7 +319,7 @@ def selected_key(table: DataTable) -> str | None:
     return row_key.value
 
 
-def refill(table: DataTable, rows: Iterable[tuple[str | None, Sequence[RenderableType | str]]]) -> None:
+def refill(table: DataTable[Any], rows: Iterable[tuple[str | None, Sequence[RenderableType | str]]]) -> None:
     """Replace a table's rows while keeping the cursor on the same record.
 
     Auto-refresh reloads every table; without this the cursor would snap back

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from typing import TYPE_CHECKING
 
 from rich.text import Text
 from textual.app import ComposeResult
@@ -13,6 +14,9 @@ from textual.widgets import DataTable, Footer, Header, Static
 from greenhouse_cli.tui import formatting as fmt
 from greenhouse_cli.tui.screens.base import DataScreen
 from greenhouse_cli.tui.widgets import Banner, KeyValue, refill, selected_key
+
+if TYPE_CHECKING:
+    from rich.console import RenderableType
 
 
 class SystemScreen(DataScreen):
@@ -78,7 +82,7 @@ class SystemScreen(DataScreen):
         # One row per job id: an unstarted APScheduler can report a pending job twice.
         unique_jobs = {job["id"]: job for job in jobs or []}.values()
         self.core_jobs = {job["id"] for job in unique_jobs if job.get("core")}
-        job_rows: list = []
+        job_rows: list[tuple[str | None, list[RenderableType | str]]] = []
         for job in unique_jobs:
             job_rows.append(
                 (
@@ -94,7 +98,7 @@ class SystemScreen(DataScreen):
         refill(table, job_rows)
 
         devices = self.query_one("#devices-table", DataTable)
-        device_rows: list = []
+        device_rows: list[tuple[str | None, list[RenderableType | str]]] = []
         for d in (health or {}).get("devices", []):
             device_rows.append(
                 (
@@ -114,7 +118,7 @@ class SystemScreen(DataScreen):
         counts = ", ".join(f"{v} {k}" for k, v in sorted(((quality or {}).get("counts") or {}).items())) or "none"
         self.query_one("#quality-hint", Static).update(f"[b]Data quality[/b]  [dim]{counts}[/dim]")
         qtable = self.query_one("#quality-table", DataTable)
-        issue_rows: list = []
+        issue_rows: list[tuple[str | None, list[RenderableType | str]]] = []
         for issue in issues:
             entity = issue["entity_type"] + (f" #{issue['entity_id']}" if issue.get("entity_id") is not None else "")
             issue_rows.append(

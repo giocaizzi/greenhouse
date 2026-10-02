@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import re
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 from rich.text import Text
 from textual.app import ComposeResult
@@ -26,12 +27,15 @@ from greenhouse_cli.tui.screens.modals import ConfirmScreen, IrrigateScreen, Wat
 from greenhouse_cli.tui.sprites import watering_can_sprite
 from greenhouse_cli.tui.widgets import Heatmap, KeyValue, MetricChart, PlantTile, SpriteView, refill, selected_key
 
+if TYPE_CHECKING:
+    from rich.console import RenderableType
+
 METRIC_ORDER = ["soil_moisture", "temperature", "env_humidity", "light", "overlay"]
 RANGES = [6, 24, 72, 168, 720]
 STATS_DAYS = 7
 
 
-def _next_water(forecast: dict) -> str | Text:
+def _next_water(forecast: dict[str, Any]) -> str | Text:
     hours = forecast.get("hours_until_next")
     if hours is None:
         return "—"
@@ -68,8 +72,8 @@ class ClusterScreen(DataScreen):
         super().__init__()
         self.cluster_id = cluster_id
         self.summary: ClusterSummary | None = None
-        self.status: dict = {}
-        self.detail: dict = {}
+        self.status: dict[str, Any] = {}
+        self.detail: dict[str, Any] = {}
         self.metric = "soil_moisture"
         self.hours = 24
         self._plants_loaded: list[int] = []
@@ -176,7 +180,7 @@ class ClusterScreen(DataScreen):
         if event.pane.id == "tab-insights":
             self.run_worker(self._load_insights(), group="insights", exclusive=True)
 
-    async def _render_overview(self, status: dict) -> None:
+    async def _render_overview(self, status: dict[str, Any]) -> None:
         s = self.summary
         assert s is not None
         garden = self.query_one("#garden", HorizontalScroll)
@@ -258,7 +262,7 @@ class ClusterScreen(DataScreen):
         rows.append(("", Text(f.get("explanation", ""), style="dim")))
         panel.show(rows, title="Forecast")
 
-    async def _load_chart(self, payload: dict | None = None) -> None:
+    async def _load_chart(self, payload: dict[str, Any] | None = None) -> None:
         label = "Overlay: soil / humidity / light (0-100)" if self.metric == "overlay" else fmt.METRICS[self.metric][0]
         self.query_one("#chart-hint", Static).update(
             f"[b]{label}[/b] · {self.hours}h   [dim]m: next metric   [ / ]: shorter / longer range[/dim]"
@@ -276,9 +280,9 @@ class ClusterScreen(DataScreen):
         payload = await self.gh.api(lambda c: c.cluster_heatmap(self.cluster_id), quiet=True)
         self.query_one("#heatmap", Heatmap).show(payload)
 
-    def _render_plants(self, status: dict) -> None:
+    def _render_plants(self, status: dict[str, Any]) -> None:
         table = self.query_one("#plants-table", DataTable)
-        rows: list = []
+        rows: list[tuple[str | None, list[RenderableType | str]]] = []
         for p in status.get("plants", []):
             temp = (
                 f"{fmt.num(p.get('ideal_temp_min'), '', 0)}–{fmt.num(p.get('ideal_temp_max'), '°C', 0)}"
@@ -324,9 +328,9 @@ class ClusterScreen(DataScreen):
         title = f"Health — {species}" + (f" · today {score:.0f}/100" if score is not None else "") + " (90 days)"
         chart.show_timeline(timeline, title)
 
-    def _render_sensors(self, status: dict) -> None:
+    def _render_sensors(self, status: dict[str, Any]) -> None:
         table = self.query_one("#sensors-table", DataTable)
-        rows: list = []
+        rows: list[tuple[str | None, list[RenderableType | str]]] = []
         species = {p["id"]: p["species"] for p in status.get("plants", [])}
         for s in status.get("sensors", []):
             r = s.get("last_reading") or {}
@@ -355,7 +359,7 @@ class ClusterScreen(DataScreen):
     async def _load_decisions(self) -> None:
         data = await self.gh.api(lambda c: c.list_decisions(self.cluster_id, limit=100), quiet=True)
         table = self.query_one("#decisions-table", DataTable)
-        rows: list = []
+        rows: list[tuple[str | None, list[RenderableType | str]]] = []
         for d in (data or {}).get("items", []):
             rows.append(
                 (
@@ -381,7 +385,7 @@ class ClusterScreen(DataScreen):
         events = [
             (ev, irr["irrigator_name"]) for irr in (data or {}).get("irrigators", []) for ev in irr.get("events", [])
         ]
-        rows: list = []
+        rows: list[tuple[str | None, list[RenderableType | str]]] = []
         for ev, name in sorted(events, key=lambda r: r[0]["timestamp"], reverse=True):
             rows.append(
                 (
@@ -413,7 +417,7 @@ class ClusterScreen(DataScreen):
             rows.append((key, Text.assemble((str(value), style), (f"  ↳ {source}", "dim"))))
         self.query_one("#config-panel", KeyValue).show(rows or [("config", "unavailable")], title="Effective config")
         table = self.query_one("#windows-table", DataTable)
-        window_rows: list = []
+        window_rows: list[tuple[str | None, list[RenderableType | str]]] = []
         for w in self.detail.get("windows", []):
             window_rows.append(
                 (
@@ -468,7 +472,7 @@ class ClusterScreen(DataScreen):
         )
 
         table = self.query_one("#efficacy-table", DataTable)
-        rows: list = []
+        rows: list[tuple[str | None, list[RenderableType | str]]] = []
         for e in (efficacy or {}).get("items", []):
             score = e.get("score")
             rows.append(
@@ -513,7 +517,7 @@ class ClusterScreen(DataScreen):
     def action_irrigate(self) -> None:
         name = self.summary.name if self.summary else f"cluster {self.cluster_id}"
 
-        def _after(opts: dict | None) -> None:
+        def _after(opts: dict[str, Any] | None) -> None:
             if opts is None:
                 return
             self.run_worker(
@@ -719,7 +723,7 @@ class ClusterScreen(DataScreen):
         else:
             self.notify("Nothing to delete here — use D to delete the whole cluster.")
 
-    def _selected(self, table_id: str, rows: list[dict]) -> dict | None:
+    def _selected(self, table_id: str, rows: list[dict[str, Any]]) -> dict[str, Any] | None:
         key = selected_key(self.query_one(table_id, DataTable))
         row = next((r for r in rows if str(r["id"]) == key), None)
         if row is None:
@@ -732,7 +736,7 @@ class ClusterScreen(DataScreen):
             return
         self.run_worker(self._move_plant(plant), group="act")
 
-    async def _move_plant(self, plant: dict) -> None:
+    async def _move_plant(self, plant: dict[str, Any]) -> None:
         clusters = await self.gh.api(lambda c: c.list_clusters())
         options = [(f"{c['name']} (#{c['id']})", c["id"]) for c in clusters or [] if c["id"] != self.cluster_id]
         if not options:
@@ -783,7 +787,7 @@ class ClusterScreen(DataScreen):
         if await self.gh.api(lambda c: c.delete_cluster(self.cluster_id)) is not None:
             self.notify("Cluster deleted")
             self.app.pop_screen()
-            self.app.action_refresh()
+            self.gh.action_refresh()
 
     def action_export_stats(self) -> None:
         self.run_worker(self._export_stats(), group="act")

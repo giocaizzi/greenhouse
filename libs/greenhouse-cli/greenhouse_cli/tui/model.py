@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Any, cast
 
 from greenhouse_cli.tui.formatting import now
 from greenhouse_cli.tui.sprites import Mood, mood_for
@@ -39,8 +40,8 @@ class ClusterSummary:
     irrigator_id: int | None = None
     irrigator_name: str | None = None
     watering: bool = False
-    last_event: dict | None = None
-    decision: dict | None = None
+    last_event: dict[str, Any] | None = None
+    decision: dict[str, Any] | None = None
     sparkline: list[float] = field(default_factory=list)
 
     @property
@@ -52,15 +53,16 @@ def _mean(values: list[float]) -> float | None:
     return sum(values) / len(values) if values else None
 
 
-def is_watering(last_event: dict | None, reference: int | None = None) -> bool:
+def is_watering(last_event: dict[str, Any] | None, reference: int | None = None) -> bool:
     """True while the irrigator's last ``start`` event is still within its duration."""
     if not last_event or last_event.get("action") != "start":
         return False
     minutes = last_event.get("duration_minutes") or 0
-    return (reference if reference is not None else now()) < last_event["timestamp"] + minutes * 60
+    watering: bool = (reference if reference is not None else now()) < last_event["timestamp"] + minutes * 60
+    return watering
 
 
-def sparkline_points(chart: dict | None) -> list[float]:
+def sparkline_points(chart: dict[str, Any] | None) -> list[float]:
     """Collapse a multi-sensor chart payload into one series (per-timestamp minimum).
 
     The minimum mirrors the engine's "driest plant drives the call" rule.
@@ -74,7 +76,7 @@ def sparkline_points(chart: dict | None) -> list[float]:
     return [merged[ts] for ts in sorted(merged)]
 
 
-def summarize(status: dict, chart: dict | None = None) -> ClusterSummary:
+def summarize(status: dict[str, Any], chart: dict[str, Any] | None = None) -> ClusterSummary:
     """Build a :class:`ClusterSummary` from ``GET /clusters/{id}/status`` (+ optional chart-data).
 
     Args:
@@ -132,7 +134,7 @@ def summarize(status: dict, chart: dict | None = None) -> ClusterSummary:
         )
     with_data = [p for p in summary.plants if p.moisture is not None]
     if with_data:
-        summary.driest = min(with_data, key=lambda p: p.moisture)
+        summary.driest = min(with_data, key=lambda p: cast(float, p.moisture))
     elif summary.plants:
         summary.driest = summary.plants[0]
 

@@ -6,10 +6,15 @@ libs/greenhouse-cli/greenhouse_cli/commands/_helpers.py
 libs/greenhouse-cli/greenhouse_cli/commands/auth.py
 libs/greenhouse-cli/greenhouse_cli/commands/tui.py
 libs/greenhouse-cli/greenhouse_cli/tui/formatting.py
+libs/greenhouse-cli/greenhouse_cli/tui/model.py
 libs/greenhouse-cli/greenhouse_cli/tui/screens/activity.py
+libs/greenhouse-cli/greenhouse_cli/tui/screens/cluster.py
 libs/greenhouse-cli/greenhouse_cli/tui/screens/dashboard.py
 libs/greenhouse-cli/greenhouse_cli/tui/screens/search.py
+libs/greenhouse-cli/greenhouse_cli/tui/screens/settings.py
+libs/greenhouse-cli/greenhouse_cli/tui/screens/system.py
 libs/greenhouse-cli/greenhouse_cli/tui/sprites.py
+libs/greenhouse-cli/greenhouse_cli/tui/widgets.py
 libs/greenhouse-core/greenhouse_core/auth.py
 libs/greenhouse-core/greenhouse_core/constants.py
 libs/greenhouse-core/greenhouse_core/devices/registry.py

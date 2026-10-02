@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from typing import TYPE_CHECKING, Any
 
 from rich.text import Text
 from textual.app import ComposeResult
@@ -15,6 +16,9 @@ from greenhouse_cli.tui import formatting as fmt
 from greenhouse_cli.tui import resources
 from greenhouse_cli.tui.screens.base import DataScreen
 from greenhouse_cli.tui.widgets import KeyValue, refill, selected_key
+
+if TYPE_CHECKING:
+    from rich.console import RenderableType
 
 
 class SettingsScreen(DataScreen):
@@ -31,9 +35,9 @@ class SettingsScreen(DataScreen):
 
     def __init__(self) -> None:
         super().__init__()
-        self.prefs: dict = {}
-        self.global_config: dict = {}
-        self.vacations: list[dict] = []
+        self.prefs: dict[str, Any] = {}
+        self.global_config: dict[str, Any] = {}
+        self.vacations: list[dict[str, Any]] = []
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
@@ -84,7 +88,7 @@ class SettingsScreen(DataScreen):
         self.vacations = (vacation or {}).get("items", [])
         active_id = ((vacation or {}).get("active") or {}).get("id")
         table = self.query_one("#vacation-table", DataTable)
-        rows: list = []
+        rows: list[tuple[str | None, list[RenderableType | str]]] = []
         now = fmt.now()
         for v in self.vacations:
             if v["id"] == active_id:
@@ -125,7 +129,7 @@ class SettingsScreen(DataScreen):
             note="Clusters inherit these unless they override a field. Blank = keep current.",
         )
 
-    def _selected_vacation(self) -> dict | None:
+    def _selected_vacation(self) -> dict[str, Any] | None:
         key = selected_key(self.query_one("#vacation-table", DataTable))
         found = next((v for v in self.vacations if str(v["id"]) == key), None)
         if found:
