@@ -1283,13 +1283,7 @@ class IrrigationRepository:
         # silently lose history.
         plant_id_in_fields = "plant_id" in fields
         new_plant_id = fields.pop("plant_id", None) if plant_id_in_fields else None
-        for key, value in fields.items():
-            if value is None:
-                continue
-            if key == "config" and isinstance(value, dict):
-                sensor.config = json.dumps(value)
-            elif hasattr(sensor, key):
-                setattr(sensor, key, value)
+        self._patch_fields(sensor, fields, json_fields=frozenset({"config"}))
         if plant_id_in_fields:
             self.reassign_sensor_to_plant(sensor_id, new_plant_id)
         self.session.flush()
@@ -1304,13 +1298,7 @@ class IrrigationRepository:
         irrigator = self.session.get(Irrigator, irrigator_id)
         if not irrigator:
             return None
-        for key, value in fields.items():
-            if value is None:
-                continue
-            if key == "config" and isinstance(value, dict):
-                irrigator.config = json.dumps(value)
-            elif hasattr(irrigator, key):
-                setattr(irrigator, key, value)
+        self._patch_fields(irrigator, fields, json_fields=frozenset({"config"}))
         self.session.flush()
         return irrigator
 
