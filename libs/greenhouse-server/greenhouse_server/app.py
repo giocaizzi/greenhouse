@@ -146,31 +146,38 @@ _OPENAPI_TAGS: tuple[dict[str, str], ...] = (
     {"name": "bulk", "description": "Bulk operations — emergency stop all irrigators"},
 )
 
+
 # Every /api/v1 router gated by `require_user`, in include order. That order is the OpenAPI
 # path order and therefore the MCP tool order — append, never reorder.
-_PROTECTED_API_ROUTERS: "tuple[APIRouter, ...]" = (
-    clusters.router,
-    plants.router,
-    irrigators.router,
-    sensors.router,
-    configs.router,
-    operations.router,
-    scheduler.router,
-    charts.router,
-    alerts.router,
-    activity.router,
-    decisions.router,
-    forecast.router,
-    preferences.router,
-    vacation.router,
-    search.router,
-    bulk.router,
-    insights.router,
-    health.router,
-    quality.router,
-    efficacy.router,
-    windows.router,
-)
+def _protected_api_routers() -> "tuple[APIRouter, ...]":
+    """Return the auth-gated API routers in registration order (= OpenAPI path order).
+
+    Read at ``create_app`` time, as the original inline includes did, so a rebound
+    ``<module>.router`` is picked up.
+    """
+    return (
+        clusters.router,
+        plants.router,
+        irrigators.router,
+        sensors.router,
+        configs.router,
+        operations.router,
+        scheduler.router,
+        charts.router,
+        alerts.router,
+        activity.router,
+        decisions.router,
+        forecast.router,
+        preferences.router,
+        vacation.router,
+        search.router,
+        bulk.router,
+        insights.router,
+        health.router,
+        quality.router,
+        efficacy.router,
+        windows.router,
+    )
 
 
 def create_app(settings: Settings | None = None, engine: Engine | None = None) -> FastAPI:
@@ -264,7 +271,7 @@ def _include_api_routers(app: FastAPI) -> None:
     prefix = "/api/v1"
     app.include_router(auth_routes.router, prefix=prefix)
     protected = [Depends(require_user)]
-    for router in _PROTECTED_API_ROUTERS:
+    for router in _protected_api_routers():
         app.include_router(router, prefix=prefix, dependencies=protected)
 
     # OAuth discovery stubs at root (not /api/v1) so MCP HTTP clients that
