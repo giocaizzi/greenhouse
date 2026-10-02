@@ -35,7 +35,7 @@ from greenhouse_server.services.sync import SyncService
 from greenhouse_server.services.weather import WeatherClient
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Callable, Mapping, Sequence
 
     from sqlalchemy.orm import Session
 
@@ -43,6 +43,7 @@ if TYPE_CHECKING:
     from greenhouse_core.logic.cleaning import CleanedReading
     from greenhouse_core.logic.decision import IrrigationDecision
     from greenhouse_core.models import Irrigator
+    from greenhouse_server.config import Settings
 
 logger = logging.getLogger(__name__)
 
@@ -153,6 +154,63 @@ def handle_watcher_interrupted(
     return stop_ok
 
 
+def _watcher_tuning(settings: "Settings | None") -> tuple[float, float, int]:
+    """Poll interval, warm-up and read-failure budget for a watcher; constants when settings are absent."""
+    if settings is None:
+        return PUMP_WATCHER_POLL_SECONDS, PUMP_WATCHER_WARMUP_SECONDS, PUMP_WATCHER_MAX_READ_FAILURES
+    return (
+        settings.pump_watcher_poll_seconds,
+        settings.pump_watcher_warmup_seconds,
+        settings.pump_watcher_max_read_failures,
+    )
+
+
+def _run_pump_watcher(
+    app: Any,
+    registry: DeviceRegistry,
+    *,
+    irrigator_id: int,
+    duration_seconds: int,
+    started_at: int,
+    triggered_by: str,
+    sleep: "Callable[[float], bool]",
+    stop_requested: "Callable[[], bool]",
+) -> None:
+    """The watcher job body: its own session; tuning and the health monitor are read when it runs."""
+    from greenhouse_core.repository import IrrigationRepository
+    from greenhouse_server.services.pump_watcher import PumpWatcherService
+
+    session = app.state.session_factory()
+    try:
+        repo = IrrigationRepository(session)
+        irrigator = repo.get_irrigator(irrigator_id)
+        if irrigator is None:
+            return
+        poll, warmup, max_failures = _watcher_tuning(getattr(app.state, "settings", None))
+        monitor = getattr(app.state, "health_monitor", None)
+        if monitor is not None:
+            monitor.bind_repo(repo)
+        watcher = PumpWatcherService(
+            repo,
+            registry,
+            poll_seconds=poll,
+            warmup_seconds=warmup,
+            max_read_failures=max_failures,
+            monitor=monitor,
+            sleep=sleep,  # type: ignore[arg-type]  # contract: pump_watcher.py (WP4) types sleep -> None; the bool is ignored
+            stop_requested=stop_requested,
+        )
+        result = watcher.watch(irrigator, duration_seconds, started_at=started_at)
+        if result["outcome"] == "interrupted":
+            handle_watcher_interrupted(repo, registry, irrigator, triggered_by=triggered_by, started_at=started_at)
+            session.commit()
+    except Exception:
+        session.rollback()
+        logger.exception("Pump watcher job failed for irrigator %d", irrigator_id)
+    finally:
+        session.close()
+
+
 def schedule_pump_watcher(
     irrigator_id: int, duration_minutes: int, started_at: int, *, triggered_by: str = "auto"
 ) -> bool:
@@ -181,73 +239,36 @@ def schedule_pump_watcher(
     if duration_minutes <= 0:
         return False
     try:
-        from greenhouse_server.config import Settings
         from greenhouse_server.scheduler import _app, scheduler, shutdown_requested, wait_for_shutdown
 
         if not scheduler.running or _app is None:
             return False
-
         settings: Settings | None = getattr(_app.state, "settings", None)
         if settings is not None and not settings.pump_watcher_enabled:
             return False
-
         registry: DeviceRegistry | None = getattr(_app.state, "device_registry", None)
         if registry is None:
             return False
-
         run_date = datetime.fromtimestamp(started_at, tz=UTC)
-        job_id = f"pump-watcher-{irrigator_id}-{started_at}"
         duration_seconds = int(duration_minutes * 60)
 
         def _run() -> None:
-            from greenhouse_core.repository import IrrigationRepository
-            from greenhouse_server.services.pump_watcher import PumpWatcherService
-
-            session = _app.state.session_factory()
-            try:
-                repo = IrrigationRepository(session)
-                irrigator = repo.get_irrigator(irrigator_id)
-                if irrigator is None:
-                    return
-                watcher_settings = getattr(_app.state, "settings", None)
-                if watcher_settings is None:
-                    poll = PUMP_WATCHER_POLL_SECONDS
-                    warmup = PUMP_WATCHER_WARMUP_SECONDS
-                    max_failures = PUMP_WATCHER_MAX_READ_FAILURES
-                else:
-                    poll = watcher_settings.pump_watcher_poll_seconds
-                    warmup = watcher_settings.pump_watcher_warmup_seconds
-                    max_failures = watcher_settings.pump_watcher_max_read_failures
-                monitor = getattr(_app.state, "health_monitor", None)
-                if monitor is not None:
-                    monitor.bind_repo(repo)
-                watcher = PumpWatcherService(
-                    repo,
-                    registry,
-                    poll_seconds=poll,
-                    warmup_seconds=warmup,
-                    max_read_failures=max_failures,
-                    monitor=monitor,
-                    sleep=wait_for_shutdown,  # type: ignore[arg-type]  # contract: pump_watcher.py (WP4) types sleep -> None; the bool is ignored
-                    stop_requested=shutdown_requested,
-                )
-                result = watcher.watch(irrigator, duration_seconds, started_at=started_at)
-                if result["outcome"] == "interrupted":
-                    handle_watcher_interrupted(
-                        repo, registry, irrigator, triggered_by=triggered_by, started_at=started_at
-                    )
-                    session.commit()
-            except Exception:
-                session.rollback()
-                logger.exception("Pump watcher job failed for irrigator %d", irrigator_id)
-            finally:
-                session.close()
+            _run_pump_watcher(
+                _app,
+                registry,
+                irrigator_id=irrigator_id,
+                duration_seconds=duration_seconds,
+                started_at=started_at,
+                triggered_by=triggered_by,
+                sleep=wait_for_shutdown,
+                stop_requested=shutdown_requested,
+            )
 
         scheduler.add_job(
             _run,
             "date",
             run_date=run_date,
-            id=job_id,
+            id=f"pump-watcher-{irrigator_id}-{started_at}",
             name=f"Pump watcher irrigator {irrigator_id}",
             replace_existing=True,
         )
