@@ -1,0 +1,117 @@
+[
+ {
+  "dialog": null,
+  "key": "u",
+  "tab": "tab-plants",
+  "toasts": [
+   [
+    "warning",
+    "Select a row first."
+   ]
+  ],
+  "writes": []
+ },
+ {
+  "dialog": null,
+  "key": "delete",
+  "tab": "tab-plants",
+  "toasts": [
+   [
+    "warning",
+    "Select a row first."
+   ]
+  ],
+  "writes": []
+ },
+ {
+  "dialog": null,
+  "key": "u",
+  "tab": "tab-sensors",
+  "toasts": [
+   [
+    "warning",
+    "Select a row first."
+   ]
+  ],
+  "writes": []
+ },
+ {
+  "dialog": null,
+  "key": "delete",
+  "tab": "tab-sensors",
+  "toasts": [
+   [
+    "warning",
+    "Select a row first."
+   ]
+  ],
+  "writes": []
+ },
+ {
+  "dialog": null,
+  "key": "u",
+  "tab": "tab-windows",
+  "toasts": [
+   [
+    "warning",
+    "Select a row first."
+   ]
+  ],
+  "writes": []
+ },
+ {
+  "dialog": null,
+  "key": "delete",
+  "tab": "tab-windows",
+  "toasts": [
+   [
+    "warning",
+    "Select a row first."
+   ]
+  ],
+  "writes": []
+ },
+ {
+  "dialog": null,
+  "key": "u",
+  "tab": "tab-overview",
+  "toasts": [
+   [
+    "warning",
+    "No irrigator — press n to attach one."
+   ]
+  ],
+  "writes": []
+ },
+ {
+  "dialog": null,
+  "key": "delete",
+  "tab": "tab-overview",
+  "toasts": [
+   [
+    "warning",
+    "This cluster has no irrigator."
+   ]
+  ],
+  "writes": []
+ },
+ {
+  "dialog": "FormScreen",
+  "key": "u",
+  "tab": "tab-config",
+  "toasts": [],
+  "writes": []
+ },
+ {
+  "dialog": null,
+  "key": "delete",
+  "tab": "tab-config",
+  "toasts": [
+   [
+    "information",
+    "Nothing to delete here — use D to delete the whole cluster."
+   ]
+  ],
+  "writes": []
+ }
+]
