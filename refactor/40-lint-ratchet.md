@@ -47,6 +47,37 @@ each preview code by full name. Measured: this adds **0** findings to the rules 
 preview codes activate. Preview rules may change between ruff releases, so the ruff version is pinned in `uv.lock`
 and the pre-commit hook is aligned to it (`b2b75fb`, v0.15.19; it was 0.15.9 before).
 
+## Full `select = ["ALL"]` audit (ruff docs "trying out categories")
+
+`ruff check libs/ --extend-select ALL` with the repo's own config: **2,016 findings in 31 families** (the `--isolated`
+run reports 3,024, but ~1,000 of those are artifacts of dropping line-length 120 / `E501` / `B008` / package roots).
+Every family gets a decision. "Frozen" = would change OpenAPI/MCP, CLI/web output, signatures or behavior.
+
+| Family | Findings | Decision | Why |
+|---|---|---|---|
+| `COM` (COM812) | 165 | **never** | conflicts with `ruff format` (ruff docs list COM812/COM819, ISC001/002, Q000–Q003, W191, E111/E114/E117, D206/D300 as formatter-incompatible) |
+| `D` pydocstyle | 705 | adopt with `pydocstyle.convention = "google"`, **exclude `routes/*`, `web/routes/*`, schema classes, Typer commands** | route/Typer/schema docstrings are frozen interface text (MCP, OpenAPI, `--help`) |
+| `ANN` | 329 | **skip** | redundant with the mypy strict ratchet |
+| `FAST` (FAST002 168, FAST001 26) | 194 | FAST002 queued **only with OpenAPI/MCP golden proof**; FAST001 **never** | FAST002 rewrites route params to `Annotated[...]` (schema should be identical — goldens decide); FAST001 removes `response_model`, which is frozen |
+| `PLR`/`PLC`/`PLW` | 157 | PLR0913 with exclusions; PLR2004 → `constants.py`; **PLC0415 (44) ignore**; **PLW0603 (5) ignore** | lazy imports are deliberate (scheduler↔irrigation cycle, `_app` trap); `global` holds the per-app scheduler `_app` and display tz |
+| `TC` | 89 | queued, test-proven only | moving imports under `TYPE_CHECKING` changes import-time behavior |
+| `FBT` | 70 | private code only | public signatures frozen |
+| `RUF` | 68 | RUF012 (17, `ClassVar` on Textual `BINDINGS` etc.) adopt; RUF003 (comments) adopt; **RUF001/RUF002 never** (or `allowed-confusables`) | the "ambiguous" `–` `—` `×` live in user-facing strings and route docstrings — frozen |
+| `BLE` 33, `TRY` 27, `S110` 8, `DTZ` 3, `PLW0717` 14 | — | **report-only** → REFACTOR_NOTES | fixing changes which exceptions are caught / timezone semantics |
+| `EM` 22 (+ `TRY003`) | 22 | optional, cosmetic | message stays identical; churn for little value |
+| `ARG` | 30 | with exclusions | FastAPI/Textual/Typer callbacks must keep unused params |
+| `B008` | 18 | **keep ignored** | FastAPI `Depends(...)` defaults |
+| `A002` | 16 | exclude frozen signatures | `id`/`type` params on routes |
+| `T201` print | 16 | exclude CLI/report modules | printing *is* their behavior |
+| `INP001` | 11 | **ignore** for migrations/scripts | adding `__init__.py` changes packaging/import semantics |
+| `PYI041` | 6 | **never on `schemas.py`** | `int | float` → `float` changes the OpenAPI schema |
+| `SIM` 12, `PERF` 12, `PTH` 4, `RET` 4, `EXE` 3, `FURB`/`RSE`/`PIE`/`N` 1 each | ~39 | adopt | mechanical, behavior-neutral (each test-backed) |
+| `S` (other) | 9 | review each | S310 `urlopen` (weather), S106 test defaults — documented ignores or REFACTOR_NOTES |
+| `E501` | 1 | keep ignored | formatter owns line length |
+
+**Formatter side:** `ruff format` already enforces style (double quotes, 120 cols). Not adopted:
+`docstring-code-format` (would rewrite code blocks inside frozen route docstrings).
+
 ## Already enforced
 - `E, W, F, I, B, C4, UP` (pre-existing)
 - `C90` max-complexity 8, `PLR0911/0912/0915` with a shrinking per-file ignore list (WP0)
