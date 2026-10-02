@@ -73,10 +73,12 @@ def stop_scheduler() -> None:
         scheduler.shutdown(wait=False)
 
 
+CHECK_ALL_JOB_ID = "check_all"
+
 # Cron jobs that gate wall-clock-sensitive work and therefore MUST fire on the
 # same clock the engine reasons in (UserPreferences.timezone). These are
 # re-added by `reschedule_for_timezone` whenever the preference changes.
-_TZ_BOUND_CRON_JOBS = ("check_all", "plant_health_snapshot")
+_TZ_BOUND_CRON_JOBS = (CHECK_ALL_JOB_ID, "plant_health_snapshot")
 
 # IDs of the built-in jobs registered at startup, recorded by `_add_core_job`
 # as they are registered — so the protected set can never drift from what
@@ -214,7 +216,7 @@ def _add_tz_bound_cron_jobs(settings: Settings) -> None:
         "cron",
         hour=_resolve_check_cron_hours(settings),
         minute=0,
-        id="check_all",
+        id=CHECK_ALL_JOB_ID,
         name="Check all clusters",
     )
     _add_core_job(
@@ -448,9 +450,6 @@ def init_health_monitor(app: FastAPI, settings: Settings) -> None:
         app.state.health_monitor = monitor
     finally:
         session.close()
-
-
-CHECK_ALL_JOB_ID = "check_all"
 
 
 def _is_paused(job: "Job") -> bool:
