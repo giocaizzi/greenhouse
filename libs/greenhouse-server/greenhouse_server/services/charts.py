@@ -47,7 +47,7 @@ def build_plant_chart_payload(
     hours: int,
     metric: Metric,
 ) -> dict[str, Any]:
-    plant: Plant | None = repo.session.get(Plant, plant_id)
+    plant: Plant | None = repo.get_plant(plant_id)
     if plant is None:
         return {}
 
@@ -355,7 +355,7 @@ def build_plant_health_timeline_payload(
     Health score per day is derived from the mean soil moisture reading clamped
     to [0, 100]. Returns None if the plant is not found.
     """
-    plant: Plant | None = repo.session.get(Plant, plant_id)
+    plant: Plant | None = repo.get_plant(plant_id)
     if plant is None:
         return None
 
