@@ -346,3 +346,53 @@ def quality_rows(issues: list[dict[str, Any]]) -> list[Row]:
             )
         )
     return rows
+
+
+def account_line(who: str | None, server_url: str) -> str:
+    """Settings account line (markup): who is signed in where, or that auth is off / nobody is signed in."""
+    return (
+        f"Signed in as [b]{who}[/b] on {server_url}   [dim]O: log out[/dim]"
+        if who
+        else f"Server {server_url}  [dim](auth disabled or not signed in)[/dim]"
+    )
+
+
+def preference_rows(prefs: dict[str, Any]) -> list[tuple[str, str]]:
+    """Preference rows sorted by key, or a single "unavailable" row."""
+    return [(k, str(v)) for k, v in sorted(prefs.items())] or [("preferences", "unavailable")]
+
+
+def global_config_rows(config: dict[str, Any]) -> list[tuple[str, str | Text]]:
+    """Global-default rows sorted by key (bookkeeping fields hidden; unset = built-in default), or "unavailable"."""
+    return [
+        (k, Text("built-in default", style="dim") if v is None else str(v))
+        for k, v in sorted(config.items())
+        if k not in {"id", "last_updated"}
+    ] or [("config", "unavailable")]
+
+
+def vacation_rows(vacations: list[dict[str, Any]], active_id: int | None) -> list[Row]:
+    """Vacation rows keyed by window id, with an active / past / upcoming state column."""
+    rows: list[Row] = []
+    now = fmt.now()
+    for v in vacations:
+        if v["id"] == active_id:
+            state = Text("active", style="bold #7ed957")
+        elif v["ends_at"] < now:
+            state = Text("past", style="dim")
+        else:
+            state = Text(f"starts {fmt.ago(v['starts_at'])}", style="#6fb7ff")
+        rows.append(
+            (
+                str(v["id"]),
+                [
+                    str(v["id"]),
+                    fmt.clock(v["starts_at"], True),
+                    fmt.clock(v["ends_at"], True),
+                    v.get("contact_email") or "—",
+                    v.get("notes") or "",
+                    state,
+                ],
+            )
+        )
+    return rows
