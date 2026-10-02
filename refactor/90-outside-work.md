@@ -31,7 +31,7 @@ suggested follow-up. Details/evidence: `REFACTOR_NOTES.md` and the `refactor/10-
   green at the end.
 - gitleaks' pre-commit hook scans only staged changes; consider `gitleaks detect` on the PR range in CI.
 
-## 4. Docs / plugin drift (files out of scope here: `plugin/`, `.claude-plugin/`)
+## 4. Docs / plugin drift — **now in scope** (owner: remove drift everywhere; see `refactor/45-drift-track.md`)
 - `CLAUDE.md` + `ConfirmScreen` docstring claim every actuating TUI key confirms; `i`/`w` open their own dialogs and
   `S`, `P`, `H`, alert `k`/`v`/`y`, scheduler resume run without one.
 - `CLAUDE.md` module paths must be updated if the final structure moved anything (dedicated docs commit).

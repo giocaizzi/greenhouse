@@ -75,3 +75,7 @@ Do not commit unless your brief says so. Do not touch files outside your stated 
   `FULL` run (seed 0) + lint/typecheck/import contracts; the seed-12345 and `TZ=America/New_York` runs move to the
   final gate; optional tasks skipped; second reviewers only for high-risk code (pipeline/scheduler, engine,
   devices, auth/app wiring). Per-task safety rules (coverage precondition, golden checks, no fix-forward) unchanged.
+- **Remove drift everywhere** (owner, 2026-10-02): divergent duplicate copies are unified on this branch as
+  clearly labeled behavior-change commits (`fix(drift): …`), one pair per commit, updating only the affected pinned
+  tests/goldens with a reviewed diff — see `refactor/45-drift-track.md`. Docs and plugin (`CLAUDE.md`, `plugin/`) are
+  synced to the final code (now in scope). Running work packages keep drifted copies untouched until the drift track.
