@@ -515,22 +515,29 @@ class IrrigationService:
             return temp_override, "override", None
 
         sensor_data = None if no_sync else self._sync.ensure_fresh_and_read(cluster_id)
-        weather = None
-
-        if is_indoor:
-            if sensor_data and sensor_data.get("temperature") is not None:
-                return sensor_data["temperature"], "sensor", sensor_data
-            weather = self._weather.get_current()
-            if weather and weather.get("feels_like") is not None:
-                return weather["feels_like"], "open-meteo (fallback)", sensor_data
-        else:
-            weather = self._weather.get_current()
-            if weather and weather.get("feels_like") is not None:
-                return weather["feels_like"], "open-meteo", sensor_data
-            if sensor_data and sensor_data.get("temperature") is not None:
-                return sensor_data["temperature"], "sensor (weather unavailable)", sensor_data
-
+        picked = self._indoor_temperature(sensor_data) if is_indoor else self._outdoor_temperature(sensor_data)
+        if picked is not None:
+            temp, source = picked
+            return temp, source, sensor_data
         return FALLBACK_TEMPERATURE_C, "fallback (20C)", sensor_data
+
+    def _indoor_temperature(self, sensor_data: dict[str, Any] | None) -> tuple[float, str] | None:
+        """Indoor: the cluster's own sensor first, then the weather feels-like; None if neither."""
+        if sensor_data and sensor_data.get("temperature") is not None:
+            return sensor_data["temperature"], "sensor"
+        weather = self._weather.get_current()
+        if weather and weather.get("feels_like") is not None:
+            return weather["feels_like"], "open-meteo (fallback)"
+        return None
+
+    def _outdoor_temperature(self, sensor_data: dict[str, Any] | None) -> tuple[float, str] | None:
+        """Any non-indoor environment: the weather feels-like first, then the sensor; None if neither."""
+        weather = self._weather.get_current()
+        if weather and weather.get("feels_like") is not None:
+            return weather["feels_like"], "open-meteo"
+        if sensor_data and sensor_data.get("temperature") is not None:
+            return sensor_data["temperature"], "sensor (weather unavailable)"
+        return None
 
     def _decide(self, cluster_id: int, temp: float, *, force: bool) -> "IrrigationDecision | None":
         """Run (and persist) the engine; ``force`` records a manual trigger and bypasses quiet hours."""
