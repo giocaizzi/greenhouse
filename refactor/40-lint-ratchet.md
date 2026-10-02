@@ -10,7 +10,7 @@ by code prefix in `pyproject.toml` (`B` = bugbear, `SIM` = flake8-simplify, `C90
 |---|---|---|
 | flake8-functions `CFQ001` (function length), file length | none (`PLR0915` counts statements only) | `refactor/scripts/sizecheck.py` (≤ 40 body lines, ≤ 400 lines/file) + register |
 | nesting depth | `PLR1702` (preview only in ruff 0.15.19) | sizecheck authoritative; opt into `PLR1702` via `explicit-preview-rules` as a cross-check |
-| flake8-cognitive-complexity | none | candidate: `complexipy` (Rust) as a dev pre-commit hook — evaluate |
+| flake8-cognitive-complexity | none | covered by the refactor + reviews (owner decision); no extra tool |
 | flake8-expression-complexity, flake8-cohesion, wemake-python-styleguide | none | not adopted (YAGNI) |
 | layer contracts | `TID251` bans single APIs only | `import-linter` (10 contracts) |
 | type checking | — | `mypy --strict` per-module ratchet |
@@ -38,7 +38,9 @@ uses or should use (refactor Definition of Done: CC ≤ 8, ≤ 40 body lines, ne
 | PLW3301 | nested-min-max | stable | — | — | ⏳ with the PLW batch |
 
 Not in ruff at all: function/file **line length** (only statements), **cognitive complexity**, expression complexity,
-cohesion, maintainability index → `sizecheck.py` (lines), optional `complexipy` (cognitive), radon MI in the report.
+cohesion, maintainability index → `sizecheck.py` (lines), radon MI in the report. **Owner decision:** cognitive
+complexity is covered by the refactor work itself (method-level decomposition + reviewer/adversary passes), not by an
+extra tool — `complexipy` is not adopted.
 
 **How preview rules are adopted safely:** `[tool.ruff.lint] preview = true` + `explicit-preview-rules = true`, then list
 each preview code by full name. Measured: this adds **0** findings to the rules already selected — only the listed
