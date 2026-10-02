@@ -212,22 +212,27 @@ def _threshold_for_cluster(
     if metric == "temperature":
         mins = [p.ideal_temp_min for p in plants if p.ideal_temp_min is not None]
         maxs = [p.ideal_temp_max for p in plants if p.ideal_temp_max is not None]
-        if mins or maxs:
-            return {
-                "min": min(mins) if mins else None,
-                "max": max(maxs) if maxs else None,
-                "source": "plant_aggregate",
-            }
+        band = _aggregate_band(mins, maxs)
+        if band is not None:
+            return band
     if metric == "env_humidity":
         mins = [p.ideal_humidity_min for p in plants if p.ideal_humidity_min is not None]
         maxs = [p.ideal_humidity_max for p in plants if p.ideal_humidity_max is not None]
-        if mins or maxs:
-            return {
-                "min": min(mins) if mins else None,
-                "max": max(maxs) if maxs else None,
-                "source": "plant_aggregate",
-            }
+        band = _aggregate_band(mins, maxs)
+        if band is not None:
+            return band
     return {"min": None, "max": None, "source": "none"}
+
+
+def _aggregate_band(mins: list[float], maxs: list[float]) -> dict[str, Any] | None:
+    """Widest band across the cluster's plants; None when no plant sets either bound."""
+    if mins or maxs:
+        return {
+            "min": min(mins) if mins else None,
+            "max": max(maxs) if maxs else None,
+            "source": "plant_aggregate",
+        }
+    return None
 
 
 # ---------------------------------------------------------------------------
