@@ -4,6 +4,7 @@ import json
 import logging
 import time as _time
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any
 
 from greenhouse_core.constants import LEAK_CHECK_DELAY_SECONDS, LEAK_HOLD_HOURS
 from greenhouse_core.devices import DeviceRegistry, UnknownDeviceModel
@@ -20,6 +21,9 @@ from greenhouse_server.services.notify import NtfyClient, maybe_notify
 from greenhouse_server.services.sync import SyncService
 from greenhouse_server.services.weather import WeatherClient
 
+if TYPE_CHECKING:
+    from greenhouse_core.models import Irrigator
+
 logger = logging.getLogger(__name__)
 
 CHECK_FAILED_ALERT_CODE = "check_failed"
@@ -31,7 +35,7 @@ WATCHER_SHUTDOWN_ACTIVITY_CODE = "pump_watcher_shutdown"
 def handle_watcher_interrupted(
     repo: IrrigationRepository,
     registry: DeviceRegistry,
-    irrigator,
+    irrigator: "Irrigator",
     *,
     triggered_by: str,
     started_at: int,
@@ -153,7 +157,7 @@ def schedule_pump_watcher(
         if not scheduler.running or _app is None:
             return False
 
-        settings: Settings = getattr(_app.state, "settings", None)
+        settings: Settings | None = getattr(_app.state, "settings", None)
         if settings is not None and not settings.pump_watcher_enabled:
             return False
 
@@ -194,7 +198,7 @@ def schedule_pump_watcher(
                     warmup_seconds=warmup,
                     max_read_failures=max_failures,
                     monitor=monitor,
-                    sleep=wait_for_shutdown,
+                    sleep=wait_for_shutdown,  # type: ignore[arg-type]  # contract: pump_watcher.py (WP4) types sleep -> None; the bool is ignored
                     stop_requested=shutdown_requested,
                 )
                 result = watcher.watch(irrigator, duration_seconds, started_at=started_at)
@@ -396,7 +400,7 @@ class IrrigationService:
         is_indoor: bool,
         temp_override: float | None,
         no_sync: bool,
-    ) -> tuple[float, str, dict | None]:
+    ) -> tuple[float, str, dict[str, Any] | None]:
         """Resolve temperature from override, sensor, or weather. Returns (temp, source, sensor_data)."""
         if temp_override is not None:
             return temp_override, "override", None
@@ -426,7 +430,7 @@ class IrrigationService:
         dry_run: bool = False,
         no_sync: bool = False,
         force: bool = False,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Full pipeline: sync -> weather -> decide -> execute. Returns result dict.
 
         ``force=True`` bypasses the quiet-hours gate inside the decision
@@ -452,7 +456,7 @@ class IrrigationService:
         if not decision:
             return {"action": "error", "reason": "no data for decision", "confidence": 0}
 
-        result = {
+        result: dict[str, Any] = {
             "action": decision.action.value,
             "reason": decision.reason_text,
             "confidence": decision.confidence,
@@ -576,7 +580,7 @@ class IrrigationService:
                 self._notifier,
                 self._repo.get_preferences(),
                 "auto",
-                lambda: self._notifier.notify_irrigation(
+                lambda: self._notifier.notify_irrigation(  # type: ignore[union-attr]  # maybe_notify returns first when notifier is None
                     triggered_by="auto",
                     irrigator_name=irrigator.name,
                     duration_minutes=duration,
@@ -607,7 +611,7 @@ class IrrigationService:
 
         return result
 
-    def monitor_cluster(self, cluster_id: int, no_sync: bool = False) -> dict:
+    def monitor_cluster(self, cluster_id: int, no_sync: bool = False) -> dict[str, Any]:
         """Monitor sensor-only cluster. Returns per-sensor soil status."""
         cluster = self._repo.get_cluster(cluster_id)
         if not cluster:
@@ -670,7 +674,7 @@ class IrrigationService:
             "needs_water": needs_water,
         }
 
-    def check_cluster(self, cluster_id: int) -> dict:
+    def check_cluster(self, cluster_id: int) -> dict[str, Any]:
         """Check a single cluster: irrigate if has irrigators, monitor otherwise."""
         cluster = self._repo.get_cluster(cluster_id)
         if not cluster:
@@ -715,7 +719,7 @@ class IrrigationService:
                 "maintenance": maintenance,
             }
 
-    def check_all_clusters(self) -> list[dict]:
+    def check_all_clusters(self) -> list[dict[str, Any]]:
         """Check every cluster, isolating each one in its own transaction.
 
         Each cluster's work is committed as soon as it finishes, so a crash in

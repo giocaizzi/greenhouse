@@ -35,6 +35,7 @@ libs/greenhouse-server/greenhouse_server/services/bulk.py
 libs/greenhouse-server/greenhouse_server/services/data_quality.py
 libs/greenhouse-server/greenhouse_server/services/efficacy.py
 libs/greenhouse-server/greenhouse_server/services/insights.py
+libs/greenhouse-server/greenhouse_server/services/irrigation.py
 libs/greenhouse-server/greenhouse_server/services/search.py
 libs/greenhouse-server/greenhouse_server/services/system_health.py
 libs/greenhouse-server/greenhouse_server/services/vacation.py
