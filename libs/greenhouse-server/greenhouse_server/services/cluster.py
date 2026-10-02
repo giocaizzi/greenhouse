@@ -14,6 +14,10 @@ if TYPE_CHECKING:
     from greenhouse_core.models import Plant
 
 
+class PlantNotFoundError(LookupError):
+    """Raised by ``ClusterService.sync_plants`` when no cluster lists the requested plant id."""
+
+
 def decision_to_view(decision: IrrigationDecision) -> dict[str, Any]:
     """Render a decision for templates and JSON responses.
 
@@ -157,6 +161,53 @@ class ClusterService:
             "sensors": sensor_histories,
             "irrigators": irrigator_histories,
         }
+
+    def sync_plants(self, *, plant_id: int | None, cluster_id: int | None) -> tuple[int, list[str]]:
+        """Refresh care data for one plant, one cluster or every cluster; return ``(synced, errors)``.
+
+        Shared by the API and web plant-DB sync. A truthy ``plant_id`` wins and its failure
+        propagates; otherwise per-plant failures are collected and the run continues. The
+        caller commits.
+
+        Raises:
+            PlantNotFoundError: ``plant_id`` is set and no cluster lists that plant.
+        """
+        if plant_id:
+            plant = self._find_plant_in_clusters(plant_id)
+            if not plant:
+                raise PlantNotFoundError(plant_id)
+            self.sync_plant_with_db(plant)
+            return 1, []
+        return self._sync_cluster_plants(cluster_id)
+
+    def _find_plant_in_clusters(self, plant_id: int) -> "Plant | None":
+        """Scan every cluster's plants (not ``get_plant``: an orphan plant must stay "not found")."""
+        clusters = self._repo.list_clusters()
+        plant = None
+        for cluster in clusters:
+            for p in self._repo.get_plants_in_cluster(cluster.id):
+                if p.id == plant_id:
+                    plant = p
+                    break
+            if plant:
+                break
+        return plant
+
+    def _sync_cluster_plants(self, cluster_id: int | None) -> tuple[int, list[str]]:
+        """Sync every plant of one cluster (or of all clusters), collecting per-plant errors."""
+        errors: list[str] = []
+        synced = 0
+        clusters = [self._repo.get_cluster(cluster_id)] if cluster_id else self._repo.list_clusters()
+        for cluster in clusters:
+            if not cluster:
+                continue
+            for plant in self._repo.get_plants_in_cluster(cluster.id):
+                try:
+                    self.sync_plant_with_db(plant)
+                    synced += 1
+                except Exception as e:
+                    errors.append(f"{plant.species}: {e}")
+        return synced, errors
 
     def sync_plant_with_db(self, plant: "Plant") -> None:
         """Update a single plant with evidence-based care data."""
