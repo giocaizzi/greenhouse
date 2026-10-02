@@ -34,3 +34,41 @@
 ## Not behavioral (noted)
 - `LogRecord.funcName`/`lineno` change for the moved log calls (`_log_abandoned`, `_stop_pump`, `_log_*`, `_commit_trip`), and tracebacks gain frames (`_poll_step`, `_commit_trip`). Logger name, level and message are identical.
 - Pre-existing latent bug, preserved by both versions: any failed flush during a trip (for example "database is locked" on the event/activity/alert INSERT) expires `irrigator`. The watcher's own `except` handlers then call `irrigator.id` and raise `PendingRollbackError` out of `watch()`, so the commit/rollback steps never run. The pump is already stopped by then.
+
+---
+
+## Re-review: T4.12 redo `3a01c4b` (after revert `6134bf0`)
+
+**Verdict: APPROVE.** I found no differences between old and new, and the commit body no longer makes a false claim.
+
+**Integrity checks**
+- HEAD's `pump_watcher.py` (HEAD = `8137a6c`) is byte-identical to `3a01c4b`'s, and to the worktree copy.
+- `6134bf0` restores `pump_watcher.py` exactly to `931ad9b^` (empty diff).
+- The only commits touching the file after `931ad9b^` are 931ad9b, 6134bf0 and 3a01c4b.
+- `pw_mid.py` still matches `6a06507`. The harness now uses `pw_new.py` = `3a01c4b`.
+
+**Static read of `git diff 6a06507 3a01c4b`**
+- `from greenhouse_server.services.alerts import SOURCE_PUMP` is again the first statement of `_handle_trip`, before `_stop_pump`. The value is passed to `_log_trip_activity` as `source=`.
+- `_commit_trip(irrigator)` reads `irrigator.id` only inside its except handler, as the old code did.
+- `_trip_payload` keeps the same 11-key literal in the same order. Its keyword arguments are plain locals, so evaluation order is unchanged.
+- `_stop_pump`, `_log_aborted_event` and `_record_trip_state` are verbatim moves.
+
+**Harness re-run (strict comparison of old `6a06507^` / mid `6a06507` / new `3a01c4b`), all with 0 differences on every pair**
+- `run_diff.py 6000`: 6071 scenarios, i.e. 6000 Hypothesis cases plus 71 hand-picked edges. 26 of the edges are new adversarial ones suggested by the redo's structure:
+  - `source_pump_mutated_during_stop` and `..._stop_raises`: `adapter.stop()` rebinds `alerts.SOURCE_PUMP`. Old and new both use the value bound before stop.
+  - `trip_all_fail_id_raise_at_1..13`: every step fails and `irrigator.id` raises on its k-th read.
+  - `trip_lazy_id_raise_at_1..11`: lazy-monitor constructor raises, commit and rollback raise, and `id` raises on its k-th read.
+  - The run also includes `alerts_import_broken` and `trip_(commit_fail_)id_raise_at_1..9`, which differed against 931ad9b.
+- `run_trip.py 2500` (trip-biased): 0 differences. Against 931ad9b, 1524 of these differed by the extra id read.
+- `realstack.py` (real SQLite, every SQL statement and its params, final rows, logs): 0 of 432 differ. Against 931ad9b, 72 differed.
+- `realistic_locked.py`: 0 of 12 differ.
+- `repro_commit_flush.py`: old and new now both log CRITICAL and then raise `PendingRollbackError`. The old behavior is preserved.
+
+**Harness note:** my first re-run of `run_diff` crashed on a bug in my own harness (the `alerts` module was imported after `sys.modules` was set to `None`). I fixed it and re-ran; the numbers above are from the fixed run.
+
+**Commit body**
+- It now says plainly that 931ad9b's "loaded and identical" claim was false.
+- It states that the import and the id read stay at their original points.
+- It declares the pre-existing `PendingRollbackError`-from-handler bug under "Bugs touched (preserved)".
+- Every evidence number it cites matches my independent re-run.
+- I found no false claim.
