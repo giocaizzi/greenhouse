@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
+from greenhouse_core.constants import FULL_WEEKDAY_MASK, WINDOW_HOUR_MAX
 from greenhouse_server.deps import RepoDep, require_cluster
 from greenhouse_server.web.context import base_context
 from greenhouse_server.web.templating import templates
@@ -39,11 +40,11 @@ def _parse_weekday_mask(values: list[str]) -> int:
 
 
 def _validate_window_form(start_hour: int, end_hour: int, mask: int) -> None:
-    if not (0 <= start_hour <= 23 and 0 <= end_hour <= 23):
+    if not (0 <= start_hour <= WINDOW_HOUR_MAX and 0 <= end_hour <= WINDOW_HOUR_MAX):
         raise HTTPException(400, "start_hour and end_hour must be 0..23.")
     if start_hour == end_hour:
         raise HTTPException(400, "start_hour and end_hour must differ.")
-    if not (1 <= mask <= 127):
+    if not (1 <= mask <= FULL_WEEKDAY_MASK):
         raise HTTPException(400, "Select at least one weekday.")
 
 

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, status
 
+from greenhouse_core.constants import FULL_WEEKDAY_MASK, WINDOW_HOUR_MAX
 from greenhouse_core.schemas import (
     CreateIrrigationWindowRequest,
     IrrigationWindowListResponse,
@@ -22,14 +23,14 @@ router = APIRouter(tags=["windows"])
 
 
 def _validate_hours(start: int, end: int) -> None:
-    if not (0 <= start <= 23 and 0 <= end <= 23):
+    if not (0 <= start <= WINDOW_HOUR_MAX and 0 <= end <= WINDOW_HOUR_MAX):
         raise HTTPException(status_code=400, detail="start_hour and end_hour must be 0..23")
     if start == end:
         raise HTTPException(status_code=400, detail="start_hour and end_hour must differ")
 
 
 def _validate_weekday_mask(mask: int) -> None:
-    if not (1 <= mask <= 127):
+    if not (1 <= mask <= FULL_WEEKDAY_MASK):
         raise HTTPException(status_code=400, detail="weekday_mask must be 1..127 (Mon=1, Sun=64)")
 
 
