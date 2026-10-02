@@ -10,9 +10,10 @@ from greenhouse_core.repository import IrrigationRepository
 from greenhouse_core.utils import format_timestamp
 
 if TYPE_CHECKING:
+    from _csv import Writer as _CsvWriter
     from collections.abc import Mapping
 
-    from greenhouse_core.models import IrrigationEvent
+    from greenhouse_core.models import IrrigationEvent, Irrigator
 
 
 def format_duration(minutes: int) -> str:
@@ -115,6 +116,30 @@ def print_stats_report(stats: dict[str, Any], cluster_name: str) -> None:
             print(f"   {ts} | {format_duration(irr['duration_minutes'])} | {irr['triggered_by']} | {irr['irrigator']}")
 
 
+def _csv_event_row(event: IrrigationEvent, irrigator: Irrigator) -> list[object]:
+    """One CSV row: raw timestamp, local date and time, then the event fields."""
+    date_str = format_timestamp(event.timestamp, fmt="%Y-%m-%d")
+    time_str = format_timestamp(event.timestamp, fmt="%H:%M:%S")
+    return [
+        event.timestamp,
+        date_str,
+        time_str,
+        irrigator.name,
+        event.action,
+        event.duration_minutes or "",
+        event.triggered_by,
+        event.notes or "",
+    ]
+
+
+def _write_event_rows(writer: _CsvWriter, events: list[IrrigationEvent], irrigator: Irrigator, cutoff: int) -> None:
+    """Write the rows of the events inside the window, in repository order."""
+    for event in events:
+        if event.timestamp < cutoff:
+            continue
+        writer.writerow(_csv_event_row(event, irrigator))
+
+
 def export_csv(db: IrrigationRepository, cluster_id: int, days: int, output_path: str) -> None:
     """Export irrigation events to CSV."""
     import csv
@@ -129,23 +154,6 @@ def export_csv(db: IrrigationRepository, cluster_id: int, days: int, output_path
         )
 
         if irrigator is not None:
-            events = db.get_recent_events(irrigator.id, hours=days * 24)
-            for event in events:
-                if event.timestamp < cutoff:
-                    continue
-                date_str = format_timestamp(event.timestamp, fmt="%Y-%m-%d")
-                time_str = format_timestamp(event.timestamp, fmt="%H:%M:%S")
-                writer.writerow(
-                    [
-                        event.timestamp,
-                        date_str,
-                        time_str,
-                        irrigator.name,
-                        event.action,
-                        event.duration_minutes or "",
-                        event.triggered_by,
-                        event.notes or "",
-                    ]
-                )
+            _write_event_rows(writer, db.get_recent_events(irrigator.id, hours=days * 24), irrigator, cutoff)
 
     print(f"✅ Exported to {output_path}")
