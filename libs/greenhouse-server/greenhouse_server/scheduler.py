@@ -351,19 +351,9 @@ def _health_snapshot_job() -> None:
     """Background job: compute and persist daily plant health snapshots."""
     from greenhouse_server.services.health import PlantHealthService
 
-    session = _app.state.session_factory()  # type: ignore[union-attr]  # None _app escapes as AttributeError (pinned)
-    try:
-        from greenhouse_core.repository import IrrigationRepository
-
-        repo = IrrigationRepository(session)
+    with _job_session(_app, "Plant health snapshot job failed") as repo:
         svc = PlantHealthService(repo, _app.state.plant_db)  # type: ignore[union-attr]  # None _app escapes as AttributeError (pinned)
         svc.snapshot_daily()
-        session.commit()
-    except Exception:
-        session.rollback()
-        logger.exception("Plant health snapshot job failed")
-    finally:
-        session.close()
 
 
 def _check_job() -> None:
