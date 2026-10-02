@@ -11,7 +11,7 @@ from greenhouse_core.repository import IrrigationRepository
 from greenhouse_core.utils import format_timestamp
 
 if TYPE_CHECKING:
-    from greenhouse_core.models import Plant
+    from greenhouse_core.models import Irrigator, Plant, Sensor
 
 
 class PlantNotFoundError(LookupError):
@@ -79,6 +79,24 @@ class ClusterService:
         plants = self._repo.get_plants_in_cluster(cluster_id)
         sensors = self._repo.get_sensors_in_cluster(cluster_id)
         irrigator = self._repo.get_irrigator_for_cluster(cluster_id)
+        sensor_data = self._sensor_status_rows(sensors)
+        irrigator_data = self._irrigator_status(irrigator)
+
+        logic = IrrigationLogic(self._repo, self._plant_db)
+        decision = logic.decide_for_cluster(cluster_id)  # no weather_client: status snapshot stays fast
+        decision_dict = decision_to_view(decision) if decision else None
+
+        return {
+            "cluster": cluster,
+            "config": config,
+            "plants": plants,
+            "sensors": sensor_data,
+            "irrigator": irrigator_data,
+            "decision": decision_dict,
+        }
+
+    def _sensor_status_rows(self, sensors: "list[Sensor]") -> list[dict[str, Any]]:
+        """One status row per sensor: its newest reading (24 h) and that reading's age."""
         now = int(time.time())
 
         sensor_data = []
@@ -96,7 +114,10 @@ class ClusterService:
                     "reading_age_seconds": age,
                 }
             )
+        return sensor_data
 
+    def _irrigator_status(self, irrigator: "Irrigator | None") -> dict[str, Any] | None:
+        """The irrigator's status dict (48 h event count, newest event, capacity), or ``None``."""
         irrigator_data = None
         if irrigator is not None:
             events = self._repo.get_recent_events(irrigator.id, hours=48)
@@ -112,19 +133,7 @@ class ClusterService:
                 "reservoir_l": irrigator.reservoir_l,
                 "flow_rate_l_per_min": irrigator.flow_rate_l_per_min,
             }
-
-        logic = IrrigationLogic(self._repo, self._plant_db)
-        decision = logic.decide_for_cluster(cluster_id)  # no weather_client: status snapshot stays fast
-        decision_dict = decision_to_view(decision) if decision else None
-
-        return {
-            "cluster": cluster,
-            "config": config,
-            "plants": plants,
-            "sensors": sensor_data,
-            "irrigator": irrigator_data,
-            "decision": decision_dict,
-        }
+        return irrigator_data
 
     def get_cluster_history(self, cluster_id: int, hours: int = 24, limit: int = 50) -> dict[str, Any] | None:
         """Get sensor readings + irrigation events for a cluster."""
