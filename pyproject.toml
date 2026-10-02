@@ -133,11 +133,8 @@ indent-style = "space"
 "libs/greenhouse-core/greenhouse_core/logic/stress.py" = ["C901", "PLR0912"]
 "libs/greenhouse-core/greenhouse_core/logic/trends.py" = ["C901", "PLR0912"]
 "libs/greenhouse-core/greenhouse_core/stats.py" = ["C901"]
-"libs/greenhouse-server/greenhouse_server/app.py" = ["PLR0915"]
-"libs/greenhouse-server/greenhouse_server/routes/plants.py" = ["C901"]
 "libs/greenhouse-server/greenhouse_server/services/health_monitor.py" = ["PLR0911"]
 "libs/greenhouse-server/greenhouse_server/services/irrigation.py" = ["C901", "PLR0911", "PLR0915"]
-"libs/greenhouse-server/greenhouse_server/web/routes/operations.py" = ["C901"]
 
 [tool.importlinter]
 root_packages = ["greenhouse_core", "greenhouse_server", "greenhouse_cli"]
