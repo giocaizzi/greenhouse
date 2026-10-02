@@ -121,10 +121,7 @@ indent-style = "space"
 # Complexity offenders at max-complexity 8 (baseline refactor-gate1); only shrinks.
 "libs/greenhouse-cli/greenhouse_cli/commands/auth.py" = ["C901"]
 "libs/greenhouse-cli/greenhouse_cli/commands/operations.py" = ["C901", "PLR0915"]
-"libs/greenhouse-cli/greenhouse_cli/tui/model.py" = ["C901"]
-"libs/greenhouse-cli/greenhouse_cli/tui/screens/cluster.py" = ["C901", "PLR0912"]
 "libs/greenhouse-cli/greenhouse_cli/tui/screens/forms.py" = ["C901", "PLR0911"]
-"libs/greenhouse-cli/greenhouse_cli/tui/widgets.py" = ["C901"]
 "libs/greenhouse-core/greenhouse_core/devices/irrigators/ik10pw.py" = ["C901", "PLR0911"]
 "libs/greenhouse-core/greenhouse_core/devices/irrigators/tuya_generic.py" = ["C901"]
 "libs/greenhouse-core/greenhouse_core/learning/issues.py" = ["C901", "PLR0912", "PLR0915"]
@@ -212,5 +209,5 @@ forbidden_modules = ["greenhouse_core.devices", "greenhouse_core.sync"]
 [[tool.importlinter.contracts]]
 name = "TUI view-model modules stay widget-free and I/O-free"
 type = "forbidden"
-source_modules = ["greenhouse_cli.tui.model", "greenhouse_cli.tui.formatting"]
+source_modules = ["greenhouse_cli.tui.model", "greenhouse_cli.tui.formatting", "greenhouse_cli.tui.render"]
 forbidden_modules = ["textual", "greenhouse_cli.tui.screens", "greenhouse_cli.tui.widgets", "greenhouse_cli.client", "httpx"]

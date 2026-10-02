@@ -6,4 +6,4 @@
 # render; the identical command failed the same way on the parent commit 11c2eb6 with the change stashed. WP0 saw it
 # on refactor-gate1 too. Same race class as the alerts table widths fixed in 7b73582, not reproduced by that agent.
 # Follow-up: a targeted test-side fix is queued with wave C (TUI).
-tests/cli/test_contract_tui_screens.py::test_screen_render_golden[search_citrus]
+# (2026-10-02) search_citrus removed: fixed by 5faca04 + debounce test 5cd26fe (second reviewer: approve). List empty.

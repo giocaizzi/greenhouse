@@ -140,6 +140,11 @@ Process note: Reviewer 2's differential harness (real SQLAlchemy) caught a behav
 attempt (an `irrigator.id` read moved before `commit()`); T4.12 was reverted and redone. See
 `refactor/reviews/wp4-pump-watcher-r2.md`.
 
+TUI (wave C):
+- search-table column widths only ever grow: an early partial query can leave the final table wider than its rows
+  need (root cause of the old `search_citrus` flake);
+- `SpriteView._animate` shadows a Textual attribute (pre-existing; one targeted `type: ignore`).
+
 ## Golden-test policy (orchestrator decision)
 
 - OpenAPI, routes, MCP tools, settings, DDL, scheduler registry, package data, web HTML, CLI help/output, TUI renders,
