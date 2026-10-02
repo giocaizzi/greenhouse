@@ -71,3 +71,7 @@ The machine has 4 cores; do NOT run the full suite unless your brief tells you t
 ## Output discipline
 Write findings to files under `refactor/` (never only in chat). Return a short conclusion (≤ 25 lines) to the orchestrator.
 Do not commit unless your brief says so. Do not touch files outside your stated scope.
+- **Sprint mode** (owner, 2026-10-02): up to 3 implementer worktrees at once; integration gate per merge = one
+  `FULL` run (seed 0) + lint/typecheck/import contracts; the seed-12345 and `TZ=America/New_York` runs move to the
+  final gate; optional tasks skipped; second reviewers only for high-risk code (pipeline/scheduler, engine,
+  devices, auth/app wiring). Per-task safety rules (coverage precondition, golden checks, no fix-forward) unchanged.
