@@ -2,6 +2,9 @@
 # Append-only: each "add type annotations" task appends the modules it made clean; never remove a line.
 # On a rebase conflict, resolve with union + sort.
 libs/greenhouse-cli/greenhouse_cli/client.py
+libs/greenhouse-cli/greenhouse_cli/commands/_helpers.py
+libs/greenhouse-cli/greenhouse_cli/commands/auth.py
+libs/greenhouse-cli/greenhouse_cli/commands/tui.py
 libs/greenhouse-cli/greenhouse_cli/tui/formatting.py
 libs/greenhouse-cli/greenhouse_cli/tui/screens/activity.py
 libs/greenhouse-cli/greenhouse_cli/tui/screens/dashboard.py
