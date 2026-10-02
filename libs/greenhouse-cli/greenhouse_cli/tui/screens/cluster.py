@@ -379,48 +379,60 @@ class ClusterScreen(DataScreen):
     # ── CRUD (contextual on the active tab) ──────────────────────────────
 
     def action_new(self) -> None:
-        cid = self.cluster_id
-        tab = self.active_tab
-        if tab == "tab-plants":
-            self.form_then(
-                "Add plant",
-                resources.plant_fields(),
-                lambda v: lambda c: c.add_plant(cid, **v),
-                lambda r: f"Added {r.get('species')}",
-                "Add",
-                note="Blank care fields are filled from the plant DB when the species is known.",
-            )
-        elif tab == "tab-sensors":
-            self.form_then(
-                "Add sensor",
-                resources.sensor_fields(None, self.status.get("plants", [])),
-                lambda v: lambda c: c.add_sensor(cid, **v),
-                lambda r: f"Added sensor {r.get('name')}",
-                "Add",
-            )
-        elif tab == "tab-windows":
-            self.form_then(
-                "Add irrigation window",
-                resources.window_fields(),
-                lambda v: (
-                    lambda c: c.add_window(cid, v["start_hour"], v["end_hour"], v["weekday_mask"] or 127, v["label"])
-                ),
-                "Window added",
-                "Add",
-            )
-        elif tab == "tab-overview":
-            if self.summary and self.summary.irrigator_id is not None:
-                self.notify("This cluster already has an irrigator — press u to edit it.", severity="warning")
-                return
-            self.form_then(
-                "Attach irrigator",
-                resources.irrigator_fields(),
-                lambda v: lambda c: c.add_irrigator(cid, **v),
-                lambda r: f"Attached {r.get('name')}",
-                "Attach",
-            )
-        else:
+        handler = {
+            "tab-plants": self._new_plant,
+            "tab-sensors": self._new_sensor,
+            "tab-windows": self._new_window,
+            "tab-overview": self._attach_irrigator,
+        }.get(self.active_tab)
+        if handler is None:
             self.notify("Nothing to add here — try the Plants, Sensors, Windows or Overview tab.")
+            return
+        handler()
+
+    def _new_plant(self) -> None:
+        cid = self.cluster_id
+        self.form_then(
+            "Add plant",
+            resources.plant_fields(),
+            lambda v: lambda c: c.add_plant(cid, **v),
+            lambda r: f"Added {r.get('species')}",
+            "Add",
+            note="Blank care fields are filled from the plant DB when the species is known.",
+        )
+
+    def _new_sensor(self) -> None:
+        cid = self.cluster_id
+        self.form_then(
+            "Add sensor",
+            resources.sensor_fields(None, self.status.get("plants", [])),
+            lambda v: lambda c: c.add_sensor(cid, **v),
+            lambda r: f"Added sensor {r.get('name')}",
+            "Add",
+        )
+
+    def _new_window(self) -> None:
+        cid = self.cluster_id
+        self.form_then(
+            "Add irrigation window",
+            resources.window_fields(),
+            lambda v: lambda c: c.add_window(cid, v["start_hour"], v["end_hour"], v["weekday_mask"] or 127, v["label"]),
+            "Window added",
+            "Add",
+        )
+
+    def _attach_irrigator(self) -> None:
+        cid = self.cluster_id
+        if self.summary and self.summary.irrigator_id is not None:
+            self.notify("This cluster already has an irrigator — press u to edit it.", severity="warning")
+            return
+        self.form_then(
+            "Attach irrigator",
+            resources.irrigator_fields(),
+            lambda v: lambda c: c.add_irrigator(cid, **v),
+            lambda r: f"Attached {r.get('name')}",
+            "Attach",
+        )
 
     def action_edit(self) -> None:
         cid = self.cluster_id
