@@ -30,8 +30,15 @@ def search(repo: IrrigationRepository, q: str, limit: int = 20) -> list[SearchHi
 
     pattern = f"%{q}%"
     hits: list[SearchHit] = []
+    hits.extend(_cluster_hits(repo, pattern))
+    hits.extend(_plant_hits(repo, pattern))
+    hits.extend(_sensor_hits(repo, q, pattern))
+    hits.extend(_irrigator_hits(repo, q, pattern))
+    return hits[:limit]
 
-    # ── Clusters ──────────────────────────────────────────────────────────────
+
+def _cluster_hits(repo: IrrigationRepository, pattern: str) -> list[SearchHit]:
+    """Clusters whose name or location matches."""
     clusters = list(
         repo.session.scalars(
             select(Cluster)
@@ -44,18 +51,20 @@ def search(repo: IrrigationRepository, q: str, limit: int = 20) -> list[SearchHi
             .limit(_PER_TYPE_LIMIT)
         )
     )
-    for c in clusters:
-        hits.append(
-            SearchHit(
-                entity_type="cluster",
-                entity_id=c.id,
-                label=c.name,
-                sublabel=c.location,
-                href=f"/clusters/{c.id}",
-            )
+    return [
+        SearchHit(
+            entity_type="cluster",
+            entity_id=c.id,
+            label=c.name,
+            sublabel=c.location,
+            href=f"/clusters/{c.id}",
         )
+        for c in clusters
+    ]
 
-    # ── Plants ────────────────────────────────────────────────────────────────
+
+def _plant_hits(repo: IrrigationRepository, pattern: str) -> list[SearchHit]:
+    """Plants whose species or notes match."""
     plants = list(
         repo.session.scalars(
             select(Plant)
@@ -68,18 +77,20 @@ def search(repo: IrrigationRepository, q: str, limit: int = 20) -> list[SearchHi
             .limit(_PER_TYPE_LIMIT)
         )
     )
-    for p in plants:
-        hits.append(
-            SearchHit(
-                entity_type="plant",
-                entity_id=p.id,
-                label=p.species,
-                sublabel=_cluster_name(repo, p.cluster_id),
-                href=f"/clusters/{p.cluster_id}/plants/{p.id}",
-            )
+    return [
+        SearchHit(
+            entity_type="plant",
+            entity_id=p.id,
+            label=p.species,
+            sublabel=_cluster_name(repo, p.cluster_id),
+            href=f"/clusters/{p.cluster_id}/plants/{p.id}",
         )
+        for p in plants
+    ]
 
-    # ── Sensors ───────────────────────────────────────────────────────────────
+
+def _sensor_hits(repo: IrrigationRepository, q: str, pattern: str) -> list[SearchHit]:
+    """Sensors whose name matches, or whose Tuya device id starts with the query."""
     sensors = list(
         repo.session.scalars(
             select(Sensor)
@@ -92,18 +103,20 @@ def search(repo: IrrigationRepository, q: str, limit: int = 20) -> list[SearchHi
             .limit(_PER_TYPE_LIMIT)
         )
     )
-    for s in sensors:
-        hits.append(
-            SearchHit(
-                entity_type="sensor",
-                entity_id=s.id,
-                label=s.name,
-                sublabel=_cluster_name(repo, s.cluster_id),
-                href=f"/clusters/{s.cluster_id}#sensor-{s.id}",
-            )
+    return [
+        SearchHit(
+            entity_type="sensor",
+            entity_id=s.id,
+            label=s.name,
+            sublabel=_cluster_name(repo, s.cluster_id),
+            href=f"/clusters/{s.cluster_id}#sensor-{s.id}",
         )
+        for s in sensors
+    ]
 
-    # ── Irrigators ────────────────────────────────────────────────────────────
+
+def _irrigator_hits(repo: IrrigationRepository, q: str, pattern: str) -> list[SearchHit]:
+    """Irrigators whose name matches, or whose Tuya device id starts with the query."""
     irrigators = list(
         repo.session.scalars(
             select(Irrigator)
@@ -116,18 +129,16 @@ def search(repo: IrrigationRepository, q: str, limit: int = 20) -> list[SearchHi
             .limit(_PER_TYPE_LIMIT)
         )
     )
-    for i in irrigators:
-        hits.append(
-            SearchHit(
-                entity_type="irrigator",
-                entity_id=i.id,
-                label=i.name,
-                sublabel=_cluster_name(repo, i.cluster_id),
-                href=f"/clusters/{i.cluster_id}#irrigator-{i.id}",
-            )
+    return [
+        SearchHit(
+            entity_type="irrigator",
+            entity_id=i.id,
+            label=i.name,
+            sublabel=_cluster_name(repo, i.cluster_id),
+            href=f"/clusters/{i.cluster_id}#irrigator-{i.id}",
         )
-
-    return hits[:limit]
+        for i in irrigators
+    ]
 
 
 def _cluster_name(repo: IrrigationRepository, cluster_id: int) -> str | None:

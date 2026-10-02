@@ -1,11 +1,16 @@
 """System-wide health pulse: sensor freshness, irrigator inventory, scheduler state."""
 
 import time
+from collections.abc import Sequence
+from typing import TYPE_CHECKING
 
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_core.schemas import SystemHealthDevice, SystemHealthResponse
 from greenhouse_server.scheduler import scheduler
 from greenhouse_server.services.sync import SyncService
+
+if TYPE_CHECKING:
+    from greenhouse_core.models import Sensor
 
 _STALE_SECONDS = 3 * 3600
 _COLD_SECONDS = 24 * 3600
@@ -31,6 +36,36 @@ class SystemHealthService:
         sensors = self._repo.list_all_sensors()
         irrigators = self._repo.list_all_irrigators()
 
+        sensor_devices, last_ts_values, stale_count = self._sensor_devices(sensors, now)
+
+        irrigator_devices: list[SystemHealthDevice] = [
+            SystemHealthDevice(id=irr.id, name=irr.name, status="ok", age_seconds=None) for irr in irrigators
+        ]
+
+        last_sync_at = max(last_ts_values) if last_ts_values else None
+        cloud_reachable = any(ts > now - _FRESH_SECONDS for ts in last_ts_values) if last_ts_values else False
+
+        open_alerts = self._repo.count_open_alerts()
+
+        status = _overall_status(cloud_reachable, stale_count, open_alerts)
+
+        all_devices = (sensor_devices + irrigator_devices)[:_DEVICE_LIMIT]
+
+        return SystemHealthResponse(
+            status=status,
+            scheduler_running=scheduler.running,
+            cloud_reachable=cloud_reachable,
+            last_sync_at=last_sync_at,
+            sensors_total=len(sensors),
+            sensors_stale=stale_count,
+            sensors_fresh=len(sensors) - stale_count,
+            irrigators_total=len(irrigators),
+            open_alerts=open_alerts,
+            devices=all_devices,
+        )
+
+    def _sensor_devices(self, sensors: "Sequence[Sensor]", now: int) -> tuple[list[SystemHealthDevice], list[int], int]:
+        """Per-sensor freshness rows, the sensors' last reading timestamps, and how many are stale or cold."""
         sensor_devices: list[SystemHealthDevice] = []
         last_ts_values: list[int] = []
         stale_count = 0
@@ -47,33 +82,13 @@ class SystemHealthService:
                 status = "ok"
             sensor_devices.append(SystemHealthDevice(id=sensor.id, name=sensor.name, status=status, age_seconds=age))
 
-        irrigator_devices: list[SystemHealthDevice] = [
-            SystemHealthDevice(id=irr.id, name=irr.name, status="ok", age_seconds=None) for irr in irrigators
-        ]
+        return sensor_devices, last_ts_values, stale_count
 
-        last_sync_at = max(last_ts_values) if last_ts_values else None
-        cloud_reachable = any(ts > now - _FRESH_SECONDS for ts in last_ts_values) if last_ts_values else False
 
-        open_alerts = self._repo.count_open_alerts()
-
-        if not cloud_reachable:
-            status = "down"
-        elif stale_count > 0 or open_alerts >= 3:
-            status = "degraded"
-        else:
-            status = "ok"
-
-        all_devices = (sensor_devices + irrigator_devices)[:_DEVICE_LIMIT]
-
-        return SystemHealthResponse(
-            status=status,
-            scheduler_running=scheduler.running,
-            cloud_reachable=cloud_reachable,
-            last_sync_at=last_sync_at,
-            sensors_total=len(sensors),
-            sensors_stale=stale_count,
-            sensors_fresh=len(sensors) - stale_count,
-            irrigators_total=len(irrigators),
-            open_alerts=open_alerts,
-            devices=all_devices,
-        )
+def _overall_status(cloud_reachable: bool, stale_count: int, open_alerts: int) -> str:
+    """Down without fresh cloud data; degraded with stale sensors or 3+ open alerts; ok otherwise."""
+    if not cloud_reachable:
+        return "down"
+    if stale_count > 0 or open_alerts >= 3:
+        return "degraded"
+    return "ok"

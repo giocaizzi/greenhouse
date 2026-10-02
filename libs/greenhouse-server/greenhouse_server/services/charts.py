@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 from collections import defaultdict
 from datetime import UTC, datetime
-from typing import Literal
+from typing import Any, Literal
 
 from sqlalchemy import select
 
@@ -46,8 +46,8 @@ def build_plant_chart_payload(
     plant_id: int,
     hours: int,
     metric: Metric,
-) -> dict:
-    plant: Plant | None = repo.session.get(Plant, plant_id)
+) -> dict[str, Any]:
+    plant: Plant | None = repo.get_plant(plant_id)
     if plant is None:
         return {}
 
@@ -74,7 +74,7 @@ def build_cluster_chart_payload(
     cluster_id: int,
     hours: int,
     metric: Metric,
-) -> dict:
+) -> dict[str, Any]:
     cluster = repo.get_cluster(cluster_id)
     if cluster is None:
         return {}
@@ -98,7 +98,7 @@ def _build_plant_sensor_datasets(
     plant_id: int,
     hours: int,
     metric: Metric,
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """Assignment-aware variant: readings are filtered to windows when the
     sensor was actually linked to this plant. One dataset per sensor that ever
     served this plant within the lookback window."""
@@ -135,7 +135,7 @@ def _build_sensor_datasets(
     sensors: list[Sensor],
     hours: int,
     metric: Metric,
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     datasets = []
     field = _metric_field(metric)
     for sensor in sensors:
@@ -154,10 +154,10 @@ def _build_sensor_datasets(
     return datasets
 
 
-def _build_event_list(repo: IrrigationRepository, cluster_id: int, hours: int) -> list[dict]:
+def _build_event_list(repo: IrrigationRepository, cluster_id: int, hours: int) -> list[dict[str, Any]]:
     irrigator = repo.get_irrigator_for_cluster(cluster_id)
     cutoff = int(time.time()) - (hours * 3600)
-    events: list[dict] = []
+    events: list[dict[str, Any]] = []
     if irrigator is not None:
         for e in repo.get_recent_events(irrigator.id, hours=hours):
             if e.timestamp < cutoff:
@@ -173,7 +173,7 @@ def _build_event_list(repo: IrrigationRepository, cluster_id: int, hours: int) -
     return events
 
 
-def _threshold_for_plant(plant: Plant, plant_db: PlantDatabase, metric: Metric) -> dict:
+def _threshold_for_plant(plant: Plant, plant_db: PlantDatabase, metric: Metric) -> dict[str, Any]:
     if metric == "soil_moisture":
         if plant.water_needs:
             info = plant_db.get_water_needs_info(plant.water_needs)
@@ -200,7 +200,7 @@ def _threshold_for_plant(plant: Plant, plant_db: PlantDatabase, metric: Metric) 
 
 def _threshold_for_cluster(
     repo: IrrigationRepository, plant_db: PlantDatabase, cluster_id: int, metric: Metric
-) -> dict:
+) -> dict[str, Any]:
     if metric == "soil_moisture":
         return {
             "min": float(DEFAULT_SOIL_MOISTURE_MIN),
@@ -212,22 +212,27 @@ def _threshold_for_cluster(
     if metric == "temperature":
         mins = [p.ideal_temp_min for p in plants if p.ideal_temp_min is not None]
         maxs = [p.ideal_temp_max for p in plants if p.ideal_temp_max is not None]
-        if mins or maxs:
-            return {
-                "min": min(mins) if mins else None,
-                "max": max(maxs) if maxs else None,
-                "source": "plant_aggregate",
-            }
+        band = _aggregate_band(mins, maxs)
+        if band is not None:
+            return band
     if metric == "env_humidity":
         mins = [p.ideal_humidity_min for p in plants if p.ideal_humidity_min is not None]
         maxs = [p.ideal_humidity_max for p in plants if p.ideal_humidity_max is not None]
-        if mins or maxs:
-            return {
-                "min": min(mins) if mins else None,
-                "max": max(maxs) if maxs else None,
-                "source": "plant_aggregate",
-            }
+        band = _aggregate_band(mins, maxs)
+        if band is not None:
+            return band
     return {"min": None, "max": None, "source": "none"}
+
+
+def _aggregate_band(mins: list[float], maxs: list[float]) -> dict[str, Any] | None:
+    """Widest band across the cluster's plants; None when no plant sets either bound."""
+    if mins or maxs:
+        return {
+            "min": min(mins) if mins else None,
+            "max": max(maxs) if maxs else None,
+            "source": "plant_aggregate",
+        }
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -255,6 +260,26 @@ def build_overlay_payload(
     sensors = repo.get_sensors_in_cluster(cluster_id)
     cutoff = int(time.time()) - hours * 3600
 
+    soil_buckets, humidity_buckets, light_buckets = _bucket_readings(repo, sensors, hours)
+    datasets = _overlay_datasets(soil_buckets, humidity_buckets, light_buckets, cutoff)
+    raw_events = _build_event_list(repo, cluster_id, hours)
+
+    return MultiMetricOverlayResponse(
+        cluster_id=cluster_id,
+        hours=hours,
+        datasets=datasets,
+        events=raw_events,  # type: ignore[arg-type]
+        normalised=True,
+    )
+
+
+_Buckets = dict[int, list[float]]
+
+
+def _bucket_readings(
+    repo: IrrigationRepository, sensors: list[Sensor], hours: int
+) -> tuple[_Buckets, _Buckets, _Buckets]:
+    """Soil, humidity and light values of every sensor, bucketed to the minute (in that order)."""
     # Aggregate per-metric points: take mean across sensors per timestamp bucket (nearest minute).
     soil_buckets: dict[int, list[float]] = defaultdict(list)
     humidity_buckets: dict[int, list[float]] = defaultdict(list)
@@ -269,6 +294,14 @@ def build_overlay_payload(
                 humidity_buckets[ts].append(float(r.env_humidity))
             if r.light is not None:
                 light_buckets[ts].append(float(r.light))
+
+    return soil_buckets, humidity_buckets, light_buckets
+
+
+def _overlay_datasets(
+    soil_buckets: _Buckets, humidity_buckets: _Buckets, light_buckets: _Buckets, cutoff: int
+) -> list[OverlayDataset]:
+    """One normalised 0-100 dataset per non-empty metric: soil, humidity, then light."""
 
     def _to_points(buckets: dict[int, list[float]], scale: float = 1.0) -> list[tuple[int, float]]:
         return sorted((ts, min(100.0, sum(v) / len(v) * scale)) for ts, v in buckets.items() if ts >= cutoff)
@@ -287,16 +320,7 @@ def build_overlay_payload(
                 original_max=_LIGHT_MAX_LUX,
             )
         )
-
-    raw_events = _build_event_list(repo, cluster_id, hours)
-
-    return MultiMetricOverlayResponse(
-        cluster_id=cluster_id,
-        hours=hours,
-        datasets=datasets,
-        events=raw_events,  # type: ignore[arg-type]
-        normalised=True,
-    )
+    return datasets
 
 
 def build_heatmap_payload(
@@ -350,7 +374,7 @@ def build_plant_health_timeline_payload(
     Health score per day is derived from the mean soil moisture reading clamped
     to [0, 100]. Returns None if the plant is not found.
     """
-    plant: Plant | None = repo.session.get(Plant, plant_id)
+    plant: Plant | None = repo.get_plant(plant_id)
     if plant is None:
         return None
 

@@ -1,5 +1,8 @@
 """Cluster-level care insights aggregated from learning + maintenance + decisions."""
 
+from collections.abc import Mapping
+from typing import Any
+
 from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_core.schemas import CareInsight, ClusterInsightsResponse
@@ -15,6 +18,16 @@ _ALERT_TYPE_META: dict[str, tuple[str, str, str]] = {
     "chronic_underwatering": ("warning", "Chronic underwatering", "Increase irrigation frequency or duration."),
     "unresolvable_conflict": ("warning", "Sensor conflict", "Verify all sensors are correctly assigned to plants."),
 }
+
+
+def _insight_from_alert(alert: Mapping[str, Any]) -> CareInsight:
+    """Map a maintenance/learning alert dict to a CareInsight, with known types' curated copy."""
+    code = alert["type"]
+    meta = _ALERT_TYPE_META.get(code)
+    severity = meta[0] if meta else alert.get("severity", "warning")
+    title = meta[1] if meta else code.replace("_", " ").title()
+    suggestion = meta[2] if meta else None
+    return CareInsight(code=code, severity=severity, title=title, message=alert["message"], suggestion=suggestion)
 
 
 class InsightsService:
@@ -45,26 +58,14 @@ class InsightsService:
             if code in seen_codes:
                 continue
             seen_codes.add(code)
-            meta = _ALERT_TYPE_META.get(code)
-            severity = meta[0] if meta else alert.get("severity", "warning")
-            title = meta[1] if meta else code.replace("_", " ").title()
-            suggestion = meta[2] if meta else None
-            insights.append(
-                CareInsight(code=code, severity=severity, title=title, message=alert["message"], suggestion=suggestion)
-            )
+            insights.append(_insight_from_alert(alert))
 
         for alert in collect_learning_alerts(self._repo, cluster_id, self._plant_db):
             code = alert["type"]
             if code in seen_codes:
                 continue
             seen_codes.add(code)
-            meta = _ALERT_TYPE_META.get(code)
-            severity = meta[0] if meta else alert.get("severity", "warning")
-            title = meta[1] if meta else code.replace("_", " ").title()
-            suggestion = meta[2] if meta else None
-            insights.append(
-                CareInsight(code=code, severity=severity, title=title, message=alert["message"], suggestion=suggestion)
-            )
+            insights.append(_insight_from_alert(alert))
 
         logs = self._repo.list_decision_logs(cluster_id, limit=1)
         if logs:

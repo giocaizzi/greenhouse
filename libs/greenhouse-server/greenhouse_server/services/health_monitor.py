@@ -27,11 +27,13 @@ import logging
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from greenhouse_core.constants import (
     BATTERY_CRITICAL_PCT,
     BATTERY_LOW_PCT,
     OFFLINE_AFTER_MINUTES,
+    SENSOR_HEALTH_BACKFILL_HOURS,
     SENSOR_HEALTH_BACKFILL_WINDOW,
     SIGNAL_LOSS_THRESHOLD,
 )
@@ -42,6 +44,11 @@ from greenhouse_core.models import ENTITY_IRRIGATOR, ENTITY_SENSOR, Irrigator, S
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.services.alerts import notify_if_new_alert
 from greenhouse_server.services.notify import NtfyClient
+
+if TYPE_CHECKING:
+    from sqlalchemy import Select
+
+    from greenhouse_core.models import Alert
 
 logger = logging.getLogger(__name__)
 
@@ -224,7 +231,7 @@ class DeviceHealthMonitor:
         cached = self._cache.get((ENTITY_IRRIGATOR, irrigator.id))
         if cached is None:
             return False, []
-        blocking = [
+        blocking: list[HealthAlarm] = [
             alarm
             for alarm in cached.derived_alarms
             if alarm in (HealthAlarm.NO_WATER, HealthAlarm.RAIN_DETECTED, HealthAlarm.DEVICE_OFFLINE)
@@ -241,7 +248,7 @@ class DeviceHealthMonitor:
         forgetting a known-bad battery state across a restart.
         """
         for sensor in self._repo.list_all_sensors():
-            readings = self._repo.get_recent_readings(sensor.id, hours=24 * 7)
+            readings = self._repo.get_recent_readings(sensor.id, hours=SENSOR_HEALTH_BACKFILL_HOURS)
             if not readings:
                 continue
             recent = readings[:window]
@@ -250,28 +257,23 @@ class DeviceHealthMonitor:
             cluster_id = sensor.cluster_id
 
             if all(_is_low_battery_state(r.battery_state) for r in recent):
-                key = _dedup_key(ENTITY_SENSOR, sensor.id, HealthAlarm.LOW_BATTERY)
-                if not self._repo.session.scalar(self._open_alert_stmt(key)):
-                    self._raise_health_alert(
-                        entity_type=ENTITY_SENSOR,
-                        entity_id=sensor.id,
-                        alarm=HealthAlarm.LOW_BATTERY,
-                        state=DeviceHealthState(observed_at=self._clock()),
-                        label=sensor.name,
-                        cluster_id=cluster_id,
-                    )
+                self._raise_if_not_open(HealthAlarm.LOW_BATTERY, sensor, cluster_id=cluster_id)
 
             if all(r.water_warning is True for r in recent):
-                key = _dedup_key(ENTITY_SENSOR, sensor.id, HealthAlarm.SENSOR_FAULT)
-                if not self._repo.session.scalar(self._open_alert_stmt(key)):
-                    self._raise_health_alert(
-                        entity_type=ENTITY_SENSOR,
-                        entity_id=sensor.id,
-                        alarm=HealthAlarm.SENSOR_FAULT,
-                        state=DeviceHealthState(observed_at=self._clock()),
-                        label=sensor.name,
-                        cluster_id=cluster_id,
-                    )
+                self._raise_if_not_open(HealthAlarm.SENSOR_FAULT, sensor, cluster_id=cluster_id)
+
+    def _raise_if_not_open(self, alarm: HealthAlarm, sensor: Sensor, *, cluster_id: int | None) -> None:
+        """Raise a back-filled sensor alarm unless its alert is already open (no duplicate on restart)."""
+        key = _dedup_key(ENTITY_SENSOR, sensor.id, alarm)
+        if not self._repo.session.scalar(self._open_alert_stmt(key)):
+            self._raise_health_alert(
+                entity_type=ENTITY_SENSOR,
+                entity_id=sensor.id,
+                alarm=alarm,
+                state=DeviceHealthState(observed_at=self._clock()),
+                label=sensor.name,
+                cluster_id=cluster_id,
+            )
 
     # ── Legacy alias migration (startup hook) ─────────────────────────────
 
@@ -370,7 +372,7 @@ class DeviceHealthMonitor:
             logger.exception("Failed to resolve health alert %s for %s %d", alarm.value, entity_type, entity_id)
 
     @staticmethod
-    def _open_alert_stmt(dedup_key: str):
+    def _open_alert_stmt(dedup_key: str) -> Select[tuple[Alert]]:
         from sqlalchemy import select
 
         from greenhouse_core.models import Alert
