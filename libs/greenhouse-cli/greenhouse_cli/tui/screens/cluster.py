@@ -19,7 +19,7 @@ from textual.containers import Horizontal, HorizontalScroll, Vertical, VerticalS
 from textual.widgets import DataTable, Footer, Header, Static, TabbedContent, TabPane
 
 from greenhouse_cli.tui import formatting as fmt
-from greenhouse_cli.tui import resources
+from greenhouse_cli.tui import render, resources
 from greenhouse_cli.tui.model import ClusterSummary, summarize
 from greenhouse_cli.tui.screens.base import DataScreen
 from greenhouse_cli.tui.screens.forms import Field
@@ -282,27 +282,7 @@ class ClusterScreen(DataScreen):
 
     def _render_plants(self, status: dict[str, Any]) -> None:
         table = self.query_one("#plants-table", DataTable)
-        rows: list[tuple[str | None, list[RenderableType | str]]] = []
-        for p in status.get("plants", []):
-            temp = (
-                f"{fmt.num(p.get('ideal_temp_min'), '', 0)}–{fmt.num(p.get('ideal_temp_max'), '°C', 0)}"
-                if p.get("ideal_temp_min") is not None
-                else "—"
-            )
-            rows.append(
-                (
-                    str(p["id"]),
-                    [
-                        str(p["id"]),
-                        p["species"],
-                        p.get("category") or "—",
-                        p.get("water_needs") or "—",
-                        p.get("light_needs") or "—",
-                        temp,
-                    ],
-                )
-            )
-        refill(table, rows)
+        refill(table, render.plant_rows(status.get("plants", [])))
         ids = [p["id"] for p in status.get("plants", [])]
         if ids and ids != self._plants_loaded:
             self._plants_loaded = ids
@@ -330,31 +310,7 @@ class ClusterScreen(DataScreen):
 
     def _render_sensors(self, status: dict[str, Any]) -> None:
         table = self.query_one("#sensors-table", DataTable)
-        rows: list[tuple[str | None, list[RenderableType | str]]] = []
-        species = {p["id"]: p["species"] for p in status.get("plants", [])}
-        for s in status.get("sensors", []):
-            r = s.get("last_reading") or {}
-            battery = r.get("battery_state") or "—"
-            if r.get("water_warning"):
-                battery = f"{battery} ⚠ water"
-            rows.append(
-                (
-                    str(s["id"]),
-                    [
-                        str(s["id"]),
-                        s["name"],
-                        s["type"],
-                        species.get(s.get("plant_id"), "—"),
-                        fmt.num(r.get("soil_moisture"), "%"),
-                        fmt.num(r.get("temperature"), "°C"),
-                        fmt.num(r.get("env_humidity"), "%", 0),
-                        fmt.num(r.get("light"), " lx", 0),
-                        battery,
-                        fmt.age(s.get("reading_age_seconds")),
-                    ],
-                )
-            )
-        refill(table, rows)
+        refill(table, render.sensor_rows(status))
 
     async def _load_decisions(self) -> None:
         data = await self.gh.api(lambda c: c.list_decisions(self.cluster_id, limit=100), quiet=True)

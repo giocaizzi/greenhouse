@@ -7,6 +7,7 @@ libs/greenhouse-cli/greenhouse_cli/commands/auth.py
 libs/greenhouse-cli/greenhouse_cli/commands/tui.py
 libs/greenhouse-cli/greenhouse_cli/tui/formatting.py
 libs/greenhouse-cli/greenhouse_cli/tui/model.py
+libs/greenhouse-cli/greenhouse_cli/tui/render.py
 libs/greenhouse-cli/greenhouse_cli/tui/screens/activity.py
 libs/greenhouse-cli/greenhouse_cli/tui/screens/cluster.py
 libs/greenhouse-cli/greenhouse_cli/tui/screens/dashboard.py
