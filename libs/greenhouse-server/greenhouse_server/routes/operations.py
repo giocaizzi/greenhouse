@@ -272,7 +272,8 @@ def learn(cluster_id: int, repo: RepoDep, plant_db: PlantDbDep):
     cluster = require_cluster(repo, cluster_id)
     report = generate_learning_report(repo, cluster_id, plant_db)
     alerts = collect_learning_alerts(repo, cluster_id, plant_db)
-    return LearnResponse(cluster_name=cluster.name, report=report, alerts=alerts)
+    # contract: LearnResponse.alerts validates the alert dicts into AlertResponse.
+    return LearnResponse(cluster_name=cluster.name, report=report, alerts=alerts)  # type: ignore[arg-type]
 
 
 @router.get("/clusters/{cluster_id}/history", response_model=HistoryResponse)

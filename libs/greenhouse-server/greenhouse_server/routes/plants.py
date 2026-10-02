@@ -233,7 +233,8 @@ def sync_plants(request: SyncPlantsRequest, repo: RepoDep, cluster_svc: ClusterS
         cluster_svc.sync_plant_with_db(plant)
         synced = 1
     else:
-        clusters = [repo.get_cluster(request.cluster_id)] if request.cluster_id else repo.list_clusters()
+        # contract: route body kept verbatim until T5.7 moves it into ClusterService.sync_plants.
+        clusters = [repo.get_cluster(request.cluster_id)] if request.cluster_id else repo.list_clusters()  # type: ignore[list-item]
         for cluster in clusters:
             if not cluster:
                 continue
@@ -281,7 +282,8 @@ def get_plant_health(plant_id: int, repo: RepoDep, health_svc: PlantHealthServic
         plant_id=plant_id,
         species=plant.species,
         current_score=result["score"],
-        history=history,
+        # contract: PlantHealthResponse.history validates the ORM rows (from_attributes).
+        history=history,  # type: ignore[arg-type]
     )
 
 
