@@ -315,48 +315,12 @@ class ClusterScreen(DataScreen):
     async def _load_decisions(self) -> None:
         data = await self.gh.api(lambda c: c.list_decisions(self.cluster_id, limit=100), quiet=True)
         table = self.query_one("#decisions-table", DataTable)
-        rows: list[tuple[str | None, list[RenderableType | str]]] = []
-        for d in (data or {}).get("items", []):
-            rows.append(
-                (
-                    None,
-                    [
-                        fmt.clock(d["evaluated_at"], with_date=True),
-                        fmt.styled(d["action"], fmt.ACTION_STYLES),
-                        str(d["duration_minutes"]),
-                        f"{d['interval_hours']}h",
-                        f"{d['confidence']:.0%}",
-                        d.get("primary_code") or "—",
-                        d.get("triggered_by", ""),
-                        Text("yes", style="#4fb3ff") if d.get("actuated") else Text("no", style="dim"),
-                        d.get("reason_text", ""),
-                    ],
-                )
-            )
-        refill(table, rows)
+        refill(table, render.decision_rows(data))
 
     async def _load_history(self) -> None:
         data = await self.gh.api(lambda c: c.history(self.cluster_id, hours=24 * 30, limit=200), quiet=True)
         table = self.query_one("#history-table", DataTable)
-        events = [
-            (ev, irr["irrigator_name"]) for irr in (data or {}).get("irrigators", []) for ev in irr.get("events", [])
-        ]
-        rows: list[tuple[str | None, list[RenderableType | str]]] = []
-        for ev, name in sorted(events, key=lambda r: r[0]["timestamp"], reverse=True):
-            rows.append(
-                (
-                    None,
-                    [
-                        fmt.clock(ev["timestamp"], with_date=True),
-                        name,
-                        fmt.styled(ev["action"], fmt.ACTION_STYLES),
-                        fmt.num(ev.get("duration_minutes"), "", 0),
-                        ev.get("triggered_by", ""),
-                        ev.get("notes") or "",
-                    ],
-                )
-            )
-        refill(table, rows)
+        refill(table, render.history_rows(data))
 
     async def _load_config(self) -> None:
         cid = self.cluster_id
@@ -365,28 +329,10 @@ class ClusterScreen(DataScreen):
             self.gh.api(lambda c: c.get_cluster_detail(cid), quiet=True),
         )
         self.detail = detail or {}
-        rows: list[tuple[str, str | Text]] = []
-        for key, field in sorted(((effective or {}).get("effective") or {}).items()):
-            value = field.get("value")
-            source = field.get("source", "")
-            style = "bold" if source == "cluster" else ""
-            rows.append((key, Text.assemble((str(value), style), (f"  ↳ {source}", "dim"))))
+        rows = render.config_rows(effective)
         self.query_one("#config-panel", KeyValue).show(rows or [("config", "unavailable")], title="Effective config")
         table = self.query_one("#windows-table", DataTable)
-        window_rows: list[tuple[str | None, list[RenderableType | str]]] = []
-        for w in self.detail.get("windows", []):
-            window_rows.append(
-                (
-                    str(w["id"]),
-                    [
-                        str(w["id"]),
-                        w.get("label") or "—",
-                        f"{w['start_hour']:02d}:00–{w['end_hour']:02d}:00",
-                        fmt.weekday_mask(w["weekday_mask"]),
-                    ],
-                )
-            )
-        refill(table, window_rows)
+        refill(table, render.window_rows(self.detail.get("windows", [])))
 
     async def _load_insights(self) -> None:
         cid = self.cluster_id
