@@ -5,7 +5,7 @@ import logging
 import time as _time
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any, Required, TypedDict
+from typing import TYPE_CHECKING, Any, Literal, Required, TypedDict, cast
 
 from greenhouse_core.constants import (
     DEFAULT_SOIL_MOISTURE_TARGET,
@@ -517,6 +517,31 @@ def _soil_status(latest_soil: float | None, t_min: float, t_max: float) -> str:
     return "ok"
 
 
+def _check_result(
+    cluster_id: int,
+    cluster_name: str,
+    action: str,
+    *,
+    detail_key: Literal["notes", "needs_water"],
+    detail: str | list[str],
+    alerts: list[dict[str, Any]],
+    maintenance: list[dict[str, Any]],
+) -> CheckResult:
+    """One ``check_cluster`` entry, keys in the response order; ``detail_key`` names the branch's detail."""
+    # A TypedDict literal cannot carry a computed key; the runtime object is the same plain dict.
+    return cast(
+        CheckResult,
+        {
+            "cluster_id": cluster_id,
+            "cluster_name": cluster_name,
+            "action": action,
+            detail_key: detail,
+            "alerts": alerts,
+            "maintenance": maintenance,
+        },
+    )
+
+
 class IrrigationService:
     """Orchestrates irrigation decisions, execution, and monitoring."""
 
@@ -822,40 +847,26 @@ class IrrigationService:
         alerts = collect_learning_alerts(self._repo, cluster_id, self._plant_db)
         maintenance = collect_maintenance_alerts(self._repo, cluster_id, self._plant_db)
 
-        if irrigator:
-            effective = self._repo.get_effective_config(cluster_id)
-            if not effective["auto_run"]["value"]:
-                sync_cluster_alerts(self._repo, cluster_id, self._plant_db, notifier=self._notifier)
-                return {
-                    "cluster_id": cluster_id,
-                    "cluster_name": cluster.name,
-                    "action": "skipped",
-                    "notes": "auto_run disabled",
-                    "alerts": alerts,
-                    "maintenance": maintenance,
-                }
-
-            result = self.run_irrigation_pipeline(cluster_id)
-            sync_cluster_alerts(self._repo, cluster_id, self._plant_db, notifier=self._notifier)
-            return {
-                "cluster_id": cluster_id,
-                "cluster_name": cluster.name,
-                "action": result.get("action", "error"),
-                "notes": result.get("reason", ""),
-                "alerts": alerts,
-                "maintenance": maintenance,
-            }
-        else:
+        detail_key: Literal["notes", "needs_water"] = "notes"
+        detail: str | list[str]
+        if not irrigator:
             monitor = self.monitor_cluster(cluster_id)
-            sync_cluster_alerts(self._repo, cluster_id, self._plant_db, notifier=self._notifier)
-            return {
-                "cluster_id": cluster_id,
-                "cluster_name": cluster.name,
-                "action": "monitored",
-                "needs_water": monitor.get("needs_water", []),
-                "alerts": alerts,
-                "maintenance": maintenance,
-            }
+            action, detail_key, detail = "monitored", "needs_water", monitor.get("needs_water", [])
+        elif not self._repo.get_effective_config(cluster_id)["auto_run"]["value"]:
+            action, detail = "skipped", "auto_run disabled"
+        else:
+            result = self.run_irrigation_pipeline(cluster_id)
+            action, detail = result.get("action", "error"), result.get("reason", "")
+        sync_cluster_alerts(self._repo, cluster_id, self._plant_db, notifier=self._notifier)
+        return _check_result(
+            cluster_id,
+            cluster.name,
+            action,
+            detail_key=detail_key,
+            detail=detail,
+            alerts=alerts,
+            maintenance=maintenance,
+        )
 
     def check_all_clusters(self) -> list[CheckResult]:
         """Check every cluster, isolating each one in its own transaction.
