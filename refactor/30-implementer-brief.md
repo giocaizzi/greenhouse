@@ -48,6 +48,11 @@ public import paths, names tests patch at attribute paths (`refactor/00-map.md` 
 move logging code to a new module), env vars and defaults, DDL, `constants.py` values, `TriggerCode` members,
 `tests/golden/**`, every existing test, and the frozen safety-net files.
 
+## Dead code (owner directive)
+Prune dead code you find **in your own files** along the way, following the rules in `refactor/BRIEF.md`
+("Prune dead code along the way"): evidence first, one dedicated commit per removal group, evidence in the body.
+Dead code outside your files → list it in the hand-off for the final sweep.
+
 ## Hand-off
 WP gate before hand-back (§0.4): union of task subsets + `$CORE`; high-risk WPs run `FULL` and `FULL_SEED2`.
 Then write `refactor/wp-handoff/<WP>.md` (last commit): per task commit hash + evidence, M-pre/M-post mutation

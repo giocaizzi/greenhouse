@@ -48,6 +48,20 @@ Behavior-preserving refactor: make the codebase cleaner, more readable, better o
   signatures, `response_model`s, Pydantic class/field names and order, CLI option names stay frozen. Running work
   packages are unaffected (they keep the full freeze).
 
+- **Prune dead code along the way** (owner, 2026-10-02). Rules:
+  1. Evidence first: zero references across `libs/`, `tests/`, templates (`*.html`, Jinja filters/globals registered by
+     name), `app.tcss`, `plugin/`, entry points, and no dynamic access (`getattr`, Textual `action_*`/`on_*` name
+     strings, decorators/registries, `__all__`). vulture output is a lead, never proof.
+  2. One dedicated commit per removal group: `refactor(<area>): remove dead code — <what>`, body lists the evidence
+     (grep commands + results) and that the full relevant subset is green.
+  3. Unreachable branches (provably impossible conditions) may be removed only when the proof is in the commit body
+     and no test exercises them.
+  4. Dead **public** names on pinned import surfaces (`tests/golden/contracts/imports.json`) and dead code whose only
+     users are its own characterization tests: remove in a dedicated commit that also removes those tests / that
+     golden name, with the justification in the body — the reviewer checks the golden diff is removal-only.
+  5. Never "dead": route/web/Typer handlers, Textual handlers and actions, scheduler job functions, Pydantic models
+     referenced by OpenAPI, anything a frozen golden renders.
+
 ## Test suite
 `uv run pytest` — ~1160 tests, ~12 min full. Use targeted paths / `-x` for inner loops. No real network/hardware ever;
 fakes in `tests/fake_devices.py`, `tests/fake_data.py`, fixtures in `tests/conftest.py`, TUI fixtures in `tests/cli/tui_fixtures.py`.

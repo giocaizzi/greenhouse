@@ -33,7 +33,7 @@ suggested follow-up. Details/evidence: `REFACTOR_NOTES.md` and the `refactor/10-
 - `CLAUDE.md` module paths must be updated if the final structure moved anything (dedicated docs commit).
 - Plugin skill docs (`plugin/skills/greenhouse/references/{LOGIC,CLI}.md`, `SKILL.md`) must be checked for drift
   after the refactor — CLAUDE.md requires them to track CLI/engine changes; refactor scope forbids editing `plugin/`.
-- Dead code candidates found (remove in dedicated, test-backed commits): `StressIndicators.any_critical()`,
+- Dead code candidates — **now in scope** (owner directive: prune along the way + final sweep): `StressIndicators.any_critical()`,
   `is_within_quiet_hours` duplicate guard, unused `DEFAULT_QUIET_*` constants, `print_stats_report` (no caller),
   `#global-config` CSS rule, the 8 unreferenced public names in `refactor/00-map.md`, two unreachable guards from WP4.
 
@@ -45,6 +45,7 @@ suggested follow-up. Details/evidence: `REFACTOR_NOTES.md` and the `refactor/10-
 - **Open the PR** for `claude/focused-hawking-7to7o3` when the refactor is done (not opened without your request).
 
 ## 6. Queued refactor follow-ups (in scope, scheduled)
+- Dead-code sweep after the last wave: vulture + manual evidence over the whole tree, rules in `refactor/BRIEF.md`.
 - Lint ratchet after wave C — `refactor/40-lint-ratchet.md` (complexity tightening, then every non-functional ruff
   family; reviewed doc-contract edits allowed).
 - TUI `search_citrus` render still flaky (listed in `refactor/gate1/flaky-tests.txt`) — targeted test-side fix in the
