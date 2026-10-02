@@ -260,6 +260,26 @@ def build_overlay_payload(
     sensors = repo.get_sensors_in_cluster(cluster_id)
     cutoff = int(time.time()) - hours * 3600
 
+    soil_buckets, humidity_buckets, light_buckets = _bucket_readings(repo, sensors, hours)
+    datasets = _overlay_datasets(soil_buckets, humidity_buckets, light_buckets, cutoff)
+    raw_events = _build_event_list(repo, cluster_id, hours)
+
+    return MultiMetricOverlayResponse(
+        cluster_id=cluster_id,
+        hours=hours,
+        datasets=datasets,
+        events=raw_events,  # type: ignore[arg-type]
+        normalised=True,
+    )
+
+
+_Buckets = dict[int, list[float]]
+
+
+def _bucket_readings(
+    repo: IrrigationRepository, sensors: list[Sensor], hours: int
+) -> tuple[_Buckets, _Buckets, _Buckets]:
+    """Soil, humidity and light values of every sensor, bucketed to the minute (in that order)."""
     # Aggregate per-metric points: take mean across sensors per timestamp bucket (nearest minute).
     soil_buckets: dict[int, list[float]] = defaultdict(list)
     humidity_buckets: dict[int, list[float]] = defaultdict(list)
@@ -274,6 +294,14 @@ def build_overlay_payload(
                 humidity_buckets[ts].append(float(r.env_humidity))
             if r.light is not None:
                 light_buckets[ts].append(float(r.light))
+
+    return soil_buckets, humidity_buckets, light_buckets
+
+
+def _overlay_datasets(
+    soil_buckets: _Buckets, humidity_buckets: _Buckets, light_buckets: _Buckets, cutoff: int
+) -> list[OverlayDataset]:
+    """One normalised 0-100 dataset per non-empty metric: soil, humidity, then light."""
 
     def _to_points(buckets: dict[int, list[float]], scale: float = 1.0) -> list[tuple[int, float]]:
         return sorted((ts, min(100.0, sum(v) / len(v) * scale)) for ts, v in buckets.items() if ts >= cutoff)
@@ -292,16 +320,7 @@ def build_overlay_payload(
                 original_max=_LIGHT_MAX_LUX,
             )
         )
-
-    raw_events = _build_event_list(repo, cluster_id, hours)
-
-    return MultiMetricOverlayResponse(
-        cluster_id=cluster_id,
-        hours=hours,
-        datasets=datasets,
-        events=raw_events,  # type: ignore[arg-type]
-        normalised=True,
-    )
+    return datasets
 
 
 def build_heatmap_payload(
