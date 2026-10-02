@@ -47,6 +47,16 @@ each preview code by full name. Measured: this adds **0** findings to the rules 
 preview codes activate. Preview rules may change between ruff releases, so the ruff version is pinned in `uv.lock`
 and the pre-commit hook is aligned to it (`b2b75fb`, v0.15.19; it was 0.15.9 before).
 
+## Owner directives (2026-10-02)
+1. Queue **any** fix that does not functionally change the app; the code may mutate over several steps.
+2. Docstrings of routes / schemas / Typer commands **may** be fixed (reviewed, dedicated commits regenerating only
+   the OpenAPI / MCP / help goldens; diff = description text only). So `D` no longer excludes those modules, and
+   `RUF002` (confusable characters in docstrings) is allowed there too. User-facing **strings** (`RUF001`) stay frozen:
+   they are runtime output.
+3. Still out: behavior changes (`BLE`/`TRY` exception handling, `DTZ`, `PYI041` on schemas, `FAST001`
+   — CLAUDE.md invariant 7 requires `response_model`), formatter conflicts (`COM812`), and deliberate code kept on
+   purpose (`B008`, `PLC0415`, `PLW0603`, `INP001`).
+
 ## Full `select = ["ALL"]` audit (ruff docs "trying out categories")
 
 `ruff check libs/ --extend-select ALL` with the repo's own config: **2,016 findings in 31 families** (the `--isolated`
@@ -56,7 +66,7 @@ Every family gets a decision. "Frozen" = would change OpenAPI/MCP, CLI/web outpu
 | Family | Findings | Decision | Why |
 |---|---|---|---|
 | `COM` (COM812) | 165 | **never** | conflicts with `ruff format` (ruff docs list COM812/COM819, ISC001/002, Q000–Q003, W191, E111/E114/E117, D206/D300 as formatter-incompatible) |
-| `D` pydocstyle | 705 | adopt with `pydocstyle.convention = "google"`, **exclude `routes/*`, `web/routes/*`, schema classes, Typer commands** | route/Typer/schema docstrings are frozen interface text (MCP, OpenAPI, `--help`) |
+| `D` pydocstyle | 705 (522 with google) | adopt with `pydocstyle.convention = "google"` everywhere; ignore `D105`/`D107`; route/schema/Typer docstrings in **dedicated reviewed commits** that regenerate only OpenAPI/MCP/help goldens (owner directive 2) | 412 missing, 110 format; write *why*-docstrings, not signature restatements |
 | `ANN` | 329 | **skip** | redundant with the mypy strict ratchet |
 | `FAST` (FAST002 168, FAST001 26) | 194 | FAST002 queued **only with OpenAPI/MCP golden proof**; FAST001 **never** | FAST002 rewrites route params to `Annotated[...]` (schema should be identical — goldens decide); FAST001 removes `response_model`, which is frozen |
 | `PLR`/`PLC`/`PLW` | 157 | PLR0913 with exclusions; PLR2004 → `constants.py`; **PLC0415 (44) ignore**; **PLW0603 (5) ignore** | lazy imports are deliberate (scheduler↔irrigation cycle, `_app` trap); `global` holds the per-app scheduler `_app` and display tz |
@@ -64,7 +74,7 @@ Every family gets a decision. "Frozen" = would change OpenAPI/MCP, CLI/web outpu
 | `FBT` | 70 | private code only | public signatures frozen |
 | `RUF` | 68 | RUF012 (17, `ClassVar` on Textual `BINDINGS` etc.) adopt; RUF003 (comments) adopt; **RUF001/RUF002 never** (or `allowed-confusables`) | the "ambiguous" `–` `—` `×` live in user-facing strings and route docstrings — frozen |
 | `BLE` 33, `TRY` 27, `S110` 8, `DTZ` 3, `PLW0717` 14 | — | **report-only** → REFACTOR_NOTES | fixing changes which exceptions are caught / timezone semantics |
-| `EM` 22 (+ `TRY003`) | 22 | optional, cosmetic | message stays identical; churn for little value |
+| `EM` 22 (+ `TRY003`) | 22 | adopt (owner directive 1) | message text stays identical; only where the raise site is not a frozen output path change |
 | `ARG` | 30 | with exclusions | FastAPI/Textual/Typer callbacks must keep unused params |
 | `B008` | 18 | **keep ignored** | FastAPI `Depends(...)` defaults |
 | `A002` | 16 | exclude frozen signatures | `id`/`type` params on routes |

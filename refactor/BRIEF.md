@@ -39,6 +39,15 @@ Behavior-preserving refactor: make the codebase cleaner, more readable, better o
   Pydantic class/field names, Textual `action_*`/`on_*`/ids and CLI options do not change. Internal (non-contract)
   method signatures MAY be redesigned when every call site is updated in the same commit and tests prove no change.
 
+- **Non-functional fixes may be queued freely** (owner, 2026-10-02): any change that does not alter runtime behavior
+  is in scope; the code may evolve over several steps toward its cleanest form.
+- **Doc-contract text may change, reviewed** (owner, 2026-10-02): docstrings of routes (MCP tool descriptions),
+  Pydantic schemas (OpenAPI descriptions) and Typer commands (`--help`) MAY be edited — only in the lint-ratchet stage
+  (after wave C), each in a dedicated commit that regenerates ONLY the affected goldens (OpenAPI / MCP tools / CLI
+  help) with a reviewed diff showing description-text changes only. Route function names (operationIds),
+  signatures, `response_model`s, Pydantic class/field names and order, CLI option names stay frozen. Running work
+  packages are unaffected (they keep the full freeze).
+
 ## Test suite
 `uv run pytest` — ~1160 tests, ~12 min full. Use targeted paths / `-x` for inner loops. No real network/hardware ever;
 fakes in `tests/fake_devices.py`, `tests/fake_data.py`, fixtures in `tests/conftest.py`, TUI fixtures in `tests/cli/tui_fixtures.py`.

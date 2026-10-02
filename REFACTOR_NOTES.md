@@ -11,6 +11,10 @@ Running log for the behavior-preserving refactor on `claude/focused-hawking-7to7
   module reorganization. The plan includes a per-method pass (extract function, guard clauses, naming, typed explicit
   parameters, parameter objects, CQS). Frozen public contracts still bound it; internal signatures may change when all
   call sites move in the same commit.
+- **Non-functional fixes may be queued freely; doc-contract text may change, reviewed** (2026-10-02): see
+  `refactor/BRIEF.md` owner decisions. This relaxes the golden policy for exactly one case: docstring-only commits in
+  the lint-ratchet stage may regenerate the OpenAPI / MCP-tool / CLI-help goldens, with a reviewer confirming the
+  golden diff is description text only.
 - **Branch:** work lands on `claude/focused-hawking-7to7o3` (the session's designated branch) instead of
   `refactor/clean-structure`.
 
