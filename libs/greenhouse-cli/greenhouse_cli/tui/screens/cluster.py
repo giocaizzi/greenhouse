@@ -10,9 +10,8 @@ from __future__ import annotations
 import asyncio
 import re
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
-from rich.text import Text
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, HorizontalScroll, Vertical, VerticalScroll
@@ -26,9 +25,6 @@ from greenhouse_cli.tui.screens.forms import Field
 from greenhouse_cli.tui.screens.modals import ConfirmScreen, IrrigateScreen, WaterNowScreen
 from greenhouse_cli.tui.sprites import watering_can_sprite
 from greenhouse_cli.tui.widgets import Heatmap, KeyValue, MetricChart, PlantTile, SpriteView, refill, selected_key
-
-if TYPE_CHECKING:
-    from rich.console import RenderableType
 
 METRIC_ORDER = ["soil_moisture", "temperature", "env_humidity", "light", "overlay"]
 RANGES = [6, 24, 72, 168, 720]
@@ -288,59 +284,10 @@ class ClusterScreen(DataScreen):
             api(lambda c: c.efficacy(cid), quiet=True),
             api(lambda c: c.learn(cid), quiet=True),
         )
-        text = Text.assemble(("Care insights\n", "bold"))
-        for item in (insights or {}).get("insights", []):
-            text.append("● ", style=fmt.SEVERITY_STYLES.get(item.get("severity", "info"), ""))
-            text.append(f"{item['title']}\n", style="bold")
-            text.append(f"  {item['message']}\n")
-            if item.get("suggestion"):
-                text.append(f"  → {item['suggestion']}\n", style="#7ed957")
-        if not (insights or {}).get("insights"):
-            text.append("nothing to flag\n", style="dim")
-        needs = (monitor or {}).get("needs_water") or []
-        text.append("\nNeeds water: ", style="bold")
-        text.append(", ".join(needs) if needs else "nobody", style="#e0c341" if needs else "dim")
-        self.query_one("#insights-panel", Static).update(text)
-
-        s = stats or {}
-        by_type = ", ".join(f"{k} {v}" for k, v in (s.get("events_by_type") or {}).items()) or "—"
-        by_trigger = ", ".join(f"{k} {v}" for k, v in (s.get("events_by_trigger") or {}).items()) or "—"
-        self.query_one("#stats-panel", KeyValue).show(
-            [
-                ("events", str(s.get("total_events", "—"))),
-                ("total", fmt.num(s.get("total_duration_minutes"), " min", 0)),
-                ("average", fmt.num(s.get("avg_duration_minutes"), " min")),
-                ("per day", fmt.num(s.get("frequency_per_day"), "", 2)),
-                ("by type", by_type),
-                ("by trigger", by_trigger),
-            ],
-            title=f"Stats — last {STATS_DAYS} days",
-        )
-
-        table = self.query_one("#efficacy-table", DataTable)
-        rows: list[tuple[str | None, list[RenderableType | str]]] = []
-        for e in (efficacy or {}).get("items", []):
-            score = e.get("score")
-            rows.append(
-                (
-                    None,
-                    [
-                        fmt.clock(e["timestamp"], with_date=True),
-                        e["irrigator_name"],
-                        str(e["duration_minutes"]),
-                        fmt.num(e.get("before_pct"), "%"),
-                        fmt.num(e.get("after_pct"), "%"),
-                        Text(fmt.num(score, "", 2), style="#7ed957" if (score or 0) >= 0.5 else "#e0c341"),
-                    ],
-                )
-            )
-        refill(table, rows)
-
-        report = Text.assemble(
-            ("Learning report\n", "bold"),
-            ((learn or {}).get("report") or "no report available", "" if learn else "dim"),
-        )
-        self.query_one("#learn-panel", Static).update(report)  # the report already lists its alerts
+        self.query_one("#insights-panel", Static).update(render.insights_text(insights, monitor))
+        self.query_one("#stats-panel", KeyValue).show(render.stats_rows(stats), title=f"Stats — last {STATS_DAYS} days")
+        refill(self.query_one("#efficacy-table", DataTable), render.efficacy_rows(efficacy))
+        self.query_one("#learn-panel", Static).update(render.learn_report(learn))  # the report already lists its alerts
 
     # ── Charts ───────────────────────────────────────────────────────────
 

@@ -214,3 +214,64 @@ def forecast_rows(forecast: dict[str, Any]) -> list[tuple[str, str | Text]]:
         rows.append(("weather", Text(f.get("weather_reason") or "skip — rain expected", style="#4fb3ff")))
     rows.append(("", Text(f.get("explanation", ""), style="dim")))
     return rows
+
+
+def insights_text(insights: dict[str, Any] | None, monitor: dict[str, Any] | None) -> Text:
+    """Insights panel: each care insight with its suggestion, then who needs water now."""
+    text = Text.assemble(("Care insights\n", "bold"))
+    for item in (insights or {}).get("insights", []):
+        text.append("● ", style=fmt.SEVERITY_STYLES.get(item.get("severity", "info"), ""))
+        text.append(f"{item['title']}\n", style="bold")
+        text.append(f"  {item['message']}\n")
+        if item.get("suggestion"):
+            text.append(f"  → {item['suggestion']}\n", style="#7ed957")
+    if not (insights or {}).get("insights"):
+        text.append("nothing to flag\n", style="dim")
+    needs = (monitor or {}).get("needs_water") or []
+    text.append("\nNeeds water: ", style="bold")
+    text.append(", ".join(needs) if needs else "nobody", style="#e0c341" if needs else "dim")
+    return text
+
+
+def stats_rows(stats: dict[str, Any] | None) -> list[tuple[str, str]]:
+    """Stats panel rows: event count, total/average minutes, frequency, and breakdowns by type and trigger."""
+    s = stats or {}
+    by_type = ", ".join(f"{k} {v}" for k, v in (s.get("events_by_type") or {}).items()) or "—"
+    by_trigger = ", ".join(f"{k} {v}" for k, v in (s.get("events_by_trigger") or {}).items()) or "—"
+    return [
+        ("events", str(s.get("total_events", "—"))),
+        ("total", fmt.num(s.get("total_duration_minutes"), " min", 0)),
+        ("average", fmt.num(s.get("avg_duration_minutes"), " min")),
+        ("per day", fmt.num(s.get("frequency_per_day"), "", 2)),
+        ("by type", by_type),
+        ("by trigger", by_trigger),
+    ]
+
+
+def efficacy_rows(payload: dict[str, Any] | None) -> list[Row]:
+    """Efficacy table rows (unkeyed): moisture before/after each watering and its score (green from 0.5)."""
+    rows: list[Row] = []
+    for e in (payload or {}).get("items", []):
+        score = e.get("score")
+        rows.append(
+            (
+                None,
+                [
+                    fmt.clock(e["timestamp"], with_date=True),
+                    e["irrigator_name"],
+                    str(e["duration_minutes"]),
+                    fmt.num(e.get("before_pct"), "%"),
+                    fmt.num(e.get("after_pct"), "%"),
+                    Text(fmt.num(score, "", 2), style="#7ed957" if (score or 0) >= 0.5 else "#e0c341"),
+                ],
+            )
+        )
+    return rows
+
+
+def learn_report(learn: dict[str, Any] | None) -> Text:
+    """Learning panel: the server's report text (it already lists its alerts), or a dim placeholder."""
+    return Text.assemble(
+        ("Learning report\n", "bold"),
+        ((learn or {}).get("report") or "no report available", "" if learn else "dim"),
+    )
