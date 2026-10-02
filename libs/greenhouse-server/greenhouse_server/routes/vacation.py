@@ -80,9 +80,7 @@ def update_vacation_window(window_id: int, request: UpdateVacationWindowRequest,
         HTTPException: 404 if no window with that ID exists, 400 if the
             resulting ``starts_at`` is not strictly before ``ends_at``.
     """
-    from greenhouse_core.models import VacationWindow
-
-    row = repo.session.get(VacationWindow, window_id)
+    row = repo.get_vacation_window(window_id)
     if not row:
         raise HTTPException(status_code=404, detail="Vacation window not found")
     effective_start = request.starts_at if request.starts_at is not None else row.starts_at
