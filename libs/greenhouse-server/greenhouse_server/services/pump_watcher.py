@@ -78,6 +78,34 @@ def _outcome(kind: str, *, polls: int, failures: int, alarm_raw: Any, elapsed: f
     }
 
 
+def _trip_payload(
+    irrigator: Irrigator,
+    *,
+    cluster_id: int,
+    alarm_raw: Any,
+    polls: int,
+    started_at: int,
+    duration_seconds: int,
+    elapsed_estimate: int,
+    stop_ok: bool,
+    stop_msg: str,
+) -> dict[str, Any]:
+    """Payload of the ``pump_dry_run`` activity row; a non-JSON alarm value is stored as its repr."""
+    return {
+        "irrigator_id": irrigator.id,
+        "irrigator_name": irrigator.name,
+        "cluster_id": cluster_id,
+        "alarm_dp": 105,
+        "alarm_raw": alarm_raw if isinstance(alarm_raw, int | str | bool) else repr(alarm_raw),
+        "polls": polls,
+        "started_at": started_at,
+        "duration_seconds_requested": duration_seconds,
+        "elapsed_seconds": elapsed_estimate,
+        "stop_ok": stop_ok,
+        "stop_message": stop_msg,
+    }
+
+
 class PumpWatcherService:
     """Polls an irrigator's dry-run alarm and stops the pump on trip."""
 
@@ -223,16 +251,7 @@ class PumpWatcherService:
         The alert itself is raised by :meth:`DeviceHealthMonitor.record`,
         which uses the unified ``health:irrigator:{id}:no_water`` dedup_key.
         """
-        from greenhouse_server.services.alerts import SOURCE_PUMP
-
-        stop_ok = False
-        stop_msg = ""
-        try:
-            adapter = self._registry.get_irrigator(irrigator)
-            stop_ok, stop_msg = adapter.stop(irrigator)
-        except Exception as exc:
-            stop_msg = f"adapter.stop raised: {exc}"
-            logger.exception("Pump watcher could not stop irrigator %d", irrigator.id)
+        stop_ok, stop_msg = self._stop_pump(irrigator)
 
         alarm_raw = state.raw.get("alarm_raw") if isinstance(state.raw, dict) else None
         logger.critical(
@@ -246,20 +265,38 @@ class PumpWatcherService:
         )
 
         elapsed_estimate = int(time.time()) - started_at
-        payload = {
-            "irrigator_id": irrigator.id,
-            "irrigator_name": irrigator.name,
-            "cluster_id": cluster_id,
-            "alarm_dp": 105,
-            "alarm_raw": alarm_raw if isinstance(alarm_raw, int | str | bool) else repr(alarm_raw),
-            "polls": polls,
-            "started_at": started_at,
-            "duration_seconds_requested": duration_seconds,
-            "elapsed_seconds": elapsed_estimate,
-            "stop_ok": stop_ok,
-            "stop_message": stop_msg,
-        }
+        payload = _trip_payload(
+            irrigator,
+            cluster_id=cluster_id,
+            alarm_raw=alarm_raw,
+            polls=polls,
+            started_at=started_at,
+            duration_seconds=duration_seconds,
+            elapsed_estimate=elapsed_estimate,
+            stop_ok=stop_ok,
+            stop_msg=stop_msg,
+        )
 
+        # Each step below is its own failure domain: one failing never skips the next.
+        self._log_aborted_event(irrigator, elapsed_estimate=elapsed_estimate, alarm_raw=alarm_raw, stop_ok=stop_ok)
+        self._log_trip_activity(irrigator, elapsed_estimate=elapsed_estimate, payload=payload)
+        self._record_trip_state(irrigator, cluster_id=cluster_id, state=state)
+        self._commit_trip(irrigator.id)
+
+    def _stop_pump(self, irrigator: Irrigator) -> tuple[bool, str]:
+        """Stop the pump — the top-priority trip step; a failure is logged and reported, never raised."""
+        stop_ok = False
+        stop_msg = ""
+        try:
+            adapter = self._registry.get_irrigator(irrigator)
+            stop_ok, stop_msg = adapter.stop(irrigator)
+        except Exception as exc:
+            stop_msg = f"adapter.stop raised: {exc}"
+            logger.exception("Pump watcher could not stop irrigator %d", irrigator.id)
+        return stop_ok, stop_msg
+
+    def _log_aborted_event(self, irrigator: Irrigator, *, elapsed_estimate: int, alarm_raw: Any, stop_ok: bool) -> None:
+        """Record the aborted irrigation event; best-effort."""
         try:
             self._repo.add_irrigation_event(
                 irrigator_id=irrigator.id,
@@ -270,6 +307,10 @@ class PumpWatcherService:
             )
         except Exception:
             logger.exception("Failed to log aborted irrigation event for irrigator %d", irrigator.id)
+
+    def _log_trip_activity(self, irrigator: Irrigator, *, elapsed_estimate: int, payload: dict[str, Any]) -> None:
+        """Record the critical pump_dry_run activity row; best-effort."""
+        from greenhouse_server.services.alerts import SOURCE_PUMP
 
         try:
             self._repo.add_activity_event(
@@ -286,6 +327,8 @@ class PumpWatcherService:
         except Exception:
             logger.exception("Failed to log activity event for pump dry-run on irrigator %d", irrigator.id)
 
+    def _record_trip_state(self, irrigator: Irrigator, *, cluster_id: int, state: "DeviceHealthState") -> None:
+        """Hand the NO_WATER state to the health monitor, which raises the alert; best-effort."""
         # Route through the monitor so the inbox + cache + slow-path
         # observer all see the same NO_WATER transition. The monitor owns
         # the unified ``health:irrigator:{id}:no_water`` dedup_key.
@@ -302,10 +345,12 @@ class PumpWatcherService:
         except Exception:
             logger.exception("Failed to record dry-run state into health monitor for irrigator %d", irrigator.id)
 
+    def _commit_trip(self, irrigator_id: int) -> None:
+        """Commit the trip's side effects; on failure log and roll back, never raise."""
         try:
             self._repo.session.commit()
         except Exception:
-            logger.exception("Failed to commit pump dry-run side effects for irrigator %d", irrigator.id)
+            logger.exception("Failed to commit pump dry-run side effects for irrigator %d", irrigator_id)
             try:
                 self._repo.session.rollback()
             except Exception:
