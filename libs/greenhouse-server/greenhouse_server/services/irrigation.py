@@ -35,7 +35,10 @@ from greenhouse_server.services.sync import SyncService
 from greenhouse_server.services.weather import WeatherClient
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping, Sequence
+
     from greenhouse_core.devices import AbstractIrrigatorAdapter
+    from greenhouse_core.logic.cleaning import CleanedReading
     from greenhouse_core.logic.decision import IrrigationDecision
     from greenhouse_core.models import Irrigator
 
@@ -482,6 +485,38 @@ def _event_notes(act: _Actuation, soil_note: str) -> str:
     )
 
 
+def _latest_soil(readings: "Sequence[CleanedReading]") -> float | None:
+    """Newest non-null soil value of a newest-first (cleaned) series, or None."""
+    return next((r.soil_moisture for r in readings if r.soil_moisture is not None), None) if readings else None
+
+
+def _monitor_target_band(care: "Mapping[str, Any]") -> tuple[float, float]:
+    """The plant's soil target band for monitoring; any parse failure falls back to (45.0, 65.0).
+
+    Deliberately its own strict two-part parse — not ``moisture_target_range``, which reads
+    three-part strings differently.
+    """
+    target_raw = care.get("soil_moisture_target", DEFAULT_SOIL_MOISTURE_TARGET)
+    try:
+        t_min, t_max = (float(x) for x in target_raw.split("-"))
+    except Exception:
+        t_min, t_max = 45.0, 65.0
+    return t_min, t_max
+
+
+def _soil_status(latest_soil: float | None, t_min: float, t_max: float) -> str:
+    """Classify one sensor's latest soil value against the target band."""
+    if latest_soil is None:
+        return "no_data"
+    if latest_soil < t_min - MONITOR_VERY_DRY_MARGIN:
+        return "very_dry"
+    if latest_soil < t_min:
+        return "dry"
+    if latest_soil > t_max + MONITOR_WET_MARGIN:
+        return "wet"
+    return "ok"
+
+
 class IrrigationService:
     """Orchestrates irrigation decisions, execution, and monitoring."""
 
@@ -753,28 +788,12 @@ class IrrigationService:
             # Cleaned view: monitor classifies each sensor as dry/ok/wet, and a
             # sensor-only cluster has no engine to sanity-check that call.
             readings = clean_readings_desc(self._repo.get_recent_readings(sensor.id, hours=MONITOR_LOOKBACK_HOURS))
-            latest_soil = (
-                next((r.soil_moisture for r in readings if r.soil_moisture is not None), None) if readings else None
-            )
+            latest_soil = _latest_soil(readings)
 
             plant = plants_by_id.get(sensor.plant_id) if sensor.plant_id else None
             care = self._plant_db.get_care_data(species=plant.species if plant else None)
-            target_raw = care.get("soil_moisture_target", DEFAULT_SOIL_MOISTURE_TARGET)
-            try:
-                t_min, t_max = (float(x) for x in target_raw.split("-"))
-            except Exception:
-                t_min, t_max = 45.0, 65.0
-
-            if latest_soil is None:
-                status = "no_data"
-            elif latest_soil < t_min - MONITOR_VERY_DRY_MARGIN:
-                status = "very_dry"
-            elif latest_soil < t_min:
-                status = "dry"
-            elif latest_soil > t_max + MONITOR_WET_MARGIN:
-                status = "wet"
-            else:
-                status = "ok"
+            t_min, t_max = _monitor_target_band(care)
+            status = _soil_status(latest_soil, t_min, t_max)
 
             sensor_statuses.append(
                 {
@@ -791,11 +810,7 @@ class IrrigationService:
             if status in ("very_dry", "dry"):
                 needs_water.append(f"{sensor.name} ({plant.species if plant else 'unknown'}): {latest_soil:.0f}%")
 
-        return {
-            "cluster_name": cluster.name,
-            "sensors": sensor_statuses,
-            "needs_water": needs_water,
-        }
+        return {"cluster_name": cluster.name, "sensors": sensor_statuses, "needs_water": needs_water}
 
     def check_cluster(self, cluster_id: int) -> CheckResult:
         """Check a single cluster: irrigate if has irrigators, monitor otherwise."""
