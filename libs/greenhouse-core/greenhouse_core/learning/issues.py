@@ -38,6 +38,109 @@ if TYPE_CHECKING:
     _SensorReading = tuple[Sensor, float, float]  # sensor, current moisture, band edge
 
 
+def _learned_profiles(db: IrrigationRepository, sensors: list[Sensor]) -> dict[int, PlantProfile]:
+    """Learned profile per sensor, for the sensors with enough history."""
+    return {sensor.id: profile for sensor in sensors if (profile := get_plant_profile(db, sensor))}
+
+
+def _blocked_drip_alert(sensor: Sensor, profile: PlantProfile) -> Alert | None:
+    """Consistently low response to irrigation: the drip is probably blocked."""
+    if (
+        profile.efficiency_score < LEARNING_MIN_EFFICIENCY
+        and profile.avg_absorption_per_minute < LEARNING_MIN_ABSORPTION_PER_MIN
+    ):
+        return Alert(
+            severity="critical",
+            alert_type="blocked_drip",
+            message=(
+                f"🚫 {sensor.name}: minimal response to irrigation "
+                f"(avg +{profile.avg_absorption_per_minute:.1f}%/min, "
+                f"efficiency {profile.efficiency_score:.0%}). "
+                f"Check drip connection."
+            ),
+            sensor_name=sensor.name,
+            data={"absorption": profile.avg_absorption_per_minute, "efficiency": profile.efficiency_score},
+        )
+    return None
+
+
+def _drainage_alert(db: IrrigationRepository, sensor: Sensor, profile: PlantProfile) -> Alert | None:
+    """Rapid drainage, attributed to transpiration when recent daytime light is high."""
+    if not profile.avg_drainage_per_hour < LEARNING_RAPID_DRAINAGE_THRESHOLD:
+        return None
+    recent_readings = clean_readings(db.get_recent_readings(sensor.id, hours=LEARNING_DRAINAGE_LUX_LOOKBACK_HOURS))
+    lux_readings = daytime_lux_readings(recent_readings)
+    avg_lux = statistics.mean(lux_readings) if lux_readings else None
+
+    bright_threshold = LIGHT_BRIGHT * seasonal_light_factor()
+    if avg_lux is not None and avg_lux > bright_threshold:
+        return Alert(
+            severity="warning",
+            alert_type="light_accelerated_drainage",
+            message=(
+                f"☀️💨 {sensor.name}: rapid drainage "
+                f"({profile.avg_drainage_per_hour:.1f}%/hr) correlated with high light "
+                f"({avg_lux:.0f} lux) — increased transpiration. "
+                f"Consider more frequent irrigation on bright days."
+            ),
+            sensor_name=sensor.name,
+            data={"drainage_rate": profile.avg_drainage_per_hour, "avg_lux": avg_lux},
+        )
+    return Alert(
+        severity="warning",
+        alert_type="rapid_drainage",
+        message=(
+            f"💨 {sensor.name}: rapid drainage "
+            f"({profile.avg_drainage_per_hour:.1f}%/hr). "
+            f"Soil may not retain water well."
+        ),
+        sensor_name=sensor.name,
+        data={"drainage_rate": profile.avg_drainage_per_hour},
+    )
+
+
+def _chronic_underwatering_alert(
+    db: IrrigationRepository, sensor: Sensor, profile: PlantProfile, care: Mapping[str, Any]
+) -> Alert | None:
+    """The soil never reaches the plant's target minimum over the last week."""
+    target = care.get("soil_moisture_target", DEFAULT_SOIL_MOISTURE_TARGET)
+    try:
+        target_min = float(target.split("-")[0])
+    except (ValueError, IndexError):
+        target_min = 45.0
+
+    recent = clean_readings(db.get_recent_readings(sensor.id, hours=LEARNING_WEEK_HOURS))  # 7 days
+    if not recent:
+        return None
+    max_recent = max((r.soil_moisture for r in recent if r.soil_moisture is not None), default=0)
+    if max_recent < target_min and profile.response_count >= LEARNING_CHRONIC_MIN_RESPONSES:
+        return Alert(
+            severity="warning",
+            alert_type="chronic_underwatering",
+            message=(
+                f"🏜️ {sensor.name}: soil never reaches target "
+                f"({max_recent:.0f}% peak vs {target_min:.0f}% target). "
+                f"Consider longer irrigation or check drip flow."
+            ),
+            sensor_name=sensor.name,
+            data={"max_recent": max_recent, "target_min": target_min},
+        )
+    return None
+
+
+def _sensor_alerts(
+    db: IrrigationRepository,
+    sensor: Sensor,
+    profile: PlantProfile,
+    plant_care: Mapping[int, Mapping[str, Any]],
+) -> list[Alert]:
+    """Per-sensor checks in their fixed order: blocked drip → drainage → chronic underwatering."""
+    candidates = [_blocked_drip_alert(sensor, profile), _drainage_alert(db, sensor, profile)]
+    if sensor.plant_id and sensor.plant_id in plant_care:
+        candidates.append(_chronic_underwatering_alert(db, sensor, profile, plant_care[sensor.plant_id]))
+    return [alert for alert in candidates if alert is not None]
+
+
 def detect_issues(
     db: IrrigationRepository,
     plant_db: PlantDatabase,
@@ -59,12 +162,7 @@ def detect_issues(
     if not sensors:
         return alerts
 
-    profiles: dict[int, PlantProfile] = {}
-    for sensor in sensors:
-        profile = get_plant_profile(db, sensor)
-        if profile:
-            profiles[sensor.id] = profile
-
+    profiles = _learned_profiles(db, sensors)
     if not profiles:
         return alerts  # Not enough data yet
 
@@ -75,98 +173,9 @@ def detect_issues(
         profile = profiles.get(sensor.id)
         if not profile or profile.response_count < LEARNING_MIN_EVENTS:
             continue  # Not enough data
+        alerts.extend(_sensor_alerts(db, sensor, profile, plant_care))
 
-        # 1. Blocked drip: consistently low response
-        if (
-            profile.efficiency_score < LEARNING_MIN_EFFICIENCY
-            and profile.avg_absorption_per_minute < LEARNING_MIN_ABSORPTION_PER_MIN
-        ):
-            alerts.append(
-                Alert(
-                    severity="critical",
-                    alert_type="blocked_drip",
-                    message=(
-                        f"🚫 {sensor.name}: minimal response to irrigation "
-                        f"(avg +{profile.avg_absorption_per_minute:.1f}%/min, "
-                        f"efficiency {profile.efficiency_score:.0%}). "
-                        f"Check drip connection."
-                    ),
-                    sensor_name=sensor.name,
-                    data={"absorption": profile.avg_absorption_per_minute, "efficiency": profile.efficiency_score},
-                )
-            )
-
-        # 2. Rapid drainage — with light correlation
-        if profile.avg_drainage_per_hour < LEARNING_RAPID_DRAINAGE_THRESHOLD:
-            # Check if high light explains the drainage (daytime readings only)
-            recent_readings = clean_readings(
-                db.get_recent_readings(sensor.id, hours=LEARNING_DRAINAGE_LUX_LOOKBACK_HOURS)
-            )
-            avg_lux = None
-            lux_readings = daytime_lux_readings(recent_readings)
-            if lux_readings:
-                avg_lux = statistics.mean(lux_readings)
-
-            bright_threshold = LIGHT_BRIGHT * seasonal_light_factor()
-            if avg_lux is not None and avg_lux > bright_threshold:
-                alerts.append(
-                    Alert(
-                        severity="warning",
-                        alert_type="light_accelerated_drainage",
-                        message=(
-                            f"☀️💨 {sensor.name}: rapid drainage "
-                            f"({profile.avg_drainage_per_hour:.1f}%/hr) correlated with high light "
-                            f"({avg_lux:.0f} lux) — increased transpiration. "
-                            f"Consider more frequent irrigation on bright days."
-                        ),
-                        sensor_name=sensor.name,
-                        data={"drainage_rate": profile.avg_drainage_per_hour, "avg_lux": avg_lux},
-                    )
-                )
-            else:
-                alerts.append(
-                    Alert(
-                        severity="warning",
-                        alert_type="rapid_drainage",
-                        message=(
-                            f"💨 {sensor.name}: rapid drainage "
-                            f"({profile.avg_drainage_per_hour:.1f}%/hr). "
-                            f"Soil may not retain water well."
-                        ),
-                        sensor_name=sensor.name,
-                        data={"drainage_rate": profile.avg_drainage_per_hour},
-                    )
-                )
-
-        # 3. Chronic underwatering: max delta never reaches target
-        if sensor.plant_id and sensor.plant_id in plant_care:
-            care = plant_care[sensor.plant_id]
-            target = care.get("soil_moisture_target", DEFAULT_SOIL_MOISTURE_TARGET)
-            try:
-                target_min = float(target.split("-")[0])
-            except (ValueError, IndexError):
-                target_min = 45.0
-
-            # Check if recent readings ever reach target
-            recent = clean_readings(db.get_recent_readings(sensor.id, hours=LEARNING_WEEK_HOURS))  # 7 days
-            if recent:
-                max_recent = max((r.soil_moisture for r in recent if r.soil_moisture is not None), default=0)
-                if max_recent < target_min and profile.response_count >= LEARNING_CHRONIC_MIN_RESPONSES:
-                    alerts.append(
-                        Alert(
-                            severity="warning",
-                            alert_type="chronic_underwatering",
-                            message=(
-                                f"🏜️ {sensor.name}: soil never reaches target "
-                                f"({max_recent:.0f}% peak vs {target_min:.0f}% target). "
-                                f"Consider longer irrigation or check drip flow."
-                            ),
-                            sensor_name=sensor.name,
-                            data={"max_recent": max_recent, "target_min": target_min},
-                        )
-                    )
-
-    # 4. Unresolvable conflict: check if profiles show incompatible needs
+    # Unresolvable conflict: check if profiles show incompatible needs
     if len(profiles) >= 2:
         alerts.extend(detect_conflicts(db, plant_db, cluster_id, profiles, plant_care))
 
