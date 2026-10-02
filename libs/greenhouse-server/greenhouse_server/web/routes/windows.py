@@ -8,12 +8,18 @@ but uses repo methods directly (in-process, like every other web route).
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from greenhouse_server.deps import RepoDep, require_cluster
 from greenhouse_server.web.context import base_context
 from greenhouse_server.web.templating import templates
+
+if TYPE_CHECKING:
+    from greenhouse_core.models import IrrigationWindow
+    from greenhouse_core.repository import IrrigationRepository
 
 router = APIRouter(include_in_schema=False)
 
@@ -42,7 +48,7 @@ def _validate_window_form(start_hour: int, end_hour: int, mask: int) -> None:
         raise HTTPException(400, "Select at least one weekday.")
 
 
-def _get_window_in_cluster(repo, cluster_id: int, window_id: int):
+def _get_window_in_cluster(repo: IrrigationRepository, cluster_id: int, window_id: int) -> IrrigationWindow:
     window = repo.get_irrigation_window(window_id)
     if window is None or window.cluster_id != cluster_id:
         raise HTTPException(404, "Window not found in cluster.")

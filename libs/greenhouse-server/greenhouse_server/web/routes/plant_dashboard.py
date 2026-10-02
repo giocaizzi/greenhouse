@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import time
+from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, Form, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
@@ -20,12 +21,16 @@ from greenhouse_server.services.maintenance import collect_learning_alerts
 from greenhouse_server.web.context import base_context
 from greenhouse_server.web.templating import templates
 
+if TYPE_CHECKING:
+    from greenhouse_core.repository import IrrigationRepository
+    from greenhouse_server.services.charts import Metric
+
 router = APIRouter(include_in_schema=False)
 
-METRICS = ("soil_moisture", "temperature", "env_humidity", "light")
+METRICS: tuple[Metric, ...] = ("soil_moisture", "temperature", "env_humidity", "light")
 
 
-def _get_plant_or_404(repo, plant_id: int, cluster_id: int) -> Plant:
+def _get_plant_or_404(repo: IrrigationRepository, plant_id: int, cluster_id: int) -> Plant:
     plant: Plant | None = repo.session.get(Plant, plant_id)
     if plant is None or plant.cluster_id != cluster_id:
         raise HTTPException(404, "Plant not found")

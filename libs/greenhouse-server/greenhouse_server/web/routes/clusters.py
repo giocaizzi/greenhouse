@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import time
+from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -18,6 +19,9 @@ from greenhouse_server.services.charts import (
 )
 from greenhouse_server.web.context import base_context
 from greenhouse_server.web.templating import templates
+
+if TYPE_CHECKING:
+    from greenhouse_core.repository import IrrigationRepository
 
 _EMPTY_RATIONALE: list[dict] = []
 
@@ -100,7 +104,7 @@ def _format_weekday_mask(mask: int) -> str:
     return ", ".join(label for bit, label in zip(_WEEKDAY_BITS, _WEEKDAY_LABELS, strict=True) if mask & bit)
 
 
-def _plants_by_id(repo, cluster_id: int) -> dict[int, object]:
+def _plants_by_id(repo: IrrigationRepository, cluster_id: int) -> dict[int, object]:
     return {p.id: p for p in repo.get_plants_in_cluster(cluster_id)}
 
 
@@ -142,7 +146,7 @@ def cluster_detail(
     # shapes feed ``partials/_config_field.html`` so it can render the
     # current value next to its source badge.
     declared_config = repo.get_irrigation_config(cluster_id)
-    effective_config = repo.get_effective_config(cluster_id)
+    effective_config: dict[str, dict[str, Any]] = repo.get_effective_config(cluster_id)
     windows = [
         {
             "id": w.id,

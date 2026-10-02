@@ -128,7 +128,8 @@ def sync_plants(
         synced = 1
     else:
         clusters = [repo.get_cluster(cid)] if cid else repo.list_clusters()
-        for c in clusters:
+        # contract: route body kept verbatim until T5.8 moves it into ClusterService.sync_plants.
+        for c in clusters:  # type: ignore[assignment]
             if not c:
                 continue
             for p in repo.get_plants_in_cluster(c.id):

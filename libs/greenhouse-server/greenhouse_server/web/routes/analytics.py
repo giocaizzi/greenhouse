@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import io
+from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
@@ -33,6 +34,9 @@ from greenhouse_server.services.forecast import ForecastService
 from greenhouse_server.services.insights import InsightsService
 from greenhouse_server.web.context import base_context
 from greenhouse_server.web.templating import templates
+
+if TYPE_CHECKING:
+    from greenhouse_core.repository import IrrigationRepository
 
 router = APIRouter(include_in_schema=False)
 
@@ -164,7 +168,7 @@ def scheduler_delete_job(request: Request, job_id: str):
     return HTMLResponse("")
 
 
-def _set_check_all_paused_web(repo, paused: bool) -> RedirectResponse:
+def _set_check_all_paused_web(repo: IrrigationRepository, paused: bool) -> RedirectResponse:
     # Same code path as POST /api/v1/scheduler/{pause,resume}: works (and
     # persists the preference) whether or not the scheduler is running.
     try:

@@ -47,4 +47,11 @@ libs/greenhouse-server/greenhouse_server/services/system_health.py
 libs/greenhouse-server/greenhouse_server/services/vacation.py
 libs/greenhouse-server/greenhouse_server/web/context.py
 libs/greenhouse-server/greenhouse_server/web/router.py
+libs/greenhouse-server/greenhouse_server/web/routes/analytics.py
+libs/greenhouse-server/greenhouse_server/web/routes/clusters.py
+libs/greenhouse-server/greenhouse_server/web/routes/configs.py
+libs/greenhouse-server/greenhouse_server/web/routes/operations.py
+libs/greenhouse-server/greenhouse_server/web/routes/plant_dashboard.py
+libs/greenhouse-server/greenhouse_server/web/routes/plants.py
+libs/greenhouse-server/greenhouse_server/web/routes/windows.py
 libs/greenhouse-server/greenhouse_server/web/templating.py
