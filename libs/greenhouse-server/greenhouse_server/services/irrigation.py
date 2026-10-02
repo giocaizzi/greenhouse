@@ -4,7 +4,7 @@ import json
 import logging
 import time as _time
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Required, TypedDict
 
 from greenhouse_core.constants import (
     DEFAULT_SOIL_MOISTURE_TARGET,
@@ -385,6 +385,41 @@ def rearm_leak_checks() -> int:
     return scheduled
 
 
+class PipelineResult(TypedDict, total=False):
+    """``run_irrigation_pipeline`` result: a plain dict at runtime (``IrrigateResponse(**result)``, decision panel)."""
+
+    action: Required[str]
+    reason: Required[str]
+    confidence: Required[float]
+    duration_minutes: int
+    interval_hours: int
+    stress_indicators: dict[str, Any]
+    reasons: list[dict[str, Any]]
+    temperature: float
+    temperature_source: str
+    blocking_alarms: list[str]
+
+
+class MonitorResult(TypedDict):
+    """``monitor_cluster`` result: a plain dict at runtime (``MonitorResponse``)."""
+
+    cluster_name: str
+    sensors: list[dict[str, Any]]
+    needs_water: list[str]
+
+
+class CheckResult(TypedDict, total=False):
+    """One ``check_cluster`` entry: a plain dict at runtime; ``notes`` or ``needs_water`` per branch."""
+
+    cluster_id: Required[int]
+    cluster_name: Required[str]
+    action: Required[str]
+    notes: str
+    needs_water: list[str]
+    alerts: list[dict[str, Any]]
+    maintenance: list[dict[str, Any]]
+
+
 class IrrigationService:
     """Orchestrates irrigation decisions, execution, and monitoring."""
 
@@ -442,7 +477,7 @@ class IrrigationService:
         dry_run: bool = False,
         no_sync: bool = False,
         force: bool = False,
-    ) -> dict[str, Any]:
+    ) -> PipelineResult:
         """Full pipeline: sync -> weather -> decide -> execute. Returns result dict.
 
         ``force=True`` bypasses the quiet-hours gate inside the decision
@@ -468,7 +503,7 @@ class IrrigationService:
         if not decision:
             return {"action": "error", "reason": "no data for decision", "confidence": 0}
 
-        result: dict[str, Any] = {
+        result: PipelineResult = {
             "action": decision.action.value,
             "reason": decision.reason_text,
             "confidence": decision.confidence,
@@ -623,7 +658,7 @@ class IrrigationService:
 
         return result
 
-    def monitor_cluster(self, cluster_id: int, no_sync: bool = False) -> dict[str, Any]:
+    def monitor_cluster(self, cluster_id: int, no_sync: bool = False) -> MonitorResult:
         """Monitor sensor-only cluster. Returns per-sensor soil status."""
         cluster = self._repo.get_cluster(cluster_id)
         if not cluster:
@@ -635,8 +670,8 @@ class IrrigationService:
         sensors = self._repo.get_sensors_in_cluster(cluster_id)
         plants_by_id = {p.id: p for p in self._repo.get_plants_in_cluster(cluster_id)}
 
-        sensor_statuses = []
-        needs_water = []
+        sensor_statuses: list[dict[str, Any]] = []
+        needs_water: list[str] = []
 
         for sensor in sensors:
             # Cleaned view: monitor classifies each sensor as dry/ok/wet, and a
@@ -686,7 +721,7 @@ class IrrigationService:
             "needs_water": needs_water,
         }
 
-    def check_cluster(self, cluster_id: int) -> dict[str, Any]:
+    def check_cluster(self, cluster_id: int) -> CheckResult:
         """Check a single cluster: irrigate if has irrigators, monitor otherwise."""
         cluster = self._repo.get_cluster(cluster_id)
         if not cluster:
@@ -731,7 +766,7 @@ class IrrigationService:
                 "maintenance": maintenance,
             }
 
-    def check_all_clusters(self) -> list[dict[str, Any]]:
+    def check_all_clusters(self) -> list[CheckResult]:
         """Check every cluster, isolating each one in its own transaction.
 
         Each cluster's work is committed as soon as it finishes, so a crash in
@@ -742,7 +777,7 @@ class IrrigationService:
         ``check_failed`` alert, which the next successful check resolves.
         """
         clusters = [(c.id, c.name) for c in self._repo.list_clusters()]
-        results = []
+        results: list[CheckResult] = []
         for cluster_id, cluster_name in clusters:
             session = self._repo.session
             try:
