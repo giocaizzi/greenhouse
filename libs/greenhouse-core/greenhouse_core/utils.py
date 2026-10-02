@@ -3,6 +3,7 @@
 
 import os
 from datetime import UTC, datetime
+from typing import Any
 from zoneinfo import ZoneInfo
 
 # Seasonal light reduction factor by month (Northern hemisphere, ~45°N latitude - Milano)
@@ -41,7 +42,7 @@ def seasonal_light_factor(month: int | None = None) -> float:
     return _SEASONAL_LIGHT_FACTOR.get(month, 1.0)
 
 
-def daytime_lux_readings(readings: list, min_lux: int = NIGHT_LUX_THRESHOLD) -> list[float]:
+def daytime_lux_readings(readings: list[Any], min_lux: int = NIGHT_LUX_THRESHOLD) -> list[float]:
     """Extract daytime lux values from a list of SensorReading objects.
 
     Filters out readings where light <= min_lux (night / no light).

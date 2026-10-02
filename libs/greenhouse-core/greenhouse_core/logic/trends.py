@@ -1,6 +1,7 @@
 """Historical trend analysis for irrigation decisions."""
 
 import statistics
+from typing import cast
 
 from greenhouse_core.constants import TREND_MIN_READINGS, TREND_MOISTURE_THRESHOLD, TREND_TEMP_THRESHOLD
 from greenhouse_core.logic.cleaning import clean_readings
@@ -56,7 +57,7 @@ def analyze_historical_trends(db: IrrigationRepository, cluster_id: int) -> Tren
         # is a config change, not water, so it must not inflate the cadence.
         irrigation_events = [e for e in events if e.action == "start" and e.duration_minutes]
         total_events = len(irrigation_events)
-        total_duration = sum(e.duration_minutes for e in irrigation_events)
+        total_duration = sum(cast(int, e.duration_minutes) for e in irrigation_events)
 
         if total_events > 0:
             avg_per_day = total_events / 7

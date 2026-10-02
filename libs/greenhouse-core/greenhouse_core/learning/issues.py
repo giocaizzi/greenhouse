@@ -1,6 +1,7 @@
 """Issue detection and alert generation from learned irrigation data."""
 
 import statistics
+from typing import Any
 
 from greenhouse_core.constants import (
     LEARNING_MIN_ABSORPTION_PER_MIN,
@@ -10,7 +11,7 @@ from greenhouse_core.constants import (
     LEARNING_RAPID_DRAINAGE_THRESHOLD,
     LIGHT_BRIGHT,
 )
-from greenhouse_core.learning.models import Alert
+from greenhouse_core.learning.models import Alert, PlantProfile
 from greenhouse_core.learning.profiling import get_plant_profile
 from greenhouse_core.logic.cleaning import clean_readings, clean_readings_desc
 from greenhouse_core.plant_db import PlantDatabase
@@ -34,12 +35,12 @@ def detect_issues(
     - low_light:                  avg lux below plant's minimum need (7d avg)
     - low_env_humidity:           ambient humidity below ideal for plant type (48h avg)
     """
-    alerts = []
+    alerts: list[Alert] = []
     sensors = db.get_sensors_in_cluster(cluster_id)
     if not sensors:
         return alerts
 
-    profiles = {}
+    profiles: dict[int, PlantProfile] = {}
     for sensor in sensors:
         profile = get_plant_profile(db, sensor)
         if profile:
@@ -155,11 +156,11 @@ def detect_conflicts(
     db: IrrigationRepository,
     plant_db: PlantDatabase,
     cluster_id: int,
-    profiles: dict,
-    plant_care: dict,
+    profiles: dict[int, PlantProfile],
+    plant_care: dict[int, dict[str, Any]],
 ) -> list[Alert]:
     """Detect unresolvable conflicts between plants in same cluster."""
-    alerts = []
+    alerts: list[Alert] = []
     sensors = db.get_sensors_in_cluster(cluster_id)
 
     # Get current moisture levels

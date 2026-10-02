@@ -2,6 +2,7 @@
 
 import time
 from collections import defaultdict
+from typing import Any
 
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_core.utils import format_timestamp
@@ -16,7 +17,7 @@ def format_duration(minutes: int) -> str:
     return f"{hours}h {mins}min" if mins else f"{hours}h"
 
 
-def get_irrigation_stats(db: IrrigationRepository, cluster_id: int, days: int = 7) -> dict:
+def get_irrigation_stats(db: IrrigationRepository, cluster_id: int, days: int = 7) -> dict[str, Any]:
     """Get irrigation statistics for a cluster."""
     cutoff = int(time.time()) - (days * 24 * 3600)
 
@@ -24,7 +25,7 @@ def get_irrigation_stats(db: IrrigationRepository, cluster_id: int, days: int = 
     if irrigator is None:
         return {"error": "No irrigators in cluster"}
 
-    stats = {
+    stats: dict[str, Any] = {
         "period_days": days,
         "total_events": 0,
         "total_duration_minutes": 0,
@@ -64,7 +65,7 @@ def get_irrigation_stats(db: IrrigationRepository, cluster_id: int, days: int = 
     return stats
 
 
-def print_stats_report(stats: dict, cluster_name: str):
+def print_stats_report(stats: dict[str, Any], cluster_name: str) -> None:
     """Print formatted statistics report."""
     if "error" in stats:
         print(f"❌ {stats['error']}")
@@ -98,7 +99,7 @@ def print_stats_report(stats: dict, cluster_name: str):
             print(f"   {ts} | {format_duration(irr['duration_minutes'])} | {irr['triggered_by']} | {irr['irrigator']}")
 
 
-def export_csv(db: IrrigationRepository, cluster_id: int, days: int, output_path: str):
+def export_csv(db: IrrigationRepository, cluster_id: int, days: int, output_path: str) -> None:
     """Export irrigation events to CSV."""
     import csv
 

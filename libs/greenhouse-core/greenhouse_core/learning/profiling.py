@@ -2,6 +2,7 @@
 
 import statistics
 import time
+from typing import cast
 
 from greenhouse_core.learning.models import IrrigationResponse, PlantProfile
 from greenhouse_core.logic.cleaning import clean_readings, clean_readings_around
@@ -45,10 +46,12 @@ def compute_sensor_response(
     pre = pre_moisture_readings[-1]
 
     # Post: use the reading with highest moisture (peak absorption)
-    post = max(post_moisture_readings, key=lambda r: r.soil_moisture)
+    post = max(post_moisture_readings, key=lambda r: cast(float, r.soil_moisture))
 
     duration = event.duration_minutes or 2
-    delta = post.soil_moisture - pre.soil_moisture
+    pre_moisture = cast(float, pre.soil_moisture)
+    post_moisture = cast(float, post.soil_moisture)
+    delta = post_moisture - pre_moisture
 
     return IrrigationResponse(
         sensor_id=sensor.id,
@@ -57,8 +60,8 @@ def compute_sensor_response(
         event_id=event.id,
         event_timestamp=event.timestamp,
         duration_minutes=duration,
-        pre_moisture=pre.soil_moisture,
-        post_moisture=post.soil_moisture,
+        pre_moisture=pre_moisture,
+        post_moisture=post_moisture,
         delta=delta,
         delta_per_minute=delta / duration if duration > 0 else 0,
         reading_delay_seconds=post.timestamp - event.timestamp,
