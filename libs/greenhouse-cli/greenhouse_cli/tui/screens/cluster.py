@@ -504,46 +504,60 @@ class ClusterScreen(DataScreen):
         )
 
     def action_delete(self) -> None:
-        cid = self.cluster_id
-        tab = self.active_tab
-        if tab == "tab-plants":
-            plant = self._selected("#plants-table", self.status.get("plants", []))
-            if plant:
-                self.confirm_then(
-                    f"Delete plant [b]{plant['species']}[/b]?",
-                    lambda c: c.delete_plant(cid, plant["id"]),
-                    "Plant deleted",
-                    "Delete",
-                )
-        elif tab == "tab-sensors":
-            sensor = self._selected("#sensors-table", self.detail.get("sensors", []))
-            if sensor:
-                self.confirm_then(
-                    f"Delete sensor [b]{sensor['name']}[/b]? Its readings are kept.",
-                    lambda c: c.delete_sensor(cid, sensor["id"]),
-                    "Sensor deleted",
-                    "Delete",
-                )
-        elif tab == "tab-windows":
-            window = self._selected("#windows-table", self.detail.get("windows", []))
-            if window:
-                self.confirm_then(
-                    f"Delete window {window['start_hour']:02d}–{window['end_hour']:02d}h?",
-                    lambda c: c.delete_window(cid, window["id"]),
-                    "Window deleted",
-                    "Delete",
-                )
-        elif tab == "tab-overview":
-            irrigator = self._irrigator()
-            if irrigator:
-                self.confirm_then(
-                    f"Detach irrigator [b]{irrigator[1]}[/b] from this cluster?",
-                    lambda c: c.delete_irrigator(cid),
-                    "Irrigator detached",
-                    "Detach",
-                )
-        else:
+        handler = {
+            "tab-plants": self._delete_plant,
+            "tab-sensors": self._delete_sensor,
+            "tab-windows": self._delete_window,
+            "tab-overview": self._detach_irrigator,
+        }.get(self.active_tab)
+        if handler is None:
             self.notify("Nothing to delete here — use D to delete the whole cluster.")
+            return
+        handler()
+
+    def _delete_plant(self) -> None:
+        cid = self.cluster_id
+        plant = self._selected("#plants-table", self.status.get("plants", []))
+        if plant:
+            self.confirm_then(
+                f"Delete plant [b]{plant['species']}[/b]?",
+                lambda c: c.delete_plant(cid, plant["id"]),
+                "Plant deleted",
+                "Delete",
+            )
+
+    def _delete_sensor(self) -> None:
+        cid = self.cluster_id
+        sensor = self._selected("#sensors-table", self.detail.get("sensors", []))
+        if sensor:
+            self.confirm_then(
+                f"Delete sensor [b]{sensor['name']}[/b]? Its readings are kept.",
+                lambda c: c.delete_sensor(cid, sensor["id"]),
+                "Sensor deleted",
+                "Delete",
+            )
+
+    def _delete_window(self) -> None:
+        cid = self.cluster_id
+        window = self._selected("#windows-table", self.detail.get("windows", []))
+        if window:
+            self.confirm_then(
+                f"Delete window {window['start_hour']:02d}–{window['end_hour']:02d}h?",
+                lambda c: c.delete_window(cid, window["id"]),
+                "Window deleted",
+                "Delete",
+            )
+
+    def _detach_irrigator(self) -> None:
+        cid = self.cluster_id
+        irrigator = self._irrigator()
+        if irrigator:
+            self.confirm_then(
+                f"Detach irrigator [b]{irrigator[1]}[/b] from this cluster?",
+                lambda c: c.delete_irrigator(cid),
+                "Irrigator detached",
+                "Detach",
+            )
 
     def _selected(self, table_id: str, rows: list[dict[str, Any]]) -> dict[str, Any] | None:
         key = selected_key(self.query_one(table_id, DataTable))
