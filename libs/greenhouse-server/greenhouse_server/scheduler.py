@@ -405,17 +405,9 @@ def _health_monitor_job() -> None:
         logger.debug("Health monitor job skipped: no monitor wired")
         return
 
-    session = _app.state.session_factory()
-    try:
-        repo = IrrigationRepository(session)
+    with _job_session(_app, "Device health monitor job failed") as repo:
         monitor.bind_repo(repo)
         monitor.poll_all()
-        session.commit()
-    except Exception:
-        session.rollback()
-        logger.exception("Device health monitor job failed")
-    finally:
-        session.close()
 
 
 def init_health_monitor(app: FastAPI, settings: Settings) -> None:
