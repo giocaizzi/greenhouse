@@ -34,6 +34,7 @@ from greenhouse_server.services.sync import SyncService
 from greenhouse_server.services.weather import WeatherClient
 
 if TYPE_CHECKING:
+    from greenhouse_core.logic.decision import IrrigationDecision
     from greenhouse_core.models import Irrigator
 
 logger = logging.getLogger(__name__)
@@ -420,6 +421,26 @@ class CheckResult(TypedDict, total=False):
     maintenance: list[dict[str, Any]]
 
 
+def _error_result(reason: str) -> PipelineResult:
+    """The pipeline's early-exit shape (``routes/operations`` string-matches "cluster not found")."""
+    return {"action": "error", "reason": reason, "confidence": 0}
+
+
+def _decision_result(decision: "IrrigationDecision", temp: float, source: str) -> PipelineResult:
+    """The pipeline result for an evaluated decision, before any actuation outcome is applied."""
+    return {
+        "action": decision.action.value,
+        "reason": decision.reason_text,
+        "confidence": decision.confidence,
+        "duration_minutes": decision.duration_minutes,
+        "interval_hours": decision.interval_hours,
+        "stress_indicators": decision.stress_indicators.model_dump(exclude_none=True),
+        "reasons": [r.model_dump() for r in decision.reasons],
+        "temperature": temp,
+        "temperature_source": source,
+    }
+
+
 class IrrigationService:
     """Orchestrates irrigation decisions, execution, and monitoring."""
 
@@ -470,6 +491,28 @@ class IrrigationService:
 
         return FALLBACK_TEMPERATURE_C, "fallback (20C)", sensor_data
 
+    def _decide(self, cluster_id: int, temp: float, *, force: bool) -> "IrrigationDecision | None":
+        """Run (and persist) the engine; ``force`` records a manual trigger and bypasses quiet hours."""
+        logic = IrrigationLogic(self._repo, self._plant_db, weather_client=self._weather)
+        return logic.decide_for_cluster(
+            cluster_id,
+            current_temp=temp,
+            persist=True,
+            triggered_by="manual" if force else "auto",
+            bypass_quiet_hours=force,
+        )
+
+    def _log_decision_skip(self, cluster_id: int, decision: "IrrigationDecision") -> None:
+        """Record an automatic skip in the activity log (no payload, unlike the health-gate skip)."""
+        self._repo.add_activity_event(
+            source="irrigation",
+            entity_type=ENTITY_CLUSTER,
+            entity_id=cluster_id,
+            code="decision_skip",
+            message=decision.reason_text,
+            severity="info",
+        )
+
     def run_irrigation_pipeline(
         self,
         cluster_id: int,
@@ -487,44 +530,20 @@ class IrrigationService:
         """
         cluster = self._repo.get_cluster(cluster_id)
         if not cluster:
-            return {"action": "error", "reason": "cluster not found", "confidence": 0}
+            return _error_result("cluster not found")
 
         is_indoor = cluster.environment == "indoor"
         temp, source, sensor_data = self._resolve_temperature(cluster_id, is_indoor, temp_override, no_sync)
 
-        logic = IrrigationLogic(self._repo, self._plant_db, weather_client=self._weather)
-        decision = logic.decide_for_cluster(
-            cluster_id,
-            current_temp=temp,
-            persist=True,
-            triggered_by="manual" if force else "auto",
-            bypass_quiet_hours=force,
-        )
+        decision = self._decide(cluster_id, temp, force=force)
         if not decision:
-            return {"action": "error", "reason": "no data for decision", "confidence": 0}
+            return _error_result("no data for decision")
 
-        result: PipelineResult = {
-            "action": decision.action.value,
-            "reason": decision.reason_text,
-            "confidence": decision.confidence,
-            "duration_minutes": decision.duration_minutes,
-            "interval_hours": decision.interval_hours,
-            "stress_indicators": decision.stress_indicators.model_dump(exclude_none=True),
-            "reasons": [r.model_dump() for r in decision.reasons],
-            "temperature": temp,
-            "temperature_source": source,
-        }
+        result = _decision_result(decision, temp, source)
 
         if dry_run or decision.action.value == "skip":
             if not dry_run:
-                self._repo.add_activity_event(
-                    source="irrigation",
-                    entity_type=ENTITY_CLUSTER,
-                    entity_id=cluster_id,
-                    code="decision_skip",
-                    message=decision.reason_text,
-                    severity="info",
-                )
+                self._log_decision_skip(cluster_id, decision)
             return result
 
         # Execute
