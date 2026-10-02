@@ -1,11 +1,14 @@
 """Cluster status and history services."""
 
+import csv
+import io
 import time
 from typing import TYPE_CHECKING, Any
 
 from greenhouse_core.logic import IrrigationDecision, IrrigationLogic
 from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_core.repository import IrrigationRepository
+from greenhouse_core.utils import format_timestamp
 
 if TYPE_CHECKING:
     from greenhouse_core.models import Plant
@@ -22,6 +25,37 @@ def decision_to_view(decision: IrrigationDecision) -> dict[str, Any]:
     payload["reason"] = decision.reason_text
     payload["primary_code"] = decision.primary_code.value if decision.primary_code else None
     return payload
+
+
+def cluster_events_csv(repo: IrrigationRepository, cluster_id: int, *, days: int) -> str:
+    """Render a cluster's recent irrigation events as CSV text.
+
+    The API and web CSV exports share it so both downloads keep one column layout.
+    """
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["timestamp", "date", "time", "irrigator", "action", "duration_minutes", "triggered_by", "notes"])
+    irrigator = repo.get_irrigator_for_cluster(cluster_id)
+    if irrigator is not None:
+        events = repo.get_recent_events(irrigator.id, hours=days * 24)
+        for event in events:
+            ts_str = format_timestamp(event.timestamp)
+            date, _, time_part = ts_str.partition(" ")
+            writer.writerow(
+                [
+                    event.timestamp,
+                    date,
+                    time_part,
+                    irrigator.name,
+                    event.action,
+                    event.duration_minutes or "",
+                    event.triggered_by,
+                    event.notes or "",
+                ]
+            )
+
+    output.seek(0)
+    return output.getvalue()
 
 
 class ClusterService:

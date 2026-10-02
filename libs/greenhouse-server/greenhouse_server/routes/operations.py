@@ -35,6 +35,7 @@ from greenhouse_server.deps import (
     SyncServiceDep,
     require_cluster,
 )
+from greenhouse_server.services.cluster import cluster_events_csv
 from greenhouse_server.services.maintenance import collect_learning_alerts, generate_learning_report
 
 router = APIRouter(tags=["operations"])
@@ -354,37 +355,9 @@ def stats_export(cluster_id: int, repo: RepoDep, days: int = Query(default=7, ge
         HTTPException: 404 if the cluster does not exist.
     """
     cluster = require_cluster(repo, cluster_id)
-
-    import csv
-    import io
-
-    from greenhouse_core.utils import format_timestamp
-
-    output = io.StringIO()
-    writer = csv.writer(output)
-    writer.writerow(["timestamp", "date", "time", "irrigator", "action", "duration_minutes", "triggered_by", "notes"])
-    irrigator = repo.get_irrigator_for_cluster(cluster_id)
-    if irrigator is not None:
-        events = repo.get_recent_events(irrigator.id, hours=days * 24)
-        for event in events:
-            ts_str = format_timestamp(event.timestamp)
-            date, _, time_part = ts_str.partition(" ")
-            writer.writerow(
-                [
-                    event.timestamp,
-                    date,
-                    time_part,
-                    irrigator.name,
-                    event.action,
-                    event.duration_minutes or "",
-                    event.triggered_by,
-                    event.notes or "",
-                ]
-            )
-
-    output.seek(0)
+    csv_text = cluster_events_csv(repo, cluster_id, days=days)
     return StreamingResponse(
-        iter([output.getvalue()]),
+        iter([csv_text]),
         media_type="text/csv",
         headers={"Content-Disposition": f"attachment; filename=cluster_{cluster.id}_stats.csv"},
     )
