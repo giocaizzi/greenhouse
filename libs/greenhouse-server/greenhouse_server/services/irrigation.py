@@ -3,6 +3,7 @@
 import json
 import logging
 import time as _time
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Required, TypedDict
 
@@ -449,6 +450,38 @@ def _with_error(result: PipelineResult, reason: str) -> PipelineResult:
     return result
 
 
+@dataclass(frozen=True, slots=True)
+class _Actuation:
+    """Everything the actuation half of the pipeline needs, resolved before the pump is started."""
+
+    cluster_id: int
+    irrigator: "Irrigator"
+    adapter: "AbstractIrrigatorAdapter"
+    decision: "IrrigationDecision"
+    temp: float
+    source: str
+    sensor_data: "dict[str, Any] | None"
+
+
+def _soil_note(sensor_data: "dict[str, Any] | None") -> str:
+    """The event-notes soil fragment, labelled as the cluster's driest sensor (invariant #2)."""
+    # The snapshot's soil value is the cluster's driest sensor (invariant #2),
+    # so label it as such — an unqualified "soil=" reads as "this plant's".
+    return (
+        f", soil={sensor_data['soil_moisture']:.0f}% (driest)"
+        if sensor_data and sensor_data.get("soil_moisture") is not None
+        else ""
+    )
+
+
+def _event_notes(act: _Actuation, soil_note: str) -> str:
+    """The ``notes`` text of the start / attempted irrigation event."""
+    return (
+        f"temp={act.temp:.1f}C ({act.source}){soil_note}, "
+        f"confidence={act.decision.confidence:.0%}, reason={act.decision.reason_text}"
+    )
+
+
 class IrrigationService:
     """Orchestrates irrigation decisions, execution, and monitoring."""
 
@@ -535,6 +568,90 @@ class IrrigationService:
             return f"no adapter for irrigator: {exc}"
         return irrigator, adapter
 
+    def _actuate(self, act: _Actuation, result: PipelineResult) -> PipelineResult:
+        """Start the pump, record the event, then apply the started / failed follow-ups to ``result``."""
+        duration = act.decision.duration_minutes
+        success, output = act.adapter.start(act.irrigator, duration)
+        soil_note = _soil_note(act.sensor_data)
+        # One timestamp for the event row, the leak check and the watcher, so
+        # the restart re-arm (which reads the row) can match the leak check.
+        started_at = int(_time.time())
+        self._repo.add_irrigation_event(
+            irrigator_id=act.irrigator.id,
+            action="start" if success else "attempted",
+            duration_minutes=duration,
+            triggered_by="auto",
+            timestamp=started_at,
+            notes=_event_notes(act, soil_note),
+        )
+
+        if success:
+            self._on_started(act, started_at)
+            result["action"] = "irrigated"
+            self._notify_auto_irrigation(act)
+        else:
+            self._on_start_failed(act, output)
+            _with_error(result, f"irrigator failed: {output}")
+
+        return result
+
+    def _on_started(self, act: _Actuation, started_at: int) -> None:
+        """Log the run, flag the decision as actuated, and arm the leak check and dry-run watcher."""
+        duration = act.decision.duration_minutes
+        self._repo.add_activity_event(
+            source="irrigation",
+            entity_type=ENTITY_CLUSTER,
+            entity_id=act.cluster_id,
+            code="irrigated",
+            message=f"irrigated for {duration}min (confidence={act.decision.confidence:.0%})",
+            severity="info",
+            payload={
+                "irrigator_id": act.irrigator.id,
+                "duration_minutes": duration,
+                "confidence": act.decision.confidence,
+            },
+        )
+        if act.decision.decision_log_id is not None:
+            self._repo.set_decision_actuated(act.decision.decision_log_id)
+        _schedule_leak_check(act.cluster_id, started_at)
+        schedule_pump_watcher(act.irrigator.id, duration, started_at)
+
+    def _notify_auto_irrigation(self, act: _Actuation) -> None:
+        """Push the auto-irrigation notice (``get_preferences`` still runs as an argument: it may insert)."""
+        duration = act.decision.duration_minutes
+        maybe_notify(
+            self._notifier,
+            self._repo.get_preferences(),
+            "auto",
+            lambda: self._notifier.notify_irrigation(  # type: ignore[union-attr]  # maybe_notify returns first when notifier is None
+                triggered_by="auto",
+                irrigator_name=act.irrigator.name,
+                duration_minutes=duration,
+                detail=f"confidence={act.decision.confidence:.0%}",
+            ),
+        )
+
+    def _on_start_failed(self, act: _Actuation, output: str) -> None:
+        """Log the failed start and raise the actuation-failed alert."""
+        self._repo.add_activity_event(
+            source="irrigation",
+            entity_type=ENTITY_CLUSTER,
+            entity_id=act.cluster_id,
+            code="actuation_failed",
+            message=f"irrigator failed: {output}",
+            severity="warning",
+        )
+        raise_alert(
+            self._repo,
+            source="irrigation",
+            code="actuation_failed",
+            title="Irrigation Actuation Failed",
+            message=f"Irrigator '{act.irrigator.name}' failed to start: {output}",
+            severity="warning",
+            cluster_id=act.cluster_id,
+            notifier=self._notifier,
+        )
+
     def run_irrigation_pipeline(
         self,
         cluster_id: int,
@@ -608,84 +725,7 @@ class IrrigationService:
                 result["blocking_alarms"] = [a.value for a in blocking_alarms]
                 return result
 
-        duration = decision.duration_minutes
-        success, output = adapter.start(irrigator, duration)
-
-        # The snapshot's soil value is the cluster's driest sensor (invariant #2),
-        # so label it as such — an unqualified "soil=" reads as "this plant's".
-        soil_note = (
-            f", soil={sensor_data['soil_moisture']:.0f}% (driest)"
-            if sensor_data and sensor_data.get("soil_moisture") is not None
-            else ""
-        )
-        # One timestamp for the event row, the leak check and the watcher, so
-        # the restart re-arm (which reads the row) can match the leak check.
-        started_at = int(_time.time())
-        self._repo.add_irrigation_event(
-            irrigator_id=irrigator.id,
-            action="start" if success else "attempted",
-            duration_minutes=duration,
-            triggered_by="auto",
-            timestamp=started_at,
-            notes=(
-                f"temp={temp:.1f}C ({source}){soil_note}, "
-                f"confidence={decision.confidence:.0%}, reason={decision.reason_text}"
-            ),
-        )
-
-        if success:
-            self._repo.add_activity_event(
-                source="irrigation",
-                entity_type=ENTITY_CLUSTER,
-                entity_id=cluster_id,
-                code="irrigated",
-                message=f"irrigated for {duration}min (confidence={decision.confidence:.0%})",
-                severity="info",
-                payload={
-                    "irrigator_id": irrigator.id,
-                    "duration_minutes": duration,
-                    "confidence": decision.confidence,
-                },
-            )
-            if decision.decision_log_id is not None:
-                self._repo.set_decision_actuated(decision.decision_log_id)
-            _schedule_leak_check(cluster_id, started_at)
-            schedule_pump_watcher(irrigator.id, duration, started_at)
-            result["action"] = "irrigated"
-            maybe_notify(
-                self._notifier,
-                self._repo.get_preferences(),
-                "auto",
-                lambda: self._notifier.notify_irrigation(  # type: ignore[union-attr]  # maybe_notify returns first when notifier is None
-                    triggered_by="auto",
-                    irrigator_name=irrigator.name,
-                    duration_minutes=duration,
-                    detail=f"confidence={decision.confidence:.0%}",
-                ),
-            )
-        else:
-            self._repo.add_activity_event(
-                source="irrigation",
-                entity_type=ENTITY_CLUSTER,
-                entity_id=cluster_id,
-                code="actuation_failed",
-                message=f"irrigator failed: {output}",
-                severity="warning",
-            )
-            raise_alert(
-                self._repo,
-                source="irrigation",
-                code="actuation_failed",
-                title="Irrigation Actuation Failed",
-                message=f"Irrigator '{irrigator.name}' failed to start: {output}",
-                severity="warning",
-                cluster_id=cluster_id,
-                notifier=self._notifier,
-            )
-            result["action"] = "error"
-            result["reason"] = f"irrigator failed: {output}"
-
-        return result
+        return self._actuate(_Actuation(cluster_id, irrigator, adapter, decision, temp, source, sensor_data), result)
 
     def monitor_cluster(self, cluster_id: int, no_sync: bool = False) -> MonitorResult:
         """Monitor sensor-only cluster. Returns per-sensor soil status."""
