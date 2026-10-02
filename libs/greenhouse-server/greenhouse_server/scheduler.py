@@ -27,6 +27,9 @@ if TYPE_CHECKING:
     from apscheduler.job import Job
     from starlette.requests import Request
 
+    from greenhouse_core.devices import DeviceRegistry
+    from greenhouse_server.services.irrigation import IrrigationService
+
 logger = logging.getLogger(__name__)
 
 # Defaults for every job, periodic and one-shot alike. APScheduler's stock
@@ -348,37 +351,40 @@ def _health_snapshot_job() -> None:
         svc.snapshot_daily()
 
 
-def _check_job() -> None:
-    """Background job: check all clusters."""
+def _build_irrigation_service(
+    app: FastAPI, repo: IrrigationRepository, registry: "DeviceRegistry | None", cloud: DeviceGateway | None
+) -> "IrrigationService":
+    """Wire the check job's service on the job's own repo; the shared health monitor is re-bound to it first."""
     from greenhouse_server.services.irrigation import IrrigationService
     from greenhouse_server.services.sync import SyncService
+
+    sync_svc = SyncService(repo, registry, cloud)
+    monitor = getattr(app.state, "health_monitor", None)
+    if monitor is not None:
+        monitor.bind_repo(repo)
+    return IrrigationService(
+        repo=repo,
+        registry=registry,
+        sync_service=sync_svc,
+        weather_client=app.state.weather_client,
+        plant_db=app.state.plant_db,
+        health_monitor=monitor,
+        notifier=getattr(app.state, "ntfy_notifier", None),
+    )
+
+
+def _check_job() -> None:
+    """Background job: check all clusters."""
+    # Resolved here, before the session opens, exactly as before the extraction: an import
+    # failure escapes the job instead of being logged as "Check job failed".
+    from greenhouse_server.services.irrigation import IrrigationService  # noqa: F401
+    from greenhouse_server.services.sync import SyncService  # noqa: F401
 
     cloud = _get_cloud()
     registry = getattr(_app.state, "device_registry", None)  # type: ignore[union-attr]  # None _app escapes as AttributeError (pinned)
 
-    session = _app.state.session_factory()  # type: ignore[union-attr]  # None _app escapes as AttributeError (pinned)
-    try:
-        repo = IrrigationRepository(session)
-        sync_svc = SyncService(repo, registry, cloud)
-        monitor = getattr(_app.state, "health_monitor", None)  # type: ignore[union-attr]  # None _app escapes as AttributeError (pinned)
-        if monitor is not None:
-            monitor.bind_repo(repo)
-        irrigation_svc = IrrigationService(
-            repo=repo,
-            registry=registry,
-            sync_service=sync_svc,
-            weather_client=_app.state.weather_client,  # type: ignore[union-attr]  # None _app escapes as AttributeError (pinned)
-            plant_db=_app.state.plant_db,  # type: ignore[union-attr]  # None _app escapes as AttributeError (pinned)
-            health_monitor=monitor,
-            notifier=getattr(_app.state, "ntfy_notifier", None),  # type: ignore[union-attr]  # None _app escapes as AttributeError (pinned)
-        )
-        irrigation_svc.check_all_clusters()
-        session.commit()
-    except Exception:
-        session.rollback()
-        logger.exception("Check job failed")
-    finally:
-        session.close()
+    with _job_session(_app, "Check job failed") as repo:
+        _build_irrigation_service(_app, repo, registry, cloud).check_all_clusters()  # type: ignore[arg-type]  # non-None: _job_session already read _app.state
 
 
 def _anomaly_job() -> None:
