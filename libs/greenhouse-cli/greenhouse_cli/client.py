@@ -1,12 +1,18 @@
 """HTTP client for the greenhouse server API."""
 
 import os
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, cast
 
 import httpx
 
 JSONObject = dict[str, Any]
+
+
+def _drop_none(fields: Mapping[str, Any]) -> JSONObject:
+    """Omit unset (``None``) fields so the server applies its default or keeps the current value; order is kept."""
+    return {k: v for k, v in fields.items() if v is not None}
 
 
 def _default_token_path() -> Path:
@@ -142,7 +148,7 @@ class IrrigationClient:
         return self._object("GET", f"/api/v1/clusters/{cluster_id}/detail")
 
     def update_cluster(self, cluster_id: int, **kwargs: Any) -> JSONObject:
-        body = {k: v for k, v in kwargs.items() if v is not None}
+        body = _drop_none(kwargs)
         return self._object("PUT", f"/api/v1/clusters/{cluster_id}", json=body)
 
     def delete_cluster(self, cluster_id: int) -> JSONObject:
@@ -157,7 +163,7 @@ class IrrigationClient:
         return self._array("GET", f"/api/v1/clusters/{cluster_id}/plants")
 
     def update_plant(self, cluster_id: int, plant_id: int, **kwargs: Any) -> JSONObject:
-        body = {k: v for k, v in kwargs.items() if v is not None}
+        body = _drop_none(kwargs)
         return self._object("PUT", f"/api/v1/clusters/{cluster_id}/plants/{plant_id}", json=body)
 
     def delete_plant(self, cluster_id: int, plant_id: int) -> JSONObject:
@@ -177,14 +183,14 @@ class IrrigationClient:
         return self._array("GET", "/api/v1/irrigators")
 
     def add_irrigator(self, cluster_id: int, **kwargs: Any) -> JSONObject:
-        body = {k: v for k, v in kwargs.items() if v is not None}
+        body = _drop_none(kwargs)
         return self._object("POST", f"/api/v1/clusters/{cluster_id}/irrigator", json=body)
 
     def get_irrigator(self, cluster_id: int) -> JSONObject:
         return self._object("GET", f"/api/v1/clusters/{cluster_id}/irrigator")
 
     def update_irrigator(self, cluster_id: int, **kwargs: Any) -> JSONObject:
-        body = {k: v for k, v in kwargs.items() if v is not None}
+        body = _drop_none(kwargs)
         return self._object("PUT", f"/api/v1/clusters/{cluster_id}/irrigator", json=body)
 
     def delete_irrigator(self, cluster_id: int) -> JSONObject:
@@ -210,7 +216,7 @@ class IrrigationClient:
         return self._array("GET", f"/api/v1/clusters/{cluster_id}/sensors")
 
     def update_sensor(self, cluster_id: int, sensor_id: int, **kwargs: Any) -> JSONObject:
-        body = {k: v for k, v in kwargs.items() if v is not None}
+        body = _drop_none(kwargs)
         return self._object("PUT", f"/api/v1/clusters/{cluster_id}/sensors/{sensor_id}", json=body)
 
     def delete_sensor(self, cluster_id: int, sensor_id: int) -> JSONObject:
@@ -219,7 +225,7 @@ class IrrigationClient:
     # ── Config ──
 
     def set_config(self, cluster_id: int, **kwargs: Any) -> JSONObject:
-        body = {k: v for k, v in kwargs.items() if v is not None}
+        body = _drop_none(kwargs)
         return self._object("PUT", f"/api/v1/clusters/{cluster_id}/config", json=body)
 
     def get_config(self, cluster_id: int) -> JSONObject:
@@ -232,7 +238,7 @@ class IrrigationClient:
         return self._object("GET", "/api/v1/config/global")
 
     def update_global_config(self, **kwargs: Any) -> JSONObject:
-        body = {k: v for k, v in kwargs.items() if v is not None}
+        body = _drop_none(kwargs)
         return self._object("PUT", "/api/v1/config/global", json=body)
 
     # ── Operations ──
@@ -304,7 +310,7 @@ class IrrigationClient:
         params: dict[str, int | str] = {"limit": limit}
         if before is not None:
             params["before"] = before
-        params.update({k: v for k, v in filters.items() if v is not None})
+        params.update(_drop_none(filters))
         return self._object("GET", "/api/v1/activity", params=params)
 
     def insights(self, cluster_id: int) -> JSONObject:
@@ -387,7 +393,7 @@ class IrrigationClient:
         return self._object("GET", "/api/v1/preferences")
 
     def update_preferences(self, **kwargs: Any) -> JSONObject:
-        body = {k: v for k, v in kwargs.items() if v is not None}
+        body = _drop_none(kwargs)
         return self._object("PUT", "/api/v1/preferences", json=body)
 
     # ── Vacation ──
