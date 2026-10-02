@@ -4,6 +4,14 @@ import statistics
 import time
 from typing import Any
 
+from greenhouse_core.constants import (
+    LOW_LIGHT_ALERT_FRACTION,
+    MAINTENANCE_HUMIDITY_DEFICIT,
+    MAINTENANCE_LOOKBACK_HOURS,
+    MAINTENANCE_MIN_SAMPLES,
+    MAINTENANCE_STALE_SECONDS,
+    SECONDS_PER_HOUR,
+)
 from greenhouse_core.learning import IrrigationLearner
 from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_core.repository import IrrigationRepository
@@ -32,7 +40,7 @@ def collect_maintenance_alerts(
     now = int(time.time())
 
     for sensor in sensors:
-        readings = repo.get_recent_readings(sensor.id, hours=24)
+        readings = repo.get_recent_readings(sensor.id, hours=MAINTENANCE_LOOKBACK_HOURS)
 
         # Battery low
         latest_bat = next((r.battery_state for r in readings if r.battery_state is not None), None)
@@ -47,8 +55,8 @@ def collect_maintenance_alerts(
 
         # Stale data (no readings in 3h)
         latest_ts = readings[0].timestamp if readings else None
-        if latest_ts is None or (now - latest_ts) > 3 * 3600:
-            age_h = (now - latest_ts) / 3600 if latest_ts else None
+        if latest_ts is None or (now - latest_ts) > MAINTENANCE_STALE_SECONDS:
+            age_h = (now - latest_ts) / SECONDS_PER_HOUR if latest_ts else None
             age_str = f"{age_h:.0f}h ago" if age_h else "never"
             alerts.append(
                 {
@@ -60,13 +68,13 @@ def collect_maintenance_alerts(
 
         # Low ambient humidity
         hum_vals = [r.env_humidity for r in readings if r.env_humidity is not None]
-        if len(hum_vals) >= 3:
+        if len(hum_vals) >= MAINTENANCE_MIN_SAMPLES:
             avg_env_hum = statistics.mean(hum_vals)
             plant = plants_by_id.get(sensor.plant_id) if sensor.plant_id else None
             if plant:
                 care = plant_db.get_care_data(species=plant.species, category=plant.category)
                 ideal_hum_min = care.get("ideal_humidity_min")
-                if ideal_hum_min and avg_env_hum < ideal_hum_min - 10:
+                if ideal_hum_min and avg_env_hum < ideal_hum_min - MAINTENANCE_HUMIDITY_DEFICIT:
                     alerts.append(
                         {
                             "severity": "warning",
@@ -77,7 +85,7 @@ def collect_maintenance_alerts(
 
         # Low light (daytime, seasonal)
         lux_vals = daytime_lux_readings(readings)
-        if len(lux_vals) >= 3:
+        if len(lux_vals) >= MAINTENANCE_MIN_SAMPLES:
             avg_lux = statistics.mean(lux_vals)
             plant = plants_by_id.get(sensor.plant_id) if sensor.plant_id else None
             if plant:
@@ -85,7 +93,7 @@ def collect_maintenance_alerts(
                 min_lux = care.get("ideal_light_lux_min")
                 if min_lux:
                     seasonal_min = effective_light_threshold(min_lux)
-                    if avg_lux < seasonal_min * 0.5:
+                    if avg_lux < seasonal_min * LOW_LIGHT_ALERT_FRACTION:
                         alerts.append(
                             {
                                 "severity": "warning",

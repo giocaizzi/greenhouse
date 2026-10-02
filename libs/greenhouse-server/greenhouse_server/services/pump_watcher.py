@@ -33,6 +33,11 @@ import time
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
+from greenhouse_core.constants import (
+    PUMP_WATCHER_MAX_READ_FAILURES,
+    PUMP_WATCHER_POLL_SECONDS,
+    PUMP_WATCHER_WARMUP_SECONDS,
+)
 from greenhouse_core.devices import DeviceRegistry
 from greenhouse_core.devices.health import HealthAlarm
 from greenhouse_core.models import ENTITY_IRRIGATOR, Irrigator
@@ -60,9 +65,9 @@ class PumpWatcherService:
         repo: IrrigationRepository,
         registry: DeviceRegistry,
         *,
-        poll_seconds: float = 2.0,
-        warmup_seconds: float = 5.0,
-        max_read_failures: int = 5,
+        poll_seconds: float = PUMP_WATCHER_POLL_SECONDS,
+        warmup_seconds: float = PUMP_WATCHER_WARMUP_SECONDS,
+        max_read_failures: int = PUMP_WATCHER_MAX_READ_FAILURES,
         clock: Callable[[], float] = time.monotonic,
         sleep: Callable[[float], None] = time.sleep,
         monitor: DeviceHealthMonitor | None = None,

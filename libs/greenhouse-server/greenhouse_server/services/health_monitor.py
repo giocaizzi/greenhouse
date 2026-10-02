@@ -33,6 +33,7 @@ from greenhouse_core.constants import (
     BATTERY_CRITICAL_PCT,
     BATTERY_LOW_PCT,
     OFFLINE_AFTER_MINUTES,
+    SENSOR_HEALTH_BACKFILL_HOURS,
     SENSOR_HEALTH_BACKFILL_WINDOW,
     SIGNAL_LOSS_THRESHOLD,
 )
@@ -247,7 +248,7 @@ class DeviceHealthMonitor:
         forgetting a known-bad battery state across a restart.
         """
         for sensor in self._repo.list_all_sensors():
-            readings = self._repo.get_recent_readings(sensor.id, hours=24 * 7)
+            readings = self._repo.get_recent_readings(sensor.id, hours=SENSOR_HEALTH_BACKFILL_HOURS)
             if not readings:
                 continue
             recent = readings[:window]

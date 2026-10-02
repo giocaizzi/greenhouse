@@ -4,6 +4,16 @@ import time
 from dataclasses import dataclass
 from typing import Any
 
+from greenhouse_core.constants import (
+    DEFAULT_SOIL_MOISTURE_TARGET,
+    FORECAST_CONFIDENCE_HIGH,
+    FORECAST_CONFIDENCE_LOW,
+    FORECAST_CONFIDENCE_MEDIUM,
+    FORECAST_HIGH_CONFIDENCE_PROFILES,
+    SECONDS_PER_HOUR,
+    WEATHER_FORECAST_HOURS,
+    WEATHER_SKIP_PRECIP_MM,
+)
 from greenhouse_core.learning import IrrigationLearner
 from greenhouse_core.logic.cleaning import clean_readings_desc
 from greenhouse_core.logic.plant_needs import parse_moisture_target
@@ -12,7 +22,7 @@ from greenhouse_core.repository import IrrigationRepository
 from greenhouse_core.schemas import ForecastResponse
 
 _FALLBACK_DRAINAGE_PER_HOUR = -2.0  # %/h, used when no learned profile is available
-_WEATHER_PRECIP_THRESHOLD_MM = 2.0
+_WEATHER_PRECIP_THRESHOLD_MM = WEATHER_SKIP_PRECIP_MM
 
 
 @dataclass
@@ -63,7 +73,7 @@ class ForecastService:
                 species=plant.species if plant else None,
                 category=plant.category if plant else None,
             )
-            target_min, _ = parse_moisture_target(care.get("soil_moisture_target", "45-65"))
+            target_min, _ = parse_moisture_target(care.get("soil_moisture_target", DEFAULT_SOIL_MOISTURE_TARGET))
 
             profile = learner.get_plant_profile(sensor)
             has_profile = profile is not None
@@ -95,7 +105,7 @@ class ForecastService:
                 hours_until_next=None,
                 projected_min_moisture=None,
                 method="fallback_constant",
-                confidence=0.2,
+                confidence=FORECAST_CONFIDENCE_LOW,
                 explanation="No sensors with soil moisture data available.",
             )
 
@@ -104,12 +114,12 @@ class ForecastService:
         driver = sensor_forecasts[0]
 
         profiled_count = sum(1 for f in sensor_forecasts if f.has_profile)
-        if profiled_count >= 3:
-            confidence = 0.7
+        if profiled_count >= FORECAST_HIGH_CONFIDENCE_PROFILES:
+            confidence = FORECAST_CONFIDENCE_HIGH
         elif profiled_count >= 1:
-            confidence = 0.4
+            confidence = FORECAST_CONFIDENCE_MEDIUM
         else:
-            confidence = 0.2
+            confidence = FORECAST_CONFIDENCE_LOW
 
         method = "drainage_slope" if driver.has_profile else "fallback_constant"
         explanation = (
@@ -117,7 +127,7 @@ class ForecastService:
             f"based on {driver.drainage_rate:.1f}%/h drainage."
         )
 
-        next_predicted_at = int(now + driver.hours_until_next * 3600)
+        next_predicted_at = int(now + driver.hours_until_next * SECONDS_PER_HOUR)
 
         weather_skip = False
         weather_reason: str | None = None
@@ -125,7 +135,7 @@ class ForecastService:
 
         is_outdoor = cluster is not None and cluster.environment != "indoor"
         if is_outdoor and self._weather is not None:
-            forecast = self._weather.get_forecast(hours=6)
+            forecast = self._weather.get_forecast(hours=WEATHER_FORECAST_HOURS)
             if forecast is not None:
                 precip = forecast.get("precipitation_mm", 0.0) or 0.0
                 precipitation_next_6h_mm = precip
