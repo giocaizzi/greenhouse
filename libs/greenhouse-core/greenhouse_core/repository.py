@@ -13,6 +13,7 @@ from greenhouse_core.constants import (
     DEFAULT_DURATION_MINUTES,
     DEFAULT_INTERVAL_HOURS,
     DEFAULT_IRRIGATION_MODE,
+    FULL_WEEKDAY_MASK,
 )
 from greenhouse_core.models import (
     ENTITY_PLANT,
@@ -1006,7 +1007,7 @@ class IrrigationRepository:
         *,
         start_hour: int,
         end_hour: int,
-        weekday_mask: int = 127,
+        weekday_mask: int = FULL_WEEKDAY_MASK,
         label: str | None = None,
     ) -> IrrigationWindow:
         row = IrrigationWindow(
