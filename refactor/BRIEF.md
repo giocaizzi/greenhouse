@@ -79,3 +79,7 @@ Do not commit unless your brief says so. Do not touch files outside your stated 
   clearly labeled behavior-change commits (`fix(drift): …`), one pair per commit, updating only the affected pinned
   tests/goldens with a reviewed diff — see `refactor/45-drift-track.md`. Docs and plugin (`CLAUDE.md`, `plugin/`) are
   synced to the final code (now in scope). Running work packages keep drifted copies untouched until the drift track.
+- **Land a full clean, consistent end state** (owner, 2026-10-02): no dead code, no stale comments/TODOs/docs, no
+  legacy patterns; every change that makes the codebase consistent end-to-end is in scope. Behavior-preserving changes
+  stay `refactor(...)`; any change that alters observable behavior is a labeled `fix(drift|consistency): …` commit
+  with reviewed test/golden updates. See `refactor/46-consistency-track.md`.
