@@ -3,7 +3,16 @@
 import statistics
 from typing import cast
 
-from greenhouse_core.constants import TREND_MIN_READINGS, TREND_MOISTURE_THRESHOLD, TREND_TEMP_THRESHOLD
+from greenhouse_core.constants import (
+    CADENCE_HIGH_EVENTS_PER_DAY,
+    CADENCE_LOW_AVG_MINUTES,
+    CADENCE_LOW_EVENTS_PER_DAY,
+    CADENCE_WINDOW_DAYS,
+    TREND_LOOKBACK_HOURS,
+    TREND_MIN_READINGS,
+    TREND_MOISTURE_THRESHOLD,
+    TREND_TEMP_THRESHOLD,
+)
 from greenhouse_core.logic.cleaning import clean_readings
 from greenhouse_core.logic.decision import Trends
 from greenhouse_core.repository import IrrigationRepository
@@ -19,7 +28,7 @@ def analyze_historical_trends(db: IrrigationRepository, cluster_id: int) -> Tren
         for sensor in sensors:
             # Clean each sensor's series before pooling — the Hampel filter is
             # only valid within one sensor's own timeline, not across sensors.
-            all_readings.extend(clean_readings(db.get_recent_readings(sensor.id, hours=48)))
+            all_readings.extend(clean_readings(db.get_recent_readings(sensor.id, hours=TREND_LOOKBACK_HOURS)))
 
         if len(all_readings) >= TREND_MIN_READINGS:
             all_readings.sort(key=lambda r: r.timestamp)
@@ -52,7 +61,7 @@ def analyze_historical_trends(db: IrrigationRepository, cluster_id: int) -> Tren
 
     irrigator = db.get_irrigator_for_cluster(cluster_id)
     if irrigator is not None:
-        events = db.get_recent_events(irrigator.id, hours=7 * 24)
+        events = db.get_recent_events(irrigator.id, hours=CADENCE_WINDOW_DAYS * 24)
         # Only real actuation (`start`) counts as irrigation. `schedule_updated`
         # is a config change, not water, so it must not inflate the cadence.
         irrigation_events = [e for e in events if e.action == "start" and e.duration_minutes]
@@ -60,11 +69,11 @@ def analyze_historical_trends(db: IrrigationRepository, cluster_id: int) -> Tren
         total_duration = sum(cast(int, e.duration_minutes) for e in irrigation_events)
 
         if total_events > 0:
-            avg_per_day = total_events / 7
+            avg_per_day = total_events / CADENCE_WINDOW_DAYS
             avg_duration = total_duration / total_events
-            if avg_per_day < 1 and avg_duration < 2:
+            if avg_per_day < CADENCE_LOW_EVENTS_PER_DAY and avg_duration < CADENCE_LOW_AVG_MINUTES:
                 trends.irrigation_frequency_low = True
-            elif avg_per_day > 3:
+            elif avg_per_day > CADENCE_HIGH_EVENTS_PER_DAY:
                 trends.irrigation_frequency_high = True
 
     return trends

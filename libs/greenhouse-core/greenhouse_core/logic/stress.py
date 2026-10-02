@@ -1,6 +1,14 @@
 """Stress condition detection for irrigation decisions."""
 
-from greenhouse_core.constants import SOIL_MOISTURE_CRITICAL, SOIL_MOISTURE_LOW, SOIL_MOISTURE_SATURATED
+from greenhouse_core.constants import (
+    SOIL_MOISTURE_CRITICAL,
+    SOIL_MOISTURE_LOW,
+    SOIL_MOISTURE_SATURATED,
+    STRESS_HEAT_OFFSET_C,
+    STRESS_HUMIDITY_DEFICIT,
+    STRESS_LOW_LIGHT_FRACTION,
+    STRESS_STEEP_DECLINE_DELTA,
+)
 from greenhouse_core.logic.decision import SensorSnapshot, StressIndicators, Trends
 from greenhouse_core.logic.plant_needs import get_ideal_humidity_range, get_ideal_temp_range
 from greenhouse_core.plant_db import PlantDatabase
@@ -25,7 +33,7 @@ def detect_stress_conditions(
 
     if snapshot.avg_env_humidity is not None and plant_care:
         hum_range = get_ideal_humidity_range(plant_care)
-        if hum_range and snapshot.avg_env_humidity < hum_range[0] - 20:
+        if hum_range and snapshot.avg_env_humidity < hum_range[0] - STRESS_HUMIDITY_DEFICIT:
             stress.low_env_humidity = (
                 f"very dry air ({snapshot.avg_env_humidity:.0f}% vs ideal ≥{hum_range[0]:.0f}%) — high transpiration"
             )
@@ -33,7 +41,7 @@ def detect_stress_conditions(
     if snapshot.avg_light is not None and plant_care:
         min_lux_needed = max((d.get("ideal_light_lux_min", 0) for d in plant_care), default=0)
         seasonal_min = effective_light_threshold(min_lux_needed)
-        if min_lux_needed > 0 and snapshot.avg_light < seasonal_min * 0.4:
+        if min_lux_needed > 0 and snapshot.avg_light < seasonal_min * STRESS_LOW_LIGHT_FRACTION:
             stress.low_light = (
                 f"insufficient light ({snapshot.avg_light:.0f} lux vs seasonal min {seasonal_min:.0f}) — "
                 f"reduced transpiration and growth"
@@ -46,12 +54,12 @@ def detect_stress_conditions(
             if trends.soil_moisture_trend == "declining":
                 stress.water_stress += " + declining"
         elif avg_soil < SOIL_MOISTURE_LOW and trends.soil_moisture_trend == "declining":
-            if trends.soil_moisture_delta < -10:
+            if trends.soil_moisture_delta < STRESS_STEEP_DECLINE_DELTA:
                 stress.water_stress = f"low ({avg_soil:.0f}%) + steep decline ({trends.soil_moisture_delta:.0f}%)"
 
     if snapshot.avg_temperature is not None and plant_care:
         temp_range = get_ideal_temp_range(plant_care)
-        if temp_range and snapshot.avg_temperature > temp_range[1] + 5:
+        if temp_range and snapshot.avg_temperature > temp_range[1] + STRESS_HEAT_OFFSET_C:
             if trends.temperature_trend == "rising":
                 stress.heat_stress = f"high temp ({snapshot.avg_temperature:.0f}°C) + rising"
             else:

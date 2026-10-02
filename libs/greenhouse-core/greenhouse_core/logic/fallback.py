@@ -9,6 +9,8 @@ from greenhouse_core.constants import (
     CONFLICT_INTERVAL_HOURS,
     DEFAULT_DURATION_MINUTES,
     DEFAULT_INTERVAL_HOURS,
+    FALLBACK_HIGH_NEEDS_INTERVAL_STEP,
+    FALLBACK_LOW_NEEDS_INTERVAL_STEP,
     MAX_INTERVAL_HOURS,
     MIN_INTERVAL_HOURS,
     TEMP_COLD,
@@ -90,9 +92,9 @@ def temperature_based_decision(
         interval = MIN_INTERVAL_HOURS
 
     if water_needs == "high":
-        interval = max(MIN_INTERVAL_HOURS, interval - 4)
+        interval = max(MIN_INTERVAL_HOURS, interval - FALLBACK_HIGH_NEEDS_INTERVAL_STEP)
     elif water_needs == "low":
-        interval = min(MAX_INTERVAL_HOURS, interval + 6)
+        interval = min(MAX_INTERVAL_HOURS, interval + FALLBACK_LOW_NEEDS_INTERVAL_STEP)
 
     # Cooldown is NOT re-checked here: the engine runs `_enforce_cooldown`
     # (single source of truth — `start` events over a fixed 6h window) before

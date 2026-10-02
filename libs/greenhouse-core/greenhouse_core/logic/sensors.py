@@ -2,6 +2,7 @@
 
 import statistics
 
+from greenhouse_core.constants import NIGHT_LUX_THRESHOLD
 from greenhouse_core.logic.cleaning import clean_readings
 from greenhouse_core.logic.decision import PerSensorSnapshot, SensorSnapshot
 from greenhouse_core.repository import IrrigationRepository
@@ -43,7 +44,7 @@ def get_recent_sensor_data(db: IrrigationRepository, cluster_id: int, hours: int
             if r.soil_moisture is not None:
                 all_soil.append(r.soil_moisture)
                 s_soil.append(r.soil_moisture)
-            if r.light is not None and r.light > 15:
+            if r.light is not None and r.light > NIGHT_LUX_THRESHOLD:
                 all_light.append(r.light)
             if r.water_warning:
                 water_warnings.append(sensor.name)
