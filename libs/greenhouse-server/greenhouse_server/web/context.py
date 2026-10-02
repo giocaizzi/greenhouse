@@ -4,8 +4,14 @@ from __future__ import annotations
 
 import time
 from importlib.metadata import PackageNotFoundError, version
+from typing import TYPE_CHECKING, Any
 
 from fastapi import Request
+
+if TYPE_CHECKING:
+    from sqlalchemy.orm import Session
+
+    from greenhouse_core.repository import IrrigationRepository
 
 
 def _app_version() -> str:
@@ -22,7 +28,7 @@ def is_hx(request: Request) -> bool:
     return request.headers.get("HX-Request", "").lower() == "true"
 
 
-def _repo_from_request(request: Request):
+def _repo_from_request(request: Request) -> tuple[IrrigationRepository, Session] | tuple[None, None]:
     """Resolve an IrrigationRepository from request.app.state, or None."""
     try:
         from greenhouse_core.repository import IrrigationRepository
@@ -34,7 +40,7 @@ def _repo_from_request(request: Request):
         return None, None
 
 
-def base_context(request: Request, **extra) -> dict:
+def base_context(request: Request, **extra: Any) -> dict[str, Any]:
     repo, session = _repo_from_request(request)
     dry_run_global = False
     active_vacation = None
@@ -53,7 +59,8 @@ def base_context(request: Request, **extra) -> dict:
         except Exception:
             pass
         finally:
-            session.close()
+            # contract: target §3.6 keeps this close; _repo_from_request sets repo and session together.
+            session.close()  # type: ignore[union-attr]
 
     # auth_enabled is read off app.state so the topbar can hide the Sign out
     # button when running in the no-auth dev mode.

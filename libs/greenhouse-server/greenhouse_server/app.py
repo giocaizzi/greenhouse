@@ -2,6 +2,7 @@
 
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -55,6 +56,9 @@ from greenhouse_server.services.weather import WeatherClient
 from greenhouse_server.web.exception_handlers import register_web_exception_handlers
 from greenhouse_server.web.router import web_router
 
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
+
 
 def _init_tuya(app: FastAPI) -> None:
     """Build the one shared Tuya gateway and the registry that wraps it.
@@ -91,7 +95,8 @@ _mcp_bearer = HTTPBearer(auto_error=False)
 
 def _get_settings(request: Request) -> Settings:
     """Resolve the live Settings from app.state."""
-    return request.app.state.settings
+    settings: Settings = request.app.state.settings
+    return settings
 
 
 def require_mcp_token(
@@ -130,7 +135,7 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
     init_db(engine)
 
     @asynccontextmanager
-    async def lifespan(app: FastAPI):
+    async def lifespan(app: FastAPI) -> "AsyncIterator[None]":
         if settings.enable_scheduler:
             start_scheduler()
             # Leak-check jobs are in-memory: restore any a restart dropped.
@@ -306,7 +311,7 @@ def _init_plant_db(settings: Settings) -> PlantDatabase:
     return PlantDatabase()
 
 
-def main():
+def main() -> None:
     """Entry point for greenhouse-server command."""
     import uvicorn
     from dotenv import load_dotenv

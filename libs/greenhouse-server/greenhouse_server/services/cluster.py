@@ -1,13 +1,17 @@
 """Cluster status and history services."""
 
 import time
+from typing import TYPE_CHECKING, Any
 
 from greenhouse_core.logic import IrrigationDecision, IrrigationLogic
 from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_core.repository import IrrigationRepository
 
+if TYPE_CHECKING:
+    from greenhouse_core.models import Plant
 
-def decision_to_view(decision: IrrigationDecision) -> dict:
+
+def decision_to_view(decision: IrrigationDecision) -> dict[str, Any]:
     """Render a decision for templates and JSON responses.
 
     Templates and the legacy JSON shape consume the decision via dict
@@ -27,7 +31,7 @@ class ClusterService:
         self._repo = repo
         self._plant_db = plant_db
 
-    def get_cluster_status(self, cluster_id: int) -> dict | None:
+    def get_cluster_status(self, cluster_id: int) -> dict[str, Any] | None:
         """Full cluster status: config, plants, sensors, irrigators, smart decision."""
         cluster = self._repo.get_cluster(cluster_id)
         if not cluster:
@@ -84,7 +88,7 @@ class ClusterService:
             "decision": decision_dict,
         }
 
-    def get_cluster_history(self, cluster_id: int, hours: int = 24, limit: int = 50) -> dict | None:
+    def get_cluster_history(self, cluster_id: int, hours: int = 24, limit: int = 50) -> dict[str, Any] | None:
         """Get sensor readings + irrigation events for a cluster."""
         cluster = self._repo.get_cluster(cluster_id)
         if not cluster:
@@ -120,7 +124,7 @@ class ClusterService:
             "irrigators": irrigator_histories,
         }
 
-    def sync_plant_with_db(self, plant) -> None:
+    def sync_plant_with_db(self, plant: "Plant") -> None:
         """Update a single plant with evidence-based care data."""
         care_data = self._plant_db.get_care_data(species=plant.species, category=plant.category)
         plant.water_needs = care_data.get("water_needs")
