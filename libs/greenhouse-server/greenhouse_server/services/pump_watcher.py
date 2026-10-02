@@ -31,7 +31,7 @@ recommended belt-and-suspenders safeguard.
 import logging
 import time
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypedDict
 
 from greenhouse_core.constants import (
     PUMP_WATCHER_MAX_READ_FAILURES,
@@ -55,6 +55,27 @@ logger = logging.getLogger(__name__)
 ALERT_CODE = HealthAlarm.NO_WATER.value  # "no_water"
 EVENT_ACTION_ABORTED = "aborted"
 ACTIVITY_CODE = "pump_dry_run"
+
+
+class WatchOutcome(TypedDict):
+    """Result of one watch; the key order is the order callers and logs see."""
+
+    outcome: str
+    polls: int
+    read_failures: int
+    alarm_raw: Any
+    elapsed_seconds: float
+
+
+def _outcome(kind: str, *, polls: int, failures: int, alarm_raw: Any, elapsed: float) -> WatchOutcome:
+    """Build a watch result; the caller reads the clock for elapsed at its own exit point."""
+    return {
+        "outcome": kind,
+        "polls": polls,
+        "read_failures": failures,
+        "alarm_raw": alarm_raw,
+        "elapsed_seconds": elapsed,
+    }
 
 
 class PumpWatcherService:
@@ -97,7 +118,7 @@ class PumpWatcherService:
         duration_seconds: int,
         *,
         started_at: int | None = None,
-    ) -> dict[str, Any]:
+    ) -> WatchOutcome:
         """Poll the dry-run alarm for the duration of an active irrigation.
 
         Args:
@@ -118,57 +139,29 @@ class PumpWatcherService:
         started_at = started_at if started_at is not None else int(time.time())
         deadline = self._clock() + max(0.0, float(duration_seconds))
         warmup_until = self._clock() + self._warmup
-
         polls = 0
-        consecutive_failures = 0
-        last_failure_msg: str | None = None
-
+        failures = 0  # consecutive failed reads
         while True:
             if self._stop_requested():
-                return {
-                    "outcome": "interrupted",
-                    "polls": polls,
-                    "read_failures": consecutive_failures,
-                    "alarm_raw": None,
-                    "elapsed_seconds": self._clock() - (deadline - duration_seconds),
-                }
+                elapsed = self._clock() - (deadline - duration_seconds)
+                return _outcome("interrupted", polls=polls, failures=failures, alarm_raw=None, elapsed=elapsed)
             now = self._clock()
             if now >= deadline:
-                return {
-                    "outcome": "completed",
-                    "polls": polls,
-                    "read_failures": 0,
-                    "alarm_raw": None,
-                    "elapsed_seconds": now - (deadline - duration_seconds),
-                }
+                elapsed = now - (deadline - duration_seconds)
+                return _outcome("completed", polls=polls, failures=0, alarm_raw=None, elapsed=elapsed)
 
             polls += 1
-            state = self._read_health(irrigator)
-            read_error = state.raw.get("error") if isinstance(state.raw, dict) else None
-
-            if read_error or state.offline:
-                consecutive_failures += 1
-                last_failure_msg = read_error or "device offline"
-                if consecutive_failures >= self._max_read_failures:
-                    logger.warning(
-                        "Pump watcher abandoning irrigator %d after %d read failures "
-                        "(last: %s) — irrigation continues unprotected",
-                        irrigator.id,
-                        consecutive_failures,
-                        last_failure_msg,
-                    )
-                    return {
-                        "outcome": "abandoned",
-                        "polls": polls,
-                        "read_failures": consecutive_failures,
-                        "alarm_raw": None,
-                        "elapsed_seconds": self._clock() - (deadline - duration_seconds),
-                    }
+            state, failure_msg = self._poll_step(irrigator)
+            if failure_msg is not None:
+                failures += 1
+                if failures >= self._max_read_failures:
+                    self._log_abandoned(irrigator, failures, failure_msg)
+                    elapsed = self._clock() - (deadline - duration_seconds)
+                    return _outcome("abandoned", polls=polls, failures=failures, alarm_raw=None, elapsed=elapsed)
             else:
-                consecutive_failures = 0
-                # Only trip after the warm-up window has elapsed. A pump that's
-                # still priming naturally draws lower current and can briefly
-                # set the bit before water reaches the impeller.
+                failures = 0
+                # Only trip after the warm-up window has elapsed. A pump that's still priming naturally
+                # draws lower current and can briefly set the bit before water reaches the impeller.
                 if HealthAlarm.NO_WATER in state.alarms and now >= warmup_until:
                     self._handle_trip(
                         irrigator=irrigator,
@@ -178,17 +171,30 @@ class PumpWatcherService:
                         polls=polls,
                         duration_seconds=duration_seconds,
                     )
-                    return {
-                        "outcome": "tripped",
-                        "polls": polls,
-                        "read_failures": 0,
-                        "alarm_raw": state.raw.get("alarm_raw") if isinstance(state.raw, dict) else None,
-                        "elapsed_seconds": self._clock() - (deadline - duration_seconds),
-                    }
-
+                    alarm_raw = state.raw.get("alarm_raw") if isinstance(state.raw, dict) else None
+                    elapsed = self._clock() - (deadline - duration_seconds)
+                    return _outcome("tripped", polls=polls, failures=0, alarm_raw=alarm_raw, elapsed=elapsed)
             self._sleep(self._poll)
 
     # ── Internals ─────────────────────────────────────────────────────────
+
+    def _poll_step(self, irrigator: Irrigator) -> tuple["DeviceHealthState", str | None]:
+        """One poll: the health state, plus the failure message when the read failed or the device is offline."""
+        state = self._read_health(irrigator)
+        read_error = state.raw.get("error") if isinstance(state.raw, dict) else None
+        if read_error or state.offline:
+            return state, read_error or "device offline"
+        return state, None
+
+    @staticmethod
+    def _log_abandoned(irrigator: Irrigator, consecutive_failures: int, last_failure_msg: str) -> None:
+        """Say loudly that the irrigation now runs without dry-run protection."""
+        logger.warning(
+            "Pump watcher abandoning irrigator %d after %d read failures (last: %s) — irrigation continues unprotected",
+            irrigator.id,
+            consecutive_failures,
+            last_failure_msg,
+        )
 
     def _read_health(self, irrigator: Irrigator) -> "DeviceHealthState":
         """Read the device's health surface via the registry-resolved adapter.
