@@ -41,6 +41,8 @@ if TYPE_CHECKING:
     from sqlalchemy.engine import CursorResult
     from sqlalchemy.orm import InstrumentedAttribute
 
+    from greenhouse_core.models import Base
+
 _GLOBAL_CONFIG_DEFAULTS: dict[str, int | str | bool | None] = {
     "mode": DEFAULT_IRRIGATION_MODE,
     "duration_minutes": DEFAULT_DURATION_MINUTES,
@@ -981,12 +983,7 @@ class IrrigationRepository:
 
     def delete_vacation_window(self, window_id: int) -> bool:
         """Delete a vacation window; returns True if a row was removed."""
-        row = self.session.get(VacationWindow, window_id)
-        if not row:
-            return False
-        self.session.delete(row)
-        self.session.flush()
-        return True
+        return self._delete_by_id(VacationWindow, window_id)
 
     # ── Irrigation Windows ────────────────────────────────────────────────────
 
@@ -1034,12 +1031,7 @@ class IrrigationRepository:
         return row
 
     def delete_irrigation_window(self, window_id: int) -> bool:
-        row = self.session.get(IrrigationWindow, window_id)
-        if row is None:
-            return False
-        self.session.delete(row)
-        self.session.flush()
-        return True
+        return self._delete_by_id(IrrigationWindow, window_id)
 
     # ── User Preferences (single-row) ─────────────────────────────────────────
 
@@ -1160,6 +1152,15 @@ class IrrigationRepository:
 
     # ── Mutations for CRUD edit/delete ────────────────────────────────────────
 
+    def _delete_by_id(self, model: "type[Base]", row_id: int) -> bool:
+        """Delete one row by primary key; ``False`` when it does not exist (shared by the plain deletes)."""
+        row = self.session.get(model, row_id)
+        if row is None:
+            return False
+        self.session.delete(row)
+        self.session.flush()
+        return True
+
     def update_cluster(self, cluster_id: int, **fields: Any) -> Cluster | None:
         """Patch cluster fields; returns the updated row or None if missing."""
         cluster = self.session.get(Cluster, cluster_id)
@@ -1173,12 +1174,7 @@ class IrrigationRepository:
 
     def delete_cluster(self, cluster_id: int) -> bool:
         """Delete a cluster (cascades to plants/sensors/irrigators/config)."""
-        cluster = self.session.get(Cluster, cluster_id)
-        if not cluster:
-            return False
-        self.session.delete(cluster)
-        self.session.flush()
-        return True
+        return self._delete_by_id(Cluster, cluster_id)
 
     def update_plant(self, plant_id: int, **fields: Any) -> Plant | None:
         """Patch plant fields; returns the updated row or None."""
@@ -1291,12 +1287,7 @@ class IrrigationRepository:
 
     def delete_sensor(self, sensor_id: int) -> bool:
         """Delete a sensor (cascades to its readings)."""
-        sensor = self.session.get(Sensor, sensor_id)
-        if not sensor:
-            return False
-        self.session.delete(sensor)
-        self.session.flush()
-        return True
+        return self._delete_by_id(Sensor, sensor_id)
 
     def update_irrigator(self, irrigator_id: int, **fields: Any) -> Irrigator | None:
         """Patch irrigator fields; ``config`` is JSON-serialised if a dict."""
@@ -1315,9 +1306,4 @@ class IrrigationRepository:
 
     def delete_irrigator(self, irrigator_id: int) -> bool:
         """Delete an irrigator (cascades to its events)."""
-        irrigator = self.session.get(Irrigator, irrigator_id)
-        if not irrigator:
-            return False
-        self.session.delete(irrigator)
-        self.session.flush()
-        return True
+        return self._delete_by_id(Irrigator, irrigator_id)
