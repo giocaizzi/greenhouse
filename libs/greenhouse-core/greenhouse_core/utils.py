@@ -6,27 +6,11 @@ from datetime import UTC, datetime
 from typing import Any
 from zoneinfo import ZoneInfo
 
-# Seasonal light reduction factor by month (Northern hemisphere, ~45°N latitude - Milano)
-# Represents typical ratio of available daylight vs peak summer.
-# June/July = 1.0 (peak). December/January = ~0.55 (shortest days + low sun angle).
-_SEASONAL_LIGHT_FACTOR: dict[int, float] = {
-    1: 0.50,
-    2: 0.60,
-    3: 0.72,
-    4: 0.85,
-    5: 0.95,
-    6: 1.00,
-    7: 1.00,
-    8: 0.95,
-    9: 0.83,
-    10: 0.70,
-    11: 0.58,
-    12: 0.50,
-}
+from greenhouse_core.constants import NIGHT_LUX_THRESHOLD, SEASONAL_LIGHT_FACTOR_BY_MONTH
 
-# Lux threshold below which a reading is considered "nighttime / artificial light only"
-# Used to exclude night readings from daytime light averages.
-NIGHT_LUX_THRESHOLD = 15
+# Seasonal light reduction factor by month (Northern hemisphere, ~45°N latitude - Milano);
+# the table lives in constants. NIGHT_LUX_THRESHOLD stays importable from here.
+_SEASONAL_LIGHT_FACTOR: dict[int, float] = SEASONAL_LIGHT_FACTOR_BY_MONTH
 
 
 def seasonal_light_factor(month: int | None = None) -> float:
