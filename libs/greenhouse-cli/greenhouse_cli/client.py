@@ -360,12 +360,7 @@ class IrrigationClient:
         limit: int = 100,
     ) -> JSONObject:
         params: dict[str, int | str] = {"limit": limit}
-        if status is not None:
-            params["status"] = status
-        if cluster_id is not None:
-            params["cluster_id"] = cluster_id
-        if plant_id is not None:
-            params["plant_id"] = plant_id
+        params.update(_drop_none({"status": status, "cluster_id": cluster_id, "plant_id": plant_id}))
         return self._object("GET", "/api/v1/alerts", params=params)
 
     def get_alert(self, alert_id: int) -> JSONObject:
@@ -424,15 +419,7 @@ class IrrigationClient:
         contact_email: str | None = None,
         notes: str | None = None,
     ) -> JSONObject:
-        body: JSONObject = {}
-        if starts_at is not None:
-            body["starts_at"] = starts_at
-        if ends_at is not None:
-            body["ends_at"] = ends_at
-        if contact_email is not None:
-            body["contact_email"] = contact_email
-        if notes is not None:
-            body["notes"] = notes
+        body = _drop_none({"starts_at": starts_at, "ends_at": ends_at, "contact_email": contact_email, "notes": notes})
         return self._object("PUT", f"/api/v1/vacation/{window_id}", json=body)
 
     def delete_vacation(self, window_id: int) -> JSONObject:
@@ -468,15 +455,9 @@ class IrrigationClient:
         weekday_mask: int | None = None,
         label: str | None = None,
     ) -> JSONObject:
-        body: JSONObject = {}
-        if start_hour is not None:
-            body["start_hour"] = start_hour
-        if end_hour is not None:
-            body["end_hour"] = end_hour
-        if weekday_mask is not None:
-            body["weekday_mask"] = weekday_mask
-        if label is not None:
-            body["label"] = label
+        body = _drop_none(
+            {"start_hour": start_hour, "end_hour": end_hour, "weekday_mask": weekday_mask, "label": label}
+        )
         return self._object("PUT", f"/api/v1/clusters/{cluster_id}/windows/{window_id}", json=body)
 
     def delete_window(self, cluster_id: int, window_id: int) -> JSONObject:
