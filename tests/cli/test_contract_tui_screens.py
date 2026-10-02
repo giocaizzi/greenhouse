@@ -17,13 +17,15 @@ import asyncio
 import os
 import re
 import tempfile
+import threading
 import time
 from pathlib import Path
 
 import pytest
 import time_machine
 
-from cli.test_contract_tui import make_seeded_app, make_tui, screen_text, settle
+from cli.test_contract_tui import make_seeded_app, make_tui, screen_text, settle, wait_until
+from cli.tui_fixtures import tui_client_factory
 from golden import ENV_PREFIXES, FROZEN_INSTANT, assert_golden, assert_golden_json
 from greenhouse_cli import tui as tui_pkg
 from greenhouse_cli.tui.screens.cluster import ClusterScreen
@@ -73,8 +75,45 @@ def _dom_ids(screen) -> list[str]:
     return sorted(seen)
 
 
+class _SearchGate:
+    """Holds every ``search`` request while the test is typing a query into the search dialog.
+
+    ``DataTable`` column widths are a high-water mark: ``clear()`` keeps the columns and
+    ``_update_dimensions`` only ever widens them. The dialog debounces each keystroke by 0.2 s,
+    so when a loaded CPU spaces two pilot keystrokes further apart than that, an intermediate
+    query (``"c"``, ``"ci"`` …) renders its wider hits first and the final table keeps those widths.
+    Holding the responses until the last keystroke's worker is the only live one reproduces the
+    unloaded timing (every intermediate worker is cancelled before its rows land) on any machine.
+    The requests themselves are unchanged; they are only delayed.
+    """
+
+    def __init__(self, http) -> None:
+        self.open = threading.Event()
+        self.open.set()
+        self._factory = tui_client_factory(http)
+
+    def factory(self, token: str | None):
+        client = self._factory(token)
+        search = client.search
+
+        def gated(*args, **kwargs):
+            if not self.open.wait(timeout=60):
+                raise AssertionError("search gate never reopened")
+            return search(*args, **kwargs)
+
+        client.search = gated
+        return client
+
+
+def _only_live_search(tui, query: str) -> bool:
+    """True once the worker for ``query`` exists and every other search worker is cancelled or done."""
+    live = [w for w in tui.workers if w.group == "search" and not w.is_cancelled and not w.is_finished]
+    return [w.description for w in live] == [f"search({query!r})"]
+
+
 async def _tour(http, captures: dict[str, tuple[str, list[str]]]) -> None:
-    tui = make_tui(http)
+    gate = _SearchGate(http)
+    tui = make_tui(http, factory=gate.factory)
 
     def snap(name: str) -> None:
         captures[name] = (screen_text(tui), _dom_ids(tui.screen))
@@ -97,7 +136,12 @@ async def _tour(http, captures: dict[str, tuple[str, list[str]]]) -> None:
 
         await pilot.press("slash")
         await settle(pilot, tui)
+        gate.open.clear()
         await pilot.press(*"citrus")
+        await wait_until(
+            lambda: _only_live_search(tui, "citrus"), "the search worker for 'citrus' to be the only live one"
+        )
+        gate.open.set()
         await pilot.pause(0.4)
         await settle(pilot, tui)
         snap("search_citrus")

@@ -2,6 +2,8 @@
 
 import json
 import os
+from collections.abc import Callable
+from typing import Any
 
 import typer
 from rich import print_json
@@ -15,7 +17,7 @@ def get_client(ctx: typer.Context) -> IrrigationClient:
     return IrrigationClient(base_url=server)
 
 
-def call(ctx: typer.Context, fn, *args, **kwargs):
+def call(ctx: typer.Context, fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
     """Call a client method with error handling. Returns the result or exits on error."""
     try:
         return fn(get_client(ctx), *args, **kwargs)
@@ -24,6 +26,6 @@ def call(ctx: typer.Context, fn, *args, **kwargs):
         raise typer.Exit(1) from None
 
 
-def output(data):
+def output(data: Any) -> None:
     """Pretty-print JSON data."""
     print_json(json.dumps(data, default=str))
