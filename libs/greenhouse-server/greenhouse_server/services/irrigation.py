@@ -34,6 +34,7 @@ from greenhouse_server.services.sync import SyncService
 from greenhouse_server.services.weather import WeatherClient
 
 if TYPE_CHECKING:
+    from greenhouse_core.devices import AbstractIrrigatorAdapter
     from greenhouse_core.logic.decision import IrrigationDecision
     from greenhouse_core.models import Irrigator
 
@@ -441,6 +442,13 @@ def _decision_result(decision: "IrrigationDecision", temp: float, source: str) -
     }
 
 
+def _with_error(result: PipelineResult, reason: str) -> PipelineResult:
+    """Turn ``result`` into an error in place (key positions unchanged) and return the same dict."""
+    result["action"] = "error"
+    result["reason"] = reason
+    return result
+
+
 class IrrigationService:
     """Orchestrates irrigation decisions, execution, and monitoring."""
 
@@ -513,6 +521,20 @@ class IrrigationService:
             severity="info",
         )
 
+    def _actuation_target(self, cluster_id: int) -> "tuple[Irrigator, AbstractIrrigatorAdapter] | str":
+        """The cluster's irrigator and its adapter, or the error reason that stops actuation."""
+        irrigator = self._repo.get_irrigator_for_cluster(cluster_id)
+        if not irrigator:
+            return "no irrigators found"
+        if self._registry is None:
+            return "no device registry"
+
+        try:
+            adapter = self._registry.get_irrigator(irrigator)
+        except UnknownDeviceModel as exc:
+            return f"no adapter for irrigator: {exc}"
+        return irrigator, adapter
+
     def run_irrigation_pipeline(
         self,
         cluster_id: int,
@@ -547,22 +569,10 @@ class IrrigationService:
             return result
 
         # Execute
-        irrigator = self._repo.get_irrigator_for_cluster(cluster_id)
-        if not irrigator:
-            result["action"] = "error"
-            result["reason"] = "no irrigators found"
-            return result
-        if self._registry is None:
-            result["action"] = "error"
-            result["reason"] = "no device registry"
-            return result
-
-        try:
-            adapter = self._registry.get_irrigator(irrigator)
-        except UnknownDeviceModel as exc:
-            result["action"] = "error"
-            result["reason"] = f"no adapter for irrigator: {exc}"
-            return result
+        target = self._actuation_target(cluster_id)
+        if isinstance(target, str):
+            return _with_error(result, target)
+        irrigator, adapter = target
 
         # Device-health gate: if a NO_WATER / RAIN / OFFLINE alarm is open
         # for this irrigator, append a typed Reason and short-circuit to
