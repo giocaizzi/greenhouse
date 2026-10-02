@@ -9,7 +9,13 @@ from apscheduler.jobstores.base import JobLookupError
 from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi import FastAPI
 
-from greenhouse_core.constants import HEALTH_POLL_IDLE_MINUTES
+from greenhouse_core.constants import (
+    ANOMALY_SCAN_INTERVAL_MINUTES,
+    HEALTH_POLL_IDLE_MINUTES,
+    HEALTH_SNAPSHOT_HOUR,
+    HEALTH_SNAPSHOT_MINUTE,
+    SYNC_JOB_BACKFILL_HOURS,
+)
 from greenhouse_core.devices import DeviceGateway
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.config import Settings
@@ -190,7 +196,7 @@ def init_scheduler(app: FastAPI, settings: Settings, tz_name: str | None = None)
     _add_core_job(
         _anomaly_job,
         "interval",
-        minutes=15,
+        minutes=ANOMALY_SCAN_INTERVAL_MINUTES,
         id="sensor_anomaly",
         name="Sensor anomaly scan",
     )
@@ -222,8 +228,8 @@ def _add_tz_bound_cron_jobs(settings: Settings) -> None:
     _add_core_job(
         _health_snapshot_job,
         "cron",
-        hour=0,
-        minute=30,
+        hour=HEALTH_SNAPSHOT_HOUR,
+        minute=HEALTH_SNAPSHOT_MINUTE,
         id="plant_health_snapshot",
         name="Daily plant health snapshot",
     )
@@ -312,7 +318,7 @@ def _sync_job() -> None:
     try:
         repo = IrrigationRepository(session)
         sync_svc = SyncService(repo, registry, cloud)
-        sync_svc.sync_all_sensors(hours=6)
+        sync_svc.sync_all_sensors(hours=SYNC_JOB_BACKFILL_HOURS)
         session.commit()
     except Exception:
         session.rollback()
