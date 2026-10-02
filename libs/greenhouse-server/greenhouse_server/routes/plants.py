@@ -16,6 +16,7 @@ from greenhouse_core.schemas import (
     UpdatePlantRequest,
 )
 from greenhouse_server.deps import ClusterServiceDep, PlantHealthServiceDep, RepoDep, require_cluster
+from greenhouse_server.services.cluster import PlantNotFoundError
 
 router = APIRouter(tags=["plants"])
 
@@ -215,34 +216,10 @@ def sync_plants(request: SyncPlantsRequest, repo: RepoDep, cluster_svc: ClusterS
     Raises:
         HTTPException: 404 if plant_id is set and no such plant exists.
     """
-    errors = []
-    synced = 0
-
-    if request.plant_id:
-        clusters = repo.list_clusters()
-        plant = None
-        for cluster in clusters:
-            for p in repo.get_plants_in_cluster(cluster.id):
-                if p.id == request.plant_id:
-                    plant = p
-                    break
-            if plant:
-                break
-        if not plant:
-            raise HTTPException(status_code=404, detail=f"Plant {request.plant_id} not found")
-        cluster_svc.sync_plant_with_db(plant)
-        synced = 1
-    else:
-        clusters = [repo.get_cluster(request.cluster_id)] if request.cluster_id else repo.list_clusters()
-        for cluster in clusters:
-            if not cluster:
-                continue
-            for plant in repo.get_plants_in_cluster(cluster.id):
-                try:
-                    cluster_svc.sync_plant_with_db(plant)
-                    synced += 1
-                except Exception as e:
-                    errors.append(f"{plant.species}: {e}")
+    try:
+        synced, errors = cluster_svc.sync_plants(plant_id=request.plant_id, cluster_id=request.cluster_id)
+    except PlantNotFoundError:
+        raise HTTPException(status_code=404, detail=f"Plant {request.plant_id} not found") from None
 
     repo.session.commit()
     return SyncPlantsResponse(synced=synced, errors=errors)
@@ -281,7 +258,8 @@ def get_plant_health(plant_id: int, repo: RepoDep, health_svc: PlantHealthServic
         plant_id=plant_id,
         species=plant.species,
         current_score=result["score"],
-        history=history,
+        # contract: PlantHealthResponse.history validates the ORM rows (from_attributes).
+        history=history,  # type: ignore[arg-type]
     )
 
 

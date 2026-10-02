@@ -1,5 +1,7 @@
 """Operation routes: status, irrigate, check, monitor, sync, learn, history, stats."""
 
+from typing import Any
+
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
@@ -35,6 +37,7 @@ from greenhouse_server.deps import (
     SyncServiceDep,
     require_cluster,
 )
+from greenhouse_server.services.cluster import cluster_events_csv
 from greenhouse_server.services.maintenance import collect_learning_alerts, generate_learning_report
 
 router = APIRouter(tags=["operations"])
@@ -64,45 +67,47 @@ def cluster_status(cluster_id: int, cluster_svc: ClusterServiceDep):
         cluster=result["cluster"],
         config=ConfigResponse.model_validate(config) if config else None,
         plants=[PlantResponse.model_validate(p) for p in result["plants"]],
-        sensors=[
-            ClusterStatusSensorResponse(
-                id=s["id"],
-                name=s["name"],
-                type=s["type"],
-                plant_id=s["plant_id"],
-                last_reading=SensorReadingResponse.model_validate(s["last_reading"]) if s["last_reading"] else None,
-                reading_age_seconds=s["reading_age_seconds"],
-            )
-            for s in result["sensors"]
-        ],
-        irrigator=(
-            ClusterStatusIrrigatorResponse(
-                id=result["irrigator"]["id"],
-                name=result["irrigator"]["name"],
-                type=result["irrigator"]["type"],
-                recent_event_count=result["irrigator"]["recent_event_count"],
-                last_event=(
-                    IrrigationEventResponse.model_validate(result["irrigator"]["last_event"])
-                    if result["irrigator"]["last_event"]
-                    else None
-                ),
-            )
-            if result["irrigator"]
-            else None
+        sensors=[_status_sensor(s) for s in result["sensors"]],
+        irrigator=_status_irrigator(result["irrigator"]) if result["irrigator"] else None,
+        decision=_status_decision(decision) if decision else None,
+    )
+
+
+def _status_sensor(s: dict[str, Any]) -> ClusterStatusSensorResponse:
+    """Map one ``get_cluster_status`` sensor row to its response model."""
+    return ClusterStatusSensorResponse(
+        id=s["id"],
+        name=s["name"],
+        type=s["type"],
+        plant_id=s["plant_id"],
+        last_reading=SensorReadingResponse.model_validate(s["last_reading"]) if s["last_reading"] else None,
+        reading_age_seconds=s["reading_age_seconds"],
+    )
+
+
+def _status_irrigator(irrigator: dict[str, Any]) -> ClusterStatusIrrigatorResponse:
+    """Map the ``get_cluster_status`` irrigator dict to its response model."""
+    return ClusterStatusIrrigatorResponse(
+        id=irrigator["id"],
+        name=irrigator["name"],
+        type=irrigator["type"],
+        recent_event_count=irrigator["recent_event_count"],
+        last_event=(
+            IrrigationEventResponse.model_validate(irrigator["last_event"]) if irrigator["last_event"] else None
         ),
-        decision=(
-            IrrigateResponse(
-                action=decision["action"],
-                reason=decision["reason"],
-                confidence=decision["confidence"],
-                duration_minutes=decision["duration_minutes"],
-                interval_hours=decision["interval_hours"],
-                stress_indicators=decision.get("stress_indicators"),
-                reasons=decision.get("reasons", []),
-            )
-            if decision
-            else None
-        ),
+    )
+
+
+def _status_decision(decision: dict[str, Any]) -> IrrigateResponse:
+    """Map the ``get_cluster_status`` decision view to the irrigate response model."""
+    return IrrigateResponse(
+        action=decision["action"],
+        reason=decision["reason"],
+        confidence=decision["confidence"],
+        duration_minutes=decision["duration_minutes"],
+        interval_hours=decision["interval_hours"],
+        stress_indicators=decision.get("stress_indicators"),
+        reasons=decision.get("reasons", []),
     )
 
 
@@ -272,7 +277,8 @@ def learn(cluster_id: int, repo: RepoDep, plant_db: PlantDbDep):
     cluster = require_cluster(repo, cluster_id)
     report = generate_learning_report(repo, cluster_id, plant_db)
     alerts = collect_learning_alerts(repo, cluster_id, plant_db)
-    return LearnResponse(cluster_name=cluster.name, report=report, alerts=alerts)
+    # contract: LearnResponse.alerts validates the alert dicts into AlertResponse.
+    return LearnResponse(cluster_name=cluster.name, report=report, alerts=alerts)  # type: ignore[arg-type]
 
 
 @router.get("/clusters/{cluster_id}/history", response_model=HistoryResponse)
@@ -353,37 +359,9 @@ def stats_export(cluster_id: int, repo: RepoDep, days: int = Query(default=7, ge
         HTTPException: 404 if the cluster does not exist.
     """
     cluster = require_cluster(repo, cluster_id)
-
-    import csv
-    import io
-
-    from greenhouse_core.utils import format_timestamp
-
-    output = io.StringIO()
-    writer = csv.writer(output)
-    writer.writerow(["timestamp", "date", "time", "irrigator", "action", "duration_minutes", "triggered_by", "notes"])
-    irrigator = repo.get_irrigator_for_cluster(cluster_id)
-    if irrigator is not None:
-        events = repo.get_recent_events(irrigator.id, hours=days * 24)
-        for event in events:
-            ts_str = format_timestamp(event.timestamp)
-            date, _, time_part = ts_str.partition(" ")
-            writer.writerow(
-                [
-                    event.timestamp,
-                    date,
-                    time_part,
-                    irrigator.name,
-                    event.action,
-                    event.duration_minutes or "",
-                    event.triggered_by,
-                    event.notes or "",
-                ]
-            )
-
-    output.seek(0)
+    csv_text = cluster_events_csv(repo, cluster_id, days=days)
     return StreamingResponse(
-        iter([output.getvalue()]),
+        iter([csv_text]),
         media_type="text/csv",
         headers={"Content-Disposition": f"attachment; filename=cluster_{cluster.id}_stats.csv"},
     )

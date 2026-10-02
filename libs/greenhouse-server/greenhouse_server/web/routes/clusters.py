@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import time
+from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -18,6 +19,11 @@ from greenhouse_server.services.charts import (
 )
 from greenhouse_server.web.context import base_context
 from greenhouse_server.web.templating import templates
+from greenhouse_server.web.weekdays import WEEKDAY_BITS, WEEKDAY_LABELS, format_weekday_mask
+
+if TYPE_CHECKING:
+    from greenhouse_core.plant_db import PlantDatabase
+    from greenhouse_core.repository import IrrigationRepository
 
 _EMPTY_RATIONALE: list[dict] = []
 
@@ -89,19 +95,53 @@ def delete_cluster(cluster_id: int, repo: RepoDep):
     return HTMLResponse("")
 
 
-_WEEKDAY_BITS: tuple[int, ...] = (1, 2, 4, 8, 16, 32, 64)
-_WEEKDAY_LABELS: tuple[str, ...] = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
-_FULL_WEEKDAY_MASK = 127
-
-
-def _format_weekday_mask(mask: int) -> str:
-    if mask & _FULL_WEEKDAY_MASK == _FULL_WEEKDAY_MASK:
-        return "Every day"
-    return ", ".join(label for bit, label in zip(_WEEKDAY_BITS, _WEEKDAY_LABELS, strict=True) if mask & bit)
-
-
-def _plants_by_id(repo, cluster_id: int) -> dict[int, object]:
+def _plants_by_id(repo: IrrigationRepository, cluster_id: int) -> dict[int, object]:
     return {p.id: p for p in repo.get_plants_in_cluster(cluster_id)}
+
+
+def _cluster_chart_payloads(
+    repo: IrrigationRepository, plant_db: PlantDatabase, cluster_id: int, hours: int
+) -> tuple[dict[str, str], dict[str, Any]]:
+    """Pre-build every metric's chart payload (as JSON) so charts render on first page load.
+
+    Also returns each metric's threshold, which the stat tiles reuse for the range indicator.
+    """
+    chart_payloads = {
+        metric: build_cluster_chart_payload(repo, plant_db, cluster_id, hours, metric)  # type: ignore[arg-type]
+        for metric in CLUSTER_METRICS
+    }
+    chart_payloads_json = {metric: json.dumps(payload) for metric, payload in chart_payloads.items()}
+    chart_thresholds = {metric: payload.get("threshold", {}) for metric, payload in chart_payloads.items()}
+    return chart_payloads_json, chart_thresholds
+
+
+def _rationale_reasons(repo: IrrigationRepository, cluster_id: int) -> list[dict[str, Any]]:
+    """Decoded ``reasons[]`` of the latest persisted DecisionLog (the shared empty list when none decode)."""
+    rationale_reasons: list[dict[str, Any]] = _EMPTY_RATIONALE
+    logs = repo.list_decision_logs(cluster_id, limit=1)
+    if logs:
+        log = logs[0]
+        try:
+            payload = json.loads(log.payload_json)
+            rationale_reasons = payload.get("reasons", [])
+        except (json.JSONDecodeError, TypeError):
+            rationale_reasons = _EMPTY_RATIONALE
+    return rationale_reasons
+
+
+def _window_rows(repo: IrrigationRepository, cluster_id: int) -> list[dict[str, Any]]:
+    """The cluster's irrigation windows as template rows, each with its weekday label."""
+    return [
+        {
+            "id": w.id,
+            "start_hour": w.start_hour,
+            "end_hour": w.end_hour,
+            "weekday_mask": w.weekday_mask,
+            "weekday_label": format_weekday_mask(w.weekday_mask),
+            "label": w.label,
+        }
+        for w in repo.list_irrigation_windows(cluster_id)
+    ]
 
 
 @router.get("/clusters/{cluster_id}")
@@ -117,44 +157,15 @@ def cluster_detail(
     if status is None:
         raise HTTPException(404, "Cluster not found")
 
-    # Pre-build chart payloads so charts render on first page load
-    chart_payloads = {
-        metric: build_cluster_chart_payload(repo, plant_db, cluster_id, hours, metric)  # type: ignore[arg-type]
-        for metric in CLUSTER_METRICS
-    }
-    chart_payloads_json = {metric: json.dumps(payload) for metric, payload in chart_payloads.items()}
-    # Threshold per metric is reused by stat tiles to render the range indicator.
-    chart_thresholds = {metric: payload.get("threshold", {}) for metric, payload in chart_payloads.items()}
-
-    # Decision rationale: latest persisted DecisionLog with decoded reasons[]
-    rationale_reasons: list[dict] = _EMPTY_RATIONALE
-    logs = repo.list_decision_logs(cluster_id, limit=1)
-    if logs:
-        log = logs[0]
-        try:
-            payload = json.loads(log.payload_json)
-            rationale_reasons = payload.get("reasons", [])
-        except (json.JSONDecodeError, TypeError):
-            rationale_reasons = _EMPTY_RATIONALE
-
+    chart_payloads_json, chart_thresholds = _cluster_chart_payloads(repo, plant_db, cluster_id, hours)
+    rationale_reasons = _rationale_reasons(repo, cluster_id)
     # Inline-config section data: the declared row (nullable per-field
     # overrides) plus the effective resolved view used by the engine. Both
     # shapes feed ``partials/_config_field.html`` so it can render the
     # current value next to its source badge.
     declared_config = repo.get_irrigation_config(cluster_id)
-    effective_config = repo.get_effective_config(cluster_id)
-    windows = [
-        {
-            "id": w.id,
-            "start_hour": w.start_hour,
-            "end_hour": w.end_hour,
-            "weekday_mask": w.weekday_mask,
-            "weekday_label": _format_weekday_mask(w.weekday_mask),
-            "label": w.label,
-        }
-        for w in repo.list_irrigation_windows(cluster_id)
-    ]
-
+    effective_config: dict[str, dict[str, Any]] = repo.get_effective_config(cluster_id)
+    windows = _window_rows(repo, cluster_id)
     # Sensor → plant lookup so the inline #sensors table can render the
     # plant↔sensor relationship with the ``↳`` glyph without extra queries.
     plants_by_id = _plants_by_id(repo, cluster_id)
@@ -194,8 +205,8 @@ def cluster_detail(
             declared_config=declared_config,
             effective_config=effective_config,
             windows=windows,
-            weekday_bits=_WEEKDAY_BITS,
-            weekday_labels=_WEEKDAY_LABELS,
+            weekday_bits=WEEKDAY_BITS,
+            weekday_labels=WEEKDAY_LABELS,
             plants_by_id=plants_by_id,
             quiet_active_now=quiet_active_now,
         ),

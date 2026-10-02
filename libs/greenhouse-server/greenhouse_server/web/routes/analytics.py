@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-import csv
-import io
+from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 
 from greenhouse_core.stats import get_irrigation_stats
-from greenhouse_core.utils import format_timestamp
 from greenhouse_server.deps import (
     ClusterServiceDep,
     DeviceRegistryDep,
@@ -29,10 +27,14 @@ from greenhouse_server.scheduler import (
 )
 from greenhouse_server.scheduler import scheduler as bg_scheduler
 from greenhouse_server.services.bulk import stop_all_irrigators
+from greenhouse_server.services.cluster import cluster_events_csv
 from greenhouse_server.services.forecast import ForecastService
 from greenhouse_server.services.insights import InsightsService
 from greenhouse_server.web.context import base_context
 from greenhouse_server.web.templating import templates
+
+if TYPE_CHECKING:
+    from greenhouse_core.repository import IrrigationRepository
 
 router = APIRouter(include_in_schema=False)
 
@@ -78,29 +80,9 @@ def cluster_stats_export(
     days: int = Query(default=7, ge=1),
 ):
     cluster = require_cluster(repo, cluster_id)
-    output = io.StringIO()
-    writer = csv.writer(output)
-    writer.writerow(["timestamp", "date", "time", "irrigator", "action", "duration_minutes", "triggered_by", "notes"])
-    irrigator = repo.get_irrigator_for_cluster(cluster_id)
-    if irrigator is not None:
-        for event in repo.get_recent_events(irrigator.id, hours=days * 24):
-            ts_str = format_timestamp(event.timestamp)
-            date, _, time_part = ts_str.partition(" ")
-            writer.writerow(
-                [
-                    event.timestamp,
-                    date,
-                    time_part,
-                    irrigator.name,
-                    event.action,
-                    event.duration_minutes or "",
-                    event.triggered_by,
-                    event.notes or "",
-                ]
-            )
-    output.seek(0)
+    csv_text = cluster_events_csv(repo, cluster_id, days=days)
     return StreamingResponse(
-        iter([output.getvalue()]),
+        iter([csv_text]),
         media_type="text/csv",
         headers={"Content-Disposition": f"attachment; filename=cluster_{cluster.id}_stats.csv"},
     )
@@ -164,7 +146,7 @@ def scheduler_delete_job(request: Request, job_id: str):
     return HTMLResponse("")
 
 
-def _set_check_all_paused_web(repo, paused: bool) -> RedirectResponse:
+def _set_check_all_paused_web(repo: IrrigationRepository, paused: bool) -> RedirectResponse:
     # Same code path as POST /api/v1/scheduler/{pause,resume}: works (and
     # persists the preference) whether or not the scheduler is running.
     try:

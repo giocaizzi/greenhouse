@@ -4,8 +4,15 @@ from __future__ import annotations
 
 import time
 from importlib.metadata import PackageNotFoundError, version
+from typing import TYPE_CHECKING, Any
 
 from fastapi import Request
+
+if TYPE_CHECKING:
+    from sqlalchemy.orm import Session
+
+    from greenhouse_core.models import VacationWindow
+    from greenhouse_core.repository import IrrigationRepository
 
 
 def _app_version() -> str:
@@ -22,7 +29,7 @@ def is_hx(request: Request) -> bool:
     return request.headers.get("HX-Request", "").lower() == "true"
 
 
-def _repo_from_request(request: Request):
+def _repo_from_request(request: Request) -> tuple[IrrigationRepository, Session] | tuple[None, None]:
     """Resolve an IrrigationRepository from request.app.state, or None."""
     try:
         from greenhouse_core.repository import IrrigationRepository
@@ -34,7 +41,12 @@ def _repo_from_request(request: Request):
         return None, None
 
 
-def base_context(request: Request, **extra) -> dict:
+def _preference_flags(request: Request) -> tuple[bool, VacationWindow | None, bool, str]:
+    """Read the chrome's preference flags: ``(dry_run_global, active_vacation, scheduler_paused, theme)``.
+
+    Best effort: a failed read keeps whatever was read before it (defaults otherwise), and the
+    short-lived session is always closed.
+    """
     repo, session = _repo_from_request(request)
     dry_run_global = False
     active_vacation = None
@@ -53,15 +65,24 @@ def base_context(request: Request, **extra) -> dict:
         except Exception:
             pass
         finally:
-            session.close()
+            # contract: target §3.6 keeps this close; _repo_from_request sets repo and session together.
+            session.close()  # type: ignore[union-attr]
+    return dry_run_global, active_vacation, scheduler_paused, theme
 
-    # auth_enabled is read off app.state so the topbar can hide the Sign out
-    # button when running in the no-auth dev mode.
+
+def _auth_enabled(request: Request) -> bool:
+    """Whether auth is on; read off app.state so the topbar can hide Sign out in the no-auth dev mode."""
     auth_enabled = True
     try:
         auth_enabled = bool(request.app.state.settings.auth_enabled)
     except AttributeError:
         pass
+    return auth_enabled
+
+
+def base_context(request: Request, **extra: Any) -> dict[str, Any]:
+    dry_run_global, active_vacation, scheduler_paused, theme = _preference_flags(request)
+    auth_enabled = _auth_enabled(request)
 
     return {
         "request": request,

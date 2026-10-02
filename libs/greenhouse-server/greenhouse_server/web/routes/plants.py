@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, Any
+
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from greenhouse_server.deps import RepoDep, require_cluster
 from greenhouse_server.web.context import base_context
 from greenhouse_server.web.templating import templates
+
+if TYPE_CHECKING:
+    from greenhouse_core.models import Plant
+    from greenhouse_core.repository import IrrigationRepository
 
 router = APIRouter(include_in_schema=False)
 
@@ -18,7 +24,33 @@ def _opt_float(value: str | None) -> float | None:
     return float(value)
 
 
-def _get_plant_in_cluster(repo, cluster_id: int, plant_id: int):
+def _plant_form_fields(
+    *,
+    species: str,
+    category: str,
+    water_needs: str,
+    light_needs: str,
+    ideal_temp_min: str,
+    ideal_temp_max: str,
+    ideal_humidity_min: str,
+    ideal_humidity_max: str,
+    notes: str,
+) -> dict[str, Any]:
+    """Map the plant form (create and edit share it) to repository fields: blank → None, bounds → float."""
+    return {
+        "species": species,
+        "category": category or None,
+        "water_needs": water_needs or None,
+        "light_needs": light_needs or None,
+        "ideal_temp_min": _opt_float(ideal_temp_min),
+        "ideal_temp_max": _opt_float(ideal_temp_max),
+        "ideal_humidity_min": _opt_float(ideal_humidity_min),
+        "ideal_humidity_max": _opt_float(ideal_humidity_max),
+        "notes": notes or None,
+    }
+
+
+def _get_plant_in_cluster(repo: IrrigationRepository, cluster_id: int, plant_id: int) -> Plant:
     plant = repo.get_plant(plant_id)
     if not plant or plant.cluster_id != cluster_id:
         raise HTTPException(404, "Plant not found in cluster")
@@ -58,15 +90,17 @@ def create_plant(
     require_cluster(repo, cluster_id)
     repo.add_plant(
         cluster_id=cluster_id,
-        species=species,
-        category=category or None,
-        water_needs=water_needs or None,
-        light_needs=light_needs or None,
-        ideal_temp_min=_opt_float(ideal_temp_min),
-        ideal_temp_max=_opt_float(ideal_temp_max),
-        ideal_humidity_min=_opt_float(ideal_humidity_min),
-        ideal_humidity_max=_opt_float(ideal_humidity_max),
-        notes=notes or None,
+        **_plant_form_fields(
+            species=species,
+            category=category,
+            water_needs=water_needs,
+            light_needs=light_needs,
+            ideal_temp_min=ideal_temp_min,
+            ideal_temp_max=ideal_temp_max,
+            ideal_humidity_min=ideal_humidity_min,
+            ideal_humidity_max=ideal_humidity_max,
+            notes=notes,
+        ),
     )
     repo.session.commit()
     return RedirectResponse(url=f"/clusters/{cluster_id}#plants", status_code=303)
@@ -98,15 +132,17 @@ def update_plant(
     _get_plant_in_cluster(repo, cluster_id, plant_id)
     repo.update_plant(
         plant_id,
-        species=species,
-        category=category or None,
-        water_needs=water_needs or None,
-        light_needs=light_needs or None,
-        ideal_temp_min=_opt_float(ideal_temp_min),
-        ideal_temp_max=_opt_float(ideal_temp_max),
-        ideal_humidity_min=_opt_float(ideal_humidity_min),
-        ideal_humidity_max=_opt_float(ideal_humidity_max),
-        notes=notes or None,
+        **_plant_form_fields(
+            species=species,
+            category=category,
+            water_needs=water_needs,
+            light_needs=light_needs,
+            ideal_temp_min=ideal_temp_min,
+            ideal_temp_max=ideal_temp_max,
+            ideal_humidity_min=ideal_humidity_min,
+            ideal_humidity_max=ideal_humidity_max,
+            notes=notes,
+        ),
     )
     repo.session.commit()
     return RedirectResponse(url=f"/clusters/{cluster_id}#plants", status_code=303)

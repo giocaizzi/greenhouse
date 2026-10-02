@@ -10,18 +10,6 @@ from greenhouse_server.deps import RepoDep, require_cluster
 router = APIRouter(include_in_schema=False)
 
 
-_WEEKDAY_BITS: tuple[int, ...] = (1, 2, 4, 8, 16, 32, 64)
-_WEEKDAY_LABELS: tuple[str, ...] = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
-_FULL_MASK = 127
-
-
-def _format_weekday_mask(mask: int) -> str:
-    """Render a weekday bitmask as a human label (e.g. 'Mon, Wed, Fri')."""
-    if mask & _FULL_MASK == _FULL_MASK:
-        return "Every day"
-    return ", ".join(label for bit, label in zip(_WEEKDAY_BITS, _WEEKDAY_LABELS, strict=True) if mask & bit)
-
-
 @router.get("/clusters/{cluster_id}/config")
 def config_form(cluster_id: int, repo: RepoDep):
     """Legacy URL — config is now rendered inline on the unified cluster

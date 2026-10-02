@@ -1,13 +1,24 @@
 """Cluster status and history services."""
 
+import csv
+import io
 import time
+from typing import TYPE_CHECKING, Any
 
 from greenhouse_core.logic import IrrigationDecision, IrrigationLogic
 from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_core.repository import IrrigationRepository
+from greenhouse_core.utils import format_timestamp
+
+if TYPE_CHECKING:
+    from greenhouse_core.models import Irrigator, Plant, Sensor
 
 
-def decision_to_view(decision: IrrigationDecision) -> dict:
+class PlantNotFoundError(LookupError):
+    """Raised by ``ClusterService.sync_plants`` when no cluster lists the requested plant id."""
+
+
+def decision_to_view(decision: IrrigationDecision) -> dict[str, Any]:
     """Render a decision for templates and JSON responses.
 
     Templates and the legacy JSON shape consume the decision via dict
@@ -20,6 +31,37 @@ def decision_to_view(decision: IrrigationDecision) -> dict:
     return payload
 
 
+def cluster_events_csv(repo: IrrigationRepository, cluster_id: int, *, days: int) -> str:
+    """Render a cluster's recent irrigation events as CSV text.
+
+    The API and web CSV exports share it so both downloads keep one column layout.
+    """
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["timestamp", "date", "time", "irrigator", "action", "duration_minutes", "triggered_by", "notes"])
+    irrigator = repo.get_irrigator_for_cluster(cluster_id)
+    if irrigator is not None:
+        events = repo.get_recent_events(irrigator.id, hours=days * 24)
+        for event in events:
+            ts_str = format_timestamp(event.timestamp)
+            date, _, time_part = ts_str.partition(" ")
+            writer.writerow(
+                [
+                    event.timestamp,
+                    date,
+                    time_part,
+                    irrigator.name,
+                    event.action,
+                    event.duration_minutes or "",
+                    event.triggered_by,
+                    event.notes or "",
+                ]
+            )
+
+    output.seek(0)
+    return output.getvalue()
+
+
 class ClusterService:
     """Cluster status, history, and plant DB sync operations."""
 
@@ -27,7 +69,7 @@ class ClusterService:
         self._repo = repo
         self._plant_db = plant_db
 
-    def get_cluster_status(self, cluster_id: int) -> dict | None:
+    def get_cluster_status(self, cluster_id: int) -> dict[str, Any] | None:
         """Full cluster status: config, plants, sensors, irrigators, smart decision."""
         cluster = self._repo.get_cluster(cluster_id)
         if not cluster:
@@ -37,6 +79,24 @@ class ClusterService:
         plants = self._repo.get_plants_in_cluster(cluster_id)
         sensors = self._repo.get_sensors_in_cluster(cluster_id)
         irrigator = self._repo.get_irrigator_for_cluster(cluster_id)
+        sensor_data = self._sensor_status_rows(sensors)
+        irrigator_data = self._irrigator_status(irrigator)
+
+        logic = IrrigationLogic(self._repo, self._plant_db)
+        decision = logic.decide_for_cluster(cluster_id)  # no weather_client: status snapshot stays fast
+        decision_dict = decision_to_view(decision) if decision else None
+
+        return {
+            "cluster": cluster,
+            "config": config,
+            "plants": plants,
+            "sensors": sensor_data,
+            "irrigator": irrigator_data,
+            "decision": decision_dict,
+        }
+
+    def _sensor_status_rows(self, sensors: "list[Sensor]") -> list[dict[str, Any]]:
+        """One status row per sensor: its newest reading (24 h) and that reading's age."""
         now = int(time.time())
 
         sensor_data = []
@@ -54,7 +114,10 @@ class ClusterService:
                     "reading_age_seconds": age,
                 }
             )
+        return sensor_data
 
+    def _irrigator_status(self, irrigator: "Irrigator | None") -> dict[str, Any] | None:
+        """The irrigator's status dict (48 h event count, newest event, capacity), or ``None``."""
         irrigator_data = None
         if irrigator is not None:
             events = self._repo.get_recent_events(irrigator.id, hours=48)
@@ -70,21 +133,9 @@ class ClusterService:
                 "reservoir_l": irrigator.reservoir_l,
                 "flow_rate_l_per_min": irrigator.flow_rate_l_per_min,
             }
+        return irrigator_data
 
-        logic = IrrigationLogic(self._repo, self._plant_db)
-        decision = logic.decide_for_cluster(cluster_id)  # no weather_client: status snapshot stays fast
-        decision_dict = decision_to_view(decision) if decision else None
-
-        return {
-            "cluster": cluster,
-            "config": config,
-            "plants": plants,
-            "sensors": sensor_data,
-            "irrigator": irrigator_data,
-            "decision": decision_dict,
-        }
-
-    def get_cluster_history(self, cluster_id: int, hours: int = 24, limit: int = 50) -> dict | None:
+    def get_cluster_history(self, cluster_id: int, hours: int = 24, limit: int = 50) -> dict[str, Any] | None:
         """Get sensor readings + irrigation events for a cluster."""
         cluster = self._repo.get_cluster(cluster_id)
         if not cluster:
@@ -120,7 +171,54 @@ class ClusterService:
             "irrigators": irrigator_histories,
         }
 
-    def sync_plant_with_db(self, plant) -> None:
+    def sync_plants(self, *, plant_id: int | None, cluster_id: int | None) -> tuple[int, list[str]]:
+        """Refresh care data for one plant, one cluster or every cluster; return ``(synced, errors)``.
+
+        Shared by the API and web plant-DB sync. A truthy ``plant_id`` wins and its failure
+        propagates; otherwise per-plant failures are collected and the run continues. The
+        caller commits.
+
+        Raises:
+            PlantNotFoundError: ``plant_id`` is set and no cluster lists that plant.
+        """
+        if plant_id:
+            plant = self._find_plant_in_clusters(plant_id)
+            if not plant:
+                raise PlantNotFoundError(plant_id)
+            self.sync_plant_with_db(plant)
+            return 1, []
+        return self._sync_cluster_plants(cluster_id)
+
+    def _find_plant_in_clusters(self, plant_id: int) -> "Plant | None":
+        """Scan every cluster's plants (not ``get_plant``: an orphan plant must stay "not found")."""
+        clusters = self._repo.list_clusters()
+        plant = None
+        for cluster in clusters:
+            for p in self._repo.get_plants_in_cluster(cluster.id):
+                if p.id == plant_id:
+                    plant = p
+                    break
+            if plant:
+                break
+        return plant
+
+    def _sync_cluster_plants(self, cluster_id: int | None) -> tuple[int, list[str]]:
+        """Sync every plant of one cluster (or of all clusters), collecting per-plant errors."""
+        errors: list[str] = []
+        synced = 0
+        clusters = [self._repo.get_cluster(cluster_id)] if cluster_id else self._repo.list_clusters()
+        for cluster in clusters:
+            if not cluster:
+                continue
+            for plant in self._repo.get_plants_in_cluster(cluster.id):
+                try:
+                    self.sync_plant_with_db(plant)
+                    synced += 1
+                except Exception as e:
+                    errors.append(f"{plant.species}: {e}")
+        return synced, errors
+
+    def sync_plant_with_db(self, plant: "Plant") -> None:
         """Update a single plant with evidence-based care data."""
         care_data = self._plant_db.get_care_data(species=plant.species, category=plant.category)
         plant.water_needs = care_data.get("water_needs")
