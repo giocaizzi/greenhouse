@@ -2,3 +2,8 @@
 # Initially empty: no flakiness was reproduced in 2 full Gate 1 runs + 6 targeted TUI runs.
 # (2026-10-01) The two temporary TUI entries were removed after the TUI hardening commit (second reviewer: APPROVE,
 # 4/4 production mutations still caught; 16/16 green under artificial load). List is empty again.
+# (2026-10-02, WP3 integration) Evidence for criterion (b): WP3's T3.2 saw a column-width diff in the search table
+# render; the identical command failed the same way on the parent commit 11c2eb6 with the change stashed. WP0 saw it
+# on refactor-gate1 too. Same race class as the alerts table widths fixed in 7b73582, not reproduced by that agent.
+# Follow-up: a targeted test-side fix is queued with wave C (TUI).
+tests/cli/test_contract_tui_screens.py::test_screen_render_golden[search_citrus]
