@@ -5,7 +5,6 @@ from dataclasses import dataclass
 from typing import Any
 
 from greenhouse_core.constants import (
-    DEFAULT_SOIL_MOISTURE_TARGET,
     FORECAST_CONFIDENCE_HIGH,
     FORECAST_CONFIDENCE_LOW,
     FORECAST_CONFIDENCE_MEDIUM,
@@ -16,7 +15,7 @@ from greenhouse_core.constants import (
 )
 from greenhouse_core.learning import IrrigationLearner
 from greenhouse_core.logic.cleaning import clean_readings_desc
-from greenhouse_core.logic.plant_needs import parse_moisture_target
+from greenhouse_core.logic.plant_needs import moisture_target_range
 from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_core.schemas import ForecastResponse
@@ -73,7 +72,7 @@ class ForecastService:
                 species=plant.species if plant else None,
                 category=plant.category if plant else None,
             )
-            target_min, _ = parse_moisture_target(care.get("soil_moisture_target", DEFAULT_SOIL_MOISTURE_TARGET))
+            target_min, _ = moisture_target_range(care)
 
             profile = learner.get_plant_profile(sensor)
             has_profile = profile is not None

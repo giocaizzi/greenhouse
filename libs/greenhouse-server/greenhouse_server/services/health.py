@@ -4,10 +4,10 @@ import time
 from datetime import UTC, datetime
 from typing import Any
 
-from greenhouse_core.constants import DEFAULT_SOIL_MOISTURE_TARGET, HEALTH_SCORE_WINDOW_DAYS
+from greenhouse_core.constants import HEALTH_SCORE_WINDOW_DAYS
 from greenhouse_core.learning.profiling import get_plant_profile
 from greenhouse_core.logic.cleaning import clean_readings
-from greenhouse_core.logic.plant_needs import parse_moisture_target
+from greenhouse_core.logic.plant_needs import moisture_target_range
 from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_core.repository import IrrigationRepository
 
@@ -51,7 +51,7 @@ class PlantHealthService:
 
         care = self._plant_db.get_care_data(species=plant.species, category=plant.category)
 
-        soil_min, soil_max = parse_moisture_target(care.get("soil_moisture_target", DEFAULT_SOIL_MOISTURE_TARGET))
+        soil_min, soil_max = moisture_target_range(care)
         temp_min = care.get("ideal_temp_min_c")
         temp_max = care.get("ideal_temp_max_c")
         hum_min = care.get("ideal_humidity_min")
