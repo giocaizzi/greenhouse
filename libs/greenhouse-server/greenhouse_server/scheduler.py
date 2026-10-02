@@ -2,6 +2,7 @@
 
 import logging
 import threading
+from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from apscheduler.jobstores.base import JobLookupError
@@ -12,6 +13,12 @@ from greenhouse_core.constants import HEALTH_POLL_IDLE_MINUTES
 from greenhouse_core.devices import DeviceGateway
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.config import Settings
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from apscheduler.job import Job
+    from starlette.requests import Request
 
 logger = logging.getLogger(__name__)
 
@@ -88,7 +95,7 @@ class JobNotRegisteredError(LookupError):
     """Raised when the job an operation targets is not registered."""
 
 
-def _add_core_job(func, trigger: str, *, id: str, name: str, **trigger_args) -> None:
+def _add_core_job(func: "Callable[[], None]", trigger: str, *, id: str, name: str, **trigger_args: Any) -> None:
     """Register (or replace) a built-in job and mark its id as core."""
     _CORE_JOB_IDS.add(id)
     scheduler.add_job(func, trigger, id=id, name=name, replace_existing=True, **trigger_args)
@@ -249,7 +256,7 @@ def reschedule_for_timezone(tz_name: str | None, settings: Settings) -> None:
         apply_persisted_pause(True)
 
 
-def apply_timezone_preference(request, tz_name: str | None) -> None:
+def apply_timezone_preference(request: "Request", tz_name: str | None) -> None:
     """Re-sync every clock to ``UserPreferences.timezone`` after it changes.
 
     Keeps the three formerly-competing clocks in lockstep with the engine:
@@ -298,8 +305,8 @@ def _sync_job() -> None:
         logger.debug("Sync job skipped: no Tuya credentials")
         return
 
-    registry = getattr(_app.state, "device_registry", None)
-    session = _app.state.session_factory()
+    registry = getattr(_app.state, "device_registry", None)  # type: ignore[union-attr]  # None _app escapes as AttributeError (pinned)
+    session = _app.state.session_factory()  # type: ignore[union-attr]  # None _app escapes as AttributeError (pinned)
     try:
         repo = IrrigationRepository(session)
         sync_svc = SyncService(repo, registry, cloud)
@@ -316,12 +323,12 @@ def _health_snapshot_job() -> None:
     """Background job: compute and persist daily plant health snapshots."""
     from greenhouse_server.services.health import PlantHealthService
 
-    session = _app.state.session_factory()
+    session = _app.state.session_factory()  # type: ignore[union-attr]  # None _app escapes as AttributeError (pinned)
     try:
         from greenhouse_core.repository import IrrigationRepository
 
         repo = IrrigationRepository(session)
-        svc = PlantHealthService(repo, _app.state.plant_db)
+        svc = PlantHealthService(repo, _app.state.plant_db)  # type: ignore[union-attr]  # None _app escapes as AttributeError (pinned)
         svc.snapshot_daily()
         session.commit()
     except Exception:
@@ -337,23 +344,23 @@ def _check_job() -> None:
     from greenhouse_server.services.sync import SyncService
 
     cloud = _get_cloud()
-    registry = getattr(_app.state, "device_registry", None)
+    registry = getattr(_app.state, "device_registry", None)  # type: ignore[union-attr]  # None _app escapes as AttributeError (pinned)
 
-    session = _app.state.session_factory()
+    session = _app.state.session_factory()  # type: ignore[union-attr]  # None _app escapes as AttributeError (pinned)
     try:
         repo = IrrigationRepository(session)
         sync_svc = SyncService(repo, registry, cloud)
-        monitor = getattr(_app.state, "health_monitor", None)
+        monitor = getattr(_app.state, "health_monitor", None)  # type: ignore[union-attr]  # None _app escapes as AttributeError (pinned)
         if monitor is not None:
             monitor.bind_repo(repo)
         irrigation_svc = IrrigationService(
             repo=repo,
             registry=registry,
             sync_service=sync_svc,
-            weather_client=_app.state.weather_client,
-            plant_db=_app.state.plant_db,
+            weather_client=_app.state.weather_client,  # type: ignore[union-attr]  # None _app escapes as AttributeError (pinned)
+            plant_db=_app.state.plant_db,  # type: ignore[union-attr]  # None _app escapes as AttributeError (pinned)
             health_monitor=monitor,
-            notifier=getattr(_app.state, "ntfy_notifier", None),
+            notifier=getattr(_app.state, "ntfy_notifier", None),  # type: ignore[union-attr]  # None _app escapes as AttributeError (pinned)
         )
         irrigation_svc.check_all_clusters()
         session.commit()
@@ -368,10 +375,10 @@ def _anomaly_job() -> None:
     """Background job: scan all sensors for staleness and drift anomalies."""
     from greenhouse_server.services.anomaly import SensorAnomalyService
 
-    session = _app.state.session_factory()
+    session = _app.state.session_factory()  # type: ignore[union-attr]  # None _app escapes as AttributeError (pinned)
     try:
         repo = IrrigationRepository(session)
-        SensorAnomalyService(repo, notifier=getattr(_app.state, "ntfy_notifier", None)).scan()
+        SensorAnomalyService(repo, notifier=getattr(_app.state, "ntfy_notifier", None)).scan()  # type: ignore[union-attr]  # None _app escapes as AttributeError (pinned)
         session.commit()
     except Exception:
         session.rollback()
@@ -446,7 +453,7 @@ def init_health_monitor(app: FastAPI, settings: Settings) -> None:
 CHECK_ALL_JOB_ID = "check_all"
 
 
-def _is_paused(job) -> bool:
+def _is_paused(job: "Job") -> bool:
     """True only when ``job`` was explicitly paused.
 
     APScheduler pauses a job by setting ``next_run_time`` to ``None``. A job
@@ -459,7 +466,7 @@ def _is_paused(job) -> bool:
     return hasattr(job, "next_run_time") and job.next_run_time is None
 
 
-def get_jobs() -> list[dict]:
+def get_jobs() -> list[dict[str, Any]]:
     """List all registered jobs.
 
     ``paused`` is True only for an explicitly paused job (only ``check_all``
