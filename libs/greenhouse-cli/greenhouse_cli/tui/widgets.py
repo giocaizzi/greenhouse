@@ -208,14 +208,11 @@ class MetricChart(PlotextPlot):
         for edge in ("min", "max"):
             if threshold.get(edge) is not None:
                 plt.hline(threshold[edge], "green")
-        for event in (payload or {}).get("events", []):
-            if event.get("action") == "start":
-                plt.vline((event["timestamp"] - reference) / 3600, "blue")
+        self._draw_event_lines((payload or {}).get("events", []), reference)
         plt.xlim(-hours, 0)
         if metric in ("soil_moisture", "env_humidity"):
             plt.ylim(0, 100)
-        ticks = [-hours + hours * i / 4 for i in range(5)]
-        plt.xticks(ticks, [fmt.clock(reference + t * 3600, with_date=hours > 24) for t in ticks])
+        self._set_x_ticks(hours, reference)
         if not plotted:
             plt.title(f"{label} — no readings in the last {hours}h")
         self.refresh()
@@ -240,17 +237,25 @@ class MetricChart(PlotextPlot):
                 color=colors.get(dataset["metric"], "white"),
             )
             plotted = True
-        for event in (payload or {}).get("events", []):
-            if event.get("action") == "start":
-                plt.vline((event["timestamp"] - reference) / 3600, "blue")
+        self._draw_event_lines((payload or {}).get("events", []), reference)
         plt.title(
             f"Soil · humidity · light, normalised — last {hours}h" if plotted else f"No data in the last {hours}h"
         )
         plt.xlim(-hours, 0)
         plt.ylim(0, 100)
-        ticks = [-hours + hours * i / 4 for i in range(5)]
-        plt.xticks(ticks, [fmt.clock(reference + t * 3600, with_date=hours > 24) for t in ticks])
+        self._set_x_ticks(hours, reference)
         self.refresh()
+
+    def _draw_event_lines(self, events: list[dict[str, Any]], reference: int) -> None:
+        """Mark every irrigation ``start`` as a vertical line at its hour offset from ``reference``."""
+        for event in events:
+            if event.get("action") == "start":
+                self.plt.vline((event["timestamp"] - reference) / 3600, "blue")
+
+    def _set_x_ticks(self, hours: int, reference: int) -> None:
+        """Five evenly spaced wall-clock labels across the ``-hours … 0`` axis (with dates beyond one day)."""
+        ticks = [-hours + hours * i / 4 for i in range(5)]
+        self.plt.xticks(ticks, [fmt.clock(reference + t * 3600, with_date=hours > 24) for t in ticks])
 
     def show_timeline(self, payload: dict[str, Any] | None, title: str) -> None:
         """Plot a ``(timestamp, score)`` timeline such as plant health."""
