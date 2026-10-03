@@ -40,6 +40,7 @@ from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.services.alerts import raise_alert, sync_cluster_alerts
 from greenhouse_server.services.health_monitor import HEALTH_ALARM_TO_TRIGGER, DeviceHealthMonitor
+from greenhouse_server.services.jobs import job_session
 from greenhouse_server.services.maintenance import collect_learning_alerts, collect_maintenance_alerts
 from greenhouse_server.services.notify import NtfyClient, maybe_notify
 from greenhouse_server.services.sync import SyncService
@@ -189,8 +190,7 @@ def _run_pump_watcher(
     from greenhouse_core.repository import IrrigationRepository
     from greenhouse_server.services.pump_watcher import PumpWatcherService
 
-    session = app.state.session_factory()
-    try:
+    with job_session(app, logger, "Pump watcher job failed for irrigator %d", irrigator_id, commit=False) as session:
         repo = IrrigationRepository(session)
         irrigator = repo.get_irrigator(irrigator_id)
         if irrigator is None:
@@ -213,11 +213,6 @@ def _run_pump_watcher(
         if result["outcome"] == "interrupted":
             handle_watcher_interrupted(repo, registry, irrigator, triggered_by=triggered_by, started_at=started_at)
             session.commit()
-    except Exception:
-        session.rollback()
-        logger.exception("Pump watcher job failed for irrigator %d", irrigator_id)
-    finally:
-        session.close()
 
 
 def schedule_pump_watcher(
@@ -329,11 +324,8 @@ def _run_leak_check(cluster_id: int, started_at: int) -> None:
 
     if _app is None:
         return
-    # Own scaffolding, not services.jobs.job_session: the "already done" early return
-    # leaves its read-only transaction to close() (a failing ROLLBACK there escapes the job),
-    # which the context manager cannot express without changing that path.
-    session = _app.state.session_factory()
-    try:
+    # commit=False: the "already done" early return leaves its read-only transaction to close().
+    with job_session(_app, logger, "Leak check job failed for cluster %d", cluster_id, commit=False) as session:
         repo = IrrigationRepository(session)
         if _leak_check_done(repo, cluster_id, started_at):
             logger.debug("Leak check for cluster %d start %d already done", cluster_id, started_at)
@@ -355,11 +347,6 @@ def _run_leak_check(cluster_id: int, started_at: int) -> None:
             payload={"started_at": started_at, "flagged_sensor_ids": [a.entity_id for a in alerts]},
         )
         session.commit()
-    except Exception:
-        session.rollback()
-        logger.exception("Leak check job failed for cluster %d", cluster_id)
-    finally:
-        session.close()
 
 
 def _add_leak_check_job(cluster_id: int, started_at: int, *, run_at: int | None = None) -> None:
