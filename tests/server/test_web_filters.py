@@ -9,6 +9,7 @@ from greenhouse_server.web.filters import (
     moisture_badge,
     stat_position,
     strip_emoji,
+    time_ago,
 )
 
 
@@ -30,26 +31,48 @@ class TestStripEmoji:
         assert strip_emoji("") == ""
 
 
-class TestAgeSeconds:
+class TestTimeAgo:
+    """``time_ago`` takes a Unix timestamp."""
+
     def test_caps_absurd_age_as_stale(self):
         # Far in the past — old seed data must not render as "20567d ago"
-        assert age_seconds(0) == "stale"
+        assert time_ago(0) == "stale"
 
     def test_handles_none(self):
-        assert age_seconds(None) == "—"
+        assert time_ago(None) == "—"
 
     def test_recent_units(self):
         now = time.time()
-        assert age_seconds(now - 30).endswith("s ago")
-        assert age_seconds(now - 300).endswith("m ago")
-        assert age_seconds(now - 7200).endswith("h ago")
-        assert age_seconds(now - 2 * 86400).endswith("d ago")
+        assert time_ago(now - 30).endswith("s ago")
+        assert time_ago(now - 300).endswith("m ago")
+        assert time_ago(now - 7200).endswith("h ago")
+        assert time_ago(now - 2 * 86400).endswith("d ago")
 
     def test_seven_day_boundary(self):
         # Just under 7 days -> still d-ago; past it -> stale
         now = time.time()
-        assert age_seconds(now - (6 * 86400)).endswith("d ago")
-        assert age_seconds(now - (8 * 86400)) == "stale"
+        assert time_ago(now - (6 * 86400)).endswith("d ago")
+        assert time_ago(now - (8 * 86400)) == "stale"
+
+
+class TestAgeSeconds:
+    """``age_seconds`` takes an age in seconds (D18: it used to take a timestamp)."""
+
+    def test_formats_the_age_itself(self):
+        assert age_seconds(30) == "30s ago"
+        assert age_seconds(300) == "5m ago"
+        assert age_seconds(7200) == "2h ago"
+        assert age_seconds(2 * 86400) == "2d ago"
+
+    def test_handles_none(self):
+        assert age_seconds(None) == "—"
+
+    def test_seven_day_boundary(self):
+        assert age_seconds(6 * 86400) == "6d ago"
+        assert age_seconds(8 * 86400) == "stale"
+
+    def test_negative_age_reads_zero(self):
+        assert age_seconds(-5) == "0s ago"
 
 
 class TestStatPosition:

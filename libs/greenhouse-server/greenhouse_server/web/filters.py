@@ -27,18 +27,19 @@ def format_ts(ts: int | float | None, fmt: str = "%Y-%m-%d %H:%M") -> str:
     return format_timestamp(float(ts), fmt)
 
 
-def relative_age(
-    ts: int | float | None, *, missing: str = "—", stale_after: int | None = AGE_BADGE_STALE_SECONDS
+def format_age(
+    age: int | float | None, *, missing: str = "—", stale_after: int | None = AGE_BADGE_STALE_SECONDS
 ) -> str:
-    """The one "how long ago" formatter: ``Ns`` / ``Nm`` / ``Nh`` / ``Nd ago`` for a Unix timestamp.
+    """The one "how long ago" formatter: ``Ns`` / ``Nm`` / ``Nh`` / ``Nd ago`` for an age in seconds.
 
     ``missing`` is shown for ``None``; from ``stale_after`` seconds on the age reads
     "stale" (sensor freshness), or keeps counting days when ``stale_after`` is ``None``
-    (elapsed time, e.g. the plant dashboard's last watering).
+    (elapsed time, e.g. the plant dashboard's last watering). A negative age (clock
+    skew) reads as ``0s ago``.
     """
-    if ts is None:
+    if age is None:
         return missing
-    delta = max(0, int(time.time() - float(ts)))
+    delta = max(0, int(age))
     if delta < _SECONDS_PER_MINUTE:
         return f"{delta}s ago"
     if delta < SECONDS_PER_HOUR:
@@ -50,8 +51,25 @@ def relative_age(
     return "stale"
 
 
-def age_seconds(ts: int | float | None) -> str:
-    """Template filter: :func:`relative_age` with the freshness defaults ("—" when missing, "stale" from 7 days)."""
+def relative_age(
+    ts: int | float | None, *, missing: str = "—", stale_after: int | None = AGE_BADGE_STALE_SECONDS
+) -> str:
+    """:func:`format_age` of a Unix timestamp: how long ago ``ts`` was, from the wall clock."""
+    if ts is None:
+        return missing
+    return format_age(time.time() - float(ts), missing=missing, stale_after=stale_after)
+
+
+def age_seconds(age: int | float | None) -> str:
+    """Template filter for an **age in seconds**: :func:`format_age` with the freshness defaults.
+
+    "—" when missing, "stale" from 7 days. For a Unix timestamp use :func:`time_ago`.
+    """
+    return format_age(age)
+
+
+def time_ago(ts: int | float | None) -> str:
+    """Template filter for a **Unix timestamp**: :func:`relative_age` with the freshness defaults."""
     return relative_age(ts)
 
 
@@ -250,6 +268,7 @@ def cluster_caps(obj: Any) -> dict[str, Any]:
 ALL_FILTERS = {
     "format_ts": format_ts,
     "age_seconds": age_seconds,
+    "time_ago": time_ago,
     "moisture_badge": moisture_badge,
     "severity_class": severity_class,
     "decision_badge": decision_badge,

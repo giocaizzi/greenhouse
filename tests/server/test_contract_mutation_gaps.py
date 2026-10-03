@@ -34,7 +34,14 @@ from greenhouse_server.services.manual_control import ManualActionError, check_r
 from greenhouse_server.services.pump_watcher import PumpWatcherService
 from greenhouse_server.services.sync import SyncService
 from greenhouse_server.web.context import is_hx
-from greenhouse_server.web.filters import age_seconds, format_minutes, moisture_badge, severity_class, strip_emoji
+from greenhouse_server.web.filters import (
+    age_seconds,
+    format_minutes,
+    moisture_badge,
+    severity_class,
+    strip_emoji,
+    time_ago,
+)
 
 from .conftest import _make_stubbed_app
 
@@ -475,8 +482,12 @@ def test_leak_check_without_findings_writes_no_activity(db):
 
 @pytest.mark.parametrize(("age", "text"), [(59, "59s ago"), (60, "1m ago"), (3599, "59m ago"), (3600, "1h ago")])
 def test_age_seconds_unit_boundaries(frozen_clock, age, text):
-    """web-01: ``age_seconds`` switches unit at exactly 60 s / 3600 s (lower bound inclusive)."""
-    assert age_seconds(FROZEN_TS - age) == text
+    """web-01: the age formatter switches unit at exactly 60 s / 3600 s (lower bound inclusive).
+
+    D18: ``age_seconds`` takes the age itself; ``time_ago`` takes the timestamp.
+    """
+    assert age_seconds(age) == text
+    assert time_ago(FROZEN_TS - age) == text
 
 
 def test_template_filters_current_behavior():
