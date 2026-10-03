@@ -28,7 +28,7 @@ from greenhouse_cli.tui.screens.system import SystemScreen
 ClientFactory = Callable[[str | None], IrrigationClient]
 
 
-class GreenhouseApp(App):
+class GreenhouseApp(App[None]):
     """Full-screen terminal UI for a greenhouse server."""
 
     TITLE = "greenhouse"

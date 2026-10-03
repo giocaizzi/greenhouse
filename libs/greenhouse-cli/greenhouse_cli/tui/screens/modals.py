@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from textual.app import ComposeResult
 from textual.containers import Grid, Horizontal, Vertical
 from textual.screen import ModalScreen
@@ -35,7 +37,7 @@ class ConfirmScreen(ModalScreen[bool]):
         self.dismiss(event.button.id == "confirm")
 
 
-class IrrigateScreen(ModalScreen[dict | None]):
+class IrrigateScreen(ModalScreen[dict[str, Any] | None]):
     """Options for ``POST /clusters/{id}/irrigate`` — dry-run is the safe default."""
 
     BINDINGS = [("escape", "dismiss(None)", "Cancel")]

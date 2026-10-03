@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from greenhouse_cli.tui.app import GreenhouseApp
 
 
-class DataScreen(Screen):
+class DataScreen(Screen[Any]):
     """A screen that loads its content from the API and can auto-refresh."""
 
     AUTO_REFRESH = False
@@ -63,7 +63,7 @@ class DataScreen(Screen):
         self,
         title: str,
         fields: list[Field],
-        call: Callable[[dict], Callable[[IrrigationClient], Any]],
+        call: Callable[[dict[str, Any]], Callable[[IrrigationClient], Any]],
         done: str | Callable[[Any], str],
         submit_label: str = "Save",
         note: str | None = None,
@@ -79,7 +79,7 @@ class DataScreen(Screen):
             note: Optional help line under the title.
         """
 
-        def _after(values: dict | None) -> None:
+        def _after(values: dict[str, Any] | None) -> None:
             if values is not None:
                 self.run_worker(self.act(call(values), done), group="act")
 

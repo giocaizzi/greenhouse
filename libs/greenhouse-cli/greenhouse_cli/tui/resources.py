@@ -7,6 +7,8 @@ server value never gets rejected client-side.
 
 from __future__ import annotations
 
+from typing import Any
+
 from greenhouse_cli.constants import ALL_WEEKDAYS
 from greenhouse_cli.tui.screens.forms import Field
 
@@ -16,7 +18,7 @@ NEEDS = [(n, n) for n in ("low", "medium", "high")]
 MODES = [("smart", "smart"), ("schedule", "schedule"), ("manual", "manual")]
 
 
-def cluster_fields(cluster: dict | None = None) -> list[Field]:
+def cluster_fields(cluster: dict[str, Any] | None = None) -> list[Field]:
     c = cluster or {}
     return [
         Field("name", "Name", value=c.get("name"), required=True),
@@ -25,7 +27,7 @@ def cluster_fields(cluster: dict | None = None) -> list[Field]:
     ]
 
 
-def plant_fields(plant: dict | None = None) -> list[Field]:
+def plant_fields(plant: dict[str, Any] | None = None) -> list[Field]:
     p = plant or {}
     return [
         Field("species", "Species", value=p.get("species"), required=True, placeholder="Monstera deliciosa"),
@@ -40,7 +42,7 @@ def plant_fields(plant: dict | None = None) -> list[Field]:
     ]
 
 
-def sensor_fields(sensor: dict | None = None, plants: list[dict] | None = None) -> list[Field]:
+def sensor_fields(sensor: dict[str, Any] | None = None, plants: list[dict[str, Any]] | None = None) -> list[Field]:
     s = sensor or {}
     plant_options = [(f"{p['species']} (#{p['id']})", p["id"]) for p in plants or []]
     fields = []
@@ -54,7 +56,7 @@ def sensor_fields(sensor: dict | None = None, plants: list[dict] | None = None) 
     return fields
 
 
-def irrigator_fields(irrigator: dict | None = None) -> list[Field]:
+def irrigator_fields(irrigator: dict[str, Any] | None = None) -> list[Field]:
     i = irrigator or {}
     fields = []
     if irrigator is None:
@@ -69,7 +71,7 @@ def irrigator_fields(irrigator: dict | None = None) -> list[Field]:
     return fields
 
 
-def config_fields(config: dict | None = None) -> list[Field]:
+def config_fields(config: dict[str, Any] | None = None) -> list[Field]:
     """Cluster or global irrigation config (blank = keep current / inherit)."""
     c = config or {}
     return [
@@ -84,7 +86,7 @@ def config_fields(config: dict | None = None) -> list[Field]:
     ]
 
 
-def window_fields(window: dict | None = None) -> list[Field]:
+def window_fields(window: dict[str, Any] | None = None) -> list[Field]:
     w = window or {}
     return [
         Field("start_hour", "Start hour (0-23)", "int", w.get("start_hour"), required=True),
@@ -100,7 +102,7 @@ def window_fields(window: dict | None = None) -> list[Field]:
     ]
 
 
-def vacation_fields(window: dict | None = None, tz: str | None = None) -> list[Field]:
+def vacation_fields(window: dict[str, Any] | None = None, tz: str | None = None) -> list[Field]:
     """Vacation form; ``tz`` is the server's ``timezone`` preference the times are entered in."""
     v = window or {}
     return [
@@ -111,7 +113,7 @@ def vacation_fields(window: dict | None = None, tz: str | None = None) -> list[F
     ]
 
 
-def preference_fields(prefs: dict) -> list[Field]:
+def preference_fields(prefs: dict[str, Any]) -> list[Field]:
     return [
         Field("units", "Units", "select", prefs.get("units"), [("metric", "metric"), ("imperial", "imperial")]),
         Field("timezone", "Timezone", value=prefs.get("timezone")),
