@@ -13,3 +13,6 @@ TUI view-model modules stay widget-free and I/O-free KEPT
 
 Contracts: 10 kept, 0 broken.
 exit=0
+== FULL (seed 0, -n 4)
+3040 passed, 10 warnings in 311.21s
+exit=0
