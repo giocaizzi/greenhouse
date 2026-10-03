@@ -12,13 +12,12 @@ VACATION_RESERVOIR_USABLE_FRACTION = 0.95  # reserve 5% so the pump never runs d
 VACATION_MIN_RUN_MINUTES = 1  # below this, skip instead of a token dribble
 
 # ── Quiet Hours — hard gate against actuation during user-defined windows ────
-# Default applies to every cluster that hasn't overridden. Indoor irrigators
-# tend to make pump noise at night, so the baseline blocks 00:00–05:00 local
-# time. Start/end are integers 0–23, end-exclusive, wrap-around supported.
-# A row with start == end means "explicitly disabled at this level" (e.g. an
-# outdoor cluster that should be allowed to run overnight).
-DEFAULT_QUIET_START_HOUR = 0
-DEFAULT_QUIET_END_HOUR = 5
+# No built-in fallback here: the baseline Alembic migration seeds the global row
+# with 00:00–05:00 local time (indoor pumps are noisy at night), and an
+# unconfigured database has quiet hours off. Start/end are integers 0–23,
+# end-exclusive, wrap-around supported. A row with start == end means
+# "explicitly disabled at this level" (e.g. an outdoor cluster that should be
+# allowed to run overnight).
 
 # ── Irrigation Config — hierarchical defaults ────────────────────────────────
 # Built-in fallbacks for fields that resolve cluster → global → here.

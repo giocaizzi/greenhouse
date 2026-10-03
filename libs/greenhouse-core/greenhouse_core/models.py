@@ -18,7 +18,6 @@ ENTITY_CLUSTER = "cluster"
 ENTITY_PLANT = "plant"
 ENTITY_SENSOR = "sensor"
 ENTITY_IRRIGATOR = "irrigator"
-ENTITY_SYSTEM = "system"
 
 # ``source`` of an ActivityEvent / Alert row: the subsystem that produced it.
 SOURCE_IRRIGATION = "irrigation"
