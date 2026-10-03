@@ -155,6 +155,17 @@ Consistency audit (2026-10-03):
   exists" (SQLite DDL is not transactional: tables created before the failure remain plus an empty `alembic_version`;
   such a DB must be stamped manually). See `refactor/wp-handoff/CONS-W1.md`.
 
+- **S6 (architecture review A1) reproduced — shared `DeviceHealthMonitor` rebind during a pump watch.** The single
+  `app.state.health_monitor` is re-pointed by every job via `bind_repo` (`services/health_monitor.py:117`; callers
+  `scheduler.py:327,381`, `services/irrigation.py:201`), and its alert cache is a plain dict with no lock. When another
+  job rebinds it while the minutes-long pump watcher runs, the watcher's NO_WATER trip (`pump_watcher.py:343`) writes
+  the alert into the *other* job's session; the watcher commits only its own session (aborted event durable, alert
+  missing). If that session rolls back or is closed without commit, the alert is lost, yet the cache already marks
+  NO_WATER as raised: actuation stays blocked with no inbox alert, and the alert is never raised again (later NO_WATER
+  reads are not transitions). On one shared SQLite file the rebound write fails with "database is locked" instead
+  (swallowed by the monitor) — same loss, same cache state. Pinned by
+  `test_pump_watcher_trip_current_behavior_alert_written_through_rebound_repo_and_cache_suppresses_reraise` (`tests/server/test_health_monitor.py`). Not fixed; fix = repo-per-call monitor + lock (A1).
+
 ## Labeled behavior changes landed (drift + consistency; details in refactor/wp-handoff/DRIFT.md, CONS-W1.md)
 - API/MCP/CLI: reversed vacation create → 400; plant sync for unknown cluster → 404; sensor update with another
   cluster's plant → 404; `/monitor` commits the readings it refreshes (fewer Cloud calls) and the web monitor now

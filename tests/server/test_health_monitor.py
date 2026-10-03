@@ -396,3 +396,112 @@ class TestEngineActuationBlock:
             assert any(r["code"] == TriggerCode.SEASONAL_HOLD.value for r in result["reasons"]), result["reasons"]
         # The blocked device must not have been actuated.
         assert not any(c[0] == "start" for c in irr_adapter.calls)
+
+
+class TestSharedMonitorRebind:
+    """S6 / architecture review A1: the singleton monitor's repo can be swapped mid-watch.
+
+    Production wires ONE ``DeviceHealthMonitor`` (``app.state.health_monitor``). The pump-watcher
+    job binds it to its own session (``services/irrigation.py`` ``_run_pump_watcher``) and then
+    watches for minutes; meanwhile ``_health_monitor_job`` / ``_build_irrigation_service``
+    (``scheduler.py``) call ``bind_repo`` with *their* job sessions. The interleaving is reproduced
+    deterministically from the watcher's ``sleep`` hook — no threads needed, because the bug is the
+    shared, unlocked ``_repo`` reference, not a data race inside one call.
+
+    Two SQLite files stand in for "the watcher's session" and "the other job's session" so the
+    write can be attributed: on one shared SQLite file the rebound write would instead fail with
+    "database is locked" (the watcher's session already holds the write lock), which the monitor
+    swallows — the alert is lost the same way and the cache outcome is identical.
+    """
+
+    def test_pump_watcher_trip_current_behavior_alert_written_through_rebound_repo_and_cache_suppresses_reraise(
+        self, tmp_path
+    ):
+        from greenhouse_core.models import ENTITY_IRRIGATOR, IrrigationEvent
+        from greenhouse_server.services.pump_watcher import EVENT_ACTION_ABORTED, PumpWatcherService
+
+        def _engine(name: str):
+            engine = create_engine(f"sqlite:///{tmp_path / name}", echo=False)
+            Base.metadata.create_all(engine)
+            return engine
+
+        watcher_engine, other_engine = _engine("watcher.db"), _engine("other_job.db")
+        watcher_repo = IrrigationRepository(Session(watcher_engine))
+        other_repo = IrrigationRepository(Session(other_engine))
+
+        cluster_id = watcher_repo.add_cluster("S6 Cluster")
+        irrigator_id = watcher_repo.add_irrigator(
+            cluster_id=cluster_id,
+            tuya_device_id="fake_tuya_device_aabbccdd",
+            name="S6 Irrigator",
+            irrigator_type="rainpoint.ik10pw",
+            config={},
+        )
+        watcher_repo.commit()
+        irrigator = watcher_repo.get_irrigator(irrigator_id)
+
+        adapter = FakeIrrigatorAdapter()
+        registry = DeviceRegistry()
+        registry.register_irrigator("rainpoint.ik10pw", lambda: adapter)
+        monitor = DeviceHealthMonitor(repo=other_repo, registry=registry)
+
+        # The watcher job binds the shared monitor to its own session (as _run_pump_watcher does).
+        monitor.bind_repo(watcher_repo)
+
+        no_water = _state(alarms=frozenset({HealthAlarm.NO_WATER}))
+        now = [0.0]
+
+        def _sleep(_seconds: float) -> None:
+            # Between two polls another scheduler job rebinds the shared monitor to its session,
+            # and the pump then reports a dry run.
+            monitor.bind_repo(other_repo)
+            adapter.set_health(no_water)
+            now[0] += 1.0
+
+        watcher = PumpWatcherService(
+            watcher_repo,
+            registry,
+            poll_seconds=1.0,
+            warmup_seconds=0.0,
+            clock=lambda: now[0],
+            sleep=_sleep,
+            monitor=monitor,
+        )
+
+        result = watcher.watch(irrigator, duration_seconds=30, started_at=100)
+
+        assert result["outcome"] == "tripped"
+        key = f"health:{ENTITY_IRRIGATOR}:{irrigator_id}:no_water"
+
+        # The watcher committed its own session: the aborted event is durable, the alert is not there.
+        with Session(watcher_engine) as fresh:
+            actions = fresh.scalars(select(IrrigationEvent.action)).all()
+            assert actions == [EVENT_ACTION_ABORTED]
+            assert fresh.scalar(select(Alert).where(Alert.dedup_key == key)) is None
+
+        # CURRENT (buggy) behavior: the NO_WATER alert was written into the OTHER job's session, uncommitted.
+        pending = other_repo.get_open_alert_by_key(key)
+        assert pending is not None
+        assert pending.code == HealthAlarm.NO_WATER.value
+
+        # The other job rolls back (or closes without committing) → the alert is gone everywhere.
+        other_repo.rollback()
+        with Session(other_engine) as fresh:
+            assert fresh.scalar(select(Alert).where(Alert.dedup_key == key)) is None
+
+        # ...yet the shared cache already holds NO_WATER as raised: actuation stays blocked with no inbox alert.
+        assert monitor.is_actuation_blocked(irrigator) == (True, [HealthAlarm.NO_WATER])
+
+        # A later NO_WATER observation through the watcher's repo is no transition → never re-raised.
+        monitor.bind_repo(watcher_repo)
+        derived = monitor.record(ENTITY_IRRIGATOR, irrigator_id, no_water, label="S6 Irrigator", cluster_id=cluster_id)
+        watcher_repo.commit()
+        assert derived == frozenset({HealthAlarm.NO_WATER})
+        for engine in (watcher_engine, other_engine):
+            with Session(engine) as fresh:
+                assert fresh.scalars(select(Alert)).all() == []
+
+        watcher_repo.session.close()
+        other_repo.session.close()
+        watcher_engine.dispose()
+        other_engine.dispose()
