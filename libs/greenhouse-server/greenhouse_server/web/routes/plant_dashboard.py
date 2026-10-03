@@ -10,7 +10,7 @@ from fastapi.responses import RedirectResponse
 
 from greenhouse_core.models import Plant
 from greenhouse_core.repository import SameClusterMoveError
-from greenhouse_server.deps import PlantDbDep, PlantHealthServiceDep, RepoDep, require_plant_in_cluster
+from greenhouse_server.deps import PlantDbDep, PlantHealthServiceDep, RepoDep, require_metric, require_plant_in_cluster
 from greenhouse_server.services.charts import (
     ALLOWED_HOURS,
     build_plant_chart_payload,
@@ -134,10 +134,9 @@ def plant_chart_fragment(
     metric: str = Query("soil_moisture"),
     hours: int = Query(24, ge=1, le=8760),
 ):
-    if metric not in METRICS:
-        raise HTTPException(400, f"Unsupported metric: {metric}")
+    chart_metric = require_metric(metric)
     require_plant_in_cluster(repo, cluster_id, plant_id)
-    payload = build_plant_chart_payload(repo, plant_db, plant_id, hours, metric)
+    payload = build_plant_chart_payload(repo, plant_db, plant_id, hours, chart_metric)
     if not payload:
         raise HTTPException(404, "Plant not found")
     return templates.TemplateResponse(

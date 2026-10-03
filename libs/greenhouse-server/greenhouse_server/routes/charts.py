@@ -11,7 +11,7 @@ from greenhouse_core.schemas import (
     PlantHealthTimelineResponse,
     PlantResponse,
 )
-from greenhouse_server.deps import PlantDbDep, RepoDep, require_plant
+from greenhouse_server.deps import PlantDbDep, RepoDep, require_metric, require_plant
 from greenhouse_server.services.charts import (
     build_cluster_chart_payload,
     build_heatmap_payload,
@@ -59,9 +59,7 @@ def plant_chart_data(
         HTTPException: 400 if the metric is unsupported, 404 if the plant
             does not exist.
     """
-    if metric not in {"soil_moisture", "temperature", "light", "env_humidity"}:
-        raise HTTPException(400, f"Unsupported metric: {metric}")
-    payload = build_plant_chart_payload(repo, plant_db, plant_id, hours, metric)  # type: ignore[arg-type]
+    payload = build_plant_chart_payload(repo, plant_db, plant_id, hours, require_metric(metric))
     if not payload:
         raise HTTPException(404, "Plant not found")
     return payload
@@ -86,9 +84,7 @@ def cluster_chart_data(
         HTTPException: 400 if the metric is unsupported, 404 if the cluster
             does not exist.
     """
-    if metric not in {"soil_moisture", "temperature", "light", "env_humidity"}:
-        raise HTTPException(400, f"Unsupported metric: {metric}")
-    payload = build_cluster_chart_payload(repo, plant_db, cluster_id, hours, metric)  # type: ignore[arg-type]
+    payload = build_cluster_chart_payload(repo, plant_db, cluster_id, hours, require_metric(metric))
     if not payload:
         raise HTTPException(404, "Cluster not found")
     return payload

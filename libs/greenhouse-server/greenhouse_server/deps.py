@@ -1,7 +1,7 @@
 """FastAPI dependency injection."""
 
 from collections.abc import Generator
-from typing import Annotated
+from typing import Annotated, cast, get_args
 
 from fastapi import Depends, HTTPException, Request
 from sqlalchemy.orm import Session
@@ -10,6 +10,7 @@ from greenhouse_core.devices import DeviceGateway, DeviceRegistry
 from greenhouse_core.models import Alert, Cluster, IrrigationWindow, Irrigator, Plant, Sensor, VacationWindow
 from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_core.repository import IrrigationRepository
+from greenhouse_server.services.charts import Metric
 from greenhouse_server.services.cluster import ClusterService
 from greenhouse_server.services.health import PlantHealthService
 from greenhouse_server.services.health_monitor import DeviceHealthMonitor
@@ -158,6 +159,22 @@ def require_alert(repo: IrrigationRepository, alert_id: int) -> Alert:
     if not alert:
         raise HTTPException(status_code=404, detail="Alert not found")
     return alert
+
+
+# --- Query-value validation (400) ---
+
+_CHART_METRICS: frozenset[str] = frozenset(get_args(Metric))
+
+
+def require_metric(metric: str) -> Metric:
+    """Narrow a chart ``metric`` query value to :data:`Metric` or raise 400 "Unsupported metric: …".
+
+    The route parameter stays a plain ``str`` (its OpenAPI schema is frozen); this is the one
+    place that turns it into the typed value the chart builders take.
+    """
+    if metric not in _CHART_METRICS:
+        raise HTTPException(400, f"Unsupported metric: {metric}")
+    return cast("Metric", metric)
 
 
 # --- Service dependencies ---

@@ -10,7 +10,7 @@ from fastapi import APIRouter, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from greenhouse_core.logic.timing import is_within_quiet_hours
-from greenhouse_server.deps import ClusterServiceDep, PlantDbDep, RepoDep, require_cluster
+from greenhouse_server.deps import ClusterServiceDep, PlantDbDep, RepoDep, require_cluster, require_metric
 from greenhouse_server.services.charts import (
     ALLOWED_HOURS,
     build_cluster_chart_payload,
@@ -24,12 +24,13 @@ from greenhouse_server.web.weekdays import WEEKDAY_BITS, WEEKDAY_LABELS, format_
 if TYPE_CHECKING:
     from greenhouse_core.plant_db import PlantDatabase
     from greenhouse_core.repository import IrrigationRepository
+    from greenhouse_server.services.charts import Metric
 
 _EMPTY_RATIONALE: list[dict] = []
 
 router = APIRouter(include_in_schema=False)
 
-CLUSTER_METRICS = ("soil_moisture", "temperature", "env_humidity", "light")
+CLUSTER_METRICS: tuple[Metric, ...] = ("soil_moisture", "temperature", "env_humidity", "light")
 
 
 @router.get("/clusters")
@@ -97,14 +98,13 @@ def _plants_by_id(repo: IrrigationRepository, cluster_id: int) -> dict[int, obje
 
 def _cluster_chart_payloads(
     repo: IrrigationRepository, plant_db: PlantDatabase, cluster_id: int, hours: int
-) -> tuple[dict[str, str], dict[str, Any]]:
+) -> tuple[dict[Metric, str], dict[Metric, Any]]:
     """Pre-build every metric's chart payload (as JSON) so charts render on first page load.
 
     Also returns each metric's threshold, which the stat tiles reuse for the range indicator.
     """
     chart_payloads = {
-        metric: build_cluster_chart_payload(repo, plant_db, cluster_id, hours, metric)  # type: ignore[arg-type]
-        for metric in CLUSTER_METRICS
+        metric: build_cluster_chart_payload(repo, plant_db, cluster_id, hours, metric) for metric in CLUSTER_METRICS
     }
     chart_payloads_json = {metric: json.dumps(payload) for metric, payload in chart_payloads.items()}
     chart_thresholds = {metric: payload.get("threshold", {}) for metric, payload in chart_payloads.items()}
@@ -251,9 +251,7 @@ def cluster_chart_fragment(
     metric: str = Query("soil_moisture"),
     hours: int = Query(24, ge=1, le=8760),
 ):
-    if metric not in CLUSTER_METRICS:
-        raise HTTPException(400, f"Unsupported metric: {metric}")
-    payload = build_cluster_chart_payload(repo, plant_db, cluster_id, hours, metric)  # type: ignore[arg-type]
+    payload = build_cluster_chart_payload(repo, plant_db, cluster_id, hours, require_metric(metric))
     if not payload:
         raise HTTPException(404, "Cluster not found")
     return templates.TemplateResponse(
