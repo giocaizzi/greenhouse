@@ -36,10 +36,6 @@ def _water_needs_band(target: str | None) -> tuple[float, float] | None:
     return parse_moisture_target(target)
 
 
-def _metric_field(metric: Metric) -> str:
-    return metric  # the metric names are the SensorReading column names
-
-
 def build_plant_chart_payload(
     repo: IrrigationRepository,
     plant_db: PlantDatabase,
@@ -105,7 +101,7 @@ def _build_plant_sensor_datasets(
 
     Readings are filtered to the periods when each sensor was actually linked to this plant.
     """
-    field = _metric_field(metric)
+    field: str = metric  # metric names are SensorReading column names
     since = int(time.time()) - hours * SECONDS_PER_HOUR
     readings = repo.readings_for_plant(plant_id, since_ts=since)
     by_sensor: dict[int, list[tuple[int, float]]] = defaultdict(list)
@@ -140,7 +136,7 @@ def _build_sensor_datasets(
     metric: Metric,
 ) -> list[dict[str, Any]]:
     datasets = []
-    field = _metric_field(metric)
+    field: str = metric  # metric names are SensorReading column names
     for sensor in sensors:
         readings = repo.get_recent_readings(sensor.id, hours=hours)
         points: list[tuple[int, float]] = []
