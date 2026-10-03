@@ -381,11 +381,15 @@ def detect_conflicts(
     profiles: dict[int, PlantProfile],
     plant_care: dict[int, dict[str, Any]],
 ) -> list[Alert]:
-    """Detect unresolvable conflicts between plants in same cluster."""
+    """Detect cluster-level issues: over-water conflicts, then ``low_light`` and ``low_env_humidity``.
+
+    All three share one gate: with fewer than ``CONFLICT_MIN_MOISTURE_SENSORS`` sensors holding a
+    recent moisture value nothing is returned (known quirk: the environment checks need no moisture).
+    """
     sensors = db.get_sensors_in_cluster(cluster_id)
     moisture = _latest_moisture_by_sensor(db, sensors)
     if len(moisture) < CONFLICT_MIN_MOISTURE_SENSORS:
-        return []  # known quirk: the light / humidity checks share this gate and are skipped too
+        return []
     alerts = _overwater_conflict_alerts(sensors, moisture, profiles, plant_care)
     plants_by_id = {p.id: p for p in db.get_plants_in_cluster(cluster_id)}
     alerts.extend(_low_light_alerts(db, plant_db, sensors, plants_by_id))
