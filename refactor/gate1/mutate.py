@@ -2032,7 +2032,7 @@ add(
         ),
         (
             "12",
-            '            cfg_key = _coerce_config(config).get("local_key") if config is not None else None\n            if cfg_key:\n                return cfg_key\n',
+            '            cfg_key = parse_device_config(config).get("local_key") if config is not None else None\n            if cfg_key:\n                return cfg_key\n',
             "",
             "config local_key ignored (Cloud lookup every time)",
         ),

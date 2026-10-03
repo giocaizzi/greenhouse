@@ -19,7 +19,6 @@ shared ``tinytuya`` module object — and intercept construction here too.
 
 from __future__ import annotations
 
-import json as _json
 import logging
 import os
 import time
@@ -27,7 +26,7 @@ from collections.abc import Callable
 
 import tinytuya
 
-from greenhouse_core.models import Irrigator
+from greenhouse_core.models import Irrigator, parse_device_config
 
 logger = logging.getLogger(__name__)
 
@@ -52,19 +51,6 @@ DATAPOINT_PARSERS: dict[str, Callable[[object], tuple[str, object]]] = {
     "water_warning": lambda v: ("water_warning", bool(v)),  # DP 111: device soil-dry alert
     "soil_warning": lambda v: ("soil_warning", int(v)),  # DP 110: soil warning code
 }
-
-
-def _coerce_config(config: object) -> dict:
-    """Return the irrigator ``config`` blob as a dict (JSON string or dict)."""
-    if isinstance(config, dict):
-        return config
-    if isinstance(config, str):
-        try:
-            parsed = _json.loads(config)
-            return parsed if isinstance(parsed, dict) else {}
-        except (ValueError, TypeError):
-            return {}
-    return {}
 
 
 def group_logs_by_timestamp(logs: list[dict], tolerance_ms: int = 5000) -> list[dict]:
@@ -274,7 +260,7 @@ class DeviceGateway:
         cheap sources and forces the Cloud lookup (stale-key recovery).
         """
         if not refresh:
-            cfg_key = _coerce_config(config).get("local_key") if config is not None else None
+            cfg_key = parse_device_config(config).get("local_key") if config is not None else None
             if cfg_key:
                 return cfg_key
             cached = self._key_cache.get(device_id)
@@ -318,7 +304,7 @@ class DeviceGateway:
         Raises ``ConnectionError`` when either is missing. ``refresh=True``
         forces a fresh Cloud key lookup for stale-key recovery.
         """
-        config = _coerce_config(irrigator.config)
+        config = parse_device_config(irrigator.config)
         local_ip = config.get("device_ip")
         if not local_ip:
             raise ConnectionError(f"No device_ip in config for irrigator {irrigator.tuya_device_id}.")
