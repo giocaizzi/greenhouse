@@ -203,7 +203,8 @@ A plant's `soil_moisture_target` (e.g. `"45-65"`) is read through one parser, `p
 the monitor / check of sensor-only clusters, and the learning issue heuristics (chronic underwatering, unresolvable
 conflict). It takes the first two `-`-separated numbers (`"40-50-60"` → 40–50) and falls back to the default band
 45–65 for anything else — a bare `"50"`, non-numeric text, a missing or non-string value. It does not validate the
-band (an inverted `"65-45"` is used as given). Chart threshold bands use a stricter check of their own: anything but exactly `a-b` shows the default band.
+band (an inverted `"65-45"` is used as given). The plant chart's water-needs threshold band uses the same parser;
+only a target with no `-` at all (or none) shows the default band labelled `default`.
 
 ## Multi-Sensor Conflict Resolution
 
