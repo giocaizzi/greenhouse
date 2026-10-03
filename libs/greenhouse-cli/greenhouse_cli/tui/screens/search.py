@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import asyncio
 import re
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 
 from textual import on, work
 from textual.app import ComposeResult
+from textual.binding import BindingType
 from textual.containers import Vertical
 from textual.screen import ModalScreen
 from textual.widgets import DataTable, Input, Static
@@ -21,9 +22,10 @@ CLUSTER_HREF = re.compile(r"/clusters/(\d+)")
 class SearchScreen(ModalScreen[int | None]):
     """Type to search; ``enter`` on a hit dismisses with the hit's cluster ID."""
 
-    BINDINGS = [("escape", "dismiss(None)", "Close")]
+    BINDINGS: ClassVar[list[BindingType]] = [("escape", "dismiss(None)", "Close")]
 
     def compose(self) -> ComposeResult:
+        """Render the search box above the results table."""
         with Vertical(classes="dialog search-dialog"):
             yield Static("[b]Search[/b]  [dim]clusters, plants, sensors, irrigators, device IDs[/dim]")
             yield Input(placeholder="type to search…", id="search-input")
@@ -34,6 +36,7 @@ class SearchScreen(ModalScreen[int | None]):
         self._targets: dict[str, int] = {}
 
     def on_mount(self) -> None:
+        """Declare the result columns and put the cursor in the search box."""
         self.query_one(DataTable).add_columns("Type", "Name", "Detail")
         self.query_one(Input).focus()
 
@@ -49,6 +52,7 @@ class SearchScreen(ModalScreen[int | None]):
 
     @work(exclusive=True, group="search")
     async def search(self, query: str) -> None:
+        """Debounce keystrokes, then query the server and remember which hits link to a cluster."""
         await asyncio.sleep(0.2)  # debounce keystrokes
         table = self.query_one(DataTable)
         if not query.strip():

@@ -34,10 +34,12 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+_MIN_TIMESTAMPS_FOR_GAP = 2  # a gap needs two points
+
 
 def _median_interval(timestamps: list[int]) -> float | None:
     """Return median gap between consecutive timestamps in seconds."""
-    if len(timestamps) < 2:
+    if len(timestamps) < _MIN_TIMESTAMPS_FOR_GAP:
         return None
     gaps = [timestamps[i + 1] - timestamps[i] for i in range(len(timestamps) - 1)]
     return statistics.median(gaps)

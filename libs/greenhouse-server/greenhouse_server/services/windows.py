@@ -20,8 +20,11 @@ def validate_window(start_hour: int, end_hour: int, weekday_mask: int) -> None:
             the mask selects no weekday / unknown bits.
     """
     if not (0 <= start_hour <= WINDOW_HOUR_MAX and 0 <= end_hour <= WINDOW_HOUR_MAX):
-        raise WindowValidationError("start_hour and end_hour must be 0..23")
+        msg = "start_hour and end_hour must be 0..23"
+        raise WindowValidationError(msg)
     if start_hour == end_hour:
-        raise WindowValidationError("start_hour and end_hour must differ")
+        msg = "start_hour and end_hour must differ"
+        raise WindowValidationError(msg)
     if not (1 <= weekday_mask <= FULL_WEEKDAY_MASK):
-        raise WindowValidationError("weekday_mask must be 1..127 (Mon=1, Sun=64)")
+        msg = "weekday_mask must be 1..127 (Mon=1, Sun=64)"
+        raise WindowValidationError(msg)

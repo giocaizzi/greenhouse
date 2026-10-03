@@ -87,11 +87,10 @@ def sync_cluster_alerts(
         return []
     now = int(time.time())
 
-    findings: list[tuple[str, dict[str, Any]]] = []
-    for raw in collect_learning_alerts(repo, cluster_id, plant_db):
-        findings.append((SOURCE_LEARNING, raw))
-    for raw in collect_maintenance_alerts(repo, cluster_id, plant_db):
-        findings.append((SOURCE_MAINTENANCE, raw))
+    findings: list[tuple[str, dict[str, Any]]] = [
+        (SOURCE_LEARNING, raw) for raw in collect_learning_alerts(repo, cluster_id, plant_db)
+    ]
+    findings.extend((SOURCE_MAINTENANCE, raw) for raw in collect_maintenance_alerts(repo, cluster_id, plant_db))
 
     seen_keys: set[str] = set()
     for source, raw in findings:

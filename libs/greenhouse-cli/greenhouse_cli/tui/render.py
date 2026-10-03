@@ -16,6 +16,8 @@ if TYPE_CHECKING:
 Row = tuple[str | None, list[RenderableType | str]]
 """One ``DataTable`` row for :func:`greenhouse_cli.tui.widgets.refill`: ``(row key or None, cells)``."""
 
+_GOOD_EFFICACY_SCORE = 0.5  # efficacy scores from here up render green
+
 
 def plant_rows(plants: list[dict[str, Any]]) -> list[Row]:
     """Plants tab rows keyed by plant id; the temperature column shows the ideal range when known."""
@@ -73,24 +75,23 @@ def sensor_rows(status: dict[str, Any]) -> list[Row]:
 
 def decision_rows(payload: dict[str, Any] | None) -> list[Row]:
     """Decisions tab rows (unkeyed) in the order the API lists the logged evaluations."""
-    rows: list[Row] = []
-    for d in (payload or {}).get("items", []):
-        rows.append(
-            (
-                None,
-                [
-                    fmt.clock(d["evaluated_at"], with_date=True),
-                    fmt.styled(d["action"], fmt.ACTION_STYLES),
-                    str(d["duration_minutes"]),
-                    f"{d['interval_hours']}h",
-                    f"{d['confidence']:.0%}",
-                    d.get("primary_code") or "—",
-                    d.get("triggered_by", ""),
-                    Text("yes", style="#4fb3ff") if d.get("actuated") else Text("no", style="dim"),
-                    d.get("reason_text", ""),
-                ],
-            )
+    rows: list[Row] = [
+        (
+            None,
+            [
+                fmt.clock(d["evaluated_at"], with_date=True),
+                fmt.styled(d["action"], fmt.ACTION_STYLES),
+                str(d["duration_minutes"]),
+                f"{d['interval_hours']}h",
+                f"{d['confidence']:.0%}",
+                d.get("primary_code") or "—",
+                d.get("triggered_by", ""),
+                Text("yes", style="#4fb3ff") if d.get("actuated") else Text("no", style="dim"),
+                d.get("reason_text", ""),
+            ],
         )
+        for d in (payload or {}).get("items", [])
+    ]
     return rows
 
 
@@ -118,8 +119,7 @@ def history_rows(payload: dict[str, Any] | None) -> list[Row]:
 
 
 def config_rows(effective: dict[str, Any] | None) -> list[tuple[str, Text]]:
-    """Effective-config rows in server order (the repository's config field order, as the edit form);
-    values the cluster overrides are bold, each tagged with its source."""
+    """Effective-config rows in repository field order (as the form); cluster overrides bold, tagged by source."""
     rows: list[tuple[str, Text]] = []
     for key, field in ((effective or {}).get("effective") or {}).items():
         value = field.get("value")
@@ -131,19 +131,18 @@ def config_rows(effective: dict[str, Any] | None) -> list[tuple[str, Text]]:
 
 def window_rows(windows: list[dict[str, Any]]) -> list[Row]:
     """Windows tab rows keyed by window id: label, hour span and weekday mask."""
-    rows: list[Row] = []
-    for w in windows:
-        rows.append(
-            (
+    rows: list[Row] = [
+        (
+            str(w["id"]),
+            [
                 str(w["id"]),
-                [
-                    str(w["id"]),
-                    w.get("label") or "—",
-                    f"{w['start_hour']:02d}:00–{w['end_hour']:02d}:00",
-                    fmt.weekday_mask(w["weekday_mask"]),
-                ],
-            )
+                w.get("label") or "—",
+                f"{w['start_hour']:02d}:00–{w['end_hour']:02d}:00",
+                fmt.weekday_mask(w["weekday_mask"]),
+            ],
         )
+        for w in windows
+    ]
     return rows
 
 
@@ -264,7 +263,7 @@ def efficacy_rows(payload: dict[str, Any] | None) -> list[Row]:
                     str(e["duration_minutes"]),
                     fmt.num(e.get("before_pct"), "%"),
                     fmt.num(e.get("after_pct"), "%"),
-                    Text(fmt.num(score, "", 2), style="#7ed957" if (score or 0) >= 0.5 else "#e0c341"),
+                    Text(fmt.num(score, "", 2), style="#7ed957" if (score or 0) >= _GOOD_EFFICACY_SCORE else "#e0c341"),
                 ],
             )
         )
@@ -294,38 +293,36 @@ def scheduler_panel_rows(paused: bool | None, health: dict[str, Any] | None) -> 
 
 def job_rows(jobs: Iterable[dict[str, Any]]) -> list[Row]:
     """Scheduler job rows keyed by job id; built-in jobs are tagged."""
-    rows: list[Row] = []
-    for job in jobs:
-        rows.append(
-            (
-                job["id"],
-                [
-                    Text.assemble(job["name"], (" · built-in", "dim") if job.get("core") else ""),
-                    job["trigger"],
-                    job.get("next_run_time") or "—",
-                    Text("paused", style="#e0c341") if job.get("paused") else Text("active", style="#7ed957"),
-                ],
-            )
+    rows: list[Row] = [
+        (
+            job["id"],
+            [
+                Text.assemble(job["name"], (" · built-in", "dim") if job.get("core") else ""),
+                job["trigger"],
+                job.get("next_run_time") or "—",
+                Text("paused", style="#e0c341") if job.get("paused") else Text("active", style="#7ed957"),
+            ],
         )
+        for job in jobs
+    ]
     return rows
 
 
 def device_rows(health: dict[str, Any] | None) -> list[Row]:
     """Device freshness rows (unkeyed) from the system-health payload."""
-    rows: list[Row] = []
-    for d in (health or {}).get("devices", []):
-        rows.append(
-            (
-                None,
-                [
-                    str(d["id"]),
-                    d["name"],
-                    fmt.styled(d["status"], fmt.STATUS_STYLES),
-                    fmt.age(d.get("age_seconds")),
-                    d.get("note") or "",
-                ],
-            )
+    rows: list[Row] = [
+        (
+            None,
+            [
+                str(d["id"]),
+                d["name"],
+                fmt.styled(d["status"], fmt.STATUS_STYLES),
+                fmt.age(d.get("age_seconds")),
+                d.get("note") or "",
+            ],
         )
+        for d in (health or {}).get("devices", [])
+    ]
     return rows
 
 
@@ -364,8 +361,7 @@ def preference_rows(prefs: dict[str, Any]) -> list[tuple[str, str]]:
 
 
 def global_config_rows(config: dict[str, Any]) -> list[tuple[str, str | Text]]:
-    """Global-default rows in server order — the repository's config field order, as the edit form
-    (bookkeeping fields hidden; unset = built-in default), or "unavailable"."""
+    """Global-default rows in repository field order (bookkeeping hidden, unset = built-in default) or "unavailable"."""
     return [
         (k, Text("built-in default", style="dim") if v is None else str(v))
         for k, v in config.items()
@@ -374,8 +370,7 @@ def global_config_rows(config: dict[str, Any]) -> list[tuple[str, str | Text]]:
 
 
 def vacation_rows(vacations: list[dict[str, Any]], active_id: int | None, tz: str | None = None) -> list[Row]:
-    """Vacation rows keyed by window id, times in the ``timezone`` preference ``tz`` (as the form takes them; UTC
-    when unset), with an active / past / upcoming state column."""
+    """Vacation rows keyed by id with an active/past/upcoming state; times in the ``tz`` preference (else UTC)."""
     rows: list[Row] = []
     now = fmt.now()
     for v in vacations:

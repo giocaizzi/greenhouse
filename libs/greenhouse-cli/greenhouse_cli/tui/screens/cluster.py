@@ -10,10 +10,10 @@ from __future__ import annotations
 import asyncio
 import re
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 from textual.app import ComposeResult
-from textual.binding import Binding
+from textual.binding import Binding, BindingType
 from textual.containers import Horizontal, HorizontalScroll, Vertical, VerticalScroll
 from textual.widgets import DataTable, Footer, Header, Static, TabbedContent, TabPane
 
@@ -29,6 +29,7 @@ from greenhouse_cli.tui.widgets import Heatmap, KeyValue, MetricChart, PlantTile
 
 METRIC_ORDER = ["soil_moisture", "temperature", "env_humidity", "light", "overlay"]
 RANGES = [6, 24, 72, 168, 720]
+_PRELOAD_HOURS = 24  # soil chart window fetched with the overview; reused while the range matches
 STATS_DAYS = 7
 
 
@@ -36,7 +37,7 @@ class ClusterScreen(DataScreen):
     """Everything about one cluster, in tabs."""
 
     AUTO_REFRESH = True
-    BINDINGS = [
+    BINDINGS: ClassVar[list[BindingType]] = [
         Binding("escape", "app.pop_screen", "Back"),
         Binding("i", "irrigate", "Irrigate"),
         Binding("w", "water_now", "Water now"),
@@ -69,6 +70,7 @@ class ClusterScreen(DataScreen):
         self._plant_id: int | None = None
 
     def compose(self) -> ComposeResult:
+        """Build the tab tree; its order is the focus order and matches the ``app.tcss`` selectors."""
         yield Header(show_clock=True)
         with TabbedContent(id="cluster-tabs"):
             with TabPane("Overview", id="tab-overview"), VerticalScroll():
@@ -120,6 +122,7 @@ class ClusterScreen(DataScreen):
         yield Footer()
 
     def on_mount(self) -> None:
+        """Declare every table's columns once; loads only refill rows."""
         self.query_one("#plants-table", DataTable).add_columns("ID", "Species", "Category", "Water", "Light", "Temp")
         self.query_one("#sensors-table", DataTable).add_columns(
             "ID", "Name", "Type", "Plant", "Soil", "Temp", "Humidity", "Light", "Battery", "Age"
@@ -133,16 +136,22 @@ class ClusterScreen(DataScreen):
 
     @property
     def active_tab(self) -> str:
+        """Id of the visible tab — the contextual n / u / del keys act on it."""
         return self.query_one(TabbedContent).active
 
     # ── Loading ──────────────────────────────────────────────────────────
 
     async def load(self) -> None:
+        """Fetch status and the preloaded soil chart, render the overview, then load every tab concurrently.
+
+        Insights are costly (learning report), so they load only while their tab is open.
+
+        """
         cid = self.cluster_id
         api = self.gh.api
         status, soil = await asyncio.gather(
             api(lambda c: c.status(cid)),
-            api(lambda c: c.cluster_chart_data(cid, hours=24), quiet=True),
+            api(lambda c: c.cluster_chart_data(cid, hours=_PRELOAD_HOURS), quiet=True),
         )
         if status is None:
             return
@@ -154,7 +163,7 @@ class ClusterScreen(DataScreen):
         self._render_plants(status)
         tasks = [
             self._load_forecast(),
-            self._load_chart(soil if self.metric == "soil_moisture" and self.hours == 24 else None),
+            self._load_chart(soil if self.metric == "soil_moisture" and self.hours == _PRELOAD_HOURS else None),
             self._load_heatmap(),
             self._load_decisions(),
             self._load_history(),
@@ -165,12 +174,13 @@ class ClusterScreen(DataScreen):
         await asyncio.gather(*tasks)
 
     def on_tabbed_content_tab_activated(self, event: TabbedContent.TabActivated) -> None:
+        """Load the insights tab lazily, the first time it is opened."""
         if event.pane.id == "tab-insights":
             self.run_worker(self._load_insights(), group="insights", exclusive=True)
 
     async def _render_overview(self, status: dict[str, Any]) -> None:
         s = self.summary
-        assert s is not None
+        assert s is not None  # noqa: S101 — type narrowing: load() sets summary before rendering
         garden = self.query_one("#garden", HorizontalScroll)
         await garden.remove_children()
         if s.plants:
@@ -230,6 +240,7 @@ class ClusterScreen(DataScreen):
             self.run_worker(self._load_plant_health(ids[0]), group="plant-health", exclusive=True)
 
     def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
+        """Follow the plant cursor with that plant's chart."""
         if event.data_table.id == "plants-table" and event.row_key.value:
             self.run_worker(self._load_plant_health(int(event.row_key.value)), group="plant-health", exclusive=True)
 
@@ -293,6 +304,7 @@ class ClusterScreen(DataScreen):
     # ── Charts ───────────────────────────────────────────────────────────
 
     def action_cycle_metric(self) -> None:
+        """On Plants toggle health ↔ moisture; elsewhere step through the cluster chart metrics."""
         if self.active_tab == "tab-plants":
             self.plant_chart = "moisture" if self.plant_chart == "health" else "health"
             if self._plant_id is not None:
@@ -302,6 +314,7 @@ class ClusterScreen(DataScreen):
         self.run_worker(self._load_chart(), group="chart", exclusive=True)
 
     def action_range(self, step: int) -> None:
+        """Move ``step`` positions along the fixed chart ranges, clamped at both ends."""
         idx = max(0, min(len(RANGES) - 1, RANGES.index(self.hours) + step))
         self.hours = RANGES[idx]
         self.run_worker(self._load_chart(), group="chart", exclusive=True)
@@ -309,6 +322,7 @@ class ClusterScreen(DataScreen):
     # ── Irrigation actions ───────────────────────────────────────────────
 
     def action_irrigate(self) -> None:
+        """Run the smart pipeline with the options picked in the dialog (dry-run by default)."""
         name = self.summary.name if self.summary else f"cluster {self.cluster_id}"
 
         def _after(opts: dict[str, Any] | None) -> None:
@@ -331,6 +345,7 @@ class ClusterScreen(DataScreen):
         return self.summary.irrigator_id, self.summary.irrigator_name or "irrigator"
 
     def action_water_now(self) -> None:
+        """Start the irrigator for N minutes, bypassing the decision engine."""
         irrigator = self._irrigator()
         if not irrigator:
             return
@@ -347,6 +362,7 @@ class ClusterScreen(DataScreen):
         self.app.push_screen(WaterNowScreen(name), _after)
 
     def action_stop(self) -> None:
+        """Stop the cluster's irrigator after confirmation."""
         irrigator = self._irrigator()
         if not irrigator:
             return
@@ -356,6 +372,7 @@ class ClusterScreen(DataScreen):
         )
 
     def action_check(self) -> None:
+        """Run the scheduled check for this cluster now (auto-run may water)."""
         self.confirm_then(
             "Run the scheduled check for this cluster now?\nIf auto-run is enabled it may irrigate.",
             lambda c: c.check(self.cluster_id),
@@ -364,6 +381,7 @@ class ClusterScreen(DataScreen):
         )
 
     def action_log_manual(self) -> None:
+        """Record a watering done by hand so cooldown and learning see it; nothing is actuated."""
         irrigator = self._irrigator()
         if not irrigator:
             return
@@ -380,6 +398,7 @@ class ClusterScreen(DataScreen):
     # ── CRUD (contextual on the active tab) ──────────────────────────────
 
     def action_new(self) -> None:
+        """Add a row to the active tab's resource (plant, sensor, window or irrigator)."""
         handler = {
             "tab-plants": self._new_plant,
             "tab-sensors": self._new_sensor,
@@ -440,6 +459,7 @@ class ClusterScreen(DataScreen):
         )
 
     def action_edit(self) -> None:
+        """Edit the selected row of the active tab, or the irrigator / config."""
         handler = {
             "tab-plants": self._edit_plant,
             "tab-sensors": self._edit_sensor,
@@ -509,6 +529,7 @@ class ClusterScreen(DataScreen):
         )
 
     def action_delete(self) -> None:
+        """Delete the selected row of the active tab, or detach the irrigator."""
         handler = {
             "tab-plants": self._delete_plant,
             "tab-sensors": self._delete_sensor,
@@ -572,6 +593,7 @@ class ClusterScreen(DataScreen):
         return row
 
     def action_move_plant(self) -> None:
+        """Move the selected plant to another cluster."""
         plant = self._selected("#plants-table", self.status.get("plants", []))
         if not plant:
             return
@@ -592,6 +614,7 @@ class ClusterScreen(DataScreen):
         )
 
     def action_plant_sync(self) -> None:
+        """Refresh this cluster's plant care data from the curated plant DB."""
         self.run_worker(
             self.act(
                 lambda c: c.sync_plants(cluster_id=self.cluster_id),
@@ -601,6 +624,7 @@ class ClusterScreen(DataScreen):
         )
 
     def action_edit_cluster(self) -> None:
+        """Edit the cluster's name, location and environment."""
         cluster = self.status.get("cluster")
         if cluster:
             self.form_then(
@@ -611,6 +635,7 @@ class ClusterScreen(DataScreen):
             )
 
     def action_delete_cluster(self) -> None:
+        """Delete the cluster with everything in it, then return to the dashboard."""
         name = self.summary.name if self.summary else f"#{self.cluster_id}"
 
         def _after(ok: bool | None) -> None:
@@ -631,6 +656,7 @@ class ClusterScreen(DataScreen):
             self.gh.action_refresh()
 
     def action_export_stats(self) -> None:
+        """Write the last 30 days of stats as CSV into the working directory."""
         self.run_worker(self._export_stats(), group="act")
 
     async def _export_stats(self) -> None:

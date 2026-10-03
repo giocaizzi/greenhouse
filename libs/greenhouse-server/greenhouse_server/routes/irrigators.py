@@ -123,8 +123,7 @@ def get_irrigator(cluster_id: int, repo: RepoDep):
     Raises:
         HTTPException: 404 if the cluster has no irrigator.
     """
-    irrigator = require_cluster_irrigator(repo, cluster_id)
-    return irrigator
+    return require_cluster_irrigator(repo, cluster_id)
 
 
 @router.put(

@@ -115,8 +115,7 @@ def _recent_events(repo: IrrigationRepository, cluster_irrigator: Irrigator | No
     if cluster_irrigator is not None:
         recent_events.extend(repo.get_recent_events(cluster_irrigator.id, hours=hours))
     recent_events.sort(key=lambda e: e.timestamp, reverse=True)
-    recent_events = recent_events[:10]
-    return recent_events
+    return recent_events[:10]
 
 
 def _plant_alerts(

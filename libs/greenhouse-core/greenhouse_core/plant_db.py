@@ -30,9 +30,10 @@ class PlantDatabase:
     def _load_database(self) -> dict[str, Any]:
         """Load plant database from JSON."""
         if not self.db_path.exists():
-            raise FileNotFoundError(f"Plant database not found: {self.db_path}")
+            msg = f"Plant database not found: {self.db_path}"
+            raise FileNotFoundError(msg)
 
-        with open(self.db_path, encoding="utf-8") as f:
+        with self.db_path.open(encoding="utf-8") as f:
             data: dict[str, Any] = json.load(f)
         return data
 

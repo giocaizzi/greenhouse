@@ -11,10 +11,11 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Callable
 from http import HTTPStatus
-from typing import Any
+from typing import Any, ClassVar
 
 from textual.app import App
-from textual.binding import Binding
+from textual.binding import Binding, BindingType
+from textual.screen import Screen
 
 from greenhouse_cli.client import IrrigationClient, ServerError, store_token
 from greenhouse_cli.tui.screens.activity import ActivityScreen
@@ -33,7 +34,7 @@ class GreenhouseApp(App[None]):
 
     TITLE = "greenhouse"
     CSS_PATH = "app.tcss"
-    MODES = {
+    MODES: ClassVar[dict[str, str | Callable[[], Screen[Any]]]] = {
         "dashboard": DashboardScreen,
         "alerts": AlertsScreen,
         "activity": ActivityScreen,
@@ -41,7 +42,7 @@ class GreenhouseApp(App[None]):
         "settings": SettingsScreen,
     }
     DEFAULT_MODE = "dashboard"
-    BINDINGS = [
+    BINDINGS: ClassVar[list[BindingType]] = [
         Binding("d", "switch_mode('dashboard')", "Dashboard"),
         Binding("a", "switch_mode('alerts')", "Alerts"),
         Binding("l", "switch_mode('activity')", "Activity"),

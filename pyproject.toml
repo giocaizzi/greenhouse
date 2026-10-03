@@ -91,10 +91,47 @@ select = [
     "C4",  # flake8-comprehensions
     "UP",  # pyupgrade
 ]
-# Complexity ratchet (refactor plan T0.3 / target §11): today's offenders are listed in
-# per-file-ignores below; the integrator removes each entry once its file is clean (I1).
+# Lint ratchet (refactor/40-lint-ratchet.md): every family below is enforced; today's offenders are
+# listed per file in per-file-ignores and the integrator removes each entry once its file is clean.
+# Not adopted, on purpose: COM812 (conflicts with ruff format), ANN (redundant with the mypy strict
+# ratchet), TC (moves imports under TYPE_CHECKING and breaks FastAPI / Typer / Pydantic runtime
+# annotations — typing review), FAST001 (removes response_model: CLAUDE.md invariant 7), FAST002 (only
+# with OpenAPI/MCP golden proof), PYI041 on schemas (changes the OpenAPI schema), DTZ and TRY other than
+# TRY003 (report-only: timezone / exception-handling semantics), PLW0717 (preview, report-only),
+# INP001 (would change packaging), PLC0415 (lazy imports are deliberate).
 extend-select = [
+    # complexity / size (sizecheck.py is the authority on body lines and file length)
     "C90", "PLR0911", "PLR0912", "PLR0915",
+    "PLR0916",  # too-many-boolean-expressions
+    "PLR1702",  # too-many-nested-blocks (preview, explicit) — agrees with sizecheck's nesting check
+    "PLR0914",  # too-many-locals (preview, explicit)
+    "PLR0904",  # too-many-public-methods (preview, explicit)
+    "PLR0913",  # too-many-arguments (frozen handler signatures excluded per directory)
+    "PLR0917",  # too-many-positional-arguments (preview, explicit; same exclusions)
+    # mechanical, behaviour-neutral
+    "SIM",  # flake8-simplify
+    "RET",  # flake8-return
+    "PTH",  # flake8-use-pathlib
+    "PERF",  # perflint
+    "PIE",  # flake8-pie
+    "RSE",  # flake8-raise
+    "FURB",  # refurb
+    "N",  # pep8-naming
+    "EXE",  # flake8-executable
+    "RUF",  # ruff-specific (RUF001 / RUF002 ignored, see below)
+    "PLR2004",  # magic-value-comparison: thresholds live in constants.py (CLAUDE.md invariant 5)
+    "EM",  # exception message literals bound to `msg` first (message text unchanged)
+    "TRY003",  # long messages outside the exception class
+    # signatures (frozen handlers excluded per directory)
+    "FBT",  # boolean traps (Typer --flag options are the CLI contract)
+    "ARG",  # unused arguments (FastAPI web handlers keep `request`)
+    "A002",  # builtin-argument-shadowing (`id` / `type` options and form fields)
+    # docs, security, hygiene
+    "D",  # pydocstyle, google convention (D105 / D107 ignored)
+    "S",  # flake8-bandit: intended uses carry a reasoned noqa; real findings → REFACTOR_NOTES
+    "BLE",  # blind except — a lock: existing sites carry noqa (WP8 files: per-file), never rewritten
+    "T201",  # print: libs/ output goes through typer.echo / rich / logging
+    "PLW",  # pylint warnings
     "ERA",  # eradicate: commented-out code
     "PGH",  # pygrep-hooks: blanket noqa / type: ignore without codes
     "SLF",  # flake8-self: private member access across objects
@@ -103,10 +140,32 @@ extend-select = [
 ignore = [
     "E501",  # line too long (handled by formatter)
     "B008",  # function call in argument defaults
+    "RUF001",  # ambiguous unicode in strings: frozen user-facing output (–, —, ×, …)
+    "RUF002",  # ambiguous unicode in docstrings: allowed by the owner (route docstrings are MCP text)
+    "D105",  # magic methods: their meaning is the protocol's
+    "D107",  # __init__: the class docstring documents construction
+    "PLW0603",  # global statement: deliberate — per-app scheduler `_app`, display tz, plant-DB singleton
 ]
+# Preview rules are opt-in one by one: with explicit-preview-rules only the preview codes listed by full
+# name activate. Measured at step 0: 0 extra findings on the stable rules then selected. Preview does refine
+# two stable rules adopted later: BLE001 skips handlers that log the exception or re-raise, S310 skips
+# literal http(s) URLs. Preview rules may change between ruff releases — the version is pinned in uv.lock
+# and .pre-commit-config.yaml.
+preview = true
+explicit-preview-rules = true
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
 
 [tool.ruff.lint.mccabe]
 max-complexity = 8
+
+[tool.ruff.lint.pylint]
+max-branches = 8
+# 23 statements best approximates the 40-body-line rule of refactor/scripts/sizecheck.py on today's
+# libs/ code (measured over every function: 3 false positives, 1 false negative; 22 → 8 errors, 24 → 6).
+max-statements = 23
+max-nested-blocks = 3
 
 [tool.ruff.format]
 quote-style = "double"
@@ -116,16 +175,70 @@ indent-style = "space"
 "__init__.py" = ["F401"]  # unused imports in __init__
 "tests/*" = ["B011"]  # assert False check
 "scripts/*" = ["E402"]  # intentional sys.path before import
-"tests/**" = ["C90", "PLR0911", "PLR0912", "PLR0915", "ERA001", "SLF001"]  # frozen safety net: exceeds limits, pokes privates
-"refactor/**" = ["C90", "PLR0911", "PLR0912", "PLR0915"]  # refactor tooling scripts, not shipped code
-# Complexity offenders at max-complexity 8 (baseline refactor-gate1); only shrinks.
-"libs/greenhouse-cli/greenhouse_cli/commands/auth.py" = ["C901"]
+# Frozen safety net: tests exceed size limits and poke privates; never edited to satisfy a lint rule.
+"tests/**" = [
+    "C90", "PLR0911", "PLR0912", "PLR0915", "PLR0904", "PLR0913", "PLR0914", "PLR0917", "PLR1702", "PLR2004",
+    "SIM", "RET", "PTH", "PERF", "PLW", "FURB", "N", "RUF", "EM", "TRY003",
+    "FBT", "ARG", "D", "S", "BLE", "ERA001", "SLF001",
+]
+# Refactor tooling scripts (not shipped; the folder is dropped at the end, sizecheck moves to scripts/).
+"refactor/**" = [
+    "C90", "PLR0911", "PLR0912", "PLR0915", "PLR0914", "PLR1702", "PLR2004",
+    "PERF", "PLW", "RUF005", "EM", "TRY003", "FBT", "D", "S", "T201",
+]
+"libs/greenhouse-core/greenhouse_core/migrations/versions/*" = ["D", "PLR0915"]  # generated Alembic DDL, out of scope
+# Frozen handler signatures (not a ratchet): FastAPI API/web handlers and Typer commands declare one
+# parameter per query/form field or CLI option (the OpenAPI / MCP / --help contract), and web pages
+# keep `request: Request` even when unused.
+# D417: route docstrings document request parameters only, never framework-level dependencies such as
+# `repo` / services / settings (CLAUDE.md invariant 7) — the docstring is the MCP tool description.
+"libs/greenhouse-server/greenhouse_server/routes/*" = ["D417", "PLR0913", "PLR0917"]
+"libs/greenhouse-server/greenhouse_server/web/routes/*" = ["A002", "ARG001", "D417", "PLR0913", "PLR0917"]
+"libs/greenhouse-cli/greenhouse_cli/commands/*" = ["A002", "FBT", "PLR0913", "PLR0917"]
+# Ratchet offenders (baseline refactor-gate1 + lint ratchet, refactor/40-lint-ratchet.md); each list only shrinks.
+"libs/greenhouse-cli/greenhouse_cli/client.py" = ["FBT001", "FBT002", "PLR0904", "PLR0913", "PLR0917"]
+"libs/greenhouse-cli/greenhouse_cli/commands/auth.py" = ["PLR0915"]
 "libs/greenhouse-cli/greenhouse_cli/commands/operations.py" = ["C901", "PLR0915"]
-"libs/greenhouse-cli/greenhouse_cli/tui/screens/forms.py" = ["C901", "PLR0911"]
-"libs/greenhouse-core/greenhouse_core/devices/irrigators/ik10pw.py" = ["C901", "PLR0911"]
-"libs/greenhouse-core/greenhouse_core/devices/irrigators/tuya_generic.py" = ["C901"]
-"libs/greenhouse-core/greenhouse_core/logic/engine.py" = ["C901", "PLR0911", "PLR0912", "PLR0915"]
-"libs/greenhouse-server/greenhouse_server/services/health_monitor.py" = ["PLR0911"]
+"libs/greenhouse-cli/greenhouse_cli/tui/__init__.py" = ["FBT001", "FBT002"]
+"libs/greenhouse-cli/greenhouse_cli/tui/app.py" = ["FBT001", "FBT002"]
+"libs/greenhouse-cli/greenhouse_cli/tui/formatting.py" = ["FBT001", "FBT002"]
+"libs/greenhouse-cli/greenhouse_cli/tui/render.py" = ["FBT001", "FBT003"]
+"libs/greenhouse-cli/greenhouse_cli/tui/screens/alerts.py" = ["FBT003"]
+"libs/greenhouse-cli/greenhouse_cli/tui/screens/base.py" = ["FBT001", "PLR0913", "PLR0917"]
+"libs/greenhouse-cli/greenhouse_cli/tui/screens/cluster.py" = ["FBT001", "FBT003", "PLR0904", "PLR0915", "PLR1702"]
+"libs/greenhouse-cli/greenhouse_cli/tui/screens/forms.py" = ["C901", "PLR0911", "PLR0912", "PLR1702"]
+"libs/greenhouse-cli/greenhouse_cli/tui/screens/modals.py" = ["FBT001", "FBT002"]
+"libs/greenhouse-cli/greenhouse_cli/tui/sprites.py" = ["FBT001", "FBT002"]
+"libs/greenhouse-cli/greenhouse_cli/tui/widgets.py" = ["FBT001", "FBT002", "PLR0913", "PLR0915", "PLR0917"]
+"libs/greenhouse-core/greenhouse_core/devices/__init__.py" = ["RUF022"]
+"libs/greenhouse-core/greenhouse_core/devices/gateway.py" = ["BLE001", "EM101", "EM102", "PLR0915", "TRY003"]
+"libs/greenhouse-core/greenhouse_core/devices/irrigators/ik10pw.py" = ["BLE001", "C901", "PLR0911", "PLR0915", "PLR1702", "RUF022", "S110", "SIM105"]
+"libs/greenhouse-core/greenhouse_core/devices/irrigators/tuya_generic.py" = ["ARG002", "BLE001", "C901", "FBT001", "FBT003", "PLR0912", "PLR1702", "S110"]
+"libs/greenhouse-core/greenhouse_core/devices/profile.py" = ["D205"]
+"libs/greenhouse-core/greenhouse_core/devices/registry.py" = ["D102", "EM102", "N818", "TRY003"]  # UnknownDeviceModel: public name (WP8-owned file)
+"libs/greenhouse-core/greenhouse_core/devices/sensors/tr301z.py" = ["ARG002", "RUF022"]
+"libs/greenhouse-core/greenhouse_core/devices/sensors/tuya_generic.py" = ["ARG002", "BLE001"]
+"libs/greenhouse-core/greenhouse_core/logic/decision.py" = ["PLR0913"]
+"libs/greenhouse-core/greenhouse_core/logic/engine.py" = ["ARG002", "C901", "D205", "PLR0911", "PLR0912", "PLR0913", "PLR0914", "PLR0915", "PLR2004", "RUF003", "RUF046"]
+"libs/greenhouse-core/greenhouse_core/logic/fallback.py" = ["PLR0913"]
+"libs/greenhouse-core/greenhouse_core/logic/timing.py" = ["SIM102"]
+"libs/greenhouse-core/greenhouse_core/repository.py" = ["FBT001", "FBT002", "PLR0904", "PLR0913", "PLR0917"]
+"libs/greenhouse-core/greenhouse_core/sync.py" = ["BLE001", "D202", "EXE002", "PLR0915", "PLR1702", "S110", "SIM108"]  # EXE002: stray +x bit, WP8-owned
+"libs/greenhouse-server/greenhouse_server/config.py" = ["D101"]
+"libs/greenhouse-server/greenhouse_server/deps.py" = ["PLR0913", "PLR0917"]
+"libs/greenhouse-server/greenhouse_server/routes/scheduler.py" = ["FBT001", "FBT003"]
+"libs/greenhouse-server/greenhouse_server/scheduler.py" = ["FBT001", "FBT003"]
+"libs/greenhouse-server/greenhouse_server/services/alerts.py" = ["PLR0913"]
+"libs/greenhouse-server/greenhouse_server/services/bulk.py" = ["PLR1702"]
+"libs/greenhouse-server/greenhouse_server/services/forecast.py" = ["PLR0914"]
+"libs/greenhouse-server/greenhouse_server/services/health_monitor.py" = ["PLR0911", "PLR0913"]
+"libs/greenhouse-server/greenhouse_server/services/inventory.py" = ["PLR0913"]
+"libs/greenhouse-server/greenhouse_server/services/irrigation.py" = ["FBT001", "FBT002", "PLR0913", "PLR0915", "PLR0917"]
+"libs/greenhouse-server/greenhouse_server/services/manual_control.py" = ["PLR0913"]
+"libs/greenhouse-server/greenhouse_server/services/pump_watcher.py" = ["PLR0913", "PLR0915"]
+"libs/greenhouse-server/greenhouse_server/services/system_health.py" = ["FBT001"]
+"libs/greenhouse-server/greenhouse_server/web/filters.py" = ["PLR0912"]
+"libs/greenhouse-server/greenhouse_server/web/routes/analytics.py" = ["FBT001", "FBT003"]
 
 [tool.importlinter]
 root_packages = ["greenhouse_core", "greenhouse_server", "greenhouse_cli"]

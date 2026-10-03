@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import time
 from importlib.metadata import PackageNotFoundError, version
 from typing import TYPE_CHECKING, Any
@@ -42,7 +43,7 @@ def _repo_from_request(request: Request) -> tuple[IrrigationRepository, Session]
         factory = request.app.state.session_factory
         session = factory()
         return IrrigationRepository(session), session
-    except Exception:
+    except Exception:  # noqa: BLE001
         return None, None
 
 
@@ -67,7 +68,7 @@ def _preference_flags(request: Request) -> tuple[bool, VacationWindow | None, bo
             scheduler_paused = prefs.scheduler_paused
             theme = prefs.theme or "auto"
             active_vacation = repo.get_active_vacation()
-        except Exception:
+        except Exception:  # noqa: BLE001, S110
             pass
         finally:
             # contract: target §3.6 keeps this close; _repo_from_request sets repo and session together.
@@ -78,10 +79,8 @@ def _preference_flags(request: Request) -> tuple[bool, VacationWindow | None, bo
 def _auth_enabled(request: Request) -> bool:
     """Whether auth is on; read off app.state so the topbar can hide Sign out in the no-auth dev mode."""
     auth_enabled = True
-    try:
+    with contextlib.suppress(AttributeError):
         auth_enabled = bool(request.app.state.settings.auth_enabled)
-    except AttributeError:
-        pass
     return auth_enabled
 
 

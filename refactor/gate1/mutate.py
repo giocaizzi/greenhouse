@@ -1806,7 +1806,12 @@ add(
             "if max_recent < target_min and profile.response_count >= 3:",
             "chronic underwatering min responses 5 -> 3",
         ),
-        ("05", "    if len(profiles) >= 2:", "    if len(profiles) > 2:", "conflict check needs > 2 profiles"),
+        (
+            "05",
+            "    if len(profiles) >= CONFLICT_MIN_PROFILES:",
+            "    if len(profiles) > CONFLICT_MIN_PROFILES:",
+            "conflict check needs > 2 profiles",
+        ),
         ("06", "if moisture < target_min - 5:", "if moisture < target_min - 10:", "dry-sensor margin 5 -> 10"),
         (
             "07",
@@ -1886,14 +1891,14 @@ add(
         ),
         (
             "21",
-            "positive_responses = sum(1 for d in deltas if d > 2)",
+            "positive_responses = sum(1 for d in deltas if d > LEARNING_POSITIVE_RESPONSE_DELTA)",
             "positive_responses = sum(1 for d in deltas if d > 0)",
             "efficiency threshold 2% -> 0%",
         ),
         (
             "22",
-            "if delta < 0 and 0.1 < hours < 12:",
-            "if delta < 0 and 0.1 < hours < 24:",
+            "if delta < 0 and LEARNING_DRAINAGE_MIN_GAP_HOURS < hours < LEARNING_DRAINAGE_MAX_GAP_HOURS:",
+            "if delta < 0 and LEARNING_DRAINAGE_MIN_GAP_HOURS < hours < 24:",
             "drainage gap limit 12h -> 24h",
         ),
         (
@@ -1923,14 +1928,14 @@ add(
     [
         (
             "26",
-            "        if profile.efficiency_score < 0.5:",
+            "        if profile.efficiency_score < LEARNING_REPORT_LOW_EFFICIENCY:",
             "        if profile.efficiency_score < 0.6:",
             "report low-efficiency 0.5 -> 0.6",
         ),
         (
             "27",
-            'lines.append(f"   [{alert.severity.upper()}] {alert.message}")',
-            'lines.append(f"   [{alert.severity}] {alert.message}")',
+            'lines.extend(f"   [{alert.severity.upper()}] {alert.message}" for alert in alerts)',
+            'lines.extend(f"   [{alert.severity}] {alert.message}" for alert in alerts)',
             "report severity not upper-cased",
         ),
         ("28", '        return "No sensors in cluster."', '        return ""', "report empty-cluster text"),
@@ -2380,8 +2385,8 @@ add(
         ),
         (
             "14",
-            "    if job_id in _CORE_JOB_IDS:\n        raise CoreJobError(",
-            "    if job_id in ():\n        raise CoreJobError(",
+            "    if job_id in _CORE_JOB_IDS:\n        msg = (",
+            "    if job_id in ():\n        msg = (",
             "core jobs deletable",
         ),
         ("15", "    repo.update_preferences(scheduler_paused=paused)\n", "", "pause not persisted"),
@@ -2458,8 +2463,8 @@ add(
         ),
         (
             "04",
-            '            triggered_by=TRIGGERED_BY_MANUAL if force else TRIGGERED_BY_AUTO,',
-            '            triggered_by=TRIGGERED_BY_AUTO,',
+            "            triggered_by=TRIGGERED_BY_MANUAL if force else TRIGGERED_BY_AUTO,",
+            "            triggered_by=TRIGGERED_BY_AUTO,",
             "force no longer logs manual trigger",
         ),
         (
@@ -2497,8 +2502,8 @@ add(
         ),
         (
             "10",
-            '            action=EVENT_ACTION_START if success else EVENT_ACTION_ATTEMPTED,',
-            '            action=EVENT_ACTION_START,',
+            "            action=EVENT_ACTION_START if success else EVENT_ACTION_ATTEMPTED,",
+            "            action=EVENT_ACTION_START,",
             "failed start recorded as start",
         ),
         (
@@ -2772,7 +2777,7 @@ add(
         ),
         (
             "03",
-            '        minutes_used = sum(e.duration_minutes or 0 for e in recent if e.action == EVENT_ACTION_START)',
+            "        minutes_used = sum(e.duration_minutes or 0 for e in recent if e.action == EVENT_ACTION_START)",
             "        minutes_used = sum(e.duration_minutes or 0 for e in recent)",
             "daily cap counts non-start events",
         ),
@@ -2790,7 +2795,7 @@ add(
         ),
         (
             "06",
-            '    if minutes:\n        schedule_pump_watcher(irrigator.id, minutes, started_at, triggered_by=TRIGGERED_BY_MANUAL)',
+            "    if minutes:\n        schedule_pump_watcher(irrigator.id, minutes, started_at, triggered_by=TRIGGERED_BY_MANUAL)",
             "    if minutes:\n        schedule_pump_watcher(irrigator.id, minutes, started_at)",
             "manual watcher marked auto (stopped on shutdown)",
         ),
@@ -3165,7 +3170,7 @@ add(
     [
         (
             "01",
-            '    if not plain:\n        raise ValueError("password must be non-empty")\n',
+            '    if not plain:\n        msg = "password must be non-empty"\n        raise ValueError(msg)\n',
             "",
             "empty password accepted",
         ),
@@ -3228,8 +3233,8 @@ add(
         ),
         (
             "11",
-            '    if user is None or not user.is_active:\n        raise AuthError("User no longer active")',
-            '    if user is None:\n        raise AuthError("User no longer active")',
+            '    if user is None or not user.is_active:\n        msg = "User no longer active"',
+            '    if user is None:\n        msg = "User no longer active"',
             "inactive users accepted",
         ),
         (
@@ -3322,7 +3327,12 @@ add(
             "age_seconds 60 s boundary",
         ),
         ("02", "_AGE_STALE_SECONDS = 7 * 86400", "_AGE_STALE_SECONDS = 30 * 86400", "stale age 7d -> 30d"),
-        ("03", '    cleaned = re.sub(r"\\s*;\\s*", "; ", cleaned)\n', "", "strip_emoji keeps ' ; ' spacing"),
+        (
+            "03",
+            '    return re.sub(r"\\s*;\\s*", "; ", cleaned)\n',
+            "    return cleaned\n",
+            "strip_emoji keeps ' ; ' spacing",
+        ),
         (
             "04",
             "    if value is None or lo is None or hi is None or hi <= lo:",
@@ -3480,7 +3490,7 @@ add(
             "XDG_CONFIG_HOME ignored",
         ),
         ("02", "        return env_token.strip() or None", "        return env_token", "env token not stripped"),
-        ("03", "    os.chmod(path, 0o600)", "    os.chmod(path, 0o644)", "token file world-readable"),
+        ("03", "    path.chmod(0o600)", "    path.chmod(0o644)", "token file world-readable"),
         (
             "04",
             "        resolved = token if token is not None else load_stored_token()",
@@ -3493,7 +3503,12 @@ add(
             "        self.http = httpx.Client(base_url=base_url, timeout=10.0, headers=headers, **kwargs)",
             "client timeout 30 -> 10 s",
         ),
-        ("06", "        if resp.status_code >= HTTPStatus.BAD_REQUEST:", "        if resp.status_code > HTTPStatus.BAD_REQUEST:", "400 not treated as error"),
+        (
+            "06",
+            "        if resp.status_code >= HTTPStatus.BAD_REQUEST:",
+            "        if resp.status_code > HTTPStatus.BAD_REQUEST:",
+            "400 not treated as error",
+        ),
         (
             "07",
             '                detail = resp.json().get("detail", resp.text)',
@@ -3852,8 +3867,8 @@ add(
     [
         (
             "29",
-            '        if f.required:\n            raise ValueError(f"{f.label} is required")',
-            '        if False:\n            raise ValueError(f"{f.label} is required")',
+            '        if f.required:\n            msg = f"{f.label} is required"',
+            '        if False:\n            msg = f"{f.label} is required"',
             "required fields accept blanks",
         ),
         (

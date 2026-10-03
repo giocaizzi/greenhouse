@@ -1,5 +1,6 @@
 """Top-level operation commands: status, irrigate, check, monitor, sync, learn, history, stats, health."""
 
+from pathlib import Path
 from typing import Annotated
 
 import typer
@@ -93,7 +94,7 @@ def register(app: typer.Typer) -> None:
         """Irrigation statistics and CSV export."""
         if export:
             csv_data = call(ctx, lambda c: c.stats_export(cluster, days=days))
-            with open(export, "w") as f:
+            with Path(export).open("w") as f:
                 f.write(csv_data)
             typer.echo(f"Exported to {export}")
         else:

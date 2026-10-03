@@ -4417,7 +4417,8 @@
     "required": [
      "items"
     ],
-    "title": "ActivityListResponse"
+    "title": "ActivityListResponse",
+    "description": "A page of the activity stream, newest first; pass ``next_cursor`` for older events."
    },
    "AlertListResponse": {
     "properties": {
@@ -4449,7 +4450,8 @@
      "open_count",
      "items"
     ],
-    "title": "AlertListResponse"
+    "title": "AlertListResponse",
+    "description": "A page of the alert inbox, with the total number of open alerts."
    },
    "AlertResponse": {
     "properties": {
@@ -4484,7 +4486,8 @@
      "severity",
      "message"
     ],
-    "title": "AlertResponse"
+    "title": "AlertResponse",
+    "description": "An advisory alert raised alongside a decision, check or learning report."
    },
    "AlertSummary": {
     "properties": {
@@ -4682,7 +4685,8 @@
      "sensor_name",
      "points"
     ],
-    "title": "ChartDatasetResponse"
+    "title": "ChartDatasetResponse",
+    "description": "One sensor's ``(timestamp, value)`` series for a chart."
    },
    "ChartEventResponse": {
     "properties": {
@@ -4711,7 +4715,8 @@
      "timestamp",
      "action"
     ],
-    "title": "ChartEventResponse"
+    "title": "ChartEventResponse",
+    "description": "An irrigation event marked on a chart."
    },
    "ChartPayloadResponse": {
     "properties": {
@@ -4749,7 +4754,8 @@
      "events",
      "threshold"
     ],
-    "title": "ChartPayloadResponse"
+    "title": "ChartPayloadResponse",
+    "description": "Everything a metric chart needs: sensor series, irrigation events and the ideal band."
    },
    "ChartThresholdResponse": {
     "properties": {
@@ -4782,7 +4788,8 @@
      }
     },
     "type": "object",
-    "title": "ChartThresholdResponse"
+    "title": "ChartThresholdResponse",
+    "description": "The ideal band drawn on a chart and where it came from (``none`` when unknown)."
    },
    "CheckAllResponse": {
     "properties": {
@@ -4803,7 +4810,8 @@
      "results",
      "has_alerts"
     ],
-    "title": "CheckAllResponse"
+    "title": "CheckAllResponse",
+    "description": "Outcome of the scheduled check across all clusters."
    },
    "CheckClusterResponse": {
     "properties": {
@@ -4861,7 +4869,8 @@
      "cluster_name",
      "action"
     ],
-    "title": "CheckClusterResponse"
+    "title": "CheckClusterResponse",
+    "description": "Outcome of the scheduled check for one cluster, with any alerts it raised."
    },
    "ClusterDetailResponse": {
     "properties": {
@@ -4956,7 +4965,8 @@
      "cluster_name",
      "insights"
     ],
-    "title": "ClusterInsightsResponse"
+    "title": "ClusterInsightsResponse",
+    "description": "Care insights for a cluster, with the next-irrigation forecast."
    },
    "ClusterResponse": {
     "properties": {
@@ -4995,7 +5005,8 @@
      "id",
      "created_at"
     ],
-    "title": "ClusterResponse"
+    "title": "ClusterResponse",
+    "description": "A cluster as stored."
    },
    "ClusterStatusIrrigatorResponse": {
     "properties": {
@@ -5034,7 +5045,8 @@
      "recent_event_count",
      "last_event"
     ],
-    "title": "ClusterStatusIrrigatorResponse"
+    "title": "ClusterStatusIrrigatorResponse",
+    "description": "The irrigator in the status view, with its recent activity."
    },
    "ClusterStatusResponse": {
     "properties": {
@@ -5095,7 +5107,8 @@
      "irrigator",
      "decision"
     ],
-    "title": "ClusterStatusResponse"
+    "title": "ClusterStatusResponse",
+    "description": "Everything the dashboard shows for a cluster: config, plants, sensors, irrigator and current decision."
    },
    "ClusterStatusSensorResponse": {
     "properties": {
@@ -5153,7 +5166,8 @@
      "last_reading",
      "reading_age_seconds"
     ],
-    "title": "ClusterStatusSensorResponse"
+    "title": "ClusterStatusSensorResponse",
+    "description": "A sensor in the status view, with its latest reading and how old it is."
    },
    "ConfigResponse": {
     "properties": {
@@ -5298,7 +5312,8 @@
     "required": [
      "name"
     ],
-    "title": "CreateClusterRequest"
+    "title": "CreateClusterRequest",
+    "description": "Body for creating a cluster."
    },
    "CreateIrrigationWindowRequest": {
     "properties": {
@@ -5332,7 +5347,8 @@
      "start_hour",
      "end_hour"
     ],
-    "title": "CreateIrrigationWindowRequest"
+    "title": "CreateIrrigationWindowRequest",
+    "description": "Body for adding a watering window to a cluster."
    },
    "CreateIrrigatorRequest": {
     "properties": {
@@ -5391,7 +5407,8 @@
      "name",
      "type"
     ],
-    "title": "CreateIrrigatorRequest"
+    "title": "CreateIrrigatorRequest",
+    "description": "Body for attaching an irrigator to a cluster (one per cluster)."
    },
    "CreatePlantRequest": {
     "properties": {
@@ -5492,7 +5509,8 @@
     "required": [
      "species"
     ],
-    "title": "CreatePlantRequest"
+    "title": "CreatePlantRequest",
+    "description": "Body for adding a plant to a cluster."
    },
    "CreateSensorRequest": {
     "properties": {
@@ -5538,7 +5556,8 @@
      "name",
      "type"
     ],
-    "title": "CreateSensorRequest"
+    "title": "CreateSensorRequest",
+    "description": "Body for registering a sensor in a cluster."
    },
    "DataQualityIssue": {
     "properties": {
@@ -5583,7 +5602,8 @@
      "label",
      "message"
     ],
-    "title": "DataQualityIssue"
+    "title": "DataQualityIssue",
+    "description": "One data-quality finding about a sensor, plant or cluster."
    },
    "DataQualityReport": {
     "properties": {
@@ -5607,7 +5627,8 @@
      "issues",
      "counts"
     ],
-    "title": "DataQualityReport"
+    "title": "DataQualityReport",
+    "description": "Every data-quality finding plus how many there are per issue code."
    },
    "DecisionLogListResponse": {
     "properties": {
@@ -5628,7 +5649,8 @@
      "cluster_id",
      "items"
     ],
-    "title": "DecisionLogListResponse"
+    "title": "DecisionLogListResponse",
+    "description": "Logged decision evaluations for a cluster, newest first."
    },
    "DecisionLogResponse": {
     "properties": {
@@ -5823,7 +5845,8 @@
      "days",
      "items"
     ],
-    "title": "EfficacyListResponse"
+    "title": "EfficacyListResponse",
+    "description": "Scored irrigation outcomes for a cluster over the requested number of days."
    },
    "ForecastResponse": {
     "properties": {
@@ -6069,7 +6092,8 @@
      "scheduler_running",
      "jobs"
     ],
-    "title": "HealthResponse"
+    "title": "HealthResponse",
+    "description": "Liveness of the server and its scheduler, with the registered jobs."
    },
    "HeatmapCell": {
     "properties": {
@@ -6154,7 +6178,8 @@
      "sensors",
      "irrigators"
     ],
-    "title": "HistoryResponse"
+    "title": "HistoryResponse",
+    "description": "A cluster's sensor readings and irrigation events over the requested window."
    },
    "IrrigateRequest": {
     "properties": {
@@ -6282,7 +6307,8 @@
      "reason",
      "confidence"
     ],
-    "title": "IrrigateResponse"
+    "title": "IrrigateResponse",
+    "description": "The decision for a cluster: action, duration, interval, confidence and the reason trail behind it."
    },
    "IrrigationEventResponse": {
     "properties": {
@@ -6339,7 +6365,8 @@
      "triggered_by",
      "notes"
     ],
-    "title": "IrrigationEventResponse"
+    "title": "IrrigationEventResponse",
+    "description": "One irrigation event (start, stop, manual log, …) with what triggered it."
    },
    "IrrigationWindowListResponse": {
     "properties": {
@@ -6360,7 +6387,8 @@
      "cluster_id",
      "windows"
     ],
-    "title": "IrrigationWindowListResponse"
+    "title": "IrrigationWindowListResponse",
+    "description": "A cluster's watering windows; an empty list allows every hour (quiet hours still apply)."
    },
    "IrrigationWindowResponse": {
     "properties": {
@@ -6404,7 +6432,8 @@
      "id",
      "cluster_id"
     ],
-    "title": "IrrigationWindowResponse"
+    "title": "IrrigationWindowResponse",
+    "description": "A watering window as stored."
    },
    "IrrigatorActionResponse": {
     "properties": {
@@ -6449,7 +6478,8 @@
      "irrigator_name",
      "events"
     ],
-    "title": "IrrigatorHistoryResponse"
+    "title": "IrrigatorHistoryResponse",
+    "description": "One irrigator's events over the requested window."
    },
    "IrrigatorListResponse": {
     "properties": {
@@ -6546,7 +6576,8 @@
      "id",
      "cluster_id"
     ],
-    "title": "IrrigatorResponse"
+    "title": "IrrigatorResponse",
+    "description": "An irrigator as stored, with the cluster it waters."
    },
    "LearnResponse": {
     "properties": {
@@ -6572,7 +6603,8 @@
      "cluster_name",
      "report"
     ],
-    "title": "LearnResponse"
+    "title": "LearnResponse",
+    "description": "The learning report for a cluster as text, plus the alerts it detected."
    },
    "LogManualRequest": {
     "properties": {
@@ -6596,7 +6628,8 @@
     "required": [
      "minutes"
     ],
-    "title": "LogManualRequest"
+    "title": "LogManualRequest",
+    "description": "Body for recording a watering done by hand; it feeds cooldown and learning, nothing is actuated."
    },
    "LogManualResponse": {
     "properties": {
@@ -6708,7 +6741,8 @@
      "sensors",
      "needs_water"
     ],
-    "title": "MonitorResponse"
+    "title": "MonitorResponse",
+    "description": "Moisture status of every sensor in a cluster and the plants that need water."
    },
    "MovePlantRequest": {
     "properties": {
@@ -6877,7 +6911,8 @@
      "score",
      "sample_count"
     ],
-    "title": "PlantHealthDailyResponse"
+    "title": "PlantHealthDailyResponse",
+    "description": "One day's health score for a plant and the in-band percentages behind it."
    },
    "PlantHealthResponse": {
     "properties": {
@@ -6915,7 +6950,8 @@
      "current_score",
      "history"
     ],
-    "title": "PlantHealthResponse"
+    "title": "PlantHealthResponse",
+    "description": "A plant's current health score and its daily history."
    },
    "PlantHealthTimelineResponse": {
     "properties": {
@@ -7097,7 +7133,8 @@
      "id",
      "cluster_id"
     ],
-    "title": "PlantResponse"
+    "title": "PlantResponse",
+    "description": "A plant as stored, with the cluster it belongs to."
    },
    "PreferencesResponse": {
     "properties": {
@@ -7167,7 +7204,8 @@
      "notify_alerts",
      "notify_auto"
     ],
-    "title": "PreferencesResponse"
+    "title": "PreferencesResponse",
+    "description": "Server-wide preferences (display, refresh, global dry-run, scheduler pause, notifications)."
    },
    "PreferencesUpdateRequest": {
     "properties": {
@@ -7283,7 +7321,8 @@
      }
     },
     "type": "object",
-    "title": "PreferencesUpdateRequest"
+    "title": "PreferencesUpdateRequest",
+    "description": "Partial update of the preferences; omitted fields keep their value."
    },
    "ReasonResponse": {
     "properties": {
@@ -7408,7 +7447,8 @@
      "trigger",
      "next_run_time"
     ],
-    "title": "SchedulerJobResponse"
+    "title": "SchedulerJobResponse",
+    "description": "A scheduler job; ``core`` jobs are built in and cannot be deleted."
    },
    "SchedulerStateResponse": {
     "properties": {
@@ -7461,7 +7501,8 @@
      "label",
      "href"
     ],
-    "title": "SearchHit"
+    "title": "SearchHit",
+    "description": "One search match with a link to the page that shows it."
    },
    "SearchResponse": {
     "properties": {
@@ -7482,7 +7523,8 @@
      "query",
      "hits"
     ],
-    "title": "SearchResponse"
+    "title": "SearchResponse",
+    "description": "Search matches across clusters, plants, sensors and irrigators."
    },
    "SensorAssignmentListResponse": {
     "properties": {
@@ -7545,7 +7587,7 @@
      "ended_at"
     ],
     "title": "SensorAssignmentResponse",
-    "description": "One row from a sensor's plant-assignment history. ``ended_at=None``\nmeans the row is currently active."
+    "description": "One row from a sensor's plant-assignment history.\n\n``ended_at=None`` means the row is currently active."
    },
    "SensorHistoryResponse": {
     "properties": {
@@ -7571,7 +7613,8 @@
      "sensor_name",
      "readings"
     ],
-    "title": "SensorHistoryResponse"
+    "title": "SensorHistoryResponse",
+    "description": "One sensor's readings over the requested window."
    },
    "SensorListResponse": {
     "properties": {
@@ -7694,7 +7737,8 @@
      "battery_state",
      "water_warning"
     ],
-    "title": "SensorReadingResponse"
+    "title": "SensorReadingResponse",
+    "description": "One raw sensor reading as persisted (unset metrics are null)."
    },
    "SensorResponse": {
     "properties": {
@@ -7750,7 +7794,8 @@
      "id",
      "cluster_id"
     ],
-    "title": "SensorResponse"
+    "title": "SensorResponse",
+    "description": "A sensor as stored, with its cluster and current plant assignment."
    },
    "SensorStatusResponse": {
     "properties": {
@@ -7821,7 +7866,8 @@
      "target_min",
      "target_max"
     ],
-    "title": "SensorStatusResponse"
+    "title": "SensorStatusResponse",
+    "description": "One sensor's latest soil moisture judged against its plant's target band."
    },
    "SetConfigRequest": {
     "properties": {
@@ -7947,7 +7993,8 @@
      }
     },
     "type": "object",
-    "title": "StartIrrigatorRequest"
+    "title": "StartIrrigatorRequest",
+    "description": "Body for a manual start; omit ``minutes`` to run the configured default duration."
    },
    "StatsResponse": {
     "properties": {
@@ -8001,7 +8048,8 @@
      "events_by_type",
      "events_by_trigger"
     ],
-    "title": "StatsResponse"
+    "title": "StatsResponse",
+    "description": "Irrigation statistics for a cluster over the requested number of days."
    },
    "StopAllResponse": {
     "properties": {
@@ -8065,7 +8113,8 @@
      }
     },
     "type": "object",
-    "title": "SyncPlantsRequest"
+    "title": "SyncPlantsRequest",
+    "description": "Scope of a plant-database sync: one plant, one cluster, or every plant when both are omitted."
    },
    "SyncPlantsResponse": {
     "properties": {
@@ -8086,7 +8135,8 @@
      "synced",
      "errors"
     ],
-    "title": "SyncPlantsResponse"
+    "title": "SyncPlantsResponse",
+    "description": "Number of plants refreshed from the plant database, plus per-plant errors."
    },
    "SyncRequest": {
     "properties": {
@@ -8097,7 +8147,8 @@
      }
     },
     "type": "object",
-    "title": "SyncRequest"
+    "title": "SyncRequest",
+    "description": "Body for a sensor sync: how many hours of device history to backfill."
    },
    "SyncResponse": {
     "properties": {
@@ -8128,7 +8179,8 @@
      "total_live",
      "errors"
     ],
-    "title": "SyncResponse"
+    "title": "SyncResponse",
+    "description": "Totals of a sensor sync (history rows synced, new rows stored, live reads) and any errors."
    },
    "SystemHealthDevice": {
     "properties": {
@@ -8173,7 +8225,8 @@
      "name",
      "status"
     ],
-    "title": "SystemHealthDevice"
+    "title": "SystemHealthDevice",
+    "description": "One device's freshness on the system health page."
    },
    "SystemHealthResponse": {
     "properties": {
@@ -8241,7 +8294,8 @@
      "open_alerts",
      "devices"
     ],
-    "title": "SystemHealthResponse"
+    "title": "SystemHealthResponse",
+    "description": "Server-wide health: scheduler, cloud reachability, sensor freshness and open alerts."
    },
    "UpdateClusterRequest": {
     "properties": {
@@ -8280,7 +8334,8 @@
      }
     },
     "type": "object",
-    "title": "UpdateClusterRequest"
+    "title": "UpdateClusterRequest",
+    "description": "Partial update of a cluster; omitted fields keep their value."
    },
    "UpdateGlobalConfigRequest": {
     "properties": {
@@ -8425,7 +8480,8 @@
      }
     },
     "type": "object",
-    "title": "UpdateIrrigationWindowRequest"
+    "title": "UpdateIrrigationWindowRequest",
+    "description": "Partial update of a watering window; omitted fields keep their value."
    },
    "UpdateIrrigatorRequest": {
     "properties": {
@@ -8489,7 +8545,8 @@
      }
     },
     "type": "object",
-    "title": "UpdateIrrigatorRequest"
+    "title": "UpdateIrrigatorRequest",
+    "description": "Partial update of an irrigator; omitted fields keep their value."
    },
    "UpdatePlantRequest": {
     "properties": {
@@ -8594,7 +8651,8 @@
      }
     },
     "type": "object",
-    "title": "UpdatePlantRequest"
+    "title": "UpdatePlantRequest",
+    "description": "Partial update of a plant; omitted fields keep their value."
    },
    "UpdateSensorRequest": {
     "properties": {
@@ -8645,7 +8703,8 @@
      }
     },
     "type": "object",
-    "title": "UpdateSensorRequest"
+    "title": "UpdateSensorRequest",
+    "description": "Partial update of a sensor; omitted fields keep their value."
    },
    "UpdateVacationWindowRequest": {
     "properties": {
@@ -8736,7 +8795,8 @@
      "starts_at",
      "ends_at"
     ],
-    "title": "VacationCreateRequest"
+    "title": "VacationCreateRequest",
+    "description": "Body for scheduling a vacation window (Unix seconds); watering is rationed inside it."
    },
    "VacationListResponse": {
     "properties": {
@@ -8763,7 +8823,8 @@
      "active",
      "items"
     ],
-    "title": "VacationListResponse"
+    "title": "VacationListResponse",
+    "description": "All vacation windows and the one active now, if any."
    },
    "VacationResponse": {
     "properties": {
@@ -8815,7 +8876,8 @@
      "notes",
      "created_at"
     ],
-    "title": "VacationResponse"
+    "title": "VacationResponse",
+    "description": "A vacation window as stored."
    },
    "ValidationError": {
     "properties": {

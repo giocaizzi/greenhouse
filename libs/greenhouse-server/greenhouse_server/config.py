@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     )
 
     db_url: str = "sqlite:///data/irrigation.db"
-    host: str = "0.0.0.0"
+    host: str = "0.0.0.0"  # noqa: S104 — container default (Docker publishes the port); IRRIGATION_HOST overrides
     port: int = 8000
     debug: bool = False
     plant_db_path: str | None = None
@@ -50,7 +50,8 @@ class Settings(BaseSettings):
     @classmethod
     def _validate_sync_interval(cls, value: int) -> int:
         if value <= 0:
-            raise ValueError(f"IRRIGATION_SYNC_INTERVAL_MINUTES must be a positive number of minutes, got {value}")
+            msg = f"IRRIGATION_SYNC_INTERVAL_MINUTES must be a positive number of minutes, got {value}"
+            raise ValueError(msg)
         return value
 
     @field_validator("check_cron_hours")
@@ -63,10 +64,11 @@ class Settings(BaseSettings):
         try:
             CronTrigger(hour=value, minute=0)
         except (ValueError, TypeError) as exc:
-            raise ValueError(
+            msg = (
                 f"IRRIGATION_CHECK_CRON_HOURS={value!r} is not a valid cron hour expression "
                 f"(e.g. '*', '0,6,12,18', '*/3', '6-20/2'): {exc}"
-            ) from None
+            )
+            raise ValueError(msg) from None
         return value
 
     # MCP bearer token (fail-closed: unset -> /mcp returns 503).

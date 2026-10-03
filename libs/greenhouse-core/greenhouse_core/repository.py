@@ -60,7 +60,7 @@ _GLOBAL_CONFIG_DEFAULTS: dict[str, int | str | bool | None] = {
     "daily_cap_minutes": None,
     "max_events_per_day": None,
     # Quiet hours have no built-in fallback — the production migration seeds
-    # the global row with the canonical 00:00–05:00 window, and fresh-DB flows
+    # the global row with the canonical 00:00-05:00 window, and fresh-DB flows
     # (tests, dev installs) start with quiet hours disabled until explicitly
     # configured. See ``get_global_irrigation_config``.
     "quiet_start_hour": None,
@@ -171,7 +171,8 @@ class IrrigationRepository:
         the cluster already has one.
         """
         if self.get_irrigator_for_cluster(cluster_id) is not None:
-            raise IrrigatorExistsError(f"cluster {cluster_id} already has an irrigator")
+            msg = f"cluster {cluster_id} already has an irrigator"
+            raise IrrigatorExistsError(msg)
         irrigator = Irrigator(
             cluster_id=cluster_id,
             tuya_device_id=tuya_device_id,
@@ -357,10 +358,9 @@ class IrrigationRepository:
         self.session.flush()
         if result.rowcount > 0:
             # Fetch the inserted row's ID
-            row = self.session.execute(
+            return self.session.execute(
                 select(SensorReading.id).where(SensorReading.sensor_id == sensor_id, SensorReading.timestamp == ts)
             ).scalar_one()
-            return row
         return None
 
     def get_last_reading_timestamp(self, sensor_id: int) -> int | None:
@@ -1367,7 +1367,8 @@ class IrrigationRepository:
         if not target:
             return None
         if plant.cluster_id == target_cluster_id:
-            raise SameClusterMoveError(f"Plant {plant_id} already belongs to cluster {target_cluster_id}")
+            msg = f"Plant {plant_id} already belongs to cluster {target_cluster_id}"
+            raise SameClusterMoveError(msg)
         from_cluster_id = plant.cluster_id
         plant.cluster_id = target_cluster_id
         moved_sensors = list(self.session.scalars(select(Sensor).where(Sensor.plant_id == plant_id)))

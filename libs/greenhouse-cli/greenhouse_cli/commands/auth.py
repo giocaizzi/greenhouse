@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 from typing import Annotated
 
 import typer
@@ -79,10 +80,8 @@ def register(app: typer.Typer) -> None:
         equivalent). Best-effort server logout — a missing/expired token
         does not block the local cleanup.
         """
-        try:
+        with contextlib.suppress(ServerError):
             get_client(ctx).logout()
-        except ServerError:
-            pass
         removed = clear_stored_token()
         if removed:
             typer.echo("Logged out — token removed.")

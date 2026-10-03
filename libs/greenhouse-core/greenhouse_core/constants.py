@@ -13,8 +13,8 @@ VACATION_MIN_RUN_MINUTES = 1  # below this, skip instead of a token dribble
 
 # ── Quiet Hours — hard gate against actuation during user-defined windows ────
 # No built-in fallback here: the baseline Alembic migration seeds the global row
-# with 00:00–05:00 local time (indoor pumps are noisy at night), and an
-# unconfigured database has quiet hours off. Start/end are integers 0–23,
+# with 00:00-05:00 local time (indoor pumps are noisy at night), and an
+# unconfigured database has quiet hours off. Start/end are integers 0-23,
 # end-exclusive, wrap-around supported. A row with start == end means
 # "explicitly disabled at this level" (e.g. an outdoor cluster that should be
 # allowed to run overnight).
@@ -76,7 +76,7 @@ TEMP_HOT = 28
 # A "wet" sensor is one within CONFLICT_WET_MARGIN of its target max; a conflict
 # is the driest sensor below target_min while the wettest is still in that wet
 # band. The margin must be narrow enough that the wet band does NOT overlap the
-# healthy range: with defaults 45–65 and margin 5, "wet" means >60, so a normal
+# healthy range: with defaults 45-65 and margin 5, "wet" means >60, so a normal
 # spread like driest 44 / wettest 56 is treated as ordinarily dry (driest drives
 # the call), not an unresolvable conflict that forces a short burst.
 CONFLICT_WET_MARGIN = 5  # % below target_max that still counts as "wet"
@@ -143,8 +143,8 @@ SENSOR_PHYSICAL_RANGES = {
 CLEANING_HAMPEL_WINDOW_RADIUS = 3  # window = 2*radius + 1 samples
 CLEANING_HAMPEL_N_SIGMA = 3.0  # deviation beyond this many scaled MADs is a spike
 CLEANING_HAMPEL_MIN_READINGS = 5  # fewer points than this: too short to judge spikes
-CLEANING_MAD_SCALE = 1.4826  # MAD→σ consistency factor for Gaussian noise
-CLEANING_MAD_FLOOR = 1.0  # min σ (%) so a flat run isn't hyper-sensitive to change
+CLEANING_MAD_SCALE = 1.4826  # MAD→sigma consistency factor for Gaussian noise
+CLEANING_MAD_FLOOR = 1.0  # min sigma (%) so a flat run isn't hyper-sensitive to change
 
 # ── Leak / stuck-valve detection ─────────────────────────────────────────────
 # A post-irrigation sanity check: 30 min after a start event the detector asks
@@ -221,6 +221,9 @@ LEARNING_MIN_EFFICIENCY = 0.3
 LEARNING_MIN_ABSORPTION_PER_MIN = 0.5
 LEARNING_RAPID_DRAINAGE_THRESHOLD = -5  # %/hr
 LEARNING_OVER_WATER_THRESHOLD = 85  # % moisture
+# Cluster water-needs level from the mean of low=1 / medium=2 / high=3 over its plants.
+WATER_NEEDS_LOW_MEAN = 1.5  # mean below this → "low"
+WATER_NEEDS_HIGH_MEAN = 2.5  # mean above this → "high"
 
 # ── Light Thresholds (lux, before seasonal scaling) ──────────────────────────
 
@@ -231,14 +234,14 @@ LIGHT_VERY_DARK = 50
 
 # ── Irrigation timing — preferred windows + seasonal multipliers ─────────────
 # Defaults applied when neither a per-cluster IrrigationWindow nor a per-species
-# / per-category override is present. Hours are local-time integers 0–23,
+# / per-category override is present. Hours are local-time integers 0-23,
 # end-exclusive. The biology evidence behind these numbers lives in the team
 # audit report (Webb 2003 / PMC8997731 / extension service guidance): water
 # in the morning so foliage dries before nightfall and the root zone is moist
 # before peak transpiration.
 DEFAULT_PREFERRED_WATER_HOURS = (6, 10)
 # Indoor cluster — heated/cooled, photoperiod near-constant. Halve in winter
-# (dormancy + low light), +20% in summer (peak transpiration), 0.8× autumn.
+# (dormancy + low light), +20% in summer (peak transpiration), 0.8x autumn.
 DEFAULT_SEASON_MULTIPLIER_INDOOR = {
     "winter": 0.5,
     "spring": 1.0,
@@ -317,6 +320,12 @@ LEARNING_CONFLICT_DRY_MARGIN = 5  # % below target minimum
 LEARNING_MIN_ENV_SAMPLES = 5
 LEARNING_HUMIDITY_DEFICIT = 15  # % below the ideal humidity minimum
 LOW_LIGHT_ALERT_FRACTION = 0.5  # fraction of the seasonal light minimum
+CONFLICT_MIN_PROFILES = 2  # learned profiles needed before plants are compared for conflicts
+CONFLICT_MIN_MOISTURE_SENSORS = 2  # sensors with a latest moisture needed for the conflict checks
+LEARNING_POSITIVE_RESPONSE_DELTA = 2  # % rise after a cycle that counts it as effective (efficiency)
+LEARNING_DRAINAGE_MIN_GAP_HOURS = 0.1  # reading gaps outside (min, max) are ignored for drainage
+LEARNING_DRAINAGE_MAX_GAP_HOURS = 12
+LEARNING_REPORT_LOW_EFFICIENCY = 0.5  # text report flags drip positioning below this efficiency
 
 # ── Maintenance alerts ───────────────────────────────────────────────────────
 
@@ -387,6 +396,7 @@ SYSTEM_HEALTH_FRESH_SECONDS = SECONDS_PER_HOUR  # system page: Cloud reachable i
 SYSTEM_HEALTH_STALE_SECONDS = 3 * SECONDS_PER_HOUR  # system page: device counts as stale
 SYSTEM_HEALTH_COLD_SECONDS = 24 * SECONDS_PER_HOUR  # system page: device counts as cold
 SYSTEM_HEALTH_DEVICE_LIMIT = 20  # devices listed on the system page
+SYSTEM_HEALTH_DEGRADED_OPEN_ALERTS = 3  # system page: this many open alerts → "degraded"
 DATA_QUALITY_STALE_SECONDS = 24 * SECONDS_PER_HOUR  # data-quality report: sensor is stale
 AGE_BADGE_STALE_SECONDS = 7 * SECONDS_PER_DAY  # web relative time renders "stale" past this age
 WEATHER_FORECAST_CACHE_TTL_SECONDS = 600  # Open-Meteo forecast cache lifetime

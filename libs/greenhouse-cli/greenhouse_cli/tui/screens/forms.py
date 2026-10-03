@@ -5,9 +5,10 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any
+from typing import Any, ClassVar
 
 from textual.app import ComposeResult
+from textual.binding import BindingType
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import Button, Checkbox, Input, Label, Select, Static
@@ -48,7 +49,8 @@ def parse_value(f: Field, raw: Any) -> Any:
     text = (raw or "").strip()
     if not text:
         if f.required:
-            raise ValueError(f"{f.label} is required")
+            msg = f"{f.label} is required"
+            raise ValueError(msg)
         return None
     try:
         if f.kind == "int":
@@ -65,7 +67,8 @@ def parse_value(f: Field, raw: Any) -> Any:
     except ValueError:
         hints = {"datetime": "YYYY-MM-DD HH:MM", "json": "a JSON object", "int": "a whole number"}
         hint = hints.get(f.kind, f"a {f.kind}")
-        raise ValueError(f"{f.label}: expected {hint}") from None
+        msg = f"{f.label}: expected {hint}"
+        raise ValueError(msg) from None
     return text
 
 
@@ -82,7 +85,7 @@ def _display(f: Field) -> str:
 class FormScreen(ModalScreen[dict[str, Any] | None]):
     """Render ``fields`` and dismiss with ``{name: parsed value}`` or ``None``."""
 
-    BINDINGS = [("escape", "dismiss(None)", "Cancel"), ("ctrl+s", "submit", "Save")]
+    BINDINGS: ClassVar[list[BindingType]] = [("escape", "dismiss(None)", "Cancel"), ("ctrl+s", "submit", "Save")]
 
     def __init__(self, title: str, fields: list[Field], submit_label: str = "Save", note: str | None = None) -> None:
         super().__init__()
@@ -92,6 +95,7 @@ class FormScreen(ModalScreen[dict[str, Any] | None]):
         self.note = note
 
     def compose(self) -> ComposeResult:
+        """Render one row per field: a checkbox, a select or a typed input, plus the error line."""
         with Vertical(classes="dialog form-dialog"):
             yield Static(f"[b]{self.form_title}[/b]", classes="dialog-message")
             if self.note:
@@ -123,15 +127,18 @@ class FormScreen(ModalScreen[dict[str, Any] | None]):
                 yield Button("Cancel", id="cancel")
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Submit on the primary button; any other button cancels."""
         if event.button.id == "submit":
             self.action_submit()
         else:
             self.dismiss(None)
 
     def on_input_submitted(self) -> None:
+        """Enter in any input submits the whole form."""
         self.action_submit()
 
     def action_submit(self) -> None:
+        """Parse every field; show the first error inline, otherwise dismiss with the values."""
         values: dict[str, Any] = {}
         try:
             for f in self.fields:

@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 from greenhouse_core.constants import (
     SYSTEM_HEALTH_COLD_SECONDS,
+    SYSTEM_HEALTH_DEGRADED_OPEN_ALERTS,
     SYSTEM_HEALTH_DEVICE_LIMIT,
     SYSTEM_HEALTH_FRESH_SECONDS,
     SYSTEM_HEALTH_STALE_SECONDS,
@@ -92,6 +93,6 @@ def _overall_status(cloud_reachable: bool, stale_count: int, open_alerts: int) -
     """Down without fresh cloud data; degraded with stale sensors or 3+ open alerts; ok otherwise."""
     if not cloud_reachable:
         return "down"
-    if stale_count > 0 or open_alerts >= 3:
+    if stale_count > 0 or open_alerts >= SYSTEM_HEALTH_DEGRADED_OPEN_ALERTS:
         return "degraded"
     return "ok"

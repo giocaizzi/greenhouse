@@ -6,6 +6,8 @@ import statistics
 from typing import TYPE_CHECKING, Any
 
 from greenhouse_core.constants import (
+    CONFLICT_MIN_MOISTURE_SENSORS,
+    CONFLICT_MIN_PROFILES,
     DEFAULT_SOIL_MOISTURE_MAX,
     DEFAULT_SOIL_MOISTURE_MIN,
     LEARNING_CHRONIC_MIN_RESPONSES,
@@ -174,7 +176,7 @@ def detect_issues(
         alerts.extend(_sensor_alerts(db, sensor, profile, plant_care))
 
     # Unresolvable conflict: check if profiles show incompatible needs
-    if len(profiles) >= 2:
+    if len(profiles) >= CONFLICT_MIN_PROFILES:
         alerts.extend(detect_conflicts(db, plant_db, cluster_id, profiles, plant_care))
 
     return alerts
@@ -382,7 +384,7 @@ def detect_conflicts(
     """Detect unresolvable conflicts between plants in same cluster."""
     sensors = db.get_sensors_in_cluster(cluster_id)
     moisture = _latest_moisture_by_sensor(db, sensors)
-    if len(moisture) < 2:
+    if len(moisture) < CONFLICT_MIN_MOISTURE_SENSORS:
         return []  # quirk preserved: the light / humidity checks are skipped too
     alerts = _overwater_conflict_alerts(sensors, moisture, profiles, plant_care)
     plants_by_id = {p.id: p for p in db.get_plants_in_cluster(cluster_id)}

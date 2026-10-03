@@ -27,7 +27,8 @@ def validate_vacation_range(starts_at: int, ends_at: int) -> None:
         VacationRangeError: ``starts_at`` is not strictly before ``ends_at``.
     """
     if starts_at >= ends_at:
-        raise VacationRangeError("starts_at must be < ends_at")
+        msg = "starts_at must be < ends_at"
+        raise VacationRangeError(msg)
 
 
 @dataclass(frozen=True)

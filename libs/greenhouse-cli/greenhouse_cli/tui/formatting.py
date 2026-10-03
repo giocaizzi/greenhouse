@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from rich.text import Text
 
-from greenhouse_cli.constants import ALL_WEEKDAYS
+from greenhouse_cli.constants import ALL_WEEKDAYS, SECONDS_PER_DAY, SECONDS_PER_HOUR, SECONDS_PER_MINUTE
 
 SEVERITY_STYLES = {
     "critical": "bold #ff5f5f",
@@ -53,13 +53,13 @@ def now() -> int:
 
 
 def _span(seconds: int) -> str:
-    if seconds < 60:
+    if seconds < SECONDS_PER_MINUTE:
         return f"{seconds}s"
-    if seconds < 3600:
-        return f"{seconds // 60}m"
-    if seconds < 86400:
-        return f"{seconds // 3600}h{(seconds % 3600) // 60:02d}m"
-    return f"{seconds // 86400}d{(seconds % 86400) // 3600}h"
+    if seconds < SECONDS_PER_HOUR:
+        return f"{seconds // SECONDS_PER_MINUTE}m"
+    if seconds < SECONDS_PER_DAY:
+        return f"{seconds // SECONDS_PER_HOUR}h{(seconds % SECONDS_PER_HOUR) // SECONDS_PER_MINUTE:02d}m"
+    return f"{seconds // SECONDS_PER_DAY}d{(seconds % SECONDS_PER_DAY) // SECONDS_PER_HOUR}h"
 
 
 def ago(ts: int | float | None, reference: int | None = None) -> str:

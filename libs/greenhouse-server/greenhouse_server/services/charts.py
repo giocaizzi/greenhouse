@@ -189,21 +189,22 @@ def _threshold_for_plant(plant: Plant, plant_db: PlantDatabase, metric: Metric) 
             "max": float(DEFAULT_SOIL_MOISTURE_MAX),
             "source": "default",
         }
-    if metric == "temperature":
-        if plant.ideal_temp_min is not None or plant.ideal_temp_max is not None:
-            return {"min": plant.ideal_temp_min, "max": plant.ideal_temp_max, "source": "ideal_temp"}
-    if metric == "env_humidity":
-        if plant.ideal_humidity_min is not None or plant.ideal_humidity_max is not None:
-            return {
-                "min": plant.ideal_humidity_min,
-                "max": plant.ideal_humidity_max,
-                "source": "ideal_humidity",
-            }
+    if metric == "temperature" and (plant.ideal_temp_min is not None or plant.ideal_temp_max is not None):
+        return {"min": plant.ideal_temp_min, "max": plant.ideal_temp_max, "source": "ideal_temp"}
+    if metric == "env_humidity" and (plant.ideal_humidity_min is not None or plant.ideal_humidity_max is not None):
+        return {
+            "min": plant.ideal_humidity_min,
+            "max": plant.ideal_humidity_max,
+            "source": "ideal_humidity",
+        }
     return {"min": None, "max": None, "source": "none"}
 
 
 def _threshold_for_cluster(
-    repo: IrrigationRepository, plant_db: PlantDatabase, cluster_id: int, metric: Metric
+    repo: IrrigationRepository,
+    plant_db: PlantDatabase,  # noqa: ARG001 — unused; dropping it cascades into route dependencies (follow-up)
+    cluster_id: int,
+    metric: Metric,
 ) -> dict[str, Any]:
     if metric == "soil_moisture":
         return {

@@ -18,7 +18,7 @@ def vacation_list(ctx: typer.Context):
 
 
 @vacation_app.command("add")
-def vacation_add(
+def vacation_add(  # noqa: D417 — `ctx` is Typer plumbing; documenting it would leak into --help
     ctx: typer.Context,
     starts_at: Annotated[int, typer.Option("--starts-at", help="Window start as Unix timestamp (seconds)")],
     ends_at: Annotated[int, typer.Option("--ends-at", help="Window end as Unix timestamp (seconds)")],

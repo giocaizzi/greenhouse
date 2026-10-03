@@ -58,7 +58,7 @@ def store_token(token: str) -> Path:
     path = _default_token_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(token, encoding="utf-8")
-    os.chmod(path, 0o600)
+    path.chmod(0o600)
     return path
 
 
@@ -105,7 +105,7 @@ class IrrigationClient:
         if resp.status_code >= HTTPStatus.BAD_REQUEST:
             try:
                 detail = resp.json().get("detail", resp.text)
-            except Exception:
+            except Exception:  # noqa: BLE001
                 detail = resp.text
             raise ServerError(resp.status_code, detail)
 

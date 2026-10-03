@@ -3,17 +3,19 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Sequence
-from typing import Any
+from typing import Any, ClassVar
 
 from rich.console import Group, RenderableType
 from rich.table import Table
 from rich.text import Text
 from textual.app import ComposeResult
+from textual.binding import BindingType
 from textual.containers import Horizontal, Vertical
 from textual.message import Message
 from textual.widgets import DataTable, Sparkline, Static
 from textual_plotext import PlotextPlot
 
+from greenhouse_cli.constants import HOURS_PER_DAY, SECONDS_PER_HOUR
 from greenhouse_cli.tui import formatting as fmt
 from greenhouse_cli.tui.model import ClusterSummary
 from greenhouse_cli.tui.sprites import MOOD_COLORS, MOOD_LABELS, Mood, logo_sprite, plant_sprite
@@ -37,6 +39,7 @@ class SpriteView(Static):
         self._animate = animate  # type: ignore[assignment]  # shadows DOMNode._animate (pre-existing, kept)
 
     def on_mount(self) -> None:
+        """Start the frame timer unless animation is off for this widget or the app."""
         if self._animate and getattr(self.app, "animations", True):
             self.set_interval(ANIMATION_INTERVAL, self._tick)
 
@@ -45,11 +48,13 @@ class SpriteView(Static):
         self.update(self._factory(self._frame))
 
     def set_factory(self, factory: SpriteFactory) -> None:
+        """Swap the sprite (e.g. watering on/off) without restarting the animation."""
         self._factory = factory
         self.update(factory(self._frame))
 
 
 def plant_factory(category: str | None, mood: Mood, watering: bool = False) -> SpriteFactory:
+    """Sprite factory for one plant, bound to its category, mood and watering state."""
     return lambda frame: plant_sprite(category, mood, frame, watering)
 
 
@@ -57,6 +62,7 @@ class Banner(Static):
     """Greenhouse logo + system health pulse."""
 
     def update_health(self, health: dict[str, Any] | None, server: str) -> None:
+        """Render the logo beside the server's health summary (or *connecting…*)."""
         table = Table.grid(padding=(0, 2))
         table.add_column()
         table.add_column()
@@ -88,17 +94,20 @@ class ClusterCard(Vertical, can_focus=True):
     """Dashboard tile for one cluster: sprite, readings, decision, sparkline."""
 
     class Selected(Message):
+        """Posted when the card is opened, so the dashboard can push the cluster screen."""
+
         def __init__(self, cluster_id: int) -> None:
             super().__init__()
             self.cluster_id = cluster_id
 
-    BINDINGS = [("enter", "select", "Open")]
+    BINDINGS: ClassVar[list[BindingType]] = [("enter", "select", "Open")]
 
     def __init__(self, summary: ClusterSummary, **kwargs: Any) -> None:
         super().__init__(id=f"cluster-card-{summary.id}", classes="cluster-card", **kwargs)
         self.summary = summary
 
     def compose(self) -> ComposeResult:
+        """Lay out the sprite beside the readings, with the moisture sparkline below."""
         with Horizontal(classes="card-body"):
             yield SpriteView(self._sprite_factory(), classes="card-sprite")
             yield Static(self._info(), classes="card-info")
@@ -144,9 +153,11 @@ class ClusterCard(Vertical, can_focus=True):
         return lines
 
     def action_select(self) -> None:
+        """Announce that this cluster was opened."""
         self.post_message(self.Selected(self.summary.id))
 
     def on_click(self) -> None:
+        """A click opens the card, like Enter."""
         self.action_select()
 
 
@@ -167,6 +178,7 @@ class PlantTile(Vertical):
         self._args = (species, category, moisture, mood, watering, band)
 
     def compose(self) -> ComposeResult:
+        """Stack the plant sprite above its species, mood, moisture and band gauge."""
         species, category, moisture, mood, watering, (lo, hi) = self._args
         yield SpriteView(plant_factory(category, mood, watering))
         caption = Text.assemble((species[:18] + "\n", "bold"))
@@ -250,12 +262,14 @@ class MetricChart(PlotextPlot):
         """Mark every irrigation ``start`` as a vertical line at its hour offset from ``reference``."""
         for event in events:
             if event.get("action") == "start":
-                self.plt.vline((event["timestamp"] - reference) / 3600, "blue")
+                self.plt.vline((event["timestamp"] - reference) / SECONDS_PER_HOUR, "blue")
 
     def _set_x_ticks(self, hours: int, reference: int) -> None:
         """Five evenly spaced wall-clock labels across the ``-hours … 0`` axis (with dates beyond one day)."""
         ticks = [-hours + hours * i / 4 for i in range(5)]
-        self.plt.xticks(ticks, [fmt.clock(reference + t * 3600, with_date=hours > 24) for t in ticks])
+        self.plt.xticks(
+            ticks, [fmt.clock(reference + t * SECONDS_PER_HOUR, with_date=hours > HOURS_PER_DAY) for t in ticks]
+        )
 
     def show_timeline(self, payload: dict[str, Any] | None, title: str) -> None:
         """Plot a ``(timestamp, score)`` timeline such as plant health."""
@@ -277,10 +291,11 @@ class MetricChart(PlotextPlot):
 class Heatmap(Static):
     """7×24 weekday-by-hour irrigation heatmap from ``GET /clusters/{id}/heatmap``."""
 
-    RAMP = ["#1f2a1f", "#1d4d6b", "#2271a8", "#2f95d6", "#4fb3ff", "#9ad7ff"]
-    DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    RAMP: ClassVar[list[str]] = ["#1f2a1f", "#1d4d6b", "#2271a8", "#2f95d6", "#4fb3ff", "#9ad7ff"]
+    DAYS: ClassVar[list[str]] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
     def show(self, payload: dict[str, Any] | None) -> None:
+        """Render the 7×24 grid, shading each slot relative to the busiest one."""
         cells = {(c["weekday"], c["hour"]): c for c in (payload or {}).get("cells", [])}
         peak = max((c["count"] for c in cells.values()), default=0)
         text = Text()
@@ -305,6 +320,7 @@ class KeyValue(Static):
     """A two-column key/value panel."""
 
     def show(self, rows: Sequence[tuple[str, RenderableType | str]], title: str | None = None) -> None:
+        """Render ``rows`` as a dim-key grid, under ``title`` when given."""
         table = Table.grid(padding=(0, 2))
         table.add_column(style="dim", no_wrap=True)
         table.add_column()
@@ -343,6 +359,6 @@ def refill(table: DataTable[Any], rows: Iterable[tuple[str | None, Sequence[Rend
         return
     try:
         target = table.get_row_index(previous_key) if previous_key is not None else previous_row
-    except Exception:  # the record went away — stay at the same position
+    except Exception:  # noqa: BLE001 — the record went away — stay at the same position
         target = previous_row
     table.move_cursor(row=min(max(target, 0), table.row_count - 1))

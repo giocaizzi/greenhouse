@@ -73,7 +73,7 @@ def _event_item(
             before_seconds=RESPONSE_PRE_WINDOW_SECONDS,
             after_seconds=EFFICACY_AFTER_WINDOW_SECONDS,
         )
-        # Cleaned view: the score is rise × 5, so one spike reading is
+        # Cleaned view: the score is rise x 5, so one spike reading is
         # worth up to 100 points of phantom efficacy.
         before_readings, after_readings = clean_readings_around(before_rows, after_rows)
         before_vals.extend(r.soil_moisture for r in before_readings if r.soil_moisture is not None)

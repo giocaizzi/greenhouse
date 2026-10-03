@@ -107,7 +107,14 @@ class JobNotRegisteredError(LookupError):
     """Raised when the job an operation targets is not registered."""
 
 
-def _add_core_job(func: "Callable[[], None]", trigger: str, *, id: str, name: str, **trigger_args: Any) -> None:
+def _add_core_job(
+    func: "Callable[[], None]",
+    trigger: str,
+    *,
+    id: str,  # noqa: A002 — mirrors APScheduler add_job(id=...) at every call site
+    name: str,
+    **trigger_args: Any,
+) -> None:
     """Register (or replace) a built-in job and mark its id as core."""
     _CORE_JOB_IDS.add(id)
     scheduler.add_job(func, trigger, id=id, name=name, replace_existing=True, **trigger_args)
@@ -382,7 +389,7 @@ def _health_monitor_job() -> None:
         monitor.poll_all()
 
 
-def init_health_monitor(app: FastAPI, settings: Settings) -> None:
+def init_health_monitor(app: FastAPI, settings: Settings) -> None:  # noqa: ARG001 — public signature
     """Build the long-lived :class:`DeviceHealthMonitor` for this app.
 
     Stored on ``app.state.health_monitor`` so dependency-injection wiring
@@ -479,15 +486,17 @@ def delete_job(job_id: str) -> None:
         JobNotRegisteredError: no job with that id is registered.
     """
     if job_id in _CORE_JOB_IDS:
-        raise CoreJobError(
+        msg = (
             f"Job {job_id} is a built-in scheduler job and cannot be deleted. "
             "To stop automatic irrigation checks use POST /api/v1/scheduler/pause "
             "(resume with POST /api/v1/scheduler/resume)."
         )
+        raise CoreJobError(msg)
     try:
         scheduler.remove_job(job_id)
     except JobLookupError:
-        raise JobNotRegisteredError(f"Job {job_id} not found") from None
+        msg = f"Job {job_id} not found"
+        raise JobNotRegisteredError(msg) from None
 
 
 def set_check_all_paused(repo: IrrigationRepository, paused: bool) -> bool:
@@ -511,7 +520,8 @@ def set_check_all_paused(repo: IrrigationRepository, paused: bool) -> bool:
             is persisted in that case).
     """
     if scheduler.get_job(CHECK_ALL_JOB_ID) is None:
-        raise JobNotRegisteredError(f"Job {CHECK_ALL_JOB_ID} not found")
+        msg = f"Job {CHECK_ALL_JOB_ID} not found"
+        raise JobNotRegisteredError(msg)
     if paused:
         scheduler.pause_job(CHECK_ALL_JOB_ID)
     else:

@@ -21,7 +21,8 @@ _hasher = PasswordHasher()
 def hash_password(plain: str) -> str:
     """Hash a plaintext password with argon2id."""
     if not plain:
-        raise ValueError("password must be non-empty")
+        msg = "password must be non-empty"
+        raise ValueError(msg)
     return _hasher.hash(plain)
 
 
