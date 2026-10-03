@@ -45,6 +45,7 @@ class SpriteView(Static):
             self.set_interval(ANIMATION_INTERVAL, self._tick)
 
     def _tick(self) -> None:
+        """Advance one animation frame and re-render with the current factory."""
         self._frame += 1
         self.update(self._factory(self._frame))
 
@@ -115,10 +116,15 @@ class ClusterCard(Vertical, can_focus=True):
         yield Sparkline(self.summary.sparkline or [0], classes="card-spark")
 
     def _sprite_factory(self) -> SpriteFactory:
+        """The card sprite stands for the driest plant (it drives the call) in the cluster mood."""
         s = self.summary
         return plant_factory(s.driest.category if s.driest else None, s.mood, s.watering)
 
     def _info(self) -> RenderableType:
+        """Card text, top to bottom: identity, mood, driest-plant gauge, air readings, watering state, next decision.
+
+        The last line is the age of the newest reading, so a stale card is visible at a glance.
+        """
         s = self.summary
         mood = s.mood
         lines = Text()

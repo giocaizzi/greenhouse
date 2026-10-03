@@ -99,11 +99,16 @@ class GreenhouseApp(App[None]):
         self.push_screen(LoginScreen(self.server_url, error), self._on_login)
 
     def _on_login(self, credentials: tuple[str, str] | None) -> None:
+        """Login-dialog callback: re-arm the 401 prompt and sign in unless it was cancelled."""
         self._login_open = False
         if credentials:
             self.run_worker(self._login(*credentials), exclusive=True, group="login")
 
     async def _login(self, username: str, password: str) -> None:
+        """Sign in with a token-less client, store the token and swap in an authenticated client.
+
+        A failed login reopens the dialog with the server's message; on success the active screen reloads.
+        """
         anonymous = self.client_factory("")
         try:
             data = await asyncio.to_thread(anonymous.login, username, password)
@@ -122,6 +127,7 @@ class GreenhouseApp(App[None]):
         self.push_screen(SearchScreen(), self._open_cluster)
 
     def _open_cluster(self, cluster_id: int | None) -> None:
+        """Search callback: open the picked cluster on top of the dashboard (cancel = no-op)."""
         if cluster_id is None:
             return
         from greenhouse_cli.tui.screens.cluster import ClusterScreen

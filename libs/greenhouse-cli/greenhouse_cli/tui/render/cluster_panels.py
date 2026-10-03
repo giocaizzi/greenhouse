@@ -62,6 +62,7 @@ def decision_panel(decision: dict[str, Any]) -> Text:
 
 
 def _next_water(forecast: dict[str, Any]) -> str | Text:
+    """Next-watering cell: ``—`` without a prediction, a highlighted *due now* when overdue, else relative + clock."""
     hours = forecast.get("hours_until_next")
     if hours is None:
         return "—"

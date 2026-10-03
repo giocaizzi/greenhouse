@@ -27,7 +27,7 @@ def server_url(ctx: typer.Context) -> str:
 
 
 def get_client(ctx: typer.Context) -> IrrigationClient:
-    """Get an IrrigationClient from the Typer context."""
+    """A client for the resolved server URL; it sends the stored token when there is one."""
     return IrrigationClient(base_url=server_url(ctx))
 
 
@@ -42,5 +42,5 @@ def call(ctx: typer.Context, fn: Callable[[IrrigationClient], T]) -> T:
 
 
 def output(data: Any) -> None:
-    """Pretty-print JSON data."""
+    """Print ``data`` as pretty JSON on stdout (the CLI output contract); non-JSON values go through ``str``."""
     print_json(json.dumps(data, default=str))

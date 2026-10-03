@@ -73,6 +73,7 @@ def parse_value(f: Field, raw: Any) -> Any:
 
 
 def _display(f: Field) -> str:
+    """The text a field's input starts with: blank for ``None``, datetimes in the field's zone, JSON dumped."""
     if f.value is None:
         return ""
     if f.kind == "datetime":
