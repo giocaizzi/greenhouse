@@ -10,6 +10,7 @@ parser table via the profile JSON; behaviour stays here.
 from __future__ import annotations
 
 import time
+from typing import Any
 
 from greenhouse_core.devices.gateway import DeviceGateway
 from greenhouse_core.devices.health import DeviceHealthState
@@ -29,7 +30,7 @@ class TuyaSensorAdapter(AbstractSensorAdapter):
         self.profile = profile
         self._gateway = gateway
 
-    def read_live(self, sensor: Sensor) -> dict:
+    def read_live(self, sensor: Sensor) -> dict[str, Any]:
         """Read current sensor values via the Tuya Cloud gateway."""
         try:
             return self._gateway.get_live_reading(sensor.tuya_device_id)

@@ -18,8 +18,10 @@ libs/greenhouse-cli/greenhouse_cli/tui/sprites.py
 libs/greenhouse-cli/greenhouse_cli/tui/widgets.py
 libs/greenhouse-core/greenhouse_core/auth.py
 libs/greenhouse-core/greenhouse_core/constants.py
+libs/greenhouse-core/greenhouse_core/devices/profile.py
 libs/greenhouse-core/greenhouse_core/devices/registry.py
 libs/greenhouse-core/greenhouse_core/devices/sensors/tr301z.py
+libs/greenhouse-core/greenhouse_core/devices/sensors/tuya_generic.py
 libs/greenhouse-core/greenhouse_core/learning/learner.py
 libs/greenhouse-core/greenhouse_core/learning/report.py
 libs/greenhouse-core/greenhouse_core/logic/engine.py

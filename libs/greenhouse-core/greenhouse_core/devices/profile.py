@@ -94,7 +94,7 @@ class SensorProfile:
         return name in self.capabilities
 
 
-def load_profile_json(filename: str) -> dict:
+def load_profile_json(filename: str) -> dict[str, Any]:
     """Load the raw JSON body of a profile sidecar bundled with the package.
 
     Adapter modules are responsible for mapping the dict into a typed
@@ -102,4 +102,5 @@ def load_profile_json(filename: str) -> dict:
     expressed declaratively).
     """
     path = _PROFILES_DIR / filename
-    return json.loads(path.read_text(encoding="utf-8"))
+    raw: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
+    return raw
