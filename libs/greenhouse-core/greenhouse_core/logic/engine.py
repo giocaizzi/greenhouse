@@ -8,6 +8,8 @@ testable and contributes structured ``Reason`` entries to the trail.
 import logging
 import math
 import time
+from collections.abc import Mapping
+from typing import TYPE_CHECKING, Any, Protocol, cast
 
 from greenhouse_core.constants import (
     CONFIDENCE_CONFLICT,
@@ -92,13 +94,25 @@ from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_core.utils import seasonal_light_factor
 
+if TYPE_CHECKING:
+    from greenhouse_core.logic.timing import Environment
+    from greenhouse_core.models import Cluster
+
 log = logging.getLogger(__name__)
+
+
+class RainForecast(Protocol):
+    """What the engine needs from a weather client; core cannot import the server's ``WeatherClient``."""
+
+    def get_forecast(self, hours: int = 6) -> Mapping[str, Any] | None: ...
 
 
 class IrrigationLogic:
     """Smart irrigation decision engine using evidence-based plant data."""
 
-    def __init__(self, db: IrrigationRepository, plant_db: PlantDatabase, *, weather_client=None):
+    def __init__(
+        self, db: IrrigationRepository, plant_db: PlantDatabase, *, weather_client: RainForecast | None = None
+    ) -> None:
         self.db = db
         self.plant_db = plant_db
         self._weather = weather_client
@@ -275,7 +289,7 @@ class IrrigationLogic:
         (start > end) cross midnight; ``start == end`` at any level means
         quiet hours are disabled there.
         """
-        effective = self.db.get_effective_config(cluster_id)
+        effective: dict[str, dict[str, Any]] = self.db.get_effective_config(cluster_id)
         start = effective["quiet_start_hour"]["value"]
         end = effective["quiet_end_hour"]["value"]
         prefs = self.db.get_preferences()
@@ -289,7 +303,9 @@ class IrrigationLogic:
             return (int(start), int(end))
         return None
 
-    def _apply_window_rule(self, cluster, cluster_id, evaluated_at, decision):
+    def _apply_window_rule(
+        self, cluster: "Cluster", cluster_id: int, evaluated_at: int, decision: IrrigationDecision
+    ) -> IrrigationDecision | None:
         """Return a SKIP decision when the current local time is outside the
         cluster's irrigation windows.
 
@@ -318,7 +334,9 @@ class IrrigationLogic:
             message="outside configured watering window",
         )
 
-    def _apply_seasonal_multiplier(self, cluster, decision, plant_care, evaluated_at):
+    def _apply_seasonal_multiplier(
+        self, cluster: "Cluster", decision: IrrigationDecision, plant_care: list[dict[str, Any]], evaluated_at: int
+    ) -> None:
         """Scale ``decision.interval_hours`` by a seasonal multiplier and append
         a ``SEASONAL_HOLD`` / ``SEASONAL_BOOST`` reason when the multiplier is
         not 1.0. Clamps to [MIN_INTERVAL_HOURS, MAX_INTERVAL_HOURS].
@@ -333,7 +351,7 @@ class IrrigationLogic:
         """
         prefs = self.db.get_preferences()
         tz_name = prefs.timezone if prefs else None
-        environment = cluster.environment or "indoor"
+        environment = cast("Environment", cluster.environment or "indoor")
         season = season_for(evaluated_at, tz_name=tz_name)
 
         season_key = (
@@ -546,7 +564,9 @@ class IrrigationLogic:
             message=f"cooldown active (last irrigation {hours_ago:.1f}h ago, trigger: {latest_event.triggered_by})",
         )
 
-    def _apply_weather_skip_rule(self, cluster, cluster_id: int, evaluated_at: int) -> IrrigationDecision | None:
+    def _apply_weather_skip_rule(
+        self, cluster: "Cluster", cluster_id: int, evaluated_at: int
+    ) -> IrrigationDecision | None:
         """Skip irrigation for outdoor clusters when significant rain is forecast.
 
         No-ops when weather_client is not configured or the cluster is indoor.
@@ -675,7 +695,7 @@ def _apply_critical_stress_rule(decision: IrrigationDecision) -> bool:
     return False
 
 
-def _apply_soil_moisture_rule(decision: IrrigationDecision, plant_care: list[dict]) -> None:
+def _apply_soil_moisture_rule(decision: IrrigationDecision, plant_care: list[dict[str, Any]]) -> None:
     """Min-soil-moisture rule with conflict detection (driest plant drives it)."""
     snapshot = decision.sensor_snapshot
     if snapshot is None or snapshot.avg_soil_moisture is None:

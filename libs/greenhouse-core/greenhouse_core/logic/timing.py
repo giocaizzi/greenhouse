@@ -12,7 +12,7 @@ Everything is a pure function so the engine remains independently testable.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from greenhouse_core.constants import (
@@ -141,8 +141,8 @@ def seasonal_multiplier(
     season: Season,
     *,
     environment: Environment = "indoor",
-    plant_override: dict | None = None,
-    category_override: dict | None = None,
+    plant_override: dict[str, Any] | None = None,
+    category_override: dict[str, Any] | None = None,
 ) -> float:
     """Resolve the per-season frequency multiplier.
 
