@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import time
 from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, Form, HTTPException, Query, Request
@@ -19,6 +18,7 @@ from greenhouse_server.services.charts import (
 )
 from greenhouse_server.services.maintenance import collect_learning_alerts
 from greenhouse_server.web.context import base_context
+from greenhouse_server.web.filters import age_seconds
 from greenhouse_server.web.templating import templates
 
 if TYPE_CHECKING:
@@ -65,7 +65,7 @@ def plant_dashboard(
     # Health score + 90-day history for the hero card
     health_score: float | None = health_svc.compute_score(plant_id)["score"]
     health_history = repo.list_plant_health_history(plant_id, days=90)
-    last_irrigated_relative: str = _relative_time(_last_irrigated_ts(repo, cluster_irrigator))
+    last_irrigated_relative: str = age_seconds(_last_irrigated_ts(repo, cluster_irrigator))
 
     return templates.TemplateResponse(
         request,
@@ -127,18 +127,6 @@ def _last_irrigated_ts(repo: IrrigationRepository, cluster_irrigator: Irrigator 
             if last_irrigated_ts is None or ev.timestamp > last_irrigated_ts:
                 last_irrigated_ts = ev.timestamp
     return last_irrigated_ts
-
-
-def _relative_time(ts: int | None) -> str:
-    """Return a human-readable relative time string for a Unix timestamp."""
-    if ts is None:
-        return "never"
-    delta = max(0, int(time.time() - ts))
-    if delta < 3600:
-        return f"{delta // 60}m ago"
-    if delta < 86400:
-        return f"{delta // 3600}h ago"
-    return f"{delta // 86400}d ago"
 
 
 @router.get("/clusters/{cluster_id}/plants/{plant_id}/chart-fragment")
