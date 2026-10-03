@@ -12,6 +12,7 @@ from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, Protocol, cast
 
 from greenhouse_core.constants import (
+    CONFIDENCE_BASELINE,
     CONFIDENCE_CONFLICT,
     CONFIDENCE_COOLDOWN,
     CONFIDENCE_CRITICAL_STRESS,
@@ -47,6 +48,9 @@ from greenhouse_core.constants import (
     MAX_INTERVAL_HOURS,
     MIN_COOLDOWN_HOURS,
     MIN_INTERVAL_HOURS,
+    SECONDS_PER_DAY,
+    SECONDS_PER_HOUR,
+    SNAPSHOT_LOOKBACK_HOURS,
     STRESS_DURATION_MINUTES,
     STRESS_INTERVAL_HOURS,
     TEMP_ADJUST_OFFSET,
@@ -62,6 +66,8 @@ from greenhouse_core.constants import (
     WATER_NEEDS_DURATION_STEP,
     WATER_NEEDS_HIGH_INTERVAL_STEP,
     WATER_NEEDS_LOW_INTERVAL_STEP,
+    WEATHER_FORECAST_HOURS,
+    WEATHER_SKIP_PRECIP_MM,
 )
 from greenhouse_core.logic.decision import (
     Action,
@@ -79,7 +85,7 @@ from greenhouse_core.logic.plant_needs import (
     analyze_water_needs,
     get_ideal_humidity_range,
     get_ideal_temp_range,
-    parse_moisture_target,
+    moisture_target_range,
 )
 from greenhouse_core.logic.sensors import get_recent_sensor_data
 from greenhouse_core.logic.stress import detect_stress_conditions
@@ -211,7 +217,7 @@ class IrrigationLogic:
         if weather_skip is not None:
             return _finalize(weather_skip)
 
-        snapshot = get_recent_sensor_data(self.db, cluster_id, hours=24)
+        snapshot = get_recent_sensor_data(self.db, cluster_id, hours=SNAPSHOT_LOOKBACK_HOURS)
         trends = analyze_historical_trends(self.db, cluster_id)
         stress = detect_stress_conditions(self.db, self.plant_db, cluster_id, snapshot, trends)
         self._attach_learning_alerts(cluster_id, stress)
@@ -242,7 +248,7 @@ class IrrigationLogic:
             action=Action.SKIP,
             duration_minutes=DEFAULT_DURATION_MINUTES,
             interval_hours=DEFAULT_INTERVAL_HOURS,
-            confidence=0.5,
+            confidence=CONFIDENCE_BASELINE,
             sensor_snapshot=snapshot,
             stress_indicators=stress,
             trends=trends,
@@ -422,7 +428,7 @@ class IrrigationLogic:
 
         decision.add_reason(
             code=TriggerCode.VACATION_ACTIVE,
-            message=f"vacation active (returns in {max(0, math.ceil((vac.ends_at - now) / 86400))}d)",
+            message=f"vacation active (returns in {max(0, math.ceil((vac.ends_at - now) / SECONDS_PER_DAY))}d)",
             severity=Severity.INFO,
             icon="airplane",
         )
@@ -439,8 +445,8 @@ class IrrigationLogic:
 
         # Vacation length in whole days (at least 1) and the 0-based index of the
         # day we are currently in; the cumulative allowance grows day by day.
-        d_days = max(1, math.ceil((vac.ends_at - vac.starts_at) / 86400))
-        day_index = math.floor((now - vac.starts_at) / 86400)
+        d_days = max(1, math.ceil((vac.ends_at - vac.starts_at) / SECONDS_PER_DAY))
+        day_index = math.floor((now - vac.starts_at) / SECONDS_PER_DAY)
 
         usable_l = irr.reservoir_l * VACATION_RESERVOIR_USABLE_FRACTION
         daily_budget_l = usable_l / d_days
@@ -514,12 +520,12 @@ class IrrigationLogic:
             A terminal SKIP decision carrying ``TriggerCode.LEAK_HOLD``, or
             ``None`` when no hold is active.
         """
-        hold_seconds = LEAK_HOLD_HOURS * 3600
+        hold_seconds = LEAK_HOLD_HOURS * SECONDS_PER_HOUR
         alert = self.db.get_active_alert(LEAK_ALERT_CODE, cluster_id=cluster_id, since=now - hold_seconds)
         if alert is None:
             return None
 
-        hours_left = max(0.0, (alert.last_seen_at + hold_seconds - now) / 3600)
+        hours_left = max(0.0, (alert.last_seen_at + hold_seconds - now) / SECONDS_PER_HOUR)
         return _decision_with_reason(
             cluster_id,
             now,
@@ -552,7 +558,7 @@ class IrrigationLogic:
         if latest_event is None:
             return None
 
-        hours_ago = (now - latest_event.timestamp) / 3600
+        hours_ago = (now - latest_event.timestamp) / SECONDS_PER_HOUR
         return _decision_with_reason(
             cluster_id,
             now,
@@ -574,12 +580,12 @@ class IrrigationLogic:
         if self._weather is None or cluster.environment == "indoor":
             return None
 
-        forecast = self._weather.get_forecast(hours=6)
+        forecast = self._weather.get_forecast(hours=WEATHER_FORECAST_HOURS)
         if forecast is None:
             return None
 
         precip = forecast.get("precipitation_mm", 0.0) or 0.0
-        if precip <= 2.0:
+        if precip <= WEATHER_SKIP_PRECIP_MM:
             return None
 
         decision = _decision_with_reason(
@@ -701,7 +707,7 @@ def _apply_soil_moisture_rule(decision: IrrigationDecision, plant_care: list[dic
     if snapshot is None or snapshot.avg_soil_moisture is None:
         return
 
-    target_ranges = [parse_moisture_target(d.get("soil_moisture_target", "45-65")) for d in plant_care]
+    target_ranges = [moisture_target_range(d) for d in plant_care]
     target_min = min(r[0] for r in target_ranges)
     target_max = max(r[1] for r in target_ranges)
 
