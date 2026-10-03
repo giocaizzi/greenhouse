@@ -53,8 +53,10 @@ testpaths = ["tests"]
 pythonpath = ["libs/greenhouse-core", "libs/greenhouse-server", "libs/greenhouse-cli", "tests"]
 
 [tool.mypy]
-# Strict ratchet (refactor plan T0.4 / target §10.13, §11). No `files` key: `make typecheck`
-# checks the modules listed in refactor/mypy-strict.txt (append-only).
+# Every module under libs/ is mypy-strict clean (`make typecheck` = plain `uv run mypy`). The generated
+# Alembic revisions are frozen history and stay out of scope.
+files = ["libs/greenhouse-core", "libs/greenhouse-server", "libs/greenhouse-cli"]
+exclude = ["/migrations/versions/"]
 python_version = "3.11"
 strict = true
 follow_imports = "silent"
