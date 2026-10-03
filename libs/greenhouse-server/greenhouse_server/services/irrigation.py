@@ -832,14 +832,13 @@ class IrrigationService:
 
         return self._actuate(_Actuation(cluster_id, irrigator, adapter, decision, temp, source, sensor_data), result)
 
-    def monitor_cluster(self, cluster_id: int, no_sync: bool = False) -> MonitorResult:
-        """Monitor sensor-only cluster. Returns per-sensor soil status."""
+    def monitor_cluster(self, cluster_id: int) -> MonitorResult:
+        """Monitor a sensor-only cluster: refresh stale sensors (the caller commits), return per-sensor soil status."""
         cluster = self._repo.get_cluster(cluster_id)
         if not cluster:
             return {"cluster_name": "unknown", "sensors": [], "needs_water": []}
 
-        if not no_sync:
-            self._sync.ensure_fresh_and_read(cluster_id)
+        self._sync.ensure_fresh_and_read(cluster_id)
 
         sensors = self._repo.get_sensors_in_cluster(cluster_id)
         plants_by_id = {p.id: p for p in self._repo.get_plants_in_cluster(cluster_id)}
