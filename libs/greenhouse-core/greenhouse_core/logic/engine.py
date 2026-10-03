@@ -8,7 +8,7 @@ testable and contributes structured ``Reason`` entries to the trail.
 import logging
 import math
 import time
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Protocol, cast
 
@@ -764,38 +764,66 @@ def _apply_soil_moisture_rule(decision: IrrigationDecision, plant_care: list[dic
     if snapshot is None or snapshot.avg_soil_moisture is None:
         return
 
-    target_ranges = [moisture_target_range(d) for d in plant_care]
-    target_min = min(r[0] for r in target_ranges)
-    target_max = max(r[1] for r in target_ranges)
-
-    min_soil = snapshot.min_soil_moisture if snapshot.min_soil_moisture is not None else snapshot.avg_soil_moisture
-    max_soil = snapshot.max_soil_moisture if snapshot.max_soil_moisture is not None else snapshot.avg_soil_moisture
-
-    has_conflict = (min_soil < target_min) and (max_soil > target_max - CONFLICT_WET_MARGIN)
-    if has_conflict:
-        dry_names = [
-            s.name for s in snapshot.per_sensor if s.avg_soil_moisture is not None and s.avg_soil_moisture < target_min
-        ]
-        wet_names = [
-            s.name
-            for s in snapshot.per_sensor
-            if s.avg_soil_moisture is not None and s.avg_soil_moisture > target_max - CONFLICT_WET_MARGIN
-        ]
-        decision.action = Action.IRRIGATE
-        decision.duration_minutes = CONFLICT_DURATION_MINUTES
-        decision.interval_hours = CONFLICT_INTERVAL_HOURS
-        decision.confidence = CONFIDENCE_CONFLICT
-        decision.add_reason(
-            code=TriggerCode.CONFLICT,
-            message=(
-                f"conflict: dry={min_soil:.0f}% ({', '.join(dry_names) or '?'}), "
-                f"wet={max_soil:.0f}% ({', '.join(wet_names) or '?'}) — short burst"
-            ),
-            severity=Severity.WARNING,
-            icon="scales",
-        )
+    band = _cluster_target_band(plant_care)
+    soil = _soil_extremes(snapshot, snapshot.avg_soil_moisture)
+    if _is_conflict(soil, band):
+        _apply_conflict(decision, snapshot, soil, band)
         return
+    _apply_soil_level(decision, snapshot.avg_soil_moisture, soil, band)
 
+
+def _cluster_target_band(plant_care: list[dict[str, Any]]) -> tuple[float, float]:
+    """The widest moisture band across the cluster's plants: (lowest minimum, highest maximum)."""
+    target_ranges = [moisture_target_range(d) for d in plant_care]
+    return min(r[0] for r in target_ranges), max(r[1] for r in target_ranges)
+
+
+def _soil_extremes(snapshot: SensorSnapshot, avg_soil: float) -> tuple[float, float]:
+    """(driest, wettest) soil reading; each falls back to the average when a sensor bound is missing."""
+    min_soil = snapshot.min_soil_moisture if snapshot.min_soil_moisture is not None else avg_soil
+    max_soil = snapshot.max_soil_moisture if snapshot.max_soil_moisture is not None else avg_soil
+    return min_soil, max_soil
+
+
+def _is_conflict(soil: tuple[float, float], band: tuple[float, float]) -> bool:
+    """One plant below its band while another sits near or above the top of it."""
+    return (soil[0] < band[0]) and (soil[1] > band[1] - CONFLICT_WET_MARGIN)
+
+
+def _sensor_names(snapshot: SensorSnapshot, keep: Callable[[float], bool]) -> list[str]:
+    """Names of the sensors with a soil average that passes ``keep``, in per-sensor order."""
+    return [s.name for s in snapshot.per_sensor if s.avg_soil_moisture is not None and keep(s.avg_soil_moisture)]
+
+
+def _apply_conflict(
+    decision: IrrigationDecision, snapshot: SensorSnapshot, soil: tuple[float, float], band: tuple[float, float]
+) -> None:
+    """Dry and wet plants share the cluster: a short burst, naming the sensors on each side."""
+    min_soil, max_soil = soil
+    target_min, target_max = band
+    dry_names = _sensor_names(snapshot, lambda v: v < target_min)
+    wet_names = _sensor_names(snapshot, lambda v: v > target_max - CONFLICT_WET_MARGIN)
+    decision.action = Action.IRRIGATE
+    decision.duration_minutes = CONFLICT_DURATION_MINUTES
+    decision.interval_hours = CONFLICT_INTERVAL_HOURS
+    decision.confidence = CONFIDENCE_CONFLICT
+    decision.add_reason(
+        code=TriggerCode.CONFLICT,
+        message=(
+            f"conflict: dry={min_soil:.0f}% ({', '.join(dry_names) or '?'}), "
+            f"wet={max_soil:.0f}% ({', '.join(wet_names) or '?'}) — short burst"
+        ),
+        severity=Severity.WARNING,
+        icon="scales",
+    )
+
+
+def _apply_soil_level(
+    decision: IrrigationDecision, avg_soil: float, soil: tuple[float, float], band: tuple[float, float]
+) -> None:
+    """VERY_DRY → DRY → ADEQUATE → WET: the driest reading decides dryness, the average decides adequacy."""
+    min_soil, max_soil = soil
+    target_min, target_max = band
     if min_soil < target_min - VERY_DRY_MARGIN:
         decision.action = Action.IRRIGATE
         decision.duration_minutes = STRESS_DURATION_MINUTES
@@ -817,7 +845,7 @@ def _apply_soil_moisture_rule(decision: IrrigationDecision, plant_care: list[dic
             message=f"soil moderately dry (driest={min_soil:.0f}%)",
             icon="drop",
         )
-    elif snapshot.avg_soil_moisture <= target_max:
+    elif avg_soil <= target_max:
         decision.action = Action.SKIP
         decision.confidence = CONFIDENCE_SENSOR_ADEQUATE
         decision.add_reason(
