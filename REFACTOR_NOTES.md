@@ -143,7 +143,11 @@ attempt (an `irrigator.id` read moved before `commit()`); T4.12 was reverted and
 TUI (wave C):
 - search-table column widths only ever grow: an early partial query can leave the final table wider than its rows
   need (root cause of the old `search_citrus` flake);
-- `SpriteView._animate` shadows a Textual attribute (pre-existing; one targeted `type: ignore`).
+- **B-U1:** `SpriteView._animate` shadows Textual's `Widget._animate` (the cached `BoundAnimator`,
+  `textual/widget.py:444/2541`): the sprite stores its animation flag (`True`/`False`) there, so `Widget.animate(...)` on
+  a sprite calls the bool and raises `TypeError: 'bool' object is not callable`. No caller animates a sprite today
+  (latent; hidden by a `type: ignore[assignment]`). Pinned by the strict xfail
+  `tests/cli/test_tui.py::TestSpriteView`; fixed as a labeled `fix(consistency)` in fix pass FP-U.
 
 Consistency audit (2026-10-03):
 - **B-N1:** `GET /clusters/{id}/monitor` syncs stale sensors from the Cloud but never commits, so the synced rows are
