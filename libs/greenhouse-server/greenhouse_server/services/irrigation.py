@@ -299,11 +299,23 @@ class PipelineResult(TypedDict, total=False):
     blocking_alarms: list[str]
 
 
+class MonitorSensorRow(TypedDict):
+    """One ``MonitorResult.sensors`` row: the sensor's latest cleaned soil value against its target band."""
+
+    sensor_id: int
+    sensor_name: str
+    plant_species: str | None
+    soil_moisture: float | None
+    status: str
+    target_min: float
+    target_max: float
+
+
 class MonitorResult(TypedDict):
     """``monitor_cluster`` result: a plain dict at runtime (``MonitorResponse``)."""
 
     cluster_name: str
-    sensors: list[dict[str, Any]]
+    sensors: list[MonitorSensorRow]
     needs_water: list[str]
 
 
@@ -703,7 +715,7 @@ class IrrigationService:
         sensors = self._repo.get_sensors_in_cluster(cluster_id)
         plants_by_id = {p.id: p for p in self._repo.get_plants_in_cluster(cluster_id)}
 
-        sensor_statuses: list[dict[str, Any]] = []
+        sensor_statuses: list[MonitorSensorRow] = []
         needs_water: list[str] = []
 
         for sensor in sensors:
