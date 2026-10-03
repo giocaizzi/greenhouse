@@ -40,27 +40,42 @@ def sync_sensor_data(db: IrrigationRepository, cloud: DeviceGateway, hours: int 
         logger.info("[%s] Syncing %d sensor(s)...", cluster.name, len(sensors))
 
         for sensor in sensors:
-            try:
-                synced, new, live = sync_single_sensor(db, cloud, sensor, hours)
-                stats["total_synced"] += synced
-                stats["total_new"] += new
-                stats["total_live"] += live
-
-                parts = []
-                if new > 0:
-                    parts.append(f"{new} new from logs")
-                if live:
-                    parts.append("live ✓")
-                if not parts:
-                    parts.append("up to date")
-
-                logger.info("  %s: %s", sensor.name, ", ".join(parts))
-
-            except Exception as e:
-                stats["errors"].append(f"{sensor.name}: {e}")
-                logger.error("  %s: %s", sensor.name, e)
+            _sync_logged(db, cloud, sensor, hours, stats)
 
     return stats
+
+
+def _sync_logged(
+    db: IrrigationRepository, cloud: DeviceGateway, sensor: Sensor, hours: int, stats: dict[str, Any]
+) -> None:
+    """Sync one sensor into the running ``stats`` totals and log its summary.
+
+    The per-sensor ``try`` is the isolation boundary: any failure is recorded as
+    ``"<name>: <error>"``, logged at ERROR, and never stops the loop over sensors.
+    """
+    try:
+        synced, new, live = sync_single_sensor(db, cloud, sensor, hours)
+        stats["total_synced"] += synced
+        stats["total_new"] += new
+        stats["total_live"] += live
+
+        logger.info("  %s: %s", sensor.name, _sync_summary(new, live))
+
+    except Exception as e:
+        stats["errors"].append(f"{sensor.name}: {e}")
+        logger.error("  %s: %s", sensor.name, e)
+
+
+def _sync_summary(new: int, live: int) -> str:
+    """Return the per-sensor log summary, e.g. ``"2 new from logs, live ✓"``."""
+    parts = []
+    if new > 0:
+        parts.append(f"{new} new from logs")
+    if live:
+        parts.append("live ✓")
+    if not parts:
+        parts.append("up to date")
+    return ", ".join(parts)
 
 
 def sync_single_sensor(
