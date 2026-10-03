@@ -664,9 +664,6 @@ def _decision_with_reason(
     code: TriggerCode,
     message: str,
     severity: Severity = Severity.INFO,
-    sensor_snapshot: SensorSnapshot | None = None,
-    stress_indicators: StressIndicators | None = None,
-    trends: Trends | None = None,
 ) -> IrrigationDecision:
     """Build a one-reason decision (used by terminal rules)."""
     decision = IrrigationDecision(
@@ -676,9 +673,9 @@ def _decision_with_reason(
         duration_minutes=duration_minutes,
         interval_hours=interval_hours,
         confidence=confidence,
-        sensor_snapshot=sensor_snapshot,
-        stress_indicators=stress_indicators or StressIndicators(),
-        trends=trends or Trends(),
+        sensor_snapshot=None,
+        stress_indicators=StressIndicators(),
+        trends=Trends(),
     )
     decision.add_reason(code=code, message=message, severity=severity)
     return decision
