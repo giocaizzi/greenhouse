@@ -49,6 +49,7 @@ def plant_dashboard(
     health_svc: PlantHealthServiceDep,
     hours: int = Query(24, ge=1, le=MAX_LOOKBACK_HOURS),
 ):
+    """Render a plant's dashboard: care info, sensors, charts, health, events and alerts."""
     plant = require_plant_in_cluster(repo, cluster_id, plant_id)
     cluster = repo.get_cluster(cluster_id)
     other_clusters = [c for c in repo.list_clusters() if c.id != cluster_id]
@@ -147,6 +148,7 @@ def plant_chart_fragment(
     metric: str = Query("soil_moisture"),
     hours: int = Query(24, ge=1, le=MAX_LOOKBACK_HOURS),
 ):
+    """Render one metric's plant chart panel (HTMX fragment)."""
     chart_metric = require_metric(metric)
     require_plant_in_cluster(repo, cluster_id, plant_id)
     payload = build_plant_chart_payload(repo, plant_db, plant_id, hours, chart_metric)
@@ -166,6 +168,7 @@ def plant_health_fragment(
     plant_id: int,
     repo: RepoDep,
 ):
+    """Render the plant's 90-day health timeline chart (HTMX fragment)."""
     plant = require_plant_in_cluster(repo, cluster_id, plant_id)
     payload = build_plant_health_timeline_payload(repo, plant_id)
     if payload is None:

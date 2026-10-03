@@ -26,11 +26,17 @@ APP_VERSION = _app_version()
 
 
 def is_hx(request: Request) -> bool:
+    """Return whether the request was sent by HTMX (``HX-Request: true``)."""
     return request.headers.get("HX-Request", "").lower() == "true"
 
 
 def _repo_from_request(request: Request) -> tuple[IrrigationRepository, Session] | tuple[None, None]:
-    """Resolve an IrrigationRepository from request.app.state, or None."""
+    """Open a private, read-only repository on ``request.app.state``, or ``(None, None)``.
+
+    Deliberately not the request's own session: the chrome reads committed preferences
+    on every render (also from exception handlers, which have no request session) and
+    never writes, so the caller closes it right after the read.
+    """
     try:
         from greenhouse_core.repository import IrrigationRepository
 
@@ -81,6 +87,7 @@ def _auth_enabled(request: Request) -> bool:
 
 
 def base_context(request: Request, **extra: Any) -> dict[str, Any]:
+    """Build the template context every page shares (chrome flags, theme, version) merged with ``extra``."""
     dry_run_global, active_vacation, scheduler_paused, theme = _preference_flags(request)
     auth_enabled = _auth_enabled(request)
 

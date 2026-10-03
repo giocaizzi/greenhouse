@@ -30,8 +30,7 @@ def irrigate(
     temp_override: str = Form(""),
     force: str = Form(""),
 ):
-    """Run the irrigation pipeline from the inline action bar on the cluster
-    detail page.
+    """Run the irrigation pipeline from the cluster detail page's action bar (HTMX fragment).
 
     ``force`` is set to ``"true"`` when the user clicks Irrigate during quiet
     hours and confirms the hx-confirm prompt. It plumbs through to the
@@ -55,6 +54,7 @@ def irrigate(
 
 @router.get("/clusters/{cluster_id}/monitor")
 def monitor(request: Request, cluster_id: int, repo: RepoDep, svc: IrrigationServiceDep):
+    """Render the per-sensor soil-moisture status of a cluster (HTMX fragment)."""
     # Same path as GET /api/v1/clusters/{id}/monitor: 404 for an unknown cluster, refresh stale sensors, keep the rows.
     require_cluster(repo, cluster_id)
     result = svc.monitor_cluster(cluster_id=cluster_id)
@@ -71,6 +71,7 @@ def check_single(
     repo: RepoDep,
     svc: IrrigationServiceDep,
 ):
+    """Run the check for one cluster and render the result banner (HTMX fragment)."""
     require_cluster(repo, cluster_id)
     result = svc.check_cluster(cluster_id)
     repo.commit()
@@ -83,6 +84,7 @@ def check_single(
 
 @router.post("/check")
 def check_all(request: Request, svc: IrrigationServiceDep, repo: RepoDep):
+    """Run the check across every cluster and render the result banner (HTMX fragment)."""
     results = svc.check_all_clusters()
     repo.commit()
     has_alerts = check_has_alerts(results)
@@ -93,6 +95,7 @@ def check_all(request: Request, svc: IrrigationServiceDep, repo: RepoDep):
 
 @router.post("/sync")
 def sync_all(request: Request, svc: SyncServiceDep, repo: RepoDep, hours: str = Form("24")):
+    """Sync every sensor from the Tuya Cloud and render the sync summary (HTMX fragment)."""
     try:
         hrs = int(hours)
     except ValueError as exc:
@@ -110,6 +113,7 @@ def sync_plants(
     plant_id: str = Form(""),
     cluster_id: str = Form(""),
 ):
+    """Refresh plant care data from the plant database and render the summary (HTMX fragment)."""
     pid = int(plant_id) if plant_id.strip() else None
     cid = int(cluster_id) if cluster_id.strip() else None
     try:

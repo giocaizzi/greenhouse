@@ -16,9 +16,10 @@ router = APIRouter(tags=["configs"])
 
 
 def _request_fields(request: SetConfigRequest | UpdateGlobalConfigRequest) -> dict:
-    """Pull only fields the client explicitly set — preserving null as a
-    deliberate "clear this override" signal — and drop omitted ones so the
-    repository can patch without touching unrelated columns.
+    """Return only the fields the client explicitly set.
+
+    Keeps null as a deliberate "clear this override" signal and drops omitted
+    fields, so the repository can patch without touching unrelated columns.
     """
     return request.model_dump(exclude_unset=True)
 

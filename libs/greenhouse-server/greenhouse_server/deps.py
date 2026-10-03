@@ -23,6 +23,7 @@ from greenhouse_server.services.weather import WeatherClient
 
 
 def get_session(request: Request) -> Generator[Session, None, None]:
+    """Yield a request-scoped SQLAlchemy session; FastAPI caches it, so every dependency shares it."""
     factory = request.app.state.session_factory
     session = factory()
     try:
@@ -32,24 +33,24 @@ def get_session(request: Request) -> Generator[Session, None, None]:
 
 
 def get_repository(session: Annotated[Session, Depends(get_session)]) -> IrrigationRepository:
+    """Return the repository bound to the request's session."""
     return IrrigationRepository(session)
 
 
 def get_device_registry(request: Request) -> DeviceRegistry | None:
+    """Return the app's device registry, or ``None`` when Tuya credentials were missing."""
     return getattr(request.app.state, "device_registry", None)
 
 
 def get_health_monitor(request: Request) -> DeviceHealthMonitor | None:
-    """Return the per-app device-health monitor, if wired.
+    """Return the app's device-health monitor singleton, if wired.
 
-    The monitor is instantiated in :mod:`greenhouse_server.scheduler` and
+    The monitor is instantiated once in :mod:`greenhouse_server.scheduler` and
     stashed on ``app.state.health_monitor``; tests that don't need the
     health gate leave it unset and the irrigation service falls open.
-    The monitor is constructed per-request because it caches state in
-    process memory tied to the active session.
     """
-    factory: DeviceHealthMonitor | None = getattr(request.app.state, "health_monitor", None)
-    return factory
+    monitor: DeviceHealthMonitor | None = getattr(request.app.state, "health_monitor", None)
+    return monitor
 
 
 def get_device_gateway(request: Request) -> DeviceGateway | None:
@@ -63,6 +64,7 @@ def get_device_gateway(request: Request) -> DeviceGateway | None:
 
 
 def get_weather_client(request: Request) -> WeatherClient:
+    """Return the app-scoped weather client."""
     return request.app.state.weather_client
 
 
@@ -72,6 +74,7 @@ def get_ntfy_notifier(request: Request) -> NtfyClient | None:
 
 
 def get_plant_db(request: Request) -> PlantDatabase:
+    """Return the app-scoped plant care database."""
     return request.app.state.plant_db
 
 
@@ -187,6 +190,7 @@ def get_sync_service(
     registry: Annotated[DeviceRegistry | None, Depends(get_device_registry)],
     gateway: Annotated[DeviceGateway | None, Depends(get_device_gateway)],
 ) -> SyncService:
+    """Build the sensor sync service on the request's repository."""
     return SyncService(repo, registry, gateway)
 
 
@@ -194,6 +198,7 @@ def get_cluster_service(
     repo: Annotated[IrrigationRepository, Depends(get_repository)],
     plant_db: Annotated[PlantDatabase, Depends(get_plant_db)],
 ) -> ClusterService:
+    """Build the cluster read service on the request's repository."""
     return ClusterService(repo, plant_db)
 
 
@@ -201,6 +206,7 @@ def get_plant_health_service(
     repo: Annotated[IrrigationRepository, Depends(get_repository)],
     plant_db: Annotated[PlantDatabase, Depends(get_plant_db)],
 ) -> PlantHealthService:
+    """Build the plant health scoring service on the request's repository."""
     return PlantHealthService(repo, plant_db)
 
 
@@ -213,6 +219,7 @@ def get_irrigation_service(
     health_monitor: Annotated[DeviceHealthMonitor | None, Depends(get_health_monitor)],
     notifier: Annotated[NtfyClient | None, Depends(get_ntfy_notifier)],
 ) -> IrrigationService:
+    """Build the irrigation pipeline service with every collaborator it needs."""
     return IrrigationService(
         repo,
         registry,

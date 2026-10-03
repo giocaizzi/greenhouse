@@ -1,8 +1,9 @@
-"""HX-aware exception handler that renders HTML errors for web routes.
+"""HX-aware exception handlers that render HTML errors for web routes.
 
-API routes keep their default JSON error responses — we only intervene when
-the request looks like a browser/HTMX call (Accept: text/html or HX-Request:
-true) AND is not under /api/v1.
+The choice is made by path: ``/api/…`` and ``/mcp`` keep JSON error bodies;
+every other path gets the HTML error page — the bare ``_error.html`` partial
+for HTMX requests (``HX-Request: true``), the full layout otherwise. The
+``Accept`` header is not consulted.
 """
 
 from __future__ import annotations
@@ -30,8 +31,11 @@ def _error_template(request: Request) -> str:
 
 
 def register_web_exception_handlers(app: FastAPI) -> None:
+    """Install the HTTPException and validation handlers that render HTML for web paths, JSON elsewhere."""
+
     @app.exception_handler(HTTPException)
     async def handle_http_exc(request: Request, exc: HTTPException):
+        """Render an HTTPException: login redirect sentinel, JSON for /api and /mcp, else the HTML error page."""
         # Auth redirect sentinel — always convert to a 303 to /login, even on
         # API paths so a stale browser tab fetching /api/v1 also gets bounced
         # to the form. CLI clients should be using the bearer header, not
@@ -51,6 +55,7 @@ def register_web_exception_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(RequestValidationError)
     async def handle_validation(request: Request, exc: RequestValidationError):
+        """Render a request-validation error: JSON 422 for /api and /mcp, else the HTML error page."""
         if not _is_html_request(request):
             from fastapi.responses import JSONResponse
 

@@ -19,6 +19,7 @@ def cluster_efficacy_page(
     repo: RepoDep,
     days: int = Query(default=EFFICACY_DEFAULT_DAYS, ge=1, le=EFFICACY_MAX_DAYS),
 ):
+    """Render a cluster's per-event irrigation efficacy scores."""
     cluster = require_cluster(repo, cluster_id)
     result = score_cluster(repo, cluster_id, days=days)
     return templates.TemplateResponse(

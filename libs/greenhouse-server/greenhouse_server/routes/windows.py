@@ -1,8 +1,9 @@
 """Per-cluster irrigation window CRUD.
 
 Windows declare when a cluster is *allowed* to water in local time. The
-decision engine checks them after cooldown but before stress overrides — a
-plant in genuine stress still gets water at 2am.
+decision engine checks them after the cooldown and the stress overrides, so a
+plant in genuine stress still gets water outside its windows; a cluster with
+no windows may water at any hour (quiet hours still apply).
 """
 
 from __future__ import annotations

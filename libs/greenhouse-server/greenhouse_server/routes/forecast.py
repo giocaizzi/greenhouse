@@ -16,6 +16,7 @@ def get_forecast_service(
     plant_db: PlantDbDep,
     weather: WeatherClientDep,
 ) -> ForecastService:
+    """Build the forecast service on the request's repository, plant database and weather client."""
     return ForecastService(repo, plant_db, weather_client=weather)
 
 

@@ -17,6 +17,7 @@ _ALLOWED_THEMES = {"auto", "light", "dark"}
 
 @router.get("/preferences")
 def preferences_page(request: Request, repo: RepoDep):
+    """Render the preferences page with the global irrigation defaults."""
     prefs = repo.get_preferences()
     global_config = repo.get_global_irrigation_config()
     repo.commit()
@@ -52,6 +53,7 @@ def update_preferences(
     notify_alerts: str = Form(""),
     notify_auto: str = Form(""),
 ):
+    """Save the preferences form, re-sync the clocks to its timezone and reload the page."""
     default_cluster: int | None = None
     if default_cluster_id.strip():
         try:

@@ -55,6 +55,7 @@ def _preference_zone() -> tzinfo:
 
 @router.get("/vacation")
 def vacation_list(request: Request, repo: RepoDep):
+    """Render the vacation page with the water budget of the active or next window."""
     active = repo.get_active_vacation()
     windows = repo.list_vacation_windows()
     # Project the per-cluster water budget for the window that matters most:
@@ -88,6 +89,7 @@ def create_vacation(
     contact_email: str = Form(""),
     notes: str = Form(""),
 ):
+    """Create a vacation window from the form and return to the vacation page."""
     try:
         starts_ts = _parse_ts(starts_at)
         ends_ts = _parse_ts(ends_at)
@@ -106,6 +108,7 @@ def create_vacation(
 
 @router.get("/vacation/{window_id}/edit")
 def edit_vacation_form(request: Request, window_id: int, repo: RepoDep):
+    """Render the edit form of a vacation window."""
     window = require_vacation_window(repo, window_id)
     return templates.TemplateResponse(
         request,
@@ -124,6 +127,7 @@ def update_vacation(
     contact_email: str = Form(""),
     notes: str = Form(""),
 ):
+    """Save the vacation form and return to the vacation page."""
     require_vacation_window(repo, window_id)
     try:
         starts_ts = _parse_ts(starts_at)
@@ -144,6 +148,7 @@ def update_vacation(
 
 @router.post("/vacation/{window_id}/delete")
 def delete_vacation(request: Request, window_id: int, repo: RepoDep):
+    """Delete a vacation window and return to the vacation page."""
     require_vacation_window(repo, window_id)
     repo.delete_vacation_window(window_id)
     repo.commit()

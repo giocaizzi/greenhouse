@@ -25,6 +25,7 @@ def alert_list(
     cluster_id: int | None = Query(None),
     plant_id: int | None = Query(None),
 ):
+    """Render the alert inbox page with optional status / cluster / plant filters."""
     alerts = repo.list_alerts(status=status, cluster_id=cluster_id, plant_id=plant_id, limit=_ALERT_LIST_LIMIT)
     open_count = repo.count_open_alerts()
     return templates.TemplateResponse(
@@ -43,6 +44,7 @@ def alert_list(
 
 @router.post("/alerts/{alert_id}/ack")
 def ack_alert(request: Request, alert_id: int, repo: RepoDep):
+    """Acknowledge an alert and return its re-rendered row with a success toast."""
     alert = repo.acknowledge_alert(alert_id)
     repo.commit()
     toast = json.dumps({"severity": "success", "title": "Acknowledged", "message": "Alert moved to triage."})
@@ -56,6 +58,7 @@ def ack_alert(request: Request, alert_id: int, repo: RepoDep):
 
 @router.post("/alerts/{alert_id}/resolve")
 def resolve_alert(request: Request, alert_id: int, repo: RepoDep):
+    """Resolve an alert and return its re-rendered row with a success toast."""
     alert = repo.resolve_alert(alert_id)
     repo.commit()
     toast = json.dumps({"severity": "success", "title": "Resolved", "message": "Alert marked as resolved."})
@@ -69,6 +72,7 @@ def resolve_alert(request: Request, alert_id: int, repo: RepoDep):
 
 @router.post("/alerts/sync")
 def sync_alerts(request: Request, repo: RepoDep, plant_db: PlantDbDep):
+    """Recompute alerts for every cluster and return the refreshed inbox body with a toast."""
     open_count = sync_all_alerts(repo, plant_db)
     repo.commit()
     alerts = repo.list_alerts(limit=_ALERT_LIST_LIMIT)
@@ -83,6 +87,7 @@ def sync_alerts(request: Request, repo: RepoDep, plant_db: PlantDbDep):
 
 @router.get("/alerts/badge")
 def alert_badge(request: Request, repo: RepoDep):
+    """Return the top-bar bell count (empty body when no alert is open)."""
     count = repo.count_open_alerts()
     if count == 0:
         return HTMLResponse("")

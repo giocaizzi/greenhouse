@@ -26,14 +26,18 @@ def _parse_optional_plant_id(plant_id: str) -> int | None:
 
 @router.get("/clusters/{cluster_id}/sensors")
 def list_sensors(cluster_id: int, repo: RepoDep):
-    """Legacy URL — sensors are rendered inline on the unified cluster detail
-    page. The 301 keeps old bookmarks working."""
+    """Redirect the legacy sensors URL to the detail page's sensors section (301).
+
+    Sensors are rendered inline on the unified cluster detail page; the
+    redirect keeps old bookmarks working.
+    """
     require_cluster(repo, cluster_id)
     return RedirectResponse(url=f"/clusters/{cluster_id}#sensors", status_code=301)
 
 
 @router.get("/clusters/{cluster_id}/sensors/new")
 def new_sensor_form(request: Request, cluster_id: int, repo: RepoDep):
+    """Render the add-sensor form."""
     cluster = require_cluster(repo, cluster_id)
     plants = repo.get_plants_in_cluster(cluster_id)
     return templates.TemplateResponse(
@@ -51,6 +55,7 @@ def create_sensor(
     type: str = Form(...),
     plant_id: str = Form(""),
 ):
+    """Register a sensor from the form and return to the cluster's sensors section."""
     require_cluster(repo, cluster_id)
     pid = _parse_optional_plant_id(plant_id)
     try:
@@ -67,6 +72,7 @@ def create_sensor(
 
 @router.get("/clusters/{cluster_id}/sensors/{sensor_id}/edit")
 def edit_sensor_form(request: Request, cluster_id: int, sensor_id: int, repo: RepoDep):
+    """Render the edit form of one of the cluster's sensors."""
     cluster = require_cluster(repo, cluster_id)
     sensor = require_sensor_in_cluster(repo, cluster_id, sensor_id)
     plants = repo.get_plants_in_cluster(cluster_id)
@@ -85,6 +91,7 @@ def update_sensor(
     type: str = Form(...),
     plant_id: str = Form(""),
 ):
+    """Save the sensor form and return to the cluster's sensors section."""
     require_sensor_in_cluster(repo, cluster_id, sensor_id)
     pid = _parse_optional_plant_id(plant_id)
     try:

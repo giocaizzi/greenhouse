@@ -13,5 +13,6 @@ router = APIRouter()
 
 @router.get("/", include_in_schema=False)
 def dashboard(request: Request, repo: RepoDep):
+    """Render the dashboard (home page) with one card per cluster."""
     clusters = repo.list_clusters()
     return templates.TemplateResponse(request, "dashboard.html", base_context(request, clusters=clusters))

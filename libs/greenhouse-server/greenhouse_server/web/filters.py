@@ -20,6 +20,7 @@ _MINUTES_PER_HOUR = 60
 
 
 def format_ts(ts: int | float | None, fmt: str = "%Y-%m-%d %H:%M") -> str:
+    """Template filter: a Unix timestamp in the display timezone (``—`` when missing)."""
     if ts is None:
         return "—"
     return format_timestamp(float(ts), fmt)
@@ -76,6 +77,7 @@ def stat_position(value: float | None, lo: float | None, hi: float | None) -> st
 
 
 def moisture_badge(value: float | None, target_min: float | None, target_max: float | None) -> str:
+    """Template filter: badge class for a soil-moisture value against its target band."""
     if value is None:
         return "muted"
     if target_min is not None and value < target_min:
@@ -86,16 +88,19 @@ def moisture_badge(value: float | None, target_min: float | None, target_max: fl
 
 
 def severity_class(severity: str | None) -> str:
+    """Template filter: CSS class for an alert/insight severity (``muted`` when unknown)."""
     return {"critical": "danger", "warning": "warning", "info": "info"}.get((severity or "").lower(), "muted")
 
 
 def decision_badge(action: str | None) -> str:
+    """Template filter: badge class for a decision action (``muted`` when unknown)."""
     return {"irrigate": "primary", "hold": "muted", "skip": "muted", "error": "danger"}.get(
         (action or "").lower(), "muted"
     )
 
 
 def format_minutes(n: int | None) -> str:
+    """Template filter: a duration in minutes as ``N min`` / ``Nh`` / ``Nh Mm`` (``—`` when missing)."""
     if n is None:
         return "—"
     if n < _MINUTES_PER_HOUR:
@@ -105,6 +110,7 @@ def format_minutes(n: int | None) -> str:
 
 
 def yesno(value, yes: str = "Yes", no: str = "No") -> str:
+    """Template filter: ``yes`` / ``no`` label for a truthy / falsy value."""
     return yes if value else no
 
 

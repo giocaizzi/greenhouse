@@ -208,6 +208,7 @@ def _make_lifespan(settings: Settings) -> "Callable[[FastAPI], AbstractAsyncCont
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> "AsyncIterator[None]":
+        """Start the scheduler and re-arm leak checks on startup; stop the scheduler on shutdown."""
         if settings.enable_scheduler:
             start_scheduler()
             # Leak-check jobs are in-memory: restore any a restart dropped.

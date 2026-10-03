@@ -294,6 +294,7 @@ def set_session_cookie(response: Response, settings: Settings, token: str) -> No
 
 
 def clear_session_cookie(response: Response, settings: Settings) -> None:
+    """Delete the session cookie. Used by the logout endpoints."""
     response.delete_cookie(key=settings.auth_cookie_name, path="/")
 
 
@@ -301,8 +302,10 @@ def clear_session_cookie(response: Response, settings: Settings) -> None:
 
 
 def authenticate(session: Session, username: str, password: str) -> User | None:
-    """Verify credentials and return the User or None. Also re-hashes on success
-    if the stored argon2 parameters are outdated."""
+    """Verify credentials and return the User, or None when they do not match.
+
+    On success the password is re-hashed if the stored argon2 parameters are outdated.
+    """
     user = get_user_by_username(session, username)
     if user is None or not user.is_active:
         return None

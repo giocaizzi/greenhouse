@@ -42,12 +42,14 @@ CLUSTER_METRICS: tuple[Metric, ...] = ("soil_moisture", "temperature", "env_humi
 
 @router.get("/clusters")
 def list_clusters(request: Request, repo: RepoDep):
+    """Render the cluster list page."""
     clusters = repo.list_clusters()
     return templates.TemplateResponse(request, "clusters/list.html", base_context(request, clusters=clusters))
 
 
 @router.get("/clusters/new")
 def new_cluster_form(request: Request):
+    """Render the new-cluster form."""
     return templates.TemplateResponse(request, "clusters/new.html", base_context(request))
 
 
@@ -59,6 +61,7 @@ def create_cluster(
     location: str = Form(""),
     environment: str = Form("indoor"),
 ):
+    """Create a cluster from the form and redirect to its detail page."""
     cluster_id = repo.add_cluster(name=name, location=location or None, environment=environment)
     repo.commit()
     return RedirectResponse(url=f"/clusters/{cluster_id}", status_code=303)
@@ -66,6 +69,7 @@ def create_cluster(
 
 @router.get("/clusters/{cluster_id}/edit")
 def edit_cluster_form(request: Request, cluster_id: int, repo: RepoDep):
+    """Render the edit form of an existing cluster."""
     cluster = require_cluster(repo, cluster_id)
     return templates.TemplateResponse(request, "clusters/edit.html", base_context(request, cluster=cluster))
 
@@ -79,6 +83,7 @@ def update_cluster(
     location: str = Form(""),
     environment: str = Form("indoor"),
 ):
+    """Save the cluster form and redirect to the detail page."""
     require_cluster(repo, cluster_id)
     repo.update_cluster(
         cluster_id,
@@ -184,6 +189,7 @@ def cluster_detail(
     plant_db: PlantDbDep,
     hours: int = Query(24, ge=1, le=MAX_LOOKBACK_HOURS),
 ):
+    """Render the unified cluster detail page (status, charts, config, windows, devices)."""
     status = svc.get_cluster_status(cluster_id)
     if status is None:
         raise HTTPException(404, "Cluster not found")
@@ -266,6 +272,7 @@ def cluster_chart_fragment(
     metric: str = Query("soil_moisture"),
     hours: int = Query(24, ge=1, le=MAX_LOOKBACK_HOURS),
 ):
+    """Render one metric's cluster chart panel (HTMX fragment)."""
     payload = build_cluster_chart_payload(repo, plant_db, cluster_id, hours, require_metric(metric))
     if not payload:
         raise HTTPException(404, "Cluster not found")
@@ -283,6 +290,7 @@ def cluster_overlay_fragment(
     repo: RepoDep,
     hours: int = Query(72, ge=1, le=MAX_LOOKBACK_HOURS),
 ):
+    """Render the multi-metric overlay chart panel (HTMX fragment)."""
     payload = build_overlay_payload(repo, cluster_id, hours)
     if payload is None:
         raise HTTPException(404, "Cluster not found")
@@ -300,6 +308,7 @@ def cluster_heatmap_fragment(
     repo: RepoDep,
     days: int = Query(30, ge=1, le=365),
 ):
+    """Render the irrigation weekday-by-hour heatmap panel (HTMX fragment)."""
     payload = build_heatmap_payload(repo, cluster_id, days)
     if payload is None:
         raise HTTPException(404, "Cluster not found")
