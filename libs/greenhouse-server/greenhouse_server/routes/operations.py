@@ -154,7 +154,7 @@ def irrigate(
     if result.get("action") == "error" and result.get("reason") == "cluster not found":
         raise HTTPException(status_code=404, detail="Cluster not found")
     session.commit()
-    return IrrigateResponse(**result)
+    return IrrigateResponse(**result)  # type: ignore[misc, arg-type]  # contract: TypedDict → Pydantic, runtime-validated
 
 
 @router.get("/clusters/{cluster_id}/monitor", response_model=MonitorResponse)
@@ -205,7 +205,7 @@ def check_all(irrigation_svc: IrrigationServiceDep, session: SessionDep) -> Chec
     has_alerts = any(r.get("alerts") or r.get("maintenance") or r.get("needs_water") for r in results)
     session.commit()
     return CheckAllResponse(
-        results=[CheckClusterResponse(**r) for r in results],
+        results=[CheckClusterResponse(**r) for r in results],  # type: ignore[arg-type]  # contract: TypedDict → Pydantic
         has_alerts=has_alerts,
     )
 
@@ -231,7 +231,7 @@ def check_single(
     require_cluster(repo, cluster_id)
     result = irrigation_svc.check_cluster(cluster_id)
     session.commit()
-    return CheckClusterResponse(**result)
+    return CheckClusterResponse(**result)  # type: ignore[arg-type]  # contract: TypedDict → Pydantic
 
 
 @router.post("/sync", response_model=SyncResponse)
