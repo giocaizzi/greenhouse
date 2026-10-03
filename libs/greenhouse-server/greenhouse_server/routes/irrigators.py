@@ -188,7 +188,7 @@ def start_irrigator(
     registry: DeviceRegistryDep,
     notifier: NtfyNotifierDep,
 ) -> IrrigatorActionResponse:
-    """Manually start an irrigator over the Tuya local protocol.
+    """Manually start an irrigator through its device adapter.
 
     Side effects: actuates physical hardware and records a `start` irrigation
     event with `triggered_by="manual"`. Bypasses the smart-decision engine.
@@ -218,7 +218,7 @@ def start_irrigator(
 def stop_irrigator(
     irrigator_id: int, repo: RepoDep, registry: DeviceRegistryDep, notifier: NtfyNotifierDep
 ) -> IrrigatorActionResponse:
-    """Manually stop a running irrigator over the Tuya local protocol.
+    """Manually stop a running irrigator through its device adapter.
 
     Side effects: actuates physical hardware and records a `stop` irrigation
     event with `triggered_by="manual"` (the same action automatic and
