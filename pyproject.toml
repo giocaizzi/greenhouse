@@ -57,11 +57,16 @@ pythonpath = ["libs/greenhouse-core", "libs/greenhouse-server", "libs/greenhouse
 # checks the modules listed in refactor/mypy-strict.txt (append-only).
 python_version = "3.11"
 strict = true
-ignore_missing_imports = true
 follow_imports = "silent"
 # The workspace packages ship no py.typed, so without this their imports resolve through the
 # editable .pth files as "missing" and silently become Any. Source paths make them typed.
 mypy_path = ["libs/greenhouse-core", "libs/greenhouse-server", "libs/greenhouse-cli"]
+
+[[tool.mypy.overrides]]
+# Third-party packages with neither stubs nor py.typed — the only untyped imports. Targeted,
+# so a new untyped dependency fails loudly instead of silently becoming Any.
+module = ["tinytuya", "tinytuya.*", "apscheduler.*", "fastapi_mcp", "fastapi_mcp.*"]
+ignore_missing_imports = true
 
 [tool.ruff]
 line-length = 120
