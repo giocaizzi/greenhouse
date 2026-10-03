@@ -111,7 +111,7 @@
   "    </h3>",
   "  </div>",
   "  <div class=\"card__body\">",
-  "    <p>ends_at must be after starts_at.</p>",
+  "    <p>starts_at must be &lt; ends_at</p>",
   "    ",
   "      <div class=\"mt-4\">",
   "        <a href=\"/\" class=\"btn\">",

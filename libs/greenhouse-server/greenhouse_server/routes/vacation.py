@@ -10,8 +10,17 @@ from greenhouse_core.schemas import (
     VacationResponse,
 )
 from greenhouse_server.deps import RepoDep
+from greenhouse_server.services.vacation import VacationRangeError, validate_vacation_range
 
 router = APIRouter(prefix="/vacation", tags=["vacation"])
+
+
+def _validate_range(starts_at: int, ends_at: int) -> None:
+    """Map the shared ``starts_at < ends_at`` rule to the API's 400."""
+    try:
+        validate_vacation_range(starts_at, ends_at)
+    except VacationRangeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None
 
 
 @router.get("", response_model=VacationListResponse, summary="List vacation windows")
@@ -49,7 +58,11 @@ def create_vacation_window(request: VacationCreateRequest, repo: RepoDep):
 
     Returns:
         The newly created vacation window.
+
+    Raises:
+        HTTPException: 400 if ``starts_at`` is not strictly before ``ends_at``.
     """
+    _validate_range(request.starts_at, request.ends_at)
     window = repo.add_vacation_window(
         starts_at=request.starts_at,
         ends_at=request.ends_at,
@@ -85,8 +98,7 @@ def update_vacation_window(window_id: int, request: UpdateVacationWindowRequest,
         raise HTTPException(status_code=404, detail="Vacation window not found")
     effective_start = request.starts_at if request.starts_at is not None else row.starts_at
     effective_end = request.ends_at if request.ends_at is not None else row.ends_at
-    if effective_start >= effective_end:
-        raise HTTPException(status_code=400, detail="starts_at must be < ends_at")
+    _validate_range(effective_start, effective_end)
     updated = repo.update_vacation_window(window_id, **request.model_dump(exclude_unset=True))
     repo.session.commit()
     return updated
