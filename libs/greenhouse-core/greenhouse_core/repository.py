@@ -2,10 +2,12 @@
 
 import json
 import time
+from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any, cast
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from greenhouse_core.constants import (
@@ -44,7 +46,7 @@ from greenhouse_core.models import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Mapping
+    from collections.abc import Iterable, Iterator, Mapping
 
     from sqlalchemy import Select
     from sqlalchemy.engine import CursorResult
@@ -72,6 +74,10 @@ class SameClusterMoveError(ValueError):
     """Raised when a plant move targets its current cluster (no-op move)."""
 
 
+class DeviceIdExistsError(LookupError):
+    """The Tuya device id is already registered (the database's unique constraint refused it)."""
+
+
 class IrrigatorExistsError(ValueError):
     """Raised when adding an irrigator to a cluster that already has one.
 
@@ -97,6 +103,20 @@ class IrrigationRepository:
     def rollback(self) -> None:
         """Roll back the current transaction on the repository's session."""
         self.session.rollback()
+
+    @contextmanager
+    def refusing_duplicate_device_id(self, tuya_device_id: str) -> "Iterator[None]":
+        """Turn a unique-constraint refusal inside the block into ``DeviceIdExistsError``.
+
+        The session is rolled back before the domain error is raised, so callers outside
+        the persistence layer never handle SQLAlchemy exceptions. ``add_irrigator`` /
+        ``add_sensor`` themselves still raise the raw ``IntegrityError``.
+        """
+        try:
+            yield
+        except IntegrityError:
+            self.rollback()
+            raise DeviceIdExistsError(tuya_device_id) from None
 
     def flush(self) -> None:
         """Flush pending changes to the database without committing."""
