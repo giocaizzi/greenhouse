@@ -20,7 +20,7 @@ def windows_list(
     ctx: typer.Context,
     cluster: ClusterOpt,
 ) -> None:
-    """List configured windows for a cluster. Empty list = global defaults apply."""
+    """List configured windows for a cluster. Empty list = every hour allowed (quiet hours still apply)."""
     output(call(ctx, lambda c: c.list_windows(cluster)))
 
 

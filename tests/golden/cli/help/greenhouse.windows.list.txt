@@ -1,7 +1,7 @@
 
  Usage: greenhouse windows list [OPTIONS]
 
- List configured windows for a cluster. Empty list = global defaults apply.
+ List configured windows for a cluster. Empty list = every hour allowed (quiet hours still apply).
 
 ╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
 │ *  --cluster        <int>  Cluster ID [required]                                                 │

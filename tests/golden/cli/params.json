@@ -4449,7 +4449,7 @@
  {
   "deprecated": false,
   "group": false,
-  "help": "List configured windows for a cluster. Empty list = global defaults apply.",
+  "help": "List configured windows for a cluster. Empty list = every hour allowed (quiet hours still apply).",
   "hidden": false,
   "no_args_is_help": false,
   "params": [
