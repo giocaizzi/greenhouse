@@ -76,6 +76,5 @@ C90 @ 8: clean. Proposed size exceptions: **none**.
 (156 files) · `uv run lint-imports` 10 kept · `sizecheck` no sync.py hits · full suite: see below.
 
 Full suite at `b13e8c9`: `PYTHONHASHSEED=0 flock /tmp/greenhouse-tests.lock uv run pytest -q -n 2` →
-**3056 passed, 0 failed** (11m32s). The integration base had 3039 + 17 new tests: 7 in the gap file, counting the
-parametrized cases separately. `tests/golden` unchanged. `FULL_SEED2` was not run (sprint mode: it moves to the final
+**3056 passed, 0 failed** (11m32s), including the 7 new gap tests. `tests/golden` unchanged. `FULL_SEED2` was not run (sprint mode: it moves to the final
 gate).
