@@ -5,6 +5,9 @@ import time
 from typing import cast
 
 from greenhouse_core.constants import (
+    LEARNING_DRAINAGE_MAX_GAP_HOURS,
+    LEARNING_DRAINAGE_MIN_GAP_HOURS,
+    LEARNING_POSITIVE_RESPONSE_DELTA,
     RESPONSE_MIN_POST_DELAY_SECONDS,
     RESPONSE_POST_WINDOW_SECONDS,
     RESPONSE_PRE_WINDOW_SECONDS,
@@ -122,7 +125,7 @@ def _aggregate_profile(sensor: Sensor, responses: list[IrrigationResponse], drai
     deltas_per_min = [r.delta_per_minute for r in responses]
 
     # Efficiency: how consistently does irrigation increase moisture?
-    positive_responses = sum(1 for d in deltas if d > 2)  # >2% increase counts
+    positive_responses = sum(1 for d in deltas if d > LEARNING_POSITIVE_RESPONSE_DELTA)  # >2% increase counts
     efficiency = positive_responses / len(deltas) if deltas else 0
 
     return PlantProfile(
@@ -184,7 +187,8 @@ def compute_drainage_rate(db: IrrigationRepository, sensor: Sensor, days: int = 
         if prev.soil_moisture is not None and curr.soil_moisture is not None:
             delta = curr.soil_moisture - prev.soil_moisture
             hours = (curr.timestamp - prev.timestamp) / SECONDS_PER_HOUR
-            if delta < 0 and 0.1 < hours < 12:  # Reasonable time window
+            # Reasonable time window
+            if delta < 0 and LEARNING_DRAINAGE_MIN_GAP_HOURS < hours < LEARNING_DRAINAGE_MAX_GAP_HOURS:
                 declines.append(delta / hours)
 
     if not declines:

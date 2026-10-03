@@ -108,6 +108,7 @@ extend-select = [
     "FURB",  # refurb
     "N",  # pep8-naming
     "EXE",  # flake8-executable
+    "PLR2004",  # magic-value-comparison: thresholds live in constants.py (CLAUDE.md invariant 5)
     "RUF",  # ruff-specific (RUF001 / RUF002 ignored, see below)
     "BLE",  # blind except — report-only: existing sites carry noqa (WP8 files: per-file), never rewritten
     "PLW",  # pylint warnings (PLW0717 is preview and not listed: report-only)
@@ -151,9 +152,9 @@ indent-style = "space"
 "scripts/*" = ["E402"]  # intentional sys.path before import
 # Frozen safety net: tests exceed size limits and poke privates; never edited to satisfy a lint rule.
 "tests/**" = [
-    "C90", "PLR0911", "PLR0912", "PLR0915", "PLR0904", "PLR0914", "PLR1702", "SIM", "RET", "PTH", "PERF", "PLW", "FURB", "N", "BLE", "RUF", "ERA001", "SLF001",
+    "C90", "PLR0911", "PLR0912", "PLR0915", "PLR0904", "PLR0914", "PLR1702", "SIM", "RET", "PTH", "PERF", "PLW", "FURB", "N", "BLE", "RUF", "PLR2004", "ERA001", "SLF001",
 ]
-"refactor/**" = ["C90", "PLR0911", "PLR0912", "PLR0915", "PLR0914", "PLR1702", "PERF", "PLW", "RUF005"]  # refactor tooling scripts, not shipped
+"refactor/**" = ["C90", "PLR0911", "PLR0912", "PLR0915", "PLR0914", "PLR1702", "PERF", "PLW", "RUF005", "PLR2004"]  # refactor tooling scripts, not shipped
 "libs/greenhouse-core/greenhouse_core/migrations/versions/*" = ["PLR0915"]  # generated Alembic DDL, out of scope
 # Ratchet offenders (baseline refactor-gate1 + lint ratchet, refactor/40-lint-ratchet.md); each list only shrinks.
 "libs/greenhouse-cli/greenhouse_cli/client.py" = ["PLR0904"]
@@ -169,7 +170,7 @@ indent-style = "space"
 "libs/greenhouse-core/greenhouse_core/devices/irrigators/tuya_generic.py" = ["BLE001", "C901", "PLR0912", "PLR1702"]
 "libs/greenhouse-core/greenhouse_core/devices/sensors/tr301z.py" = ["RUF022"]
 "libs/greenhouse-core/greenhouse_core/devices/sensors/tuya_generic.py" = ["BLE001"]
-"libs/greenhouse-core/greenhouse_core/logic/engine.py" = ["C901", "PLR0911", "PLR0912", "PLR0914", "PLR0915", "RUF003", "RUF046"]
+"libs/greenhouse-core/greenhouse_core/logic/engine.py" = ["C901", "PLR0911", "PLR0912", "PLR0914", "PLR0915", "PLR2004", "RUF003", "RUF046"]
 "libs/greenhouse-core/greenhouse_core/logic/timing.py" = ["SIM102"]
 "libs/greenhouse-core/greenhouse_core/repository.py" = ["PLR0904"]
 "libs/greenhouse-core/greenhouse_core/sync.py" = ["BLE001", "EXE002", "PLR0915", "PLR1702", "SIM108"]  # EXE002: stray +x bit, WP8-owned

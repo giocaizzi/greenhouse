@@ -1,5 +1,6 @@
 """Human-readable learning report generation."""
 
+from greenhouse_core.constants import LEARNING_REPORT_LOW_EFFICIENCY
 from greenhouse_core.learning.issues import detect_issues
 from greenhouse_core.learning.profiling import get_plant_profile
 from greenhouse_core.plant_db import PlantDatabase
@@ -34,7 +35,7 @@ def generate_report(
         lines.append(f"   Response range: {profile.min_delta:+.0f}% to {profile.max_delta:+.0f}%")
         lines.append(f"   Efficiency: {profile.efficiency_score:.0%}")
 
-        if profile.efficiency_score < 0.5:
+        if profile.efficiency_score < LEARNING_REPORT_LOW_EFFICIENCY:
             lines.append("   ⚠️ Low efficiency — check drip positioning")
 
     # Alerts

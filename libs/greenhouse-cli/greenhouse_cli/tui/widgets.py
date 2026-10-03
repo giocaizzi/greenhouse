@@ -15,6 +15,7 @@ from textual.message import Message
 from textual.widgets import DataTable, Sparkline, Static
 from textual_plotext import PlotextPlot
 
+from greenhouse_cli.constants import HOURS_PER_DAY, SECONDS_PER_HOUR
 from greenhouse_cli.tui import formatting as fmt
 from greenhouse_cli.tui.model import ClusterSummary
 from greenhouse_cli.tui.sprites import MOOD_COLORS, MOOD_LABELS, Mood, logo_sprite, plant_sprite
@@ -251,12 +252,14 @@ class MetricChart(PlotextPlot):
         """Mark every irrigation ``start`` as a vertical line at its hour offset from ``reference``."""
         for event in events:
             if event.get("action") == "start":
-                self.plt.vline((event["timestamp"] - reference) / 3600, "blue")
+                self.plt.vline((event["timestamp"] - reference) / SECONDS_PER_HOUR, "blue")
 
     def _set_x_ticks(self, hours: int, reference: int) -> None:
         """Five evenly spaced wall-clock labels across the ``-hours … 0`` axis (with dates beyond one day)."""
         ticks = [-hours + hours * i / 4 for i in range(5)]
-        self.plt.xticks(ticks, [fmt.clock(reference + t * 3600, with_date=hours > 24) for t in ticks])
+        self.plt.xticks(
+            ticks, [fmt.clock(reference + t * SECONDS_PER_HOUR, with_date=hours > HOURS_PER_DAY) for t in ticks]
+        )
 
     def show_timeline(self, payload: dict[str, Any] | None, title: str) -> None:
         """Plot a ``(timestamp, score)`` timeline such as plant health."""

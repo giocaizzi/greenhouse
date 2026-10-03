@@ -8,6 +8,8 @@ from greenhouse_core.constants import (
     DEFAULT_SOIL_MOISTURE_MAX,
     DEFAULT_SOIL_MOISTURE_MIN,
     DEFAULT_SOIL_MOISTURE_TARGET,
+    WATER_NEEDS_HIGH_MEAN,
+    WATER_NEEDS_LOW_MEAN,
 )
 
 
@@ -50,8 +52,8 @@ def analyze_water_needs(plant_care_data: list[dict[str, Any]]) -> str:
     if not values:
         return "medium"
     avg = statistics.mean(values)
-    if avg < 1.5:
+    if avg < WATER_NEEDS_LOW_MEAN:
         return "low"
-    if avg > 2.5:
+    if avg > WATER_NEEDS_HIGH_MEAN:
         return "high"
     return "medium"

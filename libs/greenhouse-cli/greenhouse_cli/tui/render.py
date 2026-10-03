@@ -16,6 +16,8 @@ if TYPE_CHECKING:
 Row = tuple[str | None, list[RenderableType | str]]
 """One ``DataTable`` row for :func:`greenhouse_cli.tui.widgets.refill`: ``(row key or None, cells)``."""
 
+_GOOD_EFFICACY_SCORE = 0.5  # efficacy scores from here up render green
+
 
 def plant_rows(plants: list[dict[str, Any]]) -> list[Row]:
     """Plants tab rows keyed by plant id; the temperature column shows the ideal range when known."""
@@ -262,7 +264,7 @@ def efficacy_rows(payload: dict[str, Any] | None) -> list[Row]:
                     str(e["duration_minutes"]),
                     fmt.num(e.get("before_pct"), "%"),
                     fmt.num(e.get("after_pct"), "%"),
-                    Text(fmt.num(score, "", 2), style="#7ed957" if (score or 0) >= 0.5 else "#e0c341"),
+                    Text(fmt.num(score, "", 2), style="#7ed957" if (score or 0) >= _GOOD_EFFICACY_SCORE else "#e0c341"),
                 ],
             )
         )

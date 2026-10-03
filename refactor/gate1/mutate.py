@@ -1806,7 +1806,12 @@ add(
             "if max_recent < target_min and profile.response_count >= 3:",
             "chronic underwatering min responses 5 -> 3",
         ),
-        ("05", "    if len(profiles) >= 2:", "    if len(profiles) > 2:", "conflict check needs > 2 profiles"),
+        (
+            "05",
+            "    if len(profiles) >= CONFLICT_MIN_PROFILES:",
+            "    if len(profiles) > CONFLICT_MIN_PROFILES:",
+            "conflict check needs > 2 profiles",
+        ),
         ("06", "if moisture < target_min - 5:", "if moisture < target_min - 10:", "dry-sensor margin 5 -> 10"),
         (
             "07",
@@ -1886,14 +1891,14 @@ add(
         ),
         (
             "21",
-            "positive_responses = sum(1 for d in deltas if d > 2)",
+            "positive_responses = sum(1 for d in deltas if d > LEARNING_POSITIVE_RESPONSE_DELTA)",
             "positive_responses = sum(1 for d in deltas if d > 0)",
             "efficiency threshold 2% -> 0%",
         ),
         (
             "22",
-            "if delta < 0 and 0.1 < hours < 12:",
-            "if delta < 0 and 0.1 < hours < 24:",
+            "if delta < 0 and LEARNING_DRAINAGE_MIN_GAP_HOURS < hours < LEARNING_DRAINAGE_MAX_GAP_HOURS:",
+            "if delta < 0 and LEARNING_DRAINAGE_MIN_GAP_HOURS < hours < 24:",
             "drainage gap limit 12h -> 24h",
         ),
         (
@@ -1923,7 +1928,7 @@ add(
     [
         (
             "26",
-            "        if profile.efficiency_score < 0.5:",
+            "        if profile.efficiency_score < LEARNING_REPORT_LOW_EFFICIENCY:",
             "        if profile.efficiency_score < 0.6:",
             "report low-efficiency 0.5 -> 0.6",
         ),

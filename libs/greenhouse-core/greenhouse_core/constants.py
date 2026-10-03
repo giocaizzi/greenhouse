@@ -221,6 +221,9 @@ LEARNING_MIN_EFFICIENCY = 0.3
 LEARNING_MIN_ABSORPTION_PER_MIN = 0.5
 LEARNING_RAPID_DRAINAGE_THRESHOLD = -5  # %/hr
 LEARNING_OVER_WATER_THRESHOLD = 85  # % moisture
+# Cluster water-needs level from the mean of low=1 / medium=2 / high=3 over its plants.
+WATER_NEEDS_LOW_MEAN = 1.5  # mean below this → "low"
+WATER_NEEDS_HIGH_MEAN = 2.5  # mean above this → "high"
 
 # ── Light Thresholds (lux, before seasonal scaling) ──────────────────────────
 
@@ -317,6 +320,12 @@ LEARNING_CONFLICT_DRY_MARGIN = 5  # % below target minimum
 LEARNING_MIN_ENV_SAMPLES = 5
 LEARNING_HUMIDITY_DEFICIT = 15  # % below the ideal humidity minimum
 LOW_LIGHT_ALERT_FRACTION = 0.5  # fraction of the seasonal light minimum
+CONFLICT_MIN_PROFILES = 2  # learned profiles needed before plants are compared for conflicts
+CONFLICT_MIN_MOISTURE_SENSORS = 2  # sensors with a latest moisture needed for the conflict checks
+LEARNING_POSITIVE_RESPONSE_DELTA = 2  # % rise after a cycle that counts it as effective (efficiency)
+LEARNING_DRAINAGE_MIN_GAP_HOURS = 0.1  # reading gaps outside (min, max) are ignored for drainage
+LEARNING_DRAINAGE_MAX_GAP_HOURS = 12
+LEARNING_REPORT_LOW_EFFICIENCY = 0.5  # text report flags drip positioning below this efficiency
 
 # ── Maintenance alerts ───────────────────────────────────────────────────────
 
@@ -387,6 +396,7 @@ SYSTEM_HEALTH_FRESH_SECONDS = SECONDS_PER_HOUR  # system page: Cloud reachable i
 SYSTEM_HEALTH_STALE_SECONDS = 3 * SECONDS_PER_HOUR  # system page: device counts as stale
 SYSTEM_HEALTH_COLD_SECONDS = 24 * SECONDS_PER_HOUR  # system page: device counts as cold
 SYSTEM_HEALTH_DEVICE_LIMIT = 20  # devices listed on the system page
+SYSTEM_HEALTH_DEGRADED_OPEN_ALERTS = 3  # system page: this many open alerts → "degraded"
 DATA_QUALITY_STALE_SECONDS = 24 * SECONDS_PER_HOUR  # data-quality report: sensor is stale
 AGE_BADGE_STALE_SECONDS = 7 * SECONDS_PER_DAY  # web relative time renders "stale" past this age
 WEATHER_FORECAST_CACHE_TTL_SECONDS = 600  # Open-Meteo forecast cache lifetime

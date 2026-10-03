@@ -29,6 +29,7 @@ from greenhouse_cli.tui.widgets import Heatmap, KeyValue, MetricChart, PlantTile
 
 METRIC_ORDER = ["soil_moisture", "temperature", "env_humidity", "light", "overlay"]
 RANGES = [6, 24, 72, 168, 720]
+_PRELOAD_HOURS = 24  # soil chart window fetched with the overview; reused while the range matches
 STATS_DAYS = 7
 
 
@@ -142,7 +143,7 @@ class ClusterScreen(DataScreen):
         api = self.gh.api
         status, soil = await asyncio.gather(
             api(lambda c: c.status(cid)),
-            api(lambda c: c.cluster_chart_data(cid, hours=24), quiet=True),
+            api(lambda c: c.cluster_chart_data(cid, hours=_PRELOAD_HOURS), quiet=True),
         )
         if status is None:
             return
@@ -154,7 +155,7 @@ class ClusterScreen(DataScreen):
         self._render_plants(status)
         tasks = [
             self._load_forecast(),
-            self._load_chart(soil if self.metric == "soil_moisture" and self.hours == 24 else None),
+            self._load_chart(soil if self.metric == "soil_moisture" and self.hours == _PRELOAD_HOURS else None),
             self._load_heatmap(),
             self._load_decisions(),
             self._load_history(),
