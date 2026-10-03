@@ -69,7 +69,7 @@ class SyncService:
         stale = [
             s
             for s in sensors
-            if latest[s.id] is None or now - latest[s.id].timestamp > SENSOR_READING_STALE_SECONDS  # type: ignore[union-attr]  # None short-circuits
+            if (reading := latest[s.id]) is None or now - reading.timestamp > SENSOR_READING_STALE_SECONDS
         ]
         if stale and self._gateway is not None:
             for sensor in stale:

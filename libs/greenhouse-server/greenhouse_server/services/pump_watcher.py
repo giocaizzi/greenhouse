@@ -122,7 +122,7 @@ class PumpWatcherService:
         warmup_seconds: float = PUMP_WATCHER_WARMUP_SECONDS,
         max_read_failures: int = PUMP_WATCHER_MAX_READ_FAILURES,
         clock: Callable[[], float] = time.monotonic,
-        sleep: Callable[[float], None] = time.sleep,
+        sleep: Callable[[float], object] = time.sleep,
         monitor: DeviceHealthMonitor | None = None,
         stop_requested: Callable[[], bool] | None = None,
     ):

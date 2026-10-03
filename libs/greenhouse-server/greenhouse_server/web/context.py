@@ -72,7 +72,8 @@ def _preference_flags(request: Request) -> tuple[bool, VacationWindow | None, bo
             pass
         finally:
             # _repo_from_request sets repo and session together, so session is set whenever repo is.
-            session.close()  # type: ignore[union-attr]
+            if session is not None:
+                session.close()
     return dry_run_global, active_vacation, scheduler_paused, theme
 
 

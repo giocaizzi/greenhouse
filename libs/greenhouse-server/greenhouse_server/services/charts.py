@@ -18,6 +18,7 @@ from greenhouse_core.models import Plant, Sensor
 from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_core.schemas import (
+    ChartEventResponse,
     HeatmapCell,
     HeatmapResponse,
     MultiMetricOverlayResponse,
@@ -269,7 +270,7 @@ def build_overlay_payload(
         cluster_id=cluster_id,
         hours=hours,
         datasets=datasets,
-        events=raw_events,  # type: ignore[arg-type]
+        events=[ChartEventResponse.model_validate(e) for e in raw_events],
         normalised=True,
     )
 
