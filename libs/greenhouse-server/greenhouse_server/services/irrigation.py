@@ -474,15 +474,15 @@ class IrrigationService:
         if sensor_data and sensor_data.get("temperature") is not None:
             return sensor_data["temperature"], "sensor"
         weather = self._weather.get_current()
-        if weather and weather.get("feels_like") is not None:
-            return weather["feels_like"], "open-meteo (fallback)"
+        if weather and (feels_like := weather.get("feels_like")) is not None:
+            return feels_like, "open-meteo (fallback)"
         return None
 
     def _outdoor_temperature(self, sensor_data: dict[str, Any] | None) -> tuple[float, str] | None:
         """Any non-indoor environment: the weather feels-like first, then the sensor; None if neither."""
         weather = self._weather.get_current()
-        if weather and weather.get("feels_like") is not None:
-            return weather["feels_like"], "open-meteo"
+        if weather and (feels_like := weather.get("feels_like")) is not None:
+            return feels_like, "open-meteo"
         if sensor_data and sensor_data.get("temperature") is not None:
             return sensor_data["temperature"], "sensor (weather unavailable)"
         return None
