@@ -27,9 +27,9 @@ from greenhouse_server.services.pump_watcher import (
 
 
 def _make_registry(adapter: FakeIrrigatorAdapter) -> DeviceRegistry:
-    """Build a registry that resolves every legacy irrigator type to ``adapter``."""
+    """Build a registry that resolves the canonical and the fake irrigator model keys to ``adapter``."""
     registry = DeviceRegistry()
-    for key in ("rainpoint.ik10pw", "tuya_cloud", "tuya_local", "fake.irrigator", ""):
+    for key in ("rainpoint.ik10pw", "fake.irrigator"):
         registry.register_irrigator(key, lambda a=adapter: a)
     return registry
 
@@ -56,7 +56,7 @@ def irrigator(repo):
         cluster_id=cluster_id,
         tuya_device_id="fake_irrigator_pump",
         name="Pump Irrigator",
-        irrigator_type="tuya_cloud",
+        irrigator_type="rainpoint.ik10pw",
         config={},
     )
     repo.session.commit()
@@ -398,14 +398,14 @@ class TestWatcherIrrigatorModel:
             cluster_id=cluster_a,
             tuya_device_id="irr_a",
             name="A",
-            irrigator_type="tuya_cloud",
+            irrigator_type="rainpoint.ik10pw",
             config={},
         )
         irrigator_b_id = repo.add_irrigator(
             cluster_id=cluster_b,
             tuya_device_id="irr_b",
             name="B",
-            irrigator_type="tuya_cloud",
+            irrigator_type="rainpoint.ik10pw",
             config={},
         )
         repo.session.commit()

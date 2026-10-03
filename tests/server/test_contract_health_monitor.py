@@ -74,10 +74,10 @@ class RecordingNotifier:
 def world(tmp_db, frozen_clock):
     cid = tmp_db.add_cluster("Health Cluster")
     irr_id = tmp_db.add_irrigator(
-        cluster_id=cid, tuya_device_id="hm_pump", name="Pump One", irrigator_type="tuya_cloud", config={}
+        cluster_id=cid, tuya_device_id="hm_pump", name="Pump One", irrigator_type="rainpoint.ik10pw", config={}
     )
     sensor_id = tmp_db.add_sensor(
-        cluster_id=cid, tuya_device_id="hm_probe", name="Probe One", sensor_type="soil_moisture", config={}
+        cluster_id=cid, tuya_device_id="hm_probe", name="Probe One", sensor_type="tuya.tr301z", config={}
     )
     tmp_db.session.commit()
 
@@ -155,9 +155,9 @@ def test_poll_sensor_hands_the_newest_persisted_row_and_never_touches_the_cloud(
 
 def test_poll_all_with_fake_adapters_issues_no_read_live(tmp_db, frozen_clock):
     cid = tmp_db.add_cluster("C")
-    tmp_db.add_irrigator(cluster_id=cid, tuya_device_id="p", name="P", irrigator_type="tuya_cloud", config={})
-    s1 = tmp_db.add_sensor(cluster_id=cid, tuya_device_id="s1", name="S1", sensor_type="soil_moisture", config={})
-    s2 = tmp_db.add_sensor(cluster_id=cid, tuya_device_id="s2", name="S2", sensor_type="soil_moisture", config={})
+    tmp_db.add_irrigator(cluster_id=cid, tuya_device_id="p", name="P", irrigator_type="rainpoint.ik10pw", config={})
+    s1 = tmp_db.add_sensor(cluster_id=cid, tuya_device_id="s1", name="S1", sensor_type="tuya.tr301z", config={})
+    s2 = tmp_db.add_sensor(cluster_id=cid, tuya_device_id="s2", name="S2", sensor_type="tuya.tr301z", config={})
     tmp_db.session.commit()
     irr, sensor = FakeIrrigatorAdapter(), FakeSensorAdapter()
     registry = DeviceRegistry()

@@ -113,7 +113,7 @@ def pump(db):
         cluster_id=cid,
         tuya_device_id="fake_tuya_device_gap00001",
         name="Gap Pump",
-        irrigator_type="tuya_cloud",
+        irrigator_type="rainpoint.ik10pw",
         config={},
     )
     db.session.commit()
@@ -343,7 +343,7 @@ def test_monitor_target_band_parse_and_fallback(db, care, band, status):
         cluster_id=cid,
         tuya_device_id="fake_tuya_sensor_band0001",
         name="Band Probe",
-        sensor_type="soil_moisture",
+        sensor_type="tuya.tr301z",
         config={},
     )
     db.add_sensor_reading(sensor_id=sid, timestamp=FROZEN_TS - 600, soil_moisture=33.0)
@@ -435,7 +435,7 @@ def watcher_env(monkeypatch, frozen_clock):
     repo = IrrigationRepository(session)
     cid = repo.add_cluster("Watch Gap")
     iid = repo.add_irrigator(
-        cluster_id=cid, tuya_device_id="wg", name="Watch Gap Pump", irrigator_type="tuya_cloud", config={}
+        cluster_id=cid, tuya_device_id="wg", name="Watch Gap Pump", irrigator_type="rainpoint.ik10pw", config={}
     )
     session.commit()
     session.close()
@@ -561,7 +561,7 @@ def test_rearm_failure_mid_scan_keeps_partial_count_and_logs_both_lines(monkeypa
     for n in range(2):
         cid = repo.add_cluster(f"Rearm {n}")
         iid = repo.add_irrigator(
-            cluster_id=cid, tuya_device_id=f"rg{n}", name=f"P{n}", irrigator_type="tuya_cloud", config={}
+            cluster_id=cid, tuya_device_id=f"rg{n}", name=f"P{n}", irrigator_type="rainpoint.ik10pw", config={}
         )
         repo.add_irrigation_event(
             irrigator_id=iid, action="start", triggered_by="auto", duration_minutes=3, timestamp=FROZEN_TS - 60
@@ -952,7 +952,11 @@ def test_check_cluster_call_order_and_result_shape(db, monkeypatch, branch):
     cid = db.add_cluster("Order Gap")
     if branch != "monitored":
         db.add_irrigator(
-            cluster_id=cid, tuya_device_id="fake_tuya_device_ord1", name="O", irrigator_type="tuya_cloud", config={}
+            cluster_id=cid,
+            tuya_device_id="fake_tuya_device_ord1",
+            name="O",
+            irrigator_type="rainpoint.ik10pw",
+            config={},
         )
     if branch == "auto_run_off":
         db.set_irrigation_config(cid, auto_run=False)

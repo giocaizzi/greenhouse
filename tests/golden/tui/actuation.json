@@ -241,7 +241,7 @@
    "prefilled": {
     "config": {},
     "name": "Living Room pump",
-    "type": "tuya_cloud"
+    "type": "rainpoint.ik10pw"
    },
    "submit_label": "Save",
    "title": "Edit irrigator — Living Room pump"
@@ -262,7 +262,7 @@
     {
      "config": {},
      "name": "Living Room pump",
-     "type": "tuya_cloud"
+     "type": "rainpoint.ik10pw"
     }
    ]
   ]
@@ -604,7 +604,7 @@
    "note": null,
    "prefilled": {
     "name": "Nephrolepis probe",
-    "type": "soil_moisture"
+    "type": "tuya.tr301z"
    },
    "submit_label": "Save",
    "title": "Edit sensor #2"
@@ -624,7 +624,7 @@
     "/api/v1/clusters/1/sensors/2",
     {
      "name": "Nephrolepis probe",
-     "type": "soil_moisture"
+     "type": "tuya.tr301z"
     }
    ]
   ]

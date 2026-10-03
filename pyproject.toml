@@ -57,11 +57,16 @@ pythonpath = ["libs/greenhouse-core", "libs/greenhouse-server", "libs/greenhouse
 # checks the modules listed in refactor/mypy-strict.txt (append-only).
 python_version = "3.11"
 strict = true
-ignore_missing_imports = true
 follow_imports = "silent"
 # The workspace packages ship no py.typed, so without this their imports resolve through the
 # editable .pth files as "missing" and silently become Any. Source paths make them typed.
 mypy_path = ["libs/greenhouse-core", "libs/greenhouse-server", "libs/greenhouse-cli"]
+
+[[tool.mypy.overrides]]
+# Third-party packages with neither stubs nor py.typed — the only untyped imports. Targeted,
+# so a new untyped dependency fails loudly instead of silently becoming Any.
+module = ["tinytuya", "tinytuya.*", "apscheduler.*", "fastapi_mcp", "fastapi_mcp.*"]
+ignore_missing_imports = true
 
 [tool.ruff]
 line-length = 120
@@ -199,7 +204,7 @@ indent-style = "space"
 "libs/greenhouse-core/greenhouse_core/devices/irrigators/ik10pw.py" = ["BLE001", "C901", "PLR0911", "PLR0915", "PLR1702", "RUF022", "S110", "SIM105"]
 "libs/greenhouse-core/greenhouse_core/devices/irrigators/tuya_generic.py" = ["ARG002", "BLE001", "C901", "FBT001", "FBT003", "PLR0912", "PLR1702", "S110"]
 "libs/greenhouse-core/greenhouse_core/devices/profile.py" = ["D205"]
-"libs/greenhouse-core/greenhouse_core/devices/registry.py" = ["D102", "EM102", "N818", "TRY003"]  # UnknownDeviceModel: public name (WP8-owned file)
+"libs/greenhouse-core/greenhouse_core/devices/registry.py" = ["N818"]  # UnknownDeviceModel: public name (WP8-owned file)
 "libs/greenhouse-core/greenhouse_core/devices/sensors/tr301z.py" = ["ARG002", "RUF022"]
 "libs/greenhouse-core/greenhouse_core/devices/sensors/tuya_generic.py" = ["ARG002", "BLE001"]
 "libs/greenhouse-core/greenhouse_core/logic/decision.py" = ["PLR0913"]

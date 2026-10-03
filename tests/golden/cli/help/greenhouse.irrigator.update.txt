@@ -11,7 +11,7 @@
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
 ╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
 │ --name                       <str>    New irrigator name                                         │
-│ --type                       <str>    tuya_cloud or tuya_local                                   │
+│ --type                       <str>    Device model key (rainpoint.ik10pw)                        │
 │ --device-ip                  <str>    Local IP                                                   │
 │ --local-key                  <str>    Local key                                                  │
 │ --reservoir-l                <float>  Usable reservoir/tank volume in liters (for vacation       │

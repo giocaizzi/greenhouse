@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 from fastapi import APIRouter, Form, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
-from greenhouse_core.logic.timing import is_within_quiet_hours
+from greenhouse_core.logic.timing import active_quiet_window
 from greenhouse_server.deps import (
     MAX_LOOKBACK_HOURS,
     ClusterServiceDep,
@@ -198,22 +198,11 @@ def cluster_detail(
     effective_config: dict[str, dict[str, Any]] = data["effective_config"]
 
     # "Are we in quiet hours right now?" — drives the hx-confirm guard on
-    # the manual irrigate button. Uses the same effective resolution the
-    # engine uses, so the UI never disagrees with the engine.
+    # the manual irrigate button. Same helper and effective resolution as the
+    # engine's quiet-hours gate, so the UI never disagrees with the engine.
     prefs = repo.get_preferences()
-    quiet_active_now = is_within_quiet_hours(
-        start_hour=(
-            int(effective_config["quiet_start_hour"]["value"])
-            if effective_config["quiet_start_hour"]["value"] is not None
-            else None
-        ),
-        end_hour=(
-            int(effective_config["quiet_end_hour"]["value"])
-            if effective_config["quiet_end_hour"]["value"] is not None
-            else None
-        ),
-        now_unix=int(time.time()),
-        tz_name=prefs.timezone if prefs else None,
+    quiet_window = active_quiet_window(
+        effective_config, now_unix=int(time.time()), tz_name=prefs.timezone if prefs else None
     )
 
     return templates.TemplateResponse(
@@ -224,7 +213,7 @@ def cluster_detail(
             status=status,
             cluster_id=cluster_id,
             hours=hours,
-            quiet_active_now=quiet_active_now,
+            quiet_active_now=quiet_window is not None,
             **data,
         ),
     )

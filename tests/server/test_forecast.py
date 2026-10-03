@@ -43,7 +43,7 @@ class TestForecastEndpoint:
             json={
                 "tuya_device_id": FAKE_SENSOR_ID,
                 "name": "Test Sensor",
-                "type": "soil_moisture",
+                "type": "tuya.tr301z",
                 "plant_id": plant_id,
             },
         )
@@ -56,7 +56,7 @@ class TestForecastEndpoint:
             json={
                 "tuya_device_id": FAKE_DEVICE_ID,
                 "name": "Test Irrigator",
-                "type": "tuya_cloud",
+                "type": "rainpoint.ik10pw",
             },
         )
         assert resp.status_code == 201
@@ -221,7 +221,7 @@ class TestForecastCleaning:
             cluster_id=cluster_id,
             tuya_device_id=FAKE_SENSOR_ID,
             name="Forecast Sensor",
-            sensor_type="soil_moisture",
+            sensor_type="tuya.tr301z",
             config={},
             plant_id=plant_id,
         )

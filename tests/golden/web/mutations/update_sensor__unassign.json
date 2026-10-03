@@ -50,7 +50,7 @@
   "form": {
    "name": "Monstera Probe",
    "plant_id": "",
-   "type": "soil_moisture"
+   "type": "tuya.tr301z"
   },
   "headers": {},
   "method": "POST",

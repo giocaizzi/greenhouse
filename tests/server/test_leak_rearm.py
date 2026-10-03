@@ -29,7 +29,7 @@ def _seed(app) -> tuple[int, int]:
             cluster_id=cid,
             tuya_device_id="fake_tuya_device_aabbccdd",
             name="Pump",
-            irrigator_type="tuya_cloud",
+            irrigator_type="rainpoint.ik10pw",
             config={},
         )
         session.commit()

@@ -50,8 +50,8 @@ def plant_db():
 def seeded(repo):
     """Seed cluster, sensor, irrigator; return (cluster_id, sensor_id, irrigator_id)."""
     cluster_id = repo.add_cluster("Leak Test Cluster")
-    sensor_id = repo.add_sensor(cluster_id, "fake_sensor_leak", "Soil Sensor", "soil_moisture", {})
-    irrigator_id = repo.add_irrigator(cluster_id, "fake_irrigator_leak", "Pump", "tuya_cloud", {})
+    sensor_id = repo.add_sensor(cluster_id, "fake_sensor_leak", "Soil Sensor", "tuya.tr301z", {})
+    irrigator_id = repo.add_irrigator(cluster_id, "fake_irrigator_leak", "Pump", "rainpoint.ik10pw", {})
     repo.session.commit()
     return cluster_id, sensor_id, irrigator_id
 
@@ -291,7 +291,7 @@ class TestHoldLifecycle:
     def test_clearing_touches_only_this_sensors_leak_alert(self, repo, plant_db, seeded, started_at):
         """A settled sensor resolves its own leak alert — not the neighbour's, not other codes."""
         cluster_id, sensor_id, _irrigator_id = seeded
-        other_id = repo.add_sensor(cluster_id, "fake_sensor_leak_3", "Neighbour Sensor", "soil_moisture", {})
+        other_id = repo.add_sensor(cluster_id, "fake_sensor_leak_3", "Neighbour Sensor", "tuya.tr301z", {})
         repo.upsert_alert(
             dedup_key=f"leak::{LEAK_ALERT_CODE}::{cluster_id}::sensor{other_id}",
             source="leak",
@@ -347,7 +347,7 @@ class TestHoldLifecycle:
 class TestPerSensorScoping:
     def test_only_the_offending_sensor_is_alerted(self, repo, plant_db, seeded, started_at):
         cluster_id, sensor_id, _irrigator_id = seeded
-        other_id = repo.add_sensor(cluster_id, "fake_sensor_leak_2", "Second Sensor", "soil_moisture", {})
+        other_id = repo.add_sensor(cluster_id, "fake_sensor_leak_2", "Second Sensor", "tuya.tr301z", {})
         repo.session.commit()
 
         _seed(repo, sensor_id, started_at, before=(38.0, 38.0, 37.0), after=(50.0, 65.0, 78.0))

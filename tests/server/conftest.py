@@ -15,8 +15,8 @@ Two app fixtures exist:
 actually triggers 401 / login-redirect.
 
 Device wiring: a real :class:`DeviceRegistry` is registered for the canonical
-``rainpoint.ik10pw`` / ``tuya.tr301z`` model keys plus the legacy aliases
-(``tuya_cloud`` etc.) — its factories build :class:`FakeIrrigatorAdapter` /
+``rainpoint.ik10pw`` / ``tuya.tr301z`` model keys (plus ``fake.*`` test keys) —
+its factories build :class:`FakeIrrigatorAdapter` /
 :class:`FakeSensorAdapter` instances from ``tests/fake_devices.py``. The
 registry is stored on ``app.state.fake_devices`` so tests can fetch the
 per-irrigator fake and assert on its recorded ``calls``.
@@ -50,20 +50,12 @@ class FakeDeviceWiring:
         self.irrigator = FakeIrrigatorAdapter()
         self.sensor = FakeSensorAdapter()
         self.registry = DeviceRegistry()
-        # Register the production model keys + all legacy aliases. The fixtures
-        # exercise routes whose seed data uses ``type="tuya_cloud"`` and
-        # ``type="soil_moisture"``; we want one fake shared across keys so a
-        # test can run the engine and inspect the same adapter.
-        for key in ("rainpoint.ik10pw", "tuya_cloud", "tuya_local", "fake.irrigator", ""):
+        # Register the production model keys the seed data uses (plus the
+        # ``fake.*`` test keys); one fake is shared across keys so a test can
+        # run the engine and inspect the same adapter.
+        for key in ("rainpoint.ik10pw", "fake.irrigator"):
             self.registry.register_irrigator(key, lambda adapter=self.irrigator: adapter)
-        for key in (
-            "tuya.tr301z",
-            "soil_moisture",
-            "temp_humidity",
-            "light",
-            "fake.sensor",
-            "",
-        ):
+        for key in ("tuya.tr301z", "fake.sensor"):
             self.registry.register_sensor(key, lambda adapter=self.sensor: adapter)
 
 
@@ -205,7 +197,7 @@ def seeded_client(client):
         json={
             "tuya_device_id": "fake_sensor_001",
             "name": "Test Sensor",
-            "type": "soil_moisture",
+            "type": "tuya.tr301z",
             "plant_id": 1,
         },
     )
@@ -217,7 +209,7 @@ def seeded_client(client):
         json={
             "tuya_device_id": "fake_irrigator_001",
             "name": "Test Irrigator",
-            "type": "tuya_cloud",
+            "type": "rainpoint.ik10pw",
         },
     )
     assert resp.status_code == 201

@@ -90,14 +90,14 @@ def sample_cluster(tmp_db):
         cluster_id=cluster_id,
         tuya_device_id=FAKE_DEVICE_ID,
         name=FAKE_IRRIGATOR_NAME,
-        irrigator_type="tuya_cloud",
+        irrigator_type="rainpoint.ik10pw",
         config={},
     )
     sensor_id = tmp_db.add_sensor(
         cluster_id=cluster_id,
         tuya_device_id=FAKE_SENSOR_ID,
         name=FAKE_SENSOR_NAME,
-        sensor_type="soil_moisture",
+        sensor_type="tuya.tr301z",
         config={},
         plant_id=plant_id,
     )

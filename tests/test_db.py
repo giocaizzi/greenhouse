@@ -65,7 +65,7 @@ class TestDatabase:
             cluster_id=cluster_id,
             tuya_device_id=FAKE_DEVICE_ID,
             name=FAKE_IRRIGATOR_NAME,
-            irrigator_type="tuya_cloud",
+            irrigator_type="rainpoint.ik10pw",
             config={"interval": 12},
         )
 
@@ -82,7 +82,7 @@ class TestDatabase:
             cluster_id=cluster_a,
             tuya_device_id=FAKE_DEVICE_ID,
             name="First",
-            irrigator_type="tuya_cloud",
+            irrigator_type="rainpoint.ik10pw",
             config={},
         )
 
@@ -95,7 +95,7 @@ class TestDatabase:
                 cluster_id=cluster_b,
                 tuya_device_id=FAKE_DEVICE_ID,
                 name="Second",
-                irrigator_type="tuya_cloud",
+                irrigator_type="rainpoint.ik10pw",
                 config={},
             )
 
@@ -108,7 +108,7 @@ class TestDatabase:
             cluster_id=cluster_id,
             tuya_device_id=FAKE_DEVICE_ID,
             name="First",
-            irrigator_type="tuya_cloud",
+            irrigator_type="rainpoint.ik10pw",
             config={},
         )
 
@@ -117,7 +117,7 @@ class TestDatabase:
                 cluster_id=cluster_id,
                 tuya_device_id="fake_other_device",
                 name="Second",
-                irrigator_type="tuya_cloud",
+                irrigator_type="rainpoint.ik10pw",
                 config={},
             )
 
@@ -128,7 +128,7 @@ class TestDatabase:
             cluster_id=cluster_id,
             tuya_device_id=FAKE_SENSOR_ID,
             name=FAKE_SENSOR_NAME,
-            sensor_type="temp_humidity",
+            sensor_type="tuya.tr301z",
             config={},
         )
 
@@ -149,7 +149,7 @@ class TestDatabase:
             cluster_id=cluster_id,
             tuya_device_id=FAKE_DEVICE_ID,
             name=FAKE_IRRIGATOR_NAME,
-            irrigator_type="tuya_cloud",
+            irrigator_type="rainpoint.ik10pw",
             config={},
         )
 
@@ -203,7 +203,7 @@ class TestDatabase:
             cluster_id=cluster_id,
             tuya_device_id=FAKE_SENSOR_ID,
             name=FAKE_SENSOR_NAME,
-            sensor_type="soil_moisture",
+            sensor_type="tuya.tr301z",
             config={},
         )
 
@@ -233,7 +233,7 @@ class TestDatabase:
             cluster_id=cluster_id,
             tuya_device_id=FAKE_SENSOR_ID,
             name=FAKE_SENSOR_NAME,
-            sensor_type="soil_moisture",
+            sensor_type="tuya.tr301z",
             config={},
         )
 
@@ -259,7 +259,7 @@ class TestDatabase:
             cluster_id=cluster_id,
             tuya_device_id=FAKE_SENSOR_ID,
             name=FAKE_SENSOR_NAME,
-            sensor_type="soil_moisture",
+            sensor_type="tuya.tr301z",
             config={},
         )
 
@@ -301,7 +301,7 @@ class TestDatabase:
             cluster_id=cluster_id,
             tuya_device_id=FAKE_SENSOR_ID,
             name=FAKE_SENSOR_NAME,
-            sensor_type="soil_moisture",
+            sensor_type="tuya.tr301z",
             config={},
         )
 
@@ -320,7 +320,7 @@ class TestDatabase:
             cluster_id=cluster_id,
             tuya_device_id=FAKE_SENSOR_ID,
             name=FAKE_SENSOR_NAME,
-            sensor_type="soil_moisture",
+            sensor_type="tuya.tr301z",
             config={},
         )
 

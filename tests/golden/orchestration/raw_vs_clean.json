@@ -418,7 +418,7 @@
    "name": "Glitchy",
    "plant_id": null,
    "reading_age_seconds": 120,
-   "type": "soil_moisture"
+   "type": "tuya.tr301z"
   },
   {
    "id": 1,
@@ -436,7 +436,7 @@
    "name": "Sensor 1",
    "plant_id": 1,
    "reading_age_seconds": 60,
-   "type": "soil_moisture"
+   "type": "tuya.tr301z"
   }
  ]
 }

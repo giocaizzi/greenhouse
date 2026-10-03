@@ -20,7 +20,7 @@ def test_create_persists_capacity(seeded_client):
         data={
             "tuya_device_id": "fake_irr_cap",
             "name": "Pump Cap",
-            "type": "tuya_cloud",
+            "type": "rainpoint.ik10pw",
             "reservoir_l": "15.5",
             "flow_rate_l_per_min": "2.5",
         },
@@ -43,7 +43,7 @@ def test_create_without_capacity_leaves_none(seeded_client):
         data={
             "tuya_device_id": "fake_irr_nocap",
             "name": "Pump NoCap",
-            "type": "tuya_cloud",
+            "type": "rainpoint.ik10pw",
             "reservoir_l": "",
             "flow_rate_l_per_min": "",
         },
@@ -76,7 +76,7 @@ def test_edit_persists_capacity(seeded_client):
         "/clusters/1/irrigators/edit",
         data={
             "name": "Test Irrigator",
-            "type": "tuya_cloud",
+            "type": "rainpoint.ik10pw",
             "reservoir_l": "30.0",
             "flow_rate_l_per_min": "3.0",
         },

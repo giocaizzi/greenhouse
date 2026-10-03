@@ -20,8 +20,7 @@ def _new_app_with_engine(engine):
 
     fake = FakeIrrigatorAdapter()
     registry = DeviceRegistry()
-    for key in ("rainpoint.ik10pw", "tuya_cloud", "tuya_local", ""):
-        registry.register_irrigator(key, lambda adapter=fake: adapter)
+    registry.register_irrigator("rainpoint.ik10pw", lambda adapter=fake: adapter)
     application.dependency_overrides[get_device_registry] = lambda: registry
     application.dependency_overrides[get_device_gateway] = lambda: None
     return application

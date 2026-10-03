@@ -232,7 +232,7 @@
   "form": {
    "name": "P",
    "tuya_device_id": "fake_tuya_device_00000003",
-   "type": "tuya_cloud"
+   "type": "rainpoint.ik10pw"
   },
   "headers": {},
   "method": "POST",

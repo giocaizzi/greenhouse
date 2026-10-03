@@ -60,7 +60,7 @@ def _cluster_with_sensors(db, n: int, *, irrigator: bool = False):
             cluster_id=cid,
             tuya_device_id=f"fake_tuya_sensor_gap{i:04d}",
             name=f"Gap Probe {i}",
-            sensor_type="soil_moisture",
+            sensor_type="tuya.tr301z",
             config={},
         )
         for i in range(n)
@@ -71,7 +71,7 @@ def _cluster_with_sensors(db, n: int, *, irrigator: bool = False):
             cluster_id=cid,
             tuya_device_id="fake_tuya_device_gap0001",
             name="Gap Pump",
-            irrigator_type="tuya_cloud",
+            irrigator_type="rainpoint.ik10pw",
             config={},
         )
     db.session.commit()
@@ -117,7 +117,7 @@ def test_monitor_status_bands_around_the_plant_target(db, soil, status):
         cluster_id=cid,
         tuya_device_id="fake_tuya_sensor_mon0001",
         name="Monitor Probe",
-        sensor_type="soil_moisture",
+        sensor_type="tuya.tr301z",
         config={},
         plant_id=pid,
     )
@@ -202,7 +202,7 @@ def test_temperature_source_only_indoor_prefers_the_sensor(db, environment, temp
         cluster_id=cid,
         tuya_device_id="fake_tuya_sensor_tmp0001",
         name="Temp Probe",
-        sensor_type="soil_moisture",
+        sensor_type="tuya.tr301z",
         config={},
     )
     db.add_sensor_reading(sensor_id=sid, timestamp=FROZEN_TS - 600, soil_moisture=50.0, temperature=15.0)
@@ -230,7 +230,7 @@ def test_check_all_has_alerts_counts_thirsty_plants(api):
         cluster_id=cid,
         tuya_device_id="fake_tuya_sensor_thr0001",
         name="Thirsty Probe",
-        sensor_type="soil_moisture",
+        sensor_type="tuya.tr301z",
         config={},
         plant_id=pid,
     )
@@ -289,7 +289,7 @@ def test_web_irrigate_force_flag_spellings(api, force, triggered_by, code):
         cluster_id=cid,
         tuya_device_id="fake_tuya_sensor_frc0001",
         name="Force Probe",
-        sensor_type="soil_moisture",
+        sensor_type="tuya.tr301z",
         config={},
     )
     repo.add_sensor_reading(sensor_id=sid, timestamp=FROZEN_TS - 600, soil_moisture=50.0)

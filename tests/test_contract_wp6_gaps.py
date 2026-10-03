@@ -289,7 +289,7 @@ def test_get_irrigation_stats_counts_events_without_duration_but_not_as_irrigati
         cluster_id=cluster_id,
         tuya_device_id=FAKE_DEVICE_ID,
         name=FAKE_IRRIGATOR_NAME,
-        irrigator_type="tuya_cloud",
+        irrigator_type="rainpoint.ik10pw",
         config={},
     )
     now = int(time.time())

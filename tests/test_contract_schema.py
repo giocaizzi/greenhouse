@@ -6,7 +6,7 @@
 - ``contracts/orm_columns.json`` — per column what DDL does not show: Python-side
   ``default`` / ``onupdate``, ``index`` / ``unique`` flags, foreign keys; plus the
   mapped class → table map;
-- the literal Alembic head ``9f2b5e7c6a31`` and the full revision chain;
+- the literal Alembic head ``a1d3f5b7c902`` and the full revision chain;
 - ``contracts/migrated_schema.json`` — SQLAlchemy reflection of a temp-file SQLite
   after ``init_db`` (the schema production actually runs), and
   ``contracts/schema_drift.json`` — every difference between that and
@@ -34,7 +34,7 @@ PHASE0_DDL_SHA256 = (
     "7b6a2d72054011a900438ae7e7edd471acbffc6c6a2f2d60cc1583973fb36f2b"  # gitleaks:allow — content hash, not a secret
 )
 
-ALEMBIC_HEAD = "9f2b5e7c6a31"
+ALEMBIC_HEAD = "a1d3f5b7c902"
 ALEMBIC_CHAIN = [
     ("1c9b09f02432", None),
     ("2a4d1e7c8f02", "1c9b09f02432"),
@@ -46,6 +46,7 @@ ALEMBIC_CHAIN = [
     ("7d0e5f3a4b13", "7d3c1f9b4a08"),
     ("8e1a4d6c5f20", "7d0e5f3a4b13"),
     ("9f2b5e7c6a31", "8e1a4d6c5f20"),
+    ("a1d3f5b7c902", "9f2b5e7c6a31"),
 ]
 
 

@@ -55,7 +55,7 @@
   "form": {
    "name": "Room Climate+",
    "plant_id": "1",
-   "type": "temp_humidity"
+   "type": "tuya.tr301z"
   },
   "headers": {},
   "method": "POST",

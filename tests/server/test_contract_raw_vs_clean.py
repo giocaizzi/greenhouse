@@ -41,7 +41,7 @@ def spiky(clean_env, frozen_clock):
         second = p.api(
             "POST",
             f"/api/v1/clusters/{ids['cluster_id']}/sensors",
-            {"tuya_device_id": "fake_sensor_002", "name": "Glitchy", "type": "soil_moisture"},
+            {"tuya_device_id": "fake_sensor_002", "name": "Glitchy", "type": "tuya.tr301z"},
         )["id"]
     with p.repo() as repo:
         # Oldest first, every 30 min, the spike is the newest row (60 s ago).

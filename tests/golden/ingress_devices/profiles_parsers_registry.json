@@ -957,17 +957,6 @@
   "irrigator_keys": [
    "rainpoint.ik10pw"
   ],
-  "legacy_irrigator_aliases": {
-   "": "rainpoint.ik10pw",
-   "tuya_cloud": "rainpoint.ik10pw",
-   "tuya_local": "rainpoint.ik10pw"
-  },
-  "legacy_sensor_aliases": {
-   "": "tuya.tr301z",
-   "light": "tuya.tr301z",
-   "soil_moisture": "tuya.tr301z",
-   "temp_humidity": "tuya.tr301z"
-  },
   "sensor_keys": [
    "tuya.tr301z"
   ]

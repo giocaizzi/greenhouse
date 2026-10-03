@@ -747,7 +747,7 @@ class TestClusterCrud:
             await pilot.press("n")
             await pilot.pause()
             await _submit_form(
-                pilot, tui, tuya_device_id="fake_tuya_device_aabbccdd", name="Spare probe", type="soil_moisture"
+                pilot, tui, tuya_device_id="fake_tuya_device_aabbccdd", name="Spare probe", type="tuya.tr301z"
             )
             sensors = http.get("/api/v1/clusters/1/sensors").json()
             spare = next(s for s in sensors if s["name"] == "Spare probe")
@@ -818,7 +818,7 @@ class TestClusterCrud:
             await pilot.press("n")
             await pilot.pause()
             await _submit_form(
-                pilot, tui, tuya_device_id="fake_tuya_device_00112233", name="New pump", type="tuya_cloud"
+                pilot, tui, tuya_device_id="fake_tuya_device_00112233", name="New pump", type="rainpoint.ik10pw"
             )
             assert http.get("/api/v1/clusters/1/irrigator").json()["name"] == "New pump"
 

@@ -293,7 +293,7 @@ def _probe(repo) -> int:
         cluster_id=cid,
         tuya_device_id="fake_tuya_sensor_repo0001",
         name="Repo Probe",
-        sensor_type="soil_moisture",
+        sensor_type="tuya.tr301z",
         config={},
     )
 
@@ -380,7 +380,7 @@ def _two_probe_cluster(repo, *, link_plant: bool = True):
         cluster_id=cid,
         tuya_device_id="fake_tuya_sensor_cfl0001",
         name="Probe A",
-        sensor_type="soil_moisture",
+        sensor_type="tuya.tr301z",
         config={},
         plant_id=pid,
     )
@@ -388,7 +388,7 @@ def _two_probe_cluster(repo, *, link_plant: bool = True):
         cluster_id=cid,
         tuya_device_id="fake_tuya_sensor_cfl0002",
         name="Probe B",
-        sensor_type="soil_moisture",
+        sensor_type="tuya.tr301z",
         config={},
     )
     return cid, a, b
@@ -448,10 +448,14 @@ def test_plant_profile_end_to_end(repo):
     """
     cid = repo.add_cluster("Profile Gap")
     irr = repo.add_irrigator(
-        cluster_id=cid, tuya_device_id="fake_tuya_device_prof0001", name="Pump", irrigator_type="tuya_cloud", config={}
+        cluster_id=cid,
+        tuya_device_id="fake_tuya_device_prof0001",
+        name="Pump",
+        irrigator_type="rainpoint.ik10pw",
+        config={},
     )
     sid = repo.add_sensor(
-        cluster_id=cid, tuya_device_id="fake_tuya_sensor_prof0001", name="Prof", sensor_type="soil_moisture", config={}
+        cluster_id=cid, tuya_device_id="fake_tuya_sensor_prof0001", name="Prof", sensor_type="tuya.tr301z", config={}
     )
     t1, t2, t3 = FROZEN_TS - 10 * DAY, FROZEN_TS - 5 * DAY, FROZEN_TS - 3 * DAY
     repo.add_irrigation_event(

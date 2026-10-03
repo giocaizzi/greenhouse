@@ -232,7 +232,7 @@
   "form": {
    "name": "P",
    "tuya_device_id": "fake_tuya_sensor_00000005",
-   "type": "soil_moisture"
+   "type": "tuya.tr301z"
   },
   "headers": {},
   "method": "POST",

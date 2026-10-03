@@ -2032,7 +2032,7 @@ add(
         ),
         (
             "12",
-            '            cfg_key = _coerce_config(config).get("local_key") if config is not None else None\n            if cfg_key:\n                return cfg_key\n',
+            '            cfg_key = parse_device_config(config).get("local_key") if config is not None else None\n            if cfg_key:\n                return cfg_key\n',
             "",
             "config local_key ignored (Cloud lookup every time)",
         ),
@@ -2255,13 +2255,23 @@ add(
     "devices",
     CORE + "devices/registry.py",
     [
-        ("49", '    "tuya_local": "rainpoint.ik10pw",\n', "", "legacy tuya_local alias removed"),
-        ("50", '    "temp_humidity": "tuya.tr301z",\n', "", "legacy temp_humidity alias removed"),
+        (
+            "49",
+            "        factory = self._irrigators.get(irrigator.type)\n",
+            "        factory = self._irrigators.get(irrigator.type) or next(iter(self._irrigators.values()), None)\n",
+            "unknown irrigator type fails open to the first adapter",
+        ),
+        (
+            "50",
+            "        factory = self._sensors.get(sensor.type)\n",
+            "        factory = self._sensors.get(sensor.type) or next(iter(self._sensors.values()), None)\n",
+            "unknown sensor type fails open to the first adapter",
+        ),
         (
             "51",
-            '        key = self._resolve_irrigator_key(irrigator.type or "")',
-            '        key = irrigator.type or ""',
-            "irrigator aliases ignored",
+            "            raise UnknownDeviceModel(msg)\n",
+            "            return None\n",
+            "unknown irrigator returns None",
         ),
     ],
 )

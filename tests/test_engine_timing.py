@@ -42,7 +42,7 @@ def _add_soil(db, cluster_id: int, moisture: float, *, device_id: str = "fake_so
         cluster_id=cluster_id,
         tuya_device_id=device_id,
         name="Fake Soil",
-        sensor_type="soil_moisture",
+        sensor_type="tuya.tr301z",
         config={},
     )
     db.add_sensor_reading(sensor_id=sid, soil_moisture=moisture)
@@ -198,7 +198,7 @@ class TestSeasonalMultiplier:
             cluster_id=cluster_id,
             tuya_device_id="fake_soil_winter",
             name="Fake Soil",
-            sensor_type="soil_moisture",
+            sensor_type="tuya.tr301z",
             config={},
         )
 
@@ -326,7 +326,7 @@ class TestSeasonalMultiplier:
         tmp_db.update_global_irrigation_config(quiet_start_hour=0, quiet_end_hour=5)
         # Recent irrigation event within cooldown window.
         irrigator_id = tmp_db.add_irrigator(
-            cluster_id=cluster_id, tuya_device_id="fake_pump", name="Pump", irrigator_type="tuya_cloud", config={}
+            cluster_id=cluster_id, tuya_device_id="fake_pump", name="Pump", irrigator_type="rainpoint.ik10pw", config={}
         )
         tmp_db.add_irrigation_event(
             irrigator_id=irrigator_id,
@@ -353,7 +353,7 @@ class TestSeasonalMultiplier:
             cluster_id=cluster_id,
             tuya_device_id="fake_soil_summer",
             name="Fake Soil",
-            sensor_type="soil_moisture",
+            sensor_type="tuya.tr301z",
             config={},
         )
 

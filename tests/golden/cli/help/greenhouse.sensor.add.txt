@@ -7,7 +7,7 @@
 │ *  --cluster          <int>  Cluster ID [required]                                               │
 │ *  --device-id        <str>  Tuya device ID [required]                                           │
 │ *  --name             <str>  Sensor name [required]                                              │
-│ *  --type             <str>  soil_moisture, temp_humidity, or light [required]                   │
+│ *  --type             <str>  Device model key (tuya.tr301z) [required]                           │
 │    --plant-id         <int>  Associated plant ID                                                 │
 │    --help                    Show this message and exit.                                         │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

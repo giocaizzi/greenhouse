@@ -18,7 +18,8 @@
   "migrations/versions/7d0e5f3a4b13_add_user_preferences_notify_flags.py",
   "migrations/versions/7d3c1f9b4a08_add_global_config_and_quiet_hours.py",
   "migrations/versions/8e1a4d6c5f20_add_irrigator_reservoir_capacity.py",
-  "migrations/versions/9f2b5e7c6a31_irrigator_cluster_unique.py"
+  "migrations/versions/9f2b5e7c6a31_irrigator_cluster_unique.py",
+  "migrations/versions/a1d3f5b7c902_rewrite_legacy_device_types.py"
  ],
  "greenhouse-server": [
   "web/static/app.css",

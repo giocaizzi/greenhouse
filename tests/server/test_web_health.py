@@ -31,12 +31,12 @@ class TestHealthPage:
             client.post("/api/v1/clusters", json={"name": "Health Test Cluster"})
             client.post(
                 "/api/v1/clusters/1/sensors",
-                json={"tuya_device_id": "fake_health_s1", "name": "Stale Sensor", "type": "soil_moisture"},
+                json={"tuya_device_id": "fake_health_s1", "name": "Stale Sensor", "type": "tuya.tr301z"},
             )
             # Add another sensor to keep cloud reachable
             client.post(
                 "/api/v1/clusters/1/sensors",
-                json={"tuya_device_id": "fake_health_s2", "name": "Fresh Sensor", "type": "soil_moisture"},
+                json={"tuya_device_id": "fake_health_s2", "name": "Fresh Sensor", "type": "tuya.tr301z"},
             )
 
             from greenhouse_core.models import Sensor, SensorReading

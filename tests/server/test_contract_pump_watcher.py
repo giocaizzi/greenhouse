@@ -75,7 +75,7 @@ def env(monkeypatch, frozen_clock):
     repo = IrrigationRepository(session)
     cid = repo.add_cluster("Watch Cluster")
     iid = repo.add_irrigator(
-        cluster_id=cid, tuya_device_id="wp", name="Watch Pump", irrigator_type="tuya_cloud", config={}
+        cluster_id=cid, tuya_device_id="wp", name="Watch Pump", irrigator_type="rainpoint.ik10pw", config={}
     )
     session.commit()
     session.close()
@@ -360,7 +360,7 @@ def plain(frozen_clock):
     repo = IrrigationRepository(session)
     cid = repo.add_cluster("Trip Cluster")
     iid = repo.add_irrigator(
-        cluster_id=cid, tuya_device_id="tp", name="Trip Pump", irrigator_type="tuya_cloud", config={}
+        cluster_id=cid, tuya_device_id="tp", name="Trip Pump", irrigator_type="rainpoint.ik10pw", config={}
     )
     session.commit()
     adapter = FakeIrrigatorAdapter()

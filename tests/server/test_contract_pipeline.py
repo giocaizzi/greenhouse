@@ -189,12 +189,16 @@ class Pipeline:
                 {
                     "tuya_device_id": f"fake_sensor_{cid:03d}",
                     "name": f"Sensor {cid}",
-                    "type": "soil_moisture",
+                    "type": "tuya.tr301z",
                     "plant_id": ids.get("plant_id"),
                 },
             )["id"]
         if irrigator:
-            body = {"tuya_device_id": f"fake_irrigator_{cid:03d}", "name": f"Irrigator {cid}", "type": "tuya_cloud"}
+            body = {
+                "tuya_device_id": f"fake_irrigator_{cid:03d}",
+                "name": f"Irrigator {cid}",
+                "type": "rainpoint.ik10pw",
+            }
             if reservoir_l is not None:
                 body["reservoir_l"] = reservoir_l
             if flow_rate_l_per_min is not None:
@@ -306,7 +310,7 @@ def _irrigate(p: Pipeline, cid: int = 1, **body) -> dict:
 #
 # Each scenario seeds a fresh app, calls ``p.mark()`` and then makes the
 # observed calls. Every scenario starts from the same base (one indoor cluster:
-# Monstera, soil sensor, ``tuya_cloud`` irrigator, smart/2 min/12 h/auto_run)
+# Monstera, soil sensor, ``rainpoint.ik10pw`` irrigator, smart/2 min/12 h/auto_run)
 # unless it says otherwise.
 
 

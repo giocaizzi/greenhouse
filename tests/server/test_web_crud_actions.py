@@ -104,7 +104,7 @@ def test_sensor_edit_form_renders(seeded_client):
 def test_sensor_edit_updates(seeded_client):
     resp = seeded_client.post(
         "/clusters/1/sensors/1/edit",
-        data={"name": "Renamed Sensor", "type": "soil_moisture", "plant_id": "1"},
+        data={"name": "Renamed Sensor", "type": "tuya.tr301z", "plant_id": "1"},
         follow_redirects=False,
     )
     assert resp.status_code == 303
@@ -142,7 +142,7 @@ def test_irrigator_edit_form_renders(seeded_client):
 def test_irrigator_edit_updates(seeded_client):
     resp = seeded_client.post(
         "/clusters/1/irrigators/edit",
-        data={"name": "Pump X", "type": "tuya_cloud"},
+        data={"name": "Pump X", "type": "rainpoint.ik10pw"},
         follow_redirects=False,
     )
     assert resp.status_code == 303

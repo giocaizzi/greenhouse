@@ -56,8 +56,10 @@ libs/greenhouse-core/greenhouse_core/devices/sensors/__init__.py
 libs/greenhouse-core/greenhouse_core/devices/sensors/tr301z.py
 libs/greenhouse-core/greenhouse_core/learning/__init__.py
 libs/greenhouse-core/greenhouse_core/learning/issues.py
+libs/greenhouse-core/greenhouse_core/devices/gateway.py
 libs/greenhouse-core/greenhouse_core/devices/health.py
 libs/greenhouse-core/greenhouse_core/devices/irrigators/base.py
+libs/greenhouse-core/greenhouse_core/devices/irrigators/ik10pw.py
 libs/greenhouse-core/greenhouse_core/devices/irrigators/tuya_generic.py
 libs/greenhouse-core/greenhouse_core/devices/profile.py
 libs/greenhouse-core/greenhouse_core/devices/sensors/base.py

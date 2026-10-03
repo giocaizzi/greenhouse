@@ -472,7 +472,7 @@ class TestIrrigatorCapacity:
                 "--name",
                 "Tank pump",
                 "--type",
-                "tuya_local",
+                "rainpoint.ik10pw",
                 "--reservoir-l",
                 "20",
                 "--flow-rate-l-per-min",
@@ -498,7 +498,7 @@ class TestIrrigatorCapacity:
                 "--name",
                 "Tank pump",
                 "--type",
-                "tuya_local",
+                "rainpoint.ik10pw",
             ],
         )
         assert result.exit_code == 0
@@ -573,7 +573,7 @@ class TestIrrigatorCommands:
                 "--name",
                 "Second pump",
                 "--type",
-                "tuya_local",
+                "rainpoint.ik10pw",
             ],
         )
         assert result.exit_code == 1

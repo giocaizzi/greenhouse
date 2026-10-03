@@ -35,14 +35,14 @@ class TestIrrigationLearner:
             cluster_id=self.cluster_id,
             tuya_device_id=FAKE_DEVICE_ID,
             name=FAKE_IRRIGATOR_NAME,
-            irrigator_type="tuya_cloud",
+            irrigator_type="rainpoint.ik10pw",
             config={},
         )
         self.sensor_id = self.db.add_sensor(
             cluster_id=self.cluster_id,
             tuya_device_id=FAKE_SENSOR_ID,
             name=FAKE_SENSOR_NAME,
-            sensor_type="soil_moisture",
+            sensor_type="tuya.tr301z",
             config={},
             plant_id=self.plant_id,
         )
@@ -367,14 +367,14 @@ class TestIssueHeuristics:
             cluster_id=self.cluster_id,
             tuya_device_id=FAKE_DEVICE_ID,
             name=FAKE_IRRIGATOR_NAME,
-            irrigator_type="tuya_cloud",
+            irrigator_type="rainpoint.ik10pw",
             config={},
         )
         self.sensor_id = self.db.add_sensor(
             cluster_id=self.cluster_id,
             tuya_device_id=FAKE_SENSOR_ID,
             name=FAKE_SENSOR_NAME,
-            sensor_type="soil_moisture",
+            sensor_type="tuya.tr301z",
             config={},
             plant_id=self.plant_id,
         )
@@ -416,7 +416,7 @@ class TestIssueHeuristics:
             cluster_id=self.cluster_id,
             tuya_device_id=FAKE_DEVICE_ID_2,
             name="Test Sensor 2",
-            sensor_type="soil_moisture",
+            sensor_type="tuya.tr301z",
             config={},
             plant_id=plant2,
         )

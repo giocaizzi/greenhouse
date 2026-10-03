@@ -177,10 +177,8 @@ def _build_mcp_client(*, mcp_token: str | None) -> TestClient:
     fake_irrigator = FakeIrrigatorAdapter()
     fake_sensor = FakeSensorAdapter()
     registry = DeviceRegistry()
-    for key in ("rainpoint.ik10pw", "tuya_cloud", "tuya_local", ""):
-        registry.register_irrigator(key, lambda adapter=fake_irrigator: adapter)
-    for key in ("tuya.tr301z", "soil_moisture", "temp_humidity", "light", ""):
-        registry.register_sensor(key, lambda adapter=fake_sensor: adapter)
+    registry.register_irrigator("rainpoint.ik10pw", lambda adapter=fake_irrigator: adapter)
+    registry.register_sensor("tuya.tr301z", lambda adapter=fake_sensor: adapter)
     application.dependency_overrides[get_device_registry] = lambda: registry
     application.dependency_overrides[get_device_gateway] = lambda: None
 
