@@ -5,6 +5,7 @@ import io
 import time
 from typing import TYPE_CHECKING, Any, NamedTuple, TypedDict
 
+from greenhouse_core.constants import HOURS_PER_DAY, STATUS_EVENTS_LOOKBACK_HOURS, STATUS_READINGS_LOOKBACK_HOURS
 from greenhouse_core.logic import IrrigationDecision, IrrigationLogic
 from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_core.repository import IrrigationRepository
@@ -12,7 +13,47 @@ from greenhouse_core.utils import format_timestamp
 from greenhouse_server.services.errors import ClusterNotFoundError, PlantNotFoundError
 
 if TYPE_CHECKING:
-    from greenhouse_core.models import IrrigationConfig, Irrigator, Plant, Sensor
+    from greenhouse_core.models import IrrigationConfig, IrrigationEvent, Irrigator, Plant, Sensor, SensorReading
+
+
+class SensorStatusRow(TypedDict):
+    """One ``ClusterStatus.sensors`` row: the sensor and its newest reading (last 24 h) with that reading's age."""
+
+    id: int
+    name: str
+    type: str
+    plant_id: int | None
+    last_reading: "SensorReading | None"
+    reading_age_seconds: int | None
+
+
+class IrrigatorStatus(TypedDict):
+    """``ClusterStatus.irrigator``: 48 h event count, newest event and hardware capacity."""
+
+    id: int
+    name: str
+    type: str
+    cluster_id: int
+    recent_event_count: int
+    last_event: "IrrigationEvent | None"
+    reservoir_l: float | None
+    flow_rate_l_per_min: float | None
+
+
+class SensorHistory(TypedDict):
+    """One ``ClusterHistory.sensors`` entry: a sensor's readings in the window, newest first."""
+
+    sensor_id: int
+    sensor_name: str
+    readings: "list[SensorReading]"
+
+
+class IrrigatorHistory(TypedDict):
+    """One ``ClusterHistory.irrigators`` entry: the irrigator's events in the window, newest first."""
+
+    irrigator_id: int
+    irrigator_name: str
+    events: "list[IrrigationEvent]"
 
 
 class ClusterStatus(TypedDict):
@@ -21,8 +62,8 @@ class ClusterStatus(TypedDict):
     cluster: Any  # the Cluster row; Any until routes/operations validates it (ClusterResponse) — see CONS-W3
     config: "IrrigationConfig | None"
     plants: "list[Plant]"
-    sensors: list[dict[str, Any]]
-    irrigator: dict[str, Any] | None
+    sensors: list[SensorStatusRow]
+    irrigator: IrrigatorStatus | None
     decision: dict[str, Any] | None
 
 
@@ -30,8 +71,8 @@ class ClusterHistory(TypedDict):
     """``get_cluster_history`` result: per-sensor readings and per-irrigator events, newest first."""
 
     cluster_name: str
-    sensors: list[dict[str, Any]]
-    irrigators: list[dict[str, Any]]
+    sensors: list[SensorHistory]
+    irrigators: list[IrrigatorHistory]
 
 
 class PlantSyncResult(NamedTuple):
@@ -64,7 +105,7 @@ def cluster_events_csv(repo: IrrigationRepository, cluster_id: int, *, days: int
     writer.writerow(["timestamp", "date", "time", "irrigator", "action", "duration_minutes", "triggered_by", "notes"])
     irrigator = repo.get_irrigator_for_cluster(cluster_id)
     if irrigator is not None:
-        events = repo.get_recent_events(irrigator.id, hours=days * 24)
+        events = repo.get_recent_events(irrigator.id, hours=days * HOURS_PER_DAY)
         for event in events:
             ts_str = format_timestamp(event.timestamp)
             date, _, time_part = ts_str.partition(" ")
@@ -122,13 +163,13 @@ class ClusterService:
             "decision": decision_dict,
         }
 
-    def _sensor_status_rows(self, sensors: "list[Sensor]") -> list[dict[str, Any]]:
+    def _sensor_status_rows(self, sensors: "list[Sensor]") -> list[SensorStatusRow]:
         """One status row per sensor: its newest reading (24 h) and that reading's age."""
         now = int(time.time())
 
-        sensor_data = []
+        sensor_data: list[SensorStatusRow] = []
         for sensor in sensors:
-            readings = self._repo.get_recent_readings(sensor.id, hours=24)
+            readings = self._repo.get_recent_readings(sensor.id, hours=STATUS_READINGS_LOOKBACK_HOURS)
             last_reading = readings[0] if readings else None
             age = (now - last_reading.timestamp) if last_reading else None
             sensor_data.append(
@@ -143,11 +184,11 @@ class ClusterService:
             )
         return sensor_data
 
-    def _irrigator_status(self, irrigator: "Irrigator | None") -> dict[str, Any] | None:
+    def _irrigator_status(self, irrigator: "Irrigator | None") -> IrrigatorStatus | None:
         """The irrigator's status dict (48 h event count, newest event, capacity), or ``None``."""
-        irrigator_data = None
+        irrigator_data: IrrigatorStatus | None = None
         if irrigator is not None:
-            events = self._repo.get_recent_events(irrigator.id, hours=48)
+            events = self._repo.get_recent_events(irrigator.id, hours=STATUS_EVENTS_LOOKBACK_HOURS)
             irrigator_data = {
                 "id": irrigator.id,
                 "name": irrigator.name,
@@ -173,7 +214,7 @@ class ClusterService:
             raise ClusterNotFoundError(cluster_id)
 
         sensors = self._repo.get_sensors_in_cluster(cluster_id)
-        sensor_histories = []
+        sensor_histories: list[SensorHistory] = []
         for sensor in sensors:
             readings = self._repo.get_recent_readings(sensor.id, hours=hours)
             sensor_histories.append(
@@ -185,7 +226,7 @@ class ClusterService:
             )
 
         irrigator = self._repo.get_irrigator_for_cluster(cluster_id)
-        irrigator_histories = []
+        irrigator_histories: list[IrrigatorHistory] = []
         if irrigator is not None:
             events = self._repo.get_recent_events(irrigator.id, hours=hours)
             irrigator_histories.append(

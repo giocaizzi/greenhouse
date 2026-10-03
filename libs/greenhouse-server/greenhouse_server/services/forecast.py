@@ -8,7 +8,9 @@ from greenhouse_core.constants import (
     FORECAST_CONFIDENCE_HIGH,
     FORECAST_CONFIDENCE_LOW,
     FORECAST_CONFIDENCE_MEDIUM,
+    FORECAST_FALLBACK_DRAINAGE_PER_HOUR,
     FORECAST_HIGH_CONFIDENCE_PROFILES,
+    FORECAST_READINGS_LOOKBACK_HOURS,
     SECONDS_PER_HOUR,
     WEATHER_FORECAST_HOURS,
     WEATHER_SKIP_PRECIP_MM,
@@ -22,9 +24,6 @@ from greenhouse_core.schemas import ForecastResponse
 
 if TYPE_CHECKING:
     from greenhouse_core.models import Cluster, Plant, Sensor
-
-_FALLBACK_DRAINAGE_PER_HOUR = -2.0  # %/h, used when no learned profile is available
-_WEATHER_PRECIP_THRESHOLD_MM = WEATHER_SKIP_PRECIP_MM
 
 
 @dataclass
@@ -124,7 +123,9 @@ class ForecastService:
         """
         # Newest-first cleaned view: the forecast extrapolates from "current
         # moisture", so a spike as the latest sample would shift every ETA.
-        readings = clean_readings_desc(self._repo.get_recent_readings(sensor.id, hours=24))
+        readings = clean_readings_desc(
+            self._repo.get_recent_readings(sensor.id, hours=FORECAST_READINGS_LOOKBACK_HOURS)
+        )
         current_moisture = next((r.soil_moisture for r in readings if r.soil_moisture is not None), None)
         if current_moisture is None:
             return None
@@ -138,9 +139,9 @@ class ForecastService:
 
         profile = learner.get_plant_profile(sensor)
         has_profile = profile is not None
-        drainage = profile.avg_drainage_per_hour if profile is not None else _FALLBACK_DRAINAGE_PER_HOUR
+        drainage = profile.avg_drainage_per_hour if profile is not None else FORECAST_FALLBACK_DRAINAGE_PER_HOUR
         if drainage >= 0:
-            drainage = _FALLBACK_DRAINAGE_PER_HOUR
+            drainage = FORECAST_FALLBACK_DRAINAGE_PER_HOUR
 
         hours = 0.0 if current_moisture <= target_min else (current_moisture - target_min) / abs(drainage)
 
@@ -166,7 +167,7 @@ class ForecastService:
             if forecast is not None:
                 precip = forecast.get("precipitation_mm", 0.0) or 0.0
                 precipitation_next_6h_mm = precip
-                if precip > _WEATHER_PRECIP_THRESHOLD_MM:
+                if precip > WEATHER_SKIP_PRECIP_MM:
                     weather_skip = True
                     weather_reason = f"rain forecast ({precip:.1f}mm in next 6h)"
         return weather_skip, weather_reason, precipitation_next_6h_mm

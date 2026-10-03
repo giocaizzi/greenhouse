@@ -37,7 +37,7 @@ from greenhouse_server.deps import (
     not_found_as_404,
     require_cluster,
 )
-from greenhouse_server.services.cluster import cluster_events_csv
+from greenhouse_server.services.cluster import IrrigatorStatus, SensorStatusRow, cluster_events_csv
 from greenhouse_server.services.irrigation import check_has_alerts
 from greenhouse_server.services.maintenance import collect_learning_alerts, generate_learning_report
 
@@ -88,7 +88,7 @@ def cluster_status(cluster_id: int, cluster_svc: ClusterServiceDep) -> ClusterSt
     )
 
 
-def _status_sensor(s: dict[str, Any]) -> ClusterStatusSensorResponse:
+def _status_sensor(s: SensorStatusRow) -> ClusterStatusSensorResponse:
     """Map one ``get_cluster_status`` sensor row to its response model."""
     return ClusterStatusSensorResponse(
         id=s["id"],
@@ -100,7 +100,7 @@ def _status_sensor(s: dict[str, Any]) -> ClusterStatusSensorResponse:
     )
 
 
-def _status_irrigator(irrigator: dict[str, Any]) -> ClusterStatusIrrigatorResponse:
+def _status_irrigator(irrigator: IrrigatorStatus) -> ClusterStatusIrrigatorResponse:
     """Map the ``get_cluster_status`` irrigator dict to its response model."""
     return ClusterStatusIrrigatorResponse(
         id=irrigator["id"],

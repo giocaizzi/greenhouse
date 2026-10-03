@@ -18,6 +18,7 @@ import time
 from typing import TYPE_CHECKING
 
 from greenhouse_core.constants import (
+    ANOMALY_LOOKBACK_HOURS,
     ANOMALY_MIN_READINGS,
     ANOMALY_MIN_STD,
     ANOMALY_STALE_INTERVAL_MULTIPLIER,
@@ -90,7 +91,7 @@ class SensorAnomalyService:
         alerts: list[Alert] = []
 
         for sensor in sensors:
-            readings = self._repo.get_recent_readings(sensor.id, hours=72)
+            readings = self._repo.get_recent_readings(sensor.id, hours=ANOMALY_LOOKBACK_HOURS)
             # get_recent_readings returns DESC — take the most recent ANOMALY_WINDOW_READINGS
             window = readings[:ANOMALY_WINDOW_READINGS]
 

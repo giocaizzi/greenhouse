@@ -14,6 +14,7 @@ JSON API returns; each route maps it to its own response shape.
 import time
 from typing import TYPE_CHECKING
 
+from greenhouse_core.constants import DAILY_CAP_WINDOW_HOURS
 from greenhouse_core.devices import DeviceRegistry, UnknownDeviceModel
 from greenhouse_core.models import EVENT_ACTION_START, EVENT_ACTION_STOP, TRIGGERED_BY_MANUAL, Irrigator
 from greenhouse_core.repository import IrrigationRepository
@@ -62,7 +63,11 @@ def check_rate_limits(repo: IrrigationRepository, cluster_id: int, irrigator_id:
         # Count "start" events in the last 24 h for the cluster's single irrigator.
         irrigator = repo.get_irrigator_for_cluster(cluster_id)
         total_starts = (
-            sum(1 for e in repo.get_recent_events(irrigator.id, hours=24) if e.action == EVENT_ACTION_START)
+            sum(
+                1
+                for e in repo.get_recent_events(irrigator.id, hours=DAILY_CAP_WINDOW_HOURS)
+                if e.action == EVENT_ACTION_START
+            )
             if irrigator is not None
             else 0
         )
@@ -70,7 +75,7 @@ def check_rate_limits(repo: IrrigationRepository, cluster_id: int, irrigator_id:
             raise ManualActionError(409, "cluster max_events_per_day reached")
 
     if config.daily_cap_minutes is not None:
-        recent = repo.get_recent_events(irrigator_id, hours=24)
+        recent = repo.get_recent_events(irrigator_id, hours=DAILY_CAP_WINDOW_HOURS)
         minutes_used = sum(e.duration_minutes or 0 for e in recent if e.action == EVENT_ACTION_START)
         if minutes_used + requested > config.daily_cap_minutes:
             raise ManualActionError(409, "irrigator daily cap reached")

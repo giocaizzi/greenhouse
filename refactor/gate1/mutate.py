@@ -2840,7 +2840,7 @@ add(
         ),
         (
             "02",
-            "                    sync_single_sensor(self._repo, self._gateway, sensor, hours=6)",
+            "                    sync_single_sensor(self._repo, self._gateway, sensor, hours=FRESHNESS_SYNC_BACKFILL_HOURS)",
             "                    sync_single_sensor(self._repo, self._gateway, sensor, hours=24)",
             "freshness sync window 6h -> 24h",
         ),

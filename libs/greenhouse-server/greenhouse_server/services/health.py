@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Self, TypedDict
 
-from greenhouse_core.constants import HEALTH_SCORE_WINDOW_DAYS
+from greenhouse_core.constants import HEALTH_SCORE_WINDOW_DAYS, HOURS_PER_DAY
 from greenhouse_core.learning.profiling import get_plant_profile
 from greenhouse_core.logic.cleaning import clean_readings
 from greenhouse_core.logic.plant_needs import moisture_target_range
@@ -158,7 +158,7 @@ class PlantHealthService:
             # Cleaned view, per sensor, before pooling: the score is a judgement
             # about how much time the plant spent in band, and a probe glitch
             # must not cost (or buy) the plant health points.
-            all_readings.extend(clean_readings(self._repo.get_recent_readings(sensor.id, hours=days * 24)))
+            all_readings.extend(clean_readings(self._repo.get_recent_readings(sensor.id, hours=days * HOURS_PER_DAY)))
         return all_readings
 
     def _first_profile_efficiency(self, sensors: "Sequence[Sensor]", days: int) -> float | None:

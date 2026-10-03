@@ -415,3 +415,21 @@ PLANT_CARE_FALLBACK = {
     "soil_moisture_target": DEFAULT_SOIL_MOISTURE_TARGET,
     "sources": ["fallback default"],
 }
+
+# ── Server read windows and scan limits ──────────────────────────────────────
+# Look-backs and page sizes the server services and web pages hand to the repository.
+
+HOURS_PER_DAY = 24
+FRESHNESS_SYNC_BACKFILL_HOURS = 6  # history pulled by the pipeline's one-sensor freshness sync
+DAILY_CAP_WINDOW_HOURS = 24  # the "day" of max_events_per_day / daily_cap_minutes for manual starts
+ANOMALY_LOOKBACK_HOURS = 72  # readings the anomaly scan loads per sensor
+FORECAST_READINGS_LOOKBACK_HOURS = 24  # history the moisture forecast takes "current moisture" from
+FORECAST_FALLBACK_DRAINAGE_PER_HOUR = -2.0  # %/h, used when no learned profile is available
+STATUS_READINGS_LOOKBACK_HOURS = 24  # cluster status: newest reading per sensor
+STATUS_EVENTS_LOOKBACK_HOURS = 48  # cluster status: the irrigator's recent events
+ALERT_SCAN_LIMIT = 200  # newest alerts scanned per cluster (inbox sync, auto-resolve, leak release)
+PLANT_PAGE_READINGS_LOOKBACK_HOURS = 24  # plant page: latest reading per linked sensor
+PLANT_PAGE_RECENT_EVENTS = 10  # plant page: newest irrigation events listed
+PLANT_PAGE_HEALTH_HISTORY_DAYS = 90  # plant page: daily health-score history
+PLANT_PAGE_LAST_IRRIGATED_DAYS = 90  # plant page: window searched for the last irrigation
+EFFICACY_SCORE_PER_PCT_RISE = 5.0  # efficacy score points per percentage point of soil rise (capped at 100)

@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 from fastapi import APIRouter, Query
 
 from greenhouse_core.models import Plant
@@ -22,6 +20,7 @@ from greenhouse_server.deps import (
     require_metric,
     require_plant,
 )
+from greenhouse_server.services.chart_payload import ChartPayload
 from greenhouse_server.services.charts import (
     build_cluster_chart_payload,
     build_heatmap_payload,
@@ -56,7 +55,7 @@ def plant_chart_data(
     plant_db: PlantDbDep,
     hours: int = Query(24, ge=1, le=MAX_LOOKBACK_HOURS),
     metric: str = Query("soil_moisture"),
-) -> dict[str, Any]:
+) -> ChartPayload:
     """Return the time-series chart payload for a single plant.
 
     Includes sensor readings, irrigation events, and the plant-care threshold
@@ -86,7 +85,7 @@ def cluster_chart_data(
     plant_db: PlantDbDep,
     hours: int = Query(24, ge=1, le=MAX_LOOKBACK_HOURS),
     metric: str = Query("soil_moisture"),
-) -> dict[str, Any]:
+) -> ChartPayload:
     """Return the time-series chart payload aggregated across every sensor in a cluster.
 
     Args:

@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 from collections import defaultdict
 from datetime import UTC, datetime
-from typing import Any, Literal
+from typing import Literal
 
 from greenhouse_core.constants import (
     DEFAULT_SOIL_MOISTURE_MAX,
@@ -25,6 +25,7 @@ from greenhouse_core.schemas import (
     OverlayDataset,
     PlantHealthTimelineResponse,
 )
+from greenhouse_server.services.chart_payload import ChartDataset, ChartEvent, ChartPayload, ChartThreshold
 from greenhouse_server.services.errors import ClusterNotFoundError, PlantNotFoundError
 
 Metric = Literal["soil_moisture", "temperature", "light", "env_humidity"]
@@ -44,7 +45,7 @@ def build_plant_chart_payload(
     plant_id: int,
     hours: int,
     metric: Metric,
-) -> dict[str, Any]:
+) -> ChartPayload:
     """One plant's chart: per-sensor series, cluster irrigation events, target band; PlantNotFoundError if none."""
     plant: Plant | None = repo.get_plant(plant_id)
     if plant is None:
@@ -73,7 +74,7 @@ def build_cluster_chart_payload(
     cluster_id: int,
     hours: int,
     metric: Metric,
-) -> dict[str, Any]:
+) -> ChartPayload:
     """A cluster's chart: one series per sensor, its irrigation events and the band; ClusterNotFoundError if none."""
     cluster = repo.get_cluster(cluster_id)
     if cluster is None:
@@ -98,7 +99,7 @@ def _build_plant_sensor_datasets(
     plant_id: int,
     hours: int,
     metric: Metric,
-) -> list[dict[str, Any]]:
+) -> list[ChartDataset]:
     """Assignment-aware plant series: one dataset per sensor that served the plant in the window.
 
     Readings are filtered to the periods when each sensor was actually linked to this plant.
@@ -118,7 +119,7 @@ def _build_plant_sensor_datasets(
         for s in repo.list_sensors_by_ids(by_sensor.keys()):
             sensor_names[s.id] = s.name
 
-    datasets = []
+    datasets: list[ChartDataset] = []
     for sensor_id, points in by_sensor.items():
         points.sort(key=lambda p: p[0])
         datasets.append(
@@ -136,8 +137,8 @@ def _build_sensor_datasets(
     sensors: list[Sensor],
     hours: int,
     metric: Metric,
-) -> list[dict[str, Any]]:
-    datasets = []
+) -> list[ChartDataset]:
+    datasets: list[ChartDataset] = []
     field: str = metric  # metric names are SensorReading column names
     for sensor in sensors:
         readings = repo.get_recent_readings(sensor.id, hours=hours)
@@ -155,10 +156,10 @@ def _build_sensor_datasets(
     return datasets
 
 
-def _build_event_list(repo: IrrigationRepository, cluster_id: int, hours: int) -> list[dict[str, Any]]:
+def _build_event_list(repo: IrrigationRepository, cluster_id: int, hours: int) -> list[ChartEvent]:
     irrigator = repo.get_irrigator_for_cluster(cluster_id)
     cutoff = int(time.time()) - (hours * SECONDS_PER_HOUR)
-    events: list[dict[str, Any]] = []
+    events: list[ChartEvent] = []
     if irrigator is not None:
         for e in repo.get_recent_events(irrigator.id, hours=hours):
             if e.timestamp < cutoff:
@@ -174,7 +175,7 @@ def _build_event_list(repo: IrrigationRepository, cluster_id: int, hours: int) -
     return events
 
 
-def _threshold_for_plant(plant: Plant, plant_db: PlantDatabase, metric: Metric) -> dict[str, Any]:
+def _threshold_for_plant(plant: Plant, plant_db: PlantDatabase, metric: Metric) -> ChartThreshold:
     if metric == "soil_moisture":
         if plant.water_needs:
             info = plant_db.get_water_needs_info(plant.water_needs)
@@ -202,7 +203,7 @@ def _threshold_for_cluster(
     plant_db: PlantDatabase,  # noqa: ARG001 — unused; dropping it cascades into route dependencies (follow-up)
     cluster_id: int,
     metric: Metric,
-) -> dict[str, Any]:
+) -> ChartThreshold:
     if metric == "soil_moisture":
         return {
             "min": float(DEFAULT_SOIL_MOISTURE_MIN),
@@ -226,7 +227,7 @@ def _threshold_for_cluster(
     return {"min": None, "max": None, "source": "none"}
 
 
-def _aggregate_band(mins: list[float], maxs: list[float]) -> dict[str, Any] | None:
+def _aggregate_band(mins: list[float], maxs: list[float]) -> ChartThreshold | None:
     """Widest band across the cluster's plants; None when no plant sets either bound."""
     if mins or maxs:
         return {

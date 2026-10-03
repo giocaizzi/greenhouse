@@ -1,13 +1,10 @@
 """Cluster-level care insights aggregated from learning + maintenance + decisions."""
 
-from collections.abc import Mapping
-from typing import Any
-
 from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_core.schemas import CareInsight, ClusterInsightsResponse
 from greenhouse_server.services.errors import ClusterNotFoundError
-from greenhouse_server.services.maintenance import collect_learning_alerts, collect_maintenance_alerts
+from greenhouse_server.services.maintenance import AlertFinding, collect_learning_alerts, collect_maintenance_alerts
 
 _ALERT_TYPE_META: dict[str, tuple[str, str, str]] = {
     "stale_data": ("warning", "Stale sensor data", "Check Wi-Fi connection and sensor battery."),
@@ -21,7 +18,7 @@ _ALERT_TYPE_META: dict[str, tuple[str, str, str]] = {
 }
 
 
-def _insight_from_alert(alert: Mapping[str, Any]) -> CareInsight:
+def _insight_from_alert(alert: AlertFinding) -> CareInsight:
     """Map a maintenance/learning alert dict to a CareInsight, with known types' curated copy."""
     code = alert["type"]
     meta = _ALERT_TYPE_META.get(code)
