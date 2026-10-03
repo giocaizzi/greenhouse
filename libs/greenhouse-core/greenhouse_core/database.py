@@ -8,7 +8,7 @@ from alembic.config import Config
 from alembic.runtime.migration import MigrationContext
 from alembic.script import ScriptDirectory
 from sqlalchemy import create_engine, inspect, text
-from sqlalchemy.engine import Engine
+from sqlalchemy.engine import Connection, Engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from greenhouse_core.models import Base
@@ -69,7 +69,7 @@ def _alembic_config(engine: Engine) -> Config:
     return cfg
 
 
-def _add_missing_columns(conn) -> None:
+def _add_missing_columns(conn: Connection) -> None:
     """ALTER TABLE ADD COLUMN for any ORM column missing from a live table.
 
     Used only by the legacy-recovery branch of :func:`init_db`. After this

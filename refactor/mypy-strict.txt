@@ -36,6 +36,7 @@ libs/greenhouse-cli/greenhouse_cli/tui/widgets.py
 libs/greenhouse-core/greenhouse_core/__init__.py
 libs/greenhouse-core/greenhouse_core/auth.py
 libs/greenhouse-core/greenhouse_core/constants.py
+libs/greenhouse-core/greenhouse_core/database.py
 libs/greenhouse-core/greenhouse_core/devices/__init__.py
 libs/greenhouse-core/greenhouse_core/devices/irrigators/__init__.py
 libs/greenhouse-core/greenhouse_core/devices/registry.py
@@ -44,15 +45,19 @@ libs/greenhouse-core/greenhouse_core/devices/sensors/tr301z.py
 libs/greenhouse-core/greenhouse_core/learning/__init__.py
 libs/greenhouse-core/greenhouse_core/learning/issues.py
 libs/greenhouse-core/greenhouse_core/learning/learner.py
+libs/greenhouse-core/greenhouse_core/learning/models.py
 libs/greenhouse-core/greenhouse_core/learning/profiling.py
 libs/greenhouse-core/greenhouse_core/learning/report.py
 libs/greenhouse-core/greenhouse_core/logic/__init__.py
+libs/greenhouse-core/greenhouse_core/logic/cleaning.py
+libs/greenhouse-core/greenhouse_core/logic/decision.py
 libs/greenhouse-core/greenhouse_core/logic/fallback.py
 libs/greenhouse-core/greenhouse_core/logic/plant_needs.py
 libs/greenhouse-core/greenhouse_core/logic/sensors.py
 libs/greenhouse-core/greenhouse_core/logic/stress.py
 libs/greenhouse-core/greenhouse_core/logic/trends.py
 libs/greenhouse-core/greenhouse_core/models.py
+libs/greenhouse-core/greenhouse_core/plant_db.py
 libs/greenhouse-core/greenhouse_core/repository.py
 libs/greenhouse-core/greenhouse_core/schemas.py
 libs/greenhouse-core/greenhouse_core/stats.py
