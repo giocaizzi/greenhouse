@@ -67,3 +67,8 @@ constant; WP8 typing (58 errors); stub overrides for `tinytuya`, `apscheduler`, 
 - ruff `TC` rules (autofix breaks FastAPI/Typer/Pydantic at import time) — T.
 - 39 broad excepts: reporting only (behavior); `noqa: BLE001` either removed or BLE enabled by lint ratchet.
 - `IrrigationLearner` facade stays (public import path).
+
+## Code-side doc drift (from `wp-handoff/DOCS.md`) — doc-contract edits, reviewed golden diffs
+- `windows list` and `irrigator --type` Typer help (FP-U; `--type` after OD3 aliases), `start_irrigator` route docstring
+  "local protocol" (FP-S; MCP golden), `ConfirmScreen` docstring (FP-U), `tests/golden.py` citing `refactor/BRIEF.md` (OD5).
+- After OD5 moves: AGENTS.md "Development" paragraph naming `refactor/` paths must follow.
