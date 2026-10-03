@@ -1619,7 +1619,7 @@
   },
   {
    "name": "stats",
-   "description": "Stats\n\nReturn aggregate irrigation statistics for a cluster.\n\nArgs:\n    cluster_id: Cluster to compute stats for.\n    days: Look-back window in days (default 7).\n\nReturns:\n    Total event count, total + average duration, frequency per day, and\n    breakdowns by event type and trigger source.\n\nRaises:\n    HTTPException: 404 if the cluster does not exist.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"cluster_name\": \"Cluster Name\",\n  \"period_days\": 1,\n  \"total_events\": 1,\n  \"total_duration_minutes\": 1,\n  \"avg_duration_minutes\": 1.0,\n  \"frequency_per_day\": 1.0,\n  \"events_by_type\": {},\n  \"events_by_trigger\": {}\n}\n```",
+   "description": "Stats\n\nReturn aggregate irrigation statistics for a cluster.\n\nArgs:\n    cluster_id: Cluster to compute stats for.\n    days: Look-back window in days (default 7).\n\nReturns:\n    Total event count, total + average duration, frequency per day, and\n    breakdowns by event type and trigger source. A cluster without an\n    irrigator reports zero totals and empty breakdowns.\n\nRaises:\n    HTTPException: 404 if the cluster does not exist.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"cluster_name\": \"Cluster Name\",\n  \"period_days\": 1,\n  \"total_events\": 1,\n  \"total_duration_minutes\": 1,\n  \"avg_duration_minutes\": 1.0,\n  \"frequency_per_day\": 1.0,\n  \"events_by_type\": {},\n  \"events_by_trigger\": {}\n}\n```",
    "inputSchema": {
     "type": "object",
     "properties": {

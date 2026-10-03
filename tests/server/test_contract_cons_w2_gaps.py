@@ -2,7 +2,7 @@
 
 Each test pins what a route does today on a line the server suite did not reach: the manual
 ``POST /sync`` commit, the chart-data 400/404 branches, ``create_app`` with an explicit plant-DB
-path, and the stats endpoint on a cluster without an irrigator.
+path, and the stats endpoint on a cluster without an irrigator (fixed by D19: zero totals, not 500).
 """
 
 from __future__ import annotations
@@ -83,10 +83,20 @@ def test_create_app_loads_the_plant_db_from_settings_path(clean_env):
         engine.dispose()
 
 
-def test_stats_without_irrigator_current_behavior_500(client):
-    """B-N2 pinned: a cluster with no irrigator makes ``GET /clusters/{id}/stats`` fail with HTTP 500."""
+def test_stats_without_irrigator_reports_zero_totals(client):
+    """D19 (was B-N2, HTTP 500): a cluster with no irrigator answers the documented shape, all zero."""
     cid = client.post("/api/v1/clusters", json={"name": "Sensors only"}).json()["id"]
 
-    resp = client.get(f"/api/v1/clusters/{cid}/stats")
+    resp = client.get(f"/api/v1/clusters/{cid}/stats?days=3")
 
-    assert resp.status_code == 500
+    assert resp.status_code == 200
+    assert resp.json() == {
+        "cluster_name": "Sensors only",
+        "period_days": 3,
+        "total_events": 0,
+        "total_duration_minutes": 0,
+        "avg_duration_minutes": 0.0,
+        "frequency_per_day": 0.0,
+        "events_by_type": {},
+        "events_by_trigger": {},
+    }

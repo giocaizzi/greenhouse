@@ -42,6 +42,16 @@ from greenhouse_server.services.maintenance import collect_learning_alerts, gene
 
 router = APIRouter(tags=["operations"])
 
+# GET /clusters/{id}/stats for a cluster without an irrigator (D19): the documented shape, all zero.
+_NO_IRRIGATION_STATS = {
+    "total_events": 0,
+    "total_duration_minutes": 0,
+    "avg_duration_minutes": 0.0,
+    "frequency_per_day": 0.0,
+    "events_by_type": {},
+    "events_by_trigger": {},
+}
+
 
 @router.get("/clusters/{cluster_id}/status", response_model=ClusterStatusResponse)
 def cluster_status(cluster_id: int, cluster_svc: ClusterServiceDep):
@@ -347,14 +357,17 @@ def stats(cluster_id: int, repo: RepoDep, days: int = Query(default=7, ge=1)):
 
     Returns:
         Total event count, total + average duration, frequency per day, and
-        breakdowns by event type and trigger source.
+        breakdowns by event type and trigger source. A cluster without an
+        irrigator reports zero totals and empty breakdowns.
 
     Raises:
         HTTPException: 404 if the cluster does not exist.
     """
     cluster = require_cluster(repo, cluster_id)
     result = get_irrigation_stats(repo, cluster_id, days)
-    return StatsResponse(cluster_name=cluster.name, **result)
+    if "error" in result:  # no irrigator: nothing was irrigated in the window
+        return StatsResponse.model_validate({"cluster_name": cluster.name, **_NO_IRRIGATION_STATS, "period_days": days})
+    return StatsResponse.model_validate({"cluster_name": cluster.name, **result})
 
 
 @router.get("/clusters/{cluster_id}/stats/export")
