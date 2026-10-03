@@ -91,8 +91,8 @@ from greenhouse_core.logic.plant_needs import (
 from greenhouse_core.logic.sensors import get_recent_sensor_data
 from greenhouse_core.logic.stress import detect_stress_conditions
 from greenhouse_core.logic.timing import (
+    active_quiet_window,
     is_within_irrigation_window,
-    is_within_quiet_hours,
     season_for,
     seasonal_multiplier,
 )
@@ -300,18 +300,8 @@ class IrrigationLogic:
         (start > end) cross midnight; ``start == end`` at any level means
         quiet hours are disabled there.
         """
-        effective: dict[str, dict[str, Any]] = self.db.get_effective_config(cluster_id)
-        start = effective["quiet_start_hour"]["value"]
-        end = effective["quiet_end_hour"]["value"]
-        tz_name = self._tz_name()
-        if is_within_quiet_hours(
-            start_hour=int(start) if start is not None else None,
-            end_hour=int(end) if end is not None else None,
-            now_unix=evaluated_at,
-            tz_name=tz_name,
-        ):
-            return (int(start), int(end))
-        return None
+        effective = self.db.get_effective_config(cluster_id)
+        return active_quiet_window(effective, now_unix=evaluated_at, tz_name=self._tz_name())
 
     def _tz_name(self) -> str | None:
         """The preferences timezone, re-read on every call (``get_preferences`` may insert the row)."""
