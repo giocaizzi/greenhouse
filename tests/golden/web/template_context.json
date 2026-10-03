@@ -1562,6 +1562,25 @@
    ]
   ]
  ],
+ "monitor__404": [
+  [
+   "error_page.html",
+   [
+    "active_vacation",
+    "app_version",
+    "auth_enabled",
+    "detail",
+    "dry_run_global",
+    "is_hx",
+    "now_text",
+    "request",
+    "scheduler_paused",
+    "show_chrome",
+    "status_code",
+    "theme"
+   ]
+  ]
+ ],
  "monitor__empty": [
   [
    "partials/_monitor_panel.html",

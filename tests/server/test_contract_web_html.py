@@ -639,6 +639,7 @@ GET_CASES: tuple[GetCase, ...] = (
     C("monitor", f"/clusters/{INDOOR}/monitor"),
     C("monitor__outdoor", f"/clusters/{OUTDOOR}/monitor"),
     C("monitor__empty", f"/clusters/{EMPTY}/monitor"),
+    C("monitor__404", "/clusters/999/monitor"),
     # pages
     C("dashboard", "/"),
     # plant dashboard

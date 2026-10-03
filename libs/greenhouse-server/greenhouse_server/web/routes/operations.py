@@ -55,8 +55,9 @@ def irrigate(
 
 
 @router.get("/clusters/{cluster_id}/monitor")
-def monitor(request: Request, cluster_id: int, svc: IrrigationServiceDep, session: SessionDep):
-    # Same path as GET /api/v1/clusters/{id}/monitor: refresh stale sensors, keep the rows.
+def monitor(request: Request, cluster_id: int, repo: RepoDep, svc: IrrigationServiceDep, session: SessionDep):
+    # Same path as GET /api/v1/clusters/{id}/monitor: 404 for an unknown cluster, refresh stale sensors, keep the rows.
+    require_cluster(repo, cluster_id)
     result = svc.monitor_cluster(cluster_id=cluster_id)
     session.commit()
     return templates.TemplateResponse(
