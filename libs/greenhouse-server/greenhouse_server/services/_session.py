@@ -1,9 +1,10 @@
 """One background-job transaction: the session scaffolding every scheduler job shares.
 
-Lives below the scheduler (``app > … > scheduler > services``) so both the scheduler's own
-jobs and the one-shot jobs that services schedule (the post-irrigation leak check) can use
-it. The caller passes its module logger, so each failure record keeps its module's logger
-name.
+Lives below the scheduler (``app > … > scheduler > services``) so services may use it too;
+the scheduler's five jobs do. The services' one-shot jobs (leak check, pump watcher) keep
+their own scaffolding because their shapes differ (an early return that leaves the read-only
+transaction to ``close()``; a conditional commit). The caller passes its module logger, so
+each failure record keeps its module's logger name.
 """
 
 from collections.abc import Iterator

@@ -38,7 +38,6 @@ from greenhouse_core.models import (
 )
 from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_core.repository import IrrigationRepository
-from greenhouse_server.services._session import job_session
 from greenhouse_server.services.alerts import raise_alert, sync_cluster_alerts
 from greenhouse_server.services.health_monitor import HEALTH_ALARM_TO_TRIGGER, DeviceHealthMonitor
 from greenhouse_server.services.maintenance import collect_learning_alerts, collect_maintenance_alerts
@@ -330,13 +329,14 @@ def _run_leak_check(cluster_id: int, started_at: int) -> None:
 
     if _app is None:
         return
-    with job_session(_app, logger, "Leak check job failed for cluster %d", cluster_id) as session:
+    # Own scaffolding, not services._session.job_session: the "already done" early return
+    # leaves its read-only transaction to close() (a failing ROLLBACK there escapes the job),
+    # which the context manager cannot express without changing that path.
+    session = _app.state.session_factory()
+    try:
         repo = IrrigationRepository(session)
         if _leak_check_done(repo, cluster_id, started_at):
             logger.debug("Leak check for cluster %d start %d already done", cluster_id, started_at)
-            # Nothing to keep: end the read-only transaction now, as the early return always
-            # did (job_session's commit then has no transaction to commit).
-            session.rollback()
             return
         alerts = LeakDetectionService(
             repo, _app.state.plant_db, notifier=getattr(_app.state, "ntfy_notifier", None)
@@ -354,6 +354,12 @@ def _run_leak_check(cluster_id: int, started_at: int) -> None:
             severity="info",
             payload={"started_at": started_at, "flagged_sensor_ids": [a.entity_id for a in alerts]},
         )
+        session.commit()
+    except Exception:
+        session.rollback()
+        logger.exception("Leak check job failed for cluster %d", cluster_id)
+    finally:
+        session.close()
 
 
 def _add_leak_check_job(cluster_id: int, started_at: int, *, run_at: int | None = None) -> None:
