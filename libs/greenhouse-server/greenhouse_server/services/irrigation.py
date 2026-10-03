@@ -187,7 +187,6 @@ def _run_pump_watcher(
     stop_requested: "Callable[[], bool]",
 ) -> None:
     """The watcher job body: its own session; tuning and the health monitor are read when it runs."""
-    from greenhouse_core.repository import IrrigationRepository
     from greenhouse_server.services.pump_watcher import PumpWatcherService
 
     with job_session(app, logger, "Pump watcher job failed for irrigator %d", irrigator_id, commit=False) as session:

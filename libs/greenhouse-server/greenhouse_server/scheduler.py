@@ -315,8 +315,6 @@ def _health_snapshot_job() -> None:
     from greenhouse_server.services.health import PlantHealthService
 
     with _job_session(_app, logger, "Plant health snapshot job failed") as session:
-        from greenhouse_core.repository import IrrigationRepository
-
         repo = IrrigationRepository(session)
         svc = PlantHealthService(repo, _app.state.plant_db)  # type: ignore[union-attr]  # a None _app escapes as AttributeError
         svc.snapshot_daily()
