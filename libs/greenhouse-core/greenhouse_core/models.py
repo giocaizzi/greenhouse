@@ -54,8 +54,7 @@ SOURCE_HEALTH = "health"
 # ``IrrigationEvent.action``. Only ``start`` is real actuation: cooldown, caps,
 # trends and learning count it alone (a ``schedule_updated`` row blocks nothing).
 EVENT_ACTION_START = "start"
-EVENT_ACTION_STOP = "stop"
-EVENT_ACTION_OFF = "off"  # manual stop (OD4 unifies it on ``stop``)
+EVENT_ACTION_STOP = "stop"  # manual stop; rows written before manual stops used ``stop`` may carry ``off``
 EVENT_ACTION_ATTEMPTED = "attempted"  # automatic start whose device call failed
 EVENT_ACTION_ABORTED = "aborted"  # pump watcher stopped a dry run
 
