@@ -242,10 +242,11 @@ def test_web_plant_dashboard_without_irrigator_renders_sensor_only(app, client, 
     [
         ((600, 7200), "irrigated 10m ago"),
         ((3 * 86400 + 5, 5 * 86400), "irrigated 3d ago"),
-        # D7: the shared ``age_seconds`` filter — seconds under a minute, "stale" from 7 days, "—" when none.
+        # D7: the shared ``relative_age`` formatter — seconds under a minute, the real age in days (no "stale"),
+        # "never" when the irrigator has no event.
         ((30,), "irrigated 30s ago"),
-        ((8 * 86400,), "irrigated stale"),
-        ((), "irrigated —"),
+        ((12 * 86400,), "irrigated 12d ago"),
+        ((), "irrigated never"),
     ],
 )
 def test_web_plant_dashboard_relative_time_of_newest_event(app, client, frozen_clock, ages, expected):

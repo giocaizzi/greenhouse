@@ -18,7 +18,7 @@ from greenhouse_server.services.charts import (
 )
 from greenhouse_server.services.maintenance import collect_learning_alerts
 from greenhouse_server.web.context import base_context
-from greenhouse_server.web.filters import age_seconds
+from greenhouse_server.web.filters import relative_age
 from greenhouse_server.web.templating import templates
 
 if TYPE_CHECKING:
@@ -58,7 +58,9 @@ def plant_dashboard(
     # Health score + 90-day history for the hero card
     health_score: float | None = health_svc.compute_score(plant_id)["score"]
     health_history = repo.list_plant_health_history(plant_id, days=90)
-    last_irrigated_relative: str = age_seconds(_last_irrigated_ts(repo, cluster_irrigator))
+    last_irrigated_relative: str = relative_age(
+        _last_irrigated_ts(repo, cluster_irrigator), missing="never", stale_after=None
+    )
 
     return templates.TemplateResponse(
         request,
