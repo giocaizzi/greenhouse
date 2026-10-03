@@ -10,3 +10,6 @@ exit=0
 == lint-imports
 Contracts: 10 kept, 0 broken.
 exit=0
+== FULL (seed 0, -n 3)
+3049 passed, 9 warnings in 512.54s
+exit=0
