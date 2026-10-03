@@ -18,6 +18,10 @@ suggested follow-up. Details/evidence: `REFACTOR_NOTES.md` and the `refactor/10-
 - **Security:** the MCP bearer-token check (`require_mcp_token`, `greenhouse_server/app.py`) compares tokens with
   `!=`, not constant-time (`hmac.compare_digest`) — timing side channel on the credential that grants actuation
   authority. Found by the WP5 reviewer; not a regression.
+- **Security (lint ratchet, `refactor/wp-handoff/LINT.md`):** `services/notify.py` opens the configured ntfy URL
+  without a scheme check (ruff S310 — `file://` etc. accepted); default bind host `0.0.0.0` (S104); several
+  `try/except/pass` sites swallow errors without logging (full BLE/TRY/PLW0717 lists in the hand-off). Not changed —
+  behavior.
 
 ## 2. Dependencies / supply chain
 - `pip-audit`: 53 advisory rows across 10 locked packages (pyjwt, starlette, urllib3, cryptography, …) —
