@@ -159,24 +159,18 @@ class IrrigationLogic:
                 code=TriggerCode.NO_PLANTS,
                 message="no plants in cluster",
             )
-            if persist:
-                self._persist(decision, triggered_by)
-            return decision
+            return self._record(decision, persist=persist, triggered_by=triggered_by)
 
         # Safety gate first: a confirmed leak / stuck valve outranks every other
         # reason to skip, and saying so plainly beats reporting a cooldown that
         # happens to also be active.
         leak_hold = self._enforce_leak_hold(cluster_id, evaluated_at)
         if leak_hold is not None:
-            if persist:
-                self._persist(leak_hold, triggered_by)
-            return leak_hold
+            return self._record(leak_hold, persist=persist, triggered_by=triggered_by)
 
         cooldown = self._enforce_cooldown(cluster_id, evaluated_at)
         if cooldown is not None:
-            if persist:
-                self._persist(cooldown, triggered_by)
-            return cooldown
+            return self._record(cooldown, persist=persist, triggered_by=triggered_by)
 
         # Quiet hours run after cooldown (cooldown is the cheaper, more
         # decisive gate) and before the weather rule so the audit trail
@@ -196,9 +190,7 @@ class IrrigationLogic:
                 message=(f"quiet hours active ({quiet_window[0]:02d}:00–{quiet_window[1]:02d}:00 local)"),
                 severity=Severity.INFO,
             )
-            if persist:
-                self._persist(skip, triggered_by)
-            return skip
+            return self._record(skip, persist=persist, triggered_by=triggered_by)
 
         def _finalize(decision: IrrigationDecision) -> IrrigationDecision:
             if quiet_window is not None and bypass_quiet_hours:
@@ -479,6 +471,12 @@ class IrrigationLogic:
             severity=Severity.WARNING,
             icon="drop-slash",
         )
+
+    def _record(self, decision: IrrigationDecision, *, persist: bool, triggered_by: str) -> IrrigationDecision:
+        """Persist ``decision`` when asked and hand it back — every exit logs exactly once."""
+        if persist:
+            self._persist(decision, triggered_by)
+        return decision
 
     def _persist(self, decision: IrrigationDecision, triggered_by: str) -> None:
         """Best-effort persistence — never blocks the decision."""
