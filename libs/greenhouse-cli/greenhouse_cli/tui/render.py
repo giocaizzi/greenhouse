@@ -118,9 +118,10 @@ def history_rows(payload: dict[str, Any] | None) -> list[Row]:
 
 
 def config_rows(effective: dict[str, Any] | None) -> list[tuple[str, Text]]:
-    """Effective-config rows sorted by key; values the cluster overrides are bold, each tagged with its source."""
+    """Effective-config rows in server order (the repository's config field order, as the edit form);
+    values the cluster overrides are bold, each tagged with its source."""
     rows: list[tuple[str, Text]] = []
-    for key, field in sorted(((effective or {}).get("effective") or {}).items()):
+    for key, field in ((effective or {}).get("effective") or {}).items():
         value = field.get("value")
         source = field.get("source", "")
         style = "bold" if source == "cluster" else ""
@@ -363,10 +364,11 @@ def preference_rows(prefs: dict[str, Any]) -> list[tuple[str, str]]:
 
 
 def global_config_rows(config: dict[str, Any]) -> list[tuple[str, str | Text]]:
-    """Global-default rows sorted by key (bookkeeping fields hidden; unset = built-in default), or "unavailable"."""
+    """Global-default rows in server order — the repository's config field order, as the edit form
+    (bookkeeping fields hidden; unset = built-in default), or "unavailable"."""
     return [
         (k, Text("built-in default", style="dim") if v is None else str(v))
-        for k, v in sorted(config.items())
+        for k, v in config.items()
         if k not in {"id", "last_updated"}
     ] or [("config", "unavailable")]
 
