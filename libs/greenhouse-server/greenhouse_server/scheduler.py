@@ -512,7 +512,10 @@ def set_check_all_paused(repo: IrrigationRepository, paused: bool) -> bool:
     registered (pending) job is paused/resumed and the preference persisted,
     so it takes effect when the scheduler starts and survives restarts.
     Commits because the live scheduler has already changed: the persisted
-    flag must match it before the caller returns.
+    flag must match it before the caller returns. Order matters and is kept:
+    the live job is paused/resumed first, so if the commit then fails the
+    in-memory state and the persisted flag disagree until the next restart
+    re-applies the flag.
 
     Args:
         repo: Repository whose session receives the preference write (committed here).

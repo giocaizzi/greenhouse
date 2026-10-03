@@ -1,4 +1,9 @@
-"""Web analytics routes: history, stats, CSV export, learn, scheduler."""
+"""Web routes for three concerns that share this module (route qualnames are pinned, so it keeps its name).
+
+* Analytics: cluster history, stats, CSV export and the learn/insights page.
+* Scheduler page: job table, ad-hoc job delete, ``check_all`` pause/resume.
+* Emergency kill switch: ``POST /bulk/stop-all`` (the same service path as the JSON API).
+"""
 
 from __future__ import annotations
 
