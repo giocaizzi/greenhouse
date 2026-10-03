@@ -19,7 +19,7 @@ from greenhouse_core.constants import (
 from greenhouse_core.devices import DeviceGateway
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.config import Settings
-from greenhouse_server.services._session import job_session as _job_session  # private: keeps the frozen dir() surface
+from greenhouse_server.services.jobs import job_session as _job_session  # private: keeps the frozen dir() surface
 
 if TYPE_CHECKING:
     from collections.abc import Callable

@@ -329,7 +329,7 @@ def _run_leak_check(cluster_id: int, started_at: int) -> None:
 
     if _app is None:
         return
-    # Own scaffolding, not services._session.job_session: the "already done" early return
+    # Own scaffolding, not services.jobs.job_session: the "already done" early return
     # leaves its read-only transaction to close() (a failing ROLLBACK there escapes the job),
     # which the context manager cannot express without changing that path.
     session = _app.state.session_factory()

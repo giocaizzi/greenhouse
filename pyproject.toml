@@ -365,7 +365,7 @@ type = "forbidden"
 source_modules = ["greenhouse_server.services"]
 forbidden_modules = ["fastapi", "starlette", "greenhouse_server.deps", "greenhouse_server.auth"]
 allow_indirect_imports = true
-ignore_imports = ["greenhouse_server.services._session -> fastapi"]  # TYPE_CHECKING annotation only
+ignore_imports = ["greenhouse_server.services.jobs -> fastapi"]  # TYPE_CHECKING annotation only
 
 [[tool.importlinter.contracts]]
 name = "SQLAlchemy stays behind the repository"
@@ -381,7 +381,7 @@ ignore_imports = [
   "greenhouse_server.routes.auth -> sqlalchemy",        # auth routes take a raw Session (user CRUD)
   "greenhouse_server.web.routes.auth -> sqlalchemy",    # same, web login form
   "greenhouse_server.web.context -> sqlalchemy",        # TYPE_CHECKING annotation only
-  "greenhouse_server.services._session -> sqlalchemy",  # TYPE_CHECKING annotation only
+  "greenhouse_server.services.jobs -> sqlalchemy",  # TYPE_CHECKING annotation only
   "greenhouse_server.services.inventory -> sqlalchemy", # IntegrityError -> DeviceIdExistsError translation
 ]
 
