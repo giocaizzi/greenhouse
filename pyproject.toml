@@ -124,12 +124,7 @@ indent-style = "space"
 "libs/greenhouse-cli/greenhouse_cli/tui/screens/forms.py" = ["C901", "PLR0911"]
 "libs/greenhouse-core/greenhouse_core/devices/irrigators/ik10pw.py" = ["C901", "PLR0911"]
 "libs/greenhouse-core/greenhouse_core/devices/irrigators/tuya_generic.py" = ["C901"]
-"libs/greenhouse-core/greenhouse_core/learning/issues.py" = ["C901", "PLR0912", "PLR0915"]
 "libs/greenhouse-core/greenhouse_core/logic/engine.py" = ["C901", "PLR0911", "PLR0912", "PLR0915"]
-"libs/greenhouse-core/greenhouse_core/logic/sensors.py" = ["C901"]
-"libs/greenhouse-core/greenhouse_core/logic/stress.py" = ["C901", "PLR0912"]
-"libs/greenhouse-core/greenhouse_core/logic/trends.py" = ["C901", "PLR0912"]
-"libs/greenhouse-core/greenhouse_core/stats.py" = ["C901"]
 "libs/greenhouse-server/greenhouse_server/services/health_monitor.py" = ["PLR0911"]
 
 [tool.importlinter]
