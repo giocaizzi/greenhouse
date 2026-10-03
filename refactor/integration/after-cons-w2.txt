@@ -1,0 +1,4 @@
+## commit 41859fb
+## FULL PYTHONHASHSEED=0 (rc=0)
+3063 passed, 10 warnings in 315.25s (0:05:15)
+## goldens
