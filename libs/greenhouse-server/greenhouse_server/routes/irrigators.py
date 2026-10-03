@@ -216,8 +216,9 @@ def stop_irrigator(
 ) -> IrrigatorActionResponse:
     """Manually stop a running irrigator over the Tuya local protocol.
 
-    Side effects: actuates physical hardware and records an `off` irrigation
-    event with `triggered_by="manual"`.
+    Side effects: actuates physical hardware and records a `stop` irrigation
+    event with `triggered_by="manual"` (the same action automatic and
+    emergency stops record).
 
     Args:
         irrigator_id: Irrigator to stop.

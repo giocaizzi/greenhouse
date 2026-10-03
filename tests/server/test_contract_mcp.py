@@ -35,7 +35,7 @@ from server.conftest import _make_stubbed_app
 # refactor/00-contracts.md at the Phase-0 baseline (main @ a1b2622); re-recorded only by
 # reviewed behavior-change commits (`fix(drift|consistency): …`) that also regenerate the golden.
 PHASE0_MCP_TOOLS_SHA256 = (
-    "3c0a017d315e49038059583340649a9f18441df878b916fc72227b1e4c2294e6"  # gitleaks:allow — content hash, not a secret
+    "2a28d5d38538af656e12d24d6eb3b9b484185e3884eb7c62a26050a7c3e593fc"  # gitleaks:allow — content hash, not a secret
 )
 
 _TOKEN = "contract-mcp-token"

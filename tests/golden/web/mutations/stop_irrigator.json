@@ -14,7 +14,7 @@
   "irrigation_events": {
    "added": [
     {
-     "action": "off",
+     "action": "stop",
      "duration_minutes": null,
      "id": 7,
      "irrigator_id": 1,

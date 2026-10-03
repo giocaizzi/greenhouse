@@ -892,7 +892,7 @@
   },
   {
    "name": "stop_irrigator",
-   "description": "Stop Irrigator\n\nManually stop a running irrigator over the Tuya local protocol.\n\nSide effects: actuates physical hardware and records an `off` irrigation\nevent with `triggered_by=\"manual\"`.\n\nArgs:\n    irrigator_id: Irrigator to stop.\n\nRaises:\n    HTTPException: 404 if the irrigator is unknown, 503 if Tuya\n        credentials are missing or the irrigator model has no adapter,\n        502 if the device fails to stop.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"success\": true,\n  \"message\": \"Message\"\n}\n```",
+   "description": "Stop Irrigator\n\nManually stop a running irrigator over the Tuya local protocol.\n\nSide effects: actuates physical hardware and records a `stop` irrigation\nevent with `triggered_by=\"manual\"` (the same action automatic and\nemergency stops record).\n\nArgs:\n    irrigator_id: Irrigator to stop.\n\nRaises:\n    HTTPException: 404 if the irrigator is unknown, 503 if Tuya\n        credentials are missing or the irrigator model has no adapter,\n        502 if the device fails to stop.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"success\": true,\n  \"message\": \"Message\"\n}\n```",
    "inputSchema": {
     "type": "object",
     "properties": {
