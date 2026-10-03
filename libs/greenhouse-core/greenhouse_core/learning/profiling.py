@@ -148,7 +148,10 @@ def get_plant_profile(
 ) -> PlantProfile | None:
     """Build a learned profile for a plant based on historical irrigation responses.
 
-    Needs at least 3 irrigation events with sensor data to be meaningful.
+    Returns ``None`` when the cluster has no irrigator or no start event in the window
+    produced a measurable response. One response is enough to build a profile; callers
+    that need a minimum sample gate on ``PlantProfile.response_count`` themselves
+    (``learning.issues`` against ``LEARNING_MIN_EVENTS``).
     """
     irrigator = db.get_irrigator_for_cluster(sensor.cluster_id)
     if irrigator is None:

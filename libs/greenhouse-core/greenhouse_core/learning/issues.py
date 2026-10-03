@@ -109,7 +109,7 @@ def _chronic_underwatering_alert(
     """The soil never reaches the plant's target minimum over the last week."""
     target_min, _ = moisture_target_range(care)
 
-    recent = clean_readings(db.get_recent_readings(sensor.id, hours=LEARNING_WEEK_HOURS))  # 7 days
+    recent = clean_readings(db.get_recent_readings(sensor.id, hours=LEARNING_WEEK_HOURS))
     if not recent:
         return None
     max_recent = max((r.soil_moisture for r in recent if r.soil_moisture is not None), default=0)
@@ -164,7 +164,7 @@ def detect_issues(
 
     profiles = _learned_profiles(db, sensors)
     if not profiles:
-        return alerts  # Not enough data yet
+        return alerts
 
     plants = db.get_plants_in_cluster(cluster_id)
     plant_care = {p.id: plant_db.get_care_data(species=p.species, category=p.category) for p in plants}
@@ -172,7 +172,7 @@ def detect_issues(
     for sensor in sensors:
         profile = profiles.get(sensor.id)
         if not profile or profile.response_count < LEARNING_MIN_EVENTS:
-            continue  # Not enough data
+            continue
         alerts.extend(_sensor_alerts(db, sensor, profile, plant_care))
 
     # Unresolvable conflict: check if profiles show incompatible needs
@@ -192,7 +192,7 @@ def _latest_moisture_by_sensor(db: IrrigationRepository, sensors: list[Sensor]) 
         readings = clean_readings_desc(db.get_recent_readings(sensor.id, hours=LEARNING_CONFLICT_LOOKBACK_HOURS))
         moisture_values = [r.soil_moisture for r in readings if r.soil_moisture is not None]
         if moisture_values:
-            sensor_moisture[sensor.id] = statistics.mean(moisture_values[:LEARNING_LATEST_SAMPLES])  # latest 3 readings
+            sensor_moisture[sensor.id] = statistics.mean(moisture_values[:LEARNING_LATEST_SAMPLES])
     return sensor_moisture
 
 
@@ -313,9 +313,9 @@ def _low_light_alerts(
         if not min_lux:
             continue
         readings_7d = clean_readings(db.get_recent_readings(sensor.id, hours=LEARNING_WEEK_HOURS))
-        lux_vals = daytime_lux_readings(readings_7d)  # exclude night readings
+        lux_vals = daytime_lux_readings(readings_7d)
         if len(lux_vals) < LEARNING_MIN_ENV_SAMPLES:
-            continue  # Not enough data
+            continue
         avg_lux_7d = statistics.mean(lux_vals)
         seasonal_min_lux = effective_light_threshold(min_lux)  # adjusted for current month
         if avg_lux_7d < seasonal_min_lux * LOW_LIGHT_ALERT_FRACTION:
