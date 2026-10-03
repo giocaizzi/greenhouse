@@ -1,0 +1,13 @@
+== ruff check
+All checks passed!
+exit=0
+== ruff format
+340 files already formatted
+exit=0
+== typecheck
+Success: no issues found in 172 source files
+exit=0
+== lint-imports
+exit=0
+== sizecheck
+exit=0
