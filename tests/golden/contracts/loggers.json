@@ -1,7 +1,4 @@
 {
- "greenhouse_core.database": {
-  "log": "greenhouse_core.database"
- },
  "greenhouse_core.devices.gateway": {
   "logger": "greenhouse_core.devices.gateway"
  },

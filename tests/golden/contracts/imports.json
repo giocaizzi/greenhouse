@@ -137,7 +137,6 @@
    "create_session_factory",
    "head_revision",
    "init_db",
-   "logging",
    "sessionmaker"
   ]
  },
