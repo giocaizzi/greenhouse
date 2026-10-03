@@ -39,6 +39,7 @@ class SpriteView(Static):
         self._animate = animate  # type: ignore[assignment]  # shadows DOMNode._animate (pre-existing, kept)
 
     def on_mount(self) -> None:
+        """Start the frame timer unless animation is off for this widget or the app."""
         if self._animate and getattr(self.app, "animations", True):
             self.set_interval(ANIMATION_INTERVAL, self._tick)
 
@@ -47,11 +48,13 @@ class SpriteView(Static):
         self.update(self._factory(self._frame))
 
     def set_factory(self, factory: SpriteFactory) -> None:
+        """Swap the sprite (e.g. watering on/off) without restarting the animation."""
         self._factory = factory
         self.update(factory(self._frame))
 
 
 def plant_factory(category: str | None, mood: Mood, watering: bool = False) -> SpriteFactory:
+    """Sprite factory for one plant, bound to its category, mood and watering state."""
     return lambda frame: plant_sprite(category, mood, frame, watering)
 
 
@@ -59,6 +62,7 @@ class Banner(Static):
     """Greenhouse logo + system health pulse."""
 
     def update_health(self, health: dict[str, Any] | None, server: str) -> None:
+        """Render the logo beside the server's health summary (or *connecting…*)."""
         table = Table.grid(padding=(0, 2))
         table.add_column()
         table.add_column()
@@ -90,6 +94,8 @@ class ClusterCard(Vertical, can_focus=True):
     """Dashboard tile for one cluster: sprite, readings, decision, sparkline."""
 
     class Selected(Message):
+        """Posted when the card is opened, so the dashboard can push the cluster screen."""
+
         def __init__(self, cluster_id: int) -> None:
             super().__init__()
             self.cluster_id = cluster_id
@@ -101,6 +107,7 @@ class ClusterCard(Vertical, can_focus=True):
         self.summary = summary
 
     def compose(self) -> ComposeResult:
+        """Lay out the sprite beside the readings, with the moisture sparkline below."""
         with Horizontal(classes="card-body"):
             yield SpriteView(self._sprite_factory(), classes="card-sprite")
             yield Static(self._info(), classes="card-info")
@@ -146,9 +153,11 @@ class ClusterCard(Vertical, can_focus=True):
         return lines
 
     def action_select(self) -> None:
+        """Announce that this cluster was opened."""
         self.post_message(self.Selected(self.summary.id))
 
     def on_click(self) -> None:
+        """A click opens the card, like Enter."""
         self.action_select()
 
 
@@ -169,6 +178,7 @@ class PlantTile(Vertical):
         self._args = (species, category, moisture, mood, watering, band)
 
     def compose(self) -> ComposeResult:
+        """Stack the plant sprite above its species, mood, moisture and band gauge."""
         species, category, moisture, mood, watering, (lo, hi) = self._args
         yield SpriteView(plant_factory(category, mood, watering))
         caption = Text.assemble((species[:18] + "\n", "bold"))
@@ -285,6 +295,7 @@ class Heatmap(Static):
     DAYS: ClassVar[list[str]] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
     def show(self, payload: dict[str, Any] | None) -> None:
+        """Render the 7×24 grid, shading each slot relative to the busiest one."""
         cells = {(c["weekday"], c["hour"]): c for c in (payload or {}).get("cells", [])}
         peak = max((c["count"] for c in cells.values()), default=0)
         text = Text()
@@ -309,6 +320,7 @@ class KeyValue(Static):
     """A two-column key/value panel."""
 
     def show(self, rows: Sequence[tuple[str, RenderableType | str]], title: str | None = None) -> None:
+        """Render ``rows`` as a dim-key grid, under ``title`` when given."""
         table = Table.grid(padding=(0, 2))
         table.add_column(style="dim", no_wrap=True)
         table.add_column()

@@ -30,15 +30,18 @@ class ActivityScreen(DataScreen):
         self.cursor: int | None = None
 
     def compose(self) -> ComposeResult:
+        """Lay out the hint line above a single scrolling event table."""
         yield Header(show_clock=True)
         yield Static(id="activity-hint", classes="hint")
         yield DataTable(id="activity-table", cursor_type="row", zebra_stripes=True)
         yield Footer()
 
     def on_mount(self) -> None:
+        """Declare the table columns once; rows are appended page by page."""
         self.query_one(DataTable).add_columns("When", "Severity", "Source", "Entity", "Code", "Message")
 
     async def load(self) -> None:
+        """Restart the feed from the newest event (a filter change or refresh drops the cursor)."""
         self.cursor = None
         self.query_one(DataTable).clear()
         await self._fetch()
@@ -66,9 +69,11 @@ class ActivityScreen(DataScreen):
         )
 
     def action_cycle_filter(self) -> None:
+        """Step to the next severity filter and reload from the top."""
         self.severity = SEVERITY_FILTERS[(SEVERITY_FILTERS.index(self.severity) + 1) % len(SEVERITY_FILTERS)]
         self.reload()
 
     def action_more(self) -> None:
+        """Append the next older page, if the server reported a cursor for one."""
         if self.cursor:
             self.run_worker(self._fetch(), group="load", exclusive=True)

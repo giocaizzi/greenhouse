@@ -30,6 +30,7 @@ class DashboardScreen(DataScreen):
     ]
 
     def compose(self) -> ComposeResult:
+        """Lay out the health banner above the scrolling grid of cluster cards."""
         yield Header(show_clock=True)
         yield Banner(id="banner")
         with VerticalScroll(id="dashboard-scroll", can_focus=False):
@@ -38,6 +39,7 @@ class DashboardScreen(DataScreen):
         yield Footer()
 
     async def load(self) -> None:
+        """Fetch system health and every cluster's status + 24h chart concurrently, then rebuild the cards."""
         banner = self.query_one(Banner)
         health, clusters = await asyncio.gather(
             self.gh.api(lambda c: c.system_health(), quiet=True),
@@ -70,11 +72,13 @@ class DashboardScreen(DataScreen):
         (target or grid.children[0]).focus()
 
     def on_cluster_card_selected(self, message: ClusterCard.Selected) -> None:
+        """Open the selected cluster's detail screen."""
         from greenhouse_cli.tui.screens.cluster import ClusterScreen
 
         self.app.push_screen(ClusterScreen(message.cluster_id))
 
     def action_new_cluster(self) -> None:
+        """Create a cluster from a form; plants are added from its screen."""
         self.form_then(
             "New cluster",
             resources.cluster_fields(),
@@ -84,6 +88,7 @@ class DashboardScreen(DataScreen):
         )
 
     def action_sync(self) -> None:
+        """Pull fresh sensor readings from the cloud for every cluster."""
         self.notify("Syncing sensors from the cloud…")
         self.run_worker(
             self.act(
@@ -94,6 +99,7 @@ class DashboardScreen(DataScreen):
         )
 
     def action_check_all(self) -> None:
+        """Run the scheduled check on every cluster after confirmation (auto-run clusters may water)."""
         self.confirm_then(
             "Run the check on [b]every[/b] cluster?\nClusters with auto-run enabled may irrigate.",
             lambda c: c.check(),
@@ -102,6 +108,7 @@ class DashboardScreen(DataScreen):
         )
 
     def action_stop_all(self) -> None:
+        """Emergency stop: switch every irrigator off after confirmation."""
         self.confirm_then(
             "[b red]Emergency stop[/b red] — stop every irrigator now?",
             lambda c: c.bulk_stop_all(),

@@ -33,6 +33,7 @@ class SystemScreen(DataScreen):
         self.core_jobs: set[str] = set()
 
     def compose(self) -> ComposeResult:
+        """Lay out the health banner, scheduler panel, jobs, devices and data-quality tables."""
         yield Header(show_clock=True)
         yield Banner(id="system-banner")
         with VerticalScroll():
@@ -46,11 +47,13 @@ class SystemScreen(DataScreen):
         yield Footer()
 
     def on_mount(self) -> None:
+        """Declare the jobs, devices and data-quality table columns."""
         self.query_one("#jobs-table", DataTable).add_columns("Job", "Trigger", "Next run", "State")
         self.query_one("#devices-table", DataTable).add_columns("ID", "Device", "Status", "Age", "Note")
         self.query_one("#quality-table", DataTable).add_columns("Severity", "Code", "Entity", "Label", "Message")
 
     async def load(self) -> None:
+        """Fetch health, scheduler jobs, preferences and the data-quality report concurrently and render them."""
         api = self.gh.api
         health, jobs, prefs, quality = await asyncio.gather(
             api(lambda c: c.system_health()),
@@ -79,6 +82,7 @@ class SystemScreen(DataScreen):
         refill(self.query_one("#quality-table", DataTable), render.quality_rows(issues))
 
     def action_toggle_scheduler(self) -> None:
+        """Resume a paused scheduler at once; pausing asks first because it stops automatic irrigation."""
         if self.paused:
             self.run_worker(self.act(lambda c: c.scheduler_resume(), "Scheduler resumed"))
         else:
@@ -90,10 +94,12 @@ class SystemScreen(DataScreen):
             )
 
     def action_sync(self) -> None:
+        """Pull fresh sensor readings from the cloud."""
         self.notify("Syncing sensors from the cloud…")
         self.run_worker(self.act(lambda c: c.sync(), lambda r: f"Sync done: {r.get('total_new', 0)} new readings"))
 
     def action_plant_sync(self) -> None:
+        """Refresh every plant's care data from the curated plant DB."""
         self.run_worker(
             self.act(
                 lambda c: c.sync_plants(),
@@ -102,9 +108,11 @@ class SystemScreen(DataScreen):
         )
 
     def action_health_snapshot(self) -> None:
+        """Record a plant-health snapshot now instead of waiting for the daily job."""
         self.run_worker(self.act(lambda c: c.health_snapshot(), "Plant health snapshot recorded"))
 
     def action_delete_job(self) -> None:
+        """Remove the selected custom job; built-in jobs are refused with a hint to pause instead."""
         job_id = selected_key(self.query_one("#jobs-table", DataTable))
         if job_id is None:
             return

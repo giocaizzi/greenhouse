@@ -19,6 +19,7 @@ MODES = [("smart", "smart"), ("schedule", "schedule"), ("manual", "manual")]
 
 
 def cluster_fields(cluster: dict[str, Any] | None = None) -> list[Field]:
+    """Cluster form (create or edit); the environment picks the seasonal table."""
     c = cluster or {}
     return [
         Field("name", "Name", value=c.get("name"), required=True),
@@ -28,6 +29,7 @@ def cluster_fields(cluster: dict[str, Any] | None = None) -> list[Field]:
 
 
 def plant_fields(plant: dict[str, Any] | None = None) -> list[Field]:
+    """Plant form; blank care fields are filled from the plant DB when the species is known."""
     p = plant or {}
     return [
         Field("species", "Species", value=p.get("species"), required=True, placeholder="Monstera deliciosa"),
@@ -43,6 +45,7 @@ def plant_fields(plant: dict[str, Any] | None = None) -> list[Field]:
 
 
 def sensor_fields(sensor: dict[str, Any] | None = None, plants: list[dict[str, Any]] | None = None) -> list[Field]:
+    """Sensor form; the device id is asked only on create, and ``plants`` feed the plant picker."""
     s = sensor or {}
     plant_options = [(f"{p['species']} (#{p['id']})", p["id"]) for p in plants or []]
     fields = []
@@ -57,6 +60,7 @@ def sensor_fields(sensor: dict[str, Any] | None = None, plants: list[dict[str, A
 
 
 def irrigator_fields(irrigator: dict[str, Any] | None = None) -> list[Field]:
+    """Irrigator form; the device id is asked only on create, local-protocol settings go in the JSON config."""
     i = irrigator or {}
     fields = []
     if irrigator is None:
@@ -87,6 +91,7 @@ def config_fields(config: dict[str, Any] | None = None) -> list[Field]:
 
 
 def window_fields(window: dict[str, Any] | None = None) -> list[Field]:
+    """Irrigation-window form (hours end-exclusive, weekday bitmask defaults to every day)."""
     w = window or {}
     return [
         Field("start_hour", "Start hour (0-23)", "int", w.get("start_hour"), required=True),
@@ -114,6 +119,7 @@ def vacation_fields(window: dict[str, Any] | None = None, tz: str | None = None)
 
 
 def preference_fields(prefs: dict[str, Any]) -> list[Field]:
+    """Server-wide preference form, pre-filled from the current preferences."""
     return [
         Field("units", "Units", "select", prefs.get("units"), [("metric", "metric"), ("imperial", "imperial")]),
         Field("timezone", "Timezone", value=prefs.get("timezone")),

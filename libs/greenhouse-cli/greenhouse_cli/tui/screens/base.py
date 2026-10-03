@@ -22,9 +22,11 @@ class DataScreen(Screen[Any]):
 
     @property
     def gh(self) -> GreenhouseApp:
+        """The app with its typed API helpers (``Screen.app`` is typed as a plain ``App``)."""
         return self.app  # type: ignore[return-value]
 
     def on_mount(self) -> None:
+        """Load once on mount and, for auto-refresh screens, poll at the app's refresh interval."""
         # Textual dispatches on_mount to every class in the MRO, so subclasses
         # define their own on_mount (table columns etc.) without calling super.
         self.reload()
@@ -32,9 +34,11 @@ class DataScreen(Screen[Any]):
             self.set_interval(self.gh.refresh_seconds, self.reload)
 
     def reload(self) -> None:
+        """Re-run :meth:`load` in an exclusive worker so a slow reload is replaced, never stacked."""
         self.run_worker(self.load(), exclusive=True, group="load")
 
     async def load(self) -> None:  # pragma: no cover - overridden
+        """Fetch and render the screen's data; every concrete screen overrides it."""
         raise NotImplementedError
 
     def confirm_then(

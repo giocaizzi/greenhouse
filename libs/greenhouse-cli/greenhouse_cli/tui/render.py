@@ -119,8 +119,7 @@ def history_rows(payload: dict[str, Any] | None) -> list[Row]:
 
 
 def config_rows(effective: dict[str, Any] | None) -> list[tuple[str, Text]]:
-    """Effective-config rows in server order (the repository's config field order, as the edit form);
-    values the cluster overrides are bold, each tagged with its source."""
+    """Effective-config rows in repository field order (as the form); cluster overrides bold, tagged by source."""
     rows: list[tuple[str, Text]] = []
     for key, field in ((effective or {}).get("effective") or {}).items():
         value = field.get("value")
@@ -362,8 +361,7 @@ def preference_rows(prefs: dict[str, Any]) -> list[tuple[str, str]]:
 
 
 def global_config_rows(config: dict[str, Any]) -> list[tuple[str, str | Text]]:
-    """Global-default rows in server order — the repository's config field order, as the edit form
-    (bookkeeping fields hidden; unset = built-in default), or "unavailable"."""
+    """Global-default rows in repository field order (bookkeeping hidden, unset = built-in default) or "unavailable"."""
     return [
         (k, Text("built-in default", style="dim") if v is None else str(v))
         for k, v in config.items()
@@ -372,8 +370,7 @@ def global_config_rows(config: dict[str, Any]) -> list[tuple[str, str | Text]]:
 
 
 def vacation_rows(vacations: list[dict[str, Any]], active_id: int | None, tz: str | None = None) -> list[Row]:
-    """Vacation rows keyed by window id, times in the ``timezone`` preference ``tz`` (as the form takes them; UTC
-    when unset), with an active / past / upcoming state column."""
+    """Vacation rows keyed by id with an active/past/upcoming state; times in the ``tz`` preference (else UTC)."""
     rows: list[Row] = []
     now = fmt.now()
     for v in vacations:

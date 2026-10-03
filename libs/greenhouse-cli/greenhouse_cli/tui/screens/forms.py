@@ -95,6 +95,7 @@ class FormScreen(ModalScreen[dict[str, Any] | None]):
         self.note = note
 
     def compose(self) -> ComposeResult:
+        """Render one row per field: a checkbox, a select or a typed input, plus the error line."""
         with Vertical(classes="dialog form-dialog"):
             yield Static(f"[b]{self.form_title}[/b]", classes="dialog-message")
             if self.note:
@@ -126,15 +127,18 @@ class FormScreen(ModalScreen[dict[str, Any] | None]):
                 yield Button("Cancel", id="cancel")
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Submit on the primary button; any other button cancels."""
         if event.button.id == "submit":
             self.action_submit()
         else:
             self.dismiss(None)
 
     def on_input_submitted(self) -> None:
+        """Enter in any input submits the whole form."""
         self.action_submit()
 
     def action_submit(self) -> None:
+        """Parse every field; show the first error inline, otherwise dismiss with the values."""
         values: dict[str, Any] = {}
         try:
             for f in self.fields:

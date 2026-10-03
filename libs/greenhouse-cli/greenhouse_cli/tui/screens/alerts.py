@@ -34,6 +34,7 @@ class AlertsScreen(DataScreen):
         self._alerts: dict[int, dict[str, Any]] = {}
 
     def compose(self) -> ComposeResult:
+        """Lay out the hint line, the alert table and the detail panel below it."""
         yield Header(show_clock=True)
         with Vertical():
             yield Static(id="alerts-hint", classes="hint")
@@ -42,9 +43,11 @@ class AlertsScreen(DataScreen):
         yield Footer()
 
     def on_mount(self) -> None:
+        """Declare the alert table columns (``×`` is the occurrence count)."""
         self.query_one(DataTable).add_columns("ID", "Severity", "Status", "Title", "Cluster", "Last seen", "×")
 
     async def load(self) -> None:
+        """Fetch alerts for the current status filter and keep them by id for the detail panel."""
         status = self.status_filter
         data = await self.gh.api(lambda c: c.list_alerts(status=status, limit=200))
         if data is None:
@@ -75,6 +78,7 @@ class AlertsScreen(DataScreen):
             self.query_one("#alert-detail", Static).update(Text("Nothing here — all quiet in the greenhouse.", "dim"))
 
     def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
+        """Show the highlighted alert's full message, origin and first/last-seen times."""
         alert = self._alerts.get(int(event.row_key.value)) if event.row_key.value else None
         if not alert:
             return
@@ -93,18 +97,22 @@ class AlertsScreen(DataScreen):
         return int(key) if key else None
 
     def action_cycle_filter(self) -> None:
+        """Step through open → acknowledged → resolved → all and reload."""
         self.status_filter = STATUS_FILTERS[(STATUS_FILTERS.index(self.status_filter) + 1) % len(STATUS_FILTERS)]
         self.reload()
 
     def action_acknowledge(self) -> None:
+        """Acknowledge the selected alert; it stays unresolved, so a leak hold stays in force."""
         alert_id = self._selected()
         if alert_id is not None:
             self.run_worker(self.act(lambda c: c.acknowledge_alert(alert_id), f"Alert {alert_id} acknowledged"))
 
     def action_resolve(self) -> None:
+        """Resolve the selected alert; resolving a leak alert is what releases its hold."""
         alert_id = self._selected()
         if alert_id is not None:
             self.run_worker(self.act(lambda c: c.resolve_alert(alert_id), f"Alert {alert_id} resolved"))
 
     def action_sync_alerts(self) -> None:
+        """Ask the server to re-run the alert scan for every cluster now."""
         self.run_worker(self.act(lambda c: c.sync_alerts(), "Alert re-scan complete"))

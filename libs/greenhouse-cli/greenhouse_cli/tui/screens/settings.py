@@ -35,6 +35,7 @@ class SettingsScreen(DataScreen):
         self.vacations: list[dict[str, Any]] = []
 
     def compose(self) -> ComposeResult:
+        """Lay out the account line, the preference / global panels and the vacation table."""
         yield Header(show_clock=True)
         with VerticalScroll():
             yield Static(id="account", classes="hint")
@@ -49,9 +50,11 @@ class SettingsScreen(DataScreen):
         yield Footer()
 
     def on_mount(self) -> None:
+        """Declare the vacation table columns."""
         self.query_one("#vacation-table", DataTable).add_columns("ID", "Starts", "Ends", "Contact", "Notes", "State")
 
     async def load(self) -> None:
+        """Fetch account, preferences, global config and vacation windows concurrently and render them."""
         api = self.gh.api
         me, prefs, global_config, vacation = await asyncio.gather(
             api(lambda c: c.whoami(), quiet=True),
@@ -75,6 +78,7 @@ class SettingsScreen(DataScreen):
         refill(table, render.vacation_rows(self.vacations, active_id, self.prefs.get("timezone")))
 
     def action_edit_preferences(self) -> None:
+        """Edit the server-wide preferences."""
         self.form_then(
             "Preferences",
             resources.preference_fields(self.prefs),
@@ -83,6 +87,7 @@ class SettingsScreen(DataScreen):
         )
 
     def action_edit_global(self) -> None:
+        """Edit the global irrigation defaults that clusters inherit."""
         self.form_then(
             "Global irrigation defaults",
             resources.config_fields(self.global_config),
@@ -100,6 +105,7 @@ class SettingsScreen(DataScreen):
         return None
 
     def action_new_vacation(self) -> None:
+        """Add a vacation window, entered in the server's timezone preference."""
         self.form_then(
             "New vacation window",
             resources.vacation_fields(tz=self.prefs.get("timezone")),
@@ -109,6 +115,7 @@ class SettingsScreen(DataScreen):
         )
 
     def action_edit_vacation(self) -> None:
+        """Edit the selected vacation window."""
         window = self._selected_vacation()
         if window:
             self.form_then(
@@ -119,6 +126,7 @@ class SettingsScreen(DataScreen):
             )
 
     def action_delete_vacation(self) -> None:
+        """Delete the selected vacation window after confirmation."""
         window = self._selected_vacation()
         if window:
             self.confirm_then(
@@ -129,6 +137,7 @@ class SettingsScreen(DataScreen):
             )
 
     def action_logout(self) -> None:
+        """Log out on the server, forget the stored token and reload as anonymous."""
         self.run_worker(self._logout(), group="act")
 
     async def _logout(self) -> None:

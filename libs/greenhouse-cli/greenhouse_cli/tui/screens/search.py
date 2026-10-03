@@ -25,6 +25,7 @@ class SearchScreen(ModalScreen[int | None]):
     BINDINGS: ClassVar[list[BindingType]] = [("escape", "dismiss(None)", "Close")]
 
     def compose(self) -> ComposeResult:
+        """Render the search box above the results table."""
         with Vertical(classes="dialog search-dialog"):
             yield Static("[b]Search[/b]  [dim]clusters, plants, sensors, irrigators, device IDs[/dim]")
             yield Input(placeholder="type to search…", id="search-input")
@@ -35,6 +36,7 @@ class SearchScreen(ModalScreen[int | None]):
         self._targets: dict[str, int] = {}
 
     def on_mount(self) -> None:
+        """Declare the result columns and put the cursor in the search box."""
         self.query_one(DataTable).add_columns("Type", "Name", "Detail")
         self.query_one(Input).focus()
 
@@ -50,6 +52,7 @@ class SearchScreen(ModalScreen[int | None]):
 
     @work(exclusive=True, group="search")
     async def search(self, query: str) -> None:
+        """Debounce keystrokes, then query the server and remember which hits link to a cluster."""
         await asyncio.sleep(0.2)  # debounce keystrokes
         table = self.query_one(DataTable)
         if not query.strip():
