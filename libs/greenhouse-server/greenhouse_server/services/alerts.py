@@ -8,6 +8,7 @@ becomes the single source of truth for the bell badge and /alerts page.
 """
 
 import time
+from typing import Any
 
 from greenhouse_core.models import (
     ENTITY_CLUSTER,
@@ -86,7 +87,7 @@ def sync_cluster_alerts(
         return []
     now = int(time.time())
 
-    findings: list[tuple[str, dict]] = []
+    findings: list[tuple[str, dict[str, Any]]] = []
     for raw in collect_learning_alerts(repo, cluster_id, plant_db):
         findings.append((SOURCE_LEARNING, raw))
     for raw in collect_maintenance_alerts(repo, cluster_id, plant_db):
@@ -154,7 +155,7 @@ def raise_alert(
     cluster_id: int | None = None,
     plant_id: int | None = None,
     sensor_id: int | None = None,
-    payload: dict | None = None,
+    payload: dict[str, Any] | None = None,
     notifier: NtfyClient | None = None,
 ) -> Alert:
     """Convenience wrapper: build a dedup_key and upsert an alert."""

@@ -13,12 +13,16 @@ JSON API returns; each route maps it to its own response shape.
 """
 
 import time
+from typing import TYPE_CHECKING
 
 from greenhouse_core.devices import DeviceRegistry, UnknownDeviceModel
 from greenhouse_core.models import EVENT_ACTION_START, EVENT_ACTION_STOP, TRIGGERED_BY_MANUAL, Irrigator
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.services.irrigation import schedule_pump_watcher
 from greenhouse_server.services.notify import NtfyClient, maybe_notify
+
+if TYPE_CHECKING:
+    from greenhouse_core.devices import AbstractIrrigatorAdapter
 
 
 class ManualActionError(Exception):
@@ -73,7 +77,7 @@ def check_rate_limits(repo: IrrigationRepository, cluster_id: int, irrigator_id:
             raise ManualActionError(409, "irrigator daily cap reached")
 
 
-def _adapter(registry: DeviceRegistry | None, irrigator: Irrigator):
+def _adapter(registry: DeviceRegistry | None, irrigator: Irrigator) -> "AbstractIrrigatorAdapter":
     if registry is None:
         raise ManualActionError(503, "No device registry (missing Tuya credentials)")
     try:
@@ -138,7 +142,7 @@ def manual_start(
         notifier,
         repo.get_preferences(),
         "manual",
-        lambda: notifier.notify_irrigation(
+        lambda: notifier.notify_irrigation(  # type: ignore[union-attr]  # maybe_notify returns first when notifier is None
             triggered_by=TRIGGERED_BY_MANUAL,
             irrigator_name=irrigator.name,
             duration_minutes=minutes,
@@ -190,7 +194,7 @@ def manual_stop(
         notifier,
         repo.get_preferences(),
         "manual",
-        lambda: notifier.notify_irrigation(
+        lambda: notifier.notify_irrigation(  # type: ignore[union-attr]  # maybe_notify returns first when notifier is None
             triggered_by=TRIGGERED_BY_MANUAL,
             irrigator_name=irrigator.name,
             detail="stopped",
@@ -239,7 +243,7 @@ def manual_log(
         notifier,
         repo.get_preferences(),
         "manual",
-        lambda: notifier.notify_irrigation(
+        lambda: notifier.notify_irrigation(  # type: ignore[union-attr]  # maybe_notify returns first when notifier is None
             triggered_by=TRIGGERED_BY_MANUAL,
             irrigator_name=irrigator.name,
             duration_minutes=minutes,

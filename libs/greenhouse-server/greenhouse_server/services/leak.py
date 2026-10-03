@@ -140,7 +140,7 @@ class LeakDetectionService:
 
     # ── Detection ─────────────────────────────────────────────────────────
 
-    def _evaluate_sensor(self, sensor: Sensor, started_at: int) -> tuple[str | None, dict] | None:
+    def _evaluate_sensor(self, sensor: Sensor, started_at: int) -> tuple[str | None, dict[str, Any]] | None:
         """Judge one sensor's behaviour around an irrigation.
 
         Args:
@@ -156,7 +156,7 @@ class LeakDetectionService:
         if len(after) < LEAK_MIN_AFTER_SAMPLES:
             return None
 
-        evidence: dict = {
+        evidence: dict[str, Any] = {
             "latest_moisture": after[-1],
             "peak_after": max(after),
             "after_samples": len(after),
@@ -215,7 +215,9 @@ class LeakDetectionService:
 
     # ── Alert lifecycle ───────────────────────────────────────────────────
 
-    def _raise_for_sensor(self, cluster_id: int, sensor: Sensor, started_at: int, reason: str, evidence: dict) -> Alert:
+    def _raise_for_sensor(
+        self, cluster_id: int, sensor: Sensor, started_at: int, reason: str, evidence: dict[str, Any]
+    ) -> Alert:
         """Raise (or refresh) the critical alert that holds the cluster."""
         latest = evidence["latest_moisture"]
         message = f"{sensor.name}: soil moisture {reason} (latest={latest:.1f}%)"

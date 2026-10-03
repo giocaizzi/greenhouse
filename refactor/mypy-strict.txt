@@ -90,6 +90,7 @@ libs/greenhouse-server/greenhouse_server/routes/windows.py
 libs/greenhouse-server/greenhouse_server/scheduler.py
 libs/greenhouse-server/greenhouse_server/services/__init__.py
 libs/greenhouse-server/greenhouse_server/services/_session.py
+libs/greenhouse-server/greenhouse_server/services/alerts.py
 libs/greenhouse-server/greenhouse_server/services/anomaly.py
 libs/greenhouse-server/greenhouse_server/services/bulk.py
 libs/greenhouse-server/greenhouse_server/services/charts.py
@@ -102,11 +103,16 @@ libs/greenhouse-server/greenhouse_server/services/health_monitor.py
 libs/greenhouse-server/greenhouse_server/services/insights.py
 libs/greenhouse-server/greenhouse_server/services/inventory.py
 libs/greenhouse-server/greenhouse_server/services/irrigation.py
+libs/greenhouse-server/greenhouse_server/services/leak.py
 libs/greenhouse-server/greenhouse_server/services/maintenance.py
+libs/greenhouse-server/greenhouse_server/services/manual_control.py
+libs/greenhouse-server/greenhouse_server/services/notify.py
 libs/greenhouse-server/greenhouse_server/services/pump_watcher.py
 libs/greenhouse-server/greenhouse_server/services/search.py
+libs/greenhouse-server/greenhouse_server/services/sync.py
 libs/greenhouse-server/greenhouse_server/services/system_health.py
 libs/greenhouse-server/greenhouse_server/services/vacation.py
+libs/greenhouse-server/greenhouse_server/services/weather.py
 libs/greenhouse-server/greenhouse_server/services/windows.py
 libs/greenhouse-server/greenhouse_server/web/__init__.py
 libs/greenhouse-server/greenhouse_server/web/context.py

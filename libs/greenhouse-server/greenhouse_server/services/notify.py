@@ -13,6 +13,7 @@ sent via ``Authorization`` when configured.
 
 import logging
 import urllib.request
+from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -93,7 +94,7 @@ class NtfyClient:
         )
 
 
-def maybe_notify(notifier: NtfyClient | None, prefs, category: str, fn) -> None:
+def maybe_notify(notifier: NtfyClient | None, prefs: object, category: str, fn: Callable[[], object]) -> None:
     """Run ``fn`` (which publishes) only if notifier exists and the category is enabled.
 
     ``category`` is one of ``manual`` / ``emergency`` / ``alerts`` / ``auto``,

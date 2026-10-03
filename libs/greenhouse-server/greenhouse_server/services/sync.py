@@ -3,6 +3,8 @@
 import logging
 import statistics
 import time
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, Any
 
 from greenhouse_core.constants import SENSOR_READING_STALE_SECONDS
 from greenhouse_core.devices import DeviceRegistry
@@ -11,6 +13,9 @@ from greenhouse_core.logic.cleaning import clean_readings_desc
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_core.sync import sync_sensor_data as core_sync
 from greenhouse_core.sync import sync_single_sensor
+
+if TYPE_CHECKING:
+    from greenhouse_core.models import Sensor
 
 logger = logging.getLogger(__name__)
 
@@ -38,13 +43,13 @@ class SyncService:
         self._registry = registry
         self._gateway = cloud
 
-    def sync_all_sensors(self, hours: int = 24) -> dict:
+    def sync_all_sensors(self, hours: int = 24) -> dict[str, Any]:
         """Sync all sensor data from the Cloud gateway. Returns stats dict."""
         if self._gateway is None:
             return {"total_synced": 0, "total_new": 0, "total_live": 0, "errors": ["No cloud connection"]}
         return core_sync(self._repo, self._gateway, hours=hours)
 
-    def ensure_fresh_and_read(self, cluster_id: int) -> dict | None:
+    def ensure_fresh_and_read(self, cluster_id: int) -> dict[str, Any] | None:
         """Return the cluster's current sensor snapshot from SQLite.
 
         Reads the latest persisted reading for each sensor (no Cloud call). If
@@ -62,7 +67,9 @@ class SyncService:
         now = int(time.time())
         latest = {s.id: self._repo.get_latest_reading(s.id) for s in sensors}
         stale = [
-            s for s in sensors if latest[s.id] is None or now - latest[s.id].timestamp > SENSOR_READING_STALE_SECONDS
+            s
+            for s in sensors
+            if latest[s.id] is None or now - latest[s.id].timestamp > SENSOR_READING_STALE_SECONDS  # type: ignore[union-attr]  # None short-circuits
         ]
         if stale and self._gateway is not None:
             for sensor in stale:
@@ -75,7 +82,7 @@ class SyncService:
 
         return self._cluster_snapshot(sensors)
 
-    def _cluster_snapshot(self, sensors) -> dict | None:
+    def _cluster_snapshot(self, sensors: "Sequence[Sensor]") -> dict[str, Any] | None:
         """Fold the cluster's sensors into the single reading the pipeline acts on.
 
         One value per metric, aggregated the way the metric is used rather than

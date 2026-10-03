@@ -3,6 +3,7 @@
 import json
 import time
 import urllib.request
+from typing import Any
 
 from greenhouse_core.constants import DEFAULT_LATITUDE, DEFAULT_LONGITUDE, WEATHER_FORECAST_CACHE_TTL_SECONDS
 
@@ -23,10 +24,10 @@ class WeatherClient:
         # hours" aligns with the clock the engine reasons in, not a hardcoded
         # Europe/Rome.
         self._tz = tz
-        self._get_current_cache: tuple[float, dict] | None = None
-        self._get_forecast_cache: tuple[float, dict] | None = None
+        self._get_current_cache: tuple[float, dict[str, Any]] | None = None
+        self._get_forecast_cache: tuple[float, dict[str, Any]] | None = None
 
-    def get_current(self) -> dict | None:
+    def get_current(self) -> dict[str, Any] | None:
         """Fetch current weather. Returns None on failure."""
         if self._get_current_cache is not None:
             cached_at, cached_value = self._get_current_cache
@@ -54,7 +55,7 @@ class WeatherClient:
         except Exception:
             return None
 
-    def get_forecast(self, hours: int = 6) -> dict | None:
+    def get_forecast(self, hours: int = 6) -> dict[str, Any] | None:
         """Fetch aggregated weather forecast for the next N hours.
 
         Returns precipitation sum, max/min temperature, and average humidity
