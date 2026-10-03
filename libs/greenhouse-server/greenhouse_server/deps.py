@@ -20,7 +20,9 @@ from greenhouse_server.services.health_monitor import DeviceHealthMonitor
 from greenhouse_server.services.irrigation import IrrigationService
 from greenhouse_server.services.notify import NtfyClient
 from greenhouse_server.services.sync import SyncService
+from greenhouse_server.services.vacation import VacationRangeError, validate_vacation_range
 from greenhouse_server.services.weather import WeatherClient
+from greenhouse_server.services.windows import WindowValidationError, validate_window
 from greenhouse_server.state import get_session
 
 # --- Infrastructure dependencies ---
@@ -186,6 +188,22 @@ def require_metric(metric: str) -> Metric:
     if metric not in _CHART_METRICS:
         raise HTTPException(400, f"Unsupported metric: {metric}")
     return cast("Metric", metric)
+
+
+def require_valid_vacation_range(starts_at: int, ends_at: int) -> None:
+    """Apply the shared vacation rule (``starts_at < ends_at``) or raise 400 with its message (API and web)."""
+    try:
+        validate_vacation_range(starts_at, ends_at)
+    except VacationRangeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None
+
+
+def require_valid_window(start_hour: int, end_hour: int, weekday_mask: int) -> None:
+    """Apply the shared irrigation-window rule or raise 400 with its message (API and web)."""
+    try:
+        validate_window(start_hour, end_hour, weekday_mask)
+    except WindowValidationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None
 
 
 # --- Service dependencies ---

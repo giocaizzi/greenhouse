@@ -19,8 +19,8 @@ from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse
 
 from greenhouse_core.utils import get_display_timezone
-from greenhouse_server.deps import RepoDep, require_vacation_window
-from greenhouse_server.services.vacation import VacationRangeError, cluster_budgets, validate_vacation_range
+from greenhouse_server.deps import RepoDep, require_vacation_window, require_valid_vacation_range
+from greenhouse_server.services.vacation import cluster_budgets
 from greenhouse_server.web.context import base_context
 from greenhouse_server.web.templating import templates
 
@@ -28,14 +28,6 @@ if TYPE_CHECKING:
     from greenhouse_core.models import VacationWindow
 
 router = APIRouter(include_in_schema=False)
-
-
-def _validate_range(starts_at: int, ends_at: int) -> None:
-    """Map the shared ``starts_at < ends_at`` rule (same wording as the API) to the web's 400 page."""
-    try:
-        validate_vacation_range(starts_at, ends_at)
-    except VacationRangeError as exc:
-        raise HTTPException(400, str(exc)) from None
 
 
 def _parse_ts(value: str) -> int:
@@ -99,7 +91,7 @@ def create_vacation(
         ends_ts = _parse_ts(ends_at)
     except ValueError as exc:
         raise HTTPException(400, "Invalid date format. Use YYYY-MM-DD or Unix timestamp.") from exc
-    _validate_range(starts_ts, ends_ts)
+    require_valid_vacation_range(starts_ts, ends_ts)
     repo.add_vacation_window(
         starts_at=starts_ts,
         ends_at=ends_ts,
@@ -138,7 +130,7 @@ def update_vacation(
         ends_ts = _parse_ts(ends_at)
     except ValueError as exc:
         raise HTTPException(400, "Invalid date format. Use YYYY-MM-DD or Unix timestamp.") from exc
-    _validate_range(starts_ts, ends_ts)
+    require_valid_vacation_range(starts_ts, ends_ts)
     repo.update_vacation_window(
         window_id,
         starts_at=starts_ts,

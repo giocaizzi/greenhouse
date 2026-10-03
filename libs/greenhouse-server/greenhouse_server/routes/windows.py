@@ -8,7 +8,7 @@ no windows may water at any hour (quiet hours still apply).
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, status
 
 from greenhouse_core.schemas import (
     CreateIrrigationWindowRequest,
@@ -17,18 +17,9 @@ from greenhouse_core.schemas import (
     SuccessResponse,
     UpdateIrrigationWindowRequest,
 )
-from greenhouse_server.deps import RepoDep, require_cluster, require_window_in_cluster
-from greenhouse_server.services.windows import WindowValidationError, validate_window
+from greenhouse_server.deps import RepoDep, require_cluster, require_valid_window, require_window_in_cluster
 
 router = APIRouter(tags=["windows"])
-
-
-def _validate_window(start_hour: int, end_hour: int, weekday_mask: int) -> None:
-    """Map the shared window rule to the API's 400."""
-    try:
-        validate_window(start_hour, end_hour, weekday_mask)
-    except WindowValidationError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from None
 
 
 @router.get(
@@ -83,7 +74,7 @@ def add_window(cluster_id: int, request: CreateIrrigationWindowRequest, repo: Re
             are out of range.
     """
     require_cluster(repo, cluster_id)
-    _validate_window(request.start_hour, request.end_hour, request.weekday_mask)
+    require_valid_window(request.start_hour, request.end_hour, request.weekday_mask)
     row = repo.add_irrigation_window(
         cluster_id,
         start_hour=request.start_hour,
@@ -120,7 +111,7 @@ def update_window(cluster_id: int, window_id: int, request: UpdateIrrigationWind
     effective_start = request.start_hour if request.start_hour is not None else row.start_hour
     effective_end = request.end_hour if request.end_hour is not None else row.end_hour
     effective_mask = request.weekday_mask if request.weekday_mask is not None else row.weekday_mask
-    _validate_window(effective_start, effective_end, effective_mask)
+    require_valid_window(effective_start, effective_end, effective_mask)
     updated = repo.update_irrigation_window(window_id, **request.model_dump(exclude_none=True))
     repo.commit()
     return IrrigationWindowResponse.model_validate(updated)
