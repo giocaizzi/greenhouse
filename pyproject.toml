@@ -110,6 +110,7 @@ extend-select = [
     "EXE",  # flake8-executable
     "PLR0913",  # too-many-arguments (frozen handler signatures excluded per directory)
     "PLR0917",  # too-many-positional-arguments (preview, explicit; same exclusions)
+    "FBT",  # boolean traps (Typer commands excluded: --flag options are the CLI contract)
     "ARG",  # unused arguments (FastAPI web handlers keep `request`: per-file exclusion)
     "S",  # flake8-bandit: intended uses carry a reasoned noqa; real findings → REFACTOR_NOTES
     "PLR2004",  # magic-value-comparison: thresholds live in constants.py (CLAUDE.md invariant 5)
@@ -156,28 +157,35 @@ indent-style = "space"
 "scripts/*" = ["E402"]  # intentional sys.path before import
 # Frozen safety net: tests exceed size limits and poke privates; never edited to satisfy a lint rule.
 "tests/**" = [
-    "C90", "PLR0911", "PLR0912", "PLR0915", "PLR0904", "PLR0914", "PLR1702", "SIM", "RET", "PTH", "PERF", "PLW", "FURB", "N", "BLE", "RUF", "PLR2004", "S", "ARG", "PLR0913", "PLR0917", "ERA001", "SLF001",
+    "C90", "PLR0911", "PLR0912", "PLR0915", "PLR0904", "PLR0914", "PLR1702", "SIM", "RET", "PTH", "PERF", "PLW", "FURB", "N", "BLE", "RUF", "PLR2004", "S", "ARG", "PLR0913", "PLR0917", "FBT", "ERA001", "SLF001",
 ]
-"refactor/**" = ["C90", "PLR0911", "PLR0912", "PLR0915", "PLR0914", "PLR1702", "PERF", "PLW", "RUF005", "PLR2004", "S"]  # refactor tooling scripts, not shipped
+"refactor/**" = ["C90", "PLR0911", "PLR0912", "PLR0915", "PLR0914", "PLR1702", "PERF", "PLW", "RUF005", "PLR2004", "S", "FBT"]  # refactor tooling scripts, not shipped
 "libs/greenhouse-core/greenhouse_core/migrations/versions/*" = ["PLR0915"]  # generated Alembic DDL, out of scope
 # Frozen handler signatures (not a ratchet): FastAPI API/web handlers and Typer commands declare one
 # parameter per query/form field or CLI option (the OpenAPI / MCP / --help contract), and web pages
 # keep `request: Request` even when unused.
 "libs/greenhouse-server/greenhouse_server/routes/*" = ["PLR0913", "PLR0917"]
 "libs/greenhouse-server/greenhouse_server/web/routes/*" = ["ARG001", "PLR0913", "PLR0917"]
-"libs/greenhouse-cli/greenhouse_cli/commands/*" = ["PLR0913", "PLR0917"]
+"libs/greenhouse-cli/greenhouse_cli/commands/*" = ["FBT", "PLR0913", "PLR0917"]
 # Ratchet offenders (baseline refactor-gate1 + lint ratchet, refactor/40-lint-ratchet.md); each list only shrinks.
-"libs/greenhouse-cli/greenhouse_cli/client.py" = ["PLR0904", "PLR0913", "PLR0917"]
+"libs/greenhouse-cli/greenhouse_cli/client.py" = ["FBT001", "FBT002", "PLR0904", "PLR0913", "PLR0917"]
 "libs/greenhouse-cli/greenhouse_cli/commands/auth.py" = ["PLR0915"]
 "libs/greenhouse-cli/greenhouse_cli/commands/operations.py" = ["C901", "PLR0915"]
-"libs/greenhouse-cli/greenhouse_cli/tui/screens/base.py" = ["PLR0913", "PLR0917"]
-"libs/greenhouse-cli/greenhouse_cli/tui/screens/cluster.py" = ["PLR0904", "PLR0915", "PLR1702"]
+"libs/greenhouse-cli/greenhouse_cli/tui/__init__.py" = ["FBT001", "FBT002"]
+"libs/greenhouse-cli/greenhouse_cli/tui/app.py" = ["FBT001", "FBT002"]
+"libs/greenhouse-cli/greenhouse_cli/tui/formatting.py" = ["FBT001", "FBT002"]
+"libs/greenhouse-cli/greenhouse_cli/tui/render.py" = ["FBT001", "FBT003"]
+"libs/greenhouse-cli/greenhouse_cli/tui/screens/alerts.py" = ["FBT003"]
+"libs/greenhouse-cli/greenhouse_cli/tui/screens/base.py" = ["FBT001", "PLR0913", "PLR0917"]
+"libs/greenhouse-cli/greenhouse_cli/tui/screens/cluster.py" = ["FBT001", "FBT003", "PLR0904", "PLR0915", "PLR1702"]
 "libs/greenhouse-cli/greenhouse_cli/tui/screens/forms.py" = ["C901", "PLR0911", "PLR0912", "PLR1702"]
-"libs/greenhouse-cli/greenhouse_cli/tui/widgets.py" = ["PLR0913", "PLR0915", "PLR0917"]
+"libs/greenhouse-cli/greenhouse_cli/tui/screens/modals.py" = ["FBT001", "FBT002"]
+"libs/greenhouse-cli/greenhouse_cli/tui/sprites.py" = ["FBT001", "FBT002"]
+"libs/greenhouse-cli/greenhouse_cli/tui/widgets.py" = ["FBT001", "FBT002", "PLR0913", "PLR0915", "PLR0917"]
 "libs/greenhouse-core/greenhouse_core/devices/__init__.py" = ["RUF022"]
 "libs/greenhouse-core/greenhouse_core/devices/gateway.py" = ["BLE001", "PLR0915"]
 "libs/greenhouse-core/greenhouse_core/devices/irrigators/ik10pw.py" = ["BLE001", "C901", "PLR0911", "PLR0915", "PLR1702", "RUF022", "S110", "SIM105"]
-"libs/greenhouse-core/greenhouse_core/devices/irrigators/tuya_generic.py" = ["ARG002", "BLE001", "C901", "PLR0912", "PLR1702", "S110"]
+"libs/greenhouse-core/greenhouse_core/devices/irrigators/tuya_generic.py" = ["ARG002", "BLE001", "C901", "FBT001", "FBT003", "PLR0912", "PLR1702", "S110"]
 "libs/greenhouse-core/greenhouse_core/devices/registry.py" = ["N818"]  # UnknownDeviceModel: public name (WP8-owned file)
 "libs/greenhouse-core/greenhouse_core/devices/sensors/tr301z.py" = ["ARG002", "RUF022"]
 "libs/greenhouse-core/greenhouse_core/devices/sensors/tuya_generic.py" = ["ARG002", "BLE001"]
@@ -185,18 +193,22 @@ indent-style = "space"
 "libs/greenhouse-core/greenhouse_core/logic/engine.py" = ["ARG002", "C901", "PLR0911", "PLR0912", "PLR0913", "PLR0914", "PLR0915", "PLR2004", "RUF003", "RUF046"]
 "libs/greenhouse-core/greenhouse_core/logic/fallback.py" = ["PLR0913"]
 "libs/greenhouse-core/greenhouse_core/logic/timing.py" = ["SIM102"]
-"libs/greenhouse-core/greenhouse_core/repository.py" = ["PLR0904", "PLR0913", "PLR0917"]
+"libs/greenhouse-core/greenhouse_core/repository.py" = ["FBT001", "FBT002", "PLR0904", "PLR0913", "PLR0917"]
 "libs/greenhouse-core/greenhouse_core/sync.py" = ["BLE001", "EXE002", "PLR0915", "PLR1702", "S110", "SIM108"]  # EXE002: stray +x bit, WP8-owned
 "libs/greenhouse-server/greenhouse_server/deps.py" = ["PLR0913", "PLR0917"]
+"libs/greenhouse-server/greenhouse_server/routes/scheduler.py" = ["FBT001", "FBT003"]
+"libs/greenhouse-server/greenhouse_server/scheduler.py" = ["FBT001", "FBT003"]
 "libs/greenhouse-server/greenhouse_server/services/alerts.py" = ["PLR0913"]
 "libs/greenhouse-server/greenhouse_server/services/bulk.py" = ["PLR1702"]
 "libs/greenhouse-server/greenhouse_server/services/forecast.py" = ["PLR0914"]
 "libs/greenhouse-server/greenhouse_server/services/health_monitor.py" = ["PLR0911", "PLR0913"]
 "libs/greenhouse-server/greenhouse_server/services/inventory.py" = ["PLR0913"]
-"libs/greenhouse-server/greenhouse_server/services/irrigation.py" = ["PLR0913", "PLR0915", "PLR0917"]
+"libs/greenhouse-server/greenhouse_server/services/irrigation.py" = ["FBT001", "FBT002", "PLR0913", "PLR0915", "PLR0917"]
 "libs/greenhouse-server/greenhouse_server/services/manual_control.py" = ["PLR0913"]
 "libs/greenhouse-server/greenhouse_server/services/pump_watcher.py" = ["PLR0913", "PLR0915"]
+"libs/greenhouse-server/greenhouse_server/services/system_health.py" = ["FBT001"]
 "libs/greenhouse-server/greenhouse_server/web/filters.py" = ["PLR0912"]
+"libs/greenhouse-server/greenhouse_server/web/routes/analytics.py" = ["FBT001", "FBT003"]
 
 [tool.importlinter]
 root_packages = ["greenhouse_core", "greenhouse_server", "greenhouse_cli"]
