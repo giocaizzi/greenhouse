@@ -103,6 +103,7 @@ extend-select = [
     "RET",  # flake8-return
     "PTH",  # flake8-use-pathlib
     "PERF",  # perflint
+    "PIE",  # flake8-pie
     "PLW",  # pylint warnings (PLW0717 is preview and not listed: report-only)
     "ERA",  # eradicate: commented-out code
     "PGH",  # pygrep-hooks: blanket noqa / type: ignore without codes

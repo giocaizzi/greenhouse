@@ -22,7 +22,7 @@ def _is_html_request(request: Request) -> bool:
     # as HTML. /mcp is a machine endpoint — MCP clients (and the auth gate in
     # front of it) must always see structured JSON errors, never an HTML page.
     path = request.url.path
-    return not (path.startswith("/api/") or path.startswith("/mcp"))
+    return not path.startswith(("/api/", "/mcp"))
 
 
 def _error_template(request: Request) -> str:
