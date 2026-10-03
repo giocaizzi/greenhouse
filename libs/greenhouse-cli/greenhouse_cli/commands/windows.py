@@ -6,7 +6,7 @@ from typing import Annotated
 
 import typer
 
-from greenhouse_cli.commands._helpers import call, output
+from greenhouse_cli.commands._helpers import ClusterOpt, YesOpt, call, output
 from greenhouse_cli.constants import ALL_WEEKDAYS
 
 windows_app = typer.Typer(
@@ -18,7 +18,7 @@ windows_app = typer.Typer(
 @windows_app.command("list")
 def windows_list(
     ctx: typer.Context,
-    cluster: Annotated[int, typer.Option(help="Cluster ID")],
+    cluster: ClusterOpt,
 ):
     """List configured windows for a cluster. Empty list = global defaults apply."""
     output(call(ctx, lambda c: c.list_windows(cluster)))
@@ -27,7 +27,7 @@ def windows_list(
 @windows_app.command("add")
 def windows_add(
     ctx: typer.Context,
-    cluster: Annotated[int, typer.Option(help="Cluster ID")],
+    cluster: ClusterOpt,
     start_hour: Annotated[int, typer.Option("--start-hour", min=0, max=23, help="Local-time start hour")],
     end_hour: Annotated[int, typer.Option("--end-hour", min=0, max=23, help="Local-time end hour (exclusive)")],
     weekday_mask: Annotated[
@@ -87,7 +87,7 @@ def windows_delete(
     ctx: typer.Context,
     window_id: Annotated[int, typer.Argument(help="Window ID")],
     cluster: Annotated[int, typer.Option(help="Cluster the window belongs to")],
-    yes: Annotated[bool, typer.Option("--yes", "-y", help="Skip confirmation prompt")] = False,
+    yes: YesOpt = False,
 ):
     """Remove an irrigation window."""
     if not yes:

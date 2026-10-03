@@ -4,7 +4,7 @@ from typing import Annotated
 
 import typer
 
-from greenhouse_cli.commands._helpers import call, output
+from greenhouse_cli.commands._helpers import ClusterFilterOpt, ClusterOpt, YesOpt, call, output
 
 plant_app = typer.Typer(help="Manage plants", no_args_is_help=True)
 
@@ -13,7 +13,7 @@ plant_app = typer.Typer(help="Manage plants", no_args_is_help=True)
 def plant_add(
     ctx: typer.Context,
     species: Annotated[str, typer.Argument(help="Species name")],
-    cluster: Annotated[int, typer.Option(help="Cluster ID")],
+    cluster: ClusterOpt,
     category: Annotated[str | None, typer.Option()] = None,
     water_needs: Annotated[str | None, typer.Option(help="low/medium/high")] = None,
     light_needs: Annotated[str | None, typer.Option(help="low/medium/high")] = None,
@@ -45,7 +45,7 @@ def plant_add(
 @plant_app.command("list")
 def plant_list(
     ctx: typer.Context,
-    cluster: Annotated[int | None, typer.Option(help="Filter by cluster ID")] = None,
+    cluster: ClusterFilterOpt = None,
 ):
     """List plants."""
     if cluster:
@@ -123,7 +123,7 @@ def plant_delete(
     ctx: typer.Context,
     plant_id: Annotated[int, typer.Argument(help="Plant ID")],
     cluster: Annotated[int, typer.Option(help="Cluster the plant belongs to")],
-    yes: Annotated[bool, typer.Option("--yes", "-y", help="Skip confirmation prompt")] = False,
+    yes: YesOpt = False,
 ):
     """Delete a plant and its health / learning history."""
     if not yes:

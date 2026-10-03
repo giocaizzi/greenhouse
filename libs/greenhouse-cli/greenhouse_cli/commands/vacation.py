@@ -6,7 +6,7 @@ from typing import Annotated
 
 import typer
 
-from greenhouse_cli.commands._helpers import call, output
+from greenhouse_cli.commands._helpers import YesOpt, call, output
 
 vacation_app = typer.Typer(help="Manage vacation windows (engine holds during these)", no_args_is_help=True)
 
@@ -73,7 +73,7 @@ def vacation_update(
 def vacation_delete(
     ctx: typer.Context,
     window_id: Annotated[int, typer.Argument(help="Vacation window ID")],
-    yes: Annotated[bool, typer.Option("--yes", "-y", help="Skip confirmation prompt")] = False,
+    yes: YesOpt = False,
 ):
     """Remove a vacation window."""
     if not yes:

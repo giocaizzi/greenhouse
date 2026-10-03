@@ -5,17 +5,17 @@ from typing import Annotated
 
 import typer
 
-from greenhouse_cli.commands._helpers import call, output
+from greenhouse_cli.commands._helpers import ClusterArg, YesOpt, call, output
 
 
-def status(ctx: typer.Context, cluster: Annotated[int, typer.Argument(help="Cluster ID")]):
+def status(ctx: typer.Context, cluster: ClusterArg):
     """Full cluster overview: sensors, config, decision, alerts."""
     output(call(ctx, lambda c: c.status(cluster)))
 
 
 def irrigate(
     ctx: typer.Context,
-    cluster: Annotated[int, typer.Argument(help="Cluster ID")],
+    cluster: ClusterArg,
     temp: Annotated[float | None, typer.Option(help="Override temperature (skips sync + weather)")] = None,
     dry_run: Annotated[bool, typer.Option("--dry-run", help="Analyze only, don't execute")] = False,
     no_sync: Annotated[bool, typer.Option("--no-sync", help="Skip sensor sync")] = False,
@@ -48,7 +48,7 @@ def check(
             raise typer.Exit(1)
 
 
-def monitor(ctx: typer.Context, cluster: Annotated[int, typer.Argument(help="Cluster ID")]):
+def monitor(ctx: typer.Context, cluster: ClusterArg):
     """Raw moisture check for sensor-only clusters."""
     data = call(ctx, lambda c: c.monitor(cluster))
     output(data)
@@ -64,14 +64,14 @@ def sync(
     output(call(ctx, lambda c: c.sync(hours=hours)))
 
 
-def learn(ctx: typer.Context, cluster: Annotated[int, typer.Argument(help="Cluster ID")]):
+def learn(ctx: typer.Context, cluster: ClusterArg):
     """Learning report: efficiency analysis and pattern detection."""
     output(call(ctx, lambda c: c.learn(cluster)))
 
 
 def history(
     ctx: typer.Context,
-    cluster: Annotated[int, typer.Argument(help="Cluster ID")],
+    cluster: ClusterArg,
     hours: Annotated[int, typer.Option(help="Hours of history")] = 24,
     limit: Annotated[int, typer.Option(help="Max entries per section")] = 50,
 ):
@@ -81,7 +81,7 @@ def history(
 
 def stats(
     ctx: typer.Context,
-    cluster: Annotated[int, typer.Argument(help="Cluster ID")],
+    cluster: ClusterArg,
     days: Annotated[int, typer.Option(help="Days to analyze")] = 7,
     export: Annotated[str | None, typer.Option(help="Export CSV to file")] = None,
 ):
@@ -102,7 +102,7 @@ def health(ctx: typer.Context):
 
 def stop_all(
     ctx: typer.Context,
-    yes: Annotated[bool, typer.Option("--yes", "-y", help="Skip confirmation prompt")] = False,
+    yes: YesOpt = False,
 ):
     """Emergency kill switch: stop every irrigator in the system."""
     if not yes:

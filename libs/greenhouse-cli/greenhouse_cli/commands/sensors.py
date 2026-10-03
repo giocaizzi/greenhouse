@@ -4,7 +4,7 @@ from typing import Annotated
 
 import typer
 
-from greenhouse_cli.commands._helpers import call, output
+from greenhouse_cli.commands._helpers import ClusterFilterOpt, ClusterOpt, YesOpt, call, output
 
 sensor_app = typer.Typer(help="Manage sensors", no_args_is_help=True)
 
@@ -12,7 +12,7 @@ sensor_app = typer.Typer(help="Manage sensors", no_args_is_help=True)
 @sensor_app.command("add")
 def sensor_add(
     ctx: typer.Context,
-    cluster: Annotated[int, typer.Option(help="Cluster ID")],
+    cluster: ClusterOpt,
     device_id: Annotated[str, typer.Option(help="Tuya device ID")],
     name: Annotated[str, typer.Option(help="Sensor name")],
     type: Annotated[str, typer.Option(help="soil_moisture, temp_humidity, or light")],
@@ -27,7 +27,7 @@ def sensor_add(
 @sensor_app.command("list")
 def sensor_list(
     ctx: typer.Context,
-    cluster: Annotated[int | None, typer.Option(help="Filter by cluster ID")] = None,
+    cluster: ClusterFilterOpt = None,
 ):
     """List sensors."""
     if cluster:
@@ -63,7 +63,7 @@ def sensor_delete(
     ctx: typer.Context,
     id: Annotated[int, typer.Argument(help="Sensor ID")],
     cluster: Annotated[int, typer.Option(help="Cluster the sensor belongs to")],
-    yes: Annotated[bool, typer.Option("--yes", "-y", help="Skip confirmation prompt")] = False,
+    yes: YesOpt = False,
 ):
     """Delete a sensor. Historic readings stay attached to the cluster."""
     if not yes:

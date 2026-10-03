@@ -4,7 +4,7 @@ from typing import Annotated
 
 import typer
 
-from greenhouse_cli.commands._helpers import call, output
+from greenhouse_cli.commands._helpers import ClusterArg, ClusterOpt, YesOpt, call, output
 
 irrigator_app = typer.Typer(help="Manage and control irrigators", no_args_is_help=True)
 
@@ -29,7 +29,7 @@ def _device_config(device_ip: str | None, local_key: str | None) -> dict[str, st
 @irrigator_app.command("add")
 def irrigator_add(
     ctx: typer.Context,
-    cluster: Annotated[int, typer.Option(help="Cluster ID")],
+    cluster: ClusterOpt,
     device_id: Annotated[str, typer.Option(help="Tuya device ID")],
     name: Annotated[str, typer.Option(help="Irrigator name")],
     type: Annotated[str, typer.Option(help="tuya_cloud or tuya_local")],
@@ -68,7 +68,7 @@ def irrigator_list(ctx: typer.Context):
 @irrigator_app.command("show")
 def irrigator_show(
     ctx: typer.Context,
-    cluster: Annotated[int, typer.Argument(help="Cluster ID")],
+    cluster: ClusterArg,
 ):
     """Show the cluster's irrigator. Exits non-zero if the cluster has none."""
     output(call(ctx, lambda c: c.get_irrigator(cluster)))
@@ -104,7 +104,7 @@ def irrigator_log_manual(
 @irrigator_app.command("update")
 def irrigator_update(
     ctx: typer.Context,
-    cluster: Annotated[int, typer.Argument(help="Cluster ID")],
+    cluster: ClusterArg,
     name: Annotated[str | None, typer.Option(help="New irrigator name")] = None,
     type: Annotated[str | None, typer.Option(help="tuya_cloud or tuya_local")] = None,
     device_ip: Annotated[str | None, typer.Option(help="Local IP")] = None,
@@ -140,8 +140,8 @@ def irrigator_update(
 @irrigator_app.command("delete")
 def irrigator_delete(
     ctx: typer.Context,
-    cluster: Annotated[int, typer.Argument(help="Cluster ID")],
-    yes: Annotated[bool, typer.Option("--yes", "-y", help="Skip confirmation prompt")] = False,
+    cluster: ClusterArg,
+    yes: YesOpt = False,
 ):
     """Delete the cluster's irrigator. Historic events stay attached to the cluster."""
     if not yes:

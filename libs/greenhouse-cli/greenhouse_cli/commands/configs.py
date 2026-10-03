@@ -12,7 +12,7 @@ from typing import Annotated
 
 import typer
 
-from greenhouse_cli.commands._helpers import call, output
+from greenhouse_cli.commands._helpers import ClusterOpt, call, output
 
 config_app = typer.Typer(help="Irrigation configuration", no_args_is_help=True)
 global_app = typer.Typer(help="Global irrigation defaults (inherited by every cluster)", no_args_is_help=True)
@@ -22,7 +22,7 @@ config_app.add_typer(global_app, name="global")
 @config_app.command("set")
 def config_set(
     ctx: typer.Context,
-    cluster: Annotated[int, typer.Option(help="Cluster ID")],
+    cluster: ClusterOpt,
     mode: Annotated[str | None, typer.Option(help="manual, schedule, or smart")] = None,
     minutes: Annotated[int | None, typer.Option(help="Duration in minutes")] = None,
     interval: Annotated[int | None, typer.Option(help="Interval in hours")] = None,
@@ -53,13 +53,13 @@ def config_set(
 
 
 @config_app.command("get")
-def config_get(ctx: typer.Context, cluster: Annotated[int, typer.Option(help="Cluster ID")]):
+def config_get(ctx: typer.Context, cluster: ClusterOpt):
     """Get a cluster's declared irrigation config (nulls = inherited)."""
     output(call(ctx, lambda c: c.get_config(cluster)))
 
 
 @config_app.command("effective")
-def config_effective(ctx: typer.Context, cluster: Annotated[int, typer.Option(help="Cluster ID")]):
+def config_effective(ctx: typer.Context, cluster: ClusterOpt):
     """Show the merged config: each field's resolved value and its source layer."""
     output(call(ctx, lambda c: c.get_effective_config(cluster)))
 

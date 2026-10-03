@@ -3,13 +3,20 @@
 import json
 import os
 from collections.abc import Callable
-from typing import Any
+from typing import Annotated, Any
 
 import typer
 from rich import print_json
 
 from greenhouse_cli.client import IrrigationClient, ServerError
 from greenhouse_cli.constants import DEFAULT_SERVER_URL
+
+# Typer parameter types shared by several commands; Typer copies the ParameterInfo per use, so
+# reusing one alias yields the same option/argument (and the same --help line) as writing it out.
+ClusterArg = Annotated[int, typer.Argument(help="Cluster ID")]
+ClusterOpt = Annotated[int, typer.Option(help="Cluster ID")]
+ClusterFilterOpt = Annotated[int | None, typer.Option(help="Filter by cluster ID")]
+YesOpt = Annotated[bool, typer.Option("--yes", "-y", help="Skip confirmation prompt")]
 
 
 def server_url(ctx: typer.Context) -> str:
