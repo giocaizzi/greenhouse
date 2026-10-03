@@ -385,7 +385,7 @@ def detect_conflicts(
     sensors = db.get_sensors_in_cluster(cluster_id)
     moisture = _latest_moisture_by_sensor(db, sensors)
     if len(moisture) < CONFLICT_MIN_MOISTURE_SENSORS:
-        return []  # quirk preserved: the light / humidity checks are skipped too
+        return []  # known quirk: the light / humidity checks share this gate and are skipped too
     alerts = _overwater_conflict_alerts(sensors, moisture, profiles, plant_care)
     plants_by_id = {p.id: p for p in db.get_plants_in_cluster(cluster_id)}
     alerts.extend(_low_light_alerts(db, plant_db, sensors, plants_by_id))

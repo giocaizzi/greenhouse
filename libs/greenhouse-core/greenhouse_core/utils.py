@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 from greenhouse_core.constants import NIGHT_LUX_THRESHOLD, SEASONAL_LIGHT_FACTOR_BY_MONTH
 
 # The seasonal table (~45°N, Milano) and the night-lux cut-off live in constants;
-# NIGHT_LUX_THRESHOLD stays importable from here (pinned import surface).
+# NIGHT_LUX_THRESHOLD is also re-exported here for `from greenhouse_core.utils import` callers.
 
 
 def seasonal_light_factor(month: int | None = None) -> float:

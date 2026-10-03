@@ -88,7 +88,7 @@ class IrrigationRepository:
 
     # ── Unit of work ──────────────────────────────────────────────────────────
     # The one spelling for transaction control outside this module: handlers commit CRUD,
-    # a service commits only when a side effect must follow a durable write (OD2).
+    # a service commits only when a side effect must follow a durable write.
 
     def commit(self) -> None:
         """Commit the current transaction on the repository's session."""
