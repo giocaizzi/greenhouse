@@ -144,8 +144,7 @@ def update_vacation(
 
 @router.post("/vacation/{window_id}/delete")
 def delete_vacation(request: Request, window_id: int, repo: RepoDep):
-    deleted = repo.delete_vacation_window(window_id)
-    if not deleted:
-        raise HTTPException(404, "Vacation window not found")
+    require_vacation_window(repo, window_id)
+    repo.delete_vacation_window(window_id)
     repo.commit()
     return RedirectResponse(url="/vacation", status_code=303)

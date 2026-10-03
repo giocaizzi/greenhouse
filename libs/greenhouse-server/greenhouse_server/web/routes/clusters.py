@@ -71,14 +71,13 @@ def update_cluster(
     location: str = Form(""),
     environment: str = Form("indoor"),
 ):
-    updated = repo.update_cluster(
+    require_cluster(repo, cluster_id)
+    repo.update_cluster(
         cluster_id,
         name=name,
         location=location or None,
         environment=environment,
     )
-    if not updated:
-        raise HTTPException(404, "Cluster not found")
     repo.commit()
     return RedirectResponse(url=f"/clusters/{cluster_id}", status_code=303)
 
@@ -86,9 +85,8 @@ def update_cluster(
 @router.delete("/clusters/{cluster_id}", response_class=HTMLResponse)
 def delete_cluster(cluster_id: int, repo: RepoDep):
     """HTMX-targeted delete; returns an empty HTML body so the row is removed."""
-    deleted = repo.delete_cluster(cluster_id)
-    if not deleted:
-        raise HTTPException(404, "Cluster not found")
+    require_cluster(repo, cluster_id)
+    repo.delete_cluster(cluster_id)
     repo.commit()
     return HTMLResponse("")
 
