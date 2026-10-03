@@ -111,7 +111,7 @@
   "    </h3>",
   "  </div>",
   "  <div class=\"card__body\">",
-  "    <p>weekday_mask values must be 1, 2, 4, 8, 16, 32, or 64.</p>",
+  "    <p>weekday_mask values must be 1, 2, 4, 8, 16, 32, or 64</p>",
   "    ",
   "      <div class=\"mt-4\">",
   "        <a href=\"/\" class=\"btn\">",

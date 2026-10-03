@@ -1,4 +1,4 @@
-"""Irrigation statistics for a cluster (and the legacy CSV export)."""
+"""Irrigation statistics for a cluster."""
 
 from __future__ import annotations
 
@@ -8,12 +8,9 @@ from typing import TYPE_CHECKING, TypedDict
 
 from greenhouse_core.constants import SECONDS_PER_DAY
 from greenhouse_core.repository import IrrigationRepository
-from greenhouse_core.utils import format_timestamp
 
 if TYPE_CHECKING:
-    from _csv import Writer as _CsvWriter
-
-    from greenhouse_core.models import IrrigationEvent, Irrigator
+    from greenhouse_core.models import IrrigationEvent
 
 
 class IrrigationRecord(TypedDict):
@@ -109,46 +106,3 @@ def get_irrigation_stats(
         stats["frequency_per_day"] = len(stats["irrigations"]) / days
 
     return stats
-
-
-def _csv_event_row(event: IrrigationEvent, irrigator: Irrigator) -> list[object]:
-    """One CSV row: raw timestamp, local date and time, then the event fields."""
-    date_str = format_timestamp(event.timestamp, fmt="%Y-%m-%d")
-    time_str = format_timestamp(event.timestamp, fmt="%H:%M:%S")
-    return [
-        event.timestamp,
-        date_str,
-        time_str,
-        irrigator.name,
-        event.action,
-        event.duration_minutes or "",
-        event.triggered_by,
-        event.notes or "",
-    ]
-
-
-def _write_event_rows(writer: _CsvWriter, events: list[IrrigationEvent], irrigator: Irrigator, cutoff: int) -> None:
-    """Write the rows of the events inside the window, in repository order."""
-    for event in events:
-        if event.timestamp < cutoff:
-            continue
-        writer.writerow(_csv_event_row(event, irrigator))
-
-
-def export_csv(db: IrrigationRepository, cluster_id: int, days: int, output_path: str) -> None:
-    """Export irrigation events to CSV."""
-    import csv
-
-    cutoff = int(time.time()) - (days * SECONDS_PER_DAY)
-    irrigator = db.get_irrigator_for_cluster(cluster_id)
-
-    with open(output_path, "w", newline="") as f:
-        writer = csv.writer(f)
-        writer.writerow(
-            ["timestamp", "date", "time", "irrigator", "action", "duration_minutes", "triggered_by", "notes"]
-        )
-
-        if irrigator is not None:
-            _write_event_rows(writer, db.get_recent_events(irrigator.id, hours=days * 24), irrigator, cutoff)
-
-    print(f"✅ Exported to {output_path}")

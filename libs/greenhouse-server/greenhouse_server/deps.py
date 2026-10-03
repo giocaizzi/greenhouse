@@ -7,6 +7,7 @@ from fastapi import Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from greenhouse_core.devices import DeviceGateway, DeviceRegistry
+from greenhouse_core.models import Alert, Cluster, IrrigationWindow, Irrigator, Plant, Sensor, VacationWindow
 from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.services.cluster import ClusterService
@@ -73,17 +74,90 @@ def get_plant_db(request: Request) -> PlantDatabase:
     return request.app.state.plant_db
 
 
-# --- Helpers ---
+# --- Entity lookups (404) ---
+# One helper and one detail string per entity, shared by the JSON API and the web UI
+# (the web's HTML error page shows the same detail). A "… in cluster" lookup also
+# 404s when the row exists but belongs to another cluster.
 
 
-def require_cluster(repo: IrrigationRepository, cluster_id: int):
-    """Fetch a cluster or raise 404."""
-    from greenhouse_core.models import Cluster
-
-    cluster: Cluster | None = repo.get_cluster(cluster_id)
+def require_cluster(repo: IrrigationRepository, cluster_id: int) -> Cluster:
+    """Fetch a cluster or raise 404 "Cluster not found"."""
+    cluster = repo.get_cluster(cluster_id)
     if not cluster:
         raise HTTPException(status_code=404, detail="Cluster not found")
     return cluster
+
+
+def require_cluster_irrigator(repo: IrrigationRepository, cluster_id: int) -> Irrigator:
+    """Fetch the cluster's irrigator or raise 404 "Cluster has no irrigator"."""
+    irrigator = repo.get_irrigator_for_cluster(cluster_id)
+    if not irrigator:
+        raise HTTPException(status_code=404, detail="Cluster has no irrigator")
+    return irrigator
+
+
+def require_irrigator(repo: IrrigationRepository, irrigator_id: int) -> Irrigator:
+    """Fetch an irrigator by id or raise 404 "Irrigator not found"."""
+    irrigator = repo.get_irrigator(irrigator_id)
+    if not irrigator:
+        raise HTTPException(status_code=404, detail="Irrigator not found")
+    return irrigator
+
+
+def require_plant(repo: IrrigationRepository, plant_id: int) -> Plant:
+    """Fetch a plant by id or raise 404 "Plant not found"."""
+    plant = repo.get_plant(plant_id)
+    if not plant:
+        raise HTTPException(status_code=404, detail="Plant not found")
+    return plant
+
+
+def require_plant_in_cluster(repo: IrrigationRepository, cluster_id: int, plant_id: int) -> Plant:
+    """Fetch one of the cluster's plants or raise 404 "Plant not found in cluster"."""
+    plant = repo.get_plant(plant_id)
+    if not plant or plant.cluster_id != cluster_id:
+        raise HTTPException(status_code=404, detail="Plant not found in cluster")
+    return plant
+
+
+def require_sensor(repo: IrrigationRepository, sensor_id: int) -> Sensor:
+    """Fetch a sensor by id or raise 404 "Sensor not found"."""
+    sensor = repo.get_sensor(sensor_id)
+    if sensor is None:
+        raise HTTPException(status_code=404, detail="Sensor not found")
+    return sensor
+
+
+def require_sensor_in_cluster(repo: IrrigationRepository, cluster_id: int, sensor_id: int) -> Sensor:
+    """Fetch one of the cluster's sensors or raise 404 "Sensor not found in cluster"."""
+    sensor = repo.get_sensor(sensor_id)
+    if not sensor or sensor.cluster_id != cluster_id:
+        raise HTTPException(status_code=404, detail="Sensor not found in cluster")
+    return sensor
+
+
+def require_window_in_cluster(repo: IrrigationRepository, cluster_id: int, window_id: int) -> IrrigationWindow:
+    """Fetch one of the cluster's irrigation windows or raise 404 "Window not found in cluster"."""
+    window = repo.get_irrigation_window(window_id)
+    if window is None or window.cluster_id != cluster_id:
+        raise HTTPException(status_code=404, detail="Window not found in cluster")
+    return window
+
+
+def require_vacation_window(repo: IrrigationRepository, window_id: int) -> VacationWindow:
+    """Fetch a vacation window or raise 404 "Vacation window not found"."""
+    window = repo.get_vacation_window(window_id)
+    if not window:
+        raise HTTPException(status_code=404, detail="Vacation window not found")
+    return window
+
+
+def require_alert(repo: IrrigationRepository, alert_id: int) -> Alert:
+    """Fetch an alert or raise 404 "Alert not found"."""
+    alert = repo.get_alert(alert_id)
+    if not alert:
+        raise HTTPException(status_code=404, detail="Alert not found")
+    return alert
 
 
 # --- Service dependencies ---

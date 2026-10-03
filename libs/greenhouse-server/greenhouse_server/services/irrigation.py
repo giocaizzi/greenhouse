@@ -8,7 +8,6 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Literal, Required, TypedDict, cast
 
 from greenhouse_core.constants import (
-    DEFAULT_SOIL_MOISTURE_TARGET,
     FALLBACK_TEMPERATURE_C,
     LEAK_CHECK_ACTIVITY_SCAN_LIMIT,
     LEAK_CHECK_DELAY_SECONDS,
@@ -24,6 +23,7 @@ from greenhouse_core.devices import DeviceRegistry, UnknownDeviceModel
 from greenhouse_core.logic import IrrigationLogic
 from greenhouse_core.logic.cleaning import clean_readings_desc
 from greenhouse_core.logic.decision import Action, Severity
+from greenhouse_core.logic.plant_needs import moisture_target_range
 from greenhouse_core.models import ENTITY_CLUSTER, ENTITY_IRRIGATOR
 from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_core.repository import IrrigationRepository
@@ -35,7 +35,7 @@ from greenhouse_server.services.sync import SyncService
 from greenhouse_server.services.weather import WeatherClient
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator, Mapping, Sequence
+    from collections.abc import Callable, Iterator, Sequence
 
     from sqlalchemy.orm import Session
 
@@ -469,6 +469,15 @@ class CheckResult(TypedDict, total=False):
     maintenance: list[dict[str, Any]]
 
 
+def check_has_alerts(results: "Sequence[CheckResult]") -> bool:
+    """Whether a check needs attention: any cluster has alerts, maintenance items or thirsty plants.
+
+    The one rule behind ``has_alerts`` in the JSON API (``POST /check``) and the web
+    check result badge, so both surfaces flag the same checks.
+    """
+    return any(r.get("alerts") or r.get("maintenance") or r.get("needs_water") for r in results)
+
+
 def _error_result(reason: str) -> PipelineResult:
     """The pipeline's early-exit shape (``routes/operations`` string-matches "cluster not found")."""
     return {"action": "error", "reason": reason, "confidence": 0}
@@ -531,20 +540,6 @@ def _event_notes(act: _Actuation, soil_note: str) -> str:
 def _latest_soil(readings: "Sequence[CleanedReading]") -> float | None:
     """Newest non-null soil value of a newest-first (cleaned) series, or None."""
     return next((r.soil_moisture for r in readings if r.soil_moisture is not None), None) if readings else None
-
-
-def _monitor_target_band(care: "Mapping[str, Any]") -> tuple[float, float]:
-    """The plant's soil target band for monitoring; any parse failure falls back to (45.0, 65.0).
-
-    Deliberately its own strict two-part parse — not ``moisture_target_range``, which reads
-    three-part strings differently.
-    """
-    target_raw = care.get("soil_moisture_target", DEFAULT_SOIL_MOISTURE_TARGET)
-    try:
-        t_min, t_max = (float(x) for x in target_raw.split("-"))
-    except Exception:
-        t_min, t_max = 45.0, 65.0
-    return t_min, t_max
 
 
 def _soil_status(latest_soil: float | None, t_min: float, t_max: float) -> str:
@@ -837,14 +832,13 @@ class IrrigationService:
 
         return self._actuate(_Actuation(cluster_id, irrigator, adapter, decision, temp, source, sensor_data), result)
 
-    def monitor_cluster(self, cluster_id: int, no_sync: bool = False) -> MonitorResult:
-        """Monitor sensor-only cluster. Returns per-sensor soil status."""
+    def monitor_cluster(self, cluster_id: int) -> MonitorResult:
+        """Monitor a sensor-only cluster: refresh stale sensors (the caller commits), return per-sensor soil status."""
         cluster = self._repo.get_cluster(cluster_id)
         if not cluster:
             return {"cluster_name": "unknown", "sensors": [], "needs_water": []}
 
-        if not no_sync:
-            self._sync.ensure_fresh_and_read(cluster_id)
+        self._sync.ensure_fresh_and_read(cluster_id)
 
         sensors = self._repo.get_sensors_in_cluster(cluster_id)
         plants_by_id = {p.id: p for p in self._repo.get_plants_in_cluster(cluster_id)}
@@ -860,7 +854,7 @@ class IrrigationService:
 
             plant = plants_by_id.get(sensor.plant_id) if sensor.plant_id else None
             care = self._plant_db.get_care_data(species=plant.species if plant else None)
-            t_min, t_max = _monitor_target_band(care)
+            t_min, t_max = moisture_target_range(care)
             status = _soil_status(latest_soil, t_min, t_max)
 
             sensor_statuses.append(

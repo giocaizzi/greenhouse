@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, status
 
-from greenhouse_core.constants import FULL_WEEKDAY_MASK, WINDOW_HOUR_MAX
 from greenhouse_core.schemas import (
     CreateIrrigationWindowRequest,
     IrrigationWindowListResponse,
@@ -17,21 +16,18 @@ from greenhouse_core.schemas import (
     SuccessResponse,
     UpdateIrrigationWindowRequest,
 )
-from greenhouse_server.deps import RepoDep, require_cluster
+from greenhouse_server.deps import RepoDep, require_cluster, require_window_in_cluster
+from greenhouse_server.services.windows import WindowValidationError, validate_window
 
 router = APIRouter(tags=["windows"])
 
 
-def _validate_hours(start: int, end: int) -> None:
-    if not (0 <= start <= WINDOW_HOUR_MAX and 0 <= end <= WINDOW_HOUR_MAX):
-        raise HTTPException(status_code=400, detail="start_hour and end_hour must be 0..23")
-    if start == end:
-        raise HTTPException(status_code=400, detail="start_hour and end_hour must differ")
-
-
-def _validate_weekday_mask(mask: int) -> None:
-    if not (1 <= mask <= FULL_WEEKDAY_MASK):
-        raise HTTPException(status_code=400, detail="weekday_mask must be 1..127 (Mon=1, Sun=64)")
+def _validate_window(start_hour: int, end_hour: int, weekday_mask: int) -> None:
+    """Map the shared window rule to the API's 400."""
+    try:
+        validate_window(start_hour, end_hour, weekday_mask)
+    except WindowValidationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None
 
 
 @router.get(
@@ -86,8 +82,7 @@ def add_window(cluster_id: int, request: CreateIrrigationWindowRequest, repo: Re
             are out of range.
     """
     require_cluster(repo, cluster_id)
-    _validate_hours(request.start_hour, request.end_hour)
-    _validate_weekday_mask(request.weekday_mask)
+    _validate_window(request.start_hour, request.end_hour, request.weekday_mask)
     row = repo.add_irrigation_window(
         cluster_id,
         start_hour=request.start_hour,
@@ -119,15 +114,12 @@ def update_window(cluster_id: int, window_id: int, request: UpdateIrrigationWind
         HTTPException: 404 if the window does not exist or belongs to a
             different cluster, 400 if the resulting hours or mask are invalid.
     """
-    row = repo.get_irrigation_window(window_id)
-    if row is None or row.cluster_id != cluster_id:
-        raise HTTPException(status_code=404, detail="Window not found in cluster")
+    row = require_window_in_cluster(repo, cluster_id, window_id)
     # Validate the effective post-patch values, not the raw partial payload.
     effective_start = request.start_hour if request.start_hour is not None else row.start_hour
     effective_end = request.end_hour if request.end_hour is not None else row.end_hour
     effective_mask = request.weekday_mask if request.weekday_mask is not None else row.weekday_mask
-    _validate_hours(effective_start, effective_end)
-    _validate_weekday_mask(effective_mask)
+    _validate_window(effective_start, effective_end, effective_mask)
     updated = repo.update_irrigation_window(window_id, **request.model_dump(exclude_none=True))
     repo.session.commit()
     return IrrigationWindowResponse.model_validate(updated)
@@ -152,9 +144,7 @@ def delete_window(cluster_id: int, window_id: int, repo: RepoDep):
         HTTPException: 404 if the window does not exist or belongs to a
             different cluster.
     """
-    row = repo.get_irrigation_window(window_id)
-    if row is None or row.cluster_id != cluster_id:
-        raise HTTPException(status_code=404, detail="Window not found in cluster")
+    require_window_in_cluster(repo, cluster_id, window_id)
     repo.delete_irrigation_window(window_id)
     repo.session.commit()
     return SuccessResponse(success=True)

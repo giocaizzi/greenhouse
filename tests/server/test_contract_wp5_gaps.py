@@ -119,12 +119,12 @@ def test_api_sync_plant_scan_does_not_find_orphan_plants(app, client):
     assert resp.json() == {"detail": f"Plant {orphan} not found"}
 
 
-def test_api_sync_unknown_cluster_current_behavior_reports_zero(app, client):
-    """Pins current (buggy) behavior: an unknown cluster_id syncs nothing and returns 200 (B-16) — see REFACTOR_NOTES.md."""
+def test_api_sync_unknown_cluster_is_404(app, client):
+    """D12 (was B-16): an unknown cluster_id is a 404, not a silent ``synced=0``."""
     _seed(app, {"C1": ["Fern"]})
     resp = client.post("/api/v1/plants/sync", json={"cluster_id": 999})
-    assert resp.status_code == 200
-    assert resp.json() == {"synced": 0, "errors": []}
+    assert resp.status_code == 404
+    assert resp.json() == {"detail": "Cluster not found"}
 
 
 def test_api_sync_plant_id_zero_means_every_cluster(app, client):
@@ -151,13 +151,13 @@ def test_api_sync_single_plant_error_is_not_caught(app, client, failing_species)
 # ── Web POST /plants/sync ────────────────────────────────────────────────────
 
 
-def test_web_sync_unknown_cluster_current_behavior_reports_zero(app, client):
-    """Pins current (buggy) behavior: an unknown cluster id renders "0 plants synced" (B-16) — see REFACTOR_NOTES.md."""
+def test_web_sync_unknown_cluster_is_404(app, client):
+    """D12 (was B-16): an unknown cluster id is a 404 (same as the API), not "0 plants synced"."""
     _seed(app, {"C1": ["Fern"]})
     resp = client.post("/plants/sync", data={"cluster_id": "999"})
-    assert resp.status_code == 200
-    assert '<span class="mono">0</span> plants synced' in resp.text
-    assert "error" not in resp.text.split("plants synced", 1)[1]
+    assert resp.status_code == 404
+    assert "plants synced" not in resp.text
+    assert "Cluster not found" in resp.text
 
 
 def test_web_sync_collects_per_plant_errors_and_keeps_going(app, client, failing_species):
@@ -242,6 +242,11 @@ def test_web_plant_dashboard_without_irrigator_renders_sensor_only(app, client, 
     [
         ((600, 7200), "irrigated 10m ago"),
         ((3 * 86400 + 5, 5 * 86400), "irrigated 3d ago"),
+        # D7: the shared ``relative_age`` formatter — seconds under a minute, the real age in days (no "stale"),
+        # "never" when the irrigator has no event.
+        ((30,), "irrigated 30s ago"),
+        ((12 * 86400,), "irrigated 12d ago"),
+        ((), "irrigated never"),
     ],
 )
 def test_web_plant_dashboard_relative_time_of_newest_event(app, client, frozen_clock, ages, expected):
@@ -374,3 +379,34 @@ def test_create_app_without_engine_builds_one_from_settings_db_url(clean_env, tm
         assert (tmp_path / "built.db").exists()
     finally:
         engine.dispose()
+
+
+# ── D15: GET /clusters/{id}/monitor (API) and the web monitor share one syncing path ──────────
+
+
+@pytest.mark.parametrize("url", ["/api/v1/clusters/{cid}/monitor", "/clusters/{cid}/monitor"])
+def test_monitor_runs_the_freshness_sync_and_commits_its_rows(app, client, monkeypatch, url):
+    """D15 (was B-N1): both monitors refresh stale sensors and the refreshed reading is persisted."""
+    from greenhouse_server.services.sync import SyncService
+
+    ids = _seed(app, {"C1": ["Fern"]}, sensor_for="C1")
+    calls: list[int] = []
+
+    def fake_ensure_fresh(self, cluster_id):
+        # Stands in for the Cloud: writes one fresh row the way sync_single_sensor does, then flushes.
+        calls.append(cluster_id)
+        (sensor,) = self._repo.get_sensors_in_cluster(cluster_id)
+        self._repo.add_sensor_reading(sensor_id=sensor.id, timestamp=FROZEN_TS - 60, soil_moisture=41.0)
+        self._repo.session.flush()
+
+    monkeypatch.setattr(SyncService, "ensure_fresh_and_read", fake_ensure_fresh)
+    resp = client.get(url.format(cid=ids["C1"]))
+    assert resp.status_code == 200
+    assert calls == [ids["C1"]]
+    repo, session = _repo_session(app)
+    try:
+        (sensor,) = repo.get_sensors_in_cluster(ids["C1"])
+        latest = repo.get_latest_reading(sensor.id)
+        assert (latest.timestamp, latest.soil_moisture) == (FROZEN_TS - 60, 41.0)
+    finally:
+        session.close()

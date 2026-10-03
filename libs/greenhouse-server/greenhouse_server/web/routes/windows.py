@@ -8,20 +8,14 @@ but uses repo methods directly (in-process, like every other web route).
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-from greenhouse_core.constants import FULL_WEEKDAY_MASK, WINDOW_HOUR_MAX
-from greenhouse_server.deps import RepoDep, require_cluster
+from greenhouse_server.deps import RepoDep, require_cluster, require_window_in_cluster
+from greenhouse_server.services.windows import WindowValidationError, validate_window
 from greenhouse_server.web.context import base_context
 from greenhouse_server.web.templating import templates
 from greenhouse_server.web.weekdays import WEEKDAY_BITS, WEEKDAY_LABELS
-
-if TYPE_CHECKING:
-    from greenhouse_core.models import IrrigationWindow
-    from greenhouse_core.repository import IrrigationRepository
 
 router = APIRouter(include_in_schema=False)
 
@@ -32,27 +26,19 @@ def _parse_weekday_mask(values: list[str]) -> int:
         try:
             bit = int(raw)
         except ValueError as exc:
-            raise HTTPException(400, "weekday_mask values must be integers.") from exc
+            raise HTTPException(400, "weekday_mask values must be integers") from exc
         if bit not in WEEKDAY_BITS:
-            raise HTTPException(400, "weekday_mask values must be 1, 2, 4, 8, 16, 32, or 64.")
+            raise HTTPException(400, "weekday_mask values must be 1, 2, 4, 8, 16, 32, or 64")
         mask |= bit
     return mask
 
 
 def _validate_window_form(start_hour: int, end_hour: int, mask: int) -> None:
-    if not (0 <= start_hour <= WINDOW_HOUR_MAX and 0 <= end_hour <= WINDOW_HOUR_MAX):
-        raise HTTPException(400, "start_hour and end_hour must be 0..23.")
-    if start_hour == end_hour:
-        raise HTTPException(400, "start_hour and end_hour must differ.")
-    if not (1 <= mask <= FULL_WEEKDAY_MASK):
-        raise HTTPException(400, "Select at least one weekday.")
-
-
-def _get_window_in_cluster(repo: IrrigationRepository, cluster_id: int, window_id: int) -> IrrigationWindow:
-    window = repo.get_irrigation_window(window_id)
-    if window is None or window.cluster_id != cluster_id:
-        raise HTTPException(404, "Window not found in cluster.")
-    return window
+    """Map the shared window rule (same wording as the API) to the web's 400 page."""
+    try:
+        validate_window(start_hour, end_hour, mask)
+    except WindowValidationError as exc:
+        raise HTTPException(400, str(exc)) from None
 
 
 @router.post("/clusters/{cluster_id}/windows")
@@ -82,7 +68,7 @@ def create_window(
 @router.get("/clusters/{cluster_id}/windows/{window_id}/edit")
 def edit_window_form(request: Request, cluster_id: int, window_id: int, repo: RepoDep):
     cluster = require_cluster(repo, cluster_id)
-    window = _get_window_in_cluster(repo, cluster_id, window_id)
+    window = require_window_in_cluster(repo, cluster_id, window_id)
     weekday_checks = [
         {"bit": bit, "label": label, "checked": bool(window.weekday_mask & bit)}
         for bit, label in zip(WEEKDAY_BITS, WEEKDAY_LABELS, strict=True)
@@ -105,7 +91,7 @@ def update_window(
     weekday_mask: list[str] = Form(default=[]),
     label: str = Form(""),
 ):
-    _get_window_in_cluster(repo, cluster_id, window_id)
+    require_window_in_cluster(repo, cluster_id, window_id)
     mask = _parse_weekday_mask(weekday_mask)
     _validate_window_form(start_hour, end_hour, mask)
     repo.update_irrigation_window(
@@ -122,7 +108,7 @@ def update_window(
 @router.delete("/clusters/{cluster_id}/windows/{window_id}", response_class=HTMLResponse)
 def delete_window(cluster_id: int, window_id: int, repo: RepoDep):
     """HTMX-targeted delete; returns an empty HTML body so the row is removed."""
-    _get_window_in_cluster(repo, cluster_id, window_id)
+    require_window_in_cluster(repo, cluster_id, window_id)
     repo.delete_irrigation_window(window_id)
     repo.session.commit()
     return HTMLResponse("")

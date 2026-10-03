@@ -82,6 +82,20 @@ class TestSensorCRUD:
         assert data["name"] == "New Name"
         assert data["plant_id"] == 1
 
+    def test_update_rejects_plant_from_another_cluster(self, client):
+        """D2: the plant-in-cluster rule applies on update too (API and web share it)."""
+        client.post("/api/v1/clusters", json={"name": "C1"})
+        client.post("/api/v1/clusters", json={"name": "C2"})
+        client.post("/api/v1/clusters/2/plants", json={"species": "Fern"})
+        client.post(
+            "/api/v1/clusters/1/sensors",
+            json={"tuya_device_id": "sens001", "name": "S1", "type": "soil_moisture"},
+        )
+        resp = client.put("/api/v1/clusters/1/sensors/1", json={"plant_id": 1})
+        assert resp.status_code == 404
+        assert resp.json() == {"detail": "Plant 1 not found in cluster"}
+        assert client.get("/api/v1/clusters/1/sensors/1").json()["plant_id"] is None
+
     def test_update_wrong_cluster_returns_404(self, client):
         client.post("/api/v1/clusters", json={"name": "C1"})
         client.post("/api/v1/clusters", json={"name": "C2"})

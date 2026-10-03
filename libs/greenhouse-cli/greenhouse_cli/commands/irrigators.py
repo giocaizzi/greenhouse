@@ -9,6 +9,23 @@ from greenhouse_cli.commands._helpers import call, output
 irrigator_app = typer.Typer(help="Manage and control irrigators", no_args_is_help=True)
 
 
+def _device_config(device_ip: str | None, local_key: str | None) -> dict[str, str] | None:
+    """Build the irrigator ``config`` blob from the local-control options; ``None`` when neither is given.
+
+    One rule for ``add`` and ``update``: an option counts as given when it is not
+    ``None`` — an explicit empty string is sent as is, so the server sees exactly what
+    was typed.
+    """
+    if device_ip is None and local_key is None:
+        return None
+    config: dict[str, str] = {}
+    if device_ip is not None:
+        config["device_ip"] = device_ip
+    if local_key is not None:
+        config["local_key"] = local_key
+    return config
+
+
 @irrigator_app.command("add")
 def irrigator_add(
     ctx: typer.Context,
@@ -26,11 +43,7 @@ def irrigator_add(
     ] = None,
 ):
     """Add an irrigator to a cluster."""
-    config = {}
-    if device_ip:
-        config["device_ip"] = device_ip
-    if local_key:
-        config["local_key"] = local_key
+    config = _device_config(device_ip, local_key)
     data = call(
         ctx,
         lambda c: c.add_irrigator(
@@ -38,7 +51,7 @@ def irrigator_add(
             tuya_device_id=device_id,
             name=name,
             type=type,
-            config=config if config else None,
+            config=config,
             reservoir_l=reservoir_l,
             flow_rate_l_per_min=flow_rate_l_per_min,
         ),
@@ -108,13 +121,7 @@ def irrigator_update(
     ``--device-ip`` or ``--local-key`` overwrite the ``config`` blob; pass both
     when switching a device to local control.
     """
-    config: dict | None = None
-    if device_ip is not None or local_key is not None:
-        config = {}
-        if device_ip is not None:
-            config["device_ip"] = device_ip
-        if local_key is not None:
-            config["local_key"] = local_key
+    config = _device_config(device_ip, local_key)
     output(
         call(
             ctx,

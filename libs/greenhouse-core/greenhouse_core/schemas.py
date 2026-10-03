@@ -1,18 +1,16 @@
 """Pydantic v2 request/response schemas for the irrigation API."""
 
-import json
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from greenhouse_core.constants import FULL_WEEKDAY_MASK
+from greenhouse_core.models import parse_device_config
 
 
 def _parse_json_config(v: object) -> object:
-    """Decode a JSON-string ``config`` (as stored on the ORM row); pass anything else through."""
-    if isinstance(v, str):
-        return json.loads(v)
-    return v
+    """Decode a stored ``config`` with the shared lenient parser; ``None`` stays ``None``."""
+    return None if v is None else parse_device_config(v)
 
 
 # --- Cluster ---

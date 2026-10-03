@@ -327,7 +327,8 @@ def test_check_unknown_cluster_shape(db):
 @pytest.mark.parametrize(
     ("care", "band", "status"),
     [
-        ({"soil_moisture_target": "40-50-60"}, (45.0, 65.0), "dry"),
+        # D10: one parser everywhere — parse_moisture_target reads the first two parts.
+        ({"soil_moisture_target": "40-50-60"}, (40.0, 50.0), "dry"),
         ({"soil_moisture_target": "50"}, (45.0, 65.0), "dry"),
         ({"soil_moisture_target": "high-low"}, (45.0, 65.0), "dry"),
         ({"soil_moisture_target": None}, (45.0, 65.0), "dry"),
@@ -347,7 +348,7 @@ def test_monitor_target_band_parse_and_fallback(db, care, band, status):
     )
     db.add_sensor_reading(sensor_id=sid, timestamp=FROZEN_TS - 600, soil_moisture=33.0)
     svc = IrrigationService(db, None, StubSync(None), None, StubPlantDb(care))
-    out = svc.monitor_cluster(cid, no_sync=True)
+    out = svc.monitor_cluster(cid)
     (row,) = out["sensors"]
     assert (row["target_min"], row["target_max"], row["status"]) == (*band, status)
     assert out["needs_water"] == (["Band Probe (unknown): 33%"] if status == "dry" else [])
@@ -365,7 +366,7 @@ def test_monitor_latest_soil_skips_missing_values_and_reports_no_data(db):
     db.add_sensor_reading(sensor_id=s1, timestamp=FROZEN_TS - 600, soil_moisture=None, temperature=21.0)
     db.add_sensor_reading(sensor_id=s2, timestamp=FROZEN_TS - 600, soil_moisture=None, temperature=21.0)
     svc = IrrigationService(db, None, StubSync(None), None, StubPlantDb({}))
-    rows = svc.monitor_cluster(cid, no_sync=True)["sensors"]
+    rows = svc.monitor_cluster(cid)["sensors"]
     assert [(r["sensor_name"], r["soil_moisture"], r["status"]) for r in rows] == [
         ("P1", 52.0, "ok"),
         ("P2", None, "no_data"),
@@ -904,14 +905,13 @@ def test_health_block_names_the_first_blocking_alarm(db, pump, monkeypatch):
     assert (activity.code, activity.severity) == ("decision_skip", "warning")
 
 
-@pytest.mark.parametrize(("no_sync", "calls"), [(False, 1), (True, 0)])
-def test_monitor_syncs_unless_told_not_to(db, no_sync, calls):
-    """M-pre survivor: ``monitor_cluster`` refreshes the cluster through the sync service unless ``no_sync``."""
+def test_monitor_always_syncs(db):
+    """M-pre survivor: ``monitor_cluster`` refreshes the cluster through the sync service (D15: always)."""
     cid = db.add_cluster("Sync Gap")
     sync = StubSync(None)
     svc = IrrigationService(db, None, sync, None, StubPlantDb({}))
-    assert svc.monitor_cluster(cid, no_sync=no_sync) == {"cluster_name": "Sync Gap", "sensors": [], "needs_water": []}
-    assert sync.calls == [cid] * calls
+    assert svc.monitor_cluster(cid) == {"cluster_name": "Sync Gap", "sensors": [], "needs_water": []}
+    assert sync.calls == [cid]
 
 
 def test_monitor_looks_back_two_hours(db):
@@ -926,7 +926,7 @@ def test_monitor_looks_back_two_hours(db):
     db.add_sensor_reading(sensor_id=fresh, timestamp=FROZEN_TS - 5400, soil_moisture=50.0)
     db.add_sensor_reading(sensor_id=stale, timestamp=FROZEN_TS - 9000, soil_moisture=50.0)
     svc = IrrigationService(db, None, StubSync(None), None, StubPlantDb({}))
-    rows = svc.monitor_cluster(cid, no_sync=True)["sensors"]
+    rows = svc.monitor_cluster(cid)["sensors"]
     assert [(r["sensor_name"], r["soil_moisture"], r["status"]) for r in rows] == [
         ("F", 50.0, "ok"),
         ("S", None, "no_data"),
@@ -942,7 +942,7 @@ def test_monitor_status_ladder_edges(db, soil, status):
     sid = db.add_sensor(cluster_id=cid, tuya_device_id="fake_tuya_sensor_lad1", name="L", sensor_type="soil", config={})
     db.add_sensor_reading(sensor_id=sid, timestamp=FROZEN_TS - 600, soil_moisture=soil)
     svc = IrrigationService(db, None, StubSync(None), None, StubPlantDb({"soil_moisture_target": "20-30"}))
-    (row,) = svc.monitor_cluster(cid, no_sync=True)["sensors"]
+    (row,) = svc.monitor_cluster(cid)["sensors"]
     assert row["status"] == status
 
 

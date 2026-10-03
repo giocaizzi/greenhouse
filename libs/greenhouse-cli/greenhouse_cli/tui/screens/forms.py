@@ -12,6 +12,8 @@ from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import Button, Checkbox, Input, Label, Select, Static
 
+from greenhouse_cli.tui.formatting import zone
+
 DATETIME_FORMAT = "%Y-%m-%d %H:%M"
 
 
@@ -20,8 +22,9 @@ class Field:
     """One form input.
 
     ``kind`` is ``text`` / ``int`` / ``float`` / ``bool`` / ``select`` /
-    ``json`` (object literal) / ``datetime`` (local ``YYYY-MM-DD HH:MM`` →
-    Unix seconds). Blank optional
+    ``json`` (object literal) / ``datetime`` (``YYYY-MM-DD HH:MM`` wall time in ``tz``
+    — the server's ``timezone`` preference, as the web vacation pages; UTC when unset —
+    → Unix seconds). Blank optional
     inputs come back as ``None`` — the client drops ``None`` from update
     bodies, so a blank field means "leave unchanged".
     """
@@ -33,6 +36,7 @@ class Field:
     options: list[tuple[str, Any]] = field(default_factory=list)
     required: bool = False
     placeholder: str = ""
+    tz: str | None = None
 
 
 def parse_value(f: Field, raw: Any) -> Any:
@@ -52,7 +56,7 @@ def parse_value(f: Field, raw: Any) -> Any:
         if f.kind == "float":
             return float(text)
         if f.kind == "datetime":
-            return int(datetime.strptime(text, DATETIME_FORMAT).timestamp())
+            return int(datetime.strptime(text, DATETIME_FORMAT).replace(tzinfo=zone(f.tz)).timestamp())
         if f.kind == "json":
             parsed = json.loads(text)
             if not isinstance(parsed, dict):
@@ -69,7 +73,7 @@ def _display(f: Field) -> str:
     if f.value is None:
         return ""
     if f.kind == "datetime":
-        return datetime.fromtimestamp(f.value).strftime(DATETIME_FORMAT)
+        return datetime.fromtimestamp(f.value, zone(f.tz)).strftime(DATETIME_FORMAT)
     if f.kind == "json":
         return json.dumps(f.value)
     return str(f.value)

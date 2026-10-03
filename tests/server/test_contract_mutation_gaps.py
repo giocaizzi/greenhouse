@@ -116,7 +116,7 @@ def test_monitor_status_bands_around_the_plant_target(db, soil, status):
     )
     db.add_sensor_reading(sensor_id=sid, timestamp=FROZEN_TS - 600, soil_moisture=soil)
     svc = IrrigationService(db, None, SyncService(db, None, None), None, plant_database())
-    (row,) = svc.monitor_cluster(cid, no_sync=True)["sensors"]
+    (row,) = svc.monitor_cluster(cid)["sensors"]
     assert (row["target_min"], row["target_max"], row["status"]) == (45.0, 60.0, status)
 
 
@@ -168,7 +168,7 @@ def test_monitor_reads_the_cleaned_view(db):
     db.add_sensor_reading(sensor_id=sid, timestamp=FROZEN_TS - 1800, soil_moisture=50.0)
     db.add_sensor_reading(sensor_id=sid, timestamp=FROZEN_TS - 600, soil_moisture=150.0)
     svc = IrrigationService(db, None, SyncService(db, None, None), None, plant_database())
-    (row,) = svc.monitor_cluster(cid, no_sync=True)["sensors"]
+    (row,) = svc.monitor_cluster(cid)["sensors"]
     assert (row["soil_moisture"], row["status"]) == (50.0, "ok")
 
 

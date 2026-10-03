@@ -22,7 +22,7 @@ Contracts / invariants guarded here:
   :class:`IrrigationDecision`;
 - I11 — an open leak alert holds ``/irrigate`` even with ``force=true``, while
   ``POST /irrigators/{id}/start`` (the escape hatch) still actuates;
-- observed bugs B-1, B-4, B-5, B-6, B-8 pinned as ``*_current_behavior_*``.
+- observed bugs B-1, B-4, B-5, B-6 pinned as ``*_current_behavior_*`` (B-8 fixed by drift pair D5).
 """
 
 from __future__ import annotations
@@ -1046,19 +1046,22 @@ def test_device_health_block_current_behavior_not_written_to_decision_log(pipeli
     assert [a["code"] for a in rows["activity_events"]] == ["decision_skip"]
 
 
-def test_vacation_create_current_behavior_accepts_reversed_window(pipeline):
-    """Pins current (buggy) behavior: ``POST /vacation`` accepts ``ends_at < starts_at`` (B-8) — see REFACTOR_NOTES.md.
+def test_vacation_create_rejects_reversed_window(pipeline):
+    """D5 (was B-8): ``POST /vacation`` validates ``starts_at < ends_at`` like ``PUT`` and the web forms.
 
-    ``PUT /vacation/{id}`` rejects the same reversed window with 400.
+    Reversed and empty windows are rejected with the shared 400 wording and nothing is stored.
     """
-    created = pipeline.call("POST", "/api/v1/vacation", {"starts_at": FROZEN_TS + 86400, "ends_at": FROZEN_TS})
+    for starts, ends in ((FROZEN_TS + 86400, FROZEN_TS), (FROZEN_TS, FROZEN_TS)):
+        rejected = pipeline.call("POST", "/api/v1/vacation", {"starts_at": starts, "ends_at": ends})
+        assert rejected["status"] == 400
+        assert rejected["response"] == {"detail": "starts_at must be < ends_at"}
+    created = pipeline.call("POST", "/api/v1/vacation", {"starts_at": FROZEN_TS, "ends_at": FROZEN_TS + 86400})
     assert created["status"] == 201
-    assert (created["response"]["starts_at"], created["response"]["ends_at"]) == (FROZEN_TS + 86400, FROZEN_TS)
     window_id = created["response"]["id"]
     rejected = pipeline.call("PUT", f"/api/v1/vacation/{window_id}", {"ends_at": FROZEN_TS - 1})
     assert rejected["status"] == 400
-    # A reversed window is never "active", so it changes nothing for the engine.
-    assert pipeline.call("GET", "/api/v1/vacation")["response"]["active"] is None
+    assert rejected["response"] == {"detail": "starts_at must be < ends_at"}
+    assert [w["id"] for w in pipeline.call("GET", "/api/v1/vacation")["response"]["items"]] == [window_id]
 
 
 def test_vacation_budget_projection(pipeline):

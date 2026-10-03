@@ -192,9 +192,18 @@ While an irrigation is running, `PumpWatcherService` polls the IK10PW's DP 105 w
 
 ### Cluster without irrigator
 
-1. Read the latest persisted sensor snapshot (`ensure_fresh_and_read`; SQLite, force-syncing only a stale sensor)
+1. Read the latest persisted sensor snapshot (`ensure_fresh_and_read`; SQLite, force-syncing only a stale sensor). The same path backs `GET clusters/{id}/monitor` (API/MCP/CLI) and the web monitor panel: both 404 on an unknown cluster and **store** the readings a force-sync fetched, so repeated calls do not re-hit the Cloud for a sensor that is now fresh.
 2. Compare latest soil moisture vs plant targets
 3. Flag sensors below threshold as `needs_water`
+
+### Soil-moisture target parsing
+
+A plant's `soil_moisture_target` (e.g. `"45-65"`) is read through one parser, `parse_moisture_target`
+(`logic/plant_needs.py`, via `moisture_target_range`), everywhere it is judged: the engine, plant health, the forecast,
+the monitor / check of sensor-only clusters, and the learning issue heuristics (chronic underwatering, unresolvable
+conflict). It takes the first two `-`-separated numbers (`"40-50-60"` → 40–50) and falls back to the default band
+45–65 for anything else — a bare `"50"`, non-numeric text, a missing or non-string value. It does not validate the
+band (an inverted `"65-45"` is used as given). Chart threshold bands use a stricter check of their own: anything but exactly `a-b` shows the default band.
 
 ## Multi-Sensor Conflict Resolution
 

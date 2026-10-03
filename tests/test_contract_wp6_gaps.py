@@ -171,7 +171,7 @@ def test_detect_issues_skips_chronic_check_for_sensor_without_plant(monkeypatch)
     assert alerts == []
 
 
-@pytest.mark.parametrize("target", ["n/a", ""])
+@pytest.mark.parametrize("target", ["n/a", "", "50"])  # "50": no band → default min (D10; was read as 50)
 def test_detect_issues_chronic_unparsable_target_falls_back_to_45(monkeypatch, target):
     sensor = _sensor(1, plant_id=1)
     alerts = _issues(monkeypatch, [sensor], [_plant(1)], {"soil_moisture_target": target}, {(1, 168): _soil(30.0)})

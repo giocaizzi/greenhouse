@@ -12,7 +12,8 @@ from greenhouse_server.deps import (
     SyncServiceDep,
     require_cluster,
 )
-from greenhouse_server.services.cluster import PlantNotFoundError
+from greenhouse_server.services.cluster import ClusterNotFoundError, PlantNotFoundError
+from greenhouse_server.services.irrigation import check_has_alerts
 from greenhouse_server.web.context import base_context
 from greenhouse_server.web.templating import templates
 
@@ -54,8 +55,10 @@ def irrigate(
 
 
 @router.get("/clusters/{cluster_id}/monitor")
-def monitor(request: Request, cluster_id: int, svc: IrrigationServiceDep, session: SessionDep):
-    result = svc.monitor_cluster(cluster_id=cluster_id, no_sync=True)
+def monitor(request: Request, cluster_id: int, repo: RepoDep, svc: IrrigationServiceDep, session: SessionDep):
+    # Same path as GET /api/v1/clusters/{id}/monitor: 404 for an unknown cluster, refresh stale sensors, keep the rows.
+    require_cluster(repo, cluster_id)
+    result = svc.monitor_cluster(cluster_id=cluster_id)
     session.commit()
     return templates.TemplateResponse(
         request, "partials/_monitor_panel.html", base_context(request, result=result, cluster_id=cluster_id)
@@ -76,7 +79,7 @@ def check_single(
     return templates.TemplateResponse(
         request,
         "partials/_check_result.html",
-        base_context(request, results=[result], has_alerts=bool(result.get("alerts"))),
+        base_context(request, results=[result], has_alerts=check_has_alerts([result])),
     )
 
 
@@ -84,7 +87,7 @@ def check_single(
 def check_all(request: Request, svc: IrrigationServiceDep, session: SessionDep):
     results = svc.check_all_clusters()
     session.commit()
-    has_alerts = any(r.get("alerts") for r in results)
+    has_alerts = check_has_alerts(results)
     return templates.TemplateResponse(
         request, "partials/_check_result.html", base_context(request, results=results, has_alerts=has_alerts)
     )
@@ -115,6 +118,8 @@ def sync_plants(
         synced, errors = svc.sync_plants(plant_id=pid, cluster_id=cid)
     except PlantNotFoundError:
         raise HTTPException(404, f"Plant {pid} not found") from None
+    except ClusterNotFoundError:
+        raise HTTPException(404, "Cluster not found") from None
 
     repo.session.commit()
     return templates.TemplateResponse(

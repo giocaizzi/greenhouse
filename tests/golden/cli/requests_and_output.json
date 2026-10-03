@@ -1946,7 +1946,7 @@
    "token_file_after": null,
    "token_file_before": null
   },
-  "irrigator.add.empty_ip_current_behavior_dropped": {
+  "irrigator.add.empty_ip_sent": {
    "argv": [
     "greenhouse",
     "irrigator",
@@ -1977,9 +1977,12 @@
    "requests": [
     {
      "authorization": null,
-     "content": "{\"tuya_device_id\":\"fake_tuya_device_aabbccdd\",\"name\":\"Pump\",\"type\":\"tuya_local\"}",
+     "content": "{\"tuya_device_id\":\"fake_tuya_device_aabbccdd\",\"name\":\"Pump\",\"type\":\"tuya_local\",\"config\":{\"device_ip\":\"\"}}",
      "content_type": "application/json",
      "json": {
+      "config": {
+       "device_ip": ""
+      },
       "name": "Pump",
       "tuya_device_id": "fake_tuya_device_aabbccdd",
       "type": "tuya_local"
@@ -2553,7 +2556,7 @@
    "token_file_after": null,
    "token_file_before": null
   },
-  "irrigator.update.empty_key_current_behavior_sent": {
+  "irrigator.update.empty_key_sent": {
    "argv": [
     "greenhouse",
     "irrigator",

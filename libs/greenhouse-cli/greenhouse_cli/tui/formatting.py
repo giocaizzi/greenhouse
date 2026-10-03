@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import time
-from datetime import datetime
+from datetime import UTC, datetime, tzinfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from rich.text import Text
 
@@ -73,12 +74,22 @@ def age(seconds: int | float | None) -> str:
     return f"{_span(max(0, int(seconds)))} ago"
 
 
-def clock(ts: int | float | None, with_date: bool = False) -> str:
-    """Local wall-clock time for a Unix timestamp."""
+def zone(name: str | None) -> tzinfo:
+    """The IANA zone ``name`` (the server's ``timezone`` preference); UTC when unset or unknown."""
+    if not name:
+        return UTC
+    try:
+        return ZoneInfo(name)
+    except (ZoneInfoNotFoundError, ValueError):
+        return UTC
+
+
+def clock(ts: int | float | None, with_date: bool = False, *, tz: str | None = None) -> str:
+    """Wall-clock time for a Unix timestamp — local, or in the zone ``tz`` when given (vacations)."""
     if not ts:
         return "—"
     fmt = "%Y-%m-%d %H:%M" if with_date else "%H:%M"
-    return datetime.fromtimestamp(ts).strftime(fmt)
+    return datetime.fromtimestamp(ts, zone(tz) if tz is not None else None).strftime(fmt)
 
 
 def num(value: float | int | None, unit: str = "", digits: int = 1) -> str:

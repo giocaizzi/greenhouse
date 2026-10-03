@@ -176,7 +176,7 @@ def manual_stop(
 
     repo.add_irrigation_event(
         irrigator_id=irrigator.id,
-        action="off",
+        action="stop",
         triggered_by="manual",
         notes=f"Manual stop via {via}",
     )

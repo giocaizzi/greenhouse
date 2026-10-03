@@ -172,3 +172,10 @@ class TestClusterEfficacy:
         resp = seeded_client.get("/api/v1/clusters/1/efficacy?days=30")
         assert resp.status_code == 200
         assert resp.json()["days"] == 30
+
+
+def test_days_is_bounded_like_the_web_page(seeded_client):
+    """D17: the API rejects ``days`` above 365 (422), as the web efficacy page always did."""
+    assert seeded_client.get("/api/v1/clusters/1/efficacy?days=365").status_code == 200
+    assert seeded_client.get("/api/v1/clusters/1/efficacy?days=366").status_code == 422
+    assert seeded_client.get("/clusters/1/efficacy?days=366").status_code == 422

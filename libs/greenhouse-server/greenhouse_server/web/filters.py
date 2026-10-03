@@ -25,9 +25,15 @@ def format_ts(ts: int | float | None, fmt: str = "%Y-%m-%d %H:%M") -> str:
     return format_timestamp(float(ts), fmt)
 
 
-def age_seconds(ts: int | float | None) -> str:
+def relative_age(ts: int | float | None, *, missing: str = "—", stale_after: int | None = _AGE_STALE_SECONDS) -> str:
+    """The one "how long ago" formatter: ``Ns`` / ``Nm`` / ``Nh`` / ``Nd ago`` for a Unix timestamp.
+
+    ``missing`` is shown for ``None``; from ``stale_after`` seconds on the age reads
+    "stale" (sensor freshness), or keeps counting days when ``stale_after`` is ``None``
+    (elapsed time, e.g. the plant dashboard's last watering).
+    """
     if ts is None:
-        return "—"
+        return missing
     delta = max(0, int(time.time() - float(ts)))
     if delta < 60:
         return f"{delta}s ago"
@@ -35,9 +41,14 @@ def age_seconds(ts: int | float | None) -> str:
         return f"{delta // 60}m ago"
     if delta < 86400:
         return f"{delta // 3600}h ago"
-    if delta < _AGE_STALE_SECONDS:
+    if stale_after is None or delta < stale_after:
         return f"{delta // 86400}d ago"
     return "stale"
+
+
+def age_seconds(ts: int | float | None) -> str:
+    """Template filter: :func:`relative_age` with the freshness defaults ("—" when missing, "stale" from 7 days)."""
+    return relative_age(ts)
 
 
 def strip_emoji(text: str | None) -> str:

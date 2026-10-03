@@ -3,7 +3,7 @@
 from fastapi import APIRouter, HTTPException, Query
 
 from greenhouse_core.schemas import AlertListResponse, AlertSummary
-from greenhouse_server.deps import NtfyNotifierDep, PlantDbDep, RepoDep, SessionDep
+from greenhouse_server.deps import NtfyNotifierDep, PlantDbDep, RepoDep, SessionDep, require_alert, require_cluster
 from greenhouse_server.services.alerts import sync_all_alerts, sync_cluster_alerts
 
 router = APIRouter(tags=["alerts"])
@@ -63,9 +63,7 @@ def get_alert(alert_id: int, repo: RepoDep) -> AlertSummary:
     Raises:
         HTTPException: 404 if no alert with that ID exists.
     """
-    alert = repo.get_alert(alert_id)
-    if not alert:
-        raise HTTPException(status_code=404, detail="Alert not found")
+    alert = require_alert(repo, alert_id)
     return AlertSummary.model_validate(alert)
 
 
@@ -134,9 +132,7 @@ def refresh_cluster_alerts(
     Raises:
         HTTPException: 404 if the cluster does not exist.
     """
-    cluster = repo.get_cluster(cluster_id)
-    if not cluster:
-        raise HTTPException(status_code=404, detail="Cluster not found")
+    require_cluster(repo, cluster_id)
     alerts = sync_cluster_alerts(repo, cluster_id, plant_db, notifier=notifier)
     open_count = repo.count_open_alerts()
     session.commit()

@@ -10,7 +10,7 @@ from fastapi import APIRouter, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from greenhouse_core.logic.timing import is_within_quiet_hours
-from greenhouse_server.deps import ClusterServiceDep, PlantDbDep, RepoDep
+from greenhouse_server.deps import ClusterServiceDep, PlantDbDep, RepoDep, require_cluster
 from greenhouse_server.services.charts import (
     ALLOWED_HOURS,
     build_cluster_chart_payload,
@@ -58,9 +58,7 @@ def create_cluster(
 
 @router.get("/clusters/{cluster_id}/edit")
 def edit_cluster_form(request: Request, cluster_id: int, repo: RepoDep):
-    cluster = repo.get_cluster(cluster_id)
-    if not cluster:
-        raise HTTPException(404, "Cluster not found")
+    cluster = require_cluster(repo, cluster_id)
     return templates.TemplateResponse(request, "clusters/edit.html", base_context(request, cluster=cluster))
 
 

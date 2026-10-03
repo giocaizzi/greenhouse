@@ -93,11 +93,12 @@ def window_fields(window: dict | None = None) -> list[Field]:
     ]
 
 
-def vacation_fields(window: dict | None = None) -> list[Field]:
+def vacation_fields(window: dict | None = None, tz: str | None = None) -> list[Field]:
+    """Vacation form; ``tz`` is the server's ``timezone`` preference the times are entered in."""
     v = window or {}
     return [
-        Field("starts_at", "Starts", "datetime", v.get("starts_at"), required=window is None),
-        Field("ends_at", "Ends", "datetime", v.get("ends_at"), required=window is None),
+        Field("starts_at", "Starts", "datetime", v.get("starts_at"), required=window is None, tz=tz),
+        Field("ends_at", "Ends", "datetime", v.get("ends_at"), required=window is None, tz=tz),
         Field("contact_email", "Contact email", value=v.get("contact_email")),
         Field("notes", "Notes", value=v.get("notes")),
     ]

@@ -34,9 +34,10 @@ from golden import assert_golden, assert_golden_json, install_offline_weather
 from server.conftest import _make_stubbed_app
 
 # sha256 of ``json.dumps(app.openapi(), sort_keys=True)`` recorded in
-# refactor/00-contracts.md at the Phase-0 baseline (main @ a1b2622).
+# refactor/00-contracts.md at the Phase-0 baseline (main @ a1b2622); re-recorded only by
+# reviewed behavior-change commits (`fix(drift|consistency): …`) that also regenerate the golden.
 PHASE0_OPENAPI_SHA256 = (
-    "f983a5a8d42e60215a6e9571daccc30b635e34271879f75b3e8c46154ae7f0ee"  # gitleaks:allow — content hash, not a secret
+    "ee96dba2a5b7a62985253be1247b00b613284f4548169fc7f41b1f7324a75261"  # gitleaks:allow — content hash, not a secret
 )
 
 

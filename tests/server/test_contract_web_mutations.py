@@ -255,6 +255,12 @@ MUTATIONS: tuple[Mut, ...] = (
         {"tuya_device_id": "fake_tuya_device_00000009", "name": "Second", "type": "tuya_cloud"},
     ),
     M(
+        "create_irrigator__duplicate_device_id",
+        "POST",
+        f"/clusters/{EMPTY}/irrigators",
+        {"tuya_device_id": "fake_tuya_device_aabbccdd", "name": "Clone", "type": "tuya_cloud", "reservoir_l": "5"},
+    ),
+    M(
         "create_irrigator__bad_capacity",
         "POST",
         f"/clusters/{EMPTY}/irrigators",
@@ -411,6 +417,18 @@ MUTATIONS: tuple[Mut, ...] = (
         },
     ),
     M(
+        "create_sensor__plant_in_other_cluster",
+        "POST",
+        f"/clusters/{INDOOR}/sensors",
+        {"tuya_device_id": "fake_tuya_sensor_00000005", "name": "P", "type": "soil_moisture", "plant_id": str(LOQUAT)},
+    ),
+    M(
+        "create_sensor__duplicate_device_id",
+        "POST",
+        f"/clusters/{INDOOR}/sensors",
+        {"tuya_device_id": "fake_tuya_sensor_00000002", "name": "Clone", "type": "soil_moisture"},
+    ),
+    M(
         "create_sensor__bad_plant_id",
         "POST",
         f"/clusters/{INDOOR}/sensors",
@@ -433,6 +451,12 @@ MUTATIONS: tuple[Mut, ...] = (
         "POST",
         f"/clusters/{INDOOR}/sensors/{S_MONSTERA}/edit",
         {"name": "Monstera Probe", "type": "soil_moisture", "plant_id": ""},
+    ),
+    M(
+        "update_sensor__plant_in_other_cluster",
+        "POST",
+        f"/clusters/{INDOOR}/sensors/{S_AMBIENT}/edit",
+        {"name": "R", "type": "temp_humidity", "plant_id": str(LOQUAT)},
     ),
     M(
         "update_sensor__bad_plant_id",

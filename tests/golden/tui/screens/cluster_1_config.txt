@@ -4,14 +4,14 @@
  u edit config · e edit cluster · D delete cluster
 ╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │ Effective config                                                                                                     │
-│ auto_run            True  ↳ default                                                                                  │
-│ daily_cap_minutes   None  ↳ default                                                                                  │
+│ mode                smart  ↳ cluster                                                                                 │
 │ duration_minutes    3  ↳ cluster                                                                                     │
 │ interval_hours      12  ↳ cluster                                                                                    │
+│ auto_run            True  ↳ default                                                                                  │
+│ daily_cap_minutes   None  ↳ default                                                                                  │
 │ max_events_per_day  None  ↳ default                                                                                  │
-│ mode                smart  ↳ cluster                                                                                 │
-│ quiet_end_hour      5  ↳ global                                                                                      │
 │ quiet_start_hour    0  ↳ global                                                                                      │
+│ quiet_end_hour      5  ↳ global                                                                                      │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 
 

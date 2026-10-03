@@ -16,6 +16,10 @@ if TYPE_CHECKING:
     from greenhouse_core.models import Irrigator, Sensor
 
 _BEFORE_SECONDS = 1800
+
+# Look-back bounds for ``days``: one rule for the JSON API and the web page (D17).
+EFFICACY_DEFAULT_DAYS = 14
+EFFICACY_MAX_DAYS = 365
 _AFTER_SECONDS = 5400
 
 

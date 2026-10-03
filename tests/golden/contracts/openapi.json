@@ -787,7 +787,7 @@
      "plants"
     ],
     "summary": "Sync Plants",
-    "description": "Refresh plant care thresholds from the evidence-based plant database.\n\nResolves species to care data lookup and writes the result onto the matching\nplant rows. Use this after editing the bundled plant_database.json or after\nadding plants without explicit care fields. Scope is widening: single plant\nto cluster to entire database, depending on which field is set.\n\nArgs:\n    request: One of plant_id (single plant), cluster_id (all plants in\n        that cluster), or neither (every plant in every cluster).\n\nReturns:\n    Count of plants successfully synced and a list of error messages for\n    any that failed (failures do not abort the rest of the run).\n\nRaises:\n    HTTPException: 404 if plant_id is set and no such plant exists.",
+    "description": "Refresh plant care thresholds from the evidence-based plant database.\n\nResolves species to care data lookup and writes the result onto the matching\nplant rows. Use this after editing the bundled plant_database.json or after\nadding plants without explicit care fields. Scope is widening: single plant\nto cluster to entire database, depending on which field is set.\n\nArgs:\n    request: One of plant_id (single plant), cluster_id (all plants in\n        that cluster), or neither (every plant in every cluster).\n\nReturns:\n    Count of plants successfully synced and a list of error messages for\n    any that failed (failures do not abort the rest of the run).\n\nRaises:\n    HTTPException: 404 if plant_id is set and no such plant exists, or if\n        only cluster_id is set and no such cluster exists.",
     "operationId": "sync_plants",
     "requestBody": {
      "content": {
@@ -1260,7 +1260,7 @@
      "irrigators"
     ],
     "summary": "Stop Irrigator",
-    "description": "Manually stop a running irrigator over the Tuya local protocol.\n\nSide effects: actuates physical hardware and records an `off` irrigation\nevent with `triggered_by=\"manual\"`.\n\nArgs:\n    irrigator_id: Irrigator to stop.\n\nRaises:\n    HTTPException: 404 if the irrigator is unknown, 503 if Tuya\n        credentials are missing or the irrigator model has no adapter,\n        502 if the device fails to stop.",
+    "description": "Manually stop a running irrigator over the Tuya local protocol.\n\nSide effects: actuates physical hardware and records a `stop` irrigation\nevent with `triggered_by=\"manual\"` (the same action automatic and\nemergency stops record).\n\nArgs:\n    irrigator_id: Irrigator to stop.\n\nRaises:\n    HTTPException: 404 if the irrigator is unknown, 503 if Tuya\n        credentials are missing or the irrigator model has no adapter,\n        502 if the device fails to stop.",
     "operationId": "stop_irrigator",
     "security": [
      {
@@ -1616,7 +1616,7 @@
      "sensors"
     ],
     "summary": "Update a sensor",
-    "description": "Partially update a sensor metadata.\n\nOnly fields present in the request body are modified; omitted fields are\nleft unchanged. The sensor must belong to the specified cluster.\n\nArgs:\n    cluster_id: Cluster the sensor belongs to.\n    sensor_id: Numeric sensor identifier.\n    request: Fields to update — any subset of name, type, config,\n        and plant_id.\n\nReturns:\n    The updated sensor.\n\nRaises:\n    HTTPException: 404 if the sensor does not exist or belongs to a\n        different cluster.",
+    "description": "Partially update a sensor metadata.\n\nOnly fields present in the request body are modified; omitted fields are\nleft unchanged. The sensor must belong to the specified cluster.\n\nArgs:\n    cluster_id: Cluster the sensor belongs to.\n    sensor_id: Numeric sensor identifier.\n    request: Fields to update — any subset of name, type, config,\n        and plant_id.\n\nReturns:\n    The updated sensor.\n\nRaises:\n    HTTPException: 404 if the sensor does not exist or belongs to a\n        different cluster, or if ``plant_id`` is not a plant of that cluster.",
     "operationId": "update_sensor",
     "security": [
      {
@@ -2116,7 +2116,7 @@
      "operations"
     ],
     "summary": "Monitor",
-    "description": "Per-sensor soil-moisture status for a cluster, plus a list of plants\nthat currently need water.\n\nUse this for sensor-only clusters (no irrigators) where you want to know\nwhich plants are dry without running the decision engine. Read-only.\n\nArgs:\n    cluster_id: Cluster to monitor.\n\nReturns:\n    Each sensor's current soil moisture, the plant's target band, and a\n    status (`ok` / `dry` / `very_dry` / `wet` / `no_data`), plus a flat\n    `needs_water` list of plant labels for the dry/very_dry sensors.\n\nRaises:\n    HTTPException: 404 if the cluster does not exist.",
+    "description": "Per-sensor soil-moisture status for a cluster, plus a list of plants\nthat currently need water.\n\nUse this for sensor-only clusters (no irrigators) where you want to know\nwhich plants are dry without running the decision engine. Never actuates;\nsensors whose latest reading is stale are first refreshed from the Tuya\nCloud and the refreshed readings are stored.\n\nArgs:\n    cluster_id: Cluster to monitor.\n\nReturns:\n    Each sensor's current soil moisture, the plant's target band, and a\n    status (`ok` / `dry` / `very_dry` / `wet` / `no_data`), plus a flat\n    `needs_water` list of plant labels for the dry/very_dry sensors.\n\nRaises:\n    HTTPException: 404 if the cluster does not exist.",
     "operationId": "monitor",
     "security": [
      {
@@ -3708,7 +3708,7 @@
      "vacation"
     ],
     "summary": "Create a vacation window",
-    "description": "Schedule a vacation window that makes the engine ration water to last the trip.\n\nWhile the window is active the decision engine appends a\n``VACATION_ACTIVE`` reason to every decision and, for clusters whose\nirrigators have both ``reservoir_l`` and ``flow_rate_l_per_min`` set,\nenforces a per-day burn-down budget: each irrigation's duration is trimmed\nto fit the remaining tank allowance (``VACATION_RATIONING``), or flipped to\nSKIP when no usable water remains this cycle (``VACATION_BUDGET_EXHAUSTED``).\nWhen no irrigator in a cluster has capacity configured the window is purely\ninformational and irrigation proceeds exactly as it would normally.\n\nArgs:\n    request: Window start and end as Unix timestamps, optional contact email\n        and free-text notes.\n\nReturns:\n    The newly created vacation window.",
+    "description": "Schedule a vacation window that makes the engine ration water to last the trip.\n\nWhile the window is active the decision engine appends a\n``VACATION_ACTIVE`` reason to every decision and, for clusters whose\nirrigators have both ``reservoir_l`` and ``flow_rate_l_per_min`` set,\nenforces a per-day burn-down budget: each irrigation's duration is trimmed\nto fit the remaining tank allowance (``VACATION_RATIONING``), or flipped to\nSKIP when no usable water remains this cycle (``VACATION_BUDGET_EXHAUSTED``).\nWhen no irrigator in a cluster has capacity configured the window is purely\ninformational and irrigation proceeds exactly as it would normally.\n\nArgs:\n    request: Window start and end as Unix timestamps, optional contact email\n        and free-text notes.\n\nReturns:\n    The newly created vacation window.\n\nRaises:\n    HTTPException: 400 if ``starts_at`` is not strictly before ``ends_at``.",
     "operationId": "create_vacation_window",
     "requestBody": {
      "content": {
@@ -4053,7 +4053,7 @@
      "operations"
     ],
     "summary": "Cluster Efficacy",
-    "description": "Score completed irrigation events by post-irrigation soil-moisture rise.\n\nFor each `start` event with a positive `duration_minutes`, compares the\naverage soil moisture across all cluster sensors in the 30 minutes before\nthe event against the 90-minute window after. Score = clamp((after - before)\n× 5, 0, 100): a 20 percentage-point rise yields score 100; less than\n0 percentage-point rise yields 0. Score is None when sensor data is\ninsufficient around the event.\n\nArgs:\n    cluster_id: Cluster to score.\n    days: Look-back window in days (default 14).\n\nReturns:\n    EfficacyListResponse with one EfficacyItemResponse per qualifying event,\n    ordered newest-first.\n\nRaises:\n    HTTPException: 404 if the cluster does not exist.",
+    "description": "Score completed irrigation events by post-irrigation soil-moisture rise.\n\nFor each `start` event with a positive `duration_minutes`, compares the\naverage soil moisture across all cluster sensors in the 30 minutes before\nthe event against the 90-minute window after. Score = clamp((after - before)\n× 5, 0, 100): a 20 percentage-point rise yields score 100; less than\n0 percentage-point rise yields 0. Score is None when sensor data is\ninsufficient around the event.\n\nArgs:\n    cluster_id: Cluster to score.\n    days: Look-back window in days (default 14, at most 365).\n\nReturns:\n    EfficacyListResponse with one EfficacyItemResponse per qualifying event,\n    ordered newest-first.\n\nRaises:\n    HTTPException: 404 if the cluster does not exist.",
     "operationId": "cluster_efficacy",
     "security": [
      {
@@ -4076,6 +4076,7 @@
       "required": false,
       "schema": {
        "type": "integer",
+       "maximum": 365,
        "minimum": 1,
        "default": 14,
        "title": "Days"

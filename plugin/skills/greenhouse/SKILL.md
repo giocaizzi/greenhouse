@@ -42,14 +42,14 @@ Every `/api/v1` endpoint on the server is exposed as an MCP tool by `fastapi-mcp
 
 | User intent | What to call |
 |---|---|
-| "Is my plant thirsty?" / "Check status" | `clusters/{id}/status` or `clusters/{id}/monitor` |
+| "Is my plant thirsty?" / "Check status" | `clusters/{id}/status` or `clusters/{id}/monitor` (never actuates; refreshes stale sensors from the Cloud and stores the readings) |
 | "Water cluster X" | `clusters/{id}/irrigate` (smart pipeline) or `irrigators/{id}/start` (manual — same path as the web UI button: per-day caps (409), dry-run pump watcher when `minutes` is given, ntfy notification) |
 | "Why did it skip / why didn't anything run?" | `clusters/{id}/decisions` — read `primary_code` and `reason_text` |
 | "Did the schedule fire?" | `clusters/{id}/history` + `clusters/{id}/decisions` |
 | "What's wrong?" | `alerts` inbox (filter by `status=open`) |
 | "I just watered by hand" | `irrigators/{id}/log-manual` |
 | "Show me trends" | `clusters/{id}/chart-data` or `plants/{id}/chart-data` |
-| "I'll be away next week" | Create a `vacation` window; set the cluster's irrigator `reservoir_l` + `flow_rate_l_per_min` so the engine rations the tank across the trip |
+| "I'll be away next week" | Create a `vacation` window (Unix-second `starts_at` strictly before `ends_at`, else 400); set the cluster's irrigator `reservoir_l` + `flow_rate_l_per_min` so the engine rations the tank across the trip |
 | "Only water at night / set allowed hours" | Per-cluster irrigation `windows` (CRUD under `clusters/{id}/windows`) |
 | "Don't water overnight / set quiet hours" | `quiet_start_hour`/`quiet_end_hour` on `clusters/{id}/config` (per cluster) or `config/global` (everywhere) |
 | "Set system-wide defaults" / "what's inherited?" | `config/global` (read/write defaults); `clusters/{id}/config/effective` (merged view, source per field) |
@@ -108,5 +108,7 @@ Don't preload these. The endpoint catalogue isn't here on purpose — the MCP to
 - **"It silently failed"** is almost never silent. Check `clusters/{id}/decisions` for the latest evaluation — the engine writes a log row even when it skips. If there's no row in the expected window, the scheduler didn't fire — check `health/system` and `scheduler/jobs`. In `scheduler/jobs`, `paused: true` means explicitly paused (only `check_all`, via `scheduler/pause`, mirrored by `preferences.scheduler_paused`); a null `next_run_time` on an un-paused job means the scheduler itself isn't running (`scheduler_running: false` on `health`), not that the job is paused. Pause/resume work (and persist) even while the scheduler is stopped. `core: true` marks a built-in job: `DELETE scheduler/jobs/{id}` refuses it with 409 — pause `check_all` instead.
 - **Don't delete built-in scheduler jobs.** `DELETE scheduler/jobs/{id}` returns 409 for the jobs registered at startup (`check_all`, `sensor_sync`, `sensor_anomaly`, `device_health_monitor`, `plant_health_snapshot`); to stop automatic irrigation use `scheduler/pause`. Only ad-hoc one-shot jobs (pump watchers, leak checks) are deletable.
 - **Don't average sensors in a cluster** when interpreting state — the engine uses the minimum, and so should you when explaining results back to the user.
+- **Refusals are explicit, not silent no-ops.** A reversed or empty vacation window → 400 (create and update); `plants/sync` with an unknown `plant_id` or `cluster_id` → 404; linking a sensor (create or update) to a plant of another cluster → 404 `Plant N not found in cluster`; a duplicate Tuya device id → 409; `clusters/{id}/efficacy` accepts `days` 1–365 (422 outside). Report the error to the user instead of retrying blindly.
+- **Stop events read `stop`.** Manual, automatic-shutdown and emergency stops all record action `stop` in history/stats; databases older than this change may still contain `off` rows for earlier manual stops — treat both as "stopped". A device whose stored `config` is malformed comes back as `config: {}`.
 - **CSV export is binary**. The `clusters/{id}/stats/export` endpoint returns a file, not JSON. If you call it through MCP, expect a blob you'll need to save and tell the user where it landed.
 - **Plant health is a daily snapshot**, not a live read. If the user wants live conditions, look at sensor readings, not the health score. Use `plants/{id}/health-timeline` for the trend, and `plants/health/snapshot` to force a fresh snapshot on demand.

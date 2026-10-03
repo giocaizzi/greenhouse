@@ -72,7 +72,7 @@ class SettingsScreen(DataScreen):
         self.vacations = (vacation or {}).get("items", [])
         active_id = ((vacation or {}).get("active") or {}).get("id")
         table = self.query_one("#vacation-table", DataTable)
-        refill(table, render.vacation_rows(self.vacations, active_id))
+        refill(table, render.vacation_rows(self.vacations, active_id, self.prefs.get("timezone")))
 
     def action_edit_preferences(self) -> None:
         self.form_then(
@@ -102,7 +102,7 @@ class SettingsScreen(DataScreen):
     def action_new_vacation(self) -> None:
         self.form_then(
             "New vacation window",
-            resources.vacation_fields(),
+            resources.vacation_fields(tz=self.prefs.get("timezone")),
             lambda v: lambda c: c.add_vacation(**v),
             "Vacation window added",
             "Add",
@@ -113,7 +113,7 @@ class SettingsScreen(DataScreen):
         if window:
             self.form_then(
                 f"Edit vacation #{window['id']}",
-                resources.vacation_fields(window),
+                resources.vacation_fields(window, tz=self.prefs.get("timezone")),
                 lambda v: lambda c: c.update_vacation(window["id"], **v),
                 "Vacation window updated",
             )

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Query
 
-from greenhouse_core.models import Plant
 from greenhouse_core.schemas import (
     ChartPayloadResponse,
     HeatmapResponse,
@@ -12,7 +11,7 @@ from greenhouse_core.schemas import (
     PlantHealthTimelineResponse,
     PlantResponse,
 )
-from greenhouse_server.deps import PlantDbDep, RepoDep
+from greenhouse_server.deps import PlantDbDep, RepoDep, require_plant
 from greenhouse_server.services.charts import (
     build_cluster_chart_payload,
     build_heatmap_payload,
@@ -34,9 +33,7 @@ def get_plant(plant_id: int, repo: RepoDep):
     Raises:
         HTTPException: 404 if no plant with that ID exists.
     """
-    plant: Plant | None = repo.get_plant(plant_id)
-    if plant is None:
-        raise HTTPException(404, "Plant not found")
+    plant = require_plant(repo, plant_id)
     return plant
 
 

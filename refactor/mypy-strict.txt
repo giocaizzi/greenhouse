@@ -99,12 +99,14 @@ libs/greenhouse-server/greenhouse_server/services/forecast.py
 libs/greenhouse-server/greenhouse_server/services/health.py
 libs/greenhouse-server/greenhouse_server/services/health_monitor.py
 libs/greenhouse-server/greenhouse_server/services/insights.py
+libs/greenhouse-server/greenhouse_server/services/inventory.py
 libs/greenhouse-server/greenhouse_server/services/irrigation.py
 libs/greenhouse-server/greenhouse_server/services/maintenance.py
 libs/greenhouse-server/greenhouse_server/services/pump_watcher.py
 libs/greenhouse-server/greenhouse_server/services/search.py
 libs/greenhouse-server/greenhouse_server/services/system_health.py
 libs/greenhouse-server/greenhouse_server/services/vacation.py
+libs/greenhouse-server/greenhouse_server/services/windows.py
 libs/greenhouse-server/greenhouse_server/web/__init__.py
 libs/greenhouse-server/greenhouse_server/web/context.py
 libs/greenhouse-server/greenhouse_server/web/router.py

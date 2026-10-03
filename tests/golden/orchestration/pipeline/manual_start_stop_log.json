@@ -166,7 +166,7 @@
     "triggered_by": "manual"
    },
    {
-    "action": "off",
+    "action": "stop",
     "duration_minutes": null,
     "id": 3,
     "irrigator_id": 1,
