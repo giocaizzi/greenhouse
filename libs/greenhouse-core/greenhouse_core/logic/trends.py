@@ -17,6 +17,7 @@ from greenhouse_core.constants import (
 )
 from greenhouse_core.logic.cleaning import clean_readings
 from greenhouse_core.logic.decision import Trends
+from greenhouse_core.models import EVENT_ACTION_START
 from greenhouse_core.repository import IrrigationRepository
 
 if TYPE_CHECKING:
@@ -85,7 +86,7 @@ def _apply_cadence_flags(trends: Trends, events: Sequence[IrrigationEvent]) -> N
     """Flag a too-sparse or too-frequent irrigation cadence over the window."""
     # Only real actuation (`start`) counts as irrigation. `schedule_updated`
     # is a config change, not water, so it must not inflate the cadence.
-    irrigation_events = [e for e in events if e.action == "start" and e.duration_minutes]
+    irrigation_events = [e for e in events if e.action == EVENT_ACTION_START and e.duration_minutes]
     total_events = len(irrigation_events)
     if total_events <= 0:
         return

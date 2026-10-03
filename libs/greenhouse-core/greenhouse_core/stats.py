@@ -1,19 +1,47 @@
-"""Irrigation statistics and reporting."""
+"""Irrigation statistics for a cluster (and the legacy CSV export)."""
 
 from __future__ import annotations
 
 import time
 from collections import defaultdict
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, TypedDict
 
+from greenhouse_core.constants import SECONDS_PER_DAY
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_core.utils import format_timestamp
 
 if TYPE_CHECKING:
     from _csv import Writer as _CsvWriter
-    from collections.abc import Mapping
 
     from greenhouse_core.models import IrrigationEvent, Irrigator
+
+
+class IrrigationRecord(TypedDict):
+    """One in-window event that actually ran water (``duration_minutes`` set)."""
+
+    timestamp: int
+    duration_minutes: int
+    triggered_by: str
+    irrigator: str
+
+
+class IrrigationStats(TypedDict):
+    """Aggregates for one cluster's irrigator; key order is the output contract."""
+
+    period_days: int
+    total_events: int
+    total_duration_minutes: int
+    events_by_type: defaultdict[str, int]
+    events_by_trigger: defaultdict[str, int]
+    irrigations: list[IrrigationRecord]
+    avg_duration_minutes: float
+    frequency_per_day: float
+
+
+class StatsUnavailable(TypedDict):
+    """Returned instead of stats when the cluster has no irrigator."""
+
+    error: str
 
 
 def format_duration(minutes: int) -> str:
@@ -25,7 +53,7 @@ def format_duration(minutes: int) -> str:
     return f"{hours}h {mins}min" if mins else f"{hours}h"
 
 
-def _empty_stats(days: int) -> dict[str, Any]:
+def _empty_stats(days: int) -> IrrigationStats:
     """The stats dict before any event is counted (key order is the output contract)."""
     return {
         "period_days": days,
@@ -39,7 +67,7 @@ def _empty_stats(days: int) -> dict[str, Any]:
     }
 
 
-def _count_event(stats: dict[str, Any], event: IrrigationEvent, irrigator_name: str) -> None:
+def _count_event(stats: IrrigationStats, event: IrrigationEvent, irrigator_name: str) -> None:
     """Add one in-window event to the running totals (and to the irrigation list if it ran)."""
     stats["total_events"] += 1
     stats["events_by_type"][event.action] += 1
@@ -57,9 +85,11 @@ def _count_event(stats: dict[str, Any], event: IrrigationEvent, irrigator_name: 
         )
 
 
-def get_irrigation_stats(db: IrrigationRepository, cluster_id: int, days: int = 7) -> dict[str, Any]:
+def get_irrigation_stats(
+    db: IrrigationRepository, cluster_id: int, days: int = 7
+) -> IrrigationStats | StatsUnavailable:
     """Get irrigation statistics for a cluster."""
-    cutoff = int(time.time()) - (days * 24 * 3600)
+    cutoff = int(time.time()) - (days * SECONDS_PER_DAY)
 
     irrigator = db.get_irrigator_for_cluster(cluster_id)
     if irrigator is None:
@@ -79,41 +109,6 @@ def get_irrigation_stats(db: IrrigationRepository, cluster_id: int, days: int = 
         stats["frequency_per_day"] = len(stats["irrigations"]) / days
 
     return stats
-
-
-def _print_counts(title: str, counts: Mapping[str, int]) -> None:
-    """Print one sorted "name: count" section, or nothing when it is empty."""
-    if counts:
-        print(title)
-        for name, count in sorted(counts.items()):
-            print(f"   {name}: {count}")
-
-
-def print_stats_report(stats: dict[str, Any], cluster_name: str) -> None:
-    """Print formatted statistics report."""
-    if "error" in stats:
-        print(f"❌ {stats['error']}")
-        return
-
-    print(f"\n📊 Irrigation Statistics - {cluster_name}")
-    print(f"   Period: last {stats['period_days']} days")
-    print("\n🔢 Summary:")
-    print(f"   Total events: {stats['total_events']}")
-    print(f"   Irrigations: {len(stats['irrigations'])}")
-    print(f"   Total water time: {format_duration(stats['total_duration_minutes'])}")
-
-    if stats["irrigations"]:
-        print(f"   Average per irrigation: {format_duration(int(stats['avg_duration_minutes']))}")
-        print(f"   Frequency: {stats['frequency_per_day']:.1f} times/day")
-
-    _print_counts("\n📋 Events by type:", stats["events_by_type"])
-    _print_counts("\n🎯 Triggered by:", stats["events_by_trigger"])
-
-    if stats["irrigations"]:
-        print("\n💧 Recent irrigations:")
-        for irr in stats["irrigations"][-5:]:  # Last 5
-            ts = format_timestamp(irr["timestamp"])
-            print(f"   {ts} | {format_duration(irr['duration_minutes'])} | {irr['triggered_by']} | {irr['irrigator']}")
 
 
 def _csv_event_row(event: IrrigationEvent, irrigator: Irrigator) -> list[object]:
@@ -144,7 +139,7 @@ def export_csv(db: IrrigationRepository, cluster_id: int, days: int, output_path
     """Export irrigation events to CSV."""
     import csv
 
-    cutoff = int(time.time()) - (days * 24 * 3600)
+    cutoff = int(time.time()) - (days * SECONDS_PER_DAY)
     irrigator = db.get_irrigator_for_cluster(cluster_id)
 
     with open(output_path, "w", newline="") as f:

@@ -3,9 +3,11 @@
 from sqlalchemy import Float, ForeignKey, Index, Integer, String, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
+from greenhouse_core.constants import FULL_WEEKDAY_MASK
+
 
 class Base(DeclarativeBase):
-    pass
+    """Declarative base shared by every ORM model (one metadata = one schema)."""
 
 
 # ── Activity / audit / decisions / alerts ────────────────────────────────────
@@ -16,7 +18,32 @@ ENTITY_CLUSTER = "cluster"
 ENTITY_PLANT = "plant"
 ENTITY_SENSOR = "sensor"
 ENTITY_IRRIGATOR = "irrigator"
-ENTITY_SYSTEM = "system"
+
+# ``source`` of an ActivityEvent / Alert row: the subsystem that produced it.
+SOURCE_IRRIGATION = "irrigation"
+SOURCE_SENSOR = "sensor"
+SOURCE_PLANT = "plant"
+SOURCE_LEARNING = "learning"
+SOURCE_MAINTENANCE = "maintenance"
+SOURCE_LEAK = "leak"
+SOURCE_ANOMALY = "anomaly"
+SOURCE_PUMP = "pump"
+SOURCE_HEALTH = "health"
+
+# ``IrrigationEvent.action``. Only ``start`` is real actuation: cooldown, caps,
+# trends and learning count it alone (a ``schedule_updated`` row blocks nothing).
+EVENT_ACTION_START = "start"
+EVENT_ACTION_STOP = "stop"
+EVENT_ACTION_OFF = "off"  # manual stop (OD4 unifies it on ``stop``)
+EVENT_ACTION_ATTEMPTED = "attempted"  # automatic start whose device call failed
+EVENT_ACTION_ABORTED = "aborted"  # pump watcher stopped a dry run
+
+# ``IrrigationEvent.triggered_by``: who asked for the actuation.
+TRIGGERED_BY_AUTO = "auto"
+TRIGGERED_BY_MANUAL = "manual"
+TRIGGERED_BY_EMERGENCY = "emergency"
+TRIGGERED_BY_SHUTDOWN = "shutdown"
+TRIGGERED_BY_PUMP_WATCHER = "pump_watcher"
 
 
 class Cluster(Base):
@@ -361,7 +388,7 @@ class IrrigationWindow(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     cluster_id: Mapped[int] = mapped_column(ForeignKey("clusters.id", ondelete="CASCADE"), nullable=False)
-    weekday_mask: Mapped[int] = mapped_column(Integer, nullable=False, default=127)
+    weekday_mask: Mapped[int] = mapped_column(Integer, nullable=False, default=FULL_WEEKDAY_MASK)
     start_hour: Mapped[int] = mapped_column(Integer, nullable=False)
     end_hour: Mapped[int] = mapped_column(Integer, nullable=False)
     label: Mapped[str | None] = mapped_column(String)

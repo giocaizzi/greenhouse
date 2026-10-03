@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Utility functions for irrigation system."""
 
 import os
@@ -8,9 +7,8 @@ from zoneinfo import ZoneInfo
 
 from greenhouse_core.constants import NIGHT_LUX_THRESHOLD, SEASONAL_LIGHT_FACTOR_BY_MONTH
 
-# Seasonal light reduction factor by month (Northern hemisphere, ~45°N latitude - Milano);
-# the table lives in constants. NIGHT_LUX_THRESHOLD stays importable from here.
-_SEASONAL_LIGHT_FACTOR: dict[int, float] = SEASONAL_LIGHT_FACTOR_BY_MONTH
+# The seasonal table (~45°N, Milano) and the night-lux cut-off live in constants;
+# NIGHT_LUX_THRESHOLD stays importable from here (pinned import surface).
 
 
 def seasonal_light_factor(month: int | None = None) -> float:
@@ -23,7 +21,7 @@ def seasonal_light_factor(month: int | None = None) -> float:
     """
     if month is None:
         month = datetime.now(tz=UTC).month
-    return _SEASONAL_LIGHT_FACTOR.get(month, 1.0)
+    return SEASONAL_LIGHT_FACTOR_BY_MONTH.get(month, 1.0)
 
 
 def daytime_lux_readings(readings: list[Any], min_lux: int = NIGHT_LUX_THRESHOLD) -> list[float]:
@@ -81,8 +79,7 @@ def get_display_timezone() -> str:
 
 
 def format_timestamp(timestamp: float, fmt: str = "%Y-%m-%d %H:%M") -> str:
-    """
-    Format a UTC timestamp for display in local timezone.
+    """Format a UTC timestamp for display in local timezone.
 
     Args:
         timestamp: Unix timestamp (UTC)

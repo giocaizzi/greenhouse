@@ -1,4 +1,4 @@
-"""Database operations for the irrigation system (replaces IrrigationDB)."""
+"""Database operations for the irrigation system: the one persistence facade over the ORM."""
 
 import json
 import time
@@ -14,10 +14,17 @@ from greenhouse_core.constants import (
     DEFAULT_INTERVAL_HOURS,
     DEFAULT_IRRIGATION_MODE,
     FULL_WEEKDAY_MASK,
+    RESPONSE_POST_WINDOW_SECONDS,
+    RESPONSE_PRE_WINDOW_SECONDS,
+    SECONDS_PER_DAY,
+    SECONDS_PER_HOUR,
 )
 from greenhouse_core.models import (
     ENTITY_PLANT,
     ENTITY_SENSOR,
+    EVENT_ACTION_START,
+    SOURCE_PLANT,
+    SOURCE_SENSOR,
     ActivityEvent,
     Alert,
     Cluster,
@@ -78,6 +85,22 @@ class IrrigationRepository:
 
     def __init__(self, session: Session):
         self.session = session
+
+    # ── Unit of work ──────────────────────────────────────────────────────────
+    # The one spelling for transaction control outside this module: handlers commit CRUD,
+    # a service commits only when a side effect must follow a durable write (OD2).
+
+    def commit(self) -> None:
+        """Commit the current transaction on the repository's session."""
+        self.session.commit()
+
+    def rollback(self) -> None:
+        """Roll back the current transaction on the repository's session."""
+        self.session.rollback()
+
+    def flush(self) -> None:
+        """Flush pending changes to the database without committing."""
+        self.session.flush()
 
     # ── Clusters ──────────────────────────────────────────────────────────────
 
@@ -249,7 +272,7 @@ class IrrigationRepository:
             self._open_sensor_assignment(sensor_id, new_plant_id, when=ts)
         self.session.flush()
         self.add_activity_event(
-            source="sensor",
+            source=SOURCE_SENSOR,
             entity_type=ENTITY_SENSOR,
             entity_id=sensor_id,
             code="sensor_reassigned",
@@ -257,16 +280,6 @@ class IrrigationRepository:
             severity="info",
             payload={"from_plant_id": from_plant_id, "to_plant_id": new_plant_id},
             timestamp=ts,
-        )
-
-    def sensor_assignments_for_plant(self, plant_id: int) -> list[SensorAssignment]:
-        """All assignment rows (open or closed) ever linking sensors to this plant."""
-        return list(
-            self.session.scalars(
-                select(SensorAssignment)
-                .where(SensorAssignment.plant_id == plant_id)
-                .order_by(SensorAssignment.started_at)
-            )
         )
 
     def list_sensor_assignments(self, sensor_id: int) -> list[SensorAssignment]:
@@ -415,7 +428,7 @@ class IrrigationRepository:
 
     def get_recent_readings(self, sensor_id: int, hours: int = 24) -> list[SensorReading]:
         """Get recent readings for a sensor, ordered by timestamp DESC."""
-        cutoff = int(time.time()) - (hours * 3600)
+        cutoff = int(time.time()) - (hours * SECONDS_PER_HOUR)
         return list(
             self.session.scalars(
                 select(SensorReading)
@@ -425,7 +438,11 @@ class IrrigationRepository:
         )
 
     def get_readings_around(
-        self, sensor_id: int, timestamp: int, before_seconds: int = 1800, after_seconds: int = 7200
+        self,
+        sensor_id: int,
+        timestamp: int,
+        before_seconds: int = RESPONSE_PRE_WINDOW_SECONDS,
+        after_seconds: int = RESPONSE_POST_WINDOW_SECONDS,
     ) -> tuple[list[SensorReading], list[SensorReading]]:
         """Get readings before and after a timestamp.
 
@@ -482,7 +499,7 @@ class IrrigationRepository:
 
     def get_recent_events(self, irrigator_id: int, hours: int = 24) -> list[IrrigationEvent]:
         """Get recent events for an irrigator, ordered by timestamp DESC."""
-        cutoff = int(time.time()) - (hours * 3600)
+        cutoff = int(time.time()) - (hours * SECONDS_PER_HOUR)
         return list(
             self.session.scalars(
                 select(IrrigationEvent)
@@ -505,7 +522,7 @@ class IrrigationRepository:
         total_minutes = self.session.scalar(
             select(func.coalesce(func.sum(IrrigationEvent.duration_minutes), 0)).where(
                 IrrigationEvent.irrigator_id == irrigator_id,
-                IrrigationEvent.action == "start",
+                IrrigationEvent.action == EVENT_ACTION_START,
                 IrrigationEvent.timestamp >= since,
                 IrrigationEvent.timestamp <= until,
             )
@@ -526,8 +543,7 @@ class IrrigationRepository:
     )
 
     def set_irrigation_config(self, cluster_id: int, **fields: Any) -> int:
-        """Upsert a cluster's irrigation config; only the fields provided in
-        ``fields`` are mutated.
+        """Upsert a cluster's irrigation config, mutating only the fields provided.
 
         Every field is nullable: passing ``None`` clears the cluster-level
         override (the effective resolver will then fall through to the
@@ -921,7 +937,7 @@ class IrrigationRepository:
 
     def list_plant_health_history(self, plant_id: int, days: int = 90) -> list[PlantHealthDaily]:
         """Last ``days`` of health snapshots oldest-first for charting."""
-        cutoff = int(time.time()) - days * 86400
+        cutoff = int(time.time()) - days * SECONDS_PER_DAY
         return list(
             self.session.scalars(
                 select(PlantHealthDaily)
@@ -994,6 +1010,7 @@ class IrrigationRepository:
         )
 
     def get_irrigation_window(self, window_id: int) -> IrrigationWindow | None:
+        """Get an irrigation window by ID."""
         return self.session.get(IrrigationWindow, window_id)
 
     def add_irrigation_window(
@@ -1005,6 +1022,7 @@ class IrrigationRepository:
         weekday_mask: int = FULL_WEEKDAY_MASK,
         label: str | None = None,
     ) -> IrrigationWindow:
+        """Add an irrigation window to a cluster (every weekday unless a mask is given)."""
         row = IrrigationWindow(
             cluster_id=cluster_id,
             start_hour=start_hour,
@@ -1017,6 +1035,7 @@ class IrrigationRepository:
         return row
 
     def update_irrigation_window(self, window_id: int, **fields: Any) -> IrrigationWindow | None:
+        """Patch an irrigation window's fields; ``None`` when it does not exist."""
         row = self.session.get(IrrigationWindow, window_id)
         if row is None:
             return None
@@ -1025,6 +1044,7 @@ class IrrigationRepository:
         return row
 
     def delete_irrigation_window(self, window_id: int) -> bool:
+        """Delete an irrigation window; ``False`` when it does not exist."""
         return self._delete_by_id(IrrigationWindow, window_id)
 
     # ── User Preferences (single-row) ─────────────────────────────────────────
@@ -1198,8 +1218,11 @@ class IrrigationRepository:
         return plant
 
     def delete_plant(self, plant_id: int) -> bool:
-        """Delete a plant. Sensors retain their cluster; any open assignment to
-        the plant is closed so historical readings stay attributed correctly."""
+        """Delete a plant, closing its sensors' open assignments.
+
+        Sensors retain their cluster; any open assignment to the plant is closed
+        so historical readings stay attributed correctly.
+        """
         plant = self.session.get(Plant, plant_id)
         if not plant:
             return False
@@ -1256,7 +1279,7 @@ class IrrigationRepository:
             sensor.cluster_id = target_cluster_id
         self.session.flush()
         self.add_activity_event(
-            source="plant",
+            source=SOURCE_PLANT,
             entity_type=ENTITY_PLANT,
             entity_id=plant_id,
             code="plant_moved",
@@ -1271,8 +1294,9 @@ class IrrigationRepository:
         return plant
 
     def update_sensor(self, sensor_id: int, **fields: Any) -> Sensor | None:
-        """Patch sensor fields. ``plant_id`` changes are routed through
-        ``reassign_sensor_to_plant`` so the assignment history stays in sync.
+        """Patch sensor fields, keeping the assignment history in sync.
+
+        ``plant_id`` changes are routed through ``reassign_sensor_to_plant``;
         ``config`` is JSON-serialised if a dict.
         """
         sensor = self.session.get(Sensor, sensor_id)

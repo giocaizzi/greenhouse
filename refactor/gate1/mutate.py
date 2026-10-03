@@ -1600,8 +1600,8 @@ add(
         ),
         (
             "05",
-            'e.action == "start" and e.duration_minutes',
-            'e.action in ("start", "schedule_updated") and e.duration_minutes',
+            "e.action == EVENT_ACTION_START and e.duration_minutes",
+            'e.action in (EVENT_ACTION_START, "schedule_updated") and e.duration_minutes',
             "cadence counts schedule_updated",
         ),
         (
@@ -1735,14 +1735,6 @@ add(
             "                duration_delta=duration_delta,\n                interval_delta=interval_delta,",
             "                duration_delta=interval_delta,\n                interval_delta=duration_delta,",
             "add_reason swaps deltas",
-        ),
-        (
-            "10",
-            '    def any_critical(self) -> bool:\n        """True when at least one critical-class stress is set."""\n        return any(',
-            '    def any_critical(self) -> bool:\n        """True when at least one critical-class stress is set."""\n        return not any(',
-            "StressIndicators.any_critical negated",
-            0,
-            "any_critical() has no caller in libs/ (grep) — dead API",
         ),
     ],
 )
@@ -1888,7 +1880,7 @@ add(
         ),
         (
             "20",
-            'irrigation_events = [e for e in all_events if e.action == "start" and e.timestamp >= cutoff]',
+            "irrigation_events = [e for e in all_events if e.action == EVENT_ACTION_START and e.timestamp >= cutoff]",
             "irrigation_events = [e for e in all_events if e.timestamp >= cutoff]",
             "profile counts non-start events",
         ),
@@ -1910,7 +1902,12 @@ add(
             "delta_per_minute=delta * duration if duration > 0 else 0",
             "delta per minute * instead of /",
         ),
-        ("24", "before_seconds=PRE_WINDOW_SEC,", "before_seconds=PRE_WINDOW_SEC * 2,", "pre window 30 -> 60 min"),
+        (
+            "24",
+            "before_seconds=RESPONSE_PRE_WINDOW_SECONDS,",
+            "before_seconds=RESPONSE_PRE_WINDOW_SECONDS * 2,",
+            "pre window 30 -> 60 min",
+        ),
         (
             "25",
             "    return statistics.mean(declines)  # Negative value",
@@ -3064,7 +3061,7 @@ add(
         ),
         (
             "05",
-            '                IrrigationEvent.action == "start",\n                IrrigationEvent.timestamp >= since,',
+            "                IrrigationEvent.action == EVENT_ACTION_START,\n                IrrigationEvent.timestamp >= since,",
             "                IrrigationEvent.timestamp >= since,",
             "consumption counts non-start events",
         ),

@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import statistics
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from greenhouse_core.constants import (
     CLEANING_HAMPEL_MIN_READINGS,
@@ -37,6 +38,11 @@ from greenhouse_core.constants import (
     CLEANING_MAD_SCALE,
     SENSOR_PHYSICAL_RANGES,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+
+    from greenhouse_core.models import SensorReading
 
 # Numeric metrics cleaned independently. ``battery_state`` / ``water_warning``
 # are categorical/boolean device flags and pass through untouched.
@@ -91,7 +97,7 @@ def _hampel_outlier_mask(values: list[float], radius: int, n_sigma: float) -> li
     return mask
 
 
-def clean_readings(readings) -> list[CleanedReading]:
+def clean_readings(readings: Iterable[SensorReading | CleanedReading]) -> list[CleanedReading]:
     """Return a cleaned, chronologically-sorted view of one sensor's readings.
 
     Apply per metric to a single sensor's series (never a mix of sensors): each
@@ -139,7 +145,7 @@ def clean_readings(readings) -> list[CleanedReading]:
     return cleaned
 
 
-def clean_readings_desc(readings) -> list[CleanedReading]:
+def clean_readings_desc(readings: Iterable[SensorReading | CleanedReading]) -> list[CleanedReading]:
     """Cleaned view of one sensor's series, newest-first.
 
     Mirrors :func:`IrrigationRepository.get_recent_readings`'s ordering so
@@ -155,7 +161,9 @@ def clean_readings_desc(readings) -> list[CleanedReading]:
     return list(reversed(clean_readings(readings)))
 
 
-def clean_readings_around(before, after) -> tuple[list[CleanedReading], list[CleanedReading]]:
+def clean_readings_around(
+    before: Iterable[SensorReading | CleanedReading], after: Iterable[SensorReading | CleanedReading]
+) -> tuple[list[CleanedReading], list[CleanedReading]]:
     """Clean a before/after pair as ONE series, then split it back.
 
     Post-irrigation analysis (leak detection, efficacy scoring, learning
