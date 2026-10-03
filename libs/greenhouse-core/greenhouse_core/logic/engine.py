@@ -192,22 +192,11 @@ class IrrigationLogic:
             )
             return self._record(skip, persist=persist, triggered_by=triggered_by)
 
-        def _finalize(decision: IrrigationDecision) -> IrrigationDecision:
-            if quiet_window is not None and bypass_quiet_hours:
-                decision.add_reason(
-                    code=TriggerCode.MANUAL_OVERRIDE_QUIET_HOURS,
-                    message=(
-                        f"manual override of quiet hours ({quiet_window[0]:02d}:00–{quiet_window[1]:02d}:00 local)"
-                    ),
-                    severity=Severity.WARNING,
-                )
-            if persist:
-                self._persist(decision, triggered_by)
-            return decision
+        override = quiet_window if bypass_quiet_hours else None
 
         weather_skip = self._apply_weather_skip_rule(cluster, cluster_id, evaluated_at)
         if weather_skip is not None:
-            return _finalize(weather_skip)
+            return self._finish(weather_skip, override_window=override, persist=persist, triggered_by=triggered_by)
 
         snapshot = get_recent_sensor_data(self.db, cluster_id, hours=SNAPSHOT_LOOKBACK_HOURS)
         trends = analyze_historical_trends(self.db, cluster_id)
@@ -232,7 +221,7 @@ class IrrigationLogic:
                 trends=trends,
                 stress=stress,
             )
-            return _finalize(fallback)
+            return self._finish(fallback, override_window=override, persist=persist, triggered_by=triggered_by)
 
         decision = IrrigationDecision(
             cluster_id=cluster_id,
@@ -247,15 +236,15 @@ class IrrigationLogic:
         )
 
         if _apply_water_warning_rule(decision):
-            return _finalize(decision)
+            return self._finish(decision, override_window=override, persist=persist, triggered_by=triggered_by)
         if _apply_critical_stress_rule(decision):
-            return _finalize(decision)
+            return self._finish(decision, override_window=override, persist=persist, triggered_by=triggered_by)
 
         # Cluster-level timing gate — checked AFTER stress overrides on purpose:
         # a wilting plant still gets water at 2am, a healthy one doesn't.
         window_skip = self._apply_window_rule(cluster, cluster_id, evaluated_at, decision)
         if window_skip is not None:
-            return _finalize(window_skip)
+            return self._finish(window_skip, override_window=override, persist=persist, triggered_by=triggered_by)
 
         _apply_soil_moisture_rule(decision, plant_care)
         _apply_temperature_adjustment(decision, ideal_temp_range)
@@ -275,7 +264,7 @@ class IrrigationLogic:
         # VACATION_BUDGET_EXHAUSTED).
         self._apply_vacation_budget(decision, cluster_id, evaluated_at)
 
-        return _finalize(decision)
+        return self._finish(decision, override_window=override, persist=persist, triggered_by=triggered_by)
 
     def _resolve_quiet_window(self, cluster_id: int, evaluated_at: int) -> tuple[int, int] | None:
         """Return the effective quiet-hours window for a cluster if it is
@@ -471,6 +460,25 @@ class IrrigationLogic:
             severity=Severity.WARNING,
             icon="drop-slash",
         )
+
+    def _finish(
+        self,
+        decision: IrrigationDecision,
+        *,
+        override_window: tuple[int, int] | None,
+        persist: bool,
+        triggered_by: str,
+    ) -> IrrigationDecision:
+        """Record a rule-pipeline decision, noting a manual quiet-hours override in its trail first."""
+        if override_window is not None:
+            decision.add_reason(
+                code=TriggerCode.MANUAL_OVERRIDE_QUIET_HOURS,
+                message=(
+                    f"manual override of quiet hours ({override_window[0]:02d}:00–{override_window[1]:02d}:00 local)"
+                ),
+                severity=Severity.WARNING,
+            )
+        return self._record(decision, persist=persist, triggered_by=triggered_by)
 
     def _record(self, decision: IrrigationDecision, *, persist: bool, triggered_by: str) -> IrrigationDecision:
         """Persist ``decision`` when asked and hand it back — every exit logs exactly once."""
