@@ -30,7 +30,7 @@ def bulk_stop_all(repo: RepoDep, registry: DeviceRegistryDep, notifier: NtfyNoti
         notifier,
         repo.get_preferences(),
         "emergency",
-        lambda: notifier.notify_irrigation(
+        lambda n: n.notify_irrigation(
             triggered_by="emergency",
             irrigator_name=f"{stopped} irrigator(s)",
             detail="kill switch" + (f", {len(errors)} error(s)" if errors else ""),

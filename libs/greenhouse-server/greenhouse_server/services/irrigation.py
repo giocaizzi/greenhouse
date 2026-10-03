@@ -577,7 +577,7 @@ class IrrigationService:
             self._notifier,
             self._repo.get_preferences(),
             "auto",
-            lambda: self._notifier.notify_irrigation(  # type: ignore[union-attr]  # maybe_notify returns first when notifier is None
+            lambda n: n.notify_irrigation(
                 triggered_by=TRIGGERED_BY_AUTO,
                 irrigator_name=act.irrigator.name,
                 duration_minutes=duration,

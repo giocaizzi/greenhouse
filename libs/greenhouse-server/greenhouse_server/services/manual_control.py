@@ -141,7 +141,7 @@ def manual_start(
         notifier,
         repo.get_preferences(),
         "manual",
-        lambda: notifier.notify_irrigation(  # type: ignore[union-attr]  # maybe_notify returns first when notifier is None
+        lambda n: n.notify_irrigation(
             triggered_by=TRIGGERED_BY_MANUAL,
             irrigator_name=irrigator.name,
             duration_minutes=minutes,
@@ -193,7 +193,7 @@ def manual_stop(
         notifier,
         repo.get_preferences(),
         "manual",
-        lambda: notifier.notify_irrigation(  # type: ignore[union-attr]  # maybe_notify returns first when notifier is None
+        lambda n: n.notify_irrigation(
             triggered_by=TRIGGERED_BY_MANUAL,
             irrigator_name=irrigator.name,
             detail="stopped",
@@ -242,7 +242,7 @@ def manual_log(
         notifier,
         repo.get_preferences(),
         "manual",
-        lambda: notifier.notify_irrigation(  # type: ignore[union-attr]  # maybe_notify returns first when notifier is None
+        lambda n: n.notify_irrigation(
             triggered_by=TRIGGERED_BY_MANUAL,
             irrigator_name=irrigator.name,
             duration_minutes=minutes,
