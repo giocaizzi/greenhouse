@@ -3,7 +3,7 @@
 import json
 import os
 from collections.abc import Callable
-from typing import Annotated, Any
+from typing import Annotated, Any, TypeVar
 
 import typer
 from rich import print_json
@@ -18,6 +18,8 @@ ClusterOpt = Annotated[int, typer.Option(help="Cluster ID")]
 ClusterFilterOpt = Annotated[int | None, typer.Option(help="Filter by cluster ID")]
 YesOpt = Annotated[bool, typer.Option("--yes", "-y", help="Skip confirmation prompt")]
 
+T = TypeVar("T")
+
 
 def server_url(ctx: typer.Context) -> str:
     """The server URL: ``--server`` (stored on ``ctx.obj``), else $IRRIGATION_SERVER_URL, else the default."""
@@ -29,11 +31,11 @@ def get_client(ctx: typer.Context) -> IrrigationClient:
     return IrrigationClient(base_url=server_url(ctx))
 
 
-def call(ctx: typer.Context, fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
-    """Call a client method with error handling. Returns the result or exits on error."""
+def call(ctx: typer.Context, fn: Callable[[IrrigationClient], T]) -> T:
+    """Run ``fn`` against a fresh client and return its result; a server error prints and exits 1."""
     try:
         with get_client(ctx) as client:
-            return fn(client, *args, **kwargs)
+            return fn(client)
     except ServerError as e:
         typer.echo(f"Error: {e.detail}", err=True)
         raise typer.Exit(1) from None

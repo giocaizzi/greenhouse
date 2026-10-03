@@ -1,5 +1,6 @@
 """Plant management commands."""
 
+from operator import methodcaller
 from typing import Annotated
 
 import typer
@@ -58,7 +59,7 @@ def plant_list(
     else:
         clusters = call(ctx, lambda c: c.list_clusters())
         for cl in clusters:
-            plants = call(ctx, lambda c, cid=cl["id"]: c.list_plants(cid))
+            plants = call(ctx, methodcaller("list_plants", cl["id"]))
             if plants:
                 output({"cluster": cl["name"], "plants": plants})
 

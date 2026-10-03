@@ -1,5 +1,6 @@
 """Sensor management commands."""
 
+from operator import methodcaller
 from typing import Annotated
 
 import typer
@@ -35,7 +36,7 @@ def sensor_list(
     else:
         clusters = call(ctx, lambda c: c.list_clusters())
         for cl in clusters:
-            sensors = call(ctx, lambda c, cid=cl["id"]: c.list_sensors(cid))
+            sensors = call(ctx, methodcaller("list_sensors", cl["id"]))
             if sensors:
                 output({"cluster": cl["name"], "sensors": sensors})
 
