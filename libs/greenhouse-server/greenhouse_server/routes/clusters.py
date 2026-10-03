@@ -1,6 +1,6 @@
 """Cluster CRUD routes."""
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Query, status
 
 from greenhouse_core.schemas import (
     ClusterDetailResponse,
@@ -129,9 +129,8 @@ def update_cluster(cluster_id: int, request: UpdateClusterRequest, repo: RepoDep
     Raises:
         HTTPException: 404 if no cluster with that ID exists.
     """
+    require_cluster(repo, cluster_id)
     cluster = repo.update_cluster(cluster_id, **request.model_dump(exclude_none=True))
-    if not cluster:
-        raise HTTPException(status_code=404, detail="Cluster not found")
     repo.commit()
     return cluster
 
@@ -152,8 +151,7 @@ def delete_cluster(cluster_id: int, repo: RepoDep):
     Raises:
         HTTPException: 404 if no cluster with that ID exists.
     """
-    deleted = repo.delete_cluster(cluster_id)
-    if not deleted:
-        raise HTTPException(status_code=404, detail="Cluster not found")
+    require_cluster(repo, cluster_id)
+    repo.delete_cluster(cluster_id)
     repo.commit()
     return SuccessResponse(success=True)

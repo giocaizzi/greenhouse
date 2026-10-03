@@ -1,6 +1,6 @@
 """Alert inbox routes."""
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Query
 
 from greenhouse_core.schemas import AlertListResponse, AlertSummary
 from greenhouse_server.deps import NtfyNotifierDep, PlantDbDep, RepoDep, require_alert, require_cluster
@@ -82,9 +82,8 @@ def acknowledge_alert(alert_id: int, repo: RepoDep) -> AlertSummary:
     Raises:
         HTTPException: 404 if no alert with that ID exists.
     """
+    require_alert(repo, alert_id)
     alert = repo.acknowledge_alert(alert_id)
-    if not alert:
-        raise HTTPException(status_code=404, detail="Alert not found")
     repo.commit()
     return AlertSummary.model_validate(alert)
 
@@ -102,9 +101,8 @@ def resolve_alert(alert_id: int, repo: RepoDep) -> AlertSummary:
     Raises:
         HTTPException: 404 if no alert with that ID exists.
     """
+    require_alert(repo, alert_id)
     alert = repo.resolve_alert(alert_id)
-    if not alert:
-        raise HTTPException(status_code=404, detail="Alert not found")
     repo.commit()
     return AlertSummary.model_validate(alert)
 

@@ -115,8 +115,7 @@ def delete_vacation_window(window_id: int, repo: RepoDep):
     Raises:
         HTTPException: 404 if no window with that ID exists.
     """
-    deleted = repo.delete_vacation_window(window_id)
-    if not deleted:
-        raise HTTPException(status_code=404, detail="Vacation window not found")
+    require_vacation_window(repo, window_id)
+    repo.delete_vacation_window(window_id)
     repo.commit()
     return SuccessResponse(success=True)
