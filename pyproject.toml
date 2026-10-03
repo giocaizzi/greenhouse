@@ -202,7 +202,6 @@ indent-style = "space"
 "libs/greenhouse-cli/greenhouse_cli/tui/__init__.py" = ["FBT001", "FBT002"]
 "libs/greenhouse-cli/greenhouse_cli/tui/app.py" = ["FBT001", "FBT002"]
 "libs/greenhouse-cli/greenhouse_cli/tui/formatting.py" = ["FBT001", "FBT002"]
-"libs/greenhouse-cli/greenhouse_cli/tui/render.py" = ["FBT001", "FBT003"]
 "libs/greenhouse-cli/greenhouse_cli/tui/screens/alerts.py" = ["FBT003"]
 "libs/greenhouse-cli/greenhouse_cli/tui/screens/base.py" = ["FBT001", "PLR0913", "PLR0917"]
 "libs/greenhouse-cli/greenhouse_cli/tui/screens/cluster.py" = ["FBT001", "FBT003", "PLR0904", "PLR0915", "PLR1702"]

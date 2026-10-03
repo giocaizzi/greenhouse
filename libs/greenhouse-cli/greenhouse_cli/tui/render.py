@@ -278,7 +278,7 @@ def learn_report(learn: dict[str, Any] | None) -> Text:
     )
 
 
-def scheduler_panel_rows(paused: bool | None, health: dict[str, Any] | None) -> list[tuple[str, str | Text]]:
+def scheduler_panel_rows(*, paused: bool | None, health: dict[str, Any] | None) -> list[tuple[str, str | Text]]:
     """System scheduler panel: automatic-run state, scheduler liveness, last sync and the key hints."""
     return [
         (
@@ -385,8 +385,8 @@ def vacation_rows(vacations: list[dict[str, Any]], active_id: int | None, tz: st
                 str(v["id"]),
                 [
                     str(v["id"]),
-                    fmt.clock(v["starts_at"], True, tz=tz or "UTC"),
-                    fmt.clock(v["ends_at"], True, tz=tz or "UTC"),
+                    fmt.clock(v["starts_at"], with_date=True, tz=tz or "UTC"),
+                    fmt.clock(v["ends_at"], with_date=True, tz=tz or "UTC"),
                     v.get("contact_email") or "—",
                     v.get("notes") or "",
                     state,
