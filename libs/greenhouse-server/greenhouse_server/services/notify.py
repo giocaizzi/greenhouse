@@ -57,8 +57,9 @@ class NtfyClient:
         if self._token:
             headers["Authorization"] = f"Bearer {self._token}"
         try:
-            req = urllib.request.Request(self._url, data=message.encode("utf-8"), headers=headers)
-            with urllib.request.urlopen(req, timeout=self._timeout):
+            # The scheme is not validated (S310): the URL comes from operator config (the ntfy server URL).
+            req = urllib.request.Request(self._url, data=message.encode("utf-8"), headers=headers)  # noqa: S310
+            with urllib.request.urlopen(req, timeout=self._timeout):  # noqa: S310
                 return True
         except Exception:
             logger.debug("ntfy publish failed", exc_info=True)

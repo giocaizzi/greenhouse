@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     )
 
     db_url: str = "sqlite:///data/irrigation.db"
-    host: str = "0.0.0.0"
+    host: str = "0.0.0.0"  # noqa: S104 — container default (Docker publishes the port); IRRIGATION_HOST overrides
     port: int = 8000
     debug: bool = False
     plant_db_path: str | None = None

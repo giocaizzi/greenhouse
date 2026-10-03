@@ -35,7 +35,7 @@ class LoginResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     access_token: str
-    token_type: str = "bearer"
+    token_type: str = "bearer"  # noqa: S105 — OAuth2 token type, not a secret
     expires_in: int
     username: str
 
@@ -80,7 +80,7 @@ def login(
         # a benign success so a CLI that always logs in keeps working.
         return LoginResponse(
             access_token="",
-            token_type="bearer",
+            token_type="bearer",  # noqa: S106 — OAuth2 token type, not a secret
             expires_in=0,
             username=body.username,
         )
@@ -97,7 +97,7 @@ def login(
     set_session_cookie(response, settings, token)
     return LoginResponse(
         access_token=token,
-        token_type="bearer",
+        token_type="bearer",  # noqa: S106 — OAuth2 token type, not a secret
         expires_in=settings.auth_token_ttl_minutes * 60,
         username=user.username,
     )

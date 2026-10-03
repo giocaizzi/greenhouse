@@ -68,7 +68,7 @@ def _preference_flags(request: Request) -> tuple[bool, VacationWindow | None, bo
             scheduler_paused = prefs.scheduler_paused
             theme = prefs.theme or "auto"
             active_vacation = repo.get_active_vacation()
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001, S110
             pass
         finally:
             # contract: target §3.6 keeps this close; _repo_from_request sets repo and session together.

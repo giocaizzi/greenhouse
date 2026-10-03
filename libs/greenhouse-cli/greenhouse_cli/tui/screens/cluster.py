@@ -171,7 +171,7 @@ class ClusterScreen(DataScreen):
 
     async def _render_overview(self, status: dict[str, Any]) -> None:
         s = self.summary
-        assert s is not None
+        assert s is not None  # noqa: S101 — type narrowing: load() sets summary before rendering
         garden = self.query_one("#garden", HorizontalScroll)
         await garden.remove_children()
         if s.plants:

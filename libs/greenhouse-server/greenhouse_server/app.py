@@ -348,7 +348,7 @@ def _restore_persisted_scheduler_pause(app: FastAPI) -> None:
         finally:
             session.close()
         apply_persisted_pause(paused)
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001, S110
         pass
 
 
