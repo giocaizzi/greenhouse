@@ -451,7 +451,6 @@
   "public": [
    "IrrigationRepository",
    "defaultdict",
-   "format_duration",
    "get_irrigation_stats",
    "time"
   ]

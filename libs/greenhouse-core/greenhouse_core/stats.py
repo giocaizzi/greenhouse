@@ -41,15 +41,6 @@ class StatsUnavailable(TypedDict):
     error: str
 
 
-def format_duration(minutes: int) -> str:
-    """Format duration in human-readable format."""
-    if minutes < 60:
-        return f"{minutes}min"
-    hours = minutes // 60
-    mins = minutes % 60
-    return f"{hours}h {mins}min" if mins else f"{hours}h"
-
-
 def _empty_stats(days: int) -> IrrigationStats:
     """The stats dict before any event is counted (key order is the output contract)."""
     return {
