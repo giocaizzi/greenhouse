@@ -3,7 +3,7 @@
 import json
 import time
 from contextlib import contextmanager
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Literal, TypedDict, cast
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
@@ -68,6 +68,17 @@ _GLOBAL_CONFIG_DEFAULTS: dict[str, int | str | bool | None] = {
     "quiet_start_hour": None,
     "quiet_end_hour": None,
 }
+
+
+class EffectiveField(TypedDict):
+    """One resolved irrigation-config field: its value and the layer it came from."""
+
+    value: int | str | bool | None
+    source: Literal["cluster", "global", "default"]
+
+
+# ``get_effective_config`` result: one ``EffectiveField`` per patchable config field.
+EffectiveConfig = dict[str, EffectiveField]
 
 
 class SameClusterMoveError(ValueError):
@@ -655,7 +666,7 @@ class IrrigationRepository:
 
     # ── Effective config resolution ──────────────────────────────────────────
 
-    def get_effective_config(self, cluster_id: int) -> dict[str, dict[str, object]]:
+    def get_effective_config(self, cluster_id: int) -> EffectiveConfig:
         """Resolve every config field walking cluster → global → constants.
 
         Returns a dict keyed by field name; each value is
@@ -664,7 +675,7 @@ class IrrigationRepository:
         """
         cluster_cfg = self.get_irrigation_config(cluster_id)
         global_cfg = self.get_global_irrigation_config()
-        out: dict[str, dict[str, object]] = {}
+        out: EffectiveConfig = {}
         for field in self._CONFIG_PATCHABLE_FIELDS:
             cluster_value = getattr(cluster_cfg, field, None) if cluster_cfg else None
             if cluster_value is not None:
