@@ -65,10 +65,10 @@ def create_irrigator(
             config=config,
         )
     except IrrigatorExistsError:
-        repo.session.rollback()
+        repo.rollback()
         raise
     except IntegrityError:
-        repo.session.rollback()
+        repo.rollback()
         raise DeviceIdExistsError(tuya_device_id) from None
     if reservoir_l is not None or flow_rate_l_per_min is not None:
         repo.update_irrigator(irrigator_id, reservoir_l=reservoir_l, flow_rate_l_per_min=flow_rate_l_per_min)
@@ -116,5 +116,5 @@ def create_sensor(
             plant_id=plant_id,
         )
     except IntegrityError:
-        repo.session.rollback()
+        repo.rollback()
         raise DeviceIdExistsError(tuya_device_id) from None

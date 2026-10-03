@@ -15,7 +15,9 @@ def stop_all_irrigators(
     When ``registry`` is None (test environment or missing credentials) the
     stop command is skipped but the event is still logged and the irrigator
     is counted as stopped. Irrigators whose model is not in the registry
-    surface as a per-device error rather than aborting the batch.
+    surface as a per-device error rather than aborting the batch. Commits
+    because the stop commands have already reached the hardware: their events
+    must be durable whatever the caller does next.
 
     Args:
         repo: Active repository for listing irrigators and logging events.
@@ -50,5 +52,5 @@ def stop_all_irrigators(
         except Exception as exc:  # noqa: BLE001
             errors.append(f"irrigator {irrigator.id} ({irrigator.name}): {exc}")
 
-    repo.session.commit()
+    repo.commit()
     return stopped, errors

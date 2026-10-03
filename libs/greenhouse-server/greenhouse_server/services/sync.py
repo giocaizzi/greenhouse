@@ -71,7 +71,7 @@ class SyncService:
                 except Exception:
                     logger.debug("Freshness sync failed for sensor %s", sensor.name, exc_info=True)
             # Flush so the freshly-synced rows are visible to the snapshot query.
-            self._repo.session.flush()
+            self._repo.flush()
 
         return self._cluster_snapshot(sensors)
 

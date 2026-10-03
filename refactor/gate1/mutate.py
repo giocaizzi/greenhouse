@@ -2859,7 +2859,7 @@ add(
         ),
         (
             "05",
-            "            self._repo.session.flush()\n",
+            "            self._repo.flush()\n",
             "",
             "no flush after freshness sync",
             0,
@@ -3021,7 +3021,7 @@ add(
         ),
         (
             "11",
-            '            self._repo.session.commit()\n        except Exception:\n            logger.exception("Failed to commit pump dry-run',
+            '            self._repo.commit()\n        except Exception:\n            logger.exception("Failed to commit pump dry-run',
             '            pass\n        except Exception:\n            logger.exception("Failed to commit pump dry-run',
             "trip side effects not committed",
         ),

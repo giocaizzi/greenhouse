@@ -95,7 +95,9 @@ def manual_start(
 
     Order: registry → caps check → adapter → device start → ``start`` event (committed) → dry-run
     watcher (only with a duration — it needs a deadline) → notification. A
-    failed device start records nothing, matching the JSON API.
+    failed device start records nothing, matching the JSON API. Commits because
+    the ``start`` event must be durable before the side effects that follow it
+    (the watcher job, which runs in its own session, and the notification).
 
     Args:
         repo: Active repository session (committed here on success).
@@ -129,7 +131,7 @@ def manual_start(
         notes=f"Manual start via {via} ({minutes} min)" if minutes else f"Manual start via {via}",
         timestamp=started_at,
     )
-    repo.session.commit()
+    repo.commit()
     if minutes:
         schedule_pump_watcher(irrigator.id, minutes, started_at, triggered_by="manual")
     maybe_notify(
@@ -154,7 +156,10 @@ def manual_stop(
     *,
     via: str,
 ) -> str:
-    """Stop ``irrigator`` by hand: device stop → ``off`` event → notification.
+    """Stop ``irrigator`` by hand: device stop → ``stop`` event (committed) → notification.
+
+    Commits because the device has already stopped: the event records a hardware
+    side effect and must be durable before the notification goes out.
 
     Args:
         repo: Active repository session (committed here on success).
@@ -180,7 +185,7 @@ def manual_stop(
         triggered_by="manual",
         notes=f"Manual stop via {via}",
     )
-    repo.session.commit()
+    repo.commit()
     maybe_notify(
         notifier,
         repo.get_preferences(),
@@ -205,7 +210,8 @@ def manual_log(
 
     Recorded as a ``start`` event (``triggered_by="manual"``) so the cooldown,
     per-day caps, learning and efficacy all see it, exactly like a manual
-    start; the per-day caps apply.
+    start; the per-day caps apply. Commits before notifying, like
+    :func:`manual_start`, so the push never announces an unsaved event.
 
     Args:
         repo: Active repository session (committed here on success).
@@ -228,7 +234,7 @@ def manual_log(
         triggered_by="manual",
         notes=notes or f"Manual ({minutes} min)",
     )
-    repo.session.commit()
+    repo.commit()
     maybe_notify(
         notifier,
         repo.get_preferences(),

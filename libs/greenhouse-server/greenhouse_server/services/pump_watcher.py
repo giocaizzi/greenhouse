@@ -350,15 +350,18 @@ class PumpWatcherService:
     def _commit_trip(self, irrigator: Irrigator) -> None:
         """Commit the trip's side effects; on failure log and roll back.
 
+        Commits because the watcher owns its job session: the trip (aborted event,
+        alert) must be durable as soon as the pump is stopped.
+
         ``irrigator.id`` is read only inside the handler, exactly as before: after a failed flush
         the session has expired it, so that read raises out of the watcher (pre-existing behavior).
         """
         try:
-            self._repo.session.commit()
+            self._repo.commit()
         except Exception:
             logger.exception("Failed to commit pump dry-run side effects for irrigator %d", irrigator.id)
             try:
-                self._repo.session.rollback()
+                self._repo.rollback()
             except Exception:
                 pass
 

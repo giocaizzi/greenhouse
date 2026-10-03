@@ -533,6 +533,8 @@ def set_check_all_paused(repo: IrrigationRepository, paused: bool) -> bool:
     Works whether or not the scheduler is running: on a stopped scheduler the
     registered (pending) job is paused/resumed and the preference persisted,
     so it takes effect when the scheduler starts and survives restarts.
+    Commits because the live scheduler has already changed: the persisted
+    flag must match it before the caller returns.
 
     Args:
         repo: Repository whose session receives the preference write (committed here).
@@ -552,7 +554,7 @@ def set_check_all_paused(repo: IrrigationRepository, paused: bool) -> bool:
     else:
         scheduler.resume_job(CHECK_ALL_JOB_ID)
     repo.update_preferences(scheduler_paused=paused)
-    repo.session.commit()
+    repo.commit()
     return is_check_all_paused()
 
 

@@ -237,4 +237,4 @@ class ClusterService:
         plant.ideal_humidity_min = care_data.get("ideal_humidity_min")
         plant.ideal_humidity_max = care_data.get("ideal_humidity_max")
         plant.notes = f"Sources: {', '.join(care_data.get('sources', [])[:2])}"
-        self._repo.session.flush()
+        self._repo.flush()
