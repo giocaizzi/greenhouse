@@ -111,6 +111,7 @@ extend-select = [
     "PLR0913",  # too-many-arguments (frozen handler signatures excluded per directory)
     "PLR0917",  # too-many-positional-arguments (preview, explicit; same exclusions)
     "FBT",  # boolean traps (Typer commands excluded: --flag options are the CLI contract)
+    "T201",  # print: libs/ output goes through typer.echo / rich / logging (refactor/ scripts excluded)
     "A002",  # builtin-argument-shadowing (`id`/`type` options of frozen handlers excluded)
     "ARG",  # unused arguments (FastAPI web handlers keep `request`: per-file exclusion)
     "S",  # flake8-bandit: intended uses carry a reasoned noqa; real findings → REFACTOR_NOTES
@@ -160,7 +161,7 @@ indent-style = "space"
 "tests/**" = [
     "C90", "PLR0911", "PLR0912", "PLR0915", "PLR0904", "PLR0914", "PLR1702", "SIM", "RET", "PTH", "PERF", "PLW", "FURB", "N", "BLE", "RUF", "PLR2004", "S", "ARG", "PLR0913", "PLR0917", "FBT", "ERA001", "SLF001",
 ]
-"refactor/**" = ["C90", "PLR0911", "PLR0912", "PLR0915", "PLR0914", "PLR1702", "PERF", "PLW", "RUF005", "PLR2004", "S", "FBT"]  # refactor tooling scripts, not shipped
+"refactor/**" = ["C90", "PLR0911", "PLR0912", "PLR0915", "PLR0914", "PLR1702", "PERF", "PLW", "RUF005", "PLR2004", "S", "FBT", "T201"]  # refactor tooling scripts, not shipped
 "libs/greenhouse-core/greenhouse_core/migrations/versions/*" = ["PLR0915"]  # generated Alembic DDL, out of scope
 # Frozen handler signatures (not a ratchet): FastAPI API/web handlers and Typer commands declare one
 # parameter per query/form field or CLI option (the OpenAPI / MCP / --help contract), and web pages
