@@ -43,6 +43,7 @@ Helpers: scratchpad `w3/trun.sh`, `w3/snap.sh`.
 | 26 | C-STALE-10 (B7) | `4615c84` **fix(consistency)**: TUI irrigator config hint `device_ip` / `local_key` | `tui/surface.json` 2 lines |
 | 27 | docs | `e711743` docs(plugin): LOGIC.md chart-band sentence (D10b) | |
 | 28 | sizecheck | `5a71a27` refactor(services): tighten three charts docstrings (file back to 400 lines) | docstrings only |
+| 29 | review fix (A14) | `ea6116e` **fix(scheduler)**: `_run_leak_check` back on its own inline session scaffolding — corrects `faab47d`'s "Behavior: none" | net vs `971aa93`: none (restores the original body) |
 
 Per-commit evidence (commands + results) is in each commit body. Every commit: `ruff check` + `ruff format --check`,
 `uv run lint-imports` (10 kept), `make typecheck`, `refactor/gate1/mutate.py --check` (INVALID set kept equal to the
@@ -70,20 +71,26 @@ fixed in `ed63fdb`; `scheduler-08/09` were dropped with the code they mutated in
 - C90@8 on every touched module: only the pre-existing `commands/auth.py::register` (9) and
   `tui/screens/forms.py::parse_value` (11), both already in the per-file ignores, logic untouched.
 
-## A14 (`faab47d`) — reviewer evidence
+## A14 (`faab47d` + correction `ea6116e`) — reviewer evidence
 
-- Order preserved for all five scheduler jobs (same helper body; logger and message passed in, record name/msg/args
-  identical; the scheduler imports it as `_job_session` so its frozen `dir()` surface is unchanged).
-- `_run_leak_check`: one intentional Session-API difference on the "already done" early return — it now calls
-  `session.rollback()` before returning so the helper's `commit()` finds no transaction (SQLAlchemy 2 emits no COMMIT).
-  Before: `close()` rolled back the read-only transaction. **DB-level trace identical.**
-- `scratchpad/w3/diff/leakrepro.py` (old = `HEAD^` tree, new = commit tree): five paths (marker missing then present, no
-  app, failing check, failing commit, missing session_factory) — engine events (SQL verbs, COMMIT, ROLLBACK) + greenhouse
-  log records byte-identical; only the spy on Session methods differs on the early return (`close` → `rollback, commit,
-  close`).
-- WP7 differential harness (`scratchpad/w3/diff`, copy of `wp7-diff/harness.py` with the tests path as env var): 1,026
-  scenarios with `run_jobs` / `rearm` from `scenarios.json` + `scenarios_rearm.json`: `compared=1026 differ=0`
-  (18 harness_errors, identical in both trees).
+- `faab47d` moved `_job_session` to `services/_session.job_session` (the five scheduler jobs use it, imported as
+  `_job_session` so scheduler's frozen `dir()` is unchanged; logger and message are passed in, record name/msg/args
+  identical) and also put `_run_leak_check` on it.
+- **Second review found an undeclared difference** (`scratchpad/review-cons-w3.md`): on the leak check's "already
+  done" early return `faab47d` rolled back explicitly inside the context manager, so a *failing* ROLLBACK there was
+  logged ("Leak check job failed …") and swallowed; before, `close()` rolled back in `finally` and the
+  `OperationalError` escaped the job. `faab47d`'s "Behavior: none" claim was wrong for that path.
+- **Correction `ea6116e`** (reviewer's option 1): `_run_leak_check` is back on its own inline open / try / commit /
+  except rollback + log / finally close — byte-identical to `971aa93`'s body plus a "why not job_session" comment.
+  The scheduler-side move stays. Net effect of A14 versus `971aa93`: none.
+- Proof (reviewer's harness copied to `scratchpad/w3/rev2`, old = `971aa93`, new = `ea6116e`):
+  `scenarios_rb.json` (rollback / write / commit faults incl. the 10 rollback-on-already-done cases) →
+  `compared=295 differ=0`, and now also **0 Session-API (`sess`) differences**; `scenarios_leak.json` →
+  `compared=773 (787 rows, unique names) differ=0`, 0 `sess` differences; harness errors 0. (Raw differences are only
+  the labeled B5 DEBUG records, filtered by `cmp2.py`.)
+- Subsets: `$SCHED $PIPE $CHECK` + conservative maps `C(gs.services.irrigation)` `C(gs.scheduler)` + leak tests,
+  wp7/mutation gaps, imports (85 files) → 1,140 passed, all chunk exit codes 0. Earlier evidence for the scheduler
+  jobs (WP7 harness 1,026 scenarios, 0 diffs) still holds (their code is unchanged by the correction).
 
 ## Golden diffs (each inspected, each in its own commit)
 
@@ -134,7 +141,7 @@ tui/screens/modals}.py`. Every module in this lane's file set is now on the stri
   schema `description`) → doc-contract stage.
 - `check_failed`'s `severity="error"` stays a literal (no `Severity` member; W1 left the decision to W3 — keep, it is
   the stored value the web inbox renders).
-- `services/irrigation._run_pump_watcher`, `rearm_leak_checks`, `scheduler.init_health_monitor` keep their own session
+- `services/irrigation._run_leak_check` (after `ea6116e`), `_run_pump_watcher`, `rearm_leak_checks`, `scheduler.init_health_monitor` keep their own session
   scaffolding (conditional commit / no commit / silent wiring) — different shapes than `job_session`.
 
 ## For the integrator (ratchet edits, other lanes)
@@ -150,7 +157,7 @@ tui/screens/modals}.py`. Every module in this lane's file set is now on the stri
 
 ## Reviewer focus (hardest first)
 
-1. `faab47d` (A14) — scheduler + pipeline job scaffolding; evidence above.
+1. `faab47d` + `ea6116e` (A14 and its correction) — scheduler job scaffolding; evidence above.
 2. `ced4b55` — check_all per-cluster transaction (pinned by `test_contract_check_all` tx_log).
 3. `493f20c` — leak decomposition: per-sensor order, evidence key order, leak_hold payload.
 4. `787c471` / `80dcb7b` — OD3 removals (scheduler/config startup), golden diffs.
@@ -193,3 +200,10 @@ tests/parametrizations, net of the new D10b / OD3 tests). This run contains
 the union of all task subsets, `$CORE`, `$SCHED`, `$PIPE`, `$CLI` and `$TUI`. `5a71a27` (docstrings only) re-checked
 with ruff, `ruff format --check`, `make typecheck` and sizecheck. Seed-12345 and `TZ=America/New_York` runs are left to
 the final gate (sprint mode).
+
+### Re-run after the review correction (`ea6116e`)
+
+FULL, seed 0, `-n 2`, snapshot of `ea6116e`, the same 12 chunks, every chunk exit code 0:
+325 + 323 + 32 + 246 + 653 + 242 + 177 + 118 + 97 + 84 + 597 + 135 = **3,029 passed, 0 failed** (identical counts to the
+run at `e711743`). Static checks at `ea6116e`: ruff / format OK, lint-imports 10 kept, typecheck 144 files OK,
+`mutate.py --check` 392/470 (unchanged).
