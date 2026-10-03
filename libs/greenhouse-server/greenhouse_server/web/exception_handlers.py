@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 
 from greenhouse_server.auth import _RedirectAuthError, render_login_redirect
 from greenhouse_server.web.context import base_context, is_hx
@@ -43,8 +44,6 @@ def register_web_exception_handlers(app: FastAPI) -> None:
         if isinstance(exc, _RedirectAuthError):
             return render_login_redirect(exc, request)
         if not _is_html_request(request):
-            from fastapi.responses import JSONResponse
-
             return JSONResponse({"detail": exc.detail}, status_code=exc.status_code)
         return templates.TemplateResponse(
             request,
@@ -57,8 +56,6 @@ def register_web_exception_handlers(app: FastAPI) -> None:
     async def handle_validation(request: Request, exc: RequestValidationError):
         """Render a request-validation error: JSON 422 for /api and /mcp, else the HTML error page."""
         if not _is_html_request(request):
-            from fastapi.responses import JSONResponse
-
             return JSONResponse({"detail": exc.errors()}, status_code=422)
         return templates.TemplateResponse(
             request,

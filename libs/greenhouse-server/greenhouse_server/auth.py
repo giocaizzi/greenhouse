@@ -31,6 +31,7 @@ import logging
 import time
 from collections.abc import Generator
 from dataclasses import dataclass
+from urllib.parse import quote
 
 import jwt
 from fastapi import Depends, HTTPException, Request, Response, status
@@ -267,8 +268,6 @@ def render_login_redirect(err: _RedirectAuthError, request: Request) -> Response
     instead return an empty 204 carrying ``HX-Redirect`` so HTMX performs a
     top-level browser navigation. Non-HTMX requests keep the 303.
     """
-    from urllib.parse import quote
-
     target = f"/login?next={quote(err.next_url)}"
     if request.headers.get("HX-Request", "").lower() == "true":
         response = Response(status_code=204)
@@ -326,9 +325,7 @@ def bootstrap_admin(engine: Engine, settings: Settings) -> None:
     """
     if not settings.auth_enabled:
         return
-    from sqlalchemy.orm import Session as _Session
-
-    session = _Session(engine)
+    session = Session(engine)
     try:
         existing = session.query(User).first()
         if existing is not None:

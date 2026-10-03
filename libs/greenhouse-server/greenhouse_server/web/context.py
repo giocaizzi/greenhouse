@@ -8,11 +8,12 @@ from typing import TYPE_CHECKING, Any
 
 from fastapi import Request
 
+from greenhouse_core.repository import IrrigationRepository
+
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
 
     from greenhouse_core.models import VacationWindow
-    from greenhouse_core.repository import IrrigationRepository
 
 
 def _app_version() -> str:
@@ -38,8 +39,6 @@ def _repo_from_request(request: Request) -> tuple[IrrigationRepository, Session]
     never writes, so the caller closes it right after the read.
     """
     try:
-        from greenhouse_core.repository import IrrigationRepository
-
         factory = request.app.state.session_factory
         session = factory()
         return IrrigationRepository(session), session
