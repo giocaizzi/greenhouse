@@ -357,10 +357,9 @@ class IrrigationRepository:
         self.session.flush()
         if result.rowcount > 0:
             # Fetch the inserted row's ID
-            row = self.session.execute(
+            return self.session.execute(
                 select(SensorReading.id).where(SensorReading.sensor_id == sensor_id, SensorReading.timestamp == ts)
             ).scalar_one()
-            return row
         return None
 
     def get_last_reading_timestamp(self, sensor_id: int) -> int | None:

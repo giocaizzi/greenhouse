@@ -36,8 +36,7 @@ def get_plant(plant_id: int, repo: RepoDep):
     Raises:
         HTTPException: 404 if no plant with that ID exists.
     """
-    plant = require_plant(repo, plant_id)
-    return plant
+    return require_plant(repo, plant_id)
 
 
 @router.get("/plants/{plant_id}/chart-data", response_model=ChartPayloadResponse)

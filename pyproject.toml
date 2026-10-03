@@ -100,6 +100,7 @@ extend-select = [
     "PLR0914",  # too-many-locals (preview, explicit)
     "PLR0904",  # too-many-public-methods (preview, explicit)
     "SIM",  # flake8-simplify
+    "RET",  # flake8-return
     "ERA",  # eradicate: commented-out code
     "PGH",  # pygrep-hooks: blanket noqa / type: ignore without codes
     "SLF",  # flake8-self: private member access across objects
@@ -136,7 +137,7 @@ indent-style = "space"
 "scripts/*" = ["E402"]  # intentional sys.path before import
 # Frozen safety net: tests exceed size limits and poke privates; never edited to satisfy a lint rule.
 "tests/**" = [
-    "C90", "PLR0911", "PLR0912", "PLR0915", "PLR0904", "PLR0914", "PLR1702", "SIM", "ERA001", "SLF001",
+    "C90", "PLR0911", "PLR0912", "PLR0915", "PLR0904", "PLR0914", "PLR1702", "SIM", "RET", "ERA001", "SLF001",
 ]
 "refactor/**" = ["C90", "PLR0911", "PLR0912", "PLR0915", "PLR0914", "PLR1702"]  # refactor tooling scripts, not shipped
 "libs/greenhouse-core/greenhouse_core/migrations/versions/*" = ["PLR0915"]  # generated Alembic DDL, out of scope

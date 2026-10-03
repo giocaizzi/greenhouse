@@ -117,8 +117,7 @@ def get_sensor(cluster_id: int, sensor_id: int, repo: RepoDep):
         HTTPException: 404 if the sensor does not exist or belongs to a
             different cluster.
     """
-    sensor = require_sensor_in_cluster(repo, cluster_id, sensor_id)
-    return sensor
+    return require_sensor_in_cluster(repo, cluster_id, sensor_id)
 
 
 @router.put("/clusters/{cluster_id}/sensors/{sensor_id}", response_model=SensorResponse, summary="Update a sensor")

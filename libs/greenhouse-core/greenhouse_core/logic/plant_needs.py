@@ -52,6 +52,6 @@ def analyze_water_needs(plant_care_data: list[dict[str, Any]]) -> str:
     avg = statistics.mean(values)
     if avg < 1.5:
         return "low"
-    elif avg > 2.5:
+    if avg > 2.5:
         return "high"
     return "medium"

@@ -79,8 +79,7 @@ def strip_emoji(text: str | None) -> str:
         return ""
     cleaned = _EMOJI_RE.sub("", text)
     cleaned = re.sub(r"\s+", " ", cleaned).strip()
-    cleaned = re.sub(r"\s*;\s*", "; ", cleaned)
-    return cleaned
+    return re.sub(r"\s*;\s*", "; ", cleaned)
 
 
 def stat_position(value: float | None, lo: float | None, hi: float | None) -> str:
