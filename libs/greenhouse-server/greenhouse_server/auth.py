@@ -37,19 +37,12 @@ import jwt
 from fastapi import Depends, HTTPException, Request, Response, status
 from fastapi.responses import RedirectResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from sqlalchemy import select
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
 
-from greenhouse_core.auth import (
-    create_user,
-    get_user,
-    get_user_by_username,
-    needs_rehash,
-    set_password,
-    verify_password,
-)
+from greenhouse_core.auth import needs_rehash, verify_password
 from greenhouse_core.models import User
+from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.config import Settings
 from greenhouse_server.state import get_session, get_settings
 
@@ -160,14 +153,14 @@ def _extract_token(
     return cookie or None
 
 
-def _resolve_user(token: str, settings: Settings, session: Session) -> AuthenticatedUser:
+def _resolve_user(token: str, settings: Settings, repo: IrrigationRepository) -> AuthenticatedUser:
     payload = decode_token(settings, token)
     try:
         user_id = int(payload["sub"])
     except (KeyError, TypeError, ValueError) as exc:
         msg = "Malformed session"
         raise AuthError(msg) from exc
-    user = get_user(session, user_id)
+    user = repo.get_user(user_id)
     if user is None or not user.is_active:
         msg = "User no longer active"
         raise AuthError(msg)
@@ -218,7 +211,7 @@ def require_user(
         raise AuthError
     if _is_mcp_token(token, settings):
         return AuthenticatedUser(id=MCP_USER_ID, username=MCP_USER_NAME, is_system=True)
-    return _resolve_user(token, settings, session)
+    return _resolve_user(token, settings, IrrigationRepository(session))
 
 
 def require_web_user(
@@ -237,7 +230,7 @@ def require_web_user(
     if not token:
         raise _redirect_to_login(request)
     try:
-        return _resolve_user(token, settings, session)
+        return _resolve_user(token, settings, IrrigationRepository(session))
     except AuthError as exc:
         raise _redirect_to_login(request) from exc
 
@@ -305,13 +298,14 @@ def authenticate(session: Session, username: str, password: str) -> User | None:
 
     On success the password is re-hashed if the stored argon2 parameters are outdated.
     """
-    user = get_user_by_username(session, username)
+    repo = IrrigationRepository(session)
+    user = repo.get_user_by_username(username)
     if user is None or not user.is_active:
         return None
     if not verify_password(password, user.hashed_password):
         return None
     if needs_rehash(user.hashed_password):
-        set_password(session, user, password)
+        repo.set_user_password(user, password)
     return user
 
 
@@ -327,8 +321,8 @@ def bootstrap_admin(engine: Engine, settings: Settings) -> None:
         return
     session = Session(engine)
     try:
-        existing = session.scalar(select(User).limit(1))
-        if existing is not None:
+        repo = IrrigationRepository(session)
+        if repo.has_users():
             return
         username = settings.auth_admin_username
         password = settings.auth_admin_password
@@ -340,8 +334,8 @@ def bootstrap_admin(engine: Engine, settings: Settings) -> None:
                 "a user is created."
             )
             return
-        create_user(session, username=username, password=password)
-        session.commit()
+        repo.create_user(username, password)
+        repo.commit()
         logger.info("Bootstrapped initial admin user %r from environment.", username)
     finally:
         session.close()

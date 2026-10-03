@@ -10,18 +10,11 @@ from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, Form, Request, status
 from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy.orm import Session
 
-from greenhouse_core.auth import record_login
-from greenhouse_server.auth import (
-    _get_settings,
-    _session_from_app,
-    authenticate,
-    clear_session_cookie,
-    issue_token,
-    set_session_cookie,
-)
+from greenhouse_server.auth import authenticate, clear_session_cookie, issue_token, set_session_cookie
 from greenhouse_server.config import Settings
+from greenhouse_server.deps import RepoDep
+from greenhouse_server.state import get_settings
 from greenhouse_server.web.context import base_context
 from greenhouse_server.web.templating import templates
 
@@ -42,7 +35,7 @@ def _safe_next(next_url: str | None) -> str:
 def login_form(
     request: Request,
     next: str | None = None,
-    settings: Settings = Depends(_get_settings),
+    settings: Settings = Depends(get_settings),
 ) -> HTMLResponse:
     """Render the login form. ?next=… preserves the originally requested path."""
     ctx = base_context(
@@ -57,17 +50,17 @@ def login_form(
 @router.post("/login")
 def login_submit(
     request: Request,
+    repo: RepoDep,
     username: str = Form(),
     password: str = Form(),
     next: str = Form(default="/"),
-    settings: Settings = Depends(_get_settings),
-    session: Session = Depends(_session_from_app),
+    settings: Settings = Depends(get_settings),
 ):
     """Handle the login form. Sets a session cookie and redirects to ?next."""
     target = _safe_next(next)
     if not settings.auth_enabled:
         return RedirectResponse(url=target, status_code=303)
-    user = authenticate(session, username, password)
+    user = authenticate(repo.session, username, password)
     if user is None:
         ctx = base_context(
             request,
@@ -83,8 +76,8 @@ def login_submit(
             status_code=status.HTTP_401_UNAUTHORIZED,
         )
     token = issue_token(settings, user)
-    record_login(session, user)
-    session.commit()
+    repo.record_login(user)
+    repo.commit()
     response = RedirectResponse(url=target, status_code=303)
     set_session_cookie(response, settings, token)
     return response
@@ -92,7 +85,7 @@ def login_submit(
 
 @router.post("/logout")
 def logout_submit(
-    settings: Settings = Depends(_get_settings),
+    settings: Settings = Depends(get_settings),
 ):
     """Clear the session cookie and bounce to /login."""
     response = RedirectResponse(url="/login", status_code=303)

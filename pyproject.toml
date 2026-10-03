@@ -379,8 +379,6 @@ source_modules = [
 forbidden_modules = ["sqlalchemy", "alembic", "greenhouse_core.database"]
 allow_indirect_imports = true
 ignore_imports = [
-  "greenhouse_server.routes.auth -> sqlalchemy",        # auth routes take a raw Session (user CRUD)
-  "greenhouse_server.web.routes.auth -> sqlalchemy",    # same, web login form
   "greenhouse_server.web.context -> sqlalchemy",        # TYPE_CHECKING annotation only
   "greenhouse_server.services.jobs -> sqlalchemy",  # TYPE_CHECKING annotation only
   "greenhouse_server.services.inventory -> sqlalchemy", # IntegrityError -> DeviceIdExistsError translation
