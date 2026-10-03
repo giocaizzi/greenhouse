@@ -97,6 +97,7 @@ from greenhouse_core.logic.timing import (
     seasonal_multiplier,
 )
 from greenhouse_core.logic.trends import analyze_historical_trends
+from greenhouse_core.models import TRIGGERED_BY_AUTO, TriggeredBy
 from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_core.utils import seasonal_light_factor
@@ -143,7 +144,7 @@ class IrrigationLogic:
         current_temp: float | None = None,
         *,
         persist: bool = False,
-        triggered_by: str = "auto",
+        triggered_by: TriggeredBy = TRIGGERED_BY_AUTO,
         bypass_quiet_hours: bool = False,
     ) -> IrrigationDecision | None:
         """Run the rule pipeline for a cluster and return a typed decision.
@@ -437,7 +438,7 @@ class IrrigationLogic:
         *,
         override_window: tuple[int, int] | None,
         persist: bool,
-        triggered_by: str,
+        triggered_by: TriggeredBy,
     ) -> IrrigationDecision:
         """Record a rule-pipeline decision, noting a manual quiet-hours override in its trail first."""
         if override_window is not None:
@@ -450,13 +451,13 @@ class IrrigationLogic:
             )
         return self._record(decision, persist=persist, triggered_by=triggered_by)
 
-    def _record(self, decision: IrrigationDecision, *, persist: bool, triggered_by: str) -> IrrigationDecision:
+    def _record(self, decision: IrrigationDecision, *, persist: bool, triggered_by: TriggeredBy) -> IrrigationDecision:
         """Persist ``decision`` when asked and hand it back — every exit logs exactly once."""
         if persist:
             self._persist(decision, triggered_by)
         return decision
 
-    def _persist(self, decision: IrrigationDecision, triggered_by: str) -> None:
+    def _persist(self, decision: IrrigationDecision, triggered_by: TriggeredBy) -> None:
         """Best-effort persistence — never blocks the decision."""
         try:
             payload = decision.model_dump(mode="json")
