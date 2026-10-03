@@ -5,7 +5,12 @@ from collections.abc import Sequence
 from statistics import mean
 from typing import TYPE_CHECKING
 
-from greenhouse_core.constants import EFFICACY_AFTER_WINDOW_SECONDS, RESPONSE_PRE_WINDOW_SECONDS, SECONDS_PER_DAY
+from greenhouse_core.constants import (
+    EFFICACY_AFTER_WINDOW_SECONDS,
+    EFFICACY_SCORE_PER_PCT_RISE,
+    RESPONSE_PRE_WINDOW_SECONDS,
+    SECONDS_PER_DAY,
+)
 from greenhouse_core.logic.cleaning import clean_readings_around
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_core.schemas import EfficacyItemResponse, EfficacyListResponse
@@ -22,7 +27,7 @@ def _score(before_pct: float | None, after_pct: float | None) -> float | None:
     if before_pct is None or after_pct is None:
         return None
     rise = after_pct - before_pct
-    return max(0.0, min(100.0, rise * 5.0))
+    return max(0.0, min(100.0, rise * EFFICACY_SCORE_PER_PCT_RISE))
 
 
 def score_cluster(

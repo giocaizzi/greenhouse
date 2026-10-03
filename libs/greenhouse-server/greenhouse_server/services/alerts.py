@@ -10,6 +10,7 @@ becomes the single source of truth for the bell badge and /alerts page.
 import time
 from typing import Any
 
+from greenhouse_core.constants import ALERT_SCAN_LIMIT
 from greenhouse_core.models import (
     ENTITY_CLUSTER,
     ENTITY_SENSOR,
@@ -115,7 +116,7 @@ def sync_cluster_alerts(
         notify_if_new_alert(repo, notifier, alert)
 
     auto_resolve_cleared(repo, cluster_id, sources=(SOURCE_LEARNING, SOURCE_MAINTENANCE), seen_keys=seen_keys)
-    return repo.list_alerts(cluster_id=cluster_id, limit=200)
+    return repo.list_alerts(cluster_id=cluster_id, limit=ALERT_SCAN_LIMIT)
 
 
 def auto_resolve_cleared(
@@ -125,7 +126,7 @@ def auto_resolve_cleared(
     seen_keys: set[str],
 ) -> None:
     """Close any open/ack alerts from these sources whose condition has cleared."""
-    for alert in repo.list_alerts(cluster_id=cluster_id, limit=200):
+    for alert in repo.list_alerts(cluster_id=cluster_id, limit=ALERT_SCAN_LIMIT):
         if alert.status == "resolved" or alert.source not in sources:
             continue
         if alert.dedup_key not in seen_keys:

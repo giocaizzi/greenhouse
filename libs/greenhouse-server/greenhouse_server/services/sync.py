@@ -6,7 +6,11 @@ import time
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any, TypedDict
 
-from greenhouse_core.constants import SENSOR_READING_STALE_SECONDS
+from greenhouse_core.constants import (
+    FRESHNESS_SYNC_BACKFILL_HOURS,
+    SENSOR_READING_STALE_SECONDS,
+    SNAPSHOT_LOOKBACK_HOURS,
+)
 from greenhouse_core.devices import DeviceRegistry
 from greenhouse_core.devices.gateway import DeviceGateway
 from greenhouse_core.logic.cleaning import clean_readings_desc
@@ -18,10 +22,6 @@ if TYPE_CHECKING:
     from greenhouse_core.models import Sensor
 
 logger = logging.getLogger(__name__)
-
-# Look-back for the cluster snapshot's per-sensor values. Matches the decision
-# engine's own window so both read the same slice of history.
-SNAPSHOT_LOOKBACK_HOURS = 24
 
 
 class ClusterSnapshot(TypedDict):
@@ -83,7 +83,7 @@ class SyncService:
         if stale and self._gateway is not None:
             for sensor in stale:
                 try:
-                    sync_single_sensor(self._repo, self._gateway, sensor, hours=6)
+                    sync_single_sensor(self._repo, self._gateway, sensor, hours=FRESHNESS_SYNC_BACKFILL_HOURS)
                 except Exception:
                     logger.debug("Freshness sync failed for sensor %s", sensor.name, exc_info=True)
             # Flush so the freshly-synced rows are visible to the snapshot query.
@@ -120,6 +120,7 @@ class SyncService:
         lights: list[int] = []
 
         for sensor in sensors:
+            # The decision engine's own look-back, so both read the same slice of history.
             readings = clean_readings_desc(self._repo.get_recent_readings(sensor.id, hours=SNAPSHOT_LOOKBACK_HOURS))
             for field, bucket in (
                 ("temperature", temperatures),

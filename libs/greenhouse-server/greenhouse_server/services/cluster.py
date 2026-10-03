@@ -5,6 +5,7 @@ import io
 import time
 from typing import TYPE_CHECKING, Any, NamedTuple, TypedDict
 
+from greenhouse_core.constants import HOURS_PER_DAY, STATUS_EVENTS_LOOKBACK_HOURS, STATUS_READINGS_LOOKBACK_HOURS
 from greenhouse_core.logic import IrrigationDecision, IrrigationLogic
 from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_core.repository import IrrigationRepository
@@ -104,7 +105,7 @@ def cluster_events_csv(repo: IrrigationRepository, cluster_id: int, *, days: int
     writer.writerow(["timestamp", "date", "time", "irrigator", "action", "duration_minutes", "triggered_by", "notes"])
     irrigator = repo.get_irrigator_for_cluster(cluster_id)
     if irrigator is not None:
-        events = repo.get_recent_events(irrigator.id, hours=days * 24)
+        events = repo.get_recent_events(irrigator.id, hours=days * HOURS_PER_DAY)
         for event in events:
             ts_str = format_timestamp(event.timestamp)
             date, _, time_part = ts_str.partition(" ")
@@ -168,7 +169,7 @@ class ClusterService:
 
         sensor_data: list[SensorStatusRow] = []
         for sensor in sensors:
-            readings = self._repo.get_recent_readings(sensor.id, hours=24)
+            readings = self._repo.get_recent_readings(sensor.id, hours=STATUS_READINGS_LOOKBACK_HOURS)
             last_reading = readings[0] if readings else None
             age = (now - last_reading.timestamp) if last_reading else None
             sensor_data.append(
@@ -187,7 +188,7 @@ class ClusterService:
         """The irrigator's status dict (48 h event count, newest event, capacity), or ``None``."""
         irrigator_data: IrrigatorStatus | None = None
         if irrigator is not None:
-            events = self._repo.get_recent_events(irrigator.id, hours=48)
+            events = self._repo.get_recent_events(irrigator.id, hours=STATUS_EVENTS_LOOKBACK_HOURS)
             irrigator_data = {
                 "id": irrigator.id,
                 "name": irrigator.name,

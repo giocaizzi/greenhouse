@@ -8,6 +8,13 @@ from typing import TYPE_CHECKING, Any
 from fastapi import APIRouter, Form, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse, Response
 
+from greenhouse_core.constants import (
+    HOURS_PER_DAY,
+    PLANT_PAGE_HEALTH_HISTORY_DAYS,
+    PLANT_PAGE_LAST_IRRIGATED_DAYS,
+    PLANT_PAGE_READINGS_LOOKBACK_HOURS,
+    PLANT_PAGE_RECENT_EVENTS,
+)
 from greenhouse_core.models import Plant
 from greenhouse_core.repository import SameClusterMoveError
 from greenhouse_server.deps import (
@@ -64,7 +71,7 @@ def plant_dashboard(
     chart_payloads_json = _chart_payloads_json(repo, plant_db, plant_id, hours)
     # Health score + 90-day history for the hero card
     health_score: float | None = health_svc.compute_score(plant_id)["score"]
-    health_history = repo.list_plant_health_history(plant_id, days=90)
+    health_history = repo.list_plant_health_history(plant_id, days=PLANT_PAGE_HEALTH_HISTORY_DAYS)
     last_irrigated_relative: str = relative_age(
         _last_irrigated_ts(repo, cluster_irrigator), missing="never", stale_after=None
     )
@@ -105,7 +112,7 @@ def _latest_readings(repo: IrrigationRepository, plant_sensors: list[Sensor]) ->
     """Latest reading (last 24 h) per linked sensor, keyed by sensor id."""
     latest_readings = {}
     for s in plant_sensors:
-        recent = repo.get_recent_readings(s.id, hours=24)
+        recent = repo.get_recent_readings(s.id, hours=PLANT_PAGE_READINGS_LOOKBACK_HOURS)
         latest_readings[s.id] = recent[0] if recent else None
     return latest_readings
 
@@ -116,7 +123,7 @@ def _recent_events(repo: IrrigationRepository, cluster_irrigator: Irrigator | No
     if cluster_irrigator is not None:
         recent_events.extend(repo.get_recent_events(cluster_irrigator.id, hours=hours))
     recent_events.sort(key=lambda e: e.timestamp, reverse=True)
-    return recent_events[:10]
+    return recent_events[:PLANT_PAGE_RECENT_EVENTS]
 
 
 def _plant_alerts(
@@ -131,7 +138,7 @@ def _last_irrigated_ts(repo: IrrigationRepository, cluster_irrigator: Irrigator 
     """Timestamp of the newest event (last 90 days) on the cluster's irrigator, or ``None``."""
     last_irrigated_ts: int | None = None
     if cluster_irrigator is not None:
-        events = repo.get_recent_events(cluster_irrigator.id, hours=90 * 24)
+        events = repo.get_recent_events(cluster_irrigator.id, hours=PLANT_PAGE_LAST_IRRIGATED_DAYS * HOURS_PER_DAY)
         for ev in events:
             if last_irrigated_ts is None or ev.timestamp > last_irrigated_ts:
                 last_irrigated_ts = ev.timestamp
