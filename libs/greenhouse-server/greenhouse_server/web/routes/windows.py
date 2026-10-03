@@ -26,9 +26,9 @@ def _parse_weekday_mask(values: list[str]) -> int:
         try:
             bit = int(raw)
         except ValueError as exc:
-            raise HTTPException(400, "weekday_mask values must be integers.") from exc
+            raise HTTPException(400, "weekday_mask values must be integers") from exc
         if bit not in WEEKDAY_BITS:
-            raise HTTPException(400, "weekday_mask values must be 1, 2, 4, 8, 16, 32, or 64.")
+            raise HTTPException(400, "weekday_mask values must be 1, 2, 4, 8, 16, 32, or 64")
         mask |= bit
     return mask
 
