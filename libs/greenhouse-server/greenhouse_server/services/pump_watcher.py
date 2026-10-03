@@ -366,7 +366,7 @@ class PumpWatcherService:
             try:
                 self._repo.rollback()
             except Exception:
-                pass
+                logger.debug("Rollback after the failed trip commit failed too", exc_info=True)
 
     def _lazy_monitor(self) -> DeviceHealthMonitor | None:
         """Build a transient monitor when one wasn't injected.

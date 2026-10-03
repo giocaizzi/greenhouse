@@ -1,11 +1,14 @@
 """Weather data infrastructure client."""
 
 import json
+import logging
 import time
 import urllib.request
 from typing import Any
 
 from greenhouse_core.constants import DEFAULT_LATITUDE, DEFAULT_LONGITUDE, WEATHER_FORECAST_CACHE_TTL_SECONDS
+
+logger = logging.getLogger(__name__)
 
 _FORECAST_CACHE_TTL = WEATHER_FORECAST_CACHE_TTL_SECONDS  # module name pinned by tests
 
@@ -53,6 +56,7 @@ class WeatherClient:
                 self._get_current_cache = (time.monotonic(), result)
                 return result
         except Exception:
+            logger.debug("Open-Meteo current-weather request failed", exc_info=True)
             return None
 
     def get_forecast(self, hours: int = 6) -> dict[str, Any] | None:
@@ -99,4 +103,5 @@ class WeatherClient:
             self._get_forecast_cache = (time.monotonic(), result)
             return result
         except Exception:
+            logger.debug("Open-Meteo forecast request failed", exc_info=True)
             return None

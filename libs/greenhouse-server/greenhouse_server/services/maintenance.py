@@ -1,5 +1,6 @@
 """Maintenance and learning alert collection."""
 
+import logging
 import statistics
 import time
 from typing import TYPE_CHECKING, Any
@@ -20,6 +21,8 @@ from greenhouse_core.utils import daytime_lux_readings, effective_light_threshol
 if TYPE_CHECKING:
     from greenhouse_core.models import Plant, Sensor, SensorReading
 
+logger = logging.getLogger(__name__)
+
 
 def collect_learning_alerts(
     repo: IrrigationRepository, cluster_id: int, plant_db: PlantDatabase
@@ -30,6 +33,7 @@ def collect_learning_alerts(
         issues = learner.detect_issues(cluster_id)
         return [{"severity": a.severity, "type": a.alert_type, "message": a.message} for a in issues]
     except Exception:
+        logger.debug("Learning alerts unavailable for cluster %d", cluster_id, exc_info=True)
         return []
 
 
