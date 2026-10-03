@@ -12,7 +12,6 @@ from greenhouse_core.utils import format_timestamp
 
 if TYPE_CHECKING:
     from _csv import Writer as _CsvWriter
-    from collections.abc import Mapping
 
     from greenhouse_core.models import IrrigationEvent, Irrigator
 
@@ -80,41 +79,6 @@ def get_irrigation_stats(db: IrrigationRepository, cluster_id: int, days: int = 
         stats["frequency_per_day"] = len(stats["irrigations"]) / days
 
     return stats
-
-
-def _print_counts(title: str, counts: Mapping[str, int]) -> None:
-    """Print one sorted "name: count" section, or nothing when it is empty."""
-    if counts:
-        print(title)
-        for name, count in sorted(counts.items()):
-            print(f"   {name}: {count}")
-
-
-def print_stats_report(stats: dict[str, Any], cluster_name: str) -> None:
-    """Print formatted statistics report."""
-    if "error" in stats:
-        print(f"❌ {stats['error']}")
-        return
-
-    print(f"\n📊 Irrigation Statistics - {cluster_name}")
-    print(f"   Period: last {stats['period_days']} days")
-    print("\n🔢 Summary:")
-    print(f"   Total events: {stats['total_events']}")
-    print(f"   Irrigations: {len(stats['irrigations'])}")
-    print(f"   Total water time: {format_duration(stats['total_duration_minutes'])}")
-
-    if stats["irrigations"]:
-        print(f"   Average per irrigation: {format_duration(int(stats['avg_duration_minutes']))}")
-        print(f"   Frequency: {stats['frequency_per_day']:.1f} times/day")
-
-    _print_counts("\n📋 Events by type:", stats["events_by_type"])
-    _print_counts("\n🎯 Triggered by:", stats["events_by_trigger"])
-
-    if stats["irrigations"]:
-        print("\n💧 Recent irrigations:")
-        for irr in stats["irrigations"][-5:]:  # Last 5
-            ts = format_timestamp(irr["timestamp"])
-            print(f"   {ts} | {format_duration(irr['duration_minutes'])} | {irr['triggered_by']} | {irr['irrigator']}")
 
 
 def _csv_event_row(event: IrrigationEvent, irrigator: Irrigator) -> list[object]:

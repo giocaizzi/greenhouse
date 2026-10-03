@@ -464,7 +464,6 @@
    "format_duration",
    "format_timestamp",
    "get_irrigation_stats",
-   "print_stats_report",
    "time"
   ]
  },
