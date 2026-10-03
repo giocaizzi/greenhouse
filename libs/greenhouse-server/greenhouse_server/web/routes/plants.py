@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -10,9 +10,6 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from greenhouse_server.deps import RepoDep, require_cluster, require_plant_in_cluster
 from greenhouse_server.web.context import base_context
 from greenhouse_server.web.templating import templates
-
-if TYPE_CHECKING:
-    pass
 
 router = APIRouter(include_in_schema=False)
 

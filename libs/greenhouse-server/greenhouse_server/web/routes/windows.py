@@ -8,8 +8,6 @@ but uses repo methods directly (in-process, like every other web route).
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
@@ -18,9 +16,6 @@ from greenhouse_server.services.windows import WindowValidationError, validate_w
 from greenhouse_server.web.context import base_context
 from greenhouse_server.web.templating import templates
 from greenhouse_server.web.weekdays import WEEKDAY_BITS, WEEKDAY_LABELS
-
-if TYPE_CHECKING:
-    pass
 
 router = APIRouter(include_in_schema=False)
 
