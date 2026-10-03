@@ -155,6 +155,18 @@ Consistency audit (2026-10-03):
   exists" (SQLite DDL is not transactional: tables created before the failure remain plus an empty `alembic_version`;
   such a DB must be stamped manually). See `refactor/wp-handoff/CONS-W1.md`.
 
+## Labeled behavior changes landed (drift + consistency; details in refactor/wp-handoff/DRIFT.md, CONS-W1.md)
+- API/MCP/CLI: reversed vacation create → 400; plant sync for unknown cluster → 404; sensor update with another
+  cluster's plant → 404; `/monitor` commits the readings it refreshes (fewer Cloud calls) and the web monitor now
+  refreshes stale sensors + 404s unknown clusters; efficacy `days` ≤ 365 (422 above); manual stop recorded as `stop`
+  (old rows keep `off`, so history may show both); malformed / `"null"` stored device config returned as `{}`
+  (was 500); `irrigator add --device-ip ""` sends the empty value.
+- Web/TUI: web irrigator/sensor create handles duplicates and cross-cluster plants like the API; unified window and
+  404 messages; check-all banner uses the API rule; vacation times parsed + shown in the timezone preference
+  everywhere; plant dashboard shows "never" / real age; TUI config tables use repository field order.
+- Removed: pre-Alembic DB repair (OD3); dead `export_csv`, `print_stats_report`, and other dead code.
+- Merge note: `refactor/integration/after-drift.txt` — 3053 passed after merging drift on top of consistency W1.
+
 ## Golden-test policy (orchestrator decision)
 
 - OpenAPI, routes, MCP tools, settings, DDL, scheduler registry, package data, web HTML, CLI help/output, TUI renders,
