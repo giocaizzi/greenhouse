@@ -186,6 +186,9 @@ Consistency audit (2026-10-03):
   auth dependency now reuses the route's own `get_session` / `get_settings` providers, so the user lookup and the
   handler share one session and identity map (was two sessions per request, one of them unused with auth disabled).
   Pinned by `tests/server/test_auth_session.py`.
+- Fix pass (server), **D20:** the web kill switch (`POST /bulk/stop-all`) now sends the same ntfy emergency push as
+  `POST /api/v1/bulk/stop-all` (honouring `notify_emergency`); the notification moved into
+  `services/bulk.stop_all_irrigators`, the one path both use. Pinned by `tests/server/test_web_emergency_notify.py`.
 
 ## Golden-test policy (orchestrator decision)
 
