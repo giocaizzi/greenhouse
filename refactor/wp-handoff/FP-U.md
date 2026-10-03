@@ -49,7 +49,7 @@ Stale refactor ids in CLI production code: only two existed (`render.py` docstri
   Not in `refactor/gate1/flaky-tests.txt` and not reproduced on HEAD either, so it does not meet the flaky criteria:
   **reported, not dismissed** — suggested fix (TUI, separate commit): the auto-refresh `reload` / `load` should no-op
   once the screen is unmounting (e.g. guard on `self.is_attached` or cancel the interval in `on_unmount`).
-  Test count matches the expected 3039 + 2 (TestSpriteView) + 2 (TestClientLifecycle) + 1 failing = 3044.
+  Test count: 3044 collected = base 3040 (integration gate log after the lint merge) + 2 TestSpriteView + 2 TestClientLifecycle.
 
 ## Ratchet
 
