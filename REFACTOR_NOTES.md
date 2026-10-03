@@ -149,6 +149,12 @@ Consistency audit (2026-10-03):
 - **B-N1:** `GET /clusters/{id}/monitor` syncs stale sensors from the Cloud but never commits, so the synced rows are
   discarded and every call hits the Cloud again; the web monitor skips the sync. Tracked as drift pair D15.
 
+- **B-N2:** `GET /api/v1/clusters/{id}/stats` for a cluster without an irrigator → 500 (`StatsResponse(**{"error": …})`
+  raises `ValidationError`). Queued as D19 in the consistency track.
+- **OD3 applied (core):** pre-Alembic database repair removed — a pre-Alembic DB now fails at startup with "table already
+  exists" (SQLite DDL is not transactional: tables created before the failure remain plus an empty `alembic_version`;
+  such a DB must be stamped manually). See `refactor/wp-handoff/CONS-W1.md`.
+
 ## Golden-test policy (orchestrator decision)
 
 - OpenAPI, routes, MCP tools, settings, DDL, scheduler registry, package data, web HTML, CLI help/output, TUI renders,

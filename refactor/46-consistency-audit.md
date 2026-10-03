@@ -363,3 +363,6 @@ D-10 C-TYPE-2 `devices/gateway.py` (28 errors).
 - **D16b (after WP8):** `devices/gateway._coerce_config` → call `greenhouse_core.models.parse_device_config`
   (already behavior-identical).
 - **D11 (after WP8):** shared quiet-hours "active now" helper for web + engine.
+- **D19 (W2, fix):** `/clusters/{id}/stats` without irrigator → 500; return the documented error/empty shape consistently with the web.
+- **W3:** rename module-level `log` → `logger` in `database.py`/`notify.py` (logger NAME unchanged; `log` golden name removal approved, removal-only diff).
+- **After drift merges:** delete `format_duration` if dead (D14 interaction).
