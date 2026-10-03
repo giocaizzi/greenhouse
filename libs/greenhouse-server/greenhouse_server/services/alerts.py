@@ -12,9 +12,12 @@ import time
 from greenhouse_core.models import (
     ENTITY_CLUSTER,
     ENTITY_SENSOR,
+    SOURCE_LEARNING,
+    SOURCE_MAINTENANCE,
     Alert,
     Cluster,
 )
+from greenhouse_core.models import SOURCE_PUMP as SOURCE_PUMP  # re-export: tests import it from here
 from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.services.maintenance import collect_learning_alerts, collect_maintenance_alerts
@@ -23,13 +26,8 @@ from greenhouse_server.services.notify import NtfyClient, maybe_notify
 # Alert severities that warrant a push (info is suppressed).
 _NOTIFY_SEVERITIES = ("warning", "critical")
 
-SOURCE_LEARNING = "learning"
-SOURCE_MAINTENANCE = "maintenance"
 SOURCE_DECISION = "decision"
-SOURCE_LEAK = "leak"
-SOURCE_ANOMALY = "anomaly"
 SOURCE_SYSTEM = "system"
-SOURCE_PUMP = "pump"
 
 
 def _dedup_key(source: str, code: str, cluster_id: int | None, message: str) -> str:

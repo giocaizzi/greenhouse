@@ -39,18 +39,12 @@ from greenhouse_core.constants import (
 from greenhouse_core.devices import DeviceRegistry
 from greenhouse_core.devices.health import DeviceHealthState, HealthAlarm
 from greenhouse_core.logic.decision import TriggerCode
-from greenhouse_core.models import ENTITY_IRRIGATOR, ENTITY_SENSOR, Irrigator, Sensor
+from greenhouse_core.models import ENTITY_IRRIGATOR, ENTITY_SENSOR, SOURCE_HEALTH, Irrigator, Sensor
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.services.alerts import notify_if_new_alert
 from greenhouse_server.services.notify import NtfyClient
 
 logger = logging.getLogger(__name__)
-
-# Alert source for every health-derived alert. Distinct from
-# ``SOURCE_PUMP`` so the pump-watcher's fast-path alarms (still routed
-# through the monitor) collapse onto the same dedup_key scheme as the
-# slow-path monitor, while the audit log can still tell who raised them.
-SOURCE_HEALTH = "health"
 
 # Legacy alert code raised by the original PumpWatcher implementation.
 # Carried here so :meth:`migrate_legacy_pump_alerts` can resolve open rows

@@ -51,10 +51,10 @@ from greenhouse_core.constants import (
     LEAK_SETTLE_TOLERANCE,
 )
 from greenhouse_core.logic.cleaning import clean_readings_around
-from greenhouse_core.models import ENTITY_CLUSTER, ENTITY_SENSOR, Alert, Sensor
+from greenhouse_core.models import ENTITY_CLUSTER, ENTITY_SENSOR, SOURCE_LEAK, Alert, Sensor
 from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_core.repository import IrrigationRepository
-from greenhouse_server.services.alerts import SOURCE_LEAK, raise_alert
+from greenhouse_server.services.alerts import raise_alert
 from greenhouse_server.services.notify import NtfyClient
 
 logger = logging.getLogger(__name__)
@@ -113,7 +113,7 @@ class LeakDetectionService:
         if alerts:
             now = int(time.time())
             self._repo.add_activity_event(
-                source="leak",
+                source=SOURCE_LEAK,
                 entity_type=ENTITY_CLUSTER,
                 entity_id=cluster_id,
                 code="leak_hold",

@@ -40,7 +40,13 @@ from greenhouse_core.constants import (
 )
 from greenhouse_core.devices import DeviceRegistry
 from greenhouse_core.devices.health import HealthAlarm
-from greenhouse_core.models import ENTITY_IRRIGATOR, Irrigator
+from greenhouse_core.models import (
+    ENTITY_IRRIGATOR,
+    EVENT_ACTION_ABORTED,
+    SOURCE_PUMP,
+    TRIGGERED_BY_PUMP_WATCHER,
+    Irrigator,
+)
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.services.health_monitor import DeviceHealthMonitor
 
@@ -53,7 +59,6 @@ logger = logging.getLogger(__name__)
 # health alarm so the inbox has one row per condition. Tests + integrations
 # can keep importing ``ALERT_CODE`` from this module.
 ALERT_CODE = HealthAlarm.NO_WATER.value  # "no_water"
-EVENT_ACTION_ABORTED = "aborted"
 ACTIVITY_CODE = "pump_dry_run"
 
 
@@ -251,8 +256,6 @@ class PumpWatcherService:
         The alert itself is raised by :meth:`DeviceHealthMonitor.record`,
         which uses the unified ``health:irrigator:{id}:no_water`` dedup_key.
         """
-        from greenhouse_server.services.alerts import SOURCE_PUMP
-
         stop_ok, stop_msg = self._stop_pump(irrigator)
 
         alarm_raw = state.raw.get("alarm_raw") if isinstance(state.raw, dict) else None
@@ -304,7 +307,7 @@ class PumpWatcherService:
                 irrigator_id=irrigator.id,
                 action=EVENT_ACTION_ABORTED,
                 duration_minutes=0,
-                triggered_by="pump_watcher",
+                triggered_by=TRIGGERED_BY_PUMP_WATCHER,
                 notes=(f"pump dry-run detected after ~{elapsed_estimate}s (DP 105={alarm_raw!r}); stop_ok={stop_ok}"),
             )
         except Exception:

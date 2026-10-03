@@ -3,6 +3,7 @@
 import time
 
 from greenhouse_core.devices import DeviceRegistry, UnknownDeviceModel
+from greenhouse_core.models import EVENT_ACTION_STOP, TRIGGERED_BY_EMERGENCY
 from greenhouse_core.repository import IrrigationRepository
 
 
@@ -43,8 +44,8 @@ def stop_all_irrigators(
 
             repo.add_irrigation_event(
                 irrigator_id=irrigator.id,
-                action="stop",
-                triggered_by="emergency",
+                action=EVENT_ACTION_STOP,
+                triggered_by=TRIGGERED_BY_EMERGENCY,
                 notes="kill switch",
                 timestamp=int(time.time()),
             )

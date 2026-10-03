@@ -17,9 +17,9 @@ import statistics
 import time
 from typing import TYPE_CHECKING
 
-from greenhouse_core.models import Alert
+from greenhouse_core.models import SOURCE_ANOMALY, Alert
 from greenhouse_core.repository import IrrigationRepository
-from greenhouse_server.services.alerts import SOURCE_ANOMALY, raise_alert
+from greenhouse_server.services.alerts import raise_alert
 from greenhouse_server.services.notify import NtfyClient
 
 if TYPE_CHECKING:

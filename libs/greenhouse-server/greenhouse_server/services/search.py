@@ -1,5 +1,6 @@
 """Global search service — powers the Command-K palette."""
 
+from greenhouse_core.models import ENTITY_CLUSTER, ENTITY_IRRIGATOR, ENTITY_PLANT, ENTITY_SENSOR
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_core.schemas import SearchHit
 
@@ -39,7 +40,7 @@ def _cluster_hits(repo: IrrigationRepository, pattern: str) -> list[SearchHit]:
     clusters = repo.search_clusters(pattern, _PER_TYPE_LIMIT)
     return [
         SearchHit(
-            entity_type="cluster",
+            entity_type=ENTITY_CLUSTER,
             entity_id=c.id,
             label=c.name,
             sublabel=c.location,
@@ -54,7 +55,7 @@ def _plant_hits(repo: IrrigationRepository, pattern: str) -> list[SearchHit]:
     plants = repo.search_plants(pattern, _PER_TYPE_LIMIT)
     return [
         SearchHit(
-            entity_type="plant",
+            entity_type=ENTITY_PLANT,
             entity_id=p.id,
             label=p.species,
             sublabel=_cluster_name(repo, p.cluster_id),
@@ -69,7 +70,7 @@ def _sensor_hits(repo: IrrigationRepository, q: str, pattern: str) -> list[Searc
     sensors = repo.search_sensors(pattern, q, _PER_TYPE_LIMIT)
     return [
         SearchHit(
-            entity_type="sensor",
+            entity_type=ENTITY_SENSOR,
             entity_id=s.id,
             label=s.name,
             sublabel=_cluster_name(repo, s.cluster_id),
@@ -84,7 +85,7 @@ def _irrigator_hits(repo: IrrigationRepository, q: str, pattern: str) -> list[Se
     irrigators = repo.search_irrigators(pattern, q, _PER_TYPE_LIMIT)
     return [
         SearchHit(
-            entity_type="irrigator",
+            entity_type=ENTITY_IRRIGATOR,
             entity_id=i.id,
             label=i.name,
             sublabel=_cluster_name(repo, i.cluster_id),

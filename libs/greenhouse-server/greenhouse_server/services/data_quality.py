@@ -5,6 +5,7 @@ from collections import Counter
 from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
+from greenhouse_core.models import ENTITY_CLUSTER, ENTITY_PLANT, ENTITY_SENSOR
 from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_core.schemas import DataQualityIssue, DataQualityReport
@@ -54,7 +55,7 @@ def _sensor_issues(
                 DataQualityIssue(
                     code="sensor_without_plant",
                     severity="warning",
-                    entity_type="sensor",
+                    entity_type=ENTITY_SENSOR,
                     entity_id=sensor.id,
                     label=sensor.name,
                     message=f"Sensor '{sensor.name}' is not assigned to any plant.",
@@ -70,7 +71,7 @@ def _sensor_issues(
                 DataQualityIssue(
                     code="stale_sensor",
                     severity="warning",
-                    entity_type="sensor",
+                    entity_type=ENTITY_SENSOR,
                     entity_id=sensor.id,
                     label=sensor.name,
                     message=f"Sensor '{sensor.name}' has no reading in the last 24 h.",
@@ -91,7 +92,7 @@ def _plant_issues(
                 DataQualityIssue(
                     code="plant_without_sensor",
                     severity="warning",
-                    entity_type="plant",
+                    entity_type=ENTITY_PLANT,
                     entity_id=plant.id,
                     label=plant.species,
                     message=f"Plant '{plant.species}' has no sensor assigned.",
@@ -103,7 +104,7 @@ def _plant_issues(
                 DataQualityIssue(
                     code="unknown_species",
                     severity="warning",
-                    entity_type="plant",
+                    entity_type=ENTITY_PLANT,
                     entity_id=plant.id,
                     label=plant.species,
                     message=f"Species '{plant.species}' is not in the plant database.",
@@ -123,7 +124,7 @@ def _cluster_issues(repo: IrrigationRepository, clusters: "Sequence[Cluster]") -
                 DataQualityIssue(
                     code="irrigator_in_empty_cluster",
                     severity="warning",
-                    entity_type="cluster",
+                    entity_type=ENTITY_CLUSTER,
                     entity_id=cluster.id,
                     label=cluster.name,
                     message=f"Cluster '{cluster.name}' has irrigators but no plants.",
@@ -134,7 +135,7 @@ def _cluster_issues(repo: IrrigationRepository, clusters: "Sequence[Cluster]") -
                 DataQualityIssue(
                     code="cluster_without_config",
                     severity="warning",
-                    entity_type="cluster",
+                    entity_type=ENTITY_CLUSTER,
                     entity_id=cluster.id,
                     label=cluster.name,
                     message=f"Cluster '{cluster.name}' has no irrigation config.",

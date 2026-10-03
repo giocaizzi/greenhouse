@@ -15,7 +15,7 @@ JSON API returns; each route maps it to its own response shape.
 import time
 
 from greenhouse_core.devices import DeviceRegistry, UnknownDeviceModel
-from greenhouse_core.models import Irrigator
+from greenhouse_core.models import EVENT_ACTION_START, EVENT_ACTION_STOP, TRIGGERED_BY_MANUAL, Irrigator
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.services.irrigation import schedule_pump_watcher
 from greenhouse_server.services.notify import NtfyClient, maybe_notify
@@ -59,7 +59,7 @@ def check_rate_limits(repo: IrrigationRepository, cluster_id: int, irrigator_id:
         # Count "start" events in the last 24 h for the cluster's single irrigator.
         irrigator = repo.get_irrigator_for_cluster(cluster_id)
         total_starts = (
-            sum(1 for e in repo.get_recent_events(irrigator.id, hours=24) if e.action == "start")
+            sum(1 for e in repo.get_recent_events(irrigator.id, hours=24) if e.action == EVENT_ACTION_START)
             if irrigator is not None
             else 0
         )
@@ -68,7 +68,7 @@ def check_rate_limits(repo: IrrigationRepository, cluster_id: int, irrigator_id:
 
     if config.daily_cap_minutes is not None:
         recent = repo.get_recent_events(irrigator_id, hours=24)
-        minutes_used = sum(e.duration_minutes or 0 for e in recent if e.action == "start")
+        minutes_used = sum(e.duration_minutes or 0 for e in recent if e.action == EVENT_ACTION_START)
         if minutes_used + requested > config.daily_cap_minutes:
             raise ManualActionError(409, "irrigator daily cap reached")
 
@@ -125,21 +125,21 @@ def manual_start(
     started_at = int(time.time())
     repo.add_irrigation_event(
         irrigator_id=irrigator.id,
-        action="start",
+        action=EVENT_ACTION_START,
         duration_minutes=minutes,
-        triggered_by="manual",
+        triggered_by=TRIGGERED_BY_MANUAL,
         notes=f"Manual start via {via} ({minutes} min)" if minutes else f"Manual start via {via}",
         timestamp=started_at,
     )
     repo.commit()
     if minutes:
-        schedule_pump_watcher(irrigator.id, minutes, started_at, triggered_by="manual")
+        schedule_pump_watcher(irrigator.id, minutes, started_at, triggered_by=TRIGGERED_BY_MANUAL)
     maybe_notify(
         notifier,
         repo.get_preferences(),
         "manual",
         lambda: notifier.notify_irrigation(
-            triggered_by="manual",
+            triggered_by=TRIGGERED_BY_MANUAL,
             irrigator_name=irrigator.name,
             duration_minutes=minutes,
             detail="started",
@@ -181,8 +181,8 @@ def manual_stop(
 
     repo.add_irrigation_event(
         irrigator_id=irrigator.id,
-        action="stop",
-        triggered_by="manual",
+        action=EVENT_ACTION_STOP,
+        triggered_by=TRIGGERED_BY_MANUAL,
         notes=f"Manual stop via {via}",
     )
     repo.commit()
@@ -191,7 +191,7 @@ def manual_stop(
         repo.get_preferences(),
         "manual",
         lambda: notifier.notify_irrigation(
-            triggered_by="manual",
+            triggered_by=TRIGGERED_BY_MANUAL,
             irrigator_name=irrigator.name,
             detail="stopped",
         ),
@@ -229,9 +229,9 @@ def manual_log(
     check_rate_limits(repo, irrigator.cluster_id, irrigator.id, minutes)
     event_id = repo.add_irrigation_event(
         irrigator_id=irrigator.id,
-        action="start",
+        action=EVENT_ACTION_START,
         duration_minutes=minutes,
-        triggered_by="manual",
+        triggered_by=TRIGGERED_BY_MANUAL,
         notes=notes or f"Manual ({minutes} min)",
     )
     repo.commit()
@@ -240,7 +240,7 @@ def manual_log(
         repo.get_preferences(),
         "manual",
         lambda: notifier.notify_irrigation(
-            triggered_by="manual",
+            triggered_by=TRIGGERED_BY_MANUAL,
             irrigator_name=irrigator.name,
             duration_minutes=minutes,
             detail="logged (watered by hand)",
