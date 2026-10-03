@@ -11,9 +11,9 @@ inspected: only the intended lines move). Not pushed, not merged.
 | D14 | `45481f7` | delete dead `stats.export_csv` (+ `_csv_event_row`, `_write_event_rows`); route CSV stays | `services/cluster.cluster_events_csv` (existing) |
 | D9 | `8faca8b` | CLI `irrigator add`/`update` build `config` with one `is not None` rule | `commands/irrigators._device_config` |
 | D13 | `5e0d9b0` | TUI config tab + settings global-defaults list fields in repository order (no re-sort) | server payload order |
-| D8 | `f849e79` | TUI vacation datetimes are UTC (parse, pre-fill, table); labels/headers say "(UTC)" | `tui/screens/forms.py`, `formatting.clock(utc=True)` |
+| D8 | `f849e79` (superseded by `e2ee93f`) | TUI vacation datetimes UTC → now the `timezone` preference everywhere | `tui/screens/forms.py`, `formatting.zone/clock(tz=)`, `web/routes/vacation._preference_zone` |
 | D10 | `a77a7aa` | every soil-target reader uses `moisture_target_range` (`parse_moisture_target`) | `logic/plant_needs` (existing) |
-| D7 | `eaeb534` | plant dashboard "irrigated …" uses the `age_seconds` filter | `web/filters.age_seconds` |
+| D7 | `eaeb534` (refined by `831183d`) | plant dashboard "irrigated …" uses the shared formatter ("never" / real age) | `web/filters.relative_age` |
 | D4 | `e8af945` | web check badge uses the API `has_alerts` rule (alerts ∨ maintenance ∨ needs_water), check-all and single | `services/irrigation.check_has_alerts` |
 | D12 | `4034fb6` | plant-DB sync with unknown `cluster_id` → 404 "Cluster not found" (API + web) | `services/cluster.ClusterNotFoundError` |
 | D3 | `fe9bf91` | one window validator, API wording, for API and web | `services/windows.validate_window` (new) |
@@ -26,6 +26,28 @@ inspected: only the intended lines move). Not pushed, not merged.
 | D16 | `4c914e8` | one lenient device-config parser (malformed / non-object → `{}`) for API schemas + web | `greenhouse_core.models.parse_device_config` |
 | OD4 | `8053a89` | manual stop records action `"stop"` (new rows only) | `services/manual_control.manual_stop` |
 
+### Follow-up after review (owner decisions 2026-10-03; review APPROVED, `scratchpad/review-drift.md`)
+
+| Item | Commit | Change |
+|---|---|---|
+| D8 owner decision | `e2ee93f` | vacation times parsed **and** displayed in the `timezone` preference: web date → midnight in the display tz (`get_display_timezone()`), TUI `Field.tz` + `vacation_fields(tz)` / `vacation_rows(tz)` / `formatting.clock(tz=)`; "(UTC)" labels removed; API/CLI take Unix seconds (nothing to parse) |
+| D7 owner decision | `831183d` | one formatter `web/filters.relative_age(ts, *, missing, stale_after)`; `age_seconds` filter = freshness defaults (unchanged); dashboard shows "never" / real age ("12d ago") |
+| D2 owner decision | — | keep the 404 on a cross-cluster plant (create and update); no change |
+| m2 | `4cc4848` | `refactor(services)`: dead `monitor_cluster(no_sync=…)` removed (service method only, not a route param) |
+| m3 | `77a5bb6` | web monitor 404s an unknown cluster like the API (new golden `monitor__404`) |
+| m4 | `14e3460` | `refactor(web)`: empty `if TYPE_CHECKING: pass` blocks removed |
+| m5 | `acc9f91` | web window parse errors drop their trailing "." (2 goldens) |
+| m6 | `d74a8e7` | plugin docs: LOGIC.md (D10, D15), CLI.md (D5, D9, D12, OD4, D8), SKILL.md (API/MCP refusals, monitor, stop/off) |
+| m7 | `e11bccd` | D15–D17 + owner decisions added to `refactor/45-drift-track.md` |
+| m1, m8 | this file | notes below |
+
+**m1 — D16 also changes `"null"`:** a stored config of `"null"` used to come back as `config: null` (200); it now
+reads as `{}` like every other non-object value. Practically unreachable (writers always store `json.dumps(dict)`).
+
+**m8 — OD4 side effects:** existing databases keep their historical `off` rows, so history and `stats`
+`events_by_type` show both `off` (old manual stops) and `stop` buckets until those rows age out; the TUI now colours
+manual stops with `ACTION_STYLES["stop"]` (the old `off` had no style).
+
 **D11 skipped** (quiet-hours "active now" shared helper) — it touches `logic/engine.py`/`logic/timing.py`, owned by
 WP8. Plan task I2 / target-architecture §7.2 (`logic.timing.active_quiet_window`) still applies after WP8 merges.
 
@@ -33,9 +55,7 @@ WP8. Plan task I2 / target-architecture §7.2 (`logic.timing.active_quiet_window
 of `greenhouse_core.models.parse_device_config`; replace it with a call (behavior-preserving `refactor(devices)`).
 
 ## Ambiguities resolved by the documented default (reviewer: look here hardest)
-- D7: the filter's wording wins → dashboard can read "irrigated stale" (≥ 7 d) and "irrigated —" (no event in 90 d).
-- D8: UTC semantics; on non-UTC machines TUI-typed vacation times shift by the local offset vs before. Made visible
-  with "(UTC)" labels/headers and a UTC table so form, table and server agree.
+- D7 / D8: resolved by the owner after review (see the follow-up table): "never" / real age; `timezone` preference.
 - D13: the real drift was the display tables (`render.config_rows` / `global_config_rows` sorted alphabetically);
   `resources.config_fields` already matched repository order.
 - D2: applied to API `PUT` sensor too (B-7 assumed the API already rejected cross-cluster plants on update; it did not).
@@ -59,6 +79,8 @@ they move only with reviewed behavior-change commits. Final: openapi `ee96dba2�
 - `stop_irrigator` / `greenhouse irrigator stop`: event action `stop` (was `off`) in history/stats/CSV.
 - Irrigator/sensor responses: malformed or non-object stored `config` → `{}` (was HTTP 500).
 - `greenhouse irrigator add --device-ip ""` now sends `config: {"device_ip": ""}` (`references/CLI.md`).
+- Vacation wall times (web date fields, TUI) are in the `timezone` preference; API/MCP/CLI stay Unix seconds.
+- Plugin docs are already synced on this branch (`d74a8e7`); CLAUDE.md needs no change for these pairs.
 - `references/LOGIC.md`: one soil-target parser (first two `-` parts, default 45–65) for monitor, check and learning
   issues (D10).
 - Web/TUI only (no plugin impact): D1, D3, D4, D6, D7, D8, D13 wording/badge/order changes above.
@@ -80,13 +102,18 @@ Proposed text for a new "Drift track (behavior changes, labelled)" section:
 - Window/vacation/404 error strings unified on the API wording (D3, D5, D6).
 
 ## New observations (not fixed; for the consistency sweep)
-- `age_seconds` filter misuse: `_cluster_status.html`, `_sensor_row.html`, `clusters/detail.html` and `health.html`
+- `age_seconds` filter misuse (still open; the filter itself is unchanged by the D7 follow-up): `_cluster_status.html`, `_sensor_row.html`, `clusters/detail.html` and `health.html`
   pipe an **age in seconds** (`reading_age_seconds` / `dev.age_seconds`) into `age_seconds`, which expects a Unix
   timestamp (`time.time() - ts`) — an age like 300 renders as "stale". (`_alert_row.html` and
   `_plant_latest_card.html` pass timestamps correctly.)
 - `services/charts._parse_range` is a 4th soil-target parser ("a-b-c" → no band, source `default`); left out of D10
   because the chart needs a "parsed or not" signal for its `source` label.
 - `web/routes/clusters.py::cluster_detail` is over the size DoD (pre-existing at `3d1f43d`; not touched).
+
+## Gate after the follow-up (PYTHONHASHSEED=0, `-n 2`, flock, each hold ≤ 5 min)
+FULL in the same 7 chunks: 819 + 1006 + 389 + 242 + 473 + 92 + 32 = **3053 passed, 0 failed** (every per-commit
+subset and the affected goldens are inside this union). ruff check/format clean, `lint-imports` 10 kept,
+`make typecheck` 81 files OK, `git status --porcelain tests/golden` empty.
 
 ## Gate (end of track, PYTHONHASHSEED=0, `-n 2`, flock, each hold ≤ 5 min)
 FULL run split into 7 directory chunks covering every test file (`tests/test_*.py tests/devices/`, `tests/server/*`
