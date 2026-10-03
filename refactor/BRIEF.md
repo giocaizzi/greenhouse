@@ -92,3 +92,6 @@ Do not commit unless your brief says so. Do not touch files outside your stated 
   **OD4 (owner): manual stop records action `"stop"`** (labeled; existing rows unchanged).
   **OD5 (owner): drop the `refactor/` folder at the end; keep `REFACTOR_NOTES.md` and `REFACTOR_REPORT.md`**; strict list
   → `[tool.mypy] files`, sizecheck → `scripts/`, Makefile updated.
+- **Drift confirmations** (owner, 2026-10-03): D8 vacation times parsed and displayed in the timezone preference on
+  every interface; D7 dashboard shows "never" / real age (no "stale"); D2 cross-cluster plant on sensor update → 404 on
+  every interface.
