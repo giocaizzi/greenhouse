@@ -66,7 +66,7 @@ def irrigator_fields(irrigator: dict[str, Any] | None = None) -> list[Field]:
         Field("type", "Model / type", value=i.get("type"), required=irrigator is None, placeholder="rainpoint.ik10pw"),
         Field("reservoir_l", "Reservoir (L)", "float", i.get("reservoir_l")),
         Field("flow_rate_l_per_min", "Flow (L/min)", "float", i.get("flow_rate_l_per_min")),
-        Field("config", "Config (JSON)", "json", i.get("config"), placeholder='{"ip": "…", "version": "3.5"}'),
+        Field("config", "Config (JSON)", "json", i.get("config"), placeholder='{"device_ip": "…", "local_key": "…"}'),
     ]
     return fields
 

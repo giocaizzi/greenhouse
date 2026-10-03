@@ -1181,7 +1181,7 @@
     "label": "Config (JSON)",
     "name": "config",
     "options": [],
-    "placeholder": "{\"ip\": \"…\", \"version\": \"3.5\"}",
+    "placeholder": "{\"device_ip\": \"…\", \"local_key\": \"…\"}",
     "required": false,
     "tz": null,
     "value": null
@@ -1233,7 +1233,7 @@
     "label": "Config (JSON)",
     "name": "config",
     "options": [],
-    "placeholder": "{\"ip\": \"…\", \"version\": \"3.5\"}",
+    "placeholder": "{\"device_ip\": \"…\", \"local_key\": \"…\"}",
     "required": false,
     "tz": null,
     "value": {
