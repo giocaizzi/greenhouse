@@ -52,6 +52,7 @@ from greenhouse_server.scheduler import (
     stop_scheduler,
 )
 from greenhouse_server.services.irrigation import rearm_leak_checks
+from greenhouse_server.services.jobs import read_session
 from greenhouse_server.services.notify import NtfyClient
 from greenhouse_server.services.weather import WeatherClient
 from greenhouse_server.web.exception_handlers import register_web_exception_handlers
@@ -320,14 +321,10 @@ def _startup_timezone(app: FastAPI) -> str:
     DB cannot be read yet.
     """
     try:
-        session = app.state.session_factory()
-        try:
-            repo = IrrigationRepository(session)
-            tz = repo.get_preferences().timezone
+        with read_session(app) as session:
+            tz = IrrigationRepository(session).get_preferences().timezone
             session.commit()
             return tz or "UTC"
-        finally:
-            session.close()
     except Exception:  # noqa: BLE001
         return "UTC"
 
@@ -339,13 +336,9 @@ def _restore_persisted_scheduler_pause(app: FastAPI) -> None:
     container restart. Silently skipped if preferences cannot be read.
     """
     try:
-        session = app.state.session_factory()
-        try:
-            repo = IrrigationRepository(session)
-            paused = repo.get_preferences().scheduler_paused
+        with read_session(app) as session:
+            paused = IrrigationRepository(session).get_preferences().scheduler_paused
             session.commit()
-        finally:
-            session.close()
         apply_persisted_pause(paused)
     except Exception:  # noqa: BLE001, S110
         pass

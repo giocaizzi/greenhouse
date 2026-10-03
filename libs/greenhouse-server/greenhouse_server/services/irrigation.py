@@ -40,7 +40,7 @@ from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.services.alerts import raise_alert, sync_cluster_alerts
 from greenhouse_server.services.health_monitor import HEALTH_ALARM_TO_TRIGGER, DeviceHealthMonitor
-from greenhouse_server.services.jobs import job_session
+from greenhouse_server.services.jobs import job_session, read_session
 from greenhouse_server.services.maintenance import collect_learning_alerts, collect_maintenance_alerts
 from greenhouse_server.services.notify import NtfyClient, maybe_notify
 from greenhouse_server.services.sync import SyncService
@@ -419,15 +419,13 @@ def rearm_leak_checks() -> int:
         return 0
     now = int(_time.time())
     scheduled = 0
-    session = _app.state.session_factory()
-    try:
-        repo = IrrigationRepository(session)
-        for _ in _rearm_from_events(repo, now):
-            scheduled += 1
-    except Exception:
-        logger.exception("Re-arming leak checks after restart failed")
-    finally:
-        session.close()
+    with read_session(_app) as session:
+        try:
+            repo = IrrigationRepository(session)
+            for _ in _rearm_from_events(repo, now):
+                scheduled += 1
+        except Exception:
+            logger.exception("Re-arming leak checks after restart failed")
     if scheduled:
         logger.info("Re-armed %d post-irrigation leak check(s) after restart", scheduled)
     return scheduled

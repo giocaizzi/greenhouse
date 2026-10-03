@@ -1,8 +1,10 @@
-"""One background-job transaction: the session scaffolding every job shares.
+"""Session scaffolding outside a request: one spelling per transaction shape.
 
-Lives below the scheduler (``app > … > scheduler > services``) so services may use it too:
-the scheduler's five jobs, the leak check and the pump watcher do. The caller passes its
-module logger, so each failure record keeps its module's logger name.
+Lives below the scheduler (``app > … > scheduler > services``) so services may use it too.
+:func:`job_session` is the job transaction (the scheduler's five jobs, the leak check, the pump
+watcher); :func:`read_session` is the bare open/close for code that handles its own errors
+(startup reads, the leak-check re-arm, the health-monitor bootstrap). A job passes its module
+logger, so each failure record keeps its module's logger name.
 """
 
 from collections.abc import Iterator
@@ -49,5 +51,19 @@ def job_session(
     except Exception:
         session.rollback()
         logger.exception(failure_message, *args)
+    finally:
+        session.close()
+
+
+@contextmanager
+def read_session(app: "FastAPI") -> "Iterator[Session]":
+    """Open a session on ``app.state.session_factory`` and always close it — nothing else.
+
+    No commit, no rollback, no logging: the body commits if it writes (``get_preferences``
+    may seed its row) and handles its own errors, which escape after ``close()``.
+    """
+    session = app.state.session_factory()
+    try:
+        yield session
     finally:
         session.close()

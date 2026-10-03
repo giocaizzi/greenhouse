@@ -20,6 +20,7 @@ from greenhouse_core.devices import DeviceGateway
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.config import Settings
 from greenhouse_server.services.jobs import job_session as _job_session  # private: keeps the frozen dir() surface
+from greenhouse_server.services.jobs import read_session as _read_session  # private, as above
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -405,8 +406,7 @@ def init_health_monitor(app: FastAPI, settings: Settings) -> None:  # noqa: ARG0
         logger.debug("Health monitor init skipped: no device registry")
         return
 
-    session = app.state.session_factory()
-    try:
+    with _read_session(app) as session:
         repo = IrrigationRepository(session)
         monitor = DeviceHealthMonitor(repo=repo, registry=registry, notifier=getattr(app.state, "ntfy_notifier", None))
         try:
@@ -416,8 +416,6 @@ def init_health_monitor(app: FastAPI, settings: Settings) -> None:  # noqa: ARG0
             session.rollback()
             logger.exception("Health monitor startup hooks failed")
         app.state.health_monitor = monitor
-    finally:
-        session.close()
 
 
 def _is_paused(job: "Job") -> bool:
