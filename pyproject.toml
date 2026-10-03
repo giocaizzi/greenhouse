@@ -108,6 +108,7 @@ extend-select = [
     "FURB",  # refurb
     "N",  # pep8-naming
     "EXE",  # flake8-executable
+    "ARG",  # unused arguments (FastAPI web handlers keep `request`: per-file exclusion)
     "S",  # flake8-bandit: intended uses carry a reasoned noqa; real findings → REFACTOR_NOTES
     "PLR2004",  # magic-value-comparison: thresholds live in constants.py (CLAUDE.md invariant 5)
     "RUF",  # ruff-specific (RUF001 / RUF002 ignored, see below)
@@ -153,10 +154,12 @@ indent-style = "space"
 "scripts/*" = ["E402"]  # intentional sys.path before import
 # Frozen safety net: tests exceed size limits and poke privates; never edited to satisfy a lint rule.
 "tests/**" = [
-    "C90", "PLR0911", "PLR0912", "PLR0915", "PLR0904", "PLR0914", "PLR1702", "SIM", "RET", "PTH", "PERF", "PLW", "FURB", "N", "BLE", "RUF", "PLR2004", "S", "ERA001", "SLF001",
+    "C90", "PLR0911", "PLR0912", "PLR0915", "PLR0904", "PLR0914", "PLR1702", "SIM", "RET", "PTH", "PERF", "PLW", "FURB", "N", "BLE", "RUF", "PLR2004", "S", "ARG", "ERA001", "SLF001",
 ]
 "refactor/**" = ["C90", "PLR0911", "PLR0912", "PLR0915", "PLR0914", "PLR1702", "PERF", "PLW", "RUF005", "PLR2004", "S"]  # refactor tooling scripts, not shipped
 "libs/greenhouse-core/greenhouse_core/migrations/versions/*" = ["PLR0915"]  # generated Alembic DDL, out of scope
+# Frozen handler signatures (not a ratchet): web routes keep `request: Request` even when unused.
+"libs/greenhouse-server/greenhouse_server/web/routes/*" = ["ARG001"]
 # Ratchet offenders (baseline refactor-gate1 + lint ratchet, refactor/40-lint-ratchet.md); each list only shrinks.
 "libs/greenhouse-cli/greenhouse_cli/client.py" = ["PLR0904"]
 "libs/greenhouse-cli/greenhouse_cli/commands/auth.py" = ["PLR0915"]
@@ -167,11 +170,11 @@ indent-style = "space"
 "libs/greenhouse-core/greenhouse_core/devices/__init__.py" = ["RUF022"]
 "libs/greenhouse-core/greenhouse_core/devices/gateway.py" = ["BLE001", "PLR0915"]
 "libs/greenhouse-core/greenhouse_core/devices/registry.py" = ["N818"]  # UnknownDeviceModel: public name (WP8-owned file)
-"libs/greenhouse-core/greenhouse_core/devices/irrigators/ik10pw.py" = ["BLE001", "C901", "PLR0911", "PLR0915", "PLR1702", "RUF022", "RUF100", "S110", "SIM105"]
-"libs/greenhouse-core/greenhouse_core/devices/irrigators/tuya_generic.py" = ["BLE001", "C901", "PLR0912", "PLR1702", "S110"]
-"libs/greenhouse-core/greenhouse_core/devices/sensors/tr301z.py" = ["RUF022"]
-"libs/greenhouse-core/greenhouse_core/devices/sensors/tuya_generic.py" = ["BLE001"]
-"libs/greenhouse-core/greenhouse_core/logic/engine.py" = ["C901", "PLR0911", "PLR0912", "PLR0914", "PLR0915", "PLR2004", "RUF003", "RUF046"]
+"libs/greenhouse-core/greenhouse_core/devices/irrigators/ik10pw.py" = ["BLE001", "C901", "PLR0911", "PLR0915", "PLR1702", "RUF022", "S110", "SIM105"]
+"libs/greenhouse-core/greenhouse_core/devices/irrigators/tuya_generic.py" = ["ARG002", "BLE001", "C901", "PLR0912", "PLR1702", "S110"]
+"libs/greenhouse-core/greenhouse_core/devices/sensors/tr301z.py" = ["ARG002", "RUF022"]
+"libs/greenhouse-core/greenhouse_core/devices/sensors/tuya_generic.py" = ["ARG002", "BLE001"]
+"libs/greenhouse-core/greenhouse_core/logic/engine.py" = ["ARG002", "C901", "PLR0911", "PLR0912", "PLR0914", "PLR0915", "PLR2004", "RUF003", "RUF046"]
 "libs/greenhouse-core/greenhouse_core/logic/timing.py" = ["SIM102"]
 "libs/greenhouse-core/greenhouse_core/repository.py" = ["PLR0904"]
 "libs/greenhouse-core/greenhouse_core/sync.py" = ["BLE001", "EXE002", "PLR0915", "PLR1702", "S110", "SIM108"]  # EXE002: stray +x bit, WP8-owned

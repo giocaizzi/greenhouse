@@ -75,7 +75,7 @@ def temperature_based_decision(
     *,
     temp: float | None,
     water_needs: str,
-    temp_range: tuple[float, float] | None,
+    temp_range: tuple[float, float] | None,  # noqa: ARG001 — accepted for call-site compatibility (engine, tests), unused
     config: IrrigationConfig | None,
     trends: Trends | None = None,
     stress: StressIndicators | None = None,

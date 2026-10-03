@@ -208,7 +208,7 @@ def _make_lifespan(settings: Settings) -> "Callable[[FastAPI], AbstractAsyncCont
     """Build the lifespan: start the scheduler (and re-arm leak checks) on startup, stop it on shutdown."""
 
     @asynccontextmanager
-    async def lifespan(app: FastAPI) -> "AsyncIterator[None]":
+    async def lifespan(app: FastAPI) -> "AsyncIterator[None]":  # noqa: ARG001 — FastAPI lifespan protocol
         """Start the scheduler and re-arm leak checks on startup; stop the scheduler on shutdown."""
         if settings.enable_scheduler:
             start_scheduler()

@@ -382,7 +382,7 @@ def _health_monitor_job() -> None:
         monitor.poll_all()
 
 
-def init_health_monitor(app: FastAPI, settings: Settings) -> None:
+def init_health_monitor(app: FastAPI, settings: Settings) -> None:  # noqa: ARG001 — public signature
     """Build the long-lived :class:`DeviceHealthMonitor` for this app.
 
     Stored on ``app.state.health_monitor`` so dependency-injection wiring

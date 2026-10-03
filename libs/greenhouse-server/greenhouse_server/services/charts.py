@@ -201,7 +201,10 @@ def _threshold_for_plant(plant: Plant, plant_db: PlantDatabase, metric: Metric) 
 
 
 def _threshold_for_cluster(
-    repo: IrrigationRepository, plant_db: PlantDatabase, cluster_id: int, metric: Metric
+    repo: IrrigationRepository,
+    plant_db: PlantDatabase,  # noqa: ARG001 — unused; dropping it cascades into route dependencies (follow-up)
+    cluster_id: int,
+    metric: Metric,
 ) -> dict[str, Any]:
     if metric == "soil_moisture":
         return {
