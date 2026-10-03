@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from fastapi import APIRouter, Form, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, Response
 
 from greenhouse_server.deps import RepoDep, require_cluster
 from greenhouse_server.web.forms import blank_or, parsed_or_400, tri_bool
@@ -12,7 +14,7 @@ router = APIRouter(include_in_schema=False)
 
 
 @router.get("/clusters/{cluster_id}/config")
-def config_form(cluster_id: int, repo: RepoDep):
+def config_form(cluster_id: int, repo: RepoDep) -> Response:
     """Redirect the legacy config URL to the detail page's config section (301).
 
     Config is rendered inline on the unified cluster detail page; the redirect
@@ -43,7 +45,7 @@ def save_config(
     auto_run: str = Form(""),
     quiet_start_hour: str = Form(""),
     quiet_end_hour: str = Form(""),
-):
+) -> Response:
     """Save the cluster's irrigation config and redirect back to detail#config.
 
     Empty form fields write null (inherit from global default). Quiet hours
@@ -51,7 +53,7 @@ def save_config(
     hours off at the cluster level.
     """
     require_cluster(repo, cluster_id)
-    fields: dict = {
+    fields: dict[str, Any] = {
         "mode": mode or None,
         "duration_minutes": blank_or(duration_minutes, int),
         "interval_hours": blank_or(interval_hours, int),
@@ -76,7 +78,7 @@ def save_global_config(
     max_events_per_day: str = Form(""),
     quiet_start_hour: str = Form(""),
     quiet_end_hour: str = Form(""),
-):
+) -> Response:
     """Save the global irrigation defaults and redirect back to preferences.
 
     Empty fields write null — the effective resolver then falls through to the

@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from fastapi import APIRouter, Query, Request
+from fastapi.responses import Response
 
 from greenhouse_core.schemas import ActivityEventResponse
 from greenhouse_server.deps import RepoDep
 from greenhouse_server.web.context import base_context
 from greenhouse_server.web.templating import templates
+
+if TYPE_CHECKING:
+    from greenhouse_core.repository import IrrigationRepository
 
 router = APIRouter(include_in_schema=False)
 
@@ -15,7 +21,7 @@ _PAGE_SIZE = 50
 
 
 def _fetch_events(
-    repo,
+    repo: IrrigationRepository,
     *,
     entity_type: str | None,
     source: str | None,
@@ -42,7 +48,7 @@ def activity_list(
     entity_type: str | None = Query(default=None),
     source: str | None = Query(default=None),
     severity: str | None = Query(default=None),
-):
+) -> Response:
     """Render the activity timeline page (first page, optional filters)."""
     items, next_cursor = _fetch_events(repo, entity_type=entity_type, source=source, severity=severity, before=None)
     return templates.TemplateResponse(
@@ -67,7 +73,7 @@ def activity_page(
     entity_type: str | None = Query(default=None),
     source: str | None = Query(default=None),
     severity: str | None = Query(default=None),
-):
+) -> Response:
     """Render the next page of timeline rows for infinite scroll (HTMX fragment)."""
     items, next_cursor = _fetch_events(repo, entity_type=entity_type, source=source, severity=severity, before=before)
     return templates.TemplateResponse(

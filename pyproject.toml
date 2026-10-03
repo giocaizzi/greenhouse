@@ -68,7 +68,6 @@ mypy_path = ["libs/greenhouse-core", "libs/greenhouse-server", "libs/greenhouse-
 # (OpenAPI, response_model inference, --help) and are never edited; helpers stay fully typed.
 module = [
     "greenhouse_server.routes.*",
-    "greenhouse_server.web.routes.*",
     "greenhouse_cli.commands.*",
     "greenhouse_cli.main",
 ]

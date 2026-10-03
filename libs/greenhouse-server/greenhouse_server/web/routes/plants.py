@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, Form, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from greenhouse_server.deps import RepoDep, require_cluster, require_plant_in_cluster
 from greenhouse_server.web.context import base_context
@@ -42,7 +42,7 @@ def _plant_form_fields(
 
 
 @router.get("/clusters/{cluster_id}/plants")
-def list_plants(cluster_id: int, repo: RepoDep):
+def list_plants(cluster_id: int, repo: RepoDep) -> Response:
     """Redirect the legacy plants URL to the detail page's plants section (301).
 
     Plants are rendered inline on the unified cluster detail page; the
@@ -53,7 +53,7 @@ def list_plants(cluster_id: int, repo: RepoDep):
 
 
 @router.get("/clusters/{cluster_id}/plants/new")
-def new_plant_form(request: Request, cluster_id: int, repo: RepoDep):
+def new_plant_form(request: Request, cluster_id: int, repo: RepoDep) -> Response:
     """Render the add-plant form."""
     cluster = require_cluster(repo, cluster_id)
     return templates.TemplateResponse(request, "plants/new.html", base_context(request, cluster=cluster))
@@ -73,7 +73,7 @@ def create_plant(
     ideal_humidity_min: str = Form(""),
     ideal_humidity_max: str = Form(""),
     notes: str = Form(""),
-):
+) -> Response:
     """Add a plant from the form and return to the cluster's plants section."""
     require_cluster(repo, cluster_id)
     repo.add_plant(
@@ -95,7 +95,7 @@ def create_plant(
 
 
 @router.get("/clusters/{cluster_id}/plants/{plant_id}/edit")
-def edit_plant_form(request: Request, cluster_id: int, plant_id: int, repo: RepoDep):
+def edit_plant_form(request: Request, cluster_id: int, plant_id: int, repo: RepoDep) -> Response:
     """Render the edit form of one of the cluster's plants."""
     cluster = require_cluster(repo, cluster_id)
     plant = require_plant_in_cluster(repo, cluster_id, plant_id)
@@ -117,7 +117,7 @@ def update_plant(
     ideal_humidity_min: str = Form(""),
     ideal_humidity_max: str = Form(""),
     notes: str = Form(""),
-):
+) -> Response:
     """Save the plant form and return to the cluster's plants section."""
     require_plant_in_cluster(repo, cluster_id, plant_id)
     repo.update_plant(
@@ -139,7 +139,7 @@ def update_plant(
 
 
 @router.delete("/clusters/{cluster_id}/plants/{plant_id}", response_class=HTMLResponse)
-def delete_plant(cluster_id: int, plant_id: int, repo: RepoDep):
+def delete_plant(cluster_id: int, plant_id: int, repo: RepoDep) -> Response:
     """HTMX-targeted delete; returns an empty HTML body so the row is removed."""
     require_plant_in_cluster(repo, cluster_id, plant_id)
     repo.delete_plant(plant_id)

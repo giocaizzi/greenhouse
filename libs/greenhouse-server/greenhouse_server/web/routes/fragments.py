@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections import Counter
 
 from fastapi import APIRouter, Request
+from fastapi.responses import Response
 
 from greenhouse_server.deps import ClusterServiceDep, RepoDep
 from greenhouse_server.scheduler import scheduler as bg_scheduler
@@ -15,7 +16,7 @@ router = APIRouter(include_in_schema=False)
 
 
 @router.get("/health/badge")
-def health_badge(request: Request):
+def health_badge(request: Request) -> Response:
     """Render the scheduler health badge in the top bar (polled fragment)."""
     return templates.TemplateResponse(
         request,
@@ -29,7 +30,7 @@ def health_badge(request: Request):
 
 
 @router.get("/dashboard/hero")
-def dashboard_hero(request: Request, repo: RepoDep, svc: ClusterServiceDep):
+def dashboard_hero(request: Request, repo: RepoDep, svc: ClusterServiceDep) -> Response:
     """Lazy-loaded synthesis line for the dashboard.
 
     Walks every cluster, asks the irrigation engine for its current decision,

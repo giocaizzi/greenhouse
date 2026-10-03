@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Form, HTTPException, Request
+from fastapi.responses import Response
 
 from greenhouse_server.deps import (
     ClusterServiceDep,
@@ -30,7 +31,7 @@ def irrigate(
     no_sync: str = Form(""),
     temp_override: str = Form(""),
     force: str = Form(""),
-):
+) -> Response:
     """Run the irrigation pipeline from the cluster detail page's action bar (HTMX fragment).
 
     ``force`` is set to ``"true"`` when the user clicks Irrigate during quiet
@@ -54,7 +55,7 @@ def irrigate(
 
 
 @router.get("/clusters/{cluster_id}/monitor")
-def monitor(request: Request, cluster_id: int, repo: RepoDep, svc: IrrigationServiceDep):
+def monitor(request: Request, cluster_id: int, repo: RepoDep, svc: IrrigationServiceDep) -> Response:
     """Render the per-sensor soil-moisture status of a cluster (HTMX fragment)."""
     # Same path as GET /api/v1/clusters/{id}/monitor: 404 for an unknown cluster, refresh stale sensors, keep the rows.
     require_cluster(repo, cluster_id)
@@ -71,7 +72,7 @@ def check_single(
     cluster_id: int,
     repo: RepoDep,
     svc: IrrigationServiceDep,
-):
+) -> Response:
     """Run the check for one cluster and render the result banner (HTMX fragment)."""
     require_cluster(repo, cluster_id)
     result = svc.check_cluster(cluster_id)
@@ -84,7 +85,7 @@ def check_single(
 
 
 @router.post("/check")
-def check_all(request: Request, svc: IrrigationServiceDep, repo: RepoDep):
+def check_all(request: Request, svc: IrrigationServiceDep, repo: RepoDep) -> Response:
     """Run the check across every cluster and render the result banner (HTMX fragment)."""
     results = svc.check_all_clusters()
     repo.commit()
@@ -95,7 +96,7 @@ def check_all(request: Request, svc: IrrigationServiceDep, repo: RepoDep):
 
 
 @router.post("/sync")
-def sync_all(request: Request, svc: SyncServiceDep, repo: RepoDep, hours: str = Form("24")):
+def sync_all(request: Request, svc: SyncServiceDep, repo: RepoDep, hours: str = Form("24")) -> Response:
     """Sync every sensor from the Tuya Cloud and render the sync summary (HTMX fragment)."""
     try:
         hrs = int(hours)
@@ -113,7 +114,7 @@ def sync_plants(
     svc: ClusterServiceDep,
     plant_id: str = Form(""),
     cluster_id: str = Form(""),
-):
+) -> Response:
     """Refresh plant care data from the plant database and render the summary (HTMX fragment)."""
     pid = blank_or(plant_id, int)
     cid = blank_or(cluster_id, int)

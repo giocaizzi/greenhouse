@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 
 from fastapi import APIRouter, Query, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, Response
 
 from greenhouse_server.deps import PlantDbDep, RepoDep
 from greenhouse_server.services.alerts import sync_all_alerts
@@ -24,7 +24,7 @@ def alert_list(
     status: str | None = Query(None),
     cluster_id: int | None = Query(None),
     plant_id: int | None = Query(None),
-):
+) -> Response:
     """Render the alert inbox page with optional status / cluster / plant filters."""
     alerts = repo.list_alerts(status=status, cluster_id=cluster_id, plant_id=plant_id, limit=_ALERT_LIST_LIMIT)
     open_count = repo.count_open_alerts()
@@ -43,7 +43,7 @@ def alert_list(
 
 
 @router.post("/alerts/{alert_id}/ack")
-def ack_alert(request: Request, alert_id: int, repo: RepoDep):
+def ack_alert(request: Request, alert_id: int, repo: RepoDep) -> Response:
     """Acknowledge an alert and return its re-rendered row with a success toast."""
     alert = repo.acknowledge_alert(alert_id)
     repo.commit()
@@ -57,7 +57,7 @@ def ack_alert(request: Request, alert_id: int, repo: RepoDep):
 
 
 @router.post("/alerts/{alert_id}/resolve")
-def resolve_alert(request: Request, alert_id: int, repo: RepoDep):
+def resolve_alert(request: Request, alert_id: int, repo: RepoDep) -> Response:
     """Resolve an alert and return its re-rendered row with a success toast."""
     alert = repo.resolve_alert(alert_id)
     repo.commit()
@@ -71,7 +71,7 @@ def resolve_alert(request: Request, alert_id: int, repo: RepoDep):
 
 
 @router.post("/alerts/sync")
-def sync_alerts(request: Request, repo: RepoDep, plant_db: PlantDbDep):
+def sync_alerts(request: Request, repo: RepoDep, plant_db: PlantDbDep) -> Response:
     """Recompute alerts for every cluster and return the refreshed inbox body with a toast."""
     open_count = sync_all_alerts(repo, plant_db)
     repo.commit()
@@ -86,7 +86,7 @@ def sync_alerts(request: Request, repo: RepoDep, plant_db: PlantDbDep):
 
 
 @router.get("/alerts/badge")
-def alert_badge(request: Request, repo: RepoDep):
+def alert_badge(request: Request, repo: RepoDep) -> Response:
     """Return the top-bar bell count (empty body when no alert is open)."""
     count = repo.count_open_alerts()
     if count == 0:

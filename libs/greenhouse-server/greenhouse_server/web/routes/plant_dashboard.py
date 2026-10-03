@@ -6,7 +6,7 @@ import json
 from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, Form, HTTPException, Query, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, Response
 
 from greenhouse_core.models import Plant
 from greenhouse_core.repository import SameClusterMoveError
@@ -30,7 +30,7 @@ from greenhouse_server.web.filters import relative_age
 from greenhouse_server.web.templating import templates
 
 if TYPE_CHECKING:
-    from greenhouse_core.models import Irrigator, Sensor, SensorReading
+    from greenhouse_core.models import IrrigationEvent, Irrigator, Sensor, SensorReading
     from greenhouse_core.plant_db import PlantDatabase
     from greenhouse_core.repository import IrrigationRepository
     from greenhouse_server.services.charts import Metric
@@ -49,7 +49,7 @@ def plant_dashboard(
     plant_db: PlantDbDep,
     health_svc: PlantHealthServiceDep,
     hours: int = Query(24, ge=1, le=MAX_LOOKBACK_HOURS),
-):
+) -> Response:
     """Render a plant's dashboard: care info, sensors, charts, health, events and alerts."""
     plant = require_plant_in_cluster(repo, cluster_id, plant_id)
     cluster = repo.get_cluster(cluster_id)
@@ -112,7 +112,7 @@ def _latest_readings(repo: IrrigationRepository, plant_sensors: list[Sensor]) ->
 
 def _recent_events(repo: IrrigationRepository, cluster_irrigator: Irrigator | None, hours: int) -> list[Any]:
     """Newest ten irrigation events of the cluster's irrigator (a plant inherits its cluster's events)."""
-    recent_events: list = []
+    recent_events: list[IrrigationEvent] = []
     if cluster_irrigator is not None:
         recent_events.extend(repo.get_recent_events(cluster_irrigator.id, hours=hours))
     recent_events.sort(key=lambda e: e.timestamp, reverse=True)
@@ -147,7 +147,7 @@ def plant_chart_fragment(
     plant_db: PlantDbDep,
     metric: str = Query("soil_moisture"),
     hours: int = Query(24, ge=1, le=MAX_LOOKBACK_HOURS),
-):
+) -> Response:
     """Render one metric's plant chart panel (HTMX fragment)."""
     chart_metric = require_metric(metric)
     require_plant_in_cluster(repo, cluster_id, plant_id)
@@ -166,7 +166,7 @@ def plant_health_fragment(
     cluster_id: int,
     plant_id: int,
     repo: RepoDep,
-):
+) -> Response:
     """Render the plant's 90-day health timeline chart (HTMX fragment)."""
     plant = require_plant_in_cluster(repo, cluster_id, plant_id)
     with not_found_as_404("Plant not found"):
@@ -185,7 +185,7 @@ def move_plant_web(
     plant_id: int,
     repo: RepoDep,
     target_cluster_id: int = Form(...),
-):
+) -> Response:
     """Move a plant to a different cluster (server-rendered form submit)."""
     require_plant_in_cluster(repo, cluster_id, plant_id)
     if not repo.get_cluster(target_cluster_id):

@@ -7,7 +7,7 @@ import time
 from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, Form, Query, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from greenhouse_core.logic.timing import is_within_quiet_hours
 from greenhouse_server.deps import (
@@ -34,7 +34,7 @@ if TYPE_CHECKING:
     from greenhouse_core.repository import IrrigationRepository
     from greenhouse_server.services.charts import Metric
 
-_EMPTY_RATIONALE: list[dict] = []
+_EMPTY_RATIONALE: list[dict[str, Any]] = []
 
 router = APIRouter(include_in_schema=False)
 
@@ -42,14 +42,14 @@ CLUSTER_METRICS: tuple[Metric, ...] = ("soil_moisture", "temperature", "env_humi
 
 
 @router.get("/clusters")
-def list_clusters(request: Request, repo: RepoDep):
+def list_clusters(request: Request, repo: RepoDep) -> Response:
     """Render the cluster list page."""
     clusters = repo.list_clusters()
     return templates.TemplateResponse(request, "clusters/list.html", base_context(request, clusters=clusters))
 
 
 @router.get("/clusters/new")
-def new_cluster_form(request: Request):
+def new_cluster_form(request: Request) -> Response:
     """Render the new-cluster form."""
     return templates.TemplateResponse(request, "clusters/new.html", base_context(request))
 
@@ -61,7 +61,7 @@ def create_cluster(
     name: str = Form(...),
     location: str = Form(""),
     environment: str = Form("indoor"),
-):
+) -> Response:
     """Create a cluster from the form and redirect to its detail page."""
     cluster_id = repo.add_cluster(name=name, location=location or None, environment=environment)
     repo.commit()
@@ -69,7 +69,7 @@ def create_cluster(
 
 
 @router.get("/clusters/{cluster_id}/edit")
-def edit_cluster_form(request: Request, cluster_id: int, repo: RepoDep):
+def edit_cluster_form(request: Request, cluster_id: int, repo: RepoDep) -> Response:
     """Render the edit form of an existing cluster."""
     cluster = require_cluster(repo, cluster_id)
     return templates.TemplateResponse(request, "clusters/edit.html", base_context(request, cluster=cluster))
@@ -83,7 +83,7 @@ def update_cluster(
     name: str = Form(...),
     location: str = Form(""),
     environment: str = Form("indoor"),
-):
+) -> Response:
     """Save the cluster form and redirect to the detail page."""
     require_cluster(repo, cluster_id)
     repo.update_cluster(
@@ -97,7 +97,7 @@ def update_cluster(
 
 
 @router.delete("/clusters/{cluster_id}", response_class=HTMLResponse)
-def delete_cluster(cluster_id: int, repo: RepoDep):
+def delete_cluster(cluster_id: int, repo: RepoDep) -> Response:
     """HTMX-targeted delete; returns an empty HTML body so the row is removed."""
     require_cluster(repo, cluster_id)
     repo.delete_cluster(cluster_id)
@@ -189,7 +189,7 @@ def cluster_detail(
     repo: RepoDep,
     plant_db: PlantDbDep,
     hours: int = Query(24, ge=1, le=MAX_LOOKBACK_HOURS),
-):
+) -> Response:
     """Render the unified cluster detail page (status, charts, config, windows, devices)."""
     with not_found_as_404("Cluster not found"):
         status = svc.get_cluster_status(cluster_id)
@@ -231,7 +231,7 @@ def cluster_detail(
 
 
 @router.get("/clusters/{cluster_id}/status-fragment")
-def cluster_status_fragment(request: Request, cluster_id: int, svc: ClusterServiceDep):
+def cluster_status_fragment(request: Request, cluster_id: int, svc: ClusterServiceDep) -> Response:
     """Live status fragment used by the cluster detail page's "Live status" panel.
 
     Retained alongside the richer ``card-fragment`` endpoint so existing
@@ -245,7 +245,7 @@ def cluster_status_fragment(request: Request, cluster_id: int, svc: ClusterServi
 
 
 @router.get("/clusters/{cluster_id}/card-fragment")
-def cluster_card_fragment(request: Request, cluster_id: int, svc: ClusterServiceDep, repo: RepoDep):
+def cluster_card_fragment(request: Request, cluster_id: int, svc: ClusterServiceDep, repo: RepoDep) -> Response:
     """Rich cluster card body used by the cluster-centric home view.
 
     Returns ``partials/_cluster_card.html`` with plants/sensors/irrigators
@@ -269,7 +269,7 @@ def cluster_chart_fragment(
     plant_db: PlantDbDep,
     metric: str = Query("soil_moisture"),
     hours: int = Query(24, ge=1, le=MAX_LOOKBACK_HOURS),
-):
+) -> Response:
     """Render one metric's cluster chart panel (HTMX fragment)."""
     with not_found_as_404("Cluster not found"):
         payload = build_cluster_chart_payload(repo, plant_db, cluster_id, hours, require_metric(metric))
@@ -286,7 +286,7 @@ def cluster_overlay_fragment(
     cluster_id: int,
     repo: RepoDep,
     hours: int = Query(72, ge=1, le=MAX_LOOKBACK_HOURS),
-):
+) -> Response:
     """Render the multi-metric overlay chart panel (HTMX fragment)."""
     with not_found_as_404("Cluster not found"):
         payload = build_overlay_payload(repo, cluster_id, hours)
@@ -303,7 +303,7 @@ def cluster_heatmap_fragment(
     cluster_id: int,
     repo: RepoDep,
     days: int = Query(30, ge=1, le=365),
-):
+) -> Response:
     """Render the irrigation weekday-by-hour heatmap panel (HTMX fragment)."""
     with not_found_as_404("Cluster not found"):
         payload = build_heatmap_payload(repo, cluster_id, days)

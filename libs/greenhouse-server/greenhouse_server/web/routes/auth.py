@@ -9,7 +9,7 @@ from __future__ import annotations
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, Form, Request, status
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from greenhouse_server.auth import authenticate, clear_session_cookie, issue_token, set_session_cookie
 from greenhouse_server.config import Settings
@@ -55,7 +55,7 @@ def login_submit(
     password: str = Form(),
     next: str = Form(default="/"),
     settings: Settings = Depends(get_settings),
-):
+) -> Response:
     """Handle the login form. Sets a session cookie and redirects to ?next."""
     target = _safe_next(next)
     if not settings.auth_enabled:
@@ -86,7 +86,7 @@ def login_submit(
 @router.post("/logout")
 def logout_submit(
     settings: Settings = Depends(get_settings),
-):
+) -> Response:
     """Clear the session cookie and bounce to /login."""
     response = RedirectResponse(url="/login", status_code=303)
     clear_session_cookie(response, settings)
