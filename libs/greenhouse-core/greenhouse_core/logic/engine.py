@@ -176,41 +176,47 @@ class IrrigationLogic:
             skip = _quiet_hours_skip(cluster_id, evaluated_at, quiet_window)
             return self._record(skip, persist=persist, triggered_by=triggered_by)
 
+        decision = self._evaluate_rules(cluster, cluster_id, plants, evaluated_at, current_temp)
         override = quiet_window if bypass_quiet_hours else None
+        return self._finish(decision, override_window=override, persist=persist, triggered_by=triggered_by)
 
+    def _evaluate_rules(
+        self, cluster: "Cluster", cluster_id: int, plants: list["Plant"], evaluated_at: int, current_temp: float | None
+    ) -> IrrigationDecision:
+        """Weather → fallback → terminal triggers → windows → adjustments; the first terminal step decides."""
         weather_skip = self._apply_weather_skip_rule(cluster, cluster_id, evaluated_at)
         if weather_skip is not None:
-            return self._finish(weather_skip, override_window=override, persist=persist, triggered_by=triggered_by)
+            return weather_skip
 
         inputs = self._gather_inputs(cluster_id, plants)
         sensors = self.db.get_sensors_in_cluster(cluster_id)
         if not sensors or not inputs.snapshot.has_data:
-            fallback = self._fallback_decision(cluster_id, evaluated_at, current_temp, inputs)
-            return self._finish(fallback, override_window=override, persist=persist, triggered_by=triggered_by)
+            return self._fallback_decision(cluster_id, evaluated_at, current_temp, inputs)
 
-        decision = IrrigationDecision(
-            cluster_id=cluster_id,
-            evaluated_at=evaluated_at,
-            action=Action.SKIP,
-            duration_minutes=DEFAULT_DURATION_MINUTES,
-            interval_hours=DEFAULT_INTERVAL_HOURS,
-            confidence=CONFIDENCE_BASELINE,
-            sensor_snapshot=inputs.snapshot,
-            stress_indicators=inputs.stress,
-            trends=inputs.trends,
-        )
-
+        decision = _base_decision(cluster_id, evaluated_at, inputs)
         if _apply_water_warning_rule(decision):
-            return self._finish(decision, override_window=override, persist=persist, triggered_by=triggered_by)
+            return decision
         if _apply_critical_stress_rule(decision):
-            return self._finish(decision, override_window=override, persist=persist, triggered_by=triggered_by)
+            return decision
 
         # Cluster-level timing gate — checked AFTER stress overrides on purpose:
         # a wilting plant still gets water at 2am, a healthy one doesn't.
-        window_skip = self._apply_window_rule(cluster, cluster_id, evaluated_at, decision)
+        window_skip = self._apply_window_rule(cluster_id, evaluated_at)
         if window_skip is not None:
-            return self._finish(window_skip, override_window=override, persist=persist, triggered_by=triggered_by)
+            return window_skip
 
+        self._apply_adjustments(cluster, cluster_id, decision, inputs, evaluated_at)
+        return decision
+
+    def _apply_adjustments(
+        self,
+        cluster: "Cluster",
+        cluster_id: int,
+        decision: IrrigationDecision,
+        inputs: _EngineInputs,
+        evaluated_at: int,
+    ) -> None:
+        """Non-terminal rules, in their fixed order; vacation rationing always runs last."""
         _apply_soil_moisture_rule(decision, inputs.plant_care)
         _apply_temperature_adjustment(decision, inputs.temp_range)
         _apply_humidity_adjustment(decision, inputs.humidity_range)
@@ -228,8 +234,6 @@ class IrrigationLogic:
         # audit; trims to VACATION_RATIONING or flips to SKIP with
         # VACATION_BUDGET_EXHAUSTED).
         self._apply_vacation_budget(decision, cluster_id, evaluated_at)
-
-        return self._finish(decision, override_window=override, persist=persist, triggered_by=triggered_by)
 
     def _gather_inputs(self, cluster_id: int, plants: list["Plant"]) -> _EngineInputs:
         """Read everything the rule pipeline consumes, in the engine's fixed query order."""
@@ -314,9 +318,7 @@ class IrrigationLogic:
         prefs = self.db.get_preferences()
         return prefs.timezone if prefs else None
 
-    def _apply_window_rule(
-        self, cluster: "Cluster", cluster_id: int, evaluated_at: int, decision: IrrigationDecision
-    ) -> IrrigationDecision | None:
+    def _apply_window_rule(self, cluster_id: int, evaluated_at: int) -> IrrigationDecision | None:
         """Return a SKIP decision when the current local time is outside the
         cluster's irrigation windows.
 
@@ -694,6 +696,21 @@ def _quiet_hours_skip(cluster_id: int, evaluated_at: int, window: tuple[int, int
         code=TriggerCode.QUIET_HOURS,
         message=(f"quiet hours active ({window[0]:02d}:00–{window[1]:02d}:00 local)"),
         severity=Severity.INFO,
+    )
+
+
+def _base_decision(cluster_id: int, evaluated_at: int, inputs: _EngineInputs) -> IrrigationDecision:
+    """The neutral starting decision (SKIP at the default dosage) that the sensor rules refine."""
+    return IrrigationDecision(
+        cluster_id=cluster_id,
+        evaluated_at=evaluated_at,
+        action=Action.SKIP,
+        duration_minutes=DEFAULT_DURATION_MINUTES,
+        interval_hours=DEFAULT_INTERVAL_HOURS,
+        confidence=CONFIDENCE_BASELINE,
+        sensor_snapshot=inputs.snapshot,
+        stress_indicators=inputs.stress,
+        trends=inputs.trends,
     )
 
 
