@@ -318,3 +318,90 @@ name = "TUI view-model modules stay widget-free and I/O-free"
 type = "forbidden"
 source_modules = ["greenhouse_cli.tui.model", "greenhouse_cli.tui.formatting", "greenhouse_cli.tui.render"]
 forbidden_modules = ["textual", "greenhouse_cli.tui.screens", "greenhouse_cli.tui.widgets", "greenhouse_cli.client", "httpx"]
+
+[[tool.importlinter.contracts]]
+name = "CLI layers: main > commands > tui > client > constants"
+type = "layers"
+layers = ["greenhouse_cli.main", "greenhouse_cli.commands", "greenhouse_cli.tui", "greenhouse_cli.client", "greenhouse_cli.constants"]
+
+[[tool.importlinter.contracts]]
+name = "TUI layers: app > screens > widgets|render > model > formatting|sprites"
+type = "layers"
+layers = [
+  "greenhouse_cli.tui.app",
+  "greenhouse_cli.tui.screens",
+  "greenhouse_cli.tui.widgets | greenhouse_cli.tui.render",
+  "greenhouse_cli.tui.model",
+  "greenhouse_cli.tui.formatting | greenhouse_cli.tui.sprites",
+]
+ignore_imports = [
+  "greenhouse_cli.tui.screens.base -> greenhouse_cli.tui.app",    # TYPE_CHECKING only
+  "greenhouse_cli.tui.screens.search -> greenhouse_cli.tui.app",  # TYPE_CHECKING only
+]
+
+[[tool.importlinter.contracts]]
+name = "Web layers: router > routes|exception_handlers > context|templating > filters|weekdays"
+type = "layers"
+layers = [
+  "greenhouse_server.web.router",
+  "greenhouse_server.web.routes | greenhouse_server.web.exception_handlers",
+  "greenhouse_server.web.context | greenhouse_server.web.templating",
+  "greenhouse_server.web.filters | greenhouse_server.web.weekdays",
+]
+
+[[tool.importlinter.contracts]]
+name = "API route modules are independent of each other"
+type = "independence"
+modules = ["greenhouse_server.routes.*"]
+
+[[tool.importlinter.contracts]]
+name = "Web route modules are independent of each other"
+type = "independence"
+modules = ["greenhouse_server.web.routes.*"]
+
+[[tool.importlinter.contracts]]
+name = "Services are HTTP-free (no FastAPI/Starlette, no request plumbing)"
+type = "forbidden"
+source_modules = ["greenhouse_server.services"]
+forbidden_modules = ["fastapi", "starlette", "greenhouse_server.deps", "greenhouse_server.auth"]
+allow_indirect_imports = true
+ignore_imports = ["greenhouse_server.services._session -> fastapi"]  # TYPE_CHECKING annotation only
+
+[[tool.importlinter.contracts]]
+name = "SQLAlchemy stays behind the repository"
+type = "forbidden"
+source_modules = [
+  "greenhouse_server.routes", "greenhouse_server.web", "greenhouse_server.services", "greenhouse_server.scheduler",
+  "greenhouse_core.logic", "greenhouse_core.learning", "greenhouse_core.stats", "greenhouse_core.plant_db",
+  "greenhouse_core.utils", "greenhouse_core.schemas", "greenhouse_core.constants",
+]
+forbidden_modules = ["sqlalchemy", "alembic", "greenhouse_core.database"]
+allow_indirect_imports = true
+ignore_imports = [
+  "greenhouse_server.routes.auth -> sqlalchemy",        # auth routes take a raw Session (user CRUD)
+  "greenhouse_server.web.routes.auth -> sqlalchemy",    # same, web login form
+  "greenhouse_server.web.context -> sqlalchemy",        # TYPE_CHECKING annotation only
+  "greenhouse_server.services._session -> sqlalchemy",  # TYPE_CHECKING annotation only
+  "greenhouse_server.services.inventory -> sqlalchemy", # IntegrityError -> DeviceIdExistsError translation
+]
+
+[[tool.importlinter.contracts]]
+name = "Persistence sits below domain behaviour"
+type = "forbidden"
+source_modules = ["greenhouse_core.repository", "greenhouse_core.database", "greenhouse_core.models", "greenhouse_core.auth"]
+forbidden_modules = ["greenhouse_core.logic", "greenhouse_core.learning", "greenhouse_core.devices", "greenhouse_core.sync",
+                     "greenhouse_core.plant_db", "greenhouse_core.stats", "greenhouse_core.utils", "greenhouse_core.schemas"]
+
+[[tool.importlinter.contracts]]
+name = "Only sync and server wiring touch devices"
+type = "forbidden"
+source_modules = ["greenhouse_core.learning", "greenhouse_core.stats", "greenhouse_core.plant_db", "greenhouse_core.utils",
+                  "greenhouse_core.repository", "greenhouse_core.auth", "greenhouse_core.database"]
+forbidden_modules = ["greenhouse_core.devices", "greenhouse_core.sync", "tinytuya"]
+
+[[tool.importlinter.contracts]]
+name = "Server config is a leaf"
+type = "forbidden"
+source_modules = ["greenhouse_server.config"]
+forbidden_modules = ["greenhouse_core.repository", "greenhouse_core.models", "greenhouse_core.devices", "greenhouse_core.logic",
+                     "greenhouse_core.learning", "greenhouse_core.sync", "sqlalchemy", "fastapi"]
