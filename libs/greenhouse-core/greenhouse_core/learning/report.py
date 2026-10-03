@@ -42,7 +42,6 @@ def generate_report(
     if alerts:
         lines.append(f"\n{'=' * 40}")
         lines.append("🚨 Alerts")
-        for alert in alerts:
-            lines.append(f"   [{alert.severity.upper()}] {alert.message}")
+        lines.extend(f"   [{alert.severity.upper()}] {alert.message}" for alert in alerts)
 
     return "\n".join(lines)

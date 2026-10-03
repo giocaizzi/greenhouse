@@ -109,7 +109,7 @@ def collect_maintenance_alerts(
     repo: IrrigationRepository, cluster_id: int, plant_db: PlantDatabase
 ) -> list[dict[str, Any]]:
     """Return maintenance alerts (hardware, environment). Never raises."""
-    alerts = []
+    alerts: list[dict[str, Any]] = []
     sensors = repo.get_sensors_in_cluster(cluster_id)
     plants_by_id = {p.id: p for p in repo.get_plants_in_cluster(cluster_id)}
     now = int(time.time())
@@ -118,14 +118,16 @@ def collect_maintenance_alerts(
         readings = repo.get_recent_readings(sensor.id, hours=MAINTENANCE_LOOKBACK_HOURS)
         plant = plants_by_id.get(sensor.plant_id) if sensor.plant_id else None
         # Per-sensor order: battery, stale, humidity, light.
-        for alert in (
-            _battery_alert(sensor, readings),
-            _stale_alert(sensor, readings, now),
-            _humidity_alert(sensor, readings, plant, plant_db),
-            _light_alert(sensor, readings, plant, plant_db),
-        ):
-            if alert is not None:
-                alerts.append(alert)
+        alerts.extend(
+            alert
+            for alert in (
+                _battery_alert(sensor, readings),
+                _stale_alert(sensor, readings, now),
+                _humidity_alert(sensor, readings, plant, plant_db),
+                _light_alert(sensor, readings, plant, plant_db),
+            )
+            if alert is not None
+        )
 
     return alerts
 

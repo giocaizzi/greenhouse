@@ -54,23 +54,22 @@ class AlertsScreen(DataScreen):
             "   [dim]f: filter  k: acknowledge  v: resolve  y: re-scan[/dim]"
         )
         table = self.query_one(DataTable)
-        rows: list[Any] = []
         self._alerts = {a["id"]: a for a in data.get("items", [])}
-        for a in data.get("items", []):
-            rows.append(
-                (
+        rows: list[Any] = [
+            (
+                str(a["id"]),
+                [
                     str(a["id"]),
-                    [
-                        str(a["id"]),
-                        fmt.styled(a["severity"], fmt.SEVERITY_STYLES),
-                        fmt.styled(a["status"], fmt.STATUS_STYLES),
-                        a["title"],
-                        str(a["cluster_id"]) if a.get("cluster_id") is not None else "—",
-                        fmt.ago(a["last_seen_at"]),
-                        str(a.get("occurrence_count", 1)),
-                    ],
-                )
+                    fmt.styled(a["severity"], fmt.SEVERITY_STYLES),
+                    fmt.styled(a["status"], fmt.STATUS_STYLES),
+                    a["title"],
+                    str(a["cluster_id"]) if a.get("cluster_id") is not None else "—",
+                    fmt.ago(a["last_seen_at"]),
+                    str(a.get("occurrence_count", 1)),
+                ],
             )
+            for a in data.get("items", [])
+        ]
         refill(table, rows)
         if not self._alerts:
             self.query_one("#alert-detail", Static).update(Text("Nothing here — all quiet in the greenhouse.", "dim"))

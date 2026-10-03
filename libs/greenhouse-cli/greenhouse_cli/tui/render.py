@@ -73,24 +73,23 @@ def sensor_rows(status: dict[str, Any]) -> list[Row]:
 
 def decision_rows(payload: dict[str, Any] | None) -> list[Row]:
     """Decisions tab rows (unkeyed) in the order the API lists the logged evaluations."""
-    rows: list[Row] = []
-    for d in (payload or {}).get("items", []):
-        rows.append(
-            (
-                None,
-                [
-                    fmt.clock(d["evaluated_at"], with_date=True),
-                    fmt.styled(d["action"], fmt.ACTION_STYLES),
-                    str(d["duration_minutes"]),
-                    f"{d['interval_hours']}h",
-                    f"{d['confidence']:.0%}",
-                    d.get("primary_code") or "—",
-                    d.get("triggered_by", ""),
-                    Text("yes", style="#4fb3ff") if d.get("actuated") else Text("no", style="dim"),
-                    d.get("reason_text", ""),
-                ],
-            )
+    rows: list[Row] = [
+        (
+            None,
+            [
+                fmt.clock(d["evaluated_at"], with_date=True),
+                fmt.styled(d["action"], fmt.ACTION_STYLES),
+                str(d["duration_minutes"]),
+                f"{d['interval_hours']}h",
+                f"{d['confidence']:.0%}",
+                d.get("primary_code") or "—",
+                d.get("triggered_by", ""),
+                Text("yes", style="#4fb3ff") if d.get("actuated") else Text("no", style="dim"),
+                d.get("reason_text", ""),
+            ],
         )
+        for d in (payload or {}).get("items", [])
+    ]
     return rows
 
 
@@ -131,19 +130,18 @@ def config_rows(effective: dict[str, Any] | None) -> list[tuple[str, Text]]:
 
 def window_rows(windows: list[dict[str, Any]]) -> list[Row]:
     """Windows tab rows keyed by window id: label, hour span and weekday mask."""
-    rows: list[Row] = []
-    for w in windows:
-        rows.append(
-            (
+    rows: list[Row] = [
+        (
+            str(w["id"]),
+            [
                 str(w["id"]),
-                [
-                    str(w["id"]),
-                    w.get("label") or "—",
-                    f"{w['start_hour']:02d}:00–{w['end_hour']:02d}:00",
-                    fmt.weekday_mask(w["weekday_mask"]),
-                ],
-            )
+                w.get("label") or "—",
+                f"{w['start_hour']:02d}:00–{w['end_hour']:02d}:00",
+                fmt.weekday_mask(w["weekday_mask"]),
+            ],
         )
+        for w in windows
+    ]
     return rows
 
 
@@ -294,38 +292,36 @@ def scheduler_panel_rows(paused: bool | None, health: dict[str, Any] | None) -> 
 
 def job_rows(jobs: Iterable[dict[str, Any]]) -> list[Row]:
     """Scheduler job rows keyed by job id; built-in jobs are tagged."""
-    rows: list[Row] = []
-    for job in jobs:
-        rows.append(
-            (
-                job["id"],
-                [
-                    Text.assemble(job["name"], (" · built-in", "dim") if job.get("core") else ""),
-                    job["trigger"],
-                    job.get("next_run_time") or "—",
-                    Text("paused", style="#e0c341") if job.get("paused") else Text("active", style="#7ed957"),
-                ],
-            )
+    rows: list[Row] = [
+        (
+            job["id"],
+            [
+                Text.assemble(job["name"], (" · built-in", "dim") if job.get("core") else ""),
+                job["trigger"],
+                job.get("next_run_time") or "—",
+                Text("paused", style="#e0c341") if job.get("paused") else Text("active", style="#7ed957"),
+            ],
         )
+        for job in jobs
+    ]
     return rows
 
 
 def device_rows(health: dict[str, Any] | None) -> list[Row]:
     """Device freshness rows (unkeyed) from the system-health payload."""
-    rows: list[Row] = []
-    for d in (health or {}).get("devices", []):
-        rows.append(
-            (
-                None,
-                [
-                    str(d["id"]),
-                    d["name"],
-                    fmt.styled(d["status"], fmt.STATUS_STYLES),
-                    fmt.age(d.get("age_seconds")),
-                    d.get("note") or "",
-                ],
-            )
+    rows: list[Row] = [
+        (
+            None,
+            [
+                str(d["id"]),
+                d["name"],
+                fmt.styled(d["status"], fmt.STATUS_STYLES),
+                fmt.age(d.get("age_seconds")),
+                d.get("note") or "",
+            ],
         )
+        for d in (health or {}).get("devices", [])
+    ]
     return rows
 
 
