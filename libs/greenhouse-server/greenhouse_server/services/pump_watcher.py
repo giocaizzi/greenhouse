@@ -339,14 +339,13 @@ class PumpWatcherService:
         # the unified ``health:irrigator:{id}:no_water`` dedup_key.
         try:
             monitor = self._monitor or self._lazy_monitor()
-            if monitor is not None:
-                monitor.record(
-                    ENTITY_IRRIGATOR,
-                    irrigator.id,
-                    state,
-                    label=irrigator.name,
-                    cluster_id=cluster_id,
-                )
+            monitor.record(
+                ENTITY_IRRIGATOR,
+                irrigator.id,
+                state,
+                label=irrigator.name,
+                cluster_id=cluster_id,
+            )
         except Exception:
             logger.exception("Failed to record dry-run state into health monitor for irrigator %d", irrigator.id)
 
@@ -368,7 +367,7 @@ class PumpWatcherService:
             except Exception:
                 logger.debug("Rollback after the failed trip commit failed too", exc_info=True)
 
-    def _lazy_monitor(self) -> DeviceHealthMonitor | None:
+    def _lazy_monitor(self) -> DeviceHealthMonitor:
         """Build a transient monitor when one wasn't injected.
 
         Test harness path: callers that don't pass a monitor get a no-op
