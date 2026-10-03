@@ -165,6 +165,11 @@ Consistency audit (2026-10-03):
   404 messages; check-all banner uses the API rule; vacation times parsed + shown in the timezone preference
   everywhere; plant dashboard shows "never" / real age; TUI config tables use repository field order.
 - Removed: pre-Alembic DB repair (OD3); dead `export_csv`, `print_stats_report`, and other dead code.
+- Consistency W2/W3: sensor-age web cells show the real age (D18); `/clusters/{id}/stats` without irrigator returns
+  zero totals instead of 500 (D19); chart soil band uses the shared moisture-target parser (D10b, malformed targets
+  change); silent `except` blocks now log at DEBUG (B5); TUI config form hint (B7); **OD3:** startup migration of old
+  `pump_dry_run` alerts removed and the deprecated `IRRIGATION_CHECK_INTERVAL_HOURS` setting removed (old `.env` files
+  using it are no longer translated to the cron setting).
 - Merge note: `refactor/integration/after-drift.txt` — 3053 passed after merging drift on top of consistency W1.
 
 ## Golden-test policy (orchestrator decision)
