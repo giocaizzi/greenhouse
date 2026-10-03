@@ -9,19 +9,14 @@ from greenhouse_server.deps import RepoDep, require_cluster, require_sensor_in_c
 from greenhouse_server.services import inventory
 from greenhouse_server.services.inventory import DeviceIdExistsError, PlantNotInClusterError
 from greenhouse_server.web.context import base_context
+from greenhouse_server.web.forms import parsed_or_400
 from greenhouse_server.web.templating import templates
 
 router = APIRouter(include_in_schema=False)
 
 
 def _parse_optional_plant_id(plant_id: str) -> int | None:
-    plant_id = plant_id.strip()
-    if not plant_id:
-        return None
-    try:
-        return int(plant_id)
-    except ValueError as exc:
-        raise HTTPException(400, "Invalid plant_id") from exc
+    return parsed_or_400(plant_id, int, error="Invalid plant_id")
 
 
 @router.get("/clusters/{cluster_id}/sensors")

@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Form, HTTPException, Request
+from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse
 
 from greenhouse_server.deps import RepoDep, require_cluster
+from greenhouse_server.web.forms import blank_or, parsed_or_400, tri_bool
 
 router = APIRouter(include_in_schema=False)
 
@@ -23,39 +24,12 @@ def config_form(cluster_id: int, repo: RepoDep):
 
 def _parse_optional_hour(raw: str) -> int | None:
     """Form helper: empty string → None (inherit), otherwise int (validated 0..23 by caller)."""
-    raw = raw.strip()
-    if not raw:
-        return None
-    try:
-        return int(raw)
-    except ValueError as exc:
-        raise HTTPException(400, "Invalid hour value") from exc
+    return parsed_or_400(raw, int, error="Invalid hour value")
 
 
 def _parse_non_negative_int(raw: str) -> int | None:
     """Form helper: empty string → None (no cap), otherwise a non-negative int."""
-    raw = raw.strip()
-    if not raw:
-        return None
-    try:
-        value = int(raw)
-    except ValueError as exc:
-        raise HTTPException(400, "Invalid numeric value") from exc
-    if value < 0:
-        raise HTTPException(400, "Value must be non-negative")
-    return value
-
-
-def _parse_tri_bool(raw: str) -> bool | None:
-    """Form tri-state: ``""`` = inherit, ``"true"`` = on, ``"false"`` = off."""
-    value = raw.strip().lower()
-    if value == "":
-        return None
-    if value in ("true", "on", "1"):
-        return True
-    if value in ("false", "off", "0"):
-        return False
-    raise HTTPException(400, f"Invalid tri-bool value: {raw!r}")
+    return parsed_or_400(raw, int, error="Invalid numeric value", negative_error="Value must be non-negative")
 
 
 @router.post("/clusters/{cluster_id}/config")
@@ -79,9 +53,9 @@ def save_config(
     require_cluster(repo, cluster_id)
     fields: dict = {
         "mode": mode or None,
-        "duration_minutes": int(duration_minutes) if duration_minutes.strip() else None,
-        "interval_hours": int(interval_hours) if interval_hours.strip() else None,
-        "auto_run": _parse_tri_bool(auto_run),
+        "duration_minutes": blank_or(duration_minutes, int),
+        "interval_hours": blank_or(interval_hours, int),
+        "auto_run": tri_bool(auto_run),
         "quiet_start_hour": _parse_optional_hour(quiet_start_hour),
         "quiet_end_hour": _parse_optional_hour(quiet_end_hour),
     }
@@ -113,9 +87,9 @@ def save_global_config(
     """
     repo.update_global_irrigation_config(
         mode=mode or None,
-        duration_minutes=int(duration_minutes) if duration_minutes.strip() else None,
-        interval_hours=int(interval_hours) if interval_hours.strip() else None,
-        auto_run=_parse_tri_bool(auto_run),
+        duration_minutes=blank_or(duration_minutes, int),
+        interval_hours=blank_or(interval_hours, int),
+        auto_run=tri_bool(auto_run),
         daily_cap_minutes=_parse_non_negative_int(daily_cap_minutes),
         max_events_per_day=_parse_non_negative_int(max_events_per_day),
         quiet_start_hour=_parse_optional_hour(quiet_start_hour),

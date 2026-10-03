@@ -20,6 +20,7 @@ from greenhouse_server.services import inventory
 from greenhouse_server.services.inventory import DeviceIdExistsError, IrrigatorExistsError
 from greenhouse_server.services.manual_control import ManualActionError, manual_log, manual_start, manual_stop
 from greenhouse_server.web.context import base_context
+from greenhouse_server.web.forms import parsed_or_400
 from greenhouse_server.web.templating import templates
 
 if TYPE_CHECKING:
@@ -52,16 +53,9 @@ def new_irrigator_form(request: Request, cluster_id: int, repo: RepoDep):
 
 def _parse_capacity(raw: str) -> float | None:
     """Parse an optional non-negative float from a form field; blank -> None."""
-    raw = raw.strip()
-    if not raw:
-        return None
-    try:
-        value = float(raw)
-    except ValueError as exc:
-        raise HTTPException(400, "Capacity values must be numbers") from exc
-    if value < 0:
-        raise HTTPException(400, "Capacity values must be >= 0")
-    return value
+    return parsed_or_400(
+        raw, float, error="Capacity values must be numbers", negative_error="Capacity values must be >= 0"
+    )
 
 
 def _new_form_conflict(request: Request, cluster: Cluster, error: str) -> HTMLResponse:
@@ -206,12 +200,7 @@ def start_irrigator(
     # Same code path as POST /api/v1/irrigators/{id}/start: caps, dry-run
     # watcher, event row and notification.
     irr = require_irrigator(repo, irrigator_id)
-    mins: int | None = None
-    if minutes.strip():
-        try:
-            mins = int(minutes)
-        except ValueError as exc:
-            raise HTTPException(400, "Invalid minutes") from exc
+    mins = parsed_or_400(minutes, int, error="Invalid minutes")
     return _action_result(request, "start", lambda: manual_start(repo, registry, notifier, irr, mins, via="web UI"))
 
 

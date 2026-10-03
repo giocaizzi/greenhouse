@@ -342,13 +342,13 @@ ignore_imports = [
 ]
 
 [[tool.importlinter.contracts]]
-name = "Web layers: router > routes|exception_handlers > context|templating > filters|weekdays"
+name = "Web layers: router > routes|exception_handlers > context|templating > filters|weekdays|forms"
 type = "layers"
 layers = [
   "greenhouse_server.web.router",
   "greenhouse_server.web.routes | greenhouse_server.web.exception_handlers",
   "greenhouse_server.web.context | greenhouse_server.web.templating",
-  "greenhouse_server.web.filters | greenhouse_server.web.weekdays",
+  "greenhouse_server.web.filters | greenhouse_server.web.weekdays | greenhouse_server.web.forms",
 ]
 
 [[tool.importlinter.contracts]]

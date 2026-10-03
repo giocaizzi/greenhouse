@@ -9,15 +9,10 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 
 from greenhouse_server.deps import RepoDep, require_cluster, require_plant_in_cluster
 from greenhouse_server.web.context import base_context
+from greenhouse_server.web.forms import blank_or
 from greenhouse_server.web.templating import templates
 
 router = APIRouter(include_in_schema=False)
-
-
-def _opt_float(value: str | None) -> float | None:
-    if value is None or value.strip() == "":
-        return None
-    return float(value)
 
 
 def _plant_form_fields(
@@ -38,10 +33,10 @@ def _plant_form_fields(
         "category": category or None,
         "water_needs": water_needs or None,
         "light_needs": light_needs or None,
-        "ideal_temp_min": _opt_float(ideal_temp_min),
-        "ideal_temp_max": _opt_float(ideal_temp_max),
-        "ideal_humidity_min": _opt_float(ideal_humidity_min),
-        "ideal_humidity_max": _opt_float(ideal_humidity_max),
+        "ideal_temp_min": blank_or(ideal_temp_min, float),
+        "ideal_temp_max": blank_or(ideal_temp_max, float),
+        "ideal_humidity_min": blank_or(ideal_humidity_min, float),
+        "ideal_humidity_max": blank_or(ideal_humidity_max, float),
         "notes": notes or None,
     }
 
