@@ -257,13 +257,14 @@ source_modules = ["greenhouse_core"]
 forbidden_modules = ["greenhouse_server", "greenhouse_cli"]
 
 [[tool.importlinter.contracts]]
-name = "Server layers: app > routes|web > deps|auth > scheduler > services > config"
+name = "Server layers: app > routes|web > deps|auth > scheduler > state > services > config"
 type = "layers"
 layers = [
   "greenhouse_server.app",
   "greenhouse_server.routes | greenhouse_server.web",
   "greenhouse_server.deps | greenhouse_server.auth",
   "greenhouse_server.scheduler",
+  "greenhouse_server.state",
   "greenhouse_server.services",
   "greenhouse_server.config",
 ]

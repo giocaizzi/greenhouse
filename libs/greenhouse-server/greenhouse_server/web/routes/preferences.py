@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Form, HTTPException, Request, status
 from fastapi.responses import RedirectResponse, Response
 
+from greenhouse_server import state
 from greenhouse_server.deps import RepoDep
 from greenhouse_server.scheduler import apply_timezone_preference
 from greenhouse_server.web.context import base_context
@@ -22,7 +23,7 @@ def preferences_page(request: Request, repo: RepoDep):
     global_config = repo.get_global_irrigation_config()
     repo.commit()
     clusters = repo.list_clusters()
-    settings = request.app.state.settings
+    settings = state.settings(request.app)
     ntfy_configured = bool(settings.ntfy_server_url and settings.ntfy_topic)
     return templates.TemplateResponse(
         request,

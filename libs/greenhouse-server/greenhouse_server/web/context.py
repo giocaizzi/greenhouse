@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any
 from fastapi import Request
 
 from greenhouse_core.repository import IrrigationRepository
+from greenhouse_server import state
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
@@ -40,8 +41,7 @@ def _repo_from_request(request: Request) -> tuple[IrrigationRepository, Session]
     never writes, so the caller closes it right after the read.
     """
     try:
-        factory = request.app.state.session_factory
-        session = factory()
+        session = state.session_factory(request.app)()
         return IrrigationRepository(session), session
     except Exception:  # noqa: BLE001
         return None, None
@@ -80,7 +80,7 @@ def _auth_enabled(request: Request) -> bool:
     """Whether auth is on; read off app.state so the topbar can hide Sign out in the no-auth dev mode."""
     auth_enabled = True
     with contextlib.suppress(AttributeError):
-        auth_enabled = bool(request.app.state.settings.auth_enabled)
+        auth_enabled = bool(state.settings(request.app).auth_enabled)
     return auth_enabled
 
 

@@ -18,6 +18,7 @@ from greenhouse_core.constants import (
 )
 from greenhouse_core.devices import DeviceGateway
 from greenhouse_core.repository import IrrigationRepository
+from greenhouse_server import state
 from greenhouse_server.config import Settings
 from greenhouse_server.services.jobs import job_session as _job_session  # private: keeps the frozen dir() surface
 from greenhouse_server.services.jobs import read_session as _read_session  # private, as above
@@ -273,7 +274,7 @@ def apply_timezone_preference(request: "Request", tz_name: str | None) -> None:
         return
 
     app = request.app
-    settings = app.state.settings
+    settings = state.settings(app)
 
     set_display_timezone(tz_name)
     reschedule_for_timezone(tz_name, settings)
@@ -284,6 +285,15 @@ def apply_timezone_preference(request: "Request", tz_name: str | None) -> None:
     )
 
 
+def _job_app() -> FastAPI:
+    """The app the jobs read, typed for the ``state`` accessors.
+
+    Deliberately unchecked: with no app (jobs fired before ``init_scheduler``) the caller's
+    first ``.state`` read raises ``AttributeError`` and escapes the job, as it always has.
+    """
+    return _app  # type: ignore[return-value]  # a None _app escapes as AttributeError at the first .state read
+
+
 def _get_cloud() -> DeviceGateway | None:
     """Return the one app-scoped Tuya gateway (shared client/token), or None.
 
@@ -291,7 +301,7 @@ def _get_cloud() -> DeviceGateway | None:
     fresh client per tick — so a sync/check run costs no extra ``/v1.0/token``
     call, and the local-key cache warmed by one job is seen by the others.
     """
-    return getattr(_app.state, "device_gateway", None) if _app is not None else None
+    return state.device_gateway(_app) if _app is not None else None
 
 
 def _sync_job() -> None:
@@ -303,7 +313,7 @@ def _sync_job() -> None:
         logger.debug("Sync job skipped: no Tuya credentials")
         return
 
-    registry = getattr(_app.state, "device_registry", None)  # type: ignore[union-attr]  # a None _app escapes as AttributeError
+    registry = state.device_registry(_job_app())
     with _job_session(_app, logger, "Sync job failed") as session:
         repo = IrrigationRepository(session)
         sync_svc = SyncService(repo, registry, gateway)
@@ -316,7 +326,7 @@ def _health_snapshot_job() -> None:
 
     with _job_session(_app, logger, "Plant health snapshot job failed") as session:
         repo = IrrigationRepository(session)
-        svc = PlantHealthService(repo, _app.state.plant_db)  # type: ignore[union-attr]  # a None _app escapes as AttributeError
+        svc = PlantHealthService(repo, state.plant_db(_job_app()))
         svc.snapshot_daily()
 
 
@@ -328,17 +338,17 @@ def _build_irrigation_service(
     from greenhouse_server.services.sync import SyncService
 
     sync_svc = SyncService(repo, registry, gateway)
-    monitor = getattr(app.state, "health_monitor", None)
+    monitor = state.health_monitor(app)
     if monitor is not None:
         monitor.bind_repo(repo)
     return IrrigationService(
         repo=repo,
         registry=registry,
         sync_service=sync_svc,
-        weather_client=app.state.weather_client,
-        plant_db=app.state.plant_db,
+        weather_client=state.weather_client(app),
+        plant_db=state.plant_db(app),
         health_monitor=monitor,
-        notifier=getattr(app.state, "ntfy_notifier", None),
+        notifier=state.ntfy_notifier(app),
     )
 
 
@@ -350,11 +360,11 @@ def _check_job() -> None:
     from greenhouse_server.services.sync import SyncService  # noqa: F401
 
     gateway = _get_cloud()
-    registry = getattr(_app.state, "device_registry", None)  # type: ignore[union-attr]  # a None _app escapes as AttributeError
+    registry = state.device_registry(_job_app())
 
     with _job_session(_app, logger, "Check job failed") as session:
         repo = IrrigationRepository(session)
-        _build_irrigation_service(_app, repo, registry, gateway).check_all_clusters()  # type: ignore[arg-type]  # non-None: _job_session already read _app.state
+        _build_irrigation_service(_job_app(), repo, registry, gateway).check_all_clusters()
 
 
 def _anomaly_job() -> None:
@@ -363,7 +373,7 @@ def _anomaly_job() -> None:
 
     with _job_session(_app, logger, "Anomaly scan job failed") as session:
         repo = IrrigationRepository(session)
-        SensorAnomalyService(repo, notifier=getattr(_app.state, "ntfy_notifier", None)).scan()  # type: ignore[union-attr]  # a None _app escapes as AttributeError
+        SensorAnomalyService(repo, notifier=state.ntfy_notifier(_job_app())).scan()
 
 
 def _health_monitor_job() -> None:
@@ -377,7 +387,7 @@ def _health_monitor_job() -> None:
     if _app is None:
         return
 
-    monitor = getattr(_app.state, "health_monitor", None)
+    monitor = state.health_monitor(_app)
     if monitor is None:
         logger.debug("Health monitor job skipped: no monitor wired")
         return
@@ -399,14 +409,14 @@ def init_health_monitor(app: FastAPI, settings: Settings) -> None:  # noqa: ARG0
     """
     from greenhouse_server.services.health_monitor import DeviceHealthMonitor
 
-    registry = getattr(app.state, "device_registry", None)
+    registry = state.device_registry(app)
     if registry is None:
         logger.debug("Health monitor init skipped: no device registry")
         return
 
     with _read_session(app) as session:
         repo = IrrigationRepository(session)
-        monitor = DeviceHealthMonitor(repo=repo, registry=registry, notifier=getattr(app.state, "ntfy_notifier", None))
+        monitor = DeviceHealthMonitor(repo=repo, registry=registry, notifier=state.ntfy_notifier(app))
         try:
             monitor.backfill_from_history()
             session.commit()

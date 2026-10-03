@@ -10,6 +10,7 @@ from greenhouse_core.devices import DeviceGateway, DeviceRegistry
 from greenhouse_core.models import Alert, Cluster, IrrigationWindow, Irrigator, Plant, Sensor, VacationWindow
 from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_core.repository import IrrigationRepository
+from greenhouse_server import state
 from greenhouse_server.services.charts import Metric
 from greenhouse_server.services.cluster import ClusterService
 from greenhouse_server.services.health import PlantHealthService
@@ -24,8 +25,7 @@ from greenhouse_server.services.weather import WeatherClient
 
 def get_session(request: Request) -> Generator[Session, None, None]:
     """Yield a request-scoped SQLAlchemy session; FastAPI caches it, so every dependency shares it."""
-    factory = request.app.state.session_factory
-    session = factory()
+    session = state.session_factory(request.app)()
     try:
         yield session
     finally:
@@ -39,7 +39,7 @@ def get_repository(session: Annotated[Session, Depends(get_session)]) -> Irrigat
 
 def get_device_registry(request: Request) -> DeviceRegistry | None:
     """Return the app's device registry, or ``None`` when Tuya credentials were missing."""
-    return getattr(request.app.state, "device_registry", None)
+    return state.device_registry(request.app)
 
 
 def get_health_monitor(request: Request) -> DeviceHealthMonitor | None:
@@ -49,8 +49,7 @@ def get_health_monitor(request: Request) -> DeviceHealthMonitor | None:
     stashed on ``app.state.health_monitor``; tests that don't need the
     health gate leave it unset and the irrigation service falls open.
     """
-    monitor: DeviceHealthMonitor | None = getattr(request.app.state, "health_monitor", None)
-    return monitor
+    return state.health_monitor(request.app)
 
 
 def get_device_gateway(request: Request) -> DeviceGateway | None:
@@ -60,24 +59,22 @@ def get_device_gateway(request: Request) -> DeviceGateway | None:
     borrows the single Cloud client and its token — never constructs a new
     one. ``None`` when credentials were absent at startup.
     """
-    return getattr(request.app.state, "device_gateway", None)
+    return state.device_gateway(request.app)
 
 
 def get_weather_client(request: Request) -> WeatherClient:
     """Return the app-scoped weather client."""
-    client: WeatherClient = request.app.state.weather_client
-    return client
+    return state.weather_client(request.app)
 
 
 def get_ntfy_notifier(request: Request) -> NtfyClient | None:
     """Return the ntfy client, or ``None`` when notifications are unconfigured."""
-    return getattr(request.app.state, "ntfy_notifier", None)
+    return state.ntfy_notifier(request.app)
 
 
 def get_plant_db(request: Request) -> PlantDatabase:
     """Return the app-scoped plant care database."""
-    plant_db: PlantDatabase = request.app.state.plant_db
-    return plant_db
+    return state.plant_db(request.app)
 
 
 # --- Entity lookups (404) ---
