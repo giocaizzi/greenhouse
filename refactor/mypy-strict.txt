@@ -117,6 +117,7 @@ libs/greenhouse-server/greenhouse_server/services/__init__.py
 libs/greenhouse-server/greenhouse_server/services/alerts.py
 libs/greenhouse-server/greenhouse_server/services/anomaly.py
 libs/greenhouse-server/greenhouse_server/services/bulk.py
+libs/greenhouse-server/greenhouse_server/services/chart_payload.py
 libs/greenhouse-server/greenhouse_server/services/charts.py
 libs/greenhouse-server/greenhouse_server/services/cluster.py
 libs/greenhouse-server/greenhouse_server/services/data_quality.py
