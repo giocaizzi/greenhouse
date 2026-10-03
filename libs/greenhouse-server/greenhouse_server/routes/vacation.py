@@ -30,10 +30,8 @@ def list_vacation_windows(repo: RepoDep):
     Returns:
         A list of all windows and the active window (spanning now), if any.
     """
-    # contract: VacationListResponse validates the ORM rows (from_attributes).
-    return VacationListResponse(
-        active=repo.get_active_vacation(),  # type: ignore[arg-type]
-        items=repo.list_vacation_windows(),  # type: ignore[arg-type]
+    return VacationListResponse.model_validate(
+        {"active": repo.get_active_vacation(), "items": repo.list_vacation_windows()}
     )
 
 

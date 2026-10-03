@@ -97,7 +97,7 @@ def get_effective_config(cluster_id: int, repo: RepoDep):
     return EffectiveConfigResponse(
         cluster_id=cluster_id,
         declared=ConfigResponse.model_validate(declared) if declared else None,
-        effective={key: ResolvedConfigField(**val) for key, val in effective.items()},
+        effective={key: ResolvedConfigField.model_validate(val) for key, val in effective.items()},
     )
 
 

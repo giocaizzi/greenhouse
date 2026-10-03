@@ -154,7 +154,7 @@ def irrigate(
     if result.get("action") == "error" and result.get("reason") == "cluster not found":
         raise HTTPException(status_code=404, detail="Cluster not found")
     repo.commit()
-    return IrrigateResponse(**result)  # type: ignore[misc, arg-type]  # contract: TypedDict → Pydantic, runtime-validated
+    return IrrigateResponse.model_validate(result)
 
 
 @router.get("/clusters/{cluster_id}/monitor", response_model=MonitorResponse)
@@ -183,7 +183,7 @@ def monitor(cluster_id: int, repo: RepoDep, irrigation_svc: IrrigationServiceDep
     repo.commit()  # keep the freshness sync's rows (D15)
     return MonitorResponse(
         cluster_name=result["cluster_name"],
-        sensors=[SensorStatusResponse(**s) for s in result["sensors"]],
+        sensors=[SensorStatusResponse.model_validate(s) for s in result["sensors"]],
         needs_water=result["needs_water"],
     )
 
@@ -208,7 +208,7 @@ def check_all(irrigation_svc: IrrigationServiceDep, repo: RepoDep) -> CheckAllRe
     has_alerts = check_has_alerts(results)
     repo.commit()
     return CheckAllResponse(
-        results=[CheckClusterResponse(**r) for r in results],  # type: ignore[arg-type]  # contract: TypedDict → Pydantic
+        results=[CheckClusterResponse.model_validate(r) for r in results],
         has_alerts=has_alerts,
     )
 
@@ -233,7 +233,7 @@ def check_single(
     require_cluster(repo, cluster_id)
     result = irrigation_svc.check_cluster(cluster_id)
     repo.commit()
-    return CheckClusterResponse(**result)  # type: ignore[arg-type]  # contract: TypedDict → Pydantic
+    return CheckClusterResponse.model_validate(result)
 
 
 @router.post("/sync", response_model=SyncResponse)
@@ -279,8 +279,7 @@ def learn(cluster_id: int, repo: RepoDep, plant_db: PlantDbDep):
     cluster = require_cluster(repo, cluster_id)
     report = generate_learning_report(repo, cluster_id, plant_db)
     alerts = collect_learning_alerts(repo, cluster_id, plant_db)
-    # contract: LearnResponse.alerts validates the alert dicts into AlertResponse.
-    return LearnResponse(cluster_name=cluster.name, report=report, alerts=alerts)  # type: ignore[arg-type]
+    return LearnResponse.model_validate({"cluster_name": cluster.name, "report": report, "alerts": alerts})
 
 
 @router.get("/clusters/{cluster_id}/history", response_model=HistoryResponse)

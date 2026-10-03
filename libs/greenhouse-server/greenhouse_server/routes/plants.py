@@ -256,12 +256,8 @@ def get_plant_health(plant_id: int, repo: RepoDep, health_svc: PlantHealthServic
     plant = require_plant(repo, plant_id)
     result = health_svc.compute_score(plant_id)
     history = repo.list_plant_health_history(plant_id, days=90)
-    return PlantHealthResponse(
-        plant_id=plant_id,
-        species=plant.species,
-        current_score=result["score"],
-        # contract: PlantHealthResponse.history validates the ORM rows (from_attributes).
-        history=history,  # type: ignore[arg-type]
+    return PlantHealthResponse.model_validate(
+        {"plant_id": plant_id, "species": plant.species, "current_score": result["score"], "history": history}
     )
 
 
