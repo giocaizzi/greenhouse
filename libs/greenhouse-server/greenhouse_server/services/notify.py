@@ -13,8 +13,9 @@ sent via ``Authorization`` when configured.
 
 import logging
 import urllib.request
+from collections.abc import Callable
 
-log = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 # ntfy priority levels (1=min .. 5=max) and emoji tag names per alert severity.
 _SEVERITY_PRIORITY = {"critical": "5", "warning": "4", "info": "3"}
@@ -60,7 +61,7 @@ class NtfyClient:
             with urllib.request.urlopen(req, timeout=self._timeout):
                 return True
         except Exception:
-            log.debug("ntfy publish failed", exc_info=True)
+            logger.debug("ntfy publish failed", exc_info=True)
             return False
 
     def notify_irrigation(
@@ -93,7 +94,7 @@ class NtfyClient:
         )
 
 
-def maybe_notify(notifier: NtfyClient | None, prefs, category: str, fn) -> None:
+def maybe_notify(notifier: NtfyClient | None, prefs: object, category: str, fn: Callable[[], object]) -> None:
     """Run ``fn`` (which publishes) only if notifier exists and the category is enabled.
 
     ``category`` is one of ``manual`` / ``emergency`` / ``alerts`` / ``auto``,
@@ -107,4 +108,4 @@ def maybe_notify(notifier: NtfyClient | None, prefs, category: str, fn) -> None:
     try:
         fn()
     except Exception:
-        log.debug("notification dispatch failed", exc_info=True)
+        logger.debug("notification dispatch failed", exc_info=True)

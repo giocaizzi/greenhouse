@@ -4,7 +4,7 @@ import json
 import time
 from typing import TYPE_CHECKING, Any, cast
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
 
@@ -44,7 +44,7 @@ from greenhouse_core.models import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Iterable, Mapping
 
     from sqlalchemy import Select
     from sqlalchemy.engine import CursorResult
@@ -529,6 +529,30 @@ class IrrigationRepository:
         )
         return float(total_minutes or 0) * irrigator.flow_rate_l_per_min
 
+    def list_start_events_since(self, irrigator_id: int, since: int) -> list[IrrigationEvent]:
+        """An irrigator's ``start`` events at or after ``since``, newest first."""
+        return list(
+            self.session.scalars(
+                select(IrrigationEvent)
+                .where(
+                    IrrigationEvent.irrigator_id == irrigator_id,
+                    IrrigationEvent.action == EVENT_ACTION_START,
+                    IrrigationEvent.timestamp >= since,
+                )
+                .order_by(IrrigationEvent.timestamp.desc())
+            )
+        )
+
+    def list_events_since(self, irrigator_id: int, since: int) -> list[IrrigationEvent]:
+        """Every event of an irrigator at or after ``since``, in database order (callers only aggregate)."""
+        return list(
+            self.session.scalars(
+                select(IrrigationEvent).where(
+                    IrrigationEvent.irrigator_id == irrigator_id, IrrigationEvent.timestamp >= since
+                )
+            )
+        )
+
     # ── Irrigation Configs ────────────────────────────────────────────────────
 
     _CONFIG_PATCHABLE_FIELDS = (
@@ -867,6 +891,10 @@ class IrrigationRepository:
             stmt = stmt.where(Alert.last_seen_at >= since)
         return self.session.scalar(stmt)
 
+    def get_open_alert_by_key(self, dedup_key: str) -> Alert | None:
+        """The unresolved (open or acknowledged) alert with ``dedup_key``, if any."""
+        return self.session.scalar(select(Alert).where(Alert.dedup_key == dedup_key, Alert.status != "resolved"))
+
     def acknowledge_alert(self, alert_id: int) -> Alert | None:
         """Move an open alert to ``acknowledged``; returns the updated row."""
         alert = self.session.get(Alert, alert_id)
@@ -1161,6 +1189,74 @@ class IrrigationRepository:
     def get_sensor(self, sensor_id: int) -> Sensor | None:
         """Fetch a sensor by id."""
         return self.session.get(Sensor, sensor_id)
+
+    def list_sensors_by_ids(self, sensor_ids: "Iterable[int]") -> list[Sensor]:
+        """The sensors whose id is in ``sensor_ids``, in database order; unknown ids are skipped."""
+        return list(self.session.scalars(select(Sensor).where(Sensor.id.in_(sensor_ids))))
+
+    # ── Search (Command-K palette) ────────────────────────────────────────────
+    # ``pattern`` is a SQL LIKE pattern matched case-insensitively; ``prefix`` is the raw
+    # query, matched case-sensitively as a Tuya device-id prefix.
+
+    def search_clusters(self, pattern: str, limit: int) -> list[Cluster]:
+        """Clusters whose name or location matches ``pattern``."""
+        return list(
+            self.session.scalars(
+                select(Cluster)
+                .where(
+                    or_(
+                        func.lower(Cluster.name).like(func.lower(pattern)),
+                        func.lower(Cluster.location).like(func.lower(pattern)),
+                    )
+                )
+                .limit(limit)
+            )
+        )
+
+    def search_plants(self, pattern: str, limit: int) -> list[Plant]:
+        """Plants whose species or notes match ``pattern``."""
+        return list(
+            self.session.scalars(
+                select(Plant)
+                .where(
+                    or_(
+                        func.lower(Plant.species).like(func.lower(pattern)),
+                        func.lower(Plant.notes).like(func.lower(pattern)),
+                    )
+                )
+                .limit(limit)
+            )
+        )
+
+    def search_sensors(self, pattern: str, prefix: str, limit: int) -> list[Sensor]:
+        """Sensors whose name matches ``pattern`` or whose Tuya device id starts with ``prefix``."""
+        return list(
+            self.session.scalars(
+                select(Sensor)
+                .where(
+                    or_(
+                        func.lower(Sensor.name).like(func.lower(pattern)),
+                        Sensor.tuya_device_id.like(f"{prefix}%"),
+                    )
+                )
+                .limit(limit)
+            )
+        )
+
+    def search_irrigators(self, pattern: str, prefix: str, limit: int) -> list[Irrigator]:
+        """Irrigators whose name matches ``pattern`` or whose Tuya device id starts with ``prefix``."""
+        return list(
+            self.session.scalars(
+                select(Irrigator)
+                .where(
+                    or_(
+                        func.lower(Irrigator.name).like(func.lower(pattern)),
+                        Irrigator.tuya_device_id.like(f"{prefix}%"),
+                    )
+                )
+                .limit(limit)
+            )
+        )
 
     # ── Mutations for CRUD edit/delete ────────────────────────────────────────
 

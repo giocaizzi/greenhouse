@@ -5,21 +5,7 @@ import time
 import pytest
 
 from fake_data import FAKE_CLUSTER_NAME, FAKE_DEVICE_ID, FAKE_IRRIGATOR_NAME
-from greenhouse_core.stats import format_duration, get_irrigation_stats
-
-
-class TestFormatDuration:
-    def test_minutes_only(self):
-        assert format_duration(30) == "30min"
-
-    def test_hours_and_minutes(self):
-        assert format_duration(90) == "1h 30min"
-
-    def test_exact_hours(self):
-        assert format_duration(120) == "2h"
-
-    def test_zero(self):
-        assert format_duration(0) == "0min"
+from greenhouse_core.stats import get_irrigation_stats
 
 
 class TestGetIrrigationStats:

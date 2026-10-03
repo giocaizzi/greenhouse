@@ -79,7 +79,7 @@ def _display(f: Field) -> str:
     return str(f.value)
 
 
-class FormScreen(ModalScreen[dict | None]):
+class FormScreen(ModalScreen[dict[str, Any] | None]):
     """Render ``fields`` and dismiss with ``{name: parsed value}`` or ``None``."""
 
     BINDINGS = [("escape", "dismiss(None)", "Cancel"), ("ctrl+s", "submit", "Save")]

@@ -8,13 +8,17 @@ becomes the single source of truth for the bell badge and /alerts page.
 """
 
 import time
+from typing import Any
 
 from greenhouse_core.models import (
     ENTITY_CLUSTER,
     ENTITY_SENSOR,
+    SOURCE_LEARNING,
+    SOURCE_MAINTENANCE,
     Alert,
     Cluster,
 )
+from greenhouse_core.models import SOURCE_PUMP as SOURCE_PUMP  # re-export: tests import it from here
 from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.services.maintenance import collect_learning_alerts, collect_maintenance_alerts
@@ -22,14 +26,6 @@ from greenhouse_server.services.notify import NtfyClient, maybe_notify
 
 # Alert severities that warrant a push (info is suppressed).
 _NOTIFY_SEVERITIES = ("warning", "critical")
-
-SOURCE_LEARNING = "learning"
-SOURCE_MAINTENANCE = "maintenance"
-SOURCE_DECISION = "decision"
-SOURCE_LEAK = "leak"
-SOURCE_ANOMALY = "anomaly"
-SOURCE_SYSTEM = "system"
-SOURCE_PUMP = "pump"
 
 
 def _dedup_key(source: str, code: str, cluster_id: int | None, message: str) -> str:
@@ -91,7 +87,7 @@ def sync_cluster_alerts(
         return []
     now = int(time.time())
 
-    findings: list[tuple[str, dict]] = []
+    findings: list[tuple[str, dict[str, Any]]] = []
     for raw in collect_learning_alerts(repo, cluster_id, plant_db):
         findings.append((SOURCE_LEARNING, raw))
     for raw in collect_maintenance_alerts(repo, cluster_id, plant_db):
@@ -159,7 +155,7 @@ def raise_alert(
     cluster_id: int | None = None,
     plant_id: int | None = None,
     sensor_id: int | None = None,
-    payload: dict | None = None,
+    payload: dict[str, Any] | None = None,
     notifier: NtfyClient | None = None,
 ) -> Alert:
     """Convenience wrapper: build a dedup_key and upsert an alert."""

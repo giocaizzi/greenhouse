@@ -11,7 +11,7 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
 # Module logger kept for the pinned logger/import surface (no records since OD3).
-log = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 
 def create_db_engine(db_url: str) -> Engine:

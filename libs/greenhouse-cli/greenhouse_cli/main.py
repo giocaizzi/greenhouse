@@ -35,7 +35,6 @@ def main(
     ] = None,
 ):
     """Smart irrigation system — evidence-based plant care with Tuya IoT sensors."""
-    ctx.ensure_object(dict)
     ctx.obj = server
 
 

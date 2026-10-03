@@ -17,23 +17,22 @@ import statistics
 import time
 from typing import TYPE_CHECKING
 
-from greenhouse_core.models import Alert
+from greenhouse_core.constants import (
+    ANOMALY_MIN_READINGS,
+    ANOMALY_MIN_STD,
+    ANOMALY_STALE_INTERVAL_MULTIPLIER,
+    ANOMALY_WINDOW_READINGS,
+    ANOMALY_Z_THRESHOLD,
+)
+from greenhouse_core.models import SOURCE_ANOMALY, Alert
 from greenhouse_core.repository import IrrigationRepository
-from greenhouse_server.services.alerts import SOURCE_ANOMALY, raise_alert
+from greenhouse_server.services.alerts import raise_alert
 from greenhouse_server.services.notify import NtfyClient
 
 if TYPE_CHECKING:
     from greenhouse_core.models import Sensor, SensorReading
 
 logger = logging.getLogger(__name__)
-
-_MIN_READINGS = 10
-_WINDOW = 50
-_Z_THRESHOLD = 4.0
-_STALE_MULTIPLIER = 2.0
-# Minimum std to use for z-score; prevents false alarms on near-constant series
-# while still catching large absolute deviations (e.g. 95% vs 50% baseline).
-_MIN_STD = 1.0
 
 
 def _median_interval(timestamps: list[int]) -> float | None:
@@ -47,18 +46,18 @@ def _median_interval(timestamps: list[int]) -> float | None:
 def _latest_soil_zscore(window: "list[SensorReading]") -> tuple[float, float, float, float] | None:
     """(latest, mean, std, z) of the newest soil reading against the rest; None with too few readings."""
     soil_values = [r.soil_moisture for r in window if r.soil_moisture is not None]
-    if len(soil_values) < _MIN_READINGS:
+    if len(soil_values) < ANOMALY_MIN_READINGS:
         return None
 
     # DESC order → index 0 is most recent
     latest_soil = soil_values[0]
     # Exclude the latest from the baseline to avoid self-contamination
     baseline = soil_values[1:]
-    if len(baseline) < _MIN_READINGS - 1:
+    if len(baseline) < ANOMALY_MIN_READINGS - 1:
         return None
 
     mean = statistics.mean(baseline)
-    std = max(statistics.pstdev(baseline), _MIN_STD)
+    std = max(statistics.pstdev(baseline), ANOMALY_MIN_STD)
     z = (latest_soil - mean) / std
     return latest_soil, mean, std, z
 
@@ -90,10 +89,10 @@ class SensorAnomalyService:
 
         for sensor in sensors:
             readings = self._repo.get_recent_readings(sensor.id, hours=72)
-            # get_recent_readings returns DESC — take the most recent _WINDOW
-            window = readings[:_WINDOW]
+            # get_recent_readings returns DESC — take the most recent ANOMALY_WINDOW_READINGS
+            window = readings[:ANOMALY_WINDOW_READINGS]
 
-            if len(window) < _MIN_READINGS:
+            if len(window) < ANOMALY_MIN_READINGS:
                 continue
 
             # Ascending timestamps for interval computation
@@ -115,7 +114,7 @@ class SensorAnomalyService:
     ) -> Alert | None:
         """Raise ``sensor_stale`` when the sensor has been silent for over twice its usual interval."""
         latest_ts = timestamps_asc[-1]
-        if median_interval and (now - latest_ts) > _STALE_MULTIPLIER * median_interval:
+        if median_interval and (now - latest_ts) > ANOMALY_STALE_INTERVAL_MULTIPLIER * median_interval:
             gap_seconds = now - latest_ts
             alert = raise_alert(
                 self._repo,
@@ -157,7 +156,7 @@ class SensorAnomalyService:
             return None
         latest_soil, mean, std, z = stats
 
-        if abs(z) > _Z_THRESHOLD:
+        if abs(z) > ANOMALY_Z_THRESHOLD:
             alert = raise_alert(
                 self._repo,
                 notifier=self._notifier,

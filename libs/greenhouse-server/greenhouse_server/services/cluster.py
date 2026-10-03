@@ -3,7 +3,7 @@
 import csv
 import io
 import time
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, NamedTuple, TypedDict
 
 from greenhouse_core.logic import IrrigationDecision, IrrigationLogic
 from greenhouse_core.plant_db import PlantDatabase
@@ -11,7 +11,7 @@ from greenhouse_core.repository import IrrigationRepository
 from greenhouse_core.utils import format_timestamp
 
 if TYPE_CHECKING:
-    from greenhouse_core.models import Irrigator, Plant, Sensor
+    from greenhouse_core.models import IrrigationConfig, Irrigator, Plant, Sensor
 
 
 class PlantNotFoundError(LookupError):
@@ -20,6 +20,32 @@ class PlantNotFoundError(LookupError):
 
 class ClusterNotFoundError(LookupError):
     """Raised by ``ClusterService.sync_plants`` when the requested cluster id does not exist."""
+
+
+class ClusterStatus(TypedDict):
+    """``get_cluster_status`` result: a plain dict at runtime (templates index it, the API maps it)."""
+
+    cluster: Any  # the Cluster row; Any until routes/operations validates it (ClusterResponse) — see CONS-W3
+    config: "IrrigationConfig | None"
+    plants: "list[Plant]"
+    sensors: list[dict[str, Any]]
+    irrigator: dict[str, Any] | None
+    decision: dict[str, Any] | None
+
+
+class ClusterHistory(TypedDict):
+    """``get_cluster_history`` result: per-sensor readings and per-irrigator events, newest first."""
+
+    cluster_name: str
+    sensors: list[dict[str, Any]]
+    irrigators: list[dict[str, Any]]
+
+
+class PlantSyncResult(NamedTuple):
+    """``sync_plants`` result; still unpacks as ``synced, errors``."""
+
+    synced: int
+    errors: list[str]
 
 
 def decision_to_view(decision: IrrigationDecision) -> dict[str, Any]:
@@ -73,7 +99,7 @@ class ClusterService:
         self._repo = repo
         self._plant_db = plant_db
 
-    def get_cluster_status(self, cluster_id: int) -> dict[str, Any] | None:
+    def get_cluster_status(self, cluster_id: int) -> ClusterStatus | None:
         """Full cluster status: config, plants, sensors, irrigators, smart decision."""
         cluster = self._repo.get_cluster(cluster_id)
         if not cluster:
@@ -139,7 +165,7 @@ class ClusterService:
             }
         return irrigator_data
 
-    def get_cluster_history(self, cluster_id: int, hours: int = 24, limit: int = 50) -> dict[str, Any] | None:
+    def get_cluster_history(self, cluster_id: int, hours: int = 24, limit: int = 50) -> ClusterHistory | None:
         """Get sensor readings + irrigation events for a cluster."""
         cluster = self._repo.get_cluster(cluster_id)
         if not cluster:
@@ -175,7 +201,7 @@ class ClusterService:
             "irrigators": irrigator_histories,
         }
 
-    def sync_plants(self, *, plant_id: int | None, cluster_id: int | None) -> tuple[int, list[str]]:
+    def sync_plants(self, *, plant_id: int | None, cluster_id: int | None) -> PlantSyncResult:
         """Refresh care data for one plant, one cluster or every cluster; return ``(synced, errors)``.
 
         Shared by the API and web plant-DB sync. A truthy ``plant_id`` wins and its failure
@@ -191,7 +217,7 @@ class ClusterService:
             if not plant:
                 raise PlantNotFoundError(plant_id)
             self.sync_plant_with_db(plant)
-            return 1, []
+            return PlantSyncResult(1, [])
         return self._sync_cluster_plants(cluster_id)
 
     def _find_plant_in_clusters(self, plant_id: int) -> "Plant | None":
@@ -207,7 +233,7 @@ class ClusterService:
                 break
         return plant
 
-    def _sync_cluster_plants(self, cluster_id: int | None) -> tuple[int, list[str]]:
+    def _sync_cluster_plants(self, cluster_id: int | None) -> PlantSyncResult:
         """Sync every plant of one cluster (or of all clusters), collecting per-plant errors."""
         errors: list[str] = []
         synced = 0
@@ -225,7 +251,7 @@ class ClusterService:
                     synced += 1
                 except Exception as e:
                     errors.append(f"{plant.species}: {e}")
-        return synced, errors
+        return PlantSyncResult(synced, errors)
 
     def sync_plant_with_db(self, plant: "Plant") -> None:
         """Update a single plant with evidence-based care data."""
@@ -237,4 +263,4 @@ class ClusterService:
         plant.ideal_humidity_min = care_data.get("ideal_humidity_min")
         plant.ideal_humidity_max = care_data.get("ideal_humidity_max")
         plant.notes = f"Sources: {', '.join(care_data.get('sources', [])[:2])}"
-        self._repo.session.flush()
+        self._repo.flush()

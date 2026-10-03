@@ -1,16 +1,24 @@
 """Weather data infrastructure client."""
 
 import json
+import logging
 import time
 import urllib.request
+from typing import Any
 
-_FORECAST_CACHE_TTL = 600  # 10 minutes
+from greenhouse_core.constants import DEFAULT_LATITUDE, DEFAULT_LONGITUDE, WEATHER_FORECAST_CACHE_TTL_SECONDS
+
+logger = logging.getLogger(__name__)
+
+_FORECAST_CACHE_TTL = WEATHER_FORECAST_CACHE_TTL_SECONDS  # module name pinned by tests
 
 
 class WeatherClient:
     """Fetches current weather from Open-Meteo API."""
 
-    def __init__(self, lat: float = 45.464, lon: float = 9.189, timeout: int = 8, tz: str = "UTC"):
+    def __init__(
+        self, lat: float = DEFAULT_LATITUDE, lon: float = DEFAULT_LONGITUDE, timeout: int = 8, tz: str = "UTC"
+    ):
         self._lat = lat
         self._lon = lon
         self._timeout = timeout
@@ -19,10 +27,10 @@ class WeatherClient:
         # hours" aligns with the clock the engine reasons in, not a hardcoded
         # Europe/Rome.
         self._tz = tz
-        self._get_current_cache: tuple[float, dict] | None = None
-        self._get_forecast_cache: tuple[float, dict] | None = None
+        self._get_current_cache: tuple[float, dict[str, Any]] | None = None
+        self._get_forecast_cache: tuple[float, dict[str, Any]] | None = None
 
-    def get_current(self) -> dict | None:
+    def get_current(self) -> dict[str, Any] | None:
         """Fetch current weather. Returns None on failure."""
         if self._get_current_cache is not None:
             cached_at, cached_value = self._get_current_cache
@@ -48,9 +56,10 @@ class WeatherClient:
                 self._get_current_cache = (time.monotonic(), result)
                 return result
         except Exception:
+            logger.debug("Open-Meteo current-weather request failed", exc_info=True)
             return None
 
-    def get_forecast(self, hours: int = 6) -> dict | None:
+    def get_forecast(self, hours: int = 6) -> dict[str, Any] | None:
         """Fetch aggregated weather forecast for the next N hours.
 
         Returns precipitation sum, max/min temperature, and average humidity
@@ -94,4 +103,5 @@ class WeatherClient:
             self._get_forecast_cache = (time.monotonic(), result)
             return result
         except Exception:
+            logger.debug("Open-Meteo forecast request failed", exc_info=True)
             return None

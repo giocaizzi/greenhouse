@@ -37,6 +37,7 @@ hold lifts with it.
 import logging
 import statistics
 import time
+from typing import Any
 
 from greenhouse_core.constants import (
     LEAK_AFTER_WINDOW_SECONDS,
@@ -49,12 +50,13 @@ from greenhouse_core.constants import (
     LEAK_PINNED_THRESHOLD,
     LEAK_RISING_DELTA,
     LEAK_SETTLE_TOLERANCE,
+    SECONDS_PER_HOUR,
 )
 from greenhouse_core.logic.cleaning import clean_readings_around
-from greenhouse_core.models import ENTITY_CLUSTER, ENTITY_SENSOR, Alert, Sensor
+from greenhouse_core.models import ENTITY_CLUSTER, ENTITY_SENSOR, SOURCE_LEAK, Alert, Sensor
 from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_core.repository import IrrigationRepository
-from greenhouse_server.services.alerts import SOURCE_LEAK, raise_alert
+from greenhouse_server.services.alerts import raise_alert
 from greenhouse_server.services.notify import NtfyClient
 
 logger = logging.getLogger(__name__)
@@ -89,52 +91,56 @@ class LeakDetectionService:
         Returns:
             List of Alert rows that were created or refreshed.
         """
-        sensors = self._repo.get_sensors_in_cluster(cluster_id)
         alerts: list[Alert] = []
-
-        for sensor in sensors:
-            verdict = self._evaluate_sensor(sensor, started_at)
-            if verdict is None:
-                logger.debug(
-                    "Leak check inconclusive — cluster %d, sensor %d: not enough readings around %d",
-                    cluster_id,
-                    sensor.id,
-                    started_at,
-                )
-                continue
-
-            reason, evidence = verdict
-            if reason is None:
-                self._clear_sensor(cluster_id, sensor)
-                continue
-
-            alerts.append(self._raise_for_sensor(cluster_id, sensor, started_at, reason, evidence))
-
+        for sensor in self._repo.get_sensors_in_cluster(cluster_id):
+            alert = self._check_sensor(cluster_id, sensor, started_at)
+            if alert is not None:
+                alerts.append(alert)
         if alerts:
-            now = int(time.time())
-            self._repo.add_activity_event(
-                source="leak",
-                entity_type=ENTITY_CLUSTER,
-                entity_id=cluster_id,
-                code="leak_hold",
-                message=(
-                    f"automatic irrigation held for {LEAK_HOLD_HOURS}h: "
-                    f"possible leak or stuck valve on {len(alerts)} sensor(s)"
-                ),
-                severity="critical",
-                payload={
-                    "started_at": started_at,
-                    "hold_until": now + LEAK_HOLD_HOURS * 3600,
-                    "sensor_ids": [a.entity_id for a in alerts],
-                },
-                timestamp=now,
-            )
-
+            self._record_hold(cluster_id, started_at, alerts)
         return alerts
+
+    def _check_sensor(self, cluster_id: int, sensor: Sensor, started_at: int) -> Alert | None:
+        """Act on one sensor's verdict: raise (confirmed), release (settled) or nothing (inconclusive)."""
+        verdict = self._evaluate_sensor(sensor, started_at)
+        if verdict is None:
+            logger.debug(
+                "Leak check inconclusive — cluster %d, sensor %d: not enough readings around %d",
+                cluster_id,
+                sensor.id,
+                started_at,
+            )
+            return None
+        reason, evidence = verdict
+        if reason is None:
+            self._clear_sensor(cluster_id, sensor)
+            return None
+        return self._raise_for_sensor(cluster_id, sensor, started_at, reason, evidence)
+
+    def _record_hold(self, cluster_id: int, started_at: int, alerts: list[Alert]) -> None:
+        """Write the ``leak_hold`` activity row that explains why automatic irrigation is held."""
+        now = int(time.time())
+        self._repo.add_activity_event(
+            source=SOURCE_LEAK,
+            entity_type=ENTITY_CLUSTER,
+            entity_id=cluster_id,
+            code="leak_hold",
+            message=(
+                f"automatic irrigation held for {LEAK_HOLD_HOURS}h: "
+                f"possible leak or stuck valve on {len(alerts)} sensor(s)"
+            ),
+            severity="critical",
+            payload={
+                "started_at": started_at,
+                "hold_until": now + LEAK_HOLD_HOURS * SECONDS_PER_HOUR,
+                "sensor_ids": [a.entity_id for a in alerts],
+            },
+            timestamp=now,
+        )
 
     # ── Detection ─────────────────────────────────────────────────────────
 
-    def _evaluate_sensor(self, sensor: Sensor, started_at: int) -> tuple[str | None, dict] | None:
+    def _evaluate_sensor(self, sensor: Sensor, started_at: int) -> tuple[str | None, dict[str, Any]] | None:
         """Judge one sensor's behaviour around an irrigation.
 
         Args:
@@ -146,21 +152,11 @@ class LeakDetectionService:
             ``(reason, evidence)`` where ``reason`` is ``None`` for a settled
             sensor or a short human string naming the rule that fired.
         """
-        before_rows, after_rows = self._repo.get_readings_around(
-            sensor.id,
-            started_at,
-            before_seconds=LEAK_BEFORE_WINDOW_SECONDS,
-            after_seconds=LEAK_AFTER_WINDOW_SECONDS,
-        )
-        before_readings, after_readings = clean_readings_around(before_rows, after_rows)
-
-        after = [r.soil_moisture for r in after_readings if r.soil_moisture is not None]
-        before = [r.soil_moisture for r in before_readings if r.soil_moisture is not None]
-
+        before, after = self._soil_series(sensor, started_at)
         if len(after) < LEAK_MIN_AFTER_SAMPLES:
             return None
 
-        evidence: dict = {
+        evidence: dict[str, Any] = {
             "latest_moisture": after[-1],
             "peak_after": max(after),
             "after_samples": len(after),
@@ -181,7 +177,28 @@ class LeakDetectionService:
         # release a hold raised by an earlier, better-fed check either.
         if len(before) < LEAK_MIN_BEFORE_SAMPLES:
             return None
+        return self._never_settled_reason(before, after, evidence), evidence
 
+    def _soil_series(self, sensor: Sensor, started_at: int) -> tuple[list[float], list[float]]:
+        """The sensor's cleaned soil values before and after ``started_at`` (oldest first)."""
+        before_rows, after_rows = self._repo.get_readings_around(
+            sensor.id,
+            started_at,
+            before_seconds=LEAK_BEFORE_WINDOW_SECONDS,
+            after_seconds=LEAK_AFTER_WINDOW_SECONDS,
+        )
+        before_readings, after_readings = clean_readings_around(before_rows, after_rows)
+
+        after = [r.soil_moisture for r in after_readings if r.soil_moisture is not None]
+        before = [r.soil_moisture for r in before_readings if r.soil_moisture is not None]
+        return before, after
+
+    @staticmethod
+    def _never_settled_reason(before: list[float], after: list[float], evidence: dict[str, Any]) -> str | None:
+        """Rule 2: still at its peak, climbed across the window and far above baseline.
+
+        Records ``baseline`` (and, when the rule fires, the two rises) in ``evidence``.
+        """
         baseline = statistics.median(before)
         evidence["baseline"] = baseline
         first_after, last_after, peak_after = after[0], after[-1], max(after)
@@ -193,13 +210,14 @@ class LeakDetectionService:
         if still_climbing and rose_through_window and far_above_baseline:
             evidence["rise_over_baseline"] = last_after - baseline
             evidence["rise_in_window"] = last_after - first_after
-            return "still rising after irrigation", evidence
-
-        return None, evidence
+            return "still rising after irrigation"
+        return None
 
     # ── Alert lifecycle ───────────────────────────────────────────────────
 
-    def _raise_for_sensor(self, cluster_id: int, sensor: Sensor, started_at: int, reason: str, evidence: dict) -> Alert:
+    def _raise_for_sensor(
+        self, cluster_id: int, sensor: Sensor, started_at: int, reason: str, evidence: dict[str, Any]
+    ) -> Alert:
         """Raise (or refresh) the critical alert that holds the cluster."""
         latest = evidence["latest_moisture"]
         message = f"{sensor.name}: soil moisture {reason} (latest={latest:.1f}%)"

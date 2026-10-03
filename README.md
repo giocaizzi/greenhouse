@@ -88,8 +88,7 @@ cp .env.example .env
 | `IRRIGATION_AUTH_ENABLED` | No | Set to `false` to disable API/Web auth in local dev. Default: `true`. |
 | `IRRIGATION_DB_URL` | No | SQLite URL (default: `sqlite:///data/irrigation.db`) |
 | `IRRIGATION_SERVER_URL` | No | CLI server URL (default: `http://localhost:8000`) |
-| `IRRIGATION_CHECK_CRON_HOURS` | No | Cron `hour` field for the `check_all` job, e.g. `*`, `0,6,12,18`, `*/3`, `6-20/2` (default: `*` = hourly at :00). Validated at startup; an invalid expression stops the server with an error naming the variable. When set (even to `*`) it always overrides `IRRIGATION_CHECK_INTERVAL_HOURS`. |
-| `IRRIGATION_CHECK_INTERVAL_HOURS` | No | **Deprecated.** Used only when `IRRIGATION_CHECK_CRON_HOURS` is unset; translated to `*/N`, so N must be 1–23 and divide 24 (1, 2, 3, 4, 6, 8, 12) — anything else stops the server with a suggested `IRRIGATION_CHECK_CRON_HOURS` value. |
+| `IRRIGATION_CHECK_CRON_HOURS` | No | Cron `hour` field for the `check_all` job, e.g. `*`, `0,6,12,18`, `*/3`, `6-20/2` (default: `*` = hourly at :00). Validated at startup; an invalid expression stops the server with an error naming the variable. Replaces the removed `IRRIGATION_CHECK_INTERVAL_HOURS` (use `*/N`). |
 | `IRRIGATION_SYNC_INTERVAL_MINUTES` | No | Minutes between Tuya Cloud sensor syncs (default: `180`). Must be > 0. |
 
 ### Usage

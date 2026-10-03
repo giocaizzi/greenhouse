@@ -2353,13 +2353,7 @@ add(
             "    if paused:\n        pass",
             "pause lost on timezone reschedule",
         ),
-        ("08", '    return f"*/{n}"', '    return f"0/{n}"', "legacy interval translation"),
-        (
-            "09",
-            "    if settings.check_cron_hours_explicit:",
-            "    if not settings.check_cron_hours_explicit:",
-            "explicit cron precedence inverted",
-        ),
+        # 08/09 targeted the IRRIGATION_CHECK_INTERVAL_HOURS shim, removed by OD3.
         (
             "10",
             "        sync_svc.sync_all_sensors(hours=6)",
@@ -2464,8 +2458,8 @@ add(
         ),
         (
             "04",
-            '            triggered_by="manual" if force else "auto",',
-            '            triggered_by="auto",',
+            '            triggered_by=TRIGGERED_BY_MANUAL if force else TRIGGERED_BY_AUTO,',
+            '            triggered_by=TRIGGERED_BY_AUTO,',
             "force no longer logs manual trigger",
         ),
         (
@@ -2503,8 +2497,8 @@ add(
         ),
         (
             "10",
-            '            action="start" if success else "attempted",',
-            '            action="start",',
+            '            action=EVENT_ACTION_START if success else EVENT_ACTION_ATTEMPTED,',
+            '            action=EVENT_ACTION_START,',
             "failed start recorded as start",
         ),
         (
@@ -2716,8 +2710,8 @@ add(
         ),
         (
             "10",
-            "            if reason is None:\n                self._clear_sensor(cluster_id, sensor)\n                continue",
-            "            if reason is None:\n                continue",
+            "        if reason is None:\n            self._clear_sensor(cluster_id, sensor)\n            return None",
+            "        if reason is None:\n            return None",
             "settled sensor no longer releases the hold",
         ),
         (
@@ -2740,14 +2734,14 @@ add(
         ),
         (
             "14",
-            '                    "hold_until": now + LEAK_HOLD_HOURS * 3600,',
-            '                    "hold_until": now + LEAK_HOLD_HOURS * 60,',
+            '                "hold_until": now + LEAK_HOLD_HOURS * SECONDS_PER_HOUR,',
+            '                "hold_until": now + LEAK_HOLD_HOURS * 60,',
             "hold_until in minutes",
         ),
         (
             "15",
-            "        if alerts:\n            now = int(time.time())",
-            "        if alerts is not None:\n            now = int(time.time())",
+            "        if alerts:\n            self._record_hold(cluster_id, started_at, alerts)",
+            "        if alerts is not None:\n            self._record_hold(cluster_id, started_at, alerts)",
             "leak_hold activity written even with no findings",
         ),
         (
@@ -2778,7 +2772,7 @@ add(
         ),
         (
             "03",
-            '        minutes_used = sum(e.duration_minutes or 0 for e in recent if e.action == "start")',
+            '        minutes_used = sum(e.duration_minutes or 0 for e in recent if e.action == EVENT_ACTION_START)',
             "        minutes_used = sum(e.duration_minutes or 0 for e in recent)",
             "daily cap counts non-start events",
         ),
@@ -2796,7 +2790,7 @@ add(
         ),
         (
             "06",
-            '    if minutes:\n        schedule_pump_watcher(irrigator.id, minutes, started_at, triggered_by="manual")',
+            '    if minutes:\n        schedule_pump_watcher(irrigator.id, minutes, started_at, triggered_by=TRIGGERED_BY_MANUAL)',
             "    if minutes:\n        schedule_pump_watcher(irrigator.id, minutes, started_at)",
             "manual watcher marked auto (stopped on shutdown)",
         ),
@@ -2841,8 +2835,8 @@ add(
         ),
         (
             "02",
-            "                    sync_single_sensor(self._repo, self._cloud, sensor, hours=6)",
-            "                    sync_single_sensor(self._repo, self._cloud, sensor, hours=24)",
+            "                    sync_single_sensor(self._repo, self._gateway, sensor, hours=6)",
+            "                    sync_single_sensor(self._repo, self._gateway, sensor, hours=24)",
             "freshness sync window 6h -> 24h",
         ),
         (
@@ -2859,7 +2853,7 @@ add(
         ),
         (
             "05",
-            "            self._repo.session.flush()\n",
+            "            self._repo.flush()\n",
             "",
             "no flush after freshness sync",
             0,
@@ -2874,8 +2868,8 @@ add(
         ),
         (
             "07",
-            "        if stale and self._cloud is not None:\n            for sensor in stale:",
-            "        if self._cloud is not None:\n            for sensor in sensors:",
+            "        if stale and self._gateway is not None:\n            for sensor in stale:",
+            "        if self._gateway is not None:\n            for sensor in sensors:",
             "every sensor force-synced (not only stale)",
         ),
         (
@@ -3021,7 +3015,7 @@ add(
         ),
         (
             "11",
-            '            self._repo.session.commit()\n        except Exception:\n            logger.exception("Failed to commit pump dry-run',
+            '            self._repo.commit()\n        except Exception:\n            logger.exception("Failed to commit pump dry-run',
             '            pass\n        except Exception:\n            logger.exception("Failed to commit pump dry-run',
             "trip side effects not committed",
         ),
@@ -3499,7 +3493,7 @@ add(
             "        self.http = httpx.Client(base_url=base_url, timeout=10.0, headers=headers, **kwargs)",
             "client timeout 30 -> 10 s",
         ),
-        ("06", "        if resp.status_code >= 400:", "        if resp.status_code > 400:", "400 not treated as error"),
+        ("06", "        if resp.status_code >= HTTPStatus.BAD_REQUEST:", "        if resp.status_code > HTTPStatus.BAD_REQUEST:", "400 not treated as error"),
         (
             "07",
             '                detail = resp.json().get("detail", resp.text)',
@@ -3551,8 +3545,8 @@ add(
     [
         (
             "14",
-            '    server = ctx.obj or os.environ.get("IRRIGATION_SERVER_URL", "http://localhost:8000")',
-            '    server = os.environ.get("IRRIGATION_SERVER_URL") or ctx.obj or "http://localhost:8000"',
+            '    return ctx.obj or os.environ.get("IRRIGATION_SERVER_URL", DEFAULT_SERVER_URL)',
+            '    return os.environ.get("IRRIGATION_SERVER_URL") or ctx.obj or DEFAULT_SERVER_URL',
             "env URL beats --server",
         ),
         (
@@ -3724,8 +3718,8 @@ add(
         ),
         (
             "12",
-            '    if mask == 127:\n        return "every day"',
-            '    if mask == 126:\n        return "every day"',
+            '    if mask == ALL_WEEKDAYS:\n        return "every day"',
+            '    if mask == ALL_WEEKDAYS - 1:\n        return "every day"',
             "every-day mask",
         ),
         ("13", '    letters = "MTWTFSS"', '    letters = "SMTWTFS"', "weekday letters start Sunday"),
@@ -3877,8 +3871,8 @@ add(
     [
         (
             "31",
-            "            if e.status_code == 401:\n                self.prompt_login()",
-            "            if e.status_code == 403:\n                self.prompt_login()",
+            "            if e.status_code == HTTPStatus.UNAUTHORIZED:\n                self.prompt_login()",
+            "            if e.status_code == HTTPStatus.FORBIDDEN:\n                self.prompt_login()",
             "401 no longer prompts login",
         ),
         ("32", "            elif not quiet:\n", "            elif True:\n", "quiet flag ignored"),

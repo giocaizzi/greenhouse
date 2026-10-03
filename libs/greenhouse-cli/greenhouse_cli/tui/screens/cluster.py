@@ -17,6 +17,7 @@ from textual.binding import Binding
 from textual.containers import Horizontal, HorizontalScroll, Vertical, VerticalScroll
 from textual.widgets import DataTable, Footer, Header, Static, TabbedContent, TabPane
 
+from greenhouse_cli.constants import ALL_WEEKDAYS
 from greenhouse_cli.tui import formatting as fmt
 from greenhouse_cli.tui import render, resources
 from greenhouse_cli.tui.model import ClusterSummary, summarize
@@ -416,7 +417,11 @@ class ClusterScreen(DataScreen):
         self.form_then(
             "Add irrigation window",
             resources.window_fields(),
-            lambda v: lambda c: c.add_window(cid, v["start_hour"], v["end_hour"], v["weekday_mask"] or 127, v["label"]),
+            lambda v: (
+                lambda c: c.add_window(
+                    cid, v["start_hour"], v["end_hour"], v["weekday_mask"] or ALL_WEEKDAYS, v["label"]
+                )
+            ),
             "Window added",
             "Add",
         )

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from rich.text import Text
 from textual.app import ComposeResult
 from textual.binding import Binding
@@ -29,7 +31,7 @@ class AlertsScreen(DataScreen):
     def __init__(self) -> None:
         super().__init__()
         self.status_filter: str | None = "open"
-        self._alerts: dict[int, dict] = {}
+        self._alerts: dict[int, dict[str, Any]] = {}
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
@@ -52,7 +54,7 @@ class AlertsScreen(DataScreen):
             "   [dim]f: filter  k: acknowledge  v: resolve  y: re-scan[/dim]"
         )
         table = self.query_one(DataTable)
-        rows: list = []
+        rows: list[Any] = []
         self._alerts = {a["id"]: a for a in data.get("items", [])}
         for a in data.get("items", []):
             rows.append(

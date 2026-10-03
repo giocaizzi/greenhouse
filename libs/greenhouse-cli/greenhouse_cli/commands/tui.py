@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-import os
 from typing import Annotated
 
 import typer
+
+from greenhouse_cli.commands._helpers import server_url
 
 
 def register(app: typer.Typer) -> None:
@@ -32,5 +33,4 @@ def register(app: typer.Typer) -> None:
         """
         from greenhouse_cli.tui import run
 
-        server = ctx.obj or os.environ.get("IRRIGATION_SERVER_URL", "http://localhost:8000")
-        run(server, refresh_seconds=refresh, animations=not no_animation)
+        run(server_url(ctx), refresh_seconds=refresh, animations=not no_animation)

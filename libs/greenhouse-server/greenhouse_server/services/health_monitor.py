@@ -27,7 +27,6 @@ import logging
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
 
 from greenhouse_core.constants import (
     BATTERY_CRITICAL_PCT,
@@ -40,28 +39,12 @@ from greenhouse_core.constants import (
 from greenhouse_core.devices import DeviceRegistry
 from greenhouse_core.devices.health import DeviceHealthState, HealthAlarm
 from greenhouse_core.logic.decision import TriggerCode
-from greenhouse_core.models import ENTITY_IRRIGATOR, ENTITY_SENSOR, Irrigator, Sensor
+from greenhouse_core.models import ENTITY_IRRIGATOR, ENTITY_SENSOR, SOURCE_HEALTH, Irrigator, Sensor
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.services.alerts import notify_if_new_alert
 from greenhouse_server.services.notify import NtfyClient
 
-if TYPE_CHECKING:
-    from sqlalchemy import Select
-
-    from greenhouse_core.models import Alert
-
 logger = logging.getLogger(__name__)
-
-# Alert source for every health-derived alert. Distinct from
-# ``SOURCE_PUMP`` so the pump-watcher's fast-path alarms (still routed
-# through the monitor) collapse onto the same dedup_key scheme as the
-# slow-path monitor, while the audit log can still tell who raised them.
-SOURCE_HEALTH = "health"
-
-# Legacy alert code raised by the original PumpWatcher implementation.
-# Carried here so :meth:`migrate_legacy_pump_alerts` can resolve open rows
-# on startup once the new ``health:`` dedup_key takes over.
-LEGACY_PUMP_DRY_RUN_CODE = "pump_dry_run"
 
 
 HEALTH_ALARM_TO_TRIGGER: dict[HealthAlarm, TriggerCode] = {
@@ -177,7 +160,7 @@ class DeviceHealthMonitor:
             except Exception:
                 logger.exception("Health poll failed for sensor %d", sensor.id)
 
-    # ── Recording (shared with PumpWatcher) ───────────────────────────────
+    # ── Recording (shared with PumpWatcherService) ────────────────────────
 
     def record(
         self,
@@ -265,7 +248,7 @@ class DeviceHealthMonitor:
     def _raise_if_not_open(self, alarm: HealthAlarm, sensor: Sensor, *, cluster_id: int | None) -> None:
         """Raise a back-filled sensor alarm unless its alert is already open (no duplicate on restart)."""
         key = _dedup_key(ENTITY_SENSOR, sensor.id, alarm)
-        if not self._repo.session.scalar(self._open_alert_stmt(key)):
+        if not self._repo.get_open_alert_by_key(key):
             self._raise_health_alert(
                 entity_type=ENTITY_SENSOR,
                 entity_id=sensor.id,
@@ -274,27 +257,6 @@ class DeviceHealthMonitor:
                 label=sensor.name,
                 cluster_id=cluster_id,
             )
-
-    # ── Legacy alias migration (startup hook) ─────────────────────────────
-
-    def migrate_legacy_pump_alerts(self) -> int:
-        """Resolve open ``pump_dry_run`` alerts so the new ``health:`` key takes over.
-
-        PR 1.5 unifies the dedup_key for pump dry-run from
-        ``pump::pump_dry_run::…`` to ``health:irrigator:{id}:no_water``.
-        Without this migration a restart would surface both rows in the
-        inbox until the next live trip resolves the legacy one.
-        """
-        from sqlalchemy import select
-
-        from greenhouse_core.models import Alert
-
-        count = 0
-        stmt = select(Alert).where(Alert.code == LEGACY_PUMP_DRY_RUN_CODE, Alert.status != "resolved")
-        for alert in self._repo.session.scalars(stmt):
-            self._repo.resolve_alert(alert.id)
-            count += 1
-        return count
 
     # ── Internals ─────────────────────────────────────────────────────────
 
@@ -361,23 +323,13 @@ class DeviceHealthMonitor:
             logger.exception("Failed to raise health alert %s for %s %d", alarm.value, entity_type, entity_id)
 
     def _resolve_health_alert(self, *, entity_type: str, entity_id: int, alarm: HealthAlarm) -> None:
-        key = _dedup_key(entity_type, entity_id, alarm)
-        stmt = self._open_alert_stmt(key)
-        existing = self._repo.session.scalar(stmt)
+        existing = self._repo.get_open_alert_by_key(_dedup_key(entity_type, entity_id, alarm))
         if existing is None:
             return
         try:
             self._repo.resolve_alert(existing.id)
         except Exception:
             logger.exception("Failed to resolve health alert %s for %s %d", alarm.value, entity_type, entity_id)
-
-    @staticmethod
-    def _open_alert_stmt(dedup_key: str) -> Select[tuple[Alert]]:
-        from sqlalchemy import select
-
-        from greenhouse_core.models import Alert
-
-        return select(Alert).where(Alert.dedup_key == dedup_key, Alert.status != "resolved")
 
     @staticmethod
     def _alarm_message(alarm: HealthAlarm, label: str, state: DeviceHealthState) -> str:
@@ -428,6 +380,5 @@ def _is_low_battery_state(raw: object) -> bool:
 __all__ = [
     "DeviceHealthMonitor",
     "HEALTH_ALARM_TO_TRIGGER",
-    "LEGACY_PUMP_DRY_RUN_CODE",
     "SOURCE_HEALTH",
 ]

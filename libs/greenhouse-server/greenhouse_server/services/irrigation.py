@@ -24,10 +24,21 @@ from greenhouse_core.logic import IrrigationLogic
 from greenhouse_core.logic.cleaning import clean_readings_desc
 from greenhouse_core.logic.decision import Action, Severity
 from greenhouse_core.logic.plant_needs import moisture_target_range
-from greenhouse_core.models import ENTITY_CLUSTER, ENTITY_IRRIGATOR
+from greenhouse_core.models import (
+    ENTITY_CLUSTER,
+    ENTITY_IRRIGATOR,
+    EVENT_ACTION_ATTEMPTED,
+    EVENT_ACTION_START,
+    EVENT_ACTION_STOP,
+    SOURCE_IRRIGATION,
+    SOURCE_LEAK,
+    TRIGGERED_BY_AUTO,
+    TRIGGERED_BY_MANUAL,
+    TRIGGERED_BY_SHUTDOWN,
+)
 from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_core.repository import IrrigationRepository
-from greenhouse_server.services.alerts import SOURCE_LEAK, raise_alert, sync_cluster_alerts
+from greenhouse_server.services.alerts import raise_alert, sync_cluster_alerts
 from greenhouse_server.services.health_monitor import HEALTH_ALARM_TO_TRIGGER, DeviceHealthMonitor
 from greenhouse_server.services.maintenance import collect_learning_alerts, collect_maintenance_alerts
 from greenhouse_server.services.notify import NtfyClient, maybe_notify
@@ -36,8 +47,6 @@ from greenhouse_server.services.weather import WeatherClient
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Sequence
-
-    from sqlalchemy.orm import Session
 
     from greenhouse_core.devices import AbstractIrrigatorAdapter
     from greenhouse_core.logic.cleaning import CleanedReading
@@ -69,8 +78,8 @@ def _stop_auto_cycle(repo: IrrigationRepository, registry: DeviceRegistry, irrig
         )
         repo.add_irrigation_event(
             irrigator_id=irrigator.id,
-            action="stop",
-            triggered_by="shutdown",
+            action=EVENT_ACTION_STOP,
+            triggered_by=TRIGGERED_BY_SHUTDOWN,
             notes="server shutdown: dry-run watcher interrupted, auto cycle stopped",
             timestamp=int(_time.time()),
         )
@@ -135,13 +144,13 @@ def handle_watcher_interrupted(
         True if the pump was stopped successfully, False otherwise.
     """
     stop_ok = False
-    if triggered_by == "auto":
+    if triggered_by == TRIGGERED_BY_AUTO:
         stop_ok, message = _stop_auto_cycle(repo, registry, irrigator)
     else:
         message = _left_running_message(irrigator, triggered_by)
     try:
         repo.add_activity_event(
-            source="irrigation",
+            source=SOURCE_IRRIGATION,
             entity_type=ENTITY_IRRIGATOR,
             entity_id=irrigator.id,
             code=WATCHER_SHUTDOWN_ACTIVITY_CODE,
@@ -212,7 +221,7 @@ def _run_pump_watcher(
 
 
 def schedule_pump_watcher(
-    irrigator_id: int, duration_minutes: int, started_at: int, *, triggered_by: str = "auto"
+    irrigator_id: int, duration_minutes: int, started_at: int, *, triggered_by: str = TRIGGERED_BY_AUTO
 ) -> bool:
     """Schedule a dry-run watcher to run for the duration of an irrigation.
 
@@ -320,6 +329,9 @@ def _run_leak_check(cluster_id: int, started_at: int) -> None:
 
     if _app is None:
         return
+    # Own scaffolding, not services._session.job_session: the "already done" early return
+    # leaves its read-only transaction to close() (a failing ROLLBACK there escapes the job),
+    # which the context manager cannot express without changing that path.
     session = _app.state.session_factory()
     try:
         repo = IrrigationRepository(session)
@@ -391,7 +403,7 @@ def _rearm_from_events(repo: IrrigationRepository, now: int) -> "Iterator[None]"
     """
     for irrigator in repo.list_all_irrigators():
         for event in repo.get_recent_events(irrigator.id, hours=LEAK_HOLD_HOURS):
-            if event.action != "start" or event.triggered_by != "auto":
+            if event.action != EVENT_ACTION_START or event.triggered_by != TRIGGERED_BY_AUTO:
                 continue
             if _leak_check_done(repo, irrigator.cluster_id, event.timestamp):
                 continue
@@ -644,14 +656,14 @@ class IrrigationService:
             cluster_id,
             current_temp=temp,
             persist=True,
-            triggered_by="manual" if force else "auto",
+            triggered_by=TRIGGERED_BY_MANUAL if force else TRIGGERED_BY_AUTO,
             bypass_quiet_hours=force,
         )
 
     def _log_decision_skip(self, cluster_id: int, decision: "IrrigationDecision") -> None:
         """Record an automatic skip in the activity log (no payload, unlike the health-gate skip)."""
         self._repo.add_activity_event(
-            source="irrigation",
+            source=SOURCE_IRRIGATION,
             entity_type=ENTITY_CLUSTER,
             entity_id=cluster_id,
             code="decision_skip",
@@ -683,9 +695,9 @@ class IrrigationService:
         started_at = int(_time.time())
         self._repo.add_irrigation_event(
             irrigator_id=act.irrigator.id,
-            action="start" if success else "attempted",
+            action=EVENT_ACTION_START if success else EVENT_ACTION_ATTEMPTED,
             duration_minutes=duration,
-            triggered_by="auto",
+            triggered_by=TRIGGERED_BY_AUTO,
             timestamp=started_at,
             notes=_event_notes(act, soil_note),
         )
@@ -704,7 +716,7 @@ class IrrigationService:
         """Log the run, flag the decision as actuated, and arm the leak check and dry-run watcher."""
         duration = act.decision.duration_minutes
         self._repo.add_activity_event(
-            source="irrigation",
+            source=SOURCE_IRRIGATION,
             entity_type=ENTITY_CLUSTER,
             entity_id=act.cluster_id,
             code="irrigated",
@@ -729,7 +741,7 @@ class IrrigationService:
             self._repo.get_preferences(),
             "auto",
             lambda: self._notifier.notify_irrigation(  # type: ignore[union-attr]  # maybe_notify returns first when notifier is None
-                triggered_by="auto",
+                triggered_by=TRIGGERED_BY_AUTO,
                 irrigator_name=act.irrigator.name,
                 duration_minutes=duration,
                 detail=f"confidence={act.decision.confidence:.0%}",
@@ -739,7 +751,7 @@ class IrrigationService:
     def _on_start_failed(self, act: _Actuation, output: str) -> None:
         """Log the failed start and raise the actuation-failed alert."""
         self._repo.add_activity_event(
-            source="irrigation",
+            source=SOURCE_IRRIGATION,
             entity_type=ENTITY_CLUSTER,
             entity_id=act.cluster_id,
             code="actuation_failed",
@@ -748,7 +760,7 @@ class IrrigationService:
         )
         raise_alert(
             self._repo,
-            source="irrigation",
+            source=SOURCE_IRRIGATION,
             code="actuation_failed",
             title="Irrigation Actuation Failed",
             message=f"Irrigator '{act.irrigator.name}' failed to start: {output}",
@@ -813,7 +825,7 @@ class IrrigationService:
                 )
                 decision.action = Action.SKIP
                 self._repo.add_activity_event(
-                    source="irrigation",
+                    source=SOURCE_IRRIGATION,
                     entity_type=ENTITY_CLUSTER,
                     entity_id=cluster_id,
                     code="decision_skip",
@@ -918,13 +930,12 @@ class IrrigationService:
         clusters = [(c.id, c.name) for c in self._repo.list_clusters()]
         results: list[CheckResult] = []
         for cluster_id, cluster_name in clusters:
-            session = self._repo.session
             try:
                 result = self.check_cluster(cluster_id)
                 self._resolve_stale_check_alert(cluster_id)
-                session.commit()
+                self._repo.commit()
             except Exception as e:
-                result = self._record_check_failure(session, cluster_id, cluster_name, e)
+                result = self._record_check_failure(cluster_id, cluster_name, e)
             results.append(result)
         return results
 
@@ -934,27 +945,25 @@ class IrrigationService:
         if stale is not None:
             self._repo.resolve_alert(stale.id)
 
-    def _record_check_failure(
-        self, session: "Session", cluster_id: int, cluster_name: str, exc: Exception
-    ) -> CheckResult:
+    def _record_check_failure(self, cluster_id: int, cluster_name: str, exc: Exception) -> CheckResult:
         """Roll back the crashed cluster alone, log it, raise ``check_failed`` and commit.
 
         Called from inside the ``except`` block, so ``logger.exception`` still sees the exception.
         """
-        session.rollback()
+        self._repo.rollback()
         logger.exception("Check failed for cluster %s", cluster_id)
         self._repo.upsert_alert(
             f"{CHECK_FAILED_ALERT_CODE}:cluster:{cluster_id}",
-            "irrigation",
+            SOURCE_IRRIGATION,
             CHECK_FAILED_ALERT_CODE,
             f"Check failed: {cluster_name}",
             f"The scheduled check crashed and was skipped for this cluster: {exc!r}",
             severity="error",
-            entity_type="cluster",
+            entity_type=ENTITY_CLUSTER,
             entity_id=cluster_id,
             cluster_id=cluster_id,
         )
-        session.commit()
+        self._repo.commit()
         return {
             "cluster_id": cluster_id,
             "cluster_name": cluster_name,

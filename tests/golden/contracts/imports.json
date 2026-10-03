@@ -137,7 +137,6 @@
    "create_session_factory",
    "head_revision",
    "init_db",
-   "log",
    "logging",
    "sessionmaker"
   ]
@@ -452,7 +451,6 @@
   "public": [
    "IrrigationRepository",
    "defaultdict",
-   "format_duration",
    "get_irrigation_stats",
    "time"
   ]
@@ -607,8 +605,7 @@
    "Field",
    "Settings",
    "SettingsConfigDict",
-   "field_validator",
-   "model_validator"
+   "field_validator"
   ]
  },
  "greenhouse_server.deps": {

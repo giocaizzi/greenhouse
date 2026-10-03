@@ -280,6 +280,7 @@ class PixelSprite:
 
     @property
     def width(self) -> int:
+        """Width in terminal columns (one pixel per column)."""
         return max((len(r) for r in self.rows), default=0)
 
     @property

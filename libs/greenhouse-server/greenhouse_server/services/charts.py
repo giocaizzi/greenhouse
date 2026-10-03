@@ -7,10 +7,14 @@ from collections import defaultdict
 from datetime import UTC, datetime
 from typing import Any, Literal
 
-from sqlalchemy import select
-
-from greenhouse_core.constants import DEFAULT_SOIL_MOISTURE_MAX, DEFAULT_SOIL_MOISTURE_MIN
-from greenhouse_core.models import IrrigationEvent, Plant, Sensor
+from greenhouse_core.constants import (
+    DEFAULT_SOIL_MOISTURE_MAX,
+    DEFAULT_SOIL_MOISTURE_MIN,
+    SECONDS_PER_DAY,
+    SECONDS_PER_HOUR,
+)
+from greenhouse_core.logic.plant_needs import parse_moisture_target
+from greenhouse_core.models import Plant, Sensor
 from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_core.schemas import (
@@ -25,14 +29,11 @@ Metric = Literal["soil_moisture", "temperature", "light", "env_humidity"]
 ALLOWED_HOURS = {24, 168, 720}
 
 
-def _parse_range(target: str | None) -> tuple[float | None, float | None]:
+def _water_needs_band(target: str | None) -> tuple[float, float] | None:
+    """The water-needs soil band via the shared ``parse_moisture_target`` (D10); None without a ``lo-hi`` target."""
     if not target or "-" not in target:
-        return (None, None)
-    try:
-        lo, hi = target.split("-", 1)
-        return (float(lo), float(hi))
-    except (ValueError, TypeError):
-        return (None, None)
+        return None
+    return parse_moisture_target(target)
 
 
 def _metric_field(metric: Metric) -> str:
@@ -47,6 +48,7 @@ def build_plant_chart_payload(
     hours: int,
     metric: Metric,
 ) -> dict[str, Any]:
+    """One plant's chart: per-sensor series, cluster irrigation events, target band; ``{}`` if no such plant."""
     plant: Plant | None = repo.get_plant(plant_id)
     if plant is None:
         return {}
@@ -75,6 +77,7 @@ def build_cluster_chart_payload(
     hours: int,
     metric: Metric,
 ) -> dict[str, Any]:
+    """A cluster's chart: one series per sensor, its irrigation events and the cluster-wide band."""
     cluster = repo.get_cluster(cluster_id)
     if cluster is None:
         return {}
@@ -99,11 +102,12 @@ def _build_plant_sensor_datasets(
     hours: int,
     metric: Metric,
 ) -> list[dict[str, Any]]:
-    """Assignment-aware variant: readings are filtered to windows when the
-    sensor was actually linked to this plant. One dataset per sensor that ever
-    served this plant within the lookback window."""
+    """Assignment-aware plant series: one dataset per sensor that served the plant in the window.
+
+    Readings are filtered to the periods when each sensor was actually linked to this plant.
+    """
     field = _metric_field(metric)
-    since = int(time.time()) - hours * 3600
+    since = int(time.time()) - hours * SECONDS_PER_HOUR
     readings = repo.readings_for_plant(plant_id, since_ts=since)
     by_sensor: dict[int, list[tuple[int, float]]] = defaultdict(list)
     for r in readings:
@@ -114,7 +118,7 @@ def _build_plant_sensor_datasets(
 
     sensor_names: dict[int, str] = {}
     if by_sensor:
-        for s in repo.session.scalars(select(Sensor).where(Sensor.id.in_(by_sensor.keys()))):
+        for s in repo.list_sensors_by_ids(by_sensor.keys()):
             sensor_names[s.id] = s.name
 
     datasets = []
@@ -156,7 +160,7 @@ def _build_sensor_datasets(
 
 def _build_event_list(repo: IrrigationRepository, cluster_id: int, hours: int) -> list[dict[str, Any]]:
     irrigator = repo.get_irrigator_for_cluster(cluster_id)
-    cutoff = int(time.time()) - (hours * 3600)
+    cutoff = int(time.time()) - (hours * SECONDS_PER_HOUR)
     events: list[dict[str, Any]] = []
     if irrigator is not None:
         for e in repo.get_recent_events(irrigator.id, hours=hours):
@@ -177,9 +181,9 @@ def _threshold_for_plant(plant: Plant, plant_db: PlantDatabase, metric: Metric) 
     if metric == "soil_moisture":
         if plant.water_needs:
             info = plant_db.get_water_needs_info(plant.water_needs)
-            lo, hi = _parse_range(info.get("soil_moisture_target"))
-            if lo is not None:
-                return {"min": lo, "max": hi, "source": f"water_needs:{plant.water_needs}"}
+            band = _water_needs_band(info.get("soil_moisture_target"))
+            if band is not None:
+                return {"min": band[0], "max": band[1], "source": f"water_needs:{plant.water_needs}"}
         return {
             "min": float(DEFAULT_SOIL_MOISTURE_MIN),
             "max": float(DEFAULT_SOIL_MOISTURE_MAX),
@@ -258,7 +262,7 @@ def build_overlay_payload(
         return None
 
     sensors = repo.get_sensors_in_cluster(cluster_id)
-    cutoff = int(time.time()) - hours * 3600
+    cutoff = int(time.time()) - hours * SECONDS_PER_HOUR
 
     soil_buckets, humidity_buckets, light_buckets = _bucket_readings(repo, sensors, hours)
     datasets = _overlay_datasets(soil_buckets, humidity_buckets, light_buckets, cutoff)
@@ -337,18 +341,14 @@ def build_heatmap_payload(
     if cluster is None:
         return None
 
-    cutoff = int(time.time()) - days * 86400
+    cutoff = int(time.time()) - days * SECONDS_PER_DAY
     irrigator = repo.get_irrigator_for_cluster(cluster_id)
 
     counts: dict[tuple[int, int], int] = defaultdict(int)
     minutes_map: dict[tuple[int, int], int] = defaultdict(int)
 
     if irrigator is not None:
-        events = repo.session.scalars(
-            select(IrrigationEvent).where(
-                IrrigationEvent.irrigator_id == irrigator.id, IrrigationEvent.timestamp >= cutoff
-            )
-        )
+        events = repo.list_events_since(irrigator.id, cutoff)
         for ev in events:
             dt = datetime.fromtimestamp(ev.timestamp, tz=UTC)
             key = (dt.weekday(), dt.hour)
@@ -378,7 +378,7 @@ def build_plant_health_timeline_payload(
     if plant is None:
         return None
 
-    cutoff = int(time.time()) - 90 * 86400
+    cutoff = int(time.time()) - 90 * SECONDS_PER_DAY
     # Assignment-aware: include only readings that belonged to this plant at
     # reading time. A sensor that was on this plant 30 days ago and is now on
     # a different one still contributes its 30-days-ago readings; readings

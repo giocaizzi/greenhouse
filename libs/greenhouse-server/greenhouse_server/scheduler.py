@@ -2,8 +2,7 @@
 
 import logging
 import threading
-from contextlib import contextmanager
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypedDict
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from apscheduler.jobstores.base import JobLookupError
@@ -20,12 +19,12 @@ from greenhouse_core.constants import (
 from greenhouse_core.devices import DeviceGateway
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.config import Settings
+from greenhouse_server.services._session import job_session as _job_session  # private: keeps the frozen dir() surface
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator
+    from collections.abc import Callable
 
     from apscheduler.job import Job
-    from sqlalchemy.orm import Session
     from starlette.requests import Request
 
     from greenhouse_core.devices import DeviceRegistry
@@ -134,33 +133,11 @@ def _resolve_zoneinfo(tz_name: str | None) -> ZoneInfo:
 
 
 def _resolve_check_cron_hours(settings: Settings) -> str:
-    """Pick the cron `hour` field, honoring the deprecated interval var.
+    """The cron ``hour`` field for ``check_all`` (``IRRIGATION_CHECK_CRON_HOURS``, validated by Settings).
 
-    Why a shim: the project switched check_all from APScheduler's `interval`
-    trigger to `cron` for predictable wall-clock fires. Operators with
-    `IRRIGATION_CHECK_INTERVAL_HOURS=N` already set in their .env shouldn't
-    silently lose their cadence — translate `N` to `*/N` cron syntax and
-    warn once. An explicitly set `IRRIGATION_CHECK_CRON_HOURS` always wins,
-    even when it is the default `*`. ``Settings`` has already rejected an `N`
-    that `*/N` can't express (see ``Settings._validate_legacy_check_interval``).
+    Kept as the one seam the registration reads (tests patch it by name).
     """
-    if settings.check_interval_hours is None:
-        return settings.check_cron_hours
-    if settings.check_cron_hours_explicit:
-        logger.warning(
-            "Both IRRIGATION_CHECK_CRON_HOURS and the deprecated IRRIGATION_CHECK_INTERVAL_HOURS "
-            "are set; using IRRIGATION_CHECK_CRON_HOURS=%r and ignoring the interval.",
-            settings.check_cron_hours,
-        )
-        return settings.check_cron_hours
-    n = settings.check_interval_hours
-    logger.warning(
-        "IRRIGATION_CHECK_INTERVAL_HOURS is deprecated; set "
-        "IRRIGATION_CHECK_CRON_HOURS instead. Translating value %d to '*/%d'.",
-        n,
-        n,
-    )
-    return f"*/{n}"
+    return settings.check_cron_hours
 
 
 def init_scheduler(app: FastAPI, settings: Settings, tz_name: str | None = None) -> None:
@@ -309,41 +286,19 @@ def _get_cloud() -> DeviceGateway | None:
     return getattr(_app.state, "device_gateway", None) if _app is not None else None
 
 
-@contextmanager
-def _job_session(app: FastAPI | None, failure_message: str) -> "Iterator[Session]":
-    """One background-job transaction: commit on success, roll back and log on failure, always close.
-
-    The session is opened before the ``try`` (as every job did inline), so a missing app or
-    ``session_factory`` still escapes the job instead of being logged. It yields the bare session:
-    each caller builds its repository inside the ``with`` body, so a failure there is logged and
-    swallowed exactly like the old inline ``try`` (a raise before a ``yield`` would surface as
-    ``RuntimeError("generator didn't yield")``). Callers pass the module ``_app`` they read at call
-    time — never a default captured at import.
-    """
-    session = app.state.session_factory()  # type: ignore[union-attr]  # None app escapes as AttributeError (pinned)
-    try:
-        yield session
-        session.commit()
-    except Exception:
-        session.rollback()
-        logger.exception(failure_message)
-    finally:
-        session.close()
-
-
 def _sync_job() -> None:
     """Background job: sync all sensor data."""
     from greenhouse_server.services.sync import SyncService
 
-    cloud = _get_cloud()
-    if cloud is None:
+    gateway = _get_cloud()
+    if gateway is None:
         logger.debug("Sync job skipped: no Tuya credentials")
         return
 
     registry = getattr(_app.state, "device_registry", None)  # type: ignore[union-attr]  # None _app escapes as AttributeError (pinned)
-    with _job_session(_app, "Sync job failed") as session:
+    with _job_session(_app, logger, "Sync job failed") as session:
         repo = IrrigationRepository(session)
-        sync_svc = SyncService(repo, registry, cloud)
+        sync_svc = SyncService(repo, registry, gateway)
         sync_svc.sync_all_sensors(hours=SYNC_JOB_BACKFILL_HOURS)
 
 
@@ -351,7 +306,7 @@ def _health_snapshot_job() -> None:
     """Background job: compute and persist daily plant health snapshots."""
     from greenhouse_server.services.health import PlantHealthService
 
-    with _job_session(_app, "Plant health snapshot job failed") as session:
+    with _job_session(_app, logger, "Plant health snapshot job failed") as session:
         from greenhouse_core.repository import IrrigationRepository
 
         repo = IrrigationRepository(session)
@@ -360,13 +315,13 @@ def _health_snapshot_job() -> None:
 
 
 def _build_irrigation_service(
-    app: FastAPI, repo: IrrigationRepository, registry: "DeviceRegistry | None", cloud: DeviceGateway | None
+    app: FastAPI, repo: IrrigationRepository, registry: "DeviceRegistry | None", gateway: DeviceGateway | None
 ) -> "IrrigationService":
     """Wire the check job's service on the job's own repo; the shared health monitor is re-bound to it first."""
     from greenhouse_server.services.irrigation import IrrigationService
     from greenhouse_server.services.sync import SyncService
 
-    sync_svc = SyncService(repo, registry, cloud)
+    sync_svc = SyncService(repo, registry, gateway)
     monitor = getattr(app.state, "health_monitor", None)
     if monitor is not None:
         monitor.bind_repo(repo)
@@ -388,19 +343,19 @@ def _check_job() -> None:
     from greenhouse_server.services.irrigation import IrrigationService  # noqa: F401
     from greenhouse_server.services.sync import SyncService  # noqa: F401
 
-    cloud = _get_cloud()
+    gateway = _get_cloud()
     registry = getattr(_app.state, "device_registry", None)  # type: ignore[union-attr]  # None _app escapes as AttributeError (pinned)
 
-    with _job_session(_app, "Check job failed") as session:
+    with _job_session(_app, logger, "Check job failed") as session:
         repo = IrrigationRepository(session)
-        _build_irrigation_service(_app, repo, registry, cloud).check_all_clusters()  # type: ignore[arg-type]  # non-None: _job_session already read _app.state
+        _build_irrigation_service(_app, repo, registry, gateway).check_all_clusters()  # type: ignore[arg-type]  # non-None: _job_session already read _app.state
 
 
 def _anomaly_job() -> None:
     """Background job: scan all sensors for staleness and drift anomalies."""
     from greenhouse_server.services.anomaly import SensorAnomalyService
 
-    with _job_session(_app, "Anomaly scan job failed") as session:
+    with _job_session(_app, logger, "Anomaly scan job failed") as session:
         repo = IrrigationRepository(session)
         SensorAnomalyService(repo, notifier=getattr(_app.state, "ntfy_notifier", None)).scan()  # type: ignore[union-attr]  # None _app escapes as AttributeError (pinned)
 
@@ -421,7 +376,7 @@ def _health_monitor_job() -> None:
         logger.debug("Health monitor job skipped: no monitor wired")
         return
 
-    with _job_session(_app, "Device health monitor job failed") as session:
+    with _job_session(_app, logger, "Device health monitor job failed") as session:
         repo = IrrigationRepository(session)
         monitor.bind_repo(repo)
         monitor.poll_all()
@@ -448,9 +403,6 @@ def init_health_monitor(app: FastAPI, settings: Settings) -> None:
         repo = IrrigationRepository(session)
         monitor = DeviceHealthMonitor(repo=repo, registry=registry, notifier=getattr(app.state, "ntfy_notifier", None))
         try:
-            migrated = monitor.migrate_legacy_pump_alerts()
-            if migrated:
-                logger.info("Migrated %d legacy pump_dry_run alerts to health: keys", migrated)
             monitor.backfill_from_history()
             session.commit()
         except Exception:
@@ -474,7 +426,18 @@ def _is_paused(job: "Job") -> bool:
     return hasattr(job, "next_run_time") and job.next_run_time is None
 
 
-def get_jobs() -> list[dict[str, Any]]:
+class JobInfo(TypedDict):
+    """One ``get_jobs`` row: a plain dict at runtime (``SchedulerJobResponse(**job)``, web jobs table)."""
+
+    id: str
+    name: str
+    trigger: str
+    next_run_time: str | None
+    paused: bool
+    core: bool
+
+
+def get_jobs() -> list[JobInfo]:
     """List all registered jobs.
 
     ``paused`` is True only for an explicitly paused job (only ``check_all``
@@ -484,7 +447,7 @@ def get_jobs() -> list[dict[str, Any]]:
     ``scheduler_running`` flag on ``/health`` to tell the two apart.
     """
     running = scheduler.running
-    jobs = []
+    jobs: list[JobInfo] = []
     for job in scheduler.get_jobs():
         next_run = getattr(job, "next_run_time", None) if running else None
         jobs.append(
@@ -533,6 +496,8 @@ def set_check_all_paused(repo: IrrigationRepository, paused: bool) -> bool:
     Works whether or not the scheduler is running: on a stopped scheduler the
     registered (pending) job is paused/resumed and the preference persisted,
     so it takes effect when the scheduler starts and survives restarts.
+    Commits because the live scheduler has already changed: the persisted
+    flag must match it before the caller returns.
 
     Args:
         repo: Repository whose session receives the preference write (committed here).
@@ -552,7 +517,7 @@ def set_check_all_paused(repo: IrrigationRepository, paused: bool) -> bool:
     else:
         scheduler.resume_job(CHECK_ALL_JOB_ID)
     repo.update_preferences(scheduler_paused=paused)
-    repo.session.commit()
+    repo.commit()
     return is_check_all_paused()
 
 

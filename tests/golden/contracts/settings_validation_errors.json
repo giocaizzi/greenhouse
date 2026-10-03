@@ -44,48 +44,6 @@
    "type": "value_error"
   }
  ],
- "legacy=-3": [
-  {
-   "loc": [],
-   "msg": "Value error, IRRIGATION_CHECK_INTERVAL_HOURS=-3 is not supported: it is translated to the cron hour step '*/N', so N must be 1-23 and divide 24 evenly (1, 2, 3, 4, 6, 8, 12). Set the hours explicitly instead, e.g. IRRIGATION_CHECK_CRON_HOURS=*",
-   "type": "value_error"
-  }
- ],
- "legacy=0": [
-  {
-   "loc": [],
-   "msg": "Value error, IRRIGATION_CHECK_INTERVAL_HOURS=0 is not supported: it is translated to the cron hour step '*/N', so N must be 1-23 and divide 24 evenly (1, 2, 3, 4, 6, 8, 12). Set the hours explicitly instead, e.g. IRRIGATION_CHECK_CRON_HOURS=*",
-   "type": "value_error"
-  }
- ],
- "legacy=24": [
-  {
-   "loc": [],
-   "msg": "Value error, IRRIGATION_CHECK_INTERVAL_HOURS=24 is not supported: it is translated to the cron hour step '*/N', so N must be 1-23 and divide 24 evenly (1, 2, 3, 4, 6, 8, 12). Set the hours explicitly instead, e.g. IRRIGATION_CHECK_CRON_HOURS=0",
-   "type": "value_error"
-  }
- ],
- "legacy=48": [
-  {
-   "loc": [],
-   "msg": "Value error, IRRIGATION_CHECK_INTERVAL_HOURS=48 is not supported: it is translated to the cron hour step '*/N', so N must be 1-23 and divide 24 evenly (1, 2, 3, 4, 6, 8, 12). Set the hours explicitly instead, e.g. IRRIGATION_CHECK_CRON_HOURS=0",
-   "type": "value_error"
-  }
- ],
- "legacy=5": [
-  {
-   "loc": [],
-   "msg": "Value error, IRRIGATION_CHECK_INTERVAL_HOURS=5 is not supported: it is translated to the cron hour step '*/N', so N must be 1-23 and divide 24 evenly (1, 2, 3, 4, 6, 8, 12). Set the hours explicitly instead, e.g. IRRIGATION_CHECK_CRON_HOURS=0,5,10,15,20",
-   "type": "value_error"
-  }
- ],
- "legacy=7": [
-  {
-   "loc": [],
-   "msg": "Value error, IRRIGATION_CHECK_INTERVAL_HOURS=7 is not supported: it is translated to the cron hour step '*/N', so N must be 1-23 and divide 24 evenly (1, 2, 3, 4, 6, 8, 12). Set the hours explicitly instead, e.g. IRRIGATION_CHECK_CRON_HOURS=0,7,14,21",
-   "type": "value_error"
-  }
- ],
  "sync_interval=-1": [
   {
    "loc": [

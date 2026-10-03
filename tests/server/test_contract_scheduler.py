@@ -447,6 +447,30 @@ def test_init_health_monitor_startup_hook_failure_still_wires_monitor(p, monkeyp
     assert "Health monitor startup hooks failed" in caplog.text
 
 
+def test_init_health_monitor_leaves_old_pump_dry_run_alerts_alone(p):
+    """OD3: the startup migration of pre-unification ``pump_dry_run`` alerts is gone.
+
+    An open alert with the old ``pump::pump_dry_run::…`` key used to be resolved by
+    ``init_health_monitor``; it now stays as it is (resolve it by hand if one exists).
+    """
+    ids = p.seed_cluster(soil=35.0)
+    with p.repo() as repo:
+        repo.upsert_alert(
+            dedup_key=f"pump::pump_dry_run::{ids['cluster_id']}::irrigator{ids['irrigator_id']}",
+            source="pump",
+            code="pump_dry_run",
+            title="Pump dry-run",
+            message="row from the pre-unification code",
+            severity="critical",
+            entity_type="irrigator",
+            entity_id=ids["irrigator_id"],
+            cluster_id=ids["cluster_id"],
+        )
+    p.app.state.device_registry = p.wiring.registry
+    sched.init_health_monitor(p.app, p.app.state.settings)
+    assert [(a["code"], a["status"]) for a in p.db_rows()["alerts"]] == [("pump_dry_run", "open")]
+
+
 def test_get_cloud_reads_app_state(p, monkeypatch):
     assert sched._get_cloud() is None
     gw = RecordingGateway()

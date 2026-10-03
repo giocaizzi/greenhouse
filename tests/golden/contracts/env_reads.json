@@ -13,20 +13,8 @@
  },
  {
   "call": "os.environ.get",
-  "default": "http://localhost:8000",
+  "default": "<expr: DEFAULT_SERVER_URL>",
   "module": "greenhouse_cli.commands._helpers",
-  "var": "IRRIGATION_SERVER_URL"
- },
- {
-  "call": "os.environ.get",
-  "default": "http://localhost:8000",
-  "module": "greenhouse_cli.commands.auth",
-  "var": "IRRIGATION_SERVER_URL"
- },
- {
-  "call": "os.environ.get",
-  "default": "http://localhost:8000",
-  "module": "greenhouse_cli.commands.tui",
   "var": "IRRIGATION_SERVER_URL"
  },
  {

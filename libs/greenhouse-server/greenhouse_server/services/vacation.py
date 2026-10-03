@@ -12,10 +12,8 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
-from greenhouse_core.constants import VACATION_RESERVOIR_USABLE_FRACTION
+from greenhouse_core.constants import SECONDS_PER_DAY, VACATION_RESERVOIR_USABLE_FRACTION
 from greenhouse_core.repository import IrrigationRepository
-
-_SECONDS_PER_DAY = 86_400
 
 
 class VacationRangeError(ValueError):
@@ -54,7 +52,7 @@ def vacation_days(starts_at: int, ends_at: int) -> int:
     Returns:
         The number of days the window covers (at least 1).
     """
-    return max(1, math.ceil((ends_at - starts_at) / _SECONDS_PER_DAY))
+    return max(1, math.ceil((ends_at - starts_at) / SECONDS_PER_DAY))
 
 
 def cluster_budgets(repo: IrrigationRepository, starts_at: int, ends_at: int) -> list[ClusterBudget]:
