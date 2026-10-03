@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import time
 from importlib.metadata import PackageNotFoundError, version
 from typing import TYPE_CHECKING, Any
@@ -78,10 +79,8 @@ def _preference_flags(request: Request) -> tuple[bool, VacationWindow | None, bo
 def _auth_enabled(request: Request) -> bool:
     """Whether auth is on; read off app.state so the topbar can hide Sign out in the no-auth dev mode."""
     auth_enabled = True
-    try:
+    with contextlib.suppress(AttributeError):
         auth_enabled = bool(request.app.state.settings.auth_enabled)
-    except AttributeError:
-        pass
     return auth_enabled
 
 

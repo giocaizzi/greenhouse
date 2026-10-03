@@ -99,7 +99,7 @@ extend-select = [
     "PLR1702",  # too-many-nested-blocks (preview, explicit) — cross-checks sizecheck's nesting limit
     "PLR0914",  # too-many-locals (preview, explicit)
     "PLR0904",  # too-many-public-methods (preview, explicit)
-    "SIM117",   # multiple-with-statements
+    "SIM",  # flake8-simplify
     "ERA",  # eradicate: commented-out code
     "PGH",  # pygrep-hooks: blanket noqa / type: ignore without codes
     "SLF",  # flake8-self: private member access across objects
@@ -136,23 +136,24 @@ indent-style = "space"
 "scripts/*" = ["E402"]  # intentional sys.path before import
 # Frozen safety net: tests exceed size limits and poke privates; never edited to satisfy a lint rule.
 "tests/**" = [
-    "C90", "PLR0911", "PLR0912", "PLR0915", "PLR0904", "PLR0914", "PLR1702", "SIM117", "ERA001", "SLF001",
+    "C90", "PLR0911", "PLR0912", "PLR0915", "PLR0904", "PLR0914", "PLR1702", "SIM", "ERA001", "SLF001",
 ]
 "refactor/**" = ["C90", "PLR0911", "PLR0912", "PLR0915", "PLR0914", "PLR1702"]  # refactor tooling scripts, not shipped
 "libs/greenhouse-core/greenhouse_core/migrations/versions/*" = ["PLR0915"]  # generated Alembic DDL, out of scope
 # Ratchet offenders (baseline refactor-gate1 + lint ratchet step 0); each list only shrinks.
 "libs/greenhouse-cli/greenhouse_cli/client.py" = ["PLR0904"]
-"libs/greenhouse-cli/greenhouse_cli/commands/auth.py" = ["C901", "PLR0915"]
+"libs/greenhouse-cli/greenhouse_cli/commands/auth.py" = ["PLR0915"]
 "libs/greenhouse-cli/greenhouse_cli/commands/operations.py" = ["C901", "PLR0915"]
 "libs/greenhouse-cli/greenhouse_cli/tui/screens/cluster.py" = ["PLR0904", "PLR0915", "PLR1702"]
 "libs/greenhouse-cli/greenhouse_cli/tui/screens/forms.py" = ["C901", "PLR0911", "PLR0912", "PLR1702"]
 "libs/greenhouse-cli/greenhouse_cli/tui/widgets.py" = ["PLR0915"]
 "libs/greenhouse-core/greenhouse_core/devices/gateway.py" = ["PLR0915"]
-"libs/greenhouse-core/greenhouse_core/devices/irrigators/ik10pw.py" = ["C901", "PLR0911", "PLR0915", "PLR1702"]
+"libs/greenhouse-core/greenhouse_core/devices/irrigators/ik10pw.py" = ["C901", "PLR0911", "PLR0915", "PLR1702", "SIM105"]
 "libs/greenhouse-core/greenhouse_core/devices/irrigators/tuya_generic.py" = ["C901", "PLR0912", "PLR1702"]
 "libs/greenhouse-core/greenhouse_core/logic/engine.py" = ["C901", "PLR0911", "PLR0912", "PLR0914", "PLR0915"]
+"libs/greenhouse-core/greenhouse_core/logic/timing.py" = ["SIM102"]
 "libs/greenhouse-core/greenhouse_core/repository.py" = ["PLR0904"]
-"libs/greenhouse-core/greenhouse_core/sync.py" = ["PLR0915", "PLR1702"]
+"libs/greenhouse-core/greenhouse_core/sync.py" = ["PLR0915", "PLR1702", "SIM108"]
 "libs/greenhouse-server/greenhouse_server/services/bulk.py" = ["PLR1702"]
 "libs/greenhouse-server/greenhouse_server/services/forecast.py" = ["PLR0914"]
 "libs/greenhouse-server/greenhouse_server/services/health_monitor.py" = ["PLR0911"]

@@ -142,10 +142,7 @@ class ForecastService:
         if drainage >= 0:
             drainage = _FALLBACK_DRAINAGE_PER_HOUR
 
-        if current_moisture <= target_min:
-            hours = 0.0
-        else:
-            hours = (current_moisture - target_min) / abs(drainage)
+        hours = 0.0 if current_moisture <= target_min else (current_moisture - target_min) / abs(drainage)
 
         label = plant.species if plant else sensor.name
         return _SensorForecast(
