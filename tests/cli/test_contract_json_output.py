@@ -435,7 +435,7 @@ CLI_CASES: list[Case] = [
         "0.75",
     ),
     C(
-        "irrigator.add.empty_ip_current_behavior_dropped",
+        "irrigator.add.empty_ip_sent",
         "irrigator",
         "add",
         "--cluster",
@@ -449,7 +449,7 @@ CLI_CASES: list[Case] = [
         "--device-ip",
         "",
     ),
-    C("irrigator.update.empty_key_current_behavior_sent", "irrigator", "update", "2", "--local-key", ""),
+    C("irrigator.update.empty_key_sent", "irrigator", "update", "2", "--local-key", ""),
     C("irrigator.list", "irrigator", "list"),
     C("irrigator.show", "irrigator", "show", "2"),
     C("irrigator.start.defaults", "irrigator", "start", "9"),
