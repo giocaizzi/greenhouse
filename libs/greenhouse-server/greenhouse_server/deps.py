@@ -15,6 +15,7 @@ from greenhouse_server import state
 from greenhouse_server.services.charts import Metric
 from greenhouse_server.services.cluster import ClusterService
 from greenhouse_server.services.errors import NotFoundError
+from greenhouse_server.services.forecast import ForecastService
 from greenhouse_server.services.health import PlantHealthService
 from greenhouse_server.services.health_monitor import DeviceHealthMonitor
 from greenhouse_server.services.irrigation import IrrigationService
@@ -26,16 +27,26 @@ from greenhouse_server.services.windows import WindowValidationError, validate_w
 from greenhouse_server.state import get_session
 
 # --- Infrastructure dependencies ---
+# Each provider is followed by its ``Annotated`` alias; routes and the later factories inject
+# through the alias, so a dependency is spelled once.
+
+SessionDep = Annotated[Session, Depends(get_session)]
 
 
-def get_repository(session: Annotated[Session, Depends(get_session)]) -> IrrigationRepository:
+def get_repository(session: SessionDep) -> IrrigationRepository:
     """Return the repository bound to the request's session."""
     return IrrigationRepository(session)
+
+
+RepoDep = Annotated[IrrigationRepository, Depends(get_repository)]
 
 
 def get_device_registry(request: Request) -> DeviceRegistry | None:
     """Return the app's device registry, or ``None`` when Tuya credentials were missing."""
     return state.device_registry(request.app)
+
+
+DeviceRegistryDep = Annotated[DeviceRegistry | None, Depends(get_device_registry)]
 
 
 def get_health_monitor(request: Request) -> DeviceHealthMonitor | None:
@@ -48,6 +59,9 @@ def get_health_monitor(request: Request) -> DeviceHealthMonitor | None:
     return state.health_monitor(request.app)
 
 
+_HealthMonitorDep = Annotated[DeviceHealthMonitor | None, Depends(get_health_monitor)]
+
+
 def get_device_gateway(request: Request) -> DeviceGateway | None:
     """Return the one app-scoped Tuya gateway, or ``None`` in degraded mode.
 
@@ -58,9 +72,15 @@ def get_device_gateway(request: Request) -> DeviceGateway | None:
     return state.device_gateway(request.app)
 
 
+DeviceGatewayDep = Annotated[DeviceGateway | None, Depends(get_device_gateway)]
+
+
 def get_weather_client(request: Request) -> WeatherClient:
     """Return the app-scoped weather client."""
     return state.weather_client(request.app)
+
+
+WeatherClientDep = Annotated[WeatherClient, Depends(get_weather_client)]
 
 
 def get_ntfy_notifier(request: Request) -> NtfyClient | None:
@@ -68,9 +88,15 @@ def get_ntfy_notifier(request: Request) -> NtfyClient | None:
     return state.ntfy_notifier(request.app)
 
 
+NtfyNotifierDep = Annotated[NtfyClient | None, Depends(get_ntfy_notifier)]
+
+
 def get_plant_db(request: Request) -> PlantDatabase:
     """Return the app-scoped plant care database."""
     return state.plant_db(request.app)
+
+
+PlantDbDep = Annotated[PlantDatabase, Depends(get_plant_db)]
 
 
 # --- Entity lookups (404) ---
@@ -209,39 +235,46 @@ def require_valid_window(start_hour: int, end_hour: int, weekday_mask: int) -> N
 # --- Service dependencies ---
 
 
-def get_sync_service(
-    repo: Annotated[IrrigationRepository, Depends(get_repository)],
-    registry: Annotated[DeviceRegistry | None, Depends(get_device_registry)],
-    gateway: Annotated[DeviceGateway | None, Depends(get_device_gateway)],
-) -> SyncService:
+def get_sync_service(repo: RepoDep, registry: DeviceRegistryDep, gateway: DeviceGatewayDep) -> SyncService:
     """Build the sensor sync service on the request's repository."""
     return SyncService(repo, registry, gateway)
 
 
-def get_cluster_service(
-    repo: Annotated[IrrigationRepository, Depends(get_repository)],
-    plant_db: Annotated[PlantDatabase, Depends(get_plant_db)],
-) -> ClusterService:
+SyncServiceDep = Annotated[SyncService, Depends(get_sync_service)]
+
+
+def get_cluster_service(repo: RepoDep, plant_db: PlantDbDep) -> ClusterService:
     """Build the cluster read service on the request's repository."""
     return ClusterService(repo, plant_db)
 
 
-def get_plant_health_service(
-    repo: Annotated[IrrigationRepository, Depends(get_repository)],
-    plant_db: Annotated[PlantDatabase, Depends(get_plant_db)],
-) -> PlantHealthService:
+ClusterServiceDep = Annotated[ClusterService, Depends(get_cluster_service)]
+
+
+def get_plant_health_service(repo: RepoDep, plant_db: PlantDbDep) -> PlantHealthService:
     """Build the plant health scoring service on the request's repository."""
     return PlantHealthService(repo, plant_db)
 
 
+PlantHealthServiceDep = Annotated[PlantHealthService, Depends(get_plant_health_service)]
+
+
+def get_forecast_service(repo: RepoDep, plant_db: PlantDbDep, weather: WeatherClientDep) -> ForecastService:
+    """Build the forecast service on the request's repository, plant database and weather client."""
+    return ForecastService(repo, plant_db, weather_client=weather)
+
+
+ForecastServiceDep = Annotated[ForecastService, Depends(get_forecast_service)]
+
+
 def get_irrigation_service(
-    repo: Annotated[IrrigationRepository, Depends(get_repository)],
-    registry: Annotated[DeviceRegistry | None, Depends(get_device_registry)],
-    sync_service: Annotated[SyncService, Depends(get_sync_service)],
-    weather: Annotated[WeatherClient, Depends(get_weather_client)],
-    plant_db: Annotated[PlantDatabase, Depends(get_plant_db)],
-    health_monitor: Annotated[DeviceHealthMonitor | None, Depends(get_health_monitor)],
-    notifier: Annotated[NtfyClient | None, Depends(get_ntfy_notifier)],
+    repo: RepoDep,
+    registry: DeviceRegistryDep,
+    sync_service: SyncServiceDep,
+    weather: WeatherClientDep,
+    plant_db: PlantDbDep,
+    health_monitor: _HealthMonitorDep,
+    notifier: NtfyNotifierDep,
 ) -> IrrigationService:
     """Build the irrigation pipeline service with every collaborator it needs."""
     return IrrigationService(
@@ -255,16 +288,4 @@ def get_irrigation_service(
     )
 
 
-# --- Type aliases for route injection ---
-
-SessionDep = Annotated[Session, Depends(get_session)]
-RepoDep = Annotated[IrrigationRepository, Depends(get_repository)]
-DeviceRegistryDep = Annotated[DeviceRegistry | None, Depends(get_device_registry)]
-DeviceGatewayDep = Annotated[DeviceGateway | None, Depends(get_device_gateway)]
-WeatherClientDep = Annotated[WeatherClient, Depends(get_weather_client)]
-NtfyNotifierDep = Annotated[NtfyClient | None, Depends(get_ntfy_notifier)]
-PlantDbDep = Annotated[PlantDatabase, Depends(get_plant_db)]
-SyncServiceDep = Annotated[SyncService, Depends(get_sync_service)]
-ClusterServiceDep = Annotated[ClusterService, Depends(get_cluster_service)]
 IrrigationServiceDep = Annotated[IrrigationService, Depends(get_irrigation_service)]
-PlantHealthServiceDep = Annotated[PlantHealthService, Depends(get_plant_health_service)]
