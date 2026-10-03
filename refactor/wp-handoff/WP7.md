@@ -7,7 +7,7 @@ Every pytest run: `PYTHONHASHSEED=0 flock /tmp/greenhouse-tests.lock uv run pyte
 lock in chunks of ≤ 200 s + one mutant). Raw logs: scratchpad `wp7/tests.log`, mutation JSONL under
 `refactor/wp-handoff/wp7-mutation/`.
 
-**Status:** 19 of the plan's WP7 rows done. T7.12 was dropped by the plan. T7.0b's `leak.py` half and T7.20/T7.21 are
+**Status (updated after review round 1):** all WP7 rows in scope are done, including T7.22 (approved generator variant) and one corrective commit for reviewer 2's finding. Originally: 19 of the plan's WP7 rows done. T7.12 was dropped by the plan. T7.0b's `leak.py` half and T7.20/T7.21 are
 out of scope: `leak.py` is not in my assigned files. **T7.22 is blocked**: the design contradicts the code (see
 "Stop-and-report").
 
@@ -36,13 +36,39 @@ out of scope: `leak.py` is not in my assigned files. **T7.22 is blocked**: the d
 | T7.17 **G+** | `36f5ad0` | `$PIPE $SCHED C(gs.services.irrigation)` | 1050 passed |
 | T7.18 **G+** | `139a5af` | `$SCHED test_pump_watcher C(gs.services.irrigation)` | 964 passed |
 | T7.19 **G+** | `ed7a34f` | `$SCHED $PIPE test_pump_watcher C(gs.services.irrigation)` | 1050 passed |
+| FIX (T7.3/T7.4) **G+** | `4983b14` | `$SCHED $PIPE $RENDER test_contract_sync_service test_health_monitor test_contract_health_monitor C(gs.scheduler)` | 1412 passed |
+| T7.22 **G+** | `6ab9807` | `$SCHED $CHECK D(gs.services.irrigation) C(gs.services.irrigation)` | 1048 passed |
 
 Every commit: `ruff check` + `ruff format --check`, `ruff --select ERA,PGH,SLF,PLE` clean, `uv run lint-imports` 10 kept,
 `make typecheck` green, `git status --porcelain tests/golden` empty. No red run, no rerun. Note: `tests.log` has two
 T7.17 entries. The first one ran on unchanged T7.16 code, because the edit script aborted. The second one is the real
 evidence.
 
-## WP gate (on `ed7a34f`)
+## Review round 1 (R1 approved all 20; R2 found one difference) — fixed
+
+- **Corrective commit `4983b14`.** It corrects the false "swallow identical" claim in `959cab1` (T7.3) and the
+  false "class used unchanged" claim in `2d4bb1b` (T7.4).
+  - `_job_session` now yields the bare session, and each job builds `IrrigationRepository(session)` inside its `with`
+    body, i.e. inside the old `try`.
+  - `_health_snapshot_job` gets back its call-time `from greenhouse_core.repository import IrrigationRepository`.
+  - R2's reproducers (`repro_job_session.py`, `repro_snapshot_binding.py`) were run on a `c05e847` worktree and on
+    this tree. The outputs are identical except for traceback frame lines: all 5 jobs return None, 4 log a failure,
+    and the core-module binding is used. Outputs are in `wp7-mutation/repro/`.
+- **T7.22 `6ab9807`.** `_rearm_from_events(repo, now) -> Iterator[None]` yields after each `_add_leak_check_job`.
+  The `for _ in …: scheduled += 1` loop sits inside the existing `try`, so the partial count is preserved
+  (pinned by the gap test). Nesting goes from 4 to 2/3.
+- **Extra M-post evidence.**
+  - Rearm: 10/10 killed, 0 regressions (`rearm-*.jsonl`).
+  - The 6 scheduler mutants created by the fix: 6/6 killed (`sched-post-fix.jsonl`).
+  - Scheduler combined: 35/35 killed, 0 killed-in-pre now surviving.
+
+## WP gate after the fix (on `6ab9807`)
+
+- Union of all task subsets + `$CORE` + the gap file: **1150 passed**.
+- `FULL` (seed 0, `-n 2`): **2919 passed**.
+- `sizecheck` now lists only `run_irrigation_pipeline` (the proposed EXC).
+
+## WP gate (originally on `ed7a34f`)
 
 - Union of all task subsets + `$CORE` + the gap file: **1150 passed** (5m40s).
 - `FULL` (seed 0, `-n 2`): **2919 passed** (9m37s), which is 2840 + 79 new tests.
@@ -127,7 +153,7 @@ both gap files first. Any fast-set survivor was re-run with the full M-pre set; 
   - `check_cluster` → + `_check_result`;
   - `check_all_clusters` → + `_resolve_stale_check_alert`, `_record_check_failure`.
 
-## Stop-and-report: T7.22 not done (design contradicts code)
+## T7.22 (originally stopped; done in `6ab9807` with the approved generator variant)
 
 Target §3.1 specifies `_rearm_from_events(repo, now) -> int`, which returns the count, while `rearm_leak_checks` keeps
 the `try/except/finally`.
@@ -204,7 +230,7 @@ inside the existing `try`. This keeps the partial count and gives nesting ≤ 3.
   lines (CC ≤ 8, nesting 2). The device-health gate stays inline and verbatim by design: T7.12 was dropped (Rev-1 m5)
   because testing `if alarms:` instead of `if blocked:` would diverge on `(True, [])`. Every other block is already a
   helper. (§3.12 estimated ≈ 45; the formatter-expanded add_reason/add_activity_event calls account for the rest.)
-- `rearm_leak_checks` is **not** proposed. It waits on the T7.22 decision.
+- `rearm_leak_checks` needs no entry: it is within the limits after T7.22.
 
 ## Strict list / ratchet edits for the integrator
 

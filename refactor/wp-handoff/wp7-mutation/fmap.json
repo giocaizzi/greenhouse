@@ -1,15 +1,75 @@
 {
-  "_sync_job": ["_sync_job", "_job_session"],
-  "_health_snapshot_job": ["_health_snapshot_job", "_job_session"],
-  "_check_job": ["_check_job", "_job_session", "_build_irrigation_service"],
-  "_anomaly_job": ["_anomaly_job", "_job_session"],
-  "_health_monitor_job": ["_health_monitor_job", "_job_session"],
-  "handle_watcher_interrupted": ["handle_watcher_interrupted", "_stop_auto_cycle", "_left_running_message"],
-  "schedule_pump_watcher": ["schedule_pump_watcher"],
-  "schedule_pump_watcher._run": ["schedule_pump_watcher._run", "_run_pump_watcher", "_watcher_tuning"],
-  "IrrigationService._resolve_temperature": ["IrrigationService._resolve_temperature", "IrrigationService._indoor_temperature", "IrrigationService._outdoor_temperature"],
-  "IrrigationService.run_irrigation_pipeline": ["IrrigationService.run_irrigation_pipeline", "_error_result", "_decision_result", "IrrigationService._decide", "IrrigationService._log_decision_skip", "IrrigationService._actuation_target", "_with_error", "IrrigationService._actuate", "_soil_note", "_event_notes", "IrrigationService._on_started", "IrrigationService._notify_auto_irrigation", "IrrigationService._on_start_failed"],
-  "IrrigationService.monitor_cluster": ["IrrigationService.monitor_cluster", "_latest_soil", "_monitor_target_band", "_soil_status"],
-  "IrrigationService.check_cluster": ["IrrigationService.check_cluster", "_check_result"],
-  "IrrigationService.check_all_clusters": ["IrrigationService.check_all_clusters", "IrrigationService._resolve_stale_check_alert", "IrrigationService._record_check_failure"]
+  "_sync_job": [
+    "_sync_job",
+    "_job_session"
+  ],
+  "_health_snapshot_job": [
+    "_health_snapshot_job",
+    "_job_session"
+  ],
+  "_check_job": [
+    "_check_job",
+    "_job_session",
+    "_build_irrigation_service"
+  ],
+  "_anomaly_job": [
+    "_anomaly_job",
+    "_job_session"
+  ],
+  "_health_monitor_job": [
+    "_health_monitor_job",
+    "_job_session"
+  ],
+  "handle_watcher_interrupted": [
+    "handle_watcher_interrupted",
+    "_stop_auto_cycle",
+    "_left_running_message"
+  ],
+  "schedule_pump_watcher": [
+    "schedule_pump_watcher"
+  ],
+  "schedule_pump_watcher._run": [
+    "schedule_pump_watcher._run",
+    "_run_pump_watcher",
+    "_watcher_tuning"
+  ],
+  "IrrigationService._resolve_temperature": [
+    "IrrigationService._resolve_temperature",
+    "IrrigationService._indoor_temperature",
+    "IrrigationService._outdoor_temperature"
+  ],
+  "IrrigationService.run_irrigation_pipeline": [
+    "IrrigationService.run_irrigation_pipeline",
+    "_error_result",
+    "_decision_result",
+    "IrrigationService._decide",
+    "IrrigationService._log_decision_skip",
+    "IrrigationService._actuation_target",
+    "_with_error",
+    "IrrigationService._actuate",
+    "_soil_note",
+    "_event_notes",
+    "IrrigationService._on_started",
+    "IrrigationService._notify_auto_irrigation",
+    "IrrigationService._on_start_failed"
+  ],
+  "IrrigationService.monitor_cluster": [
+    "IrrigationService.monitor_cluster",
+    "_latest_soil",
+    "_monitor_target_band",
+    "_soil_status"
+  ],
+  "IrrigationService.check_cluster": [
+    "IrrigationService.check_cluster",
+    "_check_result"
+  ],
+  "IrrigationService.check_all_clusters": [
+    "IrrigationService.check_all_clusters",
+    "IrrigationService._resolve_stale_check_alert",
+    "IrrigationService._record_check_failure"
+  ],
+  "rearm_leak_checks": [
+    "rearm_leak_checks",
+    "_rearm_from_events"
+  ]
 }
