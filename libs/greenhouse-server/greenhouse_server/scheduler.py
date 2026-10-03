@@ -133,33 +133,11 @@ def _resolve_zoneinfo(tz_name: str | None) -> ZoneInfo:
 
 
 def _resolve_check_cron_hours(settings: Settings) -> str:
-    """Pick the cron `hour` field, honoring the deprecated interval var.
+    """The cron ``hour`` field for ``check_all`` (``IRRIGATION_CHECK_CRON_HOURS``, validated by Settings).
 
-    Why a shim: the project switched check_all from APScheduler's `interval`
-    trigger to `cron` for predictable wall-clock fires. Operators with
-    `IRRIGATION_CHECK_INTERVAL_HOURS=N` already set in their .env shouldn't
-    silently lose their cadence — translate `N` to `*/N` cron syntax and
-    warn once. An explicitly set `IRRIGATION_CHECK_CRON_HOURS` always wins,
-    even when it is the default `*`. ``Settings`` has already rejected an `N`
-    that `*/N` can't express (see ``Settings._validate_legacy_check_interval``).
+    Kept as the one seam the registration reads (tests patch it by name).
     """
-    if settings.check_interval_hours is None:
-        return settings.check_cron_hours
-    if settings.check_cron_hours_explicit:
-        logger.warning(
-            "Both IRRIGATION_CHECK_CRON_HOURS and the deprecated IRRIGATION_CHECK_INTERVAL_HOURS "
-            "are set; using IRRIGATION_CHECK_CRON_HOURS=%r and ignoring the interval.",
-            settings.check_cron_hours,
-        )
-        return settings.check_cron_hours
-    n = settings.check_interval_hours
-    logger.warning(
-        "IRRIGATION_CHECK_INTERVAL_HOURS is deprecated; set "
-        "IRRIGATION_CHECK_CRON_HOURS instead. Translating value %d to '*/%d'.",
-        n,
-        n,
-    )
-    return f"*/{n}"
+    return settings.check_cron_hours
 
 
 def init_scheduler(app: FastAPI, settings: Settings, tz_name: str | None = None) -> None:

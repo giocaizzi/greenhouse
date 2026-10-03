@@ -2353,13 +2353,7 @@ add(
             "    if paused:\n        pass",
             "pause lost on timezone reschedule",
         ),
-        ("08", '    return f"*/{n}"', '    return f"0/{n}"', "legacy interval translation"),
-        (
-            "09",
-            "    if settings.check_cron_hours_explicit:",
-            "    if not settings.check_cron_hours_explicit:",
-            "explicit cron precedence inverted",
-        ),
+        # 08/09 targeted the IRRIGATION_CHECK_INTERVAL_HOURS shim, removed by OD3.
         (
             "10",
             "        sync_svc.sync_all_sensors(hours=6)",

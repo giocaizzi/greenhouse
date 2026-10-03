@@ -7,10 +7,9 @@ only checks that validation errors *mention* the env var):
   annotation, default, alias choices) — ``contracts/settings_schema.json``;
 - the env name every field is read from, case-insensitivity, ``.env`` loading,
   precedence (kwargs > env > ``.env`` > default), ``extra="ignore"``;
-- the *exact* startup validation messages for ``IRRIGATION_SYNC_INTERVAL_MINUTES``,
-  ``IRRIGATION_CHECK_CRON_HOURS`` and the legacy ``IRRIGATION_CHECK_INTERVAL_HOURS``
-  (``contracts/settings_validation_errors.json``) and the two runtime warnings logged
-  by ``scheduler._resolve_check_cron_hours``;
+- the *exact* startup validation messages for ``IRRIGATION_SYNC_INTERVAL_MINUTES`` and
+  ``IRRIGATION_CHECK_CRON_HOURS`` (``contracts/settings_validation_errors.json``); the
+  removed legacy ``IRRIGATION_CHECK_INTERVAL_HOURS`` (OD3) is ignored like any unknown var;
 - the 8 env vars read outside ``Settings`` (``TUYA_*``, ``IRRIGATION_PLANT_DB_PATH``,
   ``IRRIGATION_TZ``, ``IRRIGATION_DB_URL`` in the migrations env,
   ``IRRIGATION_SERVER_URL``, ``GREENHOUSE_API_TOKEN``, plus ``XDG_CONFIG_HOME``): a
@@ -85,7 +84,6 @@ def test_settings_defaults_with_empty_environment(clean_env):
         "weather_lon": 9.189,
         "sync_interval_minutes": 180,
         "check_cron_hours": "*",
-        "check_interval_hours": None,
         "enable_scheduler": True,
         "mcp_token": None,
         "ntfy_server_url": None,
@@ -103,7 +101,6 @@ def test_settings_defaults_with_empty_environment(clean_env):
         "pump_watcher_warmup_seconds": 5.0,
         "pump_watcher_max_read_failures": 5,
     }
-    assert s.check_cron_hours_explicit is False
 
 
 # --- env names ---------------------------------------------------------------
@@ -119,7 +116,6 @@ ENV_TABLE = [
     ("IRRIGATION_WEATHER_LON", "-2.25", "weather_lon", -2.25),
     ("IRRIGATION_SYNC_INTERVAL_MINUTES", "30", "sync_interval_minutes", 30),
     ("IRRIGATION_CHECK_CRON_HOURS", "0,12", "check_cron_hours", "0,12"),
-    ("IRRIGATION_CHECK_INTERVAL_HOURS", "6", "check_interval_hours", 6),
     ("IRRIGATION_ENABLE_SCHEDULER", "false", "enable_scheduler", False),
     ("GREENHOUSE_MCP_TOKEN", "mcp-tok", "mcp_token", "mcp-tok"),
     ("GREENHOUSE_NTFY_SERVER_URL", "https://ntfy.invalid", "ntfy_server_url", "https://ntfy.invalid"),
@@ -204,7 +200,7 @@ def test_dotenv_in_cwd_is_loaded_and_env_beats_it(clean_env, monkeypatch):
         encoding="utf-8",
     )
     s = Settings()
-    assert (s.port, s.mcp_token, s.check_cron_hours_explicit) == (9001, "dotenv-token", True)
+    assert (s.port, s.mcp_token, s.check_cron_hours) == (9001, "dotenv-token", "*")
     assert Settings(_env_file=None).port == 8000
     monkeypatch.setenv("IRRIGATION_PORT", "9002")
     assert Settings().port == 9002
@@ -217,11 +213,17 @@ def test_extra_inputs_are_ignored(clean_env, monkeypatch):
     assert not hasattr(s, "not_a_field")
 
 
-def test_check_cron_hours_explicit_tracks_any_source(clean_env, monkeypatch):
-    assert _settings().check_cron_hours_explicit is False
-    assert _settings(check_cron_hours="*").check_cron_hours_explicit is True
-    monkeypatch.setenv("IRRIGATION_CHECK_CRON_HOURS", "*")
-    assert _settings().check_cron_hours_explicit is True
+def test_removed_check_interval_hours_is_ignored(clean_env, monkeypatch, caplog):
+    """OD3: ``IRRIGATION_CHECK_INTERVAL_HOURS`` is gone — ignored like any unknown var, never validated."""
+    from greenhouse_server.scheduler import _resolve_check_cron_hours
+
+    monkeypatch.setenv("IRRIGATION_CHECK_INTERVAL_HOURS", "5")  # used to fail startup (5 does not divide 24)
+    with caplog.at_level(logging.WARNING, logger="greenhouse_server.scheduler"):
+        s = _settings()
+        assert not hasattr(s, "check_interval_hours")
+        assert _resolve_check_cron_hours(s) == "*"
+        assert _resolve_check_cron_hours(_settings(check_cron_hours="0,12")) == "0,12"
+    assert caplog.records == []
 
 
 # --- exact validation messages ----------------------------------------------
@@ -234,12 +236,6 @@ VALIDATION_CASES = {
     "cron=*/0": {"check_cron_hours": "*/0"},
     "cron=empty": {"check_cron_hours": ""},
     "cron=0,6,": {"check_cron_hours": "0,6,"},
-    "legacy=5": {"check_interval_hours": 5},
-    "legacy=7": {"check_interval_hours": 7},
-    "legacy=24": {"check_interval_hours": 24},
-    "legacy=48": {"check_interval_hours": 48},
-    "legacy=0": {"check_interval_hours": 0},
-    "legacy=-3": {"check_interval_hours": -3},
 }
 
 
@@ -261,7 +257,6 @@ def test_startup_validation_messages_match_golden(clean_env):
     [
         ("IRRIGATION_SYNC_INTERVAL_MINUTES", "0", {"sync_interval_minutes": 0}),
         ("IRRIGATION_CHECK_CRON_HOURS", "bogus", {"check_cron_hours": "bogus"}),
-        ("IRRIGATION_CHECK_INTERVAL_HOURS", "5", {"check_interval_hours": 5}),
     ],
 )
 def test_env_sourced_values_fail_with_the_same_message_as_kwargs(clean_env, monkeypatch, env, raw, kwarg):
@@ -271,29 +266,6 @@ def test_env_sourced_values_fail_with_the_same_message_as_kwargs(clean_env, monk
     with pytest.raises(ValidationError) as from_env:
         _settings()
     assert [e["msg"] for e in from_env.value.errors()] == [e["msg"] for e in from_kwarg.value.errors()]
-
-
-def test_resolve_check_cron_hours_warning_texts(clean_env, caplog):
-    from greenhouse_server.scheduler import _resolve_check_cron_hours
-
-    with caplog.at_level(logging.WARNING, logger="greenhouse_server.scheduler"):
-        assert _resolve_check_cron_hours(_settings()) == "*"
-        assert _resolve_check_cron_hours(_settings(check_interval_hours=6)) == "*/6"
-        assert _resolve_check_cron_hours(_settings(check_cron_hours="0,12", check_interval_hours=2)) == "0,12"
-    assert [(r.name, r.levelname, r.getMessage()) for r in caplog.records] == [
-        (
-            "greenhouse_server.scheduler",
-            "WARNING",
-            "IRRIGATION_CHECK_INTERVAL_HOURS is deprecated; set IRRIGATION_CHECK_CRON_HOURS instead. "
-            "Translating value 6 to '*/6'.",
-        ),
-        (
-            "greenhouse_server.scheduler",
-            "WARNING",
-            "Both IRRIGATION_CHECK_CRON_HOURS and the deprecated IRRIGATION_CHECK_INTERVAL_HOURS are set; "
-            "using IRRIGATION_CHECK_CRON_HOURS='0,12' and ignoring the interval.",
-        ),
-    ]
 
 
 # --- env vars read outside Settings -----------------------------------------

@@ -65,13 +65,6 @@
   },
   {
    "alias": null,
-   "annotation": "int | None",
-   "default": null,
-   "name": "check_interval_hours",
-   "validation_alias_choices": null
-  },
-  {
-   "alias": null,
    "annotation": "bool",
    "default": true,
    "name": "enable_scheduler",
@@ -314,18 +307,6 @@
     "default": "*",
     "title": "Check Cron Hours",
     "type": "string"
-   },
-   "check_interval_hours": {
-    "anyOf": [
-     {
-      "type": "integer"
-     },
-     {
-      "type": "null"
-     }
-    ],
-    "default": null,
-    "title": "Check Interval Hours"
    },
    "db_url": {
     "default": "sqlite:///data/irrigation.db",

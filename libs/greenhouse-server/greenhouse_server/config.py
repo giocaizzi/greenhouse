@@ -1,6 +1,6 @@
 """Server configuration via Pydantic BaseSettings."""
 
-from pydantic import AliasChoices, Field, field_validator, model_validator
+from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from greenhouse_core.constants import (
@@ -42,12 +42,6 @@ class Settings(BaseSettings):
     # (`MIN_COOLDOWN_HOURS` in `greenhouse_core.constants`) gates actuation;
     # the scheduler decides how often to observe.
     check_cron_hours: str = "*"
-    # Deprecated alias for the old interval-trigger config. Used only when
-    # `check_cron_hours` is NOT set at all (an explicit value, even "*",
-    # always wins); then it is translated to `*/N` on startup with a one-time
-    # warning, so N must be 1–23 and divide 24 evenly. Slated for removal —
-    # prefer IRRIGATION_CHECK_CRON_HOURS.
-    check_interval_hours: int | None = None
     enable_scheduler: bool = True
 
     # ── Scheduling validation: fail fast at startup, naming the env var ─────
@@ -74,30 +68,6 @@ class Settings(BaseSettings):
                 f"(e.g. '*', '0,6,12,18', '*/3', '6-20/2'): {exc}"
             ) from None
         return value
-
-    @model_validator(mode="after")
-    def _validate_legacy_check_interval(self) -> "Settings":
-        if self.check_interval_hours is None or self.check_cron_hours_explicit:
-            return self  # unset, or ignored because IRRIGATION_CHECK_CRON_HOURS wins
-        n = self.check_interval_hours
-        if not (1 <= n <= 23 and 24 % n == 0):
-            if n <= 0:
-                suggestion = "*"
-            elif n >= 24:
-                suggestion = "0"
-            else:
-                suggestion = ",".join(str(h) for h in range(0, 24, n))
-            raise ValueError(
-                f"IRRIGATION_CHECK_INTERVAL_HOURS={n} is not supported: it is translated to the cron "
-                "hour step '*/N', so N must be 1-23 and divide 24 evenly (1, 2, 3, 4, 6, 8, 12). "
-                f"Set the hours explicitly instead, e.g. IRRIGATION_CHECK_CRON_HOURS={suggestion}"
-            )
-        return self
-
-    @property
-    def check_cron_hours_explicit(self) -> bool:
-        """True when IRRIGATION_CHECK_CRON_HOURS was set (env, .env or kwarg), even to "*"."""
-        return "check_cron_hours" in self.model_fields_set
 
     # MCP bearer token (fail-closed: unset -> /mcp returns 503).
     # Lives outside the IRRIGATION_ prefix to match the public deployment contract.

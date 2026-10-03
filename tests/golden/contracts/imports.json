@@ -605,8 +605,7 @@
    "Field",
    "Settings",
    "SettingsConfigDict",
-   "field_validator",
-   "model_validator"
+   "field_validator"
   ]
  },
  "greenhouse_server.deps": {

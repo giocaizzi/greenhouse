@@ -20,20 +20,17 @@ from greenhouse_server.config import Settings
 from greenhouse_server.scheduler import scheduler as bg_scheduler
 
 
-def _build_app(cron_hours: str | None = None, interval_hours: int | None = None):
+def _build_app(cron_hours: str | None = None):
     engine = create_engine(
         "sqlite://",
         echo=False,
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
-    # Only pass check_cron_hours when given: an explicitly set value (even the
-    # default "*") always wins over the legacy interval.
     overrides = {"check_cron_hours": cron_hours} if cron_hours is not None else {}
     settings = Settings(
         db_url="sqlite://",
         enable_scheduler=False,
-        check_interval_hours=interval_hours,
         **overrides,
     )
     create_app(settings, engine=engine)
@@ -73,41 +70,6 @@ class TestCheckAllCronRegistration:
             fields = {f.name: str(f) for f in job.trigger.fields}
             assert fields["hour"] == "0,6,12,18"
             assert fields["minute"] == "0"
-        finally:
-            engine.dispose()
-
-
-class TestLegacyIntervalShim:
-    """`IRRIGATION_CHECK_INTERVAL_HOURS` is honored and translated to `*/N` cron."""
-
-    def test_interval_translates_to_step_cron(self, monkeypatch):
-        """When only the legacy var is set, the trigger becomes `*/N` and a warning fires."""
-        from greenhouse_server import scheduler as sched_mod
-
-        warnings_seen: list[str] = []
-        monkeypatch.setattr(sched_mod.logger, "warning", lambda msg, *a, **kw: warnings_seen.append(msg % a))
-        engine = _build_app(interval_hours=2)
-        try:
-            job = bg_scheduler.get_job("check_all")
-            fields = {f.name: str(f) for f in job.trigger.fields}
-            assert fields["hour"] == "*/2"
-            assert fields["minute"] == "0"
-            assert any("IRRIGATION_CHECK_INTERVAL_HOURS is deprecated" in msg for msg in warnings_seen)
-        finally:
-            engine.dispose()
-
-    def test_explicit_cron_hours_wins_over_legacy_interval(self, monkeypatch):
-        """If both are set, the new cron var wins and no shim warning is emitted."""
-        from greenhouse_server import scheduler as sched_mod
-
-        warnings_seen: list[str] = []
-        monkeypatch.setattr(sched_mod.logger, "warning", lambda msg, *a, **kw: warnings_seen.append(msg % a))
-        engine = _build_app(cron_hours="0,12", interval_hours=6)
-        try:
-            job = bg_scheduler.get_job("check_all")
-            fields = {f.name: str(f) for f in job.trigger.fields}
-            assert fields["hour"] == "0,12"
-            assert not any("IRRIGATION_CHECK_INTERVAL_HOURS is deprecated" in msg for msg in warnings_seen)
         finally:
             engine.dispose()
 

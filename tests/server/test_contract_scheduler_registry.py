@@ -16,7 +16,7 @@ when the scheduler starts). This module snapshots both states:
 The wall clock is frozen *before* the app is built: interval triggers take
 ``start_date = now + interval`` at add time, so freezing makes every timestamp
 reproducible (nothing is normalized). Scenarios cover the default settings, custom
-cadences, the legacy interval translation, and a persisted timezone + pause.
+cadences and a persisted timezone + pause (the legacy interval scenario left with OD3).
 """
 
 from __future__ import annotations
@@ -44,7 +44,6 @@ _BASE = {
 SCENARIOS = {
     "default": {"settings": {}, "prefs": None},
     "custom_cadence": {"settings": {"sync_interval_minutes": 30, "check_cron_hours": "0,6,12,18"}, "prefs": None},
-    "legacy_interval": {"settings": {"check_interval_hours": 6}, "prefs": None},
     "persisted_tz_and_pause": {"settings": {}, "prefs": {"timezone": "Europe/Rome", "scheduler_paused": True}},
 }
 
@@ -198,7 +197,8 @@ class _ListHandler(logging.Handler):
         self.records.append(record)
 
 
-def test_registry_logs_legacy_interval_warning_once_per_build(clean_env, frozen_clock):
+def test_registry_ignores_the_removed_check_interval_hours(clean_env, frozen_clock):
+    """OD3: an old ``IRRIGATION_CHECK_INTERVAL_HOURS`` setting no longer becomes ``*/N`` and logs nothing."""
     # Attach directly to the module logger: ``init_db`` runs Alembic's ``fileConfig``,
     # which replaces the root handlers (and with them pytest's caplog handler).
     handler = _ListHandler()
@@ -206,13 +206,9 @@ def test_registry_logs_legacy_interval_warning_once_per_build(clean_env, frozen_
     sched_logger.addHandler(handler)
     try:
         app, engine = _build({"check_interval_hours": 6}, None)
+        hour = next(str(f) for f in sched_mod.scheduler.get_job("check_all").trigger.fields if f.name == "hour")
         engine.dispose()
     finally:
         sched_logger.removeHandler(handler)
-    assert [(r.levelname, r.getMessage()) for r in handler.records] == [
-        (
-            "WARNING",
-            "IRRIGATION_CHECK_INTERVAL_HOURS is deprecated; set IRRIGATION_CHECK_CRON_HOURS instead. "
-            "Translating value 6 to '*/6'.",
-        )
-    ]
+    assert hour == "*"
+    assert handler.records == []
