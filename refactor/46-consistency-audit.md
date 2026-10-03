@@ -355,3 +355,11 @@ D-10 C-TYPE-2 `devices/gateway.py` (28 errors).
 | Dead code | 12 (+ verified not-dead list) | 12 | 0 | 2 need owner OK (constants golden) |
 | Duplicated helpers | 6 | 3 | 1 (D16) | 2 covered by D4/D7 |
 | Other | 5 | 1 | 3 (D17, bounds, template IP) | — |
+
+## Added after the drift track (2026-10-03)
+- **D18 (W2, fix):** templates pass an age in seconds (`reading_age_seconds`, `dev.age_seconds`) into the `age_seconds`
+  filter, which expects a timestamp → those cells render "stale". Unify the filter contract and call sites.
+- **D10b (W3):** a fourth soil-target parser in `services/charts._parse_range` → use `parse_moisture_target`.
+- **D16b (after WP8):** `devices/gateway._coerce_config` → call `greenhouse_core.models.parse_device_config`
+  (already behavior-identical).
+- **D11 (after WP8):** shared quiet-hours "active now" helper for web + engine.
