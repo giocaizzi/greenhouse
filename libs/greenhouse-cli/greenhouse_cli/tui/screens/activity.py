@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 from textual.app import ComposeResult
-from textual.binding import Binding
+from textual.binding import Binding, BindingType
 from textual.widgets import DataTable, Footer, Header, Static
 
 from greenhouse_cli.tui import formatting as fmt
@@ -17,7 +19,7 @@ class ActivityScreen(DataScreen):
     """Scrollable activity feed — ``n`` loads older events, ``f`` filters severity."""
 
     AUTO_REFRESH = True
-    BINDINGS = [
+    BINDINGS: ClassVar[list[BindingType]] = [
         Binding("f", "cycle_filter", "Severity"),
         Binding("n", "more", "Older"),
     ]

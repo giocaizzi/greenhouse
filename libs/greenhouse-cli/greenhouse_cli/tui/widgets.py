@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Sequence
-from typing import Any
+from typing import Any, ClassVar
 
 from rich.console import Group, RenderableType
 from rich.table import Table
 from rich.text import Text
 from textual.app import ComposeResult
+from textual.binding import BindingType
 from textual.containers import Horizontal, Vertical
 from textual.message import Message
 from textual.widgets import DataTable, Sparkline, Static
@@ -92,7 +93,7 @@ class ClusterCard(Vertical, can_focus=True):
             super().__init__()
             self.cluster_id = cluster_id
 
-    BINDINGS = [("enter", "select", "Open")]
+    BINDINGS: ClassVar[list[BindingType]] = [("enter", "select", "Open")]
 
     def __init__(self, summary: ClusterSummary, **kwargs: Any) -> None:
         super().__init__(id=f"cluster-card-{summary.id}", classes="cluster-card", **kwargs)
@@ -277,8 +278,8 @@ class MetricChart(PlotextPlot):
 class Heatmap(Static):
     """7×24 weekday-by-hour irrigation heatmap from ``GET /clusters/{id}/heatmap``."""
 
-    RAMP = ["#1f2a1f", "#1d4d6b", "#2271a8", "#2f95d6", "#4fb3ff", "#9ad7ff"]
-    DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    RAMP: ClassVar[list[str]] = ["#1f2a1f", "#1d4d6b", "#2271a8", "#2f95d6", "#4fb3ff", "#9ad7ff"]
+    DAYS: ClassVar[list[str]] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
     def show(self, payload: dict[str, Any] | None) -> None:
         cells = {(c["weekday"], c["hour"]): c for c in (payload or {}).get("cells", [])}

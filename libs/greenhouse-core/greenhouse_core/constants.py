@@ -13,8 +13,8 @@ VACATION_MIN_RUN_MINUTES = 1  # below this, skip instead of a token dribble
 
 # ── Quiet Hours — hard gate against actuation during user-defined windows ────
 # No built-in fallback here: the baseline Alembic migration seeds the global row
-# with 00:00–05:00 local time (indoor pumps are noisy at night), and an
-# unconfigured database has quiet hours off. Start/end are integers 0–23,
+# with 00:00-05:00 local time (indoor pumps are noisy at night), and an
+# unconfigured database has quiet hours off. Start/end are integers 0-23,
 # end-exclusive, wrap-around supported. A row with start == end means
 # "explicitly disabled at this level" (e.g. an outdoor cluster that should be
 # allowed to run overnight).
@@ -76,7 +76,7 @@ TEMP_HOT = 28
 # A "wet" sensor is one within CONFLICT_WET_MARGIN of its target max; a conflict
 # is the driest sensor below target_min while the wettest is still in that wet
 # band. The margin must be narrow enough that the wet band does NOT overlap the
-# healthy range: with defaults 45–65 and margin 5, "wet" means >60, so a normal
+# healthy range: with defaults 45-65 and margin 5, "wet" means >60, so a normal
 # spread like driest 44 / wettest 56 is treated as ordinarily dry (driest drives
 # the call), not an unresolvable conflict that forces a short burst.
 CONFLICT_WET_MARGIN = 5  # % below target_max that still counts as "wet"
@@ -143,8 +143,8 @@ SENSOR_PHYSICAL_RANGES = {
 CLEANING_HAMPEL_WINDOW_RADIUS = 3  # window = 2*radius + 1 samples
 CLEANING_HAMPEL_N_SIGMA = 3.0  # deviation beyond this many scaled MADs is a spike
 CLEANING_HAMPEL_MIN_READINGS = 5  # fewer points than this: too short to judge spikes
-CLEANING_MAD_SCALE = 1.4826  # MAD→σ consistency factor for Gaussian noise
-CLEANING_MAD_FLOOR = 1.0  # min σ (%) so a flat run isn't hyper-sensitive to change
+CLEANING_MAD_SCALE = 1.4826  # MAD→sigma consistency factor for Gaussian noise
+CLEANING_MAD_FLOOR = 1.0  # min sigma (%) so a flat run isn't hyper-sensitive to change
 
 # ── Leak / stuck-valve detection ─────────────────────────────────────────────
 # A post-irrigation sanity check: 30 min after a start event the detector asks
@@ -231,14 +231,14 @@ LIGHT_VERY_DARK = 50
 
 # ── Irrigation timing — preferred windows + seasonal multipliers ─────────────
 # Defaults applied when neither a per-cluster IrrigationWindow nor a per-species
-# / per-category override is present. Hours are local-time integers 0–23,
+# / per-category override is present. Hours are local-time integers 0-23,
 # end-exclusive. The biology evidence behind these numbers lives in the team
 # audit report (Webb 2003 / PMC8997731 / extension service guidance): water
 # in the morning so foliage dries before nightfall and the root zone is moist
 # before peak transpiration.
 DEFAULT_PREFERRED_WATER_HOURS = (6, 10)
 # Indoor cluster — heated/cooled, photoperiod near-constant. Halve in winter
-# (dormancy + low light), +20% in summer (peak transpiration), 0.8× autumn.
+# (dormancy + low light), +20% in summer (peak transpiration), 0.8x autumn.
 DEFAULT_SEASON_MULTIPLIER_INDOOR = {
     "winter": 0.5,
     "spring": 1.0,

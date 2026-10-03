@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+from typing import ClassVar
 
 from textual.app import ComposeResult
-from textual.binding import Binding
+from textual.binding import Binding, BindingType
 from textual.containers import Horizontal, VerticalScroll
 from textual.widgets import DataTable, Footer, Header, Static
 
@@ -18,7 +19,7 @@ class SystemScreen(DataScreen):
     """Server-wide state and maintenance actions."""
 
     AUTO_REFRESH = True
-    BINDINGS = [
+    BINDINGS: ClassVar[list[BindingType]] = [
         Binding("p", "toggle_scheduler", "Pause/resume"),
         Binding("S", "sync", "Sync sensors"),
         Binding("P", "plant_sync", "Plant-DB sync"),

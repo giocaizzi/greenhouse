@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any
+from typing import Any, ClassVar
 
 from textual.app import ComposeResult
-from textual.binding import Binding
+from textual.binding import Binding, BindingType
 from textual.containers import Horizontal, VerticalScroll
 from textual.widgets import DataTable, Footer, Header, Static
 
@@ -19,7 +19,7 @@ from greenhouse_cli.tui.widgets import KeyValue, refill, selected_key
 class SettingsScreen(DataScreen):
     """Edit preferences (``p``), global defaults (``g``) and vacation windows (``n``/``u``/``del``)."""
 
-    BINDINGS = [
+    BINDINGS: ClassVar[list[BindingType]] = [
         Binding("p", "edit_preferences", "Preferences"),
         Binding("g", "edit_global", "Global config"),
         Binding("n", "new_vacation", "New vacation"),

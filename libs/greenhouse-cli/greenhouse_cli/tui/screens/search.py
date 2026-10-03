@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import asyncio
 import re
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 
 from textual import on, work
 from textual.app import ComposeResult
+from textual.binding import BindingType
 from textual.containers import Vertical
 from textual.screen import ModalScreen
 from textual.widgets import DataTable, Input, Static
@@ -21,7 +22,7 @@ CLUSTER_HREF = re.compile(r"/clusters/(\d+)")
 class SearchScreen(ModalScreen[int | None]):
     """Type to search; ``enter`` on a hit dismisses with the hit's cluster ID."""
 
-    BINDINGS = [("escape", "dismiss(None)", "Close")]
+    BINDINGS: ClassVar[list[BindingType]] = [("escape", "dismiss(None)", "Close")]
 
     def compose(self) -> ComposeResult:
         with Vertical(classes="dialog search-dialog"):

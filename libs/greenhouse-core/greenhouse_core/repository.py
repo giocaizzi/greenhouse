@@ -60,7 +60,7 @@ _GLOBAL_CONFIG_DEFAULTS: dict[str, int | str | bool | None] = {
     "daily_cap_minutes": None,
     "max_events_per_day": None,
     # Quiet hours have no built-in fallback — the production migration seeds
-    # the global row with the canonical 00:00–05:00 window, and fresh-DB flows
+    # the global row with the canonical 00:00-05:00 window, and fresh-DB flows
     # (tests, dev installs) start with quiet hours disabled until explicitly
     # configured. See ``get_global_irrigation_config``.
     "quiet_start_hour": None,

@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, ClassVar
 
 from textual.app import ComposeResult
+from textual.binding import BindingType
 from textual.containers import Grid, Horizontal, Vertical
 from textual.screen import ModalScreen
 from textual.widgets import Button, Checkbox, Input, Label, Static
@@ -15,7 +16,11 @@ from greenhouse_cli.tui.sprites import watering_can_sprite
 class ConfirmScreen(ModalScreen[bool]):
     """Yes/no confirmation — every actuating action goes through this."""
 
-    BINDINGS = [("escape", "dismiss(False)", "Cancel"), ("y", "dismiss(True)", "Yes"), ("n", "dismiss(False)", "No")]
+    BINDINGS: ClassVar[list[BindingType]] = [
+        ("escape", "dismiss(False)", "Cancel"),
+        ("y", "dismiss(True)", "Yes"),
+        ("n", "dismiss(False)", "No"),
+    ]
 
     def __init__(self, message: str, confirm_label: str = "Confirm", danger: bool = True) -> None:
         super().__init__()
@@ -40,7 +45,7 @@ class ConfirmScreen(ModalScreen[bool]):
 class IrrigateScreen(ModalScreen[dict[str, Any] | None]):
     """Options for ``POST /clusters/{id}/irrigate`` — dry-run is the safe default."""
 
-    BINDINGS = [("escape", "dismiss(None)", "Cancel")]
+    BINDINGS: ClassVar[list[BindingType]] = [("escape", "dismiss(None)", "Cancel")]
 
     def __init__(self, cluster_name: str) -> None:
         super().__init__()
@@ -79,7 +84,7 @@ class IrrigateScreen(ModalScreen[dict[str, Any] | None]):
 class WaterNowScreen(ModalScreen[int | None]):
     """Ask how many minutes to run an irrigator manually (blank = device default)."""
 
-    BINDINGS = [("escape", "dismiss(None)", "Cancel")]
+    BINDINGS: ClassVar[list[BindingType]] = [("escape", "dismiss(None)", "Cancel")]
 
     def __init__(self, irrigator_name: str) -> None:
         super().__init__()
@@ -117,7 +122,7 @@ class WaterNowScreen(ModalScreen[int | None]):
 class LoginScreen(ModalScreen[tuple[str, str] | None]):
     """Collect credentials when the server answers 401."""
 
-    BINDINGS = [("escape", "dismiss(None)", "Cancel")]
+    BINDINGS: ClassVar[list[BindingType]] = [("escape", "dismiss(None)", "Cancel")]
 
     def __init__(self, server: str, error: str | None = None) -> None:
         super().__init__()

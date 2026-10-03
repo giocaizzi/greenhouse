@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+from typing import ClassVar
 
 from textual.app import ComposeResult
-from textual.binding import Binding
+from textual.binding import Binding, BindingType
 from textual.containers import Grid, VerticalScroll
 from textual.widgets import Footer, Header, Static
 
@@ -19,7 +20,7 @@ class DashboardScreen(DataScreen):
     """Landing screen — every cluster at a glance."""
 
     AUTO_REFRESH = True
-    BINDINGS = [
+    BINDINGS: ClassVar[list[BindingType]] = [
         Binding("n", "new_cluster", "New cluster"),
         Binding("S", "sync", "Sync sensors"),
         Binding("c", "check_all", "Check all"),

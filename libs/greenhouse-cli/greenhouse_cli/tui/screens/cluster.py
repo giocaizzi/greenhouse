@@ -10,10 +10,10 @@ from __future__ import annotations
 import asyncio
 import re
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 from textual.app import ComposeResult
-from textual.binding import Binding
+from textual.binding import Binding, BindingType
 from textual.containers import Horizontal, HorizontalScroll, Vertical, VerticalScroll
 from textual.widgets import DataTable, Footer, Header, Static, TabbedContent, TabPane
 
@@ -36,7 +36,7 @@ class ClusterScreen(DataScreen):
     """Everything about one cluster, in tabs."""
 
     AUTO_REFRESH = True
-    BINDINGS = [
+    BINDINGS: ClassVar[list[BindingType]] = [
         Binding("escape", "app.pop_screen", "Back"),
         Binding("i", "irrigate", "Irrigate"),
         Binding("w", "water_now", "Water now"),

@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, ClassVar
 
 from rich.text import Text
 from textual.app import ComposeResult
-from textual.binding import Binding
+from textual.binding import Binding, BindingType
 from textual.containers import Vertical
 from textual.widgets import DataTable, Footer, Header, Static
 
@@ -21,7 +21,7 @@ class AlertsScreen(DataScreen):
     """The alert inbox — ``k`` acknowledge, ``v`` resolve, ``f`` filter."""
 
     AUTO_REFRESH = True
-    BINDINGS = [
+    BINDINGS: ClassVar[list[BindingType]] = [
         Binding("f", "cycle_filter", "Filter"),
         Binding("k", "acknowledge", "Acknowledge"),
         Binding("v", "resolve", "Resolve"),

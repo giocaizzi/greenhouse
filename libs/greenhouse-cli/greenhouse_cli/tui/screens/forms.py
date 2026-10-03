@@ -5,9 +5,10 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any
+from typing import Any, ClassVar
 
 from textual.app import ComposeResult
+from textual.binding import BindingType
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import Button, Checkbox, Input, Label, Select, Static
@@ -82,7 +83,7 @@ def _display(f: Field) -> str:
 class FormScreen(ModalScreen[dict[str, Any] | None]):
     """Render ``fields`` and dismiss with ``{name: parsed value}`` or ``None``."""
 
-    BINDINGS = [("escape", "dismiss(None)", "Cancel"), ("ctrl+s", "submit", "Save")]
+    BINDINGS: ClassVar[list[BindingType]] = [("escape", "dismiss(None)", "Cancel"), ("ctrl+s", "submit", "Save")]
 
     def __init__(self, title: str, fields: list[Field], submit_label: str = "Save", note: str | None = None) -> None:
         super().__init__()
