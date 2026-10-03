@@ -26,9 +26,6 @@ from greenhouse_server.services.notify import NtfyClient, maybe_notify
 # Alert severities that warrant a push (info is suppressed).
 _NOTIFY_SEVERITIES = ("warning", "critical")
 
-SOURCE_DECISION = "decision"
-SOURCE_SYSTEM = "system"
-
 
 def _dedup_key(source: str, code: str, cluster_id: int | None, message: str) -> str:
     """Deterministic key so repeats collapse onto the same row.
