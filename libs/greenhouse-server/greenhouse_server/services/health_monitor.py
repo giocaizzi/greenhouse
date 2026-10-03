@@ -46,11 +46,6 @@ from greenhouse_server.services.notify import NtfyClient
 
 logger = logging.getLogger(__name__)
 
-# Legacy alert code raised by the original PumpWatcher implementation.
-# Carried here so :meth:`migrate_legacy_pump_alerts` can resolve open rows
-# on startup once the new ``health:`` dedup_key takes over.
-LEGACY_PUMP_DRY_RUN_CODE = "pump_dry_run"
-
 
 HEALTH_ALARM_TO_TRIGGER: dict[HealthAlarm, TriggerCode] = {
     HealthAlarm.NO_WATER: TriggerCode.DEVICE_NO_WATER,
@@ -263,27 +258,6 @@ class DeviceHealthMonitor:
                 cluster_id=cluster_id,
             )
 
-    # ── Legacy alias migration (startup hook) ─────────────────────────────
-
-    def migrate_legacy_pump_alerts(self) -> int:
-        """Resolve open ``pump_dry_run`` alerts so the new ``health:`` key takes over.
-
-        PR 1.5 unifies the dedup_key for pump dry-run from
-        ``pump::pump_dry_run::…`` to ``health:irrigator:{id}:no_water``.
-        Without this migration a restart would surface both rows in the
-        inbox until the next live trip resolves the legacy one.
-        """
-        from sqlalchemy import select
-
-        from greenhouse_core.models import Alert
-
-        count = 0
-        stmt = select(Alert).where(Alert.code == LEGACY_PUMP_DRY_RUN_CODE, Alert.status != "resolved")
-        for alert in self._repo.session.scalars(stmt):
-            self._repo.resolve_alert(alert.id)
-            count += 1
-        return count
-
     # ── Internals ─────────────────────────────────────────────────────────
 
     def _derive_alarms(self, state: DeviceHealthState) -> frozenset[HealthAlarm]:
@@ -406,6 +380,5 @@ def _is_low_battery_state(raw: object) -> bool:
 __all__ = [
     "DeviceHealthMonitor",
     "HEALTH_ALARM_TO_TRIGGER",
-    "LEGACY_PUMP_DRY_RUN_CODE",
     "SOURCE_HEALTH",
 ]

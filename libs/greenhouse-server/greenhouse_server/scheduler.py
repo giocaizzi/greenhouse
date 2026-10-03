@@ -425,9 +425,6 @@ def init_health_monitor(app: FastAPI, settings: Settings) -> None:
         repo = IrrigationRepository(session)
         monitor = DeviceHealthMonitor(repo=repo, registry=registry, notifier=getattr(app.state, "ntfy_notifier", None))
         try:
-            migrated = monitor.migrate_legacy_pump_alerts()
-            if migrated:
-                logger.info("Migrated %d legacy pump_dry_run alerts to health: keys", migrated)
             monitor.backfill_from_history()
             session.commit()
         except Exception:

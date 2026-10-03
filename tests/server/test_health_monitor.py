@@ -16,7 +16,6 @@ from fake_devices import FakeIrrigatorAdapter, FakeSensorAdapter
 from greenhouse_core.devices import DeviceRegistry
 from greenhouse_core.devices.health import DeviceHealthState, HealthAlarm
 from greenhouse_core.models import (
-    ENTITY_IRRIGATOR,
     Alert,
     Base,
     Irrigator,
@@ -24,7 +23,6 @@ from greenhouse_core.models import (
 )
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.services.health_monitor import (
-    LEGACY_PUMP_DRY_RUN_CODE,
     SOURCE_HEALTH,
     DeviceHealthMonitor,
 )
@@ -247,32 +245,6 @@ class TestActuationGate:
         blocked, _ = monitor_.is_actuation_blocked(irrigator)
         # LOW_BATTERY is advisory, not actuation-blocking.
         assert blocked is False
-
-
-class TestLegacyMigration:
-    """Open pump_dry_run alerts are auto-resolved on startup."""
-
-    def test_migrates_open_legacy_alert(self, monitor, cluster_irrigator_sensor):
-        monitor_, *_ = monitor
-        irrigator, _ = cluster_irrigator_sensor
-
-        # Simulate an existing legacy alert raised by the previous codebase.
-        repo = monitor_._repo
-        repo.upsert_alert(
-            dedup_key="pump::pump_dry_run::1::irrigator1",
-            source="pump",
-            code=LEGACY_PUMP_DRY_RUN_CODE,
-            title="Pump dry-run · legacy",
-            message="legacy row",
-            severity="critical",
-            entity_type=ENTITY_IRRIGATOR,
-            entity_id=irrigator.id,
-            cluster_id=irrigator.cluster_id,
-        )
-        migrated = monitor_.migrate_legacy_pump_alerts()
-        assert migrated == 1
-        legacy = repo.session.scalar(select(Alert).where(Alert.dedup_key == "pump::pump_dry_run::1::irrigator1"))
-        assert legacy.status == "resolved"
 
 
 class TestBackfillFromHistory:
