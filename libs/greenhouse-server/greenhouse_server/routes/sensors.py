@@ -1,7 +1,6 @@
 """Sensor CRUD routes."""
 
 from fastapi import APIRouter, HTTPException, Query, status
-from sqlalchemy.exc import IntegrityError
 
 from greenhouse_core.schemas import (
     CreateSensorRequest,
@@ -13,6 +12,12 @@ from greenhouse_core.schemas import (
     UpdateSensorRequest,
 )
 from greenhouse_server.deps import RepoDep, require_cluster
+from greenhouse_server.services.inventory import (
+    DeviceIdExistsError,
+    PlantNotInClusterError,
+    create_sensor,
+    ensure_plant_in_cluster,
+)
 
 router = APIRouter(tags=["sensors"])
 
@@ -64,23 +69,21 @@ def add_sensor(cluster_id: int, request: CreateSensorRequest, repo: RepoDep):
         The created sensor record.
     """
     require_cluster(repo, cluster_id)
-    if request.plant_id:
-        plants = repo.get_plants_in_cluster(cluster_id)
-        if not any(p.id == request.plant_id for p in plants):
-            raise HTTPException(status_code=404, detail=f"Plant {request.plant_id} not found in cluster")
     try:
-        sensor_id = repo.add_sensor(
-            cluster_id=cluster_id,
+        sensor_id = create_sensor(
+            repo,
+            cluster_id,
             tuya_device_id=request.tuya_device_id,
             name=request.name,
             sensor_type=request.type,
             config=request.config or {},
             plant_id=request.plant_id,
         )
-        repo.session.commit()
-    except IntegrityError:
-        repo.session.rollback()
+    except PlantNotInClusterError as exc:
+        raise HTTPException(status_code=404, detail=f"Plant {exc.plant_id} not found in cluster") from None
+    except DeviceIdExistsError:
         raise HTTPException(status_code=409, detail="Device ID already exists") from None
+    repo.session.commit()
     sensors = repo.get_sensors_in_cluster(cluster_id)
     return next(s for s in sensors if s.id == sensor_id)
 
@@ -134,11 +137,15 @@ def update_sensor(cluster_id: int, sensor_id: int, request: UpdateSensorRequest,
 
     Raises:
         HTTPException: 404 if the sensor does not exist or belongs to a
-            different cluster.
+            different cluster, or if ``plant_id`` is not a plant of that cluster.
     """
     sensor = repo.get_sensor(sensor_id)
     if not sensor or sensor.cluster_id != cluster_id:
         raise HTTPException(status_code=404, detail="Sensor not found in cluster")
+    try:
+        ensure_plant_in_cluster(repo, cluster_id, request.plant_id)
+    except PlantNotInClusterError as exc:
+        raise HTTPException(status_code=404, detail=f"Plant {exc.plant_id} not found in cluster") from None
     updated = repo.update_sensor(sensor_id, **request.model_dump(exclude_none=True))
     repo.session.commit()
     return updated

@@ -6,6 +6,8 @@ from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from greenhouse_server.deps import RepoDep, require_cluster
+from greenhouse_server.services import inventory
+from greenhouse_server.services.inventory import DeviceIdExistsError, PlantNotInClusterError
 from greenhouse_server.web.context import base_context
 from greenhouse_server.web.templating import templates
 
@@ -58,14 +60,14 @@ def create_sensor(
 ):
     require_cluster(repo, cluster_id)
     pid = _parse_optional_plant_id(plant_id)
-    repo.add_sensor(
-        cluster_id=cluster_id,
-        tuya_device_id=tuya_device_id,
-        name=name,
-        sensor_type=type,
-        config={},
-        plant_id=pid,
-    )
+    try:
+        inventory.create_sensor(
+            repo, cluster_id, tuya_device_id=tuya_device_id, name=name, sensor_type=type, config={}, plant_id=pid
+        )
+    except PlantNotInClusterError as exc:
+        raise HTTPException(404, f"Plant {exc.plant_id} not found in cluster") from None
+    except DeviceIdExistsError:
+        raise HTTPException(409, "Device ID already exists") from None
     repo.session.commit()
     return RedirectResponse(url=f"/clusters/{cluster_id}#sensors", status_code=303)
 
@@ -92,6 +94,10 @@ def update_sensor(
 ):
     _get_sensor_in_cluster(repo, cluster_id, sensor_id)
     pid = _parse_optional_plant_id(plant_id)
+    try:
+        inventory.ensure_plant_in_cluster(repo, cluster_id, pid)
+    except PlantNotInClusterError as exc:
+        raise HTTPException(404, f"Plant {exc.plant_id} not found in cluster") from None
     # update_sensor routes plant_id changes through the assignment-history-aware
     # path. Pass plant_id explicitly even when None so an empty form unassigns.
     repo.update_sensor(sensor_id, name=name, type=type, plant_id=pid)
