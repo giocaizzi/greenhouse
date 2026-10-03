@@ -787,7 +787,7 @@
      "plants"
     ],
     "summary": "Sync Plants",
-    "description": "Refresh plant care thresholds from the evidence-based plant database.\n\nResolves species to care data lookup and writes the result onto the matching\nplant rows. Use this after editing the bundled plant_database.json or after\nadding plants without explicit care fields. Scope is widening: single plant\nto cluster to entire database, depending on which field is set.\n\nArgs:\n    request: One of plant_id (single plant), cluster_id (all plants in\n        that cluster), or neither (every plant in every cluster).\n\nReturns:\n    Count of plants successfully synced and a list of error messages for\n    any that failed (failures do not abort the rest of the run).\n\nRaises:\n    HTTPException: 404 if plant_id is set and no such plant exists.",
+    "description": "Refresh plant care thresholds from the evidence-based plant database.\n\nResolves species to care data lookup and writes the result onto the matching\nplant rows. Use this after editing the bundled plant_database.json or after\nadding plants without explicit care fields. Scope is widening: single plant\nto cluster to entire database, depending on which field is set.\n\nArgs:\n    request: One of plant_id (single plant), cluster_id (all plants in\n        that cluster), or neither (every plant in every cluster).\n\nReturns:\n    Count of plants successfully synced and a list of error messages for\n    any that failed (failures do not abort the rest of the run).\n\nRaises:\n    HTTPException: 404 if plant_id is set and no such plant exists, or if\n        only cluster_id is set and no such cluster exists.",
     "operationId": "sync_plants",
     "requestBody": {
      "content": {

@@ -12,7 +12,7 @@ from greenhouse_server.deps import (
     SyncServiceDep,
     require_cluster,
 )
-from greenhouse_server.services.cluster import PlantNotFoundError
+from greenhouse_server.services.cluster import ClusterNotFoundError, PlantNotFoundError
 from greenhouse_server.services.irrigation import check_has_alerts
 from greenhouse_server.web.context import base_context
 from greenhouse_server.web.templating import templates
@@ -116,6 +116,8 @@ def sync_plants(
         synced, errors = svc.sync_plants(plant_id=pid, cluster_id=cid)
     except PlantNotFoundError:
         raise HTTPException(404, f"Plant {pid} not found") from None
+    except ClusterNotFoundError:
+        raise HTTPException(404, "Cluster not found") from None
 
     repo.session.commit()
     return templates.TemplateResponse(

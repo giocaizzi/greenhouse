@@ -16,7 +16,7 @@ from greenhouse_core.schemas import (
     UpdatePlantRequest,
 )
 from greenhouse_server.deps import ClusterServiceDep, PlantHealthServiceDep, RepoDep, require_cluster
-from greenhouse_server.services.cluster import PlantNotFoundError
+from greenhouse_server.services.cluster import ClusterNotFoundError, PlantNotFoundError
 
 router = APIRouter(tags=["plants"])
 
@@ -214,12 +214,15 @@ def sync_plants(request: SyncPlantsRequest, repo: RepoDep, cluster_svc: ClusterS
         any that failed (failures do not abort the rest of the run).
 
     Raises:
-        HTTPException: 404 if plant_id is set and no such plant exists.
+        HTTPException: 404 if plant_id is set and no such plant exists, or if
+            only cluster_id is set and no such cluster exists.
     """
     try:
         synced, errors = cluster_svc.sync_plants(plant_id=request.plant_id, cluster_id=request.cluster_id)
     except PlantNotFoundError:
         raise HTTPException(status_code=404, detail=f"Plant {request.plant_id} not found") from None
+    except ClusterNotFoundError:
+        raise HTTPException(status_code=404, detail="Cluster not found") from None
 
     repo.session.commit()
     return SyncPlantsResponse(synced=synced, errors=errors)

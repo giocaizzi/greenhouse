@@ -18,6 +18,10 @@ class PlantNotFoundError(LookupError):
     """Raised by ``ClusterService.sync_plants`` when no cluster lists the requested plant id."""
 
 
+class ClusterNotFoundError(LookupError):
+    """Raised by ``ClusterService.sync_plants`` when the requested cluster id does not exist."""
+
+
 def decision_to_view(decision: IrrigationDecision) -> dict[str, Any]:
     """Render a decision for templates and JSON responses.
 
@@ -180,6 +184,7 @@ class ClusterService:
 
         Raises:
             PlantNotFoundError: ``plant_id`` is set and no cluster lists that plant.
+            ClusterNotFoundError: ``plant_id`` is not set, ``cluster_id`` is, and no such cluster exists.
         """
         if plant_id:
             plant = self._find_plant_in_clusters(plant_id)
@@ -206,10 +211,14 @@ class ClusterService:
         """Sync every plant of one cluster (or of all clusters), collecting per-plant errors."""
         errors: list[str] = []
         synced = 0
-        clusters = [self._repo.get_cluster(cluster_id)] if cluster_id else self._repo.list_clusters()
+        if cluster_id:
+            cluster = self._repo.get_cluster(cluster_id)
+            if cluster is None:
+                raise ClusterNotFoundError(cluster_id)
+            clusters = [cluster]
+        else:
+            clusters = self._repo.list_clusters()
         for cluster in clusters:
-            if not cluster:
-                continue
             for plant in self._repo.get_plants_in_cluster(cluster.id):
                 try:
                     self.sync_plant_with_db(plant)

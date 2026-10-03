@@ -119,12 +119,12 @@ def test_api_sync_plant_scan_does_not_find_orphan_plants(app, client):
     assert resp.json() == {"detail": f"Plant {orphan} not found"}
 
 
-def test_api_sync_unknown_cluster_current_behavior_reports_zero(app, client):
-    """Pins current (buggy) behavior: an unknown cluster_id syncs nothing and returns 200 (B-16) — see REFACTOR_NOTES.md."""
+def test_api_sync_unknown_cluster_is_404(app, client):
+    """D12 (was B-16): an unknown cluster_id is a 404, not a silent ``synced=0``."""
     _seed(app, {"C1": ["Fern"]})
     resp = client.post("/api/v1/plants/sync", json={"cluster_id": 999})
-    assert resp.status_code == 200
-    assert resp.json() == {"synced": 0, "errors": []}
+    assert resp.status_code == 404
+    assert resp.json() == {"detail": "Cluster not found"}
 
 
 def test_api_sync_plant_id_zero_means_every_cluster(app, client):
@@ -151,13 +151,13 @@ def test_api_sync_single_plant_error_is_not_caught(app, client, failing_species)
 # ── Web POST /plants/sync ────────────────────────────────────────────────────
 
 
-def test_web_sync_unknown_cluster_current_behavior_reports_zero(app, client):
-    """Pins current (buggy) behavior: an unknown cluster id renders "0 plants synced" (B-16) — see REFACTOR_NOTES.md."""
+def test_web_sync_unknown_cluster_is_404(app, client):
+    """D12 (was B-16): an unknown cluster id is a 404 (same as the API), not "0 plants synced"."""
     _seed(app, {"C1": ["Fern"]})
     resp = client.post("/plants/sync", data={"cluster_id": "999"})
-    assert resp.status_code == 200
-    assert '<span class="mono">0</span> plants synced' in resp.text
-    assert "error" not in resp.text.split("plants synced", 1)[1]
+    assert resp.status_code == 404
+    assert "plants synced" not in resp.text
+    assert "Cluster not found" in resp.text
 
 
 def test_web_sync_collects_per_plant_errors_and_keeps_going(app, client, failing_species):
