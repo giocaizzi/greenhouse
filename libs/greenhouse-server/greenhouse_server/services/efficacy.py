@@ -31,6 +31,7 @@ def score_cluster(
     """Score completed irrigation events for a cluster over the given window.
 
     Args:
+        repo: Repository to read events and readings from.
         cluster_id: Cluster to analyse.
         days: Look-back window in days (default 14).
 

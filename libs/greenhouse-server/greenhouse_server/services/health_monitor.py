@@ -165,7 +165,7 @@ class DeviceHealthMonitor:
             except Exception:
                 logger.exception("Health poll failed for sensor %d", sensor.id)
 
-    # ── Recording (shared with PumpWatcher) ───────────────────────────────
+    # ── Recording (shared with PumpWatcherService) ────────────────────────
 
     def record(
         self,

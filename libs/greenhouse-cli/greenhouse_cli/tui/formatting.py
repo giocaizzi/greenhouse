@@ -48,6 +48,7 @@ METRICS: dict[str, tuple[str, str]] = {
 
 
 def now() -> int:
+    """Current Unix time in whole seconds (one seam for the relative-time helpers)."""
     return int(time.time())
 
 

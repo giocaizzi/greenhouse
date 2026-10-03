@@ -46,6 +46,7 @@ class ClusterSummary:
 
     @property
     def mood(self) -> Mood:
+        """The sprite mood for the cluster's driest reading against its target band."""
         return mood_for(self.min_moisture, self.band_min, self.band_max)
 
 

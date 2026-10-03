@@ -50,6 +50,10 @@ def build_plant_chart_payload(
     hours: int,
     metric: Metric,
 ) -> dict[str, Any]:
+    """One plant's chart: per-sensor series, the cluster's irrigation events and the target band.
+
+    Returns ``{}`` when the plant does not exist.
+    """
     plant: Plant | None = repo.get_plant(plant_id)
     if plant is None:
         return {}
@@ -78,6 +82,7 @@ def build_cluster_chart_payload(
     hours: int,
     metric: Metric,
 ) -> dict[str, Any]:
+    """A cluster's chart: one series per sensor, its irrigation events and the cluster-wide band."""
     cluster = repo.get_cluster(cluster_id)
     if cluster is None:
         return {}
@@ -102,9 +107,11 @@ def _build_plant_sensor_datasets(
     hours: int,
     metric: Metric,
 ) -> list[dict[str, Any]]:
-    """Assignment-aware variant: readings are filtered to windows when the
-    sensor was actually linked to this plant. One dataset per sensor that ever
-    served this plant within the lookback window."""
+    """Assignment-aware plant series: one dataset per sensor that served the plant in the window.
+
+    Readings are filtered to the periods when each sensor was actually linked to
+    this plant.
+    """
     field = _metric_field(metric)
     since = int(time.time()) - hours * SECONDS_PER_HOUR
     readings = repo.readings_for_plant(plant_id, since_ts=since)
