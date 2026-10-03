@@ -91,10 +91,15 @@ select = [
     "C4",  # flake8-comprehensions
     "UP",  # pyupgrade
 ]
-# Complexity ratchet (refactor plan T0.3 / target §11): today's offenders are listed in
-# per-file-ignores below; the integrator removes each entry once its file is clean (I1).
+# Lint ratchet (refactor/40-lint-ratchet.md): every family below is enforced; today's offenders are
+# listed per file in per-file-ignores and the integrator removes each entry once its file is clean.
 extend-select = [
     "C90", "PLR0911", "PLR0912", "PLR0915",
+    "PLR0916",  # too-many-boolean-expressions
+    "PLR1702",  # too-many-nested-blocks (preview, explicit) — cross-checks sizecheck's nesting limit
+    "PLR0914",  # too-many-locals (preview, explicit)
+    "PLR0904",  # too-many-public-methods (preview, explicit)
+    "SIM117",   # multiple-with-statements
     "ERA",  # eradicate: commented-out code
     "PGH",  # pygrep-hooks: blanket noqa / type: ignore without codes
     "SLF",  # flake8-self: private member access across objects
@@ -104,9 +109,22 @@ ignore = [
     "E501",  # line too long (handled by formatter)
     "B008",  # function call in argument defaults
 ]
+# Preview rules are opt-in one by one: with explicit-preview-rules only the preview codes listed by full
+# name activate. Measured on this tree: 0 extra findings on the stable rules selected here. (Preview does
+# change two stable rules this repo does not select: BLE001 and S310 report fewer hits.) Preview rules may
+# change between ruff releases — the version is pinned in uv.lock and .pre-commit-config.yaml.
+preview = true
+explicit-preview-rules = true
 
 [tool.ruff.lint.mccabe]
 max-complexity = 8
+
+[tool.ruff.lint.pylint]
+max-branches = 8
+# 23 statements best approximates the 40-body-line rule of refactor/scripts/sizecheck.py on today's
+# libs/ code (measured over every function: 3 false positives, 1 false negative; 22 → 8 errors, 24 → 6).
+max-statements = 23
+max-nested-blocks = 3
 
 [tool.ruff.format]
 quote-style = "double"
@@ -116,16 +134,31 @@ indent-style = "space"
 "__init__.py" = ["F401"]  # unused imports in __init__
 "tests/*" = ["B011"]  # assert False check
 "scripts/*" = ["E402"]  # intentional sys.path before import
-"tests/**" = ["C90", "PLR0911", "PLR0912", "PLR0915", "ERA001", "SLF001"]  # frozen safety net: exceeds limits, pokes privates
-"refactor/**" = ["C90", "PLR0911", "PLR0912", "PLR0915"]  # refactor tooling scripts, not shipped code
-# Complexity offenders at max-complexity 8 (baseline refactor-gate1); only shrinks.
-"libs/greenhouse-cli/greenhouse_cli/commands/auth.py" = ["C901"]
+# Frozen safety net: tests exceed size limits and poke privates; never edited to satisfy a lint rule.
+"tests/**" = [
+    "C90", "PLR0911", "PLR0912", "PLR0915", "PLR0904", "PLR0914", "PLR1702", "SIM117", "ERA001", "SLF001",
+]
+"refactor/**" = ["C90", "PLR0911", "PLR0912", "PLR0915", "PLR0914", "PLR1702"]  # refactor tooling scripts, not shipped
+"libs/greenhouse-core/greenhouse_core/migrations/versions/*" = ["PLR0915"]  # generated Alembic DDL, out of scope
+# Ratchet offenders (baseline refactor-gate1 + lint ratchet step 0); each list only shrinks.
+"libs/greenhouse-cli/greenhouse_cli/client.py" = ["PLR0904"]
+"libs/greenhouse-cli/greenhouse_cli/commands/auth.py" = ["C901", "PLR0915"]
 "libs/greenhouse-cli/greenhouse_cli/commands/operations.py" = ["C901", "PLR0915"]
-"libs/greenhouse-cli/greenhouse_cli/tui/screens/forms.py" = ["C901", "PLR0911"]
-"libs/greenhouse-core/greenhouse_core/devices/irrigators/ik10pw.py" = ["C901", "PLR0911"]
-"libs/greenhouse-core/greenhouse_core/devices/irrigators/tuya_generic.py" = ["C901"]
-"libs/greenhouse-core/greenhouse_core/logic/engine.py" = ["C901", "PLR0911", "PLR0912", "PLR0915"]
+"libs/greenhouse-cli/greenhouse_cli/tui/screens/cluster.py" = ["PLR0904", "PLR0915", "PLR1702"]
+"libs/greenhouse-cli/greenhouse_cli/tui/screens/forms.py" = ["C901", "PLR0911", "PLR0912", "PLR1702"]
+"libs/greenhouse-cli/greenhouse_cli/tui/widgets.py" = ["PLR0915"]
+"libs/greenhouse-core/greenhouse_core/devices/gateway.py" = ["PLR0915"]
+"libs/greenhouse-core/greenhouse_core/devices/irrigators/ik10pw.py" = ["C901", "PLR0911", "PLR0915", "PLR1702"]
+"libs/greenhouse-core/greenhouse_core/devices/irrigators/tuya_generic.py" = ["C901", "PLR0912", "PLR1702"]
+"libs/greenhouse-core/greenhouse_core/logic/engine.py" = ["C901", "PLR0911", "PLR0912", "PLR0914", "PLR0915"]
+"libs/greenhouse-core/greenhouse_core/repository.py" = ["PLR0904"]
+"libs/greenhouse-core/greenhouse_core/sync.py" = ["PLR0915", "PLR1702"]
+"libs/greenhouse-server/greenhouse_server/services/bulk.py" = ["PLR1702"]
+"libs/greenhouse-server/greenhouse_server/services/forecast.py" = ["PLR0914"]
 "libs/greenhouse-server/greenhouse_server/services/health_monitor.py" = ["PLR0911"]
+"libs/greenhouse-server/greenhouse_server/services/irrigation.py" = ["PLR0915"]
+"libs/greenhouse-server/greenhouse_server/services/pump_watcher.py" = ["PLR0915"]
+"libs/greenhouse-server/greenhouse_server/web/filters.py" = ["PLR0912"]
 
 [tool.importlinter]
 root_packages = ["greenhouse_core", "greenhouse_server", "greenhouse_cli"]
