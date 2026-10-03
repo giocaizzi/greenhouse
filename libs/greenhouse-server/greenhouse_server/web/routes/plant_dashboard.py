@@ -10,7 +10,14 @@ from fastapi.responses import RedirectResponse
 
 from greenhouse_core.models import Plant
 from greenhouse_core.repository import SameClusterMoveError
-from greenhouse_server.deps import PlantDbDep, PlantHealthServiceDep, RepoDep, require_metric, require_plant_in_cluster
+from greenhouse_server.deps import (
+    MAX_LOOKBACK_HOURS,
+    PlantDbDep,
+    PlantHealthServiceDep,
+    RepoDep,
+    require_metric,
+    require_plant_in_cluster,
+)
 from greenhouse_server.services.charts import (
     ALLOWED_HOURS,
     build_plant_chart_payload,
@@ -40,7 +47,7 @@ def plant_dashboard(
     repo: RepoDep,
     plant_db: PlantDbDep,
     health_svc: PlantHealthServiceDep,
-    hours: int = Query(24, ge=1, le=8760),
+    hours: int = Query(24, ge=1, le=MAX_LOOKBACK_HOURS),
 ):
     plant = require_plant_in_cluster(repo, cluster_id, plant_id)
     cluster = repo.get_cluster(cluster_id)
@@ -132,7 +139,7 @@ def plant_chart_fragment(
     repo: RepoDep,
     plant_db: PlantDbDep,
     metric: str = Query("soil_moisture"),
-    hours: int = Query(24, ge=1, le=8760),
+    hours: int = Query(24, ge=1, le=MAX_LOOKBACK_HOURS),
 ):
     chart_metric = require_metric(metric)
     require_plant_in_cluster(repo, cluster_id, plant_id)

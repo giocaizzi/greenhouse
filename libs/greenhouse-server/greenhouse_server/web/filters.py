@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 import time
 
+from greenhouse_core.constants import AGE_BADGE_STALE_SECONDS, SECONDS_PER_DAY, SECONDS_PER_HOUR
 from greenhouse_core.utils import format_timestamp
 
 # Matches common Unicode emoji ranges. Used to scrub decorative glyphs out of
@@ -14,9 +15,8 @@ _EMOJI_RE = re.compile(
     flags=re.UNICODE,
 )
 
-# Past this age we treat readings as "stale" — avoids absurd values like
-# "20567d ago" leaking into the UI from seed data or long-offline sensors.
-_AGE_STALE_SECONDS = 7 * 86400
+_SECONDS_PER_MINUTE = 60
+_MINUTES_PER_HOUR = 60
 
 
 def format_ts(ts: int | float | None, fmt: str = "%Y-%m-%d %H:%M") -> str:
@@ -25,7 +25,9 @@ def format_ts(ts: int | float | None, fmt: str = "%Y-%m-%d %H:%M") -> str:
     return format_timestamp(float(ts), fmt)
 
 
-def relative_age(ts: int | float | None, *, missing: str = "—", stale_after: int | None = _AGE_STALE_SECONDS) -> str:
+def relative_age(
+    ts: int | float | None, *, missing: str = "—", stale_after: int | None = AGE_BADGE_STALE_SECONDS
+) -> str:
     """The one "how long ago" formatter: ``Ns`` / ``Nm`` / ``Nh`` / ``Nd ago`` for a Unix timestamp.
 
     ``missing`` is shown for ``None``; from ``stale_after`` seconds on the age reads
@@ -35,14 +37,14 @@ def relative_age(ts: int | float | None, *, missing: str = "—", stale_after: i
     if ts is None:
         return missing
     delta = max(0, int(time.time() - float(ts)))
-    if delta < 60:
+    if delta < _SECONDS_PER_MINUTE:
         return f"{delta}s ago"
-    if delta < 3600:
-        return f"{delta // 60}m ago"
-    if delta < 86400:
-        return f"{delta // 3600}h ago"
+    if delta < SECONDS_PER_HOUR:
+        return f"{delta // _SECONDS_PER_MINUTE}m ago"
+    if delta < SECONDS_PER_DAY:
+        return f"{delta // SECONDS_PER_HOUR}h ago"
     if stale_after is None or delta < stale_after:
-        return f"{delta // 86400}d ago"
+        return f"{delta // SECONDS_PER_DAY}d ago"
     return "stale"
 
 
@@ -96,9 +98,9 @@ def decision_badge(action: str | None) -> str:
 def format_minutes(n: int | None) -> str:
     if n is None:
         return "—"
-    if n < 60:
+    if n < _MINUTES_PER_HOUR:
         return f"{n} min"
-    h, m = divmod(n, 60)
+    h, m = divmod(n, _MINUTES_PER_HOUR)
     return f"{h}h {m}m" if m else f"{h}h"
 
 

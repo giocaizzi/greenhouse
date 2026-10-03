@@ -14,6 +14,8 @@ from greenhouse_server.web.templating import templates
 
 router = APIRouter(include_in_schema=False)
 
+_ALERT_LIST_LIMIT = 200  # rows the inbox page (and its post-sync refresh) renders
+
 
 @router.get("/alerts")
 def alert_list(
@@ -23,7 +25,7 @@ def alert_list(
     cluster_id: int | None = Query(None),
     plant_id: int | None = Query(None),
 ):
-    alerts = repo.list_alerts(status=status, cluster_id=cluster_id, plant_id=plant_id, limit=200)
+    alerts = repo.list_alerts(status=status, cluster_id=cluster_id, plant_id=plant_id, limit=_ALERT_LIST_LIMIT)
     open_count = repo.count_open_alerts()
     return templates.TemplateResponse(
         request,
@@ -69,7 +71,7 @@ def resolve_alert(request: Request, alert_id: int, repo: RepoDep):
 def sync_alerts(request: Request, repo: RepoDep, plant_db: PlantDbDep):
     open_count = sync_all_alerts(repo, plant_db)
     repo.commit()
-    alerts = repo.list_alerts(limit=200)
+    alerts = repo.list_alerts(limit=_ALERT_LIST_LIMIT)
     toast = json.dumps({"severity": "info", "title": "Synced", "message": f"{open_count} open alert(s) after sync."})
     return templates.TemplateResponse(
         request,

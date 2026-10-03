@@ -11,7 +11,7 @@ from greenhouse_core.schemas import (
     PlantHealthTimelineResponse,
     PlantResponse,
 )
-from greenhouse_server.deps import PlantDbDep, RepoDep, require_metric, require_plant
+from greenhouse_server.deps import MAX_LOOKBACK_HOURS, PlantDbDep, RepoDep, require_metric, require_plant
 from greenhouse_server.services.charts import (
     build_cluster_chart_payload,
     build_heatmap_payload,
@@ -42,7 +42,7 @@ def plant_chart_data(
     plant_id: int,
     repo: RepoDep,
     plant_db: PlantDbDep,
-    hours: int = Query(24, ge=1, le=8760),
+    hours: int = Query(24, ge=1, le=MAX_LOOKBACK_HOURS),
     metric: str = Query("soil_moisture"),
 ):
     """Time-series chart payload for a single plant.
@@ -70,7 +70,7 @@ def cluster_chart_data(
     cluster_id: int,
     repo: RepoDep,
     plant_db: PlantDbDep,
-    hours: int = Query(24, ge=1, le=8760),
+    hours: int = Query(24, ge=1, le=MAX_LOOKBACK_HOURS),
     metric: str = Query("soil_moisture"),
 ):
     """Time-series chart payload aggregated across every sensor in a cluster.
@@ -94,7 +94,7 @@ def cluster_chart_data(
 def cluster_overlay(
     cluster_id: int,
     repo: RepoDep,
-    hours: int = Query(72, ge=1, le=8760),
+    hours: int = Query(72, ge=1, le=MAX_LOOKBACK_HOURS),
 ):
     """Multi-metric overlay payload with soil moisture, humidity, and light normalised to 0-100.
 

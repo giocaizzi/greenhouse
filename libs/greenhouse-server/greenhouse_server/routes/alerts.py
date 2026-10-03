@@ -8,6 +8,8 @@ from greenhouse_server.services.alerts import sync_all_alerts, sync_cluster_aler
 
 router = APIRouter(tags=["alerts"])
 
+_ALERT_LIST_MAX = 500  # page-size ceiling of GET /alerts; also the post-sync list length
+
 
 @router.get("/alerts", response_model=AlertListResponse)
 def list_alerts(
@@ -15,7 +17,7 @@ def list_alerts(
     status: str | None = Query(default=None),
     cluster_id: int | None = Query(default=None),
     plant_id: int | None = Query(default=None),
-    limit: int = Query(default=100, ge=1, le=500),
+    limit: int = Query(default=100, ge=1, le=_ALERT_LIST_MAX),
     cursor: int | None = Query(default=None, description="Id cursor — return alerts with id < cursor"),
 ) -> AlertListResponse:
     """List persisted alerts from the inbox with optional filters and cursor pagination.
@@ -151,7 +153,7 @@ def refresh_all_alerts(
         Open-alert badge count and the full post-sync alert list.
     """
     sync_all_alerts(repo, plant_db, notifier=notifier)
-    items = repo.list_alerts(limit=500)
+    items = repo.list_alerts(limit=_ALERT_LIST_MAX)
     open_count = repo.count_open_alerts()
     repo.commit()
     return AlertListResponse(open_count=open_count, items=[AlertSummary.model_validate(a) for a in items])

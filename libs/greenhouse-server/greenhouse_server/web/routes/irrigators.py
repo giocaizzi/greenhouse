@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from fastapi import APIRouter, Form, HTTPException, Request
+from fastapi import APIRouter, Form, HTTPException, Request, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from greenhouse_core.models import parse_device_config
@@ -176,8 +176,8 @@ def _action_result(request: Request, action: str, run) -> HTMLResponse:
     try:
         success, message = True, run()
     except ManualActionError as exc:
-        if exc.status_code == 503:
-            raise HTTPException(503, exc.detail) from exc
+        if exc.status_code == status.HTTP_503_SERVICE_UNAVAILABLE:
+            raise HTTPException(exc.status_code, exc.detail) from exc
         success, message = False, exc.detail
     return templates.TemplateResponse(
         request,

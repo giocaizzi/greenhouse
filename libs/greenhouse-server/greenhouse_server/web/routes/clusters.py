@@ -10,7 +10,14 @@ from fastapi import APIRouter, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from greenhouse_core.logic.timing import is_within_quiet_hours
-from greenhouse_server.deps import ClusterServiceDep, PlantDbDep, RepoDep, require_cluster, require_metric
+from greenhouse_server.deps import (
+    MAX_LOOKBACK_HOURS,
+    ClusterServiceDep,
+    PlantDbDep,
+    RepoDep,
+    require_cluster,
+    require_metric,
+)
 from greenhouse_server.services.charts import (
     ALLOWED_HOURS,
     build_cluster_chart_payload,
@@ -147,7 +154,7 @@ def cluster_detail(
     svc: ClusterServiceDep,
     repo: RepoDep,
     plant_db: PlantDbDep,
-    hours: int = Query(24, ge=1, le=8760),
+    hours: int = Query(24, ge=1, le=MAX_LOOKBACK_HOURS),
 ):
     status = svc.get_cluster_status(cluster_id)
     if status is None:
@@ -249,7 +256,7 @@ def cluster_chart_fragment(
     repo: RepoDep,
     plant_db: PlantDbDep,
     metric: str = Query("soil_moisture"),
-    hours: int = Query(24, ge=1, le=8760),
+    hours: int = Query(24, ge=1, le=MAX_LOOKBACK_HOURS),
 ):
     payload = build_cluster_chart_payload(repo, plant_db, cluster_id, hours, require_metric(metric))
     if not payload:
@@ -266,7 +273,7 @@ def cluster_overlay_fragment(
     request: Request,
     cluster_id: int,
     repo: RepoDep,
-    hours: int = Query(72, ge=1, le=8760),
+    hours: int = Query(72, ge=1, le=MAX_LOOKBACK_HOURS),
 ):
     payload = build_overlay_payload(repo, cluster_id, hours)
     if payload is None:

@@ -163,6 +163,8 @@ def require_alert(repo: IrrigationRepository, alert_id: int) -> Alert:
 
 # --- Query-value validation (400) ---
 
+MAX_LOOKBACK_HOURS = 8760  # one year: upper bound of every chart ``hours`` look-back (API and web)
+
 _CHART_METRICS: frozenset[str] = frozenset(get_args(Metric))
 
 
