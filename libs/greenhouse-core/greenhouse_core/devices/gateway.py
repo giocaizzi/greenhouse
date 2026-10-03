@@ -23,6 +23,7 @@ import logging
 import os
 import time
 from collections.abc import Callable
+from typing import Any, Protocol, TypedDict
 
 import tinytuya
 
@@ -34,7 +35,7 @@ LOCAL_TIMEOUT = 5
 
 # Datapoint parsers — the single home for Tuya DP code → (canonical_key, value).
 # TR-301Z (zwjcy — 土壤温湿度) soil temp/humidity sensor and friends.
-DATAPOINT_PARSERS: dict[str, Callable[[object], tuple[str, object]]] = {
+DATAPOINT_PARSERS: dict[str, Callable[[Any], tuple[str, object]]] = {
     # Standard DPs (v1 getstatus / getdevicelog)
     "temp_current": lambda v: ("temperature", float(v) / 10.0),
     "va_temperature": lambda v: ("temperature", float(v) / 10.0),
@@ -53,7 +54,31 @@ DATAPOINT_PARSERS: dict[str, Callable[[object], tuple[str, object]]] = {
 }
 
 
-def group_logs_by_timestamp(logs: list[dict], tolerance_ms: int = 5000) -> list[dict]:
+class _CloudDevice(TypedDict, total=False):
+    """The fields of a Cloud ``getdevices`` entry the key lookup reads (the payload carries more)."""
+
+    id: str
+    key: str
+
+
+class _TuyaCloudClient(Protocol):
+    """The slice of ``tinytuya.Cloud`` the gateway calls (an injected ``raw`` client must match it).
+
+    Responses are raw Cloud JSON, hence ``dict[str, Any]``.
+    """
+
+    def cloudrequest(self, url: str, /) -> dict[str, Any]: ...
+
+    def getstatus(self, deviceid: str, /) -> dict[str, Any]: ...
+
+    def getdevicelog(self, deviceid: str, /, *, start: int, end: int, evtype: int, size: int) -> dict[str, Any]: ...
+
+    def sendcommand(self, deviceid: str, commands: dict[str, Any], /) -> dict[str, Any]: ...
+
+    def getdevices(self) -> list[_CloudDevice] | dict[str, Any]: ...
+
+
+def group_logs_by_timestamp(logs: list[dict[str, Any]], tolerance_ms: int = 5000) -> list[dict[str, Any]]:
     """Group log entries reported at ~the same time into single readings.
 
     Sensors often report multiple DPs within a few seconds; this collapses
@@ -62,8 +87,8 @@ def group_logs_by_timestamp(logs: list[dict], tolerance_ms: int = 5000) -> list[
     if not logs:
         return []
 
-    readings = []
-    current_group = {"timestamp": logs[0]["timestamp"]}
+    readings: list[dict[str, Any]] = []
+    current_group: dict[str, Any] = {"timestamp": logs[0]["timestamp"]}
     current_ts = logs[0]["timestamp_ms"]
 
     for log in logs:
@@ -96,9 +121,9 @@ class DeviceGateway:
         client_secret: str | None = None,
         region: str | None = None,
         *,
-        raw: object | None = None,
+        raw: _TuyaCloudClient | None = None,
         on_key_discovered: Callable[[str, str], None] | None = None,
-    ):
+    ) -> None:
         self.client_id = client_id or os.environ.get("TUYA_CLIENT_ID", "")
         self.client_secret = client_secret or os.environ.get("TUYA_CLIENT_SECRET", "")
         self.region = region or os.environ.get("TUYA_REGION", "eu")
@@ -108,7 +133,7 @@ class DeviceGateway:
 
         # ``raw`` lets callers inject an already-constructed client so the whole
         # app shares one token; omitted, we build the single owned instance.
-        self._cloud = (
+        self._cloud: _TuyaCloudClient = (
             raw
             if raw is not None
             else tinytuya.Cloud(
@@ -124,7 +149,7 @@ class DeviceGateway:
 
     # ── Sensor cloud reads ────────────────────────────────────────────────
 
-    def get_live_reading(self, device_id: str) -> dict:
+    def get_live_reading(self, device_id: str) -> dict[str, Any]:
         """Get current sensor values via the v2.0 shadow properties endpoint.
 
         Uses ``/v2.0/cloud/thing/{id}/shadow/properties`` which exposes the
@@ -139,14 +164,14 @@ class DeviceGateway:
         ``water_warning``…). An empty dict means the live DP set held nothing we
         recognise — that is authoritative, not a reason to re-read.
         """
-        result = None
+        result: dict[str, Any] | None = None
         try:
             result = self._cloud.cloudrequest(f"/v2.0/cloud/thing/{device_id}/shadow/properties")
         except Exception:
             result = None
 
         if result is not None and result.get("success"):
-            data: dict = {}
+            data: dict[str, Any] = {}
             for prop in result.get("result", {}).get("properties", []):
                 parser = DATAPOINT_PARSERS.get(prop.get("code", ""))
                 if parser:
@@ -174,7 +199,7 @@ class DeviceGateway:
         since_ms: int | None = None,
         hours: int = 24,
         max_records: int = 100,
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """Get historical sensor reports (``getdevicelog``), parsed + sorted.
 
         Each dict carries ``timestamp_ms``/``timestamp``/``code``/``raw_value``
@@ -193,14 +218,14 @@ class DeviceGateway:
         )
 
         logs = result.get("result", {}).get("logs", [])
-        parsed = []
+        parsed: list[dict[str, Any]] = []
 
         for log in logs:
             code = log.get("code", "")
             raw_value = log.get("value", "")
             event_time_ms = log.get("event_time", 0)
 
-            entry = {
+            entry: dict[str, Any] = {
                 "timestamp_ms": event_time_ms,
                 "timestamp": event_time_ms // 1000,
                 "code": code,
@@ -226,20 +251,20 @@ class DeviceGateway:
         return parsed
 
     @staticmethod
-    def group_logs_by_timestamp(logs: list[dict], tolerance_ms: int = 5000) -> list[dict]:
+    def group_logs_by_timestamp(logs: list[dict[str, Any]], tolerance_ms: int = 5000) -> list[dict[str, Any]]:
         """Fold parsed log entries into readings (see module function)."""
         return group_logs_by_timestamp(logs, tolerance_ms)
 
     # ── Irrigator cloud commands ──────────────────────────────────────────
 
-    def send_command(self, device_id: str, commands: dict) -> tuple[bool, str]:
+    def send_command(self, device_id: str, commands: dict[str, Any]) -> tuple[bool, str]:
         """Send a Cloud-API command payload (shaped as ``{"commands": [...]}``)."""
         result = self._cloud.sendcommand(device_id, commands)
         if result.get("success"):
             return True, "Command succeeded"
         return False, f"Cloud API error: {result}"
 
-    def get_status(self, device_id: str) -> dict:
+    def get_status(self, device_id: str) -> dict[str, Any]:
         """Return the raw Cloud-API ``getstatus`` response."""
         return self._cloud.getstatus(device_id)
 
@@ -260,7 +285,7 @@ class DeviceGateway:
         cheap sources and forces the Cloud lookup (stale-key recovery).
         """
         if not refresh:
-            cfg_key = parse_device_config(config).get("local_key") if config is not None else None
+            cfg_key: str | None = parse_device_config(config).get("local_key") if config is not None else None
             if cfg_key:
                 return cfg_key
             cached = self._key_cache.get(device_id)
@@ -293,7 +318,7 @@ class DeviceGateway:
     def open_local(
         self,
         irrigator: Irrigator,
-        protocol_version: float,
+        protocol_version: float | None,
         *,
         refresh: bool = False,
     ) -> tinytuya.OutletDevice:
