@@ -97,6 +97,7 @@ class SettingsScreen(DataScreen):
         )
 
     def _selected_vacation(self) -> dict[str, Any] | None:
+        """The vacation under the cursor, or ``None`` after a warning toast."""
         key = selected_key(self.query_one("#vacation-table", DataTable))
         found = next((v for v in self.vacations if str(v["id"]) == key), None)
         if found:
@@ -141,6 +142,7 @@ class SettingsScreen(DataScreen):
         self.run_worker(self._logout(), group="act")
 
     async def _logout(self) -> None:
+        """Log out on the server (errors ignored), drop the stored token and continue with an anonymous client."""
         await self.gh.api(lambda c: c.logout(), quiet=True)
         removed = await asyncio.to_thread(clear_stored_token)
         self.gh.client = self.gh.client_factory("")

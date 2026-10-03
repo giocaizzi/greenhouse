@@ -93,6 +93,7 @@ class AlertsScreen(DataScreen):
         self.query_one("#alert-detail", Static).update(text)
 
     def _selected(self) -> int | None:
+        """The alert id under the cursor, or ``None`` for an empty table."""
         key = selected_key(self.query_one(DataTable))
         return int(key) if key else None
 

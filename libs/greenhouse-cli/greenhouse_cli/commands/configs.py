@@ -12,28 +12,38 @@ from typing import Annotated
 
 import typer
 
-from greenhouse_cli.commands._helpers import call, output
+from greenhouse_cli.commands._helpers import ClusterOpt, call, output
 
 config_app = typer.Typer(help="Irrigation configuration", no_args_is_help=True)
 global_app = typer.Typer(help="Global irrigation defaults (inherited by every cluster)", no_args_is_help=True)
 config_app.add_typer(global_app, name="global")
 
+# Options shared by `config set` and `config global set` (same flag, type and help in both).
+ModeOpt = Annotated[str | None, typer.Option(help="manual, schedule, or smart")]
+MinutesOpt = Annotated[int | None, typer.Option(help="Duration in minutes")]
+IntervalOpt = Annotated[int | None, typer.Option(help="Interval in hours")]
+AutoRunOpt = Annotated[bool | None, typer.Option("--auto-run/--no-auto-run", help="Enable auto-run")]
+DailyCapOpt = Annotated[int | None, typer.Option("--daily-cap", help="Daily cap in minutes")]
+MaxEventsOpt = Annotated[int | None, typer.Option("--max-events", help="Max irrigation events per day")]
+QuietStartOpt = Annotated[
+    int | None, typer.Option("--quiet-start", help="Quiet-hours start (0-23); equal to end = disabled")
+]
+QuietEndOpt = Annotated[int | None, typer.Option("--quiet-end", help="Quiet-hours end (0-23, exclusive)")]
+
 
 @config_app.command("set")
 def config_set(
     ctx: typer.Context,
-    cluster: Annotated[int, typer.Option(help="Cluster ID")],
-    mode: Annotated[str | None, typer.Option(help="manual, schedule, or smart")] = None,
-    minutes: Annotated[int | None, typer.Option(help="Duration in minutes")] = None,
-    interval: Annotated[int | None, typer.Option(help="Interval in hours")] = None,
-    auto_run: Annotated[bool | None, typer.Option("--auto-run/--no-auto-run", help="Enable auto-run")] = None,
-    daily_cap: Annotated[int | None, typer.Option("--daily-cap", help="Daily cap in minutes")] = None,
-    max_events: Annotated[int | None, typer.Option("--max-events", help="Max irrigation events per day")] = None,
-    quiet_start: Annotated[
-        int | None, typer.Option("--quiet-start", help="Quiet-hours start (0-23); equal to end = disabled")
-    ] = None,
-    quiet_end: Annotated[int | None, typer.Option("--quiet-end", help="Quiet-hours end (0-23, exclusive)")] = None,
-):
+    cluster: ClusterOpt,
+    mode: ModeOpt = None,
+    minutes: MinutesOpt = None,
+    interval: IntervalOpt = None,
+    auto_run: AutoRunOpt = None,
+    daily_cap: DailyCapOpt = None,
+    max_events: MaxEventsOpt = None,
+    quiet_start: QuietStartOpt = None,
+    quiet_end: QuietEndOpt = None,
+) -> None:
     """Patch a cluster's irrigation config. Omitted options are left unchanged."""
     data = call(
         ctx,
@@ -53,19 +63,19 @@ def config_set(
 
 
 @config_app.command("get")
-def config_get(ctx: typer.Context, cluster: Annotated[int, typer.Option(help="Cluster ID")]):
+def config_get(ctx: typer.Context, cluster: ClusterOpt) -> None:
     """Get a cluster's declared irrigation config (nulls = inherited)."""
     output(call(ctx, lambda c: c.get_config(cluster)))
 
 
 @config_app.command("effective")
-def config_effective(ctx: typer.Context, cluster: Annotated[int, typer.Option(help="Cluster ID")]):
+def config_effective(ctx: typer.Context, cluster: ClusterOpt) -> None:
     """Show the merged config: each field's resolved value and its source layer."""
     output(call(ctx, lambda c: c.get_effective_config(cluster)))
 
 
 @global_app.command("get")
-def global_get(ctx: typer.Context):
+def global_get(ctx: typer.Context) -> None:
     """Show the global irrigation defaults (nulls = fall through to constants)."""
     output(call(ctx, lambda c: c.get_global_config()))
 
@@ -73,17 +83,15 @@ def global_get(ctx: typer.Context):
 @global_app.command("set")
 def global_set(
     ctx: typer.Context,
-    mode: Annotated[str | None, typer.Option(help="manual, schedule, or smart")] = None,
-    minutes: Annotated[int | None, typer.Option(help="Duration in minutes")] = None,
-    interval: Annotated[int | None, typer.Option(help="Interval in hours")] = None,
-    auto_run: Annotated[bool | None, typer.Option("--auto-run/--no-auto-run", help="Enable auto-run")] = None,
-    daily_cap: Annotated[int | None, typer.Option("--daily-cap", help="Daily cap in minutes")] = None,
-    max_events: Annotated[int | None, typer.Option("--max-events", help="Max irrigation events per day")] = None,
-    quiet_start: Annotated[
-        int | None, typer.Option("--quiet-start", help="Quiet-hours start (0-23); equal to end = disabled")
-    ] = None,
-    quiet_end: Annotated[int | None, typer.Option("--quiet-end", help="Quiet-hours end (0-23, exclusive)")] = None,
-):
+    mode: ModeOpt = None,
+    minutes: MinutesOpt = None,
+    interval: IntervalOpt = None,
+    auto_run: AutoRunOpt = None,
+    daily_cap: DailyCapOpt = None,
+    max_events: MaxEventsOpt = None,
+    quiet_start: QuietStartOpt = None,
+    quiet_end: QuietEndOpt = None,
+) -> None:
     """Patch the global irrigation defaults. Omitted options are left unchanged."""
     data = call(
         ctx,

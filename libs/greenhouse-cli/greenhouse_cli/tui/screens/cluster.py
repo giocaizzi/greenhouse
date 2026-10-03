@@ -179,6 +179,7 @@ class ClusterScreen(DataScreen):
             self.run_worker(self._load_insights(), group="insights", exclusive=True)
 
     async def _render_overview(self, status: dict[str, Any]) -> None:
+        """Remount one plant tile per plant and refresh the can, irrigator and decision panels."""
         s = self.summary
         assert s is not None  # noqa: S101 — type narrowing: load() sets summary before rendering
         garden = self.query_one("#garden", HorizontalScroll)
@@ -206,6 +207,7 @@ class ClusterScreen(DataScreen):
         self.query_one("#decision-panel", Static).update(render.decision_panel(status.get("decision") or {}))
 
     async def _load_forecast(self) -> None:
+        """Fill the forecast panel; a failed call shows ``unavailable`` instead of an error toast."""
         f = await self.gh.api(lambda c: c.forecast(self.cluster_id), quiet=True)
         panel = self.query_one("#forecast-panel", KeyValue)
         if not f:
@@ -214,6 +216,7 @@ class ClusterScreen(DataScreen):
         panel.show(render.forecast_rows(f), title="Forecast")
 
     async def _load_chart(self, payload: dict[str, Any] | None = None) -> None:
+        """Redraw the cluster chart for the current metric and range; ``payload`` reuses data already fetched."""
         label = "Overlay: soil / humidity / light (0-100)" if self.metric == "overlay" else fmt.METRICS[self.metric][0]
         self.query_one("#chart-hint", Static).update(
             f"[b]{label}[/b] · {self.hours}h   [dim]m: next metric   [ / ]: shorter / longer range[/dim]"
@@ -228,10 +231,12 @@ class ClusterScreen(DataScreen):
         chart.show_payload(payload, metric, hours)
 
     async def _load_heatmap(self) -> None:
+        """Fill the 7×24 heatmap; a failed call stays quiet (no error toast)."""
         payload = await self.gh.api(lambda c: c.cluster_heatmap(self.cluster_id), quiet=True)
         self.query_one("#heatmap", Heatmap).show(payload)
 
     def _render_plants(self, status: dict[str, Any]) -> None:
+        """Refill the plants table and chart the first plant, but only when the plant list itself changed."""
         table = self.query_one("#plants-table", DataTable)
         refill(table, render.plant_rows(status.get("plants", [])))
         ids = [p["id"] for p in status.get("plants", [])]
@@ -245,6 +250,7 @@ class ClusterScreen(DataScreen):
             self.run_worker(self._load_plant_health(int(event.row_key.value)), group="plant-health", exclusive=True)
 
     async def _load_plant_health(self, plant_id: int) -> None:
+        """Chart one plant: its 72h soil moisture, or its 90-day health timeline."""
         self._plant_id = plant_id
         species = next((p["species"] for p in self.status.get("plants", []) if p["id"] == plant_id), "")
         chart = self.query_one("#plant-chart", MetricChart)
@@ -261,20 +267,24 @@ class ClusterScreen(DataScreen):
         chart.show_timeline(timeline, title)
 
     def _render_sensors(self, status: dict[str, Any]) -> None:
+        """Refill the sensors table from the status payload already loaded."""
         table = self.query_one("#sensors-table", DataTable)
         refill(table, render.sensor_rows(status))
 
     async def _load_decisions(self) -> None:
+        """Refill the decisions tab with the latest logged evaluations."""
         data = await self.gh.api(lambda c: c.list_decisions(self.cluster_id, limit=100), quiet=True)
         table = self.query_one("#decisions-table", DataTable)
         refill(table, render.decision_rows(data))
 
     async def _load_history(self) -> None:
+        """Refill the history tab with up to 200 irrigation events from the last 30 days."""
         data = await self.gh.api(lambda c: c.history(self.cluster_id, hours=24 * 30, limit=200), quiet=True)
         table = self.query_one("#history-table", DataTable)
         refill(table, render.history_rows(data))
 
     async def _load_config(self) -> None:
+        """Load the effective config and the cluster detail (kept for the edit forms) and render config and windows."""
         cid = self.cluster_id
         effective, detail = await asyncio.gather(
             self.gh.api(lambda c: c.get_effective_config(cid), quiet=True),
@@ -287,6 +297,7 @@ class ClusterScreen(DataScreen):
         refill(table, render.window_rows(self.detail.get("windows", [])))
 
     async def _load_insights(self) -> None:
+        """Fetch insights, monitor, stats, efficacy and the learning report together and render them."""
         cid = self.cluster_id
         api = self.gh.api
         insights, monitor, stats, efficacy, learn = await asyncio.gather(
@@ -339,6 +350,7 @@ class ClusterScreen(DataScreen):
         self.app.push_screen(IrrigateScreen(name), _after)
 
     def _irrigator(self) -> tuple[int, str] | None:
+        """``(id, name)`` of the cluster's irrigator, or ``None`` after a warning toast."""
         if not self.summary or self.summary.irrigator_id is None:
             self.notify("This cluster has no irrigator.", severity="warning")
             return None
@@ -411,6 +423,7 @@ class ClusterScreen(DataScreen):
         handler()
 
     def _new_plant(self) -> None:
+        """Add-plant form for this cluster."""
         cid = self.cluster_id
         self.form_then(
             "Add plant",
@@ -422,6 +435,7 @@ class ClusterScreen(DataScreen):
         )
 
     def _new_sensor(self) -> None:
+        """Add-sensor form; the plant picker lists this cluster's plants."""
         cid = self.cluster_id
         self.form_then(
             "Add sensor",
@@ -432,6 +446,7 @@ class ClusterScreen(DataScreen):
         )
 
     def _new_window(self) -> None:
+        """Add-window form; a blank weekday mask means every day."""
         cid = self.cluster_id
         self.form_then(
             "Add irrigation window",
@@ -446,6 +461,7 @@ class ClusterScreen(DataScreen):
         )
 
     def _attach_irrigator(self) -> None:
+        """Attach-irrigator form, refused when the cluster already has one (0:1)."""
         cid = self.cluster_id
         if self.summary and self.summary.irrigator_id is not None:
             self.notify("This cluster already has an irrigator — press u to edit it.", severity="warning")
@@ -473,6 +489,7 @@ class ClusterScreen(DataScreen):
         handler()
 
     def _edit_plant(self) -> None:
+        """Edit form for the plant under the cursor."""
         cid = self.cluster_id
         plant = self._selected("#plants-table", self.status.get("plants", []))
         if plant:
@@ -484,6 +501,7 @@ class ClusterScreen(DataScreen):
             )
 
     def _edit_sensor(self) -> None:
+        """Edit form for the sensor under the cursor."""
         cid = self.cluster_id
         sensor = self._selected("#sensors-table", self.detail.get("sensors", []))
         if sensor:
@@ -495,6 +513,7 @@ class ClusterScreen(DataScreen):
             )
 
     def _edit_window(self) -> None:
+        """Edit form for the window under the cursor."""
         cid = self.cluster_id
         window = self._selected("#windows-table", self.detail.get("windows", []))
         if window:
@@ -506,6 +525,7 @@ class ClusterScreen(DataScreen):
             )
 
     def _edit_irrigator(self) -> None:
+        """Edit form for the cluster's irrigator, or a hint to attach one."""
         cid = self.cluster_id
         irrigator = self.detail.get("irrigator")
         if not irrigator:
@@ -519,6 +539,7 @@ class ClusterScreen(DataScreen):
         )
 
     def _edit_config(self) -> None:
+        """Edit form for the cluster's own config overrides (globals live on Settings)."""
         cid = self.cluster_id
         self.form_then(
             "Edit irrigation config",
@@ -542,6 +563,7 @@ class ClusterScreen(DataScreen):
         handler()
 
     def _delete_plant(self) -> None:
+        """Delete the plant under the cursor after confirmation."""
         cid = self.cluster_id
         plant = self._selected("#plants-table", self.status.get("plants", []))
         if plant:
@@ -553,6 +575,7 @@ class ClusterScreen(DataScreen):
             )
 
     def _delete_sensor(self) -> None:
+        """Delete the sensor under the cursor after confirmation (its readings stay)."""
         cid = self.cluster_id
         sensor = self._selected("#sensors-table", self.detail.get("sensors", []))
         if sensor:
@@ -564,6 +587,7 @@ class ClusterScreen(DataScreen):
             )
 
     def _delete_window(self) -> None:
+        """Delete the window under the cursor after confirmation."""
         cid = self.cluster_id
         window = self._selected("#windows-table", self.detail.get("windows", []))
         if window:
@@ -575,6 +599,7 @@ class ClusterScreen(DataScreen):
             )
 
     def _detach_irrigator(self) -> None:
+        """Detach the cluster's irrigator after confirmation."""
         cid = self.cluster_id
         irrigator = self._irrigator()
         if irrigator:
@@ -586,6 +611,7 @@ class ClusterScreen(DataScreen):
             )
 
     def _selected(self, table_id: str, rows: list[dict[str, Any]]) -> dict[str, Any] | None:
+        """The row of ``rows`` under the cursor of ``table_id``, or ``None`` after a warning toast."""
         key = selected_key(self.query_one(table_id, DataTable))
         row = next((r for r in rows if str(r["id"]) == key), None)
         if row is None:
@@ -600,6 +626,7 @@ class ClusterScreen(DataScreen):
         self.run_worker(self._move_plant(plant), group="act")
 
     async def _move_plant(self, plant: dict[str, Any]) -> None:
+        """Ask for a target among the other clusters, then move the plant there."""
         clusters = await self.gh.api(lambda c: c.list_clusters())
         options = [(f"{c['name']} (#{c['id']})", c["id"]) for c in clusters or [] if c["id"] != self.cluster_id]
         if not options:
@@ -650,6 +677,7 @@ class ClusterScreen(DataScreen):
         )
 
     async def _delete_cluster(self) -> None:
+        """Delete the cluster; on success leave its screen and refresh the dashboard."""
         if await self.gh.api(lambda c: c.delete_cluster(self.cluster_id)) is not None:
             self.notify("Cluster deleted")
             self.app.pop_screen()
@@ -660,6 +688,7 @@ class ClusterScreen(DataScreen):
         self.run_worker(self._export_stats(), group="act")
 
     async def _export_stats(self) -> None:
+        """Write the 30-day stats CSV as ``greenhouse-<cluster-slug>-stats-30d.csv`` in the cwd."""
         csv = await self.gh.api(lambda c: c.stats_export(self.cluster_id, days=30))
         if csv is None:
             return

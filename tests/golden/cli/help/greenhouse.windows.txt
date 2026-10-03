@@ -7,7 +7,8 @@
 │ --help          Show this message and exit.                                                      │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
 ╭─ Commands ───────────────────────────────────────────────────────────────────────────────────────╮
-│ list    List configured windows for a cluster. Empty list = global defaults apply.               │
+│ list    List configured windows for a cluster. Empty list = every hour allowed (quiet hours      │
+│         still apply).                                                                            │
 │ add     Add a watering window. Wrap-around (start > end) crosses midnight.                       │
 │ update  Patch a window. Only supplied fields are sent.                                           │
 │ delete  Remove an irrigation window.                                                             │

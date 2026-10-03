@@ -5,11 +5,10 @@
   (``ConfirmScreen`` / ``IrrigateScreen`` / ``WaterNowScreen`` / ``FormScreen`` /
   none), the dialog's text, and — after confirming / submitting — the exact
   mutating HTTP requests (method, path, JSON body) plus the toasts raised.
-  This pins the CURRENT behavior, including the keys CLAUDE.md's "every
-  actuating key goes through ConfirmScreen" does not describe: ``i`` / ``w``
-  open their own dialogs; ``S`` sync, ``P`` plant sync, ``H`` snapshot,
-  alert ``k`` / ``v`` / ``y`` and scheduler resume (``p`` while paused) run
-  with no dialog at all.
+  This pins the CURRENT behavior, including the keys that bypass
+  ``ConfirmScreen``: ``i`` / ``w`` open their own dialogs; ``S`` sync, ``P``
+  plant sync, ``H`` snapshot, alert ``k`` / ``v`` / ``y`` and scheduler resume
+  (``p`` while paused) run with no dialog at all.
 G13 / G14 / 401 live in ``test_contract_tui_runtime.py``.
 
 Clock frozen before seeding, ``TZ=UTC``, offline weather, animations off.

@@ -65,7 +65,7 @@ class SystemScreen(DataScreen):
 
         self.paused = (prefs or {}).get("scheduler_paused")
         self.query_one("#scheduler-panel", KeyValue).show(
-            render.scheduler_panel_rows(self.paused, health), title="Scheduler"
+            render.scheduler_panel_rows(paused=self.paused, health=health), title="Scheduler"
         )
 
         table = self.query_one("#jobs-table", DataTable)

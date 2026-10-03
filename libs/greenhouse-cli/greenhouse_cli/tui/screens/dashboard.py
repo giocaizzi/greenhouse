@@ -53,6 +53,7 @@ class DashboardScreen(DataScreen):
         await self._render_cards([s for s in summaries if s is not None])
 
     async def _summary(self, cluster_id: int) -> ClusterSummary | None:
+        """One cluster's card model from its status and 24h soil chart; ``None`` when the status call failed."""
         status, chart = await asyncio.gather(
             self.gh.api(lambda c: c.status(cluster_id)),
             self.gh.api(lambda c: c.cluster_chart_data(cluster_id, hours=24), quiet=True),
@@ -60,6 +61,7 @@ class DashboardScreen(DataScreen):
         return summarize(status, chart) if status else None
 
     async def _render_cards(self, summaries: list[ClusterSummary]) -> None:
+        """Rebuild the card grid; focus stays on the same cluster when its card is still there, else the first card."""
         grid = self.query_one("#cluster-grid", Grid)
         focused = self.focused.id if isinstance(self.focused, ClusterCard) else None
         await grid.remove_children()

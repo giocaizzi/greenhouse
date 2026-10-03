@@ -1,28 +1,34 @@
 """Plant management commands."""
 
+from operator import methodcaller
 from typing import Annotated
 
 import typer
 
-from greenhouse_cli.commands._helpers import call, output
+from greenhouse_cli.commands._helpers import ClusterFilterOpt, ClusterOpt, YesOpt, call, output
 
 plant_app = typer.Typer(help="Manage plants", no_args_is_help=True)
+
+# Option types of the add/update pair; each flag comes from its parameter name (--temp-min, --notes, …).
+LevelOpt = Annotated[str | None, typer.Option(help="low/medium/high")]
+TextOpt = Annotated[str | None, typer.Option()]
+NumberOpt = Annotated[float | None, typer.Option()]
 
 
 @plant_app.command("add")
 def plant_add(
     ctx: typer.Context,
     species: Annotated[str, typer.Argument(help="Species name")],
-    cluster: Annotated[int, typer.Option(help="Cluster ID")],
-    category: Annotated[str | None, typer.Option()] = None,
-    water_needs: Annotated[str | None, typer.Option(help="low/medium/high")] = None,
-    light_needs: Annotated[str | None, typer.Option(help="low/medium/high")] = None,
-    temp_min: Annotated[float | None, typer.Option()] = None,
-    temp_max: Annotated[float | None, typer.Option()] = None,
-    humidity_min: Annotated[float | None, typer.Option()] = None,
-    humidity_max: Annotated[float | None, typer.Option()] = None,
-    notes: Annotated[str | None, typer.Option()] = None,
-):
+    cluster: ClusterOpt,
+    category: TextOpt = None,
+    water_needs: LevelOpt = None,
+    light_needs: LevelOpt = None,
+    temp_min: NumberOpt = None,
+    temp_max: NumberOpt = None,
+    humidity_min: NumberOpt = None,
+    humidity_max: NumberOpt = None,
+    notes: TextOpt = None,
+) -> None:
     """Add a plant to a cluster."""
     data = call(
         ctx,
@@ -45,15 +51,15 @@ def plant_add(
 @plant_app.command("list")
 def plant_list(
     ctx: typer.Context,
-    cluster: Annotated[int | None, typer.Option(help="Filter by cluster ID")] = None,
-):
+    cluster: ClusterFilterOpt = None,
+) -> None:
     """List plants."""
     if cluster:
         output(call(ctx, lambda c: c.list_plants(cluster)))
     else:
         clusters = call(ctx, lambda c: c.list_clusters())
         for cl in clusters:
-            plants = call(ctx, lambda c, cid=cl["id"]: c.list_plants(cid))
+            plants = call(ctx, methodcaller("list_plants", cl["id"]))
             if plants:
                 output({"cluster": cl["name"], "plants": plants})
 
@@ -63,7 +69,7 @@ def plant_sync(
     ctx: typer.Context,
     plant_id: Annotated[int | None, typer.Option(help="Sync specific plant")] = None,
     cluster: Annotated[int | None, typer.Option(help="Sync plants in cluster")] = None,
-):
+) -> None:
     """Sync plants with evidence-based care data."""
     output(call(ctx, lambda c: c.sync_plants(plant_id=plant_id, cluster_id=cluster)))
 
@@ -73,7 +79,7 @@ def plant_move(
     ctx: typer.Context,
     plant_id: Annotated[int, typer.Argument(help="Plant ID to move")],
     to_cluster: Annotated[int, typer.Option("--to-cluster", help="Target cluster ID")],
-):
+) -> None:
     """Move a plant to a different cluster.
 
     Plant identity, health history, and learning profile follow the plant.
@@ -87,16 +93,16 @@ def plant_update(
     ctx: typer.Context,
     plant_id: Annotated[int, typer.Argument(help="Plant ID")],
     cluster: Annotated[int, typer.Option(help="Cluster the plant belongs to")],
-    species: Annotated[str | None, typer.Option()] = None,
-    category: Annotated[str | None, typer.Option()] = None,
-    water_needs: Annotated[str | None, typer.Option(help="low/medium/high")] = None,
-    light_needs: Annotated[str | None, typer.Option(help="low/medium/high")] = None,
-    temp_min: Annotated[float | None, typer.Option()] = None,
-    temp_max: Annotated[float | None, typer.Option()] = None,
-    humidity_min: Annotated[float | None, typer.Option()] = None,
-    humidity_max: Annotated[float | None, typer.Option()] = None,
-    notes: Annotated[str | None, typer.Option()] = None,
-):
+    species: TextOpt = None,
+    category: TextOpt = None,
+    water_needs: LevelOpt = None,
+    light_needs: LevelOpt = None,
+    temp_min: NumberOpt = None,
+    temp_max: NumberOpt = None,
+    humidity_min: NumberOpt = None,
+    humidity_max: NumberOpt = None,
+    notes: TextOpt = None,
+) -> None:
     """Patch plant metadata. Only the supplied fields are sent."""
     output(
         call(
@@ -123,8 +129,8 @@ def plant_delete(
     ctx: typer.Context,
     plant_id: Annotated[int, typer.Argument(help="Plant ID")],
     cluster: Annotated[int, typer.Option(help="Cluster the plant belongs to")],
-    yes: Annotated[bool, typer.Option("--yes", "-y", help="Skip confirmation prompt")] = False,
-):
+    yes: YesOpt = False,
+) -> None:
     """Delete a plant and its health / learning history."""
     if not yes:
         typer.confirm(f"Delete plant {plant_id} from cluster {cluster}?", abort=True)

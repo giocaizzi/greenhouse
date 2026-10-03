@@ -6,7 +6,7 @@ from typing import Annotated
 
 import typer
 
-from greenhouse_cli.commands._helpers import call, output
+from greenhouse_cli.commands._helpers import ClusterOpt, call, output
 
 decisions_app = typer.Typer(help="Inspect the irrigation decision log", no_args_is_help=True)
 
@@ -14,9 +14,9 @@ decisions_app = typer.Typer(help="Inspect the irrigation decision log", no_args_
 @decisions_app.command("list")
 def decisions_list(
     ctx: typer.Context,
-    cluster: Annotated[int, typer.Option(help="Cluster ID")],
+    cluster: ClusterOpt,
     limit: Annotated[int, typer.Option(min=1, max=200, help="Max entries")] = 50,
-):
+) -> None:
     """List recent decision-engine evaluations for a cluster.
 
     Every call to the engine writes a row regardless of whether it actuated

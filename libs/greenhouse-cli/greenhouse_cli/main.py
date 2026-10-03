@@ -33,7 +33,7 @@ def main(
         str | None,
         typer.Option(help="Server URL (default: $IRRIGATION_SERVER_URL or http://localhost:8000)"),
     ] = None,
-):
+) -> None:
     """Smart irrigation system — evidence-based plant care with Tuya IoT sensors."""
     ctx.obj = server
 

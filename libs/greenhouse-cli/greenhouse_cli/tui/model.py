@@ -51,6 +51,7 @@ class ClusterSummary:
 
 
 def _mean(values: list[float]) -> float | None:
+    """Arithmetic mean, ``None`` without values (temperature / humidity / light; moisture uses the minimum)."""
     return sum(values) / len(values) if values else None
 
 

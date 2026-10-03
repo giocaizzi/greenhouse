@@ -18,7 +18,7 @@ def alerts_list(
     cluster: Annotated[int | None, typer.Option(help="Filter by cluster ID")] = None,
     plant: Annotated[int | None, typer.Option(help="Filter by plant ID")] = None,
     limit: Annotated[int, typer.Option(min=1, max=500, help="Max number of items")] = 100,
-):
+) -> None:
     """List persisted alerts. Newest-seen first."""
     output(
         call(
@@ -32,7 +32,7 @@ def alerts_list(
 def alerts_get(
     ctx: typer.Context,
     alert_id: Annotated[int, typer.Argument(help="Alert ID")],
-):
+) -> None:
     """Fetch a single alert by ID."""
     output(call(ctx, lambda c: c.get_alert(alert_id)))
 
@@ -41,7 +41,7 @@ def alerts_get(
 def alerts_ack(
     ctx: typer.Context,
     alert_id: Annotated[int, typer.Argument(help="Alert ID")],
-):
+) -> None:
     """Acknowledge an open alert (idempotent)."""
     output(call(ctx, lambda c: c.acknowledge_alert(alert_id)))
 
@@ -50,7 +50,7 @@ def alerts_ack(
 def alerts_resolve(
     ctx: typer.Context,
     alert_id: Annotated[int, typer.Argument(help="Alert ID")],
-):
+) -> None:
     """Mark an alert as resolved."""
     output(call(ctx, lambda c: c.resolve_alert(alert_id)))
 
@@ -59,7 +59,7 @@ def alerts_resolve(
 def alerts_sync(
     ctx: typer.Context,
     cluster: Annotated[int | None, typer.Option(help="Sync just this cluster (default: all)")] = None,
-):
+) -> None:
     """Recompute alerts and reconcile the inbox.
 
     Without ``--cluster`` this syncs every cluster. With ``--cluster`` it
