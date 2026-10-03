@@ -297,8 +297,7 @@
    "get_plant_database",
    "json",
    "os",
-   "reset_plant_database",
-   "set_plant_database"
+   "reset_plant_database"
   ]
  },
  "greenhouse_core.repository": {

@@ -173,12 +173,6 @@ def get_plant_database() -> PlantDatabase:
     return _db_instance
 
 
-def set_plant_database(instance: PlantDatabase) -> None:
-    """Set the singleton instance (for custom path configuration)."""
-    global _db_instance
-    _db_instance = instance
-
-
 def reset_plant_database() -> None:
     """Reset the singleton instance (for testing)."""
     global _db_instance
