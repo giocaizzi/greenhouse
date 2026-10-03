@@ -56,9 +56,6 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# The watcher's externally-visible alert code is the canonical health alarm's,
-# so the inbox has one row per condition whichever observer raised it.
-ALERT_CODE = HealthAlarm.NO_WATER.value  # "no_water"
 ACTIVITY_CODE = "pump_dry_run"
 
 
