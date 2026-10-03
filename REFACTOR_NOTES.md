@@ -145,6 +145,10 @@ TUI (wave C):
   need (root cause of the old `search_citrus` flake);
 - `SpriteView._animate` shadows a Textual attribute (pre-existing; one targeted `type: ignore`).
 
+Consistency audit (2026-10-03):
+- **B-N1:** `GET /clusters/{id}/monitor` syncs stale sensors from the Cloud but never commits, so the synced rows are
+  discarded and every call hits the Cloud again; the web monitor skips the sync. Tracked as drift pair D15.
+
 ## Golden-test policy (orchestrator decision)
 
 - OpenAPI, routes, MCP tools, settings, DDL, scheduler registry, package data, web HTML, CLI help/output, TUI renders,

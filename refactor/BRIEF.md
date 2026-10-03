@@ -83,3 +83,12 @@ Do not commit unless your brief says so. Do not touch files outside your stated 
   legacy patterns; every change that makes the codebase consistent end-to-end is in scope. Behavior-preserving changes
   stay `refactor(...)`; any change that alters observable behavior is a labeled `fix(drift|consistency): …` commit
   with reviewed test/golden updates. See `refactor/46-consistency-track.md`.
+- **Consistency decisions** (2026-10-03): OD1 keep the 7 services returning core read models; dict-returning services
+  get TypedDict results (orchestrator). OD2 handlers commit CRUD; a service commits only when a side effect must
+  follow a durable write; one `repo.commit()/rollback()` API; jobs via one session helper (orchestrator).
+  **OD3 (owner): remove all legacy compatibility code** — pump-dry-run alert migration, `tuya_cloud`/`tuya_local`
+  device-type aliases, pre-Alembic DB repair, deprecated `IRRIGATION_CHECK_INTERVAL_HOURS` — as labeled
+  `fix(consistency)` commits (behavior change for old databases/deployments; noted in the report).
+  **OD4 (owner): manual stop records action `"stop"`** (labeled; existing rows unchanged).
+  **OD5 (owner): drop the `refactor/` folder at the end; keep `REFACTOR_NOTES.md` and `REFACTOR_REPORT.md`**; strict list
+  → `[tool.mypy] files`, sizecheck → `scripts/`, Makefile updated.
