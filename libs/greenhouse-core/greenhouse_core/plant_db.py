@@ -146,11 +146,6 @@ class PlantDatabase:
         mapping: dict[str, CareData] = self._data["water_needs_mapping"]
         return mapping.get(water_needs, mapping["medium"])
 
-    def get_light_needs_info(self, light_needs: str) -> CareData:
-        """Get detailed info for a light_needs level."""
-        mapping: dict[str, CareData] = self._data["light_needs_mapping"]
-        return mapping.get(light_needs, mapping["medium"])
-
     def list_species(self) -> list[str]:
         """List all species in database."""
         return list(self._data["species"].keys())

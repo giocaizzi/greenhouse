@@ -1736,14 +1736,6 @@ add(
             "                duration_delta=interval_delta,\n                interval_delta=duration_delta,",
             "add_reason swaps deltas",
         ),
-        (
-            "10",
-            '    def any_critical(self) -> bool:\n        """True when at least one critical-class stress is set."""\n        return any(',
-            '    def any_critical(self) -> bool:\n        """True when at least one critical-class stress is set."""\n        return not any(',
-            "StressIndicators.any_critical negated",
-            0,
-            "any_critical() has no caller in libs/ (grep) — dead API",
-        ),
     ],
 )
 add(

@@ -171,12 +171,6 @@ class StressIndicators(BaseModel):
     low_light: str | None = None
     learning_alerts: list[dict[Any, Any]] = Field(default_factory=list)
 
-    def any_critical(self) -> bool:
-        """True when at least one critical-class stress is set."""
-        return any(
-            value is not None for value in (self.water_warning, self.water_stress, self.over_watering, self.heat_stress)
-        )
-
 
 class Trends(BaseModel):
     """Historical trend signals for the cluster's recent behaviour."""

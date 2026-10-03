@@ -282,16 +282,6 @@ class IrrigationRepository:
             timestamp=ts,
         )
 
-    def sensor_assignments_for_plant(self, plant_id: int) -> list[SensorAssignment]:
-        """All assignment rows (open or closed) ever linking sensors to this plant."""
-        return list(
-            self.session.scalars(
-                select(SensorAssignment)
-                .where(SensorAssignment.plant_id == plant_id)
-                .order_by(SensorAssignment.started_at)
-            )
-        )
-
     def list_sensor_assignments(self, sensor_id: int) -> list[SensorAssignment]:
         """All assignment rows for one sensor, oldest first."""
         return list(
