@@ -66,8 +66,7 @@ worktree, `gh-wp6-mut`, now removed. Each run restored the target file and the w
 - stress: the trailing `return None` → pass, ×6. Falling off the end also returns None.
 - stress: the 7 `_low_light` mutants on `min_lux > 0` and the `0` defaults. Daytime light is > 15 lux, and the default sits behind the `care` guard. These are the WP0-listed equivalents.
 
-**New post-only issues survivors (not in the M-pre sample).** I did not add tests after restructuring. I request
-characterization tests for:
+**New post-only issues survivors (not in the M-pre sample).** (a) and (b) are now killed by the follow-up commit (see below). The original list was:
 - (a) `_chronic_underwatering_alert`: `max_recent < target_min` → `<=`. Not equivalent: max exactly equal to the target.
 - (b) `max(..., default=0)` → `1` in the same function. Not equivalent: the readings exist but every moisture value is None, so the message shows a 0 % peak.
 - (c) `detect_issues`: the no-profiles `return alerts` → pass. Same output; only extra plant and care reads.
@@ -115,3 +114,18 @@ None removed. Evidence collected for the final sweep:
 - Record deviations 1–4 and the chunked mutation driver.
 - Bugs preserved and untouched in behavior: B-18, B-24, critical stress keyed on the average, light thresholds on the UTC month.
 - No values changed, so `plugin/.../LOGIC.md` needs no update.
+
+## Follow-up (orchestrator request): `tests/test_contract_wp6_gaps2.py`
+
+A new test-only commit; history was not amended. It pins the current behavior behind the two non-equivalent M-post
+survivors in `_chronic_underwatering_alert`.
+
+| Check | Result |
+|---|---|
+| Pre-WP6 base `090b5fe` (scratch worktree, file copied in) | 3 passed |
+| WP6 head `8647612` | 3 passed |
+| `max_recent < target_min` → `<=` on head | killed |
+| `default=0` → `default=1` on head | killed |
+
+Green on both revisions shows the restructuring preserved this behavior. After the mutations, `issues.py` was
+restored with `git checkout --` and `libs` was clean. The log is in the scratchpad at `wp6/gaps2_followup.log`.
