@@ -182,6 +182,10 @@ Consistency audit (2026-10-03):
   `pump_dry_run` alerts removed and the deprecated `IRRIGATION_CHECK_INTERVAL_HOURS` setting removed (old `.env` files
   using it are no longer translated to the cron setting).
 - Merge note: `refactor/integration/after-drift.txt` — 3053 passed after merging drift on top of consistency W1.
+- Fix pass (server): an authenticated `/api/v1` request (and an authenticated web page) opens **one** DB session — the
+  auth dependency now reuses the route's own `get_session` / `get_settings` providers, so the user lookup and the
+  handler share one session and identity map (was two sessions per request, one of them unused with auth disabled).
+  Pinned by `tests/server/test_auth_session.py`.
 
 ## Golden-test policy (orchestrator decision)
 

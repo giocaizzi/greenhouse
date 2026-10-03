@@ -29,7 +29,6 @@ from __future__ import annotations
 import hmac
 import logging
 import time
-from collections.abc import Generator
 from dataclasses import dataclass
 from typing import Any
 from urllib.parse import quote
@@ -52,6 +51,7 @@ from greenhouse_core.auth import (
 )
 from greenhouse_core.models import User
 from greenhouse_server.config import Settings
+from greenhouse_server.state import get_session, get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -142,19 +142,10 @@ def decode_token(settings: Settings, token: str) -> dict[str, Any]:
 _bearer = HTTPBearer(auto_error=False)
 
 
-def _get_settings(request: Request) -> Settings:
-    """Resolve the live Settings from ``app.state``."""
-    settings: Settings = request.app.state.settings
-    return settings
-
-
-def _session_from_app(request: Request) -> Generator[Session, None, None]:
-    factory = request.app.state.session_factory
-    session = factory()
-    try:
-        yield session
-    finally:
-        session.close()
+# The route dependencies' own providers: FastAPI caches a dependency per request by callable
+# identity, so the auth lookup and the handler share one session (and its identity map).
+_get_settings = get_settings
+_session_from_app = get_session
 
 
 def _extract_token(
