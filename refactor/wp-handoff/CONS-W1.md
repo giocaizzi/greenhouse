@@ -126,5 +126,5 @@ Also for REFACTOR_NOTES "Doc/code mismatches and dead code": the `DEFAULT_QUIET_
 
 FULL in 12 locked chunks covering all 138 test files (30 core, 93 server, 12 cli, 3 devices):
 **3041 passed, 0 failed** (warnings = the two recorded baseline warnings + xdist noise). This includes the union of
-every task subset, `$CORE` and `$ENGINE`. `make sizecheck`: only WP8-file entries (engine/sync) remain listed, as at
-the base. Seed-12345 and `TZ=America/New_York` runs are left to the final gate (sprint mode).
+every task subset, `$CORE` and `$ENGINE`. `make sizecheck`: exits 1 on the same 9 pre-existing entries as the base (engine ×4, sync ×2 — WP8;
+`services/leak.py` ×2, `web/routes/clusters.py::cluster_detail` — W2/W3 files, untouched here); none in a W1 file. Seed-12345 and `TZ=America/New_York` runs are left to the final gate (sprint mode).
