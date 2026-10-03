@@ -606,6 +606,48 @@ class IrrigationService:
             notifier=self._notifier,
         )
 
+    def _health_gate_skips(
+        self, cluster_id: int, irrigator: "Irrigator", decision: "IrrigationDecision", result: PipelineResult
+    ) -> bool:
+        """Device-health gate: turn the run into a skip when an alarm blocks this irrigator.
+
+        If a NO_WATER / RAIN / OFFLINE alarm is open for the irrigator, append a typed Reason,
+        set the decision to ``Action.SKIP``, log the skip with the blocking alarms, and rewrite
+        ``result`` in place as a skip (same audit-trail path as the engine's own skip flow).
+        Returns True when the run was blocked; False (nothing touched) when it may actuate or no
+        monitor is wired.
+        """
+        if self._health_monitor is None:
+            return False
+        blocked, blocking_alarms = self._health_monitor.is_actuation_blocked(irrigator)
+        if not blocked:
+            return False
+        primary = blocking_alarms[0]
+        trigger = HEALTH_ALARM_TO_TRIGGER[primary]
+        decision.add_reason(
+            code=trigger,
+            message=f"Actuation blocked by device health: {primary.value} on '{irrigator.name}'",
+            severity=Severity.CRITICAL,
+        )
+        decision.action = Action.SKIP
+        self._repo.add_activity_event(
+            source=SOURCE_IRRIGATION,
+            entity_type=ENTITY_CLUSTER,
+            entity_id=cluster_id,
+            code="decision_skip",
+            message=decision.reason_text,
+            severity="warning",
+            payload={
+                "blocking_alarms": [a.value for a in blocking_alarms],
+                "irrigator_id": irrigator.id,
+            },
+        )
+        result["action"] = "skip"
+        result["reason"] = decision.reason_text
+        result["reasons"] = [r.model_dump() for r in decision.reasons]
+        result["blocking_alarms"] = [a.value for a in blocking_alarms]
+        return True
+
     def run_irrigation_pipeline(
         self,
         cluster_id: int,
@@ -634,52 +676,20 @@ class IrrigationService:
 
         result = _decision_result(decision, temp, source)
 
-        if dry_run or decision.action.value == "skip":
-            if not dry_run:
-                self._log_decision_skip(cluster_id, decision)
+        if dry_run:
+            return result
+        if decision.action is Action.SKIP:
+            self._log_decision_skip(cluster_id, decision)
             return result
 
-        # Execute
         target = self._actuation_target(cluster_id)
         if isinstance(target, str):
             return _with_error(result, target)
         irrigator, adapter = target
 
-        # Device-health gate: if a NO_WATER / RAIN / OFFLINE alarm is open
-        # for this irrigator, append a typed Reason and short-circuit to
-        # Action.SKIP. Same audit-trail path as the engine's existing skip
-        # flow — the decision is re-persisted so decision_logs reflects the
-        # block, then the run is treated as a skip.
-        if self._health_monitor is not None:
-            blocked, blocking_alarms = self._health_monitor.is_actuation_blocked(irrigator)
-            if blocked:
-                primary = blocking_alarms[0]
-                trigger = HEALTH_ALARM_TO_TRIGGER[primary]
-                decision.add_reason(
-                    code=trigger,
-                    message=(f"Actuation blocked by device health: {primary.value} on '{irrigator.name}'"),
-                    severity=Severity.CRITICAL,
-                )
-                decision.action = Action.SKIP
-                self._repo.add_activity_event(
-                    source=SOURCE_IRRIGATION,
-                    entity_type=ENTITY_CLUSTER,
-                    entity_id=cluster_id,
-                    code="decision_skip",
-                    message=decision.reason_text,
-                    severity="warning",
-                    payload={
-                        "blocking_alarms": [a.value for a in blocking_alarms],
-                        "irrigator_id": irrigator.id,
-                    },
-                )
-                result["action"] = "skip"
-                result["reason"] = decision.reason_text
-                result["reasons"] = [r.model_dump() for r in decision.reasons]
-                result["blocking_alarms"] = [a.value for a in blocking_alarms]
-                return result
-
-        return self._actuate(_Actuation(cluster_id, irrigator, adapter, decision, temp, source, sensor_data), result)
+        if not self._health_gate_skips(cluster_id, irrigator, decision, result):
+            self._actuate(_Actuation(cluster_id, irrigator, adapter, decision, temp, source, sensor_data), result)
+        return result
 
     def monitor_cluster(self, cluster_id: int) -> MonitorResult:
         """Monitor a sensor-only cluster: refresh stale sensors (the caller commits), return per-sensor soil status."""

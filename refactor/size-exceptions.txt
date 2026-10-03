@@ -24,4 +24,3 @@ libs/greenhouse-server/greenhouse_server/scheduler.py — func_ref goldens pin t
 libs/greenhouse-cli/greenhouse_cli/client.py — one thin method per /api/v1 endpoint (≈ 80), 1:1 with OpenAPI; per-slice mixins rejected (proposal C §11) — approved: orchestrator (Gate 2)
 libs/greenhouse-core/greenhouse_core/models.py — declarative ORM; DDL frozen — approved: orchestrator (Gate 2)
 libs/greenhouse-server/greenhouse_server/services/health_monitor.py::DeviceHealthMonitor._alarm_message — flat alarm-code → message mapping (8 returns, PLR0911); a lookup table would add indirection without removing a present smell — approved: orchestrator (wave A)
-libs/greenhouse-server/greenhouse_server/services/irrigation.py::IrrigationService.run_irrigation_pipeline — 59 body lines: the device-health gate stays inline by design (moving it would reorder side effects / persistence); every other step is extracted; revisit in the consistency track — approved: orchestrator (wave B)
