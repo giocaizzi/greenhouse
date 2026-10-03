@@ -59,9 +59,7 @@ def plant_dashboard(
     cluster_irrigator = repo.get_irrigator_for_cluster(cluster_id)
     recent_events = _recent_events(repo, cluster_irrigator, hours)
     plant_alerts = _plant_alerts(repo, plant_db, cluster_id, plant)
-    # Pre-build chart payloads so the page renders with data on first load
-    chart_payloads = {metric: build_plant_chart_payload(repo, plant_db, plant_id, hours, metric) for metric in METRICS}
-    chart_payloads_json = {metric: json.dumps(payload) for metric, payload in chart_payloads.items()}
+    chart_payloads_json = _chart_payloads_json(repo, plant_db, plant_id, hours)
     # Health score + 90-day history for the hero card
     health_score: float | None = health_svc.compute_score(plant_id)["score"]
     health_history = repo.list_plant_health_history(plant_id, days=90)
@@ -91,6 +89,14 @@ def plant_dashboard(
             last_irrigated_relative=last_irrigated_relative,
         ),
     )
+
+
+def _chart_payloads_json(
+    repo: IrrigationRepository, plant_db: PlantDatabase, plant_id: int, hours: int
+) -> dict[Metric, str]:
+    """Every metric's chart payload as JSON, pre-built so the page renders with data on first load."""
+    chart_payloads = {metric: build_plant_chart_payload(repo, plant_db, plant_id, hours, metric) for metric in METRICS}
+    return {metric: json.dumps(payload) for metric, payload in chart_payloads.items()}
 
 
 def _latest_readings(repo: IrrigationRepository, plant_sensors: list[Sensor]) -> dict[int, SensorReading | None]:
