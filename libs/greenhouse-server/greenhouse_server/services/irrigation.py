@@ -158,7 +158,7 @@ def handle_watcher_interrupted(
             severity="warning",
             payload={"triggered_by": triggered_by, "started_at": started_at, "stopped": stop_ok},
         )
-    except Exception:  # noqa: BLE001
+    except Exception:
         logger.exception("Failed to record watcher-shutdown activity for irrigator %d", irrigator.id)
     return stop_ok
 

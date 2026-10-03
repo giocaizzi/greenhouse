@@ -108,6 +108,7 @@ extend-select = [
     "FURB",  # refurb
     "N",  # pep8-naming
     "EXE",  # flake8-executable
+    "BLE",  # blind except — report-only: existing sites are per-file ignores, never rewritten (behavior)
     "PLW",  # pylint warnings (PLW0717 is preview and not listed: report-only)
     "ERA",  # eradicate: commented-out code
     "PGH",  # pygrep-hooks: blanket noqa / type: ignore without codes
@@ -146,30 +147,36 @@ indent-style = "space"
 "scripts/*" = ["E402"]  # intentional sys.path before import
 # Frozen safety net: tests exceed size limits and poke privates; never edited to satisfy a lint rule.
 "tests/**" = [
-    "C90", "PLR0911", "PLR0912", "PLR0915", "PLR0904", "PLR0914", "PLR1702", "SIM", "RET", "PTH", "PERF", "PLW", "FURB", "N", "ERA001", "SLF001",
+    "C90", "PLR0911", "PLR0912", "PLR0915", "PLR0904", "PLR0914", "PLR1702", "SIM", "RET", "PTH", "PERF", "PLW", "FURB", "N", "BLE", "ERA001", "SLF001",
 ]
 "refactor/**" = ["C90", "PLR0911", "PLR0912", "PLR0915", "PLR0914", "PLR1702", "PERF", "PLW"]  # refactor tooling scripts, not shipped
 "libs/greenhouse-core/greenhouse_core/migrations/versions/*" = ["PLR0915"]  # generated Alembic DDL, out of scope
-# Ratchet offenders (baseline refactor-gate1 + lint ratchet step 0); each list only shrinks.
-"libs/greenhouse-cli/greenhouse_cli/client.py" = ["PLR0904"]
+# Ratchet offenders (baseline refactor-gate1 + lint ratchet, refactor/40-lint-ratchet.md); each list only shrinks.
+"libs/greenhouse-cli/greenhouse_cli/client.py" = ["BLE001", "PLR0904"]
 "libs/greenhouse-cli/greenhouse_cli/commands/auth.py" = ["PLR0915"]
 "libs/greenhouse-cli/greenhouse_cli/commands/operations.py" = ["C901", "PLR0915"]
 "libs/greenhouse-cli/greenhouse_cli/tui/screens/cluster.py" = ["PLR0904", "PLR0915", "PLR1702"]
 "libs/greenhouse-cli/greenhouse_cli/tui/screens/forms.py" = ["C901", "PLR0911", "PLR0912", "PLR1702"]
-"libs/greenhouse-cli/greenhouse_cli/tui/widgets.py" = ["PLR0915"]
-"libs/greenhouse-core/greenhouse_core/devices/gateway.py" = ["PLR0915"]
+"libs/greenhouse-cli/greenhouse_cli/tui/widgets.py" = ["BLE001", "PLR0915"]
+"libs/greenhouse-core/greenhouse_core/devices/gateway.py" = ["BLE001", "PLR0915"]
 "libs/greenhouse-core/greenhouse_core/devices/registry.py" = ["N818"]  # UnknownDeviceModel: public name (WP8-owned file)
-"libs/greenhouse-core/greenhouse_core/devices/irrigators/ik10pw.py" = ["C901", "PLR0911", "PLR0915", "PLR1702", "SIM105"]
-"libs/greenhouse-core/greenhouse_core/devices/irrigators/tuya_generic.py" = ["C901", "PLR0912", "PLR1702"]
+"libs/greenhouse-core/greenhouse_core/devices/irrigators/ik10pw.py" = ["BLE001", "C901", "PLR0911", "PLR0915", "PLR1702", "SIM105"]
+"libs/greenhouse-core/greenhouse_core/devices/irrigators/tuya_generic.py" = ["BLE001", "C901", "PLR0912", "PLR1702"]
+"libs/greenhouse-core/greenhouse_core/devices/sensors/tuya_generic.py" = ["BLE001"]
 "libs/greenhouse-core/greenhouse_core/logic/engine.py" = ["C901", "PLR0911", "PLR0912", "PLR0914", "PLR0915"]
+"libs/greenhouse-core/greenhouse_core/logic/plant_needs.py" = ["BLE001"]
 "libs/greenhouse-core/greenhouse_core/logic/timing.py" = ["SIM102"]
 "libs/greenhouse-core/greenhouse_core/repository.py" = ["PLR0904"]
-"libs/greenhouse-core/greenhouse_core/sync.py" = ["EXE002", "PLR0915", "PLR1702", "SIM108"]  # EXE002: stray +x bit, WP8-owned
+"libs/greenhouse-core/greenhouse_core/sync.py" = ["BLE001", "EXE002", "PLR0915", "PLR1702", "SIM108"]  # EXE002: stray +x bit, WP8-owned
+"libs/greenhouse-core/greenhouse_core/utils.py" = ["BLE001"]
+"libs/greenhouse-server/greenhouse_server/app.py" = ["BLE001"]
 "libs/greenhouse-server/greenhouse_server/services/bulk.py" = ["PLR1702"]
+"libs/greenhouse-server/greenhouse_server/services/cluster.py" = ["BLE001"]
 "libs/greenhouse-server/greenhouse_server/services/forecast.py" = ["PLR0914"]
 "libs/greenhouse-server/greenhouse_server/services/health_monitor.py" = ["PLR0911"]
-"libs/greenhouse-server/greenhouse_server/services/irrigation.py" = ["PLR0915"]
+"libs/greenhouse-server/greenhouse_server/services/irrigation.py" = ["BLE001", "PLR0915"]
 "libs/greenhouse-server/greenhouse_server/services/pump_watcher.py" = ["PLR0915"]
+"libs/greenhouse-server/greenhouse_server/web/context.py" = ["BLE001"]
 "libs/greenhouse-server/greenhouse_server/web/filters.py" = ["PLR0912"]
 
 [tool.importlinter]
