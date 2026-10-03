@@ -460,7 +460,6 @@
   "public": [
    "IrrigationRepository",
    "defaultdict",
-   "export_csv",
    "format_duration",
    "format_timestamp",
    "get_irrigation_stats",
