@@ -4053,7 +4053,7 @@
      "operations"
     ],
     "summary": "Cluster Efficacy",
-    "description": "Score completed irrigation events by post-irrigation soil-moisture rise.\n\nFor each `start` event with a positive `duration_minutes`, compares the\naverage soil moisture across all cluster sensors in the 30 minutes before\nthe event against the 90-minute window after. Score = clamp((after - before)\n× 5, 0, 100): a 20 percentage-point rise yields score 100; less than\n0 percentage-point rise yields 0. Score is None when sensor data is\ninsufficient around the event.\n\nArgs:\n    cluster_id: Cluster to score.\n    days: Look-back window in days (default 14).\n\nReturns:\n    EfficacyListResponse with one EfficacyItemResponse per qualifying event,\n    ordered newest-first.\n\nRaises:\n    HTTPException: 404 if the cluster does not exist.",
+    "description": "Score completed irrigation events by post-irrigation soil-moisture rise.\n\nFor each `start` event with a positive `duration_minutes`, compares the\naverage soil moisture across all cluster sensors in the 30 minutes before\nthe event against the 90-minute window after. Score = clamp((after - before)\n× 5, 0, 100): a 20 percentage-point rise yields score 100; less than\n0 percentage-point rise yields 0. Score is None when sensor data is\ninsufficient around the event.\n\nArgs:\n    cluster_id: Cluster to score.\n    days: Look-back window in days (default 14, at most 365).\n\nReturns:\n    EfficacyListResponse with one EfficacyItemResponse per qualifying event,\n    ordered newest-first.\n\nRaises:\n    HTTPException: 404 if the cluster does not exist.",
     "operationId": "cluster_efficacy",
     "security": [
      {
@@ -4076,6 +4076,7 @@
       "required": false,
       "schema": {
        "type": "integer",
+       "maximum": 365,
        "minimum": 1,
        "default": 14,
        "title": "Days"
