@@ -63,3 +63,28 @@
 - **Watcher closure:** captures the same objects; settings tuning and the monitor are read at run time; the job id and name are unchanged.
 - **`handle_watcher_interrupted`:** stop ok/fail/raise give identical messages, logs and rows.
 - **Constants:** every replaced literal has the same value and type (2.0, 5.0, 5, 15, 0, 30, 6, 2, 15, 10, "45-65", 500). The Settings defaults are unchanged.
+
+---
+
+## Re-check: head `e7c638e` (4983b14 corrective + 6ab9807 T7.22)
+
+**Verdict: APPROVE.** Old (`c05e847`) and new (`e7c638e`) behave the same in everything I compared, and both commit bodies' claims hold up.
+
+**What the code changes do (static read of `git diff 8ffa9d6 e7c638e -- libs/`)**
+- **4983b14:** `_job_session` now yields the bare session. Each job's first statement inside its `with` body is `repo = IrrigationRepository(session)`, which puts the construction back inside the old `try`. `_health_snapshot_job` once again does `from greenhouse_core.repository import IrrigationRepository` at the same spot, so the name is resolved when the job runs. The order is unchanged: factory → (try) repo → body → commit, or on failure rollback + the same `logger.exception` → close.
+- **6ab9807:** `_rearm_from_events` holds the double loop verbatim and yields after each `_add_leak_check_job`. `rearm_leak_checks` consumes it inside the existing `try` and increments `scheduled` once per yield.
+  - A raise from inside the generator reaches the caller's `except`, and the count of jobs already added is kept.
+  - Because the generator runs lazily, every repo call and every job add happens at the same point as before.
+- Under `libs/`, only `config.py`, `scheduler.py` and `services/irrigation.py` differ from `c05e847`.
+
+**Reproducers, old vs new** (`out/recheck_repros.txt`)
+- `repro_job_session.py`: identical. In both trees all 5 jobs print "returned None", and the same 4 "… job failed" ERROR logs appear.
+- `repro_snapshot_binding.py`: identical. Both print "core-module binding used".
+
+**Full differential harness, re-run on `e7c638e`** (`out/recheck_log.txt`)
+- Main set: 1,796 scenarios (1,500 Hypothesis + 296 edges), **0 differences**. This includes `edge_py_sched.IrrigationRepository_{1,2}`, the scenarios that showed the original finding; they now return `None` in both trees.
+- Biased set: 700 scenarios, **0 differences**.
+- New re-arm / job-body batch: 796 scenarios, **0 differences**.
+  - Composition: 600 Hypothesis cases plus 196 edges. The edges inject a raise on the k-th call (k = 1..7, span 1 or 1000) of `list_all_irrigators`, `get_recent_events`, `_add_leak_check_job`, `_leak_check_done`, `list_activity_events`, `scheduler.IrrigationRepository`, `greenhouse_core.repository.IrrigationRepository`, `_get_cloud` and others, plus write/commit "database is locked" faults.
+  - Coverage: 136 re-arm runs failed. 45 of those failed mid-scan after adding jobs, so they logged both "Re-arming … failed" and "Re-armed k …" and returned the partial count k. 529 re-arm calls returned a positive count.
+- **Total: 3,292 scenarios, 0 differences.**
