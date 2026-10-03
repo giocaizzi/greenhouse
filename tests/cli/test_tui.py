@@ -606,20 +606,29 @@ class TestForms:
         assert parse_value(Field("a", "A", "json"), '{"x": 1}') == {"x": 1}
         assert isinstance(parse_value(Field("a", "A", "datetime"), "2026-10-01 08:30"), int)
 
-    def test_datetime_fields_are_utc_regardless_of_local_timezone(self, monkeypatch):
-        """Vacation datetimes follow the server convention (UTC), as the web form does — not local time."""
+    def test_datetime_fields_use_the_timezone_preference(self, monkeypatch):
+        """D8: vacation datetimes are read and shown in the server's ``timezone`` preference, not the machine's zone."""
         import time
 
+        from greenhouse_cli.tui import render, resources
         from greenhouse_cli.tui.screens.forms import _display
 
         monkeypatch.setenv("TZ", "America/New_York")
         time.tzset()
         try:
-            utc_midnight = 1777593600  # 2026-05-01 00:00 UTC (20:00 the day before in New York)
-            field = Field("starts_at", "Starts (UTC)", "datetime")
-            assert parse_value(field, "2026-05-01 00:00") == utc_midnight
-            assert _display(Field("starts_at", "Starts (UTC)", "datetime", utc_midnight)) == "2026-05-01 00:00"
-            assert fmt.clock(utc_midnight, True, utc=True) == "2026-05-01 00:00"
+            rome_midnight = 1777586400  # 2026-05-01 00:00 Europe/Rome (18:00 the day before in New York)
+            starts, ends, *_ = resources.vacation_fields(
+                {"starts_at": rome_midnight, "ends_at": rome_midnight}, "Europe/Rome"
+            )
+            assert parse_value(starts, "2026-05-01 00:00") == rome_midnight
+            assert _display(starts) == _display(ends) == "2026-05-01 00:00"
+            ((_, cells),) = render.vacation_rows(
+                [{"id": 1, "starts_at": rome_midnight, "ends_at": rome_midnight}], None, "Europe/Rome"
+            )
+            assert cells[1:3] == ["2026-05-01 00:00", "2026-05-01 00:00"]
+            # No preference (or an unknown zone): UTC, never the machine's local zone.
+            assert parse_value(Field("s", "Starts", "datetime"), "2026-05-01 00:00") == 1777593600
+            assert parse_value(Field("s", "Starts", "datetime", tz="Not/AZone"), "2026-05-01 00:00") == 1777593600
         finally:
             monkeypatch.undo()
             time.tzset()

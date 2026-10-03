@@ -15,7 +15,7 @@
 │ units                     metric                         │
 ╰──────────────────────────────────────────────────────────╯
  Vacation windows  rationed watering while you're away · n add · u edit · del delete
- ID  Starts (UTC)  Ends (UTC)  Contact  Notes  State
+ ID  Starts  Ends  Contact  Notes  State
 
 
 

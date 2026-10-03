@@ -1,19 +1,23 @@
 """Vacation window web routes — list, create, delete.
 
 Form inputs accept either YYYY-MM-DD date strings or Unix timestamps (integers).
-Date strings are interpreted as UTC midnight. The parsing priority is:
+Date strings are midnight in the ``timezone`` preference — the same zone the pages
+display vacation times in (``format_ts``), and the zone the TUI uses. The parsing
+priority is:
   1. Try to parse as a Unix integer string (e.g. "1748476800").
-  2. Fall back to parsing as ISO date "YYYY-MM-DD" (converted to UTC midnight epoch).
+  2. Fall back to parsing as ISO date "YYYY-MM-DD" (midnight in the preference timezone).
 """
 
 from __future__ import annotations
 
 import time
-from datetime import UTC, datetime
+from datetime import UTC, datetime, tzinfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse
 
+from greenhouse_core.utils import get_display_timezone
 from greenhouse_server.deps import RepoDep, require_vacation_window
 from greenhouse_server.services.vacation import VacationRangeError, cluster_budgets, validate_vacation_range
 from greenhouse_server.web.context import base_context
@@ -37,8 +41,16 @@ def _parse_ts(value: str) -> int:
         return int(value)
     except ValueError:
         pass
-    dt = datetime.strptime(value, "%Y-%m-%d").replace(tzinfo=UTC)
+    dt = datetime.strptime(value, "%Y-%m-%d").replace(tzinfo=_preference_zone())
     return int(dt.timestamp())
+
+
+def _preference_zone() -> tzinfo:
+    """The display timezone (``UserPreferences.timezone``, else ``IRRIGATION_TZ``); UTC if unknown."""
+    try:
+        return ZoneInfo(get_display_timezone())
+    except (ZoneInfoNotFoundError, ValueError):
+        return UTC
 
 
 @router.get("/vacation")
