@@ -1,0 +1,4 @@
+## commit f718d0f
+## FULL PYTHONHASHSEED=0
+3041 passed, 10 warnings in 302.53s (0:05:02)
+## goldens
