@@ -25,7 +25,7 @@ stops resolving it (`2258a20`). No commit leaves a broken state.
 
 - **Scope:** both alias tables, including the `""` entries and the sensor aliases. The sensor web forms offered only
   `soil_moisture` / `temp_humidity` / `light`, so they changed too, and so did the CLI `sensor --type` help.
-- **Legacy rows in old databases (decided, logged, pinned):** Alembic `6c9d4e2f3a12` rewrote legacy values, but rows
+- **Legacy rows in old databases (decided, logged, pinned):** Alembic `6c9d4e2f3a12` rewrote legacy values (leftovers and `""` now rewritten by `a1d3f5b7c902`, owner decision), but rows
   added later through the old web form or CLI help still carry them. The owner's live DB **probably has such an
   irrigator** (the web form offered only `tuya_cloud` / `tuya_local`). After this branch that irrigator is refused:
   `get_irrigator` logs an ERROR (type + known keys + irrigator id) and raises `UnknownDeviceModel`. As a result,
