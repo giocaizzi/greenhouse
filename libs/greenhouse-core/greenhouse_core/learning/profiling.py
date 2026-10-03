@@ -5,6 +5,7 @@ import time
 from typing import cast
 
 from greenhouse_core.constants import (
+    DEFAULT_DURATION_MINUTES,
     LEARNING_DRAINAGE_MAX_GAP_HOURS,
     LEARNING_DRAINAGE_MIN_GAP_HOURS,
     LEARNING_POSITIVE_RESPONSE_DELTA,
@@ -35,7 +36,7 @@ def _response_from(
     sensor: Sensor, event: IrrigationEvent, pre: CleanedReading, post: CleanedReading
 ) -> IrrigationResponse:
     """Response metrics between the last pre-event reading and the post-event peak."""
-    duration = event.duration_minutes or 2
+    duration = event.duration_minutes or DEFAULT_DURATION_MINUTES
     pre_moisture = cast(float, pre.soil_moisture)
     post_moisture = cast(float, post.soil_moisture)
     delta = post_moisture - pre_moisture
