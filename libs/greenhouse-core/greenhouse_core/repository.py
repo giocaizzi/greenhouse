@@ -79,6 +79,22 @@ class IrrigationRepository:
     def __init__(self, session: Session):
         self.session = session
 
+    # ── Unit of work ──────────────────────────────────────────────────────────
+    # The one spelling for transaction control outside this module: handlers commit CRUD,
+    # a service commits only when a side effect must follow a durable write (OD2).
+
+    def commit(self) -> None:
+        """Commit the current transaction on the repository's session."""
+        self.session.commit()
+
+    def rollback(self) -> None:
+        """Roll back the current transaction on the repository's session."""
+        self.session.rollback()
+
+    def flush(self) -> None:
+        """Flush pending changes to the database without committing."""
+        self.session.flush()
+
     # ── Clusters ──────────────────────────────────────────────────────────────
 
     def add_cluster(self, name: str, location: str | None = None, environment: str = "indoor") -> int:
