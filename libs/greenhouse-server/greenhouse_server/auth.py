@@ -219,7 +219,7 @@ def require_user(
         return AuthenticatedUser(id=SYSTEM_USER_ID, username=SYSTEM_USER_NAME, is_system=True)
     token = _extract_token(request, creds, settings)
     if not token:
-        raise AuthError()
+        raise AuthError
     if _is_mcp_token(token, settings):
         return AuthenticatedUser(id=MCP_USER_ID, username=MCP_USER_NAME, is_system=True)
     return _resolve_user(token, settings, session)
