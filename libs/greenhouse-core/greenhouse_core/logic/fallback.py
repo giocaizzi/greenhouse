@@ -92,8 +92,7 @@ def temperature_based_decision(
 
     if temp is None:
         if config:
-            # Known quirk: the configured schedule is used only when the cluster has its own
-            # config row; with no row even a global schedule falls through to NO_DATA.
+            # Known quirk: only a cluster config row enables this; a global-only schedule falls to NO_DATA.
             return _config_fallback(db, cluster_id, base)
         base.add_reason(
             code=TriggerCode.NO_DATA,
