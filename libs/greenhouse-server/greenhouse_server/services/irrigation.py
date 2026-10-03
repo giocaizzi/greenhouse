@@ -30,6 +30,7 @@ from greenhouse_core.models import (
     TRIGGERED_BY_AUTO,
     TRIGGERED_BY_MANUAL,
     TRIGGERED_BY_SHUTDOWN,
+    TriggeredBy,
 )
 from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_core.repository import IrrigationRepository
@@ -99,7 +100,7 @@ def _stop_auto_cycle(repo: IrrigationRepository, registry: DeviceRegistry, irrig
     )
 
 
-def _left_running_message(irrigator: "Irrigator", triggered_by: str) -> str:
+def _left_running_message(irrigator: "Irrigator", triggered_by: TriggeredBy) -> str:
     """Warn that a non-auto cycle keeps running unwatched; returns the activity message."""
     logger.warning(
         "Server shutting down mid-irrigation: %s cycle on irrigator %d left running "
@@ -118,7 +119,7 @@ def handle_watcher_interrupted(
     registry: DeviceRegistry,
     irrigator: "Irrigator",
     *,
-    triggered_by: str,
+    triggered_by: TriggeredBy,
     started_at: int,
 ) -> bool:
     """Shutdown policy for a pump whose dry-run watcher was cut short.
@@ -184,7 +185,7 @@ def _run_pump_watcher(
     irrigator_id: int,
     duration_seconds: int,
     started_at: int,
-    triggered_by: str,
+    triggered_by: TriggeredBy,
     sleep: "Callable[[float], bool]",
     stop_requested: "Callable[[], bool]",
 ) -> None:
@@ -217,7 +218,7 @@ def _run_pump_watcher(
 
 
 def schedule_pump_watcher(
-    irrigator_id: int, duration_minutes: int, started_at: int, *, triggered_by: str = TRIGGERED_BY_AUTO
+    irrigator_id: int, duration_minutes: int, started_at: int, *, triggered_by: TriggeredBy = TRIGGERED_BY_AUTO
 ) -> bool:
     """Schedule a dry-run watcher to run for the duration of an irrigation.
 

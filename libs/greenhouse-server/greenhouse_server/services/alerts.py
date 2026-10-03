@@ -15,6 +15,7 @@ from greenhouse_core.models import (
     ENTITY_SENSOR,
     SOURCE_LEARNING,
     SOURCE_MAINTENANCE,
+    ActivitySource,
     Alert,
     Cluster,
 )
@@ -28,7 +29,7 @@ from greenhouse_server.services.notify import NtfyClient, maybe_notify
 _NOTIFY_SEVERITIES = ("warning", "critical")
 
 
-def _dedup_key(source: str, code: str, cluster_id: int | None, message: str) -> str:
+def _dedup_key(source: ActivitySource, code: str, cluster_id: int | None, message: str) -> str:
     """Deterministic key so repeats collapse onto the same row.
 
     ``message`` is included to distinguish per-sensor variants of the same
@@ -87,7 +88,7 @@ def sync_cluster_alerts(
         return []
     now = int(time.time())
 
-    findings: list[tuple[str, dict[str, Any]]] = [
+    findings: list[tuple[ActivitySource, dict[str, Any]]] = [
         (SOURCE_LEARNING, raw) for raw in collect_learning_alerts(repo, cluster_id, plant_db)
     ]
     findings.extend((SOURCE_MAINTENANCE, raw) for raw in collect_maintenance_alerts(repo, cluster_id, plant_db))
@@ -120,7 +121,7 @@ def sync_cluster_alerts(
 def auto_resolve_cleared(
     repo: IrrigationRepository,
     cluster_id: int,
-    sources: tuple[str, ...],
+    sources: tuple[ActivitySource, ...],
     seen_keys: set[str],
 ) -> None:
     """Close any open/ack alerts from these sources whose condition has cleared."""
@@ -146,7 +147,7 @@ def sync_all_alerts(
 def raise_alert(
     repo: IrrigationRepository,
     *,
-    source: str,
+    source: ActivitySource,
     code: str,
     title: str,
     message: str,

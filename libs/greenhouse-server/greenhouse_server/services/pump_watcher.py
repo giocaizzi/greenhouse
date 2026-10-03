@@ -45,6 +45,7 @@ from greenhouse_core.models import (
     EVENT_ACTION_ABORTED,
     SOURCE_PUMP,
     TRIGGERED_BY_PUMP_WATCHER,
+    ActivitySource,
     Irrigator,
 )
 from greenhouse_core.repository import IrrigationRepository
@@ -313,7 +314,7 @@ class PumpWatcherService:
             logger.exception("Failed to log aborted irrigation event for irrigator %d", irrigator.id)
 
     def _log_trip_activity(
-        self, irrigator: Irrigator, *, source: str, elapsed_estimate: int, payload: dict[str, Any]
+        self, irrigator: Irrigator, *, source: ActivitySource, elapsed_estimate: int, payload: dict[str, Any]
     ) -> None:
         """Record the critical ``pump_dry_run`` activity row; best-effort."""
         try:
