@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from textual.screen import Screen
 
@@ -23,7 +23,7 @@ class DataScreen(Screen[Any]):
     @property
     def gh(self) -> GreenhouseApp:
         """The app with its typed API helpers (``Screen.app`` is typed as a plain ``App``)."""
-        return self.app  # type: ignore[return-value]
+        return cast("GreenhouseApp", self.app)
 
     def on_mount(self) -> None:
         """Load once on mount and, for auto-refresh screens, poll at the app's refresh interval."""

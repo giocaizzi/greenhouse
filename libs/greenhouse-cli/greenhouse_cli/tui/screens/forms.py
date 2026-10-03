@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, ClassVar
+from typing import Any, ClassVar, cast
 
 from textual.app import ComposeResult
 from textual.binding import BindingType
@@ -143,8 +143,9 @@ class FormScreen(ModalScreen[dict[str, Any] | None]):
         values: dict[str, Any] = {}
         try:
             for f in self.fields:
-                widget = self.query_one(f"#field-{f.name}")
-                values[f.name] = parse_value(f, widget.value)  # type: ignore[attr-defined]
+                # compose() builds every field as one of these three widgets.
+                widget = cast("Input | Select[Any] | Checkbox", self.query_one(f"#field-{f.name}"))
+                values[f.name] = parse_value(f, widget.value)
         except ValueError as e:
             self.query_one("#form-error", Label).update(str(e))
             return

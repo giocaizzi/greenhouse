@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import re
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING, ClassVar, cast
 
 from textual import on, work
 from textual.app import ComposeResult
@@ -60,7 +60,7 @@ class SearchScreen(ModalScreen[int | None]):
         if not query.strip():
             table.clear()
             return
-        app: GreenhouseApp = self.app  # type: ignore[assignment]
+        app = cast("GreenhouseApp", self.app)
         data = await app.api(lambda c: c.search(query, limit=50), quiet=True)
         table.clear()
         self._targets = {}
