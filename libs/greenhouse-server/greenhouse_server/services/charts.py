@@ -37,8 +37,7 @@ def _water_needs_band(target: str | None) -> tuple[float, float] | None:
 
 
 def _metric_field(metric: Metric) -> str:
-    # Matches SensorReading column names.
-    return metric
+    return metric  # the metric names are the SensorReading column names
 
 
 def build_plant_chart_payload(
