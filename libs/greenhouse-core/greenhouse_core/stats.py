@@ -6,6 +6,7 @@ import time
 from collections import defaultdict
 from typing import TYPE_CHECKING, Any
 
+from greenhouse_core.constants import SECONDS_PER_DAY
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_core.utils import format_timestamp
 
@@ -59,7 +60,7 @@ def _count_event(stats: dict[str, Any], event: IrrigationEvent, irrigator_name: 
 
 def get_irrigation_stats(db: IrrigationRepository, cluster_id: int, days: int = 7) -> dict[str, Any]:
     """Get irrigation statistics for a cluster."""
-    cutoff = int(time.time()) - (days * 24 * 3600)
+    cutoff = int(time.time()) - (days * SECONDS_PER_DAY)
 
     irrigator = db.get_irrigator_for_cluster(cluster_id)
     if irrigator is None:
@@ -144,7 +145,7 @@ def export_csv(db: IrrigationRepository, cluster_id: int, days: int, output_path
     """Export irrigation events to CSV."""
     import csv
 
-    cutoff = int(time.time()) - (days * 24 * 3600)
+    cutoff = int(time.time()) - (days * SECONDS_PER_DAY)
     irrigator = db.get_irrigator_for_cluster(cluster_id)
 
     with open(output_path, "w", newline="") as f:

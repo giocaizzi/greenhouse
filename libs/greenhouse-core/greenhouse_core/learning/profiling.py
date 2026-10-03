@@ -4,6 +4,7 @@ import statistics
 import time
 from typing import cast
 
+from greenhouse_core.constants import SECONDS_PER_DAY, SECONDS_PER_HOUR
 from greenhouse_core.learning.models import IrrigationResponse, PlantProfile
 from greenhouse_core.logic.cleaning import CleanedReading, clean_readings, clean_readings_around
 from greenhouse_core.models import IrrigationEvent, Sensor
@@ -149,7 +150,7 @@ def get_plant_profile(
     if irrigator is None:
         return None
 
-    cutoff = int(time.time()) - (days * 86400)
+    cutoff = int(time.time()) - (days * SECONDS_PER_DAY)
     all_events = db.get_recent_events(irrigator.id, hours=days * 24)
     irrigation_events = [e for e in all_events if e.action == "start" and e.timestamp >= cutoff]
 
@@ -181,7 +182,7 @@ def compute_drainage_rate(db: IrrigationRepository, sensor: Sensor, days: int = 
         prev, curr = readings[i - 1], readings[i]
         if prev.soil_moisture is not None and curr.soil_moisture is not None:
             delta = curr.soil_moisture - prev.soil_moisture
-            hours = (curr.timestamp - prev.timestamp) / 3600
+            hours = (curr.timestamp - prev.timestamp) / SECONDS_PER_HOUR
             if delta < 0 and 0.1 < hours < 12:  # Reasonable time window
                 declines.append(delta / hours)
 

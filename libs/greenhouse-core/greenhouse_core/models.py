@@ -3,6 +3,8 @@
 from sqlalchemy import Float, ForeignKey, Index, Integer, String, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
+from greenhouse_core.constants import FULL_WEEKDAY_MASK
+
 
 class Base(DeclarativeBase):
     pass
@@ -361,7 +363,7 @@ class IrrigationWindow(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     cluster_id: Mapped[int] = mapped_column(ForeignKey("clusters.id", ondelete="CASCADE"), nullable=False)
-    weekday_mask: Mapped[int] = mapped_column(Integer, nullable=False, default=127)
+    weekday_mask: Mapped[int] = mapped_column(Integer, nullable=False, default=FULL_WEEKDAY_MASK)
     start_hour: Mapped[int] = mapped_column(Integer, nullable=False)
     end_hour: Mapped[int] = mapped_column(Integer, nullable=False)
     label: Mapped[str | None] = mapped_column(String)

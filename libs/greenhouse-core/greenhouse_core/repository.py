@@ -14,6 +14,8 @@ from greenhouse_core.constants import (
     DEFAULT_INTERVAL_HOURS,
     DEFAULT_IRRIGATION_MODE,
     FULL_WEEKDAY_MASK,
+    SECONDS_PER_DAY,
+    SECONDS_PER_HOUR,
 )
 from greenhouse_core.models import (
     ENTITY_PLANT,
@@ -431,7 +433,7 @@ class IrrigationRepository:
 
     def get_recent_readings(self, sensor_id: int, hours: int = 24) -> list[SensorReading]:
         """Get recent readings for a sensor, ordered by timestamp DESC."""
-        cutoff = int(time.time()) - (hours * 3600)
+        cutoff = int(time.time()) - (hours * SECONDS_PER_HOUR)
         return list(
             self.session.scalars(
                 select(SensorReading)
@@ -498,7 +500,7 @@ class IrrigationRepository:
 
     def get_recent_events(self, irrigator_id: int, hours: int = 24) -> list[IrrigationEvent]:
         """Get recent events for an irrigator, ordered by timestamp DESC."""
-        cutoff = int(time.time()) - (hours * 3600)
+        cutoff = int(time.time()) - (hours * SECONDS_PER_HOUR)
         return list(
             self.session.scalars(
                 select(IrrigationEvent)
@@ -937,7 +939,7 @@ class IrrigationRepository:
 
     def list_plant_health_history(self, plant_id: int, days: int = 90) -> list[PlantHealthDaily]:
         """Last ``days`` of health snapshots oldest-first for charting."""
-        cutoff = int(time.time()) - days * 86400
+        cutoff = int(time.time()) - days * SECONDS_PER_DAY
         return list(
             self.session.scalars(
                 select(PlantHealthDaily)

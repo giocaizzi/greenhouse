@@ -5,6 +5,8 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from greenhouse_core.constants import FULL_WEEKDAY_MASK
+
 
 def _parse_json_config(v: object) -> object:
     """Decode a JSON-string ``config`` (as stored on the ORM row); pass anything else through."""
@@ -232,7 +234,7 @@ class IrrigationWindowBase(BaseModel):
 
     start_hour: int
     end_hour: int
-    weekday_mask: int = 127
+    weekday_mask: int = FULL_WEEKDAY_MASK
     label: str | None = None
 
 
