@@ -2,7 +2,7 @@
 
 One clearly named test (or small group) per invariant; each docstring cites the
 invariant number. Invariants already pinned *exactly* elsewhere are only cited
-here (see ``refactor/10-safety-engine.md``). Clock frozen at
+here. Clock frozen at
 ``golden.FROZEN_INSTANT`` (Wed 2026-04-15 10:00 UTC) via ``frozen_clock``;
 every timestamp is derived from it.
 """
@@ -264,7 +264,7 @@ def test_inv5_thresholds_are_bound_at_import_current_behavior(env, monkeypatch):
 
 
 def test_inv5_inline_literals_current_behavior(env):
-    """Invariant #5 gaps (00-smells A1): literals still inline in engine.py are pinned here.
+    """Invariant #5 gaps: literals still inline in engine.py are pinned here.
 
     Forecast horizon ``hours=6``, rain threshold ``> 2.0`` mm, base confidence ``0.5``.
     """

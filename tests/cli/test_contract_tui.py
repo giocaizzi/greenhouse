@@ -1,4 +1,4 @@
-"""Characterization goldens for the Textual TUI — static surface and sprites (gap G12).
+"""Characterization goldens for the Textual TUI — static surface and sprites.
 
 Pins *what the TUI declares today* so a behavior-preserving refactor of
 ``greenhouse_cli.tui`` can prove it changed nothing a user (or ``app.tcss``)

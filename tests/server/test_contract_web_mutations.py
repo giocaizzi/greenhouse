@@ -1,11 +1,11 @@
-"""Characterization (G3): every POST / DELETE web route — happy path + its validation / 404 branch.
+"""Characterization: every POST / DELETE web route — happy path + its validation / 404 branch.
 
 Each case runs on a *fresh* seeded app (see ``test_contract_web_html.build_app``) so cases are
 independent. Pinned per case in ``golden/web/mutations/<case>.json``:
 
 * the request (method, url, form fields, extra headers);
 * status, the contract headers (``location``, ``set-cookie``, ``content-type``, every ``HX-*``);
-* the response body (as a list of lines, version-normalized) and, for G4, the template name +
+* the response body (as a list of lines, version-normalized) and the template name +
   sorted context keys of every ``TemplateResponse`` rendered;
 * the DB effect: per table, rows added (full row), removed (primary keys) and changed
   (``column: [before, after]``) — diffed between just before and just after the request;
@@ -656,7 +656,7 @@ def test_web_mutation_golden(case, make_client, monkeypatch):
         "status": resp.status_code,
         "headers": pinned_headers(resp),
         "body_lines": normalize(resp.text).split("\n"),
-        "templates": spy.calls,  # G4 for write routes: [[template name, sorted context keys], …]
+        "templates": spy.calls,  # for write routes: [[template name, sorted context keys], …]
         "db_effect": db_effect(before, after),
         "device_calls": {"irrigator": wiring.irrigator.calls, "sensor": wiring.sensor.calls},
     }

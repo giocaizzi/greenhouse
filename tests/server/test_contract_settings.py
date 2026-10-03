@@ -1,4 +1,4 @@
-"""Characterization: server ``Settings`` and every environment variable the code reads (G8).
+"""Characterization: server ``Settings`` and every environment variable the code reads.
 
 What is pinned here (and NOT already pinned by ``test_scheduler_settings.py``, which
 only checks that validation errors *mention* the env var):

@@ -1,7 +1,7 @@
-"""Characterization pins for the TUI branches WP2 restructures that the safety net left uncovered.
+"""Characterization pins for TUI branches that the characterization suite left uncovered before a restructuring.
 
-Coverage precondition for WP2 (``t $CLI $TUI --cov=greenhouse_cli --cov-branch``) reported these lines/branches as
-missed in code WP2 moves or re-dispatches:
+A branch-coverage run of the CLI and TUI suites (``--cov=greenhouse_cli --cov-branch``) reported these lines/branches
+as missed in code that the TUI restructuring moved or re-dispatched:
 
 - ``screens/cluster.py`` — decision panel (no decision; no ``interval_hours``; no ``reasons`` → ``reason`` text),
   forecast panel (unavailable; rain 6h; weather skip with and without a reason), sensor rows (water warning),

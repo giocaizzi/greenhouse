@@ -1,4 +1,4 @@
-"""Characterization: console scripts, the server entry point and package data (G7).
+"""Characterization: console scripts, the server entry point and package data.
 
 - ``[project.scripts]`` of the three distributions (read from each ``pyproject.toml``
   and from the installed metadata) — ``greenhouse`` and ``greenhouse-server``;
@@ -10,8 +10,7 @@
   path rather than imported — golden ``contracts/package_data.json`` — and the code
   paths that resolve them at runtime.
 
-The full wheel listing is not a pytest test (building is slow); see
-``refactor/scripts/check_wheels.sh`` and ``refactor/baseline/wheel-contents.txt``.
+The full wheel listing is not pinned by a pytest test (building the wheels is slow).
 """
 
 from __future__ import annotations

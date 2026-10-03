@@ -1,11 +1,11 @@
-"""Characterization: public import surfaces, test-patched attribute paths, logger names (G10).
+"""Characterization: public import surfaces, test-patched attribute paths, logger names.
 
 - ``contracts/imports.json`` — for each frozen module, ``sorted(n for n in dir(mod) if
   not n.startswith("_"))`` and ``__all__`` (declared order) when present. Re-imported
   names (``time``, ``logging``, ``tinytuya`` …) are part of the surface: a refactor that
   drops one from a frozen module needs a shim or a justification.
 - every dotted attribute path that the existing tests patch or import privately
-  (``refactor/00-map.md`` "Test-pinned module paths") still resolves, to the same
+  still resolves, to the same
   kind of object;
 - ``contracts/loggers.json`` — ``{module: {attr: logger.name}}`` for every module under
   ``libs/*/greenhouse_*`` that holds a module-level ``logging.Logger``. Loggers are

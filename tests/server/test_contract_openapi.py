@@ -1,4 +1,4 @@
-"""Characterization: the OpenAPI document and the full route table (G1).
+"""Characterization: the OpenAPI document and the full route table.
 
 Pins *what the app exposes today* so a behavior-preserving refactor can prove it
 changed nothing:
@@ -33,8 +33,8 @@ from starlette.routing import Mount
 from golden import assert_golden, assert_golden_json, install_offline_weather
 from server.conftest import _make_stubbed_app
 
-# sha256 of ``json.dumps(app.openapi(), sort_keys=True)`` recorded in
-# refactor/00-contracts.md at the Phase-0 baseline (main @ a1b2622); re-recorded only by
+# sha256 of ``json.dumps(app.openapi(), sort_keys=True)``, first recorded at the
+# original baseline (main @ a1b2622, hence "PHASE0"); re-recorded only by
 # reviewed behavior-change commits (`fix(drift|consistency): …`) or description-only doc-contract
 # commits (`docs(api): …`) that also regenerate the golden.
 PHASE0_OPENAPI_SHA256 = (
@@ -124,7 +124,7 @@ def test_openapi_document_matches_golden(contract_app):
 
 
 def test_openapi_matches_phase0_baseline_fingerprint(contract_app):
-    """The document still hashes to the Phase-0 baseline recorded in 00-contracts.md."""
+    """The document still hashes to the recorded ``PHASE0_OPENAPI_SHA256`` fingerprint."""
     digest = hashlib.sha256(json.dumps(contract_app.openapi(), sort_keys=True).encode()).hexdigest()
     assert digest == PHASE0_OPENAPI_SHA256
 
@@ -177,7 +177,7 @@ def test_route_table_matches_golden(contract_app):
 
 
 def test_route_table_counts(contract_app):
-    """Headline counts from 00-contracts.md: 84 schema operations, 85 web routes."""
+    """Headline counts: 84 schema operations, 85 web routes."""
     rows = _route_rows(contract_app)
     api = [r for r in rows if r["kind"] == "APIRoute" and r["include_in_schema"]]
     hidden = [r for r in rows if r["kind"] == "APIRoute" and not r["include_in_schema"]]

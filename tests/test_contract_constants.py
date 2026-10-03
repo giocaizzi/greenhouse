@@ -1,4 +1,4 @@
-"""Characterization: ``constants.py`` values and the decision enums (G11).
+"""Characterization: ``constants.py`` values and the decision enums.
 
 ``contracts/constants.json``:
 

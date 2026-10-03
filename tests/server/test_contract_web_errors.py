@@ -1,4 +1,4 @@
-"""Characterization (G3): error pages and the auth wall in front of the web UI.
+"""Characterization: error pages and the auth wall in front of the web UI.
 
 Goldens in ``golden/web/errors/<case>.html`` (request line, status, pinned headers, body):
 

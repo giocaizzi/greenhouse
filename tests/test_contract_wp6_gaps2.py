@@ -1,7 +1,8 @@
-"""WP6 follow-up gap tests: chronic-underwatering boundaries in ``learning/issues``.
+"""Follow-up gap tests: chronic-underwatering boundaries in ``learning/issues``.
 
-Characterization (current behavior) for the two non-equivalent M-post survivors in
-``_chronic_underwatering_alert``. Green on the pre-WP6 base and on the WP6 head.
+Characterization (current behavior) for the two non-equivalent mutants that survived the
+post-restructuring mutation run in ``_chronic_underwatering_alert``. Green before and after
+that restructuring.
 """
 
 from types import SimpleNamespace

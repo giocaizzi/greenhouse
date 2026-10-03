@@ -1,4 +1,4 @@
-"""Characterization of the TUI's actuating keys (gap G12).
+"""Characterization of the TUI's actuating keys.
 
 - ``tests/golden/tui/actuation.json`` — for every write-producing key on every
   screen (and every contextual tab of the cluster screen): which dialog opens

@@ -1,6 +1,6 @@
 """Refactor guard tests — cheap, fail-fast checks for rules the refactor must not break.
 
-Each guard turns a review rule from ``refactor/20-target-architecture.md`` §11 into a test:
+Each guard turns a code-review rule into a test:
 
 1. Importing the CLI entry point does not import Textual (the TUI stays lazily imported).
 2. No production module writes ``from time import time`` (it would defeat ``time.time`` patch seams).
@@ -8,8 +8,8 @@ Each guard turns a review rule from ``refactor/20-target-architecture.md`` §11 
 4. No TUI ``DOMNode`` subclass shadows a name of its Textual base class (and none defines ``key_*``).
 5. Every ``_``-prefixed helper in a framework-boundary module is fully annotated.
 
-The allow-lists below are the baseline state at tag ``refactor-gate1``, captured once. They may only shrink
-(the integrator removes stale entries); a stale entry never fails a test.
+The allow-lists below are a baseline captured once (git tag ``refactor-gate1``). They may only shrink
+(remove an entry once its offender is gone); a stale entry never fails a test.
 """
 
 from __future__ import annotations
@@ -61,7 +61,7 @@ SHADOWING_ALLOWED: dict[str, frozenset[str]] = {
     "greenhouse_cli.tui.widgets:SpriteView": frozenset({"DEFAULT_CSS"}),
 }
 
-# Guard 5 baseline: boundary-module helpers that were not fully annotated at refactor-gate1.
+# Guard 5 baseline: boundary-module helpers that were not fully annotated when the baseline was captured.
 UNANNOTATED_ALLOWED: frozenset[str] = frozenset(
     {
         "greenhouse-server/greenhouse_server/routes/scheduler.py::_set_paused",

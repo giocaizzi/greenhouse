@@ -1,6 +1,6 @@
-"""Characterization tests for route/web branches WP5 restructures (refactor plan §0.4 G.1).
+"""Characterization tests for route/web branches that a route/web restructuring touched.
 
-Each test pins what the code does today on a branch the WP5 task subsets did not exercise:
+Each test pins what the code does today on a branch the route and web suites did not exercise:
 the plant-DB sync (API + web), the events CSV export without an irrigator, the cluster
 detail rationale fallback, the plant dashboard's no-irrigator / relative-time branches,
 ``base_context``'s swallow paths and ``create_app``'s default settings/engine.

@@ -1,8 +1,8 @@
-"""WP7 characterization gaps — pin scheduler / irrigation-pipeline branches before restructuring.
+"""Characterization gaps — pin scheduler / irrigation-pipeline branches before restructuring.
 
 Each test pins what ``greenhouse_server.scheduler`` and ``greenhouse_server.services.irrigation``
-do TODAY on a branch or ordering that the Phase-1 net left uncovered (coverage precondition,
-plan §0.4 G.1) or that a WP7 extraction could silently change (target §3.1 / §3.8): job-session
+do TODAY on a branch or ordering that the original characterization suite left uncovered (by
+coverage) or that extracting the job plumbing could silently change: job-session
 scaffolding (commit / rollback / close order, which errors escape), the run-time vs schedule-time
 reads of the pump-watcher job, the temperature-source matrix, the actuation clock seam, partial
 counts when ``rearm_leak_checks`` fails mid-scan, and every early-return shape. Nothing here
@@ -781,11 +781,11 @@ def test_check_job_binds_the_monitor_to_its_repo_before_the_pipeline_asks_it(p, 
     assert [c[0] for c in p.wiring.irrigator.calls] == ["start"]
 
 
-# ── M-pre survivors (refactor/wp-handoff/WP7.md) ──────────────────────────────
+# ── Mutation survivors (mutants no other test killed) ─────────────────────────
 
 
 def test_job_skip_guards_log_at_debug(p, caplog):
-    """M-pre survivors: the two pre-session guards each log one debug line."""
+    """Mutation survivors: the two pre-session guards each log one debug line."""
     assert getattr(p.app.state, "device_gateway", None) is None
     assert getattr(p.app.state, "health_monitor", None) is None
     with caplog.at_level(logging.DEBUG, logger=SCHEDULER_LOGGER):
@@ -799,7 +799,7 @@ def test_job_skip_guards_log_at_debug(p, caplog):
 
 @pytest.mark.parametrize("outcome", ["completed", "interrupted", "boom"])
 def test_watcher_job_session_commit_rollback_close_order(watcher_env, monkeypatch, outcome):
-    """M-pre survivor: the watcher job rolls back on failure, commits only after an interrupt, always closes."""
+    """Mutation survivor: the watcher job rolls back on failure, commits only after an interrupt, always closes."""
     log: list[str] = []
     real_factory = watcher_env.factory
 
@@ -829,7 +829,7 @@ def test_watcher_job_session_commit_rollback_close_order(watcher_env, monkeypatc
 
 
 def test_leak_check_done_scans_at_most_500_leak_rows(db, monkeypatch):
-    """M-post guard for the ``limit=500`` literal (bug B-23 neighbourhood: older markers are not seen)."""
+    """Mutation guard for the ``limit=500`` literal (bug B-23 neighbourhood: older markers are not seen)."""
     seen: list[dict] = []
 
     def spy(self, **kwargs):
@@ -842,7 +842,7 @@ def test_leak_check_done_scans_at_most_500_leak_rows(db, monkeypatch):
 
 
 def test_leak_check_done_ignores_other_codes_and_empty_payloads(db):
-    """M-pre survivor: only ``leak_check`` / ``leak_hold`` rows with a payload count as a completed check."""
+    """Mutation survivor: only ``leak_check`` / ``leak_hold`` rows with a payload count as a completed check."""
     cid = db.add_cluster("Done Gap")
     for code, payload in (("leak_suspect", {"started_at": FROZEN_TS}), ("leak_check", None)):
         db.add_activity_event(
@@ -862,7 +862,7 @@ def test_leak_check_done_ignores_other_codes_and_empty_payloads(db):
 
 @pytest.mark.parametrize("fail", [False, True])
 def test_rearm_always_closes_its_session(monkeypatch, frozen_clock, fail):
-    """M-pre survivor: ``rearm_leak_checks`` closes its session on success and after a failure."""
+    """Mutation survivor: ``rearm_leak_checks`` closes its session on success and after a failure."""
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(engine)
     real_factory = sessionmaker(bind=engine)
@@ -882,7 +882,7 @@ def test_rearm_always_closes_its_session(monkeypatch, frozen_clock, fail):
 
 
 def test_health_block_names_the_first_blocking_alarm(db, pump, monkeypatch):
-    """M-pre survivor: the device-health gate reports ``blocking_alarms[0]`` as the primary alarm."""
+    """Mutation survivor: the device-health gate reports ``blocking_alarms[0]`` as the primary alarm."""
     from greenhouse_core.devices.health import HealthAlarm
 
     class Blocking:
@@ -906,7 +906,7 @@ def test_health_block_names_the_first_blocking_alarm(db, pump, monkeypatch):
 
 
 def test_monitor_always_syncs(db):
-    """M-pre survivor: ``monitor_cluster`` refreshes the cluster through the sync service (D15: always)."""
+    """Mutation survivor: ``monitor_cluster`` refreshes the cluster through the sync service (D15: always)."""
     cid = db.add_cluster("Sync Gap")
     sync = StubSync(None)
     svc = IrrigationService(db, None, sync, None, StubPlantDb({}))
@@ -915,7 +915,7 @@ def test_monitor_always_syncs(db):
 
 
 def test_monitor_looks_back_two_hours(db):
-    """M-pre survivor: monitor reads the last 2 h of readings (a 1.5 h-old sample counts, a 2.5 h-old one does not)."""
+    """Mutation survivor: monitor reads the last 2 h of readings (a 1.5 h-old sample counts, a 2.5 h-old one does not)."""
     cid = db.add_cluster("Lookback Gap")
     fresh = db.add_sensor(
         cluster_id=cid, tuya_device_id="fake_tuya_sensor_lb01", name="F", sensor_type="soil", config={}
@@ -937,7 +937,7 @@ def test_monitor_looks_back_two_hours(db):
     ("soil", "status"), [(5.0, "dry"), (4.9, "very_dry"), (19.9, "dry"), (20.0, "ok"), (40.0, "ok"), (40.1, "wet")]
 )
 def test_monitor_status_ladder_edges(db, soil, status):
-    """M-pre survivor: the 5-way ladder is strict ``<`` / ``>`` at every edge (band 20-30)."""
+    """Mutation survivor: the 5-way ladder is strict ``<`` / ``>`` at every edge (band 20-30)."""
     cid = db.add_cluster("Ladder Gap")
     sid = db.add_sensor(cluster_id=cid, tuya_device_id="fake_tuya_sensor_lad1", name="L", sensor_type="soil", config={})
     db.add_sensor_reading(sensor_id=sid, timestamp=FROZEN_TS - 600, soil_moisture=soil)
@@ -948,7 +948,7 @@ def test_monitor_status_ladder_edges(db, soil, status):
 
 @pytest.mark.parametrize("branch", ["monitored", "auto_run_off", "pipeline"])
 def test_check_cluster_call_order_and_result_shape(db, monkeypatch, branch):
-    """M-pre survivor: learning → maintenance → (config) → pipeline/monitor → ``sync_cluster_alerts`` → result."""
+    """Mutation survivor: learning → maintenance → (config) → pipeline/monitor → ``sync_cluster_alerts`` → result."""
     cid = db.add_cluster("Order Gap")
     if branch != "monitored":
         db.add_irrigator(

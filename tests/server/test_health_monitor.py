@@ -397,7 +397,7 @@ class TestEngineActuationBlock:
 
 
 class TestSharedMonitorRebind:
-    """S6 / architecture review A1: the singleton monitor's repo can be swapped mid-watch.
+    """The singleton monitor's repo can be swapped mid-watch.
 
     Production wires ONE ``DeviceHealthMonitor`` (``app.state.health_monitor``). The pump-watcher
     job binds it to its own session (``services/irrigation.py`` ``_run_pump_watcher``) and then
