@@ -2255,13 +2255,23 @@ add(
     "devices",
     CORE + "devices/registry.py",
     [
-        ("49", '    "tuya_local": "rainpoint.ik10pw",\n', "", "legacy tuya_local alias removed"),
-        ("50", '    "temp_humidity": "tuya.tr301z",\n', "", "legacy temp_humidity alias removed"),
+        (
+            "49",
+            "        factory = self._irrigators.get(irrigator.type)\n",
+            "        factory = self._irrigators.get(irrigator.type) or next(iter(self._irrigators.values()), None)\n",
+            "unknown irrigator type fails open to the first adapter",
+        ),
+        (
+            "50",
+            "        factory = self._sensors.get(sensor.type)\n",
+            "        factory = self._sensors.get(sensor.type) or next(iter(self._sensors.values()), None)\n",
+            "unknown sensor type fails open to the first adapter",
+        ),
         (
             "51",
-            '        key = self._resolve_irrigator_key(irrigator.type or "")',
-            '        key = irrigator.type or ""',
-            "irrigator aliases ignored",
+            "            raise UnknownDeviceModel(msg)\n",
+            "            return None\n",
+            "unknown irrigator returns None",
         ),
     ],
 )

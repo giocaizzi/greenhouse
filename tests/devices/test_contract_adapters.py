@@ -55,7 +55,6 @@ from greenhouse_core.devices import (
 from greenhouse_core.devices import gateway as gateway_module
 from greenhouse_core.devices.irrigators import ik10pw as ik10pw_module
 from greenhouse_core.devices.profile import load_profile_json
-from greenhouse_core.devices.registry import LEGACY_IRRIGATOR_ALIASES, LEGACY_SENSOR_ALIASES
 from greenhouse_core.models import Irrigator, Sensor, SensorReading
 
 GOLDEN = "ingress_devices"
@@ -256,8 +255,6 @@ def test_profiles_parsers_and_registry_golden():
             "registry": {
                 "irrigator_keys": list(registry.registered_irrigator_keys()),
                 "sensor_keys": list(registry.registered_sensor_keys()),
-                "legacy_irrigator_aliases": LEGACY_IRRIGATOR_ALIASES,
-                "legacy_sensor_aliases": LEGACY_SENSOR_ALIASES,
             },
             "health_capabilities": {
                 "IK10PWAdapter": sorted(a.value for a in IK10PWAdapter.health_capabilities),
@@ -303,23 +300,35 @@ class TestRegistryResolution:
         assert a is not b
         assert a._gateway is gateway and b._gateway is gateway and s._gateway is gateway
 
-    @pytest.mark.parametrize("raw_type", [None, "", "tuya_cloud", "tuya_local", "rainpoint.ik10pw"])
-    def test_irrigator_types_resolving_to_ik10pw(self, raw_type):
+    def test_only_the_model_key_resolves_to_ik10pw(self):
         registry = build_default_registry(DeviceGateway(FAKE_CLIENT_ID, FAKE_CLIENT_SECRET, raw=object()))
-        assert type(registry.get_irrigator(_irrigator(device_type=raw_type))) is IK10PWAdapter
+        assert type(registry.get_irrigator(_irrigator(device_type="rainpoint.ik10pw"))) is IK10PWAdapter
+
+    @pytest.mark.parametrize("raw_type", [None, "", "tuya_cloud", "tuya_local"])
+    def test_legacy_and_empty_irrigator_types_are_unknown(self, raw_type):
+        """OD3: the legacy alias table is gone — these values are unknown models."""
+        registry = build_default_registry(DeviceGateway(FAKE_CLIENT_ID, FAKE_CLIENT_SECRET, raw=object()))
+        with pytest.raises(UnknownDeviceModel) as excinfo:
+            registry.get_irrigator(_irrigator(device_type=raw_type))
+        assert str(excinfo.value) == f"No adapter registered for irrigator type {raw_type!r} (known: rainpoint.ik10pw)"
+
+    @pytest.mark.parametrize("raw_type", ["", "soil_moisture", "temp_humidity", "light"])
+    def test_legacy_and_empty_sensor_types_are_unknown(self, raw_type):
+        registry = build_default_registry(DeviceGateway(FAKE_CLIENT_ID, FAKE_CLIENT_SECRET, raw=object()))
+        assert registry.get_sensor(_sensor(raw_type)) is None
 
     def test_unknown_irrigator_message_is_exact(self):
         registry = build_default_registry(DeviceGateway(FAKE_CLIENT_ID, FAKE_CLIENT_SECRET, raw=object()))
         with pytest.raises(UnknownDeviceModel) as excinfo:
             registry.get_irrigator(_irrigator(device_type="acme.pump"))
-        assert str(excinfo.value) == "No adapter registered for irrigator type 'acme.pump' (resolved='acme.pump')"
+        assert str(excinfo.value) == "No adapter registered for irrigator type 'acme.pump' (known: rainpoint.ik10pw)"
 
     def test_unknown_sensor_logs_warning_and_returns_none(self, caplog):
         registry = build_default_registry(DeviceGateway(FAKE_CLIENT_ID, FAKE_CLIENT_SECRET, raw=object()))
         with caplog.at_level(logging.WARNING, logger="greenhouse_core.devices.registry"):
             assert registry.get_sensor(_sensor("acme.probe")) is None
         assert caplog.messages == [
-            "No adapter registered for sensor type 'acme.probe' (resolved='acme.probe'); sensor will be skipped"
+            "No adapter registered for sensor type 'acme.probe' (known: tuya.tr301z); sensor 9 will be skipped"
         ]
 
     def test_empty_registry_and_late_registration_order(self):

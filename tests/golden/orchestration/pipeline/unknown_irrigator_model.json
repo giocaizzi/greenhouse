@@ -9,7 +9,7 @@
     "duration_minutes": 2,
     "interval_hours": 12,
     "learning_alerts": [],
-    "reason": "no adapter for irrigator: No adapter registered for irrigator type 'acme.unknown' (resolved='acme.unknown')",
+    "reason": "no adapter for irrigator: No adapter registered for irrigator type 'acme.unknown' (known: fake.irrigator, rainpoint.ik10pw)",
     "reasons": [
      {
       "code": "sensor_dry",

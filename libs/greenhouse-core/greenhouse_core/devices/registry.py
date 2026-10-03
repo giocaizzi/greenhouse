@@ -8,17 +8,18 @@ Resolution policy (deliberately strict for irrigators, lenient for sensors):
   sensor just degrades the cluster to weather-only operation; the engine
   already handles that.
 
-Legacy column values (``"tuya_cloud"`` / ``"tuya_local"`` for irrigators,
-``"soil_moisture"`` / ``"temp_humidity"`` / ``"light"`` for sensors) are
-honoured via :attr:`LEGACY_IRRIGATOR_ALIASES` / :attr:`LEGACY_SENSOR_ALIASES`
-so existing rows keep working before the data migration has run and so PR 1
-remains a strict no-op for callers.
+Rows are matched on their exact ``type`` (the ``vendor.model`` key). The legacy
+column values (``tuya_cloud`` / ``tuya_local``, ``soil_moisture`` /
+``temp_humidity`` / ``light``) are no longer aliased (owner decision OD3): Alembic
+revision ``6c9d4e2f3a12`` rewrites them, and a row that still carries one is an
+unknown model — the irrigator is refused (logged, never actuated) and the sensor is
+skipped by the health poll. Fix such a row by setting its type to the model key.
 """
 
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 
 from greenhouse_core.devices.irrigators.base import AbstractIrrigatorAdapter
 from greenhouse_core.devices.sensors.base import AbstractSensorAdapter
@@ -32,22 +33,6 @@ SensorFactory = Callable[[], AbstractSensorAdapter]
 
 class UnknownDeviceModel(Exception):
     """Raised when an irrigator references a model not in the registry."""
-
-
-# Legacy DB values predate the move to ``vendor.model`` keys. Both forms
-# resolve to the same adapter so PR 1 can land without touching data.
-LEGACY_IRRIGATOR_ALIASES: dict[str, str] = {
-    "tuya_cloud": "rainpoint.ik10pw",
-    "tuya_local": "rainpoint.ik10pw",
-    "": "rainpoint.ik10pw",
-}
-
-LEGACY_SENSOR_ALIASES: dict[str, str] = {
-    "soil_moisture": "tuya.tr301z",
-    "temp_humidity": "tuya.tr301z",
-    "light": "tuya.tr301z",
-    "": "tuya.tr301z",
-}
 
 
 class DeviceRegistry:
@@ -77,10 +62,11 @@ class DeviceRegistry:
 
     def get_irrigator(self, irrigator: Irrigator) -> AbstractIrrigatorAdapter:
         """Return the adapter for ``irrigator``. Raises ``UnknownDeviceModel`` on miss."""
-        key = self._resolve_irrigator_key(irrigator.type or "")
-        factory = self._irrigators.get(key)
+        factory = self._irrigators.get(irrigator.type)
         if factory is None:
-            raise UnknownDeviceModel(f"No adapter registered for irrigator type {irrigator.type!r} (resolved={key!r})")
+            msg = f"No adapter registered for irrigator type {irrigator.type!r} (known: {_known(self._irrigators)})"
+            logger.error("%s; irrigator %s will not be actuated", msg, irrigator.id)
+            raise UnknownDeviceModel(msg)
         return factory()
 
     def get_sensor(self, sensor: Sensor) -> AbstractSensorAdapter | None:
@@ -89,26 +75,16 @@ class DeviceRegistry:
         Logs a warning on miss instead of raising — unknown sensor models
         degrade the system, they don't endanger hardware.
         """
-        key = self._resolve_sensor_key(sensor.type or "")
-        factory = self._sensors.get(key)
+        factory = self._sensors.get(sensor.type)
         if factory is None:
             logger.warning(
-                "No adapter registered for sensor type %r (resolved=%r); sensor will be skipped",
+                "No adapter registered for sensor type %r (known: %s); sensor %s will be skipped",
                 sensor.type,
-                key,
+                _known(self._sensors),
+                sensor.id,
             )
             return None
         return factory()
-
-    # ── Helpers ───────────────────────────────────────────────────────────
-
-    @staticmethod
-    def _resolve_irrigator_key(raw: str) -> str:
-        return LEGACY_IRRIGATOR_ALIASES.get(raw, raw)
-
-    @staticmethod
-    def _resolve_sensor_key(raw: str) -> str:
-        return LEGACY_SENSOR_ALIASES.get(raw, raw)
 
     # Introspection — useful for the parametrised adapter contract test.
 
@@ -117,3 +93,8 @@ class DeviceRegistry:
 
     def registered_sensor_keys(self) -> tuple[str, ...]:
         return tuple(self._sensors)
+
+
+def _known(factories: Mapping[str, object]) -> str:
+    """The registered model keys, sorted, for a lookup-miss message."""
+    return ", ".join(sorted(factories)) or "none"

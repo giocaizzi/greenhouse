@@ -196,6 +196,17 @@ Consistency audit (2026-10-03):
 - Fix pass (server), **D20:** the web kill switch (`POST /bulk/stop-all`) now sends the same ntfy emergency push as
   `POST /api/v1/bulk/stop-all` (honouring `notify_emergency`); the notification moved into
   `services/bulk.stop_all_irrigators`, the one path both use. Pinned by `tests/server/test_web_emergency_notify.py`.
+- **OD3 device-type aliases removed** (post-WP8, `fix(consistency)`): the registry matches the exact `vendor.model`
+  key; `tuya_cloud` / `tuya_local` / `""` (irrigators) and `soil_moisture` / `temp_humidity` / `light` / `""` (sensors)
+  no longer resolve. The web add/edit forms offer `rainpoint.ik10pw` / `tuya.tr301z` (they offered only the legacy
+  values, and the edit form silently picked the first legacy option for a canonical row); CLI `--type` help names the
+  model key. **Old databases:** Alembic `6c9d4e2f3a12` rewrote legacy values, but rows created afterwards through the
+  old web form / CLI help still carry them. Such an irrigator is refused, never actuated: `registry.get_irrigator`
+  logs an ERROR naming the type and the known keys and raises `UnknownDeviceModel` — manual start → 503 with that
+  message, automatic runs → `no adapter for irrigator: …`, emergency stop → listed in `errors`, health poll → logged.
+  Such a sensor still syncs readings but gets no health monitoring (WARNING per poll). Remedy: `greenhouse irrigator
+  update <cluster> --type rainpoint.ik10pw`, `greenhouse sensor update <id> --cluster N --type tuya.tr301z`, or saving
+  the web edit form. Pinned by `tests/server/test_legacy_device_types.py` and the registry tests.
 
 ## Golden-test policy (orchestrator decision)
 

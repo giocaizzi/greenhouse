@@ -104,7 +104,7 @@ uv run greenhouse-server
 # Set up a cluster
 uv run greenhouse cluster add "Living Room" --environment indoor
 uv run greenhouse plant add "Monstera deliciosa" --cluster 1
-uv run greenhouse sensor add --cluster 1 --device-id YOUR_DEVICE_ID --name "Monstera Sensor" --type soil_moisture
+uv run greenhouse sensor add --cluster 1 --device-id YOUR_DEVICE_ID --name "Monstera Sensor" --type tuya.tr301z
 
 # Operations
 uv run greenhouse status 1          # full cluster overview

@@ -166,12 +166,14 @@ class TestRegistryFailureModes:
         out = registry.get_sensor(_make_sensor("tuya.does-not-exist"))
         assert out is None
 
-    def test_legacy_irrigator_aliases_resolve(self, registry: DeviceRegistry):
-        for legacy in ("tuya_cloud", "tuya_local", ""):
-            adapter = registry.get_irrigator(_make_irrigator(legacy))
-            assert isinstance(adapter, IK10PWAdapter), legacy
+    def test_legacy_irrigator_types_are_unknown(self, registry: DeviceRegistry):
+        """OD3: no alias table — a legacy irrigator type fails closed like any unknown model."""
+        from greenhouse_core.devices import UnknownDeviceModel
 
-    def test_legacy_sensor_aliases_resolve(self, registry: DeviceRegistry):
+        for legacy in ("tuya_cloud", "tuya_local", ""):
+            with pytest.raises(UnknownDeviceModel):
+                registry.get_irrigator(_make_irrigator(legacy))
+
+    def test_legacy_sensor_types_are_unknown(self, registry: DeviceRegistry):
         for legacy in ("soil_moisture", "temp_humidity", "light", ""):
-            adapter = registry.get_sensor(_make_sensor(legacy))
-            assert isinstance(adapter, TR301ZAdapter), legacy
+            assert registry.get_sensor(_make_sensor(legacy)) is None, legacy
