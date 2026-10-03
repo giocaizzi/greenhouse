@@ -78,3 +78,7 @@ constant; WP8 typing (58 errors); stub overrides for `tinytuya`, `apscheduler`, 
   only via `refactor/00-smells.md` / safety reports (e.g. B-18, B-24, the shared `detect_conflicts` gate).
 - Deferred from FP-C: enum-typed parameters (~56 signatures, mostly server) and server TypedDicts (weather results,
   alert findings, sync snapshot) — after FP-S merges; engine rain `2.0` — after WP8.
+
+## From FP-U hand-off (orchestrator)
+- `greenhouse tui --help` claims sync runs behind a confirmation dialog — it does not; doc-contract fix (help golden only).
+- CLI relaxed mypy override removal handed to FP-S (same block as routes).
