@@ -378,3 +378,34 @@ def test_create_app_without_engine_builds_one_from_settings_db_url(clean_env, tm
         assert (tmp_path / "built.db").exists()
     finally:
         engine.dispose()
+
+
+# ── D15: GET /clusters/{id}/monitor (API) and the web monitor share one syncing path ──────────
+
+
+@pytest.mark.parametrize("url", ["/api/v1/clusters/{cid}/monitor", "/clusters/{cid}/monitor"])
+def test_monitor_runs_the_freshness_sync_and_commits_its_rows(app, client, monkeypatch, url):
+    """D15 (was B-N1): both monitors refresh stale sensors and the refreshed reading is persisted."""
+    from greenhouse_server.services.sync import SyncService
+
+    ids = _seed(app, {"C1": ["Fern"]}, sensor_for="C1")
+    calls: list[int] = []
+
+    def fake_ensure_fresh(self, cluster_id):
+        # Stands in for the Cloud: writes one fresh row the way sync_single_sensor does, then flushes.
+        calls.append(cluster_id)
+        (sensor,) = self._repo.get_sensors_in_cluster(cluster_id)
+        self._repo.add_sensor_reading(sensor_id=sensor.id, timestamp=FROZEN_TS - 60, soil_moisture=41.0)
+        self._repo.session.flush()
+
+    monkeypatch.setattr(SyncService, "ensure_fresh_and_read", fake_ensure_fresh)
+    resp = client.get(url.format(cid=ids["C1"]))
+    assert resp.status_code == 200
+    assert calls == [ids["C1"]]
+    repo, session = _repo_session(app)
+    try:
+        (sensor,) = repo.get_sensors_in_cluster(ids["C1"])
+        latest = repo.get_latest_reading(sensor.id)
+        assert (latest.timestamp, latest.soil_moisture) == (FROZEN_TS - 60, 41.0)
+    finally:
+        session.close()

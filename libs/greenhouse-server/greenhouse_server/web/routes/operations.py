@@ -56,7 +56,8 @@ def irrigate(
 
 @router.get("/clusters/{cluster_id}/monitor")
 def monitor(request: Request, cluster_id: int, svc: IrrigationServiceDep, session: SessionDep):
-    result = svc.monitor_cluster(cluster_id=cluster_id, no_sync=True)
+    # Same path as GET /api/v1/clusters/{id}/monitor: refresh stale sensors, keep the rows.
+    result = svc.monitor_cluster(cluster_id=cluster_id)
     session.commit()
     return templates.TemplateResponse(
         request, "partials/_monitor_panel.html", base_context(request, result=result, cluster_id=cluster_id)

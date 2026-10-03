@@ -37,7 +37,7 @@ from server.conftest import _make_stubbed_app
 # refactor/00-contracts.md at the Phase-0 baseline (main @ a1b2622); re-recorded only by
 # reviewed behavior-change commits (`fix(drift|consistency): …`) that also regenerate the golden.
 PHASE0_OPENAPI_SHA256 = (
-    "c9e6d5f53c3ac92ece142e5e1de5034e7012a687347167579425dab4f548ea0f"  # gitleaks:allow — content hash, not a secret
+    "c62de22163d6b44d8d29a5fe35a4d79d2a0b62901175e6b9c7699ad6c3cc71f6"  # gitleaks:allow — content hash, not a secret
 )
 
 

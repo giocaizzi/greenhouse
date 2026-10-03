@@ -164,7 +164,9 @@ def monitor(cluster_id: int, repo: RepoDep, irrigation_svc: IrrigationServiceDep
     that currently need water.
 
     Use this for sensor-only clusters (no irrigators) where you want to know
-    which plants are dry without running the decision engine. Read-only.
+    which plants are dry without running the decision engine. Never actuates;
+    sensors whose latest reading is stale are first refreshed from the Tuya
+    Cloud and the refreshed readings are stored.
 
     Args:
         cluster_id: Cluster to monitor.
@@ -179,6 +181,7 @@ def monitor(cluster_id: int, repo: RepoDep, irrigation_svc: IrrigationServiceDep
     """
     require_cluster(repo, cluster_id)
     result = irrigation_svc.monitor_cluster(cluster_id)
+    repo.session.commit()  # keep the freshness sync's rows (D15)
     return MonitorResponse(
         cluster_name=result["cluster_name"],
         sensors=[SensorStatusResponse(**s) for s in result["sensors"]],
