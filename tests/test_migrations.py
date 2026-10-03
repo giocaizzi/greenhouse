@@ -1,11 +1,11 @@
 """Schema-migration integration tests.
 
-These tests guard the three init_db branches:
+These tests guard init_db, which is plain ``alembic upgrade head``:
 
-- Empty DB → alembic upgrade head creates the full schema.
+- Empty DB → the chain from baseline creates the full schema.
 - Already-managed DB → upgrade head is a no-op.
-- Pre-Alembic legacy DB → missing tables/columns are repaired and the DB
-  is stamped at head.
+- Pre-Alembic DB (tables but no ``alembic_version``) → no longer repaired
+  (OD3): the baseline revision fails on the existing tables.
 """
 
 import os
@@ -13,6 +13,7 @@ import tempfile
 
 import pytest
 from sqlalchemy import create_engine, inspect, text
+from sqlalchemy.exc import OperationalError
 
 from greenhouse_core.database import head_revision, init_db
 
@@ -103,11 +104,15 @@ def test_device_type_backfill_rewrites_legacy_values(file_db):
     assert sens == ["tuya.tr301z"] * 4
 
 
-def test_legacy_partial_db_gets_repaired(file_db):
-    """A partial pre-baseline DB (missing newer columns) is repaired and stamped."""
+def test_pre_alembic_db_is_not_repaired(file_db):
+    """A pre-baseline DB (tables, no ``alembic_version``) is no longer patched up and stamped.
+
+    OD3 removed the legacy repair branch: init_db always runs ``upgrade head``,
+    whose baseline revision fails on the table that already exists. SQLite DDL is
+    non-transactional, so the tables created before the failure stay, but no
+    revision is recorded: the database needs a manual ``alembic stamp head``.
+    """
     engine = create_engine(file_db)
-    # Simulate a partial DB: irrigation_configs without daily_cap_minutes / max_events_per_day,
-    # no alembic_version, missing baseline tables.
     with engine.begin() as conn:
         conn.execute(
             text(
@@ -115,27 +120,13 @@ def test_legacy_partial_db_gets_repaired(file_db):
                 "environment TEXT, created_at INTEGER)"
             )
         )
-        conn.execute(
-            text(
-                "CREATE TABLE irrigation_configs (id INTEGER PRIMARY KEY, cluster_id INTEGER UNIQUE, "
-                "mode TEXT, duration_minutes INTEGER, interval_hours INTEGER, auto_run INTEGER, "
-                "last_updated INTEGER)"
-            )
-        )
 
-    init_db(engine)
-
-    inspector = inspect(engine)
-    cols = {c["name"] for c in inspector.get_columns("irrigation_configs")}
-    assert "daily_cap_minutes" in cols
-    assert "max_events_per_day" in cols
-
-    tables = set(inspector.get_table_names())
-    assert {"decision_logs", "alerts", "activity_events", "plant_health_daily"} <= tables
+    with pytest.raises(OperationalError, match="already exists"):
+        init_db(engine)
 
     with engine.connect() as conn:
-        version = conn.execute(text("SELECT version_num FROM alembic_version")).scalar()
-    assert version == head_revision()
+        assert conn.execute(text("SELECT version_num FROM alembic_version")).all() == []
+    engine.dispose()
 
 
 def test_init_db_does_not_disable_application_loggers():
