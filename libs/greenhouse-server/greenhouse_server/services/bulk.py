@@ -1,16 +1,24 @@
 """Bulk operations service — emergency stop all irrigators."""
 
 import time
+from typing import NamedTuple
 
 from greenhouse_core.devices import DeviceRegistry, UnknownDeviceModel
 from greenhouse_core.models import EVENT_ACTION_STOP, TRIGGERED_BY_EMERGENCY
 from greenhouse_core.repository import IrrigationRepository
 
 
+class StopAllResult(NamedTuple):
+    """``stop_all_irrigators`` result; still unpacks as ``stopped, errors``."""
+
+    stopped: int
+    errors: list[str]
+
+
 def stop_all_irrigators(
     repo: IrrigationRepository,
     registry: DeviceRegistry | None,
-) -> tuple[int, list[str]]:
+) -> StopAllResult:
     """Send an emergency stop to every irrigator and log the event.
 
     When ``registry`` is None (test environment or missing credentials) the
@@ -25,7 +33,7 @@ def stop_all_irrigators(
         registry: Device registry, or None in test / credential-less envs.
 
     Returns:
-        A (stopped_count, errors) tuple where errors contains one entry per
+        A ``(stopped, errors)`` StopAllResult where errors contains one entry per
         irrigator that raised an exception during device communication.
     """
     irrigators = repo.list_all_irrigators()
@@ -54,4 +62,4 @@ def stop_all_irrigators(
             errors.append(f"irrigator {irrigator.id} ({irrigator.name}): {exc}")
 
     repo.commit()
-    return stopped, errors
+    return StopAllResult(stopped, errors)

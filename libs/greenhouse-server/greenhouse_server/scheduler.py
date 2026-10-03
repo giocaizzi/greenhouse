@@ -2,7 +2,7 @@
 
 import logging
 import threading
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypedDict
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from apscheduler.jobstores.base import JobLookupError
@@ -451,7 +451,18 @@ def _is_paused(job: "Job") -> bool:
     return hasattr(job, "next_run_time") and job.next_run_time is None
 
 
-def get_jobs() -> list[dict[str, Any]]:
+class JobInfo(TypedDict):
+    """One ``get_jobs`` row: a plain dict at runtime (``SchedulerJobResponse(**job)``, web jobs table)."""
+
+    id: str
+    name: str
+    trigger: str
+    next_run_time: str | None
+    paused: bool
+    core: bool
+
+
+def get_jobs() -> list[JobInfo]:
     """List all registered jobs.
 
     ``paused`` is True only for an explicitly paused job (only ``check_all``
@@ -461,7 +472,7 @@ def get_jobs() -> list[dict[str, Any]]:
     ``scheduler_running`` flag on ``/health`` to tell the two apart.
     """
     running = scheduler.running
-    jobs = []
+    jobs: list[JobInfo] = []
     for job in scheduler.get_jobs():
         next_run = getattr(job, "next_run_time", None) if running else None
         jobs.append(
