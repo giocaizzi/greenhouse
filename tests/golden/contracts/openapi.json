@@ -12,7 +12,7 @@
      "auth"
     ],
     "summary": "Login",
-    "description": "Exchange a username and password for a session JWT.\n\nThe token is returned in the JSON body for API/CLI clients AND set as an\nHTTPOnly cookie for browser sessions, so the same login serves both.\n\nArgs:\n    body: username + password.\n\nReturns:\n    JSON with access_token, token_type, expires_in (seconds), username.\n\nRaises:\n    HTTPException 401 if credentials are invalid or the user is inactive.\n    HTTPException 503 if auth is enabled but no secret key is configured.",
+    "description": "Exchange a username and password for a session JWT.\n\nThe token is returned in the JSON body for API/CLI clients AND set as an\nHTTPOnly cookie for browser sessions, so the same login serves both.\n\nArgs:\n    body: username + password.\n\nReturns:\n    JSON with access_token, token_type, expires_in (seconds), username.\n\nRaises:\n    HTTPException: 401 if credentials are invalid or the user is inactive,\n        503 if auth is enabled but no secret key is configured.",
     "operationId": "login",
     "requestBody": {
      "content": {
@@ -54,7 +54,7 @@
      "auth"
     ],
     "summary": "Logout",
-    "description": "Clear the session cookie. JWT bearer tokens remain valid until expiry.\n\nReturns:\n    Confirmation payload.\n\nRaises:\n    HTTPException 401 when called without an active session.",
+    "description": "Clear the session cookie.\n\nJWT bearer tokens remain valid until they expire.\n\nReturns:\n    Confirmation payload.\n\nRaises:\n    HTTPException: 401 when called without an active session.",
     "operationId": "logout",
     "responses": {
      "200": {
@@ -81,7 +81,7 @@
      "auth"
     ],
     "summary": "Whoami",
-    "description": "Return the currently authenticated user.\n\nReturns:\n    Authenticated user's id and username.\n\nRaises:\n    HTTPException 401 if no valid session is present.",
+    "description": "Return the currently authenticated user.\n\nReturns:\n    Authenticated user's id and username.\n\nRaises:\n    HTTPException: 401 if no valid session is present.",
     "operationId": "whoami",
     "responses": {
      "200": {
@@ -108,7 +108,7 @@
      "clusters"
     ],
     "summary": "List all clusters",
-    "description": "List every cluster in the system.",
+    "description": "List every cluster in the system.\n\nReturns:\n    All clusters, ordered by name.",
     "operationId": "list_clusters",
     "responses": {
      "200": {
@@ -230,7 +230,7 @@
      "clusters"
     ],
     "summary": "Update a cluster",
-    "description": "Partially update a cluster metadata.\n\nOnly fields present in the request body are modified; omitted fields are\nleft unchanged.\n\nArgs:\n    cluster_id: Numeric cluster identifier.\n    request: Fields to update — any combination of name, location, and\n        environment.\n\nReturns:\n    The updated cluster.\n\nRaises:\n    HTTPException: 404 if no cluster with that ID exists.",
+    "description": "Partially update a cluster's metadata.\n\nOnly fields present in the request body are modified; omitted fields are\nleft unchanged.\n\nArgs:\n    cluster_id: Numeric cluster identifier.\n    request: Fields to update — any combination of name, location, and\n        environment.\n\nReturns:\n    The updated cluster.\n\nRaises:\n    HTTPException: 404 if no cluster with that ID exists.",
     "operationId": "update_cluster",
     "security": [
      {
@@ -555,7 +555,7 @@
      "plants"
     ],
     "summary": "List Plants",
-    "description": "List every plant in a cluster.\n\nArgs:\n    cluster_id: ID of the cluster to enumerate.",
+    "description": "List every plant in a cluster.\n\nArgs:\n    cluster_id: ID of the cluster to enumerate.\n\nReturns:\n    The cluster's plants (empty for an unknown cluster).",
     "operationId": "list_plants",
     "security": [
      {
@@ -607,7 +607,7 @@
      "plants"
     ],
     "summary": "Update a plant",
-    "description": "Partially update a plant care metadata.\n\nOnly fields present in the request body are modified; omitted fields are\nleft unchanged. The plant must belong to the specified cluster.\n\nArgs:\n    cluster_id: Cluster the plant belongs to.\n    plant_id: Numeric plant identifier.\n    request: Fields to update — any subset of care metadata fields.\n\nReturns:\n    The updated plant.\n\nRaises:\n    HTTPException: 404 if the plant does not exist or belongs to a\n        different cluster.",
+    "description": "Partially update a plant's care metadata.\n\nOnly fields present in the request body are modified; omitted fields are\nleft unchanged. The plant must belong to the specified cluster.\n\nArgs:\n    cluster_id: Cluster the plant belongs to.\n    plant_id: Numeric plant identifier.\n    request: Fields to update — any subset of care metadata fields.\n\nReturns:\n    The updated plant.\n\nRaises:\n    HTTPException: 404 if the plant does not exist or belongs to a\n        different cluster.",
     "operationId": "update_plant",
     "security": [
      {
@@ -996,7 +996,7 @@
      "irrigators"
     ],
     "summary": "Register the cluster's irrigator",
-    "description": "Register the Tuya irrigator for a cluster.\n\nA cluster has at most one irrigator (strict 0:1). Registering a second one\nis rejected.\n\nArgs:\n    cluster_id: Cluster the irrigator belongs to.\n    request: Tuya device ID, irrigator name, type (e.g. `tuya_cloud`),\n        optional config dict, and optional `reservoir_l` /\n        `flow_rate_l_per_min` capacity used for vacation rationing.\n\nReturns:\n    The newly created irrigator.\n\nRaises:\n    HTTPException: 404 if the cluster does not exist, 409 if the cluster\n        already has an irrigator or the Tuya device ID is already\n        registered.",
+    "description": "Register the Tuya irrigator for a cluster.\n\nA cluster has at most one irrigator (strict 0:1). Registering a second one\nis rejected.\n\nArgs:\n    cluster_id: Cluster the irrigator belongs to.\n    request: Tuya device ID, irrigator name, type (the device model key,\n        e.g. `rainpoint.ik10pw`),\n        optional config dict, and optional `reservoir_l` /\n        `flow_rate_l_per_min` capacity used for vacation rationing.\n\nReturns:\n    The newly created irrigator.\n\nRaises:\n    HTTPException: 404 if the cluster does not exist, 409 if the cluster\n        already has an irrigator or the Tuya device ID is already\n        registered.",
     "operationId": "add_irrigator",
     "security": [
      {
@@ -1098,7 +1098,7 @@
      "irrigators"
     ],
     "summary": "Update the cluster's irrigator",
-    "description": "Partially update the cluster's irrigator metadata.\n\nOnly fields present in the request body are modified; omitted fields are\nleft unchanged.\n\nArgs:\n    cluster_id: Cluster whose irrigator to update.\n    request: Fields to update — any subset of `name`, `type`, `config`,\n        `reservoir_l`, and `flow_rate_l_per_min`.\n\nReturns:\n    The updated irrigator.\n\nRaises:\n    HTTPException: 404 if the cluster has no irrigator.",
+    "description": "Partially update the metadata of the cluster's irrigator.\n\nOnly fields present in the request body are modified; omitted fields are\nleft unchanged.\n\nArgs:\n    cluster_id: Cluster whose irrigator to update.\n    request: Fields to update — any subset of `name`, `type`, `config`,\n        `reservoir_l`, and `flow_rate_l_per_min`.\n\nReturns:\n    The updated irrigator.\n\nRaises:\n    HTTPException: 404 if the cluster has no irrigator.",
     "operationId": "update_irrigator",
     "security": [
      {
@@ -1202,7 +1202,7 @@
      "irrigators"
     ],
     "summary": "Start Irrigator",
-    "description": "Manually start an irrigator over the Tuya local protocol.\n\nSide effects: actuates physical hardware and records a `start` irrigation\nevent with `triggered_by=\"manual\"`. Bypasses the smart-decision engine.\n\nArgs:\n    irrigator_id: Irrigator to actuate.\n    request: Optional `minutes` for run duration.\n\nRaises:\n    HTTPException: 404 if the irrigator is unknown, 409 if the cluster\n        daily cap or max-events-per-day limit would be exceeded, 503 if\n        Tuya credentials are missing or the irrigator model has no\n        adapter, 502 if the device fails to start.",
+    "description": "Manually start an irrigator over the Tuya local protocol.\n\nSide effects: actuates physical hardware and records a `start` irrigation\nevent with `triggered_by=\"manual\"`. Bypasses the smart-decision engine.\n\nArgs:\n    irrigator_id: Irrigator to actuate.\n    request: Optional `minutes` for run duration.\n\nReturns:\n    `success=True` and the adapter's start message.\n\nRaises:\n    HTTPException: 404 if the irrigator is unknown, 409 if the cluster\n        daily cap or max-events-per-day limit would be exceeded, 503 if\n        Tuya credentials are missing or the irrigator model has no\n        adapter, 502 if the device fails to start.",
     "operationId": "start_irrigator",
     "security": [
      {
@@ -1260,7 +1260,7 @@
      "irrigators"
     ],
     "summary": "Stop Irrigator",
-    "description": "Manually stop a running irrigator over the Tuya local protocol.\n\nSide effects: actuates physical hardware and records a `stop` irrigation\nevent with `triggered_by=\"manual\"` (the same action automatic and\nemergency stops record).\n\nArgs:\n    irrigator_id: Irrigator to stop.\n\nRaises:\n    HTTPException: 404 if the irrigator is unknown, 503 if Tuya\n        credentials are missing or the irrigator model has no adapter,\n        502 if the device fails to stop.",
+    "description": "Manually stop a running irrigator over the Tuya local protocol.\n\nSide effects: actuates physical hardware and records a `stop` irrigation\nevent with `triggered_by=\"manual\"` (the same action automatic and\nemergency stops record).\n\nArgs:\n    irrigator_id: Irrigator to stop.\n\nReturns:\n    `success=True` and the adapter's stop message.\n\nRaises:\n    HTTPException: 404 if the irrigator is unknown, 503 if Tuya\n        credentials are missing or the irrigator model has no adapter,\n        502 if the device fails to stop.",
     "operationId": "stop_irrigator",
     "security": [
      {
@@ -1308,7 +1308,7 @@
      "irrigators"
     ],
     "summary": "Log Manual",
-    "description": "Record a manually executed irrigation that did not go through the API.\n\nUseful when the user watered by hand but wants the learning engine and\nhistory to know about it. No hardware is actuated.\n\nArgs:\n    irrigator_id: Irrigator the manual run is attributed to.\n    request: Duration in minutes plus optional notes.\n\nRaises:\n    HTTPException: 404 if the irrigator is unknown, 409 if the cluster\n        daily cap or max-events-per-day limit would be exceeded.",
+    "description": "Record a manually executed irrigation that did not go through the API.\n\nUseful when the user watered by hand but wants the learning engine and\nhistory to know about it. No hardware is actuated.\n\nArgs:\n    irrigator_id: Irrigator the manual run is attributed to.\n    request: Duration in minutes plus optional notes.\n\nReturns:\n    `success=True` and the id of the recorded irrigation event.\n\nRaises:\n    HTTPException: 404 if the irrigator is unknown, 409 if the cluster\n        daily cap or max-events-per-day limit would be exceeded.",
     "operationId": "log_manual",
     "security": [
      {
@@ -1453,7 +1453,7 @@
      "sensors"
     ],
     "summary": "Add Sensor",
-    "description": "Register a Tuya sensor under a cluster.\n\nA sensor may optionally be linked to a specific plant; otherwise it is\ntreated as a cluster-level reading.\n\nArgs:\n    cluster_id: Cluster the sensor belongs to.\n    request: Tuya device ID, sensor name, type (e.g. soil_moisture),\n        optional config dict, and optional plant_id for per-plant linking.\n\nRaises:\n    HTTPException: 404 if the cluster (or referenced plant) is missing,\n        409 if the Tuya device ID is already registered.\n\nReturns:\n    The created sensor record.",
+    "description": "Register a Tuya sensor under a cluster.\n\nA sensor may optionally be linked to a specific plant; otherwise it is\ntreated as a cluster-level reading.\n\nArgs:\n    cluster_id: Cluster the sensor belongs to.\n    request: Tuya device ID, sensor name, type (the device model key,\n        e.g. `tuya.tr301z`),\n        optional config dict, and optional plant_id for per-plant linking.\n\nRaises:\n    HTTPException: 404 if the cluster (or referenced plant) is missing,\n        409 if the Tuya device ID is already registered.\n\nReturns:\n    The created sensor record.",
     "operationId": "add_sensor",
     "security": [
      {
@@ -1509,7 +1509,7 @@
      "sensors"
     ],
     "summary": "List Sensors",
-    "description": "List every sensor registered to a cluster.\n\nArgs:\n    cluster_id: ID of the cluster to enumerate.",
+    "description": "List every sensor registered to a cluster.\n\nArgs:\n    cluster_id: ID of the cluster to enumerate.\n\nReturns:\n    The cluster's sensors (empty for an unknown cluster).",
     "operationId": "list_sensors",
     "security": [
      {
@@ -1616,7 +1616,7 @@
      "sensors"
     ],
     "summary": "Update a sensor",
-    "description": "Partially update a sensor metadata.\n\nOnly fields present in the request body are modified; omitted fields are\nleft unchanged. The sensor must belong to the specified cluster.\n\nArgs:\n    cluster_id: Cluster the sensor belongs to.\n    sensor_id: Numeric sensor identifier.\n    request: Fields to update — any subset of name, type, config,\n        and plant_id.\n\nReturns:\n    The updated sensor.\n\nRaises:\n    HTTPException: 404 if the sensor does not exist or belongs to a\n        different cluster, or if ``plant_id`` is not a plant of that cluster.",
+    "description": "Partially update a sensor's metadata.\n\nOnly fields present in the request body are modified; omitted fields are\nleft unchanged. The sensor must belong to the specified cluster.\n\nArgs:\n    cluster_id: Cluster the sensor belongs to.\n    sensor_id: Numeric sensor identifier.\n    request: Fields to update — any subset of name, type, config,\n        and plant_id.\n\nReturns:\n    The updated sensor.\n\nRaises:\n    HTTPException: 404 if the sensor does not exist or belongs to a\n        different cluster, or if ``plant_id`` is not a plant of that cluster.",
     "operationId": "update_sensor",
     "security": [
      {
@@ -1842,7 +1842,7 @@
      "configs"
     ],
     "summary": "Get Config",
-    "description": "Read a cluster's declared (raw) irrigation config.\n\nNulls represent inherited values — call ``GET .../config/effective`` for\nthe merged view used by the decision engine.\n\nArgs:\n    cluster_id: Cluster to inspect.\n\nRaises:\n    HTTPException: 404 if the cluster has no config row yet.",
+    "description": "Read a cluster's declared (raw) irrigation config.\n\nNulls represent inherited values — call ``GET .../config/effective`` for\nthe merged view used by the decision engine.\n\nArgs:\n    cluster_id: Cluster to inspect.\n\nReturns:\n    The declared per-cluster config row (nulls = inherited).\n\nRaises:\n    HTTPException: 404 if the cluster has no config row yet.",
     "operationId": "get_config",
     "security": [
      {
@@ -2010,7 +2010,7 @@
      "operations"
     ],
     "summary": "Cluster Status",
-    "description": "Full cluster snapshot: config, plants, sensors (latest reading + age),\nirrigators (last event), and the current decision-engine recommendation.\n\nRead-only — does not actuate hardware or modify the database.\n\nArgs:\n    cluster_id: Cluster to inspect.\n\nRaises:\n    HTTPException: 404 if the cluster does not exist.",
+    "description": "Return a full cluster snapshot with the current decision-engine recommendation.\n\nThe snapshot covers the config, plants, sensors (latest reading + age) and\nthe irrigator (last event). Read-only — does not actuate hardware or modify\nthe database.\n\nArgs:\n    cluster_id: Cluster to inspect.\n\nReturns:\n    The cluster, its config, plants, sensors, irrigator, and the decision\n    the engine would make now (`null` parts when absent).\n\nRaises:\n    HTTPException: 404 if the cluster does not exist.",
     "operationId": "cluster_status",
     "security": [
      {
@@ -2116,7 +2116,7 @@
      "operations"
     ],
     "summary": "Monitor",
-    "description": "Per-sensor soil-moisture status for a cluster, plus a list of plants\nthat currently need water.\n\nUse this for sensor-only clusters (no irrigators) where you want to know\nwhich plants are dry without running the decision engine. Never actuates;\nsensors whose latest reading is stale are first refreshed from the Tuya\nCloud and the refreshed readings are stored.\n\nArgs:\n    cluster_id: Cluster to monitor.\n\nReturns:\n    Each sensor's current soil moisture, the plant's target band, and a\n    status (`ok` / `dry` / `very_dry` / `wet` / `no_data`), plus a flat\n    `needs_water` list of plant labels for the dry/very_dry sensors.\n\nRaises:\n    HTTPException: 404 if the cluster does not exist.",
+    "description": "Report each sensor's soil-moisture status and the plants that currently need water.\n\nUse this for sensor-only clusters (no irrigators) where you want to know\nwhich plants are dry without running the decision engine. Never actuates;\nsensors whose latest reading is stale are first refreshed from the Tuya\nCloud and the refreshed readings are stored.\n\nArgs:\n    cluster_id: Cluster to monitor.\n\nReturns:\n    Each sensor's current soil moisture, the plant's target band, and a\n    status (`ok` / `dry` / `very_dry` / `wet` / `no_data`), plus a flat\n    `needs_water` list of plant labels for the dry/very_dry sensors.\n\nRaises:\n    HTTPException: 404 if the cluster does not exist.",
     "operationId": "monitor",
     "security": [
      {
@@ -2191,7 +2191,7 @@
      "operations"
     ],
     "summary": "Check Single",
-    "description": "Run a check for a single cluster (irrigate or monitor + collect alerts).\n\nSide effects: may actuate physical hardware if the cluster has irrigators\nand `auto_run=True`. Same semantics as POST /check, scoped to one cluster.\n\nArgs:\n    cluster_id: Cluster to check.\n\nRaises:\n    HTTPException: 404 if the cluster does not exist.",
+    "description": "Run a check for a single cluster (irrigate or monitor + collect alerts).\n\nSide effects: may actuate physical hardware if the cluster has irrigators\nand `auto_run=True`. Same semantics as POST /check, scoped to one cluster.\n\nArgs:\n    cluster_id: Cluster to check.\n\nReturns:\n    The cluster's check result: irrigation or monitor outcome plus its\n    learning and maintenance alerts.\n\nRaises:\n    HTTPException: 404 if the cluster does not exist.",
     "operationId": "check_single",
     "security": [
      {
@@ -2286,7 +2286,7 @@
      "operations"
     ],
     "summary": "Learn",
-    "description": "Human-readable learning report for a cluster.\n\nSummarises absorption rates, drainage profiles, and any advisory alerts\n(blocked drip, rapid drainage, chronic underwatering, etc.) the learner\nhas detected. Read-only and never blocks irrigation.\n\nArgs:\n    cluster_id: Cluster to analyse.\n\nRaises:\n    HTTPException: 404 if the cluster does not exist.",
+    "description": "Return a human-readable learning report for a cluster.\n\nSummarises absorption rates, drainage profiles, and any advisory alerts\n(blocked drip, rapid drainage, chronic underwatering, etc.) the learner\nhas detected. Read-only and never blocks irrigation.\n\nArgs:\n    cluster_id: Cluster to analyse.\n\nReturns:\n    The cluster name, the report text, and the advisory learning alerts.\n\nRaises:\n    HTTPException: 404 if the cluster does not exist.",
     "operationId": "learn",
     "security": [
      {
@@ -2334,7 +2334,7 @@
      "operations"
     ],
     "summary": "History",
-    "description": "Recent sensor readings and irrigation events for a cluster.\n\nArgs:\n    cluster_id: Cluster to inspect.\n    hours: Look-back window in hours (default 24).\n    limit: Maximum readings/events per sensor or irrigator (default 50).\n\nRaises:\n    HTTPException: 404 if the cluster does not exist.",
+    "description": "Return recent sensor readings and irrigation events for a cluster.\n\nArgs:\n    cluster_id: Cluster to inspect.\n    hours: Look-back window in hours (default 24).\n    limit: Maximum readings/events per sensor or irrigator (default 50).\n\nReturns:\n    Per-sensor readings and per-irrigator events within the window.\n\nRaises:\n    HTTPException: 404 if the cluster does not exist.",
     "operationId": "history",
     "security": [
      {
@@ -2404,7 +2404,7 @@
      "operations"
     ],
     "summary": "Stats",
-    "description": "Aggregate irrigation statistics for a cluster.\n\nArgs:\n    cluster_id: Cluster to compute stats for.\n    days: Look-back window in days (default 7).\n\nReturns:\n    Total event count, total + average duration, frequency per day, and\n    breakdowns by event type and trigger source.\n\nRaises:\n    HTTPException: 404 if the cluster does not exist.",
+    "description": "Return aggregate irrigation statistics for a cluster.\n\nArgs:\n    cluster_id: Cluster to compute stats for.\n    days: Look-back window in days (default 7).\n\nReturns:\n    Total event count, total + average duration, frequency per day, and\n    breakdowns by event type and trigger source.\n\nRaises:\n    HTTPException: 404 if the cluster does not exist.",
     "operationId": "stats",
     "security": [
      {
@@ -2463,7 +2463,7 @@
      "operations"
     ],
     "summary": "Stats Export",
-    "description": "Export raw irrigation events for a cluster as a CSV download.\n\nThe CSV columns are: timestamp, date, time, irrigator, action,\nduration_minutes, triggered_by, notes. This route returns a binary\n`text/csv` stream and is therefore exempt from the response_model\ntyping requirement that the rest of the API follows.\n\nArgs:\n    cluster_id: Cluster to export.\n    days: Look-back window in days (default 7).\n\nRaises:\n    HTTPException: 404 if the cluster does not exist.",
+    "description": "Export raw irrigation events for a cluster as a CSV download.\n\nThe CSV columns are: timestamp, date, time, irrigator, action,\nduration_minutes, triggered_by, notes. This route returns a binary\n`text/csv` stream and is therefore exempt from the response_model\ntyping requirement that the rest of the API follows.\n\nArgs:\n    cluster_id: Cluster to export.\n    days: Look-back window in days (default 7).\n\nReturns:\n    A `text/csv` attachment named `cluster_<id>_stats.csv`.\n\nRaises:\n    HTTPException: 404 if the cluster does not exist.",
     "operationId": "stats_export",
     "security": [
      {
@@ -2520,7 +2520,7 @@
      "scheduler"
     ],
     "summary": "Health",
-    "description": "Liveness probe: server status, scheduler state, and registered jobs.\n\nReturns:\n    `status=\"ok\"` and a snapshot of the APScheduler jobs the server\n    currently has registered.",
+    "description": "Report liveness: server status, scheduler state, and registered jobs.\n\nReturns:\n    `status=\"ok\"` and a snapshot of the APScheduler jobs the server\n    currently has registered.",
     "operationId": "health",
     "responses": {
      "200": {
@@ -2680,7 +2680,7 @@
      "charts"
     ],
     "summary": "Get Plant",
-    "description": "Fetch a single plant by ID across all clusters.\n\nArgs:\n    plant_id: Numeric plant identifier.\n\nRaises:\n    HTTPException: 404 if no plant with that ID exists.",
+    "description": "Fetch a single plant by ID across all clusters.\n\nArgs:\n    plant_id: Numeric plant identifier.\n\nReturns:\n    The plant record including its parent ``cluster_id``.\n\nRaises:\n    HTTPException: 404 if no plant with that ID exists.",
     "operationId": "get_plant",
     "security": [
      {
@@ -2728,7 +2728,7 @@
      "charts"
     ],
     "summary": "Plant Chart Data",
-    "description": "Time-series chart payload for a single plant.\n\nReturns sensor readings, irrigation events, and the plant-care threshold\nband so the caller can render a Chart.js time-scale chart.\n\nArgs:\n    plant_id: Plant whose sensors to chart.\n    hours: Look-back window (1–8760).\n    metric: One of `soil_moisture`, `temperature`, `light`, `env_humidity`.\n\nRaises:\n    HTTPException: 400 if the metric is unsupported, 404 if the plant\n        does not exist.",
+    "description": "Return the time-series chart payload for a single plant.\n\nIncludes sensor readings, irrigation events, and the plant-care threshold\nband so the caller can render a Chart.js time-scale chart.\n\nArgs:\n    plant_id: Plant whose sensors to chart.\n    hours: Look-back window (1–8760).\n    metric: One of `soil_moisture`, `temperature`, `light`, `env_humidity`.\n\nReturns:\n    Chart datasets for the plant's sensors, irrigation-event markers, and\n    the threshold band for the metric.\n\nRaises:\n    HTTPException: 400 if the metric is unsupported, 404 if the plant\n        does not exist.",
     "operationId": "plant_chart_data",
     "security": [
      {
@@ -2798,7 +2798,7 @@
      "charts"
     ],
     "summary": "Cluster Chart Data",
-    "description": "Time-series chart payload aggregated across every sensor in a cluster.\n\nArgs:\n    cluster_id: Cluster whose sensors to chart.\n    hours: Look-back window (1–8760).\n    metric: One of `soil_moisture`, `temperature`, `light`, `env_humidity`.\n\nRaises:\n    HTTPException: 400 if the metric is unsupported, 404 if the cluster\n        does not exist.",
+    "description": "Return the time-series chart payload aggregated across every sensor in a cluster.\n\nArgs:\n    cluster_id: Cluster whose sensors to chart.\n    hours: Look-back window (1–8760).\n    metric: One of `soil_moisture`, `temperature`, `light`, `env_humidity`.\n\nReturns:\n    One chart dataset per cluster sensor, irrigation-event markers, and the\n    threshold band for the metric.\n\nRaises:\n    HTTPException: 400 if the metric is unsupported, 404 if the cluster\n        does not exist.",
     "operationId": "cluster_chart_data",
     "security": [
      {
@@ -2868,7 +2868,7 @@
      "charts"
     ],
     "summary": "Cluster Overlay",
-    "description": "Multi-metric overlay payload with soil moisture, humidity, and light normalised to 0-100.\n\nAll three series share a common Y axis (0-100) so they can be overlaid on one chart.\nLight is rescaled from lux using a 10 000 lx ceiling; the original ceiling is\nreturned as `original_max` on the light dataset for tooltip back-conversion.\n\nArgs:\n    cluster_id: Cluster to summarise.\n    hours: Look-back window (1–8760, default 72).\n\nReturns:\n    MultiMetricOverlayResponse with normalised datasets and irrigation event markers.\n\nRaises:\n    HTTPException: 404 if the cluster does not exist.",
+    "description": "Return a multi-metric overlay payload with soil moisture, humidity, and light normalised to 0-100.\n\nAll three series share a common Y axis (0-100) so they can be overlaid on one chart.\nLight is rescaled from lux using a 10 000 lx ceiling; the original ceiling is\nreturned as `original_max` on the light dataset for tooltip back-conversion.\n\nArgs:\n    cluster_id: Cluster to summarise.\n    hours: Look-back window (1–8760, default 72).\n\nReturns:\n    MultiMetricOverlayResponse with normalised datasets and irrigation event markers.\n\nRaises:\n    HTTPException: 404 if the cluster does not exist.",
     "operationId": "cluster_overlay",
     "security": [
      {
@@ -2928,7 +2928,7 @@
      "charts"
     ],
     "summary": "Cluster Heatmap",
-    "description": "Irrigation frequency heatmap cells for a 7×24 weekday-by-hour grid.\n\nEach non-zero cell records the count of irrigation events and the total\nirrigated minutes for that (weekday, hour) combination within the look-back\nwindow. Zero-count cells are omitted to keep the payload compact.\n\nArgs:\n    cluster_id: Cluster to summarise.\n    days: Look-back window in days (1–365, default 30).\n\nReturns:\n    HeatmapResponse with a sparse list of HeatmapCell objects.\n\nRaises:\n    HTTPException: 404 if the cluster does not exist.",
+    "description": "Return irrigation-frequency heatmap cells for a 7×24 weekday-by-hour grid.\n\nEach non-zero cell records the count of irrigation events and the total\nirrigated minutes for that (weekday, hour) combination within the look-back\nwindow. Zero-count cells are omitted to keep the payload compact.\n\nArgs:\n    cluster_id: Cluster to summarise.\n    days: Look-back window in days (1–365, default 30).\n\nReturns:\n    HeatmapResponse with a sparse list of HeatmapCell objects.\n\nRaises:\n    HTTPException: 404 if the cluster does not exist.",
     "operationId": "cluster_heatmap",
     "security": [
      {
@@ -2988,7 +2988,7 @@
      "charts"
     ],
     "summary": "Plant Health Timeline",
-    "description": "90-day daily health score timeline for a single plant.\n\nHealth score per day (0–100) is the mean soil moisture across all sensors\nlinked to the plant. Points are (unix_timestamp_of_day_start, score) tuples\nin ascending time order. Days with no readings are omitted.\n\nArgs:\n    plant_id: Plant to chart.\n\nReturns:\n    PlantHealthTimelineResponse with daily score points and threshold levels.\n\nRaises:\n    HTTPException: 404 if the plant does not exist.",
+    "description": "Return the 90-day daily health score timeline for a single plant.\n\nHealth score per day (0–100) is the mean soil moisture across all sensors\nlinked to the plant. Points are (unix_timestamp_of_day_start, score) tuples\nin ascending time order. Days with no readings are omitted.\n\nArgs:\n    plant_id: Plant to chart.\n\nReturns:\n    PlantHealthTimelineResponse with daily score points and threshold levels.\n\nRaises:\n    HTTPException: 404 if the plant does not exist.",
     "operationId": "plant_health_timeline",
     "security": [
      {
@@ -3999,7 +3999,7 @@
      "scheduler"
     ],
     "summary": "System Health",
-    "description": "Detailed system health pulse: sensor freshness, irrigator inventory, and cloud reachability.\n\nA richer sibling of GET /health. Checks every sensor's most recent reading\ntimestamp to classify devices as ok / stale / cold, infers cloud\nreachability from recent data, counts open alerts, and reports whether the\nbackground scheduler is running.\n\nReturns:\n    SystemHealthResponse with status (\"ok\" / \"degraded\" / \"down\"),\n    sensor and irrigator counts, open alert count, last sync timestamp,\n    and a per-device status list (up to 20 devices).",
+    "description": "Return a detailed system health pulse: sensor freshness, irrigator inventory, and cloud reachability.\n\nA richer sibling of GET /health. Checks every sensor's most recent reading\ntimestamp to classify devices as ok / stale / cold, infers cloud\nreachability from recent data, counts open alerts, and reports whether the\nbackground scheduler is running.\n\nReturns:\n    SystemHealthResponse with status (\"ok\" / \"degraded\" / \"down\"),\n    sensor and irrigator counts, open alert count, last sync timestamp,\n    and a per-device status list (up to 20 devices).",
     "operationId": "system_health",
     "responses": {
      "200": {
@@ -4113,7 +4113,7 @@
      "windows"
     ],
     "summary": "List a cluster's irrigation windows",
-    "description": "Return every configured watering window for the cluster, oldest first.\n\nArgs:\n    cluster_id: Cluster the windows belong to.\n\nReturns:\n    ``IrrigationWindowListResponse`` — may have an empty ``windows`` list\n    when no per-cluster windows are configured (the engine then falls back\n    to the global default preferred hours).\n\nRaises:\n    HTTPException: 404 if the cluster does not exist.",
+    "description": "Return every configured watering window for the cluster, oldest first.\n\nArgs:\n    cluster_id: Cluster the windows belong to.\n\nReturns:\n    ``IrrigationWindowListResponse`` — may have an empty ``windows`` list\n    when no per-cluster windows are configured (the engine then allows\n    irrigation at any hour, subject to quiet hours).\n\nRaises:\n    HTTPException: 404 if the cluster does not exist.",
     "operationId": "list_windows",
     "security": [
      {
@@ -6637,7 +6637,8 @@
      "username",
      "password"
     ],
-    "title": "LoginRequest"
+    "title": "LoginRequest",
+    "description": "Credentials for POST /auth/login."
    },
    "LoginResponse": {
     "properties": {
@@ -6665,7 +6666,8 @@
      "expires_in",
      "username"
     ],
-    "title": "LoginResponse"
+    "title": "LoginResponse",
+    "description": "A session JWT, also set as the HTTPOnly session cookie."
    },
    "LogoutResponse": {
     "properties": {
@@ -6676,7 +6678,8 @@
      }
     },
     "type": "object",
-    "title": "LogoutResponse"
+    "title": "LogoutResponse",
+    "description": "Confirmation that the session cookie was cleared."
    },
    "MonitorResponse": {
     "properties": {
@@ -8870,7 +8873,8 @@
      "id",
      "username"
     ],
-    "title": "WhoAmIResponse"
+    "title": "WhoAmIResponse",
+    "description": "The authenticated principal."
    }
   },
   "securitySchemes": {

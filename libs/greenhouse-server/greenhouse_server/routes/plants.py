@@ -108,13 +108,16 @@ def list_plants(cluster_id: int, repo: RepoDep):
 
     Args:
         cluster_id: ID of the cluster to enumerate.
+
+    Returns:
+        The cluster's plants (empty for an unknown cluster).
     """
     return repo.get_plants_in_cluster(cluster_id)
 
 
 @router.put("/clusters/{cluster_id}/plants/{plant_id}", response_model=PlantResponse, summary="Update a plant")
 def update_plant(cluster_id: int, plant_id: int, request: UpdatePlantRequest, repo: RepoDep):
-    """Partially update a plant care metadata.
+    """Partially update a plant's care metadata.
 
     Only fields present in the request body are modified; omitted fields are
     left unchanged. The plant must belong to the specified cluster.

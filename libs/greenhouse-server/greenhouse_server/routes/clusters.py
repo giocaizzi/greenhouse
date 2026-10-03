@@ -40,7 +40,11 @@ def create_cluster(request: CreateClusterRequest, repo: RepoDep):
 
 @router.get("", response_model=list[ClusterResponse], summary="List all clusters")
 def list_clusters(repo: RepoDep):
-    """List every cluster in the system."""
+    """List every cluster in the system.
+
+    Returns:
+        All clusters, ordered by name.
+    """
     return repo.list_clusters()
 
 
@@ -113,7 +117,7 @@ def get_cluster_detail(
 
 @router.put("/{cluster_id}", response_model=ClusterResponse, summary="Update a cluster")
 def update_cluster(cluster_id: int, request: UpdateClusterRequest, repo: RepoDep):
-    """Partially update a cluster metadata.
+    """Partially update a cluster's metadata.
 
     Only fields present in the request body are modified; omitted fields are
     left unchanged.

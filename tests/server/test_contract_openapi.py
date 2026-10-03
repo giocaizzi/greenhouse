@@ -35,9 +35,10 @@ from server.conftest import _make_stubbed_app
 
 # sha256 of ``json.dumps(app.openapi(), sort_keys=True)`` recorded in
 # refactor/00-contracts.md at the Phase-0 baseline (main @ a1b2622); re-recorded only by
-# reviewed behavior-change commits (`fix(drift|consistency): …`) that also regenerate the golden.
+# reviewed behavior-change commits (`fix(drift|consistency): …`) or description-only doc-contract
+# commits (`docs(api): …`) that also regenerate the golden.
 PHASE0_OPENAPI_SHA256 = (
-    "ee96dba2a5b7a62985253be1247b00b613284f4548169fc7f41b1f7324a75261"  # gitleaks:allow — content hash, not a secret
+    "f752e84f5329166c587fc733737258c6726f3e43c0c2d648e42ee5192b449dda"  # gitleaks:allow — content hash, not a secret
 )
 
 

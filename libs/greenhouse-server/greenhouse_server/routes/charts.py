@@ -30,6 +30,9 @@ def get_plant(plant_id: int, repo: RepoDep):
     Args:
         plant_id: Numeric plant identifier.
 
+    Returns:
+        The plant record including its parent ``cluster_id``.
+
     Raises:
         HTTPException: 404 if no plant with that ID exists.
     """
@@ -45,15 +48,19 @@ def plant_chart_data(
     hours: int = Query(24, ge=1, le=MAX_LOOKBACK_HOURS),
     metric: str = Query("soil_moisture"),
 ):
-    """Time-series chart payload for a single plant.
+    """Return the time-series chart payload for a single plant.
 
-    Returns sensor readings, irrigation events, and the plant-care threshold
+    Includes sensor readings, irrigation events, and the plant-care threshold
     band so the caller can render a Chart.js time-scale chart.
 
     Args:
         plant_id: Plant whose sensors to chart.
         hours: Look-back window (1–8760).
         metric: One of `soil_moisture`, `temperature`, `light`, `env_humidity`.
+
+    Returns:
+        Chart datasets for the plant's sensors, irrigation-event markers, and
+        the threshold band for the metric.
 
     Raises:
         HTTPException: 400 if the metric is unsupported, 404 if the plant
@@ -73,12 +80,16 @@ def cluster_chart_data(
     hours: int = Query(24, ge=1, le=MAX_LOOKBACK_HOURS),
     metric: str = Query("soil_moisture"),
 ):
-    """Time-series chart payload aggregated across every sensor in a cluster.
+    """Return the time-series chart payload aggregated across every sensor in a cluster.
 
     Args:
         cluster_id: Cluster whose sensors to chart.
         hours: Look-back window (1–8760).
         metric: One of `soil_moisture`, `temperature`, `light`, `env_humidity`.
+
+    Returns:
+        One chart dataset per cluster sensor, irrigation-event markers, and the
+        threshold band for the metric.
 
     Raises:
         HTTPException: 400 if the metric is unsupported, 404 if the cluster
@@ -96,7 +107,7 @@ def cluster_overlay(
     repo: RepoDep,
     hours: int = Query(72, ge=1, le=MAX_LOOKBACK_HOURS),
 ):
-    """Multi-metric overlay payload with soil moisture, humidity, and light normalised to 0-100.
+    """Return a multi-metric overlay payload with soil moisture, humidity, and light normalised to 0-100.
 
     All three series share a common Y axis (0-100) so they can be overlaid on one chart.
     Light is rescaled from lux using a 10 000 lx ceiling; the original ceiling is
@@ -124,7 +135,7 @@ def cluster_heatmap(
     repo: RepoDep,
     days: int = Query(30, ge=1, le=365),
 ):
-    """Irrigation frequency heatmap cells for a 7×24 weekday-by-hour grid.
+    """Return irrigation-frequency heatmap cells for a 7×24 weekday-by-hour grid.
 
     Each non-zero cell records the count of irrigation events and the total
     irrigated minutes for that (weekday, hour) combination within the look-back
@@ -151,7 +162,7 @@ def plant_health_timeline(
     plant_id: int,
     repo: RepoDep,
 ):
-    """90-day daily health score timeline for a single plant.
+    """Return the 90-day daily health score timeline for a single plant.
 
     Health score per day (0–100) is the mean soil moisture across all sensors
     linked to the plant. Points are (unix_timestamp_of_day_start, score) tuples

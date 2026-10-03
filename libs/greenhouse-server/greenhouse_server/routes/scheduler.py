@@ -17,7 +17,7 @@ router = APIRouter(tags=["scheduler"])
 
 @router.get("/health", response_model=HealthResponse)
 def health() -> HealthResponse:
-    """Liveness probe: server status, scheduler state, and registered jobs.
+    """Report liveness: server status, scheduler state, and registered jobs.
 
     Returns:
         `status="ok"` and a snapshot of the APScheduler jobs the server

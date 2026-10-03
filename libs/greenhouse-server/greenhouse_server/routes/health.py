@@ -11,7 +11,7 @@ router = APIRouter(tags=["scheduler"])
 
 @router.get("/health/system", response_model=SystemHealthResponse)
 def system_health(repo: RepoDep, sync_svc: SyncServiceDep) -> SystemHealthResponse:
-    """Detailed system health pulse: sensor freshness, irrigator inventory, and cloud reachability.
+    """Return a detailed system health pulse: sensor freshness, irrigator inventory, and cloud reachability.
 
     A richer sibling of GET /health. Checks every sensor's most recent reading
     timestamp to classify devices as ok / stale / cold, infers cloud

@@ -58,7 +58,8 @@ def add_sensor(cluster_id: int, request: CreateSensorRequest, repo: RepoDep):
 
     Args:
         cluster_id: Cluster the sensor belongs to.
-        request: Tuya device ID, sensor name, type (e.g. soil_moisture),
+        request: Tuya device ID, sensor name, type (the device model key,
+            e.g. `tuya.tr301z`),
             optional config dict, and optional plant_id for per-plant linking.
 
     Raises:
@@ -94,6 +95,9 @@ def list_sensors(cluster_id: int, repo: RepoDep):
 
     Args:
         cluster_id: ID of the cluster to enumerate.
+
+    Returns:
+        The cluster's sensors (empty for an unknown cluster).
     """
     return repo.get_sensors_in_cluster(cluster_id)
 
@@ -119,7 +123,7 @@ def get_sensor(cluster_id: int, sensor_id: int, repo: RepoDep):
 
 @router.put("/clusters/{cluster_id}/sensors/{sensor_id}", response_model=SensorResponse, summary="Update a sensor")
 def update_sensor(cluster_id: int, sensor_id: int, request: UpdateSensorRequest, repo: RepoDep):
-    """Partially update a sensor metadata.
+    """Partially update a sensor's metadata.
 
     Only fields present in the request body are modified; omitted fields are
     left unchanged. The sensor must belong to the specified cluster.

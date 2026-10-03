@@ -73,7 +73,8 @@ def add_irrigator(cluster_id: int, request: CreateIrrigatorRequest, repo: RepoDe
 
     Args:
         cluster_id: Cluster the irrigator belongs to.
-        request: Tuya device ID, irrigator name, type (e.g. `tuya_cloud`),
+        request: Tuya device ID, irrigator name, type (the device model key,
+            e.g. `rainpoint.ik10pw`),
             optional config dict, and optional `reservoir_l` /
             `flow_rate_l_per_min` capacity used for vacation rationing.
 
@@ -132,7 +133,7 @@ def get_irrigator(cluster_id: int, repo: RepoDep):
     summary="Update the cluster's irrigator",
 )
 def update_irrigator(cluster_id: int, request: UpdateIrrigatorRequest, repo: RepoDep):
-    """Partially update the cluster's irrigator metadata.
+    """Partially update the metadata of the cluster's irrigator.
 
     Only fields present in the request body are modified; omitted fields are
     left unchanged.
@@ -196,6 +197,9 @@ def start_irrigator(
         irrigator_id: Irrigator to actuate.
         request: Optional `minutes` for run duration.
 
+    Returns:
+        `success=True` and the adapter's start message.
+
     Raises:
         HTTPException: 404 if the irrigator is unknown, 409 if the cluster
             daily cap or max-events-per-day limit would be exceeded, 503 if
@@ -223,6 +227,9 @@ def stop_irrigator(
     Args:
         irrigator_id: Irrigator to stop.
 
+    Returns:
+        `success=True` and the adapter's stop message.
+
     Raises:
         HTTPException: 404 if the irrigator is unknown, 503 if Tuya
             credentials are missing or the irrigator model has no adapter,
@@ -248,6 +255,9 @@ def log_manual(
     Args:
         irrigator_id: Irrigator the manual run is attributed to.
         request: Duration in minutes plus optional notes.
+
+    Returns:
+        `success=True` and the id of the recorded irrigation event.
 
     Raises:
         HTTPException: 404 if the irrigator is unknown, 409 if the cluster

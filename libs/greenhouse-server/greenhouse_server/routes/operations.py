@@ -45,13 +45,18 @@ router = APIRouter(tags=["operations"])
 
 @router.get("/clusters/{cluster_id}/status", response_model=ClusterStatusResponse)
 def cluster_status(cluster_id: int, cluster_svc: ClusterServiceDep):
-    """Full cluster snapshot: config, plants, sensors (latest reading + age),
-    irrigators (last event), and the current decision-engine recommendation.
+    """Return a full cluster snapshot with the current decision-engine recommendation.
 
-    Read-only — does not actuate hardware or modify the database.
+    The snapshot covers the config, plants, sensors (latest reading + age) and
+    the irrigator (last event). Read-only — does not actuate hardware or modify
+    the database.
 
     Args:
         cluster_id: Cluster to inspect.
+
+    Returns:
+        The cluster, its config, plants, sensors, irrigator, and the decision
+        the engine would make now (`null` parts when absent).
 
     Raises:
         HTTPException: 404 if the cluster does not exist.
@@ -159,8 +164,7 @@ def irrigate(
 
 @router.get("/clusters/{cluster_id}/monitor", response_model=MonitorResponse)
 def monitor(cluster_id: int, repo: RepoDep, irrigation_svc: IrrigationServiceDep) -> MonitorResponse:
-    """Per-sensor soil-moisture status for a cluster, plus a list of plants
-    that currently need water.
+    """Report each sensor's soil-moisture status and the plants that currently need water.
 
     Use this for sensor-only clusters (no irrigators) where you want to know
     which plants are dry without running the decision engine. Never actuates;
@@ -227,6 +231,10 @@ def check_single(
     Args:
         cluster_id: Cluster to check.
 
+    Returns:
+        The cluster's check result: irrigation or monitor outcome plus its
+        learning and maintenance alerts.
+
     Raises:
         HTTPException: 404 if the cluster does not exist.
     """
@@ -264,7 +272,7 @@ def sync(request: SyncRequest, sync_svc: SyncServiceDep, repo: RepoDep) -> SyncR
 
 @router.get("/clusters/{cluster_id}/learn", response_model=LearnResponse)
 def learn(cluster_id: int, repo: RepoDep, plant_db: PlantDbDep):
-    """Human-readable learning report for a cluster.
+    """Return a human-readable learning report for a cluster.
 
     Summarises absorption rates, drainage profiles, and any advisory alerts
     (blocked drip, rapid drainage, chronic underwatering, etc.) the learner
@@ -272,6 +280,9 @@ def learn(cluster_id: int, repo: RepoDep, plant_db: PlantDbDep):
 
     Args:
         cluster_id: Cluster to analyse.
+
+    Returns:
+        The cluster name, the report text, and the advisory learning alerts.
 
     Raises:
         HTTPException: 404 if the cluster does not exist.
@@ -289,12 +300,15 @@ def history(
     hours: int = Query(default=24, ge=1),
     limit: int = Query(default=50, ge=1),
 ):
-    """Recent sensor readings and irrigation events for a cluster.
+    """Return recent sensor readings and irrigation events for a cluster.
 
     Args:
         cluster_id: Cluster to inspect.
         hours: Look-back window in hours (default 24).
         limit: Maximum readings/events per sensor or irrigator (default 50).
+
+    Returns:
+        Per-sensor readings and per-irrigator events within the window.
 
     Raises:
         HTTPException: 404 if the cluster does not exist.
@@ -325,7 +339,7 @@ def history(
 
 @router.get("/clusters/{cluster_id}/stats", response_model=StatsResponse)
 def stats(cluster_id: int, repo: RepoDep, days: int = Query(default=7, ge=1)):
-    """Aggregate irrigation statistics for a cluster.
+    """Return aggregate irrigation statistics for a cluster.
 
     Args:
         cluster_id: Cluster to compute stats for.
@@ -355,6 +369,9 @@ def stats_export(cluster_id: int, repo: RepoDep, days: int = Query(default=7, ge
     Args:
         cluster_id: Cluster to export.
         days: Look-back window in days (default 7).
+
+    Returns:
+        A `text/csv` attachment named `cluster_<id>_stats.csv`.
 
     Raises:
         HTTPException: 404 if the cluster does not exist.

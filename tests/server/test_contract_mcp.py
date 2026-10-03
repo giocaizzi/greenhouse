@@ -33,9 +33,10 @@ from server.conftest import _make_stubbed_app
 
 # sha256 of the name-sorted, key-sorted ``exclude_none`` tool dump recorded in
 # refactor/00-contracts.md at the Phase-0 baseline (main @ a1b2622); re-recorded only by
-# reviewed behavior-change commits (`fix(drift|consistency): …`) that also regenerate the golden.
+# reviewed behavior-change commits (`fix(drift|consistency): …`) or description-only doc-contract
+# commits (`docs(api): …`) that also regenerate the golden.
 PHASE0_MCP_TOOLS_SHA256 = (
-    "2a28d5d38538af656e12d24d6eb3b9b484185e3884eb7c62a26050a7c3e593fc"  # gitleaks:allow — content hash, not a secret
+    "0b5fbae53c228b13dae11358d0690fa7263f3aa68e73af00d1eeb732ba2d4cee"  # gitleaks:allow — content hash, not a secret
 )
 
 _TOKEN = "contract-mcp-token"

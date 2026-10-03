@@ -44,8 +44,8 @@ def list_windows(cluster_id: int, repo: RepoDep):
 
     Returns:
         ``IrrigationWindowListResponse`` — may have an empty ``windows`` list
-        when no per-cluster windows are configured (the engine then falls back
-        to the global default preferred hours).
+        when no per-cluster windows are configured (the engine then allows
+        irrigation at any hour, subject to quiet hours).
 
     Raises:
         HTTPException: 404 if the cluster does not exist.

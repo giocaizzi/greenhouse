@@ -62,6 +62,9 @@ def get_config(cluster_id: int, repo: RepoDep):
     Args:
         cluster_id: Cluster to inspect.
 
+    Returns:
+        The declared per-cluster config row (nulls = inherited).
+
     Raises:
         HTTPException: 404 if the cluster has no config row yet.
     """
