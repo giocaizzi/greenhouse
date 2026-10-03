@@ -27,6 +27,7 @@ These commits **change behavior on purpose**, unlike the rest of the branch. Rul
 | D15 | Monitor (API vs web) — audit C-TX-6 / B-N1 | API runs the freshness sync but never commits (rows discarded, Cloud re-hit each call); web skips the sync | one path that syncs stale sensors and commits, used by both; web also 404s an unknown cluster | API stores synced rows (fewer Cloud calls); web refreshes stale sensors |
 | D16 | Device `config` parsing — audit C-DUP-2 | schemas raise on bad/non-object JSON (500); web `{}` on bad JSON but passes non-objects; gateway `{}` for both | one lenient `models.parse_device_config` (dict / JSON object, else `{}`); gateway swap left to WP8 | API returns `config: {}` instead of 500 (and for a stored `"null"`) |
 | D17 | Efficacy `days` bound — audit C-MISC-1 | API `ge=1`; web `ge=1, le=365` | `le=365` on both (shared constants) | API/MCP 422 above 365 |
+| D20 | Emergency stop (API vs web) — architecture review A9 | API notifies (ntfy); web does not | one service path that notifies, used by both | web emergency stop now sends the notification |
 
 Owner decisions after review (2026-10-03): D8 → vacation times are parsed and displayed in the `timezone`
 preference on every interface (supersedes "UTC midnight"); D7 → the shared formatter shows "never" and the real age on
