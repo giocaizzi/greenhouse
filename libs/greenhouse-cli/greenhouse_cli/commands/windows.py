@@ -7,6 +7,7 @@ from typing import Annotated
 import typer
 
 from greenhouse_cli.commands._helpers import call, output
+from greenhouse_cli.constants import ALL_WEEKDAYS
 
 windows_app = typer.Typer(
     help="Manage per-cluster preferred watering windows",
@@ -34,10 +35,10 @@ def windows_add(
         typer.Option(
             "--weekday-mask",
             min=1,
-            max=127,
+            max=ALL_WEEKDAYS,
             help="Weekday bitmask (Mon=1, Tue=2, ..., Sun=64; 127 = every day)",
         ),
-    ] = 127,
+    ] = ALL_WEEKDAYS,
     label: Annotated[str | None, typer.Option(help="Optional label, e.g. 'morning'")] = None,
 ):
     """Add a watering window. Wrap-around (start > end) crosses midnight."""
@@ -62,7 +63,7 @@ def windows_update(
     cluster: Annotated[int, typer.Option(help="Cluster the window belongs to")],
     start_hour: Annotated[int | None, typer.Option("--start-hour", min=0, max=23)] = None,
     end_hour: Annotated[int | None, typer.Option("--end-hour", min=0, max=23)] = None,
-    weekday_mask: Annotated[int | None, typer.Option("--weekday-mask", min=1, max=127)] = None,
+    weekday_mask: Annotated[int | None, typer.Option("--weekday-mask", min=1, max=ALL_WEEKDAYS)] = None,
     label: Annotated[str | None, typer.Option()] = None,
 ):
     """Patch a window. Only supplied fields are sent."""

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from typing import Annotated
 
 import typer
@@ -13,7 +12,7 @@ from greenhouse_cli.client import (
     clear_stored_token,
     store_token,
 )
-from greenhouse_cli.commands._helpers import call, get_client, output
+from greenhouse_cli.commands._helpers import call, get_client, output, server_url
 
 
 def _login_client(ctx: typer.Context) -> IrrigationClient:
@@ -23,8 +22,7 @@ def _login_client(ctx: typer.Context) -> IrrigationClient:
     on the server, so we deliberately pass ``token=""`` to suppress the
     on-disk token.
     """
-    server = ctx.obj or os.environ.get("IRRIGATION_SERVER_URL", "http://localhost:8000")
-    return IrrigationClient(base_url=server, token="")
+    return IrrigationClient(base_url=server_url(ctx), token="")
 
 
 def register(app: typer.Typer) -> None:

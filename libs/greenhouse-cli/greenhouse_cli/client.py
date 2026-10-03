@@ -7,6 +7,8 @@ from typing import Any, cast
 
 import httpx
 
+from greenhouse_cli.constants import ALL_WEEKDAYS, DEFAULT_SERVER_URL
+
 JSONObject = dict[str, Any]
 
 
@@ -84,7 +86,7 @@ class ServerError(Exception):
 class IrrigationClient:
     """Thin HTTP client wrapping the greenhouse REST API."""
 
-    def __init__(self, base_url: str = "http://localhost:8000", token: str | None = None, **kwargs: Any) -> None:
+    def __init__(self, base_url: str = DEFAULT_SERVER_URL, token: str | None = None, **kwargs: Any) -> None:
         """Build the HTTP session; ``token=None`` falls back to the stored token, ``""`` sends no bearer header."""
         headers = dict(kwargs.pop("headers", {}) or {})
         resolved = token if token is not None else load_stored_token()
@@ -508,7 +510,7 @@ class IrrigationClient:
         cluster_id: int,
         start_hour: int,
         end_hour: int,
-        weekday_mask: int = 127,
+        weekday_mask: int = ALL_WEEKDAYS,
         label: str | None = None,
     ) -> JSONObject:
         """Add an irrigation window; ``weekday_mask`` 127 = every day (``POST /clusters/{id}/windows``)."""

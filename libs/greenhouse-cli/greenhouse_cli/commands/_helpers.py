@@ -9,12 +9,17 @@ import typer
 from rich import print_json
 
 from greenhouse_cli.client import IrrigationClient, ServerError
+from greenhouse_cli.constants import DEFAULT_SERVER_URL
+
+
+def server_url(ctx: typer.Context) -> str:
+    """The server URL: ``--server`` (stored on ``ctx.obj``), else $IRRIGATION_SERVER_URL, else the default."""
+    return ctx.obj or os.environ.get("IRRIGATION_SERVER_URL", DEFAULT_SERVER_URL)
 
 
 def get_client(ctx: typer.Context) -> IrrigationClient:
     """Get an IrrigationClient from the Typer context."""
-    server = ctx.obj or os.environ.get("IRRIGATION_SERVER_URL", "http://localhost:8000")
-    return IrrigationClient(base_url=server)
+    return IrrigationClient(base_url=server_url(ctx))
 
 
 def call(ctx: typer.Context, fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:

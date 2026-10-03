@@ -8,6 +8,8 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from rich.text import Text
 
+from greenhouse_cli.constants import ALL_WEEKDAYS
+
 SEVERITY_STYLES = {
     "critical": "bold #ff5f5f",
     "error": "bold #ff5f5f",
@@ -141,7 +143,7 @@ def bar(value: float | None, width: int = 20, lo: float | None = None, hi: float
 
 def weekday_mask(mask: int) -> str:
     """Render a Mon-bit-1 weekday bitmask as ``MTWTF··``."""
-    if mask == 127:
+    if mask == ALL_WEEKDAYS:
         return "every day"
     letters = "MTWTFSS"
     return "".join(letters[i] if mask & (1 << i) else "·" for i in range(7))

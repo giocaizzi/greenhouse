@@ -7,6 +7,7 @@ server value never gets rejected client-side.
 
 from __future__ import annotations
 
+from greenhouse_cli.constants import ALL_WEEKDAYS
 from greenhouse_cli.tui.screens.forms import Field
 
 ENVIRONMENTS = [("indoor", "indoor"), ("outdoor", "outdoor")]
@@ -88,7 +89,13 @@ def window_fields(window: dict | None = None) -> list[Field]:
     return [
         Field("start_hour", "Start hour (0-23)", "int", w.get("start_hour"), required=True),
         Field("end_hour", "End hour (excl.)", "int", w.get("end_hour"), required=True),
-        Field("weekday_mask", "Weekday mask", "int", w.get("weekday_mask", 127), placeholder="Mon=1 … Sun=64; 127=all"),
+        Field(
+            "weekday_mask",
+            "Weekday mask",
+            "int",
+            w.get("weekday_mask", ALL_WEEKDAYS),
+            placeholder="Mon=1 … Sun=64; 127=all",
+        ),
         Field("label", "Label", value=w.get("label")),
     ]
 
