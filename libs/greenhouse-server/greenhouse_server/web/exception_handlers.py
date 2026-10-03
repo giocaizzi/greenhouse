@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 
 from greenhouse_server.auth import _RedirectAuthError, render_login_redirect
 from greenhouse_server.web.context import base_context, is_hx
@@ -35,7 +35,7 @@ def register_web_exception_handlers(app: FastAPI) -> None:
     """Install the HTTPException and validation handlers that render HTML for web paths, JSON elsewhere."""
 
     @app.exception_handler(HTTPException)
-    async def handle_http_exc(request: Request, exc: HTTPException):
+    async def handle_http_exc(request: Request, exc: HTTPException) -> Response:
         """Render an HTTPException: login redirect sentinel, JSON for /api and /mcp, else the HTML error page."""
         # Auth redirect sentinel — always convert to a 303 to /login, even on
         # API paths so a stale browser tab fetching /api/v1 also gets bounced
@@ -53,7 +53,7 @@ def register_web_exception_handlers(app: FastAPI) -> None:
         )
 
     @app.exception_handler(RequestValidationError)
-    async def handle_validation(request: Request, exc: RequestValidationError):
+    async def handle_validation(request: Request, exc: RequestValidationError) -> Response:
         """Render a request-validation error: JSON 422 for /api and /mcp, else the HTML error page."""
         if not _is_html_request(request):
             return JSONResponse({"detail": exc.errors()}, status_code=422)

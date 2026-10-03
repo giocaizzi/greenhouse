@@ -65,7 +65,8 @@ def get_device_gateway(request: Request) -> DeviceGateway | None:
 
 def get_weather_client(request: Request) -> WeatherClient:
     """Return the app-scoped weather client."""
-    return request.app.state.weather_client
+    client: WeatherClient = request.app.state.weather_client
+    return client
 
 
 def get_ntfy_notifier(request: Request) -> NtfyClient | None:
@@ -75,7 +76,8 @@ def get_ntfy_notifier(request: Request) -> NtfyClient | None:
 
 def get_plant_db(request: Request) -> PlantDatabase:
     """Return the app-scoped plant care database."""
-    return request.app.state.plant_db
+    plant_db: PlantDatabase = request.app.state.plant_db
+    return plant_db
 
 
 # --- Entity lookups (404) ---

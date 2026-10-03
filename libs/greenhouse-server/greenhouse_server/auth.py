@@ -31,6 +31,7 @@ import logging
 import time
 from collections.abc import Generator
 from dataclasses import dataclass
+from typing import Any
 from urllib.parse import quote
 
 import jwt
@@ -115,7 +116,7 @@ def issue_token(settings: Settings, user: User, *, now: int | None = None) -> st
     return jwt.encode(payload, secret, algorithm=JWT_ALGORITHM)
 
 
-def decode_token(settings: Settings, token: str) -> dict:
+def decode_token(settings: Settings, token: str) -> dict[str, Any]:
     """Decode and validate a session JWT. Raises AuthError on any failure."""
     secret = _require_secret(settings)
     try:
@@ -139,7 +140,9 @@ _bearer = HTTPBearer(auto_error=False)
 
 
 def _get_settings(request: Request) -> Settings:
-    return request.app.state.settings
+    """Resolve the live Settings from ``app.state``."""
+    settings: Settings = request.app.state.settings
+    return settings
 
 
 def _session_from_app(request: Request) -> Generator[Session, None, None]:

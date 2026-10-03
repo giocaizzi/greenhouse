@@ -64,7 +64,9 @@ libs/greenhouse-core/greenhouse_core/stats.py
 libs/greenhouse-core/greenhouse_core/utils.py
 libs/greenhouse-server/greenhouse_server/__init__.py
 libs/greenhouse-server/greenhouse_server/app.py
+libs/greenhouse-server/greenhouse_server/auth.py
 libs/greenhouse-server/greenhouse_server/config.py
+libs/greenhouse-server/greenhouse_server/deps.py
 libs/greenhouse-server/greenhouse_server/routes/__init__.py
 libs/greenhouse-server/greenhouse_server/routes/activity.py
 libs/greenhouse-server/greenhouse_server/routes/alerts.py
@@ -109,6 +111,8 @@ libs/greenhouse-server/greenhouse_server/services/vacation.py
 libs/greenhouse-server/greenhouse_server/services/windows.py
 libs/greenhouse-server/greenhouse_server/web/__init__.py
 libs/greenhouse-server/greenhouse_server/web/context.py
+libs/greenhouse-server/greenhouse_server/web/exception_handlers.py
+libs/greenhouse-server/greenhouse_server/web/filters.py
 libs/greenhouse-server/greenhouse_server/web/router.py
 libs/greenhouse-server/greenhouse_server/web/routes/__init__.py
 libs/greenhouse-server/greenhouse_server/web/routes/activity.py
@@ -121,6 +125,7 @@ libs/greenhouse-server/greenhouse_server/web/routes/decisions.py
 libs/greenhouse-server/greenhouse_server/web/routes/efficacy.py
 libs/greenhouse-server/greenhouse_server/web/routes/fragments.py
 libs/greenhouse-server/greenhouse_server/web/routes/health_page.py
+libs/greenhouse-server/greenhouse_server/web/routes/irrigators.py
 libs/greenhouse-server/greenhouse_server/web/routes/operations.py
 libs/greenhouse-server/greenhouse_server/web/routes/pages.py
 libs/greenhouse-server/greenhouse_server/web/routes/plant_dashboard.py
@@ -128,6 +133,7 @@ libs/greenhouse-server/greenhouse_server/web/routes/plants.py
 libs/greenhouse-server/greenhouse_server/web/routes/preferences.py
 libs/greenhouse-server/greenhouse_server/web/routes/quality.py
 libs/greenhouse-server/greenhouse_server/web/routes/sensors.py
+libs/greenhouse-server/greenhouse_server/web/routes/vacation.py
 libs/greenhouse-server/greenhouse_server/web/routes/windows.py
 libs/greenhouse-server/greenhouse_server/web/templating.py
 libs/greenhouse-server/greenhouse_server/web/weekdays.py

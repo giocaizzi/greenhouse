@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 import time
+from typing import Any
 
 from greenhouse_core.constants import AGE_BADGE_STALE_SECONDS, SECONDS_PER_DAY, SECONDS_PER_HOUR
 from greenhouse_core.utils import format_timestamp
@@ -109,7 +110,7 @@ def format_minutes(n: int | None) -> str:
     return f"{h}h {m}m" if m else f"{h}h"
 
 
-def yesno(value, yes: str = "Yes", no: str = "No") -> str:
+def yesno(value: object, yes: str = "Yes", no: str = "No") -> str:
     """Template filter: ``yes`` / ``no`` label for a truthy / falsy value."""
     return yes if value else no
 
@@ -164,7 +165,7 @@ def icon_for_code(code: str) -> str:
     return _TRIGGER_CODE_ICONS.get(code, _SEVERITY_ICONS.get(code, "info"))
 
 
-def _present(value) -> bool:
+def _present(value: Any) -> bool:
     """True when a child collection/relationship holds at least one item.
 
     Accepts the shapes the web layer passes around: ``status`` lists, a single
@@ -179,7 +180,7 @@ def _present(value) -> bool:
         return bool(value)
 
 
-def cluster_caps(obj) -> dict:
+def cluster_caps(obj: Any) -> dict[str, Any]:
     """Derive a cluster's capability tier from what it contains.
 
     The single source of truth for feature gating across the web UI. Accepts

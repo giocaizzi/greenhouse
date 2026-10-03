@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import time
 from datetime import UTC, datetime, tzinfo
+from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, Form, HTTPException, Request
@@ -22,6 +23,9 @@ from greenhouse_server.deps import RepoDep, require_vacation_window
 from greenhouse_server.services.vacation import VacationRangeError, cluster_budgets, validate_vacation_range
 from greenhouse_server.web.context import base_context
 from greenhouse_server.web.templating import templates
+
+if TYPE_CHECKING:
+    from greenhouse_core.models import VacationWindow
 
 router = APIRouter(include_in_schema=False)
 
@@ -71,7 +75,7 @@ def vacation_list(request: Request, repo: RepoDep):
     )
 
 
-def _next_window(windows):
+def _next_window(windows: list[VacationWindow]) -> VacationWindow | None:
     """Return the soonest-starting future window, or None when none are scheduled."""
     now = int(time.time())
     upcoming = [w for w in windows if w.starts_at > now]
