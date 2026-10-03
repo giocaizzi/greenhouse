@@ -360,3 +360,34 @@ HEALTH_SCORE_WINDOW_DAYS = 14
 
 WINDOW_HOUR_MAX = 23
 FULL_WEEKDAY_MASK = 127  # Monday..Sunday bits all set
+
+# ── Irrigation response windows (learning profiles, efficacy) ────────────────
+# Sensor readings around a start event that show how the soil answered.
+
+RESPONSE_PRE_WINDOW_SECONDS = 1800  # baseline: 30 min before the start event
+RESPONSE_POST_WINDOW_SECONDS = 7200  # learning: 2 h after (water needs time to soak)
+RESPONSE_MIN_POST_DELAY_SECONDS = 600  # ignore readings < 10 min after (water still distributing)
+EFFICACY_AFTER_WINDOW_SECONDS = 5400  # efficacy scoring: 90 min after the start event
+
+# ── Anomaly scan ─────────────────────────────────────────────────────────────
+
+ANOMALY_MIN_READINGS = 10  # readings needed before a sensor is scanned
+ANOMALY_WINDOW_READINGS = 50  # most recent readings the z-score baseline uses
+ANOMALY_Z_THRESHOLD = 4.0
+ANOMALY_STALE_INTERVAL_MULTIPLIER = 2.0  # stale when silent > this x the median report gap
+# Minimum std to use for z-score; prevents false alarms on near-constant series
+# while still catching large absolute deviations (e.g. 95% vs 50% baseline).
+ANOMALY_MIN_STD = 1.0
+
+# ── Freshness thresholds by purpose ──────────────────────────────────────────
+# Distinct on purpose: each answers a different question about "how old is too old".
+# (SENSOR_READING_STALE_SECONDS: force a sync before deciding; MAINTENANCE_STALE_SECONDS:
+# maintenance alert; OFFLINE_AFTER_MINUTES: device health.)
+
+SYSTEM_HEALTH_FRESH_SECONDS = SECONDS_PER_HOUR  # system page: Cloud reachable if a reading is newer
+SYSTEM_HEALTH_STALE_SECONDS = 3 * SECONDS_PER_HOUR  # system page: device counts as stale
+SYSTEM_HEALTH_COLD_SECONDS = 24 * SECONDS_PER_HOUR  # system page: device counts as cold
+SYSTEM_HEALTH_DEVICE_LIMIT = 20  # devices listed on the system page
+DATA_QUALITY_STALE_SECONDS = 24 * SECONDS_PER_HOUR  # data-quality report: sensor is stale
+AGE_BADGE_STALE_SECONDS = 7 * SECONDS_PER_DAY  # web relative time renders "stale" past this age
+WEATHER_FORECAST_CACHE_TTL_SECONDS = 600  # Open-Meteo forecast cache lifetime

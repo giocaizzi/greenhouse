@@ -20,6 +20,32 @@ ENTITY_SENSOR = "sensor"
 ENTITY_IRRIGATOR = "irrigator"
 ENTITY_SYSTEM = "system"
 
+# ``source`` of an ActivityEvent / Alert row: the subsystem that produced it.
+SOURCE_IRRIGATION = "irrigation"
+SOURCE_SENSOR = "sensor"
+SOURCE_PLANT = "plant"
+SOURCE_LEARNING = "learning"
+SOURCE_MAINTENANCE = "maintenance"
+SOURCE_LEAK = "leak"
+SOURCE_ANOMALY = "anomaly"
+SOURCE_PUMP = "pump"
+SOURCE_HEALTH = "health"
+
+# ``IrrigationEvent.action``. Only ``start`` is real actuation: cooldown, caps,
+# trends and learning count it alone (a ``schedule_updated`` row blocks nothing).
+EVENT_ACTION_START = "start"
+EVENT_ACTION_STOP = "stop"
+EVENT_ACTION_OFF = "off"  # manual stop (OD4 unifies it on ``stop``)
+EVENT_ACTION_ATTEMPTED = "attempted"  # automatic start whose device call failed
+EVENT_ACTION_ABORTED = "aborted"  # pump watcher stopped a dry run
+
+# ``IrrigationEvent.triggered_by``: who asked for the actuation.
+TRIGGERED_BY_AUTO = "auto"
+TRIGGERED_BY_MANUAL = "manual"
+TRIGGERED_BY_EMERGENCY = "emergency"
+TRIGGERED_BY_SHUTDOWN = "shutdown"
+TRIGGERED_BY_PUMP_WATCHER = "pump_watcher"
+
 
 class Cluster(Base):
     """A cluster of plants irrigated by the same device."""
