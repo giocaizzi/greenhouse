@@ -51,7 +51,7 @@ from greenhouse_server.scheduler import (
     start_scheduler,
     stop_scheduler,
 )
-from greenhouse_server.services.irrigation import rearm_leak_checks
+from greenhouse_server.services.irrigation_jobs import rearm_leak_checks
 from greenhouse_server.services.jobs import read_session
 from greenhouse_server.services.notify import NtfyClient
 from greenhouse_server.services.weather import WeatherClient

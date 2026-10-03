@@ -111,6 +111,7 @@ libs/greenhouse-server/greenhouse_server/services/health_monitor.py
 libs/greenhouse-server/greenhouse_server/services/insights.py
 libs/greenhouse-server/greenhouse_server/services/inventory.py
 libs/greenhouse-server/greenhouse_server/services/irrigation.py
+libs/greenhouse-server/greenhouse_server/services/irrigation_jobs.py
 libs/greenhouse-server/greenhouse_server/services/jobs.py
 libs/greenhouse-server/greenhouse_server/services/leak.py
 libs/greenhouse-server/greenhouse_server/services/maintenance.py

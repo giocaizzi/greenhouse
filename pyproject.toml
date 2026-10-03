@@ -269,7 +269,8 @@ layers = [
   "greenhouse_server.config",
 ]
 ignore_imports = [
-  "greenhouse_server.services.irrigation -> greenhouse_server.scheduler",     # lazy; _app trap (§6)
+  "greenhouse_server.services.irrigation -> greenhouse_server.scheduler",       # lazy: pump-watcher scheduling reads _app at call time
+  "greenhouse_server.services.irrigation_jobs -> greenhouse_server.scheduler",  # lazy: leak-check jobs read _app at call time
   "greenhouse_server.services.system_health -> greenhouse_server.scheduler",
 ]
 
