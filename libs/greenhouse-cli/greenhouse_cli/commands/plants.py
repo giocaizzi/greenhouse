@@ -8,20 +8,25 @@ from greenhouse_cli.commands._helpers import ClusterFilterOpt, ClusterOpt, YesOp
 
 plant_app = typer.Typer(help="Manage plants", no_args_is_help=True)
 
+# Option types of the add/update pair; each flag comes from its parameter name (--temp-min, --notes, …).
+LevelOpt = Annotated[str | None, typer.Option(help="low/medium/high")]
+TextOpt = Annotated[str | None, typer.Option()]
+NumberOpt = Annotated[float | None, typer.Option()]
+
 
 @plant_app.command("add")
 def plant_add(
     ctx: typer.Context,
     species: Annotated[str, typer.Argument(help="Species name")],
     cluster: ClusterOpt,
-    category: Annotated[str | None, typer.Option()] = None,
-    water_needs: Annotated[str | None, typer.Option(help="low/medium/high")] = None,
-    light_needs: Annotated[str | None, typer.Option(help="low/medium/high")] = None,
-    temp_min: Annotated[float | None, typer.Option()] = None,
-    temp_max: Annotated[float | None, typer.Option()] = None,
-    humidity_min: Annotated[float | None, typer.Option()] = None,
-    humidity_max: Annotated[float | None, typer.Option()] = None,
-    notes: Annotated[str | None, typer.Option()] = None,
+    category: TextOpt = None,
+    water_needs: LevelOpt = None,
+    light_needs: LevelOpt = None,
+    temp_min: NumberOpt = None,
+    temp_max: NumberOpt = None,
+    humidity_min: NumberOpt = None,
+    humidity_max: NumberOpt = None,
+    notes: TextOpt = None,
 ):
     """Add a plant to a cluster."""
     data = call(
@@ -87,15 +92,15 @@ def plant_update(
     ctx: typer.Context,
     plant_id: Annotated[int, typer.Argument(help="Plant ID")],
     cluster: Annotated[int, typer.Option(help="Cluster the plant belongs to")],
-    species: Annotated[str | None, typer.Option()] = None,
-    category: Annotated[str | None, typer.Option()] = None,
-    water_needs: Annotated[str | None, typer.Option(help="low/medium/high")] = None,
-    light_needs: Annotated[str | None, typer.Option(help="low/medium/high")] = None,
-    temp_min: Annotated[float | None, typer.Option()] = None,
-    temp_max: Annotated[float | None, typer.Option()] = None,
-    humidity_min: Annotated[float | None, typer.Option()] = None,
-    humidity_max: Annotated[float | None, typer.Option()] = None,
-    notes: Annotated[str | None, typer.Option()] = None,
+    species: TextOpt = None,
+    category: TextOpt = None,
+    water_needs: LevelOpt = None,
+    light_needs: LevelOpt = None,
+    temp_min: NumberOpt = None,
+    temp_max: NumberOpt = None,
+    humidity_min: NumberOpt = None,
+    humidity_max: NumberOpt = None,
+    notes: TextOpt = None,
 ):
     """Patch plant metadata. Only the supplied fields are sent."""
     output(

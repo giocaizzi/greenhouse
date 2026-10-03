@@ -8,6 +8,16 @@ from greenhouse_cli.commands._helpers import ClusterArg, ClusterOpt, YesOpt, cal
 
 irrigator_app = typer.Typer(help="Manage and control irrigators", no_args_is_help=True)
 
+# Options shared by `irrigator add` and `irrigator update` (same flag, type and help in both).
+DeviceIpOpt = Annotated[str | None, typer.Option(help="Local IP")]
+LocalKeyOpt = Annotated[str | None, typer.Option(help="Local key")]
+ReservoirOpt = Annotated[
+    float | None, typer.Option(help="Usable reservoir/tank volume in liters (for vacation rationing)")
+]
+FlowRateOpt = Annotated[
+    float | None, typer.Option(help="Measured pump throughput in liters per minute (for vacation rationing)")
+]
+
 
 def _device_config(device_ip: str | None, local_key: str | None) -> dict[str, str] | None:
     """Build the irrigator ``config`` blob from the local-control options; ``None`` when neither is given.
@@ -33,14 +43,10 @@ def irrigator_add(
     device_id: Annotated[str, typer.Option(help="Tuya device ID")],
     name: Annotated[str, typer.Option(help="Irrigator name")],
     type: Annotated[str, typer.Option(help="tuya_cloud or tuya_local")],
-    device_ip: Annotated[str | None, typer.Option(help="Local IP")] = None,
-    local_key: Annotated[str | None, typer.Option(help="Local key")] = None,
-    reservoir_l: Annotated[
-        float | None, typer.Option(help="Usable reservoir/tank volume in liters (for vacation rationing)")
-    ] = None,
-    flow_rate_l_per_min: Annotated[
-        float | None, typer.Option(help="Measured pump throughput in liters per minute (for vacation rationing)")
-    ] = None,
+    device_ip: DeviceIpOpt = None,
+    local_key: LocalKeyOpt = None,
+    reservoir_l: ReservoirOpt = None,
+    flow_rate_l_per_min: FlowRateOpt = None,
 ):
     """Add an irrigator to a cluster."""
     config = _device_config(device_ip, local_key)
@@ -107,14 +113,10 @@ def irrigator_update(
     cluster: ClusterArg,
     name: Annotated[str | None, typer.Option(help="New irrigator name")] = None,
     type: Annotated[str | None, typer.Option(help="tuya_cloud or tuya_local")] = None,
-    device_ip: Annotated[str | None, typer.Option(help="Local IP")] = None,
-    local_key: Annotated[str | None, typer.Option(help="Local key")] = None,
-    reservoir_l: Annotated[
-        float | None, typer.Option(help="Usable reservoir/tank volume in liters (for vacation rationing)")
-    ] = None,
-    flow_rate_l_per_min: Annotated[
-        float | None, typer.Option(help="Measured pump throughput in liters per minute (for vacation rationing)")
-    ] = None,
+    device_ip: DeviceIpOpt = None,
+    local_key: LocalKeyOpt = None,
+    reservoir_l: ReservoirOpt = None,
+    flow_rate_l_per_min: FlowRateOpt = None,
 ):
     """Patch the cluster's irrigator. Only the supplied fields are sent.
 
