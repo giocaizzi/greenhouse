@@ -7,7 +7,7 @@
 │ *  --cluster                    <int>    Cluster ID [required]                                   │
 │ *  --device-id                  <str>    Tuya device ID [required]                               │
 │ *  --name                       <str>    Irrigator name [required]                               │
-│ *  --type                       <str>    tuya_cloud or tuya_local [required]                     │
+│ *  --type                       <str>    Device model key (rainpoint.ik10pw) [required]          │
 │    --device-ip                  <str>    Local IP                                                │
 │    --local-key                  <str>    Local key                                               │
 │    --reservoir-l                <float>  Usable reservoir/tank volume in liters (for vacation    │

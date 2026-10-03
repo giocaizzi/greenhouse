@@ -16,7 +16,7 @@ def sensor_add(
     cluster: ClusterOpt,
     device_id: Annotated[str, typer.Option(help="Tuya device ID")],
     name: Annotated[str, typer.Option(help="Sensor name")],
-    type: Annotated[str, typer.Option(help="soil_moisture, temp_humidity, or light")],
+    type: Annotated[str, typer.Option(help="Device model key (tuya.tr301z)")],
     plant_id: Annotated[int | None, typer.Option(help="Associated plant ID")] = None,
 ) -> None:
     """Add a sensor to a cluster."""
@@ -47,7 +47,7 @@ def sensor_update(
     id: Annotated[int, typer.Argument(help="Sensor ID")],
     cluster: Annotated[int, typer.Option(help="Cluster the sensor belongs to")],
     name: Annotated[str | None, typer.Option(help="New sensor name")] = None,
-    type: Annotated[str | None, typer.Option(help="soil_moisture, temp_humidity, or light")] = None,
+    type: Annotated[str | None, typer.Option(help="Device model key (tuya.tr301z)")] = None,
     plant_id: Annotated[int | None, typer.Option(help="Reassign to a different plant")] = None,
 ) -> None:
     """Patch sensor metadata. Only the supplied fields are sent."""

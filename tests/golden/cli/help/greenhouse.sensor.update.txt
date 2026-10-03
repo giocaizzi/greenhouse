@@ -9,7 +9,7 @@
 ╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
 │ *  --cluster         <int>  Cluster the sensor belongs to [required]                             │
 │    --name            <str>  New sensor name                                                      │
-│    --type            <str>  soil_moisture, temp_humidity, or light                               │
+│    --type            <str>  Device model key (tuya.tr301z)                                       │
 │    --plant-id        <int>  Reassign to a different plant                                        │
 │    --help                   Show this message and exit.                                          │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
