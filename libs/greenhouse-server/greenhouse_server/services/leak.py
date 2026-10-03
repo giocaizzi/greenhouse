@@ -40,6 +40,7 @@ import time
 from typing import Any
 
 from greenhouse_core.constants import (
+    ALERT_SCAN_LIMIT,
     LEAK_AFTER_WINDOW_SECONDS,
     LEAK_ALERT_CODE,
     LEAK_BEFORE_WINDOW_SECONDS,
@@ -245,7 +246,7 @@ class LeakDetectionService:
 
     def _clear_sensor(self, cluster_id: int, sensor: Sensor) -> None:
         """Resolve this sensor's open leak alert once its soil behaves again."""
-        for alert in self._repo.list_alerts(cluster_id=cluster_id, limit=200):
+        for alert in self._repo.list_alerts(cluster_id=cluster_id, limit=ALERT_SCAN_LIMIT):
             if alert.code != LEAK_ALERT_CODE or alert.status == "resolved":
                 continue
             if alert.entity_type != ENTITY_SENSOR or alert.entity_id != sensor.id:

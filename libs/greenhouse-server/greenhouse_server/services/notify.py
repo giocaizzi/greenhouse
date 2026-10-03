@@ -16,6 +16,8 @@ import urllib.request
 from collections.abc import Callable
 from typing import Literal
 
+from greenhouse_core.models import TRIGGERED_BY_EMERGENCY, TriggeredBy
+
 logger = logging.getLogger(__name__)
 
 # ntfy priority levels (1=min .. 5=max) and emoji tag names per alert severity.
@@ -69,7 +71,7 @@ class NtfyClient:
     def notify_irrigation(
         self,
         *,
-        triggered_by: str,
+        triggered_by: TriggeredBy,
         irrigator_name: str,
         duration_minutes: int | None = None,
         detail: str = "",
@@ -83,7 +85,7 @@ class NtfyClient:
             title=_IRRIGATION_TITLES.get(triggered_by, "Irrigation"),
             message=message,
             tags=_IRRIGATION_TAGS.get(triggered_by, "potted_plant"),
-            priority="5" if triggered_by == "emergency" else "3",
+            priority="5" if triggered_by == TRIGGERED_BY_EMERGENCY else "3",
         )
 
     def notify_alert(self, *, severity: str, title: str, message: str) -> bool:

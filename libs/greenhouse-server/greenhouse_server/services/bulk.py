@@ -72,7 +72,7 @@ def stop_all_irrigators(
         repo.get_preferences(),
         "emergency",
         lambda n: n.notify_irrigation(
-            triggered_by="emergency",
+            triggered_by=TRIGGERED_BY_EMERGENCY,
             irrigator_name=f"{stopped} irrigator(s)",
             detail="kill switch" + (f", {len(errors)} error(s)" if errors else ""),
         ),

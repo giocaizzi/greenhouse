@@ -3,7 +3,7 @@
 import logging
 import statistics
 import time
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, TypedDict
 
 from greenhouse_core.constants import (
     LOW_LIGHT_ALERT_FRACTION,
@@ -24,9 +24,15 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def collect_learning_alerts(
-    repo: IrrigationRepository, cluster_id: int, plant_db: PlantDatabase
-) -> list[dict[str, Any]]:
+class AlertFinding(TypedDict):
+    """One learning / maintenance finding: a plain dict at runtime (alert inbox, check result, insights)."""
+
+    severity: str
+    type: str
+    message: str
+
+
+def collect_learning_alerts(repo: IrrigationRepository, cluster_id: int, plant_db: PlantDatabase) -> list[AlertFinding]:
     """Return learning alerts for a cluster (efficiency, patterns). Never raises."""
     try:
         learner = IrrigationLearner(repo, plant_db)
@@ -37,7 +43,7 @@ def collect_learning_alerts(
         return []
 
 
-def _battery_alert(sensor: "Sensor", readings: "list[SensorReading]") -> dict[str, Any] | None:
+def _battery_alert(sensor: "Sensor", readings: "list[SensorReading]") -> AlertFinding | None:
     """Warn when the newest reported battery state is low."""
     latest_bat = next((r.battery_state for r in readings if r.battery_state is not None), None)
     if latest_bat == "low":
@@ -49,7 +55,7 @@ def _battery_alert(sensor: "Sensor", readings: "list[SensorReading]") -> dict[st
     return None
 
 
-def _stale_alert(sensor: "Sensor", readings: "list[SensorReading]", now: int) -> dict[str, Any] | None:
+def _stale_alert(sensor: "Sensor", readings: "list[SensorReading]", now: int) -> AlertFinding | None:
     """Warn when the sensor has not reported recently (or never)."""
     latest_ts = readings[0].timestamp if readings else None
     if latest_ts is None or (now - latest_ts) > MAINTENANCE_STALE_SECONDS:
@@ -65,7 +71,7 @@ def _stale_alert(sensor: "Sensor", readings: "list[SensorReading]", now: int) ->
 
 def _humidity_alert(
     sensor: "Sensor", readings: "list[SensorReading]", plant: "Plant | None", plant_db: PlantDatabase
-) -> dict[str, Any] | None:
+) -> AlertFinding | None:
     """Warn when ambient humidity sits well below the plant's ideal minimum."""
     hum_vals = [r.env_humidity for r in readings if r.env_humidity is not None]
     if len(hum_vals) >= MAINTENANCE_MIN_SAMPLES:
@@ -84,7 +90,7 @@ def _humidity_alert(
 
 def _light_alert(
     sensor: "Sensor", readings: "list[SensorReading]", plant: "Plant | None", plant_db: PlantDatabase
-) -> dict[str, Any] | None:
+) -> AlertFinding | None:
     """Warn when daytime light stays well below the plant's seasonal minimum."""
     lux_vals = daytime_lux_readings(readings)
     if len(lux_vals) < MAINTENANCE_MIN_SAMPLES:
@@ -107,9 +113,9 @@ def _light_alert(
 
 def collect_maintenance_alerts(
     repo: IrrigationRepository, cluster_id: int, plant_db: PlantDatabase
-) -> list[dict[str, Any]]:
+) -> list[AlertFinding]:
     """Return maintenance alerts (hardware, environment). Never raises."""
-    alerts: list[dict[str, Any]] = []
+    alerts: list[AlertFinding] = []
     sensors = repo.get_sensors_in_cluster(cluster_id)
     plants_by_id = {p.id: p for p in repo.get_plants_in_cluster(cluster_id)}
     now = int(time.time())

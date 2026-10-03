@@ -10,25 +10,27 @@ becomes the single source of truth for the bell badge and /alerts page.
 import time
 from typing import Any
 
+from greenhouse_core.constants import ALERT_SCAN_LIMIT
 from greenhouse_core.models import (
     ENTITY_CLUSTER,
     ENTITY_SENSOR,
     SOURCE_LEARNING,
     SOURCE_MAINTENANCE,
+    ActivitySource,
     Alert,
     Cluster,
 )
 from greenhouse_core.models import SOURCE_PUMP as SOURCE_PUMP  # re-export: tests import it from here
 from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_core.repository import IrrigationRepository
-from greenhouse_server.services.maintenance import collect_learning_alerts, collect_maintenance_alerts
+from greenhouse_server.services.maintenance import AlertFinding, collect_learning_alerts, collect_maintenance_alerts
 from greenhouse_server.services.notify import NtfyClient, maybe_notify
 
 # Alert severities that warrant a push (info is suppressed).
 _NOTIFY_SEVERITIES = ("warning", "critical")
 
 
-def _dedup_key(source: str, code: str, cluster_id: int | None, message: str) -> str:
+def _dedup_key(source: ActivitySource, code: str, cluster_id: int | None, message: str) -> str:
     """Deterministic key so repeats collapse onto the same row.
 
     ``message`` is included to distinguish per-sensor variants of the same
@@ -87,7 +89,7 @@ def sync_cluster_alerts(
         return []
     now = int(time.time())
 
-    findings: list[tuple[str, dict[str, Any]]] = [
+    findings: list[tuple[ActivitySource, AlertFinding]] = [
         (SOURCE_LEARNING, raw) for raw in collect_learning_alerts(repo, cluster_id, plant_db)
     ]
     findings.extend((SOURCE_MAINTENANCE, raw) for raw in collect_maintenance_alerts(repo, cluster_id, plant_db))
@@ -114,17 +116,17 @@ def sync_cluster_alerts(
         notify_if_new_alert(repo, notifier, alert)
 
     auto_resolve_cleared(repo, cluster_id, sources=(SOURCE_LEARNING, SOURCE_MAINTENANCE), seen_keys=seen_keys)
-    return repo.list_alerts(cluster_id=cluster_id, limit=200)
+    return repo.list_alerts(cluster_id=cluster_id, limit=ALERT_SCAN_LIMIT)
 
 
 def auto_resolve_cleared(
     repo: IrrigationRepository,
     cluster_id: int,
-    sources: tuple[str, ...],
+    sources: tuple[ActivitySource, ...],
     seen_keys: set[str],
 ) -> None:
     """Close any open/ack alerts from these sources whose condition has cleared."""
-    for alert in repo.list_alerts(cluster_id=cluster_id, limit=200):
+    for alert in repo.list_alerts(cluster_id=cluster_id, limit=ALERT_SCAN_LIMIT):
         if alert.status == "resolved" or alert.source not in sources:
             continue
         if alert.dedup_key not in seen_keys:
@@ -146,7 +148,7 @@ def sync_all_alerts(
 def raise_alert(
     repo: IrrigationRepository,
     *,
-    source: str,
+    source: ActivitySource,
     code: str,
     title: str,
     message: str,

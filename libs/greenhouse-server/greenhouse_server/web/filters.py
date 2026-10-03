@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 import time
-from typing import Any
+from typing import Any, TypedDict
 
 from greenhouse_core.constants import AGE_BADGE_STALE_SECONDS, SECONDS_PER_DAY, SECONDS_PER_HOUR
 from greenhouse_core.utils import format_timestamp
@@ -197,7 +197,21 @@ def _present(value: Any) -> bool:
         return bool(value)
 
 
-def cluster_caps(obj: Any) -> dict[str, Any]:
+class ClusterCaps(TypedDict):
+    """``cluster_caps`` result: what a cluster contains and the features that unlocks."""
+
+    has_plants: bool
+    has_sensors: bool
+    has_irrigator: bool
+    can_monitor: bool
+    can_target: bool
+    can_decide: bool
+    can_actuate: bool
+    tier: str
+    missing: list[str]
+
+
+def cluster_caps(obj: Any) -> ClusterCaps:
     """Derive a cluster's capability tier from what it contains.
 
     The single source of truth for feature gating across the web UI. Accepts

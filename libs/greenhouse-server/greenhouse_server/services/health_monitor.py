@@ -39,7 +39,7 @@ from greenhouse_core.constants import (
 from greenhouse_core.devices import DeviceRegistry
 from greenhouse_core.devices.health import DeviceHealthState, HealthAlarm
 from greenhouse_core.logic.decision import TriggerCode
-from greenhouse_core.models import ENTITY_IRRIGATOR, ENTITY_SENSOR, SOURCE_HEALTH, Irrigator, Sensor
+from greenhouse_core.models import ENTITY_IRRIGATOR, ENTITY_SENSOR, SOURCE_HEALTH, EntityType, Irrigator, Sensor
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.services.alerts import notify_if_new_alert
 from greenhouse_server.services.notify import NtfyClient
@@ -76,7 +76,7 @@ def _alarm_title(entity_label: str, alarm: HealthAlarm) -> str:
     return f"{pretty} · {entity_label}"
 
 
-def _dedup_key(entity_type: str, entity_id: int, alarm: HealthAlarm) -> str:
+def _dedup_key(entity_type: EntityType, entity_id: int, alarm: HealthAlarm) -> str:
     """Single source of truth for health-alert dedup keys."""
     return f"health:{entity_type}:{entity_id}:{alarm.value}"
 
@@ -164,7 +164,7 @@ class DeviceHealthMonitor:
 
     def record(
         self,
-        entity_type: str,
+        entity_type: EntityType,
         entity_id: int,
         state: DeviceHealthState,
         *,
@@ -286,7 +286,7 @@ class DeviceHealthMonitor:
     def _raise_health_alert(
         self,
         *,
-        entity_type: str,
+        entity_type: EntityType,
         entity_id: int,
         alarm: HealthAlarm,
         state: DeviceHealthState,
@@ -322,7 +322,7 @@ class DeviceHealthMonitor:
         except Exception:
             logger.exception("Failed to raise health alert %s for %s %d", alarm.value, entity_type, entity_id)
 
-    def _resolve_health_alert(self, *, entity_type: str, entity_id: int, alarm: HealthAlarm) -> None:
+    def _resolve_health_alert(self, *, entity_type: EntityType, entity_id: int, alarm: HealthAlarm) -> None:
         existing = self._repo.get_open_alert_by_key(_dedup_key(entity_type, entity_id, alarm))
         if existing is None:
             return
@@ -351,7 +351,7 @@ class DeviceHealthMonitor:
             return f"'{label}' is reporting a sensor fault. Cross-check the probe placement."
         return f"'{label}' raised {alarm.value}."
 
-    def _infer_cluster_id(self, entity_type: str, entity_id: int) -> int | None:
+    def _infer_cluster_id(self, entity_type: EntityType, entity_id: int) -> int | None:
         if entity_type == ENTITY_IRRIGATOR:
             irr = self._repo.get_irrigator(entity_id)
             return irr.cluster_id if irr else None
@@ -360,7 +360,7 @@ class DeviceHealthMonitor:
             return sensor.cluster_id if sensor else None
         return None
 
-    def _infer_label(self, entity_type: str, entity_id: int) -> str | None:
+    def _infer_label(self, entity_type: EntityType, entity_id: int) -> str | None:
         if entity_type == ENTITY_IRRIGATOR:
             irr = self._repo.get_irrigator(entity_id)
             return irr.name if irr else None

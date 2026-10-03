@@ -1,7 +1,10 @@
 """Shared pytest fixtures for greenhouse test suite."""
 
 import os
+import socket
 import time
+import urllib.error
+import urllib.request
 
 import pytest
 import time_machine
@@ -22,6 +25,31 @@ from fake_data import (
 from golden import ENV_PREFIXES, FROZEN_INSTANT
 from greenhouse_core.models import Base
 from greenhouse_core.repository import IrrigationRepository
+
+_LOOPBACK_HOSTS = frozenset({"127.0.0.1", "::1", "localhost"})
+
+
+@pytest.fixture(autouse=True)
+def _no_network(monkeypatch):
+    """Keep every test hermetic: real outbound HTTP fails fast instead of reaching the internet.
+
+    The app's weather client calls Open-Meteo through ``urllib.request.urlopen`` unless a test installs
+    ``golden.OfflineWeather``; a blocked call degrades to ``None`` exactly like an offline host, so results
+    no longer depend on live weather or network access. Tests that stub ``urlopen`` themselves override this.
+    """
+
+    def _blocked_urlopen(url, *args, **kwargs):
+        raise urllib.error.URLError(f"network disabled in tests: {getattr(url, 'full_url', url)}")
+
+    real_connect = socket.socket.connect
+
+    def _loopback_only_connect(self, address):
+        if self.family in (socket.AF_INET, socket.AF_INET6) and address[0] not in _LOOPBACK_HOSTS:
+            raise OSError(f"network disabled in tests: {address!r}")
+        return real_connect(self, address)
+
+    monkeypatch.setattr(urllib.request, "urlopen", _blocked_urlopen)
+    monkeypatch.setattr(socket.socket, "connect", _loopback_only_connect)
 
 
 @pytest.fixture

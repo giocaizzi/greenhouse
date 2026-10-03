@@ -30,6 +30,7 @@ from greenhouse_core.models import (
     TRIGGERED_BY_AUTO,
     TRIGGERED_BY_MANUAL,
     TRIGGERED_BY_SHUTDOWN,
+    TriggeredBy,
 )
 from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_core.repository import IrrigationRepository
@@ -43,13 +44,15 @@ from greenhouse_server.services.irrigation_jobs import (  # noqa: F401 — re-ex
     rearm_leak_checks,
 )
 from greenhouse_server.services.jobs import job_session
-from greenhouse_server.services.maintenance import collect_learning_alerts, collect_maintenance_alerts
+from greenhouse_server.services.maintenance import AlertFinding, collect_learning_alerts, collect_maintenance_alerts
 from greenhouse_server.services.notify import NtfyClient, maybe_notify
-from greenhouse_server.services.sync import SyncService
+from greenhouse_server.services.sync import ClusterSnapshot, SyncService
 from greenhouse_server.services.weather import WeatherClient
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
+
+    from fastapi import FastAPI
 
     from greenhouse_core.devices import AbstractIrrigatorAdapter
     from greenhouse_core.logic.cleaning import CleanedReading
@@ -99,7 +102,7 @@ def _stop_auto_cycle(repo: IrrigationRepository, registry: DeviceRegistry, irrig
     )
 
 
-def _left_running_message(irrigator: "Irrigator", triggered_by: str) -> str:
+def _left_running_message(irrigator: "Irrigator", triggered_by: TriggeredBy) -> str:
     """Warn that a non-auto cycle keeps running unwatched; returns the activity message."""
     logger.warning(
         "Server shutting down mid-irrigation: %s cycle on irrigator %d left running "
@@ -118,7 +121,7 @@ def handle_watcher_interrupted(
     registry: DeviceRegistry,
     irrigator: "Irrigator",
     *,
-    triggered_by: str,
+    triggered_by: TriggeredBy,
     started_at: int,
 ) -> bool:
     """Shutdown policy for a pump whose dry-run watcher was cut short.
@@ -178,13 +181,13 @@ def _watcher_tuning(settings: "Settings | None") -> tuple[float, float, int]:
 
 
 def _run_pump_watcher(
-    app: Any,
+    app: "FastAPI",
     registry: DeviceRegistry,
     *,
     irrigator_id: int,
     duration_seconds: int,
     started_at: int,
-    triggered_by: str,
+    triggered_by: TriggeredBy,
     sleep: "Callable[[float], bool]",
     stop_requested: "Callable[[], bool]",
 ) -> None:
@@ -217,7 +220,7 @@ def _run_pump_watcher(
 
 
 def schedule_pump_watcher(
-    irrigator_id: int, duration_minutes: int, started_at: int, *, triggered_by: str = TRIGGERED_BY_AUTO
+    irrigator_id: int, duration_minutes: int, started_at: int, *, triggered_by: TriggeredBy = TRIGGERED_BY_AUTO
 ) -> bool:
     """Schedule a dry-run watcher to run for the duration of an irrigation.
 
@@ -298,11 +301,23 @@ class PipelineResult(TypedDict, total=False):
     blocking_alarms: list[str]
 
 
+class MonitorSensorRow(TypedDict):
+    """One ``MonitorResult.sensors`` row: the sensor's latest cleaned soil value against its target band."""
+
+    sensor_id: int
+    sensor_name: str
+    plant_species: str | None
+    soil_moisture: float | None
+    status: str
+    target_min: float
+    target_max: float
+
+
 class MonitorResult(TypedDict):
     """``monitor_cluster`` result: a plain dict at runtime (``MonitorResponse``)."""
 
     cluster_name: str
-    sensors: list[dict[str, Any]]
+    sensors: list[MonitorSensorRow]
     needs_water: list[str]
 
 
@@ -314,8 +329,8 @@ class CheckResult(TypedDict, total=False):
     action: Required[str]
     notes: str
     needs_water: list[str]
-    alerts: list[dict[str, Any]]
-    maintenance: list[dict[str, Any]]
+    alerts: list[AlertFinding]
+    maintenance: list[AlertFinding]
 
 
 def check_has_alerts(results: "Sequence[CheckResult]") -> bool:
@@ -364,10 +379,10 @@ class _Actuation:
     decision: "IrrigationDecision"
     temp: float
     source: str
-    sensor_data: "dict[str, Any] | None"
+    sensor_data: ClusterSnapshot | None
 
 
-def _soil_note(sensor_data: "dict[str, Any] | None") -> str:
+def _soil_note(sensor_data: ClusterSnapshot | None) -> str:
     """The event-notes soil fragment, labelled as the cluster's driest sensor (invariant #2)."""
     # The snapshot's soil value is the cluster's driest sensor (invariant #2),
     # so label it as such — an unqualified "soil=" reads as "this plant's".
@@ -411,8 +426,8 @@ def _check_result(
     *,
     detail_key: Literal["notes", "needs_water"],
     detail: str | list[str],
-    alerts: list[dict[str, Any]],
-    maintenance: list[dict[str, Any]],
+    alerts: list[AlertFinding],
+    maintenance: list[AlertFinding],
 ) -> CheckResult:
     """One ``check_cluster`` entry, keys in the response order; ``detail_key`` names the branch's detail."""
     # A TypedDict literal cannot carry a computed key; the runtime object is the same plain dict.
@@ -456,7 +471,7 @@ class IrrigationService:
         is_indoor: bool,
         temp_override: float | None,
         no_sync: bool,
-    ) -> tuple[float, str, dict[str, Any] | None]:
+    ) -> tuple[float, str, ClusterSnapshot | None]:
         """Resolve temperature from override, sensor, or weather. Returns (temp, source, sensor_data)."""
         if temp_override is not None:
             return temp_override, "override", None
@@ -468,22 +483,22 @@ class IrrigationService:
             return temp, source, sensor_data
         return FALLBACK_TEMPERATURE_C, "fallback (20C)", sensor_data
 
-    def _indoor_temperature(self, sensor_data: dict[str, Any] | None) -> tuple[float, str] | None:
+    def _indoor_temperature(self, sensor_data: ClusterSnapshot | None) -> tuple[float, str] | None:
         """Indoor: the cluster's own sensor first, then the weather feels-like; None if neither."""
-        if sensor_data and sensor_data.get("temperature") is not None:
-            return sensor_data["temperature"], "sensor"
+        if sensor_data and (temperature := sensor_data.get("temperature")) is not None:
+            return temperature, "sensor"
         weather = self._weather.get_current()
-        if weather and weather.get("feels_like") is not None:
-            return weather["feels_like"], "open-meteo (fallback)"
+        if weather and (feels_like := weather.get("feels_like")) is not None:
+            return feels_like, "open-meteo (fallback)"
         return None
 
-    def _outdoor_temperature(self, sensor_data: dict[str, Any] | None) -> tuple[float, str] | None:
+    def _outdoor_temperature(self, sensor_data: ClusterSnapshot | None) -> tuple[float, str] | None:
         """Any non-indoor environment: the weather feels-like first, then the sensor; None if neither."""
         weather = self._weather.get_current()
-        if weather and weather.get("feels_like") is not None:
-            return weather["feels_like"], "open-meteo"
-        if sensor_data and sensor_data.get("temperature") is not None:
-            return sensor_data["temperature"], "sensor (weather unavailable)"
+        if weather and (feels_like := weather.get("feels_like")) is not None:
+            return feels_like, "open-meteo"
+        if sensor_data and (temperature := sensor_data.get("temperature")) is not None:
+            return temperature, "sensor (weather unavailable)"
         return None
 
     def _decide(self, cluster_id: int, temp: float, *, force: bool) -> "IrrigationDecision | None":
@@ -702,7 +717,7 @@ class IrrigationService:
         sensors = self._repo.get_sensors_in_cluster(cluster_id)
         plants_by_id = {p.id: p for p in self._repo.get_plants_in_cluster(cluster_id)}
 
-        sensor_statuses: list[dict[str, Any]] = []
+        sensor_statuses: list[MonitorSensorRow] = []
         needs_water: list[str] = []
 
         for sensor in sensors:

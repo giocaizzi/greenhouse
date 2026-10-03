@@ -2292,8 +2292,8 @@ add(
     [
         (
             "55",
-            "        since_ms = (last_ts - 60) * 1000",
-            "        since_ms = last_ts * 1000",
+            "        return (last_ts - 60) * 1000",
+            "        return last_ts * 1000",
             "sync overlap 60 s removed",
         ),
         (
@@ -2306,20 +2306,20 @@ add(
         ("58", "        if not ts:\n            continue\n", "", "log reading without timestamp not skipped"),
         (
             "59",
-            '                    parts.append(f"{new} new from logs")',
-            '                    parts.append(f"{new} new")',
+            '        parts.append(f"{new} new from logs")',
+            '        parts.append(f"{new} new")',
             "sync log text",
         ),
         (
             "60",
-            '                stats["errors"].append(f"{sensor.name}: {e}")',
-            '                stats["errors"].append(str(e))',
+            '        stats["errors"].append(f"{sensor.name}: {e}")',
+            '        stats["errors"].append(str(e))',
             "sync error string drops sensor name",
         ),
         (
             "61",
-            "            if result is not None:\n                live_saved = 1",
-            "            live_saved = 1",
+            "            if result is not None:\n                saved = True",
+            "            saved = True",
             "duplicate live reading counted",
         ),
     ],
@@ -2850,7 +2850,7 @@ add(
         ),
         (
             "02",
-            "                    sync_single_sensor(self._repo, self._gateway, sensor, hours=6)",
+            "                    sync_single_sensor(self._repo, self._gateway, sensor, hours=FRESHNESS_SYNC_BACKFILL_HOURS)",
             "                    sync_single_sensor(self._repo, self._gateway, sensor, hours=24)",
             "freshness sync window 6h -> 24h",
         ),

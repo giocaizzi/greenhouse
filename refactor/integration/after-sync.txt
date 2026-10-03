@@ -1,0 +1,16 @@
+== ruff check
+All checks passed!
+exit=0
+== ruff format
+339 files already formatted
+exit=0
+== typecheck
+Success: no issues found in 171 source files
+exit=0
+== lint-imports
+exit=0
+== sizecheck
+== sizecheck exit=0 (only registered exceptions)
+== FULL (seed 0, -n 3)
+3082 passed, 9 warnings in 434.43s (0:07:14)
+exit=0
