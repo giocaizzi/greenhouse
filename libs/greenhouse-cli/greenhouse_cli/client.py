@@ -4,7 +4,7 @@ import os
 from collections.abc import Mapping
 from http import HTTPStatus
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Self, cast
 
 import httpx
 
@@ -94,6 +94,14 @@ class IrrigationClient:
         if resolved:
             headers["Authorization"] = f"Bearer {resolved}"
         self.http = httpx.Client(base_url=base_url, timeout=30.0, headers=headers, **kwargs)
+
+    # Context manager only, no public close(): every public method maps to one /api/v1 endpoint (pinned by tests).
+    # CLI commands close the client per call; the TUI keeps one client for the whole session.
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(self, *exc_info: object) -> None:
+        self.http.close()
 
     def _request(self, method: str, path: str, **kwargs: Any) -> JSONObject | list[Any]:
         """Send one request and decode it; HTTP >= 400 and connection errors raise :class:`ServerError`."""

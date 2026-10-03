@@ -51,7 +51,8 @@ def login(
     emit the token to stdout — handy for piping into ``$GREENHOUSE_API_TOKEN``.
     """
     try:
-        data = _login_client(ctx).login(username, password)
+        with _login_client(ctx) as client:
+            data = client.login(username, password)
     except ServerError as e:
         typer.echo(f"Error: {e.detail}", err=True)
         raise typer.Exit(1) from None
@@ -76,8 +77,8 @@ def logout(ctx: typer.Context):
     equivalent). Best-effort server logout — a missing/expired token
     does not block the local cleanup.
     """
-    with contextlib.suppress(ServerError):
-        get_client(ctx).logout()
+    with contextlib.suppress(ServerError), get_client(ctx) as client:
+        client.logout()
     removed = clear_stored_token()
     if removed:
         typer.echo("Logged out — token removed.")

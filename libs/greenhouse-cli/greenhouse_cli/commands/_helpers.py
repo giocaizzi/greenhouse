@@ -32,7 +32,8 @@ def get_client(ctx: typer.Context) -> IrrigationClient:
 def call(ctx: typer.Context, fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
     """Call a client method with error handling. Returns the result or exits on error."""
     try:
-        return fn(get_client(ctx), *args, **kwargs)
+        with get_client(ctx) as client:
+            return fn(client, *args, **kwargs)
     except ServerError as e:
         typer.echo(f"Error: {e.detail}", err=True)
         raise typer.Exit(1) from None
