@@ -9,22 +9,28 @@ Tuya Cloud is the source of truth for sensor data.
 Local DB is our permanent archive.
 """
 
+from __future__ import annotations
+
 import logging
 import time
+from typing import TYPE_CHECKING, Any
 
 from greenhouse_core.devices.gateway import DeviceGateway
 from greenhouse_core.repository import IrrigationRepository
 
+if TYPE_CHECKING:
+    from greenhouse_core.models import Sensor
+
 logger = logging.getLogger(__name__)
 
 
-def sync_sensor_data(db: IrrigationRepository, cloud: DeviceGateway, hours: int = 24) -> dict:
+def sync_sensor_data(db: IrrigationRepository, cloud: DeviceGateway, hours: int = 24) -> dict[str, Any]:
     """Sync all sensor data from Tuya Cloud to local DB.
 
     Returns dict with sync stats per cluster.
     """
     clusters = db.list_clusters()
-    stats = {"total_synced": 0, "total_new": 0, "total_live": 0, "errors": []}
+    stats: dict[str, Any] = {"total_synced": 0, "total_new": 0, "total_live": 0, "errors": []}
 
     for cluster in clusters:
         sensors = db.get_sensors_in_cluster(cluster.id)
@@ -57,7 +63,9 @@ def sync_sensor_data(db: IrrigationRepository, cloud: DeviceGateway, hours: int 
     return stats
 
 
-def sync_single_sensor(db: IrrigationRepository, cloud: DeviceGateway, sensor, hours: int) -> tuple[int, int, int]:
+def sync_single_sensor(
+    db: IrrigationRepository, cloud: DeviceGateway, sensor: Sensor, hours: int
+) -> tuple[int, int, int]:
     """Sync a single sensor. Returns (total_processed, new_inserted, live_saved)."""
 
     # 1. Determine sync window

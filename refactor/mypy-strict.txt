@@ -73,6 +73,7 @@ libs/greenhouse-core/greenhouse_core/plant_db.py
 libs/greenhouse-core/greenhouse_core/repository.py
 libs/greenhouse-core/greenhouse_core/schemas.py
 libs/greenhouse-core/greenhouse_core/stats.py
+libs/greenhouse-core/greenhouse_core/sync.py
 libs/greenhouse-core/greenhouse_core/utils.py
 libs/greenhouse-server/greenhouse_server/__init__.py
 libs/greenhouse-server/greenhouse_server/app.py
