@@ -37,6 +37,7 @@ import jwt
 from fastapi import Depends, HTTPException, Request, Response, status
 from fastapi.responses import RedirectResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy import select
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
 
@@ -327,7 +328,7 @@ def bootstrap_admin(engine: Engine, settings: Settings) -> None:
         return
     session = Session(engine)
     try:
-        existing = session.query(User).first()
+        existing = session.scalar(select(User).limit(1))
         if existing is not None:
             return
         username = settings.auth_admin_username
