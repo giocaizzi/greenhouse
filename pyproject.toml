@@ -220,7 +220,6 @@ indent-style = "space"
 "libs/greenhouse-core/greenhouse_core/logic/fallback.py" = ["PLR0913"]
 "libs/greenhouse-core/greenhouse_core/logic/timing.py" = ["SIM102"]
 "libs/greenhouse-core/greenhouse_core/repository.py" = ["FBT001", "FBT002", "PLR0904", "PLR0913", "PLR0917"]
-"libs/greenhouse-core/greenhouse_core/sync.py" = ["BLE001", "D202", "PLR0915", "PLR1702", "S110", "SIM108"]
 "libs/greenhouse-server/greenhouse_server/config.py" = ["D101"]
 "libs/greenhouse-server/greenhouse_server/deps.py" = ["PLR0913", "PLR0917"]
 "libs/greenhouse-server/greenhouse_server/routes/scheduler.py" = ["FBT001", "FBT003"]

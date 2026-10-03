@@ -61,7 +61,7 @@ def _sync_logged(
 
         logger.info("  %s: %s", sensor.name, _sync_summary(new, live))
 
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 — per-sensor isolation: record, log, keep looping
         stats["errors"].append(f"{sensor.name}: {e}")
         logger.error("  %s: %s", sensor.name, e)
 
@@ -155,6 +155,6 @@ def _store_live_reading(db: IrrigationRepository, cloud: DeviceGateway, sensor: 
             )
             if result is not None:
                 saved = True
-    except Exception:
+    except Exception:  # noqa: BLE001, S110 — the live read is best-effort by contract (invariant 8)
         pass  # Live reading is best-effort
     return saved
