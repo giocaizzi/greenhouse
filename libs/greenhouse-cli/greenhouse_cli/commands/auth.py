@@ -26,69 +26,72 @@ def _login_client(ctx: typer.Context) -> IrrigationClient:
     return IrrigationClient(base_url=server_url(ctx), token="")
 
 
+def login(
+    ctx: typer.Context,
+    username: Annotated[str, typer.Option(prompt=True, help="Username")],
+    password: Annotated[
+        str,
+        typer.Option(
+            prompt=True,
+            hide_input=True,
+            confirmation_prompt=False,
+            help="Password",
+        ),
+    ],
+    print_token: Annotated[
+        bool,
+        typer.Option("--print-token", help="Print the JWT to stdout instead of storing it"),
+    ] = False,
+):
+    """Exchange username/password for a session JWT.
+
+    On success the JWT is written to ``~/.config/greenhouse/token`` with
+    mode 600 (or ``$XDG_CONFIG_HOME/greenhouse/token``) and used for
+    subsequent CLI calls. Use ``--print-token`` to skip persistence and
+    emit the token to stdout — handy for piping into ``$GREENHOUSE_API_TOKEN``.
+    """
+    try:
+        data = _login_client(ctx).login(username, password)
+    except ServerError as e:
+        typer.echo(f"Error: {e.detail}", err=True)
+        raise typer.Exit(1) from None
+
+    token = data.get("access_token", "")
+    if print_token:
+        typer.echo(token)
+        return
+
+    if not token:
+        typer.echo("Server returned an empty token (auth may be disabled).")
+        return
+
+    path = store_token(token)
+    typer.echo(f"Logged in as {data.get('username', username)}. Token stored at {path}.")
+
+
+def logout(ctx: typer.Context):
+    """Clear the cached session token and notify the server.
+
+    Deletes ``~/.config/greenhouse/token`` (or the ``$XDG_CONFIG_HOME``
+    equivalent). Best-effort server logout — a missing/expired token
+    does not block the local cleanup.
+    """
+    with contextlib.suppress(ServerError):
+        get_client(ctx).logout()
+    removed = clear_stored_token()
+    if removed:
+        typer.echo("Logged out — token removed.")
+    else:
+        typer.echo("No token was stored; nothing to remove.")
+
+
+def whoami(ctx: typer.Context):
+    """Print the currently-authenticated user."""
+    output(call(ctx, lambda c: c.whoami()))
+
+
 def register(app: typer.Typer) -> None:
     """Register top-level auth commands on the main Typer app."""
-
-    @app.command()
-    def login(
-        ctx: typer.Context,
-        username: Annotated[str, typer.Option(prompt=True, help="Username")],
-        password: Annotated[
-            str,
-            typer.Option(
-                prompt=True,
-                hide_input=True,
-                confirmation_prompt=False,
-                help="Password",
-            ),
-        ],
-        print_token: Annotated[
-            bool,
-            typer.Option("--print-token", help="Print the JWT to stdout instead of storing it"),
-        ] = False,
-    ):
-        """Exchange username/password for a session JWT.
-
-        On success the JWT is written to ``~/.config/greenhouse/token`` with
-        mode 600 (or ``$XDG_CONFIG_HOME/greenhouse/token``) and used for
-        subsequent CLI calls. Use ``--print-token`` to skip persistence and
-        emit the token to stdout — handy for piping into ``$GREENHOUSE_API_TOKEN``.
-        """
-        try:
-            data = _login_client(ctx).login(username, password)
-        except ServerError as e:
-            typer.echo(f"Error: {e.detail}", err=True)
-            raise typer.Exit(1) from None
-
-        token = data.get("access_token", "")
-        if print_token:
-            typer.echo(token)
-            return
-
-        if not token:
-            typer.echo("Server returned an empty token (auth may be disabled).")
-            return
-
-        path = store_token(token)
-        typer.echo(f"Logged in as {data.get('username', username)}. Token stored at {path}.")
-
-    @app.command()
-    def logout(ctx: typer.Context):
-        """Clear the cached session token and notify the server.
-
-        Deletes ``~/.config/greenhouse/token`` (or the ``$XDG_CONFIG_HOME``
-        equivalent). Best-effort server logout — a missing/expired token
-        does not block the local cleanup.
-        """
-        with contextlib.suppress(ServerError):
-            get_client(ctx).logout()
-        removed = clear_stored_token()
-        if removed:
-            typer.echo("Logged out — token removed.")
-        else:
-            typer.echo("No token was stored; nothing to remove.")
-
-    @app.command()
-    def whoami(ctx: typer.Context):
-        """Print the currently-authenticated user."""
-        output(call(ctx, lambda c: c.whoami()))
+    app.command()(login)
+    app.command()(logout)
+    app.command()(whoami)
