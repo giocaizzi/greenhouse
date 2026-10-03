@@ -169,3 +169,12 @@ the average — all unchanged and grid-pinned. `ik10pw._start_keepalive` (safety
 
 T8.7 (single `_finish` for six exits; `override` computed after `_evaluate_rules`), T8.10 (consumption query moved
 ahead of the arithmetic), T8.11 (dict reads after `get_preferences`), T8.9 (lambda filters for dry/wet names).
+
+## Review follow-ups (orchestrator)
+- R1 N1 / R2 F1: vacation rationing restored to the base order — the allowance arithmetic runs before the
+  consumption query again (`_allowed_cumulative_liters`), so even a corrupt non-numeric `reservoir_l` raises before
+  the query exactly as at base (R2 `repro_vacation_order.py`: 25 statements at base and after the fix; 26 before).
+- R1 N2: `RainForecast.get_forecast(hours: int = ...)` (Protocol default, typing only).
+- R2 F2 (declared seam move): patching `engine.is_within_quiet_hours` / `engine.parse_moisture_target` no longer
+  steers the engine (names gone); patch `logic.timing.is_within_quiet_hours` / `plant_needs.parse_moisture_target`.
+  No test patches either.

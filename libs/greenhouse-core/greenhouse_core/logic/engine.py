@@ -111,7 +111,7 @@ log = logging.getLogger(__name__)
 class RainForecast(Protocol):
     """What the engine needs from a weather client; core cannot import the server's ``WeatherClient``."""
 
-    def get_forecast(self, hours: int = 6) -> Mapping[str, Any] | None: ...
+    def get_forecast(self, hours: int = ...) -> Mapping[str, Any] | None: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -423,15 +423,11 @@ class IrrigationLogic:
         if decision.action is not Action.IRRIGATE:
             return
 
-        spent_l = self.db.irrigator_consumption_liters(irr.id, since=vac.starts_at, until=now)
-        binding_max_min = _binding_max_minutes(
-            reservoir_l=irr.reservoir_l,
-            flow_rate_l_per_min=irr.flow_rate_l_per_min,
-            starts_at=vac.starts_at,
-            ends_at=vac.ends_at,
-            now=now,
-            spent_l=spent_l,
+        allowed_cum_l = _allowed_cumulative_liters(
+            reservoir_l=irr.reservoir_l, starts_at=vac.starts_at, ends_at=vac.ends_at, now=now
         )
+        spent_l = self.db.irrigator_consumption_liters(irr.id, since=vac.starts_at, until=now)
+        binding_max_min = math.floor(max(0.0, allowed_cum_l - spent_l) / irr.flow_rate_l_per_min)
 
         _apply_vacation_ration(decision, binding_max_min)
 
@@ -692,10 +688,8 @@ def _vacation_days_left(vac: "VacationWindow", now: int) -> int:
     return max(0, math.ceil((vac.ends_at - now) / SECONDS_PER_DAY))
 
 
-def _binding_max_minutes(
-    *, reservoir_l: float, flow_rate_l_per_min: float, starts_at: int, ends_at: int, now: int, spent_l: float
-) -> int:
-    """Minutes the pump may still run today under the linear reservoir burn-down envelope."""
+def _allowed_cumulative_liters(*, reservoir_l: float, starts_at: int, ends_at: int, now: int) -> float:
+    """Litres the linear reservoir burn-down envelope allows to have been used by the end of today."""
     # Vacation length in whole days (at least 1) and the 0-based index of the
     # day we are currently in; the cumulative allowance grows day by day.
     d_days = max(1, math.ceil((ends_at - starts_at) / SECONDS_PER_DAY))
@@ -703,9 +697,7 @@ def _binding_max_minutes(
 
     usable_l = reservoir_l * VACATION_RESERVOIR_USABLE_FRACTION
     daily_budget_l = usable_l / d_days
-    allowed_cum_l = min(usable_l, daily_budget_l * (day_index + 1))
-    headroom_l = max(0.0, allowed_cum_l - spent_l)
-    return math.floor(headroom_l / flow_rate_l_per_min)
+    return min(usable_l, daily_budget_l * (day_index + 1))
 
 
 def _apply_vacation_ration(decision: IrrigationDecision, binding_max_min: int) -> None:
