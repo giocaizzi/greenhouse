@@ -22,6 +22,10 @@ suggested follow-up. Details/evidence: `REFACTOR_NOTES.md` and the `refactor/10-
   without a scheme check (ruff S310 — `file://` etc. accepted); default bind host `0.0.0.0` (S104); several
   `try/except/pass` sites swallow errors without logging (full BLE/TRY/PLW0717 lists in the hand-off). Not changed —
   behavior.
+- **Unknown device types accepted on write:** API/CLI/MCP store any irrigator/sensor `type`; after OD3 an unknown value
+  is refused at actuation (safe) but logged with a traceback on every health tick. Suggested labeled API change:
+  validate `type` against the registry keys on write (422). The web edit form hard-selects the single model key —
+  render options from `registry.registered_*_keys()` when a second model is added. (post-WP8 review nits 1/3)
 
 ## 2. Dependencies / supply chain
 - `pip-audit`: 53 advisory rows across 10 locked packages (pyjwt, starlette, urllib3, cryptography, …) —
