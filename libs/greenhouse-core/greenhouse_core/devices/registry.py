@@ -89,9 +89,11 @@ class DeviceRegistry:
     # Introspection — useful for the parametrised adapter contract test.
 
     def registered_irrigator_keys(self) -> tuple[str, ...]:
+        """The irrigator model keys, in registration order."""
         return tuple(self._irrigators)
 
     def registered_sensor_keys(self) -> tuple[str, ...]:
+        """The sensor model keys, in registration order."""
         return tuple(self._sensors)
 
 
