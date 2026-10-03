@@ -335,15 +335,15 @@ def _sync_job() -> None:
     """Background job: sync all sensor data."""
     from greenhouse_server.services.sync import SyncService
 
-    cloud = _get_cloud()
-    if cloud is None:
+    gateway = _get_cloud()
+    if gateway is None:
         logger.debug("Sync job skipped: no Tuya credentials")
         return
 
     registry = getattr(_app.state, "device_registry", None)  # type: ignore[union-attr]  # None _app escapes as AttributeError (pinned)
     with _job_session(_app, "Sync job failed") as session:
         repo = IrrigationRepository(session)
-        sync_svc = SyncService(repo, registry, cloud)
+        sync_svc = SyncService(repo, registry, gateway)
         sync_svc.sync_all_sensors(hours=SYNC_JOB_BACKFILL_HOURS)
 
 
@@ -360,13 +360,13 @@ def _health_snapshot_job() -> None:
 
 
 def _build_irrigation_service(
-    app: FastAPI, repo: IrrigationRepository, registry: "DeviceRegistry | None", cloud: DeviceGateway | None
+    app: FastAPI, repo: IrrigationRepository, registry: "DeviceRegistry | None", gateway: DeviceGateway | None
 ) -> "IrrigationService":
     """Wire the check job's service on the job's own repo; the shared health monitor is re-bound to it first."""
     from greenhouse_server.services.irrigation import IrrigationService
     from greenhouse_server.services.sync import SyncService
 
-    sync_svc = SyncService(repo, registry, cloud)
+    sync_svc = SyncService(repo, registry, gateway)
     monitor = getattr(app.state, "health_monitor", None)
     if monitor is not None:
         monitor.bind_repo(repo)
@@ -388,12 +388,12 @@ def _check_job() -> None:
     from greenhouse_server.services.irrigation import IrrigationService  # noqa: F401
     from greenhouse_server.services.sync import SyncService  # noqa: F401
 
-    cloud = _get_cloud()
+    gateway = _get_cloud()
     registry = getattr(_app.state, "device_registry", None)  # type: ignore[union-attr]  # None _app escapes as AttributeError (pinned)
 
     with _job_session(_app, "Check job failed") as session:
         repo = IrrigationRepository(session)
-        _build_irrigation_service(_app, repo, registry, cloud).check_all_clusters()  # type: ignore[arg-type]  # non-None: _job_session already read _app.state
+        _build_irrigation_service(_app, repo, registry, gateway).check_all_clusters()  # type: ignore[arg-type]  # non-None: _job_session already read _app.state
 
 
 def _anomaly_job() -> None:

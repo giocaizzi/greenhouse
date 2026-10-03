@@ -2841,8 +2841,8 @@ add(
         ),
         (
             "02",
-            "                    sync_single_sensor(self._repo, self._cloud, sensor, hours=6)",
-            "                    sync_single_sensor(self._repo, self._cloud, sensor, hours=24)",
+            "                    sync_single_sensor(self._repo, self._gateway, sensor, hours=6)",
+            "                    sync_single_sensor(self._repo, self._gateway, sensor, hours=24)",
             "freshness sync window 6h -> 24h",
         ),
         (
@@ -2874,8 +2874,8 @@ add(
         ),
         (
             "07",
-            "        if stale and self._cloud is not None:\n            for sensor in stale:",
-            "        if self._cloud is not None:\n            for sensor in sensors:",
+            "        if stale and self._gateway is not None:\n            for sensor in stale:",
+            "        if self._gateway is not None:\n            for sensor in sensors:",
             "every sensor force-synced (not only stale)",
         ),
         (

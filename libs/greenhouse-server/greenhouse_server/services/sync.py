@@ -36,13 +36,13 @@ class SyncService:
     ):
         self._repo = repo
         self._registry = registry
-        self._cloud = cloud
+        self._gateway = cloud
 
     def sync_all_sensors(self, hours: int = 24) -> dict:
         """Sync all sensor data from the Cloud gateway. Returns stats dict."""
-        if self._cloud is None:
+        if self._gateway is None:
             return {"total_synced": 0, "total_new": 0, "total_live": 0, "errors": ["No cloud connection"]}
-        return core_sync(self._repo, self._cloud, hours=hours)
+        return core_sync(self._repo, self._gateway, hours=hours)
 
     def ensure_fresh_and_read(self, cluster_id: int) -> dict | None:
         """Return the cluster's current sensor snapshot from SQLite.
@@ -64,10 +64,10 @@ class SyncService:
         stale = [
             s for s in sensors if latest[s.id] is None or now - latest[s.id].timestamp > SENSOR_READING_STALE_SECONDS
         ]
-        if stale and self._cloud is not None:
+        if stale and self._gateway is not None:
             for sensor in stale:
                 try:
-                    sync_single_sensor(self._repo, self._cloud, sensor, hours=6)
+                    sync_single_sensor(self._repo, self._gateway, sensor, hours=6)
                 except Exception:
                     logger.debug("Freshness sync failed for sensor %s", sensor.name, exc_info=True)
             # Flush so the freshly-synced rows are visible to the snapshot query.
