@@ -13,3 +13,6 @@ exit=0
 libs/greenhouse-core/greenhouse_core/sync.py::sync_sensor_data  body=32 nesting=4
 libs/greenhouse-core/greenhouse_core/sync.py::sync_single_sensor  body=52 nesting=3
 sizecheck: 2 function(s)/file(s) over the DoD limits
+== FULL (seed 0, -n 3)
+3075 passed, 9 warnings in 417.68s (0:06:57)
+exit=0
