@@ -8,6 +8,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
 
+from greenhouse_core import auth
 from greenhouse_core.constants import (
     DEFAULT_AUTO_RUN,
     DEFAULT_DURATION_MINUTES,
@@ -39,6 +40,7 @@ from greenhouse_core.models import (
     Sensor,
     SensorAssignment,
     SensorReading,
+    User,
     UserPreferences,
     VacationWindow,
 )
@@ -101,6 +103,34 @@ class IrrigationRepository:
     def flush(self) -> None:
         """Flush pending changes to the database without committing."""
         self.session.flush()
+
+    # ── Users ─────────────────────────────────────────────────────────────────
+    # Thin delegates to ``greenhouse_core.auth`` (which owns hashing), so the server reaches
+    # users through the repository like every other row. Callers commit.
+
+    def get_user(self, user_id: int) -> User | None:
+        """Look up a user by id."""
+        return auth.get_user(self.session, user_id)
+
+    def get_user_by_username(self, username: str) -> User | None:
+        """Look up a user by case-sensitive username."""
+        return auth.get_user_by_username(self.session, username)
+
+    def has_users(self) -> bool:
+        """Whether any user row exists (first-run admin bootstrap)."""
+        return self.session.scalar(select(User).limit(1)) is not None
+
+    def create_user(self, username: str, password: str) -> User:
+        """Create an active user with a hashed password; raises ``ValueError`` on an empty password."""
+        return auth.create_user(self.session, username=username, password=password)
+
+    def set_user_password(self, user: User, password: str) -> None:
+        """Replace a user's password hash."""
+        auth.set_password(self.session, user, password)
+
+    def record_login(self, user: User) -> None:
+        """Stamp the user's ``last_login_at`` with the current time."""
+        auth.record_login(self.session, user)
 
     # ── Clusters ──────────────────────────────────────────────────────────────
 
