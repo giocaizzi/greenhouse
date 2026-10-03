@@ -147,6 +147,34 @@ def _window_rows(repo: IrrigationRepository, cluster_id: int) -> list[dict[str, 
     ]
 
 
+def _detail_data(repo: IrrigationRepository, plant_db: PlantDatabase, cluster_id: int, hours: int) -> dict[str, Any]:
+    """Detail-page template data besides the live status and the quiet-hours flag.
+
+    Chart controls and pre-built payloads, the decision rationale, the inline config, the
+    irrigation windows (with the weekday vocabulary of their form) and the sensor→plant map.
+    """
+    chart_payloads_json, chart_thresholds = _cluster_chart_payloads(repo, plant_db, cluster_id, hours)
+    return {
+        "allowed_hours": sorted(ALLOWED_HOURS),
+        "metrics": CLUSTER_METRICS,
+        "chart_payloads": chart_payloads_json,
+        "chart_thresholds": chart_thresholds,
+        "rationale_reasons": _rationale_reasons(repo, cluster_id),
+        # Inline-config section data: the declared row (nullable per-field
+        # overrides) plus the effective resolved view used by the engine. Both
+        # shapes feed ``partials/_config_field.html`` so it can render the
+        # current value next to its source badge.
+        "declared_config": repo.get_irrigation_config(cluster_id),
+        "effective_config": repo.get_effective_config(cluster_id),
+        "windows": _window_rows(repo, cluster_id),
+        "weekday_bits": WEEKDAY_BITS,
+        "weekday_labels": WEEKDAY_LABELS,
+        # Sensor → plant lookup so the inline #sensors table can render the
+        # plant↔sensor relationship with the ``↳`` glyph without extra queries.
+        "plants_by_id": _plants_by_id(repo, cluster_id),
+    }
+
+
 @router.get("/clusters/{cluster_id}")
 def cluster_detail(
     request: Request,
@@ -160,18 +188,8 @@ def cluster_detail(
     if status is None:
         raise HTTPException(404, "Cluster not found")
 
-    chart_payloads_json, chart_thresholds = _cluster_chart_payloads(repo, plant_db, cluster_id, hours)
-    rationale_reasons = _rationale_reasons(repo, cluster_id)
-    # Inline-config section data: the declared row (nullable per-field
-    # overrides) plus the effective resolved view used by the engine. Both
-    # shapes feed ``partials/_config_field.html`` so it can render the
-    # current value next to its source badge.
-    declared_config = repo.get_irrigation_config(cluster_id)
-    effective_config: dict[str, dict[str, Any]] = repo.get_effective_config(cluster_id)
-    windows = _window_rows(repo, cluster_id)
-    # Sensor → plant lookup so the inline #sensors table can render the
-    # plant↔sensor relationship with the ``↳`` glyph without extra queries.
-    plants_by_id = _plants_by_id(repo, cluster_id)
+    data = _detail_data(repo, plant_db, cluster_id, hours)
+    effective_config: dict[str, dict[str, Any]] = data["effective_config"]
 
     # "Are we in quiet hours right now?" — drives the hx-confirm guard on
     # the manual irrigate button. Uses the same effective resolution the
@@ -200,18 +218,8 @@ def cluster_detail(
             status=status,
             cluster_id=cluster_id,
             hours=hours,
-            allowed_hours=sorted(ALLOWED_HOURS),
-            metrics=CLUSTER_METRICS,
-            chart_payloads=chart_payloads_json,
-            chart_thresholds=chart_thresholds,
-            rationale_reasons=rationale_reasons,
-            declared_config=declared_config,
-            effective_config=effective_config,
-            windows=windows,
-            weekday_bits=WEEKDAY_BITS,
-            weekday_labels=WEEKDAY_LABELS,
-            plants_by_id=plants_by_id,
             quiet_active_now=quiet_active_now,
+            **data,
         ),
     )
 
