@@ -354,4 +354,3 @@ def bootstrap_admin(engine: Engine, settings: Settings) -> None:
         logger.info("Bootstrapped initial admin user %r from environment.", username)
     finally:
         session.close()
-
