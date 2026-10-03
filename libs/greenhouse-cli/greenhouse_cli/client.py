@@ -2,6 +2,7 @@
 
 import os
 from collections.abc import Mapping
+from http import HTTPStatus
 from pathlib import Path
 from typing import Any, cast
 
@@ -101,7 +102,7 @@ class IrrigationClient:
         except httpx.ConnectError as e:
             raise ServerError(0, f"Cannot connect to server: {e}") from None
 
-        if resp.status_code >= 400:
+        if resp.status_code >= HTTPStatus.BAD_REQUEST:
             try:
                 detail = resp.json().get("detail", resp.text)
             except Exception:

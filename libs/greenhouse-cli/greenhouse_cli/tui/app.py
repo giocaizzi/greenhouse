@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Callable
+from http import HTTPStatus
 from typing import Any
 
 from textual.app import App
@@ -83,7 +84,7 @@ class GreenhouseApp(App):
         try:
             return await asyncio.to_thread(fn, self.client)
         except ServerError as e:
-            if e.status_code == 401:
+            if e.status_code == HTTPStatus.UNAUTHORIZED:
                 self.prompt_login()
             elif not quiet:
                 self.notify(str(e.detail), title=f"Server error {e.status_code or ''}".strip(), severity="error")
