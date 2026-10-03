@@ -26,11 +26,10 @@ suggested follow-up. Details/evidence: `REFACTOR_NOTES.md` and the `refactor/10-
   imports `rich` transitively — declare them explicitly.
 
 ## 3. CI / repo settings (files out of scope here: `.github/workflows/*`)
-- CI runs only `make coverage`; it does not run pre-commit (ruff, gitleaks), `lint-imports`, `make typecheck` or
-  `make sizecheck`. Wire them into CI so the new gates are enforced on every PR.
+- CI (`ci.yml`) runs ruff check/format, `pre-commit run --all-files`, hadolint, gitleaks and `make coverage`, but not
+  `lint-imports`, `make typecheck` or `make sizecheck`. Wire those into CI so the new gates are enforced on every PR.
 - `make check` stays red until the final gate (I5) by design (sizecheck lists functions still scheduled); must be
   green at the end.
-- gitleaks' pre-commit hook scans only staged changes; consider `gitleaks detect` on the PR range in CI.
 
 ## 4. Docs / plugin drift — **now in scope** (owner: remove drift everywhere; see `refactor/45-drift-track.md`)
 - `CLAUDE.md` + `ConfirmScreen` docstring claim every actuating TUI key confirms; `i`/`w` open their own dialogs and
