@@ -1,0 +1,14 @@
+stmt-delete | return None -> pass | IrrigationLogic._resolve_quiet_window
+stmt-delete | return None -> pass | IrrigationLogic._apply_window_rule
+cmp-flip | multiplier < 1.0 -> multiplier <= 1.0 | IrrigationLogic._apply_seasonal_multiplier
+num-minus1 | max(0, math.ceil((vac.ends_at - now) / 86400)) -> max(-1, math.ceil((vac.ends_at - now) / 86400)) | IrrigationLogic._apply_vacation_budget
+num-minus1 | max(0.0, allowed_cum_l - spent_l) -> max(-1.0, allowed_cum_l - spent_l) | IrrigationLogic._apply_vacation_budget
+num-minus1 | max(0.0, (alert.last_seen_at + hold_seconds - now) / 3600) -> max(-1.0, (alert.last_seen_at + hold_seconds - now) / 3600) | IrrigationLogic._enforce_leak_hold
+num-minus1 | forecast.get("precipitation_mm", 0.0) -> forecast.get("precipitation_mm", -1.0) | IrrigationLogic._apply_weather_skip_rule
+num-minus1 | forecast.get("precipitation_mm", 0.0) or 0.0 -> forecast.get("precipitation_mm", 0.0) or -1.0 | IrrigationLogic._apply_weather_skip_rule
+num-plus1 | forecast.get("precipitation_mm", 0.0) or 0.0 -> forecast.get("precipitation_mm", 0.0) or 1.0 | IrrigationLogic._apply_weather_skip_rule
+num-plus1 | forecast.get("precipitation_mm", 0.0) -> forecast.get("precipitation_mm", 1.0) | IrrigationLogic._apply_weather_skip_rule
+stmt-delete | decision.duration_minutes = DEFAULT_DURATION_MINUTES -> pass | _apply_soil_moisture_rule
+stmt-delete | decision.interval_hours = DEFAULT_INTERVAL_HOURS -> pass | _apply_soil_moisture_rule
+stmt-delete | decision.action = Action.SKIP -> pass | _apply_soil_moisture_rule
+stmt-delete | decision.action = Action.SKIP -> pass | _apply_soil_moisture_rule#2
