@@ -47,7 +47,7 @@ def set_config(cluster_id: int, request: SetConfigRequest, repo: RepoDep):
     """
     require_cluster(repo, cluster_id)
     repo.set_irrigation_config(cluster_id=cluster_id, **_request_fields(request))
-    repo.session.commit()
+    repo.commit()
     return repo.get_irrigation_config(cluster_id)
 
 
@@ -126,5 +126,5 @@ def update_global_config(request: UpdateGlobalConfigRequest, repo: RepoDep):
         The updated global defaults row.
     """
     repo.update_global_irrigation_config(**_request_fields(request))
-    repo.session.commit()
+    repo.commit()
     return repo.get_global_irrigation_config()

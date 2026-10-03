@@ -83,7 +83,7 @@ def add_sensor(cluster_id: int, request: CreateSensorRequest, repo: RepoDep):
         raise HTTPException(status_code=404, detail=f"Plant {exc.plant_id} not found in cluster") from None
     except DeviceIdExistsError:
         raise HTTPException(status_code=409, detail="Device ID already exists") from None
-    repo.session.commit()
+    repo.commit()
     sensors = repo.get_sensors_in_cluster(cluster_id)
     return next(s for s in sensors if s.id == sensor_id)
 
@@ -143,7 +143,7 @@ def update_sensor(cluster_id: int, sensor_id: int, request: UpdateSensorRequest,
     except PlantNotInClusterError as exc:
         raise HTTPException(status_code=404, detail=f"Plant {exc.plant_id} not found in cluster") from None
     updated = repo.update_sensor(sensor_id, **request.model_dump(exclude_none=True))
-    repo.session.commit()
+    repo.commit()
     return updated
 
 
@@ -197,5 +197,5 @@ def delete_sensor(cluster_id: int, sensor_id: int, repo: RepoDep):
     """
     require_sensor_in_cluster(repo, cluster_id, sensor_id)
     repo.delete_sensor(sensor_id)
-    repo.session.commit()
+    repo.commit()
     return SuccessResponse(success=True)

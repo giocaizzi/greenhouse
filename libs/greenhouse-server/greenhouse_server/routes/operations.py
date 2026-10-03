@@ -33,7 +33,6 @@ from greenhouse_server.deps import (
     IrrigationServiceDep,
     PlantDbDep,
     RepoDep,
-    SessionDep,
     SyncServiceDep,
     require_cluster,
 )
@@ -117,7 +116,7 @@ def irrigate(
     cluster_id: int,
     request: IrrigateRequest,
     irrigation_svc: IrrigationServiceDep,
-    session: SessionDep,
+    repo: RepoDep,
 ) -> IrrigateResponse:
     """Run the full smart-irrigation pipeline for a cluster.
 
@@ -154,7 +153,7 @@ def irrigate(
     )
     if result.get("action") == "error" and result.get("reason") == "cluster not found":
         raise HTTPException(status_code=404, detail="Cluster not found")
-    session.commit()
+    repo.commit()
     return IrrigateResponse(**result)  # type: ignore[misc, arg-type]  # contract: TypedDict → Pydantic, runtime-validated
 
 
@@ -181,7 +180,7 @@ def monitor(cluster_id: int, repo: RepoDep, irrigation_svc: IrrigationServiceDep
     """
     require_cluster(repo, cluster_id)
     result = irrigation_svc.monitor_cluster(cluster_id)
-    repo.session.commit()  # keep the freshness sync's rows (D15)
+    repo.commit()  # keep the freshness sync's rows (D15)
     return MonitorResponse(
         cluster_name=result["cluster_name"],
         sensors=[SensorStatusResponse(**s) for s in result["sensors"]],
@@ -190,7 +189,7 @@ def monitor(cluster_id: int, repo: RepoDep, irrigation_svc: IrrigationServiceDep
 
 
 @router.post("/check", response_model=CheckAllResponse)
-def check_all(irrigation_svc: IrrigationServiceDep, session: SessionDep) -> CheckAllResponse:
+def check_all(irrigation_svc: IrrigationServiceDep, repo: RepoDep) -> CheckAllResponse:
     """Run a check across every cluster.
 
     For each cluster: irrigate (if it has irrigators and `auto_run` is on) or
@@ -207,7 +206,7 @@ def check_all(irrigation_svc: IrrigationServiceDep, session: SessionDep) -> Chec
     """
     results = irrigation_svc.check_all_clusters()
     has_alerts = check_has_alerts(results)
-    session.commit()
+    repo.commit()
     return CheckAllResponse(
         results=[CheckClusterResponse(**r) for r in results],  # type: ignore[arg-type]  # contract: TypedDict → Pydantic
         has_alerts=has_alerts,
@@ -219,7 +218,6 @@ def check_single(
     cluster_id: int,
     repo: RepoDep,
     irrigation_svc: IrrigationServiceDep,
-    session: SessionDep,
 ) -> CheckClusterResponse:
     """Run a check for a single cluster (irrigate or monitor + collect alerts).
 
@@ -234,12 +232,12 @@ def check_single(
     """
     require_cluster(repo, cluster_id)
     result = irrigation_svc.check_cluster(cluster_id)
-    session.commit()
+    repo.commit()
     return CheckClusterResponse(**result)  # type: ignore[arg-type]  # contract: TypedDict → Pydantic
 
 
 @router.post("/sync", response_model=SyncResponse)
-def sync(request: SyncRequest, sync_svc: SyncServiceDep, session: SessionDep) -> SyncResponse:
+def sync(request: SyncRequest, sync_svc: SyncServiceDep, repo: RepoDep) -> SyncResponse:
     """Pull recent sensor readings from the Tuya Cloud into the local SQLite archive.
 
     This is the same job the background scheduler runs every
@@ -255,7 +253,7 @@ def sync(request: SyncRequest, sync_svc: SyncServiceDep, session: SessionDep) ->
         readings hit, and any per-sensor error messages.
     """
     stats = sync_svc.sync_all_sensors(hours=request.hours)
-    session.commit()
+    repo.commit()
     return SyncResponse(
         total_synced=stats["total_synced"],
         total_new=stats["total_new"],

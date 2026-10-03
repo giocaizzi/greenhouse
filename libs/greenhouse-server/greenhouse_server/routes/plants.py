@@ -97,7 +97,7 @@ def add_plant(cluster_id: int, request: CreatePlantRequest, repo: RepoDep):
         ideal_humidity_max=request.ideal_humidity_max,
         notes=request.notes,
     )
-    repo.session.commit()
+    repo.commit()
     plants = repo.get_plants_in_cluster(cluster_id)
     return next(p for p in plants if p.id == plant_id)
 
@@ -133,7 +133,7 @@ def update_plant(cluster_id: int, plant_id: int, request: UpdatePlantRequest, re
     """
     require_plant_in_cluster(repo, cluster_id, plant_id)
     updated = repo.update_plant(plant_id, **request.model_dump(exclude_none=True))
-    repo.session.commit()
+    repo.commit()
     return updated
 
 
@@ -157,7 +157,7 @@ def delete_plant(cluster_id: int, plant_id: int, repo: RepoDep):
     """
     require_plant_in_cluster(repo, cluster_id, plant_id)
     repo.delete_plant(plant_id)
-    repo.session.commit()
+    repo.commit()
     return SuccessResponse(success=True)
 
 
@@ -193,7 +193,7 @@ def move_plant(plant_id: int, request: MovePlantRequest, repo: RepoDep):
         moved = repo.move_plant(plant_id, request.target_cluster_id)
     except SameClusterMoveError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-    repo.session.commit()
+    repo.commit()
     return moved
 
 
@@ -225,7 +225,7 @@ def sync_plants(request: SyncPlantsRequest, repo: RepoDep, cluster_svc: ClusterS
     except ClusterNotFoundError:
         raise HTTPException(status_code=404, detail="Cluster not found") from None
 
-    repo.session.commit()
+    repo.commit()
     return SyncPlantsResponse(synced=synced, errors=errors)
 
 
@@ -276,5 +276,5 @@ def trigger_health_snapshot(health_svc: PlantHealthServiceDep, repo: RepoDep):
         Number of plant rows written (plants with no data are skipped).
     """
     rows = health_svc.snapshot_daily()
-    repo.session.commit()
+    repo.commit()
     return SnapshotResponse(rows_written=rows)

@@ -34,7 +34,7 @@ def create_cluster(request: CreateClusterRequest, repo: RepoDep):
         The newly created cluster including its assigned ID.
     """
     cluster_id = repo.add_cluster(request.name, request.location, request.environment)
-    repo.session.commit()
+    repo.commit()
     return repo.get_cluster(cluster_id)
 
 
@@ -132,7 +132,7 @@ def update_cluster(cluster_id: int, request: UpdateClusterRequest, repo: RepoDep
     cluster = repo.update_cluster(cluster_id, **request.model_dump(exclude_none=True))
     if not cluster:
         raise HTTPException(status_code=404, detail="Cluster not found")
-    repo.session.commit()
+    repo.commit()
     return cluster
 
 
@@ -155,5 +155,5 @@ def delete_cluster(cluster_id: int, repo: RepoDep):
     deleted = repo.delete_cluster(cluster_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Cluster not found")
-    repo.session.commit()
+    repo.commit()
     return SuccessResponse(success=True)

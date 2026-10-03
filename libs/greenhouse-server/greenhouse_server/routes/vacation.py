@@ -69,7 +69,7 @@ def create_vacation_window(request: VacationCreateRequest, repo: RepoDep):
         contact_email=request.contact_email,
         notes=request.notes,
     )
-    repo.session.commit()
+    repo.commit()
     return window
 
 
@@ -98,7 +98,7 @@ def update_vacation_window(window_id: int, request: UpdateVacationWindowRequest,
     effective_end = request.ends_at if request.ends_at is not None else row.ends_at
     _validate_range(effective_start, effective_end)
     updated = repo.update_vacation_window(window_id, **request.model_dump(exclude_unset=True))
-    repo.session.commit()
+    repo.commit()
     return updated
 
 
@@ -118,5 +118,5 @@ def delete_vacation_window(window_id: int, repo: RepoDep):
     deleted = repo.delete_vacation_window(window_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Vacation window not found")
-    repo.session.commit()
+    repo.commit()
     return SuccessResponse(success=True)

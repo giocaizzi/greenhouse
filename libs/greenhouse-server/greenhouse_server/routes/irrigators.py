@@ -101,7 +101,7 @@ def add_irrigator(cluster_id: int, request: CreateIrrigatorRequest, repo: RepoDe
         raise HTTPException(status_code=409, detail="Cluster already has an irrigator") from None
     except DeviceIdExistsError:
         raise HTTPException(status_code=409, detail="Device ID already exists") from None
-    repo.session.commit()
+    repo.commit()
     return repo.get_irrigator(irrigator_id)
 
 
@@ -150,7 +150,7 @@ def update_irrigator(cluster_id: int, request: UpdateIrrigatorRequest, repo: Rep
     """
     irrigator = require_cluster_irrigator(repo, cluster_id)
     updated = repo.update_irrigator(irrigator.id, **request.model_dump(exclude_none=True))
-    repo.session.commit()
+    repo.commit()
     return updated
 
 
@@ -175,7 +175,7 @@ def delete_irrigator(cluster_id: int, repo: RepoDep):
     """
     irrigator = require_cluster_irrigator(repo, cluster_id)
     repo.delete_irrigator(irrigator.id)
-    repo.session.commit()
+    repo.commit()
     return SuccessResponse(success=True)
 
 

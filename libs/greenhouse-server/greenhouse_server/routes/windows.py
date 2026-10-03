@@ -90,7 +90,7 @@ def add_window(cluster_id: int, request: CreateIrrigationWindowRequest, repo: Re
         weekday_mask=request.weekday_mask,
         label=request.label,
     )
-    repo.session.commit()
+    repo.commit()
     return IrrigationWindowResponse.model_validate(row)
 
 
@@ -121,7 +121,7 @@ def update_window(cluster_id: int, window_id: int, request: UpdateIrrigationWind
     effective_mask = request.weekday_mask if request.weekday_mask is not None else row.weekday_mask
     _validate_window(effective_start, effective_end, effective_mask)
     updated = repo.update_irrigation_window(window_id, **request.model_dump(exclude_none=True))
-    repo.session.commit()
+    repo.commit()
     return IrrigationWindowResponse.model_validate(updated)
 
 
@@ -146,5 +146,5 @@ def delete_window(cluster_id: int, window_id: int, repo: RepoDep):
     """
     require_window_in_cluster(repo, cluster_id, window_id)
     repo.delete_irrigation_window(window_id)
-    repo.session.commit()
+    repo.commit()
     return SuccessResponse(success=True)
