@@ -1113,9 +1113,6 @@ class TestRefill:
 
 
 class TestSpriteView:
-    @pytest.mark.xfail(
-        strict=True, raises=TypeError, reason="REFACTOR_NOTES B-U1: SpriteView._animate shadows Widget._animate"
-    )
     @pytest.mark.parametrize("animate", [True, False])
     def test_widget_animate_still_works_on_a_sprite(self, animate):
         """``Widget.animate`` caches its animator in ``_animate``; the sprite's animation flag must not live there."""

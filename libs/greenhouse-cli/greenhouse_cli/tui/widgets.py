@@ -36,11 +36,12 @@ class SpriteView(Static):
         super().__init__(factory(0), **kwargs)
         self._factory = factory
         self._frame = 0
-        self._animate = animate  # type: ignore[assignment]  # shadows DOMNode._animate (pre-existing, kept)
+        # Not `_animate`: Widget keeps its cached animator under that name (Widget.animate calls it).
+        self._animated = animate
 
     def on_mount(self) -> None:
         """Start the frame timer unless animation is off for this widget or the app."""
-        if self._animate and getattr(self.app, "animations", True):
+        if self._animated and getattr(self.app, "animations", True):
             self.set_interval(ANIMATION_INTERVAL, self._tick)
 
     def _tick(self) -> None:
