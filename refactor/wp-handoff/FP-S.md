@@ -80,4 +80,4 @@ override block only, plus one per-file-ignore ratchet removal.
 `lint-imports` 20 kept · sizecheck: no server hits (remaining 7 are WP8 files + core `constants.py`) ·
 full suite: see the last line of this file.
 
-Full suite at `8e3400a`: `PYTHONHASHSEED=0 flock /tmp/greenhouse-tests.lock uv run pytest -q -n 2` → **3049 passed**, 0 failed (11m37s; base had 3039 + 10 new tests: 2 auth-session, 4 repository-users, 3 web emergency notify, +1 net elsewhere: none removed).
+Full suite at `8e3400a`: `PYTHONHASHSEED=0 flock /tmp/greenhouse-tests.lock uv run pytest -q -n 2` → **3049 passed**, 0 failed (11m37s). Base integration gate after the lint merge: 3040; +9 new tests here (2 auth-session, 4 repository-users, 3 web emergency notify); no test removed.
