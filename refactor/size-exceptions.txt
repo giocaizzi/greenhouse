@@ -4,8 +4,6 @@
 # I1 rejects any line without an approval.
 
 # ── Functions (EXC rows of target §3.12) ─────────────────────────────────────
-libs/greenhouse-cli/greenhouse_cli/commands/auth.py::register — Typer declarative registration block: CC/length come from the nested command defs, whose decorators/params/docstrings are the frozen --help contract; each nested command ≤ 20 body lines, CC ≤ 4 (CC now ≤ 8 after the lint ratchet; closures move out in fix pass FP-U) — approved: orchestrator (Gate 2)
-libs/greenhouse-cli/greenhouse_cli/commands/operations.py::register — same as auth.register (10 nested commands, each ≤ 12 body lines, CC ≤ 5); module untouched — approved: orchestrator (Gate 2)
 libs/greenhouse-cli/greenhouse_cli/tui/screens/cluster.py::ClusterScreen.compose — single declarative widget tree, CC 1; order = focus order + app.tcss selectors + screen goldens; splitting scatters the DOM picture (C §8.2) — approved: orchestrator (Gate 2)
 libs/greenhouse-cli/greenhouse_cli/tui/screens/forms.py::FormScreen.compose — nesting 5 from nested `with` widget containers: declarative Textual tree whose order is focus order + tcss + form-screen goldens; module untouched (Rev 2) — approved: orchestrator (Gate 2)
 libs/greenhouse-cli/greenhouse_cli/tui/screens/forms.py::parse_value — ≤ 40 lines; CC 11 is a flat type-dispatch ladder over field kinds; module untouched by any WP — approved: orchestrator (Gate 2)
@@ -23,4 +21,5 @@ libs/greenhouse-server/greenhouse_server/services/irrigation.py — logger name,
 libs/greenhouse-server/greenhouse_server/scheduler.py — func_ref goldens pin the 5 jobs here; job registry, tz rebuild and pause policy are one concern; public surface (dir()) frozen — approved: orchestrator (Gate 2)
 libs/greenhouse-cli/greenhouse_cli/client.py — one thin method per /api/v1 endpoint (≈ 80), 1:1 with OpenAPI; per-slice mixins rejected (proposal C §11) — approved: orchestrator (Gate 2)
 libs/greenhouse-core/greenhouse_core/models.py — declarative ORM; DDL frozen — approved: orchestrator (Gate 2)
+libs/greenhouse-core/greenhouse_core/constants.py — flat register of named thresholds; CLAUDE.md invariant 5 requires every threshold to live here, so splitting would only scatter them — approved: orchestrator (FP-C merge)
 libs/greenhouse-server/greenhouse_server/services/health_monitor.py::DeviceHealthMonitor._alarm_message — flat alarm-code → message mapping (8 returns, PLR0911); a lookup table would add indirection without removing a present smell — approved: orchestrator (wave A)

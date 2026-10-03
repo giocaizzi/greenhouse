@@ -289,11 +289,13 @@ class PixelSprite:
         return (len(self.rows) + 1) // 2
 
     def _color(self, key: str) -> str | None:
+        """Palette colour of a pixel key; ``None`` for transparent pixels and unknown keys."""
         if key == TRANSPARENT:
             return None
         return self.palette.get(key)
 
     def __rich_console__(self, console: Console, options: ConsoleOptions) -> RenderResult:
+        """Pack two pixel rows into each terminal row with half blocks (``▀`` foreground = top, background = bottom)."""
         width = self.width
         rows = [r.ljust(width, TRANSPARENT) for r in self.rows]
         if len(rows) % 2:
@@ -312,6 +314,7 @@ class PixelSprite:
             yield Segment.line()
 
     def __rich_measure__(self, console: Console, options: ConsoleOptions) -> Measurement:
+        """Report the fixed pixel width, so Rich never wraps or stretches a sprite."""
         return Measurement(self.width, self.width)
 
 
@@ -328,6 +331,7 @@ def _sway(rows: list[str], offset: int) -> list[str]:
 
 
 def _overlay(rows: list[str], points: list[tuple[int, int]], key: str) -> list[str]:
+    """Paint ``key`` at each ``(col, row)`` point that is transparent — effects never cover the drawing."""
     grid = [list(r) for r in rows]
     for col, row in points:
         if 0 <= row < len(grid) and 0 <= col < len(grid[row]) and grid[row][col] == TRANSPARENT:

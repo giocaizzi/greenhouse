@@ -1112,6 +1112,30 @@ class TestRefill:
         self._table_app(body)
 
 
+class TestSpriteView:
+    @pytest.mark.parametrize("animate", [True, False])
+    def test_widget_animate_still_works_on_a_sprite(self, animate):
+        """``Widget.animate`` caches its animator in ``_animate``; the sprite's animation flag must not live there."""
+        from textual.app import App
+
+        from greenhouse_cli.tui.widgets import SpriteView
+
+        class SpriteApp(App):
+            def compose(self):
+                yield SpriteView(lambda frame: f"frame {frame}", animate=animate, id="sprite")
+
+        async def scenario():
+            app = SpriteApp()
+            async with app.run_test() as pilot:
+                sprite = app.query_one("#sprite", SpriteView)
+                sprite.level = 0.0
+                sprite.animate("level", 1.0, duration=0.01)
+                await pilot.wait_for_animation()
+                assert sprite.level == 1.0
+
+        _run(scenario())
+
+
 class TestExactRequests:
     def _open(self, http, log, cluster_id, body, tab=None):
         async def scenario():

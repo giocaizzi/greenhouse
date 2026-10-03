@@ -53,6 +53,7 @@ def now() -> int:
 
 
 def _span(seconds: int) -> str:
+    """Compact duration: ``45s``, ``12m``, ``3h05m`` under a day, then ``2d4h`` (truncated, never rounded up)."""
     if seconds < SECONDS_PER_MINUTE:
         return f"{seconds}s"
     if seconds < SECONDS_PER_HOUR:
@@ -96,7 +97,7 @@ def clock(ts: int | float | None, with_date: bool = False, *, tz: str | None = N
 
 
 def num(value: float | int | None, unit: str = "", digits: int = 1) -> str:
-    """Format a nullable number with a unit."""
+    """Number plus unit, ``—`` for ``None``; ints and ``digits=0`` are rounded to whole numbers."""
     if value is None:
         return "—"
     if isinstance(value, int) or digits == 0:
@@ -105,7 +106,7 @@ def num(value: float | int | None, unit: str = "", digits: int = 1) -> str:
 
 
 def styled(value: str | None, styles: dict[str, str], default: str = "") -> Text:
-    """Return ``value`` as Text styled by a lookup table."""
+    """``value`` as Text styled by ``styles[value.lower()]`` (else ``default``); ``None`` shows ``—``."""
     text = value or "—"
     return Text(text, style=styles.get((value or "").lower(), default))
 

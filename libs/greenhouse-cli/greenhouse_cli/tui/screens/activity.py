@@ -47,6 +47,7 @@ class ActivityScreen(DataScreen):
         await self._fetch()
 
     async def _fetch(self) -> None:
+        """Append the page older than the cursor and keep the server's next cursor (``None`` = end of the feed)."""
         severity, before = self.severity, self.cursor
         data = await self.gh.api(lambda c: c.list_activity(limit=PAGE, before=before, severity=severity))
         if data is None:

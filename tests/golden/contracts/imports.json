@@ -137,7 +137,6 @@
    "create_session_factory",
    "head_revision",
    "init_db",
-   "logging",
    "sessionmaker"
   ]
  },
@@ -297,8 +296,7 @@
    "get_plant_database",
    "json",
    "os",
-   "reset_plant_database",
-   "set_plant_database"
+   "reset_plant_database"
   ]
  },
  "greenhouse_core.repository": {

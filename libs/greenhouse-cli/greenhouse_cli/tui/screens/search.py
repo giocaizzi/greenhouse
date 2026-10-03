@@ -42,10 +42,12 @@ class SearchScreen(ModalScreen[int | None]):
 
     @on(Input.Changed)
     def _changed(self, event: Input.Changed) -> None:
+        """Every keystroke restarts the debounced search worker."""
         self.search(event.value)
 
     @on(Input.Submitted)
     def _submitted(self) -> None:
+        """Enter moves focus to the results, when there are any, so arrows pick a hit."""
         table = self.query_one(DataTable)
         if table.row_count:
             table.focus()
@@ -70,6 +72,7 @@ class SearchScreen(ModalScreen[int | None]):
 
     @on(DataTable.RowSelected)
     def _selected(self, event: DataTable.RowSelected) -> None:
+        """Dismiss with the hit's cluster id; hits that link to no cluster are ignored."""
         target = self._targets.get(event.row_key.value or "")
         if target is not None:
             self.dismiss(target)

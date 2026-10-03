@@ -3,13 +3,22 @@
 import json
 import os
 from collections.abc import Callable
-from typing import Any
+from typing import Annotated, Any, TypeVar
 
 import typer
 from rich import print_json
 
 from greenhouse_cli.client import IrrigationClient, ServerError
 from greenhouse_cli.constants import DEFAULT_SERVER_URL
+
+# Typer parameter types shared by several commands; Typer copies the ParameterInfo per use, so
+# reusing one alias yields the same option/argument (and the same --help line) as writing it out.
+ClusterArg = Annotated[int, typer.Argument(help="Cluster ID")]
+ClusterOpt = Annotated[int, typer.Option(help="Cluster ID")]
+ClusterFilterOpt = Annotated[int | None, typer.Option(help="Filter by cluster ID")]
+YesOpt = Annotated[bool, typer.Option("--yes", "-y", help="Skip confirmation prompt")]
+
+T = TypeVar("T")
 
 
 def server_url(ctx: typer.Context) -> str:
@@ -18,19 +27,20 @@ def server_url(ctx: typer.Context) -> str:
 
 
 def get_client(ctx: typer.Context) -> IrrigationClient:
-    """Get an IrrigationClient from the Typer context."""
+    """A client for the resolved server URL; it sends the stored token when there is one."""
     return IrrigationClient(base_url=server_url(ctx))
 
 
-def call(ctx: typer.Context, fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
-    """Call a client method with error handling. Returns the result or exits on error."""
+def call(ctx: typer.Context, fn: Callable[[IrrigationClient], T]) -> T:
+    """Run ``fn`` against a fresh client and return its result; a server error prints and exits 1."""
     try:
-        return fn(get_client(ctx), *args, **kwargs)
+        with get_client(ctx) as client:
+            return fn(client)
     except ServerError as e:
         typer.echo(f"Error: {e.detail}", err=True)
         raise typer.Exit(1) from None
 
 
 def output(data: Any) -> None:
-    """Pretty-print JSON data."""
+    """Print ``data`` as pretty JSON on stdout (the CLI output contract); non-JSON values go through ``str``."""
     print_json(json.dumps(data, default=str))

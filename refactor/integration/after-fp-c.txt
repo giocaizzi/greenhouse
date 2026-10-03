@@ -1,0 +1,14 @@
+== ruff check
+All checks passed!
+exit=0
+== ruff format
+325 files already formatted
+exit=0
+== typecheck
+Success: no issues found in 150 source files
+exit=0
+== lint-imports
+Contracts: 10 kept, 0 broken.
+exit=0
+== FULL
+Merge base == FP-C base (8a76a3f): tree identical to refactor/fp-c; FP-C FULL at 9018e47 = 3045 passed (seed 0); later commits: comment-only + hand-off (diff above shows libs/tests delta).

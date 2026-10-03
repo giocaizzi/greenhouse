@@ -41,7 +41,7 @@ def parse_moisture_target(target: str) -> tuple[float, float]:
 
 
 def moisture_target_range(care: Mapping[str, Any]) -> tuple[float, float]:
-    """Return a plant's soil-moisture band; one home for the "45-65" fallback six call sites repeat."""
+    """Return a plant's soil-moisture band, falling back to ``DEFAULT_SOIL_MOISTURE_TARGET`` when unset."""
     return parse_moisture_target(care.get("soil_moisture_target", DEFAULT_SOIL_MOISTURE_TARGET))
 
 

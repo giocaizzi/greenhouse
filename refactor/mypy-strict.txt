@@ -25,7 +25,12 @@ libs/greenhouse-cli/greenhouse_cli/tui/__init__.py
 libs/greenhouse-cli/greenhouse_cli/tui/app.py
 libs/greenhouse-cli/greenhouse_cli/tui/formatting.py
 libs/greenhouse-cli/greenhouse_cli/tui/model.py
-libs/greenhouse-cli/greenhouse_cli/tui/render.py
+libs/greenhouse-cli/greenhouse_cli/tui/render/__init__.py
+libs/greenhouse-cli/greenhouse_cli/tui/render/_rows.py
+libs/greenhouse-cli/greenhouse_cli/tui/render/cluster_panels.py
+libs/greenhouse-cli/greenhouse_cli/tui/render/cluster_tabs.py
+libs/greenhouse-cli/greenhouse_cli/tui/render/settings.py
+libs/greenhouse-cli/greenhouse_cli/tui/render/system.py
 libs/greenhouse-cli/greenhouse_cli/tui/resources.py
 libs/greenhouse-cli/greenhouse_cli/tui/screens/__init__.py
 libs/greenhouse-cli/greenhouse_cli/tui/screens/activity.py

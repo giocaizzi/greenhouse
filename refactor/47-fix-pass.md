@@ -72,3 +72,13 @@ constant; WP8 typing (58 errors); stub overrides for `tinytuya`, `apscheduler`, 
 - `windows list` and `irrigator --type` Typer help (FP-U; `--type` after OD3 aliases), `start_irrigator` route docstring
   "local protocol" (FP-S; MCP golden), `ConfirmScreen` docstring (FP-U), `tests/golden.py` citing `refactor/BRIEF.md` (OD5).
 - After OD5 moves: AGENTS.md "Development" paragraph naming `refactor/` paths must follow.
+
+## OD5 prerequisites (from FP-C hand-off)
+- `REFACTOR_NOTES.md` must be self-contained before `refactor/` is deleted: inline titled entries for every bug it cites
+  only via `refactor/00-smells.md` / safety reports (e.g. B-18, B-24, the shared `detect_conflicts` gate).
+- Deferred from FP-C: enum-typed parameters (~56 signatures, mostly server) and server TypedDicts (weather results,
+  alert findings, sync snapshot) — after FP-S merges; engine rain `2.0` — after WP8.
+
+## From FP-U hand-off (orchestrator)
+- `greenhouse tui --help` claims sync runs behind a confirmation dialog — it does not; doc-contract fix (help golden only).
+- CLI relaxed mypy override removal handed to FP-S (same block as routes).
