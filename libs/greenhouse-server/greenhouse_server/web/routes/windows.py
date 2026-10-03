@@ -10,10 +10,9 @@ repository in-process like every other web route.
 from __future__ import annotations
 
 from fastapi import APIRouter, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
-from greenhouse_server.deps import RepoDep, require_cluster, require_window_in_cluster
-from greenhouse_server.services.windows import WindowValidationError, validate_window
+from greenhouse_server.deps import RepoDep, require_cluster, require_valid_window, require_window_in_cluster
 from greenhouse_server.web.context import base_context
 from greenhouse_server.web.templating import templates
 from greenhouse_server.web.weekdays import WEEKDAY_BITS, WEEKDAY_LABELS
@@ -34,14 +33,6 @@ def _parse_weekday_mask(values: list[str]) -> int:
     return mask
 
 
-def _validate_window_form(start_hour: int, end_hour: int, mask: int) -> None:
-    """Map the shared window rule (same wording as the API) to the web's 400 page."""
-    try:
-        validate_window(start_hour, end_hour, mask)
-    except WindowValidationError as exc:
-        raise HTTPException(400, str(exc)) from None
-
-
 @router.post("/clusters/{cluster_id}/windows")
 def create_window(
     request: Request,
@@ -51,11 +42,11 @@ def create_window(
     end_hour: int = Form(...),
     weekday_mask: list[str] = Form(default=[]),
     label: str = Form(""),
-):
+) -> Response:
     """Add an irrigation window from the form and return to the cluster config."""
     require_cluster(repo, cluster_id)
     mask = _parse_weekday_mask(weekday_mask)
-    _validate_window_form(start_hour, end_hour, mask)
+    require_valid_window(start_hour, end_hour, mask)
     repo.add_irrigation_window(
         cluster_id,
         start_hour=start_hour,
@@ -68,7 +59,7 @@ def create_window(
 
 
 @router.get("/clusters/{cluster_id}/windows/{window_id}/edit")
-def edit_window_form(request: Request, cluster_id: int, window_id: int, repo: RepoDep):
+def edit_window_form(request: Request, cluster_id: int, window_id: int, repo: RepoDep) -> Response:
     """Render the edit form of one of the cluster's irrigation windows."""
     cluster = require_cluster(repo, cluster_id)
     window = require_window_in_cluster(repo, cluster_id, window_id)
@@ -93,11 +84,11 @@ def update_window(
     end_hour: int = Form(...),
     weekday_mask: list[str] = Form(default=[]),
     label: str = Form(""),
-):
+) -> Response:
     """Save the window form and return to the cluster config."""
     require_window_in_cluster(repo, cluster_id, window_id)
     mask = _parse_weekday_mask(weekday_mask)
-    _validate_window_form(start_hour, end_hour, mask)
+    require_valid_window(start_hour, end_hour, mask)
     repo.update_irrigation_window(
         window_id,
         start_hour=start_hour,
@@ -110,7 +101,7 @@ def update_window(
 
 
 @router.delete("/clusters/{cluster_id}/windows/{window_id}", response_class=HTMLResponse)
-def delete_window(cluster_id: int, window_id: int, repo: RepoDep):
+def delete_window(cluster_id: int, window_id: int, repo: RepoDep) -> Response:
     """HTMX-targeted delete; returns an empty HTML body so the row is removed."""
     require_window_in_cluster(repo, cluster_id, window_id)
     repo.delete_irrigation_window(window_id)

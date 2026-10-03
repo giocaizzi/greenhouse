@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Query
+from typing import Any
 
+from fastapi import APIRouter, Query
+
+from greenhouse_core.models import Plant
 from greenhouse_core.schemas import (
     ChartPayloadResponse,
     HeatmapResponse,
@@ -11,7 +14,14 @@ from greenhouse_core.schemas import (
     PlantHealthTimelineResponse,
     PlantResponse,
 )
-from greenhouse_server.deps import MAX_LOOKBACK_HOURS, PlantDbDep, RepoDep, require_metric, require_plant
+from greenhouse_server.deps import (
+    MAX_LOOKBACK_HOURS,
+    PlantDbDep,
+    RepoDep,
+    not_found_as_404,
+    require_metric,
+    require_plant,
+)
 from greenhouse_server.services.charts import (
     build_cluster_chart_payload,
     build_heatmap_payload,
@@ -24,7 +34,7 @@ router = APIRouter(tags=["charts"])
 
 
 @router.get("/plants/{plant_id}", response_model=PlantResponse)
-def get_plant(plant_id: int, repo: RepoDep):
+def get_plant(plant_id: int, repo: RepoDep) -> Plant:
     """Fetch a single plant by ID across all clusters.
 
     Args:
@@ -46,7 +56,7 @@ def plant_chart_data(
     plant_db: PlantDbDep,
     hours: int = Query(24, ge=1, le=MAX_LOOKBACK_HOURS),
     metric: str = Query("soil_moisture"),
-):
+) -> dict[str, Any]:
     """Return the time-series chart payload for a single plant.
 
     Includes sensor readings, irrigation events, and the plant-care threshold
@@ -65,10 +75,8 @@ def plant_chart_data(
         HTTPException: 400 if the metric is unsupported, 404 if the plant
             does not exist.
     """
-    payload = build_plant_chart_payload(repo, plant_db, plant_id, hours, require_metric(metric))
-    if not payload:
-        raise HTTPException(404, "Plant not found")
-    return payload
+    with not_found_as_404("Plant not found"):
+        return build_plant_chart_payload(repo, plant_db, plant_id, hours, require_metric(metric))
 
 
 @router.get("/clusters/{cluster_id}/chart-data", response_model=ChartPayloadResponse)
@@ -78,7 +86,7 @@ def cluster_chart_data(
     plant_db: PlantDbDep,
     hours: int = Query(24, ge=1, le=MAX_LOOKBACK_HOURS),
     metric: str = Query("soil_moisture"),
-):
+) -> dict[str, Any]:
     """Return the time-series chart payload aggregated across every sensor in a cluster.
 
     Args:
@@ -94,10 +102,8 @@ def cluster_chart_data(
         HTTPException: 400 if the metric is unsupported, 404 if the cluster
             does not exist.
     """
-    payload = build_cluster_chart_payload(repo, plant_db, cluster_id, hours, require_metric(metric))
-    if not payload:
-        raise HTTPException(404, "Cluster not found")
-    return payload
+    with not_found_as_404("Cluster not found"):
+        return build_cluster_chart_payload(repo, plant_db, cluster_id, hours, require_metric(metric))
 
 
 @router.get("/clusters/{cluster_id}/overlay", response_model=MultiMetricOverlayResponse)
@@ -105,7 +111,7 @@ def cluster_overlay(
     cluster_id: int,
     repo: RepoDep,
     hours: int = Query(72, ge=1, le=MAX_LOOKBACK_HOURS),
-):
+) -> MultiMetricOverlayResponse:
     """Return a multi-metric overlay payload with soil moisture, humidity, and light normalised to 0-100.
 
     All three series share a common Y axis (0-100) so they can be overlaid on one chart.
@@ -122,10 +128,8 @@ def cluster_overlay(
     Raises:
         HTTPException: 404 if the cluster does not exist.
     """
-    payload = build_overlay_payload(repo, cluster_id, hours)
-    if payload is None:
-        raise HTTPException(404, "Cluster not found")
-    return payload
+    with not_found_as_404("Cluster not found"):
+        return build_overlay_payload(repo, cluster_id, hours)
 
 
 @router.get("/clusters/{cluster_id}/heatmap", response_model=HeatmapResponse)
@@ -133,7 +137,7 @@ def cluster_heatmap(
     cluster_id: int,
     repo: RepoDep,
     days: int = Query(30, ge=1, le=365),
-):
+) -> HeatmapResponse:
     """Return irrigation-frequency heatmap cells for a 7×24 weekday-by-hour grid.
 
     Each non-zero cell records the count of irrigation events and the total
@@ -150,17 +154,15 @@ def cluster_heatmap(
     Raises:
         HTTPException: 404 if the cluster does not exist.
     """
-    payload = build_heatmap_payload(repo, cluster_id, days)
-    if payload is None:
-        raise HTTPException(404, "Cluster not found")
-    return payload
+    with not_found_as_404("Cluster not found"):
+        return build_heatmap_payload(repo, cluster_id, days)
 
 
 @router.get("/plants/{plant_id}/health-timeline", response_model=PlantHealthTimelineResponse)
 def plant_health_timeline(
     plant_id: int,
     repo: RepoDep,
-):
+) -> PlantHealthTimelineResponse:
     """Return the 90-day daily health score timeline for a single plant.
 
     Health score per day (0–100) is the mean soil moisture across all sensors
@@ -176,7 +178,5 @@ def plant_health_timeline(
     Raises:
         HTTPException: 404 if the plant does not exist.
     """
-    payload = build_plant_health_timeline_payload(repo, plant_id)
-    if payload is None:
-        raise HTTPException(404, "Plant not found")
-    return payload
+    with not_found_as_404("Plant not found"):
+        return build_plant_health_timeline_payload(repo, plant_id)

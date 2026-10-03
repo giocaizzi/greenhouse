@@ -66,7 +66,7 @@ def notify_if_new_alert(repo: IrrigationRepository, notifier: NtfyClient | None,
         notifier,
         repo.get_preferences(),
         "alerts",
-        lambda: notifier.notify_alert(severity=alert.severity, title=alert.title, message=alert.message),
+        lambda n: n.notify_alert(severity=alert.severity, title=alert.title, message=alert.message),
     )
 
 

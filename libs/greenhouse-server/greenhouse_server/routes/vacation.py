@@ -1,7 +1,8 @@
 """Vacation window routes."""
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, status
 
+from greenhouse_core.models import VacationWindow
 from greenhouse_core.schemas import (
     SuccessResponse,
     UpdateVacationWindowRequest,
@@ -9,22 +10,13 @@ from greenhouse_core.schemas import (
     VacationListResponse,
     VacationResponse,
 )
-from greenhouse_server.deps import RepoDep, require_vacation_window
-from greenhouse_server.services.vacation import VacationRangeError, validate_vacation_range
+from greenhouse_server.deps import RepoDep, require_vacation_window, require_valid_vacation_range
 
 router = APIRouter(prefix="/vacation", tags=["vacation"])
 
 
-def _validate_range(starts_at: int, ends_at: int) -> None:
-    """Map the shared ``starts_at < ends_at`` rule to the API's 400."""
-    try:
-        validate_vacation_range(starts_at, ends_at)
-    except VacationRangeError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from None
-
-
 @router.get("", response_model=VacationListResponse, summary="List vacation windows")
-def list_vacation_windows(repo: RepoDep):
+def list_vacation_windows(repo: RepoDep) -> VacationListResponse:
     """Return all vacation windows together with the currently active one.
 
     Returns:
@@ -38,7 +30,7 @@ def list_vacation_windows(repo: RepoDep):
 @router.post(
     "", response_model=VacationResponse, status_code=status.HTTP_201_CREATED, summary="Create a vacation window"
 )
-def create_vacation_window(request: VacationCreateRequest, repo: RepoDep):
+def create_vacation_window(request: VacationCreateRequest, repo: RepoDep) -> VacationWindow:
     """Schedule a vacation window that makes the engine ration water to last the trip.
 
     While the window is active the decision engine appends a
@@ -60,7 +52,7 @@ def create_vacation_window(request: VacationCreateRequest, repo: RepoDep):
     Raises:
         HTTPException: 400 if ``starts_at`` is not strictly before ``ends_at``.
     """
-    _validate_range(request.starts_at, request.ends_at)
+    require_valid_vacation_range(request.starts_at, request.ends_at)
     window = repo.add_vacation_window(
         starts_at=request.starts_at,
         ends_at=request.ends_at,
@@ -72,7 +64,9 @@ def create_vacation_window(request: VacationCreateRequest, repo: RepoDep):
 
 
 @router.put("/{window_id}", response_model=VacationResponse, summary="Update a vacation window")
-def update_vacation_window(window_id: int, request: UpdateVacationWindowRequest, repo: RepoDep):
+def update_vacation_window(
+    window_id: int, request: UpdateVacationWindowRequest, repo: RepoDep
+) -> VacationWindow | None:
     """Partially update a vacation window.
 
     Only fields present in the request body are modified; omitted fields are
@@ -94,14 +88,14 @@ def update_vacation_window(window_id: int, request: UpdateVacationWindowRequest,
     row = require_vacation_window(repo, window_id)
     effective_start = request.starts_at if request.starts_at is not None else row.starts_at
     effective_end = request.ends_at if request.ends_at is not None else row.ends_at
-    _validate_range(effective_start, effective_end)
+    require_valid_vacation_range(effective_start, effective_end)
     updated = repo.update_vacation_window(window_id, **request.model_dump(exclude_unset=True))
     repo.commit()
     return updated
 
 
 @router.delete("/{window_id}", response_model=SuccessResponse, summary="Delete a vacation window")
-def delete_vacation_window(window_id: int, repo: RepoDep):
+def delete_vacation_window(window_id: int, repo: RepoDep) -> SuccessResponse:
     """Remove a vacation window by ID.
 
     Args:

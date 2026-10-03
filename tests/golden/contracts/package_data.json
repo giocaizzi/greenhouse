@@ -71,7 +71,6 @@
   "web/templates/partials/_plant_latest_card.html",
   "web/templates/partials/_plant_row.html",
   "web/templates/partials/_recent_events.html",
-  "web/templates/partials/_sensor_row.html",
   "web/templates/partials/_stop_all_result.html",
   "web/templates/partials/_sync_result.html",
   "web/templates/plants/dashboard.html",

@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Form, HTTPException, Request, status
 from fastapi.responses import RedirectResponse, Response
 
+from greenhouse_server import state
 from greenhouse_server.deps import RepoDep
 from greenhouse_server.scheduler import apply_timezone_preference
 from greenhouse_server.web.context import base_context
@@ -16,13 +17,13 @@ _ALLOWED_THEMES = {"auto", "light", "dark"}
 
 
 @router.get("/preferences")
-def preferences_page(request: Request, repo: RepoDep):
+def preferences_page(request: Request, repo: RepoDep) -> Response:
     """Render the preferences page with the global irrigation defaults."""
     prefs = repo.get_preferences()
     global_config = repo.get_global_irrigation_config()
     repo.commit()
     clusters = repo.list_clusters()
-    settings = request.app.state.settings
+    settings = state.settings(request.app)
     ntfy_configured = bool(settings.ntfy_server_url and settings.ntfy_topic)
     return templates.TemplateResponse(
         request,
@@ -52,7 +53,7 @@ def update_preferences(
     notify_emergency: str = Form(""),
     notify_alerts: str = Form(""),
     notify_auto: str = Form(""),
-):
+) -> Response:
     """Save the preferences form, re-sync the clocks to its timezone and reload the page."""
     default_cluster: int | None = None
     if default_cluster_id.strip():

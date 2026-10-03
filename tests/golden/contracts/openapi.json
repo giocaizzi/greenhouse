@@ -1202,7 +1202,7 @@
      "irrigators"
     ],
     "summary": "Start Irrigator",
-    "description": "Manually start an irrigator over the Tuya local protocol.\n\nSide effects: actuates physical hardware and records a `start` irrigation\nevent with `triggered_by=\"manual\"`. Bypasses the smart-decision engine.\n\nArgs:\n    irrigator_id: Irrigator to actuate.\n    request: Optional `minutes` for run duration.\n\nReturns:\n    `success=True` and the adapter's start message.\n\nRaises:\n    HTTPException: 404 if the irrigator is unknown, 409 if the cluster\n        daily cap or max-events-per-day limit would be exceeded, 503 if\n        Tuya credentials are missing or the irrigator model has no\n        adapter, 502 if the device fails to start.",
+    "description": "Manually start an irrigator through its device adapter.\n\nSide effects: actuates physical hardware and records a `start` irrigation\nevent with `triggered_by=\"manual\"`. Bypasses the smart-decision engine.\n\nArgs:\n    irrigator_id: Irrigator to actuate.\n    request: Optional `minutes` for run duration.\n\nReturns:\n    `success=True` and the adapter's start message.\n\nRaises:\n    HTTPException: 404 if the irrigator is unknown, 409 if the cluster\n        daily cap or max-events-per-day limit would be exceeded, 503 if\n        Tuya credentials are missing or the irrigator model has no\n        adapter, 502 if the device fails to start.",
     "operationId": "start_irrigator",
     "security": [
      {
@@ -1260,7 +1260,7 @@
      "irrigators"
     ],
     "summary": "Stop Irrigator",
-    "description": "Manually stop a running irrigator over the Tuya local protocol.\n\nSide effects: actuates physical hardware and records a `stop` irrigation\nevent with `triggered_by=\"manual\"` (the same action automatic and\nemergency stops record).\n\nArgs:\n    irrigator_id: Irrigator to stop.\n\nReturns:\n    `success=True` and the adapter's stop message.\n\nRaises:\n    HTTPException: 404 if the irrigator is unknown, 503 if Tuya\n        credentials are missing or the irrigator model has no adapter,\n        502 if the device fails to stop.",
+    "description": "Manually stop a running irrigator through its device adapter.\n\nSide effects: actuates physical hardware and records a `stop` irrigation\nevent with `triggered_by=\"manual\"` (the same action automatic and\nemergency stops record).\n\nArgs:\n    irrigator_id: Irrigator to stop.\n\nReturns:\n    `success=True` and the adapter's stop message.\n\nRaises:\n    HTTPException: 404 if the irrigator is unknown, 503 if Tuya\n        credentials are missing or the irrigator model has no adapter,\n        502 if the device fails to stop.",
     "operationId": "stop_irrigator",
     "security": [
      {

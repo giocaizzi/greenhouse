@@ -1,6 +1,5 @@
 """Irrigation and monitoring orchestration."""
 
-import json
 import logging
 import time as _time
 from dataclasses import dataclass
@@ -9,9 +8,6 @@ from typing import TYPE_CHECKING, Any, Literal, Required, TypedDict, cast
 
 from greenhouse_core.constants import (
     FALLBACK_TEMPERATURE_C,
-    LEAK_CHECK_ACTIVITY_SCAN_LIMIT,
-    LEAK_CHECK_DELAY_SECONDS,
-    LEAK_HOLD_HOURS,
     MONITOR_LOOKBACK_HOURS,
     MONITOR_VERY_DRY_MARGIN,
     MONITOR_WET_MARGIN,
@@ -31,7 +27,6 @@ from greenhouse_core.models import (
     EVENT_ACTION_START,
     EVENT_ACTION_STOP,
     SOURCE_IRRIGATION,
-    SOURCE_LEAK,
     TRIGGERED_BY_AUTO,
     TRIGGERED_BY_MANUAL,
     TRIGGERED_BY_SHUTDOWN,
@@ -40,13 +35,21 @@ from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.services.alerts import raise_alert, sync_cluster_alerts
 from greenhouse_server.services.health_monitor import HEALTH_ALARM_TO_TRIGGER, DeviceHealthMonitor
+from greenhouse_server.services.irrigation_jobs import (  # noqa: F401 — re-exported: callers and tests use these paths
+    _add_leak_check_job,
+    _leak_check_done,
+    _run_leak_check,
+    _schedule_leak_check,
+    rearm_leak_checks,
+)
+from greenhouse_server.services.jobs import job_session
 from greenhouse_server.services.maintenance import collect_learning_alerts, collect_maintenance_alerts
 from greenhouse_server.services.notify import NtfyClient, maybe_notify
 from greenhouse_server.services.sync import SyncService
 from greenhouse_server.services.weather import WeatherClient
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator, Sequence
+    from collections.abc import Callable, Sequence
 
     from greenhouse_core.devices import AbstractIrrigatorAdapter
     from greenhouse_core.logic.cleaning import CleanedReading
@@ -186,11 +189,9 @@ def _run_pump_watcher(
     stop_requested: "Callable[[], bool]",
 ) -> None:
     """The watcher job body: its own session; tuning and the health monitor are read when it runs."""
-    from greenhouse_core.repository import IrrigationRepository
     from greenhouse_server.services.pump_watcher import PumpWatcherService
 
-    session = app.state.session_factory()
-    try:
+    with job_session(app, logger, "Pump watcher job failed for irrigator %d", irrigator_id, commit=False) as session:
         repo = IrrigationRepository(session)
         irrigator = repo.get_irrigator(irrigator_id)
         if irrigator is None:
@@ -206,18 +207,13 @@ def _run_pump_watcher(
             warmup_seconds=warmup,
             max_read_failures=max_failures,
             monitor=monitor,
-            sleep=sleep,  # type: ignore[arg-type]  # contract: pump_watcher.py (WP4) types sleep -> None; the bool is ignored
+            sleep=sleep,
             stop_requested=stop_requested,
         )
         result = watcher.watch(irrigator, duration_seconds, started_at=started_at)
         if result["outcome"] == "interrupted":
             handle_watcher_interrupted(repo, registry, irrigator, triggered_by=triggered_by, started_at=started_at)
             session.commit()
-    except Exception:
-        session.rollback()
-        logger.exception("Pump watcher job failed for irrigator %d", irrigator_id)
-    finally:
-        session.close()
 
 
 def schedule_pump_watcher(
@@ -287,165 +283,6 @@ def schedule_pump_watcher(
         return False
 
 
-LEAK_CHECK_ACTIVITY_CODE = "leak_check"
-# Activity codes that prove a start's leak check already completed:
-# ``leak_check`` is written by every completed check; ``leak_hold`` is
-# written when a check raised a hold (and predates the ``leak_check`` marker).
-_LEAK_CHECK_DONE_CODES = frozenset({LEAK_CHECK_ACTIVITY_CODE, "leak_hold"})
-
-
-def _leak_check_done(repo: IrrigationRepository, cluster_id: int, started_at: int) -> bool:
-    """True when the leak check for this (cluster, start) has already completed.
-
-    There is no dedicated table for leak-check runs; the activity log is the
-    durable record. Every completed check writes a ``leak_check`` row (see
-    :func:`_run_leak_check`), and a check that raised a hold also wrote a
-    ``leak_hold`` row — both carry ``started_at`` in their payload.
-    """
-    for event in repo.list_activity_events(
-        entity_type=ENTITY_CLUSTER, entity_id=cluster_id, source=SOURCE_LEAK, limit=LEAK_CHECK_ACTIVITY_SCAN_LIMIT
-    ):
-        if event.code not in _LEAK_CHECK_DONE_CODES or not event.payload_json:
-            continue
-        try:
-            if json.loads(event.payload_json).get("started_at") == started_at:
-                return True
-        except (ValueError, AttributeError):
-            continue
-    return False
-
-
-def _run_leak_check(cluster_id: int, started_at: int) -> None:
-    """Scheduler job: run the post-irrigation leak check once, then mark it done.
-
-    Idempotent: skips when the check for this start already completed (a
-    normal job and a restart re-arm can both exist for the same start). The
-    ``leak_check`` marker is committed in the same transaction as the check's
-    own effects, so a failed check leaves no marker and is re-armed on the
-    next startup.
-    """
-    from greenhouse_server.scheduler import _app
-    from greenhouse_server.services.leak import LeakDetectionService
-
-    if _app is None:
-        return
-    # Own scaffolding, not services._session.job_session: the "already done" early return
-    # leaves its read-only transaction to close() (a failing ROLLBACK there escapes the job),
-    # which the context manager cannot express without changing that path.
-    session = _app.state.session_factory()
-    try:
-        repo = IrrigationRepository(session)
-        if _leak_check_done(repo, cluster_id, started_at):
-            logger.debug("Leak check for cluster %d start %d already done", cluster_id, started_at)
-            return
-        alerts = LeakDetectionService(
-            repo, _app.state.plant_db, notifier=getattr(_app.state, "ntfy_notifier", None)
-        ).check_after_irrigation(cluster_id, started_at)
-        repo.add_activity_event(
-            source=SOURCE_LEAK,
-            entity_type=ENTITY_CLUSTER,
-            entity_id=cluster_id,
-            code=LEAK_CHECK_ACTIVITY_CODE,
-            message=(
-                f"post-irrigation leak check: {len(alerts)} sensor(s) flagged"
-                if alerts
-                else "post-irrigation leak check: no leak found"
-            ),
-            severity="info",
-            payload={"started_at": started_at, "flagged_sensor_ids": [a.entity_id for a in alerts]},
-        )
-        session.commit()
-    except Exception:
-        session.rollback()
-        logger.exception("Leak check job failed for cluster %d", cluster_id)
-    finally:
-        session.close()
-
-
-def _add_leak_check_job(cluster_id: int, started_at: int, *, run_at: int | None = None) -> None:
-    from greenhouse_server.scheduler import scheduler
-
-    due = started_at + LEAK_CHECK_DELAY_SECONDS
-    scheduler.add_job(
-        _run_leak_check,
-        "date",
-        run_date=datetime.fromtimestamp(run_at if run_at is not None else due, tz=UTC),
-        args=[cluster_id, started_at],
-        id=f"leak-check-{cluster_id}-{started_at}",
-        name=f"Leak check cluster {cluster_id}",
-        replace_existing=True,
-    )
-
-
-def _schedule_leak_check(cluster_id: int, started_at: int) -> None:
-    """Schedule a one-shot leak detection check 30 minutes after an irrigation start.
-
-    Skips silently when the scheduler is not running (test environments).
-    Tests should call ``LeakDetectionService.check_after_irrigation`` directly.
-    The job is in-memory; :func:`rearm_leak_checks` restores it after a restart.
-    """
-    try:
-        from greenhouse_server.scheduler import scheduler
-
-        if not scheduler.running:
-            return
-        _add_leak_check_job(cluster_id, started_at)
-    except Exception:
-        # Scheduling must never block irrigation
-        logger.debug("Could not schedule leak check for cluster %d", cluster_id, exc_info=True)
-
-
-def _rearm_from_events(repo: IrrigationRepository, now: int) -> "Iterator[None]":
-    """Schedule a leak check for every recent auto start whose check never completed; yield once per job.
-
-    A generator rather than a returned count, so the caller's tally keeps the jobs already added
-    when the scan fails midway (pinned by the partial-count characterization test).
-    """
-    for irrigator in repo.list_all_irrigators():
-        for event in repo.get_recent_events(irrigator.id, hours=LEAK_HOLD_HOURS):
-            if event.action != EVENT_ACTION_START or event.triggered_by != TRIGGERED_BY_AUTO:
-                continue
-            if _leak_check_done(repo, irrigator.cluster_id, event.timestamp):
-                continue
-            due = event.timestamp + LEAK_CHECK_DELAY_SECONDS
-            _add_leak_check_job(irrigator.cluster_id, event.timestamp, run_at=max(due, now))
-            yield
-
-
-def rearm_leak_checks() -> int:
-    """Re-schedule leak checks lost to a restart; call once after the scheduler starts.
-
-    Leak-check jobs live only in memory, so a restart inside the 30-min window
-    after an auto start used to drop the check — and with it the leak hold.
-    Scans auto ``start`` events from the last ``LEAK_HOLD_HOURS`` (older
-    findings would be outside the hold horizon) and schedules every one whose
-    check has not completed (see :func:`_leak_check_done`): at its normal due
-    time if that is still ahead, otherwise immediately. Manual starts never
-    get a leak check, so they are not re-armed. Idempotent across restarts.
-
-    Returns:
-        Number of leak checks scheduled (0 when the scheduler isn't running).
-    """
-    from greenhouse_server.scheduler import _app, scheduler
-
-    if not scheduler.running or _app is None:
-        return 0
-    now = int(_time.time())
-    scheduled = 0
-    session = _app.state.session_factory()
-    try:
-        repo = IrrigationRepository(session)
-        for _ in _rearm_from_events(repo, now):
-            scheduled += 1
-    except Exception:
-        logger.exception("Re-arming leak checks after restart failed")
-    finally:
-        session.close()
-    if scheduled:
-        logger.info("Re-armed %d post-irrigation leak check(s) after restart", scheduled)
-    return scheduled
-
-
 class PipelineResult(TypedDict, total=False):
     """``run_irrigation_pipeline`` result: a plain dict at runtime (``IrrigateResponse(**result)``, decision panel)."""
 
@@ -491,7 +328,7 @@ def check_has_alerts(results: "Sequence[CheckResult]") -> bool:
 
 
 def _error_result(reason: str) -> PipelineResult:
-    """The pipeline's early-exit shape (``routes/operations`` string-matches "cluster not found")."""
+    """The pipeline's early-exit shape (an unknown cluster, or no data for a decision)."""
     return {"action": "error", "reason": reason, "confidence": 0}
 
 
@@ -740,7 +577,7 @@ class IrrigationService:
             self._notifier,
             self._repo.get_preferences(),
             "auto",
-            lambda: self._notifier.notify_irrigation(  # type: ignore[union-attr]  # maybe_notify returns first when notifier is None
+            lambda n: n.notify_irrigation(
                 triggered_by=TRIGGERED_BY_AUTO,
                 irrigator_name=act.irrigator.name,
                 duration_minutes=duration,
@@ -768,6 +605,48 @@ class IrrigationService:
             cluster_id=act.cluster_id,
             notifier=self._notifier,
         )
+
+    def _health_gate_skips(
+        self, cluster_id: int, irrigator: "Irrigator", decision: "IrrigationDecision", result: PipelineResult
+    ) -> bool:
+        """Device-health gate: turn the run into a skip when an alarm blocks this irrigator.
+
+        If a NO_WATER / RAIN / OFFLINE alarm is open for the irrigator, append a typed Reason,
+        set the decision to ``Action.SKIP``, log the skip with the blocking alarms, and rewrite
+        ``result`` in place as a skip (same audit-trail path as the engine's own skip flow).
+        Returns True when the run was blocked; False (nothing touched) when it may actuate or no
+        monitor is wired.
+        """
+        if self._health_monitor is None:
+            return False
+        blocked, blocking_alarms = self._health_monitor.is_actuation_blocked(irrigator)
+        if not blocked:
+            return False
+        primary = blocking_alarms[0]
+        trigger = HEALTH_ALARM_TO_TRIGGER[primary]
+        decision.add_reason(
+            code=trigger,
+            message=f"Actuation blocked by device health: {primary.value} on '{irrigator.name}'",
+            severity=Severity.CRITICAL,
+        )
+        decision.action = Action.SKIP
+        self._repo.add_activity_event(
+            source=SOURCE_IRRIGATION,
+            entity_type=ENTITY_CLUSTER,
+            entity_id=cluster_id,
+            code="decision_skip",
+            message=decision.reason_text,
+            severity="warning",
+            payload={
+                "blocking_alarms": [a.value for a in blocking_alarms],
+                "irrigator_id": irrigator.id,
+            },
+        )
+        result["action"] = "skip"
+        result["reason"] = decision.reason_text
+        result["reasons"] = [r.model_dump() for r in decision.reasons]
+        result["blocking_alarms"] = [a.value for a in blocking_alarms]
+        return True
 
     def run_irrigation_pipeline(
         self,
@@ -797,52 +676,20 @@ class IrrigationService:
 
         result = _decision_result(decision, temp, source)
 
-        if dry_run or decision.action.value == "skip":
-            if not dry_run:
-                self._log_decision_skip(cluster_id, decision)
+        if dry_run:
+            return result
+        if decision.action is Action.SKIP:
+            self._log_decision_skip(cluster_id, decision)
             return result
 
-        # Execute
         target = self._actuation_target(cluster_id)
         if isinstance(target, str):
             return _with_error(result, target)
         irrigator, adapter = target
 
-        # Device-health gate: if a NO_WATER / RAIN / OFFLINE alarm is open
-        # for this irrigator, append a typed Reason and short-circuit to
-        # Action.SKIP. Same audit-trail path as the engine's existing skip
-        # flow — the decision is re-persisted so decision_logs reflects the
-        # block, then the run is treated as a skip.
-        if self._health_monitor is not None:
-            blocked, blocking_alarms = self._health_monitor.is_actuation_blocked(irrigator)
-            if blocked:
-                primary = blocking_alarms[0]
-                trigger = HEALTH_ALARM_TO_TRIGGER[primary]
-                decision.add_reason(
-                    code=trigger,
-                    message=(f"Actuation blocked by device health: {primary.value} on '{irrigator.name}'"),
-                    severity=Severity.CRITICAL,
-                )
-                decision.action = Action.SKIP
-                self._repo.add_activity_event(
-                    source=SOURCE_IRRIGATION,
-                    entity_type=ENTITY_CLUSTER,
-                    entity_id=cluster_id,
-                    code="decision_skip",
-                    message=decision.reason_text,
-                    severity="warning",
-                    payload={
-                        "blocking_alarms": [a.value for a in blocking_alarms],
-                        "irrigator_id": irrigator.id,
-                    },
-                )
-                result["action"] = "skip"
-                result["reason"] = decision.reason_text
-                result["reasons"] = [r.model_dump() for r in decision.reasons]
-                result["blocking_alarms"] = [a.value for a in blocking_alarms]
-                return result
-
-        return self._actuate(_Actuation(cluster_id, irrigator, adapter, decision, temp, source, sensor_data), result)
+        if not self._health_gate_skips(cluster_id, irrigator, decision, result):
+            self._actuate(_Actuation(cluster_id, irrigator, adapter, decision, temp, source, sensor_data), result)
+        return result
 
     def monitor_cluster(self, cluster_id: int) -> MonitorResult:
         """Monitor a sensor-only cluster: refresh stale sensors (the caller commits), return per-sensor soil status."""

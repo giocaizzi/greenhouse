@@ -189,6 +189,13 @@ Consistency audit (2026-10-03):
   `Widget._animate` animator slot, so `Widget.animate()` on a sprite animates instead of raising `TypeError` (B-U1; no
   caller today). Frame timer and `--no-animation` unchanged.
 - Merge note: `refactor/integration/after-drift.txt` — 3053 passed after merging drift on top of consistency W1.
+- Fix pass (server): an authenticated `/api/v1` request (and an authenticated web page) opens **one** DB session — the
+  auth dependency now reuses the route's own `get_session` / `get_settings` providers, so the user lookup and the
+  handler share one session and identity map (was two sessions per request, one of them unused with auth disabled).
+  Pinned by `tests/server/test_auth_session.py`.
+- Fix pass (server), **D20:** the web kill switch (`POST /bulk/stop-all`) now sends the same ntfy emergency push as
+  `POST /api/v1/bulk/stop-all` (honouring `notify_emergency`); the notification moved into
+  `services/bulk.stop_all_irrigators`, the one path both use. Pinned by `tests/server/test_web_emergency_notify.py`.
 
 ## Golden-test policy (orchestrator decision)
 

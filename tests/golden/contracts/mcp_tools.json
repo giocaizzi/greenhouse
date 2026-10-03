@@ -863,7 +863,7 @@
   },
   {
    "name": "start_irrigator",
-   "description": "Start Irrigator\n\nManually start an irrigator over the Tuya local protocol.\n\nSide effects: actuates physical hardware and records a `start` irrigation\nevent with `triggered_by=\"manual\"`. Bypasses the smart-decision engine.\n\nArgs:\n    irrigator_id: Irrigator to actuate.\n    request: Optional `minutes` for run duration.\n\nReturns:\n    `success=True` and the adapter's start message.\n\nRaises:\n    HTTPException: 404 if the irrigator is unknown, 409 if the cluster\n        daily cap or max-events-per-day limit would be exceeded, 503 if\n        Tuya credentials are missing or the irrigator model has no\n        adapter, 502 if the device fails to start.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"success\": true,\n  \"message\": \"Message\"\n}\n```",
+   "description": "Start Irrigator\n\nManually start an irrigator through its device adapter.\n\nSide effects: actuates physical hardware and records a `start` irrigation\nevent with `triggered_by=\"manual\"`. Bypasses the smart-decision engine.\n\nArgs:\n    irrigator_id: Irrigator to actuate.\n    request: Optional `minutes` for run duration.\n\nReturns:\n    `success=True` and the adapter's start message.\n\nRaises:\n    HTTPException: 404 if the irrigator is unknown, 409 if the cluster\n        daily cap or max-events-per-day limit would be exceeded, 503 if\n        Tuya credentials are missing or the irrigator model has no\n        adapter, 502 if the device fails to start.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"success\": true,\n  \"message\": \"Message\"\n}\n```",
    "inputSchema": {
     "type": "object",
     "properties": {
@@ -892,7 +892,7 @@
   },
   {
    "name": "stop_irrigator",
-   "description": "Stop Irrigator\n\nManually stop a running irrigator over the Tuya local protocol.\n\nSide effects: actuates physical hardware and records a `stop` irrigation\nevent with `triggered_by=\"manual\"` (the same action automatic and\nemergency stops record).\n\nArgs:\n    irrigator_id: Irrigator to stop.\n\nReturns:\n    `success=True` and the adapter's stop message.\n\nRaises:\n    HTTPException: 404 if the irrigator is unknown, 503 if Tuya\n        credentials are missing or the irrigator model has no adapter,\n        502 if the device fails to stop.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"success\": true,\n  \"message\": \"Message\"\n}\n```",
+   "description": "Stop Irrigator\n\nManually stop a running irrigator through its device adapter.\n\nSide effects: actuates physical hardware and records a `stop` irrigation\nevent with `triggered_by=\"manual\"` (the same action automatic and\nemergency stops record).\n\nArgs:\n    irrigator_id: Irrigator to stop.\n\nReturns:\n    `success=True` and the adapter's stop message.\n\nRaises:\n    HTTPException: 404 if the irrigator is unknown, 503 if Tuya\n        credentials are missing or the irrigator model has no adapter,\n        502 if the device fails to stop.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"success\": true,\n  \"message\": \"Message\"\n}\n```",
    "inputSchema": {
     "type": "object",
     "properties": {

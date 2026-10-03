@@ -1,7 +1,10 @@
 """Irrigation config routes (declared + global defaults + effective view)."""
 
+from typing import Any
+
 from fastapi import APIRouter, HTTPException
 
+from greenhouse_core.models import GlobalIrrigationConfig, IrrigationConfig
 from greenhouse_core.schemas import (
     ConfigResponse,
     EffectiveConfigResponse,
@@ -15,7 +18,7 @@ from greenhouse_server.deps import RepoDep, require_cluster
 router = APIRouter(tags=["configs"])
 
 
-def _request_fields(request: SetConfigRequest | UpdateGlobalConfigRequest) -> dict:
+def _request_fields(request: SetConfigRequest | UpdateGlobalConfigRequest) -> dict[str, Any]:
     """Return only the fields the client explicitly set.
 
     Keeps null as a deliberate "clear this override" signal and drops omitted
@@ -25,7 +28,7 @@ def _request_fields(request: SetConfigRequest | UpdateGlobalConfigRequest) -> di
 
 
 @router.put("/clusters/{cluster_id}/config", response_model=ConfigResponse)
-def set_config(cluster_id: int, request: SetConfigRequest, repo: RepoDep):
+def set_config(cluster_id: int, request: SetConfigRequest, repo: RepoDep) -> IrrigationConfig | None:
     """Patch a cluster's irrigation config.
 
     Every field is optional and nullable: omit a field to leave it unchanged,
@@ -53,7 +56,7 @@ def set_config(cluster_id: int, request: SetConfigRequest, repo: RepoDep):
 
 
 @router.get("/clusters/{cluster_id}/config", response_model=ConfigResponse)
-def get_config(cluster_id: int, repo: RepoDep):
+def get_config(cluster_id: int, repo: RepoDep) -> IrrigationConfig:
     """Read a cluster's declared (raw) irrigation config.
 
     Nulls represent inherited values — call ``GET .../config/effective`` for
@@ -78,7 +81,7 @@ def get_config(cluster_id: int, repo: RepoDep):
     "/clusters/{cluster_id}/config/effective",
     response_model=EffectiveConfigResponse,
 )
-def get_effective_config(cluster_id: int, repo: RepoDep):
+def get_effective_config(cluster_id: int, repo: RepoDep) -> EffectiveConfigResponse:
     """Read a cluster's effective irrigation config (resolved across levels).
 
     Walks cluster → global defaults → built-in constants and reports both
@@ -106,7 +109,7 @@ def get_effective_config(cluster_id: int, repo: RepoDep):
 
 
 @router.get("/config/global", response_model=GlobalConfigResponse)
-def get_global_config(repo: RepoDep):
+def get_global_config(repo: RepoDep) -> GlobalIrrigationConfig:
     """Read the singleton global irrigation defaults row.
 
     Returns:
@@ -117,7 +120,7 @@ def get_global_config(repo: RepoDep):
 
 
 @router.put("/config/global", response_model=GlobalConfigResponse)
-def update_global_config(request: UpdateGlobalConfigRequest, repo: RepoDep):
+def update_global_config(request: UpdateGlobalConfigRequest, repo: RepoDep) -> GlobalIrrigationConfig:
     """Patch the singleton global irrigation defaults.
 
     Omitted fields stay unchanged; pass ``null`` to clear a previously set

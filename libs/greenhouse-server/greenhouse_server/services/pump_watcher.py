@@ -14,8 +14,8 @@ reconnection logic without a meaningful latency win — the firmware itself
 debounces dry-run detection over several seconds, so a 2 s poll is well
 inside its own resolution.
 
-Why we record through the monitor. PR 1.5 unified the slow ambient
-observer and the fast in-flight watchdog onto a single dedup_key scheme
+Why we record through the monitor. The slow ambient observer and the
+fast in-flight watchdog share a single dedup_key scheme
 (``health:irrigator:{id}:no_water``). The watcher trips first (sub-2s
 response is the safety story); the monitor's cache absorbs the
 transition so the engine's actuation gate stays consistent with what the
@@ -55,9 +55,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# The watcher's externally-visible alert code now mirrors the canonical
-# health alarm so the inbox has one row per condition. Tests + integrations
-# can keep importing ``ALERT_CODE`` from this module.
+# The watcher's externally-visible alert code is the canonical health alarm's,
+# so the inbox has one row per condition whichever observer raised it.
 ALERT_CODE = HealthAlarm.NO_WATER.value  # "no_water"
 ACTIVITY_CODE = "pump_dry_run"
 
@@ -123,7 +122,7 @@ class PumpWatcherService:
         warmup_seconds: float = PUMP_WATCHER_WARMUP_SECONDS,
         max_read_failures: int = PUMP_WATCHER_MAX_READ_FAILURES,
         clock: Callable[[], float] = time.monotonic,
-        sleep: Callable[[float], None] = time.sleep,
+        sleep: Callable[[float], object] = time.sleep,
         monitor: DeviceHealthMonitor | None = None,
         stop_requested: Callable[[], bool] | None = None,
     ):
@@ -356,8 +355,8 @@ class PumpWatcherService:
         Commits because the watcher owns its job session: the trip (aborted event,
         alert) must be durable as soon as the pump is stopped.
 
-        ``irrigator.id`` is read only inside the handler, exactly as before: after a failed flush
-        the session has expired it, so that read raises out of the watcher (pre-existing behavior).
+        ``irrigator.id`` is read only inside the handler: after a failed flush the session has
+        expired it, so that read raises out of the watcher (recorded in REFACTOR_NOTES.md, "Pump watcher").
         """
         try:
             self._repo.commit()

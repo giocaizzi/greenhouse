@@ -6,6 +6,7 @@ from typing import Any
 from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_core.schemas import CareInsight, ClusterInsightsResponse
+from greenhouse_server.services.errors import ClusterNotFoundError
 from greenhouse_server.services.maintenance import collect_learning_alerts, collect_maintenance_alerts
 
 _ALERT_TYPE_META: dict[str, tuple[str, str, str]] = {
@@ -37,18 +38,21 @@ class InsightsService:
         self._repo = repo
         self._plant_db = plant_db
 
-    def cluster_insights(self, cluster_id: int) -> ClusterInsightsResponse | None:
+    def cluster_insights(self, cluster_id: int) -> ClusterInsightsResponse:
         """Return structured insights for a cluster.
 
         Args:
             cluster_id: Cluster to analyse.
 
         Returns:
-            ClusterInsightsResponse with deduplicated CareInsight list, or None if cluster not found.
+            ClusterInsightsResponse with deduplicated CareInsight list.
+
+        Raises:
+            ClusterNotFoundError: no such cluster.
         """
         cluster = self._repo.get_cluster(cluster_id)
         if not cluster:
-            return None
+            raise ClusterNotFoundError(cluster_id)
 
         insights: list[CareInsight] = []
         seen_codes: set[str] = set()

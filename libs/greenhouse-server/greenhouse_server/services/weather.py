@@ -10,7 +10,7 @@ from greenhouse_core.constants import DEFAULT_LATITUDE, DEFAULT_LONGITUDE, WEATH
 
 logger = logging.getLogger(__name__)
 
-_FORECAST_CACHE_TTL = WEATHER_FORECAST_CACHE_TTL_SECONDS  # module name pinned by tests
+_FORECAST_CACHE_TTL = WEATHER_FORECAST_CACHE_TTL_SECONDS  # module-level so tests can patch the TTL
 
 
 class WeatherClient:

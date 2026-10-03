@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter, HTTPException, Query, status
 
+from greenhouse_core.models import Sensor
 from greenhouse_core.schemas import (
     CreateSensorRequest,
     SensorAssignmentListResponse,
@@ -28,7 +29,7 @@ def list_all_sensors(
     cluster_id: int | None = Query(default=None, description="Restrict results to a specific cluster"),
     limit: int = Query(default=100, ge=1, le=500),
     cursor: int | None = Query(default=None, description="Id cursor — return rows with id > cursor"),
-):
+) -> SensorListResponse:
     """List every sensor across all clusters with optional cluster filter and cursor pagination.
 
     Args:
@@ -50,7 +51,7 @@ def list_all_sensors(
 
 
 @router.post("/clusters/{cluster_id}/sensors", response_model=SensorResponse, status_code=status.HTTP_201_CREATED)
-def add_sensor(cluster_id: int, request: CreateSensorRequest, repo: RepoDep):
+def add_sensor(cluster_id: int, request: CreateSensorRequest, repo: RepoDep) -> Sensor:
     """Register a Tuya sensor under a cluster.
 
     A sensor may optionally be linked to a specific plant; otherwise it is
@@ -90,7 +91,7 @@ def add_sensor(cluster_id: int, request: CreateSensorRequest, repo: RepoDep):
 
 
 @router.get("/clusters/{cluster_id}/sensors", response_model=list[SensorResponse])
-def list_sensors(cluster_id: int, repo: RepoDep):
+def list_sensors(cluster_id: int, repo: RepoDep) -> list[Sensor]:
     """List every sensor registered to a cluster.
 
     Args:
@@ -103,7 +104,7 @@ def list_sensors(cluster_id: int, repo: RepoDep):
 
 
 @router.get("/clusters/{cluster_id}/sensors/{sensor_id}", response_model=SensorResponse, summary="Get a sensor by ID")
-def get_sensor(cluster_id: int, sensor_id: int, repo: RepoDep):
+def get_sensor(cluster_id: int, sensor_id: int, repo: RepoDep) -> Sensor:
     """Fetch a single sensor by ID.
 
     Args:
@@ -121,7 +122,7 @@ def get_sensor(cluster_id: int, sensor_id: int, repo: RepoDep):
 
 
 @router.put("/clusters/{cluster_id}/sensors/{sensor_id}", response_model=SensorResponse, summary="Update a sensor")
-def update_sensor(cluster_id: int, sensor_id: int, request: UpdateSensorRequest, repo: RepoDep):
+def update_sensor(cluster_id: int, sensor_id: int, request: UpdateSensorRequest, repo: RepoDep) -> Sensor | None:
     """Partially update a sensor's metadata.
 
     Only fields present in the request body are modified; omitted fields are
@@ -155,7 +156,7 @@ def update_sensor(cluster_id: int, sensor_id: int, request: UpdateSensorRequest,
     response_model=SensorAssignmentListResponse,
     summary="List the sensor's plant-assignment history",
 )
-def list_sensor_assignments(sensor_id: int, repo: RepoDep):
+def list_sensor_assignments(sensor_id: int, repo: RepoDep) -> SensorAssignmentListResponse:
     """Return every plant this sensor has ever been linked to, oldest first.
 
     Each row covers the interval ``[started_at, ended_at)``. ``ended_at=None``
@@ -181,7 +182,7 @@ def list_sensor_assignments(sensor_id: int, repo: RepoDep):
 
 
 @router.delete("/clusters/{cluster_id}/sensors/{sensor_id}", response_model=SuccessResponse, summary="Delete a sensor")
-def delete_sensor(cluster_id: int, sensor_id: int, repo: RepoDep):
+def delete_sensor(cluster_id: int, sensor_id: int, repo: RepoDep) -> SuccessResponse:
     """Delete a sensor and all its historical readings.
 
     This operation is irreversible. The sensor must belong to the specified

@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from fastapi import Depends, FastAPI, HTTPException, Request, status
+from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.staticfiles import StaticFiles
 from fastapi_mcp import AuthConfig, FastApiMCP
@@ -51,9 +51,11 @@ from greenhouse_server.scheduler import (
     start_scheduler,
     stop_scheduler,
 )
-from greenhouse_server.services.irrigation import rearm_leak_checks
+from greenhouse_server.services.irrigation_jobs import rearm_leak_checks
+from greenhouse_server.services.jobs import read_session
 from greenhouse_server.services.notify import NtfyClient
 from greenhouse_server.services.weather import WeatherClient
+from greenhouse_server.state import get_settings
 from greenhouse_server.web.exception_handlers import register_web_exception_handlers
 from greenhouse_server.web.router import web_router
 
@@ -97,15 +99,9 @@ def _init_ntfy_notifier(settings: Settings) -> NtfyClient | None:
 _mcp_bearer = HTTPBearer(auto_error=False)
 
 
-def _get_settings(request: Request) -> Settings:
-    """Resolve the live Settings from app.state."""
-    settings: Settings = request.app.state.settings
-    return settings
-
-
 def require_mcp_token(
     creds: HTTPAuthorizationCredentials | None = Depends(_mcp_bearer),
-    settings: Settings = Depends(_get_settings),
+    settings: Settings = Depends(get_settings),
 ) -> None:
     """Gate `/mcp` behind a static bearer token.
 
@@ -153,8 +149,7 @@ _OPENAPI_TAGS: tuple[dict[str, str], ...] = (
 def _protected_api_routers() -> "tuple[APIRouter, ...]":
     """Return the auth-gated API routers in registration order (= OpenAPI path order).
 
-    Read at ``create_app`` time, as the original inline includes did, so a rebound
-    ``<module>.router`` is picked up.
+    Read at ``create_app`` time, so a rebound ``<module>.router`` is picked up.
     """
     return (
         clusters.router,
@@ -321,14 +316,10 @@ def _startup_timezone(app: FastAPI) -> str:
     DB cannot be read yet.
     """
     try:
-        session = app.state.session_factory()
-        try:
-            repo = IrrigationRepository(session)
-            tz = repo.get_preferences().timezone
+        with read_session(app) as session:
+            tz = IrrigationRepository(session).get_preferences().timezone
             session.commit()
             return tz or "UTC"
-        finally:
-            session.close()
     except Exception:  # noqa: BLE001
         return "UTC"
 
@@ -340,13 +331,9 @@ def _restore_persisted_scheduler_pause(app: FastAPI) -> None:
     container restart. Silently skipped if preferences cannot be read.
     """
     try:
-        session = app.state.session_factory()
-        try:
-            repo = IrrigationRepository(session)
-            paused = repo.get_preferences().scheduler_paused
+        with read_session(app) as session:
+            paused = IrrigationRepository(session).get_preferences().scheduler_paused
             session.commit()
-        finally:
-            session.close()
         apply_persisted_pause(paused)
     except Exception:  # noqa: BLE001, S110
         pass

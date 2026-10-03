@@ -13,7 +13,7 @@ from greenhouse_core.schemas import EfficacyItemResponse, EfficacyListResponse
 if TYPE_CHECKING:
     from greenhouse_core.models import IrrigationEvent, Irrigator, Sensor
 
-# Look-back bounds for ``days``: one rule for the JSON API and the web page (D17).
+# Look-back bounds for ``days``: one rule for the JSON API and the web page.
 EFFICACY_DEFAULT_DAYS = 14
 EFFICACY_MAX_DAYS = 365
 

@@ -131,21 +131,21 @@ class TestNtfyClient:
 class TestMaybeNotify:
     def test_skips_when_notifier_none(self):
         hits = []
-        maybe_notify(None, _Prefs(), "manual", lambda: hits.append(1))
+        maybe_notify(None, _Prefs(), "manual", lambda _client: hits.append(1))
         assert hits == []
 
     def test_skips_when_category_disabled(self):
         hits = []
-        maybe_notify(_RecordingNotifier(), _Prefs(notify_alerts=False), "alerts", lambda: hits.append(1))
+        maybe_notify(_RecordingNotifier(), _Prefs(notify_alerts=False), "alerts", lambda _client: hits.append(1))
         assert hits == []
 
     def test_fires_when_enabled(self):
         hits = []
-        maybe_notify(_RecordingNotifier(), _Prefs(), "manual", lambda: hits.append(1))
+        maybe_notify(_RecordingNotifier(), _Prefs(), "manual", lambda _client: hits.append(1))
         assert hits == [1]
 
     def test_swallows_callback_error(self):
-        def boom():
+        def boom(_client):
             raise RuntimeError("nope")
 
         # Should not propagate.

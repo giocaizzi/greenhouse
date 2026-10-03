@@ -14,6 +14,7 @@ sent via ``Authorization`` when configured.
 import logging
 import urllib.request
 from collections.abc import Callable
+from typing import Literal
 
 logger = logging.getLogger(__name__)
 
@@ -95,18 +96,24 @@ class NtfyClient:
         )
 
 
-def maybe_notify(notifier: NtfyClient | None, prefs: object, category: str, fn: Callable[[], object]) -> None:
-    """Run ``fn`` (which publishes) only if notifier exists and the category is enabled.
+NotifyCategory = Literal["manual", "emergency", "alerts", "auto"]
+"""The ``notify_<category>`` preference toggles; a typo would silently disable a push."""
 
-    ``category`` is one of ``manual`` / ``emergency`` / ``alerts`` / ``auto``,
-    matching the ``notify_<category>`` booleans on the preferences row. Fully
-    fail-silent so a notification can never disrupt the caller.
+
+def maybe_notify(
+    notifier: NtfyClient | None, prefs: object, category: NotifyCategory, fn: Callable[[NtfyClient], object]
+) -> None:
+    """Call ``fn(notifier)`` (which publishes) only if notifier exists and the category is enabled.
+
+    ``category`` names the ``notify_<category>`` boolean on the preferences row. ``fn`` receives
+    the (non-None) client, so callers never touch an unchecked ``notifier``. Fully fail-silent
+    so a notification can never disrupt the caller.
     """
     if notifier is None:
         return
     if not getattr(prefs, f"notify_{category}", False):
         return
     try:
-        fn()
+        fn(notifier)
     except Exception:
         logger.debug("notification dispatch failed", exc_info=True)

@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Query
 from fastapi.responses import StreamingResponse
 
 from greenhouse_core.schemas import (
@@ -34,6 +34,7 @@ from greenhouse_server.deps import (
     PlantDbDep,
     RepoDep,
     SyncServiceDep,
+    not_found_as_404,
     require_cluster,
 )
 from greenhouse_server.services.cluster import cluster_events_csv
@@ -42,7 +43,7 @@ from greenhouse_server.services.maintenance import collect_learning_alerts, gene
 
 router = APIRouter(tags=["operations"])
 
-# GET /clusters/{id}/stats for a cluster without an irrigator (D19): the documented shape, all zero.
+# GET /clusters/{id}/stats for a cluster without an irrigator: the documented shape, all zero.
 _NO_IRRIGATION_STATS = {
     "total_events": 0,
     "total_duration_minutes": 0,
@@ -54,7 +55,7 @@ _NO_IRRIGATION_STATS = {
 
 
 @router.get("/clusters/{cluster_id}/status", response_model=ClusterStatusResponse)
-def cluster_status(cluster_id: int, cluster_svc: ClusterServiceDep):
+def cluster_status(cluster_id: int, cluster_svc: ClusterServiceDep) -> ClusterStatusResponse:
     """Return a full cluster snapshot with the current decision-engine recommendation.
 
     The snapshot covers the config, plants, sensors (latest reading + age) and
@@ -71,9 +72,8 @@ def cluster_status(cluster_id: int, cluster_svc: ClusterServiceDep):
     Raises:
         HTTPException: 404 if the cluster does not exist.
     """
-    result = cluster_svc.get_cluster_status(cluster_id)
-    if not result:
-        raise HTTPException(status_code=404, detail="Cluster not found")
+    with not_found_as_404("Cluster not found"):
+        result = cluster_svc.get_cluster_status(cluster_id)
 
     config = result["config"]
     decision = result["decision"]
@@ -159,6 +159,7 @@ def irrigate(
     Raises:
         HTTPException: 404 if the cluster does not exist.
     """
+    require_cluster(repo, cluster_id)
     result = irrigation_svc.run_irrigation_pipeline(
         cluster_id,
         temp_override=request.temp_override,
@@ -166,8 +167,6 @@ def irrigate(
         no_sync=request.no_sync,
         force=request.force,
     )
-    if result.get("action") == "error" and result.get("reason") == "cluster not found":
-        raise HTTPException(status_code=404, detail="Cluster not found")
     repo.commit()
     return IrrigateResponse.model_validate(result)
 
@@ -194,7 +193,7 @@ def monitor(cluster_id: int, repo: RepoDep, irrigation_svc: IrrigationServiceDep
     """
     require_cluster(repo, cluster_id)
     result = irrigation_svc.monitor_cluster(cluster_id)
-    repo.commit()  # keep the freshness sync's rows (D15)
+    repo.commit()  # keep the rows the freshness sync just stored
     return MonitorResponse(
         cluster_name=result["cluster_name"],
         sensors=[SensorStatusResponse.model_validate(s) for s in result["sensors"]],
@@ -281,7 +280,7 @@ def sync(request: SyncRequest, sync_svc: SyncServiceDep, repo: RepoDep) -> SyncR
 
 
 @router.get("/clusters/{cluster_id}/learn", response_model=LearnResponse)
-def learn(cluster_id: int, repo: RepoDep, plant_db: PlantDbDep):
+def learn(cluster_id: int, repo: RepoDep, plant_db: PlantDbDep) -> LearnResponse:
     """Return a human-readable learning report for a cluster.
 
     Summarises absorption rates, drainage profiles, and any advisory alerts
@@ -309,7 +308,7 @@ def history(
     cluster_svc: ClusterServiceDep,
     hours: int = Query(default=24, ge=1),
     limit: int = Query(default=50, ge=1),
-):
+) -> HistoryResponse:
     """Return recent sensor readings and irrigation events for a cluster.
 
     Args:
@@ -323,9 +322,8 @@ def history(
     Raises:
         HTTPException: 404 if the cluster does not exist.
     """
-    result = cluster_svc.get_cluster_history(cluster_id, hours=hours, limit=limit)
-    if not result:
-        raise HTTPException(status_code=404, detail="Cluster not found")
+    with not_found_as_404("Cluster not found"):
+        result = cluster_svc.get_cluster_history(cluster_id, hours=hours, limit=limit)
     return HistoryResponse(
         cluster_name=result["cluster_name"],
         sensors=[
@@ -348,7 +346,7 @@ def history(
 
 
 @router.get("/clusters/{cluster_id}/stats", response_model=StatsResponse)
-def stats(cluster_id: int, repo: RepoDep, days: int = Query(default=7, ge=1)):
+def stats(cluster_id: int, repo: RepoDep, days: int = Query(default=7, ge=1)) -> StatsResponse:
     """Return aggregate irrigation statistics for a cluster.
 
     Args:
@@ -371,7 +369,7 @@ def stats(cluster_id: int, repo: RepoDep, days: int = Query(default=7, ge=1)):
 
 
 @router.get("/clusters/{cluster_id}/stats/export")
-def stats_export(cluster_id: int, repo: RepoDep, days: int = Query(default=7, ge=1)):
+def stats_export(cluster_id: int, repo: RepoDep, days: int = Query(default=7, ge=1)) -> StreamingResponse:
     """Export raw irrigation events for a cluster as a CSV download.
 
     The CSV columns are: timestamp, date, time, irrigator, action,

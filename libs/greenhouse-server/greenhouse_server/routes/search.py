@@ -14,7 +14,7 @@ def global_search(
     repo: RepoDep,
     q: str = Query("", description="Search query"),
     limit: int = Query(20, ge=1, le=100, description="Maximum number of hits to return"),
-):
+) -> SearchResponse:
     """Search clusters, plants, sensors, and irrigators by name or device ID prefix.
 
     Case-insensitive LIKE match on cluster name/location, plant species/notes,
