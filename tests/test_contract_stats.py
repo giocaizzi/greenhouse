@@ -3,22 +3,12 @@
 Pins ``get_irrigation_stats``'s defensive cutoff filter.
 """
 
-import pytest
-
 import greenhouse_core.repository as repo_mod
-import greenhouse_core.utils as utils_mod
 from fake_data import FAKE_CLUSTER_NAME, FAKE_DEVICE_ID, FAKE_IRRIGATOR_NAME
 from golden import FROZEN_TS
 from greenhouse_core.stats import get_irrigation_stats
 
 DAY = 24 * 3600
-
-
-@pytest.fixture
-def utc_display(monkeypatch):
-    """Display timezone pinned to UTC regardless of process state or ``IRRIGATION_TZ``."""
-    monkeypatch.setattr(utils_mod, "_display_timezone", None)
-    monkeypatch.delenv("IRRIGATION_TZ", raising=False)
 
 
 def _cluster_with_irrigator(db):
