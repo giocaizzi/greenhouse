@@ -9,6 +9,7 @@ import logging
 import math
 import time
 from collections.abc import Mapping
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Protocol, cast
 
 from greenhouse_core.constants import (
@@ -113,6 +114,19 @@ class RainForecast(Protocol):
     def get_forecast(self, hours: int = 6) -> Mapping[str, Any] | None: ...
 
 
+@dataclass(frozen=True, slots=True)
+class _EngineInputs:
+    """The sensor, history and plant-care inputs one evaluation reads once and every rule shares."""
+
+    snapshot: SensorSnapshot
+    trends: Trends
+    stress: StressIndicators
+    plant_care: list[dict[str, Any]]
+    temp_range: tuple[float, float] | None
+    humidity_range: tuple[float, float] | None
+    water_needs: str
+
+
 class IrrigationLogic:
     """Smart irrigation decision engine using evidence-based plant data."""
 
@@ -168,29 +182,10 @@ class IrrigationLogic:
         if weather_skip is not None:
             return self._finish(weather_skip, override_window=override, persist=persist, triggered_by=triggered_by)
 
-        snapshot = get_recent_sensor_data(self.db, cluster_id, hours=SNAPSHOT_LOOKBACK_HOURS)
-        trends = analyze_historical_trends(self.db, cluster_id)
-        stress = detect_stress_conditions(self.db, self.plant_db, cluster_id, snapshot, trends)
-        self._attach_learning_alerts(cluster_id, stress)
-
-        plant_care = [self.plant_db.get_care_data(species=p.species, category=p.category) for p in plants]
-        ideal_temp_range = get_ideal_temp_range(plant_care)
-        ideal_humidity_range = get_ideal_humidity_range(plant_care)
-        water_needs = analyze_water_needs(plant_care)
-
+        inputs = self._gather_inputs(cluster_id, plants)
         sensors = self.db.get_sensors_in_cluster(cluster_id)
-        if not sensors or not snapshot.has_data:
-            fallback = temperature_based_decision(
-                self.db,
-                cluster_id,
-                evaluated_at,
-                temp=current_temp,
-                water_needs=water_needs,
-                temp_range=ideal_temp_range,
-                config=self.db.get_irrigation_config(cluster_id),
-                trends=trends,
-                stress=stress,
-            )
+        if not sensors or not inputs.snapshot.has_data:
+            fallback = self._fallback_decision(cluster_id, evaluated_at, current_temp, inputs)
             return self._finish(fallback, override_window=override, persist=persist, triggered_by=triggered_by)
 
         decision = IrrigationDecision(
@@ -200,9 +195,9 @@ class IrrigationLogic:
             duration_minutes=DEFAULT_DURATION_MINUTES,
             interval_hours=DEFAULT_INTERVAL_HOURS,
             confidence=CONFIDENCE_BASELINE,
-            sensor_snapshot=snapshot,
-            stress_indicators=stress,
-            trends=trends,
+            sensor_snapshot=inputs.snapshot,
+            stress_indicators=inputs.stress,
+            trends=inputs.trends,
         )
 
         if _apply_water_warning_rule(decision):
@@ -216,17 +211,17 @@ class IrrigationLogic:
         if window_skip is not None:
             return self._finish(window_skip, override_window=override, persist=persist, triggered_by=triggered_by)
 
-        _apply_soil_moisture_rule(decision, plant_care)
-        _apply_temperature_adjustment(decision, ideal_temp_range)
-        _apply_humidity_adjustment(decision, ideal_humidity_range)
+        _apply_soil_moisture_rule(decision, inputs.plant_care)
+        _apply_temperature_adjustment(decision, inputs.temp_range)
+        _apply_humidity_adjustment(decision, inputs.humidity_range)
         _apply_light_adjustment(decision)
-        _apply_water_needs_adjustment(decision, water_needs)
+        _apply_water_needs_adjustment(decision, inputs.water_needs)
         _apply_trend_adjustment(decision)
 
         # Seasonal interval scaling — multiplies the engine-chosen cadence by a
         # plant-aware factor so winter intervals stretch and summer intervals
         # tighten. Cooldown remains the safety floor (see MIN_COOLDOWN_HOURS).
-        self._apply_seasonal_multiplier(cluster, decision, plant_care, evaluated_at)
+        self._apply_seasonal_multiplier(cluster, decision, inputs.plant_care, evaluated_at)
 
         # Vacation rationing — the LAST adjustment so it clamps the final dosage
         # against the reservoir burn-down envelope (appends VACATION_ACTIVE for
@@ -235,6 +230,40 @@ class IrrigationLogic:
         self._apply_vacation_budget(decision, cluster_id, evaluated_at)
 
         return self._finish(decision, override_window=override, persist=persist, triggered_by=triggered_by)
+
+    def _gather_inputs(self, cluster_id: int, plants: list["Plant"]) -> _EngineInputs:
+        """Read everything the rule pipeline consumes, in the engine's fixed query order."""
+        snapshot = get_recent_sensor_data(self.db, cluster_id, hours=SNAPSHOT_LOOKBACK_HOURS)
+        trends = analyze_historical_trends(self.db, cluster_id)
+        stress = detect_stress_conditions(self.db, self.plant_db, cluster_id, snapshot, trends)
+        self._attach_learning_alerts(cluster_id, stress)
+
+        plant_care = [self.plant_db.get_care_data(species=p.species, category=p.category) for p in plants]
+        return _EngineInputs(
+            snapshot=snapshot,
+            trends=trends,
+            stress=stress,
+            plant_care=plant_care,
+            temp_range=get_ideal_temp_range(plant_care),
+            humidity_range=get_ideal_humidity_range(plant_care),
+            water_needs=analyze_water_needs(plant_care),
+        )
+
+    def _fallback_decision(
+        self, cluster_id: int, evaluated_at: int, current_temp: float | None, inputs: _EngineInputs
+    ) -> IrrigationDecision:
+        """No usable sensor data: decide from temperature (the irrigation config is read only on this path)."""
+        return temperature_based_decision(
+            self.db,
+            cluster_id,
+            evaluated_at,
+            temp=current_temp,
+            water_needs=inputs.water_needs,
+            temp_range=inputs.temp_range,
+            config=self.db.get_irrigation_config(cluster_id),
+            trends=inputs.trends,
+            stress=inputs.stress,
+        )
 
     def _pre_gates(self, cluster_id: int, evaluated_at: int, plants: list["Plant"]) -> IrrigationDecision | None:
         """Terminal gates ahead of quiet hours; the first that fires wins and later ones are not evaluated."""
