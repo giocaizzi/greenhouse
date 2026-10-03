@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TypedDict
 
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
@@ -13,6 +13,20 @@ from greenhouse_server.web.forms import blank_or
 from greenhouse_server.web.templating import templates
 
 router = APIRouter(include_in_schema=False)
+
+
+class PlantFormFields(TypedDict):
+    """The plant form mapped to repository fields (``add_plant`` / ``update_plant`` keywords)."""
+
+    species: str
+    category: str | None
+    water_needs: str | None
+    light_needs: str | None
+    ideal_temp_min: float | None
+    ideal_temp_max: float | None
+    ideal_humidity_min: float | None
+    ideal_humidity_max: float | None
+    notes: str | None
 
 
 def _plant_form_fields(
@@ -26,7 +40,7 @@ def _plant_form_fields(
     ideal_humidity_min: str,
     ideal_humidity_max: str,
     notes: str,
-) -> dict[str, Any]:
+) -> PlantFormFields:
     """Map the plant form (create and edit share it) to repository fields: blank → None, bounds → float."""
     return {
         "species": species,
