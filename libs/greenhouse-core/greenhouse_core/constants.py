@@ -400,3 +400,18 @@ SYSTEM_HEALTH_DEGRADED_OPEN_ALERTS = 3  # system page: this many open alerts →
 DATA_QUALITY_STALE_SECONDS = 24 * SECONDS_PER_HOUR  # data-quality report: sensor is stale
 AGE_BADGE_STALE_SECONDS = 7 * SECONDS_PER_DAY  # web relative time renders "stale" past this age
 WEATHER_FORECAST_CACHE_TTL_SECONDS = 600  # Open-Meteo forecast cache lifetime
+
+# ── Plant care fallback ──────────────────────────────────────────────────────
+# Bottom layer of plant_db.get_care_data: used when neither the species nor its
+# category supplies a field (plant_database.json layers override it key by key).
+PLANT_CARE_FALLBACK = {
+    "water_needs": "medium",
+    "water_frequency_days": 7,
+    "ideal_temp_min_c": 18,
+    "ideal_temp_max_c": 27,
+    "ideal_humidity_min": 50,
+    "ideal_humidity_max": 70,
+    "light_needs": "medium",
+    "soil_moisture_target": DEFAULT_SOIL_MOISTURE_TARGET,
+    "sources": ["fallback default"],
+}

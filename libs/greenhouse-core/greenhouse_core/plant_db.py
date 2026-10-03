@@ -1,10 +1,13 @@
 """Plant database lookup - Evidence-based plant care data."""
 
+import copy
 import json
 import os
 from importlib.resources import files
 from pathlib import Path
 from typing import Any
+
+from greenhouse_core.constants import PLANT_CARE_FALLBACK
 
 # One plant-database entry (species, category or mapping row) as decoded from JSON.
 CareData = dict[str, Any]
@@ -110,17 +113,8 @@ class PlantDatabase:
         species_data = self.lookup_species(species) if species else None
         resolved_category = (species_data or {}).get("category") or category
 
-        merged: CareData = {
-            "water_needs": "medium",
-            "water_frequency_days": 7,
-            "ideal_temp_min_c": 18,
-            "ideal_temp_max_c": 27,
-            "ideal_humidity_min": 50,
-            "ideal_humidity_max": 70,
-            "light_needs": "medium",
-            "soil_moisture_target": "45-65",
-            "sources": ["fallback default"],
-        }
+        # Deep copy: callers own the returned dict, including its ``sources`` list.
+        merged: CareData = copy.deepcopy(PLANT_CARE_FALLBACK)
 
         if resolved_category:
             cat_basics = self.lookup_category(resolved_category)
