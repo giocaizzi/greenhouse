@@ -12,7 +12,7 @@ SECRET_KEY = "fake_local_key_deadbeef"
 
 
 def _seed_local_irrigator(client, cluster_name="Local Cluster"):
-    """Create a cluster + tuya_local irrigator carrying a stored local key.
+    """Create a cluster + IK10PW irrigator carrying a stored local key.
 
     Returns the cluster id.
     """
@@ -23,7 +23,7 @@ def _seed_local_irrigator(client, cluster_name="Local Cluster"):
         data={
             "tuya_device_id": "fake_tuya_device_aabbccdd",
             "name": "Local Pump",
-            "type": "tuya_local",
+            "type": "rainpoint.ik10pw",
             "device_ip": "192.0.2.10",
             "local_key": SECRET_KEY,
         },
@@ -49,7 +49,7 @@ def test_blank_local_key_preserves_stored_key(client):
         f"/clusters/{cluster_id}/irrigators/edit",
         data={
             "name": "Renamed Pump",
-            "type": "tuya_local",
+            "type": "rainpoint.ik10pw",
             "device_ip": "192.0.2.10",
             "local_key": "",  # blank — must NOT wipe the stored key
         },
@@ -69,7 +69,7 @@ def test_nonblank_local_key_overrides_stored_key(client):
         f"/clusters/{cluster_id}/irrigators/edit",
         data={
             "name": "Local Pump",
-            "type": "tuya_local",
+            "type": "rainpoint.ik10pw",
             "device_ip": "192.0.2.10",
             "local_key": "fake_local_key_rotated",
         },

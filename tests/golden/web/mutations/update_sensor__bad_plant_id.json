@@ -232,7 +232,7 @@
   "form": {
    "name": "R",
    "plant_id": "x",
-   "type": "temp_humidity"
+   "type": "tuya.tr301z"
   },
   "headers": {},
   "method": "POST",

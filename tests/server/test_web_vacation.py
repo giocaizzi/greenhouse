@@ -109,7 +109,7 @@ class TestVacationWaterBudget:
             json={
                 "tuya_device_id": "fake_budget_irr",
                 "name": "Budget Pump",
-                "type": "tuya_cloud",
+                "type": "rainpoint.ik10pw",
                 "reservoir_l": reservoir_l,
                 "flow_rate_l_per_min": flow_rate_l_per_min,
             },
@@ -135,7 +135,7 @@ class TestVacationWaterBudget:
         client.post("/api/v1/clusters", json={"name": "Plain Cluster"})
         client.post(
             "/api/v1/clusters/1/irrigator",
-            json={"tuya_device_id": "fake_plain_irr", "name": "Plain Pump", "type": "tuya_cloud"},
+            json={"tuya_device_id": "fake_plain_irr", "name": "Plain Pump", "type": "rainpoint.ik10pw"},
         )
         now = int(time.time())
         client.post("/vacation", data={"starts_at": str(now - 3600), "ends_at": str(now + 7 * 86400)})

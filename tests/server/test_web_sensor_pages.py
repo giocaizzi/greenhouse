@@ -20,7 +20,7 @@ def test_create_sensor(seeded_client):
         data={
             "tuya_device_id": "fake_device_new",
             "name": "Second Sensor",
-            "type": "soil_moisture",
+            "type": "tuya.tr301z",
             "plant_id": "1",
         },
         follow_redirects=False,

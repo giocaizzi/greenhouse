@@ -45,14 +45,14 @@ def cluster_irrigator_sensor(repo) -> tuple[Irrigator, Sensor]:
         cluster_id=cluster_id,
         tuya_device_id="hm_irrigator",
         name="HM Irrigator",
-        irrigator_type="tuya_cloud",
+        irrigator_type="rainpoint.ik10pw",
         config={},
     )
     sensor_id = repo.add_sensor(
         cluster_id=cluster_id,
         tuya_device_id="hm_sensor",
         name="HM Sensor",
-        sensor_type="soil_moisture",
+        sensor_type="tuya.tr301z",
         config={},
     )
     repo.session.commit()
@@ -77,9 +77,7 @@ def registry_with_fakes() -> tuple[DeviceRegistry, FakeIrrigatorAdapter, FakeSen
     irr_adapter = FakeIrrigatorAdapter()
     sensor_adapter = FakeSensorAdapter()
     registry = DeviceRegistry()
-    # Aliases used by add_irrigator above: ``tuya_cloud``/``soil_moisture`` →
-    # default keys. We register the default model_keys here so DeviceRegistry's
-    # alias table resolves the fake adapters in this test.
+    # The fakes are registered under the model keys the rows above carry.
     registry.register_irrigator("rainpoint.ik10pw", lambda: irr_adapter)
     registry.register_sensor("tuya.tr301z", lambda: sensor_adapter)
     return registry, irr_adapter, sensor_adapter

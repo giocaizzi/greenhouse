@@ -47,7 +47,7 @@ def test_config_form_renders_inherit_state_with_irrigator(client):
     client.post("/clusters", data={"name": "Empty", "environment": "indoor"}, follow_redirects=False)
     resp = client.post(
         "/api/v1/clusters/1/irrigator",
-        json={"tuya_device_id": "fake_irrigator_001", "name": "Test Irrigator", "type": "tuya_cloud"},
+        json={"tuya_device_id": "fake_irrigator_001", "name": "Test Irrigator", "type": "rainpoint.ik10pw"},
     )
     assert resp.status_code == 201
     resp = client.get("/clusters/1")

@@ -94,7 +94,7 @@ def _rows(db, sensor_id: int) -> list[dict]:
 
 def _add_sensor(db, cluster_id: int, name: str, device_id: str) -> int:
     return db.add_sensor(
-        cluster_id=cluster_id, tuya_device_id=device_id, name=name, sensor_type="soil_moisture", config={}
+        cluster_id=cluster_id, tuya_device_id=device_id, name=name, sensor_type="tuya.tr301z", config={}
     )
 
 

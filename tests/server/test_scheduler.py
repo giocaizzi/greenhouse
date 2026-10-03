@@ -98,14 +98,14 @@ class TestCooldownGatesActuation:
                     cluster_id=cluster_id,
                     tuya_device_id=FAKE_DEVICE_ID,
                     name="Irrigator",
-                    irrigator_type="tuya_cloud",
+                    irrigator_type="rainpoint.ik10pw",
                     config={},
                 )
                 sensor_id = repo.add_sensor(
                     cluster_id=cluster_id,
                     tuya_device_id=FAKE_SENSOR_ID,
                     name="Dry Sensor",
-                    sensor_type="soil_moisture",
+                    sensor_type="tuya.tr301z",
                     config={},
                 )
                 session.commit()

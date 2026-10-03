@@ -11,7 +11,7 @@ class TestIrrigatorCRUD:
         client.post("/api/v1/clusters", json={"name": "C1"})
         resp = client.post(
             "/api/v1/clusters/1/irrigator",
-            json={"tuya_device_id": "dev001", "name": "Pump", "type": "tuya_cloud"},
+            json={"tuya_device_id": "dev001", "name": "Pump", "type": "rainpoint.ik10pw"},
         )
         assert resp.status_code == 201
         assert resp.json()["name"] == "Pump"
@@ -25,12 +25,12 @@ class TestIrrigatorCRUD:
         client.post("/api/v1/clusters", json={"name": "C1"})
         first = client.post(
             "/api/v1/clusters/1/irrigator",
-            json={"tuya_device_id": "dev001", "name": "A", "type": "tuya_cloud"},
+            json={"tuya_device_id": "dev001", "name": "A", "type": "rainpoint.ik10pw"},
         )
         assert first.status_code == 201
         resp = client.post(
             "/api/v1/clusters/1/irrigator",
-            json={"tuya_device_id": "dev002", "name": "B", "type": "tuya_cloud"},
+            json={"tuya_device_id": "dev002", "name": "B", "type": "rainpoint.ik10pw"},
         )
         assert resp.status_code == 409
 
@@ -40,11 +40,11 @@ class TestIrrigatorCRUD:
         client.post("/api/v1/clusters", json={"name": "C2"})
         client.post(
             "/api/v1/clusters/1/irrigator",
-            json={"tuya_device_id": "dev001", "name": "A", "type": "tuya_cloud"},
+            json={"tuya_device_id": "dev001", "name": "A", "type": "rainpoint.ik10pw"},
         )
         resp = client.post(
             "/api/v1/clusters/2/irrigator",
-            json={"tuya_device_id": "dev001", "name": "B", "type": "tuya_cloud"},
+            json={"tuya_device_id": "dev001", "name": "B", "type": "rainpoint.ik10pw"},
         )
         assert resp.status_code == 409
 
@@ -57,7 +57,7 @@ class TestIrrigatorCRUD:
         client.post("/api/v1/clusters", json={"name": "C1"})
         client.post(
             "/api/v1/clusters/1/irrigator",
-            json={"tuya_device_id": "dev001", "name": "Old Pump", "type": "tuya_cloud"},
+            json={"tuya_device_id": "dev001", "name": "Old Pump", "type": "rainpoint.ik10pw"},
         )
         resp = client.put(
             "/api/v1/clusters/1/irrigator",
@@ -81,7 +81,7 @@ class TestIrrigatorCRUD:
             json={
                 "tuya_device_id": "dev001",
                 "name": "Pump",
-                "type": "tuya_cloud",
+                "type": "rainpoint.ik10pw",
                 "reservoir_l": 12.5,
                 "flow_rate_l_per_min": 1.5,
             },
@@ -101,7 +101,7 @@ class TestIrrigatorCRUD:
         client.post("/api/v1/clusters", json={"name": "C1"})
         resp = client.post(
             "/api/v1/clusters/1/irrigator",
-            json={"tuya_device_id": "dev001", "name": "Pump", "type": "tuya_cloud"},
+            json={"tuya_device_id": "dev001", "name": "Pump", "type": "rainpoint.ik10pw"},
         )
         data = resp.json()
         assert data["reservoir_l"] is None
@@ -112,7 +112,7 @@ class TestIrrigatorCRUD:
         client.post("/api/v1/clusters", json={"name": "C1"})
         client.post(
             "/api/v1/clusters/1/irrigator",
-            json={"tuya_device_id": "dev001", "name": "Pump", "type": "tuya_cloud"},
+            json={"tuya_device_id": "dev001", "name": "Pump", "type": "rainpoint.ik10pw"},
         )
         resp = client.put(
             "/api/v1/clusters/1/irrigator",
@@ -132,7 +132,7 @@ class TestIrrigatorCRUD:
         client.post("/api/v1/clusters", json={"name": "C1"})
         client.post(
             "/api/v1/clusters/1/irrigator",
-            json={"tuya_device_id": "dev001", "name": "Pump", "type": "tuya_cloud"},
+            json={"tuya_device_id": "dev001", "name": "Pump", "type": "rainpoint.ik10pw"},
         )
         resp = client.put("/api/v1/clusters/1/irrigator", json={"reservoir_l": -1.0})
         assert resp.status_code == 422
@@ -141,7 +141,7 @@ class TestIrrigatorCRUD:
         client.post("/api/v1/clusters", json={"name": "C1"})
         client.post(
             "/api/v1/clusters/1/irrigator",
-            json={"tuya_device_id": "dev001", "name": "Pump", "type": "tuya_cloud"},
+            json={"tuya_device_id": "dev001", "name": "Pump", "type": "rainpoint.ik10pw"},
         )
         resp = client.delete("/api/v1/clusters/1/irrigator")
         assert resp.status_code == 200
@@ -159,7 +159,7 @@ class TestIrrigatorCRUD:
         client.post("/api/v1/clusters", json={"name": "C1"})
         client.post(
             "/api/v1/clusters/1/irrigator",
-            json={"tuya_device_id": "dev001", "name": "Pump", "type": "tuya_cloud"},
+            json={"tuya_device_id": "dev001", "name": "Pump", "type": "rainpoint.ik10pw"},
         )
         client.delete("/api/v1/clusters/1/irrigator")
         resp = client.delete("/api/v1/clusters/1/irrigator")
@@ -170,12 +170,12 @@ class TestIrrigatorCRUD:
         client.post("/api/v1/clusters", json={"name": "C1"})
         client.post(
             "/api/v1/clusters/1/irrigator",
-            json={"tuya_device_id": "dev001", "name": "Pump", "type": "tuya_cloud"},
+            json={"tuya_device_id": "dev001", "name": "Pump", "type": "rainpoint.ik10pw"},
         )
         client.delete("/api/v1/clusters/1/irrigator")
         resp = client.post(
             "/api/v1/clusters/1/irrigator",
-            json={"tuya_device_id": "dev002", "name": "Pump2", "type": "tuya_cloud"},
+            json={"tuya_device_id": "dev002", "name": "Pump2", "type": "rainpoint.ik10pw"},
         )
         assert resp.status_code == 201
 
@@ -220,11 +220,11 @@ class TestListAllIrrigatorsTopLevel:
         client.post("/api/v1/clusters", json={"name": "B"})
         client.post(
             "/api/v1/clusters/1/irrigator",
-            json={"tuya_device_id": "dev_a", "name": "A1", "type": "tuya_cloud"},
+            json={"tuya_device_id": "dev_a", "name": "A1", "type": "rainpoint.ik10pw"},
         )
         client.post(
             "/api/v1/clusters/2/irrigator",
-            json={"tuya_device_id": "dev_b", "name": "B1", "type": "tuya_cloud"},
+            json={"tuya_device_id": "dev_b", "name": "B1", "type": "rainpoint.ik10pw"},
         )
         resp = client.get("/api/v1/irrigators")
         names = sorted(i["name"] for i in resp.json()["irrigators"])
@@ -236,11 +236,11 @@ class TestListAllIrrigatorsTopLevel:
         client.post("/api/v1/clusters", json={"name": "B"})
         client.post(
             "/api/v1/clusters/1/irrigator",
-            json={"tuya_device_id": "dev_a", "name": "A1", "type": "tuya_cloud"},
+            json={"tuya_device_id": "dev_a", "name": "A1", "type": "rainpoint.ik10pw"},
         )
         client.post(
             "/api/v1/clusters/2/irrigator",
-            json={"tuya_device_id": "dev_b", "name": "B1", "type": "tuya_cloud"},
+            json={"tuya_device_id": "dev_b", "name": "B1", "type": "rainpoint.ik10pw"},
         )
         resp = client.get("/api/v1/irrigators?cluster_id=2")
         names = [i["name"] for i in resp.json()["irrigators"]]
@@ -252,7 +252,7 @@ class TestListAllIrrigatorsTopLevel:
             client.post("/api/v1/clusters", json={"name": f"C{n}"})
             client.post(
                 f"/api/v1/clusters/{n + 1}/irrigator",
-                json={"tuya_device_id": f"dev_{n}", "name": f"I{n}", "type": "tuya_cloud"},
+                json={"tuya_device_id": f"dev_{n}", "name": f"I{n}", "type": "rainpoint.ik10pw"},
             )
         resp = client.get("/api/v1/irrigators?limit=2")
         data = resp.json()

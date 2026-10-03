@@ -293,7 +293,7 @@
    "name": "Clone",
    "reservoir_l": "5",
    "tuya_device_id": "fake_tuya_device_aabbccdd",
-   "type": "tuya_cloud"
+   "type": "rainpoint.ik10pw"
   },
   "headers": {},
   "method": "POST",

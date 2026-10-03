@@ -39,7 +39,11 @@ def _cluster(db, *, soils=(38.0,), species="Monstera deliciosa", category="tropi
     cid = db.add_cluster("Invariant Cluster", environment=environment)
     db.add_plant(cluster_id=cid, species=species, category=category)
     irr = db.add_irrigator(
-        cluster_id=cid, tuya_device_id="fake_tuya_device_inv0001", name="Pump", irrigator_type="tuya_cloud", config={}
+        cluster_id=cid,
+        tuya_device_id="fake_tuya_device_inv0001",
+        name="Pump",
+        irrigator_type="rainpoint.ik10pw",
+        config={},
     )
     sensors = []
     for i, soil in enumerate(soils):
@@ -47,7 +51,7 @@ def _cluster(db, *, soils=(38.0,), species="Monstera deliciosa", category="tropi
             cluster_id=cid,
             tuya_device_id=f"fake_tuya_sensor_inv{i:04d}",
             name=f"Soil {chr(65 + i)}",
-            sensor_type="soil_moisture",
+            sensor_type="tuya.tr301z",
             config={},
         )
         db.add_sensor_reading(sensor_id=sid, timestamp=FROZEN_TS - 600, soil_moisture=soil)

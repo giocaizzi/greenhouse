@@ -4,7 +4,7 @@
    "cells": [
     "1",
     "Monstera probe",
-    "soil_moisture",
+    "tuya.tr301z",
     "Monstera deliciosa",
     "58.0%",
     "19.1°C",
@@ -19,7 +19,7 @@
    "cells": [
     "2",
     "Nephrolepis probe",
-    "soil_moisture",
+    "tuya.tr301z",
     "Nephrolepis exaltata",
     "38.0%",
     "19.1°C",

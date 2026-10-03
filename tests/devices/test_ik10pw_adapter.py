@@ -23,7 +23,7 @@ from greenhouse_core.devices.health import DeviceHealthState
 from greenhouse_core.models import Irrigator, Sensor
 
 
-def _make_irrigator(device_type="tuya_cloud"):
+def _make_irrigator(device_type="rainpoint.ik10pw"):
     return Irrigator(
         id=1,
         cluster_id=1,
@@ -40,7 +40,7 @@ def _make_sensor():
         cluster_id=1,
         tuya_device_id=FAKE_DEVICE_ID,
         name="Test Sensor",
-        type="soil_moisture",
+        type="tuya.tr301z",
         plant_id=None,
         config={},
     )

@@ -284,14 +284,14 @@ def _build_dry_cluster(repo):
         cluster_id=cluster_id,
         tuya_device_id="fake_dev",
         name="Dry Irrigator",
-        irrigator_type="tuya_cloud",
+        irrigator_type="rainpoint.ik10pw",
         config={},
     )
     sensor_id = repo.add_sensor(
         cluster_id=cluster_id,
         tuya_device_id="fake_sensor",
         name="Dry Sensor",
-        sensor_type="soil_moisture",
+        sensor_type="tuya.tr301z",
         config={},
         plant_id=plant_id,
     )
@@ -311,12 +311,9 @@ def _build_service(repo, notifier):
     registry = DeviceRegistry()
     irr = FakeIrrigatorAdapter()
     sensor = FakeSensorAdapter()
-    # Register under both the seeded type strings and their resolved canonical
-    # keys so registry alias resolution finds the fakes (mirrors conftest).
-    for key in ("tuya_cloud", "rainpoint.ik10pw"):
-        registry.register_irrigator(key, lambda a=irr: a)
-    for key in ("soil_moisture", "tuya.tr301z"):
-        registry.register_sensor(key, lambda a=sensor: a)
+    # Registered under the canonical model keys the seeded rows carry (mirrors conftest).
+    registry.register_irrigator("rainpoint.ik10pw", lambda a=irr: a)
+    registry.register_sensor("tuya.tr301z", lambda a=sensor: a)
     sync_service = MagicMock()
     sync_service.ensure_fresh_and_read.return_value = {"temperature": 24.0, "soil_moisture": 35.0}
     weather = MagicMock()

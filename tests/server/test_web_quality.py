@@ -24,7 +24,7 @@ class TestQualityPage:
             # Sensor not assigned to any plant → sensor_without_plant issue
             client.post(
                 "/api/v1/clusters/1/sensors",
-                json={"tuya_device_id": "fake_qc_s1", "name": "Unassigned Sensor", "type": "soil_moisture"},
+                json={"tuya_device_id": "fake_qc_s1", "name": "Unassigned Sensor", "type": "tuya.tr301z"},
             )
 
             resp = client.get("/quality")
@@ -40,7 +40,7 @@ class TestQualityPage:
             client.post("/api/v1/clusters", json={"name": "Badge Cluster"})
             client.post(
                 "/api/v1/clusters/1/sensors",
-                json={"tuya_device_id": "fake_badge_s1", "name": "Badge Sensor", "type": "soil_moisture"},
+                json={"tuya_device_id": "fake_badge_s1", "name": "Badge Sensor", "type": "tuya.tr301z"},
             )
 
             resp = client.get("/quality")

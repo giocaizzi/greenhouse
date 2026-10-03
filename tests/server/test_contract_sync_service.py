@@ -50,14 +50,12 @@ def cluster(tmp_db, frozen_clock):
     cid = tmp_db.add_cluster("Fresh Cluster")
     other = tmp_db.add_cluster("Other Cluster")
     alpha = tmp_db.add_sensor(
-        cluster_id=cid, tuya_device_id="dev_alpha", name="Alpha", sensor_type="soil_moisture", config={}
+        cluster_id=cid, tuya_device_id="dev_alpha", name="Alpha", sensor_type="tuya.tr301z", config={}
     )
     beta = tmp_db.add_sensor(
-        cluster_id=cid, tuya_device_id="dev_beta", name="Beta", sensor_type="soil_moisture", config={}
+        cluster_id=cid, tuya_device_id="dev_beta", name="Beta", sensor_type="tuya.tr301z", config={}
     )
-    tmp_db.add_sensor(
-        cluster_id=other, tuya_device_id="dev_other", name="Other", sensor_type="soil_moisture", config={}
-    )
+    tmp_db.add_sensor(cluster_id=other, tuya_device_id="dev_other", name="Other", sensor_type="tuya.tr301z", config={})
     tmp_db.session.commit()
     return tmp_db, cid, alpha, beta
 

@@ -40,7 +40,7 @@ class TestClusterInsights:
             json={
                 "tuya_device_id": "fake_stale_sensor",
                 "name": "Stale Sensor",
-                "type": "soil_moisture",
+                "type": "tuya.tr301z",
                 "plant_id": 1,
             },
         )

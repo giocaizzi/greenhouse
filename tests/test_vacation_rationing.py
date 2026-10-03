@@ -50,14 +50,14 @@ def _make_cluster(db, *, moisture: float = 38.0, device_id: str = "fake_pump_a")
         cluster_id=cluster_id,
         tuya_device_id=device_id,
         name="Pump A",
-        irrigator_type="tuya_cloud",
+        irrigator_type="rainpoint.ik10pw",
         config={},
     )
     sensor_id = db.add_sensor(
         cluster_id=cluster_id,
         tuya_device_id="fake_soil_vac",
         name="Soil",
-        sensor_type="soil_moisture",
+        sensor_type="tuya.tr301z",
         config={},
     )
     db.add_sensor_reading(sensor_id=sensor_id, soil_moisture=moisture)
@@ -277,7 +277,7 @@ def test_second_irrigator_add_rejected(tmp_db):
             cluster_id=ctx["cluster_id"],
             tuya_device_id="fake_pump_b",
             name="Pump B",
-            irrigator_type="tuya_cloud",
+            irrigator_type="rainpoint.ik10pw",
             config={},
         )
 
@@ -292,7 +292,7 @@ def test_cluster_with_no_irrigators_does_not_crash(tmp_db, logic, monkeypatch):
         cluster_id=cluster_id,
         tuya_device_id="fake_soil_only",
         name="Soil",
-        sensor_type="soil_moisture",
+        sensor_type="tuya.tr301z",
         config={},
     )
     tmp_db.add_sensor_reading(sensor_id=sensor_id, soil_moisture=38.0)
@@ -317,7 +317,7 @@ def test_irrigator_consumption_liters_sums_starts_times_flow(tmp_db):
         cluster_id=cluster_id,
         tuya_device_id="fake_pump_consume",
         name="Pump",
-        irrigator_type="tuya_cloud",
+        irrigator_type="rainpoint.ik10pw",
         config={},
     )
     _set_capacity(tmp_db, irr, reservoir_l=10.0, flow_rate_l_per_min=2.0)
@@ -346,7 +346,7 @@ def test_irrigator_consumption_liters_none_flow_returns_zero(tmp_db):
         cluster_id=cluster_id,
         tuya_device_id="fake_pump_noflow",
         name="Pump",
-        irrigator_type="tuya_cloud",
+        irrigator_type="rainpoint.ik10pw",
         config={},
     )
     tmp_db.add_irrigation_event(irrigator_id=irr, action="start", triggered_by="auto", duration_minutes=5, timestamp=50)

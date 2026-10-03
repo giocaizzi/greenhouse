@@ -222,7 +222,7 @@ def _seed(repo: IrrigationRepository, case: Case) -> int:
             cluster_id=cluster_id,
             tuya_device_id="fake_tuya_device_grid0001",
             name="Grid Pump",
-            irrigator_type="tuya_cloud",
+            irrigator_type="rainpoint.ik10pw",
             config={},
         )
         if case.reservoir_l is not None or case.flow_rate is not None:
@@ -237,7 +237,7 @@ def _seed(repo: IrrigationRepository, case: Case) -> int:
             cluster_id=cluster_id,
             tuya_device_id=f"fake_tuya_sensor_grid{i:04d}",
             name=spec.name,
-            sensor_type="soil_moisture",
+            sensor_type="tuya.tr301z",
             config={},
             plant_id=plant_ids[spec.plant] if spec.plant is not None else None,
             assignment_started_at=0,

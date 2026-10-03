@@ -111,11 +111,11 @@ def seed_greenhouse(repo: IrrigationRepository) -> None:
         {"device_ip": FAKE_DEVICE_IP, "local_key": FAKE_LOCAL_KEY},
     )
     repo.update_irrigator(irr_indoor, reservoir_l=10.0, flow_rate_l_per_min=0.5)
-    irr_outdoor = repo.add_irrigator(outdoor, FAKE_DEVICE_ID_2, "Balcony Valve", "tuya_cloud", {})
+    irr_outdoor = repo.add_irrigator(outdoor, FAKE_DEVICE_ID_2, "Balcony Valve", "rainpoint.ik10pw", {})
 
     start = T - 72 * H
     s_monstera = repo.add_sensor(
-        indoor, FAKE_SENSOR_ID, "Monstera Probe", "soil_moisture", {}, plant_id=monstera, assignment_started_at=start
+        indoor, FAKE_SENSOR_ID, "Monstera Probe", "tuya.tr301z", {}, plant_id=monstera, assignment_started_at=start
     )
     s_alocasia = repo.add_sensor(
         indoor,
@@ -130,12 +130,12 @@ def seed_greenhouse(repo: IrrigationRepository) -> None:
         outdoor,
         "fake_tuya_sensor_00000003",
         "Loquat Probe",
-        "soil_moisture",
+        "tuya.tr301z",
         {},
         plant_id=loquat,
         assignment_started_at=start,
     )
-    s_ambient = repo.add_sensor(indoor, "fake_tuya_sensor_00000004", "Room Climate", "temp_humidity", {})
+    s_ambient = repo.add_sensor(indoor, "fake_tuya_sensor_00000004", "Room Climate", "tuya.tr301z", {})
 
     # Readings every 2 h over the last 48 h; newest 30 min ago (fresh: < SENSOR_READING_STALE_SECONDS).
     for k in range(25):

@@ -42,7 +42,7 @@ def test_create_irrigator_on_empty_cluster(seeded_client):
         data={
             "tuya_device_id": "fake_irr_002",
             "name": "Pump B",
-            "type": "tuya_cloud",
+            "type": "rainpoint.ik10pw",
         },
         follow_redirects=False,
     )
@@ -59,7 +59,7 @@ def test_create_second_irrigator_surfaces_409(seeded_client):
         data={
             "tuya_device_id": "fake_irr_999",
             "name": "Extra Pump",
-            "type": "tuya_cloud",
+            "type": "rainpoint.ik10pw",
         },
         follow_redirects=False,
     )

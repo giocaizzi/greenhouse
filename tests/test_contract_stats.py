@@ -27,7 +27,7 @@ def _cluster_with_irrigator(db):
         cluster_id=cluster_id,
         tuya_device_id=FAKE_DEVICE_ID,
         name=FAKE_IRRIGATOR_NAME,
-        irrigator_type="tuya_cloud",
+        irrigator_type="rainpoint.ik10pw",
         config={},
     )
     return cluster_id, irrigator_id

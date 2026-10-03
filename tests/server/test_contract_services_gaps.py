@@ -63,7 +63,7 @@ def _cluster_with_sensor(repo, *, plant: bool = True, environment: str = "indoor
             cluster_id=cid,
             tuya_device_id=f"gap-sensor-{i}",
             name=f"Gap Sensor {i}",
-            sensor_type="soil_moisture",
+            sensor_type="tuya.tr301z",
             config={},
             plant_id=pid,
             assignment_started_at=FROZEN_TS - 30 * 86400,
@@ -319,7 +319,7 @@ def test_efficacy_of_a_cluster_without_irrigator_is_empty(repo):
 def test_efficacy_skips_start_events_without_a_positive_duration(repo):
     cid, _, _ = _cluster_with_sensor(repo)
     iid = repo.add_irrigator(
-        cluster_id=cid, tuya_device_id="gap-pump", name="Gap Pump", irrigator_type="tuya_cloud", config={}
+        cluster_id=cid, tuya_device_id="gap-pump", name="Gap Pump", irrigator_type="rainpoint.ik10pw", config={}
     )
     repo.add_irrigation_event(iid, "start", "auto", duration_minutes=0, timestamp=FROZEN_TS - 7200)
     repo.add_irrigation_event(iid, "start", "auto", duration_minutes=None, timestamp=FROZEN_TS - 5400)
@@ -387,7 +387,7 @@ DRY = DeviceHealthState(observed_at=FROZEN_TS, alarms=frozenset({HealthAlarm.NO_
 def pump(repo):
     cid = repo.add_cluster("Pump Gap Cluster")
     iid = repo.add_irrigator(
-        cluster_id=cid, tuya_device_id="pg", name="Gap Pump", irrigator_type="tuya_cloud", config={}
+        cluster_id=cid, tuya_device_id="pg", name="Gap Pump", irrigator_type="rainpoint.ik10pw", config={}
     )
     repo.session.commit()
     adapter = ScriptedAdapter()

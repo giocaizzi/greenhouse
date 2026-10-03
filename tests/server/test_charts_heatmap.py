@@ -60,7 +60,7 @@ def test_heatmap_with_events(app):
         cluster_id=cluster_id,
         tuya_device_id="fake_heatmap_irr",
         name="Heatmap Irrigator",
-        irrigator_type="tuya_cloud",
+        irrigator_type="rainpoint.ik10pw",
         config={},
     )
     # Seed an event at a known UTC datetime: Wednesday (weekday=2) at 14:00 UTC

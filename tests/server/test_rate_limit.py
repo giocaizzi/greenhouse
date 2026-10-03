@@ -24,7 +24,7 @@ def _setup_cluster_irrigator_config(client, *, tuya_id: str = "fake_rl_001") -> 
     client.post("/api/v1/clusters", json={"name": "Rate Limit Cluster"})
     resp = client.post(
         "/api/v1/clusters/1/irrigator",
-        json={"tuya_device_id": tuya_id, "name": "Pump", "type": "tuya_cloud"},
+        json={"tuya_device_id": tuya_id, "name": "Pump", "type": "rainpoint.ik10pw"},
     )
     assert resp.status_code == 201
     client.put(
@@ -66,7 +66,7 @@ class TestMaxEventsPerDay:
         client.post("/api/v1/clusters", json={"name": "No Config Cluster"})
         client.post(
             "/api/v1/clusters/1/irrigator",
-            json={"tuya_device_id": "fake_nc_001", "name": "Pump", "type": "tuya_cloud"},
+            json={"tuya_device_id": "fake_nc_001", "name": "Pump", "type": "rainpoint.ik10pw"},
         )
 
         for _ in range(5):

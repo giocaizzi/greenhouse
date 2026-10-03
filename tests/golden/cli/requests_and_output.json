@@ -1896,7 +1896,7 @@
     "--name",
     "Pump",
     "--type",
-    "tuya_local",
+    "rainpoint.ik10pw",
     "--device-ip",
     "192.0.2.20",
     "--local-key",
@@ -1921,7 +1921,7 @@
    "requests": [
     {
      "authorization": null,
-     "content": "{\"tuya_device_id\":\"fake_tuya_device_aabbccdd\",\"name\":\"Pump\",\"type\":\"tuya_local\",\"config\":{\"device_ip\":\"192.0.2.20\",\"local_key\":\"fake_local_key_0000\"},\"reservoir_l\":12.5,\"flow_rate_l_per_min\":0.75}",
+     "content": "{\"tuya_device_id\":\"fake_tuya_device_aabbccdd\",\"name\":\"Pump\",\"type\":\"rainpoint.ik10pw\",\"config\":{\"device_ip\":\"192.0.2.20\",\"local_key\":\"fake_local_key_0000\"},\"reservoir_l\":12.5,\"flow_rate_l_per_min\":0.75}",
      "content_type": "application/json",
      "json": {
       "config": {
@@ -1932,7 +1932,7 @@
       "name": "Pump",
       "reservoir_l": 12.5,
       "tuya_device_id": "fake_tuya_device_aabbccdd",
-      "type": "tuya_local"
+      "type": "rainpoint.ik10pw"
      },
      "method": "POST",
      "path": "/api/v1/clusters/2/irrigator",
@@ -1958,7 +1958,7 @@
     "--name",
     "Pump",
     "--type",
-    "tuya_local",
+    "rainpoint.ik10pw",
     "--device-ip",
     ""
    ],
@@ -1977,7 +1977,7 @@
    "requests": [
     {
      "authorization": null,
-     "content": "{\"tuya_device_id\":\"fake_tuya_device_aabbccdd\",\"name\":\"Pump\",\"type\":\"tuya_local\",\"config\":{\"device_ip\":\"\"}}",
+     "content": "{\"tuya_device_id\":\"fake_tuya_device_aabbccdd\",\"name\":\"Pump\",\"type\":\"rainpoint.ik10pw\",\"config\":{\"device_ip\":\"\"}}",
      "content_type": "application/json",
      "json": {
       "config": {
@@ -1985,7 +1985,7 @@
       },
       "name": "Pump",
       "tuya_device_id": "fake_tuya_device_aabbccdd",
-      "type": "tuya_local"
+      "type": "rainpoint.ik10pw"
      },
      "method": "POST",
      "path": "/api/v1/clusters/2/irrigator",
@@ -2011,7 +2011,7 @@
     "--name",
     "Pump",
     "--type",
-    "tuya_cloud"
+    "rainpoint.ik10pw"
    ],
    "clients": [
     {
@@ -2028,12 +2028,12 @@
    "requests": [
     {
      "authorization": null,
-     "content": "{\"tuya_device_id\":\"fake_tuya_device_aabbccdd\",\"name\":\"Pump\",\"type\":\"tuya_cloud\"}",
+     "content": "{\"tuya_device_id\":\"fake_tuya_device_aabbccdd\",\"name\":\"Pump\",\"type\":\"rainpoint.ik10pw\"}",
      "content_type": "application/json",
      "json": {
       "name": "Pump",
       "tuya_device_id": "fake_tuya_device_aabbccdd",
-      "type": "tuya_cloud"
+      "type": "rainpoint.ik10pw"
      },
      "method": "POST",
      "path": "/api/v1/clusters/2/irrigator",
@@ -2464,7 +2464,7 @@
     "--name",
     "Pump 2",
     "--type",
-    "tuya_local",
+    "rainpoint.ik10pw",
     "--device-ip",
     "192.0.2.21",
     "--local-key",
@@ -2489,7 +2489,7 @@
    "requests": [
     {
      "authorization": null,
-     "content": "{\"name\":\"Pump 2\",\"type\":\"tuya_local\",\"config\":{\"device_ip\":\"192.0.2.21\",\"local_key\":\"fake_local_key_1111\"},\"reservoir_l\":10.0,\"flow_rate_l_per_min\":1.5}",
+     "content": "{\"name\":\"Pump 2\",\"type\":\"rainpoint.ik10pw\",\"config\":{\"device_ip\":\"192.0.2.21\",\"local_key\":\"fake_local_key_1111\"},\"reservoir_l\":10.0,\"flow_rate_l_per_min\":1.5}",
      "content_type": "application/json",
      "json": {
       "config": {
@@ -2499,7 +2499,7 @@
       "flow_rate_l_per_min": 1.5,
       "name": "Pump 2",
       "reservoir_l": 10.0,
-      "type": "tuya_local"
+      "type": "rainpoint.ik10pw"
      },
      "method": "PUT",
      "path": "/api/v1/clusters/2/irrigator",
@@ -4075,7 +4075,7 @@
     "--name",
     "Soil",
     "--type",
-    "soil_moisture"
+    "tuya.tr301z"
    ],
    "clients": [
     {
@@ -4092,13 +4092,13 @@
    "requests": [
     {
      "authorization": null,
-     "content": "{\"tuya_device_id\":\"fake_sensor_001\",\"name\":\"Soil\",\"type\":\"soil_moisture\",\"plant_id\":null}",
+     "content": "{\"tuya_device_id\":\"fake_sensor_001\",\"name\":\"Soil\",\"type\":\"tuya.tr301z\",\"plant_id\":null}",
      "content_type": "application/json",
      "json": {
       "name": "Soil",
       "plant_id": null,
       "tuya_device_id": "fake_sensor_001",
-      "type": "soil_moisture"
+      "type": "tuya.tr301z"
      },
      "method": "POST",
      "path": "/api/v1/clusters/2/sensors",
@@ -4124,7 +4124,7 @@
     "--name",
     "Soil",
     "--type",
-    "soil_moisture",
+    "tuya.tr301z",
     "--plant-id",
     "5"
    ],
@@ -4143,13 +4143,13 @@
    "requests": [
     {
      "authorization": null,
-     "content": "{\"tuya_device_id\":\"fake_sensor_001\",\"name\":\"Soil\",\"type\":\"soil_moisture\",\"plant_id\":5}",
+     "content": "{\"tuya_device_id\":\"fake_sensor_001\",\"name\":\"Soil\",\"type\":\"tuya.tr301z\",\"plant_id\":5}",
      "content_type": "application/json",
      "json": {
       "name": "Soil",
       "plant_id": 5,
       "tuya_device_id": "fake_sensor_001",
-      "type": "soil_moisture"
+      "type": "tuya.tr301z"
      },
      "method": "POST",
      "path": "/api/v1/clusters/2/sensors",
@@ -4458,7 +4458,7 @@
     "--name",
     "Soil 2",
     "--type",
-    "temp_humidity",
+    "tuya.tr301z",
     "--plant-id",
     "6"
    ],
@@ -4477,12 +4477,12 @@
    "requests": [
     {
      "authorization": null,
-     "content": "{\"name\":\"Soil 2\",\"type\":\"temp_humidity\",\"plant_id\":6}",
+     "content": "{\"name\":\"Soil 2\",\"type\":\"tuya.tr301z\",\"plant_id\":6}",
      "content_type": "application/json",
      "json": {
       "name": "Soil 2",
       "plant_id": 6,
-      "type": "temp_humidity"
+      "type": "tuya.tr301z"
      },
      "method": "PUT",
      "path": "/api/v1/clusters/2/sensors/20",

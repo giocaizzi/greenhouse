@@ -35,14 +35,14 @@ class _Fixture:
             cluster_id=self.cluster_id,
             tuya_device_id="fake_irr_hold",
             name="Irrigator",
-            irrigator_type="tuya_cloud",
+            irrigator_type="rainpoint.ik10pw",
             config={},
         )
         self.sensor_id = self.db.add_sensor(
             cluster_id=self.cluster_id,
             tuya_device_id="fake_sensor_hold",
             name="Dry Sensor",
-            sensor_type="soil_moisture",
+            sensor_type="tuya.tr301z",
             config={},
         )
         # Bone dry: without a hold this cluster irrigates.

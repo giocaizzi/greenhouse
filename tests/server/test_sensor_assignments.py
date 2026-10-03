@@ -18,7 +18,7 @@ def seeded(client):
         json={
             "tuya_device_id": "fake_assignment_sensor",
             "name": "Assignment Probe",
-            "type": "soil_moisture",
+            "type": "tuya.tr301z",
             "plant_id": 1,
         },
     )
@@ -78,7 +78,7 @@ def test_readings_for_plant_respects_assignment_window(client, app):
         json={
             "tuya_device_id": "fake_window_sensor",
             "name": "Window Probe",
-            "type": "soil_moisture",
+            "type": "tuya.tr301z",
             "plant_id": 1,
         },
     )
@@ -130,7 +130,7 @@ def test_plant_chart_uses_assignment_window(client, app):
         json={
             "tuya_device_id": "fake_chart_sensor",
             "name": "Chart Probe",
-            "type": "soil_moisture",
+            "type": "tuya.tr301z",
             "plant_id": 1,
         },
     )
@@ -180,7 +180,7 @@ def test_delete_plant_closes_open_assignment(client, app):
     client.post("/api/v1/clusters/1/plants", json={"species": "Monstera deliciosa"})
     client.post(
         "/api/v1/clusters/1/sensors",
-        json={"tuya_device_id": "fake_delete_sensor", "name": "Probe", "type": "soil_moisture", "plant_id": 1},
+        json={"tuya_device_id": "fake_delete_sensor", "name": "Probe", "type": "tuya.tr301z", "plant_id": 1},
     )
     # Sensor has one open assignment now.
     rows = client.get("/api/v1/sensors/1/assignments").json()["assignments"]

@@ -231,7 +231,7 @@
  "request": {
   "form": {
    "name": "X",
-   "type": "tuya_cloud"
+   "type": "rainpoint.ik10pw"
   },
   "headers": {},
   "method": "POST",

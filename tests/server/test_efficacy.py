@@ -42,11 +42,11 @@ class TestClusterEfficacy:
             client.post("/api/v1/clusters", json={"name": "Efficacy Cluster"})
             client.post(
                 "/api/v1/clusters/1/sensors",
-                json={"tuya_device_id": "fake_eff_sensor", "name": "Eff Sensor", "type": "soil_moisture"},
+                json={"tuya_device_id": "fake_eff_sensor", "name": "Eff Sensor", "type": "tuya.tr301z"},
             )
             client.post(
                 "/api/v1/clusters/1/irrigator",
-                json={"tuya_device_id": "fake_eff_irrigator", "name": "Eff Pump", "type": "tuya_cloud"},
+                json={"tuya_device_id": "fake_eff_irrigator", "name": "Eff Pump", "type": "rainpoint.ik10pw"},
             )
 
             now = int(time.time())
@@ -99,11 +99,11 @@ class TestClusterEfficacy:
             client.post("/api/v1/clusters", json={"name": "Efficacy Cluster"})
             client.post(
                 "/api/v1/clusters/1/sensors",
-                json={"tuya_device_id": "fake_eff_sensor", "name": "Eff Sensor", "type": "soil_moisture"},
+                json={"tuya_device_id": "fake_eff_sensor", "name": "Eff Sensor", "type": "tuya.tr301z"},
             )
             client.post(
                 "/api/v1/clusters/1/irrigator",
-                json={"tuya_device_id": "fake_eff_irrigator", "name": "Eff Pump", "type": "tuya_cloud"},
+                json={"tuya_device_id": "fake_eff_irrigator", "name": "Eff Pump", "type": "rainpoint.ik10pw"},
             )
 
             now = int(time.time())
@@ -141,11 +141,11 @@ class TestClusterEfficacy:
             client.post("/api/v1/clusters", json={"name": "Score Cluster"})
             client.post(
                 "/api/v1/clusters/1/sensors",
-                json={"tuya_device_id": "fake_score_sensor", "name": "S Sensor", "type": "soil_moisture"},
+                json={"tuya_device_id": "fake_score_sensor", "name": "S Sensor", "type": "tuya.tr301z"},
             )
             client.post(
                 "/api/v1/clusters/1/irrigator",
-                json={"tuya_device_id": "fake_score_pump", "name": "S Pump", "type": "tuya_cloud"},
+                json={"tuya_device_id": "fake_score_pump", "name": "S Pump", "type": "rainpoint.ik10pw"},
             )
 
             now = int(time.time())
