@@ -4,8 +4,8 @@
  Open the interactive terminal dashboard.
 
  Animated plant sprites, live charts, decision trails, alerts, activity
- and system health — plus irrigate / water-now / stop / check / sync
- actions behind confirmation dialogs. Talks to the server over HTTP,
+ and system health — plus irrigate / water-now dialogs, stop / check
+ behind a yes/no confirmation, and one-key syncs. Talks to the server over HTTP,
  so it works against any reachable greenhouse server (``--server``).
 
 ╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮

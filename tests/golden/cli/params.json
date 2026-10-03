@@ -758,7 +758,7 @@
  {
   "deprecated": false,
   "group": false,
-  "help": "Open the interactive terminal dashboard.\n\nAnimated plant sprites, live charts, decision trails, alerts, activity\nand system health — plus irrigate / water-now / stop / check / sync\nactions behind confirmation dialogs. Talks to the server over HTTP,\nso it works against any reachable greenhouse server (``--server``).",
+  "help": "Open the interactive terminal dashboard.\n\nAnimated plant sprites, live charts, decision trails, alerts, activity\nand system health — plus irrigate / water-now dialogs, stop / check\nbehind a yes/no confirmation, and one-key syncs. Talks to the server over HTTP,\nso it works against any reachable greenhouse server (``--server``).",
   "hidden": false,
   "no_args_is_help": false,
   "params": [
