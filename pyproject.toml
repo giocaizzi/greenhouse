@@ -106,6 +106,7 @@ extend-select = [
     "PIE",  # flake8-pie
     "RSE",  # flake8-raise
     "FURB",  # refurb
+    "N",  # pep8-naming
     "PLW",  # pylint warnings (PLW0717 is preview and not listed: report-only)
     "ERA",  # eradicate: commented-out code
     "PGH",  # pygrep-hooks: blanket noqa / type: ignore without codes
@@ -144,7 +145,7 @@ indent-style = "space"
 "scripts/*" = ["E402"]  # intentional sys.path before import
 # Frozen safety net: tests exceed size limits and poke privates; never edited to satisfy a lint rule.
 "tests/**" = [
-    "C90", "PLR0911", "PLR0912", "PLR0915", "PLR0904", "PLR0914", "PLR1702", "SIM", "RET", "PTH", "PERF", "PLW", "FURB", "ERA001", "SLF001",
+    "C90", "PLR0911", "PLR0912", "PLR0915", "PLR0904", "PLR0914", "PLR1702", "SIM", "RET", "PTH", "PERF", "PLW", "FURB", "N", "ERA001", "SLF001",
 ]
 "refactor/**" = ["C90", "PLR0911", "PLR0912", "PLR0915", "PLR0914", "PLR1702", "PERF", "PLW"]  # refactor tooling scripts, not shipped
 "libs/greenhouse-core/greenhouse_core/migrations/versions/*" = ["PLR0915"]  # generated Alembic DDL, out of scope
@@ -156,6 +157,7 @@ indent-style = "space"
 "libs/greenhouse-cli/greenhouse_cli/tui/screens/forms.py" = ["C901", "PLR0911", "PLR0912", "PLR1702"]
 "libs/greenhouse-cli/greenhouse_cli/tui/widgets.py" = ["PLR0915"]
 "libs/greenhouse-core/greenhouse_core/devices/gateway.py" = ["PLR0915"]
+"libs/greenhouse-core/greenhouse_core/devices/registry.py" = ["N818"]  # UnknownDeviceModel: public name (WP8-owned file)
 "libs/greenhouse-core/greenhouse_core/devices/irrigators/ik10pw.py" = ["C901", "PLR0911", "PLR0915", "PLR1702", "SIM105"]
 "libs/greenhouse-core/greenhouse_core/devices/irrigators/tuya_generic.py" = ["C901", "PLR0912", "PLR1702"]
 "libs/greenhouse-core/greenhouse_core/logic/engine.py" = ["C901", "PLR0911", "PLR0912", "PLR0914", "PLR0915"]
