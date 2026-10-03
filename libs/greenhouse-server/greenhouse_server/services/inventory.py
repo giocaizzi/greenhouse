@@ -10,9 +10,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy.exc import IntegrityError
-
-from greenhouse_core.repository import IrrigationRepository, IrrigatorExistsError
+from greenhouse_core.repository import DeviceIdExistsError, IrrigationRepository, IrrigatorExistsError
 
 __all__ = [
     "DeviceIdExistsError",
@@ -22,10 +20,6 @@ __all__ = [
     "create_sensor",
     "ensure_plant_in_cluster",
 ]
-
-
-class DeviceIdExistsError(LookupError):
-    """The Tuya device id is already registered (the database's unique constraint refused it)."""
 
 
 class PlantNotInClusterError(LookupError):
@@ -57,19 +51,17 @@ def create_irrigator(
         DeviceIdExistsError: the Tuya device id is already registered (session rolled back).
     """
     try:
-        irrigator_id = repo.add_irrigator(
-            cluster_id=cluster_id,
-            tuya_device_id=tuya_device_id,
-            name=name,
-            irrigator_type=irrigator_type,
-            config=config,
-        )
+        with repo.refusing_duplicate_device_id(tuya_device_id):
+            irrigator_id = repo.add_irrigator(
+                cluster_id=cluster_id,
+                tuya_device_id=tuya_device_id,
+                name=name,
+                irrigator_type=irrigator_type,
+                config=config,
+            )
     except IrrigatorExistsError:
         repo.rollback()
         raise
-    except IntegrityError:
-        repo.rollback()
-        raise DeviceIdExistsError(tuya_device_id) from None
     if reservoir_l is not None or flow_rate_l_per_min is not None:
         repo.update_irrigator(irrigator_id, reservoir_l=reservoir_l, flow_rate_l_per_min=flow_rate_l_per_min)
     return irrigator_id
@@ -106,7 +98,7 @@ def create_sensor(
         DeviceIdExistsError: the Tuya device id is already registered (session rolled back).
     """
     ensure_plant_in_cluster(repo, cluster_id, plant_id)
-    try:
+    with repo.refusing_duplicate_device_id(tuya_device_id):
         return repo.add_sensor(
             cluster_id=cluster_id,
             tuya_device_id=tuya_device_id,
@@ -115,6 +107,3 @@ def create_sensor(
             config=config,
             plant_id=plant_id,
         )
-    except IntegrityError:
-        repo.rollback()
-        raise DeviceIdExistsError(tuya_device_id) from None

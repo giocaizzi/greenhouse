@@ -1,7 +1,5 @@
 """Temperature-based fallback when the cluster has no live sensor data."""
 
-from typing import cast
-
 from greenhouse_core.constants import (
     CONFIDENCE_CONFIG_FALLBACK,
     CONFIDENCE_NO_DATA,
@@ -38,8 +36,8 @@ def _config_fallback(db: IrrigationRepository, cluster_id: int, base: Irrigation
     effective = db.get_effective_config(cluster_id)
     effective_mode = effective["mode"]["value"]
     base.action = Action.SKIP if effective_mode == "manual" else Action.IRRIGATE
-    base.duration_minutes = int(cast(int | None, effective["duration_minutes"]["value"]) or DEFAULT_DURATION_MINUTES)
-    base.interval_hours = int(cast(int | None, effective["interval_hours"]["value"]) or DEFAULT_INTERVAL_HOURS)
+    base.duration_minutes = int(effective["duration_minutes"]["value"] or DEFAULT_DURATION_MINUTES)
+    base.interval_hours = int(effective["interval_hours"]["value"] or DEFAULT_INTERVAL_HOURS)
     base.confidence = CONFIDENCE_CONFIG_FALLBACK
     base.add_reason(
         code=TriggerCode.CONFIG_FALLBACK,
@@ -94,7 +92,7 @@ def temperature_based_decision(
 
     if temp is None:
         if config:
-            # B-24 (preserved): the configured schedule is honoured only when a cluster config row exists.
+            # Known quirk: only a cluster config row enables this; a global-only schedule falls to NO_DATA.
             return _config_fallback(db, cluster_id, base)
         base.add_reason(
             code=TriggerCode.NO_DATA,

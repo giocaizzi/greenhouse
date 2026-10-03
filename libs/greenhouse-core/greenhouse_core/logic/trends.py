@@ -56,7 +56,7 @@ def _moisture_trend(first: Sequence[CleanedReading], second: Sequence[CleanedRea
 
 def _temperature_trend(first: Sequence[CleanedReading], second: Sequence[CleanedReading]) -> str | None:
     """Label of the temperature means between the two halves, or None without data."""
-    # Truthiness filter kept on purpose: a 0 °C reading is dropped (B-18, preserved).
+    # Known quirk: a truthiness filter, so a genuine 0 °C reading is dropped as missing.
     temp_first = [r.temperature for r in first if r.temperature]
     temp_second = [r.temperature for r in second if r.temperature]
     if not temp_first or not temp_second:

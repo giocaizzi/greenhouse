@@ -1879,8 +1879,8 @@ add(
         ),
         (
             "19",
-            "    duration = event.duration_minutes or 2",
-            "    duration = event.duration_minutes or 1",
+            "    duration = event.duration_minutes or DEFAULT_DURATION_MINUTES",
+            "    duration = event.duration_minutes or DEFAULT_DURATION_MINUTES - 1",
             "default duration 2 -> 1",
         ),
         (
