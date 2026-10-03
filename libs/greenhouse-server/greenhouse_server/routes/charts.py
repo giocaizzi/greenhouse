@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from fastapi import APIRouter, Query
 
+from greenhouse_core.models import Plant
 from greenhouse_core.schemas import (
     ChartPayloadResponse,
     HeatmapResponse,
@@ -31,7 +34,7 @@ router = APIRouter(tags=["charts"])
 
 
 @router.get("/plants/{plant_id}", response_model=PlantResponse)
-def get_plant(plant_id: int, repo: RepoDep):
+def get_plant(plant_id: int, repo: RepoDep) -> Plant:
     """Fetch a single plant by ID across all clusters.
 
     Args:
@@ -53,7 +56,7 @@ def plant_chart_data(
     plant_db: PlantDbDep,
     hours: int = Query(24, ge=1, le=MAX_LOOKBACK_HOURS),
     metric: str = Query("soil_moisture"),
-):
+) -> dict[str, Any]:
     """Return the time-series chart payload for a single plant.
 
     Includes sensor readings, irrigation events, and the plant-care threshold
@@ -83,7 +86,7 @@ def cluster_chart_data(
     plant_db: PlantDbDep,
     hours: int = Query(24, ge=1, le=MAX_LOOKBACK_HOURS),
     metric: str = Query("soil_moisture"),
-):
+) -> dict[str, Any]:
     """Return the time-series chart payload aggregated across every sensor in a cluster.
 
     Args:
@@ -108,7 +111,7 @@ def cluster_overlay(
     cluster_id: int,
     repo: RepoDep,
     hours: int = Query(72, ge=1, le=MAX_LOOKBACK_HOURS),
-):
+) -> MultiMetricOverlayResponse:
     """Return a multi-metric overlay payload with soil moisture, humidity, and light normalised to 0-100.
 
     All three series share a common Y axis (0-100) so they can be overlaid on one chart.
@@ -134,7 +137,7 @@ def cluster_heatmap(
     cluster_id: int,
     repo: RepoDep,
     days: int = Query(30, ge=1, le=365),
-):
+) -> HeatmapResponse:
     """Return irrigation-frequency heatmap cells for a 7×24 weekday-by-hour grid.
 
     Each non-zero cell records the count of irrigation events and the total
@@ -159,7 +162,7 @@ def cluster_heatmap(
 def plant_health_timeline(
     plant_id: int,
     repo: RepoDep,
-):
+) -> PlantHealthTimelineResponse:
     """Return the 90-day daily health score timeline for a single plant.
 
     Health score per day (0–100) is the mean soil moisture across all sensors

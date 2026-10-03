@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter, HTTPException
 
+from greenhouse_core.repository import IrrigationRepository
 from greenhouse_core.schemas import (
     HealthResponse,
     SchedulerJobResponse,
@@ -77,7 +78,7 @@ def delete_job(job_id: str) -> SuccessResponse:
     return SuccessResponse(success=True)
 
 
-def _set_paused(repo, paused: bool) -> SchedulerStateResponse:
+def _set_paused(repo: IrrigationRepository, paused: bool) -> SchedulerStateResponse:
     try:
         return SchedulerStateResponse(paused=sched.set_check_all_paused(repo, paused))
     except sched.JobNotRegisteredError as exc:

@@ -64,10 +64,9 @@ follow_imports = "silent"
 mypy_path = ["libs/greenhouse-core", "libs/greenhouse-server", "libs/greenhouse-cli"]
 
 [[tool.mypy.overrides]]
-# Framework-boundary profile: FastAPI route / Typer command signatures are introspected
-# (OpenAPI, response_model inference, --help) and are never edited; helpers stay fully typed.
+# Framework-boundary profile for the Typer commands: their signatures are introspected
+# (--help) and are never edited; helpers stay fully typed. (Server routes are fully strict.)
 module = [
-    "greenhouse_server.routes.*",
     "greenhouse_cli.commands.*",
     "greenhouse_cli.main",
 ]

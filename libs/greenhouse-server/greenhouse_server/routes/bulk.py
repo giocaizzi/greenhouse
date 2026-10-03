@@ -10,7 +10,7 @@ router = APIRouter(prefix="/bulk", tags=["bulk"])
 
 
 @router.post("/stop-all", response_model=StopAllResponse, summary="Emergency stop all irrigators")
-def bulk_stop_all(repo: RepoDep, registry: DeviceRegistryDep, notifier: NtfyNotifierDep):
+def bulk_stop_all(repo: RepoDep, registry: DeviceRegistryDep, notifier: NtfyNotifierDep) -> StopAllResponse:
     """Send an emergency stop command to every irrigator in the system.
 
     Iterates all irrigators regardless of cluster, calls the per-adapter

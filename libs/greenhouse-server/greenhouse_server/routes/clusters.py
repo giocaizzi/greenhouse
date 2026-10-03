@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter, Query, status
 
+from greenhouse_core.models import Cluster
 from greenhouse_core.schemas import (
     ClusterDetailResponse,
     ClusterResponse,
@@ -20,7 +21,7 @@ router = APIRouter(prefix="/clusters", tags=["clusters"])
 
 
 @router.post("", response_model=ClusterResponse, status_code=status.HTTP_201_CREATED, summary="Create a cluster")
-def create_cluster(request: CreateClusterRequest, repo: RepoDep):
+def create_cluster(request: CreateClusterRequest, repo: RepoDep) -> Cluster | None:
     """Create a new plant cluster.
 
     A cluster groups plants that share an irrigator and are watered together;
@@ -39,7 +40,7 @@ def create_cluster(request: CreateClusterRequest, repo: RepoDep):
 
 
 @router.get("", response_model=list[ClusterResponse], summary="List all clusters")
-def list_clusters(repo: RepoDep):
+def list_clusters(repo: RepoDep) -> list[Cluster]:
     """List every cluster in the system.
 
     Returns:
@@ -49,7 +50,7 @@ def list_clusters(repo: RepoDep):
 
 
 @router.get("/{cluster_id}", response_model=ClusterResponse, summary="Get a cluster by ID")
-def get_cluster(cluster_id: int, repo: RepoDep):
+def get_cluster(cluster_id: int, repo: RepoDep) -> Cluster:
     """Fetch a single cluster by ID.
 
     Args:
@@ -78,7 +79,7 @@ def get_cluster_detail(
         default="children",
         description="Reserved for future expansion levels — currently must be ``children`` (the default).",
     ),
-):
+) -> ClusterDetailResponse:
     """Return a cluster together with every child resource in one round-trip.
 
     Inlines the cluster's plants, sensors, irrigators, irrigation config, and
@@ -116,7 +117,7 @@ def get_cluster_detail(
 
 
 @router.put("/{cluster_id}", response_model=ClusterResponse, summary="Update a cluster")
-def update_cluster(cluster_id: int, request: UpdateClusterRequest, repo: RepoDep):
+def update_cluster(cluster_id: int, request: UpdateClusterRequest, repo: RepoDep) -> Cluster | None:
     """Partially update a cluster's metadata.
 
     Only fields present in the request body are modified; omitted fields are
@@ -140,7 +141,7 @@ def update_cluster(cluster_id: int, request: UpdateClusterRequest, repo: RepoDep
 
 
 @router.delete("/{cluster_id}", response_model=SuccessResponse, summary="Delete a cluster")
-def delete_cluster(cluster_id: int, repo: RepoDep):
+def delete_cluster(cluster_id: int, repo: RepoDep) -> SuccessResponse:
     """Delete a cluster and all its associated data.
 
     Cascades to plants, sensors, irrigators, and irrigation config. This

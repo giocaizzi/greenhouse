@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter, HTTPException, Query, status
 
+from greenhouse_core.models import Irrigator
 from greenhouse_core.schemas import (
     CreateIrrigatorRequest,
     IrrigatorActionResponse,
@@ -38,7 +39,7 @@ def list_all_irrigators(
     cluster_id: int | None = Query(default=None, description="Restrict results to a specific cluster"),
     limit: int = Query(default=100, ge=1, le=500),
     cursor: int | None = Query(default=None, description="Id cursor — return rows with id > cursor"),
-):
+) -> IrrigatorListResponse:
     """List every irrigator across all clusters with optional cluster filter and cursor pagination.
 
     Args:
@@ -65,7 +66,7 @@ def list_all_irrigators(
     status_code=status.HTTP_201_CREATED,
     summary="Register the cluster's irrigator",
 )
-def add_irrigator(cluster_id: int, request: CreateIrrigatorRequest, repo: RepoDep):
+def add_irrigator(cluster_id: int, request: CreateIrrigatorRequest, repo: RepoDep) -> Irrigator | None:
     """Register the Tuya irrigator for a cluster.
 
     A cluster has at most one irrigator (strict 0:1). Registering a second one
@@ -111,7 +112,7 @@ def add_irrigator(cluster_id: int, request: CreateIrrigatorRequest, repo: RepoDe
     response_model=IrrigatorResponse,
     summary="Get the cluster's irrigator",
 )
-def get_irrigator(cluster_id: int, repo: RepoDep):
+def get_irrigator(cluster_id: int, repo: RepoDep) -> Irrigator:
     """Fetch the cluster's single irrigator.
 
     Args:
@@ -131,7 +132,7 @@ def get_irrigator(cluster_id: int, repo: RepoDep):
     response_model=IrrigatorResponse,
     summary="Update the cluster's irrigator",
 )
-def update_irrigator(cluster_id: int, request: UpdateIrrigatorRequest, repo: RepoDep):
+def update_irrigator(cluster_id: int, request: UpdateIrrigatorRequest, repo: RepoDep) -> Irrigator | None:
     """Partially update the metadata of the cluster's irrigator.
 
     Only fields present in the request body are modified; omitted fields are
@@ -159,7 +160,7 @@ def update_irrigator(cluster_id: int, request: UpdateIrrigatorRequest, repo: Rep
     response_model=SuccessResponse,
     summary="Delete the cluster's irrigator",
 )
-def delete_irrigator(cluster_id: int, repo: RepoDep):
+def delete_irrigator(cluster_id: int, repo: RepoDep) -> SuccessResponse:
     """Delete the cluster's irrigator and all its historical events.
 
     This operation is irreversible.

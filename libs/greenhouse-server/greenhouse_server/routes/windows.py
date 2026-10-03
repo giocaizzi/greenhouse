@@ -27,7 +27,7 @@ router = APIRouter(tags=["windows"])
     response_model=IrrigationWindowListResponse,
     summary="List a cluster's irrigation windows",
 )
-def list_windows(cluster_id: int, repo: RepoDep):
+def list_windows(cluster_id: int, repo: RepoDep) -> IrrigationWindowListResponse:
     """Return every configured watering window for the cluster, oldest first.
 
     Args:
@@ -55,7 +55,7 @@ def list_windows(cluster_id: int, repo: RepoDep):
     status_code=status.HTTP_201_CREATED,
     summary="Create an irrigation window",
 )
-def add_window(cluster_id: int, request: CreateIrrigationWindowRequest, repo: RepoDep):
+def add_window(cluster_id: int, request: CreateIrrigationWindowRequest, repo: RepoDep) -> IrrigationWindowResponse:
     """Register a new local-time window during which this cluster may irrigate.
 
     Multiple windows per cluster are allowed (e.g. a morning + a backup
@@ -91,7 +91,9 @@ def add_window(cluster_id: int, request: CreateIrrigationWindowRequest, repo: Re
     response_model=IrrigationWindowResponse,
     summary="Update an irrigation window",
 )
-def update_window(cluster_id: int, window_id: int, request: UpdateIrrigationWindowRequest, repo: RepoDep):
+def update_window(
+    cluster_id: int, window_id: int, request: UpdateIrrigationWindowRequest, repo: RepoDep
+) -> IrrigationWindowResponse:
     """Patch a window's hours, weekday mask, or label.
 
     Args:
@@ -122,7 +124,7 @@ def update_window(cluster_id: int, window_id: int, request: UpdateIrrigationWind
     response_model=SuccessResponse,
     summary="Delete an irrigation window",
 )
-def delete_window(cluster_id: int, window_id: int, repo: RepoDep):
+def delete_window(cluster_id: int, window_id: int, repo: RepoDep) -> SuccessResponse:
     """Remove a watering window.
 
     Args:

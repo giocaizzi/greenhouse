@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter, status
 
+from greenhouse_core.models import VacationWindow
 from greenhouse_core.schemas import (
     SuccessResponse,
     UpdateVacationWindowRequest,
@@ -15,7 +16,7 @@ router = APIRouter(prefix="/vacation", tags=["vacation"])
 
 
 @router.get("", response_model=VacationListResponse, summary="List vacation windows")
-def list_vacation_windows(repo: RepoDep):
+def list_vacation_windows(repo: RepoDep) -> VacationListResponse:
     """Return all vacation windows together with the currently active one.
 
     Returns:
@@ -29,7 +30,7 @@ def list_vacation_windows(repo: RepoDep):
 @router.post(
     "", response_model=VacationResponse, status_code=status.HTTP_201_CREATED, summary="Create a vacation window"
 )
-def create_vacation_window(request: VacationCreateRequest, repo: RepoDep):
+def create_vacation_window(request: VacationCreateRequest, repo: RepoDep) -> VacationWindow:
     """Schedule a vacation window that makes the engine ration water to last the trip.
 
     While the window is active the decision engine appends a
@@ -63,7 +64,9 @@ def create_vacation_window(request: VacationCreateRequest, repo: RepoDep):
 
 
 @router.put("/{window_id}", response_model=VacationResponse, summary="Update a vacation window")
-def update_vacation_window(window_id: int, request: UpdateVacationWindowRequest, repo: RepoDep):
+def update_vacation_window(
+    window_id: int, request: UpdateVacationWindowRequest, repo: RepoDep
+) -> VacationWindow | None:
     """Partially update a vacation window.
 
     Only fields present in the request body are modified; omitted fields are
@@ -92,7 +95,7 @@ def update_vacation_window(window_id: int, request: UpdateVacationWindowRequest,
 
 
 @router.delete("/{window_id}", response_model=SuccessResponse, summary="Delete a vacation window")
-def delete_vacation_window(window_id: int, repo: RepoDep):
+def delete_vacation_window(window_id: int, repo: RepoDep) -> SuccessResponse:
     """Remove a vacation window by ID.
 
     Args:

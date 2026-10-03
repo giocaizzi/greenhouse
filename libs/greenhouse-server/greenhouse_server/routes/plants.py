@@ -3,6 +3,7 @@
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel
 
+from greenhouse_core.models import Plant
 from greenhouse_core.repository import SameClusterMoveError
 from greenhouse_core.schemas import (
     CreatePlantRequest,
@@ -35,7 +36,7 @@ def list_all_plants(
     category: str | None = Query(default=None, description="Restrict results to a plant category"),
     limit: int = Query(default=100, ge=1, le=500),
     cursor: int | None = Query(default=None, description="Id cursor — return rows with id > cursor"),
-):
+) -> PlantListResponse:
     """List every plant across all clusters, with optional filters and cursor pagination.
 
     The cluster-scoped list at ``/clusters/{id}/plants`` is unchanged; this
@@ -67,7 +68,7 @@ def list_all_plants(
 
 
 @router.post("/clusters/{cluster_id}/plants", response_model=PlantResponse, status_code=status.HTTP_201_CREATED)
-def add_plant(cluster_id: int, request: CreatePlantRequest, repo: RepoDep):
+def add_plant(cluster_id: int, request: CreatePlantRequest, repo: RepoDep) -> Plant:
     """Add a plant to a cluster.
 
     Care thresholds (water needs, temperature/humidity ranges) can be supplied
@@ -103,7 +104,7 @@ def add_plant(cluster_id: int, request: CreatePlantRequest, repo: RepoDep):
 
 
 @router.get("/clusters/{cluster_id}/plants", response_model=list[PlantResponse])
-def list_plants(cluster_id: int, repo: RepoDep):
+def list_plants(cluster_id: int, repo: RepoDep) -> list[Plant]:
     """List every plant in a cluster.
 
     Args:
@@ -116,7 +117,7 @@ def list_plants(cluster_id: int, repo: RepoDep):
 
 
 @router.put("/clusters/{cluster_id}/plants/{plant_id}", response_model=PlantResponse, summary="Update a plant")
-def update_plant(cluster_id: int, plant_id: int, request: UpdatePlantRequest, repo: RepoDep):
+def update_plant(cluster_id: int, plant_id: int, request: UpdatePlantRequest, repo: RepoDep) -> Plant | None:
     """Partially update a plant's care metadata.
 
     Only fields present in the request body are modified; omitted fields are
@@ -141,7 +142,7 @@ def update_plant(cluster_id: int, plant_id: int, request: UpdatePlantRequest, re
 
 
 @router.delete("/clusters/{cluster_id}/plants/{plant_id}", response_model=SuccessResponse, summary="Delete a plant")
-def delete_plant(cluster_id: int, plant_id: int, repo: RepoDep):
+def delete_plant(cluster_id: int, plant_id: int, repo: RepoDep) -> SuccessResponse:
     """Delete a plant from a cluster.
 
     Sensors previously linked to this plant retain their cluster membership
@@ -165,7 +166,7 @@ def delete_plant(cluster_id: int, plant_id: int, repo: RepoDep):
 
 
 @router.post("/plants/{plant_id}/move", response_model=PlantResponse)
-def move_plant(plant_id: int, request: MovePlantRequest, repo: RepoDep):
+def move_plant(plant_id: int, request: MovePlantRequest, repo: RepoDep) -> Plant | None:
     """Move a plant from its current cluster to a different cluster.
 
     The plant keeps its id, its plant_health_daily history, and its learning
@@ -201,7 +202,7 @@ def move_plant(plant_id: int, request: MovePlantRequest, repo: RepoDep):
 
 
 @router.post("/plants/sync", response_model=SyncPlantsResponse)
-def sync_plants(request: SyncPlantsRequest, repo: RepoDep, cluster_svc: ClusterServiceDep):
+def sync_plants(request: SyncPlantsRequest, repo: RepoDep, cluster_svc: ClusterServiceDep) -> SyncPlantsResponse:
     """Refresh plant care thresholds from the evidence-based plant database.
 
     Resolves species to care data lookup and writes the result onto the matching
@@ -239,7 +240,7 @@ class SnapshotResponse(BaseModel):
 
 
 @router.get("/plants/{plant_id}/health", response_model=PlantHealthResponse)
-def get_plant_health(plant_id: int, repo: RepoDep, health_svc: PlantHealthServiceDep):
+def get_plant_health(plant_id: int, repo: RepoDep, health_svc: PlantHealthServiceDep) -> PlantHealthResponse:
     """Return the current health score and 90-day history for a plant.
 
     Computes a fresh 0–100 composite score from readings over the last 14 days
@@ -265,7 +266,7 @@ def get_plant_health(plant_id: int, repo: RepoDep, health_svc: PlantHealthServic
 
 
 @router.post("/plants/health/snapshot", response_model=SnapshotResponse)
-def trigger_health_snapshot(health_svc: PlantHealthServiceDep, repo: RepoDep):
+def trigger_health_snapshot(health_svc: PlantHealthServiceDep, repo: RepoDep) -> SnapshotResponse:
     """Compute today's health score for every plant and persist the daily snapshots.
 
     Intended for manual ops and testing. The scheduler calls this automatically

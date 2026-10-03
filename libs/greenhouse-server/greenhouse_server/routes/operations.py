@@ -55,7 +55,7 @@ _NO_IRRIGATION_STATS = {
 
 
 @router.get("/clusters/{cluster_id}/status", response_model=ClusterStatusResponse)
-def cluster_status(cluster_id: int, cluster_svc: ClusterServiceDep):
+def cluster_status(cluster_id: int, cluster_svc: ClusterServiceDep) -> ClusterStatusResponse:
     """Return a full cluster snapshot with the current decision-engine recommendation.
 
     The snapshot covers the config, plants, sensors (latest reading + age) and
@@ -280,7 +280,7 @@ def sync(request: SyncRequest, sync_svc: SyncServiceDep, repo: RepoDep) -> SyncR
 
 
 @router.get("/clusters/{cluster_id}/learn", response_model=LearnResponse)
-def learn(cluster_id: int, repo: RepoDep, plant_db: PlantDbDep):
+def learn(cluster_id: int, repo: RepoDep, plant_db: PlantDbDep) -> LearnResponse:
     """Return a human-readable learning report for a cluster.
 
     Summarises absorption rates, drainage profiles, and any advisory alerts
@@ -308,7 +308,7 @@ def history(
     cluster_svc: ClusterServiceDep,
     hours: int = Query(default=24, ge=1),
     limit: int = Query(default=50, ge=1),
-):
+) -> HistoryResponse:
     """Return recent sensor readings and irrigation events for a cluster.
 
     Args:
@@ -346,7 +346,7 @@ def history(
 
 
 @router.get("/clusters/{cluster_id}/stats", response_model=StatsResponse)
-def stats(cluster_id: int, repo: RepoDep, days: int = Query(default=7, ge=1)):
+def stats(cluster_id: int, repo: RepoDep, days: int = Query(default=7, ge=1)) -> StatsResponse:
     """Return aggregate irrigation statistics for a cluster.
 
     Args:
@@ -369,7 +369,7 @@ def stats(cluster_id: int, repo: RepoDep, days: int = Query(default=7, ge=1)):
 
 
 @router.get("/clusters/{cluster_id}/stats/export")
-def stats_export(cluster_id: int, repo: RepoDep, days: int = Query(default=7, ge=1)):
+def stats_export(cluster_id: int, repo: RepoDep, days: int = Query(default=7, ge=1)) -> StreamingResponse:
     """Export raw irrigation events for a cluster as a CSV download.
 
     The CSV columns are: timestamp, date, time, irrigator, action,
