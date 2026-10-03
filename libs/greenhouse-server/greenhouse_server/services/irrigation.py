@@ -328,7 +328,7 @@ def check_has_alerts(results: "Sequence[CheckResult]") -> bool:
 
 
 def _error_result(reason: str) -> PipelineResult:
-    """The pipeline's early-exit shape (``routes/operations`` string-matches "cluster not found")."""
+    """The pipeline's early-exit shape (an unknown cluster, or no data for a decision)."""
     return {"action": "error", "reason": reason, "confidence": 0}
 
 

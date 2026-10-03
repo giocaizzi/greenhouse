@@ -1,5 +1,7 @@
 """FastAPI dependency injection."""
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import Annotated, cast, get_args
 
 from fastapi import Depends, HTTPException, Request
@@ -12,6 +14,7 @@ from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server import state
 from greenhouse_server.services.charts import Metric
 from greenhouse_server.services.cluster import ClusterService
+from greenhouse_server.services.errors import NotFoundError
 from greenhouse_server.services.health import PlantHealthService
 from greenhouse_server.services.health_monitor import DeviceHealthMonitor
 from greenhouse_server.services.irrigation import IrrigationService
@@ -152,6 +155,19 @@ def require_alert(repo: IrrigationRepository, alert_id: int) -> Alert:
     if not alert:
         raise HTTPException(status_code=404, detail="Alert not found")
     return alert
+
+
+@contextmanager
+def not_found_as_404(detail: str) -> Iterator[None]:
+    """Translate a service's :class:`~greenhouse_server.services.errors.NotFoundError` into 404 ``detail``.
+
+    Services raise a typed not-found error; each route keeps its own detail string by wrapping
+    only the service call: ``with not_found_as_404("Cluster not found"): svc.get_…(…)``.
+    """
+    try:
+        yield
+    except NotFoundError:
+        raise HTTPException(status_code=404, detail=detail) from None
 
 
 # --- Query-value validation (400) ---

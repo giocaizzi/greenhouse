@@ -6,7 +6,7 @@ import json
 import time
 from typing import TYPE_CHECKING, Any
 
-from fastapi import APIRouter, Form, HTTPException, Query, Request
+from fastapi import APIRouter, Form, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from greenhouse_core.logic.timing import is_within_quiet_hours
@@ -15,6 +15,7 @@ from greenhouse_server.deps import (
     ClusterServiceDep,
     PlantDbDep,
     RepoDep,
+    not_found_as_404,
     require_cluster,
     require_metric,
 )
@@ -190,9 +191,8 @@ def cluster_detail(
     hours: int = Query(24, ge=1, le=MAX_LOOKBACK_HOURS),
 ):
     """Render the unified cluster detail page (status, charts, config, windows, devices)."""
-    status = svc.get_cluster_status(cluster_id)
-    if status is None:
-        raise HTTPException(404, "Cluster not found")
+    with not_found_as_404("Cluster not found"):
+        status = svc.get_cluster_status(cluster_id)
 
     data = _detail_data(repo, plant_db, cluster_id, hours)
     effective_config: dict[str, dict[str, Any]] = data["effective_config"]
@@ -237,9 +237,8 @@ def cluster_status_fragment(request: Request, cluster_id: int, svc: ClusterServi
     Retained alongside the richer ``card-fragment`` endpoint so existing
     bookmarks and the cluster detail page keep working unchanged.
     """
-    status = svc.get_cluster_status(cluster_id)
-    if status is None:
-        raise HTTPException(404, "Cluster not found")
+    with not_found_as_404("Cluster not found"):
+        status = svc.get_cluster_status(cluster_id)
     return templates.TemplateResponse(
         request, "partials/_cluster_status.html", base_context(request, status=status, cluster_id=cluster_id)
     )
@@ -253,9 +252,8 @@ def cluster_card_fragment(request: Request, cluster_id: int, svc: ClusterService
     rolled up inline so the relationship between them is visible without
     drilling into the cluster detail page.
     """
-    status = svc.get_cluster_status(cluster_id)
-    if status is None:
-        raise HTTPException(404, "Cluster not found")
+    with not_found_as_404("Cluster not found"):
+        status = svc.get_cluster_status(cluster_id)
     return templates.TemplateResponse(
         request,
         "partials/_cluster_card.html",
@@ -273,9 +271,8 @@ def cluster_chart_fragment(
     hours: int = Query(24, ge=1, le=MAX_LOOKBACK_HOURS),
 ):
     """Render one metric's cluster chart panel (HTMX fragment)."""
-    payload = build_cluster_chart_payload(repo, plant_db, cluster_id, hours, require_metric(metric))
-    if not payload:
-        raise HTTPException(404, "Cluster not found")
+    with not_found_as_404("Cluster not found"):
+        payload = build_cluster_chart_payload(repo, plant_db, cluster_id, hours, require_metric(metric))
     return templates.TemplateResponse(
         request,
         "partials/_chart_panel.html",
@@ -291,9 +288,8 @@ def cluster_overlay_fragment(
     hours: int = Query(72, ge=1, le=MAX_LOOKBACK_HOURS),
 ):
     """Render the multi-metric overlay chart panel (HTMX fragment)."""
-    payload = build_overlay_payload(repo, cluster_id, hours)
-    if payload is None:
-        raise HTTPException(404, "Cluster not found")
+    with not_found_as_404("Cluster not found"):
+        payload = build_overlay_payload(repo, cluster_id, hours)
     return templates.TemplateResponse(
         request,
         "partials/_chart_overlay.html",
@@ -309,9 +305,8 @@ def cluster_heatmap_fragment(
     days: int = Query(30, ge=1, le=365),
 ):
     """Render the irrigation weekday-by-hour heatmap panel (HTMX fragment)."""
-    payload = build_heatmap_payload(repo, cluster_id, days)
-    if payload is None:
-        raise HTTPException(404, "Cluster not found")
+    with not_found_as_404("Cluster not found"):
+        payload = build_heatmap_payload(repo, cluster_id, days)
     return templates.TemplateResponse(
         request,
         "partials/_heatmap_panel.html",

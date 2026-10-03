@@ -41,8 +41,6 @@ def dashboard_hero(request: Request, repo: RepoDep, svc: ClusterServiceDep):
     counts: Counter[str] = Counter()
     for cluster in clusters:
         status = svc.get_cluster_status(cluster.id)
-        if not status:
-            continue
         action = (status.get("decision") or {}).get("action") or "unknown"
         counts[action.lower()] += 1
     return templates.TemplateResponse(

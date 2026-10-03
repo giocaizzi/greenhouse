@@ -9,17 +9,10 @@ from greenhouse_core.logic import IrrigationDecision, IrrigationLogic
 from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_core.utils import format_timestamp
+from greenhouse_server.services.errors import ClusterNotFoundError, PlantNotFoundError
 
 if TYPE_CHECKING:
     from greenhouse_core.models import IrrigationConfig, Irrigator, Plant, Sensor
-
-
-class PlantNotFoundError(LookupError):
-    """Raised by ``ClusterService.sync_plants`` when no cluster lists the requested plant id."""
-
-
-class ClusterNotFoundError(LookupError):
-    """Raised by ``ClusterService.sync_plants`` when the requested cluster id does not exist."""
 
 
 class ClusterStatus(TypedDict):
@@ -99,11 +92,15 @@ class ClusterService:
         self._repo = repo
         self._plant_db = plant_db
 
-    def get_cluster_status(self, cluster_id: int) -> ClusterStatus | None:
-        """Full cluster status: config, plants, sensors, irrigators, smart decision."""
+    def get_cluster_status(self, cluster_id: int) -> ClusterStatus:
+        """Full cluster status: config, plants, sensors, irrigators, smart decision.
+
+        Raises:
+            ClusterNotFoundError: no such cluster.
+        """
         cluster = self._repo.get_cluster(cluster_id)
         if not cluster:
-            return None
+            raise ClusterNotFoundError(cluster_id)
 
         config = self._repo.get_irrigation_config(cluster_id)
         plants = self._repo.get_plants_in_cluster(cluster_id)
@@ -165,11 +162,15 @@ class ClusterService:
             }
         return irrigator_data
 
-    def get_cluster_history(self, cluster_id: int, hours: int = 24, limit: int = 50) -> ClusterHistory | None:
-        """Get sensor readings + irrigation events for a cluster."""
+    def get_cluster_history(self, cluster_id: int, hours: int = 24, limit: int = 50) -> ClusterHistory:
+        """Get sensor readings + irrigation events for a cluster.
+
+        Raises:
+            ClusterNotFoundError: no such cluster.
+        """
         cluster = self._repo.get_cluster(cluster_id)
         if not cluster:
-            return None
+            raise ClusterNotFoundError(cluster_id)
 
         sensors = self._repo.get_sensors_in_cluster(cluster_id)
         sensor_histories = []

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Query
 
 from greenhouse_core.schemas import (
     ChartPayloadResponse,
@@ -11,7 +11,14 @@ from greenhouse_core.schemas import (
     PlantHealthTimelineResponse,
     PlantResponse,
 )
-from greenhouse_server.deps import MAX_LOOKBACK_HOURS, PlantDbDep, RepoDep, require_metric, require_plant
+from greenhouse_server.deps import (
+    MAX_LOOKBACK_HOURS,
+    PlantDbDep,
+    RepoDep,
+    not_found_as_404,
+    require_metric,
+    require_plant,
+)
 from greenhouse_server.services.charts import (
     build_cluster_chart_payload,
     build_heatmap_payload,
@@ -65,10 +72,8 @@ def plant_chart_data(
         HTTPException: 400 if the metric is unsupported, 404 if the plant
             does not exist.
     """
-    payload = build_plant_chart_payload(repo, plant_db, plant_id, hours, require_metric(metric))
-    if not payload:
-        raise HTTPException(404, "Plant not found")
-    return payload
+    with not_found_as_404("Plant not found"):
+        return build_plant_chart_payload(repo, plant_db, plant_id, hours, require_metric(metric))
 
 
 @router.get("/clusters/{cluster_id}/chart-data", response_model=ChartPayloadResponse)
@@ -94,10 +99,8 @@ def cluster_chart_data(
         HTTPException: 400 if the metric is unsupported, 404 if the cluster
             does not exist.
     """
-    payload = build_cluster_chart_payload(repo, plant_db, cluster_id, hours, require_metric(metric))
-    if not payload:
-        raise HTTPException(404, "Cluster not found")
-    return payload
+    with not_found_as_404("Cluster not found"):
+        return build_cluster_chart_payload(repo, plant_db, cluster_id, hours, require_metric(metric))
 
 
 @router.get("/clusters/{cluster_id}/overlay", response_model=MultiMetricOverlayResponse)
@@ -122,10 +125,8 @@ def cluster_overlay(
     Raises:
         HTTPException: 404 if the cluster does not exist.
     """
-    payload = build_overlay_payload(repo, cluster_id, hours)
-    if payload is None:
-        raise HTTPException(404, "Cluster not found")
-    return payload
+    with not_found_as_404("Cluster not found"):
+        return build_overlay_payload(repo, cluster_id, hours)
 
 
 @router.get("/clusters/{cluster_id}/heatmap", response_model=HeatmapResponse)
@@ -150,10 +151,8 @@ def cluster_heatmap(
     Raises:
         HTTPException: 404 if the cluster does not exist.
     """
-    payload = build_heatmap_payload(repo, cluster_id, days)
-    if payload is None:
-        raise HTTPException(404, "Cluster not found")
-    return payload
+    with not_found_as_404("Cluster not found"):
+        return build_heatmap_payload(repo, cluster_id, days)
 
 
 @router.get("/plants/{plant_id}/health-timeline", response_model=PlantHealthTimelineResponse)
@@ -176,7 +175,5 @@ def plant_health_timeline(
     Raises:
         HTTPException: 404 if the plant does not exist.
     """
-    payload = build_plant_health_timeline_payload(repo, plant_id)
-    if payload is None:
-        raise HTTPException(404, "Plant not found")
-    return payload
+    with not_found_as_404("Plant not found"):
+        return build_plant_health_timeline_payload(repo, plant_id)

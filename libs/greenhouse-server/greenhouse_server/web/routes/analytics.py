@@ -15,6 +15,7 @@ from greenhouse_server.deps import (
     PlantDbDep,
     RepoDep,
     WeatherClientDep,
+    not_found_as_404,
     require_cluster,
 )
 from greenhouse_server.scheduler import (
@@ -49,9 +50,8 @@ def cluster_history(
     limit: int = Query(default=50, ge=1),
 ):
     """Render a cluster's recent readings and irrigation events."""
-    result = svc.get_cluster_history(cluster_id, hours=hours, limit=limit)
-    if not result:
-        raise HTTPException(404, "Cluster not found")
+    with not_found_as_404("Cluster not found"):
+        result = svc.get_cluster_history(cluster_id, hours=hours, limit=limit)
     return templates.TemplateResponse(
         request,
         "clusters/history.html",

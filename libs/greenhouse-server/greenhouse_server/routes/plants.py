@@ -23,7 +23,7 @@ from greenhouse_server.deps import (
     require_plant,
     require_plant_in_cluster,
 )
-from greenhouse_server.services.cluster import ClusterNotFoundError, PlantNotFoundError
+from greenhouse_server.services.errors import ClusterNotFoundError, PlantNotFoundError
 
 router = APIRouter(tags=["plants"])
 

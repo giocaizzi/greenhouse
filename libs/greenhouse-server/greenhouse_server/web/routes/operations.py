@@ -11,7 +11,7 @@ from greenhouse_server.deps import (
     SyncServiceDep,
     require_cluster,
 )
-from greenhouse_server.services.cluster import ClusterNotFoundError, PlantNotFoundError
+from greenhouse_server.services.errors import ClusterNotFoundError, PlantNotFoundError
 from greenhouse_server.services.irrigation import check_has_alerts
 from greenhouse_server.web.context import base_context
 from greenhouse_server.web.templating import templates

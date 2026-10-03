@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Query
 from fastapi.responses import StreamingResponse
 
 from greenhouse_core.schemas import (
@@ -34,6 +34,7 @@ from greenhouse_server.deps import (
     PlantDbDep,
     RepoDep,
     SyncServiceDep,
+    not_found_as_404,
     require_cluster,
 )
 from greenhouse_server.services.cluster import cluster_events_csv
@@ -71,9 +72,8 @@ def cluster_status(cluster_id: int, cluster_svc: ClusterServiceDep):
     Raises:
         HTTPException: 404 if the cluster does not exist.
     """
-    result = cluster_svc.get_cluster_status(cluster_id)
-    if not result:
-        raise HTTPException(status_code=404, detail="Cluster not found")
+    with not_found_as_404("Cluster not found"):
+        result = cluster_svc.get_cluster_status(cluster_id)
 
     config = result["config"]
     decision = result["decision"]
@@ -159,6 +159,7 @@ def irrigate(
     Raises:
         HTTPException: 404 if the cluster does not exist.
     """
+    require_cluster(repo, cluster_id)
     result = irrigation_svc.run_irrigation_pipeline(
         cluster_id,
         temp_override=request.temp_override,
@@ -166,8 +167,6 @@ def irrigate(
         no_sync=request.no_sync,
         force=request.force,
     )
-    if result.get("action") == "error" and result.get("reason") == "cluster not found":
-        raise HTTPException(status_code=404, detail="Cluster not found")
     repo.commit()
     return IrrigateResponse.model_validate(result)
 
@@ -323,9 +322,8 @@ def history(
     Raises:
         HTTPException: 404 if the cluster does not exist.
     """
-    result = cluster_svc.get_cluster_history(cluster_id, hours=hours, limit=limit)
-    if not result:
-        raise HTTPException(status_code=404, detail="Cluster not found")
+    with not_found_as_404("Cluster not found"):
+        result = cluster_svc.get_cluster_history(cluster_id, hours=hours, limit=limit)
     return HistoryResponse(
         cluster_name=result["cluster_name"],
         sensors=[

@@ -105,6 +105,7 @@ libs/greenhouse-server/greenhouse_server/services/charts.py
 libs/greenhouse-server/greenhouse_server/services/cluster.py
 libs/greenhouse-server/greenhouse_server/services/data_quality.py
 libs/greenhouse-server/greenhouse_server/services/efficacy.py
+libs/greenhouse-server/greenhouse_server/services/errors.py
 libs/greenhouse-server/greenhouse_server/services/forecast.py
 libs/greenhouse-server/greenhouse_server/services/health.py
 libs/greenhouse-server/greenhouse_server/services/health_monitor.py

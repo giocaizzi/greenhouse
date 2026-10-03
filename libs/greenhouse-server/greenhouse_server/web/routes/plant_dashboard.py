@@ -15,6 +15,7 @@ from greenhouse_server.deps import (
     PlantDbDep,
     PlantHealthServiceDep,
     RepoDep,
+    not_found_as_404,
     require_metric,
     require_plant_in_cluster,
 )
@@ -150,9 +151,8 @@ def plant_chart_fragment(
     """Render one metric's plant chart panel (HTMX fragment)."""
     chart_metric = require_metric(metric)
     require_plant_in_cluster(repo, cluster_id, plant_id)
-    payload = build_plant_chart_payload(repo, plant_db, plant_id, hours, chart_metric)
-    if not payload:
-        raise HTTPException(404, "Plant not found")
+    with not_found_as_404("Plant not found"):
+        payload = build_plant_chart_payload(repo, plant_db, plant_id, hours, chart_metric)
     return templates.TemplateResponse(
         request,
         "partials/_chart_panel.html",
@@ -169,9 +169,8 @@ def plant_health_fragment(
 ):
     """Render the plant's 90-day health timeline chart (HTMX fragment)."""
     plant = require_plant_in_cluster(repo, cluster_id, plant_id)
-    payload = build_plant_health_timeline_payload(repo, plant_id)
-    if payload is None:
-        raise HTTPException(404, "Plant not found")
+    with not_found_as_404("Plant not found"):
+        payload = build_plant_health_timeline_payload(repo, plant_id)
     return templates.TemplateResponse(
         request,
         "partials/_plant_health_chart.html",

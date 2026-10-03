@@ -24,6 +24,7 @@ from greenhouse_core.schemas import (
     OverlayDataset,
     PlantHealthTimelineResponse,
 )
+from greenhouse_server.services.errors import ClusterNotFoundError, PlantNotFoundError
 
 Metric = Literal["soil_moisture", "temperature", "light", "env_humidity"]
 ALLOWED_HOURS = {24, 168, 720}
@@ -43,10 +44,10 @@ def build_plant_chart_payload(
     hours: int,
     metric: Metric,
 ) -> dict[str, Any]:
-    """One plant's chart: per-sensor series, cluster irrigation events, target band; ``{}`` if no such plant."""
+    """One plant's chart: per-sensor series, cluster irrigation events, target band; PlantNotFoundError if none."""
     plant: Plant | None = repo.get_plant(plant_id)
     if plant is None:
-        return {}
+        raise PlantNotFoundError(plant_id)
 
     # Use assignment-aware reading lookup so historical readings stay attributed
     # to the plant that actually owned the sensor at reading time. Filtering
@@ -72,10 +73,10 @@ def build_cluster_chart_payload(
     hours: int,
     metric: Metric,
 ) -> dict[str, Any]:
-    """A cluster's chart: one series per sensor, its irrigation events and the cluster-wide band."""
+    """A cluster's chart: one series per sensor, its irrigation events and the band; ClusterNotFoundError if none."""
     cluster = repo.get_cluster(cluster_id)
     if cluster is None:
-        return {}
+        raise ClusterNotFoundError(cluster_id)
 
     sensors = repo.get_sensors_in_cluster(cluster_id)
     datasets = _build_sensor_datasets(repo, sensors, hours, metric)
@@ -246,16 +247,16 @@ def build_overlay_payload(
     repo: IrrigationRepository,
     cluster_id: int,
     hours: int,
-) -> MultiMetricOverlayResponse | None:
+) -> MultiMetricOverlayResponse:
     """Build the multi-metric overlay payload for a cluster.
 
     Collects soil moisture, env humidity, and light readings across all sensors
     in the cluster, normalises each series to 0-100, and merges irrigation events.
-    Returns None if the cluster does not exist.
+    Raises ClusterNotFoundError if the cluster does not exist.
     """
     cluster = repo.get_cluster(cluster_id)
     if cluster is None:
-        return None
+        raise ClusterNotFoundError(cluster_id)
 
     sensors = repo.get_sensors_in_cluster(cluster_id)
     cutoff = int(time.time()) - hours * SECONDS_PER_HOUR
@@ -327,15 +328,15 @@ def build_heatmap_payload(
     repo: IrrigationRepository,
     cluster_id: int,
     days: int,
-) -> HeatmapResponse | None:
+) -> HeatmapResponse:
     """Build the 7×24 irrigation heatmap payload for a cluster.
 
     Counts irrigation events per (weekday, hour) cell over the given look-back
-    window. Returns None if the cluster does not exist.
+    window. Raises ClusterNotFoundError if the cluster does not exist.
     """
     cluster = repo.get_cluster(cluster_id)
     if cluster is None:
-        return None
+        raise ClusterNotFoundError(cluster_id)
 
     cutoff = int(time.time()) - days * SECONDS_PER_DAY
     irrigator = repo.get_irrigator_for_cluster(cluster_id)
@@ -364,15 +365,15 @@ def build_heatmap_payload(
 def build_plant_health_timeline_payload(
     repo: IrrigationRepository,
     plant_id: int,
-) -> PlantHealthTimelineResponse | None:
+) -> PlantHealthTimelineResponse:
     """Build the 90-day daily health score timeline for a single plant.
 
     Health score per day is derived from the mean soil moisture reading clamped
-    to [0, 100]. Returns None if the plant is not found.
+    to [0, 100]. Raises PlantNotFoundError if the plant is not found.
     """
     plant: Plant | None = repo.get_plant(plant_id)
     if plant is None:
-        return None
+        raise PlantNotFoundError(plant_id)
 
     cutoff = int(time.time()) - 90 * SECONDS_PER_DAY
     # Assignment-aware: include only readings that belonged to this plant at
