@@ -16,7 +16,7 @@ def decisions_list(
     ctx: typer.Context,
     cluster: ClusterOpt,
     limit: Annotated[int, typer.Option(min=1, max=200, help="Max entries")] = 50,
-):
+) -> None:
     """List recent decision-engine evaluations for a cluster.
 
     Every call to the engine writes a row regardless of whether it actuated

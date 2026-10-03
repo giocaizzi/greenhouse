@@ -19,7 +19,7 @@ windows_app = typer.Typer(
 def windows_list(
     ctx: typer.Context,
     cluster: ClusterOpt,
-):
+) -> None:
     """List configured windows for a cluster. Empty list = global defaults apply."""
     output(call(ctx, lambda c: c.list_windows(cluster)))
 
@@ -40,7 +40,7 @@ def windows_add(
         ),
     ] = ALL_WEEKDAYS,
     label: Annotated[str | None, typer.Option(help="Optional label, e.g. 'morning'")] = None,
-):
+) -> None:
     """Add a watering window. Wrap-around (start > end) crosses midnight."""
     output(
         call(
@@ -65,7 +65,7 @@ def windows_update(
     end_hour: Annotated[int | None, typer.Option("--end-hour", min=0, max=23)] = None,
     weekday_mask: Annotated[int | None, typer.Option("--weekday-mask", min=1, max=ALL_WEEKDAYS)] = None,
     label: Annotated[str | None, typer.Option()] = None,
-):
+) -> None:
     """Patch a window. Only supplied fields are sent."""
     output(
         call(
@@ -88,7 +88,7 @@ def windows_delete(
     window_id: Annotated[int, typer.Argument(help="Window ID")],
     cluster: Annotated[int, typer.Option(help="Cluster the window belongs to")],
     yes: YesOpt = False,
-):
+) -> None:
     """Remove an irrigation window."""
     if not yes:
         typer.confirm(f"Delete window {window_id} on cluster {cluster}?", abort=True)

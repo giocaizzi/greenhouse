@@ -28,7 +28,7 @@ def plant_add(
     humidity_min: NumberOpt = None,
     humidity_max: NumberOpt = None,
     notes: TextOpt = None,
-):
+) -> None:
     """Add a plant to a cluster."""
     data = call(
         ctx,
@@ -52,7 +52,7 @@ def plant_add(
 def plant_list(
     ctx: typer.Context,
     cluster: ClusterFilterOpt = None,
-):
+) -> None:
     """List plants."""
     if cluster:
         output(call(ctx, lambda c: c.list_plants(cluster)))
@@ -69,7 +69,7 @@ def plant_sync(
     ctx: typer.Context,
     plant_id: Annotated[int | None, typer.Option(help="Sync specific plant")] = None,
     cluster: Annotated[int | None, typer.Option(help="Sync plants in cluster")] = None,
-):
+) -> None:
     """Sync plants with evidence-based care data."""
     output(call(ctx, lambda c: c.sync_plants(plant_id=plant_id, cluster_id=cluster)))
 
@@ -79,7 +79,7 @@ def plant_move(
     ctx: typer.Context,
     plant_id: Annotated[int, typer.Argument(help="Plant ID to move")],
     to_cluster: Annotated[int, typer.Option("--to-cluster", help="Target cluster ID")],
-):
+) -> None:
     """Move a plant to a different cluster.
 
     Plant identity, health history, and learning profile follow the plant.
@@ -102,7 +102,7 @@ def plant_update(
     humidity_min: NumberOpt = None,
     humidity_max: NumberOpt = None,
     notes: TextOpt = None,
-):
+) -> None:
     """Patch plant metadata. Only the supplied fields are sent."""
     output(
         call(
@@ -130,7 +130,7 @@ def plant_delete(
     plant_id: Annotated[int, typer.Argument(help="Plant ID")],
     cluster: Annotated[int, typer.Option(help="Cluster the plant belongs to")],
     yes: YesOpt = False,
-):
+) -> None:
     """Delete a plant and its health / learning history."""
     if not yes:
         typer.confirm(f"Delete plant {plant_id} from cluster {cluster}?", abort=True)

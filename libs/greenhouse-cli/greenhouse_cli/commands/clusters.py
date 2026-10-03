@@ -15,13 +15,13 @@ def cluster_add(
     name: Annotated[str, typer.Argument(help="Cluster name")],
     location: Annotated[str | None, typer.Option(help="Location description")] = None,
     environment: Annotated[str, typer.Option(help="indoor or outdoor")] = "indoor",
-):
+) -> None:
     """Add a new cluster."""
     output(call(ctx, lambda c: c.create_cluster(name, location, environment)))
 
 
 @cluster_app.command("list")
-def cluster_list(ctx: typer.Context):
+def cluster_list(ctx: typer.Context) -> None:
     """List all clusters."""
     output(call(ctx, lambda c: c.list_clusters()))
 
@@ -30,7 +30,7 @@ def cluster_list(ctx: typer.Context):
 def cluster_get(
     ctx: typer.Context,
     cluster_id: ClusterArg,
-):
+) -> None:
     """Fetch one cluster by ID."""
     output(call(ctx, lambda c: c.get_cluster(cluster_id)))
 
@@ -42,7 +42,7 @@ def cluster_update(
     name: Annotated[str | None, typer.Option(help="New cluster name")] = None,
     location: Annotated[str | None, typer.Option(help="New location description")] = None,
     environment: Annotated[str | None, typer.Option(help="indoor or outdoor")] = None,
-):
+) -> None:
     """Update cluster metadata. Only the supplied fields are sent."""
     output(
         call(
@@ -57,7 +57,7 @@ def cluster_delete(
     ctx: typer.Context,
     cluster_id: ClusterArg,
     yes: YesOpt = False,
-):
+) -> None:
     """Delete a cluster and all of its children (plants, sensors, irrigators, history)."""
     if not yes:
         typer.confirm(

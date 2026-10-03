@@ -19,7 +19,7 @@ def tui(
         bool,
         typer.Option("--no-animation", help="Render sprites as still frames"),
     ] = False,
-):
+) -> None:
     """Open the interactive terminal dashboard.
 
     Animated plant sprites, live charts, decision trails, alerts, activity

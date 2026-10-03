@@ -43,7 +43,7 @@ def config_set(
     max_events: MaxEventsOpt = None,
     quiet_start: QuietStartOpt = None,
     quiet_end: QuietEndOpt = None,
-):
+) -> None:
     """Patch a cluster's irrigation config. Omitted options are left unchanged."""
     data = call(
         ctx,
@@ -63,19 +63,19 @@ def config_set(
 
 
 @config_app.command("get")
-def config_get(ctx: typer.Context, cluster: ClusterOpt):
+def config_get(ctx: typer.Context, cluster: ClusterOpt) -> None:
     """Get a cluster's declared irrigation config (nulls = inherited)."""
     output(call(ctx, lambda c: c.get_config(cluster)))
 
 
 @config_app.command("effective")
-def config_effective(ctx: typer.Context, cluster: ClusterOpt):
+def config_effective(ctx: typer.Context, cluster: ClusterOpt) -> None:
     """Show the merged config: each field's resolved value and its source layer."""
     output(call(ctx, lambda c: c.get_effective_config(cluster)))
 
 
 @global_app.command("get")
-def global_get(ctx: typer.Context):
+def global_get(ctx: typer.Context) -> None:
     """Show the global irrigation defaults (nulls = fall through to constants)."""
     output(call(ctx, lambda c: c.get_global_config()))
 
@@ -91,7 +91,7 @@ def global_set(
     max_events: MaxEventsOpt = None,
     quiet_start: QuietStartOpt = None,
     quiet_end: QuietEndOpt = None,
-):
+) -> None:
     """Patch the global irrigation defaults. Omitted options are left unchanged."""
     data = call(
         ctx,

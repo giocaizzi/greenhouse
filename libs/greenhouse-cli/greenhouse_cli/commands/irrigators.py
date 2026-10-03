@@ -47,7 +47,7 @@ def irrigator_add(
     local_key: LocalKeyOpt = None,
     reservoir_l: ReservoirOpt = None,
     flow_rate_l_per_min: FlowRateOpt = None,
-):
+) -> None:
     """Add an irrigator to a cluster."""
     config = _device_config(device_ip, local_key)
     data = call(
@@ -66,7 +66,7 @@ def irrigator_add(
 
 
 @irrigator_app.command("list")
-def irrigator_list(ctx: typer.Context):
+def irrigator_list(ctx: typer.Context) -> None:
     """List every irrigator across all clusters."""
     output(call(ctx, lambda c: c.list_irrigators()))
 
@@ -75,7 +75,7 @@ def irrigator_list(ctx: typer.Context):
 def irrigator_show(
     ctx: typer.Context,
     cluster: ClusterArg,
-):
+) -> None:
     """Show the cluster's irrigator. Exits non-zero if the cluster has none."""
     output(call(ctx, lambda c: c.get_irrigator(cluster)))
 
@@ -85,13 +85,13 @@ def irrigator_start(
     ctx: typer.Context,
     id: Annotated[int, typer.Argument(help="Irrigator ID")],
     minutes: Annotated[int | None, typer.Option(help="Duration in minutes")] = None,
-):
+) -> None:
     """Start an irrigator."""
     output(call(ctx, lambda c: c.start_irrigator(id, minutes)))
 
 
 @irrigator_app.command("stop")
-def irrigator_stop(ctx: typer.Context, id: Annotated[int, typer.Argument(help="Irrigator ID")]):
+def irrigator_stop(ctx: typer.Context, id: Annotated[int, typer.Argument(help="Irrigator ID")]) -> None:
     """Stop an irrigator."""
     output(call(ctx, lambda c: c.stop_irrigator(id)))
 
@@ -102,7 +102,7 @@ def irrigator_log_manual(
     id: Annotated[int, typer.Argument(help="Irrigator ID")],
     minutes: Annotated[int, typer.Option(help="Duration in minutes")],
     notes: Annotated[str | None, typer.Option()] = None,
-):
+) -> None:
     """Log a manual irrigation event (no device command)."""
     output(call(ctx, lambda c: c.log_manual(id, minutes, notes)))
 
@@ -117,7 +117,7 @@ def irrigator_update(
     local_key: LocalKeyOpt = None,
     reservoir_l: ReservoirOpt = None,
     flow_rate_l_per_min: FlowRateOpt = None,
-):
+) -> None:
     """Patch the cluster's irrigator. Only the supplied fields are sent.
 
     ``--device-ip`` or ``--local-key`` overwrite the ``config`` blob; pass both
@@ -144,7 +144,7 @@ def irrigator_delete(
     ctx: typer.Context,
     cluster: ClusterArg,
     yes: YesOpt = False,
-):
+) -> None:
     """Delete the cluster's irrigator. Historic events stay attached to the cluster."""
     if not yes:
         typer.confirm(f"Delete the irrigator from cluster {cluster}?", abort=True)

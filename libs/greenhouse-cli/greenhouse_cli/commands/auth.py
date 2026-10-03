@@ -42,7 +42,7 @@ def login(
         bool,
         typer.Option("--print-token", help="Print the JWT to stdout instead of storing it"),
     ] = False,
-):
+) -> None:
     """Exchange username/password for a session JWT.
 
     On success the JWT is written to ``~/.config/greenhouse/token`` with
@@ -70,7 +70,7 @@ def login(
     typer.echo(f"Logged in as {data.get('username', username)}. Token stored at {path}.")
 
 
-def logout(ctx: typer.Context):
+def logout(ctx: typer.Context) -> None:
     """Clear the cached session token and notify the server.
 
     Deletes ``~/.config/greenhouse/token`` (or the ``$XDG_CONFIG_HOME``
@@ -86,7 +86,7 @@ def logout(ctx: typer.Context):
         typer.echo("No token was stored; nothing to remove.")
 
 
-def whoami(ctx: typer.Context):
+def whoami(ctx: typer.Context) -> None:
     """Print the currently-authenticated user."""
     output(call(ctx, lambda c: c.whoami()))
 

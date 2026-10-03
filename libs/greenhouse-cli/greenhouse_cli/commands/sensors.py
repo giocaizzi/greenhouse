@@ -18,7 +18,7 @@ def sensor_add(
     name: Annotated[str, typer.Option(help="Sensor name")],
     type: Annotated[str, typer.Option(help="soil_moisture, temp_humidity, or light")],
     plant_id: Annotated[int | None, typer.Option(help="Associated plant ID")] = None,
-):
+) -> None:
     """Add a sensor to a cluster."""
     output(
         call(ctx, lambda c: c.add_sensor(cluster, tuya_device_id=device_id, name=name, type=type, plant_id=plant_id))
@@ -29,7 +29,7 @@ def sensor_add(
 def sensor_list(
     ctx: typer.Context,
     cluster: ClusterFilterOpt = None,
-):
+) -> None:
     """List sensors."""
     if cluster:
         output(call(ctx, lambda c: c.list_sensors(cluster)))
@@ -49,7 +49,7 @@ def sensor_update(
     name: Annotated[str | None, typer.Option(help="New sensor name")] = None,
     type: Annotated[str | None, typer.Option(help="soil_moisture, temp_humidity, or light")] = None,
     plant_id: Annotated[int | None, typer.Option(help="Reassign to a different plant")] = None,
-):
+) -> None:
     """Patch sensor metadata. Only the supplied fields are sent."""
     output(
         call(
@@ -65,7 +65,7 @@ def sensor_delete(
     id: Annotated[int, typer.Argument(help="Sensor ID")],
     cluster: Annotated[int, typer.Option(help="Cluster the sensor belongs to")],
     yes: YesOpt = False,
-):
+) -> None:
     """Delete a sensor. Historic readings stay attached to the cluster."""
     if not yes:
         typer.confirm(f"Delete sensor {id} from cluster {cluster}?", abort=True)
