@@ -93,12 +93,22 @@ select = [
 ]
 # Lint ratchet (refactor/40-lint-ratchet.md): every family below is enforced; today's offenders are
 # listed per file in per-file-ignores and the integrator removes each entry once its file is clean.
+# Not adopted, on purpose: COM812 (conflicts with ruff format), ANN (redundant with the mypy strict
+# ratchet), TC (moves imports under TYPE_CHECKING and breaks FastAPI / Typer / Pydantic runtime
+# annotations — typing review), FAST001 (removes response_model: CLAUDE.md invariant 7), FAST002 (only
+# with OpenAPI/MCP golden proof), PYI041 on schemas (changes the OpenAPI schema), DTZ and TRY other than
+# TRY003 (report-only: timezone / exception-handling semantics), PLW0717 (preview, report-only),
+# INP001 (would change packaging), PLC0415 (lazy imports are deliberate).
 extend-select = [
+    # complexity / size (sizecheck.py is the authority on body lines and file length)
     "C90", "PLR0911", "PLR0912", "PLR0915",
     "PLR0916",  # too-many-boolean-expressions
-    "PLR1702",  # too-many-nested-blocks (preview, explicit) — cross-checks sizecheck's nesting limit
+    "PLR1702",  # too-many-nested-blocks (preview, explicit) — agrees with sizecheck's nesting check
     "PLR0914",  # too-many-locals (preview, explicit)
     "PLR0904",  # too-many-public-methods (preview, explicit)
+    "PLR0913",  # too-many-arguments (frozen handler signatures excluded per directory)
+    "PLR0917",  # too-many-positional-arguments (preview, explicit; same exclusions)
+    # mechanical, behaviour-neutral
     "SIM",  # flake8-simplify
     "RET",  # flake8-return
     "PTH",  # flake8-use-pathlib
@@ -108,20 +118,20 @@ extend-select = [
     "FURB",  # refurb
     "N",  # pep8-naming
     "EXE",  # flake8-executable
-    "PLR0913",  # too-many-arguments (frozen handler signatures excluded per directory)
-    "PLR0917",  # too-many-positional-arguments (preview, explicit; same exclusions)
-    "FBT",  # boolean traps (Typer commands excluded: --flag options are the CLI contract)
-    "D",  # pydocstyle, google convention (D105 / D107 ignored)
-    "EM",  # exception message literals bound to `msg` first (message text unchanged)
-    "TRY003",  # long messages outside the exception class (other TRY rules: report-only)
-    "T201",  # print: libs/ output goes through typer.echo / rich / logging (refactor/ scripts excluded)
-    "A002",  # builtin-argument-shadowing (`id`/`type` options of frozen handlers excluded)
-    "ARG",  # unused arguments (FastAPI web handlers keep `request`: per-file exclusion)
-    "S",  # flake8-bandit: intended uses carry a reasoned noqa; real findings → REFACTOR_NOTES
-    "PLR2004",  # magic-value-comparison: thresholds live in constants.py (CLAUDE.md invariant 5)
     "RUF",  # ruff-specific (RUF001 / RUF002 ignored, see below)
-    "BLE",  # blind except — report-only: existing sites carry noqa (WP8 files: per-file), never rewritten
-    "PLW",  # pylint warnings (PLW0717 is preview and not listed: report-only)
+    "PLR2004",  # magic-value-comparison: thresholds live in constants.py (CLAUDE.md invariant 5)
+    "EM",  # exception message literals bound to `msg` first (message text unchanged)
+    "TRY003",  # long messages outside the exception class
+    # signatures (frozen handlers excluded per directory)
+    "FBT",  # boolean traps (Typer --flag options are the CLI contract)
+    "ARG",  # unused arguments (FastAPI web handlers keep `request`)
+    "A002",  # builtin-argument-shadowing (`id` / `type` options and form fields)
+    # docs, security, hygiene
+    "D",  # pydocstyle, google convention (D105 / D107 ignored)
+    "S",  # flake8-bandit: intended uses carry a reasoned noqa; real findings → REFACTOR_NOTES
+    "BLE",  # blind except — a lock: existing sites carry noqa (WP8 files: per-file), never rewritten
+    "T201",  # print: libs/ output goes through typer.echo / rich / logging
+    "PLW",  # pylint warnings
     "ERA",  # eradicate: commented-out code
     "PGH",  # pygrep-hooks: blanket noqa / type: ignore without codes
     "SLF",  # flake8-self: private member access across objects
@@ -167,9 +177,15 @@ indent-style = "space"
 "scripts/*" = ["E402"]  # intentional sys.path before import
 # Frozen safety net: tests exceed size limits and poke privates; never edited to satisfy a lint rule.
 "tests/**" = [
-    "C90", "PLR0911", "PLR0912", "PLR0915", "PLR0904", "PLR0914", "PLR1702", "SIM", "RET", "PTH", "PERF", "PLW", "FURB", "N", "BLE", "RUF", "PLR2004", "S", "ARG", "PLR0913", "PLR0917", "FBT", "EM", "TRY003", "D", "ERA001", "SLF001",
+    "C90", "PLR0911", "PLR0912", "PLR0915", "PLR0904", "PLR0913", "PLR0914", "PLR0917", "PLR1702", "PLR2004",
+    "SIM", "RET", "PTH", "PERF", "PLW", "FURB", "N", "RUF", "EM", "TRY003",
+    "FBT", "ARG", "D", "S", "BLE", "ERA001", "SLF001",
 ]
-"refactor/**" = ["C90", "PLR0911", "PLR0912", "PLR0915", "PLR0914", "PLR1702", "PERF", "PLW", "RUF005", "PLR2004", "S", "FBT", "T201", "EM", "TRY003", "D"]  # refactor tooling scripts, not shipped
+# Refactor tooling scripts (not shipped; the folder is dropped at the end, sizecheck moves to scripts/).
+"refactor/**" = [
+    "C90", "PLR0911", "PLR0912", "PLR0915", "PLR0914", "PLR1702", "PLR2004",
+    "PERF", "PLW", "RUF005", "EM", "TRY003", "FBT", "D", "S", "T201",
+]
 "libs/greenhouse-core/greenhouse_core/migrations/versions/*" = ["D", "PLR0915"]  # generated Alembic DDL, out of scope
 # Frozen handler signatures (not a ratchet): FastAPI API/web handlers and Typer commands declare one
 # parameter per query/form field or CLI option (the OpenAPI / MCP / --help contract), and web pages
