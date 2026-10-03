@@ -3,6 +3,12 @@
 from pydantic import AliasChoices, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from greenhouse_core.constants import (
+    PUMP_WATCHER_MAX_READ_FAILURES,
+    PUMP_WATCHER_POLL_SECONDS,
+    PUMP_WATCHER_WARMUP_SECONDS,
+)
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -153,11 +159,11 @@ class Settings(BaseSettings):
     # Seconds between alarm polls. Lower = faster detection, more local
     # network traffic. The firmware itself debounces dry-run detection over
     # several seconds, so going below ~1s gains little.
-    pump_watcher_poll_seconds: float = 2.0
+    pump_watcher_poll_seconds: float = PUMP_WATCHER_POLL_SECONDS
     # Grace window at the start of each irrigation before the watcher will
     # trip. Avoids false positives during pump prime / initial suction.
-    pump_watcher_warmup_seconds: float = 5.0
+    pump_watcher_warmup_seconds: float = PUMP_WATCHER_WARMUP_SECONDS
     # Cap on consecutive local-read failures tolerated before the watcher
     # gives up and exits (logging a warning). Does NOT stop the pump — a
     # broken local socket is not by itself evidence of a dry pump.
-    pump_watcher_max_read_failures: int = 5
+    pump_watcher_max_read_failures: int = PUMP_WATCHER_MAX_READ_FAILURES

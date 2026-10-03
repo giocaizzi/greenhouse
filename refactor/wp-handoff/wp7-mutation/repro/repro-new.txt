@@ -1,0 +1,75 @@
+  INFO  [alembic.runtime.migration] Context impl SQLiteImpl.
+  INFO  [alembic.runtime.migration] Will assume non-transactional DDL.
+  INFO  [alembic.runtime.migration] Running upgrade  -> 1c9b09f02432, baseline v1.0.0 schema
+  INFO  [alembic.runtime.migration] Running upgrade 1c9b09f02432 -> 2a4d1e7c8f02, add user_preferences.scheduler_paused
+  INFO  [alembic.runtime.migration] Running upgrade 2a4d1e7c8f02 -> 3f1a8b5c9d10, add users table
+  INFO  [alembic.runtime.migration] Running upgrade 3f1a8b5c9d10 -> 4a7e2b9c8d10, add sensor_assignments table with backfill from current sensor.plant_id
+  INFO  [alembic.runtime.migration] Running upgrade 4a7e2b9c8d10 -> 5b8f3c2d4e11, add irrigation_windows table
+  INFO  [alembic.runtime.migration] Running upgrade 5b8f3c2d4e11 -> 6c9d4e2f3a12, backfill irrigators.type and sensors.type to model_key form
+  INFO  [alembic.runtime.migration] Running upgrade 6c9d4e2f3a12 -> 7d3c1f9b4a08, add global_irrigation_config + quiet-hours columns
+  INFO  [alembic.runtime.migration] Running upgrade 7d3c1f9b4a08 -> 7d0e5f3a4b13, add user_preferences ntfy notify flags
+  INFO  [alembic.runtime.migration] Running upgrade 7d0e5f3a4b13 -> 8e1a4d6c5f20, add irrigator reservoir capacity (reservoir_l, flow_rate_l_per_min)
+  INFO  [alembic.runtime.migration] Running upgrade 8e1a4d6c5f20 -> 9f2b5e7c6a31, enforce one irrigator per cluster (unique constraint on irrigators.cluster_id)
+  _check_job
+  ERROR [greenhouse_server.scheduler] Check job failed
+  Traceback (most recent call last):
+    File "/home/user/gh-wp7/libs/greenhouse-server/greenhouse_server/scheduler.py", line 325, in _job_session
+      yield session
+    File "/home/user/gh-wp7/libs/greenhouse-server/greenhouse_server/scheduler.py", line 395, in _check_job
+      repo = IrrigationRepository(session)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    File "/tmp/claude-0/-home-user-greenhouse/13425f2d-7c47-5b83-96d4-7045d3907ad2/scratchpad/wp7/repro_job_session.py", line 29, in raising_repo
+      raise Boom("repo construction failed")
+  Boom: repo construction failed
+     returned None
+  _sync_job
+  ERROR [greenhouse_server.scheduler] Sync job failed
+  Traceback (most recent call last):
+    File "/home/user/gh-wp7/libs/greenhouse-server/greenhouse_server/scheduler.py", line 325, in _job_session
+      yield session
+    File "/home/user/gh-wp7/libs/greenhouse-server/greenhouse_server/scheduler.py", line 345, in _sync_job
+      repo = IrrigationRepository(session)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    File "/tmp/claude-0/-home-user-greenhouse/13425f2d-7c47-5b83-96d4-7045d3907ad2/scratchpad/wp7/repro_job_session.py", line 29, in raising_repo
+      raise Boom("repo construction failed")
+  Boom: repo construction failed
+     returned None
+  _anomaly_job
+  ERROR [greenhouse_server.scheduler] Anomaly scan job failed
+  Traceback (most recent call last):
+    File "/home/user/gh-wp7/libs/greenhouse-server/greenhouse_server/scheduler.py", line 325, in _job_session
+      yield session
+    File "/home/user/gh-wp7/libs/greenhouse-server/greenhouse_server/scheduler.py", line 404, in _anomaly_job
+      repo = IrrigationRepository(session)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    File "/tmp/claude-0/-home-user-greenhouse/13425f2d-7c47-5b83-96d4-7045d3907ad2/scratchpad/wp7/repro_job_session.py", line 29, in raising_repo
+      raise Boom("repo construction failed")
+  Boom: repo construction failed
+     returned None
+  _health_snapshot_job
+     returned None
+  _health_monitor_job
+  ERROR [greenhouse_server.scheduler] Device health monitor job failed
+  Traceback (most recent call last):
+    File "/home/user/gh-wp7/libs/greenhouse-server/greenhouse_server/scheduler.py", line 325, in _job_session
+      yield session
+    File "/home/user/gh-wp7/libs/greenhouse-server/greenhouse_server/scheduler.py", line 425, in _health_monitor_job
+      repo = IrrigationRepository(session)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    File "/tmp/claude-0/-home-user-greenhouse/13425f2d-7c47-5b83-96d4-7045d3907ad2/scratchpad/wp7/repro_job_session.py", line 29, in raising_repo
+      raise Boom("repo construction failed")
+  Boom: repo construction failed
+     returned None
+  INFO  [alembic.runtime.migration] Context impl SQLiteImpl.
+  INFO  [alembic.runtime.migration] Will assume non-transactional DDL.
+  INFO  [alembic.runtime.migration] Running upgrade  -> 1c9b09f02432, baseline v1.0.0 schema
+  INFO  [alembic.runtime.migration] Running upgrade 1c9b09f02432 -> 2a4d1e7c8f02, add user_preferences.scheduler_paused
+  INFO  [alembic.runtime.migration] Running upgrade 2a4d1e7c8f02 -> 3f1a8b5c9d10, add users table
+  INFO  [alembic.runtime.migration] Running upgrade 3f1a8b5c9d10 -> 4a7e2b9c8d10, add sensor_assignments table with backfill from current sensor.plant_id
+  INFO  [alembic.runtime.migration] Running upgrade 4a7e2b9c8d10 -> 5b8f3c2d4e11, add irrigation_windows table
+  INFO  [alembic.runtime.migration] Running upgrade 5b8f3c2d4e11 -> 6c9d4e2f3a12, backfill irrigators.type and sensors.type to model_key form
+  INFO  [alembic.runtime.migration] Running upgrade 6c9d4e2f3a12 -> 7d3c1f9b4a08, add global_irrigation_config + quiet-hours columns
+  INFO  [alembic.runtime.migration] Running upgrade 7d3c1f9b4a08 -> 7d0e5f3a4b13, add user_preferences ntfy notify flags
+  INFO  [alembic.runtime.migration] Running upgrade 7d0e5f3a4b13 -> 8e1a4d6c5f20, add irrigator reservoir capacity (reservoir_l, flow_rate_l_per_min)
+  INFO  [alembic.runtime.migration] Running upgrade 8e1a4d6c5f20 -> 9f2b5e7c6a31, enforce one irrigator per cluster (unique constraint on irrigators.cluster_id)
+  snapshot job via patched greenhouse_core.repository.IrrigationRepository: ['core-module binding used']

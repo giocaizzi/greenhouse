@@ -2,16 +2,34 @@
 
 import logging
 import threading
+from contextlib import contextmanager
+from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from apscheduler.jobstores.base import JobLookupError
 from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi import FastAPI
 
-from greenhouse_core.constants import HEALTH_POLL_IDLE_MINUTES
+from greenhouse_core.constants import (
+    ANOMALY_SCAN_INTERVAL_MINUTES,
+    HEALTH_POLL_IDLE_MINUTES,
+    HEALTH_SNAPSHOT_HOUR,
+    HEALTH_SNAPSHOT_MINUTE,
+    SYNC_JOB_BACKFILL_HOURS,
+)
 from greenhouse_core.devices import DeviceGateway
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.config import Settings
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Iterator
+
+    from apscheduler.job import Job
+    from sqlalchemy.orm import Session
+    from starlette.requests import Request
+
+    from greenhouse_core.devices import DeviceRegistry
+    from greenhouse_server.services.irrigation import IrrigationService
 
 logger = logging.getLogger(__name__)
 
@@ -66,10 +84,12 @@ def stop_scheduler() -> None:
         scheduler.shutdown(wait=False)
 
 
+CHECK_ALL_JOB_ID = "check_all"
+
 # Cron jobs that gate wall-clock-sensitive work and therefore MUST fire on the
 # same clock the engine reasons in (UserPreferences.timezone). These are
 # re-added by `reschedule_for_timezone` whenever the preference changes.
-_TZ_BOUND_CRON_JOBS = ("check_all", "plant_health_snapshot")
+_TZ_BOUND_CRON_JOBS = (CHECK_ALL_JOB_ID, "plant_health_snapshot")
 
 # IDs of the built-in jobs registered at startup, recorded by `_add_core_job`
 # as they are registered — so the protected set can never drift from what
@@ -88,7 +108,7 @@ class JobNotRegisteredError(LookupError):
     """Raised when the job an operation targets is not registered."""
 
 
-def _add_core_job(func, trigger: str, *, id: str, name: str, **trigger_args) -> None:
+def _add_core_job(func: "Callable[[], None]", trigger: str, *, id: str, name: str, **trigger_args: Any) -> None:
     """Register (or replace) a built-in job and mark its id as core."""
     _CORE_JOB_IDS.add(id)
     scheduler.add_job(func, trigger, id=id, name=name, replace_existing=True, **trigger_args)
@@ -181,7 +201,7 @@ def init_scheduler(app: FastAPI, settings: Settings, tz_name: str | None = None)
     _add_core_job(
         _anomaly_job,
         "interval",
-        minutes=15,
+        minutes=ANOMALY_SCAN_INTERVAL_MINUTES,
         id="sensor_anomaly",
         name="Sensor anomaly scan",
     )
@@ -207,14 +227,14 @@ def _add_tz_bound_cron_jobs(settings: Settings) -> None:
         "cron",
         hour=_resolve_check_cron_hours(settings),
         minute=0,
-        id="check_all",
+        id=CHECK_ALL_JOB_ID,
         name="Check all clusters",
     )
     _add_core_job(
         _health_snapshot_job,
         "cron",
-        hour=0,
-        minute=30,
+        hour=HEALTH_SNAPSHOT_HOUR,
+        minute=HEALTH_SNAPSHOT_MINUTE,
         id="plant_health_snapshot",
         name="Daily plant health snapshot",
     )
@@ -249,7 +269,7 @@ def reschedule_for_timezone(tz_name: str | None, settings: Settings) -> None:
         apply_persisted_pause(True)
 
 
-def apply_timezone_preference(request, tz_name: str | None) -> None:
+def apply_timezone_preference(request: "Request", tz_name: str | None) -> None:
     """Re-sync every clock to ``UserPreferences.timezone`` after it changes.
 
     Keeps the three formerly-competing clocks in lockstep with the engine:
@@ -289,6 +309,28 @@ def _get_cloud() -> DeviceGateway | None:
     return getattr(_app.state, "device_gateway", None) if _app is not None else None
 
 
+@contextmanager
+def _job_session(app: FastAPI | None, failure_message: str) -> "Iterator[Session]":
+    """One background-job transaction: commit on success, roll back and log on failure, always close.
+
+    The session is opened before the ``try`` (as every job did inline), so a missing app or
+    ``session_factory`` still escapes the job instead of being logged. It yields the bare session:
+    each caller builds its repository inside the ``with`` body, so a failure there is logged and
+    swallowed exactly like the old inline ``try`` (a raise before a ``yield`` would surface as
+    ``RuntimeError("generator didn't yield")``). Callers pass the module ``_app`` they read at call
+    time — never a default captured at import.
+    """
+    session = app.state.session_factory()  # type: ignore[union-attr]  # None app escapes as AttributeError (pinned)
+    try:
+        yield session
+        session.commit()
+    except Exception:
+        session.rollback()
+        logger.exception(failure_message)
+    finally:
+        session.close()
+
+
 def _sync_job() -> None:
     """Background job: sync all sensor data."""
     from greenhouse_server.services.sync import SyncService
@@ -298,86 +340,69 @@ def _sync_job() -> None:
         logger.debug("Sync job skipped: no Tuya credentials")
         return
 
-    registry = getattr(_app.state, "device_registry", None)
-    session = _app.state.session_factory()
-    try:
+    registry = getattr(_app.state, "device_registry", None)  # type: ignore[union-attr]  # None _app escapes as AttributeError (pinned)
+    with _job_session(_app, "Sync job failed") as session:
         repo = IrrigationRepository(session)
         sync_svc = SyncService(repo, registry, cloud)
-        sync_svc.sync_all_sensors(hours=6)
-        session.commit()
-    except Exception:
-        session.rollback()
-        logger.exception("Sync job failed")
-    finally:
-        session.close()
+        sync_svc.sync_all_sensors(hours=SYNC_JOB_BACKFILL_HOURS)
 
 
 def _health_snapshot_job() -> None:
     """Background job: compute and persist daily plant health snapshots."""
     from greenhouse_server.services.health import PlantHealthService
 
-    session = _app.state.session_factory()
-    try:
+    with _job_session(_app, "Plant health snapshot job failed") as session:
         from greenhouse_core.repository import IrrigationRepository
 
         repo = IrrigationRepository(session)
-        svc = PlantHealthService(repo, _app.state.plant_db)
+        svc = PlantHealthService(repo, _app.state.plant_db)  # type: ignore[union-attr]  # None _app escapes as AttributeError (pinned)
         svc.snapshot_daily()
-        session.commit()
-    except Exception:
-        session.rollback()
-        logger.exception("Plant health snapshot job failed")
-    finally:
-        session.close()
+
+
+def _build_irrigation_service(
+    app: FastAPI, repo: IrrigationRepository, registry: "DeviceRegistry | None", cloud: DeviceGateway | None
+) -> "IrrigationService":
+    """Wire the check job's service on the job's own repo; the shared health monitor is re-bound to it first."""
+    from greenhouse_server.services.irrigation import IrrigationService
+    from greenhouse_server.services.sync import SyncService
+
+    sync_svc = SyncService(repo, registry, cloud)
+    monitor = getattr(app.state, "health_monitor", None)
+    if monitor is not None:
+        monitor.bind_repo(repo)
+    return IrrigationService(
+        repo=repo,
+        registry=registry,
+        sync_service=sync_svc,
+        weather_client=app.state.weather_client,
+        plant_db=app.state.plant_db,
+        health_monitor=monitor,
+        notifier=getattr(app.state, "ntfy_notifier", None),
+    )
 
 
 def _check_job() -> None:
     """Background job: check all clusters."""
-    from greenhouse_server.services.irrigation import IrrigationService
-    from greenhouse_server.services.sync import SyncService
+    # Resolved here, before the session opens, exactly as before the extraction: an import
+    # failure escapes the job instead of being logged as "Check job failed".
+    from greenhouse_server.services.irrigation import IrrigationService  # noqa: F401
+    from greenhouse_server.services.sync import SyncService  # noqa: F401
 
     cloud = _get_cloud()
-    registry = getattr(_app.state, "device_registry", None)
+    registry = getattr(_app.state, "device_registry", None)  # type: ignore[union-attr]  # None _app escapes as AttributeError (pinned)
 
-    session = _app.state.session_factory()
-    try:
+    with _job_session(_app, "Check job failed") as session:
         repo = IrrigationRepository(session)
-        sync_svc = SyncService(repo, registry, cloud)
-        monitor = getattr(_app.state, "health_monitor", None)
-        if monitor is not None:
-            monitor.bind_repo(repo)
-        irrigation_svc = IrrigationService(
-            repo=repo,
-            registry=registry,
-            sync_service=sync_svc,
-            weather_client=_app.state.weather_client,
-            plant_db=_app.state.plant_db,
-            health_monitor=monitor,
-            notifier=getattr(_app.state, "ntfy_notifier", None),
-        )
-        irrigation_svc.check_all_clusters()
-        session.commit()
-    except Exception:
-        session.rollback()
-        logger.exception("Check job failed")
-    finally:
-        session.close()
+        _build_irrigation_service(_app, repo, registry, cloud).check_all_clusters()  # type: ignore[arg-type]  # non-None: _job_session already read _app.state
 
 
 def _anomaly_job() -> None:
     """Background job: scan all sensors for staleness and drift anomalies."""
     from greenhouse_server.services.anomaly import SensorAnomalyService
 
-    session = _app.state.session_factory()
-    try:
+    with _job_session(_app, "Anomaly scan job failed") as session:
         repo = IrrigationRepository(session)
-        SensorAnomalyService(repo, notifier=getattr(_app.state, "ntfy_notifier", None)).scan()
-        session.commit()
-    except Exception:
-        session.rollback()
-        logger.exception("Anomaly scan job failed")
-    finally:
-        session.close()
+        SensorAnomalyService(repo, notifier=getattr(_app.state, "ntfy_notifier", None)).scan()  # type: ignore[union-attr]  # None _app escapes as AttributeError (pinned)
 
 
 def _health_monitor_job() -> None:
@@ -396,17 +421,10 @@ def _health_monitor_job() -> None:
         logger.debug("Health monitor job skipped: no monitor wired")
         return
 
-    session = _app.state.session_factory()
-    try:
+    with _job_session(_app, "Device health monitor job failed") as session:
         repo = IrrigationRepository(session)
         monitor.bind_repo(repo)
         monitor.poll_all()
-        session.commit()
-    except Exception:
-        session.rollback()
-        logger.exception("Device health monitor job failed")
-    finally:
-        session.close()
 
 
 def init_health_monitor(app: FastAPI, settings: Settings) -> None:
@@ -443,10 +461,7 @@ def init_health_monitor(app: FastAPI, settings: Settings) -> None:
         session.close()
 
 
-CHECK_ALL_JOB_ID = "check_all"
-
-
-def _is_paused(job) -> bool:
+def _is_paused(job: "Job") -> bool:
     """True only when ``job`` was explicitly paused.
 
     APScheduler pauses a job by setting ``next_run_time`` to ``None``. A job
@@ -459,7 +474,7 @@ def _is_paused(job) -> bool:
     return hasattr(job, "next_run_time") and job.next_run_time is None
 
 
-def get_jobs() -> list[dict]:
+def get_jobs() -> list[dict[str, Any]]:
     """List all registered jobs.
 
     ``paused`` is True only for an explicitly paused job (only ``check_all``
