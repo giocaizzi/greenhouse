@@ -7,10 +7,8 @@ from collections import defaultdict
 from datetime import UTC, datetime
 from typing import Any, Literal
 
-from sqlalchemy import select
-
 from greenhouse_core.constants import DEFAULT_SOIL_MOISTURE_MAX, DEFAULT_SOIL_MOISTURE_MIN
-from greenhouse_core.models import IrrigationEvent, Plant, Sensor
+from greenhouse_core.models import Plant, Sensor
 from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_core.schemas import (
@@ -114,7 +112,7 @@ def _build_plant_sensor_datasets(
 
     sensor_names: dict[int, str] = {}
     if by_sensor:
-        for s in repo.session.scalars(select(Sensor).where(Sensor.id.in_(by_sensor.keys()))):
+        for s in repo.list_sensors_by_ids(by_sensor.keys()):
             sensor_names[s.id] = s.name
 
     datasets = []
@@ -344,11 +342,7 @@ def build_heatmap_payload(
     minutes_map: dict[tuple[int, int], int] = defaultdict(int)
 
     if irrigator is not None:
-        events = repo.session.scalars(
-            select(IrrigationEvent).where(
-                IrrigationEvent.irrigator_id == irrigator.id, IrrigationEvent.timestamp >= cutoff
-            )
-        )
+        events = repo.list_events_since(irrigator.id, cutoff)
         for ev in events:
             dt = datetime.fromtimestamp(ev.timestamp, tz=UTC)
             key = (dt.weekday(), dt.hour)

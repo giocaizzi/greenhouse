@@ -27,7 +27,6 @@ import logging
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
 
 from greenhouse_core.constants import (
     BATTERY_CRITICAL_PCT,
@@ -44,11 +43,6 @@ from greenhouse_core.models import ENTITY_IRRIGATOR, ENTITY_SENSOR, Irrigator, S
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.services.alerts import notify_if_new_alert
 from greenhouse_server.services.notify import NtfyClient
-
-if TYPE_CHECKING:
-    from sqlalchemy import Select
-
-    from greenhouse_core.models import Alert
 
 logger = logging.getLogger(__name__)
 
@@ -265,7 +259,7 @@ class DeviceHealthMonitor:
     def _raise_if_not_open(self, alarm: HealthAlarm, sensor: Sensor, *, cluster_id: int | None) -> None:
         """Raise a back-filled sensor alarm unless its alert is already open (no duplicate on restart)."""
         key = _dedup_key(ENTITY_SENSOR, sensor.id, alarm)
-        if not self._repo.session.scalar(self._open_alert_stmt(key)):
+        if not self._repo.get_open_alert_by_key(key):
             self._raise_health_alert(
                 entity_type=ENTITY_SENSOR,
                 entity_id=sensor.id,
@@ -361,23 +355,13 @@ class DeviceHealthMonitor:
             logger.exception("Failed to raise health alert %s for %s %d", alarm.value, entity_type, entity_id)
 
     def _resolve_health_alert(self, *, entity_type: str, entity_id: int, alarm: HealthAlarm) -> None:
-        key = _dedup_key(entity_type, entity_id, alarm)
-        stmt = self._open_alert_stmt(key)
-        existing = self._repo.session.scalar(stmt)
+        existing = self._repo.get_open_alert_by_key(_dedup_key(entity_type, entity_id, alarm))
         if existing is None:
             return
         try:
             self._repo.resolve_alert(existing.id)
         except Exception:
             logger.exception("Failed to resolve health alert %s for %s %d", alarm.value, entity_type, entity_id)
-
-    @staticmethod
-    def _open_alert_stmt(dedup_key: str) -> Select[tuple[Alert]]:
-        from sqlalchemy import select
-
-        from greenhouse_core.models import Alert
-
-        return select(Alert).where(Alert.dedup_key == dedup_key, Alert.status != "resolved")
 
     @staticmethod
     def _alarm_message(alarm: HealthAlarm, label: str, state: DeviceHealthState) -> str:

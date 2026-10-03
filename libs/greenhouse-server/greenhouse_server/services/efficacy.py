@@ -5,15 +5,12 @@ from collections.abc import Sequence
 from statistics import mean
 from typing import TYPE_CHECKING
 
-from sqlalchemy import select
-
 from greenhouse_core.logic.cleaning import clean_readings_around
-from greenhouse_core.models import IrrigationEvent
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_core.schemas import EfficacyItemResponse, EfficacyListResponse
 
 if TYPE_CHECKING:
-    from greenhouse_core.models import Irrigator, Sensor
+    from greenhouse_core.models import IrrigationEvent, Irrigator, Sensor
 
 _BEFORE_SECONDS = 1800
 
@@ -47,17 +44,7 @@ def score_cluster(repo: IrrigationRepository, cluster_id: int, days: int = 14) -
     items: list[EfficacyItemResponse] = []
 
     if irrigator is not None:
-        events = list(
-            repo.session.scalars(
-                select(IrrigationEvent)
-                .where(
-                    IrrigationEvent.irrigator_id == irrigator.id,
-                    IrrigationEvent.action == "start",
-                    IrrigationEvent.timestamp >= cutoff,
-                )
-                .order_by(IrrigationEvent.timestamp.desc())
-            )
-        )
+        events = repo.list_start_events_since(irrigator.id, cutoff)
 
         for event in events:
             item = _event_item(repo, event, sensors, irrigator)
@@ -69,7 +56,7 @@ def score_cluster(repo: IrrigationRepository, cluster_id: int, days: int = 14) -
 
 
 def _event_item(
-    repo: IrrigationRepository, event: IrrigationEvent, sensors: "Sequence[Sensor]", irrigator: "Irrigator"
+    repo: IrrigationRepository, event: "IrrigationEvent", sensors: "Sequence[Sensor]", irrigator: "Irrigator"
 ) -> EfficacyItemResponse | None:
     """Score one start event by the cluster's moisture rise around it; None for an event without a duration."""
     duration = event.duration_minutes

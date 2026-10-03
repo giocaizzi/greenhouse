@@ -1,8 +1,5 @@
 """Global search service — powers the Command-K palette."""
 
-from sqlalchemy import func, or_, select
-
-from greenhouse_core.models import Cluster, Irrigator, Plant, Sensor
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_core.schemas import SearchHit
 
@@ -39,18 +36,7 @@ def search(repo: IrrigationRepository, q: str, limit: int = 20) -> list[SearchHi
 
 def _cluster_hits(repo: IrrigationRepository, pattern: str) -> list[SearchHit]:
     """Clusters whose name or location matches."""
-    clusters = list(
-        repo.session.scalars(
-            select(Cluster)
-            .where(
-                or_(
-                    func.lower(Cluster.name).like(func.lower(pattern)),
-                    func.lower(Cluster.location).like(func.lower(pattern)),
-                )
-            )
-            .limit(_PER_TYPE_LIMIT)
-        )
-    )
+    clusters = repo.search_clusters(pattern, _PER_TYPE_LIMIT)
     return [
         SearchHit(
             entity_type="cluster",
@@ -65,18 +51,7 @@ def _cluster_hits(repo: IrrigationRepository, pattern: str) -> list[SearchHit]:
 
 def _plant_hits(repo: IrrigationRepository, pattern: str) -> list[SearchHit]:
     """Plants whose species or notes match."""
-    plants = list(
-        repo.session.scalars(
-            select(Plant)
-            .where(
-                or_(
-                    func.lower(Plant.species).like(func.lower(pattern)),
-                    func.lower(Plant.notes).like(func.lower(pattern)),
-                )
-            )
-            .limit(_PER_TYPE_LIMIT)
-        )
-    )
+    plants = repo.search_plants(pattern, _PER_TYPE_LIMIT)
     return [
         SearchHit(
             entity_type="plant",
@@ -91,18 +66,7 @@ def _plant_hits(repo: IrrigationRepository, pattern: str) -> list[SearchHit]:
 
 def _sensor_hits(repo: IrrigationRepository, q: str, pattern: str) -> list[SearchHit]:
     """Sensors whose name matches, or whose Tuya device id starts with the query."""
-    sensors = list(
-        repo.session.scalars(
-            select(Sensor)
-            .where(
-                or_(
-                    func.lower(Sensor.name).like(func.lower(pattern)),
-                    Sensor.tuya_device_id.like(f"{q}%"),
-                )
-            )
-            .limit(_PER_TYPE_LIMIT)
-        )
-    )
+    sensors = repo.search_sensors(pattern, q, _PER_TYPE_LIMIT)
     return [
         SearchHit(
             entity_type="sensor",
@@ -117,18 +81,7 @@ def _sensor_hits(repo: IrrigationRepository, q: str, pattern: str) -> list[Searc
 
 def _irrigator_hits(repo: IrrigationRepository, q: str, pattern: str) -> list[SearchHit]:
     """Irrigators whose name matches, or whose Tuya device id starts with the query."""
-    irrigators = list(
-        repo.session.scalars(
-            select(Irrigator)
-            .where(
-                or_(
-                    func.lower(Irrigator.name).like(func.lower(pattern)),
-                    Irrigator.tuya_device_id.like(f"{q}%"),
-                )
-            )
-            .limit(_PER_TYPE_LIMIT)
-        )
-    )
+    irrigators = repo.search_irrigators(pattern, q, _PER_TYPE_LIMIT)
     return [
         SearchHit(
             entity_type="irrigator",
