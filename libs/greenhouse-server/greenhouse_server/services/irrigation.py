@@ -46,7 +46,7 @@ from greenhouse_server.services.irrigation_jobs import (  # noqa: F401 — re-ex
 from greenhouse_server.services.jobs import job_session
 from greenhouse_server.services.maintenance import AlertFinding, collect_learning_alerts, collect_maintenance_alerts
 from greenhouse_server.services.notify import NtfyClient, maybe_notify
-from greenhouse_server.services.sync import SyncService
+from greenhouse_server.services.sync import ClusterSnapshot, SyncService
 from greenhouse_server.services.weather import WeatherClient
 
 if TYPE_CHECKING:
@@ -365,10 +365,10 @@ class _Actuation:
     decision: "IrrigationDecision"
     temp: float
     source: str
-    sensor_data: "dict[str, Any] | None"
+    sensor_data: ClusterSnapshot | None
 
 
-def _soil_note(sensor_data: "dict[str, Any] | None") -> str:
+def _soil_note(sensor_data: ClusterSnapshot | None) -> str:
     """The event-notes soil fragment, labelled as the cluster's driest sensor (invariant #2)."""
     # The snapshot's soil value is the cluster's driest sensor (invariant #2),
     # so label it as such — an unqualified "soil=" reads as "this plant's".
@@ -457,7 +457,7 @@ class IrrigationService:
         is_indoor: bool,
         temp_override: float | None,
         no_sync: bool,
-    ) -> tuple[float, str, dict[str, Any] | None]:
+    ) -> tuple[float, str, ClusterSnapshot | None]:
         """Resolve temperature from override, sensor, or weather. Returns (temp, source, sensor_data)."""
         if temp_override is not None:
             return temp_override, "override", None
@@ -469,22 +469,22 @@ class IrrigationService:
             return temp, source, sensor_data
         return FALLBACK_TEMPERATURE_C, "fallback (20C)", sensor_data
 
-    def _indoor_temperature(self, sensor_data: dict[str, Any] | None) -> tuple[float, str] | None:
+    def _indoor_temperature(self, sensor_data: ClusterSnapshot | None) -> tuple[float, str] | None:
         """Indoor: the cluster's own sensor first, then the weather feels-like; None if neither."""
-        if sensor_data and sensor_data.get("temperature") is not None:
-            return sensor_data["temperature"], "sensor"
+        if sensor_data and (temperature := sensor_data.get("temperature")) is not None:
+            return temperature, "sensor"
         weather = self._weather.get_current()
         if weather and (feels_like := weather.get("feels_like")) is not None:
             return feels_like, "open-meteo (fallback)"
         return None
 
-    def _outdoor_temperature(self, sensor_data: dict[str, Any] | None) -> tuple[float, str] | None:
+    def _outdoor_temperature(self, sensor_data: ClusterSnapshot | None) -> tuple[float, str] | None:
         """Any non-indoor environment: the weather feels-like first, then the sensor; None if neither."""
         weather = self._weather.get_current()
         if weather and (feels_like := weather.get("feels_like")) is not None:
             return feels_like, "open-meteo"
-        if sensor_data and sensor_data.get("temperature") is not None:
-            return sensor_data["temperature"], "sensor (weather unavailable)"
+        if sensor_data and (temperature := sensor_data.get("temperature")) is not None:
+            return temperature, "sensor (weather unavailable)"
         return None
 
     def _decide(self, cluster_id: int, temp: float, *, force: bool) -> "IrrigationDecision | None":

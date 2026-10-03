@@ -4,7 +4,7 @@ import logging
 import statistics
 import time
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypedDict
 
 from greenhouse_core.constants import SENSOR_READING_STALE_SECONDS
 from greenhouse_core.devices import DeviceRegistry
@@ -22,6 +22,15 @@ logger = logging.getLogger(__name__)
 # Look-back for the cluster snapshot's per-sensor values. Matches the decision
 # engine's own window so both read the same slice of history.
 SNAPSHOT_LOOKBACK_HOURS = 24
+
+
+class ClusterSnapshot(TypedDict):
+    """The cluster-level reading the pipeline acts on: one aggregated value per metric (``None`` if unreported)."""
+
+    temperature: float | None
+    soil_moisture: float | None
+    env_humidity: float | None
+    light: int | None
 
 
 class SyncService:
@@ -49,7 +58,7 @@ class SyncService:
             return {"total_synced": 0, "total_new": 0, "total_live": 0, "errors": ["No cloud connection"]}
         return core_sync(self._repo, self._gateway, hours=hours)
 
-    def ensure_fresh_and_read(self, cluster_id: int) -> dict[str, Any] | None:
+    def ensure_fresh_and_read(self, cluster_id: int) -> ClusterSnapshot | None:
         """Return the cluster's current sensor snapshot from SQLite.
 
         Reads the latest persisted reading for each sensor (no Cloud call). If
@@ -82,7 +91,7 @@ class SyncService:
 
         return self._cluster_snapshot(sensors)
 
-    def _cluster_snapshot(self, sensors: "Sequence[Sensor]") -> dict[str, Any] | None:
+    def _cluster_snapshot(self, sensors: "Sequence[Sensor]") -> ClusterSnapshot | None:
         """Fold the cluster's sensors into the single reading the pipeline acts on.
 
         One value per metric, aggregated the way the metric is used rather than
