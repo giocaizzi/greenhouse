@@ -1,0 +1,23 @@
+# Size-exception register, read by scripts/sizecheck.py (`make sizecheck`).
+# Format: <repo-relative path>[::<qualname>] — <reason>
+# Each entry names a function or file that is over the size limits on purpose and says why splitting it
+# would be worse. The register only shrinks: add an entry only with a reason a reviewer accepts.
+
+# ── Functions (> 40 body lines or nesting > 3) ───────────────────────────────
+libs/greenhouse-cli/greenhouse_cli/tui/screens/cluster.py::ClusterScreen.compose — one declarative widget tree with no branching; its order is the focus order and is pinned by the app.tcss selectors and the screen goldens, so splitting it would scatter the DOM picture
+libs/greenhouse-cli/greenhouse_cli/tui/screens/forms.py::FormScreen.compose — the nesting comes from nested `with` widget containers in a declarative Textual tree whose order is the focus order, pinned by app.tcss and the form-screen goldens
+libs/greenhouse-core/greenhouse_core/devices/gateway.py::DeviceGateway.get_device_logs — Cloud v1 and v2 log parsing differ in how they handle ValueError; a merged helper would fork device behaviour
+libs/greenhouse-core/greenhouse_core/devices/irrigators/ik10pw.py::IK10PWAdapter._start_keepalive — actuation safety path that holds a recorded bug (REFACTOR_NOTES.md "Observed bugs": IK10PW keep-alive fallback, signal.signal called off the main thread); restructuring it belongs to the fix for that bug
+libs/greenhouse-core/greenhouse_core/devices/irrigators/tuya_generic.py::TuyaIrrigatorAdapter.status — flat DPS-decoding ladder in a device adapter; the nesting is the per-DP decode and splitting it adds indirection on a device path
+libs/greenhouse-server/greenhouse_server/services/bulk.py::stop_all_irrigators — emergency stop-all path; each irrigator is isolated in its own try (for → try → if → try) so one failure cannot stop the others
+
+# ── Files > 400 lines ─────────────────────────────────────────────────────────
+libs/greenhouse-core/greenhouse_core/repository.py — one persistence facade of many shallow query/write methods; a mixin split adds indirection without removing duplication
+libs/greenhouse-core/greenhouse_core/schemas.py — cohesive Pydantic DTO module; splitting it risks the OpenAPI contract (class __module__, docstrings, field order) for navigation only
+libs/greenhouse-core/greenhouse_core/logic/engine.py — one cohesive rule pipeline; tests read the engine's constant imports from vars(engine) and patch engine.time / engine.season_for, so moving rules out breaks pinned tests
+libs/greenhouse-cli/greenhouse_cli/tui/screens/cluster.py — one Screen: a compose tree plus its action_* and on_* handlers, pinned per class by the TUI surface golden; per-tab controller objects would add indirection
+libs/greenhouse-server/greenhouse_server/services/irrigation.py — the logger name, the clock seam, the lazy scheduler imports and the names tests call by path pin the pipeline and job plumbing to this module
+libs/greenhouse-server/greenhouse_server/scheduler.py — the scheduler-job goldens pin the built-in jobs' function references here; job registry, timezone rebuild and pause policy are one concern and the public surface is pinned
+libs/greenhouse-cli/greenhouse_cli/client.py — one thin method per /api/v1 endpoint, 1:1 with the OpenAPI schema; per-resource mixins would add indirection
+libs/greenhouse-core/greenhouse_core/models.py — declarative ORM models; the DDL is pinned by the schema goldens
+libs/greenhouse-core/greenhouse_core/constants.py — flat register of named thresholds; AGENTS.md invariant 5 requires every threshold to live here, so splitting would only scatter them

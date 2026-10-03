@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Size checker for the refactor Definition of Done (target §3.12, plan T0.9).
+"""Size checker for the repository's size rules (``make sizecheck``; AGENTS.md "Size and complexity").
 
 Reports, for the given Python files or directories (default: ``libs/``, excluding
 ``migrations/versions/``):
@@ -18,19 +18,19 @@ Metrics:
 
 Cyclomatic complexity is ruff's job (``C90`` at max-complexity 8), not this script's.
 
-Entries listed in ``refactor/size-exceptions.txt`` are reported as ``excepted: <reason>`` and do not fail the run.
+Entries listed in ``scripts/size-exceptions.txt`` are reported as ``excepted: <reason>`` and do not fail the run.
 Register format, one entry per line (``#`` comments allowed)::
 
-    <repo-relative path>::<qualname> — <reason> — approved: <who>     # a function
-    <repo-relative path> — <reason> — approved: <who>                 # a whole file (> MAX_FILE_LINES)
+    <repo-relative path>::<qualname> — <reason>     # a function
+    <repo-relative path> — <reason>                 # a whole file (> MAX_FILE_LINES)
 
 Exit status: 0 when every hit is excepted, 1 otherwise (2 on usage errors).
 
 Usage::
 
-    uv run python refactor/scripts/sizecheck.py                      # all of libs/
-    uv run python refactor/scripts/sizecheck.py path/to/a.py dir/    # specific files / directories
-    uv run python refactor/scripts/sizecheck.py --no-exceptions FILE  # ignore the register (per-task DoD check)
+    uv run python scripts/sizecheck.py                      # all of libs/
+    uv run python scripts/sizecheck.py path/to/a.py dir/    # specific files / directories
+    uv run python scripts/sizecheck.py --no-exceptions FILE  # ignore the register (check a change in isolation)
 """
 
 from __future__ import annotations
@@ -42,8 +42,8 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
-REGISTER = ROOT / "refactor" / "size-exceptions.txt"
+ROOT = Path(__file__).resolve().parents[1]
+REGISTER = ROOT / "scripts" / "size-exceptions.txt"
 DEFAULT_TARGETS = ("libs",)
 EXCLUDED_PARTS = ("migrations/versions/", "/__pycache__/")
 MAX_BODY_LINES = 40
@@ -56,6 +56,8 @@ COMPOUND = (ast.If, ast.For, ast.AsyncFor, ast.While, ast.With, ast.AsyncWith, a
 
 @dataclass(frozen=True)
 class Hit:
+    """One function or file over a size limit."""
+
     key: str  # "path::qualname" or "path"
     detail: str
 
@@ -134,6 +136,7 @@ def _functions(tree: ast.AST) -> Iterator[tuple[str, ast.FunctionDef | ast.Async
 
 
 def scan_file(path: Path) -> list[Hit]:
+    """Return the size-limit hits of one Python file (file length, then each function)."""
     rel = path.resolve().relative_to(ROOT).as_posix()
     source = path.read_text(encoding="utf-8")
     lines = source.splitlines()
@@ -148,6 +151,7 @@ def scan_file(path: Path) -> list[Hit]:
 
 
 def iter_files(targets: list[str]) -> Iterator[Path]:
+    """Yield the Python files under the targets, skipping generated migrations and caches."""
     for target in targets:
         path = (ROOT / target) if not Path(target).is_absolute() else Path(target)
         candidates = sorted(path.rglob("*.py")) if path.is_dir() else [path]
@@ -167,12 +171,14 @@ def load_register(path: Path) -> dict[str, str]:
             continue
         key, sep, reason = line.partition(SEPARATOR)
         if not sep or not reason.strip():
-            raise SystemExit(f"{path.name}:{number}: entry without a reason: {line!r}")
+            msg = f"{path.name}:{number}: entry without a reason: {line!r}"
+            raise SystemExit(msg)
         entries[key.strip()] = reason.strip()
     return entries
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Scan the targets and print every hit; return 1 when a hit is not in the register."""
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("targets", nargs="*", help="files or directories (default: libs/)")
     parser.add_argument("--register", type=Path, default=REGISTER, help="exception register")
@@ -191,7 +197,7 @@ def main(argv: list[str] | None = None) -> int:
             elif not args.quiet_excepted:
                 print(f"{hit.key}  {hit.detail}  excepted: {reason}")
     if failures:
-        print(f"sizecheck: {failures} function(s)/file(s) over the DoD limits", file=sys.stderr)
+        print(f"sizecheck: {failures} function(s)/file(s) over the size limits", file=sys.stderr)
     return 1 if failures else 0
 
 
