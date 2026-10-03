@@ -56,6 +56,12 @@ libs/greenhouse-core/greenhouse_core/devices/sensors/__init__.py
 libs/greenhouse-core/greenhouse_core/devices/sensors/tr301z.py
 libs/greenhouse-core/greenhouse_core/learning/__init__.py
 libs/greenhouse-core/greenhouse_core/learning/issues.py
+libs/greenhouse-core/greenhouse_core/devices/health.py
+libs/greenhouse-core/greenhouse_core/devices/irrigators/base.py
+libs/greenhouse-core/greenhouse_core/devices/irrigators/tuya_generic.py
+libs/greenhouse-core/greenhouse_core/devices/profile.py
+libs/greenhouse-core/greenhouse_core/devices/sensors/base.py
+libs/greenhouse-core/greenhouse_core/devices/sensors/tuya_generic.py
 libs/greenhouse-core/greenhouse_core/learning/learner.py
 libs/greenhouse-core/greenhouse_core/learning/models.py
 libs/greenhouse-core/greenhouse_core/learning/profiling.py
@@ -69,6 +75,8 @@ libs/greenhouse-core/greenhouse_core/logic/sensors.py
 libs/greenhouse-core/greenhouse_core/logic/stress.py
 libs/greenhouse-core/greenhouse_core/logic/trends.py
 libs/greenhouse-core/greenhouse_core/migrations/env.py
+libs/greenhouse-core/greenhouse_core/logic/engine.py
+libs/greenhouse-core/greenhouse_core/logic/timing.py
 libs/greenhouse-core/greenhouse_core/models.py
 libs/greenhouse-core/greenhouse_core/plant_db.py
 libs/greenhouse-core/greenhouse_core/repository.py

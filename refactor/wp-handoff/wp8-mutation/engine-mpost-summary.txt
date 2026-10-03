@@ -1,0 +1,110 @@
+mutants 271 | killed 257 | survived 14 | invalid 0 | kill rate 94.8% | test time 97.6 min
+  SURVIVED cmp-flip | multiplier < 1.0 -> multiplier <= 1.0 | IrrigationLogic._apply_seasonal_multiplier
+  SURVIVED num-minus1 | forecast.get("precipitation_mm", 0.0) -> forecast.get("precipitation_mm", -1.0) | IrrigationLogic._apply_weather_skip_rule
+  SURVIVED num-minus1 | forecast.get("precipitation_mm", 0.0) or 0.0 -> forecast.get("precipitation_mm", 0.0) or -1.0 | IrrigationLogic._apply_weather_skip_rule
+  SURVIVED num-minus1 | max(0, math.ceil((vac.ends_at - now) / SECONDS_PER_DAY)) -> max(-1, math.ceil((vac.ends_at - now) / SECONDS_PER_DAY)) | _vacation_days_left
+  SURVIVED num-minus1 | max(0.0, (alert.last_seen_at + hold_seconds - now) / SECONDS_PER_HOUR) -> max(-1.0, (alert.last_seen_at + hold_seconds - now) / SECONDS_PER_HOUR) | IrrigationLogic._enforce_leak_hold
+  SURVIVED num-minus1 | max(0.0, allowed_cum_l - spent_l) -> max(-1.0, allowed_cum_l - spent_l) | _binding_max_minutes
+  SURVIVED num-plus1 | forecast.get("precipitation_mm", 0.0) -> forecast.get("precipitation_mm", 1.0) | IrrigationLogic._apply_weather_skip_rule
+  SURVIVED num-plus1 | forecast.get("precipitation_mm", 0.0) or 0.0 -> forecast.get("precipitation_mm", 0.0) or 1.0 | IrrigationLogic._apply_weather_skip_rule
+  SURVIVED stmt-delete | decision.action = Action.SKIP -> pass | _apply_soil_level
+  SURVIVED stmt-delete | decision.action = Action.SKIP -> pass | _apply_soil_level#2
+  SURVIVED stmt-delete | decision.duration_minutes = DEFAULT_DURATION_MINUTES -> pass | _apply_soil_level
+  SURVIVED stmt-delete | decision.interval_hours = DEFAULT_INTERVAL_HOURS -> pass | _apply_soil_level
+  SURVIVED stmt-delete | return None -> pass | IrrigationLogic._apply_window_rule
+  SURVIVED stmt-delete | return None -> pass | active_quiet_window
+M-post: kill rate OK; killed-in-pre now surviving: 0
+  (killed-in-pre identities with no post counterpart — code removed/rewritten: 93)
+  UNMATCHED stmt-delete | decision = _decision_with_reason( cluster_id, evaluated_at, Action.SKIP, DEFAULT_DURATION_MINUTES, DEFAULT_INTERVAL_HOURS, confidence=0.0, code=TriggerCode.NO_PLANTS, message="no plants in cluster", ) -> pass | IrrigationLogic.decide_for_cluster
+  UNMATCHED stmt-delete | self._persist(leak_hold, triggered_by) -> pass | IrrigationLogic.decide_for_cluster
+  UNMATCHED stmt-delete | cooldown = self._enforce_cooldown(cluster_id, evaluated_at) -> pass | IrrigationLogic.decide_for_cluster
+  UNMATCHED cmp-flip | cooldown is not None -> cooldown is None | IrrigationLogic.decide_for_cluster
+  UNMATCHED stmt-delete | self._persist(cooldown, triggered_by) -> pass | IrrigationLogic.decide_for_cluster
+  UNMATCHED stmt-delete | return cooldown -> pass | IrrigationLogic.decide_for_cluster
+  UNMATCHED stmt-delete | skip = _decision_with_reason( cluster_id, evaluated_at, Action.SKIP, DEFAULT_DURATION_MINUTES, DEFAULT_INTERVAL_HOURS, confidence=CONFIDENCE_COOLDOWN, code=TriggerCode.QUIET_HOURS, message=(f"quiet hours active ({quiet_window[0]:02d}:00–{quiet_window[1]:02d}:00 local)"), severity=Severity.INFO, ) -> pass | IrrigationLogic.decide_for_cluster
+  UNMATCHED num-minus1 | quiet_window[0] -> quiet_window[-1] | IrrigationLogic.decide_for_cluster
+  UNMATCHED num-plus1 | quiet_window[0] -> quiet_window[1] | IrrigationLogic.decide_for_cluster
+  UNMATCHED num-minus1 | quiet_window[1] -> quiet_window[0] | IrrigationLogic.decide_for_cluster
+  UNMATCHED num-plus1 | quiet_window[1] -> quiet_window[2] | IrrigationLogic.decide_for_cluster
+  UNMATCHED stmt-delete | self._persist(skip, triggered_by) -> pass | IrrigationLogic.decide_for_cluster
+  UNMATCHED stmt-delete | return skip -> pass | IrrigationLogic.decide_for_cluster
+  UNMATCHED bool-flip | quiet_window is not None and bypass_quiet_hours -> quiet_window is not None or bypass_quiet_hours | IrrigationLogic.decide_for_cluster._finalize
+  UNMATCHED cmp-flip | quiet_window is not None -> quiet_window is None | IrrigationLogic.decide_for_cluster._finalize
+  UNMATCHED stmt-delete | decision.add_reason( code=TriggerCode.MANUAL_OVERRIDE_QUIET_HOURS, message=( f"manual override of quiet hours ({quiet_window[0]:02d}:00–{quiet_window[1]:02d}:00 local)" ), severity=Severity.WARNING, ) -> pass | IrrigationLogic.decide_for_cluster._finalize
+  UNMATCHED num-minus1 | quiet_window[0] -> quiet_window[-1] | IrrigationLogic.decide_for_cluster._finalize
+  UNMATCHED num-plus1 | quiet_window[0] -> quiet_window[1] | IrrigationLogic.decide_for_cluster._finalize
+  UNMATCHED num-minus1 | quiet_window[1] -> quiet_window[0] | IrrigationLogic.decide_for_cluster._finalize
+  UNMATCHED num-plus1 | quiet_window[1] -> quiet_window[2] | IrrigationLogic.decide_for_cluster._finalize
+  UNMATCHED stmt-delete | return _finalize(weather_skip) -> pass | IrrigationLogic.decide_for_cluster
+  UNMATCHED stmt-delete | snapshot = get_recent_sensor_data(self.db, cluster_id, hours=24) -> pass | IrrigationLogic.decide_for_cluster
+  UNMATCHED num-minus1 | get_recent_sensor_data(self.db, cluster_id, hours=24) -> get_recent_sensor_data(self.db, cluster_id, hours=23) | IrrigationLogic.decide_for_cluster
+  UNMATCHED num-plus1 | get_recent_sensor_data(self.db, cluster_id, hours=24) -> get_recent_sensor_data(self.db, cluster_id, hours=25) | IrrigationLogic.decide_for_cluster
+  UNMATCHED stmt-delete | ideal_temp_range = get_ideal_temp_range(plant_care) -> pass | IrrigationLogic.decide_for_cluster
+  UNMATCHED stmt-delete | ideal_humidity_range = get_ideal_humidity_range(plant_care) -> pass | IrrigationLogic.decide_for_cluster
+  UNMATCHED stmt-delete | water_needs = analyze_water_needs(plant_care) -> pass | IrrigationLogic.decide_for_cluster
+  UNMATCHED bool-flip | not sensors or not snapshot.has_data -> not sensors and not snapshot.has_data | IrrigationLogic.decide_for_cluster
+  UNMATCHED stmt-delete | fallback = temperature_based_decision( self.db, cluster_id, evaluated_at, temp=current_temp, water_needs=water_needs, temp_range=ideal_temp_range, config=self.db.get_irrigation_config(cluster_id), trends=trends, stress=stress, ) -> pass | IrrigationLogic.decide_for_cluster
+  UNMATCHED stmt-delete | return _finalize(fallback) -> pass | IrrigationLogic.decide_for_cluster
+  UNMATCHED stmt-delete | decision = IrrigationDecision( cluster_id=cluster_id, evaluated_at=evaluated_at, action=Action.SKIP, duration_minutes=DEFAULT_DURATION_MINUTES, interval_hours=DEFAULT_INTERVAL_HOURS, confidence=0.5, sensor_snapshot=snapshot, stress_indicators=stress, trends=trends, ) -> pass | IrrigationLogic.decide_for_cluster
+  UNMATCHED num-minus1 | IrrigationDecision( cluster_id=cluster_id, evaluated_at=evaluated_at, action=Action.SKIP, duration_minutes=DEFAULT_DURATION_MINUTES, interval_hours=DEFAULT_INTERVAL_HOURS, confidence=0.5, sensor_snapshot=snapshot, stress_indicators=stress, trends=trends, ) -> IrrigationDecision( cluster_id=cluster_id, evaluated_at=evaluated_at, action=Action.SKIP, duration_minutes=DEFAULT_DURATION_MINUTES, interval_hours=DEFAULT_INTERVAL_HOURS, confidence=-0.5, sensor_snapshot=snapshot, stress_indicators=stress, trends=trends, ) | IrrigationLogic.decide_for_cluster
+  UNMATCHED num-plus1 | IrrigationDecision( cluster_id=cluster_id, evaluated_at=evaluated_at, action=Action.SKIP, duration_minutes=DEFAULT_DURATION_MINUTES, interval_hours=DEFAULT_INTERVAL_HOURS, confidence=0.5, sensor_snapshot=snapshot, stress_indicators=stress, trends=trends, ) -> IrrigationDecision( cluster_id=cluster_id, evaluated_at=evaluated_at, action=Action.SKIP, duration_minutes=DEFAULT_DURATION_MINUTES, interval_hours=DEFAULT_INTERVAL_HOURS, confidence=1.5, sensor_snapshot=snapshot, stress_indicators=stress, trends=trends, ) | IrrigationLogic.decide_for_cluster
+  UNMATCHED stmt-delete | return _finalize(decision) -> pass | IrrigationLogic.decide_for_cluster
+  UNMATCHED stmt-delete | return _finalize(decision) -> pass | IrrigationLogic.decide_for_cluster#2
+  UNMATCHED stmt-delete | window_skip = self._apply_window_rule(cluster, cluster_id, evaluated_at, decision) -> pass | IrrigationLogic.decide_for_cluster
+  UNMATCHED stmt-delete | return _finalize(window_skip) -> pass | IrrigationLogic.decide_for_cluster
+  UNMATCHED stmt-delete | _apply_soil_moisture_rule(decision, plant_care) -> pass | IrrigationLogic.decide_for_cluster
+  UNMATCHED stmt-delete | _apply_temperature_adjustment(decision, ideal_temp_range) -> pass | IrrigationLogic.decide_for_cluster
+  UNMATCHED stmt-delete | _apply_humidity_adjustment(decision, ideal_humidity_range) -> pass | IrrigationLogic.decide_for_cluster
+  UNMATCHED stmt-delete | _apply_water_needs_adjustment(decision, water_needs) -> pass | IrrigationLogic.decide_for_cluster
+  UNMATCHED stmt-delete | self._apply_seasonal_multiplier(cluster, decision, plant_care, evaluated_at) -> pass | IrrigationLogic.decide_for_cluster
+  UNMATCHED stmt-delete | return _finalize(decision) -> pass | IrrigationLogic.decide_for_cluster#3
+  UNMATCHED stmt-delete | tz_name = prefs.timezone if prefs else None -> pass | IrrigationLogic._resolve_quiet_window
+  UNMATCHED stmt-delete | tz_name = prefs.timezone if prefs else None -> pass | IrrigationLogic._apply_window_rule
+  UNMATCHED stmt-delete | tz_name = prefs.timezone if prefs else None -> pass | IrrigationLogic._apply_seasonal_multiplier
+  UNMATCHED stmt-delete | environment = cluster.environment or "indoor" -> pass | IrrigationLogic._apply_seasonal_multiplier
+  UNMATCHED stmt-delete | new_interval = int(round(decision.interval_hours / multiplier)) -> pass | IrrigationLogic._apply_seasonal_multiplier
+  UNMATCHED stmt-delete | new_interval = max(MIN_INTERVAL_HOURS, min(MAX_INTERVAL_HOURS, new_interval)) -> pass | IrrigationLogic._apply_seasonal_multiplier
+  UNMATCHED stmt-delete | decision.interval_hours = new_interval -> pass | IrrigationLogic._apply_seasonal_multiplier
+  UNMATCHED stmt-delete | decision.add_reason( code=TriggerCode.VACATION_ACTIVE, message=f"vacation active (returns in {max(0, math.ceil((vac.ends_at - now) / 86400))}d)", severity=Severity.INFO, icon="airplane", ) -> pass | IrrigationLogic._apply_vacation_budget
+  UNMATCHED num-plus1 | max(0, math.ceil((vac.ends_at - now) / 86400)) -> max(1, math.ceil((vac.ends_at - now) / 86400)) | IrrigationLogic._apply_vacation_budget
+  UNMATCHED num-minus1 | (vac.ends_at - now) / 86400 -> (vac.ends_at - now) / 86399 | IrrigationLogic._apply_vacation_budget
+  UNMATCHED stmt-delete | d_days = max(1, math.ceil((vac.ends_at - vac.starts_at) / 86400)) -> pass | IrrigationLogic._apply_vacation_budget
+  UNMATCHED num-minus1 | (vac.ends_at - vac.starts_at) / 86400 -> (vac.ends_at - vac.starts_at) / 86399 | IrrigationLogic._apply_vacation_budget
+  UNMATCHED stmt-delete | day_index = math.floor((now - vac.starts_at) / 86400) -> pass | IrrigationLogic._apply_vacation_budget
+  UNMATCHED stmt-delete | usable_l = irr.reservoir_l * VACATION_RESERVOIR_USABLE_FRACTION -> pass | IrrigationLogic._apply_vacation_budget
+  UNMATCHED stmt-delete | binding_max_min = math.floor(headroom_l / irr.flow_rate_l_per_min) -> pass | IrrigationLogic._apply_vacation_budget
+  UNMATCHED stmt-delete | return -> pass | IrrigationLogic._apply_vacation_budget#5
+  UNMATCHED stmt-delete | return -> pass | IrrigationLogic._apply_vacation_budget#6
+  UNMATCHED stmt-delete | hold_seconds = LEAK_HOLD_HOURS * 3600 -> pass | IrrigationLogic._enforce_leak_hold
+  UNMATCHED num-minus1 | LEAK_HOLD_HOURS * 3600 -> LEAK_HOLD_HOURS * 3599 | IrrigationLogic._enforce_leak_hold
+  UNMATCHED num-plus1 | LEAK_HOLD_HOURS * 3600 -> LEAK_HOLD_HOURS * 3601 | IrrigationLogic._enforce_leak_hold
+  UNMATCHED stmt-delete | hours_left = max(0.0, (alert.last_seen_at + hold_seconds - now) / 3600) -> pass | IrrigationLogic._enforce_leak_hold
+  UNMATCHED num-plus1 | max(0.0, (alert.last_seen_at + hold_seconds - now) / 3600) -> max(1.0, (alert.last_seen_at + hold_seconds - now) / 3600) | IrrigationLogic._enforce_leak_hold
+  UNMATCHED stmt-delete | hours_ago = (now - latest_event.timestamp) / 3600 -> pass | IrrigationLogic._enforce_cooldown
+  UNMATCHED stmt-delete | forecast = self._weather.get_forecast(hours=6) -> pass | IrrigationLogic._apply_weather_skip_rule
+  UNMATCHED num-minus1 | self._weather.get_forecast(hours=6) -> self._weather.get_forecast(hours=5) | IrrigationLogic._apply_weather_skip_rule
+  UNMATCHED num-plus1 | self._weather.get_forecast(hours=6) -> self._weather.get_forecast(hours=7) | IrrigationLogic._apply_weather_skip_rule
+  UNMATCHED cmp-flip | precip <= 2.0 -> precip < 2.0 | IrrigationLogic._apply_weather_skip_rule
+  UNMATCHED num-minus1 | precip <= 2.0 -> precip <= 1.0 | IrrigationLogic._apply_weather_skip_rule
+  UNMATCHED num-plus1 | precip <= 2.0 -> precip <= 3.0 | IrrigationLogic._apply_weather_skip_rule
+  UNMATCHED stmt-delete | decision = IrrigationDecision( cluster_id=cluster_id, evaluated_at=evaluated_at, action=action, duration_minutes=duration_minutes, interval_hours=interval_hours, confidence=confidence, sensor_snapshot=sensor_snapshot, stress_indicators=stress_indicators or StressIndicators(), trends=trends or Trends(), ) -> pass | _decision_with_reason
+  UNMATCHED bool-flip | stress_indicators or StressIndicators() -> stress_indicators and StressIndicators() | _decision_with_reason
+  UNMATCHED bool-flip | trends or Trends() -> trends and Trends() | _decision_with_reason
+  UNMATCHED stmt-delete | target_ranges = [parse_moisture_target(d.get("soil_moisture_target", "45-65")) for d in plant_care] -> pass | _apply_soil_moisture_rule
+  UNMATCHED stmt-delete | target_min = min(r[0] for r in target_ranges) -> pass | _apply_soil_moisture_rule
+  UNMATCHED stmt-delete | target_max = max(r[1] for r in target_ranges) -> pass | _apply_soil_moisture_rule
+  UNMATCHED stmt-delete | min_soil = snapshot.min_soil_moisture if snapshot.min_soil_moisture is not None else snapshot.avg_soil_moisture -> pass | _apply_soil_moisture_rule
+  UNMATCHED stmt-delete | max_soil = snapshot.max_soil_moisture if snapshot.max_soil_moisture is not None else snapshot.avg_soil_moisture -> pass | _apply_soil_moisture_rule
+  UNMATCHED stmt-delete | has_conflict = (min_soil < target_min) and (max_soil > target_max - CONFLICT_WET_MARGIN) -> pass | _apply_soil_moisture_rule
+  UNMATCHED bool-flip | (min_soil < target_min) and (max_soil > target_max - CONFLICT_WET_MARGIN) -> (min_soil < target_min) or (max_soil > target_max - CONFLICT_WET_MARGIN) | _apply_soil_moisture_rule
+  UNMATCHED cmp-flip | max_soil > target_max - CONFLICT_WET_MARGIN -> max_soil >= target_max - CONFLICT_WET_MARGIN | _apply_soil_moisture_rule
+  UNMATCHED stmt-delete | dry_names = [ s.name for s in snapshot.per_sensor if s.avg_soil_moisture is not None and s.avg_soil_moisture < target_min ] -> pass | _apply_soil_moisture_rule
+  UNMATCHED bool-flip | s.avg_soil_moisture is not None and s.avg_soil_moisture < target_min -> s.avg_soil_moisture is not None or s.avg_soil_moisture < target_min | _apply_soil_moisture_rule
+  UNMATCHED stmt-delete | wet_names = [ s.name for s in snapshot.per_sensor if s.avg_soil_moisture is not None and s.avg_soil_moisture > target_max - CONFLICT_WET_MARGIN ] -> pass | _apply_soil_moisture_rule
+  UNMATCHED bool-flip | s.avg_soil_moisture is not None and s.avg_soil_moisture > target_max - CONFLICT_WET_MARGIN -> s.avg_soil_moisture is not None or s.avg_soil_moisture > target_max - CONFLICT_WET_MARGIN | _apply_soil_moisture_rule
+  UNMATCHED cmp-flip | s.avg_soil_moisture is not None -> s.avg_soil_moisture is None | _apply_soil_moisture_rule#2
+  UNMATCHED cmp-flip | s.avg_soil_moisture > target_max - CONFLICT_WET_MARGIN -> s.avg_soil_moisture >= target_max - CONFLICT_WET_MARGIN | _apply_soil_moisture_rule
+  UNMATCHED stmt-delete | decision.interval_hours = CONFLICT_INTERVAL_HOURS -> pass | _apply_soil_moisture_rule#2
+  UNMATCHED cmp-flip | min_soil < target_min -> min_soil <= target_min | _apply_soil_moisture_rule#2
+  UNMATCHED stmt-delete | decision.action = Action.IRRIGATE -> pass | _apply_soil_moisture_rule#3
+  UNMATCHED cmp-flip | snapshot.avg_soil_moisture <= target_max -> snapshot.avg_soil_moisture < target_max | _apply_soil_moisture_rule

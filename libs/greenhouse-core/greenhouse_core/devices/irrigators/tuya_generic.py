@@ -8,6 +8,7 @@ or ``read_health`` for firmware-specific recipes.
 from __future__ import annotations
 
 import time
+from typing import Any
 
 from greenhouse_core.devices.gateway import DeviceGateway
 from greenhouse_core.devices.health import DeviceHealthState
@@ -54,7 +55,7 @@ class TuyaIrrigatorAdapter(AbstractIrrigatorAdapter):
         """Switch off."""
         return self.off(irrigator)
 
-    def status(self, irrigator: Irrigator) -> dict:
+    def status(self, irrigator: Irrigator) -> dict[str, Any]:
         """Return current status. Tries local first, falls back to cloud.
 
         Local read fields (``running``, ``duration``, ``left_time``,
@@ -68,7 +69,7 @@ class TuyaIrrigatorAdapter(AbstractIrrigatorAdapter):
                 live = device.status()
                 if live and "dps" in live:
                     dps = live["dps"]
-                    out: dict = {"source": "local"}
+                    out: dict[str, Any] = {"source": "local"}
                     for key in ("switch", "duration", "left_time", "work_status", "auto_run"):
                         if key in self.profile.dp_map:
                             out[self._status_key(key)] = dps.get(str(self.profile.dp(key)))
@@ -80,7 +81,7 @@ class TuyaIrrigatorAdapter(AbstractIrrigatorAdapter):
         if not result.get("success"):
             return {"error": f"Cloud API error: {result}"}
 
-        status: dict = {"source": "cloud"}
+        status: dict[str, Any] = {"source": "cloud"}
         for item in result.get("result", []):
             code = item.get("code")
             value = item.get("value")

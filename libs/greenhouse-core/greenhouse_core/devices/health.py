@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import StrEnum
+from typing import Any
 
 
 class HealthAlarm(StrEnum):
@@ -60,7 +61,7 @@ class DeviceHealthState:
     last_seen_ts: int | None = None
     offline: bool = False
     alarms: frozenset[HealthAlarm] = frozenset()
-    raw: dict = field(default_factory=dict)
+    raw: dict[str, Any] = field(default_factory=dict)
 
 
 __all__ = ["DeviceHealthState", "HealthAlarm"]

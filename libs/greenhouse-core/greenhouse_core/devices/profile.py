@@ -78,9 +78,12 @@ class SensorProfile:
         transport: Tuya transport in use (typically ``tuya_cloud``).
         capabilities: Free-form flags such as ``"reports_soil_moisture"``,
             ``"reports_temperature"``, ``"reports_lux"``, ``"reports_battery"``.
-        dp_parsers: Tuya DP code (e.g. ``"humidity"``) → parser callable.
-            The parser returns a ``(canonical_key, value)`` tuple consumed by
-            ``TuyaSensorAdapter.read_live``.
+        dp_parsers: Tuya DP code (e.g. ``"humidity"``) → parser callable,
+            each returning a ``(canonical_key, value)`` tuple. Descriptive:
+            the entries are picked from the gateway's single
+            ``DATAPOINT_PARSERS`` table, and reads parse through that table
+            inside :class:`~greenhouse_core.devices.gateway.DeviceGateway` —
+            ``TuyaSensorAdapter.read_live`` does not consult this mapping.
     """
 
     model_key: str
@@ -94,7 +97,7 @@ class SensorProfile:
         return name in self.capabilities
 
 
-def load_profile_json(filename: str) -> dict:
+def load_profile_json(filename: str) -> dict[str, Any]:
     """Load the raw JSON body of a profile sidecar bundled with the package.
 
     Adapter modules are responsible for mapping the dict into a typed
@@ -102,4 +105,5 @@ def load_profile_json(filename: str) -> dict:
     expressed declaratively).
     """
     path = _PROFILES_DIR / filename
-    return json.loads(path.read_text(encoding="utf-8"))
+    raw: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
+    return raw

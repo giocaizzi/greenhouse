@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from typing import Any
 
 from greenhouse_core.devices.health import DeviceHealthState, HealthAlarm
 from greenhouse_core.devices.profile import SensorProfile
@@ -22,7 +23,7 @@ class AbstractSensorAdapter(ABC):
     health_capabilities: frozenset[HealthAlarm] = frozenset()
 
     @abstractmethod
-    def read_live(self, sensor: Sensor) -> dict:
+    def read_live(self, sensor: Sensor) -> dict[str, Any]:
         """Fetch current values. Returns canonical-key dict, or ``{"error": ...}``."""
 
     @abstractmethod
