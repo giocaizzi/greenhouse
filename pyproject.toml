@@ -111,6 +111,7 @@ extend-select = [
     "PLR0913",  # too-many-arguments (frozen handler signatures excluded per directory)
     "PLR0917",  # too-many-positional-arguments (preview, explicit; same exclusions)
     "FBT",  # boolean traps (Typer commands excluded: --flag options are the CLI contract)
+    "A002",  # builtin-argument-shadowing (`id`/`type` options of frozen handlers excluded)
     "ARG",  # unused arguments (FastAPI web handlers keep `request`: per-file exclusion)
     "S",  # flake8-bandit: intended uses carry a reasoned noqa; real findings → REFACTOR_NOTES
     "PLR2004",  # magic-value-comparison: thresholds live in constants.py (CLAUDE.md invariant 5)
@@ -165,8 +166,8 @@ indent-style = "space"
 # parameter per query/form field or CLI option (the OpenAPI / MCP / --help contract), and web pages
 # keep `request: Request` even when unused.
 "libs/greenhouse-server/greenhouse_server/routes/*" = ["PLR0913", "PLR0917"]
-"libs/greenhouse-server/greenhouse_server/web/routes/*" = ["ARG001", "PLR0913", "PLR0917"]
-"libs/greenhouse-cli/greenhouse_cli/commands/*" = ["FBT", "PLR0913", "PLR0917"]
+"libs/greenhouse-server/greenhouse_server/web/routes/*" = ["A002", "ARG001", "PLR0913", "PLR0917"]
+"libs/greenhouse-cli/greenhouse_cli/commands/*" = ["A002", "FBT", "PLR0913", "PLR0917"]
 # Ratchet offenders (baseline refactor-gate1 + lint ratchet, refactor/40-lint-ratchet.md); each list only shrinks.
 "libs/greenhouse-cli/greenhouse_cli/client.py" = ["FBT001", "FBT002", "PLR0904", "PLR0913", "PLR0917"]
 "libs/greenhouse-cli/greenhouse_cli/commands/auth.py" = ["PLR0915"]

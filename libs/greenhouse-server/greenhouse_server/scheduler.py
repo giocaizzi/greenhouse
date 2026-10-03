@@ -107,7 +107,14 @@ class JobNotRegisteredError(LookupError):
     """Raised when the job an operation targets is not registered."""
 
 
-def _add_core_job(func: "Callable[[], None]", trigger: str, *, id: str, name: str, **trigger_args: Any) -> None:
+def _add_core_job(
+    func: "Callable[[], None]",
+    trigger: str,
+    *,
+    id: str,  # noqa: A002 — mirrors APScheduler add_job(id=...) at every call site
+    name: str,
+    **trigger_args: Any,
+) -> None:
     """Register (or replace) a built-in job and mark its id as core."""
     _CORE_JOB_IDS.add(id)
     scheduler.add_job(func, trigger, id=id, name=name, replace_existing=True, **trigger_args)
