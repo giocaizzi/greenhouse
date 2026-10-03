@@ -30,11 +30,7 @@ ALLOWED_HOURS = {24, 168, 720}
 
 
 def _water_needs_band(target: str | None) -> tuple[float, float] | None:
-    """The water-needs soil band through the shared parser (D10); None when no ``lo-hi`` target is set.
-
-    ``parse_moisture_target`` reads the first two ``-`` parts and falls back to the
-    default band, exactly like every other soil-target reader.
-    """
+    """The water-needs soil band via the shared ``parse_moisture_target`` (D10); None without a ``lo-hi`` target."""
     if not target or "-" not in target:
         return None
     return parse_moisture_target(target)
@@ -52,10 +48,7 @@ def build_plant_chart_payload(
     hours: int,
     metric: Metric,
 ) -> dict[str, Any]:
-    """One plant's chart: per-sensor series, the cluster's irrigation events and the target band.
-
-    Returns ``{}`` when the plant does not exist.
-    """
+    """One plant's chart: per-sensor series, cluster irrigation events, target band; ``{}`` if no such plant."""
     plant: Plant | None = repo.get_plant(plant_id)
     if plant is None:
         return {}
@@ -111,8 +104,7 @@ def _build_plant_sensor_datasets(
 ) -> list[dict[str, Any]]:
     """Assignment-aware plant series: one dataset per sensor that served the plant in the window.
 
-    Readings are filtered to the periods when each sensor was actually linked to
-    this plant.
+    Readings are filtered to the periods when each sensor was actually linked to this plant.
     """
     field = _metric_field(metric)
     since = int(time.time()) - hours * SECONDS_PER_HOUR
