@@ -567,7 +567,6 @@
   "#alerts-table",
   "#alert-detail",
   "#system-panels",
-  "#global-config",
   "#jobs-table",
   "#devices-table",
   "ModalScreen",
@@ -595,7 +594,5 @@
   "#vacation-table, #quality-table",
   "#scheduler-panel"
  ],
- "tcss_tokens_without_a_mounted_widget": [
-  "#global-config"
- ]
+ "tcss_tokens_without_a_mounted_widget": []
 }
