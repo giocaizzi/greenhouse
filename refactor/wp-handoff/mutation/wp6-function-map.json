@@ -1,0 +1,8 @@
+{
+  "get_recent_sensor_data": ["get_recent_sensor_data", "_mean_or_none", "_per_sensor_snapshot"],
+  "analyze_historical_trends": ["analyze_historical_trends", "_pooled_clean_readings", "_moisture_trend", "_temperature_trend", "_apply_reading_trends", "_apply_cadence_flags"],
+  "detect_stress_conditions": ["detect_stress_conditions", "_water_warning", "_low_env_humidity", "_low_light", "_water_stress", "_heat_stress", "_over_watering"],
+  "temperature_based_decision": ["temperature_based_decision", "_config_fallback", "_temperature_interval"],
+  "detect_issues": ["detect_issues", "_learned_profiles", "_blocked_drip_alert", "_drainage_alert", "_chronic_underwatering_alert", "_sensor_alerts"],
+  "detect_conflicts": ["detect_conflicts", "_latest_moisture_by_sensor", "_conflict_band", "_split_dry_wet", "_conflict_alert", "_wet_conflict_alerts", "_overwater_conflict_alerts", "_cluster_plant", "_low_light_alerts", "_low_env_humidity_alerts"]
+}
