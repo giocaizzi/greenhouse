@@ -7,7 +7,7 @@ from greenhouse_core.constants import FULL_WEEKDAY_MASK
 
 
 class Base(DeclarativeBase):
-    pass
+    """Declarative base shared by every ORM model (one metadata = one schema)."""
 
 
 # ── Activity / audit / decisions / alerts ────────────────────────────────────

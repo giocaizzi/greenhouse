@@ -79,8 +79,7 @@ def get_display_timezone() -> str:
 
 
 def format_timestamp(timestamp: float, fmt: str = "%Y-%m-%d %H:%M") -> str:
-    """
-    Format a UTC timestamp for display in local timezone.
+    """Format a UTC timestamp for display in local timezone.
 
     Args:
         timestamp: Unix timestamp (UTC)

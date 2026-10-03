@@ -9,6 +9,9 @@ from typing import Any
 # One plant-database entry (species, category or mapping row) as decoded from JSON.
 CareData = dict[str, Any]
 
+# IRRIGATION_PLANT_DB_PATH is read once at import: the fallback for direct core users
+# (tests, scripts, PlantDatabase() without a path). The server resolves the same
+# variable through Settings.plant_db_path and builds its PlantDatabase from that.
 _DEFAULT_PLANT_DB_PATH = Path(str(files("greenhouse_core") / "data" / "plant_database.json"))
 PLANT_DB_PATH = (
     Path(os.environ["IRRIGATION_PLANT_DB_PATH"])
@@ -34,8 +37,7 @@ class PlantDatabase:
         return data
 
     def lookup_species(self, species: str) -> CareData | None:
-        """
-        Look up care requirements for a specific species.
+        """Look up care requirements for a specific species.
 
         Args:
             species: Scientific name or common name (e.g., "Monstera deliciosa", "Areca palm")
@@ -69,8 +71,7 @@ class PlantDatabase:
         return None
 
     def lookup_category(self, category: str) -> CareData | None:
-        """
-        Look up general care requirements for a plant category.
+        """Look up general care requirements for a plant category.
 
         Args:
             category: Category name (e.g., "tropical", "succulent")
@@ -82,8 +83,7 @@ class PlantDatabase:
         return categories.get(category)
 
     def get_care_data(self, species: str | None = None, category: str | None = None) -> CareData:
-        """
-        Resolve plant care data with three-layer precedence.
+        """Resolve plant care data with three-layer precedence.
 
         Layered merge (least → most specific): ultimate defaults < ``categories[c]``
         biology basics < ``_category_defaults[c]`` timing fields < ``species[s]``

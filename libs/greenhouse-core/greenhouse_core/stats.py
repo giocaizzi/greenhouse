@@ -1,4 +1,4 @@
-"""Irrigation statistics and reporting."""
+"""Irrigation statistics for a cluster (and the legacy CSV export)."""
 
 from __future__ import annotations
 

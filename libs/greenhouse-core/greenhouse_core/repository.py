@@ -1,4 +1,4 @@
-"""Database operations for the irrigation system (replaces IrrigationDB)."""
+"""Database operations for the irrigation system: the one persistence facade over the ORM."""
 
 import json
 import time
@@ -543,8 +543,7 @@ class IrrigationRepository:
     )
 
     def set_irrigation_config(self, cluster_id: int, **fields: Any) -> int:
-        """Upsert a cluster's irrigation config; only the fields provided in
-        ``fields`` are mutated.
+        """Upsert a cluster's irrigation config, mutating only the fields provided.
 
         Every field is nullable: passing ``None`` clears the cluster-level
         override (the effective resolver will then fall through to the
@@ -1011,6 +1010,7 @@ class IrrigationRepository:
         )
 
     def get_irrigation_window(self, window_id: int) -> IrrigationWindow | None:
+        """Get an irrigation window by ID."""
         return self.session.get(IrrigationWindow, window_id)
 
     def add_irrigation_window(
@@ -1022,6 +1022,7 @@ class IrrigationRepository:
         weekday_mask: int = FULL_WEEKDAY_MASK,
         label: str | None = None,
     ) -> IrrigationWindow:
+        """Add an irrigation window to a cluster (every weekday unless a mask is given)."""
         row = IrrigationWindow(
             cluster_id=cluster_id,
             start_hour=start_hour,
@@ -1034,6 +1035,7 @@ class IrrigationRepository:
         return row
 
     def update_irrigation_window(self, window_id: int, **fields: Any) -> IrrigationWindow | None:
+        """Patch an irrigation window's fields; ``None`` when it does not exist."""
         row = self.session.get(IrrigationWindow, window_id)
         if row is None:
             return None
@@ -1042,6 +1044,7 @@ class IrrigationRepository:
         return row
 
     def delete_irrigation_window(self, window_id: int) -> bool:
+        """Delete an irrigation window; ``False`` when it does not exist."""
         return self._delete_by_id(IrrigationWindow, window_id)
 
     # ── User Preferences (single-row) ─────────────────────────────────────────
@@ -1215,8 +1218,11 @@ class IrrigationRepository:
         return plant
 
     def delete_plant(self, plant_id: int) -> bool:
-        """Delete a plant. Sensors retain their cluster; any open assignment to
-        the plant is closed so historical readings stay attributed correctly."""
+        """Delete a plant, closing its sensors' open assignments.
+
+        Sensors retain their cluster; any open assignment to the plant is closed
+        so historical readings stay attributed correctly.
+        """
         plant = self.session.get(Plant, plant_id)
         if not plant:
             return False
@@ -1288,8 +1294,9 @@ class IrrigationRepository:
         return plant
 
     def update_sensor(self, sensor_id: int, **fields: Any) -> Sensor | None:
-        """Patch sensor fields. ``plant_id`` changes are routed through
-        ``reassign_sensor_to_plant`` so the assignment history stays in sync.
+        """Patch sensor fields, keeping the assignment history in sync.
+
+        ``plant_id`` changes are routed through ``reassign_sensor_to_plant``;
         ``config`` is JSON-serialised if a dict.
         """
         sensor = self.session.get(Sensor, sensor_id)
