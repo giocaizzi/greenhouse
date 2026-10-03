@@ -298,8 +298,7 @@ class IrrigationLogic:
         effective: dict[str, dict[str, Any]] = self.db.get_effective_config(cluster_id)
         start = effective["quiet_start_hour"]["value"]
         end = effective["quiet_end_hour"]["value"]
-        prefs = self.db.get_preferences()
-        tz_name = prefs.timezone if prefs else None
+        tz_name = self._tz_name()
         if is_within_quiet_hours(
             start_hour=int(start) if start is not None else None,
             end_hour=int(end) if end is not None else None,
@@ -308,6 +307,11 @@ class IrrigationLogic:
         ):
             return (int(start), int(end))
         return None
+
+    def _tz_name(self) -> str | None:
+        """The preferences timezone, re-read on every call (``get_preferences`` may insert the row)."""
+        prefs = self.db.get_preferences()
+        return prefs.timezone if prefs else None
 
     def _apply_window_rule(
         self, cluster: "Cluster", cluster_id: int, evaluated_at: int, decision: IrrigationDecision
@@ -325,8 +329,7 @@ class IrrigationLogic:
         if not windows:
             return None
 
-        prefs = self.db.get_preferences()
-        tz_name = prefs.timezone if prefs else None
+        tz_name = self._tz_name()
         if is_within_irrigation_window(windows, now_unix=evaluated_at, tz_name=tz_name):
             return None
         return _decision_with_reason(
@@ -355,8 +358,7 @@ class IrrigationLogic:
         missing for outdoor we fall to the next layer rather than silently
         reading the indoor key (avoids surprising mixed-env scaling).
         """
-        prefs = self.db.get_preferences()
-        tz_name = prefs.timezone if prefs else None
+        tz_name = self._tz_name()
         environment = cast("Environment", cluster.environment or "indoor")
         season = season_for(evaluated_at, tz_name=tz_name)
 
