@@ -364,7 +364,6 @@
    "CreateIrrigationWindowRequest",
    "CreateIrrigatorRequest",
    "CreatePlantRequest",
-   "CreateSchedulerJobRequest",
    "CreateSensorRequest",
    "DataQualityIssue",
    "DataQualityReport",
