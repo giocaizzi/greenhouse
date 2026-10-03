@@ -95,7 +95,7 @@ class IrrigationClient:
             headers["Authorization"] = f"Bearer {resolved}"
         self.http = httpx.Client(base_url=base_url, timeout=30.0, headers=headers, **kwargs)
 
-    # Context manager only, no public close(): every public method maps to one /api/v1 endpoint (pinned by tests).
+    # Context manager only, no public close(): every public method maps to one /api/v1 endpoint (tests enforce it).
     # CLI commands close the client per call; the TUI keeps one client for the whole session.
     def __enter__(self) -> Self:
         return self

@@ -18,7 +18,7 @@ class ConfirmScreen(ModalScreen[bool]):
 
     Not every actuating key comes here: irrigate and water-now open their own dialogs, and syncs,
     the health snapshot, scheduler resume, alert ack / resolve / re-scan and logout run on the key press
-    (pinned by ``tests/golden/tui/actuation.json``).
+    (see ``tests/golden/tui/actuation.json``).
     """
 
     BINDINGS: ClassVar[list[BindingType]] = [
