@@ -327,7 +327,8 @@ def test_check_unknown_cluster_shape(db):
 @pytest.mark.parametrize(
     ("care", "band", "status"),
     [
-        ({"soil_moisture_target": "40-50-60"}, (45.0, 65.0), "dry"),
+        # D10: one parser everywhere — parse_moisture_target reads the first two parts.
+        ({"soil_moisture_target": "40-50-60"}, (40.0, 50.0), "dry"),
         ({"soil_moisture_target": "50"}, (45.0, 65.0), "dry"),
         ({"soil_moisture_target": "high-low"}, (45.0, 65.0), "dry"),
         ({"soil_moisture_target": None}, (45.0, 65.0), "dry"),

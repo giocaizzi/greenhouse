@@ -8,7 +8,6 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Literal, Required, TypedDict, cast
 
 from greenhouse_core.constants import (
-    DEFAULT_SOIL_MOISTURE_TARGET,
     FALLBACK_TEMPERATURE_C,
     LEAK_CHECK_ACTIVITY_SCAN_LIMIT,
     LEAK_CHECK_DELAY_SECONDS,
@@ -24,6 +23,7 @@ from greenhouse_core.devices import DeviceRegistry, UnknownDeviceModel
 from greenhouse_core.logic import IrrigationLogic
 from greenhouse_core.logic.cleaning import clean_readings_desc
 from greenhouse_core.logic.decision import Action, Severity
+from greenhouse_core.logic.plant_needs import moisture_target_range
 from greenhouse_core.models import ENTITY_CLUSTER, ENTITY_IRRIGATOR
 from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_core.repository import IrrigationRepository
@@ -35,7 +35,7 @@ from greenhouse_server.services.sync import SyncService
 from greenhouse_server.services.weather import WeatherClient
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator, Mapping, Sequence
+    from collections.abc import Callable, Iterator, Sequence
 
     from sqlalchemy.orm import Session
 
@@ -533,20 +533,6 @@ def _latest_soil(readings: "Sequence[CleanedReading]") -> float | None:
     return next((r.soil_moisture for r in readings if r.soil_moisture is not None), None) if readings else None
 
 
-def _monitor_target_band(care: "Mapping[str, Any]") -> tuple[float, float]:
-    """The plant's soil target band for monitoring; any parse failure falls back to (45.0, 65.0).
-
-    Deliberately its own strict two-part parse — not ``moisture_target_range``, which reads
-    three-part strings differently.
-    """
-    target_raw = care.get("soil_moisture_target", DEFAULT_SOIL_MOISTURE_TARGET)
-    try:
-        t_min, t_max = (float(x) for x in target_raw.split("-"))
-    except Exception:
-        t_min, t_max = 45.0, 65.0
-    return t_min, t_max
-
-
 def _soil_status(latest_soil: float | None, t_min: float, t_max: float) -> str:
     """Classify one sensor's latest soil value against the target band."""
     if latest_soil is None:
@@ -860,7 +846,7 @@ class IrrigationService:
 
             plant = plants_by_id.get(sensor.plant_id) if sensor.plant_id else None
             care = self._plant_db.get_care_data(species=plant.species if plant else None)
-            t_min, t_max = _monitor_target_band(care)
+            t_min, t_max = moisture_target_range(care)
             status = _soil_status(latest_soil, t_min, t_max)
 
             sensor_statuses.append(

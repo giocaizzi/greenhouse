@@ -6,7 +6,8 @@ import statistics
 from typing import TYPE_CHECKING, Any
 
 from greenhouse_core.constants import (
-    DEFAULT_SOIL_MOISTURE_TARGET,
+    DEFAULT_SOIL_MOISTURE_MAX,
+    DEFAULT_SOIL_MOISTURE_MIN,
     LEARNING_CHRONIC_MIN_RESPONSES,
     LEARNING_CONFLICT_DRY_MARGIN,
     LEARNING_CONFLICT_LOOKBACK_HOURS,
@@ -26,6 +27,7 @@ from greenhouse_core.constants import (
 from greenhouse_core.learning.models import Alert, PlantProfile
 from greenhouse_core.learning.profiling import get_plant_profile
 from greenhouse_core.logic.cleaning import clean_readings, clean_readings_desc
+from greenhouse_core.logic.plant_needs import moisture_target_range
 from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_core.utils import daytime_lux_readings, effective_light_threshold, seasonal_light_factor
@@ -103,11 +105,7 @@ def _chronic_underwatering_alert(
     db: IrrigationRepository, sensor: Sensor, profile: PlantProfile, care: Mapping[str, Any]
 ) -> Alert | None:
     """The soil never reaches the plant's target minimum over the last week."""
-    target = care.get("soil_moisture_target", DEFAULT_SOIL_MOISTURE_TARGET)
-    try:
-        target_min = float(target.split("-")[0])
-    except (ValueError, IndexError):
-        target_min = 45.0
+    target_min, _ = moisture_target_range(care)
 
     recent = clean_readings(db.get_recent_readings(sensor.id, hours=LEARNING_WEEK_HOURS))  # 7 days
     if not recent:
@@ -197,16 +195,10 @@ def _latest_moisture_by_sensor(db: IrrigationRepository, sensors: list[Sensor]) 
 
 
 def _conflict_band(plant_care: Mapping[int, Mapping[str, Any]], plant_id: int | None) -> tuple[float, float]:
-    """The plant's moisture target band; (45, 65) when unknown or unparsable."""
-    target_min, target_max = 45.0, 65.0
+    """The plant's moisture target band; the default band when the plant is unknown or its target unparsable."""
     if plant_id and plant_id in plant_care:
-        target_str = plant_care[plant_id].get("soil_moisture_target", DEFAULT_SOIL_MOISTURE_TARGET)
-        try:
-            parts = target_str.split("-")
-            target_min, target_max = float(parts[0]), float(parts[1])
-        except (ValueError, IndexError):
-            pass
-    return target_min, target_max
+        return moisture_target_range(plant_care[plant_id])
+    return DEFAULT_SOIL_MOISTURE_MIN, DEFAULT_SOIL_MOISTURE_MAX
 
 
 def _split_dry_wet(
