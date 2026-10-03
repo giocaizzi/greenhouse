@@ -52,6 +52,8 @@ from greenhouse_server.services.weather import WeatherClient
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
+    from fastapi import FastAPI
+
     from greenhouse_core.devices import AbstractIrrigatorAdapter
     from greenhouse_core.logic.cleaning import CleanedReading
     from greenhouse_core.logic.decision import IrrigationDecision
@@ -179,7 +181,7 @@ def _watcher_tuning(settings: "Settings | None") -> tuple[float, float, int]:
 
 
 def _run_pump_watcher(
-    app: Any,
+    app: "FastAPI",
     registry: DeviceRegistry,
     *,
     irrigator_id: int,

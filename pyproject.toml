@@ -351,7 +351,10 @@ type = "forbidden"
 source_modules = ["greenhouse_server.services"]
 forbidden_modules = ["fastapi", "starlette", "greenhouse_server.deps", "greenhouse_server.auth"]
 allow_indirect_imports = true
-ignore_imports = ["greenhouse_server.services.jobs -> fastapi"]  # TYPE_CHECKING annotation only
+ignore_imports = [
+  "greenhouse_server.services.jobs -> fastapi",        # TYPE_CHECKING annotation only
+  "greenhouse_server.services.irrigation -> fastapi",  # TYPE_CHECKING annotation only (_run_pump_watcher's app)
+]
 
 [[tool.importlinter.contracts]]
 name = "SQLAlchemy stays behind the repository"
