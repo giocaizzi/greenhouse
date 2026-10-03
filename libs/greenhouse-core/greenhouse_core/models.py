@@ -1,6 +1,7 @@
 """SQLAlchemy v2 ORM models for the irrigation system."""
 
 import json
+from enum import StrEnum
 from typing import Any
 
 from sqlalchemy import Float, ForeignKey, Index, Integer, String, UniqueConstraint
@@ -35,35 +36,82 @@ def parse_device_config(raw: object) -> dict[str, Any]:
 # Cross-cutting tables. They reference cluster_id/plant_id/sensor_id/etc. by
 # integer id rather than hard FKs so the audit trail survives cascade deletes
 # and the notification inbox can deduplicate across resource types.
-ENTITY_CLUSTER = "cluster"
-ENTITY_PLANT = "plant"
-ENTITY_SENSOR = "sensor"
-ENTITY_IRRIGATOR = "irrigator"
 
-# ``source`` of an ActivityEvent / Alert row: the subsystem that produced it.
-SOURCE_IRRIGATION = "irrigation"
-SOURCE_SENSOR = "sensor"
-SOURCE_PLANT = "plant"
-SOURCE_LEARNING = "learning"
-SOURCE_MAINTENANCE = "maintenance"
-SOURCE_LEAK = "leak"
-SOURCE_ANOMALY = "anomaly"
-SOURCE_PUMP = "pump"
-SOURCE_HEALTH = "health"
 
-# ``IrrigationEvent.action``. Only ``start`` is real actuation: cooldown, caps,
-# trends and learning count it alone (a ``schedule_updated`` row blocks nothing).
-EVENT_ACTION_START = "start"
-EVENT_ACTION_STOP = "stop"  # manual stop; rows written before manual stops used ``stop`` may carry ``off``
-EVENT_ACTION_ATTEMPTED = "attempted"  # automatic start whose device call failed
-EVENT_ACTION_ABORTED = "aborted"  # pump watcher stopped a dry run
+class EntityType(StrEnum):
+    """``entity_type`` of an ActivityEvent / Alert row: the kind of resource it is about."""
 
-# ``IrrigationEvent.triggered_by``: who asked for the actuation.
-TRIGGERED_BY_AUTO = "auto"
-TRIGGERED_BY_MANUAL = "manual"
-TRIGGERED_BY_EMERGENCY = "emergency"
-TRIGGERED_BY_SHUTDOWN = "shutdown"
-TRIGGERED_BY_PUMP_WATCHER = "pump_watcher"
+    CLUSTER = "cluster"
+    PLANT = "plant"
+    SENSOR = "sensor"
+    IRRIGATOR = "irrigator"
+
+
+class ActivitySource(StrEnum):
+    """``source`` of an ActivityEvent / Alert row: the subsystem that produced it."""
+
+    IRRIGATION = "irrigation"
+    SENSOR = "sensor"
+    PLANT = "plant"
+    LEARNING = "learning"
+    MAINTENANCE = "maintenance"
+    LEAK = "leak"
+    ANOMALY = "anomaly"
+    PUMP = "pump"
+    HEALTH = "health"
+
+
+class EventAction(StrEnum):
+    """``IrrigationEvent.action``.
+
+    Only ``start`` is real actuation: cooldown, caps, trends and learning count it
+    alone (a ``schedule_updated`` row blocks nothing).
+    """
+
+    START = "start"
+    STOP = "stop"  # manual stop; rows written before manual stops used ``stop`` may carry ``off``
+    ATTEMPTED = "attempted"  # automatic start whose device call failed
+    ABORTED = "aborted"  # pump watcher stopped a dry run
+
+
+class TriggeredBy(StrEnum):
+    """``IrrigationEvent.triggered_by``: who asked for the actuation."""
+
+    AUTO = "auto"
+    MANUAL = "manual"
+    EMERGENCY = "emergency"
+    SHUTDOWN = "shutdown"
+    PUMP_WATCHER = "pump_watcher"
+
+
+# Module-level names for the members above (the import surface every caller uses).
+# Members are ``str`` subclasses: they compare, hash, format, bind to SQLite and
+# serialise exactly like the plain strings these names used to hold.
+ENTITY_CLUSTER = EntityType.CLUSTER
+ENTITY_PLANT = EntityType.PLANT
+ENTITY_SENSOR = EntityType.SENSOR
+ENTITY_IRRIGATOR = EntityType.IRRIGATOR
+
+SOURCE_IRRIGATION = ActivitySource.IRRIGATION
+SOURCE_SENSOR = ActivitySource.SENSOR
+SOURCE_PLANT = ActivitySource.PLANT
+SOURCE_LEARNING = ActivitySource.LEARNING
+SOURCE_MAINTENANCE = ActivitySource.MAINTENANCE
+SOURCE_LEAK = ActivitySource.LEAK
+SOURCE_ANOMALY = ActivitySource.ANOMALY
+SOURCE_PUMP = ActivitySource.PUMP
+SOURCE_HEALTH = ActivitySource.HEALTH
+
+EVENT_ACTION_START = EventAction.START
+EVENT_ACTION_STOP = EventAction.STOP
+EVENT_ACTION_ATTEMPTED = EventAction.ATTEMPTED
+EVENT_ACTION_ABORTED = EventAction.ABORTED
+
+TRIGGERED_BY_AUTO = TriggeredBy.AUTO
+TRIGGERED_BY_MANUAL = TriggeredBy.MANUAL
+TRIGGERED_BY_EMERGENCY = TriggeredBy.EMERGENCY
+TRIGGERED_BY_SHUTDOWN = TriggeredBy.SHUTDOWN
+TRIGGERED_BY_PUMP_WATCHER = TriggeredBy.PUMP_WATCHER
 
 
 class Cluster(Base):
