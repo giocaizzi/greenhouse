@@ -190,6 +190,9 @@ def bulk_stop_all_web(
     auditable inline.
     """
     stopped, errors = stop_all_irrigators(repo, registry, notifier)
+    # The stops are committed; drop the uncommitted preferences seed the notify gate may have
+    # inserted so the page chrome's own session isn't blocked on SQLite's write lock.
+    repo.rollback()
     return templates.TemplateResponse(
         request,
         "partials/_stop_all_result.html",
