@@ -13,6 +13,7 @@ from greenhouse_core.constants import (
     SECONDS_PER_DAY,
     SECONDS_PER_HOUR,
 )
+from greenhouse_core.logic.plant_needs import parse_moisture_target
 from greenhouse_core.models import Plant, Sensor
 from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_core.repository import IrrigationRepository
@@ -28,14 +29,15 @@ Metric = Literal["soil_moisture", "temperature", "light", "env_humidity"]
 ALLOWED_HOURS = {24, 168, 720}
 
 
-def _parse_range(target: str | None) -> tuple[float | None, float | None]:
+def _water_needs_band(target: str | None) -> tuple[float, float] | None:
+    """The water-needs soil band through the shared parser (D10); None when no ``lo-hi`` target is set.
+
+    ``parse_moisture_target`` reads the first two ``-`` parts and falls back to the
+    default band, exactly like every other soil-target reader.
+    """
     if not target or "-" not in target:
-        return (None, None)
-    try:
-        lo, hi = target.split("-", 1)
-        return (float(lo), float(hi))
-    except (ValueError, TypeError):
-        return (None, None)
+        return None
+    return parse_moisture_target(target)
 
 
 def _metric_field(metric: Metric) -> str:
@@ -187,9 +189,9 @@ def _threshold_for_plant(plant: Plant, plant_db: PlantDatabase, metric: Metric) 
     if metric == "soil_moisture":
         if plant.water_needs:
             info = plant_db.get_water_needs_info(plant.water_needs)
-            lo, hi = _parse_range(info.get("soil_moisture_target"))
-            if lo is not None:
-                return {"min": lo, "max": hi, "source": f"water_needs:{plant.water_needs}"}
+            band = _water_needs_band(info.get("soil_moisture_target"))
+            if band is not None:
+                return {"min": band[0], "max": band[1], "source": f"water_needs:{plant.water_needs}"}
         return {
             "min": float(DEFAULT_SOIL_MOISTURE_MIN),
             "max": float(DEFAULT_SOIL_MOISTURE_MAX),
