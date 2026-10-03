@@ -63,6 +63,7 @@ libs/greenhouse-server/greenhouse_server/services/forecast.py
 libs/greenhouse-server/greenhouse_server/services/health.py
 libs/greenhouse-server/greenhouse_server/services/health_monitor.py
 libs/greenhouse-server/greenhouse_server/services/insights.py
+libs/greenhouse-server/greenhouse_server/services/inventory.py
 libs/greenhouse-server/greenhouse_server/services/irrigation.py
 libs/greenhouse-server/greenhouse_server/services/maintenance.py
 libs/greenhouse-server/greenhouse_server/services/pump_watcher.py

@@ -255,6 +255,12 @@ MUTATIONS: tuple[Mut, ...] = (
         {"tuya_device_id": "fake_tuya_device_00000009", "name": "Second", "type": "tuya_cloud"},
     ),
     M(
+        "create_irrigator__duplicate_device_id",
+        "POST",
+        f"/clusters/{EMPTY}/irrigators",
+        {"tuya_device_id": "fake_tuya_device_aabbccdd", "name": "Clone", "type": "tuya_cloud", "reservoir_l": "5"},
+    ),
+    M(
         "create_irrigator__bad_capacity",
         "POST",
         f"/clusters/{EMPTY}/irrigators",

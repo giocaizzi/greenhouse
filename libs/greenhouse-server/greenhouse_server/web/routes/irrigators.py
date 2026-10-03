@@ -3,15 +3,20 @@
 from __future__ import annotations
 
 import json
+from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-from greenhouse_core.repository import IrrigatorExistsError
 from greenhouse_server.deps import DeviceRegistryDep, NtfyNotifierDep, RepoDep, require_cluster
+from greenhouse_server.services import inventory
+from greenhouse_server.services.inventory import DeviceIdExistsError, IrrigatorExistsError
 from greenhouse_server.services.manual_control import ManualActionError, manual_log, manual_start, manual_stop
 from greenhouse_server.web.context import base_context
 from greenhouse_server.web.templating import templates
+
+if TYPE_CHECKING:
+    from greenhouse_core.models import Cluster
 
 router = APIRouter(include_in_schema=False)
 
@@ -66,6 +71,13 @@ def _parse_capacity(raw: str) -> float | None:
     return value
 
 
+def _new_form_conflict(request: Request, cluster: Cluster, error: str) -> HTMLResponse:
+    """Re-render the add form with the conflict message (HTTP 409), as the API's 409."""
+    return templates.TemplateResponse(
+        request, "irrigators/new.html", base_context(request, cluster=cluster, error=error), status_code=409
+    )
+
+
 @router.post("/clusters/{cluster_id}/irrigators")
 def create_irrigator(
     request: Request,
@@ -88,29 +100,24 @@ def create_irrigator(
     reservoir = _parse_capacity(reservoir_l)
     flow_rate = _parse_capacity(flow_rate_l_per_min)
     try:
-        irrigator_id = repo.add_irrigator(
-            cluster_id=cluster_id,
+        inventory.create_irrigator(
+            repo,
+            cluster_id,
             tuya_device_id=tuya_device_id,
             name=name,
             irrigator_type=type,
             config=config,
+            reservoir_l=reservoir,
+            flow_rate_l_per_min=flow_rate,
         )
     except IrrigatorExistsError:
-        repo.session.rollback()
         # Re-render the form with a user-facing error instead of a redirect; a
         # cluster may have at most one irrigator.
-        return templates.TemplateResponse(
-            request,
-            "irrigators/new.html",
-            base_context(
-                request,
-                cluster=cluster,
-                error="This cluster already has an irrigator. A cluster can have at most one.",
-            ),
-            status_code=409,
+        return _new_form_conflict(
+            request, cluster, "This cluster already has an irrigator. A cluster can have at most one."
         )
-    if reservoir is not None or flow_rate is not None:
-        repo.update_irrigator(irrigator_id, reservoir_l=reservoir, flow_rate_l_per_min=flow_rate)
+    except DeviceIdExistsError:
+        return _new_form_conflict(request, cluster, "Device ID already exists")
     repo.session.commit()
     return RedirectResponse(url=f"/clusters/{cluster_id}#irrigators", status_code=303)
 

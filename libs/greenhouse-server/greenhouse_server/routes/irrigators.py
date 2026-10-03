@@ -1,9 +1,7 @@
 """Irrigator CRUD + control routes."""
 
 from fastapi import APIRouter, HTTPException, Query, status
-from sqlalchemy.exc import IntegrityError
 
-from greenhouse_core.repository import IrrigatorExistsError
 from greenhouse_core.schemas import (
     CreateIrrigatorRequest,
     IrrigatorActionResponse,
@@ -16,6 +14,7 @@ from greenhouse_core.schemas import (
     UpdateIrrigatorRequest,
 )
 from greenhouse_server.deps import DeviceRegistryDep, NtfyNotifierDep, RepoDep, require_cluster
+from greenhouse_server.services.inventory import DeviceIdExistsError, IrrigatorExistsError, create_irrigator
 from greenhouse_server.services.manual_control import (
     ManualActionError,
     manual_log,
@@ -81,27 +80,21 @@ def add_irrigator(cluster_id: int, request: CreateIrrigatorRequest, repo: RepoDe
     """
     require_cluster(repo, cluster_id)
     try:
-        irrigator_id = repo.add_irrigator(
-            cluster_id=cluster_id,
+        irrigator_id = create_irrigator(
+            repo,
+            cluster_id,
             tuya_device_id=request.tuya_device_id,
             name=request.name,
             irrigator_type=request.type,
             config=request.config or {},
+            reservoir_l=request.reservoir_l,
+            flow_rate_l_per_min=request.flow_rate_l_per_min,
         )
-        # add_irrigator does not accept capacity columns; persist them here if supplied.
-        if request.reservoir_l is not None or request.flow_rate_l_per_min is not None:
-            repo.update_irrigator(
-                irrigator_id,
-                reservoir_l=request.reservoir_l,
-                flow_rate_l_per_min=request.flow_rate_l_per_min,
-            )
-        repo.session.commit()
     except IrrigatorExistsError:
-        repo.session.rollback()
         raise HTTPException(status_code=409, detail="Cluster already has an irrigator") from None
-    except IntegrityError:
-        repo.session.rollback()
+    except DeviceIdExistsError:
         raise HTTPException(status_code=409, detail="Device ID already exists") from None
+    repo.session.commit()
     return repo.get_irrigator(irrigator_id)
 
 
