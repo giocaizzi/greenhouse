@@ -1090,7 +1090,7 @@ class IrrigationRepository:
     def update_preferences(self, **fields: Any) -> UserPreferences:
         """Patch preferences with the provided keyword args; unknown keys are ignored."""
         prefs = self.get_preferences()
-        self._patch_fields_hasattr_first(prefs, fields)
+        self._patch_fields(prefs, fields)
         self.session.flush()
         return prefs
 
@@ -1276,12 +1276,6 @@ class IrrigationRepository:
             elif hasattr(row, key):
                 setattr(row, key, value)
 
-    def _patch_fields_hasattr_first(self, row: "Base", fields: "Mapping[str, Any]") -> None:
-        """hasattr-first PATCH (``hasattr(row, key) and value is not None``); hasattr runs even for None values."""
-        for key, value in fields.items():
-            if hasattr(row, key) and value is not None:
-                setattr(row, key, value)
-
     def _delete_by_id(self, model: "type[Base]", row_id: int) -> bool:
         """Delete one row by primary key; ``False`` when it does not exist (shared by the plain deletes)."""
         row = self.session.get(model, row_id)
@@ -1296,7 +1290,7 @@ class IrrigationRepository:
         cluster = self.session.get(Cluster, cluster_id)
         if not cluster:
             return None
-        self._patch_fields_hasattr_first(cluster, fields)
+        self._patch_fields(cluster, fields)
         self.session.flush()
         return cluster
 
@@ -1309,7 +1303,7 @@ class IrrigationRepository:
         plant = self.session.get(Plant, plant_id)
         if not plant:
             return None
-        self._patch_fields_hasattr_first(plant, fields)
+        self._patch_fields(plant, fields)
         self.session.flush()
         return plant
 
