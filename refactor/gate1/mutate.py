@@ -3499,7 +3499,7 @@ add(
             "        self.http = httpx.Client(base_url=base_url, timeout=10.0, headers=headers, **kwargs)",
             "client timeout 30 -> 10 s",
         ),
-        ("06", "        if resp.status_code >= 400:", "        if resp.status_code > 400:", "400 not treated as error"),
+        ("06", "        if resp.status_code >= HTTPStatus.BAD_REQUEST:", "        if resp.status_code > HTTPStatus.BAD_REQUEST:", "400 not treated as error"),
         (
             "07",
             '                detail = resp.json().get("detail", resp.text)',
@@ -3551,8 +3551,8 @@ add(
     [
         (
             "14",
-            '    server = ctx.obj or os.environ.get("IRRIGATION_SERVER_URL", "http://localhost:8000")',
-            '    server = os.environ.get("IRRIGATION_SERVER_URL") or ctx.obj or "http://localhost:8000"',
+            '    return ctx.obj or os.environ.get("IRRIGATION_SERVER_URL", DEFAULT_SERVER_URL)',
+            '    return os.environ.get("IRRIGATION_SERVER_URL") or ctx.obj or DEFAULT_SERVER_URL',
             "env URL beats --server",
         ),
         (
@@ -3724,8 +3724,8 @@ add(
         ),
         (
             "12",
-            '    if mask == 127:\n        return "every day"',
-            '    if mask == 126:\n        return "every day"',
+            '    if mask == ALL_WEEKDAYS:\n        return "every day"',
+            '    if mask == ALL_WEEKDAYS - 1:\n        return "every day"',
             "every-day mask",
         ),
         ("13", '    letters = "MTWTFSS"', '    letters = "SMTWTFS"', "weekday letters start Sunday"),
@@ -3877,8 +3877,8 @@ add(
     [
         (
             "31",
-            "            if e.status_code == 401:\n                self.prompt_login()",
-            "            if e.status_code == 403:\n                self.prompt_login()",
+            "            if e.status_code == HTTPStatus.UNAUTHORIZED:\n                self.prompt_login()",
+            "            if e.status_code == HTTPStatus.FORBIDDEN:\n                self.prompt_login()",
             "401 no longer prompts login",
         ),
         ("32", "            elif not quiet:\n", "            elif True:\n", "quiet flag ignored"),
