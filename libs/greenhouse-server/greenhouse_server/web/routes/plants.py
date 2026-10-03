@@ -91,7 +91,7 @@ def create_plant(
             notes=notes,
         ),
     )
-    repo.session.commit()
+    repo.commit()
     return RedirectResponse(url=f"/clusters/{cluster_id}#plants", status_code=303)
 
 
@@ -133,7 +133,7 @@ def update_plant(
             notes=notes,
         ),
     )
-    repo.session.commit()
+    repo.commit()
     return RedirectResponse(url=f"/clusters/{cluster_id}#plants", status_code=303)
 
 
@@ -142,5 +142,5 @@ def delete_plant(cluster_id: int, plant_id: int, repo: RepoDep):
     """HTMX-targeted delete; returns an empty HTML body so the row is removed."""
     require_plant_in_cluster(repo, cluster_id, plant_id)
     repo.delete_plant(plant_id)
-    repo.session.commit()
+    repo.commit()
     return HTMLResponse("")

@@ -181,5 +181,5 @@ def move_plant_web(
         repo.move_plant(plant_id, target_cluster_id)
     except SameClusterMoveError as exc:
         raise HTTPException(400, str(exc)) from exc
-    repo.session.commit()
+    repo.commit()
     return RedirectResponse(url=f"/clusters/{target_cluster_id}/plants/{plant_id}", status_code=303)

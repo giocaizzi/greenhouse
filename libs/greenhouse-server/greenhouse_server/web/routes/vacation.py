@@ -100,7 +100,7 @@ def create_vacation(
         contact_email=contact_email.strip() or None,
         notes=notes.strip() or None,
     )
-    repo.session.commit()
+    repo.commit()
     return RedirectResponse(url="/vacation", status_code=303)
 
 
@@ -138,7 +138,7 @@ def update_vacation(
         contact_email=contact_email.strip() or None,
         notes=notes.strip() or None,
     )
-    repo.session.commit()
+    repo.commit()
     return RedirectResponse(url="/vacation", status_code=303)
 
 
@@ -147,5 +147,5 @@ def delete_vacation(request: Request, window_id: int, repo: RepoDep):
     deleted = repo.delete_vacation_window(window_id)
     if not deleted:
         raise HTTPException(404, "Vacation window not found")
-    repo.session.commit()
+    repo.commit()
     return RedirectResponse(url="/vacation", status_code=303)

@@ -52,7 +52,7 @@ def create_cluster(
     environment: str = Form("indoor"),
 ):
     cluster_id = repo.add_cluster(name=name, location=location or None, environment=environment)
-    repo.session.commit()
+    repo.commit()
     return RedirectResponse(url=f"/clusters/{cluster_id}", status_code=303)
 
 
@@ -79,7 +79,7 @@ def update_cluster(
     )
     if not updated:
         raise HTTPException(404, "Cluster not found")
-    repo.session.commit()
+    repo.commit()
     return RedirectResponse(url=f"/clusters/{cluster_id}", status_code=303)
 
 
@@ -89,7 +89,7 @@ def delete_cluster(cluster_id: int, repo: RepoDep):
     deleted = repo.delete_cluster(cluster_id)
     if not deleted:
         raise HTTPException(404, "Cluster not found")
-    repo.session.commit()
+    repo.commit()
     return HTMLResponse("")
 
 

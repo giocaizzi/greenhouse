@@ -107,7 +107,7 @@ def create_irrigator(
         )
     except DeviceIdExistsError:
         return _new_form_conflict(request, cluster, "Device ID already exists")
-    repo.session.commit()
+    repo.commit()
     return RedirectResponse(url=f"/clusters/{cluster_id}#irrigators", status_code=303)
 
 
@@ -153,7 +153,7 @@ def update_irrigator(
         reservoir_l=_parse_capacity(reservoir_l),
         flow_rate_l_per_min=_parse_capacity(flow_rate_l_per_min),
     )
-    repo.session.commit()
+    repo.commit()
     return RedirectResponse(url=f"/clusters/{cluster_id}#irrigators", status_code=303)
 
 
@@ -162,7 +162,7 @@ def delete_irrigator(cluster_id: int, repo: RepoDep):
     """HTMX-targeted delete; returns an empty HTML body so the row is removed."""
     irrigator = require_cluster_irrigator(repo, cluster_id)
     repo.delete_irrigator(irrigator.id)
-    repo.session.commit()
+    repo.commit()
     return HTMLResponse("")
 
 

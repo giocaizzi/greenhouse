@@ -42,7 +42,7 @@ def alert_list(
 @router.post("/alerts/{alert_id}/ack")
 def ack_alert(request: Request, alert_id: int, repo: RepoDep):
     alert = repo.acknowledge_alert(alert_id)
-    repo.session.commit()
+    repo.commit()
     toast = json.dumps({"severity": "success", "title": "Acknowledged", "message": "Alert moved to triage."})
     return templates.TemplateResponse(
         request,
@@ -55,7 +55,7 @@ def ack_alert(request: Request, alert_id: int, repo: RepoDep):
 @router.post("/alerts/{alert_id}/resolve")
 def resolve_alert(request: Request, alert_id: int, repo: RepoDep):
     alert = repo.resolve_alert(alert_id)
-    repo.session.commit()
+    repo.commit()
     toast = json.dumps({"severity": "success", "title": "Resolved", "message": "Alert marked as resolved."})
     return templates.TemplateResponse(
         request,
@@ -68,7 +68,7 @@ def resolve_alert(request: Request, alert_id: int, repo: RepoDep):
 @router.post("/alerts/sync")
 def sync_alerts(request: Request, repo: RepoDep, plant_db: PlantDbDep):
     open_count = sync_all_alerts(repo, plant_db)
-    repo.session.commit()
+    repo.commit()
     alerts = repo.list_alerts(limit=200)
     toast = json.dumps({"severity": "info", "title": "Synced", "message": f"{open_count} open alert(s) after sync."})
     return templates.TemplateResponse(

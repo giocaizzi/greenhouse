@@ -61,7 +61,7 @@ def create_window(
         weekday_mask=mask,
         label=label.strip() or None,
     )
-    repo.session.commit()
+    repo.commit()
     return RedirectResponse(url=f"/clusters/{cluster_id}/config", status_code=303)
 
 
@@ -101,7 +101,7 @@ def update_window(
         weekday_mask=mask,
         label=label.strip() or None,
     )
-    repo.session.commit()
+    repo.commit()
     return RedirectResponse(url=f"/clusters/{cluster_id}/config", status_code=303)
 
 
@@ -110,5 +110,5 @@ def delete_window(cluster_id: int, window_id: int, repo: RepoDep):
     """HTMX-targeted delete; returns an empty HTML body so the row is removed."""
     require_window_in_cluster(repo, cluster_id, window_id)
     repo.delete_irrigation_window(window_id)
-    repo.session.commit()
+    repo.commit()
     return HTMLResponse("")

@@ -61,7 +61,7 @@ def create_sensor(
         raise HTTPException(404, f"Plant {exc.plant_id} not found in cluster") from None
     except DeviceIdExistsError:
         raise HTTPException(409, "Device ID already exists") from None
-    repo.session.commit()
+    repo.commit()
     return RedirectResponse(url=f"/clusters/{cluster_id}#sensors", status_code=303)
 
 
@@ -94,7 +94,7 @@ def update_sensor(
     # update_sensor routes plant_id changes through the assignment-history-aware
     # path. Pass plant_id explicitly even when None so an empty form unassigns.
     repo.update_sensor(sensor_id, name=name, type=type, plant_id=pid)
-    repo.session.commit()
+    repo.commit()
     return RedirectResponse(url=f"/clusters/{cluster_id}#sensors", status_code=303)
 
 
@@ -103,5 +103,5 @@ def delete_sensor(cluster_id: int, sensor_id: int, repo: RepoDep):
     """HTMX-targeted delete; returns an empty HTML body so the row is removed."""
     require_sensor_in_cluster(repo, cluster_id, sensor_id)
     repo.delete_sensor(sensor_id)
-    repo.session.commit()
+    repo.commit()
     return HTMLResponse("")

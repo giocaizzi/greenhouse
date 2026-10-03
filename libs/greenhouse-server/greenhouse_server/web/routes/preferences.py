@@ -19,7 +19,7 @@ _ALLOWED_THEMES = {"auto", "light", "dark"}
 def preferences_page(request: Request, repo: RepoDep):
     prefs = repo.get_preferences()
     global_config = repo.get_global_irrigation_config()
-    repo.session.commit()
+    repo.commit()
     clusters = repo.list_clusters()
     settings = request.app.state.settings
     ntfy_configured = bool(settings.ntfy_server_url and settings.ntfy_topic)
@@ -70,7 +70,7 @@ def update_preferences(
         notify_alerts=bool(notify_alerts),
         notify_auto=bool(notify_auto),
     )
-    repo.session.commit()
+    repo.commit()
     apply_timezone_preference(request, prefs.timezone)
     return RedirectResponse(url="/preferences?saved=1", status_code=303)
 
@@ -98,5 +98,5 @@ def update_theme(repo: RepoDep, theme: str = Form(...)) -> Response:
             detail=f"Invalid theme: {theme!r}",
         )
     repo.update_preferences(theme=theme)
-    repo.session.commit()
+    repo.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)

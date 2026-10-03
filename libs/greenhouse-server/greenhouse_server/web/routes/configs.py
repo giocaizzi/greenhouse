@@ -83,7 +83,7 @@ def save_config(
         "quiet_end_hour": _parse_optional_hour(quiet_end_hour),
     }
     repo.set_irrigation_config(cluster_id=cluster_id, **fields)
-    repo.session.commit()
+    repo.commit()
     return RedirectResponse(url=f"/clusters/{cluster_id}#config", status_code=303)
 
 
@@ -118,5 +118,5 @@ def save_global_config(
         quiet_start_hour=_parse_optional_hour(quiet_start_hour),
         quiet_end_hour=_parse_optional_hour(quiet_end_hour),
     )
-    repo.session.commit()
+    repo.commit()
     return RedirectResponse(url="/preferences?saved=global#global-config", status_code=303)
