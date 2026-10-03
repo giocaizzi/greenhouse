@@ -69,6 +69,7 @@ libs/greenhouse-server/greenhouse_server/services/pump_watcher.py
 libs/greenhouse-server/greenhouse_server/services/search.py
 libs/greenhouse-server/greenhouse_server/services/system_health.py
 libs/greenhouse-server/greenhouse_server/services/vacation.py
+libs/greenhouse-server/greenhouse_server/services/windows.py
 libs/greenhouse-server/greenhouse_server/web/context.py
 libs/greenhouse-server/greenhouse_server/web/router.py
 libs/greenhouse-server/greenhouse_server/web/routes/analytics.py
