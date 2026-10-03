@@ -3,7 +3,7 @@
   "<article class=\"card card--flush result-panel\">",
   "  <div class=\"card__head\">",
   "    <h3 class=\"card__title\">Check result</h3>",
-  "    ",
+  "    <span class=\"badge-warning\">alerts</span>",
   "  </div>",
   "  <div class=\"card__body col col--g4\">",
   "    ",

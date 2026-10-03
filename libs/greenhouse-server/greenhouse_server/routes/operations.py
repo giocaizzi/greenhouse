@@ -38,6 +38,7 @@ from greenhouse_server.deps import (
     require_cluster,
 )
 from greenhouse_server.services.cluster import cluster_events_csv
+from greenhouse_server.services.irrigation import check_has_alerts
 from greenhouse_server.services.maintenance import collect_learning_alerts, generate_learning_report
 
 router = APIRouter(tags=["operations"])
@@ -202,7 +203,7 @@ def check_all(irrigation_svc: IrrigationServiceDep, session: SessionDep) -> Chec
         cluster has alerts, maintenance items, or thirsty plants.
     """
     results = irrigation_svc.check_all_clusters()
-    has_alerts = any(r.get("alerts") or r.get("maintenance") or r.get("needs_water") for r in results)
+    has_alerts = check_has_alerts(results)
     session.commit()
     return CheckAllResponse(
         results=[CheckClusterResponse(**r) for r in results],  # type: ignore[arg-type]  # contract: TypedDict → Pydantic

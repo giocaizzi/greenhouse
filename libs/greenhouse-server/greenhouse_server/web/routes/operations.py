@@ -13,6 +13,7 @@ from greenhouse_server.deps import (
     require_cluster,
 )
 from greenhouse_server.services.cluster import PlantNotFoundError
+from greenhouse_server.services.irrigation import check_has_alerts
 from greenhouse_server.web.context import base_context
 from greenhouse_server.web.templating import templates
 
@@ -76,7 +77,7 @@ def check_single(
     return templates.TemplateResponse(
         request,
         "partials/_check_result.html",
-        base_context(request, results=[result], has_alerts=bool(result.get("alerts"))),
+        base_context(request, results=[result], has_alerts=check_has_alerts([result])),
     )
 
 
@@ -84,7 +85,7 @@ def check_single(
 def check_all(request: Request, svc: IrrigationServiceDep, session: SessionDep):
     results = svc.check_all_clusters()
     session.commit()
-    has_alerts = any(r.get("alerts") for r in results)
+    has_alerts = check_has_alerts(results)
     return templates.TemplateResponse(
         request, "partials/_check_result.html", base_context(request, results=results, has_alerts=has_alerts)
     )

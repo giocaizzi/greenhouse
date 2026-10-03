@@ -469,6 +469,15 @@ class CheckResult(TypedDict, total=False):
     maintenance: list[dict[str, Any]]
 
 
+def check_has_alerts(results: "Sequence[CheckResult]") -> bool:
+    """Whether a check needs attention: any cluster has alerts, maintenance items or thirsty plants.
+
+    The one rule behind ``has_alerts`` in the JSON API (``POST /check``) and the web
+    check result badge, so both surfaces flag the same checks.
+    """
+    return any(r.get("alerts") or r.get("maintenance") or r.get("needs_water") for r in results)
+
+
 def _error_result(reason: str) -> PipelineResult:
     """The pipeline's early-exit shape (``routes/operations`` string-matches "cluster not found")."""
     return {"action": "error", "reason": reason, "confidence": 0}
