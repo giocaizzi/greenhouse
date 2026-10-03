@@ -3,7 +3,7 @@
 import json
 import time
 from contextlib import contextmanager
-from typing import TYPE_CHECKING, Any, Literal, TypedDict, cast
+from typing import TYPE_CHECKING, Any, Literal, TypedDict, Unpack, cast
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
@@ -79,6 +79,100 @@ class EffectiveField(TypedDict):
 
 # ``get_effective_config`` result: one ``EffectiveField`` per patchable config field.
 EffectiveConfig = dict[str, EffectiveField]
+
+
+# ── PATCH payloads for the update_* methods ──────────────────────────────────
+# Keys a caller may pass (all optional). Runtime semantics are the methods' own:
+# ``None`` skips a field (except the config upserts, where ``None`` clears it) and
+# keys that are not attributes of the row are ignored.
+
+
+class ClusterPatch(TypedDict, total=False):
+    """Fields ``update_cluster`` may change."""
+
+    name: str | None
+    location: str | None
+    environment: str | None
+
+
+class PlantPatch(TypedDict, total=False):
+    """Fields ``update_plant`` may change."""
+
+    species: str | None
+    category: str | None
+    water_needs: str | None
+    light_needs: str | None
+    ideal_temp_min: float | None
+    ideal_temp_max: float | None
+    ideal_humidity_min: float | None
+    ideal_humidity_max: float | None
+    notes: str | None
+
+
+class SensorPatch(TypedDict, total=False):
+    """Fields ``update_sensor`` may change (``plant_id`` goes through the assignment history)."""
+
+    name: str | None
+    type: str | None
+    config: dict[Any, Any] | None
+    plant_id: int | None
+
+
+class IrrigatorPatch(TypedDict, total=False):
+    """Fields ``update_irrigator`` may change."""
+
+    name: str | None
+    type: str | None
+    config: dict[Any, Any] | None
+    reservoir_l: float | None
+    flow_rate_l_per_min: float | None
+
+
+class VacationWindowPatch(TypedDict, total=False):
+    """Fields ``update_vacation_window`` may change."""
+
+    starts_at: int | None
+    ends_at: int | None
+    contact_email: str | None
+    notes: str | None
+
+
+class IrrigationWindowPatch(TypedDict, total=False):
+    """Fields ``update_irrigation_window`` may change."""
+
+    start_hour: int | None
+    end_hour: int | None
+    weekday_mask: int | None
+    label: str | None
+
+
+class PreferencesPatch(TypedDict, total=False):
+    """Fields ``update_preferences`` may change."""
+
+    units: str | None
+    timezone: str | None
+    theme: str | None
+    default_cluster_id: int | None
+    refresh_interval_seconds: int | None
+    dry_run_global: bool | None
+    notify_manual: bool | None
+    notify_emergency: bool | None
+    notify_alerts: bool | None
+    notify_auto: bool | None
+    scheduler_paused: bool | None
+
+
+class IrrigationConfigPatch(TypedDict, total=False):
+    """Fields ``set_irrigation_config`` / ``update_global_irrigation_config`` may set (``None`` clears)."""
+
+    mode: str | None
+    duration_minutes: int | None
+    interval_hours: int | None
+    auto_run: bool | None
+    daily_cap_minutes: int | None
+    max_events_per_day: int | None
+    quiet_start_hour: int | None
+    quiet_end_hour: int | None
 
 
 class SameClusterMoveError(ValueError):
@@ -597,7 +691,7 @@ class IrrigationRepository:
         "quiet_end_hour",
     )
 
-    def set_irrigation_config(self, cluster_id: int, **fields: Any) -> int:
+    def set_irrigation_config(self, cluster_id: int, **fields: Unpack[IrrigationConfigPatch]) -> int:
         """Upsert a cluster's irrigation config, mutating only the fields provided.
 
         Every field is nullable: passing ``None`` clears the cluster-level
@@ -606,11 +700,12 @@ class IrrigationRepository:
         — so callers acting on a single form input do not need to round-trip
         every column.
         """
+        patch: Mapping[str, object] = fields  # indexed by the patchable-field names below
         existing = self.session.scalar(select(IrrigationConfig).where(IrrigationConfig.cluster_id == cluster_id))
         if existing:
             for key in self._CONFIG_PATCHABLE_FIELDS:
-                if key in fields:
-                    setattr(existing, key, fields[key])
+                if key in patch:
+                    setattr(existing, key, patch[key])
             existing.last_updated = int(time.time())
             self.session.flush()
             return existing.id
@@ -649,17 +744,18 @@ class IrrigationRepository:
         self.session.flush()
         return row
 
-    def update_global_irrigation_config(self, **fields: Any) -> GlobalIrrigationConfig:
+    def update_global_irrigation_config(self, **fields: Unpack[IrrigationConfigPatch]) -> GlobalIrrigationConfig:
         """Patch the singleton global config; only the supplied keys are set.
 
         Pass ``None`` to clear a previously set field (the effective resolver
         then falls through to the project-wide constant). Omit a key entirely
         to leave its stored value untouched.
         """
+        patch: Mapping[str, object] = fields  # indexed by the patchable-field names below
         row = self.get_global_irrigation_config()
         for key in self._CONFIG_PATCHABLE_FIELDS:
-            if key in fields:
-                setattr(row, key, fields[key])
+            if key in patch:
+                setattr(row, key, patch[key])
         row.last_updated = int(time.time())
         self.session.flush()
         return row
@@ -1041,7 +1137,7 @@ class IrrigationRepository:
             select(VacationWindow).where(VacationWindow.starts_at <= now, VacationWindow.ends_at >= now)
         )
 
-    def update_vacation_window(self, window_id: int, **fields: Any) -> VacationWindow | None:
+    def update_vacation_window(self, window_id: int, **fields: Unpack[VacationWindowPatch]) -> VacationWindow | None:
         """Patch a vacation window's fields; returns the updated row or None.
 
         Only keys with non-None values are applied — the route layer is
@@ -1093,7 +1189,9 @@ class IrrigationRepository:
         self.session.flush()
         return row
 
-    def update_irrigation_window(self, window_id: int, **fields: Any) -> IrrigationWindow | None:
+    def update_irrigation_window(
+        self, window_id: int, **fields: Unpack[IrrigationWindowPatch]
+    ) -> IrrigationWindow | None:
         """Patch an irrigation window's fields; ``None`` when it does not exist."""
         row = self.session.get(IrrigationWindow, window_id)
         if row is None:
@@ -1118,7 +1216,7 @@ class IrrigationRepository:
         self.session.flush()
         return prefs
 
-    def update_preferences(self, **fields: Any) -> UserPreferences:
+    def update_preferences(self, **fields: Unpack[PreferencesPatch]) -> UserPreferences:
         """Patch preferences with the provided keyword args; unknown keys are ignored."""
         prefs = self.get_preferences()
         self._patch_fields(prefs, fields)
@@ -1316,7 +1414,7 @@ class IrrigationRepository:
         self.session.flush()
         return True
 
-    def update_cluster(self, cluster_id: int, **fields: Any) -> Cluster | None:
+    def update_cluster(self, cluster_id: int, **fields: Unpack[ClusterPatch]) -> Cluster | None:
         """Patch cluster fields; returns the updated row or None if missing."""
         cluster = self.session.get(Cluster, cluster_id)
         if not cluster:
@@ -1329,7 +1427,7 @@ class IrrigationRepository:
         """Delete a cluster (cascades to plants/sensors/irrigators/config)."""
         return self._delete_by_id(Cluster, cluster_id)
 
-    def update_plant(self, plant_id: int, **fields: Any) -> Plant | None:
+    def update_plant(self, plant_id: int, **fields: Unpack[PlantPatch]) -> Plant | None:
         """Patch plant fields; returns the updated row or None."""
         plant = self.session.get(Plant, plant_id)
         if not plant:
@@ -1415,7 +1513,7 @@ class IrrigationRepository:
         )
         return plant
 
-    def update_sensor(self, sensor_id: int, **fields: Any) -> Sensor | None:
+    def update_sensor(self, sensor_id: int, **fields: Unpack[SensorPatch]) -> Sensor | None:
         """Patch sensor fields, keeping the assignment history in sync.
 
         ``plant_id`` changes are routed through ``reassign_sensor_to_plant``;
@@ -1439,7 +1537,7 @@ class IrrigationRepository:
         """Delete a sensor (cascades to its readings)."""
         return self._delete_by_id(Sensor, sensor_id)
 
-    def update_irrigator(self, irrigator_id: int, **fields: Any) -> Irrigator | None:
+    def update_irrigator(self, irrigator_id: int, **fields: Unpack[IrrigatorPatch]) -> Irrigator | None:
         """Patch irrigator fields; ``config`` is JSON-serialised if a dict."""
         irrigator = self.session.get(Irrigator, irrigator_id)
         if not irrigator:
