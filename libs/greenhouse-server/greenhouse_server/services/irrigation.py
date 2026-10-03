@@ -44,7 +44,7 @@ from greenhouse_server.services.irrigation_jobs import (  # noqa: F401 — re-ex
     rearm_leak_checks,
 )
 from greenhouse_server.services.jobs import job_session
-from greenhouse_server.services.maintenance import collect_learning_alerts, collect_maintenance_alerts
+from greenhouse_server.services.maintenance import AlertFinding, collect_learning_alerts, collect_maintenance_alerts
 from greenhouse_server.services.notify import NtfyClient, maybe_notify
 from greenhouse_server.services.sync import SyncService
 from greenhouse_server.services.weather import WeatherClient
@@ -315,8 +315,8 @@ class CheckResult(TypedDict, total=False):
     action: Required[str]
     notes: str
     needs_water: list[str]
-    alerts: list[dict[str, Any]]
-    maintenance: list[dict[str, Any]]
+    alerts: list[AlertFinding]
+    maintenance: list[AlertFinding]
 
 
 def check_has_alerts(results: "Sequence[CheckResult]") -> bool:
@@ -412,8 +412,8 @@ def _check_result(
     *,
     detail_key: Literal["notes", "needs_water"],
     detail: str | list[str],
-    alerts: list[dict[str, Any]],
-    maintenance: list[dict[str, Any]],
+    alerts: list[AlertFinding],
+    maintenance: list[AlertFinding],
 ) -> CheckResult:
     """One ``check_cluster`` entry, keys in the response order; ``detail_key`` names the branch's detail."""
     # A TypedDict literal cannot carry a computed key; the runtime object is the same plain dict.

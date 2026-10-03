@@ -22,7 +22,7 @@ from greenhouse_core.models import (
 from greenhouse_core.models import SOURCE_PUMP as SOURCE_PUMP  # re-export: tests import it from here
 from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_core.repository import IrrigationRepository
-from greenhouse_server.services.maintenance import collect_learning_alerts, collect_maintenance_alerts
+from greenhouse_server.services.maintenance import AlertFinding, collect_learning_alerts, collect_maintenance_alerts
 from greenhouse_server.services.notify import NtfyClient, maybe_notify
 
 # Alert severities that warrant a push (info is suppressed).
@@ -88,7 +88,7 @@ def sync_cluster_alerts(
         return []
     now = int(time.time())
 
-    findings: list[tuple[ActivitySource, dict[str, Any]]] = [
+    findings: list[tuple[ActivitySource, AlertFinding]] = [
         (SOURCE_LEARNING, raw) for raw in collect_learning_alerts(repo, cluster_id, plant_db)
     ]
     findings.extend((SOURCE_MAINTENANCE, raw) for raw in collect_maintenance_alerts(repo, cluster_id, plant_db))

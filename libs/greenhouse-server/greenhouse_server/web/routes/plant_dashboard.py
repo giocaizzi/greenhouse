@@ -24,7 +24,7 @@ from greenhouse_server.services.charts import (
     build_plant_chart_payload,
     build_plant_health_timeline_payload,
 )
-from greenhouse_server.services.maintenance import collect_learning_alerts
+from greenhouse_server.services.maintenance import AlertFinding, collect_learning_alerts
 from greenhouse_server.web.context import base_context
 from greenhouse_server.web.filters import relative_age
 from greenhouse_server.web.templating import templates
@@ -121,7 +121,7 @@ def _recent_events(repo: IrrigationRepository, cluster_irrigator: Irrigator | No
 
 def _plant_alerts(
     repo: IrrigationRepository, plant_db: PlantDatabase, cluster_id: int, plant: Plant
-) -> list[dict[str, Any]]:
+) -> list[AlertFinding]:
     """The cluster's learning alerts whose message mentions this plant's species."""
     all_alerts = collect_learning_alerts(repo, cluster_id, plant_db)
     return [a for a in all_alerts if plant.species.lower() in (a.get("message") or "").lower()]
