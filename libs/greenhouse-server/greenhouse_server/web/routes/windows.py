@@ -1,9 +1,10 @@
 """Per-cluster irrigation window web routes — list, add, edit, delete.
 
-The watering schedule section is rendered as part of the cluster config
-page; this module hosts the form POST endpoints and the HTMX delete /
-edit flows. Mirrors the JSON API at ``/api/v1/clusters/{id}/windows``
-but uses repo methods directly (in-process, like every other web route).
+The watering schedule is rendered in the config section of the cluster
+detail page; this module hosts the form POST endpoints and the HTMX delete /
+edit flows. Mirrors the JSON API at ``/api/v1/clusters/{id}/windows`` and
+shares its validator (``services.windows.validate_window``), calling the
+repository in-process like every other web route.
 """
 
 from __future__ import annotations
@@ -51,6 +52,7 @@ def create_window(
     weekday_mask: list[str] = Form(default=[]),
     label: str = Form(""),
 ):
+    """Add an irrigation window from the form and return to the cluster config."""
     require_cluster(repo, cluster_id)
     mask = _parse_weekday_mask(weekday_mask)
     _validate_window_form(start_hour, end_hour, mask)
@@ -61,12 +63,13 @@ def create_window(
         weekday_mask=mask,
         label=label.strip() or None,
     )
-    repo.session.commit()
+    repo.commit()
     return RedirectResponse(url=f"/clusters/{cluster_id}/config", status_code=303)
 
 
 @router.get("/clusters/{cluster_id}/windows/{window_id}/edit")
 def edit_window_form(request: Request, cluster_id: int, window_id: int, repo: RepoDep):
+    """Render the edit form of one of the cluster's irrigation windows."""
     cluster = require_cluster(repo, cluster_id)
     window = require_window_in_cluster(repo, cluster_id, window_id)
     weekday_checks = [
@@ -91,6 +94,7 @@ def update_window(
     weekday_mask: list[str] = Form(default=[]),
     label: str = Form(""),
 ):
+    """Save the window form and return to the cluster config."""
     require_window_in_cluster(repo, cluster_id, window_id)
     mask = _parse_weekday_mask(weekday_mask)
     _validate_window_form(start_hour, end_hour, mask)
@@ -101,7 +105,7 @@ def update_window(
         weekday_mask=mask,
         label=label.strip() or None,
     )
-    repo.session.commit()
+    repo.commit()
     return RedirectResponse(url=f"/clusters/{cluster_id}/config", status_code=303)
 
 
@@ -110,5 +114,5 @@ def delete_window(cluster_id: int, window_id: int, repo: RepoDep):
     """HTMX-targeted delete; returns an empty HTML body so the row is removed."""
     require_window_in_cluster(repo, cluster_id, window_id)
     repo.delete_irrigation_window(window_id)
-    repo.session.commit()
+    repo.commit()
     return HTMLResponse("")

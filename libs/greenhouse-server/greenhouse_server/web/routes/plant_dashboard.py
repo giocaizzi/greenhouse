@@ -10,7 +10,14 @@ from fastapi.responses import RedirectResponse
 
 from greenhouse_core.models import Plant
 from greenhouse_core.repository import SameClusterMoveError
-from greenhouse_server.deps import PlantDbDep, PlantHealthServiceDep, RepoDep, require_plant_in_cluster
+from greenhouse_server.deps import (
+    MAX_LOOKBACK_HOURS,
+    PlantDbDep,
+    PlantHealthServiceDep,
+    RepoDep,
+    require_metric,
+    require_plant_in_cluster,
+)
 from greenhouse_server.services.charts import (
     ALLOWED_HOURS,
     build_plant_chart_payload,
@@ -40,8 +47,9 @@ def plant_dashboard(
     repo: RepoDep,
     plant_db: PlantDbDep,
     health_svc: PlantHealthServiceDep,
-    hours: int = Query(24, ge=1, le=8760),
+    hours: int = Query(24, ge=1, le=MAX_LOOKBACK_HOURS),
 ):
+    """Render a plant's dashboard: care info, sensors, charts, health, events and alerts."""
     plant = require_plant_in_cluster(repo, cluster_id, plant_id)
     cluster = repo.get_cluster(cluster_id)
     other_clusters = [c for c in repo.list_clusters() if c.id != cluster_id]
@@ -52,9 +60,7 @@ def plant_dashboard(
     cluster_irrigator = repo.get_irrigator_for_cluster(cluster_id)
     recent_events = _recent_events(repo, cluster_irrigator, hours)
     plant_alerts = _plant_alerts(repo, plant_db, cluster_id, plant)
-    # Pre-build chart payloads so the page renders with data on first load
-    chart_payloads = {metric: build_plant_chart_payload(repo, plant_db, plant_id, hours, metric) for metric in METRICS}
-    chart_payloads_json = {metric: json.dumps(payload) for metric, payload in chart_payloads.items()}
+    chart_payloads_json = _chart_payloads_json(repo, plant_db, plant_id, hours)
     # Health score + 90-day history for the hero card
     health_score: float | None = health_svc.compute_score(plant_id)["score"]
     health_history = repo.list_plant_health_history(plant_id, days=90)
@@ -84,6 +90,14 @@ def plant_dashboard(
             last_irrigated_relative=last_irrigated_relative,
         ),
     )
+
+
+def _chart_payloads_json(
+    repo: IrrigationRepository, plant_db: PlantDatabase, plant_id: int, hours: int
+) -> dict[Metric, str]:
+    """Every metric's chart payload as JSON, pre-built so the page renders with data on first load."""
+    chart_payloads = {metric: build_plant_chart_payload(repo, plant_db, plant_id, hours, metric) for metric in METRICS}
+    return {metric: json.dumps(payload) for metric, payload in chart_payloads.items()}
 
 
 def _latest_readings(repo: IrrigationRepository, plant_sensors: list[Sensor]) -> dict[int, SensorReading | None]:
@@ -132,12 +146,12 @@ def plant_chart_fragment(
     repo: RepoDep,
     plant_db: PlantDbDep,
     metric: str = Query("soil_moisture"),
-    hours: int = Query(24, ge=1, le=8760),
+    hours: int = Query(24, ge=1, le=MAX_LOOKBACK_HOURS),
 ):
-    if metric not in METRICS:
-        raise HTTPException(400, f"Unsupported metric: {metric}")
+    """Render one metric's plant chart panel (HTMX fragment)."""
+    chart_metric = require_metric(metric)
     require_plant_in_cluster(repo, cluster_id, plant_id)
-    payload = build_plant_chart_payload(repo, plant_db, plant_id, hours, metric)
+    payload = build_plant_chart_payload(repo, plant_db, plant_id, hours, chart_metric)
     if not payload:
         raise HTTPException(404, "Plant not found")
     return templates.TemplateResponse(
@@ -154,6 +168,7 @@ def plant_health_fragment(
     plant_id: int,
     repo: RepoDep,
 ):
+    """Render the plant's 90-day health timeline chart (HTMX fragment)."""
     plant = require_plant_in_cluster(repo, cluster_id, plant_id)
     payload = build_plant_health_timeline_payload(repo, plant_id)
     if payload is None:
@@ -181,5 +196,5 @@ def move_plant_web(
         repo.move_plant(plant_id, target_cluster_id)
     except SameClusterMoveError as exc:
         raise HTTPException(400, str(exc)) from exc
-    repo.session.commit()
+    repo.commit()
     return RedirectResponse(url=f"/clusters/{target_cluster_id}/plants/{plant_id}", status_code=303)

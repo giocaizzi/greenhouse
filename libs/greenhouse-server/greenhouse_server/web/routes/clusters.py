@@ -10,7 +10,14 @@ from fastapi import APIRouter, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from greenhouse_core.logic.timing import is_within_quiet_hours
-from greenhouse_server.deps import ClusterServiceDep, PlantDbDep, RepoDep, require_cluster
+from greenhouse_server.deps import (
+    MAX_LOOKBACK_HOURS,
+    ClusterServiceDep,
+    PlantDbDep,
+    RepoDep,
+    require_cluster,
+    require_metric,
+)
 from greenhouse_server.services.charts import (
     ALLOWED_HOURS,
     build_cluster_chart_payload,
@@ -24,22 +31,25 @@ from greenhouse_server.web.weekdays import WEEKDAY_BITS, WEEKDAY_LABELS, format_
 if TYPE_CHECKING:
     from greenhouse_core.plant_db import PlantDatabase
     from greenhouse_core.repository import IrrigationRepository
+    from greenhouse_server.services.charts import Metric
 
 _EMPTY_RATIONALE: list[dict] = []
 
 router = APIRouter(include_in_schema=False)
 
-CLUSTER_METRICS = ("soil_moisture", "temperature", "env_humidity", "light")
+CLUSTER_METRICS: tuple[Metric, ...] = ("soil_moisture", "temperature", "env_humidity", "light")
 
 
 @router.get("/clusters")
 def list_clusters(request: Request, repo: RepoDep):
+    """Render the cluster list page."""
     clusters = repo.list_clusters()
     return templates.TemplateResponse(request, "clusters/list.html", base_context(request, clusters=clusters))
 
 
 @router.get("/clusters/new")
 def new_cluster_form(request: Request):
+    """Render the new-cluster form."""
     return templates.TemplateResponse(request, "clusters/new.html", base_context(request))
 
 
@@ -51,13 +61,15 @@ def create_cluster(
     location: str = Form(""),
     environment: str = Form("indoor"),
 ):
+    """Create a cluster from the form and redirect to its detail page."""
     cluster_id = repo.add_cluster(name=name, location=location or None, environment=environment)
-    repo.session.commit()
+    repo.commit()
     return RedirectResponse(url=f"/clusters/{cluster_id}", status_code=303)
 
 
 @router.get("/clusters/{cluster_id}/edit")
 def edit_cluster_form(request: Request, cluster_id: int, repo: RepoDep):
+    """Render the edit form of an existing cluster."""
     cluster = require_cluster(repo, cluster_id)
     return templates.TemplateResponse(request, "clusters/edit.html", base_context(request, cluster=cluster))
 
@@ -71,25 +83,24 @@ def update_cluster(
     location: str = Form(""),
     environment: str = Form("indoor"),
 ):
-    updated = repo.update_cluster(
+    """Save the cluster form and redirect to the detail page."""
+    require_cluster(repo, cluster_id)
+    repo.update_cluster(
         cluster_id,
         name=name,
         location=location or None,
         environment=environment,
     )
-    if not updated:
-        raise HTTPException(404, "Cluster not found")
-    repo.session.commit()
+    repo.commit()
     return RedirectResponse(url=f"/clusters/{cluster_id}", status_code=303)
 
 
 @router.delete("/clusters/{cluster_id}", response_class=HTMLResponse)
 def delete_cluster(cluster_id: int, repo: RepoDep):
     """HTMX-targeted delete; returns an empty HTML body so the row is removed."""
-    deleted = repo.delete_cluster(cluster_id)
-    if not deleted:
-        raise HTTPException(404, "Cluster not found")
-    repo.session.commit()
+    require_cluster(repo, cluster_id)
+    repo.delete_cluster(cluster_id)
+    repo.commit()
     return HTMLResponse("")
 
 
@@ -99,14 +110,13 @@ def _plants_by_id(repo: IrrigationRepository, cluster_id: int) -> dict[int, obje
 
 def _cluster_chart_payloads(
     repo: IrrigationRepository, plant_db: PlantDatabase, cluster_id: int, hours: int
-) -> tuple[dict[str, str], dict[str, Any]]:
+) -> tuple[dict[Metric, str], dict[Metric, Any]]:
     """Pre-build every metric's chart payload (as JSON) so charts render on first page load.
 
     Also returns each metric's threshold, which the stat tiles reuse for the range indicator.
     """
     chart_payloads = {
-        metric: build_cluster_chart_payload(repo, plant_db, cluster_id, hours, metric)  # type: ignore[arg-type]
-        for metric in CLUSTER_METRICS
+        metric: build_cluster_chart_payload(repo, plant_db, cluster_id, hours, metric) for metric in CLUSTER_METRICS
     }
     chart_payloads_json = {metric: json.dumps(payload) for metric, payload in chart_payloads.items()}
     chart_thresholds = {metric: payload.get("threshold", {}) for metric, payload in chart_payloads.items()}
@@ -142,6 +152,34 @@ def _window_rows(repo: IrrigationRepository, cluster_id: int) -> list[dict[str, 
     ]
 
 
+def _detail_data(repo: IrrigationRepository, plant_db: PlantDatabase, cluster_id: int, hours: int) -> dict[str, Any]:
+    """Detail-page template data besides the live status and the quiet-hours flag.
+
+    Chart controls and pre-built payloads, the decision rationale, the inline config, the
+    irrigation windows (with the weekday vocabulary of their form) and the sensor→plant map.
+    """
+    chart_payloads_json, chart_thresholds = _cluster_chart_payloads(repo, plant_db, cluster_id, hours)
+    return {
+        "allowed_hours": sorted(ALLOWED_HOURS),
+        "metrics": CLUSTER_METRICS,
+        "chart_payloads": chart_payloads_json,
+        "chart_thresholds": chart_thresholds,
+        "rationale_reasons": _rationale_reasons(repo, cluster_id),
+        # Inline-config section data: the declared row (nullable per-field
+        # overrides) plus the effective resolved view used by the engine. Both
+        # shapes feed ``partials/_config_field.html`` so it can render the
+        # current value next to its source badge.
+        "declared_config": repo.get_irrigation_config(cluster_id),
+        "effective_config": repo.get_effective_config(cluster_id),
+        "windows": _window_rows(repo, cluster_id),
+        "weekday_bits": WEEKDAY_BITS,
+        "weekday_labels": WEEKDAY_LABELS,
+        # Sensor → plant lookup so the inline #sensors table can render the
+        # plant↔sensor relationship with the ``↳`` glyph without extra queries.
+        "plants_by_id": _plants_by_id(repo, cluster_id),
+    }
+
+
 @router.get("/clusters/{cluster_id}")
 def cluster_detail(
     request: Request,
@@ -149,24 +187,15 @@ def cluster_detail(
     svc: ClusterServiceDep,
     repo: RepoDep,
     plant_db: PlantDbDep,
-    hours: int = Query(24, ge=1, le=8760),
+    hours: int = Query(24, ge=1, le=MAX_LOOKBACK_HOURS),
 ):
+    """Render the unified cluster detail page (status, charts, config, windows, devices)."""
     status = svc.get_cluster_status(cluster_id)
     if status is None:
         raise HTTPException(404, "Cluster not found")
 
-    chart_payloads_json, chart_thresholds = _cluster_chart_payloads(repo, plant_db, cluster_id, hours)
-    rationale_reasons = _rationale_reasons(repo, cluster_id)
-    # Inline-config section data: the declared row (nullable per-field
-    # overrides) plus the effective resolved view used by the engine. Both
-    # shapes feed ``partials/_config_field.html`` so it can render the
-    # current value next to its source badge.
-    declared_config = repo.get_irrigation_config(cluster_id)
-    effective_config: dict[str, dict[str, Any]] = repo.get_effective_config(cluster_id)
-    windows = _window_rows(repo, cluster_id)
-    # Sensor → plant lookup so the inline #sensors table can render the
-    # plant↔sensor relationship with the ``↳`` glyph without extra queries.
-    plants_by_id = _plants_by_id(repo, cluster_id)
+    data = _detail_data(repo, plant_db, cluster_id, hours)
+    effective_config: dict[str, dict[str, Any]] = data["effective_config"]
 
     # "Are we in quiet hours right now?" — drives the hx-confirm guard on
     # the manual irrigate button. Uses the same effective resolution the
@@ -195,18 +224,8 @@ def cluster_detail(
             status=status,
             cluster_id=cluster_id,
             hours=hours,
-            allowed_hours=sorted(ALLOWED_HOURS),
-            metrics=CLUSTER_METRICS,
-            chart_payloads=chart_payloads_json,
-            chart_thresholds=chart_thresholds,
-            rationale_reasons=rationale_reasons,
-            declared_config=declared_config,
-            effective_config=effective_config,
-            windows=windows,
-            weekday_bits=WEEKDAY_BITS,
-            weekday_labels=WEEKDAY_LABELS,
-            plants_by_id=plants_by_id,
             quiet_active_now=quiet_active_now,
+            **data,
         ),
     )
 
@@ -251,11 +270,10 @@ def cluster_chart_fragment(
     repo: RepoDep,
     plant_db: PlantDbDep,
     metric: str = Query("soil_moisture"),
-    hours: int = Query(24, ge=1, le=8760),
+    hours: int = Query(24, ge=1, le=MAX_LOOKBACK_HOURS),
 ):
-    if metric not in CLUSTER_METRICS:
-        raise HTTPException(400, f"Unsupported metric: {metric}")
-    payload = build_cluster_chart_payload(repo, plant_db, cluster_id, hours, metric)  # type: ignore[arg-type]
+    """Render one metric's cluster chart panel (HTMX fragment)."""
+    payload = build_cluster_chart_payload(repo, plant_db, cluster_id, hours, require_metric(metric))
     if not payload:
         raise HTTPException(404, "Cluster not found")
     return templates.TemplateResponse(
@@ -270,8 +288,9 @@ def cluster_overlay_fragment(
     request: Request,
     cluster_id: int,
     repo: RepoDep,
-    hours: int = Query(72, ge=1, le=8760),
+    hours: int = Query(72, ge=1, le=MAX_LOOKBACK_HOURS),
 ):
+    """Render the multi-metric overlay chart panel (HTMX fragment)."""
     payload = build_overlay_payload(repo, cluster_id, hours)
     if payload is None:
         raise HTTPException(404, "Cluster not found")
@@ -289,6 +308,7 @@ def cluster_heatmap_fragment(
     repo: RepoDep,
     days: int = Query(30, ge=1, le=365),
 ):
+    """Render the irrigation weekday-by-hour heatmap panel (HTMX fragment)."""
     payload = build_heatmap_payload(repo, cluster_id, days)
     if payload is None:
         raise HTTPException(404, "Cluster not found")

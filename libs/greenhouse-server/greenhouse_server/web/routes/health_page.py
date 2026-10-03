@@ -14,6 +14,7 @@ router = APIRouter(include_in_schema=False)
 
 @router.get("/health")
 def health_page(request: Request, repo: RepoDep, sync_svc: SyncServiceDep):
+    """Render the system health page (sensor freshness, devices, Cloud reachability)."""
     svc = SystemHealthService(repo, sync_svc)
     pulse = svc.pulse()
     return templates.TemplateResponse(

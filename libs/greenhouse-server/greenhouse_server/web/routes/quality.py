@@ -14,6 +14,7 @@ router = APIRouter(include_in_schema=False)
 
 @router.get("/quality")
 def quality_page(request: Request, repo: RepoDep, plant_db: PlantDbDep):
+    """Render the data-quality report grouped by issue code."""
     report = build_report(repo, plant_db)
 
     # Group issues by code for the template.

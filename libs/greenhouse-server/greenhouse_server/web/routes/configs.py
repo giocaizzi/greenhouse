@@ -12,8 +12,11 @@ router = APIRouter(include_in_schema=False)
 
 @router.get("/clusters/{cluster_id}/config")
 def config_form(cluster_id: int, repo: RepoDep):
-    """Legacy URL — config is now rendered inline on the unified cluster
-    detail page. A 301 drops old bookmarks at the right section anchor."""
+    """Redirect the legacy config URL to the detail page's config section (301).
+
+    Config is rendered inline on the unified cluster detail page; the redirect
+    drops old bookmarks at the right section anchor.
+    """
     require_cluster(repo, cluster_id)
     return RedirectResponse(url=f"/clusters/{cluster_id}#config", status_code=301)
 
@@ -83,7 +86,7 @@ def save_config(
         "quiet_end_hour": _parse_optional_hour(quiet_end_hour),
     }
     repo.set_irrigation_config(cluster_id=cluster_id, **fields)
-    repo.session.commit()
+    repo.commit()
     return RedirectResponse(url=f"/clusters/{cluster_id}#config", status_code=303)
 
 
@@ -118,5 +121,5 @@ def save_global_config(
         quiet_start_hour=_parse_optional_hour(quiet_start_hour),
         quiet_end_hour=_parse_optional_hour(quiet_end_hour),
     )
-    repo.session.commit()
+    repo.commit()
     return RedirectResponse(url="/preferences?saved=global#global-config", status_code=303)

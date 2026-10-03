@@ -30,10 +30,8 @@ def list_vacation_windows(repo: RepoDep):
     Returns:
         A list of all windows and the active window (spanning now), if any.
     """
-    # contract: VacationListResponse validates the ORM rows (from_attributes).
-    return VacationListResponse(
-        active=repo.get_active_vacation(),  # type: ignore[arg-type]
-        items=repo.list_vacation_windows(),  # type: ignore[arg-type]
+    return VacationListResponse.model_validate(
+        {"active": repo.get_active_vacation(), "items": repo.list_vacation_windows()}
     )
 
 
@@ -69,7 +67,7 @@ def create_vacation_window(request: VacationCreateRequest, repo: RepoDep):
         contact_email=request.contact_email,
         notes=request.notes,
     )
-    repo.session.commit()
+    repo.commit()
     return window
 
 
@@ -98,7 +96,7 @@ def update_vacation_window(window_id: int, request: UpdateVacationWindowRequest,
     effective_end = request.ends_at if request.ends_at is not None else row.ends_at
     _validate_range(effective_start, effective_end)
     updated = repo.update_vacation_window(window_id, **request.model_dump(exclude_unset=True))
-    repo.session.commit()
+    repo.commit()
     return updated
 
 
@@ -115,8 +113,7 @@ def delete_vacation_window(window_id: int, repo: RepoDep):
     Raises:
         HTTPException: 404 if no window with that ID exists.
     """
-    deleted = repo.delete_vacation_window(window_id)
-    if not deleted:
-        raise HTTPException(status_code=404, detail="Vacation window not found")
-    repo.session.commit()
+    require_vacation_window(repo, window_id)
+    repo.delete_vacation_window(window_id)
+    repo.commit()
     return SuccessResponse(success=True)

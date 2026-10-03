@@ -43,6 +43,7 @@ def activity_list(
     source: str | None = Query(default=None),
     severity: str | None = Query(default=None),
 ):
+    """Render the activity timeline page (first page, optional filters)."""
     items, next_cursor = _fetch_events(repo, entity_type=entity_type, source=source, severity=severity, before=None)
     return templates.TemplateResponse(
         request,
@@ -67,6 +68,7 @@ def activity_page(
     source: str | None = Query(default=None),
     severity: str | None = Query(default=None),
 ):
+    """Render the next page of timeline rows for infinite scroll (HTMX fragment)."""
     items, next_cursor = _fetch_events(repo, entity_type=entity_type, source=source, severity=severity, before=before)
     return templates.TemplateResponse(
         request,

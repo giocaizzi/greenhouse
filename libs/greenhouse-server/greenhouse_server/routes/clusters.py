@@ -1,6 +1,6 @@
 """Cluster CRUD routes."""
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Query, status
 
 from greenhouse_core.schemas import (
     ClusterDetailResponse,
@@ -34,13 +34,17 @@ def create_cluster(request: CreateClusterRequest, repo: RepoDep):
         The newly created cluster including its assigned ID.
     """
     cluster_id = repo.add_cluster(request.name, request.location, request.environment)
-    repo.session.commit()
+    repo.commit()
     return repo.get_cluster(cluster_id)
 
 
 @router.get("", response_model=list[ClusterResponse], summary="List all clusters")
 def list_clusters(repo: RepoDep):
-    """List every cluster in the system."""
+    """List every cluster in the system.
+
+    Returns:
+        All clusters, ordered by name.
+    """
     return repo.list_clusters()
 
 
@@ -113,7 +117,7 @@ def get_cluster_detail(
 
 @router.put("/{cluster_id}", response_model=ClusterResponse, summary="Update a cluster")
 def update_cluster(cluster_id: int, request: UpdateClusterRequest, repo: RepoDep):
-    """Partially update a cluster metadata.
+    """Partially update a cluster's metadata.
 
     Only fields present in the request body are modified; omitted fields are
     left unchanged.
@@ -129,10 +133,9 @@ def update_cluster(cluster_id: int, request: UpdateClusterRequest, repo: RepoDep
     Raises:
         HTTPException: 404 if no cluster with that ID exists.
     """
+    require_cluster(repo, cluster_id)
     cluster = repo.update_cluster(cluster_id, **request.model_dump(exclude_none=True))
-    if not cluster:
-        raise HTTPException(status_code=404, detail="Cluster not found")
-    repo.session.commit()
+    repo.commit()
     return cluster
 
 
@@ -152,8 +155,7 @@ def delete_cluster(cluster_id: int, repo: RepoDep):
     Raises:
         HTTPException: 404 if no cluster with that ID exists.
     """
-    deleted = repo.delete_cluster(cluster_id)
-    if not deleted:
-        raise HTTPException(status_code=404, detail="Cluster not found")
-    repo.session.commit()
+    require_cluster(repo, cluster_id)
+    repo.delete_cluster(cluster_id)
+    repo.commit()
     return SuccessResponse(success=True)

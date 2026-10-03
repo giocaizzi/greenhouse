@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import re
 import time
+from typing import Any
 
+from greenhouse_core.constants import AGE_BADGE_STALE_SECONDS, SECONDS_PER_DAY, SECONDS_PER_HOUR
 from greenhouse_core.utils import format_timestamp
 
 # Matches common Unicode emoji ranges. Used to scrub decorative glyphs out of
@@ -14,40 +16,60 @@ _EMOJI_RE = re.compile(
     flags=re.UNICODE,
 )
 
-# Past this age we treat readings as "stale" — avoids absurd values like
-# "20567d ago" leaking into the UI from seed data or long-offline sensors.
-_AGE_STALE_SECONDS = 7 * 86400
+_SECONDS_PER_MINUTE = 60
+_MINUTES_PER_HOUR = 60
 
 
 def format_ts(ts: int | float | None, fmt: str = "%Y-%m-%d %H:%M") -> str:
+    """Template filter: a Unix timestamp in the display timezone (``—`` when missing)."""
     if ts is None:
         return "—"
     return format_timestamp(float(ts), fmt)
 
 
-def relative_age(ts: int | float | None, *, missing: str = "—", stale_after: int | None = _AGE_STALE_SECONDS) -> str:
-    """The one "how long ago" formatter: ``Ns`` / ``Nm`` / ``Nh`` / ``Nd ago`` for a Unix timestamp.
+def format_age(
+    age: int | float | None, *, missing: str = "—", stale_after: int | None = AGE_BADGE_STALE_SECONDS
+) -> str:
+    """The one "how long ago" formatter: ``Ns`` / ``Nm`` / ``Nh`` / ``Nd ago`` for an age in seconds.
 
     ``missing`` is shown for ``None``; from ``stale_after`` seconds on the age reads
     "stale" (sensor freshness), or keeps counting days when ``stale_after`` is ``None``
-    (elapsed time, e.g. the plant dashboard's last watering).
+    (elapsed time, e.g. the plant dashboard's last watering). A negative age (clock
+    skew) reads as ``0s ago``.
     """
-    if ts is None:
+    if age is None:
         return missing
-    delta = max(0, int(time.time() - float(ts)))
-    if delta < 60:
+    delta = max(0, int(age))
+    if delta < _SECONDS_PER_MINUTE:
         return f"{delta}s ago"
-    if delta < 3600:
-        return f"{delta // 60}m ago"
-    if delta < 86400:
-        return f"{delta // 3600}h ago"
+    if delta < SECONDS_PER_HOUR:
+        return f"{delta // _SECONDS_PER_MINUTE}m ago"
+    if delta < SECONDS_PER_DAY:
+        return f"{delta // SECONDS_PER_HOUR}h ago"
     if stale_after is None or delta < stale_after:
-        return f"{delta // 86400}d ago"
+        return f"{delta // SECONDS_PER_DAY}d ago"
     return "stale"
 
 
-def age_seconds(ts: int | float | None) -> str:
-    """Template filter: :func:`relative_age` with the freshness defaults ("—" when missing, "stale" from 7 days)."""
+def relative_age(
+    ts: int | float | None, *, missing: str = "—", stale_after: int | None = AGE_BADGE_STALE_SECONDS
+) -> str:
+    """:func:`format_age` of a Unix timestamp: how long ago ``ts`` was, from the wall clock."""
+    if ts is None:
+        return missing
+    return format_age(time.time() - float(ts), missing=missing, stale_after=stale_after)
+
+
+def age_seconds(age: int | float | None) -> str:
+    """Template filter for an **age in seconds**: :func:`format_age` with the freshness defaults.
+
+    "—" when missing, "stale" from 7 days. For a Unix timestamp use :func:`time_ago`.
+    """
+    return format_age(age)
+
+
+def time_ago(ts: int | float | None) -> str:
+    """Template filter for a **Unix timestamp**: :func:`relative_age` with the freshness defaults."""
     return relative_age(ts)
 
 
@@ -74,6 +96,7 @@ def stat_position(value: float | None, lo: float | None, hi: float | None) -> st
 
 
 def moisture_badge(value: float | None, target_min: float | None, target_max: float | None) -> str:
+    """Template filter: badge class for a soil-moisture value against its target band."""
     if value is None:
         return "muted"
     if target_min is not None and value < target_min:
@@ -84,25 +107,29 @@ def moisture_badge(value: float | None, target_min: float | None, target_max: fl
 
 
 def severity_class(severity: str | None) -> str:
+    """Template filter: CSS class for an alert/insight severity (``muted`` when unknown)."""
     return {"critical": "danger", "warning": "warning", "info": "info"}.get((severity or "").lower(), "muted")
 
 
 def decision_badge(action: str | None) -> str:
+    """Template filter: badge class for a decision action (``muted`` when unknown)."""
     return {"irrigate": "primary", "hold": "muted", "skip": "muted", "error": "danger"}.get(
         (action or "").lower(), "muted"
     )
 
 
 def format_minutes(n: int | None) -> str:
+    """Template filter: a duration in minutes as ``N min`` / ``Nh`` / ``Nh Mm`` (``—`` when missing)."""
     if n is None:
         return "—"
-    if n < 60:
+    if n < _MINUTES_PER_HOUR:
         return f"{n} min"
-    h, m = divmod(n, 60)
+    h, m = divmod(n, _MINUTES_PER_HOUR)
     return f"{h}h {m}m" if m else f"{h}h"
 
 
-def yesno(value, yes: str = "Yes", no: str = "No") -> str:
+def yesno(value: object, yes: str = "Yes", no: str = "No") -> str:
+    """Template filter: ``yes`` / ``no`` label for a truthy / falsy value."""
     return yes if value else no
 
 
@@ -156,7 +183,7 @@ def icon_for_code(code: str) -> str:
     return _TRIGGER_CODE_ICONS.get(code, _SEVERITY_ICONS.get(code, "info"))
 
 
-def _present(value) -> bool:
+def _present(value: Any) -> bool:
     """True when a child collection/relationship holds at least one item.
 
     Accepts the shapes the web layer passes around: ``status`` lists, a single
@@ -171,7 +198,7 @@ def _present(value) -> bool:
         return bool(value)
 
 
-def cluster_caps(obj) -> dict:
+def cluster_caps(obj: Any) -> dict[str, Any]:
     """Derive a cluster's capability tier from what it contains.
 
     The single source of truth for feature gating across the web UI. Accepts
@@ -241,6 +268,7 @@ def cluster_caps(obj) -> dict:
 ALL_FILTERS = {
     "format_ts": format_ts,
     "age_seconds": age_seconds,
+    "time_ago": time_ago,
     "moisture_badge": moisture_badge,
     "severity_class": severity_class,
     "decision_badge": decision_badge,

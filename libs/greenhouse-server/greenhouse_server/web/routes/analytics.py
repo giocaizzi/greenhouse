@@ -47,6 +47,7 @@ def cluster_history(
     hours: int = Query(default=24, ge=1),
     limit: int = Query(default=50, ge=1),
 ):
+    """Render a cluster's recent readings and irrigation events."""
     result = svc.get_cluster_history(cluster_id, hours=hours, limit=limit)
     if not result:
         raise HTTPException(404, "Cluster not found")
@@ -64,6 +65,7 @@ def cluster_stats(
     repo: RepoDep,
     days: int = Query(default=7, ge=1),
 ):
+    """Render a cluster's irrigation statistics for the last ``days`` days."""
     cluster = require_cluster(repo, cluster_id)
     stats = get_irrigation_stats(repo, cluster_id, days)
     return templates.TemplateResponse(
@@ -79,6 +81,7 @@ def cluster_stats_export(
     repo: RepoDep,
     days: int = Query(default=7, ge=1),
 ):
+    """Download a cluster's irrigation events of the last ``days`` days as CSV."""
     cluster = require_cluster(repo, cluster_id)
     csv_text = cluster_events_csv(repo, cluster_id, days=days)
     return StreamingResponse(
@@ -96,6 +99,7 @@ def cluster_learn(
     plant_db: PlantDbDep,
     weather: WeatherClientDep,
 ):
+    """Render a cluster's care insights and next-irrigation forecast."""
     cluster = require_cluster(repo, cluster_id)
     insights_resp = InsightsService(repo, plant_db).cluster_insights(cluster_id)
     forecast = ForecastService(repo, plant_db, weather_client=weather).predict_next_irrigation(cluster_id)
@@ -108,6 +112,7 @@ def cluster_learn(
 
 @router.get("/scheduler")
 def scheduler_page(request: Request):
+    """Render the scheduler page: running state, jobs (core jobs flagged) and the check-all pause."""
     # Share the API's job serializer so the per-row `paused` badge the
     # template renders is actually populated. Core (built-in) jobs carry
     # `core=True` so the template hides their delete button — deleting them
@@ -134,6 +139,7 @@ def scheduler_page(request: Request):
 
 @router.post("/scheduler/jobs/{job_id}/delete", response_class=HTMLResponse)
 def scheduler_delete_job(request: Request, job_id: str):
+    """Delete an ad-hoc scheduler job; the empty body removes its table row."""
     if not bg_scheduler.running:
         raise HTTPException(503, "Scheduler not running")
     try:
@@ -158,11 +164,13 @@ def _set_check_all_paused_web(repo: IrrigationRepository, paused: bool) -> Redir
 
 @router.post("/scheduler/pause")
 def scheduler_pause(request: Request, repo: RepoDep):
+    """Pause the ``check_all`` job (persisted) and return to the scheduler page."""
     return _set_check_all_paused_web(repo, True)
 
 
 @router.post("/scheduler/resume")
 def scheduler_resume(request: Request, repo: RepoDep):
+    """Resume the ``check_all`` job (persisted) and return to the scheduler page."""
     return _set_check_all_paused_web(repo, False)
 
 

@@ -13,6 +13,7 @@ from sqlalchemy.engine import Engine
 from greenhouse_core.database import create_db_engine, create_session_factory, init_db
 from greenhouse_core.devices import DeviceGateway, build_default_registry
 from greenhouse_core.plant_db import PlantDatabase
+from greenhouse_core.repository import IrrigationRepository
 from greenhouse_core.utils import set_display_timezone
 from greenhouse_server.auth import bootstrap_admin, require_user
 from greenhouse_server.config import Settings
@@ -74,7 +75,7 @@ def _init_tuya(app: FastAPI) -> None:
     """
     try:
         gateway = DeviceGateway()
-    except (ValueError, Exception):
+    except Exception:
         app.state.device_gateway = None
         app.state.device_registry = None
         return
@@ -208,6 +209,7 @@ def _make_lifespan(settings: Settings) -> "Callable[[FastAPI], AbstractAsyncCont
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> "AsyncIterator[None]":
+        """Start the scheduler and re-arm leak checks on startup; stop the scheduler on shutdown."""
         if settings.enable_scheduler:
             start_scheduler()
             # Leak-check jobs are in-memory: restore any a restart dropped.
@@ -321,8 +323,6 @@ def _startup_timezone(app: FastAPI) -> str:
     try:
         session = app.state.session_factory()
         try:
-            from greenhouse_core.repository import IrrigationRepository
-
             repo = IrrigationRepository(session)
             tz = repo.get_preferences().timezone
             session.commit()
@@ -342,8 +342,6 @@ def _restore_persisted_scheduler_pause(app: FastAPI) -> None:
     try:
         session = app.state.session_factory()
         try:
-            from greenhouse_core.repository import IrrigationRepository
-
             repo = IrrigationRepository(session)
             paused = repo.get_preferences().scheduler_paused
             session.commit()
@@ -357,8 +355,6 @@ def _restore_persisted_scheduler_pause(app: FastAPI) -> None:
 def _init_plant_db(settings: Settings) -> PlantDatabase:
     """Initialize plant database from settings or default."""
     if settings.plant_db_path:
-        from pathlib import Path
-
         return PlantDatabase(db_path=Path(settings.plant_db_path))
     return PlantDatabase()
 

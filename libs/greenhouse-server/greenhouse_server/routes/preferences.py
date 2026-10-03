@@ -18,7 +18,7 @@ def get_preferences(repo: RepoDep):
         refresh interval, and dry-run flag.
     """
     prefs = repo.get_preferences()
-    repo.session.commit()
+    repo.commit()
     return prefs
 
 
@@ -38,6 +38,6 @@ def update_preferences(request: PreferencesUpdateRequest, http_request: Request,
         The updated preferences row.
     """
     prefs = repo.update_preferences(**request.model_dump(exclude_none=True))
-    repo.session.commit()
+    repo.commit()
     apply_timezone_preference(http_request, prefs.timezone)
     return prefs

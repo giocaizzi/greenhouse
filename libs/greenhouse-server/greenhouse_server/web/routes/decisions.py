@@ -18,6 +18,7 @@ def cluster_decisions(
     repo: RepoDep,
     limit: int = Query(default=50, ge=1, le=200),
 ):
+    """Render a cluster's persisted decision log, newest first."""
     cluster = require_cluster(repo, cluster_id)
     logs = repo.list_decision_logs(cluster_id, limit=limit)
     return templates.TemplateResponse(

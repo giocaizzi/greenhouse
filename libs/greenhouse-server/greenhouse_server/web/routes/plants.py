@@ -48,15 +48,18 @@ def _plant_form_fields(
 
 @router.get("/clusters/{cluster_id}/plants")
 def list_plants(cluster_id: int, repo: RepoDep):
-    """Legacy URL — plants are rendered inline on the unified cluster detail
-    page. A 301 keeps old bookmarks working and drops them at the right
-    section anchor."""
+    """Redirect the legacy plants URL to the detail page's plants section (301).
+
+    Plants are rendered inline on the unified cluster detail page; the
+    redirect keeps old bookmarks working and drops them at the right anchor.
+    """
     require_cluster(repo, cluster_id)
     return RedirectResponse(url=f"/clusters/{cluster_id}#plants", status_code=301)
 
 
 @router.get("/clusters/{cluster_id}/plants/new")
 def new_plant_form(request: Request, cluster_id: int, repo: RepoDep):
+    """Render the add-plant form."""
     cluster = require_cluster(repo, cluster_id)
     return templates.TemplateResponse(request, "plants/new.html", base_context(request, cluster=cluster))
 
@@ -76,6 +79,7 @@ def create_plant(
     ideal_humidity_max: str = Form(""),
     notes: str = Form(""),
 ):
+    """Add a plant from the form and return to the cluster's plants section."""
     require_cluster(repo, cluster_id)
     repo.add_plant(
         cluster_id=cluster_id,
@@ -91,12 +95,13 @@ def create_plant(
             notes=notes,
         ),
     )
-    repo.session.commit()
+    repo.commit()
     return RedirectResponse(url=f"/clusters/{cluster_id}#plants", status_code=303)
 
 
 @router.get("/clusters/{cluster_id}/plants/{plant_id}/edit")
 def edit_plant_form(request: Request, cluster_id: int, plant_id: int, repo: RepoDep):
+    """Render the edit form of one of the cluster's plants."""
     cluster = require_cluster(repo, cluster_id)
     plant = require_plant_in_cluster(repo, cluster_id, plant_id)
     return templates.TemplateResponse(request, "plants/edit.html", base_context(request, cluster=cluster, plant=plant))
@@ -118,6 +123,7 @@ def update_plant(
     ideal_humidity_max: str = Form(""),
     notes: str = Form(""),
 ):
+    """Save the plant form and return to the cluster's plants section."""
     require_plant_in_cluster(repo, cluster_id, plant_id)
     repo.update_plant(
         plant_id,
@@ -133,7 +139,7 @@ def update_plant(
             notes=notes,
         ),
     )
-    repo.session.commit()
+    repo.commit()
     return RedirectResponse(url=f"/clusters/{cluster_id}#plants", status_code=303)
 
 
@@ -142,5 +148,5 @@ def delete_plant(cluster_id: int, plant_id: int, repo: RepoDep):
     """HTMX-targeted delete; returns an empty HTML body so the row is removed."""
     require_plant_in_cluster(repo, cluster_id, plant_id)
     repo.delete_plant(plant_id)
-    repo.session.commit()
+    repo.commit()
     return HTMLResponse("")

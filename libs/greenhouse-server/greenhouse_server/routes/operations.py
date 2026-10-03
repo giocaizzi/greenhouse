@@ -33,7 +33,6 @@ from greenhouse_server.deps import (
     IrrigationServiceDep,
     PlantDbDep,
     RepoDep,
-    SessionDep,
     SyncServiceDep,
     require_cluster,
 )
@@ -43,16 +42,31 @@ from greenhouse_server.services.maintenance import collect_learning_alerts, gene
 
 router = APIRouter(tags=["operations"])
 
+# GET /clusters/{id}/stats for a cluster without an irrigator (D19): the documented shape, all zero.
+_NO_IRRIGATION_STATS = {
+    "total_events": 0,
+    "total_duration_minutes": 0,
+    "avg_duration_minutes": 0.0,
+    "frequency_per_day": 0.0,
+    "events_by_type": {},
+    "events_by_trigger": {},
+}
+
 
 @router.get("/clusters/{cluster_id}/status", response_model=ClusterStatusResponse)
 def cluster_status(cluster_id: int, cluster_svc: ClusterServiceDep):
-    """Full cluster snapshot: config, plants, sensors (latest reading + age),
-    irrigators (last event), and the current decision-engine recommendation.
+    """Return a full cluster snapshot with the current decision-engine recommendation.
 
-    Read-only — does not actuate hardware or modify the database.
+    The snapshot covers the config, plants, sensors (latest reading + age) and
+    the irrigator (last event). Read-only — does not actuate hardware or modify
+    the database.
 
     Args:
         cluster_id: Cluster to inspect.
+
+    Returns:
+        The cluster, its config, plants, sensors, irrigator, and the decision
+        the engine would make now (`null` parts when absent).
 
     Raises:
         HTTPException: 404 if the cluster does not exist.
@@ -117,7 +131,7 @@ def irrigate(
     cluster_id: int,
     request: IrrigateRequest,
     irrigation_svc: IrrigationServiceDep,
-    session: SessionDep,
+    repo: RepoDep,
 ) -> IrrigateResponse:
     """Run the full smart-irrigation pipeline for a cluster.
 
@@ -154,14 +168,13 @@ def irrigate(
     )
     if result.get("action") == "error" and result.get("reason") == "cluster not found":
         raise HTTPException(status_code=404, detail="Cluster not found")
-    session.commit()
-    return IrrigateResponse(**result)  # type: ignore[misc, arg-type]  # contract: TypedDict → Pydantic, runtime-validated
+    repo.commit()
+    return IrrigateResponse.model_validate(result)
 
 
 @router.get("/clusters/{cluster_id}/monitor", response_model=MonitorResponse)
 def monitor(cluster_id: int, repo: RepoDep, irrigation_svc: IrrigationServiceDep) -> MonitorResponse:
-    """Per-sensor soil-moisture status for a cluster, plus a list of plants
-    that currently need water.
+    """Report each sensor's soil-moisture status and the plants that currently need water.
 
     Use this for sensor-only clusters (no irrigators) where you want to know
     which plants are dry without running the decision engine. Never actuates;
@@ -181,16 +194,16 @@ def monitor(cluster_id: int, repo: RepoDep, irrigation_svc: IrrigationServiceDep
     """
     require_cluster(repo, cluster_id)
     result = irrigation_svc.monitor_cluster(cluster_id)
-    repo.session.commit()  # keep the freshness sync's rows (D15)
+    repo.commit()  # keep the freshness sync's rows (D15)
     return MonitorResponse(
         cluster_name=result["cluster_name"],
-        sensors=[SensorStatusResponse(**s) for s in result["sensors"]],
+        sensors=[SensorStatusResponse.model_validate(s) for s in result["sensors"]],
         needs_water=result["needs_water"],
     )
 
 
 @router.post("/check", response_model=CheckAllResponse)
-def check_all(irrigation_svc: IrrigationServiceDep, session: SessionDep) -> CheckAllResponse:
+def check_all(irrigation_svc: IrrigationServiceDep, repo: RepoDep) -> CheckAllResponse:
     """Run a check across every cluster.
 
     For each cluster: irrigate (if it has irrigators and `auto_run` is on) or
@@ -207,9 +220,9 @@ def check_all(irrigation_svc: IrrigationServiceDep, session: SessionDep) -> Chec
     """
     results = irrigation_svc.check_all_clusters()
     has_alerts = check_has_alerts(results)
-    session.commit()
+    repo.commit()
     return CheckAllResponse(
-        results=[CheckClusterResponse(**r) for r in results],  # type: ignore[arg-type]  # contract: TypedDict → Pydantic
+        results=[CheckClusterResponse.model_validate(r) for r in results],
         has_alerts=has_alerts,
     )
 
@@ -219,7 +232,6 @@ def check_single(
     cluster_id: int,
     repo: RepoDep,
     irrigation_svc: IrrigationServiceDep,
-    session: SessionDep,
 ) -> CheckClusterResponse:
     """Run a check for a single cluster (irrigate or monitor + collect alerts).
 
@@ -229,17 +241,21 @@ def check_single(
     Args:
         cluster_id: Cluster to check.
 
+    Returns:
+        The cluster's check result: irrigation or monitor outcome plus its
+        learning and maintenance alerts.
+
     Raises:
         HTTPException: 404 if the cluster does not exist.
     """
     require_cluster(repo, cluster_id)
     result = irrigation_svc.check_cluster(cluster_id)
-    session.commit()
-    return CheckClusterResponse(**result)  # type: ignore[arg-type]  # contract: TypedDict → Pydantic
+    repo.commit()
+    return CheckClusterResponse.model_validate(result)
 
 
 @router.post("/sync", response_model=SyncResponse)
-def sync(request: SyncRequest, sync_svc: SyncServiceDep, session: SessionDep) -> SyncResponse:
+def sync(request: SyncRequest, sync_svc: SyncServiceDep, repo: RepoDep) -> SyncResponse:
     """Pull recent sensor readings from the Tuya Cloud into the local SQLite archive.
 
     This is the same job the background scheduler runs every
@@ -255,7 +271,7 @@ def sync(request: SyncRequest, sync_svc: SyncServiceDep, session: SessionDep) ->
         readings hit, and any per-sensor error messages.
     """
     stats = sync_svc.sync_all_sensors(hours=request.hours)
-    session.commit()
+    repo.commit()
     return SyncResponse(
         total_synced=stats["total_synced"],
         total_new=stats["total_new"],
@@ -266,7 +282,7 @@ def sync(request: SyncRequest, sync_svc: SyncServiceDep, session: SessionDep) ->
 
 @router.get("/clusters/{cluster_id}/learn", response_model=LearnResponse)
 def learn(cluster_id: int, repo: RepoDep, plant_db: PlantDbDep):
-    """Human-readable learning report for a cluster.
+    """Return a human-readable learning report for a cluster.
 
     Summarises absorption rates, drainage profiles, and any advisory alerts
     (blocked drip, rapid drainage, chronic underwatering, etc.) the learner
@@ -275,14 +291,16 @@ def learn(cluster_id: int, repo: RepoDep, plant_db: PlantDbDep):
     Args:
         cluster_id: Cluster to analyse.
 
+    Returns:
+        The cluster name, the report text, and the advisory learning alerts.
+
     Raises:
         HTTPException: 404 if the cluster does not exist.
     """
     cluster = require_cluster(repo, cluster_id)
     report = generate_learning_report(repo, cluster_id, plant_db)
     alerts = collect_learning_alerts(repo, cluster_id, plant_db)
-    # contract: LearnResponse.alerts validates the alert dicts into AlertResponse.
-    return LearnResponse(cluster_name=cluster.name, report=report, alerts=alerts)  # type: ignore[arg-type]
+    return LearnResponse.model_validate({"cluster_name": cluster.name, "report": report, "alerts": alerts})
 
 
 @router.get("/clusters/{cluster_id}/history", response_model=HistoryResponse)
@@ -292,12 +310,15 @@ def history(
     hours: int = Query(default=24, ge=1),
     limit: int = Query(default=50, ge=1),
 ):
-    """Recent sensor readings and irrigation events for a cluster.
+    """Return recent sensor readings and irrigation events for a cluster.
 
     Args:
         cluster_id: Cluster to inspect.
         hours: Look-back window in hours (default 24).
         limit: Maximum readings/events per sensor or irrigator (default 50).
+
+    Returns:
+        Per-sensor readings and per-irrigator events within the window.
 
     Raises:
         HTTPException: 404 if the cluster does not exist.
@@ -328,7 +349,7 @@ def history(
 
 @router.get("/clusters/{cluster_id}/stats", response_model=StatsResponse)
 def stats(cluster_id: int, repo: RepoDep, days: int = Query(default=7, ge=1)):
-    """Aggregate irrigation statistics for a cluster.
+    """Return aggregate irrigation statistics for a cluster.
 
     Args:
         cluster_id: Cluster to compute stats for.
@@ -336,14 +357,17 @@ def stats(cluster_id: int, repo: RepoDep, days: int = Query(default=7, ge=1)):
 
     Returns:
         Total event count, total + average duration, frequency per day, and
-        breakdowns by event type and trigger source.
+        breakdowns by event type and trigger source. A cluster without an
+        irrigator reports zero totals and empty breakdowns.
 
     Raises:
         HTTPException: 404 if the cluster does not exist.
     """
     cluster = require_cluster(repo, cluster_id)
     result = get_irrigation_stats(repo, cluster_id, days)
-    return StatsResponse(cluster_name=cluster.name, **result)
+    if "error" in result:  # no irrigator: nothing was irrigated in the window
+        return StatsResponse.model_validate({"cluster_name": cluster.name, **_NO_IRRIGATION_STATS, "period_days": days})
+    return StatsResponse.model_validate({"cluster_name": cluster.name, **result})
 
 
 @router.get("/clusters/{cluster_id}/stats/export")
@@ -358,6 +382,9 @@ def stats_export(cluster_id: int, repo: RepoDep, days: int = Query(default=7, ge
     Args:
         cluster_id: Cluster to export.
         days: Look-back window in days (default 7).
+
+    Returns:
+        A `text/csv` attachment named `cluster_<id>_stats.csv`.
 
     Raises:
         HTTPException: 404 if the cluster does not exist.

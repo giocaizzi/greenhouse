@@ -1,8 +1,9 @@
 """Per-cluster irrigation window CRUD.
 
 Windows declare when a cluster is *allowed* to water in local time. The
-decision engine checks them after cooldown but before stress overrides — a
-plant in genuine stress still gets water at 2am.
+decision engine checks them after the cooldown and the stress overrides, so a
+plant in genuine stress still gets water outside its windows; a cluster with
+no windows may water at any hour (quiet hours still apply).
 """
 
 from __future__ import annotations
@@ -43,8 +44,8 @@ def list_windows(cluster_id: int, repo: RepoDep):
 
     Returns:
         ``IrrigationWindowListResponse`` — may have an empty ``windows`` list
-        when no per-cluster windows are configured (the engine then falls back
-        to the global default preferred hours).
+        when no per-cluster windows are configured (the engine then allows
+        irrigation at any hour, subject to quiet hours).
 
     Raises:
         HTTPException: 404 if the cluster does not exist.
@@ -90,7 +91,7 @@ def add_window(cluster_id: int, request: CreateIrrigationWindowRequest, repo: Re
         weekday_mask=request.weekday_mask,
         label=request.label,
     )
-    repo.session.commit()
+    repo.commit()
     return IrrigationWindowResponse.model_validate(row)
 
 
@@ -121,7 +122,7 @@ def update_window(cluster_id: int, window_id: int, request: UpdateIrrigationWind
     effective_mask = request.weekday_mask if request.weekday_mask is not None else row.weekday_mask
     _validate_window(effective_start, effective_end, effective_mask)
     updated = repo.update_irrigation_window(window_id, **request.model_dump(exclude_none=True))
-    repo.session.commit()
+    repo.commit()
     return IrrigationWindowResponse.model_validate(updated)
 
 
@@ -146,5 +147,5 @@ def delete_window(cluster_id: int, window_id: int, repo: RepoDep):
     """
     require_window_in_cluster(repo, cluster_id, window_id)
     repo.delete_irrigation_window(window_id)
-    repo.session.commit()
+    repo.commit()
     return SuccessResponse(success=True)

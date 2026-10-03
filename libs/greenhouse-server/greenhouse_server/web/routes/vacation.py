@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import time
 from datetime import UTC, datetime, tzinfo
+from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, Form, HTTPException, Request
@@ -22,6 +23,9 @@ from greenhouse_server.deps import RepoDep, require_vacation_window
 from greenhouse_server.services.vacation import VacationRangeError, cluster_budgets, validate_vacation_range
 from greenhouse_server.web.context import base_context
 from greenhouse_server.web.templating import templates
+
+if TYPE_CHECKING:
+    from greenhouse_core.models import VacationWindow
 
 router = APIRouter(include_in_schema=False)
 
@@ -55,6 +59,7 @@ def _preference_zone() -> tzinfo:
 
 @router.get("/vacation")
 def vacation_list(request: Request, repo: RepoDep):
+    """Render the vacation page with the water budget of the active or next window."""
     active = repo.get_active_vacation()
     windows = repo.list_vacation_windows()
     # Project the per-cluster water budget for the window that matters most:
@@ -70,7 +75,7 @@ def vacation_list(request: Request, repo: RepoDep):
     )
 
 
-def _next_window(windows):
+def _next_window(windows: list[VacationWindow]) -> VacationWindow | None:
     """Return the soonest-starting future window, or None when none are scheduled."""
     now = int(time.time())
     upcoming = [w for w in windows if w.starts_at > now]
@@ -88,6 +93,7 @@ def create_vacation(
     contact_email: str = Form(""),
     notes: str = Form(""),
 ):
+    """Create a vacation window from the form and return to the vacation page."""
     try:
         starts_ts = _parse_ts(starts_at)
         ends_ts = _parse_ts(ends_at)
@@ -100,12 +106,13 @@ def create_vacation(
         contact_email=contact_email.strip() or None,
         notes=notes.strip() or None,
     )
-    repo.session.commit()
+    repo.commit()
     return RedirectResponse(url="/vacation", status_code=303)
 
 
 @router.get("/vacation/{window_id}/edit")
 def edit_vacation_form(request: Request, window_id: int, repo: RepoDep):
+    """Render the edit form of a vacation window."""
     window = require_vacation_window(repo, window_id)
     return templates.TemplateResponse(
         request,
@@ -124,6 +131,7 @@ def update_vacation(
     contact_email: str = Form(""),
     notes: str = Form(""),
 ):
+    """Save the vacation form and return to the vacation page."""
     require_vacation_window(repo, window_id)
     try:
         starts_ts = _parse_ts(starts_at)
@@ -138,14 +146,14 @@ def update_vacation(
         contact_email=contact_email.strip() or None,
         notes=notes.strip() or None,
     )
-    repo.session.commit()
+    repo.commit()
     return RedirectResponse(url="/vacation", status_code=303)
 
 
 @router.post("/vacation/{window_id}/delete")
 def delete_vacation(request: Request, window_id: int, repo: RepoDep):
-    deleted = repo.delete_vacation_window(window_id)
-    if not deleted:
-        raise HTTPException(404, "Vacation window not found")
-    repo.session.commit()
+    """Delete a vacation window and return to the vacation page."""
+    require_vacation_window(repo, window_id)
+    repo.delete_vacation_window(window_id)
+    repo.commit()
     return RedirectResponse(url="/vacation", status_code=303)

@@ -16,6 +16,7 @@ router = APIRouter(include_in_schema=False)
 
 @router.get("/health/badge")
 def health_badge(request: Request):
+    """Render the scheduler health badge in the top bar (polled fragment)."""
     return templates.TemplateResponse(
         request,
         "partials/_health_badge.html",

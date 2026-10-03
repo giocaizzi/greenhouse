@@ -31,11 +31,14 @@ import logging
 import time
 from collections.abc import Generator
 from dataclasses import dataclass
+from typing import Any
+from urllib.parse import quote
 
 import jwt
 from fastapi import Depends, HTTPException, Request, Response, status
 from fastapi.responses import RedirectResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy import select
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
 
@@ -113,7 +116,7 @@ def issue_token(settings: Settings, user: User, *, now: int | None = None) -> st
     return jwt.encode(payload, secret, algorithm=JWT_ALGORITHM)
 
 
-def decode_token(settings: Settings, token: str) -> dict:
+def decode_token(settings: Settings, token: str) -> dict[str, Any]:
     """Decode and validate a session JWT. Raises AuthError on any failure."""
     secret = _require_secret(settings)
     try:
@@ -137,7 +140,9 @@ _bearer = HTTPBearer(auto_error=False)
 
 
 def _get_settings(request: Request) -> Settings:
-    return request.app.state.settings
+    """Resolve the live Settings from ``app.state``."""
+    settings: Settings = request.app.state.settings
+    return settings
 
 
 def _session_from_app(request: Request) -> Generator[Session, None, None]:
@@ -267,8 +272,6 @@ def render_login_redirect(err: _RedirectAuthError, request: Request) -> Response
     instead return an empty 204 carrying ``HX-Redirect`` so HTMX performs a
     top-level browser navigation. Non-HTMX requests keep the 303.
     """
-    from urllib.parse import quote
-
     target = f"/login?next={quote(err.next_url)}"
     if request.headers.get("HX-Request", "").lower() == "true":
         response = Response(status_code=204)
@@ -294,6 +297,7 @@ def set_session_cookie(response: Response, settings: Settings, token: str) -> No
 
 
 def clear_session_cookie(response: Response, settings: Settings) -> None:
+    """Delete the session cookie. Used by the logout endpoints."""
     response.delete_cookie(key=settings.auth_cookie_name, path="/")
 
 
@@ -301,8 +305,10 @@ def clear_session_cookie(response: Response, settings: Settings) -> None:
 
 
 def authenticate(session: Session, username: str, password: str) -> User | None:
-    """Verify credentials and return the User or None. Also re-hashes on success
-    if the stored argon2 parameters are outdated."""
+    """Verify credentials and return the User, or None when they do not match.
+
+    On success the password is re-hashed if the stored argon2 parameters are outdated.
+    """
     user = get_user_by_username(session, username)
     if user is None or not user.is_active:
         return None
@@ -323,11 +329,9 @@ def bootstrap_admin(engine: Engine, settings: Settings) -> None:
     """
     if not settings.auth_enabled:
         return
-    from sqlalchemy.orm import Session as _Session
-
-    session = _Session(engine)
+    session = Session(engine)
     try:
-        existing = session.query(User).first()
+        existing = session.scalar(select(User).limit(1))
         if existing is not None:
             return
         username = settings.auth_admin_username

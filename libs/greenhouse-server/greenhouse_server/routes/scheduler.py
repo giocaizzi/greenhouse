@@ -17,7 +17,7 @@ router = APIRouter(tags=["scheduler"])
 
 @router.get("/health", response_model=HealthResponse)
 def health() -> HealthResponse:
-    """Liveness probe: server status, scheduler state, and registered jobs.
+    """Report liveness: server status, scheduler state, and registered jobs.
 
     Returns:
         `status="ok"` and a snapshot of the APScheduler jobs the server
@@ -26,7 +26,7 @@ def health() -> HealthResponse:
     return HealthResponse(
         status="ok",
         scheduler_running=scheduler.running,
-        jobs=[SchedulerJobResponse(**j) for j in get_jobs()],
+        jobs=[SchedulerJobResponse.model_validate(j) for j in get_jobs()],
     )
 
 
@@ -41,7 +41,7 @@ def list_jobs() -> list[SchedulerJobResponse]:
         flag that is true only for an explicitly paused job (`check_all`
         after POST /scheduler/pause, mirroring the persisted preference).
     """
-    return [SchedulerJobResponse(**j) for j in get_jobs()]
+    return [SchedulerJobResponse.model_validate(j) for j in get_jobs()]
 
 
 @router.delete("/scheduler/jobs/{job_id}", response_model=SuccessResponse)

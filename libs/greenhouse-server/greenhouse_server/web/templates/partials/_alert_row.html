@@ -45,6 +45,6 @@
       {% endif %}
     </div>
   </div>
-  <span class="alert__time">{{ alert.last_seen_at | age_seconds }}</span>
+  <span class="alert__time">{{ alert.last_seen_at | time_ago }}</span>
 </div>
 {% endif %}
