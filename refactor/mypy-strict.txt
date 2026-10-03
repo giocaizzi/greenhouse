@@ -89,6 +89,7 @@ libs/greenhouse-server/greenhouse_server/routes/well_known.py
 libs/greenhouse-server/greenhouse_server/routes/windows.py
 libs/greenhouse-server/greenhouse_server/scheduler.py
 libs/greenhouse-server/greenhouse_server/services/__init__.py
+libs/greenhouse-server/greenhouse_server/services/_session.py
 libs/greenhouse-server/greenhouse_server/services/anomaly.py
 libs/greenhouse-server/greenhouse_server/services/bulk.py
 libs/greenhouse-server/greenhouse_server/services/charts.py

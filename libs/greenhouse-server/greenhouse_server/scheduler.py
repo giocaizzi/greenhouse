@@ -2,7 +2,6 @@
 
 import logging
 import threading
-from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -20,12 +19,12 @@ from greenhouse_core.constants import (
 from greenhouse_core.devices import DeviceGateway
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.config import Settings
+from greenhouse_server.services._session import job_session as _job_session  # private: keeps the frozen dir() surface
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator
+    from collections.abc import Callable
 
     from apscheduler.job import Job
-    from sqlalchemy.orm import Session
     from starlette.requests import Request
 
     from greenhouse_core.devices import DeviceRegistry
@@ -309,28 +308,6 @@ def _get_cloud() -> DeviceGateway | None:
     return getattr(_app.state, "device_gateway", None) if _app is not None else None
 
 
-@contextmanager
-def _job_session(app: FastAPI | None, failure_message: str) -> "Iterator[Session]":
-    """One background-job transaction: commit on success, roll back and log on failure, always close.
-
-    The session is opened before the ``try`` (as every job did inline), so a missing app or
-    ``session_factory`` still escapes the job instead of being logged. It yields the bare session:
-    each caller builds its repository inside the ``with`` body, so a failure there is logged and
-    swallowed exactly like the old inline ``try`` (a raise before a ``yield`` would surface as
-    ``RuntimeError("generator didn't yield")``). Callers pass the module ``_app`` they read at call
-    time — never a default captured at import.
-    """
-    session = app.state.session_factory()  # type: ignore[union-attr]  # None app escapes as AttributeError (pinned)
-    try:
-        yield session
-        session.commit()
-    except Exception:
-        session.rollback()
-        logger.exception(failure_message)
-    finally:
-        session.close()
-
-
 def _sync_job() -> None:
     """Background job: sync all sensor data."""
     from greenhouse_server.services.sync import SyncService
@@ -341,7 +318,7 @@ def _sync_job() -> None:
         return
 
     registry = getattr(_app.state, "device_registry", None)  # type: ignore[union-attr]  # None _app escapes as AttributeError (pinned)
-    with _job_session(_app, "Sync job failed") as session:
+    with _job_session(_app, logger, "Sync job failed") as session:
         repo = IrrigationRepository(session)
         sync_svc = SyncService(repo, registry, gateway)
         sync_svc.sync_all_sensors(hours=SYNC_JOB_BACKFILL_HOURS)
@@ -351,7 +328,7 @@ def _health_snapshot_job() -> None:
     """Background job: compute and persist daily plant health snapshots."""
     from greenhouse_server.services.health import PlantHealthService
 
-    with _job_session(_app, "Plant health snapshot job failed") as session:
+    with _job_session(_app, logger, "Plant health snapshot job failed") as session:
         from greenhouse_core.repository import IrrigationRepository
 
         repo = IrrigationRepository(session)
@@ -391,7 +368,7 @@ def _check_job() -> None:
     gateway = _get_cloud()
     registry = getattr(_app.state, "device_registry", None)  # type: ignore[union-attr]  # None _app escapes as AttributeError (pinned)
 
-    with _job_session(_app, "Check job failed") as session:
+    with _job_session(_app, logger, "Check job failed") as session:
         repo = IrrigationRepository(session)
         _build_irrigation_service(_app, repo, registry, gateway).check_all_clusters()  # type: ignore[arg-type]  # non-None: _job_session already read _app.state
 
@@ -400,7 +377,7 @@ def _anomaly_job() -> None:
     """Background job: scan all sensors for staleness and drift anomalies."""
     from greenhouse_server.services.anomaly import SensorAnomalyService
 
-    with _job_session(_app, "Anomaly scan job failed") as session:
+    with _job_session(_app, logger, "Anomaly scan job failed") as session:
         repo = IrrigationRepository(session)
         SensorAnomalyService(repo, notifier=getattr(_app.state, "ntfy_notifier", None)).scan()  # type: ignore[union-attr]  # None _app escapes as AttributeError (pinned)
 
@@ -421,7 +398,7 @@ def _health_monitor_job() -> None:
         logger.debug("Health monitor job skipped: no monitor wired")
         return
 
-    with _job_session(_app, "Device health monitor job failed") as session:
+    with _job_session(_app, logger, "Device health monitor job failed") as session:
         repo = IrrigationRepository(session)
         monitor.bind_repo(repo)
         monitor.poll_all()
