@@ -552,7 +552,6 @@
   "public": [
    "AuthConfigError",
    "AuthError",
-   "AuthUserDep",
    "AuthenticatedUser",
    "Depends",
    "Engine",

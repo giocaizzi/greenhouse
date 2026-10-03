@@ -355,6 +355,3 @@ def bootstrap_admin(engine: Engine, settings: Settings) -> None:
     finally:
         session.close()
 
-
-# Type alias for route signatures
-AuthUserDep = AuthenticatedUser
