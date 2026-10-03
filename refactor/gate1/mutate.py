@@ -1929,8 +1929,8 @@ add(
         ),
         (
             "27",
-            'lines.append(f"   [{alert.severity.upper()}] {alert.message}")',
-            'lines.append(f"   [{alert.severity}] {alert.message}")',
+            'lines.extend(f"   [{alert.severity.upper()}] {alert.message}" for alert in alerts)',
+            'lines.extend(f"   [{alert.severity}] {alert.message}" for alert in alerts)',
             "report severity not upper-cased",
         ),
         ("28", '        return "No sensors in cluster."', '        return ""', "report empty-cluster text"),
@@ -3322,7 +3322,12 @@ add(
             "age_seconds 60 s boundary",
         ),
         ("02", "_AGE_STALE_SECONDS = 7 * 86400", "_AGE_STALE_SECONDS = 30 * 86400", "stale age 7d -> 30d"),
-        ("03", '    cleaned = re.sub(r"\\s*;\\s*", "; ", cleaned)\n', "", "strip_emoji keeps ' ; ' spacing"),
+        (
+            "03",
+            '    return re.sub(r"\\s*;\\s*", "; ", cleaned)\n',
+            "    return cleaned\n",
+            "strip_emoji keeps ' ; ' spacing",
+        ),
         (
             "04",
             "    if value is None or lo is None or hi is None or hi <= lo:",
@@ -3480,7 +3485,7 @@ add(
             "XDG_CONFIG_HOME ignored",
         ),
         ("02", "        return env_token.strip() or None", "        return env_token", "env token not stripped"),
-        ("03", "    os.chmod(path, 0o600)", "    os.chmod(path, 0o644)", "token file world-readable"),
+        ("03", "    path.chmod(0o600)", "    path.chmod(0o644)", "token file world-readable"),
         (
             "04",
             "        resolved = token if token is not None else load_stored_token()",
