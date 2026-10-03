@@ -35,7 +35,7 @@ from greenhouse_server.services.sync import SyncService
 from greenhouse_server.services.weather import WeatherClient
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping, Sequence
+    from collections.abc import Callable, Iterator, Mapping, Sequence
 
     from sqlalchemy.orm import Session
 
@@ -383,6 +383,23 @@ def _schedule_leak_check(cluster_id: int, started_at: int) -> None:
         logger.debug("Could not schedule leak check for cluster %d", cluster_id, exc_info=True)
 
 
+def _rearm_from_events(repo: IrrigationRepository, now: int) -> "Iterator[None]":
+    """Schedule a leak check for every recent auto start whose check never completed; yield once per job.
+
+    A generator rather than a returned count, so the caller's tally keeps the jobs already added
+    when the scan fails midway (pinned by the partial-count characterization test).
+    """
+    for irrigator in repo.list_all_irrigators():
+        for event in repo.get_recent_events(irrigator.id, hours=LEAK_HOLD_HOURS):
+            if event.action != "start" or event.triggered_by != "auto":
+                continue
+            if _leak_check_done(repo, irrigator.cluster_id, event.timestamp):
+                continue
+            due = event.timestamp + LEAK_CHECK_DELAY_SECONDS
+            _add_leak_check_job(irrigator.cluster_id, event.timestamp, run_at=max(due, now))
+            yield
+
+
 def rearm_leak_checks() -> int:
     """Re-schedule leak checks lost to a restart; call once after the scheduler starts.
 
@@ -406,15 +423,8 @@ def rearm_leak_checks() -> int:
     session = _app.state.session_factory()
     try:
         repo = IrrigationRepository(session)
-        for irrigator in repo.list_all_irrigators():
-            for event in repo.get_recent_events(irrigator.id, hours=LEAK_HOLD_HOURS):
-                if event.action != "start" or event.triggered_by != "auto":
-                    continue
-                if _leak_check_done(repo, irrigator.cluster_id, event.timestamp):
-                    continue
-                due = event.timestamp + LEAK_CHECK_DELAY_SECONDS
-                _add_leak_check_job(irrigator.cluster_id, event.timestamp, run_at=max(due, now))
-                scheduled += 1
+        for _ in _rearm_from_events(repo, now):
+            scheduled += 1
     except Exception:
         logger.exception("Re-arming leak checks after restart failed")
     finally:
