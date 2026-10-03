@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from datetime import datetime
+from datetime import UTC, datetime
 
 from rich.text import Text
 
@@ -73,12 +73,12 @@ def age(seconds: int | float | None) -> str:
     return f"{_span(max(0, int(seconds)))} ago"
 
 
-def clock(ts: int | float | None, with_date: bool = False) -> str:
-    """Local wall-clock time for a Unix timestamp."""
+def clock(ts: int | float | None, with_date: bool = False, *, utc: bool = False) -> str:
+    """Wall-clock time for a Unix timestamp — local, or UTC where the value was entered as UTC (vacations)."""
     if not ts:
         return "—"
     fmt = "%Y-%m-%d %H:%M" if with_date else "%H:%M"
-    return datetime.fromtimestamp(ts).strftime(fmt)
+    return datetime.fromtimestamp(ts, UTC if utc else None).strftime(fmt)
 
 
 def num(value: float | int | None, unit: str = "", digits: int = 1) -> str:

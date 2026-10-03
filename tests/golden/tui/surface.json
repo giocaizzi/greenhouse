@@ -1529,7 +1529,7 @@
   "vacation_fields()": [
    {
     "kind": "datetime",
-    "label": "Starts",
+    "label": "Starts (UTC)",
     "name": "starts_at",
     "options": [],
     "placeholder": "",
@@ -1538,7 +1538,7 @@
    },
    {
     "kind": "datetime",
-    "label": "Ends",
+    "label": "Ends (UTC)",
     "name": "ends_at",
     "options": [],
     "placeholder": "",
@@ -1567,7 +1567,7 @@
   "vacation_fields(window)": [
    {
     "kind": "datetime",
-    "label": "Starts",
+    "label": "Starts (UTC)",
     "name": "starts_at",
     "options": [],
     "placeholder": "",
@@ -1576,7 +1576,7 @@
    },
    {
     "kind": "datetime",
-    "label": "Ends",
+    "label": "Ends (UTC)",
     "name": "ends_at",
     "options": [],
     "placeholder": "",

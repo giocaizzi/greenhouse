@@ -606,6 +606,24 @@ class TestForms:
         assert parse_value(Field("a", "A", "json"), '{"x": 1}') == {"x": 1}
         assert isinstance(parse_value(Field("a", "A", "datetime"), "2026-10-01 08:30"), int)
 
+    def test_datetime_fields_are_utc_regardless_of_local_timezone(self, monkeypatch):
+        """Vacation datetimes follow the server convention (UTC), as the web form does — not local time."""
+        import time
+
+        from greenhouse_cli.tui.screens.forms import _display
+
+        monkeypatch.setenv("TZ", "America/New_York")
+        time.tzset()
+        try:
+            utc_midnight = 1777593600  # 2026-05-01 00:00 UTC (20:00 the day before in New York)
+            field = Field("starts_at", "Starts (UTC)", "datetime")
+            assert parse_value(field, "2026-05-01 00:00") == utc_midnight
+            assert _display(Field("starts_at", "Starts (UTC)", "datetime", utc_midnight)) == "2026-05-01 00:00"
+            assert fmt.clock(utc_midnight, True, utc=True) == "2026-05-01 00:00"
+        finally:
+            monkeypatch.undo()
+            time.tzset()
+
     @pytest.mark.parametrize(
         ("field", "raw", "message"),
         [

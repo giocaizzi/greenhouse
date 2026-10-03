@@ -374,7 +374,7 @@ def global_config_rows(config: dict[str, Any]) -> list[tuple[str, str | Text]]:
 
 
 def vacation_rows(vacations: list[dict[str, Any]], active_id: int | None) -> list[Row]:
-    """Vacation rows keyed by window id, with an active / past / upcoming state column."""
+    """Vacation rows keyed by window id (times in UTC, as the form takes them), with an active / past / upcoming state."""
     rows: list[Row] = []
     now = fmt.now()
     for v in vacations:
@@ -389,8 +389,8 @@ def vacation_rows(vacations: list[dict[str, Any]], active_id: int | None) -> lis
                 str(v["id"]),
                 [
                     str(v["id"]),
-                    fmt.clock(v["starts_at"], True),
-                    fmt.clock(v["ends_at"], True),
+                    fmt.clock(v["starts_at"], True, utc=True),
+                    fmt.clock(v["ends_at"], True, utc=True),
                     v.get("contact_email") or "—",
                     v.get("notes") or "",
                     state,

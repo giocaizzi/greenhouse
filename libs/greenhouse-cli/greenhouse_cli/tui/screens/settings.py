@@ -49,7 +49,9 @@ class SettingsScreen(DataScreen):
         yield Footer()
 
     def on_mount(self) -> None:
-        self.query_one("#vacation-table", DataTable).add_columns("ID", "Starts", "Ends", "Contact", "Notes", "State")
+        self.query_one("#vacation-table", DataTable).add_columns(
+            "ID", "Starts (UTC)", "Ends (UTC)", "Contact", "Notes", "State"
+        )
 
     async def load(self) -> None:
         api = self.gh.api

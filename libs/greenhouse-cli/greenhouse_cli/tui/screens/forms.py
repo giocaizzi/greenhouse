@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from textual.app import ComposeResult
@@ -20,8 +20,8 @@ class Field:
     """One form input.
 
     ``kind`` is ``text`` / ``int`` / ``float`` / ``bool`` / ``select`` /
-    ``json`` (object literal) / ``datetime`` (local ``YYYY-MM-DD HH:MM`` →
-    Unix seconds). Blank optional
+    ``json`` (object literal) / ``datetime`` (``YYYY-MM-DD HH:MM`` read as **UTC** →
+    Unix seconds — the server's convention, as the web vacation form). Blank optional
     inputs come back as ``None`` — the client drops ``None`` from update
     bodies, so a blank field means "leave unchanged".
     """
@@ -52,7 +52,7 @@ def parse_value(f: Field, raw: Any) -> Any:
         if f.kind == "float":
             return float(text)
         if f.kind == "datetime":
-            return int(datetime.strptime(text, DATETIME_FORMAT).timestamp())
+            return int(datetime.strptime(text, DATETIME_FORMAT).replace(tzinfo=UTC).timestamp())
         if f.kind == "json":
             parsed = json.loads(text)
             if not isinstance(parsed, dict):
@@ -69,7 +69,7 @@ def _display(f: Field) -> str:
     if f.value is None:
         return ""
     if f.kind == "datetime":
-        return datetime.fromtimestamp(f.value).strftime(DATETIME_FORMAT)
+        return datetime.fromtimestamp(f.value, UTC).strftime(DATETIME_FORMAT)
     if f.kind == "json":
         return json.dumps(f.value)
     return str(f.value)
