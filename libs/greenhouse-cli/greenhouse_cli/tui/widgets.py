@@ -343,6 +343,6 @@ def refill(table: DataTable[Any], rows: Iterable[tuple[str | None, Sequence[Rend
         return
     try:
         target = table.get_row_index(previous_key) if previous_key is not None else previous_row
-    except Exception:  # the record went away — stay at the same position
+    except Exception:  # noqa: BLE001 — the record went away — stay at the same position
         target = previous_row
     table.move_cursor(row=min(max(target, 0), table.row_count - 1))

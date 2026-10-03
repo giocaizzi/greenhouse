@@ -75,7 +75,7 @@ def _init_tuya(app: FastAPI) -> None:
     """
     try:
         gateway = DeviceGateway()
-    except Exception:
+    except Exception:  # noqa: BLE001
         app.state.device_gateway = None
         app.state.device_registry = None
         return
@@ -329,7 +329,7 @@ def _startup_timezone(app: FastAPI) -> str:
             return tz or "UTC"
         finally:
             session.close()
-    except Exception:
+    except Exception:  # noqa: BLE001
         return "UTC"
 
 
@@ -348,7 +348,7 @@ def _restore_persisted_scheduler_pause(app: FastAPI) -> None:
         finally:
             session.close()
         apply_persisted_pause(paused)
-    except Exception:
+    except Exception:  # noqa: BLE001
         pass
 
 

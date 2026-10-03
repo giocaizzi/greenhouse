@@ -249,7 +249,7 @@ class ClusterService:
                 try:
                     self.sync_plant_with_db(plant)
                     synced += 1
-                except Exception as e:
+                except Exception as e:  # noqa: BLE001
                     errors.append(f"{plant.species}: {e}")
         return PlantSyncResult(synced, errors)
 

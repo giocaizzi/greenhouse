@@ -93,7 +93,7 @@ def format_timestamp(timestamp: float, fmt: str = "%Y-%m-%d %H:%M") -> str:
         dt_utc = datetime.fromtimestamp(timestamp, tz=ZoneInfo("UTC"))
         dt_local = dt_utc.astimezone(ZoneInfo(tz))
         return dt_local.strftime(fmt)
-    except Exception:
+    except Exception:  # noqa: BLE001
         # Fallback to UTC if timezone conversion fails
         dt_utc = datetime.fromtimestamp(timestamp, tz=UTC)
         return dt_utc.strftime(fmt) + " UTC"

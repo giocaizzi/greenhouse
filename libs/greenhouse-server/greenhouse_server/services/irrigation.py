@@ -934,7 +934,7 @@ class IrrigationService:
                 result = self.check_cluster(cluster_id)
                 self._resolve_stale_check_alert(cluster_id)
                 self._repo.commit()
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 result = self._record_check_failure(cluster_id, cluster_name, e)
             results.append(result)
         return results

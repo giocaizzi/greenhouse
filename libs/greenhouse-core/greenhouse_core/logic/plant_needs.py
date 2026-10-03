@@ -34,7 +34,7 @@ def parse_moisture_target(target: str) -> tuple[float, float]:
     try:
         parts = target.split("-")
         return (float(parts[0]), float(parts[1]))
-    except Exception:
+    except Exception:  # noqa: BLE001
         return (DEFAULT_SOIL_MOISTURE_MIN, DEFAULT_SOIL_MOISTURE_MAX)
 
 

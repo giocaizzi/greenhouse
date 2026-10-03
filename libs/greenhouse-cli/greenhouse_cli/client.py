@@ -105,7 +105,7 @@ class IrrigationClient:
         if resp.status_code >= HTTPStatus.BAD_REQUEST:
             try:
                 detail = resp.json().get("detail", resp.text)
-            except Exception:
+            except Exception:  # noqa: BLE001
                 detail = resp.text
             raise ServerError(resp.status_code, detail)
 
