@@ -206,7 +206,7 @@ def _run_pump_watcher(
             warmup_seconds=warmup,
             max_read_failures=max_failures,
             monitor=monitor,
-            sleep=sleep,  # type: ignore[arg-type]  # contract: pump_watcher.py (WP4) types sleep -> None; the bool is ignored
+            sleep=sleep,  # type: ignore[arg-type]  # PumpWatcherService types sleep -> None; the returned bool is ignored
             stop_requested=stop_requested,
         )
         result = watcher.watch(irrigator, duration_seconds, started_at=started_at)
@@ -399,7 +399,7 @@ def _rearm_from_events(repo: IrrigationRepository, now: int) -> "Iterator[None]"
     """Schedule a leak check for every recent auto start whose check never completed; yield once per job.
 
     A generator rather than a returned count, so the caller's tally keeps the jobs already added
-    when the scan fails midway (pinned by the partial-count characterization test).
+    when the scan fails midway.
     """
     for irrigator in repo.list_all_irrigators():
         for event in repo.get_recent_events(irrigator.id, hours=LEAK_HOLD_HOURS):

@@ -42,7 +42,7 @@ from greenhouse_server.services.maintenance import collect_learning_alerts, gene
 
 router = APIRouter(tags=["operations"])
 
-# GET /clusters/{id}/stats for a cluster without an irrigator (D19): the documented shape, all zero.
+# GET /clusters/{id}/stats for a cluster without an irrigator: the documented shape, all zero.
 _NO_IRRIGATION_STATS = {
     "total_events": 0,
     "total_duration_minutes": 0,
@@ -194,7 +194,7 @@ def monitor(cluster_id: int, repo: RepoDep, irrigation_svc: IrrigationServiceDep
     """
     require_cluster(repo, cluster_id)
     result = irrigation_svc.monitor_cluster(cluster_id)
-    repo.commit()  # keep the freshness sync's rows (D15)
+    repo.commit()  # keep the rows the freshness sync just stored
     return MonitorResponse(
         cluster_name=result["cluster_name"],
         sensors=[SensorStatusResponse.model_validate(s) for s in result["sensors"]],

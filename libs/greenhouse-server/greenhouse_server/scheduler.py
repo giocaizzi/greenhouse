@@ -256,7 +256,7 @@ def reschedule_for_timezone(tz_name: str | None, settings: Settings) -> None:
 def apply_timezone_preference(request: "Request", tz_name: str | None) -> None:
     """Re-sync every clock to ``UserPreferences.timezone`` after it changes.
 
-    Keeps the three formerly-competing clocks in lockstep with the engine:
+    Keeps the three clocks in lockstep with the engine:
     the scheduler's wall-clock cron jobs, the weather forecast localization,
     and the display formatter. A no-op when the timezone is unchanged.
 
@@ -302,7 +302,7 @@ def _sync_job() -> None:
         logger.debug("Sync job skipped: no Tuya credentials")
         return
 
-    registry = getattr(_app.state, "device_registry", None)  # type: ignore[union-attr]  # None _app escapes as AttributeError (pinned)
+    registry = getattr(_app.state, "device_registry", None)  # type: ignore[union-attr]  # a None _app escapes as AttributeError
     with _job_session(_app, logger, "Sync job failed") as session:
         repo = IrrigationRepository(session)
         sync_svc = SyncService(repo, registry, gateway)
@@ -317,7 +317,7 @@ def _health_snapshot_job() -> None:
         from greenhouse_core.repository import IrrigationRepository
 
         repo = IrrigationRepository(session)
-        svc = PlantHealthService(repo, _app.state.plant_db)  # type: ignore[union-attr]  # None _app escapes as AttributeError (pinned)
+        svc = PlantHealthService(repo, _app.state.plant_db)  # type: ignore[union-attr]  # a None _app escapes as AttributeError
         svc.snapshot_daily()
 
 
@@ -345,13 +345,13 @@ def _build_irrigation_service(
 
 def _check_job() -> None:
     """Background job: check all clusters."""
-    # Resolved here, before the session opens, exactly as before the extraction: an import
-    # failure escapes the job instead of being logged as "Check job failed".
+    # Resolved here, before the session opens, so an import failure escapes the job
+    # instead of being logged as "Check job failed".
     from greenhouse_server.services.irrigation import IrrigationService  # noqa: F401
     from greenhouse_server.services.sync import SyncService  # noqa: F401
 
     gateway = _get_cloud()
-    registry = getattr(_app.state, "device_registry", None)  # type: ignore[union-attr]  # None _app escapes as AttributeError (pinned)
+    registry = getattr(_app.state, "device_registry", None)  # type: ignore[union-attr]  # a None _app escapes as AttributeError
 
     with _job_session(_app, logger, "Check job failed") as session:
         repo = IrrigationRepository(session)
@@ -364,7 +364,7 @@ def _anomaly_job() -> None:
 
     with _job_session(_app, logger, "Anomaly scan job failed") as session:
         repo = IrrigationRepository(session)
-        SensorAnomalyService(repo, notifier=getattr(_app.state, "ntfy_notifier", None)).scan()  # type: ignore[union-attr]  # None _app escapes as AttributeError (pinned)
+        SensorAnomalyService(repo, notifier=getattr(_app.state, "ntfy_notifier", None)).scan()  # type: ignore[union-attr]  # a None _app escapes as AttributeError
 
 
 def _health_monitor_job() -> None:

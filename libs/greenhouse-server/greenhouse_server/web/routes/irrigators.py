@@ -204,7 +204,7 @@ def start_irrigator(
 ):
     """Manually start an irrigator and render the action result (HTMX fragment)."""
     # Same code path as POST /api/v1/irrigators/{id}/start: caps, dry-run
-    # watcher, event row and notification (the web route used to skip them).
+    # watcher, event row and notification.
     irr = require_irrigator(repo, irrigator_id)
     mins: int | None = None
     if minutes.strip():

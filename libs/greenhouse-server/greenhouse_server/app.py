@@ -153,8 +153,7 @@ _OPENAPI_TAGS: tuple[dict[str, str], ...] = (
 def _protected_api_routers() -> "tuple[APIRouter, ...]":
     """Return the auth-gated API routers in registration order (= OpenAPI path order).
 
-    Read at ``create_app`` time, as the original inline includes did, so a rebound
-    ``<module>.router`` is picked up.
+    Read at ``create_app`` time, so a rebound ``<module>.router`` is picked up.
     """
     return (
         clusters.router,

@@ -30,7 +30,7 @@ ALLOWED_HOURS = {24, 168, 720}
 
 
 def _water_needs_band(target: str | None) -> tuple[float, float] | None:
-    """The water-needs soil band via the shared ``parse_moisture_target`` (D10); None without a ``lo-hi`` target."""
+    """The water-needs soil band via the shared ``parse_moisture_target``; None without a ``lo-hi`` target."""
     if not target or "-" not in target:
         return None
     return parse_moisture_target(target)

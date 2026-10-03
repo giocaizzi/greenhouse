@@ -71,7 +71,7 @@ def _preference_flags(request: Request) -> tuple[bool, VacationWindow | None, bo
         except Exception:  # noqa: BLE001, S110
             pass
         finally:
-            # contract: target §3.6 keeps this close; _repo_from_request sets repo and session together.
+            # _repo_from_request sets repo and session together, so session is set whenever repo is.
             session.close()  # type: ignore[union-attr]
     return dry_run_global, active_vacation, scheduler_paused, theme
 

@@ -24,11 +24,11 @@ def job_session(
 ) -> "Iterator[Session]":
     """Commit on success, roll back and log on failure, always close.
 
-    The session is opened before the ``try`` (as every job did inline), so a missing app or
-    ``session_factory`` still escapes the job instead of being logged. It yields the bare
-    session: each caller builds its repository inside the ``with`` body, so a failure there is
-    logged and swallowed exactly like the old inline ``try`` (a raise before a ``yield`` would
-    surface as ``RuntimeError("generator didn't yield")``). Callers pass the module ``_app``
+    The session is opened before the ``try``, so a missing app or ``session_factory`` escapes
+    the job instead of being logged. It yields the bare session: each caller builds its
+    repository inside the ``with`` body, so a failure there is logged and swallowed like any
+    other job failure (a raise before a ``yield`` would surface as
+    ``RuntimeError("generator didn't yield")``). Callers pass the module ``_app``
     they read at call time — never a default captured at import.
 
     Args:
@@ -37,7 +37,7 @@ def job_session(
         failure_message: %-style message logged (with traceback) when the body or the commit fails.
         *args: Lazy %-arguments for ``failure_message``.
     """
-    session = app.state.session_factory()  # type: ignore[union-attr]  # None app escapes as AttributeError (pinned)
+    session = app.state.session_factory()  # type: ignore[union-attr]  # a None app escapes as AttributeError
     try:
         yield session
         session.commit()

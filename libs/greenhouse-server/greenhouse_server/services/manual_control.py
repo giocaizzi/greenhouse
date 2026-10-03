@@ -4,9 +4,8 @@ Both front doors (``POST /api/v1/irrigators/{id}/start|stop|log-manual`` and
 the web ``/irrigators/{id}/start|stop|log-manual`` actions) call these
 functions, so a manual action always gets the same rails no matter where it
 came from: per-day caps, the dry-run pump watcher, the event row, and the
-notification. (The web routes used to drive the adapter directly — or, for
-log-manual, record an ``action="manual"`` row that cooldown, caps and
-learning never counted — and skipped all of them.)
+notification. A manual log is recorded as a ``start`` row so cooldown, caps
+and learning count it like any other run.
 
 Errors are raised as :class:`ManualActionError` carrying the HTTP status the
 JSON API returns; each route maps it to its own response shape.
