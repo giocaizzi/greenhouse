@@ -63,17 +63,6 @@ follow_imports = "silent"
 # editable .pth files as "missing" and silently become Any. Source paths make them typed.
 mypy_path = ["libs/greenhouse-core", "libs/greenhouse-server", "libs/greenhouse-cli"]
 
-[[tool.mypy.overrides]]
-# Framework-boundary profile for the Typer commands: their signatures are introspected
-# (--help) and are never edited; helpers stay fully typed. (Server routes are fully strict.)
-module = [
-    "greenhouse_cli.commands.*",
-    "greenhouse_cli.main",
-]
-disallow_untyped_defs = false
-disallow_incomplete_defs = false
-disallow_any_generics = false
-
 [tool.ruff]
 line-length = 120
 target-version = "py311"
@@ -377,7 +366,6 @@ allow_indirect_imports = true
 ignore_imports = [
   "greenhouse_server.web.context -> sqlalchemy",        # TYPE_CHECKING annotation only
   "greenhouse_server.services.jobs -> sqlalchemy",  # TYPE_CHECKING annotation only
-  "greenhouse_server.services.inventory -> sqlalchemy", # IntegrityError -> DeviceIdExistsError translation
 ]
 
 [[tool.importlinter.contracts]]
