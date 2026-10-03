@@ -8,7 +8,6 @@ provably keep today's behavior. Everything here pins CURRENT behavior, odd or no
 import json
 
 import pytest
-from pydantic import ValidationError
 from sqlalchemy import func, select
 
 from fake_data import FAKE_DEVICE_ID, FAKE_SENSOR_ID
@@ -51,7 +50,7 @@ _RESPONSE_MODELS = [IrrigatorResponse, SensorResponse]
     [
         ('{"a": 1, "b": [1, 2]}', {"a": 1, "b": [1, 2]}),
         ("{}", {}),
-        ("null", None),
+        ("null", {}),  # D16: non-object JSON reads as {} (shared lenient parser)
         ({"k": 1}, {"k": 1}),
         (None, None),
     ],
@@ -63,22 +62,25 @@ def test_parse_config_decodes_json_strings_and_passes_other_values(model, raw, e
 
 @pytest.mark.parametrize("model", _RESPONSE_MODELS, ids=lambda m: m.__name__)
 @pytest.mark.parametrize("raw", ["not json", ""], ids=["garbage", "empty-string"])
-def test_parse_config_invalid_json_is_a_value_error(model, raw):
-    with pytest.raises(ValidationError) as exc:
-        model.model_validate({**_RESPONSE_BASE, "config": raw})
-    errors = exc.value.errors()
-    assert [(e["type"], e["loc"], e["msg"]) for e in errors] == [
-        ("value_error", ("config",), "Value error, Expecting value: line 1 column 1 (char 0)")
-    ]
+def test_parse_config_invalid_json_reads_as_empty(model, raw):
+    """D16: malformed stored JSON reads as ``{}`` (was a ValidationError → 500), as in the web and gateway."""
+    assert model.model_validate({**_RESPONSE_BASE, "config": raw}).config == {}
 
 
 @pytest.mark.parametrize("model", _RESPONSE_MODELS, ids=lambda m: m.__name__)
-@pytest.mark.parametrize("raw", ["[1, 2]", '"x"', "3"], ids=["json-list", "json-string", "json-number"])
-def test_parse_config_non_object_json_fails_dict_validation_current_behavior(model, raw):
-    """Pins current behavior: a JSON string that decodes to a non-object fails dict validation."""
-    with pytest.raises(ValidationError) as exc:
-        model.model_validate({**_RESPONSE_BASE, "config": raw})
-    assert [(e["type"], e["loc"]) for e in exc.value.errors()] == [("dict_type", ("config",))]
+@pytest.mark.parametrize("raw", ["[1, 2]", '"x"', "3", 3], ids=["json-list", "json-string", "json-number", "int"])
+def test_parse_config_non_object_reads_as_empty(model, raw):
+    """D16: a config that is not a JSON object reads as ``{}`` (was a dict_type ValidationError)."""
+    assert model.model_validate({**_RESPONSE_BASE, "config": raw}).config == {}
+
+
+def test_parse_device_config_is_the_one_lenient_parser():
+    """D16: ``models.parse_device_config`` — dict as is, JSON object decoded, everything else ``{}``."""
+    from greenhouse_core.models import parse_device_config
+
+    assert parse_device_config({"k": 1}) == {"k": 1}
+    assert parse_device_config('{"device_ip": "192.0.2.1"}') == {"device_ip": "192.0.2.1"}
+    assert [parse_device_config(raw) for raw in ("", "nope", "[1]", "null", None, 7)] == [{}] * 6
 
 
 def test_parse_config_decodes_the_stored_orm_json_string(tmp_db):

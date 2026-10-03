@@ -451,8 +451,7 @@
    "VacationCreateRequest",
    "VacationListResponse",
    "VacationResponse",
-   "field_validator",
-   "json"
+   "field_validator"
   ]
  },
  "greenhouse_core.stats": {

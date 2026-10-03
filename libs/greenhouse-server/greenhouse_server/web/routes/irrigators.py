@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import json
 from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
+from greenhouse_core.models import parse_device_config
 from greenhouse_server.deps import (
     DeviceRegistryDep,
     NtfyNotifierDep,
@@ -26,17 +26,6 @@ if TYPE_CHECKING:
     from greenhouse_core.models import Cluster
 
 router = APIRouter(include_in_schema=False)
-
-
-def _parse_config(raw: str | dict | None) -> dict:
-    if isinstance(raw, dict):
-        return raw
-    if raw is None or raw == "":
-        return {}
-    try:
-        return json.loads(raw)
-    except (TypeError, json.JSONDecodeError):
-        return {}
 
 
 @router.get("/clusters/{cluster_id}/irrigators")
@@ -126,7 +115,7 @@ def create_irrigator(
 def edit_irrigator_form(request: Request, cluster_id: int, repo: RepoDep):
     cluster = require_cluster(repo, cluster_id)
     irrigator = require_cluster_irrigator(repo, cluster_id)
-    config = _parse_config(irrigator.config)
+    config = parse_device_config(irrigator.config)
     return templates.TemplateResponse(
         request,
         "irrigators/edit.html",
@@ -151,7 +140,7 @@ def update_irrigator(
     # rather than wiping it. The local key is a root-level credential — a blank
     # submit must never silently erase it (the form intentionally renders it
     # masked and empty, so most saves arrive blank).
-    config = _parse_config(irrigator.config)
+    config = parse_device_config(irrigator.config)
     if device_ip.strip():
         config["device_ip"] = device_ip.strip()
     if local_key.strip():

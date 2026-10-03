@@ -1,11 +1,32 @@
 """SQLAlchemy v2 ORM models for the irrigation system."""
 
+import json
+from typing import Any
+
 from sqlalchemy import Float, ForeignKey, Index, Integer, String, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
 class Base(DeclarativeBase):
     pass
+
+
+def parse_device_config(raw: object) -> dict[str, Any]:
+    """Decode a device's stored ``config`` (JSON text, as on the ORM row, or a dict) into a dict.
+
+    Lenient on purpose — the one parser for every reader (API responses, web forms,
+    device gateway): a dict is returned as is; JSON text that decodes to an object is
+    returned decoded; anything else (malformed JSON, non-object JSON, ``None``) is ``{}``.
+    """
+    if isinstance(raw, dict):
+        return raw
+    if isinstance(raw, str):
+        try:
+            parsed = json.loads(raw)
+        except ValueError:
+            return {}
+        return parsed if isinstance(parsed, dict) else {}
+    return {}
 
 
 # ── Activity / audit / decisions / alerts ────────────────────────────────────
