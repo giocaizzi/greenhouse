@@ -379,6 +379,5 @@ def _is_low_battery_state(raw: object) -> bool:
 
 __all__ = [
     "HEALTH_ALARM_TO_TRIGGER",
-    "SOURCE_HEALTH",
     "DeviceHealthMonitor",
 ]

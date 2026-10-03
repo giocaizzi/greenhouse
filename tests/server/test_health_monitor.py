@@ -16,6 +16,7 @@ from fake_devices import FakeIrrigatorAdapter, FakeSensorAdapter
 from greenhouse_core.devices import DeviceRegistry
 from greenhouse_core.devices.health import DeviceHealthState, HealthAlarm
 from greenhouse_core.models import (
+    SOURCE_HEALTH,
     Alert,
     Base,
     Irrigator,
@@ -23,7 +24,6 @@ from greenhouse_core.models import (
 )
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.services.health_monitor import (
-    SOURCE_HEALTH,
     DeviceHealthMonitor,
 )
 
