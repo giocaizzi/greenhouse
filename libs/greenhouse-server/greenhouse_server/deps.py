@@ -1,6 +1,5 @@
 """FastAPI dependency injection."""
 
-from collections.abc import Generator
 from typing import Annotated, cast, get_args
 
 from fastapi import Depends, HTTPException, Request
@@ -19,17 +18,9 @@ from greenhouse_server.services.irrigation import IrrigationService
 from greenhouse_server.services.notify import NtfyClient
 from greenhouse_server.services.sync import SyncService
 from greenhouse_server.services.weather import WeatherClient
+from greenhouse_server.state import get_session
 
 # --- Infrastructure dependencies ---
-
-
-def get_session(request: Request) -> Generator[Session, None, None]:
-    """Yield a request-scoped SQLAlchemy session; FastAPI caches it, so every dependency shares it."""
-    session = state.session_factory(request.app)()
-    try:
-        yield session
-    finally:
-        session.close()
 
 
 def get_repository(session: Annotated[Session, Depends(get_session)]) -> IrrigationRepository:

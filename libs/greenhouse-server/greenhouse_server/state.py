@@ -1,4 +1,4 @@
-"""Typed reads of what ``create_app`` stores on ``app.state``.
+"""Typed reads of what ``create_app`` stores on ``app.state``, and the request-scoped session/settings.
 
 Starlette's ``app.state`` is an untyped attribute bag, so every value read straight off it is
 ``Any``. Reading through these accessors gives each value its type and spells the two access
@@ -11,19 +11,26 @@ rules in one place:
 
 Sits below the scheduler and above the services in the server layers, so the scheduler, the
 DI providers and the web layer share it; services receive these values as arguments.
+:func:`get_session` and :func:`get_settings` live here too (re-exported by ``deps``) so the auth
+dependencies and the route dependencies resolve the very same providers.
 """
 
 from __future__ import annotations
 
+from collections.abc import Generator
 from typing import TYPE_CHECKING
+
+from fastapi import Request
+from sqlalchemy.orm import Session
+
+from greenhouse_server.config import Settings
 
 if TYPE_CHECKING:
     from fastapi import FastAPI
-    from sqlalchemy.orm import Session, sessionmaker
+    from sqlalchemy.orm import sessionmaker
 
     from greenhouse_core.devices import DeviceGateway, DeviceRegistry
     from greenhouse_core.plant_db import PlantDatabase
-    from greenhouse_server.config import Settings
     from greenhouse_server.services.health_monitor import DeviceHealthMonitor
     from greenhouse_server.services.notify import NtfyClient
     from greenhouse_server.services.weather import WeatherClient
@@ -75,3 +82,17 @@ def ntfy_notifier(app: FastAPI) -> NtfyClient | None:
     """The ntfy client, or ``None`` when notifications are unconfigured."""
     value: NtfyClient | None = getattr(app.state, "ntfy_notifier", None)
     return value
+
+
+def get_session(request: Request) -> Generator[Session, None, None]:
+    """Yield a request-scoped SQLAlchemy session; FastAPI caches it, so every dependency shares it."""
+    session = session_factory(request.app)()
+    try:
+        yield session
+    finally:
+        session.close()
+
+
+def get_settings(request: Request) -> Settings:
+    """Resolve the live Settings from ``app.state``."""
+    return settings(request.app)
