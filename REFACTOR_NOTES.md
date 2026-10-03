@@ -201,7 +201,9 @@ Consistency audit (2026-10-03):
   no longer resolve. The web add/edit forms offer `rainpoint.ik10pw` / `tuya.tr301z` (they offered only the legacy
   values, and the edit form silently picked the first legacy option for a canonical row); CLI `--type` help names the
   model key. **Old databases:** Alembic `6c9d4e2f3a12` rewrote legacy values, but rows created afterwards through the
-  old web form / CLI help still carry them. Such an irrigator is refused, never actuated: `registry.get_irrigator`
+  old web form / CLI help still carried them; the data-only revision `a1d3f5b7c902` (owner decision, 2026-10-03)
+  rewrites those leftovers (and `""`) on upgrade, so a migrated database has none. A row written with a legacy
+  value after the upgrade (API / CLI accept any string) is still an unknown model: such an irrigator is refused, never actuated: `registry.get_irrigator`
   logs an ERROR naming the type and the known keys and raises `UnknownDeviceModel` — manual start → 503 with that
   message, automatic runs → `no adapter for irrigator: …`, emergency stop → listed in `errors`, health poll → logged.
   Such a sensor still syncs readings but gets no health monitoring (WARNING per poll). Remedy: `greenhouse irrigator

@@ -81,3 +81,50 @@ def test_health_poll_skips_a_legacy_sensor_with_a_warning(client, app, caplog, l
         f"No adapter registered for sensor type '{legacy}' (known: fake.sensor, tuya.tr301z); "
         f"sensor {sid} will be skipped"
     ]
+
+
+def test_upgrade_rewrites_leftover_legacy_types_to_model_keys(tmp_path):
+    """Alembic ``a1d3f5b7c902`` rewrites rows the old web forms left on legacy values."""
+    from alembic import command
+    from sqlalchemy import create_engine, text
+
+    from greenhouse_core import database
+
+    engine = create_engine(f"sqlite:///{tmp_path}/legacy.db")
+    cfg = database._alembic_config(engine)
+
+    def upgrade_to(revision: str) -> None:  # same connection hand-off as database.init_db
+        with engine.connect() as conn:
+            cfg.attributes["connection"] = conn
+            command.upgrade(cfg, revision)
+            conn.commit()
+
+    upgrade_to("9f2b5e7c6a31")
+    legacy_irrigators = ["tuya_cloud", "tuya_local", "", "rainpoint.ik10pw"]
+    legacy_sensors = ["soil_moisture", "temp_humidity", "light", "", "tuya.tr301z"]
+    with engine.begin() as conn:
+        for n, kind in enumerate(legacy_irrigators, start=1):
+            conn.execute(
+                text("INSERT INTO clusters (id, name, created_at, environment) VALUES (:n, :name, 0, 'indoor')"),
+                {"n": n, "name": f"c{n}"},
+            )
+            conn.execute(
+                text(
+                    "INSERT INTO irrigators (cluster_id, tuya_device_id, name, type) VALUES (:n, :dev, 'pump', :kind)"
+                ),
+                {"n": n, "dev": f"fake_tuya_device_irr{n:05d}", "kind": kind},
+            )
+        for n, kind in enumerate(legacy_sensors, start=1):
+            conn.execute(
+                text("INSERT INTO sensors (cluster_id, tuya_device_id, name, type) VALUES (1, :dev, 's', :kind)"),
+                {"dev": f"fake_tuya_device_sen{n:05d}", "kind": kind},
+            )
+
+    upgrade_to("head")
+
+    with engine.connect() as conn:
+        irrigator_types = conn.execute(text("SELECT type FROM irrigators ORDER BY id")).scalars().all()
+        sensor_types = conn.execute(text("SELECT type FROM sensors ORDER BY id")).scalars().all()
+    engine.dispose()
+    assert irrigator_types == ["rainpoint.ik10pw"] * len(legacy_irrigators)
+    assert sensor_types == ["tuya.tr301z"] * len(legacy_sensors)
