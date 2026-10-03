@@ -2458,8 +2458,8 @@ add(
         ),
         (
             "04",
-            '            triggered_by=TRIGGERED_BY_MANUAL if force else TRIGGERED_BY_AUTO,',
-            '            triggered_by=TRIGGERED_BY_AUTO,',
+            "            triggered_by=TRIGGERED_BY_MANUAL if force else TRIGGERED_BY_AUTO,",
+            "            triggered_by=TRIGGERED_BY_AUTO,",
             "force no longer logs manual trigger",
         ),
         (
@@ -2497,8 +2497,8 @@ add(
         ),
         (
             "10",
-            '            action=EVENT_ACTION_START if success else EVENT_ACTION_ATTEMPTED,',
-            '            action=EVENT_ACTION_START,',
+            "            action=EVENT_ACTION_START if success else EVENT_ACTION_ATTEMPTED,",
+            "            action=EVENT_ACTION_START,",
             "failed start recorded as start",
         ),
         (
@@ -2772,7 +2772,7 @@ add(
         ),
         (
             "03",
-            '        minutes_used = sum(e.duration_minutes or 0 for e in recent if e.action == EVENT_ACTION_START)',
+            "        minutes_used = sum(e.duration_minutes or 0 for e in recent if e.action == EVENT_ACTION_START)",
             "        minutes_used = sum(e.duration_minutes or 0 for e in recent)",
             "daily cap counts non-start events",
         ),
@@ -2790,7 +2790,7 @@ add(
         ),
         (
             "06",
-            '    if minutes:\n        schedule_pump_watcher(irrigator.id, minutes, started_at, triggered_by=TRIGGERED_BY_MANUAL)',
+            "    if minutes:\n        schedule_pump_watcher(irrigator.id, minutes, started_at, triggered_by=TRIGGERED_BY_MANUAL)",
             "    if minutes:\n        schedule_pump_watcher(irrigator.id, minutes, started_at)",
             "manual watcher marked auto (stopped on shutdown)",
         ),
@@ -3493,7 +3493,12 @@ add(
             "        self.http = httpx.Client(base_url=base_url, timeout=10.0, headers=headers, **kwargs)",
             "client timeout 30 -> 10 s",
         ),
-        ("06", "        if resp.status_code >= HTTPStatus.BAD_REQUEST:", "        if resp.status_code > HTTPStatus.BAD_REQUEST:", "400 not treated as error"),
+        (
+            "06",
+            "        if resp.status_code >= HTTPStatus.BAD_REQUEST:",
+            "        if resp.status_code > HTTPStatus.BAD_REQUEST:",
+            "400 not treated as error",
+        ),
         (
             "07",
             '                detail = resp.json().get("detail", resp.text)',
