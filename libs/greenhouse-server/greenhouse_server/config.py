@@ -4,6 +4,8 @@ from pydantic import AliasChoices, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from greenhouse_core.constants import (
+    DEFAULT_LATITUDE,
+    DEFAULT_LONGITUDE,
     PUMP_WATCHER_MAX_READ_FAILURES,
     PUMP_WATCHER_POLL_SECONDS,
     PUMP_WATCHER_WARMUP_SECONDS,
@@ -26,8 +28,8 @@ class Settings(BaseSettings):
     plant_db_path: str | None = None
 
     # Weather API
-    weather_lat: float = 45.464
-    weather_lon: float = 9.189
+    weather_lat: float = DEFAULT_LATITUDE
+    weather_lon: float = DEFAULT_LONGITUDE
 
     # Scheduler defaults
     # Sync is the sole Cloud reader of sensor data. Sensors push their own
