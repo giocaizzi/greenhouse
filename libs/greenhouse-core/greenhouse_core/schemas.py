@@ -120,7 +120,7 @@ class IrrigatorBase(BaseModel):
     tuya_device_id: str
     name: str
     type: str
-    config: dict | None = None  # type: ignore[type-arg]  # contract: OpenAPI
+    config: dict[Any, Any] | None = None
     reservoir_l: float | None = Field(default=None, ge=0)
     flow_rate_l_per_min: float | None = Field(default=None, ge=0)
 
@@ -193,7 +193,7 @@ class SensorBase(BaseModel):
     tuya_device_id: str
     name: str
     type: str
-    config: dict | None = None  # type: ignore[type-arg]  # contract: OpenAPI
+    config: dict[Any, Any] | None = None
     plant_id: int | None = None
 
 
@@ -464,7 +464,7 @@ class AlertResponse(BaseModel):
     type: str
     severity: str
     message: str
-    data: dict | None = None  # type: ignore[type-arg]  # contract: OpenAPI
+    data: dict[Any, Any] | None = None
 
 
 class ReasonResponse(BaseModel):
@@ -486,7 +486,7 @@ class IrrigateResponse(BaseModel):
     confidence: float
     duration_minutes: int | None = None
     interval_hours: int | None = None
-    stress_indicators: dict | None = None  # type: ignore[type-arg]  # contract: OpenAPI
+    stress_indicators: dict[Any, Any] | None = None
     reasons: list[ReasonResponse] = []
     learning_alerts: list[AlertResponse] = []
     temperature: float | None = None
@@ -990,7 +990,7 @@ class UpdateSensorRequest(BaseModel):
 
     name: str | None = None
     type: str | None = None
-    config: dict | None = None  # type: ignore[type-arg]  # contract: OpenAPI
+    config: dict[Any, Any] | None = None
     plant_id: int | None = None
 
 
@@ -999,7 +999,7 @@ class UpdateIrrigatorRequest(BaseModel):
 
     name: str | None = None
     type: str | None = None
-    config: dict | None = None  # type: ignore[type-arg]  # contract: OpenAPI
+    config: dict[Any, Any] | None = None
     reservoir_l: float | None = Field(default=None, ge=0)
     flow_rate_l_per_min: float | None = Field(default=None, ge=0)
 
