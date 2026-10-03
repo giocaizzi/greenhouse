@@ -102,7 +102,7 @@ from greenhouse_core.utils import seasonal_light_factor
 
 if TYPE_CHECKING:
     from greenhouse_core.logic.timing import Environment
-    from greenhouse_core.models import Cluster
+    from greenhouse_core.models import Cluster, Plant
 
 log = logging.getLogger(__name__)
 
@@ -148,29 +148,9 @@ class IrrigationLogic:
 
         evaluated_at = int(time.time())
         plants = self.db.get_plants_in_cluster(cluster_id)
-        if not plants:
-            decision = _decision_with_reason(
-                cluster_id,
-                evaluated_at,
-                Action.SKIP,
-                DEFAULT_DURATION_MINUTES,
-                DEFAULT_INTERVAL_HOURS,
-                confidence=0.0,
-                code=TriggerCode.NO_PLANTS,
-                message="no plants in cluster",
-            )
-            return self._record(decision, persist=persist, triggered_by=triggered_by)
-
-        # Safety gate first: a confirmed leak / stuck valve outranks every other
-        # reason to skip, and saying so plainly beats reporting a cooldown that
-        # happens to also be active.
-        leak_hold = self._enforce_leak_hold(cluster_id, evaluated_at)
-        if leak_hold is not None:
-            return self._record(leak_hold, persist=persist, triggered_by=triggered_by)
-
-        cooldown = self._enforce_cooldown(cluster_id, evaluated_at)
-        if cooldown is not None:
-            return self._record(cooldown, persist=persist, triggered_by=triggered_by)
+        gate = self._pre_gates(cluster_id, evaluated_at, plants)
+        if gate is not None:
+            return self._record(gate, persist=persist, triggered_by=triggered_by)
 
         # Quiet hours run after cooldown (cooldown is the cheaper, more
         # decisive gate) and before the weather rule so the audit trail
@@ -179,17 +159,7 @@ class IrrigationLogic:
         # final decision so the audit log records the override.
         quiet_window = self._resolve_quiet_window(cluster_id, evaluated_at)
         if quiet_window is not None and not bypass_quiet_hours:
-            skip = _decision_with_reason(
-                cluster_id,
-                evaluated_at,
-                Action.SKIP,
-                DEFAULT_DURATION_MINUTES,
-                DEFAULT_INTERVAL_HOURS,
-                confidence=CONFIDENCE_COOLDOWN,
-                code=TriggerCode.QUIET_HOURS,
-                message=(f"quiet hours active ({quiet_window[0]:02d}:00–{quiet_window[1]:02d}:00 local)"),
-                severity=Severity.INFO,
-            )
+            skip = _quiet_hours_skip(cluster_id, evaluated_at, quiet_window)
             return self._record(skip, persist=persist, triggered_by=triggered_by)
 
         override = quiet_window if bypass_quiet_hours else None
@@ -265,6 +235,27 @@ class IrrigationLogic:
         self._apply_vacation_budget(decision, cluster_id, evaluated_at)
 
         return self._finish(decision, override_window=override, persist=persist, triggered_by=triggered_by)
+
+    def _pre_gates(self, cluster_id: int, evaluated_at: int, plants: list["Plant"]) -> IrrigationDecision | None:
+        """Terminal gates ahead of quiet hours; the first that fires wins and later ones are not evaluated."""
+        if not plants:
+            return _decision_with_reason(
+                cluster_id,
+                evaluated_at,
+                Action.SKIP,
+                DEFAULT_DURATION_MINUTES,
+                DEFAULT_INTERVAL_HOURS,
+                confidence=0.0,
+                code=TriggerCode.NO_PLANTS,
+                message="no plants in cluster",
+            )
+        # Safety gate first: a confirmed leak / stuck valve outranks every other
+        # reason to skip, and saying so plainly beats reporting a cooldown that
+        # happens to also be active.
+        leak_hold = self._enforce_leak_hold(cluster_id, evaluated_at)
+        if leak_hold is not None:
+            return leak_hold
+        return self._enforce_cooldown(cluster_id, evaluated_at)
 
     def _resolve_quiet_window(self, cluster_id: int, evaluated_at: int) -> tuple[int, int] | None:
         """Return the effective quiet-hours window for a cluster if it is
@@ -660,6 +651,21 @@ def _decision_with_reason(
     )
     decision.add_reason(code=code, message=message, severity=severity)
     return decision
+
+
+def _quiet_hours_skip(cluster_id: int, evaluated_at: int, window: tuple[int, int]) -> IrrigationDecision:
+    """The terminal SKIP for an automatic evaluation inside the quiet-hours window."""
+    return _decision_with_reason(
+        cluster_id,
+        evaluated_at,
+        Action.SKIP,
+        DEFAULT_DURATION_MINUTES,
+        DEFAULT_INTERVAL_HOURS,
+        confidence=CONFIDENCE_COOLDOWN,
+        code=TriggerCode.QUIET_HOURS,
+        message=(f"quiet hours active ({window[0]:02d}:00–{window[1]:02d}:00 local)"),
+        severity=Severity.INFO,
+    )
 
 
 def _apply_water_warning_rule(decision: IrrigationDecision) -> bool:
