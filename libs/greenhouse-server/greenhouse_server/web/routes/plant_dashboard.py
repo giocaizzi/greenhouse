@@ -10,7 +10,7 @@ from fastapi.responses import RedirectResponse
 
 from greenhouse_core.models import Plant
 from greenhouse_core.repository import SameClusterMoveError
-from greenhouse_server.deps import PlantDbDep, PlantHealthServiceDep, RepoDep
+from greenhouse_server.deps import PlantDbDep, PlantHealthServiceDep, RepoDep, require_plant_in_cluster
 from greenhouse_server.services.charts import (
     ALLOWED_HOURS,
     build_plant_chart_payload,
@@ -32,13 +32,6 @@ router = APIRouter(include_in_schema=False)
 METRICS: tuple[Metric, ...] = ("soil_moisture", "temperature", "env_humidity", "light")
 
 
-def _get_plant_or_404(repo: IrrigationRepository, plant_id: int, cluster_id: int) -> Plant:
-    plant: Plant | None = repo.get_plant(plant_id)
-    if plant is None or plant.cluster_id != cluster_id:
-        raise HTTPException(404, "Plant not found")
-    return plant
-
-
 @router.get("/clusters/{cluster_id}/plants/{plant_id}")
 def plant_dashboard(
     request: Request,
@@ -49,7 +42,7 @@ def plant_dashboard(
     health_svc: PlantHealthServiceDep,
     hours: int = Query(24, ge=1, le=8760),
 ):
-    plant = _get_plant_or_404(repo, plant_id, cluster_id)
+    plant = require_plant_in_cluster(repo, cluster_id, plant_id)
     cluster = repo.get_cluster(cluster_id)
     other_clusters = [c for c in repo.list_clusters() if c.id != cluster_id]
     plant_sensors = [s for s in repo.get_sensors_in_cluster(cluster_id) if s.plant_id == plant_id]
@@ -141,7 +134,7 @@ def plant_chart_fragment(
 ):
     if metric not in METRICS:
         raise HTTPException(400, f"Unsupported metric: {metric}")
-    _get_plant_or_404(repo, plant_id, cluster_id)
+    require_plant_in_cluster(repo, cluster_id, plant_id)
     payload = build_plant_chart_payload(repo, plant_db, plant_id, hours, metric)
     if not payload:
         raise HTTPException(404, "Plant not found")
@@ -159,7 +152,7 @@ def plant_health_fragment(
     plant_id: int,
     repo: RepoDep,
 ):
-    plant = _get_plant_or_404(repo, plant_id, cluster_id)
+    plant = require_plant_in_cluster(repo, cluster_id, plant_id)
     payload = build_plant_health_timeline_payload(repo, plant_id)
     if payload is None:
         raise HTTPException(404, "Plant not found")
@@ -179,7 +172,7 @@ def move_plant_web(
     target_cluster_id: int = Form(...),
 ):
     """Move a plant to a different cluster (server-rendered form submit)."""
-    _get_plant_or_404(repo, plant_id, cluster_id)
+    require_plant_in_cluster(repo, cluster_id, plant_id)
     if not repo.get_cluster(target_cluster_id):
         raise HTTPException(404, "Target cluster not found")
     try:

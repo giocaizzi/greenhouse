@@ -69,13 +69,7 @@ UNANNOTATED_ALLOWED: frozenset[str] = frozenset(
         "greenhouse-server/greenhouse_server/web/routes/analytics.py::_set_check_all_paused_web",
         "greenhouse-server/greenhouse_server/web/routes/clusters.py::_plants_by_id",
         "greenhouse-server/greenhouse_server/web/routes/irrigators.py::_action_result",
-        "greenhouse-server/greenhouse_server/web/routes/irrigators.py::_get_irrigator_or_404",
-        "greenhouse-server/greenhouse_server/web/routes/irrigators.py::_require_cluster_irrigator",
-        "greenhouse-server/greenhouse_server/web/routes/plant_dashboard.py::_get_plant_or_404",
-        "greenhouse-server/greenhouse_server/web/routes/plants.py::_get_plant_in_cluster",
-        "greenhouse-server/greenhouse_server/web/routes/sensors.py::_get_sensor_in_cluster",
         "greenhouse-server/greenhouse_server/web/routes/vacation.py::_next_window",
-        "greenhouse-server/greenhouse_server/web/routes/windows.py::_get_window_in_cluster",
     }
 )
 

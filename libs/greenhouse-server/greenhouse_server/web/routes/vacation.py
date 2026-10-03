@@ -14,7 +14,7 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse
 
-from greenhouse_server.deps import RepoDep
+from greenhouse_server.deps import RepoDep, require_vacation_window
 from greenhouse_server.services.vacation import VacationRangeError, cluster_budgets, validate_vacation_range
 from greenhouse_server.web.context import base_context
 from greenhouse_server.web.templating import templates
@@ -94,9 +94,7 @@ def create_vacation(
 
 @router.get("/vacation/{window_id}/edit")
 def edit_vacation_form(request: Request, window_id: int, repo: RepoDep):
-    window = next((w for w in repo.list_vacation_windows() if w.id == window_id), None)
-    if window is None:
-        raise HTTPException(404, "Vacation window not found.")
+    window = require_vacation_window(repo, window_id)
     return templates.TemplateResponse(
         request,
         "vacation/edit.html",
@@ -114,21 +112,20 @@ def update_vacation(
     contact_email: str = Form(""),
     notes: str = Form(""),
 ):
+    require_vacation_window(repo, window_id)
     try:
         starts_ts = _parse_ts(starts_at)
         ends_ts = _parse_ts(ends_at)
     except ValueError as exc:
         raise HTTPException(400, "Invalid date format. Use YYYY-MM-DD or Unix timestamp.") from exc
     _validate_range(starts_ts, ends_ts)
-    updated = repo.update_vacation_window(
+    repo.update_vacation_window(
         window_id,
         starts_at=starts_ts,
         ends_at=ends_ts,
         contact_email=contact_email.strip() or None,
         notes=notes.strip() or None,
     )
-    if updated is None:
-        raise HTTPException(404, "Vacation window not found.")
     repo.session.commit()
     return RedirectResponse(url="/vacation", status_code=303)
 
@@ -137,6 +134,6 @@ def update_vacation(
 def delete_vacation(request: Request, window_id: int, repo: RepoDep):
     deleted = repo.delete_vacation_window(window_id)
     if not deleted:
-        raise HTTPException(404, "Vacation window not found.")
+        raise HTTPException(404, "Vacation window not found")
     repo.session.commit()
     return RedirectResponse(url="/vacation", status_code=303)

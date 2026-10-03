@@ -8,7 +8,14 @@ from typing import TYPE_CHECKING
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-from greenhouse_server.deps import DeviceRegistryDep, NtfyNotifierDep, RepoDep, require_cluster
+from greenhouse_server.deps import (
+    DeviceRegistryDep,
+    NtfyNotifierDep,
+    RepoDep,
+    require_cluster,
+    require_cluster_irrigator,
+    require_irrigator,
+)
 from greenhouse_server.services import inventory
 from greenhouse_server.services.inventory import DeviceIdExistsError, IrrigatorExistsError
 from greenhouse_server.services.manual_control import ManualActionError, manual_log, manual_start, manual_stop
@@ -19,13 +26,6 @@ if TYPE_CHECKING:
     from greenhouse_core.models import Cluster
 
 router = APIRouter(include_in_schema=False)
-
-
-def _require_cluster_irrigator(repo, cluster_id: int):
-    irr = repo.get_irrigator_for_cluster(cluster_id)
-    if not irr:
-        raise HTTPException(404, "Cluster has no irrigator")
-    return irr
 
 
 def _parse_config(raw: str | dict | None) -> dict:
@@ -125,7 +125,7 @@ def create_irrigator(
 @router.get("/clusters/{cluster_id}/irrigators/edit")
 def edit_irrigator_form(request: Request, cluster_id: int, repo: RepoDep):
     cluster = require_cluster(repo, cluster_id)
-    irrigator = _require_cluster_irrigator(repo, cluster_id)
+    irrigator = require_cluster_irrigator(repo, cluster_id)
     config = _parse_config(irrigator.config)
     return templates.TemplateResponse(
         request,
@@ -146,7 +146,7 @@ def update_irrigator(
     reservoir_l: str = Form(""),
     flow_rate_l_per_min: str = Form(""),
 ):
-    irrigator = _require_cluster_irrigator(repo, cluster_id)
+    irrigator = require_cluster_irrigator(repo, cluster_id)
     # Merge into the stored config so a blank field PRESERVES the current value
     # rather than wiping it. The local key is a root-level credential — a blank
     # submit must never silently erase it (the form intentionally renders it
@@ -171,17 +171,10 @@ def update_irrigator(
 @router.delete("/clusters/{cluster_id}/irrigators", response_class=HTMLResponse)
 def delete_irrigator(cluster_id: int, repo: RepoDep):
     """HTMX-targeted delete; returns an empty HTML body so the row is removed."""
-    irrigator = _require_cluster_irrigator(repo, cluster_id)
+    irrigator = require_cluster_irrigator(repo, cluster_id)
     repo.delete_irrigator(irrigator.id)
     repo.session.commit()
     return HTMLResponse("")
-
-
-def _get_irrigator_or_404(repo: RepoDep, irrigator_id: int):
-    irr = repo.get_irrigator(irrigator_id)
-    if not irr:
-        raise HTTPException(404, "Irrigator not found")
-    return irr
 
 
 def _action_result(request: Request, action: str, run) -> HTMLResponse:
@@ -215,7 +208,7 @@ def start_irrigator(
 ):
     # Same code path as POST /api/v1/irrigators/{id}/start: caps, dry-run
     # watcher, event row and notification (the web route used to skip them).
-    irr = _get_irrigator_or_404(repo, irrigator_id)
+    irr = require_irrigator(repo, irrigator_id)
     mins: int | None = None
     if minutes.strip():
         try:
@@ -233,13 +226,13 @@ def stop_irrigator(
     registry: DeviceRegistryDep,
     notifier: NtfyNotifierDep,
 ):
-    irr = _get_irrigator_or_404(repo, irrigator_id)
+    irr = require_irrigator(repo, irrigator_id)
     return _action_result(request, "stop", lambda: manual_stop(repo, registry, notifier, irr, via="web UI"))
 
 
 @router.get("/irrigators/{irrigator_id}/log-manual")
 def log_manual_form(request: Request, irrigator_id: int, repo: RepoDep):
-    irr = _get_irrigator_or_404(repo, irrigator_id)
+    irr = require_irrigator(repo, irrigator_id)
     return templates.TemplateResponse(request, "irrigators/log_manual.html", base_context(request, irrigator=irr))
 
 
@@ -252,7 +245,7 @@ def log_manual_submit(
     minutes: int = Form(...),
     notes: str = Form(""),
 ):
-    irr = _get_irrigator_or_404(repo, irrigator_id)
+    irr = require_irrigator(repo, irrigator_id)
     try:
         manual_log(repo, notifier, irr, minutes, notes or None)
     except ManualActionError as e:

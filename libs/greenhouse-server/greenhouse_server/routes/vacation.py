@@ -9,7 +9,7 @@ from greenhouse_core.schemas import (
     VacationListResponse,
     VacationResponse,
 )
-from greenhouse_server.deps import RepoDep
+from greenhouse_server.deps import RepoDep, require_vacation_window
 from greenhouse_server.services.vacation import VacationRangeError, validate_vacation_range
 
 router = APIRouter(prefix="/vacation", tags=["vacation"])
@@ -93,9 +93,7 @@ def update_vacation_window(window_id: int, request: UpdateVacationWindowRequest,
         HTTPException: 404 if no window with that ID exists, 400 if the
             resulting ``starts_at`` is not strictly before ``ends_at``.
     """
-    row = repo.get_vacation_window(window_id)
-    if not row:
-        raise HTTPException(status_code=404, detail="Vacation window not found")
+    row = require_vacation_window(repo, window_id)
     effective_start = request.starts_at if request.starts_at is not None else row.starts_at
     effective_end = request.ends_at if request.ends_at is not None else row.ends_at
     _validate_range(effective_start, effective_end)

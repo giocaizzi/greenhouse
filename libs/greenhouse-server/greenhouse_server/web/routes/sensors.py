@@ -5,20 +5,13 @@ from __future__ import annotations
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-from greenhouse_server.deps import RepoDep, require_cluster
+from greenhouse_server.deps import RepoDep, require_cluster, require_sensor_in_cluster
 from greenhouse_server.services import inventory
 from greenhouse_server.services.inventory import DeviceIdExistsError, PlantNotInClusterError
 from greenhouse_server.web.context import base_context
 from greenhouse_server.web.templating import templates
 
 router = APIRouter(include_in_schema=False)
-
-
-def _get_sensor_in_cluster(repo, cluster_id: int, sensor_id: int):
-    sensor = repo.get_sensor(sensor_id)
-    if not sensor or sensor.cluster_id != cluster_id:
-        raise HTTPException(404, "Sensor not found in cluster")
-    return sensor
 
 
 def _parse_optional_plant_id(plant_id: str) -> int | None:
@@ -75,7 +68,7 @@ def create_sensor(
 @router.get("/clusters/{cluster_id}/sensors/{sensor_id}/edit")
 def edit_sensor_form(request: Request, cluster_id: int, sensor_id: int, repo: RepoDep):
     cluster = require_cluster(repo, cluster_id)
-    sensor = _get_sensor_in_cluster(repo, cluster_id, sensor_id)
+    sensor = require_sensor_in_cluster(repo, cluster_id, sensor_id)
     plants = repo.get_plants_in_cluster(cluster_id)
     return templates.TemplateResponse(
         request, "sensors/edit.html", base_context(request, cluster=cluster, sensor=sensor, plants=plants)
@@ -92,7 +85,7 @@ def update_sensor(
     type: str = Form(...),
     plant_id: str = Form(""),
 ):
-    _get_sensor_in_cluster(repo, cluster_id, sensor_id)
+    require_sensor_in_cluster(repo, cluster_id, sensor_id)
     pid = _parse_optional_plant_id(plant_id)
     try:
         inventory.ensure_plant_in_cluster(repo, cluster_id, pid)
@@ -108,7 +101,7 @@ def update_sensor(
 @router.delete("/clusters/{cluster_id}/sensors/{sensor_id}", response_class=HTMLResponse)
 def delete_sensor(cluster_id: int, sensor_id: int, repo: RepoDep):
     """HTMX-targeted delete; returns an empty HTML body so the row is removed."""
-    _get_sensor_in_cluster(repo, cluster_id, sensor_id)
+    require_sensor_in_cluster(repo, cluster_id, sensor_id)
     repo.delete_sensor(sensor_id)
     repo.session.commit()
     return HTMLResponse("")

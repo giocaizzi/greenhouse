@@ -13,7 +13,14 @@ from greenhouse_core.schemas import (
     SuccessResponse,
     UpdateIrrigatorRequest,
 )
-from greenhouse_server.deps import DeviceRegistryDep, NtfyNotifierDep, RepoDep, require_cluster
+from greenhouse_server.deps import (
+    DeviceRegistryDep,
+    NtfyNotifierDep,
+    RepoDep,
+    require_cluster,
+    require_cluster_irrigator,
+    require_irrigator,
+)
 from greenhouse_server.services.inventory import DeviceIdExistsError, IrrigatorExistsError, create_irrigator
 from greenhouse_server.services.manual_control import (
     ManualActionError,
@@ -115,9 +122,7 @@ def get_irrigator(cluster_id: int, repo: RepoDep):
     Raises:
         HTTPException: 404 if the cluster has no irrigator.
     """
-    irrigator = repo.get_irrigator_for_cluster(cluster_id)
-    if not irrigator:
-        raise HTTPException(status_code=404, detail="Cluster has no irrigator")
+    irrigator = require_cluster_irrigator(repo, cluster_id)
     return irrigator
 
 
@@ -143,9 +148,7 @@ def update_irrigator(cluster_id: int, request: UpdateIrrigatorRequest, repo: Rep
     Raises:
         HTTPException: 404 if the cluster has no irrigator.
     """
-    irrigator = repo.get_irrigator_for_cluster(cluster_id)
-    if not irrigator:
-        raise HTTPException(status_code=404, detail="Cluster has no irrigator")
+    irrigator = require_cluster_irrigator(repo, cluster_id)
     updated = repo.update_irrigator(irrigator.id, **request.model_dump(exclude_none=True))
     repo.session.commit()
     return updated
@@ -170,9 +173,7 @@ def delete_irrigator(cluster_id: int, repo: RepoDep):
     Raises:
         HTTPException: 404 if the cluster has no irrigator.
     """
-    irrigator = repo.get_irrigator_for_cluster(cluster_id)
-    if not irrigator:
-        raise HTTPException(status_code=404, detail="Cluster has no irrigator")
+    irrigator = require_cluster_irrigator(repo, cluster_id)
     repo.delete_irrigator(irrigator.id)
     repo.session.commit()
     return SuccessResponse(success=True)
@@ -201,9 +202,7 @@ def start_irrigator(
             Tuya credentials are missing or the irrigator model has no
             adapter, 502 if the device fails to start.
     """
-    irrigator = repo.get_irrigator(irrigator_id)
-    if not irrigator:
-        raise HTTPException(status_code=404, detail="Irrigator not found")
+    irrigator = require_irrigator(repo, irrigator_id)
     try:
         output = manual_start(repo, registry, notifier, irrigator, request.minutes, via="API")
     except ManualActionError as exc:
@@ -228,9 +227,7 @@ def stop_irrigator(
             credentials are missing or the irrigator model has no adapter,
             502 if the device fails to stop.
     """
-    irrigator = repo.get_irrigator(irrigator_id)
-    if not irrigator:
-        raise HTTPException(status_code=404, detail="Irrigator not found")
+    irrigator = require_irrigator(repo, irrigator_id)
     try:
         output = manual_stop(repo, registry, notifier, irrigator, via="API")
     except ManualActionError as exc:
@@ -255,9 +252,7 @@ def log_manual(
         HTTPException: 404 if the irrigator is unknown, 409 if the cluster
             daily cap or max-events-per-day limit would be exceeded.
     """
-    irrigator = repo.get_irrigator(irrigator_id)
-    if not irrigator:
-        raise HTTPException(status_code=404, detail="Irrigator not found")
+    irrigator = require_irrigator(repo, irrigator_id)
     try:
         event_id = manual_log(repo, notifier, irrigator, request.minutes, request.notes)
     except ManualActionError as e:

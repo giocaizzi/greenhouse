@@ -15,7 +15,14 @@ from greenhouse_core.schemas import (
     SyncPlantsResponse,
     UpdatePlantRequest,
 )
-from greenhouse_server.deps import ClusterServiceDep, PlantHealthServiceDep, RepoDep, require_cluster
+from greenhouse_server.deps import (
+    ClusterServiceDep,
+    PlantHealthServiceDep,
+    RepoDep,
+    require_cluster,
+    require_plant,
+    require_plant_in_cluster,
+)
 from greenhouse_server.services.cluster import ClusterNotFoundError, PlantNotFoundError
 
 router = APIRouter(tags=["plants"])
@@ -124,9 +131,7 @@ def update_plant(cluster_id: int, plant_id: int, request: UpdatePlantRequest, re
         HTTPException: 404 if the plant does not exist or belongs to a
             different cluster.
     """
-    plant = repo.get_plant(plant_id)
-    if not plant or plant.cluster_id != cluster_id:
-        raise HTTPException(status_code=404, detail="Plant not found in cluster")
+    require_plant_in_cluster(repo, cluster_id, plant_id)
     updated = repo.update_plant(plant_id, **request.model_dump(exclude_none=True))
     repo.session.commit()
     return updated
@@ -150,9 +155,7 @@ def delete_plant(cluster_id: int, plant_id: int, repo: RepoDep):
         HTTPException: 404 if the plant does not exist or belongs to a
             different cluster.
     """
-    plant = repo.get_plant(plant_id)
-    if not plant or plant.cluster_id != cluster_id:
-        raise HTTPException(status_code=404, detail="Plant not found in cluster")
+    require_plant_in_cluster(repo, cluster_id, plant_id)
     repo.delete_plant(plant_id)
     repo.session.commit()
     return SuccessResponse(success=True)
@@ -183,9 +186,7 @@ def move_plant(plant_id: int, request: MovePlantRequest, repo: RepoDep):
             400 if ``target_cluster_id`` equals the plant's current cluster
             (no-op move).
     """
-    plant = repo.get_plant(plant_id)
-    if not plant:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plant not found")
+    require_plant(repo, plant_id)
     if not repo.get_cluster(request.target_cluster_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Target cluster not found")
     try:
@@ -252,9 +253,7 @@ def get_plant_health(plant_id: int, repo: RepoDep, health_svc: PlantHealthServic
     Raises:
         HTTPException: 404 if the plant does not exist.
     """
-    plant = repo.get_plant(plant_id)
-    if not plant:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plant not found")
+    plant = require_plant(repo, plant_id)
     result = health_svc.compute_score(plant_id)
     history = repo.list_plant_health_history(plant_id, days=90)
     return PlantHealthResponse(

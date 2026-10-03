@@ -11,7 +11,7 @@ from greenhouse_core.schemas import (
     SuccessResponse,
     UpdateSensorRequest,
 )
-from greenhouse_server.deps import RepoDep, require_cluster
+from greenhouse_server.deps import RepoDep, require_cluster, require_sensor, require_sensor_in_cluster
 from greenhouse_server.services.inventory import (
     DeviceIdExistsError,
     PlantNotInClusterError,
@@ -113,9 +113,7 @@ def get_sensor(cluster_id: int, sensor_id: int, repo: RepoDep):
         HTTPException: 404 if the sensor does not exist or belongs to a
             different cluster.
     """
-    sensor = repo.get_sensor(sensor_id)
-    if not sensor or sensor.cluster_id != cluster_id:
-        raise HTTPException(status_code=404, detail="Sensor not found in cluster")
+    sensor = require_sensor_in_cluster(repo, cluster_id, sensor_id)
     return sensor
 
 
@@ -139,9 +137,7 @@ def update_sensor(cluster_id: int, sensor_id: int, request: UpdateSensorRequest,
         HTTPException: 404 if the sensor does not exist or belongs to a
             different cluster, or if ``plant_id`` is not a plant of that cluster.
     """
-    sensor = repo.get_sensor(sensor_id)
-    if not sensor or sensor.cluster_id != cluster_id:
-        raise HTTPException(status_code=404, detail="Sensor not found in cluster")
+    require_sensor_in_cluster(repo, cluster_id, sensor_id)
     try:
         ensure_plant_in_cluster(repo, cluster_id, request.plant_id)
     except PlantNotInClusterError as exc:
@@ -173,9 +169,7 @@ def list_sensor_assignments(sensor_id: int, repo: RepoDep):
     Raises:
         HTTPException: 404 if the sensor does not exist.
     """
-    sensor = repo.get_sensor(sensor_id)
-    if sensor is None:
-        raise HTTPException(status_code=404, detail="Sensor not found")
+    require_sensor(repo, sensor_id)
     rows = repo.list_sensor_assignments(sensor_id)
     return SensorAssignmentListResponse(
         sensor_id=sensor_id,
@@ -201,9 +195,7 @@ def delete_sensor(cluster_id: int, sensor_id: int, repo: RepoDep):
         HTTPException: 404 if the sensor does not exist or belongs to a
             different cluster.
     """
-    sensor = repo.get_sensor(sensor_id)
-    if not sensor or sensor.cluster_id != cluster_id:
-        raise HTTPException(status_code=404, detail="Sensor not found in cluster")
+    require_sensor_in_cluster(repo, cluster_id, sensor_id)
     repo.delete_sensor(sensor_id)
     repo.session.commit()
     return SuccessResponse(success=True)

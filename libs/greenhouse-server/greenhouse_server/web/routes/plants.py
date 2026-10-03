@@ -4,16 +4,15 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from fastapi import APIRouter, Form, HTTPException, Request
+from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-from greenhouse_server.deps import RepoDep, require_cluster
+from greenhouse_server.deps import RepoDep, require_cluster, require_plant_in_cluster
 from greenhouse_server.web.context import base_context
 from greenhouse_server.web.templating import templates
 
 if TYPE_CHECKING:
-    from greenhouse_core.models import Plant
-    from greenhouse_core.repository import IrrigationRepository
+    pass
 
 router = APIRouter(include_in_schema=False)
 
@@ -48,13 +47,6 @@ def _plant_form_fields(
         "ideal_humidity_max": _opt_float(ideal_humidity_max),
         "notes": notes or None,
     }
-
-
-def _get_plant_in_cluster(repo: IrrigationRepository, cluster_id: int, plant_id: int) -> Plant:
-    plant = repo.get_plant(plant_id)
-    if not plant or plant.cluster_id != cluster_id:
-        raise HTTPException(404, "Plant not found in cluster")
-    return plant
 
 
 @router.get("/clusters/{cluster_id}/plants")
@@ -109,7 +101,7 @@ def create_plant(
 @router.get("/clusters/{cluster_id}/plants/{plant_id}/edit")
 def edit_plant_form(request: Request, cluster_id: int, plant_id: int, repo: RepoDep):
     cluster = require_cluster(repo, cluster_id)
-    plant = _get_plant_in_cluster(repo, cluster_id, plant_id)
+    plant = require_plant_in_cluster(repo, cluster_id, plant_id)
     return templates.TemplateResponse(request, "plants/edit.html", base_context(request, cluster=cluster, plant=plant))
 
 
@@ -129,7 +121,7 @@ def update_plant(
     ideal_humidity_max: str = Form(""),
     notes: str = Form(""),
 ):
-    _get_plant_in_cluster(repo, cluster_id, plant_id)
+    require_plant_in_cluster(repo, cluster_id, plant_id)
     repo.update_plant(
         plant_id,
         **_plant_form_fields(
@@ -151,7 +143,7 @@ def update_plant(
 @router.delete("/clusters/{cluster_id}/plants/{plant_id}", response_class=HTMLResponse)
 def delete_plant(cluster_id: int, plant_id: int, repo: RepoDep):
     """HTMX-targeted delete; returns an empty HTML body so the row is removed."""
-    _get_plant_in_cluster(repo, cluster_id, plant_id)
+    require_plant_in_cluster(repo, cluster_id, plant_id)
     repo.delete_plant(plant_id)
     repo.session.commit()
     return HTMLResponse("")

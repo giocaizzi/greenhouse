@@ -16,7 +16,7 @@ from greenhouse_core.schemas import (
     SuccessResponse,
     UpdateIrrigationWindowRequest,
 )
-from greenhouse_server.deps import RepoDep, require_cluster
+from greenhouse_server.deps import RepoDep, require_cluster, require_window_in_cluster
 from greenhouse_server.services.windows import WindowValidationError, validate_window
 
 router = APIRouter(tags=["windows"])
@@ -114,9 +114,7 @@ def update_window(cluster_id: int, window_id: int, request: UpdateIrrigationWind
         HTTPException: 404 if the window does not exist or belongs to a
             different cluster, 400 if the resulting hours or mask are invalid.
     """
-    row = repo.get_irrigation_window(window_id)
-    if row is None or row.cluster_id != cluster_id:
-        raise HTTPException(status_code=404, detail="Window not found in cluster")
+    row = require_window_in_cluster(repo, cluster_id, window_id)
     # Validate the effective post-patch values, not the raw partial payload.
     effective_start = request.start_hour if request.start_hour is not None else row.start_hour
     effective_end = request.end_hour if request.end_hour is not None else row.end_hour
@@ -146,9 +144,7 @@ def delete_window(cluster_id: int, window_id: int, repo: RepoDep):
         HTTPException: 404 if the window does not exist or belongs to a
             different cluster.
     """
-    row = repo.get_irrigation_window(window_id)
-    if row is None or row.cluster_id != cluster_id:
-        raise HTTPException(status_code=404, detail="Window not found in cluster")
+    require_window_in_cluster(repo, cluster_id, window_id)
     repo.delete_irrigation_window(window_id)
     repo.session.commit()
     return SuccessResponse(success=True)

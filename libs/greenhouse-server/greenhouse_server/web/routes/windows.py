@@ -13,15 +13,14 @@ from typing import TYPE_CHECKING
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-from greenhouse_server.deps import RepoDep, require_cluster
+from greenhouse_server.deps import RepoDep, require_cluster, require_window_in_cluster
 from greenhouse_server.services.windows import WindowValidationError, validate_window
 from greenhouse_server.web.context import base_context
 from greenhouse_server.web.templating import templates
 from greenhouse_server.web.weekdays import WEEKDAY_BITS, WEEKDAY_LABELS
 
 if TYPE_CHECKING:
-    from greenhouse_core.models import IrrigationWindow
-    from greenhouse_core.repository import IrrigationRepository
+    pass
 
 router = APIRouter(include_in_schema=False)
 
@@ -45,13 +44,6 @@ def _validate_window_form(start_hour: int, end_hour: int, mask: int) -> None:
         validate_window(start_hour, end_hour, mask)
     except WindowValidationError as exc:
         raise HTTPException(400, str(exc)) from None
-
-
-def _get_window_in_cluster(repo: IrrigationRepository, cluster_id: int, window_id: int) -> IrrigationWindow:
-    window = repo.get_irrigation_window(window_id)
-    if window is None or window.cluster_id != cluster_id:
-        raise HTTPException(404, "Window not found in cluster.")
-    return window
 
 
 @router.post("/clusters/{cluster_id}/windows")
@@ -81,7 +73,7 @@ def create_window(
 @router.get("/clusters/{cluster_id}/windows/{window_id}/edit")
 def edit_window_form(request: Request, cluster_id: int, window_id: int, repo: RepoDep):
     cluster = require_cluster(repo, cluster_id)
-    window = _get_window_in_cluster(repo, cluster_id, window_id)
+    window = require_window_in_cluster(repo, cluster_id, window_id)
     weekday_checks = [
         {"bit": bit, "label": label, "checked": bool(window.weekday_mask & bit)}
         for bit, label in zip(WEEKDAY_BITS, WEEKDAY_LABELS, strict=True)
@@ -104,7 +96,7 @@ def update_window(
     weekday_mask: list[str] = Form(default=[]),
     label: str = Form(""),
 ):
-    _get_window_in_cluster(repo, cluster_id, window_id)
+    require_window_in_cluster(repo, cluster_id, window_id)
     mask = _parse_weekday_mask(weekday_mask)
     _validate_window_form(start_hour, end_hour, mask)
     repo.update_irrigation_window(
@@ -121,7 +113,7 @@ def update_window(
 @router.delete("/clusters/{cluster_id}/windows/{window_id}", response_class=HTMLResponse)
 def delete_window(cluster_id: int, window_id: int, repo: RepoDep):
     """HTMX-targeted delete; returns an empty HTML body so the row is removed."""
-    _get_window_in_cluster(repo, cluster_id, window_id)
+    require_window_in_cluster(repo, cluster_id, window_id)
     repo.delete_irrigation_window(window_id)
     repo.session.commit()
     return HTMLResponse("")
