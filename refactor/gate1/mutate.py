@@ -1600,8 +1600,8 @@ add(
         ),
         (
             "05",
-            'e.action == "start" and e.duration_minutes',
-            'e.action in ("start", "schedule_updated") and e.duration_minutes',
+            "e.action == EVENT_ACTION_START and e.duration_minutes",
+            'e.action in (EVENT_ACTION_START, "schedule_updated") and e.duration_minutes',
             "cadence counts schedule_updated",
         ),
         (
@@ -1888,7 +1888,7 @@ add(
         ),
         (
             "20",
-            'irrigation_events = [e for e in all_events if e.action == "start" and e.timestamp >= cutoff]',
+            "irrigation_events = [e for e in all_events if e.action == EVENT_ACTION_START and e.timestamp >= cutoff]",
             "irrigation_events = [e for e in all_events if e.timestamp >= cutoff]",
             "profile counts non-start events",
         ),
@@ -1910,7 +1910,12 @@ add(
             "delta_per_minute=delta * duration if duration > 0 else 0",
             "delta per minute * instead of /",
         ),
-        ("24", "before_seconds=PRE_WINDOW_SEC,", "before_seconds=PRE_WINDOW_SEC * 2,", "pre window 30 -> 60 min"),
+        (
+            "24",
+            "before_seconds=RESPONSE_PRE_WINDOW_SECONDS,",
+            "before_seconds=RESPONSE_PRE_WINDOW_SECONDS * 2,",
+            "pre window 30 -> 60 min",
+        ),
         (
             "25",
             "    return statistics.mean(declines)  # Negative value",
@@ -3064,7 +3069,7 @@ add(
         ),
         (
             "05",
-            '                IrrigationEvent.action == "start",\n                IrrigationEvent.timestamp >= since,',
+            "                IrrigationEvent.action == EVENT_ACTION_START,\n                IrrigationEvent.timestamp >= since,",
             "                IrrigationEvent.timestamp >= since,",
             "consumption counts non-start events",
         ),

@@ -14,12 +14,17 @@ from greenhouse_core.constants import (
     DEFAULT_INTERVAL_HOURS,
     DEFAULT_IRRIGATION_MODE,
     FULL_WEEKDAY_MASK,
+    RESPONSE_POST_WINDOW_SECONDS,
+    RESPONSE_PRE_WINDOW_SECONDS,
     SECONDS_PER_DAY,
     SECONDS_PER_HOUR,
 )
 from greenhouse_core.models import (
     ENTITY_PLANT,
     ENTITY_SENSOR,
+    EVENT_ACTION_START,
+    SOURCE_PLANT,
+    SOURCE_SENSOR,
     ActivityEvent,
     Alert,
     Cluster,
@@ -267,7 +272,7 @@ class IrrigationRepository:
             self._open_sensor_assignment(sensor_id, new_plant_id, when=ts)
         self.session.flush()
         self.add_activity_event(
-            source="sensor",
+            source=SOURCE_SENSOR,
             entity_type=ENTITY_SENSOR,
             entity_id=sensor_id,
             code="sensor_reassigned",
@@ -443,7 +448,11 @@ class IrrigationRepository:
         )
 
     def get_readings_around(
-        self, sensor_id: int, timestamp: int, before_seconds: int = 1800, after_seconds: int = 7200
+        self,
+        sensor_id: int,
+        timestamp: int,
+        before_seconds: int = RESPONSE_PRE_WINDOW_SECONDS,
+        after_seconds: int = RESPONSE_POST_WINDOW_SECONDS,
     ) -> tuple[list[SensorReading], list[SensorReading]]:
         """Get readings before and after a timestamp.
 
@@ -523,7 +532,7 @@ class IrrigationRepository:
         total_minutes = self.session.scalar(
             select(func.coalesce(func.sum(IrrigationEvent.duration_minutes), 0)).where(
                 IrrigationEvent.irrigator_id == irrigator_id,
-                IrrigationEvent.action == "start",
+                IrrigationEvent.action == EVENT_ACTION_START,
                 IrrigationEvent.timestamp >= since,
                 IrrigationEvent.timestamp <= until,
             )
@@ -1274,7 +1283,7 @@ class IrrigationRepository:
             sensor.cluster_id = target_cluster_id
         self.session.flush()
         self.add_activity_event(
-            source="plant",
+            source=SOURCE_PLANT,
             entity_type=ENTITY_PLANT,
             entity_id=plant_id,
             code="plant_moved",

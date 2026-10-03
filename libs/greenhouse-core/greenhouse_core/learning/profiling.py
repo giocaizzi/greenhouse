@@ -4,16 +4,17 @@ import statistics
 import time
 from typing import cast
 
-from greenhouse_core.constants import SECONDS_PER_DAY, SECONDS_PER_HOUR
+from greenhouse_core.constants import (
+    RESPONSE_MIN_POST_DELAY_SECONDS,
+    RESPONSE_POST_WINDOW_SECONDS,
+    RESPONSE_PRE_WINDOW_SECONDS,
+    SECONDS_PER_DAY,
+    SECONDS_PER_HOUR,
+)
 from greenhouse_core.learning.models import IrrigationResponse, PlantProfile
 from greenhouse_core.logic.cleaning import CleanedReading, clean_readings, clean_readings_around
-from greenhouse_core.models import IrrigationEvent, Sensor
+from greenhouse_core.models import EVENT_ACTION_START, IrrigationEvent, Sensor
 from greenhouse_core.repository import IrrigationRepository
-
-# Time windows for analysis
-PRE_WINDOW_SEC = 1800  # 30min before irrigation
-POST_WINDOW_SEC = 7200  # 2h after irrigation (water needs time to soak)
-MIN_POST_DELAY_SEC = 600  # Ignore readings < 10min after (water still distributing)
 
 
 def _moisture_windows(
@@ -22,7 +23,7 @@ def _moisture_windows(
     """Readings with a moisture value: all before the event, and after it once water has distributed."""
     pre_moisture_readings = [r for r in before if r.soil_moisture is not None]
     post_moisture_readings = [
-        r for r in after if r.soil_moisture is not None and (r.timestamp - event_ts) >= MIN_POST_DELAY_SEC
+        r for r in after if r.soil_moisture is not None and (r.timestamp - event_ts) >= RESPONSE_MIN_POST_DELAY_SECONDS
     ]
     return pre_moisture_readings, post_moisture_readings
 
@@ -60,8 +61,8 @@ def compute_sensor_response(
     before_rows, after_rows = db.get_readings_around(
         sensor.id,
         event.timestamp,
-        before_seconds=PRE_WINDOW_SEC,
-        after_seconds=POST_WINDOW_SEC,
+        before_seconds=RESPONSE_PRE_WINDOW_SECONDS,
+        after_seconds=RESPONSE_POST_WINDOW_SECONDS,
     )
     # Cleaned view — the post reading is picked as the window's *maximum*
     # (peak absorption), which is precisely the sample a spike would win.
@@ -152,7 +153,7 @@ def get_plant_profile(
 
     cutoff = int(time.time()) - (days * SECONDS_PER_DAY)
     all_events = db.get_recent_events(irrigator.id, hours=days * 24)
-    irrigation_events = [e for e in all_events if e.action == "start" and e.timestamp >= cutoff]
+    irrigation_events = [e for e in all_events if e.action == EVENT_ACTION_START and e.timestamp >= cutoff]
 
     if not irrigation_events:
         return None
