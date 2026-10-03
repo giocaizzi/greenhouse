@@ -174,14 +174,15 @@ indent-style = "space"
 # Frozen handler signatures (not a ratchet): FastAPI API/web handlers and Typer commands declare one
 # parameter per query/form field or CLI option (the OpenAPI / MCP / --help contract), and web pages
 # keep `request: Request` even when unused.
-"libs/greenhouse-server/greenhouse_server/routes/*" = ["PLR0913", "PLR0917"]
-"libs/greenhouse-server/greenhouse_server/web/routes/*" = ["A002", "ARG001", "PLR0913", "PLR0917"]
+# D417: route docstrings document request parameters only, never framework-level dependencies such as
+# `repo` / services / settings (CLAUDE.md invariant 7) — the docstring is the MCP tool description.
+"libs/greenhouse-server/greenhouse_server/routes/*" = ["D417", "PLR0913", "PLR0917"]
+"libs/greenhouse-server/greenhouse_server/web/routes/*" = ["A002", "ARG001", "D417", "PLR0913", "PLR0917"]
 "libs/greenhouse-cli/greenhouse_cli/commands/*" = ["A002", "FBT", "PLR0913", "PLR0917"]
 # Ratchet offenders (baseline refactor-gate1 + lint ratchet, refactor/40-lint-ratchet.md); each list only shrinks.
 "libs/greenhouse-cli/greenhouse_cli/client.py" = ["FBT001", "FBT002", "PLR0904", "PLR0913", "PLR0917"]
 "libs/greenhouse-cli/greenhouse_cli/commands/auth.py" = ["PLR0915"]
 "libs/greenhouse-cli/greenhouse_cli/commands/operations.py" = ["C901", "PLR0915"]
-"libs/greenhouse-cli/greenhouse_cli/commands/vacation.py" = ["D417"]
 "libs/greenhouse-cli/greenhouse_cli/tui/__init__.py" = ["FBT001", "FBT002"]
 "libs/greenhouse-cli/greenhouse_cli/tui/app.py" = ["FBT001", "FBT002"]
 "libs/greenhouse-cli/greenhouse_cli/tui/formatting.py" = ["FBT001", "FBT002"]
@@ -210,25 +211,7 @@ indent-style = "space"
 "libs/greenhouse-core/greenhouse_core/sync.py" = ["BLE001", "D202", "EXE002", "PLR0915", "PLR1702", "S110", "SIM108"]  # EXE002: stray +x bit, WP8-owned
 "libs/greenhouse-server/greenhouse_server/config.py" = ["D101"]
 "libs/greenhouse-server/greenhouse_server/deps.py" = ["PLR0913", "PLR0917"]
-"libs/greenhouse-server/greenhouse_server/routes/activity.py" = ["D417"]
-"libs/greenhouse-server/greenhouse_server/routes/alerts.py" = ["D417"]
-"libs/greenhouse-server/greenhouse_server/routes/auth.py" = ["D417"]
-"libs/greenhouse-server/greenhouse_server/routes/charts.py" = ["D417"]
-"libs/greenhouse-server/greenhouse_server/routes/clusters.py" = ["D417"]
-"libs/greenhouse-server/greenhouse_server/routes/configs.py" = ["D417"]
-"libs/greenhouse-server/greenhouse_server/routes/decisions.py" = ["D417"]
-"libs/greenhouse-server/greenhouse_server/routes/efficacy.py" = ["D417"]
-"libs/greenhouse-server/greenhouse_server/routes/forecast.py" = ["D417"]
-"libs/greenhouse-server/greenhouse_server/routes/insights.py" = ["D417"]
-"libs/greenhouse-server/greenhouse_server/routes/irrigators.py" = ["D417"]
-"libs/greenhouse-server/greenhouse_server/routes/operations.py" = ["D417"]
-"libs/greenhouse-server/greenhouse_server/routes/plants.py" = ["D417"]
-"libs/greenhouse-server/greenhouse_server/routes/preferences.py" = ["D417"]
 "libs/greenhouse-server/greenhouse_server/routes/scheduler.py" = ["FBT001", "FBT003"]
-"libs/greenhouse-server/greenhouse_server/routes/search.py" = ["D417"]
-"libs/greenhouse-server/greenhouse_server/routes/sensors.py" = ["D417"]
-"libs/greenhouse-server/greenhouse_server/routes/vacation.py" = ["D417"]
-"libs/greenhouse-server/greenhouse_server/routes/windows.py" = ["D417"]
 "libs/greenhouse-server/greenhouse_server/scheduler.py" = ["FBT001", "FBT003"]
 "libs/greenhouse-server/greenhouse_server/services/alerts.py" = ["PLR0913"]
 "libs/greenhouse-server/greenhouse_server/services/bulk.py" = ["PLR1702"]
@@ -241,7 +224,6 @@ indent-style = "space"
 "libs/greenhouse-server/greenhouse_server/services/system_health.py" = ["FBT001"]
 "libs/greenhouse-server/greenhouse_server/web/filters.py" = ["PLR0912"]
 "libs/greenhouse-server/greenhouse_server/web/routes/analytics.py" = ["FBT001", "FBT003"]
-"libs/greenhouse-server/greenhouse_server/web/routes/preferences.py" = ["D417"]
 
 [tool.importlinter]
 root_packages = ["greenhouse_core", "greenhouse_server", "greenhouse_cli"]
