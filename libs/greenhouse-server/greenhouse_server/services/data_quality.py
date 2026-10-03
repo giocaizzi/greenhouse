@@ -5,6 +5,7 @@ from collections import Counter
 from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
+from greenhouse_core.constants import DATA_QUALITY_STALE_SECONDS
 from greenhouse_core.models import ENTITY_CLUSTER, ENTITY_PLANT, ENTITY_SENSOR
 from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_core.repository import IrrigationRepository
@@ -12,8 +13,6 @@ from greenhouse_core.schemas import DataQualityIssue, DataQualityReport
 
 if TYPE_CHECKING:
     from greenhouse_core.models import Cluster, Irrigator, Plant, Sensor
-
-_STALE_THRESHOLD = 24 * 3600
 
 
 def build_report(repo: IrrigationRepository, plant_db: PlantDatabase) -> DataQualityReport:
@@ -66,7 +65,7 @@ def _sensor_issues(
 
         last_ts = repo.get_last_reading_timestamp(sensor.id)
         age = (now - last_ts) if last_ts else None
-        if age is None or age > _STALE_THRESHOLD:
+        if age is None or age > DATA_QUALITY_STALE_SECONDS:
             issues.append(
                 DataQualityIssue(
                     code="stale_sensor",

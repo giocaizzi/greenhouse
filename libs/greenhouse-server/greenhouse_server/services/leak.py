@@ -49,6 +49,7 @@ from greenhouse_core.constants import (
     LEAK_PINNED_THRESHOLD,
     LEAK_RISING_DELTA,
     LEAK_SETTLE_TOLERANCE,
+    SECONDS_PER_HOUR,
 )
 from greenhouse_core.logic.cleaning import clean_readings_around
 from greenhouse_core.models import ENTITY_CLUSTER, ENTITY_SENSOR, SOURCE_LEAK, Alert, Sensor
@@ -124,7 +125,7 @@ class LeakDetectionService:
                 severity="critical",
                 payload={
                     "started_at": started_at,
-                    "hold_until": now + LEAK_HOLD_HOURS * 3600,
+                    "hold_until": now + LEAK_HOLD_HOURS * SECONDS_PER_HOUR,
                     "sensor_ids": [a.entity_id for a in alerts],
                 },
                 timestamp=now,

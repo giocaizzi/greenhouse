@@ -2740,7 +2740,7 @@ add(
         ),
         (
             "14",
-            '                    "hold_until": now + LEAK_HOLD_HOURS * 3600,',
+            '                    "hold_until": now + LEAK_HOLD_HOURS * SECONDS_PER_HOUR,',
             '                    "hold_until": now + LEAK_HOLD_HOURS * 60,',
             "hold_until in minutes",
         ),

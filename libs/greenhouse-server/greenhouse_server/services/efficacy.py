@@ -5,6 +5,7 @@ from collections.abc import Sequence
 from statistics import mean
 from typing import TYPE_CHECKING
 
+from greenhouse_core.constants import EFFICACY_AFTER_WINDOW_SECONDS, RESPONSE_PRE_WINDOW_SECONDS, SECONDS_PER_DAY
 from greenhouse_core.logic.cleaning import clean_readings_around
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_core.schemas import EfficacyItemResponse, EfficacyListResponse
@@ -12,12 +13,9 @@ from greenhouse_core.schemas import EfficacyItemResponse, EfficacyListResponse
 if TYPE_CHECKING:
     from greenhouse_core.models import IrrigationEvent, Irrigator, Sensor
 
-_BEFORE_SECONDS = 1800
-
 # Look-back bounds for ``days``: one rule for the JSON API and the web page (D17).
 EFFICACY_DEFAULT_DAYS = 14
 EFFICACY_MAX_DAYS = 365
-_AFTER_SECONDS = 5400
 
 
 def _score(before_pct: float | None, after_pct: float | None) -> float | None:
@@ -27,7 +25,9 @@ def _score(before_pct: float | None, after_pct: float | None) -> float | None:
     return max(0.0, min(100.0, rise * 5.0))
 
 
-def score_cluster(repo: IrrigationRepository, cluster_id: int, days: int = 14) -> EfficacyListResponse:
+def score_cluster(
+    repo: IrrigationRepository, cluster_id: int, days: int = EFFICACY_DEFAULT_DAYS
+) -> EfficacyListResponse:
     """Score completed irrigation events for a cluster over the given window.
 
     Args:
@@ -37,7 +37,7 @@ def score_cluster(repo: IrrigationRepository, cluster_id: int, days: int = 14) -
     Returns:
         EfficacyListResponse with one scored item per qualifying event, newest-first.
     """
-    cutoff = int(time.time()) - days * 86400
+    cutoff = int(time.time()) - days * SECONDS_PER_DAY
     irrigator = repo.get_irrigator_for_cluster(cluster_id)
     sensors = repo.get_sensors_in_cluster(cluster_id)
 
@@ -67,7 +67,10 @@ def _event_item(
     after_vals: list[float] = []
     for sensor in sensors:
         before_rows, after_rows = repo.get_readings_around(
-            sensor.id, event.timestamp, before_seconds=_BEFORE_SECONDS, after_seconds=_AFTER_SECONDS
+            sensor.id,
+            event.timestamp,
+            before_seconds=RESPONSE_PRE_WINDOW_SECONDS,
+            after_seconds=EFFICACY_AFTER_WINDOW_SECONDS,
         )
         # Cleaned view: the score is rise × 5, so one spike reading is
         # worth up to 100 points of phantom efficacy.

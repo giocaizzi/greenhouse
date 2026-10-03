@@ -4,13 +4,17 @@ import json
 import time
 import urllib.request
 
-_FORECAST_CACHE_TTL = 600  # 10 minutes
+from greenhouse_core.constants import DEFAULT_LATITUDE, DEFAULT_LONGITUDE, WEATHER_FORECAST_CACHE_TTL_SECONDS
+
+_FORECAST_CACHE_TTL = WEATHER_FORECAST_CACHE_TTL_SECONDS  # module name pinned by tests
 
 
 class WeatherClient:
     """Fetches current weather from Open-Meteo API."""
 
-    def __init__(self, lat: float = 45.464, lon: float = 9.189, timeout: int = 8, tz: str = "UTC"):
+    def __init__(
+        self, lat: float = DEFAULT_LATITUDE, lon: float = DEFAULT_LONGITUDE, timeout: int = 8, tz: str = "UTC"
+    ):
         self._lat = lat
         self._lon = lon
         self._timeout = timeout

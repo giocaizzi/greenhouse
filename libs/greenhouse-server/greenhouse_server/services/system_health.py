@@ -4,6 +4,12 @@ import time
 from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
+from greenhouse_core.constants import (
+    SYSTEM_HEALTH_COLD_SECONDS,
+    SYSTEM_HEALTH_DEVICE_LIMIT,
+    SYSTEM_HEALTH_FRESH_SECONDS,
+    SYSTEM_HEALTH_STALE_SECONDS,
+)
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_core.schemas import SystemHealthDevice, SystemHealthResponse
 from greenhouse_server.scheduler import scheduler
@@ -11,11 +17,6 @@ from greenhouse_server.services.sync import SyncService
 
 if TYPE_CHECKING:
     from greenhouse_core.models import Sensor
-
-_STALE_SECONDS = 3 * 3600
-_COLD_SECONDS = 24 * 3600
-_FRESH_SECONDS = 3600
-_DEVICE_LIMIT = 20
 
 
 class SystemHealthService:
@@ -43,13 +44,15 @@ class SystemHealthService:
         ]
 
         last_sync_at = max(last_ts_values) if last_ts_values else None
-        cloud_reachable = any(ts > now - _FRESH_SECONDS for ts in last_ts_values) if last_ts_values else False
+        cloud_reachable = (
+            any(ts > now - SYSTEM_HEALTH_FRESH_SECONDS for ts in last_ts_values) if last_ts_values else False
+        )
 
         open_alerts = self._repo.count_open_alerts()
 
         status = _overall_status(cloud_reachable, stale_count, open_alerts)
 
-        all_devices = (sensor_devices + irrigator_devices)[:_DEVICE_LIMIT]
+        all_devices = (sensor_devices + irrigator_devices)[:SYSTEM_HEALTH_DEVICE_LIMIT]
 
         return SystemHealthResponse(
             status=status,
@@ -75,9 +78,9 @@ class SystemHealthService:
             if last_ts:
                 last_ts_values.append(last_ts)
             age = (now - last_ts) if last_ts else None
-            if age is None or age > _STALE_SECONDS:
+            if age is None or age > SYSTEM_HEALTH_STALE_SECONDS:
                 stale_count += 1
-                status = "cold" if (age is None or age > _COLD_SECONDS) else "stale"
+                status = "cold" if (age is None or age > SYSTEM_HEALTH_COLD_SECONDS) else "stale"
             else:
                 status = "ok"
             sensor_devices.append(SystemHealthDevice(id=sensor.id, name=sensor.name, status=status, age_seconds=age))

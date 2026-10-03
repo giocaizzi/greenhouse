@@ -7,7 +7,12 @@ from collections import defaultdict
 from datetime import UTC, datetime
 from typing import Any, Literal
 
-from greenhouse_core.constants import DEFAULT_SOIL_MOISTURE_MAX, DEFAULT_SOIL_MOISTURE_MIN
+from greenhouse_core.constants import (
+    DEFAULT_SOIL_MOISTURE_MAX,
+    DEFAULT_SOIL_MOISTURE_MIN,
+    SECONDS_PER_DAY,
+    SECONDS_PER_HOUR,
+)
 from greenhouse_core.models import Plant, Sensor
 from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_core.repository import IrrigationRepository
@@ -101,7 +106,7 @@ def _build_plant_sensor_datasets(
     sensor was actually linked to this plant. One dataset per sensor that ever
     served this plant within the lookback window."""
     field = _metric_field(metric)
-    since = int(time.time()) - hours * 3600
+    since = int(time.time()) - hours * SECONDS_PER_HOUR
     readings = repo.readings_for_plant(plant_id, since_ts=since)
     by_sensor: dict[int, list[tuple[int, float]]] = defaultdict(list)
     for r in readings:
@@ -154,7 +159,7 @@ def _build_sensor_datasets(
 
 def _build_event_list(repo: IrrigationRepository, cluster_id: int, hours: int) -> list[dict[str, Any]]:
     irrigator = repo.get_irrigator_for_cluster(cluster_id)
-    cutoff = int(time.time()) - (hours * 3600)
+    cutoff = int(time.time()) - (hours * SECONDS_PER_HOUR)
     events: list[dict[str, Any]] = []
     if irrigator is not None:
         for e in repo.get_recent_events(irrigator.id, hours=hours):
@@ -256,7 +261,7 @@ def build_overlay_payload(
         return None
 
     sensors = repo.get_sensors_in_cluster(cluster_id)
-    cutoff = int(time.time()) - hours * 3600
+    cutoff = int(time.time()) - hours * SECONDS_PER_HOUR
 
     soil_buckets, humidity_buckets, light_buckets = _bucket_readings(repo, sensors, hours)
     datasets = _overlay_datasets(soil_buckets, humidity_buckets, light_buckets, cutoff)
@@ -335,7 +340,7 @@ def build_heatmap_payload(
     if cluster is None:
         return None
 
-    cutoff = int(time.time()) - days * 86400
+    cutoff = int(time.time()) - days * SECONDS_PER_DAY
     irrigator = repo.get_irrigator_for_cluster(cluster_id)
 
     counts: dict[tuple[int, int], int] = defaultdict(int)
@@ -372,7 +377,7 @@ def build_plant_health_timeline_payload(
     if plant is None:
         return None
 
-    cutoff = int(time.time()) - 90 * 86400
+    cutoff = int(time.time()) - 90 * SECONDS_PER_DAY
     # Assignment-aware: include only readings that belonged to this plant at
     # reading time. A sensor that was on this plant 30 days ago and is now on
     # a different one still contributes its 30-days-ago readings; readings
