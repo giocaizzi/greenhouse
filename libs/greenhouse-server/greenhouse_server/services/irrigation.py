@@ -37,8 +37,6 @@ from greenhouse_server.services.weather import WeatherClient
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Sequence
 
-    from sqlalchemy.orm import Session
-
     from greenhouse_core.devices import AbstractIrrigatorAdapter
     from greenhouse_core.logic.cleaning import CleanedReading
     from greenhouse_core.logic.decision import IrrigationDecision
@@ -918,13 +916,12 @@ class IrrigationService:
         clusters = [(c.id, c.name) for c in self._repo.list_clusters()]
         results: list[CheckResult] = []
         for cluster_id, cluster_name in clusters:
-            session = self._repo.session
             try:
                 result = self.check_cluster(cluster_id)
                 self._resolve_stale_check_alert(cluster_id)
-                session.commit()
+                self._repo.commit()
             except Exception as e:
-                result = self._record_check_failure(session, cluster_id, cluster_name, e)
+                result = self._record_check_failure(cluster_id, cluster_name, e)
             results.append(result)
         return results
 
@@ -934,14 +931,12 @@ class IrrigationService:
         if stale is not None:
             self._repo.resolve_alert(stale.id)
 
-    def _record_check_failure(
-        self, session: "Session", cluster_id: int, cluster_name: str, exc: Exception
-    ) -> CheckResult:
+    def _record_check_failure(self, cluster_id: int, cluster_name: str, exc: Exception) -> CheckResult:
         """Roll back the crashed cluster alone, log it, raise ``check_failed`` and commit.
 
         Called from inside the ``except`` block, so ``logger.exception`` still sees the exception.
         """
-        session.rollback()
+        self._repo.rollback()
         logger.exception("Check failed for cluster %s", cluster_id)
         self._repo.upsert_alert(
             f"{CHECK_FAILED_ALERT_CODE}:cluster:{cluster_id}",
@@ -954,7 +949,7 @@ class IrrigationService:
             entity_id=cluster_id,
             cluster_id=cluster_id,
         )
-        session.commit()
+        self._repo.commit()
         return {
             "cluster_id": cluster_id,
             "cluster_name": cluster_name,
