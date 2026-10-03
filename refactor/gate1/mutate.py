@@ -2716,8 +2716,8 @@ add(
         ),
         (
             "10",
-            "            if reason is None:\n                self._clear_sensor(cluster_id, sensor)\n                continue",
-            "            if reason is None:\n                continue",
+            "        if reason is None:\n            self._clear_sensor(cluster_id, sensor)\n            return None",
+            "        if reason is None:\n            return None",
             "settled sensor no longer releases the hold",
         ),
         (
@@ -2740,14 +2740,14 @@ add(
         ),
         (
             "14",
-            '                    "hold_until": now + LEAK_HOLD_HOURS * SECONDS_PER_HOUR,',
-            '                    "hold_until": now + LEAK_HOLD_HOURS * 60,',
+            '                "hold_until": now + LEAK_HOLD_HOURS * SECONDS_PER_HOUR,',
+            '                "hold_until": now + LEAK_HOLD_HOURS * 60,',
             "hold_until in minutes",
         ),
         (
             "15",
-            "        if alerts:\n            now = int(time.time())",
-            "        if alerts is not None:\n            now = int(time.time())",
+            "        if alerts:\n            self._record_hold(cluster_id, started_at, alerts)",
+            "        if alerts is not None:\n            self._record_hold(cluster_id, started_at, alerts)",
             "leak_hold activity written even with no findings",
         ),
         (
