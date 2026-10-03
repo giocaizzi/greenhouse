@@ -63,6 +63,7 @@ libs/greenhouse-core/greenhouse_core/logic/plant_needs.py
 libs/greenhouse-core/greenhouse_core/logic/sensors.py
 libs/greenhouse-core/greenhouse_core/logic/stress.py
 libs/greenhouse-core/greenhouse_core/logic/trends.py
+libs/greenhouse-core/greenhouse_core/migrations/env.py
 libs/greenhouse-core/greenhouse_core/models.py
 libs/greenhouse-core/greenhouse_core/plant_db.py
 libs/greenhouse-core/greenhouse_core/repository.py
@@ -78,8 +79,10 @@ libs/greenhouse-server/greenhouse_server/routes/__init__.py
 libs/greenhouse-server/greenhouse_server/routes/activity.py
 libs/greenhouse-server/greenhouse_server/routes/alerts.py
 libs/greenhouse-server/greenhouse_server/routes/auth.py
+libs/greenhouse-server/greenhouse_server/routes/bulk.py
 libs/greenhouse-server/greenhouse_server/routes/charts.py
 libs/greenhouse-server/greenhouse_server/routes/clusters.py
+libs/greenhouse-server/greenhouse_server/routes/configs.py
 libs/greenhouse-server/greenhouse_server/routes/decisions.py
 libs/greenhouse-server/greenhouse_server/routes/efficacy.py
 libs/greenhouse-server/greenhouse_server/routes/forecast.py
