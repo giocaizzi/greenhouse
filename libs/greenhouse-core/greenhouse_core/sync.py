@@ -66,21 +66,37 @@ def sync_sensor_data(db: IrrigationRepository, cloud: DeviceGateway, hours: int 
 def sync_single_sensor(
     db: IrrigationRepository, cloud: DeviceGateway, sensor: Sensor, hours: int
 ) -> tuple[int, int, int]:
-    """Sync a single sensor. Returns (total_processed, new_inserted, live_saved)."""
+    """Sync a single sensor. Returns (total_processed, new_inserted, live_saved).
 
-    # 1. Determine sync window
-    last_ts = db.get_last_reading_timestamp(sensor.id)
-    if last_ts:
-        # Sync from last known reading (with 1min overlap for safety)
-        since_ms = (last_ts - 60) * 1000
-    else:
-        # First sync: pull full history window
-        since_ms = int((time.time() - hours * 3600) * 1000)
-
-    # 2. Pull historical logs from cloud
+    Order (invariant 8): sync window -> one ``getdevicelog`` pull -> per-reading
+    insert -> exactly one best-effort live read.
+    """
+    since_ms = _sync_window_start(db.get_last_reading_timestamp(sensor.id), hours, time.time())
     logs = cloud.get_device_logs(sensor.tuya_device_id, since_ms=since_ms)
     grouped = cloud.group_logs_by_timestamp(logs)
+    new_count = _store_history(db, sensor, grouped)
+    live_saved = int(_store_live_reading(db, cloud, sensor))
+    return len(grouped), new_count, live_saved
 
+
+def _sync_window_start(last_ts: int | None, hours: int, now: float) -> int:
+    """Return the ``getdevicelog`` window start in epoch milliseconds.
+
+    With a stored reading, resume one minute before it (overlap for safety; the
+    repository de-duplicates on ``(sensor_id, timestamp)``). On the first sync
+    (no row, or a falsy timestamp) pull the full ``hours`` window back from ``now``.
+    """
+    if last_ts:
+        return (last_ts - 60) * 1000
+    return int((now - hours * 3600) * 1000)
+
+
+def _store_history(db: IrrigationRepository, sensor: Sensor, grouped: list[dict[str, Any]]) -> int:
+    """Insert each grouped log reading; return how many rows were new.
+
+    Readings without a timestamp are skipped. Log rows never carry
+    ``water_warning`` — only the live read persists it.
+    """
     new_count = 0
     for reading in grouped:
         ts = reading.get("timestamp")
@@ -98,9 +114,16 @@ def sync_single_sensor(
         )
         if result is not None:
             new_count += 1
+    return new_count
 
-    # 3. Get live reading (current state)
-    live_saved = 0
+
+def _store_live_reading(db: IrrigationRepository, cloud: DeviceGateway, sensor: Sensor) -> bool:
+    """Persist the sensor's current state at now; ``True`` when a new row was stored.
+
+    The single live read is best-effort: any error is swallowed and counts as
+    "not saved", so a flaky live endpoint never fails the backfill above.
+    """
+    saved = False
     try:
         live = cloud.get_live_reading(sensor.tuya_device_id)
         if live and any(k in live for k in ("temperature", "soil_moisture", "humidity", "light")):
@@ -116,8 +139,7 @@ def sync_single_sensor(
                 water_warning=live.get("water_warning"),
             )
             if result is not None:
-                live_saved = 1
+                saved = True
     except Exception:
         pass  # Live reading is best-effort
-
-    return len(grouped), new_count, live_saved
+    return saved
