@@ -103,7 +103,7 @@ from greenhouse_core.utils import seasonal_light_factor
 
 if TYPE_CHECKING:
     from greenhouse_core.logic.timing import Environment
-    from greenhouse_core.models import Cluster, Plant
+    from greenhouse_core.models import Cluster, Plant, VacationWindow
 
 log = logging.getLogger(__name__)
 
@@ -374,18 +374,7 @@ class IrrigationLogic:
         # category defaults at the top level, while ``_category_defaults`` stays
         # available verbatim — so we can ask :func:`seasonal_multiplier` to
         # respect both layers' per-season fallback semantics.
-        plant_override = None
-        category_override = None
-        for care in plant_care:
-            data = care if isinstance(care, dict) else {}
-            if plant_override is None:
-                plant_override = data.get(season_key)
-            if category_override is None:
-                cat_defaults = data.get("_category_defaults") or {}
-                category_override = cat_defaults.get(season_key)
-            if plant_override is not None and category_override is not None:
-                break
-
+        plant_override, category_override = _seasonal_overrides(plant_care, season_key)
         multiplier = seasonal_multiplier(
             season,
             environment=environment,
@@ -394,11 +383,7 @@ class IrrigationLogic:
         )
         if multiplier == 1.0:
             return
-        # Multiplier is a frequency factor (water N× as often), not an interval
-        # factor — so divide the baseline interval by it to get the new cadence.
-        new_interval = int(round(decision.interval_hours / multiplier))
-        new_interval = max(MIN_INTERVAL_HOURS, min(MAX_INTERVAL_HOURS, new_interval))
-        decision.interval_hours = new_interval
+        decision.interval_hours = _scaled_interval(decision.interval_hours, multiplier)
         decision.add_reason(
             code=TriggerCode.SEASONAL_HOLD if multiplier < 1.0 else TriggerCode.SEASONAL_BOOST,
             message=f"{season} multiplier {multiplier:g}× for {environment} cluster",
@@ -433,7 +418,7 @@ class IrrigationLogic:
 
         decision.add_reason(
             code=TriggerCode.VACATION_ACTIVE,
-            message=f"vacation active (returns in {max(0, math.ceil((vac.ends_at - now) / SECONDS_PER_DAY))}d)",
+            message=f"vacation active (returns in {_vacation_days_left(vac, now)}d)",
             severity=Severity.INFO,
             icon="airplane",
         )
@@ -448,40 +433,17 @@ class IrrigationLogic:
         if decision.action is not Action.IRRIGATE:
             return
 
-        # Vacation length in whole days (at least 1) and the 0-based index of the
-        # day we are currently in; the cumulative allowance grows day by day.
-        d_days = max(1, math.ceil((vac.ends_at - vac.starts_at) / SECONDS_PER_DAY))
-        day_index = math.floor((now - vac.starts_at) / SECONDS_PER_DAY)
-
-        usable_l = irr.reservoir_l * VACATION_RESERVOIR_USABLE_FRACTION
-        daily_budget_l = usable_l / d_days
-        allowed_cum_l = min(usable_l, daily_budget_l * (day_index + 1))
         spent_l = self.db.irrigator_consumption_liters(irr.id, since=vac.starts_at, until=now)
-        headroom_l = max(0.0, allowed_cum_l - spent_l)
-        binding_max_min = math.floor(headroom_l / irr.flow_rate_l_per_min)
-
-        if binding_max_min >= decision.duration_minutes:
-            return
-
-        if binding_max_min >= VACATION_MIN_RUN_MINUTES:
-            decision.duration_minutes = binding_max_min
-            decision.add_reason(
-                code=TriggerCode.VACATION_RATIONING,
-                message=f"trimmed to {binding_max_min} min so reservoir lasts the vacation",
-                severity=Severity.WARNING,
-                icon="drop-half",
-            )
-            return
-
-        decision.action = Action.SKIP
-        decision.duration_minutes = 0
-        decision.confidence = CONFIDENCE_COOLDOWN
-        decision.add_reason(
-            code=TriggerCode.VACATION_BUDGET_EXHAUSTED,
-            message="vacation water budget exhausted this cycle — skipping to conserve reservoir",
-            severity=Severity.WARNING,
-            icon="drop-slash",
+        binding_max_min = _binding_max_minutes(
+            reservoir_l=irr.reservoir_l,
+            flow_rate_l_per_min=irr.flow_rate_l_per_min,
+            starts_at=vac.starts_at,
+            ends_at=vac.ends_at,
+            now=now,
+            spent_l=spent_l,
         )
+
+        _apply_vacation_ration(decision, binding_max_min)
 
     def _finish(
         self,
@@ -708,6 +670,77 @@ def _base_decision(cluster_id: int, evaluated_at: int, inputs: _EngineInputs) ->
         sensor_snapshot=inputs.snapshot,
         stress_indicators=inputs.stress,
         trends=inputs.trends,
+    )
+
+
+def _seasonal_overrides(plant_care: list[dict[str, Any]], season_key: str) -> tuple[Any, Any]:
+    """First plant-level and first category-level ``season_key`` table across the cluster's plants."""
+    plant_override = None
+    category_override = None
+    for care in plant_care:
+        data = care if isinstance(care, dict) else {}
+        if plant_override is None:
+            plant_override = data.get(season_key)
+        if category_override is None:
+            cat_defaults = data.get("_category_defaults") or {}
+            category_override = cat_defaults.get(season_key)
+        if plant_override is not None and category_override is not None:
+            break
+    return plant_override, category_override
+
+
+def _scaled_interval(interval_hours: int, multiplier: float) -> int:
+    """Divide the interval by a frequency multiplier (water N× as often), clamped to the interval bounds."""
+    # Multiplier is a frequency factor (water N× as often), not an interval
+    # factor — so divide the baseline interval by it to get the new cadence.
+    new_interval = int(round(interval_hours / multiplier))
+    return max(MIN_INTERVAL_HOURS, min(MAX_INTERVAL_HOURS, new_interval))
+
+
+def _vacation_days_left(vac: "VacationWindow", now: int) -> int:
+    """Whole days until the vacation ends, rounded up (never negative)."""
+    return max(0, math.ceil((vac.ends_at - now) / SECONDS_PER_DAY))
+
+
+def _binding_max_minutes(
+    *, reservoir_l: float, flow_rate_l_per_min: float, starts_at: int, ends_at: int, now: int, spent_l: float
+) -> int:
+    """Minutes the pump may still run today under the linear reservoir burn-down envelope."""
+    # Vacation length in whole days (at least 1) and the 0-based index of the
+    # day we are currently in; the cumulative allowance grows day by day.
+    d_days = max(1, math.ceil((ends_at - starts_at) / SECONDS_PER_DAY))
+    day_index = math.floor((now - starts_at) / SECONDS_PER_DAY)
+
+    usable_l = reservoir_l * VACATION_RESERVOIR_USABLE_FRACTION
+    daily_budget_l = usable_l / d_days
+    allowed_cum_l = min(usable_l, daily_budget_l * (day_index + 1))
+    headroom_l = max(0.0, allowed_cum_l - spent_l)
+    return math.floor(headroom_l / flow_rate_l_per_min)
+
+
+def _apply_vacation_ration(decision: IrrigationDecision, binding_max_min: int) -> None:
+    """Within budget → unchanged; a meaningful partial budget → trimmed; otherwise → SKIP."""
+    if binding_max_min >= decision.duration_minutes:
+        return
+
+    if binding_max_min >= VACATION_MIN_RUN_MINUTES:
+        decision.duration_minutes = binding_max_min
+        decision.add_reason(
+            code=TriggerCode.VACATION_RATIONING,
+            message=f"trimmed to {binding_max_min} min so reservoir lasts the vacation",
+            severity=Severity.WARNING,
+            icon="drop-half",
+        )
+        return
+
+    decision.action = Action.SKIP
+    decision.duration_minutes = 0
+    decision.confidence = CONFIDENCE_COOLDOWN
+    decision.add_reason(
+        code=TriggerCode.VACATION_BUDGET_EXHAUSTED,
+        message="vacation water budget exhausted this cycle — skipping to conserve reservoir",
+        severity=Severity.WARNING,
+        icon="drop-slash",
     )
 
 
