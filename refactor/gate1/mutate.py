@@ -2385,8 +2385,8 @@ add(
         ),
         (
             "14",
-            "    if job_id in _CORE_JOB_IDS:\n        raise CoreJobError(",
-            "    if job_id in ():\n        raise CoreJobError(",
+            "    if job_id in _CORE_JOB_IDS:\n        msg = (",
+            "    if job_id in ():\n        msg = (",
             "core jobs deletable",
         ),
         ("15", "    repo.update_preferences(scheduler_paused=paused)\n", "", "pause not persisted"),
@@ -3170,7 +3170,7 @@ add(
     [
         (
             "01",
-            '    if not plain:\n        raise ValueError("password must be non-empty")\n',
+            '    if not plain:\n        msg = "password must be non-empty"\n        raise ValueError(msg)\n',
             "",
             "empty password accepted",
         ),
@@ -3233,8 +3233,8 @@ add(
         ),
         (
             "11",
-            '    if user is None or not user.is_active:\n        raise AuthError("User no longer active")',
-            '    if user is None:\n        raise AuthError("User no longer active")',
+            '    if user is None or not user.is_active:\n        msg = "User no longer active"',
+            '    if user is None:\n        msg = "User no longer active"',
             "inactive users accepted",
         ),
         (
@@ -3867,8 +3867,8 @@ add(
     [
         (
             "29",
-            '        if f.required:\n            raise ValueError(f"{f.label} is required")',
-            '        if False:\n            raise ValueError(f"{f.label} is required")',
+            '        if f.required:\n            msg = f"{f.label} is required"',
+            '        if False:\n            msg = f"{f.label} is required"',
             "required fields accept blanks",
         ),
         (

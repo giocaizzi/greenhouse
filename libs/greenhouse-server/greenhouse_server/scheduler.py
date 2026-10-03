@@ -486,15 +486,17 @@ def delete_job(job_id: str) -> None:
         JobNotRegisteredError: no job with that id is registered.
     """
     if job_id in _CORE_JOB_IDS:
-        raise CoreJobError(
+        msg = (
             f"Job {job_id} is a built-in scheduler job and cannot be deleted. "
             "To stop automatic irrigation checks use POST /api/v1/scheduler/pause "
             "(resume with POST /api/v1/scheduler/resume)."
         )
+        raise CoreJobError(msg)
     try:
         scheduler.remove_job(job_id)
     except JobLookupError:
-        raise JobNotRegisteredError(f"Job {job_id} not found") from None
+        msg = f"Job {job_id} not found"
+        raise JobNotRegisteredError(msg) from None
 
 
 def set_check_all_paused(repo: IrrigationRepository, paused: bool) -> bool:
@@ -518,7 +520,8 @@ def set_check_all_paused(repo: IrrigationRepository, paused: bool) -> bool:
             is persisted in that case).
     """
     if scheduler.get_job(CHECK_ALL_JOB_ID) is None:
-        raise JobNotRegisteredError(f"Job {CHECK_ALL_JOB_ID} not found")
+        msg = f"Job {CHECK_ALL_JOB_ID} not found"
+        raise JobNotRegisteredError(msg)
     if paused:
         scheduler.pause_job(CHECK_ALL_JOB_ID)
     else:

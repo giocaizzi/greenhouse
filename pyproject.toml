@@ -111,6 +111,8 @@ extend-select = [
     "PLR0913",  # too-many-arguments (frozen handler signatures excluded per directory)
     "PLR0917",  # too-many-positional-arguments (preview, explicit; same exclusions)
     "FBT",  # boolean traps (Typer commands excluded: --flag options are the CLI contract)
+    "EM",  # exception message literals bound to `msg` first (message text unchanged)
+    "TRY003",  # long messages outside the exception class (other TRY rules: report-only)
     "T201",  # print: libs/ output goes through typer.echo / rich / logging (refactor/ scripts excluded)
     "A002",  # builtin-argument-shadowing (`id`/`type` options of frozen handlers excluded)
     "ARG",  # unused arguments (FastAPI web handlers keep `request`: per-file exclusion)
@@ -159,9 +161,9 @@ indent-style = "space"
 "scripts/*" = ["E402"]  # intentional sys.path before import
 # Frozen safety net: tests exceed size limits and poke privates; never edited to satisfy a lint rule.
 "tests/**" = [
-    "C90", "PLR0911", "PLR0912", "PLR0915", "PLR0904", "PLR0914", "PLR1702", "SIM", "RET", "PTH", "PERF", "PLW", "FURB", "N", "BLE", "RUF", "PLR2004", "S", "ARG", "PLR0913", "PLR0917", "FBT", "ERA001", "SLF001",
+    "C90", "PLR0911", "PLR0912", "PLR0915", "PLR0904", "PLR0914", "PLR1702", "SIM", "RET", "PTH", "PERF", "PLW", "FURB", "N", "BLE", "RUF", "PLR2004", "S", "ARG", "PLR0913", "PLR0917", "FBT", "EM", "TRY003", "ERA001", "SLF001",
 ]
-"refactor/**" = ["C90", "PLR0911", "PLR0912", "PLR0915", "PLR0914", "PLR1702", "PERF", "PLW", "RUF005", "PLR2004", "S", "FBT", "T201"]  # refactor tooling scripts, not shipped
+"refactor/**" = ["C90", "PLR0911", "PLR0912", "PLR0915", "PLR0914", "PLR1702", "PERF", "PLW", "RUF005", "PLR2004", "S", "FBT", "T201", "EM", "TRY003"]  # refactor tooling scripts, not shipped
 "libs/greenhouse-core/greenhouse_core/migrations/versions/*" = ["PLR0915"]  # generated Alembic DDL, out of scope
 # Frozen handler signatures (not a ratchet): FastAPI API/web handlers and Typer commands declare one
 # parameter per query/form field or CLI option (the OpenAPI / MCP / --help contract), and web pages
@@ -185,10 +187,10 @@ indent-style = "space"
 "libs/greenhouse-cli/greenhouse_cli/tui/sprites.py" = ["FBT001", "FBT002"]
 "libs/greenhouse-cli/greenhouse_cli/tui/widgets.py" = ["FBT001", "FBT002", "PLR0913", "PLR0915", "PLR0917"]
 "libs/greenhouse-core/greenhouse_core/devices/__init__.py" = ["RUF022"]
-"libs/greenhouse-core/greenhouse_core/devices/gateway.py" = ["BLE001", "PLR0915"]
+"libs/greenhouse-core/greenhouse_core/devices/gateway.py" = ["BLE001", "EM101", "EM102", "PLR0915", "TRY003"]
 "libs/greenhouse-core/greenhouse_core/devices/irrigators/ik10pw.py" = ["BLE001", "C901", "PLR0911", "PLR0915", "PLR1702", "RUF022", "S110", "SIM105"]
 "libs/greenhouse-core/greenhouse_core/devices/irrigators/tuya_generic.py" = ["ARG002", "BLE001", "C901", "FBT001", "FBT003", "PLR0912", "PLR1702", "S110"]
-"libs/greenhouse-core/greenhouse_core/devices/registry.py" = ["N818"]  # UnknownDeviceModel: public name (WP8-owned file)
+"libs/greenhouse-core/greenhouse_core/devices/registry.py" = ["EM102", "N818", "TRY003"]  # UnknownDeviceModel: public name (WP8-owned file)
 "libs/greenhouse-core/greenhouse_core/devices/sensors/tr301z.py" = ["ARG002", "RUF022"]
 "libs/greenhouse-core/greenhouse_core/devices/sensors/tuya_generic.py" = ["ARG002", "BLE001"]
 "libs/greenhouse-core/greenhouse_core/logic/decision.py" = ["PLR0913"]

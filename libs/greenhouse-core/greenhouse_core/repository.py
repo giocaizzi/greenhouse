@@ -171,7 +171,8 @@ class IrrigationRepository:
         the cluster already has one.
         """
         if self.get_irrigator_for_cluster(cluster_id) is not None:
-            raise IrrigatorExistsError(f"cluster {cluster_id} already has an irrigator")
+            msg = f"cluster {cluster_id} already has an irrigator"
+            raise IrrigatorExistsError(msg)
         irrigator = Irrigator(
             cluster_id=cluster_id,
             tuya_device_id=tuya_device_id,
@@ -1366,7 +1367,8 @@ class IrrigationRepository:
         if not target:
             return None
         if plant.cluster_id == target_cluster_id:
-            raise SameClusterMoveError(f"Plant {plant_id} already belongs to cluster {target_cluster_id}")
+            msg = f"Plant {plant_id} already belongs to cluster {target_cluster_id}"
+            raise SameClusterMoveError(msg)
         from_cluster_id = plant.cluster_id
         plant.cluster_id = target_cluster_id
         moved_sensors = list(self.session.scalars(select(Sensor).where(Sensor.plant_id == plant_id)))

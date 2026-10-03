@@ -97,7 +97,8 @@ class AuthenticatedUser:
 
 def _require_secret(settings: Settings) -> str:
     if not settings.auth_secret_key:
-        raise AuthConfigError("auth_secret_key is not set")
+        msg = "auth_secret_key is not set"
+        raise AuthConfigError(msg)
     return settings.auth_secret_key
 
 
@@ -128,9 +129,11 @@ def decode_token(settings: Settings, token: str) -> dict[str, Any]:
             options={"require": ["sub", "iat", "exp", "aud"]},
         )
     except jwt.ExpiredSignatureError as exc:
-        raise AuthError("Session expired") from exc
+        msg = "Session expired"
+        raise AuthError(msg) from exc
     except jwt.InvalidTokenError as exc:
-        raise AuthError("Invalid session") from exc
+        msg = "Invalid session"
+        raise AuthError(msg) from exc
 
 
 # ── FastAPI dependencies ────────────────────────────────────────────────────
@@ -171,10 +174,12 @@ def _resolve_user(token: str, settings: Settings, session: Session) -> Authentic
     try:
         user_id = int(payload["sub"])
     except (KeyError, TypeError, ValueError) as exc:
-        raise AuthError("Malformed session") from exc
+        msg = "Malformed session"
+        raise AuthError(msg) from exc
     user = get_user(session, user_id)
     if user is None or not user.is_active:
-        raise AuthError("User no longer active")
+        msg = "User no longer active"
+        raise AuthError(msg)
     return AuthenticatedUser(id=user.id, username=user.username)
 
 

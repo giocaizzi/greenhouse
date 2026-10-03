@@ -49,7 +49,8 @@ def parse_value(f: Field, raw: Any) -> Any:
     text = (raw or "").strip()
     if not text:
         if f.required:
-            raise ValueError(f"{f.label} is required")
+            msg = f"{f.label} is required"
+            raise ValueError(msg)
         return None
     try:
         if f.kind == "int":
@@ -66,7 +67,8 @@ def parse_value(f: Field, raw: Any) -> Any:
     except ValueError:
         hints = {"datetime": "YYYY-MM-DD HH:MM", "json": "a JSON object", "int": "a whole number"}
         hint = hints.get(f.kind, f"a {f.kind}")
-        raise ValueError(f"{f.label}: expected {hint}") from None
+        msg = f"{f.label}: expected {hint}"
+        raise ValueError(msg) from None
     return text
 
 
