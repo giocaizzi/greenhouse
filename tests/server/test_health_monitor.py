@@ -244,6 +244,35 @@ class TestActuationGate:
         # LOW_BATTERY is advisory, not actuation-blocking.
         assert blocked is False
 
+    @staticmethod
+    def _seed_cache(monitor_, irrigator, derived):
+        """Put ``derived`` straight into the actuation-gate cache for ``irrigator``."""
+        from greenhouse_core.models import ENTITY_IRRIGATOR
+        from greenhouse_server.services.health_monitor import _Cached
+
+        monitor_._cache[(ENTITY_IRRIGATOR, irrigator.id)] = _Cached(state=_state(), derived_alarms=derived)
+
+    @pytest.mark.parametrize("alarm", list(HealthAlarm), ids=lambda a: a.value)
+    def test_blocking_set_for_every_alarm(self, monitor, cluster_irrigator_sensor, alarm):
+        """Exactly NO_WATER, RAIN_DETECTED and DEVICE_OFFLINE block; every other alarm is advisory."""
+        monitor_, _, _, _ = monitor
+        irrigator, _ = cluster_irrigator_sensor
+        self._seed_cache(monitor_, irrigator, frozenset({alarm}))
+
+        blocking = {HealthAlarm.NO_WATER, HealthAlarm.RAIN_DETECTED, HealthAlarm.DEVICE_OFFLINE}
+        expected = (True, [alarm]) if alarm in blocking else (False, [])
+        assert monitor_.is_actuation_blocked(irrigator) == expected
+
+    def test_blocking_alarms_keep_derived_order(self, monitor, cluster_irrigator_sensor):
+        """With every alarm cached, the blocking ones come back in derived-set iteration order."""
+        monitor_, _, _, _ = monitor
+        irrigator, _ = cluster_irrigator_sensor
+        derived = frozenset(HealthAlarm)
+        self._seed_cache(monitor_, irrigator, derived)
+
+        blocking = {HealthAlarm.NO_WATER, HealthAlarm.RAIN_DETECTED, HealthAlarm.DEVICE_OFFLINE}
+        assert monitor_.is_actuation_blocked(irrigator) == (True, [a for a in derived if a in blocking])
+
 
 class TestBackfillFromHistory:
     """Persistent low-battery state survives a server restart via back-fill."""
