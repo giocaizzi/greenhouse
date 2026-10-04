@@ -40,6 +40,7 @@ from greenhouse_core.constants import (
 )
 from greenhouse_core.devices import DeviceRegistry
 from greenhouse_core.devices.health import HealthAlarm
+from greenhouse_core.devices.irrigators.ik10pw import IK10PW_ALARM_DP
 from greenhouse_core.models import (
     ENTITY_IRRIGATOR,
     EVENT_ACTION_ABORTED,
@@ -97,7 +98,7 @@ def _trip_payload(
         "irrigator_id": irrigator.id,
         "irrigator_name": irrigator.name,
         "cluster_id": cluster_id,
-        "alarm_dp": 105,
+        "alarm_dp": IK10PW_ALARM_DP,
         "alarm_raw": alarm_raw if isinstance(alarm_raw, int | str | bool) else repr(alarm_raw),
         "polls": polls,
         "started_at": started_at,
