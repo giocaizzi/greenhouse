@@ -27,7 +27,7 @@ import json
 from collections import Counter
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from datetime import datetime
 from importlib.resources import files
 from pathlib import Path
@@ -50,7 +50,6 @@ HOUR = 3600
 DAY = 86400
 
 ROME = "Europe/Rome"
-NEW_YORK = "America/New_York"
 
 # ── Case model ───────────────────────────────────────────────────────────────
 
@@ -1193,8 +1192,3 @@ def build_cases(family: str | None = None) -> list[Case]:
     if duplicates:
         raise ValueError(f"duplicate case ids: {duplicates}")
     return cases
-
-
-def case_with(case: Case, **changes: Any) -> Case:
-    """``dataclasses.replace`` re-export so callers can derive variants."""
-    return replace(case, **changes)

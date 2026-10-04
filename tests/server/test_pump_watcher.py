@@ -15,12 +15,11 @@ from sqlalchemy.orm import Session
 from fake_devices import FakeIrrigatorAdapter
 from greenhouse_core.devices import DeviceRegistry
 from greenhouse_core.devices.health import DeviceHealthState, HealthAlarm
-from greenhouse_core.models import Base, Irrigator
+from greenhouse_core.models import SOURCE_HEALTH, Base, Irrigator
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.services.alerts import SOURCE_PUMP
-from greenhouse_server.services.health_monitor import SOURCE_HEALTH, DeviceHealthMonitor
+from greenhouse_server.services.health_monitor import DeviceHealthMonitor
 from greenhouse_server.services.pump_watcher import (
-    ALERT_CODE,
     EVENT_ACTION_ABORTED,
     PumpWatcherService,
 )
@@ -215,7 +214,7 @@ class TestWatcherTrips:
         # Critical alert raised under SOURCE_HEALTH / no_water — unified
         # dedup_key replaces the legacy pump_dry_run alias.
         open_alerts = repo.list_alerts(limit=10)
-        health_alerts = [a for a in open_alerts if a.source == SOURCE_HEALTH and a.code == ALERT_CODE]
+        health_alerts = [a for a in open_alerts if a.source == SOURCE_HEALTH and a.code == HealthAlarm.NO_WATER]
         assert len(health_alerts) == 1
         assert health_alerts[0].severity == "critical"
         assert health_alerts[0].cluster_id == irrigator.cluster_id
@@ -345,7 +344,7 @@ class TestWatcherTripSideEffectsAreRobust:
         assert result["outcome"] == "tripped"
         # Alert still raised even though the physical stop failed
         open_alerts = repo.list_alerts(limit=10)
-        pump_alerts = [a for a in open_alerts if a.code == ALERT_CODE]
+        pump_alerts = [a for a in open_alerts if a.code == HealthAlarm.NO_WATER]
         assert len(pump_alerts) == 1
         # Event row marks the abort attempt
         events = repo.get_recent_events(irrigator.id, hours=1)
@@ -428,5 +427,5 @@ class TestWatcherIrrigatorModel:
         alerts_b = repo.list_alerts(cluster_id=cluster_b, limit=10)
         alerts_a = repo.list_alerts(cluster_id=cluster_a, limit=10)
         assert len(alerts_b) == 1
-        assert alerts_b[0].code == ALERT_CODE
+        assert alerts_b[0].code == HealthAlarm.NO_WATER
         assert len(alerts_a) == 0

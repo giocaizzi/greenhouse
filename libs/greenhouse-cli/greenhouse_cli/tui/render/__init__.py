@@ -5,7 +5,6 @@ One module per screen area; every builder is re-exported here so screens call ``
 
 from __future__ import annotations
 
-from greenhouse_cli.tui.render._rows import Row
 from greenhouse_cli.tui.render.cluster_panels import (
     decision_panel,
     efficacy_rows,
@@ -37,7 +36,6 @@ from greenhouse_cli.tui.render.system import (
 )
 
 __all__ = [
-    "Row",
     "account_line",
     "config_rows",
     "decision_panel",

@@ -53,9 +53,6 @@ class SpyTR301Z(TR301ZAdapter):
 
     seen: list = []
 
-    def read_live(self, sensor):  # pragma: no cover — must never run
-        raise AssertionError("health poll issued a live read")
-
     def read_health(self, sensor, latest=None):
         SpyTR301Z.seen.append(None if latest is None else latest.timestamp)
         return super().read_health(sensor, latest)

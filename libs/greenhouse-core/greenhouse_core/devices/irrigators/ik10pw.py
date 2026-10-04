@@ -83,6 +83,8 @@ def _load_profile() -> IrrigatorProfile:
 
 
 IK10PW_PROFILE = _load_profile()
+# The dry-run / water-shortage alarm DP (105): the pump watcher polls it and records it on a trip.
+IK10PW_ALARM_DP = IK10PW_PROFILE.dp("alarm")
 
 
 class IK10PWAdapter(TuyaIrrigatorAdapter):
@@ -250,4 +252,4 @@ class IK10PWAdapter(TuyaIrrigatorAdapter):
         )
 
 
-__all__ = ["IK10PWAdapter", "IK10PW_PROFILE", "alarm_indicates_no_water"]
+__all__ = ["IK10PW_ALARM_DP", "IK10PWAdapter", "IK10PW_PROFILE", "alarm_indicates_no_water"]

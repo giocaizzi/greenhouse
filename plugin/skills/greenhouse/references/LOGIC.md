@@ -346,7 +346,6 @@ All engine thresholds live in `libs/greenhouse-core/greenhouse_core/constants.py
 - Anomaly scan: `ANOMALY_*` (15-min job, 50-reading window, z > 4, std floor 1.0, stale at 2× the median gap)
 - Service read windows and scan limits (no decision effect): anomaly scan loads 72h per sensor (`ANOMALY_LOOKBACK_HOURS`); the pipeline's one-sensor freshness sync pulls 6h (`FRESHNESS_SYNC_BACKFILL_HOURS`); manual-start caps count the last 24h (`DAILY_CAP_WINDOW_HOURS`); the forecast falls back to −2.0 %/h without a learned profile (`FORECAST_FALLBACK_DRAINAGE_PER_HOUR`); alert sync / auto-resolve scan the newest 200 alerts (`ALERT_SCAN_LIMIT`); efficacy scores 5 points per pp of soil rise (`EFFICACY_SCORE_PER_PCT_RISE`); status and plant-page windows are `STATUS_*` / `PLANT_PAGE_*`
 - Seasonal multipliers: indoor {winter 0.5, spring 1.0, summer 1.2, autumn 0.8}, outdoor {0.3, 1.0, 1.5, 0.7} (`DEFAULT_SEASON_MULTIPLIER_INDOOR` / `_OUTDOOR`)
-- `DEFAULT_PREFERRED_WATER_HOURS = (6, 10)` — advisory plant-data default only; it never gates irrigation (see Irrigation-window gate)
 - Quiet hours: **no constant** — the baseline Alembic migration seeds the global row with 00:00–05:00 local; an unconfigured database has quiet hours off
 - Hierarchical config built-ins: `DEFAULT_IRRIGATION_MODE = "smart"`, `DEFAULT_AUTO_RUN = True`
 - Vacation rationing: `VACATION_RESERVOIR_USABLE_FRACTION = 0.95` (reserve 5% so the pump never runs dry), `VACATION_MIN_RUN_MINUTES = 1` (below this, skip instead of a token dribble)

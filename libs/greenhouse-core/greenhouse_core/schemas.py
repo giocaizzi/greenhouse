@@ -639,15 +639,6 @@ class SchedulerJobResponse(BaseModel):
     core: bool = False
 
 
-class CreateSchedulerJobRequest(BaseModel):
-    """Body for adding a custom scheduler job (cron expression or fixed interval)."""
-
-    name: str
-    job_type: str
-    cron_expression: str | None = None
-    interval_minutes: int | None = None
-
-
 class SchedulerStateResponse(BaseModel):
     """Runtime state of the check_all scheduler job."""
 

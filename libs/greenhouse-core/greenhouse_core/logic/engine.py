@@ -73,7 +73,6 @@ from greenhouse_core.constants import (
 from greenhouse_core.logic.decision import (
     Action,
     IrrigationDecision,
-    Reason,
     SensorSnapshot,
     Severity,
     StressIndicators,
@@ -1060,4 +1059,4 @@ def _apply_trend_adjustment(decision: IrrigationDecision) -> None:
         )
 
 
-__all__ = ["IrrigationLogic", "Reason"]
+__all__ = ["IrrigationLogic"]

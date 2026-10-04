@@ -311,10 +311,6 @@ class DeviceGateway:
                     return d.get("key")
         return None
 
-    def invalidate_key(self, device_id: str) -> None:
-        """Drop a cached local_key (call on key rotation / local-auth failure)."""
-        self._key_cache.pop(device_id, None)
-
     def open_local(
         self,
         irrigator: Irrigator,

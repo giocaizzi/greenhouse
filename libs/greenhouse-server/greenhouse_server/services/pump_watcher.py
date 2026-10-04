@@ -40,6 +40,7 @@ from greenhouse_core.constants import (
 )
 from greenhouse_core.devices import DeviceRegistry
 from greenhouse_core.devices.health import HealthAlarm
+from greenhouse_core.devices.irrigators.ik10pw import IK10PW_ALARM_DP
 from greenhouse_core.models import (
     ENTITY_IRRIGATOR,
     EVENT_ACTION_ABORTED,
@@ -56,9 +57,6 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# The watcher's externally-visible alert code is the canonical health alarm's,
-# so the inbox has one row per condition whichever observer raised it.
-ALERT_CODE = HealthAlarm.NO_WATER.value  # "no_water"
 ACTIVITY_CODE = "pump_dry_run"
 
 
@@ -100,7 +98,7 @@ def _trip_payload(
         "irrigator_id": irrigator.id,
         "irrigator_name": irrigator.name,
         "cluster_id": cluster_id,
-        "alarm_dp": 105,
+        "alarm_dp": IK10PW_ALARM_DP,
         "alarm_raw": alarm_raw if isinstance(alarm_raw, int | str | bool) else repr(alarm_raw),
         "polls": polls,
         "started_at": started_at,
@@ -339,14 +337,13 @@ class PumpWatcherService:
         # the unified ``health:irrigator:{id}:no_water`` dedup_key.
         try:
             monitor = self._monitor or self._lazy_monitor()
-            if monitor is not None:
-                monitor.record(
-                    ENTITY_IRRIGATOR,
-                    irrigator.id,
-                    state,
-                    label=irrigator.name,
-                    cluster_id=cluster_id,
-                )
+            monitor.record(
+                ENTITY_IRRIGATOR,
+                irrigator.id,
+                state,
+                label=irrigator.name,
+                cluster_id=cluster_id,
+            )
         except Exception:
             logger.exception("Failed to record dry-run state into health monitor for irrigator %d", irrigator.id)
 
@@ -368,7 +365,7 @@ class PumpWatcherService:
             except Exception:
                 logger.debug("Rollback after the failed trip commit failed too", exc_info=True)
 
-    def _lazy_monitor(self) -> DeviceHealthMonitor | None:
+    def _lazy_monitor(self) -> DeviceHealthMonitor:
         """Build a transient monitor when one wasn't injected.
 
         Test harness path: callers that don't pass a monitor get a no-op

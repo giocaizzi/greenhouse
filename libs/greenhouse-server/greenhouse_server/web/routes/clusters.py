@@ -31,7 +31,7 @@ from greenhouse_server.web.weekdays import WEEKDAY_BITS, WEEKDAY_LABELS, format_
 
 if TYPE_CHECKING:
     from greenhouse_core.plant_db import PlantDatabase
-    from greenhouse_core.repository import IrrigationRepository
+    from greenhouse_core.repository import EffectiveConfig, IrrigationRepository
     from greenhouse_server.services.charts import Metric
 
 _EMPTY_RATIONALE: list[dict[str, Any]] = []
@@ -195,7 +195,7 @@ def cluster_detail(
         status = svc.get_cluster_status(cluster_id)
 
     data = _detail_data(repo, plant_db, cluster_id, hours)
-    effective_config: dict[str, dict[str, Any]] = data["effective_config"]
+    effective_config: EffectiveConfig = data["effective_config"]
 
     # "Are we in quiet hours right now?" — drives the hx-confirm guard on
     # the manual irrigate button. Same helper and effective resolution as the

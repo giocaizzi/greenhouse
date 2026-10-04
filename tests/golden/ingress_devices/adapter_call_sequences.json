@@ -669,46 +669,5 @@
    true,
    "Device turned OFF"
   ]
- },
- "tr301z.read_live.both_fail_returns_error_dict": {
-  "calls": [
-   [
-    "cloud.cloudrequest",
-    "/v2.0/cloud/thing/fake_tuya_sensor_aabbccdd/shadow/properties"
-   ],
-   [
-    "cloud.getstatus",
-    "fake_tuya_sensor_aabbccdd"
-   ]
-  ],
-  "result": {
-   "error": "Cloud API error: {'success': False, 'msg': 'offline'}"
-  }
- },
- "tr301z.read_live.transport_error_returns_error_dict": {
-  "calls": [
-   [
-    "cloud.cloudrequest",
-    "/v2.0/cloud/thing/fake_tuya_sensor_aabbccdd/shadow/properties"
-   ],
-   [
-    "cloud.getstatus",
-    "fake_tuya_sensor_aabbccdd"
-   ]
-  ],
-  "result": {
-   "error": "no route"
-  }
- },
- "tr301z.read_live.v2": {
-  "calls": [
-   [
-    "cloud.cloudrequest",
-    "/v2.0/cloud/thing/fake_tuya_sensor_aabbccdd/shadow/properties"
-   ]
-  ],
-  "result": {
-   "soil_moisture": 38.0
-  }
  }
 }

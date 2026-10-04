@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any
 
 from greenhouse_core.devices.health import DeviceHealthState, HealthAlarm
 from greenhouse_core.devices.profile import SensorProfile
@@ -11,20 +10,17 @@ from greenhouse_core.models import Sensor, SensorReading
 
 
 class AbstractSensorAdapter(ABC):
-    """Contract for any sensor driver.
+    """Contract for any sensor driver: derive health from persisted readings.
 
-    ``read_live`` must not raise on network failure — it returns
-    ``{"error": <str>}`` instead. This keeps :class:`SyncService` simple
-    (no per-adapter try/except) and uniform across models. ``read_health``
-    follows the same rule: ``offline=True`` rather than raising.
+    Live reads do not go through the adapter — the sync job reads the Cloud
+    via :meth:`DeviceGateway.get_live_reading` directly. ``read_health`` must
+    not raise on an offline or unreachable device; it reports
+    ``offline=True`` instead, so the health poll needs no per-adapter
+    try/except.
     """
 
     profile: SensorProfile
     health_capabilities: frozenset[HealthAlarm] = frozenset()
-
-    @abstractmethod
-    def read_live(self, sensor: Sensor) -> dict[str, Any]:
-        """Fetch current values. Returns canonical-key dict, or ``{"error": ...}``."""
 
     @abstractmethod
     def read_health(self, sensor: Sensor, latest: SensorReading | None = None) -> DeviceHealthState:

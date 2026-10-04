@@ -16,7 +16,6 @@ from typing import TYPE_CHECKING, Any, Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from greenhouse_core.constants import (
-    DEFAULT_PREFERRED_WATER_HOURS,
     DEFAULT_SEASON_MULTIPLIER_INDOOR,
     DEFAULT_SEASON_MULTIPLIER_OUTDOOR,
 )
@@ -82,22 +81,6 @@ def is_within_irrigation_window(
         if _hour_in_range(dt.hour, w.start_hour, w.end_hour):
             return True
     return False
-
-
-def is_within_preferred_hours(
-    *,
-    now_unix: int,
-    tz_name: str | None,
-    preferred: tuple[int, int] | None = None,
-) -> bool:
-    """Default soft window when no IrrigationWindow rows exist.
-
-    ``preferred`` is (start_hour, end_hour) end-exclusive. None → use the global
-    default (morning window from constants).
-    """
-    start, end = preferred or DEFAULT_PREFERRED_WATER_HOURS
-    dt = local_now(now_unix, tz_name)
-    return _hour_in_range(dt.hour, start, end)
 
 
 def is_within_quiet_hours(

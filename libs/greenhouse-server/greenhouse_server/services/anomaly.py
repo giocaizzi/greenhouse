@@ -56,8 +56,6 @@ def _latest_soil_zscore(window: "list[SensorReading]") -> tuple[float, float, fl
     latest_soil = soil_values[0]
     # Exclude the latest from the baseline to avoid self-contamination
     baseline = soil_values[1:]
-    if len(baseline) < ANOMALY_MIN_READINGS - 1:
-        return None
 
     mean = statistics.mean(baseline)
     std = max(statistics.pstdev(baseline), ANOMALY_MIN_STD)
