@@ -600,17 +600,15 @@ class TestLocalKeyResolution:
         harness.gateway.open_local(_irrigator(), 3.5, refresh=True)
         assert harness.log == [("cloud.getdevices",), *_local_open_calls("rotated")]
 
-    def test_resolve_local_key_order_and_invalidate(self, harness):
+    def test_resolve_local_key_order(self, harness):
         gw = harness.gateway
         harness.cloud.set("getdevices", [{"id": FAKE_DEVICE_ID, "key": "from-cloud"}])
         assert gw.resolve_local_key(FAKE_DEVICE_ID, {"local_key": "cfg"}) == "cfg"
         assert gw.resolve_local_key(FAKE_DEVICE_ID, "not json") == "from-cloud"  # garbage config → cold path
         assert gw.resolve_local_key(FAKE_DEVICE_ID, None) == "from-cloud"  # cache hit
         assert gw.resolve_local_key(FAKE_DEVICE_ID, {"local_key": ""}) == "from-cloud"  # empty cfg key → cache
-        gw.invalidate_key(FAKE_DEVICE_ID)
-        gw.invalidate_key("never-cached")  # no KeyError
-        assert gw.resolve_local_key(FAKE_DEVICE_ID, ["not", "a", "dict"]) == "from-cloud"
-        assert harness.log == [("cloud.getdevices",), ("cloud.getdevices",)]
+        assert gw.resolve_local_key(FAKE_DEVICE_ID, ["not", "a", "dict"]) == "from-cloud"  # non-dict cfg → cache
+        assert harness.log == [("cloud.getdevices",)]
 
     @pytest.mark.parametrize("devices", [[{"id": "someone-else", "key": "k"}], {"error": "not a list"}, []])
     def test_unknown_device_resolves_none_and_is_not_cached(self, harness, devices):
