@@ -38,7 +38,7 @@ from greenhouse_core.constants import (
 )
 from greenhouse_core.devices import DeviceRegistry
 from greenhouse_core.devices.health import DeviceHealthState, HealthAlarm
-from greenhouse_core.logic.decision import TriggerCode
+from greenhouse_core.logic.decision import DEVICE_BLOCKING_CODES, TriggerCode
 from greenhouse_core.models import ENTITY_IRRIGATOR, ENTITY_SENSOR, SOURCE_HEALTH, EntityType, Irrigator, Sensor
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.services.alerts import notify_if_new_alert
@@ -214,10 +214,9 @@ class DeviceHealthMonitor:
         cached = self._cache.get((ENTITY_IRRIGATOR, irrigator.id))
         if cached is None:
             return False, []
+        # An alarm blocks when its trigger code is a device-blocking one; SENSOR_FAULT has no code.
         blocking: list[HealthAlarm] = [
-            alarm
-            for alarm in cached.derived_alarms
-            if alarm in (HealthAlarm.NO_WATER, HealthAlarm.RAIN_DETECTED, HealthAlarm.DEVICE_OFFLINE)
+            alarm for alarm in cached.derived_alarms if HEALTH_ALARM_TO_TRIGGER.get(alarm) in DEVICE_BLOCKING_CODES
         ]
         return bool(blocking), blocking
 
