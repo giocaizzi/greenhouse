@@ -1,7 +1,7 @@
 """Characterization: the ``greenhouse`` CLI command tree, every ``--help`` page and every parameter.
 
-Gap-list item G5 (``refactor/00-tests.md`` §6). The CLI interface and its ``--help``
-text are a frozen public contract (``refactor/BRIEF.md`` rule 6), so this module pins:
+The CLI interface and its ``--help`` text are a frozen public contract (AGENTS.md
+"Golden tests"; changing help text is a dedicated ``docs(cli)`` commit), so this module pins:
 
 - the full command tree in registration order (order is what ``--help`` lists);
 - the exact ``--help`` output of every group and leaf command, one golden per page
@@ -32,7 +32,7 @@ from greenhouse_cli.main import app
 
 PROG = "greenhouse"
 HELP_GOLDEN_DIR = "cli/help"
-EXPECTED_HELP_PAGES = 74  # 13 groups + 61 leaf commands (refactor/00-contracts.md §4.1)
+EXPECTED_HELP_PAGES = 74  # 13 groups + 61 leaf commands
 
 # Environment variables rich / typer / click read that would change rendered output.
 RENDER_ENV_VARS = (

@@ -1,6 +1,6 @@
 """Characterization: exact HTTP requests and exact stdout/stderr/exit code of the ``greenhouse`` CLI.
 
-Gap-list item G6 (``refactor/00-tests.md`` §6). For every leaf command of the Typer tree
+For every leaf command of the Typer tree
 (derived from ``typer.main.get_command(app)`` — a newly added command without a case fails
 ``test_every_cli_command_has_a_case``) and for every public ``IrrigationClient`` method
 (``test_every_client_method_has_a_case``), a canned ``httpx.MockTransport`` response is

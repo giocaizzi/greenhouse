@@ -53,8 +53,10 @@ testpaths = ["tests"]
 pythonpath = ["libs/greenhouse-core", "libs/greenhouse-server", "libs/greenhouse-cli", "tests"]
 
 [tool.mypy]
-# Strict ratchet (refactor plan T0.4 / target §10.13, §11). No `files` key: `make typecheck`
-# checks the modules listed in refactor/mypy-strict.txt (append-only).
+# Every module under libs/ is mypy-strict clean (`make typecheck` = plain `uv run mypy`). The generated
+# Alembic revisions are frozen history and stay out of scope.
+files = ["libs/greenhouse-core", "libs/greenhouse-server", "libs/greenhouse-cli"]
+exclude = ["/migrations/versions/"]
 python_version = "3.11"
 strict = true
 follow_imports = "silent"
@@ -83,8 +85,8 @@ select = [
     "C4",  # flake8-comprehensions
     "UP",  # pyupgrade
 ]
-# Lint ratchet (refactor/40-lint-ratchet.md): every family below is enforced; today's offenders are
-# listed per file in per-file-ignores and the integrator removes each entry once its file is clean.
+# Lint ratchet: every family below is enforced; today's offenders are listed per file in
+# per-file-ignores and each entry is removed once its file is clean.
 # Not adopted, on purpose: COM812 (conflicts with ruff format), ANN (redundant with the mypy strict
 # ratchet), TC (moves imports under TYPE_CHECKING and breaks FastAPI / Typer / Pydantic runtime
 # annotations — typing review), FAST001 (removes response_model: CLAUDE.md invariant 7), FAST002 (only
@@ -154,7 +156,7 @@ max-complexity = 8
 
 [tool.ruff.lint.pylint]
 max-branches = 8
-# 23 statements best approximates the 40-body-line rule of refactor/scripts/sizecheck.py on today's
+# 23 statements best approximates the 40-body-line rule of scripts/sizecheck.py on today's
 # libs/ code (measured over every function: 3 false positives, 1 false negative; 22 → 8 errors, 24 → 6).
 max-statements = 23
 max-nested-blocks = 3
@@ -166,14 +168,14 @@ indent-style = "space"
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]  # unused imports in __init__
 "tests/*" = ["B011"]  # assert False check
-"scripts/*" = ["E402"]  # intentional sys.path before import
+"scripts/*" = ["T201"]  # command-line tools report on stdout
 # Frozen safety net: tests exceed size limits and poke privates; never edited to satisfy a lint rule.
 "tests/**" = [
     "C90", "PLR0911", "PLR0912", "PLR0915", "PLR0904", "PLR0913", "PLR0914", "PLR0917", "PLR1702", "PLR2004",
     "SIM", "RET", "PTH", "PERF", "PLW", "FURB", "N", "RUF", "EM", "TRY003",
     "FBT", "ARG", "D", "S", "BLE", "ERA001", "SLF001",
 ]
-# Refactor tooling scripts (not shipped; the folder is dropped at the end, sizecheck moves to scripts/).
+# Temporary: the leftover refactor/ tooling scripts. Delete this entry in the same commit that deletes refactor/.
 "refactor/**" = [
     "C90", "PLR0911", "PLR0912", "PLR0915", "PLR0914", "PLR1702", "PLR2004",
     "PERF", "PLW", "RUF005", "EM", "TRY003", "FBT", "D", "S", "T201",
@@ -187,7 +189,7 @@ indent-style = "space"
 "libs/greenhouse-server/greenhouse_server/routes/*" = ["D417", "PLR0913", "PLR0917"]
 "libs/greenhouse-server/greenhouse_server/web/routes/*" = ["A002", "ARG001", "D417", "PLR0913", "PLR0917"]
 "libs/greenhouse-cli/greenhouse_cli/commands/*" = ["A002", "FBT", "PLR0913", "PLR0917"]
-# Ratchet offenders (baseline refactor-gate1 + lint ratchet, refactor/40-lint-ratchet.md); each list only shrinks.
+# Ratchet offenders (lint-ratchet baseline); each list only shrinks.
 "libs/greenhouse-cli/greenhouse_cli/client.py" = ["FBT001", "FBT002", "PLR0904", "PLR0913", "PLR0917"]
 "libs/greenhouse-cli/greenhouse_cli/tui/__init__.py" = ["FBT001", "FBT002"]
 "libs/greenhouse-cli/greenhouse_cli/tui/app.py" = ["FBT001", "FBT002"]

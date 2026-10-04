@@ -1,4 +1,4 @@
-"""Characterization tests for route branches consistency group W2 restructures (plan §0.4 G.6).
+"""Characterization tests for route branches that a consistency pass restructured.
 
 Each test pins what a route does today on a line the server suite did not reach: the manual
 ``POST /sync`` commit, the chart-data 400/404 branches, ``create_app`` with an explicit plant-DB

@@ -1,8 +1,8 @@
-"""Characterization: service branches left unpinned before the WP4 restructuring.
+"""Characterization: service branches left unpinned before the services were restructured.
 
-The WP4 coverage precondition (refactor plan §0.4 G.1) found lines/branches that no test
+A coverage run found lines/branches that no test
 reached in ``services/{health,forecast,maintenance,insights,health_monitor,anomaly,efficacy,
-charts}.py``, and the pump-watcher M-pre mutation run (§0.5) left surviving mutants in
+charts}.py``, and a pump-watcher mutation run left surviving mutants in
 ``PumpWatcherService.watch`` / ``_handle_trip``. Each test below pins **current** behavior of one
 of those spots, exactly, under a frozen clock with no network (plant care / weather / learner are
 in-module fakes). Odd behavior is pinned as ``…_current_behavior``.
@@ -74,7 +74,7 @@ def _cluster_with_sensor(repo, *, plant: bool = True, environment: str = "indoor
     return cid, pid, sids
 
 
-# ── health.compute_score (T4.3) ────────────────────────────────────────────────
+# ── health.compute_score ──────────────────────────────────────────────────────────
 
 
 def test_health_score_of_unknown_plant_is_the_empty_score(repo):
@@ -128,7 +128,7 @@ def test_health_score_ignores_temperature_and_humidity_without_both_care_bounds(
     }
 
 
-# ── forecast.predict_next_irrigation (T4.4) ─────────────────────────────────────
+# ── forecast.predict_next_irrigation ──────────────────────────────────────────────
 
 
 class FakeLearner:
@@ -222,7 +222,7 @@ def test_forecast_indoor_cluster_never_asks_the_weather(repo, learner):
     assert (result.weather_skip, result.precipitation_next_6h_mm) == (False, None)
 
 
-# ── maintenance.collect_maintenance_alerts (T4.5) ──────────────────────────────
+# ── maintenance.collect_maintenance_alerts ────────────────────────────────────────
 
 
 def _lux_readings(repo, sid, lux: int) -> None:
@@ -249,7 +249,7 @@ def test_maintenance_light_check_needs_a_plant(repo):
     assert plant_db.calls == []
 
 
-# ── insights.cluster_insights (T4.9) ───────────────────────────────────────────
+# ── insights.cluster_insights ─────────────────────────────────────────────────────
 
 
 def test_insights_keep_only_the_first_alert_of_each_type(repo):
@@ -267,7 +267,7 @@ def test_insights_keep_only_the_first_alert_of_each_type(repo):
     ]
 
 
-# ── health_monitor.backfill_from_history (T4.11) ───────────────────────────────
+# ── health_monitor.backfill_from_history ──────────────────────────────────────────
 
 
 def test_backfill_does_not_re_raise_an_open_sensor_fault(repo):
@@ -290,7 +290,7 @@ def test_backfill_does_not_re_raise_an_open_sensor_fault(repo):
     assert rows == [(f"health:sensor:{sid}:sensor_fault", "pre-existing title", "pre-existing message", "open")]
 
 
-# ── anomaly.SensorAnomalyService.scan (T4.14) ──────────────────────────────────
+# ── anomaly.SensorAnomalyService.scan ─────────────────────────────────────────────
 
 
 @pytest.mark.parametrize("soil_values", [0, 5])
@@ -308,7 +308,7 @@ def test_anomaly_skips_drift_with_too_few_soil_values_but_still_checks_staleness
     assert repo.session.query(Alert).count() == 1
 
 
-# ── efficacy.score_cluster (T4.15) ─────────────────────────────────────────────
+# ── efficacy.score_cluster ────────────────────────────────────────────────────────
 
 
 def test_efficacy_of_a_cluster_without_irrigator_is_empty(repo):
@@ -338,7 +338,7 @@ def test_efficacy_skips_start_events_without_a_positive_duration(repo):
     ]
 
 
-# ── charts.build_overlay_payload (T4.17) ───────────────────────────────────────
+# ── charts.build_overlay_payload ──────────────────────────────────────────────────
 
 
 def test_overlay_buckets_skip_missing_metric_values(repo):
@@ -356,7 +356,7 @@ def test_overlay_buckets_skip_missing_metric_values(repo):
     ]
 
 
-# ── pump_watcher: M-pre survivors (T4.10 / T4.12) ──────────────────────────────
+# ── pump_watcher: mutation survivors ──────────────────────────────────────────────
 
 
 @dataclass

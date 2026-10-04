@@ -11,7 +11,7 @@ prove it changed nothing. They must be hermetic and reproducible:
 
 Golden files live in ``tests/golden/``. A missing or different golden fails the
 test. ``GOLDEN_UPDATE=1`` (re)writes goldens; it is meant only for the commit that
-creates them — never to make a refactor pass (see ``refactor/BRIEF.md`` rule 8).
+creates them — never to make a refactor pass (AGENTS.md "Golden policy").
 """
 
 from __future__ import annotations

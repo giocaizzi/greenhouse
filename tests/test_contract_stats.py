@@ -1,4 +1,4 @@
-"""Characterization tests for ``greenhouse_core.stats`` gaps left by the Phase-1 net.
+"""Characterization tests for ``greenhouse_core.stats`` gaps left by the original characterization suite.
 
 Pins ``get_irrigation_stats``'s defensive cutoff filter.
 """

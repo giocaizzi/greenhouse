@@ -1,8 +1,8 @@
-"""WP6 coverage / mutation gap tests (characterization, current behavior).
+"""Coverage / mutation gap tests (characterization, current behavior).
 
-Pins boundaries in ``logic/stress.py`` that only the golden grid guarded (WP0
-M-pre survivors) and branches of ``learning/issues.py`` that no test reached,
-before WP6 restructures those functions. Each test was proven to fail under a
+Pins boundaries in ``logic/stress.py`` that only the golden grid guarded (mutation
+survivors) and branches of ``learning/issues.py`` that no test reached,
+written before those functions were restructured. Each test was proven to fail under a
 temporary in-place mutation of the production line it pins.
 """
 
@@ -383,7 +383,7 @@ def test_cadence_flags_boundaries(events, low, high):
     assert (trends.irrigation_frequency_low, trends.irrigation_frequency_high) == (low, high)
 
 
-# ── detect_issues: per-sensor alert conditions (WP6 M-pre survivors) ──────────
+# ── detect_issues: per-sensor alert conditions (mutation survivors) ───────────
 
 
 def _issues_with(monkeypatch, profile, readings, care=None, plant_id=1):

@@ -1,8 +1,8 @@
-"""WP8 gap tests: ``greenhouse_core.sync`` behavior that T8.17 / T8.18 restructure.
+"""Gap tests: ``greenhouse_core.sync`` behavior pinned before the sync loop was restructured.
 
-Characterization (current behavior), green on the pre-WP8 base. The existing
+Characterization (current behavior), green before and after that restructuring. The existing
 ``test_contract_sync.py`` golden sorts dict keys and never logs a sensor with both
-new log rows and a live save, nor exactly one new row (M-pre survivor
+new log rows and a live save, nor exactly one new row (mutation survivor
 ``new > 0 -> new > 1`` in ``sync_sensor_data``). These pin:
 
 - the per-sensor summary line for every combination of new rows / live save;

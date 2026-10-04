@@ -1,6 +1,6 @@
 """Characterization tests for repository / schema branches that no other test reaches.
 
-Written before the WP3 restructuring tasks (T3.1–T3.5) so the shared helpers
+Written before the repository was restructured so the shared helpers
 (`_parse_json_config`, `_delete_by_id`, `_patch_fields`, `_patch_fields_hasattr_first`)
 provably keep today's behavior. Everything here pins CURRENT behavior, odd or not.
 """
@@ -38,7 +38,7 @@ def _seed(repo):
     }
 
 
-# ── T3.1: parse_config validators (schemas.py IrrigatorResponse / SensorResponse) ──
+# ── parse_config validators (schemas.py IrrigatorResponse / SensorResponse) ──
 
 _RESPONSE_BASE = {"id": 1, "cluster_id": 2, "tuya_device_id": FAKE_DEVICE_ID, "name": "n", "type": "t"}
 _RESPONSE_MODELS = [IrrigatorResponse, SensorResponse]
@@ -93,7 +93,7 @@ def test_parse_config_decodes_the_stored_orm_json_string(tmp_db):
     assert SensorResponse.model_validate(sensor).config == {"k": 1}
 
 
-# ── T3.2: deleting an unknown id ──
+# ── deleting an unknown id ──
 
 
 @pytest.mark.parametrize(
@@ -129,7 +129,7 @@ def test_delete_known_id_returns_true_and_removes_the_row(tmp_db, method, key, m
     assert _count(tmp_db, model) == 0
 
 
-# ── T3.3: vacation / irrigation window PATCH ──
+# ── vacation / irrigation window PATCH ──
 
 
 def test_update_vacation_window_ignores_unknown_keys_and_none(tmp_db, frozen_clock):
@@ -163,7 +163,7 @@ def test_update_irrigation_window_unknown_id_returns_none(tmp_db):
     assert tmp_db.update_irrigation_window(UNKNOWN_ID, end_hour=9) is None
 
 
-# ── T3.4: sensor / irrigator PATCH ──
+# ── sensor / irrigator PATCH ──
 
 
 def test_update_sensor_unknown_id_returns_none(tmp_db):
@@ -216,7 +216,7 @@ def test_update_irrigator_json_encodes_dict_config(tmp_db):
     assert updated.config == '{"z": 1, "a": "b"}'
 
 
-# ── T3.5: plant PATCH ──
+# ── plant PATCH ──
 
 
 def test_update_plant_unknown_id_returns_none(tmp_db):
@@ -234,7 +234,7 @@ def test_update_plant_ignores_unknown_keys_and_none_current_behavior(tmp_db):
     assert (updated.species, updated.notes, updated.category) == ("Monstera deliciosa", "first", "tropical")
 
 
-# ── T3.7: get_vacation_window ──
+# ── get_vacation_window ──
 
 
 def test_get_vacation_window_found_and_not_found(tmp_db, frozen_clock):

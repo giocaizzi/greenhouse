@@ -1,4 +1,4 @@
-"""Characterization: the MCP tool surface published at ``/mcp`` (G2).
+"""Characterization: the MCP tool surface published at ``/mcp``.
 
 ``fastapi-mcp`` 0.4 derives the tools once, in ``FastApiMCP.setup_server``, from the
 app's OpenAPI document and keeps them on the instance (``app.state.mcp``):
@@ -31,8 +31,8 @@ from fastapi.testclient import TestClient
 from golden import assert_golden, install_offline_weather
 from server.conftest import _make_stubbed_app
 
-# sha256 of the name-sorted, key-sorted ``exclude_none`` tool dump recorded in
-# refactor/00-contracts.md at the Phase-0 baseline (main @ a1b2622); re-recorded only by
+# sha256 of the name-sorted, key-sorted ``exclude_none`` tool dump, first recorded at the
+# original baseline (main @ a1b2622, hence "PHASE0"); re-recorded only by
 # reviewed behavior-change commits (`fix(drift|consistency): …`) or description-only doc-contract
 # commits (`docs(api): …`) that also regenerate the golden.
 PHASE0_MCP_TOOLS_SHA256 = (

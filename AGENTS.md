@@ -129,7 +129,7 @@ Commands: top-level `status`, `irrigate`, `check`, `monitor`, `sync`, `learn`, `
 - **Clock.** Read `int(time.time())` at call time (no clock helper, no `from time import time` — `tests/test_refactor_guards.py` enforces it); tests freeze time with `time_machine`.
 - **Logging.** Module-level `logger = logging.getLogger(__name__)`, %-style lazy arguments. Job / actuation failures → `logger.exception`; advisory or best-effort failures → `warning` / `debug` with `exc_info`. Never swallow an exception silently — at least a DEBUG line. Logger names are pinned (`tests/golden/contracts/loggers.json`).
 - **Naming.** Core functions keep their public `db` repository parameter; new and server-side code uses `repo`.
-- **Size and complexity.** Functions ≤ 40 body lines, nesting ≤ 3, files ≤ 400 lines (`make sizecheck`); ruff `C90` max-complexity 8 plus `PLR0911/0912/0915`, `ERA`, `PGH`, `SLF`. Existing exceptions are registered and only shrink.
+- **Size and complexity.** Functions ≤ 40 body lines, nesting ≤ 3, files ≤ 400 lines (`make sizecheck`, exceptions in `scripts/size-exceptions.txt`); ruff `C90` max-complexity 8 plus `PLR0911/0912/0915`, `ERA`, `PGH`, `SLF`. Existing exceptions are registered and only shrink.
 - **Docstrings** are Google style and say *why*. Route docstrings are MCP tool descriptions, Typer docstrings are `--help` text, schema docstrings are OpenAPI descriptions: changing them regenerates the matching goldens in a dedicated `docs(api)` / `docs(cli)` commit.
 - **Dead code** is removed in its own commit with the grep evidence in the body; route / web / Typer / Textual handlers, scheduler jobs and anything a golden renders are never "dead".
 
@@ -143,15 +143,15 @@ make test          # uv run pytest
 make lint          # ruff check libs/ tests/
 make format        # ruff format libs/ tests/
 make lint-imports  # import-linter layering contracts
-make typecheck     # mypy --strict over the strict module list
-make sizecheck     # size DoD (FILES=... to narrow)
+make typecheck     # mypy --strict over libs/ ([tool.mypy] files in pyproject.toml)
+make sizecheck     # size limits via scripts/sizecheck.py (FILES=... to narrow)
 make coverage      # pytest with coverage (fails under 60%)
 make pre-commit-install / make pre-commit-run   # hooks: ruff, ruff-format, hygiene, hadolint, gitleaks
 make docker-build / docker-up / docker-down / docker-logs / docker-shell
 make help          # list every target
 ```
 
-CI runs ruff check + format, pre-commit and `make coverage`; `make check` is the stricter local superset — run it before pushing. Today `make typecheck` reads its module list from `refactor/mypy-strict.txt` and `make sizecheck` runs `refactor/scripts/sizecheck.py` with exceptions in `refactor/size-exceptions.txt`; when the `refactor/` folder is retired these move (mypy `files` in `pyproject.toml`, the script under `scripts/`) and this paragraph must follow.
+CI runs ruff check + format, pre-commit and `make coverage`; `make check` is the stricter local superset (pre-commit-run, then lint-imports, typecheck, sizecheck and coverage, stopping at the first failure) — run it before pushing. `make typecheck` is plain `uv run mypy`: strict mode over every module listed by `files` in `[tool.mypy]` (`pyproject.toml`; all of `libs/`, the frozen Alembic revisions excluded). `make sizecheck` runs `scripts/sizecheck.py` over `libs/`; deliberate exceptions live in `scripts/size-exceptions.txt`, one `<path>[::<qualname>] — <reason>` line each, and the register only shrinks.
 
 ### Tests
 

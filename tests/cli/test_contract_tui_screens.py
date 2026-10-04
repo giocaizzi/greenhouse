@@ -1,4 +1,4 @@
-"""Characterization goldens for the Textual TUI — screen renders, widget ids, tcss selectors (gap G12).
+"""Characterization goldens for the Textual TUI — screen renders, widget ids, tcss selectors.
 
 One headless tour of the real app (seeded in-memory server, fake devices, offline
 weather, clock frozen at ``FROZEN_INSTANT`` *before* seeding, ``TZ=UTC``, sprite

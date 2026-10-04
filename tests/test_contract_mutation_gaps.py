@@ -1,7 +1,7 @@
-"""Gate 1 mutation-campaign gap tests (core) — characterization, current behavior.
+"""Mutation-campaign gap tests (core) — characterization, current behavior.
 
-Each test kills one mutant that survived the Phase-1 safety net (see
-``refactor/gate1/mutation.md``, ids in the test docstrings). They pin what the
+Each test kills one mutant that survived the original characterization suite (the
+mutant id opens each test docstring). They pin what the
 code does TODAY at boundaries and orderings the golden grid did not reach;
 nothing here asserts what the code *should* do. Engine cases reuse the
 pytest-free ``engine_grid`` harness: every case is evaluated under its own

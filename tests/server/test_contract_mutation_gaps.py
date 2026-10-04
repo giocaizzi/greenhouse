@@ -1,7 +1,7 @@
-"""Gate 1 mutation-campaign gap tests (server) — characterization, current behavior.
+"""Mutation-campaign gap tests (server) — characterization, current behavior.
 
-Each test kills one mutant that survived the Phase-1 safety net (ids in the
-docstrings, details in ``refactor/gate1/mutation.md``). They pin what the code
+Each test kills one mutant that survived the original characterization suite (the
+mutant id opens each docstring). They pin what the code
 does TODAY; nothing here asserts what it *should* do. Hermetic: in-memory
 SQLite (``tmp_db``), frozen clock (``frozen_clock`` at ``golden.FROZEN_INSTANT``),
 no network, fake device adapters written in this module.

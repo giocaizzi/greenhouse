@@ -1,11 +1,11 @@
-"""Characterization (G3 + G4): the HTMX/Jinja2 web UI renders exactly what it renders today.
+"""Characterization: the HTMX/Jinja2 web UI renders exactly what it renders today.
 
 Pins, for one deterministic seeded greenhouse (frozen clock, offline weather, clean env, ``TZ=UTC``):
 
 * the web route inventory in registration order → ``golden/web/routes.json``;
 * every GET page / HX fragment: status, relevant headers and the full body →
   ``golden/web/get/<case>.html`` (one file per route + variant);
-* G4 — the template name and sorted context keys each GET renders →
+* the template name and sorted context keys each GET renders →
   ``golden/web/template_context.json``.
 
 Mutating routes live in ``test_contract_web_mutations.py``; error pages / auth redirects in
@@ -774,7 +774,7 @@ def test_get_variant_html_golden(name, url, setup, running, seeded_get_client):
     assert_golden(f"web/get/{name}.html", render_response("GET", url, {}, resp))
 
 
-# ── G4: template name + context keys per GET ─────────────────────────────────────────────────
+# ── template name + context keys per GET ─────────────────────────────────────────────────────
 
 
 def test_template_context_golden(web_env, monkeypatch):

@@ -1,7 +1,7 @@
-"""Gate 1 mutation-campaign gap tests (CLI / TUI) — characterization, current behavior.
+"""Mutation-campaign gap tests (CLI / TUI) — characterization, current behavior.
 
-Each test kills one mutant that survived the Phase-1 safety net (ids in the
-docstrings, details in ``refactor/gate1/mutation.md``). Pure functions use
+Each test kills one mutant that survived the original characterization suite (the
+mutant id opens each docstring). Pure functions use
 explicit reference timestamps; the one Textual test hosts a probe ``DataScreen``
 in a minimal app (no server, no client, no network).
 """

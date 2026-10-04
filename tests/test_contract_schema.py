@@ -1,8 +1,8 @@
-"""Characterization: ORM DDL, the Alembic head, and migrated-vs-ORM schema (G9).
+"""Characterization: ORM DDL, the Alembic head, and migrated-vs-ORM schema.
 
 - ``contracts/ddl.sql`` — ``CREATE TABLE`` / ``CREATE INDEX`` for every table of
   ``Base.metadata`` compiled for SQLite, in ``metadata.sorted_tables`` order with each
-  table's indexes sorted by name (the exact recipe behind the Phase-0 fingerprint);
+  table's indexes sorted by name (the exact recipe behind the ``PHASE0_DDL_SHA256`` fingerprint);
 - ``contracts/orm_columns.json`` — per column what DDL does not show: Python-side
   ``default`` / ``onupdate``, ``index`` / ``unique`` flags, foreign keys; plus the
   mapped class → table map;
@@ -29,7 +29,7 @@ from greenhouse_core import database
 from greenhouse_core.database import head_revision, init_db
 from greenhouse_core.models import Base
 
-# sha256 of "\n".join(DDL statements) recorded in refactor/00-contracts.md (main @ a1b2622).
+# sha256 of "\n".join(DDL statements), recorded at the original baseline (main @ a1b2622, hence "PHASE0").
 PHASE0_DDL_SHA256 = (
     "7b6a2d72054011a900438ae7e7edd471acbffc6c6a2f2d60cc1583973fb36f2b"  # gitleaks:allow — content hash, not a secret
 )

@@ -12,7 +12,7 @@ below the repo's 512 KB large-file hook; large families are sharded by
 and which top-level fields differ, then the byte-level diff.
 
 This is what the code does *today* — a refactor of ``logic/`` or ``learning/``
-must leave every golden byte-identical (``refactor/BRIEF.md`` rules 1 and 8).
+must leave every golden byte-identical (AGENTS.md "Golden policy").
 """
 
 from __future__ import annotations
