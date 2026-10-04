@@ -1,247 +1,380 @@
 # Refactor notes
 
-Running log for the behavior-preserving refactor on `claude/focused-hawking-7to7o3` (baseline `main` @ `a1b2622`).
+Notes for the behavior-preserving refactor on `claude/focused-hawking-7to7o3`. Baseline: `main` @ `a1b2622`.
+The safety net is frozen at the local tag `refactor-gate1`. This file is self-contained. The short ids in
+parentheses (B-n, S-n, D-n, OD-n) are labels kept only because test docstrings and commit bodies use them.
 
 ## Owner decisions
 
-- **No `src/` layout.** The owner wants to keep the `libs/` uv workspace (`libs/greenhouse-{core,server,cli}/greenhouse_*`).
-  The PyPA src-layout recommendation (§1.1) is deliberately not applied; hatch package paths and pytest `pythonpath`
-  stay as they are. Restructuring happens inside each package.
-- **Method-level cleanup is in scope.** The owner wants methods made slick and clear with clean interfaces, not only
-  module reorganization. The plan includes a per-method pass (extract function, guard clauses, naming, typed explicit
-  parameters, parameter objects, CQS). Frozen public contracts still bound it; internal signatures may change when all
-  call sites move in the same commit.
-- **Non-functional fixes may be queued freely; doc-contract text may change, reviewed** (2026-10-02): see
-  `refactor/BRIEF.md` owner decisions. This relaxes the golden policy for exactly one case: docstring-only commits in
-  the lint-ratchet stage may regenerate the OpenAPI / MCP-tool / CLI-help goldens, with a reviewer confirming the
-  golden diff is description text only.
-- **Branch:** work lands on `claude/focused-hawking-7to7o3` (the session's designated branch) instead of
-  `refactor/clean-structure`.
+- **No `src/` layout.** The `libs/` uv workspace stays (`libs/greenhouse-{core,server,cli}/greenhouse_*`). Hatch
+  package paths and the pytest `pythonpath` are unchanged. Restructuring happens only inside each package.
+- **Method-level cleanup is in scope.** This covers small single-purpose functions, guard clauses, names, typed
+  explicit parameters, parameter objects and command–query separation. Frozen contracts still bound it: route names,
+  docstrings and `response_model`s, public import paths, Pydantic class and field names, Textual `action_*`/`on_*`/ids,
+  and CLI options. An internal signature may change only when every call site moves in the same commit.
+- **Non-functional fixes may be queued freely** (2026-10-02).
+- **Doc-contract text may change after review** (2026-10-02). This covers route docstrings (MCP tool descriptions),
+  schema docstrings (OpenAPI descriptions) and Typer help. Each edit is a dedicated `docs(api|cli)` commit. It
+  regenerates only the affected goldens, and a reviewer confirms the diff is description text only.
+- **Prune dead code along the way** (2026-10-02). Evidence comes first: no references across libs, tests, templates,
+  `app.tcss`, `plugin/` or entry points, and no dynamic access. Each removal group gets its own
+  `refactor(<area>): remove dead code — …` commit. A dead name on a pinned import surface is removed together with its
+  golden entry, and the diff must be removal-only. Never treated as dead: handlers, Textual actions, scheduler jobs,
+  and models that OpenAPI references.
+- **Remove drift everywhere** (2026-10-02). Divergent duplicate copies are unified in labeled `fix(drift): …` commits,
+  one pair per commit. By default the canonical side is the stricter, validated, API side.
+- **Land a clean, consistent end state** (2026-10-02). An observable change is a labeled `fix(consistency): …` commit
+  with reviewed test and golden updates.
+- **OD1** Seven services keep returning core read models. Services that return dicts get TypedDict results.
+- **OD2** Handlers commit CRUD. A service commits only when a side effect must follow a durable write. There is one
+  `repo.commit()/rollback()` API, and jobs go through one session helper.
+- **OD3** Remove all legacy compatibility code (pump-dry-run alert migration, `tuya_cloud`/`tuya_local` device-type
+  aliases, pre-Alembic DB repair, `IRRIGATION_CHECK_INTERVAL_HOURS`) as labeled commits.
+- **OD4** A manual stop records action `"stop"`. Existing rows are unchanged.
+- **OD5** The `refactor/` working folder was deleted at the end; only `REFACTOR_NOTES.md` and `REFACTOR_REPORT.md` stay. The
+  strict list moves to `[tool.mypy] files`, sizecheck moves to `scripts/`, and the Makefile is updated.
+- **Drift confirmations** (2026-10-03):
+  - D8: vacation times are parsed and displayed in the `timezone` preference on every interface.
+  - D7: the plant dashboard shows "never" or the real age, never "stale".
+  - D2: a cross-cluster plant on sensor create or update is a 404 everywhere.
+- **Branch.** Work lands on `claude/focused-hawking-7to7o3`, not on `refactor/clean-structure`.
 
-## Observed bugs (not fixed)
+## Labeled behavior changes landed
 
-1. **`WWW-Authenticate` header dropped on JSON 401s.** `greenhouse_server/web/exception_handlers.py:41-44` — the global
-   `HTTPException` handler returns `JSONResponse({"detail": exc.detail}, status_code=exc.status_code)` without
-   `headers=exc.headers`, so the `WWW-Authenticate: Bearer` header raised for 401s on `/api/v1` and `/mcp` never reaches
-   the client. Found by the contract extractor (probe script in the scratchpad). To be pinned by a characterization test
-   in Phase 1 (asserting the header is **absent**). Not fixed.
+These come from `git log --oneline --grep='^fix(' a1b2622..HEAD` (34 commits). Each commit body has before/after
+details and the exact test and golden diffs.
 
-2. **SAFETY — `dry_run_global` is never enforced.** The preference (labelled "Global dry-run (never actuate)" in the TUI,
-   `tui/resources.py:113`) is stored (`models.py:422`), editable via API/web/CLI/TUI and shown in the web context
-   (`web/context.py:49`), but no actuation path reads it (`grep -rn dry_run_global libs/` — only storage/display hits).
-   Verified by the orchestrator. Not fixed (behavior change); recommend a dedicated fix PR.
-3. **SAFETY — IK10PW keep-alive fallback can leave the pump on until the device's own auto-off.**
-   `devices/irrigators/ik10pw.py:160-177`: `self.on()` runs first, then `signal.signal(SIGTERM, …)` is called *outside*
-   the `try`. `signal.signal` raises `ValueError` when called off the main thread (APScheduler worker / FastAPI
-   threadpool), so the `finally` that sends `off()` never runs and the error propagates with the pump ON. Bounded by the
-   firmware auto-off timer the keep-alive is meant to refresh. Verified by reading; to be pinned by a characterization
-   test. Not fixed; recommend a dedicated fix PR.
+### Drift (`fix(drift)`)
 
-Further suspected bugs (B-3…B-25: offline flag after every sync, caps never checked in the automatic pipeline,
-re-raised alerts not re-notified, `water_warning` meaning differs between engine and health monitor, 500 on duplicate
-device id in web create routes, vacation end < start accepted by the API, `local_key` returned in plain text, …) are
-listed with file:line evidence in `refactor/00-smells.md` ("Observed bugs"). They are recorded, not fixed; each one that a
-refactored module touches gets a characterization test pinning current behavior.
+| Change | Where (shared home) | Pinned by | Commit |
+|---|---|---|---|
+| D1 One irrigator registration path. The web form answers a duplicate device id with 409 instead of 500 (fixes B-7, part 1). | `services/inventory.create_irrigator` | `tests/server/test_contract_web_mutations.py` (`create_*__duplicate_device_id`) | `c54e86a` |
+| D2 Sensor create and update share the plant-in-cluster rule and duplicate-id handling. API `PUT` now also rejects another cluster's plant (404 `Plant N not found in cluster`) (fixes B-7, part 2). | `services/inventory.{ensure_plant_in_cluster,create_sensor}` | `tests/server/test_sensors.py`, `test_contract_web_mutations.py`, OpenAPI/MCP goldens | `abbe4a9` |
+| D3 One irrigation-window validator, using the API wording. The web loses "Select at least one weekday." | `services/windows.validate_window` | web goldens `web/mutations/*window*` | `fe9bf91` |
+| D3 follow-up: web window parse errors drop their trailing "." | web window routes | 2 web goldens | `acc9f91` |
+| D4 The web check badge uses the API `has_alerts` rule (alerts ∨ maintenance ∨ needs_water) (fixes B-13). | `services/irrigation.check_has_alerts` | goldens `web/mutations/check_{all,single}.json` | `e8af945` |
+| D5 Every vacation write path checks `starts_at < ends_at`. API/MCP/CLI `POST` now returns 400 (fixes B-8). | `services/vacation.validate_vacation_range` | `tests/server/test_contract_pipeline.py`, OpenAPI/MCP goldens | `76bc13e` |
+| D6 `deps.require_*` lookups give one 404 wording per entity in the API and the web. | `deps.require_{cluster,irrigator,plant,sensor,…}` | `tests/test_refactor_guards.py`, web `*__404` goldens | `63c93a5` |
+| D7 One relative-time formatter. The plant dashboard shows "never" or the real age ("12d ago"). | `web/filters.relative_age` | `tests/server/test_contract_wp5_gaps.py` | `eaeb534`, `831183d` |
+| D8 Vacation times use the `timezone` preference in the web and TUI. API/CLI stay in Unix seconds. | `tui/screens/forms.py`, `web/routes/vacation._preference_zone` | `tests/cli/test_tui.py`, `tests/server/test_web_vacation.py` | `f849e79` → `e2ee93f` |
+| D9 CLI `irrigator add/update` use one `is not None` rule. `--device-ip ""` is now sent. | `commands/irrigators._device_config` | `tests/cli/test_contract_json_output.py` | `8faca8b` |
+| D10 Every soil-target reader goes through `parse_moisture_target` (monitor, check, learning issues). | `logic/plant_needs.moisture_target_range` | `tests/test_moisture_target_range.py`, wp6/wp7 gap tests | `a77a7aa` |
+| D10b The plant chart's soil band uses the same parser. `"40-60-80"` → 40–60; non-numeric → default band labelled `water_needs:<level>`. | `services/charts` | `tests/server/test_web_charts.py` | `1f44fd2` |
+| D12 Plant-DB sync of an unknown cluster returns 404 in the API and the web, instead of `synced=0` (fixes B-16). | `services/cluster.ClusterNotFoundError` | `test_contract_wp5_gaps.py`, OpenAPI/MCP goldens | `4034fb6` |
+| D13 TUI config tables list fields in repository order. | TUI `render` config rows | goldens `tui/screens/{cluster_1_config,settings}.txt` | `5e0d9b0` |
+| D14 The dead `stats.export_csv` copy is deleted; the route CSV stays. | `services/cluster.cluster_events_csv` | `tests/test_contract_stats.py` | `45481f7` |
+| D15 The API and web monitors share one path that commits its freshness sync. Repeated calls make fewer Cloud calls, and the web monitor now refreshes stale sensors (fixes B-N1). | `IrrigationService.monitor_cluster` | `test_contract_wp5_gaps.py`, OpenAPI/MCP goldens | `046a39a` |
+| D15 follow-up: the web monitor 404s an unknown cluster. | web monitor route | golden `monitor__404` | `77a5bb6` |
+| D16 One lenient device-config parser. Malformed, non-object or `"null"` stored config reads as `{}` instead of HTTP 500. | `greenhouse_core.models.parse_device_config` | `tests/test_contract_repository_gaps.py` | `4c914e8` |
+| D17 Efficacy `days` is bounded to 1..365 on the API too (422 above). | `services/efficacy.EFFICACY_{DEFAULT,MAX}_DAYS` | `tests/server/test_efficacy.py`, OpenAPI/MCP goldens | `cf8dafe` |
+| D20 The web kill switch (`POST /bulk/stop-all`) sends the same ntfy emergency push as the API. | `services/bulk.stop_all_irrigators` | `tests/server/test_web_emergency_notify.py` | `cfb423f` |
+| D20 follow-up: the web route rolls back the notify gate's uncommitted preferences seed. Without it, the page waited out SQLite's 5 s busy timeout. | web bulk route | same file (red without the fix) | `a0e504b` |
 
-CLI (pinned in `tests/cli/test_contract_json_output.py`, details in `refactor/10-safety-cli.md`):
-- a whitespace-only `GREENHOUSE_API_TOKEN` disables the token file fallback;
-- only connection errors are turned into a clean error — a timeout or an empty 2xx body crashes with a traceback (exit 1);
-- a 422 validation error is printed as a Python repr;
-- id `0` is treated as "not given" by `check`, `plant list`, `sensor list`;
-- `stats --export` with a non-CSV response writes an empty file and reports success;
-- scheduler job ids are interpolated into the URL path unescaped;
-- empty `--device-ip` on `irrigator add` is dropped while empty `--local-key` on `irrigator update` is sent;
-- each call opens an `httpx` client that is never closed.
+### Consistency (`fix(consistency)`)
 
-Devices / ingress / auth (pinned; details in `refactor/10-safety-ingress-devices.md`):
-- B-2 confirmed by test: `test_keepalive_off_main_thread_current_behavior_leaves_pump_on`,
-  `test_start_off_main_thread_current_behavior_raises_after_switching_on` (ON sent, `ValueError`, OFF never sent).
-- B-3 reproduced: a healthy sensor is flagged offline 31 min after every sync; the alert re-opens and only notifies the
-  first time (`test_sensor_offline_flap_current_behavior_flags_offline_31min_after_every_sync`).
-- B-21: a humidity-only live environment reading is dropped.
-- `verify_password` raises `VerificationError` on a truncated stored hash instead of returning `False` (login → 500).
-- The weather forecast cache ignores `hours` within its 600 s window.
+| Change | Where | Pinned by | Commit |
+|---|---|---|---|
+| OD4 A manual stop records action `stop`. Old databases keep their `off` rows, so history and `stats.events_by_type` show both. The TUI colours `stop`. | `services/manual_control.manual_stop` | OpenAPI/MCP goldens, `orchestration/pipeline/manual_start_stop_log.json` | `8053a89` |
+| OD3 Pre-Alembic DB repair removed. A DB with tables but no `alembic_version` now fails at startup ("table … already exists"). SQLite DDL is not transactional, so partial tables and an empty `alembic_version` are left behind. Remedy: back up, add the missing columns, then `alembic stamp head`. | `greenhouse_core.database.init_db` | `tests/test_migrations.py` | `1a6e30e` |
+| OD3 The startup migration of open `pump_dry_run` alerts is removed. Such alerts stay open until resolved by hand. The pump watcher's `pump_dry_run` activity code is unchanged. | `scheduler.init_health_monitor`, `services/health_monitor` | `tests/server/test_health_monitor.py`, `test_contract_scheduler.py` | `80dcb7b` |
+| OD3 `IRRIGATION_CHECK_INTERVAL_HOURS` is no longer read. Use `IRRIGATION_CHECK_CRON_HOURS=*/N`; old `.env` files silently fall back to hourly. | `config.Settings`, `scheduler._resolve_check_cron_hours` | `test_contract_settings.py`, `test_scheduler_settings.py`, registry golden | `787c471` |
+| D18 Sensor-age cells (cluster detail, live status, sensors table, health page) show the real age. They showed "stale" for every age because an age was piped into a timestamp filter. Filter contract: `age_seconds` takes seconds, `time_ago` takes a timestamp. | `web/filters`, templates | `tests/server/test_web_filters.py` | `ef2e49f` |
+| D19 `GET /clusters/{id}/stats` on a cluster without an irrigator returns zero totals instead of 500 (fixes B-N2). | `routes/operations`, `stats.get_irrigation_stats` | `tests/server/test_contract_cons_w2_gaps.py`, OpenAPI/MCP goldens | `37bc66f` |
+| Silent `except` blocks now log at DEBUG with a traceback: weather, `collect_learning_alerts`, and the pump watcher's rollback after a failed commit. Adds two loggers: `greenhouse_server.services.{weather,maintenance}`. | those services | no test change (DEBUG records only) | `3444d9a` |
+| The TUI irrigator form hint shows the keys the server reads: `{"device_ip": …, "local_key": …}` (half of B-19). | `tui/resources.py` | golden `tui/surface.json` | `4615c84` |
+| An authenticated `/api/v1` request or web page opens one DB session instead of two. Auth reuses the route's `get_session` / `get_settings` providers. | `greenhouse_server.auth`, `state.py` | `tests/server/test_auth_session.py` | `d44ab8f` |
+| `SpriteView` keeps its animation flag in `_animated`, not in Textual's `Widget._animate` slot, so `Widget.animate()` on a sprite works instead of raising `TypeError` (B-U1). No caller today. | `tui/sprites.py` | `tests/cli/test_tui.py::TestSpriteView` | `589b176` |
 
-Settings / schema (pinned; details in `refactor/10-safety-contracts-static.md`):
-- `GREENHOUSE_*`-aliased settings (MCP token, ntfy, auth secret/admin) are also read from the bare field name and from
-  `IRRIGATION_<FIELD>` (e.g. `MCP_TOKEN` or `IRRIGATION_AUTH_SECRET_KEY` configure the server).
-- The migrated schema differs from `Base.metadata.create_all`: migrations add four server defaults and two named unique
-  constraints, so `tmp_db`-based tests run on a slightly different schema than production.
-- Test infra: every `create_app` replaces root log handlers, so `caplog` sees nothing afterwards.
-- Pre-existing pytest quirk: `tests/server/X tests/<core file> tests/server/Y` on one command line → "fixture 'client'
-  not found" for Y; group test paths by directory.
+`ea6116e fix(scheduler)` is a correction with **no net behavior change**. Commit `faab47d` had moved `_run_leak_check`
+onto `job_session`, which changed one rollback-failure path. `ea6116e` restores the original scaffolding, and the
+reviewer's harness shows 0 differences against `971aa93`.
 
-Decision engine (pinned; details in `refactor/10-safety-engine.md`):
-- a decision can end with zero reasons (temperature-only data): skip, confidence 0.5, `primary_code` NULL in the log;
-- critical stress keys on the **average** soil moisture, not the driest plant (contrast with invariant #2);
-- `constants.py` values are bound by name at import (`from … import`), so patching `constants.X` does not affect the
-  engine — only patching the name inside `engine.py` does (relevant to how invariant #5 can be tested);
-- cleaning readings twice can drop more values than once (not idempotent);
-- with < 5 readings a spike is not filtered and can trigger very-dry irrigation;
-- `parse_moisture_target` does no validation; 0 °C / 0 % plant bounds are treated as missing;
-- cooldown (6 h) and leak hold (24 h) are inclusive at the exact edge;
-- critical stress, water warning and the no-sensor fallback bypass vacation rationing;
-- light thresholds use the UTC month while seasons use the preferences timezone.
+Behavior-preserving but worth knowing: `cc0d37e` (refactor) makes the CLI close its `httpx.Client` after each call.
+The TUI still keeps one client per session.
 
-Orchestration (pinned; details in `refactor/10-safety-orchestration.md`):
-- B-1 (`dry_run_global` ignored), B-4 (caps not checked in the automatic pipeline; global caps ignored), B-5 (re-raised
-  alert not re-notified), B-6 (device-health block not written to `decision_logs`), B-8 (vacation end < start accepted)
-  — each pinned by a `test_*_current_behavior_*` test.
-- **SAFETY:** a cluster that crashes *after* actuating in `check_all_clusters` is rolled back including its `start`
-  event, so the cooldown can't see that pump run (a second irrigation can follow sooner than 6 h).
-- `/monitor` cleans only a 2 h slice — too few samples for the spike filter — so a single spike reports `very_dry`.
-- `force=true` records the start event and push as `auto` and schedules a leak check, while the decision log says manual.
+| OD3 Legacy device-type aliases removed: the registry matches the exact `vendor.model` key; `tuya_cloud` / `tuya_local` / `""` (irrigators) and `soil_moisture` / `temp_humidity` / `light` / `""` (sensors) no longer resolve. Web add/edit forms offer `rainpoint.ik10pw` / `tuya.tr301z` (they offered only legacy values, so saving a canonical row wrote a legacy value back); CLI `--type` help names the model key. A row written with an unknown type is refused, never actuated: `registry.get_irrigator` logs an ERROR and raises `UnknownDeviceModel` — manual start → 503, automatic runs → `no adapter for irrigator: …`, stop-all → listed in `errors`; such a sensor syncs but gets no health monitoring. | `devices/registry.py`, web irrigator/sensor forms, CLI help | `tests/server/test_legacy_device_types.py`, registry/adapter contract tests, CLI help + web goldens | `2eaca6b`, `3d7544a`, `dc64396`, `2258a20` |
+| OD3 follow-up (owner decision 2026-10-03): data-only Alembic revision `a1d3f5b7c902` rewrites leftover legacy type values (and `""`) to the model keys on upgrade (idempotent, no-op downgrade), so a migrated database has none. | `migrations/versions/a1d3f5b7c902_rewrite_legacy_device_types.py` | `tests/server/test_legacy_device_types.py::test_upgrade_rewrites_leftover_legacy_types_to_model_keys`, Alembic head pin in `tests/test_contract_schema.py` | `8355fad` |
 
-Web UI (pinned; details in `refactor/10-safety-web.md`):
-- bulk stop-all reports "Every device is now off." even when a device reports a failed stop (`services/bulk.py`);
-- ack/resolve of a missing alert returns 200 with a success toast instead of 404;
-- bare `int()`/`float()` on form fields → unhandled plain-text 500 (config, global config, plants, `temp_override`,
-  plants/sync);
-- `POST /clusters/999/irrigate` → 500 (decision panel template crashes);
-- deleting a populated cluster leaves orphan windows, decision logs, alerts and sensor assignments;
-- unknown paths and 405s return JSON even to browsers: the handler picks HTML vs JSON by path, not by `Accept` as its
-  docstring says;
-- `now_text` uses the process-local timezone (stable in tests only because `clean_env` sets `TZ=UTC`).
+D11 (web cluster quiet flag through `logic.timing.active_quiet_window`, `60829bf`) and D16b (gateway config through
+`models.parse_device_config`, `5addfe0`) landed as behavior-preserving refactors: the second reviewer found zero
+differences (725,200 quiet-hour cases; 38 config input classes).
 
-TUI (pinned; details in `refactor/10-safety-tui.md`):
-- on a 401 the dashboard shows "Cannot reach the server" behind the sign-in dialog;
-- `app.tcss` `#global-config` matches no widget (dead CSS);
-- the Activity table cursor jumps to the top row on every refresh (harmless: no row actions);
-- the `ConfirmScreen` docstring / CLAUDE.md claim every actuating key confirms — see the actuation golden for the real
-  table (`S`, `P`, `H`, alert `k`/`v`/`y`, scheduler resume run without a dialog);
-- TUI renders are tied to the locked Textual / plotext / rich versions — a dependency bump regenerates those goldens in
-  its own commit; the `system` render reads the process-wide scheduler.
-- **Overlapping dashboard reloads can crash the TUI**: when a load takes longer than the refresh period, two loads
-  interleave in `DashboardScreen._render_cards` and the app dies with `WorkerFailed: NoMatches('#cluster-card-2')`
-  (`.first()` at `tui/screens/dashboard.py:68`). Found while hardening the TUI tests; not fixed.
-- One TUI contract test failed once under heavy machine load (4 cores shared by several agents) and passed in 6
-  subsequent runs; watched at Gate 1.
+The test suite is hermetic since `13fcac7`: an autouse fixture in `tests/conftest.py` blocks `urllib.request.urlopen`
+and non-loopback sockets. Before it, 21 tests reached the real Open-Meteo API through the app's weather client
+(already at baseline `a1b2622`), so results could depend on live weather.
 
-Safety-net hygiene: test session JWTs in `set-cookie` goldens are stored as `<JWT sha256=…>` (still exact) so
-gitleaks stays clean; gitleaks' pre-commit hook only scans staged changes, so the branch was also scanned with
-`gitleaks detect --log-opts=a1b2622..HEAD` (no leaks).
+## Observed bugs not fixed (open)
 
-Mutation campaign (Gate 1; details in `refactor/gate1/mutation.md`):
-- the spike filter drops the first sample of a genuine step change (e.g. 40,40,40,60,60) — pinned as
-  `…_current_behavior`;
-- equivalent mutants exposed dead/redundant code: `StressIndicators.any_critical()` has no caller; the
-  `start == end` guard in `is_within_quiet_hours` duplicates `_hour_in_range`. Candidates for dead-code removal in
-  dedicated, test-backed commits.
-- mutmut 3 cannot run on this layout (it keys mutants by file path `libs.greenhouse-core.…` while tests import
-  `greenhouse_core.…` via pytest `pythonpath`); the scripted runner `refactor/gate1/mutate.py` (473-mutant catalogue)
-  is the reusable mutation tool for Phase 3/5.
+Each entry is pinned as current behavior unless it says otherwise. A fix is a separate labeled PR that flips the
+pinning test.
 
-Pump watcher (found by the WP4 reviewers; pre-existing, not fixed):
-- if any DB write fails during a trip, the watcher's own except handlers raise `PendingRollbackError` (expired ORM
-  state), so the commit/rollback steps never run (the pump is already stopped);
-- if the health monitor swallows a failed flush (e.g. SQLite "database is locked"), `_handle_trip` still raises.
+### Safety
 
-Process note: Reviewer 2's differential harness (real SQLAlchemy) caught a behavior difference in WP4's first T4.12
-attempt (an `irrigator.id` read moved before `commit()`); T4.12 was reverted and redone. See
-`refactor/reviews/wp4-pump-watcher-r2.md`.
+- **dry_run_global is never enforced (S1, B-1).** The "Global dry-run (never actuate)" preference is stored, editable
+  (API, web, CLI, TUI) and shown as a banner. No actuation path reads it: not the pipeline, not manual start, not the
+  scheduler. *Where:* `models.py` (preference), `web/context.py` (display only). *Pinned:*
+  `tests/server/test_contract_pipeline.py::test_dry_run_global_current_behavior_still_actuates` and golden
+  `dry_run_global_preference`.
+- **The IK10PW keep-alive fallback can leave the pump ON (S2, B-2).** `self.on()` runs first. Then
+  `signal.signal(SIGTERM, …)` raises `ValueError` off the main thread (scheduler worker, FastAPI threadpool), before
+  the `try/finally` that sends `off()`. The error propagates with the pump ON, bounded only by the firmware auto-off.
+  *Where:* `devices/irrigators/ik10pw.py::IK10PWAdapter._start_keepalive`. *Pinned:*
+  `tests/devices/test_contract_adapters.py::test_keepalive_off_main_thread_current_behavior_leaves_pump_on`,
+  `::test_start_off_main_thread_current_behavior_raises_after_switching_on`.
+- **Cooldown blind spot after a crash (S3).** In `check_all_clusters`, if a cluster crashes after `adapter.start`, its
+  `start` event is rolled back. The pump ran, but the 6 h cooldown cannot see it. *Where:*
+  `services/irrigation.py::check_all_clusters`. *Pinned:* orchestration golden `check_all_crash_after_writes.json`.
+- **Overlapping dashboard reloads crash the TUI (S4).** When a load outlasts `refresh_seconds`, two loads interleave
+  in `DashboardScreen._render_cards` and the app dies with `WorkerFailed: NoMatches('#cluster-card-2')`. The same race
+  hit once at teardown (`test_auto_refresh_polls_again` → `NoMatches('#cluster-grid')`, 0/33 on reruns). Suggested
+  fix: reload no-ops once the screen is unmounting. *Where:* `tui/screens/dashboard.py`. *Pinned:* not pinned (race).
+- **Pump watcher error handling during a trip (S5).** If a DB write fails during a trip, the watcher's own except
+  handlers raise `PendingRollbackError`, so commit and rollback never run (the pump is already stopped). If the health
+  monitor swallows a failed flush ("database is locked"), `_handle_trip` still raises. *Where:*
+  `services/pump_watcher.py`. *Pinned:* not pinned (found by WP4 reviewers).
+- **Shared `DeviceHealthMonitor` is rebound during a pump watch (S6).** Every job re-points the one
+  `app.state.health_monitor` via `bind_repo`, and its alert cache is an unlocked dict. A NO_WATER trip during a
+  minutes-long watch writes its alert into another job's session. If that session rolls back, the alert is lost, but
+  the cache marks NO_WATER as raised. Actuation stays blocked with no inbox alert, and the alert never re-fires. On one
+  shared SQLite file the write fails with "database is locked" (swallowed), with the same result. Fix: a repo-per-call
+  monitor plus a lock. *Where:* `services/health_monitor.py::bind_repo`, `scheduler.py`, `services/pump_watcher.py`.
+  *Pinned:*
+  `tests/server/test_health_monitor.py::test_pump_watcher_trip_current_behavior_alert_written_through_rebound_repo_and_cache_suppresses_reraise`.
 
-TUI (wave C):
-- search-table column widths only ever grow: an early partial query can leave the final table wider than its rows
-  need (root cause of the old `search_citrus` flake);
-- **B-U1:** `SpriteView._animate` shadows Textual's `Widget._animate` (the cached `BoundAnimator`,
-  `textual/widget.py:444/2541`): the sprite stores its animation flag (`True`/`False`) there, so `Widget.animate(...)` on
-  a sprite calls the bool and raises `TypeError: 'bool' object is not callable`. No caller animates a sprite today
-  (latent; hidden by a `type: ignore[assignment]`). Pinned by the strict xfail
-  `tests/cli/test_tui.py::TestSpriteView`; **fixed** in fix pass FP-U (flag renamed `_animated`, labeled `fix(consistency)`).
+### Orchestration / API
 
-Consistency audit (2026-10-03):
-- **B-N1:** `GET /clusters/{id}/monitor` syncs stale sensors from the Cloud but never commits, so the synced rows are
-  discarded and every call hits the Cloud again; the web monitor skips the sync. Tracked as drift pair D15.
+- **Sensors flap offline after every sync (B-3).** The 30-min offline threshold is applied to the latest *persisted*
+  reading, but readings are persisted only by the 180-min sync. A healthy sensor goes offline about 31 min after each
+  sync; the alert re-opens and notifies only the first time. *Where:* `services/health_monitor.py`,
+  `constants.py`. *Pinned:*
+  `tests/server/test_contract_health_monitor.py::test_sensor_offline_flap_current_behavior_flags_offline_31min_after_every_sync`.
+- **Caps are not checked by the automatic pipeline, and global caps are ignored (B-4).** `check_rate_limits` reads
+  only the raw cluster row. `/irrigate` and the scheduler never check caps, and `TriggerCode.DAILY_CAP_HIT` is never
+  emitted. *Where:* `services/manual_control.check_rate_limits`. *Pinned:* `test_contract_pipeline.py::test_caps_current_behavior_not_checked_by_automatic_pipeline`, `::test_global_caps_current_behavior_ignored_by_manual_start`, golden `caps_reached_automatic`.
+- **A re-raised alert is not re-notified (B-5).** `upsert_alert` re-opens a resolved row with `occurrence_count` 2,
+  but `notify_if_new_alert` requires `== 1`. *Where:* `repository.upsert_alert`, `services/alerts.py`. *Pinned:*
+  `test_contract_pipeline.py::test_reraised_alert_current_behavior_is_not_renotified`.
+- **A device-health block is not written to `decision_logs` (B-6).** The response says `skip`/`device_no_water`, but
+  the log row keeps `irrigate`. *Where:* the health gate in `services/irrigation.py`. *Pinned:*
+  `test_contract_pipeline.py::test_device_health_block_current_behavior_not_written_to_decision_log`, golden
+  `device_health_block`.
+- **The health-monitor cache is memory-only (B-9).** After a restart, an open NO_WATER/OFFLINE alert does not block
+  actuation until the next poll. If the condition cleared while the server was down, the alert is never auto-resolved.
+  The same applies to `backfill_from_history`. *Where:* `services/health_monitor.py`. *Pinned:* not pinned.
+- **`water_warning` has two meanings (B-10).** The engine reads it as "soil dry → irrigate" (WATER_WARNING, critical).
+  The health monitor raises it as SENSOR_FAULT ("cross-check probe placement") with a push. *Where:*
+  `logic/engine.py`, `devices/sensors/tr301z.py`, `services/health_monitor.py`. *Pinned:* not by a dedicated test.
+- **The API returns `local_key` in plain text (B-11).** Irrigator `config` goes out verbatim on API/MCP; the web masks
+  it. *Where:* `schemas.py` irrigator response. *Pinned:* not by a dedicated test.
+- **The reason `interval_delta` claims the nominal step when the interval was clamped (B-14).** This affects the
+  humidity, light and trend rules. *Where:* `logic/engine.py` interval rules. *Pinned:* not by a dedicated test.
+- **PATCH cannot clear nullable fields (B-15).** Repository `update_*` skip `None` (vacation notes/email, cluster
+  location, plant notes, prefs `default_cluster_id`). *Where:* `repository._patch_fields`. *Pinned:*
+  `tests/test_contract_repository_gaps.py::test_update_plant_ignores_unknown_keys_and_none_current_behavior`,
+  `tests/test_repository_patch_fields.py`.
+- **`getdevicelog` is not paginated (B-20).** It uses `max_records=100`, so long gaps can be silently truncated.
+  *Where:* `devices/gateway.py::DeviceGateway.get_device_logs`. *Pinned:* not pinned.
+- **A humidity-only live reading is dropped (B-21).** The persistence guard checks `"humidity"`, never a canonical key.
+  *Where:* `greenhouse_core/sync.py::_store_live_reading`. *Pinned:*
+  `tests/test_contract_sync.py::test_env_humidity_only_live_reading_current_behavior_is_dropped`.
+- **Cluster status hides readings older than 24 h (B-22).** `reading_age_seconds` becomes `None`, not the real age.
+  *Where:* `services/cluster.py::_sensor_status_rows`. *Pinned:* not by a dedicated test.
+- **The leak-check scan is limited to 500 rows (B-23).** `_leak_check_done` inspects only the newest
+  `LEAK_CHECK_ACTIVITY_SCAN_LIMIT` (500) rows, so older completed checks inside 24 h could be re-armed. *Where:*
+  `services/irrigation_jobs.py::_leak_check_done`. *Pinned:* not pinned.
+- **The fallback ignores a global schedule without a cluster config row (B-24).** With no sensor data and no
+  `irrigation_config` row, the decision is NO_DATA. *Where:* `logic/fallback.py`. *Pinned:* not by a dedicated test; an in-code "known quirk"
+  comment marks it.
+- **`/monitor` defeats the spike filter.** It cleans only a 2 h slice; at a 30-min cadence that is under 5 samples, so
+  Hampel is skipped and one spike reports `very_dry`/`needs_water`. *Pinned:*
+  `tests/server/test_contract_raw_vs_clean.py::test_monitor_current_behavior_short_window_defeats_spike_filter`.
+- **`force=true` is recorded as automatic.** The decision log says `manual`, but the `IrrigationEvent` and push say
+  `auto`, and a leak check is scheduled (manual starts never get one). *Pinned:* golden `pipeline/quiet_hours_force.json`.
+- **An exhausted vacation budget keeps `primary_code`.** The decision becomes `skip` but `primary_code` stays
+  `sensor_dry`. *Pinned:* golden `pipeline/vacation_budget_exhausted.json`.
+- **The forecast cache ignores `hours`** inside its 600 s window. *Pinned:*
+  `tests/server/test_contract_weather.py::test_forecast_cache_ignores_hours_current_behavior`.
+- **A negative watch duration reports negative elapsed time.** *Pinned:*
+  `tests/server/test_contract_services_gaps.py::test_watch_negative_duration_current_behavior_reports_negative_elapsed`.
 
-- **B-N2:** `GET /api/v1/clusters/{id}/stats` for a cluster without an irrigator → 500 (`StatsResponse(**{"error": …})`
-  raises `ValidationError`). Queued as D19 in the consistency track.
-- **OD3 applied (core):** pre-Alembic database repair removed — a pre-Alembic DB now fails at startup with "table already
-  exists" (SQLite DDL is not transactional: tables created before the failure remain plus an empty `alembic_version`;
-  such a DB must be stamped manually). See `refactor/wp-handoff/CONS-W1.md`.
+### Web UI
 
-- **S6 (architecture review A1) reproduced — shared `DeviceHealthMonitor` rebind during a pump watch.** The single
-  `app.state.health_monitor` is re-pointed by every job via `bind_repo` (`services/health_monitor.py:117`; callers
-  `scheduler.py:327,381`, `services/irrigation.py:201`), and its alert cache is a plain dict with no lock. When another
-  job rebinds it while the minutes-long pump watcher runs, the watcher's NO_WATER trip (`pump_watcher.py:343`) writes
-  the alert into the *other* job's session; the watcher commits only its own session (aborted event durable, alert
-  missing). If that session rolls back or is closed without commit, the alert is lost, yet the cache already marks
-  NO_WATER as raised: actuation stays blocked with no inbox alert, and the alert is never raised again (later NO_WATER
-  reads are not transitions). On one shared SQLite file the rebound write fails with "database is locked" instead
-  (swallowed by the monitor) — same loss, same cache state. Pinned by
-  `test_pump_watcher_trip_current_behavior_alert_written_through_rebound_repo_and_cache_suppresses_reraise` (`tests/server/test_health_monitor.py`). Not fixed; fix = repo-per-call monitor + lock (A1).
+- **Bulk stop-all always reports success.** It says "Every device is now off." even when `adapter.stop()` returns
+  `(False, msg)`, and it still logs `stop/emergency` events. *Where:* `services/bulk.stop_all_irrigators`. *Pinned:*
+  `tests/server/test_contract_web_mutations.py::test_bulk_stop_all_current_behavior_reports_success_when_device_stop_fails`.
+- **Ack/resolve of a missing alert returns 200** with a success toast; the API returns 404. *Pinned:*
+  `::test_alert_action_on_missing_alert_current_behavior_returns_200_success_toast`.
+- **Non-numeric form fields cause a plain-text 500.** Bare `int()`/`float()` fails in config, global config, plants,
+  `temp_override` and plants/sync. *Pinned:* `::test_non_numeric_form_value_current_behavior_is_unhandled_500`.
+- **`POST /clusters/999/irrigate` → 500.** `_decision_panel.html` crashes on the error dict. *Pinned:*
+  `::test_irrigate_missing_cluster_current_behavior_500_from_template`.
+- **Deleting a populated cluster leaves orphans.** Windows, decision logs, alerts and sensor assignments remain
+  (SQLite FKs are off). *Pinned:* `::test_delete_cluster_current_behavior_leaves_orphan_rows`.
+- **Error pages are chosen by path, not by `Accept`.** Router-level 404/405 return JSON even to browsers, contrary to
+  the handler docstring. *Where:* `web/exception_handlers.py`. *Pinned:*
+  `tests/server/test_contract_web_errors.py::test_unknown_path_current_behavior_returns_json_404_to_browsers`.
+- **`now_text` uses the process-local timezone** (`time.strftime` in `web/context.py`). It is stable in tests only
+  because `clean_env` sets `TZ=UTC`. *Pinned:* web goldens.
 
-## Labeled behavior changes landed (drift + consistency; details in refactor/wp-handoff/DRIFT.md, CONS-W1.md)
-- API/MCP/CLI: reversed vacation create → 400; plant sync for unknown cluster → 404; sensor update with another
-  cluster's plant → 404; `/monitor` commits the readings it refreshes (fewer Cloud calls) and the web monitor now
-  refreshes stale sensors + 404s unknown clusters; efficacy `days` ≤ 365 (422 above); manual stop recorded as `stop`
-  (old rows keep `off`, so history may show both); malformed / `"null"` stored device config returned as `{}`
-  (was 500); `irrigator add --device-ip ""` sends the empty value.
-- Web/TUI: web irrigator/sensor create handles duplicates and cross-cluster plants like the API; unified window and
-  404 messages; check-all banner uses the API rule; vacation times parsed + shown in the timezone preference
-  everywhere; plant dashboard shows "never" / real age; TUI config tables use repository field order.
-- Removed: pre-Alembic DB repair (OD3); dead `export_csv`, `print_stats_report`, and other dead code.
-- Consistency W2/W3: sensor-age web cells show the real age (D18); `/clusters/{id}/stats` without irrigator returns
-  zero totals instead of 500 (D19); chart soil band uses the shared moisture-target parser (D10b, malformed targets
-  change); silent `except` blocks now log at DEBUG (B5); TUI config form hint (B7); **OD3:** startup migration of old
-  `pump_dry_run` alerts removed and the deprecated `IRRIGATION_CHECK_INTERVAL_HOURS` setting removed (old `.env` files
-  using it are no longer translated to the cron setting).
-- FP-U (`fix(consistency)`): `SpriteView` keeps its animation flag in `_animated`, no longer in Textual's
-  `Widget._animate` animator slot, so `Widget.animate()` on a sprite animates instead of raising `TypeError` (B-U1; no
-  caller today). Frame timer and `--no-animation` unchanged.
-- Merge note: `refactor/integration/after-drift.txt` — 3053 passed after merging drift on top of consistency W1.
-- Fix pass (server): an authenticated `/api/v1` request (and an authenticated web page) opens **one** DB session — the
-  auth dependency now reuses the route's own `get_session` / `get_settings` providers, so the user lookup and the
-  handler share one session and identity map (was two sessions per request, one of them unused with auth disabled).
-  Pinned by `tests/server/test_auth_session.py`.
-- Fix pass (server), **D20:** the web kill switch (`POST /bulk/stop-all`) now sends the same ntfy emergency push as
-  `POST /api/v1/bulk/stop-all` (honouring `notify_emergency`); the notification moved into
-  `services/bulk.stop_all_irrigators`, the one path both use. Pinned by `tests/server/test_web_emergency_notify.py`.
-- **OD3 device-type aliases removed** (post-WP8, `fix(consistency)`): the registry matches the exact `vendor.model`
-  key; `tuya_cloud` / `tuya_local` / `""` (irrigators) and `soil_moisture` / `temp_humidity` / `light` / `""` (sensors)
-  no longer resolve. The web add/edit forms offer `rainpoint.ik10pw` / `tuya.tr301z` (they offered only the legacy
-  values, and the edit form silently picked the first legacy option for a canonical row); CLI `--type` help names the
-  model key. **Old databases:** Alembic `6c9d4e2f3a12` rewrote legacy values, but rows created afterwards through the
-  old web form / CLI help still carried them; the data-only revision `a1d3f5b7c902` (owner decision, 2026-10-03)
-  rewrites those leftovers (and `""`) on upgrade, so a migrated database has none. A row written with a legacy
-  value after the upgrade (API / CLI accept any string) is still an unknown model: such an irrigator is refused, never actuated: `registry.get_irrigator`
-  logs an ERROR naming the type and the known keys and raises `UnknownDeviceModel` — manual start → 503 with that
-  message, automatic runs → `no adapter for irrigator: …`, emergency stop → listed in `errors`, health poll → logged.
-  Such a sensor still syncs readings but gets no health monitoring (WARNING per poll). Remedy: `greenhouse irrigator
-  update <cluster> --type rainpoint.ik10pw`, `greenhouse sensor update <id> --cluster N --type tuya.tr301z`, or saving
-  the web edit form. Pinned by `tests/server/test_legacy_device_types.py` and the registry tests.
+### Auth / security / settings
 
-## Golden-test policy (orchestrator decision)
+- **`WWW-Authenticate` is dropped on JSON 401s.** The global `HTTPException` handler rebuilds the response without
+  `exc.headers`, which affects `/api/v1` and `/mcp`. *Where:* `web/exception_handlers.py`. *Pinned:*
+  `tests/server/test_contract_auth.py::test_api_401_current_behavior_drops_www_authenticate_header`,
+  `tests/server/test_contract_mcp.py::test_mcp_401_current_behavior_drops_www_authenticate_header`,
+  `tests/server/test_contract_web_errors.py::test_json_401_current_behavior_drops_www_authenticate`.
+- **The MCP token check is not constant-time (B-12).** `require_mcp_token` compares with `!=`; shared auth uses
+  `hmac.compare_digest`. *Where:* `app.py`. *Pinned:* not pinned.
+- **`verify_password` raises on a truncated hash.** It raises `VerificationError` instead of returning `False`, so
+  login returns 500. *Pinned:* `test_contract_auth.py::test_verify_password_current_behavior_raises_on_truncated_hash`.
+- **MCP token edge cases.** `mcp_token=""` gives 401, not 503. The MCP token is also accepted via cookie. *Pinned:*
+  ingress golden (plain behavior).
+- **Aliased settings are read from three env names.** The `GREENHOUSE_X` fields (MCP token, ntfy, auth secret/admin)
+  are also read from bare `X` and `IRRIGATION_X`. Precedence: `GREENHOUSE_X` > `X` > `IRRIGATION_X`. *Pinned:*
+  `tests/server/test_contract_settings.py::test_aliased_fields_current_behavior_read_three_env_names`.
+- **ntfy URL scheme is not checked (ruff S310).** `services/notify.py::_publish` accepts `file:` and other schemes
+  from operator config. *Pinned:* not pinned.
+- **Default bind host is `0.0.0.0` (S104).** This is intended for Docker; document it next to the MCP-token warning.
+- **Silent swallows remain** (`try/except/pass`, S110). Sites: `app._apply_persisted_pause`,
+  `web/context._preference_flags`, `ik10pw` ×3, `devices/irrigators/tuya_generic`, core `sync`.
 
-- OpenAPI, routes, MCP tools, settings, DDL, scheduler registry, package data, web HTML, CLI help/output, TUI renders,
-  decision grid: **strict** equality.
-- Public import surfaces, `constants.py` values and logger names: **compatibility (superset)** — every golden name must
-  still resolve with an equal value (loggers: same name for modules that still exist); additions are allowed because
-  they break no consumer, and rule 8 forbids editing goldens after Gate 1. Enum members (`TriggerCode`, …) stay strict.
-- `tests/golden/` is excluded from the pre-commit whitespace fixers so snapshots stay byte-exact; goldens stay < 400 KB.
+### Engine (pinned quirks — documented behavior, change only as labeled fixes)
 
-## Test-suite hazards found at baseline (recorded)
+- A decision can end with **zero reasons** (temperature-only, in range): skip, confidence 0.5, `primary_code` NULL.
+  *Pinned:* `tests/test_invariants_engine.py::test_inv5_inline_literals_current_behavior`.
+- **Critical stress keys on the average** soil moisture, not the driest plant (contrast with invariant #2). *Pinned:*
+  `::test_inv2_stress_rule_keys_on_average_current_behavior`.
+- **Thresholds are bound at import.** Patching `constants.X` does not steer the engine; patch the name where it is
+  used. Since WP8, `engine.is_within_quiet_hours` / `engine.parse_moisture_target` no longer exist; patch
+  `logic.timing.is_within_quiet_hours` / `logic.plant_needs.parse_moisture_target`. *Pinned:*
+  `::test_inv5_thresholds_are_bound_at_import_current_behavior`.
+- **Cleaning is not idempotent.** *Pinned:*
+  `tests/test_properties_logic.py::test_clean_readings_is_not_idempotent_current_behavior`.
+- **With fewer than 5 readings a spike is not filtered** and can trigger very-dry irrigation. *Pinned:*
+  `::test_inv10_short_series_spike_is_not_filtered_current_behavior`.
+- **The spike filter drops the first sample of a genuine step change** (40,40,40,60,60). *Pinned:*
+  `tests/test_contract_mutation_gaps.py::test_hampel_window_is_centered_with_full_left_context_current_behavior`.
+- **`parse_moisture_target` does no validation** ("65-45" stays inverted). *Pinned:*
+  `::test_parse_moisture_target_inverted_and_negative_current_behavior`.
+- **0 °C / 0 % bounds are treated as missing (B-18).** Trends also ignore a 0.0 °C reading. *Pinned:*
+  `::test_plant_needs_zero_is_treated_as_missing_current_behavior`,
+  `tests/test_contract_mutation_gaps.py::test_zero_celsius_readings_are_ignored_by_the_temperature_trend_current_behavior`.
+- **Grid-pinned edges** (`tests/engine_grid.py`, `tests/golden/engine/`):
+  - cooldown (6 h) and leak hold (24 h) are inclusive at the exact edge;
+  - a vacation ending exactly now is still active;
+  - critical stress, water warning and the no-sensor fallback bypass vacation rationing, and the fallback bypasses
+    windows;
+  - any `environment` other than "indoor" gets the weather rule but the indoor seasonal table;
+  - light thresholds use the UTC month, while seasons use the preferences timezone.
 
-- **Real network in the existing suite.** `get_weather_client` is never overridden in test fixtures, so ~19 tests call the
-  live Open-Meteo API through `services/weather.py:WeatherClient` (or fall back to 20 °C after a timeout when offline).
-  Their assertions are loose enough to pass either way. New safety-net tests are hermetic (weather stubbed).
-- **Wall clock everywhere.** The engine reads `time.time()` directly (`logic/engine.py:129`); the baseline migration
-  seeds quiet hours 00:00–05:00 UTC into every app. Snapshot/golden tests freeze the clock.
-- `test_cli.py` can read the real CLI token from the user config dir; `Settings` reads `.env` / `IRRIGATION_*` /
-  `GREENHOUSE_*` from the environment.
+### Devices / ingress
 
-## Doc/code mismatches and dead code noticed (not changed)
+- The SIGTERM path sends OFF twice.
+- v2 parser errors are uncaught.
+- Log rows never store `water_warning`.
+- Negative `hours` slices weather from the end.
 
-- `DEFAULT_QUIET_START_HOUR` / `DEFAULT_QUIET_END_HOUR` in `constants.py` are unused; the live 00–05 default is a
-  literal inside the baseline Alembic migration (out of scope: migrations are frozen).
-- CLAUDE.md says every actuating TUI key goes through `ConfirmScreen`; in code `i` (irrigate) and `w` (water now) open
-  their own dialogs, and scheduler resume (`p`) / sync (`S`) run without confirmation. Current behavior is pinned as is.
+All of these are pinned in the ingress goldens.
+
+### CLI (pinned in `tests/cli/test_contract_json_output.py` golden cases)
+
+- A whitespace-only `GREENHOUSE_API_TOKEN` disables the token-file fallback (`token.blank_env_current_behavior_ignores_file`).
+- Only `httpx.ConnectError` becomes a clean error (B-17). A read timeout or an empty/non-JSON 2xx body crashes with a
+  traceback, exit 1 (`error.read_timeout_current_behavior_uncaught`, `error.empty_200_body_current_behavior_uncaught`).
+- A 422 `detail` list is printed as a Python repr (`error.422_detail_list_python_repr`).
+- Id `0` means "not given" for `check`, `plant list --cluster`, `sensor list --cluster`.
+- `stats --export` with a non-CSV response writes an empty file and reports success.
+- Scheduler job ids are put into the URL path unescaped (`client/delete_scheduler_job.path_not_escaped`).
+- Bare groups exit 2, not 0.
+
+### TUI
+
+- **A 401 shows "Cannot reach the server"** behind the sign-in dialog. *Pinned:*
+  `tests/cli/test_contract_tui_runtime.py::test_401_current_behavior_dashboard_says_cannot_reach_server`.
+- **The Activity table cursor jumps to the top on refresh.** Harmless, because rows have no actions. *Pinned:*
+  `::test_activity_cursor_current_behavior_resets_to_top_on_refresh`.
+- **Wrong cluster-form copy** (other half of B-19): "Blank care fields are filled from the plant DB…" — the API does
+  not auto-fill; that needs `/plants/sync`. *Where:* `tui/screens/cluster.py`. *Pinned:* TUI golden.
+- **Search-table column widths only grow.** An early partial query can leave the table wider than needed. The test
+  side was fixed (`search_citrus`); the widget is unchanged.
+- **Not every actuating key confirms.** `i`/`w` open their own dialogs. `S`, `P`, `H`, alert `k`/`v`/`y` and scheduler
+  resume run without one. Pinned by the actuation golden. The docs now say this (AGENTS.md, `ConfirmScreen`
+  docstring, `tui --help`).
+
+### Schema / tests infrastructure
+
+- **The migrated schema differs from `Base.metadata.create_all`.** Migrations add server defaults
+  (`irrigation_windows.weekday_mask='127'`, `user_preferences.scheduler_paused=0`, `notify_*=1`,
+  `users.is_active=1`) and named uniques (`uq_irrigators_cluster_id`, `uq_users_username`). `tmp_db` tests therefore
+  run on a slightly different schema. *Pinned:*
+  `tests/test_contract_schema.py::test_schema_drift_current_behavior_migrations_differ_from_create_all`.
+- **Every `create_app` replaces the root log handlers** (Alembic `fileConfig`), so `caplog` sees nothing afterwards.
+  Attach a handler to the module logger instead.
+- **Mixed directories on one pytest command line break fixtures.** `tests/server/X tests/<core> tests/server/Y` →
+  "fixture 'client' not found" for Y. Group paths by directory.
+- **Some tests use the real network.** The default server `app` fixture (`tests/server/conftest.py`) does not stub the
+  weather client, so older tests can call Open-Meteo (or fall back to 20 °C offline). Contract tests use
+  `install_offline_weather`.
+- **The wall clock is read directly** (`time.time()` in the engine and services). The baseline migration seeds quiet
+  hours 00:00–05:00 into every app. Golden tests freeze the clock.
+- `test_cli.py` can read the real CLI token from the user config dir. `Settings` reads `.env`, `IRRIGATION_*` and
+  `GREENHOUSE_*`.
+
+### Dead-code and cleanup candidates (not removed yet)
+
+- The `start == end` guard in `logic/timing.is_within_quiet_hours` duplicates `_hour_in_range`.
+- `DeviceRegistry.registered_{irrigator,sensor}_keys` are used only by the adapter contract tests (kept: they drive them).
+- `services/charts._threshold_for_cluster(plant_db)` has an unused parameter that cascades into route dependencies.
+- `fallback.temperature_based_decision(temp_range)` is unused but passed by the engine and frozen tests.
+- The `refresh=True` parameter of `DeviceGateway.resolve_local_key` / `open_local` has no production caller.
+
+Removed during the refactor (one commit per group, grep evidence in each body; `git log --grep="dead code" a1b2622..HEAD`):
+`any_critical`, `DEFAULT_QUIET_*`, `print_stats_report`, `stats.export_csv`/`format_duration`, `#global-config` CSS,
+`set_plant_database`, `database.logger`, `AuthUserDep`, `_sensor_row.html`, `EVENT_ACTION_OFF`,
+`CreateSchedulerJobRequest`, `is_within_preferred_hours`, `DEFAULT_PREFERRED_WATER_HOURS`, `DeviceGateway.invalidate_key`,
+sensor-adapter `read_live`, `pump_watcher.ALERT_CODE`, three unused re-exports, two unreachable branches, and unused
+test helpers. `DEVICE_BLOCKING_CODES` is now the source of `is_actuation_blocked` instead of a dead duplicate.
+
+## Golden and test policy (for future contributors)
+
+- **Kit:** `tests/golden.py`.
+  - `FROZEN_INSTANT` = 2026-04-15 10:00 UTC, outside the seeded quiet hours; also `FROZEN_TS`.
+  - `OfflineWeather` + `install_offline_weather(app)`.
+  - `ENV_PREFIXES` (`IRRIGATION_`, `GREENHOUSE_`, `TUYA_`), cleared by `clean_env`.
+  - `to_canonical_json` (sorted keys).
+  - `assert_golden(name, text)` / `assert_golden_json(name, value)` compare with `tests/golden/<name>`. A missing
+    golden fails.
+- **`GOLDEN_UPDATE=1 uv run pytest <test>`** rewrites goldens. Use it only in:
+  - the commit that creates a golden;
+  - a labeled `fix(...)` commit that intentionally changes pinned behavior;
+  - a `docs(api)`/`docs(cli)` commit whose diff is description text only;
+  - a dead-code removal whose golden diff is removal-only.
+  Review the diff so only the intended lines move. Never regenerate a golden to make a refactor pass.
+- **Comparison.** Strict equality for OpenAPI, routes, MCP tools, settings, DDL, scheduler registry, package data, web
+  HTML, CLI help/output, TUI renders and the decision grid. Supersets for public import surfaces, `constants.py`
+  values and logger names: additions are allowed, and every golden name must still resolve with an equal value. Enum
+  members stay strict.
+- **Fingerprints.** `PHASE0_OPENAPI_SHA256` / `PHASE0_MCP_TOOLS_SHA256` (`tests/server/test_contract_{openapi,mcp}.py`)
+  are re-recorded only in reviewed behavior-change or doc-contract commits.
+- **Frozen safety net.** Changes to `tests/**/test_contract_*.py`, `tests/golden/**`, `tests/engine_grid.py`,
+  `tests/test_invariants_engine.py` or `tests/test_properties_logic.py` need a written justification and a second
+  reviewer.
+- **Hygiene.** `tests/golden/` is excluded from the whitespace fixers (byte-exact), and each golden stays under
+  400 KB. A Textual/plotext/rich bump regenerates the TUI render goldens in its own commit. Session JWTs in
+  `set-cookie` goldens are stored as `<JWT sha256=…>` so gitleaks stays clean. gitleaks' pre-commit hook scans only
+  staged changes, so scan branches with `gitleaks detect --log-opts=<base>..HEAD`.
+- **Mutation testing.** mutmut 3 cannot key this layout: it sees `libs.greenhouse-core.…` paths, while tests import
+  `greenhouse_core.…`. The scripted runner used during the refactor (a 473+ mutant catalogue) lived under
+  `refactor/gate1/mutate.py`.
 
 ## Baseline warnings (recorded, not fixed)
 
-Gate 0 run on `a1b2622`, Python 3.11.15: **1182 passed, 2 warnings, 1168 s** (slowed by concurrent recon agents);
-total coverage 90% (line+branch). Both warnings are pre-existing and left as is:
+Gate 0 on `a1b2622`, Python 3.11.15: **1182 passed, 2 warnings, 1168 s**; total coverage 90% (line+branch).
 
-1. `PydanticDeprecatedSince211`: `BaseModel.__get_pydantic_core_schema__` deprecated — raised from inside pydantic's
-   schema generation (dependency path), not from repo code.
-2. `RuntimeWarning: coroutine 'ClusterScreen._load_plant_health' was never awaited` in
-   `tests/cli/test_tui.py::TestClusterCrud::test_plant_add_edit_move_delete` (Textual cache path).
+1. `PydanticDeprecatedSince211`: `BaseModel.__get_pydantic_core_schema__`, raised inside pydantic's schema generation
+   (dependency path).
+2. `RuntimeWarning: coroutine 'ClusterScreen._load_plant_health' was never awaited` in TUI tests. A worker is
+   cancelled at teardown (Textual cache path).
+
+Added by the safety net, on purpose: `InsecureKeyLengthWarning` from `tests/server/test_contract_auth.py` (short test
+HMAC key). Current runs report 9–10 warnings in total; see the `REFACTOR_REPORT.md` final gate.
