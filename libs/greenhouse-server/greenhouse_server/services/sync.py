@@ -4,7 +4,7 @@ import logging
 import statistics
 import time
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, Any, TypedDict
+from typing import TYPE_CHECKING, TypedDict
 
 from greenhouse_core.constants import (
     FRESHNESS_SYNC_BACKFILL_HOURS,
@@ -15,8 +15,8 @@ from greenhouse_core.devices import DeviceRegistry
 from greenhouse_core.devices.gateway import DeviceGateway
 from greenhouse_core.logic.cleaning import clean_readings_desc
 from greenhouse_core.repository import IrrigationRepository
+from greenhouse_core.sync import SyncStats, sync_single_sensor
 from greenhouse_core.sync import sync_sensor_data as core_sync
-from greenhouse_core.sync import sync_single_sensor
 
 if TYPE_CHECKING:
     from greenhouse_core.models import Sensor
@@ -52,8 +52,8 @@ class SyncService:
         self._registry = registry
         self._gateway = cloud
 
-    def sync_all_sensors(self, hours: int = 24) -> dict[str, Any]:
-        """Sync all sensor data from the Cloud gateway. Returns stats dict."""
+    def sync_all_sensors(self, hours: int = 24) -> SyncStats:
+        """Sync all sensor data from the Cloud gateway. Returns the run's totals."""
         if self._gateway is None:
             return {"total_synced": 0, "total_new": 0, "total_live": 0, "errors": ["No cloud connection"]}
         return core_sync(self._repo, self._gateway, hours=hours)

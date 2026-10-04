@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypedDict
 
 from greenhouse_core.devices.gateway import DeviceGateway
 from greenhouse_core.repository import IrrigationRepository
@@ -24,13 +24,22 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def sync_sensor_data(db: IrrigationRepository, cloud: DeviceGateway, hours: int = 24) -> dict[str, Any]:
+class SyncStats(TypedDict):
+    """Totals of one sync run; the key order is the order API and web callers see."""
+
+    total_synced: int
+    total_new: int
+    total_live: int
+    errors: list[str]
+
+
+def sync_sensor_data(db: IrrigationRepository, cloud: DeviceGateway, hours: int = 24) -> SyncStats:
     """Sync all sensor data from Tuya Cloud to local DB.
 
-    Returns dict with sync stats per cluster.
+    Returns the run's totals across every cluster.
     """
     clusters = db.list_clusters()
-    stats: dict[str, Any] = {"total_synced": 0, "total_new": 0, "total_live": 0, "errors": []}
+    stats: SyncStats = {"total_synced": 0, "total_new": 0, "total_live": 0, "errors": []}
 
     for cluster in clusters:
         sensors = db.get_sensors_in_cluster(cluster.id)
@@ -45,9 +54,7 @@ def sync_sensor_data(db: IrrigationRepository, cloud: DeviceGateway, hours: int 
     return stats
 
 
-def _sync_logged(
-    db: IrrigationRepository, cloud: DeviceGateway, sensor: Sensor, hours: int, stats: dict[str, Any]
-) -> None:
+def _sync_logged(db: IrrigationRepository, cloud: DeviceGateway, sensor: Sensor, hours: int, stats: SyncStats) -> None:
     """Sync one sensor into the running ``stats`` totals and log its summary.
 
     The per-sensor ``try`` is the isolation boundary: any failure is recorded as
