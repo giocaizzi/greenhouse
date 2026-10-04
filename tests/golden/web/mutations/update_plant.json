@@ -1,0 +1,62 @@
+{
+ "body_lines": [
+  ""
+ ],
+ "db_effect": {
+  "plants": {
+   "changed": {
+    "1": {
+     "ideal_humidity_max": [
+      80.0,
+      60.0
+     ],
+     "ideal_humidity_min": [
+      60.0,
+      40.0
+     ],
+     "ideal_temp_max": [
+      27.0,
+      28.0
+     ],
+     "ideal_temp_min": [
+      18.0,
+      16.0
+     ],
+     "notes": [
+      "By the window",
+      "Corner"
+     ],
+     "water_needs": [
+      "medium",
+      "low"
+     ]
+    }
+   }
+  }
+ },
+ "device_calls": {
+  "irrigator": [],
+  "sensor": []
+ },
+ "headers": {
+  "location": "/clusters/1#plants"
+ },
+ "request": {
+  "form": {
+   "category": "tropical",
+   "ideal_humidity_max": "60",
+   "ideal_humidity_min": "40",
+   "ideal_temp_max": "28",
+   "ideal_temp_min": "16",
+   "light_needs": "medium",
+   "notes": "Corner",
+   "species": "Monstera deliciosa",
+   "water_needs": "low"
+  },
+  "headers": {},
+  "method": "POST",
+  "url": "/clusters/1/plants/1/edit"
+ },
+ "status": 303,
+ "templates": []
+}

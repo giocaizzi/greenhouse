@@ -1,0 +1,37 @@
+{
+ "body_lines": [
+  ""
+ ],
+ "db_effect": {
+  "users": {
+   "changed": {
+    "1": {
+     "last_login_at": [
+      null,
+      1776247200
+     ]
+    }
+   }
+  }
+ },
+ "device_calls": {
+  "irrigator": [],
+  "sensor": []
+ },
+ "headers": {
+  "location": "/alerts?status=open",
+  "set-cookie": "greenhouse_session=<JWT sha256=6a2ce862b2061240a36cc95e435c70095404bff284a491085bf71845690d3bdc>; HttpOnly; Max-Age=86400; Path=/; SameSite=lax"
+ },
+ "request": {
+  "form": {
+   "next": "/alerts?status=open",
+   "password": "test-admin-pw-123",
+   "username": "test-admin"
+  },
+  "headers": {},
+  "method": "POST",
+  "url": "/login"
+ },
+ "status": 303,
+ "templates": []
+}

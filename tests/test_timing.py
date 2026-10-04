@@ -7,7 +7,6 @@ from zoneinfo import ZoneInfo
 
 from greenhouse_core.logic.timing import (
     is_within_irrigation_window,
-    is_within_preferred_hours,
     is_within_quiet_hours,
     season_for,
     seasonal_multiplier,
@@ -17,23 +16,6 @@ from greenhouse_core.models import IrrigationWindow
 
 def _ts(year, month, day, hour, tz="UTC"):
     return int(datetime(year, month, day, hour, tzinfo=ZoneInfo(tz)).timestamp())
-
-
-def test_preferred_hours_default_morning_window():
-    # 07:00 UTC on a Thursday — within default 6..10 window.
-    ts = _ts(2026, 5, 14, 7)
-    assert is_within_preferred_hours(now_unix=ts, tz_name="UTC") is True
-
-
-def test_preferred_hours_rejects_midday():
-    ts = _ts(2026, 5, 14, 14)
-    assert is_within_preferred_hours(now_unix=ts, tz_name="UTC") is False
-
-
-def test_preferred_hours_custom_window():
-    ts = _ts(2026, 5, 14, 17)
-    # 16..19 secondary window
-    assert is_within_preferred_hours(now_unix=ts, tz_name="UTC", preferred=(16, 19)) is True
 
 
 def test_window_match_within_window():

@@ -606,6 +606,33 @@ class TestForms:
         assert parse_value(Field("a", "A", "json"), '{"x": 1}') == {"x": 1}
         assert isinstance(parse_value(Field("a", "A", "datetime"), "2026-10-01 08:30"), int)
 
+    def test_datetime_fields_use_the_timezone_preference(self, monkeypatch):
+        """D8: vacation datetimes are read and shown in the server's ``timezone`` preference, not the machine's zone."""
+        import time
+
+        from greenhouse_cli.tui import render, resources
+        from greenhouse_cli.tui.screens.forms import _display
+
+        monkeypatch.setenv("TZ", "America/New_York")
+        time.tzset()
+        try:
+            rome_midnight = 1777586400  # 2026-05-01 00:00 Europe/Rome (18:00 the day before in New York)
+            starts, ends, *_ = resources.vacation_fields(
+                {"starts_at": rome_midnight, "ends_at": rome_midnight}, "Europe/Rome"
+            )
+            assert parse_value(starts, "2026-05-01 00:00") == rome_midnight
+            assert _display(starts) == _display(ends) == "2026-05-01 00:00"
+            ((_, cells),) = render.vacation_rows(
+                [{"id": 1, "starts_at": rome_midnight, "ends_at": rome_midnight}], None, "Europe/Rome"
+            )
+            assert cells[1:3] == ["2026-05-01 00:00", "2026-05-01 00:00"]
+            # No preference (or an unknown zone): UTC, never the machine's local zone.
+            assert parse_value(Field("s", "Starts", "datetime"), "2026-05-01 00:00") == 1777593600
+            assert parse_value(Field("s", "Starts", "datetime", tz="Not/AZone"), "2026-05-01 00:00") == 1777593600
+        finally:
+            monkeypatch.undo()
+            time.tzset()
+
     @pytest.mark.parametrize(
         ("field", "raw", "message"),
         [
@@ -720,7 +747,7 @@ class TestClusterCrud:
             await pilot.press("n")
             await pilot.pause()
             await _submit_form(
-                pilot, tui, tuya_device_id="fake_tuya_device_aabbccdd", name="Spare probe", type="soil_moisture"
+                pilot, tui, tuya_device_id="fake_tuya_device_aabbccdd", name="Spare probe", type="tuya.tr301z"
             )
             sensors = http.get("/api/v1/clusters/1/sensors").json()
             spare = next(s for s in sensors if s["name"] == "Spare probe")
@@ -791,7 +818,7 @@ class TestClusterCrud:
             await pilot.press("n")
             await pilot.pause()
             await _submit_form(
-                pilot, tui, tuya_device_id="fake_tuya_device_00112233", name="New pump", type="tuya_cloud"
+                pilot, tui, tuya_device_id="fake_tuya_device_00112233", name="New pump", type="rainpoint.ik10pw"
             )
             assert http.get("/api/v1/clusters/1/irrigator").json()["name"] == "New pump"
 
@@ -1083,6 +1110,30 @@ class TestRefill:
             assert selected_key(table) is None
 
         self._table_app(body)
+
+
+class TestSpriteView:
+    @pytest.mark.parametrize("animate", [True, False])
+    def test_widget_animate_still_works_on_a_sprite(self, animate):
+        """``Widget.animate`` caches its animator in ``_animate``; the sprite's animation flag must not live there."""
+        from textual.app import App
+
+        from greenhouse_cli.tui.widgets import SpriteView
+
+        class SpriteApp(App):
+            def compose(self):
+                yield SpriteView(lambda frame: f"frame {frame}", animate=animate, id="sprite")
+
+        async def scenario():
+            app = SpriteApp()
+            async with app.run_test() as pilot:
+                sprite = app.query_one("#sprite", SpriteView)
+                sprite.level = 0.0
+                sprite.animate("level", 1.0, duration=0.01)
+                await pilot.wait_for_animation()
+                assert sprite.level == 1.0
+
+        _run(scenario())
 
 
 class TestExactRequests:

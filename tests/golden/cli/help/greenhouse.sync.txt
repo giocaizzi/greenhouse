@@ -1,0 +1,9 @@
+
+ Usage: greenhouse sync [OPTIONS]
+
+ Sync sensor data from Tuya Cloud.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ --hours        <int>  History window in hours [default: 24]                                      │
+│ --help                Show this message and exit.                                                │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

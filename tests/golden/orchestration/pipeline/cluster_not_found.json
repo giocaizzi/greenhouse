@@ -1,0 +1,39 @@
+{
+ "calls": [
+  {
+   "body": {},
+   "request": "POST /api/v1/clusters/99/irrigate",
+   "response": {
+    "detail": "Cluster not found"
+   },
+   "status": 404
+  },
+  {
+   "body": null,
+   "request": "POST /api/v1/clusters/99/check",
+   "response": {
+    "detail": "Cluster not found"
+   },
+   "status": 404
+  },
+  {
+   "body": null,
+   "request": "GET /api/v1/clusters/99/decisions",
+   "response": {
+    "detail": "Cluster not found"
+   },
+   "status": 404
+  }
+ ],
+ "db_writes": {
+  "activity_events": [],
+  "alerts": [],
+  "decision_logs": [],
+  "irrigation_events": [],
+  "sensor_readings": []
+ },
+ "gateway_calls": null,
+ "irrigator_adapter_calls": [],
+ "notifications": [],
+ "sensor_adapter_calls": []
+}

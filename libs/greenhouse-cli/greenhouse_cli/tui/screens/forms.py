@@ -5,12 +5,15 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any
+from typing import Any, ClassVar, cast
 
 from textual.app import ComposeResult
+from textual.binding import BindingType
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import Button, Checkbox, Input, Label, Select, Static
+
+from greenhouse_cli.tui.formatting import zone
 
 DATETIME_FORMAT = "%Y-%m-%d %H:%M"
 
@@ -20,8 +23,9 @@ class Field:
     """One form input.
 
     ``kind`` is ``text`` / ``int`` / ``float`` / ``bool`` / ``select`` /
-    ``json`` (object literal) / ``datetime`` (local ``YYYY-MM-DD HH:MM`` →
-    Unix seconds). Blank optional
+    ``json`` (object literal) / ``datetime`` (``YYYY-MM-DD HH:MM`` wall time in ``tz``
+    — the server's ``timezone`` preference, as the web vacation pages; UTC when unset —
+    → Unix seconds). Blank optional
     inputs come back as ``None`` — the client drops ``None`` from update
     bodies, so a blank field means "leave unchanged".
     """
@@ -33,6 +37,7 @@ class Field:
     options: list[tuple[str, Any]] = field(default_factory=list)
     required: bool = False
     placeholder: str = ""
+    tz: str | None = None
 
 
 def parse_value(f: Field, raw: Any) -> Any:
@@ -44,7 +49,8 @@ def parse_value(f: Field, raw: Any) -> Any:
     text = (raw or "").strip()
     if not text:
         if f.required:
-            raise ValueError(f"{f.label} is required")
+            msg = f"{f.label} is required"
+            raise ValueError(msg)
         return None
     try:
         if f.kind == "int":
@@ -52,7 +58,7 @@ def parse_value(f: Field, raw: Any) -> Any:
         if f.kind == "float":
             return float(text)
         if f.kind == "datetime":
-            return int(datetime.strptime(text, DATETIME_FORMAT).timestamp())
+            return int(datetime.strptime(text, DATETIME_FORMAT).replace(tzinfo=zone(f.tz)).timestamp())
         if f.kind == "json":
             parsed = json.loads(text)
             if not isinstance(parsed, dict):
@@ -61,24 +67,26 @@ def parse_value(f: Field, raw: Any) -> Any:
     except ValueError:
         hints = {"datetime": "YYYY-MM-DD HH:MM", "json": "a JSON object", "int": "a whole number"}
         hint = hints.get(f.kind, f"a {f.kind}")
-        raise ValueError(f"{f.label}: expected {hint}") from None
+        msg = f"{f.label}: expected {hint}"
+        raise ValueError(msg) from None
     return text
 
 
 def _display(f: Field) -> str:
+    """The text a field's input starts with: blank for ``None``, datetimes in the field's zone, JSON dumped."""
     if f.value is None:
         return ""
     if f.kind == "datetime":
-        return datetime.fromtimestamp(f.value).strftime(DATETIME_FORMAT)
+        return datetime.fromtimestamp(f.value, zone(f.tz)).strftime(DATETIME_FORMAT)
     if f.kind == "json":
         return json.dumps(f.value)
     return str(f.value)
 
 
-class FormScreen(ModalScreen[dict | None]):
+class FormScreen(ModalScreen[dict[str, Any] | None]):
     """Render ``fields`` and dismiss with ``{name: parsed value}`` or ``None``."""
 
-    BINDINGS = [("escape", "dismiss(None)", "Cancel"), ("ctrl+s", "submit", "Save")]
+    BINDINGS: ClassVar[list[BindingType]] = [("escape", "dismiss(None)", "Cancel"), ("ctrl+s", "submit", "Save")]
 
     def __init__(self, title: str, fields: list[Field], submit_label: str = "Save", note: str | None = None) -> None:
         super().__init__()
@@ -88,6 +96,7 @@ class FormScreen(ModalScreen[dict | None]):
         self.note = note
 
     def compose(self) -> ComposeResult:
+        """Render one row per field: a checkbox, a select or a typed input, plus the error line."""
         with Vertical(classes="dialog form-dialog"):
             yield Static(f"[b]{self.form_title}[/b]", classes="dialog-message")
             if self.note:
@@ -119,20 +128,24 @@ class FormScreen(ModalScreen[dict | None]):
                 yield Button("Cancel", id="cancel")
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Submit on the primary button; any other button cancels."""
         if event.button.id == "submit":
             self.action_submit()
         else:
             self.dismiss(None)
 
     def on_input_submitted(self) -> None:
+        """Enter in any input submits the whole form."""
         self.action_submit()
 
     def action_submit(self) -> None:
+        """Parse every field; show the first error inline, otherwise dismiss with the values."""
         values: dict[str, Any] = {}
         try:
             for f in self.fields:
-                widget = self.query_one(f"#field-{f.name}")
-                values[f.name] = parse_value(f, widget.value)  # type: ignore[attr-defined]
+                # compose() builds every field as one of these three widgets.
+                widget = cast("Input | Select[Any] | Checkbox", self.query_one(f"#field-{f.name}"))
+                values[f.name] = parse_value(f, widget.value)
         except ValueError as e:
             self.query_one("#form-error", Label).update(str(e))
             return

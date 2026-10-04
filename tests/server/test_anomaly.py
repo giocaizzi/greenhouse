@@ -30,7 +30,7 @@ def repo(db_session):
 def cluster_and_sensor(repo):
     """Seed a cluster and sensor; return (cluster_id, sensor_id)."""
     cluster_id = repo.add_cluster("Anomaly Test Cluster")
-    sensor_id = repo.add_sensor(cluster_id, "fake_anomaly_sensor", "Test Sensor", "soil_moisture", {})
+    sensor_id = repo.add_sensor(cluster_id, "fake_anomaly_sensor", "Test Sensor", "tuya.tr301z", {})
     repo.session.commit()
     return cluster_id, sensor_id
 

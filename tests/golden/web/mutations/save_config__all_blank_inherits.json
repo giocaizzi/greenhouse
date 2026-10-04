@@ -1,0 +1,36 @@
+{
+ "body_lines": [
+  ""
+ ],
+ "db_effect": {
+  "irrigation_configs": {
+   "changed": {
+    "2": {
+     "auto_run": [
+      0,
+      null
+     ],
+     "duration_minutes": [
+      5,
+      null
+     ]
+    }
+   }
+  }
+ },
+ "device_calls": {
+  "irrigator": [],
+  "sensor": []
+ },
+ "headers": {
+  "location": "/clusters/2#config"
+ },
+ "request": {
+  "form": {},
+  "headers": {},
+  "method": "POST",
+  "url": "/clusters/2/config"
+ },
+ "status": 303,
+ "templates": []
+}

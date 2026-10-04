@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from textual.screen import Screen
 
@@ -15,16 +15,18 @@ if TYPE_CHECKING:
     from greenhouse_cli.tui.app import GreenhouseApp
 
 
-class DataScreen(Screen):
+class DataScreen(Screen[Any]):
     """A screen that loads its content from the API and can auto-refresh."""
 
     AUTO_REFRESH = False
 
     @property
     def gh(self) -> GreenhouseApp:
-        return self.app  # type: ignore[return-value]
+        """The app with its typed API helpers (``Screen.app`` is typed as a plain ``App``)."""
+        return cast("GreenhouseApp", self.app)
 
     def on_mount(self) -> None:
+        """Load once on mount and, for auto-refresh screens, poll at the app's refresh interval."""
         # Textual dispatches on_mount to every class in the MRO, so subclasses
         # define their own on_mount (table columns etc.) without calling super.
         self.reload()
@@ -32,9 +34,11 @@ class DataScreen(Screen):
             self.set_interval(self.gh.refresh_seconds, self.reload)
 
     def reload(self) -> None:
+        """Re-run :meth:`load` in an exclusive worker so a slow reload is replaced, never stacked."""
         self.run_worker(self.load(), exclusive=True, group="load")
 
     async def load(self) -> None:  # pragma: no cover - overridden
+        """Fetch and render the screen's data; every concrete screen overrides it."""
         raise NotImplementedError
 
     def confirm_then(
@@ -63,7 +67,7 @@ class DataScreen(Screen):
         self,
         title: str,
         fields: list[Field],
-        call: Callable[[dict], Callable[[IrrigationClient], Any]],
+        call: Callable[[dict[str, Any]], Callable[[IrrigationClient], Any]],
         done: str | Callable[[Any], str],
         submit_label: str = "Save",
         note: str | None = None,
@@ -79,7 +83,7 @@ class DataScreen(Screen):
             note: Optional help line under the title.
         """
 
-        def _after(values: dict | None) -> None:
+        def _after(values: dict[str, Any] | None) -> None:
             if values is not None:
                 self.run_worker(self.act(call(values), done), group="act")
 

@@ -1,31 +1,14 @@
-#!/usr/bin/env python3
 """Utility functions for irrigation system."""
 
 import os
 from datetime import UTC, datetime
+from typing import Any
 from zoneinfo import ZoneInfo
 
-# Seasonal light reduction factor by month (Northern hemisphere, ~45°N latitude - Milano)
-# Represents typical ratio of available daylight vs peak summer.
-# June/July = 1.0 (peak). December/January = ~0.55 (shortest days + low sun angle).
-_SEASONAL_LIGHT_FACTOR: dict[int, float] = {
-    1: 0.50,
-    2: 0.60,
-    3: 0.72,
-    4: 0.85,
-    5: 0.95,
-    6: 1.00,
-    7: 1.00,
-    8: 0.95,
-    9: 0.83,
-    10: 0.70,
-    11: 0.58,
-    12: 0.50,
-}
+from greenhouse_core.constants import NIGHT_LUX_THRESHOLD, SEASONAL_LIGHT_FACTOR_BY_MONTH
 
-# Lux threshold below which a reading is considered "nighttime / artificial light only"
-# Used to exclude night readings from daytime light averages.
-NIGHT_LUX_THRESHOLD = 15
+# The seasonal table (~45°N, Milano) and the night-lux cut-off live in constants;
+# NIGHT_LUX_THRESHOLD is also re-exported here for `from greenhouse_core.utils import` callers.
 
 
 def seasonal_light_factor(month: int | None = None) -> float:
@@ -38,10 +21,10 @@ def seasonal_light_factor(month: int | None = None) -> float:
     """
     if month is None:
         month = datetime.now(tz=UTC).month
-    return _SEASONAL_LIGHT_FACTOR.get(month, 1.0)
+    return SEASONAL_LIGHT_FACTOR_BY_MONTH.get(month, 1.0)
 
 
-def daytime_lux_readings(readings: list, min_lux: int = NIGHT_LUX_THRESHOLD) -> list[float]:
+def daytime_lux_readings(readings: list[Any], min_lux: int = NIGHT_LUX_THRESHOLD) -> list[float]:
     """Extract daytime lux values from a list of SensorReading objects.
 
     Filters out readings where light <= min_lux (night / no light).
@@ -96,8 +79,7 @@ def get_display_timezone() -> str:
 
 
 def format_timestamp(timestamp: float, fmt: str = "%Y-%m-%d %H:%M") -> str:
-    """
-    Format a UTC timestamp for display in local timezone.
+    """Format a UTC timestamp for display in local timezone.
 
     Args:
         timestamp: Unix timestamp (UTC)
@@ -111,7 +93,7 @@ def format_timestamp(timestamp: float, fmt: str = "%Y-%m-%d %H:%M") -> str:
         dt_utc = datetime.fromtimestamp(timestamp, tz=ZoneInfo("UTC"))
         dt_local = dt_utc.astimezone(ZoneInfo(tz))
         return dt_local.strftime(fmt)
-    except Exception:
+    except Exception:  # noqa: BLE001
         # Fallback to UTC if timezone conversion fails
         dt_utc = datetime.fromtimestamp(timestamp, tz=UTC)
         return dt_utc.strftime(fmt) + " UTC"

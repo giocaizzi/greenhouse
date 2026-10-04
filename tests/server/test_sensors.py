@@ -6,7 +6,7 @@ class TestSensorCRUD:
         client.post("/api/v1/clusters", json={"name": "C1"})
         resp = client.post(
             "/api/v1/clusters/1/sensors",
-            json={"tuya_device_id": "sens001", "name": "Soil Sensor", "type": "soil_moisture"},
+            json={"tuya_device_id": "sens001", "name": "Soil Sensor", "type": "tuya.tr301z"},
         )
         assert resp.status_code == 201
         assert resp.json()["name"] == "Soil Sensor"
@@ -19,7 +19,7 @@ class TestSensorCRUD:
         client.post("/api/v1/clusters/1/plants", json={"species": "Fern"})
         resp = client.post(
             "/api/v1/clusters/1/sensors",
-            json={"tuya_device_id": "sens001", "name": "S1", "type": "soil_moisture", "plant_id": 1},
+            json={"tuya_device_id": "sens001", "name": "S1", "type": "tuya.tr301z", "plant_id": 1},
         )
         assert resp.status_code == 201
         assert resp.json()["plant_id"] == 1
@@ -28,11 +28,11 @@ class TestSensorCRUD:
         client.post("/api/v1/clusters", json={"name": "C1"})
         client.post(
             "/api/v1/clusters/1/sensors",
-            json={"tuya_device_id": "sens001", "name": "A", "type": "soil_moisture"},
+            json={"tuya_device_id": "sens001", "name": "A", "type": "tuya.tr301z"},
         )
         resp = client.post(
             "/api/v1/clusters/1/sensors",
-            json={"tuya_device_id": "sens001", "name": "B", "type": "soil_moisture"},
+            json={"tuya_device_id": "sens001", "name": "B", "type": "tuya.tr301z"},
         )
         assert resp.status_code == 409
 
@@ -45,7 +45,7 @@ class TestSensorCRUD:
         client.post("/api/v1/clusters", json={"name": "C1"})
         client.post(
             "/api/v1/clusters/1/sensors",
-            json={"tuya_device_id": "sens001", "name": "My Sensor", "type": "soil_moisture"},
+            json={"tuya_device_id": "sens001", "name": "My Sensor", "type": "tuya.tr301z"},
         )
         resp = client.get("/api/v1/clusters/1/sensors/1")
         assert resp.status_code == 200
@@ -56,7 +56,7 @@ class TestSensorCRUD:
         client.post("/api/v1/clusters", json={"name": "C2"})
         client.post(
             "/api/v1/clusters/1/sensors",
-            json={"tuya_device_id": "sens001", "name": "S1", "type": "soil_moisture"},
+            json={"tuya_device_id": "sens001", "name": "S1", "type": "tuya.tr301z"},
         )
         resp = client.get("/api/v1/clusters/2/sensors/1")
         assert resp.status_code == 404
@@ -71,7 +71,7 @@ class TestSensorCRUD:
         client.post("/api/v1/clusters/1/plants", json={"species": "Fern"})
         client.post(
             "/api/v1/clusters/1/sensors",
-            json={"tuya_device_id": "sens001", "name": "Old Name", "type": "soil_moisture"},
+            json={"tuya_device_id": "sens001", "name": "Old Name", "type": "tuya.tr301z"},
         )
         resp = client.put(
             "/api/v1/clusters/1/sensors/1",
@@ -82,12 +82,26 @@ class TestSensorCRUD:
         assert data["name"] == "New Name"
         assert data["plant_id"] == 1
 
+    def test_update_rejects_plant_from_another_cluster(self, client):
+        """D2: the plant-in-cluster rule applies on update too (API and web share it)."""
+        client.post("/api/v1/clusters", json={"name": "C1"})
+        client.post("/api/v1/clusters", json={"name": "C2"})
+        client.post("/api/v1/clusters/2/plants", json={"species": "Fern"})
+        client.post(
+            "/api/v1/clusters/1/sensors",
+            json={"tuya_device_id": "sens001", "name": "S1", "type": "tuya.tr301z"},
+        )
+        resp = client.put("/api/v1/clusters/1/sensors/1", json={"plant_id": 1})
+        assert resp.status_code == 404
+        assert resp.json() == {"detail": "Plant 1 not found in cluster"}
+        assert client.get("/api/v1/clusters/1/sensors/1").json()["plant_id"] is None
+
     def test_update_wrong_cluster_returns_404(self, client):
         client.post("/api/v1/clusters", json={"name": "C1"})
         client.post("/api/v1/clusters", json={"name": "C2"})
         client.post(
             "/api/v1/clusters/1/sensors",
-            json={"tuya_device_id": "sens001", "name": "S", "type": "soil_moisture"},
+            json={"tuya_device_id": "sens001", "name": "S", "type": "tuya.tr301z"},
         )
         resp = client.put("/api/v1/clusters/2/sensors/1", json={"name": "X"})
         assert resp.status_code == 404
@@ -101,7 +115,7 @@ class TestSensorCRUD:
         client.post("/api/v1/clusters", json={"name": "C1"})
         client.post(
             "/api/v1/clusters/1/sensors",
-            json={"tuya_device_id": "sens001", "name": "S1", "type": "soil_moisture"},
+            json={"tuya_device_id": "sens001", "name": "S1", "type": "tuya.tr301z"},
         )
         resp = client.delete("/api/v1/clusters/1/sensors/1")
         assert resp.status_code == 200
@@ -115,7 +129,7 @@ class TestSensorCRUD:
         client.post("/api/v1/clusters", json={"name": "C2"})
         client.post(
             "/api/v1/clusters/1/sensors",
-            json={"tuya_device_id": "sens001", "name": "S", "type": "soil_moisture"},
+            json={"tuya_device_id": "sens001", "name": "S", "type": "tuya.tr301z"},
         )
         resp = client.delete("/api/v1/clusters/2/sensors/1")
         assert resp.status_code == 404
@@ -141,11 +155,11 @@ class TestListAllSensorsTopLevel:
         client.post("/api/v1/clusters", json={"name": "B"})
         client.post(
             "/api/v1/clusters/1/sensors",
-            json={"tuya_device_id": "dev_a", "name": "A1", "type": "soil_moisture"},
+            json={"tuya_device_id": "dev_a", "name": "A1", "type": "tuya.tr301z"},
         )
         client.post(
             "/api/v1/clusters/2/sensors",
-            json={"tuya_device_id": "dev_b", "name": "B1", "type": "soil_moisture"},
+            json={"tuya_device_id": "dev_b", "name": "B1", "type": "tuya.tr301z"},
         )
         resp = client.get("/api/v1/sensors")
         names = sorted(s["name"] for s in resp.json()["sensors"])
@@ -157,11 +171,11 @@ class TestListAllSensorsTopLevel:
         client.post("/api/v1/clusters", json={"name": "B"})
         client.post(
             "/api/v1/clusters/1/sensors",
-            json={"tuya_device_id": "dev_a", "name": "A1", "type": "soil_moisture"},
+            json={"tuya_device_id": "dev_a", "name": "A1", "type": "tuya.tr301z"},
         )
         client.post(
             "/api/v1/clusters/2/sensors",
-            json={"tuya_device_id": "dev_b", "name": "B1", "type": "soil_moisture"},
+            json={"tuya_device_id": "dev_b", "name": "B1", "type": "tuya.tr301z"},
         )
         resp = client.get("/api/v1/sensors?cluster_id=2")
         names = [s["name"] for s in resp.json()["sensors"]]
@@ -173,7 +187,7 @@ class TestListAllSensorsTopLevel:
         for n in range(3):
             client.post(
                 "/api/v1/clusters/1/sensors",
-                json={"tuya_device_id": f"dev_{n}", "name": f"S{n}", "type": "soil_moisture"},
+                json={"tuya_device_id": f"dev_{n}", "name": f"S{n}", "type": "tuya.tr301z"},
             )
         resp = client.get("/api/v1/sensors?limit=2")
         data = resp.json()
@@ -193,7 +207,7 @@ class TestSensorReassignmentActivity:
         client.post("/api/v1/clusters/1/plants", json={"species": "Monstera"})
         client.post(
             "/api/v1/clusters/1/sensors",
-            json={"tuya_device_id": "s001", "name": "S1", "type": "soil_moisture", "plant_id": 1},
+            json={"tuya_device_id": "s001", "name": "S1", "type": "tuya.tr301z", "plant_id": 1},
         )
 
         resp = client.put("/api/v1/clusters/1/sensors/1", json={"plant_id": 2})
@@ -209,7 +223,7 @@ class TestSensorReassignmentActivity:
         client.post("/api/v1/clusters/1/plants", json={"species": "Fern"})
         client.post(
             "/api/v1/clusters/1/sensors",
-            json={"tuya_device_id": "s001", "name": "S1", "type": "soil_moisture", "plant_id": 1},
+            json={"tuya_device_id": "s001", "name": "S1", "type": "tuya.tr301z", "plant_id": 1},
         )
         # No-op PUT (same plant_id).
         client.put("/api/v1/clusters/1/sensors/1", json={"plant_id": 1})
@@ -224,7 +238,7 @@ class TestSensorReassignmentActivity:
         client.post("/api/v1/clusters/1/plants", json={"species": "Fern"})
         client.post(
             "/api/v1/clusters/1/sensors",
-            json={"tuya_device_id": "s001", "name": "S1", "type": "soil_moisture", "plant_id": 1},
+            json={"tuya_device_id": "s001", "name": "S1", "type": "tuya.tr301z", "plant_id": 1},
         )
         # We can't send null via the existing PUT (exclude_none drops it), so
         # exercise it directly through the repository for coverage of the path.

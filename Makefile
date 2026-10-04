@@ -1,4 +1,4 @@
-.PHONY: help install test lint format check coverage serve clean \
+.PHONY: help install test lint format check coverage serve clean lint-imports typecheck sizecheck \
         docker-build docker-up docker-down docker-logs docker-shell \
         pre-commit-install pre-commit-run
 
@@ -19,7 +19,17 @@ lint: ## Run ruff lint
 format: ## Apply ruff formatter
 	uv run ruff format libs/ tests/
 
-check: pre-commit-run coverage ## CI parity: pre-commit hooks (lint/format/hygiene) + coverage gate
+check: pre-commit-run lint-imports typecheck sizecheck coverage ## CI parity: pre-commit hooks (lint/format/hygiene) + import contracts + strict types + size limits + coverage gate
+
+lint-imports: ## Check the import-linter layering contracts
+	uv run lint-imports
+
+typecheck: ## mypy strict over libs/ (files and exclusions in [tool.mypy], pyproject.toml)
+	uv run mypy
+
+FILES ?= libs/
+sizecheck: ## Size limits (body lines / nesting / file length); FILES=... to narrow, register in scripts/size-exceptions.txt
+	uv run python scripts/sizecheck.py $(FILES)
 
 coverage: ## Run tests with coverage report (fails under 60%)
 	uv run pytest --cov=greenhouse_core --cov=greenhouse_server --cov=greenhouse_cli --cov-report=term-missing --cov-report=xml --cov-fail-under=60

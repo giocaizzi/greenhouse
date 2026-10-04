@@ -1,0 +1,39 @@
+{
+ "body_lines": [
+  ""
+ ],
+ "db_effect": {
+  "user_preferences": {
+   "changed": {
+    "1": {
+     "scheduler_paused": [
+      0,
+      1
+     ]
+    }
+   }
+  }
+ },
+ "device_calls": {
+  "irrigator": [],
+  "sensor": []
+ },
+ "headers": {
+  "location": "/scheduler"
+ },
+ "request": {
+  "form": null,
+  "headers": {},
+  "method": "POST",
+  "url": "/scheduler/pause"
+ },
+ "scheduler_jobs_after": [
+  "check_all",
+  "device_health_monitor",
+  "plant_health_snapshot",
+  "sensor_anomaly",
+  "sensor_sync"
+ ],
+ "status": 303,
+ "templates": []
+}

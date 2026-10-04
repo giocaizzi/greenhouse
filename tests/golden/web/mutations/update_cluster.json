@@ -1,0 +1,36 @@
+{
+ "body_lines": [
+  ""
+ ],
+ "db_effect": {
+  "clusters": {
+   "changed": {
+    "1": {
+     "name": [
+      "Indoor Jungle",
+      "Jungle"
+     ]
+    }
+   }
+  }
+ },
+ "device_calls": {
+  "irrigator": [],
+  "sensor": []
+ },
+ "headers": {
+  "location": "/clusters/1"
+ },
+ "request": {
+  "form": {
+   "environment": "indoor",
+   "location": "",
+   "name": "Jungle"
+  },
+  "headers": {},
+  "method": "POST",
+  "url": "/clusters/1/edit"
+ },
+ "status": 303,
+ "templates": []
+}

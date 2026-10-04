@@ -23,7 +23,7 @@ from greenhouse_core.devices.health import DeviceHealthState
 from greenhouse_core.models import Irrigator, Sensor
 
 
-def _make_irrigator(device_type="tuya_cloud"):
+def _make_irrigator(device_type="rainpoint.ik10pw"):
     return Irrigator(
         id=1,
         cluster_id=1,
@@ -40,7 +40,7 @@ def _make_sensor():
         cluster_id=1,
         tuya_device_id=FAKE_DEVICE_ID,
         name="Test Sensor",
-        type="soil_moisture",
+        type="tuya.tr301z",
         plant_id=None,
         config={},
     )
@@ -155,28 +155,6 @@ class TestIK10PWAdapterStatus:
         assert status["work_state"] == "watering"
 
 
-class TestTR301ZAdapterReadLive:
-    """The sensor adapter delegates ``read_live`` to TuyaCloud."""
-
-    def test_read_live_returns_parsed_dict(self, registry, fake_cloud):
-        adapter = registry.get_sensor(_make_sensor())
-        adapter._gateway.get_live_reading = MagicMock(  # type: ignore[attr-defined]
-            return_value={"temperature": 22.5, "soil_moisture": 45.0}
-        )
-        reading = adapter.read_live(_make_sensor())
-        assert reading["temperature"] == 22.5
-        assert reading["soil_moisture"] == 45.0
-
-    def test_read_live_cloud_failure_returns_error_dict(self, registry):
-        adapter = registry.get_sensor(_make_sensor())
-        adapter._gateway.get_live_reading = MagicMock(  # type: ignore[attr-defined]
-            side_effect=RuntimeError("device offline")
-        )
-        out = adapter.read_live(_make_sensor())
-        assert "error" in out
-        assert "device offline" in out["error"]
-
-
 class TestAlarmParser:
     """alarm_indicates_no_water handles the multiple shapes the DP can take."""
 
@@ -253,24 +231,11 @@ class TestIK10PWReadHealth:
 class TestRegistry:
     """Smoke checks: the registry yields the expected concrete adapters."""
 
-    def test_registry_resolves_legacy_irrigator_aliases(self, registry: DeviceRegistry):
-        for legacy in ("tuya_cloud", "tuya_local", ""):
-            adapter = registry.get_irrigator(_make_irrigator(legacy))
-            assert isinstance(adapter, IK10PWAdapter)
+    def test_registry_resolves_the_irrigator_model_key(self, registry: DeviceRegistry):
+        assert isinstance(registry.get_irrigator(_make_irrigator("rainpoint.ik10pw")), IK10PWAdapter)
 
-    def test_registry_resolves_legacy_sensor_aliases(self, registry: DeviceRegistry):
-        for legacy in ("soil_moisture", "temp_humidity", "light", ""):
-            sensor = Sensor(
-                id=1,
-                cluster_id=1,
-                tuya_device_id=FAKE_DEVICE_ID,
-                name="s",
-                type=legacy,
-                plant_id=None,
-                config={},
-            )
-            adapter = registry.get_sensor(sensor)
-            assert isinstance(adapter, TR301ZAdapter)
+    def test_registry_resolves_the_sensor_model_key(self, registry: DeviceRegistry):
+        assert isinstance(registry.get_sensor(_make_sensor()), TR301ZAdapter)
 
     def test_health_state_is_typed(self, adapter):
         state = adapter.read_health(_make_irrigator())

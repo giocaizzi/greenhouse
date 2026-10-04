@@ -1,0 +1,14 @@
+
+ Usage: greenhouse config [OPTIONS] COMMAND [ARGS]...
+
+ Irrigation configuration
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                                      │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────────────────────────╮
+│ set        Patch a cluster's irrigation config. Omitted options are left unchanged.              │
+│ get        Get a cluster's declared irrigation config (nulls = inherited).                       │
+│ effective  Show the merged config: each field's resolved value and its source layer.             │
+│ global     Global irrigation defaults (inherited by every cluster)                               │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

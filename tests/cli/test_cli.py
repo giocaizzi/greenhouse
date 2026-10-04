@@ -275,6 +275,26 @@ class TestErrorHandling:
         assert result.exit_code == 2
 
 
+class TestClientLifecycle:
+    @pytest.mark.parametrize(("status", "exit_code"), [(200, 0), (404, 1)])
+    def test_call_closes_the_client_it_opened(self, monkeypatch, status, exit_code):
+        """Every CLI call closes its HTTP client, on success and on a server error."""
+        body = {"status": "ok"} if status == 200 else {"detail": "Not found"}
+        transport = httpx.MockTransport(lambda request: httpx.Response(status, json=body))
+        clients: list[httpx.Client] = []
+        original_init = httpx.Client.__init__
+
+        def recording_init(self, *args, **kwargs):
+            original_init(self, *args, **{**kwargs, "transport": transport})
+            clients.append(self)
+
+        monkeypatch.setattr(httpx.Client, "__init__", recording_init)
+        result = runner.invoke(app, ["health"])
+        assert result.exit_code == exit_code
+        assert len(clients) == 1
+        assert clients[0].is_closed
+
+
 class TestServerFlag:
     def test_custom_server_url(self, _patch_client):
         _patch_client(
@@ -452,7 +472,7 @@ class TestIrrigatorCapacity:
                 "--name",
                 "Tank pump",
                 "--type",
-                "tuya_local",
+                "rainpoint.ik10pw",
                 "--reservoir-l",
                 "20",
                 "--flow-rate-l-per-min",
@@ -478,7 +498,7 @@ class TestIrrigatorCapacity:
                 "--name",
                 "Tank pump",
                 "--type",
-                "tuya_local",
+                "rainpoint.ik10pw",
             ],
         )
         assert result.exit_code == 0
@@ -553,7 +573,7 @@ class TestIrrigatorCommands:
                 "--name",
                 "Second pump",
                 "--type",
-                "tuya_local",
+                "rainpoint.ik10pw",
             ],
         )
         assert result.exit_code == 1

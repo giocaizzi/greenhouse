@@ -29,8 +29,9 @@ from __future__ import annotations
 import hmac
 import logging
 import time
-from collections.abc import Generator
 from dataclasses import dataclass
+from typing import Any
+from urllib.parse import quote
 
 import jwt
 from fastapi import Depends, HTTPException, Request, Response, status
@@ -39,16 +40,11 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
 
-from greenhouse_core.auth import (
-    create_user,
-    get_user,
-    get_user_by_username,
-    needs_rehash,
-    set_password,
-    verify_password,
-)
+from greenhouse_core.auth import needs_rehash, verify_password
 from greenhouse_core.models import User
+from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.config import Settings
+from greenhouse_server.state import get_session, get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -94,7 +90,8 @@ class AuthenticatedUser:
 
 def _require_secret(settings: Settings) -> str:
     if not settings.auth_secret_key:
-        raise AuthConfigError("auth_secret_key is not set")
+        msg = "auth_secret_key is not set"
+        raise AuthConfigError(msg)
     return settings.auth_secret_key
 
 
@@ -113,7 +110,7 @@ def issue_token(settings: Settings, user: User, *, now: int | None = None) -> st
     return jwt.encode(payload, secret, algorithm=JWT_ALGORITHM)
 
 
-def decode_token(settings: Settings, token: str) -> dict:
+def decode_token(settings: Settings, token: str) -> dict[str, Any]:
     """Decode and validate a session JWT. Raises AuthError on any failure."""
     secret = _require_secret(settings)
     try:
@@ -125,9 +122,11 @@ def decode_token(settings: Settings, token: str) -> dict:
             options={"require": ["sub", "iat", "exp", "aud"]},
         )
     except jwt.ExpiredSignatureError as exc:
-        raise AuthError("Session expired") from exc
+        msg = "Session expired"
+        raise AuthError(msg) from exc
     except jwt.InvalidTokenError as exc:
-        raise AuthError("Invalid session") from exc
+        msg = "Invalid session"
+        raise AuthError(msg) from exc
 
 
 # ── FastAPI dependencies ────────────────────────────────────────────────────
@@ -136,17 +135,10 @@ def decode_token(settings: Settings, token: str) -> dict:
 _bearer = HTTPBearer(auto_error=False)
 
 
-def _get_settings(request: Request) -> Settings:
-    return request.app.state.settings
-
-
-def _session_from_app(request: Request) -> Generator[Session, None, None]:
-    factory = request.app.state.session_factory
-    session = factory()
-    try:
-        yield session
-    finally:
-        session.close()
+# The route dependencies' own providers: FastAPI caches a dependency per request by callable
+# identity, so the auth lookup and the handler share one session (and its identity map).
+_get_settings = get_settings
+_session_from_app = get_session
 
 
 def _extract_token(
@@ -161,15 +153,17 @@ def _extract_token(
     return cookie or None
 
 
-def _resolve_user(token: str, settings: Settings, session: Session) -> AuthenticatedUser:
+def _resolve_user(token: str, settings: Settings, repo: IrrigationRepository) -> AuthenticatedUser:
     payload = decode_token(settings, token)
     try:
         user_id = int(payload["sub"])
     except (KeyError, TypeError, ValueError) as exc:
-        raise AuthError("Malformed session") from exc
-    user = get_user(session, user_id)
+        msg = "Malformed session"
+        raise AuthError(msg) from exc
+    user = repo.get_user(user_id)
     if user is None or not user.is_active:
-        raise AuthError("User no longer active")
+        msg = "User no longer active"
+        raise AuthError(msg)
     return AuthenticatedUser(id=user.id, username=user.username)
 
 
@@ -214,10 +208,10 @@ def require_user(
         return AuthenticatedUser(id=SYSTEM_USER_ID, username=SYSTEM_USER_NAME, is_system=True)
     token = _extract_token(request, creds, settings)
     if not token:
-        raise AuthError()
+        raise AuthError
     if _is_mcp_token(token, settings):
         return AuthenticatedUser(id=MCP_USER_ID, username=MCP_USER_NAME, is_system=True)
-    return _resolve_user(token, settings, session)
+    return _resolve_user(token, settings, IrrigationRepository(session))
 
 
 def require_web_user(
@@ -236,7 +230,7 @@ def require_web_user(
     if not token:
         raise _redirect_to_login(request)
     try:
-        return _resolve_user(token, settings, session)
+        return _resolve_user(token, settings, IrrigationRepository(session))
     except AuthError as exc:
         raise _redirect_to_login(request) from exc
 
@@ -267,8 +261,6 @@ def render_login_redirect(err: _RedirectAuthError, request: Request) -> Response
     instead return an empty 204 carrying ``HX-Redirect`` so HTMX performs a
     top-level browser navigation. Non-HTMX requests keep the 303.
     """
-    from urllib.parse import quote
-
     target = f"/login?next={quote(err.next_url)}"
     if request.headers.get("HX-Request", "").lower() == "true":
         response = Response(status_code=204)
@@ -294,6 +286,7 @@ def set_session_cookie(response: Response, settings: Settings, token: str) -> No
 
 
 def clear_session_cookie(response: Response, settings: Settings) -> None:
+    """Delete the session cookie. Used by the logout endpoints."""
     response.delete_cookie(key=settings.auth_cookie_name, path="/")
 
 
@@ -301,15 +294,18 @@ def clear_session_cookie(response: Response, settings: Settings) -> None:
 
 
 def authenticate(session: Session, username: str, password: str) -> User | None:
-    """Verify credentials and return the User or None. Also re-hashes on success
-    if the stored argon2 parameters are outdated."""
-    user = get_user_by_username(session, username)
+    """Verify credentials and return the User, or None when they do not match.
+
+    On success the password is re-hashed if the stored argon2 parameters are outdated.
+    """
+    repo = IrrigationRepository(session)
+    user = repo.get_user_by_username(username)
     if user is None or not user.is_active:
         return None
     if not verify_password(password, user.hashed_password):
         return None
     if needs_rehash(user.hashed_password):
-        set_password(session, user, password)
+        repo.set_user_password(user, password)
     return user
 
 
@@ -323,12 +319,10 @@ def bootstrap_admin(engine: Engine, settings: Settings) -> None:
     """
     if not settings.auth_enabled:
         return
-    from sqlalchemy.orm import Session as _Session
-
-    session = _Session(engine)
+    session = Session(engine)
     try:
-        existing = session.query(User).first()
-        if existing is not None:
+        repo = IrrigationRepository(session)
+        if repo.has_users():
             return
         username = settings.auth_admin_username
         password = settings.auth_admin_password
@@ -340,12 +334,8 @@ def bootstrap_admin(engine: Engine, settings: Settings) -> None:
                 "a user is created."
             )
             return
-        create_user(session, username=username, password=password)
-        session.commit()
+        repo.create_user(username, password)
+        repo.commit()
         logger.info("Bootstrapped initial admin user %r from environment.", username)
     finally:
         session.close()
-
-
-# Type alias for route signatures
-AuthUserDep = AuthenticatedUser

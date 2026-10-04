@@ -3,16 +3,15 @@
 from __future__ import annotations
 
 import asyncio
+from typing import Any, ClassVar
 
-from rich.text import Text
 from textual.app import ComposeResult
-from textual.binding import Binding
+from textual.binding import Binding, BindingType
 from textual.containers import Horizontal, VerticalScroll
 from textual.widgets import DataTable, Footer, Header, Static
 
 from greenhouse_cli.client import clear_stored_token
-from greenhouse_cli.tui import formatting as fmt
-from greenhouse_cli.tui import resources
+from greenhouse_cli.tui import render, resources
 from greenhouse_cli.tui.screens.base import DataScreen
 from greenhouse_cli.tui.widgets import KeyValue, refill, selected_key
 
@@ -20,7 +19,7 @@ from greenhouse_cli.tui.widgets import KeyValue, refill, selected_key
 class SettingsScreen(DataScreen):
     """Edit preferences (``p``), global defaults (``g``) and vacation windows (``n``/``u``/``del``)."""
 
-    BINDINGS = [
+    BINDINGS: ClassVar[list[BindingType]] = [
         Binding("p", "edit_preferences", "Preferences"),
         Binding("g", "edit_global", "Global config"),
         Binding("n", "new_vacation", "New vacation"),
@@ -31,11 +30,12 @@ class SettingsScreen(DataScreen):
 
     def __init__(self) -> None:
         super().__init__()
-        self.prefs: dict = {}
-        self.global_config: dict = {}
-        self.vacations: list[dict] = []
+        self.prefs: dict[str, Any] = {}
+        self.global_config: dict[str, Any] = {}
+        self.vacations: list[dict[str, Any]] = []
 
     def compose(self) -> ComposeResult:
+        """Lay out the account line, the preference / global panels and the vacation table."""
         yield Header(show_clock=True)
         with VerticalScroll():
             yield Static(id="account", classes="hint")
@@ -50,9 +50,11 @@ class SettingsScreen(DataScreen):
         yield Footer()
 
     def on_mount(self) -> None:
+        """Declare the vacation table columns."""
         self.query_one("#vacation-table", DataTable).add_columns("ID", "Starts", "Ends", "Contact", "Notes", "State")
 
     async def load(self) -> None:
+        """Fetch account, preferences, global config and vacation windows concurrently and render them."""
         api = self.gh.api
         me, prefs, global_config, vacation = await asyncio.gather(
             api(lambda c: c.whoami(), quiet=True),
@@ -61,54 +63,22 @@ class SettingsScreen(DataScreen):
             api(lambda c: c.list_vacation()),
         )
         who = (me or {}).get("username")
-        self.query_one("#account", Static).update(
-            f"Signed in as [b]{who}[/b] on {self.gh.server_url}   [dim]O: log out[/dim]"
-            if who
-            else f"Server {self.gh.server_url}  [dim](auth disabled or not signed in)[/dim]"
-        )
+        self.query_one("#account", Static).update(render.account_line(who, self.gh.server_url))
         self.prefs = prefs or {}
         self.query_one("#prefs-panel", KeyValue).show(
-            [(k, str(v)) for k, v in sorted(self.prefs.items())] or [("preferences", "unavailable")],
-            title="Preferences  (p to edit)",
+            render.preference_rows(self.prefs), title="Preferences  (p to edit)"
         )
         self.global_config = global_config or {}
         self.query_one("#global-panel", KeyValue).show(
-            [
-                (k, Text("built-in default", style="dim") if v is None else str(v))
-                for k, v in sorted(self.global_config.items())
-                if k not in {"id", "last_updated"}
-            ]
-            or [("config", "unavailable")],
-            title="Global irrigation defaults  (g to edit)",
+            render.global_config_rows(self.global_config), title="Global irrigation defaults  (g to edit)"
         )
         self.vacations = (vacation or {}).get("items", [])
         active_id = ((vacation or {}).get("active") or {}).get("id")
         table = self.query_one("#vacation-table", DataTable)
-        rows: list = []
-        now = fmt.now()
-        for v in self.vacations:
-            if v["id"] == active_id:
-                state = Text("active", style="bold #7ed957")
-            elif v["ends_at"] < now:
-                state = Text("past", style="dim")
-            else:
-                state = Text(f"starts {fmt.ago(v['starts_at'])}", style="#6fb7ff")
-            rows.append(
-                (
-                    str(v["id"]),
-                    [
-                        str(v["id"]),
-                        fmt.clock(v["starts_at"], True),
-                        fmt.clock(v["ends_at"], True),
-                        v.get("contact_email") or "—",
-                        v.get("notes") or "",
-                        state,
-                    ],
-                )
-            )
-        refill(table, rows)
+        refill(table, render.vacation_rows(self.vacations, active_id, self.prefs.get("timezone")))
 
     def action_edit_preferences(self) -> None:
+        """Edit the server-wide preferences."""
         self.form_then(
             "Preferences",
             resources.preference_fields(self.prefs),
@@ -117,6 +87,7 @@ class SettingsScreen(DataScreen):
         )
 
     def action_edit_global(self) -> None:
+        """Edit the global irrigation defaults that clusters inherit."""
         self.form_then(
             "Global irrigation defaults",
             resources.config_fields(self.global_config),
@@ -125,7 +96,8 @@ class SettingsScreen(DataScreen):
             note="Clusters inherit these unless they override a field. Blank = keep current.",
         )
 
-    def _selected_vacation(self) -> dict | None:
+    def _selected_vacation(self) -> dict[str, Any] | None:
+        """The vacation under the cursor, or ``None`` after a warning toast."""
         key = selected_key(self.query_one("#vacation-table", DataTable))
         found = next((v for v in self.vacations if str(v["id"]) == key), None)
         if found:
@@ -134,25 +106,28 @@ class SettingsScreen(DataScreen):
         return None
 
     def action_new_vacation(self) -> None:
+        """Add a vacation window, entered in the server's timezone preference."""
         self.form_then(
             "New vacation window",
-            resources.vacation_fields(),
+            resources.vacation_fields(tz=self.prefs.get("timezone")),
             lambda v: lambda c: c.add_vacation(**v),
             "Vacation window added",
             "Add",
         )
 
     def action_edit_vacation(self) -> None:
+        """Edit the selected vacation window."""
         window = self._selected_vacation()
         if window:
             self.form_then(
                 f"Edit vacation #{window['id']}",
-                resources.vacation_fields(window),
+                resources.vacation_fields(window, tz=self.prefs.get("timezone")),
                 lambda v: lambda c: c.update_vacation(window["id"], **v),
                 "Vacation window updated",
             )
 
     def action_delete_vacation(self) -> None:
+        """Delete the selected vacation window after confirmation."""
         window = self._selected_vacation()
         if window:
             self.confirm_then(
@@ -163,9 +138,11 @@ class SettingsScreen(DataScreen):
             )
 
     def action_logout(self) -> None:
+        """Log out on the server, forget the stored token and reload as anonymous."""
         self.run_worker(self._logout(), group="act")
 
     async def _logout(self) -> None:
+        """Log out on the server (errors ignored), drop the stored token and continue with an anonymous client."""
         await self.gh.api(lambda c: c.logout(), quiet=True)
         removed = await asyncio.to_thread(clear_stored_token)
         self.gh.client = self.gh.client_factory("")

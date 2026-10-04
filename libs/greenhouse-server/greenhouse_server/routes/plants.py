@@ -3,6 +3,7 @@
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel
 
+from greenhouse_core.models import Plant
 from greenhouse_core.repository import SameClusterMoveError
 from greenhouse_core.schemas import (
     CreatePlantRequest,
@@ -15,7 +16,15 @@ from greenhouse_core.schemas import (
     SyncPlantsResponse,
     UpdatePlantRequest,
 )
-from greenhouse_server.deps import ClusterServiceDep, PlantHealthServiceDep, RepoDep, require_cluster
+from greenhouse_server.deps import (
+    ClusterServiceDep,
+    PlantHealthServiceDep,
+    RepoDep,
+    require_cluster,
+    require_plant,
+    require_plant_in_cluster,
+)
+from greenhouse_server.services.errors import ClusterNotFoundError, PlantNotFoundError
 
 router = APIRouter(tags=["plants"])
 
@@ -27,7 +36,7 @@ def list_all_plants(
     category: str | None = Query(default=None, description="Restrict results to a plant category"),
     limit: int = Query(default=100, ge=1, le=500),
     cursor: int | None = Query(default=None, description="Id cursor — return rows with id > cursor"),
-):
+) -> PlantListResponse:
     """List every plant across all clusters, with optional filters and cursor pagination.
 
     The cluster-scoped list at ``/clusters/{id}/plants`` is unchanged; this
@@ -59,7 +68,7 @@ def list_all_plants(
 
 
 @router.post("/clusters/{cluster_id}/plants", response_model=PlantResponse, status_code=status.HTTP_201_CREATED)
-def add_plant(cluster_id: int, request: CreatePlantRequest, repo: RepoDep):
+def add_plant(cluster_id: int, request: CreatePlantRequest, repo: RepoDep) -> Plant:
     """Add a plant to a cluster.
 
     Care thresholds (water needs, temperature/humidity ranges) can be supplied
@@ -89,24 +98,27 @@ def add_plant(cluster_id: int, request: CreatePlantRequest, repo: RepoDep):
         ideal_humidity_max=request.ideal_humidity_max,
         notes=request.notes,
     )
-    repo.session.commit()
+    repo.commit()
     plants = repo.get_plants_in_cluster(cluster_id)
     return next(p for p in plants if p.id == plant_id)
 
 
 @router.get("/clusters/{cluster_id}/plants", response_model=list[PlantResponse])
-def list_plants(cluster_id: int, repo: RepoDep):
+def list_plants(cluster_id: int, repo: RepoDep) -> list[Plant]:
     """List every plant in a cluster.
 
     Args:
         cluster_id: ID of the cluster to enumerate.
+
+    Returns:
+        The cluster's plants (empty for an unknown cluster).
     """
     return repo.get_plants_in_cluster(cluster_id)
 
 
 @router.put("/clusters/{cluster_id}/plants/{plant_id}", response_model=PlantResponse, summary="Update a plant")
-def update_plant(cluster_id: int, plant_id: int, request: UpdatePlantRequest, repo: RepoDep):
-    """Partially update a plant care metadata.
+def update_plant(cluster_id: int, plant_id: int, request: UpdatePlantRequest, repo: RepoDep) -> Plant | None:
+    """Partially update a plant's care metadata.
 
     Only fields present in the request body are modified; omitted fields are
     left unchanged. The plant must belong to the specified cluster.
@@ -123,16 +135,14 @@ def update_plant(cluster_id: int, plant_id: int, request: UpdatePlantRequest, re
         HTTPException: 404 if the plant does not exist or belongs to a
             different cluster.
     """
-    plant = repo.get_plant(plant_id)
-    if not plant or plant.cluster_id != cluster_id:
-        raise HTTPException(status_code=404, detail="Plant not found in cluster")
+    require_plant_in_cluster(repo, cluster_id, plant_id)
     updated = repo.update_plant(plant_id, **request.model_dump(exclude_none=True))
-    repo.session.commit()
+    repo.commit()
     return updated
 
 
 @router.delete("/clusters/{cluster_id}/plants/{plant_id}", response_model=SuccessResponse, summary="Delete a plant")
-def delete_plant(cluster_id: int, plant_id: int, repo: RepoDep):
+def delete_plant(cluster_id: int, plant_id: int, repo: RepoDep) -> SuccessResponse:
     """Delete a plant from a cluster.
 
     Sensors previously linked to this plant retain their cluster membership
@@ -149,16 +159,14 @@ def delete_plant(cluster_id: int, plant_id: int, repo: RepoDep):
         HTTPException: 404 if the plant does not exist or belongs to a
             different cluster.
     """
-    plant = repo.get_plant(plant_id)
-    if not plant or plant.cluster_id != cluster_id:
-        raise HTTPException(status_code=404, detail="Plant not found in cluster")
+    require_plant_in_cluster(repo, cluster_id, plant_id)
     repo.delete_plant(plant_id)
-    repo.session.commit()
+    repo.commit()
     return SuccessResponse(success=True)
 
 
 @router.post("/plants/{plant_id}/move", response_model=PlantResponse)
-def move_plant(plant_id: int, request: MovePlantRequest, repo: RepoDep):
+def move_plant(plant_id: int, request: MovePlantRequest, repo: RepoDep) -> Plant | None:
     """Move a plant from its current cluster to a different cluster.
 
     The plant keeps its id, its plant_health_daily history, and its learning
@@ -182,21 +190,19 @@ def move_plant(plant_id: int, request: MovePlantRequest, repo: RepoDep):
             400 if ``target_cluster_id`` equals the plant's current cluster
             (no-op move).
     """
-    plant = repo.get_plant(plant_id)
-    if not plant:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plant not found")
+    require_plant(repo, plant_id)
     if not repo.get_cluster(request.target_cluster_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Target cluster not found")
     try:
         moved = repo.move_plant(plant_id, request.target_cluster_id)
     except SameClusterMoveError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-    repo.session.commit()
+    repo.commit()
     return moved
 
 
 @router.post("/plants/sync", response_model=SyncPlantsResponse)
-def sync_plants(request: SyncPlantsRequest, repo: RepoDep, cluster_svc: ClusterServiceDep):
+def sync_plants(request: SyncPlantsRequest, repo: RepoDep, cluster_svc: ClusterServiceDep) -> SyncPlantsResponse:
     """Refresh plant care thresholds from the evidence-based plant database.
 
     Resolves species to care data lookup and writes the result onto the matching
@@ -213,38 +219,17 @@ def sync_plants(request: SyncPlantsRequest, repo: RepoDep, cluster_svc: ClusterS
         any that failed (failures do not abort the rest of the run).
 
     Raises:
-        HTTPException: 404 if plant_id is set and no such plant exists.
+        HTTPException: 404 if plant_id is set and no such plant exists, or if
+            only cluster_id is set and no such cluster exists.
     """
-    errors = []
-    synced = 0
+    try:
+        synced, errors = cluster_svc.sync_plants(plant_id=request.plant_id, cluster_id=request.cluster_id)
+    except PlantNotFoundError:
+        raise HTTPException(status_code=404, detail=f"Plant {request.plant_id} not found") from None
+    except ClusterNotFoundError:
+        raise HTTPException(status_code=404, detail="Cluster not found") from None
 
-    if request.plant_id:
-        clusters = repo.list_clusters()
-        plant = None
-        for cluster in clusters:
-            for p in repo.get_plants_in_cluster(cluster.id):
-                if p.id == request.plant_id:
-                    plant = p
-                    break
-            if plant:
-                break
-        if not plant:
-            raise HTTPException(status_code=404, detail=f"Plant {request.plant_id} not found")
-        cluster_svc.sync_plant_with_db(plant)
-        synced = 1
-    else:
-        clusters = [repo.get_cluster(request.cluster_id)] if request.cluster_id else repo.list_clusters()
-        for cluster in clusters:
-            if not cluster:
-                continue
-            for plant in repo.get_plants_in_cluster(cluster.id):
-                try:
-                    cluster_svc.sync_plant_with_db(plant)
-                    synced += 1
-                except Exception as e:
-                    errors.append(f"{plant.species}: {e}")
-
-    repo.session.commit()
+    repo.commit()
     return SyncPlantsResponse(synced=synced, errors=errors)
 
 
@@ -255,7 +240,7 @@ class SnapshotResponse(BaseModel):
 
 
 @router.get("/plants/{plant_id}/health", response_model=PlantHealthResponse)
-def get_plant_health(plant_id: int, repo: RepoDep, health_svc: PlantHealthServiceDep):
+def get_plant_health(plant_id: int, repo: RepoDep, health_svc: PlantHealthServiceDep) -> PlantHealthResponse:
     """Return the current health score and 90-day history for a plant.
 
     Computes a fresh 0–100 composite score from readings over the last 14 days
@@ -272,21 +257,16 @@ def get_plant_health(plant_id: int, repo: RepoDep, health_svc: PlantHealthServic
     Raises:
         HTTPException: 404 if the plant does not exist.
     """
-    plant = repo.get_plant(plant_id)
-    if not plant:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plant not found")
+    plant = require_plant(repo, plant_id)
     result = health_svc.compute_score(plant_id)
     history = repo.list_plant_health_history(plant_id, days=90)
-    return PlantHealthResponse(
-        plant_id=plant_id,
-        species=plant.species,
-        current_score=result["score"],
-        history=history,
+    return PlantHealthResponse.model_validate(
+        {"plant_id": plant_id, "species": plant.species, "current_score": result["score"], "history": history}
     )
 
 
 @router.post("/plants/health/snapshot", response_model=SnapshotResponse)
-def trigger_health_snapshot(health_svc: PlantHealthServiceDep, repo: RepoDep):
+def trigger_health_snapshot(health_svc: PlantHealthServiceDep, repo: RepoDep) -> SnapshotResponse:
     """Compute today's health score for every plant and persist the daily snapshots.
 
     Intended for manual ops and testing. The scheduler calls this automatically
@@ -296,5 +276,5 @@ def trigger_health_snapshot(health_svc: PlantHealthServiceDep, repo: RepoDep):
         Number of plant rows written (plants with no data are skipped).
     """
     rows = health_svc.snapshot_daily()
-    repo.session.commit()
+    repo.commit()
     return SnapshotResponse(rows_written=rows)

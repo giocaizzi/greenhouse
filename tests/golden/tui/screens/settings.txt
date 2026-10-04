@@ -1,0 +1,40 @@
+ ⭘                                          greenhouse — http://testserver                                     10:00:00
+ Signed in as test-admin on http://testserver   O: log out
+╭──────────────────────────────────────────────────────────╮╭──────────────────────────────────────────────────────────╮
+│ Preferences  (p to edit)                                 ││ Global irrigation defaults  (g to edit)                  │
+│ default_cluster_id        None                           ││ mode                built-in default                     │
+│ dry_run_global            False                          ││ duration_minutes    built-in default                     │
+│ notify_alerts             True                           ││ interval_hours      built-in default                     │
+│ notify_auto               True                           ││ auto_run            built-in default                     │
+│ notify_emergency          True                           ││ daily_cap_minutes   built-in default                     │
+│ notify_manual             True                           ││ max_events_per_day  built-in default                     │
+│ refresh_interval_seconds  30                             ││ quiet_start_hour    0                                    │
+│ scheduler_paused          False                          ││ quiet_end_hour      5                                    │
+│ theme                     auto                           │╰──────────────────────────────────────────────────────────╯
+│ timezone                  UTC                            │
+│ units                     metric                         │
+╰──────────────────────────────────────────────────────────╯
+ Vacation windows  rationed watering while you're away · n add · u edit · del delete
+ ID  Starts  Ends  Contact  Notes  State
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ p Preferences  g Global config  n New vacation  u Edit vacation  del Delete vacation  O Log out  d Dashboar▏^p palette

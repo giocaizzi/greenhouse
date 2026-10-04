@@ -1,21 +1,26 @@
-"""Web analytics routes: history, stats, CSV export, learn, scheduler."""
+"""Web routes for three concerns that share this module (it keeps its name so the route qualnames stay stable).
+
+* Analytics: cluster history, stats, CSV export and the learn/insights page.
+* Scheduler page: job table, ad-hoc job delete, ``check_all`` pause/resume.
+* Emergency kill switch: ``POST /bulk/stop-all`` (the same service path as the JSON API).
+"""
 
 from __future__ import annotations
 
-import csv
-import io
+from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response, StreamingResponse
 
 from greenhouse_core.stats import get_irrigation_stats
-from greenhouse_core.utils import format_timestamp
 from greenhouse_server.deps import (
     ClusterServiceDep,
     DeviceRegistryDep,
+    NtfyNotifierDep,
     PlantDbDep,
     RepoDep,
     WeatherClientDep,
+    not_found_as_404,
     require_cluster,
 )
 from greenhouse_server.scheduler import (
@@ -29,10 +34,14 @@ from greenhouse_server.scheduler import (
 )
 from greenhouse_server.scheduler import scheduler as bg_scheduler
 from greenhouse_server.services.bulk import stop_all_irrigators
+from greenhouse_server.services.cluster import cluster_events_csv
 from greenhouse_server.services.forecast import ForecastService
 from greenhouse_server.services.insights import InsightsService
 from greenhouse_server.web.context import base_context
 from greenhouse_server.web.templating import templates
+
+if TYPE_CHECKING:
+    from greenhouse_core.repository import IrrigationRepository
 
 router = APIRouter(include_in_schema=False)
 
@@ -44,10 +53,10 @@ def cluster_history(
     svc: ClusterServiceDep,
     hours: int = Query(default=24, ge=1),
     limit: int = Query(default=50, ge=1),
-):
-    result = svc.get_cluster_history(cluster_id, hours=hours, limit=limit)
-    if not result:
-        raise HTTPException(404, "Cluster not found")
+) -> Response:
+    """Render a cluster's recent readings and irrigation events."""
+    with not_found_as_404("Cluster not found"):
+        result = svc.get_cluster_history(cluster_id, hours=hours, limit=limit)
     return templates.TemplateResponse(
         request,
         "clusters/history.html",
@@ -61,7 +70,8 @@ def cluster_stats(
     cluster_id: int,
     repo: RepoDep,
     days: int = Query(default=7, ge=1),
-):
+) -> Response:
+    """Render a cluster's irrigation statistics for the last ``days`` days."""
     cluster = require_cluster(repo, cluster_id)
     stats = get_irrigation_stats(repo, cluster_id, days)
     return templates.TemplateResponse(
@@ -76,31 +86,12 @@ def cluster_stats_export(
     cluster_id: int,
     repo: RepoDep,
     days: int = Query(default=7, ge=1),
-):
+) -> Response:
+    """Download a cluster's irrigation events of the last ``days`` days as CSV."""
     cluster = require_cluster(repo, cluster_id)
-    output = io.StringIO()
-    writer = csv.writer(output)
-    writer.writerow(["timestamp", "date", "time", "irrigator", "action", "duration_minutes", "triggered_by", "notes"])
-    irrigator = repo.get_irrigator_for_cluster(cluster_id)
-    if irrigator is not None:
-        for event in repo.get_recent_events(irrigator.id, hours=days * 24):
-            ts_str = format_timestamp(event.timestamp)
-            date, _, time_part = ts_str.partition(" ")
-            writer.writerow(
-                [
-                    event.timestamp,
-                    date,
-                    time_part,
-                    irrigator.name,
-                    event.action,
-                    event.duration_minutes or "",
-                    event.triggered_by,
-                    event.notes or "",
-                ]
-            )
-    output.seek(0)
+    csv_text = cluster_events_csv(repo, cluster_id, days=days)
     return StreamingResponse(
-        iter([output.getvalue()]),
+        iter([csv_text]),
         media_type="text/csv",
         headers={"Content-Disposition": f"attachment; filename=cluster_{cluster.id}_stats.csv"},
     )
@@ -113,7 +104,8 @@ def cluster_learn(
     repo: RepoDep,
     plant_db: PlantDbDep,
     weather: WeatherClientDep,
-):
+) -> Response:
+    """Render a cluster's care insights and next-irrigation forecast."""
     cluster = require_cluster(repo, cluster_id)
     insights_resp = InsightsService(repo, plant_db).cluster_insights(cluster_id)
     forecast = ForecastService(repo, plant_db, weather_client=weather).predict_next_irrigation(cluster_id)
@@ -125,7 +117,8 @@ def cluster_learn(
 
 
 @router.get("/scheduler")
-def scheduler_page(request: Request):
+def scheduler_page(request: Request) -> Response:
+    """Render the scheduler page: running state, jobs (core jobs flagged) and the check-all pause."""
     # Share the API's job serializer so the per-row `paused` badge the
     # template renders is actually populated. Core (built-in) jobs carry
     # `core=True` so the template hides their delete button — deleting them
@@ -151,7 +144,8 @@ def scheduler_page(request: Request):
 
 
 @router.post("/scheduler/jobs/{job_id}/delete", response_class=HTMLResponse)
-def scheduler_delete_job(request: Request, job_id: str):
+def scheduler_delete_job(request: Request, job_id: str) -> Response:
+    """Delete an ad-hoc scheduler job; the empty body removes its table row."""
     if not bg_scheduler.running:
         raise HTTPException(503, "Scheduler not running")
     try:
@@ -164,7 +158,7 @@ def scheduler_delete_job(request: Request, job_id: str):
     return HTMLResponse("")
 
 
-def _set_check_all_paused_web(repo, paused: bool) -> RedirectResponse:
+def _set_check_all_paused_web(repo: IrrigationRepository, paused: bool) -> RedirectResponse:
     # Same code path as POST /api/v1/scheduler/{pause,resume}: works (and
     # persists the preference) whether or not the scheduler is running.
     try:
@@ -175,23 +169,30 @@ def _set_check_all_paused_web(repo, paused: bool) -> RedirectResponse:
 
 
 @router.post("/scheduler/pause")
-def scheduler_pause(request: Request, repo: RepoDep):
+def scheduler_pause(request: Request, repo: RepoDep) -> Response:
+    """Pause the ``check_all`` job (persisted) and return to the scheduler page."""
     return _set_check_all_paused_web(repo, True)
 
 
 @router.post("/scheduler/resume")
-def scheduler_resume(request: Request, repo: RepoDep):
+def scheduler_resume(request: Request, repo: RepoDep) -> Response:
+    """Resume the ``check_all`` job (persisted) and return to the scheduler page."""
     return _set_check_all_paused_web(repo, False)
 
 
 @router.post("/bulk/stop-all")
-def bulk_stop_all_web(request: Request, repo: RepoDep, registry: DeviceRegistryDep):
+def bulk_stop_all_web(
+    request: Request, repo: RepoDep, registry: DeviceRegistryDep, notifier: NtfyNotifierDep
+) -> Response:
     """Emergency stop — invoked from dashboard / scheduler.
 
     HTMX target receives a one-line status fragment so the action is
     auditable inline.
     """
-    stopped, errors = stop_all_irrigators(repo, registry)
+    stopped, errors = stop_all_irrigators(repo, registry, notifier)
+    # The stops are committed; drop the uncommitted preferences seed the notify gate may have
+    # inserted so the page chrome's own session isn't blocked on SQLite's write lock.
+    repo.rollback()
     return templates.TemplateResponse(
         request,
         "partials/_stop_all_result.html",

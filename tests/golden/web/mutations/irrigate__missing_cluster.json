@@ -1,0 +1,41 @@
+{
+ "body_lines": [
+  "Internal Server Error"
+ ],
+ "db_effect": {},
+ "device_calls": {
+  "irrigator": [],
+  "sensor": []
+ },
+ "headers": {
+  "content-type": "text/plain; charset=utf-8"
+ },
+ "request": {
+  "form": {},
+  "headers": {
+   "HX-Request": "true"
+  },
+  "method": "POST",
+  "url": "/clusters/999/irrigate"
+ },
+ "status": 500,
+ "templates": [
+  [
+   "partials/_decision_panel.html",
+   [
+    "active_vacation",
+    "app_version",
+    "auth_enabled",
+    "cluster_id",
+    "dry_run_global",
+    "is_hx",
+    "now_text",
+    "request",
+    "result",
+    "scheduler_paused",
+    "show_chrome",
+    "theme"
+   ]
+  ]
+ ]
+}

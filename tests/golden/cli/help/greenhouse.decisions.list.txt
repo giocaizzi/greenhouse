@@ -1,0 +1,13 @@
+
+ Usage: greenhouse decisions list [OPTIONS]
+
+ List recent decision-engine evaluations for a cluster.
+
+ Every call to the engine writes a row regardless of whether it actuated
+ — use this to audit "why did you skip at 3am?".
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  --cluster        <int>                    Cluster ID [required]                               │
+│    --limit          <int range> [1<=x<=200]  Max entries [default: 50]                           │
+│    --help                                    Show this message and exit.                         │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

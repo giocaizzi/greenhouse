@@ -125,7 +125,7 @@ def cluster_with_sensor(tmp_db):
         cluster_id=cluster_id,
         tuya_device_id=FAKE_SENSOR_ID,
         name=FAKE_SENSOR_NAME,
-        sensor_type="soil_moisture",
+        sensor_type="tuya.tr301z",
         config={},
         plant_id=plant_id,
     )

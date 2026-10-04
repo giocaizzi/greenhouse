@@ -105,3 +105,37 @@ def test_cluster_chart_fragment_invalid_metric(seeded_client):
 def test_cluster_chart_fragment_404(client):
     resp = client.get("/clusters/9999/chart-fragment")
     assert resp.status_code == 404
+
+
+def test_plant_chart_soil_band_uses_the_shared_target_parser():
+    """D10b: the chart's water-needs band reads targets like every other reader (``parse_moisture_target``).
+
+    Before D10b the chart had its own parser: ``"40-60-80"`` fell back to the default band with
+    source ``"default"``; now it reads the first two parts. No ``lo-hi`` target at all still
+    yields the default band labelled ``"default"``.
+    """
+    from types import SimpleNamespace
+
+    from greenhouse_server.services.charts import _threshold_for_plant
+
+    plant = SimpleNamespace(water_needs="medium")
+
+    def db(target):
+        return SimpleNamespace(get_water_needs_info=lambda level: {"soil_moisture_target": target})
+
+    assert _threshold_for_plant(plant, db("40-60-80"), "soil_moisture") == {
+        "min": 40.0,
+        "max": 60.0,
+        "source": "water_needs:medium",
+    }
+    assert _threshold_for_plant(plant, db("40-60"), "soil_moisture") == {
+        "min": 40.0,
+        "max": 60.0,
+        "source": "water_needs:medium",
+    }
+    for missing in (None, "", "55"):
+        assert _threshold_for_plant(plant, db(missing), "soil_moisture") == {
+            "min": 45.0,
+            "max": 65.0,
+            "source": "default",
+        }

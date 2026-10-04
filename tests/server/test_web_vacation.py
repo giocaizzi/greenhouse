@@ -51,6 +51,24 @@ class TestVacationCreate:
         )
         assert resp.status_code == 303
 
+    def test_iso_dates_are_midnight_in_the_timezone_preference(self, client, monkeypatch):
+        """D8: a date means midnight in the ``timezone`` preference (the zone the page displays), not UTC."""
+        import greenhouse_core.utils as utils
+
+        monkeypatch.setattr(utils, "_display_timezone", "Europe/Rome")
+        resp = client.post(
+            "/vacation", data={"starts_at": "2026-05-01", "ends_at": "2026-05-10"}, follow_redirects=False
+        )
+        assert resp.status_code == 303
+        (window,) = client.get("/api/v1/vacation").json()["items"]
+        assert (window["starts_at"], window["ends_at"]) == (
+            1777586400,
+            1778364000,
+        )  # 00:00 Rome = 22:00Z the day before
+        page = client.get(f"/vacation/{window['id']}/edit").text
+        assert 'value="2026-05-01"' in page
+        assert 'value="2026-05-10"' in page
+
     def test_active_window_shows_banner(self, client):
         now = int(time.time())
         client.post(
@@ -91,7 +109,7 @@ class TestVacationWaterBudget:
             json={
                 "tuya_device_id": "fake_budget_irr",
                 "name": "Budget Pump",
-                "type": "tuya_cloud",
+                "type": "rainpoint.ik10pw",
                 "reservoir_l": reservoir_l,
                 "flow_rate_l_per_min": flow_rate_l_per_min,
             },
@@ -117,7 +135,7 @@ class TestVacationWaterBudget:
         client.post("/api/v1/clusters", json={"name": "Plain Cluster"})
         client.post(
             "/api/v1/clusters/1/irrigator",
-            json={"tuya_device_id": "fake_plain_irr", "name": "Plain Pump", "type": "tuya_cloud"},
+            json={"tuya_device_id": "fake_plain_irr", "name": "Plain Pump", "type": "rainpoint.ik10pw"},
         )
         now = int(time.time())
         client.post("/vacation", data={"starts_at": str(now - 3600), "ends_at": str(now + 7 * 86400)})

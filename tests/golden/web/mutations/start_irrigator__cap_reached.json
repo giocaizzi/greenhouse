@@ -1,0 +1,52 @@
+{
+ "body_lines": [
+  "<div class=\"irr-result irr-result--err\" role=\"alert\">",
+  "  ",
+  "    <span class=\"badge-danger\">",
+  "      <svg class=\"icon\" style=\"width:11px;height:11px;\" aria-hidden=\"true\"><use href=\"/static/icons/sprite.svg#i-x\"></use></svg>",
+  "      start failed",
+  "    </span>",
+  "  ",
+  "  <small class=\"muted\">cluster max_events_per_day reached</small>",
+  "</div>"
+ ],
+ "db_effect": {},
+ "device_calls": {
+  "irrigator": [],
+  "sensor": []
+ },
+ "headers": {
+  "content-type": "text/html; charset=utf-8"
+ },
+ "request": {
+  "form": {
+   "minutes": "2"
+  },
+  "headers": {
+   "HX-Request": "true"
+  },
+  "method": "POST",
+  "url": "/irrigators/1/start"
+ },
+ "status": 200,
+ "templates": [
+  [
+   "partials/_irrigator_action_result.html",
+   [
+    "action",
+    "active_vacation",
+    "app_version",
+    "auth_enabled",
+    "dry_run_global",
+    "is_hx",
+    "message",
+    "now_text",
+    "request",
+    "scheduler_paused",
+    "show_chrome",
+    "success",
+    "theme"
+   ]
+  ]
+ ]
+}

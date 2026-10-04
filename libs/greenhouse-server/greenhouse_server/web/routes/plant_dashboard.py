@@ -3,33 +3,48 @@
 from __future__ import annotations
 
 import json
-import time
+from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, Form, HTTPException, Query, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, Response
 
+from greenhouse_core.constants import (
+    HOURS_PER_DAY,
+    PLANT_PAGE_HEALTH_HISTORY_DAYS,
+    PLANT_PAGE_LAST_IRRIGATED_DAYS,
+    PLANT_PAGE_READINGS_LOOKBACK_HOURS,
+    PLANT_PAGE_RECENT_EVENTS,
+)
 from greenhouse_core.models import Plant
 from greenhouse_core.repository import SameClusterMoveError
-from greenhouse_server.deps import PlantDbDep, PlantHealthServiceDep, RepoDep
+from greenhouse_server.deps import (
+    MAX_LOOKBACK_HOURS,
+    PlantDbDep,
+    PlantHealthServiceDep,
+    RepoDep,
+    not_found_as_404,
+    require_metric,
+    require_plant_in_cluster,
+)
 from greenhouse_server.services.charts import (
     ALLOWED_HOURS,
     build_plant_chart_payload,
     build_plant_health_timeline_payload,
 )
-from greenhouse_server.services.maintenance import collect_learning_alerts
+from greenhouse_server.services.maintenance import AlertFinding, collect_learning_alerts
 from greenhouse_server.web.context import base_context
+from greenhouse_server.web.filters import relative_age
 from greenhouse_server.web.templating import templates
+
+if TYPE_CHECKING:
+    from greenhouse_core.models import IrrigationEvent, Irrigator, Sensor, SensorReading
+    from greenhouse_core.plant_db import PlantDatabase
+    from greenhouse_core.repository import IrrigationRepository
+    from greenhouse_server.services.charts import Metric
 
 router = APIRouter(include_in_schema=False)
 
-METRICS = ("soil_moisture", "temperature", "env_humidity", "light")
-
-
-def _get_plant_or_404(repo, plant_id: int, cluster_id: int) -> Plant:
-    plant: Plant | None = repo.session.get(Plant, plant_id)
-    if plant is None or plant.cluster_id != cluster_id:
-        raise HTTPException(404, "Plant not found")
-    return plant
+METRICS: tuple[Metric, ...] = ("soil_moisture", "temperature", "env_humidity", "light")
 
 
 @router.get("/clusters/{cluster_id}/plants/{plant_id}")
@@ -40,53 +55,26 @@ def plant_dashboard(
     repo: RepoDep,
     plant_db: PlantDbDep,
     health_svc: PlantHealthServiceDep,
-    hours: int = Query(24, ge=1, le=8760),
-):
-    plant = _get_plant_or_404(repo, plant_id, cluster_id)
+    hours: int = Query(24, ge=1, le=MAX_LOOKBACK_HOURS),
+) -> Response:
+    """Render a plant's dashboard: care info, sensors, charts, health, events and alerts."""
+    plant = require_plant_in_cluster(repo, cluster_id, plant_id)
     cluster = repo.get_cluster(cluster_id)
     other_clusters = [c for c in repo.list_clusters() if c.id != cluster_id]
-
-    sensors_all = repo.get_sensors_in_cluster(cluster_id)
-    plant_sensors = [s for s in sensors_all if s.plant_id == plant_id]
-
-    # Latest reading per linked sensor
-    latest_readings = {}
-    for s in plant_sensors:
-        recent = repo.get_recent_readings(s.id, hours=24)
-        latest_readings[s.id] = recent[0] if recent else None
-
+    plant_sensors = [s for s in repo.get_sensors_in_cluster(cluster_id) if s.plant_id == plant_id]
+    latest_readings = _latest_readings(repo, plant_sensors)
     # Plant care info (best-effort species lookup)
     care_info = plant_db.lookup_species(plant.species)
-
-    # Recent irrigation events across the cluster (plant inherits cluster events)
-    recent_events: list = []
     cluster_irrigator = repo.get_irrigator_for_cluster(cluster_id)
-    if cluster_irrigator is not None:
-        recent_events.extend(repo.get_recent_events(cluster_irrigator.id, hours=hours))
-    recent_events.sort(key=lambda e: e.timestamp, reverse=True)
-    recent_events = recent_events[:10]
-
-    # Learning alerts for the cluster, filtered to those mentioning this plant species
-    all_alerts = collect_learning_alerts(repo, cluster_id, plant_db)
-    plant_alerts = [a for a in all_alerts if plant.species.lower() in (a.get("message") or "").lower()]
-
-    # Pre-build chart payloads so the page renders with data on first load
-    chart_payloads = {metric: build_plant_chart_payload(repo, plant_db, plant_id, hours, metric) for metric in METRICS}
-    chart_payloads_json = {metric: json.dumps(payload) for metric, payload in chart_payloads.items()}
-
+    recent_events = _recent_events(repo, cluster_irrigator, hours)
+    plant_alerts = _plant_alerts(repo, plant_db, cluster_id, plant)
+    chart_payloads_json = _chart_payloads_json(repo, plant_db, plant_id, hours)
     # Health score + 90-day history for the hero card
-    health_result = health_svc.compute_score(plant_id)
-    health_score: float | None = health_result["score"]
-    health_history = repo.list_plant_health_history(plant_id, days=90)
-
-    # Last-irrigated relative timestamp (newest event on the cluster's irrigator)
-    last_irrigated_ts: int | None = None
-    if cluster_irrigator is not None:
-        events = repo.get_recent_events(cluster_irrigator.id, hours=90 * 24)
-        for ev in events:
-            if last_irrigated_ts is None or ev.timestamp > last_irrigated_ts:
-                last_irrigated_ts = ev.timestamp
-    last_irrigated_relative: str = _relative_time(last_irrigated_ts)
+    health_score: float | None = health_svc.compute_score(plant_id)["score"]
+    health_history = repo.list_plant_health_history(plant_id, days=PLANT_PAGE_HEALTH_HISTORY_DAYS)
+    last_irrigated_relative: str = relative_age(
+        _last_irrigated_ts(repo, cluster_irrigator), missing="never", stale_after=None
+    )
 
     return templates.TemplateResponse(
         request,
@@ -112,16 +100,49 @@ def plant_dashboard(
     )
 
 
-def _relative_time(ts: int | None) -> str:
-    """Return a human-readable relative time string for a Unix timestamp."""
-    if ts is None:
-        return "never"
-    delta = max(0, int(time.time() - ts))
-    if delta < 3600:
-        return f"{delta // 60}m ago"
-    if delta < 86400:
-        return f"{delta // 3600}h ago"
-    return f"{delta // 86400}d ago"
+def _chart_payloads_json(
+    repo: IrrigationRepository, plant_db: PlantDatabase, plant_id: int, hours: int
+) -> dict[Metric, str]:
+    """Every metric's chart payload as JSON, pre-built so the page renders with data on first load."""
+    chart_payloads = {metric: build_plant_chart_payload(repo, plant_db, plant_id, hours, metric) for metric in METRICS}
+    return {metric: json.dumps(payload) for metric, payload in chart_payloads.items()}
+
+
+def _latest_readings(repo: IrrigationRepository, plant_sensors: list[Sensor]) -> dict[int, SensorReading | None]:
+    """Latest reading (last 24 h) per linked sensor, keyed by sensor id."""
+    latest_readings = {}
+    for s in plant_sensors:
+        recent = repo.get_recent_readings(s.id, hours=PLANT_PAGE_READINGS_LOOKBACK_HOURS)
+        latest_readings[s.id] = recent[0] if recent else None
+    return latest_readings
+
+
+def _recent_events(repo: IrrigationRepository, cluster_irrigator: Irrigator | None, hours: int) -> list[Any]:
+    """Newest ten irrigation events of the cluster's irrigator (a plant inherits its cluster's events)."""
+    recent_events: list[IrrigationEvent] = []
+    if cluster_irrigator is not None:
+        recent_events.extend(repo.get_recent_events(cluster_irrigator.id, hours=hours))
+    recent_events.sort(key=lambda e: e.timestamp, reverse=True)
+    return recent_events[:PLANT_PAGE_RECENT_EVENTS]
+
+
+def _plant_alerts(
+    repo: IrrigationRepository, plant_db: PlantDatabase, cluster_id: int, plant: Plant
+) -> list[AlertFinding]:
+    """The cluster's learning alerts whose message mentions this plant's species."""
+    all_alerts = collect_learning_alerts(repo, cluster_id, plant_db)
+    return [a for a in all_alerts if plant.species.lower() in (a.get("message") or "").lower()]
+
+
+def _last_irrigated_ts(repo: IrrigationRepository, cluster_irrigator: Irrigator | None) -> int | None:
+    """Timestamp of the newest event (last 90 days) on the cluster's irrigator, or ``None``."""
+    last_irrigated_ts: int | None = None
+    if cluster_irrigator is not None:
+        events = repo.get_recent_events(cluster_irrigator.id, hours=PLANT_PAGE_LAST_IRRIGATED_DAYS * HOURS_PER_DAY)
+        for ev in events:
+            if last_irrigated_ts is None or ev.timestamp > last_irrigated_ts:
+                last_irrigated_ts = ev.timestamp
+    return last_irrigated_ts
 
 
 @router.get("/clusters/{cluster_id}/plants/{plant_id}/chart-fragment")
@@ -132,14 +153,13 @@ def plant_chart_fragment(
     repo: RepoDep,
     plant_db: PlantDbDep,
     metric: str = Query("soil_moisture"),
-    hours: int = Query(24, ge=1, le=8760),
-):
-    if metric not in METRICS:
-        raise HTTPException(400, f"Unsupported metric: {metric}")
-    _get_plant_or_404(repo, plant_id, cluster_id)
-    payload = build_plant_chart_payload(repo, plant_db, plant_id, hours, metric)
-    if not payload:
-        raise HTTPException(404, "Plant not found")
+    hours: int = Query(24, ge=1, le=MAX_LOOKBACK_HOURS),
+) -> Response:
+    """Render one metric's plant chart panel (HTMX fragment)."""
+    chart_metric = require_metric(metric)
+    require_plant_in_cluster(repo, cluster_id, plant_id)
+    with not_found_as_404("Plant not found"):
+        payload = build_plant_chart_payload(repo, plant_db, plant_id, hours, chart_metric)
     return templates.TemplateResponse(
         request,
         "partials/_chart_panel.html",
@@ -153,11 +173,11 @@ def plant_health_fragment(
     cluster_id: int,
     plant_id: int,
     repo: RepoDep,
-):
-    plant = _get_plant_or_404(repo, plant_id, cluster_id)
-    payload = build_plant_health_timeline_payload(repo, plant_id)
-    if payload is None:
-        raise HTTPException(404, "Plant not found")
+) -> Response:
+    """Render the plant's 90-day health timeline chart (HTMX fragment)."""
+    plant = require_plant_in_cluster(repo, cluster_id, plant_id)
+    with not_found_as_404("Plant not found"):
+        payload = build_plant_health_timeline_payload(repo, plant_id)
     return templates.TemplateResponse(
         request,
         "partials/_plant_health_chart.html",
@@ -172,14 +192,14 @@ def move_plant_web(
     plant_id: int,
     repo: RepoDep,
     target_cluster_id: int = Form(...),
-):
+) -> Response:
     """Move a plant to a different cluster (server-rendered form submit)."""
-    _get_plant_or_404(repo, plant_id, cluster_id)
+    require_plant_in_cluster(repo, cluster_id, plant_id)
     if not repo.get_cluster(target_cluster_id):
         raise HTTPException(404, "Target cluster not found")
     try:
         repo.move_plant(plant_id, target_cluster_id)
     except SameClusterMoveError as exc:
         raise HTTPException(400, str(exc)) from exc
-    repo.session.commit()
+    repo.commit()
     return RedirectResponse(url=f"/clusters/{target_cluster_id}/plants/{plant_id}", status_code=303)

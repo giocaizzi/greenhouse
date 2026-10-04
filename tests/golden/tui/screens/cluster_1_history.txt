@@ -1,0 +1,40 @@
+ ⭘                                   greenhouse · Living Room — http://testserver                              10:00:00
+ Overview  Charts  Plants  Sensors  Insights  Decisions  History  Windows  Config
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╸━━━━━━━╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ L log a manual watering
+ When              Irrigator         Action  Minutes  By    Notes
+ 2026-04-15 02:00  Living Room pump  start   3        auto
+ 2026-04-14 10:00  Living Room pump  start   3        auto
+ 2026-04-13 18:00  Living Room pump  start   3        auto
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ esc Back  i Irrigate  w Water now  x Stop  c Check  n New  u Edit  del Delete  d Dashboard  a Alerts  l Act▏^p palette

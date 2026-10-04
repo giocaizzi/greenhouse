@@ -1,7 +1,10 @@
 """Irrigation config routes (declared + global defaults + effective view)."""
 
+from typing import Any
+
 from fastapi import APIRouter, HTTPException
 
+from greenhouse_core.models import GlobalIrrigationConfig, IrrigationConfig
 from greenhouse_core.schemas import (
     ConfigResponse,
     EffectiveConfigResponse,
@@ -15,16 +18,17 @@ from greenhouse_server.deps import RepoDep, require_cluster
 router = APIRouter(tags=["configs"])
 
 
-def _request_fields(request: SetConfigRequest | UpdateGlobalConfigRequest) -> dict:
-    """Pull only fields the client explicitly set — preserving null as a
-    deliberate "clear this override" signal — and drop omitted ones so the
-    repository can patch without touching unrelated columns.
+def _request_fields(request: SetConfigRequest | UpdateGlobalConfigRequest) -> dict[str, Any]:
+    """Return only the fields the client explicitly set.
+
+    Keeps null as a deliberate "clear this override" signal and drops omitted
+    fields, so the repository can patch without touching unrelated columns.
     """
     return request.model_dump(exclude_unset=True)
 
 
 @router.put("/clusters/{cluster_id}/config", response_model=ConfigResponse)
-def set_config(cluster_id: int, request: SetConfigRequest, repo: RepoDep):
+def set_config(cluster_id: int, request: SetConfigRequest, repo: RepoDep) -> IrrigationConfig | None:
     """Patch a cluster's irrigation config.
 
     Every field is optional and nullable: omit a field to leave it unchanged,
@@ -47,12 +51,12 @@ def set_config(cluster_id: int, request: SetConfigRequest, repo: RepoDep):
     """
     require_cluster(repo, cluster_id)
     repo.set_irrigation_config(cluster_id=cluster_id, **_request_fields(request))
-    repo.session.commit()
+    repo.commit()
     return repo.get_irrigation_config(cluster_id)
 
 
 @router.get("/clusters/{cluster_id}/config", response_model=ConfigResponse)
-def get_config(cluster_id: int, repo: RepoDep):
+def get_config(cluster_id: int, repo: RepoDep) -> IrrigationConfig:
     """Read a cluster's declared (raw) irrigation config.
 
     Nulls represent inherited values — call ``GET .../config/effective`` for
@@ -60,6 +64,9 @@ def get_config(cluster_id: int, repo: RepoDep):
 
     Args:
         cluster_id: Cluster to inspect.
+
+    Returns:
+        The declared per-cluster config row (nulls = inherited).
 
     Raises:
         HTTPException: 404 if the cluster has no config row yet.
@@ -74,7 +81,7 @@ def get_config(cluster_id: int, repo: RepoDep):
     "/clusters/{cluster_id}/config/effective",
     response_model=EffectiveConfigResponse,
 )
-def get_effective_config(cluster_id: int, repo: RepoDep):
+def get_effective_config(cluster_id: int, repo: RepoDep) -> EffectiveConfigResponse:
     """Read a cluster's effective irrigation config (resolved across levels).
 
     Walks cluster → global defaults → built-in constants and reports both
@@ -97,12 +104,12 @@ def get_effective_config(cluster_id: int, repo: RepoDep):
     return EffectiveConfigResponse(
         cluster_id=cluster_id,
         declared=ConfigResponse.model_validate(declared) if declared else None,
-        effective={key: ResolvedConfigField(**val) for key, val in effective.items()},
+        effective={key: ResolvedConfigField.model_validate(val) for key, val in effective.items()},
     )
 
 
 @router.get("/config/global", response_model=GlobalConfigResponse)
-def get_global_config(repo: RepoDep):
+def get_global_config(repo: RepoDep) -> GlobalIrrigationConfig:
     """Read the singleton global irrigation defaults row.
 
     Returns:
@@ -113,7 +120,7 @@ def get_global_config(repo: RepoDep):
 
 
 @router.put("/config/global", response_model=GlobalConfigResponse)
-def update_global_config(request: UpdateGlobalConfigRequest, repo: RepoDep):
+def update_global_config(request: UpdateGlobalConfigRequest, repo: RepoDep) -> GlobalIrrigationConfig:
     """Patch the singleton global irrigation defaults.
 
     Omitted fields stay unchanged; pass ``null`` to clear a previously set
@@ -126,5 +133,5 @@ def update_global_config(request: UpdateGlobalConfigRequest, repo: RepoDep):
         The updated global defaults row.
     """
     repo.update_global_irrigation_config(**_request_fields(request))
-    repo.session.commit()
+    repo.commit()
     return repo.get_global_irrigation_config()

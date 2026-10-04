@@ -1,7 +1,8 @@
 """Vacation window routes."""
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, status
 
+from greenhouse_core.models import VacationWindow
 from greenhouse_core.schemas import (
     SuccessResponse,
     UpdateVacationWindowRequest,
@@ -9,28 +10,27 @@ from greenhouse_core.schemas import (
     VacationListResponse,
     VacationResponse,
 )
-from greenhouse_server.deps import RepoDep
+from greenhouse_server.deps import RepoDep, require_vacation_window, require_valid_vacation_range
 
 router = APIRouter(prefix="/vacation", tags=["vacation"])
 
 
 @router.get("", response_model=VacationListResponse, summary="List vacation windows")
-def list_vacation_windows(repo: RepoDep):
+def list_vacation_windows(repo: RepoDep) -> VacationListResponse:
     """Return all vacation windows together with the currently active one.
 
     Returns:
         A list of all windows and the active window (spanning now), if any.
     """
-    return VacationListResponse(
-        active=repo.get_active_vacation(),
-        items=repo.list_vacation_windows(),
+    return VacationListResponse.model_validate(
+        {"active": repo.get_active_vacation(), "items": repo.list_vacation_windows()}
     )
 
 
 @router.post(
     "", response_model=VacationResponse, status_code=status.HTTP_201_CREATED, summary="Create a vacation window"
 )
-def create_vacation_window(request: VacationCreateRequest, repo: RepoDep):
+def create_vacation_window(request: VacationCreateRequest, repo: RepoDep) -> VacationWindow:
     """Schedule a vacation window that makes the engine ration water to last the trip.
 
     While the window is active the decision engine appends a
@@ -48,19 +48,25 @@ def create_vacation_window(request: VacationCreateRequest, repo: RepoDep):
 
     Returns:
         The newly created vacation window.
+
+    Raises:
+        HTTPException: 400 if ``starts_at`` is not strictly before ``ends_at``.
     """
+    require_valid_vacation_range(request.starts_at, request.ends_at)
     window = repo.add_vacation_window(
         starts_at=request.starts_at,
         ends_at=request.ends_at,
         contact_email=request.contact_email,
         notes=request.notes,
     )
-    repo.session.commit()
+    repo.commit()
     return window
 
 
 @router.put("/{window_id}", response_model=VacationResponse, summary="Update a vacation window")
-def update_vacation_window(window_id: int, request: UpdateVacationWindowRequest, repo: RepoDep):
+def update_vacation_window(
+    window_id: int, request: UpdateVacationWindowRequest, repo: RepoDep
+) -> VacationWindow | None:
     """Partially update a vacation window.
 
     Only fields present in the request body are modified; omitted fields are
@@ -79,22 +85,17 @@ def update_vacation_window(window_id: int, request: UpdateVacationWindowRequest,
         HTTPException: 404 if no window with that ID exists, 400 if the
             resulting ``starts_at`` is not strictly before ``ends_at``.
     """
-    from greenhouse_core.models import VacationWindow
-
-    row = repo.session.get(VacationWindow, window_id)
-    if not row:
-        raise HTTPException(status_code=404, detail="Vacation window not found")
+    row = require_vacation_window(repo, window_id)
     effective_start = request.starts_at if request.starts_at is not None else row.starts_at
     effective_end = request.ends_at if request.ends_at is not None else row.ends_at
-    if effective_start >= effective_end:
-        raise HTTPException(status_code=400, detail="starts_at must be < ends_at")
+    require_valid_vacation_range(effective_start, effective_end)
     updated = repo.update_vacation_window(window_id, **request.model_dump(exclude_unset=True))
-    repo.session.commit()
+    repo.commit()
     return updated
 
 
 @router.delete("/{window_id}", response_model=SuccessResponse, summary="Delete a vacation window")
-def delete_vacation_window(window_id: int, repo: RepoDep):
+def delete_vacation_window(window_id: int, repo: RepoDep) -> SuccessResponse:
     """Remove a vacation window by ID.
 
     Args:
@@ -106,8 +107,7 @@ def delete_vacation_window(window_id: int, repo: RepoDep):
     Raises:
         HTTPException: 404 if no window with that ID exists.
     """
-    deleted = repo.delete_vacation_window(window_id)
-    if not deleted:
-        raise HTTPException(status_code=404, detail="Vacation window not found")
-    repo.session.commit()
+    require_vacation_window(repo, window_id)
+    repo.delete_vacation_window(window_id)
+    repo.commit()
     return SuccessResponse(success=True)

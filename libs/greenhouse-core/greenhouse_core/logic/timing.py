@@ -12,15 +12,17 @@ Everything is a pure function so the engine remains independently testable.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
+from typing import TYPE_CHECKING, Any, Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from greenhouse_core.constants import (
-    DEFAULT_PREFERRED_WATER_HOURS,
     DEFAULT_SEASON_MULTIPLIER_INDOOR,
     DEFAULT_SEASON_MULTIPLIER_OUTDOOR,
 )
 from greenhouse_core.models import IrrigationWindow
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 Season = Literal["winter", "spring", "summer", "autumn"]
 Environment = Literal["indoor", "outdoor"]
@@ -81,22 +83,6 @@ def is_within_irrigation_window(
     return False
 
 
-def is_within_preferred_hours(
-    *,
-    now_unix: int,
-    tz_name: str | None,
-    preferred: tuple[int, int] | None = None,
-) -> bool:
-    """Default soft window when no IrrigationWindow rows exist.
-
-    ``preferred`` is (start_hour, end_hour) end-exclusive. None → use the global
-    default (morning window from constants).
-    """
-    start, end = preferred or DEFAULT_PREFERRED_WATER_HOURS
-    dt = local_now(now_unix, tz_name)
-    return _hour_in_range(dt.hour, start, end)
-
-
 def is_within_quiet_hours(
     *,
     start_hour: int | None,
@@ -117,6 +103,26 @@ def is_within_quiet_hours(
         return False
     dt = local_now(now_unix, tz_name)
     return _hour_in_range(dt.hour, start_hour, end_hour)
+
+
+def active_quiet_window(
+    effective: Mapping[str, Mapping[str, Any]], *, now_unix: int, tz_name: str | None
+) -> tuple[int, int] | None:
+    """The resolved quiet-hours window ``(start, end)`` when ``now_unix`` falls inside it, else ``None``.
+
+    ``effective`` is ``IrrigationRepository.get_effective_config`` output (cluster → global →
+    built-in default); a ``None`` bound or ``start == end`` means quiet hours are off.
+    """
+    start = effective["quiet_start_hour"]["value"]
+    end = effective["quiet_end_hour"]["value"]
+    if is_within_quiet_hours(
+        start_hour=int(start) if start is not None else None,
+        end_hour=int(end) if end is not None else None,
+        now_unix=now_unix,
+        tz_name=tz_name,
+    ):
+        return (int(start), int(end))
+    return None
 
 
 def season_for(unix_ts: int, *, tz_name: str | None, hemisphere: Hemisphere = "northern") -> Season:
@@ -141,8 +147,8 @@ def seasonal_multiplier(
     season: Season,
     *,
     environment: Environment = "indoor",
-    plant_override: dict | None = None,
-    category_override: dict | None = None,
+    plant_override: dict[str, Any] | None = None,
+    category_override: dict[str, Any] | None = None,
 ) -> float:
     """Resolve the per-season frequency multiplier.
 

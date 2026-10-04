@@ -1,0 +1,37 @@
+{
+ "body_lines": [
+  ""
+ ],
+ "db_effect": {
+  "clusters": {
+   "added": [
+    {
+     "created_at": 1776247200,
+     "environment": "outdoor",
+     "id": 4,
+     "location": "Kitchen",
+     "name": "Herb Box"
+    }
+   ]
+  }
+ },
+ "device_calls": {
+  "irrigator": [],
+  "sensor": []
+ },
+ "headers": {
+  "location": "/clusters/4"
+ },
+ "request": {
+  "form": {
+   "environment": "outdoor",
+   "location": "Kitchen",
+   "name": "Herb Box"
+  },
+  "headers": {},
+  "method": "POST",
+  "url": "/clusters"
+ },
+ "status": 303,
+ "templates": []
+}

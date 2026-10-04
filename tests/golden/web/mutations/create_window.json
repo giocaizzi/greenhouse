@@ -1,0 +1,42 @@
+{
+ "body_lines": [
+  ""
+ ],
+ "db_effect": {
+  "irrigation_windows": {
+   "added": [
+    {
+     "cluster_id": 1,
+     "end_hour": 21,
+     "id": 2,
+     "label": "Weekend evenings",
+     "start_hour": 18,
+     "weekday_mask": 96
+    }
+   ]
+  }
+ },
+ "device_calls": {
+  "irrigator": [],
+  "sensor": []
+ },
+ "headers": {
+  "location": "/clusters/1/config"
+ },
+ "request": {
+  "form": {
+   "end_hour": "21",
+   "label": " Weekend evenings ",
+   "start_hour": "18",
+   "weekday_mask": [
+    "32",
+    "64"
+   ]
+  },
+  "headers": {},
+  "method": "POST",
+  "url": "/clusters/1/windows"
+ },
+ "status": 303,
+ "templates": []
+}

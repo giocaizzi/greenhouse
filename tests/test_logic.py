@@ -52,7 +52,7 @@ class TestIrrigationLogic:
             cluster_id=self.cluster_id,
             tuya_device_id=device_id,
             name="Fake Soil Sensor",
-            sensor_type="soil_moisture",
+            sensor_type="tuya.tr301z",
             config={},
         )
         self.db.add_sensor_reading(sensor_id=sensor_id, soil_moisture=moisture)
@@ -154,7 +154,7 @@ class TestIrrigationLogic:
             cluster_id=cluster_id,
             tuya_device_id="fake_sensor_wn",
             name="Soil",
-            sensor_type="soil_moisture",
+            sensor_type="tuya.tr301z",
             config={},
         )
         self.db.add_sensor_reading(sensor_id=sensor_id, soil_moisture=55.0)
@@ -201,7 +201,7 @@ class TestIrrigationLogic:
             cluster_id=cluster_id,
             tuya_device_id="fake_sensor_a",
             name="Dry Sensor",
-            sensor_type="soil_moisture",
+            sensor_type="tuya.tr301z",
             config={},
         )
         self.db.add_sensor_reading(sensor_id=s_a, soil_moisture=20.0)
@@ -210,7 +210,7 @@ class TestIrrigationLogic:
             cluster_id=cluster_id,
             tuya_device_id="fake_sensor_b",
             name="OK Sensor",
-            sensor_type="soil_moisture",
+            sensor_type="tuya.tr301z",
             config={},
         )
         self.db.add_sensor_reading(sensor_id=s_b, soil_moisture=50.0)
@@ -232,7 +232,7 @@ class TestIrrigationLogic:
             cluster_id=cluster_id,
             tuya_device_id="fake_sensor_dry",
             name="Dry Plant",
-            sensor_type="soil_moisture",
+            sensor_type="tuya.tr301z",
             config={},
         )
         self.db.add_sensor_reading(sensor_id=s_a, soil_moisture=15.0)
@@ -241,7 +241,7 @@ class TestIrrigationLogic:
             cluster_id=cluster_id,
             tuya_device_id="fake_sensor_wet",
             name="Wet Plant",
-            sensor_type="soil_moisture",
+            sensor_type="tuya.tr301z",
             config={},
         )
         # Monstera target is 45–60; with CONFLICT_WET_MARGIN=5 the wet band is
@@ -274,7 +274,7 @@ class TestIrrigationLogic:
             cluster_id=cluster_id,
             tuya_device_id="fake_sensor_h_dry",
             name="Driest",
-            sensor_type="soil_moisture",
+            sensor_type="tuya.tr301z",
             config={},
         )
         self.db.add_sensor_reading(sensor_id=s_dry, soil_moisture=44.0)
@@ -283,7 +283,7 @@ class TestIrrigationLogic:
             cluster_id=cluster_id,
             tuya_device_id="fake_sensor_h_wet",
             name="Wettest",
-            sensor_type="soil_moisture",
+            sensor_type="tuya.tr301z",
             config={},
         )
         self.db.add_sensor_reading(sensor_id=s_wet, soil_moisture=56.0)
@@ -308,7 +308,7 @@ class TestIrrigationLogic:
                 cluster_id=cluster_id,
                 tuya_device_id=f"fake_sensor_{i}",
                 name=name,
-                sensor_type="soil_moisture",
+                sensor_type="tuya.tr301z",
                 config={},
             )
             self.db.add_sensor_reading(sensor_id=sid, soil_moisture=55.0 + i)
@@ -325,7 +325,7 @@ class TestIrrigationLogic:
             cluster_id=cluster_id,
             tuya_device_id="fake_irr_cd",
             name="Irrigator",
-            irrigator_type="tuya_cloud",
+            irrigator_type="rainpoint.ik10pw",
             config={},
         )
         # Irrigation happened 1 hour ago
@@ -340,7 +340,7 @@ class TestIrrigationLogic:
             cluster_id=cluster_id,
             tuya_device_id="fake_sensor_cd",
             name="Dry Sensor",
-            sensor_type="soil_moisture",
+            sensor_type="tuya.tr301z",
             config={},
         )
         self.db.add_sensor_reading(sensor_id=sensor_id, soil_moisture=20.0)
@@ -364,7 +364,7 @@ class TestIrrigationLogic:
             cluster_id=self.cluster_id,
             tuya_device_id=device_id,
             name="Full Sensor",
-            sensor_type="soil_moisture",
+            sensor_type="tuya.tr301z",
             config={},
         )
         self.db.add_sensor_reading(
@@ -436,7 +436,7 @@ class TestIrrigationLogic:
             cluster_id=self.cluster_id,
             tuya_device_id=FAKE_SENSOR_ID,
             name="Warning Sensor",
-            sensor_type="soil_moisture",
+            sensor_type="tuya.tr301z",
             config={},
         )
         self.db.add_sensor_reading(
@@ -468,14 +468,14 @@ class TestIrrigationLogic:
             cluster_id=cluster_id,
             tuya_device_id="fake_irr_ow",
             name="Irrigator",
-            irrigator_type="tuya_cloud",
+            irrigator_type="rainpoint.ik10pw",
             config={},
         )
         sensor_id = self.db.add_sensor(
             cluster_id=cluster_id,
             tuya_device_id="fake_sensor_ow",
             name="Wet Sensor",
-            sensor_type="soil_moisture",
+            sensor_type="tuya.tr301z",
             config={},
         )
         now = int(time.time())
@@ -512,7 +512,7 @@ class TestIrrigationLogic:
             cluster_id=cluster_id,
             tuya_device_id="fake_sensor_heat",
             name="Hot Sensor",
-            sensor_type="soil_moisture",
+            sensor_type="tuya.tr301z",
             config={},
         )
         now = int(time.time())
@@ -539,7 +539,7 @@ class TestIrrigationLogic:
             cluster_id=self.cluster_id,
             tuya_device_id=FAKE_SENSOR_ID,
             name="Trend Sensor",
-            sensor_type="soil_moisture",
+            sensor_type="tuya.tr301z",
             config={},
         )
         now = int(time.time())
@@ -563,7 +563,7 @@ class TestIrrigationLogic:
             cluster_id=self.cluster_id,
             tuya_device_id=FAKE_SENSOR_ID,
             name="Rising Sensor",
-            sensor_type="soil_moisture",
+            sensor_type="tuya.tr301z",
             config={},
         )
         now = int(time.time())
@@ -625,7 +625,7 @@ class TestCooldownSemantics:
             cluster_id=self.cluster_id,
             tuya_device_id="fake_irr_sem",
             name="Irrigator",
-            irrigator_type="tuya_cloud",
+            irrigator_type="rainpoint.ik10pw",
             config={},
         )
 
@@ -699,7 +699,7 @@ class TestWeatherSkipRule:
             cluster_id=cluster_id,
             tuya_device_id=FAKE_SENSOR_ID,
             name="Outdoor Sensor",
-            sensor_type="soil_moisture",
+            sensor_type="tuya.tr301z",
             config={},
         )
         self.db.add_sensor_reading(sensor_id=sensor_id, soil_moisture=moisture)
@@ -736,7 +736,7 @@ class TestWeatherSkipRule:
             cluster_id=cluster_id,
             tuya_device_id=FAKE_SENSOR_ID,
             name="Indoor Sensor",
-            sensor_type="soil_moisture",
+            sensor_type="tuya.tr301z",
             config={},
         )
         self.db.add_sensor_reading(sensor_id=sensor_id, soil_moisture=20.0)

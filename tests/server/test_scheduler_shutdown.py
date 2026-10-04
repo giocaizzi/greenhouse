@@ -53,15 +53,14 @@ _SCRIPT = textwrap.dedent(
 
     fake = FakeIrrigatorAdapter()
     registry = DeviceRegistry()
-    for key in ("rainpoint.ik10pw", "tuya_cloud", "tuya_local", ""):
-        registry.register_irrigator(key, lambda a=fake: a)
+    registry.register_irrigator("rainpoint.ik10pw", lambda a=fake: a)
     app.state.device_registry = registry
 
     session = app.state.session_factory()
     repo = IrrigationRepository(session)
     cid = repo.add_cluster("C")
     iid = repo.add_irrigator(cluster_id=cid, tuya_device_id="fake_tuya_device_aabbccdd",
-                             name="Pump", irrigator_type="tuya_cloud", config={})
+                             name="Pump", irrigator_type="rainpoint.ik10pw", config={})
     session.commit()
     session.close()
 
@@ -130,7 +129,7 @@ def irrigator(repo):
         cluster_id=cluster_id,
         tuya_device_id="fake_irrigator_pump",
         name="Pump Irrigator",
-        irrigator_type="tuya_cloud",
+        irrigator_type="rainpoint.ik10pw",
         config={},
     )
     repo.session.commit()
@@ -139,8 +138,7 @@ def irrigator(repo):
 
 def _registry(adapter: FakeIrrigatorAdapter) -> DeviceRegistry:
     registry = DeviceRegistry()
-    for key in ("rainpoint.ik10pw", "tuya_cloud", "tuya_local", ""):
-        registry.register_irrigator(key, lambda a=adapter: a)
+    registry.register_irrigator("rainpoint.ik10pw", lambda a=adapter: a)
     return registry
 
 

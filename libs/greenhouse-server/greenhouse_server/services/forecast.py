@@ -2,16 +2,28 @@
 
 import time
 from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any
 
+from greenhouse_core.constants import (
+    FORECAST_CONFIDENCE_HIGH,
+    FORECAST_CONFIDENCE_LOW,
+    FORECAST_CONFIDENCE_MEDIUM,
+    FORECAST_FALLBACK_DRAINAGE_PER_HOUR,
+    FORECAST_HIGH_CONFIDENCE_PROFILES,
+    FORECAST_READINGS_LOOKBACK_HOURS,
+    SECONDS_PER_HOUR,
+    WEATHER_FORECAST_HOURS,
+    WEATHER_SKIP_PRECIP_MM,
+)
 from greenhouse_core.learning import IrrigationLearner
 from greenhouse_core.logic.cleaning import clean_readings_desc
-from greenhouse_core.logic.plant_needs import parse_moisture_target
+from greenhouse_core.logic.plant_needs import moisture_target_range
 from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_core.schemas import ForecastResponse
 
-_FALLBACK_DRAINAGE_PER_HOUR = -2.0  # %/h, used when no learned profile is available
-_WEATHER_PRECIP_THRESHOLD_MM = 2.0
+if TYPE_CHECKING:
+    from greenhouse_core.models import Cluster, Plant, Sensor
 
 
 @dataclass
@@ -24,10 +36,32 @@ class _SensorForecast:
     drainage_rate: float
 
 
+def _no_data_forecast(cluster_id: int) -> ForecastResponse:
+    """Forecast for a cluster without any current soil-moisture reading."""
+    return ForecastResponse(
+        cluster_id=cluster_id,
+        next_predicted_at=None,
+        hours_until_next=None,
+        projected_min_moisture=None,
+        method="fallback_constant",
+        confidence=FORECAST_CONFIDENCE_LOW,
+        explanation="No sensors with soil moisture data available.",
+    )
+
+
+def _confidence_for(profiled_count: int) -> float:
+    """More sensors with a learned drainage profile means more trust in the projection."""
+    if profiled_count >= FORECAST_HIGH_CONFIDENCE_PROFILES:
+        return FORECAST_CONFIDENCE_HIGH
+    if profiled_count >= 1:
+        return FORECAST_CONFIDENCE_MEDIUM
+    return FORECAST_CONFIDENCE_LOW
+
+
 class ForecastService:
     """Predicts when a cluster will next need irrigation."""
 
-    def __init__(self, repo: IrrigationRepository, plant_db: PlantDatabase, weather_client=None):
+    def __init__(self, repo: IrrigationRepository, plant_db: PlantDatabase, weather_client: Any = None):
         self._repo = repo
         self._plant_db = plant_db
         self._weather = weather_client
@@ -44,94 +78,29 @@ class ForecastService:
         plants = self._repo.get_plants_in_cluster(cluster_id)
         plant_map = {p.id: p for p in plants}
         learner = IrrigationLearner(self._repo, self._plant_db)
-
         now = int(time.time())
 
         sensor_forecasts: list[_SensorForecast] = []
-
         for sensor in sensors:
-            # Newest-first cleaned view: the forecast extrapolates from "current
-            # moisture", so a spike as the latest sample would shift every ETA.
-            readings = clean_readings_desc(self._repo.get_recent_readings(sensor.id, hours=24))
-            current_moisture = next((r.soil_moisture for r in readings if r.soil_moisture is not None), None)
-            if current_moisture is None:
-                continue
-
-            plant = plant_map.get(sensor.plant_id) if sensor.plant_id else None
-            care = self._plant_db.get_care_data(
-                species=plant.species if plant else None,
-                category=plant.category if plant else None,
-            )
-            target_min, _ = parse_moisture_target(care.get("soil_moisture_target", "45-65"))
-
-            profile = learner.get_plant_profile(sensor)
-            has_profile = profile is not None
-            drainage = profile.avg_drainage_per_hour if has_profile else _FALLBACK_DRAINAGE_PER_HOUR
-            if drainage >= 0:
-                drainage = _FALLBACK_DRAINAGE_PER_HOUR
-
-            if current_moisture <= target_min:
-                hours = 0.0
-            else:
-                hours = (current_moisture - target_min) / abs(drainage)
-
-            label = plant.species if plant else sensor.name
-            sensor_forecasts.append(
-                _SensorForecast(
-                    hours_until_next=hours,
-                    current_moisture=current_moisture,
-                    target_min=target_min,
-                    label=label,
-                    has_profile=has_profile,
-                    drainage_rate=drainage,
-                )
-            )
-
+            sensor_forecast = self._forecast_sensor(sensor, plant_map, learner)
+            if sensor_forecast is not None:
+                sensor_forecasts.append(sensor_forecast)
         if not sensor_forecasts:
-            return ForecastResponse(
-                cluster_id=cluster_id,
-                next_predicted_at=None,
-                hours_until_next=None,
-                projected_min_moisture=None,
-                method="fallback_constant",
-                confidence=0.2,
-                explanation="No sensors with soil moisture data available.",
-            )
+            return _no_data_forecast(cluster_id)
 
         # Driest plant (shortest time to threshold) drives the forecast
         sensor_forecasts.sort(key=lambda f: f.hours_until_next)
         driver = sensor_forecasts[0]
-
         profiled_count = sum(1 for f in sensor_forecasts if f.has_profile)
-        if profiled_count >= 3:
-            confidence = 0.7
-        elif profiled_count >= 1:
-            confidence = 0.4
-        else:
-            confidence = 0.2
+        confidence = _confidence_for(profiled_count)
 
         method = "drainage_slope" if driver.has_profile else "fallback_constant"
         explanation = (
             f"{driver.label} will hit its {driver.target_min:.0f}% min in ~{driver.hours_until_next:.1f}h "
             f"based on {driver.drainage_rate:.1f}%/h drainage."
         )
-
-        next_predicted_at = int(now + driver.hours_until_next * 3600)
-
-        weather_skip = False
-        weather_reason: str | None = None
-        precipitation_next_6h_mm: float | None = None
-
-        is_outdoor = cluster is not None and cluster.environment != "indoor"
-        if is_outdoor and self._weather is not None:
-            forecast = self._weather.get_forecast(hours=6)
-            if forecast is not None:
-                precip = forecast.get("precipitation_mm", 0.0) or 0.0
-                precipitation_next_6h_mm = precip
-                if precip > _WEATHER_PRECIP_THRESHOLD_MM:
-                    weather_skip = True
-                    weather_reason = f"rain forecast ({precip:.1f}mm in next 6h)"
-
+        next_predicted_at = int(now + driver.hours_until_next * SECONDS_PER_HOUR)
+        weather_skip, weather_reason, precipitation_next_6h_mm = self._rain_outlook(cluster)
         return ForecastResponse(
             cluster_id=cluster_id,
             next_predicted_at=next_predicted_at,
@@ -144,3 +113,61 @@ class ForecastService:
             weather_reason=weather_reason,
             precipitation_next_6h_mm=precipitation_next_6h_mm,
         )
+
+    def _forecast_sensor(
+        self, sensor: "Sensor", plant_map: "dict[int, Plant]", learner: IrrigationLearner
+    ) -> _SensorForecast | None:
+        """Project one sensor to its target minimum; None when it has no current moisture.
+
+        The learned profile is only looked up for a sensor that has a current reading.
+        """
+        # Newest-first cleaned view: the forecast extrapolates from "current
+        # moisture", so a spike as the latest sample would shift every ETA.
+        readings = clean_readings_desc(
+            self._repo.get_recent_readings(sensor.id, hours=FORECAST_READINGS_LOOKBACK_HOURS)
+        )
+        current_moisture = next((r.soil_moisture for r in readings if r.soil_moisture is not None), None)
+        if current_moisture is None:
+            return None
+
+        plant = plant_map.get(sensor.plant_id) if sensor.plant_id else None
+        care = self._plant_db.get_care_data(
+            species=plant.species if plant else None,
+            category=plant.category if plant else None,
+        )
+        target_min, _ = moisture_target_range(care)
+
+        profile = learner.get_plant_profile(sensor)
+        has_profile = profile is not None
+        drainage = profile.avg_drainage_per_hour if profile is not None else FORECAST_FALLBACK_DRAINAGE_PER_HOUR
+        if drainage >= 0:
+            drainage = FORECAST_FALLBACK_DRAINAGE_PER_HOUR
+
+        hours = 0.0 if current_moisture <= target_min else (current_moisture - target_min) / abs(drainage)
+
+        label = plant.species if plant else sensor.name
+        return _SensorForecast(
+            hours_until_next=hours,
+            current_moisture=current_moisture,
+            target_min=target_min,
+            label=label,
+            has_profile=has_profile,
+            drainage_rate=drainage,
+        )
+
+    def _rain_outlook(self, cluster: "Cluster | None") -> tuple[bool, str | None, float | None]:
+        """Rain check for outdoor clusters: (skip, reason, forecast precipitation in mm)."""
+        weather_skip = False
+        weather_reason: str | None = None
+        precipitation_next_6h_mm: float | None = None
+
+        is_outdoor = cluster is not None and cluster.environment != "indoor"
+        if is_outdoor and self._weather is not None:
+            forecast = self._weather.get_forecast(hours=WEATHER_FORECAST_HOURS)
+            if forecast is not None:
+                precip = forecast.get("precipitation_mm", 0.0) or 0.0
+                precipitation_next_6h_mm = precip
+                if precip > WEATHER_SKIP_PRECIP_MM:
+                    weather_skip = True
+                    weather_reason = f"rain forecast ({precip:.1f}mm in next 6h)"
+        return weather_skip, weather_reason, precipitation_next_6h_mm

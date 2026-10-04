@@ -1,8 +1,8 @@
 """Sensor CRUD routes."""
 
 from fastapi import APIRouter, HTTPException, Query, status
-from sqlalchemy.exc import IntegrityError
 
+from greenhouse_core.models import Sensor
 from greenhouse_core.schemas import (
     CreateSensorRequest,
     SensorAssignmentListResponse,
@@ -12,7 +12,13 @@ from greenhouse_core.schemas import (
     SuccessResponse,
     UpdateSensorRequest,
 )
-from greenhouse_server.deps import RepoDep, require_cluster
+from greenhouse_server.deps import RepoDep, require_cluster, require_sensor, require_sensor_in_cluster
+from greenhouse_server.services.inventory import (
+    DeviceIdExistsError,
+    PlantNotInClusterError,
+    create_sensor,
+    ensure_plant_in_cluster,
+)
 
 router = APIRouter(tags=["sensors"])
 
@@ -23,7 +29,7 @@ def list_all_sensors(
     cluster_id: int | None = Query(default=None, description="Restrict results to a specific cluster"),
     limit: int = Query(default=100, ge=1, le=500),
     cursor: int | None = Query(default=None, description="Id cursor — return rows with id > cursor"),
-):
+) -> SensorListResponse:
     """List every sensor across all clusters with optional cluster filter and cursor pagination.
 
     Args:
@@ -45,7 +51,7 @@ def list_all_sensors(
 
 
 @router.post("/clusters/{cluster_id}/sensors", response_model=SensorResponse, status_code=status.HTTP_201_CREATED)
-def add_sensor(cluster_id: int, request: CreateSensorRequest, repo: RepoDep):
+def add_sensor(cluster_id: int, request: CreateSensorRequest, repo: RepoDep) -> Sensor:
     """Register a Tuya sensor under a cluster.
 
     A sensor may optionally be linked to a specific plant; otherwise it is
@@ -53,7 +59,8 @@ def add_sensor(cluster_id: int, request: CreateSensorRequest, repo: RepoDep):
 
     Args:
         cluster_id: Cluster the sensor belongs to.
-        request: Tuya device ID, sensor name, type (e.g. soil_moisture),
+        request: Tuya device ID, sensor name, type (the device model key,
+            e.g. `tuya.tr301z`),
             optional config dict, and optional plant_id for per-plant linking.
 
     Raises:
@@ -64,39 +71,40 @@ def add_sensor(cluster_id: int, request: CreateSensorRequest, repo: RepoDep):
         The created sensor record.
     """
     require_cluster(repo, cluster_id)
-    if request.plant_id:
-        plants = repo.get_plants_in_cluster(cluster_id)
-        if not any(p.id == request.plant_id for p in plants):
-            raise HTTPException(status_code=404, detail=f"Plant {request.plant_id} not found in cluster")
     try:
-        sensor_id = repo.add_sensor(
-            cluster_id=cluster_id,
+        sensor_id = create_sensor(
+            repo,
+            cluster_id,
             tuya_device_id=request.tuya_device_id,
             name=request.name,
             sensor_type=request.type,
             config=request.config or {},
             plant_id=request.plant_id,
         )
-        repo.session.commit()
-    except IntegrityError:
-        repo.session.rollback()
+    except PlantNotInClusterError as exc:
+        raise HTTPException(status_code=404, detail=f"Plant {exc.plant_id} not found in cluster") from None
+    except DeviceIdExistsError:
         raise HTTPException(status_code=409, detail="Device ID already exists") from None
+    repo.commit()
     sensors = repo.get_sensors_in_cluster(cluster_id)
     return next(s for s in sensors if s.id == sensor_id)
 
 
 @router.get("/clusters/{cluster_id}/sensors", response_model=list[SensorResponse])
-def list_sensors(cluster_id: int, repo: RepoDep):
+def list_sensors(cluster_id: int, repo: RepoDep) -> list[Sensor]:
     """List every sensor registered to a cluster.
 
     Args:
         cluster_id: ID of the cluster to enumerate.
+
+    Returns:
+        The cluster's sensors (empty for an unknown cluster).
     """
     return repo.get_sensors_in_cluster(cluster_id)
 
 
 @router.get("/clusters/{cluster_id}/sensors/{sensor_id}", response_model=SensorResponse, summary="Get a sensor by ID")
-def get_sensor(cluster_id: int, sensor_id: int, repo: RepoDep):
+def get_sensor(cluster_id: int, sensor_id: int, repo: RepoDep) -> Sensor:
     """Fetch a single sensor by ID.
 
     Args:
@@ -110,15 +118,12 @@ def get_sensor(cluster_id: int, sensor_id: int, repo: RepoDep):
         HTTPException: 404 if the sensor does not exist or belongs to a
             different cluster.
     """
-    sensor = repo.get_sensor(sensor_id)
-    if not sensor or sensor.cluster_id != cluster_id:
-        raise HTTPException(status_code=404, detail="Sensor not found in cluster")
-    return sensor
+    return require_sensor_in_cluster(repo, cluster_id, sensor_id)
 
 
 @router.put("/clusters/{cluster_id}/sensors/{sensor_id}", response_model=SensorResponse, summary="Update a sensor")
-def update_sensor(cluster_id: int, sensor_id: int, request: UpdateSensorRequest, repo: RepoDep):
-    """Partially update a sensor metadata.
+def update_sensor(cluster_id: int, sensor_id: int, request: UpdateSensorRequest, repo: RepoDep) -> Sensor | None:
+    """Partially update a sensor's metadata.
 
     Only fields present in the request body are modified; omitted fields are
     left unchanged. The sensor must belong to the specified cluster.
@@ -134,13 +139,15 @@ def update_sensor(cluster_id: int, sensor_id: int, request: UpdateSensorRequest,
 
     Raises:
         HTTPException: 404 if the sensor does not exist or belongs to a
-            different cluster.
+            different cluster, or if ``plant_id`` is not a plant of that cluster.
     """
-    sensor = repo.get_sensor(sensor_id)
-    if not sensor or sensor.cluster_id != cluster_id:
-        raise HTTPException(status_code=404, detail="Sensor not found in cluster")
+    require_sensor_in_cluster(repo, cluster_id, sensor_id)
+    try:
+        ensure_plant_in_cluster(repo, cluster_id, request.plant_id)
+    except PlantNotInClusterError as exc:
+        raise HTTPException(status_code=404, detail=f"Plant {exc.plant_id} not found in cluster") from None
     updated = repo.update_sensor(sensor_id, **request.model_dump(exclude_none=True))
-    repo.session.commit()
+    repo.commit()
     return updated
 
 
@@ -149,7 +156,7 @@ def update_sensor(cluster_id: int, sensor_id: int, request: UpdateSensorRequest,
     response_model=SensorAssignmentListResponse,
     summary="List the sensor's plant-assignment history",
 )
-def list_sensor_assignments(sensor_id: int, repo: RepoDep):
+def list_sensor_assignments(sensor_id: int, repo: RepoDep) -> SensorAssignmentListResponse:
     """Return every plant this sensor has ever been linked to, oldest first.
 
     Each row covers the interval ``[started_at, ended_at)``. ``ended_at=None``
@@ -166,9 +173,7 @@ def list_sensor_assignments(sensor_id: int, repo: RepoDep):
     Raises:
         HTTPException: 404 if the sensor does not exist.
     """
-    sensor = repo.get_sensor(sensor_id)
-    if sensor is None:
-        raise HTTPException(status_code=404, detail="Sensor not found")
+    require_sensor(repo, sensor_id)
     rows = repo.list_sensor_assignments(sensor_id)
     return SensorAssignmentListResponse(
         sensor_id=sensor_id,
@@ -177,7 +182,7 @@ def list_sensor_assignments(sensor_id: int, repo: RepoDep):
 
 
 @router.delete("/clusters/{cluster_id}/sensors/{sensor_id}", response_model=SuccessResponse, summary="Delete a sensor")
-def delete_sensor(cluster_id: int, sensor_id: int, repo: RepoDep):
+def delete_sensor(cluster_id: int, sensor_id: int, repo: RepoDep) -> SuccessResponse:
     """Delete a sensor and all its historical readings.
 
     This operation is irreversible. The sensor must belong to the specified
@@ -194,9 +199,7 @@ def delete_sensor(cluster_id: int, sensor_id: int, repo: RepoDep):
         HTTPException: 404 if the sensor does not exist or belongs to a
             different cluster.
     """
-    sensor = repo.get_sensor(sensor_id)
-    if not sensor or sensor.cluster_id != cluster_id:
-        raise HTTPException(status_code=404, detail="Sensor not found in cluster")
+    require_sensor_in_cluster(repo, cluster_id, sensor_id)
     repo.delete_sensor(sensor_id)
-    repo.session.commit()
+    repo.commit()
     return SuccessResponse(success=True)

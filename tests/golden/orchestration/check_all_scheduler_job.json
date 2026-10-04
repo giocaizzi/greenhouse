@@ -1,0 +1,111 @@
+{
+ "activity": [
+  [
+   1,
+   "irrigated"
+  ],
+  [
+   3,
+   "irrigated"
+  ]
+ ],
+ "alerts": [
+  {
+   "acknowledged_at": null,
+   "cluster_id": 2,
+   "code": "check_failed",
+   "dedup_key": "check_failed:cluster:2",
+   "entity_id": 2,
+   "entity_type": "cluster",
+   "first_seen_at": 1776247200,
+   "id": 1,
+   "last_seen_at": 1776247200,
+   "message": "The scheduled check crashed and was skipped for this cluster: Boom('cluster 2 crashed after writing')",
+   "occurrence_count": 1,
+   "payload_json": null,
+   "plant_id": null,
+   "resolved_at": null,
+   "severity": "error",
+   "source": "irrigation",
+   "status": "open",
+   "title": "Check failed: Bravo"
+  }
+ ],
+ "calls": [],
+ "decision_logs": [
+  [
+   1,
+   "irrigate",
+   "sensor_dry",
+   true
+  ],
+  [
+   3,
+   "irrigate",
+   "sensor_dry",
+   true
+  ]
+ ],
+ "irrigator_adapter_calls": [
+  [
+   "start",
+   1,
+   2
+  ],
+  [
+   "start",
+   2,
+   2
+  ],
+  [
+   "start",
+   3,
+   2
+  ]
+ ],
+ "notifications": [
+  {
+   "detail": "confidence=80%",
+   "duration_minutes": 2,
+   "irrigator_name": "Irrigator 1",
+   "kind": "irrigation",
+   "triggered_by": "auto"
+  },
+  {
+   "detail": "confidence=80%",
+   "duration_minutes": 2,
+   "irrigator_name": "Irrigator 2",
+   "kind": "irrigation",
+   "triggered_by": "auto"
+  },
+  {
+   "detail": "confidence=80%",
+   "duration_minutes": 2,
+   "irrigator_name": "Irrigator 3",
+   "kind": "irrigation",
+   "triggered_by": "auto"
+  }
+ ],
+ "start_events_by_irrigator": [
+  [
+   1,
+   "start",
+   "auto"
+  ],
+  [
+   3,
+   "start",
+   "auto"
+  ]
+ ],
+ "transactions": [
+  "check:1",
+  "commit",
+  "check:2",
+  "rollback",
+  "commit",
+  "check:3",
+  "commit",
+  "commit"
+ ]
+}

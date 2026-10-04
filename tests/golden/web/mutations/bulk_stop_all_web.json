@@ -1,0 +1,81 @@
+{
+ "body_lines": [
+  "",
+  "<article class=\"alert alert--ok\" role=\"status\">",
+  "  <span class=\"alert__icon\" aria-hidden=\"true\"><svg class=\"icon\"><use href=\"/static/icons/sprite.svg#i-check\"></use></svg></span>",
+  "  <div>",
+  "    <strong>Stopped 2 irrigators.</strong>",
+  "    <small class=\"muted\"> Every device is now off.</small>",
+  "  </div>",
+  "</article>",
+  ""
+ ],
+ "db_effect": {
+  "irrigation_events": {
+   "added": [
+    {
+     "action": "stop",
+     "duration_minutes": null,
+     "id": 7,
+     "irrigator_id": 1,
+     "notes": "kill switch",
+     "timestamp": 1776247200,
+     "triggered_by": "emergency"
+    },
+    {
+     "action": "stop",
+     "duration_minutes": null,
+     "id": 8,
+     "irrigator_id": 2,
+     "notes": "kill switch",
+     "timestamp": 1776247200,
+     "triggered_by": "emergency"
+    }
+   ]
+  }
+ },
+ "device_calls": {
+  "irrigator": [
+   [
+    "stop",
+    1
+   ],
+   [
+    "stop",
+    2
+   ]
+  ],
+  "sensor": []
+ },
+ "headers": {
+  "content-type": "text/html; charset=utf-8"
+ },
+ "request": {
+  "form": null,
+  "headers": {
+   "HX-Request": "true"
+  },
+  "method": "POST",
+  "url": "/bulk/stop-all"
+ },
+ "status": 200,
+ "templates": [
+  [
+   "partials/_stop_all_result.html",
+   [
+    "active_vacation",
+    "app_version",
+    "auth_enabled",
+    "dry_run_global",
+    "errors",
+    "is_hx",
+    "now_text",
+    "request",
+    "scheduler_paused",
+    "show_chrome",
+    "stopped",
+    "theme"
+   ]
+  ]
+ ]
+}

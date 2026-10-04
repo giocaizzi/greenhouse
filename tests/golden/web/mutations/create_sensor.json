@@ -1,0 +1,51 @@
+{
+ "body_lines": [
+  ""
+ ],
+ "db_effect": {
+  "sensor_assignments": {
+   "added": [
+    {
+     "ended_at": null,
+     "id": 4,
+     "plant_id": 1,
+     "sensor_id": 5,
+     "started_at": 1776247200
+    }
+   ]
+  },
+  "sensors": {
+   "added": [
+    {
+     "cluster_id": 1,
+     "config": "{}",
+     "id": 5,
+     "name": "Spare Probe",
+     "plant_id": 1,
+     "tuya_device_id": "fake_tuya_sensor_00000005",
+     "type": "tuya.tr301z"
+    }
+   ]
+  }
+ },
+ "device_calls": {
+  "irrigator": [],
+  "sensor": []
+ },
+ "headers": {
+  "location": "/clusters/1#sensors"
+ },
+ "request": {
+  "form": {
+   "name": "Spare Probe",
+   "plant_id": "1",
+   "tuya_device_id": "fake_tuya_sensor_00000005",
+   "type": "tuya.tr301z"
+  },
+  "headers": {},
+  "method": "POST",
+  "url": "/clusters/1/sensors"
+ },
+ "status": 303,
+ "templates": []
+}

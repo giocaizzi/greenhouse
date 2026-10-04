@@ -2,48 +2,49 @@
 
 from __future__ import annotations
 
-import json
+from typing import TYPE_CHECKING, Any
 
-from fastapi import APIRouter, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi import APIRouter, Form, HTTPException, Request, status
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
-from greenhouse_core.repository import IrrigatorExistsError
-from greenhouse_server.deps import DeviceRegistryDep, NtfyNotifierDep, RepoDep, require_cluster
+from greenhouse_core.models import parse_device_config
+from greenhouse_server.deps import (
+    DeviceRegistryDep,
+    NtfyNotifierDep,
+    RepoDep,
+    require_cluster,
+    require_cluster_irrigator,
+    require_irrigator,
+)
+from greenhouse_server.services import inventory
+from greenhouse_server.services.inventory import DeviceIdExistsError, IrrigatorExistsError
 from greenhouse_server.services.manual_control import ManualActionError, manual_log, manual_start, manual_stop
 from greenhouse_server.web.context import base_context
+from greenhouse_server.web.forms import parsed_or_400
 from greenhouse_server.web.templating import templates
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from greenhouse_core.models import Cluster
 
 router = APIRouter(include_in_schema=False)
 
 
-def _require_cluster_irrigator(repo, cluster_id: int):
-    irr = repo.get_irrigator_for_cluster(cluster_id)
-    if not irr:
-        raise HTTPException(404, "Cluster has no irrigator")
-    return irr
-
-
-def _parse_config(raw: str | dict | None) -> dict:
-    if isinstance(raw, dict):
-        return raw
-    if raw is None or raw == "":
-        return {}
-    try:
-        return json.loads(raw)
-    except (TypeError, json.JSONDecodeError):
-        return {}
-
-
 @router.get("/clusters/{cluster_id}/irrigators")
-def list_irrigators(cluster_id: int, repo: RepoDep):
-    """Legacy URL — irrigators are rendered inline on the unified cluster
-    detail page. The 301 keeps old bookmarks working."""
+def list_irrigators(cluster_id: int, repo: RepoDep) -> Response:
+    """Redirect the legacy irrigators URL to the detail page's irrigators section (301).
+
+    Irrigators are rendered inline on the unified cluster detail page; the
+    redirect keeps old bookmarks working.
+    """
     require_cluster(repo, cluster_id)
     return RedirectResponse(url=f"/clusters/{cluster_id}#irrigators", status_code=301)
 
 
 @router.get("/clusters/{cluster_id}/irrigators/new")
-def new_irrigator_form(request: Request, cluster_id: int, repo: RepoDep):
+def new_irrigator_form(request: Request, cluster_id: int, repo: RepoDep) -> Response:
+    """Render the add-irrigator form, or go back to the cluster when it already has one."""
     cluster = require_cluster(repo, cluster_id)
     # A cluster has at most one irrigator. If one already exists, send the user
     # back to the detail page instead of offering an "add" form they cannot use.
@@ -54,16 +55,16 @@ def new_irrigator_form(request: Request, cluster_id: int, repo: RepoDep):
 
 def _parse_capacity(raw: str) -> float | None:
     """Parse an optional non-negative float from a form field; blank -> None."""
-    raw = raw.strip()
-    if not raw:
-        return None
-    try:
-        value = float(raw)
-    except ValueError as exc:
-        raise HTTPException(400, "Capacity values must be numbers") from exc
-    if value < 0:
-        raise HTTPException(400, "Capacity values must be >= 0")
-    return value
+    return parsed_or_400(
+        raw, float, error="Capacity values must be numbers", negative_error="Capacity values must be >= 0"
+    )
+
+
+def _new_form_conflict(request: Request, cluster: Cluster, error: str) -> HTMLResponse:
+    """Re-render the add form with the conflict message (HTTP 409), as the API's 409."""
+    return templates.TemplateResponse(
+        request, "irrigators/new.html", base_context(request, cluster=cluster, error=error), status_code=409
+    )
 
 
 @router.post("/clusters/{cluster_id}/irrigators")
@@ -78,9 +79,10 @@ def create_irrigator(
     local_key: str = Form(""),
     reservoir_l: str = Form(""),
     flow_rate_l_per_min: str = Form(""),
-):
+) -> Response:
+    """Register the cluster's irrigator from the form; a conflict re-renders the form with 409."""
     cluster = require_cluster(repo, cluster_id)
-    config: dict = {}
+    config: dict[str, Any] = {}
     if device_ip.strip():
         config["device_ip"] = device_ip.strip()
     if local_key.strip():
@@ -88,38 +90,34 @@ def create_irrigator(
     reservoir = _parse_capacity(reservoir_l)
     flow_rate = _parse_capacity(flow_rate_l_per_min)
     try:
-        irrigator_id = repo.add_irrigator(
-            cluster_id=cluster_id,
+        inventory.create_irrigator(
+            repo,
+            cluster_id,
             tuya_device_id=tuya_device_id,
             name=name,
             irrigator_type=type,
             config=config,
+            reservoir_l=reservoir,
+            flow_rate_l_per_min=flow_rate,
         )
     except IrrigatorExistsError:
-        repo.session.rollback()
         # Re-render the form with a user-facing error instead of a redirect; a
         # cluster may have at most one irrigator.
-        return templates.TemplateResponse(
-            request,
-            "irrigators/new.html",
-            base_context(
-                request,
-                cluster=cluster,
-                error="This cluster already has an irrigator. A cluster can have at most one.",
-            ),
-            status_code=409,
+        return _new_form_conflict(
+            request, cluster, "This cluster already has an irrigator. A cluster can have at most one."
         )
-    if reservoir is not None or flow_rate is not None:
-        repo.update_irrigator(irrigator_id, reservoir_l=reservoir, flow_rate_l_per_min=flow_rate)
-    repo.session.commit()
+    except DeviceIdExistsError:
+        return _new_form_conflict(request, cluster, "Device ID already exists")
+    repo.commit()
     return RedirectResponse(url=f"/clusters/{cluster_id}#irrigators", status_code=303)
 
 
 @router.get("/clusters/{cluster_id}/irrigators/edit")
-def edit_irrigator_form(request: Request, cluster_id: int, repo: RepoDep):
+def edit_irrigator_form(request: Request, cluster_id: int, repo: RepoDep) -> Response:
+    """Render the edit form of the cluster's irrigator."""
     cluster = require_cluster(repo, cluster_id)
-    irrigator = _require_cluster_irrigator(repo, cluster_id)
-    config = _parse_config(irrigator.config)
+    irrigator = require_cluster_irrigator(repo, cluster_id)
+    config = parse_device_config(irrigator.config)
     return templates.TemplateResponse(
         request,
         "irrigators/edit.html",
@@ -138,13 +136,14 @@ def update_irrigator(
     local_key: str = Form(""),
     reservoir_l: str = Form(""),
     flow_rate_l_per_min: str = Form(""),
-):
-    irrigator = _require_cluster_irrigator(repo, cluster_id)
+) -> Response:
+    """Save the irrigator form (blank connection fields keep their stored values)."""
+    irrigator = require_cluster_irrigator(repo, cluster_id)
     # Merge into the stored config so a blank field PRESERVES the current value
     # rather than wiping it. The local key is a root-level credential — a blank
     # submit must never silently erase it (the form intentionally renders it
     # masked and empty, so most saves arrive blank).
-    config = _parse_config(irrigator.config)
+    config = parse_device_config(irrigator.config)
     if device_ip.strip():
         config["device_ip"] = device_ip.strip()
     if local_key.strip():
@@ -157,27 +156,20 @@ def update_irrigator(
         reservoir_l=_parse_capacity(reservoir_l),
         flow_rate_l_per_min=_parse_capacity(flow_rate_l_per_min),
     )
-    repo.session.commit()
+    repo.commit()
     return RedirectResponse(url=f"/clusters/{cluster_id}#irrigators", status_code=303)
 
 
 @router.delete("/clusters/{cluster_id}/irrigators", response_class=HTMLResponse)
-def delete_irrigator(cluster_id: int, repo: RepoDep):
+def delete_irrigator(cluster_id: int, repo: RepoDep) -> Response:
     """HTMX-targeted delete; returns an empty HTML body so the row is removed."""
-    irrigator = _require_cluster_irrigator(repo, cluster_id)
+    irrigator = require_cluster_irrigator(repo, cluster_id)
     repo.delete_irrigator(irrigator.id)
-    repo.session.commit()
+    repo.commit()
     return HTMLResponse("")
 
 
-def _get_irrigator_or_404(repo: RepoDep, irrigator_id: int):
-    irr = repo.get_irrigator(irrigator_id)
-    if not irr:
-        raise HTTPException(404, "Irrigator not found")
-    return irr
-
-
-def _action_result(request: Request, action: str, run) -> HTMLResponse:
+def _action_result(request: Request, action: str, run: Callable[[], str]) -> HTMLResponse:
     """Run a shared manual action and render the HX result partial.
 
     Refusals the JSON API reports as 409 (caps) / 502 (device failure) are
@@ -187,8 +179,8 @@ def _action_result(request: Request, action: str, run) -> HTMLResponse:
     try:
         success, message = True, run()
     except ManualActionError as exc:
-        if exc.status_code == 503:
-            raise HTTPException(503, exc.detail) from exc
+        if exc.status_code == status.HTTP_503_SERVICE_UNAVAILABLE:
+            raise HTTPException(exc.status_code, exc.detail) from exc
         success, message = False, exc.detail
     return templates.TemplateResponse(
         request,
@@ -205,16 +197,12 @@ def start_irrigator(
     registry: DeviceRegistryDep,
     notifier: NtfyNotifierDep,
     minutes: str = Form(""),
-):
+) -> Response:
+    """Manually start an irrigator and render the action result (HTMX fragment)."""
     # Same code path as POST /api/v1/irrigators/{id}/start: caps, dry-run
-    # watcher, event row and notification (the web route used to skip them).
-    irr = _get_irrigator_or_404(repo, irrigator_id)
-    mins: int | None = None
-    if minutes.strip():
-        try:
-            mins = int(minutes)
-        except ValueError as exc:
-            raise HTTPException(400, "Invalid minutes") from exc
+    # watcher, event row and notification.
+    irr = require_irrigator(repo, irrigator_id)
+    mins = parsed_or_400(minutes, int, error="Invalid minutes")
     return _action_result(request, "start", lambda: manual_start(repo, registry, notifier, irr, mins, via="web UI"))
 
 
@@ -225,14 +213,16 @@ def stop_irrigator(
     repo: RepoDep,
     registry: DeviceRegistryDep,
     notifier: NtfyNotifierDep,
-):
-    irr = _get_irrigator_or_404(repo, irrigator_id)
+) -> Response:
+    """Manually stop an irrigator and render the action result (HTMX fragment)."""
+    irr = require_irrigator(repo, irrigator_id)
     return _action_result(request, "stop", lambda: manual_stop(repo, registry, notifier, irr, via="web UI"))
 
 
 @router.get("/irrigators/{irrigator_id}/log-manual")
-def log_manual_form(request: Request, irrigator_id: int, repo: RepoDep):
-    irr = _get_irrigator_or_404(repo, irrigator_id)
+def log_manual_form(request: Request, irrigator_id: int, repo: RepoDep) -> Response:
+    """Render the form that records a manual watering for an irrigator."""
+    irr = require_irrigator(repo, irrigator_id)
     return templates.TemplateResponse(request, "irrigators/log_manual.html", base_context(request, irrigator=irr))
 
 
@@ -244,8 +234,9 @@ def log_manual_submit(
     notifier: NtfyNotifierDep,
     minutes: int = Form(...),
     notes: str = Form(""),
-):
-    irr = _get_irrigator_or_404(repo, irrigator_id)
+) -> Response:
+    """Record a manual watering; a refusal re-renders the form with the error."""
+    irr = require_irrigator(repo, irrigator_id)
     try:
         manual_log(repo, notifier, irr, minutes, notes or None)
     except ManualActionError as e:

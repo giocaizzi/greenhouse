@@ -1,0 +1,2390 @@
+{
+ "mapped_classes": [
+  "ActivityEvent=activity_events",
+  "Alert=alerts",
+  "Cluster=clusters",
+  "DecisionLog=decision_logs",
+  "GlobalIrrigationConfig=global_irrigation_config",
+  "IrrigationConfig=irrigation_configs",
+  "IrrigationEvent=irrigation_events",
+  "IrrigationWindow=irrigation_windows",
+  "Irrigator=irrigators",
+  "Plant=plants",
+  "PlantHealthDaily=plant_health_daily",
+  "Sensor=sensors",
+  "SensorAssignment=sensor_assignments",
+  "SensorReading=sensor_readings",
+  "User=users",
+  "UserPreferences=user_preferences",
+  "VacationWindow=vacation_windows"
+ ],
+ "tables": {
+  "activity_events": {
+   "columns": [
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "id",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": true,
+     "server_default": null,
+     "type": "INTEGER",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "timestamp",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "INTEGER",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "source",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "VARCHAR",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "entity_type",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "VARCHAR",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "entity_id",
+     "nullable": true,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "INTEGER",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": "scalar:'info'",
+     "foreign_keys": [],
+     "index": null,
+     "name": "severity",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "VARCHAR",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "code",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "VARCHAR",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "message",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "VARCHAR",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "payload_json",
+     "nullable": true,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "VARCHAR",
+     "unique": null
+    }
+   ],
+   "constraints": [],
+   "indexes": [
+    [
+     "idx_activity_events_entity",
+     [
+      "entity_type",
+      "entity_id"
+     ],
+     false
+    ],
+    [
+     "idx_activity_events_source",
+     [
+      "source"
+     ],
+     false
+    ],
+    [
+     "idx_activity_events_timestamp",
+     [
+      "timestamp"
+     ],
+     false
+    ]
+   ]
+  },
+  "alerts": {
+   "columns": [
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "id",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": true,
+     "server_default": null,
+     "type": "INTEGER",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "dedup_key",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "VARCHAR",
+     "unique": true
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "source",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "VARCHAR",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "code",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "VARCHAR",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": "scalar:'info'",
+     "foreign_keys": [],
+     "index": null,
+     "name": "severity",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "VARCHAR",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "entity_type",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "VARCHAR",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "entity_id",
+     "nullable": true,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "INTEGER",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "cluster_id",
+     "nullable": true,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "INTEGER",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "plant_id",
+     "nullable": true,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "INTEGER",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "title",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "VARCHAR",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "message",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "VARCHAR",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "payload_json",
+     "nullable": true,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "VARCHAR",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": "scalar:'open'",
+     "foreign_keys": [],
+     "index": null,
+     "name": "status",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "VARCHAR",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "first_seen_at",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "INTEGER",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "last_seen_at",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "INTEGER",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": "scalar:1",
+     "foreign_keys": [],
+     "index": null,
+     "name": "occurrence_count",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "INTEGER",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "acknowledged_at",
+     "nullable": true,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "INTEGER",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "resolved_at",
+     "nullable": true,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "INTEGER",
+     "unique": null
+    }
+   ],
+   "constraints": [
+    [
+     "UniqueConstraint",
+     null,
+     [
+      "dedup_key"
+     ]
+    ]
+   ],
+   "indexes": [
+    [
+     "idx_alerts_dedup_key",
+     [
+      "dedup_key"
+     ],
+     false
+    ],
+    [
+     "idx_alerts_entity",
+     [
+      "entity_type",
+      "entity_id"
+     ],
+     false
+    ],
+    [
+     "idx_alerts_status",
+     [
+      "status"
+     ],
+     false
+    ]
+   ]
+  },
+  "clusters": {
+   "columns": [
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "id",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": true,
+     "server_default": null,
+     "type": "INTEGER",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "name",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "VARCHAR",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "location",
+     "nullable": true,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "VARCHAR",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "created_at",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "INTEGER",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": "scalar:'indoor'",
+     "foreign_keys": [],
+     "index": null,
+     "name": "environment",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "VARCHAR",
+     "unique": null
+    }
+   ],
+   "constraints": [],
+   "indexes": []
+  },
+  "decision_logs": {
+   "columns": [
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "id",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": true,
+     "server_default": null,
+     "type": "INTEGER",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "cluster_id",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "INTEGER",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "evaluated_at",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "INTEGER",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "action",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "VARCHAR",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "duration_minutes",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "INTEGER",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "interval_hours",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "INTEGER",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "confidence",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "FLOAT",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "primary_code",
+     "nullable": true,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "VARCHAR",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "reason_text",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "VARCHAR",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "payload_json",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "VARCHAR",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": "scalar:'auto'",
+     "foreign_keys": [],
+     "index": null,
+     "name": "triggered_by",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "VARCHAR",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": "scalar:False",
+     "foreign_keys": [],
+     "index": null,
+     "name": "actuated",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "BOOLEAN",
+     "unique": null
+    }
+   ],
+   "constraints": [],
+   "indexes": [
+    [
+     "idx_decision_logs_cluster_id",
+     [
+      "cluster_id"
+     ],
+     false
+    ],
+    [
+     "idx_decision_logs_evaluated_at",
+     [
+      "evaluated_at"
+     ],
+     false
+    ]
+   ]
+  },
+  "global_irrigation_config": {
+   "columns": [
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "id",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": true,
+     "server_default": null,
+     "type": "INTEGER",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "mode",
+     "nullable": true,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "VARCHAR",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "duration_minutes",
+     "nullable": true,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "INTEGER",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "interval_hours",
+     "nullable": true,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "INTEGER",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "auto_run",
+     "nullable": true,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "BOOLEAN",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "daily_cap_minutes",
+     "nullable": true,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "INTEGER",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "max_events_per_day",
+     "nullable": true,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "INTEGER",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "quiet_start_hour",
+     "nullable": true,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "INTEGER",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "quiet_end_hour",
+     "nullable": true,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "INTEGER",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "last_updated",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "INTEGER",
+     "unique": null
+    }
+   ],
+   "constraints": [],
+   "indexes": []
+  },
+  "irrigation_configs": {
+   "columns": [
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "id",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": true,
+     "server_default": null,
+     "type": "INTEGER",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [
+      "clusters.id"
+     ],
+     "index": null,
+     "name": "cluster_id",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "INTEGER",
+     "unique": true
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "mode",
+     "nullable": true,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "VARCHAR",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "duration_minutes",
+     "nullable": true,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "INTEGER",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "interval_hours",
+     "nullable": true,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "INTEGER",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "auto_run",
+     "nullable": true,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "BOOLEAN",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "last_updated",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "INTEGER",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "daily_cap_minutes",
+     "nullable": true,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "INTEGER",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "max_events_per_day",
+     "nullable": true,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "INTEGER",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "quiet_start_hour",
+     "nullable": true,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "INTEGER",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "quiet_end_hour",
+     "nullable": true,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "INTEGER",
+     "unique": null
+    }
+   ],
+   "constraints": [
+    [
+     "ForeignKeyConstraint",
+     null,
+     [
+      "cluster_id"
+     ]
+    ],
+    [
+     "UniqueConstraint",
+     null,
+     [
+      "cluster_id"
+     ]
+    ]
+   ],
+   "indexes": []
+  },
+  "irrigation_events": {
+   "columns": [
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "id",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": true,
+     "server_default": null,
+     "type": "INTEGER",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [
+      "irrigators.id"
+     ],
+     "index": null,
+     "name": "irrigator_id",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "INTEGER",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "timestamp",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "INTEGER",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "action",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "VARCHAR",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "duration_minutes",
+     "nullable": true,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "INTEGER",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "triggered_by",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "VARCHAR",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "notes",
+     "nullable": true,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "VARCHAR",
+     "unique": null
+    }
+   ],
+   "constraints": [
+    [
+     "ForeignKeyConstraint",
+     null,
+     [
+      "irrigator_id"
+     ]
+    ]
+   ],
+   "indexes": [
+    [
+     "idx_irrigation_events_irrigator_id",
+     [
+      "irrigator_id"
+     ],
+     false
+    ],
+    [
+     "idx_irrigation_events_timestamp",
+     [
+      "timestamp"
+     ],
+     false
+    ]
+   ]
+  },
+  "irrigation_windows": {
+   "columns": [
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "id",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": true,
+     "server_default": null,
+     "type": "INTEGER",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [
+      "clusters.id"
+     ],
+     "index": null,
+     "name": "cluster_id",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "INTEGER",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": "scalar:127",
+     "foreign_keys": [],
+     "index": null,
+     "name": "weekday_mask",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "INTEGER",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "start_hour",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "INTEGER",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "end_hour",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "INTEGER",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "label",
+     "nullable": true,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "VARCHAR",
+     "unique": null
+    }
+   ],
+   "constraints": [
+    [
+     "ForeignKeyConstraint",
+     null,
+     [
+      "cluster_id"
+     ]
+    ]
+   ],
+   "indexes": [
+    [
+     "idx_irrigation_windows_cluster",
+     [
+      "cluster_id"
+     ],
+     false
+    ]
+   ]
+  },
+  "irrigators": {
+   "columns": [
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "id",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": true,
+     "server_default": null,
+     "type": "INTEGER",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [
+      "clusters.id"
+     ],
+     "index": null,
+     "name": "cluster_id",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "INTEGER",
+     "unique": true
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "tuya_device_id",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "VARCHAR",
+     "unique": true
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "name",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "VARCHAR",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "type",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "VARCHAR",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "config",
+     "nullable": true,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "VARCHAR",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "reservoir_l",
+     "nullable": true,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "FLOAT",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "flow_rate_l_per_min",
+     "nullable": true,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "FLOAT",
+     "unique": null
+    }
+   ],
+   "constraints": [
+    [
+     "ForeignKeyConstraint",
+     null,
+     [
+      "cluster_id"
+     ]
+    ],
+    [
+     "UniqueConstraint",
+     null,
+     [
+      "cluster_id"
+     ]
+    ],
+    [
+     "UniqueConstraint",
+     null,
+     [
+      "tuya_device_id"
+     ]
+    ]
+   ],
+   "indexes": []
+  },
+  "plant_health_daily": {
+   "columns": [
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "id",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": true,
+     "server_default": null,
+     "type": "INTEGER",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "plant_id",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "INTEGER",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "date_key",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "VARCHAR",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "timestamp",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "INTEGER",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "score",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "FLOAT",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "soil_in_band_pct",
+     "nullable": true,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "FLOAT",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "temp_in_band_pct",
+     "nullable": true,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "FLOAT",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "humidity_in_band_pct",
+     "nullable": true,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "FLOAT",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "efficiency",
+     "nullable": true,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "FLOAT",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": "scalar:0",
+     "foreign_keys": [],
+     "index": null,
+     "name": "sample_count",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "INTEGER",
+     "unique": null
+    }
+   ],
+   "constraints": [
+    [
+     "UniqueConstraint",
+     null,
+     [
+      "plant_id",
+      "date_key"
+     ]
+    ]
+   ],
+   "indexes": [
+    [
+     "idx_plant_health_daily_plant",
+     [
+      "plant_id"
+     ],
+     false
+    ]
+   ]
+  },
+  "plants": {
+   "columns": [
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "id",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": true,
+     "server_default": null,
+     "type": "INTEGER",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [
+      "clusters.id"
+     ],
+     "index": null,
+     "name": "cluster_id",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "INTEGER",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "species",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "VARCHAR",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "category",
+     "nullable": true,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "VARCHAR",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "water_needs",
+     "nullable": true,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "VARCHAR",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "light_needs",
+     "nullable": true,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "VARCHAR",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "ideal_temp_min",
+     "nullable": true,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "FLOAT",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "ideal_temp_max",
+     "nullable": true,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "FLOAT",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "ideal_humidity_min",
+     "nullable": true,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "FLOAT",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "ideal_humidity_max",
+     "nullable": true,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "FLOAT",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "notes",
+     "nullable": true,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "VARCHAR",
+     "unique": null
+    }
+   ],
+   "constraints": [
+    [
+     "ForeignKeyConstraint",
+     null,
+     [
+      "cluster_id"
+     ]
+    ]
+   ],
+   "indexes": []
+  },
+  "sensor_assignments": {
+   "columns": [
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "id",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": true,
+     "server_default": null,
+     "type": "INTEGER",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [
+      "sensors.id"
+     ],
+     "index": null,
+     "name": "sensor_id",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "INTEGER",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [
+      "plants.id"
+     ],
+     "index": null,
+     "name": "plant_id",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "INTEGER",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "started_at",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "INTEGER",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "ended_at",
+     "nullable": true,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "INTEGER",
+     "unique": null
+    }
+   ],
+   "constraints": [
+    [
+     "ForeignKeyConstraint",
+     null,
+     [
+      "plant_id"
+     ]
+    ],
+    [
+     "ForeignKeyConstraint",
+     null,
+     [
+      "sensor_id"
+     ]
+    ]
+   ],
+   "indexes": [
+    [
+     "idx_sensor_assignments_plant",
+     [
+      "plant_id"
+     ],
+     false
+    ],
+    [
+     "idx_sensor_assignments_sensor",
+     [
+      "sensor_id"
+     ],
+     false
+    ],
+    [
+     "idx_sensor_assignments_time",
+     [
+      "started_at",
+      "ended_at"
+     ],
+     false
+    ]
+   ]
+  },
+  "sensor_readings": {
+   "columns": [
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "id",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": true,
+     "server_default": null,
+     "type": "INTEGER",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [
+      "sensors.id"
+     ],
+     "index": null,
+     "name": "sensor_id",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "INTEGER",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "timestamp",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "INTEGER",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "temperature",
+     "nullable": true,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "FLOAT",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "soil_moisture",
+     "nullable": true,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "FLOAT",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "light",
+     "nullable": true,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "INTEGER",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "env_humidity",
+     "nullable": true,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "FLOAT",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "battery_state",
+     "nullable": true,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "VARCHAR",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "water_warning",
+     "nullable": true,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "BOOLEAN",
+     "unique": null
+    }
+   ],
+   "constraints": [
+    [
+     "ForeignKeyConstraint",
+     null,
+     [
+      "sensor_id"
+     ]
+    ],
+    [
+     "UniqueConstraint",
+     null,
+     [
+      "sensor_id",
+      "timestamp"
+     ]
+    ]
+   ],
+   "indexes": [
+    [
+     "idx_sensor_readings_sensor_id",
+     [
+      "sensor_id"
+     ],
+     false
+    ],
+    [
+     "idx_sensor_readings_timestamp",
+     [
+      "timestamp"
+     ],
+     false
+    ]
+   ]
+  },
+  "sensors": {
+   "columns": [
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "id",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": true,
+     "server_default": null,
+     "type": "INTEGER",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [
+      "clusters.id"
+     ],
+     "index": null,
+     "name": "cluster_id",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "INTEGER",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "tuya_device_id",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "VARCHAR",
+     "unique": true
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "name",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "VARCHAR",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "type",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "VARCHAR",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "config",
+     "nullable": true,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "VARCHAR",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [
+      "plants.id"
+     ],
+     "index": null,
+     "name": "plant_id",
+     "nullable": true,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "INTEGER",
+     "unique": null
+    }
+   ],
+   "constraints": [
+    [
+     "ForeignKeyConstraint",
+     null,
+     [
+      "cluster_id"
+     ]
+    ],
+    [
+     "ForeignKeyConstraint",
+     null,
+     [
+      "plant_id"
+     ]
+    ],
+    [
+     "UniqueConstraint",
+     null,
+     [
+      "tuya_device_id"
+     ]
+    ]
+   ],
+   "indexes": []
+  },
+  "user_preferences": {
+   "columns": [
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "id",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": true,
+     "server_default": null,
+     "type": "INTEGER",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": "scalar:'metric'",
+     "foreign_keys": [],
+     "index": null,
+     "name": "units",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "VARCHAR",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": "scalar:'UTC'",
+     "foreign_keys": [],
+     "index": null,
+     "name": "timezone",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "VARCHAR",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": "scalar:'auto'",
+     "foreign_keys": [],
+     "index": null,
+     "name": "theme",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "VARCHAR",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "default_cluster_id",
+     "nullable": true,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "INTEGER",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": "scalar:30",
+     "foreign_keys": [],
+     "index": null,
+     "name": "refresh_interval_seconds",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "INTEGER",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": "scalar:False",
+     "foreign_keys": [],
+     "index": null,
+     "name": "dry_run_global",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "BOOLEAN",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": "scalar:False",
+     "foreign_keys": [],
+     "index": null,
+     "name": "scheduler_paused",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "BOOLEAN",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": "scalar:True",
+     "foreign_keys": [],
+     "index": null,
+     "name": "notify_manual",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "BOOLEAN",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": "scalar:True",
+     "foreign_keys": [],
+     "index": null,
+     "name": "notify_emergency",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "BOOLEAN",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": "scalar:True",
+     "foreign_keys": [],
+     "index": null,
+     "name": "notify_alerts",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "BOOLEAN",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": "scalar:True",
+     "foreign_keys": [],
+     "index": null,
+     "name": "notify_auto",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "BOOLEAN",
+     "unique": null
+    }
+   ],
+   "constraints": [],
+   "indexes": []
+  },
+  "users": {
+   "columns": [
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "id",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": true,
+     "server_default": null,
+     "type": "INTEGER",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "username",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "VARCHAR",
+     "unique": true
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "hashed_password",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "VARCHAR",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": "scalar:True",
+     "foreign_keys": [],
+     "index": null,
+     "name": "is_active",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "BOOLEAN",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "created_at",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "INTEGER",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "last_login_at",
+     "nullable": true,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "INTEGER",
+     "unique": null
+    }
+   ],
+   "constraints": [
+    [
+     "UniqueConstraint",
+     null,
+     [
+      "username"
+     ]
+    ]
+   ],
+   "indexes": []
+  },
+  "vacation_windows": {
+   "columns": [
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "id",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": true,
+     "server_default": null,
+     "type": "INTEGER",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "starts_at",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "INTEGER",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "ends_at",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "INTEGER",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "contact_email",
+     "nullable": true,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "VARCHAR",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "notes",
+     "nullable": true,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "VARCHAR",
+     "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "created_at",
+     "nullable": false,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "INTEGER",
+     "unique": null
+    }
+   ],
+   "constraints": [],
+   "indexes": []
+  }
+ }
+}

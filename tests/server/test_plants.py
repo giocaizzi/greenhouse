@@ -64,7 +64,7 @@ class TestPlantCRUD:
         client.post("/api/v1/clusters/1/plants", json={"species": "Fern"})
         client.post(
             "/api/v1/clusters/1/sensors",
-            json={"tuya_device_id": "s001", "name": "S1", "type": "soil_moisture", "plant_id": 1},
+            json={"tuya_device_id": "s001", "name": "S1", "type": "tuya.tr301z", "plant_id": 1},
         )
         resp = client.get("/api/v1/clusters/1/sensors/1")
         assert resp.json()["plant_id"] == 1
@@ -171,7 +171,7 @@ class TestPlantMove:
             json={
                 "tuya_device_id": "fake_tuya_device_aabbccdd",
                 "name": "Soil probe",
-                "type": "soil_moisture",
+                "type": "tuya.tr301z",
                 "plant_id": plant_id,
             },
         )
@@ -205,7 +205,7 @@ class TestPlantMove:
             json={
                 "tuya_device_id": "fake_tuya_device_aabbccdd",
                 "name": "Soil probe",
-                "type": "soil_moisture",
+                "type": "tuya.tr301z",
                 "plant_id": plant_id,
             },
         )
@@ -236,7 +236,7 @@ class TestPlantMove:
             json={
                 "tuya_device_id": "fake_tuya_device_aabbccdd",
                 "name": "Soil probe",
-                "type": "soil_moisture",
+                "type": "tuya.tr301z",
                 "plant_id": plant_id,
             },
         )
@@ -296,7 +296,7 @@ class TestPlantMove:
         plant_id = self._seed_two_clusters_one_plant(client)
         client.post(
             "/api/v1/clusters/1/irrigator",
-            json={"tuya_device_id": "fake_tuya_irrigator_aabb", "name": "Source Irrigator", "type": "tuya_cloud"},
+            json={"tuya_device_id": "fake_tuya_irrigator_aabb", "name": "Source Irrigator", "type": "rainpoint.ik10pw"},
         )
 
         with app.state.session_factory() as session:

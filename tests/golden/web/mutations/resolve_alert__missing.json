@@ -1,0 +1,41 @@
+{
+ "body_lines": [
+  ""
+ ],
+ "db_effect": {},
+ "device_calls": {
+  "irrigator": [],
+  "sensor": []
+ },
+ "headers": {
+  "content-type": "text/html; charset=utf-8",
+  "hx-toast": "{\"severity\": \"success\", \"title\": \"Resolved\", \"message\": \"Alert marked as resolved.\"}"
+ },
+ "request": {
+  "form": null,
+  "headers": {
+   "HX-Request": "true"
+  },
+  "method": "POST",
+  "url": "/alerts/999/resolve"
+ },
+ "status": 200,
+ "templates": [
+  [
+   "partials/_alert_row.html",
+   [
+    "active_vacation",
+    "alert",
+    "app_version",
+    "auth_enabled",
+    "dry_run_global",
+    "is_hx",
+    "now_text",
+    "request",
+    "scheduler_paused",
+    "show_chrome",
+    "theme"
+   ]
+  ]
+ ]
+}

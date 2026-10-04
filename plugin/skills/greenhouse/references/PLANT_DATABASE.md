@@ -1,6 +1,6 @@
 # Plant database reference
 
-The server's per-plant decisions read care requirements from a curated JSON file shipped inside `greenhouse-core` at `libs/greenhouse-core/greenhouse_core/data/plant_database.json`. This file describes the shape of that data so you can help the user read a target, extend the database, or interpret why a plant has the moisture range it does.
+The server's per-plant decisions read care requirements from a curated JSON file shipped inside `greenhouse-core` at `libs/greenhouse-core/greenhouse_core/data/plant_database.json` (a deployment can point `IRRIGATION_PLANT_DB_PATH` at another copy). This file describes the shape of that data so you can help the user read a target, extend the database, or interpret why a plant has the moisture range it does.
 
 ## Top-level structure
 
@@ -9,7 +9,7 @@ The JSON is a single object with these top-level keys:
 - `species` — object keyed by binomial name (e.g. `"Monstera deliciosa"`) → species care entry.
 - `categories` — object keyed by category name (`"tropical"`, `"succulent"`, `"cacti"`, `"fern"`, `"fruit_tree"`) → biology-basics entry.
 - `_category_defaults` — object keyed by category name → **timing-only** override block (`preferred_water_hours_local`, `season_frequency_multiplier`, optional `season_frequency_multiplier_outdoor`, `sources`). Kept distinct from `categories` so the engine can apply the category timing layer separately.
-- `water_needs_mapping` / `light_needs_mapping` — coarse band → descriptive metadata used for thresholds/alerts.
+- `water_needs_mapping` / `light_needs_mapping` — coarse band → descriptive metadata (`get_water_needs_info` serves the water one; the engine keys on the band string itself).
 - `_metadata`, `notes` — provenance and human-readable notes; the engine does not key on these.
 
 ## Resolution — `get_care_data`
@@ -76,15 +76,15 @@ A separate top-level object holding **only** the timing fields for each category
 | `category` | string | Links a species to its category. Species only. |
 | `aliases` | array of strings | Alternate names matched case-insensitively, then by fuzzy substring. Species only, optional. |
 | `native_region` | string | Provenance/biogeography. Species only, optional. The engine doesn't key on it. |
-| `water_needs` | `"low"` / `"medium"` / `"high"` | Coarse band; the engine combines this with sensor readings. |
-| `water_frequency_days` | int | Base cadence in days. Adjusted by sensors and weather at runtime. |
+| `water_needs` | `"low"` / `"medium"` / `"high"` | Coarse band; drives the `water_needs_high` / `water_needs_low` adjustments and the temperature fallback interval (the cluster uses its plants' averaged band). Copied onto the `Plant` row by `plant sync`. |
+| `water_frequency_days` | int | Reference cadence from the literature. Informational: the engine's interval comes from its own interval constants and rules, not from this field. |
 | `water_notes` | string | Human-readable care note. The engine doesn't read it. Optional. |
-| `ideal_temp_min_c` / `ideal_temp_max_c` | float | Celsius. The engine raises stress reasons outside this band. |
+| `ideal_temp_min_c` / `ideal_temp_max_c` | float | Celsius. The engine adjusts the interval 3 °C outside this band (`temp_high` / `temp_low`) and flags heat stress 5 °C above the max. A `0` bound is treated as missing. |
 | `ideal_humidity_min` / `ideal_humidity_max` | percent (0–100) | Ambient, not soil. |
-| `soil_moisture_target` | string `"min-max"` | The band the engine aims for; below `min` → `sensor_dry`, above `max` → `sensor_wet`. |
-| `light_needs` | `"low"` / `"medium"` / `"high"` | Used by daytime-lux alerts. |
-| `ideal_light_lux_min` | int | Minimum adequate lux for this species. Species only, optional. |
-| `preferred_water_hours_local` | `[start_hour, end_hour]` | Local-hour window the engine prefers to water in. Lives on `_category_defaults[c]`; a species may override. |
+| `soil_moisture_target` | string `"min-max"` | The band the engine aims for; below `min` → `sensor_dry` (more than 10 below → `sensor_very_dry`), above `max` → `sensor_wet`. Read everywhere through one parser (`parse_moisture_target`): the first two `-`-separated numbers are used (`"40-50-60"` → 40–50); anything else (a bare `"50"`, text, missing) falls back to 45–65. The band is not validated, so keep `min < max`. |
+| `light_needs` | `"low"` / `"medium"` / `"high"` | Descriptive band, copied onto the `Plant` row by `plant sync`; the engine and the light alerts do not read it (they use `ideal_light_lux_min`). |
+| `ideal_light_lux_min` | int | Minimum adequate lux for this species. Drives the `low_light` stress indicator and maintenance/learning low-light alerts (scaled by a seasonal factor). Species only, optional. |
+| `preferred_water_hours_local` | `[start_hour, end_hour]` | Advisory local-hour watering window from the literature, surfaced in plant care info. It does **not** gate irrigation (issue #83): only per-cluster irrigation windows do, and with none every hour is allowed (quiet hours still apply). Lives on `_category_defaults[c]`; a species may override. |
 | `season_frequency_multiplier` | object `{winter,spring,summer,autumn}` → float | Per-season scaling of base frequency (indoor / default). On `_category_defaults[c]`; species may override. |
 | `season_frequency_multiplier_outdoor` | object `{winter,spring,summer,autumn}` → float | Outdoor variant; the engine prefers it when `cluster.environment == "outdoor"`. Optional, on category and/or species. |
 | `timing_notes` | string | Rationale for a timing override. Species only, optional. The engine doesn't read it. |

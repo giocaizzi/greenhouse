@@ -1,9 +1,8 @@
 """Irrigator CRUD + control routes."""
 
 from fastapi import APIRouter, HTTPException, Query, status
-from sqlalchemy.exc import IntegrityError
 
-from greenhouse_core.repository import IrrigatorExistsError
+from greenhouse_core.models import Irrigator
 from greenhouse_core.schemas import (
     CreateIrrigatorRequest,
     IrrigatorActionResponse,
@@ -15,7 +14,15 @@ from greenhouse_core.schemas import (
     SuccessResponse,
     UpdateIrrigatorRequest,
 )
-from greenhouse_server.deps import DeviceRegistryDep, NtfyNotifierDep, RepoDep, require_cluster
+from greenhouse_server.deps import (
+    DeviceRegistryDep,
+    NtfyNotifierDep,
+    RepoDep,
+    require_cluster,
+    require_cluster_irrigator,
+    require_irrigator,
+)
+from greenhouse_server.services.inventory import DeviceIdExistsError, IrrigatorExistsError, create_irrigator
 from greenhouse_server.services.manual_control import (
     ManualActionError,
     manual_log,
@@ -32,7 +39,7 @@ def list_all_irrigators(
     cluster_id: int | None = Query(default=None, description="Restrict results to a specific cluster"),
     limit: int = Query(default=100, ge=1, le=500),
     cursor: int | None = Query(default=None, description="Id cursor — return rows with id > cursor"),
-):
+) -> IrrigatorListResponse:
     """List every irrigator across all clusters with optional cluster filter and cursor pagination.
 
     Args:
@@ -59,7 +66,7 @@ def list_all_irrigators(
     status_code=status.HTTP_201_CREATED,
     summary="Register the cluster's irrigator",
 )
-def add_irrigator(cluster_id: int, request: CreateIrrigatorRequest, repo: RepoDep):
+def add_irrigator(cluster_id: int, request: CreateIrrigatorRequest, repo: RepoDep) -> Irrigator | None:
     """Register the Tuya irrigator for a cluster.
 
     A cluster has at most one irrigator (strict 0:1). Registering a second one
@@ -67,7 +74,8 @@ def add_irrigator(cluster_id: int, request: CreateIrrigatorRequest, repo: RepoDe
 
     Args:
         cluster_id: Cluster the irrigator belongs to.
-        request: Tuya device ID, irrigator name, type (e.g. `tuya_cloud`),
+        request: Tuya device ID, irrigator name, type (the device model key,
+            e.g. `rainpoint.ik10pw`),
             optional config dict, and optional `reservoir_l` /
             `flow_rate_l_per_min` capacity used for vacation rationing.
 
@@ -81,27 +89,21 @@ def add_irrigator(cluster_id: int, request: CreateIrrigatorRequest, repo: RepoDe
     """
     require_cluster(repo, cluster_id)
     try:
-        irrigator_id = repo.add_irrigator(
-            cluster_id=cluster_id,
+        irrigator_id = create_irrigator(
+            repo,
+            cluster_id,
             tuya_device_id=request.tuya_device_id,
             name=request.name,
             irrigator_type=request.type,
             config=request.config or {},
+            reservoir_l=request.reservoir_l,
+            flow_rate_l_per_min=request.flow_rate_l_per_min,
         )
-        # add_irrigator does not accept capacity columns; persist them here if supplied.
-        if request.reservoir_l is not None or request.flow_rate_l_per_min is not None:
-            repo.update_irrigator(
-                irrigator_id,
-                reservoir_l=request.reservoir_l,
-                flow_rate_l_per_min=request.flow_rate_l_per_min,
-            )
-        repo.session.commit()
     except IrrigatorExistsError:
-        repo.session.rollback()
         raise HTTPException(status_code=409, detail="Cluster already has an irrigator") from None
-    except IntegrityError:
-        repo.session.rollback()
+    except DeviceIdExistsError:
         raise HTTPException(status_code=409, detail="Device ID already exists") from None
+    repo.commit()
     return repo.get_irrigator(irrigator_id)
 
 
@@ -110,7 +112,7 @@ def add_irrigator(cluster_id: int, request: CreateIrrigatorRequest, repo: RepoDe
     response_model=IrrigatorResponse,
     summary="Get the cluster's irrigator",
 )
-def get_irrigator(cluster_id: int, repo: RepoDep):
+def get_irrigator(cluster_id: int, repo: RepoDep) -> Irrigator:
     """Fetch the cluster's single irrigator.
 
     Args:
@@ -122,10 +124,7 @@ def get_irrigator(cluster_id: int, repo: RepoDep):
     Raises:
         HTTPException: 404 if the cluster has no irrigator.
     """
-    irrigator = repo.get_irrigator_for_cluster(cluster_id)
-    if not irrigator:
-        raise HTTPException(status_code=404, detail="Cluster has no irrigator")
-    return irrigator
+    return require_cluster_irrigator(repo, cluster_id)
 
 
 @router.put(
@@ -133,8 +132,8 @@ def get_irrigator(cluster_id: int, repo: RepoDep):
     response_model=IrrigatorResponse,
     summary="Update the cluster's irrigator",
 )
-def update_irrigator(cluster_id: int, request: UpdateIrrigatorRequest, repo: RepoDep):
-    """Partially update the cluster's irrigator metadata.
+def update_irrigator(cluster_id: int, request: UpdateIrrigatorRequest, repo: RepoDep) -> Irrigator | None:
+    """Partially update the metadata of the cluster's irrigator.
 
     Only fields present in the request body are modified; omitted fields are
     left unchanged.
@@ -150,11 +149,9 @@ def update_irrigator(cluster_id: int, request: UpdateIrrigatorRequest, repo: Rep
     Raises:
         HTTPException: 404 if the cluster has no irrigator.
     """
-    irrigator = repo.get_irrigator_for_cluster(cluster_id)
-    if not irrigator:
-        raise HTTPException(status_code=404, detail="Cluster has no irrigator")
+    irrigator = require_cluster_irrigator(repo, cluster_id)
     updated = repo.update_irrigator(irrigator.id, **request.model_dump(exclude_none=True))
-    repo.session.commit()
+    repo.commit()
     return updated
 
 
@@ -163,7 +160,7 @@ def update_irrigator(cluster_id: int, request: UpdateIrrigatorRequest, repo: Rep
     response_model=SuccessResponse,
     summary="Delete the cluster's irrigator",
 )
-def delete_irrigator(cluster_id: int, repo: RepoDep):
+def delete_irrigator(cluster_id: int, repo: RepoDep) -> SuccessResponse:
     """Delete the cluster's irrigator and all its historical events.
 
     This operation is irreversible.
@@ -177,11 +174,9 @@ def delete_irrigator(cluster_id: int, repo: RepoDep):
     Raises:
         HTTPException: 404 if the cluster has no irrigator.
     """
-    irrigator = repo.get_irrigator_for_cluster(cluster_id)
-    if not irrigator:
-        raise HTTPException(status_code=404, detail="Cluster has no irrigator")
+    irrigator = require_cluster_irrigator(repo, cluster_id)
     repo.delete_irrigator(irrigator.id)
-    repo.session.commit()
+    repo.commit()
     return SuccessResponse(success=True)
 
 
@@ -193,7 +188,7 @@ def start_irrigator(
     registry: DeviceRegistryDep,
     notifier: NtfyNotifierDep,
 ) -> IrrigatorActionResponse:
-    """Manually start an irrigator over the Tuya local protocol.
+    """Manually start an irrigator through its device adapter.
 
     Side effects: actuates physical hardware and records a `start` irrigation
     event with `triggered_by="manual"`. Bypasses the smart-decision engine.
@@ -202,15 +197,16 @@ def start_irrigator(
         irrigator_id: Irrigator to actuate.
         request: Optional `minutes` for run duration.
 
+    Returns:
+        `success=True` and the adapter's start message.
+
     Raises:
         HTTPException: 404 if the irrigator is unknown, 409 if the cluster
             daily cap or max-events-per-day limit would be exceeded, 503 if
             Tuya credentials are missing or the irrigator model has no
             adapter, 502 if the device fails to start.
     """
-    irrigator = repo.get_irrigator(irrigator_id)
-    if not irrigator:
-        raise HTTPException(status_code=404, detail="Irrigator not found")
+    irrigator = require_irrigator(repo, irrigator_id)
     try:
         output = manual_start(repo, registry, notifier, irrigator, request.minutes, via="API")
     except ManualActionError as exc:
@@ -222,22 +218,24 @@ def start_irrigator(
 def stop_irrigator(
     irrigator_id: int, repo: RepoDep, registry: DeviceRegistryDep, notifier: NtfyNotifierDep
 ) -> IrrigatorActionResponse:
-    """Manually stop a running irrigator over the Tuya local protocol.
+    """Manually stop a running irrigator through its device adapter.
 
-    Side effects: actuates physical hardware and records an `off` irrigation
-    event with `triggered_by="manual"`.
+    Side effects: actuates physical hardware and records a `stop` irrigation
+    event with `triggered_by="manual"` (the same action automatic and
+    emergency stops record).
 
     Args:
         irrigator_id: Irrigator to stop.
+
+    Returns:
+        `success=True` and the adapter's stop message.
 
     Raises:
         HTTPException: 404 if the irrigator is unknown, 503 if Tuya
             credentials are missing or the irrigator model has no adapter,
             502 if the device fails to stop.
     """
-    irrigator = repo.get_irrigator(irrigator_id)
-    if not irrigator:
-        raise HTTPException(status_code=404, detail="Irrigator not found")
+    irrigator = require_irrigator(repo, irrigator_id)
     try:
         output = manual_stop(repo, registry, notifier, irrigator, via="API")
     except ManualActionError as exc:
@@ -258,13 +256,14 @@ def log_manual(
         irrigator_id: Irrigator the manual run is attributed to.
         request: Duration in minutes plus optional notes.
 
+    Returns:
+        `success=True` and the id of the recorded irrigation event.
+
     Raises:
         HTTPException: 404 if the irrigator is unknown, 409 if the cluster
             daily cap or max-events-per-day limit would be exceeded.
     """
-    irrigator = repo.get_irrigator(irrigator_id)
-    if not irrigator:
-        raise HTTPException(status_code=404, detail="Irrigator not found")
+    irrigator = require_irrigator(repo, irrigator_id)
     try:
         event_id = manual_log(repo, notifier, irrigator, request.minutes, request.notes)
     except ManualActionError as e:

@@ -12,7 +12,7 @@ prefs_app = typer.Typer(help="Read and update user preferences", no_args_is_help
 
 
 @prefs_app.command("get")
-def prefs_get(ctx: typer.Context):
+def prefs_get(ctx: typer.Context) -> None:
     """Show the current preferences."""
     output(call(ctx, lambda c: c.get_preferences()))
 
@@ -35,7 +35,7 @@ def prefs_set(
         int | None,
         typer.Option("--default-cluster", help="Default cluster ID for one-click commands"),
     ] = None,
-):
+) -> None:
     """Patch preferences. Omitted fields are left unchanged."""
     output(
         call(

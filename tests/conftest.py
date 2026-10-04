@@ -1,8 +1,13 @@
 """Shared pytest fixtures for greenhouse test suite."""
 
+import os
+import socket
 import time
+import urllib.error
+import urllib.request
 
 import pytest
+import time_machine
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
@@ -17,8 +22,34 @@ from fake_data import (
     FAKE_SENSOR_ID,
     FAKE_SENSOR_NAME,
 )
+from golden import ENV_PREFIXES, FROZEN_INSTANT
 from greenhouse_core.models import Base
 from greenhouse_core.repository import IrrigationRepository
+
+_LOOPBACK_HOSTS = frozenset({"127.0.0.1", "::1", "localhost"})
+
+
+@pytest.fixture(autouse=True)
+def _no_network(monkeypatch):
+    """Keep every test hermetic: real outbound HTTP fails fast instead of reaching the internet.
+
+    The app's weather client calls Open-Meteo through ``urllib.request.urlopen`` unless a test installs
+    ``golden.OfflineWeather``; a blocked call degrades to ``None`` exactly like an offline host, so results
+    no longer depend on live weather or network access. Tests that stub ``urlopen`` themselves override this.
+    """
+
+    def _blocked_urlopen(url, *args, **kwargs):
+        raise urllib.error.URLError(f"network disabled in tests: {getattr(url, 'full_url', url)}")
+
+    real_connect = socket.socket.connect
+
+    def _loopback_only_connect(self, address):
+        if self.family in (socket.AF_INET, socket.AF_INET6) and address[0] not in _LOOPBACK_HOSTS:
+            raise OSError(f"network disabled in tests: {address!r}")
+        return real_connect(self, address)
+
+    monkeypatch.setattr(urllib.request, "urlopen", _blocked_urlopen)
+    monkeypatch.setattr(socket.socket, "connect", _loopback_only_connect)
 
 
 @pytest.fixture
@@ -59,14 +90,14 @@ def sample_cluster(tmp_db):
         cluster_id=cluster_id,
         tuya_device_id=FAKE_DEVICE_ID,
         name=FAKE_IRRIGATOR_NAME,
-        irrigator_type="tuya_cloud",
+        irrigator_type="rainpoint.ik10pw",
         config={},
     )
     sensor_id = tmp_db.add_sensor(
         cluster_id=cluster_id,
         tuya_device_id=FAKE_SENSOR_ID,
         name=FAKE_SENSOR_NAME,
-        sensor_type="soil_moisture",
+        sensor_type="tuya.tr301z",
         config={},
         plant_id=plant_id,
     )
@@ -82,3 +113,35 @@ def sample_cluster(tmp_db):
         "irrigator_id": irrigator_id,
         "sensor_id": sensor_id,
     }
+
+
+# ── Determinism kit for the characterization / golden suite (see tests/golden.py) ──
+
+
+@pytest.fixture
+def frozen_clock():
+    """Freeze wall-clock time (``time.time``, ``datetime.now``) at ``FROZEN_INSTANT``.
+
+    Monotonic clocks keep running, so asyncio / Textual timers still work.
+    """
+    with time_machine.travel(FROZEN_INSTANT, tick=False) as traveller:
+        yield traveller
+
+
+@pytest.fixture
+def clean_env(monkeypatch, tmp_path):
+    """Hermetic environment: no app env vars, no ``.env`` file in cwd, UTC local time, plain terminal."""
+    for name in list(os.environ):
+        if name.startswith(ENV_PREFIXES):
+            monkeypatch.delenv(name, raising=False)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
+    monkeypatch.setenv("TZ", "UTC")
+    monkeypatch.setenv("COLUMNS", "100")
+    monkeypatch.setenv("TERM", "dumb")
+    monkeypatch.setenv("NO_COLOR", "1")
+    time.tzset()
+    yield tmp_path
+    monkeypatch.undo()
+    time.tzset()

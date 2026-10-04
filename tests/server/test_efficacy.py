@@ -42,11 +42,11 @@ class TestClusterEfficacy:
             client.post("/api/v1/clusters", json={"name": "Efficacy Cluster"})
             client.post(
                 "/api/v1/clusters/1/sensors",
-                json={"tuya_device_id": "fake_eff_sensor", "name": "Eff Sensor", "type": "soil_moisture"},
+                json={"tuya_device_id": "fake_eff_sensor", "name": "Eff Sensor", "type": "tuya.tr301z"},
             )
             client.post(
                 "/api/v1/clusters/1/irrigator",
-                json={"tuya_device_id": "fake_eff_irrigator", "name": "Eff Pump", "type": "tuya_cloud"},
+                json={"tuya_device_id": "fake_eff_irrigator", "name": "Eff Pump", "type": "rainpoint.ik10pw"},
             )
 
             now = int(time.time())
@@ -99,11 +99,11 @@ class TestClusterEfficacy:
             client.post("/api/v1/clusters", json={"name": "Efficacy Cluster"})
             client.post(
                 "/api/v1/clusters/1/sensors",
-                json={"tuya_device_id": "fake_eff_sensor", "name": "Eff Sensor", "type": "soil_moisture"},
+                json={"tuya_device_id": "fake_eff_sensor", "name": "Eff Sensor", "type": "tuya.tr301z"},
             )
             client.post(
                 "/api/v1/clusters/1/irrigator",
-                json={"tuya_device_id": "fake_eff_irrigator", "name": "Eff Pump", "type": "tuya_cloud"},
+                json={"tuya_device_id": "fake_eff_irrigator", "name": "Eff Pump", "type": "rainpoint.ik10pw"},
             )
 
             now = int(time.time())
@@ -141,11 +141,11 @@ class TestClusterEfficacy:
             client.post("/api/v1/clusters", json={"name": "Score Cluster"})
             client.post(
                 "/api/v1/clusters/1/sensors",
-                json={"tuya_device_id": "fake_score_sensor", "name": "S Sensor", "type": "soil_moisture"},
+                json={"tuya_device_id": "fake_score_sensor", "name": "S Sensor", "type": "tuya.tr301z"},
             )
             client.post(
                 "/api/v1/clusters/1/irrigator",
-                json={"tuya_device_id": "fake_score_pump", "name": "S Pump", "type": "tuya_cloud"},
+                json={"tuya_device_id": "fake_score_pump", "name": "S Pump", "type": "rainpoint.ik10pw"},
             )
 
             now = int(time.time())
@@ -172,3 +172,10 @@ class TestClusterEfficacy:
         resp = seeded_client.get("/api/v1/clusters/1/efficacy?days=30")
         assert resp.status_code == 200
         assert resp.json()["days"] == 30
+
+
+def test_days_is_bounded_like_the_web_page(seeded_client):
+    """D17: the API rejects ``days`` above 365 (422), as the web efficacy page always did."""
+    assert seeded_client.get("/api/v1/clusters/1/efficacy?days=365").status_code == 200
+    assert seeded_client.get("/api/v1/clusters/1/efficacy?days=366").status_code == 422
+    assert seeded_client.get("/clusters/1/efficacy?days=366").status_code == 422

@@ -1,0 +1,1007 @@
+{
+ "custom_cadence": {
+  "check_all_paused": false,
+  "core_job_ids": [
+   "check_all",
+   "device_health_monitor",
+   "plant_health_snapshot",
+   "sensor_anomaly",
+   "sensor_sync"
+  ],
+  "pending_get_jobs": [
+   {
+    "core": true,
+    "id": "sensor_sync",
+    "name": "Sensor data sync",
+    "next_run_time": null,
+    "paused": false,
+    "trigger": "interval[0:30:00]"
+   },
+   {
+    "core": true,
+    "id": "check_all",
+    "name": "Check all clusters",
+    "next_run_time": null,
+    "paused": false,
+    "trigger": "cron[hour='0,6,12,18', minute='0']"
+   },
+   {
+    "core": true,
+    "id": "plant_health_snapshot",
+    "name": "Daily plant health snapshot",
+    "next_run_time": null,
+    "paused": false,
+    "trigger": "cron[hour='0', minute='30']"
+   },
+   {
+    "core": true,
+    "id": "sensor_anomaly",
+    "name": "Sensor anomaly scan",
+    "next_run_time": null,
+    "paused": false,
+    "trigger": "interval[0:15:00]"
+   },
+   {
+    "core": true,
+    "id": "device_health_monitor",
+    "name": "Device health monitor",
+    "next_run_time": null,
+    "paused": false,
+    "trigger": "interval[0:05:00]"
+   }
+  ],
+  "pending_jobs": [
+   {
+    "args": [],
+    "executor": "default",
+    "func_ref": "greenhouse_server.scheduler:_sync_job",
+    "id": "sensor_sync",
+    "kwargs": {},
+    "name": "Sensor data sync",
+    "pending": true,
+    "trigger": {
+     "end_date": null,
+     "interval_seconds": 1800.0,
+     "jitter": null,
+     "repr": "<IntervalTrigger (interval=datetime.timedelta(seconds=1800), start_date='2026-04-15 10:30:00 UTC', timezone='UTC')>",
+     "start_date": "2026-04-15T10:30:00+00:00",
+     "str": "interval[0:30:00]",
+     "timezone": "UTC",
+     "type": "IntervalTrigger"
+    }
+   },
+   {
+    "args": [],
+    "executor": "default",
+    "func_ref": "greenhouse_server.scheduler:_check_job",
+    "id": "check_all",
+    "kwargs": {},
+    "name": "Check all clusters",
+    "pending": true,
+    "trigger": {
+     "end_date": null,
+     "fields": [
+      [
+       "year",
+       "*",
+       true
+      ],
+      [
+       "month",
+       "*",
+       true
+      ],
+      [
+       "day",
+       "*",
+       true
+      ],
+      [
+       "week",
+       "*",
+       true
+      ],
+      [
+       "day_of_week",
+       "*",
+       true
+      ],
+      [
+       "hour",
+       "0,6,12,18",
+       false
+      ],
+      [
+       "minute",
+       "0",
+       false
+      ],
+      [
+       "second",
+       "0",
+       true
+      ]
+     ],
+     "jitter": null,
+     "repr": "<CronTrigger (hour='0,6,12,18', minute='0', timezone='UTC')>",
+     "start_date": null,
+     "str": "cron[hour='0,6,12,18', minute='0']",
+     "timezone": "UTC",
+     "type": "CronTrigger"
+    }
+   },
+   {
+    "args": [],
+    "executor": "default",
+    "func_ref": "greenhouse_server.scheduler:_health_snapshot_job",
+    "id": "plant_health_snapshot",
+    "kwargs": {},
+    "name": "Daily plant health snapshot",
+    "pending": true,
+    "trigger": {
+     "end_date": null,
+     "fields": [
+      [
+       "year",
+       "*",
+       true
+      ],
+      [
+       "month",
+       "*",
+       true
+      ],
+      [
+       "day",
+       "*",
+       true
+      ],
+      [
+       "week",
+       "*",
+       true
+      ],
+      [
+       "day_of_week",
+       "*",
+       true
+      ],
+      [
+       "hour",
+       "0",
+       false
+      ],
+      [
+       "minute",
+       "30",
+       false
+      ],
+      [
+       "second",
+       "0",
+       true
+      ]
+     ],
+     "jitter": null,
+     "repr": "<CronTrigger (hour='0', minute='30', timezone='UTC')>",
+     "start_date": null,
+     "str": "cron[hour='0', minute='30']",
+     "timezone": "UTC",
+     "type": "CronTrigger"
+    }
+   },
+   {
+    "args": [],
+    "executor": "default",
+    "func_ref": "greenhouse_server.scheduler:_anomaly_job",
+    "id": "sensor_anomaly",
+    "kwargs": {},
+    "name": "Sensor anomaly scan",
+    "pending": true,
+    "trigger": {
+     "end_date": null,
+     "interval_seconds": 900.0,
+     "jitter": null,
+     "repr": "<IntervalTrigger (interval=datetime.timedelta(seconds=900), start_date='2026-04-15 10:15:00 UTC', timezone='UTC')>",
+     "start_date": "2026-04-15T10:15:00+00:00",
+     "str": "interval[0:15:00]",
+     "timezone": "UTC",
+     "type": "IntervalTrigger"
+    }
+   },
+   {
+    "args": [],
+    "executor": "default",
+    "func_ref": "greenhouse_server.scheduler:_health_monitor_job",
+    "id": "device_health_monitor",
+    "kwargs": {},
+    "name": "Device health monitor",
+    "pending": true,
+    "trigger": {
+     "end_date": null,
+     "interval_seconds": 300.0,
+     "jitter": null,
+     "repr": "<IntervalTrigger (interval=datetime.timedelta(seconds=300), start_date='2026-04-15 10:05:00 UTC', timezone='UTC')>",
+     "start_date": "2026-04-15T10:05:00+00:00",
+     "str": "interval[0:05:00]",
+     "timezone": "UTC",
+     "type": "IntervalTrigger"
+    }
+   }
+  ],
+  "running_get_jobs": [
+   {
+    "core": true,
+    "id": "device_health_monitor",
+    "name": "Device health monitor",
+    "next_run_time": "2026-04-15 10:05:00+00:00",
+    "paused": false,
+    "trigger": "interval[0:05:00]"
+   },
+   {
+    "core": true,
+    "id": "sensor_anomaly",
+    "name": "Sensor anomaly scan",
+    "next_run_time": "2026-04-15 10:15:00+00:00",
+    "paused": false,
+    "trigger": "interval[0:15:00]"
+   },
+   {
+    "core": true,
+    "id": "sensor_sync",
+    "name": "Sensor data sync",
+    "next_run_time": "2026-04-15 10:30:00+00:00",
+    "paused": false,
+    "trigger": "interval[0:30:00]"
+   },
+   {
+    "core": true,
+    "id": "check_all",
+    "name": "Check all clusters",
+    "next_run_time": "2026-04-15 12:00:00+00:00",
+    "paused": false,
+    "trigger": "cron[hour='0,6,12,18', minute='0']"
+   },
+   {
+    "core": true,
+    "id": "plant_health_snapshot",
+    "name": "Daily plant health snapshot",
+    "next_run_time": "2026-04-16 00:30:00+00:00",
+    "paused": false,
+    "trigger": "cron[hour='0', minute='30']"
+   }
+  ],
+  "scheduler": {
+   "class": "BackgroundScheduler",
+   "job_defaults": {
+    "coalesce": true,
+    "max_instances": 1,
+    "misfire_grace_time": null
+   },
+   "timezone": "UTC"
+  },
+  "started_paused_state": 2,
+  "stored_jobs": [
+   {
+    "coalesce": true,
+    "executor": "default",
+    "func_ref": "greenhouse_server.scheduler:_health_monitor_job",
+    "id": "device_health_monitor",
+    "max_instances": 1,
+    "misfire_grace_time": null,
+    "next_run_time": "2026-04-15T10:05:00+00:00",
+    "pending": false
+   },
+   {
+    "coalesce": true,
+    "executor": "default",
+    "func_ref": "greenhouse_server.scheduler:_anomaly_job",
+    "id": "sensor_anomaly",
+    "max_instances": 1,
+    "misfire_grace_time": null,
+    "next_run_time": "2026-04-15T10:15:00+00:00",
+    "pending": false
+   },
+   {
+    "coalesce": true,
+    "executor": "default",
+    "func_ref": "greenhouse_server.scheduler:_sync_job",
+    "id": "sensor_sync",
+    "max_instances": 1,
+    "misfire_grace_time": null,
+    "next_run_time": "2026-04-15T10:30:00+00:00",
+    "pending": false
+   },
+   {
+    "coalesce": true,
+    "executor": "default",
+    "func_ref": "greenhouse_server.scheduler:_check_job",
+    "id": "check_all",
+    "max_instances": 1,
+    "misfire_grace_time": null,
+    "next_run_time": "2026-04-15T12:00:00+00:00",
+    "pending": false
+   },
+   {
+    "coalesce": true,
+    "executor": "default",
+    "func_ref": "greenhouse_server.scheduler:_health_snapshot_job",
+    "id": "plant_health_snapshot",
+    "max_instances": 1,
+    "misfire_grace_time": null,
+    "next_run_time": "2026-04-16T00:30:00+00:00",
+    "pending": false
+   }
+  ]
+ },
+ "default": {
+  "check_all_paused": false,
+  "core_job_ids": [
+   "check_all",
+   "device_health_monitor",
+   "plant_health_snapshot",
+   "sensor_anomaly",
+   "sensor_sync"
+  ],
+  "pending_get_jobs": [
+   {
+    "core": true,
+    "id": "sensor_sync",
+    "name": "Sensor data sync",
+    "next_run_time": null,
+    "paused": false,
+    "trigger": "interval[3:00:00]"
+   },
+   {
+    "core": true,
+    "id": "check_all",
+    "name": "Check all clusters",
+    "next_run_time": null,
+    "paused": false,
+    "trigger": "cron[hour='*', minute='0']"
+   },
+   {
+    "core": true,
+    "id": "plant_health_snapshot",
+    "name": "Daily plant health snapshot",
+    "next_run_time": null,
+    "paused": false,
+    "trigger": "cron[hour='0', minute='30']"
+   },
+   {
+    "core": true,
+    "id": "sensor_anomaly",
+    "name": "Sensor anomaly scan",
+    "next_run_time": null,
+    "paused": false,
+    "trigger": "interval[0:15:00]"
+   },
+   {
+    "core": true,
+    "id": "device_health_monitor",
+    "name": "Device health monitor",
+    "next_run_time": null,
+    "paused": false,
+    "trigger": "interval[0:05:00]"
+   }
+  ],
+  "pending_jobs": [
+   {
+    "args": [],
+    "executor": "default",
+    "func_ref": "greenhouse_server.scheduler:_sync_job",
+    "id": "sensor_sync",
+    "kwargs": {},
+    "name": "Sensor data sync",
+    "pending": true,
+    "trigger": {
+     "end_date": null,
+     "interval_seconds": 10800.0,
+     "jitter": null,
+     "repr": "<IntervalTrigger (interval=datetime.timedelta(seconds=10800), start_date='2026-04-15 13:00:00 UTC', timezone='UTC')>",
+     "start_date": "2026-04-15T13:00:00+00:00",
+     "str": "interval[3:00:00]",
+     "timezone": "UTC",
+     "type": "IntervalTrigger"
+    }
+   },
+   {
+    "args": [],
+    "executor": "default",
+    "func_ref": "greenhouse_server.scheduler:_check_job",
+    "id": "check_all",
+    "kwargs": {},
+    "name": "Check all clusters",
+    "pending": true,
+    "trigger": {
+     "end_date": null,
+     "fields": [
+      [
+       "year",
+       "*",
+       true
+      ],
+      [
+       "month",
+       "*",
+       true
+      ],
+      [
+       "day",
+       "*",
+       true
+      ],
+      [
+       "week",
+       "*",
+       true
+      ],
+      [
+       "day_of_week",
+       "*",
+       true
+      ],
+      [
+       "hour",
+       "*",
+       false
+      ],
+      [
+       "minute",
+       "0",
+       false
+      ],
+      [
+       "second",
+       "0",
+       true
+      ]
+     ],
+     "jitter": null,
+     "repr": "<CronTrigger (hour='*', minute='0', timezone='UTC')>",
+     "start_date": null,
+     "str": "cron[hour='*', minute='0']",
+     "timezone": "UTC",
+     "type": "CronTrigger"
+    }
+   },
+   {
+    "args": [],
+    "executor": "default",
+    "func_ref": "greenhouse_server.scheduler:_health_snapshot_job",
+    "id": "plant_health_snapshot",
+    "kwargs": {},
+    "name": "Daily plant health snapshot",
+    "pending": true,
+    "trigger": {
+     "end_date": null,
+     "fields": [
+      [
+       "year",
+       "*",
+       true
+      ],
+      [
+       "month",
+       "*",
+       true
+      ],
+      [
+       "day",
+       "*",
+       true
+      ],
+      [
+       "week",
+       "*",
+       true
+      ],
+      [
+       "day_of_week",
+       "*",
+       true
+      ],
+      [
+       "hour",
+       "0",
+       false
+      ],
+      [
+       "minute",
+       "30",
+       false
+      ],
+      [
+       "second",
+       "0",
+       true
+      ]
+     ],
+     "jitter": null,
+     "repr": "<CronTrigger (hour='0', minute='30', timezone='UTC')>",
+     "start_date": null,
+     "str": "cron[hour='0', minute='30']",
+     "timezone": "UTC",
+     "type": "CronTrigger"
+    }
+   },
+   {
+    "args": [],
+    "executor": "default",
+    "func_ref": "greenhouse_server.scheduler:_anomaly_job",
+    "id": "sensor_anomaly",
+    "kwargs": {},
+    "name": "Sensor anomaly scan",
+    "pending": true,
+    "trigger": {
+     "end_date": null,
+     "interval_seconds": 900.0,
+     "jitter": null,
+     "repr": "<IntervalTrigger (interval=datetime.timedelta(seconds=900), start_date='2026-04-15 10:15:00 UTC', timezone='UTC')>",
+     "start_date": "2026-04-15T10:15:00+00:00",
+     "str": "interval[0:15:00]",
+     "timezone": "UTC",
+     "type": "IntervalTrigger"
+    }
+   },
+   {
+    "args": [],
+    "executor": "default",
+    "func_ref": "greenhouse_server.scheduler:_health_monitor_job",
+    "id": "device_health_monitor",
+    "kwargs": {},
+    "name": "Device health monitor",
+    "pending": true,
+    "trigger": {
+     "end_date": null,
+     "interval_seconds": 300.0,
+     "jitter": null,
+     "repr": "<IntervalTrigger (interval=datetime.timedelta(seconds=300), start_date='2026-04-15 10:05:00 UTC', timezone='UTC')>",
+     "start_date": "2026-04-15T10:05:00+00:00",
+     "str": "interval[0:05:00]",
+     "timezone": "UTC",
+     "type": "IntervalTrigger"
+    }
+   }
+  ],
+  "running_get_jobs": [
+   {
+    "core": true,
+    "id": "check_all",
+    "name": "Check all clusters",
+    "next_run_time": "2026-04-15 10:00:00+00:00",
+    "paused": false,
+    "trigger": "cron[hour='*', minute='0']"
+   },
+   {
+    "core": true,
+    "id": "device_health_monitor",
+    "name": "Device health monitor",
+    "next_run_time": "2026-04-15 10:05:00+00:00",
+    "paused": false,
+    "trigger": "interval[0:05:00]"
+   },
+   {
+    "core": true,
+    "id": "sensor_anomaly",
+    "name": "Sensor anomaly scan",
+    "next_run_time": "2026-04-15 10:15:00+00:00",
+    "paused": false,
+    "trigger": "interval[0:15:00]"
+   },
+   {
+    "core": true,
+    "id": "sensor_sync",
+    "name": "Sensor data sync",
+    "next_run_time": "2026-04-15 13:00:00+00:00",
+    "paused": false,
+    "trigger": "interval[3:00:00]"
+   },
+   {
+    "core": true,
+    "id": "plant_health_snapshot",
+    "name": "Daily plant health snapshot",
+    "next_run_time": "2026-04-16 00:30:00+00:00",
+    "paused": false,
+    "trigger": "cron[hour='0', minute='30']"
+   }
+  ],
+  "scheduler": {
+   "class": "BackgroundScheduler",
+   "job_defaults": {
+    "coalesce": true,
+    "max_instances": 1,
+    "misfire_grace_time": null
+   },
+   "timezone": "UTC"
+  },
+  "started_paused_state": 2,
+  "stored_jobs": [
+   {
+    "coalesce": true,
+    "executor": "default",
+    "func_ref": "greenhouse_server.scheduler:_check_job",
+    "id": "check_all",
+    "max_instances": 1,
+    "misfire_grace_time": null,
+    "next_run_time": "2026-04-15T10:00:00+00:00",
+    "pending": false
+   },
+   {
+    "coalesce": true,
+    "executor": "default",
+    "func_ref": "greenhouse_server.scheduler:_health_monitor_job",
+    "id": "device_health_monitor",
+    "max_instances": 1,
+    "misfire_grace_time": null,
+    "next_run_time": "2026-04-15T10:05:00+00:00",
+    "pending": false
+   },
+   {
+    "coalesce": true,
+    "executor": "default",
+    "func_ref": "greenhouse_server.scheduler:_anomaly_job",
+    "id": "sensor_anomaly",
+    "max_instances": 1,
+    "misfire_grace_time": null,
+    "next_run_time": "2026-04-15T10:15:00+00:00",
+    "pending": false
+   },
+   {
+    "coalesce": true,
+    "executor": "default",
+    "func_ref": "greenhouse_server.scheduler:_sync_job",
+    "id": "sensor_sync",
+    "max_instances": 1,
+    "misfire_grace_time": null,
+    "next_run_time": "2026-04-15T13:00:00+00:00",
+    "pending": false
+   },
+   {
+    "coalesce": true,
+    "executor": "default",
+    "func_ref": "greenhouse_server.scheduler:_health_snapshot_job",
+    "id": "plant_health_snapshot",
+    "max_instances": 1,
+    "misfire_grace_time": null,
+    "next_run_time": "2026-04-16T00:30:00+00:00",
+    "pending": false
+   }
+  ]
+ },
+ "persisted_tz_and_pause": {
+  "check_all_paused": true,
+  "core_job_ids": [
+   "check_all",
+   "device_health_monitor",
+   "plant_health_snapshot",
+   "sensor_anomaly",
+   "sensor_sync"
+  ],
+  "pending_get_jobs": [
+   {
+    "core": true,
+    "id": "sensor_sync",
+    "name": "Sensor data sync",
+    "next_run_time": null,
+    "paused": false,
+    "trigger": "interval[3:00:00]"
+   },
+   {
+    "core": true,
+    "id": "check_all",
+    "name": "Check all clusters",
+    "next_run_time": null,
+    "paused": true,
+    "trigger": "cron[hour='*', minute='0']"
+   },
+   {
+    "core": true,
+    "id": "plant_health_snapshot",
+    "name": "Daily plant health snapshot",
+    "next_run_time": null,
+    "paused": false,
+    "trigger": "cron[hour='0', minute='30']"
+   },
+   {
+    "core": true,
+    "id": "sensor_anomaly",
+    "name": "Sensor anomaly scan",
+    "next_run_time": null,
+    "paused": false,
+    "trigger": "interval[0:15:00]"
+   },
+   {
+    "core": true,
+    "id": "device_health_monitor",
+    "name": "Device health monitor",
+    "next_run_time": null,
+    "paused": false,
+    "trigger": "interval[0:05:00]"
+   }
+  ],
+  "pending_jobs": [
+   {
+    "args": [],
+    "executor": "default",
+    "func_ref": "greenhouse_server.scheduler:_sync_job",
+    "id": "sensor_sync",
+    "kwargs": {},
+    "name": "Sensor data sync",
+    "pending": true,
+    "trigger": {
+     "end_date": null,
+     "interval_seconds": 10800.0,
+     "jitter": null,
+     "repr": "<IntervalTrigger (interval=datetime.timedelta(seconds=10800), start_date='2026-04-15 15:00:00 CEST', timezone='Europe/Rome')>",
+     "start_date": "2026-04-15T15:00:00+02:00",
+     "str": "interval[3:00:00]",
+     "timezone": "Europe/Rome",
+     "type": "IntervalTrigger"
+    }
+   },
+   {
+    "args": [],
+    "executor": "default",
+    "func_ref": "greenhouse_server.scheduler:_check_job",
+    "id": "check_all",
+    "kwargs": {},
+    "name": "Check all clusters",
+    "pending": true,
+    "trigger": {
+     "end_date": null,
+     "fields": [
+      [
+       "year",
+       "*",
+       true
+      ],
+      [
+       "month",
+       "*",
+       true
+      ],
+      [
+       "day",
+       "*",
+       true
+      ],
+      [
+       "week",
+       "*",
+       true
+      ],
+      [
+       "day_of_week",
+       "*",
+       true
+      ],
+      [
+       "hour",
+       "*",
+       false
+      ],
+      [
+       "minute",
+       "0",
+       false
+      ],
+      [
+       "second",
+       "0",
+       true
+      ]
+     ],
+     "jitter": null,
+     "repr": "<CronTrigger (hour='*', minute='0', timezone='Europe/Rome')>",
+     "start_date": null,
+     "str": "cron[hour='*', minute='0']",
+     "timezone": "Europe/Rome",
+     "type": "CronTrigger"
+    }
+   },
+   {
+    "args": [],
+    "executor": "default",
+    "func_ref": "greenhouse_server.scheduler:_health_snapshot_job",
+    "id": "plant_health_snapshot",
+    "kwargs": {},
+    "name": "Daily plant health snapshot",
+    "pending": true,
+    "trigger": {
+     "end_date": null,
+     "fields": [
+      [
+       "year",
+       "*",
+       true
+      ],
+      [
+       "month",
+       "*",
+       true
+      ],
+      [
+       "day",
+       "*",
+       true
+      ],
+      [
+       "week",
+       "*",
+       true
+      ],
+      [
+       "day_of_week",
+       "*",
+       true
+      ],
+      [
+       "hour",
+       "0",
+       false
+      ],
+      [
+       "minute",
+       "30",
+       false
+      ],
+      [
+       "second",
+       "0",
+       true
+      ]
+     ],
+     "jitter": null,
+     "repr": "<CronTrigger (hour='0', minute='30', timezone='Europe/Rome')>",
+     "start_date": null,
+     "str": "cron[hour='0', minute='30']",
+     "timezone": "Europe/Rome",
+     "type": "CronTrigger"
+    }
+   },
+   {
+    "args": [],
+    "executor": "default",
+    "func_ref": "greenhouse_server.scheduler:_anomaly_job",
+    "id": "sensor_anomaly",
+    "kwargs": {},
+    "name": "Sensor anomaly scan",
+    "pending": true,
+    "trigger": {
+     "end_date": null,
+     "interval_seconds": 900.0,
+     "jitter": null,
+     "repr": "<IntervalTrigger (interval=datetime.timedelta(seconds=900), start_date='2026-04-15 12:15:00 CEST', timezone='Europe/Rome')>",
+     "start_date": "2026-04-15T12:15:00+02:00",
+     "str": "interval[0:15:00]",
+     "timezone": "Europe/Rome",
+     "type": "IntervalTrigger"
+    }
+   },
+   {
+    "args": [],
+    "executor": "default",
+    "func_ref": "greenhouse_server.scheduler:_health_monitor_job",
+    "id": "device_health_monitor",
+    "kwargs": {},
+    "name": "Device health monitor",
+    "pending": true,
+    "trigger": {
+     "end_date": null,
+     "interval_seconds": 300.0,
+     "jitter": null,
+     "repr": "<IntervalTrigger (interval=datetime.timedelta(seconds=300), start_date='2026-04-15 12:05:00 CEST', timezone='Europe/Rome')>",
+     "start_date": "2026-04-15T12:05:00+02:00",
+     "str": "interval[0:05:00]",
+     "timezone": "Europe/Rome",
+     "type": "IntervalTrigger"
+    }
+   }
+  ],
+  "running_get_jobs": [
+   {
+    "core": true,
+    "id": "device_health_monitor",
+    "name": "Device health monitor",
+    "next_run_time": "2026-04-15 12:05:00+02:00",
+    "paused": false,
+    "trigger": "interval[0:05:00]"
+   },
+   {
+    "core": true,
+    "id": "sensor_anomaly",
+    "name": "Sensor anomaly scan",
+    "next_run_time": "2026-04-15 12:15:00+02:00",
+    "paused": false,
+    "trigger": "interval[0:15:00]"
+   },
+   {
+    "core": true,
+    "id": "sensor_sync",
+    "name": "Sensor data sync",
+    "next_run_time": "2026-04-15 15:00:00+02:00",
+    "paused": false,
+    "trigger": "interval[3:00:00]"
+   },
+   {
+    "core": true,
+    "id": "plant_health_snapshot",
+    "name": "Daily plant health snapshot",
+    "next_run_time": "2026-04-16 00:30:00+02:00",
+    "paused": false,
+    "trigger": "cron[hour='0', minute='30']"
+   },
+   {
+    "core": true,
+    "id": "check_all",
+    "name": "Check all clusters",
+    "next_run_time": null,
+    "paused": true,
+    "trigger": "cron[hour='*', minute='0']"
+   }
+  ],
+  "scheduler": {
+   "class": "BackgroundScheduler",
+   "job_defaults": {
+    "coalesce": true,
+    "max_instances": 1,
+    "misfire_grace_time": null
+   },
+   "timezone": "Europe/Rome"
+  },
+  "started_paused_state": 2,
+  "stored_jobs": [
+   {
+    "coalesce": true,
+    "executor": "default",
+    "func_ref": "greenhouse_server.scheduler:_health_monitor_job",
+    "id": "device_health_monitor",
+    "max_instances": 1,
+    "misfire_grace_time": null,
+    "next_run_time": "2026-04-15T12:05:00+02:00",
+    "pending": false
+   },
+   {
+    "coalesce": true,
+    "executor": "default",
+    "func_ref": "greenhouse_server.scheduler:_anomaly_job",
+    "id": "sensor_anomaly",
+    "max_instances": 1,
+    "misfire_grace_time": null,
+    "next_run_time": "2026-04-15T12:15:00+02:00",
+    "pending": false
+   },
+   {
+    "coalesce": true,
+    "executor": "default",
+    "func_ref": "greenhouse_server.scheduler:_sync_job",
+    "id": "sensor_sync",
+    "max_instances": 1,
+    "misfire_grace_time": null,
+    "next_run_time": "2026-04-15T15:00:00+02:00",
+    "pending": false
+   },
+   {
+    "coalesce": true,
+    "executor": "default",
+    "func_ref": "greenhouse_server.scheduler:_health_snapshot_job",
+    "id": "plant_health_snapshot",
+    "max_instances": 1,
+    "misfire_grace_time": null,
+    "next_run_time": "2026-04-16T00:30:00+02:00",
+    "pending": false
+   },
+   {
+    "coalesce": true,
+    "executor": "default",
+    "func_ref": "greenhouse_server.scheduler:_check_job",
+    "id": "check_all",
+    "max_instances": 1,
+    "misfire_grace_time": null,
+    "next_run_time": null,
+    "pending": false
+   }
+  ]
+ }
+}

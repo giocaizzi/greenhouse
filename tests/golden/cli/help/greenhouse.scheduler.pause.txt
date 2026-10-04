@@ -1,0 +1,12 @@
+
+ Usage: greenhouse scheduler pause [OPTIONS]
+
+ Pause the `check_all` scheduler job.
+
+ Stops automated cluster checks until `resume`. Other background jobs
+ (sensor sync, anomaly scan, plant-health snapshot) continue to run.
+ The pause is persisted, so it survives a server restart.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                                      │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

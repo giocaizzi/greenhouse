@@ -95,13 +95,8 @@ class FakeSensorAdapter(AbstractSensorAdapter):
             }
         )
     )
-    reading: dict = field(default_factory=lambda: {"temperature": 22.0, "soil_moisture": 50.0})
     health_state: DeviceHealthState = field(default_factory=_clean_health)
     calls: list[tuple] = field(default_factory=list)
-
-    def read_live(self, sensor: Sensor) -> dict:
-        self.calls.append(("read_live", sensor.id))
-        return dict(self.reading)
 
     def read_health(self, sensor: Sensor, latest=None) -> DeviceHealthState:
         self.calls.append(("read_health", sensor.id))

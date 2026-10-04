@@ -1,0 +1,23 @@
+<!-- GET /clusters/1/plants/2/chart-fragment?metric=env_humidity&hours=48 -->
+<!-- status: 200 -->
+<!-- content-type: text/html; charset=utf-8 -->
+
+<div id="chart-container-env_humidity" class="chart-container">
+  <canvas id="chart-env_humidity"></canvas>
+  <script type="application/json" id="chart-data-env_humidity">{"metric": "env_humidity", "hours": 48, "datasets": [{"sensor_id": 2, "sensor_name": "Alocasia Probe", "points": [[1776079800, 57.0], [1776087000, 56.0], [1776094200, 55.0], [1776101400, 57.0], [1776108600, 56.0], [1776115800, 55.0], [1776123000, 57.0], [1776130200, 56.0], [1776137400, 55.0], [1776144600, 57.0], [1776151800, 56.0], [1776159000, 55.0], [1776166200, 57.0], [1776173400, 56.0], [1776180600, 55.0], [1776187800, 57.0], [1776195000, 56.0], [1776202200, 55.0], [1776209400, 57.0], [1776216600, 56.0], [1776223800, 55.0], [1776231000, 57.0], [1776238200, 56.0], [1776245400, 55.0]]}], "events": [{"timestamp": 1776139200, "action": "start", "duration_minutes": 3}, {"timestamp": 1776139380, "action": "off", "duration_minutes": null}, {"timestamp": 1776218400, "action": "start", "duration_minutes": 2}, {"timestamp": 1776218520, "action": "off", "duration_minutes": null}], "threshold": {"min": 60.0, "max": 85.0, "source": "ideal_humidity"}}</script>
+  <script>
+    (function () {
+      var el = document.getElementById('chart-env_humidity');
+      var raw = document.getElementById('chart-data-env_humidity');
+      if (!el || !raw) return;
+      var data = JSON.parse(raw.textContent);
+      function draw() {
+        if (typeof window.renderIrrigationChart === 'function') {
+          window.renderIrrigationChart(el, data);
+        }
+      }
+      if (window.Chart) { draw(); }
+      else { window.addEventListener('load', draw); }
+    })();
+  </script>
+</div>

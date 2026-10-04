@@ -15,29 +15,52 @@ Both emit into the shared alert inbox via ``raise_alert``.
 import logging
 import statistics
 import time
+from typing import TYPE_CHECKING
 
-from greenhouse_core.models import Alert
+from greenhouse_core.constants import (
+    ANOMALY_LOOKBACK_HOURS,
+    ANOMALY_MIN_READINGS,
+    ANOMALY_MIN_STD,
+    ANOMALY_STALE_INTERVAL_MULTIPLIER,
+    ANOMALY_WINDOW_READINGS,
+    ANOMALY_Z_THRESHOLD,
+)
+from greenhouse_core.models import SOURCE_ANOMALY, Alert
 from greenhouse_core.repository import IrrigationRepository
-from greenhouse_server.services.alerts import SOURCE_ANOMALY, raise_alert
+from greenhouse_server.services.alerts import raise_alert
 from greenhouse_server.services.notify import NtfyClient
+
+if TYPE_CHECKING:
+    from greenhouse_core.models import Sensor, SensorReading
 
 logger = logging.getLogger(__name__)
 
-_MIN_READINGS = 10
-_WINDOW = 50
-_Z_THRESHOLD = 4.0
-_STALE_MULTIPLIER = 2.0
-# Minimum std to use for z-score; prevents false alarms on near-constant series
-# while still catching large absolute deviations (e.g. 95% vs 50% baseline).
-_MIN_STD = 1.0
+_MIN_TIMESTAMPS_FOR_GAP = 2  # a gap needs two points
 
 
 def _median_interval(timestamps: list[int]) -> float | None:
     """Return median gap between consecutive timestamps in seconds."""
-    if len(timestamps) < 2:
+    if len(timestamps) < _MIN_TIMESTAMPS_FOR_GAP:
         return None
     gaps = [timestamps[i + 1] - timestamps[i] for i in range(len(timestamps) - 1)]
     return statistics.median(gaps)
+
+
+def _latest_soil_zscore(window: "list[SensorReading]") -> tuple[float, float, float, float] | None:
+    """(latest, mean, std, z) of the newest soil reading against the rest; None with too few readings."""
+    soil_values = [r.soil_moisture for r in window if r.soil_moisture is not None]
+    if len(soil_values) < ANOMALY_MIN_READINGS:
+        return None
+
+    # DESC order → index 0 is most recent
+    latest_soil = soil_values[0]
+    # Exclude the latest from the baseline to avoid self-contamination
+    baseline = soil_values[1:]
+
+    mean = statistics.mean(baseline)
+    std = max(statistics.pstdev(baseline), ANOMALY_MIN_STD)
+    z = (latest_soil - mean) / std
+    return latest_soil, mean, std, z
 
 
 class SensorAnomalyService:
@@ -66,99 +89,105 @@ class SensorAnomalyService:
         alerts: list[Alert] = []
 
         for sensor in sensors:
-            readings = self._repo.get_recent_readings(sensor.id, hours=72)
-            # get_recent_readings returns DESC — take the most recent _WINDOW
-            window = readings[:_WINDOW]
+            readings = self._repo.get_recent_readings(sensor.id, hours=ANOMALY_LOOKBACK_HOURS)
+            # get_recent_readings returns DESC — take the most recent ANOMALY_WINDOW_READINGS
+            window = readings[:ANOMALY_WINDOW_READINGS]
 
-            if len(window) < _MIN_READINGS:
+            if len(window) < ANOMALY_MIN_READINGS:
                 continue
 
             # Ascending timestamps for interval computation
             timestamps_asc = sorted(r.timestamp for r in window)
             median_interval = _median_interval(timestamps_asc)
 
-            # ── Stale check ──────────────────────────────────────────────────
-            latest_ts = timestamps_asc[-1]
-            if median_interval and (now - latest_ts) > _STALE_MULTIPLIER * median_interval:
-                gap_seconds = now - latest_ts
-                alert = raise_alert(
-                    self._repo,
-                    notifier=self._notifier,
-                    source=SOURCE_ANOMALY,
-                    code="sensor_stale",
-                    severity="warning",
-                    title=f"Stale sensor: {sensor.name}",
-                    message=(
-                        f"{sensor.name}: no reading for {gap_seconds // 60:.0f} min "
-                        f"(expected every {median_interval / 60:.0f} min)"
-                    ),
-                    cluster_id=sensor.cluster_id,
-                    sensor_id=sensor.id,
-                    payload={
-                        "sensor_id": sensor.id,
-                        "sensor_name": sensor.name,
-                        "latest_ts": latest_ts,
-                        "gap_seconds": gap_seconds,
-                        "median_interval_s": median_interval,
-                    },
-                )
-                alerts.append(alert)
-                logger.warning(
-                    "Stale sensor %d (%s): silent for %.0fs, median interval %.0fs",
-                    sensor.id,
-                    sensor.name,
-                    gap_seconds,
-                    median_interval,
-                )
-
-            # ── Z-score drift check ──────────────────────────────────────────
-            soil_values = [r.soil_moisture for r in window if r.soil_moisture is not None]
-            if len(soil_values) < _MIN_READINGS:
-                continue
-
-            # DESC order → index 0 is most recent
-            latest_soil = soil_values[0]
-            # Exclude the latest from the baseline to avoid self-contamination
-            baseline = soil_values[1:]
-            if len(baseline) < _MIN_READINGS - 1:
-                continue
-
-            mean = statistics.mean(baseline)
-            std = max(statistics.pstdev(baseline), _MIN_STD)
-            z = (latest_soil - mean) / std
-
-            if abs(z) > _Z_THRESHOLD:
-                alert = raise_alert(
-                    self._repo,
-                    notifier=self._notifier,
-                    source=SOURCE_ANOMALY,
-                    code="sensor_drift",
-                    severity="warning",
-                    title=f"Sensor spike/drift: {sensor.name}",
-                    message=(
-                        f"{sensor.name}: soil moisture {latest_soil:.1f}% "
-                        f"is a {z:+.1f}σ outlier (mean={mean:.1f}%, std={std:.1f}%)"
-                    ),
-                    cluster_id=sensor.cluster_id,
-                    sensor_id=sensor.id,
-                    payload={
-                        "sensor_id": sensor.id,
-                        "sensor_name": sensor.name,
-                        "latest_value": latest_soil,
-                        "mean": mean,
-                        "std": std,
-                        "z": z,
-                        "median_interval_s": median_interval,
-                    },
-                )
-                alerts.append(alert)
-                logger.warning(
-                    "Sensor drift %d (%s): z=%.2f, latest=%.1f%%, mean=%.1f%%",
-                    sensor.id,
-                    sensor.name,
-                    z,
-                    latest_soil,
-                    mean,
-                )
+            # The stale check runs before the drift check, for every sensor.
+            stale = self._stale_alert(sensor, timestamps_asc, median_interval, now)
+            if stale is not None:
+                alerts.append(stale)
+            drift = self._drift_alert(sensor, window, median_interval)
+            if drift is not None:
+                alerts.append(drift)
 
         return alerts
+
+    def _stale_alert(
+        self, sensor: "Sensor", timestamps_asc: list[int], median_interval: float | None, now: int
+    ) -> Alert | None:
+        """Raise ``sensor_stale`` when the sensor has been silent for over twice its usual interval."""
+        latest_ts = timestamps_asc[-1]
+        if median_interval and (now - latest_ts) > ANOMALY_STALE_INTERVAL_MULTIPLIER * median_interval:
+            gap_seconds = now - latest_ts
+            alert = raise_alert(
+                self._repo,
+                notifier=self._notifier,
+                source=SOURCE_ANOMALY,
+                code="sensor_stale",
+                severity="warning",
+                title=f"Stale sensor: {sensor.name}",
+                message=(
+                    f"{sensor.name}: no reading for {gap_seconds // 60:.0f} min "
+                    f"(expected every {median_interval / 60:.0f} min)"
+                ),
+                cluster_id=sensor.cluster_id,
+                sensor_id=sensor.id,
+                payload={
+                    "sensor_id": sensor.id,
+                    "sensor_name": sensor.name,
+                    "latest_ts": latest_ts,
+                    "gap_seconds": gap_seconds,
+                    "median_interval_s": median_interval,
+                },
+            )
+            logger.warning(
+                "Stale sensor %d (%s): silent for %.0fs, median interval %.0fs",
+                sensor.id,
+                sensor.name,
+                gap_seconds,
+                median_interval,
+            )
+            return alert
+        return None
+
+    def _drift_alert(
+        self, sensor: "Sensor", window: "list[SensorReading]", median_interval: float | None
+    ) -> Alert | None:
+        """Raise ``sensor_drift`` when the latest soil reading is a > 4σ outlier against the window."""
+        stats = _latest_soil_zscore(window)
+        if stats is None:
+            return None
+        latest_soil, mean, std, z = stats
+
+        if abs(z) > ANOMALY_Z_THRESHOLD:
+            alert = raise_alert(
+                self._repo,
+                notifier=self._notifier,
+                source=SOURCE_ANOMALY,
+                code="sensor_drift",
+                severity="warning",
+                title=f"Sensor spike/drift: {sensor.name}",
+                message=(
+                    f"{sensor.name}: soil moisture {latest_soil:.1f}% "
+                    f"is a {z:+.1f}σ outlier (mean={mean:.1f}%, std={std:.1f}%)"
+                ),
+                cluster_id=sensor.cluster_id,
+                sensor_id=sensor.id,
+                payload={
+                    "sensor_id": sensor.id,
+                    "sensor_name": sensor.name,
+                    "latest_value": latest_soil,
+                    "mean": mean,
+                    "std": std,
+                    "z": z,
+                    "median_interval_s": median_interval,
+                },
+            )
+            logger.warning(
+                "Sensor drift %d (%s): z=%.2f, latest=%.1f%%, mean=%.1f%%",
+                sensor.id,
+                sensor.name,
+                z,
+                latest_soil,
+                mean,
+            )
+            return alert
+        return None

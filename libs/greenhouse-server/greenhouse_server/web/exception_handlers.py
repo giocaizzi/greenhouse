@@ -1,14 +1,16 @@
-"""HX-aware exception handler that renders HTML errors for web routes.
+"""HX-aware exception handlers that render HTML errors for web routes.
 
-API routes keep their default JSON error responses — we only intervene when
-the request looks like a browser/HTMX call (Accept: text/html or HX-Request:
-true) AND is not under /api/v1.
+The choice is made by path: ``/api/…`` and ``/mcp`` keep JSON error bodies;
+every other path gets the HTML error page — the bare ``_error.html`` partial
+for HTMX requests (``HX-Request: true``), the full layout otherwise. The
+``Accept`` header is not consulted.
 """
 
 from __future__ import annotations
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse, Response
 
 from greenhouse_server.auth import _RedirectAuthError, render_login_redirect
 from greenhouse_server.web.context import base_context, is_hx
@@ -20,7 +22,7 @@ def _is_html_request(request: Request) -> bool:
     # as HTML. /mcp is a machine endpoint — MCP clients (and the auth gate in
     # front of it) must always see structured JSON errors, never an HTML page.
     path = request.url.path
-    return not (path.startswith("/api/") or path.startswith("/mcp"))
+    return not path.startswith(("/api/", "/mcp"))
 
 
 def _error_template(request: Request) -> str:
@@ -30,8 +32,11 @@ def _error_template(request: Request) -> str:
 
 
 def register_web_exception_handlers(app: FastAPI) -> None:
+    """Install the HTTPException and validation handlers that render HTML for web paths, JSON elsewhere."""
+
     @app.exception_handler(HTTPException)
-    async def handle_http_exc(request: Request, exc: HTTPException):
+    async def handle_http_exc(request: Request, exc: HTTPException) -> Response:
+        """Render an HTTPException: login redirect sentinel, JSON for /api and /mcp, else the HTML error page."""
         # Auth redirect sentinel — always convert to a 303 to /login, even on
         # API paths so a stale browser tab fetching /api/v1 also gets bounced
         # to the form. CLI clients should be using the bearer header, not
@@ -39,8 +44,6 @@ def register_web_exception_handlers(app: FastAPI) -> None:
         if isinstance(exc, _RedirectAuthError):
             return render_login_redirect(exc, request)
         if not _is_html_request(request):
-            from fastapi.responses import JSONResponse
-
             return JSONResponse({"detail": exc.detail}, status_code=exc.status_code)
         return templates.TemplateResponse(
             request,
@@ -50,10 +53,9 @@ def register_web_exception_handlers(app: FastAPI) -> None:
         )
 
     @app.exception_handler(RequestValidationError)
-    async def handle_validation(request: Request, exc: RequestValidationError):
+    async def handle_validation(request: Request, exc: RequestValidationError) -> Response:
+        """Render a request-validation error: JSON 422 for /api and /mcp, else the HTML error page."""
         if not _is_html_request(request):
-            from fastapi.responses import JSONResponse
-
             return JSONResponse({"detail": exc.errors()}, status_code=422)
         return templates.TemplateResponse(
             request,

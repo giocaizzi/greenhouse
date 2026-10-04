@@ -1,0 +1,61 @@
+{
+ "body_lines": [
+  ""
+ ],
+ "db_effect": {
+  "activity_events": {
+   "added": [
+    {
+     "code": "sensor_reassigned",
+     "entity_id": 1,
+     "entity_type": "sensor",
+     "id": 5,
+     "message": "reassigned sensor 1 from plant 1 to plant None",
+     "payload_json": "{\"from_plant_id\": 1, \"to_plant_id\": null}",
+     "severity": "info",
+     "source": "sensor",
+     "timestamp": 1776247200
+    }
+   ]
+  },
+  "sensor_assignments": {
+   "changed": {
+    "1": {
+     "ended_at": [
+      null,
+      1776247200
+     ]
+    }
+   }
+  },
+  "sensors": {
+   "changed": {
+    "1": {
+     "plant_id": [
+      1,
+      null
+     ]
+    }
+   }
+  }
+ },
+ "device_calls": {
+  "irrigator": [],
+  "sensor": []
+ },
+ "headers": {
+  "location": "/clusters/1#sensors"
+ },
+ "request": {
+  "form": {
+   "name": "Monstera Probe",
+   "plant_id": "",
+   "type": "tuya.tr301z"
+  },
+  "headers": {},
+  "method": "POST",
+  "url": "/clusters/1/sensors/1/edit"
+ },
+ "status": 303,
+ "templates": []
+}

@@ -1,25 +1,11 @@
 """Forecast route: next-irrigation prediction per cluster."""
 
-from typing import Annotated
-
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter
 
 from greenhouse_core.schemas import ForecastResponse
-from greenhouse_server.deps import PlantDbDep, RepoDep, WeatherClientDep, require_cluster
-from greenhouse_server.services.forecast import ForecastService
+from greenhouse_server.deps import ForecastServiceDep, RepoDep, require_cluster
 
 router = APIRouter(tags=["operations"])
-
-
-def get_forecast_service(
-    repo: RepoDep,
-    plant_db: PlantDbDep,
-    weather: WeatherClientDep,
-) -> ForecastService:
-    return ForecastService(repo, plant_db, weather_client=weather)
-
-
-ForecastServiceDep = Annotated[ForecastService, Depends(get_forecast_service)]
 
 
 @router.get("/clusters/{cluster_id}/forecast", response_model=ForecastResponse)

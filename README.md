@@ -27,12 +27,12 @@ uv run greenhouse check --all   # check all clusters
 ## How it decides
 
 1. **Reads** sensor data from Tuya Cloud, synced to a local SQLite archive.
-2. **Decides** using a typed `IrrigationDecision` pipeline: cooldown check, stress detection, multi-sensor conflict resolution, trend analysis, preferred irrigation windows, evidence-based moisture targets. Every evaluation produces a structured `Reason` trail and is persisted whether or not it was acted on.
-3. **Acts** by controlling Tuya irrigators over local protocol v3.5.
+2. **Decides** using a typed `IrrigationDecision` pipeline: leak hold, cooldown, quiet hours, weather skip, stress detection, per-cluster irrigation windows, multi-sensor conflict resolution (the driest plant drives the call), trend and seasonal adjustments, vacation rationing, evidence-based moisture targets. Every evaluation produces a structured `Reason` trail and is persisted whether or not it was acted on.
+3. **Acts** on Tuya irrigators local-first over protocol v3.5 (run length and the dry-run safety read are local; the on/off switch pulse goes through the Tuya Cloud API, with a local keep-alive fallback). A pump watcher stops a run that goes dry, and a post-irrigation leak check holds the cluster on a suspected stuck valve.
 4. **Learns** — builds per-plant absorption/drainage profiles; raises advisory alerts (blocked drip, rapid drainage, chronic underwatering, unresolvable conflict). Learning never blocks decisions.
 5. **Persists** sensor readings, irrigation events, decision logs, alerts, activity events, and sensor-to-plant assignment history in a local SQLite archive. Tuya Cloud is the live source; SQLite is the permanent record.
 
-The `irrigation_windows` table holds per-cluster preferred watering hours (with a weekday bitmask) so the engine waters in the morning by default; stress overrides still fire outside windows. The `sensor_assignments` table records every time a probe is moved between plants, so historical readings remain attributed to the plant they were actually measuring — not whichever plant the sensor currently points at.
+The `irrigation_windows` table holds optional per-cluster allowed watering hours (with a weekday bitmask): with windows configured the engine skips outside them (stress overrides still fire); with none, every hour is allowed. Night protection comes from quiet hours, which a fresh install seeds at 00:00–05:00 local. The `sensor_assignments` table records every time a probe is moved between plants, so historical readings remain attributed to the plant they were actually measuring — not whichever plant the sensor currently points at.
 
 ## Interfaces — four ways in, one source of truth
 
@@ -88,9 +88,12 @@ cp .env.example .env
 | `IRRIGATION_AUTH_ENABLED` | No | Set to `false` to disable API/Web auth in local dev. Default: `true`. |
 | `IRRIGATION_DB_URL` | No | SQLite URL (default: `sqlite:///data/irrigation.db`) |
 | `IRRIGATION_SERVER_URL` | No | CLI server URL (default: `http://localhost:8000`) |
-| `IRRIGATION_CHECK_CRON_HOURS` | No | Cron `hour` field for the `check_all` job, e.g. `*`, `0,6,12,18`, `*/3`, `6-20/2` (default: `*` = hourly at :00). Validated at startup; an invalid expression stops the server with an error naming the variable. When set (even to `*`) it always overrides `IRRIGATION_CHECK_INTERVAL_HOURS`. |
-| `IRRIGATION_CHECK_INTERVAL_HOURS` | No | **Deprecated.** Used only when `IRRIGATION_CHECK_CRON_HOURS` is unset; translated to `*/N`, so N must be 1–23 and divide 24 (1, 2, 3, 4, 6, 8, 12) — anything else stops the server with a suggested `IRRIGATION_CHECK_CRON_HOURS` value. |
+| `IRRIGATION_CHECK_CRON_HOURS` | No | Cron `hour` field for the `check_all` job, e.g. `*`, `0,6,12,18`, `*/3`, `6-20/2` (default: `*` = hourly at :00). Validated at startup; an invalid expression stops the server with an error naming the variable. (The old `IRRIGATION_CHECK_INTERVAL_HOURS` is no longer read — an `.env` that still sets it silently gets hourly checks; write `*/N` here instead.) |
 | `IRRIGATION_SYNC_INTERVAL_MINUTES` | No | Minutes between Tuya Cloud sensor syncs (default: `180`). Must be > 0. |
+| `IRRIGATION_ENABLE_SCHEDULER` | No | Set to `false` to run without background jobs (no automatic checks, syncs or health polls). Default: `true`. |
+| `IRRIGATION_PLANT_DB_PATH` | No | Alternative `plant_database.json` (default: the copy shipped in `greenhouse-core`). |
+| `IRRIGATION_WEATHER_LAT` / `IRRIGATION_WEATHER_LON` | No | Location for Open-Meteo forecasts (default: Milan). |
+| `GREENHOUSE_NTFY_SERVER_URL` / `GREENHOUSE_NTFY_TOPIC` / `GREENHOUSE_NTFY_TOKEN` | No | Push notifications via [ntfy](https://ntfy.sh); unset → no pushes. Which categories fire is a per-user preference. |
 
 ### Usage
 
@@ -101,7 +104,7 @@ uv run greenhouse-server
 # Set up a cluster
 uv run greenhouse cluster add "Living Room" --environment indoor
 uv run greenhouse plant add "Monstera deliciosa" --cluster 1
-uv run greenhouse sensor add --cluster 1 --device-id YOUR_DEVICE_ID --name "Monstera Sensor" --type soil_moisture
+uv run greenhouse sensor add --cluster 1 --device-id YOUR_DEVICE_ID --name "Monstera Sensor" --type tuya.tr301z
 
 # Operations
 uv run greenhouse status 1          # full cluster overview
@@ -118,7 +121,7 @@ uv run greenhouse tui                                   # local server
 greenhouse --server http://greenhouse.lan:8000 tui      # any reachable server
 ```
 
-A full-screen dashboard in the terminal that covers the whole system: animated pixel-art plants that wilt, sparkle and get rained on as moisture changes; live charts, overlay and heatmap; decision trails, forecast, insights, learning report and efficacy; alerts, activity, data quality and system health; and every action and edit — irrigate / water-now / stop / check / sync, clusters, plants, sensors, irrigators, windows, config, vacation and preferences — behind forms and confirmation dialogs. Press `d` `a` `l` `s` `o` to switch screens, `/` to search, `enter` to open a cluster, `?` for keys, `q` to quit.
+A full-screen dashboard in the terminal that covers the whole system: animated pixel-art plants that wilt, sparkle and get rained on as moisture changes; live charts, overlay and heatmap; decision trails, forecast, insights, learning report and efficacy; alerts, activity, data quality and system health; and every action and edit — irrigate / water-now / stop / check / sync, clusters, plants, sensors, irrigators, windows, config, vacation and preferences — mostly behind forms and confirmation dialogs (sensor / plant-DB sync, health snapshot, alert acknowledge / resolve and scheduler resume run on the key press). Press `d` `a` `l` `s` `o` to switch screens, `/` to search, `enter` to open a cluster, `?` for keys, `q` to quit.
 
 To use it from another machine, install just the client (it has no server dependencies and talks HTTP only):
 
@@ -137,12 +140,18 @@ Same data is also available via:
 ## Development
 
 ```bash
-make check      # lint + test
-make test       # uv run pytest
-make lint       # uv run ruff check libs/ tests/
-make format     # uv run ruff format libs/ tests/
-make coverage   # pytest with coverage (60% threshold)
+make check         # full local gate: pre-commit + import contracts + strict types + size limits + coverage
+make test          # uv run pytest  (add -n auto for parallel runs via pytest-xdist)
+make lint          # uv run ruff check libs/ tests/
+make format        # uv run ruff format libs/ tests/
+make lint-imports  # import-linter layering contracts
+make typecheck     # mypy --strict over the strict module list
+make sizecheck     # function / file size limits
+make coverage      # pytest with coverage (60% threshold)
+make help          # every target
 ```
+
+The suite includes golden (characterization) tests under `tests/golden/`; regenerating them (`GOLDEN_UPDATE=1`) is reserved for commits that intentionally change the pinned behavior — see AGENTS.md.
 
 See [AGENTS.md](AGENTS.md) for full developer guide, package structure, and testing conventions.
 

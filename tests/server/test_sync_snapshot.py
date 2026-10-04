@@ -23,14 +23,14 @@ def cluster_with_two_sensors(tmp_db):
         cluster_id=cluster_id,
         tuya_device_id="fake_sensor_dry",
         name="Dry Plant Sensor",
-        sensor_type="soil_moisture",
+        sensor_type="tuya.tr301z",
         config={},
     )
     wet_id = tmp_db.add_sensor(
         cluster_id=cluster_id,
         tuya_device_id="fake_sensor_wet",
         name="Wet Plant Sensor",
-        sensor_type="soil_moisture",
+        sensor_type="tuya.tr301z",
         config={},
     )
     return cluster_id, dry_id, wet_id

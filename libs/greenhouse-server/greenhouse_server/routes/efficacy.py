@@ -4,7 +4,7 @@ from fastapi import APIRouter, Query
 
 from greenhouse_core.schemas import EfficacyListResponse
 from greenhouse_server.deps import RepoDep, require_cluster
-from greenhouse_server.services.efficacy import score_cluster
+from greenhouse_server.services.efficacy import EFFICACY_DEFAULT_DAYS, EFFICACY_MAX_DAYS, score_cluster
 
 router = APIRouter(tags=["operations"])
 
@@ -13,7 +13,7 @@ router = APIRouter(tags=["operations"])
 def cluster_efficacy(
     cluster_id: int,
     repo: RepoDep,
-    days: int = Query(default=14, ge=1),
+    days: int = Query(default=EFFICACY_DEFAULT_DAYS, ge=1, le=EFFICACY_MAX_DAYS),
 ) -> EfficacyListResponse:
     """Score completed irrigation events by post-irrigation soil-moisture rise.
 
@@ -26,7 +26,7 @@ def cluster_efficacy(
 
     Args:
         cluster_id: Cluster to score.
-        days: Look-back window in days (default 14).
+        days: Look-back window in days (default 14, at most 365).
 
     Returns:
         EfficacyListResponse with one EfficacyItemResponse per qualifying event,

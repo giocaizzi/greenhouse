@@ -100,7 +100,7 @@ def seed_greenhouse(http: TestClient, engine) -> None:
                     json={
                         "tuya_device_id": f"fake_sensor_{sensor_no:03d}",
                         "name": f"{species.split()[0]} probe",
-                        "type": "soil_moisture",
+                        "type": "tuya.tr301z",
                         "plant_id": pid,
                     },
                 )
@@ -112,7 +112,7 @@ def seed_greenhouse(http: TestClient, engine) -> None:
                     json={
                         "tuya_device_id": f"fake_irrigator_{c_idx:03d}",
                         "name": f"{cluster['name']} pump",
-                        "type": "tuya_cloud",
+                        "type": "rainpoint.ik10pw",
                     },
                 )
                 assert resp.status_code == 201, resp.text

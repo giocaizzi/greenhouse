@@ -1,0 +1,55 @@
+{
+ "body_lines": [
+  "<div class=\"irr-result irr-result--err\" role=\"alert\">",
+  "  ",
+  "    <span class=\"badge-danger\">",
+  "      <svg class=\"icon\" style=\"width:11px;height:11px;\" aria-hidden=\"true\"><use href=\"/static/icons/sprite.svg#i-x\"></use></svg>",
+  "      stop failed",
+  "    </span>",
+  "  ",
+  "  <small class=\"muted\">fake stop failed</small>",
+  "</div>"
+ ],
+ "db_effect": {},
+ "device_calls": {
+  "irrigator": [
+   [
+    "stop",
+    1
+   ]
+  ],
+  "sensor": []
+ },
+ "headers": {
+  "content-type": "text/html; charset=utf-8"
+ },
+ "request": {
+  "form": null,
+  "headers": {
+   "HX-Request": "true"
+  },
+  "method": "POST",
+  "url": "/irrigators/1/stop"
+ },
+ "status": 200,
+ "templates": [
+  [
+   "partials/_irrigator_action_result.html",
+   [
+    "action",
+    "active_vacation",
+    "app_version",
+    "auth_enabled",
+    "dry_run_global",
+    "is_hx",
+    "message",
+    "now_text",
+    "request",
+    "scheduler_paused",
+    "show_chrome",
+    "success",
+    "theme"
+   ]
+  ]
+ ]
+}

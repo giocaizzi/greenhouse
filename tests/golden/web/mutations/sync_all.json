@@ -1,0 +1,66 @@
+{
+ "body_lines": [
+  "<article class=\"card card--flush result-panel\">",
+  "  <div class=\"card__head\">",
+  "    <div class=\"row\" style=\"gap: var(--sp-3);\">",
+  "      <span class=\"badge-ok\">",
+  "        <svg class=\"icon icon--xs\" aria-hidden=\"true\"><use href=\"/static/icons/sprite.svg#i-check\"></use></svg>",
+  "        Synced",
+  "      </span>",
+  "      <h3 class=\"card__title\">Sync result</h3>",
+  "    </div>",
+  "  </div>",
+  "  <div class=\"card__body\">",
+  "    ",
+  "      <p>",
+  "        <span class=\"mono\">0</span> readings",
+  "        <small class=\"muted\">(0 new · 0 live)</small>",
+  "      </p>",
+  "    ",
+  "    ",
+  "      <details>",
+  "        <summary><span class=\"badge-warning\">1 error</span></summary>",
+  "        <ul><li>No cloud connection</li></ul>",
+  "      </details>",
+  "    ",
+  "  </div>",
+  "</article>"
+ ],
+ "db_effect": {},
+ "device_calls": {
+  "irrigator": [],
+  "sensor": []
+ },
+ "headers": {
+  "content-type": "text/html; charset=utf-8"
+ },
+ "request": {
+  "form": {
+   "hours": "6"
+  },
+  "headers": {
+   "HX-Request": "true"
+  },
+  "method": "POST",
+  "url": "/sync"
+ },
+ "status": 200,
+ "templates": [
+  [
+   "partials/_sync_result.html",
+   [
+    "active_vacation",
+    "app_version",
+    "auth_enabled",
+    "dry_run_global",
+    "is_hx",
+    "now_text",
+    "request",
+    "result",
+    "scheduler_paused",
+    "show_chrome",
+    "theme"
+   ]
+  ]
+ ]
+}

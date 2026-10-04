@@ -1,0 +1,38 @@
+{
+ "alerts": [
+  {
+   "acknowledged_at": null,
+   "cluster_id": 1,
+   "code": "sensor_stale",
+   "dedup_key": "anomaly::sensor_stale::1::sensor1",
+   "entity_id": 1,
+   "entity_type": "sensor",
+   "first_seen_at": 1776247200,
+   "id": 1,
+   "last_seen_at": 1776247200,
+   "message": "Sensor 1: no reading for 300 min (expected every 60 min)",
+   "occurrence_count": 1,
+   "payload_json": {
+    "gap_seconds": 18000,
+    "latest_ts": 1776229200,
+    "median_interval_s": 3600,
+    "sensor_id": 1,
+    "sensor_name": "Sensor 1"
+   },
+   "plant_id": null,
+   "resolved_at": null,
+   "severity": "warning",
+   "source": "anomaly",
+   "status": "open",
+   "title": "Stale sensor: Sensor 1"
+  }
+ ],
+ "notifications": [
+  {
+   "kind": "alert",
+   "message": "Sensor 1: no reading for 300 min (expected every 60 min)",
+   "severity": "warning",
+   "title": "Stale sensor: Sensor 1"
+  }
+ ]
+}

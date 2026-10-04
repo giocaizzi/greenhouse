@@ -1,0 +1,41 @@
+{
+ "body_lines": [
+  ""
+ ],
+ "db_effect": {
+  "plants": {
+   "added": [
+    {
+     "category": null,
+     "cluster_id": 3,
+     "id": 4,
+     "ideal_humidity_max": null,
+     "ideal_humidity_min": null,
+     "ideal_temp_max": null,
+     "ideal_temp_min": null,
+     "light_needs": null,
+     "notes": null,
+     "species": "Unknown fern",
+     "water_needs": null
+    }
+   ]
+  }
+ },
+ "device_calls": {
+  "irrigator": [],
+  "sensor": []
+ },
+ "headers": {
+  "location": "/clusters/3#plants"
+ },
+ "request": {
+  "form": {
+   "species": "Unknown fern"
+  },
+  "headers": {},
+  "method": "POST",
+  "url": "/clusters/3/plants"
+ },
+ "status": 303,
+ "templates": []
+}

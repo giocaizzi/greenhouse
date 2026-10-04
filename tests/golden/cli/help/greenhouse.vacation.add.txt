@@ -1,0 +1,18 @@
+
+ Usage: greenhouse vacation add [OPTIONS]
+
+ Schedule a vacation window during which the engine will hold.
+
+ Args:
+ starts_at: Unix timestamp (seconds) for the window start.
+ ends_at: Unix timestamp (seconds) for the window end.
+ email: Optional contact for alerts raised while you're away.
+ notes: Optional free-text notes.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  --starts-at        <int>  Window start as Unix timestamp (seconds) [required]                 │
+│ *  --ends-at          <int>  Window end as Unix timestamp (seconds) [required]                   │
+│    --email            <str>  Contact email to surface in alerts                                  │
+│    --notes            <str>  Free-text notes                                                     │
+│    --help                    Show this message and exit.                                         │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

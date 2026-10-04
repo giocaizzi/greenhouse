@@ -39,7 +39,7 @@ class TestSystemHealthPulse:
             client.post("/api/v1/clusters", json={"name": "Fresh Cluster"})
             client.post(
                 "/api/v1/clusters/1/sensors",
-                json={"tuya_device_id": "fake_fresh_001", "name": "Fresh Sensor", "type": "soil_moisture"},
+                json={"tuya_device_id": "fake_fresh_001", "name": "Fresh Sensor", "type": "tuya.tr301z"},
             )
 
             from sqlalchemy.orm import Session
@@ -68,7 +68,7 @@ class TestSystemHealthPulse:
             client.post("/api/v1/clusters", json={"name": "Stale Cluster"})
             client.post(
                 "/api/v1/clusters/1/sensors",
-                json={"tuya_device_id": "fake_stale_002", "name": "Stale Sensor", "type": "soil_moisture"},
+                json={"tuya_device_id": "fake_stale_002", "name": "Stale Sensor", "type": "tuya.tr301z"},
             )
 
             from sqlalchemy.orm import Session
@@ -115,7 +115,7 @@ class TestSystemHealthPulse:
             client.post("/api/v1/clusters", json={"name": "Alert Cluster"})
             client.post(
                 "/api/v1/clusters/1/sensors",
-                json={"tuya_device_id": "fake_alert_sensor", "name": "Alert Sensor", "type": "soil_moisture"},
+                json={"tuya_device_id": "fake_alert_sensor", "name": "Alert Sensor", "type": "tuya.tr301z"},
             )
 
             from sqlalchemy.orm import Session

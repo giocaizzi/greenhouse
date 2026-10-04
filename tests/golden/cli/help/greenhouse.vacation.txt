@@ -1,0 +1,14 @@
+
+ Usage: greenhouse vacation [OPTIONS] COMMAND [ARGS]...
+
+ Manage vacation windows (engine holds during these)
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                                      │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────────────────────────╮
+│ list    List vacation windows together with the active one (if any).                             │
+│ add     Schedule a vacation window during which the engine will hold.                            │
+│ update  Patch a vacation window. Only supplied fields are sent.                                  │
+│ delete  Remove a vacation window.                                                                │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

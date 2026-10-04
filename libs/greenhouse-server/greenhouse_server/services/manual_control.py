@@ -4,21 +4,25 @@ Both front doors (``POST /api/v1/irrigators/{id}/start|stop|log-manual`` and
 the web ``/irrigators/{id}/start|stop|log-manual`` actions) call these
 functions, so a manual action always gets the same rails no matter where it
 came from: per-day caps, the dry-run pump watcher, the event row, and the
-notification. (The web routes used to drive the adapter directly — or, for
-log-manual, record an ``action="manual"`` row that cooldown, caps and
-learning never counted — and skipped all of them.)
+notification. A manual log is recorded as a ``start`` row so cooldown, caps
+and learning count it like any other run.
 
 Errors are raised as :class:`ManualActionError` carrying the HTTP status the
 JSON API returns; each route maps it to its own response shape.
 """
 
 import time
+from typing import TYPE_CHECKING
 
+from greenhouse_core.constants import DAILY_CAP_WINDOW_HOURS
 from greenhouse_core.devices import DeviceRegistry, UnknownDeviceModel
-from greenhouse_core.models import Irrigator
+from greenhouse_core.models import EVENT_ACTION_START, EVENT_ACTION_STOP, TRIGGERED_BY_MANUAL, Irrigator
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.services.irrigation import schedule_pump_watcher
 from greenhouse_server.services.notify import NtfyClient, maybe_notify
+
+if TYPE_CHECKING:
+    from greenhouse_core.devices import AbstractIrrigatorAdapter
 
 
 class ManualActionError(Exception):
@@ -59,7 +63,11 @@ def check_rate_limits(repo: IrrigationRepository, cluster_id: int, irrigator_id:
         # Count "start" events in the last 24 h for the cluster's single irrigator.
         irrigator = repo.get_irrigator_for_cluster(cluster_id)
         total_starts = (
-            sum(1 for e in repo.get_recent_events(irrigator.id, hours=24) if e.action == "start")
+            sum(
+                1
+                for e in repo.get_recent_events(irrigator.id, hours=DAILY_CAP_WINDOW_HOURS)
+                if e.action == EVENT_ACTION_START
+            )
             if irrigator is not None
             else 0
         )
@@ -67,13 +75,13 @@ def check_rate_limits(repo: IrrigationRepository, cluster_id: int, irrigator_id:
             raise ManualActionError(409, "cluster max_events_per_day reached")
 
     if config.daily_cap_minutes is not None:
-        recent = repo.get_recent_events(irrigator_id, hours=24)
-        minutes_used = sum(e.duration_minutes or 0 for e in recent if e.action == "start")
+        recent = repo.get_recent_events(irrigator_id, hours=DAILY_CAP_WINDOW_HOURS)
+        minutes_used = sum(e.duration_minutes or 0 for e in recent if e.action == EVENT_ACTION_START)
         if minutes_used + requested > config.daily_cap_minutes:
             raise ManualActionError(409, "irrigator daily cap reached")
 
 
-def _adapter(registry: DeviceRegistry | None, irrigator: Irrigator):
+def _adapter(registry: DeviceRegistry | None, irrigator: Irrigator) -> "AbstractIrrigatorAdapter":
     if registry is None:
         raise ManualActionError(503, "No device registry (missing Tuya credentials)")
     try:
@@ -95,7 +103,9 @@ def manual_start(
 
     Order: registry → caps check → adapter → device start → ``start`` event (committed) → dry-run
     watcher (only with a duration — it needs a deadline) → notification. A
-    failed device start records nothing, matching the JSON API.
+    failed device start records nothing, matching the JSON API. Commits because
+    the ``start`` event must be durable before the side effects that follow it
+    (the watcher job, which runs in its own session, and the notification).
 
     Args:
         repo: Active repository session (committed here on success).
@@ -123,21 +133,21 @@ def manual_start(
     started_at = int(time.time())
     repo.add_irrigation_event(
         irrigator_id=irrigator.id,
-        action="start",
+        action=EVENT_ACTION_START,
         duration_minutes=minutes,
-        triggered_by="manual",
+        triggered_by=TRIGGERED_BY_MANUAL,
         notes=f"Manual start via {via} ({minutes} min)" if minutes else f"Manual start via {via}",
         timestamp=started_at,
     )
-    repo.session.commit()
+    repo.commit()
     if minutes:
-        schedule_pump_watcher(irrigator.id, minutes, started_at, triggered_by="manual")
+        schedule_pump_watcher(irrigator.id, minutes, started_at, triggered_by=TRIGGERED_BY_MANUAL)
     maybe_notify(
         notifier,
         repo.get_preferences(),
         "manual",
-        lambda: notifier.notify_irrigation(
-            triggered_by="manual",
+        lambda n: n.notify_irrigation(
+            triggered_by=TRIGGERED_BY_MANUAL,
             irrigator_name=irrigator.name,
             duration_minutes=minutes,
             detail="started",
@@ -154,7 +164,10 @@ def manual_stop(
     *,
     via: str,
 ) -> str:
-    """Stop ``irrigator`` by hand: device stop → ``off`` event → notification.
+    """Stop ``irrigator`` by hand: device stop → ``stop`` event (committed) → notification.
+
+    Commits because the device has already stopped: the event records a hardware
+    side effect and must be durable before the notification goes out.
 
     Args:
         repo: Active repository session (committed here on success).
@@ -176,17 +189,17 @@ def manual_stop(
 
     repo.add_irrigation_event(
         irrigator_id=irrigator.id,
-        action="off",
-        triggered_by="manual",
+        action=EVENT_ACTION_STOP,
+        triggered_by=TRIGGERED_BY_MANUAL,
         notes=f"Manual stop via {via}",
     )
-    repo.session.commit()
+    repo.commit()
     maybe_notify(
         notifier,
         repo.get_preferences(),
         "manual",
-        lambda: notifier.notify_irrigation(
-            triggered_by="manual",
+        lambda n: n.notify_irrigation(
+            triggered_by=TRIGGERED_BY_MANUAL,
             irrigator_name=irrigator.name,
             detail="stopped",
         ),
@@ -205,7 +218,8 @@ def manual_log(
 
     Recorded as a ``start`` event (``triggered_by="manual"``) so the cooldown,
     per-day caps, learning and efficacy all see it, exactly like a manual
-    start; the per-day caps apply.
+    start; the per-day caps apply. Commits before notifying, like
+    :func:`manual_start`, so the push never announces an unsaved event.
 
     Args:
         repo: Active repository session (committed here on success).
@@ -223,18 +237,18 @@ def manual_log(
     check_rate_limits(repo, irrigator.cluster_id, irrigator.id, minutes)
     event_id = repo.add_irrigation_event(
         irrigator_id=irrigator.id,
-        action="start",
+        action=EVENT_ACTION_START,
         duration_minutes=minutes,
-        triggered_by="manual",
+        triggered_by=TRIGGERED_BY_MANUAL,
         notes=notes or f"Manual ({minutes} min)",
     )
-    repo.session.commit()
+    repo.commit()
     maybe_notify(
         notifier,
         repo.get_preferences(),
         "manual",
-        lambda: notifier.notify_irrigation(
-            triggered_by="manual",
+        lambda n: n.notify_irrigation(
+            triggered_by=TRIGGERED_BY_MANUAL,
             irrigator_name=irrigator.name,
             duration_minutes=minutes,
             detail="logged (watered by hand)",

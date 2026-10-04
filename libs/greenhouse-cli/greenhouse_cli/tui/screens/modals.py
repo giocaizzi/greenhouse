@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from typing import Any, ClassVar
+
 from textual.app import ComposeResult
+from textual.binding import BindingType
 from textual.containers import Grid, Horizontal, Vertical
 from textual.screen import ModalScreen
 from textual.widgets import Button, Checkbox, Input, Label, Static
@@ -11,9 +14,18 @@ from greenhouse_cli.tui.sprites import watering_can_sprite
 
 
 class ConfirmScreen(ModalScreen[bool]):
-    """Yes/no confirmation — every actuating action goes through this."""
+    """Yes/no confirmation for check / check-all, stop / stop-all, every delete and scheduler pause.
 
-    BINDINGS = [("escape", "dismiss(False)", "Cancel"), ("y", "dismiss(True)", "Yes"), ("n", "dismiss(False)", "No")]
+    Not every actuating key comes here: irrigate and water-now open their own dialogs, and syncs,
+    the health snapshot, scheduler resume, alert ack / resolve / re-scan and logout run on the key press
+    (see ``tests/golden/tui/actuation.json``).
+    """
+
+    BINDINGS: ClassVar[list[BindingType]] = [
+        ("escape", "dismiss(False)", "Cancel"),
+        ("y", "dismiss(True)", "Yes"),
+        ("n", "dismiss(False)", "No"),
+    ]
 
     def __init__(self, message: str, confirm_label: str = "Confirm", danger: bool = True) -> None:
         super().__init__()
@@ -22,6 +34,7 @@ class ConfirmScreen(ModalScreen[bool]):
         self.danger = danger
 
     def compose(self) -> ComposeResult:
+        """Render the question with confirm (red when dangerous) and cancel buttons."""
         with Vertical(classes="dialog"):
             yield Static(self.message, classes="dialog-message")
             with Horizontal(classes="dialog-buttons"):
@@ -29,22 +42,25 @@ class ConfirmScreen(ModalScreen[bool]):
                 yield Button("Cancel", id="cancel")
 
     def on_mount(self) -> None:
+        """Focus Cancel so a stray Enter never confirms an actuation."""
         self.query_one("#cancel", Button).focus()
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Dismiss with ``True`` only for the confirm button."""
         self.dismiss(event.button.id == "confirm")
 
 
-class IrrigateScreen(ModalScreen[dict | None]):
+class IrrigateScreen(ModalScreen[dict[str, Any] | None]):
     """Options for ``POST /clusters/{id}/irrigate`` — dry-run is the safe default."""
 
-    BINDINGS = [("escape", "dismiss(None)", "Cancel")]
+    BINDINGS: ClassVar[list[BindingType]] = [("escape", "dismiss(None)", "Cancel")]
 
     def __init__(self, cluster_name: str) -> None:
         super().__init__()
         self.cluster_name = cluster_name
 
     def compose(self) -> ComposeResult:
+        """Render the pipeline options; dry-run starts checked."""
         with Vertical(classes="dialog"):
             with Horizontal(classes="dialog-head"):
                 yield Static(watering_can_sprite(), classes="dialog-sprite")
@@ -62,6 +78,7 @@ class IrrigateScreen(ModalScreen[dict | None]):
                 yield Button("Cancel", id="cancel")
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Dismiss with the chosen options on Run, ``None`` otherwise."""
         if event.button.id != "run":
             self.dismiss(None)
             return
@@ -77,13 +94,14 @@ class IrrigateScreen(ModalScreen[dict | None]):
 class WaterNowScreen(ModalScreen[int | None]):
     """Ask how many minutes to run an irrigator manually (blank = device default)."""
 
-    BINDINGS = [("escape", "dismiss(None)", "Cancel")]
+    BINDINGS: ClassVar[list[BindingType]] = [("escape", "dismiss(None)", "Cancel")]
 
     def __init__(self, irrigator_name: str) -> None:
         super().__init__()
         self.irrigator_name = irrigator_name
 
     def compose(self) -> ComposeResult:
+        """Render the minutes input (blank = configured default) and Start / Cancel."""
         with Vertical(classes="dialog"):
             with Horizontal(classes="dialog-head"):
                 yield Static(watering_can_sprite(pouring=True), classes="dialog-sprite")
@@ -99,15 +117,18 @@ class WaterNowScreen(ModalScreen[int | None]):
                 yield Button("Cancel", id="cancel")
 
     def on_input_submitted(self) -> None:
+        """Enter in the minutes input starts the run."""
         self._submit()
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Start on the Start button; any other button cancels."""
         if event.button.id == "start":
             self._submit()
         else:
             self.dismiss(None)
 
     def _submit(self) -> None:
+        """Dismiss with the typed minutes; blank sends ``0`` (the caller asks for the default)."""
         raw = self.query_one("#minutes", Input).value.strip()
         self.dismiss(int(raw) if raw else 0)
 
@@ -115,7 +136,7 @@ class WaterNowScreen(ModalScreen[int | None]):
 class LoginScreen(ModalScreen[tuple[str, str] | None]):
     """Collect credentials when the server answers 401."""
 
-    BINDINGS = [("escape", "dismiss(None)", "Cancel")]
+    BINDINGS: ClassVar[list[BindingType]] = [("escape", "dismiss(None)", "Cancel")]
 
     def __init__(self, server: str, error: str | None = None) -> None:
         super().__init__()
@@ -123,6 +144,7 @@ class LoginScreen(ModalScreen[tuple[str, str] | None]):
         self.error = error
 
     def compose(self) -> ComposeResult:
+        """Render the credential form, with the previous error if a login failed."""
         with Vertical(classes="dialog"):
             yield Static(f"[b]Sign in[/b]  [dim]{self.server}[/dim]", classes="dialog-message")
             if self.error:
@@ -137,18 +159,21 @@ class LoginScreen(ModalScreen[tuple[str, str] | None]):
                 yield Button("Cancel", id="cancel")
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
+        """Enter in the username moves to the password; in the password it signs in."""
         if event.input.id == "username":
             self.query_one("#password", Input).focus()
         else:
             self._submit()
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Sign in on the login button; any other button cancels."""
         if event.button.id == "login":
             self._submit()
         else:
             self.dismiss(None)
 
     def _submit(self) -> None:
+        """Dismiss with the credentials once both are filled; otherwise stay open."""
         username = self.query_one("#username", Input).value.strip()
         password = self.query_one("#password", Input).value
         if username and password:

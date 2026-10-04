@@ -23,7 +23,7 @@ def _seed_plant_with_sensor(client) -> tuple[int, int]:
     )
     client.post(
         "/api/v1/clusters/1/sensors",
-        json={"tuya_device_id": "fake_health_sensor", "name": "HS", "type": "soil_moisture", "plant_id": 1},
+        json={"tuya_device_id": "fake_health_sensor", "name": "HS", "type": "tuya.tr301z", "plant_id": 1},
     )
     return 1, 1
 

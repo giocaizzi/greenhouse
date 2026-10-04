@@ -1,0 +1,40 @@
+ ⭘                                      greenhouse · Desk — http://testserver                                  10:00:00
+ Overview  Charts  Plants  Sensors  Insights  Decisions  History  Windows  Config
+╸━━━━━━━━╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+╭────────────────────╮ ╭────────────────────╮
+│                    │ │      ▄▀▀▄          │
+│                    │ │  ▄   ▀▀▀▀   ▄      │
+│       ▄▀▄          │ │ ▀▀▀  ▀▀▀▀  ▀▀▀     │
+│   ▄▀▄ ▀▀▀ ▄▀▄      │ │ ▀▀▀▀▀▀▀▀▀▀▀▀▀▀     │
+│ ▄▀▀▀▀▀▀▀▀▀▀▀▀▀▄    │ │      ▀▀▀▀          │
+│  ▀▀▀▀▀▀▀▀▀▀▀▀▀▄    │ │  ▄▄▄▄▀▀▀▀▄▄▄▄▄▄    │
+│   ▀▀▀▀▀▀▀▀▀▀▀▀     │ │   ▀▀▀▀▀▀▀▀▀▀▀▀     │
+│    ▀▀▀▀▀▀▀▀▀▀      │ │    ▀▀▀▀▀▀▀▀▀▀      │
+│ Echeveria elegans  │ │ Opuntia microdasys │
+│ soaked 80.0%       │ │ no data —          │
+│ █████████████░░░   │ │ ░░░░░░░░░░░░░░░░   │
+╰────────────────────╯ ╰────────────────────╯
+
+╭────────────────────────────────╮╭────────────────────────────────────────╮╭──────────────────────────────────────────╮
+│    ▄▀▀▀▀▀▄                     ││ Decision engine                        ││ Forecast                                 │
+│   ▀▀▀▀▀▀▀▀▀   ▄▀               ││ skip  2 min · every 16h  confidence    ││ next water     in 1d3h (13:18)           │
+│ ▀▀▀▀▀▀▀▀▀▀▀▀▀▀                 ││ 80%                                    ││ projected min  74.6%                     │
+│   ▀▀▀▀▀▀▀▀▀                    ││ drop-half soil too wet (wettest=87% >  ││ method         fallback_constant (20%)   │
+│                                ││ 40.0%) [sensor_wet]                    ││                Echeveria elegans will    │
+│ No irrigator                   ││ cloud-rain high ambient humidity (57%) ││                hit its 20% min in ~27.3h │
+│ sensor-only cluster            ││ [humidity_high]                        ││                based on -2.0%/h          │
+│ n: attach an irrigator         ││ sun very bright (2592 lux, seasonal)   ││                drainage.                 │
+╰────────────────────────────────╯│ [light_very_bright]                    │╰──────────────────────────────────────────╯
+                                  │ drop-half low water-needs plants —     │
+                                  │ less water, longer interval            │
+                                  │ [water_needs_low]                      │
+                                  │                                        │
+                                  ╰────────────────────────────────────────╯
+
+
+
+
+
+
+ esc Back  i Irrigate  w Water now  x Stop  c Check  n New  u Edit  del Delete  d Dashboard  a Alerts  l Act▏^p palette

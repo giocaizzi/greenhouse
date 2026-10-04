@@ -32,7 +32,7 @@ class TestDataQualityReport:
             client.post("/api/v1/clusters", json={"name": "Quality Cluster"})
             client.post(
                 "/api/v1/clusters/1/sensors",
-                json={"tuya_device_id": "fake_unassigned_sensor", "name": "Orphan Sensor", "type": "soil_moisture"},
+                json={"tuya_device_id": "fake_unassigned_sensor", "name": "Orphan Sensor", "type": "tuya.tr301z"},
             )
             resp = client.get("/api/v1/quality/report")
             data = resp.json()
@@ -61,11 +61,11 @@ class TestDataQualityReport:
             client.post("/api/v1/clusters", json={"name": "Quality Cluster"})
             client.post(
                 "/api/v1/clusters/1/sensors",
-                json={"tuya_device_id": "shared_id_aabbcc", "name": "Sensor A", "type": "soil_moisture"},
+                json={"tuya_device_id": "shared_id_aabbcc", "name": "Sensor A", "type": "tuya.tr301z"},
             )
             client.post(
                 "/api/v1/clusters/1/irrigator",
-                json={"tuya_device_id": "shared_id_aabbcc", "name": "Irrigator A", "type": "tuya_cloud"},
+                json={"tuya_device_id": "shared_id_aabbcc", "name": "Irrigator A", "type": "rainpoint.ik10pw"},
             )
             resp = client.get("/api/v1/quality/report")
             data = resp.json()

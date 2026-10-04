@@ -1,12 +1,14 @@
 """Alert inbox routes."""
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Query
 
 from greenhouse_core.schemas import AlertListResponse, AlertSummary
-from greenhouse_server.deps import NtfyNotifierDep, PlantDbDep, RepoDep, SessionDep
+from greenhouse_server.deps import NtfyNotifierDep, PlantDbDep, RepoDep, require_alert, require_cluster
 from greenhouse_server.services.alerts import sync_all_alerts, sync_cluster_alerts
 
 router = APIRouter(tags=["alerts"])
+
+_ALERT_LIST_MAX = 500  # page-size ceiling of GET /alerts; also the post-sync list length
 
 
 @router.get("/alerts", response_model=AlertListResponse)
@@ -15,7 +17,7 @@ def list_alerts(
     status: str | None = Query(default=None),
     cluster_id: int | None = Query(default=None),
     plant_id: int | None = Query(default=None),
-    limit: int = Query(default=100, ge=1, le=500),
+    limit: int = Query(default=100, ge=1, le=_ALERT_LIST_MAX),
     cursor: int | None = Query(default=None, description="Id cursor — return alerts with id < cursor"),
 ) -> AlertListResponse:
     """List persisted alerts from the inbox with optional filters and cursor pagination.
@@ -63,14 +65,12 @@ def get_alert(alert_id: int, repo: RepoDep) -> AlertSummary:
     Raises:
         HTTPException: 404 if no alert with that ID exists.
     """
-    alert = repo.get_alert(alert_id)
-    if not alert:
-        raise HTTPException(status_code=404, detail="Alert not found")
+    alert = require_alert(repo, alert_id)
     return AlertSummary.model_validate(alert)
 
 
 @router.post("/alerts/{alert_id}/acknowledge", response_model=AlertSummary)
-def acknowledge_alert(alert_id: int, repo: RepoDep, session: SessionDep) -> AlertSummary:
+def acknowledge_alert(alert_id: int, repo: RepoDep) -> AlertSummary:
     """Move an open alert to the acknowledged state.
 
     Idempotent: acknowledging an already-acknowledged alert leaves it unchanged.
@@ -84,15 +84,14 @@ def acknowledge_alert(alert_id: int, repo: RepoDep, session: SessionDep) -> Aler
     Raises:
         HTTPException: 404 if no alert with that ID exists.
     """
+    require_alert(repo, alert_id)
     alert = repo.acknowledge_alert(alert_id)
-    if not alert:
-        raise HTTPException(status_code=404, detail="Alert not found")
-    session.commit()
+    repo.commit()
     return AlertSummary.model_validate(alert)
 
 
 @router.post("/alerts/{alert_id}/resolve", response_model=AlertSummary)
-def resolve_alert(alert_id: int, repo: RepoDep, session: SessionDep) -> AlertSummary:
+def resolve_alert(alert_id: int, repo: RepoDep) -> AlertSummary:
     """Mark an alert as resolved, closing the inbox entry.
 
     Args:
@@ -104,10 +103,9 @@ def resolve_alert(alert_id: int, repo: RepoDep, session: SessionDep) -> AlertSum
     Raises:
         HTTPException: 404 if no alert with that ID exists.
     """
+    require_alert(repo, alert_id)
     alert = repo.resolve_alert(alert_id)
-    if not alert:
-        raise HTTPException(status_code=404, detail="Alert not found")
-    session.commit()
+    repo.commit()
     return AlertSummary.model_validate(alert)
 
 
@@ -116,7 +114,6 @@ def refresh_cluster_alerts(
     cluster_id: int,
     repo: RepoDep,
     plant_db: PlantDbDep,
-    session: SessionDep,
     notifier: NtfyNotifierDep,
 ) -> AlertListResponse:
     """Recompute alerts for a single cluster and reconcile the inbox.
@@ -134,12 +131,10 @@ def refresh_cluster_alerts(
     Raises:
         HTTPException: 404 if the cluster does not exist.
     """
-    cluster = repo.get_cluster(cluster_id)
-    if not cluster:
-        raise HTTPException(status_code=404, detail="Cluster not found")
+    require_cluster(repo, cluster_id)
     alerts = sync_cluster_alerts(repo, cluster_id, plant_db, notifier=notifier)
     open_count = repo.count_open_alerts()
-    session.commit()
+    repo.commit()
     return AlertListResponse(open_count=open_count, items=[AlertSummary.model_validate(a) for a in alerts])
 
 
@@ -147,7 +142,6 @@ def refresh_cluster_alerts(
 def refresh_all_alerts(
     repo: RepoDep,
     plant_db: PlantDbDep,
-    session: SessionDep,
     notifier: NtfyNotifierDep,
 ) -> AlertListResponse:
     """Recompute and reconcile alerts across all clusters.
@@ -159,7 +153,7 @@ def refresh_all_alerts(
         Open-alert badge count and the full post-sync alert list.
     """
     sync_all_alerts(repo, plant_db, notifier=notifier)
-    items = repo.list_alerts(limit=500)
+    items = repo.list_alerts(limit=_ALERT_LIST_MAX)
     open_count = repo.count_open_alerts()
-    session.commit()
+    repo.commit()
     return AlertListResponse(open_count=open_count, items=[AlertSummary.model_validate(a) for a in items])

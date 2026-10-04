@@ -6,25 +6,25 @@ from typing import Annotated
 
 import typer
 
-from greenhouse_cli.commands._helpers import call, output
+from greenhouse_cli.commands._helpers import YesOpt, call, output
 
 vacation_app = typer.Typer(help="Manage vacation windows (engine holds during these)", no_args_is_help=True)
 
 
 @vacation_app.command("list")
-def vacation_list(ctx: typer.Context):
+def vacation_list(ctx: typer.Context) -> None:
     """List vacation windows together with the active one (if any)."""
     output(call(ctx, lambda c: c.list_vacation()))
 
 
 @vacation_app.command("add")
-def vacation_add(
+def vacation_add(  # noqa: D417 — `ctx` is Typer plumbing; documenting it would leak into --help
     ctx: typer.Context,
     starts_at: Annotated[int, typer.Option("--starts-at", help="Window start as Unix timestamp (seconds)")],
     ends_at: Annotated[int, typer.Option("--ends-at", help="Window end as Unix timestamp (seconds)")],
     email: Annotated[str | None, typer.Option(help="Contact email to surface in alerts")] = None,
     notes: Annotated[str | None, typer.Option(help="Free-text notes")] = None,
-):
+) -> None:
     """Schedule a vacation window during which the engine will hold.
 
     Args:
@@ -49,7 +49,7 @@ def vacation_update(
     ends_at: Annotated[int | None, typer.Option("--ends-at", help="New end (Unix seconds)")] = None,
     email: Annotated[str | None, typer.Option(help="New contact email")] = None,
     notes: Annotated[str | None, typer.Option(help="New notes")] = None,
-):
+) -> None:
     """Patch a vacation window. Only supplied fields are sent.
 
     NOTE: ``PUT /api/v1/vacation/{id}`` is being added in a parallel branch;
@@ -73,8 +73,8 @@ def vacation_update(
 def vacation_delete(
     ctx: typer.Context,
     window_id: Annotated[int, typer.Argument(help="Vacation window ID")],
-    yes: Annotated[bool, typer.Option("--yes", "-y", help="Skip confirmation prompt")] = False,
-):
+    yes: YesOpt = False,
+) -> None:
     """Remove a vacation window."""
     if not yes:
         typer.confirm(f"Delete vacation window {window_id}?", abort=True)

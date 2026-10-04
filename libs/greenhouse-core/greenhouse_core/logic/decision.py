@@ -1,6 +1,7 @@
 """Typed value objects for irrigation decisions and their explanation trail."""
 
 from enum import StrEnum
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -168,13 +169,7 @@ class StressIndicators(BaseModel):
     over_watering: str | None = None
     low_env_humidity: str | None = None
     low_light: str | None = None
-    learning_alerts: list[dict] = Field(default_factory=list)
-
-    def any_critical(self) -> bool:
-        """True when at least one critical-class stress is set."""
-        return any(
-            value is not None for value in (self.water_warning, self.water_stress, self.over_watering, self.heat_stress)
-        )
+    learning_alerts: list[dict[Any, Any]] = Field(default_factory=list)
 
 
 class Trends(BaseModel):

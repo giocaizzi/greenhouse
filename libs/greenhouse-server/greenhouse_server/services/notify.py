@@ -13,8 +13,12 @@ sent via ``Authorization`` when configured.
 
 import logging
 import urllib.request
+from collections.abc import Callable
+from typing import Literal
 
-log = logging.getLogger(__name__)
+from greenhouse_core.models import TRIGGERED_BY_EMERGENCY, TriggeredBy
+
+logger = logging.getLogger(__name__)
 
 # ntfy priority levels (1=min .. 5=max) and emoji tag names per alert severity.
 _SEVERITY_PRIORITY = {"critical": "5", "warning": "4", "info": "3"}
@@ -56,17 +60,18 @@ class NtfyClient:
         if self._token:
             headers["Authorization"] = f"Bearer {self._token}"
         try:
-            req = urllib.request.Request(self._url, data=message.encode("utf-8"), headers=headers)
-            with urllib.request.urlopen(req, timeout=self._timeout):
+            # The scheme is not validated (S310): the URL comes from operator config (the ntfy server URL).
+            req = urllib.request.Request(self._url, data=message.encode("utf-8"), headers=headers)  # noqa: S310
+            with urllib.request.urlopen(req, timeout=self._timeout):  # noqa: S310
                 return True
         except Exception:
-            log.debug("ntfy publish failed", exc_info=True)
+            logger.debug("ntfy publish failed", exc_info=True)
             return False
 
     def notify_irrigation(
         self,
         *,
-        triggered_by: str,
+        triggered_by: TriggeredBy,
         irrigator_name: str,
         duration_minutes: int | None = None,
         detail: str = "",
@@ -80,7 +85,7 @@ class NtfyClient:
             title=_IRRIGATION_TITLES.get(triggered_by, "Irrigation"),
             message=message,
             tags=_IRRIGATION_TAGS.get(triggered_by, "potted_plant"),
-            priority="5" if triggered_by == "emergency" else "3",
+            priority="5" if triggered_by == TRIGGERED_BY_EMERGENCY else "3",
         )
 
     def notify_alert(self, *, severity: str, title: str, message: str) -> bool:
@@ -93,18 +98,24 @@ class NtfyClient:
         )
 
 
-def maybe_notify(notifier: NtfyClient | None, prefs, category: str, fn) -> None:
-    """Run ``fn`` (which publishes) only if notifier exists and the category is enabled.
+NotifyCategory = Literal["manual", "emergency", "alerts", "auto"]
+"""The ``notify_<category>`` preference toggles; a typo would silently disable a push."""
 
-    ``category`` is one of ``manual`` / ``emergency`` / ``alerts`` / ``auto``,
-    matching the ``notify_<category>`` booleans on the preferences row. Fully
-    fail-silent so a notification can never disrupt the caller.
+
+def maybe_notify(
+    notifier: NtfyClient | None, prefs: object, category: NotifyCategory, fn: Callable[[NtfyClient], object]
+) -> None:
+    """Call ``fn(notifier)`` (which publishes) only if notifier exists and the category is enabled.
+
+    ``category`` names the ``notify_<category>`` boolean on the preferences row. ``fn`` receives
+    the (non-None) client, so callers never touch an unchecked ``notifier``. Fully fail-silent
+    so a notification can never disrupt the caller.
     """
     if notifier is None:
         return
     if not getattr(prefs, f"notify_{category}", False):
         return
     try:
-        fn()
+        fn(notifier)
     except Exception:
-        log.debug("notification dispatch failed", exc_info=True)
+        logger.debug("notification dispatch failed", exc_info=True)

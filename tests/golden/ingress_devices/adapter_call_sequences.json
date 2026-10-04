@@ -1,0 +1,673 @@
+{
+ "generic_cloud.read_health_clean": {
+  "calls": [],
+  "result": {
+   "alarms": [],
+   "battery_pct": null,
+   "last_seen_ts": null,
+   "observed_at": 1776247200,
+   "offline": false,
+   "raw": {},
+   "signal_quality": null
+  }
+ },
+ "generic_cloud.start_ignores_minutes": {
+  "calls": [
+   [
+    "cloud.sendcommand",
+    "fake_tuya_device_aabbccdd",
+    {
+     "commands": [
+      {
+       "code": "switch",
+       "value": true
+      }
+     ]
+    }
+   ]
+  ],
+  "result": [
+   true,
+   "Device turned ON"
+  ]
+ },
+ "generic_cloud.status_skips_local": {
+  "calls": [
+   [
+    "cloud.getstatus",
+    "fake_tuya_device_aabbccdd"
+   ]
+  ],
+  "result": {
+   "running": true,
+   "source": "cloud",
+   "work_state": "auto"
+  }
+ },
+ "generic_cloud.stop": {
+  "calls": [
+   [
+    "cloud.sendcommand",
+    "fake_tuya_device_aabbccdd",
+    {
+     "commands": [
+      {
+       "code": "switch",
+       "value": false
+      }
+     ]
+    }
+   ]
+  ],
+  "result": [
+   true,
+   "Device turned OFF"
+  ]
+ },
+ "generic_local_without_capability.status_skips_local": {
+  "calls": [
+   [
+    "cloud.getstatus",
+    "fake_tuya_device_aabbccdd"
+   ]
+  ],
+  "result": {
+   "running": true,
+   "source": "cloud",
+   "work_state": "auto"
+  }
+ },
+ "ik10pw.off.cloud_rejects": {
+  "calls": [
+   [
+    "cloud.sendcommand",
+    "fake_tuya_device_aabbccdd",
+    {
+     "commands": [
+      {
+       "code": "switch",
+       "value": false
+      }
+     ]
+    }
+   ]
+  ],
+  "result": [
+   false,
+   "Failed to turn OFF device"
+  ]
+ },
+ "ik10pw.off.ok": {
+  "calls": [
+   [
+    "cloud.sendcommand",
+    "fake_tuya_device_aabbccdd",
+    {
+     "commands": [
+      {
+       "code": "switch",
+       "value": false
+      }
+     ]
+    }
+   ]
+  ],
+  "result": [
+   true,
+   "Device turned OFF"
+  ]
+ },
+ "ik10pw.on.cloud_rejects": {
+  "calls": [
+   [
+    "cloud.sendcommand",
+    "fake_tuya_device_aabbccdd",
+    {
+     "commands": [
+      {
+       "code": "switch",
+       "value": true
+      }
+     ]
+    }
+   ]
+  ],
+  "result": [
+   false,
+   "Failed to turn ON device"
+  ]
+ },
+ "ik10pw.on.ok": {
+  "calls": [
+   [
+    "cloud.sendcommand",
+    "fake_tuya_device_aabbccdd",
+    {
+     "commands": [
+      {
+       "code": "switch",
+       "value": true
+      }
+     ]
+    }
+   ]
+  ],
+  "result": [
+   true,
+   "Device turned ON"
+  ]
+ },
+ "ik10pw.read_health.local_raises_is_offline": {
+  "calls": [
+   [
+    "local.OutletDevice",
+    "fake_tuya_device_aabbccdd",
+    "192.0.2.1",
+    "fakelocalkeyxxxx"
+   ],
+   [
+    "local.set_version",
+    3.5
+   ],
+   [
+    "local.set_socketTimeout",
+    5
+   ],
+   [
+    "local.status"
+   ]
+  ],
+  "result": {
+   "alarms": [],
+   "battery_pct": null,
+   "last_seen_ts": null,
+   "observed_at": 1776247200,
+   "offline": true,
+   "raw": {
+    "error": "local read failed: timed out"
+   },
+   "signal_quality": null
+  }
+ },
+ "ik10pw.read_health.no_ip_is_offline": {
+  "calls": [],
+  "result": {
+   "alarms": [],
+   "battery_pct": null,
+   "last_seen_ts": null,
+   "observed_at": 1776247200,
+   "offline": true,
+   "raw": {
+    "error": "local read failed: No device_ip in config for irrigator fake_tuya_device_aabbccdd."
+   },
+   "signal_quality": null
+  }
+ },
+ "ik10pw.read_health.no_water_bit": {
+  "calls": [
+   [
+    "local.OutletDevice",
+    "fake_tuya_device_aabbccdd",
+    "192.0.2.1",
+    "fakelocalkeyxxxx"
+   ],
+   [
+    "local.set_version",
+    3.5
+   ],
+   [
+    "local.set_socketTimeout",
+    5
+   ],
+   [
+    "local.status"
+   ]
+  ],
+  "result": {
+   "alarms": [
+    "no_water"
+   ],
+   "battery_pct": null,
+   "last_seen_ts": null,
+   "observed_at": 1776247200,
+   "offline": false,
+   "raw": {
+    "alarm_raw": 3,
+    "left_time": 30,
+    "running": true,
+    "source": "local",
+    "work_status": 1
+   },
+   "signal_quality": null
+  }
+ },
+ "ik10pw.read_health.status_none": {
+  "calls": [
+   [
+    "local.OutletDevice",
+    "fake_tuya_device_aabbccdd",
+    "192.0.2.1",
+    "fakelocalkeyxxxx"
+   ],
+   [
+    "local.set_version",
+    3.5
+   ],
+   [
+    "local.set_socketTimeout",
+    5
+   ],
+   [
+    "local.status"
+   ]
+  ],
+  "result": {
+   "alarms": [],
+   "battery_pct": null,
+   "last_seen_ts": null,
+   "observed_at": 1776247200,
+   "offline": false,
+   "raw": {
+    "alarm_raw": null,
+    "left_time": null,
+    "running": null,
+    "source": "local",
+    "work_status": null
+   },
+   "signal_quality": null
+  }
+ },
+ "ik10pw.read_health.string_dp_clear": {
+  "calls": [
+   [
+    "local.OutletDevice",
+    "fake_tuya_device_aabbccdd",
+    "192.0.2.1",
+    "fakelocalkeyxxxx"
+   ],
+   [
+    "local.set_version",
+    3.5
+   ],
+   [
+    "local.set_socketTimeout",
+    5
+   ],
+   [
+    "local.status"
+   ]
+  ],
+  "result": {
+   "alarms": [],
+   "battery_pct": null,
+   "last_seen_ts": null,
+   "observed_at": 1776247200,
+   "offline": false,
+   "raw": {
+    "alarm_raw": "2",
+    "left_time": null,
+    "running": null,
+    "source": "local",
+    "work_status": null
+   },
+   "signal_quality": null
+  }
+ },
+ "ik10pw.set_duration_local.error_payload": {
+  "calls": [
+   [
+    "local.OutletDevice",
+    "fake_tuya_device_aabbccdd",
+    "192.0.2.1",
+    "fakelocalkeyxxxx"
+   ],
+   [
+    "local.set_version",
+    3.5
+   ],
+   [
+    "local.set_socketTimeout",
+    5
+   ],
+   [
+    "local.set_value",
+    102,
+    60
+   ]
+  ],
+  "result": [
+   false,
+   "Local API error: {'Error': 'Network Error: Device Unreachable', 'Err': '905'}"
+  ]
+ },
+ "ik10pw.set_duration_local.no_ip": {
+  "calls": [],
+  "result": [
+   false,
+   "Local connection failed: No device_ip in config for irrigator fake_tuya_device_aabbccdd."
+  ]
+ },
+ "ik10pw.set_duration_local.ok_payload": {
+  "calls": [
+   [
+    "local.OutletDevice",
+    "fake_tuya_device_aabbccdd",
+    "192.0.2.1",
+    "fakelocalkeyxxxx"
+   ],
+   [
+    "local.set_version",
+    3.5
+   ],
+   [
+    "local.set_socketTimeout",
+    5
+   ],
+   [
+    "local.set_value",
+    102,
+    60
+   ]
+  ],
+  "result": [
+   true,
+   "Duration set to 60s"
+  ]
+ },
+ "ik10pw.start.5min.local_dp_then_cloud_switch": {
+  "calls": [
+   [
+    "local.OutletDevice",
+    "fake_tuya_device_aabbccdd",
+    "192.0.2.1",
+    "fakelocalkeyxxxx"
+   ],
+   [
+    "local.set_version",
+    3.5
+   ],
+   [
+    "local.set_socketTimeout",
+    5
+   ],
+   [
+    "local.set_value",
+    102,
+    300
+   ],
+   [
+    "cloud.sendcommand",
+    "fake_tuya_device_aabbccdd",
+    {
+     "commands": [
+      {
+       "code": "switch",
+       "value": true
+      }
+     ]
+    }
+   ]
+  ],
+  "result": [
+   true,
+   "Irrigation started for 5 min (Duration DP set to 300s, device auto-stops)"
+  ]
+ },
+ "ik10pw.start.fractional_minutes": {
+  "calls": [
+   [
+    "local.OutletDevice",
+    "fake_tuya_device_aabbccdd",
+    "192.0.2.1",
+    "fakelocalkeyxxxx"
+   ],
+   [
+    "local.set_version",
+    3.5
+   ],
+   [
+    "local.set_socketTimeout",
+    5
+   ],
+   [
+    "local.set_value",
+    102,
+    150
+   ],
+   [
+    "cloud.sendcommand",
+    "fake_tuya_device_aabbccdd",
+    {
+     "commands": [
+      {
+       "code": "switch",
+       "value": true
+      }
+     ]
+    }
+   ]
+  ],
+  "result": [
+   true,
+   "Irrigation started for 2.5 min (Duration DP set to 150s, device auto-stops)"
+  ]
+ },
+ "ik10pw.start.local_dp_ok_cloud_switch_fails": {
+  "calls": [
+   [
+    "local.OutletDevice",
+    "fake_tuya_device_aabbccdd",
+    "192.0.2.1",
+    "fakelocalkeyxxxx"
+   ],
+   [
+    "local.set_version",
+    3.5
+   ],
+   [
+    "local.set_socketTimeout",
+    5
+   ],
+   [
+    "local.set_value",
+    102,
+    300
+   ],
+   [
+    "cloud.sendcommand",
+    "fake_tuya_device_aabbccdd",
+    {
+     "commands": [
+      {
+       "code": "switch",
+       "value": true
+      }
+     ]
+    }
+   ]
+  ],
+  "result": [
+   false,
+   "Failed to start irrigation: Failed to turn ON device"
+  ]
+ },
+ "ik10pw.start.local_set_value_returns_none_counts_as_ok": {
+  "calls": [
+   [
+    "local.OutletDevice",
+    "fake_tuya_device_aabbccdd",
+    "192.0.2.1",
+    "fakelocalkeyxxxx"
+   ],
+   [
+    "local.set_version",
+    3.5
+   ],
+   [
+    "local.set_socketTimeout",
+    5
+   ],
+   [
+    "local.set_value",
+    102,
+    60
+   ],
+   [
+    "cloud.sendcommand",
+    "fake_tuya_device_aabbccdd",
+    {
+     "commands": [
+      {
+       "code": "switch",
+       "value": true
+      }
+     ]
+    }
+   ]
+  ],
+  "result": [
+   true,
+   "Irrigation started for 1 min (Duration DP set to 60s, device auto-stops)"
+  ]
+ },
+ "ik10pw.start.unbounded": {
+  "calls": [
+   [
+    "cloud.sendcommand",
+    "fake_tuya_device_aabbccdd",
+    {
+     "commands": [
+      {
+       "code": "switch",
+       "value": true
+      }
+     ]
+    }
+   ]
+  ],
+  "result": [
+   true,
+   "Device turned ON"
+  ]
+ },
+ "ik10pw.status.local": {
+  "calls": [
+   [
+    "local.OutletDevice",
+    "fake_tuya_device_aabbccdd",
+    "192.0.2.1",
+    "fakelocalkeyxxxx"
+   ],
+   [
+    "local.set_version",
+    3.5
+   ],
+   [
+    "local.set_socketTimeout",
+    5
+   ],
+   [
+    "local.status"
+   ]
+  ],
+  "result": {
+   "auto_run": false,
+   "duration": 300,
+   "left_time": 120,
+   "running": true,
+   "source": "local",
+   "work_status": 2
+  }
+ },
+ "ik10pw.status.local_raises_falls_back_to_cloud": {
+  "calls": [
+   [
+    "local.OutletDevice",
+    "fake_tuya_device_aabbccdd",
+    "192.0.2.1",
+    "fakelocalkeyxxxx"
+   ],
+   [
+    "local.set_version",
+    3.5
+   ],
+   [
+    "local.set_socketTimeout",
+    5
+   ],
+   [
+    "local.status"
+   ],
+   [
+    "cloud.getstatus",
+    "fake_tuya_device_aabbccdd"
+   ]
+  ],
+  "result": {
+   "running": true,
+   "source": "cloud",
+   "work_state": "auto"
+  }
+ },
+ "ik10pw.status.local_without_dps_falls_back_to_cloud": {
+  "calls": [
+   [
+    "local.OutletDevice",
+    "fake_tuya_device_aabbccdd",
+    "192.0.2.1",
+    "fakelocalkeyxxxx"
+   ],
+   [
+    "local.set_version",
+    3.5
+   ],
+   [
+    "local.set_socketTimeout",
+    5
+   ],
+   [
+    "local.status"
+   ],
+   [
+    "cloud.getstatus",
+    "fake_tuya_device_aabbccdd"
+   ]
+  ],
+  "result": {
+   "running": true,
+   "source": "cloud",
+   "work_state": "auto"
+  }
+ },
+ "ik10pw.status.no_ip_cloud_fails": {
+  "calls": [
+   [
+    "cloud.getstatus",
+    "fake_tuya_device_aabbccdd"
+   ]
+  ],
+  "result": {
+   "error": "Cloud API error: {'success': False, 'msg': 'offline'}"
+  }
+ },
+ "ik10pw.stop.ok": {
+  "calls": [
+   [
+    "cloud.sendcommand",
+    "fake_tuya_device_aabbccdd",
+    {
+     "commands": [
+      {
+       "code": "switch",
+       "value": false
+      }
+     ]
+    }
+   ]
+  ],
+  "result": [
+   true,
+   "Device turned OFF"
+  ]
+ }
+}

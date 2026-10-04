@@ -3,7 +3,8 @@
 from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_core.schemas import CareInsight, ClusterInsightsResponse
-from greenhouse_server.services.maintenance import collect_learning_alerts, collect_maintenance_alerts
+from greenhouse_server.services.errors import ClusterNotFoundError
+from greenhouse_server.services.maintenance import AlertFinding, collect_learning_alerts, collect_maintenance_alerts
 
 _ALERT_TYPE_META: dict[str, tuple[str, str, str]] = {
     "stale_data": ("warning", "Stale sensor data", "Check Wi-Fi connection and sensor battery."),
@@ -17,6 +18,16 @@ _ALERT_TYPE_META: dict[str, tuple[str, str, str]] = {
 }
 
 
+def _insight_from_alert(alert: AlertFinding) -> CareInsight:
+    """Map a maintenance/learning alert dict to a CareInsight, with known types' curated copy."""
+    code = alert["type"]
+    meta = _ALERT_TYPE_META.get(code)
+    severity = meta[0] if meta else alert.get("severity", "warning")
+    title = meta[1] if meta else code.replace("_", " ").title()
+    suggestion = meta[2] if meta else None
+    return CareInsight(code=code, severity=severity, title=title, message=alert["message"], suggestion=suggestion)
+
+
 class InsightsService:
     """Aggregate learning and maintenance data into structured CareInsight items."""
 
@@ -24,18 +35,21 @@ class InsightsService:
         self._repo = repo
         self._plant_db = plant_db
 
-    def cluster_insights(self, cluster_id: int) -> ClusterInsightsResponse | None:
+    def cluster_insights(self, cluster_id: int) -> ClusterInsightsResponse:
         """Return structured insights for a cluster.
 
         Args:
             cluster_id: Cluster to analyse.
 
         Returns:
-            ClusterInsightsResponse with deduplicated CareInsight list, or None if cluster not found.
+            ClusterInsightsResponse with deduplicated CareInsight list.
+
+        Raises:
+            ClusterNotFoundError: no such cluster.
         """
         cluster = self._repo.get_cluster(cluster_id)
         if not cluster:
-            return None
+            raise ClusterNotFoundError(cluster_id)
 
         insights: list[CareInsight] = []
         seen_codes: set[str] = set()
@@ -45,26 +59,14 @@ class InsightsService:
             if code in seen_codes:
                 continue
             seen_codes.add(code)
-            meta = _ALERT_TYPE_META.get(code)
-            severity = meta[0] if meta else alert.get("severity", "warning")
-            title = meta[1] if meta else code.replace("_", " ").title()
-            suggestion = meta[2] if meta else None
-            insights.append(
-                CareInsight(code=code, severity=severity, title=title, message=alert["message"], suggestion=suggestion)
-            )
+            insights.append(_insight_from_alert(alert))
 
         for alert in collect_learning_alerts(self._repo, cluster_id, self._plant_db):
             code = alert["type"]
             if code in seen_codes:
                 continue
             seen_codes.add(code)
-            meta = _ALERT_TYPE_META.get(code)
-            severity = meta[0] if meta else alert.get("severity", "warning")
-            title = meta[1] if meta else code.replace("_", " ").title()
-            suggestion = meta[2] if meta else None
-            insights.append(
-                CareInsight(code=code, severity=severity, title=title, message=alert["message"], suggestion=suggestion)
-            )
+            insights.append(_insight_from_alert(alert))
 
         logs = self._repo.list_decision_logs(cluster_id, limit=1)
         if logs:

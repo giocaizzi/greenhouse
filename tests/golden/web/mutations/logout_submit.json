@@ -1,0 +1,22 @@
+{
+ "body_lines": [
+  ""
+ ],
+ "db_effect": {},
+ "device_calls": {
+  "irrigator": [],
+  "sensor": []
+ },
+ "headers": {
+  "location": "/login",
+  "set-cookie": "greenhouse_session=\"\"; expires=Wed, 15 Apr 2026 10:00:00 GMT; Max-Age=0; Path=/; SameSite=lax"
+ },
+ "request": {
+  "form": null,
+  "headers": {},
+  "method": "POST",
+  "url": "/logout"
+ },
+ "status": 303,
+ "templates": []
+}

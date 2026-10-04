@@ -1,0 +1,197 @@
+{
+ "alerts": [
+  {
+   "cluster_id": 1,
+   "code": "battery_critical",
+   "dedup_key": "health:irrigator:1:battery_critical",
+   "entity_id": 1,
+   "entity_type": "irrigator",
+   "message": "'Pump One' battery is critical (15%). Replace immediately.",
+   "occurrence_count": 1,
+   "payload": {
+    "alarm": "battery_critical",
+    "battery_pct": 15,
+    "entity_id": 1,
+    "entity_type": "irrigator",
+    "last_seen_ts": 1776247190,
+    "observed_at": 1776247200,
+    "offline": false,
+    "signal_quality": 80
+   },
+   "severity": "critical",
+   "source": "health",
+   "status": "open",
+   "title": "Battery Critical · Pump One"
+  },
+  {
+   "cluster_id": 1,
+   "code": "device_offline",
+   "dedup_key": "health:irrigator:1:device_offline",
+   "entity_id": 1,
+   "entity_type": "irrigator",
+   "message": "'Pump One' is unreachable. Actuation is blocked until the device comes back online.",
+   "occurrence_count": 1,
+   "payload": {
+    "alarm": "device_offline",
+    "battery_pct": 15,
+    "entity_id": 1,
+    "entity_type": "irrigator",
+    "last_seen_ts": 1776247190,
+    "observed_at": 1776247200,
+    "offline": false,
+    "signal_quality": 80
+   },
+   "severity": "warning",
+   "source": "health",
+   "status": "open",
+   "title": "Device Offline · Pump One"
+  },
+  {
+   "cluster_id": 1,
+   "code": "low_battery",
+   "dedup_key": "health:irrigator:1:low_battery",
+   "entity_id": 1,
+   "entity_type": "irrigator",
+   "message": "'Pump One' battery is low (15%). Replace soon to keep readings flowing.",
+   "occurrence_count": 1,
+   "payload": {
+    "alarm": "low_battery",
+    "battery_pct": 15,
+    "entity_id": 1,
+    "entity_type": "irrigator",
+    "last_seen_ts": 1776247190,
+    "observed_at": 1776247200,
+    "offline": false,
+    "signal_quality": 80
+   },
+   "severity": "warning",
+   "source": "health",
+   "status": "open",
+   "title": "Low Battery · Pump One"
+  },
+  {
+   "cluster_id": 1,
+   "code": "no_water",
+   "dedup_key": "health:irrigator:1:no_water",
+   "entity_id": 1,
+   "entity_type": "irrigator",
+   "message": "'Pump One' reported water shortage. Pump actuation will be blocked until refilled.",
+   "occurrence_count": 1,
+   "payload": {
+    "alarm": "no_water",
+    "battery_pct": 15,
+    "entity_id": 1,
+    "entity_type": "irrigator",
+    "last_seen_ts": 1776247190,
+    "observed_at": 1776247200,
+    "offline": false,
+    "signal_quality": 80
+   },
+   "severity": "critical",
+   "source": "health",
+   "status": "open",
+   "title": "No Water · Pump One"
+  },
+  {
+   "cluster_id": 1,
+   "code": "rain_detected",
+   "dedup_key": "health:irrigator:1:rain_detected",
+   "entity_id": 1,
+   "entity_type": "irrigator",
+   "message": "'Pump One' reports rain. Skipping scheduled irrigation.",
+   "occurrence_count": 1,
+   "payload": {
+    "alarm": "rain_detected",
+    "battery_pct": 15,
+    "entity_id": 1,
+    "entity_type": "irrigator",
+    "last_seen_ts": 1776247190,
+    "observed_at": 1776247200,
+    "offline": false,
+    "signal_quality": 80
+   },
+   "severity": "info",
+   "source": "health",
+   "status": "open",
+   "title": "Rain Detected · Pump One"
+  },
+  {
+   "cluster_id": 1,
+   "code": "sensor_fault",
+   "dedup_key": "health:irrigator:1:sensor_fault",
+   "entity_id": 1,
+   "entity_type": "irrigator",
+   "message": "'Pump One' is reporting a sensor fault. Cross-check the probe placement.",
+   "occurrence_count": 1,
+   "payload": {
+    "alarm": "sensor_fault",
+    "battery_pct": 15,
+    "entity_id": 1,
+    "entity_type": "irrigator",
+    "last_seen_ts": 1776247190,
+    "observed_at": 1776247200,
+    "offline": false,
+    "signal_quality": 80
+   },
+   "severity": "warning",
+   "source": "health",
+   "status": "open",
+   "title": "Sensor Fault · Pump One"
+  },
+  {
+   "cluster_id": 1,
+   "code": "signal_loss",
+   "dedup_key": "health:irrigator:1:signal_loss",
+   "entity_id": 1,
+   "entity_type": "irrigator",
+   "message": "'Pump One' signal quality is degraded — readings may be intermittent.",
+   "occurrence_count": 1,
+   "payload": {
+    "alarm": "signal_loss",
+    "battery_pct": 15,
+    "entity_id": 1,
+    "entity_type": "irrigator",
+    "last_seen_ts": 1776247190,
+    "observed_at": 1776247200,
+    "offline": false,
+    "signal_quality": 80
+   },
+   "severity": "warning",
+   "source": "health",
+   "status": "open",
+   "title": "Signal Loss · Pump One"
+  }
+ ],
+ "notifications": [
+  {
+   "message": "'Pump One' battery is critical (15%). Replace immediately.",
+   "severity": "critical",
+   "title": "Battery Critical · Pump One"
+  },
+  {
+   "message": "'Pump One' is unreachable. Actuation is blocked until the device comes back online.",
+   "severity": "warning",
+   "title": "Device Offline · Pump One"
+  },
+  {
+   "message": "'Pump One' battery is low (15%). Replace soon to keep readings flowing.",
+   "severity": "warning",
+   "title": "Low Battery · Pump One"
+  },
+  {
+   "message": "'Pump One' reported water shortage. Pump actuation will be blocked until refilled.",
+   "severity": "critical",
+   "title": "No Water · Pump One"
+  },
+  {
+   "message": "'Pump One' is reporting a sensor fault. Cross-check the probe placement.",
+   "severity": "warning",
+   "title": "Sensor Fault · Pump One"
+  },
+  {
+   "message": "'Pump One' signal quality is degraded — readings may be intermittent.",
+   "severity": "warning",
+   "title": "Signal Loss · Pump One"
+  }
+ ]
+}

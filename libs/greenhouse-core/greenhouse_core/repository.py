@@ -1,25 +1,42 @@
-"""Database operations for the irrigation system (replaces IrrigationDB)."""
+"""Database operations for the irrigation system: the one persistence facade over the ORM."""
 
 import json
 import time
+from contextlib import contextmanager
+from typing import TYPE_CHECKING, Any, Literal, TypedDict, Unpack, cast
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from greenhouse_core import auth
 from greenhouse_core.constants import (
     DEFAULT_AUTO_RUN,
     DEFAULT_DURATION_MINUTES,
     DEFAULT_INTERVAL_HOURS,
     DEFAULT_IRRIGATION_MODE,
+    FULL_WEEKDAY_MASK,
+    RESPONSE_POST_WINDOW_SECONDS,
+    RESPONSE_PRE_WINDOW_SECONDS,
+    SECONDS_PER_DAY,
+    SECONDS_PER_HOUR,
 )
 from greenhouse_core.models import (
+    ENTITY_CLUSTER,
     ENTITY_PLANT,
     ENTITY_SENSOR,
+    EVENT_ACTION_START,
+    SOURCE_PLANT,
+    SOURCE_SENSOR,
+    TRIGGERED_BY_AUTO,
     ActivityEvent,
+    ActivitySource,
     Alert,
     Cluster,
     DecisionLog,
+    EntityType,
+    EventAction,
     GlobalIrrigationConfig,
     IrrigationConfig,
     IrrigationEvent,
@@ -30,9 +47,20 @@ from greenhouse_core.models import (
     Sensor,
     SensorAssignment,
     SensorReading,
+    TriggeredBy,
+    User,
     UserPreferences,
     VacationWindow,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable, Iterator, Mapping
+
+    from sqlalchemy import Select
+    from sqlalchemy.engine import CursorResult
+    from sqlalchemy.orm import InstrumentedAttribute
+
+    from greenhouse_core.models import Base
 
 _GLOBAL_CONFIG_DEFAULTS: dict[str, int | str | bool | None] = {
     "mode": DEFAULT_IRRIGATION_MODE,
@@ -42,7 +70,7 @@ _GLOBAL_CONFIG_DEFAULTS: dict[str, int | str | bool | None] = {
     "daily_cap_minutes": None,
     "max_events_per_day": None,
     # Quiet hours have no built-in fallback — the production migration seeds
-    # the global row with the canonical 00:00–05:00 window, and fresh-DB flows
+    # the global row with the canonical 00:00-05:00 window, and fresh-DB flows
     # (tests, dev installs) start with quiet hours disabled until explicitly
     # configured. See ``get_global_irrigation_config``.
     "quiet_start_hour": None,
@@ -50,8 +78,117 @@ _GLOBAL_CONFIG_DEFAULTS: dict[str, int | str | bool | None] = {
 }
 
 
+class EffectiveField(TypedDict):
+    """One resolved irrigation-config field: its value and the layer it came from."""
+
+    value: int | str | bool | None
+    source: Literal["cluster", "global", "default"]
+
+
+# ``get_effective_config`` result: one ``EffectiveField`` per patchable config field.
+EffectiveConfig = dict[str, EffectiveField]
+
+
+# ── PATCH payloads for the update_* methods ──────────────────────────────────
+# Keys a caller may pass (all optional). Runtime semantics are the methods' own:
+# ``None`` skips a field (except the config upserts, where ``None`` clears it) and
+# keys that are not attributes of the row are ignored.
+
+
+class ClusterPatch(TypedDict, total=False):
+    """Fields ``update_cluster`` may change."""
+
+    name: str | None
+    location: str | None
+    environment: str | None
+
+
+class PlantPatch(TypedDict, total=False):
+    """Fields ``update_plant`` may change."""
+
+    species: str | None
+    category: str | None
+    water_needs: str | None
+    light_needs: str | None
+    ideal_temp_min: float | None
+    ideal_temp_max: float | None
+    ideal_humidity_min: float | None
+    ideal_humidity_max: float | None
+    notes: str | None
+
+
+class SensorPatch(TypedDict, total=False):
+    """Fields ``update_sensor`` may change (``plant_id`` goes through the assignment history)."""
+
+    name: str | None
+    type: str | None
+    config: dict[Any, Any] | None
+    plant_id: int | None
+
+
+class IrrigatorPatch(TypedDict, total=False):
+    """Fields ``update_irrigator`` may change."""
+
+    name: str | None
+    type: str | None
+    config: dict[Any, Any] | None
+    reservoir_l: float | None
+    flow_rate_l_per_min: float | None
+
+
+class VacationWindowPatch(TypedDict, total=False):
+    """Fields ``update_vacation_window`` may change."""
+
+    starts_at: int | None
+    ends_at: int | None
+    contact_email: str | None
+    notes: str | None
+
+
+class IrrigationWindowPatch(TypedDict, total=False):
+    """Fields ``update_irrigation_window`` may change."""
+
+    start_hour: int | None
+    end_hour: int | None
+    weekday_mask: int | None
+    label: str | None
+
+
+class PreferencesPatch(TypedDict, total=False):
+    """Fields ``update_preferences`` may change."""
+
+    units: str | None
+    timezone: str | None
+    theme: str | None
+    default_cluster_id: int | None
+    refresh_interval_seconds: int | None
+    dry_run_global: bool | None
+    notify_manual: bool | None
+    notify_emergency: bool | None
+    notify_alerts: bool | None
+    notify_auto: bool | None
+    scheduler_paused: bool | None
+
+
+class IrrigationConfigPatch(TypedDict, total=False):
+    """Fields ``set_irrigation_config`` / ``update_global_irrigation_config`` may set (``None`` clears)."""
+
+    mode: str | None
+    duration_minutes: int | None
+    interval_hours: int | None
+    auto_run: bool | None
+    daily_cap_minutes: int | None
+    max_events_per_day: int | None
+    quiet_start_hour: int | None
+    quiet_end_hour: int | None
+
+
 class SameClusterMoveError(ValueError):
     """Raised when a plant move targets its current cluster (no-op move)."""
+
+
+class DeviceIdExistsError(LookupError):
+    """The Tuya device id is already registered (the database's unique constraint refused it)."""
 
 
 class IrrigatorExistsError(ValueError):
@@ -67,6 +204,64 @@ class IrrigationRepository:
 
     def __init__(self, session: Session):
         self.session = session
+
+    # ── Unit of work ──────────────────────────────────────────────────────────
+    # The one spelling for transaction control outside this module: handlers commit CRUD,
+    # a service commits only when a side effect must follow a durable write.
+
+    def commit(self) -> None:
+        """Commit the current transaction on the repository's session."""
+        self.session.commit()
+
+    def rollback(self) -> None:
+        """Roll back the current transaction on the repository's session."""
+        self.session.rollback()
+
+    @contextmanager
+    def refusing_duplicate_device_id(self, tuya_device_id: str) -> "Iterator[None]":
+        """Turn a unique-constraint refusal inside the block into ``DeviceIdExistsError``.
+
+        The session is rolled back before the domain error is raised, so callers outside
+        the persistence layer never handle SQLAlchemy exceptions. ``add_irrigator`` /
+        ``add_sensor`` themselves still raise the raw ``IntegrityError``.
+        """
+        try:
+            yield
+        except IntegrityError:
+            self.rollback()
+            raise DeviceIdExistsError(tuya_device_id) from None
+
+    def flush(self) -> None:
+        """Flush pending changes to the database without committing."""
+        self.session.flush()
+
+    # ── Users ─────────────────────────────────────────────────────────────────
+    # Thin delegates to ``greenhouse_core.auth`` (which owns hashing), so the server reaches
+    # users through the repository like every other row. Callers commit.
+
+    def get_user(self, user_id: int) -> User | None:
+        """Look up a user by id."""
+        return auth.get_user(self.session, user_id)
+
+    def get_user_by_username(self, username: str) -> User | None:
+        """Look up a user by case-sensitive username."""
+        return auth.get_user_by_username(self.session, username)
+
+    def has_users(self) -> bool:
+        """Whether any user row exists (first-run admin bootstrap)."""
+        return self.session.scalar(select(User).limit(1)) is not None
+
+    def create_user(self, username: str, password: str) -> User:
+        """Create an active user with a hashed password; raises ``ValueError`` on an empty password."""
+        return auth.create_user(self.session, username=username, password=password)
+
+    def set_user_password(self, user: User, password: str) -> None:
+        """Replace a user's password hash."""
+        auth.set_password(self.session, user, password)
+
+    def record_login(self, user: User) -> None:
+        """Stamp the user's ``last_login_at`` with the current time."""
+        auth.record_login(self.session, user)
 
     # ── Clusters ──────────────────────────────────────────────────────────────
 
@@ -129,7 +324,7 @@ class IrrigationRepository:
         tuya_device_id: str,
         name: str,
         irrigator_type: str,
-        config: dict,
+        config: dict[str, Any],
     ) -> int:
         """Add an irrigator device and return its ID.
 
@@ -137,7 +332,8 @@ class IrrigationRepository:
         the cluster already has one.
         """
         if self.get_irrigator_for_cluster(cluster_id) is not None:
-            raise IrrigatorExistsError(f"cluster {cluster_id} already has an irrigator")
+            msg = f"cluster {cluster_id} already has an irrigator"
+            raise IrrigatorExistsError(msg)
         irrigator = Irrigator(
             cluster_id=cluster_id,
             tuya_device_id=tuya_device_id,
@@ -165,7 +361,7 @@ class IrrigationRepository:
         tuya_device_id: str,
         name: str,
         sensor_type: str,
-        config: dict,
+        config: dict[str, Any],
         plant_id: int | None = None,
         assignment_started_at: int | None = None,
     ) -> int:
@@ -238,7 +434,7 @@ class IrrigationRepository:
             self._open_sensor_assignment(sensor_id, new_plant_id, when=ts)
         self.session.flush()
         self.add_activity_event(
-            source="sensor",
+            source=SOURCE_SENSOR,
             entity_type=ENTITY_SENSOR,
             entity_id=sensor_id,
             code="sensor_reassigned",
@@ -246,16 +442,6 @@ class IrrigationRepository:
             severity="info",
             payload={"from_plant_id": from_plant_id, "to_plant_id": new_plant_id},
             timestamp=ts,
-        )
-
-    def sensor_assignments_for_plant(self, plant_id: int) -> list[SensorAssignment]:
-        """All assignment rows (open or closed) ever linking sensors to this plant."""
-        return list(
-            self.session.scalars(
-                select(SensorAssignment)
-                .where(SensorAssignment.plant_id == plant_id)
-                .order_by(SensorAssignment.started_at)
-            )
         )
 
     def list_sensor_assignments(self, sensor_id: int) -> list[SensorAssignment]:
@@ -329,14 +515,13 @@ class IrrigationRepository:
             )
             .on_conflict_do_nothing(index_elements=["sensor_id", "timestamp"])
         )
-        result = self.session.execute(stmt)
+        result = cast("CursorResult[Any]", self.session.execute(stmt))
         self.session.flush()
         if result.rowcount > 0:
             # Fetch the inserted row's ID
-            row = self.session.execute(
+            return self.session.execute(
                 select(SensorReading.id).where(SensorReading.sensor_id == sensor_id, SensorReading.timestamp == ts)
             ).scalar_one()
-            return row
         return None
 
     def get_last_reading_timestamp(self, sensor_id: int) -> int | None:
@@ -397,14 +582,14 @@ class IrrigationRepository:
                 )
                 .on_conflict_do_nothing(index_elements=["sensor_id", "timestamp"])
             )
-            result = self.session.execute(stmt)
+            result = cast("CursorResult[Any]", self.session.execute(stmt))
             inserted += result.rowcount
         self.session.flush()
         return inserted
 
     def get_recent_readings(self, sensor_id: int, hours: int = 24) -> list[SensorReading]:
         """Get recent readings for a sensor, ordered by timestamp DESC."""
-        cutoff = int(time.time()) - (hours * 3600)
+        cutoff = int(time.time()) - (hours * SECONDS_PER_HOUR)
         return list(
             self.session.scalars(
                 select(SensorReading)
@@ -414,7 +599,11 @@ class IrrigationRepository:
         )
 
     def get_readings_around(
-        self, sensor_id: int, timestamp: int, before_seconds: int = 1800, after_seconds: int = 7200
+        self,
+        sensor_id: int,
+        timestamp: int,
+        before_seconds: int = RESPONSE_PRE_WINDOW_SECONDS,
+        after_seconds: int = RESPONSE_POST_WINDOW_SECONDS,
     ) -> tuple[list[SensorReading], list[SensorReading]]:
         """Get readings before and after a timestamp.
 
@@ -449,8 +638,8 @@ class IrrigationRepository:
     def add_irrigation_event(
         self,
         irrigator_id: int,
-        action: str,
-        triggered_by: str,
+        action: EventAction,
+        triggered_by: TriggeredBy,
         duration_minutes: int | None = None,
         notes: str | None = None,
         timestamp: int | None = None,
@@ -471,7 +660,7 @@ class IrrigationRepository:
 
     def get_recent_events(self, irrigator_id: int, hours: int = 24) -> list[IrrigationEvent]:
         """Get recent events for an irrigator, ordered by timestamp DESC."""
-        cutoff = int(time.time()) - (hours * 3600)
+        cutoff = int(time.time()) - (hours * SECONDS_PER_HOUR)
         return list(
             self.session.scalars(
                 select(IrrigationEvent)
@@ -494,12 +683,36 @@ class IrrigationRepository:
         total_minutes = self.session.scalar(
             select(func.coalesce(func.sum(IrrigationEvent.duration_minutes), 0)).where(
                 IrrigationEvent.irrigator_id == irrigator_id,
-                IrrigationEvent.action == "start",
+                IrrigationEvent.action == EVENT_ACTION_START,
                 IrrigationEvent.timestamp >= since,
                 IrrigationEvent.timestamp <= until,
             )
         )
         return float(total_minutes or 0) * irrigator.flow_rate_l_per_min
+
+    def list_start_events_since(self, irrigator_id: int, since: int) -> list[IrrigationEvent]:
+        """An irrigator's ``start`` events at or after ``since``, newest first."""
+        return list(
+            self.session.scalars(
+                select(IrrigationEvent)
+                .where(
+                    IrrigationEvent.irrigator_id == irrigator_id,
+                    IrrigationEvent.action == EVENT_ACTION_START,
+                    IrrigationEvent.timestamp >= since,
+                )
+                .order_by(IrrigationEvent.timestamp.desc())
+            )
+        )
+
+    def list_events_since(self, irrigator_id: int, since: int) -> list[IrrigationEvent]:
+        """Every event of an irrigator at or after ``since``, in database order (callers only aggregate)."""
+        return list(
+            self.session.scalars(
+                select(IrrigationEvent).where(
+                    IrrigationEvent.irrigator_id == irrigator_id, IrrigationEvent.timestamp >= since
+                )
+            )
+        )
 
     # ── Irrigation Configs ────────────────────────────────────────────────────
 
@@ -514,9 +727,8 @@ class IrrigationRepository:
         "quiet_end_hour",
     )
 
-    def set_irrigation_config(self, cluster_id: int, **fields) -> int:
-        """Upsert a cluster's irrigation config; only the fields provided in
-        ``fields`` are mutated.
+    def set_irrigation_config(self, cluster_id: int, **fields: Unpack[IrrigationConfigPatch]) -> int:
+        """Upsert a cluster's irrigation config, mutating only the fields provided.
 
         Every field is nullable: passing ``None`` clears the cluster-level
         override (the effective resolver will then fall through to the
@@ -524,11 +736,12 @@ class IrrigationRepository:
         — so callers acting on a single form input do not need to round-trip
         every column.
         """
+        patch: Mapping[str, object] = fields  # indexed by the patchable-field names below
         existing = self.session.scalar(select(IrrigationConfig).where(IrrigationConfig.cluster_id == cluster_id))
         if existing:
             for key in self._CONFIG_PATCHABLE_FIELDS:
-                if key in fields:
-                    setattr(existing, key, fields[key])
+                if key in patch:
+                    setattr(existing, key, patch[key])
             existing.last_updated = int(time.time())
             self.session.flush()
             return existing.id
@@ -567,24 +780,25 @@ class IrrigationRepository:
         self.session.flush()
         return row
 
-    def update_global_irrigation_config(self, **fields) -> GlobalIrrigationConfig:
+    def update_global_irrigation_config(self, **fields: Unpack[IrrigationConfigPatch]) -> GlobalIrrigationConfig:
         """Patch the singleton global config; only the supplied keys are set.
 
         Pass ``None`` to clear a previously set field (the effective resolver
         then falls through to the project-wide constant). Omit a key entirely
         to leave its stored value untouched.
         """
+        patch: Mapping[str, object] = fields  # indexed by the patchable-field names below
         row = self.get_global_irrigation_config()
         for key in self._CONFIG_PATCHABLE_FIELDS:
-            if key in fields:
-                setattr(row, key, fields[key])
+            if key in patch:
+                setattr(row, key, patch[key])
         row.last_updated = int(time.time())
         self.session.flush()
         return row
 
     # ── Effective config resolution ──────────────────────────────────────────
 
-    def get_effective_config(self, cluster_id: int) -> dict[str, dict[str, object]]:
+    def get_effective_config(self, cluster_id: int) -> EffectiveConfig:
         """Resolve every config field walking cluster → global → constants.
 
         Returns a dict keyed by field name; each value is
@@ -593,7 +807,7 @@ class IrrigationRepository:
         """
         cluster_cfg = self.get_irrigation_config(cluster_id)
         global_cfg = self.get_global_irrigation_config()
-        out: dict[str, dict[str, object]] = {}
+        out: EffectiveConfig = {}
         for field in self._CONFIG_PATCHABLE_FIELDS:
             cluster_value = getattr(cluster_cfg, field, None) if cluster_cfg else None
             if cluster_value is not None:
@@ -618,8 +832,8 @@ class IrrigationRepository:
         confidence: float,
         primary_code: str | None,
         reason_text: str,
-        payload: dict,
-        triggered_by: str = "auto",
+        payload: dict[str, Any],
+        triggered_by: TriggeredBy = TRIGGERED_BY_AUTO,
         actuated: bool = False,
     ) -> int:
         """Persist a single decision evaluation; returns the new row id."""
@@ -662,14 +876,14 @@ class IrrigationRepository:
 
     def add_activity_event(
         self,
-        source: str,
-        entity_type: str,
+        source: ActivitySource,
+        entity_type: EntityType,
         code: str,
         message: str,
         *,
         entity_id: int | None = None,
         severity: str = "info",
-        payload: dict | None = None,
+        payload: dict[str, Any] | None = None,
         timestamp: int | None = None,
     ) -> int:
         """Append a polymorphic activity event; returns the new row id."""
@@ -716,17 +930,17 @@ class IrrigationRepository:
     def upsert_alert(
         self,
         dedup_key: str,
-        source: str,
+        source: ActivitySource,
         code: str,
         title: str,
         message: str,
         *,
         severity: str = "info",
-        entity_type: str = "cluster",
+        entity_type: EntityType = ENTITY_CLUSTER,
         entity_id: int | None = None,
         cluster_id: int | None = None,
         plant_id: int | None = None,
-        payload: dict | None = None,
+        payload: dict[str, Any] | None = None,
         seen_at: int | None = None,
     ) -> Alert:
         """Insert or refresh an alert keyed by ``dedup_key``.
@@ -840,6 +1054,10 @@ class IrrigationRepository:
             stmt = stmt.where(Alert.last_seen_at >= since)
         return self.session.scalar(stmt)
 
+    def get_open_alert_by_key(self, dedup_key: str) -> Alert | None:
+        """The unresolved (open or acknowledged) alert with ``dedup_key``, if any."""
+        return self.session.scalar(select(Alert).where(Alert.dedup_key == dedup_key, Alert.status != "resolved"))
+
     def acknowledge_alert(self, alert_id: int) -> Alert | None:
         """Move an open alert to ``acknowledged``; returns the updated row."""
         alert = self.session.get(Alert, alert_id)
@@ -910,7 +1128,7 @@ class IrrigationRepository:
 
     def list_plant_health_history(self, plant_id: int, days: int = 90) -> list[PlantHealthDaily]:
         """Last ``days`` of health snapshots oldest-first for charting."""
-        cutoff = int(time.time()) - days * 86400
+        cutoff = int(time.time()) - days * SECONDS_PER_DAY
         return list(
             self.session.scalars(
                 select(PlantHealthDaily)
@@ -944,6 +1162,10 @@ class IrrigationRepository:
         """All vacation windows ordered by start time desc."""
         return list(self.session.scalars(select(VacationWindow).order_by(VacationWindow.starts_at.desc())))
 
+    def get_vacation_window(self, window_id: int) -> VacationWindow | None:
+        """Fetch a vacation window by id."""
+        return self.session.get(VacationWindow, window_id)
+
     def get_active_vacation(self, at: int | None = None) -> VacationWindow | None:
         """The currently-active vacation window, if any."""
         now = at or int(time.time())
@@ -951,7 +1173,7 @@ class IrrigationRepository:
             select(VacationWindow).where(VacationWindow.starts_at <= now, VacationWindow.ends_at >= now)
         )
 
-    def update_vacation_window(self, window_id: int, **fields) -> VacationWindow | None:
+    def update_vacation_window(self, window_id: int, **fields: Unpack[VacationWindowPatch]) -> VacationWindow | None:
         """Patch a vacation window's fields; returns the updated row or None.
 
         Only keys with non-None values are applied — the route layer is
@@ -960,22 +1182,13 @@ class IrrigationRepository:
         row = self.session.get(VacationWindow, window_id)
         if not row:
             return None
-        for key, value in fields.items():
-            if value is None:
-                continue
-            if hasattr(row, key):
-                setattr(row, key, value)
+        self._patch_fields(row, fields)
         self.session.flush()
         return row
 
     def delete_vacation_window(self, window_id: int) -> bool:
         """Delete a vacation window; returns True if a row was removed."""
-        row = self.session.get(VacationWindow, window_id)
-        if not row:
-            return False
-        self.session.delete(row)
-        self.session.flush()
-        return True
+        return self._delete_by_id(VacationWindow, window_id)
 
     # ── Irrigation Windows ────────────────────────────────────────────────────
 
@@ -988,6 +1201,7 @@ class IrrigationRepository:
         )
 
     def get_irrigation_window(self, window_id: int) -> IrrigationWindow | None:
+        """Get an irrigation window by ID."""
         return self.session.get(IrrigationWindow, window_id)
 
     def add_irrigation_window(
@@ -996,9 +1210,10 @@ class IrrigationRepository:
         *,
         start_hour: int,
         end_hour: int,
-        weekday_mask: int = 127,
+        weekday_mask: int = FULL_WEEKDAY_MASK,
         label: str | None = None,
     ) -> IrrigationWindow:
+        """Add an irrigation window to a cluster (every weekday unless a mask is given)."""
         row = IrrigationWindow(
             cluster_id=cluster_id,
             start_hour=start_hour,
@@ -1010,25 +1225,20 @@ class IrrigationRepository:
         self.session.flush()
         return row
 
-    def update_irrigation_window(self, window_id: int, **fields) -> IrrigationWindow | None:
+    def update_irrigation_window(
+        self, window_id: int, **fields: Unpack[IrrigationWindowPatch]
+    ) -> IrrigationWindow | None:
+        """Patch an irrigation window's fields; ``None`` when it does not exist."""
         row = self.session.get(IrrigationWindow, window_id)
         if row is None:
             return None
-        for key, value in fields.items():
-            if value is None:
-                continue
-            if hasattr(row, key):
-                setattr(row, key, value)
+        self._patch_fields(row, fields)
         self.session.flush()
         return row
 
     def delete_irrigation_window(self, window_id: int) -> bool:
-        row = self.session.get(IrrigationWindow, window_id)
-        if row is None:
-            return False
-        self.session.delete(row)
-        self.session.flush()
-        return True
+        """Delete an irrigation window; ``False`` when it does not exist."""
+        return self._delete_by_id(IrrigationWindow, window_id)
 
     # ── User Preferences (single-row) ─────────────────────────────────────────
 
@@ -1042,16 +1252,29 @@ class IrrigationRepository:
         self.session.flush()
         return prefs
 
-    def update_preferences(self, **fields) -> UserPreferences:
+    def update_preferences(self, **fields: Unpack[PreferencesPatch]) -> UserPreferences:
         """Patch preferences with the provided keyword args; unknown keys are ignored."""
         prefs = self.get_preferences()
-        for key, value in fields.items():
-            if hasattr(prefs, key) and value is not None:
-                setattr(prefs, key, value)
+        self._patch_fields(prefs, fields)
         self.session.flush()
         return prefs
 
     # ── Generic helpers used by health / quality services ─────────────────────
+
+    @staticmethod
+    def _page(
+        stmt: "Select[Any]",
+        id_column: "InstrumentedAttribute[int]",
+        *,
+        limit: int | None,
+        after_id: int | None,
+    ) -> "Select[Any]":
+        """Id-cursor pagination, applied after the caller's own filters so the WHERE order is unchanged."""
+        if after_id is not None:
+            stmt = stmt.where(id_column > after_id)
+        if limit is not None:
+            stmt = stmt.limit(limit)
+        return stmt
 
     def list_all_sensors(
         self,
@@ -1073,11 +1296,7 @@ class IrrigationRepository:
         stmt = select(Sensor).order_by(Sensor.id)
         if filter_cluster_id is not None:
             stmt = stmt.where(Sensor.cluster_id == filter_cluster_id)
-        if after_id is not None:
-            stmt = stmt.where(Sensor.id > after_id)
-        if limit is not None:
-            stmt = stmt.limit(limit)
-        return list(self.session.scalars(stmt))
+        return list(self.session.scalars(self._page(stmt, Sensor.id, limit=limit, after_id=after_id)))
 
     def list_all_irrigators(
         self,
@@ -1099,11 +1318,7 @@ class IrrigationRepository:
         stmt = select(Irrigator).order_by(Irrigator.id)
         if filter_cluster_id is not None:
             stmt = stmt.where(Irrigator.cluster_id == filter_cluster_id)
-        if after_id is not None:
-            stmt = stmt.where(Irrigator.id > after_id)
-        if limit is not None:
-            stmt = stmt.limit(limit)
-        return list(self.session.scalars(stmt))
+        return list(self.session.scalars(self._page(stmt, Irrigator.id, limit=limit, after_id=after_id)))
 
     def list_all_plants(
         self,
@@ -1130,11 +1345,7 @@ class IrrigationRepository:
             stmt = stmt.where(Plant.cluster_id == filter_cluster_id)
         if filter_category is not None:
             stmt = stmt.where(Plant.category == filter_category)
-        if after_id is not None:
-            stmt = stmt.where(Plant.id > after_id)
-        if limit is not None:
-            stmt = stmt.limit(limit)
-        return list(self.session.scalars(stmt))
+        return list(self.session.scalars(self._page(stmt, Plant.id, limit=limit, after_id=after_id)))
 
     def get_plant(self, plant_id: int) -> Plant | None:
         """Fetch a plant by id."""
@@ -1144,42 +1355,129 @@ class IrrigationRepository:
         """Fetch a sensor by id."""
         return self.session.get(Sensor, sensor_id)
 
+    def list_sensors_by_ids(self, sensor_ids: "Iterable[int]") -> list[Sensor]:
+        """The sensors whose id is in ``sensor_ids``, in database order; unknown ids are skipped."""
+        return list(self.session.scalars(select(Sensor).where(Sensor.id.in_(sensor_ids))))
+
+    # ── Search (Command-K palette) ────────────────────────────────────────────
+    # ``pattern`` is a SQL LIKE pattern matched case-insensitively; ``prefix`` is the raw
+    # query, matched case-sensitively as a Tuya device-id prefix.
+
+    def search_clusters(self, pattern: str, limit: int) -> list[Cluster]:
+        """Clusters whose name or location matches ``pattern``."""
+        return list(
+            self.session.scalars(
+                select(Cluster)
+                .where(
+                    or_(
+                        func.lower(Cluster.name).like(func.lower(pattern)),
+                        func.lower(Cluster.location).like(func.lower(pattern)),
+                    )
+                )
+                .limit(limit)
+            )
+        )
+
+    def search_plants(self, pattern: str, limit: int) -> list[Plant]:
+        """Plants whose species or notes match ``pattern``."""
+        return list(
+            self.session.scalars(
+                select(Plant)
+                .where(
+                    or_(
+                        func.lower(Plant.species).like(func.lower(pattern)),
+                        func.lower(Plant.notes).like(func.lower(pattern)),
+                    )
+                )
+                .limit(limit)
+            )
+        )
+
+    def search_sensors(self, pattern: str, prefix: str, limit: int) -> list[Sensor]:
+        """Sensors whose name matches ``pattern`` or whose Tuya device id starts with ``prefix``."""
+        return list(
+            self.session.scalars(
+                select(Sensor)
+                .where(
+                    or_(
+                        func.lower(Sensor.name).like(func.lower(pattern)),
+                        Sensor.tuya_device_id.like(f"{prefix}%"),
+                    )
+                )
+                .limit(limit)
+            )
+        )
+
+    def search_irrigators(self, pattern: str, prefix: str, limit: int) -> list[Irrigator]:
+        """Irrigators whose name matches ``pattern`` or whose Tuya device id starts with ``prefix``."""
+        return list(
+            self.session.scalars(
+                select(Irrigator)
+                .where(
+                    or_(
+                        func.lower(Irrigator.name).like(func.lower(pattern)),
+                        Irrigator.tuya_device_id.like(f"{prefix}%"),
+                    )
+                )
+                .limit(limit)
+            )
+        )
+
     # ── Mutations for CRUD edit/delete ────────────────────────────────────────
 
-    def update_cluster(self, cluster_id: int, **fields) -> Cluster | None:
+    def _patch_fields(
+        self,
+        row: "Base",
+        fields: "Mapping[str, Any]",
+        *,
+        json_fields: frozenset[str] = frozenset(),
+    ) -> None:
+        """None-first PATCH: skip None, JSON-encode dict values of ``json_fields``, set only existing attributes."""
+        for key, value in fields.items():
+            if value is None:
+                continue
+            if key in json_fields and isinstance(value, dict):
+                setattr(row, key, json.dumps(value))
+            elif hasattr(row, key):
+                setattr(row, key, value)
+
+    def _delete_by_id(self, model: "type[Base]", row_id: int) -> bool:
+        """Delete one row by primary key; ``False`` when it does not exist (shared by the plain deletes)."""
+        row = self.session.get(model, row_id)
+        if row is None:
+            return False
+        self.session.delete(row)
+        self.session.flush()
+        return True
+
+    def update_cluster(self, cluster_id: int, **fields: Unpack[ClusterPatch]) -> Cluster | None:
         """Patch cluster fields; returns the updated row or None if missing."""
         cluster = self.session.get(Cluster, cluster_id)
         if not cluster:
             return None
-        for key, value in fields.items():
-            if hasattr(cluster, key) and value is not None:
-                setattr(cluster, key, value)
+        self._patch_fields(cluster, fields)
         self.session.flush()
         return cluster
 
     def delete_cluster(self, cluster_id: int) -> bool:
         """Delete a cluster (cascades to plants/sensors/irrigators/config)."""
-        cluster = self.session.get(Cluster, cluster_id)
-        if not cluster:
-            return False
-        self.session.delete(cluster)
-        self.session.flush()
-        return True
+        return self._delete_by_id(Cluster, cluster_id)
 
-    def update_plant(self, plant_id: int, **fields) -> Plant | None:
+    def update_plant(self, plant_id: int, **fields: Unpack[PlantPatch]) -> Plant | None:
         """Patch plant fields; returns the updated row or None."""
         plant = self.session.get(Plant, plant_id)
         if not plant:
             return None
-        for key, value in fields.items():
-            if hasattr(plant, key) and value is not None:
-                setattr(plant, key, value)
+        self._patch_fields(plant, fields)
         self.session.flush()
         return plant
 
     def delete_plant(self, plant_id: int) -> bool:
-        """Delete a plant. Sensors retain their cluster; any open assignment to
-        the plant is closed so historical readings stay attributed correctly."""
+        """Delete a plant, closing its sensors' open assignments.
+
+        Sensors retain their cluster; any open assignment to the plant is closed
+        so historical readings stay attributed correctly.
+        """
         plant = self.session.get(Plant, plant_id)
         if not plant:
             return False
@@ -1228,7 +1526,8 @@ class IrrigationRepository:
         if not target:
             return None
         if plant.cluster_id == target_cluster_id:
-            raise SameClusterMoveError(f"Plant {plant_id} already belongs to cluster {target_cluster_id}")
+            msg = f"Plant {plant_id} already belongs to cluster {target_cluster_id}"
+            raise SameClusterMoveError(msg)
         from_cluster_id = plant.cluster_id
         plant.cluster_id = target_cluster_id
         moved_sensors = list(self.session.scalars(select(Sensor).where(Sensor.plant_id == plant_id)))
@@ -1236,7 +1535,7 @@ class IrrigationRepository:
             sensor.cluster_id = target_cluster_id
         self.session.flush()
         self.add_activity_event(
-            source="plant",
+            source=SOURCE_PLANT,
             entity_type=ENTITY_PLANT,
             entity_id=plant_id,
             code="plant_moved",
@@ -1250,9 +1549,10 @@ class IrrigationRepository:
         )
         return plant
 
-    def update_sensor(self, sensor_id: int, **fields) -> Sensor | None:
-        """Patch sensor fields. ``plant_id`` changes are routed through
-        ``reassign_sensor_to_plant`` so the assignment history stays in sync.
+    def update_sensor(self, sensor_id: int, **fields: Unpack[SensorPatch]) -> Sensor | None:
+        """Patch sensor fields, keeping the assignment history in sync.
+
+        ``plant_id`` changes are routed through ``reassign_sensor_to_plant``;
         ``config`` is JSON-serialised if a dict.
         """
         sensor = self.session.get(Sensor, sensor_id)
@@ -1263,13 +1563,7 @@ class IrrigationRepository:
         # silently lose history.
         plant_id_in_fields = "plant_id" in fields
         new_plant_id = fields.pop("plant_id", None) if plant_id_in_fields else None
-        for key, value in fields.items():
-            if value is None:
-                continue
-            if key == "config" and isinstance(value, dict):
-                sensor.config = json.dumps(value)
-            elif hasattr(sensor, key):
-                setattr(sensor, key, value)
+        self._patch_fields(sensor, fields, json_fields=frozenset({"config"}))
         if plant_id_in_fields:
             self.reassign_sensor_to_plant(sensor_id, new_plant_id)
         self.session.flush()
@@ -1277,33 +1571,17 @@ class IrrigationRepository:
 
     def delete_sensor(self, sensor_id: int) -> bool:
         """Delete a sensor (cascades to its readings)."""
-        sensor = self.session.get(Sensor, sensor_id)
-        if not sensor:
-            return False
-        self.session.delete(sensor)
-        self.session.flush()
-        return True
+        return self._delete_by_id(Sensor, sensor_id)
 
-    def update_irrigator(self, irrigator_id: int, **fields) -> Irrigator | None:
+    def update_irrigator(self, irrigator_id: int, **fields: Unpack[IrrigatorPatch]) -> Irrigator | None:
         """Patch irrigator fields; ``config`` is JSON-serialised if a dict."""
         irrigator = self.session.get(Irrigator, irrigator_id)
         if not irrigator:
             return None
-        for key, value in fields.items():
-            if value is None:
-                continue
-            if key == "config" and isinstance(value, dict):
-                irrigator.config = json.dumps(value)
-            elif hasattr(irrigator, key):
-                setattr(irrigator, key, value)
+        self._patch_fields(irrigator, fields, json_fields=frozenset({"config"}))
         self.session.flush()
         return irrigator
 
     def delete_irrigator(self, irrigator_id: int) -> bool:
         """Delete an irrigator (cascades to its events)."""
-        irrigator = self.session.get(Irrigator, irrigator_id)
-        if not irrigator:
-            return False
-        self.session.delete(irrigator)
-        self.session.flush()
-        return True
+        return self._delete_by_id(Irrigator, irrigator_id)

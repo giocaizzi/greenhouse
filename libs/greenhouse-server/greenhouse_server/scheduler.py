@@ -2,16 +2,35 @@
 
 import logging
 import threading
+from typing import TYPE_CHECKING, Any, TypedDict
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from apscheduler.jobstores.base import JobLookupError
 from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi import FastAPI
 
-from greenhouse_core.constants import HEALTH_POLL_IDLE_MINUTES
+from greenhouse_core.constants import (
+    ANOMALY_SCAN_INTERVAL_MINUTES,
+    HEALTH_POLL_IDLE_MINUTES,
+    HEALTH_SNAPSHOT_HOUR,
+    HEALTH_SNAPSHOT_MINUTE,
+    SYNC_JOB_BACKFILL_HOURS,
+)
 from greenhouse_core.devices import DeviceGateway
 from greenhouse_core.repository import IrrigationRepository
+from greenhouse_server import state
 from greenhouse_server.config import Settings
+from greenhouse_server.services.jobs import job_session as _job_session  # private: keeps the frozen dir() surface
+from greenhouse_server.services.jobs import read_session as _read_session  # private, as above
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from apscheduler.job import Job
+    from starlette.requests import Request
+
+    from greenhouse_core.devices import DeviceRegistry
+    from greenhouse_server.services.irrigation import IrrigationService
 
 logger = logging.getLogger(__name__)
 
@@ -66,10 +85,12 @@ def stop_scheduler() -> None:
         scheduler.shutdown(wait=False)
 
 
+CHECK_ALL_JOB_ID = "check_all"
+
 # Cron jobs that gate wall-clock-sensitive work and therefore MUST fire on the
 # same clock the engine reasons in (UserPreferences.timezone). These are
 # re-added by `reschedule_for_timezone` whenever the preference changes.
-_TZ_BOUND_CRON_JOBS = ("check_all", "plant_health_snapshot")
+_TZ_BOUND_CRON_JOBS = (CHECK_ALL_JOB_ID, "plant_health_snapshot")
 
 # IDs of the built-in jobs registered at startup, recorded by `_add_core_job`
 # as they are registered — so the protected set can never drift from what
@@ -88,7 +109,14 @@ class JobNotRegisteredError(LookupError):
     """Raised when the job an operation targets is not registered."""
 
 
-def _add_core_job(func, trigger: str, *, id: str, name: str, **trigger_args) -> None:
+def _add_core_job(
+    func: "Callable[[], None]",
+    trigger: str,
+    *,
+    id: str,  # noqa: A002 — mirrors APScheduler add_job(id=...) at every call site
+    name: str,
+    **trigger_args: Any,
+) -> None:
     """Register (or replace) a built-in job and mark its id as core."""
     _CORE_JOB_IDS.add(id)
     scheduler.add_job(func, trigger, id=id, name=name, replace_existing=True, **trigger_args)
@@ -114,33 +142,11 @@ def _resolve_zoneinfo(tz_name: str | None) -> ZoneInfo:
 
 
 def _resolve_check_cron_hours(settings: Settings) -> str:
-    """Pick the cron `hour` field, honoring the deprecated interval var.
+    """The cron ``hour`` field for ``check_all`` (``IRRIGATION_CHECK_CRON_HOURS``, validated by Settings).
 
-    Why a shim: the project switched check_all from APScheduler's `interval`
-    trigger to `cron` for predictable wall-clock fires. Operators with
-    `IRRIGATION_CHECK_INTERVAL_HOURS=N` already set in their .env shouldn't
-    silently lose their cadence — translate `N` to `*/N` cron syntax and
-    warn once. An explicitly set `IRRIGATION_CHECK_CRON_HOURS` always wins,
-    even when it is the default `*`. ``Settings`` has already rejected an `N`
-    that `*/N` can't express (see ``Settings._validate_legacy_check_interval``).
+    Kept as the one seam the registration reads (tests patch it by name).
     """
-    if settings.check_interval_hours is None:
-        return settings.check_cron_hours
-    if settings.check_cron_hours_explicit:
-        logger.warning(
-            "Both IRRIGATION_CHECK_CRON_HOURS and the deprecated IRRIGATION_CHECK_INTERVAL_HOURS "
-            "are set; using IRRIGATION_CHECK_CRON_HOURS=%r and ignoring the interval.",
-            settings.check_cron_hours,
-        )
-        return settings.check_cron_hours
-    n = settings.check_interval_hours
-    logger.warning(
-        "IRRIGATION_CHECK_INTERVAL_HOURS is deprecated; set "
-        "IRRIGATION_CHECK_CRON_HOURS instead. Translating value %d to '*/%d'.",
-        n,
-        n,
-    )
-    return f"*/{n}"
+    return settings.check_cron_hours
 
 
 def init_scheduler(app: FastAPI, settings: Settings, tz_name: str | None = None) -> None:
@@ -181,7 +187,7 @@ def init_scheduler(app: FastAPI, settings: Settings, tz_name: str | None = None)
     _add_core_job(
         _anomaly_job,
         "interval",
-        minutes=15,
+        minutes=ANOMALY_SCAN_INTERVAL_MINUTES,
         id="sensor_anomaly",
         name="Sensor anomaly scan",
     )
@@ -207,14 +213,14 @@ def _add_tz_bound_cron_jobs(settings: Settings) -> None:
         "cron",
         hour=_resolve_check_cron_hours(settings),
         minute=0,
-        id="check_all",
+        id=CHECK_ALL_JOB_ID,
         name="Check all clusters",
     )
     _add_core_job(
         _health_snapshot_job,
         "cron",
-        hour=0,
-        minute=30,
+        hour=HEALTH_SNAPSHOT_HOUR,
+        minute=HEALTH_SNAPSHOT_MINUTE,
         id="plant_health_snapshot",
         name="Daily plant health snapshot",
     )
@@ -249,10 +255,10 @@ def reschedule_for_timezone(tz_name: str | None, settings: Settings) -> None:
         apply_persisted_pause(True)
 
 
-def apply_timezone_preference(request, tz_name: str | None) -> None:
+def apply_timezone_preference(request: "Request", tz_name: str | None) -> None:
     """Re-sync every clock to ``UserPreferences.timezone`` after it changes.
 
-    Keeps the three formerly-competing clocks in lockstep with the engine:
+    Keeps the three clocks in lockstep with the engine:
     the scheduler's wall-clock cron jobs, the weather forecast localization,
     and the display formatter. A no-op when the timezone is unchanged.
 
@@ -268,7 +274,7 @@ def apply_timezone_preference(request, tz_name: str | None) -> None:
         return
 
     app = request.app
-    settings = app.state.settings
+    settings = state.settings(app)
 
     set_display_timezone(tz_name)
     reschedule_for_timezone(tz_name, settings)
@@ -279,6 +285,15 @@ def apply_timezone_preference(request, tz_name: str | None) -> None:
     )
 
 
+def _job_app() -> FastAPI:
+    """The app the jobs read, typed for the ``state`` accessors.
+
+    Deliberately unchecked: with no app (jobs fired before ``init_scheduler``) the caller's
+    first ``.state`` read raises ``AttributeError`` and escapes the job, as it always has.
+    """
+    return _app  # type: ignore[return-value]  # a None _app escapes as AttributeError at the first .state read
+
+
 def _get_cloud() -> DeviceGateway | None:
     """Return the one app-scoped Tuya gateway (shared client/token), or None.
 
@@ -286,98 +301,79 @@ def _get_cloud() -> DeviceGateway | None:
     fresh client per tick — so a sync/check run costs no extra ``/v1.0/token``
     call, and the local-key cache warmed by one job is seen by the others.
     """
-    return getattr(_app.state, "device_gateway", None) if _app is not None else None
+    return state.device_gateway(_app) if _app is not None else None
 
 
 def _sync_job() -> None:
     """Background job: sync all sensor data."""
     from greenhouse_server.services.sync import SyncService
 
-    cloud = _get_cloud()
-    if cloud is None:
+    gateway = _get_cloud()
+    if gateway is None:
         logger.debug("Sync job skipped: no Tuya credentials")
         return
 
-    registry = getattr(_app.state, "device_registry", None)
-    session = _app.state.session_factory()
-    try:
+    registry = state.device_registry(_job_app())
+    with _job_session(_app, logger, "Sync job failed") as session:
         repo = IrrigationRepository(session)
-        sync_svc = SyncService(repo, registry, cloud)
-        sync_svc.sync_all_sensors(hours=6)
-        session.commit()
-    except Exception:
-        session.rollback()
-        logger.exception("Sync job failed")
-    finally:
-        session.close()
+        sync_svc = SyncService(repo, registry, gateway)
+        sync_svc.sync_all_sensors(hours=SYNC_JOB_BACKFILL_HOURS)
 
 
 def _health_snapshot_job() -> None:
     """Background job: compute and persist daily plant health snapshots."""
     from greenhouse_server.services.health import PlantHealthService
 
-    session = _app.state.session_factory()
-    try:
-        from greenhouse_core.repository import IrrigationRepository
-
+    with _job_session(_app, logger, "Plant health snapshot job failed") as session:
         repo = IrrigationRepository(session)
-        svc = PlantHealthService(repo, _app.state.plant_db)
+        svc = PlantHealthService(repo, state.plant_db(_job_app()))
         svc.snapshot_daily()
-        session.commit()
-    except Exception:
-        session.rollback()
-        logger.exception("Plant health snapshot job failed")
-    finally:
-        session.close()
+
+
+def _build_irrigation_service(
+    app: FastAPI, repo: IrrigationRepository, registry: "DeviceRegistry | None", gateway: DeviceGateway | None
+) -> "IrrigationService":
+    """Wire the check job's service on the job's own repo; the shared health monitor is re-bound to it first."""
+    from greenhouse_server.services.irrigation import IrrigationService
+    from greenhouse_server.services.sync import SyncService
+
+    sync_svc = SyncService(repo, registry, gateway)
+    monitor = state.health_monitor(app)
+    if monitor is not None:
+        monitor.bind_repo(repo)
+    return IrrigationService(
+        repo=repo,
+        registry=registry,
+        sync_service=sync_svc,
+        weather_client=state.weather_client(app),
+        plant_db=state.plant_db(app),
+        health_monitor=monitor,
+        notifier=state.ntfy_notifier(app),
+    )
 
 
 def _check_job() -> None:
     """Background job: check all clusters."""
-    from greenhouse_server.services.irrigation import IrrigationService
-    from greenhouse_server.services.sync import SyncService
+    # Resolved here, before the session opens, so an import failure escapes the job
+    # instead of being logged as "Check job failed".
+    from greenhouse_server.services.irrigation import IrrigationService  # noqa: F401
+    from greenhouse_server.services.sync import SyncService  # noqa: F401
 
-    cloud = _get_cloud()
-    registry = getattr(_app.state, "device_registry", None)
+    gateway = _get_cloud()
+    registry = state.device_registry(_job_app())
 
-    session = _app.state.session_factory()
-    try:
+    with _job_session(_app, logger, "Check job failed") as session:
         repo = IrrigationRepository(session)
-        sync_svc = SyncService(repo, registry, cloud)
-        monitor = getattr(_app.state, "health_monitor", None)
-        if monitor is not None:
-            monitor.bind_repo(repo)
-        irrigation_svc = IrrigationService(
-            repo=repo,
-            registry=registry,
-            sync_service=sync_svc,
-            weather_client=_app.state.weather_client,
-            plant_db=_app.state.plant_db,
-            health_monitor=monitor,
-            notifier=getattr(_app.state, "ntfy_notifier", None),
-        )
-        irrigation_svc.check_all_clusters()
-        session.commit()
-    except Exception:
-        session.rollback()
-        logger.exception("Check job failed")
-    finally:
-        session.close()
+        _build_irrigation_service(_job_app(), repo, registry, gateway).check_all_clusters()
 
 
 def _anomaly_job() -> None:
     """Background job: scan all sensors for staleness and drift anomalies."""
     from greenhouse_server.services.anomaly import SensorAnomalyService
 
-    session = _app.state.session_factory()
-    try:
+    with _job_session(_app, logger, "Anomaly scan job failed") as session:
         repo = IrrigationRepository(session)
-        SensorAnomalyService(repo, notifier=getattr(_app.state, "ntfy_notifier", None)).scan()
-        session.commit()
-    except Exception:
-        session.rollback()
-        logger.exception("Anomaly scan job failed")
-    finally:
-        session.close()
+        SensorAnomalyService(repo, notifier=state.ntfy_notifier(_job_app())).scan()
 
 
 def _health_monitor_job() -> None:
@@ -391,25 +387,18 @@ def _health_monitor_job() -> None:
     if _app is None:
         return
 
-    monitor = getattr(_app.state, "health_monitor", None)
+    monitor = state.health_monitor(_app)
     if monitor is None:
         logger.debug("Health monitor job skipped: no monitor wired")
         return
 
-    session = _app.state.session_factory()
-    try:
+    with _job_session(_app, logger, "Device health monitor job failed") as session:
         repo = IrrigationRepository(session)
         monitor.bind_repo(repo)
         monitor.poll_all()
-        session.commit()
-    except Exception:
-        session.rollback()
-        logger.exception("Device health monitor job failed")
-    finally:
-        session.close()
 
 
-def init_health_monitor(app: FastAPI, settings: Settings) -> None:
+def init_health_monitor(app: FastAPI, settings: Settings) -> None:  # noqa: ARG001 — public signature
     """Build the long-lived :class:`DeviceHealthMonitor` for this app.
 
     Stored on ``app.state.health_monitor`` so dependency-injection wiring
@@ -420,33 +409,24 @@ def init_health_monitor(app: FastAPI, settings: Settings) -> None:
     """
     from greenhouse_server.services.health_monitor import DeviceHealthMonitor
 
-    registry = getattr(app.state, "device_registry", None)
+    registry = state.device_registry(app)
     if registry is None:
         logger.debug("Health monitor init skipped: no device registry")
         return
 
-    session = app.state.session_factory()
-    try:
+    with _read_session(app) as session:
         repo = IrrigationRepository(session)
-        monitor = DeviceHealthMonitor(repo=repo, registry=registry, notifier=getattr(app.state, "ntfy_notifier", None))
+        monitor = DeviceHealthMonitor(repo=repo, registry=registry, notifier=state.ntfy_notifier(app))
         try:
-            migrated = monitor.migrate_legacy_pump_alerts()
-            if migrated:
-                logger.info("Migrated %d legacy pump_dry_run alerts to health: keys", migrated)
             monitor.backfill_from_history()
             session.commit()
         except Exception:
             session.rollback()
             logger.exception("Health monitor startup hooks failed")
         app.state.health_monitor = monitor
-    finally:
-        session.close()
 
 
-CHECK_ALL_JOB_ID = "check_all"
-
-
-def _is_paused(job) -> bool:
+def _is_paused(job: "Job") -> bool:
     """True only when ``job`` was explicitly paused.
 
     APScheduler pauses a job by setting ``next_run_time`` to ``None``. A job
@@ -459,7 +439,18 @@ def _is_paused(job) -> bool:
     return hasattr(job, "next_run_time") and job.next_run_time is None
 
 
-def get_jobs() -> list[dict]:
+class JobInfo(TypedDict):
+    """One ``get_jobs`` row: a plain dict at runtime (``SchedulerJobResponse(**job)``, web jobs table)."""
+
+    id: str
+    name: str
+    trigger: str
+    next_run_time: str | None
+    paused: bool
+    core: bool
+
+
+def get_jobs() -> list[JobInfo]:
     """List all registered jobs.
 
     ``paused`` is True only for an explicitly paused job (only ``check_all``
@@ -469,7 +460,7 @@ def get_jobs() -> list[dict]:
     ``scheduler_running`` flag on ``/health`` to tell the two apart.
     """
     running = scheduler.running
-    jobs = []
+    jobs: list[JobInfo] = []
     for job in scheduler.get_jobs():
         next_run = getattr(job, "next_run_time", None) if running else None
         jobs.append(
@@ -501,15 +492,17 @@ def delete_job(job_id: str) -> None:
         JobNotRegisteredError: no job with that id is registered.
     """
     if job_id in _CORE_JOB_IDS:
-        raise CoreJobError(
+        msg = (
             f"Job {job_id} is a built-in scheduler job and cannot be deleted. "
             "To stop automatic irrigation checks use POST /api/v1/scheduler/pause "
             "(resume with POST /api/v1/scheduler/resume)."
         )
+        raise CoreJobError(msg)
     try:
         scheduler.remove_job(job_id)
     except JobLookupError:
-        raise JobNotRegisteredError(f"Job {job_id} not found") from None
+        msg = f"Job {job_id} not found"
+        raise JobNotRegisteredError(msg) from None
 
 
 def set_check_all_paused(repo: IrrigationRepository, paused: bool) -> bool:
@@ -518,6 +511,11 @@ def set_check_all_paused(repo: IrrigationRepository, paused: bool) -> bool:
     Works whether or not the scheduler is running: on a stopped scheduler the
     registered (pending) job is paused/resumed and the preference persisted,
     so it takes effect when the scheduler starts and survives restarts.
+    Commits because the live scheduler has already changed: the persisted
+    flag must match it before the caller returns. Order matters and is kept:
+    the live job is paused/resumed first, so if the commit then fails the
+    in-memory state and the persisted flag disagree until the next restart
+    re-applies the flag.
 
     Args:
         repo: Repository whose session receives the preference write (committed here).
@@ -531,13 +529,14 @@ def set_check_all_paused(repo: IrrigationRepository, paused: bool) -> bool:
             is persisted in that case).
     """
     if scheduler.get_job(CHECK_ALL_JOB_ID) is None:
-        raise JobNotRegisteredError(f"Job {CHECK_ALL_JOB_ID} not found")
+        msg = f"Job {CHECK_ALL_JOB_ID} not found"
+        raise JobNotRegisteredError(msg)
     if paused:
         scheduler.pause_job(CHECK_ALL_JOB_ID)
     else:
         scheduler.resume_job(CHECK_ALL_JOB_ID)
     repo.update_preferences(scheduler_paused=paused)
-    repo.session.commit()
+    repo.commit()
     return is_check_all_paused()
 
 

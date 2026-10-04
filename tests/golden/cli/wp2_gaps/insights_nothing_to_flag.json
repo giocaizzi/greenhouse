@@ -1,0 +1,32 @@
+{
+ "insights": [
+  [
+   "Care insights",
+   "bold"
+  ],
+  [
+   "\n",
+   ""
+  ],
+  [
+   "nothing to flag",
+   "dim"
+  ],
+  [
+   "\n\n",
+   ""
+  ],
+  [
+   "Needs water: ",
+   "bold"
+  ],
+  [
+   "nobody",
+   "dim"
+  ],
+  [
+   "\n",
+   ""
+  ]
+ ]
+}

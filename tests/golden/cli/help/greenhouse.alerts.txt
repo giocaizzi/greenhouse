@@ -1,0 +1,15 @@
+
+ Usage: greenhouse alerts [OPTIONS] COMMAND [ARGS]...
+
+ Inspect and manage the alert inbox
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                                      │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────────────────────────╮
+│ list     List persisted alerts. Newest-seen first.                                               │
+│ get      Fetch a single alert by ID.                                                             │
+│ ack      Acknowledge an open alert (idempotent).                                                 │
+│ resolve  Mark an alert as resolved.                                                              │
+│ sync     Recompute alerts and reconcile the inbox.                                               │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

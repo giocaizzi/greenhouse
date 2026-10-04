@@ -1,0 +1,13 @@
+
+ Usage: greenhouse history [OPTIONS] {cluster}
+
+ Sensor readings + irrigation events timeline.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────╮
+│ *    cluster      <int>  Cluster ID [required]                                                   │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ --hours        <int>  Hours of history [default: 24]                                             │
+│ --limit        <int>  Max entries per section [default: 50]                                      │
+│ --help                Show this message and exit.                                                │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

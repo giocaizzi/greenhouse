@@ -1,0 +1,45 @@
+{
+ "body_lines": [
+  ""
+ ],
+ "db_effect": {
+  "vacation_windows": {
+   "changed": {
+    "1": {
+     "ends_at": [
+      1777284000,
+      1777075200
+     ],
+     "notes": [
+      "Spain",
+      "Shorter"
+     ],
+     "starts_at": [
+      1776679200,
+      1776643200
+     ]
+    }
+   }
+  }
+ },
+ "device_calls": {
+  "irrigator": [],
+  "sensor": []
+ },
+ "headers": {
+  "location": "/vacation"
+ },
+ "request": {
+  "form": {
+   "contact_email": "",
+   "ends_at": "2026-04-25",
+   "notes": "Shorter",
+   "starts_at": "2026-04-20"
+  },
+  "headers": {},
+  "method": "POST",
+  "url": "/vacation/1/edit"
+ },
+ "status": 303,
+ "templates": []
+}

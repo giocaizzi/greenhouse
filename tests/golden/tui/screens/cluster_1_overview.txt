@@ -1,0 +1,40 @@
+ ⭘                                   greenhouse · Living Room — http://testserver                              10:00:00
+ Overview  Charts  Plants  Sensors  Insights  Decisions  History  Windows  Config
+╸━━━━━━━━╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+╭────────────────────╮ ╭────────────────────╮
+│  ▄▄▀▀▄    ▄▀▀▄     │ │    ▄  ▄▀▄  ▄       │
+│  ▀▀▀▀▀▀  ▀▀▀▀▀▀    │ │  ▄▀▀▀ ▀▀▀ ▀▀▀▄     │
+│   ▀▀▀▀▀▄ ▀▀▀▀▀     │ │ ▀▀▀▄▀▄▀▀▀▄▀▄▀▀▀    │
+│ ▄▀▀▀▄ ▀▀▄▀ ▄▀▀▀▄   │ │ ▀ ▄▀▀▀ ▀ ▀▀▀▄ ▀    │
+│  ▀▀▀▀▀▄▀▀▄▀▀▀▀▀    │ │  ▀▀▀▄▀▄▀▄▀▄▀▀▀     │
+│  ▄▄▄▄▄▀▀▀▀▄▄▄▄▄    │ │  ▄▄▄▀▀▀▀▀▀▀▄▄▄▄    │
+│   ▀▀▀▀▀▀▀▀▀▀▀▀     │ │   ▀▀▀▀▀▀▀▀▀▀▀▀     │
+│    ▀▀▀▀▀▀▀▀▀▀      │ │    ▀▀▀▀▀▀▀▀▀▀      │
+│ Monstera deliciosa │ │ Nephrolepis exalta │
+│ thriving 58.0%     │ │ thirsty 38.0%      │
+│ █████████░┊░░░░░   │ │ ██████░┊░░┊░░░░░   │
+╰────────────────────╯ ╰────────────────────╯
+
+╭────────────────────────────────╮╭────────────────────────────────────────╮╭──────────────────────────────────────────╮
+│    ▄▀▀▀▀▀▄                     ││ Decision engine                        ││ Forecast                                 │
+│   ▀▀▀▀▀▀▀▀▀   ▄▀               ││ irrigate  4 min · every 6h  confidence ││ next water     due now                   │
+│ ▀▀▀▀▀▀▀▀▀▀▀▀▀▀                 ││ 90%                                    ││ projected min  32.6%                     │
+│   ▀▀▀▀▀▀▀▀▀                    ││ drop soil very dry (driest=32% <       ││ method         drainage_slope (40%)      │
+│                                ││ 45.0%) [sensor_very_dry]               ││                Nephrolepis exaltata will │
+│ Living Room pump               ││ sun very bright (2592 lux, seasonal)   ││                hit its 60% min in ~0.0h  │
+│ idle                           ││ [light_very_bright]                    ││                based on -1.1%/h          │
+│ last start 8h00m ago · 3m      ││                                        ││                drainage.                 │
+│ by auto                        │╰────────────────────────────────────────╯╰──────────────────────────────────────────╯
+│ u edit · del detach            │
+╰────────────────────────────────╯
+
+
+
+
+
+
+
+
+
+ esc Back  i Irrigate  w Water now  x Stop  c Check  n New  u Edit  del Delete  d Dashboard  a Alerts  l Act▏^p palette

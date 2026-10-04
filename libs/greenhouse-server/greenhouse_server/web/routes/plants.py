@@ -2,40 +2,73 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from typing import TypedDict
 
-from greenhouse_server.deps import RepoDep, require_cluster
+from fastapi import APIRouter, Form, Request
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
+
+from greenhouse_server.deps import RepoDep, require_cluster, require_plant_in_cluster
 from greenhouse_server.web.context import base_context
+from greenhouse_server.web.forms import blank_or
 from greenhouse_server.web.templating import templates
 
 router = APIRouter(include_in_schema=False)
 
 
-def _opt_float(value: str | None) -> float | None:
-    if value is None or value.strip() == "":
-        return None
-    return float(value)
+class PlantFormFields(TypedDict):
+    """The plant form mapped to repository fields (``add_plant`` / ``update_plant`` keywords)."""
+
+    species: str
+    category: str | None
+    water_needs: str | None
+    light_needs: str | None
+    ideal_temp_min: float | None
+    ideal_temp_max: float | None
+    ideal_humidity_min: float | None
+    ideal_humidity_max: float | None
+    notes: str | None
 
 
-def _get_plant_in_cluster(repo, cluster_id: int, plant_id: int):
-    plant = repo.get_plant(plant_id)
-    if not plant or plant.cluster_id != cluster_id:
-        raise HTTPException(404, "Plant not found in cluster")
-    return plant
+def _plant_form_fields(
+    *,
+    species: str,
+    category: str,
+    water_needs: str,
+    light_needs: str,
+    ideal_temp_min: str,
+    ideal_temp_max: str,
+    ideal_humidity_min: str,
+    ideal_humidity_max: str,
+    notes: str,
+) -> PlantFormFields:
+    """Map the plant form (create and edit share it) to repository fields: blank → None, bounds → float."""
+    return {
+        "species": species,
+        "category": category or None,
+        "water_needs": water_needs or None,
+        "light_needs": light_needs or None,
+        "ideal_temp_min": blank_or(ideal_temp_min, float),
+        "ideal_temp_max": blank_or(ideal_temp_max, float),
+        "ideal_humidity_min": blank_or(ideal_humidity_min, float),
+        "ideal_humidity_max": blank_or(ideal_humidity_max, float),
+        "notes": notes or None,
+    }
 
 
 @router.get("/clusters/{cluster_id}/plants")
-def list_plants(cluster_id: int, repo: RepoDep):
-    """Legacy URL — plants are rendered inline on the unified cluster detail
-    page. A 301 keeps old bookmarks working and drops them at the right
-    section anchor."""
+def list_plants(cluster_id: int, repo: RepoDep) -> Response:
+    """Redirect the legacy plants URL to the detail page's plants section (301).
+
+    Plants are rendered inline on the unified cluster detail page; the
+    redirect keeps old bookmarks working and drops them at the right anchor.
+    """
     require_cluster(repo, cluster_id)
     return RedirectResponse(url=f"/clusters/{cluster_id}#plants", status_code=301)
 
 
 @router.get("/clusters/{cluster_id}/plants/new")
-def new_plant_form(request: Request, cluster_id: int, repo: RepoDep):
+def new_plant_form(request: Request, cluster_id: int, repo: RepoDep) -> Response:
+    """Render the add-plant form."""
     cluster = require_cluster(repo, cluster_id)
     return templates.TemplateResponse(request, "plants/new.html", base_context(request, cluster=cluster))
 
@@ -54,28 +87,32 @@ def create_plant(
     ideal_humidity_min: str = Form(""),
     ideal_humidity_max: str = Form(""),
     notes: str = Form(""),
-):
+) -> Response:
+    """Add a plant from the form and return to the cluster's plants section."""
     require_cluster(repo, cluster_id)
     repo.add_plant(
         cluster_id=cluster_id,
-        species=species,
-        category=category or None,
-        water_needs=water_needs or None,
-        light_needs=light_needs or None,
-        ideal_temp_min=_opt_float(ideal_temp_min),
-        ideal_temp_max=_opt_float(ideal_temp_max),
-        ideal_humidity_min=_opt_float(ideal_humidity_min),
-        ideal_humidity_max=_opt_float(ideal_humidity_max),
-        notes=notes or None,
+        **_plant_form_fields(
+            species=species,
+            category=category,
+            water_needs=water_needs,
+            light_needs=light_needs,
+            ideal_temp_min=ideal_temp_min,
+            ideal_temp_max=ideal_temp_max,
+            ideal_humidity_min=ideal_humidity_min,
+            ideal_humidity_max=ideal_humidity_max,
+            notes=notes,
+        ),
     )
-    repo.session.commit()
+    repo.commit()
     return RedirectResponse(url=f"/clusters/{cluster_id}#plants", status_code=303)
 
 
 @router.get("/clusters/{cluster_id}/plants/{plant_id}/edit")
-def edit_plant_form(request: Request, cluster_id: int, plant_id: int, repo: RepoDep):
+def edit_plant_form(request: Request, cluster_id: int, plant_id: int, repo: RepoDep) -> Response:
+    """Render the edit form of one of the cluster's plants."""
     cluster = require_cluster(repo, cluster_id)
-    plant = _get_plant_in_cluster(repo, cluster_id, plant_id)
+    plant = require_plant_in_cluster(repo, cluster_id, plant_id)
     return templates.TemplateResponse(request, "plants/edit.html", base_context(request, cluster=cluster, plant=plant))
 
 
@@ -94,28 +131,31 @@ def update_plant(
     ideal_humidity_min: str = Form(""),
     ideal_humidity_max: str = Form(""),
     notes: str = Form(""),
-):
-    _get_plant_in_cluster(repo, cluster_id, plant_id)
+) -> Response:
+    """Save the plant form and return to the cluster's plants section."""
+    require_plant_in_cluster(repo, cluster_id, plant_id)
     repo.update_plant(
         plant_id,
-        species=species,
-        category=category or None,
-        water_needs=water_needs or None,
-        light_needs=light_needs or None,
-        ideal_temp_min=_opt_float(ideal_temp_min),
-        ideal_temp_max=_opt_float(ideal_temp_max),
-        ideal_humidity_min=_opt_float(ideal_humidity_min),
-        ideal_humidity_max=_opt_float(ideal_humidity_max),
-        notes=notes or None,
+        **_plant_form_fields(
+            species=species,
+            category=category,
+            water_needs=water_needs,
+            light_needs=light_needs,
+            ideal_temp_min=ideal_temp_min,
+            ideal_temp_max=ideal_temp_max,
+            ideal_humidity_min=ideal_humidity_min,
+            ideal_humidity_max=ideal_humidity_max,
+            notes=notes,
+        ),
     )
-    repo.session.commit()
+    repo.commit()
     return RedirectResponse(url=f"/clusters/{cluster_id}#plants", status_code=303)
 
 
 @router.delete("/clusters/{cluster_id}/plants/{plant_id}", response_class=HTMLResponse)
-def delete_plant(cluster_id: int, plant_id: int, repo: RepoDep):
+def delete_plant(cluster_id: int, plant_id: int, repo: RepoDep) -> Response:
     """HTMX-targeted delete; returns an empty HTML body so the row is removed."""
-    _get_plant_in_cluster(repo, cluster_id, plant_id)
+    require_plant_in_cluster(repo, cluster_id, plant_id)
     repo.delete_plant(plant_id)
-    repo.session.commit()
+    repo.commit()
     return HTMLResponse("")

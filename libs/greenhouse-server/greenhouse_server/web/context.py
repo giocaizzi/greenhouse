@@ -2,10 +2,20 @@
 
 from __future__ import annotations
 
+import contextlib
 import time
 from importlib.metadata import PackageNotFoundError, version
+from typing import TYPE_CHECKING, Any
 
 from fastapi import Request
+
+from greenhouse_core.repository import IrrigationRepository
+from greenhouse_server import state
+
+if TYPE_CHECKING:
+    from sqlalchemy.orm import Session
+
+    from greenhouse_core.models import VacationWindow
 
 
 def _app_version() -> str:
@@ -19,22 +29,30 @@ APP_VERSION = _app_version()
 
 
 def is_hx(request: Request) -> bool:
+    """Return whether the request was sent by HTMX (``HX-Request: true``)."""
     return request.headers.get("HX-Request", "").lower() == "true"
 
 
-def _repo_from_request(request: Request):
-    """Resolve an IrrigationRepository from request.app.state, or None."""
-    try:
-        from greenhouse_core.repository import IrrigationRepository
+def _repo_from_request(request: Request) -> tuple[IrrigationRepository, Session] | tuple[None, None]:
+    """Open a private, read-only repository on ``request.app.state``, or ``(None, None)``.
 
-        factory = request.app.state.session_factory
-        session = factory()
+    Deliberately not the request's own session: the chrome reads committed preferences
+    on every render (also from exception handlers, which have no request session) and
+    never writes, so the caller closes it right after the read.
+    """
+    try:
+        session = state.session_factory(request.app)()
         return IrrigationRepository(session), session
-    except Exception:
+    except Exception:  # noqa: BLE001
         return None, None
 
 
-def base_context(request: Request, **extra) -> dict:
+def _preference_flags(request: Request) -> tuple[bool, VacationWindow | None, bool, str]:
+    """Read the chrome's preference flags: ``(dry_run_global, active_vacation, scheduler_paused, theme)``.
+
+    Best effort: a failed read keeps whatever was read before it (defaults otherwise), and the
+    short-lived session is always closed.
+    """
     repo, session = _repo_from_request(request)
     dry_run_global = False
     active_vacation = None
@@ -50,18 +68,27 @@ def base_context(request: Request, **extra) -> dict:
             scheduler_paused = prefs.scheduler_paused
             theme = prefs.theme or "auto"
             active_vacation = repo.get_active_vacation()
-        except Exception:
+        except Exception:  # noqa: BLE001, S110
             pass
         finally:
-            session.close()
+            # _repo_from_request sets repo and session together, so session is set whenever repo is.
+            if session is not None:
+                session.close()
+    return dry_run_global, active_vacation, scheduler_paused, theme
 
-    # auth_enabled is read off app.state so the topbar can hide the Sign out
-    # button when running in the no-auth dev mode.
+
+def _auth_enabled(request: Request) -> bool:
+    """Whether auth is on; read off app.state so the topbar can hide Sign out in the no-auth dev mode."""
     auth_enabled = True
-    try:
-        auth_enabled = bool(request.app.state.settings.auth_enabled)
-    except AttributeError:
-        pass
+    with contextlib.suppress(AttributeError):
+        auth_enabled = bool(state.settings(request.app).auth_enabled)
+    return auth_enabled
+
+
+def base_context(request: Request, **extra: Any) -> dict[str, Any]:
+    """Build the template context every page shares (chrome flags, theme, version) merged with ``extra``."""
+    dry_run_global, active_vacation, scheduler_paused, theme = _preference_flags(request)
+    auth_enabled = _auth_enabled(request)
 
     return {
         "request": request,

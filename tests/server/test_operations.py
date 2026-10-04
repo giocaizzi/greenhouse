@@ -207,11 +207,11 @@ class TestFullLifecycle:
         client.post("/api/v1/clusters/1/plants", json={"species": "Fern", "water_needs": "high"})
         client.post(
             "/api/v1/clusters/1/sensors",
-            json={"tuya_device_id": "s1", "name": "S1", "type": "soil_moisture", "plant_id": 1},
+            json={"tuya_device_id": "s1", "name": "S1", "type": "tuya.tr301z", "plant_id": 1},
         )
         client.post(
             "/api/v1/clusters/1/irrigator",
-            json={"tuya_device_id": "i1", "name": "Pump", "type": "tuya_cloud"},
+            json={"tuya_device_id": "i1", "name": "Pump", "type": "rainpoint.ik10pw"},
         )
         client.put(
             "/api/v1/clusters/1/config",

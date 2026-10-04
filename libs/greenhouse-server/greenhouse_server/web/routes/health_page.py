@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Request
+from fastapi.responses import Response
 
 from greenhouse_server.deps import RepoDep, SyncServiceDep
 from greenhouse_server.services.system_health import SystemHealthService
@@ -13,7 +14,8 @@ router = APIRouter(include_in_schema=False)
 
 
 @router.get("/health")
-def health_page(request: Request, repo: RepoDep, sync_svc: SyncServiceDep):
+def health_page(request: Request, repo: RepoDep, sync_svc: SyncServiceDep) -> Response:
+    """Render the system health page (sensor freshness, devices, Cloud reachability)."""
     svc = SystemHealthService(repo, sync_svc)
     pulse = svc.pulse()
     return templates.TemplateResponse(

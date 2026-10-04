@@ -1,0 +1,24 @@
+{
+ "calls": [
+  {
+   "body": null,
+   "request": "POST /api/v1/check",
+   "response": {
+    "has_alerts": false,
+    "results": []
+   },
+   "status": 200
+  }
+ ],
+ "db_writes": {
+  "activity_events": [],
+  "alerts": [],
+  "decision_logs": [],
+  "irrigation_events": [],
+  "sensor_readings": []
+ },
+ "gateway_calls": null,
+ "irrigator_adapter_calls": [],
+ "notifications": [],
+ "sensor_adapter_calls": []
+}

@@ -1,0 +1,29 @@
+{
+ "body_lines": [
+  ""
+ ],
+ "db_effect": {
+  "clusters": {
+   "removed": [
+    "3"
+   ]
+  }
+ },
+ "device_calls": {
+  "irrigator": [],
+  "sensor": []
+ },
+ "headers": {
+  "content-type": "text/html; charset=utf-8"
+ },
+ "request": {
+  "form": null,
+  "headers": {
+   "HX-Request": "true"
+  },
+  "method": "DELETE",
+  "url": "/clusters/3"
+ },
+ "status": 200,
+ "templates": []
+}

@@ -1,0 +1,39 @@
+{
+ "body_lines": [
+  ""
+ ],
+ "db_effect": {
+  "vacation_windows": {
+   "added": [
+    {
+     "contact_email": "a@example.com",
+     "created_at": 1776247200,
+     "ends_at": 1778839200,
+     "id": 3,
+     "notes": null,
+     "starts_at": 1777593600
+    }
+   ]
+  }
+ },
+ "device_calls": {
+  "irrigator": [],
+  "sensor": []
+ },
+ "headers": {
+  "location": "/vacation"
+ },
+ "request": {
+  "form": {
+   "contact_email": " a@example.com ",
+   "ends_at": "1778839200",
+   "notes": " ",
+   "starts_at": "2026-05-01"
+  },
+  "headers": {},
+  "method": "POST",
+  "url": "/vacation"
+ },
+ "status": 303,
+ "templates": []
+}

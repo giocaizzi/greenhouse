@@ -10,15 +10,16 @@ from __future__ import annotations
 import asyncio
 import re
 from pathlib import Path
+from typing import Any, ClassVar
 
-from rich.text import Text
 from textual.app import ComposeResult
-from textual.binding import Binding
+from textual.binding import Binding, BindingType
 from textual.containers import Horizontal, HorizontalScroll, Vertical, VerticalScroll
 from textual.widgets import DataTable, Footer, Header, Static, TabbedContent, TabPane
 
+from greenhouse_cli.constants import ALL_WEEKDAYS
 from greenhouse_cli.tui import formatting as fmt
-from greenhouse_cli.tui import resources
+from greenhouse_cli.tui import render, resources
 from greenhouse_cli.tui.model import ClusterSummary, summarize
 from greenhouse_cli.tui.screens.base import DataScreen
 from greenhouse_cli.tui.screens.forms import Field
@@ -28,23 +29,15 @@ from greenhouse_cli.tui.widgets import Heatmap, KeyValue, MetricChart, PlantTile
 
 METRIC_ORDER = ["soil_moisture", "temperature", "env_humidity", "light", "overlay"]
 RANGES = [6, 24, 72, 168, 720]
+_PRELOAD_HOURS = 24  # soil chart window fetched with the overview; reused while the range matches
 STATS_DAYS = 7
-
-
-def _next_water(forecast: dict) -> str | Text:
-    hours = forecast.get("hours_until_next")
-    if hours is None:
-        return "—"
-    if hours <= 0:
-        return Text("due now", style="bold #e0c341")
-    return f"{fmt.ago(forecast.get('next_predicted_at'))} ({fmt.clock(forecast.get('next_predicted_at'))})"
 
 
 class ClusterScreen(DataScreen):
     """Everything about one cluster, in tabs."""
 
     AUTO_REFRESH = True
-    BINDINGS = [
+    BINDINGS: ClassVar[list[BindingType]] = [
         Binding("escape", "app.pop_screen", "Back"),
         Binding("i", "irrigate", "Irrigate"),
         Binding("w", "water_now", "Water now"),
@@ -68,8 +61,8 @@ class ClusterScreen(DataScreen):
         super().__init__()
         self.cluster_id = cluster_id
         self.summary: ClusterSummary | None = None
-        self.status: dict = {}
-        self.detail: dict = {}
+        self.status: dict[str, Any] = {}
+        self.detail: dict[str, Any] = {}
         self.metric = "soil_moisture"
         self.hours = 24
         self._plants_loaded: list[int] = []
@@ -77,6 +70,7 @@ class ClusterScreen(DataScreen):
         self._plant_id: int | None = None
 
     def compose(self) -> ComposeResult:
+        """Build the tab tree; its order is the focus order and matches the ``app.tcss`` selectors."""
         yield Header(show_clock=True)
         with TabbedContent(id="cluster-tabs"):
             with TabPane("Overview", id="tab-overview"), VerticalScroll():
@@ -128,6 +122,7 @@ class ClusterScreen(DataScreen):
         yield Footer()
 
     def on_mount(self) -> None:
+        """Declare every table's columns once; loads only refill rows."""
         self.query_one("#plants-table", DataTable).add_columns("ID", "Species", "Category", "Water", "Light", "Temp")
         self.query_one("#sensors-table", DataTable).add_columns(
             "ID", "Name", "Type", "Plant", "Soil", "Temp", "Humidity", "Light", "Battery", "Age"
@@ -141,16 +136,22 @@ class ClusterScreen(DataScreen):
 
     @property
     def active_tab(self) -> str:
+        """Id of the visible tab — the contextual n / u / del keys act on it."""
         return self.query_one(TabbedContent).active
 
     # ── Loading ──────────────────────────────────────────────────────────
 
     async def load(self) -> None:
+        """Fetch status and the preloaded soil chart, render the overview, then load every tab concurrently.
+
+        Insights are costly (learning report), so they load only while their tab is open.
+
+        """
         cid = self.cluster_id
         api = self.gh.api
         status, soil = await asyncio.gather(
             api(lambda c: c.status(cid)),
-            api(lambda c: c.cluster_chart_data(cid, hours=24), quiet=True),
+            api(lambda c: c.cluster_chart_data(cid, hours=_PRELOAD_HOURS), quiet=True),
         )
         if status is None:
             return
@@ -162,7 +163,7 @@ class ClusterScreen(DataScreen):
         self._render_plants(status)
         tasks = [
             self._load_forecast(),
-            self._load_chart(soil if self.metric == "soil_moisture" and self.hours == 24 else None),
+            self._load_chart(soil if self.metric == "soil_moisture" and self.hours == _PRELOAD_HOURS else None),
             self._load_heatmap(),
             self._load_decisions(),
             self._load_history(),
@@ -173,12 +174,14 @@ class ClusterScreen(DataScreen):
         await asyncio.gather(*tasks)
 
     def on_tabbed_content_tab_activated(self, event: TabbedContent.TabActivated) -> None:
+        """Load the insights tab lazily, the first time it is opened."""
         if event.pane.id == "tab-insights":
             self.run_worker(self._load_insights(), group="insights", exclusive=True)
 
-    async def _render_overview(self, status: dict) -> None:
+    async def _render_overview(self, status: dict[str, Any]) -> None:
+        """Remount one plant tile per plant and refresh the can, irrigator and decision panels."""
         s = self.summary
-        assert s is not None
+        assert s is not None  # noqa: S101 — type narrowing: load() sets summary before rendering
         garden = self.query_one("#garden", HorizontalScroll)
         await garden.remove_children()
         if s.plants:
@@ -200,65 +203,20 @@ class ClusterScreen(DataScreen):
             )
 
         self.query_one("#can", SpriteView).set_factory(lambda f: watering_can_sprite(s.watering, f))
-        info = Text()
-        if s.irrigator_id is None:
-            info.append("No irrigator\n", style="bold")
-            info.append("sensor-only cluster\n", style="dim")
-            info.append("n: attach an irrigator", style="dim")
-        else:
-            info.append(f"{s.irrigator_name}\n", style="bold")
-            if s.watering:
-                info.append("● watering now\n", style="bold #4fb3ff")
-            else:
-                info.append("idle\n", style="dim")
-            ev = s.last_event
-            if ev:
-                info.append(f"last {ev['action']} {fmt.ago(ev['timestamp'])}")
-                if ev.get("duration_minutes"):
-                    info.append(f" · {ev['duration_minutes']}m")
-                info.append(f"\nby {ev.get('triggered_by', '?')}", style="dim")
-            info.append("\nu edit · del detach", style="dim")
-        self.query_one("#irrigator-info", Static).update(info)
-
-        decision = status.get("decision") or {}
-        text = Text.assemble(("Decision engine\n", "bold"))
-        if not decision:
-            text.append("no decision available", style="dim")
-        else:
-            text.append_text(fmt.styled(decision.get("action"), fmt.ACTION_STYLES))
-            if decision.get("duration_minutes"):
-                text.append(f"  {decision['duration_minutes']} min")
-            if decision.get("interval_hours"):
-                text.append(f" · every {decision['interval_hours']}h")
-            text.append(f"  confidence {decision.get('confidence', 0):.0%}\n", style="dim")
-            for reason in decision.get("reasons", []):
-                sev = reason.get("severity", "info")
-                text.append(f"{reason.get('icon') or '•'} ", style=fmt.SEVERITY_STYLES.get(sev, ""))
-                text.append(f"{reason.get('message', '')} ")
-                text.append(f"[{reason.get('code', '')}]\n", style="dim")
-            if not decision.get("reasons"):
-                text.append(decision.get("reason", ""))
-        self.query_one("#decision-panel", Static).update(text)
+        self.query_one("#irrigator-info", Static).update(render.irrigator_info(s))
+        self.query_one("#decision-panel", Static).update(render.decision_panel(status.get("decision") or {}))
 
     async def _load_forecast(self) -> None:
+        """Fill the forecast panel; a failed call shows ``unavailable`` instead of an error toast."""
         f = await self.gh.api(lambda c: c.forecast(self.cluster_id), quiet=True)
         panel = self.query_one("#forecast-panel", KeyValue)
         if not f:
             panel.show([("forecast", "unavailable")], title="Forecast")
             return
-        rows: list[tuple[str, str | Text]] = [
-            ("next water", _next_water(f)),
-            ("projected min", fmt.num(f.get("projected_min_moisture"), "%")),
-            ("method", f"{f.get('method', '?')} ({f.get('confidence', 0):.0%})"),
-        ]
-        if f.get("precipitation_next_6h_mm") is not None:
-            rows.append(("rain 6h", fmt.num(f["precipitation_next_6h_mm"], " mm")))
-        if f.get("weather_skip"):
-            rows.append(("weather", Text(f.get("weather_reason") or "skip — rain expected", style="#4fb3ff")))
-        rows.append(("", Text(f.get("explanation", ""), style="dim")))
-        panel.show(rows, title="Forecast")
+        panel.show(render.forecast_rows(f), title="Forecast")
 
-    async def _load_chart(self, payload: dict | None = None) -> None:
+    async def _load_chart(self, payload: dict[str, Any] | None = None) -> None:
+        """Redraw the cluster chart for the current metric and range; ``payload`` reuses data already fetched."""
         label = "Overlay: soil / humidity / light (0-100)" if self.metric == "overlay" else fmt.METRICS[self.metric][0]
         self.query_one("#chart-hint", Static).update(
             f"[b]{label}[/b] · {self.hours}h   [dim]m: next metric   [ / ]: shorter / longer range[/dim]"
@@ -273,42 +231,26 @@ class ClusterScreen(DataScreen):
         chart.show_payload(payload, metric, hours)
 
     async def _load_heatmap(self) -> None:
+        """Fill the 7×24 heatmap; a failed call stays quiet (no error toast)."""
         payload = await self.gh.api(lambda c: c.cluster_heatmap(self.cluster_id), quiet=True)
         self.query_one("#heatmap", Heatmap).show(payload)
 
-    def _render_plants(self, status: dict) -> None:
+    def _render_plants(self, status: dict[str, Any]) -> None:
+        """Refill the plants table and chart the first plant, but only when the plant list itself changed."""
         table = self.query_one("#plants-table", DataTable)
-        rows: list = []
-        for p in status.get("plants", []):
-            temp = (
-                f"{fmt.num(p.get('ideal_temp_min'), '', 0)}–{fmt.num(p.get('ideal_temp_max'), '°C', 0)}"
-                if p.get("ideal_temp_min") is not None
-                else "—"
-            )
-            rows.append(
-                (
-                    str(p["id"]),
-                    [
-                        str(p["id"]),
-                        p["species"],
-                        p.get("category") or "—",
-                        p.get("water_needs") or "—",
-                        p.get("light_needs") or "—",
-                        temp,
-                    ],
-                )
-            )
-        refill(table, rows)
+        refill(table, render.plant_rows(status.get("plants", [])))
         ids = [p["id"] for p in status.get("plants", [])]
         if ids and ids != self._plants_loaded:
             self._plants_loaded = ids
             self.run_worker(self._load_plant_health(ids[0]), group="plant-health", exclusive=True)
 
     def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
+        """Follow the plant cursor with that plant's chart."""
         if event.data_table.id == "plants-table" and event.row_key.value:
             self.run_worker(self._load_plant_health(int(event.row_key.value)), group="plant-health", exclusive=True)
 
     async def _load_plant_health(self, plant_id: int) -> None:
+        """Chart one plant: its 72h soil moisture, or its 90-day health timeline."""
         self._plant_id = plant_id
         species = next((p["species"] for p in self.status.get("plants", []) if p["id"] == plant_id), "")
         chart = self.query_one("#plant-chart", MetricChart)
@@ -324,111 +266,38 @@ class ClusterScreen(DataScreen):
         title = f"Health — {species}" + (f" · today {score:.0f}/100" if score is not None else "") + " (90 days)"
         chart.show_timeline(timeline, title)
 
-    def _render_sensors(self, status: dict) -> None:
+    def _render_sensors(self, status: dict[str, Any]) -> None:
+        """Refill the sensors table from the status payload already loaded."""
         table = self.query_one("#sensors-table", DataTable)
-        rows: list = []
-        species = {p["id"]: p["species"] for p in status.get("plants", [])}
-        for s in status.get("sensors", []):
-            r = s.get("last_reading") or {}
-            battery = r.get("battery_state") or "—"
-            if r.get("water_warning"):
-                battery = f"{battery} ⚠ water"
-            rows.append(
-                (
-                    str(s["id"]),
-                    [
-                        str(s["id"]),
-                        s["name"],
-                        s["type"],
-                        species.get(s.get("plant_id"), "—"),
-                        fmt.num(r.get("soil_moisture"), "%"),
-                        fmt.num(r.get("temperature"), "°C"),
-                        fmt.num(r.get("env_humidity"), "%", 0),
-                        fmt.num(r.get("light"), " lx", 0),
-                        battery,
-                        fmt.age(s.get("reading_age_seconds")),
-                    ],
-                )
-            )
-        refill(table, rows)
+        refill(table, render.sensor_rows(status))
 
     async def _load_decisions(self) -> None:
+        """Refill the decisions tab with the latest logged evaluations."""
         data = await self.gh.api(lambda c: c.list_decisions(self.cluster_id, limit=100), quiet=True)
         table = self.query_one("#decisions-table", DataTable)
-        rows: list = []
-        for d in (data or {}).get("items", []):
-            rows.append(
-                (
-                    None,
-                    [
-                        fmt.clock(d["evaluated_at"], with_date=True),
-                        fmt.styled(d["action"], fmt.ACTION_STYLES),
-                        str(d["duration_minutes"]),
-                        f"{d['interval_hours']}h",
-                        f"{d['confidence']:.0%}",
-                        d.get("primary_code") or "—",
-                        d.get("triggered_by", ""),
-                        Text("yes", style="#4fb3ff") if d.get("actuated") else Text("no", style="dim"),
-                        d.get("reason_text", ""),
-                    ],
-                )
-            )
-        refill(table, rows)
+        refill(table, render.decision_rows(data))
 
     async def _load_history(self) -> None:
+        """Refill the history tab with up to 200 irrigation events from the last 30 days."""
         data = await self.gh.api(lambda c: c.history(self.cluster_id, hours=24 * 30, limit=200), quiet=True)
         table = self.query_one("#history-table", DataTable)
-        events = [
-            (ev, irr["irrigator_name"]) for irr in (data or {}).get("irrigators", []) for ev in irr.get("events", [])
-        ]
-        rows: list = []
-        for ev, name in sorted(events, key=lambda r: r[0]["timestamp"], reverse=True):
-            rows.append(
-                (
-                    None,
-                    [
-                        fmt.clock(ev["timestamp"], with_date=True),
-                        name,
-                        fmt.styled(ev["action"], fmt.ACTION_STYLES),
-                        fmt.num(ev.get("duration_minutes"), "", 0),
-                        ev.get("triggered_by", ""),
-                        ev.get("notes") or "",
-                    ],
-                )
-            )
-        refill(table, rows)
+        refill(table, render.history_rows(data))
 
     async def _load_config(self) -> None:
+        """Load the effective config and the cluster detail (kept for the edit forms) and render config and windows."""
         cid = self.cluster_id
         effective, detail = await asyncio.gather(
             self.gh.api(lambda c: c.get_effective_config(cid), quiet=True),
             self.gh.api(lambda c: c.get_cluster_detail(cid), quiet=True),
         )
         self.detail = detail or {}
-        rows: list[tuple[str, str | Text]] = []
-        for key, field in sorted(((effective or {}).get("effective") or {}).items()):
-            value = field.get("value")
-            source = field.get("source", "")
-            style = "bold" if source == "cluster" else ""
-            rows.append((key, Text.assemble((str(value), style), (f"  ↳ {source}", "dim"))))
+        rows = render.config_rows(effective)
         self.query_one("#config-panel", KeyValue).show(rows or [("config", "unavailable")], title="Effective config")
         table = self.query_one("#windows-table", DataTable)
-        window_rows: list = []
-        for w in self.detail.get("windows", []):
-            window_rows.append(
-                (
-                    str(w["id"]),
-                    [
-                        str(w["id"]),
-                        w.get("label") or "—",
-                        f"{w['start_hour']:02d}:00–{w['end_hour']:02d}:00",
-                        fmt.weekday_mask(w["weekday_mask"]),
-                    ],
-                )
-            )
-        refill(table, window_rows)
+        refill(table, render.window_rows(self.detail.get("windows", [])))
 
     async def _load_insights(self) -> None:
+        """Fetch insights, monitor, stats, efficacy and the learning report together and render them."""
         cid = self.cluster_id
         api = self.gh.api
         insights, monitor, stats, efficacy, learn = await asyncio.gather(
@@ -438,63 +307,15 @@ class ClusterScreen(DataScreen):
             api(lambda c: c.efficacy(cid), quiet=True),
             api(lambda c: c.learn(cid), quiet=True),
         )
-        text = Text.assemble(("Care insights\n", "bold"))
-        for item in (insights or {}).get("insights", []):
-            text.append("● ", style=fmt.SEVERITY_STYLES.get(item.get("severity", "info"), ""))
-            text.append(f"{item['title']}\n", style="bold")
-            text.append(f"  {item['message']}\n")
-            if item.get("suggestion"):
-                text.append(f"  → {item['suggestion']}\n", style="#7ed957")
-        if not (insights or {}).get("insights"):
-            text.append("nothing to flag\n", style="dim")
-        needs = (monitor or {}).get("needs_water") or []
-        text.append("\nNeeds water: ", style="bold")
-        text.append(", ".join(needs) if needs else "nobody", style="#e0c341" if needs else "dim")
-        self.query_one("#insights-panel", Static).update(text)
-
-        s = stats or {}
-        by_type = ", ".join(f"{k} {v}" for k, v in (s.get("events_by_type") or {}).items()) or "—"
-        by_trigger = ", ".join(f"{k} {v}" for k, v in (s.get("events_by_trigger") or {}).items()) or "—"
-        self.query_one("#stats-panel", KeyValue).show(
-            [
-                ("events", str(s.get("total_events", "—"))),
-                ("total", fmt.num(s.get("total_duration_minutes"), " min", 0)),
-                ("average", fmt.num(s.get("avg_duration_minutes"), " min")),
-                ("per day", fmt.num(s.get("frequency_per_day"), "", 2)),
-                ("by type", by_type),
-                ("by trigger", by_trigger),
-            ],
-            title=f"Stats — last {STATS_DAYS} days",
-        )
-
-        table = self.query_one("#efficacy-table", DataTable)
-        rows: list = []
-        for e in (efficacy or {}).get("items", []):
-            score = e.get("score")
-            rows.append(
-                (
-                    None,
-                    [
-                        fmt.clock(e["timestamp"], with_date=True),
-                        e["irrigator_name"],
-                        str(e["duration_minutes"]),
-                        fmt.num(e.get("before_pct"), "%"),
-                        fmt.num(e.get("after_pct"), "%"),
-                        Text(fmt.num(score, "", 2), style="#7ed957" if (score or 0) >= 0.5 else "#e0c341"),
-                    ],
-                )
-            )
-        refill(table, rows)
-
-        report = Text.assemble(
-            ("Learning report\n", "bold"),
-            ((learn or {}).get("report") or "no report available", "" if learn else "dim"),
-        )
-        self.query_one("#learn-panel", Static).update(report)  # the report already lists its alerts
+        self.query_one("#insights-panel", Static).update(render.insights_text(insights, monitor))
+        self.query_one("#stats-panel", KeyValue).show(render.stats_rows(stats), title=f"Stats — last {STATS_DAYS} days")
+        refill(self.query_one("#efficacy-table", DataTable), render.efficacy_rows(efficacy))
+        self.query_one("#learn-panel", Static).update(render.learn_report(learn))  # the report already lists its alerts
 
     # ── Charts ───────────────────────────────────────────────────────────
 
     def action_cycle_metric(self) -> None:
+        """On Plants toggle health ↔ moisture; elsewhere step through the cluster chart metrics."""
         if self.active_tab == "tab-plants":
             self.plant_chart = "moisture" if self.plant_chart == "health" else "health"
             if self._plant_id is not None:
@@ -504,6 +325,7 @@ class ClusterScreen(DataScreen):
         self.run_worker(self._load_chart(), group="chart", exclusive=True)
 
     def action_range(self, step: int) -> None:
+        """Move ``step`` positions along the fixed chart ranges, clamped at both ends."""
         idx = max(0, min(len(RANGES) - 1, RANGES.index(self.hours) + step))
         self.hours = RANGES[idx]
         self.run_worker(self._load_chart(), group="chart", exclusive=True)
@@ -511,9 +333,10 @@ class ClusterScreen(DataScreen):
     # ── Irrigation actions ───────────────────────────────────────────────
 
     def action_irrigate(self) -> None:
+        """Run the smart pipeline with the options picked in the dialog (dry-run by default)."""
         name = self.summary.name if self.summary else f"cluster {self.cluster_id}"
 
-        def _after(opts: dict | None) -> None:
+        def _after(opts: dict[str, Any] | None) -> None:
             if opts is None:
                 return
             self.run_worker(
@@ -527,12 +350,14 @@ class ClusterScreen(DataScreen):
         self.app.push_screen(IrrigateScreen(name), _after)
 
     def _irrigator(self) -> tuple[int, str] | None:
+        """``(id, name)`` of the cluster's irrigator, or ``None`` after a warning toast."""
         if not self.summary or self.summary.irrigator_id is None:
             self.notify("This cluster has no irrigator.", severity="warning")
             return None
         return self.summary.irrigator_id, self.summary.irrigator_name or "irrigator"
 
     def action_water_now(self) -> None:
+        """Start the irrigator for N minutes, bypassing the decision engine."""
         irrigator = self._irrigator()
         if not irrigator:
             return
@@ -549,6 +374,7 @@ class ClusterScreen(DataScreen):
         self.app.push_screen(WaterNowScreen(name), _after)
 
     def action_stop(self) -> None:
+        """Stop the cluster's irrigator after confirmation."""
         irrigator = self._irrigator()
         if not irrigator:
             return
@@ -558,6 +384,7 @@ class ClusterScreen(DataScreen):
         )
 
     def action_check(self) -> None:
+        """Run the scheduled check for this cluster now (auto-run may water)."""
         self.confirm_then(
             "Run the scheduled check for this cluster now?\nIf auto-run is enabled it may irrigate.",
             lambda c: c.check(self.cluster_id),
@@ -566,6 +393,7 @@ class ClusterScreen(DataScreen):
         )
 
     def action_log_manual(self) -> None:
+        """Record a watering done by hand so cooldown and learning see it; nothing is actuated."""
         irrigator = self._irrigator()
         if not irrigator:
             return
@@ -582,144 +410,208 @@ class ClusterScreen(DataScreen):
     # ── CRUD (contextual on the active tab) ──────────────────────────────
 
     def action_new(self) -> None:
-        cid = self.cluster_id
-        tab = self.active_tab
-        if tab == "tab-plants":
-            self.form_then(
-                "Add plant",
-                resources.plant_fields(),
-                lambda v: lambda c: c.add_plant(cid, **v),
-                lambda r: f"Added {r.get('species')}",
-                "Add",
-                note="Blank care fields are filled from the plant DB when the species is known.",
-            )
-        elif tab == "tab-sensors":
-            self.form_then(
-                "Add sensor",
-                resources.sensor_fields(None, self.status.get("plants", [])),
-                lambda v: lambda c: c.add_sensor(cid, **v),
-                lambda r: f"Added sensor {r.get('name')}",
-                "Add",
-            )
-        elif tab == "tab-windows":
-            self.form_then(
-                "Add irrigation window",
-                resources.window_fields(),
-                lambda v: (
-                    lambda c: c.add_window(cid, v["start_hour"], v["end_hour"], v["weekday_mask"] or 127, v["label"])
-                ),
-                "Window added",
-                "Add",
-            )
-        elif tab == "tab-overview":
-            if self.summary and self.summary.irrigator_id is not None:
-                self.notify("This cluster already has an irrigator — press u to edit it.", severity="warning")
-                return
-            self.form_then(
-                "Attach irrigator",
-                resources.irrigator_fields(),
-                lambda v: lambda c: c.add_irrigator(cid, **v),
-                lambda r: f"Attached {r.get('name')}",
-                "Attach",
-            )
-        else:
+        """Add a row to the active tab's resource (plant, sensor, window or irrigator)."""
+        handler = {
+            "tab-plants": self._new_plant,
+            "tab-sensors": self._new_sensor,
+            "tab-windows": self._new_window,
+            "tab-overview": self._attach_irrigator,
+        }.get(self.active_tab)
+        if handler is None:
             self.notify("Nothing to add here — try the Plants, Sensors, Windows or Overview tab.")
+            return
+        handler()
+
+    def _new_plant(self) -> None:
+        """Add-plant form for this cluster."""
+        cid = self.cluster_id
+        self.form_then(
+            "Add plant",
+            resources.plant_fields(),
+            lambda v: lambda c: c.add_plant(cid, **v),
+            lambda r: f"Added {r.get('species')}",
+            "Add",
+            note="Blank care fields are filled from the plant DB when the species is known.",
+        )
+
+    def _new_sensor(self) -> None:
+        """Add-sensor form; the plant picker lists this cluster's plants."""
+        cid = self.cluster_id
+        self.form_then(
+            "Add sensor",
+            resources.sensor_fields(None, self.status.get("plants", [])),
+            lambda v: lambda c: c.add_sensor(cid, **v),
+            lambda r: f"Added sensor {r.get('name')}",
+            "Add",
+        )
+
+    def _new_window(self) -> None:
+        """Add-window form; a blank weekday mask means every day."""
+        cid = self.cluster_id
+        self.form_then(
+            "Add irrigation window",
+            resources.window_fields(),
+            lambda v: (
+                lambda c: c.add_window(
+                    cid, v["start_hour"], v["end_hour"], v["weekday_mask"] or ALL_WEEKDAYS, v["label"]
+                )
+            ),
+            "Window added",
+            "Add",
+        )
+
+    def _attach_irrigator(self) -> None:
+        """Attach-irrigator form, refused when the cluster already has one (0:1)."""
+        cid = self.cluster_id
+        if self.summary and self.summary.irrigator_id is not None:
+            self.notify("This cluster already has an irrigator — press u to edit it.", severity="warning")
+            return
+        self.form_then(
+            "Attach irrigator",
+            resources.irrigator_fields(),
+            lambda v: lambda c: c.add_irrigator(cid, **v),
+            lambda r: f"Attached {r.get('name')}",
+            "Attach",
+        )
 
     def action_edit(self) -> None:
-        cid = self.cluster_id
-        tab = self.active_tab
-        if tab == "tab-plants":
-            plant = self._selected("#plants-table", self.status.get("plants", []))
-            if plant:
-                self.form_then(
-                    f"Edit plant #{plant['id']}",
-                    resources.plant_fields(plant),
-                    lambda v: lambda c: c.update_plant(cid, plant["id"], **v),
-                    "Plant updated",
-                )
-        elif tab == "tab-sensors":
-            sensor = self._selected("#sensors-table", self.detail.get("sensors", []))
-            if sensor:
-                self.form_then(
-                    f"Edit sensor #{sensor['id']}",
-                    resources.sensor_fields(sensor, self.status.get("plants", [])),
-                    lambda v: lambda c: c.update_sensor(cid, sensor["id"], **v),
-                    "Sensor updated",
-                )
-        elif tab == "tab-windows":
-            window = self._selected("#windows-table", self.detail.get("windows", []))
-            if window:
-                self.form_then(
-                    f"Edit window #{window['id']}",
-                    resources.window_fields(window),
-                    lambda v: lambda c: c.update_window(cid, window["id"], **v),
-                    "Window updated",
-                )
-        elif tab == "tab-overview":
-            irrigator = self.detail.get("irrigator")
-            if not irrigator:
-                self.notify("No irrigator — press n to attach one.", severity="warning")
-                return
-            self.form_then(
-                f"Edit irrigator — {irrigator['name']}",
-                resources.irrigator_fields(irrigator),
-                lambda v: lambda c: c.update_irrigator(cid, **v),
-                "Irrigator updated",
-            )
-        elif tab == "tab-config":
-            self.form_then(
-                "Edit irrigation config",
-                resources.config_fields(self.detail.get("config")),
-                lambda v: lambda c: c.set_config(cid, **v),
-                "Config saved",
-                note="Blank = keep the current value. Global defaults live on the Settings screen (o).",
-            )
-        else:
+        """Edit the selected row of the active tab, or the irrigator / config."""
+        handler = {
+            "tab-plants": self._edit_plant,
+            "tab-sensors": self._edit_sensor,
+            "tab-windows": self._edit_window,
+            "tab-overview": self._edit_irrigator,
+            "tab-config": self._edit_config,
+        }.get(self.active_tab)
+        if handler is None:
             self.notify("Nothing to edit here — try Plants, Sensors, Windows, Overview or Config.")
+            return
+        handler()
+
+    def _edit_plant(self) -> None:
+        """Edit form for the plant under the cursor."""
+        cid = self.cluster_id
+        plant = self._selected("#plants-table", self.status.get("plants", []))
+        if plant:
+            self.form_then(
+                f"Edit plant #{plant['id']}",
+                resources.plant_fields(plant),
+                lambda v: lambda c: c.update_plant(cid, plant["id"], **v),
+                "Plant updated",
+            )
+
+    def _edit_sensor(self) -> None:
+        """Edit form for the sensor under the cursor."""
+        cid = self.cluster_id
+        sensor = self._selected("#sensors-table", self.detail.get("sensors", []))
+        if sensor:
+            self.form_then(
+                f"Edit sensor #{sensor['id']}",
+                resources.sensor_fields(sensor, self.status.get("plants", [])),
+                lambda v: lambda c: c.update_sensor(cid, sensor["id"], **v),
+                "Sensor updated",
+            )
+
+    def _edit_window(self) -> None:
+        """Edit form for the window under the cursor."""
+        cid = self.cluster_id
+        window = self._selected("#windows-table", self.detail.get("windows", []))
+        if window:
+            self.form_then(
+                f"Edit window #{window['id']}",
+                resources.window_fields(window),
+                lambda v: lambda c: c.update_window(cid, window["id"], **v),
+                "Window updated",
+            )
+
+    def _edit_irrigator(self) -> None:
+        """Edit form for the cluster's irrigator, or a hint to attach one."""
+        cid = self.cluster_id
+        irrigator = self.detail.get("irrigator")
+        if not irrigator:
+            self.notify("No irrigator — press n to attach one.", severity="warning")
+            return
+        self.form_then(
+            f"Edit irrigator — {irrigator['name']}",
+            resources.irrigator_fields(irrigator),
+            lambda v: lambda c: c.update_irrigator(cid, **v),
+            "Irrigator updated",
+        )
+
+    def _edit_config(self) -> None:
+        """Edit form for the cluster's own config overrides (globals live on Settings)."""
+        cid = self.cluster_id
+        self.form_then(
+            "Edit irrigation config",
+            resources.config_fields(self.detail.get("config")),
+            lambda v: lambda c: c.set_config(cid, **v),
+            "Config saved",
+            note="Blank = keep the current value. Global defaults live on the Settings screen (o).",
+        )
 
     def action_delete(self) -> None:
-        cid = self.cluster_id
-        tab = self.active_tab
-        if tab == "tab-plants":
-            plant = self._selected("#plants-table", self.status.get("plants", []))
-            if plant:
-                self.confirm_then(
-                    f"Delete plant [b]{plant['species']}[/b]?",
-                    lambda c: c.delete_plant(cid, plant["id"]),
-                    "Plant deleted",
-                    "Delete",
-                )
-        elif tab == "tab-sensors":
-            sensor = self._selected("#sensors-table", self.detail.get("sensors", []))
-            if sensor:
-                self.confirm_then(
-                    f"Delete sensor [b]{sensor['name']}[/b]? Its readings are kept.",
-                    lambda c: c.delete_sensor(cid, sensor["id"]),
-                    "Sensor deleted",
-                    "Delete",
-                )
-        elif tab == "tab-windows":
-            window = self._selected("#windows-table", self.detail.get("windows", []))
-            if window:
-                self.confirm_then(
-                    f"Delete window {window['start_hour']:02d}–{window['end_hour']:02d}h?",
-                    lambda c: c.delete_window(cid, window["id"]),
-                    "Window deleted",
-                    "Delete",
-                )
-        elif tab == "tab-overview":
-            irrigator = self._irrigator()
-            if irrigator:
-                self.confirm_then(
-                    f"Detach irrigator [b]{irrigator[1]}[/b] from this cluster?",
-                    lambda c: c.delete_irrigator(cid),
-                    "Irrigator detached",
-                    "Detach",
-                )
-        else:
+        """Delete the selected row of the active tab, or detach the irrigator."""
+        handler = {
+            "tab-plants": self._delete_plant,
+            "tab-sensors": self._delete_sensor,
+            "tab-windows": self._delete_window,
+            "tab-overview": self._detach_irrigator,
+        }.get(self.active_tab)
+        if handler is None:
             self.notify("Nothing to delete here — use D to delete the whole cluster.")
+            return
+        handler()
 
-    def _selected(self, table_id: str, rows: list[dict]) -> dict | None:
+    def _delete_plant(self) -> None:
+        """Delete the plant under the cursor after confirmation."""
+        cid = self.cluster_id
+        plant = self._selected("#plants-table", self.status.get("plants", []))
+        if plant:
+            self.confirm_then(
+                f"Delete plant [b]{plant['species']}[/b]?",
+                lambda c: c.delete_plant(cid, plant["id"]),
+                "Plant deleted",
+                "Delete",
+            )
+
+    def _delete_sensor(self) -> None:
+        """Delete the sensor under the cursor after confirmation (its readings stay)."""
+        cid = self.cluster_id
+        sensor = self._selected("#sensors-table", self.detail.get("sensors", []))
+        if sensor:
+            self.confirm_then(
+                f"Delete sensor [b]{sensor['name']}[/b]? Its readings are kept.",
+                lambda c: c.delete_sensor(cid, sensor["id"]),
+                "Sensor deleted",
+                "Delete",
+            )
+
+    def _delete_window(self) -> None:
+        """Delete the window under the cursor after confirmation."""
+        cid = self.cluster_id
+        window = self._selected("#windows-table", self.detail.get("windows", []))
+        if window:
+            self.confirm_then(
+                f"Delete window {window['start_hour']:02d}–{window['end_hour']:02d}h?",
+                lambda c: c.delete_window(cid, window["id"]),
+                "Window deleted",
+                "Delete",
+            )
+
+    def _detach_irrigator(self) -> None:
+        """Detach the cluster's irrigator after confirmation."""
+        cid = self.cluster_id
+        irrigator = self._irrigator()
+        if irrigator:
+            self.confirm_then(
+                f"Detach irrigator [b]{irrigator[1]}[/b] from this cluster?",
+                lambda c: c.delete_irrigator(cid),
+                "Irrigator detached",
+                "Detach",
+            )
+
+    def _selected(self, table_id: str, rows: list[dict[str, Any]]) -> dict[str, Any] | None:
+        """The row of ``rows`` under the cursor of ``table_id``, or ``None`` after a warning toast."""
         key = selected_key(self.query_one(table_id, DataTable))
         row = next((r for r in rows if str(r["id"]) == key), None)
         if row is None:
@@ -727,12 +619,14 @@ class ClusterScreen(DataScreen):
         return row
 
     def action_move_plant(self) -> None:
+        """Move the selected plant to another cluster."""
         plant = self._selected("#plants-table", self.status.get("plants", []))
         if not plant:
             return
         self.run_worker(self._move_plant(plant), group="act")
 
-    async def _move_plant(self, plant: dict) -> None:
+    async def _move_plant(self, plant: dict[str, Any]) -> None:
+        """Ask for a target among the other clusters, then move the plant there."""
         clusters = await self.gh.api(lambda c: c.list_clusters())
         options = [(f"{c['name']} (#{c['id']})", c["id"]) for c in clusters or [] if c["id"] != self.cluster_id]
         if not options:
@@ -747,6 +641,7 @@ class ClusterScreen(DataScreen):
         )
 
     def action_plant_sync(self) -> None:
+        """Refresh this cluster's plant care data from the curated plant DB."""
         self.run_worker(
             self.act(
                 lambda c: c.sync_plants(cluster_id=self.cluster_id),
@@ -756,6 +651,7 @@ class ClusterScreen(DataScreen):
         )
 
     def action_edit_cluster(self) -> None:
+        """Edit the cluster's name, location and environment."""
         cluster = self.status.get("cluster")
         if cluster:
             self.form_then(
@@ -766,6 +662,7 @@ class ClusterScreen(DataScreen):
             )
 
     def action_delete_cluster(self) -> None:
+        """Delete the cluster with everything in it, then return to the dashboard."""
         name = self.summary.name if self.summary else f"#{self.cluster_id}"
 
         def _after(ok: bool | None) -> None:
@@ -780,15 +677,18 @@ class ClusterScreen(DataScreen):
         )
 
     async def _delete_cluster(self) -> None:
+        """Delete the cluster; on success leave its screen and refresh the dashboard."""
         if await self.gh.api(lambda c: c.delete_cluster(self.cluster_id)) is not None:
             self.notify("Cluster deleted")
             self.app.pop_screen()
-            self.app.action_refresh()
+            self.gh.action_refresh()
 
     def action_export_stats(self) -> None:
+        """Write the last 30 days of stats as CSV into the working directory."""
         self.run_worker(self._export_stats(), group="act")
 
     async def _export_stats(self) -> None:
+        """Write the 30-day stats CSV as ``greenhouse-<cluster-slug>-stats-30d.csv`` in the cwd."""
         csv = await self.gh.api(lambda c: c.stats_export(self.cluster_id, days=30))
         if csv is None:
             return

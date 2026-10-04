@@ -1,23 +1,31 @@
 """Vacation window web routes — list, create, delete.
 
 Form inputs accept either YYYY-MM-DD date strings or Unix timestamps (integers).
-Date strings are interpreted as UTC midnight. The parsing priority is:
+Date strings are midnight in the ``timezone`` preference — the same zone the pages
+display vacation times in (``format_ts``), and the zone the TUI uses. The parsing
+priority is:
   1. Try to parse as a Unix integer string (e.g. "1748476800").
-  2. Fall back to parsing as ISO date "YYYY-MM-DD" (converted to UTC midnight epoch).
+  2. Fall back to parsing as ISO date "YYYY-MM-DD" (midnight in the preference timezone).
 """
 
 from __future__ import annotations
 
 import time
-from datetime import UTC, datetime
+from datetime import UTC, datetime, tzinfo
+from typing import TYPE_CHECKING
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, Form, HTTPException, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, Response
 
-from greenhouse_server.deps import RepoDep
+from greenhouse_core.utils import get_display_timezone
+from greenhouse_server.deps import RepoDep, require_vacation_window, require_valid_vacation_range
 from greenhouse_server.services.vacation import cluster_budgets
 from greenhouse_server.web.context import base_context
 from greenhouse_server.web.templating import templates
+
+if TYPE_CHECKING:
+    from greenhouse_core.models import VacationWindow
 
 router = APIRouter(include_in_schema=False)
 
@@ -29,12 +37,21 @@ def _parse_ts(value: str) -> int:
         return int(value)
     except ValueError:
         pass
-    dt = datetime.strptime(value, "%Y-%m-%d").replace(tzinfo=UTC)
+    dt = datetime.strptime(value, "%Y-%m-%d").replace(tzinfo=_preference_zone())
     return int(dt.timestamp())
 
 
+def _preference_zone() -> tzinfo:
+    """The display timezone (``UserPreferences.timezone``, else ``IRRIGATION_TZ``); UTC if unknown."""
+    try:
+        return ZoneInfo(get_display_timezone())
+    except (ZoneInfoNotFoundError, ValueError):
+        return UTC
+
+
 @router.get("/vacation")
-def vacation_list(request: Request, repo: RepoDep):
+def vacation_list(request: Request, repo: RepoDep) -> Response:
+    """Render the vacation page with the water budget of the active or next window."""
     active = repo.get_active_vacation()
     windows = repo.list_vacation_windows()
     # Project the per-cluster water budget for the window that matters most:
@@ -50,7 +67,7 @@ def vacation_list(request: Request, repo: RepoDep):
     )
 
 
-def _next_window(windows):
+def _next_window(windows: list[VacationWindow]) -> VacationWindow | None:
     """Return the soonest-starting future window, or None when none are scheduled."""
     now = int(time.time())
     upcoming = [w for w in windows if w.starts_at > now]
@@ -67,29 +84,28 @@ def create_vacation(
     ends_at: str = Form(...),
     contact_email: str = Form(""),
     notes: str = Form(""),
-):
+) -> Response:
+    """Create a vacation window from the form and return to the vacation page."""
     try:
         starts_ts = _parse_ts(starts_at)
         ends_ts = _parse_ts(ends_at)
     except ValueError as exc:
         raise HTTPException(400, "Invalid date format. Use YYYY-MM-DD or Unix timestamp.") from exc
-    if ends_ts <= starts_ts:
-        raise HTTPException(400, "ends_at must be after starts_at.")
+    require_valid_vacation_range(starts_ts, ends_ts)
     repo.add_vacation_window(
         starts_at=starts_ts,
         ends_at=ends_ts,
         contact_email=contact_email.strip() or None,
         notes=notes.strip() or None,
     )
-    repo.session.commit()
+    repo.commit()
     return RedirectResponse(url="/vacation", status_code=303)
 
 
 @router.get("/vacation/{window_id}/edit")
-def edit_vacation_form(request: Request, window_id: int, repo: RepoDep):
-    window = next((w for w in repo.list_vacation_windows() if w.id == window_id), None)
-    if window is None:
-        raise HTTPException(404, "Vacation window not found.")
+def edit_vacation_form(request: Request, window_id: int, repo: RepoDep) -> Response:
+    """Render the edit form of a vacation window."""
+    window = require_vacation_window(repo, window_id)
     return templates.TemplateResponse(
         request,
         "vacation/edit.html",
@@ -106,31 +122,30 @@ def update_vacation(
     ends_at: str = Form(...),
     contact_email: str = Form(""),
     notes: str = Form(""),
-):
+) -> Response:
+    """Save the vacation form and return to the vacation page."""
+    require_vacation_window(repo, window_id)
     try:
         starts_ts = _parse_ts(starts_at)
         ends_ts = _parse_ts(ends_at)
     except ValueError as exc:
         raise HTTPException(400, "Invalid date format. Use YYYY-MM-DD or Unix timestamp.") from exc
-    if ends_ts <= starts_ts:
-        raise HTTPException(400, "ends_at must be after starts_at.")
-    updated = repo.update_vacation_window(
+    require_valid_vacation_range(starts_ts, ends_ts)
+    repo.update_vacation_window(
         window_id,
         starts_at=starts_ts,
         ends_at=ends_ts,
         contact_email=contact_email.strip() or None,
         notes=notes.strip() or None,
     )
-    if updated is None:
-        raise HTTPException(404, "Vacation window not found.")
-    repo.session.commit()
+    repo.commit()
     return RedirectResponse(url="/vacation", status_code=303)
 
 
 @router.post("/vacation/{window_id}/delete")
-def delete_vacation(request: Request, window_id: int, repo: RepoDep):
-    deleted = repo.delete_vacation_window(window_id)
-    if not deleted:
-        raise HTTPException(404, "Vacation window not found.")
-    repo.session.commit()
+def delete_vacation(request: Request, window_id: int, repo: RepoDep) -> Response:
+    """Delete a vacation window and return to the vacation page."""
+    require_vacation_window(repo, window_id)
+    repo.delete_vacation_window(window_id)
+    repo.commit()
     return RedirectResponse(url="/vacation", status_code=303)

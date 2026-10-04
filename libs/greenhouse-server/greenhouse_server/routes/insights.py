@@ -1,9 +1,9 @@
 """Cluster care insights aggregated from learning, maintenance, and decisions."""
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 
 from greenhouse_core.schemas import ClusterInsightsResponse
-from greenhouse_server.deps import PlantDbDep, RepoDep
+from greenhouse_server.deps import PlantDbDep, RepoDep, not_found_as_404
 from greenhouse_server.services.insights import InsightsService
 
 router = APIRouter(tags=["operations"])
@@ -30,7 +30,5 @@ def cluster_insights(cluster_id: int, repo: RepoDep, plant_db: PlantDbDep) -> Cl
         HTTPException: 404 if the cluster does not exist.
     """
     svc = InsightsService(repo, plant_db)
-    result = svc.cluster_insights(cluster_id)
-    if result is None:
-        raise HTTPException(status_code=404, detail="Cluster not found")
-    return result
+    with not_found_as_404("Cluster not found"):
+        return svc.cluster_insights(cluster_id)
