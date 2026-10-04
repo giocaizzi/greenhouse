@@ -1,4 +1,4 @@
-"""Web routes for three concerns that share this module (route qualnames are pinned, so it keeps its name).
+"""Web routes for three concerns that share this module (it keeps its name so the route qualnames stay stable).
 
 * Analytics: cluster history, stats, CSV export and the learn/insights page.
 * Scheduler page: job table, ad-hoc job delete, ``check_all`` pause/resume.

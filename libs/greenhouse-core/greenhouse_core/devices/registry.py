@@ -10,7 +10,7 @@ Resolution policy (deliberately strict for irrigators, lenient for sensors):
 
 Rows are matched on their exact ``type`` (the ``vendor.model`` key). The legacy
 column values (``tuya_cloud`` / ``tuya_local``, ``soil_moisture`` /
-``temp_humidity`` / ``light``) are no longer aliased (owner decision OD3): Alembic
+``temp_humidity`` / ``light``) are no longer aliased, because Alembic
 revisions ``6c9d4e2f3a12`` and ``a1d3f5b7c902`` rewrite them (and ``""``) on upgrade; a row
 written with one afterwards is an unknown model — the irrigator is refused (logged, never actuated) and the sensor is
 skipped by the health poll. Fix such a row by setting its type to the model key.
