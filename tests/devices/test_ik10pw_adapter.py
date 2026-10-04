@@ -155,28 +155,6 @@ class TestIK10PWAdapterStatus:
         assert status["work_state"] == "watering"
 
 
-class TestTR301ZAdapterReadLive:
-    """The sensor adapter delegates ``read_live`` to TuyaCloud."""
-
-    def test_read_live_returns_parsed_dict(self, registry, fake_cloud):
-        adapter = registry.get_sensor(_make_sensor())
-        adapter._gateway.get_live_reading = MagicMock(  # type: ignore[attr-defined]
-            return_value={"temperature": 22.5, "soil_moisture": 45.0}
-        )
-        reading = adapter.read_live(_make_sensor())
-        assert reading["temperature"] == 22.5
-        assert reading["soil_moisture"] == 45.0
-
-    def test_read_live_cloud_failure_returns_error_dict(self, registry):
-        adapter = registry.get_sensor(_make_sensor())
-        adapter._gateway.get_live_reading = MagicMock(  # type: ignore[attr-defined]
-            side_effect=RuntimeError("device offline")
-        )
-        out = adapter.read_live(_make_sensor())
-        assert "error" in out
-        assert "device offline" in out["error"]
-
-
 class TestAlarmParser:
     """alarm_indicates_no_water handles the multiple shapes the DP can take."""
 

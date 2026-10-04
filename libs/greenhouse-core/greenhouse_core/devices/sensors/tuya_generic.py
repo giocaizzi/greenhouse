@@ -1,8 +1,9 @@
 """Generic profile-driven Tuya sensor adapter.
 
-Live reads delegate to :meth:`DeviceGateway.get_live_reading`, which converts
-the raw Tuya properties into the canonical key set the rest of the codebase
-consumes (``temperature``, ``soil_moisture``, ``env_humidity``, ``light``,
+Live reads do not go through the adapter: the sync job calls
+:meth:`DeviceGateway.get_live_reading`, which converts the raw Tuya properties
+into the canonical key set the rest of the codebase consumes
+(``temperature``, ``soil_moisture``, ``env_humidity``, ``light``,
 ``battery_state``…) through the gateway's single ``DATAPOINT_PARSERS`` table.
 Per-model adapters describe their DP codes in the profile JSON and override
 ``read_health`` where the model reports health DPs.
@@ -11,7 +12,6 @@ Per-model adapters describe their DP codes in the profile JSON and override
 from __future__ import annotations
 
 import time
-from typing import Any
 
 from greenhouse_core.devices.gateway import DeviceGateway
 from greenhouse_core.devices.health import DeviceHealthState
@@ -30,13 +30,6 @@ class TuyaSensorAdapter(AbstractSensorAdapter):
     def __init__(self, profile: SensorProfile, gateway: DeviceGateway):
         self.profile = profile
         self._gateway = gateway
-
-    def read_live(self, sensor: Sensor) -> dict[str, Any]:
-        """Read current sensor values via the Tuya Cloud gateway."""
-        try:
-            return self._gateway.get_live_reading(sensor.tuya_device_id)
-        except Exception as e:
-            return {"error": str(e)}
 
     def read_health(self, sensor: Sensor, latest: SensorReading | None = None) -> DeviceHealthState:
         """Default: no health surface beyond reachability.

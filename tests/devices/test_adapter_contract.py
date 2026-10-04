@@ -125,15 +125,6 @@ class TestSensorContract:
             assert isinstance(adapter, TR301ZAdapter)
 
     @pytest.mark.parametrize("model_key", ["tuya.tr301z"])
-    def test_read_live_returns_dict(self, registry: DeviceRegistry, model_key: str):
-        adapter = registry.get_sensor(_make_sensor(model_key))
-        # The cloud client is a MagicMock; ``get_live_reading`` will return
-        # a MagicMock, which the adapter passes through. The contract is:
-        # never raise.
-        out = adapter.read_live(_make_sensor(model_key))
-        assert out is not None
-
-    @pytest.mark.parametrize("model_key", ["tuya.tr301z"])
     def test_read_health_no_reading_surfaces_offline(self, registry: DeviceRegistry, model_key: str):
         """With no persisted reading, health derivation surfaces offline=True."""
         adapter = registry.get_sensor(_make_sensor(model_key))

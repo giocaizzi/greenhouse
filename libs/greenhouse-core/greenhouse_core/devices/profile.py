@@ -82,8 +82,8 @@ class SensorProfile:
             each returning a ``(canonical_key, value)`` tuple. Descriptive:
             the entries are picked from the gateway's single
             ``DATAPOINT_PARSERS`` table, and reads parse through that table
-            inside :class:`~greenhouse_core.devices.gateway.DeviceGateway` —
-            ``TuyaSensorAdapter.read_live`` does not consult this mapping.
+            inside :class:`~greenhouse_core.devices.gateway.DeviceGateway`,
+            which does not consult this mapping.
     """
 
     model_key: str

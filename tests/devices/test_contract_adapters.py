@@ -765,21 +765,6 @@ def _scenarios():
             lambda h: None,
             lambda h: _state_dict(generic_cloud(h).read_health(_irrigator())),
         ),
-        "tr301z.read_live.v2": (
-            lambda h: h.cloud.set(
-                "cloudrequest",
-                {"success": True, "result": {"properties": [{"code": "humidity_value", "value": 38}]}},
-            ),
-            lambda h: TR301ZAdapter(h.gateway).read_live(_sensor()),
-        ),
-        "tr301z.read_live.both_fail_returns_error_dict": (
-            lambda h: (h.cloud.set("cloudrequest", fail), h.cloud.set("getstatus", fail)),
-            lambda h: TR301ZAdapter(h.gateway).read_live(_sensor()),
-        ),
-        "tr301z.read_live.transport_error_returns_error_dict": (
-            lambda h: (h.cloud.set("cloudrequest", OSError("x")), h.cloud.set("getstatus", OSError("no route"))),
-            lambda h: TR301ZAdapter(h.gateway).read_live(_sensor()),
-        ),
     }
 
 
