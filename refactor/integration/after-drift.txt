@@ -1,4 +1,0 @@
-## commit 0f043a6
-## FULL PYTHONHASHSEED=0 (rc=0)
-3053 passed, 10 warnings in 295.86s (0:04:55)
-## goldens

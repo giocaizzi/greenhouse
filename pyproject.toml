@@ -175,11 +175,6 @@ indent-style = "space"
     "SIM", "RET", "PTH", "PERF", "PLW", "FURB", "N", "RUF", "EM", "TRY003",
     "FBT", "ARG", "D", "S", "BLE", "ERA001", "SLF001",
 ]
-# Temporary: the leftover refactor/ tooling scripts. Delete this entry in the same commit that deletes refactor/.
-"refactor/**" = [
-    "C90", "PLR0911", "PLR0912", "PLR0915", "PLR0914", "PLR1702", "PLR2004",
-    "PERF", "PLW", "RUF005", "EM", "TRY003", "FBT", "D", "S", "T201",
-]
 "libs/greenhouse-core/greenhouse_core/migrations/versions/*" = ["D", "PLR0915"]  # generated Alembic DDL, out of scope
 # Frozen handler signatures (not a ratchet): FastAPI API/web handlers and Typer commands declare one
 # parameter per query/form field or CLI option (the OpenAPI / MCP / --help contract), and web pages

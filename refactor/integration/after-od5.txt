@@ -1,3 +1,0 @@
-== after OD5-prep merge (static)
-ruff 0, format clean (344), typecheck 174 files (pyproject [tool.mypy] files), lint-imports 0, make sizecheck 0
-OD5 branch: coverage 3144 passed 99.07% (flock); pre-commit outside refactor/ green except hadolint (needs Docker daemon, unavailable here)

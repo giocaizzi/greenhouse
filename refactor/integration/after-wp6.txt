@@ -1,6 +1,0 @@
-## commit 453090b
-## lint-imports
-Contracts: 10 kept, 0 broken.
-## FULL PYTHONHASHSEED=0
-3041 passed, 10 warnings in 342.67s (0:05:42)
-## goldens

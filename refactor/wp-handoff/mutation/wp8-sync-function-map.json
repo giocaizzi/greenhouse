@@ -1,4 +1,0 @@
-{
-  "sync_single_sensor": ["sync_single_sensor", "_sync_window_start", "_store_history", "_store_live_reading"],
-  "sync_sensor_data": ["sync_sensor_data", "_sync_logged", "_sync_summary"]
-}
