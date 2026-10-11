@@ -897,14 +897,16 @@ def _apply_soil_moisture_rule(decision: IrrigationDecision, soil: list[SoilNow],
     plant watered since yesterday is no longer "very dry" — and the dry steps
     use the band of the plant each sensor is linked to (unlinked sensors use the
     cluster's widest band), so one drought-tolerant plant cannot lower the dry
-    threshold of its neighbours. Wetness (the conflict's wet side, adequate vs
-    wet) is judged against the cluster's widest band. The 24 h aggregates stay
+    threshold of its neighbours; the conflict's wet side is per sensor too (a
+    cactus above its own band beside a dry Monstera is a conflict, not a
+    very-dry run). Adequate vs wet uses the current mean against the cluster's
+    widest band. The 24 h aggregates stay
     in the snapshot for the audit log; trends keep their own 48 h window.
     """
     if not soil:
         return
     dry = [s for s in soil if s.value < s.band[0]]
-    wet = [s for s in soil if s.value > band[1] - CONFLICT_WET_MARGIN]
+    wet = [s for s in soil if s.value > s.band[1] - CONFLICT_WET_MARGIN]
     if dry and wet:
         _apply_conflict(decision, soil, dry, wet)
         return

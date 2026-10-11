@@ -577,6 +577,17 @@ def _second_review_cases() -> list[Case]:
                 SensorSpec("Dry Probe", (Reading(600, soil=10.0),), 0),
             ),
         ),
+        # A linked cactus above its own band (45 % > 35 %) beside a Monstera at 30 %: per-sensor wetness → conflict.
+        Case(
+            id="series/wet-cactus-beside-dry-monstera",
+            family="series",
+            at=BASE_AT,
+            plants=(("Monstera deliciosa", "tropical"), ("Unknown cactus", "cacti")),
+            sensors=(
+                SensorSpec("Monstera Probe", (Reading(600, soil=30.0),), 0),
+                SensorSpec("Cactus Probe", (Reading(600, soil=45.0),), 1),
+            ),
+        ),
         # Device soil-dry alarm while the probe reads 80 % (Monstera band tops at 60 %): noted, not an emergency.
         Case(
             id="series/water-warning-on-over-watered-soil",
