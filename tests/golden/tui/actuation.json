@@ -393,7 +393,7 @@
     "ideal_humidity_max",
     "notes"
    ],
-   "note": "Blank care fields are filled from the plant DB when the species is known.",
+   "note": "Blank care fields stay blank — press P afterwards to fill them from the plant DB.",
    "prefilled": {},
    "submit_label": "Add",
    "title": "Add plant"

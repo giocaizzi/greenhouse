@@ -431,7 +431,7 @@ class ClusterScreen(DataScreen):
             lambda v: lambda c: c.add_plant(cid, **v),
             lambda r: f"Added {r.get('species')}",
             "Add",
-            note="Blank care fields are filled from the plant DB when the species is known.",
+            note="Blank care fields stay blank — press P afterwards to fill them from the plant DB.",
         )
 
     def _new_sensor(self) -> None:
