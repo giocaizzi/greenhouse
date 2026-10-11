@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Sequence
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, TypedDict, Unpack
 
 from rich.console import Group, RenderableType
 from rich.table import Table
@@ -29,6 +29,25 @@ ANIMATION_INTERVAL = 0.7
 SpriteFactory = Callable[[int], RenderableType]
 
 
+class CardOptions(TypedDict, total=False):
+    """Textual widget keywords a :class:`ClusterCard` forwards (it sets its own ``id`` and ``classes``)."""
+
+    name: str | None
+    disabled: bool
+
+
+class TileOptions(CardOptions, total=False):
+    """Textual widget keywords a :class:`PlantTile` forwards (it sets its own ``classes``)."""
+
+    id: str | None
+
+
+class WidgetOptions(TileOptions, total=False):
+    """The standard Textual widget keywords a :class:`SpriteView` forwards to ``Static``."""
+
+    classes: str | None
+
+
 class SpriteView(Static):
     """Displays a sprite, re-rendering it every tick so animated frames play."""
 
@@ -36,7 +55,7 @@ class SpriteView(Static):
     SpriteView { width: auto; height: auto; }
     """
 
-    def __init__(self, factory: SpriteFactory, *, animate: bool = True, **kwargs: Any) -> None:
+    def __init__(self, factory: SpriteFactory, *, animate: bool = True, **kwargs: Unpack[WidgetOptions]) -> None:
         """Render frame 0 of ``factory``; ``animate`` cycles the frames on a timer."""
         super().__init__(factory(0), **kwargs)
         self._factory = factory
@@ -110,7 +129,7 @@ class ClusterCard(Vertical, can_focus=True):
 
     BINDINGS: ClassVar[list[BindingType]] = [("enter", "select", "Open")]
 
-    def __init__(self, summary: ClusterSummary, **kwargs: Any) -> None:
+    def __init__(self, summary: ClusterSummary, **kwargs: Unpack[CardOptions]) -> None:
         """Build the card for ``summary``; its DOM id derives from the cluster id."""
         super().__init__(id=f"cluster-card-{summary.id}", classes="cluster-card", **kwargs)
         self.summary = summary
@@ -184,7 +203,7 @@ class PlantTile(Vertical):
         *,
         watering: bool,
         band: tuple[float | None, float | None] = (None, None),
-        **kw: Any,
+        **kw: Unpack[TileOptions],
     ) -> None:
         """Show ``plant``: species/category pick the sprite, its moisture and ``band`` fill the gauge."""
         super().__init__(classes="plant-tile", **kw)

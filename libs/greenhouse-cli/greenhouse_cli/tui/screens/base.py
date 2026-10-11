@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, TypedDict, Unpack, cast
+from typing import TYPE_CHECKING, Any, TypedDict, TypeVar, Unpack, cast
 
 from textual.screen import Screen
 
@@ -14,6 +14,8 @@ if TYPE_CHECKING:
 
     from greenhouse_cli.client import IrrigationClient
     from greenhouse_cli.tui.app import GreenhouseApp
+
+_T = TypeVar("_T")
 
 
 class FormOptions(TypedDict, total=False):
@@ -110,7 +112,7 @@ class DataScreen(Screen[Any]):
             FormScreen(title, fields, options.get("submit_label", "Save"), options.get("note")), _after
         )
 
-    async def act(self, fn: Callable[[IrrigationClient], Any], done: str | Callable[[Any], str]) -> Any:
+    async def act(self, fn: Callable[[IrrigationClient], _T], done: str | Callable[[Any], str]) -> _T | None:
         """Run an action call, toast the outcome and reload."""
         result = await self.gh.api(fn)
         if result is not None:

@@ -18,7 +18,7 @@ def lazy_module_attrs(
     namespace: dict[str, Any],
     exports: Mapping[str, str],
     modules: Mapping[str, str],
-) -> tuple[Callable[[str], Any], Callable[[], list[str]]]:
+) -> tuple[Callable[[str], object], Callable[[], list[str]]]:
     """Build a package's module-level ``__getattr__`` and ``__dir__``.
 
     Args:
@@ -33,7 +33,7 @@ def lazy_module_attrs(
         The ``(__getattr__, __dir__)`` pair to bind at package level.
     """
 
-    def _getattr(name: str) -> Any:
+    def _getattr(name: str) -> object:
         if name in exports:
             value = getattr(importlib.import_module(exports[name]), name)
         elif name in modules:

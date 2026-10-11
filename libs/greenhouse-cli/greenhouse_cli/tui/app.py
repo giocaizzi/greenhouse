@@ -11,7 +11,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Callable
 from http import HTTPStatus
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, TypeVar
 
 from textual.app import App
 from textual.binding import Binding, BindingType
@@ -29,6 +29,7 @@ if TYPE_CHECKING:
     from textual.screen import Screen
 
 ClientFactory = Callable[[str | None], IrrigationClient]
+_T = TypeVar("_T")
 
 
 class GreenhouseApp(App[None]):
@@ -80,7 +81,7 @@ class GreenhouseApp(App[None]):
         self.needs_sign_in = False
         self.sub_title = server_url
 
-    async def api(self, fn: Callable[[IrrigationClient], Any], *, quiet: bool = False) -> Any:
+    async def api(self, fn: Callable[[IrrigationClient], _T], *, quiet: bool = False) -> _T | None:
         """Run ``fn(client)`` in a thread; surface errors as notifications.
 
         Args:
