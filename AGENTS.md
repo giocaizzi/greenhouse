@@ -41,7 +41,7 @@ Dependency direction is strict and **enforced by import-linter** (`make lint-imp
 - server layers: `app > routes | web > deps | auth > scheduler > services > config` (two documented lazy exceptions: `services.irrigation` and `services.system_health` → `scheduler`); API `routes` and `web` are independent of each other;
 - `devices/` never imports `logic`, `learning`, `repository`, `schemas` or `sync`; `models` / `schemas` / `constants` import no behavior; `logic` never drives devices;
 - `learning` builds on `logic` (the engine's advisory learning hook is the only way back); inside `logic`, `engine` orchestrates and the helpers never import it;
-- the TUI view-model modules (`tui/model.py`, `tui/formatting.py`, `tui/render.py`) import no Textual, screens, widgets, client or httpx.
+- the TUI view-model modules (`tui/model.py`, `tui/formatting.py`, the `tui/render/` package) import no Textual, screens, widgets, client or httpx.
 
 ### `greenhouse-core` (`greenhouse_core`)
 
@@ -59,7 +59,7 @@ Dependency direction is strict and **enforced by import-linter** (`make lint-imp
 | `sync.py` | core Tuya Cloud → SQLite sensor sync (driven by the server's `SyncService`) |
 | `stats.py`, `auth.py`, `utils.py` | cluster stats, Argon2id password hashing / user helpers, small time/light helpers |
 
-`logic/engine.py` and `devices/` keep their pre-refactor module layout for now (a pending work package may split them); the behavior and the public names above stay.
+`logic/engine.py` stays one cohesive rule pipeline (a registered size exception: frozen tests patch `engine.time` / `engine.season_for` and pin its constant imports); its rules are small private helpers inside it.
 
 ### `greenhouse-server` (`greenhouse_server`)
 
@@ -67,11 +67,12 @@ Dependency direction is strict and **enforced by import-linter** (`make lint-imp
 |---|---|
 | `app.py` | `create_app` + `main`: settings, DB init, device/gateway wiring, scheduler start, routers, MCP mount (`require_mcp_token`) |
 | `config.py` | `Settings` (env prefix `IRRIGATION_`; secrets via `GREENHOUSE_*` aliases) |
+| `state.py` | typed accessors for `app.state` (session factory, settings, plant DB, weather, gateway, registry, health monitor, notifier) and the request providers shared by `deps` and `auth` |
 | `deps.py` | FastAPI providers (`get_repository`, gateway / registry / health monitor / weather / notifier / plant DB, service factories) and the **`require_*` lookups** — `require_{cluster,cluster_irrigator,irrigator,plant,plant_in_cluster,sensor,sensor_in_cluster,window_in_cluster,vacation_window,alert,metric}` — one 404 wording per entity, used by API and web |
 | `auth.py` | JWT issuance, session cookie, auth dependencies |
 | `scheduler.py` | APScheduler: built-in jobs `check_all` (cron, `IRRIGATION_CHECK_CRON_HOURS`, default `"*"` = top of every hour), `sensor_sync`, `sensor_anomaly`, `device_health_monitor`, `plant_health_snapshot`; ad-hoc one-shots (pump watchers, leak checks). Built-in jobs can be paused (`check_all`) but not deleted |
 | `routes/` | `/api/v1` JSON routes, one module per resource |
-| `web/` | HTMX/Jinja2 UI — `router.py`, `routes/`, `templates/`, `static/`, `filters.py` (`relative_age`; the `age_seconds` filter takes an age in seconds, `time_ago` a timestamp), `context.py`, `exception_handlers.py` |
+| `web/` | HTMX/Jinja2 UI — `router.py`, `routes/`, `templates/`, `static/`, `forms.py` (shared form parsers), `weekdays.py`, `filters.py` (`relative_age`; the `age_seconds` filter takes an age in seconds, `time_ago` a timestamp), `context.py`, `exception_handlers.py` |
 | `services/` | orchestration shared by API, web and jobs (below) |
 
 `services/`:
@@ -80,7 +81,8 @@ Dependency direction is strict and **enforced by import-linter** (`make lint-imp
 - **data** — `sync.py` (`SyncService.ensure_fresh_and_read`), `weather.py` (Open-Meteo), `anomaly.py`, `maintenance.py`, `data_quality.py`, `system_health.py`;
 - **read models** — `cluster.py` (status, history, plant-DB sync, CSV export), `charts.py`, `forecast.py`, `efficacy.py`, `insights.py`, `health.py` (plant health scores + daily snapshot), `search.py`;
 - **shared write rules** — `inventory.py` (irrigator / sensor registration, duplicate device ids, plant-in-cluster), `windows.py` (`validate_window`), `vacation.py` (`validate_vacation_range`, reservoir budgets), `alerts.py` (alert inbox upsert / reconcile), `notify.py` (ntfy);
-- `_session.py` — `job_session`, the one transaction scaffold for scheduler jobs.
+- **job plumbing** — `jobs.py` (`job_session(commit=…)`, the one transaction scaffold for scheduler jobs, and `read_session`), `irrigation_jobs.py` (leak-check jobs);
+- `errors.py` (`NotFoundError` family mapped to 404 at the edge), `chart_payload.py` (chart payload TypedDicts).
 
 ### `greenhouse-cli` (`greenhouse_cli`)
 
@@ -90,7 +92,7 @@ Dependency direction is strict and **enforced by import-linter** (`make lint-imp
 | `client.py` | `IrrigationClient` (httpx, 30 s timeout) and the token file (`~/.config/greenhouse/token`, `$XDG_CONFIG_HOME`; `$GREENHOUSE_API_TOKEN` wins) |
 | `constants.py` | `DEFAULT_SERVER_URL`, `ALL_WEEKDAYS` — values mirrored from the server side (the CLI may not import core) |
 | `commands/` | `_helpers.py` (`server_url`, `call` → `ServerError` → exit 1, `output` via `rich.print_json`), `operations.py` (top-level operations), `auth.py`, `tui.py`, one module per sub-app |
-| `tui/` | Textual UI — `app.py` (`GreenhouseApp`; blocking client calls run in threads via `GreenhouseApp.api()`), `screens/`, `widgets.py`, `sprites.py` (half-block pixel-art), pure view-model `model.py` (payload → summaries), `render.py` (payload → rows / rich text, golden-pinned), `formatting.py`, `resources.py` (form field specs) |
+| `tui/` | Textual UI — `app.py` (`GreenhouseApp`; blocking client calls run in threads via `GreenhouseApp.api()`), `screens/`, `widgets.py`, `sprites.py` (half-block pixel-art), pure view-model `model.py` (payload → summaries), `render/` (payload → rows / rich text by screen area, golden-pinned), `formatting.py`, `resources.py` (form field specs) |
 
 Commands: top-level `status`, `irrigate`, `check`, `monitor`, `sync`, `learn`, `history`, `stats`, `health`, `stop-all`, `login`, `logout`, `whoami`, `tui`; sub-apps `cluster`, `plant`, `irrigator`, `sensor`, `config` (+ `config global`), `scheduler`, `alerts`, `decisions`, `prefs`, `vacation`, `windows`. Server URL resolves `--server` → `$IRRIGATION_SERVER_URL` → `http://localhost:8000`. Output is JSON; exit 1 on errors, 2 for `check --all` with `has_alerts` and `monitor` with plants needing water.
 
@@ -122,7 +124,7 @@ Commands: top-level `status`, `irrigate`, `check`, `monitor`, `sync`, `learn`, `
 
 ## Conventions
 
-- **Transactions.** Route handlers own the commit for CRUD (`repo.commit()`; never `session.commit()` directly). A service commits only when a side effect must follow a durable write (e.g. `manual_start` commits the `start` event before arming the watcher and notifying; `check_all_clusters` commits per cluster). Scheduler jobs open their transaction with `services/_session.job_session` (commit on success, roll back + log on failure, always close). The web template context reads preferences on its own short-lived session (deliberate: read-only).
+- **Transactions.** Route handlers own the commit for CRUD (`repo.commit()`; never `session.commit()` directly). A service commits only when a side effect must follow a durable write (e.g. `manual_start` commits the `start` event before arming the watcher and notifying; `check_all_clusters` commits per cluster). Scheduler jobs open their transaction with `services/jobs.job_session` (commit on success, roll back + log on failure, always close). The web template context reads preferences on its own short-lived session (deliberate: read-only).
 - **Lookups and 404s** go through `deps.require_*` (one wording per entity, API and web alike); services signal "not found" with domain exceptions (e.g. `ClusterNotFoundError`, `PlantNotInClusterError`) or `None`, mapped to HTTP at the edge.
 - **Shared rules live in services**, called by both the API route and the web route: `services/inventory.py`, `services/windows.validate_window`, `services/vacation.validate_vacation_range`, `models.parse_device_config`, `logic/plant_needs.parse_moisture_target`. Error wording is the API's.
 - **Service results** are core read models or `TypedDict`s; Pydantic models are built at the HTTP edge.
