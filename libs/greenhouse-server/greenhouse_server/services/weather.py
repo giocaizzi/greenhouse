@@ -31,6 +31,27 @@ class WeatherForecast(TypedDict):
     avg_humidity: float | None
 
 
+def _aggregate_window(hourly: dict[str, list[float]], hours: int) -> WeatherForecast | None:
+    """Aggregate the first ``hours`` entries of Open-Meteo's hourly series.
+
+    The window is sized by the precipitation series (clamped to what it holds);
+    an empty window has no forecast (``None``).
+    """
+    precip_list = hourly.get("precipitation", [])
+    n = min(hours, len(precip_list))
+    if n == 0:
+        return None
+
+    window_temp = hourly.get("temperature_2m", [])[:n]
+    window_humidity = hourly.get("relative_humidity_2m", [])[:n]
+    return {
+        "precipitation_mm": sum(precip_list[:n]),
+        "max_temp": max(window_temp) if window_temp else None,
+        "min_temp": min(window_temp) if window_temp else None,
+        "avg_humidity": sum(window_humidity) / len(window_humidity) if window_humidity else None,
+    }
+
+
 class WeatherClient:
     """Fetches current weather from Open-Meteo API."""
 
@@ -46,7 +67,8 @@ class WeatherClient:
         # Europe/Rome.
         self._tz = tz
         self._get_current_cache: tuple[float, CurrentWeather] | None = None
-        self._get_forecast_cache: tuple[float, WeatherForecast] | None = None
+        # Keyed by ``hours``: each window is a different aggregate of the same series.
+        self._get_forecast_cache: dict[int, tuple[float, WeatherForecast]] = {}
 
     def get_current(self) -> CurrentWeather | None:
         """Fetch current weather. Returns None on failure."""
@@ -88,8 +110,9 @@ class WeatherClient:
         if hours < 1:
             logger.debug("Forecast window of %d hours requested; returning no forecast", hours)
             return None
-        if self._get_forecast_cache is not None:
-            cached_at, cached_value = self._get_forecast_cache
+        cached = self._get_forecast_cache.get(hours)
+        if cached is not None:
+            cached_at, cached_value = cached
             if time.monotonic() - cached_at < _FORECAST_CACHE_TTL:
                 return cached_value
 
@@ -104,26 +127,9 @@ class WeatherClient:
             with urllib.request.urlopen(url, timeout=self._timeout) as resp:
                 data = json.loads(resp.read())
 
-            hourly = data.get("hourly", {})
-            precip_list: list[float] = hourly.get("precipitation", [])
-            temp_list: list[float] = hourly.get("temperature_2m", [])
-            humidity_list: list[float] = hourly.get("relative_humidity_2m", [])
-
-            n = min(hours, len(precip_list))
-            if n == 0:
-                return None
-
-            window_precip = precip_list[:n]
-            window_temp = temp_list[:n]
-            window_humidity = humidity_list[:n]
-
-            result: WeatherForecast = {
-                "precipitation_mm": sum(window_precip),
-                "max_temp": max(window_temp) if window_temp else None,
-                "min_temp": min(window_temp) if window_temp else None,
-                "avg_humidity": sum(window_humidity) / len(window_humidity) if window_humidity else None,
-            }
-            self._get_forecast_cache = (time.monotonic(), result)
+            result = _aggregate_window(data.get("hourly", {}), hours)
+            if result is not None:
+                self._get_forecast_cache[hours] = (time.monotonic(), result)
             return result
         except Exception:
             logger.debug("Open-Meteo forecast request failed", exc_info=True)

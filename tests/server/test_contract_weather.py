@@ -206,17 +206,17 @@ class TestForecast:
         assert client.get_forecast()["precipitation_mm"] == 9.0
         assert [url for url, _ in net.calls] == [FORECAST_URL, CURRENT_URL, FORECAST_URL]
 
-    def test_forecast_cache_ignores_hours_current_behavior(self, net):
-        """Pins current (buggy) behavior: the forecast cache is not keyed by ``hours`` — see REFACTOR_NOTES.md.
-
-        Within the TTL, ``get_forecast(hours=2)`` returns the aggregate computed for
-        the earlier ``get_forecast(hours=6)`` call, without a fetch.
-        """
-        net.queue(HOURLY_PAYLOAD)
+    def test_forecast_cache_is_keyed_by_hours(self, net):
+        """Within the TTL each ``hours`` window gets its own aggregate (and cache entry), not the first one's."""
+        net.queue(HOURLY_PAYLOAD, HOURLY_PAYLOAD)
         client = WeatherClient()
         six = client.get_forecast(hours=6)
-        assert client.get_forecast(hours=2) == six
-        assert len(net.calls) == 1
+        two = client.get_forecast(hours=2)
+        assert two == {"precipitation_mm": 0.5, "max_temp": 15.5, "min_temp": 14.0, "avg_humidity": 75.0}
+        assert two != six
+        assert client.get_forecast(hours=6) == six  # both windows are now served from the cache
+        assert client.get_forecast(hours=2) == two
+        assert len(net.calls) == 2
 
 
 def test_app_wires_settings_location_and_preference_timezone(clean_env):
