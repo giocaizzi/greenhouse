@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Sequence
-from typing import TYPE_CHECKING, Any, ClassVar, TypedDict, Unpack
+from typing import TYPE_CHECKING, Any, ClassVar, Unpack
 
 from rich.console import Group, RenderableType
 from rich.table import Table
@@ -24,29 +24,11 @@ if TYPE_CHECKING:
 
     from greenhouse_cli.tui.model import ClusterSummary, PlantView
     from greenhouse_cli.tui.table import DataTable
+    from greenhouse_cli.tui.widget_options import CardOptions, TileOptions, WidgetOptions
 
 ANIMATION_INTERVAL = 0.7
 
 SpriteFactory = Callable[[int], RenderableType]
-
-
-class CardOptions(TypedDict, total=False):
-    """Textual widget keywords a :class:`ClusterCard` forwards (it sets its own ``id`` and ``classes``)."""
-
-    name: str | None
-    disabled: bool
-
-
-class TileOptions(CardOptions, total=False):
-    """Textual widget keywords a :class:`PlantTile` forwards (it sets its own ``classes``)."""
-
-    id: str | None
-
-
-class WidgetOptions(TileOptions, total=False):
-    """The standard Textual widget keywords a :class:`SpriteView` forwards to ``Static``."""
-
-    classes: str | None
 
 
 class SpriteView(Static):
