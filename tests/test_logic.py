@@ -805,7 +805,7 @@ def test_clamped_adjustments_report_the_applied_delta_not_the_nominal_step():
     assert [(r.code, r.interval_delta) for r in dry_air.reasons] == [(TriggerCode.HUMIDITY_VERY_LOW, -1)]
 
     bright = _bare_decision(interval=MIN_INTERVAL_HOURS, duration=MAX_DURATION_MINUTES, avg_light=200_000.0)
-    engine._apply_light_adjustment(bright)
+    engine._apply_light_adjustment(bright, 6)
     assert [(r.interval_delta, r.duration_delta) for r in bright.reasons] == [(0, 0)]
 
     rising = _bare_decision(interval=MAX_INTERVAL_HOURS - 1, duration=MAX_DURATION_MINUTES)
@@ -831,3 +831,25 @@ def test_fallback_uses_a_global_schedule_without_a_cluster_config_row(tmp_db, fr
 
     assert decision.primary_code is TriggerCode.CONFIG_FALLBACK
     assert (decision.action, decision.duration_minutes, decision.interval_hours) == (Action.IRRIGATE, 3, 8)
+
+
+def test_light_thresholds_use_the_preferences_timezone_month(tmp_db):
+    """Light thresholds and seasons share one clock: the month in the preferences timezone.
+
+    2026-09-30 23:30 UTC is 2026-10-01 08:30 in Tokyo. 600 lux is below September's
+    bright threshold (800 × 0.83 = 664) but above October's (800 × 0.70 = 560), so the
+    LIGHT_BRIGHT reason appears only when the local month drives the factor.
+    """
+    import time_machine
+
+    cid = tmp_db.add_cluster("Tokyo")
+    tmp_db.add_plant(cluster_id=cid, species=FAKE_PLANT_SPECIES)
+    tmp_db.update_preferences(timezone="Asia/Tokyo")
+    instant = datetime(2026, 9, 30, 23, 30, tzinfo=ZoneInfo("UTC"))
+    sid = tmp_db.add_sensor(cluster_id=cid, tuya_device_id=FAKE_SENSOR_ID, name="S", sensor_type="x", config={})
+    tmp_db.add_sensor_reading(sensor_id=sid, timestamp=int(instant.timestamp()) - 600, soil_moisture=50.0, light=600)
+
+    with time_machine.travel(instant, tick=False):
+        decision = IrrigationLogic(tmp_db, get_plant_database()).decide_for_cluster(cid)
+
+    assert TriggerCode.LIGHT_BRIGHT in [r.code for r in decision.reasons]

@@ -152,7 +152,7 @@ def test_water_warning_names_are_deduplicated_per_sensor():
 def test_low_light_stress_fires_below_40_percent_of_the_seasonal_minimum(fraction, expected):
     """stress-02: ``low_light`` needs ``avg_light < 0.4 × effective_light_threshold(lux_min)``.
 
-    Monstera's summer baseline is 150 lux; April's seasonal factor applies (UTC month).
+    Monstera's summer baseline is 150 lux; April's seasonal factor applies (month in the preferences timezone).
     """
     lux = round(effective_light_threshold(150, month=BASE_AT.month) * fraction)
     decision = _decide(f"low-light-{fraction}", sensors=(_sensor(Reading(age_s=600, soil=50.0, light=lux)),))

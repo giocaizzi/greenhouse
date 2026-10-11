@@ -92,6 +92,7 @@ from greenhouse_core.logic.stress import detect_stress_conditions
 from greenhouse_core.logic.timing import (
     active_quiet_window,
     is_within_irrigation_window,
+    local_now,
     season_for,
     seasonal_multiplier,
 )
@@ -125,6 +126,7 @@ class _EngineInputs:
     temp_range: tuple[float, float] | None
     humidity_range: tuple[float, float] | None
     water_needs: str
+    light_month: int  # month in the preferences timezone; picks the seasonal light factor
 
 
 class IrrigationLogic:
@@ -188,7 +190,7 @@ class IrrigationLogic:
         if weather_skip is not None:
             return weather_skip
 
-        inputs = self._gather_inputs(cluster_id, plants)
+        inputs = self._gather_inputs(cluster_id, plants, evaluated_at)
         sensors = self.db.get_sensors_in_cluster(cluster_id)
         if not sensors or not inputs.snapshot.has_data:
             return self._fallback_decision(cluster_id, evaluated_at, current_temp, inputs)
@@ -221,7 +223,7 @@ class IrrigationLogic:
         _apply_soil_moisture_rule(decision, inputs.plant_care)
         _apply_temperature_adjustment(decision, inputs.temp_range)
         _apply_humidity_adjustment(decision, inputs.humidity_range)
-        _apply_light_adjustment(decision)
+        _apply_light_adjustment(decision, inputs.light_month)
         _apply_water_needs_adjustment(decision, inputs.water_needs)
         _apply_trend_adjustment(decision)
 
@@ -236,11 +238,17 @@ class IrrigationLogic:
         # VACATION_BUDGET_EXHAUSTED).
         self._apply_vacation_budget(decision, cluster_id, evaluated_at)
 
-    def _gather_inputs(self, cluster_id: int, plants: list["Plant"]) -> _EngineInputs:
-        """Read everything the rule pipeline consumes, in the engine's fixed query order."""
+    def _gather_inputs(self, cluster_id: int, plants: list["Plant"], evaluated_at: int) -> _EngineInputs:
+        """Read everything the rule pipeline consumes, in the engine's fixed query order.
+
+        The light season is the month in the preferences timezone — the same
+        clock :func:`season_for` uses for the seasonal multiplier — so both
+        rules agree on the season around a month boundary.
+        """
         snapshot = get_recent_sensor_data(self.db, cluster_id, hours=SNAPSHOT_LOOKBACK_HOURS)
         trends = analyze_historical_trends(self.db, cluster_id)
-        stress = detect_stress_conditions(self.db, self.plant_db, cluster_id, snapshot, trends)
+        light_month = local_now(evaluated_at, self._tz_name()).month
+        stress = detect_stress_conditions(self.db, self.plant_db, cluster_id, snapshot, trends, month=light_month)
         self._attach_learning_alerts(cluster_id, stress)
 
         plant_care = [self.plant_db.get_care_data(species=p.species, category=p.category) for p in plants]
@@ -252,6 +260,7 @@ class IrrigationLogic:
             temp_range=get_ideal_temp_range(plant_care),
             humidity_range=get_ideal_humidity_range(plant_care),
             water_needs=analyze_water_needs(plant_care),
+            light_month=light_month,
         )
 
     def _fallback_decision(
@@ -970,11 +979,12 @@ def _apply_humidity_adjustment(decision: IrrigationDecision, humidity_range: tup
         )
 
 
-def _apply_light_adjustment(decision: IrrigationDecision) -> None:
+def _apply_light_adjustment(decision: IrrigationDecision, month: int) -> None:
+    """Shorten the interval in bright light and lengthen it in the dark, thresholds scaled to ``month``'s daylight."""
     avg_light = decision.sensor_snapshot.avg_light if decision.sensor_snapshot else None
     if avg_light is None:
         return
-    sf = seasonal_light_factor()
+    sf = seasonal_light_factor(month)
     if avg_light > LIGHT_VERY_BRIGHT * sf:
         interval_delta = _shift_interval(decision, -LIGHT_VERY_BRIGHT_INTERVAL_STEP)
         duration_delta = _lengthen_duration(decision, LIGHT_VERY_BRIGHT_DURATION_STEP)
