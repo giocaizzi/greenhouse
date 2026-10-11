@@ -25,8 +25,8 @@ import copy
 import logging
 import threading
 import time
-from collections.abc import Callable
 from dataclasses import dataclass, replace
+from typing import TYPE_CHECKING
 
 from greenhouse_core.constants import (
     BATTERY_CRITICAL_PCT,
@@ -38,11 +38,9 @@ from greenhouse_core.constants import (
     SENSOR_OFFLINE_GRACE_MINUTES,
     SIGNAL_LOSS_THRESHOLD,
 )
-from greenhouse_core.devices import DeviceRegistry
 from greenhouse_core.devices.health import DeviceHealthState, HealthAlarm
 from greenhouse_core.logic.decision import DEVICE_BLOCKING_CODES
 from greenhouse_core.models import ENTITY_IRRIGATOR, ENTITY_SENSOR, SOURCE_HEALTH, EntityType, Irrigator, Sensor
-from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.services.alerts import is_alert_open, notify_if_new_alert
 from greenhouse_server.services.health_alarms import (
     HEALTH_ALARM_TO_TRIGGER,
@@ -57,7 +55,13 @@ from greenhouse_server.services.health_alarms import (
     is_low_battery_state,
     unresolved_alarms_by_entity,
 )
-from greenhouse_server.services.notify import NtfyClient
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from greenhouse_core.devices import DeviceRegistry
+    from greenhouse_core.repository import IrrigationRepository
+    from greenhouse_server.services.notify import NtfyClient
 
 logger = logging.getLogger(__name__)
 

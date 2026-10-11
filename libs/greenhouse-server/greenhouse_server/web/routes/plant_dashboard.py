@@ -15,7 +15,6 @@ from greenhouse_core.constants import (
     PLANT_PAGE_READINGS_LOOKBACK_HOURS,
     PLANT_PAGE_RECENT_EVENTS,
 )
-from greenhouse_core.models import Plant
 from greenhouse_core.repository import SameClusterMoveError
 from greenhouse_server.deps import (
     MAX_LOOKBACK_HOURS,
@@ -37,7 +36,7 @@ from greenhouse_server.web.filters import relative_age
 from greenhouse_server.web.templating import templates
 
 if TYPE_CHECKING:
-    from greenhouse_core.models import IrrigationEvent, Irrigator, Sensor, SensorReading
+    from greenhouse_core.models import IrrigationEvent, Irrigator, Plant, Sensor, SensorReading
     from greenhouse_core.plant_db import PlantDatabase
     from greenhouse_core.repository import IrrigationRepository
     from greenhouse_server.services.charts import Metric

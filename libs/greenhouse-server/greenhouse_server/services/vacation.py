@@ -11,9 +11,12 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from greenhouse_core.constants import SECONDS_PER_DAY, VACATION_RESERVOIR_USABLE_FRACTION
-from greenhouse_core.repository import IrrigationRepository
+
+if TYPE_CHECKING:
+    from greenhouse_core.repository import IrrigationRepository
 
 
 class VacationRangeError(ValueError):

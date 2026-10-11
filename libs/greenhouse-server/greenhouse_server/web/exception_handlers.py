@@ -12,8 +12,8 @@ The handler is registered for Starlette's ``HTTPException`` so router-level 404 
 from __future__ import annotations
 
 import math
+from typing import TYPE_CHECKING
 
-from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -21,6 +21,9 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from greenhouse_server.auth import _RedirectAuthError, render_login_redirect
 from greenhouse_server.web.context import base_context, is_hx
 from greenhouse_server.web.templating import templates
+
+if TYPE_CHECKING:
+    from fastapi import FastAPI, Request
 
 # Machine endpoints: their clients (CLI, MCP, OAuth discovery probes) must always see
 # structured JSON errors, never an HTML page, whatever they send in ``Accept``.

@@ -38,11 +38,11 @@ import jwt
 from fastapi import Depends, HTTPException, Request, Response, status
 from fastapi.responses import RedirectResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from sqlalchemy.engine import Engine
+from sqlalchemy.engine import Engine  # noqa: TC002 — pinned public name (golden contracts/imports.json)
 from sqlalchemy.orm import Session
 
 from greenhouse_core.auth import hash_password, needs_rehash, verify_password
-from greenhouse_core.models import User
+from greenhouse_core.models import User  # noqa: TC001 — pinned public name (golden contracts/imports.json)
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.config import Settings
 from greenhouse_server.state import get_session, get_settings
@@ -143,6 +143,12 @@ _bearer = HTTPBearer(auto_error=False)
 _get_settings = get_settings
 _session_from_app = get_session
 
+# Spelled once, as the ``deps`` aliases are; module-level, so the names they carry exist at runtime
+# when FastAPI resolves the dependencies' string annotations.
+_BearerCredentialsDep = Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)]
+_SettingsDep = Annotated[Settings, Depends(_get_settings)]
+_SessionDep = Annotated[Session, Depends(_session_from_app)]
+
 
 def _extract_token(
     request: Request,
@@ -189,9 +195,9 @@ def is_mcp_token(token: str, settings: Settings) -> bool:
 
 def require_user(
     request: Request,
-    creds: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
-    settings: Annotated[Settings, Depends(_get_settings)],
-    session: Annotated[Session, Depends(_session_from_app)],
+    creds: _BearerCredentialsDep,
+    settings: _SettingsDep,
+    session: _SessionDep,
 ) -> AuthenticatedUser:
     """API dependency — returns the authenticated user or raises 401.
 
@@ -229,8 +235,8 @@ def require_user(
 
 def require_web_user(
     request: Request,
-    settings: Annotated[Settings, Depends(_get_settings)],
-    session: Annotated[Session, Depends(_session_from_app)],
+    settings: _SettingsDep,
+    session: _SessionDep,
 ) -> AuthenticatedUser:
     """Web-page dependency — same as require_user but redirects to /login.
 

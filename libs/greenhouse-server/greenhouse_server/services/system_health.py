@@ -1,7 +1,6 @@
 """System-wide health pulse: sensor freshness, irrigator inventory, scheduler state."""
 
 import time
-from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
 from greenhouse_core.constants import (
@@ -17,6 +16,8 @@ from greenhouse_server.scheduler import scheduler
 from greenhouse_server.services.sync import SyncService
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from greenhouse_core.models import Sensor
 
 

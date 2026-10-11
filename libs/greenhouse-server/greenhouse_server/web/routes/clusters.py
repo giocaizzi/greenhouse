@@ -10,6 +10,7 @@ from fastapi import APIRouter, Form, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from greenhouse_core.logic.timing import active_quiet_window
+from greenhouse_core.repository import EffectiveConfig
 from greenhouse_server.deps import (
     MAX_LOOKBACK_HOURS,
     ClusterServiceDep,
@@ -29,7 +30,7 @@ from greenhouse_server.web.templating import templates
 from greenhouse_server.web.weekdays import WEEKDAY_BITS, WEEKDAY_LABELS, format_weekday_mask
 
 if TYPE_CHECKING:
-    from greenhouse_core.repository import EffectiveConfig, IrrigationRepository
+    from greenhouse_core.repository import IrrigationRepository
     from greenhouse_server.services.charts import Metric
 
 _EMPTY_RATIONALE: list[dict[str, Any]] = []

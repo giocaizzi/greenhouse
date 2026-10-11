@@ -38,9 +38,12 @@ from __future__ import annotations
 import argparse
 import ast
 import sys
-from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 ROOT = Path(__file__).resolve().parents[1]
 REGISTER = ROOT / "scripts" / "size-exceptions.txt"
