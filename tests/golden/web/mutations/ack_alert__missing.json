@@ -1,6 +1,16 @@
 {
  "body_lines": [
-  ""
+  "<article class=\"card error-panel\">",
+  "  <div class=\"card__head\">",
+  "    <h3 class=\"card__title\">",
+  "      <span class=\"badge-danger\">Error 404</span>",
+  "    </h3>",
+  "  </div>",
+  "  <div class=\"card__body\">",
+  "    <p>Alert not found</p>",
+  "    ",
+  "  </div>",
+  "</article>"
  ],
  "db_effect": {},
  "device_calls": {
@@ -8,8 +18,7 @@
   "sensor": []
  },
  "headers": {
-  "content-type": "text/html; charset=utf-8",
-  "hx-toast": "{\"severity\": \"success\", \"title\": \"Acknowledged\", \"message\": \"Alert moved to triage.\"}"
+  "content-type": "text/html; charset=utf-8"
  },
  "request": {
   "form": null,
@@ -19,21 +28,22 @@
   "method": "POST",
   "url": "/alerts/999/ack"
  },
- "status": 200,
+ "status": 404,
  "templates": [
   [
-   "partials/_alert_row.html",
+   "_error.html",
    [
     "active_vacation",
-    "alert",
     "app_version",
     "auth_enabled",
+    "detail",
     "dry_run_global",
     "is_hx",
     "now_text",
     "request",
     "scheduler_paused",
     "show_chrome",
+    "status_code",
     "theme"
    ]
   ]

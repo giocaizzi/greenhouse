@@ -16,7 +16,6 @@ There are no PUT routes in the web router. Nothing is normalized but the package
 
 from __future__ import annotations
 
-import json
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
@@ -699,16 +698,16 @@ def test_bulk_stop_all_current_behavior_reports_success_when_device_stop_fails(m
 
 
 @pytest.mark.parametrize("action", ["ack", "resolve"])
-def test_alert_action_on_missing_alert_current_behavior_returns_200_success_toast(action, make_client):
-    """Pins current (buggy) behavior: ack/resolve of a missing alert is a 200 with a success toast — see REFACTOR_NOTES.md.
+def test_alert_action_on_missing_alert_is_404(action, make_client):
+    """Ack/resolve of a missing alert is a 404 "Alert not found", like the JSON API.
 
-    ``web/routes/alerts.py`` never checks the repository's ``None`` (the JSON API returns 404):
-    the row partial renders empty and ``HX-Toast`` still announces success.
+    ``web/routes/alerts.py`` used to skip the lookup: the row partial rendered empty and
+    ``HX-Toast`` still announced success with a 200.
     """
     _, resp, effect = _run(make_client, "POST", f"/alerts/999/{action}")
-    assert resp.status_code == 200
-    assert resp.text.strip() == ""
-    assert json.loads(resp.headers["HX-Toast"])["severity"] == "success"
+    assert resp.status_code == 404
+    assert "Alert not found" in resp.text
+    assert "HX-Toast" not in resp.headers
     assert effect == {}
 
 
