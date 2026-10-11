@@ -301,7 +301,8 @@ infrastructure) and keep only "Follow-ups". -->
   - critical stress, water warning and the no-sensor fallback bypass vacation rationing, and the fallback bypasses
     windows;
   - any `environment` other than "indoor" gets the weather rule but the indoor seasonal table;
-  - light thresholds use the UTC month, while seasons use the preferences timezone.
+  - light thresholds use the UTC month, while seasons use the preferences timezone (fixed: the engine and the
+    learning light heuristics both read the preferences-timezone month).
 
 ### CLI (package D; pinned in `tests/cli/test_contract_json_output.py` golden cases)
 

@@ -310,6 +310,8 @@ After ≥3 irrigation cycles with sensor data, the system learns:
 - **Drainage rate:** -X%/hr natural moisture loss
 - **Efficiency score:** how consistently irrigation increases moisture
 
+Light-based heuristics (light-accelerated drainage, `low_light`) scale their lux thresholds by the seasonal light factor of the current month in the `timezone` preference — the same month the engine's light adjustment and seasonal multiplier use.
+
 ### Alert Types (learning)
 
 | Alert | Severity | Trigger |
@@ -386,4 +388,3 @@ These are current behavior, recorded during the refactor and pinned by character
 - **A decision can end with no reasons** (e.g. temperature-only data that triggers no rule): `skip`, confidence 0.5, `primary_code` empty in the log.
 - **Fewer than 5 readings are not spike-filtered**, so a lone glitch can trigger a `sensor_very_dry` run on a new sensor. The spike filter also drops the first sample of a genuine step change.
 - **Cooldown (6h) and leak hold (24h) are inclusive** at the exact edge.
-- **Light thresholds use the UTC month** for their seasonal factor, while seasons (multipliers) use the `timezone` preference.

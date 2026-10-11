@@ -130,6 +130,9 @@ class _LearningRepo:
         self.calls.append((sensor_id, hours))
         return list(self._readings.get((sensor_id, hours), []))
 
+    def get_preferences(self):
+        return None  # no preferences row: the learning light season reads the UTC month
+
 
 def _sensor(sid, plant_id=None):
     return SimpleNamespace(id=sid, name=f"S{sid}", plant_id=plant_id)
