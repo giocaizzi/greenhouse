@@ -150,6 +150,7 @@ _TRIGGER_CODE_ICONS: dict[str, str] = {
     "config_fallback": "gear-six",
     "no_data": "x-circle",
     "daily_cap_hit": "x-circle",
+    "no_action_needed": "check",
     # Adjustments
     "temp_high": "thermometer-hot",
     "temp_low": "thermometer-simple",
