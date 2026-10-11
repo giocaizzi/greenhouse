@@ -1,7 +1,7 @@
 """Typed value objects for irrigation decisions and their explanation trail."""
 
 from enum import StrEnum
-from typing import Any
+from typing import Any, TypedDict, Unpack
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -129,6 +129,15 @@ class Reason(BaseModel):
     interval_delta: int = 0
 
 
+class ReasonDetails(TypedDict, total=False):
+    """Optional :class:`Reason` fields for ``IrrigationDecision.add_reason`` (the model's defaults apply)."""
+
+    severity: Severity
+    icon: str | None
+    duration_delta: int
+    interval_delta: int
+
+
 class PerSensorSnapshot(BaseModel):
     """Per-sensor aggregate over the lookback window."""
 
@@ -248,24 +257,19 @@ class IrrigationDecision(BaseModel):
         """The first (most decisive) reason code, if any."""
         return self.reasons[0].code if self.reasons else None
 
-    def add_reason(
-        self,
-        code: TriggerCode,
-        message: str,
-        *,
-        severity: Severity = Severity.INFO,
-        icon: str | None = None,
-        duration_delta: int = 0,
-        interval_delta: int = 0,
-    ) -> None:
-        """Append a Reason; mutates the model in place."""
+    def add_reason(self, code: TriggerCode, message: str, **details: Unpack[ReasonDetails]) -> None:
+        """Append a Reason; mutates the model in place.
+
+        Every field is passed explicitly (defaults included), so the Reason's
+        ``model_fields_set`` is the same whichever details the caller gave.
+        """
         self.reasons.append(
             Reason(
                 code=code,
                 message=message,
-                severity=severity,
-                icon=icon,
-                duration_delta=duration_delta,
-                interval_delta=interval_delta,
+                severity=details.get("severity", Severity.INFO),
+                icon=details.get("icon"),
+                duration_delta=details.get("duration_delta", 0),
+                interval_delta=details.get("interval_delta", 0),
             )
         )

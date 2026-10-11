@@ -5,7 +5,7 @@ import os
 from collections.abc import Mapping
 from http import HTTPStatus
 from pathlib import Path
-from typing import Any, Self, cast
+from typing import Any, Self, TypedDict, Unpack, cast
 from urllib.parse import quote
 
 import httpx
@@ -123,6 +123,15 @@ def _decode_json(resp: httpx.Response) -> JSONObject | list[Any]:
     except ValueError:
         raise ServerError(resp.status_code, f"Invalid JSON response from server: {resp.text[:200]!r}") from None
     return data
+
+
+class WindowPatch(TypedDict, total=False):
+    """Fields ``update_window`` may change (``None`` or absent = keep the current value)."""
+
+    start_hour: int | None
+    end_hour: int | None
+    weekday_mask: int | None
+    label: str | None
 
 
 class ServerError(Exception):
@@ -614,15 +623,10 @@ class IrrigationClient:
         self,
         cluster_id: int,
         window_id: int,
-        start_hour: int | None = None,
-        end_hour: int | None = None,
-        weekday_mask: int | None = None,
-        label: str | None = None,
+        **patch: Unpack[WindowPatch],
     ) -> JSONObject:
         """Patch an irrigation window; ``None`` fields are left unchanged (``PUT .../windows/{window_id}``)."""
-        body = _drop_none(
-            {"start_hour": start_hour, "end_hour": end_hour, "weekday_mask": weekday_mask, "label": label}
-        )
+        body = _drop_none({key: patch.get(key) for key in ("start_hour", "end_hour", "weekday_mask", "label")})
         return self._object("PUT", f"/api/v1/clusters/{cluster_id}/windows/{window_id}", json=body)
 
     def delete_window(self, cluster_id: int, window_id: int) -> JSONObject:

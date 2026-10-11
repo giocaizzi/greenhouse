@@ -11,7 +11,7 @@ import statistics
 import time
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol, Required, TypedDict, Unpack
 
 from greenhouse_core.constants import (
     CONFIDENCE_BASELINE,
@@ -641,17 +641,22 @@ class IrrigationLogic:
 # ── Rule functions ──────────────────────────────────────────────────────────
 
 
+class _TerminalReason(TypedDict, total=False):
+    """The confidence and single reason of a terminal decision (``severity`` defaults to INFO)."""
+
+    confidence: Required[float]
+    code: Required[TriggerCode]
+    message: Required[str]
+    severity: Severity
+
+
 def _decision_with_reason(
     cluster_id: int,
     evaluated_at: int,
     action: Action,
     duration_minutes: int,
     interval_hours: int,
-    *,
-    confidence: float,
-    code: TriggerCode,
-    message: str,
-    severity: Severity = Severity.INFO,
+    **reason: Unpack[_TerminalReason],
 ) -> IrrigationDecision:
     """Build a one-reason decision (used by terminal rules)."""
     decision = IrrigationDecision(
@@ -660,12 +665,12 @@ def _decision_with_reason(
         action=action,
         duration_minutes=duration_minutes,
         interval_hours=interval_hours,
-        confidence=confidence,
+        confidence=reason["confidence"],
         sensor_snapshot=None,
         stress_indicators=StressIndicators(),
         trends=Trends(),
     )
-    decision.add_reason(code=code, message=message, severity=severity)
+    decision.add_reason(code=reason["code"], message=reason["message"], severity=reason.get("severity", Severity.INFO))
     return decision
 
 
