@@ -76,6 +76,13 @@ def override_repository(app: FastAPI) -> Iterator[IrrigationRepository]:
         engine.dispose()
 
 
+def app_of(client: TestClient) -> FastAPI:
+    """The FastAPI application ``client`` drives (``TestClient.app`` is typed as a bare ASGI app)."""
+    application = client.app
+    assert isinstance(application, FastAPI)
+    return application
+
+
 def run_core_job(job_id: str) -> None:
     """Run a built-in scheduler job through the callable the scheduler registered for ``job_id``.
 
