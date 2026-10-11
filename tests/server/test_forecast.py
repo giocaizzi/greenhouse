@@ -235,3 +235,26 @@ class TestForecastCleaning:
 
         assert forecast.hours_until_next is not None
         assert forecast.hours_until_next > 0
+
+
+@pytest.mark.parametrize(("environment", "skips"), [("outdoor", True), ("greenhouse", False), ("indoor", False)])
+def test_forecast_rain_skip_follows_the_engine_outdoor_rule(tmp_db, environment, skips):
+    """Only ``environment == "outdoor"`` gets the predicted rain skip — the engine applies no other."""
+    from greenhouse_core.plant_db import get_plant_database
+    from greenhouse_server.services.forecast import ForecastService
+
+    class _Rain:
+        def get_forecast(self, hours=6):
+            return {"precipitation_mm": 9.0}
+
+    cid = tmp_db.add_cluster("Rainy", environment=environment)
+    plant_id = tmp_db.add_plant(cluster_id=cid, species=FAKE_PLANT_SPECIES, water_needs="medium")
+    sensor_id = tmp_db.add_sensor(
+        cluster_id=cid, tuya_device_id=FAKE_SENSOR_ID, name="S", sensor_type="tuya.tr301z", config={}, plant_id=plant_id
+    )
+    now = int(time.time())
+    for i, moisture in enumerate([50.0, 52.0, 54.0]):
+        tmp_db.add_sensor_reading(sensor_id=sensor_id, timestamp=now - i * 3600, soil_moisture=moisture)
+    forecast = ForecastService(tmp_db, get_plant_database(), _Rain()).predict_next_irrigation(cid)
+
+    assert forecast.weather_skip is skips

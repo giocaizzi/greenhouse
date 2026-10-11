@@ -191,11 +191,11 @@ class _Weather:
 
 @pytest.mark.parametrize(
     ("environment", "temp", "source"),
-    [("indoor", 15.0, "sensor"), ("greenhouse", 25.0, "open-meteo"), ("outdoor", 25.0, "open-meteo")],
+    [("indoor", 15.0, "sensor"), ("greenhouse", 15.0, "sensor"), ("outdoor", 25.0, "open-meteo")],
 )
-def test_temperature_source_only_indoor_prefers_the_sensor(db, environment, temp, source):
-    """irrigation-34: only ``environment == "indoor"`` reads the sensor first; any other value
-    (e.g. "greenhouse") is treated like outdoor and prefers the weather feels-like."""
+def test_temperature_source_only_outdoor_prefers_the_weather(db, environment, temp, source):
+    """irrigation-34: only ``environment == "outdoor"`` prefers the weather feels-like (the engine's
+    ``environment_for`` rule); any other value (e.g. "greenhouse") is sheltered and reads the sensor first."""
     cid = db.add_cluster("Temp Gap", environment=environment)
     db.add_plant(cluster_id=cid, species="Monstera deliciosa", category="tropical")
     sid = db.add_sensor(

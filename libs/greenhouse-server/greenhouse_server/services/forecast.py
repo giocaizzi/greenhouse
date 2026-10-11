@@ -18,6 +18,7 @@ from greenhouse_core.constants import (
 from greenhouse_core.learning import IrrigationLearner
 from greenhouse_core.logic.cleaning import clean_readings_desc
 from greenhouse_core.logic.plant_needs import moisture_target_range
+from greenhouse_core.logic.timing import environment_for
 from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_core.schemas import ForecastResponse
@@ -161,7 +162,9 @@ class ForecastService:
         weather_reason: str | None = None
         precipitation_next_6h_mm: float | None = None
 
-        is_outdoor = cluster is not None and cluster.environment != "indoor"
+        # Same outdoor rule as the engine's rain skip (only "outdoor" is outdoor), so the
+        # forecast never predicts a skip the engine would not make.
+        is_outdoor = cluster is not None and environment_for(cluster.environment) == "outdoor"
         if is_outdoor and self._weather is not None:
             forecast = self._weather.get_forecast(hours=WEATHER_FORECAST_HOURS)
             if forecast is not None:

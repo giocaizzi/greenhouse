@@ -23,6 +23,7 @@ from greenhouse_core.logic import IrrigationLogic
 from greenhouse_core.logic.cleaning import clean_readings_desc
 from greenhouse_core.logic.decision import Action, Reason
 from greenhouse_core.logic.plant_needs import moisture_target_range
+from greenhouse_core.logic.timing import environment_for
 from greenhouse_core.models import (
     ENTITY_CLUSTER,
     ENTITY_IRRIGATOR,
@@ -564,7 +565,7 @@ class IrrigationService:
         return None
 
     def _outdoor_temperature(self, sensor_data: ClusterSnapshot | None) -> tuple[float, str] | None:
-        """Any non-indoor environment: the weather feels-like first, then the sensor; None if neither."""
+        """Outdoor clusters: the weather feels-like first, then the sensor; None if neither."""
         weather = self._weather.get_current()
         if weather and (feels_like := weather.get("feels_like")) is not None:
             return feels_like, "open-meteo"
@@ -805,7 +806,8 @@ class IrrigationService:
         if not cluster:
             return _error_result("cluster not found")
 
-        is_indoor = cluster.environment == "indoor"
+        # The engine's outdoor rule: only "outdoor" prefers the weather temperature.
+        is_indoor = environment_for(cluster.environment) == "indoor"
         temp, source, sensor_data = self._resolve_temperature(cluster_id, is_indoor, temp_override, no_sync)
 
         decision = self._decide(cluster_id, temp, force=force)
