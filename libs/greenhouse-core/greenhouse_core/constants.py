@@ -118,6 +118,12 @@ TREND_UNDERWATERING_DURATION_STEP = 1
 SOIL_MOISTURE_CRITICAL = 30
 SOIL_MOISTURE_LOW = 40
 SOIL_MOISTURE_SATURATED = 70
+# Critical water stress is plant-aware: it fires below the most drought-tolerant plant's
+# own minimum target by this margin, capped at SOIL_MOISTURE_CRITICAL (the "low + steep
+# decline" threshold moves with it, keeping its SOIL_MOISTURE_LOW - CRITICAL offset). A
+# tropical plant (45 % minimum) keeps the 30 % / 40 % thresholds; a cactus (15-35 %) is
+# not dosed as an emergency at 28 %.
+CRITICAL_STRESS_BELOW_TARGET_MARGIN = 15  # % below the lowest plant minimum
 
 # ── Sensor Data Cleaning ─────────────────────────────────────────────────────
 # Raw readings are noisy: capacitive soil probes glitch to single-sample spikes,

@@ -5,7 +5,9 @@ from __future__ import annotations
 from typing import Any
 
 from greenhouse_core.constants import (
+    CRITICAL_STRESS_BELOW_TARGET_MARGIN,
     DEFAULT_SOIL_MOISTURE_MAX,
+    DEFAULT_SOIL_MOISTURE_MIN,
     SOIL_MOISTURE_CRITICAL,
     SOIL_MOISTURE_LOW,
     SOIL_MOISTURE_SATURATED,
@@ -52,23 +54,37 @@ def _low_light(snapshot: SensorSnapshot, care: list[dict[str, Any]], month: int 
     return None
 
 
-def _water_stress(snapshot: SensorSnapshot, trends: Trends) -> str | None:
+def _critical_thresholds(care: list[dict[str, Any]]) -> tuple[float, float]:
+    """(critical, low) soil thresholds for these plants, never above the global 30 % / 40 %.
+
+    Keyed on the lowest minimum target across the cluster's plants (the same
+    parser as the soil rule): a band that tolerates dry soil lowers both, a
+    thirsty one keeps the global values.
+    """
+    lowest_min = min((moisture_target_range(c)[0] for c in care), default=DEFAULT_SOIL_MOISTURE_MIN)
+    critical = min(float(SOIL_MOISTURE_CRITICAL), lowest_min - CRITICAL_STRESS_BELOW_TARGET_MARGIN)
+    return critical, critical + (SOIL_MOISTURE_LOW - SOIL_MOISTURE_CRITICAL)
+
+
+def _water_stress(snapshot: SensorSnapshot, trends: Trends, care: list[dict[str, Any]]) -> str | None:
     """Critically dry soil, or low soil still falling steeply — judged on the driest plant *now*.
 
     Invariant #2 (the driest plant drives the call) holds here too: averaging a
     wilting plant at 10 % with a watered one at 60 % would hide the emergency.
     But this override is terminal and waters at stress dosage, so it keys on each
     sensor's newest cleaned reading, not on the 24 h minimum — a plant that was
-    dry yesterday and has been watered since is not in critical stress.
+    dry yesterday and has been watered since is not in critical stress. The
+    thresholds follow the plants' own targets (:func:`_critical_thresholds`).
     """
     driest = min(snapshot.latest_soil_moisture, default=None)
     if driest is None:
         return None
-    if driest < SOIL_MOISTURE_CRITICAL:
+    critical, low = _critical_thresholds(care)
+    if driest < critical:
         declining = " + declining" if trends.soil_moisture_trend == "declining" else ""
         return f"critical low ({driest:.0f}%){declining}"
     if (
-        driest < SOIL_MOISTURE_LOW
+        driest < low
         and trends.soil_moisture_trend == "declining"
         and trends.soil_moisture_delta < STRESS_STEEP_DECLINE_DELTA
     ):
@@ -139,7 +155,7 @@ def detect_stress_conditions(  # noqa: PLR0913 — five pinned positionals (test
         stress.low_light = low_light
     over_watering = _over_watering(snapshot, trends)
     # Over-watering, or any plant currently above its band, vetoes the water-stress override.
-    water_stress = _water_stress(snapshot, trends)
+    water_stress = _water_stress(snapshot, trends, plant_care)
     if water_stress is not None and over_watering is None and not _wet_plant_present(snapshot, plant_care):
         stress.water_stress = water_stress
     if (heat_stress := _heat_stress(snapshot, trends, plant_care)) is not None:

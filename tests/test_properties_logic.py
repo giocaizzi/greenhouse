@@ -409,10 +409,13 @@ def test_detect_stress_conditions_rules(plants, snapshot, trends):
     # Water stress keys on the driest *current* reading; over-watering or a plant above the band vetoes it.
     current = snapshot.latest_soil_moisture
     driest = min(current, default=None)
-    dry = driest is not None and (
-        driest < 30 or (driest < 40 and trends.soil_moisture_trend == "declining" and trends.soil_moisture_delta < -10)
-    )
     care = [plant_database().get_care_data(species=p.species, category=p.category) for p in plants]
+    # Plant-aware thresholds: 15 points below the lowest plant minimum, capped at 30 % (low = critical + 10).
+    critical = min(30.0, min((moisture_target_range(c)[0] for c in care), default=45.0) - 15)
+    dry = driest is not None and (
+        driest < critical
+        or (driest < critical + 10 and trends.soil_moisture_trend == "declining" and trends.soil_moisture_delta < -10)
+    )
     band_top = max((moisture_target_range(c)[1] for c in care), default=65.0)
     vetoed = expect_over or (bool(current) and max(current) > band_top)
     assert (stress.water_stress is not None) == (dry and not vetoed)
