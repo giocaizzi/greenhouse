@@ -23,6 +23,10 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Canonical measurement keys (the gateway's parsed names): a live read carrying at
+# least one of them is a reading worth a row. Battery / water-warning alone are not.
+_LIVE_MEASUREMENT_KEYS = ("temperature", "soil_moisture", "env_humidity", "light")
+
 
 class SyncStats(TypedDict):
     """Totals of one sync run; the key order is the order API and web callers see."""
@@ -116,8 +120,9 @@ def _sync_window_start(last_ts: int | None, hours: int, now: float) -> int:
 def _store_history(db: IrrigationRepository, sensor: Sensor, grouped: list[dict[str, Any]]) -> int:
     """Insert each grouped log reading; return how many rows were new.
 
-    Readings without a timestamp are skipped. Log rows never carry
-    ``water_warning`` — only the live read persists it.
+    Readings without a timestamp are skipped. ``water_warning`` (DP 111) is
+    stored when the log carries it as a parsed boolean; a raw value the parser
+    rejected is stored as unknown (``None``) rather than guessed.
     """
     new_count = 0
     for reading in grouped:
@@ -133,22 +138,29 @@ def _store_history(db: IrrigationRepository, sensor: Sensor, grouped: list[dict[
             light=reading.get("light"),
             env_humidity=reading.get("env_humidity"),
             battery_state=reading.get("battery_state"),
+            water_warning=_logged_bool(reading.get("water_warning")),
         )
         if result is not None:
             new_count += 1
     return new_count
 
 
+def _logged_bool(value: object) -> bool | None:
+    """Return a parsed boolean log value, or ``None`` for a raw value the DP parser rejected."""
+    return value if isinstance(value, bool) else None
+
+
 def _store_live_reading(db: IrrigationRepository, cloud: DeviceGateway, sensor: Sensor) -> bool:
     """Persist the sensor's current state at now; ``True`` when a new row was stored.
 
-    The single live read is best-effort: any error is swallowed and counts as
-    "not saved", so a flaky live endpoint never fails the backfill above.
+    The single live read is best-effort: any error is logged (WARNING, with the
+    traceback) and counts as "not saved", so a flaky live endpoint never fails
+    the backfill above.
     """
     saved = False
     try:
         live = cloud.get_live_reading(sensor.tuya_device_id)
-        if live and any(k in live for k in ("temperature", "soil_moisture", "humidity", "light")):
+        if live and any(k in live for k in _LIVE_MEASUREMENT_KEYS):
             now = int(time.time())
             result = db.add_sensor_reading(
                 sensor_id=sensor.id,
@@ -162,6 +174,6 @@ def _store_live_reading(db: IrrigationRepository, cloud: DeviceGateway, sensor: 
             )
             if result is not None:
                 saved = True
-    except Exception:  # noqa: BLE001, S110 — the live read is best-effort by contract (invariant 8)
-        pass  # Live reading is best-effort
+    except Exception:  # the live read is best-effort by contract (invariant 8)
+        logger.warning("  %s: live read failed", sensor.name, exc_info=True)
     return saved

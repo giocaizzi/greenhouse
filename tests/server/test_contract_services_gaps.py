@@ -270,14 +270,35 @@ def test_insights_keep_only_the_first_alert_of_each_type(repo):
 # ── health_monitor.backfill_from_history ──────────────────────────────────────────
 
 
-def test_backfill_does_not_re_raise_an_open_sensor_fault(repo):
+def test_backfill_resolves_legacy_open_sensor_fault_alerts(repo):
+    """B-10 follow-up: a sensor_fault alert left open from before the fix is resolved at startup, once."""
     _, _, (sid,) = _cluster_with_sensor(repo)
-    for k in range(5):
-        repo.add_sensor_reading(sensor_id=sid, timestamp=FROZEN_TS - 600 * (k + 1), water_warning=True)
     repo.upsert_alert(
         dedup_key=f"health:sensor:{sid}:sensor_fault",
         source="health",
         code="sensor_fault",
+        title="Sensor Fault · Probe",
+        message="legacy",
+        severity="warning",
+        entity_type="sensor",
+        entity_id=sid,
+    )
+    repo.session.commit()
+    monitor = DeviceHealthMonitor(repo, DeviceRegistry(), clock=lambda: FROZEN_TS)
+    monitor.backfill_from_history()  # no readings at all: the sweep still runs
+    monitor.backfill_from_history()  # idempotent: nothing left to resolve, nothing raised
+    rows = [(a.dedup_key, a.status) for a in repo.session.query(Alert).all()]
+    assert rows == [(f"health:sensor:{sid}:sensor_fault", "resolved")]
+
+
+def test_backfill_does_not_re_raise_an_open_low_battery(repo):
+    _, _, (sid,) = _cluster_with_sensor(repo)
+    for k in range(5):
+        repo.add_sensor_reading(sensor_id=sid, timestamp=FROZEN_TS - 600 * (k + 1), battery_state="low")
+    repo.upsert_alert(
+        dedup_key=f"health:sensor:{sid}:low_battery",
+        source="health",
+        code="low_battery",
         title="pre-existing title",
         message="pre-existing message",
         severity="warning",
@@ -287,7 +308,7 @@ def test_backfill_does_not_re_raise_an_open_sensor_fault(repo):
     repo.session.commit()
     DeviceHealthMonitor(repo, DeviceRegistry(), clock=lambda: FROZEN_TS).backfill_from_history()
     rows = [(a.dedup_key, a.title, a.message, a.status) for a in repo.session.query(Alert).all()]
-    assert rows == [(f"health:sensor:{sid}:sensor_fault", "pre-existing title", "pre-existing message", "open")]
+    assert rows == [(f"health:sensor:{sid}:low_battery", "pre-existing title", "pre-existing message", "open")]
 
 
 # ── anomaly.SensorAnomalyService.scan ─────────────────────────────────────────────

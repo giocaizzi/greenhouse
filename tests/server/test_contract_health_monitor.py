@@ -404,8 +404,8 @@ def test_resolve_without_an_open_row_is_a_noop(world):
     ("rows", "expected_codes"),
     [
         ([{"battery_state": " LOW "}] * 5, ["low_battery"]),
-        ([{"water_warning": True}] * 5, ["sensor_fault"]),
-        ([{"battery_state": "low", "water_warning": True}] * 5, ["low_battery", "sensor_fault"]),
+        ([{"water_warning": True}] * 5, []),  # B-10: DP 111 is a soil-dry alert, never a sensor fault
+        ([{"battery_state": "low", "water_warning": True}] * 5, ["low_battery"]),
         ([{"battery_state": "low"}] * 4, []),  # fewer than SENSOR_HEALTH_BACKFILL_WINDOW
         ([{"battery_state": "low"}] * 4 + [{"battery_state": "middle"}], []),
         ([{"battery_state": "low"}] * 5 + [{"battery_state": "middle"}], ["low_battery"]),  # only newest 5 count

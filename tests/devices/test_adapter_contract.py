@@ -140,8 +140,9 @@ class TestSensorContract:
         adapter = registry.get_sensor(_make_sensor(model_key))
         assert HealthAlarm.LOW_BATTERY in adapter.health_capabilities
         assert HealthAlarm.BATTERY_CRITICAL in adapter.health_capabilities
-        assert HealthAlarm.SENSOR_FAULT in adapter.health_capabilities
         assert HealthAlarm.DEVICE_OFFLINE in adapter.health_capabilities
+        # B-10: DP 111 water_warning is the soil-dry alert the engine acts on, not a sensor fault.
+        assert HealthAlarm.SENSOR_FAULT not in adapter.health_capabilities
 
 
 class TestRegistryFailureModes:

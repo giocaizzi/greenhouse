@@ -501,12 +501,12 @@ def test_template_filters_current_behavior():
 # ── services/health_monitor.py ──────────────────────────────────────────────
 
 
-def test_backfill_sensor_fault_needs_every_reading_in_the_window(db):
-    """health-09: SENSOR_FAULT is back-filled only when ALL of the newest 5 rows carry water_warning."""
+def test_backfill_never_raises_sensor_fault_from_water_warning(db):
+    """B-10: a full window of water_warning rows back-fills nothing (DP 111 is the soil-dry alert)."""
     _, (sid,), _ = _cluster_with_sensors(db, 1)
     for i in range(5):
         db.add_sensor_reading(
-            sensor_id=sid, timestamp=FROZEN_TS - 600 * (i + 1), soil_moisture=40.0, water_warning=(i != 2)
+            sensor_id=sid, timestamp=FROZEN_TS - 600 * (i + 1), soil_moisture=40.0, water_warning=True
         )
     DeviceHealthMonitor(repo=db, registry=DeviceRegistry()).backfill_from_history()
     assert db.session.scalars(select(Alert)).all() == []

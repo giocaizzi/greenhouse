@@ -16,8 +16,8 @@ Invariants pinned here: #1 (IK10PW speaks local protocol 3.5) and the device hal
 of #8 (``open_local`` resolves ``local_key`` from config/cache with zero Cloud
 calls; ``get_live_reading`` is single-call — v1.0 ``getstatus`` only when the
 v2.0 shadow *fails*; the on/off switch pulse goes through the Cloud API and the
-keep-alive fallback re-pulses it via the Cloud). Bug B-2 (keep-alive SIGTERM
-handler off the main thread) is pinned as current behavior, not fixed.
+bounded IK10PW start refuses before any ON when the local Duration DP cannot be
+written — S2 / B-2: the keep-alive fallback is gone).
 """
 
 from __future__ import annotations
@@ -26,7 +26,6 @@ import dataclasses
 import logging
 import signal
 import threading
-import time
 from types import SimpleNamespace
 
 import pytest
@@ -263,7 +262,6 @@ def test_profiles_parsers_and_registry_golden():
                 "TuyaSensorAdapter": sorted(a.value for a in TuyaSensorAdapter.health_capabilities),
             },
             "constants": {
-                "KEEP_ALIVE_INTERVAL": ik10pw_module.KEEP_ALIVE_INTERVAL,
                 "LOCAL_TIMEOUT": gateway_module.LOCAL_TIMEOUT,
             },
         },
@@ -430,11 +428,36 @@ class TestLiveReadSingleCall:
         with pytest.raises(ConnectionError, match="v1 down"):
             harness.gateway.get_live_reading(FAKE_SENSOR_ID)
 
-    def test_v2_parser_error_is_not_caught(self, harness):
-        """The v2 path does not guard parser errors (get_device_logs does) — pinned."""
-        harness.cloud.set("cloudrequest", {"success": True, "result": {"properties": [{"code": "humidity"}]}})
-        with pytest.raises(TypeError):
-            harness.gateway.get_live_reading(FAKE_SENSOR_ID)
+    def test_v2_parser_error_skips_only_that_dp(self, harness, caplog):
+        """A DP its parser rejects is logged and skipped; the rest of the v2 reading is kept (one call)."""
+        harness.cloud.set(
+            "cloudrequest",
+            {
+                "success": True,
+                "result": {"properties": [{"code": "humidity"}, {"code": "temp_current", "value": 231}]},
+            },
+        )
+        with caplog.at_level(logging.WARNING, logger="greenhouse_core.devices.gateway"):
+            assert harness.gateway.get_live_reading(FAKE_SENSOR_ID) == {"temperature": 23.1}
+        assert harness.log == [("cloud.cloudrequest", SHADOW_PATH)]
+        assert [(r.levelname, r.getMessage(), r.exc_info is not None) for r in caplog.records] == [
+            ("WARNING", f"Skipping unparseable DP humidity=None from {FAKE_SENSOR_ID}", True)
+        ]
+
+    def test_v1_parser_error_skips_only_that_dp(self, harness):
+        harness.cloud.set("cloudrequest", {"success": False})
+        harness.cloud.set(
+            "getstatus",
+            {"success": True, "result": [{"code": "va_temperature", "value": "205"}, {"code": "light", "value": "x"}]},
+        )
+        assert harness.gateway.get_live_reading(FAKE_SENSOR_ID) == {"temperature": 20.5}
+        assert harness.log == [("cloud.cloudrequest", SHADOW_PATH), ("cloud.getstatus", FAKE_SENSOR_ID)]
+
+    def test_v2_all_dps_unparseable_is_an_empty_authoritative_read(self, harness):
+        harness.cloud.set(
+            "cloudrequest", {"success": True, "result": {"properties": [{"code": "light", "value": None}]}}
+        )
+        assert harness.gateway.get_live_reading(FAKE_SENSOR_ID) == {}
         assert harness.log == [("cloud.cloudrequest", SHADOW_PATH)]
 
     def test_later_dp_wins_for_the_same_canonical_key(self, harness):
@@ -451,6 +474,28 @@ class TestLiveReadSingleCall:
 
 
 # ── getdevicelog + grouping ───────────────────────────────────────────────────
+
+
+def _log_page_kwargs(start: int, *, size: int = 100, start_row_key: str | None = None) -> dict:
+    """The kwargs of one paginated ``getdevicelog`` request (tinytuya's own paging disabled, end fixed at now)."""
+    return {
+        "start": start,
+        "end": FROZEN_TS * 1000,
+        "evtype": 7,
+        "size": size,
+        "max_fetches": 1,
+        "start_row_key": start_row_key,
+    }
+
+
+def _log_page(entries: list[tuple[str, str, int]], *, has_next: bool, next_row_key: str | None = None) -> dict:
+    page: dict = {
+        "logs": [{"code": code, "value": value, "event_time": ms} for code, value, ms in entries],
+        "has_next": has_next,
+    }
+    if next_row_key is not None:
+        page["next_row_key"] = next_row_key
+    return {"success": True, "result": page}
 
 
 class TestDeviceLogs:
@@ -470,7 +515,7 @@ class TestDeviceLogs:
         )
         logs = harness.gateway.get_device_logs(FAKE_SENSOR_ID, since_ms=123)
         assert harness.log == [
-            ("cloud.getdevicelog", FAKE_SENSOR_ID, {"start": 123, "end": 0, "evtype": 7, "size": 100}),
+            ("cloud.getdevicelog", FAKE_SENSOR_ID, _log_page_kwargs(123)),
         ]
         assert logs == [
             {"timestamp_ms": 0, "timestamp": 0, "code": "", "raw_value": "7", "key": "", "value": "7"},
@@ -500,22 +545,124 @@ class TestDeviceLogs:
             },
         ]
 
+    def test_logged_water_warning_strings_parse_to_booleans(self, harness):
+        """``getdevicelog`` reports values as strings; DP 111 must read "false" as False."""
+        harness.cloud.set(
+            "getdevicelog",
+            {
+                "result": {
+                    "logs": [
+                        {"code": "water_warning", "value": "false", "event_time": 1_700_000_001_000},
+                        {"code": "water_warning", "value": "true", "event_time": 1_700_000_002_000},
+                    ]
+                }
+            },
+        )
+        logs = harness.gateway.get_device_logs(FAKE_SENSOR_ID, since_ms=0)
+        assert [(e["key"], e["value"]) for e in logs] == [("water_warning", False), ("water_warning", True)]
+
     def test_default_window_is_hours_back_from_now(self, harness):
         harness.cloud.set("getdevicelog", {"result": {"logs": []}})
         harness.gateway.get_device_logs(FAKE_SENSOR_ID)
-        harness.gateway.get_device_logs(FAKE_SENSOR_ID, hours=2, max_records=5)
+        harness.gateway.get_device_logs(FAKE_SENSOR_ID, hours=2, page_size=5)
         assert harness.log == [
-            (
-                "cloud.getdevicelog",
-                FAKE_SENSOR_ID,
-                {"start": (FROZEN_TS - 24 * 3600) * 1000, "end": 0, "evtype": 7, "size": 100},
-            ),
-            (
-                "cloud.getdevicelog",
-                FAKE_SENSOR_ID,
-                {"start": (FROZEN_TS - 2 * 3600) * 1000, "end": 0, "evtype": 7, "size": 5},
-            ),
+            ("cloud.getdevicelog", FAKE_SENSOR_ID, _log_page_kwargs((FROZEN_TS - 24 * 3600) * 1000)),
+            ("cloud.getdevicelog", FAKE_SENSOR_ID, _log_page_kwargs((FROZEN_TS - 2 * 3600) * 1000, size=5)),
         ]
+
+    def test_pages_through_the_window_with_the_row_key_cursor(self, harness):
+        """B-20 fixed: ``has_next`` + ``next_row_key`` drive one request per page until the window is covered."""
+        harness.cloud.set(
+            "getdevicelog",
+            Seq(
+                _log_page([("humidity", "40", 3_000)], has_next=True, next_row_key="k1"),
+                _log_page([("humidity", "41", 2_000)], has_next=True, next_row_key="k2"),
+                _log_page([("humidity", "42", 1_000)], has_next=False),
+            ),
+        )
+        logs = harness.gateway.get_device_logs(FAKE_SENSOR_ID, since_ms=123)
+        assert harness.log == [
+            ("cloud.getdevicelog", FAKE_SENSOR_ID, _log_page_kwargs(123)),
+            ("cloud.getdevicelog", FAKE_SENSOR_ID, _log_page_kwargs(123, start_row_key="k1")),
+            ("cloud.getdevicelog", FAKE_SENSOR_ID, _log_page_kwargs(123, start_row_key="k2")),
+        ]
+        assert [(e["timestamp_ms"], e["value"]) for e in logs] == [(1_000, 42.0), (2_000, 41.0), (3_000, 40.0)]
+
+    @pytest.mark.parametrize(
+        "last_page",
+        [{"result": {"logs": [], "has_next": True}}, {"result": {"logs": [], "has_next": True, "next_row_key": ""}}],
+        ids=["no-row-key", "empty-row-key"],
+    )
+    def test_has_next_without_a_cursor_stops(self, harness, last_page):
+        harness.cloud.set("getdevicelog", last_page)
+        assert harness.gateway.get_device_logs(FAKE_SENSOR_ID, since_ms=0) == []
+        assert len(harness.log) == 1
+
+    def test_repeated_cursor_stops_and_warns(self, harness, caplog):
+        harness.cloud.set("getdevicelog", _log_page([("humidity", "40", 1_000)], has_next=True, next_row_key="again"))
+        with caplog.at_level(logging.WARNING, logger="greenhouse_core.devices.gateway"):
+            logs = harness.gateway.get_device_logs(FAKE_SENSOR_ID, since_ms=0)
+        assert [c[2]["start_row_key"] for c in harness.log] == [None, "again"]
+        assert len(logs) == 2
+        assert caplog.messages == [f"getdevicelog for {FAKE_SENSOR_ID} repeated cursor 'again'; stopping"]
+
+    def test_failed_page_stops_keeps_earlier_pages_and_warns(self, harness, caplog):
+        harness.cloud.set(
+            "getdevicelog",
+            Seq(
+                _log_page([("humidity", "40", 1_000)], has_next=True, next_row_key="k1"),
+                {"success": False, "code": 1010},
+            ),
+        )
+        with caplog.at_level(logging.WARNING, logger="greenhouse_core.devices.gateway"):
+            logs = harness.gateway.get_device_logs(FAKE_SENSOR_ID, since_ms=0)
+        assert len(harness.log) == 2
+        assert [e["value"] for e in logs] == [40.0]
+        assert caplog.messages == [f"getdevicelog page for {FAKE_SENSOR_ID} failed: {{'success': False, 'code': 1010}}"]
+
+    def test_page_cap_bounds_the_requests_and_warns(self, harness, caplog):
+        harness.cloud.set(
+            "getdevicelog",
+            Seq(
+                *(_log_page([("humidity", "40", 1_000)], has_next=True, next_row_key=f"k{i}") for i in range(3)),
+            ),
+        )
+        with caplog.at_level(logging.WARNING, logger="greenhouse_core.devices.gateway"):
+            logs = harness.gateway.get_device_logs(FAKE_SENSOR_ID, since_ms=0, max_pages=3)
+        assert len(harness.log) == 3
+        assert len(logs) == 3
+        assert caplog.messages == [
+            f"getdevicelog for {FAKE_SENSOR_ID} still had rows after 3 pages (3 entries); "
+            "the window is not fully covered"
+        ]
+
+    def test_one_sensor_sync_pages_the_backfill_then_reads_live_once(self, harness, tmp_db):
+        """Invariant 8 with pagination: N log pages, then exactly one live read — one logical sync per sensor."""
+        from greenhouse_core.sync import sync_single_sensor
+
+        cluster_id = tmp_db.add_cluster("Paged")
+        sensor_id = tmp_db.add_sensor(
+            cluster_id=cluster_id, tuya_device_id=FAKE_SENSOR_ID, name="P", sensor_type="tuya.tr301z", config={}
+        )
+        sensor = tmp_db.get_sensor(sensor_id)
+        base_ms = (FROZEN_TS - 3600) * 1000
+        harness.cloud.set(
+            "getdevicelog",
+            Seq(
+                _log_page([("humidity", "40", base_ms)], has_next=True, next_row_key="k1"),
+                _log_page([("humidity", "41", base_ms + 600_000)], has_next=False),
+            ),
+        )
+        harness.cloud.set(
+            "cloudrequest", {"success": True, "result": {"properties": [{"code": "humidity", "value": 42}]}}
+        )
+        assert sync_single_sensor(tmp_db, harness.gateway, sensor, 24) == (2, 2, 1)
+        assert [c[0] for c in harness.log] == ["cloud.getdevicelog", "cloud.getdevicelog", "cloud.cloudrequest"]
+
+    def test_default_page_cap_and_size_come_from_constants(self):
+        from greenhouse_core import constants
+
+        assert (constants.SENSOR_LOG_PAGE_SIZE, constants.SENSOR_LOG_MAX_PAGES) == (100, 50)
 
     @pytest.mark.parametrize("payload", [{}, {"result": {}}, {"success": False}])
     def test_missing_logs_is_empty(self, harness, payload):
@@ -594,11 +741,6 @@ class TestLocalKeyResolution:
         assert harness.log == [("cloud.getdevices",), *_local_open_calls("cold-key"), *_local_open_calls("cold-key")]
         assert discovered == [(FAKE_DEVICE_ID, "cold-key")]
         assert gateway._key_cache == {FAKE_DEVICE_ID: "cold-key"}
-
-    def test_refresh_forces_cloud_even_with_config_key(self, harness):
-        harness.cloud.set("getdevices", [{"id": FAKE_DEVICE_ID, "key": "rotated"}])
-        harness.gateway.open_local(_irrigator(), 3.5, refresh=True)
-        assert harness.log == [("cloud.getdevices",), *_local_open_calls("rotated")]
 
     def test_resolve_local_key_order(self, harness):
         gw = harness.gateway
@@ -768,6 +910,17 @@ def _scenarios():
     }
 
 
+def test_local_status_failure_is_logged_before_cloud_fallback(harness, caplog):
+    """The local-read failure behind the Cloud fallback leaves a DEBUG trace (no silent swallow)."""
+    harness.local_status_error = OSError("reset by peer")
+    harness.cloud.set("getstatus", {"success": True, "result": []})
+    with caplog.at_level(logging.DEBUG, logger="greenhouse_core.devices.irrigators.tuya_generic"):
+        assert IK10PWAdapter(harness.gateway).status(_irrigator()) == {"source": "cloud"}
+    assert [(r.levelname, r.getMessage(), r.exc_info is not None) for r in caplog.records] == [
+        ("DEBUG", f"Local status read failed for {FAKE_DEVICE_ID}; using Cloud", True)
+    ]
+
+
 def test_adapter_call_sequences_golden(monkeypatch, frozen_clock):
     """Every non-keep-alive adapter path: return value and the exact local/Cloud call log."""
     out = {}
@@ -837,7 +990,7 @@ class TestAdapterInvariants:
         (_reading(battery_state="HIGH"), {"offline": False, "battery_pct": 90, "alarms": []}),
         (_reading(battery_state="full"), {"offline": False, "battery_pct": None, "alarms": []}),
         (_reading(battery_state=None), {"offline": False, "battery_pct": None, "alarms": []}),
-        (_reading(water_warning=True), {"alarms": ["sensor_fault"]}),
+        (_reading(water_warning=True), {"alarms": []}),  # B-10: soil-dry alert, not a health alarm
         (_reading(water_warning=False), {"alarms": []}),
         (_reading(water_warning=None), {"alarms": []}),
         (_reading(timestamp=123), {"last_seen_ts": 123}),
@@ -874,109 +1027,14 @@ def test_tr301z_read_health_raw_payloads(harness):
     assert harness.log == []
 
 
-# ── Keep-alive fallback (IK10PW) incl. pinned bug B-2 ─────────────────────────
+# ── Duration DP unavailable → bounded start is refused (IK10PW, S2 / B-2) ─────
 
 
-@pytest.fixture
-def fake_sleep(monkeypatch):
-    """Replace the ``time`` module seen by ik10pw with an instant, recording sleep."""
-    sleeps: list[float] = []
-    monkeypatch.setattr(ik10pw_module, "time", SimpleNamespace(sleep=sleeps.append, time=time.time))
-    return sleeps
-
-
-def _keepalive_ok_harness(harness):
-    harness.cloud.set("sendcommand", {"success": True})
-    return IK10PWAdapter(harness.gateway)
-
-
-class TestKeepAliveMainThread:
-    def test_main_thread_cycle_pulses_on_and_always_switches_off(self, harness, fake_sleep):
-        assert threading.current_thread() is threading.main_thread()
-        before = signal.getsignal(signal.SIGTERM)
-        result = _keepalive_ok_harness(harness)._start_keepalive(_irrigator(), 1)
-        assert result == (True, "Irrigation completed for 1 min [keep-alive mode]")
-        assert fake_sleep == [20, 20, 20]
-        assert harness.log == [
-            ("cloud.sendcommand", FAKE_DEVICE_ID, SWITCH_ON),
-            ("cloud.sendcommand", FAKE_DEVICE_ID, SWITCH_ON),
-            ("cloud.sendcommand", FAKE_DEVICE_ID, SWITCH_ON),
-            ("cloud.sendcommand", FAKE_DEVICE_ID, SWITCH_OFF),
-        ]
-        assert signal.getsignal(signal.SIGTERM) is before
-
-    def test_interval_patched_last_sleep_is_the_remainder(self, harness, fake_sleep, monkeypatch):
-        monkeypatch.setattr(ik10pw_module, "KEEP_ALIVE_INTERVAL", 25)
-        result = _keepalive_ok_harness(harness)._start_keepalive(_irrigator(), 1)
-        assert result == (True, "Irrigation completed for 1 min [keep-alive mode]")
-        assert fake_sleep == [25, 25, 10]
-        assert [c[2] for c in harness.log] == [SWITCH_ON, SWITCH_ON, SWITCH_ON, SWITCH_OFF]
-
-    def test_start_falls_back_to_keepalive_when_local_dp_fails(self, harness, fake_sleep, caplog):
-        adapter = _keepalive_ok_harness(harness)
-        with caplog.at_level(logging.WARNING, logger="greenhouse_core.devices.irrigators.ik10pw"):
-            result = adapter.start(_irrigator({}), 1)  # no device_ip → local fails without any I/O
-        assert result == (True, "Irrigation completed for 1 min [keep-alive mode]")
-        assert caplog.messages == [
-            "Local Duration set failed (Local connection failed: No device_ip in config for irrigator "
-            f"{FAKE_DEVICE_ID}.), using keep-alive fallback"
-        ]
-        assert [c[0] for c in harness.log] == ["cloud.sendcommand"] * 4
-        assert harness.log[-1][2] == SWITCH_OFF
-
-    def test_sigterm_during_cycle_switches_off_twice_and_reports_interrupted(self, harness, monkeypatch):
-        before = signal.getsignal(signal.SIGTERM)
-        sleeps: list[float] = []
-
-        def _sleep(seconds):
-            sleeps.append(seconds)
-            if len(sleeps) == 2:
-                signal.getsignal(signal.SIGTERM)(signal.SIGTERM, None)  # deliver "SIGTERM" synchronously
-
-        monkeypatch.setattr(ik10pw_module, "time", SimpleNamespace(sleep=_sleep, time=time.time))
-        result = _keepalive_ok_harness(harness)._start_keepalive(_irrigator(), 1)
-        assert result == (
-            True,
-            "Irrigation interrupted after ~20s — device turned off (requested 1 min) [keep-alive mode]",
-        )
-        # on, keep-alive on, off from the handler, off again from ``finally``.
-        assert [c[2] for c in harness.log] == [SWITCH_ON, SWITCH_ON, SWITCH_OFF, SWITCH_OFF]
-        assert signal.getsignal(signal.SIGTERM) is before
-
-    def test_keyboard_interrupt_is_swallowed_and_switches_off_once(self, harness, monkeypatch):
-        def _sleep(_seconds):
-            raise KeyboardInterrupt
-
-        monkeypatch.setattr(ik10pw_module, "time", SimpleNamespace(sleep=_sleep, time=time.time))
-        result = _keepalive_ok_harness(harness)._start_keepalive(_irrigator(), 1)
-        assert result == (
-            True,
-            "Irrigation interrupted after ~0s — device turned off (requested 1 min) [keep-alive mode]",
-        )
-        assert [c[2] for c in harness.log] == [SWITCH_ON, SWITCH_OFF]
-
-    def test_initial_on_failure_returns_before_signal_or_sleep(self, harness, fake_sleep):
-        before = signal.getsignal(signal.SIGTERM)
-        harness.cloud.set("sendcommand", {"success": False})
-        result = IK10PWAdapter(harness.gateway)._start_keepalive(_irrigator(), 1)
-        assert result == (False, "Failed to start irrigation: Failed to turn ON device")
-        assert fake_sleep == []
-        assert harness.log == [("cloud.sendcommand", FAKE_DEVICE_ID, SWITCH_ON)]
-        assert signal.getsignal(signal.SIGTERM) is before
-
-    def test_keepalive_and_final_off_errors_are_swallowed(self, harness, fake_sleep):
-        harness.cloud.set(
-            "sendcommand", Seq({"success": True}, ConnectionError("blip"), {"success": True}, ConnectionError("down"))
-        )
-        result = IK10PWAdapter(harness.gateway)._start_keepalive(_irrigator(), 1)
-        assert result == (True, "Irrigation completed for 1 min [keep-alive mode]")
-        assert [c[2] for c in harness.log] == [SWITCH_ON, SWITCH_ON, SWITCH_ON, SWITCH_OFF]
-
-    def test_zero_minutes_still_switches_on_then_off(self, harness, fake_sleep):
-        result = _keepalive_ok_harness(harness)._start_keepalive(_irrigator(), 0)
-        assert result == (True, "Irrigation completed for 0 min [keep-alive mode]")
-        assert fake_sleep == []
-        assert [c[2] for c in harness.log] == [SWITCH_ON, SWITCH_OFF]
+REFUSAL = (
+    False,
+    "Local Duration DP unavailable (Local connection failed: No device_ip in config for irrigator "
+    f"{FAKE_DEVICE_ID}.); keep-alive is not supported in the server — irrigation not started",
+)
 
 
 def _run_in_thread(fn) -> dict:
@@ -985,7 +1043,7 @@ def _run_in_thread(fn) -> dict:
     def _target():
         try:
             outcome["result"] = fn()
-        except BaseException as exc:  # noqa: BLE001 — the exception is what we pin
+        except BaseException as exc:  # noqa: BLE001 — the exception is what we assert on
             outcome["exc"] = exc
 
     worker = threading.Thread(target=_target, name="fastapi-threadpool-stand-in")
@@ -995,36 +1053,36 @@ def _run_in_thread(fn) -> dict:
     return outcome
 
 
-def test_keepalive_off_main_thread_current_behavior_leaves_pump_on(harness, fake_sleep):
-    """Pins current (buggy) behavior: B-2 — see REFACTOR_NOTES.md.
-
-    ``_start_keepalive`` switches the pump ON via the Cloud, then calls
-    ``signal.signal(SIGTERM, …)`` *outside* its ``try``. Off the main thread
-    (FastAPI threadpool, APScheduler worker) that raises ``ValueError``, so the
-    ``finally`` that sends OFF never runs: the pump is left on, bounded only by
-    the device's own ~30 s auto-off, and the error propagates to the caller.
-    """
+@pytest.mark.parametrize("on_main_thread", [True, False], ids=["main-thread", "worker-thread"])
+def test_bounded_start_without_local_duration_is_refused_before_any_on(harness, caplog, on_main_thread):
+    """S2 / B-2: no Duration DP → ``(False, …)`` and zero Cloud calls; no keep-alive loop, on any thread."""
+    harness.cloud.set("sendcommand", {"success": True})
+    adapter = IK10PWAdapter(harness.gateway)
     before = signal.getsignal(signal.SIGTERM)
-    adapter = _keepalive_ok_harness(harness)
-    outcome = _run_in_thread(lambda: adapter._start_keepalive(_irrigator(), 1))
-    assert "result" not in outcome
-    assert isinstance(outcome["exc"], ValueError)
-    assert "main thread" in str(outcome["exc"])
-    assert harness.log == [("cloud.sendcommand", FAKE_DEVICE_ID, SWITCH_ON)]  # ON sent, OFF never sent
-    assert fake_sleep == []
+    with caplog.at_level(logging.WARNING, logger="greenhouse_core.devices.irrigators.ik10pw"):
+        if on_main_thread:
+            result = adapter.start(_irrigator({}), 3)
+        else:
+            result = _run_in_thread(lambda: adapter.start(_irrigator({}), 3))["result"]
+    assert result == REFUSAL
+    assert harness.log == []  # no ON, no OFF: the pump was never switched
     assert signal.getsignal(signal.SIGTERM) is before
+    assert [r.levelname for r in caplog.records] == ["WARNING"]
 
 
-def test_start_off_main_thread_current_behavior_raises_after_switching_on(harness, fake_sleep):
-    """Pins current (buggy) behavior: B-2 via the public ``start`` — see REFACTOR_NOTES.md.
+def test_local_duration_error_payload_refuses_after_the_local_write_only(harness):
+    """A local error payload is a failed Duration write too: only the local calls happen, no Cloud ON."""
+    harness.cloud.set("sendcommand", {"success": True})
+    harness.local_set_value = {"Error": "Network Error: Device Unreachable", "Err": "905"}
+    ok, msg = IK10PWAdapter(harness.gateway).start(_irrigator(), 2)
+    assert ok is False
+    assert msg.startswith("Local Duration DP unavailable (Local API error: ")
+    assert harness.log == [*_local_open_calls(), ("local.set_value", 102, 120)]
 
-    A bounded ``start`` whose local Duration write fails falls back to keep-alive;
-    on a worker thread that ends in ``ValueError`` after the Cloud ON pulse.
-    """
-    adapter = _keepalive_ok_harness(harness)
-    outcome = _run_in_thread(lambda: adapter.start(_irrigator({}), 3))
-    assert isinstance(outcome.get("exc"), ValueError)
-    assert harness.log == [("cloud.sendcommand", FAKE_DEVICE_ID, SWITCH_ON)]
+
+def test_keepalive_loop_is_gone():
+    assert not hasattr(IK10PWAdapter, "_start_keepalive")
+    assert not hasattr(ik10pw_module, "KEEP_ALIVE_INTERVAL")
 
 
 # ── alarm DP parsing ──────────────────────────────────────────────────────────

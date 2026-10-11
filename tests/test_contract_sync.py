@@ -152,7 +152,7 @@ class TestBackfillAndDedup:
                     _log(t3, "light", 900),
                     _log(t3, "env_humidity", 61.0, offset_ms=100),
                     _log(t3, "battery_state", "middle", offset_ms=200),
-                    _log(t3, "water_warning", True, offset_ms=300),  # NOT persisted from logs
+                    _log(t3, "water_warning", True, offset_ms=300),  # persisted from logs
                 ]
             }
         )
@@ -183,9 +183,18 @@ class TestBackfillAndDedup:
                 "light": 900,
                 "env_humidity": 61.0,
                 "battery_state": "middle",
-                "water_warning": None,
+                "water_warning": True,
             },
         ]
+
+    @pytest.mark.parametrize(("logged", "stored"), [(False, False), (True, True), ("abc", None), ("false", None)])
+    def test_log_water_warning_is_stored_only_as_a_parsed_bool(self, one_sensor, logged, stored):
+        """A parsed boolean is stored; a raw string the DP parser rejected is stored as unknown."""
+        db, sensor = one_sensor
+        ts = FROZEN_TS - 600
+        gw = FakeGateway(logs={"dev_a": [_log(ts, "soil_moisture", 40.0), _log(ts, "water_warning", logged)]})
+        assert sync_single_sensor(db, gw, sensor, 24) == (1, 1, 0)
+        assert [r["water_warning"] for r in _rows(db, sensor.id)] == [stored]
 
     def test_grouped_reading_without_timestamp_is_skipped_but_counted(self, one_sensor):
         db, sensor = one_sensor
@@ -241,7 +250,8 @@ class TestLiveRead:
             ({"temperature": 20.0}, 1),
             ({"soil_moisture": 33.0}, 1),
             ({"light": 10}, 1),
-            ({"humidity": 70.0}, 1),  # legacy key passes the guard; stored row has no metric values
+            ({"env_humidity": 64.0}, 1),
+            ({"humidity": 70.0}, 0),  # not a canonical key (the gateway maps DP "humidity" to soil_moisture)
             ({}, 0),
             ({"battery_state": "low", "water_warning": True}, 0),
             ({"error": "device offline"}, 0),
@@ -252,39 +262,33 @@ class TestLiveRead:
         assert sync_single_sensor(db, FakeGateway(live={"dev_a": live}), sensor, 24) == (0, 0, saved)
         assert len(_rows(db, sensor.id)) == saved
 
-    def test_env_humidity_only_live_reading_current_behavior_is_dropped(self, one_sensor):
-        """Pins current (buggy) behavior: B-21 — see REFACTOR_NOTES.md.
-
-        The live-read guard checks the legacy ``"humidity"`` key instead of a
-        canonical one, so a live reading carrying only ``env_humidity`` is never
-        persisted.
-        """
+    def test_env_humidity_only_live_reading_is_persisted(self, one_sensor):
+        """B-21 fixed: the guard checks the canonical keys, so an ``env_humidity``-only live read is stored."""
         db, sensor = one_sensor
-        assert sync_single_sensor(db, FakeGateway(live={"dev_a": {"env_humidity": 64.0}}), sensor, 24) == (0, 0, 0)
-        assert _rows(db, sensor.id) == []
-
-    def test_humidity_key_row_stores_no_metric(self, one_sensor):
-        db, sensor = one_sensor
-        sync_single_sensor(db, FakeGateway(live={"dev_a": {"humidity": 70.0}}), sensor, 24)
+        assert sync_single_sensor(db, FakeGateway(live={"dev_a": {"env_humidity": 64.0}}), sensor, 24) == (0, 0, 1)
         assert _rows(db, sensor.id) == [
             {
                 "timestamp": FROZEN_TS,
                 "temperature": None,
                 "soil_moisture": None,
                 "light": None,
-                "env_humidity": None,
+                "env_humidity": 64.0,
                 "battery_state": None,
                 "water_warning": None,
             }
         ]
 
-    def test_live_error_is_swallowed(self, one_sensor):
+    def test_live_error_is_logged_and_not_raised(self, one_sensor, caplog):
         db, sensor = one_sensor
         gw = FakeGateway(
             logs={"dev_a": [_log(FROZEN_TS - 60, "soil_moisture", 31.0)]},
             live={"dev_a": RuntimeError("Cloud API error")},
         )
-        assert sync_single_sensor(db, gw, sensor, 24) == (1, 1, 0)
+        with caplog.at_level(logging.WARNING, logger="greenhouse_core.sync"):
+            assert sync_single_sensor(db, gw, sensor, 24) == (1, 1, 0)
+        assert [(r.levelname, r.getMessage(), r.exc_info is not None) for r in caplog.records] == [
+            ("WARNING", "  Probe A: live read failed", True)
+        ]
 
     def test_live_row_colliding_with_a_log_row_at_now_is_not_counted(self, one_sensor):
         db, sensor = one_sensor
