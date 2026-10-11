@@ -1,6 +1,7 @@
 """FastAPI application factory."""
 
 import logging
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -17,7 +18,7 @@ from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_core.utils import set_display_timezone
 from greenhouse_server.auth import bootstrap_admin, is_mcp_token, require_user
-from greenhouse_server.config import Settings
+from greenhouse_server.config import Settings, ignored_legacy_secret_env_names
 from greenhouse_server.routes import (
     activity,
     alerts,
@@ -185,6 +186,7 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
     """Create and configure the FastAPI application."""
     if settings is None:
         settings = Settings()
+    _warn_ignored_legacy_secret_env_names()
 
     if engine is None:
         engine = create_db_engine(settings.db_url)
@@ -202,6 +204,14 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
     _mount_web(app)
     _mount_mcp(app)  # must stay last: FastApiMCP snapshots the routes included above
     return app
+
+
+def _warn_ignored_legacy_secret_env_names() -> None:
+    """Name (never print the value of) each legacy secret env var that is set but ignored."""
+    for name in ignored_legacy_secret_env_names(os.environ):
+        logger.warning(
+            "Environment variable %s is set but ignored: secrets are read from GREENHOUSE_* names only", name
+        )
 
 
 def _make_lifespan(settings: Settings) -> "Callable[[FastAPI], AbstractAsyncContextManager[None]]":

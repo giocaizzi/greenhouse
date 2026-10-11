@@ -1,5 +1,6 @@
 """Server configuration via Pydantic BaseSettings."""
 
+from collections.abc import Iterable
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -198,3 +199,19 @@ class Settings(BaseSettings):
     # gives up and exits (logging a warning). Does NOT stop the pump — a
     # broken local socket is not by itself evidence of a dry pump.
     pump_watcher_max_read_failures: int = PUMP_WATCHER_MAX_READ_FAILURES
+
+
+def ignored_legacy_secret_env_names(env_names: Iterable[str]) -> list[str]:
+    """The legacy spellings of the aliased secrets that are set but no longer read.
+
+    Each aliased secret is read from ``GREENHOUSE_<NAME>`` only; the bare ``<NAME>`` and
+    ``IRRIGATION_<NAME>`` used to configure it too. Matching is case-insensitive like the
+    settings themselves. Returns the names as given (never the values), sorted.
+    """
+    legacy: set[str] = set()
+    for info in Settings.model_fields.values():
+        alias = info.validation_alias
+        if isinstance(alias, AliasChoices):
+            bare = str(alias.choices[0]).upper().removeprefix("GREENHOUSE_")
+            legacy |= {bare, f"IRRIGATION_{bare}"}
+    return sorted(name for name in env_names if name.upper() in legacy)

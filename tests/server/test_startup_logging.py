@@ -97,3 +97,19 @@ def test_now_text_uses_the_timezone_preference_not_the_process_zone(clean_env, f
 
 def test_now_text_falls_back_to_utc_for_an_unknown_zone(frozen_clock):
     assert context._now_text("Mars/Olympus_Mons") == "2026-04-15 10:00"
+
+
+def test_ignored_legacy_secret_env_names_are_warned_by_name_only(clean_env, caplog, monkeypatch):
+    """A legacy secret env name (bare / IRRIGATION_) that is set is named in a WARNING; its value never is."""
+    monkeypatch.setenv("MCP_TOKEN", "s3cr3t-value")
+    monkeypatch.setenv("irrigation_auth_secret_key", "other-s3cr3t")
+    monkeypatch.setenv("GREENHOUSE_MCP_TOKEN", "fine")
+    with caplog.at_level(logging.WARNING, logger="greenhouse_server.app"):
+        app_module._warn_ignored_legacy_secret_env_names()
+    messages = [r.getMessage() for r in caplog.records]
+    assert messages == [
+        "Environment variable MCP_TOKEN is set but ignored: secrets are read from GREENHOUSE_* names only",
+        "Environment variable irrigation_auth_secret_key is set but ignored: "
+        "secrets are read from GREENHOUSE_* names only",
+    ]
+    assert not any("s3cr3t" in m for m in messages)
