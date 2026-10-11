@@ -41,6 +41,10 @@ from server.conftest import _make_stubbed_app
 PHASE0_OPENAPI_SHA256 = (
     "31b4fd2b7af2190136714124b827d09fc0ca08a9e0c9e7ceef0dc7775959ecf1"  # gitleaks:allow — content hash, not a secret
 )
+# Headline counts of the pinned route table.
+API_OPERATION_COUNT = 84
+API_PATH_COUNT = 66
+WEB_ROUTE_COUNT = 85
 
 
 def _package_version() -> str:
@@ -54,6 +58,7 @@ def _normalize_version(text: str) -> str:
 @pytest.fixture
 def contract_app(clean_env):
     """A real-auth app (no dependency overrides on the auth gate) on in-memory SQLite."""
+    del clean_env  # requested only for its side effect
     application, engine = _make_stubbed_app(bypass_auth=False)
     install_offline_weather(application)
     yield application
@@ -169,8 +174,8 @@ def test_operation_id_is_route_function_name(contract_app):
         for m in row["methods"]
     }
     assert by_key == names
-    assert len(by_key) == 84
-    assert len(contract_app.openapi()["paths"]) == 66
+    assert len(by_key) == API_OPERATION_COUNT
+    assert len(contract_app.openapi()["paths"]) == API_PATH_COUNT
 
 
 def test_route_table_matches_golden(contract_app):
@@ -184,9 +189,10 @@ def test_route_table_counts(contract_app):
     api = [r for r in rows if r["kind"] == "APIRoute" and r["include_in_schema"]]
     hidden = [r for r in rows if r["kind"] == "APIRoute" and not r["include_in_schema"]]
     web = [r for r in hidden if not r["path"].startswith(("/.well-known", "/mcp"))]
-    assert len(api) == 84
-    assert len(web) == 85
+    assert len(api) == API_OPERATION_COUNT
+    assert len(web) == WEB_ROUTE_COUNT
     assert [r["path"] for r in rows if r["kind"] == "Mount"] == ["/static"]
     mcp_rows = [r for r in rows if r["path"] == "/mcp"]
-    assert len(mcp_rows) == 1 and mcp_rows[0]["methods"] == ["DELETE", "GET", "POST"]
+    assert len(mcp_rows) == 1
+    assert mcp_rows[0]["methods"] == ["DELETE", "GET", "POST"]
     assert mcp_rows[0]["dependencies"] == ["require_mcp_token"]

@@ -17,6 +17,8 @@ from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.scheduler import scheduler as bg_scheduler
 from greenhouse_server.services import irrigation as irrigation_mod
 from greenhouse_server.services import irrigation_jobs as irrigation_jobs_mod
+from greenhouse_server.services import leak as leak_mod
+from greenhouse_server.services.irrigation_jobs import record_leak_check_armed
 from server.conftest import _make_stubbed_app
 
 
@@ -58,11 +60,9 @@ def _leak_jobs() -> dict[str, object]:
 @pytest.fixture
 def check_calls(monkeypatch):
     """Record LeakDetectionService runs instead of evaluating readings."""
-    from greenhouse_server.services import leak as leak_mod
-
     calls: list[tuple[int, int]] = []
 
-    def _fake(self, cluster_id, started_at):
+    def _fake(_self, cluster_id, started_at):
         calls.append((cluster_id, started_at))
         return []
 
@@ -71,7 +71,11 @@ def check_calls(monkeypatch):
 
 
 class TestRearm:
-    def test_pending_and_overdue_auto_starts_are_rearmed(self, app, running_scheduler):
+    """Tests for rearm."""
+
+    @pytest.mark.usefixtures("running_scheduler")
+    def test_pending_and_overdue_auto_starts_are_rearmed(self, app):
+        """Pending and overdue auto starts are rearmed."""
         cid, iid = _seed(app)
         now = int(time.time())
         pending = _start(app, iid, now - 600)  # due in 20 min
@@ -79,22 +83,22 @@ class TestRearm:
         _start(app, iid, now - 900, triggered_by="manual")  # no armed marker: a hand log, no check
         _start(app, iid, now - LEAK_HOLD_HOURS * 3600 - 60)  # older than the hold horizon
 
-        assert irrigation_jobs_mod.rearm_leak_checks() == 2
+        rearmed = irrigation_jobs_mod.rearm_leak_checks()
         jobs = _leak_jobs()
         assert set(jobs) == {f"leak-check-{cid}-{pending}", f"leak-check-{cid}-{overdue}"}
+        assert rearmed == len(jobs)
         due = jobs[f"leak-check-{cid}-{pending}"].next_run_time.timestamp()
         assert due == pytest.approx(pending + LEAK_CHECK_DELAY_SECONDS, abs=1)
         # Overdue checks run right away rather than at their (past) due time.
         assert jobs[f"leak-check-{cid}-{overdue}"].next_run_time.timestamp() == pytest.approx(time.time(), abs=5)
 
-    def test_marked_manual_start_is_rearmed_but_a_hand_log_is_not(self, app, running_scheduler):
+    @pytest.mark.usefixtures("running_scheduler")
+    def test_marked_manual_start_is_rearmed_but_a_hand_log_is_not(self, app):
         """A non-automatic start that armed a check (forced run) leaves a ``leak_check_armed`` marker.
 
         The re-arm finds it through that marker; a ``start``/``manual`` row without one (a
         logged hand-watering, no pump) gets no check.
         """
-        from greenhouse_server.services.irrigation_jobs import record_leak_check_armed
-
         cid, iid = _seed(app)
         now = int(time.time())
         forced = _start(app, iid, now - 600, triggered_by="manual")
@@ -109,10 +113,9 @@ class TestRearm:
         assert irrigation_jobs_mod.rearm_leak_checks() == 1
         assert set(_leak_jobs()) == {f"leak-check-{cid}-{forced}"}
 
-    def test_long_manual_start_is_rearmed_with_its_own_window(self, app, running_scheduler):
+    @pytest.mark.usefixtures("running_scheduler")
+    def test_long_manual_start_is_rearmed_with_its_own_window(self, app):
         """The marker's ``check_after_seconds`` survives a restart: due time and job args keep the window."""
-        from greenhouse_server.services.irrigation_jobs import record_leak_check_armed
-
         cid, iid = _seed(app)
         started = _start(app, iid, int(time.time()) - 600, triggered_by="manual")
         session = app.state.session_factory()
@@ -127,7 +130,9 @@ class TestRearm:
         assert list(job.args) == [cid, started, 5100]
         assert job.next_run_time.timestamp() == pytest.approx(started + 5100, abs=1)
 
-    def test_completed_check_is_not_rearmed(self, app, running_scheduler, check_calls):
+    @pytest.mark.usefixtures("running_scheduler")
+    def test_completed_check_is_not_rearmed(self, app, check_calls):
+        """Completed check is not rearmed."""
         cid, iid = _seed(app)
         overdue = _start(app, iid, int(time.time()) - 2700)
         assert irrigation_jobs_mod.rearm_leak_checks() == 1
@@ -139,7 +144,9 @@ class TestRearm:
         assert irrigation_jobs_mod.rearm_leak_checks() == 0  # marker found
         assert _leak_jobs() == {}
 
-    def test_job_runs_check_at_most_once(self, app, running_scheduler, check_calls):
+    @pytest.mark.usefixtures("running_scheduler")
+    def test_job_runs_check_at_most_once(self, app, check_calls):
+        """Job runs check at most once."""
         cid, iid = _seed(app)
         ts = _start(app, iid, int(time.time()) - 2700)
         irrigation_jobs_mod.rearm_leak_checks()
@@ -148,11 +155,13 @@ class TestRearm:
         job.func(*job.args)  # e.g. normal job + re-armed job both fired
         assert check_calls == [(cid, ts)]
 
-    def test_failed_check_leaves_no_marker(self, app, running_scheduler, monkeypatch):
-        from greenhouse_server.services import leak as leak_mod
+    @pytest.mark.usefixtures("running_scheduler")
+    def test_failed_check_leaves_no_marker(self, app, monkeypatch):
+        """Failed check leaves no marker."""
 
-        def _boom(self, cluster_id, started_at):
-            raise RuntimeError("db hiccup")
+        def _boom(_self, _cluster_id, _started_at):
+            msg = "db hiccup"
+            raise RuntimeError(msg)
 
         monkeypatch.setattr(leak_mod.LeakDetectionService, "check_after_irrigation", _boom)
         cid, iid = _seed(app)
@@ -163,9 +172,13 @@ class TestRearm:
         bg_scheduler.remove_job(job.id)
         assert irrigation_jobs_mod.rearm_leak_checks() == 1  # still owed
 
-    def test_already_held_start_is_not_rechecked(self, app, running_scheduler):
-        """A start whose check raised a hold before markers existed is treated as checked
-        (re-running it could re-raise an alert the operator already resolved)."""
+    @pytest.mark.usefixtures("running_scheduler")
+    def test_already_held_start_is_not_rechecked(self, app):
+        """A start whose check already raised a hold is treated as checked.
+
+        A start whose check raised a hold before markers existed is treated as checked
+        (re-running it could re-raise an alert the operator already resolved).
+        """
         cid, iid = _seed(app)
         ts = _start(app, iid, int(time.time()) - 2700)
         session = app.state.session_factory()
@@ -185,12 +198,15 @@ class TestRearm:
         assert irrigation_jobs_mod.rearm_leak_checks() == 0
 
     def test_noop_when_scheduler_stopped(self, app):
+        """Noop when scheduler stopped."""
         _, iid = _seed(app)
         _start(app, iid, int(time.time()) - 600)
         assert irrigation_jobs_mod.rearm_leak_checks() == 0
 
 
 class TestStartupWiring:
+    """Tests for startup wiring."""
+
     def test_startup_rearms_lost_leak_check(self):
         """Regression: a restart within the 30-min window silently lost the check."""
         application, engine = _make_stubbed_app(bypass_auth=True, enable_scheduler=True)
@@ -204,9 +220,15 @@ class TestStartupWiring:
 
 
 class TestAutoStartTimestampAlignment:
-    def test_leak_check_keyed_by_the_start_event_timestamp(self, app, seeded_client, running_scheduler, monkeypatch):
-        """The leak-check job id / started_at must equal the `start` row's timestamp,
-        otherwise the restart re-arm (which reads the row) can't match it."""
+    """Tests for auto start timestamp alignment."""
+
+    @pytest.mark.usefixtures("running_scheduler")
+    def test_leak_check_keyed_by_the_start_event_timestamp(self, app, seeded_client, monkeypatch):
+        """The leak-check job is keyed by the ``start`` row's own timestamp.
+
+        The leak-check job id / started_at must equal the `start` row's timestamp,
+        otherwise the restart re-arm (which reads the row) can't match it.
+        """
         session = app.state.session_factory()
         repo = IrrigationRepository(session)
         now = int(time.time())

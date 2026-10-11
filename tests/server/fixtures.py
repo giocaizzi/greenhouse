@@ -29,21 +29,60 @@ registry is stored on ``app.state.fake_devices`` so tests can fetch the
 per-irrigator fake and assert on its recorded ``calls``.
 """
 
+from collections.abc import Iterator
+from contextlib import contextmanager
+from http import HTTPStatus
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
 from fake_devices import FakeIrrigatorAdapter, FakeSensorAdapter
 from greenhouse_core.devices import DeviceRegistry
+from greenhouse_core.models import Base
+from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.app import create_app
 from greenhouse_server.auth import AuthenticatedUser, require_user, require_web_user
 from greenhouse_server.config import Settings
-from greenhouse_server.deps import get_device_gateway, get_device_registry
+from greenhouse_server.deps import get_device_gateway, get_device_registry, get_repository
+from greenhouse_server.scheduler import scheduler as bg_scheduler
+from greenhouse_server.scheduler import start_scheduler, stop_scheduler
 
 TEST_ADMIN_USERNAME = "test-admin"
-TEST_ADMIN_PASSWORD = "test-admin-pw-123"
-TEST_AUTH_SECRET = "unit-test-jwt-secret-do-not-use-in-prod-please"
+# The server tests' fake credentials, defined once here (S105 can only be satisfied by not defining them).
+TEST_ADMIN_PASSWORD = "test-admin-pw-123"  # noqa: S105 — fake test credential
+TEST_AUTH_SECRET = "unit-test-jwt-secret-do-not-use-in-prod-please"  # noqa: S105 — fake test credential
+TEST_MCP_TOKEN = "contract-mcp-token-0123456789abcdef"  # noqa: S105 — fake test credential
+TEST_NTFY_TOKEN = "test-ntfy-token"  # noqa: S105 — fake test credential
+
+
+@contextmanager
+def override_repository(app) -> Iterator[IrrigationRepository]:
+    """Serve ``app``'s repository dependency from a fresh in-memory database; undo it on exit."""
+    engine = create_engine("sqlite://", echo=False, connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    session = Session(engine)
+    repo = IrrigationRepository(session)
+    app.dependency_overrides[get_repository] = lambda: repo
+    try:
+        yield repo
+    finally:
+        app.dependency_overrides.pop(get_repository, None)
+        session.close()
+        engine.dispose()
+
+
+def run_core_job(job_id: str) -> None:
+    """Run a built-in scheduler job through the callable the scheduler registered for ``job_id``.
+
+    This is the path APScheduler takes when the job fires, so a test drives the job body
+    without reaching into the scheduler module's private functions.
+    """
+    job = bg_scheduler.get_job(job_id)
+    assert job is not None, f"built-in job {job_id!r} is not registered"
+    job.func()
 
 
 class FakeDeviceWiring:
@@ -54,6 +93,7 @@ class FakeDeviceWiring:
     """
 
     def __init__(self) -> None:
+        """Build the shared fakes and a registry that resolves every seeded model key to them."""
         self.irrigator = FakeIrrigatorAdapter()
         self.sensor = FakeSensorAdapter()
         self.registry = DeviceRegistry()
@@ -141,7 +181,7 @@ def authed_real_client(app_real_auth):
         "/api/v1/auth/login",
         json={"username": TEST_ADMIN_USERNAME, "password": TEST_ADMIN_PASSWORD},
     )
-    assert resp.status_code == 200, f"Real-auth login failed: {resp.status_code} {resp.text}"
+    assert resp.status_code == HTTPStatus.OK, f"Real-auth login failed: {resp.status_code} {resp.text}"
     tc.headers["Authorization"] = f"Bearer {resp.json()['access_token']}"
     return tc
 
@@ -166,8 +206,7 @@ def running_scheduler(app):
     loop processes nothing — and shuts it down afterwards. Depends on ``app``
     so the app's ``init_scheduler`` (which needs a stopped scheduler) runs first.
     """
-    from greenhouse_server.scheduler import scheduler as bg_scheduler
-    from greenhouse_server.scheduler import start_scheduler, stop_scheduler
+    del app  # requested only for its side effect
 
     start_scheduler(paused=True)
     try:
@@ -181,7 +220,7 @@ def seeded_client(client):
     """Client with a pre-populated cluster, plant, sensor, irrigator, and config."""
     # Create cluster
     resp = client.post("/api/v1/clusters", json={"name": "Test Cluster", "environment": "indoor"})
-    assert resp.status_code == 201
+    assert resp.status_code == HTTPStatus.CREATED
 
     # Add plant
     resp = client.post(
@@ -196,7 +235,7 @@ def seeded_client(client):
             "ideal_humidity_max": 80.0,
         },
     )
-    assert resp.status_code == 201
+    assert resp.status_code == HTTPStatus.CREATED
 
     # Add sensor
     resp = client.post(
@@ -208,7 +247,7 @@ def seeded_client(client):
             "plant_id": 1,
         },
     )
-    assert resp.status_code == 201
+    assert resp.status_code == HTTPStatus.CREATED
 
     # Add irrigator
     resp = client.post(
@@ -219,13 +258,13 @@ def seeded_client(client):
             "type": "rainpoint.ik10pw",
         },
     )
-    assert resp.status_code == 201
+    assert resp.status_code == HTTPStatus.CREATED
 
     # Set config
     resp = client.put(
         "/api/v1/clusters/1/config",
         json={"mode": "smart", "duration_minutes": 2, "interval_hours": 12, "auto_run": True},
     )
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
 
     return client

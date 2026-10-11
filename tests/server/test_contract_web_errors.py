@@ -11,11 +11,14 @@ Goldens in ``golden/web/errors/<case>.html`` (request line, status, pinned heade
 
 from __future__ import annotations
 
+from http import HTTPStatus
+
 import pytest
 from fastapi.testclient import TestClient
 
 from golden import assert_golden, install_offline_weather
 from server import test_contract_web_html as _web
+from server.conftest import TEST_MCP_TOKEN
 from server.test_contract_web_html import (
     INDOOR,
     render_response,
@@ -54,6 +57,7 @@ def test_error_page_golden(name, method, url, headers, seeded_get_client):
 @pytest.fixture
 def anon(web_env, app_real_auth):
     """``anonymous_client`` on the real-auth app, under the frozen clock with offline weather."""
+    del web_env  # requested only for its side effect
     install_offline_weather(app_real_auth)
     return TestClient(app_real_auth, raise_server_exceptions=False)
 
@@ -72,7 +76,7 @@ def anon(web_env, app_real_auth):
         ("unknown_path__anonymous", "GET", "/no/such/page", HTML, {}),
     ],
 )
-def test_auth_wall_golden(name, method, url, headers, cookies, anon):
+def test_auth_wall_golden(name, method, url, headers, cookies, anon):  # noqa: PLR0913, PLR0917 — parametrize argnames
     """Anonymous browser → 303 ``/login?next=…`` (HTMX: 204 + ``HX-Redirect``); API → JSON 401."""
     for key, value in cookies.items():
         anon.cookies.set(key, value)
@@ -85,7 +89,8 @@ def test_session_cookie_name_is_the_one_the_garbage_case_uses(app_real_auth):
     assert app_real_auth.state.settings.auth_cookie_name == "greenhouse_session"
 
 
-def test_json_401_carries_www_authenticate(web_env, anon, make_client):
+@pytest.mark.usefixtures("web_env")
+def test_json_401_carries_www_authenticate(anon, make_client):
     """The JSON 401 carries ``WWW-Authenticate: Bearer`` (RFC 9110 §11.6.1).
 
     ``AuthError`` (``greenhouse_server/auth.py``) and ``require_mcp_token`` (``app.py``) both set
@@ -93,21 +98,21 @@ def test_json_401_carries_www_authenticate(web_env, anon, make_client):
     (it used to drop them).
     """
     api = anon.get("/api/v1/clusters")
-    assert api.status_code == 401
+    assert api.status_code == HTTPStatus.UNAUTHORIZED
     assert api.json() == {"detail": "Not authenticated"}
     assert api.headers["www-authenticate"] == "Bearer"
 
     bad_bearer = anon.get("/api/v1/clusters", headers={"Authorization": "Bearer not-a-jwt"})
-    assert bad_bearer.status_code == 401
+    assert bad_bearer.status_code == HTTPStatus.UNAUTHORIZED
     assert bad_bearer.headers["www-authenticate"] == "Bearer"
 
-    _, mcp_client = make_client(bypass_auth=False, mcp_token="contract-mcp-token")
+    _, mcp_client = make_client(bypass_auth=False, mcp_token=TEST_MCP_TOKEN)
     mcp = mcp_client.post(
         "/mcp",
         headers={"Authorization": "Bearer wrong", "Accept": "application/json, text/event-stream"},
         json={"jsonrpc": "2.0", "id": 1, "method": "tools/list"},
     )
-    assert mcp.status_code == 401
+    assert mcp.status_code == HTTPStatus.UNAUTHORIZED
     assert mcp.json() == {"detail": "Invalid MCP token"}
     assert mcp.headers["www-authenticate"] == "Bearer"
 
@@ -120,10 +125,10 @@ def test_error_format_follows_accept_on_web_paths(seeded_get_client):
     ``Accept: application/json``.
     """
     unknown = seeded_get_client.get("/no/such/page", headers=HTML)
-    assert unknown.status_code == 404
+    assert unknown.status_code == HTTPStatus.NOT_FOUND
     assert unknown.headers["content-type"].startswith("text/html")
     wrong_method = seeded_get_client.put("/clusters", headers=HTML)
-    assert wrong_method.status_code == 405
+    assert wrong_method.status_code == HTTPStatus.METHOD_NOT_ALLOWED
     assert wrong_method.headers["content-type"].startswith("text/html")
     assert "GET" in wrong_method.headers["allow"]  # the HTML page keeps the 405's Allow header
     route_404 = seeded_get_client.get("/clusters/999", headers=JSON)

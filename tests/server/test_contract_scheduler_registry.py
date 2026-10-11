@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import logging
 
+import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.pool import StaticPool
 
@@ -31,6 +32,9 @@ from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server import scheduler as sched_mod
 from greenhouse_server.app import create_app
 from greenhouse_server.config import Settings
+
+# sensor_sync, check_all, plant_health_snapshot, sensor_anomaly, device_health_monitor
+BUILT_IN_JOB_COUNT = 5
 
 _BASE = {
     "db_url": "sqlite://",
@@ -115,14 +119,14 @@ def _stored_job(job) -> dict:
     }
 
 
-def _snapshot(app) -> dict:
+def _snapshot() -> dict:
     scheduler = sched_mod.scheduler
     assert not scheduler.running
     snap = {
         "scheduler": {
             "class": type(scheduler).__name__,
             "timezone": str(scheduler.timezone),
-            "job_defaults": dict(scheduler._job_defaults),
+            "job_defaults": dict(scheduler._job_defaults),  # noqa: SLF001 — pins scheduler internals (no public accessor)
         },
         "pending_jobs": [_pending_job(j) for j in scheduler.get_jobs()],
         "pending_get_jobs": sched_mod.get_jobs(),
@@ -139,19 +143,21 @@ def _snapshot(app) -> dict:
     return snap
 
 
-def test_scheduler_registry_matches_golden(clean_env, frozen_clock):
+@pytest.mark.usefixtures("clean_env", "frozen_clock")
+def test_scheduler_registry_matches_golden():
     """Every scenario's pending + started registry equals ``contracts/scheduler_jobs.json``."""
     observed = {}
     for scenario, spec in SCENARIOS.items():
-        app, engine = _build(spec["settings"], spec["prefs"])
+        _app, engine = _build(spec["settings"], spec["prefs"])
         try:
-            observed[scenario] = _snapshot(app)
+            observed[scenario] = _snapshot()
         finally:
             engine.dispose()
     assert_golden_json("contracts/scheduler_jobs.json", observed)
 
 
-def test_registration_order_and_identity(clean_env, frozen_clock):
+@pytest.mark.usefixtures("clean_env", "frozen_clock")
+def test_registration_order_and_identity():
     """The five core jobs, in ``init_scheduler`` registration order, bound to the app."""
     app, engine = _build({}, None)
     try:
@@ -167,22 +173,25 @@ def test_registration_order_and_identity(clean_env, frozen_clock):
             ("sensor_anomaly", "Sensor anomaly scan", "greenhouse_server.scheduler:_anomaly_job"),
             ("device_health_monitor", "Device health monitor", "greenhouse_server.scheduler:_health_monitor_job"),
         ]
-        assert sched_mod._app is app
+        assert sched_mod._app is app  # noqa: SLF001 — pins the module-global app binding (no public accessor)
         assert sched_mod.CHECK_ALL_JOB_ID == "check_all"
-        assert sched_mod._TZ_BOUND_CRON_JOBS == ("check_all", "plant_health_snapshot")
-        assert sched_mod._JOB_DEFAULTS == {"misfire_grace_time": None, "coalesce": True, "max_instances": 1}
+        assert sched_mod._TZ_BOUND_CRON_JOBS == ("check_all", "plant_health_snapshot")  # noqa: SLF001 — pins scheduler internals (no public accessor)
+        assert sched_mod._JOB_DEFAULTS == {"misfire_grace_time": None, "coalesce": True, "max_instances": 1}  # noqa: SLF001 — pins scheduler internals (no public accessor)
     finally:
         engine.dispose()
 
 
-def test_rebuilding_the_app_does_not_duplicate_jobs(clean_env, frozen_clock):
-    app1, engine1 = _build({}, None)
-    app2, engine2 = _build({"sync_interval_minutes": 45}, None)
+@pytest.mark.usefixtures("clean_env", "frozen_clock")
+def test_rebuilding_the_app_does_not_duplicate_jobs():
+    """Rebuilding the app does not duplicate jobs."""
+    _app1, engine1 = _build({}, None)
+    sync_minutes = 45
+    app2, engine2 = _build({"sync_interval_minutes": sync_minutes}, None)
     try:
         jobs = sched_mod.scheduler.get_jobs()
-        assert len(jobs) == 5
-        assert jobs[0].trigger.interval.total_seconds() == 45 * 60
-        assert sched_mod._app is app2
+        assert len(jobs) == BUILT_IN_JOB_COUNT
+        assert jobs[0].trigger.interval.total_seconds() == sync_minutes * 60
+        assert sched_mod._app is app2  # noqa: SLF001 — pins the module-global app binding (no public accessor)
     finally:
         engine1.dispose()
         engine2.dispose()
@@ -197,7 +206,8 @@ class _ListHandler(logging.Handler):
         self.records.append(record)
 
 
-def test_registry_ignores_the_removed_check_interval_hours(clean_env, frozen_clock):
+@pytest.mark.usefixtures("clean_env", "frozen_clock")
+def test_registry_ignores_the_removed_check_interval_hours():
     """OD3: an old ``IRRIGATION_CHECK_INTERVAL_HOURS`` setting no longer becomes ``*/N`` and logs nothing."""
     # Attach directly to the module logger: ``init_db`` runs Alembic's ``fileConfig``,
     # which replaces the root handlers (and with them pytest's caplog handler).
@@ -205,7 +215,7 @@ def test_registry_ignores_the_removed_check_interval_hours(clean_env, frozen_clo
     sched_logger = logging.getLogger("greenhouse_server.scheduler")
     sched_logger.addHandler(handler)
     try:
-        app, engine = _build({"check_interval_hours": 6}, None)
+        _app, engine = _build({"check_interval_hours": 6}, None)
         hour = next(str(f) for f in sched_mod.scheduler.get_job("check_all").trigger.fields if f.name == "hour")
         engine.dispose()
     finally:

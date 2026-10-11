@@ -3,12 +3,15 @@
 Absent → unchanged; ``null`` → cleared for an optional field, ignored for a required one.
 """
 
+from http import HTTPStatus
+
 
 def _cluster(client, **extra):
     return client.post("/api/v1/clusters", json={"name": "C1", "location": "Shelf", **extra}).json()["id"]
 
 
 def test_cluster_location_null_clears_absent_keeps(client):
+    """Cluster location null clears absent keeps."""
     cid = _cluster(client)
     kept = client.put(f"/api/v1/clusters/{cid}", json={"environment": "outdoor"}).json()
     assert (kept["name"], kept["location"], kept["environment"]) == ("C1", "Shelf", "outdoor")
@@ -17,6 +20,7 @@ def test_cluster_location_null_clears_absent_keeps(client):
 
 
 def test_plant_notes_null_clears(client):
+    """Plant notes null clears."""
     cid = _cluster(client)
     pid = client.post(f"/api/v1/clusters/{cid}/plants", json={"species": "Monstera deliciosa", "notes": "n"}).json()[
         "id"
@@ -26,6 +30,7 @@ def test_plant_notes_null_clears(client):
 
 
 def test_vacation_notes_and_email_null_clear(client):
+    """Vacation notes and email null clear."""
     created = client.post(
         "/api/v1/vacation",
         json={"starts_at": 4_000_000_000, "ends_at": 4_000_003_600, "notes": "trip", "contact_email": "a@b.invalid"},
@@ -41,6 +46,7 @@ def test_vacation_notes_and_email_null_clear(client):
 
 
 def test_preferences_default_cluster_null_clears(client):
+    """Preferences default cluster null clears."""
     cid = _cluster(client)
     assert client.put("/api/v1/preferences", json={"default_cluster_id": cid}).json()["default_cluster_id"] == cid
     body = client.put("/api/v1/preferences", json={"default_cluster_id": None, "theme": None}).json()
@@ -48,6 +54,7 @@ def test_preferences_default_cluster_null_clears(client):
 
 
 def test_sensor_plant_id_null_unassigns(client):
+    """Sensor plant ID null unassigns."""
     cid = _cluster(client)
     pid = client.post(f"/api/v1/clusters/{cid}/plants", json={"species": "Monstera deliciosa"}).json()["id"]
     sid = client.post(
@@ -59,6 +66,7 @@ def test_sensor_plant_id_null_unassigns(client):
 
 
 def test_irrigator_capacity_null_clears(client):
+    """Irrigator capacity null clears."""
     cid = _cluster(client)
     client.post(
         f"/api/v1/clusters/{cid}/irrigator",
@@ -74,7 +82,7 @@ def test_preferences_refuse_an_unknown_default_cluster(client):
     assert (resp.status_code, resp.json()) == (404, {"detail": "Cluster not found"})
     form = {"units": "metric", "timezone": "UTC", "theme": "dark", "refresh_interval_seconds": "30"}
     web = client.post("/preferences", data={**form, "default_cluster_id": "999"}, headers={"Accept": "text/html"})
-    assert web.status_code == 404
+    assert web.status_code == HTTPStatus.NOT_FOUND
     assert "Cluster not found" in web.text
     prefs = client.get("/api/v1/preferences").json()
     assert (prefs["default_cluster_id"], prefs["theme"]) == (None, "auto")

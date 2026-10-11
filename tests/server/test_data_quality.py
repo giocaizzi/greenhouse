@@ -1,5 +1,7 @@
 """Tests for GET /api/v1/quality/report."""
 
+from http import HTTPStatus
+
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.pool import StaticPool
@@ -19,14 +21,18 @@ def _make_client():
 
 
 class TestDataQualityReport:
+    """Tests for data quality report."""
+
     def test_empty_db_no_issues(self, client):
+        """Empty DB no issues."""
         resp = client.get("/api/v1/quality/report")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         data = resp.json()
         assert data["issues"] == []
         assert data["counts"] == {}
 
     def test_sensor_without_plant_detected(self):
+        """Sensor without plant detected."""
         client, engine = _make_client()
         try:
             client.post("/api/v1/clusters", json={"name": "Quality Cluster"})
@@ -43,6 +49,7 @@ class TestDataQualityReport:
             engine.dispose()
 
     def test_plant_without_sensor_detected(self):
+        """Plant without sensor detected."""
         client, engine = _make_client()
         try:
             client.post("/api/v1/clusters", json={"name": "Quality Cluster"})
@@ -76,13 +83,15 @@ class TestDataQualityReport:
             engine.dispose()
 
     def test_counts_aggregation(self):
+        """Counts aggregation."""
         client, engine = _make_client()
         try:
             client.post("/api/v1/clusters", json={"name": "Count Cluster"})
-            client.post("/api/v1/clusters/1/plants", json={"species": "Rose A"})
-            client.post("/api/v1/clusters/1/plants", json={"species": "Rose B"})
+            species = ["Rose A", "Rose B"]
+            for name in species:
+                client.post("/api/v1/clusters/1/plants", json={"species": name})
             resp = client.get("/api/v1/quality/report")
             data = resp.json()
-            assert data["counts"].get("plant_without_sensor", 0) == 2
+            assert data["counts"].get("plant_without_sensor", 0) == len(species)
         finally:
             engine.dispose()

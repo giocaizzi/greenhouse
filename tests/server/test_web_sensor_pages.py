@@ -1,20 +1,25 @@
 """Web sensor list and creation form."""
 
+from http import HTTPStatus
+
 
 def test_sensors_list_renders(seeded_client):
+    """Sensors list renders."""
     resp = seeded_client.get("/clusters/1/sensors")
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     assert "Test Sensor" in resp.text
     assert "Monstera deliciosa" in resp.text  # plant link
 
 
 def test_new_sensor_form_includes_plant_options(seeded_client):
+    """New sensor form includes plant options."""
     resp = seeded_client.get("/clusters/1/sensors/new")
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     assert "Monstera deliciosa" in resp.text  # plant_id <option>
 
 
 def test_create_sensor(seeded_client):
+    """Create sensor."""
     resp = seeded_client.post(
         "/clusters/1/sensors",
         data={
@@ -25,7 +30,7 @@ def test_create_sensor(seeded_client):
         },
         follow_redirects=False,
     )
-    assert resp.status_code == 303
+    assert resp.status_code == HTTPStatus.SEE_OTHER
 
     resp2 = seeded_client.get("/clusters/1/sensors")
     assert "Second Sensor" in resp2.text

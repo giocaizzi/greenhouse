@@ -10,14 +10,18 @@ from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
 from fake_data import FAKE_DEVICE_ID, FAKE_PLANT_SPECIES, FAKE_SENSOR_ID
+from greenhouse_core import repository as repo_mod
 from greenhouse_core.constants import MIN_COOLDOWN_HOURS
 from greenhouse_core.logic import IrrigationLogic
+from greenhouse_core.logic import engine as engine_mod
 from greenhouse_core.models import Base
 from greenhouse_core.plant_db import get_plant_database
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.app import create_app
 from greenhouse_server.config import Settings
 from greenhouse_server.scheduler import scheduler as bg_scheduler
+
+EXPECTED_MAX_DAILY_ACTUATIONS = 4  # 24 h under the 6 h global cooldown
 
 
 def _build_app(cron_hours: str | None = None):
@@ -74,6 +78,64 @@ class TestCheckAllCronRegistration:
             engine.dispose()
 
 
+def _seed_dry_cluster(repo) -> tuple[int, int, int]:
+    """A cluster with a plant, an irrigator and a sensor (committed): ``(cluster_id, irrigator_id, sensor_id)``."""
+    cluster_id = repo.add_cluster("Cooldown Cluster")
+    repo.add_plant(
+        cluster_id=cluster_id,
+        species=FAKE_PLANT_SPECIES,
+        water_needs="medium",
+    )
+    irrigator_id = repo.add_irrigator(
+        cluster_id=cluster_id,
+        tuya_device_id=FAKE_DEVICE_ID,
+        name="Irrigator",
+        irrigator_type="rainpoint.ik10pw",
+        config={},
+    )
+    sensor_id = repo.add_sensor(
+        cluster_id=cluster_id,
+        tuya_device_id=FAKE_SENSOR_ID,
+        name="Dry Sensor",
+        sensor_type="tuya.tr301z",
+        config={},
+    )
+    repo.session.commit()
+    return cluster_id, irrigator_id, sensor_id
+
+
+def _hourly_actuations(repo, ids: tuple[int, int, int], monkeypatch) -> int:
+    """Run 24 simulated hourly checks on a very dry sensor, logging each irrigate; return how many fired."""
+    cluster_id, irrigator_id, sensor_id = ids
+    logic = IrrigationLogic(repo, get_plant_database())
+    start = int(time.time()) - 24 * 3600
+
+    actuations = 0
+    # Patch the engine's and repository's clocks for each
+    # simulated hourly check — both consult `time.time()` when
+    # deciding the cooldown cutoff.
+
+    for step in range(24):
+        now = start + step * 3600
+        monkeypatch.setattr(engine_mod.time, "time", lambda now=now: now)
+        monkeypatch.setattr(repo_mod.time, "time", lambda now=now: now)
+        # Reading at "now" — always very dry, so absent the cooldown
+        # gate the engine would irrigate every hour.
+        repo.add_sensor_reading(sensor_id=sensor_id, timestamp=now, soil_moisture=20.0)
+        decision = logic.decide_for_cluster(cluster_id)
+        if decision.action.value == "irrigate":
+            repo.add_irrigation_event(
+                irrigator_id=irrigator_id,
+                action="start",
+                triggered_by="auto",
+                duration_minutes=decision.duration_minutes,
+                timestamp=now,
+            )
+            actuations += 1
+        repo.session.commit()
+    return actuations
+
+
 class TestCooldownGatesActuation:
     """Hourly checks must NOT actuate more often than the engine cooldown allows."""
 
@@ -88,60 +150,11 @@ class TestCooldownGatesActuation:
         try:
             with Session(engine) as session:
                 repo = IrrigationRepository(session)
-                cluster_id = repo.add_cluster("Cooldown Cluster")
-                repo.add_plant(
-                    cluster_id=cluster_id,
-                    species=FAKE_PLANT_SPECIES,
-                    water_needs="medium",
-                )
-                irrigator_id = repo.add_irrigator(
-                    cluster_id=cluster_id,
-                    tuya_device_id=FAKE_DEVICE_ID,
-                    name="Irrigator",
-                    irrigator_type="rainpoint.ik10pw",
-                    config={},
-                )
-                sensor_id = repo.add_sensor(
-                    cluster_id=cluster_id,
-                    tuya_device_id=FAKE_SENSOR_ID,
-                    name="Dry Sensor",
-                    sensor_type="tuya.tr301z",
-                    config={},
-                )
-                session.commit()
-
-                logic = IrrigationLogic(repo, get_plant_database())
-                start = int(time.time()) - 24 * 3600
-
-                actuations = 0
-                # Patch the engine's and repository's clocks for each
-                # simulated hourly check — both consult `time.time()` when
-                # deciding the cooldown cutoff.
-                from greenhouse_core import repository as repo_mod
-                from greenhouse_core.logic import engine as engine_mod
-
-                for step in range(24):
-                    now = start + step * 3600
-                    monkeypatch.setattr(engine_mod.time, "time", lambda now=now: now)
-                    monkeypatch.setattr(repo_mod.time, "time", lambda now=now: now)
-                    # Reading at "now" — always very dry, so absent the cooldown
-                    # gate the engine would irrigate every hour.
-                    repo.add_sensor_reading(sensor_id=sensor_id, timestamp=now, soil_moisture=20.0)
-                    decision = logic.decide_for_cluster(cluster_id)
-                    if decision.action.value == "irrigate":
-                        repo.add_irrigation_event(
-                            irrigator_id=irrigator_id,
-                            action="start",
-                            triggered_by="auto",
-                            duration_minutes=decision.duration_minutes,
-                            timestamp=now,
-                        )
-                        actuations += 1
-                    session.commit()
+                actuations = _hourly_actuations(repo, _seed_dry_cluster(repo), monkeypatch)
 
                 # 24h / 6h cooldown = at most 4 actuations.
                 max_allowed = 24 // MIN_COOLDOWN_HOURS
-                assert max_allowed == 4
+                assert max_allowed == EXPECTED_MAX_DAILY_ACTUATIONS
                 assert actuations <= max_allowed, (
                     f"engine fired {actuations} times in 24h; cooldown should cap at {max_allowed}"
                 )

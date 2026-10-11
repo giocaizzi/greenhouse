@@ -24,6 +24,7 @@ import pytest
 import time_machine
 
 from golden import FROZEN_INSTANT, FROZEN_TS, assert_golden_json
+from server.conftest import run_core_job
 from server.test_contract_pipeline import Pipeline
 
 STEADY = (45.0, 46.0, 45.0, 44.0, 45.0, 46.0, 45.0, 44.0, 45.0)
@@ -33,6 +34,8 @@ IMPOSSIBLE = 150.0
 
 @pytest.fixture
 def spiky(clean_env, frozen_clock):
+    """A pipeline whose sensors carry a Hampel spike and an impossible reading."""
+    del clean_env, frozen_clock  # requested only for their side effects
     p = Pipeline()
     # Devices are registered (and the sensor→plant assignment opened) two days
     # earlier, so the assignment-aware plant chart covers every seeded reading.
@@ -68,18 +71,25 @@ def _soil_points(chart: dict) -> list[float]:
     return [value for ds in chart["datasets"] for _ts, value in ds["points"]]
 
 
-def test_raw_views_keep_the_spike_and_cleaned_views_ignore_it(spiky):
-    p = spiky
-    chart = p.call("GET", "/api/v1/clusters/1/chart-data?hours=24&metric=soil_moisture")["response"]
-    plant_chart = p.call("GET", f"/api/v1/plants/{p.ids['plant_id']}/chart-data?hours=24")["response"]
-    history = p.call("GET", "/api/v1/clusters/1/history?hours=48&limit=50")["response"]
-    quality = p.call("GET", "/api/v1/quality/report")["response"]
-    status = p.call("GET", "/api/v1/clusters/1/status")["response"]
-    dry_run = p.call("POST", "/api/v1/clusters/1/irrigate", {"dry_run": True})["response"]
-    monitor = p.call("GET", "/api/v1/clusters/1/monitor")["response"]
+def _views(p) -> dict:
+    """Every raw and cleaned read surface, fetched in the order the contract pins (the dry run logs a decision)."""
+    return {
+        "chart": p.call("GET", "/api/v1/clusters/1/chart-data?hours=24&metric=soil_moisture")["response"],
+        "plant_chart": p.call("GET", f"/api/v1/plants/{p.ids['plant_id']}/chart-data?hours=24")["response"],
+        "history": p.call("GET", "/api/v1/clusters/1/history?hours=48&limit=50")["response"],
+        "quality": p.call("GET", "/api/v1/quality/report")["response"],
+        "status": p.call("GET", "/api/v1/clusters/1/status")["response"],
+        "dry_run": p.call("POST", "/api/v1/clusters/1/irrigate", {"dry_run": True})["response"],
+        "monitor": p.call("GET", "/api/v1/clusters/1/monitor")["response"],
+    }
 
-    # Raw (archive / display) side.
-    assert SPIKE in _soil_points(chart) and IMPOSSIBLE in _soil_points(chart)
+
+def _assert_raw_side_keeps_the_spike(p, views: dict) -> None:
+    """Archive / display surfaces read raw rows."""
+    chart, plant_chart, history = views["chart"], views["plant_chart"], views["history"]
+    quality, status = views["quality"], views["status"]
+    assert SPIKE in _soil_points(chart)
+    assert IMPOSSIBLE in _soil_points(chart)
     assert SPIKE in _soil_points(plant_chart)
     history_soil = {s["sensor_id"]: [r["soil_moisture"] for r in s["readings"]] for s in history["sensors"]}
     assert history_soil[p.ids["sensor_id"]][0] == SPIKE  # newest first
@@ -90,7 +100,10 @@ def test_raw_views_keep_the_spike_and_cleaned_views_ignore_it(spiky):
     # Raw latest rows are what the status page displays.
     assert status_latest == {p.ids["sensor_id"]: SPIKE, p.ids["second_sensor_id"]: IMPOSSIBLE}
 
-    # Cleaned (judgement) side.
+
+def _assert_cleaned_side_ignores_it(p, views: dict, decision_log: dict) -> None:
+    """Judgement surfaces read the cleaned view."""
+    status, dry_run, monitor = views["status"], views["dry_run"], views["monitor"]
     snapshot_min = 44.0
     # The soil rule judges each sensor's newest *cleaned* reading: the 5 % spike is filtered, so the
     # current reading is 45 % — inside the Monstera band → "adequate", not the "very dry" a 5 % reading
@@ -104,7 +117,6 @@ def test_raw_views_keep_the_spike_and_cleaned_views_ignore_it(spiky):
     assert dry_run["reasons"][0]["message"] == status["decision"]["reasons"][0]["message"]
     # No reason quotes the spike value (a bare "5%", not the "5%" inside "45%").
     assert all(re.search(rf"(?<!\d){int(SPIKE)}%", r["message"]) is None for r in dry_run["reasons"])
-    decision_log = p.db_rows()["decision_logs"][0]["payload_json"]
     assert decision_log["sensor_snapshot"]["min_soil_moisture"] == snapshot_min
     monitor_soil = {s["sensor_id"]: (s["soil_moisture"], s["status"]) for s in monitor["sensors"]}
     # /monitor cleans over the snapshot window before cutting its 2 h slice, so the spike is gone
@@ -113,17 +125,26 @@ def test_raw_views_keep_the_spike_and_cleaned_views_ignore_it(spiky):
     # The range gate still applies regardless of window size.
     assert monitor_soil[p.ids["second_sensor_id"]] == (None, "no_data")
 
+
+def test_raw_views_keep_the_spike_and_cleaned_views_ignore_it(spiky):
+    """Raw views keep the spike and cleaned views ignore it."""
+    p = spiky
+    v = _views(p)
+    _assert_raw_side_keeps_the_spike(p, v)
+    decision_log = p.db_rows()["decision_logs"][0]["payload_json"]
+    _assert_cleaned_side_ignores_it(p, v, decision_log)
+
     assert_golden_json(
         "orchestration/raw_vs_clean.json",
         {
-            "chart": chart,
-            "plant_chart": plant_chart,
-            "history": history,
-            "quality": quality,
-            "status_decision": status["decision"],
-            "status_sensors": status["sensors"],
-            "dry_run": dry_run,
-            "monitor": monitor,
+            "chart": v["chart"],
+            "plant_chart": v["plant_chart"],
+            "history": v["history"],
+            "quality": v["quality"],
+            "status_decision": v["status"]["decision"],
+            "status_sensors": v["status"]["sensors"],
+            "dry_run": v["dry_run"],
+            "monitor": v["monitor"],
             "decision_log_snapshot": decision_log["sensor_snapshot"],
         },
     )
@@ -131,11 +152,9 @@ def test_raw_views_keep_the_spike_and_cleaned_views_ignore_it(spiky):
 
 def test_anomaly_scan_sees_what_cleaning_masks(spiky):
     """The ``sensor_drift`` scan reads raw rows, so it flags the very spike the snapshot ignored."""
-    from greenhouse_server import scheduler
-
     rows_before = spiky.db_rows()["alerts"]
     assert rows_before == []
-    scheduler._anomaly_job()
+    run_core_job("sensor_anomaly")
     alerts = spiky.db_rows()["alerts"]
     assert [(a["code"], a["entity_id"]) for a in alerts] == [("sensor_drift", spiky.ids["sensor_id"])]
 

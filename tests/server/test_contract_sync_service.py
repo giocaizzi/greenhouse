@@ -12,6 +12,7 @@ All timestamps derive from ``FROZEN_INSTANT``; the gateway is a recording fake.
 from __future__ import annotations
 
 import logging
+from datetime import timedelta
 
 import pytest
 
@@ -25,21 +26,25 @@ class RecordingGateway:
     """Fake DeviceGateway recording every call ``sync_single_sensor`` makes."""
 
     def __init__(self, *, live: dict | None = None, logs_error: Exception | None = None) -> None:
+        """Serve per-device ``live`` readings, optionally fail log fetches, and record every call."""
         self.live = live or {}
         self.logs_error = logs_error
         self.calls: list[tuple] = []
 
-    def get_device_logs(self, device_id, since_ms=None, hours=24, max_records=100):
+    def get_device_logs(self, device_id, since_ms=None, _hours=24, _max_records=100):
+        """Record the call; raise the configured error or return no logs."""
         self.calls.append(("get_device_logs", device_id, since_ms))
         if self.logs_error is not None:
             raise self.logs_error
         return []
 
-    def group_logs_by_timestamp(self, logs, tolerance_ms=5000):
+    def group_logs_by_timestamp(self, logs, _tolerance_ms=5000):
+        """Record how many logs were grouped; there are no groups."""
         self.calls.append(("group_logs_by_timestamp", len(logs)))
         return []
 
     def get_live_reading(self, device_id):
+        """Record the call and return a copy of the device's canned reading."""
         self.calls.append(("get_live_reading", device_id))
         return dict(self.live.get(device_id, {}))
 
@@ -47,6 +52,7 @@ class RecordingGateway:
 @pytest.fixture
 def cluster(tmp_db, frozen_clock):
     """Two sensors in one cluster (names sort Alpha < Beta), plus an unrelated cluster's sensor."""
+    del frozen_clock  # requested only for its side effect
     cid = tmp_db.add_cluster("Fresh Cluster")
     other = tmp_db.add_cluster("Other Cluster")
     alpha = tmp_db.add_sensor(
@@ -79,11 +85,13 @@ def _seed(db, sensor_id: int, age: int, **values) -> None:
 
 
 def test_threshold_constant_is_four_hours():
-    assert SENSOR_READING_STALE_SECONDS == 14400
-    assert SNAPSHOT_LOOKBACK_HOURS == 24
+    """Threshold constant is four hours."""
+    assert timedelta(seconds=SENSOR_READING_STALE_SECONDS) == timedelta(hours=4)
+    assert timedelta(hours=SNAPSHOT_LOOKBACK_HOURS) == timedelta(days=1)
 
 
 def test_fresh_readings_cost_zero_gateway_calls(cluster, spy_sync):
+    """Fresh readings cost zero gateway calls."""
     db, cid, alpha, beta = cluster
     _seed(db, alpha, 60, soil_moisture=40.0, temperature=20.0)
     _seed(db, beta, SENSOR_READING_STALE_SECONDS - 1, soil_moisture=35.0, temperature=24.0, light=800)
@@ -103,6 +111,7 @@ def test_fresh_readings_cost_zero_gateway_calls(cluster, spy_sync):
     ],
 )
 def test_boundary_at_exactly_the_threshold(cluster, spy_sync, age, stale):
+    """Boundary at exactly the threshold."""
     db, cid, alpha, beta = cluster
     _seed(db, alpha, age, soil_moisture=40.0)
     _seed(db, beta, 10, soil_moisture=50.0)
@@ -113,6 +122,7 @@ def test_boundary_at_exactly_the_threshold(cluster, spy_sync, age, stale):
 
 
 def test_stale_sensor_gets_exactly_one_targeted_sync(cluster, spy_sync):
+    """Stale sensor gets exactly one targeted sync."""
     db, cid, alpha, beta = cluster
     stale_ts = FROZEN_TS - SENSOR_READING_STALE_SECONDS - 600
     _seed(db, alpha, SENSOR_READING_STALE_SECONDS + 600, soil_moisture=40.0)
@@ -130,16 +140,19 @@ def test_stale_sensor_gets_exactly_one_targeted_sync(cluster, spy_sync):
 
 
 def test_sensor_without_any_reading_is_synced_with_a_six_hour_window(cluster, spy_sync):
+    """Sensor without any reading is synced with a six hour window."""
     db, cid, alpha, beta = cluster
     _seed(db, beta, 30, soil_moisture=50.0)
-    gw = RecordingGateway(live={"dev_alpha": {"soil_moisture": 44.0}})
+    live_soil = 44.0
+    gw = RecordingGateway(live={"dev_alpha": {"soil_moisture": live_soil}})
     snapshot = SyncService(db, None, gw).ensure_fresh_and_read(cid)
     assert spy_sync == [(alpha, 6)]
     assert gw.calls[0] == ("get_device_logs", "dev_alpha", (FROZEN_TS - 6 * 3600) * 1000)
-    assert snapshot["soil_moisture"] == 44.0
+    assert snapshot["soil_moisture"] == live_soil
 
 
 def test_all_stale_sync_in_sensor_name_order(cluster, spy_sync):
+    """All stale sync in sensor name order."""
     db, cid, alpha, beta = cluster
     gw = RecordingGateway()
     assert SyncService(db, None, gw).ensure_fresh_and_read(cid) is None
@@ -148,12 +161,14 @@ def test_all_stale_sync_in_sensor_name_order(cluster, spy_sync):
 
 
 def test_no_reading_at_all_and_no_cloud_returns_none_without_sync(cluster, spy_sync):
+    """No reading at all and no cloud returns none without sync."""
     db, cid, _, _ = cluster
     assert SyncService(db, None, None).ensure_fresh_and_read(cid) is None
     assert spy_sync == []
 
 
 def test_stale_but_no_cloud_reads_what_is_archived(cluster, spy_sync):
+    """Stale but no cloud reads what is archived."""
     db, cid, alpha, _ = cluster
     _seed(db, alpha, SENSOR_READING_STALE_SECONDS + 1, soil_moisture=40.0, env_humidity=55.0)
     assert SyncService(db, None, None).ensure_fresh_and_read(cid) == {
@@ -166,12 +181,14 @@ def test_stale_but_no_cloud_reads_what_is_archived(cluster, spy_sync):
 
 
 def test_archived_rows_older_than_the_lookback_are_ignored_by_the_snapshot(cluster):
+    """Archived rows older than the lookback are ignored by the snapshot."""
     db, cid, alpha, _ = cluster
     _seed(db, alpha, SNAPSHOT_LOOKBACK_HOURS * 3600 + 1, soil_moisture=40.0)
     assert SyncService(db, None, None).ensure_fresh_and_read(cid) is None
 
 
 def test_failed_freshness_sync_is_swallowed_and_logged_at_debug(cluster, spy_sync, caplog):
+    """Failed freshness sync is swallowed and logged at debug."""
     db, cid, alpha, beta = cluster
     _seed(db, beta, 30, soil_moisture=50.0)
     gw = RecordingGateway(logs_error=RuntimeError("token expired"))
@@ -185,14 +202,19 @@ def test_failed_freshness_sync_is_swallowed_and_logged_at_debug(cluster, spy_syn
 
 
 def test_empty_cluster_returns_none_with_zero_calls(tmp_db, spy_sync):
+    """Empty cluster returns none with zero calls."""
     cid = tmp_db.add_cluster("Empty")
     gw = RecordingGateway()
     assert SyncService(tmp_db, None, gw).ensure_fresh_and_read(cid) is None
-    assert gw.calls == [] and spy_sync == []
+    assert gw.calls == []
+    assert spy_sync == []
 
 
 class TestSyncAllSensors:
+    """Tests for sync all sensors."""
+
     def test_without_cloud_returns_the_fixed_error_payload(self, tmp_db):
+        """Without cloud returns the fixed error payload."""
         assert SyncService(tmp_db, None, None).sync_all_sensors() == {
             "total_synced": 0,
             "total_new": 0,
@@ -201,6 +223,7 @@ class TestSyncAllSensors:
         }
 
     def test_with_cloud_delegates_to_core_sync_with_hours(self, tmp_db, monkeypatch):
+        """With cloud delegates to core sync with hours."""
         seen = []
         monkeypatch.setattr(
             sync_service_module, "core_sync", lambda repo, cloud, hours: seen.append((repo, cloud, hours)) or {"ok": 1}

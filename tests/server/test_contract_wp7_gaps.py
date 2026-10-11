@@ -26,6 +26,7 @@ from engine_grid import plant_database
 from fake_devices import FakeIrrigatorAdapter
 from golden import FROZEN_TS
 from greenhouse_core.devices import DeviceRegistry
+from greenhouse_core.devices.health import HealthAlarm
 from greenhouse_core.logic import IrrigationLogic
 from greenhouse_core.logic.decision import Action, IrrigationDecision, TriggerCode
 from greenhouse_core.models import ActivityEvent, Base, IrrigationEvent
@@ -38,7 +39,8 @@ from greenhouse_server.services import pump_watcher_jobs as pump_watcher_jobs_mo
 from greenhouse_server.services.irrigation import IrrigationService
 from greenhouse_server.services.pump_watcher import PumpWatcherService
 from greenhouse_server.services.pump_watcher_jobs import handle_watcher_interrupted, schedule_pump_watcher
-from server.test_contract_pipeline import Pipeline
+from server.conftest import run_core_job
+from server.test_contract_pipeline import Pipeline, RecordingGateway
 
 IRRIGATION_LOGGER = "greenhouse_server.services.irrigation"
 SCHEDULER_LOGGER = "greenhouse_server.scheduler"
@@ -48,11 +50,15 @@ SCHEDULER_LOGGER = "greenhouse_server.scheduler"
 
 
 class FakeScheduler:
+    """A running scheduler stand-in that records ``add_job`` calls."""
+
     def __init__(self) -> None:
+        """Report running, with no jobs yet."""
         self.running = True
         self.jobs: list[dict] = []
 
     def add_job(self, func, trigger, **kwargs):
+        """Record the job."""
         self.jobs.append({"func": func, "trigger": trigger, **kwargs})
 
 
@@ -60,32 +66,43 @@ class StubSync:
     """``SyncService`` stand-in: records ``ensure_fresh_and_read`` calls, returns a canned snapshot."""
 
     def __init__(self, data: dict | None) -> None:
+        """Serve ``data`` as the cluster snapshot (``None`` = no data) and record each read."""
         self.data = data
         self.calls: list[int] = []
 
     def ensure_fresh_and_read(self, cluster_id: int):
+        """Record the cluster and return a copy of the canned snapshot."""
         self.calls.append(cluster_id)
         return None if self.data is None else dict(self.data)
 
 
 class StubWeather:
+    """Weather stand-in with a fixed current reading and no forecast."""
+
     def __init__(self, current: dict | None) -> None:
+        """Serve ``current`` (``None`` = weather unavailable) and count reads."""
         self.current = current
         self.calls = 0
 
     def get_current(self):
+        """Count the read and return a copy of the canned reading."""
         self.calls += 1
         return None if self.current is None else dict(self.current)
 
     def get_forecast(self, hours: int = 6):  # noqa: ARG002 — mirrors WeatherClient
-        return None
+        """No forecast is available."""
+        return
 
 
 class StubPlantDb:
+    """Plant-DB stand-in serving the same care data for every species."""
+
     def __init__(self, care: dict) -> None:
+        """Serve ``care`` for every lookup."""
         self.care = care
 
     def get_care_data(self, species=None):  # noqa: ARG002 — mirrors PlantDatabase
+        """Return a copy of the canned care data."""
         return dict(self.care)
 
 
@@ -105,6 +122,8 @@ def _decision(cluster_id: int, *, log_id: int | None = None) -> IrrigationDecisi
 
 @pytest.fixture
 def db(tmp_db, frozen_clock, clean_env):
+    """The in-memory repository, with a frozen clock and a clean environment."""
+    del frozen_clock, clean_env  # requested only for their side effects
     return tmp_db
 
 
@@ -129,7 +148,7 @@ def pump(db):
 def _patch_decide(monkeypatch, factory) -> list[dict]:
     calls: list[dict] = []
 
-    def fake(self, cluster_id, **kwargs):
+    def fake(_self, cluster_id, **kwargs):
         calls.append({"cluster_id": cluster_id, **kwargs})
         return factory(cluster_id)
 
@@ -145,24 +164,29 @@ def _rows(db, model) -> list:
 
 
 def test_pipeline_without_a_decision_returns_the_no_data_error(db, pump, monkeypatch):
-    _patch_decide(monkeypatch, lambda cid: None)
+    """Pipeline without a decision returns the no data error."""
+    _patch_decide(monkeypatch, lambda _cid: None)
     svc = IrrigationService(db, pump.registry, StubSync(None), StubWeather(None), plant_database())
     result = svc.run_irrigation_pipeline(pump.cluster_id, no_sync=True)
     assert result == {"action": "error", "reason": "no data for decision", "confidence": 0}
     assert [type(v) for v in result.values()] == [str, str, int]
-    assert _rows(db, ActivityEvent) == [] and pump.adapter.calls == []
+    assert _rows(db, ActivityEvent) == []
+    assert pump.adapter.calls == []
 
 
 def test_pipeline_unknown_cluster_returns_the_not_found_error_without_deciding(db, pump, monkeypatch):
+    """Pipeline unknown cluster returns the not found error without deciding."""
     calls = _patch_decide(monkeypatch, _decision)
     sync = StubSync({"temperature": 22.0})
     svc = IrrigationService(db, pump.registry, sync, StubWeather(None), plant_database())
     assert svc.run_irrigation_pipeline(999) == {"action": "error", "reason": "cluster not found", "confidence": 0}
-    assert calls == [] and sync.calls == []
+    assert calls == []
+    assert sync.calls == []
 
 
 @pytest.mark.parametrize("force", [False, True])
 def test_pipeline_builds_the_engine_and_passes_force_flags(db, pump, monkeypatch, force):
+    """Pipeline builds the engine and passes force flags."""
     built: list[tuple] = []
     decided: list[dict] = []
 
@@ -172,7 +196,6 @@ def test_pipeline_builds_the_engine_and_passes_force_flags(db, pump, monkeypatch
 
         def decide_for_cluster(self, cluster_id, **kwargs):
             decided.append({"cluster_id": cluster_id, **kwargs})
-            return None
 
     monkeypatch.setattr(irrigation_mod, "IrrigationLogic", SpyLogic)
     weather, plants = StubWeather({"feels_like": 18.0}), plant_database()
@@ -233,9 +256,10 @@ TEMP_MATRIX = [
     ("environment", "override", "no_sync", "snapshot", "now", "temp", "source", "sync_calls", "weather_calls"),
     TEMP_MATRIX,
 )
-def test_temperature_source_matrix_and_soil_note(
+def test_temperature_source_matrix_and_soil_note(  # noqa: PLR0913, PLR0917 — one parameter per parametrize argname
     db, pump, monkeypatch, environment, override, no_sync, snapshot, now, temp, source, sync_calls, weather_calls
 ):
+    """Temperature source matrix and soil note."""
     db.update_cluster(pump.cluster_id, environment=environment)
     db.session.commit()
     _patch_decide(monkeypatch, _decision)
@@ -253,15 +277,20 @@ def test_temperature_source_matrix_and_soil_note(
 
 
 class NotBlockingMonitor:
+    """Health-monitor stand-in that never blocks actuation and records who asked."""
+
     def __init__(self) -> None:
+        """Start with no questions asked."""
         self.asked: list[int] = []
 
     def is_actuation_blocked(self, irrigator):
+        """Record the irrigator and answer: not blocked."""
         self.asked.append(irrigator.id)
         return False, []
 
 
 def test_health_monitor_that_does_not_block_lets_the_pump_start(db, pump, monkeypatch):
+    """Health monitor that does not block lets the pump start."""
     _patch_decide(monkeypatch, _decision)
     monitor = NotBlockingMonitor()
     svc = IrrigationService(
@@ -270,21 +299,24 @@ def test_health_monitor_that_does_not_block_lets_the_pump_start(db, pump, monkey
     result = svc.run_irrigation_pipeline(pump.cluster_id, no_sync=True)
     assert monitor.asked == [pump.irrigator_id]
     assert pump.adapter.calls == [("start", pump.irrigator_id, 4)]
-    assert result["action"] == "irrigated" and "blocking_alarms" not in result
+    assert result["action"] == "irrigated"
+    assert "blocking_alarms" not in result
     assert [(a.code, a.severity) for a in _rows(db, ActivityEvent)] == [("irrigated", "info")]
 
 
 @pytest.mark.parametrize("log_id", [None, 4242])
 def test_successful_start_marks_the_decision_actuated_only_with_a_log_id(db, pump, monkeypatch, log_id):
+    """Successful start marks the decision actuated only with a log ID."""
     _patch_decide(monkeypatch, lambda cid: _decision(cid, log_id=log_id))
     marked: list = []
-    monkeypatch.setattr(IrrigationRepository, "set_decision_actuated", lambda self, i, *a: marked.append(i))
+    monkeypatch.setattr(IrrigationRepository, "set_decision_actuated", lambda _self, i, *_a: marked.append(i))
     svc = IrrigationService(db, pump.registry, StubSync(None), StubWeather(None), plant_database())
     assert svc.run_irrigation_pipeline(pump.cluster_id, no_sync=True)["action"] == "irrigated"
     assert marked == ([] if log_id is None else [log_id])
 
 
 def test_started_at_is_read_after_the_adapter_start(db, pump, monkeypatch):
+    """Started at is read after the adapter start."""
     clock = {"now": 1_000_000.0}
 
     class Clock:
@@ -311,6 +343,7 @@ def test_started_at_is_read_after_the_adapter_start(db, pump, monkeypatch):
 
 
 def test_monitor_unknown_cluster_shape(db):
+    """Monitor unknown cluster shape."""
     sync = StubSync(None)
     svc = IrrigationService(db, None, sync, None, plant_database())
     assert svc.monitor_cluster(999) == {"cluster_name": "unknown", "sensors": [], "needs_water": []}
@@ -318,6 +351,7 @@ def test_monitor_unknown_cluster_shape(db):
 
 
 def test_check_unknown_cluster_shape(db):
+    """Check unknown cluster shape."""
     svc = IrrigationService(db, None, StubSync(None), None, plant_database())
     assert svc.check_cluster(999) == {
         "cluster_id": 999,
@@ -341,6 +375,7 @@ def test_check_unknown_cluster_shape(db):
     ],
 )
 def test_monitor_target_band_parse_and_fallback(db, care, band, status):
+    """Monitor target band parse and fallback."""
     cid = db.add_cluster("Band Gap")
     sid = db.add_sensor(
         cluster_id=cid,
@@ -358,6 +393,7 @@ def test_monitor_target_band_parse_and_fallback(db, care, band, status):
 
 
 def test_monitor_latest_soil_skips_missing_values_and_reports_no_data(db):
+    """Monitor latest soil skips missing values and reports no data."""
     cid = db.add_cluster("Latest Gap")
     s1 = db.add_sensor(
         cluster_id=cid, tuya_device_id="fake_tuya_sensor_lat0001", name="P1", sensor_type="soil", config={}
@@ -380,27 +416,29 @@ def test_monitor_latest_soil_skips_missing_values_and_reports_no_data(db):
 
 
 def test_check_all_failure_log_carries_the_exception(db, monkeypatch, caplog):
+    """Check all failure log carries the exception."""
     cid = db.add_cluster("Crashy")
     db.session.commit()
 
-    class Boom(RuntimeError):
+    class BoomError(RuntimeError):
         pass
 
-    def explode(self, cluster_id):
-        raise Boom("kaput")
+    def explode(_self, _cluster_id):
+        msg = "kaput"
+        raise BoomError(msg)
 
     monkeypatch.setattr(IrrigationService, "check_cluster", explode)
     svc = IrrigationService(db, None, StubSync(None), None, plant_database())
     with caplog.at_level(logging.ERROR, logger=IRRIGATION_LOGGER):
         results = svc.check_all_clusters()
     assert results == [
-        {"cluster_id": cid, "cluster_name": "Crashy", "action": "error", "notes": "check failed: Boom('kaput')"}
+        {"cluster_id": cid, "cluster_name": "Crashy", "action": "error", "notes": "check failed: BoomError('kaput')"}
     ]
     (record,) = caplog.records
     assert (record.levelname, record.getMessage(), record.exc_info[0]) == (
         "ERROR",
         f"Check failed for cluster {cid}",
-        Boom,
+        BoomError,
     )
 
 
@@ -408,13 +446,16 @@ def test_check_all_failure_log_carries_the_exception(db, monkeypatch, caplog):
 
 
 @pytest.mark.parametrize(("triggered_by", "stopped"), [("auto", True), ("manual", False)])
-def test_watcher_shutdown_activity_failure_is_logged_not_raised(db, pump, monkeypatch, caplog, triggered_by, stopped):
-    def broken(self, **kwargs):
-        raise RuntimeError("activity table locked")
+def test_watcher_shutdown_activity_failure_is_logged_not_raised(db, pump, caplog, triggered_by, stopped):
+    """Watcher shutdown activity failure is logged not raised."""
 
-    monkeypatch.setattr(IrrigationRepository, "add_activity_event", broken)
+    def broken(_self, **_kwargs):
+        msg = "activity table locked"
+        raise RuntimeError(msg)
+
     irrigator = db.get_irrigator(pump.irrigator_id)
-    with caplog.at_level(logging.ERROR, logger=IRRIGATION_LOGGER):
+    with pytest.MonkeyPatch.context() as mp, caplog.at_level(logging.ERROR, logger=IRRIGATION_LOGGER):
+        mp.setattr(IrrigationRepository, "add_activity_event", broken)
         assert (
             handle_watcher_interrupted(
                 db, pump.registry, irrigator, triggered_by=triggered_by, started_at=FROZEN_TS - 30
@@ -429,8 +470,8 @@ def test_watcher_shutdown_activity_failure_is_logged_not_raised(db, pump, monkey
 # ── schedule_pump_watcher: schedule-time captures vs run-time reads ───────────
 
 
-@pytest.fixture
-def watcher_env(monkeypatch, frozen_clock):
+def _watch_gap_db():
+    """A shared in-memory DB with one cluster and one irrigator: ``(engine, factory, irrigator_id)``."""
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(engine)
     factory = sessionmaker(bind=engine)
@@ -442,6 +483,11 @@ def watcher_env(monkeypatch, frozen_clock):
     )
     session.commit()
     session.close()
+    return engine, factory, iid
+
+
+def _watch_gap_app(factory):
+    """A stand-in ``_app`` with watcher settings and a fake-adapter registry: ``(app, settings, registry)``."""
     registry = DeviceRegistry()
     registry.register_irrigator("rainpoint.ik10pw", FakeIrrigatorAdapter)
     settings = SimpleNamespace(
@@ -451,6 +497,15 @@ def watcher_env(monkeypatch, frozen_clock):
         pump_watcher_max_read_failures=4,
     )
     app = SimpleNamespace(state=SimpleNamespace(settings=settings, device_registry=registry, session_factory=factory))
+    return app, settings, registry
+
+
+@pytest.fixture
+def watcher_env(monkeypatch, frozen_clock):
+    """A stand-in app and fake scheduler for scheduling pump watchers, with a spying watcher class."""
+    del frozen_clock  # requested only for its side effect
+    engine, factory, iid = _watch_gap_db()
+    app, settings, registry = _watch_gap_app(factory)
     fake = FakeScheduler()
 
     def original_wait(_s):
@@ -490,6 +545,7 @@ def watcher_env(monkeypatch, frozen_clock):
 
 
 def test_watcher_job_without_a_health_monitor_passes_none(watcher_env):
+    """Watcher job without a health monitor passes none."""
     assert not hasattr(watcher_env.app.state, "health_monitor")
     assert schedule_pump_watcher(watcher_env.irrigator_id, 2, FROZEN_TS) is True
     watcher_env.scheduler.jobs[0]["func"]()
@@ -499,6 +555,7 @@ def test_watcher_job_without_a_health_monitor_passes_none(watcher_env):
 
 
 def test_watcher_tuning_is_read_when_the_job_runs(watcher_env):
+    """Watcher tuning is read when the job runs."""
     schedule_pump_watcher(watcher_env.irrigator_id, 2, FROZEN_TS)
     watcher_env.settings.pump_watcher_poll_seconds = 9.5
     watcher_env.settings.pump_watcher_warmup_seconds = 1.25
@@ -510,6 +567,7 @@ def test_watcher_tuning_is_read_when_the_job_runs(watcher_env):
 
 
 def test_watcher_settings_removed_after_scheduling_fall_back_to_defaults(watcher_env):
+    """Watcher settings removed after scheduling fall back to defaults."""
     schedule_pump_watcher(watcher_env.irrigator_id, 2, FROZEN_TS)
     watcher_env.app.state.settings = None
     watcher_env.scheduler.jobs[0]["func"]()
@@ -523,6 +581,7 @@ def test_watcher_settings_removed_after_scheduling_fall_back_to_defaults(watcher
 
 
 def test_watcher_monitor_is_read_when_the_job_runs(watcher_env):
+    """Watcher monitor is read when the job runs."""
     schedule_pump_watcher(watcher_env.irrigator_id, 2, FROZEN_TS)
     bound: list = []
     view = SimpleNamespace()
@@ -534,6 +593,7 @@ def test_watcher_monitor_is_read_when_the_job_runs(watcher_env):
 
 
 def test_watcher_job_keeps_the_app_and_hooks_captured_at_schedule_time(watcher_env, monkeypatch):
+    """Watcher job keeps the app and hooks captured at schedule time."""
     schedule_pump_watcher(watcher_env.irrigator_id, 2, FROZEN_TS)
     other_registry = DeviceRegistry()
     opened: list = []
@@ -541,21 +601,23 @@ def test_watcher_job_keeps_the_app_and_hooks_captured_at_schedule_time(watcher_e
         state=SimpleNamespace(settings=None, device_registry=other_registry, session_factory=lambda: opened.append(1))
     )
     monkeypatch.setattr(sched, "_app", other_app)
-    monkeypatch.setattr(sched, "wait_for_shutdown", lambda s: True)
+    monkeypatch.setattr(sched, "wait_for_shutdown", lambda _s: True)
     monkeypatch.setattr(sched, "shutdown_requested", lambda: True)
     watcher_env.app.state.device_registry = other_registry  # the registry object was captured too
     watcher_env.scheduler.jobs[0]["func"]()
     (built,) = watcher_env.built
     assert opened == []
     assert built["registry"] is watcher_env.registry
-    assert built["sleep"] is watcher_env.wait and built["stop_requested"] is watcher_env.stop
+    assert built["sleep"] is watcher_env.wait
+    assert built["stop_requested"] is watcher_env.stop
     assert (built["poll_seconds"], built["max_read_failures"]) == (0.7, 4)
 
 
 # ── rearm_leak_checks: a failure mid-scan keeps the partial count ─────────────
 
 
-def test_rearm_failure_mid_scan_keeps_partial_count_and_logs_both_lines(monkeypatch, frozen_clock, caplog):
+def _two_recent_auto_starts():
+    """Two clusters, each with an automatic start 60 s ago: ``(engine, factory, cluster_ids)``."""
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(engine)
     factory = sessionmaker(bind=engine)
@@ -573,16 +635,25 @@ def test_rearm_failure_mid_scan_keeps_partial_count_and_logs_both_lines(monkeypa
         ids.append(cid)
     session.commit()
     session.close()
+    return engine, factory, ids
+
+
+@pytest.mark.usefixtures("frozen_clock")
+def test_rearm_failure_mid_scan_keeps_partial_count_and_logs_both_lines(monkeypatch, caplog):
+    """Rearm failure mid scan keeps partial count and logs both lines."""
+    engine, factory, ids = _two_recent_auto_starts()
     fake = FakeScheduler()
     monkeypatch.setattr(sched, "scheduler", fake)
     monkeypatch.setattr(sched, "_app", SimpleNamespace(state=SimpleNamespace(session_factory=factory)))
     real = IrrigationRepository.get_recent_events
     seen: list[int] = []
+    failing_call = 2  # the second irrigator's lookup fails
 
     def flaky(self, irrigator_id, hours=24):
         seen.append(irrigator_id)
-        if len(seen) == 2:
-            raise RuntimeError("db gone")
+        if len(seen) == failing_call:
+            msg = "db gone"
+            raise RuntimeError(msg)
         return real(self, irrigator_id, hours=hours)
 
     monkeypatch.setattr(IrrigationRepository, "get_recent_events", flaky)
@@ -601,6 +672,8 @@ def test_rearm_failure_mid_scan_keeps_partial_count_and_logs_both_lines(monkeypa
 
 @pytest.fixture
 def p(clean_env, frozen_clock):
+    """A fresh pipeline harness with a clean environment and a frozen clock."""
+    del clean_env, frozen_clock  # requested only for their side effects
     pipeline = Pipeline()
     yield pipeline
     pipeline.close()
@@ -610,22 +683,27 @@ class SpySession:
     """Wraps a real session and logs commit / rollback / close in call order."""
 
     def __init__(self, real: Session, log: list[str]) -> None:
+        """Wrap ``real``, logging transaction calls into ``log``."""
         self._real = real
         self._log = log
 
     def commit(self):
+        """Log and commit the real session."""
         self._log.append("commit")
         return self._real.commit()
 
     def rollback(self):
+        """Log and roll back the real session."""
         self._log.append("rollback")
         return self._real.rollback()
 
     def close(self):
+        """Log and close the real session."""
         self._log.append("close")
         return self._real.close()
 
     def __getattr__(self, name):
+        """Delegate everything else to the real session."""
         return getattr(self._real, name)
 
 
@@ -642,19 +720,25 @@ def _spy_sessions(monkeypatch, app) -> list[str]:
 
 
 class StubMonitor:
+    """Health-monitor stand-in that logs binds, polls and gate questions in call order."""
+
     def __init__(self, log: list[str]) -> None:
+        """Log into ``log`` and remember every repository a view binds to."""
         self.log = log
         self.repos: list = []
 
     def for_repo(self, repo):
+        """Log the bind, remember the repository and act as the view itself."""
         self.log.append("bind")
         self.repos.append(repo)
         return self
 
     def poll_all(self):
+        """Log the poll."""
         self.log.append("poll")
 
     def is_actuation_blocked(self, irrigator):
+        """Log the question and answer: not blocked."""
         self.log.append(f"blocked?{irrigator.id}")
         return False, []
 
@@ -680,9 +764,7 @@ JOBS = {
 }
 
 
-def _wire_job(p, monkeypatch, log: list[str]) -> StubMonitor:
-    from server.test_contract_pipeline import RecordingGateway
-
+def _wire_job(p, log: list[str]) -> StubMonitor:
     p.app.state.device_gateway = RecordingGateway()
     monitor = StubMonitor(log)
     p.app.state.health_monitor = monitor
@@ -691,24 +773,26 @@ def _wire_job(p, monkeypatch, log: list[str]) -> StubMonitor:
 
 @pytest.mark.parametrize("job", list(JOBS))
 def test_job_success_commits_then_closes(p, monkeypatch, job):
+    """Job success commits then closes."""
     func_name, _, _ = JOBS[job]
     log = _spy_sessions(monkeypatch, p.app)
-    _wire_job(p, monkeypatch, log)
+    _wire_job(p, log)
     getattr(sched, func_name)()
     assert [e for e in log if e in ("open", "commit", "rollback", "close")] == ["open", "commit", "close"]
 
 
 @pytest.mark.parametrize("job", list(JOBS))
 def test_job_failure_rolls_back_logs_with_traceback_and_closes(p, monkeypatch, caplog, job):
+    """Job failure rolls back logs with traceback and closes."""
     func_name, target, message = JOBS[job]
     log = _spy_sessions(monkeypatch, p.app)
-    monitor = _wire_job(p, monkeypatch, log)
+    monitor = _wire_job(p, log)
 
-    class JobBoom(RuntimeError):
+    class JobBoomError(RuntimeError):
         pass
 
     def explode(*_a, **_kw):
-        raise JobBoom(job)
+        raise JobBoomError(job)
 
     if target is None:
         monkeypatch.setattr(monitor, "poll_all", explode)
@@ -719,27 +803,31 @@ def test_job_failure_rolls_back_logs_with_traceback_and_closes(p, monkeypatch, c
     assert [e for e in log if e in ("open", "commit", "rollback", "close")] == ["open", "rollback", "close"]
     records = [r for r in caplog.records if r.name == SCHEDULER_LOGGER]
     assert [(r.levelname, r.getMessage()) for r in records] == [("ERROR", message)]
-    assert records[0].exc_info[0] is JobBoom
+    assert records[0].exc_info[0] is JobBoomError
 
 
 @pytest.mark.parametrize("job", ["snapshot", "check", "anomaly", "monitor"])
 def test_session_factory_failure_escapes_the_job(p, monkeypatch, job):
+    """Session factory failure escapes the job."""
     func_name, _, _ = JOBS[job]
-    _wire_job(p, monkeypatch, [])
+    _wire_job(p, [])
 
     def broken_factory():
-        raise ConnectionError("db file locked")
+        msg = "db file locked"
+        raise ConnectionError(msg)
 
     monkeypatch.setattr(p.app.state, "session_factory", broken_factory)
     with pytest.raises(ConnectionError, match="db file locked"):
         getattr(sched, func_name)()
 
 
+@pytest.mark.usefixtures("p")
 @pytest.mark.parametrize(
     ("job", "escapes"),
     [("sync", False), ("snapshot", True), ("check", True), ("anomaly", True), ("monitor", False)],
 )
-def test_jobs_without_an_app(p, monkeypatch, job, escapes):
+def test_jobs_without_an_app(monkeypatch, job, escapes):
+    """Jobs without an app."""
     func_name, _, _ = JOBS[job]
     monkeypatch.setattr(sched, "_app", None)
     if escapes:
@@ -749,12 +837,8 @@ def test_jobs_without_an_app(p, monkeypatch, job, escapes):
         assert getattr(sched, func_name)() is None
 
 
-def test_check_job_binds_the_monitor_to_its_repo_before_the_pipeline_asks_it(p, monkeypatch):
-    ids = p.seed_cluster(soil=35.0)
-    p.app.state.device_registry = p.wiring.registry
-    log: list[str] = []
-    monitor = StubMonitor(log)
-    p.app.state.health_monitor = monitor
+def _spy_service_init(monkeypatch, log: list[str]) -> list[dict]:
+    """Record every ``IrrigationService`` construction (logging "service"); return the kwargs list."""
     built: list = []
     real_init = IrrigationService.__init__
 
@@ -764,7 +848,18 @@ def test_check_job_binds_the_monitor_to_its_repo_before_the_pipeline_asks_it(p, 
         real_init(self, *args, **kwargs)
 
     monkeypatch.setattr(IrrigationService, "__init__", spy_init)
-    sched._check_job()
+    return built
+
+
+def test_check_job_binds_the_monitor_to_its_repo_before_the_pipeline_asks_it(p, monkeypatch):
+    """Check job binds the monitor to its repo before the pipeline asks it."""
+    ids = p.seed_cluster(soil=35.0)
+    p.app.state.device_registry = p.wiring.registry
+    log: list[str] = []
+    monitor = StubMonitor(log)
+    p.app.state.health_monitor = monitor
+    built = _spy_service_init(monkeypatch, log)
+    run_core_job(sched.CHECK_ALL_JOB_ID)
     assert log == ["bind", "service", f"blocked?{ids['irrigator_id']}"]
     (kwargs,) = built
     assert list(kwargs) == [
@@ -782,7 +877,7 @@ def test_check_job_binds_the_monitor_to_its_repo_before_the_pipeline_asks_it(p, 
     assert kwargs["weather_client"] is p.app.state.weather_client
     assert kwargs["plant_db"] is p.app.state.plant_db
     assert kwargs["notifier"] is p.notifier
-    assert kwargs["sync_service"]._repo is kwargs["repo"]
+    assert kwargs["sync_service"]._repo is kwargs["repo"]  # noqa: SLF001 — SyncService exposes no repository accessor
     assert [c[0] for c in p.wiring.irrigator.calls] == ["start"]
 
 
@@ -794,8 +889,8 @@ def test_job_skip_guards_log_at_debug(p, caplog):
     assert getattr(p.app.state, "device_gateway", None) is None
     assert getattr(p.app.state, "health_monitor", None) is None
     with caplog.at_level(logging.DEBUG, logger=SCHEDULER_LOGGER):
-        sched._sync_job()
-        sched._health_monitor_job()
+        run_core_job("sensor_sync")
+        run_core_job("device_health_monitor")
     assert [(r.levelname, r.getMessage()) for r in caplog.records if r.name == SCHEDULER_LOGGER] == [
         ("DEBUG", "Sync job skipped: no Tuya credentials"),
         ("DEBUG", "Health monitor job skipped: no monitor wired"),
@@ -814,13 +909,17 @@ def test_watcher_job_session_commit_rollback_close_order(watcher_env, monkeypatc
 
     watcher_env.app.state.session_factory = factory
 
-    def watch(self, irrigator, duration_seconds, *, started_at=None):
+    def watch(_self, _irrigator, _duration_seconds, *, started_at=None):
+        del started_at  # the job passes it by keyword
         if outcome == "boom":
-            raise RuntimeError("watch exploded")
+            msg = "watch exploded"
+            raise RuntimeError(msg)
         return {"outcome": outcome}
 
     monkeypatch.setattr(pump_watcher_module.PumpWatcherService, "watch", watch)  # the spy subclass
-    monkeypatch.setattr(pump_watcher_jobs_mod, "handle_watcher_interrupted", lambda *a, **kw: log.append("interrupted"))
+    monkeypatch.setattr(
+        pump_watcher_jobs_mod, "handle_watcher_interrupted", lambda *_a, **_kw: log.append("interrupted")
+    )
     schedule_pump_watcher(watcher_env.irrigator_id, 2, FROZEN_TS, triggered_by="manual")
     watcher_env.scheduler.jobs[0]["func"]()
     assert (
@@ -844,7 +943,7 @@ def test_leak_check_done_sees_a_marker_behind_many_newer_leak_rows(db):
         source="leak", entity_type="cluster", entity_id=cid, code="leak_check", message="m",
         payload={"started_at": FROZEN_TS}, timestamp=FROZEN_TS - 1,
     )  # fmt: skip
-    assert irrigation_jobs_mod._leak_check_done(db, cid, FROZEN_TS) is False
+    assert irrigation_jobs_mod._leak_check_done(db, cid, FROZEN_TS) is False  # noqa: SLF001 — leak-check jobs have no public entry point
     db.add_activity_event(
         source="leak", entity_type="cluster", entity_id=cid, code="leak_check", message="m",
         payload={"started_at": FROZEN_TS}, timestamp=FROZEN_TS + 1800,
@@ -854,7 +953,7 @@ def test_leak_check_done_sees_a_marker_behind_many_newer_leak_rows(db):
             source="leak", entity_type="cluster", entity_id=cid, code="leak_check", message="m",
             payload={"started_at": FROZEN_TS + 3600 + i}, timestamp=FROZEN_TS + 5400 + i,
         )  # fmt: skip
-    assert irrigation_jobs_mod._leak_check_done(db, cid, FROZEN_TS) is True
+    assert irrigation_jobs_mod._leak_check_done(db, cid, FROZEN_TS) is True  # noqa: SLF001 — leak-check jobs have no public entry point
 
 
 def test_leak_check_done_ignores_other_codes_and_empty_payloads(db):
@@ -864,7 +963,7 @@ def test_leak_check_done_ignores_other_codes_and_empty_payloads(db):
         db.add_activity_event(
             source="leak", entity_type="cluster", entity_id=cid, code=code, message="m", payload=payload
         )
-    assert irrigation_jobs_mod._leak_check_done(db, cid, FROZEN_TS) is False
+    assert irrigation_jobs_mod._leak_check_done(db, cid, FROZEN_TS) is False  # noqa: SLF001 — leak-check jobs have no public entry point
     db.add_activity_event(
         source="leak",
         entity_type="cluster",
@@ -873,11 +972,12 @@ def test_leak_check_done_ignores_other_codes_and_empty_payloads(db):
         message="m",
         payload={"started_at": FROZEN_TS},
     )
-    assert irrigation_jobs_mod._leak_check_done(db, cid, FROZEN_TS) is True
+    assert irrigation_jobs_mod._leak_check_done(db, cid, FROZEN_TS) is True  # noqa: SLF001 — leak-check jobs have no public entry point
 
 
+@pytest.mark.usefixtures("frozen_clock")
 @pytest.mark.parametrize("fail", [False, True])
-def test_rearm_always_closes_its_session(monkeypatch, frozen_clock, fail):
+def test_rearm_always_closes_its_session(monkeypatch, fail):
     """Mutation survivor: ``rearm_leak_checks`` closes its session on success and after a failure."""
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(engine)
@@ -891,7 +991,7 @@ def test_rearm_always_closes_its_session(monkeypatch, frozen_clock, fail):
     monkeypatch.setattr(sched, "scheduler", FakeScheduler())
     monkeypatch.setattr(sched, "_app", SimpleNamespace(state=SimpleNamespace(session_factory=factory)))
     if fail:
-        monkeypatch.setattr(IrrigationRepository, "list_all_irrigators", lambda self: 1 / 0)
+        monkeypatch.setattr(IrrigationRepository, "list_all_irrigators", lambda _self: 1 / 0)
     assert irrigation_jobs_mod.rearm_leak_checks() == 0
     assert log == ["open", "close"]
     engine.dispose()
@@ -899,10 +999,9 @@ def test_rearm_always_closes_its_session(monkeypatch, frozen_clock, fail):
 
 def test_health_block_names_the_first_blocking_alarm(db, pump, monkeypatch):
     """Mutation survivor: the device-health gate reports ``blocking_alarms[0]`` as the primary alarm."""
-    from greenhouse_core.devices.health import HealthAlarm
 
     class Blocking:
-        def is_actuation_blocked(self, irrigator):
+        def is_actuation_blocked(self, _irrigator):
             return True, [HealthAlarm.NO_WATER, HealthAlarm.DEVICE_OFFLINE]
 
     _patch_decide(monkeypatch, _decision)
@@ -932,7 +1031,10 @@ def test_monitor_always_syncs(db):
 
 
 def test_monitor_looks_back_two_hours(db):
-    """Mutation survivor: monitor reads the last 2 h of readings (a 1.5 h-old sample counts, a 2.5 h-old one does not)."""
+    """Mutation survivor: monitor reads the last 2 h of readings.
+
+    A 1.5 h-old sample counts, a 2.5 h-old one does not.
+    """
     cid = db.add_cluster("Lookback Gap")
     fresh = db.add_sensor(
         cluster_id=cid, tuya_device_id="fake_tuya_sensor_lb01", name="F", sensor_type="soil", config={}
@@ -979,20 +1081,20 @@ def test_check_cluster_call_order_and_result_shape(db, monkeypatch, branch):
         db.set_irrigation_config(cid, auto_run=False)
     db.session.commit()
     log: list[str] = []
-    monkeypatch.setattr(irrigation_mod, "collect_learning_alerts", lambda *a: log.append("learning") or [{"a": 1}])
+    monkeypatch.setattr(irrigation_mod, "collect_learning_alerts", lambda *_a: log.append("learning") or [{"a": 1}])
     monkeypatch.setattr(
-        irrigation_mod, "collect_maintenance_alerts", lambda *a: log.append("maintenance") or [{"m": 1}]
+        irrigation_mod, "collect_maintenance_alerts", lambda *_a: log.append("maintenance") or [{"m": 1}]
     )
     monkeypatch.setattr(
-        irrigation_mod, "sync_cluster_alerts", lambda repo, c, pdb, *, notifier: log.append(f"sync:{c}:{notifier}")
+        irrigation_mod, "sync_cluster_alerts", lambda _repo, c, _pdb, *, notifier: log.append(f"sync:{c}:{notifier}")
     )
     monkeypatch.setattr(
         IrrigationService,
         "run_irrigation_pipeline",
-        lambda self, c: log.append("pipeline") or {"action": "skip", "reason": "why", "confidence": 0.5},
+        lambda _self, _c: log.append("pipeline") or {"action": "skip", "reason": "why", "confidence": 0.5},
     )
     monkeypatch.setattr(
-        IrrigationService, "monitor_cluster", lambda self, c: log.append("monitor") or {"needs_water": ["x"]}
+        IrrigationService, "monitor_cluster", lambda _self, _c: log.append("monitor") or {"needs_water": ["x"]}
     )
     svc = IrrigationService(db, None, StubSync(None), None, StubPlantDb({}))
     result = svc.check_cluster(cid)

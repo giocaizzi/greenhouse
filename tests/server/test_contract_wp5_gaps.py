@@ -8,6 +8,7 @@ detail rationale fallback, the plant dashboard's no-irrigator / relative-time br
 
 from __future__ import annotations
 
+from http import HTTPStatus
 from types import SimpleNamespace
 
 import pytest
@@ -15,10 +16,13 @@ from sqlalchemy import create_engine
 from sqlalchemy.pool import StaticPool
 
 from golden import FROZEN_TS
+from greenhouse_core.models import DecisionLog
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.app import create_app
 from greenhouse_server.config import Settings
+from greenhouse_server.services.sync import SyncService
 from greenhouse_server.web.context import base_context
+from server.conftest import TEST_AUTH_SECRET
 
 CSV_HEADER = "timestamp,date,time,irrigator,action,duration_minutes,triggered_by,notes\r\n"
 
@@ -80,7 +84,8 @@ def failing_species(app, monkeypatch):
 
     def get_care_data(species=None, category=None):
         if species == "Bad":
-            raise ValueError("boom")
+            msg = "boom"
+            raise ValueError(msg)
         return original(species=species, category=category)
 
     monkeypatch.setattr(plant_db, "get_care_data", get_care_data)
@@ -90,18 +95,20 @@ def failing_species(app, monkeypatch):
 
 
 def test_api_sync_plant_id_found_in_a_later_cluster_syncs_only_that_plant(app, client):
+    """API sync plant ID found in a later cluster syncs only that plant."""
     ids = _seed(app, {"C1": ["Fern"], "C2": ["Monstera deliciosa"]})
     resp = client.post("/api/v1/plants/sync", json={"plant_id": ids["Monstera deliciosa"]})
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     assert resp.json() == {"synced": 1, "errors": []}
     assert _plant_notes(app, ids["Monstera deliciosa"]).startswith("Sources: ")
     assert _plant_notes(app, ids["Fern"]) is None
 
 
 def test_api_sync_unknown_plant_id_is_404(app, client):
+    """API sync unknown plant ID is 404."""
     _seed(app, {"C1": ["Fern"]})
     resp = client.post("/api/v1/plants/sync", json={"plant_id": 999})
-    assert resp.status_code == 404
+    assert resp.status_code == HTTPStatus.NOT_FOUND
     assert resp.json() == {"detail": "Plant 999 not found"}
 
 
@@ -115,7 +122,7 @@ def test_api_sync_plant_scan_does_not_find_orphan_plants(app, client):
     finally:
         session.close()
     resp = client.post("/api/v1/plants/sync", json={"plant_id": orphan})
-    assert resp.status_code == 404
+    assert resp.status_code == HTTPStatus.NOT_FOUND
     assert resp.json() == {"detail": f"Plant {orphan} not found"}
 
 
@@ -123,29 +130,34 @@ def test_api_sync_unknown_cluster_is_404(app, client):
     """D12 (was B-16): an unknown cluster_id is a 404, not a silent ``synced=0``."""
     _seed(app, {"C1": ["Fern"]})
     resp = client.post("/api/v1/plants/sync", json={"cluster_id": 999})
-    assert resp.status_code == 404
+    assert resp.status_code == HTTPStatus.NOT_FOUND
     assert resp.json() == {"detail": "Cluster not found"}
 
 
 def test_api_sync_plant_id_zero_means_every_cluster(app, client):
+    """API sync plant ID zero means every cluster."""
     _seed(app, {"C1": ["Fern"], "C2": ["Monstera deliciosa"]})
     resp = client.post("/api/v1/plants/sync", json={"plant_id": 0})
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     assert resp.json() == {"synced": 2, "errors": []}
 
 
-def test_api_sync_collects_per_plant_errors_and_keeps_going(app, client, failing_species):
+@pytest.mark.usefixtures("failing_species")
+def test_api_sync_collects_per_plant_errors_and_keeps_going(app, client):
+    """API sync collects per plant errors and keeps going."""
     ids = _seed(app, {"C1": ["Bad", "Fern"]})
     resp = client.post("/api/v1/plants/sync", json={"cluster_id": ids["C1"]})
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     assert resp.json() == {"synced": 1, "errors": ["Bad: boom"]}
     assert _plant_notes(app, ids["Fern"]).startswith("Sources: ")
 
 
-def test_api_sync_single_plant_error_is_not_caught(app, client, failing_species):
+@pytest.mark.usefixtures("failing_species")
+def test_api_sync_single_plant_error_is_not_caught(app, client):
+    """API sync single plant error is not caught."""
     ids = _seed(app, {"C1": ["Bad"]})
     resp = client.post("/api/v1/plants/sync", json={"plant_id": ids["Bad"]})
-    assert resp.status_code == 500
+    assert resp.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
 
 
 # ── Web POST /plants/sync ────────────────────────────────────────────────────
@@ -155,21 +167,24 @@ def test_web_sync_unknown_cluster_is_404(app, client):
     """D12 (was B-16): an unknown cluster id is a 404 (same as the API), not "0 plants synced"."""
     _seed(app, {"C1": ["Fern"]})
     resp = client.post("/plants/sync", data={"cluster_id": "999"})
-    assert resp.status_code == 404
+    assert resp.status_code == HTTPStatus.NOT_FOUND
     assert "plants synced" not in resp.text
     assert "Cluster not found" in resp.text
 
 
-def test_web_sync_collects_per_plant_errors_and_keeps_going(app, client, failing_species):
+@pytest.mark.usefixtures("failing_species")
+def test_web_sync_collects_per_plant_errors_and_keeps_going(app, client):
+    """Web sync collects per plant errors and keeps going."""
     ids = _seed(app, {"C1": ["Bad", "Fern"]})
     resp = client.post("/plants/sync", data={"cluster_id": str(ids["C1"])})
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     assert '<span class="mono">1</span> plant synced' in resp.text
     assert "<li>Bad: boom</li>" in resp.text
     assert _plant_notes(app, ids["Fern"]).startswith("Sources: ")
 
 
 def test_web_sync_plant_scan_does_not_find_orphan_plants(app, client):
+    """Web sync plant scan does not find orphan plants."""
     _seed(app, {"C1": ["Fern"]})
     repo, session = _repo_session(app)
     try:
@@ -178,7 +193,7 @@ def test_web_sync_plant_scan_does_not_find_orphan_plants(app, client):
     finally:
         session.close()
     resp = client.post("/plants/sync", data={"plant_id": str(orphan)})
-    assert resp.status_code == 404
+    assert resp.status_code == HTTPStatus.NOT_FOUND
     assert f"Plant {orphan} not found" in resp.text
 
 
@@ -186,9 +201,10 @@ def test_web_sync_plant_scan_does_not_find_orphan_plants(app, client):
 
 
 def test_api_stats_export_without_irrigator_is_header_only(app, client):
+    """API stats export without irrigator is header only."""
     ids = _seed(app, {"C1": ["Fern"]})
     resp = client.get(f"/api/v1/clusters/{ids['C1']}/stats/export")
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     assert resp.headers["content-type"].startswith("text/csv")
     assert resp.headers["content-disposition"] == f"attachment; filename=cluster_{ids['C1']}_stats.csv"
     assert resp.text == CSV_HEADER
@@ -198,6 +214,7 @@ def test_api_stats_export_without_irrigator_is_header_only(app, client):
 
 
 def test_web_cluster_detail_with_undecodable_decision_payload_shows_no_rationale(app, client):
+    """Web cluster detail with undecodable decision payload shows no rationale."""
     ids = _seed(app, {"C1": ["Fern"]}, irrigator_for="C1", sensor_for="C1")
     repo, session = _repo_session(app)
     try:
@@ -213,14 +230,13 @@ def test_web_cluster_detail_with_undecodable_decision_payload_shows_no_rationale
             payload={"reasons": [{"message": "should not render", "code": "x"}]},
         )
         session.commit()
-        from greenhouse_core.models import DecisionLog
 
         session.get(DecisionLog, log_id).payload_json = "not json"
         session.commit()
     finally:
         session.close()
     resp = client.get(f"/clusters/{ids['C1']}")
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     assert "rationale__row" not in resp.text
     assert "should not render" not in resp.text
     assert "No decisions yet." in resp.text
@@ -229,14 +245,17 @@ def test_web_cluster_detail_with_undecodable_decision_payload_shows_no_rationale
 # ── Web GET /clusters/{cid}/plants/{pid} — plant dashboard ────────────────────
 
 
-def test_web_plant_dashboard_without_irrigator_renders_sensor_only(app, client, frozen_clock):
+@pytest.mark.usefixtures("frozen_clock")
+def test_web_plant_dashboard_without_irrigator_renders_sensor_only(app, client):
+    """Web plant dashboard without irrigator renders sensor only."""
     ids = _seed(app, {"C1": ["Fern"]}, sensor_for="C1")
     resp = client.get(f"/clusters/{ids['C1']}/plants/{ids['Fern']}")
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     assert "sensor-only cluster" in resp.text
     assert "irrigated " not in resp.text
 
 
+@pytest.mark.usefixtures("frozen_clock")
 @pytest.mark.parametrize(
     ("ages", "expected"),
     [
@@ -249,7 +268,8 @@ def test_web_plant_dashboard_without_irrigator_renders_sensor_only(app, client, 
         ((), "irrigated never"),
     ],
 )
-def test_web_plant_dashboard_relative_time_of_newest_event(app, client, frozen_clock, ages, expected):
+def test_web_plant_dashboard_relative_time_of_newest_event(app, client, ages, expected):
+    """Web plant dashboard relative time of newest event."""
     ids = _seed(app, {"C1": ["Fern"]}, irrigator_for="C1")
     repo, session = _repo_session(app)
     try:
@@ -261,7 +281,7 @@ def test_web_plant_dashboard_relative_time_of_newest_event(app, client, frozen_c
     finally:
         session.close()
     resp = client.get(f"/clusters/{ids['C1']}/plants/{ids['Fern']}")
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     assert expected in resp.text
 
 
@@ -296,7 +316,9 @@ BASE_KEYS = [
 ]
 
 
-def test_base_context_without_session_factory_uses_defaults(clean_env, frozen_clock):
+@pytest.mark.usefixtures("clean_env", "frozen_clock")
+def test_base_context_without_session_factory_uses_defaults():
+    """Base context without session factory uses defaults."""
     request = _request(settings=SimpleNamespace(auth_enabled=False))
     ctx = base_context(request, extra_key=1)
     assert list(ctx) == [*BASE_KEYS, "extra_key"]
@@ -315,6 +337,7 @@ def test_base_context_without_session_factory_uses_defaults(clean_env, frozen_cl
 
 
 def test_base_context_swallows_preference_errors_and_closes_session():
+    """Base context swallows preference errors and closes session."""
     session = _ClosingSession()
     ctx = base_context(_request(session_factory=lambda: session, settings=SimpleNamespace(auth_enabled=True)))
     assert session.closed == 1
@@ -327,11 +350,13 @@ def test_base_context_swallows_preference_errors_and_closes_session():
 
 
 def test_base_context_keeps_preferences_read_before_a_vacation_error(monkeypatch):
+    """Base context keeps preferences read before a vacation error."""
     prefs = SimpleNamespace(dry_run_global=True, scheduler_paused=True, theme="dark")
-    monkeypatch.setattr(IrrigationRepository, "get_preferences", lambda self: prefs)
+    monkeypatch.setattr(IrrigationRepository, "get_preferences", lambda _self: prefs)
 
-    def boom(self):
-        raise RuntimeError("vacation read failed")
+    def boom(_self):
+        msg = "vacation read failed"
+        raise RuntimeError(msg)
 
     monkeypatch.setattr(IrrigationRepository, "get_active_vacation", boom)
     session = _ClosingSession()
@@ -350,11 +375,13 @@ def test_base_context_keeps_preferences_read_before_a_vacation_error(monkeypatch
 def test_base_context_hides_the_banners_from_an_anonymous_viewer(monkeypatch):
     """Login and anonymous error pages get the theme but not the dry-run / vacation / paused banners."""
     prefs = SimpleNamespace(dry_run_global=True, scheduler_paused=True, theme="dark", timezone="UTC")
-    monkeypatch.setattr(IrrigationRepository, "get_preferences", lambda self: prefs)
-    monkeypatch.setattr(IrrigationRepository, "get_active_vacation", lambda self: object())
+    monkeypatch.setattr(IrrigationRepository, "get_preferences", lambda _self: prefs)
+    monkeypatch.setattr(IrrigationRepository, "get_active_vacation", lambda _self: object())
     request = _request(
         session_factory=_ClosingSession,
-        settings=SimpleNamespace(auth_enabled=True, auth_cookie_name="greenhouse_session", auth_secret_key="k"),
+        settings=SimpleNamespace(
+            auth_enabled=True, auth_cookie_name="greenhouse_session", auth_secret_key=TEST_AUTH_SECRET
+        ),
     )
     request.cookies = {"greenhouse_session": "not-a-jwt"}
     ctx = base_context(request)
@@ -367,6 +394,7 @@ def test_base_context_hides_the_banners_from_an_anonymous_viewer(monkeypatch):
 
 
 def test_base_context_auth_enabled_defaults_true_without_settings():
+    """Base context auth enabled defaults true without settings."""
     assert base_context(_request())["auth_enabled"] is True
 
 
@@ -377,7 +405,9 @@ def _memory_engine():
     return create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
 
 
-def test_create_app_without_settings_reads_settings_from_env(clean_env, monkeypatch, tmp_path):
+@pytest.mark.usefixtures("clean_env")
+def test_create_app_without_settings_reads_settings_from_env(monkeypatch, tmp_path):
+    """Create app without settings reads settings from env."""
     db_url = f"sqlite:///{tmp_path}/env.db"
     monkeypatch.setenv("IRRIGATION_DB_URL", db_url)
     monkeypatch.setenv("IRRIGATION_ENABLE_SCHEDULER", "false")
@@ -391,7 +421,9 @@ def test_create_app_without_settings_reads_settings_from_env(clean_env, monkeypa
         engine.dispose()
 
 
-def test_create_app_without_engine_builds_one_from_settings_db_url(clean_env, tmp_path):
+@pytest.mark.usefixtures("clean_env")
+def test_create_app_without_engine_builds_one_from_settings_db_url(tmp_path):
+    """Create app without engine builds one from settings DB URL."""
     db_url = f"sqlite:///{tmp_path}/built.db"
     application = create_app(Settings(db_url=db_url, enable_scheduler=False))
     engine = application.state.session_factory.kw["bind"]
@@ -408,8 +440,6 @@ def test_create_app_without_engine_builds_one_from_settings_db_url(clean_env, tm
 @pytest.mark.parametrize("url", ["/api/v1/clusters/{cid}/monitor", "/clusters/{cid}/monitor"])
 def test_monitor_runs_the_freshness_sync_and_commits_its_rows(app, client, monkeypatch, url):
     """D15 (was B-N1): both monitors refresh stale sensors and the refreshed reading is persisted."""
-    from greenhouse_server.services.sync import SyncService
-
     ids = _seed(app, {"C1": ["Fern"]}, sensor_for="C1")
     calls: list[int] = []
 
@@ -422,7 +452,7 @@ def test_monitor_runs_the_freshness_sync_and_commits_its_rows(app, client, monke
 
     monkeypatch.setattr(SyncService, "ensure_fresh_and_read", fake_ensure_fresh)
     resp = client.get(url.format(cid=ids["C1"]))
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     assert calls == [ids["C1"]]
     repo, session = _repo_session(app)
     try:

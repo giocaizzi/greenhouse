@@ -1,48 +1,51 @@
 """Tests for the plant health timeline API endpoint."""
 
 import time
+from http import HTTPStatus
+
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
+from sqlalchemy.pool import StaticPool
+
+from greenhouse_core.models import Base
+from greenhouse_core.repository import IrrigationRepository
+from greenhouse_server.deps import get_repository
+
+HEALTH_THRESHOLDS = {"good": 80.0, "ok": 50.0}  # the timeline's score bands
+MAX_HEALTH_SCORE = 100.0
 
 
 def test_health_timeline_empty_no_readings(seeded_client):
     """Plant with no moisture readings returns an empty points list."""
     resp = seeded_client.get("/api/v1/plants/1/health-timeline")
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     body = resp.json()
     assert body["plant_id"] == 1
     assert isinstance(body["points"], list)
     assert "thresholds" in body
-    assert body["thresholds"]["good"] == 80.0
-    assert body["thresholds"]["ok"] == 50.0
+    assert {key: body["thresholds"][key] for key in HEALTH_THRESHOLDS} == HEALTH_THRESHOLDS
 
 
 def test_health_timeline_404_unknown_plant(client):
+    """Health timeline 404 unknown plant."""
     resp = client.get("/api/v1/plants/9999/health-timeline")
-    assert resp.status_code == 404
+    assert resp.status_code == HTTPStatus.NOT_FOUND
 
 
 def test_health_timeline_point_structure(seeded_client):
     """Each point is a (unix_timestamp, score) tuple with score in [0, 100]."""
     resp = seeded_client.get("/api/v1/plants/1/health-timeline")
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     for ts, score in resp.json()["points"]:
         assert isinstance(ts, int)
-        assert 0.0 <= score <= 100.0
+        assert 0.0 <= score <= MAX_HEALTH_SCORE
 
 
 def test_health_timeline_points_match_seeded_readings(app):
     """Seed N days of readings and assert points length matches."""
-    from fastapi.testclient import TestClient
-    from sqlalchemy import create_engine
-    from sqlalchemy.pool import StaticPool
-
-    from greenhouse_core.models import Base
-    from greenhouse_core.repository import IrrigationRepository
-    from greenhouse_server.deps import get_repository
-
     engine = create_engine("sqlite://", echo=False, connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(engine)
-
-    from sqlalchemy.orm import Session
 
     session = Session(engine)
     repo = IrrigationRepository(session)
@@ -75,7 +78,7 @@ def test_health_timeline_points_match_seeded_readings(app):
     client = TestClient(app, raise_server_exceptions=False)
 
     resp = client.get(f"/api/v1/plants/{plant_id}/health-timeline")
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     body = resp.json()
     assert len(body["points"]) == distinct_days
 

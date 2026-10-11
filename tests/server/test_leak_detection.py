@@ -13,6 +13,7 @@ must stay silent. Issue #103: an empty baseline window was read as "soil was at
 0%", so every healthy cycle looked like a flood.
 """
 
+import json
 import time
 
 import pytest
@@ -29,6 +30,7 @@ from greenhouse_server.services.leak import LeakDetectionService
 
 @pytest.fixture
 def db_session():
+    """A session on a fresh, Alembic-migrated in-memory database."""
     engine = create_engine("sqlite://", echo=False, connect_args={"check_same_thread": False}, poolclass=StaticPool)
     init_db(engine)
     with Session(engine) as session:
@@ -38,11 +40,13 @@ def db_session():
 
 @pytest.fixture
 def repo(db_session):
+    """A repository on the test's migrated session."""
     return IrrigationRepository(db_session)
 
 
 @pytest.fixture
 def plant_db():
+    """The curated plant database."""
     return PlantDatabase()
 
 
@@ -84,6 +88,7 @@ class TestInsufficientData:
     """No data, thin data, or no baseline → silence. Never a hold."""
 
     def test_no_readings_at_all_produces_no_alert(self, repo, plant_db, seeded, started_at):
+        """No readings at all produces no alert."""
         cluster_id, _sensor_id, _irrigator_id = seeded
 
         alerts = LeakDetectionService(repo, plant_db).check_after_irrigation(cluster_id, started_at)
@@ -145,6 +150,7 @@ class TestSuccessfulIrrigation:
         assert alerts == []
 
     def test_jump_then_drain_back_produces_no_alert(self, repo, plant_db, seeded, started_at):
+        """Jump then drain back produces no alert."""
         cluster_id, sensor_id, _irrigator_id = seeded
         _seed(repo, sensor_id, started_at, before=(35.0, 36.0, 35.0), after=(72.0, 68.0, 64.0, 61.0))
 
@@ -200,12 +206,11 @@ class TestLeakDetected:
         assert alerts == []
 
     def test_alert_payload_carries_the_evidence(self, repo, plant_db, seeded, started_at):
+        """Alert payload carries the evidence."""
         cluster_id, sensor_id, _irrigator_id = seeded
         _seed(repo, sensor_id, started_at, before=(38.0, 38.0, 37.0), after=(50.0, 65.0, 78.0))
 
         alerts = LeakDetectionService(repo, plant_db).check_after_irrigation(cluster_id, started_at)
-
-        import json
 
         payload = json.loads(alerts[0].payload_json)
         assert payload["sensor_id"] == sensor_id
@@ -219,7 +224,7 @@ class TestCleaningIsApplied:
     """The detector reads the same cleaned view as the decision engine."""
 
     def test_outlier_spike_does_not_raise_an_alert(self, repo, plant_db, seeded, started_at):
-        """The exact #103 signature: one +4σ sample the anomaly scan flags as drift.
+        """The exact #103 signature: one +4 sigma sample the anomaly scan flags as drift.
 
         Raw, the after-window averages ~45% against an empty-ish baseline and
         the old rule cried leak. Through the Hampel filter the spike drops out
@@ -246,6 +251,7 @@ class TestHoldLifecycle:
     """What a finding does beyond the alert row."""
 
     def test_activity_event_records_the_hold(self, repo, plant_db, seeded, started_at):
+        """Activity event records the hold."""
         cluster_id, sensor_id, _irrigator_id = seeded
         _seed(repo, sensor_id, started_at, before=(38.0, 38.0, 37.0), after=(50.0, 65.0, 78.0))
 
@@ -330,22 +336,26 @@ class TestHoldLifecycle:
         assert by_entity[("sensor_drift", sensor_id)] == "open"
 
     def test_dedup_key_collapses_repeated_calls(self, repo, plant_db, seeded, started_at):
+        """Dedup key collapses repeated calls."""
         cluster_id, sensor_id, _irrigator_id = seeded
         _seed(repo, sensor_id, started_at, before=(38.0, 38.0, 37.0), after=(50.0, 65.0, 78.0))
 
         svc = LeakDetectionService(repo, plant_db)
-        svc.check_after_irrigation(cluster_id, started_at)
-        repo.session.commit()
-        svc.check_after_irrigation(cluster_id, started_at)
-        repo.session.commit()
+        checks = 2
+        for _ in range(checks):
+            svc.check_after_irrigation(cluster_id, started_at)
+            repo.session.commit()
 
         alerts = _leak_alerts(repo, cluster_id)
         assert len(alerts) == 1
-        assert alerts[0].occurrence_count == 2
+        assert alerts[0].occurrence_count == checks
 
 
 class TestPerSensorScoping:
+    """Tests for per sensor scoping."""
+
     def test_only_the_offending_sensor_is_alerted(self, repo, plant_db, seeded, started_at):
+        """Only the offending sensor is alerted."""
         cluster_id, sensor_id, _irrigator_id = seeded
         other_id = repo.add_sensor(cluster_id, "fake_sensor_leak_2", "Second Sensor", "tuya.tr301z", {})
         repo.session.commit()
@@ -363,6 +373,7 @@ class TestLongRunWindow:
     """A long manual run is judged over its run plus the settle time, not over the first 30 min."""
 
     def test_wider_window_sees_the_soil_settle_after_a_long_run(self, repo, plant_db, seeded):
+        """Wider window sees the soil settle after a long run."""
         cluster_id, sensor_id, _irrigator_id = seeded
         started_at = int(time.time()) - 6000
         for i, value in enumerate((35.0, 35.0, 36.0)):

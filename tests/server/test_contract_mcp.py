@@ -23,13 +23,14 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+from http import HTTPStatus
 
 import mcp.types as mcp_types
 import pytest
 from fastapi.testclient import TestClient
 
 from golden import assert_golden, install_offline_weather
-from server.conftest import _make_stubbed_app
+from server.conftest import TEST_MCP_TOKEN, _make_stubbed_app
 
 # sha256 of the name-sorted, key-sorted ``exclude_none`` tool dump, first recorded at the
 # original baseline (main @ a1b2622, hence "PHASE0"); re-recorded only by
@@ -39,11 +40,14 @@ PHASE0_MCP_TOOLS_SHA256 = (
     "336539b9ec4d7560e7900fd511ae55d8cbb21b7cae999759b6146a13d1e63386"  # gitleaks:allow — content hash, not a secret
 )
 
-_TOKEN = "contract-mcp-token"
+_TOKEN = TEST_MCP_TOKEN
+MCP_TOOL_COUNT = 84  # one tool per /api/v1 operation
 
 
 @pytest.fixture
 def mcp_app(clean_env):
+    """An app with real auth and offline weather, for inspecting its MCP surface."""
+    del clean_env  # requested only for its side effect
     application, engine = _make_stubbed_app(bypass_auth=False)
     install_offline_weather(application)
     yield application
@@ -61,12 +65,12 @@ def _surface(app) -> dict:
             "name": mcp.name,
             "description": mcp.description,
             "server_name": mcp.server.name,
-            "describe_all_responses": mcp._describe_all_responses,
-            "describe_full_response_schema": mcp._describe_full_response_schema,
-            "include_operations": mcp._include_operations,
-            "exclude_operations": mcp._exclude_operations,
-            "include_tags": mcp._include_tags,
-            "exclude_tags": mcp._exclude_tags,
+            "describe_all_responses": mcp._describe_all_responses,  # noqa: SLF001 — fastapi-mcp keeps its config private
+            "describe_full_response_schema": mcp._describe_full_response_schema,  # noqa: SLF001 — fastapi-mcp keeps its config private
+            "include_operations": mcp._include_operations,  # noqa: SLF001 — fastapi-mcp keeps its config private
+            "exclude_operations": mcp._exclude_operations,  # noqa: SLF001 — fastapi-mcp keeps its config private
+            "include_tags": mcp._include_tags,  # noqa: SLF001 — fastapi-mcp keeps its config private
+            "exclude_tags": mcp._exclude_tags,  # noqa: SLF001 — fastapi-mcp keeps its config private
         },
         "tools": _tool_dumps(mcp.tools),
         "operation_map": {
@@ -82,6 +86,7 @@ def test_mcp_surface_matches_golden(mcp_app):
 
 
 def test_mcp_tools_match_phase0_baseline_fingerprint(mcp_app):
+    """MCP tools match phase0 baseline fingerprint."""
     tools = sorted(_tool_dumps(mcp_app.state.mcp.tools), key=lambda t: t["name"])
     blob = json.dumps(tools, sort_keys=True, indent=1)
     assert hashlib.sha256(blob.encode()).hexdigest() == PHASE0_MCP_TOOLS_SHA256
@@ -93,10 +98,11 @@ def test_tools_list_handler_returns_exactly_mcp_tools(mcp_app):
     handler = mcp.server.request_handlers[mcp_types.ListToolsRequest]
     result = asyncio.run(handler(mcp_types.ListToolsRequest(method="tools/list")))
     assert _tool_dumps(result.root.tools) == _tool_dumps(mcp.tools)
-    assert len(result.root.tools) == 84
+    assert len(result.root.tools) == MCP_TOOL_COUNT
 
 
 def test_tool_names_are_operation_ids_one_to_one(mcp_app):
+    """Tool names are operation IDs one to one."""
     mcp = mcp_app.state.mcp
     op_ids = [op["operationId"] for item in mcp_app.openapi()["paths"].values() for op in item.values()]
     assert [t.name for t in mcp.tools] == op_ids
@@ -108,6 +114,8 @@ def test_tool_names_are_operation_ids_one_to_one(mcp_app):
 
 @pytest.fixture
 def gated_client(clean_env):
+    """A client on an app whose MCP endpoint requires the contract token."""
+    del clean_env  # requested only for its side effect
     application, engine = _make_stubbed_app(bypass_auth=True, mcp_token=_TOKEN)
     install_offline_weather(application)
     yield TestClient(application, raise_server_exceptions=False)
@@ -116,6 +124,8 @@ def gated_client(clean_env):
 
 @pytest.fixture
 def unconfigured_client(clean_env):
+    """A client on an app with no MCP token configured (the endpoint fails closed)."""
+    del clean_env  # requested only for its side effect
     application, engine = _make_stubbed_app(bypass_auth=True, mcp_token=None)
     install_offline_weather(application)
     yield TestClient(application, raise_server_exceptions=False)
@@ -133,11 +143,13 @@ _BAD_HEADERS = {
 @pytest.mark.parametrize("method", ["GET", "POST", "DELETE"])
 @pytest.mark.parametrize("header_case", sorted(_BAD_HEADERS))
 def test_mcp_401_carries_www_authenticate_header(gated_client, method, header_case):
-    """``require_mcp_token`` raises 401 with ``WWW-Authenticate: Bearer`` and the JSON branch
+    """An MCP 401 carries ``WWW-Authenticate: Bearer`` through to the client.
+
+    ``require_mcp_token`` raises 401 with ``WWW-Authenticate: Bearer`` and the JSON branch
     of the global HTTPException handler keeps ``exc.headers``, so the client receives it.
     """
     resp = gated_client.request(method, "/mcp", headers=_BAD_HEADERS[header_case])
-    assert resp.status_code == 401
+    assert resp.status_code == HTTPStatus.UNAUTHORIZED
     assert resp.json() == {"detail": "Invalid MCP token"}
     assert resp.headers["content-type"] == "application/json"
     assert resp.headers["www-authenticate"] == "Bearer"
@@ -146,7 +158,8 @@ def test_mcp_401_carries_www_authenticate_header(gated_client, method, header_ca
 @pytest.mark.parametrize("method", ["GET", "POST", "DELETE"])
 @pytest.mark.parametrize("headers", [{}, {"Authorization": f"Bearer {_TOKEN}"}])
 def test_mcp_503_body_when_token_unset_on_every_method(unconfigured_client, method, headers):
+    """MCP 503 body when token unset on every method."""
     resp = unconfigured_client.request(method, "/mcp", headers=headers)
-    assert resp.status_code == 503
+    assert resp.status_code == HTTPStatus.SERVICE_UNAVAILABLE
     assert resp.json() == {"detail": "MCP auth not configured"}
     assert "www-authenticate" not in resp.headers

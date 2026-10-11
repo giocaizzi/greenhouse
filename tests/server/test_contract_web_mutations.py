@@ -16,9 +16,10 @@ There are no PUT routes in the web router. Nothing is normalized but the package
 
 from __future__ import annotations
 
-from collections.abc import Callable
+import re
 from dataclasses import dataclass, field
-from typing import Any
+from http import HTTPStatus
+from typing import TYPE_CHECKING, Any
 
 import pytest
 from sqlalchemy import inspect, text
@@ -26,6 +27,8 @@ from sqlalchemy import inspect, text
 from golden import assert_golden_json
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.deps import get_device_registry
+from greenhouse_server.scheduler import CHECK_ALL_JOB_ID, scheduler, start_scheduler, stop_scheduler
+from greenhouse_server.web.router import web_router
 from server import test_contract_web_html as _web
 from server.conftest import TEST_ADMIN_PASSWORD, TEST_ADMIN_USERNAME
 from server.test_contract_web_html import (
@@ -48,7 +51,11 @@ from server.test_contract_web_html import (
     T,
     normalize,
     pinned_headers,
+    web_routes,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 ADHOC_JOB = "adhoc_contract_job"
 
@@ -60,30 +67,28 @@ web_env = _web.web_env
 # ── Per-case setup hooks (run against the fresh app before the "before" snapshot) ──────────────
 
 
-def _cap_indoor_to_one_event(app, repo: IrrigationRepository) -> None:
+def _cap_indoor_to_one_event(_app, repo: IrrigationRepository) -> None:
     repo.set_irrigation_config(cluster_id=INDOOR, max_events_per_day=1)
 
 
-def _device_start_fails(app, repo) -> None:
+def _device_start_fails(app, _repo) -> None:
     app.state.fake_devices.irrigator.start_result = (False, "fake start failed")
 
 
-def _device_stop_fails(app, repo) -> None:
+def _device_stop_fails(app, _repo) -> None:
     app.state.fake_devices.irrigator.stop_result = (False, "fake stop failed")
 
 
-def _no_device_registry(app, repo) -> None:
+def _no_device_registry(app, _repo) -> None:
     app.dependency_overrides[get_device_registry] = lambda: None
 
 
-def _quiet_hours_now(app, repo) -> None:
-    # Frozen clock is 10:00 UTC; make 09–12 quiet for the indoor cluster.
+def _quiet_hours_now(_app, repo) -> None:
+    # Frozen clock is 10:00 UTC; make 09-12 quiet for the indoor cluster.
     repo.set_irrigation_config(cluster_id=INDOOR, quiet_start_hour=9, quiet_end_hour=12)
 
 
-def _unregister_check_all(app, repo) -> None:
-    from greenhouse_server.scheduler import CHECK_ALL_JOB_ID, scheduler
-
+def _unregister_check_all(_app, _repo) -> None:
     scheduler.remove_job(CHECK_ALL_JOB_ID)
 
 
@@ -607,11 +612,6 @@ def _natural(key: str) -> tuple:
 
 def test_mutation_cases_are_unique_and_cover_every_web_write_route():
     """Every non-GET web route has at least one case; case names are unique."""
-    import re
-
-    from greenhouse_server.web.router import web_router
-    from server.test_contract_web_html import web_routes
-
     names = [m.name for m in MUTATIONS]
     assert len(names) == len(set(names))
     for route in web_routes(web_router.routes):
@@ -620,23 +620,23 @@ def test_mutation_cases_are_unique_and_cover_every_web_write_route():
             assert any(m.method == method and re.match(pattern, m.url) for m in MUTATIONS), (method, route.path)
 
 
-@pytest.mark.parametrize("case", MUTATIONS, ids=lambda m: m.name)
-def test_web_mutation_golden(case, make_client, monkeypatch):
-    """Status, headers, body, templates, DB effect and fake-device calls of one write on a fresh app."""
-    app, client = make_client(**case.app_kwargs)
-    spy = _web.TemplateSpy()
-    spy.install(monkeypatch)
-    engine = app.state.session_factory.kw["bind"]
-    if case.setup is not None:
-        session = app.state.session_factory()
-        try:
-            case.setup(app, IrrigationRepository(session))
-            session.commit()
-        finally:
-            session.close()
+def _apply_setup(app, setup: Callable | None) -> None:
+    """Run a per-case setup hook against the fresh app's database (committed)."""
+    if setup is None:
+        return
+    session = app.state.session_factory()
+    try:
+        setup(app, IrrigationRepository(session))
+        session.commit()
+    finally:
+        session.close()
 
-    from greenhouse_server.scheduler import scheduler, start_scheduler, stop_scheduler
 
+def _send(case: Mut, client, engine) -> tuple[dict, object, dict, list[str]]:
+    """Send ``case``'s request (inside a paused running scheduler when it asks for one).
+
+    Returns the DB snapshot before, the response, the snapshot after and the job ids after.
+    """
     if case.running_scheduler:
         start_scheduler(paused=True)
         scheduler.add_job(_nothing, "interval", hours=1, id=ADHOC_JOB, name="Ad-hoc contract job")
@@ -648,6 +648,18 @@ def test_web_mutation_golden(case, make_client, monkeypatch):
     finally:
         if case.running_scheduler:
             stop_scheduler()
+    return before, resp, after, jobs_after
+
+
+@pytest.mark.parametrize("case", MUTATIONS, ids=lambda m: m.name)
+def test_web_mutation_golden(case, make_client, monkeypatch):
+    """Status, headers, body, templates, DB effect and fake-device calls of one write on a fresh app."""
+    app, client = make_client(**case.app_kwargs)
+    spy = _web.TemplateSpy()
+    spy.install(monkeypatch)
+    engine = app.state.session_factory.kw["bind"]
+    _apply_setup(app, case.setup)
+    before, resp, after, jobs_after = _send(case, client, engine)
 
     wiring = app.state.fake_devices
     record = {
@@ -669,13 +681,7 @@ def test_web_mutation_golden(case, make_client, monkeypatch):
 
 def _run(make_client, method: str, url: str, form: dict | None = None, setup: Callable | None = None):
     app, client = make_client()
-    if setup is not None:
-        session = app.state.session_factory()
-        try:
-            setup(app, IrrigationRepository(session))
-            session.commit()
-        finally:
-            session.close()
+    _apply_setup(app, setup)
     engine = app.state.session_factory.kw["bind"]
     before = db_snapshot(engine)
     resp = client.request(method, url, data=form, headers=HX, follow_redirects=False)
@@ -690,10 +696,10 @@ def test_bulk_stop_all_reports_a_device_that_refuses_the_stop(make_client):
     device is now off." Every device is still asked to stop.
     """
     app, resp, effect = _run(make_client, "POST", "/bulk/stop-all", setup=_device_stop_fails)
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     assert "Stopped 0 irrigators; 2 did not confirm the stop and may still be running." in resp.text
     assert "Every device is now off." not in resp.text
-    assert resp.text.count("stop failed: ") == 2
+    assert resp.text.count("stop failed: ") == len((IRR_INDOOR, IRR_OUTDOOR))
     assert app.state.fake_devices.irrigator.calls == [("stop", IRR_INDOOR), ("stop", IRR_OUTDOOR)]
     assert "irrigation_events" not in effect
 
@@ -706,7 +712,7 @@ def test_alert_action_on_missing_alert_is_404(action, make_client):
     ``HX-Toast`` still announced success with a 200.
     """
     _, resp, effect = _run(make_client, "POST", f"/alerts/999/{action}")
-    assert resp.status_code == 404
+    assert resp.status_code == HTTPStatus.NOT_FOUND
     assert "Alert not found" in resp.text
     assert "HX-Toast" not in resp.headers
     assert effect == {}
@@ -732,7 +738,7 @@ def test_non_numeric_form_value_is_a_400_error_page(url, form, make_client):
     numeric field now goes through ``web.forms.parsed_or_400`` like its siblings.
     """
     _, resp, effect = _run(make_client, "POST", url, form)
-    assert resp.status_code == 400
+    assert resp.status_code == HTTPStatus.BAD_REQUEST
     assert resp.headers["content-type"].startswith("text/html")
     assert "Invalid" in resp.text
     assert effect == {}
@@ -745,7 +751,7 @@ def test_irrigate_missing_cluster_is_404(make_client):
     ``partials/_decision_panel.html``, which crashed on it (plain-text 500).
     """
     app, resp, effect = _run(make_client, "POST", "/clusters/999/irrigate", {})
-    assert resp.status_code == 404
+    assert resp.status_code == HTTPStatus.NOT_FOUND
     assert "Cluster not found" in resp.text
     assert effect == {}
     assert app.state.fake_devices.irrigator.calls == []
@@ -759,7 +765,7 @@ def test_delete_cluster_leaves_no_orphan_rows(make_client):
     sensor assignments, which used to stay behind (SQLite FK enforcement is off).
     """
     app, resp, effect = _run(make_client, "DELETE", f"/clusters/{OUTDOOR}")
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     assert set(effect) == {
         "alerts",
         "clusters",

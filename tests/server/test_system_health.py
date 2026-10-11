@@ -1,11 +1,14 @@
 """Tests for GET /api/v1/health/system."""
 
 import time
+from http import HTTPStatus
 
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
+from greenhouse_core.models import Alert, Sensor, SensorReading
 from greenhouse_server.app import create_app
 from greenhouse_server.config import Settings
 from greenhouse_server.deps import get_device_gateway, get_device_registry
@@ -21,9 +24,12 @@ def _make_app():
 
 
 class TestSystemHealthPulse:
+    """Tests for system health pulse."""
+
     def test_empty_system_status_down(self, client):
+        """Empty system status down."""
         resp = client.get("/api/v1/health/system")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         data = resp.json()
         assert data["status"] == "down"
         assert data["sensors_total"] == 0
@@ -41,10 +47,6 @@ class TestSystemHealthPulse:
                 "/api/v1/clusters/1/sensors",
                 json={"tuya_device_id": "fake_fresh_001", "name": "Fresh Sensor", "type": "tuya.tr301z"},
             )
-
-            from sqlalchemy.orm import Session
-
-            from greenhouse_core.models import Sensor, SensorReading
 
             with Session(engine) as session:
                 sensor = session.get(Sensor, 1)
@@ -70,10 +72,6 @@ class TestSystemHealthPulse:
                 "/api/v1/clusters/1/sensors",
                 json={"tuya_device_id": "fake_stale_002", "name": "Stale Sensor", "type": "tuya.tr301z"},
             )
-
-            from sqlalchemy.orm import Session
-
-            from greenhouse_core.models import Sensor, SensorReading
 
             with Session(engine) as session:
                 sensor = session.get(Sensor, 1)
@@ -101,7 +99,8 @@ class TestSystemHealthPulse:
             # With a 2h reading cloud IS reachable (last_sync_at is 2h ago) but < 1h threshold → not reachable.
             # Cloud reachable requires reading < 1h. 2h old = not reachable → "down" again.
             # The "degraded" path requires: cloud_reachable=True AND (stale_count>0 OR open_alerts>=3).
-            # To have cloud_reachable=True we need at least one reading <1h, which means sensors_stale=0 for that sensor.
+            # To have cloud_reachable=True we need at least one reading <1h,
+            # which means sensors_stale=0 for that sensor.
             # If we want degraded with open_alerts: add >=3 alerts.
             assert data["sensors_total"] == 1
             assert "status" in data
@@ -118,15 +117,12 @@ class TestSystemHealthPulse:
                 json={"tuya_device_id": "fake_alert_sensor", "name": "Alert Sensor", "type": "tuya.tr301z"},
             )
 
-            from sqlalchemy.orm import Session
-
-            from greenhouse_core.models import Alert, Sensor, SensorReading
-
             now = int(time.time())
+            open_alerts = 3
             with Session(engine) as session:
                 sensor = session.get(Sensor, 1)
                 session.add(SensorReading(sensor_id=sensor.id, timestamp=now - 300, soil_moisture=50.0))
-                for i in range(3):
+                for i in range(open_alerts):
                     session.add(
                         Alert(
                             dedup_key=f"test_alert_{i}",
@@ -149,11 +145,12 @@ class TestSystemHealthPulse:
             data = resp.json()
             assert data["cloud_reachable"] is True
             assert data["status"] == "degraded"
-            assert data["open_alerts"] == 3
+            assert data["open_alerts"] == open_alerts
         finally:
             engine.dispose()
 
     def test_response_schema(self, client):
+        """Response schema."""
         resp = client.get("/api/v1/health/system")
         data = resp.json()
         required = {

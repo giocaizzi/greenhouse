@@ -1,6 +1,7 @@
 """Plant dashboard — hero card + health ring."""
 
 import time
+from http import HTTPStatus
 
 import sqlalchemy
 from sqlalchemy.orm import Session
@@ -9,15 +10,16 @@ from greenhouse_core.repository import IrrigationRepository
 
 
 def test_plant_hero_renders(seeded_client):
+    """Plant hero renders."""
     resp = seeded_client.get("/clusters/1/plants/1")
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     assert 'class="plant-hero"' in resp.text
 
 
 def test_plant_hero_ring_hidden_without_readings(seeded_client):
     """With no sensor readings the health ring shows the '—' placeholder."""
     resp = seeded_client.get("/clusters/1/plants/1")
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     # Score is None → health-ring--empty variant is shown
     assert "health-ring" in resp.text
     assert "health-ring--empty" in resp.text
@@ -38,10 +40,11 @@ def test_plant_hero_ring_shows_score_with_readings(seeded_client, app):
         session.commit()
 
     resp = seeded_client.get("/clusters/1/plants/1")
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     assert 'class="health-ring' in resp.text
 
 
 def test_plant_hero_404_for_wrong_cluster(seeded_client):
+    """Plant hero 404 for wrong cluster."""
     resp = seeded_client.get("/clusters/999/plants/1")
-    assert resp.status_code == 404
+    assert resp.status_code == HTTPStatus.NOT_FOUND

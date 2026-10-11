@@ -20,20 +20,26 @@ Golden: ``tests/golden/orchestration/check_all.json``.
 
 from __future__ import annotations
 
+from http import HTTPStatus
+
 import pytest
 from sqlalchemy.orm import Session
 
 from golden import FROZEN_TS, assert_golden_json
+from greenhouse_server import scheduler
 from greenhouse_server.services.irrigation import CHECK_FAILED_ALERT_CODE, IrrigationService
+from server.conftest import run_core_job
 from server.test_contract_pipeline import Pipeline
 
 
-class Boom(RuntimeError):
+class Boom(RuntimeError):  # noqa: N818 — the name is in the pinned golden (repr in alert text)
     """The injected failure (a distinct type so the golden shows exactly where it came from)."""
 
 
 @pytest.fixture
 def three_dry_clusters(clean_env, frozen_clock):
+    """A pipeline with three dry, fully wired clusters, marked so only the check's writes count."""
+    del clean_env, frozen_clock  # requested only for their side effects
     p = Pipeline()
     for name in ("Alpha", "Bravo", "Charlie"):
         p.seed_cluster(name, soil=35.0)
@@ -70,7 +76,8 @@ def _crash_after_check(monkeypatch, tx_log: list[str], failing: set[int]) -> dic
         tx_log.append(f"check:{cluster_id}")
         result = original(self, cluster_id)
         if cluster_id in state["failing"]:
-            raise Boom(f"cluster {cluster_id} crashed after writing")
+            msg = f"cluster {cluster_id} crashed after writing"
+            raise Boom(msg)
         return result
 
     monkeypatch.setattr(IrrigationService, "check_cluster", flaky)
@@ -101,7 +108,7 @@ def test_crash_after_writes_rolls_back_only_the_failing_cluster(three_dry_cluste
     p = three_dry_clusters
     _crash_after_check(monkeypatch, tx_log, failing={2})
     resp = p.call("POST", "/api/v1/check")
-    assert resp["status"] == 200
+    assert resp["status"] == HTTPStatus.OK
     by_id = {r["cluster_id"]: r for r in resp["response"]["results"]}
     assert [by_id[i]["action"] for i in (1, 2, 3)] == ["irrigated", "error", "irrigated"]
     assert by_id[2]["notes"] == "check failed: Boom('cluster 2 crashed after writing')"
@@ -173,15 +180,13 @@ def test_check_failed_alert_lifecycle(three_dry_clusters, tx_log, monkeypatch):
 
 def test_scheduler_check_job_isolates_clusters_the_same_way(three_dry_clusters, tx_log, monkeypatch):
     """I-ii (4): the scheduler's ``_check_job`` body gives the same per-cluster isolation."""
-    from greenhouse_server import scheduler
-
     p = three_dry_clusters
-    assert scheduler._app is p.app  # init_scheduler rebinds the module global per create_app
+    assert scheduler._app is p.app  # noqa: SLF001 — pins the module global init_scheduler rebinds per create_app
     # The job reads the registry from app.state, not from the request-level override.
     p.app.state.device_registry = p.wiring.registry
     _crash_after_check(monkeypatch, tx_log, failing={2})
 
-    scheduler._check_job()
+    run_core_job(scheduler.CHECK_ALL_JOB_ID)
 
     summary = _summary(p, tx_log)
     assert summary["start_events_by_irrigator"] == [(1, "start", "auto"), (2, "start", "auto"), (3, "start", "auto")]
@@ -208,11 +213,9 @@ def test_scheduler_check_job_isolates_clusters_the_same_way(three_dry_clusters, 
 
 def test_scheduler_check_job_without_registry_reports_errors_but_commits(three_dry_clusters, tx_log):
     """With no registry on ``app.state`` (degraded mode) the job evaluates and logs, but cannot actuate."""
-    from greenhouse_server import scheduler
-
     p = three_dry_clusters
     assert getattr(p.app.state, "device_registry", None) is None
-    scheduler._check_job()
+    run_core_job(scheduler.CHECK_ALL_JOB_ID)
     summary = _summary(p, tx_log)
     assert summary["start_events_by_irrigator"] == []
     assert summary["irrigator_adapter_calls"] == []
@@ -226,14 +229,14 @@ def test_scheduler_check_job_without_registry_reports_errors_but_commits(three_d
 
 def test_scheduler_check_job_swallows_a_total_failure(three_dry_clusters, tx_log, monkeypatch, caplog):
     """If ``check_all_clusters`` itself raises, the job rolls back, logs and returns (never raises)."""
-    from greenhouse_server import scheduler
 
-    def explode(self):
-        raise Boom("whole check exploded")
+    def explode(_self):
+        msg = "whole check exploded"
+        raise Boom(msg)
 
     monkeypatch.setattr(IrrigationService, "check_all_clusters", explode)
     with caplog.at_level("ERROR", logger="greenhouse_server.scheduler"):
-        scheduler._check_job()
+        run_core_job(scheduler.CHECK_ALL_JOB_ID)
     assert tx_log == ["rollback"]
     assert [r.getMessage() for r in caplog.records if r.name == "greenhouse_server.scheduler"] == ["Check job failed"]
     assert three_dry_clusters.db_rows()["decision_logs"] == []

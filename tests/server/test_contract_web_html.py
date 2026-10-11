@@ -24,10 +24,12 @@ cheap (~20 ms instead of ~0.8 s).
 
 from __future__ import annotations
 
+import functools
 import hashlib
 import re
 import sqlite3
 from dataclasses import dataclass, field
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -39,10 +41,12 @@ from sqlalchemy.pool import StaticPool
 from fake_data import FAKE_DEVICE_ID, FAKE_DEVICE_ID_2, FAKE_DEVICE_IP, FAKE_LOCAL_KEY, FAKE_SENSOR_ID
 from golden import FROZEN_TS, assert_golden, assert_golden_json, install_offline_weather
 from greenhouse_core.repository import IrrigationRepository
+from greenhouse_core.utils import set_display_timezone
 from greenhouse_server.app import create_app
 from greenhouse_server.auth import AuthenticatedUser, require_user, require_web_user
 from greenhouse_server.config import Settings
 from greenhouse_server.deps import get_device_gateway, get_device_registry
+from greenhouse_server.scheduler import init_scheduler, start_scheduler, stop_scheduler
 from greenhouse_server.web.context import APP_VERSION
 from greenhouse_server.web.router import web_router
 from greenhouse_server.web.templating import templates
@@ -65,6 +69,8 @@ IRR_INDOOR, IRR_OUTDOOR = 1, 2
 ALERT_OPEN, ALERT_ACKED, ALERT_RESOLVED = 1, 2, 3
 WINDOW = 1
 VACATION_UPCOMING, VACATION_PAST = 1, 2
+MONSTERA_SPIKE_INDEX = 5  # the reading index seeded as a Hampel spike
+WEB_ROUTE_COUNT = 85
 
 
 # ── Seed ──────────────────────────────────────────────────────────────────────────────────────
@@ -75,6 +81,17 @@ def seed_greenhouse(repo: IrrigationRepository) -> None:
 
     Must run inside the frozen clock: repository defaults (``created_at`` …) read ``time.time()``.
     """
+    ids = _seed_inventory(repo)
+    _seed_readings(repo, ids)
+    _seed_irrigation_history(repo, ids)
+    _seed_decisions(repo, ids)
+    _seed_alerts(repo, ids)
+    _seed_activity_and_health(repo, ids)
+    _seed_schedules_and_settings(repo, ids)
+
+
+def _seed_inventory(repo: IrrigationRepository) -> SimpleNamespace:
+    """Clusters, plants, irrigators and sensors, in id order; return their ids."""
     indoor = repo.add_cluster("Indoor Jungle", location="Living room", environment="indoor")
     outdoor = repo.add_cluster("Balcony Orchard", location="Balcony", environment="outdoor")
     repo.add_cluster("Empty Shelf", environment="indoor")
@@ -137,10 +154,28 @@ def seed_greenhouse(repo: IrrigationRepository) -> None:
     )
     s_ambient = repo.add_sensor(indoor, "fake_tuya_sensor_00000004", "Room Climate", "tuya.tr301z", {})
 
+    return SimpleNamespace(
+        indoor=indoor,
+        outdoor=outdoor,
+        monstera=monstera,
+        alocasia=alocasia,
+        loquat=loquat,
+        irr_indoor=irr_indoor,
+        irr_outdoor=irr_outdoor,
+        s_monstera=s_monstera,
+        s_alocasia=s_alocasia,
+        s_loquat=s_loquat,
+        s_ambient=s_ambient,
+    )
+
+
+def _seed_readings(repo: IrrigationRepository, ids: SimpleNamespace) -> None:
+    """Two-hourly readings for every probe over the last 48 h."""
+    s_monstera, s_alocasia, s_loquat, s_ambient = ids.s_monstera, ids.s_alocasia, ids.s_loquat, ids.s_ambient
     # Readings every 2 h over the last 48 h; newest 30 min ago (fresh: < SENSOR_READING_STALE_SECONDS).
     for k in range(25):
         ts = T - 1800 - k * 2 * H
-        monstera_soil = 97.0 if k == 5 else round(50.0 + k * 0.5, 1)  # k == 5: a Hampel spike
+        monstera_soil = 97.0 if k == MONSTERA_SPIKE_INDEX else round(50.0 + k * 0.5, 1)
         repo.add_sensor_reading(
             s_monstera,
             timestamp=ts,
@@ -173,6 +208,10 @@ def seed_greenhouse(repo: IrrigationRepository) -> None:
                 s_ambient, timestamp=ts, temperature=round(21.0 + k * 0.1, 1), env_humidity=float(50 + k % 5)
             )
 
+
+def _seed_irrigation_history(repo: IrrigationRepository, ids: SimpleNamespace) -> None:
+    """Starts, stops and a schedule update on both irrigators."""
+    irr_indoor, irr_outdoor = ids.irr_indoor, ids.irr_outdoor
     # Irrigation history.
     repo.add_irrigation_event(irr_indoor, "start", "auto", duration_minutes=3, notes="Scheduled", timestamp=T - 30 * H)
     repo.add_irrigation_event(irr_indoor, "off", "auto", timestamp=T - 30 * H + 180)
@@ -183,18 +222,24 @@ def seed_greenhouse(repo: IrrigationRepository) -> None:
     repo.add_irrigation_event(irr_outdoor, "start", "auto", duration_minutes=5, timestamp=T - 20 * H)
     repo.add_irrigation_event(irr_outdoor, "schedule_updated", "auto", notes="interval 24h", timestamp=T - 20 * H + 5)
 
-    # Decision log (newest first in the UI).
-    def _payload(cluster_id: int, evaluated_at: int, action: str, minutes: int, reasons: list[dict]) -> dict:
-        return {
-            "cluster_id": cluster_id,
-            "evaluated_at": evaluated_at,
-            "action": action,
-            "duration_minutes": minutes,
-            "interval_hours": 12,
-            "confidence": 0.8,
-            "reasons": reasons,
-        }
 
+def _decision_payload(cluster_id: int, evaluated_at: int, action: str, minutes: int, reasons: list[dict]) -> dict:
+    """The decision payload a seeded ``DecisionLog`` row carries."""
+    return {
+        "cluster_id": cluster_id,
+        "evaluated_at": evaluated_at,
+        "action": action,
+        "duration_minutes": minutes,
+        "interval_hours": 12,
+        "confidence": 0.8,
+        "reasons": reasons,
+    }
+
+
+def _seed_decisions(repo: IrrigationRepository, ids: SimpleNamespace) -> None:
+    """Four decision-log rows across both clusters."""
+    indoor, outdoor = ids.indoor, ids.outdoor
+    # Decision log (newest first in the UI).
     dry = {"code": "sensor_very_dry", "message": "Alocasia amazonica soil at 8%", "severity": "critical"}
     hot = {"code": "temp_high", "message": "Warm room", "severity": "warning", "duration_delta": 1}
     ok = {"code": "sensor_adequate", "message": "Soil moisture adequate", "severity": "info"}
@@ -214,11 +259,15 @@ def seed_greenhouse(repo: IrrigationRepository) -> None:
             confidence=0.8,
             primary_code=reasons[0]["code"],
             reason_text="; ".join(r["message"] for r in reasons),
-            payload=_payload(cluster_id, at, action, minutes, reasons),
+            payload=_decision_payload(cluster_id, at, action, minutes, reasons),
             triggered_by="auto",
             actuated=actuated,
         )
 
+
+def _seed_alerts(repo: IrrigationRepository, ids: SimpleNamespace) -> None:
+    """One open, one acknowledged and one resolved alert."""
+    indoor, outdoor, alocasia, s_alocasia = ids.indoor, ids.outdoor, ids.alocasia, ids.s_alocasia
     # Alerts: one open, one acknowledged, one resolved.
     repo.upsert_alert(
         f"soil_dry:plant:{alocasia}",
@@ -260,6 +309,16 @@ def seed_greenhouse(repo: IrrigationRepository) -> None:
     )
     resolved.status, resolved.resolved_at = "resolved", T - 25 * H
 
+
+def _seed_activity_and_health(repo: IrrigationRepository, ids: SimpleNamespace) -> None:
+    """Activity timeline rows and the Monstera's daily health snapshots."""
+    indoor, outdoor, alocasia, irr_indoor, monstera = (
+        ids.indoor,
+        ids.outdoor,
+        ids.alocasia,
+        ids.irr_indoor,
+        ids.monstera,
+    )
     # Activity timeline.
     for at, source, entity_type, entity_id, severity, code, message in (
         (T - 30 * H, "scheduler", "cluster", indoor, "info", "irrigation_started", "Auto irrigation 3 min"),
@@ -287,7 +346,11 @@ def seed_greenhouse(repo: IrrigationRepository) -> None:
             timestamp=ts,
         )
 
-    # Watering window on the outdoor cluster: 06–09, Mon/Wed/Fri.
+
+def _seed_schedules_and_settings(repo: IrrigationRepository, ids: SimpleNamespace) -> None:
+    """Watering window, vacations, configs and preferences."""
+    indoor, outdoor = ids.indoor, ids.outdoor
+    # Watering window on the outdoor cluster: 06-09, Mon/Wed/Fri.
     repo.add_irrigation_window(outdoor, start_hour=6, end_hour=9, weekday_mask=1 | 4 | 16, label="Morning")
 
     # Vacations: one upcoming (drives the budget readout), one past.
@@ -307,33 +370,29 @@ def seed_greenhouse(repo: IrrigationRepository) -> None:
 
 # ── App factory (copy of a seeded template DB per app) ────────────────────────────────────────
 
-_TEMPLATE_DB: sqlite3.Connection | None = None
 
-
+@functools.cache
 def _seeded_template() -> sqlite3.Connection:
-    """Build (once per process) a migrated + seeded DB through the real ``_make_stubbed_app``.
+    """Build (once per process, memoised) a migrated + seeded DB through the real ``_make_stubbed_app``.
 
     The first caller is always inside ``frozen_clock`` + ``clean_env`` (see ``web_env``), so
     the result is identical whichever test builds it.
     """
-    global _TEMPLATE_DB
-    if _TEMPLATE_DB is None:
-        app, engine = _make_stubbed_app(bypass_auth=True)
-        session = app.state.session_factory()
-        try:
-            seed_greenhouse(IrrigationRepository(session))
-            session.commit()
-        finally:
-            session.close()
-        raw = engine.raw_connection()
-        try:
-            snapshot = sqlite3.connect(":memory:", check_same_thread=False)
-            raw.driver_connection.backup(snapshot)
-        finally:
-            raw.close()
-        engine.dispose()
-        _TEMPLATE_DB = snapshot
-    return _TEMPLATE_DB
+    app, engine = _make_stubbed_app(bypass_auth=True)
+    session = app.state.session_factory()
+    try:
+        seed_greenhouse(IrrigationRepository(session))
+        session.commit()
+    finally:
+        session.close()
+    raw = engine.raw_connection()
+    try:
+        snapshot = sqlite3.connect(":memory:", check_same_thread=False)
+        raw.driver_connection.backup(snapshot)
+    finally:
+        raw.close()
+    engine.dispose()
+    return snapshot
 
 
 def build_app(*, bypass_auth: bool = True, seeded: bool = True, **settings_override):
@@ -376,6 +435,7 @@ def build_app(*, bypass_auth: bool = True, seeded: bool = True, **settings_overr
 @pytest.fixture
 def web_env(clean_env, frozen_clock):
     """Hermetic + frozen environment; builds the shared seeded template inside it."""
+    del clean_env  # requested only for its side effect
     _seeded_template()
     return frozen_clock
 
@@ -383,6 +443,7 @@ def web_env(clean_env, frozen_clock):
 @pytest.fixture
 def make_client(web_env):
     """Factory: a *fresh* seeded app + TestClient per call (used by every mutating case)."""
+    del web_env  # requested only for its side effect
     engines = []
 
     def _make(**kwargs) -> tuple[Any, TestClient]:
@@ -407,9 +468,6 @@ def reset_shared_app() -> Any:
     ``create_app`` sets (scheduler job registration, display timezone) are re-applied exactly as
     ``create_app`` applies them for this seed (prefs timezone ``UTC``, not paused).
     """
-    from greenhouse_core.utils import set_display_timezone
-    from greenhouse_server.scheduler import init_scheduler
-
     if "app" not in _SHARED:
         _SHARED["app"], _SHARED["engine"] = build_app()
     application, engine = _SHARED["app"], _SHARED["engine"]
@@ -429,6 +487,7 @@ def reset_shared_app() -> Any:
 @pytest.fixture
 def seeded_get_client(web_env) -> TestClient:
     """TestClient on the shared app, freshly reset to the seeded state."""
+    del web_env  # requested only for its side effect
     return TestClient(reset_shared_app(), raise_server_exceptions=False)
 
 
@@ -484,12 +543,14 @@ class TemplateSpy:
     calls: list[list] = field(default_factory=list)
 
     def install(self, monkeypatch) -> None:
+        """Wrap ``TemplateResponse`` so every render records its template and context keys."""
         original = templates.TemplateResponse
 
         def spy(*args, **kwargs):
             # Signature: TemplateResponse(request, name, context=None, ...) — positional or keyword.
-            name = kwargs.get("name", args[1] if len(args) > 1 else None)
-            context = kwargs.get("context", args[2] if len(args) > 2 else None) or {}
+            positional = dict(zip(("request", "name", "context"), args, strict=False))
+            name = kwargs.get("name", positional.get("name"))
+            context = kwargs.get("context", positional.get("context")) or {}
             self.calls.append([name, sorted(context)])
             return original(*args, **kwargs)
 
@@ -525,7 +586,8 @@ def _route_inventory(application) -> list[dict]:
     ]
 
 
-def test_web_route_inventory(web_env):
+@pytest.mark.usefixtures("web_env")
+def test_web_route_inventory():
     """Routes, methods, endpoint names, auth dependency and include_in_schema — in registration order.
 
     Order is behavior (first match wins, e.g. ``/clusters/new`` before ``/clusters/{cluster_id}``).
@@ -535,7 +597,7 @@ def test_web_route_inventory(web_env):
         inventory = _route_inventory(application)
     finally:
         engine.dispose()
-    assert len(inventory) == len(web_routes(web_router.routes)) == 85
+    assert len(inventory) == len(web_routes(web_router.routes)) == WEB_ROUTE_COUNT
     assert all(r["include_in_schema"] is False for r in inventory)
     assert_golden_json("web/routes.json", inventory)
 
@@ -635,7 +697,7 @@ GET_CASES: tuple[GetCase, ...] = (
     C("edit_irrigator_form__404", f"/clusters/{EMPTY}/irrigators/edit"),
     C("log_manual_form", f"/irrigators/{IRR_INDOOR}/log-manual"),
     C("log_manual_form__404", "/irrigators/999/log-manual"),
-    # operations (GET)
+    # GET operations
     C("monitor", f"/clusters/{INDOOR}/monitor"),
     C("monitor__outdoor", f"/clusters/{OUTDOOR}/monitor"),
     C("monitor__empty", f"/clusters/{EMPTY}/monitor"),
@@ -695,6 +757,7 @@ def _run_get(client: TestClient, case: GetCase):
 
 
 def test_get_cases_are_unique():
+    """Get cases are unique."""
     names = [c.name for c in GET_CASES]
     assert len(names) == len(set(names))
 
@@ -708,8 +771,6 @@ def test_get_route_html_golden(case, seeded_get_client):
 
 def test_get_sweep_covers_every_web_get_route():
     """Every GET route of the web router is hit by at least one case (path template match)."""
-    import re
-
     get_paths = [r.path for r in web_routes(web_router.routes) if "GET" in r.methods]
     case_paths = [c.url.split("?")[0] for c in GET_CASES]
     for path in get_paths:
@@ -755,8 +816,6 @@ VARIANTS = (
 @pytest.mark.parametrize(("name", "url", "setup", "running"), VARIANTS, ids=[v[0] for v in VARIANTS])
 def test_get_variant_html_golden(name, url, setup, running, seeded_get_client):
     """Same golden format as the sweep, after a state tweak (or with the scheduler running, paused)."""
-    from greenhouse_server.scheduler import start_scheduler, stop_scheduler
-
     if setup is not None:
         session = seeded_get_client.app.state.session_factory()
         try:
@@ -777,7 +836,8 @@ def test_get_variant_html_golden(name, url, setup, running, seeded_get_client):
 # ── template name + context keys per GET ─────────────────────────────────────────────────────
 
 
-def test_template_context_golden(web_env, monkeypatch):
+@pytest.mark.usefixtures("web_env")
+def test_template_context_golden(monkeypatch):
     """``{case: [[template, sorted context keys], …]}`` for the whole GET sweep (reset app per case)."""
     spy = TemplateSpy()
     spy.install(monkeypatch)

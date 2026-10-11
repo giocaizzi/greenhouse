@@ -7,8 +7,10 @@ path, and the stats endpoint on a cluster without an irrigator (fixed by D19: ze
 
 from __future__ import annotations
 
+from http import HTTPStatus
 from pathlib import Path
 
+import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.pool import StaticPool
 
@@ -44,7 +46,7 @@ def test_sync_route_commits_the_sync_writes_and_maps_the_stats(app, client):
 
     resp = client.post("/api/v1/sync", json={"hours": 6})
 
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     assert resp.json() == {"total_synced": 3, "total_new": 2, "total_live": 1, "errors": ["sensor 9: boom"]}
     assert [svc.hours for svc in calls] == [[6]]
     # A later request (fresh session) sees the row: the route committed it.
@@ -52,24 +54,28 @@ def test_sync_route_commits_the_sync_writes_and_maps_the_stats(app, client):
 
 
 def test_cluster_chart_data_unsupported_metric_is_400(client):
+    """Cluster chart data unsupported metric is 400."""
     resp = client.get("/api/v1/clusters/1/chart-data?metric=bogus")
-    assert resp.status_code == 400
+    assert resp.status_code == HTTPStatus.BAD_REQUEST
     assert resp.json() == {"detail": "Unsupported metric: bogus"}
 
 
 def test_cluster_chart_data_unknown_cluster_is_404(client):
+    """Cluster chart data unknown cluster is 404."""
     resp = client.get("/api/v1/clusters/999/chart-data")
-    assert resp.status_code == 404
+    assert resp.status_code == HTTPStatus.NOT_FOUND
     assert resp.json() == {"detail": "Cluster not found"}
 
 
 def test_plant_chart_data_unknown_plant_is_404(client):
+    """Plant chart data unknown plant is 404."""
     resp = client.get("/api/v1/plants/999/chart-data")
-    assert resp.status_code == 404
+    assert resp.status_code == HTTPStatus.NOT_FOUND
     assert resp.json() == {"detail": "Plant not found"}
 
 
-def test_create_app_loads_the_plant_db_from_settings_path(clean_env):
+@pytest.mark.usefixtures("clean_env")
+def test_create_app_loads_the_plant_db_from_settings_path():
     """``Settings.plant_db_path`` set → ``app.state.plant_db`` reads that file."""
     bundled = Path(greenhouse_core.__file__).parent / "data" / "plant_database.json"
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
@@ -89,7 +95,7 @@ def test_stats_without_irrigator_reports_zero_totals(client):
 
     resp = client.get(f"/api/v1/clusters/{cid}/stats?days=3")
 
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     assert resp.json() == {
         "cluster_name": "Sensors only",
         "period_days": 3,

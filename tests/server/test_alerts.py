@@ -1,38 +1,49 @@
 """Tests for the alert inbox API."""
 
+from http import HTTPStatus
+
+from fastapi.testclient import TestClient
+
+from greenhouse_core.repository import IrrigationRepository
+
 
 class TestAlertList:
+    """Tests for alert list."""
+
     def test_list_empty(self, client):
+        """List empty."""
         resp = client.get("/api/v1/alerts")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         data = resp.json()
         assert data["open_count"] == 0
         assert data["items"] == []
 
     def test_list_with_status_filter(self, client):
+        """List with status filter."""
         resp = client.get("/api/v1/alerts?status=open")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         assert resp.json()["items"] == []
 
     def test_list_with_cluster_filter(self, client):
+        """List with cluster filter."""
         resp = client.get("/api/v1/alerts?cluster_id=1")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         assert resp.json()["items"] == []
 
 
 class TestAlertGetById:
+    """Tests for alert get by id."""
+
     def test_get_not_found(self, client):
+        """Get not found."""
         resp = client.get("/api/v1/alerts/999")
-        assert resp.status_code == 404
+        assert resp.status_code == HTTPStatus.NOT_FOUND
 
     def test_get_existing(self, app):
-        from fastapi.testclient import TestClient
-
+        """Get existing."""
         with TestClient(app, raise_server_exceptions=False) as client:
             session = app.state.session_factory()
             try:
-                from greenhouse_core.repository import IrrigationRepository
-
                 repo = IrrigationRepository(session)
                 alert = repo.upsert_alert(
                     dedup_key="test::get::1",
@@ -50,7 +61,7 @@ class TestAlertGetById:
                 session.close()
 
             resp = client.get(f"/api/v1/alerts/{alert_id}")
-            assert resp.status_code == 200
+            assert resp.status_code == HTTPStatus.OK
             data = resp.json()
             assert data["id"] == alert_id
             assert data["status"] == "open"
@@ -58,18 +69,18 @@ class TestAlertGetById:
 
 
 class TestAlertAcknowledge:
+    """Tests for alert acknowledge."""
+
     def test_acknowledge_not_found(self, client):
+        """Acknowledge not found."""
         resp = client.post("/api/v1/alerts/999/acknowledge")
-        assert resp.status_code == 404
+        assert resp.status_code == HTTPStatus.NOT_FOUND
 
     def test_acknowledge_flow(self, app):
-        from fastapi.testclient import TestClient
-
+        """Acknowledge flow."""
         with TestClient(app, raise_server_exceptions=False) as client:
             session = app.state.session_factory()
             try:
-                from greenhouse_core.repository import IrrigationRepository
-
                 repo = IrrigationRepository(session)
                 alert = repo.upsert_alert(
                     dedup_key="test::ack::1",
@@ -87,30 +98,30 @@ class TestAlertAcknowledge:
                 session.close()
 
             resp = client.post(f"/api/v1/alerts/{alert_id}/acknowledge")
-            assert resp.status_code == 200
+            assert resp.status_code == HTTPStatus.OK
             data = resp.json()
             assert data["status"] == "acknowledged"
             assert data["acknowledged_at"] is not None
 
             # Idempotent second call stays acknowledged
             resp = client.post(f"/api/v1/alerts/{alert_id}/acknowledge")
-            assert resp.status_code == 200
+            assert resp.status_code == HTTPStatus.OK
             assert resp.json()["status"] == "acknowledged"
 
 
 class TestAlertResolve:
+    """Tests for alert resolve."""
+
     def test_resolve_not_found(self, client):
+        """Resolve not found."""
         resp = client.post("/api/v1/alerts/999/resolve")
-        assert resp.status_code == 404
+        assert resp.status_code == HTTPStatus.NOT_FOUND
 
     def test_resolve_flow(self, app):
-        from fastapi.testclient import TestClient
-
+        """Resolve flow."""
         with TestClient(app, raise_server_exceptions=False) as client:
             session = app.state.session_factory()
             try:
-                from greenhouse_core.repository import IrrigationRepository
-
                 repo = IrrigationRepository(session)
                 alert = repo.upsert_alert(
                     dedup_key="test::resolve::1",
@@ -128,7 +139,7 @@ class TestAlertResolve:
                 session.close()
 
             resp = client.post(f"/api/v1/alerts/{alert_id}/resolve")
-            assert resp.status_code == 200
+            assert resp.status_code == HTTPStatus.OK
             data = resp.json()
             assert data["status"] == "resolved"
             assert data["resolved_at"] is not None
@@ -144,13 +155,17 @@ class TestAlertResolve:
 
 
 class TestAlertSyncCluster:
+    """Tests for alert sync cluster."""
+
     def test_sync_not_found(self, client):
+        """Sync not found."""
         resp = client.post("/api/v1/clusters/999/alerts/sync")
-        assert resp.status_code == 404
+        assert resp.status_code == HTTPStatus.NOT_FOUND
 
     def test_sync_returns_list_response(self, seeded_client):
+        """Sync returns list response."""
         resp = seeded_client.post("/api/v1/clusters/1/alerts/sync")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         data = resp.json()
         assert "open_count" in data
         assert "items" in data
@@ -170,22 +185,21 @@ class TestAlertSyncCluster:
 
 
 class TestAlertSyncAll:
+    """Tests for alert sync all."""
+
     def test_sync_all(self, seeded_client):
+        """Sync all."""
         resp = seeded_client.post("/api/v1/alerts/sync")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         data = resp.json()
         assert "open_count" in data
         assert "items" in data
 
     def test_sync_all_open_count_badge(self, app):
         """Badge count must equal the number of open alerts."""
-        from fastapi.testclient import TestClient
-
         with TestClient(app, raise_server_exceptions=False) as client:
             session = app.state.session_factory()
             try:
-                from greenhouse_core.repository import IrrigationRepository
-
                 repo = IrrigationRepository(session)
                 repo.upsert_alert(
                     dedup_key="test::badge::1",
@@ -218,8 +232,6 @@ class TestAlertListPagination:
     """Cursor pagination on GET /alerts."""
 
     def _seed_alerts(self, app, count: int):
-        from greenhouse_core.repository import IrrigationRepository
-
         ids = []
         with app.state.session_factory() as session:
             repo = IrrigationRepository(session)
@@ -262,9 +274,10 @@ class TestAlertListPagination:
 
     def test_next_cursor_is_null_when_page_is_partial(self, app, client):
         """The last (partial) page must return ``next_cursor=None``."""
-        self._seed_alerts(app, 3)
+        seeded = 3
+        self._seed_alerts(app, seeded)
         resp = client.get("/api/v1/alerts?limit=5")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         data = resp.json()
-        assert len(data["items"]) == 3
+        assert len(data["items"]) == seeded
         assert data["next_cursor"] is None

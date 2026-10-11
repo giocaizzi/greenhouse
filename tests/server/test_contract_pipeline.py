@@ -7,7 +7,7 @@ call it makes on the fake irrigator/sensor adapters and the recording Tuya
 gateway, and every push notification it attempts.
 
 Hermetic: clock frozen at ``FROZEN_INSTANT`` (10:00 UTC — outside the
-migration-seeded 00–05 quiet hours), weather offline unless a scenario installs
+migration-seeded 00-05 quiet hours), weather offline unless a scenario installs
 its own canned stub, no env leakage (``clean_env``), notifier replaced by a
 recorder, scheduler stopped (so leak checks / pump watchers are *not*
 scheduled — :func:`test_successful_auto_start_schedules_leak_check_and_watcher`
@@ -30,23 +30,33 @@ Contracts / invariants guarded here:
 from __future__ import annotations
 
 import json
-from collections.abc import Callable
 from contextlib import contextmanager
+from dataclasses import dataclass
 from datetime import timedelta
+from http import HTTPStatus
+from typing import TYPE_CHECKING
 
 import pytest
 import time_machine
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
+from sqlalchemy.orm import Session
 
 from golden import FROZEN_INSTANT, FROZEN_TS, assert_golden_json, install_offline_weather
-from greenhouse_core.constants import LEAK_ALERT_CODE
+from greenhouse_core.constants import LEAK_ALERT_CODE, LEAK_CHECK_SETTLE_SECONDS
 from greenhouse_core.devices.health import DeviceHealthState, HealthAlarm
 from greenhouse_core.logic.decision import IrrigationDecision
 from greenhouse_core.models import Base
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.deps import get_device_gateway, get_device_registry, get_weather_client
+from greenhouse_server.scheduler import scheduler as bg_scheduler
+from greenhouse_server.scheduler import start_scheduler, stop_scheduler
+from greenhouse_server.services.health_monitor import DeviceHealthMonitor
+from greenhouse_server.services.vacation import cluster_budgets, vacation_days
 from server.conftest import _make_stubbed_app
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 HOUR = 3600
 # Tables whose rows are append-only during a pipeline run: only rows created
@@ -64,13 +74,16 @@ class RecordingNotifier:
     """Stand-in for ``NtfyClient`` that records every attempted push."""
 
     def __init__(self) -> None:
+        """Start with no pushes recorded."""
         self.sent: list[dict] = []
 
     def notify_irrigation(self, **kwargs) -> bool:
+        """Record an irrigation push and report it delivered."""
         self.sent.append({"kind": "irrigation", **kwargs})
         return True
 
     def notify_alert(self, **kwargs) -> bool:
+        """Record an alert push and report it delivered."""
         self.sent.append({"kind": "alert", **kwargs})
         return True
 
@@ -79,18 +92,22 @@ class RecordingGateway:
     """Stand-in for ``DeviceGateway``: empty device logs, canned live reading, call log."""
 
     def __init__(self, live: dict | None = None) -> None:
+        """Serve ``live`` (or a dry default) as the live reading and record every call."""
         self.live = live if live is not None else {"soil_moisture": 30.0, "temperature": 23.0}
         self.calls: list[list] = []
 
-    def get_device_logs(self, device_id: str, since_ms: int | None = None, **kwargs) -> list[dict]:
+    def get_device_logs(self, device_id: str, since_ms: int | None = None, **_kwargs) -> list[dict]:
+        """Record the call; there are no device logs."""
         self.calls.append(["get_device_logs", device_id, since_ms])
         return []
 
-    def group_logs_by_timestamp(self, logs: list[dict], tolerance_ms: int = 5000) -> list[dict]:
+    def group_logs_by_timestamp(self, logs: list[dict], _tolerance_ms: int = 5000) -> list[dict]:
+        """Record how many logs were grouped; there are no groups."""
         self.calls.append(["group_logs_by_timestamp", len(logs)])
         return []
 
     def get_live_reading(self, device_id: str) -> dict:
+        """Record the call and return a copy of the canned reading."""
         self.calls.append(["get_live_reading", device_id])
         return dict(self.live)
 
@@ -99,19 +116,67 @@ class RainyWeather:
     """Canned Open-Meteo answer: mild now, significant rain forecast (no network)."""
 
     def get_current(self) -> dict:
+        """A cool, humid current reading."""
         return {"temperature": 17.0, "feels_like": 16.5, "humidity": 80.0}
 
     def get_forecast(self, hours: int = 6) -> dict:  # noqa: ARG002 — mirrors WeatherClient
+        """A forecast with enough rain to skip an outdoor irrigation."""
         return {"precipitation_mm": 6.5}
 
 
 # ── Harness ─────────────────────────────────────────────────────────────────
 
 
+def _decode_json_columns(row) -> dict:
+    """A DB row as a dict with its JSON text columns parsed (empty ones left as they are)."""
+    record = dict(row)
+    for col in JSON_COLUMNS:
+        if record.get(col):
+            record[col] = json.loads(record[col])
+    return record
+
+
+SEED_PLANT = {
+    "species": "Monstera deliciosa",
+    "category": "tropical",
+    "water_needs": "medium",
+    "ideal_temp_min": 18.0,
+    "ideal_temp_max": 27.0,
+    "ideal_humidity_min": 60.0,
+    "ideal_humidity_max": 80.0,
+}
+
+
+@dataclass(frozen=True, kw_only=True)
+class ClusterSpec:
+    """What :meth:`Pipeline.seed_cluster` creates besides the cluster itself."""
+
+    environment: str = "indoor"
+    plant: bool = True
+    sensor: bool = True
+    irrigator: bool = True
+    soil: float | None = 35.0
+    temp: float = 24.0
+    reading_ages: tuple[int, ...] = (0, 600, 1200)
+    reservoir_l: float | None = None
+    flow_rate_l_per_min: float | None = None
+    config: dict | None = None
+
+    def irrigator_body(self, cid: int) -> dict:
+        """The irrigator create body; capacity fields only when set."""
+        body = {"tuya_device_id": f"fake_irrigator_{cid:03d}", "name": f"Irrigator {cid}", "type": "rainpoint.ik10pw"}
+        if self.reservoir_l is not None:
+            body["reservoir_l"] = self.reservoir_l
+        if self.flow_rate_l_per_min is not None:
+            body["flow_rate_l_per_min"] = self.flow_rate_l_per_min
+        return body
+
+
 class Pipeline:
     """One freshly built, seeded app plus the recorders a scenario inspects."""
 
     def __init__(self) -> None:
+        """Build a stubbed app with offline weather, a recording notifier and fake devices."""
         self.app, self.engine = _make_stubbed_app(bypass_auth=True)
         install_offline_weather(self.app)
         self.notifier = RecordingNotifier()
@@ -123,6 +188,7 @@ class Pipeline:
         self._marks: dict[str, int] = {}
 
     def close(self) -> None:
+        """Close the client and dispose of the engine."""
         self.client.close()
         self.engine.dispose()
 
@@ -130,6 +196,7 @@ class Pipeline:
 
     @contextmanager
     def repo(self):
+        """A repository on a fresh session, committed on success and always closed."""
         session = self.app.state.session_factory()
         try:
             yield IrrigationRepository(session)
@@ -140,51 +207,31 @@ class Pipeline:
     def api(self, method: str, path: str, body: dict | None = None) -> dict:
         """Seeding call: must succeed; not recorded in the golden."""
         resp = self.client.request(method, path, json=body)
-        assert resp.status_code < 300, f"{method} {path} -> {resp.status_code} {resp.text}"
+        assert resp.status_code < HTTPStatus.MULTIPLE_CHOICES, f"{method} {path} -> {resp.status_code} {resp.text}"
         return resp.json()
 
     def use_gateway(self, live: dict | None = None) -> RecordingGateway:
+        """Install a recording gateway (with ``live`` readings) and return it."""
         self.gateway = RecordingGateway(live)
         self.app.dependency_overrides[get_device_gateway] = lambda: self.gateway
         return self.gateway
 
     def use_weather(self, stub) -> None:
+        """Install ``stub`` as the app's weather client, for jobs and requests alike."""
         self.app.state.weather_client = stub
         self.app.dependency_overrides[get_weather_client] = lambda: stub
 
-    def seed_cluster(
-        self,
-        name: str = "Golden Cluster",
-        *,
-        environment: str = "indoor",
-        plant: bool = True,
-        sensor: bool = True,
-        irrigator: bool = True,
-        soil: float | None = 35.0,
-        temp: float = 24.0,
-        reading_ages: tuple[int, ...] = (0, 600, 1200),
-        reservoir_l: float | None = None,
-        flow_rate_l_per_min: float | None = None,
-        config: dict | None = None,
-    ) -> dict:
-        """Create cluster (+plant, sensor, irrigator, config) via the API; readings via the repo."""
-        cid = self.api("POST", "/api/v1/clusters", {"name": name, "environment": environment})["id"]
+    def seed_cluster(self, name: str = "Golden Cluster", **options) -> dict:
+        """Create cluster (+plant, sensor, irrigator, config) via the API; readings via the repo.
+
+        ``options`` are the keyword-only fields of :class:`ClusterSpec` (an unknown one is a TypeError).
+        """
+        spec = ClusterSpec(**options)
+        cid = self.api("POST", "/api/v1/clusters", {"name": name, "environment": spec.environment})["id"]
         ids: dict = {"cluster_id": cid}
-        if plant:
-            ids["plant_id"] = self.api(
-                "POST",
-                f"/api/v1/clusters/{cid}/plants",
-                {
-                    "species": "Monstera deliciosa",
-                    "category": "tropical",
-                    "water_needs": "medium",
-                    "ideal_temp_min": 18.0,
-                    "ideal_temp_max": 27.0,
-                    "ideal_humidity_min": 60.0,
-                    "ideal_humidity_max": 80.0,
-                },
-            )["id"]
-        if sensor:
+        if spec.plant:
+            ids["plant_id"] = self.api("POST", f"/api/v1/clusters/{cid}/plants", SEED_PLANT)["id"]
+        if spec.sensor:
             ids["sensor_id"] = self.api(
                 "POST",
                 f"/api/v1/clusters/{cid}/sensors",
@@ -195,31 +242,26 @@ class Pipeline:
                     "plant_id": ids.get("plant_id"),
                 },
             )["id"]
-        if irrigator:
-            body = {
-                "tuya_device_id": f"fake_irrigator_{cid:03d}",
-                "name": f"Irrigator {cid}",
-                "type": "rainpoint.ik10pw",
-            }
-            if reservoir_l is not None:
-                body["reservoir_l"] = reservoir_l
-            if flow_rate_l_per_min is not None:
-                body["flow_rate_l_per_min"] = flow_rate_l_per_min
-            ids["irrigator_id"] = self.api("POST", f"/api/v1/clusters/{cid}/irrigator", body)["id"]
+        if spec.irrigator:
+            ids["irrigator_id"] = self.api("POST", f"/api/v1/clusters/{cid}/irrigator", spec.irrigator_body(cid))["id"]
         self.api(
             "PUT",
             f"/api/v1/clusters/{cid}/config",
-            config or {"mode": "smart", "duration_minutes": 2, "interval_hours": 12, "auto_run": True},
+            spec.config or {"mode": "smart", "duration_minutes": 2, "interval_hours": 12, "auto_run": True},
         )
-        if sensor and soil is not None:
+        if spec.sensor and spec.soil is not None:
             with self.repo() as repo:
-                for age in reading_ages:
+                for age in spec.reading_ages:
                     repo.add_sensor_reading(
-                        sensor_id=ids["sensor_id"], timestamp=FROZEN_TS - age, soil_moisture=soil, temperature=temp
+                        sensor_id=ids["sensor_id"],
+                        timestamp=FROZEN_TS - age,
+                        soil_moisture=spec.soil,
+                        temperature=spec.temp,
                     )
         return ids
 
     def add_event(self, irrigator_id: int, *, age: int, action: str = "start", triggered_by: str = "auto") -> None:
+        """Seed one irrigation event ``age`` seconds before the frozen instant."""
         with self.repo() as repo:
             repo.add_irrigation_event(
                 irrigator_id=irrigator_id,
@@ -231,6 +273,7 @@ class Pipeline:
             )
 
     def raise_leak(self, cluster_id: int, sensor_id: int, *, age: int = 0) -> int:
+        """Open a leak / stuck-valve alert for ``cluster_id`` ``age`` seconds ago; return its id."""
         with self.repo() as repo:
             alert = repo.upsert_alert(
                 dedup_key=f"leak::{LEAK_ALERT_CODE}::{cluster_id}::sensor{sensor_id}",
@@ -269,6 +312,7 @@ class Pipeline:
         return entry
 
     def db_rows(self) -> dict[str, list[dict]]:
+        """Rows of every tracked table (only those written after ``mark`` for marked tables)."""
         out: dict[str, list[dict]] = {}
         with self.app.state.session_factory() as session:
             for name in APPEND_ONLY_TABLES + MUTABLE_TABLES:
@@ -276,17 +320,11 @@ class Pipeline:
                 stmt = select(table).order_by(table.c.id)
                 if name in self._marks:
                     stmt = stmt.where(table.c.id > self._marks[name])
-                rows = []
-                for row in session.execute(stmt).mappings():
-                    record = dict(row)
-                    for col in JSON_COLUMNS:
-                        if record.get(col):
-                            record[col] = json.loads(record[col])
-                    rows.append(record)
-                out[name] = rows
+                out[name] = [_decode_json_columns(row) for row in session.execute(stmt).mappings()]
         return out
 
     def observed(self) -> dict:
+        """Everything a golden pins: calls, DB writes, device and gateway calls, notifications."""
         return {
             "calls": self.calls,
             "db_writes": self.db_rows(),
@@ -299,6 +337,8 @@ class Pipeline:
 
 @pytest.fixture
 def pipeline(clean_env, frozen_clock):
+    """A fresh pipeline harness with a clean environment and a frozen clock."""
+    del clean_env, frozen_clock  # requested only for their side effects
     p = Pipeline()
     yield p
     p.close()
@@ -317,42 +357,49 @@ def _irrigate(p: Pipeline, cid: int = 1, **body) -> dict:
 
 
 def sc_dry_irrigates(p: Pipeline) -> None:
+    """Scenario: dry irrigates."""
     p.seed_cluster(soil=35.0)
     p.mark()
     _irrigate(p)
 
 
 def sc_very_dry_critical_stress(p: Pipeline) -> None:
+    """Scenario: very dry critical stress."""
     p.seed_cluster(soil=8.0)
     p.mark()
     _irrigate(p)
 
 
 def sc_wet_skips(p: Pipeline) -> None:
+    """Scenario: wet skips."""
     p.seed_cluster(soil=88.0)
     p.mark()
     _irrigate(p)
 
 
 def sc_adequate_skips(p: Pipeline) -> None:
+    """Scenario: adequate skips."""
     p.seed_cluster(soil=55.0)
     p.mark()
     _irrigate(p)
 
 
 def sc_no_readings_fallback(p: Pipeline) -> None:
+    """Scenario: no readings fallback."""
     p.seed_cluster(soil=None)
     p.mark()
     _irrigate(p)
 
 
 def sc_outdoor_dry_weather_offline(p: Pipeline) -> None:
+    """Scenario: outdoor dry weather offline."""
     p.seed_cluster(environment="outdoor", soil=35.0)
     p.mark()
     _irrigate(p)
 
 
 def sc_outdoor_rain_forecast(p: Pipeline) -> None:
+    """Scenario: outdoor rain forecast."""
     p.seed_cluster(environment="outdoor", soil=35.0)
     p.use_weather(RainyWeather())
     p.mark()
@@ -360,6 +407,7 @@ def sc_outdoor_rain_forecast(p: Pipeline) -> None:
 
 
 def sc_indoor_no_sync_weather_available(p: Pipeline) -> None:
+    """Scenario: indoor no sync weather available."""
     p.seed_cluster(soil=35.0)
     p.use_weather(RainyWeather())
     p.mark()
@@ -367,18 +415,21 @@ def sc_indoor_no_sync_weather_available(p: Pipeline) -> None:
 
 
 def sc_temp_override(p: Pipeline) -> None:
+    """Scenario: temp override."""
     p.seed_cluster(soil=35.0)
     p.mark()
     _irrigate(p, temp_override=31.5)
 
 
 def sc_no_sync_offline(p: Pipeline) -> None:
+    """Scenario: no sync offline."""
     p.seed_cluster(soil=35.0)
     p.mark()
     _irrigate(p, no_sync=True)
 
 
 def sc_cooldown_active(p: Pipeline) -> None:
+    """Scenario: cooldown active."""
     ids = p.seed_cluster(soil=35.0)
     p.add_event(ids["irrigator_id"], age=2 * HOUR)
     p.mark()
@@ -386,6 +437,7 @@ def sc_cooldown_active(p: Pipeline) -> None:
 
 
 def sc_cooldown_boundary_inside(p: Pipeline) -> None:
+    """Scenario: cooldown boundary inside."""
     ids = p.seed_cluster(soil=35.0)
     p.add_event(ids["irrigator_id"], age=6 * HOUR - 60)
     p.mark()
@@ -393,6 +445,7 @@ def sc_cooldown_boundary_inside(p: Pipeline) -> None:
 
 
 def sc_cooldown_boundary_outside(p: Pipeline) -> None:
+    """Scenario: cooldown boundary outside."""
     ids = p.seed_cluster(soil=35.0)
     p.add_event(ids["irrigator_id"], age=6 * HOUR + 60)
     p.mark()
@@ -400,6 +453,7 @@ def sc_cooldown_boundary_outside(p: Pipeline) -> None:
 
 
 def sc_cooldown_counts_manual_start(p: Pipeline) -> None:
+    """Scenario: cooldown counts manual start."""
     ids = p.seed_cluster(soil=35.0)
     p.add_event(ids["irrigator_id"], age=HOUR, triggered_by="manual")
     p.mark()
@@ -407,6 +461,7 @@ def sc_cooldown_counts_manual_start(p: Pipeline) -> None:
 
 
 def sc_cooldown_ignores_non_start(p: Pipeline) -> None:
+    """Scenario: cooldown ignores non start."""
     ids = p.seed_cluster(soil=35.0)
     p.add_event(ids["irrigator_id"], age=HOUR, action="schedule_updated")
     p.add_event(ids["irrigator_id"], age=HOUR - 60, action="off", triggered_by="manual")
@@ -415,6 +470,7 @@ def sc_cooldown_ignores_non_start(p: Pipeline) -> None:
 
 
 def sc_quiet_hours(p: Pipeline) -> None:
+    """Scenario: quiet hours."""
     p.seed_cluster(soil=35.0)
     p.api("PUT", "/api/v1/config/global", {"quiet_start_hour": 9, "quiet_end_hour": 11})
     p.mark()
@@ -422,6 +478,7 @@ def sc_quiet_hours(p: Pipeline) -> None:
 
 
 def sc_quiet_hours_force(p: Pipeline) -> None:
+    """Scenario: quiet hours force."""
     p.seed_cluster(soil=35.0)
     p.api("PUT", "/api/v1/config/global", {"quiet_start_hour": 9, "quiet_end_hour": 11})
     p.mark()
@@ -429,6 +486,7 @@ def sc_quiet_hours_force(p: Pipeline) -> None:
 
 
 def sc_quiet_hours_cluster_opt_out(p: Pipeline) -> None:
+    """Scenario: quiet hours cluster opt out."""
     p.seed_cluster(soil=35.0)
     p.api("PUT", "/api/v1/config/global", {"quiet_start_hour": 9, "quiet_end_hour": 11})
     p.api("PUT", "/api/v1/clusters/1/config", {"quiet_start_hour": 0, "quiet_end_hour": 0})
@@ -437,6 +495,7 @@ def sc_quiet_hours_cluster_opt_out(p: Pipeline) -> None:
 
 
 def sc_leak_hold_open(p: Pipeline) -> None:
+    """Scenario: leak hold open."""
     ids = p.seed_cluster(soil=35.0)
     p.raise_leak(ids["cluster_id"], ids["sensor_id"], age=HOUR)
     p.mark()
@@ -444,6 +503,7 @@ def sc_leak_hold_open(p: Pipeline) -> None:
 
 
 def sc_leak_hold_acknowledged(p: Pipeline) -> None:
+    """Scenario: leak hold acknowledged."""
     ids = p.seed_cluster(soil=35.0)
     alert_id = p.raise_leak(ids["cluster_id"], ids["sensor_id"], age=HOUR)
     p.api("POST", f"/api/v1/alerts/{alert_id}/acknowledge")
@@ -452,6 +512,7 @@ def sc_leak_hold_acknowledged(p: Pipeline) -> None:
 
 
 def sc_leak_hold_resolved(p: Pipeline) -> None:
+    """Scenario: leak hold resolved."""
     ids = p.seed_cluster(soil=35.0)
     alert_id = p.raise_leak(ids["cluster_id"], ids["sensor_id"], age=HOUR)
     p.api("POST", f"/api/v1/alerts/{alert_id}/resolve")
@@ -460,6 +521,7 @@ def sc_leak_hold_resolved(p: Pipeline) -> None:
 
 
 def sc_leak_hold_force(p: Pipeline) -> None:
+    """Scenario: leak hold force."""
     ids = p.seed_cluster(soil=35.0)
     p.raise_leak(ids["cluster_id"], ids["sensor_id"], age=HOUR)
     p.mark()
@@ -467,6 +529,7 @@ def sc_leak_hold_force(p: Pipeline) -> None:
 
 
 def sc_leak_hold_expired(p: Pipeline) -> None:
+    """Scenario: leak hold expired."""
     ids = p.seed_cluster(soil=35.0)
     p.raise_leak(ids["cluster_id"], ids["sensor_id"], age=25 * HOUR)
     p.mark()
@@ -474,6 +537,7 @@ def sc_leak_hold_expired(p: Pipeline) -> None:
 
 
 def sc_leak_hold_beats_cooldown(p: Pipeline) -> None:
+    """Scenario: leak hold beats cooldown."""
     ids = p.seed_cluster(soil=35.0)
     p.add_event(ids["irrigator_id"], age=HOUR)
     p.raise_leak(ids["cluster_id"], ids["sensor_id"], age=HOUR)
@@ -482,6 +546,7 @@ def sc_leak_hold_beats_cooldown(p: Pipeline) -> None:
 
 
 def sc_leak_escape_hatch_manual_start(p: Pipeline) -> None:
+    """Scenario: leak escape hatch manual start."""
     ids = p.seed_cluster(soil=35.0)
     p.raise_leak(ids["cluster_id"], ids["sensor_id"], age=HOUR)
     p.mark()
@@ -490,6 +555,7 @@ def sc_leak_escape_hatch_manual_start(p: Pipeline) -> None:
 
 
 def sc_vacation_without_capacity(p: Pipeline) -> None:
+    """Scenario: vacation without capacity."""
     p.seed_cluster(soil=35.0)
     p.api("POST", "/api/v1/vacation", {"starts_at": FROZEN_TS - 86400, "ends_at": FROZEN_TS + 3 * 86400})
     p.mark()
@@ -498,6 +564,7 @@ def sc_vacation_without_capacity(p: Pipeline) -> None:
 
 def sc_vacation_rationing(p: Pipeline) -> None:
     # 6 L * 0.95 usable over a 4-day window → 1.425 L/day → 1 min at 1 L/min (< the 2 min asked).
+    """Scenario: vacation rationing."""
     p.seed_cluster(soil=35.0, reservoir_l=6.0, flow_rate_l_per_min=1.0)
     p.api("POST", "/api/v1/vacation", {"starts_at": FROZEN_TS - 3600, "ends_at": FROZEN_TS + 4 * 86400 - 3600})
     p.mark()
@@ -505,6 +572,7 @@ def sc_vacation_rationing(p: Pipeline) -> None:
 
 
 def sc_vacation_budget_exhausted(p: Pipeline) -> None:
+    """Scenario: vacation budget exhausted."""
     p.seed_cluster(soil=35.0, reservoir_l=0.5, flow_rate_l_per_min=1.0)
     p.api("POST", "/api/v1/vacation", {"starts_at": FROZEN_TS - 3600, "ends_at": FROZEN_TS + 10 * 86400})
     p.mark()
@@ -512,6 +580,7 @@ def sc_vacation_budget_exhausted(p: Pipeline) -> None:
 
 
 def sc_window_outside(p: Pipeline) -> None:
+    """Scenario: window outside."""
     p.seed_cluster(soil=35.0)
     p.api("POST", "/api/v1/clusters/1/windows", {"start_hour": 18, "end_hour": 22})
     p.mark()
@@ -519,6 +588,7 @@ def sc_window_outside(p: Pipeline) -> None:
 
 
 def sc_window_inside(p: Pipeline) -> None:
+    """Scenario: window inside."""
     p.seed_cluster(soil=35.0)
     p.api("POST", "/api/v1/clusters/1/windows", {"start_hour": 8, "end_hour": 12})
     p.mark()
@@ -526,6 +596,7 @@ def sc_window_inside(p: Pipeline) -> None:
 
 
 def sc_window_outside_critical_stress_obeys_window(p: Pipeline) -> None:
+    """Scenario: window outside critical stress obeys window."""
     p.seed_cluster(soil=8.0)
     p.api("POST", "/api/v1/clusters/1/windows", {"start_hour": 18, "end_hour": 22})
     p.mark()
@@ -533,6 +604,7 @@ def sc_window_outside_critical_stress_obeys_window(p: Pipeline) -> None:
 
 
 def sc_caps_reached_automatic(p: Pipeline) -> None:
+    """Scenario: caps reached automatic."""
     ids = p.seed_cluster(
         soil=35.0,
         config={
@@ -550,6 +622,7 @@ def sc_caps_reached_automatic(p: Pipeline) -> None:
 
 
 def sc_caps_reached_manual_start(p: Pipeline) -> None:
+    """Scenario: caps reached manual start."""
     ids = p.seed_cluster(
         soil=35.0,
         config={"mode": "smart", "duration_minutes": 2, "auto_run": True, "max_events_per_day": 1},
@@ -561,6 +634,7 @@ def sc_caps_reached_manual_start(p: Pipeline) -> None:
 
 
 def sc_daily_minutes_cap_manual_start(p: Pipeline) -> None:
+    """Scenario: daily minutes cap manual start."""
     ids = p.seed_cluster(soil=35.0, config={"mode": "smart", "daily_cap_minutes": 4})
     p.add_event(ids["irrigator_id"], age=7 * HOUR)
     p.mark()
@@ -569,6 +643,7 @@ def sc_daily_minutes_cap_manual_start(p: Pipeline) -> None:
 
 
 def sc_manual_start_stop_log(p: Pipeline) -> None:
+    """Scenario: manual start stop log."""
     ids = p.seed_cluster(soil=35.0)
     p.mark()
     p.call("POST", f"/api/v1/irrigators/{ids['irrigator_id']}/start", {"minutes": 3})
@@ -580,6 +655,7 @@ def sc_manual_start_stop_log(p: Pipeline) -> None:
 
 
 def sc_manual_start_device_failure(p: Pipeline) -> None:
+    """Scenario: manual start device failure."""
     ids = p.seed_cluster(soil=35.0)
     p.wiring.irrigator.start_result = (False, "device timeout")
     p.wiring.irrigator.stop_result = (False, "device asleep")
@@ -589,6 +665,7 @@ def sc_manual_start_device_failure(p: Pipeline) -> None:
 
 
 def sc_manual_start_no_registry(p: Pipeline) -> None:
+    """Scenario: manual start no registry."""
     ids = p.seed_cluster(soil=35.0)
     p.app.dependency_overrides[get_device_registry] = lambda: None
     p.mark()
@@ -598,18 +675,21 @@ def sc_manual_start_no_registry(p: Pipeline) -> None:
 
 
 def sc_dry_run(p: Pipeline) -> None:
+    """Scenario: dry run."""
     p.seed_cluster(soil=35.0)
     p.mark()
     _irrigate(p, dry_run=True)
 
 
 def sc_dry_run_skip(p: Pipeline) -> None:
+    """Scenario: dry run skip."""
     p.seed_cluster(soil=88.0)
     p.mark()
     _irrigate(p, dry_run=True)
 
 
 def sc_dry_run_global_preference(p: Pipeline) -> None:
+    """Scenario: dry run global preference."""
     p.seed_cluster(soil=35.0)
     p.api("PUT", "/api/v1/preferences", {"dry_run_global": True})
     p.mark()
@@ -617,6 +697,7 @@ def sc_dry_run_global_preference(p: Pipeline) -> None:
 
 
 def sc_notify_auto_disabled(p: Pipeline) -> None:
+    """Scenario: notify auto disabled."""
     p.seed_cluster(soil=35.0)
     p.api("PUT", "/api/v1/preferences", {"notify_auto": False})
     p.mark()
@@ -624,6 +705,7 @@ def sc_notify_auto_disabled(p: Pipeline) -> None:
 
 
 def sc_fresh_reading_no_gateway_call(p: Pipeline) -> None:
+    """Scenario: fresh reading no gateway call."""
     p.seed_cluster(soil=35.0)
     p.use_gateway()
     p.mark()
@@ -631,6 +713,7 @@ def sc_fresh_reading_no_gateway_call(p: Pipeline) -> None:
 
 
 def sc_stale_reading_forces_one_sync(p: Pipeline) -> None:
+    """Scenario: stale reading forces one sync."""
     p.seed_cluster(soil=35.0, reading_ages=(5 * HOUR, 5 * HOUR + 600))
     p.use_gateway({"soil_moisture": 30.0, "temperature": 23.0})
     p.mark()
@@ -638,6 +721,7 @@ def sc_stale_reading_forces_one_sync(p: Pipeline) -> None:
 
 
 def sc_stale_reading_no_sync_flag(p: Pipeline) -> None:
+    """Scenario: stale reading no sync flag."""
     p.seed_cluster(soil=35.0, reading_ages=(5 * HOUR, 5 * HOUR + 600))
     p.use_gateway()
     p.mark()
@@ -645,18 +729,21 @@ def sc_stale_reading_no_sync_flag(p: Pipeline) -> None:
 
 
 def sc_no_plants(p: Pipeline) -> None:
+    """Scenario: no plants."""
     p.seed_cluster(plant=False, soil=35.0)
     p.mark()
     _irrigate(p)
 
 
 def sc_no_irrigator(p: Pipeline) -> None:
+    """Scenario: no irrigator."""
     p.seed_cluster(irrigator=False, soil=35.0)
     p.mark()
     _irrigate(p)
 
 
 def sc_no_registry(p: Pipeline) -> None:
+    """Scenario: no registry."""
     p.seed_cluster(soil=35.0)
     p.app.dependency_overrides[get_device_registry] = lambda: None
     p.mark()
@@ -664,6 +751,7 @@ def sc_no_registry(p: Pipeline) -> None:
 
 
 def sc_unknown_irrigator_model(p: Pipeline) -> None:
+    """Scenario: unknown irrigator model."""
     p.seed_cluster(soil=35.0, irrigator=False)
     # A row from an older database: the API refuses an unknown type on write.
     with p.repo() as repo:
@@ -675,6 +763,7 @@ def sc_unknown_irrigator_model(p: Pipeline) -> None:
 
 
 def sc_actuation_failed(p: Pipeline) -> None:
+    """Scenario: actuation failed."""
     p.seed_cluster(soil=35.0)
     p.wiring.irrigator.start_result = (False, "device timeout")
     p.mark()
@@ -682,12 +771,14 @@ def sc_actuation_failed(p: Pipeline) -> None:
 
 
 def sc_device_health_block(p: Pipeline) -> None:
+    """Scenario: device health block."""
     _install_health_block(p, p.seed_cluster(soil=35.0))
     p.mark()
     _irrigate(p)
 
 
 def sc_cluster_not_found(p: Pipeline) -> None:
+    """Scenario: cluster not found."""
     p.seed_cluster(soil=35.0)
     p.mark()
     _irrigate(p, cid=99)
@@ -696,24 +787,28 @@ def sc_cluster_not_found(p: Pipeline) -> None:
 
 
 def sc_check_single_dry(p: Pipeline) -> None:
+    """Scenario: check single dry."""
     p.seed_cluster(soil=35.0)
     p.mark()
     p.call("POST", "/api/v1/clusters/1/check")
 
 
 def sc_check_single_auto_run_off(p: Pipeline) -> None:
+    """Scenario: check single auto run off."""
     p.seed_cluster(soil=35.0, config={"mode": "smart", "duration_minutes": 2, "auto_run": False})
     p.mark()
     p.call("POST", "/api/v1/clusters/1/check")
 
 
 def sc_check_single_sensor_only(p: Pipeline) -> None:
+    """Scenario: check single sensor only."""
     p.seed_cluster(irrigator=False, soil=20.0)
     p.mark()
     p.call("POST", "/api/v1/clusters/1/check")
 
 
 def sc_check_all_mixed(p: Pipeline) -> None:
+    """Scenario: check all mixed."""
     p.seed_cluster("Alpha", soil=35.0)
     p.seed_cluster("Bravo", soil=88.0)
     p.seed_cluster("Charlie", irrigator=False, soil=20.0)
@@ -724,6 +819,7 @@ def sc_check_all_mixed(p: Pipeline) -> None:
 
 
 def sc_check_all_twice_cooldown(p: Pipeline) -> None:
+    """Scenario: check all twice cooldown."""
     p.seed_cluster(soil=35.0)
     p.mark()
     p.call("POST", "/api/v1/check")
@@ -735,14 +831,13 @@ def sc_check_all_twice_cooldown(p: Pipeline) -> None:
 
 
 def sc_check_all_empty(p: Pipeline) -> None:
+    """Scenario: check all empty."""
     p.mark()
     p.call("POST", "/api/v1/check")
 
 
 def _install_health_block(p: Pipeline, ids: dict) -> None:
     """Wire a real ``DeviceHealthMonitor`` whose cache holds NO_WATER for the irrigator."""
-    from greenhouse_server.services.health_monitor import DeviceHealthMonitor
-
     p.wiring.irrigator.set_health(DeviceHealthState(observed_at=FROZEN_TS, alarms=frozenset({HealthAlarm.NO_WATER})))
     session = p.app.state.session_factory()
     try:
@@ -819,6 +914,7 @@ SCENARIOS: dict[str, Callable[[Pipeline], None]] = {
 
 
 def run_scenario(name: str) -> dict:
+    """Run golden scenario ``name`` on a fresh pipeline and return what it observed."""
     p = Pipeline()
     try:
         SCENARIOS[name](p)
@@ -827,8 +923,9 @@ def run_scenario(name: str) -> dict:
         p.close()
 
 
+@pytest.mark.usefixtures("clean_env", "frozen_clock")
 @pytest.mark.parametrize("name", list(SCENARIOS))
-def test_pipeline_golden(name, clean_env, frozen_clock):
+def test_pipeline_golden(name):
     """Full matrix: responses, DB writes, adapter/gateway calls, notifications — one golden per scenario."""
     assert_golden_json(f"orchestration/pipeline/{name}.json", run_scenario(name))
 
@@ -854,8 +951,9 @@ _ONE_LOG_CASES = {
 }
 
 
+@pytest.mark.usefixtures("clean_env", "frozen_clock")
 @pytest.mark.parametrize("name", sorted(_ONE_LOG_CASES))
-def test_each_evaluation_writes_exactly_one_decision_log(name, clean_env, frozen_clock):
+def test_each_evaluation_writes_exactly_one_decision_log(name):
     """I6: each early return / final decision persists exactly one row that round-trips."""
     code, action, actuated = _ONE_LOG_CASES[name]
     rows = run_scenario(name)["db_writes"]["decision_logs"]
@@ -872,11 +970,12 @@ def test_each_evaluation_writes_exactly_one_decision_log(name, clean_env, frozen
         assert primary == code
 
 
+@pytest.mark.usefixtures("clean_env", "frozen_clock")
 @pytest.mark.parametrize("name", ["cluster_not_found", "manual_start_stop_log", "check_single_auto_run_off"])
-def test_decision_logs_only_come_from_engine_evaluations(name, clean_env, frozen_clock):
+def test_decision_logs_only_come_from_engine_evaluations(name):
     """404s, manual actuation and ``auto_run`` off never reach the engine's persistence."""
     observed = run_scenario(name)
-    evaluated = [c for c in observed["calls"] if c["request"].endswith("/irrigate") and c["status"] == 200]
+    evaluated = [c for c in observed["calls"] if c["request"].endswith("/irrigate") and c["status"] == HTTPStatus.OK]
     assert len(observed["db_writes"]["decision_logs"]) == len(evaluated)
 
 
@@ -890,13 +989,13 @@ def test_leak_hold_blocks_forced_irrigate_but_not_direct_start(pipeline):
     pipeline.mark()
 
     held = _irrigate(pipeline, force=True)
-    assert held["status"] == 200
+    assert held["status"] == HTTPStatus.OK
     assert held["response"]["action"] == "skip"
     assert [r["code"] for r in held["response"]["reasons"]] == ["leak_hold"]
     assert pipeline.wiring.irrigator.calls == []
 
     started = pipeline.call("POST", f"/api/v1/irrigators/{ids['irrigator_id']}/start", {"minutes": 3})
-    assert started["status"] == 200
+    assert started["status"] == HTTPStatus.OK
     assert pipeline.wiring.irrigator.calls == [("start", ids["irrigator_id"], 3)]
     events = pipeline.db_rows()["irrigation_events"]
     assert [(e["action"], e["triggered_by"], e["duration_minutes"]) for e in events] == [("start", "manual", 3)]
@@ -910,9 +1009,6 @@ def test_leak_hold_blocks_forced_irrigate_but_not_direct_start(pipeline):
 
 def test_successful_auto_start_schedules_leak_check_and_watcher(pipeline):
     """A successful automatic start schedules ``leak-check-*`` (+30 min) and ``pump-watcher-*`` jobs."""
-    from greenhouse_server.scheduler import scheduler as bg_scheduler
-    from greenhouse_server.scheduler import start_scheduler, stop_scheduler
-
     pipeline.seed_cluster(soil=35.0)
     # The watcher reads the registry from app.state (not the request override).
     pipeline.app.state.device_registry = pipeline.wiring.registry
@@ -954,9 +1050,6 @@ def test_forced_run_is_recorded_manual_and_keeps_leak_check_and_watcher(pipeline
     the dry-run watcher like an automatic run, plus a ``leak_check_armed`` marker so the
     restart re-arm finds it.
     """
-    from greenhouse_server.scheduler import scheduler as bg_scheduler
-    from greenhouse_server.scheduler import start_scheduler, stop_scheduler
-
     pipeline.seed_cluster(soil=35.0)
     pipeline.app.state.device_registry = pipeline.wiring.registry
     pipeline.mark()
@@ -980,9 +1073,6 @@ def test_manual_start_schedules_watcher_and_leak_check(pipeline):
     A short run keeps the 30-min check; without a duration (the device timer decides) the check
     is skipped and the activity log says why; the hand-watering log arms nothing.
     """
-    from greenhouse_server.scheduler import scheduler as bg_scheduler
-    from greenhouse_server.scheduler import start_scheduler, stop_scheduler
-
     ids = pipeline.seed_cluster(soil=35.0)
     pipeline.app.state.device_registry = pipeline.wiring.registry
     pipeline.mark()
@@ -1015,10 +1105,6 @@ def test_manual_start_schedules_watcher_and_leak_check(pipeline):
 
 def test_long_manual_start_checks_for_a_leak_after_the_run_has_settled(pipeline):
     """A long manual run's check is due at start + minutes + settle time, and observes that whole window."""
-    from greenhouse_core.constants import LEAK_CHECK_SETTLE_SECONDS
-    from greenhouse_server.scheduler import scheduler as bg_scheduler
-    from greenhouse_server.scheduler import start_scheduler, stop_scheduler
-
     ids = pipeline.seed_cluster(soil=35.0)
     pipeline.app.state.device_registry = pipeline.wiring.registry
     pipeline.mark()
@@ -1057,10 +1143,11 @@ def test_dry_run_global_never_actuates_but_stops_still_work(pipeline):
     assert (manual["status"], manual["response"]) == (409, {"detail": "global dry run is on: irrigator not started"})
     assert pipeline.wiring.irrigator.calls == []
 
-    assert pipeline.call("POST", f"/api/v1/irrigators/{ids['irrigator_id']}/stop")["status"] == 200
+    assert pipeline.call("POST", f"/api/v1/irrigators/{ids['irrigator_id']}/stop")["status"] == HTTPStatus.OK
     assert pipeline.call("POST", "/api/v1/bulk/stop-all")["response"] == {"stopped": 1, "errors": []}
     assert (
-        pipeline.call("POST", f"/api/v1/irrigators/{ids['irrigator_id']}/log-manual", {"minutes": 2})["status"] == 200
+        pipeline.call("POST", f"/api/v1/irrigators/{ids['irrigator_id']}/log-manual", {"minutes": 2})["status"]
+        == HTTPStatus.OK
     )
     assert [c[0] for c in pipeline.wiring.irrigator.calls] == ["stop", "stop"]
 
@@ -1149,7 +1236,7 @@ def test_device_health_block_is_written_to_decision_log(pipeline):
     pipeline.mark()
     resp = _irrigate(pipeline)["response"]
     assert resp["action"] == "skip"
-    assert [r["code"] for r in resp["reasons"]][0] == "device_no_water"
+    assert resp["reasons"][0]["code"] == "device_no_water"
     rows = pipeline.db_rows()
     (log,) = rows["decision_logs"]
     assert (log["action"], log["primary_code"], log["actuated"]) == ("skip", "device_no_water", False)
@@ -1168,21 +1255,19 @@ def test_vacation_create_rejects_reversed_window(pipeline):
     """
     for starts, ends in ((FROZEN_TS + 86400, FROZEN_TS), (FROZEN_TS, FROZEN_TS)):
         rejected = pipeline.call("POST", "/api/v1/vacation", {"starts_at": starts, "ends_at": ends})
-        assert rejected["status"] == 400
+        assert rejected["status"] == HTTPStatus.BAD_REQUEST
         assert rejected["response"] == {"detail": "starts_at must be < ends_at"}
     created = pipeline.call("POST", "/api/v1/vacation", {"starts_at": FROZEN_TS, "ends_at": FROZEN_TS + 86400})
-    assert created["status"] == 201
+    assert created["status"] == HTTPStatus.CREATED
     window_id = created["response"]["id"]
     rejected = pipeline.call("PUT", f"/api/v1/vacation/{window_id}", {"ends_at": FROZEN_TS - 1})
-    assert rejected["status"] == 400
+    assert rejected["status"] == HTTPStatus.BAD_REQUEST
     assert rejected["response"] == {"detail": "starts_at must be < ends_at"}
     assert [w["id"] for w in pipeline.call("GET", "/api/v1/vacation")["response"]["items"]] == [window_id]
 
 
 def test_vacation_budget_projection(pipeline):
     """``services.vacation`` (web-only read model): per-cluster daily budget, capacity-configured clusters only."""
-    from greenhouse_server.services.vacation import cluster_budgets, vacation_days
-
     pipeline.seed_cluster("Zulu", soil=35.0, reservoir_l=6.0, flow_rate_l_per_min=1.0)
     pipeline.seed_cluster("Alpha", soil=35.0, reservoir_l=10.0, flow_rate_l_per_min=0.5)
     pipeline.seed_cluster("No capacity", soil=35.0, reservoir_l=10.0)
@@ -1214,17 +1299,16 @@ def test_vacation_budget_projection(pipeline):
 
 
 @contextmanager
-def _failing_commit(app):
+def _failing_commit():
     """Make the next ``Session.commit`` raise, as a locked database would."""
-    from sqlalchemy.orm import Session
-
     real = Session.commit
     state = {"armed": True}
 
     def commit(self):
         if state["armed"]:
             state["armed"] = False
-            raise RuntimeError("database is locked")
+            msg = "database is locked"
+            raise RuntimeError(msg)
         return real(self)
 
     Session.commit = commit  # type: ignore[method-assign]
@@ -1238,9 +1322,9 @@ def test_unrecorded_automatic_start_is_stopped_and_surfaced(pipeline, caplog):
     """If the start event cannot be committed, the pump is stopped at once, logged at ERROR, and the error surfaces."""
     ids = pipeline.seed_cluster(soil=35.0)
     pipeline.mark()
-    with _failing_commit(pipeline.app), caplog.at_level("ERROR", logger="greenhouse_server.services.irrigation"):
+    with _failing_commit(), caplog.at_level("ERROR", logger="greenhouse_server.services.irrigation"):
         resp = pipeline.client.post("/api/v1/clusters/1/irrigate", json={})
-    assert resp.status_code == 500  # the write error surfaces
+    assert resp.status_code == HTTPStatus.INTERNAL_SERVER_ERROR  # the write error surfaces
     assert pipeline.wiring.irrigator.calls == [("start", ids["irrigator_id"], 2), ("stop", ids["irrigator_id"])]
     assert any("compensating stop: stop_ok=True" in m for m in caplog.messages)
     assert pipeline.db_rows()["irrigation_events"] == []
@@ -1251,7 +1335,7 @@ def test_unrecorded_start_in_check_all_is_stopped_and_reported(pipeline):
     """In ``check_all`` the cluster is reported as failed (``check_failed``) and its pump stopped again."""
     ids = pipeline.seed_cluster(soil=35.0)
     pipeline.mark()
-    with _failing_commit(pipeline.app):
+    with _failing_commit():
         resp = pipeline.call("POST", "/api/v1/check")
     assert [r["action"] for r in resp["response"]["results"]] == ["error"]
     assert pipeline.wiring.irrigator.calls == [("start", ids["irrigator_id"], 2), ("stop", ids["irrigator_id"])]
@@ -1259,9 +1343,10 @@ def test_unrecorded_start_in_check_all_is_stopped_and_reported(pipeline):
 
 
 def test_unrecorded_manual_start_is_stopped_and_refused(pipeline, caplog):
+    """Unrecorded manual start is stopped and refused."""
     ids = pipeline.seed_cluster(soil=35.0)
     pipeline.mark()
-    with _failing_commit(pipeline.app), caplog.at_level("ERROR", logger="greenhouse_server.services.irrigation"):
+    with _failing_commit(), caplog.at_level("ERROR", logger="greenhouse_server.services.irrigation"):
         resp = pipeline.call("POST", f"/api/v1/irrigators/{ids['irrigator_id']}/start", {"minutes": 3})
     assert (resp["status"], resp["response"]) == (
         500,

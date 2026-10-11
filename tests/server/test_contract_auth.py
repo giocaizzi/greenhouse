@@ -11,8 +11,10 @@ tests are deterministic; JWTs are compared by decoded claims, never verbatim.
 
 from __future__ import annotations
 
+import hmac
 import logging
 from datetime import timedelta
+from http import HTTPStatus
 
 import jwt
 import pytest
@@ -25,6 +27,7 @@ from sqlalchemy.pool import StaticPool
 from golden import FROZEN_INSTANT, FROZEN_TS, install_offline_weather
 from greenhouse_core import auth as core_auth
 from greenhouse_core.models import Base, User
+from greenhouse_server import auth as server_auth
 from greenhouse_server.auth import (
     JWT_ALGORITHM,
     JWT_AUDIENCE,
@@ -38,25 +41,27 @@ from greenhouse_server.auth import (
 )
 from greenhouse_server.config import Settings
 
-from .conftest import TEST_ADMIN_PASSWORD, TEST_ADMIN_USERNAME, TEST_AUTH_SECRET, _make_stubbed_app
+from .conftest import TEST_ADMIN_PASSWORD, TEST_ADMIN_USERNAME, TEST_AUTH_SECRET, TEST_MCP_TOKEN, _make_stubbed_app
 
 PW = "correct horse"
 SALT = b"fixedsalt1234567"
 HASH_CURRENT = PasswordHasher().hash(PW, salt=SALT)
 HASH_OLD_PARAMS = PasswordHasher(time_cost=1, memory_cost=8, parallelism=1).hash(PW, salt=SALT)
 HASH_ARGON2I = PasswordHasher(type=Type.I).hash(PW, salt=SALT)
-MCP_TOKEN = "contract-mcp-token-0123456789abcdef"
+MCP_TOKEN = TEST_MCP_TOKEN
 TTL_SECONDS = 24 * 60 * 60
 
 
 @pytest.fixture(autouse=True)
 def _hermetic(clean_env, frozen_clock):
     """No env/.env leakage into Settings, UTC, and a frozen wall clock for every test."""
-    yield frozen_clock
+    del clean_env  # requested only for its side effect
+    return frozen_clock
 
 
 @pytest.fixture
 def db():
+    """A session on a fresh in-memory schema, for the core auth helpers."""
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(engine)
     session = Session(engine)
@@ -79,6 +84,7 @@ def _client(**settings_override):
 
 @pytest.fixture
 def real():
+    """A client and app with real auth (no bypass) and the contract MCP token configured."""
     client, app, engine = _client(mcp_token=MCP_TOKEN)
     yield client, app
     engine.dispose()
@@ -96,11 +102,15 @@ def _admin(app) -> User:
 
 
 class TestPasswordHashing:
+    """Tests for password hashing."""
+
     def test_hash_is_salted_argon2id_with_library_defaults(self):
+        """Hash is salted argon2id with library defaults."""
         first, second = core_auth.hash_password(PW), core_auth.hash_password(PW)
         assert first.startswith("$argon2id$v=19$m=65536,t=3,p=4$")
         assert first != second  # random salt per hash
-        assert core_auth.verify_password(PW, first) and core_auth.verify_password(PW, second)
+        assert core_auth.verify_password(PW, first)
+        assert core_auth.verify_password(PW, second)
         assert (
             HASH_CURRENT
             == "$argon2id$v=19$m=65536,t=3,p=4$Zml4ZWRzYWx0MTIzNDU2Nw$Tx/iK5pGB3NIurtkkFEGlw0tIWgk27e5e2pi1nsrpOE"
@@ -108,7 +118,8 @@ class TestPasswordHashing:
 
     @pytest.mark.parametrize("plain", ["", None])
     def test_empty_password_is_rejected(self, plain):
-        with pytest.raises(ValueError) as excinfo:
+        """Empty password is rejected."""
+        with pytest.raises(ValueError, match="password must be non-empty") as excinfo:
             core_auth.hash_password(plain)
         assert str(excinfo.value) == "password must be non-empty"
 
@@ -126,6 +137,7 @@ class TestPasswordHashing:
         ],
     )
     def test_verify_password_matrix(self, plain, hashed, expected):
+        """Verify password matrix."""
         assert core_auth.verify_password(plain, hashed) is expected
 
     def test_verify_password_returns_false_on_truncated_hash(self):
@@ -152,11 +164,15 @@ class TestPasswordHashing:
         ],
     )
     def test_needs_rehash(self, hashed, expected):
+        """Needs rehash."""
         assert core_auth.needs_rehash(hashed) is expected
 
 
 class TestUserHelpers:
+    """Tests for user helpers."""
+
     def test_create_user_flushes_with_frozen_created_at(self, db):
+        """Create user flushes with frozen created at."""
         user = core_auth.create_user(db, "Alice", PW)
         assert user.id is not None  # flushed, not committed
         assert (user.username, user.is_active, user.created_at, user.last_login_at) == ("Alice", True, FROZEN_TS, None)
@@ -167,16 +183,18 @@ class TestUserHelpers:
         assert core_auth.get_user_by_username(db, "alice") is None  # case-sensitive
 
     def test_create_user_with_empty_password_raises_before_insert(self, db):
-        with pytest.raises(ValueError):
+        """Create user with empty password raises before insert."""
+        with pytest.raises(ValueError, match="password must be non-empty"):
             core_auth.create_user(db, "Bob", "")
         assert db.query(User).count() == 0
 
-    def test_set_password_and_record_login(self, db, _hermetic):
+    def test_set_password_and_record_login(self, db, frozen_clock):
+        """Set password and record login."""
         user = core_auth.create_user(db, "Carol", PW)
         core_auth.set_password(db, user, "new secret")
         assert core_auth.verify_password("new secret", user.hashed_password)
         assert not core_auth.verify_password(PW, user.hashed_password)
-        _hermetic.move_to(FROZEN_INSTANT + timedelta(seconds=90))
+        frozen_clock.move_to(FROZEN_INSTANT + timedelta(seconds=90))
         core_auth.record_login(db, user)
         assert user.last_login_at == FROZEN_TS + 90
 
@@ -191,7 +209,10 @@ class _U:
 
 
 class TestJwt:
+    """Tests for jwt."""
+
     def test_issue_token_claims_and_header(self):
+        """Issue token claims and header."""
         token = issue_token(_settings(), _U())
         assert jwt.get_unverified_header(token) == {"alg": "HS256", "typ": "JWT"}
         assert jwt.decode(token, options={"verify_signature": False}) == {
@@ -204,16 +225,18 @@ class TestJwt:
         assert (JWT_ALGORITHM, JWT_AUDIENCE) == ("HS256", "greenhouse-session")
 
     def test_issue_token_honours_now_and_ttl(self):
+        """Issue token honours now and TTL."""
         token = issue_token(_settings(auth_token_ttl_minutes=1), _U(), now=1000)
         claims = jwt.decode(token, options={"verify_signature": False})
         assert (claims["iat"], claims["exp"]) == (1000, 1060)
 
-    def test_decode_roundtrip_and_expiry_boundary(self, _hermetic):
+    def test_decode_roundtrip_and_expiry_boundary(self, frozen_clock):
+        """Decode roundtrip and expiry boundary."""
         settings = _settings(auth_token_ttl_minutes=1)
         token = issue_token(settings, _U())
-        _hermetic.move_to(FROZEN_INSTANT + timedelta(seconds=59))
+        frozen_clock.move_to(FROZEN_INSTANT + timedelta(seconds=59))
         assert decode_token(settings, token)["sub"] == "5"
-        _hermetic.move_to(FROZEN_INSTANT + timedelta(seconds=60))  # now == exp → expired
+        frozen_clock.move_to(FROZEN_INSTANT + timedelta(seconds=60))  # now == exp → expired
         with pytest.raises(AuthError) as excinfo:
             decode_token(settings, token)
         assert (excinfo.value.status_code, excinfo.value.detail, excinfo.value.headers) == (
@@ -245,12 +268,14 @@ class TestJwt:
         ids=["garbage", "wrong-aud", "no-aud", "no-iat", "no-sub", "wrong-secret", "hs512", "alg-none"],
     )
     def test_every_other_failure_is_invalid_session(self, make_token):
+        """Every other failure is invalid session."""
         with pytest.raises(AuthError) as excinfo:
             decode_token(_settings(), make_token())
         assert (excinfo.value.status_code, excinfo.value.detail) == (401, "Invalid session")
 
     @pytest.mark.parametrize("secret", [None, ""])
     def test_missing_secret_is_503_for_issue_and_decode(self, secret):
+        """Missing secret is 503 for issue and decode."""
         settings = _settings(auth_secret_key=secret)
         for call in (lambda: issue_token(settings, _U()), lambda: decode_token(settings, "x")):
             with pytest.raises(AuthConfigError) as excinfo:
@@ -262,6 +287,7 @@ class TestJwt:
             )
 
     def test_error_class_defaults(self):
+        """Error class defaults."""
         assert (AuthError().status_code, AuthError().detail) == (401, "Not authenticated")
         assert (AuthConfigError().status_code, AuthConfigError().detail) == (503, "Auth not configured")
 
@@ -278,9 +304,9 @@ def _token(app, **claims) -> str:
 @pytest.mark.parametrize(
     ("auth", "status", "body"),
     [
-        (lambda app: {}, 401, {"detail": "Not authenticated"}),
-        (lambda app: {"headers": {"Authorization": "Bearer junk"}}, 401, {"detail": "Invalid session"}),
-        (lambda app: {"headers": {"Authorization": "Basic Zm9vOmJhcg=="}}, 401, {"detail": "Not authenticated"}),
+        (lambda _app: {}, 401, {"detail": "Not authenticated"}),
+        (lambda _app: {"headers": {"Authorization": "Bearer junk"}}, 401, {"detail": "Invalid session"}),
+        (lambda _app: {"headers": {"Authorization": "Basic Zm9vOmJhcg=="}}, 401, {"detail": "Not authenticated"}),
         (
             lambda app: {"headers": {"Authorization": f"Bearer {_token(app, exp=FROZEN_TS)}"}},
             401,
@@ -304,12 +330,12 @@ def _token(app, **claims) -> str:
             {"detail": "Invalid session"},  # the header wins over a valid cookie
         ),
         (
-            lambda app: {"headers": {"Authorization": f"Bearer {MCP_TOKEN}"}},
+            lambda _app: {"headers": {"Authorization": f"Bearer {MCP_TOKEN}"}},
             200,
             {"id": MCP_USER_ID, "username": "mcp"},
         ),
         # The MCP token is bearer-only: in the cookie it is decoded as a JWT and refused.
-        (lambda app: {"cookies": {"greenhouse_session": MCP_TOKEN}}, 401, {"detail": "Invalid session"}),
+        (lambda _app: {"cookies": {"greenhouse_session": MCP_TOKEN}}, 401, {"detail": "Invalid session"}),
     ],
     ids=[
         "no-credentials",
@@ -326,6 +352,7 @@ def _token(app, **claims) -> str:
     ],
 )
 def test_require_user_matrix(real, auth, status, body):
+    """Require user matrix."""
     client, app = real
     kwargs = auth(app)
     client.cookies.clear()
@@ -354,8 +381,6 @@ def test_login_with_a_corrupt_stored_hash_is_401(real, corrupt):
 @pytest.mark.parametrize("username", ["nobody", TEST_ADMIN_USERNAME])
 def test_login_runs_one_argon2_verify_whether_or_not_the_user_exists(real, monkeypatch, username):
     """An unknown username costs the same argon2 verify as a wrong password (no timing oracle)."""
-    from greenhouse_server import auth as server_auth
-
     calls = []
     real_verify = server_auth.verify_password
     monkeypatch.setattr(server_auth, "verify_password", lambda p, h: calls.append(h) or real_verify(p, h))
@@ -367,6 +392,7 @@ def test_login_runs_one_argon2_verify_whether_or_not_the_user_exists(real, monke
 
 
 def test_inactive_user_is_rejected(real):
+    """Inactive user is rejected."""
     client, app = real
     session = app.state.session_factory()
     admin = core_auth.get_user_by_username(session, TEST_ADMIN_USERNAME)
@@ -380,7 +406,9 @@ def test_inactive_user_is_rejected(real):
 
 
 def test_api_401_carries_www_authenticate_header(real):
-    """``AuthError``, the login 401 and the MCP gate all set ``WWW-Authenticate: Bearer``, and the
+    """Every API 401 carries ``WWW-Authenticate: Bearer``.
+
+    ``AuthError``, the login 401 and the MCP gate all set ``WWW-Authenticate: Bearer``, and the
     JSON error handler in ``web/exception_handlers.py`` passes ``exc.headers`` through.
     """
     client, _ = real
@@ -393,7 +421,9 @@ def test_api_401_carries_www_authenticate_header(real):
     assert [r.headers.get("www-authenticate") for r in responses] == ["Bearer", "Bearer", "Bearer"]
 
 
-def test_secret_unset_bearer_is_503_but_no_credentials_is_401(clean_env):
+@pytest.mark.usefixtures("clean_env")
+def test_secret_unset_bearer_is_503_but_no_credentials_is_401():
+    """Secret unset bearer is 503 but no credentials is 401."""
     client, _, engine = _client(auth_secret_key=None)
     try:
         assert (client.get("/api/v1/auth/me").status_code, client.get("/api/v1/auth/me").json()) == (
@@ -410,7 +440,9 @@ def test_secret_unset_bearer_is_503_but_no_credentials_is_401(clean_env):
         engine.dispose()
 
 
-def test_mcp_token_not_accepted_on_api_when_mcp_is_unconfigured(clean_env):
+@pytest.mark.usefixtures("clean_env")
+def test_mcp_token_not_accepted_on_api_when_mcp_is_unconfigured():
+    """MCP token not accepted on API when MCP is unconfigured."""
     client, _, engine = _client(mcp_token=None)
     try:
         resp = client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {MCP_TOKEN}"})
@@ -419,7 +451,9 @@ def test_mcp_token_not_accepted_on_api_when_mcp_is_unconfigured(clean_env):
         engine.dispose()
 
 
-def test_auth_disabled_principal_is_system(clean_env):
+@pytest.mark.usefixtures("clean_env")
+def test_auth_disabled_principal_is_system():
+    """Auth disabled principal is system."""
     client, _, engine = _client(auth_enabled=False, auth_secret_key=None)
     try:
         assert client.get("/api/v1/auth/me").json() == {"id": SYSTEM_USER_ID, "username": "system"}
@@ -437,9 +471,10 @@ def test_auth_disabled_principal_is_system(clean_env):
 
 
 def test_login_success_body_cookie_and_last_login(real):
+    """Login success body cookie and last login."""
     client, app = real
     resp = client.post("/api/v1/auth/login", json={"username": TEST_ADMIN_USERNAME, "password": TEST_ADMIN_PASSWORD})
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     body = resp.json()
     token = body.pop("access_token")
     assert body == {"token_type": "bearer", "expires_in": TTL_SECONDS, "username": TEST_ADMIN_USERNAME}
@@ -456,14 +491,17 @@ def test_login_success_body_cookie_and_last_login(real):
     assert _admin(app).last_login_at == FROZEN_TS
 
 
-def test_login_cookie_secure_flag_and_custom_name(clean_env):
-    client, _, engine = _client(auth_cookie_secure=True, auth_cookie_name="gh", auth_token_ttl_minutes=5)
+@pytest.mark.usefixtures("clean_env")
+def test_login_cookie_secure_flag_and_custom_name():
+    """Login cookie secure flag and custom name."""
+    ttl_minutes = 5
+    client, _, engine = _client(auth_cookie_secure=True, auth_cookie_name="gh", auth_token_ttl_minutes=ttl_minutes)
     try:
         resp = client.post(
             "/api/v1/auth/login", json={"username": TEST_ADMIN_USERNAME, "password": TEST_ADMIN_PASSWORD}
         )
         token = resp.json()["access_token"]
-        assert resp.json()["expires_in"] == 300
+        assert resp.json()["expires_in"] == ttl_minutes * 60
         assert resp.headers["set-cookie"] == f"gh={token}; HttpOnly; Max-Age=300; Path=/; SameSite=lax; Secure"
     finally:
         engine.dispose()
@@ -481,15 +519,17 @@ def test_login_cookie_secure_flag_and_custom_name(clean_env):
     ],
 )
 def test_login_rejections(real, body, status):
+    """Login rejections."""
     client, _ = real
     resp = client.post("/api/v1/auth/login", json=body)
     assert resp.status_code == status
-    if status == 401:
+    if status == HTTPStatus.UNAUTHORIZED:
         assert resp.json() == {"detail": "Invalid username or password"}
         assert "set-cookie" not in resp.headers
 
 
 def test_login_rehashes_outdated_hash(real):
+    """Login rehashes outdated hash."""
     client, app = real
     session = app.state.session_factory()
     admin = core_auth.get_user_by_username(session, TEST_ADMIN_USERNAME)
@@ -498,14 +538,16 @@ def test_login_rehashes_outdated_hash(real):
     session.commit()
     session.close()
     resp = client.post("/api/v1/auth/login", json={"username": TEST_ADMIN_USERNAME, "password": TEST_ADMIN_PASSWORD})
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     new = _admin(app).hashed_password
-    assert new != old and new.startswith("$argon2id$v=19$m=65536,t=3,p=4$")
+    assert new != old
+    assert new.startswith("$argon2id$v=19$m=65536,t=3,p=4$")
 
 
 def test_logout_requires_auth_and_deletes_cookie(real):
+    """Logout requires auth and deletes cookie."""
     client, app = real
-    assert client.post("/api/v1/auth/logout").status_code == 401
+    assert client.post("/api/v1/auth/logout").status_code == HTTPStatus.UNAUTHORIZED
     resp = client.post("/api/v1/auth/logout", headers={"Authorization": f"Bearer {_token(app)}"})
     assert (resp.status_code, resp.json()) == (200, {"detail": "Logged out"})
     assert resp.headers["set-cookie"] == (
@@ -518,6 +560,7 @@ def test_logout_requires_auth_and_deletes_cookie(real):
 
 @pytest.mark.parametrize("cookie", [None, "junk", "expired"], ids=["no-cookie", "invalid-cookie", "expired-cookie"])
 def test_web_gate_redirects_with_quoted_next(real, cookie):
+    """Web gate redirects with quoted next."""
     client, app = real
     client.cookies.clear()
     if cookie == "expired":
@@ -525,17 +568,18 @@ def test_web_gate_redirects_with_quoted_next(real, cookie):
     elif cookie:
         client.cookies.set("greenhouse_session", cookie)
     resp = client.get("/clusters?a=1&b=x y", follow_redirects=False)
-    assert resp.status_code == 303
+    assert resp.status_code == HTTPStatus.SEE_OTHER
     assert resp.headers["location"] == "/login?next=/clusters%3Fa%3D1%26b%3Dx%2520y"
     hx = client.get("/clusters", headers={"HX-Request": "TRUE"}, follow_redirects=False)
     assert (hx.status_code, hx.headers["HX-Redirect"], hx.content) == (204, "/login?next=/clusters", b"")
 
 
 def test_web_gate_ignores_bearer_header(real):
+    """Web gate ignores bearer header."""
     client, app = real
     client.cookies.clear()
     resp = client.get("/clusters", headers={"Authorization": f"Bearer {_token(app)}"}, follow_redirects=False)
-    assert resp.status_code == 303
+    assert resp.status_code == HTTPStatus.SEE_OTHER
 
 
 # ── bootstrap_admin ───────────────────────────────────────────────────────────
@@ -543,6 +587,7 @@ def test_web_gate_ignores_bearer_header(real):
 
 @pytest.fixture
 def engine():
+    """A fresh in-memory engine with the schema, for bootstrap tests."""
     eng = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(eng)
     yield eng
@@ -555,10 +600,13 @@ def _users(engine) -> list[tuple]:
 
 
 def test_bootstrap_creates_admin_once(engine, caplog):
-    settings = _settings(auth_admin_username="root", auth_admin_password="pw-1")
+    """Bootstrap creates admin once."""
+    settings = _settings(auth_admin_username="root", auth_admin_password=TEST_ADMIN_PASSWORD)
     with caplog.at_level(logging.INFO, logger="greenhouse_server.auth"):
         bootstrap_admin(engine, settings)
-        bootstrap_admin(engine, _settings(auth_admin_username="other", auth_admin_password="pw-2"))
+        bootstrap_admin(
+            engine, _settings(auth_admin_username="other", auth_admin_password=f"{TEST_ADMIN_PASSWORD}-other")
+        )
     assert _users(engine) == [("root", FROZEN_TS, True)]
     assert caplog.messages == ["Bootstrapped initial admin user 'root' from environment."]
 
@@ -569,6 +617,7 @@ def test_bootstrap_creates_admin_once(engine, caplog):
     ids=["no-user", "no-pw", "empty-user", "empty-pw"],
 )
 def test_bootstrap_without_credentials_warns(engine, caplog, username, password):
+    """Bootstrap without credentials warns."""
     with caplog.at_level(logging.WARNING, logger="greenhouse_server.auth"):
         bootstrap_admin(engine, _settings(auth_admin_username=username, auth_admin_password=password))
     assert _users(engine) == []
@@ -579,13 +628,17 @@ def test_bootstrap_without_credentials_warns(engine, caplog, username, password)
 
 
 def test_bootstrap_is_skipped_when_auth_disabled(engine):
-    bootstrap_admin(engine, _settings(auth_enabled=False, auth_admin_username="root", auth_admin_password="pw"))
+    """Bootstrap is skipped when auth disabled."""
+    bootstrap_admin(
+        engine, _settings(auth_enabled=False, auth_admin_username="root", auth_admin_password=TEST_ADMIN_PASSWORD)
+    )
     assert _users(engine) == []
 
 
 # ── MCP bearer gate ───────────────────────────────────────────────────────────
 
 
+@pytest.mark.usefixtures("clean_env")
 @pytest.mark.parametrize(
     ("mcp_token", "headers", "status", "detail"),
     [
@@ -602,29 +655,27 @@ def test_bootstrap_is_skipped_when_auth_disabled(engine):
         ("   ", {"Authorization": "Bearer x"}, 503, "MCP auth not configured"),  # whitespace-only = unset
     ],
 )
-def test_mcp_gate(clean_env, mcp_token, headers, status, detail):
+def test_mcp_gate(mcp_token, headers, status, detail):
+    """MCP gate."""
     client, _, engine = _client(mcp_token=mcp_token)
     try:
         resp = client.get("/mcp", headers=headers)
         if status is None:
-            assert resp.status_code not in (401, 503)
+            assert resp.status_code not in (HTTPStatus.UNAUTHORIZED, HTTPStatus.SERVICE_UNAVAILABLE)
         else:
             assert (resp.status_code, resp.json()) == (status, {"detail": detail})
     finally:
         engine.dispose()
 
 
-def test_mcp_gate_compares_the_token_in_constant_time(clean_env, monkeypatch):
+@pytest.mark.usefixtures("clean_env")
+def test_mcp_gate_compares_the_token_in_constant_time(monkeypatch):
     """B-12: the `/mcp` gate compares the bearer with ``hmac.compare_digest``, not ``!=``.
 
     A short-circuiting string comparison leaks how many leading characters of a guess
     match the token through response timing; the gate must use the same constant-time
     primitive as the API's MCP-principal check.
     """
-    import hmac
-
-    from greenhouse_server import auth as server_auth
-
     calls: list[tuple[bytes, bytes]] = []
     real_compare = hmac.compare_digest
 
@@ -635,7 +686,7 @@ def test_mcp_gate_compares_the_token_in_constant_time(clean_env, monkeypatch):
     monkeypatch.setattr(server_auth.hmac, "compare_digest", spy)
     client, _, engine = _client(mcp_token=MCP_TOKEN)
     try:
-        assert client.get("/mcp", headers={"Authorization": "Bearer wrong"}).status_code == 401
+        assert client.get("/mcp", headers={"Authorization": "Bearer wrong"}).status_code == HTTPStatus.UNAUTHORIZED
         assert calls == [(b"wrong", MCP_TOKEN.encode())]
     finally:
         engine.dispose()

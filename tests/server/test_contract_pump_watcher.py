@@ -35,7 +35,7 @@ from fake_devices import FakeIrrigatorAdapter
 from golden import FROZEN_TS
 from greenhouse_core.devices import DeviceRegistry
 from greenhouse_core.devices.health import DeviceHealthState, HealthAlarm
-from greenhouse_core.models import ActivityEvent, Base, IrrigationEvent
+from greenhouse_core.models import ActivityEvent, Alert, Base, IrrigationEvent
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server import scheduler as scheduler_module
 from greenhouse_server.services import pump_watcher as pump_watcher_module
@@ -46,29 +46,37 @@ STARTED_AT = FROZEN_TS - 42
 
 
 class FakeScheduler:
+    """Scheduler stand-in that records ``add_job`` calls (or fails them)."""
+
     def __init__(self, *, running: bool = True, fail: bool = False) -> None:
+        """Configure whether the scheduler reports running and whether ``add_job`` fails."""
         self.running = running
         self.fail = fail
         self.jobs: list[dict] = []
 
     def add_job(self, func, trigger, **kwargs):
+        """Record the job, or raise like a broken job store."""
         if self.fail:
-            raise RuntimeError("jobstore down")
+            msg = "jobstore down"
+            raise RuntimeError(msg)
         self.jobs.append({"func": func, "trigger": trigger, **kwargs})
 
 
 class RecordingMonitor:
+    """Health-monitor stand-in that records which repository each view binds to."""
+
     def __init__(self) -> None:
+        """Start with no views bound."""
         self.bound: list = []
 
     def for_repo(self, repo) -> RecordingMonitor:
+        """Record the repository and act as the view itself."""
         self.bound.append(repo)
         return self
 
 
-@pytest.fixture
-def env(monkeypatch, frozen_clock):
-    """A shared in-memory DB, one irrigator, a fake adapter/registry and a fake ``_app``."""
+def _watch_db():
+    """A shared in-memory DB holding one cluster with one irrigator: ``(engine, factory, cluster_id, irrigator_id)``."""
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(engine)
     factory = sessionmaker(bind=engine)
@@ -80,7 +88,14 @@ def env(monkeypatch, frozen_clock):
     )
     session.commit()
     session.close()
+    return engine, factory, cid, iid
 
+
+def _fake_app(factory):
+    """Wire a fake adapter, registry and monitor into a stand-in ``_app``.
+
+    Returns ``(adapter, registry, settings, monitor, app)``.
+    """
     adapter = FakeIrrigatorAdapter()
     registry = DeviceRegistry()
     registry.register_irrigator("rainpoint.ik10pw", lambda: adapter)
@@ -96,6 +111,15 @@ def env(monkeypatch, frozen_clock):
             settings=settings, device_registry=registry, session_factory=factory, health_monitor=monitor
         )
     )
+    return adapter, registry, settings, monitor, app
+
+
+@pytest.fixture
+def env(monkeypatch, frozen_clock):
+    """A shared in-memory DB, one irrigator, a fake adapter/registry and a fake ``_app``."""
+    del frozen_clock  # requested only for its side effect
+    engine, factory, cid, iid = _watch_db()
+    adapter, registry, settings, monitor, app = _fake_app(factory)
     fake_scheduler = FakeScheduler()
     shutdown = {"requested": True}
     waits: list[float] = []
@@ -164,6 +188,7 @@ def _db_state(env) -> dict:
 
 @pytest.mark.parametrize("minutes", [0, -5])
 def test_non_positive_duration_is_not_scheduled(env, minutes):
+    """Non positive duration is not scheduled."""
     assert schedule_pump_watcher(env.irrigator_id, minutes, STARTED_AT) is False
     assert env.scheduler.jobs == []
 
@@ -171,20 +196,22 @@ def test_non_positive_duration_is_not_scheduled(env, minutes):
 @pytest.mark.parametrize(
     "mutate",
     [
-        lambda env, mp: setattr(env.scheduler, "running", False),
-        lambda env, mp: mp.setattr(scheduler_module, "_app", None),
-        lambda env, mp: setattr(env.settings, "pump_watcher_enabled", False),
-        lambda env, mp: setattr(env.app.state, "device_registry", None),
+        lambda env, _mp: setattr(env.scheduler, "running", False),
+        lambda _env, mp: mp.setattr(scheduler_module, "_app", None),
+        lambda env, _mp: setattr(env.settings, "pump_watcher_enabled", False),
+        lambda env, _mp: setattr(env.app.state, "device_registry", None),
     ],
     ids=["scheduler-stopped", "no-app", "watcher-disabled", "no-registry"],
 )
 def test_unavailable_watcher_is_not_scheduled(env, monkeypatch, mutate):
+    """Unavailable watcher is not scheduled."""
     mutate(env, monkeypatch)
     assert schedule_pump_watcher(env.irrigator_id, 5, STARTED_AT) is False
     assert env.scheduler.jobs == []
 
 
 def test_add_job_failure_returns_false_and_logs_at_debug(env, caplog):
+    """Add job failure returns false and logs at debug."""
     env.scheduler.fail = True
     with caplog.at_level(logging.DEBUG, logger="greenhouse_server.services.irrigation"):
         assert schedule_pump_watcher(env.irrigator_id, 5, STARTED_AT) is False
@@ -192,6 +219,7 @@ def test_add_job_failure_returns_false_and_logs_at_debug(env, caplog):
 
 
 def test_scheduled_job_shape(env):
+    """Scheduled job shape."""
     assert schedule_pump_watcher(env.irrigator_id, 5, STARTED_AT, triggered_by="manual") is True
     (job,) = env.scheduler.jobs
     assert {k: v for k, v in job.items() if k != "func"} == {
@@ -205,6 +233,7 @@ def test_scheduled_job_shape(env):
 
 
 def test_missing_settings_still_schedules_and_uses_watcher_defaults(env):
+    """Missing settings still schedules and uses watcher defaults."""
     env.app.state.settings = None
     assert schedule_pump_watcher(env.irrigator_id, 2, STARTED_AT) is True
     env.scheduler.jobs[0]["func"]()
@@ -216,6 +245,7 @@ def test_missing_settings_still_schedules_and_uses_watcher_defaults(env):
 
 
 def test_job_builds_watcher_from_settings_with_shutdown_hooks(env):
+    """Job builds watcher from settings with shutdown hooks."""
     schedule_pump_watcher(env.irrigator_id, 3, STARTED_AT)
     env.scheduler.jobs[0]["func"]()
     (built,) = env.built
@@ -228,6 +258,7 @@ def test_job_builds_watcher_from_settings_with_shutdown_hooks(env):
 
 
 def test_shutdown_stops_auto_cycle_and_records_it(env, caplog):
+    """Shutdown stops auto cycle and records it."""
     schedule_pump_watcher(env.irrigator_id, 3, STARTED_AT, triggered_by="auto")
     with caplog.at_level(logging.INFO, logger="greenhouse_server.services.irrigation"):
         env.scheduler.jobs[0]["func"]()
@@ -261,6 +292,7 @@ def test_shutdown_stops_auto_cycle_and_records_it(env, caplog):
 
 
 def test_shutdown_leaves_manual_cycle_on_device_timer_and_records_it(env, caplog):
+    """Shutdown leaves manual cycle on device timer and records it."""
     schedule_pump_watcher(env.irrigator_id, 3, STARTED_AT, triggered_by="manual")
     with caplog.at_level(logging.INFO, logger="greenhouse_server.services.irrigation"):
         env.scheduler.jobs[0]["func"]()
@@ -314,6 +346,7 @@ def test_shutdown_stops_forced_run_like_an_auto_cycle(env, caplog):
     ids=["stop-returns-false", "stop-raises"],
 )
 def test_shutdown_failed_auto_stop_is_logged_and_recorded(env, caplog, stop, stop_msg):
+    """Shutdown failed auto stop is logged and recorded."""
     if isinstance(stop, BaseException):
 
         def _raise(_irrigator):
@@ -344,8 +377,14 @@ def test_shutdown_failed_auto_stop_is_logged_and_recorded(env, caplog, stop, sto
 
 
 def test_completed_watch_records_nothing(env, monkeypatch):
+    """Completed watch records nothing."""
     env.shutdown["requested"] = False
-    monkeypatch.setattr(PumpWatcherService, "watch", lambda self, irr, secs, started_at=None: {"outcome": "completed"})
+
+    def _completed(_self, _irr, _secs, started_at=None):
+        del started_at  # the job passes it by keyword
+        return {"outcome": "completed"}
+
+    monkeypatch.setattr(PumpWatcherService, "watch", _completed)
     schedule_pump_watcher(env.irrigator_id, 3, STARTED_AT)
     env.scheduler.jobs[0]["func"]()
     assert env.adapter.calls == []
@@ -353,14 +392,20 @@ def test_completed_watch_records_nothing(env, monkeypatch):
 
 
 def test_deleted_irrigator_ends_the_job_quietly(env):
+    """Deleted irrigator ends the job quietly."""
     schedule_pump_watcher(env.irrigator_id + 100, 3, STARTED_AT)
     env.scheduler.jobs[0]["func"]()
-    assert env.built == [] and env.adapter.calls == []
+    assert env.built == []
+    assert env.adapter.calls == []
 
 
 def test_job_failure_is_rolled_back_and_logged(env, monkeypatch, caplog):
-    def _boom(self, irr, secs, started_at=None):
-        raise RuntimeError("watch exploded")
+    """Job failure is rolled back and logged."""
+
+    def _boom(_self, _irr, _secs, started_at=None):
+        del started_at  # the job passes it by keyword
+        msg = "watch exploded"
+        raise RuntimeError(msg)
 
     monkeypatch.setattr(PumpWatcherService, "watch", _boom)
     schedule_pump_watcher(env.irrigator_id, 3, STARTED_AT)
@@ -374,6 +419,8 @@ def test_job_failure_is_rolled_back_and_logged(env, monkeypatch, caplog):
 
 @pytest.fixture
 def plain(frozen_clock):
+    """A real watcher world on an in-memory DB: one irrigator and a fake adapter, no scheduler."""
+    del frozen_clock  # requested only for its side effect
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(engine)
     session = sessionmaker(bind=engine)()
@@ -394,6 +441,7 @@ def plain(frozen_clock):
 
 
 def test_interrupted_result_shape_after_one_poll(plain):
+    """Interrupted result shape after one poll."""
     ticks = iter([100.0, 100.0, 100.0, 101.5])  # deadline, warm-up, loop "now", interrupted elapsed
     flag = {"stop": False}
 
@@ -418,6 +466,7 @@ def test_interrupted_result_shape_after_one_poll(plain):
 
 
 def test_trip_side_effects_are_exact(plain):
+    """Trip side effects are exact."""
     plain.adapter.set_health(
         DeviceHealthState(
             observed_at=FROZEN_TS,
@@ -425,7 +474,7 @@ def test_trip_side_effects_are_exact(plain):
             raw={"alarm_raw": 1, "source": "local"},
         )
     )
-    watcher = PumpWatcherService(plain.repo, plain.registry, warmup_seconds=0, clock=lambda: 0.0, sleep=lambda s: None)
+    watcher = PumpWatcherService(plain.repo, plain.registry, warmup_seconds=0, clock=lambda: 0.0, sleep=lambda _s: None)
     result = watcher.watch(plain.irrigator, 60, started_at=STARTED_AT)
     assert result == {"outcome": "tripped", "polls": 1, "read_failures": 0, "alarm_raw": 1, "elapsed_seconds": 0.0}
     assert plain.adapter.calls == [("read_health", plain.irrigator.id), ("stop", plain.irrigator.id)]
@@ -460,10 +509,11 @@ def test_trip_side_effects_are_exact(plain):
 
 
 def test_trip_payload_reprs_unserialisable_alarm_value(plain):
+    """Trip payload reprs unserialisable alarm value."""
     plain.adapter.set_health(
         DeviceHealthState(observed_at=FROZEN_TS, alarms=frozenset({HealthAlarm.NO_WATER}), raw={"alarm_raw": [1, 0]})
     )
-    PumpWatcherService(plain.repo, plain.registry, warmup_seconds=0, clock=lambda: 0.0, sleep=lambda s: None).watch(
+    PumpWatcherService(plain.repo, plain.registry, warmup_seconds=0, clock=lambda: 0.0, sleep=lambda _s: None).watch(
         plain.irrigator, 60, started_at=STARTED_AT
     )
     activity = plain.repo.session.query(ActivityEvent).one()
@@ -471,8 +521,9 @@ def test_trip_payload_reprs_unserialisable_alarm_value(plain):
 
 
 def test_constructor_clamps_its_knobs(plain):
+    """Constructor clamps its knobs."""
     watcher = PumpWatcherService(plain.repo, plain.registry, poll_seconds=0, warmup_seconds=-3, max_read_failures=0)
-    assert (watcher._poll, watcher._warmup, watcher._max_read_failures) == (0.1, 0.0, 1)
+    assert (watcher._poll, watcher._warmup, watcher._max_read_failures) == (0.1, 0.0, 1)  # noqa: SLF001 — constructor clamps have no public accessor
 
 
 def test_trip_side_effect_failures_are_logged_and_the_stop_still_happens(plain, monkeypatch, caplog):
@@ -486,13 +537,15 @@ def test_trip_side_effect_failures_are_logged_and_the_stop_still_happens(plain, 
     )
 
     def _fail(*_args, **_kwargs):
-        raise RuntimeError("db gone")
+        msg = "db gone"
+        raise RuntimeError(msg)
 
     requeued: list = []
 
     class _BadMonitor:
-        def record(self, *args, **kwargs):
-            raise RuntimeError("monitor gone")
+        def record(self, *_args, **_kwargs):
+            msg = "monitor gone"
+            raise RuntimeError(msg)
 
         def mark_unraised(self, *args):
             requeued.append(args)
@@ -501,7 +554,7 @@ def test_trip_side_effect_failures_are_logged_and_the_stop_still_happens(plain, 
     monkeypatch.setattr(plain.repo, "add_activity_event", _fail)
     monkeypatch.setattr(plain.repo.session, "commit", _fail)
     watcher = PumpWatcherService(
-        plain.repo, plain.registry, warmup_seconds=0, clock=lambda: 0.0, sleep=lambda s: None, monitor=_BadMonitor()
+        plain.repo, plain.registry, warmup_seconds=0, clock=lambda: 0.0, sleep=lambda _s: None, monitor=_BadMonitor()
     )
     with caplog.at_level(logging.ERROR, logger="greenhouse_server.services.pump_watcher"):
         assert watcher.watch(plain.irrigator, 60, started_at=STARTED_AT)["outcome"] == "tripped"
@@ -529,8 +582,6 @@ def test_trip_after_a_failed_flush_rolls_back_and_still_records_the_rest(plain, 
     rolled back alone; the activity row and the NO_WATER alert are written and committed, and
     nothing escapes the watcher.
     """
-    from greenhouse_core.models import Alert
-
     plain.adapter.set_health(
         DeviceHealthState(observed_at=FROZEN_TS, alarms=frozenset({HealthAlarm.NO_WATER}), raw={"alarm_raw": 1})
     )
@@ -541,7 +592,7 @@ def test_trip_after_a_failed_flush_rolls_back_and_still_records_the_rest(plain, 
         session.flush()
 
     monkeypatch.setattr(plain.repo, "add_irrigation_event", _bad_event)
-    watcher = PumpWatcherService(plain.repo, plain.registry, warmup_seconds=0, clock=lambda: 0.0, sleep=lambda s: None)
+    watcher = PumpWatcherService(plain.repo, plain.registry, warmup_seconds=0, clock=lambda: 0.0, sleep=lambda _s: None)
     with caplog.at_level(logging.ERROR, logger="greenhouse_server.services.pump_watcher"):
         assert watcher.watch(plain.irrigator, 60, started_at=STARTED_AT)["outcome"] == "tripped"
     iid = plain.irrigator.id

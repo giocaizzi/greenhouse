@@ -7,10 +7,12 @@ These guard two properties of the edit flow:
 """
 
 import json
+from http import HTTPStatus
 
+from fake_data import FAKE_LOCAL_KEY
 from greenhouse_core.repository import IrrigationRepository
 
-SECRET_KEY = "fake_local_key_deadbeef"
+SECRET_KEY = FAKE_LOCAL_KEY
 
 
 def _seed_local_irrigator(client, cluster_name="Local Cluster"):
@@ -31,7 +33,7 @@ def _seed_local_irrigator(client, cluster_name="Local Cluster"):
         },
         follow_redirects=False,
     )
-    assert resp.status_code == 303
+    assert resp.status_code == HTTPStatus.SEE_OTHER
     return cluster_id
 
 
@@ -60,7 +62,7 @@ def test_blank_local_key_preserves_stored_key(client):
         },
         follow_redirects=False,
     )
-    assert resp.status_code == 303
+    assert resp.status_code == HTTPStatus.SEE_OTHER
 
     config = _stored_config(client, cluster_id)
     assert config["local_key"] == SECRET_KEY
@@ -80,7 +82,7 @@ def test_nonblank_local_key_overrides_stored_key(client):
         },
         follow_redirects=False,
     )
-    assert resp.status_code == 303
+    assert resp.status_code == HTTPStatus.SEE_OTHER
     assert _stored_config(client, cluster_id)["local_key"] == "fake_local_key_rotated"
 
 
@@ -88,7 +90,7 @@ def test_edit_page_does_not_leak_local_key(client):
     """The stored secret must never appear in the rendered edit page source."""
     cluster_id = _seed_local_irrigator(client)
     resp = client.get(f"/clusters/{cluster_id}/irrigators/edit")
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     assert SECRET_KEY not in resp.text
     # Field is masked and carries no stored value.
     assert 'type="password"' in resp.text
@@ -103,5 +105,5 @@ def test_submitting_the_mask_keeps_the_stored_key(client):
         data={"name": "Local Pump", "type": "rainpoint.ik10pw", "device_ip": "192.0.2.10", "local_key": "••••••••"},
         follow_redirects=False,
     )
-    assert resp.status_code == 303
+    assert resp.status_code == HTTPStatus.SEE_OTHER
     assert _stored_config(client, cluster_id)["local_key"] == SECRET_KEY

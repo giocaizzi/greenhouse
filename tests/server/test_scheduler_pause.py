@@ -1,5 +1,7 @@
 """Tests for the /scheduler/pause and /scheduler/resume endpoints."""
 
+from http import HTTPStatus
+
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.pool import StaticPool
@@ -39,23 +41,27 @@ class TestPauseResume:
     """Endpoint contract for /scheduler/pause and /scheduler/resume."""
 
     def test_pause_returns_paused_state(self, client):
+        """Pause returns paused state."""
         resp = client.post("/api/v1/scheduler/pause")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         assert resp.json() == {"paused": True}
 
     def test_resume_returns_running_state(self, client):
+        """Resume returns running state."""
         client.post("/api/v1/scheduler/pause")
         resp = client.post("/api/v1/scheduler/resume")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         assert resp.json() == {"paused": False}
 
     def test_pause_persists_in_preferences(self, client):
+        """Pause persists in preferences."""
         client.post("/api/v1/scheduler/pause")
         resp = client.get("/api/v1/preferences")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         assert resp.json()["scheduler_paused"] is True
 
     def test_resume_clears_persisted_flag(self, client):
+        """Resume clears persisted flag."""
         client.post("/api/v1/scheduler/pause")
         client.post("/api/v1/scheduler/resume")
         resp = client.get("/api/v1/preferences")
@@ -66,13 +72,15 @@ class TestSchedulerJobsListIncludesPausedFlag:
     """GET /scheduler/jobs surfaces a `paused` flag per job."""
 
     def test_paused_flag_false_initially(self, client):
+        """Paused flag false initially."""
         resp = client.get("/api/v1/scheduler/jobs")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         check_all = next((j for j in resp.json() if j["id"] == CHECK_ALL_JOB_ID), None)
         assert check_all is not None
         assert check_all["paused"] is False
 
     def test_paused_flag_true_after_pause(self, client):
+        """Paused flag true after pause."""
         client.post("/api/v1/scheduler/pause")
         resp = client.get("/api/v1/scheduler/jobs")
         check_all = next((j for j in resp.json() if j["id"] == CHECK_ALL_JOB_ID), None)
@@ -93,17 +101,21 @@ class TestPauseGatesActuation:
 
 
 class TestPausePersistsAcrossRestart:
-    """A pause set on one app instance is re-applied when a new instance boots
-    against the same database — simulates a container restart."""
+    """A scheduler pause survives an app restart.
+
+    A pause set on one app instance is re-applied when a new instance boots
+    against the same database — simulates a container restart.
+    """
 
     def test_pause_survives_app_restart(self):
+        """Pause survives app restart."""
         engine = _shared_engine()
         try:
             # First instance — pause
             app1 = _new_app_with_engine(engine)
             with TestClient(app1, raise_server_exceptions=False) as c1:
                 resp = c1.post("/api/v1/scheduler/pause")
-                assert resp.status_code == 200
+                assert resp.status_code == HTTPStatus.OK
                 assert resp.json()["paused"] is True
 
             # Confirm jobs are gone from the module-level scheduler in between
@@ -129,13 +141,15 @@ class TestWebBanner:
     """The base layout shows a banner when the scheduler is paused."""
 
     def test_banner_absent_when_running(self, client):
+        """Banner absent when running."""
         resp = client.get("/")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         assert 'data-banner="scheduler-paused"' not in resp.text
 
     def test_banner_present_when_paused(self, client):
+        """Banner present when paused."""
         client.post("/api/v1/scheduler/pause")
         resp = client.get("/")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         assert 'data-banner="scheduler-paused"' in resp.text
         assert "Auto-irrigation paused" in resp.text

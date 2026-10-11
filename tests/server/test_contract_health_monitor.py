@@ -21,6 +21,8 @@ from __future__ import annotations
 import json
 import logging
 from datetime import timedelta
+from types import SimpleNamespace
+from typing import ClassVar
 
 import pytest
 from sqlalchemy import select
@@ -31,45 +33,56 @@ from greenhouse_core.constants import DEFAULT_SYNC_INTERVAL_MINUTES, SENSOR_OFFL
 from greenhouse_core.devices import DeviceGateway, DeviceRegistry, TR301ZAdapter
 from greenhouse_core.devices.health import DeviceHealthState, HealthAlarm
 from greenhouse_core.models import ENTITY_IRRIGATOR, ENTITY_SENSOR, Alert
+from greenhouse_server import scheduler
 from greenhouse_server.services.health_monitor import DeviceHealthMonitor
 
 GOLDEN = "ingress_devices"
 SYNC_INTERVAL_SECONDS = DEFAULT_SYNC_INTERVAL_MINUTES * 60  # Settings.sync_interval_minutes default
 SENSOR_OFFLINE_AFTER_SECONDS = SYNC_INTERVAL_SECONDS + SENSOR_OFFLINE_GRACE_MINUTES * 60
+LOW_BATTERY_PCT = 10  # the TR301Z maps battery_state "low" to 10 %
 
 
 class NoCloud:
     """A ``tinytuya.Cloud`` stand-in that fails the test on *any* attribute access."""
 
     def __init__(self) -> None:
+        """Start with no Cloud access recorded."""
         self.touched: list[str] = []
 
     def __getattr__(self, name):
+        """Record and refuse any Cloud attribute: the monitor must never touch the Cloud."""
         self.touched.append(name)
-        raise AssertionError(f"health monitor touched the Cloud: {name}")
+        msg = f"health monitor touched the Cloud: {name}"
+        raise AssertionError(msg)
 
 
 class SpyTR301Z(TR301ZAdapter):
     """Real TR-301Z health derivation, recording which persisted row it was handed."""
 
-    seen: list = []
+    seen: ClassVar[list] = []
 
     def read_health(self, sensor, latest=None):
+        """Record which persisted row the monitor handed over, then derive health for real."""
         SpyTR301Z.seen.append(None if latest is None else latest.timestamp)
         return super().read_health(sensor, latest)
 
 
 class RecordingNotifier:
+    """Notifier stand-in that records every alert push."""
+
     def __init__(self) -> None:
+        """Start with no pushes recorded."""
         self.sent: list[dict] = []
 
     def notify_alert(self, *, severity, title, message):
+        """Record the push and report it delivered."""
         self.sent.append({"severity": severity, "title": title, "message": message})
         return True
 
 
 @pytest.fixture
 def world(tmp_db, frozen_clock):
+    """One cluster with a pump and a probe, a Cloud that must stay untouched, and a monitor on them."""
     cid = tmp_db.add_cluster("Health Cluster")
     irr_id = tmp_db.add_irrigator(
         cluster_id=cid, tuya_device_id="hm_pump", name="Pump One", irrigator_type="rainpoint.ik10pw", config={}
@@ -95,6 +108,7 @@ def world(tmp_db, frozen_clock):
         "sensor": tmp_db.get_sensor(sensor_id),
         "cloud": cloud,
         "irr_adapter": irr_adapter,
+        "registry": registry,
         "monitor": monitor,
         "notifier": notifier,
         "clock": frozen_clock,
@@ -135,7 +149,8 @@ def _persist(world, ts: int, **values) -> None:
 
 def _poll_sensor(world) -> list[str]:
     world["monitor"].poll_sensor(world["sensor"])
-    derived = world["monitor"]._cache[(ENTITY_SENSOR, world["sensor"].id)].derived_alarms
+    # The monitor's derived-alarm cache has no public reader; this contract pins what it holds.
+    derived = world["monitor"]._cache[(ENTITY_SENSOR, world["sensor"].id)].derived_alarms  # noqa: SLF001
     return sorted(a.value for a in derived)
 
 
@@ -143,15 +158,19 @@ def _poll_sensor(world) -> list[str]:
 
 
 def test_poll_sensor_hands_the_newest_persisted_row_and_never_touches_the_cloud(world):
+    """Poll sensor hands the newest persisted row and never touches the cloud."""
     for age, battery in ((3600, "high"), (60, "low"), (1800, "middle")):
         _persist(world, FROZEN_TS - age, soil_moisture=40.0, battery_state=battery)
     state = world["monitor"].poll_sensor(world["sensor"])
     assert SpyTR301Z.seen == [FROZEN_TS - 60]
-    assert state.battery_pct == 10 and state.last_seen_ts == FROZEN_TS - 60
+    assert state.battery_pct == LOW_BATTERY_PCT
+    assert state.last_seen_ts == FROZEN_TS - 60
     assert world["cloud"].touched == []
 
 
-def test_poll_all_with_fake_adapters_issues_no_read_live(tmp_db, frozen_clock):
+@pytest.mark.usefixtures("frozen_clock")
+def test_poll_all_with_fake_adapters_issues_no_read_live(tmp_db):
+    """Poll all with fake adapters issues no read live."""
     cid = tmp_db.add_cluster("C")
     tmp_db.add_irrigator(cluster_id=cid, tuya_device_id="p", name="P", irrigator_type="rainpoint.ik10pw", config={})
     s1 = tmp_db.add_sensor(cluster_id=cid, tuya_device_id="s1", name="S1", sensor_type="tuya.tr301z", config={})
@@ -200,6 +219,7 @@ def test_sensor_transition_scenario_golden(world):
 
 
 def test_no_persisted_reading_is_offline(world):
+    """No persisted reading is offline."""
     assert _poll_sensor(world) == ["device_offline"]
     (alert,) = _alerts(world["repo"])
     assert alert["dedup_key"] == f"health:sensor:{world['sensor'].id}:device_offline"
@@ -244,27 +264,18 @@ def test_sensor_stays_online_between_syncs_and_goes_offline_after_a_missed_sync(
 
 def test_init_health_monitor_sizes_the_sensor_window_from_the_sync_interval(world, monkeypatch):
     """The startup monitor uses ``IRRIGATION_SYNC_INTERVAL_MINUTES`` + grace, not the default interval."""
-    from types import SimpleNamespace
-
-    from greenhouse_server import scheduler
-
     session_factory = lambda: world["repo"].session  # noqa: E731 — the fixture's own session
     monkeypatch.setattr(world["repo"].session, "close", lambda: None)
     app = SimpleNamespace(
-        state=SimpleNamespace(
-            session_factory=session_factory, device_registry=world["monitor"]._registry, ntfy_notifier=None
-        )
+        state=SimpleNamespace(session_factory=session_factory, device_registry=world["registry"], ntfy_notifier=None)
     )
     scheduler.init_health_monitor(app, SimpleNamespace(sync_interval_minutes=60))
-    assert app.state.health_monitor._sensor_offline_after_seconds == (60 + SENSOR_OFFLINE_GRACE_MINUTES) * 60
+    window = app.state.health_monitor._sensor_offline_after_seconds  # noqa: SLF001 — no public accessor
+    assert window == (60 + SENSOR_OFFLINE_GRACE_MINUTES) * 60
 
 
 def test_init_health_monitor_restores_blocks_from_open_alerts(world, monkeypatch):
     """B-9: the startup monitor rebuilds its cache from the open health alerts, so actuation stays blocked."""
-    from types import SimpleNamespace
-
-    from greenhouse_server import scheduler
-
     world["irr_adapter"].set_health(DeviceHealthState(observed_at=FROZEN_TS, alarms=frozenset({HealthAlarm.NO_WATER})))
     world["monitor"].poll_irrigator(world["irrigator"])
     world["repo"].session.commit()
@@ -273,7 +284,7 @@ def test_init_health_monitor_restores_blocks_from_open_alerts(world, monkeypatch
     app = SimpleNamespace(
         state=SimpleNamespace(
             session_factory=lambda: world["repo"].session,
-            device_registry=world["monitor"]._registry,
+            device_registry=world["registry"],
             ntfy_notifier=None,
         )
     )
@@ -338,6 +349,7 @@ def test_every_alarm_alert_row_golden(world):
     ],
 )
 def test_actuation_gate_blocking_set(world, alarms, blocking):
+    """Actuation gate blocking set."""
     world["irr_adapter"].set_health(DeviceHealthState(observed_at=FROZEN_TS, alarms=alarms))
     world["monitor"].poll_irrigator(world["irrigator"])
     blocked, found = world["monitor"].is_actuation_blocked(world["irrigator"])
@@ -346,11 +358,13 @@ def test_actuation_gate_blocking_set(world, alarms, blocking):
 
 
 def test_sensor_state_never_gates_the_irrigator(world):
+    """Sensor state never gates the irrigator."""
     world["monitor"].record(ENTITY_SENSOR, world["irrigator"].id, DeviceHealthState(observed_at=0, offline=True))
     assert world["monitor"].is_actuation_blocked(world["irrigator"]) == (False, [])
 
 
 def test_unknown_sensor_model_is_not_recorded(world):
+    """Unknown sensor model is not recorded."""
     repo = world["repo"]
     sid = repo.add_sensor(
         cluster_id=world["cluster_id"], tuya_device_id="x", name="Odd", sensor_type="acme.probe", config={}
@@ -358,11 +372,12 @@ def test_unknown_sensor_model_is_not_recorded(world):
     repo.session.commit()
     state = world["monitor"].poll_sensor(repo.get_sensor(sid))
     assert state == DeviceHealthState(observed_at=FROZEN_TS, offline=False)
-    assert (ENTITY_SENSOR, sid) not in world["monitor"]._cache
+    assert (ENTITY_SENSOR, sid) not in world["monitor"]._cache  # noqa: SLF001 — cache has no public reader
     assert _alerts(repo) == []
 
 
 def test_record_infers_label_and_cluster_or_falls_back(world):
+    """Record infers label and cluster or falls back."""
     monitor = world["monitor"]
     offline = DeviceHealthState(observed_at=FROZEN_TS, offline=True)
     monitor.record(ENTITY_IRRIGATOR, world["irrigator"].id, offline)
@@ -377,6 +392,7 @@ def test_record_infers_label_and_cluster_or_falls_back(world):
 
 
 def test_explicit_label_and_cluster_win(world):
+    """Explicit label and cluster win."""
     world["monitor"].record(
         ENTITY_IRRIGATOR,
         world["irrigator"].id,
@@ -389,8 +405,11 @@ def test_explicit_label_and_cluster_win(world):
 
 
 def test_poll_all_logs_and_continues_past_failures(world, caplog):
+    """Poll all logs and continues past failures."""
+
     def _boom(_irrigator):
-        raise ConnectionError("no route")
+        msg = "no route"
+        raise ConnectionError(msg)
 
     world["irr_adapter"].read_health = _boom  # type: ignore[method-assign]
     _persist(world, FROZEN_TS, soil_moisture=40.0, battery_state="low")
@@ -415,7 +434,8 @@ def test_poll_all_requeues_an_alert_lost_to_a_failed_commit(world, monkeypatch, 
     def _commit_fails_once():
         calls["n"] += 1
         if calls["n"] == 1:
-            raise RuntimeError("database is locked")
+            msg = "database is locked"
+            raise RuntimeError(msg)
         real_commit()
 
     monkeypatch.setattr(session, "commit", _commit_fails_once)
@@ -432,8 +452,11 @@ def test_poll_all_requeues_an_alert_lost_to_a_failed_commit(world, monkeypatch, 
 
 
 def test_alert_write_failure_is_logged_and_cache_still_updates(world, monkeypatch, caplog):
+    """Alert write failure is logged and cache still updates."""
+
     def _fail(**_kwargs):
-        raise RuntimeError("db locked")
+        msg = "db locked"
+        raise RuntimeError(msg)
 
     monkeypatch.setattr(world["repo"], "upsert_alert", _fail)
     with caplog.at_level(logging.ERROR, logger="greenhouse_server.services.health_monitor"):
@@ -445,6 +468,7 @@ def test_alert_write_failure_is_logged_and_cache_still_updates(world, monkeypatc
 
 
 def test_sustained_alarm_does_not_touch_the_row_again(world):
+    """Sustained alarm does not touch the row again."""
     state = DeviceHealthState(observed_at=FROZEN_TS, offline=True)
     world["monitor"].record(ENTITY_IRRIGATOR, world["irrigator"].id, state)
     world["monitor"].record(ENTITY_IRRIGATOR, world["irrigator"].id, state)
@@ -454,6 +478,7 @@ def test_sustained_alarm_does_not_touch_the_row_again(world):
 
 
 def test_resolve_without_an_open_row_is_a_noop(world):
+    """Resolve without an open row is a noop."""
     monitor = world["monitor"]
     iid = world["irrigator"].id
     monitor.record(ENTITY_IRRIGATOR, iid, DeviceHealthState(observed_at=FROZEN_TS, offline=True))
@@ -480,6 +505,7 @@ def test_resolve_without_an_open_row_is_a_noop(world):
     ],
 )
 def test_backfill_from_history_windows(world, rows, expected_codes):
+    """Backfill from history windows."""
     for i, values in enumerate(rows):  # i=0 is the newest row
         _persist(world, FROZEN_TS - 600 * (i + 1), soil_moisture=40.0, **values)
     world["monitor"].backfill_from_history()
@@ -487,6 +513,7 @@ def test_backfill_from_history_windows(world, rows, expected_codes):
 
 
 def test_backfill_ignores_rows_older_than_a_week_and_never_duplicates(world):
+    """Backfill ignores rows older than a week and never duplicates."""
     for i in range(5):
         _persist(world, FROZEN_TS - 7 * 24 * 3600 - 60 * (i + 1), battery_state="low")
     world["monitor"].backfill_from_history()
@@ -503,4 +530,4 @@ def test_backfill_ignores_rows_older_than_a_week_and_never_duplicates(world):
     )
     assert alert["payload"]["observed_at"] == FROZEN_TS
     # Back-fill writes the alert but not the cache: the next poll still sees a transition.
-    assert (ENTITY_SENSOR, world["sensor"].id) not in world["monitor"]._cache
+    assert (ENTITY_SENSOR, world["sensor"].id) not in world["monitor"]._cache  # noqa: SLF001 — no public reader
