@@ -289,10 +289,16 @@ CLI_CASES: list[Case] = [
         routes={("GET", f"{P}/health"): Raw(500, "Internal Server Error", "text/plain")},
     ),
     C(
-        "error.422_detail_list_python_repr",
+        "error.422_detail_list_field_messages",
         "health",
-        routes={("GET", f"{P}/health"): (422, {"detail": [{"loc": ["body", "x"], "msg": "bad"}]})},
+        routes={
+            ("GET", f"{P}/health"): (
+                422,
+                {"detail": [{"loc": ["body", "x"], "msg": "bad"}, {"loc": ["query", "days", 0], "msg": "too big"}]},
+            )
+        },
     ),
+    C("error.dict_detail_as_json", "health", routes={("GET", f"{P}/health"): (409, {"detail": {"code": "busy"}})}),
     C("error.json_without_detail", "health", routes={("GET", f"{P}/health"): (503, {"error": "down"})}),
     C("error.json_list_body", "health", routes={("GET", f"{P}/health"): (400, ["a", "b"])}),
     C(

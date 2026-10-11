@@ -1,5 +1,6 @@
 """HTTP client for the greenhouse server API."""
 
+import json
 import os
 from collections.abc import Mapping
 from http import HTTPStatus
@@ -77,6 +78,33 @@ def clear_stored_token() -> bool:
     return True
 
 
+# FastAPI prefixes each validation error's ``loc`` with where the value came from.
+_LOC_SOURCES = frozenset({"body", "query", "path", "header", "cookie"})
+
+
+def _format_detail(detail: Any) -> str:
+    """Render an error ``detail`` for humans; a 422 validation list becomes ``field: message; …``.
+
+    FastAPI answers a validation failure with a list of ``{"loc": [...], "msg": ...}``
+    objects; printing that list raw showed a Python repr. Other non-string details
+    are rendered as JSON.
+    """
+    if isinstance(detail, str):
+        return detail
+    if isinstance(detail, list) and all(isinstance(item, dict) and "msg" in item for item in detail):
+        return "; ".join(_format_validation_item(item) for item in detail)
+    return json.dumps(detail, ensure_ascii=False)
+
+
+def _format_validation_item(item: Mapping[str, Any]) -> str:
+    """One validation error as ``field.path: message`` (the request-part prefix dropped)."""
+    loc = [str(part) for part in item.get("loc") or []]
+    if loc and loc[0] in _LOC_SOURCES:
+        loc = loc[1:]
+    field = ".".join(loc)
+    return f"{field}: {item['msg']}" if field else str(item["msg"])
+
+
 def _decode_json(resp: httpx.Response) -> JSONObject | list[Any]:
     """The JSON body of a successful response; an empty or non-JSON body is a :class:`ServerError`."""
     if not resp.content.strip():
@@ -137,7 +165,7 @@ class IrrigationClient:
                 detail = resp.json().get("detail", resp.text)
             except Exception:  # noqa: BLE001
                 detail = resp.text
-            raise ServerError(resp.status_code, detail)
+            raise ServerError(resp.status_code, _format_detail(detail))
 
         if resp.headers.get("content-type", "").startswith("text/csv"):
             return {"csv": resp.text}

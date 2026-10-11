@@ -1382,7 +1382,7 @@
    "token_file_after": null,
    "token_file_before": null
   },
-  "error.422_detail_list_python_repr": {
+  "error.422_detail_list_field_messages": {
    "argv": [
     "greenhouse",
     "health"
@@ -1412,7 +1412,7 @@
      "url": "http://localhost:8000/api/v1/health"
     }
    ],
-   "stderr": "Error: [{'loc': ['body', 'x'], 'msg': 'bad'}]\n",
+   "stderr": "Error: x: bad; days.0: too big\n",
    "stdout": "",
    "token_file_after": null,
    "token_file_before": null
@@ -1483,6 +1483,41 @@
     }
    ],
    "stderr": "Error: Cannot connect to server: [Errno 111] Connection refused\n",
+   "stdout": "",
+   "token_file_after": null,
+   "token_file_before": null
+  },
+  "error.dict_detail_as_json": {
+   "argv": [
+    "greenhouse",
+    "health"
+   ],
+   "clients": [
+    {
+     "base_url": "http://localhost:8000",
+     "headers": {},
+     "timeout": 30.0
+    }
+   ],
+   "env": {},
+   "exception": null,
+   "exit_code": 1,
+   "files": {},
+   "input": null,
+   "requests": [
+    {
+     "authorization": null,
+     "content": null,
+     "content_type": null,
+     "json": null,
+     "method": "GET",
+     "path": "/api/v1/health",
+     "query": [],
+     "raw_path": "/api/v1/health",
+     "url": "http://localhost:8000/api/v1/health"
+    }
+   ],
+   "stderr": "Error: {\"code\": \"busy\"}\n",
    "stdout": "",
    "token_file_after": null,
    "token_file_before": null
