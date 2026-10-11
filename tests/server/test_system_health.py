@@ -5,8 +5,10 @@ from http import HTTPStatus
 
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
+from greenhouse_core.models import Alert, Sensor, SensorReading
 from greenhouse_server.app import create_app
 from greenhouse_server.config import Settings
 from greenhouse_server.deps import get_device_gateway, get_device_registry
@@ -43,10 +45,6 @@ class TestSystemHealthPulse:
                 json={"tuya_device_id": "fake_fresh_001", "name": "Fresh Sensor", "type": "tuya.tr301z"},
             )
 
-            from sqlalchemy.orm import Session
-
-            from greenhouse_core.models import Sensor, SensorReading
-
             with Session(engine) as session:
                 sensor = session.get(Sensor, 1)
                 now = int(time.time())
@@ -71,10 +69,6 @@ class TestSystemHealthPulse:
                 "/api/v1/clusters/1/sensors",
                 json={"tuya_device_id": "fake_stale_002", "name": "Stale Sensor", "type": "tuya.tr301z"},
             )
-
-            from sqlalchemy.orm import Session
-
-            from greenhouse_core.models import Sensor, SensorReading
 
             with Session(engine) as session:
                 sensor = session.get(Sensor, 1)
@@ -118,10 +112,6 @@ class TestSystemHealthPulse:
                 "/api/v1/clusters/1/sensors",
                 json={"tuya_device_id": "fake_alert_sensor", "name": "Alert Sensor", "type": "tuya.tr301z"},
             )
-
-            from sqlalchemy.orm import Session
-
-            from greenhouse_core.models import Alert, Sensor, SensorReading
 
             now = int(time.time())
             open_alerts = 3

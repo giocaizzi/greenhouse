@@ -7,6 +7,9 @@ import pytest
 
 from fake_data import FAKE_DEVICE_ID, FAKE_PLANT_SPECIES, FAKE_SENSOR_ID
 from greenhouse_core.constants import FORECAST_CONFIDENCE_MEDIUM
+from greenhouse_core.plant_db import get_plant_database
+from greenhouse_core.repository import IrrigationRepository
+from greenhouse_server.services.forecast import ForecastService
 
 
 class TestForecastEndpoint:
@@ -118,7 +121,6 @@ class TestForecastEndpoint:
 
     def test_forecast_with_drainage_slope(self, app, seeded_with_profile):
         """Forecast returns drainage_slope method when a learned profile is available."""
-        from greenhouse_core.repository import IrrigationRepository
 
         # We need to inject readings + irrigation events directly into the in-memory DB.
         # The app fixture uses a shared engine stored on app.state — reach for it.
@@ -213,8 +215,6 @@ class TestForecastCleaning:
         Read raw, ``current_moisture`` would be the spike and the ETA would
         collapse to 0h; through the cleaned view the real ~55% level stands.
         """
-        from greenhouse_core.plant_db import get_plant_database
-        from greenhouse_server.services.forecast import ForecastService
 
         cluster_id = tmp_db.add_cluster("Forecast Cleaning Cluster")
         plant_id = tmp_db.add_plant(cluster_id=cluster_id, species=FAKE_PLANT_SPECIES, water_needs="medium")
@@ -241,8 +241,6 @@ class TestForecastCleaning:
 @pytest.mark.parametrize(("environment", "skips"), [("outdoor", True), ("greenhouse", False), ("indoor", False)])
 def test_forecast_rain_skip_follows_the_engine_outdoor_rule(tmp_db, environment, skips):
     """Only ``environment == "outdoor"`` gets the predicted rain skip — the engine applies no other."""
-    from greenhouse_core.plant_db import get_plant_database
-    from greenhouse_server.services.forecast import ForecastService
 
     class _Rain:
         def get_forecast(self, hours=6):

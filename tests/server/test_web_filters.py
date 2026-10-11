@@ -6,6 +6,7 @@ from greenhouse_server.web.filters import (
     age_seconds,
     cluster_caps,
     decision_badge,
+    icon_for_code,
     moisture_badge,
     stat_position,
     strip_emoji,
@@ -176,6 +177,5 @@ class TestClusterCaps:
 
 def test_no_action_needed_reason_has_its_icon():
     """The engine's NO_ACTION_NEEDED reason renders with the "check" icon, not the generic fallback."""
-    from greenhouse_server.web.filters import icon_for_code
 
     assert icon_for_code("no_action_needed") == "check"

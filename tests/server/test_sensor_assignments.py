@@ -7,6 +7,8 @@ from http import HTTPStatus
 
 import pytest
 
+from greenhouse_core.repository import IrrigationRepository
+
 
 @pytest.fixture
 def seeded(client):
@@ -91,8 +93,6 @@ def test_readings_for_plant_respects_assignment_window(client, app):
     time.sleep(1.1)
     session = app.state.session_factory()
     try:
-        from greenhouse_core.repository import IrrigationRepository
-
         repo = IrrigationRepository(session)
         repo.add_sensor_reading(sensor_id=1, timestamp=int(time.time()), soil_moisture=before_move)
         session.commit()
@@ -141,8 +141,6 @@ def test_plant_chart_uses_assignment_window(client, app):
     time.sleep(1.1)
     session = app.state.session_factory()
     try:
-        from greenhouse_core.repository import IrrigationRepository
-
         repo = IrrigationRepository(session)
         repo.add_sensor_reading(sensor_id=1, timestamp=int(time.time()), soil_moisture=before_move)
         session.commit()

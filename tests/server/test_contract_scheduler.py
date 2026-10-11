@@ -28,13 +28,20 @@ from http import HTTPStatus
 import pytest
 from fastapi.testclient import TestClient
 
+import greenhouse_server.web.routes.analytics as web_analytics
 from golden import FROZEN_TS, assert_golden_json
 from greenhouse_core.constants import LEAK_ALERT_CODE
 from greenhouse_core.devices.health import DeviceHealthState, HealthAlarm
+from greenhouse_core.models import PlantHealthDaily
 from greenhouse_server import scheduler as sched
 from greenhouse_server.scheduler import scheduler as bg_scheduler
 from greenhouse_server.services import irrigation_jobs as irrigation_jobs_mod
 from greenhouse_server.services import pump_watcher_jobs as pump_watcher_jobs_mod
+from greenhouse_server.services.anomaly import SensorAnomalyService
+from greenhouse_server.services.health import PlantHealthService
+from greenhouse_server.services.health_monitor import DeviceHealthMonitor
+from greenhouse_server.services.leak import LeakDetectionService
+from greenhouse_server.services.sync import SyncService
 from server.test_contract_pipeline import Pipeline, RecordingGateway
 
 HOUR = 3600
@@ -212,8 +219,6 @@ def test_web_and_api_pause_share_one_function_on_a_stopped_scheduler(p, monkeypa
         calls.append((origin["via"], paused))
         return real(repo, paused)
 
-    import greenhouse_server.web.routes.analytics as web_analytics
-
     monkeypatch.setattr(sched, "set_check_all_paused", spy)
     # The web module may hold its own reference to the function; patch it too if present.
     monkeypatch.setattr(web_analytics, "set_check_all_paused", spy, raising=False)
@@ -342,8 +347,6 @@ def test_sync_job_with_gateway_syncs_every_sensor_and_commits(p):
 
 
 def test_sync_job_failure_is_rolled_back_and_logged(p, monkeypatch, caplog):
-    from greenhouse_server.services.sync import SyncService
-
     p.app.state.device_gateway = RecordingGateway()
 
     def explode(self, hours=24):
@@ -359,8 +362,6 @@ def test_health_snapshot_job_writes_daily_rows(p):
     _seed_series(p, ages=range(0, 12 * HOUR, HOUR))
     sched._health_snapshot_job()
     with p.app.state.session_factory() as session:
-        from greenhouse_core.models import PlantHealthDaily
-
         rows = [
             {c: getattr(r, c) for c in ("plant_id", "date_key", "score", "sample_count", "timestamp")}
             for r in session.query(PlantHealthDaily).order_by(PlantHealthDaily.id)
@@ -370,8 +371,6 @@ def test_health_snapshot_job_writes_daily_rows(p):
 
 
 def test_health_snapshot_job_failure_is_logged(p, monkeypatch, caplog):
-    from greenhouse_server.services.health import PlantHealthService
-
     monkeypatch.setattr(PlantHealthService, "snapshot_daily", lambda self: 1 / 0)
     with caplog.at_level(logging.ERROR, logger="greenhouse_server.scheduler"):
         sched._health_snapshot_job()
@@ -389,8 +388,6 @@ def test_anomaly_job_raises_stale_alert_and_notifies(p):
 
 
 def test_anomaly_job_failure_is_logged(p, monkeypatch, caplog):
-    from greenhouse_server.services.anomaly import SensorAnomalyService
-
     monkeypatch.setattr(SensorAnomalyService, "scan", lambda self: 1 / 0)
     with caplog.at_level(logging.ERROR, logger="greenhouse_server.scheduler"):
         sched._anomaly_job()
@@ -439,8 +436,6 @@ def test_health_monitor_job_failure_is_logged(p, monkeypatch, caplog):
 
 
 def test_init_health_monitor_startup_hook_failure_still_wires_monitor(p, monkeypatch, caplog):
-    from greenhouse_server.services.health_monitor import DeviceHealthMonitor
-
     p.app.state.device_registry = p.wiring.registry
     monkeypatch.setattr(DeviceHealthMonitor, "backfill_from_history", lambda self: 1 / 0)
     with caplog.at_level(logging.ERROR, logger="greenhouse_server.scheduler"):
@@ -517,8 +512,6 @@ def test_run_leak_check_raises_hold_once_and_marks_done(p):
 
 
 def test_run_leak_check_noops_and_failure(p, monkeypatch, caplog):
-    from greenhouse_server.services.leak import LeakDetectionService
-
     started_at = FROZEN_TS - 2 * HOUR
     _seed_leak_shape(p, started_at)
     p.mark()

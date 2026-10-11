@@ -7,6 +7,9 @@ irrigator id (``/irrigators/{id}/start`` etc.).
 
 from http import HTTPStatus
 
+from greenhouse_core.models import parse_device_config
+from greenhouse_core.repository import IrrigationRepository
+
 
 class TestIrrigatorCRUD:
     def test_add_and_get(self, client):
@@ -282,9 +285,6 @@ class TestLocalKeyMasking:
 
     @staticmethod
     def _stored_config(client):
-        from greenhouse_core.models import parse_device_config
-        from greenhouse_core.repository import IrrigationRepository
-
         session = client.app.state.session_factory()
         try:
             return parse_device_config(IrrigationRepository(session).get_irrigator_for_cluster(1).config)

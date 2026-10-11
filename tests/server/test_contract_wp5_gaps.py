@@ -16,9 +16,11 @@ from sqlalchemy import create_engine
 from sqlalchemy.pool import StaticPool
 
 from golden import FROZEN_TS
+from greenhouse_core.models import DecisionLog
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.app import create_app
 from greenhouse_server.config import Settings
+from greenhouse_server.services.sync import SyncService
 from greenhouse_server.web.context import base_context
 
 CSV_HEADER = "timestamp,date,time,irrigator,action,duration_minutes,triggered_by,notes\r\n"
@@ -214,7 +216,6 @@ def test_web_cluster_detail_with_undecodable_decision_payload_shows_no_rationale
             payload={"reasons": [{"message": "should not render", "code": "x"}]},
         )
         session.commit()
-        from greenhouse_core.models import DecisionLog
 
         session.get(DecisionLog, log_id).payload_json = "not json"
         session.commit()
@@ -409,7 +410,6 @@ def test_create_app_without_engine_builds_one_from_settings_db_url(clean_env, tm
 @pytest.mark.parametrize("url", ["/api/v1/clusters/{cid}/monitor", "/clusters/{cid}/monitor"])
 def test_monitor_runs_the_freshness_sync_and_commits_its_rows(app, client, monkeypatch, url):
     """D15 (was B-N1): both monitors refresh stale sensors and the refreshed reading is persisted."""
-    from greenhouse_server.services.sync import SyncService
 
     ids = _seed(app, {"C1": ["Fern"]}, sensor_for="C1")
     calls: list[int] = []

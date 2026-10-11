@@ -13,6 +13,7 @@ must stay silent. Issue #103: an empty baseline window was read as "soil was at
 0%", so every healthy cycle looked like a flood.
 """
 
+import json
 import time
 
 import pytest
@@ -204,8 +205,6 @@ class TestLeakDetected:
         _seed(repo, sensor_id, started_at, before=(38.0, 38.0, 37.0), after=(50.0, 65.0, 78.0))
 
         alerts = LeakDetectionService(repo, plant_db).check_after_irrigation(cluster_id, started_at)
-
-        import json
 
         payload = json.loads(alerts[0].payload_json)
         assert payload["sensor_id"] == sensor_id

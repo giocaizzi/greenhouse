@@ -6,6 +6,10 @@ from http import HTTPStatus
 
 from fastapi.testclient import TestClient
 
+from greenhouse_core.repository import IrrigationRepository
+from greenhouse_server.auth import _session_from_app
+from greenhouse_server.deps import get_session
+
 from .conftest import TEST_ADMIN_PASSWORD, TEST_ADMIN_USERNAME
 from .test_auth import _build_app
 
@@ -38,19 +42,11 @@ def test_protected_api_request_opens_one_session():
 
 
 def test_auth_dependency_and_handler_share_the_session():
-    from greenhouse_server.auth import _session_from_app
-    from greenhouse_server.deps import get_session
-
     assert _session_from_app is get_session
 
 
 def test_anonymous_pages_hide_the_operational_banners_signed_in_pages_show_them(app_real_auth):
     """Dry-run / paused banners describe the system: only a signed-in viewer sees them."""
-    from fastapi.testclient import TestClient
-
-    from greenhouse_core.repository import IrrigationRepository
-
-    from .conftest import TEST_ADMIN_PASSWORD, TEST_ADMIN_USERNAME
 
     session = app_real_auth.state.session_factory()
     IrrigationRepository(session).update_preferences(dry_run_global=True, scheduler_paused=True)

@@ -3,6 +3,15 @@
 import time
 from http import HTTPStatus
 
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
+from sqlalchemy.pool import StaticPool
+
+from greenhouse_core.models import Base
+from greenhouse_core.repository import IrrigationRepository
+from greenhouse_server.deps import get_repository
+
 HEALTH_THRESHOLDS = {"good": 80.0, "ok": 50.0}  # the timeline's score bands
 MAX_HEALTH_SCORE = 100.0
 
@@ -34,18 +43,9 @@ def test_health_timeline_point_structure(seeded_client):
 
 def test_health_timeline_points_match_seeded_readings(app):
     """Seed N days of readings and assert points length matches."""
-    from fastapi.testclient import TestClient
-    from sqlalchemy import create_engine
-    from sqlalchemy.pool import StaticPool
-
-    from greenhouse_core.models import Base
-    from greenhouse_core.repository import IrrigationRepository
-    from greenhouse_server.deps import get_repository
 
     engine = create_engine("sqlite://", echo=False, connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(engine)
-
-    from sqlalchemy.orm import Session
 
     session = Session(engine)
     repo = IrrigationRepository(session)

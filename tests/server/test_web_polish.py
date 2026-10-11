@@ -2,6 +2,8 @@
 
 from http import HTTPStatus
 
+from greenhouse_server.web.context import APP_VERSION
+
 
 def test_html_404_returns_full_error_page(client):
     resp = client.get("/clusters/9999")
@@ -57,8 +59,6 @@ def test_html_422_returns_error_partial(client):
 
 
 def test_footer_shows_app_version(client):
-    from greenhouse_server.web.context import APP_VERSION
-
     resp = client.get("/")
     assert resp.status_code == HTTPStatus.OK
     assert f"v{APP_VERSION}" in resp.text

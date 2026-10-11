@@ -17,6 +17,8 @@ from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.scheduler import scheduler as bg_scheduler
 from greenhouse_server.services import irrigation as irrigation_mod
 from greenhouse_server.services import irrigation_jobs as irrigation_jobs_mod
+from greenhouse_server.services import leak as leak_mod
+from greenhouse_server.services.irrigation_jobs import record_leak_check_armed
 from server.conftest import _make_stubbed_app
 
 
@@ -58,7 +60,6 @@ def _leak_jobs() -> dict[str, object]:
 @pytest.fixture
 def check_calls(monkeypatch):
     """Record LeakDetectionService runs instead of evaluating readings."""
-    from greenhouse_server.services import leak as leak_mod
 
     calls: list[tuple[int, int]] = []
 
@@ -94,7 +95,6 @@ class TestRearm:
         The re-arm finds it through that marker; a ``start``/``manual`` row without one (a
         logged hand-watering, no pump) gets no check.
         """
-        from greenhouse_server.services.irrigation_jobs import record_leak_check_armed
 
         cid, iid = _seed(app)
         now = int(time.time())
@@ -112,7 +112,6 @@ class TestRearm:
 
     def test_long_manual_start_is_rearmed_with_its_own_window(self, app, running_scheduler):
         """The marker's ``check_after_seconds`` survives a restart: due time and job args keep the window."""
-        from greenhouse_server.services.irrigation_jobs import record_leak_check_armed
 
         cid, iid = _seed(app)
         started = _start(app, iid, int(time.time()) - 600, triggered_by="manual")
@@ -150,8 +149,6 @@ class TestRearm:
         assert check_calls == [(cid, ts)]
 
     def test_failed_check_leaves_no_marker(self, app, running_scheduler, monkeypatch):
-        from greenhouse_server.services import leak as leak_mod
-
         def _boom(self, cluster_id, started_at):
             raise RuntimeError("db hiccup")
 

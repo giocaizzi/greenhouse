@@ -1,6 +1,12 @@
 """Functional tests for cluster CRUD + operations via HTTP."""
 
+import warnings
 from http import HTTPStatus
+
+from sqlalchemy import text
+
+from golden import FROZEN_TS
+from greenhouse_core.repository import IrrigationRepository
 
 
 class TestClusterCRUD:
@@ -87,9 +93,6 @@ class TestClusterCRUD:
         """Windows, assignments, alerts (by cluster or entity) go; a default-cluster preference is cleared;
         another cluster's rows stay.
         """
-        from sqlalchemy import text
-
-        from greenhouse_core.repository import IrrigationRepository
 
         doomed = client.post("/api/v1/clusters", json={"name": "Doomed"}).json()["id"]
         kept = client.post("/api/v1/clusters", json={"name": "Kept"}).json()["id"]
@@ -157,9 +160,6 @@ class TestClusterStatus:
         ``model_dump`` in ``decision_to_view`` emitted
         ``PydanticSerializationUnexpectedValue`` on every status call.
         """
-        import warnings
-
-        from greenhouse_core.repository import IrrigationRepository
 
         monkeypatch.setattr("greenhouse_core.logic.engine.season_for", lambda *_a, **_k: "winter")
         # Opt this cluster out of any inherited quiet window so the wall-clock
@@ -180,8 +180,6 @@ class TestClusterStatus:
 
     def test_status_reports_the_real_age_of_a_reading_older_than_a_day(self, client, frozen_clock):
         """B-22: a sensor quiet for 3 days shows its last reading and its real age, not ``None``."""
-        from golden import FROZEN_TS
-        from greenhouse_core.repository import IrrigationRepository
 
         cid = client.post("/api/v1/clusters", json={"name": "Quiet"}).json()["id"]
         sid = client.post(

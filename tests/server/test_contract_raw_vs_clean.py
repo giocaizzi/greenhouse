@@ -24,6 +24,7 @@ import pytest
 import time_machine
 
 from golden import FROZEN_INSTANT, FROZEN_TS, assert_golden_json
+from greenhouse_server import scheduler
 from server.test_contract_pipeline import Pipeline
 
 STEADY = (45.0, 46.0, 45.0, 44.0, 45.0, 46.0, 45.0, 44.0, 45.0)
@@ -131,7 +132,6 @@ def test_raw_views_keep_the_spike_and_cleaned_views_ignore_it(spiky):
 
 def test_anomaly_scan_sees_what_cleaning_masks(spiky):
     """The ``sensor_drift`` scan reads raw rows, so it flags the very spike the snapshot ignored."""
-    from greenhouse_server import scheduler
 
     rows_before = spiky.db_rows()["alerts"]
     assert rows_before == []

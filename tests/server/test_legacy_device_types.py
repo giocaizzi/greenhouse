@@ -13,7 +13,10 @@ import logging
 from http import HTTPStatus
 
 import pytest
+from alembic import command
+from sqlalchemy import create_engine, text
 
+from greenhouse_core import database
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.services.health_monitor import DeviceHealthMonitor
 
@@ -109,10 +112,6 @@ def test_health_poll_skips_a_legacy_sensor_with_a_warning(client, app, caplog, l
 
 def test_upgrade_rewrites_leftover_legacy_types_to_model_keys(tmp_path):
     """Alembic ``a1d3f5b7c902`` rewrites rows the old web forms left on legacy values."""
-    from alembic import command
-    from sqlalchemy import create_engine, text
-
-    from greenhouse_core import database
 
     engine = create_engine(f"sqlite:///{tmp_path}/legacy.db")
     cfg = database._alembic_config(engine)

@@ -3,12 +3,14 @@
 import logging
 import time
 from http import HTTPStatus
+from urllib.parse import quote
 
 from apscheduler.events import EVENT_JOB_EXECUTED, EVENT_JOB_MISSED
 from apscheduler.executors.base import run_job
 from fastapi.testclient import TestClient
 
-from greenhouse_server.scheduler import CHECK_ALL_JOB_ID, get_jobs
+from greenhouse_server.app import create_app
+from greenhouse_server.scheduler import CHECK_ALL_JOB_ID, core_job_ids, get_jobs
 from greenhouse_server.scheduler import scheduler as bg_scheduler
 from greenhouse_server.services.pump_watcher_jobs import schedule_pump_watcher
 from server.conftest import _make_stubbed_app
@@ -54,7 +56,6 @@ class TestRegistrationIsIdempotent:
         try:
             assert TestClient(app1).post("/api/v1/scheduler/pause").status_code == HTTPStatus.OK
             # Same DB, fresh app — mirrors a restart within one process.
-            from greenhouse_server.app import create_app
 
             create_app(app1.state.settings, engine=engine1)
             bg_scheduler.start(paused=True)
@@ -179,7 +180,6 @@ class TestDeleteJob:
 
     def test_core_job_set_matches_registration(self, client):
         """The protected set is derived from registration, not a hand-kept list."""
-        from greenhouse_server.scheduler import core_job_ids
 
         assert sorted(core_job_ids()) == _job_ids(client)
 
@@ -214,7 +214,6 @@ class TestDeleteJob:
 
     def test_job_id_with_a_slash_is_deletable_through_the_encoded_path(self, client):
         """The CLI sends ``quote(job_id, safe="")``; an id containing "/" must reach the route."""
-        from urllib.parse import quote
 
         job_id = _add_adhoc_job("watch/pump 1")
         assert client.delete(f"/api/v1/scheduler/jobs/{quote(job_id, safe='')}").json() == {"success": True}
@@ -222,7 +221,6 @@ class TestDeleteJob:
 
     def test_web_delete_accepts_a_job_id_with_a_slash(self, client, running_scheduler):
         """The scheduler page links an ad-hoc job's id URL-encoded, and the web route takes ids with "/"."""
-        from urllib.parse import quote
 
         job_id = _add_adhoc_job("watch/pump 1")
         page = client.get("/scheduler").text

@@ -2,6 +2,8 @@
 
 from http import HTTPStatus
 
+from greenhouse_server.scheduler import scheduler as bg_scheduler
+
 
 def test_scheduler_page_shows_emergency_stop_button(client):
     resp = client.get("/scheduler")
@@ -67,8 +69,6 @@ def test_scheduler_page_offers_pause_when_not_running(client):
 
 
 def test_scheduler_web_pause_404_when_check_all_missing(client):
-    from greenhouse_server.scheduler import scheduler as bg_scheduler
-
     bg_scheduler.remove_job("check_all")
     assert client.post("/scheduler/pause", follow_redirects=False).status_code == HTTPStatus.NOT_FOUND
     assert client.get("/api/v1/preferences").json()["scheduler_paused"] is False

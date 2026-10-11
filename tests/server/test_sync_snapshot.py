@@ -12,6 +12,7 @@ import time
 
 import pytest
 
+from greenhouse_server.services import sync as sync_module
 from greenhouse_server.services.sync import SyncService
 
 
@@ -115,7 +116,6 @@ def test_freshness_is_judged_on_the_newest_soil_reading(tmp_db, cluster_with_two
 
     The engine dates a soil sensor by its newest soil reading, so the freshness check must too.
     """
-    from greenhouse_server.services import sync as sync_module
 
     cluster_id, dry_id, wet_id = cluster_with_two_sensors
     now = int(time.time())

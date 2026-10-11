@@ -35,7 +35,7 @@ from fake_devices import FakeIrrigatorAdapter
 from golden import FROZEN_TS
 from greenhouse_core.devices import DeviceRegistry
 from greenhouse_core.devices.health import DeviceHealthState, HealthAlarm
-from greenhouse_core.models import ActivityEvent, Base, IrrigationEvent
+from greenhouse_core.models import ActivityEvent, Alert, Base, IrrigationEvent
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server import scheduler as scheduler_module
 from greenhouse_server.services import pump_watcher as pump_watcher_module
@@ -529,7 +529,6 @@ def test_trip_after_a_failed_flush_rolls_back_and_still_records_the_rest(plain, 
     rolled back alone; the activity row and the NO_WATER alert are written and committed, and
     nothing escapes the watcher.
     """
-    from greenhouse_core.models import Alert
 
     plain.adapter.set_health(
         DeviceHealthState(observed_at=FROZEN_TS, alarms=frozenset({HealthAlarm.NO_WATER}), raw={"alarm_raw": 1})

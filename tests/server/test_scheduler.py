@@ -10,8 +10,10 @@ from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
 from fake_data import FAKE_DEVICE_ID, FAKE_PLANT_SPECIES, FAKE_SENSOR_ID
+from greenhouse_core import repository as repo_mod
 from greenhouse_core.constants import MIN_COOLDOWN_HOURS
 from greenhouse_core.logic import IrrigationLogic
+from greenhouse_core.logic import engine as engine_mod
 from greenhouse_core.models import Base
 from greenhouse_core.plant_db import get_plant_database
 from greenhouse_core.repository import IrrigationRepository
@@ -119,8 +121,6 @@ class TestCooldownGatesActuation:
                 # Patch the engine's and repository's clocks for each
                 # simulated hourly check — both consult `time.time()` when
                 # deciding the cooldown cutoff.
-                from greenhouse_core import repository as repo_mod
-                from greenhouse_core.logic import engine as engine_mod
 
                 for step in range(24):
                     now = start + step * 3600

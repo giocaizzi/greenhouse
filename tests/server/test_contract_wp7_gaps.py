@@ -26,6 +26,7 @@ from engine_grid import plant_database
 from fake_devices import FakeIrrigatorAdapter
 from golden import FROZEN_TS
 from greenhouse_core.devices import DeviceRegistry
+from greenhouse_core.devices.health import HealthAlarm
 from greenhouse_core.logic import IrrigationLogic
 from greenhouse_core.logic.decision import Action, IrrigationDecision, TriggerCode
 from greenhouse_core.models import ActivityEvent, Base, IrrigationEvent
@@ -38,7 +39,7 @@ from greenhouse_server.services import pump_watcher_jobs as pump_watcher_jobs_mo
 from greenhouse_server.services.irrigation import IrrigationService
 from greenhouse_server.services.pump_watcher import PumpWatcherService
 from greenhouse_server.services.pump_watcher_jobs import handle_watcher_interrupted, schedule_pump_watcher
-from server.test_contract_pipeline import Pipeline
+from server.test_contract_pipeline import Pipeline, RecordingGateway
 
 IRRIGATION_LOGGER = "greenhouse_server.services.irrigation"
 SCHEDULER_LOGGER = "greenhouse_server.scheduler"
@@ -681,8 +682,6 @@ JOBS = {
 
 
 def _wire_job(p, monkeypatch, log: list[str]) -> StubMonitor:
-    from server.test_contract_pipeline import RecordingGateway
-
     p.app.state.device_gateway = RecordingGateway()
     monitor = StubMonitor(log)
     p.app.state.health_monitor = monitor
@@ -899,7 +898,6 @@ def test_rearm_always_closes_its_session(monkeypatch, frozen_clock, fail):
 
 def test_health_block_names_the_first_blocking_alarm(db, pump, monkeypatch):
     """Mutation survivor: the device-health gate reports ``blocking_alarms[0]`` as the primary alarm."""
-    from greenhouse_core.devices.health import HealthAlarm
 
     class Blocking:
         def is_actuation_blocked(self, irrigator):

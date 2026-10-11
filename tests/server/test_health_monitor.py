@@ -8,6 +8,9 @@ exercise the OFFLINE_AFTER_MINUTES window without sleeping.
 
 from __future__ import annotations
 
+import time as _time
+from unittest.mock import MagicMock
+
 import pytest
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
@@ -16,17 +19,23 @@ from fake_devices import FakeIrrigatorAdapter, FakeSensorAdapter
 from greenhouse_core.constants import DEFAULT_SYNC_INTERVAL_MINUTES, SENSOR_OFFLINE_GRACE_MINUTES
 from greenhouse_core.devices import DeviceRegistry
 from greenhouse_core.devices.health import DeviceHealthState, HealthAlarm
+from greenhouse_core.logic.decision import TriggerCode
 from greenhouse_core.models import (
+    ENTITY_IRRIGATOR,
     SOURCE_HEALTH,
     Alert,
     Base,
+    IrrigationEvent,
     Irrigator,
     Sensor,
 )
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.services.health_monitor import (
     DeviceHealthMonitor,
+    _Cached,
 )
+from greenhouse_server.services.irrigation import IrrigationService
+from greenhouse_server.services.pump_watcher import EVENT_ACTION_ABORTED, PumpWatcherService
 
 
 @pytest.fixture
@@ -249,8 +258,6 @@ class TestActuationGate:
     @staticmethod
     def _seed_cache(monitor_, irrigator, derived):
         """Put ``derived`` straight into the actuation-gate cache for ``irrigator``."""
-        from greenhouse_core.models import ENTITY_IRRIGATOR
-        from greenhouse_server.services.health_monitor import _Cached
 
         monitor_._cache[(ENTITY_IRRIGATOR, irrigator.id)] = _Cached(state=_state(), derived_alarms=derived)
 
@@ -284,8 +291,6 @@ class TestBackfillFromHistory:
         _, sensor = cluster_irrigator_sensor
         repo = monitor_._repo
 
-        import time as _time
-
         now = int(_time.time())
         for offset in range(5):
             repo.add_sensor_reading(
@@ -307,8 +312,6 @@ class TestBackfillFromHistory:
         monitor_, _, _, _ = monitor
         _, sensor = cluster_irrigator_sensor
         repo = monitor_._repo
-
-        import time as _time
 
         now = int(_time.time())
         # Only 2 readings — below the SENSOR_HEALTH_BACKFILL_WINDOW of 5.
@@ -349,11 +352,6 @@ class TestEngineActuationBlock:
         soil,
         season,
     ):
-        from unittest.mock import MagicMock
-
-        from greenhouse_core.logic.decision import TriggerCode
-        from greenhouse_server.services.irrigation import IrrigationService
-
         monitor_, irr_adapter, _, _ = monitor
         irrigator, sensor = cluster_irrigator_sensor
 
@@ -376,8 +374,6 @@ class TestEngineActuationBlock:
         repo.session.commit()
         # Place the sensor on the plant so the engine has data.
         repo.update_sensor(sensor.id, plant_id=plant_id)
-
-        import time as _time
 
         now = int(_time.time())
         for offset in range(3):
@@ -442,9 +438,6 @@ class TestSharedMonitorViews:
     """
 
     def test_pump_watcher_trip_writes_its_alert_through_its_own_view(self, tmp_path):
-        from greenhouse_core.models import ENTITY_IRRIGATOR, IrrigationEvent
-        from greenhouse_server.services.pump_watcher import EVENT_ACTION_ABORTED, PumpWatcherService
-
         def _engine(name: str):
             engine = create_engine(f"sqlite:///{tmp_path / name}", echo=False)
             Base.metadata.create_all(engine)
@@ -613,8 +606,6 @@ class TestTripOnTopOfACachedAlarm:
     def test_failed_insert_poisoning_the_session_still_caches_and_reraises_no_water(
         self, repo, registry_with_fakes, cluster_irrigator_sensor, monkeypatch
     ):
-        from greenhouse_server.services.pump_watcher import PumpWatcherService
-
         registry, irr_adapter, _ = registry_with_fakes
         irrigator, _ = cluster_irrigator_sensor
         shared = DeviceHealthMonitor(repo=repo, registry=registry)

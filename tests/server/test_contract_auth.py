@@ -11,6 +11,7 @@ tests are deterministic; JWTs are compared by decoded claims, never verbatim.
 
 from __future__ import annotations
 
+import hmac
 import logging
 from datetime import timedelta
 from http import HTTPStatus
@@ -26,6 +27,7 @@ from sqlalchemy.pool import StaticPool
 from golden import FROZEN_INSTANT, FROZEN_TS, install_offline_weather
 from greenhouse_core import auth as core_auth
 from greenhouse_core.models import Base, User
+from greenhouse_server import auth as server_auth
 from greenhouse_server.auth import (
     JWT_ALGORITHM,
     JWT_AUDIENCE,
@@ -355,7 +357,6 @@ def test_login_with_a_corrupt_stored_hash_is_401(real, corrupt):
 @pytest.mark.parametrize("username", ["nobody", TEST_ADMIN_USERNAME])
 def test_login_runs_one_argon2_verify_whether_or_not_the_user_exists(real, monkeypatch, username):
     """An unknown username costs the same argon2 verify as a wrong password (no timing oracle)."""
-    from greenhouse_server import auth as server_auth
 
     calls = []
     real_verify = server_auth.verify_password
@@ -623,9 +624,6 @@ def test_mcp_gate_compares_the_token_in_constant_time(clean_env, monkeypatch):
     match the token through response timing; the gate must use the same constant-time
     primitive as the API's MCP-principal check.
     """
-    import hmac
-
-    from greenhouse_server import auth as server_auth
 
     calls: list[tuple[bytes, bytes]] = []
     real_compare = hmac.compare_digest

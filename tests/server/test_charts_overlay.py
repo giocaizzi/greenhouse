@@ -3,6 +3,15 @@
 import time
 from http import HTTPStatus
 
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
+from sqlalchemy.pool import StaticPool
+
+from greenhouse_core.models import Base
+from greenhouse_core.repository import IrrigationRepository
+from greenhouse_server.deps import get_repository
+
 OVERLAY_HOURS = 72
 NORMALISED_MAX = 100.0  # overlay values are normalised to [0, 100]
 POINT_ARITY = 2  # each point is [timestamp, value]
@@ -44,18 +53,9 @@ def test_overlay_404_unknown_cluster(client):
 
 def test_overlay_with_readings(app):
     """Seed readings and assert all three metric datasets are returned."""
-    from fastapi.testclient import TestClient
-    from sqlalchemy import create_engine
-    from sqlalchemy.pool import StaticPool
-
-    from greenhouse_core.models import Base
-    from greenhouse_core.repository import IrrigationRepository
-    from greenhouse_server.deps import get_repository
 
     engine = create_engine("sqlite://", echo=False, connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(engine)
-
-    from sqlalchemy.orm import Session
 
     session = Session(engine)
     repo = IrrigationRepository(session)

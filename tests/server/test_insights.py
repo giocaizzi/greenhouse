@@ -2,6 +2,14 @@
 
 from http import HTTPStatus
 
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.pool import StaticPool
+
+from greenhouse_server.app import create_app
+from greenhouse_server.config import Settings
+from greenhouse_server.deps import get_device_gateway, get_device_registry
+
 
 class TestClusterInsights:
     def test_insights_not_found(self, client):
@@ -19,13 +27,6 @@ class TestClusterInsights:
 
     def test_stale_sensor_surfaces_insight(self, app):
         """A sensor with no recent data must produce a stale_data insight."""
-        from fastapi.testclient import TestClient
-        from sqlalchemy import create_engine
-        from sqlalchemy.pool import StaticPool
-
-        from greenhouse_server.app import create_app
-        from greenhouse_server.config import Settings
-        from greenhouse_server.deps import get_device_gateway, get_device_registry
 
         engine = create_engine("sqlite://", echo=False, connect_args={"check_same_thread": False}, poolclass=StaticPool)
         settings = Settings(db_url="sqlite://", enable_scheduler=False, auth_enabled=False)

@@ -12,8 +12,11 @@ from types import SimpleNamespace
 
 import pytest
 
+from golden import install_offline_weather
 from greenhouse_server.services import weather as weather_module
 from greenhouse_server.services.weather import WeatherClient
+
+from .conftest import _make_stubbed_app
 
 BASE = "https://api.open-meteo.com/v1/forecast"
 CURRENT_URL = (
@@ -226,9 +229,6 @@ class TestForecast:
 
 def test_app_wires_settings_location_and_preference_timezone(clean_env):
     """``create_app`` builds the client from ``weather_lat``/``weather_lon`` and the startup timezone."""
-    from golden import install_offline_weather
-
-    from .conftest import _make_stubbed_app
 
     app, engine = _make_stubbed_app(bypass_auth=True, weather_lat=1.5, weather_lon=-2.25)
     try:

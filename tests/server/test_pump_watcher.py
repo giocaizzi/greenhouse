@@ -6,16 +6,17 @@ irrigation and aborts the pump on the first positive reading. Tests inject a
 :class:`DeviceRegistry`, plus a fake clock/sleep so each case runs instantly.
 """
 
+import json
 import time as _time
 
 import pytest
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
 from fake_devices import FakeIrrigatorAdapter
 from greenhouse_core.devices import DeviceRegistry
 from greenhouse_core.devices.health import DeviceHealthState, HealthAlarm
-from greenhouse_core.models import SOURCE_HEALTH, Base, Irrigator
+from greenhouse_core.models import ENTITY_IRRIGATOR, SOURCE_HEALTH, Alert, Base, Irrigator
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.services.alerts import SOURCE_PUMP
 from greenhouse_server.services.health_monitor import DeviceHealthMonitor
@@ -265,7 +266,6 @@ class TestWatcherTrips:
         assert activity[0].code == "pump_dry_run"
         assert activity[0].severity == "critical"
         # Payload includes alarm_raw and irrigator_id
-        import json
 
         payload = json.loads(activity[0].payload_json)
         assert payload["alarm_raw"] == 1
@@ -361,7 +361,6 @@ class TestWatcherRoutesThroughMonitor:
 
     def test_trip_records_into_monitor_cache(self, repo, irrigator):
         """After a trip, the monitor's cache reflects NO_WATER for the irrigator."""
-        from greenhouse_core.models import ENTITY_IRRIGATOR
 
         clock = FakeClock(step=1.0)
         adapter = _make_fake_adapter([_alarm(no_water=True, alarm_raw=1)] + _completed_alarms())
@@ -382,9 +381,6 @@ class TestWatcherRoutesThroughMonitor:
         assert blocked is True
         assert HealthAlarm.NO_WATER in alarms
         # And the unified health: alert key is set
-        from sqlalchemy import select
-
-        from greenhouse_core.models import Alert
 
         key = f"health:{ENTITY_IRRIGATOR}:{irrigator.id}:no_water"
         alert = repo.session.scalar(select(Alert).where(Alert.dedup_key == key))

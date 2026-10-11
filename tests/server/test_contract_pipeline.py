@@ -39,14 +39,19 @@ import pytest
 import time_machine
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
+from sqlalchemy.orm import Session
 
 from golden import FROZEN_INSTANT, FROZEN_TS, assert_golden_json, install_offline_weather
-from greenhouse_core.constants import LEAK_ALERT_CODE
+from greenhouse_core.constants import LEAK_ALERT_CODE, LEAK_CHECK_SETTLE_SECONDS
 from greenhouse_core.devices.health import DeviceHealthState, HealthAlarm
 from greenhouse_core.logic.decision import IrrigationDecision
 from greenhouse_core.models import Base
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.deps import get_device_gateway, get_device_registry, get_weather_client
+from greenhouse_server.scheduler import scheduler as bg_scheduler
+from greenhouse_server.scheduler import start_scheduler, stop_scheduler
+from greenhouse_server.services.health_monitor import DeviceHealthMonitor
+from greenhouse_server.services.vacation import cluster_budgets, vacation_days
 from server.conftest import _make_stubbed_app
 
 HOUR = 3600
@@ -742,7 +747,6 @@ def sc_check_all_empty(p: Pipeline) -> None:
 
 def _install_health_block(p: Pipeline, ids: dict) -> None:
     """Wire a real ``DeviceHealthMonitor`` whose cache holds NO_WATER for the irrigator."""
-    from greenhouse_server.services.health_monitor import DeviceHealthMonitor
 
     p.wiring.irrigator.set_health(DeviceHealthState(observed_at=FROZEN_TS, alarms=frozenset({HealthAlarm.NO_WATER})))
     session = p.app.state.session_factory()
@@ -911,8 +915,6 @@ def test_leak_hold_blocks_forced_irrigate_but_not_direct_start(pipeline):
 
 def test_successful_auto_start_schedules_leak_check_and_watcher(pipeline):
     """A successful automatic start schedules ``leak-check-*`` (+30 min) and ``pump-watcher-*`` jobs."""
-    from greenhouse_server.scheduler import scheduler as bg_scheduler
-    from greenhouse_server.scheduler import start_scheduler, stop_scheduler
 
     pipeline.seed_cluster(soil=35.0)
     # The watcher reads the registry from app.state (not the request override).
@@ -955,8 +957,6 @@ def test_forced_run_is_recorded_manual_and_keeps_leak_check_and_watcher(pipeline
     the dry-run watcher like an automatic run, plus a ``leak_check_armed`` marker so the
     restart re-arm finds it.
     """
-    from greenhouse_server.scheduler import scheduler as bg_scheduler
-    from greenhouse_server.scheduler import start_scheduler, stop_scheduler
 
     pipeline.seed_cluster(soil=35.0)
     pipeline.app.state.device_registry = pipeline.wiring.registry
@@ -981,8 +981,6 @@ def test_manual_start_schedules_watcher_and_leak_check(pipeline):
     A short run keeps the 30-min check; without a duration (the device timer decides) the check
     is skipped and the activity log says why; the hand-watering log arms nothing.
     """
-    from greenhouse_server.scheduler import scheduler as bg_scheduler
-    from greenhouse_server.scheduler import start_scheduler, stop_scheduler
 
     ids = pipeline.seed_cluster(soil=35.0)
     pipeline.app.state.device_registry = pipeline.wiring.registry
@@ -1016,9 +1014,6 @@ def test_manual_start_schedules_watcher_and_leak_check(pipeline):
 
 def test_long_manual_start_checks_for_a_leak_after_the_run_has_settled(pipeline):
     """A long manual run's check is due at start + minutes + settle time, and observes that whole window."""
-    from greenhouse_core.constants import LEAK_CHECK_SETTLE_SECONDS
-    from greenhouse_server.scheduler import scheduler as bg_scheduler
-    from greenhouse_server.scheduler import start_scheduler, stop_scheduler
 
     ids = pipeline.seed_cluster(soil=35.0)
     pipeline.app.state.device_registry = pipeline.wiring.registry
@@ -1183,7 +1178,6 @@ def test_vacation_create_rejects_reversed_window(pipeline):
 
 def test_vacation_budget_projection(pipeline):
     """``services.vacation`` (web-only read model): per-cluster daily budget, capacity-configured clusters only."""
-    from greenhouse_server.services.vacation import cluster_budgets, vacation_days
 
     pipeline.seed_cluster("Zulu", soil=35.0, reservoir_l=6.0, flow_rate_l_per_min=1.0)
     pipeline.seed_cluster("Alpha", soil=35.0, reservoir_l=10.0, flow_rate_l_per_min=0.5)
@@ -1218,7 +1212,6 @@ def test_vacation_budget_projection(pipeline):
 @contextmanager
 def _failing_commit(app):
     """Make the next ``Session.commit`` raise, as a locked database would."""
-    from sqlalchemy.orm import Session
 
     real = Session.commit
     state = {"armed": True}

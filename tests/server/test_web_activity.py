@@ -1,7 +1,12 @@
 """Web activity page tests: full-page render and HTMX infinite-scroll pagination."""
 
+import re
 import time
 from http import HTTPStatus
+
+from fastapi.testclient import TestClient
+
+from greenhouse_core.repository import IrrigationRepository
 
 PAGE_SIZE = 50  # activity rows per page
 SEEDED_EVENTS = 60
@@ -10,8 +15,6 @@ SEEDED_EVENTS = 60
 def _seed_events(app, count: int, *, base_ts: int | None = None) -> list[int]:
     session = app.state.session_factory()
     try:
-        from greenhouse_core.repository import IrrigationRepository
-
         repo = IrrigationRepository(session)
         now = base_ts or int(time.time())
         ids = []
@@ -40,8 +43,6 @@ class TestActivityListPage:
         assert "No activity yet" in resp.text
 
     def test_renders_seeded_event(self, app):
-        from fastapi.testclient import TestClient
-
         with TestClient(app, raise_server_exceptions=False) as client:
             _seed_events(app, count=1)
             resp = client.get("/activity")
@@ -55,13 +56,9 @@ class TestActivityListPage:
         assert "?source=learning" in resp.text
 
     def test_source_filter(self, app):
-        from fastapi.testclient import TestClient
-
         with TestClient(app, raise_server_exceptions=False) as client:
             session = app.state.session_factory()
             try:
-                from greenhouse_core.repository import IrrigationRepository
-
                 repo = IrrigationRepository(session)
                 repo.add_activity_event(source="learning", entity_type="cluster", code="insight", message="learn msg")
                 repo.add_activity_event(source="system", entity_type="cluster", code="sync", message="sys msg")
@@ -78,7 +75,6 @@ class TestActivityListPage:
 class TestActivityPagination:
     def test_first_page_50_events_with_sentinel(self, app):
         """Writing 60 events: first page returns 50 rows + a sentinel hx-get attribute."""
-        from fastapi.testclient import TestClient
 
         with TestClient(app, raise_server_exceptions=False) as client:
             _seed_events(app, count=SEEDED_EVENTS)
@@ -91,7 +87,6 @@ class TestActivityPagination:
 
     def test_second_page_returns_remaining_events(self, app):
         """Second page fetches the remaining 10 events and has no further sentinel."""
-        from fastapi.testclient import TestClient
 
         with TestClient(app, raise_server_exceptions=False) as client:
             now = int(time.time())
@@ -103,7 +98,6 @@ class TestActivityPagination:
             assert 'hx-get="/activity/page' in resp1.text
 
             # Extract the before= cursor from the hx-get attr
-            import re
 
             m = re.search(r'hx-get="/activity/page\?before=(\d+)"', resp1.text)
             assert m, "No sentinel cursor found in first page"

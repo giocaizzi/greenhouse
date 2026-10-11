@@ -3,6 +3,10 @@
 import time
 from http import HTTPStatus
 
+from fastapi.testclient import TestClient
+
+from greenhouse_core.repository import IrrigationRepository
+
 
 class TestActivityList:
     def test_list_empty(self, client):
@@ -15,8 +19,6 @@ class TestActivityList:
     def _seed_events(self, app, count: int = 5) -> list[int]:
         session = app.state.session_factory()
         try:
-            from greenhouse_core.repository import IrrigationRepository
-
             repo = IrrigationRepository(session)
             now = int(time.time())
             ids = []
@@ -37,8 +39,6 @@ class TestActivityList:
             session.close()
 
     def test_ordering_newest_first(self, app):
-        from fastapi.testclient import TestClient
-
         with TestClient(app, raise_server_exceptions=False) as client:
             count = 3
             self._seed_events(app, count=count)
@@ -50,13 +50,9 @@ class TestActivityList:
             assert timestamps == sorted(timestamps, reverse=True)
 
     def test_filter_by_entity_type(self, app):
-        from fastapi.testclient import TestClient
-
         with TestClient(app, raise_server_exceptions=False) as client:
             session = app.state.session_factory()
             try:
-                from greenhouse_core.repository import IrrigationRepository
-
                 repo = IrrigationRepository(session)
                 repo.add_activity_event(
                     source="system", entity_type="sensor", entity_id=99, code="stale", message="sensor stale"
@@ -75,13 +71,9 @@ class TestActivityList:
             assert len(items) == 1
 
     def test_filter_by_source(self, app):
-        from fastapi.testclient import TestClient
-
         with TestClient(app, raise_server_exceptions=False) as client:
             session = app.state.session_factory()
             try:
-                from greenhouse_core.repository import IrrigationRepository
-
                 repo = IrrigationRepository(session)
                 repo.add_activity_event(source="irrigation", entity_type="cluster", code="irrigated", message="a")
                 repo.add_activity_event(source="learning", entity_type="cluster", code="insight", message="b")
@@ -94,13 +86,9 @@ class TestActivityList:
             assert all(i["source"] == "learning" for i in items)
 
     def test_filter_by_severity(self, app):
-        from fastapi.testclient import TestClient
-
         with TestClient(app, raise_server_exceptions=False) as client:
             session = app.state.session_factory()
             try:
-                from greenhouse_core.repository import IrrigationRepository
-
                 repo = IrrigationRepository(session)
                 repo.add_activity_event(
                     source="irrigation", entity_type="cluster", code="ok", message="info msg", severity="info"
@@ -122,7 +110,6 @@ class TestActivityList:
 
     def test_cursor_pagination(self, app):
         """When limit is reached, next_cursor equals the oldest item's timestamp."""
-        from fastapi.testclient import TestClient
 
         with TestClient(app, raise_server_exceptions=False) as client:
             total, page_size = 5, 3
@@ -143,8 +130,6 @@ class TestActivityList:
             assert data2["next_cursor"] is None
 
     def test_no_cursor_when_fewer_items_than_limit(self, app):
-        from fastapi.testclient import TestClient
-
         with TestClient(app, raise_server_exceptions=False) as client:
             self._seed_events(app, count=2)
             resp = client.get("/api/v1/activity?limit=10")

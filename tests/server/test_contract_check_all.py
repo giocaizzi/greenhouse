@@ -26,6 +26,7 @@ import pytest
 from sqlalchemy.orm import Session
 
 from golden import FROZEN_TS, assert_golden_json
+from greenhouse_server import scheduler
 from greenhouse_server.services.irrigation import CHECK_FAILED_ALERT_CODE, IrrigationService
 from server.test_contract_pipeline import Pipeline
 
@@ -175,7 +176,6 @@ def test_check_failed_alert_lifecycle(three_dry_clusters, tx_log, monkeypatch):
 
 def test_scheduler_check_job_isolates_clusters_the_same_way(three_dry_clusters, tx_log, monkeypatch):
     """I-ii (4): the scheduler's ``_check_job`` body gives the same per-cluster isolation."""
-    from greenhouse_server import scheduler
 
     p = three_dry_clusters
     assert scheduler._app is p.app  # init_scheduler rebinds the module global per create_app
@@ -210,7 +210,6 @@ def test_scheduler_check_job_isolates_clusters_the_same_way(three_dry_clusters, 
 
 def test_scheduler_check_job_without_registry_reports_errors_but_commits(three_dry_clusters, tx_log):
     """With no registry on ``app.state`` (degraded mode) the job evaluates and logs, but cannot actuate."""
-    from greenhouse_server import scheduler
 
     p = three_dry_clusters
     assert getattr(p.app.state, "device_registry", None) is None
@@ -228,7 +227,6 @@ def test_scheduler_check_job_without_registry_reports_errors_but_commits(three_d
 
 def test_scheduler_check_job_swallows_a_total_failure(three_dry_clusters, tx_log, monkeypatch, caplog):
     """If ``check_all_clusters`` itself raises, the job rolls back, logs and returns (never raises)."""
-    from greenhouse_server import scheduler
 
     def explode(self):
         raise Boom("whole check exploded")

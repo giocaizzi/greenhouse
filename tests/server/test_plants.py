@@ -1,6 +1,9 @@
 """Functional tests for plant CRUD via HTTP."""
 
+import json as _json
 from http import HTTPStatus
+
+from greenhouse_core.repository import IrrigationRepository
 
 
 class TestPlantCRUD:
@@ -146,11 +149,8 @@ class TestPlantMove:
         assert moved[0]["entity_type"] == "plant"
 
         # And the persisted row must carry the typed from→to payload.
-        import json as _json
 
         with app.state.session_factory() as session:
-            from greenhouse_core.repository import IrrigationRepository
-
             repo = IrrigationRepository(session)
             rows = repo.list_activity_events(entity_type="plant", entity_id=plant_id)
             moved_rows = [r for r in rows if r.code == "plant_moved"]
@@ -216,8 +216,6 @@ class TestPlantMove:
         )
 
         with app.state.session_factory() as session:
-            from greenhouse_core.repository import IrrigationRepository
-
             repo = IrrigationRepository(session)
             repo.add_sensor_reading(sensor_id=1, timestamp=1700000000, soil_moisture=42.0)
             session.commit()
@@ -227,8 +225,6 @@ class TestPlantMove:
 
         # Same sensor, same readings — now reachable via the new cluster.
         with app.state.session_factory() as session:
-            from greenhouse_core.repository import IrrigationRepository
-
             repo = IrrigationRepository(session)
             assert [s.id for s in repo.get_sensors_in_cluster(2)] == [1]
             assert repo.get_sensors_in_cluster(1) == []
@@ -248,11 +244,7 @@ class TestPlantMove:
 
         client.post(f"/api/v1/plants/{plant_id}/move", json={"target_cluster_id": 2})
 
-        import json as _json
-
         with app.state.session_factory() as session:
-            from greenhouse_core.repository import IrrigationRepository
-
             repo = IrrigationRepository(session)
             rows = repo.list_activity_events(entity_type="plant", entity_id=plant_id)
             moved_rows = [r for r in rows if r.code == "plant_moved"]
@@ -268,8 +260,6 @@ class TestPlantMove:
 
         # Manually seed a decision log against the source cluster, BEFORE the move.
         with app.state.session_factory() as session:
-            from greenhouse_core.repository import IrrigationRepository
-
             repo = IrrigationRepository(session)
             repo.add_decision_log(
                 cluster_id=1,
@@ -289,8 +279,6 @@ class TestPlantMove:
 
         # The decision log must still belong to cluster 1, not cluster 2.
         with app.state.session_factory() as session:
-            from greenhouse_core.repository import IrrigationRepository
-
             repo = IrrigationRepository(session)
             assert len(repo.list_decision_logs(cluster_id=1)) == 1
             assert repo.list_decision_logs(cluster_id=2) == []
@@ -306,8 +294,6 @@ class TestPlantMove:
         )
 
         with app.state.session_factory() as session:
-            from greenhouse_core.repository import IrrigationRepository
-
             repo = IrrigationRepository(session)
             repo.add_irrigation_event(
                 irrigator_id=1,
@@ -322,8 +308,6 @@ class TestPlantMove:
         assert resp.status_code == HTTPStatus.OK
 
         with app.state.session_factory() as session:
-            from greenhouse_core.repository import IrrigationRepository
-
             repo = IrrigationRepository(session)
             events = repo.get_recent_events(irrigator_id=1, hours=24 * 365)
             assert len(events) == 1
@@ -337,8 +321,6 @@ class TestPlantMove:
         score = 72.5
 
         with app.state.session_factory() as session:
-            from greenhouse_core.repository import IrrigationRepository
-
             repo = IrrigationRepository(session)
             repo.upsert_plant_health(
                 plant_id=plant_id,
@@ -355,8 +337,6 @@ class TestPlantMove:
         assert resp.status_code == HTTPStatus.OK
 
         with app.state.session_factory() as session:
-            from greenhouse_core.repository import IrrigationRepository
-
             repo = IrrigationRepository(session)
             history = repo.list_plant_health_history(plant_id, days=365 * 100)
             assert len(history) == 1

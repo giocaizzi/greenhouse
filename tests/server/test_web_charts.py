@@ -1,8 +1,10 @@
 """Chart-data API endpoints + per-plant dashboard web page."""
 
 from http import HTTPStatus
+from types import SimpleNamespace
 
 from greenhouse_core.constants import DEFAULT_SOIL_MOISTURE_MIN
+from greenhouse_server.services.charts import _threshold_for_plant
 
 CHART_HOURS = 24
 MEDIUM_WATER_NEEDS_BAND = (45.0, 65.0)  # plant_db soil band for water_needs=medium
@@ -119,9 +121,6 @@ def test_plant_chart_soil_band_uses_the_shared_target_parser():
     source ``"default"``; now it reads the first two parts. No ``lo-hi`` target at all still
     yields the default band labelled ``"default"``.
     """
-    from types import SimpleNamespace
-
-    from greenhouse_server.services.charts import _threshold_for_plant
 
     plant = SimpleNamespace(water_needs="medium")
 

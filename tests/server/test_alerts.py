@@ -2,6 +2,10 @@
 
 from http import HTTPStatus
 
+from fastapi.testclient import TestClient
+
+from greenhouse_core.repository import IrrigationRepository
+
 
 class TestAlertList:
     def test_list_empty(self, client):
@@ -28,13 +32,9 @@ class TestAlertGetById:
         assert resp.status_code == HTTPStatus.NOT_FOUND
 
     def test_get_existing(self, app):
-        from fastapi.testclient import TestClient
-
         with TestClient(app, raise_server_exceptions=False) as client:
             session = app.state.session_factory()
             try:
-                from greenhouse_core.repository import IrrigationRepository
-
                 repo = IrrigationRepository(session)
                 alert = repo.upsert_alert(
                     dedup_key="test::get::1",
@@ -65,13 +65,9 @@ class TestAlertAcknowledge:
         assert resp.status_code == HTTPStatus.NOT_FOUND
 
     def test_acknowledge_flow(self, app):
-        from fastapi.testclient import TestClient
-
         with TestClient(app, raise_server_exceptions=False) as client:
             session = app.state.session_factory()
             try:
-                from greenhouse_core.repository import IrrigationRepository
-
                 repo = IrrigationRepository(session)
                 alert = repo.upsert_alert(
                     dedup_key="test::ack::1",
@@ -106,13 +102,9 @@ class TestAlertResolve:
         assert resp.status_code == HTTPStatus.NOT_FOUND
 
     def test_resolve_flow(self, app):
-        from fastapi.testclient import TestClient
-
         with TestClient(app, raise_server_exceptions=False) as client:
             session = app.state.session_factory()
             try:
-                from greenhouse_core.repository import IrrigationRepository
-
                 repo = IrrigationRepository(session)
                 alert = repo.upsert_alert(
                     dedup_key="test::resolve::1",
@@ -181,13 +173,10 @@ class TestAlertSyncAll:
 
     def test_sync_all_open_count_badge(self, app):
         """Badge count must equal the number of open alerts."""
-        from fastapi.testclient import TestClient
 
         with TestClient(app, raise_server_exceptions=False) as client:
             session = app.state.session_factory()
             try:
-                from greenhouse_core.repository import IrrigationRepository
-
                 repo = IrrigationRepository(session)
                 repo.upsert_alert(
                     dedup_key="test::badge::1",
@@ -220,8 +209,6 @@ class TestAlertListPagination:
     """Cursor pagination on GET /alerts."""
 
     def _seed_alerts(self, app, count: int):
-        from greenhouse_core.repository import IrrigationRepository
-
         ids = []
         with app.state.session_factory() as session:
             repo = IrrigationRepository(session)

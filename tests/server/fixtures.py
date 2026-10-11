@@ -42,6 +42,8 @@ from greenhouse_server.app import create_app
 from greenhouse_server.auth import AuthenticatedUser, require_user, require_web_user
 from greenhouse_server.config import Settings
 from greenhouse_server.deps import get_device_gateway, get_device_registry
+from greenhouse_server.scheduler import scheduler as bg_scheduler
+from greenhouse_server.scheduler import start_scheduler, stop_scheduler
 
 TEST_ADMIN_USERNAME = "test-admin"
 TEST_ADMIN_PASSWORD = "test-admin-pw-123"
@@ -168,8 +170,6 @@ def running_scheduler(app):
     loop processes nothing — and shuts it down afterwards. Depends on ``app``
     so the app's ``init_scheduler`` (which needs a stopped scheduler) runs first.
     """
-    from greenhouse_server.scheduler import scheduler as bg_scheduler
-    from greenhouse_server.scheduler import start_scheduler, stop_scheduler
 
     start_scheduler(paused=True)
     try:

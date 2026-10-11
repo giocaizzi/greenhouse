@@ -1,6 +1,12 @@
 """Functional tests for operation endpoints (irrigate, monitor, check, stats, etc.)."""
 
+import datetime as _dt
 from http import HTTPStatus
+
+from greenhouse_core.constants import LEAK_ALERT_CODE
+from greenhouse_core.models import ActivityEvent
+from greenhouse_core.repository import IrrigationRepository
+from greenhouse_server.services.irrigation import IrrigationService
 
 
 class TestIrrigate:
@@ -22,7 +28,6 @@ class TestIrrigate:
 
     def test_irrigate_blocked_by_quiet_hours(self, seeded_client):
         """When quiet hours cover the current time, /irrigate returns SKIP with QUIET_HOURS."""
-        import datetime as _dt
 
         hour = _dt.datetime.now(_dt.UTC).hour
         end = (hour + 1) % 24
@@ -39,7 +44,6 @@ class TestIrrigate:
 
     def test_irrigate_force_bypasses_quiet_hours(self, seeded_client):
         """``force=true`` runs the engine; the decision logs the override warning."""
-        import datetime as _dt
 
         hour = _dt.datetime.now(_dt.UTC).hour
         end = (hour + 1) % 24
@@ -63,9 +67,6 @@ class TestLeakHold:
     """End-to-end: a confirmed leak holds /irrigate until the alert is resolved."""
 
     def _raise_leak(self, app, cluster_id: int = 1, sensor_id: int = 1):
-        from greenhouse_core.constants import LEAK_ALERT_CODE
-        from greenhouse_core.repository import IrrigationRepository
-
         session = app.state.session_factory()
         repo = IrrigationRepository(session)
         alert = repo.upsert_alert(
@@ -246,9 +247,6 @@ class TestCheckAllIsolation:
             assert client.post("/api/v1/clusters", json={"name": name}).status_code == HTTPStatus.CREATED
 
     def test_crash_in_one_cluster_keeps_earlier_clusters_committed(self, app, client, monkeypatch):
-        from greenhouse_core.models import ActivityEvent
-        from greenhouse_server.services.irrigation import IrrigationService
-
         self._two_clusters(client)
         original = IrrigationService.check_cluster
         failing_cluster = 2
@@ -277,8 +275,6 @@ class TestCheckAllIsolation:
         assert alerts[0]["severity"] == "error"
 
     def test_failure_alert_resolves_on_next_success(self, client, monkeypatch):
-        from greenhouse_server.services.irrigation import IrrigationService
-
         self._two_clusters(client)
         original = IrrigationService.check_cluster
         fail = {"on": True}

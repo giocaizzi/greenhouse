@@ -3,6 +3,10 @@
 import time
 from http import HTTPStatus
 
+from fastapi.testclient import TestClient
+
+from greenhouse_core.models import Sensor, SensorReading
+
 
 class TestHealthPage:
     def test_renders_ok(self, client):
@@ -25,7 +29,6 @@ class TestHealthPage:
 
     def test_degraded_when_stale_sensor(self, app):
         """A sensor with no fresh reading + a fresh reading elsewhere → degraded."""
-        from fastapi.testclient import TestClient
 
         with TestClient(app, raise_server_exceptions=False) as client:
             # Create cluster + sensor
@@ -39,8 +42,6 @@ class TestHealthPage:
                 "/api/v1/clusters/1/sensors",
                 json={"tuya_device_id": "fake_health_s2", "name": "Fresh Sensor", "type": "tuya.tr301z"},
             )
-
-            from greenhouse_core.models import Sensor, SensorReading
 
             now = int(time.time())
             session = app.state.session_factory()

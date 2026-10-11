@@ -2,7 +2,16 @@
 
 from __future__ import annotations
 
+import time
 from http import HTTPStatus
+
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+
+from greenhouse_core.models import UserPreferences
+from greenhouse_server.app import create_app
+from greenhouse_server.config import Settings
+from greenhouse_server.deps import get_device_gateway, get_device_registry
 
 from .test_notify import _RecordingNotifier
 
@@ -37,15 +46,6 @@ def test_web_stop_all_respects_the_emergency_preference(app, seeded_client):
 
 def test_web_stop_all_without_a_preferences_row_does_not_block_the_page(tmp_path):
     """The notify gate's uncommitted preferences seed must not hold SQLite's write lock for the chrome."""
-    import time
-
-    from fastapi.testclient import TestClient
-    from sqlalchemy import create_engine
-
-    from greenhouse_core.models import UserPreferences
-    from greenhouse_server.app import create_app
-    from greenhouse_server.config import Settings
-    from greenhouse_server.deps import get_device_gateway, get_device_registry
 
     url = f"sqlite:///{tmp_path}/g.db"
     app = create_app(Settings(db_url=url, enable_scheduler=False, auth_enabled=False), engine=create_engine(url))

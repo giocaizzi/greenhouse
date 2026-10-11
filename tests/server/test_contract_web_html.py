@@ -39,10 +39,12 @@ from sqlalchemy.pool import StaticPool
 from fake_data import FAKE_DEVICE_ID, FAKE_DEVICE_ID_2, FAKE_DEVICE_IP, FAKE_LOCAL_KEY, FAKE_SENSOR_ID
 from golden import FROZEN_TS, assert_golden, assert_golden_json, install_offline_weather
 from greenhouse_core.repository import IrrigationRepository
+from greenhouse_core.utils import set_display_timezone
 from greenhouse_server.app import create_app
 from greenhouse_server.auth import AuthenticatedUser, require_user, require_web_user
 from greenhouse_server.config import Settings
 from greenhouse_server.deps import get_device_gateway, get_device_registry
+from greenhouse_server.scheduler import init_scheduler, start_scheduler, stop_scheduler
 from greenhouse_server.web.context import APP_VERSION
 from greenhouse_server.web.router import web_router
 from greenhouse_server.web.templating import templates
@@ -409,8 +411,6 @@ def reset_shared_app() -> Any:
     ``create_app`` sets (scheduler job registration, display timezone) are re-applied exactly as
     ``create_app`` applies them for this seed (prefs timezone ``UTC``, not paused).
     """
-    from greenhouse_core.utils import set_display_timezone
-    from greenhouse_server.scheduler import init_scheduler
 
     if "app" not in _SHARED:
         _SHARED["app"], _SHARED["engine"] = build_app()
@@ -711,7 +711,6 @@ def test_get_route_html_golden(case, seeded_get_client):
 
 def test_get_sweep_covers_every_web_get_route():
     """Every GET route of the web router is hit by at least one case (path template match)."""
-    import re
 
     get_paths = [r.path for r in web_routes(web_router.routes) if "GET" in r.methods]
     case_paths = [c.url.split("?")[0] for c in GET_CASES]
@@ -758,7 +757,6 @@ VARIANTS = (
 @pytest.mark.parametrize(("name", "url", "setup", "running"), VARIANTS, ids=[v[0] for v in VARIANTS])
 def test_get_variant_html_golden(name, url, setup, running, seeded_get_client):
     """Same golden format as the sweep, after a state tweak (or with the scheduler running, paused)."""
-    from greenhouse_server.scheduler import start_scheduler, stop_scheduler
 
     if setup is not None:
         session = seeded_get_client.app.state.session_factory()

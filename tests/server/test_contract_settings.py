@@ -31,7 +31,14 @@ import pytest
 from pydantic import ValidationError
 
 from golden import assert_golden_json
+from greenhouse_cli.client import _default_token_path, load_stored_token
+from greenhouse_cli.commands._helpers import get_client
+from greenhouse_cli.commands.auth import _login_client
+from greenhouse_core import utils
+from greenhouse_core.devices import gateway as gateway_mod
 from greenhouse_server.config import Settings
+from greenhouse_server.scheduler import _resolve_check_cron_hours
+from greenhouse_server.services.notify import NtfyClient
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 LIBS = REPO_ROOT / "libs"
@@ -225,7 +232,6 @@ def test_extra_inputs_are_ignored(clean_env, monkeypatch):
 
 def test_removed_check_interval_hours_is_ignored(clean_env, monkeypatch, caplog):
     """OD3: ``IRRIGATION_CHECK_INTERVAL_HOURS`` is gone — ignored like any unknown var, never validated."""
-    from greenhouse_server.scheduler import _resolve_check_cron_hours
 
     monkeypatch.setenv("IRRIGATION_CHECK_INTERVAL_HOURS", "5")  # used to fail startup (5 does not divide 24)
     with caplog.at_level(logging.WARNING, logger="greenhouse_server.scheduler"):
@@ -277,8 +283,6 @@ def test_ntfy_url_error_never_echoes_credentials(clean_env):
 
 
 def test_ntfy_client_refuses_a_non_http_scheme():
-    from greenhouse_server.services.notify import NtfyClient
-
     with pytest.raises(ValueError, match="http:// or https://"):
         NtfyClient("file:///tmp", "topic")
 
@@ -358,8 +362,6 @@ def test_direct_env_reads_match_golden():
 
 
 def test_tuya_env_vars_feed_device_gateway(clean_env, monkeypatch):
-    from greenhouse_core.devices import gateway as gateway_mod
-
     calls = []
     monkeypatch.setattr(gateway_mod.tinytuya, "Cloud", lambda **kw: calls.append(kw) or object())
     with pytest.raises(ValueError, match=r"^Missing TUYA_CLIENT_ID or TUYA_CLIENT_SECRET$"):
@@ -396,8 +398,6 @@ def test_plant_db_path_env_is_read_at_import_time(clean_env, value, expect_defau
 
 
 def test_irrigation_tz_is_display_timezone_fallback(clean_env, monkeypatch):
-    from greenhouse_core import utils
-
     monkeypatch.setattr(utils, "_display_timezone", None)
     monkeypatch.delenv("IRRIGATION_TZ", raising=False)
     assert utils.get_display_timezone() == "UTC"
@@ -408,9 +408,6 @@ def test_irrigation_tz_is_display_timezone_fallback(clean_env, monkeypatch):
 
 
 def test_cli_server_url_env_and_default(clean_env, monkeypatch):
-    from greenhouse_cli.commands._helpers import get_client
-    from greenhouse_cli.commands.auth import _login_client
-
     ctx = SimpleNamespace(obj=None)
     assert str(get_client(ctx).http.base_url) == "http://localhost:8000"
     assert str(_login_client(ctx).http.base_url) == "http://localhost:8000"
@@ -421,8 +418,6 @@ def test_cli_server_url_env_and_default(clean_env, monkeypatch):
 
 
 def test_cli_api_token_env_and_token_file(clean_env, monkeypatch):
-    from greenhouse_cli.client import _default_token_path, load_stored_token
-
     assert _default_token_path() == clean_env / "config" / "greenhouse" / "token"
     assert load_stored_token() is None
     monkeypatch.setenv("GREENHOUSE_API_TOKEN", "  env-token  ")

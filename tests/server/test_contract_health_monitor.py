@@ -21,6 +21,7 @@ from __future__ import annotations
 import json
 import logging
 from datetime import timedelta
+from types import SimpleNamespace
 
 import pytest
 from sqlalchemy import select
@@ -31,6 +32,7 @@ from greenhouse_core.constants import DEFAULT_SYNC_INTERVAL_MINUTES, SENSOR_OFFL
 from greenhouse_core.devices import DeviceGateway, DeviceRegistry, TR301ZAdapter
 from greenhouse_core.devices.health import DeviceHealthState, HealthAlarm
 from greenhouse_core.models import ENTITY_IRRIGATOR, ENTITY_SENSOR, Alert
+from greenhouse_server import scheduler
 from greenhouse_server.services.health_monitor import DeviceHealthMonitor
 
 GOLDEN = "ingress_devices"
@@ -246,9 +248,6 @@ def test_sensor_stays_online_between_syncs_and_goes_offline_after_a_missed_sync(
 
 def test_init_health_monitor_sizes_the_sensor_window_from_the_sync_interval(world, monkeypatch):
     """The startup monitor uses ``IRRIGATION_SYNC_INTERVAL_MINUTES`` + grace, not the default interval."""
-    from types import SimpleNamespace
-
-    from greenhouse_server import scheduler
 
     session_factory = lambda: world["repo"].session  # noqa: E731 — the fixture's own session
     monkeypatch.setattr(world["repo"].session, "close", lambda: None)
@@ -263,9 +262,6 @@ def test_init_health_monitor_sizes_the_sensor_window_from_the_sync_interval(worl
 
 def test_init_health_monitor_restores_blocks_from_open_alerts(world, monkeypatch):
     """B-9: the startup monitor rebuilds its cache from the open health alerts, so actuation stays blocked."""
-    from types import SimpleNamespace
-
-    from greenhouse_server import scheduler
 
     world["irr_adapter"].set_health(DeviceHealthState(observed_at=FROZEN_TS, alarms=frozenset({HealthAlarm.NO_WATER})))
     world["monitor"].poll_irrigator(world["irrigator"])

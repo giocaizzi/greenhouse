@@ -2,6 +2,9 @@
 
 from http import HTTPStatus
 
+from greenhouse_core.models import parse_device_config
+from greenhouse_core.repository import IrrigationRepository
+
 
 class TestSensorCRUD:
     def test_add_and_list(self, client):
@@ -245,7 +248,6 @@ class TestSensorReassignmentActivity:
         )
         # We can't send null via the existing PUT (exclude_none drops it), so
         # exercise it directly through the repository for coverage of the path.
-        from greenhouse_core.repository import IrrigationRepository
 
         # Resolve the underlying session factory via TestClient app state.
         app = client.app
@@ -266,9 +268,6 @@ class TestSensorLocalKeyMasking:
     MASK = "••••••••"
 
     def _stored_config(self, client, sid):
-        from greenhouse_core.models import parse_device_config
-        from greenhouse_core.repository import IrrigationRepository
-
         session = client.app.state.session_factory()
         try:
             return parse_device_config(IrrigationRepository(session).get_sensor(sid).config)

@@ -16,6 +16,7 @@ There are no PUT routes in the web router. Nothing is normalized but the package
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from http import HTTPStatus
@@ -27,6 +28,8 @@ from sqlalchemy import inspect, text
 from golden import assert_golden_json
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.deps import get_device_registry
+from greenhouse_server.scheduler import CHECK_ALL_JOB_ID, scheduler, start_scheduler, stop_scheduler
+from greenhouse_server.web.router import web_router
 from server import test_contract_web_html as _web
 from server.conftest import TEST_ADMIN_PASSWORD, TEST_ADMIN_USERNAME
 from server.test_contract_web_html import (
@@ -49,6 +52,7 @@ from server.test_contract_web_html import (
     T,
     normalize,
     pinned_headers,
+    web_routes,
 )
 
 ADHOC_JOB = "adhoc_contract_job"
@@ -83,8 +87,6 @@ def _quiet_hours_now(app, repo) -> None:
 
 
 def _unregister_check_all(app, repo) -> None:
-    from greenhouse_server.scheduler import CHECK_ALL_JOB_ID, scheduler
-
     scheduler.remove_job(CHECK_ALL_JOB_ID)
 
 
@@ -608,10 +610,6 @@ def _natural(key: str) -> tuple:
 
 def test_mutation_cases_are_unique_and_cover_every_web_write_route():
     """Every non-GET web route has at least one case; case names are unique."""
-    import re
-
-    from greenhouse_server.web.router import web_router
-    from server.test_contract_web_html import web_routes
 
     names = [m.name for m in MUTATIONS]
     assert len(names) == len(set(names))
@@ -635,8 +633,6 @@ def test_web_mutation_golden(case, make_client, monkeypatch):
             session.commit()
         finally:
             session.close()
-
-    from greenhouse_server.scheduler import scheduler, start_scheduler, stop_scheduler
 
     if case.running_scheduler:
         start_scheduler(paused=True)
