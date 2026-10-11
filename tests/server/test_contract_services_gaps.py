@@ -506,7 +506,8 @@ def test_trip_commit_failure_rolls_back(pump, monkeypatch, caplog):
     monkeypatch.setattr(pump.repo.session, "rollback", lambda: calls.append("rollback"))
     watcher = _watcher(pump, [0.0, 0.0, 0.0, 0.0], warmup_seconds=0)
     assert watcher.watch(pump.irrigator, 60, started_at=FROZEN_TS - 42)["outcome"] == "tripped"
-    assert calls == ["commit", "rollback"]
+    # S5: event, activity and alert each commit on their own, and each failed commit is rolled back.
+    assert calls == ["commit", "rollback"] * 3
 
 
 def test_trip_rollback_failure_is_swallowed(pump, monkeypatch, caplog):
@@ -518,8 +519,14 @@ def test_trip_rollback_failure_is_swallowed(pump, monkeypatch, caplog):
     monkeypatch.setattr(pump.repo.session, "commit", _fail)
     monkeypatch.setattr(pump.repo.session, "rollback", _fail)
     watcher = _watcher(pump, [0.0, 0.0, 0.0, 0.0], warmup_seconds=0)
-    with caplog.at_level(logging.ERROR, logger=PUMP_LOGGER):
+    with caplog.at_level(logging.WARNING, logger=PUMP_LOGGER):
         assert watcher.watch(pump.irrigator, 60, started_at=FROZEN_TS - 42)["outcome"] == "tripped"
-    assert [r.getMessage() for r in caplog.records][-1] == (
-        f"Failed to commit pump dry-run side effects for irrigator {pump.irrigator.id}"
-    )
+    iid = pump.irrigator.id
+    assert [(r.levelname, r.getMessage()) for r in caplog.records if r.levelname != "CRITICAL"] == [
+        ("ERROR", f"Failed to log aborted irrigation event for irrigator {iid}"),
+        ("WARNING", "Rollback after a failed pump dry-run record failed too"),
+        ("ERROR", f"Failed to log the pump dry-run activity for irrigator {iid}"),
+        ("WARNING", "Rollback after a failed pump dry-run record failed too"),
+        ("ERROR", f"Failed to record dry-run state into health monitor for irrigator {iid}"),
+        ("WARNING", "Rollback after a failed pump dry-run record failed too"),
+    ]

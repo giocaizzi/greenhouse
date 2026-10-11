@@ -457,7 +457,11 @@ def test_constructor_clamps_its_knobs(plain):
 
 
 def test_trip_side_effect_failures_are_logged_and_the_stop_still_happens(plain, monkeypatch, caplog):
-    """Each trip side effect is isolated: event, activity, monitor and commit failures are all swallowed."""
+    """Each trip side effect is isolated (S5): event, activity and monitor failures are logged, never raised.
+
+    Each record is written and committed on its own; a failed one is rolled back and the
+    lost alert is requeued on the monitor so it keeps blocking and is raised again.
+    """
     plain.adapter.set_health(
         DeviceHealthState(observed_at=FROZEN_TS, alarms=frozenset({HealthAlarm.NO_WATER}), raw={"alarm_raw": 1})
     )
@@ -465,9 +469,14 @@ def test_trip_side_effect_failures_are_logged_and_the_stop_still_happens(plain, 
     def _fail(*_args, **_kwargs):
         raise RuntimeError("db gone")
 
+    requeued: list = []
+
     class _BadMonitor:
         def record(self, *args, **kwargs):
             raise RuntimeError("monitor gone")
+
+        def mark_unraised(self, *args):
+            requeued.append(args)
 
     monkeypatch.setattr(plain.repo, "add_irrigation_event", _fail)
     monkeypatch.setattr(plain.repo, "add_activity_event", _fail)
@@ -486,7 +495,43 @@ def test_trip_side_effect_failures_are_logged_and_the_stop_still_happens(plain, 
             "alarm_raw=1, stop_ok=True, stop_msg=fake stop ok",
         ),
         ("ERROR", f"Failed to log aborted irrigation event for irrigator {iid}"),
-        ("ERROR", f"Failed to log activity event for pump dry-run on irrigator {iid}"),
+        ("ERROR", f"Failed to log the pump dry-run activity for irrigator {iid}"),
         ("ERROR", f"Failed to record dry-run state into health monitor for irrigator {iid}"),
-        ("ERROR", f"Failed to commit pump dry-run side effects for irrigator {iid}"),
     ]
+    assert requeued == [("irrigator", iid, HealthAlarm.NO_WATER)]
+
+
+def test_trip_after_a_failed_flush_rolls_back_and_still_records_the_rest(plain, monkeypatch, caplog):
+    """S5 fixed: a real failed flush no longer poisons the session for the later trip records.
+
+    The aborted-event write fails inside the flush (NOT NULL violation), which used to leave the
+    session needing a rollback: every later write and the final commit raised
+    ``PendingRollbackError`` from inside their own except handlers. Now the failed record is
+    rolled back alone; the activity row and the NO_WATER alert are written and committed, and
+    nothing escapes the watcher.
+    """
+    from greenhouse_core.models import Alert
+
+    plain.adapter.set_health(
+        DeviceHealthState(observed_at=FROZEN_TS, alarms=frozenset({HealthAlarm.NO_WATER}), raw={"alarm_raw": 1})
+    )
+    session = plain.repo.session
+
+    def _bad_event(**_kwargs):
+        session.add(IrrigationEvent(irrigator_id=plain.irrigator.id, timestamp=None, action="aborted"))
+        session.flush()
+
+    monkeypatch.setattr(plain.repo, "add_irrigation_event", _bad_event)
+    watcher = PumpWatcherService(plain.repo, plain.registry, warmup_seconds=0, clock=lambda: 0.0, sleep=lambda s: None)
+    with caplog.at_level(logging.ERROR, logger="greenhouse_server.services.pump_watcher"):
+        assert watcher.watch(plain.irrigator, 60, started_at=STARTED_AT)["outcome"] == "tripped"
+    iid = plain.irrigator.id
+    assert plain.adapter.calls == [("read_health", iid), ("stop", iid)]
+    assert [r.getMessage() for r in caplog.records if r.levelname == "ERROR"] == [
+        f"Failed to log aborted irrigation event for irrigator {iid}"
+    ]
+    session.rollback()  # read what was committed, not what is pending
+    assert session.query(IrrigationEvent).all() == []
+    assert [a.code for a in session.query(ActivityEvent).all()] == ["pump_dry_run"]
+    alert = session.query(Alert).one()
+    assert (alert.dedup_key, alert.status) == (f"health:irrigator:{iid}:no_water", "open")
