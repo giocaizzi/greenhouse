@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING, Any
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Annotated, Any
 
-from fastapi import APIRouter, Form, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Path, Query, Request
 from fastapi.responses import RedirectResponse, Response
 
 from greenhouse_core.constants import (
@@ -15,7 +16,6 @@ from greenhouse_core.constants import (
     PLANT_PAGE_READINGS_LOOKBACK_HOURS,
     PLANT_PAGE_RECENT_EVENTS,
 )
-from greenhouse_core.models import Plant
 from greenhouse_core.repository import SameClusterMoveError
 from greenhouse_server.deps import (
     MAX_LOOKBACK_HOURS,
@@ -37,7 +37,7 @@ from greenhouse_server.web.filters import relative_age
 from greenhouse_server.web.templating import templates
 
 if TYPE_CHECKING:
-    from greenhouse_core.models import IrrigationEvent, Irrigator, Sensor, SensorReading
+    from greenhouse_core.models import IrrigationEvent, Irrigator, Plant, Sensor, SensorReading
     from greenhouse_core.plant_db import PlantDatabase
     from greenhouse_core.repository import IrrigationRepository
     from greenhouse_server.services.charts import Metric
@@ -47,35 +47,51 @@ router = APIRouter(include_in_schema=False)
 METRICS: tuple[Metric, ...] = ("soil_moisture", "temperature", "env_humidity", "light")
 
 
+@dataclass(frozen=True, slots=True)
+class _PlantPageQuery:
+    """``GET /clusters/{cluster_id}/plants/{plant_id}``: the plant and the charts' look-back."""
+
+    cluster_id: Annotated[int, Path()]
+    plant_id: Annotated[int, Path()]
+    hours: Annotated[int, Query(ge=1, le=MAX_LOOKBACK_HOURS)] = 24
+
+
+@dataclass(frozen=True, slots=True)
+class _ChartFragmentQuery:
+    """``GET /clusters/{cluster_id}/plants/{plant_id}/chart-fragment``: the plant, metric and look-back."""
+
+    cluster_id: Annotated[int, Path()]
+    plant_id: Annotated[int, Path()]
+    metric: Annotated[str, Query()] = "soil_moisture"
+    hours: Annotated[int, Query(ge=1, le=MAX_LOOKBACK_HOURS)] = 24
+
+
 @router.get("/clusters/{cluster_id}/plants/{plant_id}")
 def plant_dashboard(
     request: Request,
-    cluster_id: int,
-    plant_id: int,
     repo: RepoDep,
     plant_db: PlantDbDep,
     health_svc: PlantHealthServiceDep,
-    hours: int = Query(24, ge=1, le=MAX_LOOKBACK_HOURS),
+    query: Annotated[_PlantPageQuery, Depends()],
 ) -> Response:
     """Render a plant's dashboard: care info, sensors, charts, health, events and alerts."""
-    plant = require_plant_in_cluster(repo, cluster_id, plant_id)
-    cluster = repo.get_cluster(cluster_id)
-    other_clusters = [c for c in repo.list_clusters() if c.id != cluster_id]
-    plant_sensors = [s for s in repo.get_sensors_in_cluster(cluster_id) if s.plant_id == plant_id]
+    plant = require_plant_in_cluster(repo, query.cluster_id, query.plant_id)
+    cluster = repo.get_cluster(query.cluster_id)
+    other_clusters = [c for c in repo.list_clusters() if c.id != query.cluster_id]
+    plant_sensors = [s for s in repo.get_sensors_in_cluster(query.cluster_id) if s.plant_id == query.plant_id]
     latest_readings = _latest_readings(repo, plant_sensors)
     # Plant care info (best-effort species lookup)
     care_info = plant_db.lookup_species(plant.species)
-    cluster_irrigator = repo.get_irrigator_for_cluster(cluster_id)
-    recent_events = _recent_events(repo, cluster_irrigator, hours)
-    plant_alerts = _plant_alerts(repo, plant_db, cluster_id, plant)
-    chart_payloads_json = _chart_payloads_json(repo, plant_db, plant_id, hours)
+    cluster_irrigator = repo.get_irrigator_for_cluster(query.cluster_id)
+    recent_events = _recent_events(repo, cluster_irrigator, query.hours)
+    plant_alerts = _plant_alerts(repo, plant_db, query.cluster_id, plant)
+    chart_payloads_json = _chart_payloads_json(repo, plant_db, query.plant_id, query.hours)
     # Health score + 90-day history for the hero card
-    health_score: float | None = health_svc.compute_score(plant_id)["score"]
-    health_history = repo.list_plant_health_history(plant_id, days=PLANT_PAGE_HEALTH_HISTORY_DAYS)
+    health_score: float | None = health_svc.compute_score(query.plant_id)["score"]
+    health_history = repo.list_plant_health_history(query.plant_id, days=PLANT_PAGE_HEALTH_HISTORY_DAYS)
     last_irrigated_relative: str = relative_age(
         _last_irrigated_ts(repo, cluster_irrigator), missing="never", stale_after=None
     )
-
     return templates.TemplateResponse(
         request,
         "plants/dashboard.html",
@@ -89,7 +105,7 @@ def plant_dashboard(
             care_info=care_info,
             recent_events=recent_events,
             alerts=plant_alerts,
-            hours=hours,
+            hours=query.hours,
             allowed_hours=sorted(ALLOWED_HOURS),
             metrics=METRICS,
             chart_payloads=chart_payloads_json,
@@ -147,23 +163,17 @@ def _last_irrigated_ts(repo: IrrigationRepository, cluster_irrigator: Irrigator 
 
 @router.get("/clusters/{cluster_id}/plants/{plant_id}/chart-fragment")
 def plant_chart_fragment(
-    request: Request,
-    cluster_id: int,
-    plant_id: int,
-    repo: RepoDep,
-    plant_db: PlantDbDep,
-    metric: str = Query("soil_moisture"),
-    hours: int = Query(24, ge=1, le=MAX_LOOKBACK_HOURS),
+    request: Request, repo: RepoDep, plant_db: PlantDbDep, query: Annotated[_ChartFragmentQuery, Depends()]
 ) -> Response:
     """Render one metric's plant chart panel (HTMX fragment)."""
-    chart_metric = require_metric(metric)
-    require_plant_in_cluster(repo, cluster_id, plant_id)
+    chart_metric = require_metric(query.metric)
+    require_plant_in_cluster(repo, query.cluster_id, query.plant_id)
     with not_found_as_404("Plant not found"):
-        payload = build_plant_chart_payload(repo, plant_db, plant_id, hours, chart_metric)
+        payload = build_plant_chart_payload(repo, plant_db, query.plant_id, query.hours, chart_metric)
     return templates.TemplateResponse(
         request,
         "partials/_chart_panel.html",
-        base_context(request, metric=metric, hours=hours, payload_json=json.dumps(payload)),
+        base_context(request, metric=query.metric, hours=query.hours, payload_json=json.dumps(payload)),
     )
 
 
@@ -187,11 +197,10 @@ def plant_health_fragment(
 
 @router.post("/clusters/{cluster_id}/plants/{plant_id}/move")
 def move_plant_web(
-    request: Request,
     cluster_id: int,
     plant_id: int,
     repo: RepoDep,
-    target_cluster_id: int = Form(...),
+    target_cluster_id: Annotated[int, Form()],
 ) -> Response:
     """Move a plant to a different cluster (server-rendered form submit)."""
     require_plant_in_cluster(repo, cluster_id, plant_id)

@@ -38,9 +38,12 @@ from __future__ import annotations
 import argparse
 import ast
 import sys
-from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 ROOT = Path(__file__).resolve().parents[1]
 REGISTER = ROOT / "scripts" / "size-exceptions.txt"
@@ -193,11 +196,11 @@ def main(argv: list[str] | None = None) -> int:
             reason = register.get(hit.key)
             if reason is None:
                 failures += 1
-                print(f"{hit.key}  {hit.detail}")
+                sys.stdout.write(f"{hit.key}  {hit.detail}\n")
             elif not args.quiet_excepted:
-                print(f"{hit.key}  {hit.detail}  excepted: {reason}")
+                sys.stdout.write(f"{hit.key}  {hit.detail}  excepted: {reason}\n")
     if failures:
-        print(f"sizecheck: {failures} function(s)/file(s) over the size limits", file=sys.stderr)
+        sys.stderr.write(f"sizecheck: {failures} function(s)/file(s) over the size limits\n")
     return 1 if failures else 0
 
 

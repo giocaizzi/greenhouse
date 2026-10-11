@@ -1,6 +1,9 @@
 """Alert inbox routes."""
 
-from fastapi import APIRouter, Query
+from dataclasses import dataclass
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, Query
 
 from greenhouse_core.schemas import AlertListResponse, AlertSummary
 from greenhouse_server.deps import NtfyNotifierDep, PlantDbDep, RepoDep, require_alert, require_cluster
@@ -11,15 +14,19 @@ router = APIRouter(tags=["alerts"])
 _ALERT_LIST_MAX = 500  # page-size ceiling of GET /alerts; also the post-sync list length
 
 
+@dataclass(frozen=True, slots=True)
+class _AlertListQuery:
+    """``GET /alerts`` query parameters (one OpenAPI parameter each, in this order)."""
+
+    status: Annotated[str | None, Query()] = None
+    cluster_id: Annotated[int | None, Query()] = None
+    plant_id: Annotated[int | None, Query()] = None
+    limit: Annotated[int, Query(ge=1, le=_ALERT_LIST_MAX)] = 100
+    cursor: Annotated[int | None, Query(description="Id cursor — return alerts with id < cursor")] = None
+
+
 @router.get("/alerts", response_model=AlertListResponse)
-def list_alerts(
-    repo: RepoDep,
-    status: str | None = Query(default=None),
-    cluster_id: int | None = Query(default=None),
-    plant_id: int | None = Query(default=None),
-    limit: int = Query(default=100, ge=1, le=_ALERT_LIST_MAX),
-    cursor: int | None = Query(default=None, description="Id cursor — return alerts with id < cursor"),
-) -> AlertListResponse:
+def list_alerts(repo: RepoDep, query: Annotated[_AlertListQuery, Depends()]) -> AlertListResponse:
     """List persisted alerts from the inbox with optional filters and cursor pagination.
 
     Walks the inbox newest-first. To fetch the next page, pass the previous
@@ -37,14 +44,14 @@ def list_alerts(
         and a ``next_cursor`` (None when the page was not full).
     """
     items = repo.list_alerts(
-        status=status,
-        cluster_id=cluster_id,
-        plant_id=plant_id,
-        limit=limit,
-        after_id=cursor,
+        status=query.status,
+        cluster_id=query.cluster_id,
+        plant_id=query.plant_id,
+        limit=query.limit,
+        after_id=query.cursor,
     )
     open_count = repo.count_open_alerts()
-    next_cursor = items[-1].id if len(items) == limit else None
+    next_cursor = items[-1].id if len(items) == query.limit else None
     return AlertListResponse(
         open_count=open_count,
         items=[AlertSummary.model_validate(a) for a in items],

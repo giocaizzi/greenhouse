@@ -57,7 +57,8 @@ class WeatherClient:
 
     def __init__(
         self, lat: float = DEFAULT_LATITUDE, lon: float = DEFAULT_LONGITUDE, timeout: int = 8, tz: str = "UTC"
-    ):
+    ) -> None:
+        """Point the client at one location; ``tz`` must be the preferences timezone (see below)."""
         self._lat = lat
         self._lon = lon
         self._timeout = timeout
@@ -130,7 +131,8 @@ class WeatherClient:
             result = _aggregate_window(data.get("hourly", {}), hours)
             if result is not None:
                 self._get_forecast_cache[hours] = (time.monotonic(), result)
-            return result
         except Exception:
             logger.debug("Open-Meteo forecast request failed", exc_info=True)
             return None
+        else:
+            return result

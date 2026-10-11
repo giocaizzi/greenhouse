@@ -7,12 +7,12 @@ watcher); :func:`read_session` is the bare open/close for code that handles its 
 logger, so each failure record keeps its module's logger name.
 """
 
-from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     import logging
+    from collections.abc import Iterator
 
     from fastapi import FastAPI
     from sqlalchemy.orm import Session

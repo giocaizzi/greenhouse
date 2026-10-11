@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Form, HTTPException, Request, status
+from dataclasses import dataclass
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
 from fastapi.responses import RedirectResponse, Response
 
 from greenhouse_server import state
@@ -15,6 +18,22 @@ from greenhouse_server.web.templating import templates
 router = APIRouter(include_in_schema=False)
 
 _ALLOWED_THEMES = {"auto", "light", "dark"}
+
+
+@dataclass(frozen=True, slots=True)
+class _PreferencesForm:
+    """``POST /preferences``: the form fields; a checkbox posts a value only when ticked."""
+
+    units: Annotated[str, Form()]
+    timezone: Annotated[str, Form()]
+    theme: Annotated[str, Form()]
+    refresh_interval_seconds: Annotated[int, Form()]
+    default_cluster_id: Annotated[str, Form()] = ""
+    dry_run_global: Annotated[str, Form()] = ""
+    notify_manual: Annotated[str, Form()] = ""
+    notify_emergency: Annotated[str, Form()] = ""
+    notify_alerts: Annotated[str, Form()] = ""
+    notify_auto: Annotated[str, Form()] = ""
 
 
 @router.get("/preferences")
@@ -41,36 +60,23 @@ def preferences_page(request: Request, repo: RepoDep) -> Response:
 
 
 @router.post("/preferences")
-def update_preferences(
-    request: Request,
-    repo: RepoDep,
-    units: str = Form(...),
-    timezone: str = Form(...),
-    theme: str = Form(...),
-    refresh_interval_seconds: int = Form(...),
-    default_cluster_id: str = Form(""),
-    dry_run_global: str = Form(""),
-    notify_manual: str = Form(""),
-    notify_emergency: str = Form(""),
-    notify_alerts: str = Form(""),
-    notify_auto: str = Form(""),
-) -> Response:
+def update_preferences(request: Request, repo: RepoDep, form: Annotated[_PreferencesForm, Depends()]) -> Response:
     """Save the preferences form, re-sync the clocks to its timezone and reload the page."""
     # Blank clears the default; a non-integer is a 400 page (it used to clear silently).
-    default_cluster = parsed_or_400(default_cluster_id, int, error="Invalid default_cluster_id")
+    default_cluster = parsed_or_400(form.default_cluster_id, int, error="Invalid default_cluster_id")
     if default_cluster is not None:
         require_cluster(repo, default_cluster)  # 404 page, as the API, before anything is written
     prefs = repo.update_preferences(
-        units=units,
-        timezone=timezone,
-        theme=theme,
-        refresh_interval_seconds=refresh_interval_seconds,
+        units=form.units,
+        timezone=form.timezone,
+        theme=form.theme,
+        refresh_interval_seconds=form.refresh_interval_seconds,
         default_cluster_id=default_cluster,
-        dry_run_global=bool(dry_run_global),
-        notify_manual=bool(notify_manual),
-        notify_emergency=bool(notify_emergency),
-        notify_alerts=bool(notify_alerts),
-        notify_auto=bool(notify_auto),
+        dry_run_global=bool(form.dry_run_global),
+        notify_manual=bool(form.notify_manual),
+        notify_emergency=bool(form.notify_emergency),
+        notify_alerts=bool(form.notify_alerts),
+        notify_auto=bool(form.notify_auto),
     )
     repo.commit()
     apply_timezone_preference(request, prefs.timezone)
@@ -78,7 +84,7 @@ def update_preferences(
 
 
 @router.post("/preferences/theme")
-def update_theme(repo: RepoDep, theme: str = Form(...)) -> Response:
+def update_theme(repo: RepoDep, theme: Annotated[str, Form()]) -> Response:
     """Persist just the theme preference for the header light/dark toggle.
 
     The header toggle paints instantly from ``localStorage``; this fire-and-forget
@@ -86,6 +92,7 @@ def update_theme(repo: RepoDep, theme: str = Form(...)) -> Response:
     theme instead of falling back to the stale stored preference.
 
     Args:
+        repo: The request's repository (the preferences row is written through it).
         theme: One of ``auto``, ``light``, or ``dark`` (the Preferences select's values).
 
     Returns:

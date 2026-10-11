@@ -2,7 +2,7 @@
 
 import time
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from greenhouse_core.constants import (
     FORECAST_CONFIDENCE_HIGH,
@@ -22,6 +22,7 @@ from greenhouse_core.logic.timing import environment_for
 from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_core.schemas import ForecastResponse
+from greenhouse_server.services.weather import WeatherClient
 
 if TYPE_CHECKING:
     from greenhouse_core.models import Cluster, Plant, Sensor
@@ -62,7 +63,10 @@ def _confidence_for(profiled_count: int) -> float:
 class ForecastService:
     """Predicts when a cluster will next need irrigation."""
 
-    def __init__(self, repo: IrrigationRepository, plant_db: PlantDatabase, weather_client: Any = None):
+    def __init__(
+        self, repo: IrrigationRepository, plant_db: PlantDatabase, weather_client: WeatherClient | None = None
+    ) -> None:
+        """Bind the forecast to the repository, plant database and (optional) weather client it projects with."""
         self._repo = repo
         self._plant_db = plant_db
         self._weather = weather_client
@@ -92,9 +96,13 @@ class ForecastService:
         # Driest plant (shortest time to threshold) drives the forecast
         sensor_forecasts.sort(key=lambda f: f.hours_until_next)
         driver = sensor_forecasts[0]
-        profiled_count = sum(1 for f in sensor_forecasts if f.has_profile)
-        confidence = _confidence_for(profiled_count)
+        confidence = _confidence_for(sum(1 for f in sensor_forecasts if f.has_profile))
+        return self._driver_response(cluster_id, cluster, driver, confidence, now)
 
+    def _driver_response(
+        self, cluster_id: int, cluster: "Cluster | None", driver: _SensorForecast, confidence: float, now: int
+    ) -> ForecastResponse:
+        """The forecast as the driest plant's projection, plus the outdoor rain outlook."""
         method = "drainage_slope" if driver.has_profile else "fallback_constant"
         explanation = (
             f"{driver.label} will hit its {driver.target_min:.0f}% min in ~{driver.hours_until_next:.1f}h "

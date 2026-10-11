@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import re
 import time
-from typing import Any, TypedDict
+from collections.abc import Sized
+from typing import TypedDict
 
 from greenhouse_core.constants import AGE_BADGE_STALE_SECONDS, SECONDS_PER_DAY, SECONDS_PER_HOUR
 from greenhouse_core.utils import format_timestamp
@@ -20,16 +21,14 @@ _SECONDS_PER_MINUTE = 60
 _MINUTES_PER_HOUR = 60
 
 
-def format_ts(ts: int | float | None, fmt: str = "%Y-%m-%d %H:%M") -> str:
+def format_ts(ts: float | None, fmt: str = "%Y-%m-%d %H:%M") -> str:
     """Template filter: a Unix timestamp in the display timezone (``—`` when missing)."""
     if ts is None:
         return "—"
     return format_timestamp(float(ts), fmt)
 
 
-def format_age(
-    age: int | float | None, *, missing: str = "—", stale_after: int | None = AGE_BADGE_STALE_SECONDS
-) -> str:
+def format_age(age: float | None, *, missing: str = "—", stale_after: int | None = AGE_BADGE_STALE_SECONDS) -> str:
     """The one "how long ago" formatter: ``Ns`` / ``Nm`` / ``Nh`` / ``Nd ago`` for an age in seconds.
 
     ``missing`` is shown for ``None``; from ``stale_after`` seconds on the age reads
@@ -51,16 +50,14 @@ def format_age(
     return "stale"
 
 
-def relative_age(
-    ts: int | float | None, *, missing: str = "—", stale_after: int | None = AGE_BADGE_STALE_SECONDS
-) -> str:
+def relative_age(ts: float | None, *, missing: str = "—", stale_after: int | None = AGE_BADGE_STALE_SECONDS) -> str:
     """:func:`format_age` of a Unix timestamp: how long ago ``ts`` was, from the wall clock."""
     if ts is None:
         return missing
     return format_age(time.time() - float(ts), missing=missing, stale_after=stale_after)
 
 
-def age_seconds(age: int | float | None) -> str:
+def age_seconds(age: float | None) -> str:
     """Template filter for an **age in seconds**: :func:`format_age` with the freshness defaults.
 
     "—" when missing, "stale" from 7 days. For a Unix timestamp use :func:`time_ago`.
@@ -68,7 +65,7 @@ def age_seconds(age: int | float | None) -> str:
     return format_age(age)
 
 
-def time_ago(ts: int | float | None) -> str:
+def time_ago(ts: float | None) -> str:
     """Template filter for a **Unix timestamp**: :func:`relative_age` with the freshness defaults."""
     return relative_age(ts)
 
@@ -83,7 +80,7 @@ def strip_emoji(text: str | None) -> str:
 
 
 def stat_position(value: float | None, lo: float | None, hi: float | None) -> str:
-    """Return the position of value as a 0–100 percent within [lo, hi].
+    """Return the position of value as a 0-100 percent within [lo, hi].
 
     Used by the stat tile range indicator. Falls back to 50 when bounds are
     missing or value is out of range, so the marker stays visible.
@@ -183,7 +180,7 @@ def icon_for_code(code: str) -> str:
     return _TRIGGER_CODE_ICONS.get(code, _SEVERITY_ICONS.get(code, "info"))
 
 
-def _present(value: Any) -> bool:
+def _present(value: object) -> bool:
     """True when a child collection/relationship holds at least one item.
 
     Accepts the shapes the web layer passes around: ``status`` lists, a single
@@ -192,10 +189,9 @@ def _present(value: Any) -> bool:
     """
     if value is None:
         return False
-    try:
+    if isinstance(value, Sized):
         return len(value) > 0
-    except TypeError:
-        return bool(value)
+    return bool(value)
 
 
 class ClusterCaps(TypedDict):
@@ -212,7 +208,17 @@ class ClusterCaps(TypedDict):
     missing: list[str]
 
 
-def cluster_caps(obj: Any) -> ClusterCaps:
+def _cluster_parts(obj: object) -> tuple[object, object, object]:
+    """``(plants, sensors, irrigator)`` of a cluster-status dict, a ``Cluster`` ORM object or ``None``."""
+    if isinstance(obj, dict):
+        return obj.get("plants"), obj.get("sensors"), obj.get("irrigator")
+    if obj is None:
+        return None, None, None
+    # Cluster ORM object: the same-named relationships.
+    return getattr(obj, "plants", None), getattr(obj, "sensors", None), getattr(obj, "irrigator", None)
+
+
+def cluster_caps(obj: object) -> ClusterCaps:
     """Derive a cluster's capability tier from what it contains.
 
     The single source of truth for feature gating across the web UI. Accepts
@@ -238,15 +244,7 @@ def cluster_caps(obj: Any) -> ClusterCaps:
         ``"operational"``), and ``missing`` — prerequisites ordered by impact
         for the next-step notice.
     """
-    if isinstance(obj, dict):
-        plants, sensors, irrigator = obj.get("plants"), obj.get("sensors"), obj.get("irrigator")
-    elif obj is None:
-        plants = sensors = irrigator = None
-    else:  # Cluster ORM object
-        plants = getattr(obj, "plants", None)
-        sensors = getattr(obj, "sensors", None)
-        irrigator = getattr(obj, "irrigator", None)
-
+    plants, sensors, irrigator = _cluster_parts(obj)
     has_plants, has_sensors, has_irrigator = _present(plants), _present(sensors), _present(irrigator)
 
     if has_irrigator:

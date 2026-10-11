@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Annotated
+
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import Response
 
@@ -18,7 +20,7 @@ def cluster_efficacy_page(
     request: Request,
     cluster_id: int,
     repo: RepoDep,
-    days: int = Query(default=EFFICACY_DEFAULT_DAYS, ge=1, le=EFFICACY_MAX_DAYS),
+    days: Annotated[int, Query(ge=1, le=EFFICACY_MAX_DAYS)] = EFFICACY_DEFAULT_DAYS,
 ) -> Response:
     """Render a cluster's per-event irrigation efficacy scores."""
     cluster = require_cluster(repo, cluster_id)

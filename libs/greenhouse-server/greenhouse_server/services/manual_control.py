@@ -13,6 +13,7 @@ JSON API returns; each route maps it to its own response shape.
 """
 
 import time
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from greenhouse_core.devices import DeviceRegistry, UnknownDeviceModel
@@ -55,7 +56,8 @@ class ManualActionError(Exception):
         detail: Human-readable reason.
     """
 
-    def __init__(self, status_code: int, detail: str):
+    def __init__(self, status_code: int, detail: str) -> None:
+        """Carry the HTTP status the edge maps the refusal to, next to its message."""
         super().__init__(detail)
         self.status_code = status_code
         self.detail = detail
@@ -165,14 +167,20 @@ def _record_leak_check_plan(
     return after_seconds
 
 
+@dataclass(frozen=True, slots=True)
+class ManualStart:
+    """A hand-started run: its optional duration and the front door it came through."""
+
+    minutes: int | None  # None: the device timer decides how long it runs
+    via: str  # ``"API"`` or ``"web UI"``, for the event note
+
+
 def manual_start(
     repo: IrrigationRepository,
     registry: DeviceRegistry | None,
     notifier: NtfyClient | None,
     irrigator: Irrigator,
-    minutes: int | None,
-    *,
-    via: str,
+    run: ManualStart,
 ) -> str:
     """Start ``irrigator`` by hand, with every manual-start safety rail.
 
@@ -189,8 +197,7 @@ def manual_start(
         registry: Device registry, or None when Tuya credentials are missing.
         notifier: ntfy client, or None when notifications are unconfigured.
         irrigator: Irrigator to start.
-        minutes: Optional run duration.
-        via: Front door for the event note (``"API"`` or ``"web UI"``).
+        run: The optional run duration and the front door for the event note.
 
     Returns:
         The adapter's success message.
@@ -200,30 +207,30 @@ def manual_start(
             unknown model, 502 device failure, 500 the start could not be recorded (the pump was
             stopped again).
     """
-    if minutes is not None and minutes < 1:  # the API schema refuses these first; the web form lands here
+    if run.minutes is not None and run.minutes < 1:  # the API schema refuses these first; the web form lands here
         raise ManualActionError(422, MINUTES_TOO_SMALL_DETAIL)
     if registry is None:  # checked before the caps, as the API always has
         raise ManualActionError(503, "No device registry (missing Tuya credentials)")
-    check_rate_limits(repo, irrigator.cluster_id, irrigator.id, minutes)
+    check_rate_limits(repo, irrigator.cluster_id, irrigator.id, run.minutes)
     adapter = _adapter(registry, irrigator)
-    _refuse_if_dry_run(repo, irrigator, minutes, via=via)
+    _refuse_if_dry_run(repo, irrigator, run.minutes, via=run.via)
 
     irrigator_id = irrigator.id  # read before any write can fail
-    success, output = adapter.start(irrigator, minutes)
+    success, output = adapter.start(irrigator, run.minutes)
     if not success:
         raise ManualActionError(502, output)
 
     started_at = int(time.time())
     try:
-        leak_check_after = _record_start(repo, irrigator, started_at, minutes, via=via)
+        leak_check_after = _record_start(repo, irrigator, started_at, run.minutes, via=run.via)
     except Exception as exc:
         # The pump runs but nothing records it: stop it rather than leave an unrecorded run.
         stop_unrecorded_start(repo, adapter, irrigator, irrigator_id)
         raise ManualActionError(500, START_NOT_RECORDED_DETAIL) from exc
     if leak_check_after is not None:
         _schedule_leak_check(irrigator.cluster_id, started_at, after_seconds=leak_check_after)
-    if minutes:
-        schedule_pump_watcher(irrigator.id, minutes, started_at, triggered_by=TRIGGERED_BY_MANUAL)
+    if run.minutes:
+        schedule_pump_watcher(irrigator.id, run.minutes, started_at, triggered_by=TRIGGERED_BY_MANUAL)
     maybe_notify(
         notifier,
         repo.get_preferences(),
@@ -231,7 +238,7 @@ def manual_start(
         lambda n: n.notify_irrigation(
             triggered_by=TRIGGERED_BY_MANUAL,
             irrigator_name=irrigator.name,
-            duration_minutes=minutes,
+            duration_minutes=run.minutes,
             detail="started",
         ),
     )

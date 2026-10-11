@@ -1,7 +1,6 @@
 """Irrigation efficacy scorer: post-hoc moisture-rise analysis per event."""
 
 import time
-from collections.abc import Sequence
 from statistics import mean
 from typing import TYPE_CHECKING
 
@@ -16,6 +15,8 @@ from greenhouse_core.repository import IrrigationRepository
 from greenhouse_core.schemas import EfficacyItemResponse, EfficacyListResponse
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from greenhouse_core.models import IrrigationEvent, Irrigator, Sensor
 
 # Look-back bounds for ``days``: one rule for the JSON API and the web page.

@@ -8,6 +8,7 @@ template) and commits on success; on a refusal the session is already rolled bac
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal
 
 from greenhouse_core.devices import IK10PW_PROFILE, TR301Z_PROFILE
@@ -29,6 +30,8 @@ _CANONICAL_TYPES: dict[DeviceKind, tuple[str, ...]] = {
 
 __all__ = [
     "DeviceIdExistsError",
+    "DeviceSpec",
+    "IrrigatorCapacity",
     "IrrigatorExistsError",
     "PlantNotInClusterError",
     "UnknownDeviceTypeError",
@@ -45,6 +48,7 @@ class PlantNotInClusterError(LookupError):
     """A sensor was linked to a plant that does not belong to the sensor's cluster."""
 
     def __init__(self, plant_id: int) -> None:
+        """Keep the offending ``plant_id`` so each surface words its own error."""
         super().__init__(plant_id)
         self.plant_id = plant_id
 
@@ -53,6 +57,7 @@ class UnknownDeviceTypeError(ValueError):
     """A device ``type`` that no registered adapter handles; the message lists the known keys."""
 
     def __init__(self, kind: DeviceKind, value: str, known: tuple[str, ...]) -> None:
+        """Build the shared message (API wording) and keep its parts for callers that render their own."""
         super().__init__(f"Unknown {kind} type '{value}' (known: {', '.join(known) or 'none'})")
         self.kind, self.value, self.known = kind, value, known
 
@@ -102,17 +107,31 @@ def keep_masked_local_key(config: dict[str, Any], stored_config: object) -> dict
     return resolved
 
 
+@dataclass(frozen=True, slots=True)
+class DeviceSpec:
+    """A device to register: what the API body and the web form both carry for an irrigator or sensor."""
+
+    tuya_device_id: str
+    name: str
+    model: str  # the registry model key (the API's ``type``)
+    config: dict[str, Any]
+
+
+@dataclass(frozen=True, slots=True)
+class IrrigatorCapacity:
+    """An irrigator's optional capacity columns (``None``: not set)."""
+
+    reservoir_l: float | None = None
+    flow_rate_l_per_min: float | None = None
+
+
 def create_irrigator(
     repo: IrrigationRepository,
     cluster_id: int,
+    device: DeviceSpec,
     *,
-    tuya_device_id: str,
-    name: str,
-    irrigator_type: str,
-    config: dict[str, Any],
     registry: DeviceRegistry | None,
-    reservoir_l: float | None = None,
-    flow_rate_l_per_min: float | None = None,
+    capacity: IrrigatorCapacity | None = None,
 ) -> int:
     """Add the cluster's irrigator, then persist any capacity values; return its id.
 
@@ -120,25 +139,28 @@ def create_irrigator(
     follow-up update when either is supplied. The caller commits.
 
     Raises:
-        UnknownDeviceTypeError: ``irrigator_type`` is not a registered model key (nothing written).
+        UnknownDeviceTypeError: ``device.model`` is not a registered model key (nothing written).
         IrrigatorExistsError: the cluster already has an irrigator (session rolled back).
         DeviceIdExistsError: the Tuya device id is already registered (session rolled back).
     """
-    require_known_device_type(registry, "irrigator", irrigator_type)
+    require_known_device_type(registry, "irrigator", device.model)
     try:
-        with repo.refusing_duplicate_device_id(tuya_device_id):
+        with repo.refusing_duplicate_device_id(device.tuya_device_id):
             irrigator_id = repo.add_irrigator(
                 cluster_id=cluster_id,
-                tuya_device_id=tuya_device_id,
-                name=name,
-                irrigator_type=irrigator_type,
-                config=keep_masked_local_key(config, None),
+                tuya_device_id=device.tuya_device_id,
+                name=device.name,
+                irrigator_type=device.model,
+                config=keep_masked_local_key(device.config, None),
             )
     except IrrigatorExistsError:
         repo.rollback()
         raise
-    if reservoir_l is not None or flow_rate_l_per_min is not None:
-        repo.update_irrigator(irrigator_id, reservoir_l=reservoir_l, flow_rate_l_per_min=flow_rate_l_per_min)
+    capacity = capacity or IrrigatorCapacity()
+    if capacity.reservoir_l is not None or capacity.flow_rate_l_per_min is not None:
+        repo.update_irrigator(
+            irrigator_id, reservoir_l=capacity.reservoir_l, flow_rate_l_per_min=capacity.flow_rate_l_per_min
+        )
     return irrigator_id
 
 
@@ -157,11 +179,8 @@ def ensure_plant_in_cluster(repo: IrrigationRepository, cluster_id: int, plant_i
 def create_sensor(
     repo: IrrigationRepository,
     cluster_id: int,
+    device: DeviceSpec,
     *,
-    tuya_device_id: str,
-    name: str,
-    sensor_type: str,
-    config: dict[str, Any],
     registry: DeviceRegistry | None,
     plant_id: int | None = None,
 ) -> int:
@@ -170,18 +189,18 @@ def create_sensor(
     The caller commits.
 
     Raises:
-        UnknownDeviceTypeError: ``sensor_type`` is not a registered model key (nothing written).
+        UnknownDeviceTypeError: ``device.model`` is not a registered model key (nothing written).
         PlantNotInClusterError: ``plant_id`` is not one of the cluster's plants (nothing written).
         DeviceIdExistsError: the Tuya device id is already registered (session rolled back).
     """
-    require_known_device_type(registry, "sensor", sensor_type)
+    require_known_device_type(registry, "sensor", device.model)
     ensure_plant_in_cluster(repo, cluster_id, plant_id)
-    with repo.refusing_duplicate_device_id(tuya_device_id):
+    with repo.refusing_duplicate_device_id(device.tuya_device_id):
         return repo.add_sensor(
             cluster_id=cluster_id,
-            tuya_device_id=tuya_device_id,
-            name=name,
-            sensor_type=sensor_type,
-            config=keep_masked_local_key(config, None),
+            tuya_device_id=device.tuya_device_id,
+            name=device.name,
+            sensor_type=device.model,
+            config=keep_masked_local_key(device.config, None),
             plant_id=plant_id,
         )

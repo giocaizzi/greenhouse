@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import json
 import time
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Annotated, Any
 
 from fastapi import APIRouter, Form, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from greenhouse_core.logic.timing import active_quiet_window
+from greenhouse_core.repository import EffectiveConfig
 from greenhouse_server.deps import (
     MAX_LOOKBACK_HOURS,
     ClusterServiceDep,
@@ -29,7 +30,7 @@ from greenhouse_server.web.templating import templates
 from greenhouse_server.web.weekdays import WEEKDAY_BITS, WEEKDAY_LABELS, format_weekday_mask
 
 if TYPE_CHECKING:
-    from greenhouse_core.repository import EffectiveConfig, IrrigationRepository
+    from greenhouse_core.repository import IrrigationRepository
     from greenhouse_server.services.charts import Metric
 
 _EMPTY_RATIONALE: list[dict[str, Any]] = []
@@ -54,11 +55,10 @@ def new_cluster_form(request: Request) -> Response:
 
 @router.post("/clusters")
 def create_cluster(
-    request: Request,
     repo: RepoDep,
-    name: str = Form(...),
-    location: str = Form(""),
-    environment: str = Form("indoor"),
+    name: Annotated[str, Form()],
+    location: Annotated[str, Form()] = "",
+    environment: Annotated[str, Form()] = "indoor",
 ) -> Response:
     """Create a cluster from the form and redirect to its detail page."""
     cluster_id = repo.add_cluster(name=name, location=location or None, environment=environment)
@@ -75,12 +75,11 @@ def edit_cluster_form(request: Request, cluster_id: int, repo: RepoDep) -> Respo
 
 @router.post("/clusters/{cluster_id}/edit")
 def update_cluster(
-    request: Request,
     cluster_id: int,
     repo: RepoDep,
-    name: str = Form(...),
-    location: str = Form(""),
-    environment: str = Form("indoor"),
+    name: Annotated[str, Form()],
+    location: Annotated[str, Form()] = "",
+    environment: Annotated[str, Form()] = "indoor",
 ) -> Response:
     """Save the cluster form and redirect to the detail page."""
     require_cluster(repo, cluster_id)
@@ -185,7 +184,7 @@ def cluster_detail(
     cluster_id: int,
     svc: ClusterServiceDep,
     repo: RepoDep,
-    hours: int = Query(24, ge=1, le=MAX_LOOKBACK_HOURS),
+    hours: Annotated[int, Query(ge=1, le=MAX_LOOKBACK_HOURS)] = 24,
 ) -> Response:
     """Render the unified cluster detail page (status, charts, config, windows, devices)."""
     with not_found_as_404("Cluster not found"):
@@ -252,8 +251,8 @@ def cluster_chart_fragment(
     request: Request,
     cluster_id: int,
     repo: RepoDep,
-    metric: str = Query("soil_moisture"),
-    hours: int = Query(24, ge=1, le=MAX_LOOKBACK_HOURS),
+    metric: Annotated[str, Query()] = "soil_moisture",
+    hours: Annotated[int, Query(ge=1, le=MAX_LOOKBACK_HOURS)] = 24,
 ) -> Response:
     """Render one metric's cluster chart panel (HTMX fragment)."""
     with not_found_as_404("Cluster not found"):
@@ -270,7 +269,7 @@ def cluster_overlay_fragment(
     request: Request,
     cluster_id: int,
     repo: RepoDep,
-    hours: int = Query(72, ge=1, le=MAX_LOOKBACK_HOURS),
+    hours: Annotated[int, Query(ge=1, le=MAX_LOOKBACK_HOURS)] = 72,
 ) -> Response:
     """Render the multi-metric overlay chart panel (HTMX fragment)."""
     with not_found_as_404("Cluster not found"):
@@ -287,7 +286,7 @@ def cluster_heatmap_fragment(
     request: Request,
     cluster_id: int,
     repo: RepoDep,
-    days: int = Query(30, ge=1, le=365),
+    days: Annotated[int, Query(ge=1, le=365)] = 30,
 ) -> Response:
     """Render the irrigation weekday-by-hour heatmap panel (HTMX fragment)."""
     with not_found_as_404("Cluster not found"):

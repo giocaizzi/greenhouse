@@ -7,7 +7,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Annotated
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response, StreamingResponse
@@ -51,8 +51,8 @@ def cluster_history(
     request: Request,
     cluster_id: int,
     svc: ClusterServiceDep,
-    hours: int = Query(default=24, ge=1),
-    limit: int = Query(default=50, ge=1),
+    hours: Annotated[int, Query(ge=1)] = 24,
+    limit: Annotated[int, Query(ge=1)] = 50,
 ) -> Response:
     """Render a cluster's recent readings and irrigation events."""
     with not_found_as_404("Cluster not found"):
@@ -69,7 +69,7 @@ def cluster_stats(
     request: Request,
     cluster_id: int,
     repo: RepoDep,
-    days: int = Query(default=7, ge=1),
+    days: Annotated[int, Query(ge=1)] = 7,
 ) -> Response:
     """Render a cluster's irrigation statistics for the last ``days`` days."""
     cluster = require_cluster(repo, cluster_id)
@@ -85,7 +85,7 @@ def cluster_stats(
 def cluster_stats_export(
     cluster_id: int,
     repo: RepoDep,
-    days: int = Query(default=7, ge=1),
+    days: Annotated[int, Query(ge=1)] = 7,
 ) -> Response:
     """Download a cluster's irrigation events of the last ``days`` days as CSV."""
     cluster = require_cluster(repo, cluster_id)
@@ -145,7 +145,7 @@ def scheduler_page(request: Request) -> Response:
 
 # ``:path`` like the API route, so a job id containing "/" still routes here.
 @router.post("/scheduler/jobs/{job_id:path}/delete", response_class=HTMLResponse)
-def scheduler_delete_job(request: Request, job_id: str) -> Response:
+def scheduler_delete_job(job_id: str) -> Response:
     """Delete an ad-hoc scheduler job; the empty body removes its table row."""
     if not bg_scheduler.running:
         raise HTTPException(503, "Scheduler not running")
@@ -159,26 +159,26 @@ def scheduler_delete_job(request: Request, job_id: str) -> Response:
     return HTMLResponse("")
 
 
-def _set_check_all_paused_web(repo: IrrigationRepository, paused: bool) -> RedirectResponse:
+def _set_check_all_paused_web(repo: IrrigationRepository, *, paused: bool) -> RedirectResponse:
     # Same code path as POST /api/v1/scheduler/{pause,resume}: works (and
     # persists the preference) whether or not the scheduler is running.
     try:
-        set_check_all_paused(repo, paused)
+        set_check_all_paused(repo, paused=paused)
     except JobNotRegisteredError as exc:
         raise HTTPException(404, str(exc)) from exc
     return RedirectResponse(url="/scheduler", status_code=303)
 
 
 @router.post("/scheduler/pause")
-def scheduler_pause(request: Request, repo: RepoDep) -> Response:
+def scheduler_pause(repo: RepoDep) -> Response:
     """Pause the ``check_all`` job (persisted) and return to the scheduler page."""
-    return _set_check_all_paused_web(repo, True)
+    return _set_check_all_paused_web(repo, paused=True)
 
 
 @router.post("/scheduler/resume")
-def scheduler_resume(request: Request, repo: RepoDep) -> Response:
+def scheduler_resume(repo: RepoDep) -> Response:
     """Resume the ``check_all`` job (persisted) and return to the scheduler page."""
-    return _set_check_all_paused_web(repo, False)
+    return _set_check_all_paused_web(repo, paused=False)
 
 
 @router.post("/bulk/stop-all")

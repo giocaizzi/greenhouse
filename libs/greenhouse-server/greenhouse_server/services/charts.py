@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 from collections import defaultdict
 from datetime import UTC, datetime
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from greenhouse_core.constants import (
     DEFAULT_SOIL_MOISTURE_MAX,
@@ -14,9 +14,6 @@ from greenhouse_core.constants import (
     SECONDS_PER_HOUR,
 )
 from greenhouse_core.logic.plant_needs import parse_moisture_target
-from greenhouse_core.models import Plant, Sensor
-from greenhouse_core.plant_db import PlantDatabase
-from greenhouse_core.repository import IrrigationRepository
 from greenhouse_core.schemas import (
     ChartEventResponse,
     HeatmapCell,
@@ -25,8 +22,13 @@ from greenhouse_core.schemas import (
     OverlayDataset,
     PlantHealthTimelineResponse,
 )
-from greenhouse_server.services.chart_payload import ChartDataset, ChartEvent, ChartPayload, ChartThreshold
 from greenhouse_server.services.errors import ClusterNotFoundError, PlantNotFoundError
+
+if TYPE_CHECKING:
+    from greenhouse_core.models import Plant, Sensor
+    from greenhouse_core.plant_db import PlantDatabase
+    from greenhouse_core.repository import IrrigationRepository
+    from greenhouse_server.services.chart_payload import ChartDataset, ChartEvent, ChartPayload, ChartThreshold
 
 Metric = Literal["soil_moisture", "temperature", "light", "env_humidity"]
 ALLOWED_HOURS = {24, 168, 720}
@@ -325,7 +327,7 @@ def build_heatmap_payload(
     cluster_id: int,
     days: int,
 ) -> HeatmapResponse:
-    """Build the 7×24 irrigation heatmap payload for a cluster.
+    """Build the 7x24 irrigation heatmap payload for a cluster.
 
     Counts irrigation events per (weekday, hour) cell over the given look-back
     window. Raises ClusterNotFoundError if the cluster does not exist.

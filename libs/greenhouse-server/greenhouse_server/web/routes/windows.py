@@ -9,7 +9,10 @@ repository in-process like every other web route.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Form, HTTPException, Request
+from dataclasses import dataclass
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, Form, HTTPException, Path, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from greenhouse_server.deps import RepoDep, require_cluster, require_valid_window, require_window_in_cluster
@@ -33,29 +36,44 @@ def _parse_weekday_mask(values: list[str]) -> int:
     return mask
 
 
+@dataclass(frozen=True, slots=True)
+class _NewWindowForm:
+    """``POST /clusters/{cluster_id}/windows``: hours, ticked weekday checkboxes (bit values), label."""
+
+    cluster_id: Annotated[int, Path()]
+    start_hour: Annotated[int, Form()]
+    end_hour: Annotated[int, Form()]
+    weekday_mask: Annotated[list[str], Form(default_factory=list)]
+    label: Annotated[str, Form()] = ""
+
+
+@dataclass(frozen=True, slots=True)
+class _EditWindowForm:
+    """``POST /clusters/{cluster_id}/windows/{window_id}/edit``: the same fields for an existing window."""
+
+    cluster_id: Annotated[int, Path()]
+    window_id: Annotated[int, Path()]
+    start_hour: Annotated[int, Form()]
+    end_hour: Annotated[int, Form()]
+    weekday_mask: Annotated[list[str], Form(default_factory=list)]
+    label: Annotated[str, Form()] = ""
+
+
 @router.post("/clusters/{cluster_id}/windows")
-def create_window(
-    request: Request,
-    cluster_id: int,
-    repo: RepoDep,
-    start_hour: int = Form(...),
-    end_hour: int = Form(...),
-    weekday_mask: list[str] = Form(default=[]),
-    label: str = Form(""),
-) -> Response:
+def create_window(repo: RepoDep, form: Annotated[_NewWindowForm, Depends()]) -> Response:
     """Add an irrigation window from the form and return to the cluster config."""
-    require_cluster(repo, cluster_id)
-    mask = _parse_weekday_mask(weekday_mask)
-    require_valid_window(start_hour, end_hour, mask)
+    require_cluster(repo, form.cluster_id)
+    mask = _parse_weekday_mask(form.weekday_mask)
+    require_valid_window(form.start_hour, form.end_hour, mask)
     repo.add_irrigation_window(
-        cluster_id,
-        start_hour=start_hour,
-        end_hour=end_hour,
+        form.cluster_id,
+        start_hour=form.start_hour,
+        end_hour=form.end_hour,
         weekday_mask=mask,
-        label=label.strip() or None,
+        label=form.label.strip() or None,
     )
     repo.commit()
-    return RedirectResponse(url=f"/clusters/{cluster_id}/config", status_code=303)
+    return RedirectResponse(url=f"/clusters/{form.cluster_id}/config", status_code=303)
 
 
 @router.get("/clusters/{cluster_id}/windows/{window_id}/edit")
@@ -75,29 +93,20 @@ def edit_window_form(request: Request, cluster_id: int, window_id: int, repo: Re
 
 
 @router.post("/clusters/{cluster_id}/windows/{window_id}/edit")
-def update_window(
-    request: Request,
-    cluster_id: int,
-    window_id: int,
-    repo: RepoDep,
-    start_hour: int = Form(...),
-    end_hour: int = Form(...),
-    weekday_mask: list[str] = Form(default=[]),
-    label: str = Form(""),
-) -> Response:
+def update_window(repo: RepoDep, form: Annotated[_EditWindowForm, Depends()]) -> Response:
     """Save the window form and return to the cluster config."""
-    require_window_in_cluster(repo, cluster_id, window_id)
-    mask = _parse_weekday_mask(weekday_mask)
-    require_valid_window(start_hour, end_hour, mask)
+    require_window_in_cluster(repo, form.cluster_id, form.window_id)
+    mask = _parse_weekday_mask(form.weekday_mask)
+    require_valid_window(form.start_hour, form.end_hour, mask)
     repo.update_irrigation_window(
-        window_id,
-        start_hour=start_hour,
-        end_hour=end_hour,
+        form.window_id,
+        start_hour=form.start_hour,
+        end_hour=form.end_hour,
         weekday_mask=mask,
-        label=label.strip() or None,
+        label=form.label.strip() or None,
     )
     repo.commit()
-    return RedirectResponse(url=f"/clusters/{cluster_id}/config", status_code=303)
+    return RedirectResponse(url=f"/clusters/{form.cluster_id}/config", status_code=303)
 
 
 @router.delete("/clusters/{cluster_id}/windows/{window_id}", response_class=HTMLResponse)

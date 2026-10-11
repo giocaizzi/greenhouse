@@ -15,9 +15,8 @@ from sqlalchemy.orm import Session
 from fake_devices import FakeIrrigatorAdapter
 from greenhouse_core.devices import DeviceRegistry
 from greenhouse_core.devices.health import DeviceHealthState, HealthAlarm
-from greenhouse_core.models import SOURCE_HEALTH, Base, Irrigator
+from greenhouse_core.models import SOURCE_HEALTH, SOURCE_PUMP, Base, Irrigator
 from greenhouse_core.repository import IrrigationRepository
-from greenhouse_server.services.alerts import SOURCE_PUMP
 from greenhouse_server.services.health_monitor import DeviceHealthMonitor
 from greenhouse_server.services.pump_watcher import (
     EVENT_ACTION_ABORTED,

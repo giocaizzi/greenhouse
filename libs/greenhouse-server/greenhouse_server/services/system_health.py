@@ -1,7 +1,6 @@
 """System-wide health pulse: sensor freshness, irrigator inventory, scheduler state."""
 
 import time
-from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
 from greenhouse_core.constants import (
@@ -17,13 +16,16 @@ from greenhouse_server.scheduler import scheduler
 from greenhouse_server.services.sync import SyncService
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from greenhouse_core.models import Sensor
 
 
 class SystemHealthService:
     """Derive a real-time health pulse from stored sensor data and scheduler state."""
 
-    def __init__(self, repo: IrrigationRepository, sync_service: SyncService):
+    def __init__(self, repo: IrrigationRepository, sync_service: SyncService) -> None:
+        """Bind the pulse to the repository and the sync service whose freshness view it reports."""
         self._repo = repo
         self._sync = sync_service
 
@@ -51,7 +53,7 @@ class SystemHealthService:
 
         open_alerts = self._repo.count_open_alerts()
 
-        status = _overall_status(cloud_reachable, stale_count, open_alerts)
+        status = _overall_status(cloud_reachable=cloud_reachable, stale_count=stale_count, open_alerts=open_alerts)
 
         all_devices = (sensor_devices + irrigator_devices)[:SYSTEM_HEALTH_DEVICE_LIMIT]
 
@@ -89,7 +91,7 @@ class SystemHealthService:
         return sensor_devices, last_ts_values, stale_count
 
 
-def _overall_status(cloud_reachable: bool, stale_count: int, open_alerts: int) -> str:
+def _overall_status(*, cloud_reachable: bool, stale_count: int, open_alerts: int) -> str:
     """Down without fresh cloud data; degraded with stale sensors or 3+ open alerts; ok otherwise."""
     if not cloud_reachable:
         return "down"

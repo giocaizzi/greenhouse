@@ -1,5 +1,7 @@
 """Irrigation efficacy endpoint: score soil-moisture rise per completed event."""
 
+from typing import Annotated
+
 from fastapi import APIRouter, Query
 
 from greenhouse_core.schemas import EfficacyListResponse
@@ -13,14 +15,14 @@ router = APIRouter(tags=["operations"])
 def cluster_efficacy(
     cluster_id: int,
     repo: RepoDep,
-    days: int = Query(default=EFFICACY_DEFAULT_DAYS, ge=1, le=EFFICACY_MAX_DAYS),
+    days: Annotated[int, Query(ge=1, le=EFFICACY_MAX_DAYS)] = EFFICACY_DEFAULT_DAYS,
 ) -> EfficacyListResponse:
     """Score completed irrigation events by post-irrigation soil-moisture rise.
 
     For each `start` event with a positive `duration_minutes`, compares the
     average soil moisture across all cluster sensors in the 30 minutes before
     the event against the 90-minute window after. Score = clamp((after - before)
-    × 5, 0, 100): a 20 percentage-point rise yields score 100; less than
+    * 5, 0, 100): a 20 percentage-point rise yields score 100; less than
     0 percentage-point rise yields 0. Score is None when sensor data is
     insufficient around the event.
 

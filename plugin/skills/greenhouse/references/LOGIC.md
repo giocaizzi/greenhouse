@@ -331,7 +331,7 @@ After ≥3 irrigation cycles with sensor data, the system learns:
 | `battery_low` | Sensor battery state is "low" (maintenance) |
 | `stale_data` | No readings in the last 3h (`MAINTENANCE_STALE_SECONDS`; maintenance) |
 | `low_env_humidity` | Ambient humidity below plant ideal − 10% (maintenance) |
-| `low_light` | Daytime avg lux below seasonal plant minimum × 0.5 (maintenance) |
+| `low_light` | Daytime avg lux below seasonal plant minimum × 0.5, season by the month in the preferences timezone (maintenance) |
 | `sensor_stale` | Silent for more than 2× its median report gap (anomaly scan) |
 | `sensor_drift` | Latest soil value's \|z\| > 4 against its last 50 readings (anomaly scan) |
 | `actuation_failed` | The pipeline's device start was refused or failed (warning) — e.g. the IK10PW's local Duration DP is unreachable |

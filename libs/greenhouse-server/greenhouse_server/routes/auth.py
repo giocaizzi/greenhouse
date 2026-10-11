@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Annotated
+
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -27,13 +29,17 @@ class LoginRequest(BaseModel):
     password: str = Field(min_length=1, max_length=512)
 
 
+# The OAuth2 token type of the session JWT (RFC 6750 "Bearer" scheme) - a protocol word, not a secret.
+_OAUTH2_BEARER = "bearer"
+
+
 class LoginResponse(BaseModel):
     """A session JWT, also set as the HTTPOnly session cookie."""
 
     model_config = ConfigDict(from_attributes=True)
 
     access_token: str
-    token_type: str = "bearer"  # noqa: S105 — OAuth2 token type, not a secret
+    token_type: str = _OAUTH2_BEARER
     expires_in: int
     username: str
 
@@ -56,7 +62,7 @@ def login(
     body: LoginRequest,
     response: Response,
     repo: RepoDep,
-    settings: Settings = Depends(get_settings),
+    settings: Annotated[Settings, Depends(get_settings)],
 ) -> LoginResponse:
     """Exchange a username and password for a session JWT.
 
@@ -78,7 +84,7 @@ def login(
         # a benign success so a CLI that always logs in keeps working.
         return LoginResponse(
             access_token="",
-            token_type="bearer",  # noqa: S106 — OAuth2 token type, not a secret
+            token_type=_OAUTH2_BEARER,
             expires_in=0,
             username=body.username,
         )
@@ -95,7 +101,7 @@ def login(
     set_session_cookie(response, settings, token)
     return LoginResponse(
         access_token=token,
-        token_type="bearer",  # noqa: S106 — OAuth2 token type, not a secret
+        token_type=_OAUTH2_BEARER,
         expires_in=settings.auth_token_ttl_minutes * 60,
         username=user.username,
     )
@@ -104,8 +110,8 @@ def login(
 @router.post("/logout", response_model=LogoutResponse)
 def logout(
     response: Response,
-    settings: Settings = Depends(get_settings),
-    _user: AuthenticatedUser = Depends(require_user),
+    settings: Annotated[Settings, Depends(get_settings)],
+    _user: Annotated[AuthenticatedUser, Depends(require_user)],
 ) -> LogoutResponse:
     """Clear the session cookie.
 
@@ -122,7 +128,7 @@ def logout(
 
 
 @router.get("/me", response_model=WhoAmIResponse)
-def whoami(user: AuthenticatedUser = Depends(require_user)) -> WhoAmIResponse:
+def whoami(user: Annotated[AuthenticatedUser, Depends(require_user)]) -> WhoAmIResponse:
     """Return the currently authenticated user.
 
     Returns:

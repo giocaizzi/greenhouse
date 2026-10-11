@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Any
+from dataclasses import dataclass
+from typing import Annotated, Any
 
-from fastapi import APIRouter, Form, Request
+from fastapi import APIRouter, Depends, Form, Path
 from fastapi.responses import RedirectResponse, Response
 
 from greenhouse_server.deps import RepoDep, require_cluster
@@ -39,51 +40,57 @@ def _parse_non_negative_int(raw: str) -> int | None:
     return parsed_or_400(raw, int, error="Invalid numeric value", negative_error="Value must be non-negative")
 
 
+@dataclass(frozen=True, slots=True)
+class _ClusterConfigForm:
+    """``POST /clusters/{cluster_id}/config``: every field raw; blank inherits from the global defaults."""
+
+    cluster_id: Annotated[int, Path()]
+    mode: Annotated[str, Form()] = ""
+    duration_minutes: Annotated[str, Form()] = ""
+    interval_hours: Annotated[str, Form()] = ""
+    auto_run: Annotated[str, Form()] = ""
+    quiet_start_hour: Annotated[str, Form()] = ""
+    quiet_end_hour: Annotated[str, Form()] = ""
+
+
+@dataclass(frozen=True, slots=True)
+class _GlobalConfigForm:
+    """``POST /config/global``: every field raw; blank falls through to the project-wide constants."""
+
+    mode: Annotated[str, Form()] = ""
+    duration_minutes: Annotated[str, Form()] = ""
+    interval_hours: Annotated[str, Form()] = ""
+    auto_run: Annotated[str, Form()] = ""
+    daily_cap_minutes: Annotated[str, Form()] = ""
+    max_events_per_day: Annotated[str, Form()] = ""
+    quiet_start_hour: Annotated[str, Form()] = ""
+    quiet_end_hour: Annotated[str, Form()] = ""
+
+
 @router.post("/clusters/{cluster_id}/config")
-def save_config(
-    request: Request,
-    cluster_id: int,
-    repo: RepoDep,
-    mode: str = Form(""),
-    duration_minutes: str = Form(""),
-    interval_hours: str = Form(""),
-    auto_run: str = Form(""),
-    quiet_start_hour: str = Form(""),
-    quiet_end_hour: str = Form(""),
-) -> Response:
+def save_config(repo: RepoDep, form: Annotated[_ClusterConfigForm, Depends()]) -> Response:
     """Save the cluster's irrigation config and redirect back to detail#config.
 
     Empty form fields write null (inherit from global default). Quiet hours
     follow the same rule; submitting equal start/end values switches quiet
     hours off at the cluster level.
     """
-    require_cluster(repo, cluster_id)
+    require_cluster(repo, form.cluster_id)
     fields: dict[str, Any] = {
-        "mode": mode or None,
-        "duration_minutes": _parse_optional_int(duration_minutes),
-        "interval_hours": _parse_optional_int(interval_hours),
-        "auto_run": tri_bool(auto_run),
-        "quiet_start_hour": _parse_optional_hour(quiet_start_hour),
-        "quiet_end_hour": _parse_optional_hour(quiet_end_hour),
+        "mode": form.mode or None,
+        "duration_minutes": _parse_optional_int(form.duration_minutes),
+        "interval_hours": _parse_optional_int(form.interval_hours),
+        "auto_run": tri_bool(form.auto_run),
+        "quiet_start_hour": _parse_optional_hour(form.quiet_start_hour),
+        "quiet_end_hour": _parse_optional_hour(form.quiet_end_hour),
     }
-    repo.set_irrigation_config(cluster_id=cluster_id, **fields)
+    repo.set_irrigation_config(cluster_id=form.cluster_id, **fields)
     repo.commit()
-    return RedirectResponse(url=f"/clusters/{cluster_id}#config", status_code=303)
+    return RedirectResponse(url=f"/clusters/{form.cluster_id}#config", status_code=303)
 
 
 @router.post("/config/global")
-def save_global_config(
-    request: Request,
-    repo: RepoDep,
-    mode: str = Form(""),
-    duration_minutes: str = Form(""),
-    interval_hours: str = Form(""),
-    auto_run: str = Form(""),
-    daily_cap_minutes: str = Form(""),
-    max_events_per_day: str = Form(""),
-    quiet_start_hour: str = Form(""),
-    quiet_end_hour: str = Form(""),
-) -> Response:
+def save_global_config(repo: RepoDep, form: Annotated[_GlobalConfigForm, Depends()]) -> Response:
     """Save the global irrigation defaults and redirect back to preferences.
 
     Empty fields write null — the effective resolver then falls through to the
@@ -93,14 +100,14 @@ def save_global_config(
     unenforced (no daily ceiling).
     """
     repo.update_global_irrigation_config(
-        mode=mode or None,
-        duration_minutes=_parse_optional_int(duration_minutes),
-        interval_hours=_parse_optional_int(interval_hours),
-        auto_run=tri_bool(auto_run),
-        daily_cap_minutes=_parse_non_negative_int(daily_cap_minutes),
-        max_events_per_day=_parse_non_negative_int(max_events_per_day),
-        quiet_start_hour=_parse_optional_hour(quiet_start_hour),
-        quiet_end_hour=_parse_optional_hour(quiet_end_hour),
+        mode=form.mode or None,
+        duration_minutes=_parse_optional_int(form.duration_minutes),
+        interval_hours=_parse_optional_int(form.interval_hours),
+        auto_run=tri_bool(form.auto_run),
+        daily_cap_minutes=_parse_non_negative_int(form.daily_cap_minutes),
+        max_events_per_day=_parse_non_negative_int(form.max_events_per_day),
+        quiet_start_hour=_parse_optional_hour(form.quiet_start_hour),
+        quiet_end_hour=_parse_optional_hour(form.quiet_end_hour),
     )
     repo.commit()
     return RedirectResponse(url="/preferences?saved=global#global-config", status_code=303)

@@ -15,25 +15,19 @@ DI providers and the web layer share it; services receive these values as argume
 dependencies and the route dependencies resolve the very same providers.
 """
 
-from __future__ import annotations
-
+# No ``from __future__ import annotations``: ``get_session`` / ``get_settings`` are FastAPI
+# dependencies, whose annotations FastAPI evaluates at runtime in this module's namespace.
 from collections.abc import Generator
-from typing import TYPE_CHECKING
 
-from fastapi import Request
-from sqlalchemy.orm import Session
+from fastapi import FastAPI, Request
+from sqlalchemy.orm import Session, sessionmaker
 
+from greenhouse_core.devices import DeviceGateway, DeviceRegistry
+from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_server.config import Settings
-
-if TYPE_CHECKING:
-    from fastapi import FastAPI
-    from sqlalchemy.orm import sessionmaker
-
-    from greenhouse_core.devices import DeviceGateway, DeviceRegistry
-    from greenhouse_core.plant_db import PlantDatabase
-    from greenhouse_server.services.health_monitor import DeviceHealthMonitor
-    from greenhouse_server.services.notify import NtfyClient
-    from greenhouse_server.services.weather import WeatherClient
+from greenhouse_server.services.health_monitor import DeviceHealthMonitor
+from greenhouse_server.services.notify import NtfyClient
+from greenhouse_server.services.weather import WeatherClient
 
 
 def session_factory(app: FastAPI) -> sessionmaker[Session]:

@@ -209,7 +209,7 @@ def test_web_and_api_pause_share_one_function_on_a_stopped_scheduler(p, monkeypa
 
     def spy(repo, paused):
         calls.append((origin["via"], paused))
-        return real(repo, paused)
+        return real(repo, paused=paused)
 
     import greenhouse_server.web.routes.analytics as web_analytics
 
@@ -252,9 +252,9 @@ def test_pause_without_check_all_job_is_404_and_persists_nothing(p):
 
 def test_apply_persisted_pause_edge_cases(p, monkeypatch, caplog):
     """Startup re-apply: no-op when not persisted / job missing; a failing pause is logged, not raised."""
-    sched.apply_persisted_pause(False)
+    sched.apply_persisted_pause(persisted_paused=False)
     assert sched.is_check_all_paused() is False
-    sched.apply_persisted_pause(True)
+    sched.apply_persisted_pause(persisted_paused=True)
     assert sched.is_check_all_paused() is True
     sched.init_scheduler(p.app, p.app.state.settings, tz_name="UTC")
 
@@ -263,11 +263,11 @@ def test_apply_persisted_pause_edge_cases(p, monkeypatch, caplog):
 
     monkeypatch.setattr(bg_scheduler, "pause_job", broken)
     with caplog.at_level(logging.ERROR, logger="greenhouse_server.scheduler"):
-        sched.apply_persisted_pause(True)
+        sched.apply_persisted_pause(persisted_paused=True)
     assert "Failed to re-apply persisted scheduler pause" in caplog.text
     monkeypatch.undo()
     bg_scheduler.remove_job("check_all")
-    sched.apply_persisted_pause(True)  # job missing → silently nothing
+    sched.apply_persisted_pause(persisted_paused=True)  # job missing → silently nothing
     assert sched.is_check_all_paused() is False
 
 

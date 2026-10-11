@@ -4,8 +4,10 @@ import logging
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Annotated
 
+import dotenv
+import uvicorn
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.staticfiles import StaticFiles
@@ -110,8 +112,8 @@ _mcp_bearer = HTTPBearer(auto_error=False)
 
 
 def require_mcp_token(
-    creds: HTTPAuthorizationCredentials | None = Depends(_mcp_bearer),
-    settings: Settings = Depends(get_settings),
+    creds: Annotated[HTTPAuthorizationCredentials | None, Depends(_mcp_bearer)],
+    settings: Annotated[Settings, Depends(get_settings)],
 ) -> None:
     """Gate `/mcp` behind a static bearer token.
 
@@ -223,7 +225,7 @@ def _make_lifespan(settings: Settings) -> "Callable[[FastAPI], AbstractAsyncCont
     """Build the lifespan: start the scheduler (and re-arm leak checks) on startup, stop it on shutdown."""
 
     @asynccontextmanager
-    async def lifespan(app: FastAPI) -> "AsyncIterator[None]":  # noqa: ARG001 — FastAPI lifespan protocol
+    async def lifespan(_app: FastAPI) -> "AsyncIterator[None]":  # FastAPI passes the app; unused here
         """Start the scheduler and re-arm leak checks on startup; stop the scheduler on shutdown."""
         if settings.enable_scheduler:
             start_scheduler()
@@ -357,7 +359,7 @@ def _restore_persisted_scheduler_pause(app: FastAPI) -> None:
         with read_session(app) as session:
             paused = IrrigationRepository(session).get_preferences().scheduler_paused
             session.commit()
-        apply_persisted_pause(paused)
+        apply_persisted_pause(persisted_paused=paused)
     except Exception:  # startup must not fail on a preferences read
         logger.warning("Could not restore the persisted scheduler pause", exc_info=True)
 
@@ -371,10 +373,7 @@ def _init_plant_db(settings: Settings) -> PlantDatabase:
 
 def main() -> None:
     """Entry point for greenhouse-server command."""
-    import uvicorn
-    from dotenv import load_dotenv
-
-    load_dotenv()
+    dotenv.load_dotenv()
     settings = Settings()
     app = create_app(settings)
     uvicorn.run(app, host=settings.host, port=settings.port)

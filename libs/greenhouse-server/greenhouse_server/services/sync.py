@@ -3,7 +3,6 @@
 import logging
 import statistics
 import time
-from collections.abc import Sequence
 from typing import TYPE_CHECKING, TypedDict
 
 from greenhouse_core.constants import (
@@ -19,6 +18,8 @@ from greenhouse_core.sync import SyncStats, sync_single_sensor
 from greenhouse_core.sync import sync_sensor_data as core_sync
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from greenhouse_core.models import Sensor, SensorReading
 
 logger = logging.getLogger(__name__)
@@ -47,7 +48,8 @@ class SyncService:
         repo: IrrigationRepository,
         registry: DeviceRegistry | None,
         cloud: DeviceGateway | None,
-    ):
+    ) -> None:
+        """Bind the sync to the repository and the app's one gateway (``None``: no Cloud reads, persisted rows only)."""
         self._repo = repo
         self._registry = registry
         self._gateway = cloud

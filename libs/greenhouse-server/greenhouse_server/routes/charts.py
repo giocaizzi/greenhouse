@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Annotated
+
 from fastapi import APIRouter, Query
 
 from greenhouse_core.models import Plant
@@ -53,8 +55,8 @@ def plant_chart_data(
     plant_id: int,
     repo: RepoDep,
     plant_db: PlantDbDep,
-    hours: int = Query(24, ge=1, le=MAX_LOOKBACK_HOURS),
-    metric: str = Query("soil_moisture"),
+    hours: Annotated[int, Query(ge=1, le=MAX_LOOKBACK_HOURS)] = 24,
+    metric: Annotated[str, Query()] = "soil_moisture",
 ) -> ChartPayload:
     """Return the time-series chart payload for a single plant.
 
@@ -63,7 +65,7 @@ def plant_chart_data(
 
     Args:
         plant_id: Plant whose sensors to chart.
-        hours: Look-back window (1–8760).
+        hours: Look-back window (1-8760).
         metric: One of `soil_moisture`, `temperature`, `light`, `env_humidity`.
 
     Returns:
@@ -82,14 +84,14 @@ def plant_chart_data(
 def cluster_chart_data(
     cluster_id: int,
     repo: RepoDep,
-    hours: int = Query(24, ge=1, le=MAX_LOOKBACK_HOURS),
-    metric: str = Query("soil_moisture"),
+    hours: Annotated[int, Query(ge=1, le=MAX_LOOKBACK_HOURS)] = 24,
+    metric: Annotated[str, Query()] = "soil_moisture",
 ) -> ChartPayload:
     """Return the time-series chart payload aggregated across every sensor in a cluster.
 
     Args:
         cluster_id: Cluster whose sensors to chart.
-        hours: Look-back window (1–8760).
+        hours: Look-back window (1-8760).
         metric: One of `soil_moisture`, `temperature`, `light`, `env_humidity`.
 
     Returns:
@@ -108,7 +110,7 @@ def cluster_chart_data(
 def cluster_overlay(
     cluster_id: int,
     repo: RepoDep,
-    hours: int = Query(72, ge=1, le=MAX_LOOKBACK_HOURS),
+    hours: Annotated[int, Query(ge=1, le=MAX_LOOKBACK_HOURS)] = 72,
 ) -> MultiMetricOverlayResponse:
     """Return a multi-metric overlay payload with soil moisture, humidity, and light normalised to 0-100.
 
@@ -118,7 +120,7 @@ def cluster_overlay(
 
     Args:
         cluster_id: Cluster to summarise.
-        hours: Look-back window (1–8760, default 72).
+        hours: Look-back window (1-8760, default 72).
 
     Returns:
         MultiMetricOverlayResponse with normalised datasets and irrigation event markers.
@@ -134,9 +136,9 @@ def cluster_overlay(
 def cluster_heatmap(
     cluster_id: int,
     repo: RepoDep,
-    days: int = Query(30, ge=1, le=365),
+    days: Annotated[int, Query(ge=1, le=365)] = 30,
 ) -> HeatmapResponse:
-    """Return irrigation-frequency heatmap cells for a 7×24 weekday-by-hour grid.
+    """Return irrigation-frequency heatmap cells for a 7x24 weekday-by-hour grid.
 
     Each non-zero cell records the count of irrigation events and the total
     irrigated minutes for that (weekday, hour) combination within the look-back
@@ -144,7 +146,7 @@ def cluster_heatmap(
 
     Args:
         cluster_id: Cluster to summarise.
-        days: Look-back window in days (1–365, default 30).
+        days: Look-back window in days (1-365, default 30).
 
     Returns:
         HeatmapResponse with a sparse list of HeatmapCell objects.
@@ -163,7 +165,7 @@ def plant_health_timeline(
 ) -> PlantHealthTimelineResponse:
     """Return the 90-day daily health score timeline for a single plant.
 
-    Health score per day (0–100) is the mean soil moisture across all sensors
+    Health score per day (0-100) is the mean soil moisture across all sensors
     linked to the plant. Points are (unix_timestamp_of_day_start, score) tuples
     in ascending time order. Days with no readings are omitted.
 

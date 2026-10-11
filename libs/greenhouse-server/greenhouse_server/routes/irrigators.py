@@ -1,5 +1,7 @@
 """Irrigator CRUD + control routes."""
 
+from typing import Annotated
+
 from fastapi import APIRouter, HTTPException, Query, status
 
 from greenhouse_core.models import Irrigator
@@ -24,6 +26,8 @@ from greenhouse_server.deps import (
 )
 from greenhouse_server.services.inventory import (
     DeviceIdExistsError,
+    DeviceSpec,
+    IrrigatorCapacity,
     IrrigatorExistsError,
     UnknownDeviceTypeError,
     create_irrigator,
@@ -32,6 +36,7 @@ from greenhouse_server.services.inventory import (
 )
 from greenhouse_server.services.manual_control import (
     ManualActionError,
+    ManualStart,
     manual_log,
     manual_start,
     manual_stop,
@@ -43,9 +48,9 @@ router = APIRouter(tags=["irrigators"])
 @router.get("/irrigators", response_model=IrrigatorListResponse, summary="List irrigators across all clusters")
 def list_all_irrigators(
     repo: RepoDep,
-    cluster_id: int | None = Query(default=None, description="Restrict results to a specific cluster"),
-    limit: int = Query(default=100, ge=1, le=500),
-    cursor: int | None = Query(default=None, description="Id cursor — return rows with id > cursor"),
+    cluster_id: Annotated[int | None, Query(description="Restrict results to a specific cluster")] = None,
+    limit: Annotated[int, Query(ge=1, le=500)] = 100,
+    cursor: Annotated[int | None, Query(description="Id cursor — return rows with id > cursor")] = None,
 ) -> IrrigatorListResponse:
     """List every irrigator across all clusters with optional cluster filter and cursor pagination.
 
@@ -102,13 +107,9 @@ def add_irrigator(
         irrigator_id = create_irrigator(
             repo,
             cluster_id,
-            tuya_device_id=request.tuya_device_id,
-            name=request.name,
-            irrigator_type=request.type,
-            config=request.config or {},
+            DeviceSpec(request.tuya_device_id, request.name, request.type, request.config or {}),
             registry=registry,
-            reservoir_l=request.reservoir_l,
-            flow_rate_l_per_min=request.flow_rate_l_per_min,
+            capacity=IrrigatorCapacity(request.reservoir_l, request.flow_rate_l_per_min),
         )
     except UnknownDeviceTypeError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from None
@@ -241,7 +242,7 @@ def start_irrigator(
     """
     irrigator = require_irrigator(repo, irrigator_id)
     try:
-        output = manual_start(repo, registry, notifier, irrigator, request.minutes, via="API")
+        output = manual_start(repo, registry, notifier, irrigator, ManualStart(request.minutes, via="API"))
     except ManualActionError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from None
     return IrrigatorActionResponse(success=True, message=output)

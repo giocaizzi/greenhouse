@@ -31,7 +31,8 @@ def _insight_from_alert(alert: AlertFinding) -> CareInsight:
 class InsightsService:
     """Aggregate learning and maintenance data into structured CareInsight items."""
 
-    def __init__(self, repo: IrrigationRepository, plant_db: PlantDatabase):
+    def __init__(self, repo: IrrigationRepository, plant_db: PlantDatabase) -> None:
+        """Bind the insights to the repository and the plant database the learning and maintenance scans read."""
         self._repo = repo
         self._plant_db = plant_db
 

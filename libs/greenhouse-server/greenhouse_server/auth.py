@@ -31,18 +31,18 @@ import hmac
 import logging
 import time
 from dataclasses import dataclass
-from typing import Any
+from typing import Annotated, Any
 from urllib.parse import quote
 
 import jwt
 from fastapi import Depends, HTTPException, Request, Response, status
 from fastapi.responses import RedirectResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from sqlalchemy.engine import Engine
+from sqlalchemy.engine import Engine  # noqa: TC002 — pinned public name (golden contracts/imports.json)
 from sqlalchemy.orm import Session
 
 from greenhouse_core.auth import hash_password, needs_rehash, verify_password
-from greenhouse_core.models import User
+from greenhouse_core.models import User  # noqa: TC001 — pinned public name (golden contracts/imports.json)
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.config import Settings
 from greenhouse_server.state import get_session, get_settings
@@ -62,7 +62,8 @@ MCP_USER_NAME = "mcp"
 class AuthError(HTTPException):
     """401 with a WWW-Authenticate hint."""
 
-    def __init__(self, detail: str = "Not authenticated"):
+    def __init__(self, detail: str = "Not authenticated") -> None:
+        """Build the 401; the ``WWW-Authenticate: Bearer`` header tells clients which scheme to retry with."""
         super().__init__(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=detail,
@@ -73,7 +74,8 @@ class AuthError(HTTPException):
 class AuthConfigError(HTTPException):
     """503 — auth is on but misconfigured (e.g. no secret key)."""
 
-    def __init__(self, detail: str = "Auth not configured"):
+    def __init__(self, detail: str = "Auth not configured") -> None:
+        """Build the 503: a server-side misconfiguration, so no client credential can fix it."""
         super().__init__(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=detail)
 
 
@@ -141,6 +143,12 @@ _bearer = HTTPBearer(auto_error=False)
 _get_settings = get_settings
 _session_from_app = get_session
 
+# Spelled once, as the ``deps`` aliases are; module-level, so the names they carry exist at runtime
+# when FastAPI resolves the dependencies' string annotations.
+_BearerCredentialsDep = Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)]
+_SettingsDep = Annotated[Settings, Depends(_get_settings)]
+_SessionDep = Annotated[Session, Depends(_session_from_app)]
+
 
 def _extract_token(
     request: Request,
@@ -187,9 +195,9 @@ def is_mcp_token(token: str, settings: Settings) -> bool:
 
 def require_user(
     request: Request,
-    creds: HTTPAuthorizationCredentials | None = Depends(_bearer),
-    settings: Settings = Depends(_get_settings),
-    session: Session = Depends(_session_from_app),
+    creds: _BearerCredentialsDep,
+    settings: _SettingsDep,
+    session: _SessionDep,
 ) -> AuthenticatedUser:
     """API dependency — returns the authenticated user or raises 401.
 
@@ -227,8 +235,8 @@ def require_user(
 
 def require_web_user(
     request: Request,
-    settings: Settings = Depends(_get_settings),
-    session: Session = Depends(_session_from_app),
+    settings: _SettingsDep,
+    session: _SessionDep,
 ) -> AuthenticatedUser:
     """Web-page dependency — same as require_user but redirects to /login.
 
@@ -257,7 +265,7 @@ def _redirect_to_login(request: Request) -> HTTPException:
 class _RedirectAuthError(HTTPException):
     """Sentinel — the web exception handler catches this and serves a real redirect."""
 
-    def __init__(self, next_url: str):
+    def __init__(self, next_url: str) -> None:
         super().__init__(status_code=status.HTTP_303_SEE_OTHER, detail="Redirect to login")
         self.next_url = next_url
 

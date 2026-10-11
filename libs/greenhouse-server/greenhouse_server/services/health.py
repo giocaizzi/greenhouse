@@ -94,16 +94,17 @@ def _composite_score(components: Sequence[float]) -> float | None:
 
 
 class PlantHealthService:
-    """Computes and persists a 0–100 composite health score for each plant."""
+    """Computes and persists a 0-100 composite health score for each plant."""
 
-    def __init__(self, repo: IrrigationRepository, plant_db: PlantDatabase):
+    def __init__(self, repo: IrrigationRepository, plant_db: PlantDatabase) -> None:
+        """Bind scoring to the repository (readings, snapshots) and the plant database (care bands)."""
         self._repo = repo
         self._plant_db = plant_db
 
     def compute_score(self, plant_id: int, *, days: int = HEALTH_SCORE_WINDOW_DAYS) -> HealthScore:
         """Compute the composite health score for a single plant over the last ``days``.
 
-        Score formula (0–100): mean of whichever subset of the four components
+        Score formula (0-100): mean of whichever subset of the four components
         is available — ``soil_in_band_pct``, ``temp_in_band_pct``,
         ``humidity_in_band_pct``, and ``efficiency * 100`` — clipped to [0, 100].
         Each component is included only when the underlying data exists (e.g.

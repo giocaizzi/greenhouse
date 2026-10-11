@@ -3,7 +3,7 @@
 Two detectors run across all sensors on a rolling window of the last 50
 readings:
 
-- **Stale**: if (now − latest_timestamp) > 2 × median sample interval, the
+- **Stale**: if (now - latest_timestamp) > 2 x median sample interval, the
   sensor has gone silent and raises a ``sensor_stale`` warning.
 - **Drift/spike**: if |z-score| of the latest soil-moisture reading > 4
   relative to the rolling mean + std of the 50-reading window, raises a
@@ -66,7 +66,8 @@ def _latest_soil_zscore(window: "list[SensorReading]") -> tuple[float, float, fl
 class SensorAnomalyService:
     """Rolling z-score and max-gap anomaly detector for all sensors."""
 
-    def __init__(self, repo: IrrigationRepository, notifier: NtfyClient | None = None):
+    def __init__(self, repo: IrrigationRepository, notifier: NtfyClient | None = None) -> None:
+        """Bind the scan to the caller's repository; ``notifier`` pushes newly opened alerts (``None``: no push)."""
         self._repo = repo
         self._notifier = notifier
 
@@ -75,7 +76,7 @@ class SensorAnomalyService:
 
         For each sensor with at least 10 readings in the last 72 hours:
 
-        - **Stale**: ``(now - latest_ts) > 2 × median_interval``.
+        - **Stale**: ``(now - latest_ts) > 2 * median_interval``.
         - **Drift**: ``|z-score of latest soil_moisture| > 4`` versus the
           rolling mean and std of the last 50 soil-moisture readings.
           A minimum std of 1.0 % is applied to avoid false alarms on near-constant
@@ -151,7 +152,7 @@ class SensorAnomalyService:
     def _drift_alert(
         self, sensor: "Sensor", window: "list[SensorReading]", median_interval: float | None
     ) -> Alert | None:
-        """Raise ``sensor_drift`` when the latest soil reading is a > 4σ outlier against the window."""
+        """Raise ``sensor_drift`` when the latest soil reading is a > 4-sigma outlier against the window."""
         stats = _latest_soil_zscore(window)
         if stats is None:
             return None
@@ -167,7 +168,7 @@ class SensorAnomalyService:
                 title=f"Sensor spike/drift: {sensor.name}",
                 message=(
                     f"{sensor.name}: soil moisture {latest_soil:.1f}% "
-                    f"is a {z:+.1f}σ outlier (mean={mean:.1f}%, std={std:.1f}%)"
+                    f"is a {z:+.1f}\N{GREEK SMALL LETTER SIGMA} outlier (mean={mean:.1f}%, std={std:.1f}%)"
                 ),
                 cluster_id=sensor.cluster_id,
                 sensor_id=sensor.id,

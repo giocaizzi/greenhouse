@@ -11,11 +11,12 @@ priority is:
 from __future__ import annotations
 
 import time
+from dataclasses import dataclass
 from datetime import UTC, datetime, tzinfo
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Annotated
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from fastapi import APIRouter, Form, HTTPException, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Path, Request
 from fastapi.responses import RedirectResponse, Response
 
 from greenhouse_core.utils import get_display_timezone
@@ -76,27 +77,47 @@ def _next_window(windows: list[VacationWindow]) -> VacationWindow | None:
     return min(upcoming, key=lambda w: w.starts_at)
 
 
-@router.post("/vacation")
-def create_vacation(
-    request: Request,
-    repo: RepoDep,
-    starts_at: str = Form(...),
-    ends_at: str = Form(...),
-    contact_email: str = Form(""),
-    notes: str = Form(""),
-) -> Response:
-    """Create a vacation window from the form and return to the vacation page."""
+@dataclass(frozen=True, slots=True)
+class _VacationForm:
+    """``POST /vacation``: the window bounds (date or Unix seconds, see the module docstring) and notes."""
+
+    starts_at: Annotated[str, Form()]
+    ends_at: Annotated[str, Form()]
+    contact_email: Annotated[str, Form()] = ""
+    notes: Annotated[str, Form()] = ""
+
+
+@dataclass(frozen=True, slots=True)
+class _EditVacationForm:
+    """``POST /vacation/{window_id}/edit``: the same fields for an existing window."""
+
+    window_id: Annotated[int, Path()]
+    starts_at: Annotated[str, Form()]
+    ends_at: Annotated[str, Form()]
+    contact_email: Annotated[str, Form()] = ""
+    notes: Annotated[str, Form()] = ""
+
+
+def _form_range(starts_at: str, ends_at: str) -> tuple[int, int]:
+    """Parse and validate the form's bounds: 400 on an unparseable value or ``starts_at >= ends_at``."""
     try:
         starts_ts = _parse_ts(starts_at)
         ends_ts = _parse_ts(ends_at)
     except ValueError as exc:
         raise HTTPException(400, "Invalid date format. Use YYYY-MM-DD or Unix timestamp.") from exc
     require_valid_vacation_range(starts_ts, ends_ts)
+    return starts_ts, ends_ts
+
+
+@router.post("/vacation")
+def create_vacation(repo: RepoDep, form: Annotated[_VacationForm, Depends()]) -> Response:
+    """Create a vacation window from the form and return to the vacation page."""
+    starts_ts, ends_ts = _form_range(form.starts_at, form.ends_at)
     repo.add_vacation_window(
         starts_at=starts_ts,
         ends_at=ends_ts,
-        contact_email=contact_email.strip() or None,
-        notes=notes.strip() or None,
+        contact_email=form.contact_email.strip() or None,
+        notes=form.notes.strip() or None,
     )
     repo.commit()
     return RedirectResponse(url="/vacation", status_code=303)
@@ -114,36 +135,23 @@ def edit_vacation_form(request: Request, window_id: int, repo: RepoDep) -> Respo
 
 
 @router.post("/vacation/{window_id}/edit")
-def update_vacation(
-    request: Request,
-    window_id: int,
-    repo: RepoDep,
-    starts_at: str = Form(...),
-    ends_at: str = Form(...),
-    contact_email: str = Form(""),
-    notes: str = Form(""),
-) -> Response:
+def update_vacation(repo: RepoDep, form: Annotated[_EditVacationForm, Depends()]) -> Response:
     """Save the vacation form and return to the vacation page."""
-    require_vacation_window(repo, window_id)
-    try:
-        starts_ts = _parse_ts(starts_at)
-        ends_ts = _parse_ts(ends_at)
-    except ValueError as exc:
-        raise HTTPException(400, "Invalid date format. Use YYYY-MM-DD or Unix timestamp.") from exc
-    require_valid_vacation_range(starts_ts, ends_ts)
+    require_vacation_window(repo, form.window_id)
+    starts_ts, ends_ts = _form_range(form.starts_at, form.ends_at)
     repo.update_vacation_window(
-        window_id,
+        form.window_id,
         starts_at=starts_ts,
         ends_at=ends_ts,
-        contact_email=contact_email.strip() or None,
-        notes=notes.strip() or None,
+        contact_email=form.contact_email.strip() or None,
+        notes=form.notes.strip() or None,
     )
     repo.commit()
     return RedirectResponse(url="/vacation", status_code=303)
 
 
 @router.post("/vacation/{window_id}/delete")
-def delete_vacation(request: Request, window_id: int, repo: RepoDep) -> Response:
+def delete_vacation(window_id: int, repo: RepoDep) -> Response:
     """Delete a vacation window and return to the vacation page."""
     require_vacation_window(repo, window_id)
     repo.delete_vacation_window(window_id)

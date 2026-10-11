@@ -1,5 +1,7 @@
 """Cluster CRUD routes."""
 
+from typing import Annotated
+
 from fastapi import APIRouter, Query, status
 
 from greenhouse_core.models import Cluster
@@ -75,10 +77,9 @@ def get_cluster(cluster_id: int, repo: RepoDep) -> Cluster:
 def get_cluster_detail(
     cluster_id: int,
     repo: RepoDep,
-    expand: str = Query(
-        default="children",
-        description="Reserved for future expansion levels — currently must be ``children`` (the default).",
-    ),
+    expand: Annotated[
+        str, Query(description="Reserved for future expansion levels — currently must be ``children`` (the default).")
+    ] = "children",
 ) -> ClusterDetailResponse:
     """Return a cluster together with every child resource in one round-trip.
 

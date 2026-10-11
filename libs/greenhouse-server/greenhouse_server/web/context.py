@@ -124,7 +124,7 @@ def _signed_in(request: Request, *, auth_enabled: bool) -> bool:
         return False
 
 
-def base_context(request: Request, **extra: Any) -> dict[str, Any]:
+def base_context(request: Request, **extra: object) -> dict[str, Any]:
     """Build the template context every page shares (chrome flags, theme, version) merged with ``extra``.
 
     The dry-run / vacation / scheduler-paused banners describe the system's state; an

@@ -1,5 +1,7 @@
 """Plant CRUD routes."""
 
+from typing import Annotated
+
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel
 
@@ -32,10 +34,10 @@ router = APIRouter(tags=["plants"])
 @router.get("/plants", response_model=PlantListResponse, summary="List plants across all clusters")
 def list_all_plants(
     repo: RepoDep,
-    cluster_id: int | None = Query(default=None, description="Restrict results to a specific cluster"),
-    category: str | None = Query(default=None, description="Restrict results to a plant category"),
-    limit: int = Query(default=100, ge=1, le=500),
-    cursor: int | None = Query(default=None, description="Id cursor — return rows with id > cursor"),
+    cluster_id: Annotated[int | None, Query(description="Restrict results to a specific cluster")] = None,
+    category: Annotated[str | None, Query(description="Restrict results to a plant category")] = None,
+    limit: Annotated[int, Query(ge=1, le=500)] = 100,
+    cursor: Annotated[int | None, Query(description="Id cursor — return rows with id > cursor")] = None,
 ) -> PlantListResponse:
     """List every plant across all clusters, with optional filters and cursor pagination.
 
@@ -244,7 +246,7 @@ class SnapshotResponse(BaseModel):
 def get_plant_health(plant_id: int, repo: RepoDep, health_svc: PlantHealthServiceDep) -> PlantHealthResponse:
     """Return the current health score and 90-day history for a plant.
 
-    Computes a fresh 0–100 composite score from readings over the last 14 days
+    Computes a fresh 0-100 composite score from readings over the last 14 days
     (soil/temp/humidity in-band fractions + irrigation efficiency) and returns
     the stored daily snapshots for charting.
 

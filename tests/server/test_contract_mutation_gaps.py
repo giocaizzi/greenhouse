@@ -30,7 +30,7 @@ from greenhouse_server.services import pump_watcher as pump_watcher_module
 from greenhouse_server.services.health_monitor import DeviceHealthMonitor
 from greenhouse_server.services.irrigation import IrrigationService
 from greenhouse_server.services.leak import LeakDetectionService
-from greenhouse_server.services.manual_control import ManualActionError, check_rate_limits, manual_start
+from greenhouse_server.services.manual_control import ManualActionError, ManualStart, check_rate_limits, manual_start
 from greenhouse_server.services.pump_watcher import PumpWatcherService
 from greenhouse_server.services.pump_watcher_jobs import schedule_pump_watcher
 from greenhouse_server.services.sync import SyncService
@@ -602,7 +602,7 @@ def test_manual_start_checks_registry_before_caps(db):
     cid, irr, _ = _manual_world(db, max_events_per_day=1)
     db.add_irrigation_event(irrigator_id=irr.id, action="start", triggered_by="manual", duration_minutes=2)
     with pytest.raises(ManualActionError) as exc:
-        manual_start(db, None, None, irr, 3, via="API")
+        manual_start(db, None, None, irr, ManualStart(3, via="API"))
     assert exc.value.status_code == 503
 
 
@@ -616,8 +616,8 @@ def test_manual_start_schedules_a_manual_watcher(db, monkeypatch):
         lambda irrigator_id, minutes, started_at, **kw: calls.append((irrigator_id, minutes, started_at, kw)),
     )
     _, irr, registry = _manual_world(db)
-    assert manual_start(db, registry, None, irr, 4, via="API") == "started"
-    assert manual_start(db, registry, None, irr, None, via="API") == "started"
+    assert manual_start(db, registry, None, irr, ManualStart(4, via="API")) == "started"
+    assert manual_start(db, registry, None, irr, ManualStart(None, via="API")) == "started"
     assert calls == [(irr.id, 4, FROZEN_TS, {"triggered_by": "manual"})]
 
 

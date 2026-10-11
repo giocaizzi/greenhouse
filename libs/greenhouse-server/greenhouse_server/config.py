@@ -1,9 +1,10 @@
 """Server configuration via Pydantic BaseSettings."""
 
 from collections.abc import Iterable
-from typing import Any
+from typing import Any, cast
 from urllib.parse import urlsplit
 
+from apscheduler.triggers.cron import CronTrigger
 from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -50,6 +51,8 @@ def _redact(url: str) -> str:
 
 
 class Settings(BaseSettings):
+    """Server settings from the environment (``IRRIGATION_*``; secrets only from their ``GREENHOUSE_*`` names)."""
+
     model_config = SettingsConfigDict(
         env_prefix="IRRIGATION_",
         env_file=".env",
@@ -63,7 +66,7 @@ class Settings(BaseSettings):
         populate_by_name=False,
     )
 
-    def __init__(self, **values: Any) -> None:
+    def __init__(self, **values: object) -> None:
         """Accept the field name as a kwarg for the aliased secrets too.
 
         The secrets below are read from the environment as ``GREENHOUSE_<NAME>``
@@ -76,7 +79,8 @@ class Settings(BaseSettings):
             alias = info.validation_alias
             if isinstance(alias, AliasChoices) and name in values:
                 values[str(alias.choices[0])] = values.pop(name)
-        super().__init__(**values)
+        # Field values of any type: pydantic validates them; the base signature types only its own options.
+        super().__init__(**cast("dict[str, Any]", values))
 
     db_url: str = "sqlite:///data/irrigation.db"
     # Loopback by default: /mcp and the API grant physical actuation, so a host
@@ -119,8 +123,6 @@ class Settings(BaseSettings):
     def _validate_check_cron_hours(cls, value: str) -> str:
         # Parse with APScheduler's own cron `hour` field so anything accepted
         # here is exactly what the scheduler will accept at registration.
-        from apscheduler.triggers.cron import CronTrigger
-
         try:
             CronTrigger(hour=value, minute=0)
         except (ValueError, TypeError) as exc:

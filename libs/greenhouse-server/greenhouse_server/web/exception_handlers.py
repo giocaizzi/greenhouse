@@ -12,9 +12,8 @@ The handler is registered for Starlette's ``HTTPException`` so router-level 404 
 from __future__ import annotations
 
 import math
-from typing import Any
+from typing import TYPE_CHECKING
 
-from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -22,6 +21,9 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from greenhouse_server.auth import _RedirectAuthError, render_login_redirect
 from greenhouse_server.web.context import base_context, is_hx
 from greenhouse_server.web.templating import templates
+
+if TYPE_CHECKING:
+    from fastapi import FastAPI, Request
 
 # Machine endpoints: their clients (CLI, MCP, OAuth discovery probes) must always see
 # structured JSON errors, never an HTML page, whatever they send in ``Accept``.
@@ -38,7 +40,7 @@ def _is_html_request(request: Request) -> bool:
     return "text/html" in accept or "application/json" not in accept
 
 
-def _json_safe(value: Any) -> Any:
+def _json_safe(value: object) -> object:
     """``value`` with every non-finite float replaced by its text (``"nan"``, ``"inf"``).
 
     A refused ``NaN`` / ``Infinity`` body value comes back in the 422 ``input``, and strict

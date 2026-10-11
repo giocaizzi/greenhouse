@@ -3,7 +3,7 @@
 import logging
 import time as _time
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Literal, Required, TypedDict, cast
+from typing import TYPE_CHECKING, Any, Literal, Required, TypedDict, Unpack, cast
 
 from greenhouse_core.constants import (
     FALLBACK_TEMPERATURE_C,
@@ -232,28 +232,27 @@ def _soil_status(latest_soil: float | None, t_min: float, t_max: float) -> str:
 
 
 def _check_result(
-    cluster_id: int,
-    cluster_name: str,
-    action: str,
-    *,
+    head: CheckResult,
     detail_key: Literal["notes", "needs_water"],
     detail: str | list[str],
+    *,
     alerts: list[AlertFinding],
     maintenance: list[AlertFinding],
 ) -> CheckResult:
-    """One ``check_cluster`` entry, keys in the response order; ``detail_key`` names the branch's detail."""
+    """One ``check_cluster`` entry, keys in the response order.
+
+    ``head`` (cluster id, name, action) first, then the branch's detail under ``detail_key``, then
+    the findings.
+    """
     # A TypedDict literal cannot carry a computed key; the runtime object is the same plain dict.
-    return cast(
-        CheckResult,
-        {
-            "cluster_id": cluster_id,
-            "cluster_name": cluster_name,
-            "action": action,
-            detail_key: detail,
-            "alerts": alerts,
-            "maintenance": maintenance,
-        },
-    )
+    return cast("CheckResult", {**head, detail_key: detail, "alerts": alerts, "maintenance": maintenance})
+
+
+class PipelineHooks(TypedDict, total=False):
+    """:class:`IrrigationService`'s optional collaborators, as keywords; absent or ``None`` falls open."""
+
+    health_monitor: DeviceHealthMonitor | None  # the actuation gate (absent: no device-health gate)
+    notifier: NtfyClient | None  # ntfy pushes (absent: none)
 
 
 class IrrigationService:
@@ -266,22 +265,23 @@ class IrrigationService:
         sync_service: SyncService,
         weather_client: WeatherClient,
         plant_db: PlantDatabase,
-        health_monitor: DeviceHealthMonitor | None = None,
-        notifier: NtfyClient | None = None,
-    ):
+        **hooks: Unpack[PipelineHooks],
+    ) -> None:
+        """Wire the pipeline's collaborators; a missing health monitor or notifier falls open (no gate, no push)."""
         self._repo = repo
         self._registry = registry
         self._sync = sync_service
         self._weather = weather_client
         self._plant_db = plant_db
-        self._health_monitor = health_monitor
-        self._notifier = notifier
+        self._health_monitor = hooks.get("health_monitor")
+        self._notifier = hooks.get("notifier")
 
     def _resolve_temperature(
         self,
         cluster_id: int,
-        is_indoor: bool,
         temp_override: float | None,
+        *,
+        is_indoor: bool,
         no_sync: bool,
     ) -> tuple[float, str, ClusterSnapshot | None]:
         """Resolve temperature from override, sensor, or weather. Returns (temp, source, sensor_data)."""
@@ -525,6 +525,7 @@ class IrrigationService:
         self,
         cluster_id: int,
         temp_override: float | None = None,
+        *,
         dry_run: bool = False,
         no_sync: bool = False,
         force: bool = False,
@@ -548,7 +549,9 @@ class IrrigationService:
 
         # The engine's outdoor rule: only "outdoor" prefers the weather temperature.
         is_indoor = environment_for(cluster.environment) == "indoor"
-        temp, source, sensor_data = self._resolve_temperature(cluster_id, is_indoor, temp_override, no_sync)
+        temp, source, sensor_data = self._resolve_temperature(
+            cluster_id, temp_override, is_indoor=is_indoor, no_sync=no_sync
+        )
 
         decision = self._decide(cluster_id, temp, force=force)
         if not decision:
@@ -634,15 +637,8 @@ class IrrigationService:
             result = self.run_irrigation_pipeline(cluster_id)
             action, detail = result.get("action", "error"), result.get("reason", "")
         sync_cluster_alerts(self._repo, cluster_id, self._plant_db, notifier=self._notifier)
-        return _check_result(
-            cluster_id,
-            cluster.name,
-            action,
-            detail_key=detail_key,
-            detail=detail,
-            alerts=alerts,
-            maintenance=maintenance,
-        )
+        head: CheckResult = {"cluster_id": cluster_id, "cluster_name": cluster.name, "action": action}
+        return _check_result(head, detail_key, detail, alerts=alerts, maintenance=maintenance)
 
     def check_all_clusters(self) -> list[CheckResult]:
         """Check every cluster, isolating each one in its own transaction.

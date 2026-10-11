@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Form, HTTPException, Request
+from dataclasses import dataclass
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, Form, HTTPException, Path, Request
 from fastapi.responses import Response
 
 from greenhouse_server.deps import (
@@ -21,16 +24,20 @@ from greenhouse_server.web.templating import templates
 router = APIRouter(include_in_schema=False)
 
 
+@dataclass(frozen=True, slots=True)
+class _IrrigateForm:
+    """``POST /clusters/{cluster_id}/irrigate``: the action bar's flags (a ticked box posts a value)."""
+
+    cluster_id: Annotated[int, Path()]
+    dry_run: Annotated[str, Form()] = ""
+    no_sync: Annotated[str, Form()] = ""
+    temp_override: Annotated[str, Form()] = ""
+    force: Annotated[str, Form()] = ""
+
+
 @router.post("/clusters/{cluster_id}/irrigate")
 def irrigate(
-    request: Request,
-    cluster_id: int,
-    svc: IrrigationServiceDep,
-    repo: RepoDep,
-    dry_run: str = Form(""),
-    no_sync: str = Form(""),
-    temp_override: str = Form(""),
-    force: str = Form(""),
+    request: Request, svc: IrrigationServiceDep, repo: RepoDep, form: Annotated[_IrrigateForm, Depends()]
 ) -> Response:
     """Run the irrigation pipeline from the cluster detail page's action bar (HTMX fragment).
 
@@ -41,19 +48,19 @@ def irrigate(
     """
     # Same as POST /api/v1/clusters/{id}/irrigate: an unknown cluster is a 404 page, not the
     # pipeline's error dict rendered into the decision panel.
-    require_cluster(repo, cluster_id)
-    temp = parsed_or_400(temp_override, float, error="Invalid temp_override: must be a number")
-    forced = force.strip().lower() in ("true", "on", "1")
+    require_cluster(repo, form.cluster_id)
+    temp = parsed_or_400(form.temp_override, float, error="Invalid temp_override: must be a number")
+    forced = form.force.strip().lower() in ("true", "on", "1")
     result = svc.run_irrigation_pipeline(
-        cluster_id=cluster_id,
+        cluster_id=form.cluster_id,
         temp_override=temp,
-        dry_run=bool(dry_run),
-        no_sync=bool(no_sync),
+        dry_run=bool(form.dry_run),
+        no_sync=bool(form.no_sync),
         force=forced,
     )
     repo.commit()
     return templates.TemplateResponse(
-        request, "partials/_decision_panel.html", base_context(request, result=result, cluster_id=cluster_id)
+        request, "partials/_decision_panel.html", base_context(request, result=result, cluster_id=form.cluster_id)
     )
 
 
@@ -99,7 +106,7 @@ def check_all(request: Request, svc: IrrigationServiceDep, repo: RepoDep) -> Res
 
 
 @router.post("/sync")
-def sync_all(request: Request, svc: SyncServiceDep, repo: RepoDep, hours: str = Form("24")) -> Response:
+def sync_all(request: Request, svc: SyncServiceDep, repo: RepoDep, hours: Annotated[str, Form()] = "24") -> Response:
     """Sync every sensor from the Tuya Cloud and render the sync summary (HTMX fragment)."""
     try:
         hrs = int(hours)
@@ -115,8 +122,8 @@ def sync_plants(
     request: Request,
     repo: RepoDep,
     svc: ClusterServiceDep,
-    plant_id: str = Form(""),
-    cluster_id: str = Form(""),
+    plant_id: Annotated[str, Form()] = "",
+    cluster_id: Annotated[str, Form()] = "",
 ) -> Response:
     """Refresh plant care data from the plant database and render the summary (HTMX fragment)."""
     pid = parsed_or_400(plant_id, int, error="Invalid plant_id")

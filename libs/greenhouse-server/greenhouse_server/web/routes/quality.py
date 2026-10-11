@@ -2,18 +2,14 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 from fastapi import APIRouter, Request
 from fastapi.responses import Response
 
+from greenhouse_core.schemas import DataQualityIssue
 from greenhouse_server.deps import PlantDbDep, RepoDep
 from greenhouse_server.services.data_quality import build_report
 from greenhouse_server.web.context import base_context
 from greenhouse_server.web.templating import templates
-
-if TYPE_CHECKING:
-    from greenhouse_core.schemas import DataQualityIssue
 
 router = APIRouter(include_in_schema=False)
 
