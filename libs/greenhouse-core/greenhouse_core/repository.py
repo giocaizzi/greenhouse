@@ -1167,10 +1167,13 @@ class IrrigationRepository:
         return self.session.get(VacationWindow, window_id)
 
     def get_active_vacation(self, at: int | None = None) -> VacationWindow | None:
-        """The currently-active vacation window, if any."""
+        """The vacation window active at ``at`` (default: now): ``starts_at <= at < ends_at``.
+
+        The end is exclusive — a vacation whose end time equals now is over.
+        """
         now = at or int(time.time())
         return self.session.scalar(
-            select(VacationWindow).where(VacationWindow.starts_at <= now, VacationWindow.ends_at >= now)
+            select(VacationWindow).where(VacationWindow.starts_at <= now, VacationWindow.ends_at > now)
         )
 
     def update_vacation_window(self, window_id: int, **fields: Unpack[VacationWindowPatch]) -> VacationWindow | None:

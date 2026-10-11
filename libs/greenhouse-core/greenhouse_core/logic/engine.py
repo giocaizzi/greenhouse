@@ -520,7 +520,9 @@ class IrrigationLogic:
             ``None`` when no hold is active.
         """
         hold_seconds = LEAK_HOLD_HOURS * SECONDS_PER_HOUR
-        alert = self.db.get_active_alert(LEAK_ALERT_CODE, cluster_id=cluster_id, since=now - hold_seconds)
+        # The hold window is exclusive at its edge: exactly LEAK_HOLD_HOURS after the
+        # alert was last seen it has expired (``since`` is inclusive, hence the +1 s).
+        alert = self.db.get_active_alert(LEAK_ALERT_CODE, cluster_id=cluster_id, since=now - hold_seconds + 1)
         if alert is None:
             return None
 
@@ -541,15 +543,21 @@ class IrrigationLogic:
         )
 
     def _enforce_cooldown(self, cluster_id: int, now: int) -> IrrigationDecision | None:
-        """Skip when the cluster's irrigator fired within the cooldown window."""
+        """Skip when the cluster's irrigator started less than ``MIN_COOLDOWN_HOURS`` ago.
+
+        The window is exclusive at its edge: exactly 6 h after a start the
+        cooldown is over (the repository query is inclusive, so the edge row is
+        filtered here).
+        """
         irr = self.db.get_irrigator_for_cluster(cluster_id)
         if irr is None:
             return None
 
+        cooldown_seconds = MIN_COOLDOWN_HOURS * SECONDS_PER_HOUR
         latest_event = None
         events = self.db.get_recent_events(irr.id, hours=MIN_COOLDOWN_HOURS)
         for event in events:
-            if event.action != "start":
+            if event.action != "start" or now - event.timestamp >= cooldown_seconds:
                 continue
             if latest_event is None or event.timestamp > latest_event.timestamp:
                 latest_event = event

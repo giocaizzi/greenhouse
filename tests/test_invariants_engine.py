@@ -128,13 +128,13 @@ def test_inv2_stress_rule_keys_on_the_driest_plant(env):
     [
         (MIN_COOLDOWN_HOURS * HOUR - 60, True),
         (MIN_COOLDOWN_HOURS * HOUR - 1, True),
-        (MIN_COOLDOWN_HOURS * HOUR, True),  # boundary is inclusive (`timestamp >= now - 6h`)
+        (MIN_COOLDOWN_HOURS * HOUR, False),  # boundary is exclusive: exactly 6 h later the cooldown is over
         (MIN_COOLDOWN_HOURS * HOUR + 1, False),
         (MIN_COOLDOWN_HOURS * HOUR + 60, False),
     ],
 )
-def test_inv3_cooldown_boundary_is_six_hours_inclusive(env, age_s, expect_cooldown):
-    """Invariant #3: a ``start`` within ``MIN_COOLDOWN_HOURS`` (6h, inclusive) skips with COOLDOWN."""
+def test_inv3_cooldown_boundary_is_six_hours_exclusive(env, age_s, expect_cooldown):
+    """Invariant #3: a ``start`` less than ``MIN_COOLDOWN_HOURS`` (6h) ago skips with COOLDOWN; at 6h it no longer does."""
     cid, irr, _ = _cluster(env)
     env.add_irrigation_event(irr, "start", "auto", duration_minutes=2, timestamp=FROZEN_TS - age_s)
 
@@ -547,11 +547,11 @@ def test_inv10_short_series_spike_is_filtered(env):
 
 @pytest.mark.parametrize(
     ("age_s", "held"),
-    [(LEAK_HOLD_HOURS * HOUR, True), (LEAK_HOLD_HOURS * HOUR + 1, False)],
-    ids=["exactly-LEAK_HOLD_HOURS", "LEAK_HOLD_HOURS+1s"],
+    [(LEAK_HOLD_HOURS * HOUR - 1, True), (LEAK_HOLD_HOURS * HOUR, False)],
+    ids=["LEAK_HOLD_HOURS-1s", "exactly-LEAK_HOLD_HOURS"],
 )
-def test_inv11_hold_window_edge_is_inclusive(env, age_s, held):
-    """Invariant #11: the hold lasts ``LEAK_HOLD_HOURS`` from ``last_seen_at``, inclusive at the edge.
+def test_inv11_hold_window_edge_is_exclusive(env, age_s, held):
+    """Invariant #11: the hold lasts ``LEAK_HOLD_HOURS`` from ``last_seen_at``, exclusive at the edge.
 
     (±60 s / ±600 s, acknowledge-still-holds, resolve-releases, force-does-not-bypass
     are pinned in ``tests/test_leak_hold.py``.)
