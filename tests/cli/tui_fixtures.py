@@ -11,13 +11,18 @@ from __future__ import annotations
 import math
 import threading
 import time
+from dataclasses import dataclass
+from http import HTTPStatus
+from typing import TYPE_CHECKING
 
-from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 from greenhouse_cli.client import IrrigationClient
 from greenhouse_core.models import IrrigationEvent, SensorReading
 from greenhouse_core.repository import IrrigationRepository
+
+if TYPE_CHECKING:
+    from fastapi.testclient import TestClient
 
 CLUSTERS = [
     {
@@ -75,97 +80,115 @@ def _reading_series(sensor_id: int, target: float, now: int, hours: int = 48) ->
 def seed_greenhouse(http: TestClient, engine) -> None:
     """Create clusters, plants, sensors, irrigators, readings, events, alerts, activity."""
     now = int(time.time())
-    plant_no = sensor_no = 0
     with Session(engine) as session:
+        seeder = _Seeder(http, session, now)
         for c_idx, cluster in enumerate(CLUSTERS, start=1):
             resp = http.post(
                 "/api/v1/clusters",
                 json={"name": cluster["name"], "environment": cluster["environment"], "location": cluster["location"]},
             )
-            assert resp.status_code == 201, resp.text
+            assert resp.status_code == HTTPStatus.CREATED, resp.text
             cid = resp.json()["id"]
-            for species, category, moisture in cluster["plants"]:
-                plant_no += 1
-                resp = http.post(
-                    f"/api/v1/clusters/{cid}/plants",
-                    json={"species": species, "category": category, "water_needs": "medium"},
-                )
-                assert resp.status_code == 201, resp.text
-                pid = resp.json()["id"]
-                if moisture is None:
-                    continue
-                sensor_no += 1
-                resp = http.post(
-                    f"/api/v1/clusters/{cid}/sensors",
-                    json={
-                        "tuya_device_id": f"fake_sensor_{sensor_no:03d}",
-                        "name": f"{species.split()[0]} probe",
-                        "type": "tuya.tr301z",
-                        "plant_id": pid,
-                    },
-                )
-                assert resp.status_code == 201, resp.text
-                session.add_all(_reading_series(resp.json()["id"], moisture, now))
+            seeder.add_plants(cid, cluster["plants"])
             if cluster["irrigator"]:
-                resp = http.post(
-                    f"/api/v1/clusters/{cid}/irrigator",
-                    json={
-                        "tuya_device_id": f"fake_irrigator_{c_idx:03d}",
-                        "name": f"{cluster['name']} pump",
-                        "type": "rainpoint.ik10pw",
-                    },
-                )
-                assert resp.status_code == 201, resp.text
-                iid = resp.json()["id"]
-                for hours_ago in (40, 24, 8):
-                    session.add(
-                        IrrigationEvent(
-                            irrigator_id=iid,
-                            timestamp=now - hours_ago * 3600,
-                            action="start",
-                            duration_minutes=3,
-                            triggered_by="auto",
-                            notes=None,
-                        )
-                    )
+                pump = {
+                    "tuya_device_id": f"fake_irrigator_{c_idx:03d}",
+                    "name": f"{cluster['name']} pump",
+                    "type": "rainpoint.ik10pw",
+                }
+                seeder.add_irrigator(cid, pump)
             http.put(
                 f"/api/v1/clusters/{cid}/config", json={"mode": "smart", "duration_minutes": 3, "interval_hours": 12}
             )
-
-        repo = IrrigationRepository(session)
-        repo.upsert_alert(
-            "leak:sensor:3",
-            "leak",
-            "leak_or_stuck_valve",
-            "Possible leak on Balcony",
-            "Moisture kept rising 30 min after the pump stopped.",
-            severity="critical",
-            entity_type="sensor",
-            entity_id=3,
-            cluster_id=2,
-        )
-        repo.upsert_alert(
-            "battery:sensor:1",
-            "health",
-            "battery_low",
-            "Low battery: Monstera probe",
-            "Replace the batteries soon.",
-            severity="warning",
-            entity_type="sensor",
-            entity_id=1,
-            cluster_id=1,
-        )
-        for i, (severity, code, message) in enumerate(
-            [
-                ("info", "irrigation_started", "Living Room pump ran for 3 min"),
-                ("warning", "sensor_stale", "Opuntia probe has not reported in 5h"),
-                ("info", "sync_completed", "Synced 4 sensors, 12 new readings"),
-            ]
-        ):
-            repo.add_activity_event(
-                "irrigation", "cluster", code, message, entity_id=1, severity=severity, timestamp=now - i * 600
-            )
+        _seed_inbox(IrrigationRepository(session), now)
         session.commit()
+
+
+@dataclass
+class _Seeder:
+    """The API client, the direct DB session and the clock one seeding run shares; numbers probes globally."""
+
+    http: TestClient
+    session: Session
+    now: int
+    sensor_no: int = 0
+
+    def add_plants(self, cid: int, plants: list) -> None:
+        """Add the cluster's plants, each with a probe and a reading series when it has a moisture level."""
+        for species, category, moisture in plants:
+            resp = self.http.post(
+                f"/api/v1/clusters/{cid}/plants",
+                json={"species": species, "category": category, "water_needs": "medium"},
+            )
+            assert resp.status_code == HTTPStatus.CREATED, resp.text
+            pid = resp.json()["id"]
+            if moisture is None:
+                continue
+            self.sensor_no += 1
+            resp = self.http.post(
+                f"/api/v1/clusters/{cid}/sensors",
+                json={
+                    "tuya_device_id": f"fake_sensor_{self.sensor_no:03d}",
+                    "name": f"{species.split()[0]} probe",
+                    "type": "tuya.tr301z",
+                    "plant_id": pid,
+                },
+            )
+            assert resp.status_code == HTTPStatus.CREATED, resp.text
+            self.session.add_all(_reading_series(resp.json()["id"], moisture, self.now))
+
+    def add_irrigator(self, cid: int, pump: dict) -> None:
+        """Add the cluster's pump with three past automatic runs."""
+        resp = self.http.post(f"/api/v1/clusters/{cid}/irrigator", json=pump)
+        assert resp.status_code == HTTPStatus.CREATED, resp.text
+        iid = resp.json()["id"]
+        for hours_ago in (40, 24, 8):
+            self.session.add(
+                IrrigationEvent(
+                    irrigator_id=iid,
+                    timestamp=self.now - hours_ago * 3600,
+                    action="start",
+                    duration_minutes=3,
+                    triggered_by="auto",
+                    notes=None,
+                )
+            )
+
+
+def _seed_inbox(repo: IrrigationRepository, now: int) -> None:
+    """Add the two open alerts and the three activity rows."""
+    repo.upsert_alert(
+        "leak:sensor:3",
+        "leak",
+        "leak_or_stuck_valve",
+        "Possible leak on Balcony",
+        "Moisture kept rising 30 min after the pump stopped.",
+        severity="critical",
+        entity_type="sensor",
+        entity_id=3,
+        cluster_id=2,
+    )
+    repo.upsert_alert(
+        "battery:sensor:1",
+        "health",
+        "battery_low",
+        "Low battery: Monstera probe",
+        "Replace the batteries soon.",
+        severity="warning",
+        entity_type="sensor",
+        entity_id=1,
+        cluster_id=1,
+    )
+    for i, (severity, code, message) in enumerate(
+        [
+            ("info", "irrigation_started", "Living Room pump ran for 3 min"),
+            ("warning", "sensor_stale", "Opuntia probe has not reported in 5h"),
+            ("info", "sync_completed", "Synced 4 sensors, 12 new readings"),
+        ]
+    ):
+        repo.add_activity_event(
+            "irrigation", "cluster", code, message, entity_id=1, severity=severity, timestamp=now - i * 600
+        )
 
 
 class _SharedHttp:
@@ -204,7 +227,7 @@ def tui_client_factory(http: TestClient, log: list | None = None):
         client = IrrigationClient(base_url="http://testserver", token=token or "")
         client.http.close()  # replaced by the shared in-process transport
         client.http = _SharedHttp(http)
-        original = client._send  # every request (JSON and the CSV export) goes through _send
+        original = client.http.request  # every request (JSON and the CSV export) goes through http.request
 
         def serialized(method, path, **kwargs):
             if log is not None:
@@ -212,7 +235,7 @@ def tui_client_factory(http: TestClient, log: list | None = None):
             with lock:
                 return original(method, path, **kwargs)
 
-        client._send = serialized
+        client.http.request = serialized
         return client
 
     return factory

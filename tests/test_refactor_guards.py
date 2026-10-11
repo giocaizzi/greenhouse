@@ -18,12 +18,20 @@ import ast
 import importlib
 import inspect
 import json
+import os
 import pkgutil
 import subprocess
 import sys
 from pathlib import Path
 
 import pytest
+from textual.dom import DOMNode
+
+import greenhouse_cli.tui as tui_pkg
+from greenhouse_cli.client import _default_token_path, load_stored_token
+from greenhouse_server.config import Settings
+
+DEFAULT_PORT = 8000  # Settings' built-in port, i.e. the .env value (9001) was ignored
 
 ROOT = Path(__file__).resolve().parents[1]
 LIBS = ROOT / "libs"
@@ -84,10 +92,8 @@ def _production_files() -> list[Path]:
 
 
 def _tui_module_names() -> list[str]:
-    import greenhouse_cli.tui as tui_pkg
-
     walked = pkgutil.walk_packages(tui_pkg.__path__, prefix=f"{tui_pkg.__name__}.")
-    return [tui_pkg.__name__] + sorted(m.name for m in walked)
+    return [tui_pkg.__name__, *sorted(m.name for m in walked)]
 
 
 # ── Guard 1 ──────────────────────────────────────────────────────────────────
@@ -100,7 +106,9 @@ def test_cli_entry_point_import_does_not_load_textual() -> None:
         "loaded = sorted(m for m in sys.modules if m.split('.')[0] == 'textual')\n"
         "print(','.join(loaded))\n"
     )
-    proc = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, timeout=120, cwd=ROOT)
+    proc = subprocess.run(  # noqa: S603 — fixed argv, the running interpreter
+        [sys.executable, "-c", code], capture_output=True, text=True, timeout=120, cwd=ROOT, check=False
+    )
     assert proc.returncode == 0, proc.stderr
     assert proc.stdout.strip() == "", f"textual modules loaded by `import greenhouse_cli.main`: {proc.stdout}"
 
@@ -109,12 +117,15 @@ def test_cli_entry_point_import_does_not_load_textual() -> None:
 
 
 def test_no_from_time_import_time_in_production_code() -> None:
-    offenders = []
-    for path in _production_files():
-        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
-            if isinstance(node, ast.ImportFrom) and node.module == "time":
-                if any(alias.name == "time" for alias in node.names):
-                    offenders.append(f"{path.relative_to(ROOT)}:{node.lineno}")
+    """Production code reads the clock as ``time.time()`` so tests can freeze it (Conventions: Clock)."""
+    offenders = [
+        f"{path.relative_to(ROOT)}:{node.lineno}"
+        for path in _production_files()
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8")))
+        if isinstance(node, ast.ImportFrom)
+        and node.module == "time"
+        and any(alias.name == "time" for alias in node.names)
+    ]
     assert offenders == [], f"`from time import time` defeats the time.time patch seams: {offenders}"
 
 
@@ -145,6 +156,7 @@ def _module_name(path: Path) -> str:
 
 
 def test_no_new_public_uppercase_constants_in_tui() -> None:
+    """The TUI grows no public upper-case module constants beyond the frozen surface golden."""
     golden = json.loads(SURFACE_GOLDEN.read_text(encoding="utf-8"))["module_constants"]
     extra = {}
     for path in sorted(TUI_DIR.rglob("*.py")):
@@ -170,8 +182,6 @@ def _shadowed_names(cls: type) -> set[str]:
 
 
 def _tui_domnode_classes() -> dict[str, type]:
-    from textual.dom import DOMNode
-
     found: dict[str, type] = {}
     for module_name in _tui_module_names():
         module = importlib.import_module(module_name)
@@ -182,6 +192,7 @@ def _tui_domnode_classes() -> dict[str, type]:
 
 
 def test_tui_classes_do_not_shadow_textual_base_names() -> None:
+    """Only the allow-listed TUI classes may shadow names of their Textual base."""
     classes = _tui_domnode_classes()
     assert classes, "no TUI DOMNode subclasses found"
     unknown = sorted(set(classes) - set(SHADOWING_ALLOWED))
@@ -195,6 +206,7 @@ def test_tui_classes_do_not_shadow_textual_base_names() -> None:
 
 
 def test_tui_classes_define_no_key_handlers() -> None:
+    """TUI classes use bindings, never ``key_*`` handlers."""
     offenders = {
         key: sorted(name for name in vars(cls) if name.startswith("key_"))
         for key, cls in _tui_domnode_classes().items()
@@ -221,6 +233,7 @@ def _boundary_files() -> list[Path]:
 
 @pytest.mark.parametrize("path", _boundary_files(), ids=lambda p: str(p.relative_to(LIBS)))
 def test_boundary_module_helpers_are_fully_annotated(path: Path) -> None:
+    """Private helpers in boundary modules are fully annotated."""
     rel = path.relative_to(LIBS).as_posix()
     missing = sorted(
         f"{rel}::{node.name}"
@@ -260,10 +273,6 @@ def test_server_fixtures_resolve_when_directories_are_mixed_on_one_command_line(
 
 def test_cli_token_resolution_is_isolated_from_the_developer(tmp_path_factory) -> None:
     """The autouse fixture points the CLI token lookup at a per-test temp dir and drops the env token."""
-    import os
-
-    from greenhouse_cli.client import _default_token_path, load_stored_token
-
     assert "GREENHOUSE_API_TOKEN" not in os.environ
     assert _default_token_path().is_relative_to(tmp_path_factory.getbasetemp())
     assert load_stored_token() is None
@@ -271,10 +280,8 @@ def test_cli_token_resolution_is_isolated_from_the_developer(tmp_path_factory) -
 
 def test_settings_ignore_a_developer_dotenv(tmp_path, monkeypatch) -> None:
     """Outside tests marked ``dotenv``, a ``.env`` in the working directory is not read by ``Settings``."""
-    from greenhouse_server.config import Settings
-
     (tmp_path / ".env").write_text("IRRIGATION_PORT=9001\n")
     monkeypatch.chdir(tmp_path)
     monkeypatch.delenv("IRRIGATION_PORT", raising=False)
 
-    assert Settings().port == 8000
+    assert Settings().port == DEFAULT_PORT

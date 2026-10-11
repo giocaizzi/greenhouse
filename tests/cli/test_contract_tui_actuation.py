@@ -37,6 +37,7 @@ REFRESH = 0.5
 @pytest.fixture
 def seeded(clean_env, frozen_clock):
     """(http, engine) for a seeded app — clock frozen before ``seed_greenhouse`` runs."""
+    del clean_env, frozen_clock  # side-effect fixtures (a hermetic environment; the clock is frozen)
     http, _, engine = make_seeded_app()
     yield http, engine
     engine.dispose()
@@ -108,6 +109,19 @@ class _Recorder:
             row["filled"] = fill
         if note:
             row["note"] = note
+        await self._accept(dialog_screen, fill)
+        await settle(pilot, tui)
+        assert tui.screen is not dialog_screen or dialog_screen is None, f"{self.label}/{key}: dialog still open"
+        row["writes"] = [list(w) for w in writes(self.log[start_log:])]
+        # The only normalization: ``E`` toasts the export path, which lives in pytest's random tmp cwd.
+        cwd = str(Path.cwd())
+        row["toasts"] = [[sev, msg.replace(cwd, "<CWD>")] for sev, msg in self.toasts[start_toasts:]]
+        self.rows.append(row)
+        return row
+
+    async def _accept(self, dialog_screen, fill: dict | None) -> None:
+        """Accept whatever dialog the key opened, with its default choices (forms get ``fill``)."""
+        pilot = self.pilot
         if isinstance(dialog_screen, ConfirmScreen):
             await pilot.click("#confirm")
         elif isinstance(dialog_screen, FormScreen):
@@ -118,14 +132,6 @@ class _Recorder:
             await pilot.click("#run")  # defaults: dry run on, sync on, no force
         elif isinstance(dialog_screen, WaterNowScreen):
             await pilot.click("#start")  # blank minutes = device default
-        await settle(pilot, tui)
-        assert tui.screen is not dialog_screen or dialog_screen is None, f"{self.label}/{key}: dialog still open"
-        row["writes"] = [list(w) for w in writes(self.log[start_log:])]
-        # The only normalization: ``E`` toasts the export path, which lives in pytest's random tmp cwd.
-        cwd = str(Path.cwd())
-        row["toasts"] = [[sev, msg.replace(cwd, "<CWD>")] for sev, msg in self.toasts[start_toasts:]]
-        self.rows.append(row)
-        return row
 
 
 async def _dashboard(http, rows: list) -> None:
@@ -149,56 +155,74 @@ async def _cluster(http, rows: list) -> None:
         await tui.push_screen(ClusterScreen(1))
         await settle(pilot, tui)
         rec = _Recorder(pilot, tui, log, "cluster")
-        for key in ("i", "w", "x", "c"):
-            await rec.key(key)
-        await rec.key("n", note="cluster already has an irrigator")
-        await rec.key("u")
-        await rec.key("L", fill={"minutes": "4", "notes": "watering can"})
-        await rec.key("P")
-        await rec.key("E", note="GET stats export only; CSV written to cwd")
-        await rec.key("e")
-
-        await rec.tab("tab-plants")
-        await rec.key("n", fill={"species": "Ficus lyrata", "category": "tropical"})
-        await rec.key("u")
-        await rec.key("M", fill={"target_cluster_id": 3})
-        await rec.key("delete")
-        await rec.key("m", note="toggles plant chart, read-only")
-
-        await rec.tab("tab-sensors")
-        await rec.key(
-            "n", fill={"tuya_device_id": "fake_tuya_device_aabbccdd", "name": "Spare probe", "type": "tuya.tr301z"}
-        )
-        await rec.key("u")
-        await rec.key("delete")
-
-        await rec.tab("tab-windows")
-        await rec.key("delete", note="empty table: no selection")
-        await rec.key("u", note="empty table: no selection")
-        await rec.key("n", fill={"start_hour": "6", "end_hour": "9", "label": "morning"})
-        await rec.key("u")
-        await rec.key("delete")
-
-        for tab in ("tab-charts", "tab-insights", "tab-decisions", "tab-history"):
-            await rec.tab(tab)
-            for key in ("n", "u", "delete"):
-                await rec.key(key)
-        await rec.tab("tab-charts")
-        for key in ("m", "]", "["):
-            await rec.key(key)
-
-        await rec.tab("tab-config")
-        await rec.key("u")
-
-        await rec.tab("tab-overview")
-        await rec.key("delete")
-        await rec.key("w", note="no irrigator after detach")
-        await rec.key(
-            "n", fill={"tuya_device_id": "fake_tuya_device_00112233", "name": "New pump", "type": "rainpoint.ik10pw"}
-        )
-        await rec.key("D")
+        await _cluster_overview_keys(rec)
+        await _cluster_plant_keys(rec)
+        await _cluster_sensor_keys(rec)
+        await _cluster_window_keys(rec)
+        await _cluster_chart_and_config_tab_keys(rec)
+        await _cluster_detach_and_delete(rec)
         assert isinstance(tui.screen, DashboardScreen)
         rows += rec.rows
+
+
+async def _cluster_overview_keys(rec: _Recorder) -> None:
+    for key in ("i", "w", "x", "c"):
+        await rec.key(key)
+    await rec.key("n", note="cluster already has an irrigator")
+    await rec.key("u")
+    await rec.key("L", fill={"minutes": "4", "notes": "watering can"})
+    await rec.key("P")
+    await rec.key("E", note="GET stats export only; CSV written to cwd")
+    await rec.key("e")
+
+
+async def _cluster_plant_keys(rec: _Recorder) -> None:
+    await rec.tab("tab-plants")
+    await rec.key("n", fill={"species": "Ficus lyrata", "category": "tropical"})
+    await rec.key("u")
+    await rec.key("M", fill={"target_cluster_id": 3})
+    await rec.key("delete")
+    await rec.key("m", note="toggles plant chart, read-only")
+
+
+async def _cluster_sensor_keys(rec: _Recorder) -> None:
+    await rec.tab("tab-sensors")
+    await rec.key(
+        "n", fill={"tuya_device_id": "fake_tuya_device_aabbccdd", "name": "Spare probe", "type": "tuya.tr301z"}
+    )
+    await rec.key("u")
+    await rec.key("delete")
+
+
+async def _cluster_window_keys(rec: _Recorder) -> None:
+    await rec.tab("tab-windows")
+    await rec.key("delete", note="empty table: no selection")
+    await rec.key("u", note="empty table: no selection")
+    await rec.key("n", fill={"start_hour": "6", "end_hour": "9", "label": "morning"})
+    await rec.key("u")
+    await rec.key("delete")
+
+
+async def _cluster_chart_and_config_tab_keys(rec: _Recorder) -> None:
+    for tab in ("tab-charts", "tab-insights", "tab-decisions", "tab-history"):
+        await rec.tab(tab)
+        for key in ("n", "u", "delete"):
+            await rec.key(key)
+    await rec.tab("tab-charts")
+    for key in ("m", "]", "["):
+        await rec.key(key)
+    await rec.tab("tab-config")
+    await rec.key("u")
+
+
+async def _cluster_detach_and_delete(rec: _Recorder) -> None:
+    await rec.tab("tab-overview")
+    await rec.key("delete")
+    await rec.key("w", note="no irrigator after detach")
+    await rec.key(
+        "n", fill={"tuya_device_id": "fake_tuya_device_00112233", "name": "New pump", "type": "rainpoint.ik10pw"}
+    )
+    await rec.key("D")
 
 
 async def _alerts(http, rows: list) -> None:

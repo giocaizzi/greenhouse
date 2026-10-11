@@ -4,7 +4,7 @@ Golden tests pin *what the code does today* so a behavior-preserving refactor ca
 prove it changed nothing. They must be hermetic and reproducible:
 
 - the clock is frozen at :data:`FROZEN_INSTANT` (spring, mid-morning UTC — outside
-  the seeded 00:00–05:00 quiet hours and far from day/season boundaries);
+  the seeded 00:00-05:00 quiet hours and far from day/season boundaries);
 - weather is served by :class:`OfflineWeather` (the same ``None`` the real client
   returns when Open-Meteo is unreachable), so no test touches the network;
 - environment variables that ``Settings`` / the CLI read are cleared.
@@ -23,6 +23,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from greenhouse_server.deps import get_weather_client
+
 GOLDEN_DIR = Path(__file__).parent / "golden"
 UPDATE_ENV_VAR = "GOLDEN_UPDATE"
 
@@ -39,16 +41,14 @@ class OfflineWeather:
     """Stand-in for ``WeatherClient`` that behaves like Open-Meteo being unreachable."""
 
     def get_current(self) -> None:
-        return None
+        """Return no current weather, like an unreachable Open-Meteo."""
 
-    def get_forecast(self, hours: int = 6) -> None:  # noqa: ARG002 — signature mirrors WeatherClient
-        return None
+    def get_forecast(self, hours: int = 6) -> None:
+        """Return no forecast, like an unreachable Open-Meteo."""
 
 
 def install_offline_weather(app: Any) -> OfflineWeather:
     """Replace the app's weather client (state + dependency) with :class:`OfflineWeather`."""
-    from greenhouse_server.deps import get_weather_client
-
     stub = OfflineWeather()
     app.state.weather_client = stub
     app.dependency_overrides[get_weather_client] = lambda: stub
@@ -71,7 +71,8 @@ def assert_golden(name: str, actual: str) -> None:
         path.write_text(actual, encoding="utf-8")
         return
     if not path.exists():
-        raise AssertionError(f"golden file missing: {path} (create it with {UPDATE_ENV_VAR}=1)")
+        msg = f"golden file missing: {path} (create it with {UPDATE_ENV_VAR}=1)"
+        raise AssertionError(msg)
     expected = path.read_text(encoding="utf-8")
     if actual == expected:
         return
@@ -86,7 +87,8 @@ def assert_golden(name: str, actual: str) -> None:
     )
     shown = "\n".join(diff[:_MAX_DIFF_LINES])
     more = f"\n… {len(diff) - _MAX_DIFF_LINES} more diff lines" if len(diff) > _MAX_DIFF_LINES else ""
-    raise AssertionError(f"output differs from golden/{name}:\n{shown}{more}")
+    msg = f"output differs from golden/{name}:\n{shown}{more}"
+    raise AssertionError(msg)
 
 
 def assert_golden_json(name: str, value: Any) -> None:

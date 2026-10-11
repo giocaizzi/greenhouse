@@ -23,6 +23,8 @@ from greenhouse_cli.tui.screens.dashboard import DashboardScreen
 from greenhouse_cli.tui.screens.modals import LoginScreen
 from greenhouse_cli.tui.screens.settings import SettingsScreen
 
+MIN_TIMER_RELOADS = 2  # the mount load plus at least one timer reload in half a second
+
 T0 = 1_776_247_200  # 2026-04-15T10:00:00Z (golden.FROZEN_INSTANT)
 
 
@@ -51,7 +53,7 @@ class _HostApp(App):
         self.push_screen(self._screen_cls())
 
 
-def _reloads_in_half_a_second(auto_refresh: bool) -> int:
+def _reloads_in_half_a_second(*, auto_refresh: bool) -> int:
     reloads: list[int] = []
 
     class Probe(DataScreen):
@@ -72,13 +74,16 @@ def _reloads_in_half_a_second(auto_refresh: bool) -> int:
     return len(reloads)
 
 
+@pytest.mark.usefixtures("clean_env")
 @pytest.mark.parametrize(
     ("username", "password", "dismissed"),
     [("admin", "", []), ("", "secret", []), ("  admin ", "s3cret ", [("admin", "s3cret ")])],
 )
-def test_login_dialog_needs_both_fields(clean_env, username, password, dismissed):
-    """tui-23: the sign-in dialog dismisses only with a non-blank username AND a password
-    (username stripped, password verbatim)."""
+def test_login_dialog_needs_both_fields(username, password, dismissed):
+    """tui-23: the sign-in dialog dismisses only with a non-blank username AND a password.
+
+    The username is stripped, the password is passed verbatim.
+    """
     results: list = []
 
     class Host(App):
@@ -99,24 +104,31 @@ def test_login_dialog_needs_both_fields(clean_env, username, password, dismissed
     assert results == dismissed
 
 
+@pytest.mark.usefixtures("clean_env")
 @pytest.mark.parametrize(("quiet", "toasts"), [(False, [("boom", "Server error 500", "error")]), (True, [])])
-def test_api_error_toast_respects_quiet(clean_env, quiet, toasts):
-    """tui-32: a non-401 ``ServerError`` becomes an error toast unless the caller passed ``quiet=True``;
-    either way ``api`` returns ``None``."""
-    app = GreenhouseApp("http://test.invalid", client_factory=lambda token: object(), animations=False)
-    seen: list[tuple] = []
-    app.notify = lambda message, *, title="", severity="information", **kw: seen.append((message, title, severity))
+def test_api_error_toast_respects_quiet(quiet, toasts):
+    """tui-32: a non-401 ``ServerError`` becomes an error toast unless the caller passed ``quiet=True``.
 
-    def failing(client):
+    Either way ``api`` returns ``None``.
+    """
+    app = GreenhouseApp("http://test.invalid", client_factory=lambda _token: object(), animations=False)
+    seen: list[tuple] = []
+    app.notify = lambda message, *, title="", severity="information", **_kw: seen.append((message, title, severity))
+
+    def failing(_client):
         raise ServerError(500, "boom")
 
     assert asyncio.run(app.api(failing, quiet=quiet)) is None
     assert seen == toasts
 
 
-def test_only_auto_refresh_screens_reload_on_a_timer(clean_env):
-    """tui-17: ``DataScreen.on_mount`` loads once, and installs the periodic reload only when
-    ``AUTO_REFRESH`` is true (Settings and other non-auto screens never poll)."""
-    assert SettingsScreen.AUTO_REFRESH is False and DashboardScreen.AUTO_REFRESH is True
+@pytest.mark.usefixtures("clean_env")
+def test_only_auto_refresh_screens_reload_on_a_timer():
+    """tui-17: ``DataScreen.on_mount`` loads once, and installs the periodic reload only when ``AUTO_REFRESH``.
+
+    Settings and the other non-auto screens never poll.
+    """
+    assert SettingsScreen.AUTO_REFRESH is False
+    assert DashboardScreen.AUTO_REFRESH is True
     assert _reloads_in_half_a_second(auto_refresh=False) == 1
-    assert _reloads_in_half_a_second(auto_refresh=True) >= 2
+    assert _reloads_in_half_a_second(auto_refresh=True) >= MIN_TIMER_RELOADS

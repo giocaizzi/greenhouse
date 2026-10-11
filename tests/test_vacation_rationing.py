@@ -8,7 +8,7 @@ above the very-dry/critical thresholds) so the engine reaches a normal IRRIGATE
 of ``DEFAULT_DURATION_MINUTES`` (2 min) — the critical-stress override would
 otherwise return early and bypass the window/seasonal/vacation steps entirely.
 
-Monstera inherits the tropical category window (07–10 local), so all decisions
+Monstera inherits the tropical category window (07-10 local), so all decisions
 are evaluated at 08:00 UTC to stay inside it. Vacation consumption events are
 seeded well outside the 6h global cooldown so the cooldown gate does not
 pre-empt the rationing path.
@@ -21,9 +21,11 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
+from greenhouse_core.constants import CONFIDENCE_COOLDOWN, DEFAULT_DURATION_MINUTES
 from greenhouse_core.logic import IrrigationLogic
 from greenhouse_core.logic.decision import Action, TriggerCode
 from greenhouse_core.plant_db import get_plant_database
+from greenhouse_core.repository import IrrigatorExistsError
 
 DAY = 86400
 
@@ -39,6 +41,7 @@ def _freeze(monkeypatch, ts: int) -> None:
 
 @pytest.fixture
 def logic(tmp_db):
+    """Provide an engine on the test database and the bundled plant database."""
     return IrrigationLogic(tmp_db, get_plant_database())
 
 
@@ -88,7 +91,7 @@ def test_no_active_vacation_is_noop(tmp_db, logic, monkeypatch):
 
     assert decision is not None
     assert decision.action is Action.IRRIGATE
-    assert decision.duration_minutes == 2  # DEFAULT_DURATION_MINUTES
+    assert decision.duration_minutes == DEFAULT_DURATION_MINUTES  # DEFAULT_DURATION_MINUTES
     assert TriggerCode.VACATION_ACTIVE not in _codes(decision)
 
 
@@ -103,7 +106,7 @@ def test_vacation_active_no_capacity_normal_irrigation(tmp_db, logic, monkeypatc
 
     assert decision is not None
     assert decision.action is Action.IRRIGATE
-    assert decision.duration_minutes == 2  # unchanged
+    assert decision.duration_minutes == DEFAULT_DURATION_MINUTES  # unchanged
     assert TriggerCode.VACATION_ACTIVE in _codes(decision)
     assert TriggerCode.VACATION_RATIONING not in _codes(decision)
 
@@ -123,7 +126,7 @@ def test_vacation_plenty_of_budget_unchanged(tmp_db, logic, monkeypatch):
 
     assert decision is not None
     assert decision.action is Action.IRRIGATE
-    assert decision.duration_minutes == 2
+    assert decision.duration_minutes == DEFAULT_DURATION_MINUTES
     assert TriggerCode.VACATION_ACTIVE in _codes(decision)
     assert TriggerCode.VACATION_RATIONING not in _codes(decision)
     assert TriggerCode.VACATION_BUDGET_EXHAUSTED not in _codes(decision)
@@ -169,7 +172,7 @@ def test_vacation_budget_exhausted_flips_to_skip(tmp_db, logic, monkeypatch):
     assert decision is not None
     assert decision.action is Action.SKIP
     assert decision.duration_minutes == 0
-    assert decision.confidence == 0.9  # CONFIDENCE_COOLDOWN
+    assert decision.confidence == CONFIDENCE_COOLDOWN  # CONFIDENCE_COOLDOWN
     assert TriggerCode.VACATION_BUDGET_EXHAUSTED in _codes(decision)
     assert TriggerCode.VACATION_ACTIVE in _codes(decision)
     # The exhausted budget decided the skip, so it is the primary code (not the soil reason).
@@ -201,10 +204,10 @@ def test_spent_consumption_reduces_headroom(tmp_db, logic, monkeypatch):
     Same generous-looking tank as the trim case (daily 1.9 L) but a prior 2-min
     start event (2 L spent) on day 0 drives headroom negative → SKIP. The event
     is seeded >6h before ``now`` so the cooldown gate does not pre-empt, and
-    ``now`` (09:00) stays inside the tropical 07–10 window.
+    ``now`` (09:00) stays inside the tropical 07-10 window.
     """
     starts = _ts(2026, 5, 14, 0)
-    now = _ts(2026, 5, 14, 9)  # day_index 0, inside 07–10; 8h after the 01:00 event (> 6h cooldown)
+    now = _ts(2026, 5, 14, 9)  # day_index 0, inside 07-10; 8h after the 01:00 event (> 6h cooldown)
     _freeze(monkeypatch, now)
     ctx = _make_cluster(tmp_db)
     _set_capacity(tmp_db, ctx["irrigator_id"], reservoir_l=10.0, flow_rate_l_per_min=1.0)
@@ -243,7 +246,7 @@ def test_only_actuating_irrigator_governs_budget(tmp_db, logic, monkeypatch):
 
     assert decision is not None
     assert decision.action is Action.IRRIGATE
-    assert decision.duration_minutes == 2  # unlimited tank → no trim
+    assert decision.duration_minutes == DEFAULT_DURATION_MINUTES  # unlimited tank → no trim
     assert TriggerCode.VACATION_ACTIVE in _codes(decision)
     assert TriggerCode.VACATION_RATIONING not in _codes(decision)
 
@@ -264,14 +267,12 @@ def test_uncapped_actuating_irrigator_skips_rationing(tmp_db, logic, monkeypatch
 
     assert decision is not None
     assert decision.action is Action.IRRIGATE
-    assert decision.duration_minutes == 2  # uncapped irrigator
+    assert decision.duration_minutes == DEFAULT_DURATION_MINUTES  # uncapped irrigator
     assert TriggerCode.VACATION_RATIONING not in _codes(decision)
 
 
 def test_second_irrigator_add_rejected(tmp_db):
     """A cluster holds at most one irrigator — a second add raises IrrigatorExistsError."""
-    from greenhouse_core.repository import IrrigatorExistsError
-
     ctx = _make_cluster(tmp_db)  # Pump A already added
 
     with pytest.raises(IrrigatorExistsError):
@@ -306,14 +307,14 @@ def test_cluster_with_no_irrigators_does_not_crash(tmp_db, logic, monkeypatch):
     # No capacity irrigators → VACATION_ACTIVE present, dosage untouched.
     assert TriggerCode.VACATION_ACTIVE in _codes(decision)
     assert decision.action is Action.IRRIGATE
-    assert decision.duration_minutes == 2
+    assert decision.duration_minutes == DEFAULT_DURATION_MINUTES
 
 
 # ── Repository: irrigator_consumption_liters ─────────────────────────────────
 
 
 def test_irrigator_consumption_liters_sums_starts_times_flow(tmp_db):
-    """Sum of in-window ``start`` duration_minutes × flow_rate gives liters."""
+    """Sum of in-window ``start`` duration_minutes x flow_rate gives liters."""
     cluster_id = tmp_db.add_cluster("Consumption", environment="indoor")
     irr = tmp_db.add_irrigator(
         cluster_id=cluster_id,

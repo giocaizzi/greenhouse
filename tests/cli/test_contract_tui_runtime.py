@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import inspect
 import threading
+from http import HTTPStatus
 from pathlib import Path
 
 import pytest
@@ -37,6 +38,11 @@ from greenhouse_cli.tui.widgets import selected_key
 from greenhouse_core.repository import IrrigationRepository
 from server.conftest import TEST_ADMIN_PASSWORD, TEST_ADMIN_USERNAME, _make_stubbed_app
 
+SEEDED_OPEN_ALERTS = 2
+SEEDED_ACTIVITY_EVENTS = 3
+ROW_1_AFTER_NEW_TOP_ROW = 2  # the selected row 1, pushed down by the row inserted on top
+ROW_2_AFTER_NEW_TOP_ROW = 3  # the selected row 2, pushed down by the row inserted on top
+
 SIZE = (160, 50)
 # Auto-refresh period for the G14 tests: short enough to keep them quick, long enough for a reload to finish.
 REFRESH = 0.5
@@ -45,6 +51,7 @@ REFRESH = 0.5
 @pytest.fixture
 def seeded(clean_env, frozen_clock):
     """(http, engine) for a seeded app — clock frozen before ``seed_greenhouse`` runs."""
+    del clean_env, frozen_clock  # side-effect fixtures (a hermetic environment; the clock is frozen)
     http, _, engine = make_seeded_app()
     yield http, engine
     engine.dispose()
@@ -76,6 +83,28 @@ def _thread_recording_factory(http, calls: list[tuple[str, int]]):
     return factory
 
 
+async def _tour_every_screen(pilot, tui) -> None:
+    """Visit every top-level screen, two cluster tabs, a confirmed plant-DB sync and a search."""
+    await settle(pilot, tui)
+    for key in ("a", "l", "s", "o", "d"):
+        await pilot.press(key)
+        await settle(pilot, tui)
+    await tui.push_screen(ClusterScreen(1))
+    await settle(pilot, tui)
+    for tab in ("tab-insights", "tab-plants"):
+        tui.screen.query_one("TabbedContent").active = tab
+        await settle(pilot, tui)
+    await pilot.press("P")
+    await settle(pilot, tui)
+    await pilot.press("y")  # the plant-DB sync asks for confirmation
+    await settle(pilot, tui)
+    await pilot.press("escape")
+    await pilot.press("slash")
+    await pilot.press(*"fern")
+    await pilot.pause(0.4)
+    await settle(pilot, tui)
+
+
 def test_client_calls_run_off_the_event_loop_thread(seeded):
     """G13: every IrrigationClient method call made while touring all screens ran in a worker thread."""
     http, _ = seeded
@@ -86,24 +115,7 @@ def test_client_calls_run_off_the_event_loop_thread(seeded):
         loop_thread.append(threading.get_ident())
         tui = make_tui(http, factory=_thread_recording_factory(http, calls))
         async with tui.run_test(size=SIZE) as pilot:
-            await settle(pilot, tui)
-            for key in ("a", "l", "s", "o", "d"):
-                await pilot.press(key)
-                await settle(pilot, tui)
-            await tui.push_screen(ClusterScreen(1))
-            await settle(pilot, tui)
-            for tab in ("tab-insights", "tab-plants"):
-                tui.screen.query_one("TabbedContent").active = tab
-                await settle(pilot, tui)
-            await pilot.press("P")
-            await settle(pilot, tui)
-            await pilot.press("y")  # the plant-DB sync asks for confirmation
-            await settle(pilot, tui)
-            await pilot.press("escape")
-            await pilot.press("slash")
-            await pilot.press(*"fern")
-            await pilot.pause(0.4)
-            await settle(pilot, tui)
+            await _tour_every_screen(pilot, tui)
 
     _run(scenario())
     methods = {name for name, _ in calls}
@@ -130,6 +142,23 @@ async def _open_auto_refreshing(pilot, tui, key: str, screen_type: type) -> None
     await wait_until(lambda: isinstance(tui.screen, screen_type), f"`{key}` to switch to {screen_type.__name__}")
 
 
+def _insert_offline_alert(http, engine) -> None:
+    """Open a new alert server-side, serialized with the app's requests like the TUI's own."""
+    with _app_locks[id(http)], Session(engine) as session:
+        IrrigationRepository(session).upsert_alert(
+            "health:sensor:4",
+            "health",
+            "sensor_offline",
+            "Echeveria probe offline",
+            "No reading for 6h.",
+            severity="critical",
+            entity_type="sensor",
+            entity_id=4,
+            cluster_id=3,
+        )
+        session.commit()
+
+
 def test_alerts_cursor_stays_on_record_across_auto_refresh(seeded):
     """G14: row k selected, a new alert appears server-side, the screen's timer reloads → same alert selected."""
     http, engine = seeded
@@ -141,24 +170,14 @@ def test_alerts_cursor_stays_on_record_across_auto_refresh(seeded):
             screen = tui.screen
             assert isinstance(screen, AlertsScreen)
             table = screen.query_one("#alerts-table", DataTable)
-            await wait_until(lambda: table.row_count == 2, "the first alerts load (2 open alerts)")
+            await wait_until(lambda: table.row_count == SEEDED_OPEN_ALERTS, "the first alerts load (2 open alerts)")
             table.move_cursor(row=1)
             chosen = selected_key(table)
             keys_before = [table.coordinate_to_cell_key((i, 0))[0].value for i in range(table.row_count)]
-            with _app_locks[id(http)], Session(engine) as session:
-                IrrigationRepository(session).upsert_alert(
-                    "health:sensor:4",
-                    "health",
-                    "sensor_offline",
-                    "Echeveria probe offline",
-                    "No reading for 6h.",
-                    severity="critical",
-                    entity_type="sensor",
-                    entity_id=4,
-                    cluster_id=3,
-                )
-                session.commit()
-            await wait_until(lambda: table.row_count == 3, "an auto-refresh showing the inserted alert")
+            _insert_offline_alert(http, engine)
+            await wait_until(
+                lambda: table.row_count == SEEDED_OPEN_ALERTS + 1, "an auto-refresh showing the inserted alert"
+            )
             keys_after = [table.coordinate_to_cell_key((i, 0))[0].value for i in range(table.row_count)]
             assert selected_key(table) == chosen
             assert table.cursor_row == keys_after.index(chosen)
@@ -166,15 +185,18 @@ def test_alerts_cursor_stays_on_record_across_auto_refresh(seeded):
             # selected record's row index moved from 1 to 2 while the key stayed.
             assert (keys_before, chosen) == (["2", "1"], "1")
             assert keys_after == ["3", "2", "1"]
-            assert table.cursor_row == 2
+            assert table.cursor_row == ROW_1_AFTER_NEW_TOP_ROW
 
     _run(scenario())
 
 
 def test_plants_cursor_stays_on_record_across_refresh(seeded):
-    """G14: plant row 1 selected; a plant that sorts above it is added server-side; ``r`` reloads the
+    """G14: a reload keeps the selected plant selected when a new plant sorts above it.
+
+    Plant row 1 is selected; a plant that sorts above it is added server-side; ``r`` reloads the
     screen (the same ``reload`` the auto-refresh timer calls — a fast timer keeps cancelling the heavy cluster
-    load before it finishes) → the same plant stays selected at its new index."""
+    load before it finishes) → the same plant stays selected at its new index.
+    """
     http, _ = seeded
 
     async def scenario():
@@ -190,22 +212,26 @@ def test_plants_cursor_stays_on_record_across_refresh(seeded):
             table.move_cursor(row=1)
             await settle(pilot, tui)
             assert selected_key(table) == "2"
-            assert http.post("/api/v1/clusters/1/plants", json={"species": "Ficus lyrata"}).status_code == 201
+            assert (
+                http.post("/api/v1/clusters/1/plants", json={"species": "Ficus lyrata"}).status_code
+                == HTTPStatus.CREATED
+            )
             await pilot.press("r")
             await settle(pilot, tui)
             # Pin today's row order (plants come back sorted by species, so "Ficus" lands on top): the selected
             # record moved from row 1 to row 2 and the cursor followed it.
             assert [table.coordinate_to_cell_key((i, 0))[0].value for i in range(table.row_count)] == ["6", "1", "2"]
             assert selected_key(table) == "2"
-            assert table.cursor_row == 2
+            assert table.cursor_row == ROW_1_AFTER_NEW_TOP_ROW
 
     _run(scenario())
 
 
 def test_activity_cursor_stays_on_the_selected_event_across_refresh(seeded):
-    """ActivityScreen.load repopulates through ``refill`` (rows keyed by event id), so an auto-refresh keeps the
-    cursor on the selected event — the cursor-stability contract the other tables follow — even when a newer
-    event is inserted above it.
+    """An activity auto-refresh keeps the cursor on the selected event, even when a newer one lands above it.
+
+    ActivityScreen.load repopulates through ``refill`` (rows keyed by event id) — the cursor-stability
+    contract the other tables follow.
     """
     http, engine = seeded
 
@@ -216,7 +242,7 @@ def test_activity_cursor_stays_on_the_selected_event_across_refresh(seeded):
             screen = tui.screen
             assert isinstance(screen, ActivityScreen)
             table = screen.query_one("#activity-table", DataTable)
-            await wait_until(lambda: table.row_count == 3, "the first activity load (3 events)")
+            await wait_until(lambda: table.row_count == SEEDED_ACTIVITY_EVENTS, "the first activity load (3 events)")
             table.move_cursor(row=2)
             selected = table.get_row_at(2)
             with _app_locks[id(http)], Session(engine) as session:
@@ -224,9 +250,11 @@ def test_activity_cursor_stays_on_the_selected_event_across_refresh(seeded):
                     "sync", "system", "sync_completed", "fresh event", severity="info", timestamp=FROZEN_TS
                 )
                 session.commit()
-            await wait_until(lambda: table.row_count == 4, "an auto-refresh showing the inserted event")
+            await wait_until(
+                lambda: table.row_count == SEEDED_ACTIVITY_EVENTS + 1, "an auto-refresh showing the inserted event"
+            )
             assert table.get_row_at(0)[-1] == "fresh event"
-            assert table.cursor_row == 3
+            assert table.cursor_row == ROW_2_AFTER_NEW_TOP_ROW
             assert table.get_row_at(3) == selected
 
     _run(scenario())
@@ -235,42 +263,61 @@ def test_activity_cursor_stays_on_the_selected_event_across_refresh(seeded):
 # ── 401 → in-app sign-in ────────────────────────────────────────────────────
 
 
-def test_401_opens_one_sign_in_dialog_then_logs_in(clean_env, frozen_clock):
-    """Concurrent 401s on startup open exactly one LoginScreen and raise no error toast; signing in posts the
-    credentials verbatim, stores the token, toasts and reloads the dashboard."""
-    application, engine = _make_stubbed_app(bypass_auth=False)
+def _authenticating_factory(application, log: list):
+    """Client factory on the real (auth-enforcing) app that sends the token and records every request."""
     lock = threading.Lock()
-    log: list = []
 
     def factory(token):
         client = IrrigationClient(base_url=SERVER_URL, token=token or "")
         client.http = TestClient(application, raise_server_exceptions=False)
         if token:
             client.http.headers["Authorization"] = f"Bearer {token}"
-        original = client._send  # every request (JSON and the CSV export) goes through _send
+        original = client.http.request  # every request (JSON and the CSV export) goes through http.request
 
         def serialized(method, path, **kwargs):
             log.append((method, path, kwargs.get("json"), kwargs.get("params")))
             with lock:
                 return original(method, path, **kwargs)
 
-        client._send = serialized
+        client.http.request = serialized
         return client
 
+    return factory
+
+
+async def _sign_in_as_admin(pilot, tui) -> None:
+    """Fill the sign-in dialog with the test admin and submit it."""
+    tui.screen.query_one("#username").value = TEST_ADMIN_USERNAME
+    tui.screen.query_one("#password").value = TEST_ADMIN_PASSWORD
+    await pilot.click("#login")
+    await settle(pilot, tui)
+
+
+def _assert_one_quiet_sign_in_prompt(tui, toasts: list, log: list) -> None:
+    """Exactly one LoginScreen is up, nothing was toasted, and only the two startup reads were sent."""
+    assert isinstance(tui.screen, LoginScreen)
+    assert sum(isinstance(s, LoginScreen) for s in tui.screen_stack) == 1
+    assert toasts == []
+    startup = sorted({p for m, p, _, _ in log})
+    assert startup == ["/api/v1/clusters", "/api/v1/health/system"]
+
+
+def test_401_opens_one_sign_in_dialog_then_logs_in(clean_env, frozen_clock):
+    """Concurrent 401s on startup open exactly one LoginScreen and raise no error toast.
+
+    Signing in posts the credentials verbatim, stores the token, toasts and reloads the dashboard.
+    """
+    del frozen_clock  # side-effect fixture (the clock is frozen)
+    application, engine = _make_stubbed_app(bypass_auth=False)
+    log: list = []
+
     async def scenario():
-        tui = make_tui(None, factory=factory)
+        tui = make_tui(None, factory=_authenticating_factory(application, log))
         toasts = _record_toasts(tui)
         async with tui.run_test(size=SIZE) as pilot:
             await settle(pilot, tui)
-            assert isinstance(tui.screen, LoginScreen)
-            assert sum(isinstance(s, LoginScreen) for s in tui.screen_stack) == 1
-            assert toasts == []
-            startup = sorted({p for m, p, _, _ in log})
-            assert startup == ["/api/v1/clusters", "/api/v1/health/system"]
-            tui.screen.query_one("#username").value = TEST_ADMIN_USERNAME
-            tui.screen.query_one("#password").value = TEST_ADMIN_PASSWORD
-            await pilot.click("#login")
-            await settle(pilot, tui)
+            _assert_one_quiet_sign_in_prompt(tui, toasts, log)
+            await _sign_in_as_admin(pilot, tui)
             assert writes(log) == [
                 ("POST", "/api/v1/auth/login", {"username": TEST_ADMIN_USERNAME, "password": TEST_ADMIN_PASSWORD})
             ]
@@ -284,9 +331,12 @@ def test_401_opens_one_sign_in_dialog_then_logs_in(clean_env, frozen_clock):
         engine.dispose()
 
 
-def test_401_dashboard_says_sign_in_needed(clean_env, frozen_clock):
-    """When the server answers 401 the dashboard behind the sign-in dialog says a login is needed — not
-    "Cannot reach the server", since the server was reached."""
+@pytest.mark.usefixtures("clean_env", "frozen_clock")
+def test_401_dashboard_says_sign_in_needed():
+    """When the server answers 401 the dashboard behind the sign-in dialog says a login is needed.
+
+    Not "Cannot reach the server": the server was reached.
+    """
     application, engine = _make_stubbed_app(bypass_auth=False)
 
     def factory(token):

@@ -12,7 +12,15 @@ from sqlalchemy import func, select
 
 from fake_data import FAKE_DEVICE_ID, FAKE_SENSOR_ID
 from golden import FROZEN_TS
-from greenhouse_core.models import IrrigationWindow, Irrigator, Plant, Sensor, VacationWindow
+from greenhouse_core.models import (
+    IrrigationWindow,
+    Irrigator,
+    Plant,
+    PlantHealthDaily,
+    Sensor,
+    VacationWindow,
+    parse_device_config,
+)
 from greenhouse_core.schemas import IrrigatorResponse, SensorResponse
 
 UNKNOWN_ID = 9999
@@ -57,6 +65,7 @@ _RESPONSE_MODELS = [IrrigatorResponse, SensorResponse]
     ids=["json-object", "json-empty-object", "json-null", "dict-passthrough", "none-passthrough"],
 )
 def test_parse_config_decodes_json_strings_and_passes_other_values(model, raw, expected):
+    """Response models decode JSON-string configs and pass other values through unchanged."""
     assert model.model_validate({**_RESPONSE_BASE, "config": raw}).config == expected
 
 
@@ -76,14 +85,13 @@ def test_parse_config_non_object_reads_as_empty(model, raw):
 
 def test_parse_device_config_is_the_one_lenient_parser():
     """D16: ``models.parse_device_config`` — dict as is, JSON object decoded, everything else ``{}``."""
-    from greenhouse_core.models import parse_device_config
-
     assert parse_device_config({"k": 1}) == {"k": 1}
     assert parse_device_config('{"device_ip": "192.0.2.1"}') == {"device_ip": "192.0.2.1"}
     assert [parse_device_config(raw) for raw in ("", "nope", "[1]", "null", None, 7)] == [{}] * 6
 
 
 def test_parse_config_decodes_the_stored_orm_json_string(tmp_db):
+    """The config stored as a JSON string on the ORM row decodes in the response model."""
     ids = _seed(tmp_db)
     irrigator = tmp_db.get_irrigator(ids["irrigator"])
     sensor = tmp_db.get_sensor(ids["sensor"])
@@ -106,6 +114,8 @@ def test_parse_config_decodes_the_stored_orm_json_string(tmp_db):
     ],
 )
 def test_delete_unknown_id_returns_false_and_touches_nothing(tmp_db, frozen_clock, method, model):
+    """Deleting an unknown id returns False and leaves the table untouched."""
+    del frozen_clock  # side-effect fixture (the clock is frozen)
     _seed(tmp_db)
     tmp_db.add_vacation_window(FROZEN_TS, FROZEN_TS + 3600)
     before = _count(tmp_db, model)
@@ -124,6 +134,7 @@ def test_delete_unknown_id_returns_false_and_touches_nothing(tmp_db, frozen_cloc
     ],
 )
 def test_delete_known_id_returns_true_and_removes_the_row(tmp_db, method, key, model):
+    """Deleting a known id returns True and removes the row."""
     ids = _seed(tmp_db)
     assert getattr(tmp_db, method)(ids[key]) is True
     assert _count(tmp_db, model) == 0
@@ -133,6 +144,8 @@ def test_delete_known_id_returns_true_and_removes_the_row(tmp_db, method, key, m
 
 
 def test_update_vacation_window_ignores_unknown_keys_and_none_clears_notes(tmp_db, frozen_clock):
+    """Vacation updates ignore unknown keys, and None clears the notes."""
+    del frozen_clock  # side-effect fixture (the clock is frozen)
     window = tmp_db.add_vacation_window(FROZEN_TS, FROZEN_TS + 3600, contact_email="a@example.com", notes="keep")
     updated = tmp_db.update_vacation_window(window.id, bogus_field="x", notes=None, ends_at=FROZEN_TS + 7200)
     assert updated is window
@@ -146,10 +159,12 @@ def test_update_vacation_window_ignores_unknown_keys_and_none_clears_notes(tmp_d
 
 
 def test_update_vacation_window_unknown_id_returns_none(tmp_db):
+    """Updating an unknown vacation window returns None."""
     assert tmp_db.update_vacation_window(UNKNOWN_ID, notes="x") is None
 
 
 def test_update_irrigation_window_ignores_unknown_keys_and_none_clears_label(tmp_db):
+    """Window updates ignore unknown keys, and None clears the label."""
     ids = _seed(tmp_db)
     updated = tmp_db.update_irrigation_window(ids["window"], bogus_field=1, label=None, end_hour=9)
     assert updated is not None
@@ -159,6 +174,7 @@ def test_update_irrigation_window_ignores_unknown_keys_and_none_clears_label(tmp
 
 
 def test_update_irrigation_window_unknown_id_returns_none(tmp_db):
+    """Updating an unknown irrigation window returns None."""
     _seed(tmp_db)
     assert tmp_db.update_irrigation_window(UNKNOWN_ID, end_hour=9) is None
 
@@ -167,6 +183,7 @@ def test_update_irrigation_window_unknown_id_returns_none(tmp_db):
 
 
 def test_update_sensor_unknown_id_returns_none(tmp_db):
+    """Updating an unknown sensor returns None."""
     _seed(tmp_db)
     assert tmp_db.update_sensor(UNKNOWN_ID, name="x") is None
 
@@ -179,6 +196,7 @@ def test_update_sensor_none_skips_required_and_clears_config(tmp_db):
 
 
 def test_update_sensor_json_encodes_dict_config(tmp_db):
+    """A dict sensor config is stored JSON-encoded with key order kept."""
     ids = _seed(tmp_db)
     updated = tmp_db.update_sensor(ids["sensor"], config={"b": 1, "a": [1, 2], "c": None})
     assert updated.config == '{"b": 1, "a": [1, 2], "c": null}'
@@ -193,6 +211,7 @@ def test_update_sensor_stores_non_dict_config_verbatim_current_behavior(tmp_db):
 
 
 def test_update_sensor_ignores_unknown_keys(tmp_db):
+    """Sensor updates ignore unknown keys and leave other fields as they were."""
     ids = _seed(tmp_db)
     updated = tmp_db.update_sensor(ids["sensor"], bogus_field="x", name="Renamed")
     assert not hasattr(updated, "bogus_field")
@@ -200,11 +219,13 @@ def test_update_sensor_ignores_unknown_keys(tmp_db):
 
 
 def test_update_irrigator_unknown_id_returns_none(tmp_db):
+    """Updating an unknown irrigator returns None."""
     _seed(tmp_db)
     assert tmp_db.update_irrigator(UNKNOWN_ID, name="x") is None
 
 
 def test_update_irrigator_ignores_unknown_keys_and_none(tmp_db):
+    """Irrigator updates ignore unknown keys and None values."""
     ids = _seed(tmp_db)
     updated = tmp_db.update_irrigator(ids["irrigator"], bogus_field="x", type=None, name="Renamed")
     assert not hasattr(updated, "bogus_field")
@@ -212,6 +233,7 @@ def test_update_irrigator_ignores_unknown_keys_and_none(tmp_db):
 
 
 def test_update_irrigator_json_encodes_dict_config(tmp_db):
+    """A dict irrigator config is stored JSON-encoded with key order kept."""
     ids = _seed(tmp_db)
     updated = tmp_db.update_irrigator(ids["irrigator"], config={"z": 1, "a": "b"})
     assert updated.config == '{"z": 1, "a": "b"}'
@@ -221,14 +243,17 @@ def test_update_irrigator_json_encodes_dict_config(tmp_db):
 
 
 def test_update_plant_unknown_id_returns_none(tmp_db):
+    """Updating an unknown plant returns None and adds no row."""
     _seed(tmp_db)
     assert tmp_db.update_plant(UNKNOWN_ID, notes="x") is None
     assert _count(tmp_db, Plant) == 1
 
 
 def test_update_plant_ignores_unknown_keys_and_none_clears_a_nullable_field(tmp_db):
-    """B-15: an explicit ``None`` clears a nullable field (``notes``) and is skipped for a NOT NULL one
-    (``species``); unknown keys are still ignored."""
+    """B-15: an explicit ``None`` clears a nullable field and is skipped for a NOT NULL one.
+
+    ``notes`` is cleared, ``species`` is kept; unknown keys are still ignored.
+    """
     ids = _seed(tmp_db)
     tmp_db.update_plant(ids["plant"], notes="first")
     updated = tmp_db.update_plant(ids["plant"], bogus_field="x", notes=None, species=None, category="tropical")
@@ -240,6 +265,8 @@ def test_update_plant_ignores_unknown_keys_and_none_clears_a_nullable_field(tmp_
 
 
 def test_get_vacation_window_found_and_not_found(tmp_db, frozen_clock):
+    """A vacation window is returned by id, or None when unknown."""
+    del frozen_clock  # side-effect fixture (the clock is frozen)
     window = tmp_db.add_vacation_window(FROZEN_TS, FROZEN_TS + 3600, notes="trip")
     assert tmp_db.get_vacation_window(window.id) is window
     assert tmp_db.get_vacation_window(UNKNOWN_ID) is None
@@ -249,8 +276,6 @@ def test_get_vacation_window_found_and_not_found(tmp_db, frozen_clock):
 
 
 def _health_rows(repo) -> list[int]:
-    from greenhouse_core.models import PlantHealthDaily
-
     return sorted(r.plant_id for r in repo.session.query(PlantHealthDaily).all())
 
 
@@ -265,6 +290,7 @@ def test_delete_plant_removes_its_health_snapshots(tmp_db):
 
 
 def test_delete_cluster_removes_its_plants_health_snapshots(tmp_db):
+    """Deleting a cluster removes its plants' health snapshots, not other clusters'."""
     doomed, kept = tmp_db.add_cluster("Doomed"), tmp_db.add_cluster("Kept")
     doomed_plant, kept_plant = tmp_db.add_plant(doomed, "Fern"), tmp_db.add_plant(kept, "Cactus")
     for pid in (doomed_plant, kept_plant):

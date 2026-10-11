@@ -20,9 +20,24 @@ import importlib.resources
 import tomllib
 from pathlib import Path
 
+import dotenv
+import pytest
+import typer
+import uvicorn
 from sqlalchemy import create_engine
 
+import greenhouse_cli.tui.app as tui_app_mod
+import greenhouse_server.app as app_mod
 from golden import assert_golden_json
+from greenhouse_cli.main import app as cli_app
+from greenhouse_cli.tui.app import GreenhouseApp
+from greenhouse_core import database
+from greenhouse_core.database import _alembic_config
+from greenhouse_core.devices import profile
+from greenhouse_core.devices.profile import _PROFILES_DIR
+from greenhouse_core.plant_db import _DEFAULT_PLANT_DB_PATH
+from greenhouse_server.app import main as server_main
+from greenhouse_server.web import templating
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PACKAGES = {
@@ -37,6 +52,7 @@ def _pyproject(rel: str) -> dict:
 
 
 def test_pyproject_console_scripts_and_wheel_packages():
+    """Each package's pyproject declares the pinned console scripts and wheel packages."""
     observed = {}
     for dist, (rel, _pkg) in PACKAGES.items():
         data = _pyproject(rel)
@@ -72,6 +88,7 @@ def test_pyproject_console_scripts_and_wheel_packages():
 
 
 def test_installed_console_scripts_resolve():
+    """The installed console scripts resolve to the CLI app and the server entry point."""
     eps = {
         ep.name: ep
         for ep in importlib.metadata.entry_points(group="console_scripts")
@@ -81,23 +98,15 @@ def test_installed_console_scripts_resolve():
         "greenhouse": ("greenhouse_cli.main:app", "greenhouse-cli"),
         "greenhouse-server": ("greenhouse_server.app:main", "greenhouse-server"),
     }
-    import typer
-
-    from greenhouse_cli.main import app as cli_app
-    from greenhouse_server.app import main as server_main
 
     assert eps["greenhouse"].load() is cli_app
     assert isinstance(cli_app, typer.Typer)
     assert eps["greenhouse-server"].load() is server_main
 
 
-def test_server_main_wiring(clean_env, monkeypatch):
+@pytest.mark.usefixtures("clean_env")
+def test_server_main_wiring(monkeypatch):
     """``main()`` loads ``.env`` first, then builds Settings, the app, and runs uvicorn."""
-    import dotenv
-    import uvicorn
-
-    import greenhouse_server.app as app_mod
-
     calls: list[tuple] = []
     sentinel_app = object()
 
@@ -150,32 +159,27 @@ def test_package_data_matches_golden():
 
 def test_runtime_resolution_of_package_data():
     """The code paths that locate package data still point at existing files."""
-    from greenhouse_cli.tui.app import GreenhouseApp
-    from greenhouse_core import database, plant_db
-    from greenhouse_core.devices import profile
-    from greenhouse_server.web import templating
-
     bundled = importlib.resources.files("greenhouse_core") / "data" / "plant_database.json"
     assert bundled.is_file()
-    assert plant_db._DEFAULT_PLANT_DB_PATH == Path(str(bundled))
+    assert Path(str(bundled)) == _DEFAULT_PLANT_DB_PATH
 
     core_root = Path(database.__file__).resolve().parent
-    cfg = database._alembic_config(create_engine("sqlite://"))
+    cfg = _alembic_config(create_engine("sqlite://"))
     assert Path(cfg.config_file_name) == core_root / "alembic.ini"
     assert cfg.get_main_option("script_location") == str(core_root / "migrations")
     assert (core_root / "migrations" / "env.py").is_file()
     assert (core_root / "migrations" / "script.py.mako").is_file()
 
-    assert profile._PROFILES_DIR == core_root / "devices" / "profiles"
+    assert core_root / "devices" / "profiles" == _PROFILES_DIR
     for name in ("ik10pw.json", "tr301z.json"):
         assert isinstance(profile.load_profile_json(name), dict)
 
     assert templating.TEMPLATES_DIR.is_dir()
     assert (templating.TEMPLATES_DIR / "_base.html").is_file()
     static = templating.TEMPLATES_DIR.parent / "static"
-    assert (static / "app.css").is_file() and (static / "app.js").is_file()
+    assert (static / "app.css").is_file()
+    assert (static / "app.js").is_file()
 
     assert GreenhouseApp.CSS_PATH == "app.tcss"
-    import greenhouse_cli.tui.app as tui_app_mod
 
     assert (Path(tui_app_mod.__file__).parent / GreenhouseApp.CSS_PATH).is_file()

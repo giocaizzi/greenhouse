@@ -18,13 +18,16 @@ cutoff share the same wall clock; seed sensor data *after* freezing.
 
 from __future__ import annotations
 
+import time
+import warnings
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
+import pydantic
 import pytest
 
 from greenhouse_core.logic import IrrigationLogic
-from greenhouse_core.logic.decision import TriggerCode
+from greenhouse_core.logic.decision import Action, IrrigationDecision, Reason, TriggerCode
 from greenhouse_core.plant_db import get_plant_database
 
 
@@ -51,6 +54,7 @@ def _add_soil(db, cluster_id: int, moisture: float, *, device_id: str = "fake_so
 
 @pytest.fixture
 def logic(tmp_db):
+    """Provide an engine on the test database and the bundled plant database."""
     return IrrigationLogic(tmp_db, get_plant_database())
 
 
@@ -137,8 +141,8 @@ class TestSeasonalMultiplier:
     """``season_frequency_multiplier{,_outdoor}`` is consumed by the engine."""
 
     def test_indoor_tropical_winter_emits_seasonal_hold(self, tmp_db, logic, monkeypatch):
-        """Indoor Monstera in January → tropical winter multiplier 0.5× → SEASONAL_HOLD emitted."""
-        # 08:00 is inside tropical preferred window (07–10) so the window rule
+        """Indoor Monstera in January → tropical winter multiplier 0.5x → SEASONAL_HOLD emitted."""
+        # 08:00 is inside tropical preferred window (07-10) so the window rule
         # does not pre-empt the seasonal multiplier path.
         _freeze(monkeypatch, _ts(2026, 1, 15, 8))
         cluster_id = tmp_db.add_cluster("Indoor Monstera Room", environment="indoor")
@@ -152,7 +156,7 @@ class TestSeasonalMultiplier:
         assert TriggerCode.SEASONAL_HOLD in codes
 
     def test_outdoor_fruit_tree_summer_emits_seasonal_boost(self, tmp_db, logic, monkeypatch):
-        """Outdoor loquat in July → species-level outdoor 1.5× summer → SEASONAL_BOOST emitted."""
+        """Outdoor loquat in July → species-level outdoor 1.5x summer → SEASONAL_BOOST emitted."""
         # Loquat has preferred_water_hours_local=[5,9]; pick 07:00 to stay inside.
         _freeze(monkeypatch, _ts(2026, 7, 15, 7))
         cluster_id = tmp_db.add_cluster("Garden Loquat", environment="outdoor")
@@ -166,8 +170,8 @@ class TestSeasonalMultiplier:
         assert TriggerCode.SEASONAL_BOOST in codes
 
     def test_unknown_species_unknown_category_uses_builtin_indoor(self, tmp_db, logic, monkeypatch):
-        """No species + no category → builtin DEFAULT_SEASON_MULTIPLIER_INDOOR → winter 0.5× → SEASONAL_HOLD."""
-        # 08:00 in January — inside the global default 06–10 window so the
+        """No species + no category → builtin DEFAULT_SEASON_MULTIPLIER_INDOOR → winter 0.5x → SEASONAL_HOLD."""
+        # 08:00 in January — inside the global default 06-10 window so the
         # window rule does not pre-empt; the engine reaches the seasonal step.
         _freeze(monkeypatch, _ts(2026, 1, 15, 8))
         cluster_id = tmp_db.add_cluster("Default Indoor", environment="indoor")
@@ -186,9 +190,9 @@ class TestSeasonalMultiplier:
         assert TriggerCode.SEASONAL_HOLD in codes
 
     def test_winter_multiplier_lengthens_interval(self, tmp_db, logic, monkeypatch):
-        """Indoor tropical: winter (0.5× frequency) → interval STRICTLY GREATER than spring baseline.
+        """Indoor tropical: winter (0.5x frequency) → interval STRICTLY GREATER than spring baseline.
 
-        Multiplier semantics are *frequency × baseline* — water 0.5× as often
+        Multiplier semantics are *frequency x baseline* — water 0.5x as often
         means double the interval. This guards the inversion bug that previously
         had winter shortening the interval.
         """
@@ -203,14 +207,14 @@ class TestSeasonalMultiplier:
         )
 
         # Spring baseline (multiplier == 1.0 for tropical category) at 08:00,
-        # inside the tropical 07–10 window.
+        # inside the tropical 07-10 window.
         _freeze(monkeypatch, _ts(2026, 4, 15, 8))
         tmp_db.add_sensor_reading(sensor_id=sensor_id, soil_moisture=55.0)
         spring_decision = logic.decide_for_cluster(cluster_id)
         assert spring_decision is not None
         baseline_interval = spring_decision.interval_hours
 
-        # Same cluster, same sensors, January (winter 0.5× frequency → double interval).
+        # Same cluster, same sensors, January (winter 0.5x frequency → double interval).
         _freeze(monkeypatch, _ts(2026, 1, 15, 8))
         tmp_db.add_sensor_reading(sensor_id=sensor_id, soil_moisture=55.0)
         winter_decision = logic.decide_for_cluster(cluster_id)
@@ -220,7 +224,7 @@ class TestSeasonalMultiplier:
         assert winter_decision.interval_hours > baseline_interval, (
             f"winter interval {winter_decision.interval_hours}h must be GREATER than "
             f"spring baseline {baseline_interval}h — multiplier 0.5 = water HALF as often = "
-            f"interval should DOUBLE (got {winter_decision.interval_hours / baseline_interval:.2f}×)"
+            f"interval should DOUBLE (got {winter_decision.interval_hours / baseline_interval:.2f}\u00d7)"
         )
 
     def test_seasonal_reason_keeps_reasons_a_list(self, tmp_db, logic, monkeypatch):
@@ -230,8 +234,6 @@ class TestSeasonalMultiplier:
         ``PydanticSerializationUnexpectedValue`` (status endpoint, decision_logs
         persist) and broke any later ``add_reason`` with ``AttributeError``.
         """
-        import warnings
-
         _freeze(monkeypatch, _ts(2026, 1, 15, 8))
         cluster_id = tmp_db.add_cluster("Indoor Monstera Room", environment="indoor")
         tmp_db.add_plant(cluster_id=cluster_id, species="Monstera deliciosa", category="tropical")
@@ -317,8 +319,6 @@ class TestSeasonalMultiplier:
 
     def test_cooldown_beats_quiet_hours(self, tmp_db, logic, monkeypatch):
         """Cooldown is the earlier gate — it must take precedence over quiet hours."""
-        import time as _time
-
         _freeze(monkeypatch, _ts(2026, 5, 14, 2))
         cluster_id = tmp_db.add_cluster("Indoor Cooldown First", environment="indoor")
         tmp_db.add_plant(cluster_id=cluster_id, species="Monstera deliciosa", category="tropical")
@@ -333,7 +333,7 @@ class TestSeasonalMultiplier:
             action="start",
             triggered_by="auto",
             duration_minutes=3,
-            timestamp=int(_time.time()) - 3600,
+            timestamp=int(time.time()) - 3600,
         )
 
         decision = logic.decide_for_cluster(cluster_id)
@@ -342,9 +342,9 @@ class TestSeasonalMultiplier:
         assert decision.primary_code == TriggerCode.COOLDOWN
 
     def test_summer_multiplier_shortens_interval(self, tmp_db, logic, monkeypatch):
-        """Outdoor fruit tree: summer (1.5× frequency) → interval STRICTLY LESS than spring baseline.
+        """Outdoor fruit tree: summer (1.5x frequency) → interval STRICTLY LESS than spring baseline.
 
-        Multiplier semantics are *frequency × baseline* — water 1.5× as often
+        Multiplier semantics are *frequency x baseline* — water 1.5x as often
         means 2/3 the interval. Inverse of the winter case.
         """
         cluster_id = tmp_db.add_cluster("Garden Loquat Seasonal", environment="outdoor")
@@ -357,7 +357,7 @@ class TestSeasonalMultiplier:
             config={},
         )
 
-        # Spring baseline (outdoor 1.0× for fruit_tree). Loquat preferred 05–09;
+        # Spring baseline (outdoor 1.0x for fruit_tree). Loquat preferred 05-09;
         # 07:00 stays inside.
         _freeze(monkeypatch, _ts(2026, 4, 15, 7))
         tmp_db.add_sensor_reading(sensor_id=sensor_id, soil_moisture=55.0)
@@ -365,7 +365,7 @@ class TestSeasonalMultiplier:
         assert spring_decision is not None
         baseline_interval = spring_decision.interval_hours
 
-        # July — loquat outdoor summer multiplier 1.6× → interval shrinks.
+        # July — loquat outdoor summer multiplier 1.6x → interval shrinks.
         _freeze(monkeypatch, _ts(2026, 7, 15, 7))
         tmp_db.add_sensor_reading(sensor_id=sensor_id, soil_moisture=55.0)
         summer_decision = logic.decide_for_cluster(cluster_id)
@@ -383,15 +383,12 @@ class TestDecisionAssignmentValidation:
     """IrrigationDecision re-validates assignments (validate_assignment=True)."""
 
     def _decision(self):
-        from greenhouse_core.logic.decision import Action, IrrigationDecision
-
         return IrrigationDecision(
             cluster_id=1, evaluated_at=0, action=Action.SKIP, duration_minutes=0, interval_hours=12, confidence=0.5
         )
 
     def test_tuple_reasons_are_coerced_to_list(self):
-        from greenhouse_core.logic.decision import Reason, TriggerCode
-
+        """Assigning a tuple of reasons is coerced to a list by validation."""
         decision = self._decision()
         decision.reasons = (Reason(code=TriggerCode.SEASONAL_HOLD, message="x"),)
         assert isinstance(decision.reasons, list)
@@ -399,8 +396,7 @@ class TestDecisionAssignmentValidation:
         assert [r.code for r in decision.reasons] == [TriggerCode.SEASONAL_HOLD, TriggerCode.SEASONAL_BOOST]
 
     def test_wrong_type_fails_at_the_assignment(self):
-        import pydantic
-
+        """Assigning a wrongly typed value fails at the assignment, not later."""
         decision = self._decision()
         with pytest.raises(pydantic.ValidationError):
             decision.duration_minutes = "a lot"

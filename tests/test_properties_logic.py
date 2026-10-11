@@ -12,10 +12,11 @@ deterministic and fast; no assert depends on shrinking.
 from __future__ import annotations
 
 import copy
+import statistics
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from types import SimpleNamespace
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import pytest
 import time_machine
@@ -25,6 +26,8 @@ from hypothesis import strategies as st
 from engine_grid import plant_database
 from golden import FROZEN_INSTANT
 from greenhouse_core.constants import (
+    CLEANING_MAD_FLOOR,
+    CLEANING_MAD_SCALE,
     CLEANING_SHORT_SERIES_MIN_READINGS,
     DEFAULT_DURATION_MINUTES,
     DEFAULT_SEASON_MULTIPLIER_INDOOR,
@@ -34,7 +37,12 @@ from greenhouse_core.constants import (
     SENSOR_PHYSICAL_RANGES,
     TREND_MOISTURE_THRESHOLD,
 )
-from greenhouse_core.logic.cleaning import clean_readings, clean_readings_around, clean_readings_desc
+from greenhouse_core.logic.cleaning import (
+    _hampel_outlier_mask,
+    clean_readings,
+    clean_readings_around,
+    clean_readings_desc,
+)
 from greenhouse_core.logic.decision import Action, PerSensorSnapshot, SensorSnapshot, Trends, TriggerCode
 from greenhouse_core.logic.fallback import temperature_based_decision
 from greenhouse_core.logic.plant_needs import (
@@ -52,6 +60,15 @@ from greenhouse_core.logic.timing import (
     seasonal_multiplier,
 )
 from greenhouse_core.logic.trends import analyze_historical_trends
+
+# Independent oracle values (deliberately not imported from the engine, so the properties pin them).
+BUNDLED_MULTIPLIER_RANGE = (0.1, 1.6)  # smallest / largest seasonal multiplier in the bundled plant DB
+ORACLE_SATURATED_SOIL = 70  # over-watering needs the average above this
+ORACLE_STEEP_DECLINE = -10  # a declining trend steeper than this is "steep"
+ORACLE_HIGH_STARTS_PER_DAY = 3  # more starts per day than this over the week is "high"
+ORACLE_DAYS_PER_WEEK = 7
+ORACLE_FALLBACK_CONFIDENCE = 0.6
+MOISTURE_PERCENT_MAX = 100.0
 
 PROFILE = settings(
     derandomize=True,
@@ -134,6 +151,7 @@ def test_clean_readings_is_a_masked_subset_sorted_ascending(rows):
 @PROFILE
 @given(series())
 def test_clean_readings_desc_is_exact_reverse(rows):
+    """The DESC cleaned view is exactly the ASC view reversed (invariant 10 ordering)."""
     assert clean_readings_desc(rows) == list(reversed(clean_readings(rows)))
 
 
@@ -153,6 +171,7 @@ def test_clean_readings_short_series_only_range_gates(rows):
 @PROFILE
 @given(st.floats(0, 100, allow_nan=False), st.integers(0, 40))
 def test_clean_readings_flat_run_is_untouched(level, n):
+    """Cleaning never alters a perfectly flat series."""
     rows = [Row(timestamp=i * 600, soil_moisture=level) for i in range(n)]
 
     assert [c.soil_moisture for c in clean_readings(rows)] == [level] * n
@@ -161,12 +180,14 @@ def test_clean_readings_flat_run_is_untouched(level, n):
 @PROFILE
 @given(series(), st.integers(0, 10**6))
 def test_clean_readings_around_preserves_partition_and_matches_joint_cleaning(rows, split_ts):
+    """Cleaning around a split keeps each side's rows and equals cleaning the joined series."""
     before = [r for r in rows if r.timestamp < split_ts]
     after = [r for r in rows if r.timestamp >= split_ts]
 
     cleaned_before, cleaned_after = clean_readings_around(before, after)
 
-    assert len(cleaned_before) == len(before) and len(cleaned_after) == len(after)
+    assert len(cleaned_before) == len(before)
+    assert len(cleaned_after) == len(after)
     assert cleaned_before + cleaned_after == clean_readings(rows)
 
 
@@ -198,7 +219,7 @@ _NORTH |= {6: "summer", 7: "summer", 8: "summer", 9: "autumn", 10: "autumn", 11:
 def _local_month(ts, tz):
     try:
         zone = ZoneInfo(tz) if tz else ZoneInfo("UTC")
-    except Exception:  # bad names fall back to UTC in production too
+    except ZoneInfoNotFoundError:  # bad names fall back to UTC in production too
         zone = ZoneInfo("UTC")
     return datetime.fromtimestamp(ts, tz=zone).month
 
@@ -206,6 +227,7 @@ def _local_month(ts, tz):
 @PROFILE
 @given(st.integers(_YEAR_START, _YEAR_END - 1), st.sampled_from(TZS))
 def test_season_for_is_the_meteorological_season_of_the_local_month(ts, tz):
+    """The season is the meteorological season of the local month, shifted six months in the south."""
     month = _local_month(ts, tz)
 
     assert season_for(ts, tz_name=tz) == _NORTH[month]
@@ -244,6 +266,7 @@ def test_season_for_hourly_census_over_2026(tz, expected):
     ],
 )
 def test_season_for_boundaries_are_local_midnight(local, season, utc_season):
+    """Season boundaries fall at local midnight, so the same instant can differ by timezone."""
     ts = int(datetime(*local, tzinfo=ZoneInfo("Europe/Rome")).timestamp())
 
     assert season_for(ts, tz_name="Europe/Rome") == season
@@ -261,6 +284,7 @@ _multiplier_table = st.dictionaries(st.sampled_from(SEASONS), _maybe(st.floats(0
     _maybe(_multiplier_table),
 )
 def test_seasonal_multiplier_precedence_plant_then_category_then_builtin(season, env, plant, category):
+    """The seasonal multiplier prefers the plant override, then the category, then the built-in table."""
     result = seasonal_multiplier(season, environment=env, plant_override=plant, category_override=category)
 
     assert isinstance(result, float)
@@ -277,9 +301,9 @@ def test_seasonal_multiplier_range_over_bundled_plant_data():
     """Every multiplier reachable from the bundled plant DB lies in [0.1, 1.6]."""
     pdb = plant_database()
     seen = set()
-    species = pdb.list_species() + ["Plantus fictitius"]
+    species = [*pdb.list_species(), "Plantus fictitius"]
     for name in species:
-        for category in pdb.list_categories() + [None]:
+        for category in [*pdb.list_categories(), None]:
             care = pdb.get_care_data(species=name, category=category)
             for env, key in (
                 ("indoor", "season_frequency_multiplier"),
@@ -295,18 +319,21 @@ def test_seasonal_multiplier_range_over_bundled_plant_data():
                         )
                     )
 
-    assert min(seen) == 0.1 and max(seen) == 1.6
-    assert all(0.1 <= m <= 1.6 for m in seen)
+    assert min(seen) == BUNDLED_MULTIPLIER_RANGE[0]
+    assert max(seen) == BUNDLED_MULTIPLIER_RANGE[1]
+    assert all(BUNDLED_MULTIPLIER_RANGE[0] <= m <= BUNDLED_MULTIPLIER_RANGE[1] for m in seen)
 
 
 @PROFILE
 @given(st.integers(0, 23), st.integers(0, 23), st.integers(_YEAR_START, _YEAR_END), st.sampled_from(TZS))
 def test_quiet_hours_window_and_its_complement_partition_the_day(start, end, ts, tz):
+    """A quiet-hours window and its swapped complement cover every hour exactly once."""
     inside = is_within_quiet_hours(start_hour=start, end_hour=end, now_unix=ts, tz_name=tz)
     swapped = is_within_quiet_hours(start_hour=end, end_hour=start, now_unix=ts, tz_name=tz)
 
     if start == end:
-        assert inside is False and swapped is False
+        assert inside is False
+        assert swapped is False
     else:
         assert inside != swapped
     assert is_within_quiet_hours(start_hour=None, end_hour=end, now_unix=ts, tz_name=tz) is False
@@ -328,6 +355,7 @@ def test_quiet_hours_window_and_its_complement_partition_the_day(start, end, ts,
     st.sampled_from(TZS),
 )
 def test_irrigation_window_is_any_matching_row_and_no_rows_means_allowed(windows, ts, tz):
+    """Any matching window allows irrigation, and no windows allows every hour (issue #83)."""
     result = is_within_irrigation_window(windows, now_unix=ts, tz_name=tz)
 
     if not windows:
@@ -344,25 +372,36 @@ def test_irrigation_window_is_any_matching_row_and_no_rows_means_allowed(windows
 class FakeRepo:
     """Minimal read-only repository double for the trend / stress helpers."""
 
-    def __init__(self, plants=(), readings=None, events=(), irrigator=True):
+    def __init__(self, plants=(), readings=None, events=(), *, irrigator=True):
+        """Serve the given plants, per-sensor readings and events; ``irrigator`` toggles the pump."""
         self._plants = list(plants)
         self._readings = readings or {}
         self._events = list(events)
         self._irrigator = SimpleNamespace(id=1) if irrigator else None
 
     def get_plants_in_cluster(self, cluster_id):
+        """Return the configured plants."""
+        del cluster_id  # signature mirrors the real one; unused by this fake
         return self._plants
 
     def get_sensors_in_cluster(self, cluster_id):
+        """Return one sensor per configured reading series."""
+        del cluster_id  # signature mirrors the real one; unused by this fake
         return [SimpleNamespace(id=sid) for sid in sorted(self._readings)]
 
     def get_recent_readings(self, sensor_id, hours=24):
+        """Return a sensor's readings newest first, like the real repository."""
+        del hours  # signature mirrors the real one; unused by this fake
         return sorted(self._readings[sensor_id], key=lambda r: r.timestamp, reverse=True)
 
     def get_irrigator_for_cluster(self, cluster_id):
+        """Return the pump, or None when the cluster has none."""
+        del cluster_id  # signature mirrors the real one; unused by this fake
         return self._irrigator
 
     def get_recent_events(self, irrigator_id, hours=24):
+        """Return the configured irrigation events."""
+        del irrigator_id, hours  # signature mirrors the real one; unused by this fake
         return self._events
 
 
@@ -413,23 +452,27 @@ def test_detect_stress_conditions_rules(plants, snapshot, trends):
     assert (stress.water_warning is not None) == bool(snapshot.water_warnings)
     soil = snapshot.avg_soil_moisture
     expect_over = (
-        soil is not None and soil > 70 and (trends.irrigation_frequency_high or trends.soil_moisture_trend == "rising")
+        soil is not None
+        and soil > ORACLE_SATURATED_SOIL
+        and (trends.irrigation_frequency_high or trends.soil_moisture_trend == "rising")
     )
     assert (stress.over_watering is not None) == expect_over
     # Water stress: per sensor, its current reading against its own plant's band (unlinked or unknown plant →
-    # the cluster's widest band); critical = min(30, band min − 15), low = critical + 10. Over-watering or any
+    # the cluster's widest band); critical = min(30, band min - 15), low = critical + 10. Over-watering or any
     # sensor above its own band vetoes it.
     care = [plant_database().get_care_data(species=p.species, category=p.category) for p in plants]
     ranges = [moisture_target_range(c) for c in care]
     widest = (min(r[0] for r in ranges), max(r[1] for r in ranges)) if ranges else (45.0, 65.0)
     own = dict(zip((p.id for p in plants), ranges, strict=True))
     current = [(s.latest_soil_moisture, own.get(s.plant_id, widest)) for s in snapshot.per_sensor]
-    steep = trends.soil_moisture_trend == "declining" and trends.soil_moisture_delta < -10
+    steep = trends.soil_moisture_trend == "declining" and trends.soil_moisture_delta < ORACLE_STEEP_DECLINE
     dry = any(v < min(30.0, lo - 15) or (steep and v < min(30.0, lo - 15) + 10) for v, (lo, _) in current)
     vetoed = expect_over or any(v > hi for v, (_, hi) in current)
     assert (stress.water_stress is not None) == (dry and not vetoed)
     if not plants:
-        assert stress.heat_stress is None and stress.low_env_humidity is None and stress.low_light is None
+        assert stress.heat_stress is None
+        assert stress.low_env_humidity is None
+        assert stress.low_light is None
     assert stress.learning_alerts == []
 
 
@@ -454,6 +497,7 @@ _trend_series = st.lists(
     st.booleans(),
 )
 def test_analyze_historical_trends_labels_are_consistent(sensor_series, events, has_irrigator):
+    """Trend labels always agree with the deltas and cadence flags they are derived from."""
     readings = {
         sid: [Row(timestamp=ts, soil_moisture=soil, temperature=temp) for ts, soil, temp in s]
         for sid, s in enumerate(sensor_series, start=1)
@@ -478,9 +522,10 @@ def test_analyze_historical_trends_labels_are_consistent(sensor_series, events, 
     assert not (trends.irrigation_frequency_low and trends.irrigation_frequency_high)
     starts = [e for e in events if e.action == "start" and e.duration_minutes]
     if not has_irrigator or not starts:
-        assert not trends.irrigation_frequency_low and not trends.irrigation_frequency_high
+        assert not trends.irrigation_frequency_low
+        assert not trends.irrigation_frequency_high
     else:
-        assert trends.irrigation_frequency_high == (len(starts) / 7 > 3)
+        assert trends.irrigation_frequency_high == (len(starts) / 7 > ORACLE_HIGH_STARTS_PER_DAY)
 
 
 # ── fallback / plant_needs ───────────────────────────────────────────────────
@@ -489,13 +534,14 @@ def test_analyze_historical_trends_labels_are_consistent(sensor_series, events, 
 @PROFILE
 @given(st.floats(-40, 60, allow_nan=False), st.sampled_from(["low", "medium", "high", "unknown"]))
 def test_temperature_fallback_always_irrigates_within_interval_bounds(temp, needs):
+    """The temperature fallback always irrigates for the default duration within the interval bounds."""
     decision = temperature_based_decision(None, 1, 0, temp=temp, water_needs=needs, config=None)
 
     assert decision.action is Action.IRRIGATE
     assert decision.duration_minutes == DEFAULT_DURATION_MINUTES
     assert MIN_INTERVAL_HOURS <= decision.interval_hours <= MAX_INTERVAL_HOURS
     assert [r.code for r in decision.reasons] == [TriggerCode.TEMP_FALLBACK]
-    assert decision.confidence == 0.6
+    assert decision.confidence == ORACLE_FALLBACK_CONFIDENCE
 
 
 @PROFILE
@@ -527,9 +573,11 @@ def test_temperature_fallback_without_temp_or_config_is_no_data(tmp_db):
 @PROFILE
 @given(st.text(max_size=12))
 def test_parse_moisture_target_never_raises(text):
+    """Any text parses to a float band without raising."""
     low, high = parse_moisture_target(text)
 
-    assert isinstance(low, float) and isinstance(high, float)
+    assert isinstance(low, float)
+    assert isinstance(high, float)
 
 
 @pytest.mark.parametrize(
@@ -537,6 +585,7 @@ def test_parse_moisture_target_never_raises(text):
     [("45-65", (45.0, 65.0)), ("30-50", (30.0, 50.0)), ("", (45.0, 65.0)), ("abc", (45.0, 65.0)), ("70", (45.0, 65.0))],
 )
 def test_parse_moisture_target_examples(text, expected):
+    """Documented target formats parse to the expected band."""
     assert parse_moisture_target(text) == expected
 
 
@@ -553,9 +602,10 @@ def test_parse_moisture_target_normalises_inverted_and_rejects_out_of_range():
 @PROFILE
 @given(st.text(max_size=12))
 def test_parse_moisture_target_is_always_an_ordered_physical_band(text):
+    """The parsed band is always ordered and within 0-100 %."""
     low, high = parse_moisture_target(text)
 
-    assert 0.0 <= low <= high <= 100.0
+    assert 0.0 <= low <= high <= MOISTURE_PERCENT_MAX
 
 
 _care = st.lists(
@@ -576,6 +626,7 @@ _care = st.lists(
 @PROFILE
 @given(_care)
 def test_plant_needs_aggregates(care):
+    """Aggregated water needs are a known level and the temperature range spans every plant."""
     assert analyze_water_needs(care) in ("low", "medium", "high")
     temp_range = get_ideal_temp_range(care)
     mins = [d["ideal_temp_min_c"] for d in care if d.get("ideal_temp_min_c") is not None]
@@ -595,16 +646,13 @@ def test_plant_needs_zero_is_a_real_bound():
 
 
 def test_analyze_water_needs_unknown_level_counts_as_medium():
+    """Unknown water-need levels (and no plants) count as medium."""
     assert analyze_water_needs([{"water_needs": "extreme"}, {"water_needs": "high"}]) == "medium"
     assert analyze_water_needs([]) == "medium"
 
 
 def _plain_hampel_mask(values, radius=3, n_sigma=3.0):
     """The textbook centered Hampel test, without the newest-end step confirmation."""
-    import statistics
-
-    from greenhouse_core.constants import CLEANING_MAD_FLOOR, CLEANING_MAD_SCALE
-
     mask = []
     for i, v in enumerate(values):
         window = values[max(0, i - radius) : i + radius + 1]
@@ -637,10 +685,6 @@ def test_step_confirmation_only_spares_points_their_followers_back(series_and_gl
     So the cleaned minimum can only drop below plain Hampel's for a genuine,
     confirmed level change — never for a glitch sitting beside one.
     """
-    import statistics
-
-    from greenhouse_core.logic.cleaning import _hampel_outlier_mask
-
     values, glitches = series_and_glitches
     for index, value in glitches:
         if index < len(values):

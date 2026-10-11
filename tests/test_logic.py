@@ -5,16 +5,34 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 import pytest
+import time_machine
 
 from fake_data import FAKE_CLUSTER_NAME, FAKE_PLANT_SPECIES, FAKE_SENSOR_ID
+from greenhouse_core.constants import MAX_DURATION_MINUTES, MAX_INTERVAL_HOURS, MIN_INTERVAL_HOURS
 from greenhouse_core.logic import IrrigationLogic
-from greenhouse_core.logic.decision import TriggerCode
+from greenhouse_core.logic.decision import Action, IrrigationDecision, SensorSnapshot, Trends, TriggerCode
+from greenhouse_core.logic.engine import _apply_humidity_adjustment, _apply_light_adjustment, _apply_trend_adjustment
+from greenhouse_core.logic.timing import environment_for
+from greenhouse_core.logic.trends import analyze_historical_trends
 from greenhouse_core.plant_db import get_plant_database
 
 # Wed 2026-04-08 07:00 UTC — a fixed daytime instant outside any quiet-hours
 # window. These tests configure no IrrigationWindow rows, so `_apply_window_rule`
 # is a no-op (issue #83) and the soil / temp / light / trend rules under test
 # fire regardless of the hour; the pin only keeps seasonal logic deterministic.
+# Bounds the engine's decisions must respect in the scenarios below (hours / confidence).
+COLD_FALLBACK_MIN_INTERVAL_H = 18
+HOT_FALLBACK_MAX_INTERVAL_H = 8
+MODERATE_FALLBACK_INTERVAL_H = (10, 14)  # exclusive bounds
+HIGH_NEEDS_MAX_INTERVAL_H = 8
+LOW_NEEDS_MIN_INTERVAL_H = 14
+BASELINE_INTERVAL_H = 12  # the adjustment tests compare against the 12 h baseline
+DRY_SOIL_MIN_CONFIDENCE = 0.8
+PRESENT_ZERO_MIN_CONFIDENCE = 0.3
+CONFIDENCE_SPLIT = 0.7  # sensor-backed decisions score above it; fallbacks and conflicts below
+NO_DATA_MAX_CONFIDENCE = 0.3
+EMERGENCY_MIN_CONFIDENCE = 0.9
+
 _FROZEN_TS = int(datetime(2026, 4, 8, 7, 0, tzinfo=ZoneInfo("UTC")).timestamp())
 
 
@@ -26,13 +44,14 @@ class TestIrrigationLogic:
         """Pin ``time.time`` so the engine's window gate is deterministic.
 
         Without this, tests that don't configure an IrrigationWindow row hit the
-        default 06–10 preferred-hours fallback and skip with OUTSIDE_WINDOW
+        default 06-10 preferred-hours fallback and skip with OUTSIDE_WINDOW
         whenever the wall clock is outside that range.
         """
         monkeypatch.setattr(time, "time", lambda: _FROZEN_TS)
 
     @pytest.fixture(autouse=True)
     def setup(self, tmp_db):
+        """Seed one cluster with a medium-needs plant and its ideal ranges for each test."""
         self.db = tmp_db
         self.logic = IrrigationLogic(self.db, get_plant_database())
         self.cluster_id = self.db.add_cluster(FAKE_CLUSTER_NAME)
@@ -64,7 +83,7 @@ class TestIrrigationLogic:
 
         assert decision is not None
         assert decision.action.value == "irrigate"
-        assert decision.interval_hours > 18
+        assert decision.interval_hours > COLD_FALLBACK_MIN_INTERVAL_H
         assert "temperature-based" in decision.reason_text
 
     def test_temperature_fallback_hot(self):
@@ -73,7 +92,7 @@ class TestIrrigationLogic:
 
         assert decision is not None
         assert decision.action.value == "irrigate"
-        assert decision.interval_hours < 8
+        assert decision.interval_hours < HOT_FALLBACK_MAX_INTERVAL_H
         assert "temperature-based" in decision.reason_text
 
     def test_temperature_fallback_moderate(self):
@@ -82,8 +101,8 @@ class TestIrrigationLogic:
 
         assert decision is not None
         assert decision.action.value == "irrigate"
-        assert decision.interval_hours > 10
-        assert decision.interval_hours < 14
+        assert decision.interval_hours > MODERATE_FALLBACK_INTERVAL_H[0]
+        assert decision.interval_hours < MODERATE_FALLBACK_INTERVAL_H[1]
 
     def test_soil_moisture_dry(self):
         """Dry soil triggers irrigation."""
@@ -91,7 +110,7 @@ class TestIrrigationLogic:
         decision = self.logic.decide_for_cluster(self.cluster_id)
 
         assert decision.action.value == "irrigate"
-        assert decision.confidence > 0.8
+        assert decision.confidence > DRY_SOIL_MIN_CONFIDENCE
         reason_lower = decision.reason_text.lower()
         assert "soil" in reason_lower or "stress" in reason_lower
 
@@ -106,7 +125,7 @@ class TestIrrigationLogic:
 
         assert decision.action.value == "irrigate"
         # NO_DATA fallback would report ~0.2 confidence; a real reading is higher.
-        assert decision.confidence > 0.3
+        assert decision.confidence > PRESENT_ZERO_MIN_CONFIDENCE
 
     def test_soil_moisture_adequate(self):
         """Adequate soil moisture skips irrigation."""
@@ -119,13 +138,13 @@ class TestIrrigationLogic:
     def test_confidence_without_sensors(self):
         """Temperature-based decision has lower confidence."""
         decision = self.logic.decide_for_cluster(self.cluster_id, current_temp=22.0)
-        assert decision.confidence < 0.7
+        assert decision.confidence < CONFIDENCE_SPLIT
 
     def test_confidence_with_sensors(self):
         """Sensor-based decision has higher confidence."""
         self._add_soil_sensor(moisture=30.0)
         decision = self.logic.decide_for_cluster(self.cluster_id)
-        assert decision.confidence > 0.7
+        assert decision.confidence > CONFIDENCE_SPLIT
 
     def test_high_water_needs_adjustment(self):
         """High water needs plants get more frequent irrigation."""
@@ -137,7 +156,7 @@ class TestIrrigationLogic:
             water_needs="high",
         )
         decision = self.logic.decide_for_cluster(cluster_id, current_temp=22.0)
-        assert decision.interval_hours <= 8
+        assert decision.interval_hours <= HIGH_NEEDS_MAX_INTERVAL_H
 
     def test_water_needs_emits_reason_in_sensor_path(self):
         """High water needs nudges dosage AND records an auditable WATER_NEEDS_HIGH reason."""
@@ -174,7 +193,7 @@ class TestIrrigationLogic:
             water_needs="low",
         )
         decision = self.logic.decide_for_cluster(cluster_id, current_temp=22.0)
-        assert decision.interval_hours > 14
+        assert decision.interval_hours > LOW_NEEDS_MIN_INTERVAL_H
 
     def test_no_plants_returns_skip(self):
         """Cluster with no plants returns skip action."""
@@ -248,7 +267,7 @@ class TestIrrigationLogic:
             sensor_type="tuya.tr301z",
             config={},
         )
-        # Monstera target is 45–60; with CONFLICT_WET_MARGIN=5 the wet band is
+        # Monstera target is 45-60; with CONFLICT_WET_MARGIN=5 the wet band is
         # >55, so 60 is a genuinely wet sensor against a dry 15 → true conflict.
         self.db.add_sensor_reading(sensor_id=s_b, soil_moisture=60.0)
 
@@ -256,15 +275,15 @@ class TestIrrigationLogic:
         assert decision.action.value == "irrigate"
         assert decision.duration_minutes == 1  # Short burst
         assert "conflict" in decision.reason_text.lower()
-        assert decision.confidence < 0.7
+        assert decision.confidence < CONFIDENCE_SPLIT
 
     def test_healthy_spread_is_not_flagged_as_conflict(self):
         """A normal spread within the band must NOT be a conflict (driest drives it).
 
-        Unknown species + no category → default 45–65 target. Driest 44 (just
-        below min) with wettest 56 used to trip the old wet band (target_max−10
+        Unknown species + no category → default 45-65 target. Driest 44 (just
+        below min) with wettest 56 used to trip the old wet band (target_max-10
         = 55 → 56>55), forcing a spurious short-burst. With the re-derived band
-        (target_max−5 = 60 → 56<60) it is treated as ordinarily dry instead.
+        (target_max-5 = 60 → 56<60) it is treated as ordinarily dry instead.
         """
         cluster_id = self.db.add_cluster("Healthy Spread Cluster")
         self.db.add_plant(
@@ -358,7 +377,7 @@ class TestIrrigationLogic:
         """No sensors and no temp returns low confidence skip."""
         decision = self.logic.decide_for_cluster(self.cluster_id)
         assert decision.action.value == "skip"
-        assert decision.confidence <= 0.3
+        assert decision.confidence <= NO_DATA_MAX_CONFIDENCE
 
     # ── Humidity-based decision tests ───────────────────────────────────────
 
@@ -389,7 +408,7 @@ class TestIrrigationLogic:
         assert decision is not None
         assert "dry air" in decision.reason_text.lower()
         # Should reduce interval by 3 hours from the default
-        assert decision.interval_hours < 12
+        assert decision.interval_hours < BASELINE_INTERVAL_H
 
     def test_humid_air_increases_interval(self):
         """High ambient humidity increases interval (less transpiration)."""
@@ -399,7 +418,7 @@ class TestIrrigationLogic:
 
         assert decision is not None
         assert "humidity" in decision.reason_text.lower()
-        assert decision.interval_hours > 12
+        assert decision.interval_hours > BASELINE_INTERVAL_H
 
     def test_moderately_dry_air_adjustment(self):
         """Slightly dry air has smaller frequency adjustment."""
@@ -420,7 +439,7 @@ class TestIrrigationLogic:
 
         assert decision is not None
         assert "bright" in decision.reason_text.lower()
-        assert decision.interval_hours < 12
+        assert decision.interval_hours < BASELINE_INTERVAL_H
 
     def test_very_dark_light_decreases_frequency(self):
         """Very dark conditions increase interval."""
@@ -430,7 +449,7 @@ class TestIrrigationLogic:
 
         assert decision is not None
         assert "light" in decision.reason_text.lower()
-        assert decision.interval_hours > 12
+        assert decision.interval_hours > BASELINE_INTERVAL_H
 
     # ── Stress detection tests ──────────────────────────────────────────────
 
@@ -451,7 +470,7 @@ class TestIrrigationLogic:
         decision = self.logic.decide_for_cluster(self.cluster_id)
 
         assert decision.action.value == "irrigate"
-        assert decision.confidence >= 0.9
+        assert decision.confidence >= EMERGENCY_MIN_CONFIDENCE
         assert "sensor alert" in decision.reason_text.lower()
 
     def test_critical_moisture_triggers_stress(self):
@@ -460,7 +479,7 @@ class TestIrrigationLogic:
         decision = self.logic.decide_for_cluster(self.cluster_id)
 
         assert decision.action.value == "irrigate"
-        assert decision.confidence >= 0.9
+        assert decision.confidence >= EMERGENCY_MIN_CONFIDENCE
         stress = decision.stress_indicators.model_dump(exclude_none=True)
         assert "water_stress" in stress
 
@@ -623,6 +642,7 @@ class TestCooldownSemantics:
 
     @pytest.fixture(autouse=True)
     def setup(self, tmp_db):
+        """Seed a cluster with a plant and an irrigator to exercise the cooldown."""
         self.db = tmp_db
         self.logic = IrrigationLogic(self.db, get_plant_database())
         self.cluster_id = self.db.add_cluster("Cooldown Semantics")
@@ -658,8 +678,6 @@ class TestCooldownSemantics:
 
     def test_schedule_updated_does_not_inflate_frequency_trend(self):
         """Many `schedule_updated` events must not flag a high-frequency cadence."""
-        from greenhouse_core.logic.trends import analyze_historical_trends
-
         # 28 config changes over the 7-day window — would be avg 4/day if counted.
         for i in range(28):
             self.db.add_irrigation_event(
@@ -684,6 +702,7 @@ class _StubWeatherClient:
         self._current = current or {}
 
     def get_forecast(self, hours: int = 6) -> dict:
+        del hours  # signature mirrors the real one; unused by this fake
         return {"precipitation_mm": self._precip, "max_temp": 20.0, "min_temp": 10.0, "avg_humidity": 70.0}
 
     def get_current(self) -> dict:
@@ -695,6 +714,7 @@ class TestWeatherSkipRule:
 
     @pytest.fixture(autouse=True)
     def setup(self, tmp_db):
+        """Bind the test database and the plant database for each test."""
         self.db = tmp_db
         self.plant_db = get_plant_database()
 
@@ -780,8 +800,6 @@ class TestWeatherSkipRule:
 
 
 def _bare_decision(*, interval: int, duration: int, **snapshot):
-    from greenhouse_core.logic.decision import Action, IrrigationDecision, SensorSnapshot, Trends
-
     return IrrigationDecision(
         cluster_id=1,
         evaluated_at=0,
@@ -796,20 +814,17 @@ def _bare_decision(*, interval: int, duration: int, **snapshot):
 
 def test_clamped_adjustments_report_the_applied_delta_not_the_nominal_step():
     """B-14: at the interval/duration bounds the reason's delta is what moved (0 or the remainder)."""
-    from greenhouse_core.constants import MAX_DURATION_MINUTES, MAX_INTERVAL_HOURS, MIN_INTERVAL_HOURS
-    from greenhouse_core.logic import engine
-
     dry_air = _bare_decision(interval=MIN_INTERVAL_HOURS + 1, duration=2, avg_env_humidity=5.0)
-    engine._apply_humidity_adjustment(dry_air, (60.0, 80.0))
+    _apply_humidity_adjustment(dry_air, (60.0, 80.0))
     assert dry_air.interval_hours == MIN_INTERVAL_HOURS
     assert [(r.code, r.interval_delta) for r in dry_air.reasons] == [(TriggerCode.HUMIDITY_VERY_LOW, -1)]
 
     bright = _bare_decision(interval=MIN_INTERVAL_HOURS, duration=MAX_DURATION_MINUTES, avg_light=200_000.0)
-    engine._apply_light_adjustment(bright, 6)
+    _apply_light_adjustment(bright, 6)
     assert [(r.interval_delta, r.duration_delta) for r in bright.reasons] == [(0, 0)]
 
     rising = _bare_decision(interval=MAX_INTERVAL_HOURS - 1, duration=MAX_DURATION_MINUTES)
-    engine._apply_trend_adjustment(rising)
+    _apply_trend_adjustment(rising)
     assert [(r.code, r.interval_delta, r.duration_delta) for r in rising.reasons] == [
         (TriggerCode.TREND_MOISTURE_RISING, 1, 0),
         (TriggerCode.UNDERWATERING_PATTERN, 0, 0),
@@ -818,7 +833,7 @@ def test_clamped_adjustments_report_the_applied_delta_not_the_nominal_step():
 
 def test_fallback_uses_a_global_schedule_without_a_cluster_config_row(tmp_db, frozen_clock):
     """B-24: no sensor data, no ``irrigation_config`` row, but a global schedule → CONFIG_FALLBACK, not NO_DATA."""
-    from greenhouse_core.logic.decision import Action
+    del frozen_clock  # side-effect fixture (the clock is frozen)
 
     cid = tmp_db.add_cluster("Global schedule only")
     tmp_db.add_plant(cluster_id=cid, species=FAKE_PLANT_SPECIES)
@@ -837,11 +852,9 @@ def test_light_thresholds_use_the_preferences_timezone_month(tmp_db):
     """Light thresholds and seasons share one clock: the month in the preferences timezone.
 
     2026-09-30 23:30 UTC is 2026-10-01 08:30 in Tokyo. 600 lux is below September's
-    bright threshold (800 × 0.83 = 664) but above October's (800 × 0.70 = 560), so the
+    bright threshold (800 x 0.83 = 664) but above October's (800 x 0.70 = 560), so the
     LIGHT_BRIGHT reason appears only when the local month drives the factor.
     """
-    import time_machine
-
     cid = tmp_db.add_cluster("Tokyo")
     tmp_db.add_plant(cluster_id=cid, species=FAKE_PLANT_SPECIES)
     tmp_db.update_preferences(timezone="Asia/Tokyo")
@@ -862,7 +875,7 @@ def test_outdoorness_is_one_rule_for_rain_and_seasons(tmp_db, frozen_clock, envi
     A "greenhouse" (or unset) cluster used to get the rain skip but the indoor seasonal
     table; it is now sheltered for both.
     """
-    from greenhouse_core.logic.timing import environment_for
+    del frozen_clock  # side-effect fixture (the clock is frozen)
 
     cid = tmp_db.add_cluster("Env", environment=environment)
     tmp_db.add_plant(cluster_id=cid, species=FAKE_PLANT_SPECIES)
@@ -890,6 +903,7 @@ def _critical_cluster(db):
 
 def test_emergency_triggers_obey_irrigation_windows(tmp_db, frozen_clock):
     """Owner decision: critical stress no longer bypasses the cluster's windows (10:00 UTC, window 05-09)."""
+    del frozen_clock  # side-effect fixture (the clock is frozen)
     cid, _ = _critical_cluster(tmp_db)
     logic = IrrigationLogic(tmp_db, get_plant_database())
     assert logic.decide_for_cluster(cid).primary_code is TriggerCode.WATER_STRESS
@@ -902,6 +916,7 @@ def test_emergency_triggers_obey_irrigation_windows(tmp_db, frozen_clock):
 
 def test_emergency_triggers_obey_the_vacation_budget(tmp_db, frozen_clock):
     """Owner decision: a critical-stress run during a vacation is rationed like any other run."""
+    del frozen_clock  # side-effect fixture (the clock is frozen)
     cid, irr = _critical_cluster(tmp_db)
     tmp_db.update_irrigator(irr, reservoir_l=0.5, flow_rate_l_per_min=1.0)
     now = int(time.time())
@@ -915,8 +930,11 @@ def test_emergency_triggers_obey_the_vacation_budget(tmp_db, frozen_clock):
 
 
 def test_water_warning_reads_only_the_newest_reading_per_sensor(tmp_db, frozen_clock):
-    """The newest reading that carries ``water_warning`` decides: an old True followed by a newer False does not
-    trigger, and a newer row without the flag changes nothing."""
+    """The newest reading that carries ``water_warning`` decides.
+
+    An old True followed by a newer False does not trigger, and a newer row without the flag changes nothing.
+    """
+    del frozen_clock  # side-effect fixture (the clock is frozen)
     cid = tmp_db.add_cluster("Warn")
     tmp_db.add_plant(cluster_id=cid, species="Monstera deliciosa", category="tropical")
     sid = tmp_db.add_sensor(cluster_id=cid, tuya_device_id=FAKE_SENSOR_ID, name="S", sensor_type="x", config={})
@@ -939,8 +957,11 @@ def test_water_warning_reads_only_the_newest_reading_per_sensor(tmp_db, frozen_c
 
 
 def test_stale_water_warning_does_not_trigger(tmp_db, frozen_clock):
-    """A flag last reported longer ago than SENSOR_READING_STALE_SECONDS comes from a silent sensor: it does not
-    irrigate, while fresh sensors keep deciding (one-line staleness rule shared with the soil value)."""
+    """A flag older than SENSOR_READING_STALE_SECONDS comes from a silent sensor and does not irrigate.
+
+    Fresh sensors keep deciding (one-line staleness rule shared with the soil value).
+    """
+    del frozen_clock  # side-effect fixture (the clock is frozen)
     cid = tmp_db.add_cluster("Stale alarm")
     tmp_db.add_plant(cluster_id=cid, species="Monstera deliciosa", category="tropical")
     silent = tmp_db.add_sensor(cluster_id=cid, tuya_device_id=FAKE_SENSOR_ID, name="Silent", sensor_type="x", config={})
@@ -960,6 +981,7 @@ def test_stale_water_warning_does_not_trigger(tmp_db, frozen_clock):
 
 def test_device_soil_dry_alarm_on_wet_soil(tmp_db, frozen_clock):
     """The alarm irrigates on normal soil; above the band it is only noted; detected over-watering vetoes it."""
+    del frozen_clock  # side-effect fixture (the clock is frozen)
     cid = tmp_db.add_cluster("Alarm")
     tmp_db.add_plant(cluster_id=cid, species="Monstera deliciosa", category="tropical")
     sid = tmp_db.add_sensor(cluster_id=cid, tuya_device_id=FAKE_SENSOR_ID, name="S", sensor_type="x", config={})
@@ -986,6 +1008,7 @@ def test_device_soil_dry_alarm_on_wet_soil(tmp_db, frozen_clock):
 
 def test_stuck_high_probe_does_not_veto_another_plants_alarm(tmp_db, frozen_clock):
     """Another sensor above its band only defers the alarm: the soil rule's conflict burst still waters."""
+    del frozen_clock  # side-effect fixture (the clock is frozen)
     cid = tmp_db.add_cluster("Mixed alarm")
     tmp_db.add_plant(cluster_id=cid, species="Monstera deliciosa", category="tropical")
     now = int(time.time())
@@ -1015,6 +1038,7 @@ def _two_probe_cluster(db, readings):
 
 def test_stale_readings_neither_veto_nor_trigger(tmp_db, frozen_clock):
     """A sensor whose newest reading is older than SENSOR_READING_STALE_SECONDS is left out of "current"."""
+    del frozen_clock  # side-effect fixture (the clock is frozen)
     logic = IrrigationLogic(tmp_db, get_plant_database())
     hour = 3600
 

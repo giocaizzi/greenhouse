@@ -34,6 +34,7 @@ class _Gateway:
         self.calls: list[tuple[str, str]] = []
 
     def get_device_logs(self, device_id, since_ms=None, hours=24, max_records=100):
+        del since_ms, hours, max_records  # signature mirrors the real one; unused by this fake
         self.calls.append(("get_device_logs", device_id))
         value = self.logs.get(device_id, [])
         if isinstance(value, BaseException):
@@ -56,6 +57,7 @@ def _sync_lines(caplog) -> list[tuple[str, str]]:
     return [(r.levelname, r.getMessage()) for r in caplog.records if r.name == "greenhouse_core.sync"]
 
 
+@pytest.mark.usefixtures("frozen_clock")
 @pytest.mark.parametrize(
     ("n_logs", "live", "summary"),
     [
@@ -66,7 +68,8 @@ def _sync_lines(caplog) -> list[tuple[str, str]]:
         (0, {}, "up to date"),
     ],
 )
-def test_per_sensor_summary_line(tmp_db, frozen_clock, caplog, n_logs, live, summary):
+def test_per_sensor_summary_line(tmp_db, caplog, n_logs, live, summary):
+    """Each sensor's sync summary line reports new log rows and the live read exactly."""
     cluster_id = tmp_db.add_cluster("Bench")
     tmp_db.add_sensor(
         cluster_id=cluster_id, tuya_device_id="dev_p", name="Probe", sensor_type="soil_moisture", config={}
@@ -83,10 +86,13 @@ def test_per_sensor_summary_line(tmp_db, frozen_clock, caplog, n_logs, live, sum
 
 
 def test_stats_key_order_without_clusters(tmp_db):
+    """Sync stats keep their key order even with no clusters."""
     assert list(sync_sensor_data(tmp_db, _Gateway())) == STATS_KEYS
 
 
 def test_stats_key_order_and_failure_isolation(tmp_db, frozen_clock, caplog):
+    """One sensor's failure is recorded and does not stop the others."""
+    del frozen_clock  # side-effect fixture (the clock is frozen)
     cluster_id = tmp_db.add_cluster("Bench")
     for name, dev in (("Alpha", "dev_1"), ("Broken", "dev_x"), ("Charlie", "dev_2")):
         tmp_db.add_sensor(cluster_id=cluster_id, tuya_device_id=dev, name=name, sensor_type="soil_moisture", config={})

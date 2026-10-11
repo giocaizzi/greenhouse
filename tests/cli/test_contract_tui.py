@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import ast
 import asyncio
+import contextlib
 import enum
 import hashlib
 import importlib
@@ -32,11 +33,10 @@ import pkgutil
 import re
 from dataclasses import asdict
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from fastapi.testclient import TestClient
 from rich.console import Console
-from textual.app import App
 from textual.binding import Binding
 from textual.dom import DOMNode
 from textual.widgets import DataTable
@@ -48,6 +48,11 @@ from greenhouse_cli import tui as tui_pkg
 from greenhouse_cli.tui import resources, sprites
 from greenhouse_cli.tui.app import GreenhouseApp
 from server.conftest import _make_stubbed_app
+
+_QUIET_PASSES_REQUIRED = 2  # consecutive passes with nothing pending before ``settle`` returns
+
+if TYPE_CHECKING:
+    from textual.app import App
 
 # ── Shared kit (imported by test_contract_tui_screens / _actuation / _runtime) ─
 
@@ -98,7 +103,7 @@ def screen_text(app: App) -> str:
         legacy_windows=False,
         safe_box=False,
     )
-    update = app.screen._compositor.render_update(full=True, screen_stack=app._background_screens)
+    update = app.screen._compositor.render_update(full=True, screen_stack=app._background_screens)  # noqa: SLF001 — Textual exports screenshots only as SVG; this is its text path
     console.print(update)
     lines = [line.rstrip() for line in console.export_text(styles=False).splitlines()]
     return "\n".join(lines).rstrip("\n") + "\n"
@@ -108,42 +113,54 @@ def screen_text(app: App) -> str:
 
 
 def _pending_tui_work(tui: App) -> list[str]:
-    """Everything the app still has to process: unfinished workers, queued messages, deferred callbacks,
-    running or scheduled animations (e.g. the 0.3 s slide of the active-tab underline), an open update batch
-    (``switch_mode`` → ``delay_update``), layout/repaint the visible screen still owes, and ``DataTable`` rows
-    whose column widths are only measured on the table's next idle.
+    """Return everything the app still has to process, one human-readable line per item.
+
+    Unfinished workers, queued messages, deferred callbacks, running or scheduled animations (e.g. the
+    0.3 s slide of the active-tab underline), an open update batch (``switch_mode`` → ``delay_update``),
+    layout/repaint the visible screen still owes, and ``DataTable`` rows whose column widths are only
+    measured on the table's next idle.
 
     Looks at *every* mode's screen stack, not just the active screen, so a worker or a message still
     in flight on a suspended screen (e.g. the dashboard after ``switch_mode``) counts as pending.
     """
     pending = [f"worker {w.description!r} ({w.state.name})" for w in tui.workers if not w.is_finished]
     nodes: list[Any] = [tui]
-    for stack in tui._screen_stacks.values():
+    for stack in tui._screen_stacks.values():  # noqa: SLF001 — Textual exposes no public view of pending work
         for screen in stack:
             nodes.extend(screen.walk_children(with_self=True))
-    for node in nodes:
-        if not node._message_queue.empty() or node._next_callbacks:
-            pending.append(f"messages queued on {node!r}")
+    pending.extend(
+        f"messages queued on {node!r}"
+        for node in nodes
+        if not node._message_queue.empty() or node._next_callbacks  # noqa: SLF001 — Textual exposes no public view of pending work
+    )
     animator = tui.animator
-    pending += [f"animation of {attr!r}" for _, attr in [*animator._animations, *animator._scheduled]]
-    if tui._batch_count:
+    pending += [f"animation of {attr!r}" for _, attr in [*animator._animations, *animator._scheduled]]  # noqa: SLF001 — Textual exposes no public view of pending work
+    if tui._batch_count:  # noqa: SLF001 — Textual exposes no public view of pending work
         pending.append("update batch still open")
+    return pending + _visible_screen_debts(tui)
+
+
+def _visible_screen_debts(tui: App) -> list[str]:
+    """What the visible screens still owe: after-refresh callbacks, layout/repaint, unmeasured table columns."""
+    pending = []
     screen = tui.screen
-    if screen._callbacks:  # call_after_refresh work; only the active screen refreshes
+    if screen._callbacks:  # noqa: SLF001 — Textual exposes no public view of pending work; call_after_refresh work; only the active screen refreshes
         pending.append(f"after-refresh callbacks on {screen!r}")
-    if screen._layout_required or screen._repaint_required or screen._recompose_required or screen._dirty_widgets:
+    if screen._layout_required or screen._repaint_required or screen._recompose_required or screen._dirty_widgets:  # noqa: SLF001 — Textual exposes no public view of pending work
         pending.append(f"layout/repaint pending on {screen!r}")
-    for visible in [*tui._background_screens, screen]:  # what ``screen_text`` renders
+    for visible in [*tui._background_screens, screen]:  # noqa: SLF001 — Textual exposes no public view of pending work; what ``screen_text`` renders
         for table in visible.query(DataTable):
-            if table._require_update_dimensions or table._updated_cells:
+            if table._require_update_dimensions or table._updated_cells:  # noqa: SLF001 — Textual exposes no public view of pending work
                 pending.append(f"column widths not yet measured on {table!r}")
                 table.check_idle()  # Textual measures them on the table's next idle; prompt that idle
     return pending
 
 
-async def settle(pilot, tui: App, timeout: float = 60.0) -> None:
-    """Wait until the TUI has finished reacting: no worker unfinished, no message or callback queued
-    anywhere, on two consecutive passes. Fails with what is still pending if that never happens.
+async def settle(pilot, tui: App, limit_s: float = 60.0) -> None:
+    """Wait until the TUI has finished reacting, failing with what is still pending after ``limit_s`` seconds.
+
+    Finished means no worker unfinished and no message or callback queued anywhere, on two
+    consecutive passes.
 
     Stricter than ``test_tui._settle``: a key press travels app → focused widget → back up to the app's
     bindings through several message queues, and a busy CPU can leave part of that trip (or the worker it
@@ -151,32 +168,32 @@ async def settle(pilot, tui: App, timeout: float = 60.0) -> None:
     ``pilot.pause()`` idle heuristic returns.
     """
     loop = asyncio.get_running_loop()
-    deadline = loop.time() + timeout
+    deadline = loop.time() + limit_s
     quiet_passes = 0
-    while quiet_passes < 2:
+    while quiet_passes < _QUIET_PASSES_REQUIRED:
         await pilot.pause()
-        try:
+        with contextlib.suppress(WorkerCancelled):  # an exclusive worker legitimately cancels the run it supersedes
             await tui.workers.wait_for_complete()
-        except WorkerCancelled:
-            pass  # an exclusive worker legitimately cancels the run it supersedes
         await tui.animator.wait_until_complete()
         pending = _pending_tui_work(tui)
         quiet_passes = 0 if pending else quiet_passes + 1
         if pending and loop.time() > deadline:
-            raise AssertionError(f"TUI did not settle within {timeout}s; still pending: {pending}")
+            msg = f"TUI did not settle within {limit_s}s; still pending: {pending}"
+            raise AssertionError(msg)
     await pilot.pause()
 
 
-async def wait_until(predicate, what: str, timeout: float = 60.0) -> None:
-    """Poll ``predicate`` with plain ``asyncio.sleep`` until it holds; fail naming ``what`` after ``timeout``.
+async def wait_until(predicate, what: str, limit_s: float = 60.0) -> None:
+    """Poll ``predicate`` with plain ``asyncio.sleep`` until it holds; fail naming ``what`` after ``limit_s`` seconds.
 
     For screens with a ticking auto-refresh timer, where ``settle`` / ``pilot.pause()`` may never see an idle app.
     """
     loop = asyncio.get_running_loop()
-    deadline = loop.time() + timeout
+    deadline = loop.time() + limit_s
     while not predicate():
         if loop.time() > deadline:
-            raise AssertionError(f"timed out after {timeout}s waiting for: {what}")
+            msg = f"timed out after {limit_s}s waiting for: {what}"
+            raise AssertionError(msg)
         await asyncio.sleep(0.05)
 
 
@@ -203,8 +220,11 @@ def _binding(raw: Binding | tuple) -> dict:
     return {"key": b.key, "action": b.action, "description": b.description, "show": b.show, "priority": b.priority}
 
 
-def _simple(value: Any) -> Any:
-    """JSON-able view of a class/module constant (``None`` when it is not a plain value)."""
+_NOT_SCALAR = object()
+
+
+def _simple_scalar(value: Any) -> Any:
+    """JSON-able view of a scalar constant, or ``_NOT_SCALAR``."""
     if isinstance(value, enum.Enum):
         return value.value
     if isinstance(value, str | int | float | bool) or value is None:
@@ -213,6 +233,14 @@ def _simple(value: Any) -> Any:
         return {"regex": value.pattern}
     if isinstance(value, type):
         return f"<class {value.__module__}.{value.__qualname__}>"
+    return _NOT_SCALAR
+
+
+def _simple(value: Any) -> Any:
+    """JSON-able view of a class/module constant (``None`` when it is not a plain value)."""
+    scalar = _simple_scalar(value)
+    if scalar is not _NOT_SCALAR:
+        return scalar
     if isinstance(value, list | tuple):
         return [_simple(v) for v in value]
     if isinstance(value, dict):
@@ -234,20 +262,24 @@ def _class_surface(cls: type) -> dict:
         if name.isupper() and name not in {"BINDINGS", "DEFAULT_CSS"}:
             entry[name] = _simple(own[name])
     entry["handlers"] = sorted(n for n in own if _HANDLER.match(n) and callable(own[n]))
-    decorated = []
-    for value in own.values():
-        for message_type, selectors in getattr(value, "_textual_on", []):
-            decorated.append(
-                {
-                    "message": message_type.__qualname__,
-                    "selectors": {k: [s.css for s in v] for k, v in selectors.items()},
-                }
-            )
+    decorated = _on_decorated(own)
     if decorated:
         entry["on_decorated"] = sorted(decorated, key=lambda d: (d["message"], str(d["selectors"])))
     if "can_focus" in own:
         entry["can_focus"] = own["can_focus"]
     return entry
+
+
+def _on_decorated(own: Any) -> list[dict]:
+    """``@on(...)`` handlers declared in a class body: message type and selectors, in declaration order."""
+    return [
+        {
+            "message": message_type.__qualname__,
+            "selectors": {k: [s.css for s in v] for k, v in selectors.items()},
+        }
+        for value in own.values()
+        for message_type, selectors in getattr(value, "_textual_on", [])
+    ]
 
 
 def _module_constants(module: Any) -> dict:

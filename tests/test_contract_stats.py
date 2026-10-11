@@ -8,6 +8,8 @@ from fake_data import FAKE_CLUSTER_NAME, FAKE_DEVICE_ID, FAKE_IRRIGATOR_NAME
 from golden import FROZEN_TS
 from greenhouse_core.stats import get_irrigation_stats
 
+RECENT_RUN_MINUTES = 4
+
 DAY = 24 * 3600
 
 
@@ -40,6 +42,8 @@ def _rewind_repository_clock(monkeypatch, seconds: int) -> None:
 
 
 def test_get_irrigation_stats_skips_events_older_than_its_own_cutoff(tmp_db, frozen_clock, monkeypatch):
+    """Stats skip events older than their own cutoff, even when the repository returns them."""
+    del frozen_clock  # side-effect fixture (the clock is frozen)
     cluster_id, irrigator_id = _cluster_with_irrigator(tmp_db)
     tmp_db.add_irrigation_event(irrigator_id, "start", "auto", duration_minutes=4, timestamp=FROZEN_TS - 600)
     tmp_db.add_irrigation_event(irrigator_id, "start", "auto", duration_minutes=9, timestamp=FROZEN_TS - DAY - 60)
@@ -49,5 +53,5 @@ def test_get_irrigation_stats_skips_events_older_than_its_own_cutoff(tmp_db, fro
     stats = get_irrigation_stats(tmp_db, cluster_id, days=1)
 
     assert stats["total_events"] == 1
-    assert stats["total_duration_minutes"] == 4
+    assert stats["total_duration_minutes"] == RECENT_RUN_MINUTES
     assert [irr["timestamp"] for irr in stats["irrigations"]] == [FROZEN_TS - 600]

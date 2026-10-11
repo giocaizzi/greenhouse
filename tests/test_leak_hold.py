@@ -70,6 +70,8 @@ class _Fixture:
 
 
 class TestHoldBlocks(_Fixture):
+    """An open leak alert holds automatic irrigation (invariant 11)."""
+
     def test_dry_cluster_irrigates_without_a_hold(self):
         """Baseline — the fixture is only meaningful if it irrigates untouched."""
         decision = self.logic.decide_for_cluster(self.cluster_id)
@@ -77,6 +79,7 @@ class TestHoldBlocks(_Fixture):
         assert decision.action == Action.IRRIGATE
 
     def test_open_leak_alert_holds_the_cluster(self):
+        """An open leak alert turns an irrigate decision into a hold."""
         self._raise_leak()
 
         decision = self.logic.decide_for_cluster(self.cluster_id)
@@ -86,6 +89,7 @@ class TestHoldBlocks(_Fixture):
         assert decision.duration_minutes == 0
 
     def test_hold_reason_is_critical_and_names_the_alert(self):
+        """The hold is the critical, terminal reason and names the alert."""
         alert = self._raise_leak()
 
         decision = self.logic.decide_for_cluster(self.cluster_id)
@@ -128,6 +132,7 @@ class TestHoldBlocks(_Fixture):
         assert decision.primary_code == TriggerCode.LEAK_HOLD
 
     def test_hold_is_persisted_to_the_decision_log(self):
+        """A persisted evaluation records the hold in the decision log."""
         self._raise_leak()
 
         self.logic.decide_for_cluster(self.cluster_id, persist=True)
@@ -138,7 +143,10 @@ class TestHoldBlocks(_Fixture):
 
 
 class TestHoldLifts(_Fixture):
+    """What releases a leak hold."""
+
     def test_resolved_alert_releases_the_hold(self):
+        """Resolving the alert releases the hold."""
         self._raise_leak(status="resolved")
 
         decision = self.logic.decide_for_cluster(self.cluster_id)
@@ -146,6 +154,7 @@ class TestHoldLifts(_Fixture):
         assert decision.action == Action.IRRIGATE
 
     def test_hold_expires_after_the_configured_window(self):
+        """The hold expires after ``LEAK_HOLD_HOURS``."""
         self._raise_leak(seen_at=int(time.time()) - (LEAK_HOLD_HOURS * 3600 + 60))
 
         decision = self.logic.decide_for_cluster(self.cluster_id)
@@ -153,6 +162,7 @@ class TestHoldLifts(_Fixture):
         assert decision.action == Action.IRRIGATE
 
     def test_hold_still_active_just_inside_the_window(self):
+        """The hold still applies just inside the window."""
         self._raise_leak(seen_at=int(time.time()) - (LEAK_HOLD_HOURS * 3600 - 600))
 
         decision = self.logic.decide_for_cluster(self.cluster_id)
@@ -160,6 +170,7 @@ class TestHoldLifts(_Fixture):
         assert decision.primary_code == TriggerCode.LEAK_HOLD
 
     def test_alert_on_another_cluster_does_not_hold_this_one(self):
+        """An alert on another cluster does not hold this one."""
         other = self.db.add_cluster("Other Cluster")
         self._raise_leak(cluster_id=other)
 
@@ -172,14 +183,17 @@ class TestGetActiveAlert(_Fixture):
     """Repository helper the gate is built on."""
 
     def test_returns_none_when_no_alert_exists(self):
+        """No alert means no active alert."""
         assert self.db.get_active_alert(LEAK_ALERT_CODE, cluster_id=self.cluster_id) is None
 
     def test_ignores_resolved_alerts(self):
+        """Resolved alerts are not active."""
         self._raise_leak(status="resolved")
 
         assert self.db.get_active_alert(LEAK_ALERT_CODE, cluster_id=self.cluster_id) is None
 
     def test_since_bounds_how_stale_an_alert_may_be(self):
+        """``since`` excludes alerts last seen before it."""
         now = int(time.time())
         self._raise_leak(seen_at=now - 7200)
 
@@ -187,6 +201,7 @@ class TestGetActiveAlert(_Fixture):
         assert self.db.get_active_alert(LEAK_ALERT_CODE, cluster_id=self.cluster_id, since=now - 10800) is not None
 
     def test_ignores_other_codes(self):
+        """Alerts with other codes are not returned."""
         self.db.upsert_alert(
             dedup_key="anomaly::sensor_drift::1::sensor1",
             source="anomaly",

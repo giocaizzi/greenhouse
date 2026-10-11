@@ -13,23 +13,29 @@ from greenhouse_core.learning import issues
 from greenhouse_core.learning.issues import detect_issues
 from greenhouse_core.learning.models import PlantProfile
 
+WEEK_HOURS = 168  # the chronic check's look-back
+
 
 class _Repo:
     def __init__(self, rows):
         self._rows = rows
 
     def get_sensors_in_cluster(self, cluster_id):
+        del cluster_id  # signature mirrors the real one; unused by this fake
         return [SimpleNamespace(id=1, name="S1", plant_id=1)]
 
     def get_plants_in_cluster(self, cluster_id):
+        del cluster_id  # signature mirrors the real one; unused by this fake
         return [SimpleNamespace(id=1, species="sp", category="cat")]
 
     def get_recent_readings(self, sensor_id, hours=24):
-        return list(self._rows) if hours == 168 else []
+        del sensor_id  # signature mirrors the real one; unused by this fake
+        return list(self._rows) if hours == WEEK_HOURS else []
 
 
 class _PlantDb:
     def get_care_data(self, species=None, category=None):
+        del species, category  # signature mirrors the real one; unused by this fake
         return {"soil_moisture_target": "40-60"}
 
 
@@ -57,12 +63,13 @@ def _detect(monkeypatch, rows):
         max_delta=5.0,
         efficiency_score=0.9,
     )
-    monkeypatch.setattr(issues, "get_plant_profile", lambda db, sensor: profile)
+    monkeypatch.setattr(issues, "get_plant_profile", lambda _db, _sensor: profile)
     return detect_issues(_Repo(rows), _PlantDb(), 1)
 
 
 @pytest.mark.parametrize(("peak", "fires"), [(40.0, False), (39.5, True)])
 def test_chronic_underwatering_fires_only_strictly_below_target_min(monkeypatch, peak, fires):
+    """Chronic underwatering fires only when the weekly peak is strictly below the target minimum."""
     alerts = _detect(monkeypatch, [_row(1000 - i, soil=peak) for i in range(3)])
     assert [a.alert_type for a in alerts] == (["chronic_underwatering"] if fires else [])
     if fires:
@@ -70,6 +77,7 @@ def test_chronic_underwatering_fires_only_strictly_below_target_min(monkeypatch,
 
 
 def test_chronic_underwatering_peak_defaults_to_zero_when_no_moisture_values(monkeypatch):
+    """Without moisture values the weekly peak defaults to 0, so the alert fires (pinned)."""
     # Readings exist in the week (humidity only), so the check runs with max(..., default=0).
     alerts = _detect(monkeypatch, [_row(1000 - i, humidity=50.0) for i in range(3)])
     assert [a.alert_type for a in alerts] == ["chronic_underwatering"]

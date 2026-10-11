@@ -24,9 +24,10 @@ from sqlalchemy.dialects import sqlite
 from sqlalchemy.schema import CreateIndex, CreateTable
 
 from golden import assert_golden, assert_golden_json
-from greenhouse_core import database
-from greenhouse_core.database import head_revision, init_db
+from greenhouse_core.database import _alembic_config, head_revision, init_db
 from greenhouse_core.models import Base
+
+TABLE_COUNT = 17
 
 # sha256 of "\n".join(DDL statements), recorded at the original baseline (main @ a1b2622, hence "PHASE0").
 PHASE0_DDL_SHA256 = (
@@ -54,12 +55,15 @@ def _ddl_statements() -> list[str]:
     statements = []
     for table in Base.metadata.sorted_tables:
         statements.append(str(CreateTable(table).compile(dialect=dialect)))
-        for index in sorted(table.indexes, key=lambda i: i.name or ""):
-            statements.append(str(CreateIndex(index).compile(dialect=dialect)))
+        statements.extend(
+            str(CreateIndex(index).compile(dialect=dialect))
+            for index in sorted(table.indexes, key=lambda i: i.name or "")
+        )
     return statements
 
 
 def test_orm_ddl_matches_golden():
+    """The ORM's DDL matches the pinned golden (trailing spaces stripped)."""
     # Trailing spaces SQLAlchemy emits after each column comma are stripped so the
     # repo's trailing-whitespace / end-of-file pre-commit hooks leave the golden
     # alone; the exact bytes are pinned by the fingerprint test below.
@@ -69,6 +73,7 @@ def test_orm_ddl_matches_golden():
 
 
 def test_orm_ddl_matches_phase0_fingerprint():
+    """The exact DDL bytes match the phase-0 fingerprint."""
     assert hashlib.sha256("\n".join(_ddl_statements()).encode()).hexdigest() == PHASE0_DDL_SHA256
 
 
@@ -84,6 +89,7 @@ def _default_repr(default) -> str | None:
 
 
 def test_orm_column_metadata_matches_golden():
+    """Column types, nullability and defaults match the golden."""
     tables = {}
     for table in Base.metadata.sorted_tables:
         tables[table.name] = {
@@ -116,17 +122,17 @@ def test_orm_column_metadata_matches_golden():
         }
     mapped = sorted(f"{m.class_.__name__}={m.local_table.name}" for m in Base.registry.mappers)
     assert_golden_json("contracts/orm_columns.json", {"tables": tables, "mapped_classes": mapped})
-    assert len(tables) == 17
+    assert len(tables) == TABLE_COUNT
 
 
 def test_alembic_head_is_literal():
+    """The Alembic head is the pinned revision."""
     assert head_revision() == ALEMBIC_HEAD
 
 
 def test_alembic_revision_chain():
-    script = ScriptDirectory(
-        str(database._alembic_config(create_engine("sqlite://")).get_main_option("script_location"))
-    )
+    """The revision chain is linear and matches the pinned order."""
+    script = ScriptDirectory(str(_alembic_config(create_engine("sqlite://")).get_main_option("script_location")))
     chain = [(rev.revision, rev.down_revision) for rev in script.walk_revisions(base="base", head="heads")]
     assert list(reversed(chain)) == ALEMBIC_CHAIN
     assert script.get_heads() == [ALEMBIC_HEAD]
@@ -159,6 +165,7 @@ def _reflect(engine) -> dict:
 
 @pytest.fixture
 def migrated_and_created(tmp_path):
+    """Provide one database built by migrations and one built from the ORM metadata."""
     migrated = create_engine(f"sqlite:///{tmp_path / 'migrated.db'}")
     created = create_engine(f"sqlite:///{tmp_path / 'created.db'}")
     init_db(migrated)
@@ -178,17 +185,7 @@ def _drift(migrated: dict, created: dict) -> dict:
         per_table = {}
         for aspect in migrated[name]:
             if aspect == "columns":
-                mig_cols = {c["name"]: c for c in migrated[name]["columns"]}
-                orm_cols = {c["name"]: c for c in created[name]["columns"]}
-                cols = {}
-                for col in sorted(set(mig_cols) | set(orm_cols)):
-                    if mig_cols.get(col) != orm_cols.get(col):
-                        cols[col] = {"migrated": mig_cols.get(col), "create_all": orm_cols.get(col)}
-                if [c["name"] for c in migrated[name]["columns"]] != [c["name"] for c in created[name]["columns"]]:
-                    cols["<column order>"] = {
-                        "migrated": [c["name"] for c in migrated[name]["columns"]],
-                        "create_all": [c["name"] for c in created[name]["columns"]],
-                    }
+                cols = _column_drift(migrated[name]["columns"], created[name]["columns"])
                 if cols:
                     per_table["columns"] = cols
             elif migrated[name][aspect] != created[name][aspect]:
@@ -198,7 +195,23 @@ def _drift(migrated: dict, created: dict) -> dict:
     return drift
 
 
+def _column_drift(migrated_columns: list, created_columns: list) -> dict:
+    mig_cols = {c["name"]: c for c in migrated_columns}
+    orm_cols = {c["name"]: c for c in created_columns}
+    cols = {}
+    for col in sorted(set(mig_cols) | set(orm_cols)):
+        if mig_cols.get(col) != orm_cols.get(col):
+            cols[col] = {"migrated": mig_cols.get(col), "create_all": orm_cols.get(col)}
+    if [c["name"] for c in migrated_columns] != [c["name"] for c in created_columns]:
+        cols["<column order>"] = {
+            "migrated": [c["name"] for c in migrated_columns],
+            "create_all": [c["name"] for c in created_columns],
+        }
+    return cols
+
+
 def test_migrated_schema_matches_golden(migrated_and_created):
+    """The migrated schema matches the golden."""
     migrated, _ = migrated_and_created
     assert_golden_json("contracts/migrated_schema.json", migrated)
 

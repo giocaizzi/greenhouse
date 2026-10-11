@@ -5,6 +5,16 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from fake_data import FAKE_CLIENT_ID, FAKE_CLIENT_SECRET, FAKE_REGION, FAKE_SENSOR_ID
+from greenhouse_core.devices.gateway import DeviceGateway
+
+# Canned Cloud payload values and what the gateway must parse them into.
+V1_HUMIDITY_PCT = 45.0  # v1 ``humidity`` DP 45 → soil moisture
+V2_HUMIDITY_PCT = 55.0  # v2 shadow ``humidity`` 55
+FALLBACK_HUMIDITY_PCT = 50.0  # v1 answer after a failed v2 read
+LOG_HUMIDITY_PCT = 50.0  # ``"50"`` in the device log
+OLDER_LOG_MS, NEWER_LOG_MS = 1_000_000, 2_000_000
+LOG_ENTRIES = 2
+GROUPS_WITHIN_TOLERANCE = 2
 
 
 class TestDeviceGateway:
@@ -12,6 +22,7 @@ class TestDeviceGateway:
 
     @pytest.fixture(autouse=True)
     def setup(self):
+        """Build a gateway on a mocked tinytuya Cloud whose v2.0 shadow read fails by default."""
         with patch("greenhouse_core.devices.gateway.tinytuya") as mock_tinytuya:
             self.mock_cloud_instance = MagicMock()
             mock_tinytuya.Cloud.return_value = self.mock_cloud_instance
@@ -20,18 +31,14 @@ class TestDeviceGateway:
             # override cloudrequest with a real payload.
             self.mock_cloud_instance.cloudrequest.return_value = {"success": False}
 
-            from greenhouse_core.devices.gateway import DeviceGateway
-
             self.cloud = DeviceGateway(FAKE_CLIENT_ID, FAKE_CLIENT_SECRET, FAKE_REGION)
             yield
 
-    @patch("greenhouse_core.devices.gateway.tinytuya")
+    @patch("greenhouse_core.devices.gateway.tinytuya", new=MagicMock())
     @patch.dict("os.environ", {"TUYA_CLIENT_ID": "", "TUYA_CLIENT_SECRET": ""}, clear=False)
-    def test_init_requires_credentials(self, _mock_tinytuya):
+    def test_init_requires_credentials(self):
         """Gateway raises without credentials."""
-        from greenhouse_core.devices.gateway import DeviceGateway
-
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="Missing TUYA_CLIENT_ID or TUYA_CLIENT_SECRET"):
             DeviceGateway("", "", "eu")
 
     def test_get_live_reading_parses_soil_sensor(self):
@@ -47,7 +54,7 @@ class TestDeviceGateway:
         data = self.cloud.get_live_reading(FAKE_SENSOR_ID)
 
         assert data["temperature"] == pytest.approx(25.1)
-        assert data["soil_moisture"] == 45.0
+        assert data["soil_moisture"] == V1_HUMIDITY_PCT
         assert data["battery_state"] == "middle"
 
     def test_get_live_reading_handles_error(self):
@@ -71,13 +78,13 @@ class TestDeviceGateway:
         }
         logs = self.cloud.get_device_logs(FAKE_SENSOR_ID, hours=1)
 
-        assert len(logs) == 2
-        assert logs[0]["timestamp_ms"] == 1000000
-        assert logs[1]["timestamp_ms"] == 2000000
+        assert len(logs) == LOG_ENTRIES
+        assert logs[0]["timestamp_ms"] == OLDER_LOG_MS
+        assert logs[1]["timestamp_ms"] == NEWER_LOG_MS
         assert logs[0]["key"] == "temperature"
         assert logs[0]["value"] == pytest.approx(22.0)
         assert logs[1]["key"] == "soil_moisture"
-        assert logs[1]["value"] == 50.0
+        assert logs[1]["value"] == LOG_HUMIDITY_PCT
 
     def test_group_logs_by_timestamp(self):
         """Logs reported within tolerance are grouped into single readings."""
@@ -88,7 +95,7 @@ class TestDeviceGateway:
         ]
         grouped = self.cloud.group_logs_by_timestamp(logs, tolerance_ms=5000)
 
-        assert len(grouped) == 2
+        assert len(grouped) == GROUPS_WITHIN_TOLERANCE
         assert grouped[0]["temperature"] == pytest.approx(22.0)
         assert grouped[0]["soil_moisture"] == pytest.approx(45.0)
         assert grouped[1]["temperature"] == pytest.approx(23.0)
@@ -114,7 +121,7 @@ class TestDeviceGateway:
         data = self.cloud.get_live_reading(FAKE_SENSOR_ID)
 
         assert data["temperature"] == pytest.approx(23.0)
-        assert data["soil_moisture"] == 55.0
+        assert data["soil_moisture"] == V2_HUMIDITY_PCT
         assert data["env_humidity"] == pytest.approx(72.0)
         assert data["water_warning"] is True
         # Should NOT have called getstatus (v2 succeeded)
@@ -133,7 +140,7 @@ class TestDeviceGateway:
         data = self.cloud.get_live_reading(FAKE_SENSOR_ID)
 
         assert data["temperature"] == pytest.approx(22.0)
-        assert data["soil_moisture"] == 50.0
+        assert data["soil_moisture"] == FALLBACK_HUMIDITY_PCT
 
     # ── Edge case tests ─────────────────────────────────────────────────────
 
@@ -170,7 +177,7 @@ class TestDeviceGateway:
         }
         logs = self.cloud.get_device_logs(FAKE_SENSOR_ID, hours=1)
 
-        assert len(logs) == 2
+        assert len(logs) == LOG_ENTRIES
         # Unknown code preserved as-is
         assert logs[0]["key"] == "unknown_dp_code"
         assert logs[0]["value"] == "42"

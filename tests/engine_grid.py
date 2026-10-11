@@ -22,16 +22,16 @@ the frozen block — so records are reproducible bit-for-bit.
 
 from __future__ import annotations
 
+import functools
 import hashlib
 import json
 from collections import Counter
-from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
 from importlib.resources import files
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo
 
 import time_machine
@@ -44,6 +44,11 @@ from greenhouse_core.logic import IrrigationLogic
 from greenhouse_core.models import Base, DecisionLog, IrrigationEvent, SensorReading
 from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_core.repository import IrrigationRepository
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Iterator
+
+    from sqlalchemy import Engine
 
 MINUTE = 60
 HOUR = 3600
@@ -141,15 +146,17 @@ class FakeForecastWeather:
     """``WeatherClient`` stand-in returning a fixed forecast dict (or ``None``)."""
 
     def __init__(self, forecast: dict | None):
+        """Serve ``forecast`` (None for no forecast) and record each request."""
         self._forecast = forecast
         self.forecast_calls: list[int] = []
 
     def get_forecast(self, hours: int = 6) -> dict | None:
+        """Record the requested horizon and return a copy of the canned forecast."""
         self.forecast_calls.append(hours)
         return None if self._forecast is None else dict(self._forecast)
 
     def get_current(self) -> None:
-        return None
+        """Return no current weather; the grid only drives the forecast."""
 
 
 def make_weather(case: Case) -> FakeForecastWeather | None:
@@ -164,16 +171,23 @@ def make_weather(case: Case) -> FakeForecastWeather | None:
 # ── DB plumbing ──────────────────────────────────────────────────────────────
 
 _PLANT_DB_PATH = Path(str(files("greenhouse_core") / "data" / "plant_database.json"))
-_plant_db: PlantDatabase | None = None
-_engine = None
 
 
+@functools.cache
 def plant_database() -> PlantDatabase:
-    """The bundled plant DB, loaded from the package path (ignores ``IRRIGATION_PLANT_DB_PATH``)."""
-    global _plant_db
-    if _plant_db is None:
-        _plant_db = PlantDatabase(_PLANT_DB_PATH)
-    return _plant_db
+    """The bundled plant DB, loaded from the package path (ignores ``IRRIGATION_PLANT_DB_PATH``).
+
+    Loaded once per process and shared.
+    """
+    return PlantDatabase(_PLANT_DB_PATH)
+
+
+@functools.cache
+def _shared_engine() -> Engine:
+    """The one in-memory engine (schema created once) that every grid case runs on, per process."""
+    engine = create_engine("sqlite://", poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    return engine
 
 
 @contextmanager
@@ -184,11 +198,7 @@ def fresh_repository() -> Iterator[IrrigationRepository]:
     shared per process; each case runs in an outer transaction that is rolled
     back, so ids restart at 1 and no state leaks between cases.
     """
-    global _engine
-    if _engine is None:
-        _engine = create_engine("sqlite://", poolclass=StaticPool)
-        Base.metadata.create_all(_engine)
-    conn = _engine.connect()
+    conn = _shared_engine().connect()
     trans = conn.begin()
     session = Session(bind=conn, join_transaction_mode="create_savepoint")
     try:
@@ -201,51 +211,12 @@ def fresh_repository() -> Iterator[IrrigationRepository]:
 
 def _seed(repo: IrrigationRepository, case: Case) -> int:
     now = int(case.at.timestamp())
-    if case.tz is not None:
-        repo.update_preferences(timezone=case.tz)
-    if case.global_quiet is not None:
-        repo.update_global_irrigation_config(quiet_start_hour=case.global_quiet[0], quiet_end_hour=case.global_quiet[1])
-
+    _seed_preferences(repo, case)
     cluster_id = repo.add_cluster(f"Grid {case.family}", environment=case.environment)
     plant_ids = [repo.add_plant(cluster_id=cluster_id, species=s, category=c) for s, c in case.plants]
-
-    config = dict(case.cluster_config)
-    if case.cluster_quiet is not None:
-        config["quiet_start_hour"], config["quiet_end_hour"] = case.cluster_quiet
-    if config:
-        repo.set_irrigation_config(cluster_id, **config)
-
-    irrigator_id = None
-    if case.irrigator:
-        irrigator_id = repo.add_irrigator(
-            cluster_id=cluster_id,
-            tuya_device_id="fake_tuya_device_grid0001",
-            name="Grid Pump",
-            irrigator_type="rainpoint.ik10pw",
-            config={},
-        )
-        if case.reservoir_l is not None or case.flow_rate is not None:
-            irr = repo.get_irrigator(irrigator_id)
-            irr.reservoir_l = case.reservoir_l
-            irr.flow_rate_l_per_min = case.flow_rate
-            repo.session.flush()
-
-    sensor_ids = []
-    for i, spec in enumerate(case.sensors):
-        sid = repo.add_sensor(
-            cluster_id=cluster_id,
-            tuya_device_id=f"fake_tuya_sensor_grid{i:04d}",
-            name=spec.name,
-            sensor_type="tuya.tr301z",
-            config={},
-            plant_id=plant_ids[spec.plant] if spec.plant is not None else None,
-            assignment_started_at=0,
-        )
-        sensor_ids.append(sid)
-        rows = [(sid, now - r.age_s, r.temp, r.soil, r.light, r.hum, None, r.water_warning) for r in spec.readings]
-        rows.sort(key=lambda row: row[1], reverse=case.insert_desc)
-        repo.bulk_add_sensor_readings(rows)
-
+    _seed_cluster_config(repo, case, cluster_id)
+    irrigator_id = _seed_irrigator(repo, case, cluster_id)
+    sensor_ids = _seed_sensors(repo, case, cluster_id, plant_ids, now)
     for ev in case.events:
         repo.add_irrigation_event(
             irrigator_id=irrigator_id,
@@ -265,26 +236,82 @@ def _seed(repo: IrrigationRepository, case: Case) -> int:
         repo.add_vacation_window(starts_at=now + case.vacation[0], ends_at=now + case.vacation[1])
 
     if case.leak is not None:
-        leak_cluster = repo.add_cluster("Grid other") if case.leak.other_cluster else cluster_id
-        alert = repo.upsert_alert(
-            dedup_key=f"leak::{LEAK_ALERT_CODE}::{leak_cluster}::sensor1",
-            source="leak",
-            code=LEAK_ALERT_CODE,
-            title="Possible leak or stuck valve detected",
-            message="Grid Soil: soil moisture still rising after irrigation (latest=78.0%)",
-            severity="critical",
-            entity_type="sensor",
-            entity_id=sensor_ids[0] if sensor_ids else None,
-            cluster_id=leak_cluster,
-            seen_at=now - case.leak.age_s,
-        )
-        if case.leak.status == "acknowledged":
-            repo.acknowledge_alert(alert.id)
-        elif case.leak.status == "resolved":
-            repo.resolve_alert(alert.id)
+        _seed_leak(repo, case.leak, cluster_id, sensor_ids, now)
 
     repo.session.flush()
     return cluster_id
+
+
+def _seed_preferences(repo: IrrigationRepository, case: Case) -> None:
+    if case.tz is not None:
+        repo.update_preferences(timezone=case.tz)
+    if case.global_quiet is not None:
+        repo.update_global_irrigation_config(quiet_start_hour=case.global_quiet[0], quiet_end_hour=case.global_quiet[1])
+
+
+def _seed_cluster_config(repo: IrrigationRepository, case: Case, cluster_id: int) -> None:
+    config = dict(case.cluster_config)
+    if case.cluster_quiet is not None:
+        config["quiet_start_hour"], config["quiet_end_hour"] = case.cluster_quiet
+    if config:
+        repo.set_irrigation_config(cluster_id, **config)
+
+
+def _seed_irrigator(repo: IrrigationRepository, case: Case, cluster_id: int) -> int | None:
+    if not case.irrigator:
+        return None
+    irrigator_id = repo.add_irrigator(
+        cluster_id=cluster_id,
+        tuya_device_id="fake_tuya_device_grid0001",
+        name="Grid Pump",
+        irrigator_type="rainpoint.ik10pw",
+        config={},
+    )
+    if case.reservoir_l is not None or case.flow_rate is not None:
+        irr = repo.get_irrigator(irrigator_id)
+        irr.reservoir_l = case.reservoir_l
+        irr.flow_rate_l_per_min = case.flow_rate
+        repo.session.flush()
+    return irrigator_id
+
+
+def _seed_sensors(repo: IrrigationRepository, case: Case, cluster_id: int, plant_ids: list[int], now: int) -> list[int]:
+    sensor_ids = []
+    for i, spec in enumerate(case.sensors):
+        sid = repo.add_sensor(
+            cluster_id=cluster_id,
+            tuya_device_id=f"fake_tuya_sensor_grid{i:04d}",
+            name=spec.name,
+            sensor_type="tuya.tr301z",
+            config={},
+            plant_id=plant_ids[spec.plant] if spec.plant is not None else None,
+            assignment_started_at=0,
+        )
+        sensor_ids.append(sid)
+        rows = [(sid, now - r.age_s, r.temp, r.soil, r.light, r.hum, None, r.water_warning) for r in spec.readings]
+        rows.sort(key=lambda row: row[1], reverse=case.insert_desc)
+        repo.bulk_add_sensor_readings(rows)
+    return sensor_ids
+
+
+def _seed_leak(repo: IrrigationRepository, leak: Leak, cluster_id: int, sensor_ids: list[int], now: int) -> None:
+    leak_cluster = repo.add_cluster("Grid other") if leak.other_cluster else cluster_id
+    alert = repo.upsert_alert(
+        dedup_key=f"leak::{LEAK_ALERT_CODE}::{leak_cluster}::sensor1",
+        source="leak",
+        code=LEAK_ALERT_CODE,
+        title="Possible leak or stuck valve detected",
+        message="Grid Soil: soil moisture still rising after irrigation (latest=78.0%)",
+        severity="critical",
+        entity_type="sensor",
+        entity_id=sensor_ids[0] if sensor_ids else None,
+        cluster_id=leak_cluster,
+        seen_at=now - leak.age_s,
+    )
+    if leak.status == "acknowledged":
+        repo.acknowledge_alert(alert.id)
+    elif leak.status == "resolved":
+        repo.resolve_alert(alert.id)
 
 
 def _seed_learning(repo: IrrigationRepository, seed: str, irrigator_id: int, sensor_ids: list[int], now: int) -> None:
@@ -446,28 +473,28 @@ def _soil_family() -> list[Case]:
     cases = []
     levels = [0.0, 12.0, 25.0, 29.9, 30.0, 34.0, 38.0, 44.9, 45.0, 58.0, 66.0, 71.0]
     for plant_key, plants in PLANT_SETS.items():
-        for climate_key, climate in CLIMATES.items():
-            for level in levels:
-                cases.append(
-                    Case(
-                        id=f"soil/{plant_key}/{climate_key}/indoor/m{level:g}",
-                        family="soil",
-                        at=BASE_AT,
-                        plants=plants,
-                        sensors=(_sensor(level, **climate),),
-                    )
-                )
-        for level in (25.0, 38.0, 58.0, 71.0):
-            cases.append(
-                Case(
-                    id=f"soil/{plant_key}/soil_only/outdoor/m{level:g}",
-                    family="soil",
-                    at=BASE_AT,
-                    environment="outdoor",
-                    plants=plants,
-                    sensors=(_sensor(level),),
-                )
+        cases.extend(
+            Case(
+                id=f"soil/{plant_key}/{climate_key}/indoor/m{level:g}",
+                family="soil",
+                at=BASE_AT,
+                plants=plants,
+                sensors=(_sensor(level, **climate),),
             )
+            for climate_key, climate in CLIMATES.items()
+            for level in levels
+        )
+        cases.extend(
+            Case(
+                id=f"soil/{plant_key}/soil_only/outdoor/m{level:g}",
+                family="soil",
+                at=BASE_AT,
+                environment="outdoor",
+                plants=plants,
+                sensors=(_sensor(level),),
+            )
+            for level in (25.0, 38.0, 58.0, 71.0)
+        )
     return cases
 
 
@@ -633,10 +660,10 @@ def _series_family() -> list[Case]:
         "temp-only": (SensorSpec("Grid Soil", (Reading(600, temp=22.0),), 0),),
     }
     cases = [Case(id=f"series/{k}", family="series", at=BASE_AT, sensors=v) for k, v in shapes.items()]
-    for k in ("spike-low-mid", "spike-low-newest", "declining", "rising"):
-        cases.append(
-            Case(id=f"series/{k}/inserted-desc", family="series", at=BASE_AT, sensors=shapes[k], insert_desc=True)
-        )
+    cases.extend(
+        Case(id=f"series/{k}/inserted-desc", family="series", at=BASE_AT, sensors=shapes[k], insert_desc=True)
+        for k in ("spike-low-mid", "spike-low-newest", "declining", "rising")
+    )
     cases += _second_review_cases()
     for label, age in (
         ("0s", 0),
@@ -768,20 +795,20 @@ def _quiet_family() -> list[Case]:
                 "end": e_local.timestamp(),
                 "end+1s": e_local.timestamp() + 1,
             }
-            for label, ts in instants.items():
-                for bypass in (False, True):
-                    cases.append(
-                        Case(
-                            id=f"quiet/{cfg_key}/{tz}/{label}/bypass={bypass}",
-                            family="quiet",
-                            at=datetime.fromtimestamp(int(ts), tz=ZoneInfo("UTC")),
-                            tz=tz,
-                            sensors=(_sensor(38.0),),
-                            bypass_quiet_hours=bypass,
-                            triggered_by="manual" if bypass else "auto",
-                            **cfg,
-                        )
-                    )
+            cases.extend(
+                Case(
+                    id=f"quiet/{cfg_key}/{tz}/{label}/bypass={bypass}",
+                    family="quiet",
+                    at=datetime.fromtimestamp(int(ts), tz=ZoneInfo("UTC")),
+                    tz=tz,
+                    sensors=(_sensor(38.0),),
+                    bypass_quiet_hours=bypass,
+                    triggered_by="manual" if bypass else "auto",
+                    **cfg,
+                )
+                for label, ts in instants.items()
+                for bypass in (False, True)
+            )
     night = _utc(2026, 4, 15, 2, 0, 0)
     extras = {
         "cooldown-beats-quiet": {"events": (Event(HOUR),)},
@@ -895,20 +922,20 @@ def _season_family() -> list[Case]:
         "mar01-00:00:00-rome-as-utc-prefs": ("UTC", _local(ROME, 2026, 3, 1, 0, 0, 0)),
         "mar01-00:00:00-utc": ("UTC", _utc(2026, 3, 1, 0, 0, 0)),
     }
-    for inst_key, (tz, at) in instants.items():
-        for plant_key, plants in {**PLANT_SETS, **SEASON_EXTRA_SETS}.items():
-            for env in ("indoor", "outdoor"):
-                cases.append(
-                    Case(
-                        id=f"season/{inst_key}/{plant_key}/{env}",
-                        family="season",
-                        at=at,
-                        tz=tz,
-                        environment=env,
-                        plants=plants,
-                        sensors=(_sensor(40.0, temp=22.0, hum=60.0, light=900),),
-                    )
-                )
+    cases.extend(
+        Case(
+            id=f"season/{inst_key}/{plant_key}/{env}",
+            family="season",
+            at=at,
+            tz=tz,
+            environment=env,
+            plants=plants,
+            sensors=(_sensor(40.0, temp=22.0, hum=60.0, light=900),),
+        )
+        for inst_key, (tz, at) in instants.items()
+        for plant_key, plants in {**PLANT_SETS, **SEASON_EXTRA_SETS}.items()
+        for env in ("indoor", "outdoor")
+    )
     return cases
 
 
@@ -966,28 +993,28 @@ def _vacation_family() -> list[Case]:
         "flow-only": {"vacation": (-DAY, 6 * DAY), "flow_rate": 1.0},
         "active-no-irrigator": {"vacation": (-DAY, 6 * DAY), "irrigator": False},
     }
-    for vac_key, kw in vacs.items():
-        for soil in (38.0, 25.0, 66.0):
-            cases.append(
-                Case(
-                    id=f"vacation/{vac_key}/monstera/m{soil:g}",
-                    family="vacation",
-                    at=BASE_AT,
-                    sensors=(_sensor(soil),),
-                    **kw,
-                )
-            )
-    for vac_key in ("active-partial-trim", "active-plenty"):
-        cases.append(
-            Case(
-                id=f"vacation/{vac_key}/fern_cat/m50",
-                family="vacation",
-                at=BASE_AT,
-                plants=PLANT_SETS["fern_cat"],
-                sensors=(_sensor(50.0),),
-                **vacs[vac_key],
-            )
+    cases.extend(
+        Case(
+            id=f"vacation/{vac_key}/monstera/m{soil:g}",
+            family="vacation",
+            at=BASE_AT,
+            sensors=(_sensor(soil),),
+            **kw,
         )
+        for vac_key, kw in vacs.items()
+        for soil in (38.0, 25.0, 66.0)
+    )
+    cases.extend(
+        Case(
+            id=f"vacation/{vac_key}/fern_cat/m50",
+            family="vacation",
+            at=BASE_AT,
+            plants=PLANT_SETS["fern_cat"],
+            sensors=(_sensor(50.0),),
+            **vacs[vac_key],
+        )
+        for vac_key in ("active-partial-trim", "active-plenty")
+    )
     cases.append(
         Case(
             id="vacation/active-tiny-exhausted/no-sensors-fallback",
@@ -1123,19 +1150,19 @@ def _fallback_family() -> list[Case]:
         "smart-4min-10h": (("mode", "smart"), ("duration_minutes", 4), ("interval_hours", 10)),
         "manual": (("mode", "manual"),),
     }
-    for plant_key in ("monstera", "fern_cat", "cactus_cat"):
-        for cfg_key, cfg in configs.items():
-            for temp in temps:
-                cases.append(
-                    Case(
-                        id=f"fallback/{plant_key}/{cfg_key}/temp={temp}",
-                        family="fallback",
-                        at=BASE_AT,
-                        plants=PLANT_SETS[plant_key],
-                        cluster_config=cfg,
-                        current_temp=temp,
-                    )
-                )
+    cases.extend(
+        Case(
+            id=f"fallback/{plant_key}/{cfg_key}/temp={temp}",
+            family="fallback",
+            at=BASE_AT,
+            plants=PLANT_SETS[plant_key],
+            cluster_config=cfg,
+            current_temp=temp,
+        )
+        for plant_key in ("monstera", "fern_cat", "cactus_cat")
+        for cfg_key, cfg in configs.items()
+        for temp in temps
+    )
     for temp in (None, 30.0):
         cases.append(
             Case(
@@ -1168,17 +1195,17 @@ def _fallback_family() -> list[Case]:
 
 def _learning_family() -> list[Case]:
     cases = []
-    for seed in (None, "blocked_drip", "rapid_drainage"):
-        for soil in (38.0, 55.0):
-            cases.append(
-                Case(
-                    id=f"learning/{seed or 'none'}/m{soil:g}",
-                    family="learning",
-                    at=BASE_AT,
-                    sensors=(_sensor(soil, temp=22.0),),
-                    learning=seed,
-                )
-            )
+    cases.extend(
+        Case(
+            id=f"learning/{seed or 'none'}/m{soil:g}",
+            family="learning",
+            at=BASE_AT,
+            sensors=(_sensor(soil, temp=22.0),),
+            learning=seed,
+        )
+        for seed in (None, "blocked_drip", "rapid_drainage")
+        for soil in (38.0, 55.0)
+    )
     dry_dim_air = tuple(Reading(age_s=i * HOUR, soil=20.0, hum=20.0, light=18) for i in range(6))
     cases.append(
         Case(
@@ -1277,5 +1304,6 @@ def build_cases(family: str | None = None) -> list[Case]:
     cases = [case for name in names for case in FAMILIES[name]()]
     duplicates = sorted(i for i, n in Counter(c.id for c in cases).items() if n > 1)
     if duplicates:
-        raise ValueError(f"duplicate case ids: {duplicates}")
+        msg = f"duplicate case ids: {duplicates}"
+        raise ValueError(msg)
     return cases

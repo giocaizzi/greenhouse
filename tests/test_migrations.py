@@ -8,14 +8,18 @@ These tests guard init_db, which is plain ``alembic upgrade head``:
   (OD3): the baseline revision fails on the existing tables.
 """
 
+import logging
 import os
 import tempfile
+from logging import config as logging_config
+from pathlib import Path
 
 import pytest
+from alembic import command
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.exc import OperationalError
 
-from greenhouse_core.database import head_revision, init_db
+from greenhouse_core.database import _alembic_config, head_revision, init_db
 
 
 @pytest.fixture
@@ -23,10 +27,10 @@ def file_db():
     """Tempfile-backed SQLite — alembic-friendly (in-memory loses tables across connections)."""
     fd, path = tempfile.mkstemp(suffix=".db")
     os.close(fd)
-    os.remove(path)
+    Path(path).unlink()
     yield f"sqlite:///{path}"
-    if os.path.exists(path):
-        os.remove(path)
+    if Path(path).exists():
+        Path(path).unlink()
 
 
 def test_empty_db_runs_baseline_to_head(file_db):
@@ -130,13 +134,13 @@ def test_pre_alembic_db_is_not_repaired(file_db):
 
 
 def test_init_db_does_not_disable_application_loggers():
-    """Regression: alembic's env.py ran ``fileConfig`` with the default
-    ``disable_existing_loggers=True``, so every logger created before
-    ``init_db`` (i.e. every server module imported before ``create_app``)
-    was silently muted for the life of the process — scheduler job failures,
-    pump-watcher warnings and deprecation notices never reached the log."""
-    import logging
+    """Regression: running the migrations no longer mutes loggers created before ``init_db``.
 
+    Alembic's env.py ran ``fileConfig`` with the default ``disable_existing_loggers=True``,
+    so every server module imported before ``create_app`` was silently muted for the life
+    of the process — scheduler job failures, pump-watcher warnings and deprecation notices
+    never reached the log.
+    """
     app_logger = logging.getLogger("greenhouse_server.services.irrigation")
     engine = create_engine("sqlite://")
     try:
@@ -152,8 +156,6 @@ def test_init_db_leaves_the_host_logging_configuration_alone(tmp_path):
     It used to replace the root handlers and level on every ``create_app``, so ``caplog`` (and
     any handler the host installed) saw nothing afterwards.
     """
-    import logging
-
     root = logging.getLogger()
     sentinel = logging.NullHandler()
     root.addHandler(sentinel)
@@ -169,16 +171,10 @@ def test_init_db_leaves_the_host_logging_configuration_alone(tmp_path):
 
 def test_the_alembic_command_line_still_configures_logging(monkeypatch, tmp_path):
     """A Config without the opt-out (what ``alembic`` builds from the ini) still runs ``fileConfig``."""
-    from logging import config as logging_config
-
-    from alembic import command
-
-    from greenhouse_core import database
-
     calls = []
     monkeypatch.setattr(logging_config, "fileConfig", lambda *a, **k: calls.append((a, k)))
     engine = create_engine(f"sqlite:///{tmp_path / 'cli.db'}")
-    cfg = database._alembic_config(engine)
+    cfg = _alembic_config(engine)
     del cfg.attributes["configure_logging"]
     with engine.connect() as conn:
         cfg.attributes["connection"] = conn

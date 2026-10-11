@@ -25,6 +25,7 @@ from fake_data import (
 from golden import ENV_PREFIXES, FROZEN_INSTANT
 from greenhouse_core.models import Base
 from greenhouse_core.repository import IrrigationRepository
+from greenhouse_server.config import Settings
 
 # Server fixtures (``app``, ``client``, …) as a global plugin rather than a ``tests/server``
 # conftest, so mixing directories on one command line cannot hide them (server/fixtures.py).
@@ -42,14 +43,16 @@ def _no_network(monkeypatch):
     no longer depend on live weather or network access. Tests that stub ``urlopen`` themselves override this.
     """
 
-    def _blocked_urlopen(url, *args, **kwargs):
-        raise urllib.error.URLError(f"network disabled in tests: {getattr(url, 'full_url', url)}")
+    def _blocked_urlopen(url, *_args, **_kwargs):
+        msg = f"network disabled in tests: {getattr(url, 'full_url', url)}"
+        raise urllib.error.URLError(msg)
 
     real_connect = socket.socket.connect
 
     def _loopback_only_connect(self, address):
         if self.family in (socket.AF_INET, socket.AF_INET6) and address[0] not in _LOOPBACK_HOSTS:
-            raise OSError(f"network disabled in tests: {address!r}")
+            msg = f"network disabled in tests: {address!r}"
+            raise OSError(msg)
         return real_connect(self, address)
 
     monkeypatch.setattr(urllib.request, "urlopen", _blocked_urlopen)
@@ -77,7 +80,6 @@ def _no_developer_dotenv(request, monkeypatch):
     """
     if request.node.get_closest_marker("dotenv"):
         return
-    from greenhouse_server.config import Settings
 
     monkeypatch.setitem(Settings.model_config, "env_file", None)
 

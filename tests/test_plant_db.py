@@ -4,12 +4,16 @@ import pytest
 
 from greenhouse_core.plant_db import get_plant_database, reset_plant_database
 
+FALLBACK_TEMP_MIN_C = 18
+PREFERRED_HOURS_BOUNDS = 2  # [start, end]
+
 
 class TestPlantDatabase:
     """Test plant database lookups and fallback logic."""
 
     @pytest.fixture(autouse=True)
     def setup(self):
+        """Load the bundled plant database and reset the singleton afterwards."""
         self.db = get_plant_database()
         yield
         reset_plant_database()
@@ -51,7 +55,7 @@ class TestPlantDatabase:
         """get_care_data returns safe defaults when nothing matches."""
         data = self.db.get_care_data(species="Unknown", category="unknown")
         assert data["water_needs"] == "medium"
-        assert data["ideal_temp_min_c"] == 18
+        assert data["ideal_temp_min_c"] == FALLBACK_TEMP_MIN_C
         assert data["soil_moisture_target"] == "45-65"
 
     def test_category_defaults_surface_for_unknown_species(self):
@@ -62,7 +66,7 @@ class TestPlantDatabase:
         # seasonal multiplier — both must appear in the merged dict.
         assert "preferred_water_hours_local" in data
         assert isinstance(data["preferred_water_hours_local"], list)
-        assert len(data["preferred_water_hours_local"]) == 2
+        assert len(data["preferred_water_hours_local"]) == PREFERRED_HOURS_BOUNDS
         assert "season_frequency_multiplier" in data
         # The raw category-default block is also exposed so the engine can use
         # it as a distinct override layer.

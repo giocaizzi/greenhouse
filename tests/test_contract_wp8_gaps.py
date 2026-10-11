@@ -16,6 +16,9 @@ import pytest
 
 from engine_grid import BASE_AT, DAY, HOUR, Case, Event, Leak, Reading, SensorSpec, run_case
 from greenhouse_core.logic import IrrigationLogic
+from greenhouse_core.logic.engine import _allowed_cumulative_liters
+
+UNTRIMMED_DURATION_MIN = 2
 
 _DROP = object()
 _KEY = "season_frequency_multiplier"
@@ -82,7 +85,7 @@ def test_seasonal_first_plant_override_kept_while_category_comes_from_a_later_pl
         },
         plants=_TWO_TROPICALS,
     )
-    assert _reason(decision, "seasonal_hold")["message"] == "spring multiplier 0.25× for indoor cluster"
+    assert _reason(decision, "seasonal_hold")["message"] == "spring multiplier 0.25\u00d7 for indoor cluster"
 
 
 def test_seasonal_first_category_override_kept_while_plant_comes_from_a_later_plant():
@@ -100,14 +103,14 @@ def test_seasonal_first_category_override_kept_while_plant_comes_from_a_later_pl
         },
         plants=_TWO_TROPICALS,
     )
-    assert _reason(decision, "seasonal_hold")["message"] == "spring multiplier 0.25× for indoor cluster"
+    assert _reason(decision, "seasonal_hold")["message"] == "spring multiplier 0.25\u00d7 for indoor cluster"
 
 
 def test_seasonal_plant_override_from_a_later_plant_still_wins_over_an_earlier_category():
     """Mutant ``plant_override is not None -> is None`` (break guard): the loop only stops once BOTH are found.
 
     Plant 1 contributes only a category value (0.25); plant 2 contributes a
-    species-level ``spring`` value (4.0), which outranks the category layer → 4×.
+    species-level ``spring`` value (4.0), which outranks the category layer → 4x.
     """
     decision = _decide(
         "season-plant-later",
@@ -117,7 +120,7 @@ def test_seasonal_plant_override_from_a_later_plant_still_wins_over_an_earlier_c
         },
         plants=_TWO_TROPICALS,
     )
-    assert _reason(decision, "seasonal_boost")["message"] == "spring multiplier 4× for indoor cluster"
+    assert _reason(decision, "seasonal_boost")["message"] == "spring multiplier 4\u00d7 for indoor cluster"
 
 
 # ── cooldown / leak-hold message arithmetic ─────────────────────────────────
@@ -186,9 +189,7 @@ def test_zero_length_vacation_counts_as_one_day():
     end became exclusive, a window starting and ending now is not active at all, so
     the budget helper is exercised directly.
     """
-    from greenhouse_core.logic import engine
-
-    assert engine._allowed_cumulative_liters(reservoir_l=100.0, starts_at=0, ends_at=0, now=0) == pytest.approx(95.0)
+    assert _allowed_cumulative_liters(reservoir_l=100.0, starts_at=0, ends_at=0, now=0) == pytest.approx(95.0)
     decision = _vacation("vac-zero-length", (0, 0), reservoir_l=100.0)
     assert [r["code"] for r in decision["reasons"]] == ["sensor_dry"]
 
@@ -197,7 +198,7 @@ def test_sub_day_vacation_budget_is_one_full_day():
     """Mutant ``max(1, ...) -> max(2, ...)``: a 12 h vacation is one day → 3.8 L usable → 3 min ≥ 2, untouched."""
     decision = _vacation("vac-12h", (-HOUR, 11 * HOUR), reservoir_l=4.0)
     assert [r["code"] for r in decision["reasons"]] == ["sensor_dry", "vacation_active"]
-    assert decision["duration_minutes"] == 2
+    assert decision["duration_minutes"] == UNTRIMMED_DURATION_MIN
 
 
 def test_vacation_length_rounds_up_to_whole_days():

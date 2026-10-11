@@ -2,7 +2,7 @@
 
 One headless tour of the real app (seeded in-memory server, fake devices, offline
 weather, clock frozen at ``FROZEN_INSTANT`` *before* seeding, ``TZ=UTC``, sprite
-animation off, fixed 120×40 terminal) captures:
+animation off, fixed 120x40 terminal) captures:
 
 - ``tests/golden/tui/screens/<name>.txt`` — a plain-text export of every screen,
   every cluster tab and every dialog;
@@ -98,7 +98,8 @@ class _SearchGate:
 
         def gated(*args, **kwargs):
             if not self.open.wait(timeout=60):
-                raise AssertionError("search gate never reopened")
+                msg = "search gate never reopened"
+                raise AssertionError(msg)
             return search(*args, **kwargs)
 
         client.search = gated
@@ -111,73 +112,84 @@ def _only_live_search(tui, query: str) -> bool:
     return [w.description for w in live] == [f"search({query!r})"]
 
 
+class _Tourist:
+    """One tour's pilot and app, and the captures it records (plain-text screen + DOM ids per name)."""
+
+    def __init__(self, pilot, tui, captures: dict[str, tuple[str, list[str]]]) -> None:
+        self.pilot, self.tui, self.captures = pilot, tui, captures
+
+    def snap(self, name: str) -> None:
+        self.captures[name] = (screen_text(self.tui), _dom_ids(self.tui.screen))
+
+    async def press(self, *keys: str) -> None:
+        await self.pilot.press(*keys)
+        await settle(self.pilot, self.tui)
+
+
 async def _tour(http, captures: dict[str, tuple[str, list[str]]]) -> None:
     gate = _SearchGate(http)
     tui = make_tui(http, factory=gate.factory)
-
-    def snap(name: str) -> None:
-        captures[name] = (screen_text(tui), _dom_ids(tui.screen))
-
     async with tui.run_test(size=SIZE) as pilot:
+        tourist = _Tourist(pilot, tui, captures)
         await settle(pilot, tui)
-        snap("dashboard")
-
-        await pilot.press("X")
-        await settle(pilot, tui)
-        snap("confirm_stop_all")
-        await pilot.press("n")
-        await settle(pilot, tui)
-
-        await pilot.press("n")
-        await settle(pilot, tui)
-        snap("form_new_cluster")
-        await pilot.press("escape")
-        await settle(pilot, tui)
-
-        await pilot.press("slash")
-        await settle(pilot, tui)
-        gate.open.clear()
-        await pilot.press(*"citrus")
-        await wait_until(
-            lambda: _only_live_search(tui, "citrus"), "the search worker for 'citrus' to be the only live one"
-        )
-        gate.open.set()
-        await pilot.pause(0.4)
-        await settle(pilot, tui)
-        snap("search_citrus")
-        await pilot.press("escape")
-        await settle(pilot, tui)
-
-        for key, name in (("a", "alerts"), ("l", "activity"), ("s", "system"), ("o", "settings")):
-            await pilot.press(key)
-            await settle(pilot, tui)
-            snap(name)
-        await pilot.press("d")
-        await settle(pilot, tui)
-
-        await tui.push_screen(ClusterScreen(1))
-        await settle(pilot, tui)
-        for tab in CLUSTER_TABS:
-            tui.screen.query_one("TabbedContent").active = tab
-            await settle(pilot, tui)
-            snap(f"cluster_1_{tab.removeprefix('tab-')}")
-        tui.screen.query_one("TabbedContent").active = "tab-overview"
-        await settle(pilot, tui)
-        for key, name in (("i", "irrigate"), ("w", "water_now")):
-            await pilot.press(key)
-            await settle(pilot, tui)
-            snap(name)
-            await pilot.press("escape")
-            await settle(pilot, tui)
-        tui.pop_screen()
-        await settle(pilot, tui)
-
+        await _tour_dashboard_dialogs(tourist)
+        await _tour_search(tourist, gate)
+        await _tour_top_level_screens(tourist)
+        await _tour_cluster_1(tourist)
         for cluster_id in (2, 3):
             await tui.push_screen(ClusterScreen(cluster_id))
             await settle(pilot, tui)
-            snap(f"cluster_{cluster_id}_overview")
+            tourist.snap(f"cluster_{cluster_id}_overview")
             tui.pop_screen()
             await settle(pilot, tui)
+
+
+async def _tour_dashboard_dialogs(t: _Tourist) -> None:
+    t.snap("dashboard")
+    await t.press("X")
+    t.snap("confirm_stop_all")
+    await t.press("n")
+    await t.press("n")
+    t.snap("form_new_cluster")
+    await t.press("escape")
+
+
+async def _tour_search(t: _Tourist, gate: _SearchGate) -> None:
+    pilot, tui = t.pilot, t.tui
+    await t.press("slash")
+    gate.open.clear()
+    await pilot.press(*"citrus")
+    await wait_until(lambda: _only_live_search(tui, "citrus"), "the search worker for 'citrus' to be the only live one")
+    gate.open.set()
+    await pilot.pause(0.4)
+    await settle(pilot, tui)
+    t.snap("search_citrus")
+    await t.press("escape")
+
+
+async def _tour_top_level_screens(t: _Tourist) -> None:
+    for key, name in (("a", "alerts"), ("l", "activity"), ("s", "system"), ("o", "settings")):
+        await t.press(key)
+        t.snap(name)
+    await t.press("d")
+
+
+async def _tour_cluster_1(t: _Tourist) -> None:
+    pilot, tui = t.pilot, t.tui
+    await tui.push_screen(ClusterScreen(1))
+    await settle(pilot, tui)
+    for tab in CLUSTER_TABS:
+        tui.screen.query_one("TabbedContent").active = tab
+        await settle(pilot, tui)
+        t.snap(f"cluster_1_{tab.removeprefix('tab-')}")
+    tui.screen.query_one("TabbedContent").active = "tab-overview"
+    await settle(pilot, tui)
+    for key, name in (("i", "irrigate"), ("w", "water_now")):
+        await t.press(key)
+        t.snap(name)
+        await t.press("escape")
+    tui.pop_screen()
+    await settle(pilot, tui)
 
 
 async def _login_tour(http, captures) -> None:
@@ -232,10 +244,11 @@ def test_screen_render_golden(captures, name):
 
 
 def test_tour_covers_exactly_the_named_screens(captures):
+    """The screen tour captures exactly the named screens, no more and no fewer."""
     assert sorted(captures) == sorted(SCREEN_NAMES)
 
 
-_TCSS_COMMENT = re.compile(r"/\*.*?\*/", re.S)
+_TCSS_COMMENT = re.compile(r"/\*.*?\*/", re.DOTALL)
 
 
 def _tcss_selectors() -> list[str]:

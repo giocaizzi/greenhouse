@@ -3,6 +3,7 @@
 import time
 
 import pytest
+from sqlalchemy.exc import IntegrityError
 
 from fake_data import (
     FAKE_CLUSTER_LOCATION,
@@ -13,6 +14,18 @@ from fake_data import (
     FAKE_SENSOR_ID,
     FAKE_SENSOR_NAME,
 )
+from greenhouse_core.repository import IrrigatorExistsError
+
+# Values written by the tests below and read back.
+CLUSTERS_ADDED = 3
+FIRST_TEMP_C, SECOND_TEMP_C = 22.5, 23.0
+CONFIG_DURATION_MIN, CONFIG_INTERVAL_H = 3, 8
+UPDATED_DURATION_MIN = 5
+READINGS_BEFORE_PIVOT, READINGS_AFTER_PIVOT = 3, 2
+BULK_NEW_ROWS = 2
+READINGS_WRITTEN = 2
+EVENTS_LOGGED = 2
+LAST_READING_TS = 2000
 
 
 class TestDatabase:
@@ -35,7 +48,7 @@ class TestDatabase:
         tmp_db.add_cluster("Cluster C")
 
         clusters = tmp_db.list_clusters()
-        assert len(clusters) == 3
+        assert len(clusters) == CLUSTERS_ADDED
         names = [c.name for c in clusters]
         assert "Cluster A" in names
         assert "Cluster B" in names
@@ -86,8 +99,6 @@ class TestDatabase:
             config={},
         )
 
-        from sqlalchemy.exc import IntegrityError
-
         # Distinct cluster avoids the one-irrigator-per-cluster guard; the
         # duplicate device id must still trip the DB unique constraint.
         with pytest.raises(IntegrityError):
@@ -101,8 +112,6 @@ class TestDatabase:
 
     def test_one_irrigator_per_cluster(self, tmp_db):
         """A cluster holds at most one irrigator — a second add raises IrrigatorExistsError."""
-        from greenhouse_core.repository import IrrigatorExistsError
-
         cluster_id = tmp_db.add_cluster(FAKE_CLUSTER_NAME)
         tmp_db.add_irrigator(
             cluster_id=cluster_id,
@@ -137,10 +146,10 @@ class TestDatabase:
         tmp_db.add_sensor_reading(sensor_id=sensor_id, timestamp=now + 60, temperature=23.0, env_humidity=64.0)
 
         readings = tmp_db.get_recent_readings(sensor_id, hours=24)
-        assert len(readings) == 2
+        assert len(readings) == READINGS_WRITTEN
         temps = [r.temperature for r in readings]
-        assert 22.5 in temps
-        assert 23.0 in temps
+        assert FIRST_TEMP_C in temps
+        assert SECOND_TEMP_C in temps
 
     def test_irrigation_events(self, tmp_db):
         """Irrigation events can be logged and retrieved."""
@@ -159,7 +168,7 @@ class TestDatabase:
         tmp_db.add_irrigation_event(irrigator_id=irrigator_id, action="stop", triggered_by="manual")
 
         events = tmp_db.get_recent_events(irrigator_id, hours=24)
-        assert len(events) == 2
+        assert len(events) == EVENTS_LOGGED
         actions = [e.action for e in events]
         assert "start" in actions
         assert "stop" in actions
@@ -178,8 +187,8 @@ class TestDatabase:
         config = tmp_db.get_irrigation_config(cluster_id)
         assert config is not None
         assert config.mode == "smart"
-        assert config.duration_minutes == 3
-        assert config.interval_hours == 8
+        assert config.duration_minutes == CONFIG_DURATION_MIN
+        assert config.interval_hours == CONFIG_INTERVAL_H
         assert config.auto_run is True
 
     def test_config_update(self, tmp_db):
@@ -194,7 +203,7 @@ class TestDatabase:
 
         config = tmp_db.get_irrigation_config(cluster_id)
         assert config.mode == "smart"
-        assert config.duration_minutes == 5
+        assert config.duration_minutes == UPDATED_DURATION_MIN
 
     def test_get_readings_around(self, tmp_db):
         """Readings before and after a timestamp are correctly split."""
@@ -220,8 +229,8 @@ class TestDatabase:
 
         before, after = tmp_db.get_readings_around(sensor_id, pivot, before_seconds=1800, after_seconds=7200)
 
-        assert len(before) == 3
-        assert len(after) == 2
+        assert len(before) == READINGS_BEFORE_PIVOT
+        assert len(after) == READINGS_AFTER_PIVOT
         assert before[0].soil_moisture == pytest.approx(30.0)
         assert before[-1].soil_moisture == pytest.approx(33.0)
         assert after[0].soil_moisture == pytest.approx(40.0)
@@ -248,9 +257,9 @@ class TestDatabase:
         ]
         inserted = tmp_db.bulk_add_sensor_readings(readings)
 
-        assert inserted == 2
+        assert inserted == BULK_NEW_ROWS
         all_readings = tmp_db.get_recent_readings(sensor_id, hours=999999)
-        assert len(all_readings) == 3
+        assert len(all_readings) == BULK_NEW_ROWS + 1
 
     def test_bulk_add_with_extended_columns(self, tmp_db):
         """Bulk insert correctly stores env_humidity, battery_state, water_warning."""
@@ -268,10 +277,10 @@ class TestDatabase:
             (sensor_id, 2000, 23.0, 50.0, 900, 60.0, "middle", 1),
         ]
         inserted = tmp_db.bulk_add_sensor_readings(readings)
-        assert inserted == 2
+        assert inserted == BULK_NEW_ROWS
 
         all_readings = tmp_db.get_recent_readings(sensor_id, hours=999999)
-        assert len(all_readings) == 2
+        assert len(all_readings) == BULK_NEW_ROWS
         # Check extended columns are persisted
         r = sorted(all_readings, key=lambda x: x.timestamp)
         assert r[0].env_humidity == pytest.approx(65.0)
@@ -311,7 +320,7 @@ class TestDatabase:
         tmp_db.add_sensor_reading(sensor_id=sensor_id, timestamp=1000, soil_moisture=30.0)
         tmp_db.add_sensor_reading(sensor_id=sensor_id, timestamp=2000, soil_moisture=35.0)
 
-        assert tmp_db.get_last_reading_timestamp(sensor_id) == 2000
+        assert tmp_db.get_last_reading_timestamp(sensor_id) == LAST_READING_TS
 
     def test_sensor_reading_dedup(self, tmp_db):
         """Duplicate (sensor_id, timestamp) is silently skipped."""

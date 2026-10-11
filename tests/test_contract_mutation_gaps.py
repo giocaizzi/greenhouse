@@ -25,6 +25,12 @@ from greenhouse_core.logic.cleaning import clean_readings
 from greenhouse_core.logic.timing import is_within_quiet_hours, local_now
 from greenhouse_core.utils import effective_light_threshold
 
+# Literal pins (mutation-gap tests pin the numbers, not the constants that hold them).
+WATER_WARNING_CONFIDENCE = 0.92
+BASELINE_CONFIDENCE = 0.5
+LIGHT_ONLY_LUX = 60
+POST_READING_DELAY_S = 600  # ten minutes after the start, the inclusive boundary
+
 
 @pytest.fixture(autouse=True)
 def _hermetic(clean_env):
@@ -58,7 +64,7 @@ def test_water_warning_outranks_critical_stress_when_both_fire():
     """
     decision = _decide("ww-and-stress", sensors=(_sensor(Reading(age_s=600, soil=20.0, water_warning=True)),))
     assert _codes(decision) == ["water_warning"]
-    assert decision["confidence"] == 0.92
+    assert decision["confidence"] == WATER_WARNING_CONFIDENCE
     assert decision["stress_indicators"]["water_stress"] is not None
     assert (decision["action"], decision["duration_minutes"], decision["interval_hours"]) == ("irrigate", 3, 6)
 
@@ -129,9 +135,9 @@ def test_light_only_sensor_data_counts_as_data():
     adjustment) instead of falling back to the no-data temperature rule.
     """
     decision = _decide("light-only", sensors=(_sensor(Reading(age_s=600, light=60)),))
-    assert decision["sensor_snapshot"]["avg_light"] == 60
+    assert decision["sensor_snapshot"]["avg_light"] == LIGHT_ONLY_LUX
     assert "no_data" not in _codes(decision)
-    assert decision["confidence"] == 0.5
+    assert decision["confidence"] == BASELINE_CONFIDENCE
 
 
 # ── logic/sensors.py ────────────────────────────────────────────────────────
@@ -150,7 +156,7 @@ def test_water_warning_names_are_deduplicated_per_sensor():
 
 @pytest.mark.parametrize(("fraction", "expected"), [(0.35, True), (0.45, False)])
 def test_low_light_stress_fires_below_40_percent_of_the_seasonal_minimum(fraction, expected):
-    """stress-02: ``low_light`` needs ``avg_light < 0.4 × effective_light_threshold(lux_min)``.
+    """stress-02: ``low_light`` needs ``avg_light < 0.4 x effective_light_threshold(lux_min)``.
 
     Monstera's summer baseline is 150 lux; April's seasonal factor applies (month in the preferences timezone).
     """
@@ -283,6 +289,8 @@ def test_unknown_timezone_falls_back_to_utc(tz_name):
 
 @pytest.fixture
 def repo(tmp_db, frozen_clock):
+    """Provide the test repository with the clock frozen."""
+    del frozen_clock  # side-effect fixture (the clock is frozen)
     return tmp_db
 
 
@@ -359,7 +367,7 @@ def test_blocked_drip_needs_low_efficiency_and_low_absorption(repo, monkeypatch,
     monkeypatch.setattr(
         issues_mod,
         "get_plant_profile",
-        lambda db, sensor: _profile(sensor.id, efficiency=efficiency, absorption=absorption),
+        lambda _db, sensor: _profile(sensor.id, efficiency=efficiency, absorption=absorption),
     )
     alerts = issues_mod.detect_issues(repo, plant_database(), cid)
     assert [a.alert_type for a in alerts] == (["blocked_drip"] if blocked else [])
@@ -373,7 +381,7 @@ def test_rapid_drainage_needs_drainage_strictly_below_threshold(repo, monkeypatc
     monkeypatch.setattr(
         issues_mod,
         "get_plant_profile",
-        lambda db, sensor: _profile(sensor.id, efficiency=1.0, absorption=1.0, drainage=drainage),
+        lambda _db, sensor: _profile(sensor.id, efficiency=1.0, absorption=1.0, drainage=drainage),
     )
     alerts = issues_mod.detect_issues(repo, plant_database(), cid)
     assert [a.alert_type for a in alerts] == (["rapid_drainage"] if rapid else [])
@@ -411,8 +419,9 @@ def _two_probe_cluster(repo, *, link_plant: bool = True):
     ],
 )
 def test_conflict_light_and_humidity_checks_need_five_samples(repo, metric, value, samples, flagged):
-    """learning-09 / learning-14: the low-light (7 d, daytime lux) and low-humidity (48 h) checks skip
-    sensors with fewer than 5 samples.
+    """learning-09 / learning-14: the low-light and low-humidity checks skip sensors with fewer than 5 samples.
+
+    Low light looks at 7 d of daytime lux, low humidity at 48 h.
 
     Monstera: summer minimum 150 lux (April factor 0.85, alert below half → < 63.75 lux) and
     ideal humidity ≥ 60 % (alert below 45 %).
@@ -427,8 +436,11 @@ def test_conflict_light_and_humidity_checks_need_five_samples(repo, metric, valu
 
 @pytest.mark.parametrize(("delay", "counted"), [(600, True), (599, False)])
 def test_post_irrigation_reading_counts_from_exactly_ten_minutes(repo, delay, counted):
-    """learning-16 / learning-17: a reading ``>= 600 s`` after the start is a valid "post" sample
-    (inclusive), and "pre" is the LAST reading before the start (30 %, not the older 20 %)."""
+    """learning-16 / learning-17: the "post" boundary is inclusive and "pre" is the last reading before the start.
+
+    A reading ``>= 600 s`` after the start is a valid "post" sample, and "pre" is the LAST
+    reading before the start (30 %, not the older 20 %).
+    """
     sid = _probe(repo)
     start = FROZEN_TS - 3600
     repo.add_sensor_reading(sensor_id=sid, timestamp=start - 1500, soil_moisture=20.0)
@@ -438,7 +450,7 @@ def test_post_irrigation_reading_counts_from_exactly_ten_minutes(repo, delay, co
     response = compute_sensor_response(repo, repo.get_sensor(sid), event)
     if counted:
         assert (response.pre_moisture, response.post_moisture, response.delta_per_minute) == (30.0, 50.0, 5.0)
-        assert response.reading_delay_seconds == 600
+        assert response.reading_delay_seconds == POST_READING_DELAY_S
     else:
         assert response is None
 
@@ -517,10 +529,12 @@ def test_learning_report_text(repo, monkeypatch, efficiency, warned):
     sid = _probe(repo)
     cid = repo.get_sensor(sid).cluster_id
     monkeypatch.setattr(
-        report_mod, "get_plant_profile", lambda db, sensor: _profile(sensor.id, efficiency=efficiency, absorption=1.0)
+        report_mod, "get_plant_profile", lambda _db, sensor: _profile(sensor.id, efficiency=efficiency, absorption=1.0)
     )
     monkeypatch.setattr(
-        report_mod, "detect_issues", lambda db, pdb, c: [Alert(severity="warning", alert_type="x", message="check it")]
+        report_mod,
+        "detect_issues",
+        lambda _db, _pdb, _c: [Alert(severity="warning", alert_type="x", message="check it")],
     )
     lines = report_mod.generate_report(repo, plant_database(), cid).split("\n")
     assert lines[:3] == ["📊 Irrigation Learning Report", "=" * 40, ""]

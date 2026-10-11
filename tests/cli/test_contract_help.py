@@ -30,6 +30,10 @@ from typer.testing import CliRunner
 from golden import assert_golden, assert_golden_json
 from greenhouse_cli.main import app
 
+COMMAND_GROUPS = 13
+LEAF_COMMANDS = 61
+STABLE_HELP_WIDTH = 100  # COLUMNS pinned by clean_env
+
 PROG = "greenhouse"
 HELP_GOLDEN_DIR = "cli/help"
 EXPECTED_HELP_PAGES = 74  # 13 groups + 61 leaf commands
@@ -99,6 +103,7 @@ def walk_commands() -> list[tuple[tuple[str, ...], Any]]:
 
 
 def is_group(cmd: Any) -> bool:
+    """Return whether a click command is a group (has sub-commands)."""
     return hasattr(cmd, "commands")
 
 
@@ -108,6 +113,7 @@ def leaf_command_paths() -> list[tuple[str, ...]]:
 
 
 def golden_name(path: tuple[str, ...]) -> str:
+    """Return the golden file name of a command path's help page."""
     return ".".join((PROG, *path)) + ".txt"
 
 
@@ -120,6 +126,7 @@ def _jsonable(value: Any) -> Any:
 
 
 def describe_param(param: Any) -> dict[str, Any]:
+    """Describe one click parameter (name, kind, type, default, flags) as JSON."""
     ptype = param.type
     return {
         "name": param.name,
@@ -146,6 +153,7 @@ def describe_param(param: Any) -> dict[str, Any]:
 
 
 def describe_command(path: tuple[str, ...], cmd: Any) -> dict[str, Any]:
+    """Describe one command and its parameters as JSON for the tree golden."""
     entry: dict[str, Any] = {
         "path": " ".join((PROG, *path)),
         "group": is_group(cmd),
@@ -167,21 +175,24 @@ runner = CliRunner()
 
 
 def test_command_tree_has_every_help_page():
+    """The command tree has the pinned number of help pages and groups."""
     assert len(COMMANDS) == EXPECTED_HELP_PAGES
     groups = [p for p, c in COMMANDS if is_group(c)]
-    assert len(groups) == 13
-    assert len(leaf_command_paths()) == 61
+    assert len(groups) == COMMAND_GROUPS
+    assert len(leaf_command_paths()) == LEAF_COMMANDS
 
 
-def test_params_golden(stable_cli_env):
+@pytest.mark.usefixtures("stable_cli_env")
+def test_params_golden():
     """Every group/command with its params (name, opts, default, required, type, …) == golden."""
     # Re-walk under the fixture: the completion options depend on env read at get_command() time.
     tree = [describe_command(path, cmd) for path, cmd in walk_commands()]
     assert_golden_json("cli/params.json", tree)
 
 
+@pytest.mark.usefixtures("stable_cli_env")
 @pytest.mark.parametrize("path", [p for p, _ in COMMANDS], ids=lambda p: ".".join((PROG, *p)))
-def test_help_page_golden(stable_cli_env, path):
+def test_help_page_golden(path):
     """``greenhouse <path> --help`` → exit 0, nothing on stderr, stdout == golden."""
     result = runner.invoke(app, [*path, "--help"], prog_name=PROG)
     assert result.exception is None or isinstance(result.exception, SystemExit), result.exception
@@ -191,8 +202,9 @@ def test_help_page_golden(stable_cli_env, path):
     assert_golden(f"{HELP_GOLDEN_DIR}/{golden_name(path)}", help_golden_text(result.stdout))
 
 
+@pytest.mark.usefixtures("stable_cli_env")
 @pytest.mark.parametrize("path", [p for p, c in COMMANDS if is_group(c)], ids=lambda p: ".".join((PROG, *p)) or PROG)
-def test_group_without_args_prints_help_and_exits_0(stable_cli_env, path):
+def test_group_without_args_prints_help_and_exits_0(path):
     """A bare group behaves exactly like ``--help``: the same page on stdout, nothing on stderr, exit 0."""
     bare = runner.invoke(app, list(path), prog_name=PROG)
     helped = runner.invoke(app, [*path, "--help"], prog_name=PROG)
@@ -201,7 +213,8 @@ def test_group_without_args_prints_help_and_exits_0(stable_cli_env, path):
     assert bare.stdout == helped.stdout
 
 
-def test_help_is_width_stable_against_hostile_terminal_env(stable_cli_env, monkeypatch):
+@pytest.mark.usefixtures("stable_cli_env")
+def test_help_is_width_stable_against_hostile_terminal_env(monkeypatch):
     """A developer's ``TERMINAL_WIDTH``/``FORCE_COLOR`` must not leak into goldens once the fixture is applied.
 
     The fixture already deleted the variables; this sets hostile values *after* it and shows that only the
@@ -214,4 +227,4 @@ def test_help_is_width_stable_against_hostile_terminal_env(stable_cli_env, monke
     again = runner.invoke(app, ["config", "set", "--help"], prog_name=PROG).stdout
     assert again == baseline
     assert "\x1b[" not in baseline  # no ANSI escapes
-    assert max(len(line) for line in baseline.splitlines()) <= 100
+    assert max(len(line) for line in baseline.splitlines()) <= STABLE_HELP_WIDTH

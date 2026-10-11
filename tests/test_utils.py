@@ -11,6 +11,9 @@ from greenhouse_core.utils import (
     set_display_timezone,
 )
 
+WINTER_LIGHT_FACTOR = 0.50
+SUMMER_BASE_LUX = 800.0
+
 
 @pytest.fixture(autouse=True)
 def _reset_display_tz():
@@ -21,6 +24,8 @@ def _reset_display_tz():
 
 
 class TestSeasonalLightFactor:
+    """``seasonal_light_factor`` per month."""
+
     def test_summer_peak(self):
         """June and July return 1.0 (peak)."""
         assert seasonal_light_factor(6) == 1.0
@@ -28,8 +33,8 @@ class TestSeasonalLightFactor:
 
     def test_winter_minimum(self):
         """December and January return lowest factor."""
-        assert seasonal_light_factor(12) == 0.50
-        assert seasonal_light_factor(1) == 0.50
+        assert seasonal_light_factor(12) == WINTER_LIGHT_FACTOR
+        assert seasonal_light_factor(1) == WINTER_LIGHT_FACTOR
 
     def test_spring_increases(self):
         """Factor increases from winter to summer."""
@@ -52,6 +57,8 @@ class TestSeasonalLightFactor:
 
 
 class TestDaytimeLuxReadings:
+    """``daytime_lux_readings`` filtering."""
+
     def test_filters_night_readings(self):
         """Readings at or below threshold are excluded."""
 
@@ -80,9 +87,11 @@ class TestDaytimeLuxReadings:
 
 
 class TestEffectiveLightThreshold:
+    """``effective_light_threshold`` scaling by season."""
+
     def test_summer_full_threshold(self):
         """In summer, threshold equals base."""
-        assert effective_light_threshold(800, month=6) == 800.0
+        assert effective_light_threshold(800, month=6) == SUMMER_BASE_LUX
 
     def test_winter_reduced_threshold(self):
         """In winter, threshold is reduced."""
@@ -95,6 +104,8 @@ class TestEffectiveLightThreshold:
 
 
 class TestFormatTimestamp:
+    """``format_timestamp`` output."""
+
     def test_formats_unix_timestamp(self):
         """Timestamp is formatted to human-readable string."""
         result = format_timestamp(0)
@@ -108,6 +119,8 @@ class TestFormatTimestamp:
 
 
 class TestGetDisplayTimezone:
+    """``get_display_timezone`` resolution order."""
+
     def test_default_timezone(self, monkeypatch):
         """With no preference set and no env override, the default is UTC."""
         monkeypatch.delenv("IRRIGATION_TZ", raising=False)
