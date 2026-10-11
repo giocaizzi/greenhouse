@@ -231,12 +231,16 @@ forbidden_modules = ["greenhouse_core.devices", "greenhouse_core.sync"]
 name = "TUI view-model modules stay widget-free and I/O-free"
 type = "forbidden"
 source_modules = ["greenhouse_cli.tui.model", "greenhouse_cli.tui.formatting", "greenhouse_cli.tui.render"]
-forbidden_modules = ["textual", "greenhouse_cli.tui.screens", "greenhouse_cli.tui.widgets", "greenhouse_cli.client", "httpx"]
+forbidden_modules = ["textual", "greenhouse_cli.tui.screens", "greenhouse_cli.tui.widgets", "greenhouse_cli.client",
+                     "greenhouse_cli._client", "httpx"]
 
 [[tool.importlinter.contracts]]
-name = "CLI layers: main > commands > tui > client > constants"
+name = "CLI layers: main > commands > tui > client > _client > constants"
 type = "layers"
-layers = ["greenhouse_cli.main", "greenhouse_cli.commands", "greenhouse_cli.tui", "greenhouse_cli.client", "greenhouse_cli.constants"]
+layers = [
+  "greenhouse_cli.main", "greenhouse_cli.commands", "greenhouse_cli.tui", "greenhouse_cli.client", "greenhouse_cli._client",
+  "greenhouse_cli.constants",
+]
 
 [[tool.importlinter.contracts]]
 name = "TUI layers: app > screens > widgets|render > model > formatting|sprites"

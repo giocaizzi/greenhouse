@@ -53,7 +53,7 @@ Dependency direction is strict and **enforced by import-linter** (`make lint-imp
 | `__init__.py`, `_lazy.py` | package re-exports resolve lazily on first access (PEP 562, `lazy_module_attrs`; also in `devices/` and `learning/`), so importing a leaf such as `greenhouse_core.constants` does not load SQLAlchemy, Alembic, the engine or `tinytuya` |
 | `models.py` | SQLAlchemy v2 models (they declare the migrations' server defaults and named uniques, so `create_all` and the migrated schema agree); event vocabularies (`EVENT_ACTION_*`: `start`, `stop`, `attempted`, `aborted`, legacy `off`; `TRIGGERED_BY_*`); `parse_device_config` — the one lenient device-`config` parser (malformed / non-object JSON → `{}`) |
 | `schemas.py` | Pydantic v2 request/response models (class and field names/order are the OpenAPI contract); irrigator and sensor responses mask `local_key` as `LOCAL_KEY_MASK` (`••••••••`) |
-| `repository.py` | `IrrigationRepository` — every query and write. Transaction API: `repo.commit()` / `repo.rollback()` / `repo.flush()` |
+| `repository/` | `IrrigationRepository` — every query and write, composed from per-entity mixins (`_audit`, `_sensors`, `_clusters`, `_irrigation`, `_settings` on `_base`; patch types in `_types`); import it from `greenhouse_core.repository`. Transaction API: `repo.commit()` / `repo.rollback()` / `repo.flush()` |
 | `database.py`, `migrations/` | engine + session factory; `init_db` always runs `alembic upgrade head` (no pre-Alembic repair, see Key facts) |
 | `constants.py` | every threshold and tuning value, named by purpose (invariant 5) |
 | `plant_db.py`, `data/plant_database.json` | curated plant DB and the layered `get_care_data` merge |
@@ -93,7 +93,7 @@ Dependency direction is strict and **enforced by import-linter** (`make lint-imp
 | Module | Holds |
 |---|---|
 | `main.py` | Typer root app (`--server`), registers every command |
-| `client.py` | `IrrigationClient` (httpx, 30 s timeout; transport errors and empty / non-JSON bodies become `ServerError`, a 422 detail is rendered `field: message`) and the token file (`~/.config/greenhouse/token`, `$XDG_CONFIG_HOME`; a non-blank `$GREENHOUSE_API_TOKEN` wins) |
+| `client.py`, `_client/` | `IrrigationClient` (composed from per-area endpoint mixins in `_client/`; httpx, 30 s timeout; transport errors and empty / non-JSON bodies become `ServerError`, a 422 detail is rendered `field: message`) and the token file (`~/.config/greenhouse/token`, `$XDG_CONFIG_HOME`; a non-blank `$GREENHOUSE_API_TOKEN` wins) |
 | `constants.py` | `DEFAULT_SERVER_URL`, `ALL_WEEKDAYS` — values mirrored from the server side (the CLI may not import core) |
 | `commands/` | `_helpers.py` (`server_url`, `call` → `ServerError` → exit 1, `output` via `rich.print_json`, `HelpOnBareGroup`: a bare group prints its help and exits 0), `operations.py` (top-level operations), `auth.py`, `tui.py`, one module per sub-app |
 | `tui/` | Textual UI — `app.py` (`GreenhouseApp`; blocking client calls run in threads via `GreenhouseApp.api()`), `screens/`, `table.py` (the `DataTable` every TUI table uses: Textual's, repainting when a column widens after a paint; a registered `SHADOWING_ALLOWED` exception), `widgets.py`, `sprites.py` (half-block pixel-art), pure view-model `model.py` (payload → summaries), `render/` (payload → rows / rich text by screen area, golden-pinned), `formatting.py`, `resources.py` (form field specs) |
