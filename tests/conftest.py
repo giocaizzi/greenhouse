@@ -56,6 +56,18 @@ def _no_network(monkeypatch):
     monkeypatch.setattr(socket.socket, "connect", _loopback_only_connect)
 
 
+@pytest.fixture(autouse=True)
+def _isolated_cli_token(monkeypatch, tmp_path_factory):
+    """No test reads (or writes) the developer's real CLI session token.
+
+    The CLI resolves ``$GREENHOUSE_API_TOKEN`` first, then
+    ``$XDG_CONFIG_HOME/greenhouse/token``; both are pointed away from the user's
+    environment for every test. Tests that need a token set them explicitly.
+    """
+    monkeypatch.delenv("GREENHOUSE_API_TOKEN", raising=False)
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path_factory.mktemp("xdg-config")))
+
+
 @pytest.fixture
 def tmp_db():
     """Create an in-memory IrrigationRepository for testing."""

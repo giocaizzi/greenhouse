@@ -250,3 +250,17 @@ def test_server_fixtures_resolve_when_directories_are_mixed_on_one_command_line(
     )
     assert result.returncode == 0, result.stdout[-2000:] + result.stderr[-2000:]
     assert "fixture 'client' not found" not in result.stdout
+
+
+# ── Guard: tests never touch the developer's CLI token or .env ───────────────
+
+
+def test_cli_token_resolution_is_isolated_from_the_developer(tmp_path_factory) -> None:
+    """The autouse fixture points the CLI token lookup at a per-test temp dir and drops the env token."""
+    import os
+
+    from greenhouse_cli.client import _default_token_path, load_stored_token
+
+    assert "GREENHOUSE_API_TOKEN" not in os.environ
+    assert _default_token_path().is_relative_to(tmp_path_factory.getbasetemp())
+    assert load_stored_token() is None
