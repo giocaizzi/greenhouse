@@ -96,7 +96,8 @@ def update_window(
 ) -> IrrigationWindowResponse:
     """Patch a window's hours, weekday mask, or label.
 
-    Omitted fields are left unchanged; an explicit `null` label clears it.
+    Omitted fields are left unchanged; an explicit `null` label clears it,
+    and `null` for the hours or the weekday mask is ignored.
 
     Args:
         cluster_id: Cluster the window belongs to.

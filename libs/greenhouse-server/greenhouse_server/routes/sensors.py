@@ -141,10 +141,11 @@ def update_sensor(
     """Partially update a sensor's metadata.
 
     Only fields present in the request body are modified; omitted fields are
-    left unchanged, and an explicit `null` clears an optional field. The
-    sensor must belong to the specified cluster. A `config.local_key` is
-    masked as `••••••••` in every response; sending that mask back keeps the
-    stored key.
+    left unchanged. An explicit `null` clears an optional field (`plant_id:
+    null` unassigns the sensor) and is ignored for a required one;
+    `config: null` clears the whole config, `local_key` included. The sensor
+    must belong to the specified cluster. A `config.local_key` is masked as
+    `••••••••` in every response; sending that mask back keeps the stored key.
 
     Args:
         cluster_id: Cluster the sensor belongs to.

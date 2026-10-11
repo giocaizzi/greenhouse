@@ -291,7 +291,10 @@ class CreateIrrigationWindowRequest(IrrigationWindowBase):
 
 
 class UpdateIrrigationWindowRequest(BaseModel):
-    """Partial update of a watering window; omitted fields keep their value, an explicit null clears an optional one."""
+    """Partial update of a watering window; omitted fields keep their value.
+
+    ``null`` clears an optional field and is ignored for a required one.
+    """
 
     start_hour: int | None = None
     end_hour: int | None = None
@@ -909,7 +912,10 @@ class VacationCreateRequest(BaseModel):
 
 
 class UpdateVacationWindowRequest(BaseModel):
-    """Partial-update body for a vacation window; omitted fields keep their value, null clears notes / email."""
+    """Partial-update body for a vacation window; omitted fields keep their value, null clears notes / email.
+
+    ``null`` for ``starts_at`` / ``ends_at`` is ignored (they are required).
+    """
 
     starts_at: int | None = None
     ends_at: int | None = None
@@ -959,7 +965,10 @@ class PreferencesResponse(BaseModel):
 
 
 class PreferencesUpdateRequest(BaseModel):
-    """Partial update of the preferences; omitted fields keep their value, an explicit null clears an optional one."""
+    """Partial update of the preferences; omitted fields keep their value.
+
+    ``null`` clears an optional field and is ignored for a required one.
+    """
 
     units: str | None = None
     timezone: str | None = None
@@ -977,7 +986,10 @@ class PreferencesUpdateRequest(BaseModel):
 
 
 class UpdateClusterRequest(BaseModel):
-    """Partial update of a cluster; omitted fields keep their value, an explicit null clears an optional one."""
+    """Partial update of a cluster; omitted fields keep their value.
+
+    ``null`` clears an optional field and is ignored for a required one.
+    """
 
     name: str | None = None
     location: str | None = None
@@ -985,7 +997,10 @@ class UpdateClusterRequest(BaseModel):
 
 
 class UpdatePlantRequest(BaseModel):
-    """Partial update of a plant; omitted fields keep their value, an explicit null clears an optional one."""
+    """Partial update of a plant; omitted fields keep their value.
+
+    ``null`` clears an optional field and is ignored for a required one.
+    """
 
     species: str | None = None
     category: str | None = None
@@ -999,7 +1014,11 @@ class UpdatePlantRequest(BaseModel):
 
 
 class UpdateSensorRequest(BaseModel):
-    """Partial update of a sensor; omitted fields keep their value, an explicit null clears an optional one."""
+    """Partial update of a sensor; omitted fields keep their value.
+
+    ``null`` clears an optional field and is ignored for a required one;
+    ``config: null`` clears the whole config, ``local_key`` included.
+    """
 
     name: str | None = None
     type: str | None = None
@@ -1008,7 +1027,11 @@ class UpdateSensorRequest(BaseModel):
 
 
 class UpdateIrrigatorRequest(BaseModel):
-    """Partial update of an irrigator; omitted fields keep their value, an explicit null clears an optional one."""
+    """Partial update of an irrigator; omitted fields keep their value.
+
+    ``null`` clears an optional field and is ignored for a required one;
+    ``config: null`` clears the whole config, ``local_key`` included.
+    """
 
     name: str | None = None
     type: str | None = None

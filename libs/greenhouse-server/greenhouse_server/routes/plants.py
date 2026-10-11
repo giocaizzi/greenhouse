@@ -121,7 +121,8 @@ def update_plant(cluster_id: int, plant_id: int, request: UpdatePlantRequest, re
     """Partially update a plant's care metadata.
 
     Only fields present in the request body are modified; omitted fields are
-    left unchanged, and an explicit `null` clears an optional field. The plant must belong to the specified cluster.
+    left unchanged. An explicit `null` clears an optional field and is
+    ignored for a required one. The plant must belong to the specified cluster.
 
     Args:
         cluster_id: Cluster the plant belongs to.

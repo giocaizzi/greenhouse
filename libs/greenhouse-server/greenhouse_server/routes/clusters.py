@@ -121,7 +121,8 @@ def update_cluster(cluster_id: int, request: UpdateClusterRequest, repo: RepoDep
     """Partially update a cluster's metadata.
 
     Only fields present in the request body are modified; omitted fields are
-    left unchanged, and an explicit `null` clears an optional field.
+    left unchanged. An explicit `null` clears an optional field and is
+    ignored for a required one.
 
     Args:
         cluster_id: Numeric cluster identifier.

@@ -151,9 +151,11 @@ def update_irrigator(
     """Partially update the metadata of the cluster's irrigator.
 
     Only fields present in the request body are modified; omitted fields are
-    left unchanged, and an explicit `null` clears an optional field. A `config` replaces the stored one; its `local_key` is
-    masked as `••••••••` in every response, and sending that mask back keeps
-    the stored key.
+    left unchanged. An explicit `null` clears an optional field and is
+    ignored for a required one; `config: null` clears the whole config,
+    `local_key` included. A `config` object replaces the stored one; its
+    `local_key` is masked as `••••••••` in every response, and sending that
+    mask back keeps the stored key.
 
     Args:
         cluster_id: Cluster whose irrigator to update.
