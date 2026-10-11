@@ -974,6 +974,40 @@ class TestSearchAndSystem:
 
         _run(scenario())
 
+    def test_search_columns_fit_the_latest_results(self, greenhouse):
+        """Column widths follow each result set: a long early hit no longer keeps the table wide."""
+        http, _ = greenhouse
+        hits = {
+            "lo": [{"entity_type": "plant", "label": "L" * 60, "sublabel": "D" * 40, "href": "/clusters/1"}],
+            "lon": [{"entity_type": "plant", "label": "Fern", "sublabel": "", "href": "/clusters/1"}],
+        }
+        base = tui_client_factory(http)
+
+        def factory(token):
+            client = base(token)
+            client.search = lambda query, limit=20: {"hits": hits.get(query, [])}
+            return client
+
+        async def scenario():
+            tui = GreenhouseApp("http://testserver", client_factory=factory, refresh_seconds=0)
+            async with tui.run_test(size=SIZE) as pilot:
+                await _settle(pilot, tui)
+                await pilot.press("slash")
+                await pilot.pause()
+                table = tui.screen.query_one(DataTable)
+                await pilot.press(*"lo")
+                await pilot.pause(0.4)
+                await _settle(pilot, tui)
+                wide = sum(c.get_render_width(table) for c in table.columns.values())
+                await pilot.press("n")
+                await pilot.pause(0.4)
+                await _settle(pilot, tui)
+                assert table.get_row_at(0)[1] == "Fern"
+                narrow = sum(c.get_render_width(table) for c in table.columns.values())
+                assert narrow < wide - 50
+
+        _run(scenario())
+
     def test_system_maintenance_actions(self, greenhouse):
         http, _ = greenhouse
 

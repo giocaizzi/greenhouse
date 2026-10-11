@@ -866,7 +866,12 @@
   "greenhouse_cli.tui.screens.search": {
    "CLUSTER_HREF": {
     "regex": "/clusters/(\\d+)"
-   }
+   },
+   "RESULT_COLUMNS": [
+    "Type",
+    "Name",
+    "Detail"
+   ]
   },
   "greenhouse_cli.tui.sprites": {
    "CATEGORY_ALIASES": {
