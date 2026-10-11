@@ -79,7 +79,7 @@ def test_low_light_fires_strictly_below_forty_percent_of_seasonal_min(monkeypatc
 )
 def test_water_stress_low_and_steep_decline_boundaries(soil, delta, fires):
     trends = Trends(soil_moisture_trend="declining", soil_moisture_delta=delta)
-    stress = _stress({}, SensorSnapshot(avg_soil_moisture=soil), trends)
+    stress = _stress({}, SensorSnapshot(avg_soil_moisture=soil, latest_soil_moisture=[soil]), trends)
     assert (stress.water_stress is not None) is fires
     if fires:
         assert stress.water_stress == f"low ({soil:.0f}%) + steep decline ({delta:.0f}%)"

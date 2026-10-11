@@ -34,6 +34,11 @@ def _per_sensor_snapshot(sensor: Sensor, readings: Sequence[CleanedReading]) -> 
     )
 
 
+def _latest_soil(readings: Sequence[CleanedReading]) -> float | None:
+    """A sensor's newest cleaned soil value (readings are oldest → newest), or None."""
+    return next((r.soil_moisture for r in reversed(readings) if r.soil_moisture is not None), None)
+
+
 def get_recent_sensor_data(db: IrrigationRepository, cluster_id: int, hours: int = 24) -> SensorSnapshot:
     """Build a typed snapshot of cluster sensors over the lookback window.
 
@@ -65,4 +70,5 @@ def get_recent_sensor_data(db: IrrigationRepository, cluster_id: int, hours: int
         avg_light=_mean_or_none(daytime_light),
         per_sensor=[_per_sensor_snapshot(sensor, readings) for sensor, readings in cleaned],
         water_warnings=sorted(water_warnings),
+        latest_soil_moisture=[v for _, readings in cleaned if (v := _latest_soil(readings)) is not None],
     )

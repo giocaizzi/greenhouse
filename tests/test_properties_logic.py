@@ -41,6 +41,7 @@ from greenhouse_core.logic.plant_needs import (
     analyze_water_needs,
     get_ideal_humidity_range,
     get_ideal_temp_range,
+    moisture_target_range,
     parse_moisture_target,
 )
 from greenhouse_core.logic.stress import detect_stress_conditions
@@ -380,6 +381,7 @@ _snapshots = st.builds(
     avg_soil_moisture=_maybe(st.floats(0, 100, allow_nan=False)),
     avg_light=_maybe(st.floats(16, 200_000, allow_nan=False)),
     water_warnings=st.lists(st.sampled_from(["Soil A", "Soil B"]), max_size=2, unique=True),
+    latest_soil_moisture=st.lists(st.floats(0, 100, allow_nan=False), max_size=3),
 )
 _trends = st.builds(
     Trends,
@@ -400,14 +402,20 @@ def test_detect_stress_conditions_rules(plants, snapshot, trends):
 
     assert (stress.water_warning is not None) == bool(snapshot.water_warnings)
     soil = snapshot.avg_soil_moisture
-    expect_water_stress = soil is not None and (
-        soil < 30 or (soil < 40 and trends.soil_moisture_trend == "declining" and trends.soil_moisture_delta < -10)
-    )
-    assert (stress.water_stress is not None) == expect_water_stress
     expect_over = (
         soil is not None and soil > 70 and (trends.irrigation_frequency_high or trends.soil_moisture_trend == "rising")
     )
     assert (stress.over_watering is not None) == expect_over
+    # Water stress keys on the driest *current* reading; over-watering or a plant above the band vetoes it.
+    current = snapshot.latest_soil_moisture
+    driest = min(current, default=None)
+    dry = driest is not None and (
+        driest < 30 or (driest < 40 and trends.soil_moisture_trend == "declining" and trends.soil_moisture_delta < -10)
+    )
+    care = [plant_database().get_care_data(species=p.species, category=p.category) for p in plants]
+    band_top = max((moisture_target_range(c)[1] for c in care), default=65.0)
+    vetoed = expect_over or (bool(current) and max(current) > band_top)
+    assert (stress.water_stress is not None) == (dry and not vetoed)
     if not plants:
         assert stress.heat_stress is None and stress.low_env_humidity is None and stress.low_light is None
     assert stress.learning_alerts == []

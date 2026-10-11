@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from greenhouse_core.constants import (
+    DEFAULT_SOIL_MOISTURE_MAX,
     SOIL_MOISTURE_CRITICAL,
     SOIL_MOISTURE_LOW,
     SOIL_MOISTURE_SATURATED,
@@ -14,7 +15,7 @@ from greenhouse_core.constants import (
     STRESS_STEEP_DECLINE_DELTA,
 )
 from greenhouse_core.logic.decision import SensorSnapshot, StressIndicators, Trends
-from greenhouse_core.logic.plant_needs import get_ideal_humidity_range, get_ideal_temp_range
+from greenhouse_core.logic.plant_needs import get_ideal_humidity_range, get_ideal_temp_range, moisture_target_range
 from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_core.utils import effective_light_threshold
@@ -52,14 +53,15 @@ def _low_light(snapshot: SensorSnapshot, care: list[dict[str, Any]], month: int 
 
 
 def _water_stress(snapshot: SensorSnapshot, trends: Trends) -> str | None:
-    """Critically dry soil, or low soil that is still falling steeply — judged on the driest plant.
+    """Critically dry soil, or low soil still falling steeply — judged on the driest plant *now*.
 
     Invariant #2 (the driest plant drives the call) holds here too: averaging a
     wilting plant at 10 % with a watered one at 60 % would hide the emergency.
-    The cluster minimum is the driest cleaned reading; the average stands in
-    only when no minimum was computed.
+    But this override is terminal and waters at stress dosage, so it keys on each
+    sensor's newest cleaned reading, not on the 24 h minimum — a plant that was
+    dry yesterday and has been watered since is not in critical stress.
     """
-    driest = snapshot.min_soil_moisture if snapshot.min_soil_moisture is not None else snapshot.avg_soil_moisture
+    driest = min(snapshot.latest_soil_moisture, default=None)
     if driest is None:
         return None
     if driest < SOIL_MOISTURE_CRITICAL:
@@ -72,6 +74,19 @@ def _water_stress(snapshot: SensorSnapshot, trends: Trends) -> str | None:
     ):
         return f"low ({driest:.0f}%) + steep decline ({trends.soil_moisture_delta:.0f}%)"
     return None
+
+
+def _wet_plant_present(snapshot: SensorSnapshot, care: list[dict[str, Any]]) -> bool:
+    """Some sensor's current reading sits above the cluster's widest moisture band.
+
+    A stress run would drown that plant; the mixed case belongs to the soil
+    rule's short conflict burst (and a stuck-low probe beside a wet plant is
+    more likely a fault than an emergency).
+    """
+    if not snapshot.latest_soil_moisture:
+        return False
+    band_top = max((moisture_target_range(c)[1] for c in care), default=DEFAULT_SOIL_MOISTURE_MAX)
+    return max(snapshot.latest_soil_moisture) > band_top
 
 
 def _heat_stress(snapshot: SensorSnapshot, trends: Trends, care: list[dict[str, Any]]) -> str | None:
@@ -122,10 +137,13 @@ def detect_stress_conditions(  # noqa: PLR0913 — five pinned positionals (test
         stress.low_env_humidity = low_env_humidity
     if (low_light := _low_light(snapshot, plant_care, month)) is not None:
         stress.low_light = low_light
-    if (water_stress := _water_stress(snapshot, trends)) is not None:
+    over_watering = _over_watering(snapshot, trends)
+    # Over-watering, or any plant currently above its band, vetoes the water-stress override.
+    water_stress = _water_stress(snapshot, trends)
+    if water_stress is not None and over_watering is None and not _wet_plant_present(snapshot, plant_care):
         stress.water_stress = water_stress
     if (heat_stress := _heat_stress(snapshot, trends, plant_care)) is not None:
         stress.heat_stress = heat_stress
-    if (over_watering := _over_watering(snapshot, trends)) is not None:
+    if over_watering is not None:
         stress.over_watering = over_watering
     return stress

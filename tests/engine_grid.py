@@ -513,9 +513,15 @@ def _driest_family() -> list[Case]:
 
 
 def _second_review_cases() -> list[Case]:
-    """Second-review probes: a spike glitch right beside a genuine level change."""
+    """Second-review probes: a glitch beside a level change; critical stress judged on the current state."""
     half_hour = HOUR // 2
     glitch = _series([62.0, 61.0, 60.0, 60.0, 59.0, 58.0, 0.0, 40.0, 40.0], step_s=half_hour)
+    dry_then_drowned = _series([25.0] * 4 + [85.0] * 20, step_s=half_hour)
+    recovered = _series([25.0] * 6 + [60.0] * 10, step_s=HOUR)
+    stuck_low = (
+        SensorSpec("Stuck Probe", tuple(Reading(age_s=i * HOUR, soil=3.0) for i in range(6)), None),
+        SensorSpec("Wet Probe", tuple(Reading(age_s=i * HOUR, soil=75.0) for i in range(6)), None),
+    )
     return [
         Case(id="series/glitch-beside-level-change/monstera", family="series", at=BASE_AT, sensors=(glitch,)),
         Case(
@@ -525,6 +531,21 @@ def _second_review_cases() -> list[Case]:
             plants=PLANT_SETS["dracaena"],
             sensors=(glitch,),
         ),
+        Case(
+            id="series/drowning-after-old-dry-period",
+            family="series",
+            at=BASE_AT,
+            sensors=(dry_then_drowned,),
+            events=(Event(age_s=7 * HOUR, duration=2),),
+        ),
+        Case(
+            id="series/recovered-after-watering",
+            family="series",
+            at=BASE_AT,
+            sensors=(recovered,),
+            events=(Event(age_s=10 * HOUR, duration=2),),
+        ),
+        Case(id="series/stuck-low-probe-beside-wet-plant", family="series", at=BASE_AT, sensors=stuck_low),
     ]
 
 
