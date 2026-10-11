@@ -62,6 +62,7 @@ def register_web_exception_handlers(app: FastAPI) -> None:
             _error_template(request),
             base_context(request, status_code=exc.status_code, detail=exc.detail),
             status_code=exc.status_code,
+            headers=exc.headers,  # e.g. ``Allow`` on a 405 — the page is still an HTTP answer
         )
 
     @app.exception_handler(RequestValidationError)

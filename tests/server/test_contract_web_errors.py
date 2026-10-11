@@ -125,6 +125,7 @@ def test_error_format_follows_accept_on_web_paths(seeded_get_client):
     wrong_method = seeded_get_client.put("/clusters", headers=HTML)
     assert wrong_method.status_code == 405
     assert wrong_method.headers["content-type"].startswith("text/html")
+    assert "GET" in wrong_method.headers["allow"]  # the HTML page keeps the 405's Allow header
     route_404 = seeded_get_client.get("/clusters/999", headers=JSON)
     assert (route_404.status_code, route_404.json()) == (404, {"detail": "Cluster not found"})
     unknown_json = seeded_get_client.get("/no/such/page", headers=JSON)
