@@ -8,11 +8,16 @@ malformed text, non-string values — so swapping the gateway's private parser f
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, cast
+
 import pytest
 
 from fake_data import FAKE_CLIENT_ID, FAKE_CLIENT_SECRET, FAKE_DEVICE_ID, FAKE_DEVICE_IP
 from greenhouse_core.devices import DeviceGateway
 from greenhouse_core.models import Irrigator, parse_device_config
+
+if TYPE_CHECKING:
+    from greenhouse_core.devices.gateway import _TuyaCloudClient
 
 
 class _KeyCloud:
@@ -83,7 +88,9 @@ IDS = [
 
 def _gateway() -> tuple[DeviceGateway, _KeyCloud]:
     cloud = _KeyCloud()
-    return DeviceGateway(FAKE_CLIENT_ID, FAKE_CLIENT_SECRET, "eu", raw=cloud), cloud
+    # A partial double on purpose: only ``getdevices`` exists, so any other Cloud call fails loudly.
+    raw = cast("_TuyaCloudClient", cloud)
+    return DeviceGateway(FAKE_CLIENT_ID, FAKE_CLIENT_SECRET, "eu", raw=raw), cloud
 
 
 @pytest.mark.parametrize(("config", "parsed"), CASES, ids=IDS)
