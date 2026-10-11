@@ -86,7 +86,8 @@ class TestPausedFlagIsTruthful:
 
     def test_timezone_change_does_not_pause_check_all(self, client):
         """Regression: `reschedule_for_timezone` read an unstarted job as paused
-        and re-paused it, so check_all disagreed with `scheduler_paused=false`."""
+        and re-paused it, so check_all disagreed with `scheduler_paused=false`.
+        """
         resp = client.put("/api/v1/preferences", json={"timezone": "Europe/Rome"})
         assert resp.status_code == 200
         assert resp.json()["scheduler_paused"] is False
@@ -135,7 +136,8 @@ class TestRunningScheduler:
     def test_pump_watcher_runs_when_scheduled_after_start_time(self, app, client, running_scheduler):
         """Regression: the dry-run watcher's run_date is the (floored) start
         timestamp, already >1s in the past after the Cloud start call, so the
-        default 1s misfire grace skipped it and the watcher never ran."""
+        default 1s misfire grace skipped it and the watcher never ran.
+        """
         app.state.device_registry = app.state.fake_devices.registry
         started_at = int(time.time()) - 2
         assert schedule_pump_watcher(irrigator_id=999, duration_minutes=5, started_at=started_at)

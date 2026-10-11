@@ -94,7 +94,8 @@ class TestPauseGatesActuation:
 
 class TestPausePersistsAcrossRestart:
     """A pause set on one app instance is re-applied when a new instance boots
-    against the same database — simulates a container restart."""
+    against the same database — simulates a container restart.
+    """
 
     def test_pause_survives_app_restart(self):
         engine = _shared_engine()

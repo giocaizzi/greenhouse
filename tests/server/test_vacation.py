@@ -72,7 +72,7 @@ class TestActiveVacationFlag:
         assert resp.json()["active"] is None
 
     def test_list_includes_all_windows(self, client):
-        """items list contains both active and future windows."""
+        """Items list contains both active and future windows."""
         now = int(time.time())
         client.post("/api/v1/vacation", json={"starts_at": now - 3600, "ends_at": now + 3600})
         client.post("/api/v1/vacation", json={"starts_at": now + 7200, "ends_at": now + 86400})

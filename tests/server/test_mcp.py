@@ -54,7 +54,8 @@ def test_mcp_tool_names_fit_within_64_chars(app):
 
     Claude.ai connectors enforce a hard 64-char limit on tool names and reject
     the entire tools/list when any name exceeds it.  This test runs at CI time
-    so a new route with a long function name never ships."""
+    so a new route with a long function name never ships.
+    """
     mcp = app.state.mcp
     over_limit = [tool.name for tool in mcp.tools if len(tool.name) > 64]
     assert not over_limit, "MCP tool names exceed the 64-character Claude.ai limit:\n  " + "\n  ".join(
@@ -69,7 +70,8 @@ def test_mcp_every_api_route_has_a_response_model(app):
     (no response_model) do not get one. CSV export (binary download) is exempt.
 
     This is the load-bearing assertion for the MCP interface: untyped routes
-    produce MCP tools an LLM cannot reason about safely."""
+    produce MCP tools an LLM cannot reason about safely.
+    """
     mcp = app.state.mcp
 
     binary_exempt_paths = {"/api/v1/clusters/{cluster_id}/stats/export"}
@@ -96,7 +98,8 @@ def test_every_api_route_has_a_docstring():
     give the LLM only a function name to go on, which leads to wrong tool
     selection. This is enforced statically by walking the route source so
     that adding a new endpoint without a docstring breaks CI before it
-    ever ships."""
+    ever ships.
+    """
     route_dir = Path(__file__).resolve().parents[2] / "libs/greenhouse-server/greenhouse_server/routes"
     missing = []
     for path in sorted(route_dir.glob("*.py")):
@@ -120,7 +123,8 @@ def test_every_api_route_has_a_docstring():
 
 def test_mcp_request_bodies_carry_their_field_schemas(app):
     """Endpoints with a Pydantic request body must surface those fields in the MCP
-    tool's inputSchema, so an LLM client knows the call shape."""
+    tool's inputSchema, so an LLM client knows the call shape.
+    """
     mcp = app.state.mcp
 
     body_carrying_paths = {
@@ -214,7 +218,8 @@ def test_mcp_rejects_request_with_wrong_token(mcp_client_with_token: TestClient)
 def test_mcp_accepts_request_with_correct_token(mcp_client_with_token: TestClient):
     """With the correct bearer token, the auth gate is transparent — the request
     reaches the MCP transport (whose handling of a bare GET isn't auth's concern).
-    We assert only that the response is not 401/503, i.e. auth did not block it."""
+    We assert only that the response is not 401/503, i.e. auth did not block it.
+    """
     resp = mcp_client_with_token.get("/mcp", headers={"Authorization": f"Bearer {_VALID_TOKEN}"})
     assert resp.status_code not in (401, 503), (
         f"Valid token was rejected by the auth layer (status={resp.status_code}): {resp.text}"
@@ -223,7 +228,8 @@ def test_mcp_accepts_request_with_correct_token(mcp_client_with_token: TestClien
 
 def test_mcp_returns_503_when_token_setting_is_unset(mcp_client_unconfigured: TestClient):
     """Fail-closed: with no MCP token configured, /mcp must NOT silently be open —
-    every request, with or without an Authorization header, gets 503."""
+    every request, with or without an Authorization header, gets 503.
+    """
     resp = mcp_client_unconfigured.get("/mcp")
     assert resp.status_code == 503, resp.text
     assert resp.json()["detail"] == "MCP auth not configured"
@@ -304,7 +310,8 @@ def test_mcp_tool_invocation_reaches_inner_endpoint(mcp_client_with_token: TestC
 def test_mcp_tool_invocation_rejects_garbage_bearer(mcp_client_with_token: TestClient):
     """A forwarded header that is neither a valid JWT nor the MCP token must
     still 401 at the inner endpoint — the MCP-token short-circuit must not
-    accidentally accept arbitrary bearers."""
+    accidentally accept arbitrary bearers.
+    """
     with pytest.raises(Exception) as excinfo:
         _invoke_mcp_tool(
             mcp_client_with_token,

@@ -171,7 +171,8 @@ def test_scheduled_pump_watcher_watches_for_the_duration_in_seconds(db, monkeypa
 
 def test_monitor_reads_the_cleaned_view(db):
     """irrigation-33: monitor uses ``clean_readings_desc`` — an out-of-range latest value (150 %) is
-    dropped by the range gate and the previous sample (50 %) is reported."""
+    dropped by the range gate and the previous sample (50 %) is reported.
+    """
     cid, (sid,), _ = _cluster_with_sensors(db, 1)
     db.add_sensor_reading(sensor_id=sid, timestamp=FROZEN_TS - 1800, soil_moisture=50.0)
     db.add_sensor_reading(sensor_id=sid, timestamp=FROZEN_TS - 600, soil_moisture=150.0)
@@ -196,7 +197,8 @@ class _Weather:
 )
 def test_temperature_source_only_outdoor_prefers_the_weather(db, environment, temp, source):
     """irrigation-34: only ``environment == "outdoor"`` prefers the weather feels-like (the engine's
-    ``environment_for`` rule); any other value (e.g. "greenhouse") is sheltered and reads the sensor first."""
+    ``environment_for`` rule); any other value (e.g. "greenhouse") is sheltered and reads the sensor first.
+    """
     cid = db.add_cluster("Temp Gap", environment=environment)
     db.add_plant(cluster_id=cid, species="Monstera deliciosa", category="tropical")
     sid = db.add_sensor(
@@ -254,7 +256,8 @@ def test_check_all_has_alerts_counts_thirsty_plants(api):
 )
 def test_vacation_update_requires_start_strictly_before_end(api, patch, status):
     """web-15 / web-16: the effective window must satisfy ``starts_at < ends_at``; an explicit
-    ``ends_at = 0`` is applied (and rejected), not treated as absent."""
+    ``ends_at = 0`` is applied (and rejected), not treated as absent.
+    """
     client, _ = api
     created = client.post("/api/v1/vacation", json={"starts_at": FROZEN_TS + 3600, "ends_at": FROZEN_TS + 7200}).json()
     resp = client.put(f"/api/v1/vacation/{created['id']}", json=patch)
@@ -585,7 +588,8 @@ def _manual_world(db, **caps):
 
 def test_daily_cap_counts_only_start_minutes(db):
     """manual-03 / manual-11: the per-irrigator minute cap sums ``start`` events only (an ``off`` row's
-    minutes don't count), and an open-ended start (``minutes=None``) requests 0 minutes."""
+    minutes don't count), and an open-ended start (``minutes=None``) requests 0 minutes.
+    """
     cid, irr, _ = _manual_world(db, daily_cap_minutes=5)
     db.add_irrigation_event(irrigator_id=irr.id, action="off", triggered_by="manual", duration_minutes=10)
     db.add_irrigation_event(irrigator_id=irr.id, action="start", triggered_by="manual", duration_minutes=2)
@@ -608,7 +612,8 @@ def test_manual_start_checks_registry_before_caps(db):
 
 def test_manual_start_schedules_a_manual_watcher(db, monkeypatch):
     """manual-06: a timed manual start schedules the dry-run watcher as ``triggered_by="manual"``
-    (so shutdown leaves it on the device timer) — and none without a duration."""
+    (so shutdown leaves it on the device timer) — and none without a duration.
+    """
     calls: list[tuple] = []
     monkeypatch.setattr(
         manual_control_module,

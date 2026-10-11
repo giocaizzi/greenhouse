@@ -142,7 +142,8 @@ def test_api_start_caps_still_409(app, seeded_client):
 
 def test_web_log_manual_records_same_event_as_api(app, seeded_client):
     """Regression: the web form recorded action="manual", which cooldown, caps,
-    learning and efficacy (all keyed on action == "start") never saw."""
+    learning and efficacy (all keyed on action == "start") never saw.
+    """
     seeded_client.post("/irrigators/1/log-manual", data={"minutes": "4"}, follow_redirects=False)
     seeded_client.post("/api/v1/irrigators/1/log-manual", json={"minutes": 4})
     web, api = _events(app)

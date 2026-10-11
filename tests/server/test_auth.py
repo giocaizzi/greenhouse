@@ -175,7 +175,8 @@ def test_hx_request_unauthenticated_returns_hx_redirect(anonymous_client: TestCl
     """An HTMX request to a protected web route while logged out must return
     an HX-Redirect header (full-page nav), not a 303 whose body HTMX would
     swap into the triggering fragment. Pairs with the login-page fix above so
-    a session expiring mid-page bounces cleanly to /login."""
+    a session expiring mid-page bounces cleanly to /login.
+    """
     resp = anonymous_client.get(
         "/clusters",
         headers={"HX-Request": "true"},

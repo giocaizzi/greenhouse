@@ -247,7 +247,7 @@ class TestListAllIrrigatorsTopLevel:
         assert names == ["B1"]
 
     def test_pagination(self, client):
-        """limit + cursor walks the rows id-ascending across clusters."""
+        """Limit + cursor walks the rows id-ascending across clusters."""
         for n in range(3):
             client.post("/api/v1/clusters", json={"name": f"C{n}"})
             client.post(

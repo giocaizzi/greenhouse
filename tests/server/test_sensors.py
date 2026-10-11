@@ -182,7 +182,7 @@ class TestListAllSensorsTopLevel:
         assert names == ["B1"]
 
     def test_pagination(self, client):
-        """limit + cursor walks the rows id-ascending."""
+        """Limit + cursor walks the rows id-ascending."""
         client.post("/api/v1/clusters", json={"name": "A"})
         for n in range(3):
             client.post(

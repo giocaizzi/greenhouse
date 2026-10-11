@@ -116,7 +116,6 @@ class TestForecastEndpoint:
 
     def test_forecast_with_drainage_slope(self, app, seeded_with_profile):
         """Forecast returns drainage_slope method when a learned profile is available."""
-
         from greenhouse_core.repository import IrrigationRepository
 
         # We need to inject readings + irrigation events directly into the in-memory DB.

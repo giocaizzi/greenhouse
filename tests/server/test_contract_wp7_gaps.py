@@ -172,7 +172,6 @@ def test_pipeline_builds_the_engine_and_passes_force_flags(db, pump, monkeypatch
 
         def decide_for_cluster(self, cluster_id, **kwargs):
             decided.append({"cluster_id": cluster_id, **kwargs})
-            return None
 
     monkeypatch.setattr(irrigation_mod, "IrrigationLogic", SpyLogic)
     weather, plants = StubWeather({"feels_like": 18.0}), plant_database()

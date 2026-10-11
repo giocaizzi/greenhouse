@@ -82,7 +82,8 @@ class TestClusterCRUD:
 
     def test_delete_removes_rows_that_point_at_the_cluster(self, client):
         """Windows, assignments, alerts (by cluster or entity) go; a default-cluster preference is cleared;
-        another cluster's rows stay."""
+        another cluster's rows stay.
+        """
         from sqlalchemy import text
 
         from greenhouse_core.repository import IrrigationRepository

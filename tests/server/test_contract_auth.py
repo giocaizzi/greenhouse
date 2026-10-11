@@ -52,7 +52,7 @@ TTL_SECONDS = 24 * 60 * 60
 @pytest.fixture(autouse=True)
 def _hermetic(clean_env, frozen_clock):
     """No env/.env leakage into Settings, UTC, and a frozen wall clock for every test."""
-    yield frozen_clock
+    return frozen_clock
 
 
 @pytest.fixture

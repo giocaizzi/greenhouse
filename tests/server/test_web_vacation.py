@@ -53,7 +53,7 @@ class TestVacationCreate:
 
     def test_iso_dates_are_midnight_in_the_timezone_preference(self, client, monkeypatch):
         """D8: a date means midnight in the ``timezone`` preference (the zone the page displays), not UTC."""
-        import greenhouse_core.utils as utils
+        from greenhouse_core import utils
 
         monkeypatch.setattr(utils, "_display_timezone", "Europe/Rome")
         resp = client.post(

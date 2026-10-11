@@ -162,7 +162,8 @@ class TestPlantMove:
         """A sensor attached to the plant is a probe in its soil — it must
         physically follow the plant to the new cluster, otherwise its
         historical readings vanish from the new cluster's charts and keep
-        showing up under the old one."""
+        showing up under the old one.
+        """
         plant_id = self._seed_two_clusters_one_plant(client)
 
         # Attach a sensor to the plant on the source cluster (id=1).
@@ -198,7 +199,8 @@ class TestPlantMove:
 
     def test_move_sensor_readings_follow_via_sensor(self, app, client):
         """SensorReading rows key off sensor_id, so once the sensor moves with
-        the plant the historical readings surface under the new cluster."""
+        the plant the historical readings surface under the new cluster.
+        """
         plant_id = self._seed_two_clusters_one_plant(client)
         client.post(
             "/api/v1/clusters/1/sensors",
@@ -292,7 +294,8 @@ class TestPlantMove:
 
     def test_move_preserves_irrigation_events_on_old_cluster(self, app, client):
         """Irrigation events written BEFORE the move stay attached to irrigators
-        on the original cluster (audit integrity)."""
+        on the original cluster (audit integrity).
+        """
         plant_id = self._seed_two_clusters_one_plant(client)
         client.post(
             "/api/v1/clusters/1/irrigator",
@@ -325,7 +328,8 @@ class TestPlantMove:
 
     def test_move_preserves_plant_health_history(self, app, client):
         """plant_health_daily snapshots are keyed by plant_id and must still
-        query cleanly after a move."""
+        query cleanly after a move.
+        """
         plant_id = self._seed_two_clusters_one_plant(client)
 
         with app.state.session_factory() as session:
@@ -386,7 +390,7 @@ class TestListAllPlantsTopLevel:
         assert species == ["Monstera"]
 
     def test_filter_by_category(self, client):
-        """category query param restricts results to one category."""
+        """Category query param restricts results to one category."""
         client.post("/api/v1/clusters", json={"name": "A"})
         client.post("/api/v1/clusters/1/plants", json={"species": "Fern", "category": "tropical"})
         client.post("/api/v1/clusters/1/plants", json={"species": "Cactus", "category": "succulent"})
@@ -395,7 +399,7 @@ class TestListAllPlantsTopLevel:
         assert species == ["Cactus"]
 
     def test_pagination_with_cursor(self, client):
-        """limit + cursor walks the rows id-ascending."""
+        """Limit + cursor walks the rows id-ascending."""
         client.post("/api/v1/clusters", json={"name": "A"})
         for n in range(5):
             client.post("/api/v1/clusters/1/plants", json={"species": f"P{n}"})
@@ -416,7 +420,7 @@ class TestListAllPlantsTopLevel:
         assert data3["next_cursor"] is None
 
     def test_limit_validation(self, client):
-        """limit must be 1..500."""
+        """Limit must be 1..500."""
         resp = client.get("/api/v1/plants?limit=0")
         assert resp.status_code == 422
         resp = client.get("/api/v1/plants?limit=501")

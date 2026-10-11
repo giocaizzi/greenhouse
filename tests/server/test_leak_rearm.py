@@ -165,7 +165,8 @@ class TestRearm:
 
     def test_already_held_start_is_not_rechecked(self, app, running_scheduler):
         """A start whose check raised a hold before markers existed is treated as checked
-        (re-running it could re-raise an alert the operator already resolved)."""
+        (re-running it could re-raise an alert the operator already resolved).
+        """
         cid, iid = _seed(app)
         ts = _start(app, iid, int(time.time()) - 2700)
         session = app.state.session_factory()
@@ -206,7 +207,8 @@ class TestStartupWiring:
 class TestAutoStartTimestampAlignment:
     def test_leak_check_keyed_by_the_start_event_timestamp(self, app, seeded_client, running_scheduler, monkeypatch):
         """The leak-check job id / started_at must equal the `start` row's timestamp,
-        otherwise the restart re-arm (which reads the row) can't match it."""
+        otherwise the restart re-arm (which reads the row) can't match it.
+        """
         session = app.state.session_factory()
         repo = IrrigationRepository(session)
         now = int(time.time())
