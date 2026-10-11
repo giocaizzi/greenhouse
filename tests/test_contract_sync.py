@@ -152,7 +152,7 @@ class TestBackfillAndDedup:
                     _log(t3, "light", 900),
                     _log(t3, "env_humidity", 61.0, offset_ms=100),
                     _log(t3, "battery_state", "middle", offset_ms=200),
-                    _log(t3, "water_warning", True, offset_ms=300),  # NOT persisted from logs
+                    _log(t3, "water_warning", True, offset_ms=300),  # persisted from logs
                 ]
             }
         )
@@ -183,9 +183,18 @@ class TestBackfillAndDedup:
                 "light": 900,
                 "env_humidity": 61.0,
                 "battery_state": "middle",
-                "water_warning": None,
+                "water_warning": True,
             },
         ]
+
+    @pytest.mark.parametrize(("logged", "stored"), [(False, False), (True, True), ("abc", None), ("false", None)])
+    def test_log_water_warning_is_stored_only_as_a_parsed_bool(self, one_sensor, logged, stored):
+        """A parsed boolean is stored; a raw string the DP parser rejected is stored as unknown."""
+        db, sensor = one_sensor
+        ts = FROZEN_TS - 600
+        gw = FakeGateway(logs={"dev_a": [_log(ts, "soil_moisture", 40.0), _log(ts, "water_warning", logged)]})
+        assert sync_single_sensor(db, gw, sensor, 24) == (1, 1, 0)
+        assert [r["water_warning"] for r in _rows(db, sensor.id)] == [stored]
 
     def test_grouped_reading_without_timestamp_is_skipped_but_counted(self, one_sensor):
         db, sensor = one_sensor

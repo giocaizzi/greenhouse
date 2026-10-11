@@ -525,6 +525,22 @@ class TestDeviceLogs:
             },
         ]
 
+    def test_logged_water_warning_strings_parse_to_booleans(self, harness):
+        """``getdevicelog`` reports values as strings; DP 111 must read "false" as False."""
+        harness.cloud.set(
+            "getdevicelog",
+            {
+                "result": {
+                    "logs": [
+                        {"code": "water_warning", "value": "false", "event_time": 1_700_000_001_000},
+                        {"code": "water_warning", "value": "true", "event_time": 1_700_000_002_000},
+                    ]
+                }
+            },
+        )
+        logs = harness.gateway.get_device_logs(FAKE_SENSOR_ID, since_ms=0)
+        assert [(e["key"], e["value"]) for e in logs] == [("water_warning", False), ("water_warning", True)]
+
     def test_default_window_is_hours_back_from_now(self, harness):
         harness.cloud.set("getdevicelog", {"result": {"logs": []}})
         harness.gateway.get_device_logs(FAKE_SENSOR_ID)

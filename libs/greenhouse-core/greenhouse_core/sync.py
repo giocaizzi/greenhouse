@@ -116,8 +116,9 @@ def _sync_window_start(last_ts: int | None, hours: int, now: float) -> int:
 def _store_history(db: IrrigationRepository, sensor: Sensor, grouped: list[dict[str, Any]]) -> int:
     """Insert each grouped log reading; return how many rows were new.
 
-    Readings without a timestamp are skipped. Log rows never carry
-    ``water_warning`` — only the live read persists it.
+    Readings without a timestamp are skipped. ``water_warning`` (DP 111) is
+    stored when the log carries it as a parsed boolean; a raw value the parser
+    rejected is stored as unknown (``None``) rather than guessed.
     """
     new_count = 0
     for reading in grouped:
@@ -133,10 +134,16 @@ def _store_history(db: IrrigationRepository, sensor: Sensor, grouped: list[dict[
             light=reading.get("light"),
             env_humidity=reading.get("env_humidity"),
             battery_state=reading.get("battery_state"),
+            water_warning=_logged_bool(reading.get("water_warning")),
         )
         if result is not None:
             new_count += 1
     return new_count
+
+
+def _logged_bool(value: object) -> bool | None:
+    """Return a parsed boolean log value, or ``None`` for a raw value the DP parser rejected."""
+    return value if isinstance(value, bool) else None
 
 
 def _store_live_reading(db: IrrigationRepository, cloud: DeviceGateway, sensor: Sensor) -> bool:
