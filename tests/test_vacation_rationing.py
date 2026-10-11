@@ -24,6 +24,7 @@ import pytest
 from greenhouse_core.logic import IrrigationLogic
 from greenhouse_core.logic.decision import Action, TriggerCode
 from greenhouse_core.plant_db import get_plant_database
+from greenhouse_core.repository import IrrigatorExistsError
 
 DAY = 86400
 
@@ -271,8 +272,6 @@ def test_uncapped_actuating_irrigator_skips_rationing(tmp_db, logic, monkeypatch
 
 def test_second_irrigator_add_rejected(tmp_db):
     """A cluster holds at most one irrigator — a second add raises IrrigatorExistsError."""
-    from greenhouse_core.repository import IrrigatorExistsError
-
     ctx = _make_cluster(tmp_db)  # Pump A already added
 
     with pytest.raises(IrrigatorExistsError):

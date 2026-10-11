@@ -12,7 +12,15 @@ from sqlalchemy import func, select
 
 from fake_data import FAKE_DEVICE_ID, FAKE_SENSOR_ID
 from golden import FROZEN_TS
-from greenhouse_core.models import IrrigationWindow, Irrigator, Plant, Sensor, VacationWindow
+from greenhouse_core.models import (
+    IrrigationWindow,
+    Irrigator,
+    Plant,
+    PlantHealthDaily,
+    Sensor,
+    VacationWindow,
+    parse_device_config,
+)
 from greenhouse_core.schemas import IrrigatorResponse, SensorResponse
 
 UNKNOWN_ID = 9999
@@ -77,8 +85,6 @@ def test_parse_config_non_object_reads_as_empty(model, raw):
 
 def test_parse_device_config_is_the_one_lenient_parser():
     """D16: ``models.parse_device_config`` — dict as is, JSON object decoded, everything else ``{}``."""
-    from greenhouse_core.models import parse_device_config
-
     assert parse_device_config({"k": 1}) == {"k": 1}
     assert parse_device_config('{"device_ip": "192.0.2.1"}') == {"device_ip": "192.0.2.1"}
     assert [parse_device_config(raw) for raw in ("", "nope", "[1]", "null", None, 7)] == [{}] * 6
@@ -270,8 +276,6 @@ def test_get_vacation_window_found_and_not_found(tmp_db, frozen_clock):
 
 
 def _health_rows(repo) -> list[int]:
-    from greenhouse_core.models import PlantHealthDaily
-
     return sorted(r.plant_id for r in repo.session.query(PlantHealthDaily).all())
 
 

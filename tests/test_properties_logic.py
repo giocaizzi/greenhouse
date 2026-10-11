@@ -12,6 +12,7 @@ deterministic and fast; no assert depends on shrinking.
 from __future__ import annotations
 
 import copy
+import statistics
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from types import SimpleNamespace
@@ -25,6 +26,8 @@ from hypothesis import strategies as st
 from engine_grid import plant_database
 from golden import FROZEN_INSTANT
 from greenhouse_core.constants import (
+    CLEANING_MAD_FLOOR,
+    CLEANING_MAD_SCALE,
     CLEANING_SHORT_SERIES_MIN_READINGS,
     DEFAULT_DURATION_MINUTES,
     DEFAULT_SEASON_MULTIPLIER_INDOOR,
@@ -34,7 +37,12 @@ from greenhouse_core.constants import (
     SENSOR_PHYSICAL_RANGES,
     TREND_MOISTURE_THRESHOLD,
 )
-from greenhouse_core.logic.cleaning import clean_readings, clean_readings_around, clean_readings_desc
+from greenhouse_core.logic.cleaning import (
+    _hampel_outlier_mask,
+    clean_readings,
+    clean_readings_around,
+    clean_readings_desc,
+)
 from greenhouse_core.logic.decision import Action, PerSensorSnapshot, SensorSnapshot, Trends, TriggerCode
 from greenhouse_core.logic.fallback import temperature_based_decision
 from greenhouse_core.logic.plant_needs import (
@@ -634,10 +642,6 @@ def test_analyze_water_needs_unknown_level_counts_as_medium():
 
 def _plain_hampel_mask(values, radius=3, n_sigma=3.0):
     """The textbook centered Hampel test, without the newest-end step confirmation."""
-    import statistics
-
-    from greenhouse_core.constants import CLEANING_MAD_FLOOR, CLEANING_MAD_SCALE
-
     mask = []
     for i, v in enumerate(values):
         window = values[max(0, i - radius) : i + radius + 1]
@@ -670,10 +674,6 @@ def test_step_confirmation_only_spares_points_their_followers_back(series_and_gl
     So the cleaned minimum can only drop below plain Hampel's for a genuine,
     confirmed level change — never for a glitch sitting beside one.
     """
-    import statistics
-
-    from greenhouse_core.logic.cleaning import _hampel_outlier_mask
-
     values, glitches = series_and_glitches
     for index, value in glitches:
         if index < len(values):

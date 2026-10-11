@@ -6,6 +6,7 @@ written before those functions were restructured. Each test was proven to fail u
 temporary in-place mutation of the production line it pins.
 """
 
+import time
 from types import SimpleNamespace
 
 import pytest
@@ -17,6 +18,7 @@ from greenhouse_core.learning.models import PlantProfile
 from greenhouse_core.logic.decision import PerSensorSnapshot, SensorSnapshot, Trends
 from greenhouse_core.logic.stress import detect_stress_conditions
 from greenhouse_core.logic.trends import analyze_historical_trends
+from greenhouse_core.stats import get_irrigation_stats
 
 
 class _Repo:
@@ -299,10 +301,6 @@ def test_detect_conflicts_light_and_humidity_need_care_fields_and_enough_samples
 
 def test_get_irrigation_stats_counts_events_without_duration_but_not_as_irrigations(tmp_db):
     """Events without a duration are counted as events but not as irrigations."""
-    import time
-
-    from greenhouse_core.stats import get_irrigation_stats
-
     cluster_id = tmp_db.add_cluster(FAKE_CLUSTER_NAME)
     irrigator_id = tmp_db.add_irrigator(
         cluster_id=cluster_id,

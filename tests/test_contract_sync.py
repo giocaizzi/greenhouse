@@ -18,6 +18,7 @@ import pytest
 
 from golden import FROZEN_TS, assert_golden_json
 from greenhouse_core.devices.gateway import group_logs_by_timestamp
+from greenhouse_core.models import SensorReading
 from greenhouse_core.sync import sync_sensor_data, sync_single_sensor
 
 GOLDEN = "ingress_devices"
@@ -74,8 +75,6 @@ def _log(ts: int, key: str, value, *, offset_ms: int = 0) -> dict:
 
 
 def _rows(db, sensor_id: int) -> list[dict]:
-    from greenhouse_core.models import SensorReading
-
     rows = (
         db.session.query(SensorReading)
         .filter(SensorReading.sensor_id == sensor_id)

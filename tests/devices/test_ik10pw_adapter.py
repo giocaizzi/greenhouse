@@ -145,7 +145,7 @@ class TestIK10PWAdapterActuation:
 class TestIK10PWAdapterStatus:
     """``status`` reads cloud when local isn't reachable."""
 
-    def test_status_parses_cloud_response(self, fake_cloud, adapter):
+    def test_status_parses_cloud_response(self, fake_cloud, gateway, adapter):
         """``status`` parses the Cloud status into named fields."""
         fake_cloud.getstatus.return_value = {
             "success": True,
@@ -155,7 +155,7 @@ class TestIK10PWAdapterStatus:
             ],
         }
         # Force the local path to fail so the adapter falls back to cloud.
-        with patch.object(adapter._gateway, "open_local", side_effect=ConnectionError("no route")):
+        with patch.object(gateway, "open_local", side_effect=ConnectionError("no route")):
             status = adapter.status(_make_irrigator())
 
         assert status["running"] is True
@@ -195,10 +195,10 @@ class TestIK10PWReadHealth:
         fake_local.status.return_value = {"dps": dps}
         return fake_local
 
-    def test_no_water_alarm_surfaces(self, adapter):
+    def test_no_water_alarm_surfaces(self, gateway, adapter):
         """A set alarm bit surfaces as the no-water health alarm."""
         fake_local = self._make_local_status(dps={"1": True, "104": 42, "105": 1, "106": 2})
-        with patch.object(adapter._gateway, "open_local", return_value=fake_local):
+        with patch.object(gateway, "open_local", return_value=fake_local):
             state = adapter.read_health(_make_irrigator())
 
         assert state.offline is False
@@ -209,29 +209,29 @@ class TestIK10PWReadHealth:
         assert state.raw["work_status"] == 2
         assert state.raw["source"] == "local"
 
-    def test_clear_alarm(self, adapter):
+    def test_clear_alarm(self, gateway, adapter):
         """A clear alarm DP yields no alarms."""
         fake_local = self._make_local_status(dps={"1": True, "105": 0})
-        with patch.object(adapter._gateway, "open_local", return_value=fake_local):
+        with patch.object(gateway, "open_local", return_value=fake_local):
             state = adapter.read_health(_make_irrigator())
 
         assert state.offline is False
         assert HealthAlarm.NO_WATER not in state.alarms
         assert state.raw["alarm_raw"] == 0
 
-    def test_missing_dp(self, adapter):
+    def test_missing_dp(self, gateway, adapter):
         """A missing alarm DP yields no alarms rather than an error."""
         fake_local = self._make_local_status(dps={"1": True})
-        with patch.object(adapter._gateway, "open_local", return_value=fake_local):
+        with patch.object(gateway, "open_local", return_value=fake_local):
             state = adapter.read_health(_make_irrigator())
 
         assert state.offline is False
         assert HealthAlarm.NO_WATER not in state.alarms
         assert state.raw["alarm_raw"] is None
 
-    def test_local_failure_marks_offline(self, adapter):
+    def test_local_failure_marks_offline(self, gateway, adapter):
         """A failed local connection marks the device offline."""
-        with patch.object(adapter._gateway, "open_local", side_effect=ConnectionError("no route")):
+        with patch.object(gateway, "open_local", side_effect=ConnectionError("no route")):
             state = adapter.read_health(_make_irrigator())
 
         assert state.offline is True

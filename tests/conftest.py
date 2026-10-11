@@ -25,6 +25,7 @@ from fake_data import (
 from golden import ENV_PREFIXES, FROZEN_INSTANT
 from greenhouse_core.models import Base
 from greenhouse_core.repository import IrrigationRepository
+from greenhouse_server.config import Settings
 
 # Server fixtures (``app``, ``client``, …) as a global plugin rather than a ``tests/server``
 # conftest, so mixing directories on one command line cannot hide them (server/fixtures.py).
@@ -79,7 +80,6 @@ def _no_developer_dotenv(request, monkeypatch):
     """
     if request.node.get_closest_marker("dotenv"):
         return
-    from greenhouse_server.config import Settings
 
     monkeypatch.setitem(Settings.model_config, "env_file", None)
 

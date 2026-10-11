@@ -21,6 +21,7 @@ from greenhouse_core.devices import (
     HealthAlarm,
     IK10PWAdapter,
     TR301ZAdapter,
+    UnknownDeviceModel,
     build_default_registry,
 )
 from greenhouse_core.models import Irrigator, Sensor
@@ -159,8 +160,6 @@ class TestRegistryFailureModes:
 
     def test_unknown_irrigator_raises(self, registry: DeviceRegistry):
         """An unknown irrigator model raises ``UnknownDeviceModel``."""
-        from greenhouse_core.devices import UnknownDeviceModel
-
         with pytest.raises(UnknownDeviceModel):
             registry.get_irrigator(_make_irrigator("rainpoint.does-not-exist"))
 
@@ -171,8 +170,6 @@ class TestRegistryFailureModes:
 
     def test_legacy_irrigator_types_are_unknown(self, registry: DeviceRegistry):
         """OD3: no alias table — a legacy irrigator type fails closed like any unknown model."""
-        from greenhouse_core.devices import UnknownDeviceModel
-
         for legacy in ("tuya_cloud", "tuya_local", ""):
             with pytest.raises(UnknownDeviceModel):
                 registry.get_irrigator(_make_irrigator(legacy))

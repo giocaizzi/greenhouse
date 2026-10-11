@@ -34,6 +34,7 @@ from hypothesis import strategies as st
 
 from fake_data import FAKE_CLIENT_ID, FAKE_CLIENT_SECRET, FAKE_DEVICE_ID, FAKE_DEVICE_IP, FAKE_LOCAL_KEY, FAKE_SENSOR_ID
 from golden import FROZEN_TS, assert_golden_json
+from greenhouse_core import constants
 from greenhouse_core.devices import (
     DATAPOINT_PARSERS,
     IK10PW_PROFILE,
@@ -55,6 +56,7 @@ from greenhouse_core.devices import gateway as gateway_module
 from greenhouse_core.devices.irrigators import ik10pw as ik10pw_module
 from greenhouse_core.devices.profile import load_profile_json
 from greenhouse_core.models import Irrigator, Sensor, SensorReading
+from greenhouse_core.sync import sync_single_sensor
 
 GOLDEN = "ingress_devices"
 
@@ -314,9 +316,9 @@ class TestRegistryResolution:
         assert type(a) is IK10PWAdapter
         assert type(s) is TR301ZAdapter
         assert a is not b
-        assert a._gateway is gateway
-        assert b._gateway is gateway
-        assert s._gateway is gateway
+        assert a._gateway is gateway  # noqa: SLF001 — adapters expose no gateway accessor
+        assert b._gateway is gateway  # noqa: SLF001 — adapters expose no gateway accessor
+        assert s._gateway is gateway  # noqa: SLF001 — adapters expose no gateway accessor
 
     def test_only_the_model_key_resolves_to_ik10pw(self):
         """Only the exact model key resolves to the IK10PW adapter."""
@@ -376,7 +378,7 @@ class TestGatewayConstruction:
         )
         gateway = DeviceGateway("cid", "secret", "us")
         assert built == [{"apiRegion": "us", "apiKey": "cid", "apiSecret": "secret"}]
-        assert gateway._cloud.tag == "cloud"
+        assert gateway._cloud.tag == "cloud"  # noqa: SLF001 — the gateway exposes no Cloud-client accessor
         assert (gateway.client_id, gateway.client_secret, gateway.region) == ("cid", "secret", "us")
 
     def test_environment_fallback_and_default_region(self, monkeypatch, clean_env):
@@ -393,7 +395,7 @@ class TestGatewayConstruction:
         """An injected raw client is used as is, never building a real one."""
         monkeypatch.setattr("greenhouse_core.devices.tinytuya.Cloud", lambda **_kw: pytest.fail("must not build"))
         raw = object()
-        assert DeviceGateway("cid", "secret", raw=raw)._cloud is raw
+        assert DeviceGateway("cid", "secret", raw=raw)._cloud is raw  # noqa: SLF001 — the gateway exposes no Cloud-client accessor
 
     @pytest.mark.parametrize(("cid", "secret"), [("", "s"), ("c", ""), (None, None)])
     def test_missing_credentials_fail_before_any_client(self, monkeypatch, clean_env, cid, secret):
@@ -689,8 +691,6 @@ class TestDeviceLogs:
 
     def test_one_sensor_sync_pages_the_backfill_then_reads_live_once(self, harness, tmp_db):
         """Invariant 8 with pagination: N log pages, then exactly one live read — one logical sync per sensor."""
-        from greenhouse_core.sync import sync_single_sensor
-
         cluster_id = tmp_db.add_cluster("Paged")
         sensor_id = tmp_db.add_sensor(
             cluster_id=cluster_id, tuya_device_id=FAKE_SENSOR_ID, name="P", sensor_type="tuya.tr301z", config={}
@@ -712,8 +712,6 @@ class TestDeviceLogs:
 
     def test_default_page_cap_and_size_come_from_constants(self):
         """The default page size and cap are the documented constants."""
-        from greenhouse_core import constants
-
         assert (constants.SENSOR_LOG_PAGE_SIZE, constants.SENSOR_LOG_MAX_PAGES) == (100, 50)
 
     @pytest.mark.parametrize("payload", [{}, {"result": {}}, {"success": False}])
@@ -802,7 +800,7 @@ class TestLocalKeyResolution:
         gateway.open_local(irr, 3.5)
         assert harness.log == [("cloud.getdevices",), *_local_open_calls("cold-key"), *_local_open_calls("cold-key")]
         assert discovered == [(FAKE_DEVICE_ID, "cold-key")]
-        assert gateway._key_cache == {FAKE_DEVICE_ID: "cold-key"}
+        assert gateway._key_cache == {FAKE_DEVICE_ID: "cold-key"}  # noqa: SLF001 — pins the process key cache (no public view)
 
     def test_resolve_local_key_order(self, harness):
         """Resolution order is config key, then cache, then Cloud; garbage or empty config falls through."""
@@ -820,7 +818,7 @@ class TestLocalKeyResolution:
         """A device the Cloud does not know resolves to None and nothing is cached."""
         harness.cloud.set("getdevices", devices)
         assert harness.gateway.resolve_local_key(FAKE_DEVICE_ID) is None
-        assert harness.gateway._key_cache == {}
+        assert harness.gateway._key_cache == {}  # noqa: SLF001 — pins the process key cache (no public view)
 
     def test_persistence_hook_failure_is_logged_not_raised(self, harness, caplog):
         """A failing persistence hook is logged, and the key is still cached and returned."""
@@ -834,7 +832,7 @@ class TestLocalKeyResolution:
         with caplog.at_level(logging.ERROR, logger="greenhouse_core.devices.gateway"):
             assert gateway.resolve_local_key(FAKE_DEVICE_ID) == "k1"
         assert caplog.messages == [f"local_key persistence hook failed for {FAKE_DEVICE_ID}"]
-        assert gateway._key_cache == {FAKE_DEVICE_ID: "k1"}
+        assert gateway._key_cache == {FAKE_DEVICE_ID: "k1"}  # noqa: SLF001 — pins the process key cache (no public view)
 
     def test_open_local_without_ip_never_touches_cloud(self, harness):
         """Without a device IP, opening fails before any call."""
@@ -913,15 +911,15 @@ def _scenarios():
         ),
         "ik10pw.set_duration_local.error_payload": (
             lambda h: setattr(h, "local_set_value", {"Error": "Network Error: Device Unreachable", "Err": "905"}),
-            lambda h: ik(h)._set_duration_local(_irrigator(), 60),
+            lambda h: ik(h)._set_duration_local(_irrigator(), 60),  # noqa: SLF001 — golden of the private local DP 102 write
         ),
         "ik10pw.set_duration_local.no_ip": (
             lambda _h: None,
-            lambda h: ik(h)._set_duration_local(_irrigator({}), 60),
+            lambda h: ik(h)._set_duration_local(_irrigator({}), 60),  # noqa: SLF001 — golden of the private local DP 102 write
         ),
         "ik10pw.set_duration_local.ok_payload": (
             lambda h: setattr(h, "local_set_value", {"dps": {"102": 60}}),
-            lambda h: ik(h)._set_duration_local(_irrigator(), 60),
+            lambda h: ik(h)._set_duration_local(_irrigator(), 60),  # noqa: SLF001 — golden of the private local DP 102 write
         ),
         "ik10pw.status.local": (
             lambda h: setattr(h, "local_status", local_dps),

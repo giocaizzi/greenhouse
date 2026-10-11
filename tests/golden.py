@@ -23,6 +23,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from greenhouse_server.deps import get_weather_client
+
 GOLDEN_DIR = Path(__file__).parent / "golden"
 UPDATE_ENV_VAR = "GOLDEN_UPDATE"
 
@@ -47,8 +49,6 @@ class OfflineWeather:
 
 def install_offline_weather(app: Any) -> OfflineWeather:
     """Replace the app's weather client (state + dependency) with :class:`OfflineWeather`."""
-    from greenhouse_server.deps import get_weather_client
-
     stub = OfflineWeather()
     app.state.weather_client = stub
     app.dependency_overrides[get_weather_client] = lambda: stub

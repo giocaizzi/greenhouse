@@ -18,13 +18,16 @@ cutoff share the same wall clock; seed sensor data *after* freezing.
 
 from __future__ import annotations
 
+import time
+import warnings
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
+import pydantic
 import pytest
 
 from greenhouse_core.logic import IrrigationLogic
-from greenhouse_core.logic.decision import TriggerCode
+from greenhouse_core.logic.decision import Action, IrrigationDecision, Reason, TriggerCode
 from greenhouse_core.plant_db import get_plant_database
 
 
@@ -231,8 +234,6 @@ class TestSeasonalMultiplier:
         ``PydanticSerializationUnexpectedValue`` (status endpoint, decision_logs
         persist) and broke any later ``add_reason`` with ``AttributeError``.
         """
-        import warnings
-
         _freeze(monkeypatch, _ts(2026, 1, 15, 8))
         cluster_id = tmp_db.add_cluster("Indoor Monstera Room", environment="indoor")
         tmp_db.add_plant(cluster_id=cluster_id, species="Monstera deliciosa", category="tropical")
@@ -318,8 +319,6 @@ class TestSeasonalMultiplier:
 
     def test_cooldown_beats_quiet_hours(self, tmp_db, logic, monkeypatch):
         """Cooldown is the earlier gate — it must take precedence over quiet hours."""
-        import time as _time
-
         _freeze(monkeypatch, _ts(2026, 5, 14, 2))
         cluster_id = tmp_db.add_cluster("Indoor Cooldown First", environment="indoor")
         tmp_db.add_plant(cluster_id=cluster_id, species="Monstera deliciosa", category="tropical")
@@ -334,7 +333,7 @@ class TestSeasonalMultiplier:
             action="start",
             triggered_by="auto",
             duration_minutes=3,
-            timestamp=int(_time.time()) - 3600,
+            timestamp=int(time.time()) - 3600,
         )
 
         decision = logic.decide_for_cluster(cluster_id)
@@ -384,16 +383,12 @@ class TestDecisionAssignmentValidation:
     """IrrigationDecision re-validates assignments (validate_assignment=True)."""
 
     def _decision(self):
-        from greenhouse_core.logic.decision import Action, IrrigationDecision
-
         return IrrigationDecision(
             cluster_id=1, evaluated_at=0, action=Action.SKIP, duration_minutes=0, interval_hours=12, confidence=0.5
         )
 
     def test_tuple_reasons_are_coerced_to_list(self):
         """Assigning a tuple of reasons is coerced to a list by validation."""
-        from greenhouse_core.logic.decision import Reason, TriggerCode
-
         decision = self._decision()
         decision.reasons = (Reason(code=TriggerCode.SEASONAL_HOLD, message="x"),)
         assert isinstance(decision.reasons, list)
@@ -402,8 +397,6 @@ class TestDecisionAssignmentValidation:
 
     def test_wrong_type_fails_at_the_assignment(self):
         """Assigning a wrongly typed value fails at the assignment, not later."""
-        import pydantic
-
         decision = self._decision()
         with pytest.raises(pydantic.ValidationError):
             decision.duration_minutes = "a lot"

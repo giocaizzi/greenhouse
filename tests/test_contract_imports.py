@@ -36,8 +36,12 @@ import time
 import types
 
 import pytest
+import tinytuya
 
 from golden import GOLDEN_DIR, UPDATE_ENV_VAR, assert_golden_json
+from greenhouse_core import constants, utils
+from greenhouse_core.logic import timing
+from greenhouse_server import scheduler
 
 CORE_MODULES = [
     f"greenhouse_core.{name}"
@@ -238,8 +242,6 @@ def test_patched_attribute_path_resolves(dotted):
 
 def test_patched_modules_are_the_real_modules():
     """The patch targets alias the real modules, so patching them reaches production code."""
-    import tinytuya
-
     assert _resolve("greenhouse_core.devices.tinytuya") is tinytuya
     assert _resolve("greenhouse_core.devices.gateway.tinytuya") is tinytuya
     assert _resolve("greenhouse_server.services.irrigation._time") is time
@@ -249,10 +251,6 @@ def test_patched_modules_are_the_real_modules():
 
 def test_reexports_point_at_their_definitions():
     """Re-exported names are the very objects defined in their home module."""
-    from greenhouse_core import constants, utils
-    from greenhouse_core.logic import timing
-    from greenhouse_server import scheduler
-
     assert scheduler.HEALTH_POLL_IDLE_MINUTES == constants.HEALTH_POLL_IDLE_MINUTES
     assert _resolve("greenhouse_core.logic.engine.season_for") is timing.season_for
     assert _resolve("greenhouse_core.logic.engine.seasonal_light_factor") is utils.seasonal_light_factor

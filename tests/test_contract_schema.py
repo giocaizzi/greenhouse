@@ -24,8 +24,7 @@ from sqlalchemy.dialects import sqlite
 from sqlalchemy.schema import CreateIndex, CreateTable
 
 from golden import assert_golden, assert_golden_json
-from greenhouse_core import database
-from greenhouse_core.database import head_revision, init_db
+from greenhouse_core.database import _alembic_config, head_revision, init_db
 from greenhouse_core.models import Base
 
 # sha256 of "\n".join(DDL statements), recorded at the original baseline (main @ a1b2622, hence "PHASE0").
@@ -131,9 +130,7 @@ def test_alembic_head_is_literal():
 
 def test_alembic_revision_chain():
     """The revision chain is linear and matches the pinned order."""
-    script = ScriptDirectory(
-        str(database._alembic_config(create_engine("sqlite://")).get_main_option("script_location"))
-    )
+    script = ScriptDirectory(str(_alembic_config(create_engine("sqlite://")).get_main_option("script_location")))
     chain = [(rev.revision, rev.down_revision) for rev in script.walk_revisions(base="base", head="heads")]
     assert list(reversed(chain)) == ALEMBIC_CHAIN
     assert script.get_heads() == [ALEMBIC_HEAD]

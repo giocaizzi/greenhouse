@@ -18,12 +18,18 @@ import ast
 import importlib
 import inspect
 import json
+import os
 import pkgutil
 import subprocess
 import sys
 from pathlib import Path
 
 import pytest
+from textual.dom import DOMNode
+
+import greenhouse_cli.tui as tui_pkg
+from greenhouse_cli.client import _default_token_path, load_stored_token
+from greenhouse_server.config import Settings
 
 ROOT = Path(__file__).resolve().parents[1]
 LIBS = ROOT / "libs"
@@ -84,8 +90,6 @@ def _production_files() -> list[Path]:
 
 
 def _tui_module_names() -> list[str]:
-    import greenhouse_cli.tui as tui_pkg
-
     walked = pkgutil.walk_packages(tui_pkg.__path__, prefix=f"{tui_pkg.__name__}.")
     return [tui_pkg.__name__, *sorted(m.name for m in walked)]
 
@@ -176,8 +180,6 @@ def _shadowed_names(cls: type) -> set[str]:
 
 
 def _tui_domnode_classes() -> dict[str, type]:
-    from textual.dom import DOMNode
-
     found: dict[str, type] = {}
     for module_name in _tui_module_names():
         module = importlib.import_module(module_name)
@@ -269,10 +271,6 @@ def test_server_fixtures_resolve_when_directories_are_mixed_on_one_command_line(
 
 def test_cli_token_resolution_is_isolated_from_the_developer(tmp_path_factory) -> None:
     """The autouse fixture points the CLI token lookup at a per-test temp dir and drops the env token."""
-    import os
-
-    from greenhouse_cli.client import _default_token_path, load_stored_token
-
     assert "GREENHOUSE_API_TOKEN" not in os.environ
     assert _default_token_path().is_relative_to(tmp_path_factory.getbasetemp())
     assert load_stored_token() is None
@@ -280,8 +278,6 @@ def test_cli_token_resolution_is_isolated_from_the_developer(tmp_path_factory) -
 
 def test_settings_ignore_a_developer_dotenv(tmp_path, monkeypatch) -> None:
     """Outside tests marked ``dotenv``, a ``.env`` in the working directory is not read by ``Settings``."""
-    from greenhouse_server.config import Settings
-
     (tmp_path / ".env").write_text("IRRIGATION_PORT=9001\n")
     monkeypatch.chdir(tmp_path)
     monkeypatch.delenv("IRRIGATION_PORT", raising=False)

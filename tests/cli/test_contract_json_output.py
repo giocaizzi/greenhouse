@@ -990,7 +990,7 @@ def run_cli_case(case: Case, base: Path, slot: dict[str, Recorder]) -> dict[str,
             "XDG_CONFIG_HOME": str(home / "config") if case.xdg else None,
             **case.env,
         }
-        rich._console = None  # fresh global console per case (it caches width/stream)
+        rich._console = None  # noqa: SLF001 — rich has no public reset; the next get_console() must see this case's env; fresh global console per case (it caches width/stream)
         result = runner.invoke(app, list(case.argv), input=case.input, env=env, prog_name=PROG)
         exc = result.exception
         entry = {

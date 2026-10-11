@@ -207,7 +207,7 @@ def tui_client_factory(http: TestClient, log: list | None = None):
         client = IrrigationClient(base_url="http://testserver", token=token or "")
         client.http.close()  # replaced by the shared in-process transport
         client.http = _SharedHttp(http)
-        original = client._send  # every request (JSON and the CSV export) goes through _send
+        original = client.http.request  # every request (JSON and the CSV export) goes through http.request
 
         def serialized(method, path, **kwargs):
             if log is not None:
@@ -215,7 +215,7 @@ def tui_client_factory(http: TestClient, log: list | None = None):
             with lock:
                 return original(method, path, **kwargs)
 
-        client._send = serialized
+        client.http.request = serialized
         return client
 
     return factory

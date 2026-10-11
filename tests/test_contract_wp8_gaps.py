@@ -16,6 +16,7 @@ import pytest
 
 from engine_grid import BASE_AT, DAY, HOUR, Case, Event, Leak, Reading, SensorSpec, run_case
 from greenhouse_core.logic import IrrigationLogic
+from greenhouse_core.logic.engine import _allowed_cumulative_liters
 
 _DROP = object()
 _KEY = "season_frequency_multiplier"
@@ -186,9 +187,7 @@ def test_zero_length_vacation_counts_as_one_day():
     end became exclusive, a window starting and ending now is not active at all, so
     the budget helper is exercised directly.
     """
-    from greenhouse_core.logic import engine
-
-    assert engine._allowed_cumulative_liters(reservoir_l=100.0, starts_at=0, ends_at=0, now=0) == pytest.approx(95.0)
+    assert _allowed_cumulative_liters(reservoir_l=100.0, starts_at=0, ends_at=0, now=0) == pytest.approx(95.0)
     decision = _vacation("vac-zero-length", (0, 0), reservoir_l=100.0)
     assert [r["code"] for r in decision["reasons"]] == ["sensor_dry"]
 

@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 
+import golden
 from golden import FROZEN_INSTANT, FROZEN_TS, OfflineWeather, assert_golden, to_canonical_json
 
 
@@ -43,8 +44,6 @@ def test_canonical_json_is_order_independent():
 
 def test_assert_golden_reports_diff(tmp_path, monkeypatch):
     """A golden mismatch fails naming the golden file, and a missing golden fails loudly."""
-    import golden
-
     monkeypatch.setattr(golden, "GOLDEN_DIR", tmp_path)
     monkeypatch.delenv("GOLDEN_UPDATE", raising=False)
     (tmp_path / "sample.txt").write_text("alpha\nbeta\n", encoding="utf-8")

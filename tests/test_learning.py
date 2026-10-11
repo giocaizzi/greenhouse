@@ -14,6 +14,9 @@ from fake_data import (
     FAKE_SENSOR_NAME,
 )
 from greenhouse_core.learning import IrrigationLearner
+from greenhouse_core.learning.issues import detect_conflicts
+from greenhouse_core.learning.profiling import compute_drainage_rate
+from greenhouse_core.models import IrrigationEvent
 from greenhouse_core.plant_db import get_plant_database
 
 
@@ -166,7 +169,6 @@ class TestIrrigationLearner:
             )
 
         sensor = self.db.get_sensors_in_cluster(self.cluster_id)[0]
-        from greenhouse_core.learning.profiling import compute_drainage_rate
 
         drainage = compute_drainage_rate(self.db, sensor, days=1)
 
@@ -257,7 +259,6 @@ class TestIrrigationLearner:
             )
 
         sensor = self.db.get_sensors_in_cluster(self.cluster_id)[0]
-        from greenhouse_core.learning.profiling import compute_drainage_rate
 
         drainage = compute_drainage_rate(self.db, sensor, days=1)
         assert drainage == 0.0
@@ -319,8 +320,6 @@ class TestIrrigationLearner:
 
     def test_analyze_response_no_irrigator(self):
         """Analyze response returns empty list for deleted irrigator."""
-        from greenhouse_core.models import IrrigationEvent
-
         fake_event = IrrigationEvent(
             id=999,
             irrigator_id=9999,  # Non-existent
@@ -567,7 +566,6 @@ class TestIssueHeuristics:
             self.sensor_id: self.learner.get_plant_profile(self.db.get_sensor(self.sensor_id)),
             sensor2: self.learner.get_plant_profile(self.db.get_sensor(sensor2)),
         }
-        from greenhouse_core.learning.issues import detect_conflicts
 
         alerts = detect_conflicts(self.db, self.learner.plant_db, self.cluster_id, profiles, self._care_map())
         types = [a.alert_type for a in alerts]
@@ -604,7 +602,6 @@ class TestIssueHeuristics:
             self.sensor_id: self.learner.get_plant_profile(self.db.get_sensor(self.sensor_id)),
             sensor2: self.learner.get_plant_profile(self.db.get_sensor(sensor2)),
         }
-        from greenhouse_core.learning.issues import detect_conflicts
 
         alerts = detect_conflicts(self.db, self.learner.plant_db, self.cluster_id, profiles, self._care_map())
 
@@ -625,7 +622,6 @@ class TestIssueHeuristics:
             self.sensor_id: self.learner.get_plant_profile(self.db.get_sensor(self.sensor_id)),
             sensor2: self.learner.get_plant_profile(self.db.get_sensor(sensor2)),
         }
-        from greenhouse_core.learning.issues import detect_conflicts
 
         alerts = detect_conflicts(self.db, self.learner.plant_db, self.cluster_id, profiles, self._care_map())
         assert "unresolvable_conflict" not in [a.alert_type for a in alerts]
@@ -660,7 +656,6 @@ class TestIssueHeuristics:
             self.sensor_id: self.learner.get_plant_profile(self.db.get_sensor(self.sensor_id)),
             sensor2: self.learner.get_plant_profile(self.db.get_sensor(sensor2)),
         }
-        from greenhouse_core.learning.issues import detect_conflicts
 
         alerts = detect_conflicts(self.db, self.learner.plant_db, self.cluster_id, profiles, self._care_map())
         low_light = [a for a in alerts if a.alert_type == "low_light" and a.sensor_name == FAKE_SENSOR_NAME]
@@ -690,7 +685,6 @@ class TestIssueHeuristics:
             self.sensor_id: self.learner.get_plant_profile(self.db.get_sensor(self.sensor_id)),
             sensor2: self.learner.get_plant_profile(self.db.get_sensor(sensor2)),
         }
-        from greenhouse_core.learning.issues import detect_conflicts
 
         alerts = detect_conflicts(self.db, self.learner.plant_db, self.cluster_id, profiles, self._care_map())
         sensor1_low_light = [a for a in alerts if a.alert_type == "low_light" and a.sensor_name == FAKE_SENSOR_NAME]
@@ -718,7 +712,6 @@ class TestIssueHeuristics:
             self.sensor_id: self.learner.get_plant_profile(self.db.get_sensor(self.sensor_id)),
             sensor2: self.learner.get_plant_profile(self.db.get_sensor(sensor2)),
         }
-        from greenhouse_core.learning.issues import detect_conflicts
 
         alerts = detect_conflicts(self.db, self.learner.plant_db, self.cluster_id, profiles, self._care_map())
         hum = [a for a in alerts if a.alert_type == "low_env_humidity" and a.sensor_name == FAKE_SENSOR_NAME]
@@ -746,7 +739,6 @@ class TestIssueHeuristics:
             self.sensor_id: self.learner.get_plant_profile(self.db.get_sensor(self.sensor_id)),
             sensor2: self.learner.get_plant_profile(self.db.get_sensor(sensor2)),
         }
-        from greenhouse_core.learning.issues import detect_conflicts
 
         alerts = detect_conflicts(self.db, self.learner.plant_db, self.cluster_id, profiles, self._care_map())
         sensor1_hum = [a for a in alerts if a.alert_type == "low_env_humidity" and a.sensor_name == FAKE_SENSOR_NAME]

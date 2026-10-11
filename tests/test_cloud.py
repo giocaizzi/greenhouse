@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from fake_data import FAKE_CLIENT_ID, FAKE_CLIENT_SECRET, FAKE_REGION, FAKE_SENSOR_ID
+from greenhouse_core.devices.gateway import DeviceGateway
 
 
 class TestDeviceGateway:
@@ -21,8 +22,6 @@ class TestDeviceGateway:
             # override cloudrequest with a real payload.
             self.mock_cloud_instance.cloudrequest.return_value = {"success": False}
 
-            from greenhouse_core.devices.gateway import DeviceGateway
-
             self.cloud = DeviceGateway(FAKE_CLIENT_ID, FAKE_CLIENT_SECRET, FAKE_REGION)
             yield
 
@@ -30,8 +29,6 @@ class TestDeviceGateway:
     @patch.dict("os.environ", {"TUYA_CLIENT_ID": "", "TUYA_CLIENT_SECRET": ""}, clear=False)
     def test_init_requires_credentials(self):
         """Gateway raises without credentials."""
-        from greenhouse_core.devices.gateway import DeviceGateway
-
         with pytest.raises(ValueError, match="Missing TUYA_CLIENT_ID or TUYA_CLIENT_SECRET"):
             DeviceGateway("", "", "eu")
 

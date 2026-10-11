@@ -8,9 +8,14 @@ every client call the TUI makes is checked against the live route and schema.
 
 from __future__ import annotations
 
+import ast
 import asyncio
 import contextlib
+import inspect
+import logging
 import os
+import re
+import time
 from pathlib import Path
 from typing import Any, ClassVar
 
@@ -18,21 +23,26 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 from rich.console import Console
+from textual.app import App
+from textual.geometry import Region
 from textual.widgets import Checkbox, DataTable, Input, Static
 from textual.worker import WorkerCancelled
 from typer.testing import CliRunner
 
 from cli.tui_fixtures import seed_greenhouse, tui_client_factory, writes
+from greenhouse_cli import tui as tui_pkg
 from greenhouse_cli.client import IrrigationClient
 from greenhouse_cli.main import app as cli_app
 from greenhouse_cli.tui import formatting as fmt
+from greenhouse_cli.tui import render, resources
 from greenhouse_cli.tui.app import GreenhouseApp
 from greenhouse_cli.tui.model import is_watering, sparkline_points, summarize
+from greenhouse_cli.tui.screens import dashboard
 from greenhouse_cli.tui.screens.activity import ActivityScreen
 from greenhouse_cli.tui.screens.alerts import AlertsScreen
 from greenhouse_cli.tui.screens.cluster import ClusterScreen
-from greenhouse_cli.tui.screens.dashboard import DashboardScreen
-from greenhouse_cli.tui.screens.forms import Field, FormScreen, parse_value
+from greenhouse_cli.tui.screens.dashboard import DashboardScreen, _log_rebuild_failure
+from greenhouse_cli.tui.screens.forms import Field, FormScreen, _display, parse_value
 from greenhouse_cli.tui.screens.modals import ConfirmScreen, IrrigateScreen, LoginScreen, WaterNowScreen
 from greenhouse_cli.tui.screens.search import SearchScreen
 from greenhouse_cli.tui.screens.settings import SettingsScreen
@@ -46,7 +56,8 @@ from greenhouse_cli.tui.sprites import (
     plant_sprite,
     watering_can_sprite,
 )
-from greenhouse_cli.tui.widgets import ClusterCard, MetricChart, refill, selected_key
+from greenhouse_cli.tui.table import DataTable as TuiDataTable
+from greenhouse_cli.tui.widgets import ClusterCard, MetricChart, SpriteView, refill, selected_key
 from server.conftest import TEST_ADMIN_PASSWORD, TEST_ADMIN_USERNAME, _make_stubbed_app
 
 SIZE = (160, 50)
@@ -642,12 +653,7 @@ REDUNDANT_READS = {
 
 def test_tui_reaches_every_client_capability():
     """Every public client method is reachable from the TUI, so the TUI never lags behind the CLI."""
-    import inspect
-    import re
-
-    from greenhouse_cli import tui
-
-    src = "\n".join(p.read_text() for p in Path(tui.__file__).parent.rglob("*.py"))
+    src = "\n".join(p.read_text() for p in Path(tui_pkg.__file__).parent.rglob("*.py"))
     public = [n for n, _ in inspect.getmembers(IrrigationClient, inspect.isfunction) if not n.startswith("_")]
     missing = [n for n in public if n not in REDUNDANT_READS and not re.search(rf"\.{n}\b", src)]
     assert not missing, f"IrrigationClient methods with no TUI entry point: {missing}"
@@ -686,11 +692,6 @@ class TestForms:
 
     def test_datetime_fields_use_the_timezone_preference(self, monkeypatch):
         """D8: vacation datetimes are read and shown in the server's ``timezone`` preference, not the machine's zone."""
-        import time
-
-        from greenhouse_cli.tui import render, resources
-        from greenhouse_cli.tui.screens.forms import _display
-
         monkeypatch.setenv("TZ", "America/New_York")
         time.tzset()
         try:
@@ -1201,7 +1202,7 @@ class TestSearchAndSystem:
                 await pilot.pause()
                 assert not isinstance(tui.screen, ConfirmScreen)
                 assert not [r for r in seen if r[0] == "DELETE"]
-                assert any("built-in job" in n.message for n in tui._notifications)
+                assert any("built-in job" in n.message for n in tui._notifications)  # noqa: SLF001 — Textual keeps shown toasts only in App._notifications
 
                 # Ad-hoc job: confirm → DELETE.
                 table.move_cursor(row=table.get_row_index("pump_watch_3"))
@@ -1220,8 +1221,6 @@ class TestRefill:
     """``refill`` keeps the table cursor on the same record across reloads."""
 
     def _table_app(self, body):
-        from textual.app import App
-
         class TableApp(App):
             def compose(self):
                 yield DataTable(id="t")
@@ -1269,10 +1268,6 @@ class TestTableColumnWidths:
 
     def test_paint_before_measurement_repaints_at_the_measured_width(self):
         """A paint that races the column measurement is redone at the measured width (stale-render fix)."""
-        from textual.app import App
-        from textual.geometry import Region
-
-        from greenhouse_cli.tui.table import DataTable as TuiDataTable
 
         class TableApp(App):
             # A fixed height, like ``#alerts-table``: an auto-height table resizes when the row lands, and
@@ -1289,10 +1284,10 @@ class TestTableColumnWidths:
                 table.add_columns("ID", "Title", "Cluster")
                 await pilot.pause()
                 refill(table, [("1", ["1", self.TITLE, "2"])])
-                assert table._new_rows, "the row must still be unmeasured for this paint to race the measurement"
+                assert table._new_rows, "the row must still be unmeasured for this paint to race the measurement"  # noqa: SLF001 — DataTable's pending-measurement state is private
                 # What the screen's update timer does when it fires before the table's idle (a busy CPU).
                 table.render_lines(Region(0, 0, table.size.width, table.size.height))
-                await _settle_until(pilot, app, lambda: not table._require_update_dimensions)
+                await _settle_until(pilot, app, lambda: not table._require_update_dimensions)  # noqa: SLF001 — DataTable's pending-measurement state is private
                 header, row = (table.render_line(y).text for y in range(2))
                 assert self.TITLE in row, row
                 assert header.index("Cluster") == row.index(self.TITLE) + len(self.TITLE) + 2, (header, row)
@@ -1301,10 +1296,6 @@ class TestTableColumnWidths:
 
     def test_every_tui_table_is_the_width_safe_one(self):
         """Textual's own ``DataTable`` would bring the stale-width paint back; screens use ``tui.table``'s."""
-        import ast
-
-        from greenhouse_cli import tui as tui_pkg
-
         offenders = []
         for path in sorted(Path(tui_pkg.__file__).parent.rglob("*.py")):
             if path.name == "table.py":
@@ -1325,9 +1316,6 @@ class TestSpriteView:
     @pytest.mark.parametrize("animate", [True, False])
     def test_widget_animate_still_works_on_a_sprite(self, animate):
         """``Widget.animate`` caches its animator in ``_animate``; the sprite's animation flag must not live there."""
-        from textual.app import App
-
-        from greenhouse_cli.tui.widgets import SpriteView
 
         class SpriteApp(App):
             def compose(self):
@@ -1533,7 +1521,7 @@ class TestResilience:
             tui = _mock_app(handler)
             async with tui.run_test(size=SIZE, notifications=True) as pilot:
                 await _settle(pilot, tui)
-                messages = [n.message for n in tui._notifications]
+                messages = [n.message for n in tui._notifications]  # noqa: SLF001 — Textual keeps shown toasts only in App._notifications
                 assert "database is locked" in messages
                 assert "Cannot reach the server" in _text(tui.screen.query_one("#dashboard-empty", Static))
 
@@ -1573,14 +1561,13 @@ class TestResilience:
 
     def test_overlapping_dashboard_reloads_do_not_crash(self):
         """S4: reloads that outlast each other (slow status calls) neither crash nor duplicate cards."""
-        import time as time_mod
 
         def handler(request):
             path = request.url.path
             if path == "/api/v1/clusters":
                 return httpx.Response(200, json=[{"id": 1, "name": "One"}, {"id": 2, "name": "Two"}])
             if path.endswith("/status"):
-                time_mod.sleep(0.02)
+                time.sleep(0.02)
                 cid = int(path.split("/")[-2])
                 return httpx.Response(200, json={"cluster": {"id": cid, "name": f"C{cid}"}, "sensors": []})
             return httpx.Response(200, json={})
@@ -1619,7 +1606,7 @@ class TestResilience:
             tui = GreenhouseApp("http://mock", client_factory=factory, refresh_seconds=0)
             async with tui.run_test(size=SIZE) as pilot:
                 await _settle(pilot, tui)
-                await tui._login("admin", "pw")
+                await tui._login("admin", "pw")  # noqa: SLF001 — drives the sign-in worker without the dialog
                 await _settle(pilot, tui)
                 assert not any(c.http.is_closed for c in (made[0], tui.client))
 
@@ -1708,10 +1695,6 @@ class TestResilience:
 
 def test_failed_shielded_card_rebuild_is_logged_with_traceback():
     """A rebuild whose worker was cancelled is awaited by no one; its failure is logged, not left unretrieved."""
-    import logging
-
-    from greenhouse_cli.tui.screens import dashboard
-
     records: list[logging.LogRecord] = []
     handler = logging.Handler()
     handler.emit = records.append
@@ -1723,7 +1706,7 @@ def test_failed_shielded_card_rebuild_is_logged_with_traceback():
 
     async def scenario():
         task = asyncio.ensure_future(boom())
-        task.add_done_callback(dashboard._log_rebuild_failure)
+        task.add_done_callback(_log_rebuild_failure)
         await asyncio.sleep(0)
         await asyncio.sleep(0)
 

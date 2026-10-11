@@ -5,10 +5,15 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 import pytest
+import time_machine
 
 from fake_data import FAKE_CLUSTER_NAME, FAKE_PLANT_SPECIES, FAKE_SENSOR_ID
+from greenhouse_core.constants import MAX_DURATION_MINUTES, MAX_INTERVAL_HOURS, MIN_INTERVAL_HOURS
 from greenhouse_core.logic import IrrigationLogic
-from greenhouse_core.logic.decision import TriggerCode
+from greenhouse_core.logic.decision import Action, IrrigationDecision, SensorSnapshot, Trends, TriggerCode
+from greenhouse_core.logic.engine import _apply_humidity_adjustment, _apply_light_adjustment, _apply_trend_adjustment
+from greenhouse_core.logic.timing import environment_for
+from greenhouse_core.logic.trends import analyze_historical_trends
 from greenhouse_core.plant_db import get_plant_database
 
 # Wed 2026-04-08 07:00 UTC — a fixed daytime instant outside any quiet-hours
@@ -660,8 +665,6 @@ class TestCooldownSemantics:
 
     def test_schedule_updated_does_not_inflate_frequency_trend(self):
         """Many `schedule_updated` events must not flag a high-frequency cadence."""
-        from greenhouse_core.logic.trends import analyze_historical_trends
-
         # 28 config changes over the 7-day window — would be avg 4/day if counted.
         for i in range(28):
             self.db.add_irrigation_event(
@@ -784,8 +787,6 @@ class TestWeatherSkipRule:
 
 
 def _bare_decision(*, interval: int, duration: int, **snapshot):
-    from greenhouse_core.logic.decision import Action, IrrigationDecision, SensorSnapshot, Trends
-
     return IrrigationDecision(
         cluster_id=1,
         evaluated_at=0,
@@ -800,20 +801,17 @@ def _bare_decision(*, interval: int, duration: int, **snapshot):
 
 def test_clamped_adjustments_report_the_applied_delta_not_the_nominal_step():
     """B-14: at the interval/duration bounds the reason's delta is what moved (0 or the remainder)."""
-    from greenhouse_core.constants import MAX_DURATION_MINUTES, MAX_INTERVAL_HOURS, MIN_INTERVAL_HOURS
-    from greenhouse_core.logic import engine
-
     dry_air = _bare_decision(interval=MIN_INTERVAL_HOURS + 1, duration=2, avg_env_humidity=5.0)
-    engine._apply_humidity_adjustment(dry_air, (60.0, 80.0))
+    _apply_humidity_adjustment(dry_air, (60.0, 80.0))
     assert dry_air.interval_hours == MIN_INTERVAL_HOURS
     assert [(r.code, r.interval_delta) for r in dry_air.reasons] == [(TriggerCode.HUMIDITY_VERY_LOW, -1)]
 
     bright = _bare_decision(interval=MIN_INTERVAL_HOURS, duration=MAX_DURATION_MINUTES, avg_light=200_000.0)
-    engine._apply_light_adjustment(bright, 6)
+    _apply_light_adjustment(bright, 6)
     assert [(r.interval_delta, r.duration_delta) for r in bright.reasons] == [(0, 0)]
 
     rising = _bare_decision(interval=MAX_INTERVAL_HOURS - 1, duration=MAX_DURATION_MINUTES)
-    engine._apply_trend_adjustment(rising)
+    _apply_trend_adjustment(rising)
     assert [(r.code, r.interval_delta, r.duration_delta) for r in rising.reasons] == [
         (TriggerCode.TREND_MOISTURE_RISING, 1, 0),
         (TriggerCode.UNDERWATERING_PATTERN, 0, 0),
@@ -823,7 +821,6 @@ def test_clamped_adjustments_report_the_applied_delta_not_the_nominal_step():
 def test_fallback_uses_a_global_schedule_without_a_cluster_config_row(tmp_db, frozen_clock):
     """B-24: no sensor data, no ``irrigation_config`` row, but a global schedule → CONFIG_FALLBACK, not NO_DATA."""
     del frozen_clock  # side-effect fixture (the clock is frozen)
-    from greenhouse_core.logic.decision import Action
 
     cid = tmp_db.add_cluster("Global schedule only")
     tmp_db.add_plant(cluster_id=cid, species=FAKE_PLANT_SPECIES)
@@ -845,8 +842,6 @@ def test_light_thresholds_use_the_preferences_timezone_month(tmp_db):
     bright threshold (800 x 0.83 = 664) but above October's (800 x 0.70 = 560), so the
     LIGHT_BRIGHT reason appears only when the local month drives the factor.
     """
-    import time_machine
-
     cid = tmp_db.add_cluster("Tokyo")
     tmp_db.add_plant(cluster_id=cid, species=FAKE_PLANT_SPECIES)
     tmp_db.update_preferences(timezone="Asia/Tokyo")
@@ -868,7 +863,6 @@ def test_outdoorness_is_one_rule_for_rain_and_seasons(tmp_db, frozen_clock, envi
     table; it is now sheltered for both.
     """
     del frozen_clock  # side-effect fixture (the clock is frozen)
-    from greenhouse_core.logic.timing import environment_for
 
     cid = tmp_db.add_cluster("Env", environment=environment)
     tmp_db.add_plant(cluster_id=cid, species=FAKE_PLANT_SPECIES)

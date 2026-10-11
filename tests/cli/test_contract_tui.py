@@ -101,7 +101,7 @@ def screen_text(app: App) -> str:
         legacy_windows=False,
         safe_box=False,
     )
-    update = app.screen._compositor.render_update(full=True, screen_stack=app._background_screens)
+    update = app.screen._compositor.render_update(full=True, screen_stack=app._background_screens)  # noqa: SLF001 — Textual exports screenshots only as SVG; this is its text path
     console.print(update)
     lines = [line.rstrip() for line in console.export_text(styles=False).splitlines()]
     return "\n".join(lines).rstrip("\n") + "\n"
@@ -123,24 +123,26 @@ def _pending_tui_work(tui: App) -> list[str]:
     """
     pending = [f"worker {w.description!r} ({w.state.name})" for w in tui.workers if not w.is_finished]
     nodes: list[Any] = [tui]
-    for stack in tui._screen_stacks.values():
+    for stack in tui._screen_stacks.values():  # noqa: SLF001 — Textual exposes no public view of pending work
         for screen in stack:
             nodes.extend(screen.walk_children(with_self=True))
     pending.extend(
-        f"messages queued on {node!r}" for node in nodes if not node._message_queue.empty() or node._next_callbacks
+        f"messages queued on {node!r}"
+        for node in nodes
+        if not node._message_queue.empty() or node._next_callbacks  # noqa: SLF001 — Textual exposes no public view of pending work
     )
     animator = tui.animator
-    pending += [f"animation of {attr!r}" for _, attr in [*animator._animations, *animator._scheduled]]
-    if tui._batch_count:
+    pending += [f"animation of {attr!r}" for _, attr in [*animator._animations, *animator._scheduled]]  # noqa: SLF001 — Textual exposes no public view of pending work
+    if tui._batch_count:  # noqa: SLF001 — Textual exposes no public view of pending work
         pending.append("update batch still open")
     screen = tui.screen
-    if screen._callbacks:  # call_after_refresh work; only the active screen refreshes
+    if screen._callbacks:  # noqa: SLF001 — Textual exposes no public view of pending work; call_after_refresh work; only the active screen refreshes
         pending.append(f"after-refresh callbacks on {screen!r}")
-    if screen._layout_required or screen._repaint_required or screen._recompose_required or screen._dirty_widgets:
+    if screen._layout_required or screen._repaint_required or screen._recompose_required or screen._dirty_widgets:  # noqa: SLF001 — Textual exposes no public view of pending work
         pending.append(f"layout/repaint pending on {screen!r}")
-    for visible in [*tui._background_screens, screen]:  # what ``screen_text`` renders
+    for visible in [*tui._background_screens, screen]:  # noqa: SLF001 — Textual exposes no public view of pending work; what ``screen_text`` renders
         for table in visible.query(DataTable):
-            if table._require_update_dimensions or table._updated_cells:
+            if table._require_update_dimensions or table._updated_cells:  # noqa: SLF001 — Textual exposes no public view of pending work
                 pending.append(f"column widths not yet measured on {table!r}")
                 table.check_idle()  # Textual measures them on the table's next idle; prompt that idle
     return pending

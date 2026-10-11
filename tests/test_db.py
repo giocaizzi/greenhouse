@@ -3,6 +3,7 @@
 import time
 
 import pytest
+from sqlalchemy.exc import IntegrityError
 
 from fake_data import (
     FAKE_CLUSTER_LOCATION,
@@ -13,6 +14,7 @@ from fake_data import (
     FAKE_SENSOR_ID,
     FAKE_SENSOR_NAME,
 )
+from greenhouse_core.repository import IrrigatorExistsError
 
 
 class TestDatabase:
@@ -86,8 +88,6 @@ class TestDatabase:
             config={},
         )
 
-        from sqlalchemy.exc import IntegrityError
-
         # Distinct cluster avoids the one-irrigator-per-cluster guard; the
         # duplicate device id must still trip the DB unique constraint.
         with pytest.raises(IntegrityError):
@@ -101,8 +101,6 @@ class TestDatabase:
 
     def test_one_irrigator_per_cluster(self, tmp_db):
         """A cluster holds at most one irrigator — a second add raises IrrigatorExistsError."""
-        from greenhouse_core.repository import IrrigatorExistsError
-
         cluster_id = tmp_db.add_cluster(FAKE_CLUSTER_NAME)
         tmp_db.add_irrigator(
             cluster_id=cluster_id,
