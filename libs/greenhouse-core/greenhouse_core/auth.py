@@ -33,12 +33,14 @@ def verify_password(plain: str, hashed: str) -> bool:
     """Constant-time verify. Returns False on mismatch or malformed hash.
 
     ``VerificationError`` is argon2's base for a mismatch *and* for a hash it
-    cannot decode (e.g. a truncated row); both mean "these credentials do not
-    verify", so a corrupted row answers a login with 401, never a 500.
+    cannot decode (e.g. a truncated row); a non-ASCII corrupt row raises
+    ``UnicodeEncodeError`` (a ``ValueError``) before argon2 even parses it. All
+    mean "these credentials do not verify", so a corrupted row answers a login
+    with 401, never a 500.
     """
     try:
         return _hasher.verify(hashed, plain)
-    except (VerificationError, InvalidHashError):
+    except (VerificationError, InvalidHashError, ValueError):
         return False
 
 

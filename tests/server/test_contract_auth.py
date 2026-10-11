@@ -136,6 +136,10 @@ class TestPasswordHashing:
         """
         assert core_auth.verify_password(PW, HASH_CURRENT[:-1]) is False
 
+    def test_verify_password_returns_false_on_a_non_ascii_corrupt_hash(self):
+        """A non-ASCII byte in the stored hash raises ``UnicodeEncodeError`` inside argon2; still False."""
+        assert core_auth.verify_password(PW, HASH_CURRENT[:-2] + "ü") is False
+
     @pytest.mark.parametrize(
         ("hashed", "expected"),
         [
@@ -334,12 +338,13 @@ def test_require_user_matrix(real, auth, status, body):
     assert resp.json() == body
 
 
-def test_login_with_a_truncated_stored_hash_is_401(real):
+@pytest.mark.parametrize("corrupt", [lambda h: h[:-1], lambda h: h[:-2] + "ü"], ids=["truncated", "non-ascii"])
+def test_login_with_a_corrupt_stored_hash_is_401(real, corrupt):
     """A corrupted password row refuses the login like a wrong password (401), not a 500."""
     client, app = real
     session = app.state.session_factory()
     admin = core_auth.get_user_by_username(session, TEST_ADMIN_USERNAME)
-    admin.hashed_password = admin.hashed_password[:-1]
+    admin.hashed_password = corrupt(admin.hashed_password)
     session.commit()
     session.close()
     login = client.post("/api/v1/auth/login", json={"username": TEST_ADMIN_USERNAME, "password": TEST_ADMIN_PASSWORD})
