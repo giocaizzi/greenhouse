@@ -185,31 +185,42 @@ class IrrigationLogic:
     def _evaluate_rules(
         self, cluster: "Cluster", cluster_id: int, plants: list["Plant"], evaluated_at: int, current_temp: float | None
     ) -> IrrigationDecision:
-        """Weather → fallback → terminal triggers → windows → adjustments; the first terminal step decides."""
+        """Weather → base decision → windows → adjustments or vacation budget; the first terminal step decides.
+
+        The base decision is the no-sensor fallback, or the sensor decision with
+        its emergency triggers (water warning, critical stress) applied. Every
+        run — emergencies and the fallback included — then obeys the cluster's
+        irrigation windows and, while a vacation is active, the reservoir
+        budget: an emergency changes the dosage, not the operator's limits.
+        """
         weather_skip = self._apply_weather_skip_rule(cluster, cluster_id, evaluated_at)
         if weather_skip is not None:
             return weather_skip
 
         inputs = self._gather_inputs(cluster_id, plants, evaluated_at)
-        sensors = self.db.get_sensors_in_cluster(cluster_id)
-        if not sensors or not inputs.snapshot.has_data:
-            return self._fallback_decision(cluster_id, evaluated_at, current_temp, inputs)
+        decision, terminal = self._base_or_emergency(cluster_id, evaluated_at, current_temp, inputs)
 
-        decision = _base_decision(cluster_id, evaluated_at, inputs)
-        if _apply_water_warning_rule(decision):
-            return decision
-        if _apply_critical_stress_rule(decision):
-            return decision
-
-        # Cluster-level timing gate — checked AFTER stress overrides on purpose:
-        # a wilting plant still gets water at 2am, a healthy one doesn't.
         window_skip = self._apply_window_rule(cluster_id, evaluated_at)
         if window_skip is not None:
             return window_skip
 
-        self._apply_adjustments(cluster, cluster_id, decision, inputs, evaluated_at)
-        _ensure_reason(decision)
+        if terminal:
+            self._apply_vacation_budget(decision, cluster_id, evaluated_at)
+        else:
+            self._apply_adjustments(cluster, cluster_id, decision, inputs, evaluated_at)
+            _ensure_reason(decision)
         return decision
+
+    def _base_or_emergency(
+        self, cluster_id: int, evaluated_at: int, current_temp: float | None, inputs: _EngineInputs
+    ) -> tuple[IrrigationDecision, bool]:
+        """The starting decision and whether it is terminal (fallback or emergency: no further adjustments)."""
+        sensors = self.db.get_sensors_in_cluster(cluster_id)
+        if not sensors or not inputs.snapshot.has_data:
+            return self._fallback_decision(cluster_id, evaluated_at, current_temp, inputs), True
+        decision = _base_decision(cluster_id, evaluated_at, inputs)
+        terminal = _apply_water_warning_rule(decision) or _apply_critical_stress_rule(decision)
+        return decision, terminal
 
     def _apply_adjustments(
         self,
@@ -325,8 +336,8 @@ class IrrigationLogic:
         A cluster with NO configured ``IrrigationWindow`` rows allows watering at
         any hour — night protection is the job of quiet hours, not this rule (see
         issue #83). ``preferred_water_hours_local`` is still surfaced as advisory
-        plant data via ``plant_db`` but no longer gates actuation. Stress
-        overrides have already returned early before reaching this rule.
+        plant data via ``plant_db`` but no longer gates actuation. Emergency
+        triggers and the no-sensor fallback obey it like any other run.
         """
         windows = self.db.list_irrigation_windows(cluster_id)
         if not windows:

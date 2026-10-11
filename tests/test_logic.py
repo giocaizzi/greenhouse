@@ -874,3 +874,41 @@ def test_outdoorness_is_one_rule_for_rain_and_seasons(tmp_db, frozen_clock, envi
 
     assert (decision.primary_code is TriggerCode.WEATHER_SKIP) is rain_skips
     assert environment_for(environment) == ("outdoor" if rain_skips else "indoor")
+
+
+def _critical_cluster(db):
+    """A Monstera cluster with an irrigator and one sensor at 10 % (critical water stress)."""
+    cid = db.add_cluster("Critical")
+    db.add_plant(cluster_id=cid, species="Monstera deliciosa", category="tropical")
+    irr = db.add_irrigator(
+        cluster_id=cid, tuya_device_id="fake_tuya_device_crit", name="P", irrigator_type="rainpoint.ik10pw", config={}
+    )
+    sid = db.add_sensor(cluster_id=cid, tuya_device_id=FAKE_SENSOR_ID, name="S", sensor_type="x", config={})
+    db.add_sensor_reading(sensor_id=sid, timestamp=int(time.time()) - 600, soil_moisture=10.0)
+    return cid, irr
+
+
+def test_emergency_triggers_obey_irrigation_windows(tmp_db, frozen_clock):
+    """Owner decision: critical stress no longer bypasses the cluster's windows (10:00 UTC, window 05-09)."""
+    cid, _ = _critical_cluster(tmp_db)
+    logic = IrrigationLogic(tmp_db, get_plant_database())
+    assert logic.decide_for_cluster(cid).primary_code is TriggerCode.WATER_STRESS
+
+    tmp_db.add_irrigation_window(cid, start_hour=5, end_hour=9)
+    decision = logic.decide_for_cluster(cid)
+
+    assert (decision.action.value, decision.primary_code) == ("skip", TriggerCode.OUTSIDE_WINDOW)
+
+
+def test_emergency_triggers_obey_the_vacation_budget(tmp_db, frozen_clock):
+    """Owner decision: a critical-stress run during a vacation is rationed like any other run."""
+    cid, irr = _critical_cluster(tmp_db)
+    tmp_db.update_irrigator(irr, reservoir_l=0.5, flow_rate_l_per_min=1.0)
+    now = int(time.time())
+    tmp_db.add_vacation_window(starts_at=now - 3600, ends_at=now + 10 * 86400)
+
+    decision = IrrigationLogic(tmp_db, get_plant_database()).decide_for_cluster(cid)
+
+    codes = {r.code for r in decision.reasons}
+    assert decision.action.value == "skip"
+    assert {TriggerCode.WATER_STRESS, TriggerCode.VACATION_ACTIVE, TriggerCode.VACATION_BUDGET_EXHAUSTED} <= codes
