@@ -22,6 +22,8 @@ class _CarePlantDB:
     """Plant-DB stand-in: every plant needs the same minimum light."""
 
     def get_care_data(self, species=None, category=None) -> dict:
+        """Return the same care data whatever the plant."""
+        del species, category  # every plant gets the same minimum
         return {"ideal_light_lux_min": 5000}
 
 
@@ -49,6 +51,7 @@ def _low_light_message(repo, cid: int) -> str:
 
 
 def test_low_light_season_uses_the_preferences_timezone_month(tmp_db):
+    """Already June in Europe/Rome: the low-light minimum uses June's factor (1.00)."""
     with time_machine.travel(_MONTH_BOUNDARY, tick=False):
         cid = _dim_cluster(tmp_db, int(_MONTH_BOUNDARY.timestamp()))
         tmp_db.update_preferences(timezone="Europe/Rome")
@@ -57,6 +60,7 @@ def test_low_light_season_uses_the_preferences_timezone_month(tmp_db):
 
 
 def test_low_light_season_defaults_to_utc(tmp_db):
+    """Without a timezone preference the month is UTC's: still May (factor 0.95)."""
     with time_machine.travel(_MONTH_BOUNDARY, tick=False):
         cid = _dim_cluster(tmp_db, int(_MONTH_BOUNDARY.timestamp()))
         assert _low_light_message(tmp_db, cid) == "Season Sensor: avg 100 lux (seasonal min 4750)"
