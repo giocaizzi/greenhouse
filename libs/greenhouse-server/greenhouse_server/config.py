@@ -61,7 +61,10 @@ class Settings(BaseSettings):
         super().__init__(**values)
 
     db_url: str = "sqlite:///data/irrigation.db"
-    host: str = "0.0.0.0"  # noqa: S104 — container default (Docker publishes the port); IRRIGATION_HOST overrides
+    # Loopback by default: /mcp and the API grant physical actuation, so a host
+    # install must opt in to listening on the network. The Docker image sets
+    # IRRIGATION_HOST=0.0.0.0 (the container must listen for the published port).
+    host: str = "127.0.0.1"
     port: int = 8000
     debug: bool = False
     plant_db_path: str | None = None

@@ -76,7 +76,7 @@ def test_settings_defaults_with_empty_environment(clean_env):
     s = _settings()
     assert s.model_dump() == {
         "db_url": "sqlite:///data/irrigation.db",
-        "host": "0.0.0.0",
+        "host": "127.0.0.1",
         "port": 8000,
         "debug": False,
         "plant_db_path": None,
@@ -108,7 +108,7 @@ def test_settings_defaults_with_empty_environment(clean_env):
 # (env var, raw value, field, parsed value) — one row per Settings field.
 ENV_TABLE = [
     ("IRRIGATION_DB_URL", "sqlite:///x.db", "db_url", "sqlite:///x.db"),
-    ("IRRIGATION_HOST", "127.0.0.1", "host", "127.0.0.1"),
+    ("IRRIGATION_HOST", "0.0.0.0", "host", "0.0.0.0"),  # noqa: S104 — the Docker opt-in value
     ("IRRIGATION_PORT", "9123", "port", 9123),
     ("IRRIGATION_DEBUG", "true", "debug", True),
     ("IRRIGATION_PLANT_DB_PATH", "/srv/plants.json", "plant_db_path", "/srv/plants.json"),
