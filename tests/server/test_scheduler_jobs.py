@@ -217,5 +217,15 @@ class TestDeleteJob:
         assert client.delete(f"/api/v1/scheduler/jobs/{quote(job_id, safe='')}").json() == {"success": True}
         assert job_id not in _job_ids(client)
 
+    def test_web_delete_accepts_a_job_id_with_a_slash(self, client, running_scheduler):
+        """The scheduler page links an ad-hoc job's id URL-encoded, and the web route takes ids with "/"."""
+        from urllib.parse import quote
+
+        job_id = _add_adhoc_job("watch/pump 1")
+        page = client.get("/scheduler").text
+        assert 'hx-post="/scheduler/jobs/watch/pump%201/delete"' in page
+        assert client.post(f"/scheduler/jobs/{quote(job_id, safe='')}/delete").status_code == 200
+        assert running_scheduler.get_job(job_id) is None
+
     def test_delete_unknown_job_404(self, client):
         assert client.delete("/api/v1/scheduler/jobs/nope").status_code == 404

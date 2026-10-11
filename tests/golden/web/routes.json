@@ -183,7 +183,7 @@
    "POST"
   ],
   "name": "scheduler_delete_job",
-  "path": "/scheduler/jobs/{job_id}/delete"
+  "path": "/scheduler/jobs/{job_id:path}/delete"
  },
  {
   "dependencies": [

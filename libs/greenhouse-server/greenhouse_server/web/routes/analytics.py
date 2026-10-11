@@ -143,7 +143,8 @@ def scheduler_page(request: Request) -> Response:
     )
 
 
-@router.post("/scheduler/jobs/{job_id}/delete", response_class=HTMLResponse)
+# ``:path`` like the API route, so a job id containing "/" still routes here.
+@router.post("/scheduler/jobs/{job_id:path}/delete", response_class=HTMLResponse)
 def scheduler_delete_job(request: Request, job_id: str) -> Response:
     """Delete an ad-hoc scheduler job; the empty body removes its table row."""
     if not bg_scheduler.running:

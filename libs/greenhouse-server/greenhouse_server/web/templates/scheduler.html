@@ -105,7 +105,7 @@
         <td>
           {% if not job.core %}
           <div class="row-actions">
-            <button hx-post="/scheduler/jobs/{{ job.id }}/delete"
+            <button hx-post="/scheduler/jobs/{{ job.id | urlencode }}/delete"
                     hx-target="closest tr"
                     hx-swap="outerHTML swap:200ms"
                     hx-confirm="Delete the scheduled job {{ job.id }}? It will stop running until reconfigured."

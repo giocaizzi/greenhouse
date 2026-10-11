@@ -1823,7 +1823,7 @@
    "POST"
   ],
   "name": "scheduler_delete_job",
-  "path": "/scheduler/jobs/{job_id}/delete",
+  "path": "/scheduler/jobs/{job_id:path}/delete",
   "response_class": "HTMLResponse",
   "response_model": null,
   "status_code": null,
