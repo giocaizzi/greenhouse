@@ -14,6 +14,7 @@ from greenhouse_core.constants import (
     SECONDS_PER_HOUR,
 )
 from greenhouse_core.learning import IrrigationLearner
+from greenhouse_core.logic.timing import local_now
 from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_core.utils import daytime_lux_readings, effective_light_threshold
@@ -89,9 +90,9 @@ def _humidity_alert(
 
 
 def _light_alert(
-    sensor: "Sensor", readings: "list[SensorReading]", plant: "Plant | None", plant_db: PlantDatabase
+    sensor: "Sensor", readings: "list[SensorReading]", plant: "Plant | None", plant_db: PlantDatabase, month: int
 ) -> AlertFinding | None:
-    """Warn when daytime light stays well below the plant's seasonal minimum."""
+    """Warn when daytime light stays well below the plant's seasonal minimum for ``month`` (local)."""
     lux_vals = daytime_lux_readings(readings)
     if len(lux_vals) < MAINTENANCE_MIN_SAMPLES:
         return None
@@ -101,7 +102,7 @@ def _light_alert(
     care = plant_db.get_care_data(species=plant.species, category=plant.category)
     min_lux = care.get("ideal_light_lux_min")
     if min_lux:
-        seasonal_min = effective_light_threshold(min_lux)
+        seasonal_min = effective_light_threshold(min_lux, month)
         if avg_lux < seasonal_min * LOW_LIGHT_ALERT_FRACTION:
             return {
                 "severity": "warning",
@@ -119,6 +120,9 @@ def collect_maintenance_alerts(
     sensors = repo.get_sensors_in_cluster(cluster_id)
     plants_by_id = {p.id: p for p in repo.get_plants_in_cluster(cluster_id)}
     now = int(time.time())
+    # The light season follows the preferences-timezone month, as in the decision engine.
+    prefs = repo.get_preferences()
+    light_month = local_now(now, prefs.timezone if prefs else None).month
 
     for sensor in sensors:
         readings = repo.get_recent_readings(sensor.id, hours=MAINTENANCE_LOOKBACK_HOURS)
@@ -130,7 +134,7 @@ def collect_maintenance_alerts(
                 _battery_alert(sensor, readings),
                 _stale_alert(sensor, readings, now),
                 _humidity_alert(sensor, readings, plant, plant_db),
-                _light_alert(sensor, readings, plant, plant_db),
+                _light_alert(sensor, readings, plant, plant_db, light_month),
             )
             if alert is not None
         )
