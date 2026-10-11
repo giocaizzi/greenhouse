@@ -27,6 +27,7 @@ from typing import Any, Protocol, TypedDict
 
 import tinytuya
 
+from greenhouse_core.constants import SENSOR_LOG_MAX_PAGES, SENSOR_LOG_PAGE_SIZE
 from greenhouse_core.models import Irrigator, parse_device_config
 
 logger = logging.getLogger(__name__)
@@ -92,7 +93,18 @@ class _TuyaCloudClient(Protocol):
 
     def getstatus(self, deviceid: str, /) -> dict[str, Any]: ...
 
-    def getdevicelog(self, deviceid: str, /, *, start: int, end: int, evtype: int, size: int) -> dict[str, Any]: ...
+    def getdevicelog(  # noqa: PLR0913 — mirrors tinytuya.Cloud.getdevicelog's keyword API
+        self,
+        deviceid: str,
+        /,
+        *,
+        start: int,
+        end: int,
+        evtype: int,
+        size: int,
+        max_fetches: int,
+        start_row_key: str | None,
+    ) -> dict[str, Any]: ...
 
     def sendcommand(self, deviceid: str, commands: dict[str, Any], /) -> dict[str, Any]: ...
 
@@ -149,6 +161,28 @@ def _parse_datapoints(items: list[dict[str, Any]], device_id: str) -> dict[str, 
             continue
         data[key] = value
     return data
+
+
+def _parse_log_entry(log: dict[str, Any]) -> dict[str, Any]:
+    """Shape one raw ``getdevicelog`` entry; a value its parser rejects keeps the raw code/value."""
+    code = log.get("code", "")
+    raw_value = log.get("value", "")
+    event_time_ms = log.get("event_time", 0)
+    entry: dict[str, Any] = {
+        "timestamp_ms": event_time_ms,
+        "timestamp": event_time_ms // 1000,
+        "code": code,
+        "raw_value": raw_value,
+        "key": code,
+        "value": raw_value,
+    }
+    parser = DATAPOINT_PARSERS.get(code)
+    if parser is not None:
+        try:
+            entry["key"], entry["value"] = parser(raw_value)
+        except (ValueError, TypeError):
+            logger.debug("Keeping raw log value for DP %s=%r", code, raw_value, exc_info=True)
+    return entry
 
 
 class DeviceGateway:
@@ -231,9 +265,15 @@ class DeviceGateway:
         device_id: str,
         since_ms: int | None = None,
         hours: int = 24,
-        max_records: int = 100,
+        page_size: int = SENSOR_LOG_PAGE_SIZE,
+        max_pages: int = SENSOR_LOG_MAX_PAGES,
     ) -> list[dict[str, Any]]:
         """Get historical sensor reports (``getdevicelog``), parsed + sorted.
+
+        Pages through the window with Tuya's ``next_row_key`` cursor until the
+        server reports no more rows, so a long gap is no longer cut at one
+        page of ``page_size`` entries. ``max_pages`` bounds the Cloud cost of
+        one sensor's sync; hitting it is logged as a WARNING.
 
         Each dict carries ``timestamp_ms``/``timestamp``/``code``/``raw_value``
         and, for recognised DP codes, a parsed ``key``/``value``. Results are
@@ -242,46 +282,41 @@ class DeviceGateway:
         if since_ms is None:
             since_ms = int((time.time() - hours * 3600) * 1000)
 
-        result = self._cloud.getdevicelog(
-            device_id,
-            start=since_ms,
-            end=0,
-            evtype=7,  # Status report events
-            size=max_records,
-        )
-
-        logs = result.get("result", {}).get("logs", [])
-        parsed: list[dict[str, Any]] = []
-
-        for log in logs:
-            code = log.get("code", "")
-            raw_value = log.get("value", "")
-            event_time_ms = log.get("event_time", 0)
-
-            entry: dict[str, Any] = {
-                "timestamp_ms": event_time_ms,
-                "timestamp": event_time_ms // 1000,
-                "code": code,
-                "raw_value": raw_value,
-            }
-
-            parser = DATAPOINT_PARSERS.get(code)
-            if parser:
-                try:
-                    key, value = parser(raw_value)
-                    entry["key"] = key
-                    entry["value"] = value
-                except (ValueError, TypeError):
-                    entry["key"] = code
-                    entry["value"] = raw_value
-            else:
-                entry["key"] = code
-                entry["value"] = raw_value
-
-            parsed.append(entry)
-
+        logs = self._fetch_log_pages(device_id, since_ms, page_size, max_pages)
+        parsed = [_parse_log_entry(log) for log in logs]
         parsed.sort(key=lambda x: x["timestamp_ms"])
         return parsed
+
+    def _fetch_log_pages(self, device_id: str, since_ms: int, page_size: int, max_pages: int) -> list[dict[str, Any]]:
+        """Collect raw ``getdevicelog`` entries page by page (one request per page).
+
+        ``max_fetches=1`` keeps tinytuya from paginating on its own, so every
+        Cloud request is issued (and countable) here.
+        """
+        logs: list[dict[str, Any]] = []
+        row_key: str | None = None
+        for _ in range(max_pages):
+            result = self._cloud.getdevicelog(
+                device_id,
+                start=since_ms,
+                end=0,
+                evtype=7,  # Status report events
+                size=page_size,
+                max_fetches=1,
+                start_row_key=row_key,
+            )
+            page = result.get("result") or {}
+            logs.extend(page.get("logs", []))
+            row_key = page.get("next_row_key")
+            if not page.get("has_next") or not row_key:
+                return logs
+        logger.warning(
+            "getdevicelog for %s still had rows after %d pages (%d entries); the window is not fully covered",
+            device_id,
+            max_pages,
+            len(logs),
+        )
+        return logs
 
     @staticmethod
     def group_logs_by_timestamp(logs: list[dict[str, Any]], tolerance_ms: int = 5000) -> list[dict[str, Any]]:

@@ -427,3 +427,10 @@ PLANT_PAGE_RECENT_EVENTS = 10  # plant page: newest irrigation events listed
 PLANT_PAGE_HEALTH_HISTORY_DAYS = 90  # plant page: daily health-score history
 PLANT_PAGE_LAST_IRRIGATED_DAYS = 90  # plant page: window searched for the last irrigation
 EFFICACY_SCORE_PER_PCT_RISE = 5.0  # efficacy score points per percentage point of soil rise (capped at 100)
+
+# ── Tuya device-log backfill (getdevicelog pagination) ───────────────────────
+# The sync job pages through getdevicelog until the window is covered; the page cap
+# bounds one sensor's Cloud cost after a long outage.
+
+SENSOR_LOG_PAGE_SIZE = 100  # entries per getdevicelog request (Tuya's hard per-query limit)
+SENSOR_LOG_MAX_PAGES = 50  # request cap per sensor sync (= 5,000 entries; tinytuya's own default)

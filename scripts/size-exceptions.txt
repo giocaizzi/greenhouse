@@ -6,7 +6,6 @@
 # ── Functions (> 40 body lines or nesting > 3) ───────────────────────────────
 libs/greenhouse-cli/greenhouse_cli/tui/screens/cluster.py::ClusterScreen.compose — one declarative widget tree with no branching; its order is the focus order and is pinned by the app.tcss selectors and the screen goldens, so splitting it would scatter the DOM picture
 libs/greenhouse-cli/greenhouse_cli/tui/screens/forms.py::FormScreen.compose — the nesting comes from nested `with` widget containers in a declarative Textual tree whose order is the focus order, pinned by app.tcss and the form-screen goldens
-libs/greenhouse-core/greenhouse_core/devices/gateway.py::DeviceGateway.get_device_logs — Cloud v1 and v2 log parsing differ in how they handle ValueError; a merged helper would fork device behaviour
 libs/greenhouse-core/greenhouse_core/devices/irrigators/tuya_generic.py::TuyaIrrigatorAdapter.status — flat DPS-decoding ladder in a device adapter; the nesting is the per-DP decode and splitting it adds indirection on a device path
 libs/greenhouse-server/greenhouse_server/services/bulk.py::stop_all_irrigators — emergency stop-all path; each irrigator is isolated in its own try (for → try → if → try) so one failure cannot stop the others
 

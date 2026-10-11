@@ -478,6 +478,28 @@ class TestLiveReadSingleCall:
 # ── getdevicelog + grouping ───────────────────────────────────────────────────
 
 
+def _log_page_kwargs(start: int, *, size: int = 100, start_row_key: str | None = None) -> dict:
+    """The kwargs of one paginated ``getdevicelog`` request (tinytuya's own paging disabled)."""
+    return {
+        "start": start,
+        "end": 0,
+        "evtype": 7,
+        "size": size,
+        "max_fetches": 1,
+        "start_row_key": start_row_key,
+    }
+
+
+def _log_page(entries: list[tuple[str, str, int]], *, has_next: bool, next_row_key: str | None = None) -> dict:
+    page: dict = {
+        "logs": [{"code": code, "value": value, "event_time": ms} for code, value, ms in entries],
+        "has_next": has_next,
+    }
+    if next_row_key is not None:
+        page["next_row_key"] = next_row_key
+    return {"success": True, "result": page}
+
+
 class TestDeviceLogs:
     def test_exact_request_parse_and_sort(self, harness):
         harness.cloud.set(
@@ -495,7 +517,7 @@ class TestDeviceLogs:
         )
         logs = harness.gateway.get_device_logs(FAKE_SENSOR_ID, since_ms=123)
         assert harness.log == [
-            ("cloud.getdevicelog", FAKE_SENSOR_ID, {"start": 123, "end": 0, "evtype": 7, "size": 100}),
+            ("cloud.getdevicelog", FAKE_SENSOR_ID, _log_page_kwargs(123)),
         ]
         assert logs == [
             {"timestamp_ms": 0, "timestamp": 0, "code": "", "raw_value": "7", "key": "", "value": "7"},
@@ -544,19 +566,78 @@ class TestDeviceLogs:
     def test_default_window_is_hours_back_from_now(self, harness):
         harness.cloud.set("getdevicelog", {"result": {"logs": []}})
         harness.gateway.get_device_logs(FAKE_SENSOR_ID)
-        harness.gateway.get_device_logs(FAKE_SENSOR_ID, hours=2, max_records=5)
+        harness.gateway.get_device_logs(FAKE_SENSOR_ID, hours=2, page_size=5)
         assert harness.log == [
-            (
-                "cloud.getdevicelog",
-                FAKE_SENSOR_ID,
-                {"start": (FROZEN_TS - 24 * 3600) * 1000, "end": 0, "evtype": 7, "size": 100},
-            ),
-            (
-                "cloud.getdevicelog",
-                FAKE_SENSOR_ID,
-                {"start": (FROZEN_TS - 2 * 3600) * 1000, "end": 0, "evtype": 7, "size": 5},
-            ),
+            ("cloud.getdevicelog", FAKE_SENSOR_ID, _log_page_kwargs((FROZEN_TS - 24 * 3600) * 1000)),
+            ("cloud.getdevicelog", FAKE_SENSOR_ID, _log_page_kwargs((FROZEN_TS - 2 * 3600) * 1000, size=5)),
         ]
+
+    def test_pages_through_the_window_with_the_row_key_cursor(self, harness):
+        """B-20 fixed: ``has_next`` + ``next_row_key`` drive one request per page until the window is covered."""
+        harness.cloud.set(
+            "getdevicelog",
+            Seq(
+                _log_page([("humidity", "40", 3_000)], has_next=True, next_row_key="k1"),
+                _log_page([("humidity", "41", 2_000)], has_next=True, next_row_key="k2"),
+                _log_page([("humidity", "42", 1_000)], has_next=False),
+            ),
+        )
+        logs = harness.gateway.get_device_logs(FAKE_SENSOR_ID, since_ms=123)
+        assert harness.log == [
+            ("cloud.getdevicelog", FAKE_SENSOR_ID, _log_page_kwargs(123)),
+            ("cloud.getdevicelog", FAKE_SENSOR_ID, _log_page_kwargs(123, start_row_key="k1")),
+            ("cloud.getdevicelog", FAKE_SENSOR_ID, _log_page_kwargs(123, start_row_key="k2")),
+        ]
+        assert [(e["timestamp_ms"], e["value"]) for e in logs] == [(1_000, 42.0), (2_000, 41.0), (3_000, 40.0)]
+
+    @pytest.mark.parametrize(
+        "last_page",
+        [{"result": {"logs": [], "has_next": True}}, {"result": {"logs": [], "has_next": True, "next_row_key": ""}}],
+        ids=["no-row-key", "empty-row-key"],
+    )
+    def test_has_next_without_a_cursor_stops(self, harness, last_page):
+        harness.cloud.set("getdevicelog", last_page)
+        assert harness.gateway.get_device_logs(FAKE_SENSOR_ID, since_ms=0) == []
+        assert len(harness.log) == 1
+
+    def test_page_cap_bounds_the_requests_and_warns(self, harness, caplog):
+        harness.cloud.set("getdevicelog", _log_page([("humidity", "40", 1_000)], has_next=True, next_row_key="again"))
+        with caplog.at_level(logging.WARNING, logger="greenhouse_core.devices.gateway"):
+            logs = harness.gateway.get_device_logs(FAKE_SENSOR_ID, since_ms=0, max_pages=3)
+        assert len(harness.log) == 3
+        assert len(logs) == 3
+        assert caplog.messages == [
+            f"getdevicelog for {FAKE_SENSOR_ID} still had rows after 3 pages (3 entries); "
+            "the window is not fully covered"
+        ]
+
+    def test_one_sensor_sync_pages_the_backfill_then_reads_live_once(self, harness, tmp_db):
+        """Invariant 8 with pagination: N log pages, then exactly one live read — one logical sync per sensor."""
+        from greenhouse_core.sync import sync_single_sensor
+
+        cluster_id = tmp_db.add_cluster("Paged")
+        sensor_id = tmp_db.add_sensor(
+            cluster_id=cluster_id, tuya_device_id=FAKE_SENSOR_ID, name="P", sensor_type="tuya.tr301z", config={}
+        )
+        sensor = tmp_db.get_sensor(sensor_id)
+        base_ms = (FROZEN_TS - 3600) * 1000
+        harness.cloud.set(
+            "getdevicelog",
+            Seq(
+                _log_page([("humidity", "40", base_ms)], has_next=True, next_row_key="k1"),
+                _log_page([("humidity", "41", base_ms + 600_000)], has_next=False),
+            ),
+        )
+        harness.cloud.set(
+            "cloudrequest", {"success": True, "result": {"properties": [{"code": "humidity", "value": 42}]}}
+        )
+        assert sync_single_sensor(tmp_db, harness.gateway, sensor, 24) == (2, 2, 1)
+        assert [c[0] for c in harness.log] == ["cloud.getdevicelog", "cloud.getdevicelog", "cloud.cloudrequest"]
+
+    def test_default_page_cap_and_size_come_from_constants(self):
+        from greenhouse_core import constants
+
+        assert (constants.SENSOR_LOG_PAGE_SIZE, constants.SENSOR_LOG_MAX_PAGES) == (100, 50)
 
     @pytest.mark.parametrize("payload", [{}, {"result": {}}, {"success": False}])
     def test_missing_logs_is_empty(self, harness, payload):
