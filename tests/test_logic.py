@@ -814,3 +814,20 @@ def test_clamped_adjustments_report_the_applied_delta_not_the_nominal_step():
         (TriggerCode.TREND_MOISTURE_RISING, 1, 0),
         (TriggerCode.UNDERWATERING_PATTERN, 0, 0),
     ]
+
+
+def test_fallback_uses_a_global_schedule_without_a_cluster_config_row(tmp_db, frozen_clock):
+    """B-24: no sensor data, no ``irrigation_config`` row, but a global schedule → CONFIG_FALLBACK, not NO_DATA."""
+    from greenhouse_core.logic.decision import Action
+
+    cid = tmp_db.add_cluster("Global schedule only")
+    tmp_db.add_plant(cluster_id=cid, species=FAKE_PLANT_SPECIES)
+    logic = IrrigationLogic(tmp_db, get_plant_database())
+    assert tmp_db.get_irrigation_config(cid) is None
+    assert logic.decide_for_cluster(cid).primary_code is TriggerCode.NO_DATA  # built-in defaults alone
+
+    tmp_db.update_global_irrigation_config(mode="schedule", interval_hours=8, duration_minutes=3)
+    decision = logic.decide_for_cluster(cid)
+
+    assert decision.primary_code is TriggerCode.CONFIG_FALLBACK
+    assert (decision.action, decision.duration_minutes, decision.interval_hours) == (Action.IRRIGATE, 3, 8)

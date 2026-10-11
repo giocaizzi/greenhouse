@@ -490,8 +490,14 @@ def test_temperature_fallback_interval_is_monotone_in_temperature(temp):
         assert hotter.interval_hours <= cooler.interval_hours
 
 
-def test_temperature_fallback_without_temp_or_config_is_no_data():
-    decision = temperature_based_decision(None, 1, 0, temp=None, water_needs="medium", temp_range=None, config=None)
+def test_temperature_fallback_without_temp_or_config_is_no_data(tmp_db):
+    """No temperature, no cluster row and no global schedule (built-in defaults only) → NO_DATA.
+
+    The fallback consults the effective config since B-24 (a global schedule
+    counts), so it needs a repository rather than ``None``.
+    """
+    cid = tmp_db.add_cluster("No schedule")
+    decision = temperature_based_decision(tmp_db, cid, 0, temp=None, water_needs="medium", temp_range=None, config=None)
 
     assert (decision.action, decision.confidence, [r.code for r in decision.reasons]) == (
         Action.SKIP,
