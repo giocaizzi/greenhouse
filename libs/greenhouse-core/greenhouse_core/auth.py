@@ -9,7 +9,10 @@ from __future__ import annotations
 import time
 
 from argon2 import PasswordHasher
-from argon2.exceptions import InvalidHashError, VerifyMismatchError
+from argon2.exceptions import InvalidHashError, VerificationError
+
+# Kept importable from here: the pinned public import surface lists it.
+from argon2.exceptions import VerifyMismatchError as VerifyMismatchError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -27,10 +30,15 @@ def hash_password(plain: str) -> str:
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    """Constant-time verify. Returns False on mismatch or malformed hash."""
+    """Constant-time verify. Returns False on mismatch or malformed hash.
+
+    ``VerificationError`` is argon2's base for a mismatch *and* for a hash it
+    cannot decode (e.g. a truncated row); both mean "these credentials do not
+    verify", so a corrupted row answers a login with 401, never a 500.
+    """
     try:
         return _hasher.verify(hashed, plain)
-    except (VerifyMismatchError, InvalidHashError):
+    except (VerificationError, InvalidHashError):
         return False
 
 

@@ -7,8 +7,6 @@ attributes, bootstrap) plus the MCP bearer gate (503 unset, 401 missing/wrong).
 
 Argon2 hashes used for exact comparisons are generated with a fixed salt so the
 tests are deterministic; JWTs are compared by decoded claims, never verbatim.
-One observed quirk is pinned as current behavior (see the report):
-``verify_password`` raises on a truncated hash.
 """
 
 from __future__ import annotations
@@ -19,7 +17,6 @@ from datetime import timedelta
 import jwt
 import pytest
 from argon2 import PasswordHasher, Type
-from argon2.exceptions import VerificationError
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
@@ -131,16 +128,13 @@ class TestPasswordHashing:
     def test_verify_password_matrix(self, plain, hashed, expected):
         assert core_auth.verify_password(plain, hashed) is expected
 
-    def test_verify_password_current_behavior_raises_on_truncated_hash(self):
-        """Pins current (buggy) behavior: a truncated stored hash raises instead of returning False — see REFACTOR_NOTES.md.
+    def test_verify_password_returns_false_on_truncated_hash(self):
+        """A truncated stored hash verifies as False, as the docstring promises.
 
-        The docstring promises "False on mismatch or malformed hash", but only
-        ``VerifyMismatchError``/``InvalidHashError`` are caught; argon2's generic
-        ``VerificationError("Decoding failed")`` escapes (a corrupted row would
-        turn a login into a 500).
+        argon2 raises its generic ``VerificationError("Decoding failed")`` for it, which used to
+        escape and turn a login into a 500.
         """
-        with pytest.raises(VerificationError, match="Decoding failed"):
-            core_auth.verify_password(PW, HASH_CURRENT[:-1])
+        assert core_auth.verify_password(PW, HASH_CURRENT[:-1]) is False
 
     @pytest.mark.parametrize(
         ("hashed", "expected"),
@@ -338,6 +332,18 @@ def test_require_user_matrix(real, auth, status, body):
     if body == "admin":
         body = {"id": _admin(app).id, "username": TEST_ADMIN_USERNAME}
     assert resp.json() == body
+
+
+def test_login_with_a_truncated_stored_hash_is_401(real):
+    """A corrupted password row refuses the login like a wrong password (401), not a 500."""
+    client, app = real
+    session = app.state.session_factory()
+    admin = core_auth.get_user_by_username(session, TEST_ADMIN_USERNAME)
+    admin.hashed_password = admin.hashed_password[:-1]
+    session.commit()
+    session.close()
+    login = client.post("/api/v1/auth/login", json={"username": TEST_ADMIN_USERNAME, "password": TEST_ADMIN_PASSWORD})
+    assert (login.status_code, login.json()) == (401, {"detail": "Invalid username or password"})
 
 
 def test_inactive_user_is_rejected(real):
