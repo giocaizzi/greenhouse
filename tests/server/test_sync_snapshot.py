@@ -107,3 +107,26 @@ class TestClusterSnapshot:
         cluster_id = tmp_db.add_cluster("Empty Cluster")
 
         assert _service(tmp_db).ensure_fresh_and_read(cluster_id) is None
+
+
+def test_freshness_is_judged_on_the_newest_soil_reading(tmp_db, cluster_with_two_sensors, monkeypatch):
+    """A fresh row without soil (humidity-only live read) must not hide a stale soil value from the re-sync.
+
+    The engine dates a soil sensor by its newest soil reading, so the freshness check must too.
+    """
+    from greenhouse_server.services import sync as sync_module
+
+    cluster_id, dry_id, wet_id = cluster_with_two_sensors
+    now = int(time.time())
+    tmp_db.add_sensor_reading(sensor_id=dry_id, timestamp=now - 5 * 3600, soil_moisture=30.0)
+    tmp_db.add_sensor_reading(sensor_id=dry_id, timestamp=now - 60, env_humidity=55.0)
+    tmp_db.add_sensor_reading(sensor_id=wet_id, timestamp=now - 60, soil_moisture=55.0)
+    tmp_db.session.commit()
+    synced: list[str] = []
+    monkeypatch.setattr(
+        sync_module, "sync_single_sensor", lambda repo, gateway, sensor, hours: synced.append(sensor.name)
+    )
+
+    SyncService(tmp_db, registry=None, cloud=object()).ensure_fresh_and_read(cluster_id)
+
+    assert synced == ["Dry Plant Sensor"]

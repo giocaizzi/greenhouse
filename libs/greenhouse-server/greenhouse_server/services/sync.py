@@ -19,7 +19,7 @@ from greenhouse_core.sync import SyncStats, sync_single_sensor
 from greenhouse_core.sync import sync_sensor_data as core_sync
 
 if TYPE_CHECKING:
-    from greenhouse_core.models import Sensor
+    from greenhouse_core.models import Sensor, SensorReading
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +74,7 @@ class SyncService:
             return None
 
         now = int(time.time())
-        latest = {s.id: self._repo.get_latest_reading(s.id) for s in sensors}
+        latest = {s.id: self._freshness_reading(s.id) for s in sensors}
         stale = [
             s
             for s in sensors
@@ -90,6 +90,20 @@ class SyncService:
             self._repo.flush()
 
         return self._cluster_snapshot(sensors)
+
+    def _freshness_reading(self, sensor_id: int) -> "SensorReading | None":
+        """The row that dates a sensor for the freshness check — its newest *soil* reading when it has one.
+
+        The engine judges a soil sensor's current state by its newest soil
+        reading, so a fresh row without a soil value (e.g. a humidity-only live
+        read) must not hide a stale soil value from the re-sync. A sensor with no
+        soil reading in the snapshot window is dated by its newest row of any kind.
+        """
+        latest = self._repo.get_latest_reading(sensor_id)
+        if latest is None or latest.soil_moisture is not None:
+            return latest
+        recent = self._repo.get_recent_readings(sensor_id, hours=SNAPSHOT_LOOKBACK_HOURS)  # newest first
+        return next((r for r in recent if r.soil_moisture is not None), latest)
 
     def _cluster_snapshot(self, sensors: "Sequence[Sensor]") -> ClusterSnapshot | None:
         """Fold the cluster's sensors into the single reading the pipeline acts on.
