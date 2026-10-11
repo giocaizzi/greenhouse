@@ -334,14 +334,14 @@ class TestHoldLifecycle:
         _seed(repo, sensor_id, started_at, before=(38.0, 38.0, 37.0), after=(50.0, 65.0, 78.0))
 
         svc = LeakDetectionService(repo, plant_db)
-        svc.check_after_irrigation(cluster_id, started_at)
-        repo.session.commit()
-        svc.check_after_irrigation(cluster_id, started_at)
-        repo.session.commit()
+        checks = 2
+        for _ in range(checks):
+            svc.check_after_irrigation(cluster_id, started_at)
+            repo.session.commit()
 
         alerts = _leak_alerts(repo, cluster_id)
         assert len(alerts) == 1
-        assert alerts[0].occurrence_count == 2
+        assert alerts[0].occurrence_count == checks
 
 
 class TestPerSensorScoping:

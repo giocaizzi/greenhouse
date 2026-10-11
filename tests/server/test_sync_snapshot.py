@@ -87,7 +87,8 @@ class TestClusterSnapshot:
 
         snapshot = _service(tmp_db).ensure_fresh_and_read(cluster_id)
 
-        assert snapshot["soil_moisture"] >= 50.0
+        plateau_floor = 50.0  # the dry sensor's settled readings sit at 54-56 %; the 2 % spike is far below
+        assert snapshot["soil_moisture"] >= plateau_floor
 
     def test_sensor_without_readings_is_skipped(self, tmp_db, cluster_with_two_sensors):
         cluster_id, dry_id, _wet_id = cluster_with_two_sensors

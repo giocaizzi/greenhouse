@@ -6,11 +6,12 @@ from http import HTTPStatus
 
 def test_heatmap_empty_no_events(seeded_client):
     """Heatmap with no events returns an empty cells list."""
-    resp = seeded_client.get("/api/v1/clusters/1/heatmap?days=30")
+    days = 30
+    resp = seeded_client.get(f"/api/v1/clusters/1/heatmap?days={days}")
     assert resp.status_code == HTTPStatus.OK
     body = resp.json()
     assert body["cluster_id"] == 1
-    assert body["days"] == 30
+    assert body["days"] == days
     assert isinstance(body["cells"], list)
     # seeded_client has no irrigation events → empty heatmap
     assert body["cells"] == []
@@ -23,9 +24,9 @@ def test_heatmap_structure(seeded_client):
     assert resp.status_code == HTTPStatus.OK
     for cell in resp.json()["cells"]:
         assert "weekday" in cell
-        assert 0 <= cell["weekday"] <= 6
+        assert cell["weekday"] in range(7)
         assert "hour" in cell
-        assert 0 <= cell["hour"] <= 23
+        assert cell["hour"] in range(24)
         assert "count" in cell
         assert cell["count"] >= 1
         assert "total_minutes" in cell
@@ -65,13 +66,14 @@ def test_heatmap_with_events(app):
         config={},
     )
     # Seed an event at a known UTC datetime: Wednesday (weekday=2) at 14:00 UTC
-    ts = int(datetime(2026, 1, 7, 14, 30, 0, tzinfo=UTC).timestamp())  # 2026-01-07 is a Wednesday
+    known = datetime(2026, 1, 7, 14, 30, 0, tzinfo=UTC)  # 2026-01-07 is a Wednesday
+    minutes = 10
     repo.add_irrigation_event(
         irrigator_id=irrigator_id,
         action="start",
         triggered_by="manual",
-        duration_minutes=10,
-        timestamp=ts,
+        duration_minutes=minutes,
+        timestamp=int(known.timestamp()),
     )
     session.commit()
 
@@ -84,10 +86,10 @@ def test_heatmap_with_events(app):
     assert len(cells) >= 1
 
     # Check the Wednesday-14h cell exists with count≥1
-    matching = [c for c in cells if c["weekday"] == 2 and c["hour"] == 14]
+    matching = [c for c in cells if (c["weekday"], c["hour"]) == (known.weekday(), known.hour)]
     assert matching, f"Expected cell at weekday=2 hour=14, got: {cells}"
     assert matching[0]["count"] >= 1
-    assert matching[0]["total_minutes"] == 10
+    assert matching[0]["total_minutes"] == minutes
 
     app.dependency_overrides.pop(get_repository, None)
     session.close()

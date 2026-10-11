@@ -2,6 +2,8 @@
 
 from http import HTTPStatus
 
+DEFAULT_REFRESH_INTERVAL_SECONDS = 30
+
 
 class TestGetPreferences:
     def test_defaults_exist(self, client):
@@ -13,7 +15,7 @@ class TestGetPreferences:
         assert data["timezone"] == "UTC"
         assert data["theme"] == "auto"
         assert data["default_cluster_id"] is None
-        assert data["refresh_interval_seconds"] == 30
+        assert data["refresh_interval_seconds"] == DEFAULT_REFRESH_INTERVAL_SECONDS
         assert data["dry_run_global"] is False
         # ntfy per-category toggles default ON.
         assert data["notify_manual"] is True
@@ -31,22 +33,20 @@ class TestGetPreferences:
 class TestUpdatePreferences:
     def test_put_full(self, client):
         """PUT with all fields updates every preference."""
-        resp = client.put(
-            "/api/v1/preferences",
-            json={
-                "units": "imperial",
-                "timezone": "America/New_York",
-                "theme": "dark",
-                "refresh_interval_seconds": 60,
-                "dry_run_global": True,
-            },
-        )
+        update = {
+            "units": "imperial",
+            "timezone": "America/New_York",
+            "theme": "dark",
+            "refresh_interval_seconds": 60,
+            "dry_run_global": True,
+        }
+        resp = client.put("/api/v1/preferences", json=update)
         assert resp.status_code == HTTPStatus.OK
         data = resp.json()
         assert data["units"] == "imperial"
         assert data["timezone"] == "America/New_York"
         assert data["theme"] == "dark"
-        assert data["refresh_interval_seconds"] == 60
+        assert data["refresh_interval_seconds"] == update["refresh_interval_seconds"]
         assert data["dry_run_global"] is True
 
     def test_put_partial_preserves_other_fields(self, client):

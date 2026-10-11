@@ -264,9 +264,10 @@ class TestAlertListPagination:
 
     def test_next_cursor_is_null_when_page_is_partial(self, app, client):
         """The last (partial) page must return ``next_cursor=None``."""
-        self._seed_alerts(app, 3)
+        seeded = 3
+        self._seed_alerts(app, seeded)
         resp = client.get("/api/v1/alerts?limit=5")
         assert resp.status_code == HTTPStatus.OK
         data = resp.json()
-        assert len(data["items"]) == 3
+        assert len(data["items"]) == seeded
         assert data["next_cursor"] is None

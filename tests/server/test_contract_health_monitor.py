@@ -36,6 +36,7 @@ from greenhouse_server.services.health_monitor import DeviceHealthMonitor
 GOLDEN = "ingress_devices"
 SYNC_INTERVAL_SECONDS = DEFAULT_SYNC_INTERVAL_MINUTES * 60  # Settings.sync_interval_minutes default
 SENSOR_OFFLINE_AFTER_SECONDS = SYNC_INTERVAL_SECONDS + SENSOR_OFFLINE_GRACE_MINUTES * 60
+LOW_BATTERY_PCT = 10  # the TR301Z maps battery_state "low" to 10 %
 
 
 class NoCloud:
@@ -147,7 +148,8 @@ def test_poll_sensor_hands_the_newest_persisted_row_and_never_touches_the_cloud(
         _persist(world, FROZEN_TS - age, soil_moisture=40.0, battery_state=battery)
     state = world["monitor"].poll_sensor(world["sensor"])
     assert SpyTR301Z.seen == [FROZEN_TS - 60]
-    assert state.battery_pct == 10 and state.last_seen_ts == FROZEN_TS - 60
+    assert state.battery_pct == LOW_BATTERY_PCT
+    assert state.last_seen_ts == FROZEN_TS - 60
     assert world["cloud"].touched == []
 
 

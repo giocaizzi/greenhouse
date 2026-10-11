@@ -191,11 +191,12 @@ class TestListAllSensorsTopLevel:
                 "/api/v1/clusters/1/sensors",
                 json={"tuya_device_id": f"dev_{n}", "name": f"S{n}", "type": "tuya.tr301z"},
             )
-        resp = client.get("/api/v1/sensors?limit=2")
+        page_size = 2
+        resp = client.get(f"/api/v1/sensors?limit={page_size}")
         data = resp.json()
-        assert len(data["sensors"]) == 2
+        assert len(data["sensors"]) == page_size
         assert data["next_cursor"] is not None
-        resp = client.get(f"/api/v1/sensors?limit=2&cursor={data['next_cursor']}")
+        resp = client.get(f"/api/v1/sensors?limit={page_size}&cursor={data['next_cursor']}")
         data2 = resp.json()
         assert len(data2["sensors"]) == 1
         assert data2["next_cursor"] is None

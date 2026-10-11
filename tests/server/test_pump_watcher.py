@@ -24,6 +24,8 @@ from greenhouse_server.services.pump_watcher import (
     PumpWatcherService,
 )
 
+DRY_RUN_ALARM_DP = 105  # the IK10PW dry-run / water-shortage alarm DP
+
 
 def _make_registry(adapter: FakeIrrigatorAdapter) -> DeviceRegistry:
     """Build a registry that resolves the canonical and the fake irrigator model keys to ``adapter``."""
@@ -223,13 +225,14 @@ class TestWatcherTrips:
     def test_respects_warmup_window(self, repo, irrigator):
         """Alarm bit set from t=0 must not trip until warmup elapses."""
         clock = FakeClock(step=1.0)
+        warmup = 5.0
         # Every read shows the alarm bit
         adapter = _make_fake_adapter([_alarm(no_water=True, alarm_raw=1) for _ in range(20)])
         watcher = PumpWatcherService(
             repo,
             _make_registry(adapter),
             poll_seconds=1.0,
-            warmup_seconds=5.0,
+            warmup_seconds=warmup,
             clock=clock,
             sleep=clock.sleep,
         )
@@ -240,7 +243,7 @@ class TestWatcherTrips:
         # First trip-eligible poll is the one taken at clock >= warmup (5s).
         # With step=1s per sleep, polls 1..5 are warm-up (still ignored), the
         # 6th poll at clock>=5 trips. So polls should be >= 6.
-        assert result["polls"] >= 6
+        assert result["polls"] >= warmup + 1
 
     def test_trip_records_payload_with_alarm_value(self, repo, irrigator):
         """The activity event records the raw DP 105 value for forensics."""
@@ -267,7 +270,7 @@ class TestWatcherTrips:
         payload = json.loads(activity[0].payload_json)
         assert payload["alarm_raw"] == 1
         assert payload["irrigator_id"] == irrigator.id
-        assert payload["alarm_dp"] == 105
+        assert payload["alarm_dp"] == DRY_RUN_ALARM_DP
 
 
 class TestWatcherDegradedSignals:
@@ -298,6 +301,7 @@ class TestWatcherDegradedSignals:
     def test_abandons_after_consecutive_failures(self, repo, irrigator):
         """Persistent local-read failures abandon the watch without stopping the pump."""
         clock = FakeClock(step=1.0)
+        max_failures = 3
         reads = [_alarm(no_water=False, error="local read failed: timeout") for _ in range(10)]
         adapter = _make_fake_adapter(reads)
         watcher = PumpWatcherService(
@@ -305,7 +309,7 @@ class TestWatcherDegradedSignals:
             _make_registry(adapter),
             poll_seconds=1.0,
             warmup_seconds=0.0,
-            max_read_failures=3,
+            max_read_failures=max_failures,
             clock=clock,
             sleep=clock.sleep,
         )
@@ -313,7 +317,7 @@ class TestWatcherDegradedSignals:
         result = watcher.watch(irrigator, duration_seconds=60)
 
         assert result["outcome"] == "abandoned"
-        assert result["read_failures"] == 3
+        assert result["read_failures"] == max_failures
         assert _stop_calls(adapter) == []
         events = repo.get_recent_events(irrigator.id, hours=1)
         assert all(e.action != EVENT_ACTION_ABORTED for e in events)

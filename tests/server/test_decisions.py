@@ -55,12 +55,13 @@ class TestDecisionLog:
 
     def test_multiple_decisions_ordered_newest_first(self, seeded_client):
         """Multiple pipeline calls produce ordered log entries."""
-        seeded_client.post("/api/v1/clusters/1/irrigate", json={"dry_run": True, "no_sync": True})
-        seeded_client.post("/api/v1/clusters/1/irrigate", json={"dry_run": True, "no_sync": True})
+        runs = 2
+        for _ in range(runs):
+            seeded_client.post("/api/v1/clusters/1/irrigate", json={"dry_run": True, "no_sync": True})
 
         resp = seeded_client.get("/api/v1/clusters/1/decisions")
         items = resp.json()["items"]
-        assert len(items) >= 2
+        assert len(items) >= runs
         timestamps = [i["evaluated_at"] for i in items]
         assert timestamps == sorted(timestamps, reverse=True)
 
@@ -69,9 +70,10 @@ class TestDecisionLog:
         for _ in range(3):
             seeded_client.post("/api/v1/clusters/1/irrigate", json={"dry_run": True, "no_sync": True})
 
-        resp = seeded_client.get("/api/v1/clusters/1/decisions?limit=2")
+        limit = 2
+        resp = seeded_client.get(f"/api/v1/clusters/1/decisions?limit={limit}")
         assert resp.status_code == HTTPStatus.OK
-        assert len(resp.json()["items"]) <= 2
+        assert len(resp.json()["items"]) <= limit
 
     def test_full_irrigate_also_writes_activity(self, seeded_client):
         """Non-dry-run irrigate writes both a decision log entry and activity event."""

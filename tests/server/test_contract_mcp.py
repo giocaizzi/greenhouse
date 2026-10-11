@@ -41,6 +41,7 @@ PHASE0_MCP_TOOLS_SHA256 = (
 )
 
 _TOKEN = "contract-mcp-token"
+MCP_TOOL_COUNT = 84  # one tool per /api/v1 operation
 
 
 @pytest.fixture
@@ -94,7 +95,7 @@ def test_tools_list_handler_returns_exactly_mcp_tools(mcp_app):
     handler = mcp.server.request_handlers[mcp_types.ListToolsRequest]
     result = asyncio.run(handler(mcp_types.ListToolsRequest(method="tools/list")))
     assert _tool_dumps(result.root.tools) == _tool_dumps(mcp.tools)
-    assert len(result.root.tools) == 84
+    assert len(result.root.tools) == MCP_TOOL_COUNT
 
 
 def test_tool_names_are_operation_ids_one_to_one(mcp_app):

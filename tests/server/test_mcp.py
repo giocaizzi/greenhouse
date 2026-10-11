@@ -19,6 +19,8 @@ from greenhouse_server.app import create_app
 from greenhouse_server.config import Settings
 from greenhouse_server.deps import get_device_gateway, get_device_registry
 
+MAX_TOOL_NAME_LENGTH = 64  # Claude.ai connectors reject longer tool names
+
 
 def test_mcp_endpoint_is_mounted(app):
     """The MCP server must be mounted at /mcp."""
@@ -58,7 +60,7 @@ def test_mcp_tool_names_fit_within_64_chars(app):
     so a new route with a long function name never ships.
     """
     mcp = app.state.mcp
-    over_limit = [tool.name for tool in mcp.tools if len(tool.name) > 64]
+    over_limit = [tool.name for tool in mcp.tools if len(tool.name) > MAX_TOOL_NAME_LENGTH]
     assert not over_limit, "MCP tool names exceed the 64-character Claude.ai limit:\n  " + "\n  ".join(
         f"{name!r} ({len(name)} chars)" for name in over_limit
     )

@@ -3,6 +3,9 @@
 import time
 from http import HTTPStatus
 
+PAGE_SIZE = 50  # activity rows per page
+SEEDED_EVENTS = 60
+
 
 def _seed_events(app, count: int, *, base_ts: int | None = None) -> list[int]:
     session = app.state.session_factory()
@@ -78,12 +81,12 @@ class TestActivityPagination:
         from fastapi.testclient import TestClient
 
         with TestClient(app, raise_server_exceptions=False) as client:
-            _seed_events(app, count=60)
+            _seed_events(app, count=SEEDED_EVENTS)
             resp = client.get("/activity")
             assert resp.status_code == HTTPStatus.OK
             # 50 <tr> rows (each event), plus 1 <tr> in thead = 51 total <tr>
             tr_count = resp.text.count("<tr")
-            assert tr_count >= 51  # at least 50 data rows + 1 header
+            assert tr_count >= PAGE_SIZE + 1  # at least 50 data rows + 1 header
             assert 'hx-get="/activity/page' in resp.text
 
     def test_second_page_returns_remaining_events(self, app):
@@ -92,7 +95,7 @@ class TestActivityPagination:
 
         with TestClient(app, raise_server_exceptions=False) as client:
             now = int(time.time())
-            _seed_events(app, count=60, base_ts=now)
+            _seed_events(app, count=SEEDED_EVENTS, base_ts=now)
 
             # Get the first page to find the cursor
             resp1 = client.get("/activity")
@@ -111,5 +114,5 @@ class TestActivityPagination:
             assert resp2.status_code == HTTPStatus.OK
             # Remaining 10 data rows + possible date-separator rows — no further sentinel
             tr_count = resp2.text.count("<tr")
-            assert tr_count >= 10
+            assert tr_count >= SEEDED_EVENTS - PAGE_SIZE
             assert 'hx-trigger="revealed"' not in resp2.text

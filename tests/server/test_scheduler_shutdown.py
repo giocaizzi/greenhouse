@@ -27,6 +27,7 @@ from greenhouse_server.services.pump_watcher import PumpWatcherService
 from greenhouse_server.services.pump_watcher_jobs import handle_watcher_interrupted
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+SHUTDOWN_BUDGET_SECONDS = 30  # the pre-fix process blocked for the whole 60 s irrigation
 
 _SCRIPT = textwrap.dedent(
     """
@@ -106,7 +107,7 @@ def test_shutdown_during_irrigation_is_prompt(tmp_path, triggered_by, stops):
     elapsed, out = _run_server_shutdown(tmp_path, triggered_by)
     assert "LIFESPAN_DONE" in out
     assert f"STOPS {stops}" in out, out
-    assert elapsed < 30, f"shutdown blocked for {elapsed:.1f}s"
+    assert elapsed < SHUTDOWN_BUDGET_SECONDS, f"shutdown blocked for {elapsed:.1f}s"
 
 
 # ── In-process units ────────────────────────────────────────────────────────

@@ -14,18 +14,15 @@ def test_preferences_page_renders(client):
 
 
 def test_preferences_post_updates(client):
-    resp = client.post(
-        "/preferences",
-        data={
-            "units": "imperial",
-            "timezone": "Europe/Rome",
-            "theme": "dark",
-            "refresh_interval_seconds": "60",
-            "default_cluster_id": "",
-            "dry_run_global": "on",
-        },
-        follow_redirects=False,
-    )
+    form = {
+        "units": "imperial",
+        "timezone": "Europe/Rome",
+        "theme": "dark",
+        "refresh_interval_seconds": "60",
+        "default_cluster_id": "",
+        "dry_run_global": "on",
+    }
+    resp = client.post("/preferences", data=form, follow_redirects=False)
     assert resp.status_code == HTTPStatus.SEE_OTHER
 
     resp2 = client.get("/api/v1/preferences")
@@ -33,7 +30,7 @@ def test_preferences_post_updates(client):
     assert body["units"] == "imperial"
     assert body["timezone"] == "Europe/Rome"
     assert body["theme"] == "dark"
-    assert body["refresh_interval_seconds"] == 60
+    assert body["refresh_interval_seconds"] == int(form["refresh_interval_seconds"])
     assert body["dry_run_global"] is True
 
 
@@ -49,16 +46,8 @@ def test_theme_endpoint_persists_value(client):
 
 def test_theme_endpoint_only_touches_theme(client):
     # Set non-default neighbours, then flip the theme alone.
-    client.post(
-        "/preferences",
-        data={
-            "units": "imperial",
-            "timezone": "Europe/Rome",
-            "theme": "auto",
-            "refresh_interval_seconds": "90",
-        },
-        follow_redirects=False,
-    )
+    form = {"units": "imperial", "timezone": "Europe/Rome", "theme": "auto", "refresh_interval_seconds": "90"}
+    client.post("/preferences", data=form, follow_redirects=False)
     resp = client.post("/preferences/theme", data={"theme": "dark"})
     assert resp.status_code == HTTPStatus.NO_CONTENT
     body = client.get("/api/v1/preferences").json()
@@ -66,7 +55,7 @@ def test_theme_endpoint_only_touches_theme(client):
     # Other prefs are undisturbed.
     assert body["units"] == "imperial"
     assert body["timezone"] == "Europe/Rome"
-    assert body["refresh_interval_seconds"] == 90
+    assert body["refresh_interval_seconds"] == int(form["refresh_interval_seconds"])
 
 
 def test_theme_endpoint_rejects_invalid_value(client):
@@ -103,25 +92,22 @@ def test_preferences_renders_global_config_form(client):
 
 
 def test_global_config_post_persists(client):
-    resp = client.post(
-        "/config/global",
-        data={
-            "mode": "smart",
-            "duration_minutes": "3",
-            "interval_hours": "12",
-            "auto_run": "true",
-            "quiet_start_hour": "0",
-            "quiet_end_hour": "5",
-        },
-        follow_redirects=False,
-    )
+    form = {
+        "mode": "smart",
+        "duration_minutes": "3",
+        "interval_hours": "12",
+        "auto_run": "true",
+        "quiet_start_hour": "0",
+        "quiet_end_hour": "5",
+    }
+    resp = client.post("/config/global", data=form, follow_redirects=False)
     assert resp.status_code == HTTPStatus.SEE_OTHER
 
     body = client.get("/api/v1/config/global").json()
     assert body["mode"] == "smart"
-    assert body["duration_minutes"] == 3
+    assert body["duration_minutes"] == int(form["duration_minutes"])
     assert body["quiet_start_hour"] == 0
-    assert body["quiet_end_hour"] == 5
+    assert body["quiet_end_hour"] == int(form["quiet_end_hour"])
     assert body["auto_run"] is True
 
 
@@ -145,16 +131,12 @@ def test_global_config_blank_fields_clear_to_inherit(client):
 
 
 def test_global_config_caps_persist(client):
-    resp = client.post(
-        "/config/global",
-        data={"daily_cap_minutes": "45", "max_events_per_day": "3"},
-        follow_redirects=False,
-    )
+    form = {"daily_cap_minutes": "45", "max_events_per_day": "3"}
+    resp = client.post("/config/global", data=form, follow_redirects=False)
     assert resp.status_code == HTTPStatus.SEE_OTHER
 
     body = client.get("/api/v1/config/global").json()
-    assert body["daily_cap_minutes"] == 45
-    assert body["max_events_per_day"] == 3
+    assert {key: body[key] for key in form} == {key: int(value) for key, value in form.items()}
 
     # Stored values render back into the form inputs.
     page = client.get("/preferences").text

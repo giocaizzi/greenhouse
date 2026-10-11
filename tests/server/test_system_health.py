@@ -124,10 +124,11 @@ class TestSystemHealthPulse:
             from greenhouse_core.models import Alert, Sensor, SensorReading
 
             now = int(time.time())
+            open_alerts = 3
             with Session(engine) as session:
                 sensor = session.get(Sensor, 1)
                 session.add(SensorReading(sensor_id=sensor.id, timestamp=now - 300, soil_moisture=50.0))
-                for i in range(3):
+                for i in range(open_alerts):
                     session.add(
                         Alert(
                             dedup_key=f"test_alert_{i}",
@@ -150,7 +151,7 @@ class TestSystemHealthPulse:
             data = resp.json()
             assert data["cloud_reachable"] is True
             assert data["status"] == "degraded"
-            assert data["open_alerts"] == 3
+            assert data["open_alerts"] == open_alerts
         finally:
             engine.dispose()
 

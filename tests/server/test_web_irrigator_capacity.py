@@ -17,15 +17,10 @@ def test_new_form_renders_capacity_inputs(seeded_client):
 def test_create_persists_capacity(seeded_client):
     """Submitting the create form persists the capacity fields."""
     seeded_client.post("/api/v1/clusters", json={"name": "Empty"})
+    capacity = {"reservoir_l": "15.5", "flow_rate_l_per_min": "2.5"}
     resp = seeded_client.post(
         "/clusters/2/irrigators",
-        data={
-            "tuya_device_id": "fake_irr_cap",
-            "name": "Pump Cap",
-            "type": "rainpoint.ik10pw",
-            "reservoir_l": "15.5",
-            "flow_rate_l_per_min": "2.5",
-        },
+        data={"tuya_device_id": "fake_irr_cap", "name": "Pump Cap", "type": "rainpoint.ik10pw", **capacity},
         follow_redirects=False,
     )
     assert resp.status_code == HTTPStatus.SEE_OTHER
@@ -33,8 +28,7 @@ def test_create_persists_capacity(seeded_client):
     # Confirm it round-tripped via the API.
     created = seeded_client.get("/api/v1/clusters/2/irrigator").json()
     assert created["name"] == "Pump Cap"
-    assert created["reservoir_l"] == 15.5
-    assert created["flow_rate_l_per_min"] == 2.5
+    assert {key: created[key] for key in capacity} == {key: float(value) for key, value in capacity.items()}
 
 
 def test_create_without_capacity_leaves_none(seeded_client):
@@ -74,17 +68,12 @@ def test_edit_form_prefills_capacity(seeded_client):
 
 def test_edit_persists_capacity(seeded_client):
     """Submitting the edit form persists updated capacity values."""
+    capacity = {"reservoir_l": "30.0", "flow_rate_l_per_min": "3.0"}
     resp = seeded_client.post(
         "/clusters/1/irrigators/edit",
-        data={
-            "name": "Test Irrigator",
-            "type": "rainpoint.ik10pw",
-            "reservoir_l": "30.0",
-            "flow_rate_l_per_min": "3.0",
-        },
+        data={"name": "Test Irrigator", "type": "rainpoint.ik10pw", **capacity},
         follow_redirects=False,
     )
     assert resp.status_code == HTTPStatus.SEE_OTHER
     got = seeded_client.get("/api/v1/clusters/1/irrigator").json()
-    assert got["reservoir_l"] == 30.0
-    assert got["flow_rate_l_per_min"] == 3.0
+    assert {key: got[key] for key in capacity} == {key: float(value) for key, value in capacity.items()}

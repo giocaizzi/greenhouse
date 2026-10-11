@@ -81,10 +81,11 @@ class TestDataQualityReport:
         client, engine = _make_client()
         try:
             client.post("/api/v1/clusters", json={"name": "Count Cluster"})
-            client.post("/api/v1/clusters/1/plants", json={"species": "Rose A"})
-            client.post("/api/v1/clusters/1/plants", json={"species": "Rose B"})
+            species = ["Rose A", "Rose B"]
+            for name in species:
+                client.post("/api/v1/clusters/1/plants", json={"species": name})
             resp = client.get("/api/v1/quality/report")
             data = resp.json()
-            assert data["counts"].get("plant_without_sensor", 0) == 2
+            assert data["counts"].get("plant_without_sensor", 0) == len(species)
         finally:
             engine.dispose()

@@ -12,6 +12,7 @@ All timestamps derive from ``FROZEN_INSTANT``; the gateway is a recording fake.
 from __future__ import annotations
 
 import logging
+from datetime import timedelta
 
 import pytest
 
@@ -79,8 +80,8 @@ def _seed(db, sensor_id: int, age: int, **values) -> None:
 
 
 def test_threshold_constant_is_four_hours():
-    assert SENSOR_READING_STALE_SECONDS == 14400
-    assert SNAPSHOT_LOOKBACK_HOURS == 24
+    assert timedelta(seconds=SENSOR_READING_STALE_SECONDS) == timedelta(hours=4)
+    assert timedelta(hours=SNAPSHOT_LOOKBACK_HOURS) == timedelta(days=1)
 
 
 def test_fresh_readings_cost_zero_gateway_calls(cluster, spy_sync):
@@ -132,11 +133,12 @@ def test_stale_sensor_gets_exactly_one_targeted_sync(cluster, spy_sync):
 def test_sensor_without_any_reading_is_synced_with_a_six_hour_window(cluster, spy_sync):
     db, cid, alpha, beta = cluster
     _seed(db, beta, 30, soil_moisture=50.0)
-    gw = RecordingGateway(live={"dev_alpha": {"soil_moisture": 44.0}})
+    live_soil = 44.0
+    gw = RecordingGateway(live={"dev_alpha": {"soil_moisture": live_soil}})
     snapshot = SyncService(db, None, gw).ensure_fresh_and_read(cid)
     assert spy_sync == [(alpha, 6)]
     assert gw.calls[0] == ("get_device_logs", "dev_alpha", (FROZEN_TS - 6 * 3600) * 1000)
-    assert snapshot["soil_moisture"] == 44.0
+    assert snapshot["soil_moisture"] == live_soil
 
 
 def test_all_stale_sync_in_sensor_name_order(cluster, spy_sync):

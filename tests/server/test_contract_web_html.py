@@ -65,6 +65,8 @@ IRR_INDOOR, IRR_OUTDOOR = 1, 2
 ALERT_OPEN, ALERT_ACKED, ALERT_RESOLVED = 1, 2, 3
 WINDOW = 1
 VACATION_UPCOMING, VACATION_PAST = 1, 2
+MONSTERA_SPIKE_INDEX = 5  # the reading index seeded as a Hampel spike
+WEB_ROUTE_COUNT = 85
 
 
 # ── Seed ──────────────────────────────────────────────────────────────────────────────────────
@@ -140,7 +142,7 @@ def seed_greenhouse(repo: IrrigationRepository) -> None:
     # Readings every 2 h over the last 48 h; newest 30 min ago (fresh: < SENSOR_READING_STALE_SECONDS).
     for k in range(25):
         ts = T - 1800 - k * 2 * H
-        monstera_soil = 97.0 if k == 5 else round(50.0 + k * 0.5, 1)  # k == 5: a Hampel spike
+        monstera_soil = 97.0 if k == MONSTERA_SPIKE_INDEX else round(50.0 + k * 0.5, 1)
         repo.add_sensor_reading(
             s_monstera,
             timestamp=ts,
@@ -488,8 +490,9 @@ class TemplateSpy:
 
         def spy(*args, **kwargs):
             # Signature: TemplateResponse(request, name, context=None, ...) — positional or keyword.
-            name = kwargs.get("name", args[1] if len(args) > 1 else None)
-            context = kwargs.get("context", args[2] if len(args) > 2 else None) or {}
+            positional = dict(zip(("request", "name", "context"), args, strict=False))
+            name = kwargs.get("name", positional.get("name"))
+            context = kwargs.get("context", positional.get("context")) or {}
             self.calls.append([name, sorted(context)])
             return original(*args, **kwargs)
 
@@ -535,7 +538,7 @@ def test_web_route_inventory(web_env):
         inventory = _route_inventory(application)
     finally:
         engine.dispose()
-    assert len(inventory) == len(web_routes(web_router.routes)) == 85
+    assert len(inventory) == len(web_routes(web_router.routes)) == WEB_ROUTE_COUNT
     assert all(r["include_in_schema"] is False for r in inventory)
     assert_golden_json("web/routes.json", inventory)
 

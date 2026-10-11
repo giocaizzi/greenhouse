@@ -2,6 +2,12 @@
 
 from http import HTTPStatus
 
+from greenhouse_core.constants import DEFAULT_SOIL_MOISTURE_MIN
+
+CHART_HOURS = 24
+MEDIUM_WATER_NEEDS_BAND = (45.0, 65.0)  # plant_db soil band for water_needs=medium
+SEEDED_TEMP_BAND = (18.0, 27.0)  # the seeded plant's ideal_temp_min / ideal_temp_max
+
 
 def test_single_plant_api(seeded_client):
     resp = seeded_client.get("/api/v1/plants/1")
@@ -17,16 +23,15 @@ def test_single_plant_api_404(client):
 
 
 def test_plant_chart_data_shape(seeded_client):
-    resp = seeded_client.get("/api/v1/plants/1/chart-data?hours=24&metric=soil_moisture")
+    resp = seeded_client.get(f"/api/v1/plants/1/chart-data?hours={CHART_HOURS}&metric=soil_moisture")
     assert resp.status_code == HTTPStatus.OK
     body = resp.json()
     assert body["metric"] == "soil_moisture"
-    assert body["hours"] == 24
+    assert body["hours"] == CHART_HOURS
     assert isinstance(body["datasets"], list)
     assert isinstance(body["events"], list)
     # water_needs=medium → threshold from plant_db mapping (45-65)
-    assert body["threshold"]["min"] == 45.0
-    assert body["threshold"]["max"] == 65.0
+    assert (body["threshold"]["min"], body["threshold"]["max"]) == MEDIUM_WATER_NEEDS_BAND
     assert body["threshold"]["source"] == "water_needs:medium"
 
 
@@ -34,9 +39,7 @@ def test_plant_chart_data_temperature_band(seeded_client):
     resp = seeded_client.get("/api/v1/plants/1/chart-data?metric=temperature")
     assert resp.status_code == HTTPStatus.OK
     body = resp.json()
-    # seeded plant has ideal_temp_min=18, ideal_temp_max=27
-    assert body["threshold"]["min"] == 18.0
-    assert body["threshold"]["max"] == 27.0
+    assert (body["threshold"]["min"], body["threshold"]["max"]) == SEEDED_TEMP_BAND
 
 
 def test_plant_chart_data_unsupported_metric(seeded_client):
@@ -50,7 +53,7 @@ def test_cluster_chart_data(seeded_client):
     body = resp.json()
     # cluster scope with default soil moisture threshold
     assert body["threshold"]["source"] == "default"
-    assert body["threshold"]["min"] == 45.0
+    assert body["threshold"]["min"] == DEFAULT_SOIL_MOISTURE_MIN
 
 
 def test_plant_dashboard_page_renders(seeded_client):

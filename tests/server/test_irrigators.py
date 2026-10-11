@@ -77,26 +77,19 @@ class TestIrrigatorCRUD:
 
     def test_create_with_capacity_round_trips(self, client):
         """POST with reservoir_l/flow_rate_l_per_min persists and is returned."""
+        capacity = {"reservoir_l": 12.5, "flow_rate_l_per_min": 1.5}
         client.post("/api/v1/clusters", json={"name": "C1"})
         resp = client.post(
             "/api/v1/clusters/1/irrigator",
-            json={
-                "tuya_device_id": "dev001",
-                "name": "Pump",
-                "type": "rainpoint.ik10pw",
-                "reservoir_l": 12.5,
-                "flow_rate_l_per_min": 1.5,
-            },
+            json={"tuya_device_id": "dev001", "name": "Pump", "type": "rainpoint.ik10pw", **capacity},
         )
         assert resp.status_code == HTTPStatus.CREATED
         data = resp.json()
-        assert data["reservoir_l"] == 12.5
-        assert data["flow_rate_l_per_min"] == 1.5
+        assert {key: data[key] for key in capacity} == capacity
 
         # Persisted: a fresh GET returns the same values.
         got = client.get("/api/v1/clusters/1/irrigator").json()
-        assert got["reservoir_l"] == 12.5
-        assert got["flow_rate_l_per_min"] == 1.5
+        assert {key: got[key] for key in capacity} == capacity
 
     def test_create_without_capacity_defaults_none(self, client):
         """Capacity fields are optional and default to None."""
@@ -116,18 +109,14 @@ class TestIrrigatorCRUD:
             "/api/v1/clusters/1/irrigator",
             json={"tuya_device_id": "dev001", "name": "Pump", "type": "rainpoint.ik10pw"},
         )
-        resp = client.put(
-            "/api/v1/clusters/1/irrigator",
-            json={"reservoir_l": 20.0, "flow_rate_l_per_min": 2.0},
-        )
+        capacity = {"reservoir_l": 20.0, "flow_rate_l_per_min": 2.0}
+        resp = client.put("/api/v1/clusters/1/irrigator", json=capacity)
         assert resp.status_code == HTTPStatus.OK
         data = resp.json()
-        assert data["reservoir_l"] == 20.0
-        assert data["flow_rate_l_per_min"] == 2.0
+        assert {key: data[key] for key in capacity} == capacity
 
         got = client.get("/api/v1/clusters/1/irrigator").json()
-        assert got["reservoir_l"] == 20.0
-        assert got["flow_rate_l_per_min"] == 2.0
+        assert {key: got[key] for key in capacity} == capacity
 
     def test_update_rejects_negative_capacity(self, client):
         """Negative capacity values are rejected by schema validation (ge=0)."""
@@ -256,11 +245,12 @@ class TestListAllIrrigatorsTopLevel:
                 f"/api/v1/clusters/{n + 1}/irrigator",
                 json={"tuya_device_id": f"dev_{n}", "name": f"I{n}", "type": "rainpoint.ik10pw"},
             )
-        resp = client.get("/api/v1/irrigators?limit=2")
+        page_size = 2
+        resp = client.get(f"/api/v1/irrigators?limit={page_size}")
         data = resp.json()
-        assert len(data["irrigators"]) == 2
+        assert len(data["irrigators"]) == page_size
         assert data["next_cursor"] is not None
-        resp = client.get(f"/api/v1/irrigators?limit=2&cursor={data['next_cursor']}")
+        resp = client.get(f"/api/v1/irrigators?limit={page_size}&cursor={data['next_cursor']}")
         data2 = resp.json()
         assert len(data2["irrigators"]) == 1
         assert data2["next_cursor"] is None

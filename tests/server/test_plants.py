@@ -104,12 +104,13 @@ class TestPlantMove:
 
     def test_move_happy_path(self, client):
         plant_id = self._seed_two_clusters_one_plant(client)
+        target_cluster_id = 2
 
-        resp = client.post(f"/api/v1/plants/{plant_id}/move", json={"target_cluster_id": 2})
+        resp = client.post(f"/api/v1/plants/{plant_id}/move", json={"target_cluster_id": target_cluster_id})
         assert resp.status_code == HTTPStatus.OK
         data = resp.json()
         assert data["id"] == plant_id
-        assert data["cluster_id"] == 2
+        assert data["cluster_id"] == target_cluster_id
 
         # Plant now appears under the target cluster, not the source.
         assert [p["id"] for p in client.get("/api/v1/clusters/2/plants").json()] == [plant_id]
@@ -333,6 +334,7 @@ class TestPlantMove:
         query cleanly after a move.
         """
         plant_id = self._seed_two_clusters_one_plant(client)
+        score = 72.5
 
         with app.state.session_factory() as session:
             from greenhouse_core.repository import IrrigationRepository
@@ -341,7 +343,7 @@ class TestPlantMove:
             repo.upsert_plant_health(
                 plant_id=plant_id,
                 date_key="2024-01-01",
-                score=72.5,
+                score=score,
                 soil_in_band_pct=0.8,
                 temp_in_band_pct=0.9,
                 humidity_in_band_pct=0.7,
@@ -358,7 +360,7 @@ class TestPlantMove:
             repo = IrrigationRepository(session)
             history = repo.list_plant_health_history(plant_id, days=365 * 100)
             assert len(history) == 1
-            assert history[0].score == 72.5
+            assert history[0].score == score
 
 
 class TestListAllPlantsTopLevel:
@@ -406,17 +408,18 @@ class TestListAllPlantsTopLevel:
         for n in range(5):
             client.post("/api/v1/clusters/1/plants", json={"species": f"P{n}"})
         # First page of 2
-        resp = client.get("/api/v1/plants?limit=2")
+        page_size = 2
+        resp = client.get(f"/api/v1/plants?limit={page_size}")
         data = resp.json()
-        assert len(data["plants"]) == 2
+        assert len(data["plants"]) == page_size
         assert data["next_cursor"] == data["plants"][-1]["id"]
         # Second page using cursor
-        resp = client.get(f"/api/v1/plants?limit=2&cursor={data['next_cursor']}")
+        resp = client.get(f"/api/v1/plants?limit={page_size}&cursor={data['next_cursor']}")
         data2 = resp.json()
-        assert len(data2["plants"]) == 2
+        assert len(data2["plants"]) == page_size
         assert data2["plants"][0]["id"] > data["plants"][-1]["id"]
         # Last page is partial, no cursor.
-        resp = client.get(f"/api/v1/plants?limit=2&cursor={data2['next_cursor']}")
+        resp = client.get(f"/api/v1/plants?limit={page_size}&cursor={data2['next_cursor']}")
         data3 = resp.json()
         assert len(data3["plants"]) == 1
         assert data3["next_cursor"] is None

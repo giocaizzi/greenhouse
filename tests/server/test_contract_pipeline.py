@@ -141,7 +141,7 @@ class Pipeline:
     def api(self, method: str, path: str, body: dict | None = None) -> dict:
         """Seeding call: must succeed; not recorded in the golden."""
         resp = self.client.request(method, path, json=body)
-        assert resp.status_code < 300, f"{method} {path} -> {resp.status_code} {resp.text}"
+        assert resp.status_code < HTTPStatus.MULTIPLE_CHOICES, f"{method} {path} -> {resp.status_code} {resp.text}"
         return resp.json()
 
     def use_gateway(self, live: dict | None = None) -> RecordingGateway:

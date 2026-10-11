@@ -35,6 +35,7 @@ from greenhouse_server.config import Settings
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 LIBS = REPO_ROOT / "libs"
+DEFAULT_PORT = 8000
 
 
 def _settings(**kwargs) -> Settings:
@@ -209,10 +210,11 @@ def test_dotenv_in_cwd_is_loaded_and_env_beats_it(clean_env, monkeypatch):
     )
     s = Settings()
     assert (s.port, s.mcp_token, s.check_cron_hours) == (9001, "dotenv-token", "*")
-    assert Settings(_env_file=None).port == 8000
-    monkeypatch.setenv("IRRIGATION_PORT", "9002")
-    assert Settings().port == 9002
-    assert Settings(port=9003).port == 9003
+    assert Settings(_env_file=None).port == DEFAULT_PORT
+    env_port, explicit_port = 9002, 9003
+    monkeypatch.setenv("IRRIGATION_PORT", str(env_port))
+    assert Settings().port == env_port
+    assert Settings(port=explicit_port).port == explicit_port
 
 
 def test_extra_inputs_are_ignored(clean_env, monkeypatch):

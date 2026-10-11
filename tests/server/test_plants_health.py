@@ -7,6 +7,8 @@ import pytest
 
 from greenhouse_core.repository import IrrigationRepository
 
+MAX_HEALTH_SCORE = 100
+
 
 def _seed_plant_with_sensor(client) -> tuple[int, int]:
     """Create cluster→plant→sensor; return (plant_id, sensor_id)."""
@@ -75,7 +77,7 @@ class TestPlantHealthEndpoints:
         assert data["plant_id"] == plant_id
         assert data["species"] == "Monstera deliciosa"
         assert data["current_score"] is not None
-        assert 0 <= data["current_score"] <= 100
+        assert 0 <= data["current_score"] <= MAX_HEALTH_SCORE
 
         # Persist snapshot and verify soil_in_band_pct stored correctly
         client.post("/api/v1/plants/health/snapshot")

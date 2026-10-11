@@ -577,10 +577,11 @@ def test_rearm_failure_mid_scan_keeps_partial_count_and_logs_both_lines(monkeypa
     monkeypatch.setattr(sched, "_app", SimpleNamespace(state=SimpleNamespace(session_factory=factory)))
     real = IrrigationRepository.get_recent_events
     seen: list[int] = []
+    failing_call = 2  # the second irrigator's lookup fails
 
     def flaky(self, irrigator_id, hours=24):
         seen.append(irrigator_id)
-        if len(seen) == 2:
+        if len(seen) == failing_call:
             raise RuntimeError("db gone")
         return real(self, irrigator_id, hours=hours)
 

@@ -41,6 +41,10 @@ from server.conftest import _make_stubbed_app
 PHASE0_OPENAPI_SHA256 = (
     "83777f9dd430435469ffbf7b25543e7541755d3cd3bcbfd7fff31273d7db6ee8"  # gitleaks:allow — content hash, not a secret
 )
+# Headline counts of the pinned route table.
+API_OPERATION_COUNT = 84
+API_PATH_COUNT = 66
+WEB_ROUTE_COUNT = 85
 
 
 def _package_version() -> str:
@@ -169,8 +173,8 @@ def test_operation_id_is_route_function_name(contract_app):
         for m in row["methods"]
     }
     assert by_key == names
-    assert len(by_key) == 84
-    assert len(contract_app.openapi()["paths"]) == 66
+    assert len(by_key) == API_OPERATION_COUNT
+    assert len(contract_app.openapi()["paths"]) == API_PATH_COUNT
 
 
 def test_route_table_matches_golden(contract_app):
@@ -184,8 +188,8 @@ def test_route_table_counts(contract_app):
     api = [r for r in rows if r["kind"] == "APIRoute" and r["include_in_schema"]]
     hidden = [r for r in rows if r["kind"] == "APIRoute" and not r["include_in_schema"]]
     web = [r for r in hidden if not r["path"].startswith(("/.well-known", "/mcp"))]
-    assert len(api) == 84
-    assert len(web) == 85
+    assert len(api) == API_OPERATION_COUNT
+    assert len(web) == WEB_ROUTE_COUNT
     assert [r["path"] for r in rows if r["kind"] == "Mount"] == ["/static"]
     mcp_rows = [r for r in rows if r["path"] == "/mcp"]
     assert len(mcp_rows) == 1 and mcp_rows[0]["methods"] == ["DELETE", "GET", "POST"]

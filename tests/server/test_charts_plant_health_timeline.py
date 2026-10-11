@@ -3,6 +3,9 @@
 import time
 from http import HTTPStatus
 
+HEALTH_THRESHOLDS = {"good": 80.0, "ok": 50.0}  # the timeline's score bands
+MAX_HEALTH_SCORE = 100.0
+
 
 def test_health_timeline_empty_no_readings(seeded_client):
     """Plant with no moisture readings returns an empty points list."""
@@ -12,8 +15,7 @@ def test_health_timeline_empty_no_readings(seeded_client):
     assert body["plant_id"] == 1
     assert isinstance(body["points"], list)
     assert "thresholds" in body
-    assert body["thresholds"]["good"] == 80.0
-    assert body["thresholds"]["ok"] == 50.0
+    assert {key: body["thresholds"][key] for key in HEALTH_THRESHOLDS} == HEALTH_THRESHOLDS
 
 
 def test_health_timeline_404_unknown_plant(client):
@@ -27,7 +29,7 @@ def test_health_timeline_point_structure(seeded_client):
     assert resp.status_code == HTTPStatus.OK
     for ts, score in resp.json()["points"]:
         assert isinstance(ts, int)
-        assert 0.0 <= score <= 100.0
+        assert 0.0 <= score <= MAX_HEALTH_SCORE
 
 
 def test_health_timeline_points_match_seeded_readings(app):

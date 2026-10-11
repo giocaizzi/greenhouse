@@ -138,4 +138,5 @@ class TestSensorDrift:
 
         drift_alerts = [a for a in repo.list_alerts(cluster_id=cluster_id) if a.code == "sensor_drift"]
         assert len(drift_alerts) == 1
-        assert drift_alerts[0].occurrence_count >= 2
+        scans = 2  # scan() ran twice on the same spike above
+        assert drift_alerts[0].occurrence_count >= scans

@@ -6,6 +6,7 @@ from http import HTTPStatus
 import pytest
 
 from fake_data import FAKE_DEVICE_ID, FAKE_PLANT_SPECIES, FAKE_SENSOR_ID
+from greenhouse_core.constants import FORECAST_CONFIDENCE_MEDIUM
 
 
 class TestForecastEndpoint:
@@ -176,7 +177,7 @@ class TestForecastEndpoint:
         assert body["hours_until_next"] > 0
         assert body["method"] == "drainage_slope"
         assert body["next_predicted_at"] is not None
-        assert body["confidence"] >= 0.4
+        assert body["confidence"] >= FORECAST_CONFIDENCE_MEDIUM
 
     def test_forecast_response_shape(self, client):
         """Forecast always returns all required fields."""

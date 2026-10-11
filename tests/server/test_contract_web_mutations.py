@@ -694,7 +694,7 @@ def test_bulk_stop_all_reports_a_device_that_refuses_the_stop(make_client):
     assert resp.status_code == HTTPStatus.OK
     assert "Stopped 0 irrigators; 2 did not confirm the stop and may still be running." in resp.text
     assert "Every device is now off." not in resp.text
-    assert resp.text.count("stop failed: ") == 2
+    assert resp.text.count("stop failed: ") == len((IRR_INDOOR, IRR_OUTDOOR))
     assert app.state.fake_devices.irrigator.calls == [("stop", IRR_INDOOR), ("stop", IRR_OUTDOOR)]
     assert "irrigation_events" not in effect
 

@@ -69,7 +69,8 @@ def _capture_urlopen(monkeypatch) -> dict:
 class TestNtfyClient:
     def test_publish_builds_request(self, monkeypatch):
         captured = _capture_urlopen(monkeypatch)
-        client = NtfyClient("https://ntfy.example/", "my-topic", token="s3cret", timeout=3)
+        timeout = 3
+        client = NtfyClient("https://ntfy.example/", "my-topic", token="s3cret", timeout=timeout)
 
         ok = client.notify_alert(severity="critical", title="Leak detected", message="cluster 1")
 
@@ -77,7 +78,7 @@ class TestNtfyClient:
         req = captured["request"]
         assert req.full_url == "https://ntfy.example/my-topic"
         assert req.data == b"cluster 1"
-        assert captured["timeout"] == 3
+        assert captured["timeout"] == timeout
         # urllib capitalizes header keys: "X-Title" -> "X-title".
         assert req.headers["X-title"] == "Leak detected"
         assert req.headers["X-tags"] == "rotating_light"
@@ -204,7 +205,8 @@ class TestAlertNotification:
         tmp_db.resolve_alert(alert.id)
         reopened = raise_alert(tmp_db, notifier=rec, **kwargs)
         assert (reopened.id, reopened.status, reopened.occurrence_count) == (alert.id, "open", 4)
-        assert len(rec.alerts) == 2
+        pushes = 2  # the raise that opened the alert and the one that re-opened it
+        assert len(rec.alerts) == pushes
 
     def test_pref_toggle_off_suppresses(self, tmp_db):
         tmp_db.update_preferences(notify_alerts=False)

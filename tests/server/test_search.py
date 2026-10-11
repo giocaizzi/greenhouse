@@ -98,9 +98,10 @@ class TestSearch:
         # Add more clusters to exceed limit
         for i in range(10):
             client.post("/api/v1/clusters", json={"name": f"Living Extra {i}"})
-        resp = client.get("/api/v1/search?q=living&limit=3")
+        limit = 3
+        resp = client.get(f"/api/v1/search?q=living&limit={limit}")
         assert resp.status_code == HTTPStatus.OK
-        assert len(resp.json()["hits"]) <= 3
+        assert len(resp.json()["hits"]) <= limit
 
     def test_query_echoed_back(self, client):
         _seed(client)

@@ -6,29 +6,31 @@ from sqlalchemy import select
 
 from greenhouse_core.models import IrrigationEvent
 
+_SEEDED = (
+    ("Cluster A", "fake_irrigator_bulk_001", "Irrigator A1"),
+    ("Cluster B", "fake_irrigator_bulk_002", "Irrigator B1"),
+)
 
-def _seed_irrigators(client):
-    """Seed two clusters each with one irrigator."""
-    client.post("/api/v1/clusters", json={"name": "Cluster A"})
-    client.post(
-        "/api/v1/clusters/1/irrigator",
-        json={"tuya_device_id": "fake_irrigator_bulk_001", "name": "Irrigator A1", "type": "rainpoint.ik10pw"},
-    )
-    client.post("/api/v1/clusters", json={"name": "Cluster B"})
-    client.post(
-        "/api/v1/clusters/2/irrigator",
-        json={"tuya_device_id": "fake_irrigator_bulk_002", "name": "Irrigator B1", "type": "rainpoint.ik10pw"},
-    )
+
+def _seed_irrigators(client) -> int:
+    """Seed two clusters each with one irrigator; return how many irrigators were seeded."""
+    for cluster_id, (cluster_name, device_id, name) in enumerate(_SEEDED, start=1):
+        client.post("/api/v1/clusters", json={"name": cluster_name})
+        client.post(
+            f"/api/v1/clusters/{cluster_id}/irrigator",
+            json={"tuya_device_id": device_id, "name": name, "type": "rainpoint.ik10pw"},
+        )
+    return len(_SEEDED)
 
 
 class TestBulkStopAll:
     def test_stop_all_returns_correct_count(self, client):
         """Stop-all with two irrigators must report stopped=2."""
-        _seed_irrigators(client)
+        seeded = _seed_irrigators(client)
         resp = client.post("/api/v1/bulk/stop-all")
         assert resp.status_code == HTTPStatus.OK
         data = resp.json()
-        assert data["stopped"] == 2
+        assert data["stopped"] == seeded
         assert data["errors"] == []
 
     def test_stop_all_no_irrigators(self, client):
@@ -41,14 +43,14 @@ class TestBulkStopAll:
 
     def test_stop_all_logs_irrigation_events(self, app, client):
         """Each irrigator must have an IrrigationEvent with triggered_by='emergency'."""
-        _seed_irrigators(client)
+        seeded = _seed_irrigators(client)
         client.post("/api/v1/bulk/stop-all")
 
         # Inspect the database directly via the app's session factory
         session = app.state.session_factory()
         try:
             events = list(session.scalars(select(IrrigationEvent).where(IrrigationEvent.triggered_by == "emergency")))
-            assert len(events) == 2
+            assert len(events) == seeded
             for event in events:
                 assert event.action == "stop"
                 assert event.triggered_by == "emergency"

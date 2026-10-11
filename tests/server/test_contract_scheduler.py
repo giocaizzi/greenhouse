@@ -543,7 +543,7 @@ def test_rearm_leak_checks(p):
     assert irrigation_jobs_mod.rearm_leak_checks() == 0
     sched.start_scheduler(paused=True)
     try:
-        assert irrigation_jobs_mod.rearm_leak_checks() == 2
+        rearmed = irrigation_jobs_mod.rearm_leak_checks()
         jobs = sorted((j.id, str(j.trigger)) for j in bg_scheduler.get_jobs() if j.id.startswith("leak-check-"))
     finally:
         sched.stop_scheduler()
@@ -551,6 +551,7 @@ def test_rearm_leak_checks(p):
         (f"leak-check-1-{FROZEN_TS - 2 * HOUR}", "date[2026-04-15 10:00:00 UTC]"),
         (f"leak-check-1-{FROZEN_TS - 600}", "date[2026-04-15 10:20:00 UTC]"),
     ]
+    assert rearmed == len(jobs)
 
 
 def test_schedule_pump_watcher_guards(p):

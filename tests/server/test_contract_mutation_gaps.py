@@ -559,14 +559,14 @@ def test_pump_watcher_counts_offline_reads_as_failures(db):
     """pump-04: an ``offline`` state (no error text) counts toward the read-failure budget → abandoned."""
     result, adapter = _watch(db, [True] * 10)
     assert (result["outcome"], result["polls"], result["read_failures"]) == ("abandoned", 3, 3)
-    assert adapter.reads == 3
+    assert adapter.reads == result["polls"]
 
 
 def test_pump_watcher_failure_budget_counts_consecutive_failures_only(db):
     """pump-09: a healthy read resets the failure counter — alternating failures never abandon."""
     result, adapter = _watch(db, [True, False, True, False, True, False, True], seconds=10)
     assert (result["outcome"], result["polls"], result["read_failures"]) == ("completed", 10, 0)
-    assert adapter.reads == 10
+    assert adapter.reads == result["polls"]
 
 
 # ── services/manual_control.py ──────────────────────────────────────────────

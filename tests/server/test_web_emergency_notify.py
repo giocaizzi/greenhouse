@@ -20,9 +20,10 @@ def test_web_stop_all_sends_the_emergency_push(app, seeded_client):
 def test_web_and_api_stop_all_push_the_same_payload(app, seeded_client):
     rec = _RecordingNotifier()
     app.state.ntfy_notifier = rec
-    seeded_client.post("/api/v1/bulk/stop-all")
-    seeded_client.post("/bulk/stop-all")
-    assert len(rec.irrigations) == 2
+    endpoints = ("/api/v1/bulk/stop-all", "/bulk/stop-all")
+    for url in endpoints:
+        seeded_client.post(url)
+    assert len(rec.irrigations) == len(endpoints)
     assert rec.irrigations[0] == rec.irrigations[1]
 
 
@@ -59,4 +60,5 @@ def test_web_stop_all_without_a_preferences_row_does_not_block_the_page(tmp_path
         resp = client.post("/bulk/stop-all", headers={"HX-Request": "true"})
         elapsed = time.monotonic() - started
     assert resp.status_code == HTTPStatus.OK
-    assert elapsed < 2  # SQLite busy timeout is 5 s; before the rollback this took ~5.1 s
+    prompt_seconds = 2  # SQLite busy timeout is 5 s; before the rollback this took ~5.1 s
+    assert elapsed < prompt_seconds

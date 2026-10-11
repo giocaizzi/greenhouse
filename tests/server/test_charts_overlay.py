@@ -3,14 +3,19 @@
 import time
 from http import HTTPStatus
 
+OVERLAY_HOURS = 72
+NORMALISED_MAX = 100.0  # overlay values are normalised to [0, 100]
+POINT_ARITY = 2  # each point is [timestamp, value]
+LIGHT_ORIGINAL_MAX_LUX = 10_000.0
+
 
 def test_overlay_returns_valid_shape(seeded_client):
     """Overlay endpoint returns 200 with the expected top-level keys."""
-    resp = seeded_client.get("/api/v1/clusters/1/overlay?hours=72")
+    resp = seeded_client.get(f"/api/v1/clusters/1/overlay?hours={OVERLAY_HOURS}")
     assert resp.status_code == HTTPStatus.OK
     body = resp.json()
     assert body["cluster_id"] == 1
-    assert body["hours"] == 72
+    assert body["hours"] == OVERLAY_HOURS
     assert body["normalised"] is True
     assert isinstance(body["datasets"], list)
     assert isinstance(body["events"], list)
@@ -19,17 +24,17 @@ def test_overlay_returns_valid_shape(seeded_client):
 def test_overlay_dataset_structure(seeded_client):
     """Each dataset must have metric + points fields with values in range."""
     # Seed readings first via the app fixture by seeding directly through the engine
-    resp = seeded_client.get("/api/v1/clusters/1/overlay?hours=72")
+    resp = seeded_client.get(f"/api/v1/clusters/1/overlay?hours={OVERLAY_HOURS}")
     assert resp.status_code == HTTPStatus.OK
     for ds in resp.json()["datasets"]:
         assert "metric" in ds
         assert ds["metric"] in ("soil", "humidity", "light")
         assert isinstance(ds["points"], list)
         for pt in ds["points"]:
-            assert len(pt) == 2
+            assert len(pt) == POINT_ARITY
             ts, val = pt
             assert isinstance(ts, int)
-            assert 0.0 <= val <= 100.0
+            assert 0.0 <= val <= NORMALISED_MAX
 
 
 def test_overlay_404_unknown_cluster(client):
@@ -77,7 +82,7 @@ def test_overlay_with_readings(app):
     app.dependency_overrides[get_repository] = lambda: repo
     client = TestClient(app, raise_server_exceptions=False)
 
-    resp = client.get(f"/api/v1/clusters/{cluster_id}/overlay?hours=72")
+    resp = client.get(f"/api/v1/clusters/{cluster_id}/overlay?hours={OVERLAY_HOURS}")
     assert resp.status_code == HTTPStatus.OK
     body = resp.json()
     metrics = {ds["metric"] for ds in body["datasets"]}
@@ -92,11 +97,11 @@ def test_overlay_with_readings(app):
     # All values must be in [0, 100]
     for ds in body["datasets"]:
         for _, val in ds["points"]:
-            assert 0.0 <= val <= 100.0
+            assert 0.0 <= val <= NORMALISED_MAX
 
     # Light dataset must carry original_max
     light_ds = next(ds for ds in body["datasets"] if ds["metric"] == "light")
-    assert light_ds["original_max"] == 10_000.0
+    assert light_ds["original_max"] == LIGHT_ORIGINAL_MAX_LUX
 
     app.dependency_overrides.pop(get_repository, None)
     session.close()

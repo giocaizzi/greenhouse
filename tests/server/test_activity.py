@@ -40,11 +40,12 @@ class TestActivityList:
         from fastapi.testclient import TestClient
 
         with TestClient(app, raise_server_exceptions=False) as client:
-            self._seed_events(app, count=3)
+            count = 3
+            self._seed_events(app, count=count)
             resp = client.get("/api/v1/activity")
             assert resp.status_code == HTTPStatus.OK
             items = resp.json()["items"]
-            assert len(items) == 3
+            assert len(items) == count
             timestamps = [i["timestamp"] for i in items]
             assert timestamps == sorted(timestamps, reverse=True)
 
@@ -124,20 +125,21 @@ class TestActivityList:
         from fastapi.testclient import TestClient
 
         with TestClient(app, raise_server_exceptions=False) as client:
-            self._seed_events(app, count=5)
+            total, page_size = 5, 3
+            self._seed_events(app, count=total)
 
-            resp = client.get("/api/v1/activity?limit=3")
+            resp = client.get(f"/api/v1/activity?limit={page_size}")
             assert resp.status_code == HTTPStatus.OK
             data = resp.json()
-            assert len(data["items"]) == 3
+            assert len(data["items"]) == page_size
             assert data["next_cursor"] == data["items"][-1]["timestamp"]
 
             # Fetch next page using cursor
             cursor = data["next_cursor"]
-            resp2 = client.get(f"/api/v1/activity?limit=3&before={cursor}")
+            resp2 = client.get(f"/api/v1/activity?limit={page_size}&before={cursor}")
             assert resp2.status_code == HTTPStatus.OK
             data2 = resp2.json()
-            assert len(data2["items"]) == 2
+            assert len(data2["items"]) == total - page_size
             assert data2["next_cursor"] is None
 
     def test_no_cursor_when_fewer_items_than_limit(self, app):

@@ -19,6 +19,8 @@ from greenhouse_server.app import create_app
 from greenhouse_server.config import Settings
 from greenhouse_server.scheduler import scheduler as bg_scheduler
 
+EXPECTED_MAX_DAILY_ACTUATIONS = 4  # 24 h under the 6 h global cooldown
+
 
 def _build_app(cron_hours: str | None = None):
     engine = create_engine(
@@ -141,7 +143,7 @@ class TestCooldownGatesActuation:
 
                 # 24h / 6h cooldown = at most 4 actuations.
                 max_allowed = 24 // MIN_COOLDOWN_HOURS
-                assert max_allowed == 4
+                assert max_allowed == EXPECTED_MAX_DAILY_ACTUATIONS
                 assert actuations <= max_allowed, (
                     f"engine fired {actuations} times in 24h; cooldown should cap at {max_allowed}"
                 )

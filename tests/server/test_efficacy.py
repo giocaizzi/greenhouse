@@ -13,6 +13,12 @@ from greenhouse_server.app import create_app
 from greenhouse_server.config import Settings
 from greenhouse_server.deps import get_device_gateway, get_device_registry
 
+DEFAULT_EFFICACY_DAYS = 14  # the route's ``days`` default
+MAX_EFFICACY_SCORE = 100.0  # scores are capped here
+# The dud event below sits at ~30 % before and after; counting its 95 % spike would push both far past these.
+SPIKE_FREE_AFTER_PCT_CEILING = 35.0
+SPIKE_FREE_SCORE_CEILING = 25.0
+
 
 def _make_client():
     engine = create_engine("sqlite://", echo=False, connect_args={"check_same_thread": False}, poolclass=StaticPool)
@@ -33,7 +39,7 @@ class TestClusterEfficacy:
         assert resp.status_code == HTTPStatus.OK
         data = resp.json()
         assert data["cluster_id"] == 1
-        assert data["days"] == 14
+        assert data["days"] == DEFAULT_EFFICACY_DAYS
         assert data["items"] == []
 
     def test_scored_event_with_moisture_rise(self):
@@ -53,6 +59,7 @@ class TestClusterEfficacy:
             now = int(time.time())
             event_ts = now - 3600
 
+            duration = 3
             with Session(engine) as session:
                 sensor = session.get(Sensor, 1)
                 irrigator_id = 1
@@ -67,7 +74,7 @@ class TestClusterEfficacy:
                         irrigator_id=irrigator_id,
                         timestamp=event_ts,
                         action="start",
-                        duration_minutes=3,
+                        duration_minutes=duration,
                         triggered_by="auto",
                     )
                 )
@@ -79,7 +86,7 @@ class TestClusterEfficacy:
             assert len(data["items"]) == 1
             item = data["items"][0]
             assert item["irrigator_name"] == "Eff Pump"
-            assert item["duration_minutes"] == 3
+            assert item["duration_minutes"] == duration
             assert item["before_pct"] is not None
             assert item["after_pct"] is not None
             assert item["score"] is not None
@@ -129,8 +136,8 @@ class TestClusterEfficacy:
             resp = client.get("/api/v1/clusters/1/efficacy")
             item = resp.json()["items"][0]
 
-            assert item["after_pct"] < 35.0
-            assert item["score"] < 25.0
+            assert item["after_pct"] < SPIKE_FREE_AFTER_PCT_CEILING
+            assert item["score"] < SPIKE_FREE_SCORE_CEILING
         finally:
             client.close()
             engine.dispose()
@@ -165,14 +172,15 @@ class TestClusterEfficacy:
             resp = client.get("/api/v1/clusters/1/efficacy?days=1")
             data = resp.json()
             assert len(data["items"]) == 1
-            assert data["items"][0]["score"] == 100.0
+            assert data["items"][0]["score"] == MAX_EFFICACY_SCORE
         finally:
             engine.dispose()
 
     def test_days_query_param(self, seeded_client):
-        resp = seeded_client.get("/api/v1/clusters/1/efficacy?days=30")
+        days = 30
+        resp = seeded_client.get(f"/api/v1/clusters/1/efficacy?days={days}")
         assert resp.status_code == HTTPStatus.OK
-        assert resp.json()["days"] == 30
+        assert resp.json()["days"] == days
 
 
 def test_days_is_bounded_like_the_web_page(seeded_client):

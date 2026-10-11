@@ -79,9 +79,10 @@ class TestRearm:
         _start(app, iid, now - 900, triggered_by="manual")  # no armed marker: a hand log, no check
         _start(app, iid, now - LEAK_HOLD_HOURS * 3600 - 60)  # older than the hold horizon
 
-        assert irrigation_jobs_mod.rearm_leak_checks() == 2
+        rearmed = irrigation_jobs_mod.rearm_leak_checks()
         jobs = _leak_jobs()
         assert set(jobs) == {f"leak-check-{cid}-{pending}", f"leak-check-{cid}-{overdue}"}
+        assert rearmed == len(jobs)
         due = jobs[f"leak-check-{cid}-{pending}"].next_run_time.timestamp()
         assert due == pytest.approx(pending + LEAK_CHECK_DELAY_SECONDS, abs=1)
         # Overdue checks run right away rather than at their (past) due time.

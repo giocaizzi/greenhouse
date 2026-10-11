@@ -32,6 +32,9 @@ from greenhouse_server import scheduler as sched_mod
 from greenhouse_server.app import create_app
 from greenhouse_server.config import Settings
 
+# sensor_sync, check_all, plant_health_snapshot, sensor_anomaly, device_health_monitor
+BUILT_IN_JOB_COUNT = 5
+
 _BASE = {
     "db_url": "sqlite://",
     "enable_scheduler": False,
@@ -177,11 +180,12 @@ def test_registration_order_and_identity(clean_env, frozen_clock):
 
 def test_rebuilding_the_app_does_not_duplicate_jobs(clean_env, frozen_clock):
     app1, engine1 = _build({}, None)
-    app2, engine2 = _build({"sync_interval_minutes": 45}, None)
+    sync_minutes = 45
+    app2, engine2 = _build({"sync_interval_minutes": sync_minutes}, None)
     try:
         jobs = sched_mod.scheduler.get_jobs()
-        assert len(jobs) == 5
-        assert jobs[0].trigger.interval.total_seconds() == 45 * 60
+        assert len(jobs) == BUILT_IN_JOB_COUNT
+        assert jobs[0].trigger.interval.total_seconds() == sync_minutes * 60
         assert sched_mod._app is app2
     finally:
         engine1.dispose()

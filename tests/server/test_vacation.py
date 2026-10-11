@@ -75,10 +75,14 @@ class TestActiveVacationFlag:
     def test_list_includes_all_windows(self, client):
         """Items list contains both active and future windows."""
         now = int(time.time())
-        client.post("/api/v1/vacation", json={"starts_at": now - 3600, "ends_at": now + 3600})
-        client.post("/api/v1/vacation", json={"starts_at": now + 7200, "ends_at": now + 86400})
+        windows = [
+            {"starts_at": now - 3600, "ends_at": now + 3600},
+            {"starts_at": now + 7200, "ends_at": now + 86400},
+        ]
+        for window in windows:
+            client.post("/api/v1/vacation", json=window)
         resp = client.get("/api/v1/vacation")
-        assert len(resp.json()["items"]) == 2
+        assert len(resp.json()["items"]) == len(windows)
 
 
 class TestUpdateVacationWindow:

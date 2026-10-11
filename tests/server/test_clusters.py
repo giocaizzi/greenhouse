@@ -42,10 +42,11 @@ class TestClusterCRUD:
         assert resp.json() == []
 
     def test_create_two_clusters(self, client):
-        client.post("/api/v1/clusters", json={"name": "A"})
-        client.post("/api/v1/clusters", json={"name": "B"})
+        names = ["A", "B"]
+        for name in names:
+            client.post("/api/v1/clusters", json={"name": name})
         resp = client.get("/api/v1/clusters")
-        assert len(resp.json()) == 2
+        assert len(resp.json()) == len(names)
 
     def test_update_name_and_location(self, client):
         client.post("/api/v1/clusters", json={"name": "Original", "environment": "indoor"})
@@ -188,15 +189,16 @@ class TestClusterStatus:
             json={"tuya_device_id": "fake_tuya_sensor_00000001", "name": "S", "type": "tuya.tr301z"},
         ).json()["id"]
         three_days = 3 * 24 * 3600
+        soil = 41.0
         session = client.app.state.session_factory()
         repo = IrrigationRepository(session)
-        repo.add_sensor_reading(sid, timestamp=FROZEN_TS - three_days, soil_moisture=41.0)
+        repo.add_sensor_reading(sid, timestamp=FROZEN_TS - three_days, soil_moisture=soil)
         repo.commit()
         session.close()
 
         [row] = client.get(f"/api/v1/clusters/{cid}/status").json()["sensors"]
         assert row["reading_age_seconds"] == three_days
-        assert row["last_reading"]["soil_moisture"] == 41.0
+        assert row["last_reading"]["soil_moisture"] == soil
 
     def test_status_not_found(self, client):
         resp = client.get("/api/v1/clusters/999/status")
@@ -239,14 +241,12 @@ class TestClusterDetail:
 
     def test_detail_includes_windows(self, seeded_client):
         """Configured irrigation windows show up in the detail payload."""
-        seeded_client.post(
-            "/api/v1/clusters/1/windows",
-            json={"start_hour": 6, "end_hour": 9, "weekday_mask": 127, "label": "AM"},
-        )
+        window = {"start_hour": 6, "end_hour": 9, "weekday_mask": 127, "label": "AM"}
+        seeded_client.post("/api/v1/clusters/1/windows", json=window)
         resp = seeded_client.get("/api/v1/clusters/1/detail")
         windows = resp.json()["windows"]
         assert len(windows) == 1
-        assert windows[0]["start_hour"] == 6
+        assert windows[0]["start_hour"] == window["start_hour"]
 
     def test_detail_not_found(self, client):
         resp = client.get("/api/v1/clusters/999/detail")

@@ -458,13 +458,14 @@ def test_login_success_body_cookie_and_last_login(real):
 
 
 def test_login_cookie_secure_flag_and_custom_name(clean_env):
-    client, _, engine = _client(auth_cookie_secure=True, auth_cookie_name="gh", auth_token_ttl_minutes=5)
+    ttl_minutes = 5
+    client, _, engine = _client(auth_cookie_secure=True, auth_cookie_name="gh", auth_token_ttl_minutes=ttl_minutes)
     try:
         resp = client.post(
             "/api/v1/auth/login", json={"username": TEST_ADMIN_USERNAME, "password": TEST_ADMIN_PASSWORD}
         )
         token = resp.json()["access_token"]
-        assert resp.json()["expires_in"] == 300
+        assert resp.json()["expires_in"] == ttl_minutes * 60
         assert resp.headers["set-cookie"] == f"gh={token}; HttpOnly; Max-Age=300; Path=/; SameSite=lax; Secure"
     finally:
         engine.dispose()

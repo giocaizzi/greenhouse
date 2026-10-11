@@ -83,12 +83,17 @@ HOURLY_PAYLOAD = {
         "relative_humidity_2m": [80, 70, 60, 50, 55, 65, 10, 10],
     }
 }
+CACHE_TTL_SECONDS = 600  # pinned: ``weather._FORECAST_CACHE_TTL``
+CURRENT_TEMPERATURE = CURRENT_PAYLOAD["current"]["temperature_2m"]
+SIX_HOUR_PRECIPITATION_MM = 2.0  # sum of HOURLY_PAYLOAD's first six hours
+REFETCHED_TEMPERATURE = 25.0
+REFETCHED_PRECIPITATION_MM = 9.0
 
 
 def test_constructor_defaults():
     client = WeatherClient()
     assert (client._lat, client._lon, client._timeout, client._tz) == (45.464, 9.189, 8, "UTC")
-    assert weather_module._FORECAST_CACHE_TTL == 600
+    assert weather_module._FORECAST_CACHE_TTL == CACHE_TTL_SECONDS
 
 
 class TestCurrent:
@@ -127,18 +132,18 @@ class TestCurrent:
         net.queue(failure, CURRENT_PAYLOAD)
         client = WeatherClient()
         assert client.get_current() is None
-        assert client.get_current()["temperature"] == 18.4
-        assert len(net.calls) == 2
+        assert client.get_current()["temperature"] == CURRENT_TEMPERATURE
+        assert [url for url, _ in net.calls] == [CURRENT_URL, CURRENT_URL]
 
     def test_cache_ttl_boundary(self, net):
-        net.queue(CURRENT_PAYLOAD, {"current": {"temperature_2m": 25.0}})
+        net.queue(CURRENT_PAYLOAD, {"current": {"temperature_2m": REFETCHED_TEMPERATURE}})
         client = WeatherClient()
-        assert client.get_current()["temperature"] == 18.4  # fetched at t=1000
-        net.now = 1000 + 599.999
-        assert client.get_current()["temperature"] == 18.4  # still cached
-        net.now = 1000 + 600
-        assert client.get_current()["temperature"] == 25.0  # TTL is strict: age 600 refetches
-        assert len(net.calls) == 2
+        assert client.get_current()["temperature"] == CURRENT_TEMPERATURE  # fetched at t=1000
+        net.now = 1000 + CACHE_TTL_SECONDS - 0.001
+        assert client.get_current()["temperature"] == CURRENT_TEMPERATURE  # still cached
+        net.now = 1000 + CACHE_TTL_SECONDS
+        assert client.get_current()["temperature"] == REFETCHED_TEMPERATURE  # TTL is strict: age 600 refetches
+        assert [url for url, _ in net.calls] == [CURRENT_URL, CURRENT_URL]
 
 
 class TestForecast:
@@ -178,8 +183,8 @@ class TestForecast:
         net.queue(payload, HOURLY_PAYLOAD)
         client = WeatherClient()
         assert client.get_forecast(hours=hours) is None
-        assert client.get_forecast()["precipitation_mm"] == 2.0
-        assert len(net.calls) == 2
+        assert client.get_forecast()["precipitation_mm"] == SIX_HOUR_PRECIPITATION_MM
+        assert [url for url, _ in net.calls] == [FORECAST_URL, FORECAST_URL]
 
     @pytest.mark.parametrize("hours", [0, -1, -48])
     def test_non_positive_hours_returns_none_without_a_request(self, net, hours):
@@ -188,7 +193,7 @@ class TestForecast:
         client = WeatherClient()
         assert client.get_forecast(hours=hours) is None
         assert net.calls == []
-        assert client.get_forecast()["precipitation_mm"] == 2.0  # nothing was cached by the refused call
+        assert client.get_forecast()["precipitation_mm"] == SIX_HOUR_PRECIPITATION_MM  # refused call cached nothing
 
     @pytest.mark.parametrize("failure", [OSError("reset"), b"{", b'{"hourly": {"precipitation": ["x"]}}'])
     def test_failure_returns_none(self, net, failure):
@@ -196,14 +201,14 @@ class TestForecast:
         assert WeatherClient().get_forecast() is None
 
     def test_cache_ttl_boundary_and_independent_caches(self, net):
-        net.queue(HOURLY_PAYLOAD, CURRENT_PAYLOAD, {"hourly": {"precipitation": [9.0]}})
+        net.queue(HOURLY_PAYLOAD, CURRENT_PAYLOAD, {"hourly": {"precipitation": [REFETCHED_PRECIPITATION_MM]}})
         client = WeatherClient()
         client.get_forecast()
         client.get_current()  # separate cache: forecast cache does not serve current
         net.now = 1599.0
-        assert client.get_forecast()["precipitation_mm"] == 2.0
+        assert client.get_forecast()["precipitation_mm"] == SIX_HOUR_PRECIPITATION_MM
         net.now = 1600.0
-        assert client.get_forecast()["precipitation_mm"] == 9.0
+        assert client.get_forecast()["precipitation_mm"] == REFETCHED_PRECIPITATION_MM
         assert [url for url, _ in net.calls] == [FORECAST_URL, CURRENT_URL, FORECAST_URL]
 
     def test_forecast_cache_is_keyed_by_hours(self, net):
@@ -216,7 +221,7 @@ class TestForecast:
         assert two != six
         assert client.get_forecast(hours=6) == six  # both windows are now served from the cache
         assert client.get_forecast(hours=2) == two
-        assert len(net.calls) == 2
+        assert [url for url, _ in net.calls] == [FORECAST_URL, FORECAST_URL]
 
 
 def test_app_wires_settings_location_and_preference_timezone(clean_env):

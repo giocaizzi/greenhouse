@@ -251,9 +251,10 @@ class TestCheckAllIsolation:
 
         self._two_clusters(client)
         original = IrrigationService.check_cluster
+        failing_cluster = 2
 
         def flaky(self, cluster_id):
-            if cluster_id == 2:
+            if cluster_id == failing_cluster:
                 raise RuntimeError("boom")
             # Stand-in for an actuation side effect the cooldown relies on.
             self._repo.add_activity_event("irrigation", "cluster", "probe", "ran", entity_id=cluster_id)
@@ -281,9 +282,10 @@ class TestCheckAllIsolation:
         self._two_clusters(client)
         original = IrrigationService.check_cluster
         fail = {"on": True}
+        failing_cluster = 2
 
         def flaky(self, cluster_id):
-            if cluster_id == 2 and fail["on"]:
+            if cluster_id == failing_cluster and fail["on"]:
                 raise RuntimeError("boom")
             return original(self, cluster_id)
 
