@@ -538,10 +538,9 @@ class IrrigationService:
         return irrigator, adapter
 
     def _actuate(self, act: _Actuation, result: PipelineResult) -> PipelineResult:
-        """Start the pump, record the event, then apply the started / failed follow-ups to ``result``."""
+        """Start the pump, durably record the run, then apply the started / failed follow-ups to ``result``."""
         duration = act.decision.duration_minutes
         success, output = act.adapter.start(act.irrigator, duration)
-        soil_note = _soil_note(act.sensor_data)
         # One timestamp for the event row, the leak check and the watcher, so
         # the restart re-arm (which reads the row) can match the leak check.
         started_at = int(_time.time())
@@ -551,11 +550,12 @@ class IrrigationService:
             duration_minutes=duration,
             triggered_by=TRIGGERED_BY_AUTO,
             timestamp=started_at,
-            notes=_event_notes(act, soil_note),
+            notes=_event_notes(act, _soil_note(act.sensor_data)),
         )
 
         if success:
-            self._on_started(act, started_at)
+            self._record_started(act)
+            self._arm_follow_ups(act, started_at)
             result["action"] = "irrigated"
             self._notify_auto_irrigation(act)
         else:
@@ -564,8 +564,13 @@ class IrrigationService:
 
         return result
 
-    def _on_started(self, act: _Actuation, started_at: int) -> None:
-        """Log the run, flag the decision as actuated, and arm the leak check and dry-run watcher."""
+    def _record_started(self, act: _Actuation) -> None:
+        """Log the run, flag the decision as actuated, and commit before anything else can fail.
+
+        The pump is already running, so its ``start`` event must be durable now: a later failure
+        (the follow-up scheduling, the push, or the rest of a ``check_all`` cluster) rolls back
+        only what comes after, and the 6 h cooldown still sees this run (S3).
+        """
         duration = act.decision.duration_minutes
         self._repo.add_activity_event(
             source=SOURCE_IRRIGATION,
@@ -582,8 +587,13 @@ class IrrigationService:
         )
         if act.decision.decision_log_id is not None:
             self._repo.set_decision_actuated(act.decision.decision_log_id)
+        self._repo.commit()
+
+    @staticmethod
+    def _arm_follow_ups(act: _Actuation, started_at: int) -> None:
+        """Arm the post-irrigation leak check and the dry-run watcher for a started run."""
         _schedule_leak_check(act.cluster_id, started_at)
-        schedule_pump_watcher(act.irrigator.id, duration, started_at)
+        schedule_pump_watcher(act.irrigator.id, act.decision.duration_minutes, started_at)
 
     def _notify_auto_irrigation(self, act: _Actuation) -> None:
         """Push the auto-irrigation notice (``get_preferences`` still runs as an argument: it may insert)."""
@@ -787,7 +797,10 @@ class IrrigationService:
         already ran for earlier clusters (the cooldown would not see them and
         they could water again on the next tick). A failing cluster is rolled
         back on its own, reported as ``action="error"`` and raises a
-        ``check_failed`` alert, which the next successful check resolves.
+        ``check_failed`` alert, which the next successful check resolves. The
+        rollback cannot erase the failing cluster's own pump run either: the
+        pipeline commits a successful start (event, ``irrigated`` activity,
+        actuated decision log) the moment the device accepts it.
         """
         clusters = [(c.id, c.name) for c in self._repo.list_clusters()]
         results: list[CheckResult] = []

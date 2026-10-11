@@ -10,8 +10,10 @@ drives the loop instead of ``POST /api/v1/check``.
 
 The failing cluster here raises **after** its own check ran to completion —
 i.e. after it actuated the fake pump and wrote its start event, decision log
-and activity row — so "rolled back alone" is observable: those writes vanish
-while the hardware call stays recorded (current behavior, pinned).
+and activity row. The pipeline commits a successful start the moment the device
+accepts it (S3), so the crash's rollback cannot erase that run: the start event,
+the actuated decision log and the ``irrigated`` activity survive, and the 6 h
+cooldown sees the pump that really ran.
 
 Golden: ``tests/golden/orchestration/check_all.json``.
 """
@@ -105,9 +107,9 @@ def test_crash_after_writes_rolls_back_only_the_failing_cluster(three_dry_cluste
     assert by_id[2]["notes"] == "check failed: Boom('cluster 2 crashed after writing')"
 
     summary = _summary(p, tx_log)
-    assert summary["start_events_by_irrigator"] == [(1, "start", "auto"), (3, "start", "auto")]
-    assert [row[0] for row in summary["decision_logs"]] == [1, 3]
-    # The pump for cluster 2 really ran; only its records were rolled back.
+    # S3: cluster 2's pump really ran, so its start was committed before the crash and survives.
+    assert summary["start_events_by_irrigator"] == [(1, "start", "auto"), (2, "start", "auto"), (3, "start", "auto")]
+    assert [(row[0], row[3]) for row in summary["decision_logs"]] == [(1, True), (2, True), (3, True)]
     assert [c[:2] for c in summary["irrigator_adapter_calls"]] == [["start", 1], ["start", 2], ["start", 3]]
     (alert,) = summary["alerts"]
     assert (alert["code"], alert["status"], alert["severity"], alert["cluster_id"]) == (
@@ -116,13 +118,17 @@ def test_crash_after_writes_rolls_back_only_the_failing_cluster(three_dry_cluste
         "error",
         2,
     )
+    # Each successful start commits on its own (S3), ahead of the per-cluster commit.
     assert summary["transactions"] == [
         "check:1",
         "commit",
+        "commit",
         "check:2",
+        "commit",
         "rollback",
         "commit",
         "check:3",
+        "commit",
         "commit",
         "commit",
     ]
@@ -137,7 +143,7 @@ def test_crash_in_first_cluster_does_not_block_later_ones(three_dry_clusters, tx
     actions = [r["action"] for r in resp["response"]["results"]]
     assert actions == ["error", "irrigated", "irrigated"]
     summary = _summary(p, tx_log)
-    assert summary["start_events_by_irrigator"] == [(2, "start", "auto"), (3, "start", "auto")]
+    assert summary["start_events_by_irrigator"] == [(1, "start", "auto"), (2, "start", "auto"), (3, "start", "auto")]
     assert [a["cluster_id"] for a in summary["alerts"]] == [1]
 
 
@@ -151,8 +157,8 @@ def test_check_failed_alert_lifecycle(three_dry_clusters, tx_log, monkeypatch):
 
     state["failing"] = set()
     second = p.call("POST", "/api/v1/check")
-    # Clusters 1 and 3 are now in cooldown; cluster 2 finally irrigates.
-    assert [r["action"] for r in second["response"]["results"]] == ["skip", "irrigated", "skip"]
+    # Every cluster is in cooldown now — cluster 2 too: its crashed run's start event survived (S3).
+    assert [r["action"] for r in second["response"]["results"]] == ["skip", "skip", "skip"]
     resolved = p.db_rows()["alerts"]
     assert [(a["status"], a["resolved_at"]) for a in resolved] == [("resolved", FROZEN_TS)]
 
@@ -178,18 +184,22 @@ def test_scheduler_check_job_isolates_clusters_the_same_way(three_dry_clusters, 
     scheduler._check_job()
 
     summary = _summary(p, tx_log)
-    assert summary["start_events_by_irrigator"] == [(1, "start", "auto"), (3, "start", "auto")]
+    assert summary["start_events_by_irrigator"] == [(1, "start", "auto"), (2, "start", "auto"), (3, "start", "auto")]
     assert [(a["code"], a["cluster_id"], a["status"]) for a in summary["alerts"]] == [
         (CHECK_FAILED_ALERT_CODE, 2, "open")
     ]
     # The job's own trailing commit replaces the route's.
+    # Each successful start commits on its own (S3), ahead of the per-cluster commit.
     assert summary["transactions"] == [
         "check:1",
         "commit",
+        "commit",
         "check:2",
+        "commit",
         "rollback",
         "commit",
         "check:3",
+        "commit",
         "commit",
         "commit",
     ]
