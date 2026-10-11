@@ -28,6 +28,8 @@ from greenhouse_server.deps import get_weather_client
 if TYPE_CHECKING:
     from fastapi import FastAPI
 
+    from greenhouse_server.services.weather import CurrentWeather, WeatherForecast
+
 GOLDEN_DIR = Path(__file__).parent / "golden"
 UPDATE_ENV_VAR = "GOLDEN_UPDATE"
 
@@ -43,11 +45,14 @@ _MAX_DIFF_LINES = 120
 class OfflineWeather:
     """Stand-in for ``WeatherClient`` that behaves like Open-Meteo being unreachable."""
 
-    def get_current(self) -> None:
+    def get_current(self) -> CurrentWeather | None:
         """Return no current weather, like an unreachable Open-Meteo."""
+        return None
 
-    def get_forecast(self, hours: int = 6) -> None:
+    def get_forecast(self, hours: int = 6) -> WeatherForecast | None:
         """Return no forecast, like an unreachable Open-Meteo."""
+        del hours  # signature mirrors WeatherClient.get_forecast
+        return None
 
 
 def install_offline_weather(app: FastAPI) -> OfflineWeather:
