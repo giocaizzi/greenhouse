@@ -103,4 +103,4 @@ class TR301ZAdapter(TuyaSensorAdapter):
         )
 
 
-__all__ = ["TR301ZAdapter", "TR301Z_PROFILE"]
+__all__ = ["TR301Z_PROFILE", "TR301ZAdapter"]

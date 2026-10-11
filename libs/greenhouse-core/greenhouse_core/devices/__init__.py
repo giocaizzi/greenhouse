@@ -104,6 +104,8 @@ def build_default_registry(gateway: DeviceGateway) -> DeviceRegistry:
 
 __all__ = [
     "DATAPOINT_PARSERS",
+    "IK10PW_PROFILE",
+    "TR301Z_PROFILE",
     "AbstractIrrigatorAdapter",
     "AbstractSensorAdapter",
     "DeviceGateway",
@@ -111,11 +113,9 @@ __all__ = [
     "DeviceRegistry",
     "HealthAlarm",
     "IK10PWAdapter",
-    "IK10PW_PROFILE",
     "IrrigatorProfile",
     "SensorProfile",
     "TR301ZAdapter",
-    "TR301Z_PROFILE",
     "TuyaIrrigatorAdapter",
     "TuyaSensorAdapter",
     "UnknownDeviceModel",

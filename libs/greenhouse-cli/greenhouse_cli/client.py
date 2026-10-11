@@ -189,11 +189,11 @@ class IrrigationClient:
 
     def _object(self, method: str, path: str, **kwargs: Any) -> JSONObject:
         """Send a request whose endpoint answers with a JSON object."""
-        return cast(JSONObject, self._request(method, path, **kwargs))
+        return cast("JSONObject", self._request(method, path, **kwargs))
 
     def _array(self, method: str, path: str, **kwargs: Any) -> list[JSONObject]:
         """Send a request whose endpoint answers with a JSON array of objects."""
-        return cast(list[JSONObject], self._request(method, path, **kwargs))
+        return cast("list[JSONObject]", self._request(method, path, **kwargs))
 
     # ── Auth ──
 

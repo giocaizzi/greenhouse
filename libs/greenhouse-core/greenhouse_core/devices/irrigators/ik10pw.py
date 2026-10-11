@@ -200,4 +200,4 @@ class IK10PWAdapter(TuyaIrrigatorAdapter):
         )
 
 
-__all__ = ["IK10PW_ALARM_DP", "IK10PWAdapter", "IK10PW_PROFILE", "alarm_indicates_no_water"]
+__all__ = ["IK10PW_ALARM_DP", "IK10PW_PROFILE", "IK10PWAdapter", "alarm_indicates_no_water"]
