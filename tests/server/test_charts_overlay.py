@@ -53,7 +53,6 @@ def test_overlay_404_unknown_cluster(client):
 
 def test_overlay_with_readings(app):
     """Seed readings and assert all three metric datasets are returned."""
-
     engine = create_engine("sqlite://", echo=False, connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(engine)
 

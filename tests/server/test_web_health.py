@@ -29,7 +29,6 @@ class TestHealthPage:
 
     def test_degraded_when_stale_sensor(self, app):
         """A sensor with no fresh reading + a fresh reading elsewhere → degraded."""
-
         with TestClient(app, raise_server_exceptions=False) as client:
             # Create cluster + sensor
             client.post("/api/v1/clusters", json={"name": "Health Test Cluster"})

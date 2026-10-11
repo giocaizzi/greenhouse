@@ -133,7 +133,6 @@ def test_raw_views_keep_the_spike_and_cleaned_views_ignore_it(spiky):
 
 def test_anomaly_scan_sees_what_cleaning_masks(spiky):
     """The ``sensor_drift`` scan reads raw rows, so it flags the very spike the snapshot ignored."""
-
     rows_before = spiky.db_rows()["alerts"]
     assert rows_before == []
     run_core_job("sensor_anomaly")

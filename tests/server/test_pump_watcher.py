@@ -361,7 +361,6 @@ class TestWatcherRoutesThroughMonitor:
 
     def test_trip_records_into_monitor_cache(self, repo, irrigator):
         """After a trip, the monitor's cache reflects NO_WATER for the irrigator."""
-
         clock = FakeClock(step=1.0)
         adapter = _make_fake_adapter([_alarm(no_water=True, alarm_raw=1)] + _completed_alarms())
         monitor = _make_monitor(repo)

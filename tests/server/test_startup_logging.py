@@ -76,7 +76,6 @@ def test_repo_from_request_logs_a_failed_session_open(caplog):
 
 def _footer_now_text(monkeypatch, timezone: str) -> str:
     """Render the shared template context with ``timezone`` as the stored preference; return its footer clock."""
-
     prefs = SimpleNamespace(dry_run_global=False, scheduler_paused=False, theme="dark", timezone=timezone)
 
     class _Repo:

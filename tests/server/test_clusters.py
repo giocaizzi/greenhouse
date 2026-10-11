@@ -94,7 +94,6 @@ class TestClusterCRUD:
         """Windows, assignments, alerts (by cluster or entity) go; a default-cluster preference is cleared;
         another cluster's rows stay.
         """
-
         doomed = client.post("/api/v1/clusters", json={"name": "Doomed"}).json()["id"]
         kept = client.post("/api/v1/clusters", json={"name": "Kept"}).json()["id"]
         for cid in (doomed, kept):
@@ -161,7 +160,6 @@ class TestClusterStatus:
         ``model_dump`` in ``decision_to_view`` emitted
         ``PydanticSerializationUnexpectedValue`` on every status call.
         """
-
         monkeypatch.setattr("greenhouse_core.logic.engine.season_for", lambda *_a, **_k: "winter")
         # Opt this cluster out of any inherited quiet window so the wall-clock
         # hour cannot short-circuit the pipeline before the seasonal rule.
@@ -182,7 +180,6 @@ class TestClusterStatus:
     @pytest.mark.usefixtures("frozen_clock")
     def test_status_reports_the_real_age_of_a_reading_older_than_a_day(self, client):
         """B-22: a sensor quiet for 3 days shows its last reading and its real age, not ``None``."""
-
         cid = client.post("/api/v1/clusters", json={"name": "Quiet"}).json()["id"]
         sid = client.post(
             f"/api/v1/clusters/{cid}/sensors",

@@ -28,7 +28,6 @@ class TestIrrigate:
 
     def test_irrigate_blocked_by_quiet_hours(self, seeded_client):
         """When quiet hours cover the current time, /irrigate returns SKIP with QUIET_HOURS."""
-
         hour = _dt.datetime.now(_dt.UTC).hour
         end = (hour + 1) % 24
         if end == hour:
@@ -44,7 +43,6 @@ class TestIrrigate:
 
     def test_irrigate_force_bypasses_quiet_hours(self, seeded_client):
         """``force=true`` runs the engine; the decision logs the override warning."""
-
         hour = _dt.datetime.now(_dt.UTC).hour
         end = (hour + 1) % 24
         if end == hour:

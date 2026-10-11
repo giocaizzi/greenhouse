@@ -121,7 +121,6 @@ class TestForecastEndpoint:
 
     def test_forecast_with_drainage_slope(self, app, seeded_with_profile):
         """Forecast returns drainage_slope method when a learned profile is available."""
-
         # We need to inject readings + irrigation events directly into the in-memory DB.
         # The app fixture uses a shared engine stored on app.state — reach for it.
         session_factory = app.state.session_factory
@@ -215,7 +214,6 @@ class TestForecastCleaning:
         Read raw, ``current_moisture`` would be the spike and the ETA would
         collapse to 0h; through the cleaned view the real ~55% level stands.
         """
-
         cluster_id = tmp_db.add_cluster("Forecast Cleaning Cluster")
         plant_id = tmp_db.add_plant(cluster_id=cluster_id, species=FAKE_PLANT_SPECIES, water_needs="medium")
         sensor_id = tmp_db.add_sensor(

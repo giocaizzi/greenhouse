@@ -238,7 +238,6 @@ class TestForecast:
 @pytest.mark.usefixtures("clean_env")
 def test_app_wires_settings_location_and_preference_timezone(net):
     """``create_app`` builds the client from ``weather_lat``/``weather_lon`` and the startup timezone."""
-
     app, engine = _make_stubbed_app(bypass_auth=True, weather_lat=1.5, weather_lon=-2.25)
     try:
         client = app.state.weather_client

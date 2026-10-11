@@ -56,7 +56,6 @@ class TestVacationCreate:
 
     def test_iso_dates_are_midnight_in_the_timezone_preference(self, client, monkeypatch):
         """D8: a date means midnight in the ``timezone`` preference (the zone the page displays), not UTC."""
-
         monkeypatch.setattr(utils, "_display_timezone", "Europe/Rome")
         resp = client.post(
             "/vacation", data={"starts_at": "2026-05-01", "ends_at": "2026-05-10"}, follow_redirects=False

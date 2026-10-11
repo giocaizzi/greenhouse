@@ -537,7 +537,6 @@ def test_trip_after_a_failed_flush_rolls_back_and_still_records_the_rest(plain, 
     rolled back alone; the activity row and the NO_WATER alert are written and committed, and
     nothing escapes the watcher.
     """
-
     plain.adapter.set_health(
         DeviceHealthState(observed_at=FROZEN_TS, alarms=frozenset({HealthAlarm.NO_WATER}), raw={"alarm_raw": 1})
     )

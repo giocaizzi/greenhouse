@@ -47,7 +47,6 @@ def test_auth_dependency_and_handler_share_the_session():
 
 def test_anonymous_pages_hide_the_operational_banners_signed_in_pages_show_them(app_real_auth):
     """Dry-run / paused banners describe the system: only a signed-in viewer sees them."""
-
     session = app_real_auth.state.session_factory()
     IrrigationRepository(session).update_preferences(dry_run_global=True, scheduler_paused=True)
     session.commit()

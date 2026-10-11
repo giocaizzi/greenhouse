@@ -185,7 +185,6 @@ class TestDeleteJob:
 
     def test_core_job_set_matches_registration(self, client):
         """The protected set is derived from registration, not a hand-kept list."""
-
         assert sorted(core_job_ids()) == _job_ids(client)
 
     def test_core_jobs_refused_on_running_scheduler(self, client, running_scheduler):
@@ -219,14 +218,12 @@ class TestDeleteJob:
 
     def test_job_id_with_a_slash_is_deletable_through_the_encoded_path(self, client):
         """The CLI sends ``quote(job_id, safe="")``; an id containing "/" must reach the route."""
-
         job_id = _add_adhoc_job("watch/pump 1")
         assert client.delete(f"/api/v1/scheduler/jobs/{quote(job_id, safe='')}").json() == {"success": True}
         assert job_id not in _job_ids(client)
 
     def test_web_delete_accepts_a_job_id_with_a_slash(self, client, running_scheduler):
         """The scheduler page links an ad-hoc job's id URL-encoded, and the web route takes ids with "/"."""
-
         job_id = _add_adhoc_job("watch/pump 1")
         page = client.get("/scheduler").text
         assert 'hx-post="/scheduler/jobs/watch/pump%201/delete"' in page

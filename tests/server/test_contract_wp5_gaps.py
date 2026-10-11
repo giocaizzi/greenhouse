@@ -418,7 +418,6 @@ def test_create_app_without_engine_builds_one_from_settings_db_url(tmp_path):
 @pytest.mark.parametrize("url", ["/api/v1/clusters/{cid}/monitor", "/clusters/{cid}/monitor"])
 def test_monitor_runs_the_freshness_sync_and_commits_its_rows(app, client, monkeypatch, url):
     """D15 (was B-N1): both monitors refresh stale sensors and the refreshed reading is persisted."""
-
     ids = _seed(app, {"C1": ["Fern"]}, sensor_for="C1")
     calls: list[int] = []
 

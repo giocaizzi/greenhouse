@@ -75,7 +75,6 @@ class TestActivityListPage:
 class TestActivityPagination:
     def test_first_page_50_events_with_sentinel(self, app):
         """Writing 60 events: first page returns 50 rows + a sentinel hx-get attribute."""
-
         with TestClient(app, raise_server_exceptions=False) as client:
             _seed_events(app, count=SEEDED_EVENTS)
             resp = client.get("/activity")
@@ -87,7 +86,6 @@ class TestActivityPagination:
 
     def test_second_page_returns_remaining_events(self, app):
         """Second page fetches the remaining 10 events and has no further sentinel."""
-
         with TestClient(app, raise_server_exceptions=False) as client:
             now = int(time.time())
             _seed_events(app, count=SEEDED_EVENTS, base_ts=now)

@@ -46,7 +46,6 @@ def test_web_stop_all_respects_the_emergency_preference(app, seeded_client):
 
 def test_web_stop_all_without_a_preferences_row_does_not_block_the_page(tmp_path):
     """The notify gate's uncommitted preferences seed must not hold SQLite's write lock for the chrome."""
-
     url = f"sqlite:///{tmp_path}/g.db"
     app = create_app(Settings(db_url=url, enable_scheduler=False, auth_enabled=False), engine=create_engine(url))
     app.dependency_overrides[get_device_registry] = lambda: None

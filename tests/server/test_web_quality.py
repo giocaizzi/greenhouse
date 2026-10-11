@@ -20,7 +20,6 @@ class TestQualityPage:
 
     def test_shows_issue_codes(self, app):
         """Seeding a sensor without a plant and a cluster without config → codes appear."""
-
         with TestClient(app, raise_server_exceptions=False) as client:
             # Cluster with no irrigation config
             client.post("/api/v1/clusters", json={"name": "QC Cluster"})
@@ -37,7 +36,6 @@ class TestQualityPage:
 
     def test_severity_badges_present(self, app):
         """Issue rows include a severity badge."""
-
         with TestClient(app, raise_server_exceptions=False) as client:
             client.post("/api/v1/clusters", json={"name": "Badge Cluster"})
             client.post(

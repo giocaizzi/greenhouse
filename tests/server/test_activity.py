@@ -110,7 +110,6 @@ class TestActivityList:
 
     def test_cursor_pagination(self, app):
         """When limit is reached, next_cursor equals the oldest item's timestamp."""
-
         with TestClient(app, raise_server_exceptions=False) as client:
             total, page_size = 5, 3
             self._seed_events(app, count=total)

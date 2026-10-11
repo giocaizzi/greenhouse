@@ -60,7 +60,6 @@ def _leak_jobs() -> dict[str, object]:
 @pytest.fixture
 def check_calls(monkeypatch):
     """Record LeakDetectionService runs instead of evaluating readings."""
-
     calls: list[tuple[int, int]] = []
 
     def _fake(_self, cluster_id, started_at):
@@ -97,7 +96,6 @@ class TestRearm:
         The re-arm finds it through that marker; a ``start``/``manual`` row without one (a
         logged hand-watering, no pump) gets no check.
         """
-
         cid, iid = _seed(app)
         now = int(time.time())
         forced = _start(app, iid, now - 600, triggered_by="manual")
@@ -115,7 +113,6 @@ class TestRearm:
     @pytest.mark.usefixtures("running_scheduler")
     def test_long_manual_start_is_rearmed_with_its_own_window(self, app):
         """The marker's ``check_after_seconds`` survives a restart: due time and job args keep the window."""
-
         cid, iid = _seed(app)
         started = _start(app, iid, int(time.time()) - 600, triggered_by="manual")
         session = app.state.session_factory()

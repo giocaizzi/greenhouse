@@ -177,5 +177,4 @@ class TestClusterCaps:
 
 def test_no_action_needed_reason_has_its_icon():
     """The engine's NO_ACTION_NEEDED reason renders with the "check" icon, not the generic fallback."""
-
     assert icon_for_code("no_action_needed") == "check"

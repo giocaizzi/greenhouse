@@ -358,7 +358,6 @@ def test_login_with_a_corrupt_stored_hash_is_401(real, corrupt):
 @pytest.mark.parametrize("username", ["nobody", TEST_ADMIN_USERNAME])
 def test_login_runs_one_argon2_verify_whether_or_not_the_user_exists(real, monkeypatch, username):
     """An unknown username costs the same argon2 verify as a wrong password (no timing oracle)."""
-
     calls = []
     real_verify = server_auth.verify_password
     monkeypatch.setattr(server_auth, "verify_password", lambda p, h: calls.append(h) or real_verify(p, h))
@@ -631,7 +630,6 @@ def test_mcp_gate_compares_the_token_in_constant_time(monkeypatch):
     match the token through response timing; the gate must use the same constant-time
     primitive as the API's MCP-principal check.
     """
-
     calls: list[tuple[bytes, bytes]] = []
     real_compare = hmac.compare_digest
 

@@ -242,7 +242,6 @@ def test_extra_inputs_are_ignored(monkeypatch):
 @pytest.mark.usefixtures("clean_env")
 def test_removed_check_interval_hours_is_ignored(monkeypatch, caplog):
     """OD3: ``IRRIGATION_CHECK_INTERVAL_HOURS`` is gone — ignored like any unknown var, never validated."""
-
     monkeypatch.setenv("IRRIGATION_CHECK_INTERVAL_HOURS", "5")  # used to fail startup (5 does not divide 24)
     with caplog.at_level(logging.WARNING, logger="greenhouse_server.scheduler"):
         s = _settings()

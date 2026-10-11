@@ -173,7 +173,6 @@ class TestAlertSyncAll:
 
     def test_sync_all_open_count_badge(self, app):
         """Badge count must equal the number of open alerts."""
-
         with TestClient(app, raise_server_exceptions=False) as client:
             session = app.state.session_factory()
             try:

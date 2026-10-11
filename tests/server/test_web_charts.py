@@ -121,7 +121,6 @@ def test_plant_chart_soil_band_uses_the_shared_target_parser():
     source ``"default"``; now it reads the first two parts. No ``lo-hi`` target at all still
     yields the default band labelled ``"default"``.
     """
-
     plant = SimpleNamespace(water_needs="medium")
 
     def db(target):

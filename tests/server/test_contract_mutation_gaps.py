@@ -191,7 +191,6 @@ class _Weather:
 
     def get_forecast(self, hours: int = 6):
         del hours  # the engine passes it by keyword; this stub has no forecast
-        return None
 
 
 @pytest.mark.parametrize(

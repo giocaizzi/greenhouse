@@ -29,7 +29,6 @@ class TestClusterInsights:
     @pytest.mark.usefixtures("app")
     def test_stale_sensor_surfaces_insight(self):
         """A sensor with no recent data must produce a stale_data insight."""
-
         engine = create_engine("sqlite://", echo=False, connect_args={"check_same_thread": False}, poolclass=StaticPool)
         settings = Settings(db_url="sqlite://", enable_scheduler=False, auth_enabled=False)
         application = create_app(settings, engine=engine)

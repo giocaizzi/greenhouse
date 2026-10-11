@@ -116,7 +116,6 @@ def test_freshness_is_judged_on_the_newest_soil_reading(tmp_db, cluster_with_two
 
     The engine dates a soil sensor by its newest soil reading, so the freshness check must too.
     """
-
     cluster_id, dry_id, wet_id = cluster_with_two_sensors
     now = int(time.time())
     tmp_db.add_sensor_reading(sensor_id=dry_id, timestamp=now - 5 * 3600, soil_moisture=30.0)

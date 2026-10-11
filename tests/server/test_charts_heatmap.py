@@ -49,7 +49,6 @@ def test_heatmap_404_unknown_cluster(client):
 
 def test_heatmap_with_events(app):
     """Seed an irrigation event at a known (weekday, hour) and assert the cell appears."""
-
     engine = create_engine("sqlite://", echo=False, connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(engine)
 

@@ -413,7 +413,6 @@ def reset_shared_app() -> Any:
     ``create_app`` sets (scheduler job registration, display timezone) are re-applied exactly as
     ``create_app`` applies them for this seed (prefs timezone ``UTC``, not paused).
     """
-
     if "app" not in _SHARED:
         _SHARED["app"], _SHARED["engine"] = build_app()
     application, engine = _SHARED["app"], _SHARED["engine"]
@@ -715,7 +714,6 @@ def test_get_route_html_golden(case, seeded_get_client):
 
 def test_get_sweep_covers_every_web_get_route():
     """Every GET route of the web router is hit by at least one case (path template match)."""
-
     get_paths = [r.path for r in web_routes(web_router.routes) if "GET" in r.methods]
     case_paths = [c.url.split("?")[0] for c in GET_CASES]
     for path in get_paths:
@@ -761,7 +759,6 @@ VARIANTS = (
 @pytest.mark.parametrize(("name", "url", "setup", "running"), VARIANTS, ids=[v[0] for v in VARIANTS])
 def test_get_variant_html_golden(name, url, setup, running, seeded_get_client):
     """Same golden format as the sweep, after a state tweak (or with the scheduler running, paused)."""
-
     if setup is not None:
         session = seeded_get_client.app.state.session_factory()
         try:

@@ -610,7 +610,6 @@ def _natural(key: str) -> tuple:
 
 def test_mutation_cases_are_unique_and_cover_every_web_write_route():
     """Every non-GET web route has at least one case; case names are unique."""
-
     names = [m.name for m in MUTATIONS]
     assert len(names) == len(set(names))
     for route in web_routes(web_router.routes):

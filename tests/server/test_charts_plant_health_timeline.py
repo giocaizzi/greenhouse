@@ -43,7 +43,6 @@ def test_health_timeline_point_structure(seeded_client):
 
 def test_health_timeline_points_match_seeded_readings(app):
     """Seed N days of readings and assert points length matches."""
-
     engine = create_engine("sqlite://", echo=False, connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(engine)
 

@@ -251,7 +251,6 @@ def test_sensor_stays_online_between_syncs_and_goes_offline_after_a_missed_sync(
 
 def test_init_health_monitor_sizes_the_sensor_window_from_the_sync_interval(world, monkeypatch):
     """The startup monitor uses ``IRRIGATION_SYNC_INTERVAL_MINUTES`` + grace, not the default interval."""
-
     session_factory = lambda: world["repo"].session  # noqa: E731 — the fixture's own session
     monkeypatch.setattr(world["repo"].session, "close", lambda: None)
     app = SimpleNamespace(
@@ -264,7 +263,6 @@ def test_init_health_monitor_sizes_the_sensor_window_from_the_sync_interval(worl
 
 def test_init_health_monitor_restores_blocks_from_open_alerts(world, monkeypatch):
     """B-9: the startup monitor rebuilds its cache from the open health alerts, so actuation stays blocked."""
-
     world["irr_adapter"].set_health(DeviceHealthState(observed_at=FROZEN_TS, alarms=frozenset({HealthAlarm.NO_WATER})))
     world["monitor"].poll_irrigator(world["irrigator"])
     world["repo"].session.commit()

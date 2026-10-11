@@ -178,7 +178,6 @@ def test_check_failed_alert_lifecycle(three_dry_clusters, tx_log, monkeypatch):
 
 def test_scheduler_check_job_isolates_clusters_the_same_way(three_dry_clusters, tx_log, monkeypatch):
     """I-ii (4): the scheduler's ``_check_job`` body gives the same per-cluster isolation."""
-
     p = three_dry_clusters
     assert scheduler._app is p.app  # noqa: SLF001 — init_scheduler rebinds the module global per create_app
     # The job reads the registry from app.state, not from the request-level override.
@@ -212,7 +211,6 @@ def test_scheduler_check_job_isolates_clusters_the_same_way(three_dry_clusters, 
 
 def test_scheduler_check_job_without_registry_reports_errors_but_commits(three_dry_clusters, tx_log):
     """With no registry on ``app.state`` (degraded mode) the job evaluates and logs, but cannot actuate."""
-
     p = three_dry_clusters
     assert getattr(p.app.state, "device_registry", None) is None
     run_core_job(scheduler.CHECK_ALL_JOB_ID)
