@@ -2,7 +2,7 @@
 
 import logging
 import threading
-from typing import TYPE_CHECKING, Any, TypedDict
+from typing import TYPE_CHECKING, TypedDict
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from apscheduler.jobstores.base import JobLookupError
@@ -116,7 +116,7 @@ def _add_core_job(
     *,
     id: str,  # noqa: A002 — mirrors APScheduler add_job(id=...) at every call site
     name: str,
-    **trigger_args: Any,
+    **trigger_args: object,
 ) -> None:
     """Register (or replace) a built-in job and mark its id as core."""
     _CORE_JOB_IDS.add(id)

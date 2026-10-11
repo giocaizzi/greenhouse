@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import re
 import time
-from typing import Any, TypedDict
+from collections.abc import Sized
+from typing import TypedDict
 
 from greenhouse_core.constants import AGE_BADGE_STALE_SECONDS, SECONDS_PER_DAY, SECONDS_PER_HOUR
 from greenhouse_core.utils import format_timestamp
@@ -179,7 +180,7 @@ def icon_for_code(code: str) -> str:
     return _TRIGGER_CODE_ICONS.get(code, _SEVERITY_ICONS.get(code, "info"))
 
 
-def _present(value: Any) -> bool:
+def _present(value: object) -> bool:
     """True when a child collection/relationship holds at least one item.
 
     Accepts the shapes the web layer passes around: ``status`` lists, a single
@@ -188,10 +189,9 @@ def _present(value: Any) -> bool:
     """
     if value is None:
         return False
-    try:
+    if isinstance(value, Sized):
         return len(value) > 0
-    except TypeError:
-        return bool(value)
+    return bool(value)
 
 
 class ClusterCaps(TypedDict):
@@ -208,7 +208,17 @@ class ClusterCaps(TypedDict):
     missing: list[str]
 
 
-def cluster_caps(obj: Any) -> ClusterCaps:
+def _cluster_parts(obj: object) -> tuple[object, object, object]:
+    """``(plants, sensors, irrigator)`` of a cluster-status dict, a ``Cluster`` ORM object or ``None``."""
+    if isinstance(obj, dict):
+        return obj.get("plants"), obj.get("sensors"), obj.get("irrigator")
+    if obj is None:
+        return None, None, None
+    # Cluster ORM object: the same-named relationships.
+    return getattr(obj, "plants", None), getattr(obj, "sensors", None), getattr(obj, "irrigator", None)
+
+
+def cluster_caps(obj: object) -> ClusterCaps:
     """Derive a cluster's capability tier from what it contains.
 
     The single source of truth for feature gating across the web UI. Accepts
@@ -234,15 +244,7 @@ def cluster_caps(obj: Any) -> ClusterCaps:
         ``"operational"``), and ``missing`` — prerequisites ordered by impact
         for the next-step notice.
     """
-    if isinstance(obj, dict):
-        plants, sensors, irrigator = obj.get("plants"), obj.get("sensors"), obj.get("irrigator")
-    elif obj is None:
-        plants = sensors = irrigator = None
-    else:  # Cluster ORM object
-        plants = getattr(obj, "plants", None)
-        sensors = getattr(obj, "sensors", None)
-        irrigator = getattr(obj, "irrigator", None)
-
+    plants, sensors, irrigator = _cluster_parts(obj)
     has_plants, has_sensors, has_irrigator = _present(plants), _present(sensors), _present(irrigator)
 
     if has_irrigator:

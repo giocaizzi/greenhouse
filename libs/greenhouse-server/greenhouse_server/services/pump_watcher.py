@@ -70,7 +70,7 @@ class WatchOutcome(TypedDict):
     elapsed_seconds: float
 
 
-def _outcome(kind: str, *, polls: int, failures: int, alarm_raw: Any, elapsed: float) -> WatchOutcome:
+def _outcome(kind: str, *, polls: int, failures: int, alarm_raw: object, elapsed: float) -> WatchOutcome:
     """Build a watch result; the caller reads the clock for elapsed at its own exit point."""
     return {
         "outcome": kind,
@@ -85,7 +85,7 @@ def _trip_payload(
     irrigator: Irrigator,
     *,
     cluster_id: int,
-    alarm_raw: Any,
+    alarm_raw: object,
     polls: int,
     started_at: int,
     duration_seconds: int,

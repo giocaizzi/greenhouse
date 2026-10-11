@@ -2,7 +2,7 @@
 
 import time
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from greenhouse_core.constants import (
     FORECAST_CONFIDENCE_HIGH,
@@ -22,6 +22,7 @@ from greenhouse_core.logic.timing import environment_for
 from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_core.schemas import ForecastResponse
+from greenhouse_server.services.weather import WeatherClient
 
 if TYPE_CHECKING:
     from greenhouse_core.models import Cluster, Plant, Sensor
@@ -62,7 +63,9 @@ def _confidence_for(profiled_count: int) -> float:
 class ForecastService:
     """Predicts when a cluster will next need irrigation."""
 
-    def __init__(self, repo: IrrigationRepository, plant_db: PlantDatabase, weather_client: Any = None) -> None:
+    def __init__(
+        self, repo: IrrigationRepository, plant_db: PlantDatabase, weather_client: WeatherClient | None = None
+    ) -> None:
         """Bind the forecast to the repository, plant database and (optional) weather client it projects with."""
         self._repo = repo
         self._plant_db = plant_db

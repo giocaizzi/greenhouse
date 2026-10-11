@@ -12,7 +12,6 @@ The handler is registered for Starlette's ``HTTPException`` so router-level 404 
 from __future__ import annotations
 
 import math
-from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -38,7 +37,7 @@ def _is_html_request(request: Request) -> bool:
     return "text/html" in accept or "application/json" not in accept
 
 
-def _json_safe(value: Any) -> Any:
+def _json_safe(value: object) -> object:
     """``value`` with every non-finite float replaced by its text (``"nan"``, ``"inf"``).
 
     A refused ``NaN`` / ``Infinity`` body value comes back in the 422 ``input``, and strict

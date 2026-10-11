@@ -131,7 +131,8 @@ class WeatherClient:
             result = _aggregate_window(data.get("hourly", {}), hours)
             if result is not None:
                 self._get_forecast_cache[hours] = (time.monotonic(), result)
-            return result
         except Exception:
             logger.debug("Open-Meteo forecast request failed", exc_info=True)
             return None
+        else:
+            return result

@@ -279,7 +279,8 @@ def schedule_pump_watcher(
             name=f"Pump watcher irrigator {irrigator_id}",
             replace_existing=True,
         )
-        return True
     except Exception:
         logger.debug("Could not schedule pump watcher for irrigator %d", irrigator_id, exc_info=True)
         return False
+    else:
+        return True
