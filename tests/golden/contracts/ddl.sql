@@ -117,11 +117,11 @@ CREATE TABLE user_preferences (
 	default_cluster_id INTEGER,
 	refresh_interval_seconds INTEGER NOT NULL,
 	dry_run_global BOOLEAN NOT NULL,
-	scheduler_paused BOOLEAN NOT NULL,
-	notify_manual BOOLEAN NOT NULL,
-	notify_emergency BOOLEAN NOT NULL,
-	notify_alerts BOOLEAN NOT NULL,
-	notify_auto BOOLEAN NOT NULL,
+	scheduler_paused BOOLEAN DEFAULT 0 NOT NULL,
+	notify_manual BOOLEAN DEFAULT 1 NOT NULL,
+	notify_emergency BOOLEAN DEFAULT 1 NOT NULL,
+	notify_alerts BOOLEAN DEFAULT 1 NOT NULL,
+	notify_auto BOOLEAN DEFAULT 1 NOT NULL,
 	PRIMARY KEY (id)
 )
 
@@ -131,11 +131,11 @@ CREATE TABLE users (
 	id INTEGER NOT NULL,
 	username VARCHAR NOT NULL,
 	hashed_password VARCHAR NOT NULL,
-	is_active BOOLEAN NOT NULL,
+	is_active BOOLEAN DEFAULT 1 NOT NULL,
 	created_at INTEGER NOT NULL,
 	last_login_at INTEGER,
 	PRIMARY KEY (id),
-	UNIQUE (username)
+	CONSTRAINT uq_users_username UNIQUE (username)
 )
 
 
@@ -174,7 +174,7 @@ CREATE TABLE irrigation_configs (
 CREATE TABLE irrigation_windows (
 	id INTEGER NOT NULL,
 	cluster_id INTEGER NOT NULL,
-	weekday_mask INTEGER NOT NULL,
+	weekday_mask INTEGER DEFAULT '127' NOT NULL,
 	start_hour INTEGER NOT NULL,
 	end_hour INTEGER NOT NULL,
 	label VARCHAR,
@@ -195,7 +195,7 @@ CREATE TABLE irrigators (
 	reservoir_l FLOAT,
 	flow_rate_l_per_min FLOAT,
 	PRIMARY KEY (id),
-	UNIQUE (cluster_id),
+	CONSTRAINT uq_irrigators_cluster_id UNIQUE (cluster_id),
 	FOREIGN KEY(cluster_id) REFERENCES clusters (id),
 	UNIQUE (tuya_device_id)
 )

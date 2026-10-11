@@ -8,10 +8,9 @@
   mapped class → table map;
 - the literal Alembic head ``a1d3f5b7c902`` and the full revision chain;
 - ``contracts/migrated_schema.json`` — SQLAlchemy reflection of a temp-file SQLite
-  after ``init_db`` (the schema production actually runs), and
-  ``contracts/schema_drift.json`` — every difference between that and
-  ``Base.metadata.create_all`` on another temp file. Drift is recorded as observed
-  behavior, not fixed.
+  after ``init_db`` (the schema production actually runs), which must equal
+  ``Base.metadata.create_all`` on another temp file (no drift; only ``alembic_version``
+  is extra).
 """
 
 from __future__ import annotations
@@ -31,7 +30,7 @@ from greenhouse_core.models import Base
 
 # sha256 of "\n".join(DDL statements), recorded at the original baseline (main @ a1b2622, hence "PHASE0").
 PHASE0_DDL_SHA256 = (
-    "7b6a2d72054011a900438ae7e7edd471acbffc6c6a2f2d60cc1583973fb36f2b"  # gitleaks:allow — content hash, not a secret
+    "40ff3b9d7746546d477fdfc3127f95afa8cac48b953592029f08b476e88c833c"  # gitleaks:allow — content hash, not a secret
 )
 
 ALEMBIC_HEAD = "a1d3f5b7c902"
@@ -105,9 +104,13 @@ def test_orm_column_metadata_matches_golden():
                 for c in table.columns
             ],
             "constraints": sorted(
-                [type(k).__name__, k.name, [c.name for c in k.columns]]
-                for k in table.constraints
-                if type(k).__name__ != "PrimaryKeyConstraint"
+                (
+                    [type(k).__name__, k.name, [c.name for c in k.columns]]
+                    for k in table.constraints
+                    if type(k).__name__ != "PrimaryKeyConstraint"
+                ),
+                # a table can mix named and unnamed constraints of one kind (None sorts first)
+                key=lambda row: (row[0], row[1] is not None, row[1] or "", row[2]),
             ),
             "indexes": sorted([i.name, [c.name for c in i.columns], i.unique] for i in table.indexes),
         }
@@ -200,17 +203,15 @@ def test_migrated_schema_matches_golden(migrated_and_created):
     assert_golden_json("contracts/migrated_schema.json", migrated)
 
 
-def test_schema_drift_current_behavior_migrations_differ_from_create_all(migrated_and_created):
-    """Pins current drift: the Alembic chain and ``Base.metadata.create_all`` produce
-    different SQLite schemas — migrations add server defaults (``irrigation_windows.
-    weekday_mask``, ``user_preferences.scheduler_paused``/``notify_*``, ``users.is_active``)
-    and *named* unique constraints (``uq_irrigators_cluster_id``, ``uq_users_username``)
-    that the ORM does not declare; plus the ``alembic_version`` table. Fresh test DBs
-    (``tmp_db`` fixture → ``create_all``) therefore differ from production — see
-    REFACTOR_NOTES.md.
+def test_migrations_and_create_all_produce_the_same_schema(migrated_and_created):
+    """The Alembic chain and ``Base.metadata.create_all`` produce the same SQLite schema.
+
+    The models declare the server defaults (``irrigation_windows.weekday_mask``,
+    ``user_preferences.scheduler_paused`` / ``notify_*``, ``users.is_active``) and the *named*
+    unique constraints (``uq_irrigators_cluster_id``, ``uq_users_username``) the migrations
+    create, so fresh test DBs (``tmp_db`` → ``create_all``) match production. Only the
+    ``alembic_version`` bookkeeping table differs.
     """
     migrated, created = migrated_and_created
     drift = _drift(migrated, created)
-    assert_golden_json("contracts/schema_drift.json", drift)
-    assert drift["tables_only_in_migrated"] == ["alembic_version"]
-    assert sorted(drift["tables"]) == ["irrigation_windows", "irrigators", "user_preferences", "users"]
+    assert drift == {"tables_only_in_migrated": ["alembic_version"], "tables_only_in_create_all": [], "tables": {}}

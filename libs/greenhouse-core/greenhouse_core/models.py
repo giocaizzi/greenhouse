@@ -4,7 +4,7 @@ import json
 from enum import StrEnum
 from typing import Any
 
-from sqlalchemy import Float, ForeignKey, Index, Integer, String, UniqueConstraint
+from sqlalchemy import Float, ForeignKey, Index, Integer, String, UniqueConstraint, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 from greenhouse_core.constants import FULL_WEEKDAY_MASK
@@ -160,9 +160,11 @@ class Irrigator(Base):
     """An irrigation device (Tuya-based)."""
 
     __tablename__ = "irrigators"
+    # Named like the migration that added it, so create_all and Alembic agree.
+    __table_args__ = (UniqueConstraint("cluster_id", name="uq_irrigators_cluster_id"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    cluster_id: Mapped[int] = mapped_column(ForeignKey("clusters.id"), nullable=False, unique=True)
+    cluster_id: Mapped[int] = mapped_column(ForeignKey("clusters.id"), nullable=False)
     tuya_device_id: Mapped[str] = mapped_column(String, nullable=False, unique=True)
     name: Mapped[str] = mapped_column(String, nullable=False)
     type: Mapped[str] = mapped_column(String, nullable=False)
@@ -456,7 +458,10 @@ class IrrigationWindow(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     cluster_id: Mapped[int] = mapped_column(ForeignKey("clusters.id", ondelete="CASCADE"), nullable=False)
-    weekday_mask: Mapped[int] = mapped_column(Integer, nullable=False, default=FULL_WEEKDAY_MASK)
+    # The server default mirrors the migration's literal (``'127'``) so both schemas agree.
+    weekday_mask: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=FULL_WEEKDAY_MASK, server_default=str(FULL_WEEKDAY_MASK)
+    )
     start_hour: Mapped[int] = mapped_column(Integer, nullable=False)
     end_hour: Mapped[int] = mapped_column(Integer, nullable=False)
     label: Mapped[str | None] = mapped_column(String)
@@ -490,11 +495,13 @@ class User(Base):
     """Login user (single-user app, but modeled as a table for hashed password storage)."""
 
     __tablename__ = "users"
+    # Named like the migration that added it, so create_all and Alembic agree.
+    __table_args__ = (UniqueConstraint("username", name="uq_users_username"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    username: Mapped[str] = mapped_column(String, nullable=False, unique=True)
+    username: Mapped[str] = mapped_column(String, nullable=False)
     hashed_password: Mapped[str] = mapped_column(String, nullable=False)
-    is_active: Mapped[bool] = mapped_column(nullable=False, default=True)
+    is_active: Mapped[bool] = mapped_column(nullable=False, default=True, server_default=text("1"))
     created_at: Mapped[int] = mapped_column(Integer, nullable=False)
     last_login_at: Mapped[int | None] = mapped_column(Integer)
 
@@ -518,11 +525,11 @@ class UserPreferences(Base):
     # Runtime kill switch for the APScheduler `check_all` job. Mutated by
     # the /scheduler/pause and /scheduler/resume endpoints and re-applied on
     # server startup so the pause survives a container restart.
-    scheduler_paused: Mapped[bool] = mapped_column(nullable=False, default=False)
+    scheduler_paused: Mapped[bool] = mapped_column(nullable=False, default=False, server_default=text("0"))
     # Per-category ntfy push toggles. Editable in the web UI; default ON. The
     # env-level ntfy config (GREENHOUSE_NTFY_*) governs whether anything is
     # delivered at all — these govern intent per event category.
-    notify_manual: Mapped[bool] = mapped_column(nullable=False, default=True)
-    notify_emergency: Mapped[bool] = mapped_column(nullable=False, default=True)
-    notify_alerts: Mapped[bool] = mapped_column(nullable=False, default=True)
-    notify_auto: Mapped[bool] = mapped_column(nullable=False, default=True)
+    notify_manual: Mapped[bool] = mapped_column(nullable=False, default=True, server_default=text("1"))
+    notify_emergency: Mapped[bool] = mapped_column(nullable=False, default=True, server_default=text("1"))
+    notify_alerts: Mapped[bool] = mapped_column(nullable=False, default=True, server_default=text("1"))
+    notify_auto: Mapped[bool] = mapped_column(nullable=False, default=True, server_default=text("1"))
