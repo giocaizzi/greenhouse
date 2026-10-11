@@ -912,3 +912,22 @@ def test_emergency_triggers_obey_the_vacation_budget(tmp_db, frozen_clock):
     codes = {r.code for r in decision.reasons}
     assert decision.action.value == "skip"
     assert {TriggerCode.WATER_STRESS, TriggerCode.VACATION_ACTIVE, TriggerCode.VACATION_BUDGET_EXHAUSTED} <= codes
+
+
+def test_water_warning_reads_only_the_newest_reading_per_sensor(tmp_db, frozen_clock):
+    """An old ``water_warning=True`` followed by a newer ``False`` (or unflagged) reading does not trigger."""
+    cid = tmp_db.add_cluster("Warn")
+    tmp_db.add_plant(cluster_id=cid, species="Monstera deliciosa", category="tropical")
+    sid = tmp_db.add_sensor(cluster_id=cid, tuya_device_id=FAKE_SENSOR_ID, name="S", sensor_type="x", config={})
+    now = int(time.time())
+    tmp_db.add_sensor_reading(sensor_id=sid, timestamp=now - 20 * 3600, soil_moisture=50.0, water_warning=True)
+    tmp_db.add_sensor_reading(sensor_id=sid, timestamp=now - 600, soil_moisture=50.0, water_warning=False)
+    logic = IrrigationLogic(tmp_db, get_plant_database())
+
+    cleared = logic.decide_for_cluster(cid)
+    assert cleared.sensor_snapshot.water_warnings == []
+    assert TriggerCode.WATER_WARNING not in [r.code for r in cleared.reasons]
+
+    tmp_db.add_sensor_reading(sensor_id=sid, timestamp=now - 60, soil_moisture=50.0, water_warning=True)
+    raised = logic.decide_for_cluster(cid)
+    assert raised.primary_code is TriggerCode.WATER_WARNING

@@ -51,7 +51,10 @@ def get_recent_sensor_data(db: IrrigationRepository, cluster_id: int, hours: int
     pooled = [r for _, readings in cleaned for r in readings]
     all_soil = [r.soil_moisture for r in pooled if r.soil_moisture is not None]
     daytime_light = [r.light for r in pooled if r.light is not None and r.light > NIGHT_LUX_THRESHOLD]
-    water_warnings = {sensor.name for sensor, readings in cleaned if any(r.water_warning for r in readings)}
+    # The device flag is a *state*: only each sensor's newest reading says whether it is
+    # raised now. Any-in-window let one stale backfilled ``True`` trigger irrigation
+    # hours after the soil was watered and the flag cleared.
+    water_warnings = {sensor.name for sensor, readings in cleaned if readings and readings[-1].water_warning}
 
     return SensorSnapshot(
         avg_temperature=_mean_or_none([r.temperature for r in pooled if r.temperature is not None]),
