@@ -65,7 +65,7 @@ def plant_chart_data(
 
     Args:
         plant_id: Plant whose sensors to chart.
-        hours: Look-back window (1–8760).
+        hours: Look-back window (1-8760).
         metric: One of `soil_moisture`, `temperature`, `light`, `env_humidity`.
 
     Returns:
@@ -91,7 +91,7 @@ def cluster_chart_data(
 
     Args:
         cluster_id: Cluster whose sensors to chart.
-        hours: Look-back window (1–8760).
+        hours: Look-back window (1-8760).
         metric: One of `soil_moisture`, `temperature`, `light`, `env_humidity`.
 
     Returns:
@@ -120,7 +120,7 @@ def cluster_overlay(
 
     Args:
         cluster_id: Cluster to summarise.
-        hours: Look-back window (1–8760, default 72).
+        hours: Look-back window (1-8760, default 72).
 
     Returns:
         MultiMetricOverlayResponse with normalised datasets and irrigation event markers.
@@ -138,7 +138,7 @@ def cluster_heatmap(
     repo: RepoDep,
     days: Annotated[int, Query(ge=1, le=365)] = 30,
 ) -> HeatmapResponse:
-    """Return irrigation-frequency heatmap cells for a 7×24 weekday-by-hour grid.
+    """Return irrigation-frequency heatmap cells for a 7x24 weekday-by-hour grid.
 
     Each non-zero cell records the count of irrigation events and the total
     irrigated minutes for that (weekday, hour) combination within the look-back
@@ -146,7 +146,7 @@ def cluster_heatmap(
 
     Args:
         cluster_id: Cluster to summarise.
-        days: Look-back window in days (1–365, default 30).
+        days: Look-back window in days (1-365, default 30).
 
     Returns:
         HeatmapResponse with a sparse list of HeatmapCell objects.
@@ -165,7 +165,7 @@ def plant_health_timeline(
 ) -> PlantHealthTimelineResponse:
     """Return the 90-day daily health score timeline for a single plant.
 
-    Health score per day (0–100) is the mean soil moisture across all sensors
+    Health score per day (0-100) is the mean soil moisture across all sensors
     linked to the plant. Points are (unix_timestamp_of_day_start, score) tuples
     in ascending time order. Days with no readings are omitted.
 

@@ -246,7 +246,7 @@ class SnapshotResponse(BaseModel):
 def get_plant_health(plant_id: int, repo: RepoDep, health_svc: PlantHealthServiceDep) -> PlantHealthResponse:
     """Return the current health score and 90-day history for a plant.
 
-    Computes a fresh 0–100 composite score from readings over the last 14 days
+    Computes a fresh 0-100 composite score from readings over the last 14 days
     (soil/temp/humidity in-band fractions + irrigation efficiency) and returns
     the stored daily snapshots for charting.
 

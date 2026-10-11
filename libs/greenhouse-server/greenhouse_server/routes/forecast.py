@@ -23,7 +23,7 @@ def get_cluster_forecast(cluster_id: int, repo: RepoDep, forecast_svc: ForecastS
 
     Returns:
         Forecast including `next_predicted_at` (Unix timestamp), `hours_until_next`,
-        `method` (`drainage_slope` or `fallback_constant`), `confidence` (0–1),
+        `method` (`drainage_slope` or `fallback_constant`), `confidence` (0-1),
         a human-readable `explanation`, and optional weather context
         (`precipitation_next_6h_mm`, `weather_skip`, `weather_reason`).
         `next_predicted_at` and `hours_until_next` are `null` when no sensor

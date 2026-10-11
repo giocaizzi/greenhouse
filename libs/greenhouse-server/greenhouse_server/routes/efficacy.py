@@ -22,7 +22,7 @@ def cluster_efficacy(
     For each `start` event with a positive `duration_minutes`, compares the
     average soil moisture across all cluster sensors in the 30 minutes before
     the event against the 90-minute window after. Score = clamp((after - before)
-    × 5, 0, 100): a 20 percentage-point rise yields score 100; less than
+    * 5, 0, 100): a 20 percentage-point rise yields score 100; less than
     0 percentage-point rise yields 0. Score is None when sensor data is
     insufficient around the event.
 
