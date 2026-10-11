@@ -14,6 +14,5 @@ libs/greenhouse-core/greenhouse_core/logic/engine.py — one cohesive rule pipel
 libs/greenhouse-cli/greenhouse_cli/tui/screens/cluster.py — one Screen: a compose tree plus its action_* and on_* handlers, pinned per class by the TUI surface golden; per-tab controller objects would add indirection
 libs/greenhouse-server/greenhouse_server/services/irrigation.py — the logger name, the clock seam and the names tests call by path pin the pipeline to this module (its job plumbing lives in irrigation_jobs.py / pump_watcher_jobs.py)
 libs/greenhouse-server/greenhouse_server/scheduler.py — the scheduler-job goldens pin the built-in jobs' function references here; job registry, timezone rebuild and pause policy are one concern and the public surface is pinned
-libs/greenhouse-cli/greenhouse_cli/client.py — one thin method per /api/v1 endpoint, 1:1 with the OpenAPI schema; per-resource mixins would add indirection
 libs/greenhouse-core/greenhouse_core/models.py — declarative ORM models; the DDL is pinned by the schema goldens
 libs/greenhouse-core/greenhouse_core/constants.py — flat register of named thresholds; AGENTS.md invariant 5 requires every threshold to live here, so splitting would only scatter them
