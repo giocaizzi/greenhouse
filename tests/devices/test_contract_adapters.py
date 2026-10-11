@@ -93,7 +93,8 @@ class RecordingCloud:
 
     def _respond(self, method: str):
         if method not in self.responses:
-            raise AssertionError(f"unexpected Cloud call: {method}")
+            msg = f"unexpected Cloud call: {method}"
+            raise AssertionError(msg)
         resp = self.responses[method]
         if isinstance(resp, Seq):
             resp = resp.items.pop(0) if len(resp.items) > 1 else resp.items[0]
@@ -310,9 +311,12 @@ class TestRegistryResolution:
         a = registry.get_irrigator(_irrigator())
         b = registry.get_irrigator(_irrigator())
         s = registry.get_sensor(_sensor())
-        assert type(a) is IK10PWAdapter and type(s) is TR301ZAdapter
+        assert type(a) is IK10PWAdapter
+        assert type(s) is TR301ZAdapter
         assert a is not b
-        assert a._gateway is gateway and b._gateway is gateway and s._gateway is gateway
+        assert a._gateway is gateway
+        assert b._gateway is gateway
+        assert s._gateway is gateway
 
     def test_only_the_model_key_resolves_to_ik10pw(self):
         """Only the exact model key resolves to the IK10PW adapter."""
@@ -396,7 +400,7 @@ class TestGatewayConstruction:
         """Missing credentials fail with an exact message before any client is built."""
         del clean_env  # side-effect fixture (a hermetic environment)
         monkeypatch.setattr("greenhouse_core.devices.tinytuya.Cloud", lambda **_kw: pytest.fail("must not build"))
-        with pytest.raises(ValueError) as excinfo:
+        with pytest.raises(ValueError, match="Missing TUYA_CLIENT_ID or TUYA_CLIENT_SECRET") as excinfo:
             DeviceGateway(cid, secret)
         assert str(excinfo.value) == "Missing TUYA_CLIENT_ID or TUYA_CLIENT_SECRET"
 
@@ -822,7 +826,8 @@ class TestLocalKeyResolution:
         """A failing persistence hook is logged, and the key is still cached and returned."""
 
         def _boom(_device_id, _key):
-            raise RuntimeError("db locked")
+            msg = "db locked"
+            raise RuntimeError(msg)
 
         gateway = DeviceGateway(FAKE_CLIENT_ID, FAKE_CLIENT_SECRET, raw=harness.cloud, on_key_discovered=_boom)
         harness.cloud.set("getdevices", [{"id": FAKE_DEVICE_ID, "key": "k1"}])

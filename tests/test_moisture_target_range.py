@@ -49,7 +49,9 @@ def test_default_target_constant_is_the_inline_literal() -> None:
 
 @settings(derandomize=True, max_examples=300)
 @given(other=OTHER_KEYS, has_target=st.booleans(), target=TARGETS)
-def test_moisture_target_range_equals_inline_expression(other: dict[str, Any], has_target: bool, target: Any) -> None:
+def test_moisture_target_range_equals_inline_expression(
+    *, other: dict[str, Any], has_target: bool, target: Any
+) -> None:
     """``moisture_target_range`` equals the inline expression it replaced, for any care dict."""
     care = dict(other)
     if has_target:

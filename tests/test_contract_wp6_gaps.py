@@ -328,7 +328,7 @@ def test_get_irrigation_stats_counts_events_without_duration_but_not_as_irrigati
 
 
 class _TrendRepo:
-    def __init__(self, rows, events=(), irrigator=True):
+    def __init__(self, rows, events=(), *, irrigator=True):
         self._rows = rows
         self._events = list(events)
         self._irrigator = SimpleNamespace(id=7) if irrigator else None

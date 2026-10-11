@@ -54,8 +54,10 @@ def _ddl_statements() -> list[str]:
     statements = []
     for table in Base.metadata.sorted_tables:
         statements.append(str(CreateTable(table).compile(dialect=dialect)))
-        for index in sorted(table.indexes, key=lambda i: i.name or ""):
-            statements.append(str(CreateIndex(index).compile(dialect=dialect)))
+        statements.extend(
+            str(CreateIndex(index).compile(dialect=dialect))
+            for index in sorted(table.indexes, key=lambda i: i.name or "")
+        )
     return statements
 
 

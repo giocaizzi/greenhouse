@@ -112,7 +112,9 @@ print(json.dumps({"modules": sorted(modules), "loggers": out}))
 
 
 def _run(script: str, *args: str) -> dict:
-    proc = subprocess.run([sys.executable, "-c", script, *args], capture_output=True, text=True, timeout=300)
+    proc = subprocess.run(  # noqa: S603 — the running interpreter on this module's own probe scripts
+        [sys.executable, "-c", script, *args], capture_output=True, text=True, timeout=300, check=False
+    )
     assert proc.returncode == 0, proc.stderr[-4000:]
     return json.loads(proc.stdout.strip().splitlines()[-1])
 
@@ -184,7 +186,8 @@ def _resolve(dotted: str):
         for attr in parts[cut:]:
             obj = getattr(obj, attr)
         return obj
-    raise AssertionError(f"cannot import any prefix of {dotted}")
+    msg = f"cannot import any prefix of {dotted}"
+    raise AssertionError(msg)
 
 
 PATCHED_PATHS = {

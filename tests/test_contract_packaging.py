@@ -161,7 +161,7 @@ def test_runtime_resolution_of_package_data():
 
     bundled = importlib.resources.files("greenhouse_core") / "data" / "plant_database.json"
     assert bundled.is_file()
-    assert plant_db._DEFAULT_PLANT_DB_PATH == Path(str(bundled))
+    assert Path(str(bundled)) == plant_db._DEFAULT_PLANT_DB_PATH
 
     core_root = Path(database.__file__).resolve().parent
     cfg = database._alembic_config(create_engine("sqlite://"))
@@ -170,14 +170,15 @@ def test_runtime_resolution_of_package_data():
     assert (core_root / "migrations" / "env.py").is_file()
     assert (core_root / "migrations" / "script.py.mako").is_file()
 
-    assert profile._PROFILES_DIR == core_root / "devices" / "profiles"
+    assert core_root / "devices" / "profiles" == profile._PROFILES_DIR
     for name in ("ik10pw.json", "tr301z.json"):
         assert isinstance(profile.load_profile_json(name), dict)
 
     assert templating.TEMPLATES_DIR.is_dir()
     assert (templating.TEMPLATES_DIR / "_base.html").is_file()
     static = templating.TEMPLATES_DIR.parent / "static"
-    assert (static / "app.css").is_file() and (static / "app.js").is_file()
+    assert (static / "app.css").is_file()
+    assert (static / "app.js").is_file()
 
     assert GreenhouseApp.CSS_PATH == "app.tcss"
     import greenhouse_cli.tui.app as tui_app_mod

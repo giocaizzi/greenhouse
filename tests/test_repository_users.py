@@ -19,7 +19,8 @@ def test_create_user_then_lookups(tmp_db):
     """A created user is active and can be looked up by id and name."""
     user = tmp_db.create_user("Alice", PW)
     assert isinstance(user, User)
-    assert user.id is not None and user.is_active is True
+    assert user.id is not None
+    assert user.is_active is True
     assert core_auth.verify_password(PW, user.hashed_password)
     assert tmp_db.has_users() is True
     assert tmp_db.get_user(user.id) is user

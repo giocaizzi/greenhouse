@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import ast
 import asyncio
+import contextlib
 import enum
 import hashlib
 import importlib
@@ -32,11 +33,10 @@ import pkgutil
 import re
 from dataclasses import asdict
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from fastapi.testclient import TestClient
 from rich.console import Console
-from textual.app import App
 from textual.binding import Binding
 from textual.dom import DOMNode
 from textual.widgets import DataTable
@@ -48,6 +48,9 @@ from greenhouse_cli import tui as tui_pkg
 from greenhouse_cli.tui import resources, sprites
 from greenhouse_cli.tui.app import GreenhouseApp
 from server.conftest import _make_stubbed_app
+
+if TYPE_CHECKING:
+    from textual.app import App
 
 # ── Shared kit (imported by test_contract_tui_screens / _actuation / _runtime) ─
 
@@ -123,9 +126,9 @@ def _pending_tui_work(tui: App) -> list[str]:
     for stack in tui._screen_stacks.values():
         for screen in stack:
             nodes.extend(screen.walk_children(with_self=True))
-    for node in nodes:
-        if not node._message_queue.empty() or node._next_callbacks:
-            pending.append(f"messages queued on {node!r}")
+    pending.extend(
+        f"messages queued on {node!r}" for node in nodes if not node._message_queue.empty() or node._next_callbacks
+    )
     animator = tui.animator
     pending += [f"animation of {attr!r}" for _, attr in [*animator._animations, *animator._scheduled]]
     if tui._batch_count:
@@ -143,8 +146,8 @@ def _pending_tui_work(tui: App) -> list[str]:
     return pending
 
 
-async def settle(pilot, tui: App, timeout: float = 60.0) -> None:
-    """Wait until the TUI has finished reacting, failing with what is still pending after ``timeout``.
+async def settle(pilot, tui: App, limit_s: float = 60.0) -> None:
+    """Wait until the TUI has finished reacting, failing with what is still pending after ``limit_s`` seconds.
 
     Finished means no worker unfinished and no message or callback queued anywhere, on two
     consecutive passes.
@@ -155,32 +158,32 @@ async def settle(pilot, tui: App, timeout: float = 60.0) -> None:
     ``pilot.pause()`` idle heuristic returns.
     """
     loop = asyncio.get_running_loop()
-    deadline = loop.time() + timeout
+    deadline = loop.time() + limit_s
     quiet_passes = 0
     while quiet_passes < 2:
         await pilot.pause()
-        try:
+        with contextlib.suppress(WorkerCancelled):  # an exclusive worker legitimately cancels the run it supersedes
             await tui.workers.wait_for_complete()
-        except WorkerCancelled:
-            pass  # an exclusive worker legitimately cancels the run it supersedes
         await tui.animator.wait_until_complete()
         pending = _pending_tui_work(tui)
         quiet_passes = 0 if pending else quiet_passes + 1
         if pending and loop.time() > deadline:
-            raise AssertionError(f"TUI did not settle within {timeout}s; still pending: {pending}")
+            msg = f"TUI did not settle within {limit_s}s; still pending: {pending}"
+            raise AssertionError(msg)
     await pilot.pause()
 
 
-async def wait_until(predicate, what: str, timeout: float = 60.0) -> None:
-    """Poll ``predicate`` with plain ``asyncio.sleep`` until it holds; fail naming ``what`` after ``timeout``.
+async def wait_until(predicate, what: str, limit_s: float = 60.0) -> None:
+    """Poll ``predicate`` with plain ``asyncio.sleep`` until it holds; fail naming ``what`` after ``limit_s`` seconds.
 
     For screens with a ticking auto-refresh timer, where ``settle`` / ``pilot.pause()`` may never see an idle app.
     """
     loop = asyncio.get_running_loop()
-    deadline = loop.time() + timeout
+    deadline = loop.time() + limit_s
     while not predicate():
         if loop.time() > deadline:
-            raise AssertionError(f"timed out after {timeout}s waiting for: {what}")
+            msg = f"timed out after {limit_s}s waiting for: {what}"
+            raise AssertionError(msg)
         await asyncio.sleep(0.05)
 
 

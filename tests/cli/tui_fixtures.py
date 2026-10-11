@@ -11,13 +11,16 @@ from __future__ import annotations
 import math
 import threading
 import time
+from typing import TYPE_CHECKING
 
-from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 from greenhouse_cli.client import IrrigationClient
 from greenhouse_core.models import IrrigationEvent, SensorReading
 from greenhouse_core.repository import IrrigationRepository
+
+if TYPE_CHECKING:
+    from fastapi.testclient import TestClient
 
 CLUSTERS = [
     {

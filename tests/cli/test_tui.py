@@ -9,8 +9,10 @@ every client call the TUI makes is checked against the live route and schema.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import os
 from pathlib import Path
+from typing import Any, ClassVar
 
 import httpx
 import pytest
@@ -72,7 +74,7 @@ def _app(http: TestClient, log: list | None = None, refresh_seconds: float = 0) 
     )
 
 
-async def _settle(pilot, tui: GreenhouseApp, timeout: float = 10.0) -> None:
+async def _settle(pilot, tui: GreenhouseApp, limit_s: float = 10.0) -> None:
     """Wait until no worker is running and the DOM has caught up.
 
     Workers chain (an action's worker starts a reload worker when it ends), so
@@ -81,18 +83,17 @@ async def _settle(pilot, tui: GreenhouseApp, timeout: float = 10.0) -> None:
     the run they supersede, so a cancelled worker is not a failure here.
     """
     loop = asyncio.get_running_loop()
-    deadline = loop.time() + timeout
+    deadline = loop.time() + limit_s
     idle_passes = 0
     while idle_passes < 2:
         await pilot.pause()
-        try:
+        with contextlib.suppress(WorkerCancelled):
             await tui.workers.wait_for_complete()
-        except WorkerCancelled:
-            pass
         busy = any(w.is_running for w in tui.workers)
         idle_passes = 0 if busy else idle_passes + 1
         if loop.time() > deadline:
-            raise AssertionError(f"workers still running after {timeout}s: {list(tui.workers)}")
+            msg = f"workers still running after {limit_s}s: {list(tui.workers)}"
+            raise AssertionError(msg)
     await pilot.pause()
 
 
@@ -100,13 +101,13 @@ def _run(coro) -> None:
     asyncio.run(coro)
 
 
-async def _settle_until(pilot, tui: GreenhouseApp, done, timeout: float = 30.0) -> None:
+async def _settle_until(pilot, tui: GreenhouseApp, done, limit_s: float = 30.0) -> None:
     """Settle repeatedly until ``done()`` holds.
 
     A dismissed dialog hands its result to a callback that starts the next worker one
     message later, which a single settle can miss on a slow runner.
     """
-    deadline = asyncio.get_running_loop().time() + timeout
+    deadline = asyncio.get_running_loop().time() + limit_s
     while True:
         await _settle(pilot, tui)
         if done() or asyncio.get_running_loop().time() > deadline:
@@ -158,7 +159,8 @@ class TestSprites:
     def test_half_block_rendering(self):
         """Two pixel rows collapse into one half-block line, with transparency kept per half."""
         sprite = PixelSprite(("AB.", "A.B"), {"A": "#ff0000", "B": "#00ff00"})
-        assert sprite.width == 3 and sprite.height == 1
+        assert sprite.width == 3
+        assert sprite.height == 1
         # A over A → full ▀ ; B over transparent → ▀ ; transparent over B → ▄
         assert _render(sprite).splitlines()[0] == "▀▀▄"
 
@@ -249,7 +251,7 @@ class TestFormatting:
 class TestModel:
     """Payload-to-summary view model used by the dashboard and cluster screens."""
 
-    STATUS = {
+    STATUS: ClassVar[dict[str, Any]] = {
         "cluster": {"id": 7, "name": "Shelf", "environment": "indoor", "location": None},
         "plants": [
             {"id": 1, "species": "A", "category": "fern"},
@@ -273,7 +275,8 @@ class TestModel:
         assert s.newest_reading_at == 200
         assert s.mood is Mood.THIRSTY
         assert [p.mood for p in s.plants] == [Mood.OK, Mood.THIRSTY]
-        assert s.irrigator_id == 3 and not s.watering
+        assert s.irrigator_id == 3
+        assert not s.watering
 
     def test_sparkline_uses_per_timestamp_minimum(self):
         """The sparkline plots the per-timestamp minimum across sensors, and is empty without data."""
@@ -370,7 +373,8 @@ class TestDashboard:
         """A refused connection is reported on screen instead of crashing the app."""
 
         def refuse(_request):
-            raise httpx.ConnectError("refused")
+            msg = "refused"
+            raise httpx.ConnectError(msg)
 
         def factory(_token):
             return IrrigationClient(base_url="http://down", token="", transport=httpx.MockTransport(refuse))
@@ -676,7 +680,7 @@ class TestForms:
         assert parse_value(Field("a", "A", "int"), " 5 ") == 5
         assert parse_value(Field("a", "A", "float"), "2.5") == 2.5
         assert parse_value(Field("a", "A"), "  ") is None
-        assert parse_value(Field("a", "A", "bool"), True) is True
+        assert parse_value(Field("a", "A", "bool"), raw=True) is True
         assert parse_value(Field("a", "A", "json"), '{"x": 1}') == {"x": 1}
         assert isinstance(parse_value(Field("a", "A", "datetime"), "2026-10-01 08:30"), int)
 
@@ -961,7 +965,8 @@ class TestClusterCrud:
             await pilot.press("E")
             await _settle(pilot, tui)
             exported = tmp_path / "greenhouse-living-room-stats-30d.csv"
-            assert exported.exists() and exported.read_text()
+            assert exported.exists()
+            assert exported.read_text()
 
         self._open(http, 1, body)
 
@@ -998,7 +1003,8 @@ class TestSettingsScreen:
                 await pilot.pause()
                 await _submit_form(pilot, tui, timezone="Europe/Rome", dry_run_global=True)
                 prefs = http.get("/api/v1/preferences").json()
-                assert prefs["timezone"] == "Europe/Rome" and prefs["dry_run_global"] is True
+                assert prefs["timezone"] == "Europe/Rome"
+                assert prefs["dry_run_global"] is True
 
                 await pilot.press("g")
                 await pilot.pause()
@@ -1303,10 +1309,13 @@ class TestTableColumnWidths:
         for path in sorted(Path(tui_pkg.__file__).parent.rglob("*.py")):
             if path.name == "table.py":
                 continue
-            for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
-                if isinstance(node, ast.ImportFrom) and (node.module or "").startswith("textual"):
-                    if any(alias.name == "DataTable" for alias in node.names):
-                        offenders.append(path.name)
+            offenders.extend(
+                path.name
+                for node in ast.walk(ast.parse(path.read_text(encoding="utf-8")))
+                if isinstance(node, ast.ImportFrom)
+                and (node.module or "").startswith("textual")
+                and any(alias.name == "DataTable" for alias in node.names)
+            )
         assert offenders == []
 
 
@@ -1709,7 +1718,8 @@ def test_failed_shielded_card_rebuild_is_logged_with_traceback():
     dashboard.logger.addHandler(handler)
 
     async def boom() -> None:
-        raise RuntimeError("mount failed")
+        msg = "mount failed"
+        raise RuntimeError(msg)
 
     async def scenario():
         task = asyncio.ensure_future(boom())

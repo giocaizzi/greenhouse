@@ -43,6 +43,15 @@ import rich
 from typer.testing import CliRunner
 
 from cli.test_contract_help import leaf_command_paths, stable_cli_env  # noqa: F401 — fixture re-export
+from fake_data import (
+    FAKE_JWT_BLANK_FILE,
+    FAKE_JWT_DIRECT,
+    FAKE_JWT_FILE,
+    FAKE_JWT_FILE_PADDED,
+    FAKE_JWT_HOME,
+    FAKE_JWT_OLD,
+    FAKE_JWT_STORED,
+)
 from golden import GOLDEN_DIR, UPDATE_ENV_VAR, assert_golden_json, to_canonical_json
 from greenhouse_cli.client import IrrigationClient, ServerError
 from greenhouse_cli.main import app
@@ -202,7 +211,7 @@ CLI_CASES: list[Case] = [
         "s3cret",
         routes={("POST", f"{P}/auth/login"): (200, {"access_token": "jwt-new"})},
         env={"GREENHOUSE_API_TOKEN": "env-token"},
-        token_file="old-token",
+        token_file=FAKE_JWT_OLD,
     ),
     C(
         "login.prompts",
@@ -238,21 +247,21 @@ CLI_CASES: list[Case] = [
         "bad",
         routes={("POST", f"{P}/auth/login"): (401, {"detail": "Invalid credentials"})},
     ),
-    C("logout.with_token", "logout", token_file="stored-jwt"),
+    C("logout.with_token", "logout", token_file=FAKE_JWT_STORED),
     C("logout.without_token", "logout"),
     C(
         "logout.server_error_still_clears",
         "logout",
-        token_file="stored-jwt",
+        token_file=FAKE_JWT_STORED,
         routes={("POST", f"{P}/auth/logout"): (500, {"detail": "boom"})},
     ),
     C(
         "logout.unreachable_still_clears",
         "logout",
-        token_file="stored-jwt",
+        token_file=FAKE_JWT_STORED,
         routes={("POST", f"{P}/auth/logout"): Raise("ConnectError", "[Errno 111] Connection refused")},
     ),
-    C("whoami", "whoami", token_file="stored-jwt"),
+    C("whoami", "whoami", token_file=FAKE_JWT_STORED),
     # ── server URL resolution ──
     C("server.default_localhost", "health"),
     C("server.env", "health", env={"IRRIGATION_SERVER_URL": "http://env.example:9001"}),
@@ -274,16 +283,16 @@ CLI_CASES: list[Case] = [
     C("server.base_path_prefix", "--server", "http://proxy.example/greenhouse", "health"),
     # ── token resolution ──
     C("token.none", "health"),
-    C("token.file_stripped", "health", token_file="  file-token \n"),
-    C("token.empty_file", "health", token_file="  \n"),
-    C("token.env_wins_over_file", "health", env={"GREENHOUSE_API_TOKEN": "  env-token \n"}, token_file="file-token"),
+    C("token.file_stripped", "health", token_file=FAKE_JWT_FILE_PADDED),
+    C("token.empty_file", "health", token_file=FAKE_JWT_BLANK_FILE),
+    C("token.env_wins_over_file", "health", env={"GREENHOUSE_API_TOKEN": "  env-token \n"}, token_file=FAKE_JWT_FILE),
     C(
         "token.blank_env_falls_back_to_file",
         "health",
         env={"GREENHOUSE_API_TOKEN": "   "},
-        token_file="file-token",
+        token_file=FAKE_JWT_FILE,
     ),
-    C("token.home_config_without_xdg", "health", token_file="home-token", xdg=False),
+    C("token.home_config_without_xdg", "health", token_file=FAKE_JWT_HOME, xdg=False),
     # ── error handling (ServerError → exit 1 via _helpers.call) ──
     C("error.404_detail", "status", "999", routes={("GET", f"{P}/clusters/999/status"): (404, {"detail": "Nope"})}),
     C(
@@ -947,7 +956,7 @@ def _case_dir(base: Path, name: str):
         yield path
 
 
-def _write_token(home: Path, content: str | None, xdg: bool) -> Path:
+def _write_token(home: Path, content: str | None, *, xdg: bool) -> Path:
     token_path = (home / "config" if xdg else home / ".config") / "greenhouse" / "token"
     if content is not None:
         token_path.parent.mkdir(parents=True, exist_ok=True)
@@ -973,9 +982,9 @@ def run_cli_case(case: Case, base: Path, slot: dict[str, Recorder]) -> dict[str,
     rec = Recorder(case.routes)
     slot["current"] = rec
     with _case_dir(base, "cli-" + case.id) as home:
-        token_path = _write_token(home, case.token_file, case.xdg)
+        token_path = _write_token(home, case.token_file, xdg=case.xdg)
         if case.token_file is not None:
-            os.chmod(token_path, 0o644)
+            token_path.chmod(0o644)
         env: dict[str, str | None] = {
             "HOME": str(home),
             "XDG_CONFIG_HOME": str(home / "config") if case.xdg else None,
@@ -1013,7 +1022,7 @@ def run_client_case(case: ClientCase, slot: dict[str, Recorder]) -> dict[str, An
     """Run one client method case and capture its requests and outcome."""
     rec = Recorder(default=case.response)
     slot["current"] = rec
-    client = IrrigationClient(base_url="http://client.example:8123", token="tok-direct")
+    client = IrrigationClient(base_url="http://client.example:8123", token=FAKE_JWT_DIRECT)
     outcome = _call_client(client, case)
     return {
         "call": {"method": case.method, "args": list(case.args), "kwargs": case.kwargs},

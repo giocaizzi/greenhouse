@@ -98,7 +98,8 @@ class _SearchGate:
 
         def gated(*args, **kwargs):
             if not self.open.wait(timeout=60):
-                raise AssertionError("search gate never reopened")
+                msg = "search gate never reopened"
+                raise AssertionError(msg)
             return search(*args, **kwargs)
 
         client.search = gated
@@ -236,7 +237,7 @@ def test_tour_covers_exactly_the_named_screens(captures):
     assert sorted(captures) == sorted(SCREEN_NAMES)
 
 
-_TCSS_COMMENT = re.compile(r"/\*.*?\*/", re.S)
+_TCSS_COMMENT = re.compile(r"/\*.*?\*/", re.DOTALL)
 
 
 def _tcss_selectors() -> list[str]:

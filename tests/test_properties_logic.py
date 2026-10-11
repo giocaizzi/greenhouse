@@ -15,7 +15,7 @@ import copy
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from types import SimpleNamespace
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import pytest
 import time_machine
@@ -169,7 +169,8 @@ def test_clean_readings_around_preserves_partition_and_matches_joint_cleaning(ro
 
     cleaned_before, cleaned_after = clean_readings_around(before, after)
 
-    assert len(cleaned_before) == len(before) and len(cleaned_after) == len(after)
+    assert len(cleaned_before) == len(before)
+    assert len(cleaned_after) == len(after)
     assert cleaned_before + cleaned_after == clean_readings(rows)
 
 
@@ -201,7 +202,7 @@ _NORTH |= {6: "summer", 7: "summer", 8: "summer", 9: "autumn", 10: "autumn", 11:
 def _local_month(ts, tz):
     try:
         zone = ZoneInfo(tz) if tz else ZoneInfo("UTC")
-    except Exception:  # bad names fall back to UTC in production too
+    except ZoneInfoNotFoundError:  # bad names fall back to UTC in production too
         zone = ZoneInfo("UTC")
     return datetime.fromtimestamp(ts, tz=zone).month
 
@@ -283,9 +284,9 @@ def test_seasonal_multiplier_range_over_bundled_plant_data():
     """Every multiplier reachable from the bundled plant DB lies in [0.1, 1.6]."""
     pdb = plant_database()
     seen = set()
-    species = pdb.list_species() + ["Plantus fictitius"]
+    species = [*pdb.list_species(), "Plantus fictitius"]
     for name in species:
-        for category in pdb.list_categories() + [None]:
+        for category in [*pdb.list_categories(), None]:
             care = pdb.get_care_data(species=name, category=category)
             for env, key in (
                 ("indoor", "season_frequency_multiplier"),
@@ -301,7 +302,8 @@ def test_seasonal_multiplier_range_over_bundled_plant_data():
                         )
                     )
 
-    assert min(seen) == 0.1 and max(seen) == 1.6
+    assert min(seen) == 0.1
+    assert max(seen) == 1.6
     assert all(0.1 <= m <= 1.6 for m in seen)
 
 
@@ -313,7 +315,8 @@ def test_quiet_hours_window_and_its_complement_partition_the_day(start, end, ts,
     swapped = is_within_quiet_hours(start_hour=end, end_hour=start, now_unix=ts, tz_name=tz)
 
     if start == end:
-        assert inside is False and swapped is False
+        assert inside is False
+        assert swapped is False
     else:
         assert inside != swapped
     assert is_within_quiet_hours(start_hour=None, end_hour=end, now_unix=ts, tz_name=tz) is False
@@ -352,7 +355,7 @@ def test_irrigation_window_is_any_matching_row_and_no_rows_means_allowed(windows
 class FakeRepo:
     """Minimal read-only repository double for the trend / stress helpers."""
 
-    def __init__(self, plants=(), readings=None, events=(), irrigator=True):
+    def __init__(self, plants=(), readings=None, events=(), *, irrigator=True):
         """Serve the given plants, per-sensor readings and events; ``irrigator`` toggles the pump."""
         self._plants = list(plants)
         self._readings = readings or {}
@@ -448,7 +451,9 @@ def test_detect_stress_conditions_rules(plants, snapshot, trends):
     vetoed = expect_over or any(v > hi for v, (_, hi) in current)
     assert (stress.water_stress is not None) == (dry and not vetoed)
     if not plants:
-        assert stress.heat_stress is None and stress.low_env_humidity is None and stress.low_light is None
+        assert stress.heat_stress is None
+        assert stress.low_env_humidity is None
+        assert stress.low_light is None
     assert stress.learning_alerts == []
 
 
@@ -498,7 +503,8 @@ def test_analyze_historical_trends_labels_are_consistent(sensor_series, events, 
     assert not (trends.irrigation_frequency_low and trends.irrigation_frequency_high)
     starts = [e for e in events if e.action == "start" and e.duration_minutes]
     if not has_irrigator or not starts:
-        assert not trends.irrigation_frequency_low and not trends.irrigation_frequency_high
+        assert not trends.irrigation_frequency_low
+        assert not trends.irrigation_frequency_high
     else:
         assert trends.irrigation_frequency_high == (len(starts) / 7 > 3)
 
@@ -551,7 +557,8 @@ def test_parse_moisture_target_never_raises(text):
     """Any text parses to a float band without raising."""
     low, high = parse_moisture_target(text)
 
-    assert isinstance(low, float) and isinstance(high, float)
+    assert isinstance(low, float)
+    assert isinstance(high, float)
 
 
 @pytest.mark.parametrize(

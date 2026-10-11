@@ -22,16 +22,16 @@ the frozen block — so records are reproducible bit-for-bit.
 
 from __future__ import annotations
 
+import functools
 import hashlib
 import json
 from collections import Counter
-from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
 from importlib.resources import files
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo
 
 import time_machine
@@ -44,6 +44,11 @@ from greenhouse_core.logic import IrrigationLogic
 from greenhouse_core.models import Base, DecisionLog, IrrigationEvent, SensorReading
 from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_core.repository import IrrigationRepository
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Iterator
+
+    from sqlalchemy import Engine
 
 MINUTE = 60
 HOUR = 3600
@@ -166,16 +171,23 @@ def make_weather(case: Case) -> FakeForecastWeather | None:
 # ── DB plumbing ──────────────────────────────────────────────────────────────
 
 _PLANT_DB_PATH = Path(str(files("greenhouse_core") / "data" / "plant_database.json"))
-_plant_db: PlantDatabase | None = None
-_engine = None
 
 
+@functools.cache
 def plant_database() -> PlantDatabase:
-    """The bundled plant DB, loaded from the package path (ignores ``IRRIGATION_PLANT_DB_PATH``)."""
-    global _plant_db
-    if _plant_db is None:
-        _plant_db = PlantDatabase(_PLANT_DB_PATH)
-    return _plant_db
+    """The bundled plant DB, loaded from the package path (ignores ``IRRIGATION_PLANT_DB_PATH``).
+
+    Loaded once per process and shared.
+    """
+    return PlantDatabase(_PLANT_DB_PATH)
+
+
+@functools.cache
+def _shared_engine() -> Engine:
+    """The one in-memory engine (schema created once) that every grid case runs on, per process."""
+    engine = create_engine("sqlite://", poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    return engine
 
 
 @contextmanager
@@ -186,11 +198,7 @@ def fresh_repository() -> Iterator[IrrigationRepository]:
     shared per process; each case runs in an outer transaction that is rolled
     back, so ids restart at 1 and no state leaks between cases.
     """
-    global _engine
-    if _engine is None:
-        _engine = create_engine("sqlite://", poolclass=StaticPool)
-        Base.metadata.create_all(_engine)
-    conn = _engine.connect()
+    conn = _shared_engine().connect()
     trans = conn.begin()
     session = Session(bind=conn, join_transaction_mode="create_savepoint")
     try:
@@ -448,28 +456,28 @@ def _soil_family() -> list[Case]:
     cases = []
     levels = [0.0, 12.0, 25.0, 29.9, 30.0, 34.0, 38.0, 44.9, 45.0, 58.0, 66.0, 71.0]
     for plant_key, plants in PLANT_SETS.items():
-        for climate_key, climate in CLIMATES.items():
-            for level in levels:
-                cases.append(
-                    Case(
-                        id=f"soil/{plant_key}/{climate_key}/indoor/m{level:g}",
-                        family="soil",
-                        at=BASE_AT,
-                        plants=plants,
-                        sensors=(_sensor(level, **climate),),
-                    )
-                )
-        for level in (25.0, 38.0, 58.0, 71.0):
-            cases.append(
-                Case(
-                    id=f"soil/{plant_key}/soil_only/outdoor/m{level:g}",
-                    family="soil",
-                    at=BASE_AT,
-                    environment="outdoor",
-                    plants=plants,
-                    sensors=(_sensor(level),),
-                )
+        cases.extend(
+            Case(
+                id=f"soil/{plant_key}/{climate_key}/indoor/m{level:g}",
+                family="soil",
+                at=BASE_AT,
+                plants=plants,
+                sensors=(_sensor(level, **climate),),
             )
+            for climate_key, climate in CLIMATES.items()
+            for level in levels
+        )
+        cases.extend(
+            Case(
+                id=f"soil/{plant_key}/soil_only/outdoor/m{level:g}",
+                family="soil",
+                at=BASE_AT,
+                environment="outdoor",
+                plants=plants,
+                sensors=(_sensor(level),),
+            )
+            for level in (25.0, 38.0, 58.0, 71.0)
+        )
     return cases
 
 
@@ -635,10 +643,10 @@ def _series_family() -> list[Case]:
         "temp-only": (SensorSpec("Grid Soil", (Reading(600, temp=22.0),), 0),),
     }
     cases = [Case(id=f"series/{k}", family="series", at=BASE_AT, sensors=v) for k, v in shapes.items()]
-    for k in ("spike-low-mid", "spike-low-newest", "declining", "rising"):
-        cases.append(
-            Case(id=f"series/{k}/inserted-desc", family="series", at=BASE_AT, sensors=shapes[k], insert_desc=True)
-        )
+    cases.extend(
+        Case(id=f"series/{k}/inserted-desc", family="series", at=BASE_AT, sensors=shapes[k], insert_desc=True)
+        for k in ("spike-low-mid", "spike-low-newest", "declining", "rising")
+    )
     cases += _second_review_cases()
     for label, age in (
         ("0s", 0),
@@ -770,20 +778,20 @@ def _quiet_family() -> list[Case]:
                 "end": e_local.timestamp(),
                 "end+1s": e_local.timestamp() + 1,
             }
-            for label, ts in instants.items():
-                for bypass in (False, True):
-                    cases.append(
-                        Case(
-                            id=f"quiet/{cfg_key}/{tz}/{label}/bypass={bypass}",
-                            family="quiet",
-                            at=datetime.fromtimestamp(int(ts), tz=ZoneInfo("UTC")),
-                            tz=tz,
-                            sensors=(_sensor(38.0),),
-                            bypass_quiet_hours=bypass,
-                            triggered_by="manual" if bypass else "auto",
-                            **cfg,
-                        )
-                    )
+            cases.extend(
+                Case(
+                    id=f"quiet/{cfg_key}/{tz}/{label}/bypass={bypass}",
+                    family="quiet",
+                    at=datetime.fromtimestamp(int(ts), tz=ZoneInfo("UTC")),
+                    tz=tz,
+                    sensors=(_sensor(38.0),),
+                    bypass_quiet_hours=bypass,
+                    triggered_by="manual" if bypass else "auto",
+                    **cfg,
+                )
+                for label, ts in instants.items()
+                for bypass in (False, True)
+            )
     night = _utc(2026, 4, 15, 2, 0, 0)
     extras = {
         "cooldown-beats-quiet": {"events": (Event(HOUR),)},
@@ -897,20 +905,20 @@ def _season_family() -> list[Case]:
         "mar01-00:00:00-rome-as-utc-prefs": ("UTC", _local(ROME, 2026, 3, 1, 0, 0, 0)),
         "mar01-00:00:00-utc": ("UTC", _utc(2026, 3, 1, 0, 0, 0)),
     }
-    for inst_key, (tz, at) in instants.items():
-        for plant_key, plants in {**PLANT_SETS, **SEASON_EXTRA_SETS}.items():
-            for env in ("indoor", "outdoor"):
-                cases.append(
-                    Case(
-                        id=f"season/{inst_key}/{plant_key}/{env}",
-                        family="season",
-                        at=at,
-                        tz=tz,
-                        environment=env,
-                        plants=plants,
-                        sensors=(_sensor(40.0, temp=22.0, hum=60.0, light=900),),
-                    )
-                )
+    cases.extend(
+        Case(
+            id=f"season/{inst_key}/{plant_key}/{env}",
+            family="season",
+            at=at,
+            tz=tz,
+            environment=env,
+            plants=plants,
+            sensors=(_sensor(40.0, temp=22.0, hum=60.0, light=900),),
+        )
+        for inst_key, (tz, at) in instants.items()
+        for plant_key, plants in {**PLANT_SETS, **SEASON_EXTRA_SETS}.items()
+        for env in ("indoor", "outdoor")
+    )
     return cases
 
 
@@ -968,28 +976,28 @@ def _vacation_family() -> list[Case]:
         "flow-only": {"vacation": (-DAY, 6 * DAY), "flow_rate": 1.0},
         "active-no-irrigator": {"vacation": (-DAY, 6 * DAY), "irrigator": False},
     }
-    for vac_key, kw in vacs.items():
-        for soil in (38.0, 25.0, 66.0):
-            cases.append(
-                Case(
-                    id=f"vacation/{vac_key}/monstera/m{soil:g}",
-                    family="vacation",
-                    at=BASE_AT,
-                    sensors=(_sensor(soil),),
-                    **kw,
-                )
-            )
-    for vac_key in ("active-partial-trim", "active-plenty"):
-        cases.append(
-            Case(
-                id=f"vacation/{vac_key}/fern_cat/m50",
-                family="vacation",
-                at=BASE_AT,
-                plants=PLANT_SETS["fern_cat"],
-                sensors=(_sensor(50.0),),
-                **vacs[vac_key],
-            )
+    cases.extend(
+        Case(
+            id=f"vacation/{vac_key}/monstera/m{soil:g}",
+            family="vacation",
+            at=BASE_AT,
+            sensors=(_sensor(soil),),
+            **kw,
         )
+        for vac_key, kw in vacs.items()
+        for soil in (38.0, 25.0, 66.0)
+    )
+    cases.extend(
+        Case(
+            id=f"vacation/{vac_key}/fern_cat/m50",
+            family="vacation",
+            at=BASE_AT,
+            plants=PLANT_SETS["fern_cat"],
+            sensors=(_sensor(50.0),),
+            **vacs[vac_key],
+        )
+        for vac_key in ("active-partial-trim", "active-plenty")
+    )
     cases.append(
         Case(
             id="vacation/active-tiny-exhausted/no-sensors-fallback",
@@ -1125,19 +1133,19 @@ def _fallback_family() -> list[Case]:
         "smart-4min-10h": (("mode", "smart"), ("duration_minutes", 4), ("interval_hours", 10)),
         "manual": (("mode", "manual"),),
     }
-    for plant_key in ("monstera", "fern_cat", "cactus_cat"):
-        for cfg_key, cfg in configs.items():
-            for temp in temps:
-                cases.append(
-                    Case(
-                        id=f"fallback/{plant_key}/{cfg_key}/temp={temp}",
-                        family="fallback",
-                        at=BASE_AT,
-                        plants=PLANT_SETS[plant_key],
-                        cluster_config=cfg,
-                        current_temp=temp,
-                    )
-                )
+    cases.extend(
+        Case(
+            id=f"fallback/{plant_key}/{cfg_key}/temp={temp}",
+            family="fallback",
+            at=BASE_AT,
+            plants=PLANT_SETS[plant_key],
+            cluster_config=cfg,
+            current_temp=temp,
+        )
+        for plant_key in ("monstera", "fern_cat", "cactus_cat")
+        for cfg_key, cfg in configs.items()
+        for temp in temps
+    )
     for temp in (None, 30.0):
         cases.append(
             Case(
@@ -1170,17 +1178,17 @@ def _fallback_family() -> list[Case]:
 
 def _learning_family() -> list[Case]:
     cases = []
-    for seed in (None, "blocked_drip", "rapid_drainage"):
-        for soil in (38.0, 55.0):
-            cases.append(
-                Case(
-                    id=f"learning/{seed or 'none'}/m{soil:g}",
-                    family="learning",
-                    at=BASE_AT,
-                    sensors=(_sensor(soil, temp=22.0),),
-                    learning=seed,
-                )
-            )
+    cases.extend(
+        Case(
+            id=f"learning/{seed or 'none'}/m{soil:g}",
+            family="learning",
+            at=BASE_AT,
+            sensors=(_sensor(soil, temp=22.0),),
+            learning=seed,
+        )
+        for seed in (None, "blocked_drip", "rapid_drainage")
+        for soil in (38.0, 55.0)
+    )
     dry_dim_air = tuple(Reading(age_s=i * HOUR, soil=20.0, hum=20.0, light=18) for i in range(6))
     cases.append(
         Case(
@@ -1279,5 +1287,6 @@ def build_cases(family: str | None = None) -> list[Case]:
     cases = [case for name in names for case in FAMILIES[name]()]
     duplicates = sorted(i for i, n in Counter(c.id for c in cases).items() if n > 1)
     if duplicates:
-        raise ValueError(f"duplicate case ids: {duplicates}")
+        msg = f"duplicate case ids: {duplicates}"
+        raise ValueError(msg)
     return cases

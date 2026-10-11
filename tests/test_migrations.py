@@ -10,6 +10,7 @@ These tests guard init_db, which is plain ``alembic upgrade head``:
 
 import os
 import tempfile
+from pathlib import Path
 
 import pytest
 from sqlalchemy import create_engine, inspect, text
@@ -23,10 +24,10 @@ def file_db():
     """Tempfile-backed SQLite — alembic-friendly (in-memory loses tables across connections)."""
     fd, path = tempfile.mkstemp(suffix=".db")
     os.close(fd)
-    os.remove(path)
+    Path(path).unlink()
     yield f"sqlite:///{path}"
-    if os.path.exists(path):
-        os.remove(path)
+    if Path(path).exists():
+        Path(path).unlink()
 
 
 def test_empty_db_runs_baseline_to_head(file_db):

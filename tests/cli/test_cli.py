@@ -30,7 +30,7 @@ def _mock_transport(routes: dict):
                 return httpx.Response(status, text=body, headers={"content-type": "text/csv"})
             return httpx.Response(status, json=body)
 
-        # Default: 404
+        # Unknown route: answer like the server does for a missing resource.
         return httpx.Response(404, json={"detail": "Not found"})
 
     return httpx.MockTransport(handler)

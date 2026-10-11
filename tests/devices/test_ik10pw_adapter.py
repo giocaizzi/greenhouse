@@ -166,12 +166,11 @@ class TestAlarmParser:
     """alarm_indicates_no_water handles the multiple shapes the DP can take."""
 
     @pytest.mark.parametrize(
-        "value,expected",
+        ("value", "expected"),
         [
             (None, False),
             (0, False),
             (1, True),
-            (0x01, True),
             (3, True),  # bitmap with bit 0 set
             (2, False),  # bitmap without bit 0
             (False, False),

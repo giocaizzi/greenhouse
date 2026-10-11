@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import json
 import os
-from collections.abc import Callable
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import httpx
 import pytest
@@ -18,6 +18,9 @@ from typer.testing import CliRunner
 
 from greenhouse_cli import client as client_mod
 from greenhouse_cli.main import app
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 runner = CliRunner()
 
@@ -27,7 +30,6 @@ def _isolated_token_dir(tmp_path, monkeypatch):
     """Redirect on-disk token storage to a temp dir so tests don't touch real config."""
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
     monkeypatch.delenv("GREENHOUSE_API_TOKEN", raising=False)
-    yield
 
 
 def _mock(routes: dict, captured: list | None = None):

@@ -32,7 +32,7 @@ class TestDeviceGateway:
         """Gateway raises without credentials."""
         from greenhouse_core.devices.gateway import DeviceGateway
 
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="Missing TUYA_CLIENT_ID or TUYA_CLIENT_SECRET"):
             DeviceGateway("", "", "eu")
 
     def test_get_live_reading_parses_soil_sensor(self):

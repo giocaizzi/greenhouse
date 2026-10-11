@@ -210,7 +210,8 @@ def test_inv4_learning_failure_or_alerts_never_change_the_decision(env, monkeypa
 
         def fake_detect(_self, _cluster_id, _mode=mode):
             if _mode == "raises":
-                raise RuntimeError("learner exploded")
+                msg = "learner exploded"
+                raise RuntimeError(msg)
             return [alert] if _mode == "alerts" else []
 
         monkeypatch.setattr(IrrigationLearner, "detect_issues", fake_detect)
@@ -383,7 +384,8 @@ def test_inv6_every_exit_branch_persists_exactly_one_decision_log(env, name, cod
     rows = _log_rows(env)
     assert len(rows) == 1
     row = rows[0]
-    assert decision.primary_code is code and decision.action is action
+    assert decision.primary_code is code
+    assert decision.action is action
     assert row.id == decision.decision_log_id
     assert (row.cluster_id, row.evaluated_at, row.triggered_by) == (cid, FROZEN_TS, "scheduler")
     assert (row.action, row.primary_code, row.reason_text) == (action.value, code.value, decision.reason_text)
@@ -422,7 +424,8 @@ def test_inv6_persistence_failure_never_blocks_the_decision(env, monkeypatch):
     cid, _, _ = _cluster(env)
 
     def boom(*_args, **_kwargs):
-        raise RuntimeError("db down")
+        msg = "db down"
+        raise RuntimeError(msg)
 
     monkeypatch.setattr(env, "add_decision_log", boom)
     decision = _logic(env).decide_for_cluster(cid, persist=True)

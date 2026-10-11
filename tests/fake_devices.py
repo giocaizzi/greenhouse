@@ -9,12 +9,15 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 from greenhouse_core.devices.health import DeviceHealthState, HealthAlarm
 from greenhouse_core.devices.irrigators.base import AbstractIrrigatorAdapter
 from greenhouse_core.devices.profile import IrrigatorProfile, SensorProfile
 from greenhouse_core.devices.sensors.base import AbstractSensorAdapter
-from greenhouse_core.models import Irrigator, Sensor
+
+if TYPE_CHECKING:
+    from greenhouse_core.models import Irrigator, Sensor
 
 FAKE_IRRIGATOR_PROFILE = IrrigatorProfile(
     model_key="fake.irrigator",

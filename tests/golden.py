@@ -41,7 +41,7 @@ class OfflineWeather:
     def get_current(self) -> None:
         """Return no current weather, like an unreachable Open-Meteo."""
 
-    def get_forecast(self, hours: int = 6) -> None:  # noqa: ARG002 — signature mirrors WeatherClient
+    def get_forecast(self, hours: int = 6) -> None:
         """Return no forecast, like an unreachable Open-Meteo."""
 
 
@@ -71,7 +71,8 @@ def assert_golden(name: str, actual: str) -> None:
         path.write_text(actual, encoding="utf-8")
         return
     if not path.exists():
-        raise AssertionError(f"golden file missing: {path} (create it with {UPDATE_ENV_VAR}=1)")
+        msg = f"golden file missing: {path} (create it with {UPDATE_ENV_VAR}=1)"
+        raise AssertionError(msg)
     expected = path.read_text(encoding="utf-8")
     if actual == expected:
         return
@@ -86,7 +87,8 @@ def assert_golden(name: str, actual: str) -> None:
     )
     shown = "\n".join(diff[:_MAX_DIFF_LINES])
     more = f"\n… {len(diff) - _MAX_DIFF_LINES} more diff lines" if len(diff) > _MAX_DIFF_LINES else ""
-    raise AssertionError(f"output differs from golden/{name}:\n{shown}{more}")
+    msg = f"output differs from golden/{name}:\n{shown}{more}"
+    raise AssertionError(msg)
 
 
 def assert_golden_json(name: str, value: Any) -> None:

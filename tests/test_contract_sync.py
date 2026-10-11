@@ -165,7 +165,7 @@ class TestBackfillAndDedup:
                     _log(t3, "light", 900),
                     _log(t3, "env_humidity", 61.0, offset_ms=100),
                     _log(t3, "battery_state", "middle", offset_ms=200),
-                    _log(t3, "water_warning", True, offset_ms=300),  # persisted from logs
+                    _log(t3, "water_warning", value=True, offset_ms=300),  # persisted from logs
                 ]
             }
         )

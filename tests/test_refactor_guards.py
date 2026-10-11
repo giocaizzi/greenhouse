@@ -87,7 +87,7 @@ def _tui_module_names() -> list[str]:
     import greenhouse_cli.tui as tui_pkg
 
     walked = pkgutil.walk_packages(tui_pkg.__path__, prefix=f"{tui_pkg.__name__}.")
-    return [tui_pkg.__name__] + sorted(m.name for m in walked)
+    return [tui_pkg.__name__, *sorted(m.name for m in walked)]
 
 
 # ── Guard 1 ──────────────────────────────────────────────────────────────────
@@ -100,7 +100,9 @@ def test_cli_entry_point_import_does_not_load_textual() -> None:
         "loaded = sorted(m for m in sys.modules if m.split('.')[0] == 'textual')\n"
         "print(','.join(loaded))\n"
     )
-    proc = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, timeout=120, cwd=ROOT)
+    proc = subprocess.run(  # noqa: S603 — fixed argv, the running interpreter
+        [sys.executable, "-c", code], capture_output=True, text=True, timeout=120, cwd=ROOT, check=False
+    )
     assert proc.returncode == 0, proc.stderr
     assert proc.stdout.strip() == "", f"textual modules loaded by `import greenhouse_cli.main`: {proc.stdout}"
 
@@ -110,12 +112,14 @@ def test_cli_entry_point_import_does_not_load_textual() -> None:
 
 def test_no_from_time_import_time_in_production_code() -> None:
     """Production code reads the clock as ``time.time()`` so tests can freeze it (Conventions: Clock)."""
-    offenders = []
-    for path in _production_files():
-        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
-            if isinstance(node, ast.ImportFrom) and node.module == "time":
-                if any(alias.name == "time" for alias in node.names):
-                    offenders.append(f"{path.relative_to(ROOT)}:{node.lineno}")
+    offenders = [
+        f"{path.relative_to(ROOT)}:{node.lineno}"
+        for path in _production_files()
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8")))
+        if isinstance(node, ast.ImportFrom)
+        and node.module == "time"
+        and any(alias.name == "time" for alias in node.names)
+    ]
     assert offenders == [], f"`from time import time` defeats the time.time patch seams: {offenders}"
 
 

@@ -29,6 +29,8 @@ class _KeyCloud:
 class _StrSub(str):
     """A ``str`` subclass (still JSON text to both parsers)."""
 
+    __slots__ = ()
+
 
 # (config input, expected parsed dict) — the config-borne key is "cfg" whenever the parse yields one.
 CASES = [

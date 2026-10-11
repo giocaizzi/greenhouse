@@ -51,7 +51,7 @@ class _HostApp(App):
         self.push_screen(self._screen_cls())
 
 
-def _reloads_in_half_a_second(auto_refresh: bool) -> int:
+def _reloads_in_half_a_second(*, auto_refresh: bool) -> int:
     reloads: list[int] = []
 
     class Probe(DataScreen):
@@ -126,6 +126,7 @@ def test_only_auto_refresh_screens_reload_on_a_timer():
 
     Settings and the other non-auto screens never poll.
     """
-    assert SettingsScreen.AUTO_REFRESH is False and DashboardScreen.AUTO_REFRESH is True
+    assert SettingsScreen.AUTO_REFRESH is False
+    assert DashboardScreen.AUTO_REFRESH is True
     assert _reloads_in_half_a_second(auto_refresh=False) == 1
     assert _reloads_in_half_a_second(auto_refresh=True) >= 2
