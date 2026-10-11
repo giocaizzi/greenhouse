@@ -116,6 +116,26 @@ def _parse_log_entry(log: dict[str, Any]) -> dict[str, Any]:
     return entry
 
 
+def _next_row_key(device_id: str, result: dict[str, Any], previous: str | None) -> str | None:
+    """Return the cursor for the next ``getdevicelog`` page, or ``None`` to stop paging.
+
+    Stops when the page failed (``success: false``, logged), when the server
+    reports no more rows or no cursor, and when the cursor repeats (logged) —
+    a repeated cursor would re-read the same page until the page cap.
+    """
+    if result.get("success") is False:
+        logger.warning("getdevicelog page for %s failed: %s", device_id, result)
+        return None
+    page = result.get("result") or {}
+    key: str | None = page.get("next_row_key")
+    if not page.get("has_next") or not key:
+        return None
+    if key == previous:
+        logger.warning("getdevicelog for %s repeated cursor %r; stopping", device_id, key)
+        return None
+    return key
+
+
 class DeviceGateway:
     """One Tuya boundary: a single ``tinytuya.Cloud`` plus a local-device factory.
 
@@ -222,15 +242,17 @@ class DeviceGateway:
         """Collect raw ``getdevicelog`` entries page by page (one request per page).
 
         ``max_fetches=1`` keeps tinytuya from paginating on its own, so every
-        Cloud request is issued (and countable) here.
+        Cloud request is issued (and countable) here. The window end is fixed
+        once, so every page of one cursor queries the same window.
         """
+        end_ms = int(time.time() * 1000)
         logs: list[dict[str, Any]] = []
         row_key: str | None = None
         for _ in range(max_pages):
             result = self._cloud.getdevicelog(
                 device_id,
                 start=since_ms,
-                end=0,
+                end=end_ms,
                 evtype=7,  # Status report events
                 size=page_size,
                 max_fetches=1,
@@ -238,9 +260,10 @@ class DeviceGateway:
             )
             page = result.get("result") or {}
             logs.extend(page.get("logs", []))
-            row_key = page.get("next_row_key")
-            if not page.get("has_next") or not row_key:
+            next_key = _next_row_key(device_id, result, row_key)
+            if next_key is None:
                 return logs
+            row_key = next_key
         logger.warning(
             "getdevicelog for %s still had rows after %d pages (%d entries); the window is not fully covered",
             device_id,

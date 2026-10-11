@@ -477,10 +477,10 @@ class TestLiveReadSingleCall:
 
 
 def _log_page_kwargs(start: int, *, size: int = 100, start_row_key: str | None = None) -> dict:
-    """The kwargs of one paginated ``getdevicelog`` request (tinytuya's own paging disabled)."""
+    """The kwargs of one paginated ``getdevicelog`` request (tinytuya's own paging disabled, end fixed at now)."""
     return {
         "start": start,
-        "end": 0,
+        "end": FROZEN_TS * 1000,
         "evtype": 7,
         "size": size,
         "max_fetches": 1,
@@ -598,8 +598,35 @@ class TestDeviceLogs:
         assert harness.gateway.get_device_logs(FAKE_SENSOR_ID, since_ms=0) == []
         assert len(harness.log) == 1
 
-    def test_page_cap_bounds_the_requests_and_warns(self, harness, caplog):
+    def test_repeated_cursor_stops_and_warns(self, harness, caplog):
         harness.cloud.set("getdevicelog", _log_page([("humidity", "40", 1_000)], has_next=True, next_row_key="again"))
+        with caplog.at_level(logging.WARNING, logger="greenhouse_core.devices.gateway"):
+            logs = harness.gateway.get_device_logs(FAKE_SENSOR_ID, since_ms=0)
+        assert [c[2]["start_row_key"] for c in harness.log] == [None, "again"]
+        assert len(logs) == 2
+        assert caplog.messages == [f"getdevicelog for {FAKE_SENSOR_ID} repeated cursor 'again'; stopping"]
+
+    def test_failed_page_stops_keeps_earlier_pages_and_warns(self, harness, caplog):
+        harness.cloud.set(
+            "getdevicelog",
+            Seq(
+                _log_page([("humidity", "40", 1_000)], has_next=True, next_row_key="k1"),
+                {"success": False, "code": 1010},
+            ),
+        )
+        with caplog.at_level(logging.WARNING, logger="greenhouse_core.devices.gateway"):
+            logs = harness.gateway.get_device_logs(FAKE_SENSOR_ID, since_ms=0)
+        assert len(harness.log) == 2
+        assert [e["value"] for e in logs] == [40.0]
+        assert caplog.messages == [f"getdevicelog page for {FAKE_SENSOR_ID} failed: {{'success': False, 'code': 1010}}"]
+
+    def test_page_cap_bounds_the_requests_and_warns(self, harness, caplog):
+        harness.cloud.set(
+            "getdevicelog",
+            Seq(
+                *(_log_page([("humidity", "40", 1_000)], has_next=True, next_row_key=f"k{i}") for i in range(3)),
+            ),
+        )
         with caplog.at_level(logging.WARNING, logger="greenhouse_core.devices.gateway"):
             logs = harness.gateway.get_device_logs(FAKE_SENSOR_ID, since_ms=0, max_pages=3)
         assert len(harness.log) == 3
