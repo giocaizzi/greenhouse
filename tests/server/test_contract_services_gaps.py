@@ -270,6 +270,27 @@ def test_insights_keep_only_the_first_alert_of_each_type(repo):
 # ── health_monitor.backfill_from_history ──────────────────────────────────────────
 
 
+def test_backfill_resolves_legacy_open_sensor_fault_alerts(repo):
+    """B-10 follow-up: a sensor_fault alert left open from before the fix is resolved at startup, once."""
+    _, _, (sid,) = _cluster_with_sensor(repo)
+    repo.upsert_alert(
+        dedup_key=f"health:sensor:{sid}:sensor_fault",
+        source="health",
+        code="sensor_fault",
+        title="Sensor Fault · Probe",
+        message="legacy",
+        severity="warning",
+        entity_type="sensor",
+        entity_id=sid,
+    )
+    repo.session.commit()
+    monitor = DeviceHealthMonitor(repo, DeviceRegistry(), clock=lambda: FROZEN_TS)
+    monitor.backfill_from_history()  # no readings at all: the sweep still runs
+    monitor.backfill_from_history()  # idempotent: nothing left to resolve, nothing raised
+    rows = [(a.dedup_key, a.status) for a in repo.session.query(Alert).all()]
+    assert rows == [(f"health:sensor:{sid}:sensor_fault", "resolved")]
+
+
 def test_backfill_does_not_re_raise_an_open_low_battery(repo):
     _, _, (sid,) = _cluster_with_sensor(repo)
     for k in range(5):

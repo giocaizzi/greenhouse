@@ -230,8 +230,13 @@ class DeviceHealthMonitor:
         signals are back-filled — transient ones (offline,
         signal-loss) must come from a live read. Prevents the server
         forgetting a known-bad battery state across a restart.
+
+        Also resolves any ``sensor_fault`` alert still open from before B-10
+        (when water_warning was mapped to it): nothing raises that alarm any
+        more, so without this it would stay open forever.
         """
         for sensor in self._repo.list_all_sensors():
+            self._resolve_health_alert(entity_type=ENTITY_SENSOR, entity_id=sensor.id, alarm=HealthAlarm.SENSOR_FAULT)
             readings = self._repo.get_recent_readings(sensor.id, hours=SENSOR_HEALTH_BACKFILL_HOURS)
             if not readings:
                 continue
