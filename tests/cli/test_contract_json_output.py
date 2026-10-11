@@ -119,7 +119,7 @@ CLI_CASES: list[Case] = [
     C("check.all", "check", "--all"),
     C("check.cluster_and_all_prefers_all", "check", "3", "--all"),
     C("check.no_target_exits_1", "check"),
-    C("check.cluster_zero_current_behavior", "check", "0"),
+    C("check.cluster_zero_is_an_id", "check", "0"),
     C(
         "check.has_alerts_exits_2",
         "check",
@@ -386,12 +386,12 @@ CLI_CASES: list[Case] = [
         },
     ),
     C(
-        "plant.list.cluster_zero_current_behavior_lists_all",
+        "plant.list.cluster_zero_is_an_id",
         "plant",
         "list",
         "--cluster",
         "0",
-        routes={("GET", f"{P}/clusters"): (200, [])},
+        routes={("GET", f"{P}/clusters/0/plants"): (404, {"detail": "Cluster 0 not found"})},
     ),
     C("plant.sync.defaults", "plant", "sync"),
     C("plant.sync.options", "plant", "sync", "--plant-id", "5", "--cluster", "2"),
@@ -538,12 +538,12 @@ CLI_CASES: list[Case] = [
         },
     ),
     C(
-        "sensor.list.cluster_zero_current_behavior_lists_all",
+        "sensor.list.cluster_zero_is_an_id",
         "sensor",
         "list",
         "--cluster",
         "0",
-        routes={("GET", f"{P}/clusters"): (200, [])},
+        routes={("GET", f"{P}/clusters/0/sensors"): (404, {"detail": "Cluster 0 not found"})},
     ),
     C("sensor.update.no_fields", "sensor", "update", "20", "--cluster", "2"),
     C(

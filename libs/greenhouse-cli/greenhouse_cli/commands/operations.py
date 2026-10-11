@@ -34,7 +34,7 @@ def check(
     all_clusters: Annotated[bool, typer.Option("--all", help="Check all clusters")] = False,
 ) -> None:
     """Unified check: irrigate or monitor + collect all alerts."""
-    if not cluster and not all_clusters:
+    if cluster is None and not all_clusters:
         typer.echo("Error: provide a cluster ID or --all", err=True)
         raise typer.Exit(1)
 

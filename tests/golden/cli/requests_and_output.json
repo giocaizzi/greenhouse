@@ -468,21 +468,39 @@
    "token_file_after": null,
    "token_file_before": null
   },
-  "check.cluster_zero_current_behavior": {
+  "check.cluster_zero_is_an_id": {
    "argv": [
     "greenhouse",
     "check",
     "0"
    ],
-   "clients": [],
+   "clients": [
+    {
+     "base_url": "http://localhost:8000",
+     "headers": {},
+     "timeout": 30.0
+    }
+   ],
    "env": {},
    "exception": null,
-   "exit_code": 1,
+   "exit_code": 0,
    "files": {},
    "input": null,
-   "requests": [],
-   "stderr": "Error: provide a cluster ID or --all\n",
-   "stdout": "",
+   "requests": [
+    {
+     "authorization": null,
+     "content": null,
+     "content_type": null,
+     "json": null,
+     "method": "POST",
+     "path": "/api/v1/clusters/0/check",
+     "query": [],
+     "raw_path": "/api/v1/clusters/0/check",
+     "url": "http://localhost:8000/api/v1/clusters/0/check"
+    }
+   ],
+   "stderr": "",
+   "stdout": "{\n  \"echo\": \"POST /api/v1/clusters/0/check\",\n  \"ok\": true\n}\n",
    "token_file_after": null,
    "token_file_before": null
   },
@@ -3685,7 +3703,7 @@
    "token_file_after": null,
    "token_file_before": null
   },
-  "plant.list.cluster_zero_current_behavior_lists_all": {
+  "plant.list.cluster_zero_is_an_id": {
    "argv": [
     "greenhouse",
     "plant",
@@ -3702,7 +3720,7 @@
    ],
    "env": {},
    "exception": null,
-   "exit_code": 0,
+   "exit_code": 1,
    "files": {},
    "input": null,
    "requests": [
@@ -3712,13 +3730,13 @@
      "content_type": null,
      "json": null,
      "method": "GET",
-     "path": "/api/v1/clusters",
+     "path": "/api/v1/clusters/0/plants",
      "query": [],
-     "raw_path": "/api/v1/clusters",
-     "url": "http://localhost:8000/api/v1/clusters"
+     "raw_path": "/api/v1/clusters/0/plants",
+     "url": "http://localhost:8000/api/v1/clusters/0/plants"
     }
    ],
-   "stderr": "",
+   "stderr": "Error: Cluster 0 not found\n",
    "stdout": "",
    "token_file_after": null,
    "token_file_before": null
@@ -4514,7 +4532,7 @@
    "token_file_after": null,
    "token_file_before": null
   },
-  "sensor.list.cluster_zero_current_behavior_lists_all": {
+  "sensor.list.cluster_zero_is_an_id": {
    "argv": [
     "greenhouse",
     "sensor",
@@ -4531,7 +4549,7 @@
    ],
    "env": {},
    "exception": null,
-   "exit_code": 0,
+   "exit_code": 1,
    "files": {},
    "input": null,
    "requests": [
@@ -4541,13 +4559,13 @@
      "content_type": null,
      "json": null,
      "method": "GET",
-     "path": "/api/v1/clusters",
+     "path": "/api/v1/clusters/0/sensors",
      "query": [],
-     "raw_path": "/api/v1/clusters",
-     "url": "http://localhost:8000/api/v1/clusters"
+     "raw_path": "/api/v1/clusters/0/sensors",
+     "url": "http://localhost:8000/api/v1/clusters/0/sensors"
     }
    ],
-   "stderr": "",
+   "stderr": "Error: Cluster 0 not found\n",
    "stdout": "",
    "token_file_after": null,
    "token_file_before": null

@@ -54,7 +54,7 @@ def plant_list(
     cluster: ClusterFilterOpt = None,
 ) -> None:
     """List plants."""
-    if cluster:
+    if cluster is not None:
         output(call(ctx, lambda c: c.list_plants(cluster)))
     else:
         clusters = call(ctx, lambda c: c.list_clusters())

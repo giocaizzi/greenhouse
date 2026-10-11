@@ -31,7 +31,7 @@ def sensor_list(
     cluster: ClusterFilterOpt = None,
 ) -> None:
     """List sensors."""
-    if cluster:
+    if cluster is not None:
         output(call(ctx, lambda c: c.list_sensors(cluster)))
     else:
         clusters = call(ctx, lambda c: c.list_clusters())
