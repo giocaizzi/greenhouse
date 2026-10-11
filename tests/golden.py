@@ -21,9 +21,12 @@ import json
 import os
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING
 
 from greenhouse_server.deps import get_weather_client
+
+if TYPE_CHECKING:
+    from fastapi import FastAPI
 
 GOLDEN_DIR = Path(__file__).parent / "golden"
 UPDATE_ENV_VAR = "GOLDEN_UPDATE"
@@ -47,7 +50,7 @@ class OfflineWeather:
         """Return no forecast, like an unreachable Open-Meteo."""
 
 
-def install_offline_weather(app: Any) -> OfflineWeather:
+def install_offline_weather(app: FastAPI) -> OfflineWeather:
     """Replace the app's weather client (state + dependency) with :class:`OfflineWeather`."""
     stub = OfflineWeather()
     app.state.weather_client = stub
@@ -55,7 +58,7 @@ def install_offline_weather(app: Any) -> OfflineWeather:
     return stub
 
 
-def to_canonical_json(value: Any) -> str:
+def to_canonical_json(value: object) -> str:
     """Serialize ``value`` deterministically (sorted keys, stable indentation, trailing newline)."""
     return json.dumps(value, sort_keys=True, indent=1, ensure_ascii=False, default=str) + "\n"
 
@@ -91,6 +94,6 @@ def assert_golden(name: str, actual: str) -> None:
     raise AssertionError(msg)
 
 
-def assert_golden_json(name: str, value: Any) -> None:
+def assert_golden_json(name: str, value: object) -> None:
     """Assert the canonical JSON form of ``value`` equals ``tests/golden/<name>``."""
     assert_golden(name, to_canonical_json(value))
