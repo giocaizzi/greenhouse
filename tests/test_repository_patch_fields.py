@@ -10,6 +10,7 @@ from greenhouse_core.models import Cluster, Plant, UserPreferences
 
 
 def test_update_cluster_none_clears_nullable_skips_required_ignores_unknown_keys(tmp_db):
+    """Cluster PATCH: None clears nullable fields, skips required ones and unknown keys are ignored."""
     cluster_id = tmp_db.add_cluster("Patch Cluster", "Shelf")
 
     updated = tmp_db.update_cluster(cluster_id, name=None, location=None, bogus_field="x", environment="outdoor")
@@ -20,6 +21,7 @@ def test_update_cluster_none_clears_nullable_skips_required_ignores_unknown_keys
 
 
 def test_update_cluster_absent_keys_are_unchanged(tmp_db):
+    """Cluster PATCH leaves absent keys unchanged."""
     cluster_id = tmp_db.add_cluster("Patch Cluster", "Shelf")
 
     updated = tmp_db.update_cluster(cluster_id, environment="outdoor")
@@ -28,6 +30,7 @@ def test_update_cluster_absent_keys_are_unchanged(tmp_db):
 
 
 def test_update_plant_none_clears_nullable_and_sets_the_rest(tmp_db):
+    """Plant PATCH: None clears nullable fields and the other values are set."""
     cluster_id = tmp_db.add_cluster("Patch Cluster")
     plant_id = tmp_db.add_plant(cluster_id, "Monstera deliciosa")
     tmp_db.update_plant(plant_id, notes="kept", ideal_temp_min=18.0)
@@ -40,6 +43,7 @@ def test_update_plant_none_clears_nullable_and_sets_the_rest(tmp_db):
 
 
 def test_update_preferences_none_skips_required_clears_nullable(tmp_db):
+    """Preferences PATCH: None skips required fields and clears nullable ones."""
     cluster_id = tmp_db.add_cluster("Patch Cluster")
     tmp_db.update_preferences(theme="dark", default_cluster_id=cluster_id)
 
@@ -53,6 +57,7 @@ def test_update_preferences_none_skips_required_clears_nullable(tmp_db):
 
 
 def test_update_vacation_window_none_clears_notes_and_email_keeps_bounds(tmp_db):
+    """Vacation PATCH: None clears notes and email but keeps the time bounds."""
     window = tmp_db.add_vacation_window(1_000, 2_000, contact_email="a@example.invalid", notes="trip")
 
     updated = tmp_db.update_vacation_window(window.id, starts_at=None, notes=None, contact_email=None)

@@ -232,6 +232,7 @@ def test_screen_render_golden(captures, name):
 
 
 def test_tour_covers_exactly_the_named_screens(captures):
+    """The screen tour captures exactly the named screens, no more and no fewer."""
     assert sorted(captures) == sorted(SCREEN_NAMES)
 
 

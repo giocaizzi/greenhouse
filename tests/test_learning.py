@@ -22,6 +22,7 @@ class TestIrrigationLearner:
 
     @pytest.fixture(autouse=True)
     def setup(self, tmp_db):
+        """Seed a cluster with a plant and an irrigator for the learner."""
         self.db = tmp_db
         self.learner = IrrigationLearner(self.db, get_plant_database())
 
@@ -354,6 +355,7 @@ class TestIssueHeuristics:
 
     @pytest.fixture(autouse=True)
     def setup(self, tmp_db):
+        """Seed a cluster with a plant, an irrigator and a sensor for the issue heuristics."""
         self.db = tmp_db
         self.learner = IrrigationLearner(self.db, get_plant_database())
 

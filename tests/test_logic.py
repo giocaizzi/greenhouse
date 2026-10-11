@@ -33,6 +33,7 @@ class TestIrrigationLogic:
 
     @pytest.fixture(autouse=True)
     def setup(self, tmp_db):
+        """Seed one cluster with a medium-needs plant and its ideal ranges for each test."""
         self.db = tmp_db
         self.logic = IrrigationLogic(self.db, get_plant_database())
         self.cluster_id = self.db.add_cluster(FAKE_CLUSTER_NAME)
@@ -623,6 +624,7 @@ class TestCooldownSemantics:
 
     @pytest.fixture(autouse=True)
     def setup(self, tmp_db):
+        """Seed a cluster with a plant and an irrigator to exercise the cooldown."""
         self.db = tmp_db
         self.logic = IrrigationLogic(self.db, get_plant_database())
         self.cluster_id = self.db.add_cluster("Cooldown Semantics")
@@ -695,6 +697,7 @@ class TestWeatherSkipRule:
 
     @pytest.fixture(autouse=True)
     def setup(self, tmp_db):
+        """Bind the test database and the plant database for each test."""
         self.db = tmp_db
         self.plant_db = get_plant_database()
 
@@ -915,8 +918,10 @@ def test_emergency_triggers_obey_the_vacation_budget(tmp_db, frozen_clock):
 
 
 def test_water_warning_reads_only_the_newest_reading_per_sensor(tmp_db, frozen_clock):
-    """The newest reading that carries ``water_warning`` decides: an old True followed by a newer False does not
-    trigger, and a newer row without the flag changes nothing."""
+    """The newest reading that carries ``water_warning`` decides.
+
+    An old True followed by a newer False does not trigger, and a newer row without the flag changes nothing.
+    """
     cid = tmp_db.add_cluster("Warn")
     tmp_db.add_plant(cluster_id=cid, species="Monstera deliciosa", category="tropical")
     sid = tmp_db.add_sensor(cluster_id=cid, tuya_device_id=FAKE_SENSOR_ID, name="S", sensor_type="x", config={})
@@ -939,8 +944,10 @@ def test_water_warning_reads_only_the_newest_reading_per_sensor(tmp_db, frozen_c
 
 
 def test_stale_water_warning_does_not_trigger(tmp_db, frozen_clock):
-    """A flag last reported longer ago than SENSOR_READING_STALE_SECONDS comes from a silent sensor: it does not
-    irrigate, while fresh sensors keep deciding (one-line staleness rule shared with the soil value)."""
+    """A flag older than SENSOR_READING_STALE_SECONDS comes from a silent sensor and does not irrigate.
+
+    Fresh sensors keep deciding (one-line staleness rule shared with the soil value).
+    """
     cid = tmp_db.add_cluster("Stale alarm")
     tmp_db.add_plant(cluster_id=cid, species="Monstera deliciosa", category="tropical")
     silent = tmp_db.add_sensor(cluster_id=cid, tuya_device_id=FAKE_SENSOR_ID, name="Silent", sensor_type="x", config={})

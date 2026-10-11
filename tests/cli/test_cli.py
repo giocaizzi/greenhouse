@@ -56,7 +56,10 @@ def _patch_client(monkeypatch):
 
 
 class TestClusterCommands:
+    """``greenhouse cluster`` sub-app requests and output."""
+
     def test_cluster_list(self, _patch_client):
+        """``cluster list`` prints the server's cluster list as JSON."""
         _patch_client(
             {
                 ("GET", "/api/v1/clusters"): (200, [{"id": 1, "name": "Test", "environment": "indoor"}]),
@@ -69,6 +72,7 @@ class TestClusterCommands:
         assert data[0]["name"] == "Test"
 
     def test_cluster_add(self, _patch_client):
+        """``cluster add`` posts the new cluster and prints the created row."""
         _patch_client(
             {
                 ("POST", "/api/v1/clusters"): (
@@ -83,7 +87,10 @@ class TestClusterCommands:
 
 
 class TestOperationCommands:
+    """Top-level operation commands (status, irrigate, check, monitor, sync, history, health)."""
+
     def test_status(self, _patch_client):
+        """``status`` prints the cluster status payload."""
         _patch_client(
             {
                 ("GET", "/api/v1/clusters/1/status"): (
@@ -104,6 +111,7 @@ class TestOperationCommands:
         assert "C1" in result.stdout
 
     def test_irrigate_dry_run(self, _patch_client):
+        """``irrigate --dry-run`` prints the engine's decision (here a skip)."""
         _patch_client(
             {
                 ("POST", "/api/v1/clusters/1/irrigate"): (
@@ -117,6 +125,7 @@ class TestOperationCommands:
         assert "skip" in result.stdout
 
     def test_irrigate_with_temp(self, _patch_client):
+        """``irrigate --temp`` is accepted and the command succeeds."""
         _patch_client(
             {
                 ("POST", "/api/v1/clusters/1/irrigate"): (
@@ -129,6 +138,7 @@ class TestOperationCommands:
         assert result.exit_code == 0
 
     def test_check_all(self, _patch_client):
+        """``check --all`` posts to the global check endpoint and exits 0 without alerts."""
         _patch_client(
             {
                 ("POST", "/api/v1/check"): (200, {"results": [], "has_alerts": False}),
@@ -138,6 +148,7 @@ class TestOperationCommands:
         assert result.exit_code == 0
 
     def test_check_single(self, _patch_client):
+        """``check`` with a cluster id posts to that cluster's check endpoint."""
         _patch_client(
             {
                 ("POST", "/api/v1/clusters/1/check"): (
@@ -150,6 +161,7 @@ class TestOperationCommands:
         assert result.exit_code == 0
 
     def test_monitor(self, _patch_client):
+        """``monitor`` reads the cluster monitor endpoint."""
         _patch_client(
             {
                 ("GET", "/api/v1/clusters/1/monitor"): (
@@ -162,6 +174,7 @@ class TestOperationCommands:
         assert result.exit_code == 0
 
     def test_sync(self, _patch_client):
+        """``sync`` posts the sensor sync and prints its counters."""
         _patch_client(
             {
                 ("POST", "/api/v1/sync"): (200, {"total_synced": 10, "total_new": 3, "total_live": 1, "errors": []}),
@@ -172,6 +185,7 @@ class TestOperationCommands:
         assert "3" in result.stdout
 
     def test_history(self, _patch_client):
+        """``history`` reads the cluster's irrigation history."""
         _patch_client(
             {
                 ("GET", "/api/v1/clusters/1/history"): (
@@ -184,6 +198,7 @@ class TestOperationCommands:
         assert result.exit_code == 0
 
     def test_health(self, _patch_client):
+        """``health`` prints the server health payload."""
         _patch_client(
             {
                 ("GET", "/api/v1/health"): (200, {"status": "ok", "scheduler_running": True, "jobs": []}),
@@ -195,7 +210,10 @@ class TestOperationCommands:
 
 
 class TestPlantCommands:
+    """``greenhouse plant move`` outcomes."""
+
     def test_plant_move_happy_path(self, _patch_client):
+        """Moving a plant posts the target cluster and prints the moved plant."""
         _patch_client(
             {
                 ("POST", "/api/v1/plants/7/move"): (
@@ -211,6 +229,7 @@ class TestPlantCommands:
         assert data["cluster_id"] == 3
 
     def test_plant_move_missing_plant(self, _patch_client):
+        """A 404 for an unknown plant exits 1 with the server's message."""
         _patch_client(
             {
                 ("POST", "/api/v1/plants/999/move"): (404, {"detail": "Plant not found"}),
@@ -221,6 +240,7 @@ class TestPlantCommands:
         assert "not found" in result.output.lower()
 
     def test_plant_move_same_cluster(self, _patch_client):
+        """A 400 for a move into the same cluster exits 1 with the server's message."""
         _patch_client(
             {
                 ("POST", "/api/v1/plants/7/move"): (
@@ -235,7 +255,10 @@ class TestPlantCommands:
 
 
 class TestErrorHandling:
+    """Exit codes for server errors and alerting results."""
+
     def test_server_404(self, _patch_client):
+        """A 404 from the server exits 1 and reports the detail on stderr."""
         _patch_client(
             {
                 ("GET", "/api/v1/clusters/999/status"): (404, {"detail": "Cluster not found"}),
@@ -254,6 +277,7 @@ class TestErrorHandling:
         assert "connect" in result.output.lower() or "error" in result.output.lower()
 
     def test_check_with_alerts_exits_2(self, _patch_client):
+        """``check --all`` exits 2 when the server reports alerts, so scripts can react."""
         _patch_client(
             {
                 ("POST", "/api/v1/check"): (200, {"results": [{"alerts": ["low"]}], "has_alerts": True}),
@@ -263,6 +287,7 @@ class TestErrorHandling:
         assert result.exit_code == 2
 
     def test_monitor_needs_water_exits_2(self, _patch_client):
+        """``monitor`` exits 2 when a plant needs water."""
         _patch_client(
             {
                 ("GET", "/api/v1/clusters/1/monitor"): (
@@ -276,6 +301,8 @@ class TestErrorHandling:
 
 
 class TestClientLifecycle:
+    """The HTTP client is always closed after a command."""
+
     @pytest.mark.parametrize(("status", "exit_code"), [(200, 0), (404, 1)])
     def test_call_closes_the_client_it_opened(self, monkeypatch, status, exit_code):
         """Every CLI call closes its HTTP client, on success and on a server error."""
@@ -296,7 +323,10 @@ class TestClientLifecycle:
 
 
 class TestServerFlag:
+    """The root ``--server`` option."""
+
     def test_custom_server_url(self, _patch_client):
+        """``--server`` overrides the default server URL."""
         _patch_client(
             {
                 ("GET", "/api/v1/clusters"): (200, []),
@@ -307,7 +337,10 @@ class TestServerFlag:
 
 
 class TestSchedulerCommands:
+    """``greenhouse scheduler`` sub-app."""
+
     def test_pause(self, _patch_client):
+        """``scheduler pause`` posts the pause request."""
         _patch_client(
             {
                 ("POST", "/api/v1/scheduler/pause"): (200, {"paused": True}),
@@ -318,6 +351,7 @@ class TestSchedulerCommands:
         assert json.loads(result.stdout) == {"paused": True}
 
     def test_resume(self, _patch_client):
+        """``scheduler resume`` posts the resume request."""
         _patch_client(
             {
                 ("POST", "/api/v1/scheduler/resume"): (200, {"paused": False}),
@@ -328,6 +362,7 @@ class TestSchedulerCommands:
         assert json.loads(result.stdout) == {"paused": False}
 
     def test_status_lists_jobs(self, _patch_client):
+        """``scheduler status`` lists the scheduler's jobs."""
         _patch_client(
             {
                 ("GET", "/api/v1/scheduler/jobs"): (
@@ -351,6 +386,7 @@ class TestSchedulerCommands:
         assert data[0]["paused"] is True
 
     def test_pause_server_error_exits_1(self, _patch_client):
+        """A server error on pause exits 1 with the server's message."""
         _patch_client(
             {
                 ("POST", "/api/v1/scheduler/pause"): (404, {"detail": "Job check_all not found"}),
@@ -394,7 +430,10 @@ def _patch_capture(monkeypatch):
 
 
 class TestConfigCommands:
+    """``greenhouse config`` and ``config global`` sub-apps."""
+
     def test_set_forwards_quiet_hours_and_caps(self, _patch_capture):
+        """``config set`` forwards quiet hours and the daily cap under their API field names."""
         captured = _patch_capture({("PUT", "/api/v1/clusters/1/config"): (200, {"id": 1, "cluster_id": 1})})
         result = runner.invoke(
             app,
@@ -404,6 +443,7 @@ class TestConfigCommands:
         assert captured[0]["json"] == {"quiet_start_hour": 0, "quiet_end_hour": 5, "daily_cap_minutes": 30}
 
     def test_set_omits_unset_fields(self, _patch_capture):
+        """Options left unset are not sent, so the server keeps their current values."""
         captured = _patch_capture({("PUT", "/api/v1/clusters/1/config"): (200, {"id": 1, "cluster_id": 1})})
         result = runner.invoke(app, ["config", "set", "--cluster", "1", "--mode", "smart"])
         assert result.exit_code == 0
@@ -411,6 +451,7 @@ class TestConfigCommands:
         assert captured[0]["json"] == {"mode": "smart"}
 
     def test_effective_reads_merged_config(self, _patch_client):
+        """``config effective`` reads the merged (cluster over global) config."""
         _patch_client(
             {
                 ("GET", "/api/v1/clusters/1/config/effective"): (
@@ -429,12 +470,14 @@ class TestConfigCommands:
         assert data["effective"]["quiet_start_hour"]["source"] == "global"
 
     def test_global_get(self, _patch_client):
+        """``config global get`` prints the global config."""
         _patch_client({("GET", "/api/v1/config/global"): (200, {"id": 1, "quiet_start_hour": 0, "quiet_end_hour": 5})})
         result = runner.invoke(app, ["config", "global", "get"])
         assert result.exit_code == 0
         assert json.loads(result.stdout)["quiet_end_hour"] == 5
 
     def test_global_set_forwards_only_given_fields(self, _patch_capture):
+        """``config global set`` sends only the fields given on the command line."""
         captured = _patch_capture({("PUT", "/api/v1/config/global"): (200, {"id": 1})})
         result = runner.invoke(app, ["config", "global", "set", "--quiet-start", "1", "--quiet-end", "6"])
         assert result.exit_code == 0
@@ -442,13 +485,17 @@ class TestConfigCommands:
 
 
 class TestIrrigateForce:
+    """The ``irrigate --force`` flag."""
+
     def test_force_flag_forwarded(self, _patch_capture):
+        """``--force`` is forwarded as ``force: true``."""
         captured = _patch_capture({("POST", "/api/v1/clusters/1/irrigate"): (200, {"action": "irrigate"})})
         result = runner.invoke(app, ["irrigate", "1", "--force"])
         assert result.exit_code == 0
         assert captured[0]["json"]["force"] is True
 
     def test_force_defaults_false(self, _patch_capture):
+        """Without ``--force`` the request carries ``force: false``."""
         captured = _patch_capture({("POST", "/api/v1/clusters/1/irrigate"): (200, {"action": "skip"})})
         result = runner.invoke(app, ["irrigate", "1"])
         assert result.exit_code == 0
@@ -459,6 +506,7 @@ class TestIrrigatorCapacity:
     """Irrigator add/update forward the reservoir + flow-rate capacity fields."""
 
     def test_add_forwards_capacity_fields(self, _patch_capture):
+        """``irrigator add`` forwards the reservoir and flow-rate options."""
         captured = _patch_capture({("POST", "/api/v1/clusters/1/irrigator"): (201, {"id": 7})})
         result = runner.invoke(
             app,
@@ -485,6 +533,7 @@ class TestIrrigatorCapacity:
         assert body["flow_rate_l_per_min"] == 1.5
 
     def test_add_omits_capacity_when_unset(self, _patch_capture):
+        """``irrigator add`` leaves the capacity fields out when they are not given."""
         captured = _patch_capture({("POST", "/api/v1/clusters/1/irrigator"): (201, {"id": 7})})
         result = runner.invoke(
             app,
@@ -507,6 +556,7 @@ class TestIrrigatorCapacity:
         assert "flow_rate_l_per_min" not in body
 
     def test_update_forwards_capacity_fields(self, _patch_capture):
+        """``irrigator update`` forwards the reservoir and flow-rate options."""
         captured = _patch_capture({("PUT", "/api/v1/clusters/1/irrigator"): (200, {"id": 7})})
         result = runner.invoke(
             app,
@@ -526,6 +576,7 @@ class TestIrrigatorCapacity:
         assert body["flow_rate_l_per_min"] == 2
 
     def test_update_omits_capacity_when_unset(self, _patch_capture):
+        """``irrigator update`` leaves the capacity fields out when they are not given."""
         captured = _patch_capture({("PUT", "/api/v1/clusters/1/irrigator"): (200, {"id": 7})})
         result = runner.invoke(app, ["irrigator", "update", "1", "--name", "Renamed"])
         assert result.exit_code == 0
@@ -537,6 +588,7 @@ class TestIrrigatorCommands:
     """Cluster-keyed irrigator CRUD hits the singular routes."""
 
     def test_list_global(self, _patch_client):
+        """``irrigator list`` without a cluster lists every irrigator."""
         _patch_client({("GET", "/api/v1/irrigators"): (200, [{"id": 7, "name": "Pump", "cluster_id": 1}])})
         result = runner.invoke(app, ["irrigator", "list"])
         assert result.exit_code == 0
@@ -544,6 +596,7 @@ class TestIrrigatorCommands:
         assert data[0]["id"] == 7
 
     def test_show(self, _patch_capture):
+        """``irrigator show`` reads the cluster's irrigator."""
         captured = _patch_capture({("GET", "/api/v1/clusters/1/irrigator"): (200, {"id": 7, "name": "Pump"})})
         result = runner.invoke(app, ["irrigator", "show", "1"])
         assert result.exit_code == 0
@@ -552,12 +605,14 @@ class TestIrrigatorCommands:
         assert "Pump" in result.stdout
 
     def test_show_404_exits_nonzero(self, _patch_capture):
+        """A missing irrigator exits 1 with the server's message."""
         _patch_capture({("GET", "/api/v1/clusters/9/irrigator"): (404, {"detail": "no irrigator"})})
         result = runner.invoke(app, ["irrigator", "show", "9"])
         assert result.exit_code == 1
         assert "no irrigator" in result.stderr
 
     def test_add_conflict_exits_nonzero(self, _patch_capture):
+        """Adding a second irrigator to a cluster exits 1 on the server's 409."""
         _patch_capture(
             {("POST", "/api/v1/clusters/1/irrigator"): (409, {"detail": "cluster already has an irrigator"})}
         )
@@ -580,17 +635,20 @@ class TestIrrigatorCommands:
         assert "already has an irrigator" in result.stderr
 
     def test_update_targets_cluster_path(self, _patch_capture):
+        """``irrigator update`` addresses the irrigator through its cluster."""
         captured = _patch_capture({("PUT", "/api/v1/clusters/1/irrigator"): (200, {"id": 7})})
         result = runner.invoke(app, ["irrigator", "update", "1", "--name", "Renamed"])
         assert result.exit_code == 0
         assert captured[0]["path"] == "/api/v1/clusters/1/irrigator"
 
     def test_update_404_exits_nonzero(self, _patch_capture):
+        """Updating a missing irrigator exits 1."""
         _patch_capture({("PUT", "/api/v1/clusters/9/irrigator"): (404, {"detail": "no irrigator"})})
         result = runner.invoke(app, ["irrigator", "update", "9", "--name", "Renamed"])
         assert result.exit_code == 1
 
     def test_delete_targets_cluster_path(self, _patch_capture):
+        """``irrigator delete`` sends a DELETE on the cluster's irrigator path."""
         captured = _patch_capture({("DELETE", "/api/v1/clusters/1/irrigator"): (200, {"deleted": True})})
         result = runner.invoke(app, ["irrigator", "delete", "1", "--yes"])
         assert result.exit_code == 0
@@ -598,11 +656,13 @@ class TestIrrigatorCommands:
         assert captured[0]["path"] == "/api/v1/clusters/1/irrigator"
 
     def test_delete_404_exits_nonzero(self, _patch_capture):
+        """Deleting a missing irrigator exits 1."""
         _patch_capture({("DELETE", "/api/v1/clusters/9/irrigator"): (404, {"detail": "no irrigator"})})
         result = runner.invoke(app, ["irrigator", "delete", "9", "--yes"])
         assert result.exit_code == 1
 
     def test_start_unchanged_by_id(self, _patch_capture):
+        """``irrigator start`` still addresses the irrigator by its own id."""
         captured = _patch_capture({("POST", "/api/v1/irrigators/7/start"): (200, {"status": "ok"})})
         result = runner.invoke(app, ["irrigator", "start", "7", "--minutes", "5"])
         assert result.exit_code == 0

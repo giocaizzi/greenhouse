@@ -10,6 +10,7 @@ class TestPlantDatabase:
 
     @pytest.fixture(autouse=True)
     def setup(self):
+        """Load the bundled plant database and reset the singleton afterwards."""
         self.db = get_plant_database()
         yield
         reset_plant_database()

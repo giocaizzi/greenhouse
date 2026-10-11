@@ -40,6 +40,7 @@ def _vals(cleaned, field="soil_moisture"):
 
 
 def test_returns_cleaned_readings_sorted_oldest_first():
+    """Cleaning returns ``CleanedReading`` rows sorted oldest first."""
     raw = [_Raw(timestamp=300, soil_moisture=50.0), _Raw(timestamp=100, soil_moisture=40.0)]
     cleaned = clean_readings(raw)
     assert all(isinstance(c, CleanedReading) for c in cleaned)
@@ -47,6 +48,7 @@ def test_returns_cleaned_readings_sorted_oldest_first():
 
 
 def test_range_gate_drops_out_of_range_values():
+    """Physically impossible values are dropped while valid neighbours are kept."""
     # Humidity of 250% is physically impossible -> dropped; valid neighbours kept.
     raw = _series([55.0, 250.0, 56.0, -5.0, 54.0], field="env_humidity")
     cleaned = clean_readings(raw)
@@ -54,6 +56,7 @@ def test_range_gate_drops_out_of_range_values():
 
 
 def test_spike_is_rejected():
+    """A lone spike inside a steady series is rejected."""
     # A lone spike to 5% inside a steady ~50% series is a classic probe glitch.
     values = [50.0, 51.0, 49.0, 50.0, 5.0, 51.0, 50.0, 49.0]
     cleaned = clean_readings(_series(values))
@@ -64,6 +67,7 @@ def test_spike_is_rejected():
 
 
 def test_lone_zero_among_healthy_is_rejected_as_spike():
+    """A lone in-range 0 among healthy readings is a disconnected probe, not dry soil."""
     # A disconnected-probe 0.0 sits in-range but is a spike against healthy soil.
     values = [45.0, 46.0, 44.0, 45.0, 0.0, 46.0, 45.0, 44.0]
     cleaned = clean_readings(_series(values))
@@ -71,6 +75,7 @@ def test_lone_zero_among_healthy_is_rejected_as_spike():
 
 
 def test_genuine_step_change_survives_flat_run():
+    """A real step after a flat run survives even though the MAD is near zero."""
     # Flat run then a real shift after irrigation: MAD≈0 must NOT shred the step.
     values = [40.0, 40.0, 40.0, 40.0, 40.0, 65.0, 65.0, 65.0, 65.0, 65.0]
     cleaned = clean_readings(_series(values))
@@ -78,6 +83,7 @@ def test_genuine_step_change_survives_flat_run():
 
 
 def test_genuine_dry_down_to_zero_survives():
+    """A gradual dry-down to 0 % is kept."""
     # A real, gradual dry-down ending at 0% (bone dry) must be preserved.
     values = [40.0, 32.0, 24.0, 16.0, 8.0, 0.0]
     cleaned = clean_readings(_series(values))
@@ -85,6 +91,7 @@ def test_genuine_dry_down_to_zero_survives():
 
 
 def test_short_series_rejects_a_lone_spike():
+    """Series too short for Hampel still reject an interior sample that jumped away and back."""
     # Too short for Hampel (3–4 points): an interior sample that jumped away from both
     # neighbours (and reverted) is a spike.
     assert _vals(clean_readings(_series([55.0, 55.0, 10.0, 55.0]))) == [55.0, 55.0, None, 55.0]
@@ -92,6 +99,7 @@ def test_short_series_rejects_a_lone_spike():
 
 
 def test_short_series_keeps_steps_trends_and_unconfirmed_end_points():
+    """Short series keep steps, trends and end points that cannot be judged."""
     # A step keeps its new level, so its first sample has a same-side neighbour; a trend
     # sits between its neighbours; the end points have one neighbour and are not judged.
     for values in ([40.0, 40.0, 60.0, 60.0], [30.0, 40.0, 50.0], [55.0, 55.0, 55.0, 10.0], [10.0, 55.0, 55.0]):
@@ -99,6 +107,7 @@ def test_short_series_keeps_steps_trends_and_unconfirmed_end_points():
 
 
 def test_too_few_readings_skip_spike_filter():
+    """Below the minimum length, no spike filtering is attempted."""
     # Below the minimum, there's not enough context to call anything a spike.
     values = [50.0, 10.0, 50.0][: CLEANING_SHORT_SERIES_MIN_READINGS - 1]
     cleaned = clean_readings(_series(values))
@@ -106,6 +115,7 @@ def test_too_few_readings_skip_spike_filter():
 
 
 def test_fields_cleaned_independently():
+    """Each field is cleaned on its own, so a soil spike keeps the reading's temperature."""
     # A soil spike must not discard the same reading's valid temperature.
     raw = [
         _Raw(timestamp=i, soil_moisture=s, temperature=t)
@@ -117,17 +127,20 @@ def test_fields_cleaned_independently():
 
 
 def test_passthrough_flags_preserved():
+    """Battery and water-warning flags pass through cleaning unchanged."""
     raw = [_Raw(timestamp=i, soil_moisture=50.0, battery_state="low", water_warning=True) for i in range(6)]
     cleaned = clean_readings(raw)
     assert all(c.battery_state == "low" and c.water_warning is True for c in cleaned)
 
 
 def test_empty_input():
+    """Cleaning nothing returns nothing."""
     assert clean_readings([]) == []
 
 
 @pytest.fixture
 def cluster_with_sensor(tmp_db):
+    """Seed a cluster with one plant and its soil sensor."""
     cluster_id = tmp_db.add_cluster(FAKE_CLUSTER_NAME)
     plant_id = tmp_db.add_plant(
         cluster_id=cluster_id,
@@ -176,6 +189,7 @@ def test_clean_readings_desc_returns_newest_first():
 
 
 def test_clean_readings_desc_still_drops_spikes():
+    """The DESC view applies the same spike filter as the ASC view."""
     raw = _series([50.0, 51.0, 49.0, 50.0, 99.0, 51.0, 50.0])
 
     cleaned = clean_readings_desc(raw)
@@ -213,6 +227,7 @@ def test_clean_readings_around_judges_a_boundary_spike_with_both_sides():
 
 
 def test_clean_readings_around_handles_empty_windows():
+    """Cleaning around an empty window leaves the other side cleaned normally."""
     cleaned_before, cleaned_after = clean_readings_around([], _series([50.0, 51.0]))
 
     assert cleaned_before == []

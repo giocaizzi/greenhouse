@@ -86,6 +86,7 @@ def _gateway() -> tuple[DeviceGateway, _KeyCloud]:
 
 @pytest.mark.parametrize(("config", "parsed"), CASES, ids=IDS)
 def test_resolve_local_key_reads_config_leniently(config: object, parsed: dict[str, str]) -> None:
+    """The gateway reads the local key from any stored config shape, falling back to the Cloud otherwise."""
     gateway, cloud = _gateway()
     key = gateway.resolve_local_key(FAKE_DEVICE_ID, config)
     if parsed.get("local_key"):
@@ -96,16 +97,19 @@ def test_resolve_local_key_reads_config_leniently(config: object, parsed: dict[s
 
 @pytest.mark.parametrize(("config", "parsed"), CASES, ids=IDS)
 def test_parse_device_config_matches_the_gateway_reading(config: object, parsed: dict[str, str]) -> None:
+    """``parse_device_config`` reads each config shape exactly as the gateway does."""
     assert parse_device_config(config) == parsed
 
 
 def test_parse_device_config_returns_a_dict_input_as_is() -> None:
+    """A dict config is returned as the same object."""
     config = {"local_key": "cfg"}
     assert parse_device_config(config) is config
 
 
 @pytest.mark.parametrize("config", ["null", "[1]", '"192.0.2.1"', "{bad", 7, None], ids=str)
 def test_open_local_without_object_config_reports_missing_ip(config: object) -> None:
+    """A config that is not a JSON object reports the missing device IP."""
     gateway, cloud = _gateway()
     irrigator = Irrigator(id=7, cluster_id=1, tuya_device_id=FAKE_DEVICE_ID, name="P", type="rainpoint.ik10pw")
     irrigator.config = config  # type: ignore[assignment]  # stored rows may hold any of these
@@ -115,6 +119,7 @@ def test_open_local_without_object_config_reports_missing_ip(config: object) -> 
 
 
 def test_open_local_reads_ip_from_json_text(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A JSON-text config supplies the device IP for a local connection."""
     opened: list[tuple[str, str, str]] = []
 
     class _Outlet:

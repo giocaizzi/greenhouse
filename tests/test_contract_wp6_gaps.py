@@ -44,6 +44,7 @@ def _stress(care, snapshot, trends=None):
 
 @pytest.mark.parametrize(("humidity", "fires"), [(39.5, True), (40.0, False), (40.5, False)])
 def test_low_env_humidity_fires_strictly_more_than_20_points_below_ideal_min(humidity, fires):
+    """Low-humidity stress fires only strictly more than 20 points below the ideal minimum."""
     care = {"ideal_humidity_min": 60, "ideal_humidity_max": 80}
     stress = _stress(care, SensorSnapshot(avg_env_humidity=humidity))
     assert (stress.low_env_humidity is not None) is fires
@@ -54,6 +55,7 @@ def test_low_env_humidity_fires_strictly_more_than_20_points_below_ideal_min(hum
 
 @pytest.mark.parametrize(("light", "fires"), [(399.0, True), (400.0, False)])
 def test_low_light_fires_strictly_below_forty_percent_of_seasonal_min(monkeypatch, light, fires):
+    """Low-light stress fires only strictly below 40 % of the seasonal minimum."""
     monkeypatch.setattr("greenhouse_core.utils.seasonal_light_factor", lambda month=None: 1.0)
     stress = _stress({"ideal_light_lux_min": 1000}, SensorSnapshot(avg_light=light))
     assert (stress.low_light is not None) is fires
@@ -78,6 +80,7 @@ def test_low_light_fires_strictly_below_forty_percent_of_seasonal_min(monkeypatc
     ],
 )
 def test_water_stress_low_and_steep_decline_boundaries(soil, delta, fires):
+    """Water stress fires at the exact low-moisture and steep-decline boundaries."""
     trends = Trends(soil_moisture_trend="declining", soil_moisture_delta=delta)
     current = [PerSensorSnapshot(sensor_id=1, name="Soil", latest_soil_moisture=soil)]
     stress = _stress({}, SensorSnapshot(avg_soil_moisture=soil, per_sensor=current), trends)
@@ -91,6 +94,7 @@ def test_water_stress_low_and_steep_decline_boundaries(soil, delta, fires):
 
 @pytest.mark.parametrize(("soil", "fires"), [(70.0, False), (70.1, True)])
 def test_over_watering_fires_strictly_above_saturated(soil, fires):
+    """Over-watering stress fires only strictly above the saturation level."""
     trends = Trends(irrigation_frequency_high=True)
     stress = _stress({}, SensorSnapshot(avg_soil_moisture=soil), trends)
     assert (stress.over_watering is not None) is fires
@@ -167,6 +171,7 @@ def _issues(monkeypatch, sensors, plants, care, readings):
 
 
 def test_detect_issues_skips_chronic_check_for_sensor_without_plant(monkeypatch):
+    """The chronic-underwatering check skips sensors that have no plant."""
     sensor = _sensor(1, plant_id=None)
     alerts = _issues(monkeypatch, [sensor], [], {}, {(1, 168): _soil(10.0)})
     assert alerts == []
@@ -174,6 +179,7 @@ def test_detect_issues_skips_chronic_check_for_sensor_without_plant(monkeypatch)
 
 @pytest.mark.parametrize("target", ["n/a", "", "50"])  # "50": no band → default min (D10; was read as 50)
 def test_detect_issues_chronic_unparsable_target_falls_back_to_45(monkeypatch, target):
+    """An unparsable soil target falls back to a 45 % minimum for the chronic check."""
     sensor = _sensor(1, plant_id=1)
     alerts = _issues(monkeypatch, [sensor], [_plant(1)], {"soil_moisture_target": target}, {(1, 168): _soil(30.0)})
     assert [a.alert_type for a in alerts] == ["chronic_underwatering"]
@@ -181,6 +187,7 @@ def test_detect_issues_chronic_unparsable_target_falls_back_to_45(monkeypatch, t
 
 
 def test_detect_issues_chronic_needs_readings_in_the_last_week(monkeypatch):
+    """Without readings in the last week the chronic check raises nothing."""
     sensor = _sensor(1, plant_id=1)
     alerts = _issues(monkeypatch, [sensor], [_plant(1)], {"soil_moisture_target": "60-80"}, {})
     assert alerts == []
@@ -190,6 +197,7 @@ def test_detect_issues_chronic_needs_readings_in_the_last_week(monkeypatch):
 
 
 def test_detect_conflicts_needs_two_sensors_with_moisture_and_then_skips_every_check():
+    """With fewer than two moisture sensors every conflict check is skipped (pinned quirk)."""
     # Only S1 has recent moisture. The low-light and low-humidity checks would fire
     # for S1's plant, but the early return skips them too (quirk, preserved).
     sensors = [_sensor(1, plant_id=1), _sensor(2, plant_id=2)]
@@ -207,6 +215,7 @@ def test_detect_conflicts_needs_two_sensors_with_moisture_and_then_skips_every_c
 
 
 def test_detect_conflicts_skips_sensor_without_recent_moisture_and_defaults_unknown_bands():
+    """Sensors without moisture are skipped and unknown or half-parsed targets use the default band."""
     # S1: no plant → default band 45-65, dry at 30. S2: target "55-x" fails on the max →
     # BOTH bounds stay 45/65 (tuple assignment never happens), wet at 71. S3: no moisture.
     sensors = [_sensor(1), _sensor(2, plant_id=2), _sensor(3, plant_id=3)]
@@ -230,6 +239,7 @@ def test_detect_conflicts_skips_sensor_without_recent_moisture_and_defaults_unkn
 
 @pytest.mark.parametrize("target", ["wet", "50"])
 def test_detect_conflicts_unparsable_target_uses_default_band(target):
+    """An unparsable target uses the default 45-65 % band."""
     sensors = [_sensor(1, plant_id=1), _sensor(2)]
     readings = {(1, 6): _soil(39.0), (2, 6): _soil(71.0)}
     repo = _LearningRepo(sensors, [], readings)
@@ -251,6 +261,7 @@ def test_detect_conflicts_unparsable_target_uses_default_band(target):
     ],
 )
 def test_detect_conflicts_profile_guards_and_over_water_line(profiles, wet, expected):
+    """Conflict detection needs both profiles and pins the over-watering line."""
     sensors = [_sensor(1), _sensor(2)]
     repo = _LearningRepo(sensors, [], {(1, 6): _soil(30.0), (2, 6): _soil(wet)})
     alerts = detect_conflicts(repo, _PlantDb({}), 1, profiles, {})
@@ -258,6 +269,7 @@ def test_detect_conflicts_profile_guards_and_over_water_line(profiles, wet, expe
 
 
 def test_detect_conflicts_light_and_humidity_need_care_fields_and_enough_samples():
+    """Light and humidity conflicts need the care field and at least five samples."""
     # Plant 1 has only a humidity need (light check skipped) and just 4 humidity
     # samples (< 5 → skipped); plant 2 has a zero light need and no humidity need.
     sensors = [_sensor(1, plant_id=1), _sensor(2, plant_id=2)]
@@ -281,6 +293,7 @@ def test_detect_conflicts_light_and_humidity_need_care_fields_and_enough_samples
 
 
 def test_get_irrigation_stats_counts_events_without_duration_but_not_as_irrigations(tmp_db):
+    """Events without a duration are counted as events but not as irrigations."""
     import time
 
     from greenhouse_core.stats import get_irrigation_stats
@@ -345,6 +358,7 @@ def _trend_rows(first, second, field):
     ("second", "label"), [(45.0, "stable"), (35.0, "stable"), (45.5, "rising"), (34.5, "declining")]
 )
 def test_moisture_trend_threshold_is_strict(second, label):
+    """The moisture trend label changes only strictly past its threshold."""
     trends = analyze_historical_trends(_TrendRepo(_trend_rows(40.0, second, "soil_moisture")), 1)
     assert trends.soil_moisture_trend == label
     assert trends.soil_moisture_delta == second - 40.0
@@ -352,11 +366,13 @@ def test_moisture_trend_threshold_is_strict(second, label):
 
 @pytest.mark.parametrize(("second", "label"), [(22.0, "stable"), (18.0, "stable"), (22.5, "rising"), (17.5, "falling")])
 def test_temperature_trend_threshold_is_strict(second, label):
+    """The temperature trend label changes only strictly past its threshold."""
     trends = analyze_historical_trends(_TrendRepo(_trend_rows(20.0, second, "temperature")), 1)
     assert trends.temperature_trend == label
 
 
 def test_trend_lookback_windows_are_48_hours_and_7_days():
+    """Trends read 48 h of readings and 7 days of events."""
     repo = _TrendRepo([])
     analyze_historical_trends(repo, 1)
     assert repo.calls == [("readings", 1, 48), ("events", 7, 168)]
@@ -380,6 +396,7 @@ def _starts(n, minutes=1):
     ],
 )
 def test_cadence_flags_boundaries(events, low, high):
+    """The low / high irrigation-cadence flags flip at their exact boundaries."""
     trends = analyze_historical_trends(_TrendRepo([], events), 1)
     assert (trends.irrigation_frequency_low, trends.irrigation_frequency_high) == (low, high)
 
@@ -401,6 +418,7 @@ def _issues_with(monkeypatch, profile, readings, care=None, plant_id=1):
     [(0.2, 0.4, True), (0.2, 0.5, False), (0.3, 0.4, False), (0.9, 0.1, False)],
 )
 def test_blocked_drip_needs_low_efficiency_and_low_absorption(monkeypatch, efficiency, absorption, blocked):
+    """A blocked-drip issue needs both low efficiency and low absorption."""
     profile = _profile(1, absorption=absorption, efficiency=efficiency)
     alerts, _ = _issues_with(monkeypatch, profile, {(1, 168): _soil(50.0)})
     assert ("blocked_drip" in [a.alert_type for a in alerts]) is blocked
@@ -408,6 +426,7 @@ def test_blocked_drip_needs_low_efficiency_and_low_absorption(monkeypatch, effic
 
 @pytest.mark.parametrize(("lux", "alert_type"), [(800, "rapid_drainage"), (801, "light_accelerated_drainage")])
 def test_rapid_drainage_is_light_driven_only_strictly_above_the_bright_threshold(monkeypatch, lux, alert_type):
+    """Rapid drainage is attributed to light only strictly above the bright threshold."""
     profile = _profile(1, drainage=-6.0)
     readings = {(1, 48): [_row(1000 - i, light=lux) for i in range(3)], (1, 168): _soil(50.0)}
     alerts, repo = _issues_with(monkeypatch, profile, readings)
@@ -419,6 +438,7 @@ def test_rapid_drainage_is_light_driven_only_strictly_above_the_bright_threshold
 
 
 def test_detect_conflicts_averages_only_the_latest_three_moisture_samples():
+    """Conflict detection averages only the latest three moisture samples."""
     # DESC rows: 30, 30, 36, 0 → latest three average 32 → dry; needs 13 min → wet 71 + 13 = 84 (no alert).
     # With only the latest two (30) the need would be 15 min → 86 → alert.
     sensors = [_sensor(1), _sensor(2)]
@@ -437,6 +457,7 @@ def test_detect_conflicts_averages_only_the_latest_three_moisture_samples():
     ],
 )
 def test_detect_conflicts_dry_and_wet_band_edges(dry, wet, expected):
+    """Dry / wet conflicts fire at the exact band edges."""
     sensors = [_sensor(1, plant_id=9), _sensor(2)]  # plant 9 has no care entry → default band
     repo = _LearningRepo(sensors, [], {(1, 6): _soil(dry), (2, 6): _soil(wet)})
     profiles = {1: _profile(1, absorption=0.1), 2: _profile(2, absorption=10.0)}
@@ -452,6 +473,7 @@ def _env_repo(lux_rows=(), hum_rows=()):
 
 @pytest.mark.parametrize(("n", "lux", "fires"), [(5, 499, True), (4, 499, False), (5, 500, False)])
 def test_detect_conflicts_low_light_needs_five_daytime_samples_strictly_below_half(monkeypatch, n, lux, fires):
+    """A low-light conflict needs five daytime samples strictly below half the need."""
     monkeypatch.setattr("greenhouse_core.utils.seasonal_light_factor", lambda month=None: 1.0)
     repo = _env_repo(lux_rows=[_row(1000 - i, light=lux) for i in range(n)])
     alerts = detect_conflicts(repo, _PlantDb({"ideal_light_lux_min": 1000}), 1, {}, {})
@@ -463,6 +485,7 @@ def test_detect_conflicts_low_light_needs_five_daytime_samples_strictly_below_ha
 
 @pytest.mark.parametrize(("n", "humidity", "fires"), [(5, 44.5, True), (4, 44.5, False), (5, 45.0, False)])
 def test_detect_conflicts_low_humidity_needs_five_samples_strictly_15_below(n, humidity, fires):
+    """A low-humidity conflict needs five samples strictly 15 points below the minimum."""
     repo = _env_repo(hum_rows=[_row(1000 - i, humidity=humidity) for i in range(n)])
     alerts = detect_conflicts(repo, _PlantDb({"ideal_humidity_min": 60}), 1, {}, {})
     assert [a.alert_type for a in alerts] == (["low_env_humidity"] if fires else [])

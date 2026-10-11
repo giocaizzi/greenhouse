@@ -134,6 +134,7 @@ def test_clean_readings_is_a_masked_subset_sorted_ascending(rows):
 @PROFILE
 @given(series())
 def test_clean_readings_desc_is_exact_reverse(rows):
+    """The DESC cleaned view is exactly the ASC view reversed (invariant 10 ordering)."""
     assert clean_readings_desc(rows) == list(reversed(clean_readings(rows)))
 
 
@@ -153,6 +154,7 @@ def test_clean_readings_short_series_only_range_gates(rows):
 @PROFILE
 @given(st.floats(0, 100, allow_nan=False), st.integers(0, 40))
 def test_clean_readings_flat_run_is_untouched(level, n):
+    """Cleaning never alters a perfectly flat series."""
     rows = [Row(timestamp=i * 600, soil_moisture=level) for i in range(n)]
 
     assert [c.soil_moisture for c in clean_readings(rows)] == [level] * n
@@ -161,6 +163,7 @@ def test_clean_readings_flat_run_is_untouched(level, n):
 @PROFILE
 @given(series(), st.integers(0, 10**6))
 def test_clean_readings_around_preserves_partition_and_matches_joint_cleaning(rows, split_ts):
+    """Cleaning around a split keeps each side's rows and equals cleaning the joined series."""
     before = [r for r in rows if r.timestamp < split_ts]
     after = [r for r in rows if r.timestamp >= split_ts]
 
@@ -206,6 +209,7 @@ def _local_month(ts, tz):
 @PROFILE
 @given(st.integers(_YEAR_START, _YEAR_END - 1), st.sampled_from(TZS))
 def test_season_for_is_the_meteorological_season_of_the_local_month(ts, tz):
+    """The season is the meteorological season of the local month, shifted six months in the south."""
     month = _local_month(ts, tz)
 
     assert season_for(ts, tz_name=tz) == _NORTH[month]
@@ -244,6 +248,7 @@ def test_season_for_hourly_census_over_2026(tz, expected):
     ],
 )
 def test_season_for_boundaries_are_local_midnight(local, season, utc_season):
+    """Season boundaries fall at local midnight, so the same instant can differ by timezone."""
     ts = int(datetime(*local, tzinfo=ZoneInfo("Europe/Rome")).timestamp())
 
     assert season_for(ts, tz_name="Europe/Rome") == season
@@ -261,6 +266,7 @@ _multiplier_table = st.dictionaries(st.sampled_from(SEASONS), _maybe(st.floats(0
     _maybe(_multiplier_table),
 )
 def test_seasonal_multiplier_precedence_plant_then_category_then_builtin(season, env, plant, category):
+    """The seasonal multiplier prefers the plant override, then the category, then the built-in table."""
     result = seasonal_multiplier(season, environment=env, plant_override=plant, category_override=category)
 
     assert isinstance(result, float)
@@ -302,6 +308,7 @@ def test_seasonal_multiplier_range_over_bundled_plant_data():
 @PROFILE
 @given(st.integers(0, 23), st.integers(0, 23), st.integers(_YEAR_START, _YEAR_END), st.sampled_from(TZS))
 def test_quiet_hours_window_and_its_complement_partition_the_day(start, end, ts, tz):
+    """A quiet-hours window and its swapped complement cover every hour exactly once."""
     inside = is_within_quiet_hours(start_hour=start, end_hour=end, now_unix=ts, tz_name=tz)
     swapped = is_within_quiet_hours(start_hour=end, end_hour=start, now_unix=ts, tz_name=tz)
 
@@ -328,6 +335,7 @@ def test_quiet_hours_window_and_its_complement_partition_the_day(start, end, ts,
     st.sampled_from(TZS),
 )
 def test_irrigation_window_is_any_matching_row_and_no_rows_means_allowed(windows, ts, tz):
+    """Any matching window allows irrigation, and no windows allows every hour (issue #83)."""
     result = is_within_irrigation_window(windows, now_unix=ts, tz_name=tz)
 
     if not windows:
@@ -345,24 +353,30 @@ class FakeRepo:
     """Minimal read-only repository double for the trend / stress helpers."""
 
     def __init__(self, plants=(), readings=None, events=(), irrigator=True):
+        """Serve the given plants, per-sensor readings and events; ``irrigator`` toggles the pump."""
         self._plants = list(plants)
         self._readings = readings or {}
         self._events = list(events)
         self._irrigator = SimpleNamespace(id=1) if irrigator else None
 
     def get_plants_in_cluster(self, cluster_id):
+        """Return the configured plants."""
         return self._plants
 
     def get_sensors_in_cluster(self, cluster_id):
+        """Return one sensor per configured reading series."""
         return [SimpleNamespace(id=sid) for sid in sorted(self._readings)]
 
     def get_recent_readings(self, sensor_id, hours=24):
+        """Return a sensor's readings newest first, like the real repository."""
         return sorted(self._readings[sensor_id], key=lambda r: r.timestamp, reverse=True)
 
     def get_irrigator_for_cluster(self, cluster_id):
+        """Return the pump, or None when the cluster has none."""
         return self._irrigator
 
     def get_recent_events(self, irrigator_id, hours=24):
+        """Return the configured irrigation events."""
         return self._events
 
 
@@ -454,6 +468,7 @@ _trend_series = st.lists(
     st.booleans(),
 )
 def test_analyze_historical_trends_labels_are_consistent(sensor_series, events, has_irrigator):
+    """Trend labels always agree with the deltas and cadence flags they are derived from."""
     readings = {
         sid: [Row(timestamp=ts, soil_moisture=soil, temperature=temp) for ts, soil, temp in s]
         for sid, s in enumerate(sensor_series, start=1)
@@ -489,6 +504,7 @@ def test_analyze_historical_trends_labels_are_consistent(sensor_series, events, 
 @PROFILE
 @given(st.floats(-40, 60, allow_nan=False), st.sampled_from(["low", "medium", "high", "unknown"]))
 def test_temperature_fallback_always_irrigates_within_interval_bounds(temp, needs):
+    """The temperature fallback always irrigates for the default duration within the interval bounds."""
     decision = temperature_based_decision(None, 1, 0, temp=temp, water_needs=needs, config=None)
 
     assert decision.action is Action.IRRIGATE
@@ -527,6 +543,7 @@ def test_temperature_fallback_without_temp_or_config_is_no_data(tmp_db):
 @PROFILE
 @given(st.text(max_size=12))
 def test_parse_moisture_target_never_raises(text):
+    """Any text parses to a float band without raising."""
     low, high = parse_moisture_target(text)
 
     assert isinstance(low, float) and isinstance(high, float)
@@ -537,6 +554,7 @@ def test_parse_moisture_target_never_raises(text):
     [("45-65", (45.0, 65.0)), ("30-50", (30.0, 50.0)), ("", (45.0, 65.0)), ("abc", (45.0, 65.0)), ("70", (45.0, 65.0))],
 )
 def test_parse_moisture_target_examples(text, expected):
+    """Documented target formats parse to the expected band."""
     assert parse_moisture_target(text) == expected
 
 
@@ -553,6 +571,7 @@ def test_parse_moisture_target_normalises_inverted_and_rejects_out_of_range():
 @PROFILE
 @given(st.text(max_size=12))
 def test_parse_moisture_target_is_always_an_ordered_physical_band(text):
+    """The parsed band is always ordered and within 0-100 %."""
     low, high = parse_moisture_target(text)
 
     assert 0.0 <= low <= high <= 100.0
@@ -576,6 +595,7 @@ _care = st.lists(
 @PROFILE
 @given(_care)
 def test_plant_needs_aggregates(care):
+    """Aggregated water needs are a known level and the temperature range spans every plant."""
     assert analyze_water_needs(care) in ("low", "medium", "high")
     temp_range = get_ideal_temp_range(care)
     mins = [d["ideal_temp_min_c"] for d in care if d.get("ideal_temp_min_c") is not None]
@@ -595,6 +615,7 @@ def test_plant_needs_zero_is_a_real_bound():
 
 
 def test_analyze_water_needs_unknown_level_counts_as_medium():
+    """Unknown water-need levels (and no plants) count as medium."""
     assert analyze_water_needs([{"water_needs": "extreme"}, {"water_needs": "high"}]) == "medium"
     assert analyze_water_needs([]) == "medium"
 

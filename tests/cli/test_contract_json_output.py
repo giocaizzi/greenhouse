@@ -87,6 +87,8 @@ class Raise:
 
 @dataclass(frozen=True)
 class Case:
+    """One CLI invocation: argv, canned routes, environment and token-file setup."""
+
     id: str
     argv: tuple[str, ...]
     routes: dict[tuple[str, str], Any] = field(default_factory=dict)
@@ -98,6 +100,7 @@ class Case:
 
 
 def C(case_id: str, *argv: str, **kw: Any) -> Case:  # noqa: N802 — table-builder shorthand
+    """Build a :class:`Case` tersely for the case table."""
     return Case(case_id, argv, **kw)
 
 
@@ -726,6 +729,8 @@ CLI_CASES: list[Case] = [
 
 @dataclass(frozen=True)
 class ClientCase:
+    """One direct ``IrrigationClient`` method call and its canned response."""
+
     id: str
     method: str
     args: tuple[Any, ...] = ()
@@ -734,6 +739,7 @@ class ClientCase:
 
 
 def M(case_id: str, method: str, *args: Any, response: Any = None, **kwargs: Any) -> ClientCase:  # noqa: N802
+    """Build a :class:`ClientCase` tersely for the case table."""
     return ClientCase(case_id, method, args, kwargs, response)
 
 
@@ -867,12 +873,14 @@ class Recorder:
     """Serves canned responses and records every client construction and request."""
 
     def __init__(self, routes: dict[tuple[str, str], Any] | None = None, default: Any = None):
+        """Answer from ``routes`` (or ``default``; None echoes the body) and start with empty logs."""
         self.routes = routes or {}
         self.default = default  # None → echo body
         self.requests: list[dict[str, Any]] = []
         self.clients: list[dict[str, Any]] = []
 
     def handle(self, request: httpx.Request) -> httpx.Response:
+        """Record the request and answer it from the canned routes."""
         content = request.content.decode("utf-8") if request.content else None
         try:
             parsed = json.loads(content) if content else None
@@ -961,6 +969,7 @@ runner = CliRunner()
 
 
 def run_cli_case(case: Case, base: Path, slot: dict[str, Recorder]) -> dict[str, Any]:
+    """Run one CLI case in an isolated home and capture requests, output, exit code and token state."""
     rec = Recorder(case.routes)
     slot["current"] = rec
     with _case_dir(base, "cli-" + case.id) as home:
@@ -1001,6 +1010,7 @@ def _call_client(client: IrrigationClient, case: ClientCase) -> dict[str, Any]:
 
 
 def run_client_case(case: ClientCase, slot: dict[str, Recorder]) -> dict[str, Any]:
+    """Run one client method case and capture its requests and outcome."""
     rec = Recorder(default=case.response)
     slot["current"] = rec
     client = IrrigationClient(base_url="http://client.example:8123", token="tok-direct")
@@ -1013,6 +1023,7 @@ def run_client_case(case: ClientCase, slot: dict[str, Recorder]) -> dict[str, An
 
 
 def run_constructor_case(name: str, spec: dict[str, Any], base: Path, slot: dict[str, Recorder]) -> dict[str, Any]:
+    """Construct a client from one token / environment setup and capture what it resolved."""
     rec = Recorder()
     slot["current"] = rec
     with _case_dir(base, "ctor-" + name) as home:
@@ -1035,6 +1046,7 @@ def run_constructor_case(name: str, spec: dict[str, Any], base: Path, slot: dict
 
 
 def build_all(base: Path, slot: dict[str, Recorder]) -> dict[str, Any]:
+    """Run every case and return the full golden document."""
     return {
         "cli": {case.id: run_cli_case(case, base, slot) for case in CLI_CASES},
         "client": {case.id: run_client_case(case, slot) for case in CLIENT_CASES},
@@ -1065,6 +1077,7 @@ def _command_of(argv: tuple[str, ...], leaves: set[tuple[str, ...]]) -> tuple[st
 
 
 def test_case_ids_are_unique():
+    """Case ids are unique, so each golden entry maps to exactly one case."""
     assert len({c.id for c in CLI_CASES}) == len(CLI_CASES)
     assert len({c.id for c in CLIENT_CASES}) == len(CLIENT_CASES)
 
@@ -1078,6 +1091,7 @@ def test_every_cli_command_has_a_case():
 
 
 def test_every_client_method_has_a_case():
+    """Every public client method has exactly one golden case, and no case names a missing method."""
     public = {name for name, _ in inspect.getmembers(IrrigationClient, inspect.isfunction) if not name.startswith("_")}
     covered = {c.method for c in CLIENT_CASES}
     assert public - covered == set(), f"IrrigationClient methods without a case: {sorted(public - covered)}"
@@ -1091,6 +1105,7 @@ def test_requests_and_output_golden(recorder_slot, tmp_path):
 
 @pytest.mark.parametrize("case", CLI_CASES, ids=lambda c: c.id)
 def test_cli_case(recorder_slot, tmp_path, case):
+    """Each CLI case matches its golden entry."""
     if os.environ.get(UPDATE_ENV_VAR) == "1":
         pytest.skip("golden is (re)written by test_requests_and_output_golden")
     actual = run_cli_case(case, tmp_path, recorder_slot)
@@ -1099,6 +1114,7 @@ def test_cli_case(recorder_slot, tmp_path, case):
 
 @pytest.mark.parametrize("case", CLIENT_CASES, ids=lambda c: c.id)
 def test_client_case(recorder_slot, case):
+    """Each client case matches its golden entry."""
     if os.environ.get(UPDATE_ENV_VAR) == "1":
         pytest.skip("golden is (re)written by test_requests_and_output_golden")
     actual = run_client_case(case, recorder_slot)

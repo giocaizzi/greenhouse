@@ -129,6 +129,7 @@ def _load_golden_or_update(name: str, observed) -> object | None:
 
 @pytest.mark.skipif(not hasattr(os, "fork"), reason="surface capture forks one child per module")
 def test_public_import_surfaces_are_a_superset_of_golden(clean_env):
+    """Every name in the import-surface golden still resolves (additions are allowed)."""
     observed = _run(_SURFACE_SCRIPT, *FROZEN_MODULES)
     golden = _load_golden_or_update("contracts/imports.json", observed)
     if golden is None:
@@ -150,6 +151,7 @@ def test_public_import_surfaces_are_a_superset_of_golden(clean_env):
 
 
 def test_module_level_logger_names_are_kept(clean_env):
+    """Module-level logger names stay as pinned, since operators filter logs by them."""
     observed = _run(_LOGGER_SCRIPT)
     loggers = observed["loggers"]
     # tests/test_migrations.py reads this logger by name.
@@ -225,6 +227,7 @@ def _kind(obj) -> str:
 
 @pytest.mark.parametrize("dotted", list(PATCHED_PATHS))
 def test_patched_attribute_path_resolves(dotted):
+    """Every dotted path the tests patch still resolves to the same kind of object."""
     assert _kind(_resolve(dotted)) == PATCHED_PATHS[dotted]
 
 
@@ -240,6 +243,7 @@ def test_patched_modules_are_the_real_modules():
 
 
 def test_reexports_point_at_their_definitions():
+    """Re-exported names are the very objects defined in their home module."""
     from greenhouse_core import constants, utils
     from greenhouse_core.logic import timing
     from greenhouse_server import scheduler

@@ -86,7 +86,10 @@ def patch_client(monkeypatch) -> Callable[[dict, list | None], None]:
 
 
 class TestAuthCommands:
+    """``login`` / ``logout`` / ``whoami`` and token storage."""
+
     def test_login_stores_token(self, patch_client, tmp_path):
+        """A successful login stores the returned token in the token file."""
         captured: list = []
         patch_client(
             {
@@ -115,6 +118,7 @@ class TestAuthCommands:
         assert (token_path.stat().st_mode & 0o777) == 0o600
 
     def test_login_print_token_does_not_persist(self, patch_client):
+        """``login --print-token`` prints the token without writing it to disk."""
         patch_client(
             {
                 ("POST", "/api/v1/auth/login"): (
@@ -138,6 +142,7 @@ class TestAuthCommands:
         assert not token_path.exists()
 
     def test_login_failure_exits_1(self, patch_client):
+        """Bad credentials exit 1 with the server's message."""
         patch_client(
             {
                 ("POST", "/api/v1/auth/login"): (401, {"detail": "Invalid username or password"}),
@@ -148,6 +153,7 @@ class TestAuthCommands:
         assert "invalid" in result.output.lower()
 
     def test_logout_removes_token(self, patch_client):
+        """``logout`` revokes the session and deletes the stored token."""
         client_mod.store_token("jwt-here")
         patch_client(
             {
@@ -160,6 +166,7 @@ class TestAuthCommands:
         assert not token_path.exists()
 
     def test_logout_no_token(self, patch_client):
+        """``logout`` without a token is a friendly no-op that exits 0."""
         patch_client(
             {
                 ("POST", "/api/v1/auth/logout"): (401, {"detail": "Not authenticated"}),
@@ -170,6 +177,7 @@ class TestAuthCommands:
         assert "no token" in result.output.lower()
 
     def test_whoami(self, patch_client):
+        """``whoami`` sends the stored token and prints the current user."""
         client_mod.store_token("jwt-stored")
         captured: list = []
         patch_client(
@@ -185,6 +193,7 @@ class TestAuthCommands:
         assert captured[0]["headers"].get("authorization") == "Bearer jwt-stored"
 
     def test_env_token_wins_over_disk(self, patch_client, monkeypatch):
+        """``$GREENHOUSE_API_TOKEN`` takes precedence over the token file."""
         client_mod.store_token("disk-token")
         monkeypatch.setenv("GREENHOUSE_API_TOKEN", "env-token")
         captured: list = []
@@ -203,6 +212,8 @@ class TestAuthCommands:
 
 
 class TestAlertsCommands:
+    """``greenhouse alerts`` sub-app."""
+
     def _stub_alert(self, alert_id: int = 1, status: str = "open") -> dict:
         return {
             "id": alert_id,
@@ -224,6 +235,7 @@ class TestAlertsCommands:
         }
 
     def test_list(self, patch_client):
+        """``alerts list`` reads the alert inbox with the given filters."""
         captured: list = []
         patch_client(
             {
@@ -239,6 +251,7 @@ class TestAlertsCommands:
         assert captured[0]["params"] == {"limit": "100", "status": "open", "cluster_id": "1"}
 
     def test_get(self, patch_client):
+        """``alerts get`` prints one alert."""
         patch_client(
             {
                 ("GET", "/api/v1/alerts/42"): (200, self._stub_alert(42)),
@@ -249,6 +262,7 @@ class TestAlertsCommands:
         assert json.loads(result.stdout)["id"] == 42
 
     def test_ack(self, patch_client):
+        """``alerts ack`` posts the acknowledgement."""
         captured: list = []
         patch_client(
             {
@@ -261,6 +275,7 @@ class TestAlertsCommands:
         assert captured[0]["method"] == "POST"
 
     def test_resolve(self, patch_client):
+        """``alerts resolve`` posts the resolution."""
         patch_client(
             {
                 ("POST", "/api/v1/alerts/5/resolve"): (200, self._stub_alert(5, status="resolved")),
@@ -270,6 +285,7 @@ class TestAlertsCommands:
         assert result.exit_code == 0
 
     def test_sync_all(self, patch_client):
+        """``alerts sync`` without a cluster re-scans every cluster."""
         captured: list = []
         patch_client(
             {
@@ -282,6 +298,7 @@ class TestAlertsCommands:
         assert captured[0]["path"] == "/api/v1/alerts/sync"
 
     def test_sync_cluster(self, patch_client):
+        """``alerts sync --cluster`` re-scans only that cluster."""
         captured: list = []
         patch_client(
             {
@@ -298,7 +315,10 @@ class TestAlertsCommands:
 
 
 class TestDecisionsCommands:
+    """``greenhouse decisions`` sub-app."""
+
     def test_list(self, patch_client):
+        """``decisions list`` reads the cluster's decision log."""
         captured: list = []
         patch_client(
             {
@@ -318,6 +338,8 @@ class TestDecisionsCommands:
 
 
 class TestPreferencesCommands:
+    """``greenhouse prefs`` sub-app."""
+
     def _stub(self) -> dict:
         return {
             "units": "metric",
@@ -330,6 +352,7 @@ class TestPreferencesCommands:
         }
 
     def test_get(self, patch_client):
+        """``prefs get`` prints the preferences."""
         patch_client(
             {
                 ("GET", "/api/v1/preferences"): (200, self._stub()),
@@ -340,6 +363,7 @@ class TestPreferencesCommands:
         assert "metric" in result.stdout
 
     def test_set_only_supplied_fields_are_sent(self, patch_client):
+        """``prefs set`` sends only the options given."""
         captured: list = []
         patch_client(
             {
@@ -355,6 +379,7 @@ class TestPreferencesCommands:
         assert captured[0]["json"] == {"theme": "dark", "refresh_interval_seconds": 30}
 
     def test_set_dry_run_flag(self, patch_client):
+        """``prefs set --dry-run-global`` sends ``dry_run_global: true``."""
         captured: list = []
         patch_client(
             {
@@ -371,6 +396,8 @@ class TestPreferencesCommands:
 
 
 class TestVacationCommands:
+    """``greenhouse vacation`` sub-app (times are Unix seconds)."""
+
     def _stub(self, wid: int = 1) -> dict:
         return {
             "id": wid,
@@ -382,6 +409,7 @@ class TestVacationCommands:
         }
 
     def test_list(self, patch_client):
+        """``vacation list`` prints the active window and every window."""
         patch_client(
             {
                 ("GET", "/api/v1/vacation"): (
@@ -394,6 +422,7 @@ class TestVacationCommands:
         assert result.exit_code == 0
 
     def test_add(self, patch_client):
+        """``vacation add`` maps its options onto the request body, including the contact email."""
         captured: list = []
         patch_client(
             {
@@ -423,8 +452,10 @@ class TestVacationCommands:
         }
 
     def test_update_optimistic(self, patch_client):
-        """``vacation update`` targets PUT /vacation/{id} even though the
-        endpoint is being added on a parallel branch — test the request shape."""
+        """``vacation update`` targets PUT /vacation/{id}.
+
+        The endpoint was added on a parallel branch, so this pins the request shape.
+        """
         captured: list = []
         patch_client(
             {
@@ -441,6 +472,7 @@ class TestVacationCommands:
         assert captured[0]["json"] == {"notes": "back Friday"}
 
     def test_delete(self, patch_client):
+        """``vacation delete`` sends a DELETE for the window id."""
         captured: list = []
         patch_client(
             {
@@ -457,6 +489,8 @@ class TestVacationCommands:
 
 
 class TestWindowsCommands:
+    """``greenhouse windows`` sub-app."""
+
     def _stub(self) -> dict:
         return {
             "id": 1,
@@ -468,6 +502,7 @@ class TestWindowsCommands:
         }
 
     def test_list(self, patch_client):
+        """``windows list`` reads the cluster's irrigation windows."""
         patch_client(
             {
                 ("GET", "/api/v1/clusters/2/windows"): (
@@ -481,6 +516,7 @@ class TestWindowsCommands:
         assert "morning" in result.stdout
 
     def test_add(self, patch_client):
+        """``windows add`` posts the new window with its weekday mask."""
         captured: list = []
         patch_client(
             {
@@ -512,6 +548,7 @@ class TestWindowsCommands:
         }
 
     def test_update_partial(self, patch_client):
+        """``windows update`` sends only the fields given."""
         captured: list = []
         patch_client(
             {
@@ -527,6 +564,7 @@ class TestWindowsCommands:
         assert captured[0]["json"] == {"label": "renamed"}
 
     def test_delete(self, patch_client):
+        """``windows delete`` sends a DELETE for the window."""
         patch_client(
             {
                 ("DELETE", "/api/v1/clusters/2/windows/1"): (200, {"success": True}),
@@ -540,7 +578,10 @@ class TestWindowsCommands:
 
 
 class TestClusterCrud:
+    """``cluster get`` / ``update`` / ``delete``."""
+
     def test_get(self, patch_client):
+        """``cluster get`` prints one cluster."""
         patch_client(
             {
                 ("GET", "/api/v1/clusters/4"): (200, {"id": 4, "name": "Den", "environment": "indoor"}),
@@ -551,6 +592,7 @@ class TestClusterCrud:
         assert "Den" in result.stdout
 
     def test_update_sends_only_set_fields(self, patch_client):
+        """``cluster update`` sends only the fields given."""
         captured: list = []
         patch_client(
             {
@@ -563,6 +605,7 @@ class TestClusterCrud:
         assert captured[0]["json"] == {"name": "Den2"}
 
     def test_delete_with_yes(self, patch_client):
+        """``cluster delete --yes`` deletes without prompting."""
         captured: list = []
         patch_client(
             {
@@ -575,6 +618,7 @@ class TestClusterCrud:
         assert captured[0]["method"] == "DELETE"
 
     def test_delete_prompt_aborts_without_yes(self, patch_client):
+        """Declining the delete prompt aborts without a request."""
         patch_client(
             {
                 ("DELETE", "/api/v1/clusters/4"): (200, {"success": True}),
@@ -589,7 +633,10 @@ class TestClusterCrud:
 
 
 class TestResourceCrud:
+    """Update / delete for plants, irrigators and sensors."""
+
     def test_plant_update(self, patch_client):
+        """``plant update`` sends the changed plant fields."""
         captured: list = []
         patch_client(
             {
@@ -608,6 +655,7 @@ class TestResourceCrud:
         assert captured[0]["json"] == {"species": "Fern v2"}
 
     def test_plant_delete(self, patch_client):
+        """``plant delete`` sends a DELETE for the plant."""
         patch_client(
             {
                 ("DELETE", "/api/v1/clusters/2/plants/9"): (200, {"success": True}),
@@ -617,6 +665,7 @@ class TestResourceCrud:
         assert result.exit_code == 0
 
     def test_irrigator_update_with_config(self, patch_client):
+        """``irrigator update`` folds the device IP and local key into the config object."""
         captured: list = []
         patch_client(
             {
@@ -648,6 +697,7 @@ class TestResourceCrud:
         }
 
     def test_irrigator_delete(self, patch_client):
+        """``irrigator delete`` sends a DELETE for the cluster's irrigator."""
         patch_client(
             {
                 ("DELETE", "/api/v1/clusters/1/irrigator"): (200, {"success": True}),
@@ -657,6 +707,7 @@ class TestResourceCrud:
         assert result.exit_code == 0
 
     def test_sensor_update(self, patch_client):
+        """``sensor update`` sends the changed sensor fields."""
         captured: list = []
         patch_client(
             {
@@ -675,6 +726,7 @@ class TestResourceCrud:
         assert captured[0]["json"] == {"plant_id": 7}
 
     def test_sensor_delete(self, patch_client):
+        """``sensor delete`` sends a DELETE for the sensor."""
         patch_client(
             {
                 ("DELETE", "/api/v1/clusters/1/sensors/3"): (200, {"success": True}),
@@ -688,7 +740,10 @@ class TestResourceCrud:
 
 
 class TestStopAllCommand:
+    """``greenhouse stop-all`` and its confirmation."""
+
     def test_stop_all_with_yes(self, patch_client):
+        """``stop-all --yes`` stops every pump without prompting."""
         captured: list = []
         patch_client(
             {
@@ -704,6 +759,7 @@ class TestStopAllCommand:
         assert data == {"stopped": 3, "errors": []}
 
     def test_stop_all_short_flag(self, patch_client):
+        """``-y`` is accepted as the short form of ``--yes``."""
         captured: list = []
         patch_client(
             {
@@ -716,6 +772,7 @@ class TestStopAllCommand:
         assert captured[0]["path"] == "/api/v1/bulk/stop-all"
 
     def test_stop_all_prompt_aborts_without_yes(self, patch_client):
+        """Declining the prompt aborts without a request."""
         captured: list = []
         patch_client(
             {
@@ -728,6 +785,7 @@ class TestStopAllCommand:
         assert captured == []
 
     def test_stop_all_prompt_confirmed(self, patch_client):
+        """Confirming the prompt sends the stop-all and prints any per-device errors."""
         captured: list = []
         patch_client(
             {
@@ -742,6 +800,7 @@ class TestStopAllCommand:
         assert "irrigator 5: timeout" in result.stdout
 
     def test_stop_all_server_error_exits_1(self, patch_client):
+        """A server error on stop-all exits 1."""
         patch_client(
             {
                 ("POST", "/api/v1/bulk/stop-all"): (500, {"detail": "Device manager down"}),

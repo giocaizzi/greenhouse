@@ -37,6 +37,7 @@ def _pyproject(rel: str) -> dict:
 
 
 def test_pyproject_console_scripts_and_wheel_packages():
+    """Each package's pyproject declares the pinned console scripts and wheel packages."""
     observed = {}
     for dist, (rel, _pkg) in PACKAGES.items():
         data = _pyproject(rel)
@@ -72,6 +73,7 @@ def test_pyproject_console_scripts_and_wheel_packages():
 
 
 def test_installed_console_scripts_resolve():
+    """The installed console scripts resolve to the CLI app and the server entry point."""
     eps = {
         ep.name: ep
         for ep in importlib.metadata.entry_points(group="console_scripts")

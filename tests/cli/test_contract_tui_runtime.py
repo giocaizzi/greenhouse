@@ -172,9 +172,12 @@ def test_alerts_cursor_stays_on_record_across_auto_refresh(seeded):
 
 
 def test_plants_cursor_stays_on_record_across_refresh(seeded):
-    """G14: plant row 1 selected; a plant that sorts above it is added server-side; ``r`` reloads the
+    """G14: a reload keeps the selected plant selected when a new plant sorts above it.
+
+    Plant row 1 is selected; a plant that sorts above it is added server-side; ``r`` reloads the
     screen (the same ``reload`` the auto-refresh timer calls — a fast timer keeps cancelling the heavy cluster
-    load before it finishes) → the same plant stays selected at its new index."""
+    load before it finishes) → the same plant stays selected at its new index.
+    """
     http, _ = seeded
 
     async def scenario():
@@ -203,9 +206,10 @@ def test_plants_cursor_stays_on_record_across_refresh(seeded):
 
 
 def test_activity_cursor_stays_on_the_selected_event_across_refresh(seeded):
-    """ActivityScreen.load repopulates through ``refill`` (rows keyed by event id), so an auto-refresh keeps the
-    cursor on the selected event — the cursor-stability contract the other tables follow — even when a newer
-    event is inserted above it.
+    """An activity auto-refresh keeps the cursor on the selected event, even when a newer one lands above it.
+
+    ActivityScreen.load repopulates through ``refill`` (rows keyed by event id) — the cursor-stability
+    contract the other tables follow.
     """
     http, engine = seeded
 
@@ -236,8 +240,10 @@ def test_activity_cursor_stays_on_the_selected_event_across_refresh(seeded):
 
 
 def test_401_opens_one_sign_in_dialog_then_logs_in(clean_env, frozen_clock):
-    """Concurrent 401s on startup open exactly one LoginScreen and raise no error toast; signing in posts the
-    credentials verbatim, stores the token, toasts and reloads the dashboard."""
+    """Concurrent 401s on startup open exactly one LoginScreen and raise no error toast.
+
+    Signing in posts the credentials verbatim, stores the token, toasts and reloads the dashboard.
+    """
     application, engine = _make_stubbed_app(bypass_auth=False)
     lock = threading.Lock()
     log: list = []
@@ -285,8 +291,10 @@ def test_401_opens_one_sign_in_dialog_then_logs_in(clean_env, frozen_clock):
 
 
 def test_401_dashboard_says_sign_in_needed(clean_env, frozen_clock):
-    """When the server answers 401 the dashboard behind the sign-in dialog says a login is needed — not
-    "Cannot reach the server", since the server was reached."""
+    """When the server answers 401 the dashboard behind the sign-in dialog says a login is needed.
+
+    Not "Cannot reach the server": the server was reached.
+    """
     application, engine = _make_stubbed_app(bypass_auth=False)
 
     def factory(token):

@@ -101,9 +101,11 @@ def _run(coro) -> None:
 
 
 async def _settle_until(pilot, tui: GreenhouseApp, done, timeout: float = 30.0) -> None:
-    """Settle repeatedly until ``done()`` holds: a dismissed dialog hands its result to a
-    callback that starts the next worker one message later, which a single settle can miss
-    on a slow runner."""
+    """Settle repeatedly until ``done()`` holds.
+
+    A dismissed dialog hands its result to a callback that starts the next worker one
+    message later, which a single settle can miss on a slow runner.
+    """
     deadline = asyncio.get_running_loop().time() + timeout
     while True:
         await _settle(pilot, tui)
@@ -131,6 +133,8 @@ def _render(renderable, width: int = 40) -> str:
 
 
 class TestSprites:
+    """Pure sprite logic: moods, half-block rendering, categories and animation frames."""
+
     @pytest.mark.parametrize(
         ("moisture", "expected"),
         [
@@ -143,52 +147,63 @@ class TestSprites:
         ],
     )
     def test_mood_with_fallback_band(self, moisture, expected):
+        """Without a care band, the fallback thresholds map moisture to the documented mood."""
         assert mood_for(moisture) is expected
 
     def test_mood_uses_supplied_band(self):
+        """A plant's own moisture band overrides the fallback, so the same reading can be thirsty or soaked."""
         assert mood_for(50.0, band_min=55.0, band_max=80.0) is Mood.THIRSTY
         assert mood_for(50.0, band_min=20.0, band_max=40.0) is Mood.SOAKED
 
     def test_half_block_rendering(self):
+        """Two pixel rows collapse into one half-block line, with transparency kept per half."""
         sprite = PixelSprite(("AB.", "A.B"), {"A": "#ff0000", "B": "#00ff00"})
         assert sprite.width == 3 and sprite.height == 1
         # A over A → full ▀ ; B over transparent → ▀ ; transparent over B → ▄
         assert _render(sprite).splitlines()[0] == "▀▀▄"
 
     def test_odd_row_count_is_padded(self):
+        """An odd pixel-row count is padded so the last half-block line still renders."""
         sprite = PixelSprite(("A", "A", "A"), {"A": "#ffffff"})
         assert sprite.height == 2
         assert _render(sprite).splitlines()[:2] == ["▀", "▀"]
 
     @pytest.mark.parametrize("category", ["tropical", "fern", "succulent", "cacti", "fruit_tree", None, "mystery"])
     def test_every_category_draws_a_potted_plant(self, category):
+        """Every category has a full-size sprite whose bottom row (the pot) is painted."""
         sprite = plant_sprite(category, Mood.OK)
         assert sprite.width == 16
         assert sprite.height == 8
         assert sprite.rows[-1].strip(".")  # pot base is painted
 
     def test_plants_animate(self):
+        """Successive frames differ, so an animated plant visibly moves."""
         frames = {plant_sprite("tropical", Mood.OK, f).rows for f in range(4)}
         assert len(frames) > 1
 
     def test_thriving_sparkles_and_wilting_drops_leaves(self):
+        """Mood-specific effects: sparkles when thriving, a leaf that falls frame by frame when wilting."""
         assert any("K" in r for r in plant_sprite("fern", Mood.THRIVING, 0).rows)
         wilting = [plant_sprite("fern", Mood.WILTING, f).rows for f in range(3)]
         assert len(set(wilting)) == 3  # the falling leaf moves every frame
 
     def test_watering_overlays_drops(self):
+        """Water drops appear only while the plant is being watered."""
         assert any("W" in r for r in plant_sprite("cacti", Mood.THIRSTY, 1, watering=True).rows)
         assert not any("W" in r for r in plant_sprite("cacti", Mood.THIRSTY, 1).rows)
 
     def test_mood_recolours_foliage(self):
+        """Foliage colour reflects the mood, so a wilting plant reads differently at a glance."""
         assert plant_sprite("fern", Mood.THRIVING).palette["G"] != plant_sprite("fern", Mood.WILTING).palette["G"]
 
     def test_category_aliases(self):
+        """Free-form plant categories normalise to the sprite set, with a generic fallback."""
         assert normalize_category("Cactus") == "cacti"
         assert normalize_category("fruit-tree") == "fruit_tree"
         assert normalize_category(None) == "generic"
 
     def test_misc_sprites(self):
+        """The logo renders and the watering can has a distinct pouring frame."""
         assert logo_sprite().height > 0
         assert watering_can_sprite(pouring=True, frame=1).rows != watering_can_sprite().rows
 
@@ -197,34 +212,43 @@ class TestSprites:
 
 
 class TestFormatting:
+    """Formatting helpers shared by every TUI screen."""
+
     def test_ago(self):
+        """Relative timestamps cover never, seconds, hours and the future."""
         assert fmt.ago(None) == "never"
         assert fmt.ago(1000, reference=1030) == "30s ago"
         assert fmt.ago(1000, reference=1000 + 7260) == "2h01m ago"
         assert fmt.ago(1000 + 3 * 86400, reference=1000) == "in 3d0h"
 
     def test_age(self):
+        """Ages in seconds render as a compact 'ago' string, with a dash for unknown."""
         assert fmt.age(None) == "—"
         assert fmt.age(0) == "0s ago"
         assert fmt.age(300) == "5m ago"
 
     def test_num(self):
+        """Numbers get a unit and a configurable precision, with a dash for missing values."""
         assert fmt.num(None, "%") == "—"
         assert fmt.num(42.123, "%") == "42.1%"
         assert fmt.num(42.6, "%", 0) == "43%"
 
     def test_bar(self):
+        """Gauges have a fixed width and fill in proportion to the value."""
         assert len(fmt.bar(None, 10)) == 10
         gauge = fmt.bar(50, 10, 40, 70)
         assert gauge.plain.startswith("█████")
         assert len(gauge) == 10
 
     def test_weekday_mask(self):
+        """Window weekday bitmasks render as 'every day' or a one-letter-per-day strip."""
         assert fmt.weekday_mask(127) == "every day"
         assert fmt.weekday_mask(1 | 4) == "M·W····"
 
 
 class TestModel:
+    """Payload-to-summary view model used by the dashboard and cluster screens."""
+
     STATUS = {
         "cluster": {"id": 7, "name": "Shelf", "environment": "indoor", "location": None},
         "plants": [
@@ -241,6 +265,7 @@ class TestModel:
     }
 
     def test_summarize_picks_driest_plant(self):
+        """The cluster summary is driven by the driest plant, like the engine (invariant 2)."""
         s = summarize(self.STATUS, {"threshold": {"min": 40, "max": 70}, "datasets": []})
         assert s.min_moisture == 30.0
         assert s.driest.species == "B"
@@ -251,11 +276,13 @@ class TestModel:
         assert s.irrigator_id == 3 and not s.watering
 
     def test_sparkline_uses_per_timestamp_minimum(self):
+        """The sparkline plots the per-timestamp minimum across sensors, and is empty without data."""
         chart = {"datasets": [{"points": [[1, 50], [2, 40]]}, {"points": [[1, 45], [3, 60]]}]}
         assert sparkline_points(chart) == [45, 40, 60]
         assert sparkline_points(None) == []
 
     def test_is_watering(self):
+        """Watering is inferred from a start event still inside its duration."""
         event = {"action": "start", "timestamp": 1000, "duration_minutes": 5}
         assert is_watering(event, reference=1200)
         assert not is_watering(event, reference=1000 + 301)
@@ -267,7 +294,10 @@ class TestModel:
 
 
 class TestDashboard:
+    """Dashboard screen against the seeded stub server."""
+
     def test_cards_for_every_cluster(self, greenhouse):
+        """Every cluster gets a card summarising its plants and state."""
         http, _ = greenhouse
 
         async def scenario():
@@ -294,9 +324,11 @@ class TestDashboard:
         _run(scenario())
 
     def test_rapid_reloads_never_duplicate_cards(self, greenhouse):
-        """Regression: overlapping reloads raced remove/mount and mounted two
-        cards with the same ID (MountError) when a superseded worker was
-        cancelled mid-render."""
+        """Regression: overlapping reloads never mount two cards with the same ID.
+
+        They raced remove/mount and raised MountError when a superseded worker was
+        cancelled mid-render.
+        """
         http, _ = greenhouse
 
         async def scenario():
@@ -313,6 +345,7 @@ class TestDashboard:
         _run(scenario())
 
     def test_stop_all_requires_confirmation(self, greenhouse):
+        """Stop-all is guarded by a confirmation dialog before any device call."""
         http, wiring = greenhouse
 
         async def scenario():
@@ -334,6 +367,8 @@ class TestDashboard:
         _run(scenario())
 
     def test_unreachable_server(self):
+        """A refused connection is reported on screen instead of crashing the app."""
+
         def refuse(request):
             raise httpx.ConnectError("refused")
 
@@ -351,6 +386,8 @@ class TestDashboard:
 
 
 class TestClusterScreen:
+    """Cluster detail screen: tabs, charts and actuation dialogs."""
+
     def _open(self, http, cluster_id: int, body):
         async def scenario():
             tui = _app(http)
@@ -363,6 +400,7 @@ class TestClusterScreen:
         _run(scenario())
 
     def test_tabs_are_populated(self, greenhouse):
+        """Opening a cluster fills every tab from the API payloads."""
         http, _ = greenhouse
 
         async def body(pilot, tui, screen):
@@ -380,6 +418,7 @@ class TestClusterScreen:
         self._open(http, 1, body)
 
     def test_metric_and_range_cycle(self, greenhouse):
+        """The chart metric and range keys cycle through their options and reload the chart."""
         http, _ = greenhouse
 
         async def body(pilot, tui, screen):
@@ -400,6 +439,7 @@ class TestClusterScreen:
         self._open(http, 1, body)
 
     def test_irrigate_dry_run_does_not_actuate(self, greenhouse):
+        """The irrigate dialog defaults to a dry run, which never reaches the device."""
         http, wiring = greenhouse
 
         async def body(pilot, tui, screen):
@@ -414,6 +454,7 @@ class TestClusterScreen:
         self._open(http, 1, body)
 
     def test_water_now_and_stop(self, greenhouse):
+        """Water-now starts the pump for the chosen minutes and stop turns it off again."""
         http, wiring = greenhouse
 
         async def body(pilot, tui, screen):
@@ -436,6 +477,7 @@ class TestClusterScreen:
         self._open(http, 1, body)
 
     def test_sensor_only_cluster_has_no_irrigator_actions(self, greenhouse):
+        """A cluster without a pump ignores the water-now key instead of calling a device."""
         http, wiring = greenhouse
 
         async def body(pilot, tui, screen):
@@ -449,7 +491,10 @@ class TestClusterScreen:
 
 
 class TestOtherScreens:
+    """Alerts, activity and system screens."""
+
     def test_alerts_acknowledge_and_filter(self, greenhouse):
+        """Alerts can be acknowledged from the table and filtered by state."""
         http, _ = greenhouse
 
         async def scenario():
@@ -472,6 +517,7 @@ class TestOtherScreens:
         _run(scenario())
 
     def test_activity_feed(self, greenhouse):
+        """The activity screen lists the seeded activity rows."""
         http, _ = greenhouse
 
         async def scenario():
@@ -489,6 +535,7 @@ class TestOtherScreens:
         _run(scenario())
 
     def test_system_screen(self, greenhouse):
+        """The system screen shows device health and scheduler state."""
         http, _ = greenhouse
 
         async def scenario():
@@ -505,7 +552,10 @@ class TestOtherScreens:
 
 
 class TestLogin:
+    """Login flow when the server requires authentication."""
+
     def test_401_prompts_login_and_stores_token(self):
+        """A 401 opens the login dialog and a successful login stores the token for next time."""
         application, engine = _make_stubbed_app(bypass_auth=False)
         http = TestClient(application, raise_server_exceptions=False)
 
@@ -541,7 +591,10 @@ class TestLogin:
 
 
 class TestTuiCommand:
+    """The ``greenhouse tui`` Typer command."""
+
     def test_launches_with_resolved_server(self, monkeypatch):
+        """The command passes the resolved server, refresh period and animation flag to the app."""
         seen = {}
         monkeypatch.setattr(
             "greenhouse_cli.tui.run",
@@ -556,6 +609,7 @@ class TestTuiCommand:
         assert seen == {"server": "http://10.0.0.5:8000", "refresh": 10.0, "animations": False}
 
     def test_env_server_fallback(self, monkeypatch):
+        """Without --server, the server URL falls back to IRRIGATION_SERVER_URL."""
         seen = {}
         monkeypatch.setenv("IRRIGATION_SERVER_URL", "http://192.0.2.10:8000")
         monkeypatch.setattr("greenhouse_cli.tui.run", lambda server, **kw: seen.update(server=server))
@@ -583,6 +637,7 @@ REDUNDANT_READS = {
 
 
 def test_tui_reaches_every_client_capability():
+    """Every public client method is reachable from the TUI, so the TUI never lags behind the CLI."""
     import inspect
     import re
 
@@ -614,7 +669,10 @@ async def _confirm(pilot, tui) -> None:
 
 
 class TestForms:
+    """Form field parsing and the form dialogs' validation behaviour."""
+
     def test_parse_values(self):
+        """Each field kind parses its raw input into the typed value the API expects."""
         assert parse_value(Field("a", "A", "int"), " 5 ") == 5
         assert parse_value(Field("a", "A", "float"), "2.5") == 2.5
         assert parse_value(Field("a", "A"), "  ") is None
@@ -659,10 +717,12 @@ class TestForms:
         ],
     )
     def test_parse_errors(self, field, raw, message):
+        """Invalid input raises a ValueError whose message tells the user what is wrong."""
         with pytest.raises(ValueError, match=message):
             parse_value(field, raw)
 
     def test_invalid_form_stays_open(self, greenhouse):
+        """A form with invalid input stays open instead of sending a request."""
         http, _ = greenhouse
 
         async def scenario():
@@ -681,6 +741,8 @@ class TestForms:
 
 
 class TestClusterCrud:
+    """Create / edit / delete flows on the cluster screen, checked against the server state."""
+
     def _open(self, http, cluster_id: int, body, tab: str | None = None):
         async def scenario():
             tui = _app(http)
@@ -696,6 +758,7 @@ class TestClusterCrud:
         _run(scenario())
 
     def test_create_cluster_from_dashboard(self, greenhouse):
+        """The dashboard's new-cluster form creates the cluster on the server."""
         http, _ = greenhouse
 
         async def scenario():
@@ -711,6 +774,7 @@ class TestClusterCrud:
         _run(scenario())
 
     def test_plant_add_edit_move_delete(self, greenhouse):
+        """A plant can be added, edited, moved to another cluster and deleted from the plants tab."""
         http, _ = greenhouse
 
         async def body(pilot, tui, screen):
@@ -743,6 +807,7 @@ class TestClusterCrud:
         self._open(http, 1, body, tab="tab-plants")
 
     def test_plant_chart_toggle_and_plant_db_sync(self, greenhouse):
+        """The plant chart toggles independently of the cluster chart, and P syncs the plant DB."""
         http, _ = greenhouse
 
         async def body(pilot, tui, screen):
@@ -757,6 +822,7 @@ class TestClusterCrud:
         self._open(http, 1, body, tab="tab-plants")
 
     def test_sensor_add_and_delete(self, greenhouse):
+        """A sensor can be registered and deleted from the sensors tab."""
         http, _ = greenhouse
 
         async def body(pilot, tui, screen):
@@ -781,6 +847,7 @@ class TestClusterCrud:
         self._open(http, 1, body, tab="tab-sensors")
 
     def test_windows_crud(self, greenhouse):
+        """Irrigation windows can be created, edited and deleted from the windows tab."""
         http, _ = greenhouse
 
         async def body(pilot, tui, screen):
@@ -802,6 +869,7 @@ class TestClusterCrud:
         self._open(http, 1, body, tab="tab-windows")
 
     def test_config_edit(self, greenhouse):
+        """Editing the cluster config writes the new values and refreshes the config panel."""
         http, _ = greenhouse
 
         async def body(pilot, tui, screen):
@@ -815,6 +883,7 @@ class TestClusterCrud:
         self._open(http, 1, body, tab="tab-config")
 
     def test_irrigator_edit_detach_attach(self, greenhouse):
+        """The pump can be edited, detached and attached again."""
         http, _ = greenhouse
 
         async def body(pilot, tui, screen):
@@ -841,6 +910,7 @@ class TestClusterCrud:
         self._open(http, 1, body)
 
     def test_log_manual(self, greenhouse):
+        """Logging a manual watering adds a history row without actuating the pump."""
         http, wiring = greenhouse
 
         async def body(pilot, tui, screen):
@@ -854,6 +924,7 @@ class TestClusterCrud:
         self._open(http, 1, body, tab="tab-history")
 
     def test_edit_and_delete_cluster(self, greenhouse):
+        """The cluster can be renamed and, after confirmation, deleted."""
         http, _ = greenhouse
 
         async def body(pilot, tui, screen):
@@ -870,6 +941,7 @@ class TestClusterCrud:
         self._open(http, 3, body)
 
     def test_insights_tab(self, greenhouse):
+        """The insights tab shows care insights, stats and the learning report."""
         http, _ = greenhouse
 
         async def body(pilot, tui, screen):
@@ -881,6 +953,7 @@ class TestClusterCrud:
         self._open(http, 1, body, tab="tab-insights")
 
     def test_export_stats_csv(self, greenhouse, tmp_path, monkeypatch):
+        """The export key writes the stats CSV to the working directory."""
         http, _ = greenhouse
         monkeypatch.chdir(tmp_path)
 
@@ -893,6 +966,7 @@ class TestClusterCrud:
         self._open(http, 1, body)
 
     def test_overlay_metric(self, greenhouse):
+        """Cycling the metric reaches the overlay chart with its hint."""
         http, _ = greenhouse
 
         async def body(pilot, tui, screen):
@@ -906,7 +980,10 @@ class TestClusterCrud:
 
 
 class TestSettingsScreen:
+    """Settings screen: preferences, global config, vacation and account."""
+
     def test_preferences_global_and_vacation(self, greenhouse):
+        """Preferences, global config and vacation windows are editable from the settings screen."""
         http, _ = greenhouse
 
         async def scenario():
@@ -949,6 +1026,7 @@ class TestSettingsScreen:
         _run(scenario())
 
     def test_logout_clears_token(self, greenhouse):
+        """Logging out removes the stored token file."""
         http, _ = greenhouse
         token_path = Path(os.environ["XDG_CONFIG_HOME"]) / "greenhouse" / "token"
         token_path.parent.mkdir(parents=True, exist_ok=True)
@@ -967,7 +1045,10 @@ class TestSettingsScreen:
 
 
 class TestSearchAndSystem:
+    """Global search and the system screen's maintenance actions."""
+
     def test_search_opens_cluster(self, greenhouse):
+        """Picking a search result opens the matching cluster screen."""
         http, _ = greenhouse
 
         async def scenario():
@@ -1025,6 +1106,7 @@ class TestSearchAndSystem:
         _run(scenario())
 
     def test_system_maintenance_actions(self, greenhouse):
+        """The system screen's maintenance keys send their requests and refresh the panels."""
         http, _ = greenhouse
 
         async def scenario():
@@ -1125,6 +1207,8 @@ class TestSearchAndSystem:
 
 
 class TestRefill:
+    """``refill`` keeps the table cursor on the same record across reloads."""
+
     def _table_app(self, body):
         from textual.app import App
 
@@ -1142,6 +1226,8 @@ class TestRefill:
         _run(scenario())
 
     def test_cursor_follows_record_across_reload(self):
+        """A reload that shifts rows keeps the cursor on the selected record, not the row index."""
+
         async def body(pilot, table):
             refill(table, [("1", ["a"]), ("2", ["b"]), ("3", ["c"])])
             table.move_cursor(row=2)
@@ -1153,6 +1239,8 @@ class TestRefill:
         self._table_app(body)
 
     def test_cursor_clamps_when_record_disappears(self):
+        """When the selected record disappears the cursor clamps to a remaining row, or none."""
+
         async def body(pilot, table):
             refill(table, [("1", ["a"]), ("2", ["b"]), ("3", ["c"])])
             table.move_cursor(row=2)
@@ -1170,6 +1258,7 @@ class TestTableColumnWidths:
     TITLE = "Low battery: Monstera probe"
 
     def test_paint_before_measurement_repaints_at_the_measured_width(self):
+        """A paint that races the column measurement is redone at the measured width (stale-render fix)."""
         from textual.app import App
         from textual.geometry import Region
 
@@ -1218,6 +1307,8 @@ class TestTableColumnWidths:
 
 
 class TestSpriteView:
+    """SpriteView widget integration with Textual's animation machinery."""
+
     @pytest.mark.parametrize("animate", [True, False])
     def test_widget_animate_still_works_on_a_sprite(self, animate):
         """``Widget.animate`` caches its animator in ``_animate``; the sprite's animation flag must not live there."""
@@ -1242,6 +1333,8 @@ class TestSpriteView:
 
 
 class TestExactRequests:
+    """Exact HTTP requests the TUI sends for each action (method, path and body)."""
+
     def _open(self, http, log, cluster_id, body, tab=None):
         async def scenario():
             tui = _app(http, log)
@@ -1258,6 +1351,7 @@ class TestExactRequests:
         _run(scenario())
 
     def test_irrigate_options_map_to_request_body(self, greenhouse):
+        """The irrigate dialog's checkboxes map one-to-one onto the request body."""
         http, _ = greenhouse
         log: list = []
 
@@ -1277,6 +1371,7 @@ class TestExactRequests:
         self._open(http, log, 1, body)
 
     def test_water_now_blank_minutes_uses_device_default(self, greenhouse):
+        """A blank minutes field omits the duration so the device default applies."""
         http, wiring = greenhouse
         log: list = []
 
@@ -1299,6 +1394,7 @@ class TestExactRequests:
         [("i", None), ("w", None), ("x", None), ("c", None), ("n", "tab-plants"), ("u", "tab-config"), ("D", None)],
     )
     def test_cancel_never_writes(self, greenhouse, key, tab):
+        """Cancelling any dialog sends no write request."""
         http, wiring = greenhouse
         log: list = []
 
@@ -1315,6 +1411,7 @@ class TestExactRequests:
         self._open(http, log, 1, body, tab)
 
     def test_check_cluster_after_confirm(self, greenhouse):
+        """Check runs only after confirmation and posts exactly one check request."""
         http, _ = greenhouse
         log: list = []
 
@@ -1327,6 +1424,7 @@ class TestExactRequests:
         self._open(http, log, 1, body)
 
     def test_new_and_edit_route_to_the_active_tab(self, greenhouse):
+        """New / edit / delete keys do nothing on tabs that have no editable resource."""
         http, _ = greenhouse
         log: list = []
 
@@ -1343,6 +1441,7 @@ class TestExactRequests:
         self._open(http, log, 1, body)
 
     def test_existing_irrigator_cannot_be_added_twice(self, greenhouse):
+        """A cluster that already has a pump does not offer to add a second one."""
         http, _ = greenhouse
         log: list = []
 
@@ -1355,6 +1454,7 @@ class TestExactRequests:
         self._open(http, log, 1, body)
 
     def test_alert_resolve_and_rescan(self, greenhouse):
+        """Resolve and re-scan send their alert requests from the alerts table."""
         http, _ = greenhouse
         log: list = []
 
@@ -1379,6 +1479,7 @@ class TestExactRequests:
         _run(scenario())
 
     def test_dashboard_check_all_and_sync(self, greenhouse):
+        """Dashboard check-all (after confirmation) and sensor sync send their requests."""
         http, _ = greenhouse
         log: list = []
 
@@ -1405,7 +1506,11 @@ def _mock_app(handler, refresh_seconds: float = 0) -> GreenhouseApp:
 
 
 class TestResilience:
+    """Error handling, empty installs, auto-refresh and pagination."""
+
     def test_server_error_is_toasted_not_raised(self):
+        """A 5xx from the server becomes a notification instead of an exception."""
+
         def handler(request):
             if request.url.path == "/api/v1/clusters":
                 return httpx.Response(500, json={"detail": "database is locked"})
@@ -1422,6 +1527,8 @@ class TestResilience:
         _run(scenario())
 
     def test_empty_install_prompts_to_create_cluster(self):
+        """With no clusters the dashboard invites the user to create one."""
+
         def handler(request):
             return httpx.Response(200, json=[] if request.url.path == "/api/v1/clusters" else {})
 
@@ -1434,6 +1541,7 @@ class TestResilience:
         _run(scenario())
 
     def test_auto_refresh_polls_again(self):
+        """With a refresh period set, the dashboard polls the server again on its own."""
         hits = []
 
         def handler(request):
@@ -1507,6 +1615,7 @@ class TestResilience:
         assert all(c.http.is_closed for c in made)
 
     def test_r_reloads_active_screen(self):
+        """The r key reloads the active screen on demand."""
         hits = []
 
         def handler(request):
@@ -1526,6 +1635,7 @@ class TestResilience:
         _run(scenario())
 
     def test_activity_pagination_uses_cursor(self):
+        """Loading more activity passes the previous page's cursor as ``before``."""
         requests = []
 
         def handler(request):
@@ -1557,6 +1667,7 @@ class TestResilience:
         _run(scenario())
 
     def test_login_failure_reprompts(self):
+        """A failed login keeps the login dialog open for another attempt."""
         application, engine = _make_stubbed_app(bypass_auth=False)
 
         def factory(token):

@@ -42,6 +42,7 @@ def _same(a: tuple[float, float], b: tuple[float, float]) -> bool:
 
 
 def test_default_target_constant_is_the_inline_literal() -> None:
+    """The default soil target constant is the literal it replaced."""
     assert DEFAULT_SOIL_MOISTURE_TARGET == "45-65"
     assert type(DEFAULT_SOIL_MOISTURE_TARGET) is str
 
@@ -49,6 +50,7 @@ def test_default_target_constant_is_the_inline_literal() -> None:
 @settings(derandomize=True, max_examples=300)
 @given(other=OTHER_KEYS, has_target=st.booleans(), target=TARGETS)
 def test_moisture_target_range_equals_inline_expression(other: dict[str, Any], has_target: bool, target: Any) -> None:
+    """``moisture_target_range`` equals the inline expression it replaced, for any care dict."""
     care = dict(other)
     if has_target:
         care["soil_moisture_target"] = target
@@ -58,6 +60,7 @@ def test_moisture_target_range_equals_inline_expression(other: dict[str, Any], h
 
 
 def test_missing_target_falls_back_to_default_band() -> None:
+    """A missing or null target falls back to the default band."""
     assert moisture_target_range({}) == (45.0, 65.0)
     assert moisture_target_range({"soil_moisture_target": None}) == (45.0, 65.0)
     assert moisture_target_range({"soil_moisture_target": "30-50"}) == (30.0, 50.0)

@@ -39,9 +39,11 @@ class OfflineWeather:
     """Stand-in for ``WeatherClient`` that behaves like Open-Meteo being unreachable."""
 
     def get_current(self) -> None:
+        """Return no current weather, like an unreachable Open-Meteo."""
         return None
 
     def get_forecast(self, hours: int = 6) -> None:  # noqa: ARG002 — signature mirrors WeatherClient
+        """Return no forecast, like an unreachable Open-Meteo."""
         return None
 
 

@@ -63,6 +63,7 @@ def _detect(monkeypatch, rows):
 
 @pytest.mark.parametrize(("peak", "fires"), [(40.0, False), (39.5, True)])
 def test_chronic_underwatering_fires_only_strictly_below_target_min(monkeypatch, peak, fires):
+    """Chronic underwatering fires only when the weekly peak is strictly below the target minimum."""
     alerts = _detect(monkeypatch, [_row(1000 - i, soil=peak) for i in range(3)])
     assert [a.alert_type for a in alerts] == (["chronic_underwatering"] if fires else [])
     if fires:
@@ -70,6 +71,7 @@ def test_chronic_underwatering_fires_only_strictly_below_target_min(monkeypatch,
 
 
 def test_chronic_underwatering_peak_defaults_to_zero_when_no_moisture_values(monkeypatch):
+    """Without moisture values the weekly peak defaults to 0, so the alert fires (pinned)."""
     # Readings exist in the week (humidity only), so the check runs with max(..., default=0).
     alerts = _detect(monkeypatch, [_row(1000 - i, humidity=50.0) for i in range(3)])
     assert [a.alert_type for a in alerts] == ["chronic_underwatering"]

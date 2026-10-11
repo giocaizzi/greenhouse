@@ -11,10 +11,12 @@ PW = "correct horse"
 
 
 def test_has_users_false_on_empty_db(tmp_db):
+    """A fresh database has no users."""
     assert tmp_db.has_users() is False
 
 
 def test_create_user_then_lookups(tmp_db):
+    """A created user is active and can be looked up by id and name."""
     user = tmp_db.create_user("Alice", PW)
     assert isinstance(user, User)
     assert user.id is not None and user.is_active is True
@@ -27,11 +29,13 @@ def test_create_user_then_lookups(tmp_db):
 
 
 def test_create_user_rejects_empty_password(tmp_db):
+    """Users cannot be created with an empty password."""
     with pytest.raises(ValueError, match="password must be non-empty"):
         tmp_db.create_user("Bob", "")
 
 
 def test_set_user_password_and_record_login(tmp_db, monkeypatch):
+    """Changing a password re-hashes it, and a login stamps the time."""
     user = tmp_db.create_user("Carol", PW)
     tmp_db.set_user_password(user, "new secret")
     assert core_auth.verify_password("new secret", user.hashed_password)

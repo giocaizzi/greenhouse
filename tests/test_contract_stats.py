@@ -40,6 +40,7 @@ def _rewind_repository_clock(monkeypatch, seconds: int) -> None:
 
 
 def test_get_irrigation_stats_skips_events_older_than_its_own_cutoff(tmp_db, frozen_clock, monkeypatch):
+    """Stats skip events older than their own cutoff, even when the repository returns them."""
     cluster_id, irrigator_id = _cluster_with_irrigator(tmp_db)
     tmp_db.add_irrigation_event(irrigator_id, "start", "auto", duration_minutes=4, timestamp=FROZEN_TS - 600)
     tmp_db.add_irrigation_event(irrigator_id, "start", "auto", duration_minutes=9, timestamp=FROZEN_TS - DAY - 60)

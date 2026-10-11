@@ -51,6 +51,7 @@ def _add_soil(db, cluster_id: int, moisture: float, *, device_id: str = "fake_so
 
 @pytest.fixture
 def logic(tmp_db):
+    """Provide an engine on the test database and the bundled plant database."""
     return IrrigationLogic(tmp_db, get_plant_database())
 
 
@@ -390,6 +391,7 @@ class TestDecisionAssignmentValidation:
         )
 
     def test_tuple_reasons_are_coerced_to_list(self):
+        """Assigning a tuple of reasons is coerced to a list by validation."""
         from greenhouse_core.logic.decision import Reason, TriggerCode
 
         decision = self._decision()
@@ -399,6 +401,7 @@ class TestDecisionAssignmentValidation:
         assert [r.code for r in decision.reasons] == [TriggerCode.SEASONAL_HOLD, TriggerCode.SEASONAL_BOOST]
 
     def test_wrong_type_fails_at_the_assignment(self):
+        """Assigning a wrongly typed value fails at the assignment, not later."""
         import pydantic
 
         decision = self._decision()

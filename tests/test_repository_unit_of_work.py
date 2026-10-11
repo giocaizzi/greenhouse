@@ -13,6 +13,7 @@ def _count_in_new_session(engine) -> int:
 
 
 def test_commit_makes_writes_visible_to_other_sessions(tmp_path):
+    """``commit`` makes writes visible to other sessions."""
     engine = create_engine(f"sqlite:///{tmp_path / 'uow.db'}")
     Base.metadata.create_all(engine)
     with Session(engine) as session:
@@ -25,12 +26,14 @@ def test_commit_makes_writes_visible_to_other_sessions(tmp_path):
 
 
 def test_rollback_discards_uncommitted_writes(tmp_db):
+    """``rollback`` discards uncommitted writes."""
     tmp_db.add_cluster("Discarded")
     tmp_db.rollback()
     assert tmp_db.list_clusters() == []
 
 
 def test_flush_assigns_ids_without_committing(tmp_db):
+    """``flush`` assigns ids without committing."""
     cluster = Cluster(name="Flushed", created_at=0, environment="indoor")
     tmp_db.session.add(cluster)
     assert cluster.id is None

@@ -12,6 +12,7 @@ class TestDeviceGateway:
 
     @pytest.fixture(autouse=True)
     def setup(self):
+        """Build a gateway on a mocked tinytuya Cloud whose v2.0 shadow read fails by default."""
         with patch("greenhouse_core.devices.gateway.tinytuya") as mock_tinytuya:
             self.mock_cloud_instance = MagicMock()
             mock_tinytuya.Cloud.return_value = self.mock_cloud_instance

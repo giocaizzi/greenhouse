@@ -130,11 +130,13 @@ def test_pre_alembic_db_is_not_repaired(file_db):
 
 
 def test_init_db_does_not_disable_application_loggers():
-    """Regression: alembic's env.py ran ``fileConfig`` with the default
-    ``disable_existing_loggers=True``, so every logger created before
-    ``init_db`` (i.e. every server module imported before ``create_app``)
-    was silently muted for the life of the process — scheduler job failures,
-    pump-watcher warnings and deprecation notices never reached the log."""
+    """Regression: running the migrations no longer mutes loggers created before ``init_db``.
+
+    Alembic's env.py ran ``fileConfig`` with the default ``disable_existing_loggers=True``,
+    so every server module imported before ``create_app`` was silently muted for the life
+    of the process — scheduler job failures, pump-watcher warnings and deprecation notices
+    never reached the log.
+    """
     import logging
 
     app_logger = logging.getLogger("greenhouse_server.services.irrigation")

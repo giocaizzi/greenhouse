@@ -9,6 +9,8 @@ from greenhouse_core.stats import get_irrigation_stats
 
 
 class TestGetIrrigationStats:
+    """``get_irrigation_stats`` over seeded events."""
+
     def test_no_irrigators(self, tmp_db):
         """Returns error when no irrigators in cluster."""
         cluster_id = tmp_db.add_cluster(FAKE_CLUSTER_NAME)
@@ -65,6 +67,8 @@ class TestGetIrrigationStats:
 
 
 class TestStatsWithoutEvents:
+    """``get_irrigation_stats`` when the irrigator has no events."""
+
     def test_stats_no_events_returns_zero_frequency(self, tmp_db):
         """Stats with irrigator but no events returns zero frequency."""
         cluster_id = tmp_db.add_cluster(FAKE_CLUSTER_NAME)

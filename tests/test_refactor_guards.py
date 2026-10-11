@@ -109,6 +109,7 @@ def test_cli_entry_point_import_does_not_load_textual() -> None:
 
 
 def test_no_from_time_import_time_in_production_code() -> None:
+    """Production code reads the clock as ``time.time()`` so tests can freeze it (Conventions: Clock)."""
     offenders = []
     for path in _production_files():
         for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
@@ -145,6 +146,7 @@ def _module_name(path: Path) -> str:
 
 
 def test_no_new_public_uppercase_constants_in_tui() -> None:
+    """The TUI grows no public upper-case module constants beyond the frozen surface golden."""
     golden = json.loads(SURFACE_GOLDEN.read_text(encoding="utf-8"))["module_constants"]
     extra = {}
     for path in sorted(TUI_DIR.rglob("*.py")):
@@ -182,6 +184,7 @@ def _tui_domnode_classes() -> dict[str, type]:
 
 
 def test_tui_classes_do_not_shadow_textual_base_names() -> None:
+    """Only the allow-listed TUI classes may shadow names of their Textual base."""
     classes = _tui_domnode_classes()
     assert classes, "no TUI DOMNode subclasses found"
     unknown = sorted(set(classes) - set(SHADOWING_ALLOWED))
@@ -195,6 +198,7 @@ def test_tui_classes_do_not_shadow_textual_base_names() -> None:
 
 
 def test_tui_classes_define_no_key_handlers() -> None:
+    """TUI classes use bindings, never ``key_*`` handlers."""
     offenders = {
         key: sorted(name for name in vars(cls) if name.startswith("key_"))
         for key, cls in _tui_domnode_classes().items()
@@ -221,6 +225,7 @@ def _boundary_files() -> list[Path]:
 
 @pytest.mark.parametrize("path", _boundary_files(), ids=lambda p: str(p.relative_to(LIBS)))
 def test_boundary_module_helpers_are_fully_annotated(path: Path) -> None:
+    """Private helpers in boundary modules are fully annotated."""
     rel = path.relative_to(LIBS).as_posix()
     missing = sorted(
         f"{rel}::{node.name}"

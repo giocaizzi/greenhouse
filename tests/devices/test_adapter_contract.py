@@ -51,9 +51,10 @@ def _make_sensor(model_key: str) -> Sensor:
 
 @pytest.fixture
 def registry(fake_tuya_env, monkeypatch):
-    """A registry wired with the default adapter set against a mocked Tuya
-    cloud — no real network. ``tinytuya.Cloud`` is patched to a MagicMock so
-    every cloud call inside the one shared gateway becomes a no-op.
+    """Provide the default registry against a mocked Tuya Cloud — no real network.
+
+    ``tinytuya.Cloud`` is patched to a MagicMock so every cloud call inside the one
+    shared gateway becomes a no-op.
     """
     with patch("greenhouse_core.devices.tinytuya.Cloud") as cloud_class:
         cloud_class.return_value = MagicMock()
@@ -65,11 +66,13 @@ class TestIrrigatorContract:
     """Every registered irrigator adapter must satisfy the ABC."""
 
     def test_default_registry_contains_ik10pw(self, registry: DeviceRegistry):
+        """The default registry registers the IK10PW model key."""
         keys = registry.registered_irrigator_keys()
         assert "rainpoint.ik10pw" in keys
 
     @pytest.mark.parametrize("model_key", ["rainpoint.ik10pw"])
     def test_adapter_is_abstract_subclass(self, registry: DeviceRegistry, model_key: str):
+        """Every registered irrigator adapter implements the abstract adapter contract."""
         adapter = registry.get_irrigator(_make_irrigator(model_key))
         assert isinstance(adapter, AbstractIrrigatorAdapter)
         # specific class survives the lookup
@@ -99,12 +102,14 @@ class TestIrrigatorContract:
 
     @pytest.mark.parametrize("model_key", ["rainpoint.ik10pw"])
     def test_ik10pw_health_capabilities(self, registry: DeviceRegistry, model_key: str):
+        """The IK10PW declares the no-water and offline health capabilities."""
         adapter = registry.get_irrigator(_make_irrigator(model_key))
         assert HealthAlarm.NO_WATER in adapter.health_capabilities
         assert HealthAlarm.DEVICE_OFFLINE in adapter.health_capabilities
 
     @pytest.mark.parametrize("model_key", ["rainpoint.ik10pw"])
     def test_status_returns_dict(self, registry: DeviceRegistry, model_key: str):
+        """``status`` returns a dict for every registered irrigator."""
         adapter = registry.get_irrigator(_make_irrigator(model_key))
         out = adapter.status(_make_irrigator(model_key))
         assert isinstance(out, dict)
@@ -114,11 +119,13 @@ class TestSensorContract:
     """Every registered sensor adapter must satisfy the ABC."""
 
     def test_default_registry_contains_tr301z(self, registry: DeviceRegistry):
+        """The default registry registers the TR301Z model key."""
         keys = registry.registered_sensor_keys()
         assert "tuya.tr301z" in keys
 
     @pytest.mark.parametrize("model_key", ["tuya.tr301z"])
     def test_adapter_is_abstract_subclass(self, registry: DeviceRegistry, model_key: str):
+        """Every registered sensor adapter implements the abstract adapter contract."""
         adapter = registry.get_sensor(_make_sensor(model_key))
         assert isinstance(adapter, AbstractSensorAdapter)
         if model_key == "tuya.tr301z":
@@ -137,6 +144,7 @@ class TestSensorContract:
 
     @pytest.mark.parametrize("model_key", ["tuya.tr301z"])
     def test_tr301z_health_capabilities(self, registry: DeviceRegistry, model_key: str):
+        """The TR301Z declares the battery and offline health capabilities."""
         adapter = registry.get_sensor(_make_sensor(model_key))
         assert HealthAlarm.LOW_BATTERY in adapter.health_capabilities
         assert HealthAlarm.BATTERY_CRITICAL in adapter.health_capabilities
@@ -149,12 +157,14 @@ class TestRegistryFailureModes:
     """Resolution policy: fail closed on irrigators, fail degraded on sensors."""
 
     def test_unknown_irrigator_raises(self, registry: DeviceRegistry):
+        """An unknown irrigator model raises ``UnknownDeviceModel``."""
         from greenhouse_core.devices import UnknownDeviceModel
 
         with pytest.raises(UnknownDeviceModel):
             registry.get_irrigator(_make_irrigator("rainpoint.does-not-exist"))
 
     def test_unknown_sensor_returns_none(self, registry: DeviceRegistry, caplog):
+        """An unknown sensor model resolves to None (the sensor is skipped)."""
         out = registry.get_sensor(_make_sensor("tuya.does-not-exist"))
         assert out is None
 
@@ -167,5 +177,6 @@ class TestRegistryFailureModes:
                 registry.get_irrigator(_make_irrigator(legacy))
 
     def test_legacy_sensor_types_are_unknown(self, registry: DeviceRegistry):
+        """Legacy generic sensor types no longer resolve to an adapter."""
         for legacy in ("soil_moisture", "temp_humidity", "light", ""):
             assert registry.get_sensor(_make_sensor(legacy)) is None, legacy

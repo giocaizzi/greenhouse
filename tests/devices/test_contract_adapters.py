@@ -70,6 +70,7 @@ class Seq:
     """A scripted sequence of responses for consecutive calls to one Cloud method."""
 
     def __init__(self, *items: object) -> None:
+        """Queue ``items`` to be returned one per call, in order."""
         self.items = list(items)
 
 
@@ -82,10 +83,12 @@ class RecordingCloud:
     """
 
     def __init__(self, log: list) -> None:
+        """Record every call into the shared ``log``; responses are set per method."""
         self.log = log
         self.responses: dict[str, object] = {}
 
     def set(self, method: str, response: object) -> None:
+        """Script the response (or exception, or ``Seq``) the next ``method`` calls return."""
         self.responses[method] = response
 
     def _respond(self, method: str):
@@ -99,22 +102,27 @@ class RecordingCloud:
         return resp
 
     def cloudrequest(self, url):
+        """Record a v2.0 shadow request and return its scripted response."""
         self.log.append(("cloud.cloudrequest", url))
         return self._respond("cloudrequest")
 
     def getstatus(self, device_id):
+        """Record a v1.0 status read and return its scripted response."""
         self.log.append(("cloud.getstatus", device_id))
         return self._respond("getstatus")
 
     def getdevicelog(self, device_id, **kwargs):
+        """Record a device-log page request and return its scripted response."""
         self.log.append(("cloud.getdevicelog", device_id, kwargs))
         return self._respond("getdevicelog")
 
     def sendcommand(self, device_id, commands):
+        """Record a Cloud command and return its scripted response."""
         self.log.append(("cloud.sendcommand", device_id, commands))
         return self._respond("sendcommand")
 
     def getdevices(self):
+        """Record a device listing (the cold local-key lookup) and return its scripted response."""
         self.log.append(("cloud.getdevices",))
         return self._respond("getdevices")
 
@@ -123,6 +131,7 @@ class Harness:
     """One recording Cloud + recording local-device class sharing a call log."""
 
     def __init__(self, monkeypatch) -> None:
+        """Wire a recording Cloud and a fake local tinytuya device into one shared call log."""
         self.log: list = []
         self.cloud = RecordingCloud(self.log)
         self.local_status: object = {"dps": {}}
@@ -154,11 +163,13 @@ class Harness:
         self.gateway = DeviceGateway(FAKE_CLIENT_ID, FAKE_CLIENT_SECRET, "eu", raw=self.cloud)
 
     def cloud_calls(self) -> list:
+        """Return only the Cloud calls from the shared log."""
         return [c for c in self.log if c[0].startswith("cloud.")]
 
 
 @pytest.fixture
 def harness(monkeypatch, frozen_clock) -> Harness:
+    """Provide a recording harness with the clock frozen at ``FROZEN_TS``."""
     return Harness(monkeypatch)
 
 
@@ -280,6 +291,7 @@ def test_invariant_1_ik10pw_profile_is_protocol_3_5():
 
 
 def test_profile_dp_unknown_name_raises_keyerror():
+    """Profiles reject unknown DP names and answer capability lookups exactly."""
     with pytest.raises(KeyError):
         IK10PW_PROFILE.dp("rain_sensor")
     assert IK10PW_PROFILE.has_capability("supports_local_status") is True
@@ -288,7 +300,10 @@ def test_profile_dp_unknown_name_raises_keyerror():
 
 
 class TestRegistryResolution:
+    """Registry: model key to adapter resolution."""
+
     def test_factories_build_a_fresh_adapter_per_lookup_sharing_one_gateway(self):
+        """Each lookup builds a fresh adapter, but all of them share the one app gateway (invariant 8)."""
         gateway = DeviceGateway(FAKE_CLIENT_ID, FAKE_CLIENT_SECRET, raw=object())
         registry = build_default_registry(gateway)
         a = registry.get_irrigator(_irrigator())
@@ -299,6 +314,7 @@ class TestRegistryResolution:
         assert a._gateway is gateway and b._gateway is gateway and s._gateway is gateway
 
     def test_only_the_model_key_resolves_to_ik10pw(self):
+        """Only the exact model key resolves to the IK10PW adapter."""
         registry = build_default_registry(DeviceGateway(FAKE_CLIENT_ID, FAKE_CLIENT_SECRET, raw=object()))
         assert type(registry.get_irrigator(_irrigator(device_type="rainpoint.ik10pw"))) is IK10PWAdapter
 
@@ -312,16 +328,19 @@ class TestRegistryResolution:
 
     @pytest.mark.parametrize("raw_type", ["", "soil_moisture", "temp_humidity", "light"])
     def test_legacy_and_empty_sensor_types_are_unknown(self, raw_type):
+        """Legacy and empty sensor types resolve to no adapter."""
         registry = build_default_registry(DeviceGateway(FAKE_CLIENT_ID, FAKE_CLIENT_SECRET, raw=object()))
         assert registry.get_sensor(_sensor(raw_type)) is None
 
     def test_unknown_irrigator_message_is_exact(self):
+        """An unknown irrigator type raises with the exact message naming the known keys."""
         registry = build_default_registry(DeviceGateway(FAKE_CLIENT_ID, FAKE_CLIENT_SECRET, raw=object()))
         with pytest.raises(UnknownDeviceModel) as excinfo:
             registry.get_irrigator(_irrigator(device_type="acme.pump"))
         assert str(excinfo.value) == "No adapter registered for irrigator type 'acme.pump' (known: rainpoint.ik10pw)"
 
     def test_unknown_sensor_logs_warning_and_returns_none(self, caplog):
+        """An unknown sensor type is skipped with one exact warning instead of raising."""
         registry = build_default_registry(DeviceGateway(FAKE_CLIENT_ID, FAKE_CLIENT_SECRET, raw=object()))
         with caplog.at_level(logging.WARNING, logger="greenhouse_core.devices.registry"):
             assert registry.get_sensor(_sensor("acme.probe")) is None
@@ -330,6 +349,7 @@ class TestRegistryResolution:
         ]
 
     def test_empty_registry_and_late_registration_order(self):
+        """Registered keys are reported in registration order, starting empty."""
         registry = DeviceRegistry()
         assert registry.registered_irrigator_keys() == ()
         registry.register_irrigator("b.x", lambda: None)
@@ -341,7 +361,10 @@ class TestRegistryResolution:
 
 
 class TestGatewayConstruction:
+    """DeviceGateway construction: one Cloud client, credentials and region."""
+
     def test_builds_exactly_one_cloud_client_with_explicit_credentials(self, monkeypatch):
+        """Explicit credentials build exactly one tinytuya Cloud client."""
         built = []
         monkeypatch.setattr(
             "greenhouse_core.devices.tinytuya.Cloud", lambda **kw: built.append(kw) or SimpleNamespace(tag="cloud")
@@ -352,6 +375,7 @@ class TestGatewayConstruction:
         assert (gateway.client_id, gateway.client_secret, gateway.region) == ("cid", "secret", "us")
 
     def test_environment_fallback_and_default_region(self, monkeypatch, clean_env):
+        """Without arguments, credentials come from the TUYA_ env vars and the region defaults to eu."""
         built = []
         monkeypatch.setattr("greenhouse_core.devices.tinytuya.Cloud", lambda **kw: built.append(kw))
         monkeypatch.setenv("TUYA_CLIENT_ID", "env-id")
@@ -360,12 +384,14 @@ class TestGatewayConstruction:
         assert built == [{"apiRegion": "eu", "apiKey": "env-id", "apiSecret": "env-secret"}]
 
     def test_injected_raw_client_skips_construction(self, monkeypatch):
+        """An injected raw client is used as is, never building a real one."""
         monkeypatch.setattr("greenhouse_core.devices.tinytuya.Cloud", lambda **kw: pytest.fail("must not build"))
         raw = object()
         assert DeviceGateway("cid", "secret", raw=raw)._cloud is raw
 
     @pytest.mark.parametrize(("cid", "secret"), [("", "s"), ("c", ""), (None, None)])
     def test_missing_credentials_fail_before_any_client(self, monkeypatch, clean_env, cid, secret):
+        """Missing credentials fail with an exact message before any client is built."""
         monkeypatch.setattr("greenhouse_core.devices.tinytuya.Cloud", lambda **kw: pytest.fail("must not build"))
         with pytest.raises(ValueError) as excinfo:
             DeviceGateway(cid, secret)
@@ -376,7 +402,10 @@ class TestGatewayConstruction:
 
 
 class TestLiveReadSingleCall:
+    """``get_live_reading`` is a single Cloud call unless v2.0 fails (invariant 8)."""
+
     def test_v2_success_is_one_call(self, harness):
+        """A successful v2.0 shadow read is the only call and is parsed into canonical keys."""
         harness.cloud.set(
             "cloudrequest",
             {
@@ -400,6 +429,7 @@ class TestLiveReadSingleCall:
         [{"success": True, "result": {"properties": []}}, {"success": True, "result": {}}, {"success": True}],
     )
     def test_v2_empty_but_successful_is_authoritative(self, harness, shadow):
+        """An empty but successful v2.0 read is final: no v1.0 fallback."""
         harness.cloud.set("cloudrequest", shadow)
         assert harness.gateway.get_live_reading(FAKE_SENSOR_ID) == {}
         assert harness.log == [("cloud.cloudrequest", SHADOW_PATH)]
@@ -410,12 +440,14 @@ class TestLiveReadSingleCall:
         ids=["success-false", "no-success-key", "none", "connection-error", "runtime-error"],
     )
     def test_v1_getstatus_only_when_v2_fails(self, harness, v2_failure):
+        """v1.0 ``getstatus`` fires only after a failed v2.0 read."""
         harness.cloud.set("cloudrequest", v2_failure)
         harness.cloud.set("getstatus", {"success": True, "result": [{"code": "va_temperature", "value": "205"}]})
         assert harness.gateway.get_live_reading(FAKE_SENSOR_ID) == {"temperature": 20.5}
         assert harness.log == [("cloud.cloudrequest", SHADOW_PATH), ("cloud.getstatus", FAKE_SENSOR_ID)]
 
     def test_both_endpoints_failing_raises_with_v1_payload(self, harness):
+        """When both endpoints fail, the error carries the v1.0 payload."""
         harness.cloud.set("cloudrequest", {"success": False})
         harness.cloud.set("getstatus", {"success": False, "msg": "offline"})
         with pytest.raises(RuntimeError) as excinfo:
@@ -423,6 +455,7 @@ class TestLiveReadSingleCall:
         assert str(excinfo.value) == "Cloud API error: {'success': False, 'msg': 'offline'}"
 
     def test_v1_transport_error_propagates(self, harness):
+        """A transport error on the v1.0 fallback propagates to the caller."""
         harness.cloud.set("cloudrequest", ConnectionError("v2 down"))
         harness.cloud.set("getstatus", ConnectionError("v1 down"))
         with pytest.raises(ConnectionError, match="v1 down"):
@@ -445,6 +478,7 @@ class TestLiveReadSingleCall:
         ]
 
     def test_v1_parser_error_skips_only_that_dp(self, harness):
+        """An unparseable v1.0 DP is dropped without losing the others."""
         harness.cloud.set("cloudrequest", {"success": False})
         harness.cloud.set(
             "getstatus",
@@ -454,6 +488,7 @@ class TestLiveReadSingleCall:
         assert harness.log == [("cloud.cloudrequest", SHADOW_PATH), ("cloud.getstatus", FAKE_SENSOR_ID)]
 
     def test_v2_all_dps_unparseable_is_an_empty_authoritative_read(self, harness):
+        """A v2.0 read whose DPs are all unparseable is still an authoritative empty read."""
         harness.cloud.set(
             "cloudrequest", {"success": True, "result": {"properties": [{"code": "light", "value": None}]}}
         )
@@ -461,6 +496,7 @@ class TestLiveReadSingleCall:
         assert harness.log == [("cloud.cloudrequest", SHADOW_PATH)]
 
     def test_later_dp_wins_for_the_same_canonical_key(self, harness):
+        """When two DPs map to the same canonical key, the later one wins."""
         harness.cloud.set(
             "cloudrequest",
             {
@@ -499,7 +535,10 @@ def _log_page(entries: list[tuple[str, str, int]], *, has_next: bool, next_row_k
 
 
 class TestDeviceLogs:
+    """``get_device_logs`` paging, parsing and grouping."""
+
     def test_exact_request_parse_and_sort(self, harness):
+        """Device logs are requested with exact arguments, parsed and sorted by time."""
         harness.cloud.set(
             "getdevicelog",
             {
@@ -562,6 +601,7 @@ class TestDeviceLogs:
         assert [(e["key"], e["value"]) for e in logs] == [("water_warning", False), ("water_warning", True)]
 
     def test_default_window_is_hours_back_from_now(self, harness):
+        """Without ``since_ms`` the window starts ``hours`` before now (24 by default)."""
         harness.cloud.set("getdevicelog", {"result": {"logs": []}})
         harness.gateway.get_device_logs(FAKE_SENSOR_ID)
         harness.gateway.get_device_logs(FAKE_SENSOR_ID, hours=2, page_size=5)
@@ -594,11 +634,13 @@ class TestDeviceLogs:
         ids=["no-row-key", "empty-row-key"],
     )
     def test_has_next_without_a_cursor_stops(self, harness, last_page):
+        """A page claiming more data but giving no cursor ends the paging."""
         harness.cloud.set("getdevicelog", last_page)
         assert harness.gateway.get_device_logs(FAKE_SENSOR_ID, since_ms=0) == []
         assert len(harness.log) == 1
 
     def test_repeated_cursor_stops_and_warns(self, harness, caplog):
+        """A repeated cursor stops the paging with a warning instead of looping."""
         harness.cloud.set("getdevicelog", _log_page([("humidity", "40", 1_000)], has_next=True, next_row_key="again"))
         with caplog.at_level(logging.WARNING, logger="greenhouse_core.devices.gateway"):
             logs = harness.gateway.get_device_logs(FAKE_SENSOR_ID, since_ms=0)
@@ -607,6 +649,7 @@ class TestDeviceLogs:
         assert caplog.messages == [f"getdevicelog for {FAKE_SENSOR_ID} repeated cursor 'again'; stopping"]
 
     def test_failed_page_stops_keeps_earlier_pages_and_warns(self, harness, caplog):
+        """A failed page stops paging but keeps the pages already read."""
         harness.cloud.set(
             "getdevicelog",
             Seq(
@@ -621,6 +664,7 @@ class TestDeviceLogs:
         assert caplog.messages == [f"getdevicelog page for {FAKE_SENSOR_ID} failed: {{'success': False, 'code': 1010}}"]
 
     def test_page_cap_bounds_the_requests_and_warns(self, harness, caplog):
+        """The page cap bounds the number of requests and warns when it is hit."""
         harness.cloud.set(
             "getdevicelog",
             Seq(
@@ -660,16 +704,19 @@ class TestDeviceLogs:
         assert [c[0] for c in harness.log] == ["cloud.getdevicelog", "cloud.getdevicelog", "cloud.cloudrequest"]
 
     def test_default_page_cap_and_size_come_from_constants(self):
+        """The default page size and cap are the documented constants."""
         from greenhouse_core import constants
 
         assert (constants.SENSOR_LOG_PAGE_SIZE, constants.SENSOR_LOG_MAX_PAGES) == (100, 50)
 
     @pytest.mark.parametrize("payload", [{}, {"result": {}}, {"success": False}])
     def test_missing_logs_is_empty(self, harness, payload):
+        """A payload without logs reads as no logs."""
         harness.cloud.set("getdevicelog", payload)
         assert harness.gateway.get_device_logs(FAKE_SENSOR_ID, since_ms=0) == []
 
     def test_group_logs_tolerance_boundary_and_timestamp_rules(self):
+        """Logs group within the tolerance from the group start, with exact boundary and timestamp rules."""
         logs = [
             {"timestamp_ms": 10_000, "timestamp": 10, "key": "temperature", "value": 20.0},
             {"timestamp_ms": 15_000, "timestamp": 15, "key": "soil_moisture", "value": 40.0},  # +5000: same group
@@ -694,7 +741,10 @@ class TestDeviceLogs:
 
 
 class TestCloudCommands:
+    """Raw Cloud commands and status reads."""
+
     def test_send_command_success_and_failure(self, harness):
+        """``send_command`` reports success and Cloud errors as ``(ok, message)``."""
         harness.cloud.set("sendcommand", Seq({"success": True, "t": 1}, {"success": False, "code": 2008}))
         assert harness.gateway.send_command(FAKE_DEVICE_ID, SWITCH_ON) == (True, "Command succeeded")
         assert harness.gateway.send_command(FAKE_DEVICE_ID, SWITCH_OFF) == (
@@ -707,6 +757,7 @@ class TestCloudCommands:
         ]
 
     def test_get_status_is_a_raw_passthrough(self, harness):
+        """``get_status`` returns the Cloud payload unchanged in one call."""
         harness.cloud.set("getstatus", {"anything": [1]})
         assert harness.gateway.get_status(FAKE_DEVICE_ID) == {"anything": [1]}
         assert harness.log == [("cloud.getstatus", FAKE_DEVICE_ID)]
@@ -716,6 +767,8 @@ class TestCloudCommands:
 
 
 class TestLocalKeyResolution:
+    """Local-key resolution: config first, then process cache, then one Cloud lookup."""
+
     @pytest.mark.parametrize(
         "config",
         [
@@ -725,11 +778,13 @@ class TestLocalKeyResolution:
         ids=["dict-config", "json-string-config"],
     )
     def test_open_local_from_config_costs_zero_cloud_calls(self, harness, config):
+        """A key in the irrigator config (dict or JSON) opens the device with no Cloud call."""
         harness.gateway.open_local(_irrigator(config), 3.5)
         assert harness.log == _local_open_calls()
         assert harness.cloud_calls() == []
 
     def test_cold_lookup_once_then_process_cache(self, harness):
+        """A missing key is looked up once, reported to the persistence hook, then served from cache."""
         discovered = []
         gateway = DeviceGateway(
             FAKE_CLIENT_ID, FAKE_CLIENT_SECRET, raw=harness.cloud, on_key_discovered=lambda *a: discovered.append(a)
@@ -743,6 +798,7 @@ class TestLocalKeyResolution:
         assert gateway._key_cache == {FAKE_DEVICE_ID: "cold-key"}
 
     def test_resolve_local_key_order(self, harness):
+        """Resolution order is config key, then cache, then Cloud; garbage or empty config falls through."""
         gw = harness.gateway
         harness.cloud.set("getdevices", [{"id": FAKE_DEVICE_ID, "key": "from-cloud"}])
         assert gw.resolve_local_key(FAKE_DEVICE_ID, {"local_key": "cfg"}) == "cfg"
@@ -754,11 +810,14 @@ class TestLocalKeyResolution:
 
     @pytest.mark.parametrize("devices", [[{"id": "someone-else", "key": "k"}], {"error": "not a list"}, []])
     def test_unknown_device_resolves_none_and_is_not_cached(self, harness, devices):
+        """A device the Cloud does not know resolves to None and nothing is cached."""
         harness.cloud.set("getdevices", devices)
         assert harness.gateway.resolve_local_key(FAKE_DEVICE_ID) is None
         assert harness.gateway._key_cache == {}
 
     def test_persistence_hook_failure_is_logged_not_raised(self, harness, caplog):
+        """A failing persistence hook is logged, and the key is still cached and returned."""
+
         def _boom(device_id, key):
             raise RuntimeError("db locked")
 
@@ -770,12 +829,14 @@ class TestLocalKeyResolution:
         assert gateway._key_cache == {FAKE_DEVICE_ID: "k1"}
 
     def test_open_local_without_ip_never_touches_cloud(self, harness):
+        """Without a device IP, opening fails before any call."""
         with pytest.raises(ConnectionError) as excinfo:
             harness.gateway.open_local(_irrigator({"local_key": FAKE_LOCAL_KEY}), 3.5)
         assert str(excinfo.value) == f"No device_ip in config for irrigator {FAKE_DEVICE_ID}."
         assert harness.log == []
 
     def test_open_local_without_any_key_raises_after_one_lookup(self, harness):
+        """With no key anywhere, opening fails after exactly one Cloud lookup."""
         harness.cloud.set("getdevices", [])
         with pytest.raises(ConnectionError) as excinfo:
             harness.gateway.open_local(_irrigator({"device_ip": FAKE_DEVICE_IP}), 3.5)
@@ -787,7 +848,10 @@ class TestLocalKeyResolution:
 
 
 def _scenarios():
-    """name → (setup(harness), action(harness) -> result). Keep-alive paths are tested separately."""
+    """Return the scenario table: name → (setup(harness), action(harness) -> result).
+
+    Keep-alive paths are tested separately.
+    """
     ok = {"success": True}
     fail = {"success": False, "msg": "offline"}
 
@@ -933,7 +997,10 @@ def test_adapter_call_sequences_golden(monkeypatch, frozen_clock):
 
 
 class TestAdapterInvariants:
+    """Adapter-level actuation invariants (local DP 102 over v3.5, Cloud switch pulse)."""
+
     def test_ik10pw_bounded_start_is_local_dp102_over_3_5_then_cloud_switch(self, harness):
+        """A bounded start sets Duration DP 102 locally, then pulses the switch via the Cloud."""
         harness.cloud.set("sendcommand", {"success": True})
         result = IK10PWAdapter(harness.gateway).start(_irrigator(), 5)
         assert result == (True, "Irrigation started for 5 min (Duration DP set to 300s, device auto-stops)")
@@ -944,6 +1011,7 @@ class TestAdapterInvariants:
         ]
 
     def test_ik10pw_local_paths_use_profile_protocol_version(self, harness, monkeypatch):
+        """Every local path opens the device with the profile's protocol version (invariant 1)."""
         seen = []
         real = harness.gateway.open_local
         monkeypatch.setattr(
@@ -957,6 +1025,7 @@ class TestAdapterInvariants:
         assert seen == [3.5, 3.5, 3.5]
 
     def test_switch_pulse_goes_via_cloud_only(self, harness):
+        """On / off pulses go through the Cloud only."""
         harness.cloud.set("sendcommand", {"success": True})
         adapter = IK10PWAdapter(harness.gateway)
         adapter.on(_irrigator())
@@ -967,6 +1036,7 @@ class TestAdapterInvariants:
         ]
 
     def test_cloud_switch_transport_error_propagates(self, harness):
+        """A transport error on the Cloud switch propagates to the caller."""
         harness.cloud.set("sendcommand", ConnectionError("unreachable"))
         with pytest.raises(ConnectionError):
             IK10PWAdapter(harness.gateway).on(_irrigator())
@@ -975,6 +1045,7 @@ class TestAdapterInvariants:
         ("bitmask", "raw", "tripped"), [(None, 1, True), (2, 1, False), (2, 2, True), (2, 3, True)]
     )
     def test_read_health_uses_profile_bitmask_defaulting_to_bit0(self, harness, bitmask, raw, tripped):
+        """The no-water alarm uses the profile's bitmask, bit 0 by default."""
         profile = dataclasses.replace(IK10PW_PROFILE, alarm_bitmask=bitmask)
         harness.local_status = {"dps": {"105": raw}}
         state = IK10PWAdapter(harness.gateway, profile).read_health(_irrigator())
@@ -997,6 +1068,7 @@ class TestAdapterInvariants:
     ],
 )
 def test_tr301z_read_health_derives_from_persisted_row_with_zero_cloud_calls(harness, latest, expected):
+    """Sensor health is derived from the persisted reading, with no Cloud call (invariant 8)."""
     state = TR301ZAdapter(harness.gateway).read_health(_sensor(), latest)
     got = _state_dict(state)
     assert got["observed_at"] == FROZEN_TS
@@ -1007,6 +1079,7 @@ def test_tr301z_read_health_derives_from_persisted_row_with_zero_cloud_calls(har
 
 
 def test_tr301z_read_health_raw_payloads(harness):
+    """The health state's raw payload records what it was derived from."""
     adapter = TR301ZAdapter(harness.gateway)
     assert adapter.read_health(_sensor(), None).raw == {"reason": "no persisted reading"}
     row = _reading(battery_state="low", water_warning=True)
@@ -1081,6 +1154,7 @@ def test_local_duration_error_payload_refuses_after_the_local_write_only(harness
 
 
 def test_keepalive_loop_is_gone():
+    """The removed keep-alive loop and its interval constant stay removed."""
     assert not hasattr(IK10PWAdapter, "_start_keepalive")
     assert not hasattr(ik10pw_module, "KEEP_ALIVE_INTERVAL")
 
@@ -1103,12 +1177,14 @@ def test_keepalive_loop_is_gone():
     ],
 )
 def test_alarm_indicates_no_water_with_bitmask(value, bitmask, expected):
+    """The alarm decoder's type rules: bools ignore the mask, decimal strings count, anything else is False."""
     assert alarm_indicates_no_water(value, bitmask) is expected
 
 
 @settings(derandomize=True, deadline=None, max_examples=200)
 @given(value=st.integers(min_value=-(2**40), max_value=2**40), bitmask=st.integers(min_value=0, max_value=255))
 def test_alarm_int_and_decimal_string_agree_with_bitwise_and(value, bitmask):
+    """Integer and decimal-string alarm values decode exactly like a bitwise AND."""
     expected = bool(value & bitmask)
     assert alarm_indicates_no_water(value, bitmask) is expected
     assert alarm_indicates_no_water(str(value), bitmask) is expected

@@ -21,6 +21,8 @@ def _reset_display_tz():
 
 
 class TestSeasonalLightFactor:
+    """``seasonal_light_factor`` per month."""
+
     def test_summer_peak(self):
         """June and July return 1.0 (peak)."""
         assert seasonal_light_factor(6) == 1.0
@@ -52,6 +54,8 @@ class TestSeasonalLightFactor:
 
 
 class TestDaytimeLuxReadings:
+    """``daytime_lux_readings`` filtering."""
+
     def test_filters_night_readings(self):
         """Readings at or below threshold are excluded."""
 
@@ -80,6 +84,8 @@ class TestDaytimeLuxReadings:
 
 
 class TestEffectiveLightThreshold:
+    """``effective_light_threshold`` scaling by season."""
+
     def test_summer_full_threshold(self):
         """In summer, threshold equals base."""
         assert effective_light_threshold(800, month=6) == 800.0
@@ -95,6 +101,8 @@ class TestEffectiveLightThreshold:
 
 
 class TestFormatTimestamp:
+    """``format_timestamp`` output."""
+
     def test_formats_unix_timestamp(self):
         """Timestamp is formatted to human-readable string."""
         result = format_timestamp(0)
@@ -108,6 +116,8 @@ class TestFormatTimestamp:
 
 
 class TestGetDisplayTimezone:
+    """``get_display_timezone`` resolution order."""
+
     def test_default_timezone(self, monkeypatch):
         """With no preference set and no env override, the default is UTC."""
         monkeypatch.delenv("IRRIGATION_TZ", raising=False)

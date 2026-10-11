@@ -39,6 +39,7 @@ def _freeze(monkeypatch, ts: int) -> None:
 
 @pytest.fixture
 def logic(tmp_db):
+    """Provide an engine on the test database and the bundled plant database."""
     return IrrigationLogic(tmp_db, get_plant_database())
 
 

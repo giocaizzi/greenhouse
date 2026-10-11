@@ -99,6 +99,7 @@ def walk_commands() -> list[tuple[tuple[str, ...], Any]]:
 
 
 def is_group(cmd: Any) -> bool:
+    """Return whether a click command is a group (has sub-commands)."""
     return hasattr(cmd, "commands")
 
 
@@ -108,6 +109,7 @@ def leaf_command_paths() -> list[tuple[str, ...]]:
 
 
 def golden_name(path: tuple[str, ...]) -> str:
+    """Return the golden file name of a command path's help page."""
     return ".".join((PROG, *path)) + ".txt"
 
 
@@ -120,6 +122,7 @@ def _jsonable(value: Any) -> Any:
 
 
 def describe_param(param: Any) -> dict[str, Any]:
+    """Describe one click parameter (name, kind, type, default, flags) as JSON."""
     ptype = param.type
     return {
         "name": param.name,
@@ -146,6 +149,7 @@ def describe_param(param: Any) -> dict[str, Any]:
 
 
 def describe_command(path: tuple[str, ...], cmd: Any) -> dict[str, Any]:
+    """Describe one command and its parameters as JSON for the tree golden."""
     entry: dict[str, Any] = {
         "path": " ".join((PROG, *path)),
         "group": is_group(cmd),
@@ -167,6 +171,7 @@ runner = CliRunner()
 
 
 def test_command_tree_has_every_help_page():
+    """The command tree has the pinned number of help pages and groups."""
     assert len(COMMANDS) == EXPECTED_HELP_PAGES
     groups = [p for p, c in COMMANDS if is_group(c)]
     assert len(groups) == 13

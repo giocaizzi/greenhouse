@@ -31,6 +31,7 @@ HOUR = 3600
 
 @pytest.fixture
 def env(tmp_db, frozen_clock, clean_env):
+    """Provide the test database with the clock frozen and the environment cleared."""
     return tmp_db
 
 
@@ -134,7 +135,10 @@ def test_inv2_stress_rule_keys_on_the_driest_plant(env):
     ],
 )
 def test_inv3_cooldown_boundary_is_six_hours_exclusive(env, age_s, expect_cooldown):
-    """Invariant #3: a ``start`` less than ``MIN_COOLDOWN_HOURS`` (6h) ago skips with COOLDOWN; at 6h it no longer does."""
+    """Invariant #3: a ``start`` less than ``MIN_COOLDOWN_HOURS`` (6h) ago skips with COOLDOWN.
+
+    At 6h it no longer does: the boundary is exclusive.
+    """
     cid, irr, _ = _cluster(env)
     env.add_irrigation_event(irr, "start", "auto", duration_minutes=2, timestamp=FROZEN_TS - age_s)
 

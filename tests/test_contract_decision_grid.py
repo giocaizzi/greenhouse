@@ -86,6 +86,7 @@ def _assert_audit_invariants(case_id: str, record: dict) -> None:
 
 @pytest.mark.parametrize("name", sorted(_SHARDS))
 def test_decision_grid_matches_golden(name, clean_env):
+    """Every engine-grid case in this shard decides exactly as pinned in its golden."""
     records = {case.id: run_case(case) for case in _SHARDS[name]}
 
     for case_id, record in records.items():
@@ -95,6 +96,7 @@ def test_decision_grid_matches_golden(name, clean_env):
 
 
 def test_grid_case_ids_are_unique_and_stable():
+    """Grid case ids are unique and their order is stable across builds."""
     cases = build_cases()
 
     assert len({c.id for c in cases}) == len(cases)

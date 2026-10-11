@@ -77,8 +77,10 @@ def _reloads_in_half_a_second(auto_refresh: bool) -> int:
     [("admin", "", []), ("", "secret", []), ("  admin ", "s3cret ", [("admin", "s3cret ")])],
 )
 def test_login_dialog_needs_both_fields(clean_env, username, password, dismissed):
-    """tui-23: the sign-in dialog dismisses only with a non-blank username AND a password
-    (username stripped, password verbatim)."""
+    """tui-23: the sign-in dialog dismisses only with a non-blank username AND a password.
+
+    The username is stripped, the password is passed verbatim.
+    """
     results: list = []
 
     class Host(App):
@@ -101,8 +103,10 @@ def test_login_dialog_needs_both_fields(clean_env, username, password, dismissed
 
 @pytest.mark.parametrize(("quiet", "toasts"), [(False, [("boom", "Server error 500", "error")]), (True, [])])
 def test_api_error_toast_respects_quiet(clean_env, quiet, toasts):
-    """tui-32: a non-401 ``ServerError`` becomes an error toast unless the caller passed ``quiet=True``;
-    either way ``api`` returns ``None``."""
+    """tui-32: a non-401 ``ServerError`` becomes an error toast unless the caller passed ``quiet=True``.
+
+    Either way ``api`` returns ``None``.
+    """
     app = GreenhouseApp("http://test.invalid", client_factory=lambda token: object(), animations=False)
     seen: list[tuple] = []
     app.notify = lambda message, *, title="", severity="information", **kw: seen.append((message, title, severity))
@@ -115,8 +119,10 @@ def test_api_error_toast_respects_quiet(clean_env, quiet, toasts):
 
 
 def test_only_auto_refresh_screens_reload_on_a_timer(clean_env):
-    """tui-17: ``DataScreen.on_mount`` loads once, and installs the periodic reload only when
-    ``AUTO_REFRESH`` is true (Settings and other non-auto screens never poll)."""
+    """tui-17: ``DataScreen.on_mount`` loads once, and installs the periodic reload only when ``AUTO_REFRESH``.
+
+    Settings and the other non-auto screens never poll.
+    """
     assert SettingsScreen.AUTO_REFRESH is False and DashboardScreen.AUTO_REFRESH is True
     assert _reloads_in_half_a_second(auto_refresh=False) == 1
     assert _reloads_in_half_a_second(auto_refresh=True) >= 2

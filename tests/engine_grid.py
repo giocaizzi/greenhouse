@@ -141,14 +141,17 @@ class FakeForecastWeather:
     """``WeatherClient`` stand-in returning a fixed forecast dict (or ``None``)."""
 
     def __init__(self, forecast: dict | None):
+        """Serve ``forecast`` (None for no forecast) and record each request."""
         self._forecast = forecast
         self.forecast_calls: list[int] = []
 
     def get_forecast(self, hours: int = 6) -> dict | None:
+        """Record the requested horizon and return a copy of the canned forecast."""
         self.forecast_calls.append(hours)
         return None if self._forecast is None else dict(self._forecast)
 
     def get_current(self) -> None:
+        """Return no current weather; the grid only drives the forecast."""
         return None
 
 

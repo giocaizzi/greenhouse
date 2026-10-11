@@ -15,7 +15,8 @@
 every golden name must still exist with an equal ``repr`` (so equal value *and* type);
 NEW constants are allowed, since additions break no consumer and goldens may not be
 re-generated after the fact. Each golden enum and ``DEVICE_BLOCKING_CODES`` stay STRICT:
-exact members, values and order (a brand-new enum class is an allowed addition). ``GOLDEN_UPDATE=1`` (re)writes the full snapshot.
+exact members, values and order (a brand-new enum class is an allowed addition).
+``GOLDEN_UPDATE=1`` (re)writes the full snapshot.
 """
 
 from __future__ import annotations
@@ -66,6 +67,7 @@ def _golden() -> dict | None:
 
 
 def test_golden_constants_still_exist_with_equal_values():
+    """Every golden constant still exists with an equal value (additions allowed)."""
     golden = _golden()
     if golden is None:
         return
@@ -77,6 +79,7 @@ def test_golden_constants_still_exist_with_equal_values():
 
 
 def test_enums_and_blocking_codes_match_golden_exactly():
+    """Enum members and the device-blocking codes match the golden exactly."""
     golden = _golden()
     if golden is None:
         return
@@ -87,12 +90,14 @@ def test_enums_and_blocking_codes_match_golden_exactly():
 
 
 def test_constant_types():
+    """``constants.py`` holds only plain values (invariant 5)."""
     values = {name: value for name, value in vars(constants).items() if name.isupper()}
     assert len(values) >= 100
     assert all(isinstance(v, int | float | str | bool | tuple | dict) for v in values.values())
 
 
 def test_decision_module_defines_the_three_enums():
+    """The decision module defines Action, Severity and TriggerCode first."""
     assert list(_decision_enums())[:3] == ["Action", "Severity", "TriggerCode"]
 
 
@@ -107,6 +112,7 @@ def test_enums_are_str_enums_whose_members_equal_their_values(enum):
 
 
 def test_trigger_code_count_and_extremes():
+    """The trigger-code count and first / last members are pinned."""
     members = list(TriggerCode)
     assert len(members) == 48  # + DRY_RUN_GLOBAL (S1), NO_ACTION_NEEDED
     assert (members[0].value, members[-1].value) == ("no_plants", "dry_run_global")

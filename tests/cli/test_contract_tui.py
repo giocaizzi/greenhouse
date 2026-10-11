@@ -108,10 +108,12 @@ def screen_text(app: App) -> str:
 
 
 def _pending_tui_work(tui: App) -> list[str]:
-    """Everything the app still has to process: unfinished workers, queued messages, deferred callbacks,
-    running or scheduled animations (e.g. the 0.3 s slide of the active-tab underline), an open update batch
-    (``switch_mode`` → ``delay_update``), layout/repaint the visible screen still owes, and ``DataTable`` rows
-    whose column widths are only measured on the table's next idle.
+    """Return everything the app still has to process, one human-readable line per item.
+
+    Unfinished workers, queued messages, deferred callbacks, running or scheduled animations (e.g. the
+    0.3 s slide of the active-tab underline), an open update batch (``switch_mode`` → ``delay_update``),
+    layout/repaint the visible screen still owes, and ``DataTable`` rows whose column widths are only
+    measured on the table's next idle.
 
     Looks at *every* mode's screen stack, not just the active screen, so a worker or a message still
     in flight on a suspended screen (e.g. the dashboard after ``switch_mode``) counts as pending.
@@ -142,8 +144,10 @@ def _pending_tui_work(tui: App) -> list[str]:
 
 
 async def settle(pilot, tui: App, timeout: float = 60.0) -> None:
-    """Wait until the TUI has finished reacting: no worker unfinished, no message or callback queued
-    anywhere, on two consecutive passes. Fails with what is still pending if that never happens.
+    """Wait until the TUI has finished reacting, failing with what is still pending after ``timeout``.
+
+    Finished means no worker unfinished and no message or callback queued anywhere, on two
+    consecutive passes.
 
     Stricter than ``test_tui._settle``: a key press travels app → focused widget → back up to the app's
     bindings through several message queues, and a busy CPU can leave part of that trip (or the worker it

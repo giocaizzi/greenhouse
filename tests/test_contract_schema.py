@@ -60,6 +60,7 @@ def _ddl_statements() -> list[str]:
 
 
 def test_orm_ddl_matches_golden():
+    """The ORM's DDL matches the pinned golden (trailing spaces stripped)."""
     # Trailing spaces SQLAlchemy emits after each column comma are stripped so the
     # repo's trailing-whitespace / end-of-file pre-commit hooks leave the golden
     # alone; the exact bytes are pinned by the fingerprint test below.
@@ -69,6 +70,7 @@ def test_orm_ddl_matches_golden():
 
 
 def test_orm_ddl_matches_phase0_fingerprint():
+    """The exact DDL bytes match the phase-0 fingerprint."""
     assert hashlib.sha256("\n".join(_ddl_statements()).encode()).hexdigest() == PHASE0_DDL_SHA256
 
 
@@ -84,6 +86,7 @@ def _default_repr(default) -> str | None:
 
 
 def test_orm_column_metadata_matches_golden():
+    """Column types, nullability and defaults match the golden."""
     tables = {}
     for table in Base.metadata.sorted_tables:
         tables[table.name] = {
@@ -120,10 +123,12 @@ def test_orm_column_metadata_matches_golden():
 
 
 def test_alembic_head_is_literal():
+    """The Alembic head is the pinned revision."""
     assert head_revision() == ALEMBIC_HEAD
 
 
 def test_alembic_revision_chain():
+    """The revision chain is linear and matches the pinned order."""
     script = ScriptDirectory(
         str(database._alembic_config(create_engine("sqlite://")).get_main_option("script_location"))
     )
@@ -159,6 +164,7 @@ def _reflect(engine) -> dict:
 
 @pytest.fixture
 def migrated_and_created(tmp_path):
+    """Provide one database built by migrations and one built from the ORM metadata."""
     migrated = create_engine(f"sqlite:///{tmp_path / 'migrated.db'}")
     created = create_engine(f"sqlite:///{tmp_path / 'created.db'}")
     init_db(migrated)
@@ -199,6 +205,7 @@ def _drift(migrated: dict, created: dict) -> dict:
 
 
 def test_migrated_schema_matches_golden(migrated_and_created):
+    """The migrated schema matches the golden."""
     migrated, _ = migrated_and_created
     assert_golden_json("contracts/migrated_schema.json", migrated)
 

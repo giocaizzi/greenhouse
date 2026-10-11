@@ -283,6 +283,7 @@ def test_unknown_timezone_falls_back_to_utc(tz_name):
 
 @pytest.fixture
 def repo(tmp_db, frozen_clock):
+    """Provide the test repository with the clock frozen."""
     return tmp_db
 
 
@@ -411,8 +412,9 @@ def _two_probe_cluster(repo, *, link_plant: bool = True):
     ],
 )
 def test_conflict_light_and_humidity_checks_need_five_samples(repo, metric, value, samples, flagged):
-    """learning-09 / learning-14: the low-light (7 d, daytime lux) and low-humidity (48 h) checks skip
-    sensors with fewer than 5 samples.
+    """learning-09 / learning-14: the low-light and low-humidity checks skip sensors with fewer than 5 samples.
+
+    Low light looks at 7 d of daytime lux, low humidity at 48 h.
 
     Monstera: summer minimum 150 lux (April factor 0.85, alert below half → < 63.75 lux) and
     ideal humidity ≥ 60 % (alert below 45 %).
@@ -427,8 +429,11 @@ def test_conflict_light_and_humidity_checks_need_five_samples(repo, metric, valu
 
 @pytest.mark.parametrize(("delay", "counted"), [(600, True), (599, False)])
 def test_post_irrigation_reading_counts_from_exactly_ten_minutes(repo, delay, counted):
-    """learning-16 / learning-17: a reading ``>= 600 s`` after the start is a valid "post" sample
-    (inclusive), and "pre" is the LAST reading before the start (30 %, not the older 20 %)."""
+    """learning-16 / learning-17: the "post" boundary is inclusive and "pre" is the last reading before the start.
+
+    A reading ``>= 600 s`` after the start is a valid "post" sample, and "pre" is the LAST
+    reading before the start (30 %, not the older 20 %).
+    """
     sid = _probe(repo)
     start = FROZEN_TS - 3600
     repo.add_sensor_reading(sensor_id=sid, timestamp=start - 1500, soil_moisture=20.0)
