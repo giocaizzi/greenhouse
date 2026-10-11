@@ -81,8 +81,13 @@ class WeatherClient:
         """Fetch aggregated weather forecast for the next N hours.
 
         Returns precipitation sum, max/min temperature, and average humidity
-        across the requested window, or None on network error.
+        across the requested window, or None on network error. A window of
+        fewer than one hour has no forecast: it returns None without a request
+        (a negative ``hours`` used to slice the hourly series from the end).
         """
+        if hours < 1:
+            logger.debug("Forecast window of %d hours requested; returning no forecast", hours)
+            return None
         if self._get_forecast_cache is not None:
             cached_at, cached_value = self._get_forecast_cache
             if time.monotonic() - cached_at < _FORECAST_CACHE_TTL:
