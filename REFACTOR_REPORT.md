@@ -198,8 +198,6 @@ as of the final HEAD. -->
 ### 9.1 Open bugs
 
 - Every bug the refactor recorded is fixed; what is left is in `REFACTOR_NOTES.md` → "Observed bugs not fixed".
-- The learning issue heuristics and the maintenance `low_light` check still take the light season from the UTC month
-  (advisory only; the engine uses the preference-timezone month).
 - A stale `local_key` in an irrigator's config after re-pairing is not recovered automatically (tinytuya error 914
   could drive a Cloud key refresh and retry) — `devices/gateway.py`.
 - Small leftovers: the `tr301z.py` docstring names `OFFLINE_AFTER_MINUTES` for sensors; the cleanup candidates in

@@ -388,4 +388,3 @@ Every engine quirk the refactor pinned has been fixed (critical stress on the dr
 - **Over-watering uses the 24h average** (with the trend and watering frequency), while the soil rule and critical stress use current readings.
 - **A device soil-dry alarm can go unacted on.** Beside detected over-watering it becomes an `over_watering` skip with the alarm recorded; beside a plant that merely reads above its band it is noted and the soil rule decides (its conflict burst still waters a dry plant).
 - **Only `environment == "outdoor"` is outdoor.** A free-text label such as `"greenhouse"` gets no rain skip, the indoor seasonal table and the sensor-first temperature.
-- **The light season outside the engine** (learning issue heuristics, the maintenance `low_light` check) still uses the UTC month; those checks are advisory.

@@ -252,6 +252,7 @@ Engine rules (all in `greenhouse_core/logic/`; engine goldens under `tests/golde
 | **B-14** `interval_delta` / `duration_delta` report the step actually applied after clamping (0 at a bound). | `engine._shift_interval`, `_lengthen_duration` | `test_logic.py::test_clamped_adjustments_report_the_applied_delta_not_the_nominal_step`, soil/season goldens | `081e94e` |
 | **B-24** With no sensor data, a global row that sets `mode` / `duration_minutes` / `interval_hours` drives the config fallback even without a cluster row. | `fallback._has_configured_schedule` | `test_logic.py::test_fallback_uses_a_global_schedule_without_a_cluster_config_row` | `9885cb9` |
 | Light thresholds (stress `low_light` and the light adjustment) take the season from the month in the preferences timezone, like the seasonal multiplier. | `engine._gather_inputs`, `stress._low_light` | `test_logic.py::test_light_thresholds_use_the_preferences_timezone_month` | `7175723` |
+| The light season outside the engine follows too: the learning issue heuristics and drainage profiling, and the maintenance `low_light` check, take the month in the preferences timezone (UTC when unset). | `learning/clock.light_month`, `learning/issues.py`, `learning/profiling.py`, `services/maintenance.py` | `test_learning.py::…::test_light_month_follows_the_preferences_timezone`, `::test_drainage_and_low_light_use_the_local_month`, `server/test_maintenance_light_season.py` | `53645c4`, `1b6efc3` |
 | **One outdoor rule** (`timing.environment_for`: only `"outdoor"` is outdoor) for the rain skip, the seasonal table, the forecast's rain skip and the pipeline's temperature source. | `logic/timing.py`, `services/forecast.py`, `services/irrigation.py` | `test_logic.py::test_outdoorness_is_one_rule_for_rain_and_seasons`, `server/test_forecast.py`, `server/test_contract_mutation_gaps.py` | `d08edde`, `94e34ed` |
 | **Emergency runs obey irrigation windows and vacation budgets** (water warning, critical stress, the no-sensor fallback): an emergency changes the dosage, not the operator's limits. | `engine._evaluate_rules` | `test_logic.py::test_emergency_triggers_obey_irrigation_windows`, `::test_emergency_triggers_obey_the_vacation_budget`, window / vacation goldens | `0c43ca8` |
 | **Exclusive edges:** a start exactly 6 h ago no longer blocks, a leak alert last seen exactly 24 h ago no longer holds, a vacation whose end equals now is over (API / web banner too). | `engine._enforce_cooldown`, `_enforce_leak_hold`, `repository.get_active_vacation` | `test_invariants_engine.py::test_inv3_cooldown_boundary_is_six_hours_exclusive`, `::test_inv11_hold_window_edge_is_exclusive`, cooldown / leak / vacation goldens | `e081eb0` |
@@ -313,10 +314,6 @@ engine, CLI, TUI and test-infrastructure items included). What remains are the f
 - **A manual start without `minutes`** switches the pump on with the device's own timer as the only bound: no dry-run
   watcher (it needs a deadline) and no leak check (`leak_check_skipped` says why). Documented design, listed so it is
   not mistaken for a gap.
-- **The light season outside the engine is still the UTC month.** The learning issue heuristics
-  (`learning/issues.py`) and the maintenance `low_light` check (`services/maintenance.py`) call
-  `effective_light_threshold` / `seasonal_light_factor` without a month; the engine passes the preference-timezone
-  month since `7175723`. Advisory checks only. *Pinned:* not pinned.
 - Package D's own follow-ups (temperature source and forecast on `environment_for`, an icon for `no_action_needed`,
   `{job_id:path}` on the scheduler job routes) were done before it merged (`94e34ed`, `69a3ba1`, `a8493d5`, `0c7bb22`).
 
