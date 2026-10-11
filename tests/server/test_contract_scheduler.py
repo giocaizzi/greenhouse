@@ -205,11 +205,13 @@ def test_paused_flag_is_explicit_and_mirrors_preferences(p, running):
         assert _prefs_paused(p) is False
         assert p.call("POST", "/api/v1/scheduler/pause")["response"] == {"paused": True}
         assert paused_ids() == ["check_all"]
-        assert _prefs_paused(p) is True and sched.is_check_all_paused() is True
+        assert _prefs_paused(p) is True
+        assert sched.is_check_all_paused() is True
         assert p.call("POST", "/api/v1/scheduler/pause")["response"] == {"paused": True}  # idempotent
         assert p.call("POST", "/api/v1/scheduler/resume")["response"] == {"paused": False}
         assert paused_ids() == []
-        assert _prefs_paused(p) is False and sched.is_check_all_paused() is False
+        assert _prefs_paused(p) is False
+        assert sched.is_check_all_paused() is False
     finally:
         if running:
             sched.stop_scheduler()

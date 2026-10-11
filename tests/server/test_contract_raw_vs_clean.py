@@ -81,7 +81,8 @@ def test_raw_views_keep_the_spike_and_cleaned_views_ignore_it(spiky):
     monitor = p.call("GET", "/api/v1/clusters/1/monitor")["response"]
 
     # Raw (archive / display) side.
-    assert SPIKE in _soil_points(chart) and IMPOSSIBLE in _soil_points(chart)
+    assert SPIKE in _soil_points(chart)
+    assert IMPOSSIBLE in _soil_points(chart)
     assert SPIKE in _soil_points(plant_chart)
     history_soil = {s["sensor_id"]: [r["soil_moisture"] for r in s["readings"]] for s in history["sensors"]}
     assert history_soil[p.ids["sensor_id"]][0] == SPIKE  # newest first

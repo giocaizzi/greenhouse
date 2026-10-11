@@ -193,5 +193,6 @@ def test_route_table_counts(contract_app):
     assert len(web) == WEB_ROUTE_COUNT
     assert [r["path"] for r in rows if r["kind"] == "Mount"] == ["/static"]
     mcp_rows = [r for r in rows if r["path"] == "/mcp"]
-    assert len(mcp_rows) == 1 and mcp_rows[0]["methods"] == ["DELETE", "GET", "POST"]
+    assert len(mcp_rows) == 1
+    assert mcp_rows[0]["methods"] == ["DELETE", "GET", "POST"]
     assert mcp_rows[0]["dependencies"] == ["require_mcp_token"]

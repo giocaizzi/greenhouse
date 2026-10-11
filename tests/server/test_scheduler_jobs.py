@@ -124,7 +124,8 @@ class TestRunningScheduler:
     def test_resume_reschedules_check_all(self, client):
         assert client.post("/api/v1/scheduler/pause").json() == {"paused": True}
         paused = _check_all(client)
-        assert paused["paused"] is True and paused["next_run_time"] is None
+        assert paused["paused"] is True
+        assert paused["next_run_time"] is None
 
         assert client.post("/api/v1/scheduler/resume").json() == {"paused": False}
         resumed = _check_all(client)

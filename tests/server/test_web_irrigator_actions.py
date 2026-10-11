@@ -116,7 +116,8 @@ def test_web_start_records_same_event_as_api(app, seeded_client):
 def test_web_start_device_failure_records_like_api(app, seeded_client):
     app.state.fake_devices.irrigator.start_result = (False, "device timeout")
     resp = seeded_client.post("/irrigators/1/start", data={"minutes": "3"})
-    assert "start failed" in resp.text and "device timeout" in resp.text
+    assert "start failed" in resp.text
+    assert "device timeout" in resp.text
     assert seeded_client.post("/api/v1/irrigators/1/start", json={"minutes": 3}).status_code == HTTPStatus.BAD_GATEWAY
     assert _events(app) == []  # neither path records a failed manual start
 

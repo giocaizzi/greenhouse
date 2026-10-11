@@ -174,14 +174,16 @@ class TestTransitionMatrix:
         monitor_.poll_sensor(sensor)
         low_key = f"health:sensor:{sensor.id}:low_battery"
         low = repo.session.scalar(select(Alert).where(Alert.dedup_key == low_key))
-        assert low is not None and low.status == "open"
+        assert low is not None
+        assert low.status == "open"
 
         # 3% → BATTERY_CRITICAL (and LOW_BATTERY no longer derived → resolved)
         sensor_adapter.set_health(_state(battery_pct=3))
         monitor_.poll_sensor(sensor)
         crit_key = f"health:sensor:{sensor.id}:battery_critical"
         crit = repo.session.scalar(select(Alert).where(Alert.dedup_key == crit_key))
-        assert crit is not None and crit.status == "open"
+        assert crit is not None
+        assert crit.status == "open"
         assert crit.severity == "critical"
 
     def test_offline_transition_via_stale_last_seen(self, monitor, repo, cluster_irrigator_sensor):
@@ -201,7 +203,8 @@ class TestTransitionMatrix:
         sensor_adapter.set_health(_state(last_seen_ts=clock() - stale))
         monitor_.poll_sensor(sensor)
         alert = repo.session.scalar(select(Alert).where(Alert.dedup_key == offline_key))
-        assert alert is not None and alert.status == "open"
+        assert alert is not None
+        assert alert.status == "open"
 
     def test_explicit_offline_flag_opens_alert(self, monitor, repo, cluster_irrigator_sensor):
         monitor_, irr_adapter, _, _ = monitor
@@ -212,7 +215,8 @@ class TestTransitionMatrix:
         alert = repo.session.scalar(
             select(Alert).where(Alert.dedup_key == f"health:irrigator:{irrigator.id}:device_offline")
         )
-        assert alert is not None and alert.status == "open"
+        assert alert is not None
+        assert alert.status == "open"
 
 
 class TestActuationGate:
@@ -484,7 +488,8 @@ class TestSharedMonitorViews:
         with Session(watcher_engine) as fresh:
             assert fresh.scalars(select(IrrigationEvent.action)).all() == [EVENT_ACTION_ABORTED]
             alert = fresh.scalar(select(Alert).where(Alert.dedup_key == key))
-            assert alert is not None and alert.status == "open"
+            assert alert is not None
+            assert alert.status == "open"
 
         # Nothing leaked into the other job's session; its rollback cannot lose the alert.
         assert other_repo.get_open_alert_by_key(key) is None

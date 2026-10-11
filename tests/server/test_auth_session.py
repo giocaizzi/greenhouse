@@ -54,8 +54,10 @@ def test_anonymous_pages_hide_the_operational_banners_signed_in_pages_show_them(
     client = TestClient(app_real_auth, raise_server_exceptions=False)
     for url in ("/login", "/no/such/page"):
         page = client.get(url, headers={"Accept": "text/html"}).text
-        assert "Dry-run mode is on" not in page and 'data-banner="scheduler-paused"' not in page, url
+        assert "Dry-run mode is on" not in page, url
+        assert 'data-banner="scheduler-paused"' not in page, url
     client.post("/login", data={"username": TEST_ADMIN_USERNAME, "password": TEST_ADMIN_PASSWORD})
     for url in ("/", "/no/such/page"):
         page = client.get(url, headers={"Accept": "text/html"}).text
-        assert "Dry-run mode is on" in page and 'data-banner="scheduler-paused"' in page, url
+        assert "Dry-run mode is on" in page, url
+        assert 'data-banner="scheduler-paused"' in page, url

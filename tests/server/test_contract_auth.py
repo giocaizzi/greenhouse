@@ -104,7 +104,8 @@ class TestPasswordHashing:
         first, second = core_auth.hash_password(PW), core_auth.hash_password(PW)
         assert first.startswith("$argon2id$v=19$m=65536,t=3,p=4$")
         assert first != second  # random salt per hash
-        assert core_auth.verify_password(PW, first) and core_auth.verify_password(PW, second)
+        assert core_auth.verify_password(PW, first)
+        assert core_auth.verify_password(PW, second)
         assert (
             HASH_CURRENT
             == "$argon2id$v=19$m=65536,t=3,p=4$Zml4ZWRzYWx0MTIzNDU2Nw$Tx/iK5pGB3NIurtkkFEGlw0tIWgk27e5e2pi1nsrpOE"
@@ -507,7 +508,8 @@ def test_login_rehashes_outdated_hash(real):
     resp = client.post("/api/v1/auth/login", json={"username": TEST_ADMIN_USERNAME, "password": TEST_ADMIN_PASSWORD})
     assert resp.status_code == HTTPStatus.OK
     new = _admin(app).hashed_password
-    assert new != old and new.startswith("$argon2id$v=19$m=65536,t=3,p=4$")
+    assert new != old
+    assert new.startswith("$argon2id$v=19$m=65536,t=3,p=4$")
 
 
 def test_logout_requires_auth_and_deletes_cookie(real):

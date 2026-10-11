@@ -191,7 +191,8 @@ def test_empty_cluster_returns_none_with_zero_calls(tmp_db, spy_sync):
     cid = tmp_db.add_cluster("Empty")
     gw = RecordingGateway()
     assert SyncService(tmp_db, None, gw).ensure_fresh_and_read(cid) is None
-    assert gw.calls == [] and spy_sync == []
+    assert gw.calls == []
+    assert spy_sync == []
 
 
 class TestSyncAllSensors:

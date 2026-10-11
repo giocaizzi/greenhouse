@@ -153,7 +153,8 @@ def test_pipeline_without_a_decision_returns_the_no_data_error(db, pump, monkeyp
     result = svc.run_irrigation_pipeline(pump.cluster_id, no_sync=True)
     assert result == {"action": "error", "reason": "no data for decision", "confidence": 0}
     assert [type(v) for v in result.values()] == [str, str, int]
-    assert _rows(db, ActivityEvent) == [] and pump.adapter.calls == []
+    assert _rows(db, ActivityEvent) == []
+    assert pump.adapter.calls == []
 
 
 def test_pipeline_unknown_cluster_returns_the_not_found_error_without_deciding(db, pump, monkeypatch):
@@ -161,7 +162,8 @@ def test_pipeline_unknown_cluster_returns_the_not_found_error_without_deciding(d
     sync = StubSync({"temperature": 22.0})
     svc = IrrigationService(db, pump.registry, sync, StubWeather(None), plant_database())
     assert svc.run_irrigation_pipeline(999) == {"action": "error", "reason": "cluster not found", "confidence": 0}
-    assert calls == [] and sync.calls == []
+    assert calls == []
+    assert sync.calls == []
 
 
 @pytest.mark.parametrize("force", [False, True])
@@ -272,7 +274,8 @@ def test_health_monitor_that_does_not_block_lets_the_pump_start(db, pump, monkey
     result = svc.run_irrigation_pipeline(pump.cluster_id, no_sync=True)
     assert monitor.asked == [pump.irrigator_id]
     assert pump.adapter.calls == [("start", pump.irrigator_id, 4)]
-    assert result["action"] == "irrigated" and "blocking_alarms" not in result
+    assert result["action"] == "irrigated"
+    assert "blocking_alarms" not in result
     assert [(a.code, a.severity) for a in _rows(db, ActivityEvent)] == [("irrigated", "info")]
 
 
@@ -553,7 +556,8 @@ def test_watcher_job_keeps_the_app_and_hooks_captured_at_schedule_time(watcher_e
     (built,) = watcher_env.built
     assert opened == []
     assert built["registry"] is watcher_env.registry
-    assert built["sleep"] is watcher_env.wait and built["stop_requested"] is watcher_env.stop
+    assert built["sleep"] is watcher_env.wait
+    assert built["stop_requested"] is watcher_env.stop
     assert (built["poll_seconds"], built["max_read_failures"]) == (0.7, 4)
 
 

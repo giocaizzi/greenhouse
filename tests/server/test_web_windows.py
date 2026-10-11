@@ -108,7 +108,8 @@ class TestEditWindow:
         assert 'value="10"' in resp.text
         assert 'value="AM"' in resp.text
         # the Mon checkbox (bit 1) should be checked
-        assert 'id="dow_1"' in resp.text and "checked" in resp.text
+        assert 'id="dow_1"' in resp.text
+        assert "checked" in resp.text
 
     def test_edit_inputs_have_matching_labels_a11y(self, seeded_client):
         self._seed_window(seeded_client)

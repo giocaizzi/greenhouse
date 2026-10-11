@@ -133,25 +133,30 @@ class TestClusterCaps:
     def test_empty_cluster(self):
         caps = cluster_caps(self._status(plants=0, sensors=0, irrigator=False))
         assert caps["tier"] == "empty"
-        assert not caps["can_monitor"] and not caps["can_decide"] and not caps["can_actuate"]
+        assert not caps["can_monitor"]
+        assert not caps["can_decide"]
+        assert not caps["can_actuate"]
         assert caps["missing"] == ["irrigator", "sensors", "plants"]
 
     def test_sensor_only_is_full_monitoring_without_actuation(self):
         caps = cluster_caps(self._status(plants=2, sensors=1, irrigator=False))
         assert caps["tier"] == "sensor_only"
-        assert caps["can_monitor"] and caps["can_decide"]
+        assert caps["can_monitor"]
+        assert caps["can_decide"]
         assert not caps["can_actuate"]
         assert caps["missing"] == ["irrigator"]
 
     def test_plants_only_cannot_monitor(self):
         caps = cluster_caps(self._status(plants=1, sensors=0, irrigator=False))
         assert caps["tier"] == "sensor_only"
-        assert not caps["can_monitor"] and not caps["can_decide"]
+        assert not caps["can_monitor"]
+        assert not caps["can_decide"]
 
     def test_operational_full_stack(self):
         caps = cluster_caps(self._status(plants=1, sensors=1, irrigator=True))
         assert caps["tier"] == "operational"
-        assert caps["can_decide"] and caps["can_actuate"]
+        assert caps["can_decide"]
+        assert caps["can_actuate"]
         assert caps["missing"] == []
 
     def test_operational_but_degraded_without_sensors(self):
@@ -168,7 +173,9 @@ class TestClusterCaps:
 
         caps = cluster_caps(_Cluster())
         assert caps["tier"] == "operational"
-        assert caps["has_plants"] and not caps["has_sensors"] and caps["has_irrigator"]
+        assert caps["has_plants"]
+        assert not caps["has_sensors"]
+        assert caps["has_irrigator"]
 
     def test_handles_none(self):
         caps = cluster_caps(None)

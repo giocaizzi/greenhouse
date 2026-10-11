@@ -362,7 +362,8 @@ def test_completed_watch_records_nothing(env, monkeypatch):
 def test_deleted_irrigator_ends_the_job_quietly(env):
     schedule_pump_watcher(env.irrigator_id + 100, 3, STARTED_AT)
     env.scheduler.jobs[0]["func"]()
-    assert env.built == [] and env.adapter.calls == []
+    assert env.built == []
+    assert env.adapter.calls == []
 
 
 def test_job_failure_is_rolled_back_and_logged(env, monkeypatch, caplog):
