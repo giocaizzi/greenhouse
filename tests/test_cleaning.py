@@ -15,6 +15,9 @@ from greenhouse_core.logic.cleaning import (
 )
 from greenhouse_core.logic.sensors import get_recent_sensor_data
 
+STEADY_SOIL_RANGE = (49.0, 52.0)  # the healthy samples around the glitch in test_snapshot_min_soil_ignores_spike
+DESC_SPIKE = 99.0
+
 
 @dataclass
 class _Raw:
@@ -123,7 +126,7 @@ def test_fields_cleaned_independently():
     ]
     cleaned = clean_readings(raw)
     assert cleaned[4].soil_moisture is None  # spike dropped
-    assert cleaned[4].temperature == 23.0  # temperature preserved
+    assert cleaned[4].temperature == raw[4].temperature  # temperature preserved
 
 
 def test_passthrough_flags_preserved():
@@ -171,8 +174,8 @@ def test_snapshot_min_soil_ignores_spike(cluster_with_sensor):
 
     snapshot = get_recent_sensor_data(db, cluster_id, hours=24)
     # Without cleaning min would be 3.0; cleaned it tracks the real driest sample.
-    assert snapshot.min_soil_moisture >= 49.0
-    assert 49.0 <= snapshot.avg_soil_moisture <= 52.0
+    assert snapshot.min_soil_moisture >= STEADY_SOIL_RANGE[0]
+    assert STEADY_SOIL_RANGE[0] <= snapshot.avg_soil_moisture <= STEADY_SOIL_RANGE[1]
 
 
 # ── Ordering / windowed helpers ──────────────────────────────────────────────
@@ -190,12 +193,12 @@ def test_clean_readings_desc_returns_newest_first():
 
 def test_clean_readings_desc_still_drops_spikes():
     """The DESC view applies the same spike filter as the ASC view."""
-    raw = _series([50.0, 51.0, 49.0, 50.0, 99.0, 51.0, 50.0])
+    raw = _series([50.0, 51.0, 49.0, 50.0, DESC_SPIKE, 51.0, 50.0])
 
     cleaned = clean_readings_desc(raw)
 
     assert None in _vals(cleaned)
-    assert 99.0 not in _vals(cleaned)
+    assert DESC_SPIKE not in _vals(cleaned)
 
 
 def test_clean_readings_around_preserves_the_partition():

@@ -26,6 +26,9 @@ import pytest
 from engine_grid import build_cases, golden_name, run_case
 from golden import GOLDEN_DIR, UPDATE_ENV_VAR, assert_golden
 
+_MAX_PROBLEMS_SHOWN = 40
+GRID_SIZE_RANGE = (1000, 2000)  # sanity bounds on the number of grid cases
+
 _SHARDS: dict[str, list] = defaultdict(list)
 for _case in build_cases():
     _SHARDS[golden_name(_case)].append(_case)
@@ -61,7 +64,7 @@ def _explain_mismatch(name: str, records: dict[str, dict]) -> None:
             problems.append(f"{case_id}: {fields} {detail}")
     if problems:
         shown = "\n".join(problems[:40])
-        more = f"\n… {len(problems) - 40} more" if len(problems) > 40 else ""
+        more = f"\n… {len(problems) - 40} more" if len(problems) > _MAX_PROBLEMS_SHOWN else ""
         pytest.fail(f"{len(problems)} case(s) differ from golden/{name}:\n{shown}{more}", pytrace=False)
 
 
@@ -101,7 +104,7 @@ def test_grid_case_ids_are_unique_and_stable():
     cases = build_cases()
 
     assert len({c.id for c in cases}) == len(cases)
-    assert 1000 <= len(cases) < 2000
+    assert GRID_SIZE_RANGE[0] <= len(cases) < GRID_SIZE_RANGE[1]
     assert [c.id for c in build_cases()] == [c.id for c in cases]
 
 

@@ -11,6 +11,7 @@ from __future__ import annotations
 import math
 import threading
 import time
+from http import HTTPStatus
 from typing import TYPE_CHECKING
 
 from sqlalchemy.orm import Session
@@ -85,7 +86,7 @@ def seed_greenhouse(http: TestClient, engine) -> None:
                 "/api/v1/clusters",
                 json={"name": cluster["name"], "environment": cluster["environment"], "location": cluster["location"]},
             )
-            assert resp.status_code == 201, resp.text
+            assert resp.status_code == HTTPStatus.CREATED, resp.text
             cid = resp.json()["id"]
             for species, category, moisture in cluster["plants"]:
                 plant_no += 1
@@ -93,7 +94,7 @@ def seed_greenhouse(http: TestClient, engine) -> None:
                     f"/api/v1/clusters/{cid}/plants",
                     json={"species": species, "category": category, "water_needs": "medium"},
                 )
-                assert resp.status_code == 201, resp.text
+                assert resp.status_code == HTTPStatus.CREATED, resp.text
                 pid = resp.json()["id"]
                 if moisture is None:
                     continue
@@ -107,7 +108,7 @@ def seed_greenhouse(http: TestClient, engine) -> None:
                         "plant_id": pid,
                     },
                 )
-                assert resp.status_code == 201, resp.text
+                assert resp.status_code == HTTPStatus.CREATED, resp.text
                 session.add_all(_reading_series(resp.json()["id"], moisture, now))
             if cluster["irrigator"]:
                 resp = http.post(
@@ -118,7 +119,7 @@ def seed_greenhouse(http: TestClient, engine) -> None:
                         "type": "rainpoint.ik10pw",
                     },
                 )
-                assert resp.status_code == 201, resp.text
+                assert resp.status_code == HTTPStatus.CREATED, resp.text
                 iid = resp.json()["id"]
                 for hours_ago in (40, 24, 8):
                     session.add(

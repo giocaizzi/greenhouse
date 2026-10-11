@@ -7,6 +7,9 @@ import pytest
 from fake_data import FAKE_CLUSTER_NAME, FAKE_DEVICE_ID, FAKE_IRRIGATOR_NAME
 from greenhouse_core.stats import get_irrigation_stats
 
+EVENTS_LOGGED = 2
+TOTAL_MINUTES = 3 + 5  # the two logged runs
+
 
 class TestGetIrrigationStats:
     """``get_irrigation_stats`` over seeded events."""
@@ -45,9 +48,9 @@ class TestGetIrrigationStats:
         )
 
         stats = get_irrigation_stats(tmp_db, cluster_id, days=1)
-        assert stats["total_events"] == 2
-        assert stats["total_duration_minutes"] == 8
-        assert len(stats["irrigations"]) == 2
+        assert stats["total_events"] == EVENTS_LOGGED
+        assert stats["total_duration_minutes"] == TOTAL_MINUTES
+        assert len(stats["irrigations"]) == EVENTS_LOGGED
         assert stats["avg_duration_minutes"] == pytest.approx(4.0)
 
     def test_stats_empty_period(self, tmp_db):

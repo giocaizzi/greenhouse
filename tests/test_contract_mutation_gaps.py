@@ -25,6 +25,12 @@ from greenhouse_core.logic.cleaning import clean_readings
 from greenhouse_core.logic.timing import is_within_quiet_hours, local_now
 from greenhouse_core.utils import effective_light_threshold
 
+# Literal pins (mutation-gap tests pin the numbers, not the constants that hold them).
+WATER_WARNING_CONFIDENCE = 0.92
+BASELINE_CONFIDENCE = 0.5
+LIGHT_ONLY_LUX = 60
+POST_READING_DELAY_S = 600  # ten minutes after the start, the inclusive boundary
+
 
 @pytest.fixture(autouse=True)
 def _hermetic(clean_env):
@@ -58,7 +64,7 @@ def test_water_warning_outranks_critical_stress_when_both_fire():
     """
     decision = _decide("ww-and-stress", sensors=(_sensor(Reading(age_s=600, soil=20.0, water_warning=True)),))
     assert _codes(decision) == ["water_warning"]
-    assert decision["confidence"] == 0.92
+    assert decision["confidence"] == WATER_WARNING_CONFIDENCE
     assert decision["stress_indicators"]["water_stress"] is not None
     assert (decision["action"], decision["duration_minutes"], decision["interval_hours"]) == ("irrigate", 3, 6)
 
@@ -129,9 +135,9 @@ def test_light_only_sensor_data_counts_as_data():
     adjustment) instead of falling back to the no-data temperature rule.
     """
     decision = _decide("light-only", sensors=(_sensor(Reading(age_s=600, light=60)),))
-    assert decision["sensor_snapshot"]["avg_light"] == 60
+    assert decision["sensor_snapshot"]["avg_light"] == LIGHT_ONLY_LUX
     assert "no_data" not in _codes(decision)
-    assert decision["confidence"] == 0.5
+    assert decision["confidence"] == BASELINE_CONFIDENCE
 
 
 # ── logic/sensors.py ────────────────────────────────────────────────────────
@@ -444,7 +450,7 @@ def test_post_irrigation_reading_counts_from_exactly_ten_minutes(repo, delay, co
     response = compute_sensor_response(repo, repo.get_sensor(sid), event)
     if counted:
         assert (response.pre_moisture, response.post_moisture, response.delta_per_minute) == (30.0, 50.0, 5.0)
-        assert response.reading_delay_seconds == 600
+        assert response.reading_delay_seconds == POST_READING_DELAY_S
     else:
         assert response is None
 

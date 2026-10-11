@@ -58,6 +58,12 @@ from greenhouse_core.devices.profile import load_profile_json
 from greenhouse_core.models import Irrigator, Sensor, SensorReading
 from greenhouse_core.sync import sync_single_sensor
 
+IK10PW_PROTOCOL_VERSION = 3.5  # invariant 1
+IK10PW_DURATION_DP, IK10PW_ALARM_DP = 102, 105
+PAGES_READ_BEFORE_REPEAT = 2  # the page is read again once before its cursor repeats
+REQUESTS_UNTIL_FAILED_PAGE = 2  # one good page, then the failing one
+PAGE_CAP = 3
+
 GOLDEN = "ingress_devices"
 
 SWITCH_ON = {"commands": [{"code": "switch", "value": True}]}
@@ -285,12 +291,12 @@ def test_profiles_parsers_and_registry_golden():
 
 def test_invariant_1_ik10pw_profile_is_protocol_3_5():
     """Invariant #1: Rainpoint IK10PW speaks local protocol v3.5 (not 3.3)."""
-    assert load_profile_json("ik10pw.json")["protocol_version"] == 3.5
-    assert IK10PW_PROFILE.protocol_version == 3.5
+    assert load_profile_json("ik10pw.json")["protocol_version"] == IK10PW_PROTOCOL_VERSION
+    assert IK10PW_PROFILE.protocol_version == IK10PW_PROTOCOL_VERSION
     assert IK10PWAdapter(DeviceGateway(FAKE_CLIENT_ID, FAKE_CLIENT_SECRET, raw=object())).profile is IK10PW_PROFILE
     assert IK10PW_PROFILE.dp("switch") == 1
-    assert IK10PW_PROFILE.dp("duration") == 102
-    assert IK10PW_PROFILE.dp("alarm") == 105
+    assert IK10PW_PROFILE.dp("duration") == IK10PW_DURATION_DP
+    assert IK10PW_PROFILE.dp("alarm") == IK10PW_ALARM_DP
     assert IK10PW_PROFILE.alarm_bitmask == 0x01
 
 
@@ -654,7 +660,7 @@ class TestDeviceLogs:
         with caplog.at_level(logging.WARNING, logger="greenhouse_core.devices.gateway"):
             logs = harness.gateway.get_device_logs(FAKE_SENSOR_ID, since_ms=0)
         assert [c[2]["start_row_key"] for c in harness.log] == [None, "again"]
-        assert len(logs) == 2
+        assert len(logs) == PAGES_READ_BEFORE_REPEAT
         assert caplog.messages == [f"getdevicelog for {FAKE_SENSOR_ID} repeated cursor 'again'; stopping"]
 
     def test_failed_page_stops_keeps_earlier_pages_and_warns(self, harness, caplog):
@@ -668,7 +674,7 @@ class TestDeviceLogs:
         )
         with caplog.at_level(logging.WARNING, logger="greenhouse_core.devices.gateway"):
             logs = harness.gateway.get_device_logs(FAKE_SENSOR_ID, since_ms=0)
-        assert len(harness.log) == 2
+        assert len(harness.log) == REQUESTS_UNTIL_FAILED_PAGE
         assert [e["value"] for e in logs] == [40.0]
         assert caplog.messages == [f"getdevicelog page for {FAKE_SENSOR_ID} failed: {{'success': False, 'code': 1010}}"]
 
@@ -677,13 +683,13 @@ class TestDeviceLogs:
         harness.cloud.set(
             "getdevicelog",
             Seq(
-                *(_log_page([("humidity", "40", 1_000)], has_next=True, next_row_key=f"k{i}") for i in range(3)),
+                *(_log_page([("humidity", "40", 1_000)], has_next=True, next_row_key=f"k{i}") for i in range(PAGE_CAP)),
             ),
         )
         with caplog.at_level(logging.WARNING, logger="greenhouse_core.devices.gateway"):
-            logs = harness.gateway.get_device_logs(FAKE_SENSOR_ID, since_ms=0, max_pages=3)
-        assert len(harness.log) == 3
-        assert len(logs) == 3
+            logs = harness.gateway.get_device_logs(FAKE_SENSOR_ID, since_ms=0, max_pages=PAGE_CAP)
+        assert len(harness.log) == PAGE_CAP
+        assert len(logs) == PAGE_CAP
         assert caplog.messages == [
             f"getdevicelog for {FAKE_SENSOR_ID} still had rows after 3 pages (3 entries); "
             "the window is not fully covered"

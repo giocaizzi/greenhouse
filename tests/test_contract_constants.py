@@ -33,6 +33,11 @@ from greenhouse_core.devices import HealthAlarm
 from greenhouse_core.logic import DEVICE_BLOCKING_CODES, decision
 from greenhouse_core.logic.decision import Action, Severity, TriggerCode
 
+MIN_CONSTANTS = 100
+TRIGGER_CODE_COUNT = 48  # + DRY_RUN_GLOBAL (S1), NO_ACTION_NEEDED
+PINNED_MIN_COOLDOWN_HOURS = 6  # CLAUDE.md invariant 3
+PINNED_LEAK_HOLD_HOURS = 24  # CLAUDE.md invariant 11
+
 
 def _constants() -> dict[str, str]:
     return {name: repr(value) for name, value in vars(constants).items() if name.isupper()}
@@ -92,7 +97,7 @@ def test_enums_and_blocking_codes_match_golden_exactly():
 def test_constant_types():
     """``constants.py`` holds only plain values (invariant 5)."""
     values = {name: value for name, value in vars(constants).items() if name.isupper()}
-    assert len(values) >= 100
+    assert len(values) >= MIN_CONSTANTS
     assert all(isinstance(v, int | float | str | bool | tuple | dict) for v in values.values())
 
 
@@ -114,14 +119,14 @@ def test_enums_are_str_enums_whose_members_equal_their_values(enum):
 def test_trigger_code_count_and_extremes():
     """The trigger-code count and first / last members are pinned."""
     members = list(TriggerCode)
-    assert len(members) == 48  # + DRY_RUN_GLOBAL (S1), NO_ACTION_NEEDED
+    assert len(members) == TRIGGER_CODE_COUNT  # + DRY_RUN_GLOBAL (S1), NO_ACTION_NEEDED
     assert (members[0].value, members[-1].value) == ("no_plants", "dry_run_global")
-    assert len({m.value for m in members}) == 48  # no aliases
+    assert len({m.value for m in members}) == TRIGGER_CODE_COUNT  # no aliases
 
 
 def test_notable_thresholds_named_in_claude_md():
     """Values CLAUDE.md's key invariants refer to by name."""
-    assert constants.MIN_COOLDOWN_HOURS == 6
+    assert constants.MIN_COOLDOWN_HOURS == PINNED_MIN_COOLDOWN_HOURS
     assert constants.SENSOR_READING_STALE_SECONDS == 4 * 3600
-    assert constants.LEAK_HOLD_HOURS == 24
+    assert constants.LEAK_HOLD_HOURS == PINNED_LEAK_HOLD_HOURS
     assert constants.LEAK_ALERT_CODE == "leak_or_stuck_valve"

@@ -21,6 +21,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
+from greenhouse_core.constants import CONFIDENCE_COOLDOWN, DEFAULT_DURATION_MINUTES
 from greenhouse_core.logic import IrrigationLogic
 from greenhouse_core.logic.decision import Action, TriggerCode
 from greenhouse_core.plant_db import get_plant_database
@@ -90,7 +91,7 @@ def test_no_active_vacation_is_noop(tmp_db, logic, monkeypatch):
 
     assert decision is not None
     assert decision.action is Action.IRRIGATE
-    assert decision.duration_minutes == 2  # DEFAULT_DURATION_MINUTES
+    assert decision.duration_minutes == DEFAULT_DURATION_MINUTES  # DEFAULT_DURATION_MINUTES
     assert TriggerCode.VACATION_ACTIVE not in _codes(decision)
 
 
@@ -105,7 +106,7 @@ def test_vacation_active_no_capacity_normal_irrigation(tmp_db, logic, monkeypatc
 
     assert decision is not None
     assert decision.action is Action.IRRIGATE
-    assert decision.duration_minutes == 2  # unchanged
+    assert decision.duration_minutes == DEFAULT_DURATION_MINUTES  # unchanged
     assert TriggerCode.VACATION_ACTIVE in _codes(decision)
     assert TriggerCode.VACATION_RATIONING not in _codes(decision)
 
@@ -125,7 +126,7 @@ def test_vacation_plenty_of_budget_unchanged(tmp_db, logic, monkeypatch):
 
     assert decision is not None
     assert decision.action is Action.IRRIGATE
-    assert decision.duration_minutes == 2
+    assert decision.duration_minutes == DEFAULT_DURATION_MINUTES
     assert TriggerCode.VACATION_ACTIVE in _codes(decision)
     assert TriggerCode.VACATION_RATIONING not in _codes(decision)
     assert TriggerCode.VACATION_BUDGET_EXHAUSTED not in _codes(decision)
@@ -171,7 +172,7 @@ def test_vacation_budget_exhausted_flips_to_skip(tmp_db, logic, monkeypatch):
     assert decision is not None
     assert decision.action is Action.SKIP
     assert decision.duration_minutes == 0
-    assert decision.confidence == 0.9  # CONFIDENCE_COOLDOWN
+    assert decision.confidence == CONFIDENCE_COOLDOWN  # CONFIDENCE_COOLDOWN
     assert TriggerCode.VACATION_BUDGET_EXHAUSTED in _codes(decision)
     assert TriggerCode.VACATION_ACTIVE in _codes(decision)
     # The exhausted budget decided the skip, so it is the primary code (not the soil reason).
@@ -245,7 +246,7 @@ def test_only_actuating_irrigator_governs_budget(tmp_db, logic, monkeypatch):
 
     assert decision is not None
     assert decision.action is Action.IRRIGATE
-    assert decision.duration_minutes == 2  # unlimited tank → no trim
+    assert decision.duration_minutes == DEFAULT_DURATION_MINUTES  # unlimited tank → no trim
     assert TriggerCode.VACATION_ACTIVE in _codes(decision)
     assert TriggerCode.VACATION_RATIONING not in _codes(decision)
 
@@ -266,7 +267,7 @@ def test_uncapped_actuating_irrigator_skips_rationing(tmp_db, logic, monkeypatch
 
     assert decision is not None
     assert decision.action is Action.IRRIGATE
-    assert decision.duration_minutes == 2  # uncapped irrigator
+    assert decision.duration_minutes == DEFAULT_DURATION_MINUTES  # uncapped irrigator
     assert TriggerCode.VACATION_RATIONING not in _codes(decision)
 
 
@@ -306,7 +307,7 @@ def test_cluster_with_no_irrigators_does_not_crash(tmp_db, logic, monkeypatch):
     # No capacity irrigators → VACATION_ACTIVE present, dosage untouched.
     assert TriggerCode.VACATION_ACTIVE in _codes(decision)
     assert decision.action is Action.IRRIGATE
-    assert decision.duration_minutes == 2
+    assert decision.duration_minutes == DEFAULT_DURATION_MINUTES
 
 
 # ── Repository: irrigator_consumption_liters ─────────────────────────────────

@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import inspect
 import threading
+from http import HTTPStatus
 from pathlib import Path
 
 import pytest
@@ -36,6 +37,11 @@ from greenhouse_cli.tui.screens.modals import LoginScreen
 from greenhouse_cli.tui.widgets import selected_key
 from greenhouse_core.repository import IrrigationRepository
 from server.conftest import TEST_ADMIN_PASSWORD, TEST_ADMIN_USERNAME, _make_stubbed_app
+
+SEEDED_OPEN_ALERTS = 2
+SEEDED_ACTIVITY_EVENTS = 3
+ROW_1_AFTER_NEW_TOP_ROW = 2  # the selected row 1, pushed down by the row inserted on top
+ROW_2_AFTER_NEW_TOP_ROW = 3  # the selected row 2, pushed down by the row inserted on top
 
 SIZE = (160, 50)
 # Auto-refresh period for the G14 tests: short enough to keep them quick, long enough for a reload to finish.
@@ -142,7 +148,7 @@ def test_alerts_cursor_stays_on_record_across_auto_refresh(seeded):
             screen = tui.screen
             assert isinstance(screen, AlertsScreen)
             table = screen.query_one("#alerts-table", DataTable)
-            await wait_until(lambda: table.row_count == 2, "the first alerts load (2 open alerts)")
+            await wait_until(lambda: table.row_count == SEEDED_OPEN_ALERTS, "the first alerts load (2 open alerts)")
             table.move_cursor(row=1)
             chosen = selected_key(table)
             keys_before = [table.coordinate_to_cell_key((i, 0))[0].value for i in range(table.row_count)]
@@ -159,7 +165,9 @@ def test_alerts_cursor_stays_on_record_across_auto_refresh(seeded):
                     cluster_id=3,
                 )
                 session.commit()
-            await wait_until(lambda: table.row_count == 3, "an auto-refresh showing the inserted alert")
+            await wait_until(
+                lambda: table.row_count == SEEDED_OPEN_ALERTS + 1, "an auto-refresh showing the inserted alert"
+            )
             keys_after = [table.coordinate_to_cell_key((i, 0))[0].value for i in range(table.row_count)]
             assert selected_key(table) == chosen
             assert table.cursor_row == keys_after.index(chosen)
@@ -167,7 +175,7 @@ def test_alerts_cursor_stays_on_record_across_auto_refresh(seeded):
             # selected record's row index moved from 1 to 2 while the key stayed.
             assert (keys_before, chosen) == (["2", "1"], "1")
             assert keys_after == ["3", "2", "1"]
-            assert table.cursor_row == 2
+            assert table.cursor_row == ROW_1_AFTER_NEW_TOP_ROW
 
     _run(scenario())
 
@@ -194,14 +202,17 @@ def test_plants_cursor_stays_on_record_across_refresh(seeded):
             table.move_cursor(row=1)
             await settle(pilot, tui)
             assert selected_key(table) == "2"
-            assert http.post("/api/v1/clusters/1/plants", json={"species": "Ficus lyrata"}).status_code == 201
+            assert (
+                http.post("/api/v1/clusters/1/plants", json={"species": "Ficus lyrata"}).status_code
+                == HTTPStatus.CREATED
+            )
             await pilot.press("r")
             await settle(pilot, tui)
             # Pin today's row order (plants come back sorted by species, so "Ficus" lands on top): the selected
             # record moved from row 1 to row 2 and the cursor followed it.
             assert [table.coordinate_to_cell_key((i, 0))[0].value for i in range(table.row_count)] == ["6", "1", "2"]
             assert selected_key(table) == "2"
-            assert table.cursor_row == 2
+            assert table.cursor_row == ROW_1_AFTER_NEW_TOP_ROW
 
     _run(scenario())
 
@@ -221,7 +232,7 @@ def test_activity_cursor_stays_on_the_selected_event_across_refresh(seeded):
             screen = tui.screen
             assert isinstance(screen, ActivityScreen)
             table = screen.query_one("#activity-table", DataTable)
-            await wait_until(lambda: table.row_count == 3, "the first activity load (3 events)")
+            await wait_until(lambda: table.row_count == SEEDED_ACTIVITY_EVENTS, "the first activity load (3 events)")
             table.move_cursor(row=2)
             selected = table.get_row_at(2)
             with _app_locks[id(http)], Session(engine) as session:
@@ -229,9 +240,11 @@ def test_activity_cursor_stays_on_the_selected_event_across_refresh(seeded):
                     "sync", "system", "sync_completed", "fresh event", severity="info", timestamp=FROZEN_TS
                 )
                 session.commit()
-            await wait_until(lambda: table.row_count == 4, "an auto-refresh showing the inserted event")
+            await wait_until(
+                lambda: table.row_count == SEEDED_ACTIVITY_EVENTS + 1, "an auto-refresh showing the inserted event"
+            )
             assert table.get_row_at(0)[-1] == "fresh event"
-            assert table.cursor_row == 3
+            assert table.cursor_row == ROW_2_AFTER_NEW_TOP_ROW
             assert table.get_row_at(3) == selected
 
     _run(scenario())

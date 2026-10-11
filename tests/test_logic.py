@@ -20,6 +20,19 @@ from greenhouse_core.plant_db import get_plant_database
 # window. These tests configure no IrrigationWindow rows, so `_apply_window_rule`
 # is a no-op (issue #83) and the soil / temp / light / trend rules under test
 # fire regardless of the hour; the pin only keeps seasonal logic deterministic.
+# Bounds the engine's decisions must respect in the scenarios below (hours / confidence).
+COLD_FALLBACK_MIN_INTERVAL_H = 18
+HOT_FALLBACK_MAX_INTERVAL_H = 8
+MODERATE_FALLBACK_INTERVAL_H = (10, 14)  # exclusive bounds
+HIGH_NEEDS_MAX_INTERVAL_H = 8
+LOW_NEEDS_MIN_INTERVAL_H = 14
+BASELINE_INTERVAL_H = 12  # the adjustment tests compare against the 12 h baseline
+DRY_SOIL_MIN_CONFIDENCE = 0.8
+PRESENT_ZERO_MIN_CONFIDENCE = 0.3
+CONFIDENCE_SPLIT = 0.7  # sensor-backed decisions score above it; fallbacks and conflicts below
+NO_DATA_MAX_CONFIDENCE = 0.3
+EMERGENCY_MIN_CONFIDENCE = 0.9
+
 _FROZEN_TS = int(datetime(2026, 4, 8, 7, 0, tzinfo=ZoneInfo("UTC")).timestamp())
 
 
@@ -70,7 +83,7 @@ class TestIrrigationLogic:
 
         assert decision is not None
         assert decision.action.value == "irrigate"
-        assert decision.interval_hours > 18
+        assert decision.interval_hours > COLD_FALLBACK_MIN_INTERVAL_H
         assert "temperature-based" in decision.reason_text
 
     def test_temperature_fallback_hot(self):
@@ -79,7 +92,7 @@ class TestIrrigationLogic:
 
         assert decision is not None
         assert decision.action.value == "irrigate"
-        assert decision.interval_hours < 8
+        assert decision.interval_hours < HOT_FALLBACK_MAX_INTERVAL_H
         assert "temperature-based" in decision.reason_text
 
     def test_temperature_fallback_moderate(self):
@@ -88,8 +101,8 @@ class TestIrrigationLogic:
 
         assert decision is not None
         assert decision.action.value == "irrigate"
-        assert decision.interval_hours > 10
-        assert decision.interval_hours < 14
+        assert decision.interval_hours > MODERATE_FALLBACK_INTERVAL_H[0]
+        assert decision.interval_hours < MODERATE_FALLBACK_INTERVAL_H[1]
 
     def test_soil_moisture_dry(self):
         """Dry soil triggers irrigation."""
@@ -97,7 +110,7 @@ class TestIrrigationLogic:
         decision = self.logic.decide_for_cluster(self.cluster_id)
 
         assert decision.action.value == "irrigate"
-        assert decision.confidence > 0.8
+        assert decision.confidence > DRY_SOIL_MIN_CONFIDENCE
         reason_lower = decision.reason_text.lower()
         assert "soil" in reason_lower or "stress" in reason_lower
 
@@ -112,7 +125,7 @@ class TestIrrigationLogic:
 
         assert decision.action.value == "irrigate"
         # NO_DATA fallback would report ~0.2 confidence; a real reading is higher.
-        assert decision.confidence > 0.3
+        assert decision.confidence > PRESENT_ZERO_MIN_CONFIDENCE
 
     def test_soil_moisture_adequate(self):
         """Adequate soil moisture skips irrigation."""
@@ -125,13 +138,13 @@ class TestIrrigationLogic:
     def test_confidence_without_sensors(self):
         """Temperature-based decision has lower confidence."""
         decision = self.logic.decide_for_cluster(self.cluster_id, current_temp=22.0)
-        assert decision.confidence < 0.7
+        assert decision.confidence < CONFIDENCE_SPLIT
 
     def test_confidence_with_sensors(self):
         """Sensor-based decision has higher confidence."""
         self._add_soil_sensor(moisture=30.0)
         decision = self.logic.decide_for_cluster(self.cluster_id)
-        assert decision.confidence > 0.7
+        assert decision.confidence > CONFIDENCE_SPLIT
 
     def test_high_water_needs_adjustment(self):
         """High water needs plants get more frequent irrigation."""
@@ -143,7 +156,7 @@ class TestIrrigationLogic:
             water_needs="high",
         )
         decision = self.logic.decide_for_cluster(cluster_id, current_temp=22.0)
-        assert decision.interval_hours <= 8
+        assert decision.interval_hours <= HIGH_NEEDS_MAX_INTERVAL_H
 
     def test_water_needs_emits_reason_in_sensor_path(self):
         """High water needs nudges dosage AND records an auditable WATER_NEEDS_HIGH reason."""
@@ -180,7 +193,7 @@ class TestIrrigationLogic:
             water_needs="low",
         )
         decision = self.logic.decide_for_cluster(cluster_id, current_temp=22.0)
-        assert decision.interval_hours > 14
+        assert decision.interval_hours > LOW_NEEDS_MIN_INTERVAL_H
 
     def test_no_plants_returns_skip(self):
         """Cluster with no plants returns skip action."""
@@ -262,7 +275,7 @@ class TestIrrigationLogic:
         assert decision.action.value == "irrigate"
         assert decision.duration_minutes == 1  # Short burst
         assert "conflict" in decision.reason_text.lower()
-        assert decision.confidence < 0.7
+        assert decision.confidence < CONFIDENCE_SPLIT
 
     def test_healthy_spread_is_not_flagged_as_conflict(self):
         """A normal spread within the band must NOT be a conflict (driest drives it).
@@ -364,7 +377,7 @@ class TestIrrigationLogic:
         """No sensors and no temp returns low confidence skip."""
         decision = self.logic.decide_for_cluster(self.cluster_id)
         assert decision.action.value == "skip"
-        assert decision.confidence <= 0.3
+        assert decision.confidence <= NO_DATA_MAX_CONFIDENCE
 
     # ── Humidity-based decision tests ───────────────────────────────────────
 
@@ -395,7 +408,7 @@ class TestIrrigationLogic:
         assert decision is not None
         assert "dry air" in decision.reason_text.lower()
         # Should reduce interval by 3 hours from the default
-        assert decision.interval_hours < 12
+        assert decision.interval_hours < BASELINE_INTERVAL_H
 
     def test_humid_air_increases_interval(self):
         """High ambient humidity increases interval (less transpiration)."""
@@ -405,7 +418,7 @@ class TestIrrigationLogic:
 
         assert decision is not None
         assert "humidity" in decision.reason_text.lower()
-        assert decision.interval_hours > 12
+        assert decision.interval_hours > BASELINE_INTERVAL_H
 
     def test_moderately_dry_air_adjustment(self):
         """Slightly dry air has smaller frequency adjustment."""
@@ -426,7 +439,7 @@ class TestIrrigationLogic:
 
         assert decision is not None
         assert "bright" in decision.reason_text.lower()
-        assert decision.interval_hours < 12
+        assert decision.interval_hours < BASELINE_INTERVAL_H
 
     def test_very_dark_light_decreases_frequency(self):
         """Very dark conditions increase interval."""
@@ -436,7 +449,7 @@ class TestIrrigationLogic:
 
         assert decision is not None
         assert "light" in decision.reason_text.lower()
-        assert decision.interval_hours > 12
+        assert decision.interval_hours > BASELINE_INTERVAL_H
 
     # ── Stress detection tests ──────────────────────────────────────────────
 
@@ -457,7 +470,7 @@ class TestIrrigationLogic:
         decision = self.logic.decide_for_cluster(self.cluster_id)
 
         assert decision.action.value == "irrigate"
-        assert decision.confidence >= 0.9
+        assert decision.confidence >= EMERGENCY_MIN_CONFIDENCE
         assert "sensor alert" in decision.reason_text.lower()
 
     def test_critical_moisture_triggers_stress(self):
@@ -466,7 +479,7 @@ class TestIrrigationLogic:
         decision = self.logic.decide_for_cluster(self.cluster_id)
 
         assert decision.action.value == "irrigate"
-        assert decision.confidence >= 0.9
+        assert decision.confidence >= EMERGENCY_MIN_CONFIDENCE
         stress = decision.stress_indicators.model_dump(exclude_none=True)
         assert "water_stress" in stress
 

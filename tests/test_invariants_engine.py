@@ -26,6 +26,11 @@ from greenhouse_core.logic import IrrigationDecision, IrrigationLogic
 from greenhouse_core.logic.decision import Action, Reason, TriggerCode
 from greenhouse_core.models import DecisionLog, IrrigationEvent, SensorReading
 
+DRIEST_SOIL = 33.0  # invariant 2 scenario: the driest of five sensors
+HEALTHY_SOIL = 55.0  # invariant 10 scenarios: the steady level around the spike
+SPIKE_SOIL = 10.0
+MIN_ENGINE_CONSTANTS = 50  # the engine imports at least this many names from constants.py
+
 HOUR = 3600
 
 
@@ -99,7 +104,7 @@ def test_inv2_driest_plant_drives_the_call_not_the_average(env):
     decision = _logic(env).decide_for_cluster(cid)
 
     assert decision.sensor_snapshot.avg_soil_moisture == pytest.approx(47.8)
-    assert decision.sensor_snapshot.min_soil_moisture == 33.0
+    assert decision.sensor_snapshot.min_soil_moisture == DRIEST_SOIL
     assert decision.action is Action.IRRIGATE
     assert decision.primary_code is TriggerCode.SENSOR_VERY_DRY
     assert "driest=33%" in decision.reasons[0].message
@@ -245,7 +250,7 @@ def test_inv5_engine_constants_mirror_constants_module():
     """Invariant #5: every UPPER_CASE name the engine imports is the constants.py value."""
     imported = {n for n in vars(engine_mod) if n.isupper() and hasattr(constants_mod, n)}
 
-    assert len(imported) >= 50
+    assert len(imported) >= MIN_ENGINE_CONSTANTS
     for name in imported:
         assert getattr(engine_mod, name) == getattr(constants_mod, name), name
 
@@ -525,11 +530,11 @@ def test_inv10_spike_is_ignored_by_the_decision_and_raw_rows_are_untouched(env):
 
     decision = _logic(env).decide_for_cluster(cid, persist=True)
 
-    assert decision.sensor_snapshot.min_soil_moisture == 55.0
+    assert decision.sensor_snapshot.min_soil_moisture == HEALTHY_SOIL
     assert decision.primary_code is TriggerCode.SENSOR_ADEQUATE
     after = [(r.id, r.timestamp, r.soil_moisture) for r in env.session.scalars(select(SensorReading))]
     assert after == before
-    assert 10.0 in [soil for _, _, soil in after]
+    assert SPIKE_SOIL in [soil for _, _, soil in after]
 
 
 def test_inv10_short_series_spike_is_filtered(env):
@@ -547,10 +552,10 @@ def test_inv10_short_series_spike_is_filtered(env):
 
     decision = _logic(env).decide_for_cluster(cid)
 
-    assert decision.sensor_snapshot.min_soil_moisture == 55.0
+    assert decision.sensor_snapshot.min_soil_moisture == HEALTHY_SOIL
     assert decision.stress_indicators.water_stress is None
     assert decision.primary_code is TriggerCode.SENSOR_ADEQUATE
-    assert 10.0 in [r.soil_moisture for r in env.session.scalars(select(SensorReading))]
+    assert SPIKE_SOIL in [r.soil_moisture for r in env.session.scalars(select(SensorReading))]
 
 
 # ── #11 A leak alert IS the hold ─────────────────────────────────────────────

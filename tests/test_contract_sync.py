@@ -21,6 +21,8 @@ from greenhouse_core.devices.gateway import group_logs_by_timestamp
 from greenhouse_core.models import SensorReading
 from greenhouse_core.sync import sync_sensor_data, sync_single_sensor
 
+ROWS_AFTER_FIRST_SYNC = 2  # one log row plus one live row
+
 GOLDEN = "ingress_devices"
 
 
@@ -222,7 +224,7 @@ class TestBackfillAndDedup:
         gw = FakeGateway(logs={"dev_a": logs}, live={"dev_a": {"soil_moisture": 49.0}})
         assert sync_single_sensor(db, gw, sensor, 24) == (1, 1, 1)
         assert sync_single_sensor(db, gw, sensor, 24) == (1, 0, 0)
-        assert len(_rows(db, sensor.id)) == 2
+        assert len(_rows(db, sensor.id)) == ROWS_AFTER_FIRST_SYNC
 
     def test_log_fetch_error_propagates_before_live_read(self, one_sensor):
         """A log fetch error propagates before the live read is attempted."""

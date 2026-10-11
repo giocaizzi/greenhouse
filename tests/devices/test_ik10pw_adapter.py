@@ -22,6 +22,9 @@ from greenhouse_core.devices import (
 from greenhouse_core.devices.health import DeviceHealthState
 from greenhouse_core.models import Irrigator, Sensor
 
+LOCAL_LEFT_TIME = 42  # DP 104 in the canned local status
+LOCAL_WORK_STATUS = 2  # DP 106 in the canned local status
+
 
 def _make_irrigator(device_type="rainpoint.ik10pw"):
     return Irrigator(
@@ -205,8 +208,8 @@ class TestIK10PWReadHealth:
         assert HealthAlarm.NO_WATER in state.alarms
         assert state.raw["alarm_raw"] == 1
         assert state.raw["running"] is True
-        assert state.raw["left_time"] == 42
-        assert state.raw["work_status"] == 2
+        assert state.raw["left_time"] == LOCAL_LEFT_TIME
+        assert state.raw["work_status"] == LOCAL_WORK_STATUS
         assert state.raw["source"] == "local"
 
     def test_clear_alarm(self, gateway, adapter):

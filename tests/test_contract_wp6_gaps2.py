@@ -13,6 +13,8 @@ from greenhouse_core.learning import issues
 from greenhouse_core.learning.issues import detect_issues
 from greenhouse_core.learning.models import PlantProfile
 
+WEEK_HOURS = 168  # the chronic check's look-back
+
 
 class _Repo:
     def __init__(self, rows):
@@ -28,7 +30,7 @@ class _Repo:
 
     def get_recent_readings(self, sensor_id, hours=24):
         del sensor_id  # signature mirrors the real one; unused by this fake
-        return list(self._rows) if hours == 168 else []
+        return list(self._rows) if hours == WEEK_HOURS else []
 
 
 class _PlantDb:

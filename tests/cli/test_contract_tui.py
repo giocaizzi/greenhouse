@@ -49,6 +49,8 @@ from greenhouse_cli.tui import resources, sprites
 from greenhouse_cli.tui.app import GreenhouseApp
 from server.conftest import _make_stubbed_app
 
+_QUIET_PASSES_REQUIRED = 2  # consecutive passes with nothing pending before ``settle`` returns
+
 if TYPE_CHECKING:
     from textual.app import App
 
@@ -162,7 +164,7 @@ async def settle(pilot, tui: App, limit_s: float = 60.0) -> None:
     loop = asyncio.get_running_loop()
     deadline = loop.time() + limit_s
     quiet_passes = 0
-    while quiet_passes < 2:
+    while quiet_passes < _QUIET_PASSES_REQUIRED:
         await pilot.pause()
         with contextlib.suppress(WorkerCancelled):  # an exclusive worker legitimately cancels the run it supersedes
             await tui.workers.wait_for_complete()

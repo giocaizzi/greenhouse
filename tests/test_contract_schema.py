@@ -27,6 +27,8 @@ from golden import assert_golden, assert_golden_json
 from greenhouse_core.database import _alembic_config, head_revision, init_db
 from greenhouse_core.models import Base
 
+TABLE_COUNT = 17
+
 # sha256 of "\n".join(DDL statements), recorded at the original baseline (main @ a1b2622, hence "PHASE0").
 PHASE0_DDL_SHA256 = (
     "40ff3b9d7746546d477fdfc3127f95afa8cac48b953592029f08b476e88c833c"  # gitleaks:allow — content hash, not a secret
@@ -120,7 +122,7 @@ def test_orm_column_metadata_matches_golden():
         }
     mapped = sorted(f"{m.class_.__name__}={m.local_table.name}" for m in Base.registry.mappers)
     assert_golden_json("contracts/orm_columns.json", {"tables": tables, "mapped_classes": mapped})
-    assert len(tables) == 17
+    assert len(tables) == TABLE_COUNT
 
 
 def test_alembic_head_is_literal():

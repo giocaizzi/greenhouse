@@ -61,6 +61,15 @@ from greenhouse_core.logic.timing import (
 )
 from greenhouse_core.logic.trends import analyze_historical_trends
 
+# Independent oracle values (deliberately not imported from the engine, so the properties pin them).
+BUNDLED_MULTIPLIER_RANGE = (0.1, 1.6)  # smallest / largest seasonal multiplier in the bundled plant DB
+ORACLE_SATURATED_SOIL = 70  # over-watering needs the average above this
+ORACLE_STEEP_DECLINE = -10  # a declining trend steeper than this is "steep"
+ORACLE_HIGH_STARTS_PER_DAY = 3  # more starts per day than this over the week is "high"
+ORACLE_DAYS_PER_WEEK = 7
+ORACLE_FALLBACK_CONFIDENCE = 0.6
+MOISTURE_PERCENT_MAX = 100.0
+
 PROFILE = settings(
     derandomize=True,
     deadline=None,
@@ -310,9 +319,9 @@ def test_seasonal_multiplier_range_over_bundled_plant_data():
                         )
                     )
 
-    assert min(seen) == 0.1
-    assert max(seen) == 1.6
-    assert all(0.1 <= m <= 1.6 for m in seen)
+    assert min(seen) == BUNDLED_MULTIPLIER_RANGE[0]
+    assert max(seen) == BUNDLED_MULTIPLIER_RANGE[1]
+    assert all(BUNDLED_MULTIPLIER_RANGE[0] <= m <= BUNDLED_MULTIPLIER_RANGE[1] for m in seen)
 
 
 @PROFILE
@@ -443,7 +452,9 @@ def test_detect_stress_conditions_rules(plants, snapshot, trends):
     assert (stress.water_warning is not None) == bool(snapshot.water_warnings)
     soil = snapshot.avg_soil_moisture
     expect_over = (
-        soil is not None and soil > 70 and (trends.irrigation_frequency_high or trends.soil_moisture_trend == "rising")
+        soil is not None
+        and soil > ORACLE_SATURATED_SOIL
+        and (trends.irrigation_frequency_high or trends.soil_moisture_trend == "rising")
     )
     assert (stress.over_watering is not None) == expect_over
     # Water stress: per sensor, its current reading against its own plant's band (unlinked or unknown plant →
@@ -454,7 +465,7 @@ def test_detect_stress_conditions_rules(plants, snapshot, trends):
     widest = (min(r[0] for r in ranges), max(r[1] for r in ranges)) if ranges else (45.0, 65.0)
     own = dict(zip((p.id for p in plants), ranges, strict=True))
     current = [(s.latest_soil_moisture, own.get(s.plant_id, widest)) for s in snapshot.per_sensor]
-    steep = trends.soil_moisture_trend == "declining" and trends.soil_moisture_delta < -10
+    steep = trends.soil_moisture_trend == "declining" and trends.soil_moisture_delta < ORACLE_STEEP_DECLINE
     dry = any(v < min(30.0, lo - 15) or (steep and v < min(30.0, lo - 15) + 10) for v, (lo, _) in current)
     vetoed = expect_over or any(v > hi for v, (_, hi) in current)
     assert (stress.water_stress is not None) == (dry and not vetoed)
@@ -514,7 +525,7 @@ def test_analyze_historical_trends_labels_are_consistent(sensor_series, events, 
         assert not trends.irrigation_frequency_low
         assert not trends.irrigation_frequency_high
     else:
-        assert trends.irrigation_frequency_high == (len(starts) / 7 > 3)
+        assert trends.irrigation_frequency_high == (len(starts) / 7 > ORACLE_HIGH_STARTS_PER_DAY)
 
 
 # ── fallback / plant_needs ───────────────────────────────────────────────────
@@ -530,7 +541,7 @@ def test_temperature_fallback_always_irrigates_within_interval_bounds(temp, need
     assert decision.duration_minutes == DEFAULT_DURATION_MINUTES
     assert MIN_INTERVAL_HOURS <= decision.interval_hours <= MAX_INTERVAL_HOURS
     assert [r.code for r in decision.reasons] == [TriggerCode.TEMP_FALLBACK]
-    assert decision.confidence == 0.6
+    assert decision.confidence == ORACLE_FALLBACK_CONFIDENCE
 
 
 @PROFILE
@@ -594,7 +605,7 @@ def test_parse_moisture_target_is_always_an_ordered_physical_band(text):
     """The parsed band is always ordered and within 0-100 %."""
     low, high = parse_moisture_target(text)
 
-    assert 0.0 <= low <= high <= 100.0
+    assert 0.0 <= low <= high <= MOISTURE_PERCENT_MAX
 
 
 _care = st.lists(

@@ -16,6 +16,7 @@ import logging
 import os
 import re
 import time
+from http import HTTPStatus
 from pathlib import Path
 from typing import Any, ClassVar
 
@@ -60,6 +61,48 @@ from greenhouse_cli.tui.table import DataTable as TuiDataTable
 from greenhouse_cli.tui.widgets import ClusterCard, MetricChart, SpriteView, refill, selected_key
 from server.conftest import TEST_ADMIN_PASSWORD, TEST_ADMIN_USERNAME, _make_stubbed_app
 
+_IDLE_PASSES_REQUIRED = 2  # consecutive idle passes before ``_settle`` trusts the app is quiet
+
+# Sprite geometry: plant sprites are 16 pixels wide and 16 tall (8 half-block lines).
+PLANT_SPRITE_WIDTH = 16
+PLANT_SPRITE_LINES = 8
+WILTING_FRAMES = 3
+SAMPLE_SPRITE_WIDTH = 3  # the ("AB.", "A.B") sample
+THREE_ROWS_AS_LINES = 2  # three pixel rows pad to two half-block lines
+GAUGE_WIDTH = 10
+
+# The seeded greenhouse (``cli/tui_fixtures.py``): what each screen must show.
+SEEDED_CLUSTERS = 3
+LIVING_ROOM_PLANTS = 2
+LIVING_ROOM_SENSORS = 2
+LIVING_ROOM_HISTORY_ROWS = 3
+SEEDED_OPEN_ALERTS = 2
+SEEDED_ACTIVITY_ROWS = 3
+SEEDED_DEVICES = 6
+SEEDED_PUMPS = 2  # Living Room and Balcony; stop-all reaches both
+DESK_CLUSTER_ID = 3
+BALCONY_CLUSTER_ID = 2
+
+# TestModel.STATUS: the driest plant and the averages it must summarise to.
+STATUS_DRIEST_MOISTURE = 30.0
+STATUS_MEAN_TEMPERATURE = 22.0
+STATUS_NEWEST_READING_AT = 200
+STATUS_IRRIGATOR_ID = 3
+
+CHART_HOURS_AFTER_NEXT = 72  # ``]`` from the 24 h default
+CHART_HOURS_SHORTEST = 6  # ``[`` pressed past the shortest range
+FORM_INT_VALUE = 5
+FORM_FLOAT_VALUE = 2.5
+MAY_FIRST_2026_UTC = 1777593600  # 2026-05-01 00:00 UTC, the fallback when the zone is unknown
+EDITED_WINDOW_END_HOUR = 10
+EDITED_RESERVOIR_L = 12.5
+EDITED_GLOBAL_INTERVAL_HOURS = 18
+SCHEDULER_JOB_ROWS = 2  # duplicate pending job collapsed
+MIN_AUTO_REFRESH_POLLS = 3
+CLIENTS_MADE = 3  # session client, anonymous login client, signed-in client
+POLLS_AFTER_RELOAD = 2
+ACTIVITY_PAGE_SIZE = 100
+
 SIZE = (160, 50)
 
 
@@ -96,7 +139,7 @@ async def _settle(pilot, tui: GreenhouseApp, limit_s: float = 10.0) -> None:
     loop = asyncio.get_running_loop()
     deadline = loop.time() + limit_s
     idle_passes = 0
-    while idle_passes < 2:
+    while idle_passes < _IDLE_PASSES_REQUIRED:
         await pilot.pause()
         with contextlib.suppress(WorkerCancelled):
             await tui.workers.wait_for_complete()
@@ -170,7 +213,7 @@ class TestSprites:
     def test_half_block_rendering(self):
         """Two pixel rows collapse into one half-block line, with transparency kept per half."""
         sprite = PixelSprite(("AB.", "A.B"), {"A": "#ff0000", "B": "#00ff00"})
-        assert sprite.width == 3
+        assert sprite.width == SAMPLE_SPRITE_WIDTH
         assert sprite.height == 1
         # A over A → full ▀ ; B over transparent → ▀ ; transparent over B → ▄
         assert _render(sprite).splitlines()[0] == "▀▀▄"
@@ -178,15 +221,15 @@ class TestSprites:
     def test_odd_row_count_is_padded(self):
         """An odd pixel-row count is padded so the last half-block line still renders."""
         sprite = PixelSprite(("A", "A", "A"), {"A": "#ffffff"})
-        assert sprite.height == 2
+        assert sprite.height == THREE_ROWS_AS_LINES
         assert _render(sprite).splitlines()[:2] == ["▀", "▀"]
 
     @pytest.mark.parametrize("category", ["tropical", "fern", "succulent", "cacti", "fruit_tree", None, "mystery"])
     def test_every_category_draws_a_potted_plant(self, category):
         """Every category has a full-size sprite whose bottom row (the pot) is painted."""
         sprite = plant_sprite(category, Mood.OK)
-        assert sprite.width == 16
-        assert sprite.height == 8
+        assert sprite.width == PLANT_SPRITE_WIDTH
+        assert sprite.height == PLANT_SPRITE_LINES
         assert sprite.rows[-1].strip(".")  # pot base is painted
 
     def test_plants_animate(self):
@@ -198,7 +241,7 @@ class TestSprites:
         """Mood-specific effects: sparkles when thriving, a leaf that falls frame by frame when wilting."""
         assert any("K" in r for r in plant_sprite("fern", Mood.THRIVING, 0).rows)
         wilting = [plant_sprite("fern", Mood.WILTING, f).rows for f in range(3)]
-        assert len(set(wilting)) == 3  # the falling leaf moves every frame
+        assert len(set(wilting)) == WILTING_FRAMES  # the falling leaf moves every frame
 
     def test_watering_overlays_drops(self):
         """Water drops appear only while the plant is being watered."""
@@ -248,10 +291,10 @@ class TestFormatting:
 
     def test_bar(self):
         """Gauges have a fixed width and fill in proportion to the value."""
-        assert len(fmt.bar(None, 10)) == 10
-        gauge = fmt.bar(50, 10, 40, 70)
+        assert len(fmt.bar(None, GAUGE_WIDTH)) == GAUGE_WIDTH
+        gauge = fmt.bar(50, GAUGE_WIDTH, 40, 70)
         assert gauge.plain.startswith("█████")
-        assert len(gauge) == 10
+        assert len(gauge) == GAUGE_WIDTH
 
     def test_weekday_mask(self):
         """Window weekday bitmasks render as 'every day' or a one-letter-per-day strip."""
@@ -280,13 +323,13 @@ class TestModel:
     def test_summarize_picks_driest_plant(self):
         """The cluster summary is driven by the driest plant, like the engine (invariant 2)."""
         s = summarize(self.STATUS, {"threshold": {"min": 40, "max": 70}, "datasets": []})
-        assert s.min_moisture == 30.0
+        assert s.min_moisture == STATUS_DRIEST_MOISTURE
         assert s.driest.species == "B"
-        assert s.temperature == 22.0
-        assert s.newest_reading_at == 200
+        assert s.temperature == STATUS_MEAN_TEMPERATURE
+        assert s.newest_reading_at == STATUS_NEWEST_READING_AT
         assert s.mood is Mood.THIRSTY
         assert [p.mood for p in s.plants] == [Mood.OK, Mood.THIRSTY]
-        assert s.irrigator_id == 3
+        assert s.irrigator_id == STATUS_IRRIGATOR_ID
         assert not s.watering
 
     def test_sparkline_uses_per_timestamp_minimum(self):
@@ -376,7 +419,7 @@ class TestDashboard:
                 await pilot.pause()
                 await pilot.press("y")
                 await _settle(pilot, tui)
-                assert len([c for c in wiring.irrigator.calls if c[0] == "stop"]) == 2
+                assert len([c for c in wiring.irrigator.calls if c[0] == "stop"]) == SEEDED_PUMPS
 
         _run(scenario())
 
@@ -420,10 +463,10 @@ class TestClusterScreen:
 
         async def body(_pilot, _tui, screen):
             assert screen.summary.name == "Living Room"
-            assert len(screen.query("PlantTile")) == 2
-            assert screen.query_one("#sensors-table", DataTable).row_count == 2
-            assert screen.query_one("#plants-table", DataTable).row_count == 2
-            assert screen.query_one("#history-table", DataTable).row_count == 3
+            assert len(screen.query("PlantTile")) == LIVING_ROOM_PLANTS
+            assert screen.query_one("#sensors-table", DataTable).row_count == LIVING_ROOM_SENSORS
+            assert screen.query_one("#plants-table", DataTable).row_count == LIVING_ROOM_PLANTS
+            assert screen.query_one("#history-table", DataTable).row_count == LIVING_ROOM_HISTORY_ROWS
             decision = _text(screen.query_one("#decision-panel", Static))
             assert "Decision engine" in decision
             config = _text(screen.query_one("#config-panel"))
@@ -444,10 +487,10 @@ class TestClusterScreen:
             assert screen.metric == "temperature"
             await pilot.press("]")
             await _settle(pilot, tui)
-            assert screen.hours == 72
+            assert screen.hours == CHART_HOURS_AFTER_NEXT
             await pilot.press("[", "[", "[")
             await _settle(pilot, tui)
-            assert screen.hours == 6
+            assert screen.hours == CHART_HOURS_SHORTEST
             assert "Temperature" in _text(screen.query_one("#chart-hint", Static))
             assert isinstance(screen.query_one("#metric-chart"), MetricChart)
 
@@ -519,7 +562,7 @@ class TestOtherScreens:
                 await _settle(pilot, tui)
                 assert isinstance(tui.screen, AlertsScreen)
                 table = tui.screen.query_one(DataTable)
-                assert table.row_count == 2
+                assert table.row_count == SEEDED_OPEN_ALERTS
                 await pilot.press("k")
                 await _settle(pilot, tui)
                 assert table.row_count == 1
@@ -541,7 +584,7 @@ class TestOtherScreens:
                 await pilot.press("l")
                 await _settle(pilot, tui)
                 assert isinstance(tui.screen, ActivityScreen)
-                assert tui.screen.query_one(DataTable).row_count == 3
+                assert tui.screen.query_one(DataTable).row_count == SEEDED_ACTIVITY_ROWS
                 await pilot.press("f")
                 await _settle(pilot, tui)
                 assert tui.screen.severity == "warning"
@@ -559,7 +602,7 @@ class TestOtherScreens:
                 await pilot.press("s")
                 await _settle(pilot, tui)
                 assert isinstance(tui.screen, SystemScreen)
-                assert tui.screen.query_one("#devices-table", DataTable).row_count == 6
+                assert tui.screen.query_one("#devices-table", DataTable).row_count == SEEDED_DEVICES
                 assert tui.screen.query_one("#jobs-table", DataTable).row_count >= 1
                 assert "automatic runs" in _text(tui.screen.query_one("#scheduler-panel"))
 
@@ -594,7 +637,7 @@ class TestLogin:
                 assert "Cannot reach" not in _text(tui.screen.query_one("#dashboard-empty", Static))
 
         try:
-            assert http.get("/api/v1/clusters").status_code == 401
+            assert http.get("/api/v1/clusters").status_code == HTTPStatus.UNAUTHORIZED
             _run(scenario())
             token_path = Path(os.environ["XDG_CONFIG_HOME"]) / "greenhouse" / "token"
             assert token_path.read_text()
@@ -683,8 +726,8 @@ class TestForms:
 
     def test_parse_values(self):
         """Each field kind parses its raw input into the typed value the API expects."""
-        assert parse_value(Field("a", "A", "int"), " 5 ") == 5
-        assert parse_value(Field("a", "A", "float"), "2.5") == 2.5
+        assert parse_value(Field("a", "A", "int"), " 5 ") == FORM_INT_VALUE
+        assert parse_value(Field("a", "A", "float"), "2.5") == FORM_FLOAT_VALUE
         assert parse_value(Field("a", "A"), "  ") is None
         assert parse_value(Field("a", "A", "bool"), raw=True) is True
         assert parse_value(Field("a", "A", "json"), '{"x": 1}') == {"x": 1}
@@ -706,8 +749,10 @@ class TestForms:
             )
             assert cells[1:3] == ["2026-05-01 00:00", "2026-05-01 00:00"]
             # No preference (or an unknown zone): UTC, never the machine's local zone.
-            assert parse_value(Field("s", "Starts", "datetime"), "2026-05-01 00:00") == 1777593600
-            assert parse_value(Field("s", "Starts", "datetime", tz="Not/AZone"), "2026-05-01 00:00") == 1777593600
+            assert parse_value(Field("s", "Starts", "datetime"), "2026-05-01 00:00") == MAY_FIRST_2026_UTC
+            assert (
+                parse_value(Field("s", "Starts", "datetime", tz="Not/AZone"), "2026-05-01 00:00") == MAY_FIRST_2026_UTC
+            )
         finally:
             monkeypatch.undo()
             time.tzset()
@@ -774,7 +819,7 @@ class TestClusterCrud:
                 await pilot.pause()
                 await _submit_form(pilot, tui, name="Kitchen", location="sill", environment="indoor")
                 assert "Kitchen" in [c["name"] for c in http.get("/api/v1/clusters").json()]
-                assert len(tui.screen.query(ClusterCard)) == 4
+                assert len(tui.screen.query(ClusterCard)) == SEEDED_CLUSTERS + 1
 
         _run(scenario())
 
@@ -800,14 +845,14 @@ class TestClusterCrud:
             await pilot.press("M")
             await _settle(pilot, tui)
             await _submit_form(pilot, tui, target_cluster_id=3)
-            assert http.get(f"/api/v1/plants/{ficus['id']}").json()["cluster_id"] == 3
+            assert http.get(f"/api/v1/plants/{ficus['id']}").json()["cluster_id"] == DESK_CLUSTER_ID
 
             table.move_cursor(row=0)
             first = int(table.coordinate_to_cell_key(table.cursor_coordinate)[0].value)
             await pilot.press("delete")
             await pilot.pause()
             await _confirm(pilot, tui)
-            assert http.get(f"/api/v1/plants/{first}").status_code == 404
+            assert http.get(f"/api/v1/plants/{first}").status_code == HTTPStatus.NOT_FOUND
 
         self._open(http, 1, body, tab="tab-plants")
 
@@ -847,7 +892,7 @@ class TestClusterCrud:
             await pilot.press("delete")
             await pilot.pause()
             await _confirm(pilot, tui)
-            assert http.get(f"/api/v1/clusters/1/sensors/{spare['id']}").status_code == 404
+            assert http.get(f"/api/v1/clusters/1/sensors/{spare['id']}").status_code == HTTPStatus.NOT_FOUND
 
         self._open(http, 1, body, tab="tab-sensors")
 
@@ -865,7 +910,7 @@ class TestClusterCrud:
             await pilot.press("u")
             await pilot.pause()
             await _submit_form(pilot, tui, end_hour="10")
-            assert http.get("/api/v1/clusters/1/windows").json()["windows"][0]["end_hour"] == 10
+            assert http.get("/api/v1/clusters/1/windows").json()["windows"][0]["end_hour"] == EDITED_WINDOW_END_HOUR
             await pilot.press("delete")
             await pilot.pause()
             await _confirm(pilot, tui)
@@ -896,13 +941,13 @@ class TestClusterCrud:
             await pilot.pause()
             await _submit_form(pilot, tui, reservoir_l="12.5", config='{"version": "3.5"}')
             irrigator = http.get("/api/v1/clusters/1/irrigator").json()
-            assert irrigator["reservoir_l"] == 12.5
+            assert irrigator["reservoir_l"] == EDITED_RESERVOIR_L
             assert irrigator["config"] == {"version": "3.5"}
 
             await pilot.press("delete")
             await pilot.pause()
             await _confirm(pilot, tui)
-            assert http.get("/api/v1/clusters/1/irrigator").status_code == 404
+            assert http.get("/api/v1/clusters/1/irrigator").status_code == HTTPStatus.NOT_FOUND
             assert screen.summary.irrigator_id is None
 
             await pilot.press("n")
@@ -940,7 +985,7 @@ class TestClusterCrud:
             await pilot.press("D")
             await pilot.pause()
             await _confirm(pilot, tui)
-            assert http.get("/api/v1/clusters/3").status_code == 404
+            assert http.get("/api/v1/clusters/3").status_code == HTTPStatus.NOT_FOUND
             assert isinstance(tui.screen, DashboardScreen)
 
         self._open(http, 3, body)
@@ -1010,7 +1055,7 @@ class TestSettingsScreen:
                 await pilot.press("g")
                 await pilot.pause()
                 await _submit_form(pilot, tui, interval_hours="18")
-                assert http.get("/api/v1/config/global").json()["interval_hours"] == 18
+                assert http.get("/api/v1/config/global").json()["interval_hours"] == EDITED_GLOBAL_INTERVAL_HOURS
 
                 await pilot.press("n")
                 await pilot.pause()
@@ -1074,7 +1119,7 @@ class TestSearchAndSystem:
                 await pilot.press("enter")
                 await _settle(pilot, tui)
                 assert isinstance(tui.screen, ClusterScreen)
-                assert tui.screen.cluster_id == 2
+                assert tui.screen.cluster_id == BALCONY_CLUSTER_ID
 
         _run(scenario())
 
@@ -1193,7 +1238,7 @@ class TestSearchAndSystem:
                 await pilot.press("s")
                 await _settle(pilot, tui)
                 table = tui.screen.query_one("#jobs-table", DataTable)
-                assert table.row_count == 2  # duplicate pending job collapsed
+                assert table.row_count == SCHEDULER_JOB_ROWS  # duplicate pending job collapsed
                 assert "built-in" in str(table.get_row("sensor_sync")[0])
 
                 # Built-in job: refused client-side, no dialog, no request.
@@ -1555,7 +1600,7 @@ class TestResilience:
             tui = _mock_app(handler, refresh_seconds=0.2)
             async with tui.run_test(size=SIZE) as pilot:
                 await pilot.pause(1.2)  # never idle by design, so no _settle here
-                assert len(hits) >= 3
+                assert len(hits) >= MIN_AUTO_REFRESH_POLLS
 
         _run(scenario())
 
@@ -1611,7 +1656,7 @@ class TestResilience:
                 assert not any(c.http.is_closed for c in (made[0], tui.client))
 
         _run(scenario())
-        assert len(made) == 3  # session client, anonymous login client, signed-in client
+        assert len(made) == CLIENTS_MADE  # session client, anonymous login client, signed-in client
         assert all(c.http.is_closed for c in made)
 
     def test_r_reloads_active_screen(self):
@@ -1630,7 +1675,7 @@ class TestResilience:
                 await _settle(pilot, tui)
                 await pilot.press("r")
                 await _settle(pilot, tui)
-                assert len(hits) == 2
+                assert len(hits) == POLLS_AFTER_RELOAD
 
         _run(scenario())
 
@@ -1655,10 +1700,10 @@ class TestResilience:
                 await pilot.press("l")
                 await _settle(pilot, tui)
                 table = tui.screen.query_one(DataTable)
-                assert table.row_count == 100
+                assert table.row_count == ACTIVITY_PAGE_SIZE
                 await pilot.press("n")
                 await _settle(pilot, tui)
-                assert table.row_count == 101
+                assert table.row_count == ACTIVITY_PAGE_SIZE + 1
                 assert requests[-1]["before"] == "999"
                 await pilot.press("n")  # no cursor left → no request
                 await _settle(pilot, tui)

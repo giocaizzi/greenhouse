@@ -19,6 +19,9 @@ from typer.testing import CliRunner
 from greenhouse_cli import client as client_mod
 from greenhouse_cli.main import app
 
+TOKEN_FILE_MODE = 0o600  # owner read/write only
+STUB_ALERT_ID = 42
+
 if TYPE_CHECKING:
     from collections.abc import Callable
 
@@ -117,7 +120,7 @@ class TestAuthCommands:
         token_path = Path(os.environ["XDG_CONFIG_HOME"]) / "greenhouse" / "token"
         assert token_path.read_text() == "jwt-abc"
         # 0o600 mode bits
-        assert (token_path.stat().st_mode & 0o777) == 0o600
+        assert (token_path.stat().st_mode & 0o777) == TOKEN_FILE_MODE
 
     def test_login_print_token_does_not_persist(self, patch_client):
         """``login --print-token`` prints the token without writing it to disk."""
@@ -261,7 +264,7 @@ class TestAlertsCommands:
         )
         result = runner.invoke(app, ["alerts", "get", "42"])
         assert result.exit_code == 0
-        assert json.loads(result.stdout)["id"] == 42
+        assert json.loads(result.stdout)["id"] == STUB_ALERT_ID
 
     def test_ack(self, patch_client):
         """``alerts ack`` posts the acknowledgement."""

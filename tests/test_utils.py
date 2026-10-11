@@ -11,6 +11,9 @@ from greenhouse_core.utils import (
     set_display_timezone,
 )
 
+WINTER_LIGHT_FACTOR = 0.50
+SUMMER_BASE_LUX = 800.0
+
 
 @pytest.fixture(autouse=True)
 def _reset_display_tz():
@@ -30,8 +33,8 @@ class TestSeasonalLightFactor:
 
     def test_winter_minimum(self):
         """December and January return lowest factor."""
-        assert seasonal_light_factor(12) == 0.50
-        assert seasonal_light_factor(1) == 0.50
+        assert seasonal_light_factor(12) == WINTER_LIGHT_FACTOR
+        assert seasonal_light_factor(1) == WINTER_LIGHT_FACTOR
 
     def test_spring_increases(self):
         """Factor increases from winter to summer."""
@@ -88,7 +91,7 @@ class TestEffectiveLightThreshold:
 
     def test_summer_full_threshold(self):
         """In summer, threshold equals base."""
-        assert effective_light_threshold(800, month=6) == 800.0
+        assert effective_light_threshold(800, month=6) == SUMMER_BASE_LUX
 
     def test_winter_reduced_threshold(self):
         """In winter, threshold is reduced."""

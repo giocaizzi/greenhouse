@@ -20,6 +20,9 @@ from greenhouse_core.logic.stress import detect_stress_conditions
 from greenhouse_core.logic.trends import analyze_historical_trends
 from greenhouse_core.stats import get_irrigation_stats
 
+STATS_EVENTS_LOGGED = 2  # one start with a duration, one stop without
+STATS_START_MINUTES = 3
+
 
 class _Repo:
     def __init__(self, n_plants=1):
@@ -315,11 +318,11 @@ def test_get_irrigation_stats_counts_events_without_duration_but_not_as_irrigati
     )
     tmp_db.add_irrigation_event(irrigator_id=irrigator_id, action="stop", triggered_by="manual", timestamp=now - 30)
     stats = get_irrigation_stats(tmp_db, cluster_id, days=1)
-    assert stats["total_events"] == 2
+    assert stats["total_events"] == STATS_EVENTS_LOGGED
     assert dict(stats["events_by_type"]) == {"start": 1, "stop": 1}
     assert dict(stats["events_by_trigger"]) == {"auto": 1, "manual": 1}
     assert [i["duration_minutes"] for i in stats["irrigations"]] == [3]
-    assert stats["total_duration_minutes"] == 3
+    assert stats["total_duration_minutes"] == STATS_START_MINUTES
 
 
 # ── logic/trends: exact thresholds and lookback windows ───────────────────────

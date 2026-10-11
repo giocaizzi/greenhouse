@@ -18,6 +18,8 @@ from engine_grid import BASE_AT, DAY, HOUR, Case, Event, Leak, Reading, SensorSp
 from greenhouse_core.logic import IrrigationLogic
 from greenhouse_core.logic.engine import _allowed_cumulative_liters
 
+UNTRIMMED_DURATION_MIN = 2
+
 _DROP = object()
 _KEY = "season_frequency_multiplier"
 
@@ -196,7 +198,7 @@ def test_sub_day_vacation_budget_is_one_full_day():
     """Mutant ``max(1, ...) -> max(2, ...)``: a 12 h vacation is one day → 3.8 L usable → 3 min ≥ 2, untouched."""
     decision = _vacation("vac-12h", (-HOUR, 11 * HOUR), reservoir_l=4.0)
     assert [r["code"] for r in decision["reasons"]] == ["sensor_dry", "vacation_active"]
-    assert decision["duration_minutes"] == 2
+    assert decision["duration_minutes"] == UNTRIMMED_DURATION_MIN
 
 
 def test_vacation_length_rounds_up_to_whole_days():

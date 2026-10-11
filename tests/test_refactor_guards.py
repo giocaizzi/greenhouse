@@ -31,6 +31,8 @@ import greenhouse_cli.tui as tui_pkg
 from greenhouse_cli.client import _default_token_path, load_stored_token
 from greenhouse_server.config import Settings
 
+DEFAULT_PORT = 8000  # Settings' built-in port, i.e. the .env value (9001) was ignored
+
 ROOT = Path(__file__).resolve().parents[1]
 LIBS = ROOT / "libs"
 TUI_DIR = LIBS / "greenhouse-cli" / "greenhouse_cli" / "tui"
@@ -282,4 +284,4 @@ def test_settings_ignore_a_developer_dotenv(tmp_path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
     monkeypatch.delenv("IRRIGATION_PORT", raising=False)
 
-    assert Settings().port == 8000
+    assert Settings().port == DEFAULT_PORT

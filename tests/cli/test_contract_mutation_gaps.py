@@ -23,6 +23,8 @@ from greenhouse_cli.tui.screens.dashboard import DashboardScreen
 from greenhouse_cli.tui.screens.modals import LoginScreen
 from greenhouse_cli.tui.screens.settings import SettingsScreen
 
+MIN_TIMER_RELOADS = 2  # the mount load plus at least one timer reload in half a second
+
 T0 = 1_776_247_200  # 2026-04-15T10:00:00Z (golden.FROZEN_INSTANT)
 
 
@@ -129,4 +131,4 @@ def test_only_auto_refresh_screens_reload_on_a_timer():
     assert SettingsScreen.AUTO_REFRESH is False
     assert DashboardScreen.AUTO_REFRESH is True
     assert _reloads_in_half_a_second(auto_refresh=False) == 1
-    assert _reloads_in_half_a_second(auto_refresh=True) >= 2
+    assert _reloads_in_half_a_second(auto_refresh=True) >= MIN_TIMER_RELOADS

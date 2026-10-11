@@ -21,6 +21,7 @@ from __future__ import annotations
 import asyncio
 import copy
 from dataclasses import asdict
+from http import HTTPStatus
 from typing import Any
 
 import pytest
@@ -268,7 +269,7 @@ def test_edit_and_delete_with_nothing_selected(seeded):
     """``u`` / ``delete`` on every CRUD tab of an empty cluster: the toast, no dialog, no write."""
     http, _ = seeded
     resp = http.post("/api/v1/clusters", json={"name": "Empty", "environment": "indoor", "location": None})
-    assert resp.status_code == 201, resp.text
+    assert resp.status_code == HTTPStatus.CREATED, resp.text
     empty_id = resp.json()["id"]
     log: list = []
     captured: list[dict] = []

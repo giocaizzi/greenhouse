@@ -5,12 +5,20 @@ to simulate server responses without a running server.
 """
 
 import json
+from http import HTTPStatus
 
 import httpx
 import pytest
 from typer.testing import CliRunner
 
 from greenhouse_cli.main import app
+
+EXIT_NEEDS_ATTENTION = 2  # ``check --all`` with alerts, ``monitor`` with plants needing water
+STUB_PLANT_ID, STUB_TARGET_CLUSTER_ID = 7, 3
+STUB_IRRIGATOR_ID = 7
+STUB_GLOBAL_QUIET_END_HOUR = 5
+ADD_RESERVOIR_L, ADD_FLOW_L_PER_MIN = 20, 1.5
+UPDATE_RESERVOIR_L, UPDATE_FLOW_L_PER_MIN = 15.5, 2
 
 runner = CliRunner()
 
@@ -225,8 +233,8 @@ class TestPlantCommands:
         result = runner.invoke(app, ["plant", "move", "7", "--to-cluster", "3"])
         assert result.exit_code == 0
         data = json.loads(result.stdout)
-        assert data["id"] == 7
-        assert data["cluster_id"] == 3
+        assert data["id"] == STUB_PLANT_ID
+        assert data["cluster_id"] == STUB_TARGET_CLUSTER_ID
 
     def test_plant_move_missing_plant(self, patch_client):
         """A 404 for an unknown plant exits 1 with the server's message."""
@@ -284,7 +292,7 @@ class TestErrorHandling:
             }
         )
         result = runner.invoke(app, ["check", "--all"])
-        assert result.exit_code == 2
+        assert result.exit_code == EXIT_NEEDS_ATTENTION
 
     def test_monitor_needs_water_exits_2(self, patch_client):
         """``monitor`` exits 2 when a plant needs water."""
@@ -297,7 +305,7 @@ class TestErrorHandling:
             }
         )
         result = runner.invoke(app, ["monitor", "1"])
-        assert result.exit_code == 2
+        assert result.exit_code == EXIT_NEEDS_ATTENTION
 
 
 class TestClientLifecycle:
@@ -306,7 +314,7 @@ class TestClientLifecycle:
     @pytest.mark.parametrize(("status", "exit_code"), [(200, 0), (404, 1)])
     def test_call_closes_the_client_it_opened(self, monkeypatch, status, exit_code):
         """Every CLI call closes its HTTP client, on success and on a server error."""
-        body = {"status": "ok"} if status == 200 else {"detail": "Not found"}
+        body = {"status": "ok"} if status == HTTPStatus.OK else {"detail": "Not found"}
         transport = httpx.MockTransport(lambda _request: httpx.Response(status, json=body))
         clients: list[httpx.Client] = []
         original_init = httpx.Client.__init__
@@ -474,7 +482,7 @@ class TestConfigCommands:
         patch_client({("GET", "/api/v1/config/global"): (200, {"id": 1, "quiet_start_hour": 0, "quiet_end_hour": 5})})
         result = runner.invoke(app, ["config", "global", "get"])
         assert result.exit_code == 0
-        assert json.loads(result.stdout)["quiet_end_hour"] == 5
+        assert json.loads(result.stdout)["quiet_end_hour"] == STUB_GLOBAL_QUIET_END_HOUR
 
     def test_global_set_forwards_only_given_fields(self, patch_capture):
         """``config global set`` sends only the fields given on the command line."""
@@ -529,8 +537,8 @@ class TestIrrigatorCapacity:
         )
         assert result.exit_code == 0
         body = captured[0]["json"]
-        assert body["reservoir_l"] == 20
-        assert body["flow_rate_l_per_min"] == 1.5
+        assert body["reservoir_l"] == ADD_RESERVOIR_L
+        assert body["flow_rate_l_per_min"] == ADD_FLOW_L_PER_MIN
 
     def test_add_omits_capacity_when_unset(self, patch_capture):
         """``irrigator add`` leaves the capacity fields out when they are not given."""
@@ -572,8 +580,8 @@ class TestIrrigatorCapacity:
         )
         assert result.exit_code == 0
         body = captured[0]["json"]
-        assert body["reservoir_l"] == 15.5
-        assert body["flow_rate_l_per_min"] == 2
+        assert body["reservoir_l"] == UPDATE_RESERVOIR_L
+        assert body["flow_rate_l_per_min"] == UPDATE_FLOW_L_PER_MIN
 
     def test_update_omits_capacity_when_unset(self, patch_capture):
         """``irrigator update`` leaves the capacity fields out when they are not given."""
@@ -593,7 +601,7 @@ class TestIrrigatorCommands:
         result = runner.invoke(app, ["irrigator", "list"])
         assert result.exit_code == 0
         data = json.loads(result.stdout)
-        assert data[0]["id"] == 7
+        assert data[0]["id"] == STUB_IRRIGATOR_ID
 
     def test_show(self, patch_capture):
         """``irrigator show`` reads the cluster's irrigator."""

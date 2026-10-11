@@ -19,6 +19,12 @@ from greenhouse_core.learning.profiling import compute_drainage_rate
 from greenhouse_core.models import IrrigationEvent
 from greenhouse_core.plant_db import get_plant_database
 
+SIMULATED_CYCLES = 4
+MIN_EFFICIENCY_FOR_GOOD_RESPONSE = 0.5
+BRIGHT_LUX_THRESHOLD = 800  # light-accelerated drainage needs average daytime lux above this
+OVER_WATER_LINE_PCT = 85  # an unresolvable conflict projects the wet sensor past this
+MONSTERA_LOW_LIGHT_LUX = 75  # half the Monstera minimum, scaled for April
+
 
 class TestIrrigationLearner:
     """Test learning engine with synthetic irrigation+sensor data."""
@@ -130,7 +136,7 @@ class TestIrrigationLearner:
     def test_plant_profile_builds_from_multiple_cycles(self):
         """Plant profile builds correctly from 3+ irrigation cycles."""
         now = int(time.time())
-        for i in range(4):
+        for i in range(SIMULATED_CYCLES):
             cycle_time = now - (i * 86400)
             self._simulate_irrigation_cycle(
                 cycle_time,
@@ -143,9 +149,9 @@ class TestIrrigationLearner:
         profile = self.learner.get_plant_profile(sensor, days=30)
 
         assert profile is not None
-        assert profile.response_count == 4
+        assert profile.response_count == SIMULATED_CYCLES
         assert profile.avg_absorption_per_minute > 0
-        assert profile.efficiency_score > 0.5
+        assert profile.efficiency_score > MIN_EFFICIENCY_FOR_GOOD_RESPONSE
 
     def test_plant_profile_insufficient_data(self):
         """Plant profile returns None with no irrigation history."""
@@ -244,7 +250,7 @@ class TestIrrigationLearner:
         profile = self.learner.get_plant_profile(sensor, days=30)
 
         assert profile is not None
-        assert profile.response_count == 4
+        assert profile.response_count == len(deltas)
         assert profile.efficiency_score == pytest.approx(0.5)  # 2 out of 4 had >2% increase
         assert profile.min_delta < 0
 
@@ -464,7 +470,7 @@ class TestIssueHeuristics:
         assert "rapid_drainage" not in types
         alert = next(a for a in alerts if a.alert_type == "light_accelerated_drainage")
         assert alert.severity == "warning"
-        assert alert.data["avg_lux"] > 800
+        assert alert.data["avg_lux"] > BRIGHT_LUX_THRESHOLD
 
     def test_rapid_drainage_without_bright_light(self, monkeypatch):
         """Rapid drainage in dim light fires plain rapid_drainage, not the light variant."""
@@ -572,7 +578,7 @@ class TestIssueHeuristics:
         assert "unresolvable_conflict" in types
         alert = next(a for a in alerts if a.alert_type == "unresolvable_conflict")
         assert alert.severity == "critical"
-        assert alert.data["projected_wet"] > 85
+        assert alert.data["projected_wet"] > OVER_WATER_LINE_PCT
 
     def test_conflict_keys_on_the_latest_readings_not_the_oldest(self):
         """The dry/wet snapshot must average the *newest* samples in the window.
@@ -661,7 +667,7 @@ class TestIssueHeuristics:
         low_light = [a for a in alerts if a.alert_type == "low_light" and a.sensor_name == FAKE_SENSOR_NAME]
         assert low_light
         assert low_light[0].severity == "warning"
-        assert low_light[0].data["avg_lux"] < 75
+        assert low_light[0].data["avg_lux"] < MONSTERA_LOW_LIGHT_LUX
 
     def test_no_low_light_when_bright_enough(self, monkeypatch):
         """Adequate daytime light does not fire low_light."""

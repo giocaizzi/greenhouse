@@ -7,6 +7,8 @@ import pytest
 from greenhouse_core import auth as core_auth
 from greenhouse_core.models import User
 
+LOGIN_AT = 1_700_000_000
+
 PW = "correct horse"
 
 
@@ -42,4 +44,4 @@ def test_set_user_password_and_record_login(tmp_db, monkeypatch):
     assert core_auth.verify_password("new secret", user.hashed_password)
     monkeypatch.setattr(core_auth.time, "time", lambda: 1_700_000_000)
     tmp_db.record_login(user)
-    assert user.last_login_at == 1_700_000_000
+    assert user.last_login_at == LOGIN_AT

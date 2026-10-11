@@ -13,6 +13,10 @@ from greenhouse_core.logic.timing import (
 )
 from greenhouse_core.models import IrrigationWindow
 
+# Built-in seasonal multipliers (the fallback table when no plant / category value applies).
+INDOOR_WINTER, INDOOR_SUMMER, INDOOR_AUTUMN = 0.5, 1.2, 0.8
+OUTDOOR_WINTER, OUTDOOR_SUMMER = 0.3, 1.5
+
 
 def _ts(year, month, day, hour, tz="UTC"):
     return int(datetime(year, month, day, hour, tzinfo=ZoneInfo(tz)).timestamp())
@@ -82,32 +86,35 @@ def test_season_for_southern_flips():
 
 def test_seasonal_multiplier_indoor_defaults():
     """Built-in indoor multipliers per season."""
-    assert seasonal_multiplier("winter", environment="indoor") == 0.5
+    assert seasonal_multiplier("winter", environment="indoor") == INDOOR_WINTER
     assert seasonal_multiplier("spring", environment="indoor") == 1.0
-    assert seasonal_multiplier("summer", environment="indoor") == 1.2
+    assert seasonal_multiplier("summer", environment="indoor") == INDOOR_SUMMER
 
 
 def test_seasonal_multiplier_outdoor_defaults():
     """Built-in outdoor multipliers are more extreme than indoor ones."""
-    assert seasonal_multiplier("winter", environment="outdoor") == 0.3
-    assert seasonal_multiplier("summer", environment="outdoor") == 1.5
+    assert seasonal_multiplier("winter", environment="outdoor") == OUTDOOR_WINTER
+    assert seasonal_multiplier("summer", environment="outdoor") == OUTDOOR_SUMMER
 
 
 def test_seasonal_multiplier_plant_override():
     """A plant override wins for the seasons it names and falls back for the rest."""
     override = {"winter": 0.25, "summer": 1.0}
-    assert seasonal_multiplier("winter", environment="indoor", plant_override=override) == 0.25
+    assert seasonal_multiplier("winter", environment="indoor", plant_override=override) == override["winter"]
     # Fallback when override does not have the season
-    assert seasonal_multiplier("autumn", environment="indoor", plant_override=override) == 0.8
+    assert seasonal_multiplier("autumn", environment="indoor", plant_override=override) == INDOOR_AUTUMN
 
 
 def test_seasonal_multiplier_category_fallback():
     """A category override applies when the plant has none, and the plant beats it."""
     cat = {"winter": 0.7}
-    assert seasonal_multiplier("winter", environment="indoor", category_override=cat) == 0.7
+    assert seasonal_multiplier("winter", environment="indoor", category_override=cat) == cat["winter"]
     # Plant override beats category
     plant = {"winter": 0.4}
-    assert seasonal_multiplier("winter", environment="indoor", plant_override=plant, category_override=cat) == 0.4
+    assert (
+        seasonal_multiplier("winter", environment="indoor", plant_override=plant, category_override=cat)
+        == plant["winter"]
+    )
 
 
 class TestQuietHours:

@@ -30,6 +30,10 @@ from typer.testing import CliRunner
 from golden import assert_golden, assert_golden_json
 from greenhouse_cli.main import app
 
+COMMAND_GROUPS = 13
+LEAF_COMMANDS = 61
+STABLE_HELP_WIDTH = 100  # COLUMNS pinned by clean_env
+
 PROG = "greenhouse"
 HELP_GOLDEN_DIR = "cli/help"
 EXPECTED_HELP_PAGES = 74  # 13 groups + 61 leaf commands
@@ -174,8 +178,8 @@ def test_command_tree_has_every_help_page():
     """The command tree has the pinned number of help pages and groups."""
     assert len(COMMANDS) == EXPECTED_HELP_PAGES
     groups = [p for p, c in COMMANDS if is_group(c)]
-    assert len(groups) == 13
-    assert len(leaf_command_paths()) == 61
+    assert len(groups) == COMMAND_GROUPS
+    assert len(leaf_command_paths()) == LEAF_COMMANDS
 
 
 @pytest.mark.usefixtures("stable_cli_env")
@@ -223,4 +227,4 @@ def test_help_is_width_stable_against_hostile_terminal_env(monkeypatch):
     again = runner.invoke(app, ["config", "set", "--help"], prog_name=PROG).stdout
     assert again == baseline
     assert "\x1b[" not in baseline  # no ANSI escapes
-    assert max(len(line) for line in baseline.splitlines()) <= 100
+    assert max(len(line) for line in baseline.splitlines()) <= STABLE_HELP_WIDTH
