@@ -1108,6 +1108,18 @@ class IrrigationRepository:
             stmt = stmt.where(Alert.last_seen_at >= since)
         return self.session.scalar(stmt)
 
+    def list_unresolved_alerts(self, source: str) -> list[Alert]:
+        """Every open or acknowledged alert from ``source``, oldest first — no row cap.
+
+        For state that must be rebuilt from the inbox (the health monitor's actuation cache
+        after a restart): a missed row would silently drop a block.
+        """
+        return list(
+            self.session.scalars(
+                select(Alert).where(Alert.source == source, Alert.status != "resolved").order_by(Alert.id)
+            )
+        )
+
     def get_open_alert_by_key(self, dedup_key: str) -> Alert | None:
         """The unresolved (open or acknowledged) alert with ``dedup_key``, if any."""
         return self.session.scalar(select(Alert).where(Alert.dedup_key == dedup_key, Alert.status != "resolved"))

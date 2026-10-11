@@ -403,8 +403,9 @@ def init_health_monitor(app: FastAPI, settings: Settings) -> None:
     Stored on ``app.state.health_monitor`` so dependency-injection wiring
     (:func:`greenhouse_server.deps.get_health_monitor`) and the scheduler
     job share one instance — its cache is the engine's source of truth
-    for actuation gating. Falls open if there is no device registry wired
-    (tests usually omit it).
+    for actuation gating, rebuilt here from the open health alerts so a
+    restart keeps blocked devices blocked. Falls open if there is no device
+    registry wired (tests usually omit it).
     """
     from greenhouse_server.services.health_monitor import DeviceHealthMonitor
 
@@ -428,6 +429,11 @@ def init_health_monitor(app: FastAPI, settings: Settings) -> None:
         except Exception:
             session.rollback()
             logger.exception("Health monitor startup hooks failed")
+        try:
+            # After the backfill, so back-filled alarms are cached too and resolve when they clear (B-9).
+            monitor.restore_from_open_alerts()
+        except Exception:
+            logger.exception("Health monitor could not restore its cache from open alerts")
         app.state.health_monitor = monitor
 
 

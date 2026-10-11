@@ -46,31 +46,24 @@ from greenhouse_core.constants import (
 )
 from greenhouse_core.devices import DeviceRegistry
 from greenhouse_core.devices.health import DeviceHealthState, HealthAlarm
-from greenhouse_core.logic.decision import DEVICE_BLOCKING_CODES, TriggerCode
+from greenhouse_core.logic.decision import DEVICE_BLOCKING_CODES
 from greenhouse_core.models import ENTITY_IRRIGATOR, ENTITY_SENSOR, SOURCE_HEALTH, EntityType, Irrigator, Sensor
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.services.alerts import is_alert_open, notify_if_new_alert
-from greenhouse_server.services.health_alarms import alarm_message, alarm_severity, alarm_title, is_low_battery_state
+from greenhouse_server.services.health_alarms import (
+    HEALTH_ALARM_TO_TRIGGER,
+    alarm_message,
+    alarm_severity,
+    alarm_title,
+    health_dedup_key,
+    infer_cluster_id,
+    infer_label,
+    is_low_battery_state,
+    unresolved_alarms_by_entity,
+)
 from greenhouse_server.services.notify import NtfyClient
 
 logger = logging.getLogger(__name__)
-
-
-HEALTH_ALARM_TO_TRIGGER: dict[HealthAlarm, TriggerCode] = {
-    HealthAlarm.NO_WATER: TriggerCode.DEVICE_NO_WATER,
-    HealthAlarm.RAIN_DETECTED: TriggerCode.DEVICE_RAIN_DETECTED,
-    HealthAlarm.LOW_BATTERY: TriggerCode.DEVICE_BATTERY_LOW,
-    HealthAlarm.BATTERY_CRITICAL: TriggerCode.DEVICE_BATTERY_CRITICAL,
-    HealthAlarm.SIGNAL_LOSS: TriggerCode.DEVICE_SIGNAL_LOSS,
-    HealthAlarm.DEVICE_OFFLINE: TriggerCode.DEVICE_OFFLINE,
-    # SENSOR_FAULT is sensor-only and advisory; the engine does not gate
-    # on it and so it has no TriggerCode counterpart.
-}
-
-
-def _dedup_key(entity_type: EntityType, entity_id: int, alarm: HealthAlarm) -> str:
-    """Single source of truth for health-alert dedup keys."""
-    return f"health:{entity_type}:{entity_id}:{alarm.value}"
 
 
 @dataclass(frozen=True)
@@ -199,8 +192,8 @@ class DeviceHealthMonitor:
             to_raise = (derived - prev_alarms) | (derived & (previous.unraised if previous else frozenset()))
             disappeared = prev_alarms - derived
 
-            cluster_id = cluster_id or self._infer_cluster_id(entity_type, entity_id)
-            label = label or self._infer_label(entity_type, entity_id) or f"{entity_type}#{entity_id}"
+            cluster_id = cluster_id or infer_cluster_id(self._repo, entity_type, entity_id)
+            label = label or infer_label(self._repo, entity_type, entity_id) or f"{entity_type}#{entity_id}"
 
             unraised = frozenset(
                 alarm
@@ -251,6 +244,28 @@ class DeviceHealthMonitor:
         ]
         return bool(blocking), blocking
 
+    # ── Restore from the inbox (startup hook) ─────────────────────────────
+
+    def restore_from_open_alerts(self) -> int:
+        """Rebuild the cache from the unresolved health alerts; call once at startup, after the backfill.
+
+        The cache is memory-only, so after a restart an open NO_WATER / OFFLINE alert did not
+        block actuation until the next poll, and an alarm that cleared while the server was down
+        was never auto-resolved (B-9). Seeding the cache with the alarms the inbox still holds
+        restores the gate at once; the next poll then diffs against them as usual, resolving
+        what cleared and leaving what persists alone (no duplicate raise or push).
+
+        Returns:
+            How many entities were restored.
+        """
+        restored = unresolved_alarms_by_entity(self._repo)
+        now = self._clock()
+        with self._lock:
+            for key, alarms in restored.items():
+                if key not in self._cache:  # a live observation already made wins
+                    self._cache[key] = _Cached(state=DeviceHealthState(observed_at=now), derived_alarms=alarms)
+        return len(restored)
+
     # ── Backfill from SensorReading history (startup hook) ────────────────
 
     def backfill_from_history(self, *, window: int = SENSOR_HEALTH_BACKFILL_WINDOW) -> None:
@@ -277,7 +292,7 @@ class DeviceHealthMonitor:
 
     def _raise_if_not_open(self, alarm: HealthAlarm, sensor: Sensor, *, cluster_id: int | None) -> None:
         """Raise a back-filled sensor alarm unless its alert is already open (no duplicate on restart)."""
-        key = _dedup_key(ENTITY_SENSOR, sensor.id, alarm)
+        key = health_dedup_key(ENTITY_SENSOR, sensor.id, alarm)
         if not self._repo.get_open_alert_by_key(key):
             self._raise_health_alert(
                 entity_type=ENTITY_SENSOR,
@@ -328,7 +343,7 @@ class DeviceHealthMonitor:
         cluster_id: int | None,
     ) -> bool:
         """Upsert the alarm's alert and push it when this call opened it; False when the write failed."""
-        key = _dedup_key(entity_type, entity_id, alarm)
+        key = health_dedup_key(entity_type, entity_id, alarm)
         severity = alarm_severity(alarm)
         payload = {
             "entity_type": entity_type,
@@ -366,31 +381,13 @@ class DeviceHealthMonitor:
         return True
 
     def _resolve_health_alert(self, *, entity_type: EntityType, entity_id: int, alarm: HealthAlarm) -> None:
-        existing = self._repo.get_open_alert_by_key(_dedup_key(entity_type, entity_id, alarm))
+        existing = self._repo.get_open_alert_by_key(health_dedup_key(entity_type, entity_id, alarm))
         if existing is None:
             return
         try:
             self._repo.resolve_alert(existing.id)
         except Exception:
             logger.exception("Failed to resolve health alert %s for %s %d", alarm.value, entity_type, entity_id)
-
-    def _infer_cluster_id(self, entity_type: EntityType, entity_id: int) -> int | None:
-        if entity_type == ENTITY_IRRIGATOR:
-            irr = self._repo.get_irrigator(entity_id)
-            return irr.cluster_id if irr else None
-        if entity_type == ENTITY_SENSOR:
-            sensor = self._repo.get_sensor(entity_id)
-            return sensor.cluster_id if sensor else None
-        return None
-
-    def _infer_label(self, entity_type: EntityType, entity_id: int) -> str | None:
-        if entity_type == ENTITY_IRRIGATOR:
-            irr = self._repo.get_irrigator(entity_id)
-            return irr.name if irr else None
-        if entity_type == ENTITY_SENSOR:
-            sensor = self._repo.get_sensor(entity_id)
-            return sensor.name if sensor else None
-        return None
 
 
 __all__ = [

@@ -1,10 +1,28 @@
-"""Inbox wording for device-health alarms: severity, title and message per :class:`HealthAlarm`.
+"""Device-health alarm vocabulary: trigger codes, dedup keys, inbox wording and inbox lookups.
 
-Pure presentation, kept apart from the :mod:`.health_monitor` state machine so the monitor
-module holds only transitions, the shared cache and the actuation gate.
+Kept apart from the :mod:`.health_monitor` state machine so the monitor module holds only
+transitions, the shared cache and the actuation gate.
 """
 
+import logging
+
 from greenhouse_core.devices.health import DeviceHealthState, HealthAlarm
+from greenhouse_core.logic.decision import TriggerCode
+from greenhouse_core.models import ENTITY_IRRIGATOR, ENTITY_SENSOR, SOURCE_HEALTH, EntityType
+from greenhouse_core.repository import IrrigationRepository
+
+logger = logging.getLogger("greenhouse_server.services.health_monitor")
+
+HEALTH_ALARM_TO_TRIGGER: dict[HealthAlarm, TriggerCode] = {
+    HealthAlarm.NO_WATER: TriggerCode.DEVICE_NO_WATER,
+    HealthAlarm.RAIN_DETECTED: TriggerCode.DEVICE_RAIN_DETECTED,
+    HealthAlarm.LOW_BATTERY: TriggerCode.DEVICE_BATTERY_LOW,
+    HealthAlarm.BATTERY_CRITICAL: TriggerCode.DEVICE_BATTERY_CRITICAL,
+    HealthAlarm.SIGNAL_LOSS: TriggerCode.DEVICE_SIGNAL_LOSS,
+    HealthAlarm.DEVICE_OFFLINE: TriggerCode.DEVICE_OFFLINE,
+    # SENSOR_FAULT is sensor-only and advisory; the engine does not gate
+    # on it and so it has no TriggerCode counterpart.
+}
 
 # Severity per alarm — drives the inbox styling and ack/resolve UX.
 _ALARM_SEVERITY: dict[HealthAlarm, str] = {
@@ -51,3 +69,53 @@ def is_low_battery_state(raw: object) -> bool:
     if not isinstance(raw, str):
         return False
     return raw.strip().lower() == "low"
+
+
+def health_dedup_key(entity_type: EntityType, entity_id: int, alarm: HealthAlarm) -> str:
+    """Single source of truth for health-alert dedup keys."""
+    return f"health:{entity_type}:{entity_id}:{alarm.value}"
+
+
+def infer_cluster_id(repo: IrrigationRepository, entity_type: EntityType, entity_id: int) -> int | None:
+    """The cluster an irrigator or sensor belongs to, or None."""
+    if entity_type == ENTITY_IRRIGATOR:
+        irr = repo.get_irrigator(entity_id)
+        return irr.cluster_id if irr else None
+    if entity_type == ENTITY_SENSOR:
+        sensor = repo.get_sensor(entity_id)
+        return sensor.cluster_id if sensor else None
+    return None
+
+
+def infer_label(repo: IrrigationRepository, entity_type: EntityType, entity_id: int) -> str | None:
+    """The name of an irrigator or sensor, or None."""
+    if entity_type == ENTITY_IRRIGATOR:
+        irr = repo.get_irrigator(entity_id)
+        return irr.name if irr else None
+    if entity_type == ENTITY_SENSOR:
+        sensor = repo.get_sensor(entity_id)
+        return sensor.name if sensor else None
+    return None
+
+
+def unresolved_alarms_by_entity(repo: IrrigationRepository) -> dict[tuple[str, int], frozenset[HealthAlarm]]:
+    """The alarms each device still has an unresolved health alert for (the B-9 cache rebuild).
+
+    Alerts whose code this version does not know, or that name no device, are skipped.
+    """
+    found: dict[tuple[str, int], set[HealthAlarm]] = {}
+    for alert in repo.list_unresolved_alerts(SOURCE_HEALTH):
+        alarm = _known_alarm(alert.code)
+        if alarm is None or alert.entity_id is None or alert.entity_type not in (ENTITY_IRRIGATOR, ENTITY_SENSOR):
+            logger.debug("Not restoring health alert %d (%s)", alert.id, alert.dedup_key)
+            continue
+        found.setdefault((alert.entity_type, alert.entity_id), set()).add(alarm)
+    return {key: frozenset(alarms) for key, alarms in found.items()}
+
+
+def _known_alarm(code: str) -> HealthAlarm | None:
+    """The :class:`HealthAlarm` an alert code names, or None for a code this version does not know."""
+    try:
+        return HealthAlarm(code)
+    except ValueError:
+        return None

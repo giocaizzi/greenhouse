@@ -259,6 +259,28 @@ def test_init_health_monitor_sizes_the_sensor_window_from_the_sync_interval(worl
     assert app.state.health_monitor._sensor_offline_after_seconds == (60 + SENSOR_OFFLINE_GRACE_MINUTES) * 60
 
 
+def test_init_health_monitor_restores_blocks_from_open_alerts(world, monkeypatch):
+    """B-9: the startup monitor rebuilds its cache from the open health alerts, so actuation stays blocked."""
+    from types import SimpleNamespace
+
+    from greenhouse_server import scheduler
+
+    world["irr_adapter"].set_health(DeviceHealthState(observed_at=FROZEN_TS, alarms=frozenset({HealthAlarm.NO_WATER})))
+    world["monitor"].poll_irrigator(world["irrigator"])
+    world["repo"].session.commit()
+
+    monkeypatch.setattr(world["repo"].session, "close", lambda: None)
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            session_factory=lambda: world["repo"].session,
+            device_registry=world["monitor"]._registry,
+            ntfy_notifier=None,
+        )
+    )
+    scheduler.init_health_monitor(app, SimpleNamespace(sync_interval_minutes=180))
+    assert app.state.health_monitor.is_actuation_blocked(world["irrigator"]) == (True, [HealthAlarm.NO_WATER])
+
+
 # ── Alarm derivation thresholds ───────────────────────────────────────────────
 
 

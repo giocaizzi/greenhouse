@@ -554,3 +554,54 @@ class TestUnraisedAlarmRetry:
         assert monitor_.is_actuation_blocked(irrigator) == (True, [HealthAlarm.NO_WATER])
         monitor_.poll_irrigator(irrigator)
         assert monitor_._repo.get_open_alert_by_key(key) is not None
+
+
+class TestRestoreFromOpenAlerts:
+    """B-9 fixed: after a restart the cache is rebuilt from the unresolved health alerts."""
+
+    def _raise_no_water(self, repo, registry, irrigator, irr_adapter) -> None:
+        irr_adapter.set_health(_state(alarms=frozenset({HealthAlarm.NO_WATER})))
+        DeviceHealthMonitor(repo=repo, registry=registry).poll_irrigator(irrigator)
+        repo.commit()
+
+    def test_open_alert_blocks_at_once_and_resolves_when_cleared(
+        self, repo, registry_with_fakes, cluster_irrigator_sensor
+    ):
+        registry, irr_adapter, _ = registry_with_fakes
+        irrigator, _ = cluster_irrigator_sensor
+        self._raise_no_water(repo, registry, irrigator, irr_adapter)
+
+        restarted = DeviceHealthMonitor(repo=repo, registry=registry)  # empty memory, as after a restart
+        assert restarted.is_actuation_blocked(irrigator) == (False, [])
+        assert restarted.restore_from_open_alerts() == 1
+        assert restarted.is_actuation_blocked(irrigator) == (True, [HealthAlarm.NO_WATER])
+
+        irr_adapter.set_health(_state())  # refilled while the server was down
+        restarted.poll_irrigator(irrigator)
+        key = f"health:irrigator:{irrigator.id}:no_water"
+        assert repo.get_open_alert_by_key(key) is None
+        assert restarted.is_actuation_blocked(irrigator) == (False, [])
+
+    def test_persisting_alarm_is_not_raised_again(self, repo, registry_with_fakes, cluster_irrigator_sensor):
+        registry, irr_adapter, _ = registry_with_fakes
+        irrigator, _ = cluster_irrigator_sensor
+        self._raise_no_water(repo, registry, irrigator, irr_adapter)
+        restarted = DeviceHealthMonitor(repo=repo, registry=registry)
+        restarted.restore_from_open_alerts()
+        restarted.poll_irrigator(irrigator)  # still dry: no transition
+        alert = repo.get_open_alert_by_key(f"health:irrigator:{irrigator.id}:no_water")
+        assert (alert.status, alert.occurrence_count) == ("open", 1)
+
+    def test_unknown_codes_and_resolved_alerts_are_ignored(self, repo, registry_with_fakes, cluster_irrigator_sensor):
+        registry, _, _ = registry_with_fakes
+        irrigator, _ = cluster_irrigator_sensor
+        repo.upsert_alert(
+            "health:irrigator:1:retired", "health", "retired_alarm", "t", "m", entity_type="irrigator", entity_id=1
+        )
+        resolved = repo.upsert_alert(
+            "health:irrigator:1:no_water", "health", "no_water", "t", "m", entity_type="irrigator", entity_id=1
+        )
+        repo.resolve_alert(resolved.id)
+        monitor_ = DeviceHealthMonitor(repo=repo, registry=registry)
+        assert monitor_.restore_from_open_alerts() == 0
+        assert monitor_.is_actuation_blocked(irrigator) == (False, [])
