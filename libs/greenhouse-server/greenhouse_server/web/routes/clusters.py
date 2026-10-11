@@ -13,7 +13,6 @@ from greenhouse_core.logic.timing import active_quiet_window
 from greenhouse_server.deps import (
     MAX_LOOKBACK_HOURS,
     ClusterServiceDep,
-    PlantDbDep,
     RepoDep,
     not_found_as_404,
     require_cluster,
@@ -30,7 +29,6 @@ from greenhouse_server.web.templating import templates
 from greenhouse_server.web.weekdays import WEEKDAY_BITS, WEEKDAY_LABELS, format_weekday_mask
 
 if TYPE_CHECKING:
-    from greenhouse_core.plant_db import PlantDatabase
     from greenhouse_core.repository import EffectiveConfig, IrrigationRepository
     from greenhouse_server.services.charts import Metric
 
@@ -110,14 +108,14 @@ def _plants_by_id(repo: IrrigationRepository, cluster_id: int) -> dict[int, obje
 
 
 def _cluster_chart_payloads(
-    repo: IrrigationRepository, plant_db: PlantDatabase, cluster_id: int, hours: int
+    repo: IrrigationRepository, cluster_id: int, hours: int
 ) -> tuple[dict[Metric, str], dict[Metric, Any]]:
     """Pre-build every metric's chart payload (as JSON) so charts render on first page load.
 
     Also returns each metric's threshold, which the stat tiles reuse for the range indicator.
     """
     chart_payloads = {
-        metric: build_cluster_chart_payload(repo, plant_db, cluster_id, hours, metric) for metric in CLUSTER_METRICS
+        metric: build_cluster_chart_payload(repo, cluster_id, hours, metric) for metric in CLUSTER_METRICS
     }
     chart_payloads_json = {metric: json.dumps(payload) for metric, payload in chart_payloads.items()}
     chart_thresholds = {metric: payload.get("threshold", {}) for metric, payload in chart_payloads.items()}
@@ -153,13 +151,13 @@ def _window_rows(repo: IrrigationRepository, cluster_id: int) -> list[dict[str, 
     ]
 
 
-def _detail_data(repo: IrrigationRepository, plant_db: PlantDatabase, cluster_id: int, hours: int) -> dict[str, Any]:
+def _detail_data(repo: IrrigationRepository, cluster_id: int, hours: int) -> dict[str, Any]:
     """Detail-page template data besides the live status and the quiet-hours flag.
 
     Chart controls and pre-built payloads, the decision rationale, the inline config, the
     irrigation windows (with the weekday vocabulary of their form) and the sensor→plant map.
     """
-    chart_payloads_json, chart_thresholds = _cluster_chart_payloads(repo, plant_db, cluster_id, hours)
+    chart_payloads_json, chart_thresholds = _cluster_chart_payloads(repo, cluster_id, hours)
     return {
         "allowed_hours": sorted(ALLOWED_HOURS),
         "metrics": CLUSTER_METRICS,
@@ -187,14 +185,13 @@ def cluster_detail(
     cluster_id: int,
     svc: ClusterServiceDep,
     repo: RepoDep,
-    plant_db: PlantDbDep,
     hours: int = Query(24, ge=1, le=MAX_LOOKBACK_HOURS),
 ) -> Response:
     """Render the unified cluster detail page (status, charts, config, windows, devices)."""
     with not_found_as_404("Cluster not found"):
         status = svc.get_cluster_status(cluster_id)
 
-    data = _detail_data(repo, plant_db, cluster_id, hours)
+    data = _detail_data(repo, cluster_id, hours)
     effective_config: EffectiveConfig = data["effective_config"]
 
     # "Are we in quiet hours right now?" — drives the hx-confirm guard on
@@ -255,13 +252,12 @@ def cluster_chart_fragment(
     request: Request,
     cluster_id: int,
     repo: RepoDep,
-    plant_db: PlantDbDep,
     metric: str = Query("soil_moisture"),
     hours: int = Query(24, ge=1, le=MAX_LOOKBACK_HOURS),
 ) -> Response:
     """Render one metric's cluster chart panel (HTMX fragment)."""
     with not_found_as_404("Cluster not found"):
-        payload = build_cluster_chart_payload(repo, plant_db, cluster_id, hours, require_metric(metric))
+        payload = build_cluster_chart_payload(repo, cluster_id, hours, require_metric(metric))
     return templates.TemplateResponse(
         request,
         "partials/_chart_panel.html",

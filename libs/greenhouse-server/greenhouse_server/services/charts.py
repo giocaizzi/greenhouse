@@ -70,7 +70,6 @@ def build_plant_chart_payload(
 
 def build_cluster_chart_payload(
     repo: IrrigationRepository,
-    plant_db: PlantDatabase,
     cluster_id: int,
     hours: int,
     metric: Metric,
@@ -83,7 +82,7 @@ def build_cluster_chart_payload(
     sensors = repo.get_sensors_in_cluster(cluster_id)
     datasets = _build_sensor_datasets(repo, sensors, hours, metric)
     events = _build_event_list(repo, cluster_id, hours)
-    threshold = _threshold_for_cluster(repo, plant_db, cluster_id, metric)
+    threshold = _threshold_for_cluster(repo, cluster_id, metric)
 
     return {
         "metric": metric,
@@ -198,12 +197,7 @@ def _threshold_for_plant(plant: Plant, plant_db: PlantDatabase, metric: Metric) 
     return {"min": None, "max": None, "source": "none"}
 
 
-def _threshold_for_cluster(
-    repo: IrrigationRepository,
-    plant_db: PlantDatabase,  # noqa: ARG001 — unused; dropping it cascades into route dependencies (follow-up)
-    cluster_id: int,
-    metric: Metric,
-) -> ChartThreshold:
+def _threshold_for_cluster(repo: IrrigationRepository, cluster_id: int, metric: Metric) -> ChartThreshold:
     if metric == "soil_moisture":
         return {
             "min": float(DEFAULT_SOIL_MOISTURE_MIN),
