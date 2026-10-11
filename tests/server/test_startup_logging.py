@@ -113,3 +113,36 @@ def test_ignored_legacy_secret_env_names_are_warned_by_name_only(clean_env, capl
         "secrets are read from GREENHOUSE_* names only",
     ]
     assert not any("s3cr3t" in m for m in messages)
+
+
+def _app_state():
+    return SimpleNamespace(state=SimpleNamespace())
+
+
+def test_missing_tuya_credentials_log_one_line_without_traceback(caplog, monkeypatch):
+    def missing():
+        msg = "Missing TUYA_CLIENT_ID or TUYA_CLIENT_SECRET"
+        raise ValueError(msg)
+
+    monkeypatch.setattr(app_module, "DeviceGateway", missing)
+    app = _app_state()
+    with caplog.at_level(logging.WARNING, logger="greenhouse_server.app"):
+        app_module._init_tuya(app)
+    [record] = caplog.records
+    assert record.getMessage() == (
+        "Tuya gateway not configured (Missing TUYA_CLIENT_ID or TUYA_CLIENT_SECRET); starting without device control"
+    )
+    assert record.exc_info is None
+    assert (app.state.device_gateway, app.state.device_registry) == (None, None)
+
+
+def test_an_unexpected_tuya_init_error_keeps_the_traceback(caplog, monkeypatch):
+    def broken():
+        msg = "socket exploded"
+        raise RuntimeError(msg)
+
+    monkeypatch.setattr(app_module, "DeviceGateway", broken)
+    with caplog.at_level(logging.WARNING, logger="greenhouse_server.app"):
+        app_module._init_tuya(_app_state())
+    [record] = caplog.records
+    assert record.exc_info is not None

@@ -81,6 +81,11 @@ def _init_tuya(app: FastAPI) -> None:
     """
     try:
         gateway = DeviceGateway()
+    except ValueError as exc:  # missing TUYA_CLIENT_ID / TUYA_CLIENT_SECRET: an expected setup, no traceback
+        logger.warning("Tuya gateway not configured (%s); starting without device control", exc)
+        app.state.device_gateway = None
+        app.state.device_registry = None
+        return
     except Exception:  # degraded mode: serve without devices rather than refuse to start
         logger.warning("Tuya gateway unavailable; starting without device control", exc_info=True)
         app.state.device_gateway = None
