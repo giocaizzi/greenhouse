@@ -750,21 +750,25 @@ def test_irrigate_missing_cluster_is_404(make_client):
     assert app.state.fake_devices.irrigator.calls == []
 
 
-def test_delete_cluster_current_behavior_leaves_orphan_rows(make_client):
-    """Pins current behavior: deleting a populated cluster leaves rows that still point at it — see REFACTOR_NOTES.md.
+def test_delete_cluster_leaves_no_orphan_rows(make_client):
+    """Deleting a populated cluster also removes the rows that point at it.
 
-    ``repository.delete_cluster`` removes the cluster's plants, sensors (+ readings), irrigator
-    (+ events) and config, but not its irrigation windows, decision logs, alerts or sensor
-    assignments (SQLite FK enforcement is off, so nothing complains).
+    Besides the ORM cascade (plants, sensors + readings, irrigator + events, config),
+    ``repository.delete_cluster`` removes its irrigation windows, decision logs, alerts and
+    sensor assignments, which used to stay behind (SQLite FK enforcement is off).
     """
     app, resp, effect = _run(make_client, "DELETE", f"/clusters/{OUTDOOR}")
     assert resp.status_code == 200
     assert set(effect) == {
+        "alerts",
         "clusters",
+        "decision_logs",
         "irrigation_configs",
         "irrigation_events",
+        "irrigation_windows",
         "irrigators",
         "plants",
+        "sensor_assignments",
         "sensor_readings",
         "sensors",
     }
@@ -779,4 +783,4 @@ def test_delete_cluster_current_behavior_leaves_orphan_rows(make_client):
                 "sensor_assignments": "SELECT COUNT(*) FROM sensor_assignments WHERE plant_id = 3",
             }.items()
         }
-    assert orphans == {"irrigation_windows": 1, "decision_logs": 1, "alerts": 1, "sensor_assignments": 1}
+    assert orphans == {"irrigation_windows": 0, "decision_logs": 0, "alerts": 0, "sensor_assignments": 0}

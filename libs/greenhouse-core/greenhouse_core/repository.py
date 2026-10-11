@@ -5,7 +5,7 @@ import time
 from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any, Literal, TypedDict, Unpack, cast
 
-from sqlalchemy import func, inspect, or_, select
+from sqlalchemy import and_, delete, func, inspect, or_, select
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -1471,8 +1471,46 @@ class IrrigationRepository:
         return cluster
 
     def delete_cluster(self, cluster_id: int) -> bool:
-        """Delete a cluster (cascades to plants/sensors/irrigators/config)."""
-        return self._delete_by_id(Cluster, cluster_id)
+        """Delete a cluster and everything that points at it.
+
+        The ORM cascades to plants, sensors (+ readings), the irrigator (+ events)
+        and the config. The rows that reference the cluster by plain id or by an
+        FK SQLite does not enforce — irrigation windows, decision logs, alerts,
+        sensor assignments, a preferences ``default_cluster_id`` — are removed
+        (or cleared) here, so API and web deletes leave no orphans. Activity
+        events stay: they are the audit trail.
+        """
+        cluster = self.session.get(Cluster, cluster_id)
+        if cluster is None:
+            return False
+        self._delete_cluster_references(cluster)
+        self.session.delete(cluster)
+        self.session.flush()
+        return True
+
+    def _delete_cluster_references(self, cluster: Cluster) -> None:
+        """Remove the rows that point at ``cluster`` without an ORM cascade (see ``delete_cluster``)."""
+        plant_ids = [p.id for p in cluster.plants]
+        sensor_ids = [s.id for s in cluster.sensors]
+        entity_ids = {
+            EntityType.PLANT: plant_ids,
+            EntityType.SENSOR: sensor_ids,
+            EntityType.IRRIGATOR: [cluster.irrigator.id] if cluster.irrigator else [],
+        }
+        alert_scope = [Alert.cluster_id == cluster.id] + [
+            and_(Alert.entity_type == kind, Alert.entity_id.in_(ids)) for kind, ids in entity_ids.items() if ids
+        ]
+        self.session.execute(delete(Alert).where(or_(*alert_scope)))
+        self.session.execute(delete(IrrigationWindow).where(IrrigationWindow.cluster_id == cluster.id))
+        self.session.execute(delete(DecisionLog).where(DecisionLog.cluster_id == cluster.id))
+        self.session.execute(
+            delete(SensorAssignment).where(
+                or_(SensorAssignment.sensor_id.in_(sensor_ids), SensorAssignment.plant_id.in_(plant_ids))
+            )
+        )
+        prefs = self.session.scalar(select(UserPreferences).limit(1))
+        if prefs is not None and prefs.default_cluster_id == cluster.id:
+            prefs.default_cluster_id = None
 
     def update_plant(self, plant_id: int, **fields: Unpack[PlantPatch]) -> Plant | None:
         """Patch plant fields; returns the updated row or None."""
