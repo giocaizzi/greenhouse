@@ -266,9 +266,9 @@ def test_pause_without_check_all_job_is_404_and_persists_nothing(p):
 
 def test_apply_persisted_pause_edge_cases(p, monkeypatch, caplog):
     """Startup re-apply: no-op when not persisted / job missing; a failing pause is logged, not raised."""
-    sched.apply_persisted_pause(False)
+    sched.apply_persisted_pause(persisted_paused=False)
     assert sched.is_check_all_paused() is False
-    sched.apply_persisted_pause(True)
+    sched.apply_persisted_pause(persisted_paused=True)
     assert sched.is_check_all_paused() is True
     sched.init_scheduler(p.app, p.app.state.settings, tz_name="UTC")
 
@@ -278,11 +278,11 @@ def test_apply_persisted_pause_edge_cases(p, monkeypatch, caplog):
 
     monkeypatch.setattr(bg_scheduler, "pause_job", broken)
     with caplog.at_level(logging.ERROR, logger="greenhouse_server.scheduler"):
-        sched.apply_persisted_pause(True)
+        sched.apply_persisted_pause(persisted_paused=True)
     assert "Failed to re-apply persisted scheduler pause" in caplog.text
     monkeypatch.undo()
     bg_scheduler.remove_job("check_all")
-    sched.apply_persisted_pause(True)  # job missing → silently nothing
+    sched.apply_persisted_pause(persisted_paused=True)  # job missing → silently nothing
     assert sched.is_check_all_paused() is False
 
 
@@ -297,8 +297,10 @@ def test_delete_core_vs_adhoc_jobs(p):
     for job_id in CORE_JOB_ORDER:
         resp = p.call("DELETE", f"/api/v1/scheduler/jobs/{job_id}")
         out[job_id] = (resp["status"], resp["response"]["detail"])
-    out[adhoc_id] = (lambda r: (r["status"], r["response"]))(p.call("DELETE", f"/api/v1/scheduler/jobs/{adhoc_id}"))
-    out["nope"] = (lambda r: (r["status"], r["response"]))(p.call("DELETE", "/api/v1/scheduler/jobs/nope"))
+    adhoc = p.call("DELETE", f"/api/v1/scheduler/jobs/{adhoc_id}")
+    out[adhoc_id] = (adhoc["status"], adhoc["response"])
+    nope = p.call("DELETE", "/api/v1/scheduler/jobs/nope")
+    out["nope"] = (nope["status"], nope["response"])
     assert [j.id for j in bg_scheduler.get_jobs()] == CORE_JOB_ORDER
     assert {k: v[0] for k, v in out.items()} == {**dict.fromkeys(CORE_JOB_ORDER, 409), adhoc_id: 200, "nope": 404}
     assert_golden_json("orchestration/scheduler_delete.json", out)

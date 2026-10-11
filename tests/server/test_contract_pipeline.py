@@ -30,10 +30,10 @@ Contracts / invariants guarded here:
 from __future__ import annotations
 
 import json
-from collections.abc import Callable
 from contextlib import contextmanager
 from datetime import timedelta
 from http import HTTPStatus
+from typing import TYPE_CHECKING
 
 import pytest
 import time_machine
@@ -53,6 +53,9 @@ from greenhouse_server.scheduler import start_scheduler, stop_scheduler
 from greenhouse_server.services.health_monitor import DeviceHealthMonitor
 from greenhouse_server.services.vacation import cluster_budgets, vacation_days
 from server.conftest import _make_stubbed_app
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 HOUR = 3600
 # Tables whose rows are append-only during a pipeline run: only rows created

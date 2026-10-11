@@ -17,10 +17,9 @@ There are no PUT routes in the web router. Nothing is normalized but the package
 from __future__ import annotations
 
 import re
-from collections.abc import Callable
 from dataclasses import dataclass, field
 from http import HTTPStatus
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pytest
 from sqlalchemy import inspect, text
@@ -54,6 +53,9 @@ from server.test_contract_web_html import (
     pinned_headers,
     web_routes,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 ADHOC_JOB = "adhoc_contract_job"
 

@@ -1,10 +1,12 @@
 """Tests for the per-cluster daily rate-limit guards on /start and /log-manual."""
 
 from http import HTTPStatus
-
-from sqlalchemy.orm import Session
+from typing import TYPE_CHECKING
 
 from greenhouse_core.models import IrrigationConfig
+
+if TYPE_CHECKING:
+    from sqlalchemy.orm import Session
 
 
 def _set_cap(client, cluster_id: int, *, max_events_per_day: int | None = None, daily_cap_minutes: int | None = None):

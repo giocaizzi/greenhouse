@@ -81,7 +81,7 @@ class FakeClock:
         self.now += self.step
 
 
-def _alarm(no_water: bool, alarm_raw: object = None, error: str | None = None) -> DeviceHealthState:
+def _alarm(*, no_water: bool, alarm_raw: object = None, error: str | None = None) -> DeviceHealthState:
     """Build a DeviceHealthState matching the watcher's read_health contract."""
     if error is not None:
         return DeviceHealthState(

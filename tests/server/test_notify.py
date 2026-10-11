@@ -91,7 +91,7 @@ class TestNtfyClient:
         assert "Authorization" not in captured["request"].headers
 
     @pytest.mark.parametrize(
-        "severity,priority,tag",
+        ("severity", "priority", "tag"),
         [
             ("critical", "5", "rotating_light"),
             ("warning", "4", "warning"),

@@ -96,7 +96,8 @@ class TestSystemHealthPulse:
             # With a 2h reading cloud IS reachable (last_sync_at is 2h ago) but < 1h threshold → not reachable.
             # Cloud reachable requires reading < 1h. 2h old = not reachable → "down" again.
             # The "degraded" path requires: cloud_reachable=True AND (stale_count>0 OR open_alerts>=3).
-            # To have cloud_reachable=True we need at least one reading <1h, which means sensors_stale=0 for that sensor.
+            # To have cloud_reachable=True we need at least one reading <1h,
+            # which means sensors_stale=0 for that sensor.
             # If we want degraded with open_alerts: add >=3 alerts.
             assert data["sensors_total"] == 1
             assert "status" in data

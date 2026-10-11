@@ -315,7 +315,7 @@ def test_mcp_tool_invocation_rejects_garbage_bearer(mcp_client_with_token: TestC
     still 401 at the inner endpoint — the MCP-token short-circuit must not
     accidentally accept arbitrary bearers.
     """
-    with pytest.raises(Exception) as excinfo:
+    with pytest.raises(Exception, match="401") as excinfo:
         _invoke_mcp_tool(
             mcp_client_with_token,
             tool_name="list_clusters",

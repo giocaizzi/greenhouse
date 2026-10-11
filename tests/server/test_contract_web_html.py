@@ -24,6 +24,7 @@ cheap (~20 ms instead of ~0.8 s).
 
 from __future__ import annotations
 
+import functools
 import hashlib
 import re
 import sqlite3
@@ -311,33 +312,29 @@ def seed_greenhouse(repo: IrrigationRepository) -> None:
 
 # ── App factory (copy of a seeded template DB per app) ────────────────────────────────────────
 
-_TEMPLATE_DB: sqlite3.Connection | None = None
 
-
+@functools.cache
 def _seeded_template() -> sqlite3.Connection:
-    """Build (once per process) a migrated + seeded DB through the real ``_make_stubbed_app``.
+    """Build (once per process, memoised) a migrated + seeded DB through the real ``_make_stubbed_app``.
 
     The first caller is always inside ``frozen_clock`` + ``clean_env`` (see ``web_env``), so
     the result is identical whichever test builds it.
     """
-    global _TEMPLATE_DB
-    if _TEMPLATE_DB is None:
-        app, engine = _make_stubbed_app(bypass_auth=True)
-        session = app.state.session_factory()
-        try:
-            seed_greenhouse(IrrigationRepository(session))
-            session.commit()
-        finally:
-            session.close()
-        raw = engine.raw_connection()
-        try:
-            snapshot = sqlite3.connect(":memory:", check_same_thread=False)
-            raw.driver_connection.backup(snapshot)
-        finally:
-            raw.close()
-        engine.dispose()
-        _TEMPLATE_DB = snapshot
-    return _TEMPLATE_DB
+    app, engine = _make_stubbed_app(bypass_auth=True)
+    session = app.state.session_factory()
+    try:
+        seed_greenhouse(IrrigationRepository(session))
+        session.commit()
+    finally:
+        session.close()
+    raw = engine.raw_connection()
+    try:
+        snapshot = sqlite3.connect(":memory:", check_same_thread=False)
+        raw.driver_connection.backup(snapshot)
+    finally:
+        raw.close()
+    engine.dispose()
+    return snapshot
 
 
 def build_app(*, bypass_auth: bool = True, seeded: bool = True, **settings_override):
@@ -641,7 +638,7 @@ GET_CASES: tuple[GetCase, ...] = (
     C("edit_irrigator_form__404", f"/clusters/{EMPTY}/irrigators/edit"),
     C("log_manual_form", f"/irrigators/{IRR_INDOOR}/log-manual"),
     C("log_manual_form__404", "/irrigators/999/log-manual"),
-    # operations (GET)
+    # GET operations
     C("monitor", f"/clusters/{INDOOR}/monitor"),
     C("monitor__outdoor", f"/clusters/{OUTDOOR}/monitor"),
     C("monitor__empty", f"/clusters/{EMPTY}/monitor"),

@@ -11,9 +11,9 @@ in-module fakes). Odd behavior is pinned as ``…_current_behavior``.
 from __future__ import annotations
 
 import logging
-from collections.abc import Iterator
 from dataclasses import dataclass, field
 from types import SimpleNamespace
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -34,6 +34,9 @@ from greenhouse_server.services.health_monitor import DeviceHealthMonitor
 from greenhouse_server.services.insights import InsightsService
 from greenhouse_server.services.maintenance import collect_maintenance_alerts
 from greenhouse_server.services.pump_watcher import PumpWatcherService
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 PUMP_LOGGER = "greenhouse_server.services.pump_watcher"
 

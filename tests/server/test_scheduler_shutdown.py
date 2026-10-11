@@ -89,8 +89,10 @@ def _run_server_shutdown(tmp_path: Path, triggered_by: str) -> tuple[float, str]
     )
     t0 = time.monotonic()
     # A 1-minute irrigation: the pre-fix process exits only after ~60s.
-    proc = subprocess.run(
+    # A real child process is the point: the test times the server's process-level shutdown.
+    proc = subprocess.run(  # noqa: S603 — runs this repo's own script under the current interpreter
         [sys.executable, str(script), triggered_by],
+        check=False,  # the exit status is not the contract; the output and the elapsed time are
         capture_output=True,
         text=True,
         timeout=45,

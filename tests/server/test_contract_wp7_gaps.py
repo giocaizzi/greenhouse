@@ -388,25 +388,25 @@ def test_check_all_failure_log_carries_the_exception(db, monkeypatch, caplog):
     cid = db.add_cluster("Crashy")
     db.session.commit()
 
-    class Boom(RuntimeError):
+    class BoomError(RuntimeError):
         pass
 
     def explode(_self, _cluster_id):
         msg = "kaput"
-        raise Boom(msg)
+        raise BoomError(msg)
 
     monkeypatch.setattr(IrrigationService, "check_cluster", explode)
     svc = IrrigationService(db, None, StubSync(None), None, plant_database())
     with caplog.at_level(logging.ERROR, logger=IRRIGATION_LOGGER):
         results = svc.check_all_clusters()
     assert results == [
-        {"cluster_id": cid, "cluster_name": "Crashy", "action": "error", "notes": "check failed: Boom('kaput')"}
+        {"cluster_id": cid, "cluster_name": "Crashy", "action": "error", "notes": "check failed: BoomError('kaput')"}
     ]
     (record,) = caplog.records
     assert (record.levelname, record.getMessage(), record.exc_info[0]) == (
         "ERROR",
         f"Check failed for cluster {cid}",
-        Boom,
+        BoomError,
     )
 
 
@@ -715,11 +715,11 @@ def test_job_failure_rolls_back_logs_with_traceback_and_closes(p, monkeypatch, c
     log = _spy_sessions(monkeypatch, p.app)
     monitor = _wire_job(p, log)
 
-    class JobBoom(RuntimeError):
+    class JobBoomError(RuntimeError):
         pass
 
     def explode(*_a, **_kw):
-        raise JobBoom(job)
+        raise JobBoomError(job)
 
     if target is None:
         monkeypatch.setattr(monitor, "poll_all", explode)
@@ -730,7 +730,7 @@ def test_job_failure_rolls_back_logs_with_traceback_and_closes(p, monkeypatch, c
     assert [e for e in log if e in ("open", "commit", "rollback", "close")] == ["open", "rollback", "close"]
     records = [r for r in caplog.records if r.name == SCHEDULER_LOGGER]
     assert [(r.levelname, r.getMessage()) for r in records] == [("ERROR", message)]
-    assert records[0].exc_info[0] is JobBoom
+    assert records[0].exc_info[0] is JobBoomError
 
 
 @pytest.mark.parametrize("job", ["snapshot", "check", "anomaly", "monitor"])
@@ -949,7 +949,10 @@ def test_monitor_always_syncs(db):
 
 
 def test_monitor_looks_back_two_hours(db):
-    """Mutation survivor: monitor reads the last 2 h of readings (a 1.5 h-old sample counts, a 2.5 h-old one does not)."""
+    """Mutation survivor: monitor reads the last 2 h of readings.
+
+    A 1.5 h-old sample counts, a 2.5 h-old one does not.
+    """
     cid = db.add_cluster("Lookback Gap")
     fresh = db.add_sensor(
         cluster_id=cid, tuya_device_id="fake_tuya_sensor_lb01", name="F", sensor_type="soil", config={}

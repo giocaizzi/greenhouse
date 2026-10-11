@@ -113,7 +113,7 @@ class TestPasswordHashing:
 
     @pytest.mark.parametrize("plain", ["", None])
     def test_empty_password_is_rejected(self, plain):
-        with pytest.raises(ValueError) as excinfo:
+        with pytest.raises(ValueError, match="password must be non-empty") as excinfo:
             core_auth.hash_password(plain)
         assert str(excinfo.value) == "password must be non-empty"
 
@@ -172,16 +172,16 @@ class TestUserHelpers:
         assert core_auth.get_user_by_username(db, "alice") is None  # case-sensitive
 
     def test_create_user_with_empty_password_raises_before_insert(self, db):
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="password must be non-empty"):
             core_auth.create_user(db, "Bob", "")
         assert db.query(User).count() == 0
 
-    def test_set_password_and_record_login(self, db, _hermetic):
+    def test_set_password_and_record_login(self, db, frozen_clock):
         user = core_auth.create_user(db, "Carol", PW)
         core_auth.set_password(db, user, "new secret")
         assert core_auth.verify_password("new secret", user.hashed_password)
         assert not core_auth.verify_password(PW, user.hashed_password)
-        _hermetic.move_to(FROZEN_INSTANT + timedelta(seconds=90))
+        frozen_clock.move_to(FROZEN_INSTANT + timedelta(seconds=90))
         core_auth.record_login(db, user)
         assert user.last_login_at == FROZEN_TS + 90
 
@@ -213,12 +213,12 @@ class TestJwt:
         claims = jwt.decode(token, options={"verify_signature": False})
         assert (claims["iat"], claims["exp"]) == (1000, 1060)
 
-    def test_decode_roundtrip_and_expiry_boundary(self, _hermetic):
+    def test_decode_roundtrip_and_expiry_boundary(self, frozen_clock):
         settings = _settings(auth_token_ttl_minutes=1)
         token = issue_token(settings, _U())
-        _hermetic.move_to(FROZEN_INSTANT + timedelta(seconds=59))
+        frozen_clock.move_to(FROZEN_INSTANT + timedelta(seconds=59))
         assert decode_token(settings, token)["sub"] == "5"
-        _hermetic.move_to(FROZEN_INSTANT + timedelta(seconds=60))  # now == exp → expired
+        frozen_clock.move_to(FROZEN_INSTANT + timedelta(seconds=60))  # now == exp → expired
         with pytest.raises(AuthError) as excinfo:
             decode_token(settings, token)
         assert (excinfo.value.status_code, excinfo.value.detail, excinfo.value.headers) == (

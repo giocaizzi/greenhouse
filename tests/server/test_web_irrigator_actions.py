@@ -1,11 +1,14 @@
 """Irrigator start/stop/log-manual web actions."""
 
 from http import HTTPStatus
+from typing import TYPE_CHECKING
 
 import pytest
-from sqlalchemy.orm import Session
 
 from greenhouse_core.models import IrrigationConfig, IrrigationEvent
+
+if TYPE_CHECKING:
+    from sqlalchemy.orm import Session
 
 
 def test_irrigator_start_via_web(seeded_client):

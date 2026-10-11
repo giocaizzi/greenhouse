@@ -32,7 +32,7 @@ from server.conftest import run_core_job
 from server.test_contract_pipeline import Pipeline
 
 
-class Boom(RuntimeError):
+class Boom(RuntimeError):  # noqa: N818 — the name is in the pinned golden (repr in alert text)
     """The injected failure (a distinct type so the golden shows exactly where it came from)."""
 
 
