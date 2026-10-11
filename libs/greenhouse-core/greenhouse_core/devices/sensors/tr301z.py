@@ -78,6 +78,7 @@ class TR301ZAdapter(TuyaSensorAdapter):
         :attr:`HealthAlarm.DEVICE_OFFLINE` from staleness (``OFFLINE_AFTER_MINUTES``)
         without any device round-trip. A missing row reads as offline.
         """
+        del sensor  # everything needed is on the persisted row
         now = int(time.time())
         if latest is None:
             return DeviceHealthState(

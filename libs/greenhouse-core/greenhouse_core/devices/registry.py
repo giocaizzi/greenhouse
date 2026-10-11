@@ -34,8 +34,12 @@ IrrigatorFactory = Callable[[], AbstractIrrigatorAdapter]
 SensorFactory = Callable[[], AbstractSensorAdapter]
 
 
-class UnknownDeviceModel(Exception):
+class UnknownDeviceModelError(Exception):
     """Raised when an irrigator references a model not in the registry."""
+
+
+# The established public name (pinned in the import surface); both names are the same class.
+UnknownDeviceModel = UnknownDeviceModelError
 
 
 class DeviceRegistry:
@@ -70,7 +74,7 @@ class DeviceRegistry:
         if factory is None:
             msg = f"No adapter registered for irrigator type {irrigator.type!r} (known: {_known(self._irrigators)})"
             logger.error("%s; irrigator %s will not be actuated", msg, irrigator.id)
-            raise UnknownDeviceModel(msg)
+            raise UnknownDeviceModelError(msg)
         return factory()
 
     def get_sensor(self, sensor: Sensor) -> AbstractSensorAdapter | None:

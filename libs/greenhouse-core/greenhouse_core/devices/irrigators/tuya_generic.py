@@ -55,6 +55,7 @@ class TuyaIrrigatorAdapter(AbstractIrrigatorAdapter):
 
     def start(self, irrigator: Irrigator, minutes: int | None = None) -> tuple[bool, str]:
         """Switch on. Subclasses override to handle a Duration DP recipe."""
+        del minutes  # a generic switch has no Duration DP: the cycle runs until stopped
         return self.on(irrigator)
 
     def stop(self, irrigator: Irrigator) -> tuple[bool, str]:
@@ -70,20 +71,32 @@ class TuyaIrrigatorAdapter(AbstractIrrigatorAdapter):
         """
         proto = self.profile.protocol_version
         if proto is not None and self.profile.has_capability("supports_local_status"):
-            try:
-                device = self._gateway.open_local(irrigator, proto)
-                live = device.status()
-                if live and "dps" in live:
-                    dps = live["dps"]
-                    out: dict[str, Any] = {"source": "local"}
-                    for key in ("switch", "duration", "left_time", "work_status", "auto_run"):
-                        if key in self.profile.dp_map:
-                            out[self._status_key(key)] = dps.get(str(self.profile.dp(key)))
-                    return out
-            except Exception:
-                # Expected when the device is off the LAN: the Cloud read below is the documented fallback.
-                logger.debug("Local status read failed for %s; using Cloud", irrigator.tuya_device_id, exc_info=True)
+            local = self._local_status(irrigator, proto)
+            if local is not None:
+                return local
+        return self._cloud_status(irrigator)
 
+    def _local_status(self, irrigator: Irrigator, proto: float) -> dict[str, Any] | None:
+        """The status from a local read, or ``None`` when the device gave no DPs or could not be reached."""
+        try:
+            live = self._gateway.open_local(irrigator, proto).status()
+            local = self._local_fields(live["dps"]) if live and "dps" in live else None
+        except Exception:  # noqa: BLE001 — any local failure (LAN, protocol, parse) falls back to the Cloud read
+            # Expected when the device is off the LAN: the Cloud read is the documented fallback.
+            logger.debug("Local status read failed for %s; using Cloud", irrigator.tuya_device_id, exc_info=True)
+            return None
+        return local
+
+    def _local_fields(self, dps: dict[str, Any]) -> dict[str, Any]:
+        """Map the profile's status DPs of a local read onto the public status keys."""
+        out: dict[str, Any] = {"source": "local"}
+        for key in ("switch", "duration", "left_time", "work_status", "auto_run"):
+            if key in self.profile.dp_map:
+                out[self._status_key(key)] = dps.get(str(self.profile.dp(key)))
+        return out
+
+    def _cloud_status(self, irrigator: Irrigator) -> dict[str, Any]:
+        """The status from the Cloud shadow (``running`` / ``work_state``), or an ``error`` entry."""
         result = self._gateway.get_status(irrigator.tuya_device_id)
         if not result.get("success"):
             return {"error": f"Cloud API error: {result}"}
@@ -112,6 +125,7 @@ class TuyaIrrigatorAdapter(AbstractIrrigatorAdapter):
         have no health surface beyond reachability, which the monitor
         derives from the broader sync cycle.
         """
+        del irrigator  # nothing to read: the snapshot is the same for every device of the model
         return DeviceHealthState(
             observed_at=int(time.time()),
             alarms=frozenset(),

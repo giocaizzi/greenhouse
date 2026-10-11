@@ -41,6 +41,7 @@ class TuyaSensorAdapter(AbstractSensorAdapter):
         Subclasses with battery / water-warning DPs override this to derive
         health from the latest persisted reading.
         """
+        del sensor, latest  # no health DPs on the generic model: the snapshot is always clean
         return DeviceHealthState(
             observed_at=int(time.time()),
             alarms=frozenset(),
