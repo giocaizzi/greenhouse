@@ -50,6 +50,8 @@ def _redact(url: str) -> str:
 
 
 class Settings(BaseSettings):
+    """Server settings from the environment (``IRRIGATION_*``; secrets only from their ``GREENHOUSE_*`` names)."""
+
     model_config = SettingsConfigDict(
         env_prefix="IRRIGATION_",
         env_file=".env",

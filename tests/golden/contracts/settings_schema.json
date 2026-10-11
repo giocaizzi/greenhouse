@@ -191,6 +191,7 @@
   }
  ],
  "json_schema": {
+  "description": "Server settings from the environment (``IRRIGATION_*``; secrets only from their ``GREENHOUSE_*`` names).",
   "properties": {
    "GREENHOUSE_AUTH_ADMIN_PASSWORD": {
     "anyOf": [
