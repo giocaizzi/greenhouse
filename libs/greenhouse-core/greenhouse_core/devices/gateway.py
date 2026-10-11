@@ -22,14 +22,16 @@ from __future__ import annotations
 import logging
 import os
 import time
-from collections.abc import Callable
-from typing import Any, Protocol, TypedDict
+from typing import TYPE_CHECKING, Any, Protocol, TypedDict
 
 import tinytuya
 
 from greenhouse_core.constants import SENSOR_LOG_MAX_PAGES, SENSOR_LOG_PAGE_SIZE
 from greenhouse_core.devices.datapoints import DATAPOINT_PARSERS, group_logs_by_timestamp
 from greenhouse_core.models import Irrigator, parse_device_config
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 

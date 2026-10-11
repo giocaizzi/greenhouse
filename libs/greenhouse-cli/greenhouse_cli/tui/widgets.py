@@ -3,13 +3,11 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Sequence
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from rich.console import Group, RenderableType
 from rich.table import Table
 from rich.text import Text
-from textual.app import ComposeResult
-from textual.binding import BindingType
 from textual.containers import Horizontal, Vertical
 from textual.message import Message
 from textual.widgets import Sparkline, Static
@@ -17,9 +15,14 @@ from textual_plotext import PlotextPlot
 
 from greenhouse_cli.constants import HOURS_PER_DAY, SECONDS_PER_HOUR
 from greenhouse_cli.tui import formatting as fmt
-from greenhouse_cli.tui.model import ClusterSummary
 from greenhouse_cli.tui.sprites import MOOD_COLORS, MOOD_LABELS, Mood, logo_sprite, plant_sprite
-from greenhouse_cli.tui.table import DataTable
+
+if TYPE_CHECKING:
+    from textual.app import ComposeResult
+    from textual.binding import BindingType
+
+    from greenhouse_cli.tui.model import ClusterSummary
+    from greenhouse_cli.tui.table import DataTable
 
 ANIMATION_INTERVAL = 0.7
 

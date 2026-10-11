@@ -18,12 +18,15 @@ from __future__ import annotations
 
 import logging
 import time
+from typing import TYPE_CHECKING
 
-from greenhouse_core.devices.gateway import DeviceGateway
 from greenhouse_core.devices.health import DeviceHealthState, HealthAlarm
 from greenhouse_core.devices.irrigators.tuya_generic import TuyaIrrigatorAdapter
 from greenhouse_core.devices.profile import IrrigatorProfile, load_profile_json
-from greenhouse_core.models import Irrigator
+
+if TYPE_CHECKING:
+    from greenhouse_core.devices.gateway import DeviceGateway
+    from greenhouse_core.models import Irrigator
 
 logger = logging.getLogger(__name__)
 

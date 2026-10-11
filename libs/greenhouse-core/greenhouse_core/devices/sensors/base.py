@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from typing import TYPE_CHECKING
 
-from greenhouse_core.devices.health import DeviceHealthState, HealthAlarm
-from greenhouse_core.devices.profile import SensorProfile
-from greenhouse_core.models import Sensor, SensorReading
+if TYPE_CHECKING:
+    from greenhouse_core.devices.health import DeviceHealthState, HealthAlarm
+    from greenhouse_core.devices.profile import SensorProfile
+    from greenhouse_core.models import Sensor, SensorReading
 
 
 class AbstractSensorAdapter(ABC):

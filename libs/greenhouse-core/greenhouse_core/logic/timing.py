@@ -19,10 +19,11 @@ from greenhouse_core.constants import (
     DEFAULT_SEASON_MULTIPLIER_INDOOR,
     DEFAULT_SEASON_MULTIPLIER_OUTDOOR,
 )
-from greenhouse_core.models import IrrigationWindow
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
+
+    from greenhouse_core.models import IrrigationWindow
 
 Season = Literal["winter", "spring", "summer", "autumn"]
 Environment = Literal["indoor", "outdoor"]

@@ -4,9 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import ClassVar
+from typing import TYPE_CHECKING, ClassVar
 
-from textual.app import ComposeResult
 from textual.binding import Binding, BindingType
 from textual.containers import Grid, VerticalScroll
 from textual.css.query import NoMatches
@@ -16,6 +15,9 @@ from greenhouse_cli.tui import resources
 from greenhouse_cli.tui.model import ClusterSummary, summarize
 from greenhouse_cli.tui.screens.base import DataScreen
 from greenhouse_cli.tui.widgets import Banner, ClusterCard
+
+if TYPE_CHECKING:
+    from textual.app import ComposeResult
 
 logger = logging.getLogger(__name__)
 

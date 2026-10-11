@@ -14,7 +14,7 @@ from argon2.exceptions import InvalidHashError, VerificationError
 # Kept importable from here: the pinned public import surface lists it.
 from argon2.exceptions import VerifyMismatchError as VerifyMismatchError
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session  # noqa: TC002 — pinned in golden imports.json
 
 from greenhouse_core.models import User
 

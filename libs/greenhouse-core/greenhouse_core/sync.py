@@ -15,8 +15,8 @@ import logging
 import time
 from typing import TYPE_CHECKING, Any, TypedDict
 
-from greenhouse_core.devices.gateway import DeviceGateway
-from greenhouse_core.repository import IrrigationRepository
+from greenhouse_core.devices.gateway import DeviceGateway  # noqa: TC001 — pinned in golden imports.json
+from greenhouse_core.repository import IrrigationRepository  # noqa: TC001 — pinned in golden imports.json
 
 if TYPE_CHECKING:
     from greenhouse_core.models import Sensor

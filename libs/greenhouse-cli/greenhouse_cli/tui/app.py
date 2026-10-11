@@ -11,11 +11,10 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Callable
 from http import HTTPStatus
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from textual.app import App
 from textual.binding import Binding, BindingType
-from textual.screen import Screen
 
 from greenhouse_cli.client import IrrigationClient, ServerError, store_token
 from greenhouse_cli.tui.screens.activity import ActivityScreen
@@ -25,6 +24,9 @@ from greenhouse_cli.tui.screens.modals import LoginScreen
 from greenhouse_cli.tui.screens.search import SearchScreen
 from greenhouse_cli.tui.screens.settings import SettingsScreen
 from greenhouse_cli.tui.screens.system import SystemScreen
+
+if TYPE_CHECKING:
+    from textual.screen import Screen
 
 ClientFactory = Callable[[str | None], IrrigationClient]
 

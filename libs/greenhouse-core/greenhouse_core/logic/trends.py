@@ -18,13 +18,13 @@ from greenhouse_core.constants import (
 from greenhouse_core.logic.cleaning import clean_readings
 from greenhouse_core.logic.decision import Trends
 from greenhouse_core.models import EVENT_ACTION_START
-from greenhouse_core.repository import IrrigationRepository
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from greenhouse_core.logic.cleaning import CleanedReading
     from greenhouse_core.models import IrrigationEvent, Sensor
+    from greenhouse_core.repository import IrrigationRepository
 
 
 def _pooled_clean_readings(db: IrrigationRepository, sensors: Sequence[Sensor], *, hours: int) -> list[CleanedReading]:

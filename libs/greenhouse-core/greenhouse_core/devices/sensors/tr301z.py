@@ -9,12 +9,15 @@ reading rather than a live Cloud read, so the slow health poll costs no quota.
 from __future__ import annotations
 
 import time
+from typing import TYPE_CHECKING
 
 from greenhouse_core.devices.gateway import DATAPOINT_PARSERS, DeviceGateway
 from greenhouse_core.devices.health import DeviceHealthState, HealthAlarm
 from greenhouse_core.devices.profile import SensorProfile, load_profile_json
 from greenhouse_core.devices.sensors.tuya_generic import TuyaSensorAdapter
-from greenhouse_core.models import Sensor, SensorReading
+
+if TYPE_CHECKING:
+    from greenhouse_core.models import Sensor, SensorReading
 
 # Battery-state enum buckets reported by the TR-301Z firmware. Adapters
 # never read project-wide thresholds — they convert the device's coarse

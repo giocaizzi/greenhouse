@@ -12,12 +12,15 @@ Per-model adapters describe their DP codes in the profile JSON and override
 from __future__ import annotations
 
 import time
+from typing import TYPE_CHECKING
 
-from greenhouse_core.devices.gateway import DeviceGateway
 from greenhouse_core.devices.health import DeviceHealthState
-from greenhouse_core.devices.profile import SensorProfile
 from greenhouse_core.devices.sensors.base import AbstractSensorAdapter
-from greenhouse_core.models import Sensor, SensorReading
+
+if TYPE_CHECKING:
+    from greenhouse_core.devices.gateway import DeviceGateway
+    from greenhouse_core.devices.profile import SensorProfile
+    from greenhouse_core.models import Sensor, SensorReading
 
 
 class TuyaSensorAdapter(AbstractSensorAdapter):

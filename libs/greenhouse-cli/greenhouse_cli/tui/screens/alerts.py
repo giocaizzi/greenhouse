@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from rich.text import Text
-from textual.app import ComposeResult
 from textual.binding import Binding, BindingType
 from textual.containers import Vertical
 from textual.widgets import Footer, Header, Static
@@ -14,6 +13,9 @@ from greenhouse_cli.tui import formatting as fmt
 from greenhouse_cli.tui.screens.base import DataScreen
 from greenhouse_cli.tui.table import DataTable
 from greenhouse_cli.tui.widgets import refill, selected_key
+
+if TYPE_CHECKING:
+    from textual.app import ComposeResult
 
 STATUS_FILTERS: list[str | None] = ["open", "acknowledged", "resolved", None]
 

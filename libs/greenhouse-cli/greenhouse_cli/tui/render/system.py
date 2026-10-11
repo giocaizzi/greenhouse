@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from rich.text import Text
 
 from greenhouse_cli.tui import formatting as fmt
-from greenhouse_cli.tui.render._rows import Row
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+
+    from greenhouse_cli.tui.render._rows import Row
 
 
 def scheduler_panel_rows(*, paused: bool | None, health: dict[str, Any] | None) -> list[tuple[str, str | Text]]:

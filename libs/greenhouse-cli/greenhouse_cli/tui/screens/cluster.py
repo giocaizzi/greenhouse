@@ -10,9 +10,8 @@ from __future__ import annotations
 import asyncio
 import re
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
-from textual.app import ComposeResult
 from textual.binding import Binding, BindingType
 from textual.containers import Horizontal, HorizontalScroll, Vertical, VerticalScroll
 from textual.widgets import Footer, Header, Static, TabbedContent, TabPane
@@ -27,6 +26,9 @@ from greenhouse_cli.tui.screens.modals import ConfirmScreen, IrrigateScreen, Wat
 from greenhouse_cli.tui.sprites import watering_can_sprite
 from greenhouse_cli.tui.table import DataTable
 from greenhouse_cli.tui.widgets import Heatmap, KeyValue, MetricChart, PlantTile, SpriteView, refill, selected_key
+
+if TYPE_CHECKING:
+    from textual.app import ComposeResult
 
 METRIC_ORDER = ["soil_moisture", "temperature", "env_humidity", "light", "overlay"]
 RANGES = [6, 24, 72, 168, 720]

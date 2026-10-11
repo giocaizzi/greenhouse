@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from greenhouse_core.constants import (
     CRITICAL_STRESS_BELOW_TARGET_MARGIN,
@@ -23,9 +23,11 @@ from greenhouse_core.logic.plant_needs import (
     get_ideal_temp_range,
     plant_bands,
 )
-from greenhouse_core.plant_db import PlantDatabase
-from greenhouse_core.repository import IrrigationRepository
 from greenhouse_core.utils import effective_light_threshold
+
+if TYPE_CHECKING:
+    from greenhouse_core.plant_db import PlantDatabase
+    from greenhouse_core.repository import IrrigationRepository
 
 
 def _water_warning(snapshot: SensorSnapshot) -> str | None:

@@ -9,13 +9,15 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from greenhouse_core.devices.gateway import DeviceGateway
 from greenhouse_core.devices.health import DeviceHealthState
 from greenhouse_core.devices.irrigators.base import AbstractIrrigatorAdapter
-from greenhouse_core.devices.profile import IrrigatorProfile
-from greenhouse_core.models import Irrigator
+
+if TYPE_CHECKING:
+    from greenhouse_core.devices.gateway import DeviceGateway
+    from greenhouse_core.devices.profile import IrrigatorProfile
+    from greenhouse_core.models import Irrigator
 
 logger = logging.getLogger(__name__)
 

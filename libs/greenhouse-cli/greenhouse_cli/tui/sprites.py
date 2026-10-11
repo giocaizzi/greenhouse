@@ -16,11 +16,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
+from typing import TYPE_CHECKING
 
-from rich.console import Console, ConsoleOptions, RenderResult
 from rich.measure import Measurement
 from rich.segment import Segment
 from rich.style import Style
+
+if TYPE_CHECKING:
+    from rich.console import Console, ConsoleOptions, RenderResult
 
 TRANSPARENT = "."
 

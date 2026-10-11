@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, cast
 
 from textual.screen import Screen
@@ -11,6 +10,8 @@ from greenhouse_cli.tui.screens.forms import Field, FormScreen
 from greenhouse_cli.tui.screens.modals import ConfirmScreen
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from greenhouse_cli.client import IrrigationClient
     from greenhouse_cli.tui.app import GreenhouseApp
 
