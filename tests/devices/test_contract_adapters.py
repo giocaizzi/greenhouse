@@ -430,11 +430,36 @@ class TestLiveReadSingleCall:
         with pytest.raises(ConnectionError, match="v1 down"):
             harness.gateway.get_live_reading(FAKE_SENSOR_ID)
 
-    def test_v2_parser_error_is_not_caught(self, harness):
-        """The v2 path does not guard parser errors (get_device_logs does) — pinned."""
-        harness.cloud.set("cloudrequest", {"success": True, "result": {"properties": [{"code": "humidity"}]}})
-        with pytest.raises(TypeError):
-            harness.gateway.get_live_reading(FAKE_SENSOR_ID)
+    def test_v2_parser_error_skips_only_that_dp(self, harness, caplog):
+        """A DP its parser rejects is logged and skipped; the rest of the v2 reading is kept (one call)."""
+        harness.cloud.set(
+            "cloudrequest",
+            {
+                "success": True,
+                "result": {"properties": [{"code": "humidity"}, {"code": "temp_current", "value": 231}]},
+            },
+        )
+        with caplog.at_level(logging.WARNING, logger="greenhouse_core.devices.gateway"):
+            assert harness.gateway.get_live_reading(FAKE_SENSOR_ID) == {"temperature": 23.1}
+        assert harness.log == [("cloud.cloudrequest", SHADOW_PATH)]
+        assert [(r.levelname, r.getMessage(), r.exc_info is not None) for r in caplog.records] == [
+            ("WARNING", f"Skipping unparseable DP humidity=None from {FAKE_SENSOR_ID}", True)
+        ]
+
+    def test_v1_parser_error_skips_only_that_dp(self, harness):
+        harness.cloud.set("cloudrequest", {"success": False})
+        harness.cloud.set(
+            "getstatus",
+            {"success": True, "result": [{"code": "va_temperature", "value": "205"}, {"code": "light", "value": "x"}]},
+        )
+        assert harness.gateway.get_live_reading(FAKE_SENSOR_ID) == {"temperature": 20.5}
+        assert harness.log == [("cloud.cloudrequest", SHADOW_PATH), ("cloud.getstatus", FAKE_SENSOR_ID)]
+
+    def test_v2_all_dps_unparseable_is_an_empty_authoritative_read(self, harness):
+        harness.cloud.set(
+            "cloudrequest", {"success": True, "result": {"properties": [{"code": "light", "value": None}]}}
+        )
+        assert harness.gateway.get_live_reading(FAKE_SENSOR_ID) == {}
         assert harness.log == [("cloud.cloudrequest", SHADOW_PATH)]
 
     def test_later_dp_wins_for_the_same_canonical_key(self, harness):

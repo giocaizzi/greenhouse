@@ -107,6 +107,29 @@ def group_logs_by_timestamp(logs: list[dict[str, Any]], tolerance_ms: int = 5000
     return readings
 
 
+def _parse_datapoints(items: list[dict[str, Any]], device_id: str) -> dict[str, Any]:
+    """Parse live DP items (``{"code", "value"}``) into canonical keys, one DP at a time.
+
+    Unknown codes are ignored. A value its parser rejects (``ValueError`` /
+    ``TypeError`` — e.g. a ``None`` humidity) is logged and skipped so one bad
+    datapoint cannot discard the rest of the reading. When two codes map to the
+    same canonical key, the later one wins.
+    """
+    data: dict[str, Any] = {}
+    for item in items:
+        code = item.get("code", "")
+        parser = DATAPOINT_PARSERS.get(code)
+        if parser is None:
+            continue
+        try:
+            key, value = parser(item.get("value"))
+        except (ValueError, TypeError):
+            logger.warning("Skipping unparseable DP %s=%r from %s", code, item.get("value"), device_id, exc_info=True)
+            continue
+        data[key] = value
+    return data
+
+
 class DeviceGateway:
     """One Tuya boundary: a single ``tinytuya.Cloud`` plus a local-device factory.
 
@@ -162,7 +185,9 @@ class DeviceGateway:
         Returns a dict of parsed canonical values (``temperature``,
         ``soil_moisture``, ``env_humidity``, ``light``, ``battery_state``,
         ``water_warning``…). An empty dict means the live DP set held nothing we
-        recognise — that is authoritative, not a reason to re-read.
+        recognise — that is authoritative, not a reason to re-read. A DP whose
+        value its parser rejects is logged and skipped; the other DPs of the
+        reading are kept.
         """
         result: dict[str, Any] | None = None
         try:
@@ -171,27 +196,14 @@ class DeviceGateway:
             result = None
 
         if result is not None and result.get("success"):
-            data: dict[str, Any] = {}
-            for prop in result.get("result", {}).get("properties", []):
-                parser = DATAPOINT_PARSERS.get(prop.get("code", ""))
-                if parser:
-                    key, value = parser(prop.get("value"))
-                    data[key] = value
-            return data
+            return _parse_datapoints(result.get("result", {}).get("properties", []), device_id)
 
         # Deliberate fallback: the v2.0 endpoint is unreachable/unsupported for
         # this device. Pay the second call only here, not on empty-but-ok reads.
         result = self._cloud.getstatus(device_id)
         if not result.get("success"):
             raise RuntimeError(f"Cloud API error: {result}")
-
-        data = {}
-        for dp in result.get("result", []):
-            parser = DATAPOINT_PARSERS.get(dp.get("code", ""))
-            if parser:
-                key, value = parser(dp.get("value"))
-                data[key] = value
-        return data
+        return _parse_datapoints(result.get("result", []), device_id)
 
     def get_device_logs(
         self,
