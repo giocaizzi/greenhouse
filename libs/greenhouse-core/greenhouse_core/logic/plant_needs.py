@@ -1,5 +1,6 @@
 """Pure functions for plant care data interpretation."""
 
+import math
 import statistics
 from collections.abc import Mapping
 from typing import Any
@@ -8,6 +9,7 @@ from greenhouse_core.constants import (
     DEFAULT_SOIL_MOISTURE_MAX,
     DEFAULT_SOIL_MOISTURE_MIN,
     DEFAULT_SOIL_MOISTURE_TARGET,
+    SENSOR_PHYSICAL_RANGES,
     WATER_NEEDS_HIGH_MEAN,
     WATER_NEEDS_LOW_MEAN,
 )
@@ -32,12 +34,31 @@ def get_ideal_humidity_range(plant_care_data: list[dict[str, Any]]) -> tuple[flo
 
 
 def parse_moisture_target(target: str) -> tuple[float, float]:
-    """Parse soil moisture target range string like '45-65' to tuple (45, 65)."""
+    """Parse a soil-moisture target like ``"45-65"`` into a validated ``(low, high)`` band.
+
+    This is the one soil-target parser (engine, monitor, health, forecast,
+    learning, charts), so its validation applies to every caller alike:
+
+    - an inverted range (``"65-45"``) is normalised to ``(45.0, 65.0)`` — the
+      intent is unambiguous and a reversed band would make every reading
+      "dry" and "wet" at once;
+    - a bound that is not a finite number inside the soil sensor's physical
+      range (``SENSOR_PHYSICAL_RANGES["soil_moisture"]``, 0-100 %) — negative,
+      above 100, NaN or infinite — makes the whole target unusable, and the
+      default band ``(DEFAULT_SOIL_MOISTURE_MIN, DEFAULT_SOIL_MOISTURE_MAX)``
+      applies, the same fallback as for an unparsable string.
+
+    Extra ``-``-separated parts are ignored (``"40-60-80"`` → ``(40.0, 60.0)``).
+    """
     try:
         parts = target.split("-")
-        return (float(parts[0]), float(parts[1]))
+        low, high = float(parts[0]), float(parts[1])
     except Exception:  # noqa: BLE001
         return (DEFAULT_SOIL_MOISTURE_MIN, DEFAULT_SOIL_MOISTURE_MAX)
+    floor, ceiling = SENSOR_PHYSICAL_RANGES["soil_moisture"]
+    if not all(math.isfinite(v) and floor <= v <= ceiling for v in (low, high)):
+        return (DEFAULT_SOIL_MOISTURE_MIN, DEFAULT_SOIL_MOISTURE_MAX)
+    return (min(low, high), max(low, high))
 
 
 def moisture_target_range(care: Mapping[str, Any]) -> tuple[float, float]:

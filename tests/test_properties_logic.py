@@ -516,10 +516,22 @@ def test_parse_moisture_target_examples(text, expected):
     assert parse_moisture_target(text) == expected
 
 
-def test_parse_moisture_target_inverted_and_negative_current_behavior():
-    """Pins current behavior: no validation — '65-45' stays inverted, '-5-10' falls back."""
-    assert parse_moisture_target("65-45") == (65.0, 45.0)
+def test_parse_moisture_target_normalises_inverted_and_rejects_out_of_range():
+    """An inverted band is swapped; a bound outside 0-100 %, NaN or inf → the default band."""
+    assert parse_moisture_target("65-45") == (45.0, 65.0)
     assert parse_moisture_target("-5-10") == (45.0, 65.0)
+    assert parse_moisture_target("40-120") == (45.0, 65.0)
+    assert parse_moisture_target("nan-50") == (45.0, 65.0)
+    assert parse_moisture_target("0-100") == (0.0, 100.0)
+    assert parse_moisture_target("40-60-80") == (40.0, 60.0)
+
+
+@PROFILE
+@given(st.text(max_size=12))
+def test_parse_moisture_target_is_always_an_ordered_physical_band(text):
+    low, high = parse_moisture_target(text)
+
+    assert 0.0 <= low <= high <= 100.0
 
 
 _care = st.lists(
