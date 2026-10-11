@@ -103,20 +103,21 @@ def test_inv2_driest_plant_drives_the_call_not_the_average(env):
     assert "driest=33%" in decision.reasons[0].message
 
 
-def test_inv2_stress_rule_keys_on_average_current_behavior(env):
-    """Invariant #2 caveat: critical-stress detection keys on the **average** (stress.py).
+def test_inv2_stress_rule_keys_on_the_driest_plant(env):
+    """Invariant #2 holds for critical stress too: the **driest** plant, not the average, decides.
 
-    Pins current behavior: sensors 10/60 → average 35 (not < SOIL_MOISTURE_CRITICAL=30),
-    so no WATER_STRESS even though one plant is at 10%; the soil rule then sees
-    min 10 / max 60 → CONFLICT short burst (not a stress irrigation).
+    Sensors 10/60 → average 35 (not < SOIL_MOISTURE_CRITICAL=30), but the driest
+    plant sits at 10 %, so WATER_STRESS fires and the stress dosage wins over the
+    CONFLICT short burst the soil rule would otherwise pick.
     """
     cid, _, _ = _cluster(env, soils=(10.0, 60.0))
 
     decision = _logic(env).decide_for_cluster(cid)
 
-    assert decision.stress_indicators.water_stress is None
-    assert decision.primary_code is TriggerCode.CONFLICT
-    assert decision.duration_minutes == 1
+    assert decision.sensor_snapshot.avg_soil_moisture == pytest.approx(35.0)
+    assert decision.stress_indicators.water_stress == "critical low (10%)"
+    assert decision.primary_code is TriggerCode.WATER_STRESS
+    assert (decision.action, decision.duration_minutes) == (Action.IRRIGATE, constants_mod.STRESS_DURATION_MINUTES)
 
 
 # ── #3 6h cooldown; only action == "start" counts ────────────────────────────
@@ -520,7 +521,7 @@ def test_inv10_short_series_spike_is_not_filtered_current_behavior(env):
     """Invariant #10 edge: below ``CLEANING_HAMPEL_MIN_READINGS`` (5) the spike filter is off.
 
     Pins current behavior: four readings 55/55/10/55 → the 10 survives and, being
-    the driest value, drives SENSOR_VERY_DRY (invariant #2 on raw-ish data).
+    the driest value, drives the critical-stress override (invariant #2 on raw-ish data).
     """
     cid = env.add_cluster("Short")
     env.add_plant(cluster_id=cid, species="Monstera deliciosa", category="tropical")
@@ -531,7 +532,7 @@ def test_inv10_short_series_spike_is_not_filtered_current_behavior(env):
     decision = _logic(env).decide_for_cluster(cid)
 
     assert decision.sensor_snapshot.min_soil_moisture == 10.0
-    assert decision.primary_code is TriggerCode.SENSOR_VERY_DRY
+    assert decision.primary_code is TriggerCode.WATER_STRESS
 
 
 # ── #11 A leak alert IS the hold ─────────────────────────────────────────────

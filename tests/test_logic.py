@@ -204,7 +204,9 @@ class TestIrrigationLogic:
             sensor_type="tuya.tr301z",
             config={},
         )
-        self.db.add_sensor_reading(sensor_id=s_a, soil_moisture=20.0)
+        # 32 %: dry enough for SENSOR_VERY_DRY, above SOIL_MOISTURE_CRITICAL so the
+        # critical-stress rule (which also keys on the driest plant) stays out of it.
+        self.db.add_sensor_reading(sensor_id=s_a, soil_moisture=32.0)
 
         s_b = self.db.add_sensor(
             cluster_id=cluster_id,
@@ -235,7 +237,9 @@ class TestIrrigationLogic:
             sensor_type="tuya.tr301z",
             config={},
         )
-        self.db.add_sensor_reading(sensor_id=s_a, soil_moisture=15.0)
+        # 35 %: below the band but above SOIL_MOISTURE_CRITICAL — a critically dry
+        # driest plant would be a WATER_STRESS irrigation, not a conflict burst.
+        self.db.add_sensor_reading(sensor_id=s_a, soil_moisture=35.0)
 
         s_b = self.db.add_sensor(
             cluster_id=cluster_id,
@@ -543,9 +547,11 @@ class TestIrrigationLogic:
             config={},
         )
         now = int(time.time())
-        # First half: higher moisture, second half: lower moisture (decline > 5%)
+        # First half: higher moisture, second half: lower moisture (decline > 5%).
+        # The driest reading stays at the band minimum, above SOIL_MOISTURE_LOW, so
+        # the steep-decline stress override does not end the pipeline early.
         for i in range(8):
-            moisture = 60.0 - (i * 3)  # 60, 57, 54, 51, 48, 45, 42, 39
+            moisture = 66.0 - (i * 3)  # 66, 63, 60, 57, 54, 51, 48, 45
             self.db.add_sensor_reading(
                 sensor_id=sensor_id,
                 soil_moisture=moisture,

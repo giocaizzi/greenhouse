@@ -52,19 +52,25 @@ def _low_light(snapshot: SensorSnapshot, care: list[dict[str, Any]]) -> str | No
 
 
 def _water_stress(snapshot: SensorSnapshot, trends: Trends) -> str | None:
-    """Critically dry soil, or low soil that is still falling steeply (keys on the average)."""
-    avg_soil = snapshot.avg_soil_moisture
-    if avg_soil is None:
+    """Critically dry soil, or low soil that is still falling steeply — judged on the driest plant.
+
+    Invariant #2 (the driest plant drives the call) holds here too: averaging a
+    wilting plant at 10 % with a watered one at 60 % would hide the emergency.
+    The cluster minimum is the driest cleaned reading; the average stands in
+    only when no minimum was computed.
+    """
+    driest = snapshot.min_soil_moisture if snapshot.min_soil_moisture is not None else snapshot.avg_soil_moisture
+    if driest is None:
         return None
-    if avg_soil < SOIL_MOISTURE_CRITICAL:
+    if driest < SOIL_MOISTURE_CRITICAL:
         declining = " + declining" if trends.soil_moisture_trend == "declining" else ""
-        return f"critical low ({avg_soil:.0f}%){declining}"
+        return f"critical low ({driest:.0f}%){declining}"
     if (
-        avg_soil < SOIL_MOISTURE_LOW
+        driest < SOIL_MOISTURE_LOW
         and trends.soil_moisture_trend == "declining"
         and trends.soil_moisture_delta < STRESS_STEEP_DECLINE_DELTA
     ):
-        return f"low ({avg_soil:.0f}%) + steep decline ({trends.soil_moisture_delta:.0f}%)"
+        return f"low ({driest:.0f}%) + steep decline ({trends.soil_moisture_delta:.0f}%)"
     return None
 
 
