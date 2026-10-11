@@ -857,6 +857,9 @@
    ],
    "STATS_DAYS": 7
   },
+  "greenhouse_cli.tui.screens.dashboard": {
+   "SIGN_IN_NEEDED": "Sign in to see your clusters — the server needs a login."
+  },
   "greenhouse_cli.tui.screens.forms": {
    "DATETIME_FORMAT": "%Y-%m-%d %H:%M"
   },

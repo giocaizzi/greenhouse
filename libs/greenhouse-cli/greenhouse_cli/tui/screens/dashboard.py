@@ -15,6 +15,9 @@ from greenhouse_cli.tui.model import ClusterSummary, summarize
 from greenhouse_cli.tui.screens.base import DataScreen
 from greenhouse_cli.tui.widgets import Banner, ClusterCard
 
+# The server answered 401: it was reached, it wants a login (the sign-in dialog is on top).
+SIGN_IN_NEEDED = "Sign in to see your clusters — the server needs a login."
+
 
 class DashboardScreen(DataScreen):
     """Landing screen — every cluster at a glance."""
@@ -47,7 +50,9 @@ class DashboardScreen(DataScreen):
         )
         banner.update_health(health, self.gh.server_url)
         if clusters is None:
-            self.query_one("#dashboard-empty", Static).update("Cannot reach the server — press r to retry.")
+            self.query_one("#dashboard-empty", Static).update(
+                SIGN_IN_NEEDED if self.gh.needs_sign_in else "Cannot reach the server — press r to retry."
+            )
             return
         summaries = await asyncio.gather(*(self._summary(cluster["id"]) for cluster in clusters))
         await self._render_cards([s for s in summaries if s is not None])

@@ -282,10 +282,9 @@ def test_401_opens_one_sign_in_dialog_then_logs_in(clean_env, frozen_clock):
         engine.dispose()
 
 
-def test_401_current_behavior_dashboard_says_cannot_reach_server(clean_env, frozen_clock):
-    """Pins current (buggy) behavior: when the server answers 401, ``GreenhouseApp.api`` returns ``None`` and the
-    dashboard renders "Cannot reach the server — press r to retry." behind the sign-in dialog, although the server
-    was reached — see REFACTOR_NOTES.md."""
+def test_401_dashboard_says_sign_in_needed(clean_env, frozen_clock):
+    """When the server answers 401 the dashboard behind the sign-in dialog says a login is needed — not
+    "Cannot reach the server", since the server was reached."""
     application, engine = _make_stubbed_app(bypass_auth=False)
 
     def factory(token):
@@ -300,7 +299,9 @@ def test_401_current_behavior_dashboard_says_cannot_reach_server(clean_env, froz
             assert isinstance(tui.screen, LoginScreen)
             dashboard = tui.screen_stack[-2]
             assert isinstance(dashboard, DashboardScreen)
-            assert "Cannot reach the server" in _text(dashboard.query_one("#dashboard-empty", Static))
+            text = _text(dashboard.query_one("#dashboard-empty", Static))
+            assert "Sign in to see your clusters" in text
+            assert "Cannot reach the server" not in text
 
     try:
         _run(scenario())
