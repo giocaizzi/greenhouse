@@ -45,9 +45,9 @@ from greenhouse_server.web.filters import (
     time_ago,
 )
 
-from .conftest import _make_stubbed_app
+from .conftest import TEST_MCP_TOKEN, _make_stubbed_app
 
-MCP_TOKEN = "gap-mcp-token-0123456789abcdef0123"
+MCP_TOKEN = TEST_MCP_TOKEN
 
 
 @pytest.fixture

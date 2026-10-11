@@ -18,6 +18,7 @@ from greenhouse_core.devices import DeviceRegistry
 from greenhouse_server.app import create_app
 from greenhouse_server.config import Settings
 from greenhouse_server.deps import get_device_gateway, get_device_registry
+from server.conftest import TEST_ADMIN_PASSWORD, TEST_AUTH_SECRET, TEST_MCP_TOKEN
 
 MAX_TOOL_NAME_LENGTH = 64  # Claude.ai connectors reject longer tool names
 
@@ -158,7 +159,7 @@ def test_mcp_request_bodies_carry_their_field_schemas(app):
 # --- /mcp bearer-token auth ---------------------------------------------------
 
 
-_VALID_TOKEN = "test-mcp-bearer-token"
+_VALID_TOKEN = TEST_MCP_TOKEN
 
 
 def _build_mcp_client(*, mcp_token: str | None) -> TestClient:
@@ -175,9 +176,9 @@ def _build_mcp_client(*, mcp_token: str | None) -> TestClient:
         enable_scheduler=False,
         mcp_token=mcp_token,
         auth_enabled=True,
-        auth_secret_key="unit-test-jwt-secret-do-not-use-in-prod-please",
+        auth_secret_key=TEST_AUTH_SECRET,
         auth_admin_username="mcp-test-admin",
-        auth_admin_password="mcp-test-admin-pw-123",
+        auth_admin_password=TEST_ADMIN_PASSWORD,
     )
     application = create_app(settings, engine=engine)
 

@@ -30,7 +30,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from golden import assert_golden, install_offline_weather
-from server.conftest import _make_stubbed_app
+from server.conftest import TEST_MCP_TOKEN, _make_stubbed_app
 
 # sha256 of the name-sorted, key-sorted ``exclude_none`` tool dump, first recorded at the
 # original baseline (main @ a1b2622, hence "PHASE0"); re-recorded only by
@@ -40,7 +40,7 @@ PHASE0_MCP_TOOLS_SHA256 = (
     "8e2cb61544a0fc6b32cecefd85aec22cd56d7b2dec511b56e8516f73ff0632b7"  # gitleaks:allow — content hash, not a secret
 )
 
-_TOKEN = "contract-mcp-token"
+_TOKEN = TEST_MCP_TOKEN
 MCP_TOOL_COUNT = 84  # one tool per /api/v1 operation
 
 

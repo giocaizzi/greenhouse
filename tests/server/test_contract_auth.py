@@ -41,14 +41,14 @@ from greenhouse_server.auth import (
 )
 from greenhouse_server.config import Settings
 
-from .conftest import TEST_ADMIN_PASSWORD, TEST_ADMIN_USERNAME, TEST_AUTH_SECRET, _make_stubbed_app
+from .conftest import TEST_ADMIN_PASSWORD, TEST_ADMIN_USERNAME, TEST_AUTH_SECRET, TEST_MCP_TOKEN, _make_stubbed_app
 
 PW = "correct horse"
 SALT = b"fixedsalt1234567"
 HASH_CURRENT = PasswordHasher().hash(PW, salt=SALT)
 HASH_OLD_PARAMS = PasswordHasher(time_cost=1, memory_cost=8, parallelism=1).hash(PW, salt=SALT)
 HASH_ARGON2I = PasswordHasher(type=Type.I).hash(PW, salt=SALT)
-MCP_TOKEN = "contract-mcp-token-0123456789abcdef"
+MCP_TOKEN = TEST_MCP_TOKEN
 TTL_SECONDS = 24 * 60 * 60
 
 
@@ -564,10 +564,12 @@ def _users(engine) -> list[tuple]:
 
 
 def test_bootstrap_creates_admin_once(engine, caplog):
-    settings = _settings(auth_admin_username="root", auth_admin_password="pw-1")
+    settings = _settings(auth_admin_username="root", auth_admin_password=TEST_ADMIN_PASSWORD)
     with caplog.at_level(logging.INFO, logger="greenhouse_server.auth"):
         bootstrap_admin(engine, settings)
-        bootstrap_admin(engine, _settings(auth_admin_username="other", auth_admin_password="pw-2"))
+        bootstrap_admin(
+            engine, _settings(auth_admin_username="other", auth_admin_password=f"{TEST_ADMIN_PASSWORD}-other")
+        )
     assert _users(engine) == [("root", FROZEN_TS, True)]
     assert caplog.messages == ["Bootstrapped initial admin user 'root' from environment."]
 
@@ -588,7 +590,9 @@ def test_bootstrap_without_credentials_warns(engine, caplog, username, password)
 
 
 def test_bootstrap_is_skipped_when_auth_disabled(engine):
-    bootstrap_admin(engine, _settings(auth_enabled=False, auth_admin_username="root", auth_admin_password="pw"))
+    bootstrap_admin(
+        engine, _settings(auth_enabled=False, auth_admin_username="root", auth_admin_password=TEST_ADMIN_PASSWORD)
+    )
     assert _users(engine) == []
 
 

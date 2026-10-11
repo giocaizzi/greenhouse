@@ -22,6 +22,7 @@ from greenhouse_server.app import create_app
 from greenhouse_server.config import Settings
 from greenhouse_server.services.sync import SyncService
 from greenhouse_server.web.context import base_context
+from server.conftest import TEST_AUTH_SECRET
 
 CSV_HEADER = "timestamp,date,time,irrigator,action,duration_minutes,triggered_by,notes\r\n"
 
@@ -364,7 +365,9 @@ def test_base_context_hides_the_banners_from_an_anonymous_viewer(monkeypatch):
     monkeypatch.setattr(IrrigationRepository, "get_active_vacation", lambda _self: object())
     request = _request(
         session_factory=_ClosingSession,
-        settings=SimpleNamespace(auth_enabled=True, auth_cookie_name="greenhouse_session", auth_secret_key="k"),
+        settings=SimpleNamespace(
+            auth_enabled=True, auth_cookie_name="greenhouse_session", auth_secret_key=TEST_AUTH_SECRET
+        ),
     )
     request.cookies = {"greenhouse_session": "not-a-jwt"}
     ctx = base_context(request)

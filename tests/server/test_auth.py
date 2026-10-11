@@ -70,7 +70,7 @@ def test_login_with_valid_credentials_returns_token(anonymous_client: TestClient
     )
     assert resp.status_code == HTTPStatus.OK
     payload = resp.json()
-    assert payload["token_type"] == "bearer"
+    assert payload["token_type"] == "bearer"  # noqa: S105 — OAuth token type, not a credential
     assert payload["access_token"]
     assert payload["expires_in"] > 0
     assert payload["username"] == TEST_ADMIN_USERNAME

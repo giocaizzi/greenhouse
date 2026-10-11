@@ -9,9 +9,10 @@ These guard two properties of the edit flow:
 import json
 from http import HTTPStatus
 
+from fake_data import FAKE_LOCAL_KEY
 from greenhouse_core.repository import IrrigationRepository
 
-SECRET_KEY = "fake_local_key_deadbeef"
+SECRET_KEY = FAKE_LOCAL_KEY
 
 
 def _seed_local_irrigator(client, cluster_name="Local Cluster"):

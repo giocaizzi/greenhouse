@@ -2,6 +2,7 @@
 
 from http import HTTPStatus
 
+from fake_data import FAKE_LOCAL_KEY
 from greenhouse_core.models import parse_device_config
 from greenhouse_core.repository import IrrigationRepository
 
@@ -264,7 +265,7 @@ class TestSensorReassignmentActivity:
 class TestSensorLocalKeyMasking:
     """Sensor responses mask ``config.local_key`` like irrigator responses; echoing the mask keeps it."""
 
-    SECRET = "fake_local_key_sensor01"
+    SECRET = FAKE_LOCAL_KEY
     MASK = "••••••••"
 
     def _stored_config(self, client, sid):

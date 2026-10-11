@@ -14,6 +14,7 @@ from greenhouse_core.plant_db import get_plant_database
 from greenhouse_server.services.alerts import notify_if_new_alert, raise_alert
 from greenhouse_server.services.irrigation import IrrigationService
 from greenhouse_server.services.notify import NtfyClient, maybe_notify
+from server.conftest import TEST_NTFY_TOKEN
 
 
 class _RecordingNotifier:
@@ -70,7 +71,7 @@ class TestNtfyClient:
     def test_publish_builds_request(self, monkeypatch):
         captured = _capture_urlopen(monkeypatch)
         timeout = 3
-        client = NtfyClient("https://ntfy.example/", "my-topic", token="s3cret", timeout=timeout)
+        client = NtfyClient("https://ntfy.example/", "my-topic", token=TEST_NTFY_TOKEN, timeout=timeout)
 
         ok = client.notify_alert(severity="critical", title="Leak detected", message="cluster 1")
 
@@ -83,7 +84,7 @@ class TestNtfyClient:
         assert req.headers["X-title"] == "Leak detected"
         assert req.headers["X-tags"] == "rotating_light"
         assert req.headers["X-priority"] == "5"
-        assert req.headers["Authorization"] == "Bearer s3cret"
+        assert req.headers["Authorization"] == f"Bearer {TEST_NTFY_TOKEN}"
 
     def test_no_token_omits_auth_header(self, monkeypatch):
         captured = _capture_urlopen(monkeypatch)

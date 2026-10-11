@@ -7,6 +7,7 @@ irrigator id (``/irrigators/{id}/start`` etc.).
 
 from http import HTTPStatus
 
+from fake_data import FAKE_LOCAL_KEY
 from greenhouse_core.models import parse_device_config
 from greenhouse_core.repository import IrrigationRepository
 
@@ -268,7 +269,7 @@ class TestListAllIrrigatorsTopLevel:
 class TestLocalKeyMasking:
     """B-11: the API never returns ``local_key`` in plain text; writes still accept it."""
 
-    SECRET = "fake_local_key_deadbeef"
+    SECRET = FAKE_LOCAL_KEY
     MASK = "••••••••"
 
     def _seed(self, client):

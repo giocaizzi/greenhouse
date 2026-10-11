@@ -39,6 +39,7 @@ from greenhouse_core.devices import gateway as gateway_mod
 from greenhouse_server.config import Settings
 from greenhouse_server.scheduler import _resolve_check_cron_hours
 from greenhouse_server.services.notify import NtfyClient
+from server.conftest import TEST_MCP_TOKEN
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 LIBS = REPO_ROOT / "libs"
@@ -209,8 +210,8 @@ def test_aliased_fields_ignore_double_prefixed_name(monkeypatch, suffix, field):
 
 @pytest.mark.usefixtures("clean_env")
 def test_aliased_fields_accept_both_kwarg_spellings():
-    assert _settings(mcp_token="a").mcp_token == "a"
-    assert _settings(GREENHOUSE_MCP_TOKEN="b").mcp_token == "b"
+    assert _settings(mcp_token=TEST_MCP_TOKEN).mcp_token == TEST_MCP_TOKEN
+    assert _settings(GREENHOUSE_MCP_TOKEN=TEST_MCP_TOKEN).mcp_token == TEST_MCP_TOKEN
 
 
 # --- sources, precedence, extras -------------------------------------------

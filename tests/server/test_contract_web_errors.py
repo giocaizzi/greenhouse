@@ -18,6 +18,7 @@ from fastapi.testclient import TestClient
 
 from golden import assert_golden, install_offline_weather
 from server import test_contract_web_html as _web
+from server.conftest import TEST_MCP_TOKEN
 from server.test_contract_web_html import (
     INDOOR,
     render_response,
@@ -105,7 +106,7 @@ def test_json_401_carries_www_authenticate(anon, make_client):
     assert bad_bearer.status_code == HTTPStatus.UNAUTHORIZED
     assert bad_bearer.headers["www-authenticate"] == "Bearer"
 
-    _, mcp_client = make_client(bypass_auth=False, mcp_token="contract-mcp-token")
+    _, mcp_client = make_client(bypass_auth=False, mcp_token=TEST_MCP_TOKEN)
     mcp = mcp_client.post(
         "/mcp",
         headers={"Authorization": "Bearer wrong", "Accept": "application/json, text/event-stream"},
