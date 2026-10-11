@@ -49,7 +49,7 @@ TEST_ADMIN_USERNAME = "test-admin"
 # The server tests' fake credentials, defined once here (S105 can only be satisfied by not defining them).
 TEST_ADMIN_PASSWORD = "test-admin-pw-123"  # noqa: S105 — fake test credential
 TEST_AUTH_SECRET = "unit-test-jwt-secret-do-not-use-in-prod-please"  # noqa: S105 — fake test credential
-TEST_MCP_TOKEN = "test-mcp-bearer-token-0123456789abcdef"  # noqa: S105 — fake test credential
+TEST_MCP_TOKEN = "contract-mcp-token-0123456789abcdef"  # noqa: S105 — fake test credential
 TEST_NTFY_TOKEN = "test-ntfy-token"  # noqa: S105 — fake test credential
 
 

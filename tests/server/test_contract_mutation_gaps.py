@@ -45,9 +45,9 @@ from greenhouse_server.web.filters import (
     time_ago,
 )
 
-from .conftest import TEST_MCP_TOKEN, _make_stubbed_app
+from .conftest import _make_stubbed_app
 
-MCP_TOKEN = TEST_MCP_TOKEN
+MCP_TOKEN = "gap-mcp-token-0123456789abcdef0123"  # noqa: S105 — fake; its value is in the pinned test ids
 
 
 @pytest.fixture
