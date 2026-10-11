@@ -1,28 +1,38 @@
 """HX-aware exception handlers that render HTML errors for web routes.
 
-The choice is made by path: ``/api/…`` and ``/mcp`` keep JSON error bodies;
-every other path gets the HTML error page — the bare ``_error.html`` partial
-for HTMX requests (``HX-Request: true``), the full layout otherwise. The
-``Accept`` header is not consulted.
+Machine paths — ``/api/…``, ``/mcp`` and ``/.well-known/…`` — always keep JSON error
+bodies. Elsewhere the client decides: an HTMX request (``HX-Request: true``) gets the
+bare ``_error.html`` partial, an ``Accept`` that names ``text/html`` (a browser) gets
+the full error page, an ``Accept`` that names ``application/json`` but not HTML gets
+JSON, and anything else (``*/*``, no header) gets the HTML page — the web UI's default.
+The handler is registered for Starlette's ``HTTPException`` so router-level 404 / 405
+(unknown path, wrong method) follow the same rule as errors raised by routes.
 """
 
 from __future__ import annotations
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from greenhouse_server.auth import _RedirectAuthError, render_login_redirect
 from greenhouse_server.web.context import base_context, is_hx
 from greenhouse_server.web.templating import templates
 
+# Machine endpoints: their clients (CLI, MCP, OAuth discovery probes) must always see
+# structured JSON errors, never an HTML page, whatever they send in ``Accept``.
+_JSON_ONLY_PREFIXES = ("/api/", "/mcp", "/.well-known/")
+
 
 def _is_html_request(request: Request) -> bool:
-    # API and MCP routes keep JSON error shape; everything else is rendered
-    # as HTML. /mcp is a machine endpoint — MCP clients (and the auth gate in
-    # front of it) must always see structured JSON errors, never an HTML page.
-    path = request.url.path
-    return not path.startswith(("/api/", "/mcp"))
+    """Whether to answer an error with HTML (see the module docstring for the rule)."""
+    if request.url.path.startswith(_JSON_ONLY_PREFIXES):
+        return False
+    if is_hx(request):
+        return True
+    accept = request.headers.get("accept", "").lower()
+    return "text/html" in accept or "application/json" not in accept
 
 
 def _error_template(request: Request) -> str:
@@ -32,11 +42,11 @@ def _error_template(request: Request) -> str:
 
 
 def register_web_exception_handlers(app: FastAPI) -> None:
-    """Install the HTTPException and validation handlers that render HTML for web paths, JSON elsewhere."""
+    """Install the HTTPException and validation handlers: HTML for browsers on web paths, JSON for API clients."""
 
-    @app.exception_handler(HTTPException)
-    async def handle_http_exc(request: Request, exc: HTTPException) -> Response:
-        """Render an HTTPException: login redirect sentinel, JSON for /api and /mcp, else the HTML error page."""
+    @app.exception_handler(StarletteHTTPException)
+    async def handle_http_exc(request: Request, exc: StarletteHTTPException) -> Response:
+        """Render an HTTPException (route-raised or router-level): login redirect, JSON or the HTML error page."""
         # Auth redirect sentinel — always convert to a 303 to /login, even on
         # API paths so a stale browser tab fetching /api/v1 also gets bounced
         # to the form. CLI clients should be using the bearer header, not
@@ -56,7 +66,7 @@ def register_web_exception_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(RequestValidationError)
     async def handle_validation(request: Request, exc: RequestValidationError) -> Response:
-        """Render a request-validation error: JSON 422 for /api and /mcp, else the HTML error page."""
+        """Render a request-validation error: JSON 422 for machine paths / JSON clients, else the HTML error page."""
         if not _is_html_request(request):
             return JSONResponse({"detail": exc.errors()}, status_code=422)
         return templates.TemplateResponse(
