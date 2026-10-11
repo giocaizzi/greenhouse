@@ -1,40 +1,60 @@
-"""Characterization: the PATCH semantics of ``update_cluster`` / ``update_plant`` / ``update_preferences``.
+"""The PATCH semantics of the repository ``update_*`` methods (B-15).
 
-All three skip ``None`` values (the stored value is kept), silently ignore keys that
-are not attributes of the row, and set every other supplied key. Pinned before the
-two private PATCH helpers are merged into one.
+An explicit ``None`` clears a nullable column and is skipped for a NOT NULL one (the
+stored value is kept), keys that are not attributes of the row are ignored, and every
+other supplied key is set. Absent keys are never touched — the routes pass only the
+fields the client sent (``model_dump(exclude_unset=True)``).
 """
 
 from greenhouse_core.models import Cluster, Plant, UserPreferences
 
 
-def test_update_cluster_skips_none_ignores_unknown_keys_and_sets_the_rest(tmp_db):
+def test_update_cluster_none_clears_nullable_skips_required_ignores_unknown_keys(tmp_db):
     cluster_id = tmp_db.add_cluster("Patch Cluster", "Shelf")
 
-    updated = tmp_db.update_cluster(cluster_id, name=None, location="Window", bogus_field="x", environment="outdoor")
+    updated = tmp_db.update_cluster(cluster_id, name=None, location=None, bogus_field="x", environment="outdoor")
 
     assert isinstance(updated, Cluster)
-    assert (updated.name, updated.location, updated.environment) == ("Patch Cluster", "Window", "outdoor")
+    assert (updated.name, updated.location, updated.environment) == ("Patch Cluster", None, "outdoor")
     assert not hasattr(updated, "bogus_field")
 
 
-def test_update_plant_skips_none_ignores_unknown_keys_and_sets_the_rest(tmp_db):
+def test_update_cluster_absent_keys_are_unchanged(tmp_db):
+    cluster_id = tmp_db.add_cluster("Patch Cluster", "Shelf")
+
+    updated = tmp_db.update_cluster(cluster_id, environment="outdoor")
+
+    assert (updated.name, updated.location, updated.environment) == ("Patch Cluster", "Shelf", "outdoor")
+
+
+def test_update_plant_none_clears_nullable_and_sets_the_rest(tmp_db):
     cluster_id = tmp_db.add_cluster("Patch Cluster")
     plant_id = tmp_db.add_plant(cluster_id, "Monstera deliciosa")
-    tmp_db.update_plant(plant_id, notes="kept")
+    tmp_db.update_plant(plant_id, notes="kept", ideal_temp_min=18.0)
 
     updated = tmp_db.update_plant(plant_id, notes=None, category="tropical", bogus_field=1)
 
     assert isinstance(updated, Plant)
-    assert (updated.notes, updated.category) == ("kept", "tropical")
+    assert (updated.notes, updated.category, updated.ideal_temp_min) == (None, "tropical", 18.0)
     assert not hasattr(updated, "bogus_field")
 
 
-def test_update_preferences_skips_none_ignores_unknown_keys_and_sets_the_rest(tmp_db):
-    tmp_db.update_preferences(theme="dark")
+def test_update_preferences_none_skips_required_clears_nullable(tmp_db):
+    cluster_id = tmp_db.add_cluster("Patch Cluster")
+    tmp_db.update_preferences(theme="dark", default_cluster_id=cluster_id)
 
-    prefs = tmp_db.update_preferences(theme=None, refresh_interval_seconds=60, bogus_field=True)
+    prefs = tmp_db.update_preferences(
+        theme=None, default_cluster_id=None, refresh_interval_seconds=60, bogus_field=True
+    )
 
     assert isinstance(prefs, UserPreferences)
-    assert (prefs.theme, prefs.refresh_interval_seconds) == ("dark", 60)
+    assert (prefs.theme, prefs.default_cluster_id, prefs.refresh_interval_seconds) == ("dark", None, 60)
     assert not hasattr(prefs, "bogus_field")
+
+
+def test_update_vacation_window_none_clears_notes_and_email_keeps_bounds(tmp_db):
+    window = tmp_db.add_vacation_window(1_000, 2_000, contact_email="a@example.invalid", notes="trip")
+
+    updated = tmp_db.update_vacation_window(window.id, starts_at=None, notes=None, contact_email=None)
+
+    assert (updated.starts_at, updated.ends_at, updated.notes, updated.contact_email) == (1_000, 2_000, None, None)

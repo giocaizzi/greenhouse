@@ -96,6 +96,8 @@ def update_window(
 ) -> IrrigationWindowResponse:
     """Patch a window's hours, weekday mask, or label.
 
+    Omitted fields are left unchanged; an explicit `null` label clears it.
+
     Args:
         cluster_id: Cluster the window belongs to.
         window_id: Numeric window identifier.
@@ -114,7 +116,7 @@ def update_window(
     effective_end = request.end_hour if request.end_hour is not None else row.end_hour
     effective_mask = request.weekday_mask if request.weekday_mask is not None else row.weekday_mask
     require_valid_window(effective_start, effective_end, effective_mask)
-    updated = repo.update_irrigation_window(window_id, **request.model_dump(exclude_none=True))
+    updated = repo.update_irrigation_window(window_id, **request.model_dump(exclude_unset=True))
     repo.commit()
     return IrrigationWindowResponse.model_validate(updated)
 

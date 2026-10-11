@@ -5,7 +5,7 @@ import time
 from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any, Literal, TypedDict, Unpack, cast
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, inspect, or_, select
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -1176,8 +1176,9 @@ class IrrigationRepository:
     def update_vacation_window(self, window_id: int, **fields: Unpack[VacationWindowPatch]) -> VacationWindow | None:
         """Patch a vacation window's fields; returns the updated row or None.
 
-        Only keys with non-None values are applied — the route layer is
-        responsible for validating semantics (e.g. ``starts_at < ends_at``).
+        ``None`` clears ``notes`` / ``contact_email`` (the bounds are NOT NULL and
+        keep their value) — the route layer is responsible for validating
+        semantics (e.g. ``starts_at < ends_at``).
         """
         row = self.session.get(VacationWindow, window_id)
         if not row:
@@ -1253,7 +1254,7 @@ class IrrigationRepository:
         return prefs
 
     def update_preferences(self, **fields: Unpack[PreferencesPatch]) -> UserPreferences:
-        """Patch preferences with the provided keyword args; unknown keys are ignored."""
+        """Patch preferences with the provided keyword args (``None`` clears a nullable field; unknown keys ignored)."""
         prefs = self.get_preferences()
         self._patch_fields(prefs, fields)
         self.session.flush()
@@ -1432,9 +1433,19 @@ class IrrigationRepository:
         *,
         json_fields: frozenset[str] = frozenset(),
     ) -> None:
-        """None-first PATCH: skip None, JSON-encode dict values of ``json_fields``, set only existing attributes."""
+        """PATCH the supplied keys: ``None`` clears a nullable column, absent keys stay untouched.
+
+        Callers pass only the keys the client sent (``model_dump(exclude_unset=True)``),
+        so "absent" and an explicit ``null`` stay distinct. ``None`` for a NOT NULL
+        column (a name, a flag) is skipped rather than violating the constraint;
+        dict values of ``json_fields`` are JSON-encoded; keys that are not
+        attributes of the row are ignored.
+        """
+        columns = inspect(type(row)).columns
         for key, value in fields.items():
             if value is None:
+                if key in columns and columns[key].nullable:
+                    setattr(row, key, None)
                 continue
             if key in json_fields and isinstance(value, dict):
                 setattr(row, key, json.dumps(value))

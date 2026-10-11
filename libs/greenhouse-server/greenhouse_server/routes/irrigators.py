@@ -141,7 +141,7 @@ def update_irrigator(cluster_id: int, request: UpdateIrrigatorRequest, repo: Rep
     """Partially update the metadata of the cluster's irrigator.
 
     Only fields present in the request body are modified; omitted fields are
-    left unchanged. A `config` replaces the stored one; its `local_key` is
+    left unchanged, and an explicit `null` clears an optional field. A `config` replaces the stored one; its `local_key` is
     masked as `••••••••` in every response, and sending that mask back keeps
     the stored key.
 
@@ -157,8 +157,8 @@ def update_irrigator(cluster_id: int, request: UpdateIrrigatorRequest, repo: Rep
         HTTPException: 404 if the cluster has no irrigator.
     """
     irrigator = require_cluster_irrigator(repo, cluster_id)
-    fields = request.model_dump(exclude_none=True)
-    if "config" in fields:
+    fields = request.model_dump(exclude_unset=True)
+    if fields.get("config"):
         fields["config"] = keep_masked_local_key(fields["config"], irrigator.config)
     updated = repo.update_irrigator(irrigator.id, **fields)
     repo.commit()

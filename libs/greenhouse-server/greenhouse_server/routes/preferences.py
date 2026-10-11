@@ -33,12 +33,13 @@ def update_preferences(request: PreferencesUpdateRequest, http_request: Request,
     Args:
         request: Partial update — any combination of units, timezone, theme,
             default_cluster_id, refresh_interval_seconds, or dry_run_global.
-            Fields set to null are ignored.
+            An explicit null clears default_cluster_id; null for a required
+            field is ignored.
 
     Returns:
         The updated preferences row.
     """
-    prefs = repo.update_preferences(**request.model_dump(exclude_none=True))
+    prefs = repo.update_preferences(**request.model_dump(exclude_unset=True))
     repo.commit()
     apply_timezone_preference(http_request, prefs.timezone)
     return prefs

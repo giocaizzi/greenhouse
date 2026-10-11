@@ -6,6 +6,10 @@
   "user_preferences": {
    "changed": {
     "1": {
+     "default_cluster_id": [
+      1,
+      null
+     ],
      "dry_run_global": [
       0,
       1

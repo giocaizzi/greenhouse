@@ -126,7 +126,7 @@ def update_sensor(cluster_id: int, sensor_id: int, request: UpdateSensorRequest,
     """Partially update a sensor's metadata.
 
     Only fields present in the request body are modified; omitted fields are
-    left unchanged. The sensor must belong to the specified cluster.
+    left unchanged, and an explicit `null` clears an optional field. The sensor must belong to the specified cluster.
 
     Args:
         cluster_id: Cluster the sensor belongs to.
@@ -146,7 +146,7 @@ def update_sensor(cluster_id: int, sensor_id: int, request: UpdateSensorRequest,
         ensure_plant_in_cluster(repo, cluster_id, request.plant_id)
     except PlantNotInClusterError as exc:
         raise HTTPException(status_code=404, detail=f"Plant {exc.plant_id} not found in cluster") from None
-    updated = repo.update_sensor(sensor_id, **request.model_dump(exclude_none=True))
+    updated = repo.update_sensor(sensor_id, **request.model_dump(exclude_unset=True))
     repo.commit()
     return updated
 

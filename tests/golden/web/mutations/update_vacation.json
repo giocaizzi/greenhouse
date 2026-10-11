@@ -6,6 +6,10 @@
   "vacation_windows": {
    "changed": {
     "1": {
+     "contact_email": [
+      "neighbour@example.com",
+      null
+     ],
      "ends_at": [
       1777284000,
       1777075200

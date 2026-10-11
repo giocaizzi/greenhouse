@@ -6,6 +6,10 @@
   "clusters": {
    "changed": {
     "1": {
+     "location": [
+      "Living room",
+      null
+     ],
      "name": [
       "Indoor Jungle",
       "Jungle"
