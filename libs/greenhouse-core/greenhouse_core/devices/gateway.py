@@ -303,27 +303,19 @@ class DeviceGateway:
 
     # ── Local factory (cached key, Cloud only on a cold miss) ─────────────
 
-    def resolve_local_key(
-        self,
-        device_id: str,
-        config: object | None = None,
-        *,
-        refresh: bool = False,
-    ) -> str | None:
+    def resolve_local_key(self, device_id: str, config: object | None = None) -> str | None:
         """Resolve a device's ``local_key`` cheaply.
 
         Order: persisted ``config['local_key']`` → process cache → (cold path)
         one Cloud ``getdevices`` lookup, whose result is cached and handed to
-        the ``on_key_discovered`` persistence hook. ``refresh=True`` skips the
-        cheap sources and forces the Cloud lookup (stale-key recovery).
+        the ``on_key_discovered`` persistence hook.
         """
-        if not refresh:
-            cfg_key: str | None = parse_device_config(config).get("local_key") if config is not None else None
-            if cfg_key:
-                return cfg_key
-            cached = self._key_cache.get(device_id)
-            if cached:
-                return cached
+        cfg_key: str | None = parse_device_config(config).get("local_key") if config is not None else None
+        if cfg_key:
+            return cfg_key
+        cached = self._key_cache.get(device_id)
+        if cached:
+            return cached
 
         key = self._lookup_key_via_cloud(device_id)
         if key:
@@ -344,26 +336,19 @@ class DeviceGateway:
                     return d.get("key")
         return None
 
-    def open_local(
-        self,
-        irrigator: Irrigator,
-        protocol_version: float | None,
-        *,
-        refresh: bool = False,
-    ) -> tinytuya.OutletDevice:
+    def open_local(self, irrigator: Irrigator, protocol_version: float | None) -> tinytuya.OutletDevice:
         """Build a connected ``OutletDevice`` for ``irrigator``.
 
         Resolves ``local_key`` via :meth:`resolve_local_key` (Cloud-free in
         steady state) and ``device_ip`` from the irrigator's ``config`` blob.
-        Raises ``ConnectionError`` when either is missing. ``refresh=True``
-        forces a fresh Cloud key lookup for stale-key recovery.
+        Raises ``ConnectionError`` when either is missing.
         """
         config = parse_device_config(irrigator.config)
         local_ip = config.get("device_ip")
         if not local_ip:
             raise ConnectionError(f"No device_ip in config for irrigator {irrigator.tuya_device_id}.")
 
-        local_key = self.resolve_local_key(irrigator.tuya_device_id, config, refresh=refresh)
+        local_key = self.resolve_local_key(irrigator.tuya_device_id, config)
         if not local_key:
             raise ConnectionError(f"Could not find local key for device {irrigator.tuya_device_id}")
 

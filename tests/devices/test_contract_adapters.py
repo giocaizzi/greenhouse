@@ -636,11 +636,6 @@ class TestLocalKeyResolution:
         assert discovered == [(FAKE_DEVICE_ID, "cold-key")]
         assert gateway._key_cache == {FAKE_DEVICE_ID: "cold-key"}
 
-    def test_refresh_forces_cloud_even_with_config_key(self, harness):
-        harness.cloud.set("getdevices", [{"id": FAKE_DEVICE_ID, "key": "rotated"}])
-        harness.gateway.open_local(_irrigator(), 3.5, refresh=True)
-        assert harness.log == [("cloud.getdevices",), *_local_open_calls("rotated")]
-
     def test_resolve_local_key_order(self, harness):
         gw = harness.gateway
         harness.cloud.set("getdevices", [{"id": FAKE_DEVICE_ID, "key": "from-cloud"}])
