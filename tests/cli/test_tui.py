@@ -1527,3 +1527,31 @@ class TestResilience:
             assert not (Path(os.environ["XDG_CONFIG_HOME"]) / "greenhouse" / "token").exists()
         finally:
             engine.dispose()
+
+
+def test_failed_shielded_card_rebuild_is_logged_with_traceback():
+    """A rebuild whose worker was cancelled is awaited by no one; its failure is logged, not left unretrieved."""
+    import logging
+
+    from greenhouse_cli.tui.screens import dashboard
+
+    records: list[logging.LogRecord] = []
+    handler = logging.Handler()
+    handler.emit = records.append
+    dashboard.logger.addHandler(handler)
+
+    async def boom() -> None:
+        raise RuntimeError("mount failed")
+
+    async def scenario():
+        task = asyncio.ensure_future(boom())
+        task.add_done_callback(dashboard._log_rebuild_failure)
+        await asyncio.sleep(0)
+        await asyncio.sleep(0)
+
+    try:
+        _run(scenario())
+    finally:
+        dashboard.logger.removeHandler(handler)
+    assert [r.getMessage() for r in records] == ["dashboard card rebuild failed"]
+    assert records[0].exc_info is not None

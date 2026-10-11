@@ -35,12 +35,15 @@ class DataScreen(Screen[Any]):
 
     @property
     def showing(self) -> bool:
-        """Whether the screen is still attached and not being torn down.
+        """Whether the screen is still attached and running, i.e. not being torn down.
 
         A load that finishes after the screen (or the app) started closing must
         not touch the DOM: its widgets are going away (S4, ``NoMatches`` at teardown).
+        Public Textual API only: ``is_attached`` turns False once the app exits or
+        the node leaves the DOM, ``is_running`` once its message pump stops. The
+        brief window in between is covered by the dashboard's ``NoMatches`` guard.
         """
-        return self.is_attached and not (self._closing or self._pruning)
+        return self.is_attached and self.is_running
 
     def reload(self) -> None:
         """Re-run :meth:`load` in an exclusive worker so a slow reload is replaced, never stacked."""

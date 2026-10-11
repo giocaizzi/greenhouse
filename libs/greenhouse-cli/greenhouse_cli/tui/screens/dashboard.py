@@ -23,6 +23,12 @@ logger = logging.getLogger(__name__)
 SIGN_IN_NEEDED = "Sign in to see your clusters — the server needs a login."
 
 
+def _log_rebuild_failure(task: asyncio.Future[None]) -> None:
+    """Log a card rebuild that failed, with its traceback (also when its worker was cancelled)."""
+    if not task.cancelled() and (error := task.exception()) is not None:
+        logger.error("dashboard card rebuild failed", exc_info=error)
+
+
 class DashboardScreen(DataScreen):
     """Landing screen — every cluster at a glance."""
 
@@ -68,7 +74,10 @@ class DashboardScreen(DataScreen):
         summaries = await asyncio.gather(*(self._summary(cluster["id"]) for cluster in clusters))
         # Shielded: when an exclusive reload cancels this worker mid-rebuild, the rebuild still
         # finishes (holding the lock) instead of leaving half-mounted cards for the next one.
-        await asyncio.shield(self._render_cards([s for s in summaries if s is not None]))
+        # Nobody awaits it after such a cancel, so its failure is logged by the callback.
+        rebuild = asyncio.ensure_future(self._render_cards([s for s in summaries if s is not None]))
+        rebuild.add_done_callback(_log_rebuild_failure)
+        await asyncio.shield(rebuild)
 
     async def _summary(self, cluster_id: int) -> ClusterSummary | None:
         """One cluster's card model from its status and 24h soil chart; ``None`` when the status call failed."""
