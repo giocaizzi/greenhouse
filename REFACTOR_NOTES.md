@@ -53,6 +53,8 @@ in parentheses (B-n, S-n, D-n, OD-n) are labels kept only because test docstring
 - **Engine quirks: fix all.** Critical stress keys on the driest plant (invariant #2); light thresholds use the
   preferences-timezone month; a spike guard for series too short for Hampel; validated soil targets; 0 °C / 0 % are
   real values; every decision carries at least one reason; the other engine bugs too.
+- **The soil rule judges current readings** (second D review): each sensor's newest cleaned reading against the band
+  of the plant it is linked to, not the 24 h minimum of the pooled cluster.
 - **Emergency runs obey windows and vacation budgets** (critical stress, water warning, the no-sensor fallback).
 - **Time edges are exclusive** (cooldown 6 h, leak hold 24 h, a vacation ending exactly now is over).
 - **TUI:** scheduler resume and the plant-DB sync (`P`) ask for confirmation too.
@@ -136,7 +138,7 @@ and non-loopback sockets. Before it, 21 tests reached the real Open-Meteo API th
 ### Bug-fix fold-in (`fix(<area>)`, 2026-10-11)
 
 Fix packages A (safety + actuation pipeline), B (devices, ingress, sync, weather), C (API, web, auth/security, schema),
-E (dependencies, CI) and F (cleanup) are merged; package D (engine, CLI, TUI, test infrastructure) lands separately.
+D (engine, CLI, TUI, test infrastructure), E (dependencies, CI) and F (cleanup) are all merged.
 Every high-risk package had a second, differential review; review follow-ups are listed with the bug they complete.
 Test files are under `tests/` (`server/` = `tests/server/`).
 
@@ -237,14 +239,50 @@ Test files are under `tests/` (`server/` = `tests/server/`).
 
 #### Engine, CLI, TUI, test infrastructure (package D)
 
-<!-- TODO(D): add the package D rows here once it is merged (engine: critical stress on the driest plant,
-NO_ACTION_NEEDED primary code, short-series spike guard, Hampel step sample, validated soil targets, B-18 0 °C / 0 %,
-B-14 applied interval delta, B-24 global schedule fallback, light thresholds by preference-tz month, environment_for,
-emergency paths obey windows + vacation rationing, exclusive edges, water warning newest reading per sensor; CLI:
-blank token, B-17 errors, 422 wording, id 0, stats --export, job-id encoding, bare groups exit 0; TUI: activity
-cursor, 401 copy, add-plant note, search columns, S4 dashboard lock, client close, resume + P confirm; test infra:
-server fixtures plugin, CLI token isolation, .env disabled in tests). Then delete the matching entries under
-"Observed bugs not fixed". -->
+Engine rules (all in `greenhouse_core/logic/`; engine goldens under `tests/golden/engine/`):
+
+| Change | Where | Pinned by | Commit |
+|---|---|---|---|
+| **Critical stress keys on the driest plant** (invariant #2), no longer on the cluster average. | `stress._water_stress` | `test_invariants_engine.py::test_inv2_stress_rule_keys_on_the_driest_plant`, `engine/driest.jsonl` | `7bffac8` |
+| **Every decision carries a reason.** A run no rule touched (e.g. temperature-only readings in range) gets the new `TriggerCode.NO_ACTION_NEEDED`, so `primary_code` is never NULL; the web shows it with its own icon. | `engine._ensure_reason`, `decision.TriggerCode`, `web/filters.py` | `test_invariants_engine.py::test_inv5_inline_literals_and_explicit_no_action_reason`, `server/test_web_filters.py`, constants golden | `f20ebff`, `69a3ba1` |
+| **Short-series spike guard.** A series of 3–4 points (`CLEANING_SHORT_SERIES_MIN_READINGS` = 3) gets a neighbour test: an interior point far from both neighbours, on the same side of both, is dropped. End points are not judged (a newest-end high glitch is kept on purpose, documented in `f371269`). | `cleaning._short_series_outlier_mask` | `test_cleaning.py::test_short_series_rejects_a_lone_spike`, `test_invariants_engine.py::test_inv10_short_series_spike_is_filtered` | `2632a54` |
+| **Hampel keeps a confirmed step** at the newest end (40, 40, 40, 60, 60): a point whose right context is truncated survives when every later sample backs it as the new level; a glitch beside a real level change does not count as confirmed. | `cleaning._is_hampel_outlier`, `_confirms_level` | `test_contract_mutation_gaps.py::test_hampel_keeps_a_step_change_confirmed_by_the_following_samples`, `test_properties_logic.py::test_step_confirmation_only_spares_points_their_followers_back` | `f294cb5`, `3cc9d9e` |
+| **`parse_moisture_target` validates.** An inverted band is swapped (`"65-45"` → 45–65); a bound outside 0–100 %, NaN or infinite → default band 45–65. | `plant_needs.parse_moisture_target` | `test_properties_logic.py::test_parse_moisture_target_normalises_inverted_and_rejects_out_of_range` | `4a195d3` |
+| **B-18** 0 °C / 0 % are real values in the plant temperature / humidity ranges and the temperature trend. | `plant_needs._widest_range`, `trends._temperature_trend` | `test_properties_logic.py::test_plant_needs_zero_is_a_real_bound`, `test_contract_mutation_gaps.py::test_zero_celsius_readings_count_in_the_temperature_trend` | `dd1395f` |
+| **B-14** `interval_delta` / `duration_delta` report the step actually applied after clamping (0 at a bound). | `engine._shift_interval`, `_lengthen_duration` | `test_logic.py::test_clamped_adjustments_report_the_applied_delta_not_the_nominal_step`, soil/season goldens | `081e94e` |
+| **B-24** With no sensor data, a global row that sets `mode` / `duration_minutes` / `interval_hours` drives the config fallback even without a cluster row. | `fallback._has_configured_schedule` | `test_logic.py::test_fallback_uses_a_global_schedule_without_a_cluster_config_row` | `9885cb9` |
+| Light thresholds (stress `low_light` and the light adjustment) take the season from the month in the preferences timezone, like the seasonal multiplier. | `engine._gather_inputs`, `stress._low_light` | `test_logic.py::test_light_thresholds_use_the_preferences_timezone_month` | `7175723` |
+| **One outdoor rule** (`timing.environment_for`: only `"outdoor"` is outdoor) for the rain skip, the seasonal table, the forecast's rain skip and the pipeline's temperature source. | `logic/timing.py`, `services/forecast.py`, `services/irrigation.py` | `test_logic.py::test_outdoorness_is_one_rule_for_rain_and_seasons`, `server/test_forecast.py`, `server/test_contract_mutation_gaps.py` | `d08edde`, `94e34ed` |
+| **Emergency runs obey irrigation windows and vacation budgets** (water warning, critical stress, the no-sensor fallback): an emergency changes the dosage, not the operator's limits. | `engine._evaluate_rules` | `test_logic.py::test_emergency_triggers_obey_irrigation_windows`, `::test_emergency_triggers_obey_the_vacation_budget`, window / vacation goldens | `0c43ca8` |
+| **Exclusive edges:** a start exactly 6 h ago no longer blocks, a leak alert last seen exactly 24 h ago no longer holds, a vacation whose end equals now is over (API / web banner too). | `engine._enforce_cooldown`, `_enforce_leak_hold`, `repository.get_active_vacation` | `test_invariants_engine.py::test_inv3_cooldown_boundary_is_six_hours_exclusive`, `::test_inv11_hold_window_edge_is_exclusive`, cooldown / leak / vacation goldens | `e081eb0` |
+| **Current readings.** The soil rule and critical stress judge each sensor's newest cleaned soil reading (`PerSensorSnapshot.latest_soil_moisture`, not persisted), not the 24 h pool; a reading older than `SENSOR_READING_STALE_SECONDS` (4 h) is not current, and when every soil reading is stale the no-data fallback decides. | `logic/sensors.py`, `engine._base_or_emergency` | `test_logic.py::test_stale_readings_neither_veto_nor_trigger`, `orchestration/raw_vs_clean.json`, series goldens | `3801e38`, `7f45387`, `b0157b7` |
+| **Per-plant bands.** Each sensor is judged against the band of the plant it is linked to (unlinked or unknown plant → the cluster's widest band): dry / very dry, the conflict's wet side, and critical stress, whose threshold is the plant minimum − `CRITICAL_STRESS_BELOW_TARGET_MARGIN` (15), capped at 30 % (the steep-decline threshold moves with it, +10). Adequate vs wet still uses the current mean against the widest band. | `plant_needs.current_soil`, `stress._critical_thresholds`, `engine._apply_soil_moisture_rule` | `engine/driest.jsonl`, `engine/soil/*.jsonl`, `test_contract_wp6_gaps.py` | `3f72506`, `3db76a6`, `b97567f` |
+| **Over-watering vetoes.** Water stress is dropped when over-watering is detected or any plant reads above its band. The device soil-dry alarm is a terminal `over_watering` skip (alarm recorded) only when over-watering is detected; when another sensor merely reads above its band the alarm is noted after the soil rule and critical stress / the soil rule decide. | `stress.detect_stress_conditions`, `engine._apply_emergency_rules`, `_note_deferred_alarm` | `test_logic.py::test_over_watered_soil_vetoes_the_device_soil_dry_alarm`, `::test_stuck_high_probe_does_not_veto_another_plants_alarm`, `::test_device_soil_dry_alarm_on_wet_soil` | `7fc196e`, `ae2182c`, `aba2cfa` |
+| **Water warning is a state.** Only each sensor's newest reading that carries the flag counts (a row without it neither raises nor clears it), and a flag last reported more than 4 h ago is ignored. | `sensors._latest_water_warning` | `test_logic.py::test_water_warning_reads_only_the_newest_reading_per_sensor`, `::test_stale_water_warning_does_not_trigger` | `61905d9`, `e16f4a6`, `f0c7662` |
+
+Server, CLI, TUI and test infrastructure:
+
+| Change | Where | Pinned by | Commit |
+|---|---|---|---|
+| The pre-decision freshness sync dates a soil sensor by its newest soil reading, so a fresh humidity-only row cannot hide a stale soil value. | `services/sync.SyncService._freshness_reading` | `server/test_sync_snapshot.py::test_freshness_is_judged_on_the_newest_soil_reading` | `8c74cc6` |
+| Scheduler job delete routes take `{job_id:path}` (API `DELETE /scheduler/jobs/{job_id}` and the web delete, whose template URL-encodes the id), so an id with `/` works. | `routes/scheduler.py`, `web/routes/analytics.py` | `server/test_scheduler_jobs.py`, routes goldens | `a8493d5`, `0c7bb22` |
+| CLI: a blank `GREENHOUSE_API_TOKEN` falls back to the stored token. | `client.load_stored_token` | `cli/test_contract_json_output.py` (`token.blank_env_falls_back_to_file`) | `fd2d431` |
+| CLI **B-17**: a timeout, any transport error, and an empty or non-JSON 2xx body print `Error: …` and exit 1 (no traceback). | `client.IrrigationClient._send`, `_decode_json` | `error.read_timeout_exits_1`, `error.empty_200_body_exits_1`, … | `2eabaa4` |
+| CLI: a 422 detail prints as `field: message; …` (an empty one as "The server rejected the request without details"; other non-string details as JSON). | `client._format_detail` | `error.422_detail_list_field_messages`, `error.422_empty_detail_list` | `213fb69`, `7c70c58` |
+| CLI: cluster id `0` is an id for `check`, `plant list --cluster`, `sensor list --cluster`. | `commands/{operations,plants,sensors}.py` | `check.cluster_zero_is_an_id`, … | `5f0c659` |
+| CLI: `stats --export` with a non-CSV response is an error, not an empty file. | `client.stats_export` | `stats.export_json_response_is_an_error` | `264deca` |
+| CLI: scheduler job ids are percent-encoded as one path segment. | `client.delete_scheduler_job` | `delete_scheduler_job.path_segment_escaped` | `9048809` |
+| CLI: a bare command group prints its help and exits 0 (was 2). | `commands/_helpers.HelpOnBareGroup` | `cli/test_contract_help.py::test_group_without_args_prints_help_and_exits_0` | `5d4fbf2` |
+| **TUI S4:** overlapping dashboard reloads no longer crash — one card rebuild at a time (lock + shield), no-op once the screen is closing (`DataScreen.showing`, public Textual API), a failed orphaned rebuild is logged. | `tui/screens/dashboard.py`, `screens/base.py` | `cli/test_tui.py::test_overlapping_dashboard_reloads_do_not_crash`, `::test_failed_shielded_card_rebuild_is_logged_with_traceback` | `dbfb304`, `8da8421` |
+| TUI: a 401 says "Sign in to see your clusters — the server needs a login." instead of "Cannot reach the server". | `tui/app.py`, `screens/dashboard.py` | `cli/test_contract_tui_runtime.py::test_401_dashboard_says_sign_in_needed` | `f1478d3` |
+| TUI: an Activity refresh keeps the cursor on the selected event. | `screens/activity.py` | `::test_activity_cursor_stays_on_the_selected_event_across_refresh` | `580a73a` |
+| TUI (B-19, second half): the add-plant note says blank care fields stay blank — press `P` to fill them. | `screens/cluster.py` | golden `tui/actuation.json` | `85c181a` |
+| TUI: search result columns are sized to the latest results. | `screens/search.py` | `cli/test_tui.py::test_search_columns_fit_the_latest_results` | `1a642f3` |
+| TUI: the app closes its HTTP clients (the retired signed-out one too) on exit. | `tui/app.py` | `cli/test_tui.py::test_app_closes_its_http_clients_on_exit` | `363cce7` |
+| TUI: scheduler resume and the plant-DB sync (`P`, system and cluster screens) ask for confirmation. | `screens/system.py`, `screens/cluster.py` | golden `tui/actuation.json`, `cli/test_contract_tui_actuation.py` | `61d45a2` |
+| TUI: a table painted before its columns were measured no longer keeps a narrow render (the recurring golden flake). Every TUI table is `tui/table.DataTable`, which overrides Textual's two idle-time measurements to bump the render-cache key; `SHADOWING_ALLOWED` in `tests/test_refactor_guards.py` registers that exception. | `greenhouse_cli/tui/table.py` | `cli/test_tui.py::TestTableColumnWidths` | `9767895` |
+| Tests: server fixtures are a global plugin (`tests/server/fixtures.py`, registered by `tests/conftest.py`), so mixing directories on one command line works. | `tests/conftest.py`, `tests/server/fixtures.py` | `test_refactor_guards.py::test_server_fixtures_resolve_when_directories_are_mixed_on_one_command_line` | `450eded` |
+| Tests: no test reads the developer's CLI token (`GREENHOUSE_API_TOKEN` unset, `XDG_CONFIG_HOME` in a temp dir), and `Settings` ignores a local `.env` unless the test is marked `dotenv`. | `tests/conftest.py` | `test_refactor_guards.py::test_cli_token_resolution_is_isolated_from_the_developer`, `::test_settings_ignore_a_developer_dotenv` | `2a4d6bf`, `6b78e0b` |
 
 #### Not behavior changes (same batch)
 
@@ -256,81 +294,14 @@ server fixtures plugin, CLI token isolation, .env disabled in tests). Then delet
   `services/pump_watcher_jobs.py`; logger and job ids unchanged).
 - Dead code removed: `a00ee93` (`refresh=` of `resolve_local_key` / `open_local`), `8011987` (charts `plant_db`
   parameter), `f88e0dc` (`STATUS_READINGS_LOOKBACK_HOURS`), `5cafc94` (`needs_keepalive_fallback`), `dc7d932`
-  (test-only leak-check re-exports).
+  (test-only leak-check re-exports), `da9cc6a` (`fallback.temperature_based_decision`'s unused `temp_range`),
+  `81ec7e3` (the duplicate `start == end` guard in `timing.is_within_quiet_hours`).
+- `docs(engine)` `f371269`: why the short-series guard keeps a lone high glitch at the newest end (see "Not bugs").
 
 ## Observed bugs not fixed (open)
 
-Each entry is pinned as current behavior unless it says otherwise. Everything the fold-in fixed has moved to
-"Labeled behavior changes landed" above; what remains is package D's scope (fixed on its branch, not merged yet) and
-the follow-ups below.
-
-<!-- TODO(D): when package D merges, delete the four D-scope subsections below (S4, Engine, CLI, TUI, test
-infrastructure) and keep only "Follow-ups". -->
-
-### Safety (package D)
-
-- **Overlapping dashboard reloads crash the TUI (S4).** When a load outlasts `refresh_seconds`, two loads interleave
-  in `DashboardScreen._render_cards` and the app dies with `WorkerFailed: NoMatches('#cluster-card-2')`. The same race
-  hit once at teardown (`test_auto_refresh_polls_again` → `NoMatches('#cluster-grid')`, 0/33 on reruns). Suggested
-  fix: reload no-ops once the screen is unmounting. *Where:* `tui/screens/dashboard.py`. *Pinned:* not pinned (race).
-
-### Engine (package D; pinned quirks)
-
-- A decision can end with **zero reasons** (temperature-only, in range): skip, confidence 0.5, `primary_code` NULL.
-  *Pinned:* `tests/test_invariants_engine.py::test_inv5_inline_literals_current_behavior`.
-- **Critical stress keys on the average** soil moisture, not the driest plant (contrast with invariant #2). *Pinned:*
-  `::test_inv2_stress_rule_keys_on_average_current_behavior`.
-- **With fewer than 5 readings a spike is not filtered** and can trigger very-dry irrigation. *Pinned:*
-  `::test_inv10_short_series_spike_is_not_filtered_current_behavior`.
-- **The spike filter drops the first sample of a genuine step change** (40,40,40,60,60). *Pinned:*
-  `tests/test_contract_mutation_gaps.py::test_hampel_window_is_centered_with_full_left_context_current_behavior`.
-- **`parse_moisture_target` does no validation** ("65-45" stays inverted). *Pinned:*
-  `::test_parse_moisture_target_inverted_and_negative_current_behavior`.
-- **0 °C / 0 % bounds are treated as missing (B-18).** Trends also ignore a 0.0 °C reading. *Pinned:*
-  `::test_plant_needs_zero_is_treated_as_missing_current_behavior`,
-  `tests/test_contract_mutation_gaps.py::test_zero_celsius_readings_are_ignored_by_the_temperature_trend_current_behavior`.
-- **The reason `interval_delta` claims the nominal step when the interval was clamped (B-14)** (humidity, light and
-  trend rules). *Where:* `logic/engine.py`. *Pinned:* not by a dedicated test.
-- **The fallback ignores a global schedule without a cluster config row (B-24).** With no sensor data and no
-  `irrigation_config` row, the decision is NO_DATA. *Where:* `logic/fallback.py`. *Pinned:* an in-code "known quirk"
-  comment.
-- **The engine's WATER_WARNING looks at any reading in 24 h**, not the newest reading per sensor (flagged by package B).
-- **Grid-pinned edges** (`tests/engine_grid.py`, `tests/golden/engine/`):
-  - cooldown (6 h) and leak hold (24 h) are inclusive at the exact edge;
-  - a vacation ending exactly now is still active;
-  - critical stress, water warning and the no-sensor fallback bypass vacation rationing, and the fallback bypasses
-    windows;
-  - any `environment` other than "indoor" gets the weather rule but the indoor seasonal table;
-  - light thresholds use the UTC month, while seasons use the preferences timezone.
-
-### CLI (package D; pinned in `tests/cli/test_contract_json_output.py` golden cases)
-
-- A whitespace-only `GREENHOUSE_API_TOKEN` disables the token-file fallback (`token.blank_env_current_behavior_ignores_file`).
-- Only `httpx.ConnectError` becomes a clean error (B-17). A read timeout or an empty/non-JSON 2xx body crashes with a
-  traceback, exit 1 (`error.read_timeout_current_behavior_uncaught`, `error.empty_200_body_current_behavior_uncaught`).
-- A 422 `detail` list is printed as a Python repr (`error.422_detail_list_python_repr`).
-- Id `0` means "not given" for `check`, `plant list --cluster`, `sensor list --cluster`.
-- `stats --export` with a non-CSV response writes an empty file and reports success.
-- Scheduler job ids are put into the URL path unescaped (`client/delete_scheduler_job.path_not_escaped`).
-- Bare groups exit 2, not 0.
-
-### TUI (package D)
-
-- **A 401 shows "Cannot reach the server"** behind the sign-in dialog. *Pinned:*
-  `tests/cli/test_contract_tui_runtime.py::test_401_current_behavior_dashboard_says_cannot_reach_server`.
-- **The Activity table cursor jumps to the top on refresh.** Harmless, because rows have no actions. *Pinned:*
-  `::test_activity_cursor_current_behavior_resets_to_top_on_refresh`.
-- **Wrong cluster-form copy** (other half of B-19): "Blank care fields are filled from the plant DB…" — the API does
-  not auto-fill; that needs `/plants/sync`. *Where:* `tui/screens/cluster.py`. *Pinned:* TUI golden.
-- **Search-table column widths only grow.** An early partial query can leave the table wider than needed.
-- **Scheduler resume and the plant-DB sync (`P`) run without confirmation** (owner decision: both confirm). `S`, `H`
-  and alert `k` / `v` / `y` keep running on the key press. Pinned by the actuation golden.
-
-### Test infrastructure (package D)
-
-- **Mixed directories on one pytest command line break fixtures.** `tests/server/X tests/<core> tests/server/Y` →
-  "fixture 'client' not found" for Y. Group paths by directory.
-- `test_cli.py` can read the real CLI token from the user config dir, and `Settings` reads a local `.env` during tests.
+Every bug the refactor recorded is fixed and listed under "Labeled behavior changes landed" above (package D's
+engine, CLI, TUI and test-infrastructure items included). What remains are the follow-ups below.
 
 ### Follow-ups (outside every fix package)
 
@@ -342,9 +313,12 @@ infrastructure) and keep only "Follow-ups". -->
 - **A manual start without `minutes`** switches the pump on with the device's own timer as the only bound: no dry-run
   watcher (it needs a deadline) and no leak check (`leak_check_skipped` says why). Documented design, listed so it is
   not mistaken for a gap.
-
-<!-- TODO(D): add package D's own follow-ups here when it merges (temperature-source environment check in
-services/irrigation.py, web icon for no_action_needed, scheduler job route {job_id:path}). -->
+- **The light season outside the engine is still the UTC month.** The learning issue heuristics
+  (`learning/issues.py`) and the maintenance `low_light` check (`services/maintenance.py`) call
+  `effective_light_threshold` / `seasonal_light_factor` without a month; the engine passes the preference-timezone
+  month since `7175723`. Advisory checks only. *Pinned:* not pinned.
+- Package D's own follow-ups (temperature source and forecast on `environment_for`, an icon for `no_action_needed`,
+  `{job_id:path}` on the scheduler job routes) were done before it merged (`94e34ed`, `69a3ba1`, `a8493d5`, `0c7bb22`).
 
 ## Not bugs (by design)
 
@@ -357,11 +331,16 @@ services/irrigation.py, web icon for no_action_needed, scheduler job route {job_
   baseline migration seeds quiet hours 00:00–05:00 into every app, so golden tests use `FROZEN_INSTANT` outside them.
 - **The server `app` fixture does not stub the weather client.** Since the hermetic guard (`13fcac7`) such tests get
   the offline 20 °C fallback instead of live weather; contract tests use `install_offline_weather`.
+- **A lone high glitch at the newest end of a short series is kept** (`10, 10, 99`), so a dry plant can skip one
+  cycle. Dropping a newest-end rise is not safe either: a genuine rise (rain outdoors, an unlogged manual watering)
+  looks the same. The next reading settles it — a revert makes the 99 an interior spike, which the guard drops.
+  Documented in `cleaning._short_series_outlier_mask` (`f371269`); covered by
+  `tests/test_cleaning.py::test_short_series_keeps_steps_trends_and_unconfirmed_end_points`.
+- **Over-watering is still judged on the 24 h average** (> 70 % with a high watering frequency or a rising trend),
+  while the soil rule and critical stress use current readings; package D left this rule as it was.
 
 ## Dead-code and cleanup candidates (not removed yet)
 
-- The `start_hour == end_hour` guard in `logic/timing.is_within_quiet_hours` duplicates the one in `_hour_in_range`.
-- `fallback.temperature_based_decision(temp_range)` is unused but passed by the engine and frozen tests.
 - The IK10PW profile lists three capabilities nothing reads (`has_local_duration_dp`, `has_water_shortage_dp`,
   `supports_cloud_switch`); kept as pinned profile data.
 - Kept on purpose: `HealthAlarm.SENSOR_FAULT` (the startup cleanup of pre-B-10 alerts reads it) and
@@ -375,7 +354,9 @@ sensor-adapter `read_live`, `pump_watcher.ALERT_CODE`, three unused re-exports, 
 test helpers. `DEVICE_BLOCKING_CODES` is now the source of `is_actuation_blocked` instead of a dead duplicate.
 Removed during the fold-in: the `refresh=` parameter of `resolve_local_key` / `open_local`, the charts `plant_db`
 parameter, `STATUS_READINGS_LOOKBACK_HOURS`, `LEAK_CHECK_ACTIVITY_SCAN_LIMIT`, `KEEP_ALIVE_INTERVAL`, the
-`needs_keepalive_fallback` capability and the test-only leak-check re-exports of `services/irrigation.py`.
+`needs_keepalive_fallback` capability, the test-only leak-check re-exports of `services/irrigation.py`, the unused
+`temp_range` parameter of `fallback.temperature_based_decision` and the duplicate `start_hour == end_hour` guard in
+`timing.is_within_quiet_hours`.
 
 ## Golden and test policy (for future contributors)
 
@@ -419,4 +400,6 @@ Gate 0 on `a1b2622`, Python 3.11.15: **1182 passed, 2 warnings, 1168 s**; total 
    cancelled at teardown (Textual cache path).
 
 Added by the safety net, on purpose: `InsecureKeyLengthWarning` from `tests/server/test_contract_auth.py` (short test
-HMAC key). Current runs report 9–10 warnings in total; see the `REFACTOR_REPORT.md` final gate.
+HMAC key). Current runs report 9–10 warnings in total; see the `REFACTOR_REPORT.md` final gate. Since the server
+fixtures became a global plugin (`450eded`), a core-only run imports `TestClient` too, so it also shows Starlette's
+httpx deprecation warning once per worker.
