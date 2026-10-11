@@ -284,6 +284,7 @@ def test_unknown_timezone_falls_back_to_utc(tz_name):
 @pytest.fixture
 def repo(tmp_db, frozen_clock):
     """Provide the test repository with the clock frozen."""
+    del frozen_clock  # side-effect fixture (the clock is frozen)
     return tmp_db
 
 
@@ -360,7 +361,7 @@ def test_blocked_drip_needs_low_efficiency_and_low_absorption(repo, monkeypatch,
     monkeypatch.setattr(
         issues_mod,
         "get_plant_profile",
-        lambda db, sensor: _profile(sensor.id, efficiency=efficiency, absorption=absorption),
+        lambda _db, sensor: _profile(sensor.id, efficiency=efficiency, absorption=absorption),
     )
     alerts = issues_mod.detect_issues(repo, plant_database(), cid)
     assert [a.alert_type for a in alerts] == (["blocked_drip"] if blocked else [])
@@ -374,7 +375,7 @@ def test_rapid_drainage_needs_drainage_strictly_below_threshold(repo, monkeypatc
     monkeypatch.setattr(
         issues_mod,
         "get_plant_profile",
-        lambda db, sensor: _profile(sensor.id, efficiency=1.0, absorption=1.0, drainage=drainage),
+        lambda _db, sensor: _profile(sensor.id, efficiency=1.0, absorption=1.0, drainage=drainage),
     )
     alerts = issues_mod.detect_issues(repo, plant_database(), cid)
     assert [a.alert_type for a in alerts] == (["rapid_drainage"] if rapid else [])
@@ -522,10 +523,12 @@ def test_learning_report_text(repo, monkeypatch, efficiency, warned):
     sid = _probe(repo)
     cid = repo.get_sensor(sid).cluster_id
     monkeypatch.setattr(
-        report_mod, "get_plant_profile", lambda db, sensor: _profile(sensor.id, efficiency=efficiency, absorption=1.0)
+        report_mod, "get_plant_profile", lambda _db, sensor: _profile(sensor.id, efficiency=efficiency, absorption=1.0)
     )
     monkeypatch.setattr(
-        report_mod, "detect_issues", lambda db, pdb, c: [Alert(severity="warning", alert_type="x", message="check it")]
+        report_mod,
+        "detect_issues",
+        lambda _db, _pdb, _c: [Alert(severity="warning", alert_type="x", message="check it")],
     )
     lines = report_mod.generate_report(repo, plant_database(), cid).split("\n")
     assert lines[:3] == ["📊 Irrigation Learning Report", "=" * 40, ""]

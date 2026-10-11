@@ -42,7 +42,7 @@ def _no_network(monkeypatch):
     no longer depend on live weather or network access. Tests that stub ``urlopen`` themselves override this.
     """
 
-    def _blocked_urlopen(url, *args, **kwargs):
+    def _blocked_urlopen(url, *_args, **_kwargs):
         raise urllib.error.URLError(f"network disabled in tests: {getattr(url, 'full_url', url)}")
 
     real_connect = socket.socket.connect

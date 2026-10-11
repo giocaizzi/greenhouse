@@ -20,6 +20,7 @@ import importlib.resources
 import tomllib
 from pathlib import Path
 
+import pytest
 from sqlalchemy import create_engine
 
 from golden import assert_golden_json
@@ -93,7 +94,8 @@ def test_installed_console_scripts_resolve():
     assert eps["greenhouse-server"].load() is server_main
 
 
-def test_server_main_wiring(clean_env, monkeypatch):
+@pytest.mark.usefixtures("clean_env")
+def test_server_main_wiring(monkeypatch):
     """``main()`` loads ``.env`` first, then builds Settings, the app, and runs uvicorn."""
     import dotenv
     import uvicorn

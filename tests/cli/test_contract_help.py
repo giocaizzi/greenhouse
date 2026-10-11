@@ -178,15 +178,17 @@ def test_command_tree_has_every_help_page():
     assert len(leaf_command_paths()) == 61
 
 
-def test_params_golden(stable_cli_env):
+@pytest.mark.usefixtures("stable_cli_env")
+def test_params_golden():
     """Every group/command with its params (name, opts, default, required, type, …) == golden."""
     # Re-walk under the fixture: the completion options depend on env read at get_command() time.
     tree = [describe_command(path, cmd) for path, cmd in walk_commands()]
     assert_golden_json("cli/params.json", tree)
 
 
+@pytest.mark.usefixtures("stable_cli_env")
 @pytest.mark.parametrize("path", [p for p, _ in COMMANDS], ids=lambda p: ".".join((PROG, *p)))
-def test_help_page_golden(stable_cli_env, path):
+def test_help_page_golden(path):
     """``greenhouse <path> --help`` → exit 0, nothing on stderr, stdout == golden."""
     result = runner.invoke(app, [*path, "--help"], prog_name=PROG)
     assert result.exception is None or isinstance(result.exception, SystemExit), result.exception
@@ -196,8 +198,9 @@ def test_help_page_golden(stable_cli_env, path):
     assert_golden(f"{HELP_GOLDEN_DIR}/{golden_name(path)}", help_golden_text(result.stdout))
 
 
+@pytest.mark.usefixtures("stable_cli_env")
 @pytest.mark.parametrize("path", [p for p, c in COMMANDS if is_group(c)], ids=lambda p: ".".join((PROG, *p)) or PROG)
-def test_group_without_args_prints_help_and_exits_0(stable_cli_env, path):
+def test_group_without_args_prints_help_and_exits_0(path):
     """A bare group behaves exactly like ``--help``: the same page on stdout, nothing on stderr, exit 0."""
     bare = runner.invoke(app, list(path), prog_name=PROG)
     helped = runner.invoke(app, [*path, "--help"], prog_name=PROG)
@@ -206,7 +209,8 @@ def test_group_without_args_prints_help_and_exits_0(stable_cli_env, path):
     assert bare.stdout == helped.stdout
 
 
-def test_help_is_width_stable_against_hostile_terminal_env(stable_cli_env, monkeypatch):
+@pytest.mark.usefixtures("stable_cli_env")
+def test_help_is_width_stable_against_hostile_terminal_env(monkeypatch):
     """A developer's ``TERMINAL_WIDTH``/``FORCE_COLOR`` must not leak into goldens once the fixture is applied.
 
     The fixture already deleted the variables; this sets hostile values *after* it and shows that only the

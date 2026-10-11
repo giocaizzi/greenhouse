@@ -686,6 +686,7 @@ class _StubWeatherClient:
         self._current = current or {}
 
     def get_forecast(self, hours: int = 6) -> dict:
+        del hours  # signature mirrors the real one; unused by this fake
         return {"precipitation_mm": self._precip, "max_temp": 20.0, "min_temp": 10.0, "avg_humidity": 70.0}
 
     def get_current(self) -> dict:
@@ -821,6 +822,7 @@ def test_clamped_adjustments_report_the_applied_delta_not_the_nominal_step():
 
 def test_fallback_uses_a_global_schedule_without_a_cluster_config_row(tmp_db, frozen_clock):
     """B-24: no sensor data, no ``irrigation_config`` row, but a global schedule → CONFIG_FALLBACK, not NO_DATA."""
+    del frozen_clock  # side-effect fixture (the clock is frozen)
     from greenhouse_core.logic.decision import Action
 
     cid = tmp_db.add_cluster("Global schedule only")
@@ -865,6 +867,7 @@ def test_outdoorness_is_one_rule_for_rain_and_seasons(tmp_db, frozen_clock, envi
     A "greenhouse" (or unset) cluster used to get the rain skip but the indoor seasonal
     table; it is now sheltered for both.
     """
+    del frozen_clock  # side-effect fixture (the clock is frozen)
     from greenhouse_core.logic.timing import environment_for
 
     cid = tmp_db.add_cluster("Env", environment=environment)
@@ -893,6 +896,7 @@ def _critical_cluster(db):
 
 def test_emergency_triggers_obey_irrigation_windows(tmp_db, frozen_clock):
     """Owner decision: critical stress no longer bypasses the cluster's windows (10:00 UTC, window 05-09)."""
+    del frozen_clock  # side-effect fixture (the clock is frozen)
     cid, _ = _critical_cluster(tmp_db)
     logic = IrrigationLogic(tmp_db, get_plant_database())
     assert logic.decide_for_cluster(cid).primary_code is TriggerCode.WATER_STRESS
@@ -905,6 +909,7 @@ def test_emergency_triggers_obey_irrigation_windows(tmp_db, frozen_clock):
 
 def test_emergency_triggers_obey_the_vacation_budget(tmp_db, frozen_clock):
     """Owner decision: a critical-stress run during a vacation is rationed like any other run."""
+    del frozen_clock  # side-effect fixture (the clock is frozen)
     cid, irr = _critical_cluster(tmp_db)
     tmp_db.update_irrigator(irr, reservoir_l=0.5, flow_rate_l_per_min=1.0)
     now = int(time.time())
@@ -922,6 +927,7 @@ def test_water_warning_reads_only_the_newest_reading_per_sensor(tmp_db, frozen_c
 
     An old True followed by a newer False does not trigger, and a newer row without the flag changes nothing.
     """
+    del frozen_clock  # side-effect fixture (the clock is frozen)
     cid = tmp_db.add_cluster("Warn")
     tmp_db.add_plant(cluster_id=cid, species="Monstera deliciosa", category="tropical")
     sid = tmp_db.add_sensor(cluster_id=cid, tuya_device_id=FAKE_SENSOR_ID, name="S", sensor_type="x", config={})
@@ -948,6 +954,7 @@ def test_stale_water_warning_does_not_trigger(tmp_db, frozen_clock):
 
     Fresh sensors keep deciding (one-line staleness rule shared with the soil value).
     """
+    del frozen_clock  # side-effect fixture (the clock is frozen)
     cid = tmp_db.add_cluster("Stale alarm")
     tmp_db.add_plant(cluster_id=cid, species="Monstera deliciosa", category="tropical")
     silent = tmp_db.add_sensor(cluster_id=cid, tuya_device_id=FAKE_SENSOR_ID, name="Silent", sensor_type="x", config={})
@@ -967,6 +974,7 @@ def test_stale_water_warning_does_not_trigger(tmp_db, frozen_clock):
 
 def test_device_soil_dry_alarm_on_wet_soil(tmp_db, frozen_clock):
     """The alarm irrigates on normal soil; above the band it is only noted; detected over-watering vetoes it."""
+    del frozen_clock  # side-effect fixture (the clock is frozen)
     cid = tmp_db.add_cluster("Alarm")
     tmp_db.add_plant(cluster_id=cid, species="Monstera deliciosa", category="tropical")
     sid = tmp_db.add_sensor(cluster_id=cid, tuya_device_id=FAKE_SENSOR_ID, name="S", sensor_type="x", config={})
@@ -993,6 +1001,7 @@ def test_device_soil_dry_alarm_on_wet_soil(tmp_db, frozen_clock):
 
 def test_stuck_high_probe_does_not_veto_another_plants_alarm(tmp_db, frozen_clock):
     """Another sensor above its band only defers the alarm: the soil rule's conflict burst still waters."""
+    del frozen_clock  # side-effect fixture (the clock is frozen)
     cid = tmp_db.add_cluster("Mixed alarm")
     tmp_db.add_plant(cluster_id=cid, species="Monstera deliciosa", category="tropical")
     now = int(time.time())
@@ -1022,6 +1031,7 @@ def _two_probe_cluster(db, readings):
 
 def test_stale_readings_neither_veto_nor_trigger(tmp_db, frozen_clock):
     """A sensor whose newest reading is older than SENSOR_READING_STALE_SECONDS is left out of "current"."""
+    del frozen_clock  # side-effect fixture (the clock is frozen)
     logic = IrrigationLogic(tmp_db, get_plant_database())
     hour = 3600
 

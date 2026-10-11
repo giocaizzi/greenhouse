@@ -19,17 +19,21 @@ class _Repo:
         self._rows = rows
 
     def get_sensors_in_cluster(self, cluster_id):
+        del cluster_id  # signature mirrors the real one; unused by this fake
         return [SimpleNamespace(id=1, name="S1", plant_id=1)]
 
     def get_plants_in_cluster(self, cluster_id):
+        del cluster_id  # signature mirrors the real one; unused by this fake
         return [SimpleNamespace(id=1, species="sp", category="cat")]
 
     def get_recent_readings(self, sensor_id, hours=24):
+        del sensor_id  # signature mirrors the real one; unused by this fake
         return list(self._rows) if hours == 168 else []
 
 
 class _PlantDb:
     def get_care_data(self, species=None, category=None):
+        del species, category  # signature mirrors the real one; unused by this fake
         return {"soil_moisture_target": "40-60"}
 
 
@@ -57,7 +61,7 @@ def _detect(monkeypatch, rows):
         max_delta=5.0,
         efficiency_score=0.9,
     )
-    monkeypatch.setattr(issues, "get_plant_profile", lambda db, sensor: profile)
+    monkeypatch.setattr(issues, "get_plant_profile", lambda _db, _sensor: profile)
     return detect_issues(_Repo(rows), _PlantDb(), 1)
 
 

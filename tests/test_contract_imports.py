@@ -127,8 +127,9 @@ def _load_golden_or_update(name: str, observed) -> object | None:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+@pytest.mark.usefixtures("clean_env")
 @pytest.mark.skipif(not hasattr(os, "fork"), reason="surface capture forks one child per module")
-def test_public_import_surfaces_are_a_superset_of_golden(clean_env):
+def test_public_import_surfaces_are_a_superset_of_golden():
     """Every name in the import-surface golden still resolves (additions are allowed)."""
     observed = _run(_SURFACE_SCRIPT, *FROZEN_MODULES)
     golden = _load_golden_or_update("contracts/imports.json", observed)
@@ -150,7 +151,8 @@ def test_public_import_surfaces_are_a_superset_of_golden(clean_env):
     assert not problems, "import surface shrank (add re-export shims):\n  " + "\n  ".join(problems)
 
 
-def test_module_level_logger_names_are_kept(clean_env):
+@pytest.mark.usefixtures("clean_env")
+def test_module_level_logger_names_are_kept():
     """Module-level logger names stay as pinned, since operators filter logs by them."""
     observed = _run(_LOGGER_SCRIPT)
     loggers = observed["loggers"]

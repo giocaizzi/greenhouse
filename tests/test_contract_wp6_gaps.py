@@ -24,6 +24,7 @@ class _Repo:
         self._plants = [SimpleNamespace(id=i + 1, species=f"s{i}", category="c") for i in range(n_plants)]
 
     def get_plants_in_cluster(self, cluster_id):
+        del cluster_id  # signature mirrors the real one; unused by this fake
         return self._plants
 
 
@@ -32,6 +33,7 @@ class _PlantDb:
         self._care = care
 
     def get_care_data(self, species=None, category=None):
+        del species, category  # signature mirrors the real one; unused by this fake
         return dict(self._care)
 
 
@@ -56,7 +58,7 @@ def test_low_env_humidity_fires_strictly_more_than_20_points_below_ideal_min(hum
 @pytest.mark.parametrize(("light", "fires"), [(399.0, True), (400.0, False)])
 def test_low_light_fires_strictly_below_forty_percent_of_seasonal_min(monkeypatch, light, fires):
     """Low-light stress fires only strictly below 40 % of the seasonal minimum."""
-    monkeypatch.setattr("greenhouse_core.utils.seasonal_light_factor", lambda month=None: 1.0)
+    monkeypatch.setattr("greenhouse_core.utils.seasonal_light_factor", lambda _month=None: 1.0)
     stress = _stress({"ideal_light_lux_min": 1000}, SensorSnapshot(avg_light=light))
     assert (stress.low_light is not None) is fires
     if fires:
@@ -125,9 +127,11 @@ class _LearningRepo:
         self.calls = []
 
     def get_sensors_in_cluster(self, cluster_id):
+        del cluster_id  # signature mirrors the real one; unused by this fake
         return self._sensors
 
     def get_plants_in_cluster(self, cluster_id):
+        del cluster_id  # signature mirrors the real one; unused by this fake
         return self._plants
 
     def get_recent_readings(self, sensor_id, hours=24):
@@ -166,7 +170,7 @@ def _soil(value, n=3):
 
 def _issues(monkeypatch, sensors, plants, care, readings):
     profiles = {s.id: _profile(s.id) for s in sensors}
-    monkeypatch.setattr(issues, "get_plant_profile", lambda db, sensor: profiles.get(sensor.id))
+    monkeypatch.setattr(issues, "get_plant_profile", lambda _db, sensor: profiles.get(sensor.id))
     return detect_issues(_LearningRepo(sensors, plants, readings), _PlantDb(care), 1)
 
 
@@ -281,6 +285,7 @@ def test_detect_conflicts_light_and_humidity_need_care_fields_and_enough_samples
 
     class _Care:
         def get_care_data(self, species=None, category=None):
+            del category  # signature mirrors the real one; unused by this fake
             return {"ideal_humidity_min": 60} if species == "sp1" else {"ideal_light_lux_min": 0}
 
     repo = _LearningRepo(sensors, [_plant(1), _plant(2)], readings)
@@ -330,6 +335,7 @@ class _TrendRepo:
         self.calls = []
 
     def get_sensors_in_cluster(self, cluster_id):
+        del cluster_id  # signature mirrors the real one; unused by this fake
         return [SimpleNamespace(id=1)]
 
     def get_recent_readings(self, sensor_id, hours=24):
@@ -337,6 +343,7 @@ class _TrendRepo:
         return list(self._rows)
 
     def get_irrigator_for_cluster(self, cluster_id):
+        del cluster_id  # signature mirrors the real one; unused by this fake
         return self._irrigator
 
     def get_recent_events(self, irrigator_id, hours=24):
@@ -406,8 +413,8 @@ def test_cadence_flags_boundaries(events, low, high):
 
 def _issues_with(monkeypatch, profile, readings, care=None, plant_id=1):
     sensor = _sensor(1, plant_id=plant_id)
-    monkeypatch.setattr(issues, "get_plant_profile", lambda db, s: profile)
-    monkeypatch.setattr(issues, "seasonal_light_factor", lambda month=None: 1.0)
+    monkeypatch.setattr(issues, "get_plant_profile", lambda _db, _s: profile)
+    monkeypatch.setattr(issues, "seasonal_light_factor", lambda _month=None: 1.0)
     repo = _LearningRepo([sensor], [_plant(1)], readings)
     plant_db = _PlantDb(care if care is not None else {"soil_moisture_target": "20-40"})
     return detect_issues(repo, plant_db, 1), repo
@@ -474,7 +481,7 @@ def _env_repo(lux_rows=(), hum_rows=()):
 @pytest.mark.parametrize(("n", "lux", "fires"), [(5, 499, True), (4, 499, False), (5, 500, False)])
 def test_detect_conflicts_low_light_needs_five_daytime_samples_strictly_below_half(monkeypatch, n, lux, fires):
     """A low-light conflict needs five daytime samples strictly below half the need."""
-    monkeypatch.setattr("greenhouse_core.utils.seasonal_light_factor", lambda month=None: 1.0)
+    monkeypatch.setattr("greenhouse_core.utils.seasonal_light_factor", lambda _month=None: 1.0)
     repo = _env_repo(lux_rows=[_row(1000 - i, light=lux) for i in range(n)])
     alerts = detect_conflicts(repo, _PlantDb({"ideal_light_lux_min": 1000}), 1, {}, {})
     assert [a.alert_type for a in alerts] == (["low_light"] if fires else [])

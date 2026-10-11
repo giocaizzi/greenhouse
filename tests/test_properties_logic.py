@@ -361,22 +361,27 @@ class FakeRepo:
 
     def get_plants_in_cluster(self, cluster_id):
         """Return the configured plants."""
+        del cluster_id  # signature mirrors the real one; unused by this fake
         return self._plants
 
     def get_sensors_in_cluster(self, cluster_id):
         """Return one sensor per configured reading series."""
+        del cluster_id  # signature mirrors the real one; unused by this fake
         return [SimpleNamespace(id=sid) for sid in sorted(self._readings)]
 
     def get_recent_readings(self, sensor_id, hours=24):
         """Return a sensor's readings newest first, like the real repository."""
+        del hours  # signature mirrors the real one; unused by this fake
         return sorted(self._readings[sensor_id], key=lambda r: r.timestamp, reverse=True)
 
     def get_irrigator_for_cluster(self, cluster_id):
         """Return the pump, or None when the cluster has none."""
+        del cluster_id  # signature mirrors the real one; unused by this fake
         return self._irrigator
 
     def get_recent_events(self, irrigator_id, hours=24):
         """Return the configured irrigation events."""
+        del irrigator_id, hours  # signature mirrors the real one; unused by this fake
         return self._events
 
 

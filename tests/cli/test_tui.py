@@ -369,10 +369,10 @@ class TestDashboard:
     def test_unreachable_server(self):
         """A refused connection is reported on screen instead of crashing the app."""
 
-        def refuse(request):
+        def refuse(_request):
             raise httpx.ConnectError("refused")
 
-        def factory(token):
+        def factory(_token):
             return IrrigationClient(base_url="http://down", token="", transport=httpx.MockTransport(refuse))
 
         async def scenario():
@@ -403,7 +403,7 @@ class TestClusterScreen:
         """Opening a cluster fills every tab from the API payloads."""
         http, _ = greenhouse
 
-        async def body(pilot, tui, screen):
+        async def body(_pilot, _tui, screen):
             assert screen.summary.name == "Living Room"
             assert len(screen.query("PlantTile")) == 2
             assert screen.query_one("#sensors-table", DataTable).row_count == 2
@@ -442,7 +442,7 @@ class TestClusterScreen:
         """The irrigate dialog defaults to a dry run, which never reaches the device."""
         http, wiring = greenhouse
 
-        async def body(pilot, tui, screen):
+        async def body(pilot, tui, _screen):
             await pilot.press("i")
             await pilot.pause()
             assert isinstance(tui.screen, IrrigateScreen)
@@ -612,7 +612,7 @@ class TestTuiCommand:
         """Without --server, the server URL falls back to IRRIGATION_SERVER_URL."""
         seen = {}
         monkeypatch.setenv("IRRIGATION_SERVER_URL", "http://192.0.2.10:8000")
-        monkeypatch.setattr("greenhouse_cli.tui.run", lambda server, **kw: seen.update(server=server))
+        monkeypatch.setattr("greenhouse_cli.tui.run", lambda server, **_kw: seen.update(server=server))
         result = CliRunner().invoke(cli_app, ["tui"])
         assert result.exit_code == 0, result.output
         assert seen["server"] == "http://192.0.2.10:8000"
@@ -927,7 +927,7 @@ class TestClusterCrud:
         """The cluster can be renamed and, after confirmation, deleted."""
         http, _ = greenhouse
 
-        async def body(pilot, tui, screen):
+        async def body(pilot, tui, _screen):
             await pilot.press("e")
             await pilot.pause()
             await _submit_form(pilot, tui, name="Desk (office)")
@@ -944,7 +944,7 @@ class TestClusterCrud:
         """The insights tab shows care insights, stats and the learning report."""
         http, _ = greenhouse
 
-        async def body(pilot, tui, screen):
+        async def body(_pilot, _tui, screen):
             assert "Care insights" in _text(screen.query_one("#insights-panel"))
             assert "Needs water" in _text(screen.query_one("#insights-panel"))
             assert "events" in _text(screen.query_one("#stats-panel"))
@@ -957,7 +957,7 @@ class TestClusterCrud:
         http, _ = greenhouse
         monkeypatch.chdir(tmp_path)
 
-        async def body(pilot, tui, screen):
+        async def body(pilot, tui, _screen):
             await pilot.press("E")
             await _settle(pilot, tui)
             exported = tmp_path / "greenhouse-living-room-stats-30d.csv"
@@ -1080,9 +1080,13 @@ class TestSearchAndSystem:
         }
         base = tui_client_factory(http)
 
+        def fake_search(query, limit=20):
+            del limit  # the screen passes ``limit=``; the canned hits ignore it
+            return {"hits": hits.get(query, [])}
+
         def factory(token):
             client = base(token)
-            client.search = lambda query, limit=20: {"hits": hits.get(query, [])}
+            client.search = fake_search
             return client
 
         async def scenario():
@@ -1173,7 +1177,7 @@ class TestSearchAndSystem:
                 return httpx.Response(200, json=jobs)
             return httpx.Response(200, json={})
 
-        def factory(token):
+        def factory(_token):
             return IrrigationClient(base_url="http://mock", token="", transport=httpx.MockTransport(handler))
 
         async def scenario():
@@ -1228,7 +1232,7 @@ class TestRefill:
     def test_cursor_follows_record_across_reload(self):
         """A reload that shifts rows keeps the cursor on the selected record, not the row index."""
 
-        async def body(pilot, table):
+        async def body(_pilot, table):
             refill(table, [("1", ["a"]), ("2", ["b"]), ("3", ["c"])])
             table.move_cursor(row=2)
             assert selected_key(table) == "3"
@@ -1241,7 +1245,7 @@ class TestRefill:
     def test_cursor_clamps_when_record_disappears(self):
         """When the selected record disappears the cursor clamps to a remaining row, or none."""
 
-        async def body(pilot, table):
+        async def body(_pilot, table):
             refill(table, [("1", ["a"]), ("2", ["b"]), ("3", ["c"])])
             table.move_cursor(row=2)
             refill(table, [("1", ["a"]), ("2", ["b"])])
@@ -1355,7 +1359,7 @@ class TestExactRequests:
         http, _ = greenhouse
         log: list = []
 
-        async def body(pilot, tui, screen):
+        async def body(pilot, tui, _screen):
             await pilot.press("i")
             await pilot.pause()
             tui.screen.query_one("#dry-run", Checkbox).value = False
@@ -1415,7 +1419,7 @@ class TestExactRequests:
         http, _ = greenhouse
         log: list = []
 
-        async def body(pilot, tui, screen):
+        async def body(pilot, tui, _screen):
             await pilot.press("c")
             await pilot.pause()
             await _confirm(pilot, tui)
@@ -1499,7 +1503,7 @@ class TestExactRequests:
 
 
 def _mock_app(handler, refresh_seconds: float = 0) -> GreenhouseApp:
-    def factory(token):
+    def factory(_token):
         return IrrigationClient(base_url="http://mock", token="", transport=httpx.MockTransport(handler))
 
     return GreenhouseApp("http://mock", client_factory=factory, refresh_seconds=refresh_seconds)
@@ -1597,7 +1601,7 @@ class TestResilience:
                 return httpx.Response(200, json={"access_token": "", "username": "admin"})
             return httpx.Response(200, json=[] if request.url.path == "/api/v1/clusters" else {})
 
-        def factory(token):
+        def factory(_token):
             client = IrrigationClient(base_url="http://mock", token="", transport=httpx.MockTransport(handler))
             made.append(client)
             return client

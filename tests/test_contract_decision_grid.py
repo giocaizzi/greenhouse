@@ -84,8 +84,9 @@ def _assert_audit_invariants(case_id: str, record: dict) -> None:
     assert record["decision_log_id_matches"] is True, case_id
 
 
+@pytest.mark.usefixtures("clean_env")
 @pytest.mark.parametrize("name", sorted(_SHARDS))
-def test_decision_grid_matches_golden(name, clean_env):
+def test_decision_grid_matches_golden(name):
     """Every engine-grid case in this shard decides exactly as pinned in its golden."""
     records = {case.id: run_case(case) for case in _SHARDS[name]}
 
@@ -111,7 +112,8 @@ def test_golden_files_cover_exactly_the_grid():
     assert on_disk == set(_SHARDS)
 
 
-def test_run_case_is_deterministic(clean_env):
+@pytest.mark.usefixtures("clean_env")
+def test_run_case_is_deterministic():
     """Same case twice → identical record (no hidden clock / ordering leaks)."""
     sample = build_cases("misc") + build_cases("learning")
 

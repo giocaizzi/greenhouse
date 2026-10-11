@@ -9,7 +9,8 @@ import pytest
 from golden import FROZEN_INSTANT, FROZEN_TS, OfflineWeather, assert_golden, to_canonical_json
 
 
-def test_frozen_clock_pins_time_and_datetime(frozen_clock):
+@pytest.mark.usefixtures("frozen_clock")
+def test_frozen_clock_pins_time_and_datetime():
     """``frozen_clock`` pins both ``time.time`` and ``datetime.now``."""
     assert int(time.time()) == FROZEN_TS
     assert datetime.now(UTC) == FROZEN_INSTANT

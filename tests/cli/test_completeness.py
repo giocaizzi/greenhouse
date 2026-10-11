@@ -65,7 +65,7 @@ def patch_client(monkeypatch) -> Callable[[dict, list | None], None]:
         transport = _mock(routes, captured)
         original_init = httpx.Client.__init__
 
-        def patched_init(self, *args, **kwargs):
+        def patched_init(self, *_args, **kwargs):
             kwargs.pop("base_url", None)
             kwargs.pop("timeout", None)
             headers = kwargs.pop("headers", None)
@@ -88,7 +88,7 @@ def patch_client(monkeypatch) -> Callable[[dict, list | None], None]:
 class TestAuthCommands:
     """``login`` / ``logout`` / ``whoami`` and token storage."""
 
-    def test_login_stores_token(self, patch_client, tmp_path):
+    def test_login_stores_token(self, patch_client):
         """A successful login stores the returned token in the token file."""
         captured: list = []
         patch_client(

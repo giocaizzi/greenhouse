@@ -26,9 +26,9 @@ class TestDeviceGateway:
             self.cloud = DeviceGateway(FAKE_CLIENT_ID, FAKE_CLIENT_SECRET, FAKE_REGION)
             yield
 
-    @patch("greenhouse_core.devices.gateway.tinytuya")
+    @patch("greenhouse_core.devices.gateway.tinytuya", new=MagicMock())
     @patch.dict("os.environ", {"TUYA_CLIENT_ID": "", "TUYA_CLIENT_SECRET": ""}, clear=False)
-    def test_init_requires_credentials(self, _mock_tinytuya):
+    def test_init_requires_credentials(self):
         """Gateway raises without credentials."""
         from greenhouse_core.devices.gateway import DeviceGateway
 

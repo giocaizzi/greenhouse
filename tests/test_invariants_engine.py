@@ -32,6 +32,7 @@ HOUR = 3600
 @pytest.fixture
 def env(tmp_db, frozen_clock, clean_env):
     """Provide the test database with the clock frozen and the environment cleared."""
+    del frozen_clock, clean_env  # side-effect fixtures (the clock is frozen; a hermetic environment)
     return tmp_db
 
 
@@ -207,7 +208,7 @@ def test_inv4_learning_failure_or_alerts_never_change_the_decision(env, monkeypa
     results = {}
     for mode in ("empty", "raises", "alerts"):
 
-        def fake_detect(self, cluster_id, _mode=mode):
+        def fake_detect(_self, _cluster_id, _mode=mode):
             if _mode == "raises":
                 raise RuntimeError("learner exploded")
             return [alert] if _mode == "alerts" else []
@@ -228,7 +229,7 @@ def test_inv4_learner_is_consulted_once_per_sensor_path_evaluation(env, monkeypa
     """Invariant #4: the engine calls the learner exactly once per (non-terminal) evaluation."""
     cid, _, _ = _cluster(env)
     calls = []
-    monkeypatch.setattr(IrrigationLearner, "detect_issues", lambda self, cluster_id: calls.append(cluster_id) or [])
+    monkeypatch.setattr(IrrigationLearner, "detect_issues", lambda _self, cluster_id: calls.append(cluster_id) or [])
 
     _logic(env).decide_for_cluster(cid)
 
@@ -238,7 +239,8 @@ def test_inv4_learner_is_consulted_once_per_sensor_path_evaluation(env, monkeypa
 # ── #5 Thresholds live in constants.py ───────────────────────────────────────
 
 
-def test_inv5_engine_constants_mirror_constants_module(env):
+@pytest.mark.usefixtures("env")
+def test_inv5_engine_constants_mirror_constants_module():
     """Invariant #5: every UPPER_CASE name the engine imports is the constants.py value."""
     imported = {n for n in vars(engine_mod) if n.isupper() and hasattr(constants_mod, n)}
 
@@ -399,6 +401,7 @@ def test_inv6_every_exit_branch_persists_exactly_one_decision_log(env, name, cod
 @pytest.mark.parametrize(("name", "code", "action"), EXIT_BRANCHES, ids=[b[0] for b in EXIT_BRANCHES])
 def test_inv6_persist_false_writes_nothing(env, name, code, action):
     """Invariant #6 scope: persistence is opt-in (``persist=True``); the default writes no row."""
+    del action  # parametrize column kept for the test id; unused here
     cid, logic, kwargs = _scenario(env, name)
 
     decision = logic.decide_for_cluster(cid, **kwargs)
@@ -418,7 +421,7 @@ def test_inv6_persistence_failure_never_blocks_the_decision(env, monkeypatch):
     """Invariant #6: ``_persist`` is best-effort — a failing write still returns the decision."""
     cid, _, _ = _cluster(env)
 
-    def boom(*args, **kwargs):
+    def boom(*_args, **_kwargs):
         raise RuntimeError("db down")
 
     monkeypatch.setattr(env, "add_decision_log", boom)
@@ -471,6 +474,7 @@ def test_inv9_seasonal_multiplier_precedence_species_category_constants(
     tmp_db, clean_env, species, category, environment, at_month, expected
 ):
     """Invariant #9: species > ``_category_defaults`` > constants; outdoor uses ``*_outdoor`` (no indoor fallback)."""
+    del clean_env  # side-effect fixture (a hermetic environment)
     at = datetime(2026, at_month, 15, 12, 0, 0, tzinfo=UTC)
     with time_machine.travel(at, tick=False):
         ts = int(at.timestamp())

@@ -45,6 +45,7 @@ REFRESH = 0.5
 @pytest.fixture
 def seeded(clean_env, frozen_clock):
     """(http, engine) for a seeded app — clock frozen before ``seed_greenhouse`` runs."""
+    del clean_env, frozen_clock  # side-effect fixtures (a hermetic environment; the clock is frozen)
     http, _, engine = make_seeded_app()
     yield http, engine
     engine.dispose()
@@ -244,6 +245,7 @@ def test_401_opens_one_sign_in_dialog_then_logs_in(clean_env, frozen_clock):
 
     Signing in posts the credentials verbatim, stores the token, toasts and reloads the dashboard.
     """
+    del frozen_clock  # side-effect fixture (the clock is frozen)
     application, engine = _make_stubbed_app(bypass_auth=False)
     lock = threading.Lock()
     log: list = []
@@ -290,7 +292,8 @@ def test_401_opens_one_sign_in_dialog_then_logs_in(clean_env, frozen_clock):
         engine.dispose()
 
 
-def test_401_dashboard_says_sign_in_needed(clean_env, frozen_clock):
+@pytest.mark.usefixtures("clean_env", "frozen_clock")
+def test_401_dashboard_says_sign_in_needed():
     """When the server answers 401 the dashboard behind the sign-in dialog says a login is needed.
 
     Not "Cannot reach the server": the server was reached.

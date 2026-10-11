@@ -105,6 +105,7 @@ def _add_sensor(db, cluster_id: int, name: str, device_id: str) -> int:
 @pytest.fixture
 def one_sensor(tmp_db, frozen_clock):
     """Provide a database with one cluster and one sensor, clock frozen."""
+    del frozen_clock  # side-effect fixture (the clock is frozen)
     cluster_id = tmp_db.add_cluster("Sync Cluster")
     sensor_id = _add_sensor(tmp_db, cluster_id, "Probe A", "dev_a")
     tmp_db.session.commit()
@@ -326,6 +327,7 @@ class TestLiveRead:
 
 def test_sync_all_clusters_scenario_golden(tmp_db, frozen_clock, caplog):
     """Cluster/sensor iteration order, per-sensor calls, stats, persisted rows and log lines."""
+    del frozen_clock  # side-effect fixture (the clock is frozen)
     db = tmp_db
     zeta = db.add_cluster("Zeta Balcony")
     alpha = db.add_cluster("Alpha Kitchen")
@@ -383,6 +385,7 @@ def test_sync_with_no_clusters_returns_zeroed_stats(tmp_db):
 
 def test_sync_default_hours_is_24_for_first_sync(tmp_db, frozen_clock):
     """A first sync without an explicit window pulls 24 hours."""
+    del frozen_clock  # side-effect fixture (the clock is frozen)
     cluster_id = tmp_db.add_cluster("C")
     _add_sensor(tmp_db, cluster_id, "P", "dev_p")
     tmp_db.session.commit()
@@ -393,6 +396,7 @@ def test_sync_default_hours_is_24_for_first_sync(tmp_db, frozen_clock):
 
 def test_sync_does_not_commit(tmp_db, frozen_clock):
     """Persistence is left to the caller's transaction: a rollback discards the sync."""
+    del frozen_clock  # side-effect fixture (the clock is frozen)
     cluster_id = tmp_db.add_cluster("C")
     sensor_id = _add_sensor(tmp_db, cluster_id, "P", "dev_p")
     tmp_db.session.commit()

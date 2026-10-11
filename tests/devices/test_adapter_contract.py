@@ -50,12 +50,13 @@ def _make_sensor(model_key: str) -> Sensor:
 
 
 @pytest.fixture
-def registry(fake_tuya_env, monkeypatch):
+def registry(fake_tuya_env):
     """Provide the default registry against a mocked Tuya Cloud — no real network.
 
     ``tinytuya.Cloud`` is patched to a MagicMock so every cloud call inside the one
     shared gateway becomes a no-op.
     """
+    del fake_tuya_env  # side-effect fixture (fake Tuya credentials in the environment)
     with patch("greenhouse_core.devices.tinytuya.Cloud") as cloud_class:
         cloud_class.return_value = MagicMock()
         gateway = DeviceGateway()
@@ -163,7 +164,7 @@ class TestRegistryFailureModes:
         with pytest.raises(UnknownDeviceModel):
             registry.get_irrigator(_make_irrigator("rainpoint.does-not-exist"))
 
-    def test_unknown_sensor_returns_none(self, registry: DeviceRegistry, caplog):
+    def test_unknown_sensor_returns_none(self, registry: DeviceRegistry):
         """An unknown sensor model resolves to None (the sensor is skipped)."""
         out = registry.get_sensor(_make_sensor("tuya.does-not-exist"))
         assert out is None

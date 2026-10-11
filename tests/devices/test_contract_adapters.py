@@ -170,6 +170,7 @@ class Harness:
 @pytest.fixture
 def harness(monkeypatch, frozen_clock) -> Harness:
     """Provide a recording harness with the clock frozen at ``FROZEN_TS``."""
+    del frozen_clock  # side-effect fixture (the clock is frozen)
     return Harness(monkeypatch)
 
 
@@ -376,6 +377,7 @@ class TestGatewayConstruction:
 
     def test_environment_fallback_and_default_region(self, monkeypatch, clean_env):
         """Without arguments, credentials come from the TUYA_ env vars and the region defaults to eu."""
+        del clean_env  # side-effect fixture (a hermetic environment)
         built = []
         monkeypatch.setattr("greenhouse_core.devices.tinytuya.Cloud", lambda **kw: built.append(kw))
         monkeypatch.setenv("TUYA_CLIENT_ID", "env-id")
@@ -385,14 +387,15 @@ class TestGatewayConstruction:
 
     def test_injected_raw_client_skips_construction(self, monkeypatch):
         """An injected raw client is used as is, never building a real one."""
-        monkeypatch.setattr("greenhouse_core.devices.tinytuya.Cloud", lambda **kw: pytest.fail("must not build"))
+        monkeypatch.setattr("greenhouse_core.devices.tinytuya.Cloud", lambda **_kw: pytest.fail("must not build"))
         raw = object()
         assert DeviceGateway("cid", "secret", raw=raw)._cloud is raw
 
     @pytest.mark.parametrize(("cid", "secret"), [("", "s"), ("c", ""), (None, None)])
     def test_missing_credentials_fail_before_any_client(self, monkeypatch, clean_env, cid, secret):
         """Missing credentials fail with an exact message before any client is built."""
-        monkeypatch.setattr("greenhouse_core.devices.tinytuya.Cloud", lambda **kw: pytest.fail("must not build"))
+        del clean_env  # side-effect fixture (a hermetic environment)
+        monkeypatch.setattr("greenhouse_core.devices.tinytuya.Cloud", lambda **_kw: pytest.fail("must not build"))
         with pytest.raises(ValueError) as excinfo:
             DeviceGateway(cid, secret)
         assert str(excinfo.value) == "Missing TUYA_CLIENT_ID or TUYA_CLIENT_SECRET"
@@ -818,7 +821,7 @@ class TestLocalKeyResolution:
     def test_persistence_hook_failure_is_logged_not_raised(self, harness, caplog):
         """A failing persistence hook is logged, and the key is still cached and returned."""
 
-        def _boom(device_id, key):
+        def _boom(_device_id, _key):
             raise RuntimeError("db locked")
 
         gateway = DeviceGateway(FAKE_CLIENT_ID, FAKE_CLIENT_SECRET, raw=harness.cloud, on_key_discovered=_boom)
@@ -908,7 +911,7 @@ def _scenarios():
             lambda h: ik(h)._set_duration_local(_irrigator(), 60),
         ),
         "ik10pw.set_duration_local.no_ip": (
-            lambda h: None,
+            lambda _h: None,
             lambda h: ik(h)._set_duration_local(_irrigator({}), 60),
         ),
         "ik10pw.set_duration_local.ok_payload": (
@@ -951,7 +954,7 @@ def _scenarios():
             lambda h: _state_dict(ik(h).read_health(_irrigator())),
         ),
         "ik10pw.read_health.no_ip_is_offline": (
-            lambda h: None,
+            lambda _h: None,
             lambda h: _state_dict(ik(h).read_health(_irrigator({}))),
         ),
         "generic_cloud.start_ignores_minutes": (
@@ -968,7 +971,7 @@ def _scenarios():
             lambda h: generic_local_no_cap(h).status(_irrigator()),
         ),
         "generic_cloud.read_health_clean": (
-            lambda h: None,
+            lambda _h: None,
             lambda h: _state_dict(generic_cloud(h).read_health(_irrigator())),
         ),
     }
@@ -987,6 +990,7 @@ def test_local_status_failure_is_logged_before_cloud_fallback(harness, caplog):
 
 def test_adapter_call_sequences_golden(monkeypatch, frozen_clock):
     """Every non-keep-alive adapter path: return value and the exact local/Cloud call log."""
+    del frozen_clock  # side-effect fixture (the clock is frozen)
     out = {}
     for name, (setup, action) in _scenarios().items():
         h = Harness(monkeypatch)
@@ -1015,7 +1019,7 @@ class TestAdapterInvariants:
         seen = []
         real = harness.gateway.open_local
         monkeypatch.setattr(
-            harness.gateway, "open_local", lambda irr, proto, **kw: seen.append(proto) or real(irr, proto)
+            harness.gateway, "open_local", lambda irr, proto, **_kw: seen.append(proto) or real(irr, proto)
         )
         harness.cloud.set("sendcommand", {"success": True})
         adapter = IK10PWAdapter(harness.gateway)

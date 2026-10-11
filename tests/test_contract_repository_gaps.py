@@ -109,6 +109,7 @@ def test_parse_config_decodes_the_stored_orm_json_string(tmp_db):
 )
 def test_delete_unknown_id_returns_false_and_touches_nothing(tmp_db, frozen_clock, method, model):
     """Deleting an unknown id returns False and leaves the table untouched."""
+    del frozen_clock  # side-effect fixture (the clock is frozen)
     _seed(tmp_db)
     tmp_db.add_vacation_window(FROZEN_TS, FROZEN_TS + 3600)
     before = _count(tmp_db, model)
@@ -138,6 +139,7 @@ def test_delete_known_id_returns_true_and_removes_the_row(tmp_db, method, key, m
 
 def test_update_vacation_window_ignores_unknown_keys_and_none_clears_notes(tmp_db, frozen_clock):
     """Vacation updates ignore unknown keys, and None clears the notes."""
+    del frozen_clock  # side-effect fixture (the clock is frozen)
     window = tmp_db.add_vacation_window(FROZEN_TS, FROZEN_TS + 3600, contact_email="a@example.com", notes="keep")
     updated = tmp_db.update_vacation_window(window.id, bogus_field="x", notes=None, ends_at=FROZEN_TS + 7200)
     assert updated is window
@@ -258,6 +260,7 @@ def test_update_plant_ignores_unknown_keys_and_none_clears_a_nullable_field(tmp_
 
 def test_get_vacation_window_found_and_not_found(tmp_db, frozen_clock):
     """A vacation window is returned by id, or None when unknown."""
+    del frozen_clock  # side-effect fixture (the clock is frozen)
     window = tmp_db.add_vacation_window(FROZEN_TS, FROZEN_TS + 3600, notes="trip")
     assert tmp_db.get_vacation_window(window.id) is window
     assert tmp_db.get_vacation_window(UNKNOWN_ID) is None

@@ -445,7 +445,7 @@ class TestIssueHeuristics:
     def test_light_accelerated_drainage_alert(self, monkeypatch):
         """Rapid drainage under bright daytime light fires light_accelerated_drainage."""
         # Pin the seasonal factor so the 800-lux bright threshold is deterministic.
-        monkeypatch.setattr("greenhouse_core.learning.issues.seasonal_light_factor", lambda *a, **k: 1.0)
+        monkeypatch.setattr("greenhouse_core.learning.issues.seasonal_light_factor", lambda *_a, **_k: 1.0)
 
         now = int(time.time())
         self._build_profile(self.sensor_id, self.irrigator_id, now - 7 * 86400)
@@ -469,7 +469,7 @@ class TestIssueHeuristics:
 
     def test_rapid_drainage_without_bright_light(self, monkeypatch):
         """Rapid drainage in dim light fires plain rapid_drainage, not the light variant."""
-        monkeypatch.setattr("greenhouse_core.learning.issues.seasonal_light_factor", lambda *a, **k: 1.0)
+        monkeypatch.setattr("greenhouse_core.learning.issues.seasonal_light_factor", lambda *_a, **_k: 1.0)
 
         now = int(time.time())
         self._build_profile(self.sensor_id, self.irrigator_id, now - 7 * 86400)
@@ -636,7 +636,7 @@ class TestIssueHeuristics:
         """Sustained daytime light below half the seasonal minimum fires low_light."""
         # Pin threshold: effective(150) = 150, fires below 75 lux.
         monkeypatch.setattr(
-            "greenhouse_core.learning.issues.effective_light_threshold", lambda base, *a, **k: float(base)
+            "greenhouse_core.learning.issues.effective_light_threshold", lambda base, *_a, **_k: float(base)
         )
         now = int(time.time())
         _plant2, sensor2 = self._add_second_sensor()  # need >=2 profiles to reach detect_conflicts
@@ -671,7 +671,7 @@ class TestIssueHeuristics:
     def test_no_low_light_when_bright_enough(self, monkeypatch):
         """Adequate daytime light does not fire low_light."""
         monkeypatch.setattr(
-            "greenhouse_core.learning.issues.effective_light_threshold", lambda base, *a, **k: float(base)
+            "greenhouse_core.learning.issues.effective_light_threshold", lambda base, *_a, **_k: float(base)
         )
         now = int(time.time())
         _plant2, sensor2 = self._add_second_sensor()

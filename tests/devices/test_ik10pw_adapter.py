@@ -49,6 +49,7 @@ def _make_sensor():
 @pytest.fixture
 def fake_cloud(fake_tuya_env):
     """Patch ``tinytuya.Cloud`` so the gateway never hits a real network."""
+    del fake_tuya_env  # side-effect fixture (fake Tuya credentials in the environment)
     with patch("greenhouse_core.devices.tinytuya.Cloud") as cloud_class:
         cloud = MagicMock()
         cloud_class.return_value = cloud
@@ -58,6 +59,7 @@ def fake_cloud(fake_tuya_env):
 @pytest.fixture
 def gateway(fake_cloud):
     """Provide a gateway built from the fake Tuya environment and the patched Cloud."""
+    del fake_cloud  # side-effect fixture (tinytuya.Cloud is patched)
     return DeviceGateway()
 
 

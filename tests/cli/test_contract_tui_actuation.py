@@ -37,6 +37,7 @@ REFRESH = 0.5
 @pytest.fixture
 def seeded(clean_env, frozen_clock):
     """(http, engine) for a seeded app — clock frozen before ``seed_greenhouse`` runs."""
+    del clean_env, frozen_clock  # side-effect fixtures (a hermetic environment; the clock is frozen)
     http, _, engine = make_seeded_app()
     yield http, engine
     engine.dispose()

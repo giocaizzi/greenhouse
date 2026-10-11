@@ -43,6 +43,7 @@ NOW = int(FROZEN_INSTANT.timestamp())
 @pytest.fixture
 def seeded(clean_env, frozen_clock):
     """(http, engine) for a seeded app — clock frozen before ``seed_greenhouse`` runs."""
+    del clean_env, frozen_clock  # side-effect fixtures (a hermetic environment; the clock is frozen)
     http, _, engine = make_seeded_app()
     yield http, engine
     engine.dispose()
@@ -199,7 +200,7 @@ def test_forecast_panel_variants(seeded):
     captured: dict[str, Any] = {}
 
     async def scenario():
-        tui = make_tui(http, factory=_overriding_factory(http, {"forecast": lambda real, cid: variant["f"]}))
+        tui = make_tui(http, factory=_overriding_factory(http, {"forecast": lambda _real, _cid: variant["f"]}))
         async with tui.run_test(size=SIZE) as pilot:
             variant["f"] = FORECAST_VARIANTS["empty"]
             screen = await _open_cluster(pilot, tui, 1)
@@ -245,7 +246,7 @@ def test_sensor_rows_water_warning(seeded):
 def test_insights_panel_nothing_to_flag(seeded):
     """``#insights-panel`` with no insights and nobody needing water."""
     http, _ = seeded
-    overrides = {"insights": lambda real, cid: {"insights": []}, "monitor": lambda real, cid: {"needs_water": []}}
+    overrides = {"insights": lambda _real, _cid: {"insights": []}, "monitor": lambda _real, _cid: {"needs_water": []}}
     captured: dict[str, Any] = {}
 
     async def scenario():
@@ -325,7 +326,7 @@ def test_vacation_rows_states(seeded):
     captured: dict[str, Any] = {}
 
     async def scenario():
-        factory = _overriding_factory(http, {"list_vacation": lambda real: copy.deepcopy(vacation)})
+        factory = _overriding_factory(http, {"list_vacation": lambda _real: copy.deepcopy(vacation)})
         tui = make_tui(http, factory=factory)
         async with tui.run_test(size=SIZE) as pilot:
             await settle(pilot, tui)
@@ -369,7 +370,8 @@ class _ChartApp(App):
         yield MetricChart(id="chart")
 
 
-def test_metric_chart_skips_empty_series_and_non_start_events(clean_env, frozen_clock):
+@pytest.mark.usefixtures("clean_env", "frozen_clock")
+def test_metric_chart_skips_empty_series_and_non_start_events():
     """``show_payload`` with an empty dataset next to a real one; ``show_overlay`` with a ``stop`` event."""
     payload = {
         "datasets": [

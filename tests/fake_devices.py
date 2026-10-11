@@ -104,6 +104,7 @@ class FakeSensorAdapter(AbstractSensorAdapter):
 
     def read_health(self, sensor: Sensor, latest=None) -> DeviceHealthState:
         """Record the health read and return the scripted state."""
+        del latest  # signature mirrors the real one; unused by this fake
         self.calls.append(("read_health", sensor.id))
         return self.health_state
 

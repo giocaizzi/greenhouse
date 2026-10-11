@@ -72,11 +72,12 @@ def _reloads_in_half_a_second(auto_refresh: bool) -> int:
     return len(reloads)
 
 
+@pytest.mark.usefixtures("clean_env")
 @pytest.mark.parametrize(
     ("username", "password", "dismissed"),
     [("admin", "", []), ("", "secret", []), ("  admin ", "s3cret ", [("admin", "s3cret ")])],
 )
-def test_login_dialog_needs_both_fields(clean_env, username, password, dismissed):
+def test_login_dialog_needs_both_fields(username, password, dismissed):
     """tui-23: the sign-in dialog dismisses only with a non-blank username AND a password.
 
     The username is stripped, the password is passed verbatim.
@@ -101,24 +102,26 @@ def test_login_dialog_needs_both_fields(clean_env, username, password, dismissed
     assert results == dismissed
 
 
+@pytest.mark.usefixtures("clean_env")
 @pytest.mark.parametrize(("quiet", "toasts"), [(False, [("boom", "Server error 500", "error")]), (True, [])])
-def test_api_error_toast_respects_quiet(clean_env, quiet, toasts):
+def test_api_error_toast_respects_quiet(quiet, toasts):
     """tui-32: a non-401 ``ServerError`` becomes an error toast unless the caller passed ``quiet=True``.
 
     Either way ``api`` returns ``None``.
     """
-    app = GreenhouseApp("http://test.invalid", client_factory=lambda token: object(), animations=False)
+    app = GreenhouseApp("http://test.invalid", client_factory=lambda _token: object(), animations=False)
     seen: list[tuple] = []
-    app.notify = lambda message, *, title="", severity="information", **kw: seen.append((message, title, severity))
+    app.notify = lambda message, *, title="", severity="information", **_kw: seen.append((message, title, severity))
 
-    def failing(client):
+    def failing(_client):
         raise ServerError(500, "boom")
 
     assert asyncio.run(app.api(failing, quiet=quiet)) is None
     assert seen == toasts
 
 
-def test_only_auto_refresh_screens_reload_on_a_timer(clean_env):
+@pytest.mark.usefixtures("clean_env")
+def test_only_auto_refresh_screens_reload_on_a_timer():
     """tui-17: ``DataScreen.on_mount`` loads once, and installs the periodic reload only when ``AUTO_REFRESH``.
 
     Settings and the other non-auto screens never poll.
