@@ -82,7 +82,8 @@
    "handlers": [
     "_on_login",
     "action_refresh",
-    "action_search"
+    "action_search",
+    "on_unmount"
    ]
   },
   "greenhouse_cli.tui.screens.activity:ActivityScreen": {

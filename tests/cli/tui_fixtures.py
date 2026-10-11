@@ -168,6 +168,23 @@ def seed_greenhouse(http: TestClient, engine) -> None:
         session.commit()
 
 
+class _SharedHttp:
+    """The fixture's one ``TestClient``, shared by every client (and every app) a test builds.
+
+    The TUI closes its clients' ``http`` when it exits; closing the shared test
+    transport would break the next app a test starts on it, so ``close`` is a no-op.
+    """
+
+    def __init__(self, http: TestClient) -> None:
+        self._http = http
+
+    def __getattr__(self, name: str):
+        return getattr(self._http, name)
+
+    def close(self) -> None:
+        """Leave the shared transport open (the fixture owns it)."""
+
+
 def tui_client_factory(http: TestClient, log: list | None = None):
     """Build ``IrrigationClient`` instances whose transport is the in-process app.
 
@@ -185,7 +202,8 @@ def tui_client_factory(http: TestClient, log: list | None = None):
 
     def factory(token: str | None) -> IrrigationClient:
         client = IrrigationClient(base_url="http://testserver", token=token or "")
-        client.http = http
+        client.http.close()  # replaced by the shared in-process transport
+        client.http = _SharedHttp(http)
         original = client._send  # every request (JSON and the CSV export) goes through _send
 
         def serialized(method, path, **kwargs):

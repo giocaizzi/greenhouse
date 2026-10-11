@@ -1409,6 +1409,32 @@ class TestResilience:
 
         _run(scenario())
 
+    def test_app_closes_its_http_clients_on_exit(self):
+        """The TUI's shared client — and the one replaced by a sign-in — are closed when the app exits."""
+        made: list[IrrigationClient] = []
+
+        def handler(request):
+            if request.url.path == "/api/v1/auth/login":
+                return httpx.Response(200, json={"access_token": "", "username": "admin"})
+            return httpx.Response(200, json=[] if request.url.path == "/api/v1/clusters" else {})
+
+        def factory(token):
+            client = IrrigationClient(base_url="http://mock", token="", transport=httpx.MockTransport(handler))
+            made.append(client)
+            return client
+
+        async def scenario():
+            tui = GreenhouseApp("http://mock", client_factory=factory, refresh_seconds=0)
+            async with tui.run_test(size=SIZE) as pilot:
+                await _settle(pilot, tui)
+                await tui._login("admin", "pw")
+                await _settle(pilot, tui)
+                assert not any(c.http.is_closed for c in (made[0], tui.client))
+
+        _run(scenario())
+        assert len(made) == 3  # session client, anonymous login client, signed-in client
+        assert all(c.http.is_closed for c in made)
+
     def test_r_reloads_active_screen(self):
         hits = []
 
