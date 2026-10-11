@@ -974,21 +974,30 @@ def test_forced_run_is_recorded_manual_and_keeps_leak_check_and_watcher(pipeline
     assert [a["code"] for a in rows["activity_events"]] == ["irrigated", "leak_check_armed"]
 
 
-def test_manual_start_schedules_watcher_but_no_leak_check(pipeline):
-    """Manual starts get a dry-run watcher (when a duration is given) but never a leak check."""
+def test_manual_start_schedules_watcher_and_leak_check(pipeline):
+    """Every manual start is a real watering: it gets the 30-min leak check (owner decision).
+
+    The dry-run watcher still needs a duration (a deadline); the hand-watering log arms nothing.
+    """
     from greenhouse_server.scheduler import scheduler as bg_scheduler
     from greenhouse_server.scheduler import start_scheduler, stop_scheduler
 
     ids = pipeline.seed_cluster(soil=35.0)
     pipeline.app.state.device_registry = pipeline.wiring.registry
+    pipeline.mark()
     start_scheduler(paused=True)
     try:
         pipeline.call("POST", f"/api/v1/irrigators/{ids['irrigator_id']}/start", {"minutes": 3})
-        pipeline.call("POST", f"/api/v1/irrigators/{ids['irrigator_id']}/start", {})
+        with time_machine.travel(FROZEN_INSTANT + timedelta(minutes=1), tick=False):
+            pipeline.call("POST", f"/api/v1/irrigators/{ids['irrigator_id']}/start", {})
+            pipeline.call("POST", f"/api/v1/irrigators/{ids['irrigator_id']}/log-manual", {"minutes": 2})
         adhoc = sorted(j.id for j in bg_scheduler.get_jobs() if j.id.startswith(("leak-check-", "pump-watcher-")))
     finally:
         stop_scheduler()
-    assert adhoc == [f"pump-watcher-1-{FROZEN_TS}"]
+    later = FROZEN_TS + 60
+    assert adhoc == [f"leak-check-1-{FROZEN_TS}", f"leak-check-1-{later}", f"pump-watcher-1-{FROZEN_TS}"]
+    markers = [a for a in pipeline.db_rows()["activity_events"] if a["code"] == "leak_check_armed"]
+    assert [m["payload_json"]["started_at"] for m in markers] == [FROZEN_TS, later]
 
 
 # ── Observed bugs (pinned, NOT fixed) ──────────────────────────────────────

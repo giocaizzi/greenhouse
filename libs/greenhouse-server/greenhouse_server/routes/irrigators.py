@@ -190,8 +190,10 @@ def start_irrigator(
 ) -> IrrigatorActionResponse:
     """Manually start an irrigator through its device adapter.
 
-    Side effects: actuates physical hardware and records a `start` irrigation
-    event with `triggered_by="manual"`. Bypasses the smart-decision engine.
+    Side effects: actuates physical hardware, records a `start` irrigation
+    event with `triggered_by="manual"` and arms the 30-min post-watering
+    leak / stuck-valve check (as every real watering does). Bypasses the
+    smart-decision engine, including an open leak hold.
 
     Args:
         irrigator_id: Irrigator to actuate.

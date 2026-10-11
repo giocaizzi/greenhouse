@@ -3,8 +3,8 @@
 Both front doors (``POST /api/v1/irrigators/{id}/start|stop|log-manual`` and
 the web ``/irrigators/{id}/start|stop|log-manual`` actions) call these
 functions, so a manual action always gets the same rails no matter where it
-came from: per-day caps, the global dry-run refusal, the dry-run pump watcher,
-the event row, and the notification. Stops are never refused. A manual log
+came from: per-day caps, the global dry-run refusal, the post-watering leak
+check, the dry-run pump watcher, the event row, and the notification. Stops are never refused. A manual log
 (no hardware) is recorded as a ``start`` row so cooldown, caps and learning
 count it like any other run.
 
@@ -27,6 +27,7 @@ from greenhouse_core.models import (
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.services.caps import daily_cap_violation
 from greenhouse_server.services.irrigation import schedule_pump_watcher
+from greenhouse_server.services.irrigation_jobs import _schedule_leak_check, record_leak_check_armed
 from greenhouse_server.services.notify import NtfyClient, maybe_notify
 
 if TYPE_CHECKING:
@@ -122,7 +123,8 @@ def manual_start(
     """Start ``irrigator`` by hand, with every manual-start safety rail.
 
     Order: registry → caps check → adapter → global dry-run refusal → device start → ``start`` event
-    (committed) → dry-run watcher (only with a duration — it needs a deadline) → notification. A
+    and ``leak_check_armed`` marker (committed) → 30-min leak check → dry-run watcher (only with a
+    duration — it needs a deadline) → notification. A
     failed device start records nothing, matching the JSON API. Commits because
     the ``start`` event must be durable before the side effects that follow it
     (the watcher job, which runs in its own session, and the notification).
@@ -160,7 +162,13 @@ def manual_start(
         notes=f"Manual start via {via} ({minutes} min)" if minutes else f"Manual start via {via}",
         timestamp=started_at,
     )
+    # A real watering, so it gets the post-watering leak check like any start; the marker
+    # (committed with the event) is what the restart re-arm finds — a hand log has none.
+    record_leak_check_armed(
+        repo, irrigator.cluster_id, started_at, irrigator_id=irrigator.id, triggered_by=TRIGGERED_BY_MANUAL
+    )
     repo.commit()
+    _schedule_leak_check(irrigator.cluster_id, started_at)
     if minutes:
         schedule_pump_watcher(irrigator.id, minutes, started_at, triggered_by=TRIGGERED_BY_MANUAL)
     maybe_notify(

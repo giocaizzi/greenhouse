@@ -1,7 +1,8 @@
 """Post-irrigation leak-check job plumbing: schedule, run once, and re-arm after a restart.
 
-Background-job code, kept apart from the pipeline in :mod:`.irrigation` (which arms a check
-after every auto start and re-exports these names). The scheduler is imported lazily, inside
+Background-job code, kept apart from the pipeline in :mod:`.irrigation` (which re-exports these
+names). Every real watering arms a check — automatic, forced and manual starts; a logged
+hand-watering (no pump) does not. The scheduler is imported lazily, inside
 each function, because it sits above the services layer and reads the app at call time.
 Records go to the ``greenhouse_server.services.irrigation`` logger, the pipeline's, so log
 routing and filters keyed on it keep matching.
@@ -24,7 +25,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger("greenhouse_server.services.irrigation")
 
 LEAK_CHECK_ACTIVITY_CODE = "leak_check"
-# Written when a non-automatic start (a forced ``/irrigate``) arms a leak check. An automatic
+# Written when a non-automatic start (a forced ``/irrigate``, a manual start) arms a leak check. An automatic
 # start needs no marker — its ``start``/``auto`` event already proves a check was armed — but a
 # ``start``/``manual`` event may also be a logged hand-watering (no pump, no check), so those
 # starts leave this explicit record for :func:`rearm_leak_checks`.

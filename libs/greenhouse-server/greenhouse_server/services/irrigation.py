@@ -606,7 +606,9 @@ class IrrigationService:
         exactly like an automatic one, so a stuck valve after it must raise the hold.
         """
         _schedule_leak_check(act.cluster_id, started_at)
-        schedule_pump_watcher(act.irrigator.id, act.decision.duration_minutes, started_at, triggered_by=act.triggered_by)
+        schedule_pump_watcher(
+            act.irrigator.id, act.decision.duration_minutes, started_at, triggered_by=act.triggered_by
+        )
 
     def _notify_auto_irrigation(self, act: _Actuation) -> None:
         """Push the irrigation notice under the run's own trigger (``auto``, or ``manual`` when forced).
@@ -826,7 +828,9 @@ class IrrigationService:
 
         if not self._actuation_gates_skip(cluster_id, irrigator, decision, result):
             trigger = TRIGGERED_BY_MANUAL if force else TRIGGERED_BY_AUTO
-            self._actuate(_Actuation(cluster_id, irrigator, adapter, decision, temp, source, sensor_data, trigger), result)
+            self._actuate(
+                _Actuation(cluster_id, irrigator, adapter, decision, temp, source, sensor_data, trigger), result
+            )
         return result
 
     def monitor_cluster(self, cluster_id: int) -> MonitorResult:
