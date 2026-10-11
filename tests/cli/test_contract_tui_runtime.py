@@ -200,10 +200,10 @@ def test_plants_cursor_stays_on_record_across_refresh(seeded):
     _run(scenario())
 
 
-def test_activity_cursor_current_behavior_resets_to_top_on_refresh(seeded):
-    """Pins current behavior: ActivityScreen.load clears and re-adds rows (no ``refill``), so an auto-refresh
-    moves the cursor back to row 0 — the newest event — instead of keeping the selected record. Harmless today
-    (activity rows have no row actions) but it is NOT the cursor-stability contract the other tables follow.
+def test_activity_cursor_stays_on_the_selected_event_across_refresh(seeded):
+    """ActivityScreen.load repopulates through ``refill`` (rows keyed by event id), so an auto-refresh keeps the
+    cursor on the selected event — the cursor-stability contract the other tables follow — even when a newer
+    event is inserted above it.
     """
     http, engine = seeded
 
@@ -216,14 +216,16 @@ def test_activity_cursor_current_behavior_resets_to_top_on_refresh(seeded):
             table = screen.query_one("#activity-table", DataTable)
             await wait_until(lambda: table.row_count == 3, "the first activity load (3 events)")
             table.move_cursor(row=2)
+            selected = table.get_row_at(2)
             with _app_locks[id(http)], Session(engine) as session:
                 IrrigationRepository(session).add_activity_event(
                     "sync", "system", "sync_completed", "fresh event", severity="info", timestamp=FROZEN_TS
                 )
                 session.commit()
             await wait_until(lambda: table.row_count == 4, "an auto-refresh showing the inserted event")
-            assert table.cursor_row == 0
             assert table.get_row_at(0)[-1] == "fresh event"
+            assert table.cursor_row == 3
+            assert table.get_row_at(3) == selected
 
     _run(scenario())
 
