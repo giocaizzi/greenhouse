@@ -136,7 +136,7 @@ class DeviceHealthMonitor:
         """Reconcile a sensor's health from its latest persisted reading.
 
         The sync job is the sole Cloud writer of sensor readings; the adapter
-        derives battery / water-warning / recency from the row we pass in, so
+        derives battery / recency from the row we pass in, so
         this poll issues no Cloud call.
         """
         adapter = self._registry.get_sensor(sensor)
@@ -223,9 +223,11 @@ class DeviceHealthMonitor:
     # ── Backfill from SensorReading history (startup hook) ────────────────
 
     def backfill_from_history(self, *, window: int = SENSOR_HEALTH_BACKFILL_WINDOW) -> None:
-        """Raise low-battery / sensor-fault alerts derived from recent readings.
+        """Raise low-battery alerts derived from recent readings.
 
-        Only persistent signals are back-filled — transient ones (offline,
+        ``water_warning`` is not back-filled: it is the device's soil-dry alert
+        (an engine irrigation trigger), not a sensor fault. Only persistent
+        signals are back-filled — transient ones (offline,
         signal-loss) must come from a live read. Prevents the server
         forgetting a known-bad battery state across a restart.
         """
@@ -240,9 +242,6 @@ class DeviceHealthMonitor:
 
             if all(_is_low_battery_state(r.battery_state) for r in recent):
                 self._raise_if_not_open(HealthAlarm.LOW_BATTERY, sensor, cluster_id=cluster_id)
-
-            if all(r.water_warning is True for r in recent):
-                self._raise_if_not_open(HealthAlarm.SENSOR_FAULT, sensor, cluster_id=cluster_id)
 
     def _raise_if_not_open(self, alarm: HealthAlarm, sensor: Sensor, *, cluster_id: int | None) -> None:
         """Raise a back-filled sensor alarm unless its alert is already open (no duplicate on restart)."""

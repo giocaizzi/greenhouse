@@ -876,8 +876,7 @@
   "TR301ZAdapter": [
    "battery_critical",
    "device_offline",
-   "low_battery",
-   "sensor_fault"
+   "low_battery"
   ],
   "TuyaIrrigatorAdapter": [],
   "TuyaSensorAdapter": []

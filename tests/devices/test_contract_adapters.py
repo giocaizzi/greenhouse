@@ -965,7 +965,7 @@ class TestAdapterInvariants:
         (_reading(battery_state="HIGH"), {"offline": False, "battery_pct": 90, "alarms": []}),
         (_reading(battery_state="full"), {"offline": False, "battery_pct": None, "alarms": []}),
         (_reading(battery_state=None), {"offline": False, "battery_pct": None, "alarms": []}),
-        (_reading(water_warning=True), {"alarms": ["sensor_fault"]}),
+        (_reading(water_warning=True), {"alarms": []}),  # B-10: soil-dry alert, not a health alarm
         (_reading(water_warning=False), {"alarms": []}),
         (_reading(water_warning=None), {"alarms": []}),
         (_reading(timestamp=123), {"last_seen_ts": 123}),
