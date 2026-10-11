@@ -20,7 +20,7 @@
 │    ▄▀▀▀▀▀▄                     ││ Decision engine                        ││ Forecast                                 │
 │   ▀▀▀▀▀▀▀▀▀   ▄▀               ││ skip  2 min · every 16h  confidence    ││ next water     in 1d3h (13:18)           │
 │ ▀▀▀▀▀▀▀▀▀▀▀▀▀▀                 ││ 80%                                    ││ projected min  74.6%                     │
-│   ▀▀▀▀▀▀▀▀▀                    ││ drop-half soil too wet (wettest=87% >  ││ method         fallback_constant (20%)   │
+│   ▀▀▀▀▀▀▀▀▀                    ││ drop-half soil too wet (wettest=75% >  ││ method         fallback_constant (20%)   │
 │                                ││ 40.0%) [sensor_wet]                    ││                Echeveria elegans will    │
 │ No irrigator                   ││ cloud-rain high ambient humidity (57%) ││                hit its 20% min in ~27.3h │
 │ sensor-only cluster            ││ [humidity_high]                        ││                based on -2.0%/h          │

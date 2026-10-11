@@ -17,6 +17,7 @@ Golden: ``tests/golden/orchestration/raw_vs_clean.json``.
 
 from __future__ import annotations
 
+import re
 from datetime import timedelta
 
 import pytest
@@ -91,15 +92,18 @@ def test_raw_views_keep_the_spike_and_cleaned_views_ignore_it(spiky):
 
     # Cleaned (judgement) side.
     snapshot_min = 44.0
-    # 44 % is just below the Monstera band → "moderately dry", not the "very dry" a 5 % reading would give.
+    # The soil rule judges each sensor's newest *cleaned* reading: the 5 % spike is filtered, so the
+    # current reading is 45 % — inside the Monstera band → "adequate", not the "very dry" a 5 % reading
+    # would give. (The 24 h snapshot minimum, 44 %, stays in the audit snapshot.)
     assert (status["decision"]["action"], status["decision"]["reason"]) == (
-        "irrigate",
-        "soil moderately dry (driest=44%)",
+        "skip",
+        "soil moisture adequate (range=45-45%)",
     )
-    assert [r["code"] for r in status["decision"]["reasons"]] == ["sensor_dry"]
-    assert (dry_run["action"], dry_run["duration_minutes"]) == ("irrigate", 2)
+    assert [r["code"] for r in status["decision"]["reasons"]] == ["sensor_adequate"]
+    assert (dry_run["action"], dry_run["duration_minutes"]) == ("skip", 2)
     assert dry_run["reasons"][0]["message"] == status["decision"]["reasons"][0]["message"]
-    assert all(str(int(SPIKE)) + "%" not in r["message"] for r in dry_run["reasons"])
+    # No reason quotes the spike value (a bare "5%", not the "5%" inside "45%").
+    assert all(re.search(rf"(?<!\d){int(SPIKE)}%", r["message"]) is None for r in dry_run["reasons"])
     decision_log = p.db_rows()["decision_logs"][0]["payload_json"]
     assert decision_log["sensor_snapshot"]["min_soil_moisture"] == snapshot_min
     monitor_soil = {s["sensor_id"]: (s["soil_moisture"], s["status"]) for s in monitor["sensors"]}

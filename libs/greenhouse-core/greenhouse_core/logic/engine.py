@@ -7,6 +7,7 @@ testable and contributes structured ``Reason`` entries to the trail.
 
 import logging
 import math
+import statistics
 import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
@@ -823,17 +824,25 @@ def _apply_critical_stress_rule(decision: IrrigationDecision) -> bool:
 
 
 def _apply_soil_moisture_rule(decision: IrrigationDecision, plant_care: list[dict[str, Any]]) -> None:
-    """Min-soil-moisture rule with conflict detection (driest plant drives it)."""
+    """Soil rule with conflict detection: the driest plant *now* drives it (invariant #2).
+
+    It judges each sensor's newest cleaned reading — the cluster's current
+    state — not the 24 h pool: a plant that was dry yesterday and has been
+    watered since is no longer "very dry", and an old dry reading does not make
+    a now-wet cluster look like a dry/wet conflict. The 24 h aggregates stay in
+    the snapshot for the audit log; trends keep their own 48 h window.
+    """
     snapshot = decision.sensor_snapshot
-    if snapshot is None or snapshot.avg_soil_moisture is None:
+    if snapshot is None or not snapshot.latest_soil_moisture:
         return
 
+    current = snapshot.latest_soil_moisture
     band = _cluster_target_band(plant_care)
-    soil = _soil_extremes(snapshot, snapshot.avg_soil_moisture)
+    soil = (min(current), max(current))
     if _is_conflict(soil, band):
         _apply_conflict(decision, snapshot, soil, band)
         return
-    _apply_soil_level(decision, snapshot.avg_soil_moisture, soil, band)
+    _apply_soil_level(decision, statistics.mean(current), soil, band)
 
 
 def _cluster_target_band(plant_care: list[dict[str, Any]]) -> tuple[float, float]:
@@ -842,21 +851,14 @@ def _cluster_target_band(plant_care: list[dict[str, Any]]) -> tuple[float, float
     return min(r[0] for r in target_ranges), max(r[1] for r in target_ranges)
 
 
-def _soil_extremes(snapshot: SensorSnapshot, avg_soil: float) -> tuple[float, float]:
-    """(driest, wettest) soil reading; each falls back to the average when a sensor bound is missing."""
-    min_soil = snapshot.min_soil_moisture if snapshot.min_soil_moisture is not None else avg_soil
-    max_soil = snapshot.max_soil_moisture if snapshot.max_soil_moisture is not None else avg_soil
-    return min_soil, max_soil
-
-
 def _is_conflict(soil: tuple[float, float], band: tuple[float, float]) -> bool:
     """One plant below its band while another sits near or above the top of it."""
     return (soil[0] < band[0]) and (soil[1] > band[1] - CONFLICT_WET_MARGIN)
 
 
 def _sensor_names(snapshot: SensorSnapshot, keep: Callable[[float], bool]) -> list[str]:
-    """Names of the sensors with a soil average that passes ``keep``, in per-sensor order."""
-    return [s.name for s in snapshot.per_sensor if s.avg_soil_moisture is not None and keep(s.avg_soil_moisture)]
+    """Names of the sensors whose current soil reading passes ``keep``, in per-sensor order."""
+    return [s.name for s in snapshot.per_sensor if s.latest_soil_moisture is not None and keep(s.latest_soil_moisture)]
 
 
 def _apply_conflict(
@@ -885,7 +887,7 @@ def _apply_conflict(
 def _apply_soil_level(
     decision: IrrigationDecision, avg_soil: float, soil: tuple[float, float], band: tuple[float, float]
 ) -> None:
-    """VERY_DRY → DRY → ADEQUATE → WET: the driest reading decides dryness, the average decides adequacy."""
+    """VERY_DRY → DRY → ADEQUATE → WET: the driest current reading decides dryness, their mean decides adequacy."""
     min_soil, max_soil = soil
     target_min, target_max = band
     if min_soil < target_min - VERY_DRY_MARGIN:

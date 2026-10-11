@@ -31,6 +31,7 @@ def _per_sensor_snapshot(sensor: Sensor, readings: Sequence[CleanedReading]) -> 
         avg_temperature=_mean_or_none([r.temperature for r in readings if r.temperature is not None]),
         avg_humidity=_mean_or_none([r.env_humidity for r in readings if r.env_humidity is not None]),
         avg_soil_moisture=_mean_or_none([r.soil_moisture for r in readings if r.soil_moisture is not None]),
+        latest_soil_moisture=_latest_soil(readings),
     )
 
 

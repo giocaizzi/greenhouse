@@ -140,6 +140,10 @@ class PerSensorSnapshot(BaseModel):
     avg_temperature: float | None = None
     avg_humidity: float | None = None
     avg_soil_moisture: float | None = None
+    # This sensor's newest cleaned soil reading — what the soil rule judges (current
+    # state, not the 24 h average); left out of the persisted payload like the
+    # snapshot-level ``latest_soil_moisture`` it feeds.
+    latest_soil_moisture: float | None = Field(default=None, exclude=True)
 
 
 class SensorSnapshot(BaseModel):

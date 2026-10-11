@@ -95,19 +95,19 @@
   "water_warnings": []
  },
  "dry_run": {
-  "action": "irrigate",
-  "confidence": 0.8,
+  "action": "skip",
+  "confidence": 0.7,
   "duration_minutes": 2,
   "interval_hours": 12,
   "learning_alerts": [],
-  "reason": "soil moderately dry (driest=44%)",
+  "reason": "soil moisture adequate (range=45-45%)",
   "reasons": [
    {
-    "code": "sensor_dry",
+    "code": "sensor_adequate",
     "duration_delta": 0,
-    "icon": "drop",
+    "icon": "check-circle",
     "interval_delta": 0,
-    "message": "soil moderately dry (driest=44%)",
+    "message": "soil moisture adequate (range=45-45%)",
     "severity": "info"
    }
   ],
@@ -371,19 +371,19 @@
   ]
  },
  "status_decision": {
-  "action": "irrigate",
-  "confidence": 0.8,
+  "action": "skip",
+  "confidence": 0.7,
   "duration_minutes": 2,
   "interval_hours": 12,
   "learning_alerts": [],
-  "reason": "soil moderately dry (driest=44%)",
+  "reason": "soil moisture adequate (range=45-45%)",
   "reasons": [
    {
-    "code": "sensor_dry",
+    "code": "sensor_adequate",
     "duration_delta": 0,
-    "icon": "drop",
+    "icon": "check-circle",
     "interval_delta": 0,
-    "message": "soil moderately dry (driest=44%)",
+    "message": "soil moisture adequate (range=45-45%)",
     "severity": "info"
    }
   ],
