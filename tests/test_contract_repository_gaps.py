@@ -243,3 +243,31 @@ def test_get_vacation_window_found_and_not_found(tmp_db, frozen_clock):
     window = tmp_db.add_vacation_window(FROZEN_TS, FROZEN_TS + 3600, notes="trip")
     assert tmp_db.get_vacation_window(window.id) is window
     assert tmp_db.get_vacation_window(UNKNOWN_ID) is None
+
+
+# ── plant health snapshots follow their plant ──
+
+
+def _health_rows(repo) -> list[int]:
+    from greenhouse_core.models import PlantHealthDaily
+
+    return sorted(r.plant_id for r in repo.session.query(PlantHealthDaily).all())
+
+
+def test_delete_plant_removes_its_health_snapshots(tmp_db):
+    """SQLite reuses plant ids: a deleted plant's daily health rows must not haunt the next one."""
+    cid = tmp_db.add_cluster("Health")
+    doomed, kept = tmp_db.add_plant(cid, "Fern"), tmp_db.add_plant(cid, "Cactus")
+    for pid in (doomed, kept):
+        tmp_db.upsert_plant_health(pid, "2026-04-15", 80.0)
+    assert tmp_db.delete_plant(doomed)
+    assert _health_rows(tmp_db) == [kept]
+
+
+def test_delete_cluster_removes_its_plants_health_snapshots(tmp_db):
+    doomed, kept = tmp_db.add_cluster("Doomed"), tmp_db.add_cluster("Kept")
+    doomed_plant, kept_plant = tmp_db.add_plant(doomed, "Fern"), tmp_db.add_plant(kept, "Cactus")
+    for pid in (doomed_plant, kept_plant):
+        tmp_db.upsert_plant_health(pid, "2026-04-15", 80.0)
+    assert tmp_db.delete_cluster(doomed)
+    assert _health_rows(tmp_db) == [kept_plant]

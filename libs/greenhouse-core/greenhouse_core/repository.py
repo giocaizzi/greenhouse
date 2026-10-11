@@ -1476,7 +1476,8 @@ class IrrigationRepository:
         The ORM cascades to plants, sensors (+ readings), the irrigator (+ events)
         and the config. The rows that reference the cluster by plain id or by an
         FK SQLite does not enforce — irrigation windows, decision logs, alerts,
-        sensor assignments, a preferences ``default_cluster_id`` — are removed
+        sensor assignments, its plants' daily health snapshots, a preferences
+        ``default_cluster_id`` — are removed
         (or cleared) here, so API and web deletes leave no orphans. Activity
         events stay: they are the audit trail.
         """
@@ -1503,6 +1504,7 @@ class IrrigationRepository:
         self.session.execute(delete(Alert).where(or_(*alert_scope)))
         self.session.execute(delete(IrrigationWindow).where(IrrigationWindow.cluster_id == cluster.id))
         self.session.execute(delete(DecisionLog).where(DecisionLog.cluster_id == cluster.id))
+        self.session.execute(delete(PlantHealthDaily).where(PlantHealthDaily.plant_id.in_(plant_ids)))
         self.session.execute(
             delete(SensorAssignment).where(
                 or_(SensorAssignment.sensor_id.in_(sensor_ids), SensorAssignment.plant_id.in_(plant_ids))
@@ -1525,7 +1527,8 @@ class IrrigationRepository:
         """Delete a plant, closing its sensors' open assignments.
 
         Sensors retain their cluster; any open assignment to the plant is closed
-        so historical readings stay attributed correctly.
+        so historical readings stay attributed correctly. Its daily health
+        snapshots go: SQLite reuses the id, and a new plant must not inherit them.
         """
         plant = self.session.get(Plant, plant_id)
         if not plant:
@@ -1535,6 +1538,7 @@ class IrrigationRepository:
             # Close the open assignment before clearing the FK pointer.
             self._close_open_sensor_assignment(sensor.id, when=when)
             sensor.plant_id = None
+        self.session.execute(delete(PlantHealthDaily).where(PlantHealthDaily.plant_id == plant_id))
         self.session.delete(plant)
         self.session.flush()
         return True
