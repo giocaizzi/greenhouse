@@ -663,6 +663,7 @@ version = "5.0.1"
 source = { editable = "libs/greenhouse-cli" }
 dependencies = [
     { name = "httpx" },
+    { name = "rich" },
     { name = "textual" },
     { name = "textual-plotext" },
     { name = "typer" },
@@ -671,6 +672,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "httpx", specifier = ">=0.27" },
+    { name = "rich", specifier = ">=14.3.3" },
     { name = "textual", specifier = ">=3.0" },
     { name = "textual-plotext", specifier = ">=1.0" },
     { name = "typer", specifier = ">=0.27.1" },
@@ -706,12 +708,13 @@ dependencies = [
     { name = "fastapi" },
     { name = "fastapi-mcp" },
     { name = "greenhouse-core" },
-    { name = "httpx" },
     { name = "jinja2" },
+    { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "pyjwt" },
     { name = "python-dotenv" },
     { name = "python-multipart" },
+    { name = "sqlalchemy" },
     { name = "uvicorn", extra = ["standard"] },
 ]
 
@@ -721,12 +724,13 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.141.1" },
     { name = "fastapi-mcp", specifier = ">=0.4" },
     { name = "greenhouse-core", editable = "libs/greenhouse-core" },
-    { name = "httpx", specifier = ">=0.27" },
     { name = "jinja2", specifier = ">=3.1" },
+    { name = "pydantic", specifier = ">=2.13.4" },
     { name = "pydantic-settings", specifier = ">=2.14.2" },
     { name = "pyjwt", specifier = ">=2.15.0" },
     { name = "python-dotenv", specifier = ">=1.0" },
     { name = "python-multipart", specifier = ">=0.0.9" },
+    { name = "sqlalchemy", specifier = ">=2.0.52" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.48.0" },
 ]
 
