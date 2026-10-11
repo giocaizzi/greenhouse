@@ -36,12 +36,17 @@ def init_db(engine: Engine) -> None:
 
 
 def _alembic_config(engine: Engine) -> Config:
-    """Build an in-memory Alembic Config bound to the given engine URL."""
+    """Build an in-memory Alembic Config bound to the given engine URL.
+
+    ``configure_logging=False`` tells ``migrations/env.py`` not to run ``fileConfig``:
+    in-process migrations must leave the host's logging setup alone.
+    """
     here = Path(__file__).resolve().parent
     cfg_path = here / "alembic.ini"
     cfg = Config(str(cfg_path))
     cfg.set_main_option("script_location", str(here / "migrations"))
     cfg.set_main_option("sqlalchemy.url", str(engine.url))
+    cfg.attributes["configure_logging"] = False
     return cfg
 
 

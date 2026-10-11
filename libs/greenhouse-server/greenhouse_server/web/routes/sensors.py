@@ -2,21 +2,39 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
-from greenhouse_server.deps import RepoDep, require_cluster, require_sensor_in_cluster
+from greenhouse_server.deps import DeviceRegistryDep, RepoDep, require_cluster, require_sensor_in_cluster
 from greenhouse_server.services import inventory
 from greenhouse_server.services.inventory import DeviceIdExistsError, PlantNotInClusterError
 from greenhouse_server.web.context import base_context
-from greenhouse_server.web.forms import parsed_or_400
+from greenhouse_server.web.forms import device_type_options, parsed_or_400
 from greenhouse_server.web.templating import templates
+
+if TYPE_CHECKING:
+    from greenhouse_core.devices import DeviceRegistry
 
 router = APIRouter(include_in_schema=False)
 
 
 def _parse_optional_plant_id(plant_id: str) -> int | None:
     return parsed_or_400(plant_id, int, error="Invalid plant_id")
+
+
+def _type_options(registry: DeviceRegistry | None, current: str | None = None) -> list[tuple[str, str]]:
+    """The sensor type ``<select>`` options: the registry's model keys (plus a stored unknown one)."""
+    return device_type_options(inventory.known_device_types(registry, "sensor"), current)
+
+
+def _require_known_type(registry: DeviceRegistry | None, sensor_type: str, stored: str) -> None:
+    """422 error page (the API's status and wording) for a changed type no adapter handles."""
+    try:
+        inventory.require_known_device_type(registry, "sensor", sensor_type, stored=stored)
+    except inventory.UnknownDeviceTypeError as exc:
+        raise HTTPException(422, str(exc)) from None
 
 
 @router.get("/clusters/{cluster_id}/sensors")
@@ -31,12 +49,14 @@ def list_sensors(cluster_id: int, repo: RepoDep) -> Response:
 
 
 @router.get("/clusters/{cluster_id}/sensors/new")
-def new_sensor_form(request: Request, cluster_id: int, repo: RepoDep) -> Response:
+def new_sensor_form(request: Request, cluster_id: int, repo: RepoDep, registry: DeviceRegistryDep) -> Response:
     """Render the add-sensor form."""
     cluster = require_cluster(repo, cluster_id)
     plants = repo.get_plants_in_cluster(cluster_id)
     return templates.TemplateResponse(
-        request, "sensors/new.html", base_context(request, cluster=cluster, plants=plants)
+        request,
+        "sensors/new.html",
+        base_context(request, cluster=cluster, plants=plants, type_options=_type_options(registry)),
     )
 
 
@@ -45,6 +65,7 @@ def create_sensor(
     request: Request,
     cluster_id: int,
     repo: RepoDep,
+    registry: DeviceRegistryDep,
     tuya_device_id: str = Form(...),
     name: str = Form(...),
     type: str = Form(...),
@@ -55,8 +76,17 @@ def create_sensor(
     pid = _parse_optional_plant_id(plant_id)
     try:
         inventory.create_sensor(
-            repo, cluster_id, tuya_device_id=tuya_device_id, name=name, sensor_type=type, config={}, plant_id=pid
+            repo,
+            cluster_id,
+            tuya_device_id=tuya_device_id,
+            name=name,
+            sensor_type=type,
+            config={},
+            registry=registry,
+            plant_id=pid,
         )
+    except inventory.UnknownDeviceTypeError as exc:
+        raise HTTPException(422, str(exc)) from None
     except PlantNotInClusterError as exc:
         raise HTTPException(404, f"Plant {exc.plant_id} not found in cluster") from None
     except DeviceIdExistsError:
@@ -66,13 +96,19 @@ def create_sensor(
 
 
 @router.get("/clusters/{cluster_id}/sensors/{sensor_id}/edit")
-def edit_sensor_form(request: Request, cluster_id: int, sensor_id: int, repo: RepoDep) -> Response:
+def edit_sensor_form(
+    request: Request, cluster_id: int, sensor_id: int, repo: RepoDep, registry: DeviceRegistryDep
+) -> Response:
     """Render the edit form of one of the cluster's sensors."""
     cluster = require_cluster(repo, cluster_id)
     sensor = require_sensor_in_cluster(repo, cluster_id, sensor_id)
     plants = repo.get_plants_in_cluster(cluster_id)
     return templates.TemplateResponse(
-        request, "sensors/edit.html", base_context(request, cluster=cluster, sensor=sensor, plants=plants)
+        request,
+        "sensors/edit.html",
+        base_context(
+            request, cluster=cluster, sensor=sensor, plants=plants, type_options=_type_options(registry, sensor.type)
+        ),
     )
 
 
@@ -82,13 +118,15 @@ def update_sensor(
     cluster_id: int,
     sensor_id: int,
     repo: RepoDep,
+    registry: DeviceRegistryDep,
     name: str = Form(...),
     type: str = Form(...),
     plant_id: str = Form(""),
 ) -> Response:
     """Save the sensor form and return to the cluster's sensors section."""
-    require_sensor_in_cluster(repo, cluster_id, sensor_id)
+    sensor = require_sensor_in_cluster(repo, cluster_id, sensor_id)
     pid = _parse_optional_plant_id(plant_id)
+    _require_known_type(registry, type, sensor.type)
     try:
         inventory.ensure_plant_in_cluster(repo, cluster_id, pid)
     except PlantNotInClusterError as exc:

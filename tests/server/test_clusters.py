@@ -80,6 +80,50 @@ class TestClusterCRUD:
         resp = client.get("/api/v1/clusters/1")
         assert resp.status_code == 404
 
+    def test_delete_removes_rows_that_point_at_the_cluster(self, client):
+        """Windows, assignments, alerts (by cluster or entity) go; a default-cluster preference is cleared;
+        another cluster's rows stay."""
+        from sqlalchemy import text
+
+        from greenhouse_core.repository import IrrigationRepository
+
+        doomed = client.post("/api/v1/clusters", json={"name": "Doomed"}).json()["id"]
+        kept = client.post("/api/v1/clusters", json={"name": "Kept"}).json()["id"]
+        for cid in (doomed, kept):
+            pid = client.post(f"/api/v1/clusters/{cid}/plants", json={"species": "Fern"}).json()["id"]
+            client.post(
+                f"/api/v1/clusters/{cid}/sensors",
+                json={
+                    "tuya_device_id": f"fake_tuya_sensor_{cid:08d}",
+                    "name": "S",
+                    "type": "tuya.tr301z",
+                    "plant_id": pid,
+                },
+            )
+            client.post(f"/api/v1/clusters/{cid}/windows", json={"start_hour": 6, "end_hour": 9})
+        client.put("/api/v1/preferences", json={"default_cluster_id": doomed})
+        session = client.app.state.session_factory()
+        repo = IrrigationRepository(session)
+        doomed_sensor = repo.get_sensors_in_cluster(doomed)[0].id
+        repo.upsert_alert(
+            dedup_key="sensor-only", source="sensor", code="offline", severity="warning",
+            entity_type="sensor", entity_id=doomed_sensor, title="t", message="m",
+        )  # fmt: skip
+        repo.commit()
+        session.close()
+
+        assert client.delete(f"/api/v1/clusters/{doomed}").status_code == 200
+
+        engine = client.app.state.session_factory.kw["bind"]
+        with engine.connect() as conn:
+            counts = {
+                table: conn.execute(text(f"SELECT COUNT(*) FROM {table}")).scalar_one()  # noqa: S608 — fixed names
+                for table in ("irrigation_windows", "sensor_assignments", "alerts", "plants", "sensors")
+            }
+        assert counts == {"irrigation_windows": 1, "sensor_assignments": 1, "alerts": 0, "plants": 1, "sensors": 1}
+        assert client.get("/api/v1/preferences").json()["default_cluster_id"] is None
+        assert client.get(f"/api/v1/clusters/{kept}/windows").json()
+
     def test_delete_not_found(self, client):
         resp = client.delete("/api/v1/clusters/999")
         assert resp.status_code == 404
@@ -129,6 +173,27 @@ class TestClusterStatus:
         assert resp.status_code == 200, resp.text
         codes = [r["code"] for r in resp.json()["decision"]["reasons"]]
         assert "seasonal_hold" in codes
+
+    def test_status_reports_the_real_age_of_a_reading_older_than_a_day(self, client, frozen_clock):
+        """B-22: a sensor quiet for 3 days shows its last reading and its real age, not ``None``."""
+        from golden import FROZEN_TS
+        from greenhouse_core.repository import IrrigationRepository
+
+        cid = client.post("/api/v1/clusters", json={"name": "Quiet"}).json()["id"]
+        sid = client.post(
+            f"/api/v1/clusters/{cid}/sensors",
+            json={"tuya_device_id": "fake_tuya_sensor_00000001", "name": "S", "type": "tuya.tr301z"},
+        ).json()["id"]
+        three_days = 3 * 24 * 3600
+        session = client.app.state.session_factory()
+        repo = IrrigationRepository(session)
+        repo.add_sensor_reading(sid, timestamp=FROZEN_TS - three_days, soil_moisture=41.0)
+        repo.commit()
+        session.close()
+
+        [row] = client.get(f"/api/v1/clusters/{cid}/status").json()["sensors"]
+        assert row["reading_age_seconds"] == three_days
+        assert row["last_reading"]["soil_moisture"] == 41.0
 
     def test_status_not_found(self, client):
         resp = client.get("/api/v1/clusters/999/status")

@@ -69,14 +69,14 @@ def test_settings_model_config_explicit_keys():
     assert config["env_file"] == ".env"
     assert config["case_sensitive"] is False
     assert config["extra"] == "ignore"
-    assert config["populate_by_name"] is True
+    assert config["populate_by_name"] is False
 
 
 def test_settings_defaults_with_empty_environment(clean_env):
     s = _settings()
     assert s.model_dump() == {
         "db_url": "sqlite:///data/irrigation.db",
-        "host": "0.0.0.0",
+        "host": "127.0.0.1",
         "port": 8000,
         "debug": False,
         "plant_db_path": None,
@@ -108,7 +108,7 @@ def test_settings_defaults_with_empty_environment(clean_env):
 # (env var, raw value, field, parsed value) — one row per Settings field.
 ENV_TABLE = [
     ("IRRIGATION_DB_URL", "sqlite:///x.db", "db_url", "sqlite:///x.db"),
-    ("IRRIGATION_HOST", "127.0.0.1", "host", "127.0.0.1"),
+    ("IRRIGATION_HOST", "0.0.0.0", "host", "0.0.0.0"),  # noqa: S104 — the Docker opt-in value
     ("IRRIGATION_PORT", "9123", "port", 9123),
     ("IRRIGATION_DEBUG", "true", "debug", True),
     ("IRRIGATION_PLANT_DB_PATH", "/srv/plants.json", "plant_db_path", "/srv/plants.json"),
@@ -163,20 +163,26 @@ ALIASED_FIELDS = [
 
 
 @pytest.mark.parametrize(("suffix", "field"), ALIASED_FIELDS, ids=[r[0] for r in ALIASED_FIELDS])
-def test_aliased_fields_current_behavior_read_three_env_names(clean_env, monkeypatch, suffix, field):
-    """Pins current (surprising) behavior: an ``AliasChoices("GREENHOUSE_X", "x")`` field
-    is read from **three** env names — ``GREENHOUSE_X`` (documented), the bare ``X``
-    and the prefixed ``IRRIGATION_X`` (pydantic-settings applies ``env_prefix`` to the
-    bare-name choice and also matches it unprefixed). So e.g. ``MCP_TOKEN`` or
-    ``IRRIGATION_AUTH_SECRET_KEY`` in the environment configure the server — see
-    REFACTOR_NOTES.md. Precedence: ``GREENHOUSE_X`` > ``X`` > ``IRRIGATION_X``.
+def test_aliased_fields_read_only_the_greenhouse_env_name(clean_env, monkeypatch, suffix, field):
+    """An aliased secret (MCP token, ntfy, auth secret/admin) is read from ``GREENHOUSE_X`` only.
+
+    The bare ``X`` and the prefixed ``IRRIGATION_X`` used to configure it too (owner decision:
+    one documented name per secret, so a stray ``MCP_TOKEN`` in the environment cannot open MCP).
     """
-    monkeypatch.setenv(f"IRRIGATION_{suffix}", "from-irrigation-name")
-    assert getattr(_settings(), field) == "from-irrigation-name"
-    monkeypatch.setenv(suffix, "from-bare-name")
-    assert getattr(_settings(), field) == "from-bare-name"
-    monkeypatch.setenv(f"GREENHOUSE_{suffix}", "from-greenhouse-name")
-    assert getattr(_settings(), field) == "from-greenhouse-name"
+    monkeypatch.setenv(f"IRRIGATION_{suffix}", "https://irrigation.invalid")
+    monkeypatch.setenv(suffix, "https://bare.invalid")
+    assert getattr(_settings(), field) is None
+    monkeypatch.setenv(f"GREENHOUSE_{suffix}", "https://greenhouse.invalid")
+    assert getattr(_settings(), field) == "https://greenhouse.invalid"
+
+
+@pytest.mark.parametrize(("suffix", "field"), ALIASED_FIELDS, ids=[r[0] for r in ALIASED_FIELDS])
+def test_aliased_fields_ignore_old_names_in_dotenv(clean_env, monkeypatch, tmp_path, suffix, field):
+    env_file = tmp_path / ".env"
+    env_file.write_text(f"IRRIGATION_{suffix}=https://a.invalid\n{suffix}=https://b.invalid\n")
+    assert getattr(Settings(_env_file=env_file), field) is None
+    env_file.write_text(f"GREENHOUSE_{suffix}=https://c.invalid\n")
+    assert getattr(Settings(_env_file=env_file), field) == "https://c.invalid"
 
 
 @pytest.mark.parametrize(("suffix", "field"), ALIASED_FIELDS, ids=[r[0] for r in ALIASED_FIELDS])
@@ -236,11 +242,41 @@ VALIDATION_CASES = {
     "cron=*/0": {"check_cron_hours": "*/0"},
     "cron=empty": {"check_cron_hours": ""},
     "cron=0,6,": {"check_cron_hours": "0,6,"},
+    "ntfy=file-scheme": {"ntfy_server_url": "file:///etc/passwd"},
+    "ntfy=ftp-scheme": {"ntfy_server_url": "ftp://ntfy.invalid"},
+    "ntfy=no-host": {"ntfy_server_url": "https://"},
+    "ntfy=no-scheme": {"ntfy_server_url": "ntfy.invalid"},
+    "ntfy=port-only": {"ntfy_server_url": "http://:80"},
+    "ntfy=credentials-redacted": {"ntfy_server_url": "ftp://user:pw@ntfy.invalid/topic"},
 }
 
 
 def _errors(exc: ValidationError) -> list[dict]:
     return [{"loc": list(e["loc"]), "type": e["type"], "msg": e["msg"]} for e in exc.errors()]
+
+
+@pytest.mark.parametrize("url", ["https://ntfy.invalid", "http://192.0.2.10:8080/", "HTTPS://ntfy.invalid", "", None])
+def test_ntfy_server_url_accepts_http_https_and_unset(clean_env, url):
+    assert _settings(ntfy_server_url=url).ntfy_server_url == url
+
+
+@pytest.mark.parametrize("raw", ["", " ", "\t\n"])
+def test_blank_mcp_token_is_unset(clean_env, raw):
+    assert _settings(mcp_token=raw).mcp_token is None
+
+
+def test_ntfy_url_error_never_echoes_credentials(clean_env):
+    with pytest.raises(ValidationError) as exc:
+        _settings(ntfy_server_url="file://admin:hunter2@ntfy.invalid/x")
+    assert "hunter2" not in str(exc.value)
+    assert "admin" not in str(exc.value)
+
+
+def test_ntfy_client_refuses_a_non_http_scheme():
+    from greenhouse_server.services.notify import NtfyClient
+
+    with pytest.raises(ValueError, match="http:// or https://"):
+        NtfyClient("file:///tmp", "topic")
 
 
 def test_startup_validation_messages_match_golden(clean_env):

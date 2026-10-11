@@ -121,7 +121,8 @@ def update_cluster(cluster_id: int, request: UpdateClusterRequest, repo: RepoDep
     """Partially update a cluster's metadata.
 
     Only fields present in the request body are modified; omitted fields are
-    left unchanged.
+    left unchanged. An explicit `null` clears an optional field and is
+    ignored for a required one.
 
     Args:
         cluster_id: Numeric cluster identifier.
@@ -135,7 +136,7 @@ def update_cluster(cluster_id: int, request: UpdateClusterRequest, repo: RepoDep
         HTTPException: 404 if no cluster with that ID exists.
     """
     require_cluster(repo, cluster_id)
-    cluster = repo.update_cluster(cluster_id, **request.model_dump(exclude_none=True))
+    cluster = repo.update_cluster(cluster_id, **request.model_dump(exclude_unset=True))
     repo.commit()
     return cluster
 

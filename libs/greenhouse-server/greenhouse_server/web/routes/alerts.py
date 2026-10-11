@@ -7,7 +7,7 @@ import json
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import HTMLResponse, Response
 
-from greenhouse_server.deps import PlantDbDep, RepoDep
+from greenhouse_server.deps import PlantDbDep, RepoDep, require_alert
 from greenhouse_server.services.alerts import sync_all_alerts
 from greenhouse_server.web.context import base_context
 from greenhouse_server.web.templating import templates
@@ -45,6 +45,7 @@ def alert_list(
 @router.post("/alerts/{alert_id}/ack")
 def ack_alert(request: Request, alert_id: int, repo: RepoDep) -> Response:
     """Acknowledge an alert and return its re-rendered row with a success toast."""
+    require_alert(repo, alert_id)  # 404 like the API, never an empty row with a success toast
     alert = repo.acknowledge_alert(alert_id)
     repo.commit()
     toast = json.dumps({"severity": "success", "title": "Acknowledged", "message": "Alert moved to triage."})
@@ -59,6 +60,7 @@ def ack_alert(request: Request, alert_id: int, repo: RepoDep) -> Response:
 @router.post("/alerts/{alert_id}/resolve")
 def resolve_alert(request: Request, alert_id: int, repo: RepoDep) -> Response:
     """Resolve an alert and return its re-rendered row with a success toast."""
+    require_alert(repo, alert_id)  # 404 like the API, never an empty row with a success toast
     alert = repo.resolve_alert(alert_id)
     repo.commit()
     toast = json.dumps({"severity": "success", "title": "Resolved", "message": "Alert marked as resolved."})

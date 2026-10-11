@@ -5,7 +5,7 @@ import time
 from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any, Literal, TypedDict, Unpack, cast
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, delete, func, inspect, or_, select
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -1242,8 +1242,9 @@ class IrrigationRepository:
     def update_vacation_window(self, window_id: int, **fields: Unpack[VacationWindowPatch]) -> VacationWindow | None:
         """Patch a vacation window's fields; returns the updated row or None.
 
-        Only keys with non-None values are applied — the route layer is
-        responsible for validating semantics (e.g. ``starts_at < ends_at``).
+        ``None`` clears ``notes`` / ``contact_email`` (the bounds are NOT NULL and
+        keep their value) — the route layer is responsible for validating
+        semantics (e.g. ``starts_at < ends_at``).
         """
         row = self.session.get(VacationWindow, window_id)
         if not row:
@@ -1319,7 +1320,7 @@ class IrrigationRepository:
         return prefs
 
     def update_preferences(self, **fields: Unpack[PreferencesPatch]) -> UserPreferences:
-        """Patch preferences with the provided keyword args; unknown keys are ignored."""
+        """Patch preferences with the provided keyword args (``None`` clears a nullable field; unknown keys ignored)."""
         prefs = self.get_preferences()
         self._patch_fields(prefs, fields)
         self.session.flush()
@@ -1498,9 +1499,19 @@ class IrrigationRepository:
         *,
         json_fields: frozenset[str] = frozenset(),
     ) -> None:
-        """None-first PATCH: skip None, JSON-encode dict values of ``json_fields``, set only existing attributes."""
+        """PATCH the supplied keys: ``None`` clears a nullable column, absent keys stay untouched.
+
+        Callers pass only the keys the client sent (``model_dump(exclude_unset=True)``),
+        so "absent" and an explicit ``null`` stay distinct. ``None`` for a NOT NULL
+        column (a name, a flag) is skipped rather than violating the constraint;
+        dict values of ``json_fields`` are JSON-encoded; keys that are not
+        attributes of the row are ignored.
+        """
+        columns = inspect(type(row)).columns
         for key, value in fields.items():
             if value is None:
+                if key in columns and columns[key].nullable:
+                    setattr(row, key, None)
                 continue
             if key in json_fields and isinstance(value, dict):
                 setattr(row, key, json.dumps(value))
@@ -1526,8 +1537,48 @@ class IrrigationRepository:
         return cluster
 
     def delete_cluster(self, cluster_id: int) -> bool:
-        """Delete a cluster (cascades to plants/sensors/irrigators/config)."""
-        return self._delete_by_id(Cluster, cluster_id)
+        """Delete a cluster and everything that points at it.
+
+        The ORM cascades to plants, sensors (+ readings), the irrigator (+ events)
+        and the config. The rows that reference the cluster by plain id or by an
+        FK SQLite does not enforce — irrigation windows, decision logs, alerts,
+        sensor assignments, its plants' daily health snapshots, a preferences
+        ``default_cluster_id`` — are removed
+        (or cleared) here, so API and web deletes leave no orphans. Activity
+        events stay: they are the audit trail.
+        """
+        cluster = self.session.get(Cluster, cluster_id)
+        if cluster is None:
+            return False
+        self._delete_cluster_references(cluster)
+        self.session.delete(cluster)
+        self.session.flush()
+        return True
+
+    def _delete_cluster_references(self, cluster: Cluster) -> None:
+        """Remove the rows that point at ``cluster`` without an ORM cascade (see ``delete_cluster``)."""
+        plant_ids = [p.id for p in cluster.plants]
+        sensor_ids = [s.id for s in cluster.sensors]
+        entity_ids = {
+            EntityType.PLANT: plant_ids,
+            EntityType.SENSOR: sensor_ids,
+            EntityType.IRRIGATOR: [cluster.irrigator.id] if cluster.irrigator else [],
+        }
+        alert_scope = [Alert.cluster_id == cluster.id] + [
+            and_(Alert.entity_type == kind, Alert.entity_id.in_(ids)) for kind, ids in entity_ids.items() if ids
+        ]
+        self.session.execute(delete(Alert).where(or_(*alert_scope)))
+        self.session.execute(delete(IrrigationWindow).where(IrrigationWindow.cluster_id == cluster.id))
+        self.session.execute(delete(DecisionLog).where(DecisionLog.cluster_id == cluster.id))
+        self.session.execute(delete(PlantHealthDaily).where(PlantHealthDaily.plant_id.in_(plant_ids)))
+        self.session.execute(
+            delete(SensorAssignment).where(
+                or_(SensorAssignment.sensor_id.in_(sensor_ids), SensorAssignment.plant_id.in_(plant_ids))
+            )
+        )
+        prefs = self.session.scalar(select(UserPreferences).limit(1))
+        if prefs is not None and prefs.default_cluster_id == cluster.id:
+            prefs.default_cluster_id = None
 
     def update_plant(self, plant_id: int, **fields: Unpack[PlantPatch]) -> Plant | None:
         """Patch plant fields; returns the updated row or None."""
@@ -1542,7 +1593,8 @@ class IrrigationRepository:
         """Delete a plant, closing its sensors' open assignments.
 
         Sensors retain their cluster; any open assignment to the plant is closed
-        so historical readings stay attributed correctly.
+        so historical readings stay attributed correctly. Its daily health
+        snapshots go: SQLite reuses the id, and a new plant must not inherit them.
         """
         plant = self.session.get(Plant, plant_id)
         if not plant:
@@ -1552,6 +1604,7 @@ class IrrigationRepository:
             # Close the open assignment before clearing the FK pointer.
             self._close_open_sensor_assignment(sensor.id, when=when)
             sensor.plant_id = None
+        self.session.execute(delete(PlantHealthDaily).where(PlantHealthDaily.plant_id == plant_id))
         self.session.delete(plant)
         self.session.flush()
         return True

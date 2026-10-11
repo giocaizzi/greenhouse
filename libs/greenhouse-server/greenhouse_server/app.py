@@ -1,5 +1,7 @@
 """FastAPI application factory."""
 
+import logging
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -15,8 +17,8 @@ from greenhouse_core.devices import DeviceGateway, build_default_registry
 from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_core.utils import set_display_timezone
-from greenhouse_server.auth import bootstrap_admin, require_user
-from greenhouse_server.config import Settings
+from greenhouse_server.auth import bootstrap_admin, is_mcp_token, require_user
+from greenhouse_server.config import Settings, ignored_legacy_secret_env_names
 from greenhouse_server.routes import (
     activity,
     alerts,
@@ -65,6 +67,8 @@ if TYPE_CHECKING:
 
     from fastapi import APIRouter
 
+logger = logging.getLogger(__name__)
+
 
 def _init_tuya(app: FastAPI) -> None:
     """Build the one shared Tuya gateway and the registry that wraps it.
@@ -77,7 +81,13 @@ def _init_tuya(app: FastAPI) -> None:
     """
     try:
         gateway = DeviceGateway()
-    except Exception:  # noqa: BLE001
+    except ValueError as exc:  # missing TUYA_CLIENT_ID / TUYA_CLIENT_SECRET: an expected setup, no traceback
+        logger.warning("Tuya gateway not configured (%s); starting without device control", exc)
+        app.state.device_gateway = None
+        app.state.device_registry = None
+        return
+    except Exception:  # degraded mode: serve without devices rather than refuse to start
+        logger.warning("Tuya gateway unavailable; starting without device control", exc_info=True)
         app.state.device_gateway = None
         app.state.device_registry = None
         return
@@ -105,19 +115,20 @@ def require_mcp_token(
 ) -> None:
     """Gate `/mcp` behind a static bearer token.
 
-    Fail-closed: when `settings.mcp_token` is unset the endpoint returns 503,
-    so a misconfigured deployment never silently leaves MCP open. With the
+    Fail-closed: when `settings.mcp_token` is unset or empty the endpoint
+    returns 503, so a misconfigured deployment never silently leaves MCP open
+    (an empty `GREENHOUSE_MCP_TOKEN=` is a missing token, not a token). With the
     token configured, missing or wrong `Authorization: Bearer <token>` yields
     401. The token has full reach over every `/api/v1` route exposed as an MCP
     tool — including irrigation actuation — so it MUST be a high-entropy
     secret (generate with `openssl rand -hex 32`).
     """
-    if settings.mcp_token is None:
+    if not settings.mcp_token:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="MCP auth not configured",
         )
-    if creds is None or creds.credentials != settings.mcp_token:
+    if creds is None or not is_mcp_token(creds.credentials, settings):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid MCP token",
@@ -180,6 +191,7 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
     """Create and configure the FastAPI application."""
     if settings is None:
         settings = Settings()
+    _warn_ignored_legacy_secret_env_names()
 
     if engine is None:
         engine = create_db_engine(settings.db_url)
@@ -197,6 +209,14 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
     _mount_web(app)
     _mount_mcp(app)  # must stay last: FastApiMCP snapshots the routes included above
     return app
+
+
+def _warn_ignored_legacy_secret_env_names() -> None:
+    """Name (never print the value of) each legacy secret env var that is set but ignored."""
+    for name in ignored_legacy_secret_env_names(os.environ):
+        logger.warning(
+            "Environment variable %s is set but ignored: secrets are read from GREENHOUSE_* names only", name
+        )
 
 
 def _make_lifespan(settings: Settings) -> "Callable[[FastAPI], AbstractAsyncContextManager[None]]":
@@ -320,7 +340,8 @@ def _startup_timezone(app: FastAPI) -> str:
             tz = IrrigationRepository(session).get_preferences().timezone
             session.commit()
             return tz or "UTC"
-    except Exception:  # noqa: BLE001
+    except Exception:  # fall back to the column default rather than refuse to start
+        logger.warning("Could not read the timezone preference at startup; using UTC", exc_info=True)
         return "UTC"
 
 
@@ -328,15 +349,17 @@ def _restore_persisted_scheduler_pause(app: FastAPI) -> None:
     """If `user_preferences.scheduler_paused` is True, re-pause check_all.
 
     Runs once on startup after `init_scheduler` so a pause survives a
-    container restart. Silently skipped if preferences cannot be read.
+    container restart. Skipped with a warning if preferences cannot be read:
+    the server still starts, but the operator must know check_all is running
+    although it was paused.
     """
     try:
         with read_session(app) as session:
             paused = IrrigationRepository(session).get_preferences().scheduler_paused
             session.commit()
         apply_persisted_pause(paused)
-    except Exception:  # noqa: BLE001, S110
-        pass
+    except Exception:  # startup must not fail on a preferences read
+        logger.warning("Could not restore the persisted scheduler pause", exc_info=True)
 
 
 def _init_plant_db(settings: Settings) -> PlantDatabase:

@@ -3,9 +3,19 @@
   ""
  ],
  "db_effect": {
+  "alerts": {
+   "removed": [
+    "3"
+   ]
+  },
   "clusters": {
    "removed": [
     "2"
+   ]
+  },
+  "decision_logs": {
+   "removed": [
+    "4"
    ]
   },
   "irrigation_configs": {
@@ -19,12 +29,22 @@
     "6"
    ]
   },
+  "irrigation_windows": {
+   "removed": [
+    "1"
+   ]
+  },
   "irrigators": {
    "removed": [
     "2"
    ]
   },
   "plants": {
+   "removed": [
+    "3"
+   ]
+  },
+  "sensor_assignments": {
    "removed": [
     "3"
    ]

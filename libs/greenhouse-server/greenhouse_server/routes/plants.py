@@ -121,7 +121,8 @@ def update_plant(cluster_id: int, plant_id: int, request: UpdatePlantRequest, re
     """Partially update a plant's care metadata.
 
     Only fields present in the request body are modified; omitted fields are
-    left unchanged. The plant must belong to the specified cluster.
+    left unchanged. An explicit `null` clears an optional field and is
+    ignored for a required one. The plant must belong to the specified cluster.
 
     Args:
         cluster_id: Cluster the plant belongs to.
@@ -136,7 +137,7 @@ def update_plant(cluster_id: int, plant_id: int, request: UpdatePlantRequest, re
             different cluster.
     """
     require_plant_in_cluster(repo, cluster_id, plant_id)
-    updated = repo.update_plant(plant_id, **request.model_dump(exclude_none=True))
+    updated = repo.update_plant(plant_id, **request.model_dump(exclude_unset=True))
     repo.commit()
     return updated
 

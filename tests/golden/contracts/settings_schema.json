@@ -10,7 +10,7 @@
   {
    "alias": null,
    "annotation": "str",
-   "default": "0.0.0.0",
+   "default": "127.0.0.1",
    "name": "host",
    "validation_alias_choices": null
   },
@@ -76,8 +76,7 @@
    "default": null,
    "name": "mcp_token",
    "validation_alias_choices": [
-    "GREENHOUSE_MCP_TOKEN",
-    "mcp_token"
+    "GREENHOUSE_MCP_TOKEN"
    ]
   },
   {
@@ -86,8 +85,7 @@
    "default": null,
    "name": "ntfy_server_url",
    "validation_alias_choices": [
-    "GREENHOUSE_NTFY_SERVER_URL",
-    "ntfy_server_url"
+    "GREENHOUSE_NTFY_SERVER_URL"
    ]
   },
   {
@@ -96,8 +94,7 @@
    "default": null,
    "name": "ntfy_topic",
    "validation_alias_choices": [
-    "GREENHOUSE_NTFY_TOPIC",
-    "ntfy_topic"
+    "GREENHOUSE_NTFY_TOPIC"
    ]
   },
   {
@@ -106,8 +103,7 @@
    "default": null,
    "name": "ntfy_token",
    "validation_alias_choices": [
-    "GREENHOUSE_NTFY_TOKEN",
-    "ntfy_token"
+    "GREENHOUSE_NTFY_TOKEN"
    ]
   },
   {
@@ -123,8 +119,7 @@
    "default": null,
    "name": "auth_secret_key",
    "validation_alias_choices": [
-    "GREENHOUSE_AUTH_SECRET_KEY",
-    "auth_secret_key"
+    "GREENHOUSE_AUTH_SECRET_KEY"
    ]
   },
   {
@@ -154,8 +149,7 @@
    "default": null,
    "name": "auth_admin_username",
    "validation_alias_choices": [
-    "GREENHOUSE_AUTH_ADMIN_USERNAME",
-    "auth_admin_username"
+    "GREENHOUSE_AUTH_ADMIN_USERNAME"
    ]
   },
   {
@@ -164,8 +158,7 @@
    "default": null,
    "name": "auth_admin_password",
    "validation_alias_choices": [
-    "GREENHOUSE_AUTH_ADMIN_PASSWORD",
-    "auth_admin_password"
+    "GREENHOUSE_AUTH_ADMIN_PASSWORD"
    ]
   },
   {
@@ -324,7 +317,7 @@
     "type": "boolean"
    },
    "host": {
-    "default": "0.0.0.0",
+    "default": "127.0.0.1",
     "title": "Host",
     "type": "string"
    },

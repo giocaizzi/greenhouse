@@ -275,9 +275,7 @@
  },
  "monitor": {
   "cluster_name": "Golden Cluster",
-  "needs_water": [
-   "Sensor 1 (Monstera deliciosa): 5%"
-  ],
+  "needs_water": [],
   "sensors": [
    {
     "plant_species": null,
@@ -292,8 +290,8 @@
     "plant_species": "Monstera deliciosa",
     "sensor_id": 1,
     "sensor_name": "Sensor 1",
-    "soil_moisture": 5.0,
-    "status": "very_dry",
+    "soil_moisture": 45.0,
+    "status": "ok",
     "target_max": 60.0,
     "target_min": 45.0
    }

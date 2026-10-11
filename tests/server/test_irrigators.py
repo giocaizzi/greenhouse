@@ -268,3 +268,70 @@ class TestListAllIrrigatorsTopLevel:
         resp = client.get("/api/v1/irrigators?cluster_id=999")
         assert resp.status_code == 200
         assert resp.json()["irrigators"] == []
+
+
+class TestLocalKeyMasking:
+    """B-11: the API never returns ``local_key`` in plain text; writes still accept it."""
+
+    SECRET = "fake_local_key_deadbeef"
+    MASK = "••••••••"
+
+    def _seed(self, client):
+        client.post("/api/v1/clusters", json={"name": "C1"})
+        return client.post(
+            "/api/v1/clusters/1/irrigator",
+            json={
+                "tuya_device_id": "fake_tuya_device_aabbccdd",
+                "name": "Pump",
+                "type": "rainpoint.ik10pw",
+                "config": {"device_ip": "192.0.2.10", "local_key": self.SECRET},
+            },
+        )
+
+    @staticmethod
+    def _stored_config(client):
+        from greenhouse_core.models import parse_device_config
+        from greenhouse_core.repository import IrrigationRepository
+
+        session = client.app.state.session_factory()
+        try:
+            return parse_device_config(IrrigationRepository(session).get_irrigator_for_cluster(1).config)
+        finally:
+            session.close()
+
+    def test_every_irrigator_response_masks_the_local_key(self, client):
+        created = self._seed(client)
+        expected = {"device_ip": "192.0.2.10", "local_key": self.MASK}
+        assert created.json()["config"] == expected
+        assert client.get("/api/v1/clusters/1/irrigator").json()["config"] == expected
+        assert client.get("/api/v1/irrigators").json()["irrigators"][0]["config"] == expected
+        assert client.get("/api/v1/clusters/1/detail").json()["irrigator"]["config"] == expected
+        updated = client.put("/api/v1/clusters/1/irrigator", json={"name": "Renamed"})
+        assert updated.json()["config"] == expected
+        assert self.SECRET not in client.get("/api/v1/clusters/1/irrigator").text
+        assert self._stored_config(client)["local_key"] == self.SECRET
+
+    def test_sending_the_mask_back_keeps_the_stored_key(self, client):
+        self._seed(client)
+        round_trip = client.get("/api/v1/clusters/1/irrigator").json()["config"]
+        round_trip["device_ip"] = "192.0.2.11"
+        resp = client.put("/api/v1/clusters/1/irrigator", json={"config": round_trip})
+        assert resp.status_code == 200
+        assert self._stored_config(client) == {"device_ip": "192.0.2.11", "local_key": self.SECRET}
+
+    def test_a_new_local_key_replaces_the_stored_one(self, client):
+        self._seed(client)
+        resp = client.put(
+            "/api/v1/clusters/1/irrigator",
+            json={"config": {"device_ip": "192.0.2.10", "local_key": "fake_local_key_rotated"}},
+        )
+        assert resp.json()["config"]["local_key"] == self.MASK
+        assert self._stored_config(client)["local_key"] == "fake_local_key_rotated"
+
+    def test_no_local_key_means_nothing_to_mask(self, client):
+        client.post("/api/v1/clusters", json={"name": "C1"})
+        client.post(
+            "/api/v1/clusters/1/irrigator",
+            json={"tuya_device_id": "d1", "name": "P", "type": "rainpoint.ik10pw", "config": {"local_key": ""}},
+        )
+        assert client.get("/api/v1/clusters/1/irrigator").json()["config"] == {"local_key": ""}

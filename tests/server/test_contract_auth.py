@@ -7,9 +7,6 @@ attributes, bootstrap) plus the MCP bearer gate (503 unset, 401 missing/wrong).
 
 Argon2 hashes used for exact comparisons are generated with a fixed salt so the
 tests are deterministic; JWTs are compared by decoded claims, never verbatim.
-Two observed quirks are pinned as current behavior (see the report):
-``verify_password`` raises on a truncated hash, and the JSON error handler drops
-the ``WWW-Authenticate`` header that ``AuthError`` / the MCP gate set.
 """
 
 from __future__ import annotations
@@ -20,7 +17,6 @@ from datetime import timedelta
 import jwt
 import pytest
 from argon2 import PasswordHasher, Type
-from argon2.exceptions import VerificationError
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
@@ -132,16 +128,17 @@ class TestPasswordHashing:
     def test_verify_password_matrix(self, plain, hashed, expected):
         assert core_auth.verify_password(plain, hashed) is expected
 
-    def test_verify_password_current_behavior_raises_on_truncated_hash(self):
-        """Pins current (buggy) behavior: a truncated stored hash raises instead of returning False — see REFACTOR_NOTES.md.
+    def test_verify_password_returns_false_on_truncated_hash(self):
+        """A truncated stored hash verifies as False, as the docstring promises.
 
-        The docstring promises "False on mismatch or malformed hash", but only
-        ``VerifyMismatchError``/``InvalidHashError`` are caught; argon2's generic
-        ``VerificationError("Decoding failed")`` escapes (a corrupted row would
-        turn a login into a 500).
+        argon2 raises its generic ``VerificationError("Decoding failed")`` for it, which used to
+        escape and turn a login into a 500.
         """
-        with pytest.raises(VerificationError, match="Decoding failed"):
-            core_auth.verify_password(PW, HASH_CURRENT[:-1])
+        assert core_auth.verify_password(PW, HASH_CURRENT[:-1]) is False
+
+    def test_verify_password_returns_false_on_a_non_ascii_corrupt_hash(self):
+        """A non-ASCII byte in the stored hash raises ``UnicodeEncodeError`` inside argon2; still False."""
+        assert core_auth.verify_password(PW, HASH_CURRENT[:-2] + "ü") is False
 
     @pytest.mark.parametrize(
         ("hashed", "expected"),
@@ -311,7 +308,8 @@ def _token(app, **claims) -> str:
             200,
             {"id": MCP_USER_ID, "username": "mcp"},
         ),
-        (lambda app: {"cookies": {"greenhouse_session": MCP_TOKEN}}, 200, {"id": MCP_USER_ID, "username": "mcp"}),
+        # The MCP token is bearer-only: in the cookie it is decoded as a JWT and refused.
+        (lambda app: {"cookies": {"greenhouse_session": MCP_TOKEN}}, 401, {"detail": "Invalid session"}),
     ],
     ids=[
         "no-credentials",
@@ -340,6 +338,34 @@ def test_require_user_matrix(real, auth, status, body):
     assert resp.json() == body
 
 
+@pytest.mark.parametrize("corrupt", [lambda h: h[:-1], lambda h: h[:-2] + "ü"], ids=["truncated", "non-ascii"])
+def test_login_with_a_corrupt_stored_hash_is_401(real, corrupt):
+    """A corrupted password row refuses the login like a wrong password (401), not a 500."""
+    client, app = real
+    session = app.state.session_factory()
+    admin = core_auth.get_user_by_username(session, TEST_ADMIN_USERNAME)
+    admin.hashed_password = corrupt(admin.hashed_password)
+    session.commit()
+    session.close()
+    login = client.post("/api/v1/auth/login", json={"username": TEST_ADMIN_USERNAME, "password": TEST_ADMIN_PASSWORD})
+    assert (login.status_code, login.json()) == (401, {"detail": "Invalid username or password"})
+
+
+@pytest.mark.parametrize("username", ["nobody", TEST_ADMIN_USERNAME])
+def test_login_runs_one_argon2_verify_whether_or_not_the_user_exists(real, monkeypatch, username):
+    """An unknown username costs the same argon2 verify as a wrong password (no timing oracle)."""
+    from greenhouse_server import auth as server_auth
+
+    calls = []
+    real_verify = server_auth.verify_password
+    monkeypatch.setattr(server_auth, "verify_password", lambda p, h: calls.append(h) or real_verify(p, h))
+    client, _ = real
+    login = client.post("/api/v1/auth/login", json={"username": username, "password": "wrong"})
+    assert (login.status_code, login.json()) == (401, {"detail": "Invalid username or password"})
+    assert len(calls) == 1
+    assert calls[0].startswith("$argon2id$")
+
+
 def test_inactive_user_is_rejected(real):
     client, app = real
     session = app.state.session_factory()
@@ -353,12 +379,9 @@ def test_inactive_user_is_rejected(real):
     assert (login.status_code, login.json()) == (401, {"detail": "Invalid username or password"})
 
 
-def test_api_401_current_behavior_drops_www_authenticate_header(real):
-    """Pins current (buggy) behavior: the JSON error handler drops ``exc.headers`` — see REFACTOR_NOTES.md.
-
-    ``AuthError``, the login 401 and the MCP gate all set ``WWW-Authenticate: Bearer``
-    but ``web/exception_handlers.py`` rebuilds a bare ``JSONResponse``, so the
-    client never receives it.
+def test_api_401_carries_www_authenticate_header(real):
+    """``AuthError``, the login 401 and the MCP gate all set ``WWW-Authenticate: Bearer``, and the
+    JSON error handler in ``web/exception_handlers.py`` passes ``exc.headers`` through.
     """
     client, _ = real
     responses = [
@@ -367,7 +390,7 @@ def test_api_401_current_behavior_drops_www_authenticate_header(real):
         client.get("/mcp"),
     ]
     assert [r.status_code for r in responses] == [401, 401, 401]
-    assert [r.headers.get("www-authenticate") for r in responses] == [None, None, None]
+    assert [r.headers.get("www-authenticate") for r in responses] == ["Bearer", "Bearer", "Bearer"]
 
 
 def test_secret_unset_bearer_is_503_but_no_credentials_is_401(clean_env):
@@ -574,8 +597,9 @@ def test_bootstrap_is_skipped_when_auth_disabled(engine):
         (MCP_TOKEN, {"Authorization": f"Bearer {MCP_TOKEN} "}, None, None),  # header value is stripped
         (MCP_TOKEN, {"Authorization": f"bearer {MCP_TOKEN}"}, None, None),  # scheme is case-insensitive
         (MCP_TOKEN, {"Authorization": f"Bearer {MCP_TOKEN}"}, None, None),
-        ("", {"Authorization": "Bearer "}, 401, "Invalid MCP token"),  # empty token: closed, but 401 not 503
-        ("", {"Authorization": "Bearer x"}, 401, "Invalid MCP token"),
+        ("", {"Authorization": "Bearer "}, 503, "MCP auth not configured"),  # empty token = unset
+        ("", {"Authorization": "Bearer x"}, 503, "MCP auth not configured"),
+        ("   ", {"Authorization": "Bearer x"}, 503, "MCP auth not configured"),  # whitespace-only = unset
     ],
 )
 def test_mcp_gate(clean_env, mcp_token, headers, status, detail):
@@ -586,5 +610,32 @@ def test_mcp_gate(clean_env, mcp_token, headers, status, detail):
             assert resp.status_code not in (401, 503)
         else:
             assert (resp.status_code, resp.json()) == (status, {"detail": detail})
+    finally:
+        engine.dispose()
+
+
+def test_mcp_gate_compares_the_token_in_constant_time(clean_env, monkeypatch):
+    """B-12: the `/mcp` gate compares the bearer with ``hmac.compare_digest``, not ``!=``.
+
+    A short-circuiting string comparison leaks how many leading characters of a guess
+    match the token through response timing; the gate must use the same constant-time
+    primitive as the API's MCP-principal check.
+    """
+    import hmac
+
+    from greenhouse_server import auth as server_auth
+
+    calls: list[tuple[bytes, bytes]] = []
+    real_compare = hmac.compare_digest
+
+    def spy(given, expected):
+        calls.append((given, expected))
+        return real_compare(given, expected)
+
+    monkeypatch.setattr(server_auth.hmac, "compare_digest", spy)
+    client, _, engine = _client(mcp_token=MCP_TOKEN)
+    try:
+        assert client.get("/mcp", headers={"Authorization": "Bearer wrong"}).status_code == 401
+        assert calls == [(b"wrong", MCP_TOKEN.encode())]
     finally:
         engine.dispose()

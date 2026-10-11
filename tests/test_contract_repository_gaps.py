@@ -132,7 +132,7 @@ def test_delete_known_id_returns_true_and_removes_the_row(tmp_db, method, key, m
 # ── vacation / irrigation window PATCH ──
 
 
-def test_update_vacation_window_ignores_unknown_keys_and_none(tmp_db, frozen_clock):
+def test_update_vacation_window_ignores_unknown_keys_and_none_clears_notes(tmp_db, frozen_clock):
     window = tmp_db.add_vacation_window(FROZEN_TS, FROZEN_TS + 3600, contact_email="a@example.com", notes="keep")
     updated = tmp_db.update_vacation_window(window.id, bogus_field="x", notes=None, ends_at=FROZEN_TS + 7200)
     assert updated is window
@@ -141,7 +141,7 @@ def test_update_vacation_window_ignores_unknown_keys_and_none(tmp_db, frozen_clo
         FROZEN_TS,
         FROZEN_TS + 7200,
         "a@example.com",
-        "keep",
+        None,  # B-15: an explicit None clears a nullable field
     )
 
 
@@ -149,13 +149,13 @@ def test_update_vacation_window_unknown_id_returns_none(tmp_db):
     assert tmp_db.update_vacation_window(UNKNOWN_ID, notes="x") is None
 
 
-def test_update_irrigation_window_ignores_unknown_keys_and_none(tmp_db):
+def test_update_irrigation_window_ignores_unknown_keys_and_none_clears_label(tmp_db):
     ids = _seed(tmp_db)
     updated = tmp_db.update_irrigation_window(ids["window"], bogus_field=1, label=None, end_hour=9)
     assert updated is not None
     assert updated.id == ids["window"]
     assert not hasattr(updated, "bogus_field")
-    assert (updated.start_hour, updated.end_hour, updated.weekday_mask, updated.label) == (6, 9, 127, "morning")
+    assert (updated.start_hour, updated.end_hour, updated.weekday_mask, updated.label) == (6, 9, 127, None)
 
 
 def test_update_irrigation_window_unknown_id_returns_none(tmp_db):
@@ -171,10 +171,11 @@ def test_update_sensor_unknown_id_returns_none(tmp_db):
     assert tmp_db.update_sensor(UNKNOWN_ID, name="x") is None
 
 
-def test_update_sensor_skips_none_values(tmp_db):
+def test_update_sensor_none_skips_required_and_clears_config(tmp_db):
+    """B-15: ``None`` is skipped for NOT NULL ``name`` / ``type`` and clears the nullable ``config``."""
     ids = _seed(tmp_db)
     updated = tmp_db.update_sensor(ids["sensor"], name=None, type=None, config=None)
-    assert (updated.name, updated.type, updated.config) == ("Gap Sensor", "soil", '{"k": 1}')
+    assert (updated.name, updated.type, updated.config) == ("Gap Sensor", "soil", None)
 
 
 def test_update_sensor_json_encodes_dict_config(tmp_db):
@@ -225,13 +226,14 @@ def test_update_plant_unknown_id_returns_none(tmp_db):
     assert _count(tmp_db, Plant) == 1
 
 
-def test_update_plant_ignores_unknown_keys_and_none_current_behavior(tmp_db):
-    """Pins current behavior (B-15): ``None`` cannot clear a field; unknown keys are ignored."""
+def test_update_plant_ignores_unknown_keys_and_none_clears_a_nullable_field(tmp_db):
+    """B-15: an explicit ``None`` clears a nullable field (``notes``) and is skipped for a NOT NULL one
+    (``species``); unknown keys are still ignored."""
     ids = _seed(tmp_db)
     tmp_db.update_plant(ids["plant"], notes="first")
-    updated = tmp_db.update_plant(ids["plant"], bogus_field="x", notes=None, category="tropical")
+    updated = tmp_db.update_plant(ids["plant"], bogus_field="x", notes=None, species=None, category="tropical")
     assert not hasattr(updated, "bogus_field")
-    assert (updated.species, updated.notes, updated.category) == ("Monstera deliciosa", "first", "tropical")
+    assert (updated.species, updated.notes, updated.category) == ("Monstera deliciosa", None, "tropical")
 
 
 # ── get_vacation_window ──
@@ -241,3 +243,31 @@ def test_get_vacation_window_found_and_not_found(tmp_db, frozen_clock):
     window = tmp_db.add_vacation_window(FROZEN_TS, FROZEN_TS + 3600, notes="trip")
     assert tmp_db.get_vacation_window(window.id) is window
     assert tmp_db.get_vacation_window(UNKNOWN_ID) is None
+
+
+# ── plant health snapshots follow their plant ──
+
+
+def _health_rows(repo) -> list[int]:
+    from greenhouse_core.models import PlantHealthDaily
+
+    return sorted(r.plant_id for r in repo.session.query(PlantHealthDaily).all())
+
+
+def test_delete_plant_removes_its_health_snapshots(tmp_db):
+    """SQLite reuses plant ids: a deleted plant's daily health rows must not haunt the next one."""
+    cid = tmp_db.add_cluster("Health")
+    doomed, kept = tmp_db.add_plant(cid, "Fern"), tmp_db.add_plant(cid, "Cactus")
+    for pid in (doomed, kept):
+        tmp_db.upsert_plant_health(pid, "2026-04-15", 80.0)
+    assert tmp_db.delete_plant(doomed)
+    assert _health_rows(tmp_db) == [kept]
+
+
+def test_delete_cluster_removes_its_plants_health_snapshots(tmp_db):
+    doomed, kept = tmp_db.add_cluster("Doomed"), tmp_db.add_cluster("Kept")
+    doomed_plant, kept_plant = tmp_db.add_plant(doomed, "Fern"), tmp_db.add_plant(kept, "Cactus")
+    for pid in (doomed_plant, kept_plant):
+        tmp_db.upsert_plant_health(pid, "2026-04-15", 80.0)
+    assert tmp_db.delete_cluster(doomed)
+    assert _health_rows(tmp_db) == [kept_plant]

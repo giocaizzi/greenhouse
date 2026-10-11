@@ -335,12 +335,33 @@ def test_base_context_keeps_preferences_read_before_a_vacation_error(monkeypatch
 
     monkeypatch.setattr(IrrigationRepository, "get_active_vacation", boom)
     session = _ClosingSession()
-    ctx = base_context(_request(session_factory=lambda: session, settings=SimpleNamespace(auth_enabled=True)))
+    request = _request(session_factory=lambda: session, settings=SimpleNamespace(auth_enabled=True))
+    request.state = SimpleNamespace(signed_in=True)  # what the protected web routes mark
+    ctx = base_context(request)
     assert session.closed == 1
     assert (ctx["dry_run_global"], ctx["active_vacation"], ctx["scheduler_paused"], ctx["theme"]) == (
         True,
         None,
         True,
+        "dark",
+    )
+
+
+def test_base_context_hides_the_banners_from_an_anonymous_viewer(monkeypatch):
+    """Login and anonymous error pages get the theme but not the dry-run / vacation / paused banners."""
+    prefs = SimpleNamespace(dry_run_global=True, scheduler_paused=True, theme="dark", timezone="UTC")
+    monkeypatch.setattr(IrrigationRepository, "get_preferences", lambda self: prefs)
+    monkeypatch.setattr(IrrigationRepository, "get_active_vacation", lambda self: object())
+    request = _request(
+        session_factory=_ClosingSession,
+        settings=SimpleNamespace(auth_enabled=True, auth_cookie_name="greenhouse_session", auth_secret_key="k"),
+    )
+    request.cookies = {"greenhouse_session": "not-a-jwt"}
+    ctx = base_context(request)
+    assert (ctx["dry_run_global"], ctx["active_vacation"], ctx["scheduler_paused"], ctx["theme"]) == (
+        False,
+        None,
+        False,
         "dark",
     )
 

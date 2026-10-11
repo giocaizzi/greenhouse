@@ -12,12 +12,21 @@ from greenhouse_core.schemas import (
     SuccessResponse,
     UpdateSensorRequest,
 )
-from greenhouse_server.deps import RepoDep, require_cluster, require_sensor, require_sensor_in_cluster
+from greenhouse_server.deps import (
+    DeviceRegistryDep,
+    RepoDep,
+    require_cluster,
+    require_sensor,
+    require_sensor_in_cluster,
+)
 from greenhouse_server.services.inventory import (
     DeviceIdExistsError,
     PlantNotInClusterError,
+    UnknownDeviceTypeError,
     create_sensor,
     ensure_plant_in_cluster,
+    keep_masked_local_key,
+    require_known_device_type,
 )
 
 router = APIRouter(tags=["sensors"])
@@ -51,7 +60,7 @@ def list_all_sensors(
 
 
 @router.post("/clusters/{cluster_id}/sensors", response_model=SensorResponse, status_code=status.HTTP_201_CREATED)
-def add_sensor(cluster_id: int, request: CreateSensorRequest, repo: RepoDep) -> Sensor:
+def add_sensor(cluster_id: int, request: CreateSensorRequest, repo: RepoDep, registry: DeviceRegistryDep) -> Sensor:
     """Register a Tuya sensor under a cluster.
 
     A sensor may optionally be linked to a specific plant; otherwise it is
@@ -65,7 +74,8 @@ def add_sensor(cluster_id: int, request: CreateSensorRequest, repo: RepoDep) -> 
 
     Raises:
         HTTPException: 404 if the cluster (or referenced plant) is missing,
-            409 if the Tuya device ID is already registered.
+            409 if the Tuya device ID is already registered, 422 if `type` is
+            not a registered sensor model key (the detail lists the known keys).
 
     Returns:
         The created sensor record.
@@ -79,8 +89,11 @@ def add_sensor(cluster_id: int, request: CreateSensorRequest, repo: RepoDep) -> 
             name=request.name,
             sensor_type=request.type,
             config=request.config or {},
+            registry=registry,
             plant_id=request.plant_id,
         )
+    except UnknownDeviceTypeError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
     except PlantNotInClusterError as exc:
         raise HTTPException(status_code=404, detail=f"Plant {exc.plant_id} not found in cluster") from None
     except DeviceIdExistsError:
@@ -122,11 +135,17 @@ def get_sensor(cluster_id: int, sensor_id: int, repo: RepoDep) -> Sensor:
 
 
 @router.put("/clusters/{cluster_id}/sensors/{sensor_id}", response_model=SensorResponse, summary="Update a sensor")
-def update_sensor(cluster_id: int, sensor_id: int, request: UpdateSensorRequest, repo: RepoDep) -> Sensor | None:
+def update_sensor(
+    cluster_id: int, sensor_id: int, request: UpdateSensorRequest, repo: RepoDep, registry: DeviceRegistryDep
+) -> Sensor | None:
     """Partially update a sensor's metadata.
 
     Only fields present in the request body are modified; omitted fields are
-    left unchanged. The sensor must belong to the specified cluster.
+    left unchanged. An explicit `null` clears an optional field (`plant_id:
+    null` unassigns the sensor) and is ignored for a required one;
+    `config: null` clears the whole config, `local_key` included. The sensor
+    must belong to the specified cluster. A `config.local_key` is masked as
+    `••••••••` in every response; sending that mask back keeps the stored key.
 
     Args:
         cluster_id: Cluster the sensor belongs to.
@@ -139,14 +158,22 @@ def update_sensor(cluster_id: int, sensor_id: int, request: UpdateSensorRequest,
 
     Raises:
         HTTPException: 404 if the sensor does not exist or belongs to a
-            different cluster, or if ``plant_id`` is not a plant of that cluster.
+            different cluster, or if ``plant_id`` is not a plant of that cluster;
+            422 if a changed `type` is not a registered sensor model key.
     """
-    require_sensor_in_cluster(repo, cluster_id, sensor_id)
+    sensor = require_sensor_in_cluster(repo, cluster_id, sensor_id)
     try:
+        if request.type is not None:
+            require_known_device_type(registry, "sensor", request.type, stored=sensor.type)
         ensure_plant_in_cluster(repo, cluster_id, request.plant_id)
+    except UnknownDeviceTypeError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
     except PlantNotInClusterError as exc:
         raise HTTPException(status_code=404, detail=f"Plant {exc.plant_id} not found in cluster") from None
-    updated = repo.update_sensor(sensor_id, **request.model_dump(exclude_none=True))
+    fields = request.model_dump(exclude_unset=True)
+    if fields.get("config"):
+        fields["config"] = keep_masked_local_key(fields["config"], sensor.config)
+    updated = repo.update_sensor(sensor_id, **fields)
     repo.commit()
     return updated
 

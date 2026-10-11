@@ -569,7 +569,7 @@
   "filled": {
    "name": "Spare probe",
    "tuya_device_id": "fake_tuya_device_aabbccdd",
-   "type": "x"
+   "type": "tuya.tr301z"
   },
   "key": "n",
   "screen": "cluster",
@@ -588,7 +588,7 @@
      "name": "Spare probe",
      "plant_id": null,
      "tuya_device_id": "fake_tuya_device_aabbccdd",
-     "type": "x"
+     "type": "tuya.tr301z"
     }
    ]
   ]
@@ -1088,7 +1088,7 @@
   "filled": {
    "name": "New pump",
    "tuya_device_id": "fake_tuya_device_00112233",
-   "type": "t"
+   "type": "rainpoint.ik10pw"
   },
   "key": "n",
   "screen": "cluster",
@@ -1106,7 +1106,7 @@
     {
      "name": "New pump",
      "tuya_device_id": "fake_tuya_device_00112233",
-     "type": "t"
+     "type": "rainpoint.ik10pw"
     }
    ]
   ]
@@ -1144,13 +1144,13 @@
   "toasts": [
    [
     "information",
-    "Alert 7 acknowledged"
+    "Alert 3 acknowledged"
    ]
   ],
   "writes": [
    [
     "POST",
-    "/api/v1/alerts/7/acknowledge",
+    "/api/v1/alerts/3/acknowledge",
     null
    ]
   ]
@@ -1164,13 +1164,13 @@
   "toasts": [
    [
     "information",
-    "Alert 6 resolved"
+    "Alert 1 resolved"
    ]
   ],
   "writes": [
    [
     "POST",
-    "/api/v1/alerts/6/resolve",
+    "/api/v1/alerts/1/resolve",
     null
    ]
   ]

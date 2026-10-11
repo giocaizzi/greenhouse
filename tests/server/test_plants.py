@@ -181,7 +181,7 @@ class TestPlantMove:
             json={
                 "tuya_device_id": "fake_tuya_device_eeff0011",
                 "name": "Ambient",
-                "type": "environment",
+                "type": "tuya.tr301z",
             },
         )
 

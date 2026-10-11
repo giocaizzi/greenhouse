@@ -70,7 +70,8 @@ def update_vacation_window(
     """Partially update a vacation window.
 
     Only fields present in the request body are modified; omitted fields are
-    left unchanged. The effective ``starts_at`` and ``ends_at`` after the patch
+    left unchanged. An explicit `null` clears an optional field and is
+    ignored for a required one. The effective ``starts_at`` and ``ends_at`` after the patch
     must satisfy ``starts_at < ends_at`` — otherwise the request is rejected
     so the vacation gate can never end up reversed.
 

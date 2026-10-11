@@ -26,6 +26,7 @@ re-enable) — not as a permanent state.
 
 from __future__ import annotations
 
+import functools
 import hmac
 import logging
 import time
@@ -40,7 +41,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
 
-from greenhouse_core.auth import needs_rehash, verify_password
+from greenhouse_core.auth import hash_password, needs_rehash, verify_password
 from greenhouse_core.models import User
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.config import Settings
@@ -167,8 +168,13 @@ def _resolve_user(token: str, settings: Settings, repo: IrrigationRepository) ->
     return AuthenticatedUser(id=user.id, username=user.username)
 
 
-def _is_mcp_token(token: str, settings: Settings) -> bool:
+def is_mcp_token(token: str, settings: Settings) -> bool:
     """Constant-time check of `token` against `settings.mcp_token`.
+
+    Shared by the outer `/mcp` gate (`app.require_mcp_token`) and the inner
+    MCP principal in `require_user`, so neither leaks a timing side channel.
+    Both sides are compared as UTF-8 bytes: `hmac.compare_digest` refuses
+    non-ASCII `str`, and a header can carry any Latin-1 text.
 
     Returns False when the MCP token is unconfigured so a missing setting can
     never accidentally satisfy this gate.
@@ -176,7 +182,7 @@ def _is_mcp_token(token: str, settings: Settings) -> bool:
     expected = settings.mcp_token
     if not expected:
         return False
-    return hmac.compare_digest(token, expected)
+    return hmac.compare_digest(token.encode(), expected.encode())
 
 
 def require_user(
@@ -191,7 +197,8 @@ def require_user(
 
     1. The session JWT issued by `/api/v1/auth/login` (bearer header or
        session cookie). This is the human/API client path.
-    2. The static MCP bearer token. `fastapi-mcp` reuses the `/api/v1` routes
+    2. The static MCP bearer token, from the Authorization header only
+       (never the cookie). `fastapi-mcp` reuses the `/api/v1` routes
        internally to fulfil `tools/call`, forwarding the inbound MCP
        `Authorization` header onto each inner request. The outer `/mcp` mount
        is already gated by `require_mcp_token`, so a request that reaches
@@ -209,7 +216,11 @@ def require_user(
     token = _extract_token(request, creds, settings)
     if not token:
         raise AuthError
-    if _is_mcp_token(token, settings):
+    # The MCP token is a bearer credential only: fastapi-mcp forwards it in the
+    # Authorization header. A cookie carrying it is decoded as a session JWT
+    # (and rejected), so the root credential can't ride along in a browser jar.
+    from_header = bool(creds and creds.credentials)
+    if from_header and is_mcp_token(token, settings):
         return AuthenticatedUser(id=MCP_USER_ID, username=MCP_USER_NAME, is_system=True)
     return _resolve_user(token, settings, IrrigationRepository(session))
 
@@ -293,14 +304,23 @@ def clear_session_cookie(response: Response, settings: Settings) -> None:
 # ── Login + bootstrap helpers ───────────────────────────────────────────────
 
 
+@functools.cache
+def _dummy_password_hash() -> str:
+    """An argon2 hash (current parameters) to verify against when the username is unknown."""
+    return hash_password("greenhouse-timing-equalizer")
+
+
 def authenticate(session: Session, username: str, password: str) -> User | None:
     """Verify credentials and return the User, or None when they do not match.
 
-    On success the password is re-hashed if the stored argon2 parameters are outdated.
+    An unknown or inactive username still runs one argon2 verify (against a dummy
+    hash), so the response time does not reveal which usernames exist. On success
+    the password is re-hashed if the stored argon2 parameters are outdated.
     """
     repo = IrrigationRepository(session)
     user = repo.get_user_by_username(username)
     if user is None or not user.is_active:
+        verify_password(password, _dummy_password_hash())
         return None
     if not verify_password(password, user.hashed_password):
         return None

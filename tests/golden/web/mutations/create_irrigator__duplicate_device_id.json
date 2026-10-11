@@ -140,6 +140,7 @@
   "    <label for=\"type\">Type",
   "      <select id=\"type\" name=\"type\" required>",
   "        <option value=\"rainpoint.ik10pw\" selected>Rainpoint IK10PW</option>",
+  "        <option value=\"fake.irrigator\">fake.irrigator</option>",
   "      </select>",
   "      <small class=\"muted\">Cycle bounding runs over the LAN: it needs the device IP below; a blank local key is looked up once via the Tuya Cloud.</small>",
   "    </label>",
@@ -301,7 +302,8 @@
     "request",
     "scheduler_paused",
     "show_chrome",
-    "theme"
+    "theme",
+    "type_options"
    ]
   ]
  ]

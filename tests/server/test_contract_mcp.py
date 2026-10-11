@@ -15,7 +15,7 @@ order = OpenAPI path order; key order = schema order) because that is what an MC
 client receives. The bearer-token gate (401/503 + detail strings + accept path) is
 already pinned by ``tests/server/test_mcp.py``; this module only adds what that file
 leaves open: the exact JSON bodies across every mounted method, the non-Bearer
-scheme, and the dropped ``WWW-Authenticate`` header (observed bug).
+scheme, and the ``WWW-Authenticate`` header on every 401.
 """
 
 from __future__ import annotations
@@ -36,7 +36,7 @@ from server.conftest import _make_stubbed_app
 # reviewed behavior-change commits (`fix(drift|consistency): …`) or description-only doc-contract
 # commits (`docs(api): …`) that also regenerate the golden.
 PHASE0_MCP_TOOLS_SHA256 = (
-    "5d5f562357e2e53607a5e62498c9f8bb72f1bf366b99d7300ae8f4f09a42e14b"  # gitleaks:allow — content hash, not a secret
+    "8e2cb61544a0fc6b32cecefd85aec22cd56d7b2dec511b56e8516f73ff0632b7"  # gitleaks:allow — content hash, not a secret
 )
 
 _TOKEN = "contract-mcp-token"
@@ -132,16 +132,15 @@ _BAD_HEADERS = {
 
 @pytest.mark.parametrize("method", ["GET", "POST", "DELETE"])
 @pytest.mark.parametrize("header_case", sorted(_BAD_HEADERS))
-def test_mcp_401_current_behavior_drops_www_authenticate_header(gated_client, method, header_case):
-    """Pins current (buggy) behavior: ``require_mcp_token`` raises 401 with
-    ``WWW-Authenticate: Bearer`` but the JSON branch of the global HTTPException handler
-    drops ``exc.headers``, so the header never reaches the client — see REFACTOR_NOTES.md.
+def test_mcp_401_carries_www_authenticate_header(gated_client, method, header_case):
+    """``require_mcp_token`` raises 401 with ``WWW-Authenticate: Bearer`` and the JSON branch
+    of the global HTTPException handler keeps ``exc.headers``, so the client receives it.
     """
     resp = gated_client.request(method, "/mcp", headers=_BAD_HEADERS[header_case])
     assert resp.status_code == 401
     assert resp.json() == {"detail": "Invalid MCP token"}
     assert resp.headers["content-type"] == "application/json"
-    assert "www-authenticate" not in resp.headers
+    assert resp.headers["www-authenticate"] == "Bearer"
 
 
 @pytest.mark.parametrize("method", ["GET", "POST", "DELETE"])

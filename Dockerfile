@@ -32,6 +32,9 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # ── Runtime ──────────────────────────────────────────────────────────────────
 FROM python:${PYTHON_VERSION}-slim AS runtime
 
+# The server binds 127.0.0.1 by default; a container must listen on every
+# interface so the published port reaches it, hence IRRIGATION_HOST=0.0.0.0.
+
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PATH="/app/.venv/bin:$PATH" \

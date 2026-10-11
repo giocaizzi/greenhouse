@@ -16,7 +16,6 @@ There are no PUT routes in the web router. Nothing is normalized but the package
 
 from __future__ import annotations
 
-import json
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
@@ -700,16 +699,16 @@ def test_bulk_stop_all_reports_a_device_that_refuses_the_stop(make_client):
 
 
 @pytest.mark.parametrize("action", ["ack", "resolve"])
-def test_alert_action_on_missing_alert_current_behavior_returns_200_success_toast(action, make_client):
-    """Pins current (buggy) behavior: ack/resolve of a missing alert is a 200 with a success toast — see REFACTOR_NOTES.md.
+def test_alert_action_on_missing_alert_is_404(action, make_client):
+    """Ack/resolve of a missing alert is a 404 "Alert not found", like the JSON API.
 
-    ``web/routes/alerts.py`` never checks the repository's ``None`` (the JSON API returns 404):
-    the row partial renders empty and ``HX-Toast`` still announces success.
+    ``web/routes/alerts.py`` used to skip the lookup: the row partial rendered empty and
+    ``HX-Toast`` still announced success with a 200.
     """
     _, resp, effect = _run(make_client, "POST", f"/alerts/999/{action}")
-    assert resp.status_code == 200
-    assert resp.text.strip() == ""
-    assert json.loads(resp.headers["HX-Toast"])["severity"] == "success"
+    assert resp.status_code == 404
+    assert "Alert not found" in resp.text
+    assert "HX-Toast" not in resp.headers
     assert effect == {}
 
 
@@ -723,50 +722,54 @@ def test_alert_action_on_missing_alert_current_behavior_returns_200_success_toas
         (f"/clusters/{INDOOR}/plants/{MONSTERA}/edit", {"species": "X", "ideal_humidity_max": "wet"}),
         (f"/clusters/{INDOOR}/irrigate", {"temp_override": "hot"}),
         ("/plants/sync", {"plant_id": "one"}),
+        ("/plants/sync", {"cluster_id": "first"}),
     ],
 )
-def test_non_numeric_form_value_current_behavior_is_unhandled_500(url, form, make_client):
-    """Pins current (buggy) behavior: bare ``int()``/``float()`` on form text escapes as a plain 500 — see REFACTOR_NOTES.md.
+def test_non_numeric_form_value_is_a_400_error_page(url, form, make_client):
+    """A non-numeric form value is a 400 HTML error page naming the problem, and nothing is written.
 
-    Sibling fields go through helpers that raise ``HTTPException(400)``; these do not, so the
-    ``ValueError`` bypasses the HTML error page and nothing is written.
+    Bare ``int()``/``float()`` used to let the ``ValueError`` escape as a plain-text 500; every
+    numeric field now goes through ``web.forms.parsed_or_400`` like its siblings.
     """
     _, resp, effect = _run(make_client, "POST", url, form)
-    assert resp.status_code == 500
-    assert resp.text == "Internal Server Error"
-    assert resp.headers["content-type"].startswith("text/plain")
+    assert resp.status_code == 400
+    assert resp.headers["content-type"].startswith("text/html")
+    assert "Invalid" in resp.text
     assert effect == {}
 
 
-def test_irrigate_missing_cluster_current_behavior_500_from_template(make_client):
-    """Pins current (buggy) behavior: irrigating an unknown cluster crashes the decision panel — see REFACTOR_NOTES.md.
+def test_irrigate_missing_cluster_is_404(make_client):
+    """Irrigating an unknown cluster is a 404 "Cluster not found" page, like the JSON API.
 
-    ``run_irrigation_pipeline`` returns ``{"action": "error", "reason": "cluster not found", …}``;
-    ``partials/_decision_panel.html`` formats ``result.temperature`` (undefined → ``is not none``
-    is true) and raises ``UndefinedError`` → plain 500 instead of a 404 page.
+    The route used to hand the pipeline's ``{"action": "error", …}`` dict to
+    ``partials/_decision_panel.html``, which crashed on it (plain-text 500).
     """
     app, resp, effect = _run(make_client, "POST", "/clusters/999/irrigate", {})
-    assert resp.status_code == 500
-    assert resp.text == "Internal Server Error"
+    assert resp.status_code == 404
+    assert "Cluster not found" in resp.text
     assert effect == {}
     assert app.state.fake_devices.irrigator.calls == []
 
 
-def test_delete_cluster_current_behavior_leaves_orphan_rows(make_client):
-    """Pins current behavior: deleting a populated cluster leaves rows that still point at it — see REFACTOR_NOTES.md.
+def test_delete_cluster_leaves_no_orphan_rows(make_client):
+    """Deleting a populated cluster also removes the rows that point at it.
 
-    ``repository.delete_cluster`` removes the cluster's plants, sensors (+ readings), irrigator
-    (+ events) and config, but not its irrigation windows, decision logs, alerts or sensor
-    assignments (SQLite FK enforcement is off, so nothing complains).
+    Besides the ORM cascade (plants, sensors + readings, irrigator + events, config),
+    ``repository.delete_cluster`` removes its irrigation windows, decision logs, alerts and
+    sensor assignments, which used to stay behind (SQLite FK enforcement is off).
     """
     app, resp, effect = _run(make_client, "DELETE", f"/clusters/{OUTDOOR}")
     assert resp.status_code == 200
     assert set(effect) == {
+        "alerts",
         "clusters",
+        "decision_logs",
         "irrigation_configs",
         "irrigation_events",
+        "irrigation_windows",
         "irrigators",
         "plants",
+        "sensor_assignments",
         "sensor_readings",
         "sensors",
     }
@@ -781,4 +784,4 @@ def test_delete_cluster_current_behavior_leaves_orphan_rows(make_client):
                 "sensor_assignments": "SELECT COUNT(*) FROM sensor_assignments WHERE plant_id = 3",
             }.items()
         }
-    assert orphans == {"irrigation_windows": 1, "decision_logs": 1, "alerts": 1, "sensor_assignments": 1}
+    assert orphans == {"irrigation_windows": 0, "decision_logs": 0, "alerts": 0, "sensor_assignments": 0}

@@ -7,10 +7,28 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from greenhouse_core.constants import FULL_WEEKDAY_MASK
 from greenhouse_core.models import parse_device_config
 
+# Request bodies that carry measurements / thresholds refuse ``NaN`` / ``Infinity`` (which
+# Python's JSON parser accepts): a non-finite bound or capacity would poison every comparison.
+_FINITE_NUMBERS = ConfigDict(allow_inf_nan=False)
+
 
 def _parse_json_config(v: object) -> object:
     """Decode a stored ``config`` with the shared lenient parser; ``None`` stays ``None``."""
     return None if v is None else parse_device_config(v)
+
+
+# What a stored device (irrigator or sensor) ``local_key`` reads as in every response — the same
+# dots the web edit form shows. The key is a root-level local-protocol
+# credential: it is accepted on writes but never echoed back. Sending this
+# value back in an update keeps the stored key (see services.inventory).
+LOCAL_KEY_MASK = "••••••••"
+
+
+def mask_local_key(config: object) -> object:
+    """Return ``config`` with a non-empty ``local_key`` replaced by ``LOCAL_KEY_MASK`` (copy, never in place)."""
+    if isinstance(config, dict) and config.get("local_key"):
+        return {**config, "local_key": LOCAL_KEY_MASK}
+    return config
 
 
 # --- Cluster ---
@@ -74,6 +92,8 @@ class PlantBase(BaseModel):
 class CreatePlantRequest(PlantBase):
     """Body for adding a plant to a cluster."""
 
+    model_config = _FINITE_NUMBERS
+
 
 class PlantResponse(PlantBase):
     """A plant as stored, with the cluster it belongs to."""
@@ -128,9 +148,15 @@ class IrrigatorBase(BaseModel):
 class CreateIrrigatorRequest(IrrigatorBase):
     """Body for attaching an irrigator to a cluster (one per cluster)."""
 
+    model_config = _FINITE_NUMBERS
+
 
 class IrrigatorResponse(IrrigatorBase):
-    """An irrigator as stored, with the cluster it waters."""
+    """An irrigator as stored, with the cluster it waters.
+
+    A stored ``config.local_key`` is masked as ``••••••••``; send the mask back
+    unchanged in an update to keep the stored key.
+    """
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -140,8 +166,8 @@ class IrrigatorResponse(IrrigatorBase):
     @field_validator("config", mode="before")
     @classmethod
     def parse_config(cls, v: Any) -> Any:
-        """Decode the stored device config (JSON text or dict) leniently."""
-        return _parse_json_config(v)
+        """Decode the stored device config (JSON text or dict) leniently and mask its local key."""
+        return mask_local_key(_parse_json_config(v))
 
 
 class IrrigatorListResponse(BaseModel):
@@ -202,7 +228,11 @@ class CreateSensorRequest(SensorBase):
 
 
 class SensorResponse(SensorBase):
-    """A sensor as stored, with its cluster and current plant assignment."""
+    """A sensor as stored, with its cluster and current plant assignment.
+
+    A stored ``config.local_key`` is masked as ``••••••••``; send the mask back
+    unchanged in an update to keep the stored key.
+    """
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -212,8 +242,8 @@ class SensorResponse(SensorBase):
     @field_validator("config", mode="before")
     @classmethod
     def parse_config(cls, v: Any) -> Any:
-        """Decode the stored device config (JSON text or dict) leniently."""
-        return _parse_json_config(v)
+        """Decode the stored device config (JSON text or dict) leniently and mask its local key."""
+        return mask_local_key(_parse_json_config(v))
 
 
 class SensorListResponse(BaseModel):
@@ -269,7 +299,10 @@ class CreateIrrigationWindowRequest(IrrigationWindowBase):
 
 
 class UpdateIrrigationWindowRequest(BaseModel):
-    """Partial update of a watering window; omitted fields keep their value."""
+    """Partial update of a watering window; omitted fields keep their value.
+
+    ``null`` clears an optional field and is ignored for a required one.
+    """
 
     start_hour: int | None = None
     end_hour: int | None = None
@@ -451,6 +484,8 @@ class IrrigateRequest(BaseModel):
     final decision is tagged with a ``manual_override_quiet_hours`` warning
     Reason so the audit log records the override.
     """
+
+    model_config = _FINITE_NUMBERS
 
     temp_override: float | None = None
     dry_run: bool = False
@@ -887,7 +922,10 @@ class VacationCreateRequest(BaseModel):
 
 
 class UpdateVacationWindowRequest(BaseModel):
-    """Partial-update body for a vacation window. All fields optional."""
+    """Partial-update body for a vacation window; omitted fields keep their value, null clears notes / email.
+
+    ``null`` for ``starts_at`` / ``ends_at`` is ignored (they are required).
+    """
 
     starts_at: int | None = None
     ends_at: int | None = None
@@ -937,7 +975,10 @@ class PreferencesResponse(BaseModel):
 
 
 class PreferencesUpdateRequest(BaseModel):
-    """Partial update of the preferences; omitted fields keep their value."""
+    """Partial update of the preferences; omitted fields keep their value.
+
+    ``null`` clears an optional field and is ignored for a required one.
+    """
 
     units: str | None = None
     timezone: str | None = None
@@ -955,7 +996,10 @@ class PreferencesUpdateRequest(BaseModel):
 
 
 class UpdateClusterRequest(BaseModel):
-    """Partial update of a cluster; omitted fields keep their value."""
+    """Partial update of a cluster; omitted fields keep their value.
+
+    ``null`` clears an optional field and is ignored for a required one.
+    """
 
     name: str | None = None
     location: str | None = None
@@ -963,7 +1007,12 @@ class UpdateClusterRequest(BaseModel):
 
 
 class UpdatePlantRequest(BaseModel):
-    """Partial update of a plant; omitted fields keep their value."""
+    """Partial update of a plant; omitted fields keep their value.
+
+    ``null`` clears an optional field and is ignored for a required one.
+    """
+
+    model_config = _FINITE_NUMBERS
 
     species: str | None = None
     category: str | None = None
@@ -977,7 +1026,11 @@ class UpdatePlantRequest(BaseModel):
 
 
 class UpdateSensorRequest(BaseModel):
-    """Partial update of a sensor; omitted fields keep their value."""
+    """Partial update of a sensor; omitted fields keep their value.
+
+    ``null`` clears an optional field and is ignored for a required one;
+    ``config: null`` clears the whole config, ``local_key`` included.
+    """
 
     name: str | None = None
     type: str | None = None
@@ -986,7 +1039,13 @@ class UpdateSensorRequest(BaseModel):
 
 
 class UpdateIrrigatorRequest(BaseModel):
-    """Partial update of an irrigator; omitted fields keep their value."""
+    """Partial update of an irrigator; omitted fields keep their value.
+
+    ``null`` clears an optional field and is ignored for a required one;
+    ``config: null`` clears the whole config, ``local_key`` included.
+    """
+
+    model_config = _FINITE_NUMBERS
 
     name: str | None = None
     type: str | None = None

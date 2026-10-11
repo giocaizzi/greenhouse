@@ -230,7 +230,7 @@
      "clusters"
     ],
     "summary": "Update a cluster",
-    "description": "Partially update a cluster's metadata.\n\nOnly fields present in the request body are modified; omitted fields are\nleft unchanged.\n\nArgs:\n    cluster_id: Numeric cluster identifier.\n    request: Fields to update — any combination of name, location, and\n        environment.\n\nReturns:\n    The updated cluster.\n\nRaises:\n    HTTPException: 404 if no cluster with that ID exists.",
+    "description": "Partially update a cluster's metadata.\n\nOnly fields present in the request body are modified; omitted fields are\nleft unchanged. An explicit `null` clears an optional field and is\nignored for a required one.\n\nArgs:\n    cluster_id: Numeric cluster identifier.\n    request: Fields to update — any combination of name, location, and\n        environment.\n\nReturns:\n    The updated cluster.\n\nRaises:\n    HTTPException: 404 if no cluster with that ID exists.",
     "operationId": "update_cluster",
     "security": [
      {
@@ -607,7 +607,7 @@
      "plants"
     ],
     "summary": "Update a plant",
-    "description": "Partially update a plant's care metadata.\n\nOnly fields present in the request body are modified; omitted fields are\nleft unchanged. The plant must belong to the specified cluster.\n\nArgs:\n    cluster_id: Cluster the plant belongs to.\n    plant_id: Numeric plant identifier.\n    request: Fields to update — any subset of care metadata fields.\n\nReturns:\n    The updated plant.\n\nRaises:\n    HTTPException: 404 if the plant does not exist or belongs to a\n        different cluster.",
+    "description": "Partially update a plant's care metadata.\n\nOnly fields present in the request body are modified; omitted fields are\nleft unchanged. An explicit `null` clears an optional field and is\nignored for a required one. The plant must belong to the specified cluster.\n\nArgs:\n    cluster_id: Cluster the plant belongs to.\n    plant_id: Numeric plant identifier.\n    request: Fields to update — any subset of care metadata fields.\n\nReturns:\n    The updated plant.\n\nRaises:\n    HTTPException: 404 if the plant does not exist or belongs to a\n        different cluster.",
     "operationId": "update_plant",
     "security": [
      {
@@ -996,7 +996,7 @@
      "irrigators"
     ],
     "summary": "Register the cluster's irrigator",
-    "description": "Register the Tuya irrigator for a cluster.\n\nA cluster has at most one irrigator (strict 0:1). Registering a second one\nis rejected.\n\nArgs:\n    cluster_id: Cluster the irrigator belongs to.\n    request: Tuya device ID, irrigator name, type (the device model key,\n        e.g. `rainpoint.ik10pw`),\n        optional config dict, and optional `reservoir_l` /\n        `flow_rate_l_per_min` capacity used for vacation rationing.\n\nReturns:\n    The newly created irrigator.\n\nRaises:\n    HTTPException: 404 if the cluster does not exist, 409 if the cluster\n        already has an irrigator or the Tuya device ID is already\n        registered.",
+    "description": "Register the Tuya irrigator for a cluster.\n\nA cluster has at most one irrigator (strict 0:1). Registering a second one\nis rejected.\n\nArgs:\n    cluster_id: Cluster the irrigator belongs to.\n    request: Tuya device ID, irrigator name, type (the device model key,\n        e.g. `rainpoint.ik10pw`),\n        optional config dict, and optional `reservoir_l` /\n        `flow_rate_l_per_min` capacity used for vacation rationing.\n\nReturns:\n    The newly created irrigator.\n\nRaises:\n    HTTPException: 404 if the cluster does not exist, 409 if the cluster\n        already has an irrigator or the Tuya device ID is already\n        registered, 422 if `type` is not a registered irrigator model key\n        (the detail lists the known keys).",
     "operationId": "add_irrigator",
     "security": [
      {
@@ -1052,7 +1052,7 @@
      "irrigators"
     ],
     "summary": "Get the cluster's irrigator",
-    "description": "Fetch the cluster's single irrigator.\n\nArgs:\n    cluster_id: Cluster whose irrigator to fetch.\n\nReturns:\n    The cluster's irrigator record.\n\nRaises:\n    HTTPException: 404 if the cluster has no irrigator.",
+    "description": "Fetch the cluster's single irrigator.\n\nArgs:\n    cluster_id: Cluster whose irrigator to fetch.\n\nReturns:\n    The cluster's irrigator record (a stored `local_key` reads as `••••••••`).\n\nRaises:\n    HTTPException: 404 if the cluster has no irrigator.",
     "operationId": "get_irrigator",
     "security": [
      {
@@ -1098,7 +1098,7 @@
      "irrigators"
     ],
     "summary": "Update the cluster's irrigator",
-    "description": "Partially update the metadata of the cluster's irrigator.\n\nOnly fields present in the request body are modified; omitted fields are\nleft unchanged.\n\nArgs:\n    cluster_id: Cluster whose irrigator to update.\n    request: Fields to update — any subset of `name`, `type`, `config`,\n        `reservoir_l`, and `flow_rate_l_per_min`.\n\nReturns:\n    The updated irrigator.\n\nRaises:\n    HTTPException: 404 if the cluster has no irrigator.",
+    "description": "Partially update the metadata of the cluster's irrigator.\n\nOnly fields present in the request body are modified; omitted fields are\nleft unchanged. An explicit `null` clears an optional field and is\nignored for a required one; `config: null` clears the whole config,\n`local_key` included. A `config` object replaces the stored one; its\n`local_key` is masked as `••••••••` in every response, and sending that\nmask back keeps the stored key.\n\nArgs:\n    cluster_id: Cluster whose irrigator to update.\n    request: Fields to update — any subset of `name`, `type`, `config`,\n        `reservoir_l`, and `flow_rate_l_per_min`.\n\nReturns:\n    The updated irrigator (its `local_key` masked).\n\nRaises:\n    HTTPException: 404 if the cluster has no irrigator, 422 if a changed\n        `type` is not a registered irrigator model key.",
     "operationId": "update_irrigator",
     "security": [
      {
@@ -1453,7 +1453,7 @@
      "sensors"
     ],
     "summary": "Add Sensor",
-    "description": "Register a Tuya sensor under a cluster.\n\nA sensor may optionally be linked to a specific plant; otherwise it is\ntreated as a cluster-level reading.\n\nArgs:\n    cluster_id: Cluster the sensor belongs to.\n    request: Tuya device ID, sensor name, type (the device model key,\n        e.g. `tuya.tr301z`),\n        optional config dict, and optional plant_id for per-plant linking.\n\nRaises:\n    HTTPException: 404 if the cluster (or referenced plant) is missing,\n        409 if the Tuya device ID is already registered.\n\nReturns:\n    The created sensor record.",
+    "description": "Register a Tuya sensor under a cluster.\n\nA sensor may optionally be linked to a specific plant; otherwise it is\ntreated as a cluster-level reading.\n\nArgs:\n    cluster_id: Cluster the sensor belongs to.\n    request: Tuya device ID, sensor name, type (the device model key,\n        e.g. `tuya.tr301z`),\n        optional config dict, and optional plant_id for per-plant linking.\n\nRaises:\n    HTTPException: 404 if the cluster (or referenced plant) is missing,\n        409 if the Tuya device ID is already registered, 422 if `type` is\n        not a registered sensor model key (the detail lists the known keys).\n\nReturns:\n    The created sensor record.",
     "operationId": "add_sensor",
     "security": [
      {
@@ -1616,7 +1616,7 @@
      "sensors"
     ],
     "summary": "Update a sensor",
-    "description": "Partially update a sensor's metadata.\n\nOnly fields present in the request body are modified; omitted fields are\nleft unchanged. The sensor must belong to the specified cluster.\n\nArgs:\n    cluster_id: Cluster the sensor belongs to.\n    sensor_id: Numeric sensor identifier.\n    request: Fields to update — any subset of name, type, config,\n        and plant_id.\n\nReturns:\n    The updated sensor.\n\nRaises:\n    HTTPException: 404 if the sensor does not exist or belongs to a\n        different cluster, or if ``plant_id`` is not a plant of that cluster.",
+    "description": "Partially update a sensor's metadata.\n\nOnly fields present in the request body are modified; omitted fields are\nleft unchanged. An explicit `null` clears an optional field (`plant_id:\nnull` unassigns the sensor) and is ignored for a required one;\n`config: null` clears the whole config, `local_key` included. The sensor\nmust belong to the specified cluster. A `config.local_key` is masked as\n`••••••••` in every response; sending that mask back keeps the stored key.\n\nArgs:\n    cluster_id: Cluster the sensor belongs to.\n    sensor_id: Numeric sensor identifier.\n    request: Fields to update — any subset of name, type, config,\n        and plant_id.\n\nReturns:\n    The updated sensor.\n\nRaises:\n    HTTPException: 404 if the sensor does not exist or belongs to a\n        different cluster, or if ``plant_id`` is not a plant of that cluster;\n        422 if a changed `type` is not a registered sensor model key.",
     "operationId": "update_sensor",
     "security": [
      {
@@ -3636,7 +3636,7 @@
      "preferences"
     ],
     "summary": "Update user preferences",
-    "description": "Patch user preferences; omitted fields are left unchanged.\n\nChanging the timezone re-syncs the scheduler, weather, and display clocks to\nthe new zone so they keep agreeing with the decision engine.\n\nArgs:\n    request: Partial update — any combination of units, timezone, theme,\n        default_cluster_id, refresh_interval_seconds, or dry_run_global.\n        Fields set to null are ignored.\n\nReturns:\n    The updated preferences row.",
+    "description": "Patch user preferences; omitted fields are left unchanged.\n\nChanging the timezone re-syncs the scheduler, weather, and display clocks to\nthe new zone so they keep agreeing with the decision engine.\n\nArgs:\n    request: Partial update — any combination of units, timezone, theme,\n        default_cluster_id, refresh_interval_seconds, or dry_run_global.\n        An explicit null clears default_cluster_id; null for a required\n        field is ignored.\n\nReturns:\n    The updated preferences row.\n\nRaises:\n    HTTPException: 404 if `default_cluster_id` names a cluster that does\n        not exist.",
     "operationId": "update_preferences",
     "requestBody": {
      "content": {
@@ -3755,7 +3755,7 @@
      "vacation"
     ],
     "summary": "Update a vacation window",
-    "description": "Partially update a vacation window.\n\nOnly fields present in the request body are modified; omitted fields are\nleft unchanged. The effective ``starts_at`` and ``ends_at`` after the patch\nmust satisfy ``starts_at < ends_at`` — otherwise the request is rejected\nso the vacation gate can never end up reversed.\n\nArgs:\n    window_id: Numeric ID of the vacation window to update.\n    request: Any subset of starts_at, ends_at, contact_email, notes.\n\nReturns:\n    The updated vacation window.\n\nRaises:\n    HTTPException: 404 if no window with that ID exists, 400 if the\n        resulting ``starts_at`` is not strictly before ``ends_at``.",
+    "description": "Partially update a vacation window.\n\nOnly fields present in the request body are modified; omitted fields are\nleft unchanged. An explicit `null` clears an optional field and is\nignored for a required one. The effective ``starts_at`` and ``ends_at`` after the patch\nmust satisfy ``starts_at < ends_at`` — otherwise the request is rejected\nso the vacation gate can never end up reversed.\n\nArgs:\n    window_id: Numeric ID of the vacation window to update.\n    request: Any subset of starts_at, ends_at, contact_email, notes.\n\nReturns:\n    The updated vacation window.\n\nRaises:\n    HTTPException: 404 if no window with that ID exists, 400 if the\n        resulting ``starts_at`` is not strictly before ``ends_at``.",
     "operationId": "update_vacation_window",
     "security": [
      {
@@ -4217,7 +4217,7 @@
      "windows"
     ],
     "summary": "Update an irrigation window",
-    "description": "Patch a window's hours, weekday mask, or label.\n\nArgs:\n    cluster_id: Cluster the window belongs to.\n    window_id: Numeric window identifier.\n    request: Any subset of start_hour, end_hour, weekday_mask, label.\n\nReturns:\n    The updated window.\n\nRaises:\n    HTTPException: 404 if the window does not exist or belongs to a\n        different cluster, 400 if the resulting hours or mask are invalid.",
+    "description": "Patch a window's hours, weekday mask, or label.\n\nOmitted fields are left unchanged; an explicit `null` label clears it,\nand `null` for the hours or the weekday mask is ignored.\n\nArgs:\n    cluster_id: Cluster the window belongs to.\n    window_id: Numeric window identifier.\n    request: Any subset of start_hour, end_hour, weekday_mask, label.\n\nReturns:\n    The updated window.\n\nRaises:\n    HTTPException: 404 if the window does not exist or belongs to a\n        different cluster, 400 if the resulting hours or mask are invalid.",
     "operationId": "update_window",
     "security": [
      {
@@ -6577,7 +6577,7 @@
      "cluster_id"
     ],
     "title": "IrrigatorResponse",
-    "description": "An irrigator as stored, with the cluster it waters."
+    "description": "An irrigator as stored, with the cluster it waters.\n\nA stored ``config.local_key`` is masked as ``••••••••``; send the mask back\nunchanged in an update to keep the stored key."
    },
    "LearnResponse": {
     "properties": {
@@ -7322,7 +7322,7 @@
     },
     "type": "object",
     "title": "PreferencesUpdateRequest",
-    "description": "Partial update of the preferences; omitted fields keep their value."
+    "description": "Partial update of the preferences; omitted fields keep their value.\n\n``null`` clears an optional field and is ignored for a required one."
    },
    "ReasonResponse": {
     "properties": {
@@ -7795,7 +7795,7 @@
      "cluster_id"
     ],
     "title": "SensorResponse",
-    "description": "A sensor as stored, with its cluster and current plant assignment."
+    "description": "A sensor as stored, with its cluster and current plant assignment.\n\nA stored ``config.local_key`` is masked as ``••••••••``; send the mask back\nunchanged in an update to keep the stored key."
    },
    "SensorStatusResponse": {
     "properties": {
@@ -8336,7 +8336,7 @@
     },
     "type": "object",
     "title": "UpdateClusterRequest",
-    "description": "Partial update of a cluster; omitted fields keep their value."
+    "description": "Partial update of a cluster; omitted fields keep their value.\n\n``null`` clears an optional field and is ignored for a required one."
    },
    "UpdateGlobalConfigRequest": {
     "properties": {
@@ -8482,7 +8482,7 @@
     },
     "type": "object",
     "title": "UpdateIrrigationWindowRequest",
-    "description": "Partial update of a watering window; omitted fields keep their value."
+    "description": "Partial update of a watering window; omitted fields keep their value.\n\n``null`` clears an optional field and is ignored for a required one."
    },
    "UpdateIrrigatorRequest": {
     "properties": {
@@ -8547,7 +8547,7 @@
     },
     "type": "object",
     "title": "UpdateIrrigatorRequest",
-    "description": "Partial update of an irrigator; omitted fields keep their value."
+    "description": "Partial update of an irrigator; omitted fields keep their value.\n\n``null`` clears an optional field and is ignored for a required one;\n``config: null`` clears the whole config, ``local_key`` included."
    },
    "UpdatePlantRequest": {
     "properties": {
@@ -8653,7 +8653,7 @@
     },
     "type": "object",
     "title": "UpdatePlantRequest",
-    "description": "Partial update of a plant; omitted fields keep their value."
+    "description": "Partial update of a plant; omitted fields keep their value.\n\n``null`` clears an optional field and is ignored for a required one."
    },
    "UpdateSensorRequest": {
     "properties": {
@@ -8705,7 +8705,7 @@
     },
     "type": "object",
     "title": "UpdateSensorRequest",
-    "description": "Partial update of a sensor; omitted fields keep their value."
+    "description": "Partial update of a sensor; omitted fields keep their value.\n\n``null`` clears an optional field and is ignored for a required one;\n``config: null`` clears the whole config, ``local_key`` included."
    },
    "UpdateVacationWindowRequest": {
     "properties": {
@@ -8756,7 +8756,7 @@
     },
     "type": "object",
     "title": "UpdateVacationWindowRequest",
-    "description": "Partial-update body for a vacation window. All fields optional."
+    "description": "Partial-update body for a vacation window; omitted fields keep their value, null clears notes / email.\n\n``null`` for ``starts_at`` / ``ends_at`` is ignored (they are required)."
    },
    "VacationCreateRequest": {
     "properties": {

@@ -20,12 +20,13 @@ from greenhouse_server.services import inventory
 from greenhouse_server.services.inventory import DeviceIdExistsError, IrrigatorExistsError
 from greenhouse_server.services.manual_control import ManualActionError, manual_log, manual_start, manual_stop
 from greenhouse_server.web.context import base_context
-from greenhouse_server.web.forms import parsed_or_400
+from greenhouse_server.web.forms import device_type_options, parsed_or_400
 from greenhouse_server.web.templating import templates
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from greenhouse_core.devices import DeviceRegistry
     from greenhouse_core.models import Cluster
 
 router = APIRouter(include_in_schema=False)
@@ -43,14 +44,16 @@ def list_irrigators(cluster_id: int, repo: RepoDep) -> Response:
 
 
 @router.get("/clusters/{cluster_id}/irrigators/new")
-def new_irrigator_form(request: Request, cluster_id: int, repo: RepoDep) -> Response:
+def new_irrigator_form(request: Request, cluster_id: int, repo: RepoDep, registry: DeviceRegistryDep) -> Response:
     """Render the add-irrigator form, or go back to the cluster when it already has one."""
     cluster = require_cluster(repo, cluster_id)
     # A cluster has at most one irrigator. If one already exists, send the user
     # back to the detail page instead of offering an "add" form they cannot use.
     if repo.get_irrigator_for_cluster(cluster_id) is not None:
         return RedirectResponse(url=f"/clusters/{cluster_id}#irrigators", status_code=303)
-    return templates.TemplateResponse(request, "irrigators/new.html", base_context(request, cluster=cluster))
+    return templates.TemplateResponse(
+        request, "irrigators/new.html", base_context(request, cluster=cluster, type_options=_type_options(registry))
+    )
 
 
 def _parse_capacity(raw: str) -> float | None:
@@ -60,11 +63,17 @@ def _parse_capacity(raw: str) -> float | None:
     )
 
 
-def _new_form_conflict(request: Request, cluster: Cluster, error: str) -> HTMLResponse:
-    """Re-render the add form with the conflict message (HTTP 409), as the API's 409."""
-    return templates.TemplateResponse(
-        request, "irrigators/new.html", base_context(request, cluster=cluster, error=error), status_code=409
-    )
+def _type_options(registry: DeviceRegistry | None, current: str | None = None) -> list[tuple[str, str]]:
+    """The irrigator type ``<select>`` options: the registry's model keys (plus a stored unknown one)."""
+    return device_type_options(inventory.known_device_types(registry, "irrigator"), current)
+
+
+def _new_form_error(
+    request: Request, cluster: Cluster, registry: DeviceRegistry | None, error: str, status_code: int
+) -> HTMLResponse:
+    """Re-render the add form with the error message, with the API's status (409 conflict, 422 unknown type)."""
+    context = base_context(request, cluster=cluster, error=error, type_options=_type_options(registry))
+    return templates.TemplateResponse(request, "irrigators/new.html", context, status_code=status_code)
 
 
 @router.post("/clusters/{cluster_id}/irrigators")
@@ -72,6 +81,7 @@ def create_irrigator(
     request: Request,
     cluster_id: int,
     repo: RepoDep,
+    registry: DeviceRegistryDep,
     tuya_device_id: str = Form(...),
     name: str = Form(...),
     type: str = Form(...),
@@ -97,23 +107,26 @@ def create_irrigator(
             name=name,
             irrigator_type=type,
             config=config,
+            registry=registry,
             reservoir_l=reservoir,
             flow_rate_l_per_min=flow_rate,
         )
     except IrrigatorExistsError:
         # Re-render the form with a user-facing error instead of a redirect; a
         # cluster may have at most one irrigator.
-        return _new_form_conflict(
-            request, cluster, "This cluster already has an irrigator. A cluster can have at most one."
+        return _new_form_error(
+            request, cluster, registry, "This cluster already has an irrigator. A cluster can have at most one.", 409
         )
     except DeviceIdExistsError:
-        return _new_form_conflict(request, cluster, "Device ID already exists")
+        return _new_form_error(request, cluster, registry, "Device ID already exists", 409)
+    except inventory.UnknownDeviceTypeError as exc:
+        return _new_form_error(request, cluster, registry, str(exc), 422)
     repo.commit()
     return RedirectResponse(url=f"/clusters/{cluster_id}#irrigators", status_code=303)
 
 
 @router.get("/clusters/{cluster_id}/irrigators/edit")
-def edit_irrigator_form(request: Request, cluster_id: int, repo: RepoDep) -> Response:
+def edit_irrigator_form(request: Request, cluster_id: int, repo: RepoDep, registry: DeviceRegistryDep) -> Response:
     """Render the edit form of the cluster's irrigator."""
     cluster = require_cluster(repo, cluster_id)
     irrigator = require_cluster_irrigator(repo, cluster_id)
@@ -121,7 +134,13 @@ def edit_irrigator_form(request: Request, cluster_id: int, repo: RepoDep) -> Res
     return templates.TemplateResponse(
         request,
         "irrigators/edit.html",
-        base_context(request, cluster=cluster, irrigator=irrigator, config=config),
+        base_context(
+            request,
+            cluster=cluster,
+            irrigator=irrigator,
+            config=config,
+            type_options=_type_options(registry, irrigator.type),
+        ),
     )
 
 
@@ -130,6 +149,7 @@ def update_irrigator(
     request: Request,
     cluster_id: int,
     repo: RepoDep,
+    registry: DeviceRegistryDep,
     name: str = Form(...),
     type: str = Form(...),
     device_ip: str = Form(""),
@@ -139,6 +159,10 @@ def update_irrigator(
 ) -> Response:
     """Save the irrigator form (blank connection fields keep their stored values)."""
     irrigator = require_cluster_irrigator(repo, cluster_id)
+    try:
+        inventory.require_known_device_type(registry, "irrigator", type, stored=irrigator.type)
+    except inventory.UnknownDeviceTypeError as exc:
+        raise HTTPException(422, str(exc)) from None
     # Merge into the stored config so a blank field PRESERVES the current value
     # rather than wiping it. The local key is a root-level credential — a blank
     # submit must never silently erase it (the form intentionally renders it
@@ -148,6 +172,8 @@ def update_irrigator(
         config["device_ip"] = device_ip.strip()
     if local_key.strip():
         config["local_key"] = local_key.strip()
+    # The form shows the mask as its placeholder; a pasted mask means "keep", as on the API.
+    config = inventory.keep_masked_local_key(config, irrigator.config)
     repo.update_irrigator(
         irrigator.id,
         name=name,

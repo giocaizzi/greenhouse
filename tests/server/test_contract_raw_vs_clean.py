@@ -103,9 +103,9 @@ def test_raw_views_keep_the_spike_and_cleaned_views_ignore_it(spiky):
     decision_log = p.db_rows()["decision_logs"][0]["payload_json"]
     assert decision_log["sensor_snapshot"]["min_soil_moisture"] == snapshot_min
     monitor_soil = {s["sensor_id"]: (s["soil_moisture"], s["status"]) for s in monitor["sensors"]}
-    # /monitor cleans too, but over a 2 h window: only 4 samples at this 30-min cadence, below
-    # CLEANING_HAMPEL_MIN_READINGS, so the spike survives (see the dedicated test below).
-    assert monitor_soil[p.ids["sensor_id"]] == (SPIKE, "very_dry")
+    # /monitor cleans over the snapshot window before cutting its 2 h slice, so the spike is gone
+    # and the newest sane value (45 %, inside the band) is what it judges (see the dedicated test below).
+    assert monitor_soil[p.ids["sensor_id"]] == (STEADY[-1], "ok")
     # The range gate still applies regardless of window size.
     assert monitor_soil[p.ids["second_sensor_id"]] == (None, "no_data")
 
@@ -136,14 +136,14 @@ def test_anomaly_scan_sees_what_cleaning_masks(spiky):
     assert [(a["code"], a["entity_id"]) for a in alerts] == [("sensor_drift", spiky.ids["sensor_id"])]
 
 
-def test_monitor_current_behavior_short_window_defeats_spike_filter(spiky):
-    """Pins current behavior: ``/monitor`` cleans only its 2 h slice, too short to judge spikes.
+def test_monitor_cleans_over_a_window_long_enough_for_the_spike_filter(spiky):
+    """``/monitor`` cleans the decision snapshot's 24 h window, then keeps its 2 h slice.
 
-    ``monitor_cluster`` feeds ``clean_readings_desc`` the last 2 h of readings.
-    With a 30-min cadence that is 4 samples (< ``CLEANING_HAMPEL_MIN_READINGS`` = 5),
-    so the Hampel filter is skipped and the 5 % spike becomes "very_dry" and a
-    ``needs_water`` entry — while the decision snapshot (24 h window) ignores it.
-    Observation for REFACTOR_NOTES.md; not fixed.
+    It used to clean only the 2 h slice: at a 30-min cadence that is 4 samples
+    (< ``CLEANING_HAMPEL_MIN_READINGS`` = 5), so the Hampel filter was skipped and the 5 % spike
+    became "very_dry" and a ``needs_water`` entry while the decision snapshot ignored it.
     """
     monitor = spiky.call("GET", "/api/v1/clusters/1/monitor")["response"]
-    assert monitor["needs_water"] == ["Sensor 1 (Monstera deliciosa): 5%"]
+    assert monitor["needs_water"] == []
+    by_id = {r["sensor_id"]: (r["soil_moisture"], r["status"]) for r in monitor["sensors"]}
+    assert by_id[spiky.ids["sensor_id"]] == (STEADY[-1], "ok")
