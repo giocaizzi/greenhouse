@@ -37,12 +37,12 @@ def _device_config(device_ip: str | None, local_key: str | None) -> dict[str, st
 
 
 @irrigator_app.command("add")
-def irrigator_add(
+def irrigator_add(  # noqa: PLR0913 — one parameter per CLI option/argument: Typer has no option groups
     ctx: typer.Context,
     cluster: ClusterOpt,
     device_id: Annotated[str, typer.Option(help="Tuya device ID")],
     name: Annotated[str, typer.Option(help="Irrigator name")],
-    type: Annotated[str, typer.Option(help="Device model key (rainpoint.ik10pw)")],
+    type: Annotated[str, typer.Option(help="Device model key (rainpoint.ik10pw)")],  # noqa: A002 — the Python name is the click parameter name (tests/golden/cli/params.json)
     device_ip: DeviceIpOpt = None,
     local_key: LocalKeyOpt = None,
     reservoir_l: ReservoirOpt = None,
@@ -83,7 +83,7 @@ def irrigator_show(
 @irrigator_app.command("start")
 def irrigator_start(
     ctx: typer.Context,
-    id: Annotated[int, typer.Argument(help="Irrigator ID")],
+    id: Annotated[int, typer.Argument(help="Irrigator ID")],  # noqa: A002 — the Python name is the click parameter name (tests/golden/cli/params.json)
     minutes: Annotated[int | None, typer.Option(help="Duration in minutes")] = None,
 ) -> None:
     """Start an irrigator."""
@@ -91,7 +91,7 @@ def irrigator_start(
 
 
 @irrigator_app.command("stop")
-def irrigator_stop(ctx: typer.Context, id: Annotated[int, typer.Argument(help="Irrigator ID")]) -> None:
+def irrigator_stop(ctx: typer.Context, id: Annotated[int, typer.Argument(help="Irrigator ID")]) -> None:  # noqa: A002 — the Python name is the click parameter name (tests/golden/cli/params.json)
     """Stop an irrigator."""
     output(call(ctx, lambda c: c.stop_irrigator(id)))
 
@@ -99,7 +99,7 @@ def irrigator_stop(ctx: typer.Context, id: Annotated[int, typer.Argument(help="I
 @irrigator_app.command("log-manual")
 def irrigator_log_manual(
     ctx: typer.Context,
-    id: Annotated[int, typer.Argument(help="Irrigator ID")],
+    id: Annotated[int, typer.Argument(help="Irrigator ID")],  # noqa: A002 — the Python name is the click parameter name (tests/golden/cli/params.json)
     minutes: Annotated[int, typer.Option(help="Duration in minutes")],
     notes: Annotated[str | None, typer.Option()] = None,
 ) -> None:
@@ -108,11 +108,11 @@ def irrigator_log_manual(
 
 
 @irrigator_app.command("update")
-def irrigator_update(
+def irrigator_update(  # noqa: PLR0913 — one parameter per CLI option/argument: Typer has no option groups
     ctx: typer.Context,
     cluster: ClusterArg,
     name: Annotated[str | None, typer.Option(help="New irrigator name")] = None,
-    type: Annotated[str | None, typer.Option(help="Device model key (rainpoint.ik10pw)")] = None,
+    type: Annotated[str | None, typer.Option(help="Device model key (rainpoint.ik10pw)")] = None,  # noqa: A002 — the Python name is the click parameter name (tests/golden/cli/params.json)
     device_ip: DeviceIpOpt = None,
     local_key: LocalKeyOpt = None,
     reservoir_l: ReservoirOpt = None,
@@ -142,6 +142,7 @@ def irrigator_update(
 @irrigator_app.command("delete")
 def irrigator_delete(
     ctx: typer.Context,
+    *,
     cluster: ClusterArg,
     yes: YesOpt = False,
 ) -> None:

@@ -34,7 +34,7 @@ QuietEndOpt = Annotated[int | None, typer.Option("--quiet-end", help="Quiet-hour
 
 
 @config_app.command("set")
-def config_set(
+def config_set(  # noqa: PLR0913 — one parameter per CLI option/argument: Typer has no option groups
     ctx: typer.Context,
     cluster: ClusterOpt,
     mode: ModeOpt = None,
@@ -83,7 +83,7 @@ def global_get(ctx: typer.Context) -> None:
 
 
 @global_app.command("set")
-def global_set(
+def global_set(  # noqa: PLR0913 — one parameter per CLI option/argument: Typer has no option groups
     ctx: typer.Context,
     mode: ModeOpt = None,
     minutes: MinutesOpt = None,

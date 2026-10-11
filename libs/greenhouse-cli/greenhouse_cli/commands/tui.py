@@ -11,6 +11,7 @@ from greenhouse_cli.commands._helpers import server_url
 
 def tui(
     ctx: typer.Context,
+    *,
     refresh: Annotated[
         float,
         typer.Option(min=0, help="Auto-refresh interval in seconds (0 disables)"),

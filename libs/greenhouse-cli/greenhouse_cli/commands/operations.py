@@ -13,8 +13,9 @@ def status(ctx: typer.Context, cluster: ClusterArg) -> None:
     output(call(ctx, lambda c: c.status(cluster)))
 
 
-def irrigate(
+def irrigate(  # noqa: PLR0913 — one parameter per CLI option/argument: Typer has no option groups
     ctx: typer.Context,
+    *,
     cluster: ClusterArg,
     temp: Annotated[float | None, typer.Option(help="Override temperature (skips sync + weather)")] = None,
     dry_run: Annotated[bool, typer.Option("--dry-run", help="Analyze only, don't execute")] = False,
@@ -30,6 +31,7 @@ def irrigate(
 
 def check(
     ctx: typer.Context,
+    *,
     cluster: Annotated[int | None, typer.Argument(help="Cluster ID")] = None,
     all_clusters: Annotated[bool, typer.Option("--all", help="Check all clusters")] = False,
 ) -> None:
@@ -102,6 +104,7 @@ def health(ctx: typer.Context) -> None:
 
 def stop_all(
     ctx: typer.Context,
+    *,
     yes: YesOpt = False,
 ) -> None:
     """Emergency kill switch: stop every irrigator in the system."""
