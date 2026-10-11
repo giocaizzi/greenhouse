@@ -106,6 +106,34 @@ def _display(f: Field) -> str:
     return str(f.value)
 
 
+def _form_row(f: Field) -> ComposeResult:
+    """Yield one field's widgets inside its ``form-row`` container (call from ``compose``)."""
+    with Horizontal(classes="form-row"):
+        yield from _field_widgets(f)
+
+
+def _field_widgets(f: Field) -> ComposeResult:
+    """Yield one form row's widgets: a checkbox, or a label plus a select or a typed input."""
+    if f.kind == "bool":
+        yield Checkbox(f.label, value=bool(f.value), id=f"field-{f.name}")
+        return
+    yield Label(f.label + (" *" if f.required else ""), classes="form-label")
+    if f.kind == "select":
+        yield Select(
+            f.options,
+            value=f.value if f.value is not None else Select.NULL,
+            allow_blank=not f.required,
+            id=f"field-{f.name}",
+        )
+    else:
+        yield Input(
+            _display(f),
+            placeholder=f.placeholder or ("YYYY-MM-DD HH:MM" if f.kind == "datetime" else ""),
+            type="integer" if f.kind == "int" else "number" if f.kind == "float" else "text",
+            id=f"field-{f.name}",
+        )
+
+
 class FormScreen(ModalScreen[dict[str, Any] | None]):
     """Render ``fields`` and dismiss with ``{name: parsed value}`` or ``None``."""
 
@@ -127,25 +155,7 @@ class FormScreen(ModalScreen[dict[str, Any] | None]):
                 yield Static(self.note, classes="hint")
             with VerticalScroll(classes="form-body"):
                 for f in self.fields:
-                    with Horizontal(classes="form-row"):
-                        if f.kind == "bool":
-                            yield Checkbox(f.label, value=bool(f.value), id=f"field-{f.name}")
-                            continue
-                        yield Label(f.label + (" *" if f.required else ""), classes="form-label")
-                        if f.kind == "select":
-                            yield Select(
-                                f.options,
-                                value=f.value if f.value is not None else Select.NULL,
-                                allow_blank=not f.required,
-                                id=f"field-{f.name}",
-                            )
-                        else:
-                            yield Input(
-                                _display(f),
-                                placeholder=f.placeholder or ("YYYY-MM-DD HH:MM" if f.kind == "datetime" else ""),
-                                type="integer" if f.kind == "int" else "number" if f.kind == "float" else "text",
-                                id=f"field-{f.name}",
-                            )
+                    yield from _form_row(f)
             yield Label("", id="form-error", classes="dialog-error")
             with Horizontal(classes="dialog-buttons"):
                 yield Button(self.submit_label, variant="primary", id="submit")
