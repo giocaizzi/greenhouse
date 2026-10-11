@@ -3,9 +3,10 @@
 Both front doors (``POST /api/v1/irrigators/{id}/start|stop|log-manual`` and
 the web ``/irrigators/{id}/start|stop|log-manual`` actions) call these
 functions, so a manual action always gets the same rails no matter where it
-came from: per-day caps, the dry-run pump watcher, the event row, and the
-notification. A manual log is recorded as a ``start`` row so cooldown, caps
-and learning count it like any other run.
+came from: per-day caps, the global dry-run refusal, the dry-run pump watcher,
+the event row, and the notification. Stops are never refused. A manual log
+(no hardware) is recorded as a ``start`` row so cooldown, caps and learning
+count it like any other run.
 
 Errors are raised as :class:`ManualActionError` carrying the HTTP status the
 JSON API returns; each route maps it to its own response shape.
@@ -16,7 +17,14 @@ from typing import TYPE_CHECKING
 
 from greenhouse_core.constants import DAILY_CAP_WINDOW_HOURS
 from greenhouse_core.devices import DeviceRegistry, UnknownDeviceModel
-from greenhouse_core.models import EVENT_ACTION_START, EVENT_ACTION_STOP, TRIGGERED_BY_MANUAL, Irrigator
+from greenhouse_core.models import (
+    ENTITY_IRRIGATOR,
+    EVENT_ACTION_START,
+    EVENT_ACTION_STOP,
+    SOURCE_IRRIGATION,
+    TRIGGERED_BY_MANUAL,
+    Irrigator,
+)
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.services.irrigation import schedule_pump_watcher
 from greenhouse_server.services.notify import NtfyClient, maybe_notify
@@ -25,12 +33,15 @@ if TYPE_CHECKING:
     from greenhouse_core.devices import AbstractIrrigatorAdapter
 
 
+DRY_RUN_REFUSED_DETAIL = "global dry run is on: irrigator not started"
+
+
 class ManualActionError(Exception):
     """A manual start/stop was refused or failed.
 
     Attributes:
-        status_code: HTTP status the JSON API responds with (409 caps,
-            503 no registry / unknown model, 502 device failure).
+        status_code: HTTP status the JSON API responds with (409 caps or
+            global dry run, 503 no registry / unknown model, 502 device failure).
         detail: Human-readable reason.
     """
 
@@ -90,6 +101,35 @@ def _adapter(registry: DeviceRegistry | None, irrigator: Irrigator) -> "Abstract
         raise ManualActionError(503, str(exc)) from exc
 
 
+DRY_RUN_REFUSED_ACTIVITY_CODE = "dry_run_global"
+
+
+def _refuse_if_dry_run(repo: IrrigationRepository, irrigator: Irrigator, minutes: int | None, *, via: str) -> None:
+    """Refuse the start while the global dry run is on, leaving a durable activity row (S1).
+
+    The preference promises that no pump runs, so a manual start is evaluated through every
+    rail and then refused instead of actuating. The activity row is committed before raising
+    because the route turns the refusal into an HTTP error and keeps nothing else.
+
+    Raises:
+        ManualActionError: 409 when ``dry_run_global`` is on.
+    """
+    if not repo.get_preferences().dry_run_global:
+        return
+    duration = f" for {minutes} min" if minutes else ""
+    repo.add_activity_event(
+        source=SOURCE_IRRIGATION,
+        entity_type=ENTITY_IRRIGATOR,
+        entity_id=irrigator.id,
+        code=DRY_RUN_REFUSED_ACTIVITY_CODE,
+        message=f"global dry run: manual start{duration} on '{irrigator.name}' via {via} refused (pump not started)",
+        severity="warning",
+        payload={"irrigator_id": irrigator.id, "duration_minutes": minutes, "via": via},
+    )
+    repo.commit()
+    raise ManualActionError(409, DRY_RUN_REFUSED_DETAIL)
+
+
 def manual_start(
     repo: IrrigationRepository,
     registry: DeviceRegistry | None,
@@ -101,8 +141,8 @@ def manual_start(
 ) -> str:
     """Start ``irrigator`` by hand, with every manual-start safety rail.
 
-    Order: registry → caps check → adapter → device start → ``start`` event (committed) → dry-run
-    watcher (only with a duration — it needs a deadline) → notification. A
+    Order: registry → caps check → adapter → global dry-run refusal → device start → ``start`` event
+    (committed) → dry-run watcher (only with a duration — it needs a deadline) → notification. A
     failed device start records nothing, matching the JSON API. Commits because
     the ``start`` event must be durable before the side effects that follow it
     (the watcher job, which runs in its own session, and the notification).
@@ -119,12 +159,13 @@ def manual_start(
         The adapter's success message.
 
     Raises:
-        ManualActionError: 409 caps, 503 no registry / unknown model, 502 device failure.
+        ManualActionError: 409 caps or global dry run, 503 no registry / unknown model, 502 device failure.
     """
     if registry is None:  # checked before the caps, as the API always has
         raise ManualActionError(503, "No device registry (missing Tuya credentials)")
     check_rate_limits(repo, irrigator.cluster_id, irrigator.id, minutes)
     adapter = _adapter(registry, irrigator)
+    _refuse_if_dry_run(repo, irrigator, minutes, via=via)
 
     success, output = adapter.start(irrigator, minutes)
     if not success:

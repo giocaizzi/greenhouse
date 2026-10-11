@@ -18,7 +18,7 @@ from greenhouse_core.constants import (
 from greenhouse_core.devices import DeviceRegistry, UnknownDeviceModel
 from greenhouse_core.logic import IrrigationLogic
 from greenhouse_core.logic.cleaning import clean_readings_desc
-from greenhouse_core.logic.decision import Action, Reason, Severity
+from greenhouse_core.logic.decision import Action, Reason, Severity, TriggerCode
 from greenhouse_core.logic.plant_needs import moisture_target_range
 from greenhouse_core.models import (
     ENTITY_CLUSTER,
@@ -661,6 +661,43 @@ class IrrigationService:
         result["blocking_alarms"] = [a.value for a in blocking_alarms]
         return True
 
+    def _actuation_gates_skip(
+        self, cluster_id: int, irrigator: "Irrigator", decision: "IrrigationDecision", result: PipelineResult
+    ) -> bool:
+        """The server's gates between an IRRIGATE decision and ``adapter.start``; the first that fires wins.
+
+        Order: device health (a real-world block outranks a mode), then the global dry run, the
+        last word before the pump. Returns True when the run became a skip.
+        """
+        gates = (self._health_gate_skips, self._dry_run_gate_skips)
+        return any(gate(cluster_id, irrigator, decision, result) for gate in gates)
+
+    def _dry_run_gate_skips(
+        self, cluster_id: int, irrigator: "Irrigator", decision: "IrrigationDecision", result: PipelineResult
+    ) -> bool:
+        """Global dry-run gate: with ``dry_run_global`` on, log the run as a skip instead of starting the pump.
+
+        The last gate before ``adapter.start`` (S1): automatic checks, ``/irrigate`` and its
+        ``force`` all reach it, so no pipeline run actuates while the preference is on. The run is
+        still evaluated and logged — the skip is led by ``TriggerCode.DRY_RUN_GLOBAL`` and says
+        what would have run. Returns True when the run was held.
+        """
+        if not self._repo.get_preferences().dry_run_global:
+            return False
+        duration = decision.duration_minutes
+        self._skip_run(
+            cluster_id,
+            decision,
+            result,
+            Reason(
+                code=TriggerCode.DRY_RUN_GLOBAL,
+                message=f"global dry run: would have irrigated {duration}min on '{irrigator.name}' (pump not started)",
+                severity=Severity.WARNING,
+            ),
+            payload={"dry_run_global": True, "irrigator_id": irrigator.id, "duration_minutes": duration},
+        )
+        return True
+
     def _skip_run(
         self,
         cluster_id: int,
@@ -714,6 +751,10 @@ class IrrigationService:
         engine; a ``MANUAL_OVERRIDE_QUIET_HOURS`` warning Reason is still
         attached to the resulting decision so the audit log records that
         the user pushed past the deny window.
+
+        An IRRIGATE decision then passes the server's actuation gates, in order: the
+        device-health gate, then the global dry run (``dry_run_global``). Either turns the
+        run into a logged skip; nothing bypasses them, ``force`` included.
         """
         cluster = self._repo.get_cluster(cluster_id)
         if not cluster:
@@ -739,7 +780,7 @@ class IrrigationService:
             return _with_error(result, target)
         irrigator, adapter = target
 
-        if not self._health_gate_skips(cluster_id, irrigator, decision, result):
+        if not self._actuation_gates_skip(cluster_id, irrigator, decision, result):
             self._actuate(_Actuation(cluster_id, irrigator, adapter, decision, temp, source, sensor_data), result)
         return result
 

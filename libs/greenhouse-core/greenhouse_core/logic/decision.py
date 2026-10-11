@@ -94,6 +94,10 @@ class TriggerCode(StrEnum):
     # resolved or the hold ages out; `force` does NOT bypass it, the same way
     # the device-health gate is not bypassable.
     LEAK_HOLD = "leak_hold"
+    # Global dry run (``UserPreferences.dry_run_global``) — the server's last gate
+    # before the pump: the run is evaluated and logged, then turned into a SKIP
+    # led by this reason instead of actuating.
+    DRY_RUN_GLOBAL = "dry_run_global"
 
 
 DEVICE_BLOCKING_CODES: frozenset[TriggerCode] = frozenset(

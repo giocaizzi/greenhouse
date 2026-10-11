@@ -22,8 +22,8 @@ Contracts / invariants guarded here:
   :class:`IrrigationDecision`;
 - I11 — an open leak alert holds ``/irrigate`` even with ``force=true``, while
   ``POST /irrigators/{id}/start`` (the escape hatch) still actuates;
-- observed bugs B-1, B-4, B-5 pinned as ``*_current_behavior_*`` (B-8 fixed by drift pair D5; B-6 fixed:
-  a device-health block rewrites the decision log).
+- observed bugs B-4, B-5 pinned as ``*_current_behavior_*`` (B-8 fixed by drift pair D5; B-6 fixed:
+  a device-health block rewrites the decision log; S1/B-1 fixed: ``dry_run_global`` never actuates).
 """
 
 from __future__ import annotations
@@ -966,18 +966,43 @@ def test_manual_start_schedules_watcher_but_no_leak_check(pipeline):
 # ── Observed bugs (pinned, NOT fixed) ──────────────────────────────────────
 
 
-def test_dry_run_global_current_behavior_still_actuates(pipeline):
-    """Pins current (buggy) behavior: ``dry_run_global`` is ignored by actuation (B-1) — see REFACTOR_NOTES.md.
+def test_dry_run_global_never_actuates_but_stops_still_work(pipeline):
+    """S1 / B-1 fixed: with ``dry_run_global`` on no start reaches the pump; stops always do.
 
-    The preference promises "no irrigator ever actuates", yet the pipeline,
-    the manual start and ``/check`` all drive the adapter.
+    ``/irrigate`` (with and without ``force``) and ``/check`` evaluate, log a decision
+    rewritten to ``skip`` / ``dry_run_global`` and a ``decision_skip`` activity row; the
+    manual start is refused with 409 and leaves a ``dry_run_global`` activity row. Manual
+    stop, stop-all and the hand-watering log (no hardware) are unaffected.
     """
     ids = pipeline.seed_cluster(soil=35.0)
     pipeline.api("PUT", "/api/v1/preferences", {"dry_run_global": True})
     pipeline.mark()
-    assert _irrigate(pipeline)["response"]["action"] == "irrigated"
-    assert pipeline.call("POST", f"/api/v1/irrigators/{ids['irrigator_id']}/start", {"minutes": 1})["status"] == 200
-    assert [c[0] for c in pipeline.wiring.irrigator.calls] == ["start", "start"]
+    auto = _irrigate(pipeline)["response"]
+    assert (auto["action"], auto["reasons"][0]["code"]) == ("skip", "dry_run_global")
+    assert "would have irrigated 2min on 'Irrigator 1'" in auto["reason"]
+    assert _irrigate(pipeline, force=True)["response"]["action"] == "skip"
+    assert pipeline.call("POST", "/api/v1/clusters/1/check")["response"]["action"] == "skip"
+    manual = pipeline.call("POST", f"/api/v1/irrigators/{ids['irrigator_id']}/start", {"minutes": 1})
+    assert (manual["status"], manual["response"]) == (409, {"detail": "global dry run is on: irrigator not started"})
+    assert pipeline.wiring.irrigator.calls == []
+
+    assert pipeline.call("POST", f"/api/v1/irrigators/{ids['irrigator_id']}/stop")["status"] == 200
+    assert pipeline.call("POST", "/api/v1/bulk/stop-all")["response"] == {"stopped": 1, "errors": []}
+    assert (
+        pipeline.call("POST", f"/api/v1/irrigators/{ids['irrigator_id']}/log-manual", {"minutes": 2})["status"] == 200
+    )
+    assert [c[0] for c in pipeline.wiring.irrigator.calls] == ["stop", "stop"]
+
+    rows = pipeline.db_rows()
+    assert [(r["action"], r["primary_code"], r["actuated"]) for r in rows["decision_logs"]] == [
+        ("skip", "dry_run_global", False)
+    ] * 3
+    assert [a["code"] for a in rows["activity_events"]] == ["decision_skip"] * 3 + ["dry_run_global"]
+    assert [(e["action"], e["triggered_by"]) for e in rows["irrigation_events"]] == [
+        ("stop", "manual"),
+        ("stop", "emergency"),
+        ("start", "manual"),
+    ]
 
 
 def test_caps_current_behavior_not_checked_by_automatic_pipeline(pipeline):

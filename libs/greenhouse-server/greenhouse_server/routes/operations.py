@@ -141,7 +141,9 @@ def irrigate(
     cluster's irrigation config and the global 6h cooldown.
 
     Side effects: actuates physical hardware unless `dry_run=True`; writes a
-    sensor sync and an irrigation event.
+    sensor sync and an irrigation event. While the `dry_run_global`
+    preference is on nothing actuates, `force` included: the run is logged as
+    `skip` with a `dry_run_global` reason.
 
     Args:
         cluster_id: Cluster to irrigate.
