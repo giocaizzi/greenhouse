@@ -31,9 +31,11 @@ from dataclasses import dataclass
 from greenhouse_core.constants import (
     BATTERY_CRITICAL_PCT,
     BATTERY_LOW_PCT,
+    DEFAULT_SYNC_INTERVAL_MINUTES,
     OFFLINE_AFTER_MINUTES,
     SENSOR_HEALTH_BACKFILL_HOURS,
     SENSOR_HEALTH_BACKFILL_WINDOW,
+    SENSOR_OFFLINE_GRACE_MINUTES,
     SIGNAL_LOSS_THRESHOLD,
 )
 from greenhouse_core.devices import DeviceRegistry
@@ -100,16 +102,25 @@ class DeviceHealthMonitor:
         battery_low_pct: int = BATTERY_LOW_PCT,
         battery_critical_pct: int = BATTERY_CRITICAL_PCT,
         offline_after_minutes: int = OFFLINE_AFTER_MINUTES,
+        sensor_offline_after_minutes: int = DEFAULT_SYNC_INTERVAL_MINUTES + SENSOR_OFFLINE_GRACE_MINUTES,
         signal_loss_threshold: int = SIGNAL_LOSS_THRESHOLD,
         clock: Callable[[], int] = lambda: int(time.time()),
         notifier: NtfyClient | None = None,
     ) -> None:
+        """Build a monitor.
+
+        ``offline_after_minutes`` judges irrigators, whose ``last_seen_ts`` comes from a live
+        read; ``sensor_offline_after_minutes`` judges sensors, whose ``last_seen_ts`` is the
+        latest persisted reading — pass the sync interval plus ``SENSOR_OFFLINE_GRACE_MINUTES``
+        (B-3: the 30-min irrigator window flagged every sensor offline between syncs).
+        """
         self._repo = repo
         self._registry = registry
         self._notifier = notifier
         self._battery_low_pct = battery_low_pct
         self._battery_critical_pct = battery_critical_pct
         self._offline_after_seconds = offline_after_minutes * 60
+        self._sensor_offline_after_seconds = sensor_offline_after_minutes * 60
         self._signal_loss_threshold = signal_loss_threshold
         self._clock = clock
         self._cache: dict[tuple[str, int], _Cached] = {}
@@ -176,7 +187,10 @@ class DeviceHealthMonitor:
         Returns the full set of derived alarms so the caller can
         short-circuit on a fresh transition.
         """
-        derived = self._derive_alarms(state)
+        offline_after = (
+            self._sensor_offline_after_seconds if entity_type == ENTITY_SENSOR else self._offline_after_seconds
+        )
+        derived = self._derive_alarms(state, offline_after_seconds=offline_after)
         key = (entity_type, entity_id)
         previous = self._cache.get(key)
         prev_alarms = previous.derived_alarms if previous else frozenset()
@@ -259,13 +273,17 @@ class DeviceHealthMonitor:
 
     # ── Internals ─────────────────────────────────────────────────────────
 
-    def _derive_alarms(self, state: DeviceHealthState) -> frozenset[HealthAlarm]:
+    def _derive_alarms(
+        self, state: DeviceHealthState, *, offline_after_seconds: int | None = None
+    ) -> frozenset[HealthAlarm]:
         """Combine adapter-reported alarms with monitor-applied thresholds.
 
         Battery percent → LOW_BATTERY / BATTERY_CRITICAL.
-        ``offline`` flag OR stale ``last_seen_ts`` → DEVICE_OFFLINE.
+        ``offline`` flag OR ``last_seen_ts`` older than ``offline_after_seconds`` (the
+        irrigator window when omitted) → DEVICE_OFFLINE.
         ``signal_quality`` below threshold → SIGNAL_LOSS.
         """
+        stale_after = self._offline_after_seconds if offline_after_seconds is None else offline_after_seconds
         derived: set[HealthAlarm] = set(state.alarms)
         if state.battery_pct is not None:
             if state.battery_pct < self._battery_critical_pct:
@@ -276,7 +294,7 @@ class DeviceHealthMonitor:
             derived.add(HealthAlarm.DEVICE_OFFLINE)
         elif state.last_seen_ts is not None:
             now = self._clock()
-            if now - state.last_seen_ts > self._offline_after_seconds:
+            if now - state.last_seen_ts > stale_after:
                 derived.add(HealthAlarm.DEVICE_OFFLINE)
         if state.signal_quality is not None and state.signal_quality < self._signal_loss_threshold:
             derived.add(HealthAlarm.SIGNAL_LOSS)

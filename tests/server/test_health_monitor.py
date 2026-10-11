@@ -13,6 +13,7 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
 from fake_devices import FakeIrrigatorAdapter, FakeSensorAdapter
+from greenhouse_core.constants import DEFAULT_SYNC_INTERVAL_MINUTES, SENSOR_OFFLINE_GRACE_MINUTES
 from greenhouse_core.devices import DeviceRegistry
 from greenhouse_core.devices.health import DeviceHealthState, HealthAlarm
 from greenhouse_core.models import (
@@ -193,10 +194,11 @@ class TestTransitionMatrix:
         offline_key = f"health:sensor:{sensor.id}:device_offline"
         assert monitor_._repo.session.scalar(select(Alert).where(Alert.dedup_key == offline_key)) is None
 
-        # Advance the clock beyond OFFLINE_AFTER_MINUTES (30 min default) and
-        # report the same last_seen.
-        clock.tick(31 * 60)
-        sensor_adapter.set_health(_state(last_seen_ts=clock() - 31 * 60))
+        # Advance the clock beyond the sensor window (sync interval + grace, B-3)
+        # and report the same last_seen.
+        stale = (DEFAULT_SYNC_INTERVAL_MINUTES + SENSOR_OFFLINE_GRACE_MINUTES + 1) * 60
+        clock.tick(stale)
+        sensor_adapter.set_health(_state(last_seen_ts=clock() - stale))
         monitor_.poll_sensor(sensor)
         alert = monitor_._repo.session.scalar(select(Alert).where(Alert.dedup_key == offline_key))
         assert alert is not None and alert.status == "open"

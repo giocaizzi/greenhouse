@@ -14,6 +14,7 @@ from greenhouse_core.constants import (
     HEALTH_POLL_IDLE_MINUTES,
     HEALTH_SNAPSHOT_HOUR,
     HEALTH_SNAPSHOT_MINUTE,
+    SENSOR_OFFLINE_GRACE_MINUTES,
     SYNC_JOB_BACKFILL_HOURS,
 )
 from greenhouse_core.devices import DeviceGateway
@@ -398,7 +399,7 @@ def _health_monitor_job() -> None:
         monitor.poll_all()
 
 
-def init_health_monitor(app: FastAPI, settings: Settings) -> None:  # noqa: ARG001 — public signature
+def init_health_monitor(app: FastAPI, settings: Settings) -> None:
     """Build the long-lived :class:`DeviceHealthMonitor` for this app.
 
     Stored on ``app.state.health_monitor`` so dependency-injection wiring
@@ -416,7 +417,13 @@ def init_health_monitor(app: FastAPI, settings: Settings) -> None:  # noqa: ARG0
 
     with _read_session(app) as session:
         repo = IrrigationRepository(session)
-        monitor = DeviceHealthMonitor(repo=repo, registry=registry, notifier=state.ntfy_notifier(app))
+        monitor = DeviceHealthMonitor(
+            repo=repo,
+            registry=registry,
+            # Sensors are judged on persisted readings, which land once per sync (B-3).
+            sensor_offline_after_minutes=settings.sync_interval_minutes + SENSOR_OFFLINE_GRACE_MINUTES,
+            notifier=state.ntfy_notifier(app),
+        )
         try:
             monitor.backfill_from_history()
             session.commit()

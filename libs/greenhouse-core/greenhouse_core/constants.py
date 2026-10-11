@@ -195,7 +195,13 @@ TREND_MIN_READINGS = 4  # Minimum readings for trend analysis
 # counts as "low" so thresholds stay tunable without touching device code).
 BATTERY_LOW_PCT = 20
 BATTERY_CRITICAL_PCT = 5
-OFFLINE_AFTER_MINUTES = 30
+OFFLINE_AFTER_MINUTES = 30  # irrigators: last_seen comes from a live local read
+# Sensors are judged on their latest *persisted* reading, which only the sync job writes
+# (every IRRIGATION_SYNC_INTERVAL_MINUTES): their offline window is one sync interval plus
+# this grace, so a healthy sensor never flaps offline between syncs (B-3). The default
+# interval mirrors Settings.sync_interval_minutes for monitors built without settings.
+DEFAULT_SYNC_INTERVAL_MINUTES = 180
+SENSOR_OFFLINE_GRACE_MINUTES = 30
 SIGNAL_LOSS_THRESHOLD = 30  # 0-100 link quality
 HEALTH_POLL_IDLE_MINUTES = 5
 SENSOR_HEALTH_BACKFILL_WINDOW = 5  # consecutive readings
