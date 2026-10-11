@@ -26,6 +26,7 @@ def _fake_app(factory=_broken_factory):
 
 
 def test_restore_persisted_pause_logs_a_failed_read(caplog):
+    """Restore persisted pause logs a failed read."""
     with caplog.at_level(logging.WARNING, logger="greenhouse_server.app"):
         app_module._restore_persisted_scheduler_pause(_fake_app())  # noqa: SLF001 — helper driven directly (module docstring)
     [record] = caplog.records
@@ -34,6 +35,7 @@ def test_restore_persisted_pause_logs_a_failed_read(caplog):
 
 
 def test_startup_timezone_logs_a_failed_read_and_falls_back_to_utc(caplog):
+    """Startup timezone logs a failed read and falls back to UTC."""
     with caplog.at_level(logging.WARNING, logger="greenhouse_server.app"):
         assert app_module._startup_timezone(_fake_app()) == "UTC"  # noqa: SLF001 — helper driven directly (module docstring)
     [record] = caplog.records
@@ -49,6 +51,7 @@ class _BrokenRepoSession:
 
 
 def test_preference_flags_log_a_failed_read_and_keep_defaults(caplog, monkeypatch):
+    """Preference flags log a failed read and keep defaults."""
     session = _BrokenRepoSession()
 
     class _Repo:
@@ -67,6 +70,7 @@ def test_preference_flags_log_a_failed_read_and_keep_defaults(caplog, monkeypatc
 
 
 def test_repo_from_request_logs_a_failed_session_open(caplog):
+    """Repo from request logs a failed session open."""
     request = Request({"type": "http", "headers": [], "app": _fake_app()})
     with caplog.at_level(logging.DEBUG, logger="greenhouse_server.web.context"):
         assert context._repo_from_request(request) == (None, None)  # noqa: SLF001 — helper driven directly (module docstring)
@@ -99,6 +103,7 @@ def test_now_text_uses_the_timezone_preference_not_the_process_zone(monkeypatch)
 
 @pytest.mark.usefixtures("frozen_clock")
 def test_now_text_falls_back_to_utc_for_an_unknown_zone(monkeypatch):
+    """Now text falls back to UTC for an unknown zone."""
     assert _footer_now_text(monkeypatch, "Mars/Olympus_Mons") == "2026-04-15 10:00"
 
 
@@ -124,6 +129,8 @@ def _app_state():
 
 
 def test_missing_tuya_credentials_log_one_line_without_traceback(caplog, monkeypatch):
+    """Missing tuya credentials log one line without traceback."""
+
     def missing():
         msg = "Missing TUYA_CLIENT_ID or TUYA_CLIENT_SECRET"
         raise ValueError(msg)
@@ -141,6 +148,8 @@ def test_missing_tuya_credentials_log_one_line_without_traceback(caplog, monkeyp
 
 
 def test_an_unexpected_tuya_init_error_keeps_the_traceback(caplog, monkeypatch):
+    """An unexpected tuya init error keeps the traceback."""
+
     def broken():
         msg = "socket exploded"
         raise RuntimeError(msg)

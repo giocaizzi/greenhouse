@@ -135,6 +135,8 @@ def _completed_alarms() -> list[DeviceHealthState]:
 
 
 class TestWatcherHappyPaths:
+    """Tests for watcher happy paths."""
+
     def test_completes_when_alarm_never_fires(self, repo, irrigator):
         """No alarm bit set across the cycle → outcome=completed, pump untouched."""
         clock = FakeClock(step=1.0)
@@ -179,6 +181,8 @@ class TestWatcherHappyPaths:
 
 
 class TestWatcherTrips:
+    """Tests for watcher trips."""
+
     def test_trips_on_alarm_after_warmup(self, repo, irrigator):
         """Alarm fires mid-cycle → pump stopped, alert raised, event logged."""
         clock = FakeClock(step=1.0)
@@ -275,6 +279,8 @@ class TestWatcherTrips:
 
 
 class TestWatcherDegradedSignals:
+    """Tests for watcher degraded signals."""
+
     def test_intermittent_read_failure_does_not_trip(self, repo, irrigator):
         """A single failed read recovers; the watcher does not stop the pump."""
         clock = FakeClock(step=1.0)
@@ -326,6 +332,8 @@ class TestWatcherDegradedSignals:
 
 
 class TestWatcherTripSideEffectsAreRobust:
+    """Tests for watcher trip side effects are robust."""
+
     def test_trip_proceeds_even_if_irrigator_off_raises(self, repo, irrigator):
         """If the stop call raises, the alert and event are still recorded."""
         clock = FakeClock(step=1.0)
@@ -391,6 +399,8 @@ class TestWatcherRoutesThroughMonitor:
 
 
 class TestWatcherIrrigatorModel:
+    """Tests for watcher irrigator model."""
+
     def test_uses_irrigator_cluster_id_for_alert(self, repo):
         """The alert is filed under the irrigator's cluster, not a hardcoded id."""
         cluster_a = repo.add_cluster("A")

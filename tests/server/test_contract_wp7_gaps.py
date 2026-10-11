@@ -148,6 +148,7 @@ def _rows(db, model) -> list:
 
 
 def test_pipeline_without_a_decision_returns_the_no_data_error(db, pump, monkeypatch):
+    """Pipeline without a decision returns the no data error."""
     _patch_decide(monkeypatch, lambda _cid: None)
     svc = IrrigationService(db, pump.registry, StubSync(None), StubWeather(None), plant_database())
     result = svc.run_irrigation_pipeline(pump.cluster_id, no_sync=True)
@@ -158,6 +159,7 @@ def test_pipeline_without_a_decision_returns_the_no_data_error(db, pump, monkeyp
 
 
 def test_pipeline_unknown_cluster_returns_the_not_found_error_without_deciding(db, pump, monkeypatch):
+    """Pipeline unknown cluster returns the not found error without deciding."""
     calls = _patch_decide(monkeypatch, _decision)
     sync = StubSync({"temperature": 22.0})
     svc = IrrigationService(db, pump.registry, sync, StubWeather(None), plant_database())
@@ -168,6 +170,7 @@ def test_pipeline_unknown_cluster_returns_the_not_found_error_without_deciding(d
 
 @pytest.mark.parametrize("force", [False, True])
 def test_pipeline_builds_the_engine_and_passes_force_flags(db, pump, monkeypatch, force):
+    """Pipeline builds the engine and passes force flags."""
     built: list[tuple] = []
     decided: list[dict] = []
 
@@ -240,6 +243,7 @@ TEMP_MATRIX = [
 def test_temperature_source_matrix_and_soil_note(  # noqa: PLR0913, PLR0917 — one parameter per parametrize argname
     db, pump, monkeypatch, environment, override, no_sync, snapshot, now, temp, source, sync_calls, weather_calls
 ):
+    """Temperature source matrix and soil note."""
     db.update_cluster(pump.cluster_id, environment=environment)
     db.session.commit()
     _patch_decide(monkeypatch, _decision)
@@ -266,6 +270,7 @@ class NotBlockingMonitor:
 
 
 def test_health_monitor_that_does_not_block_lets_the_pump_start(db, pump, monkeypatch):
+    """Health monitor that does not block lets the pump start."""
     _patch_decide(monkeypatch, _decision)
     monitor = NotBlockingMonitor()
     svc = IrrigationService(
@@ -281,6 +286,7 @@ def test_health_monitor_that_does_not_block_lets_the_pump_start(db, pump, monkey
 
 @pytest.mark.parametrize("log_id", [None, 4242])
 def test_successful_start_marks_the_decision_actuated_only_with_a_log_id(db, pump, monkeypatch, log_id):
+    """Successful start marks the decision actuated only with a log ID."""
     _patch_decide(monkeypatch, lambda cid: _decision(cid, log_id=log_id))
     marked: list = []
     monkeypatch.setattr(IrrigationRepository, "set_decision_actuated", lambda _self, i, *_a: marked.append(i))
@@ -290,6 +296,7 @@ def test_successful_start_marks_the_decision_actuated_only_with_a_log_id(db, pum
 
 
 def test_started_at_is_read_after_the_adapter_start(db, pump, monkeypatch):
+    """Started at is read after the adapter start."""
     clock = {"now": 1_000_000.0}
 
     class Clock:
@@ -316,6 +323,7 @@ def test_started_at_is_read_after_the_adapter_start(db, pump, monkeypatch):
 
 
 def test_monitor_unknown_cluster_shape(db):
+    """Monitor unknown cluster shape."""
     sync = StubSync(None)
     svc = IrrigationService(db, None, sync, None, plant_database())
     assert svc.monitor_cluster(999) == {"cluster_name": "unknown", "sensors": [], "needs_water": []}
@@ -323,6 +331,7 @@ def test_monitor_unknown_cluster_shape(db):
 
 
 def test_check_unknown_cluster_shape(db):
+    """Check unknown cluster shape."""
     svc = IrrigationService(db, None, StubSync(None), None, plant_database())
     assert svc.check_cluster(999) == {
         "cluster_id": 999,
@@ -346,6 +355,7 @@ def test_check_unknown_cluster_shape(db):
     ],
 )
 def test_monitor_target_band_parse_and_fallback(db, care, band, status):
+    """Monitor target band parse and fallback."""
     cid = db.add_cluster("Band Gap")
     sid = db.add_sensor(
         cluster_id=cid,
@@ -363,6 +373,7 @@ def test_monitor_target_band_parse_and_fallback(db, care, band, status):
 
 
 def test_monitor_latest_soil_skips_missing_values_and_reports_no_data(db):
+    """Monitor latest soil skips missing values and reports no data."""
     cid = db.add_cluster("Latest Gap")
     s1 = db.add_sensor(
         cluster_id=cid, tuya_device_id="fake_tuya_sensor_lat0001", name="P1", sensor_type="soil", config={}
@@ -385,6 +396,7 @@ def test_monitor_latest_soil_skips_missing_values_and_reports_no_data(db):
 
 
 def test_check_all_failure_log_carries_the_exception(db, monkeypatch, caplog):
+    """Check all failure log carries the exception."""
     cid = db.add_cluster("Crashy")
     db.session.commit()
 
@@ -415,6 +427,8 @@ def test_check_all_failure_log_carries_the_exception(db, monkeypatch, caplog):
 
 @pytest.mark.parametrize(("triggered_by", "stopped"), [("auto", True), ("manual", False)])
 def test_watcher_shutdown_activity_failure_is_logged_not_raised(db, pump, caplog, triggered_by, stopped):
+    """Watcher shutdown activity failure is logged not raised."""
+
     def broken(_self, **_kwargs):
         msg = "activity table locked"
         raise RuntimeError(msg)
@@ -510,6 +524,7 @@ def watcher_env(monkeypatch, frozen_clock):
 
 
 def test_watcher_job_without_a_health_monitor_passes_none(watcher_env):
+    """Watcher job without a health monitor passes none."""
     assert not hasattr(watcher_env.app.state, "health_monitor")
     assert schedule_pump_watcher(watcher_env.irrigator_id, 2, FROZEN_TS) is True
     watcher_env.scheduler.jobs[0]["func"]()
@@ -519,6 +534,7 @@ def test_watcher_job_without_a_health_monitor_passes_none(watcher_env):
 
 
 def test_watcher_tuning_is_read_when_the_job_runs(watcher_env):
+    """Watcher tuning is read when the job runs."""
     schedule_pump_watcher(watcher_env.irrigator_id, 2, FROZEN_TS)
     watcher_env.settings.pump_watcher_poll_seconds = 9.5
     watcher_env.settings.pump_watcher_warmup_seconds = 1.25
@@ -530,6 +546,7 @@ def test_watcher_tuning_is_read_when_the_job_runs(watcher_env):
 
 
 def test_watcher_settings_removed_after_scheduling_fall_back_to_defaults(watcher_env):
+    """Watcher settings removed after scheduling fall back to defaults."""
     schedule_pump_watcher(watcher_env.irrigator_id, 2, FROZEN_TS)
     watcher_env.app.state.settings = None
     watcher_env.scheduler.jobs[0]["func"]()
@@ -543,6 +560,7 @@ def test_watcher_settings_removed_after_scheduling_fall_back_to_defaults(watcher
 
 
 def test_watcher_monitor_is_read_when_the_job_runs(watcher_env):
+    """Watcher monitor is read when the job runs."""
     schedule_pump_watcher(watcher_env.irrigator_id, 2, FROZEN_TS)
     bound: list = []
     view = SimpleNamespace()
@@ -554,6 +572,7 @@ def test_watcher_monitor_is_read_when_the_job_runs(watcher_env):
 
 
 def test_watcher_job_keeps_the_app_and_hooks_captured_at_schedule_time(watcher_env, monkeypatch):
+    """Watcher job keeps the app and hooks captured at schedule time."""
     schedule_pump_watcher(watcher_env.irrigator_id, 2, FROZEN_TS)
     other_registry = DeviceRegistry()
     opened: list = []
@@ -600,6 +619,7 @@ def _two_recent_auto_starts():
 
 @pytest.mark.usefixtures("frozen_clock")
 def test_rearm_failure_mid_scan_keeps_partial_count_and_logs_both_lines(monkeypatch, caplog):
+    """Rearm failure mid scan keeps partial count and logs both lines."""
     engine, factory, ids = _two_recent_auto_starts()
     fake = FakeScheduler()
     monkeypatch.setattr(sched, "scheduler", fake)
@@ -720,6 +740,7 @@ def _wire_job(p, log: list[str]) -> StubMonitor:
 
 @pytest.mark.parametrize("job", list(JOBS))
 def test_job_success_commits_then_closes(p, monkeypatch, job):
+    """Job success commits then closes."""
     func_name, _, _ = JOBS[job]
     log = _spy_sessions(monkeypatch, p.app)
     _wire_job(p, log)
@@ -729,6 +750,7 @@ def test_job_success_commits_then_closes(p, monkeypatch, job):
 
 @pytest.mark.parametrize("job", list(JOBS))
 def test_job_failure_rolls_back_logs_with_traceback_and_closes(p, monkeypatch, caplog, job):
+    """Job failure rolls back logs with traceback and closes."""
     func_name, target, message = JOBS[job]
     log = _spy_sessions(monkeypatch, p.app)
     monitor = _wire_job(p, log)
@@ -753,6 +775,7 @@ def test_job_failure_rolls_back_logs_with_traceback_and_closes(p, monkeypatch, c
 
 @pytest.mark.parametrize("job", ["snapshot", "check", "anomaly", "monitor"])
 def test_session_factory_failure_escapes_the_job(p, monkeypatch, job):
+    """Session factory failure escapes the job."""
     func_name, _, _ = JOBS[job]
     _wire_job(p, [])
 
@@ -771,6 +794,7 @@ def test_session_factory_failure_escapes_the_job(p, monkeypatch, job):
     [("sync", False), ("snapshot", True), ("check", True), ("anomaly", True), ("monitor", False)],
 )
 def test_jobs_without_an_app(monkeypatch, job, escapes):
+    """Jobs without an app."""
     func_name, _, _ = JOBS[job]
     monkeypatch.setattr(sched, "_app", None)
     if escapes:
@@ -795,6 +819,7 @@ def _spy_service_init(monkeypatch, log: list[str]) -> list[dict]:
 
 
 def test_check_job_binds_the_monitor_to_its_repo_before_the_pipeline_asks_it(p, monkeypatch):
+    """Check job binds the monitor to its repo before the pipeline asks it."""
     ids = p.seed_cluster(soil=35.0)
     p.app.state.device_registry = p.wiring.registry
     log: list[str] = []

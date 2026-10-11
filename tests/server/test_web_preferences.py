@@ -4,6 +4,7 @@ from http import HTTPStatus
 
 
 def test_preferences_page_renders(client):
+    """Preferences page renders."""
     resp = client.get("/preferences")
     assert resp.status_code == HTTPStatus.OK
     assert "Preferences" in resp.text
@@ -14,6 +15,7 @@ def test_preferences_page_renders(client):
 
 
 def test_preferences_post_updates(client):
+    """Preferences post updates."""
     form = {
         "units": "imperial",
         "timezone": "Europe/Rome",
@@ -35,6 +37,7 @@ def test_preferences_post_updates(client):
 
 
 def test_theme_endpoint_persists_value(client):
+    """Theme endpoint persists value."""
     resp = client.post(
         "/preferences/theme",
         data={"theme": "light"},
@@ -46,6 +49,7 @@ def test_theme_endpoint_persists_value(client):
 
 def test_theme_endpoint_only_touches_theme(client):
     # Set non-default neighbours, then flip the theme alone.
+    """Theme endpoint only touches theme."""
     form = {"units": "imperial", "timezone": "Europe/Rome", "theme": "auto", "refresh_interval_seconds": "90"}
     client.post("/preferences", data=form, follow_redirects=False)
     resp = client.post("/preferences/theme", data={"theme": "dark"})
@@ -59,6 +63,7 @@ def test_theme_endpoint_only_touches_theme(client):
 
 
 def test_theme_endpoint_rejects_invalid_value(client):
+    """Theme endpoint rejects invalid value."""
     resp = client.post("/preferences/theme", data={"theme": "neon"})
     assert resp.status_code == HTTPStatus.BAD_REQUEST
     # Persisted theme is untouched by the rejected request.
@@ -69,18 +74,21 @@ def test_persisted_theme_renders_into_html_tag(client):
     # After persisting via the toggle endpoint, a fresh page load (no client
     # localStorage server-side) must paint the saved theme on the <html> tag,
     # so a reload / second device agrees with the stored preference.
+    """Persisted theme renders into HTML tag."""
     client.post("/preferences/theme", data={"theme": "light"})
     page = client.get("/preferences")
     assert 'data-theme="light"' in page.text
 
 
 def test_preferences_includes_default_cluster_options(seeded_client):
+    """Preferences includes default cluster options."""
     resp = seeded_client.get("/preferences")
     assert resp.status_code == HTTPStatus.OK
     assert "Test Cluster" in resp.text
 
 
 def test_preferences_renders_global_config_form(client):
+    """Preferences renders global config form."""
     resp = client.get("/preferences")
     assert resp.status_code == HTTPStatus.OK
     assert "Global irrigation defaults" in resp.text
@@ -92,6 +100,7 @@ def test_preferences_renders_global_config_form(client):
 
 
 def test_global_config_post_persists(client):
+    """Global config post persists."""
     form = {
         "mode": "smart",
         "duration_minutes": "3",
@@ -113,6 +122,7 @@ def test_global_config_post_persists(client):
 
 def test_global_config_blank_fields_clear_to_inherit(client):
     # Set values first
+    """Global config blank fields clear to inherit."""
     client.post(
         "/config/global",
         data={"mode": "smart", "quiet_start_hour": "1", "quiet_end_hour": "6"},
@@ -131,6 +141,7 @@ def test_global_config_blank_fields_clear_to_inherit(client):
 
 
 def test_global_config_caps_persist(client):
+    """Global config caps persist."""
     form = {"daily_cap_minutes": "45", "max_events_per_day": "3"}
     resp = client.post("/config/global", data=form, follow_redirects=False)
     assert resp.status_code == HTTPStatus.SEE_OTHER
@@ -146,6 +157,7 @@ def test_global_config_caps_persist(client):
 
 def test_global_config_caps_blank_clears_to_inherit(client):
     # Set caps first, then resubmit with blanks → null (no cap enforced).
+    """Global config caps blank clears to inherit."""
     client.post(
         "/config/global",
         data={"daily_cap_minutes": "45", "max_events_per_day": "3"},
@@ -162,6 +174,7 @@ def test_global_config_caps_blank_clears_to_inherit(client):
 
 
 def test_global_config_caps_reject_negative(client):
+    """Global config caps reject negative."""
     resp = client.post(
         "/config/global",
         data={"daily_cap_minutes": "-1"},
@@ -171,6 +184,7 @@ def test_global_config_caps_reject_negative(client):
 
 
 def test_preferences_renders_notification_toggles(client):
+    """Preferences renders notification toggles."""
     resp = client.get("/preferences")
     assert resp.status_code == HTTPStatus.OK
     for name in ("notify_manual", "notify_emergency", "notify_alerts", "notify_auto"):
@@ -181,6 +195,7 @@ def test_preferences_renders_notification_toggles(client):
 
 def test_preferences_post_updates_notification_toggles(client):
     # All four start enabled; submit with only notify_manual checked.
+    """Preferences post updates notification toggles."""
     resp = client.post(
         "/preferences",
         data={
@@ -203,6 +218,7 @@ def test_preferences_post_updates_notification_toggles(client):
 
 def test_preferences_clearing_dry_run_persists_false(client):
     # First turn it on
+    """Preferences clearing dry run persists false."""
     client.post(
         "/preferences",
         data={

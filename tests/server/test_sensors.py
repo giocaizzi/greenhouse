@@ -8,7 +8,10 @@ from greenhouse_core.repository import IrrigationRepository
 
 
 class TestSensorCRUD:
+    """Tests for sensor CRUD."""
+
     def test_add_and_list(self, client):
+        """Add and list."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         resp = client.post(
             "/api/v1/clusters/1/sensors",
@@ -21,6 +24,7 @@ class TestSensorCRUD:
         assert len(resp.json()) == 1
 
     def test_add_with_plant(self, client):
+        """Add with plant."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         client.post("/api/v1/clusters/1/plants", json={"species": "Fern"})
         resp = client.post(
@@ -31,6 +35,7 @@ class TestSensorCRUD:
         assert resp.json()["plant_id"] == 1
 
     def test_add_duplicate_device(self, client):
+        """Add duplicate device."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         client.post(
             "/api/v1/clusters/1/sensors",
@@ -43,11 +48,13 @@ class TestSensorCRUD:
         assert resp.status_code == HTTPStatus.CONFLICT
 
     def test_list_empty(self, client):
+        """List empty."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         resp = client.get("/api/v1/clusters/1/sensors")
         assert resp.json() == []
 
     def test_get_by_id(self, client):
+        """Get by ID."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         client.post(
             "/api/v1/clusters/1/sensors",
@@ -58,6 +65,7 @@ class TestSensorCRUD:
         assert resp.json()["name"] == "My Sensor"
 
     def test_get_wrong_cluster_returns_404(self, client):
+        """Get wrong cluster returns 404."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         client.post("/api/v1/clusters", json={"name": "C2"})
         client.post(
@@ -68,11 +76,13 @@ class TestSensorCRUD:
         assert resp.status_code == HTTPStatus.NOT_FOUND
 
     def test_get_not_found(self, client):
+        """Get not found."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         resp = client.get("/api/v1/clusters/1/sensors/999")
         assert resp.status_code == HTTPStatus.NOT_FOUND
 
     def test_update_name_and_plant_id(self, client):
+        """Update name and plant ID."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         client.post("/api/v1/clusters/1/plants", json={"species": "Fern"})
         client.post(
@@ -103,6 +113,7 @@ class TestSensorCRUD:
         assert client.get("/api/v1/clusters/1/sensors/1").json()["plant_id"] is None
 
     def test_update_wrong_cluster_returns_404(self, client):
+        """Update wrong cluster returns 404."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         client.post("/api/v1/clusters", json={"name": "C2"})
         client.post(
@@ -113,11 +124,13 @@ class TestSensorCRUD:
         assert resp.status_code == HTTPStatus.NOT_FOUND
 
     def test_update_not_found(self, client):
+        """Update not found."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         resp = client.put("/api/v1/clusters/1/sensors/999", json={"name": "X"})
         assert resp.status_code == HTTPStatus.NOT_FOUND
 
     def test_delete_sensor(self, client):
+        """Delete sensor."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         client.post(
             "/api/v1/clusters/1/sensors",
@@ -131,6 +144,7 @@ class TestSensorCRUD:
         assert resp.status_code == HTTPStatus.NOT_FOUND
 
     def test_delete_wrong_cluster_returns_404(self, client):
+        """Delete wrong cluster returns 404."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         client.post("/api/v1/clusters", json={"name": "C2"})
         client.post(
@@ -141,12 +155,15 @@ class TestSensorCRUD:
         assert resp.status_code == HTTPStatus.NOT_FOUND
 
     def test_delete_not_found(self, client):
+        """Delete not found."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         resp = client.delete("/api/v1/clusters/1/sensors/999")
         assert resp.status_code == HTTPStatus.NOT_FOUND
 
 
 class TestListAllSensorsTopLevel:
+    """Tests for list all sensors top level."""
+
     def test_list_empty(self, client):
         """GET /sensors with no rows returns empty list and null cursor."""
         resp = client.get("/api/v1/sensors")
@@ -207,6 +224,8 @@ class TestListAllSensorsTopLevel:
 
 
 class TestSensorReassignmentActivity:
+    """Tests for sensor reassignment activity."""
+
     def test_put_plant_id_change_emits_sensor_reassigned_event(self, client):
         """Changing a sensor's plant_id via PUT must publish a sensor_reassigned activity event."""
         client.post("/api/v1/clusters", json={"name": "C1"})
@@ -276,6 +295,7 @@ class TestSensorLocalKeyMasking:
             session.close()
 
     def test_responses_mask_and_the_mask_round_trips(self, client):
+        """Responses mask and the mask round trips."""
         cid = client.post("/api/v1/clusters", json={"name": "C"}).json()["id"]
         created = client.post(
             f"/api/v1/clusters/{cid}/sensors",

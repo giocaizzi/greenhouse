@@ -4,24 +4,28 @@ from http import HTTPStatus
 
 
 def test_plants_list_redirects_to_anchor(seeded_client):
+    """Plants list redirects to anchor."""
     resp = seeded_client.get("/clusters/1/plants", follow_redirects=False)
     assert resp.status_code == HTTPStatus.MOVED_PERMANENTLY
     assert resp.headers["location"] == "/clusters/1#plants"
 
 
 def test_sensors_list_redirects_to_anchor(seeded_client):
+    """Sensors list redirects to anchor."""
     resp = seeded_client.get("/clusters/1/sensors", follow_redirects=False)
     assert resp.status_code == HTTPStatus.MOVED_PERMANENTLY
     assert resp.headers["location"] == "/clusters/1#sensors"
 
 
 def test_irrigators_list_redirects_to_anchor(seeded_client):
+    """Irrigators list redirects to anchor."""
     resp = seeded_client.get("/clusters/1/irrigators", follow_redirects=False)
     assert resp.status_code == HTTPStatus.MOVED_PERMANENTLY
     assert resp.headers["location"] == "/clusters/1#irrigators"
 
 
 def test_config_redirects_to_anchor(seeded_client):
+    """Config redirects to anchor."""
     resp = seeded_client.get("/clusters/1/config", follow_redirects=False)
     assert resp.status_code == HTTPStatus.MOVED_PERMANENTLY
     assert resp.headers["location"] == "/clusters/1#config"

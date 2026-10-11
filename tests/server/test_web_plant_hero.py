@@ -10,6 +10,7 @@ from greenhouse_core.repository import IrrigationRepository
 
 
 def test_plant_hero_renders(seeded_client):
+    """Plant hero renders."""
     resp = seeded_client.get("/clusters/1/plants/1")
     assert resp.status_code == HTTPStatus.OK
     assert 'class="plant-hero"' in resp.text
@@ -44,5 +45,6 @@ def test_plant_hero_ring_shows_score_with_readings(seeded_client, app):
 
 
 def test_plant_hero_404_for_wrong_cluster(seeded_client):
+    """Plant hero 404 for wrong cluster."""
     resp = seeded_client.get("/clusters/999/plants/1")
     assert resp.status_code == HTTPStatus.NOT_FOUND

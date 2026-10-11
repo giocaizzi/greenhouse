@@ -9,13 +9,17 @@ from greenhouse_core.models import Sensor, SensorReading
 
 
 class TestHealthPage:
+    """Tests for health page."""
+
     def test_renders_ok(self, client):
+        """Renders OK."""
         resp = client.get("/health")
         assert resp.status_code == HTTPStatus.OK
         assert "text/html" in resp.headers["content-type"]
         assert "System Health" in resp.text
 
     def test_shows_status_badge(self, client):
+        """Shows status badge."""
         resp = client.get("/health")
         assert resp.status_code == HTTPStatus.OK
         # Empty system → status "down"

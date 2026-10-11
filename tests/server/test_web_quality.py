@@ -6,7 +6,10 @@ from fastapi.testclient import TestClient
 
 
 class TestQualityPage:
+    """Tests for quality page."""
+
     def test_renders_ok(self, client):
+        """Renders OK."""
         resp = client.get("/quality")
         assert resp.status_code == HTTPStatus.OK
         assert "text/html" in resp.headers["content-type"]

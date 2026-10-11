@@ -183,6 +183,7 @@ def test_registration_order_and_identity():
 
 @pytest.mark.usefixtures("clean_env", "frozen_clock")
 def test_rebuilding_the_app_does_not_duplicate_jobs():
+    """Rebuilding the app does not duplicate jobs."""
     _app1, engine1 = _build({}, None)
     sync_minutes = 45
     app2, engine2 = _build({"sync_interval_minutes": sync_minutes}, None)

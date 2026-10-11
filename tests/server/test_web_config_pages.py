@@ -20,6 +20,7 @@ def test_config_renders_on_unified_detail_page(seeded_client):
 
 
 def test_save_config_redirects_to_inline_section(seeded_client):
+    """Save config redirects to inline section."""
     resp = seeded_client.post(
         "/clusters/1/config",
         data={"mode": "manual", "duration_minutes": "5", "interval_hours": "24", "auto_run": "true"},

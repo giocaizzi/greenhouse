@@ -39,6 +39,8 @@ def _setup_cluster_irrigator_config(client, *, tuya_id: str = "fake_rl_001") -> 
 
 
 class TestMaxEventsPerDay:
+    """Tests for max events per day."""
+
     def test_start_blocked_after_cap(self, client):
         """Third /start returns 409 when max_events_per_day=2."""
         _setup_cluster_irrigator_config(client, tuya_id="fake_cap_001")
@@ -79,6 +81,8 @@ class TestMaxEventsPerDay:
 
 
 class TestDailyCapMinutes:
+    """Tests for daily cap minutes."""
+
     def test_start_blocked_by_duration_cap(self, client):
         """10-minute daily cap blocks a request that would exceed it."""
         _setup_cluster_irrigator_config(client, tuya_id="fake_dc_001")

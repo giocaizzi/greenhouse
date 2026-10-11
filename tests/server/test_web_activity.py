@@ -36,13 +36,17 @@ def _seed_events(app, count: int, *, base_ts: int | None = None) -> list[int]:
 
 
 class TestActivityListPage:
+    """Tests for activity list page."""
+
     def test_empty_state(self, client):
+        """Empty state."""
         resp = client.get("/activity")
         assert resp.status_code == HTTPStatus.OK
         assert "Activity" in resp.text
         assert "No activity yet" in resp.text
 
     def test_renders_seeded_event(self, app):
+        """Renders seeded event."""
         with TestClient(app, raise_server_exceptions=False) as client:
             _seed_events(app, count=1)
             resp = client.get("/activity")
@@ -51,11 +55,13 @@ class TestActivityListPage:
             assert "irrigation" in resp.text
 
     def test_filter_chips_present(self, client):
+        """Filter chips present."""
         resp = client.get("/activity")
         assert "?source=irrigation" in resp.text
         assert "?source=learning" in resp.text
 
     def test_source_filter(self, app):
+        """Source filter."""
         with TestClient(app, raise_server_exceptions=False) as client:
             session = app.state.session_factory()
             try:
@@ -73,6 +79,8 @@ class TestActivityListPage:
 
 
 class TestActivityPagination:
+    """Tests for activity pagination."""
+
     def test_first_page_50_events_with_sentinel(self, app):
         """Writing 60 events: first page returns 50 rows + a sentinel hx-get attribute."""
         with TestClient(app, raise_server_exceptions=False) as client:

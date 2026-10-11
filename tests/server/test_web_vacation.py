@@ -7,13 +7,17 @@ from greenhouse_core import utils
 
 
 class TestVacationListPage:
+    """Tests for vacation list page."""
+
     def test_renders_empty_state(self, client):
+        """Renders empty state."""
         resp = client.get("/vacation")
         assert resp.status_code == HTTPStatus.OK
         assert "Vacation" in resp.text
         assert "No vacation windows" in resp.text
 
     def test_renders_form(self, client):
+        """Renders form."""
         resp = client.get("/vacation")
         assert resp.status_code == HTTPStatus.OK
         assert 'name="starts_at"' in resp.text
@@ -23,7 +27,10 @@ class TestVacationListPage:
 
 
 class TestVacationCreate:
+    """Tests for vacation create."""
+
     def test_create_via_form_redirects(self, client):
+        """Create via form redirects."""
         now = int(time.time())
         resp = client.post(
             "/vacation",
@@ -37,6 +44,7 @@ class TestVacationCreate:
         assert resp.headers["location"] == "/vacation"
 
     def test_created_window_shows_in_list(self, client):
+        """Created window shows in list."""
         now = int(time.time())
         client.post(
             "/vacation",
@@ -47,6 +55,7 @@ class TestVacationCreate:
         assert "scheduled" in resp.text
 
     def test_create_with_iso_date_strings(self, client):
+        """Create with ISO date strings."""
         resp = client.post(
             "/vacation",
             data={"starts_at": "2027-01-01", "ends_at": "2027-01-14"},
@@ -71,6 +80,7 @@ class TestVacationCreate:
         assert 'value="2026-05-10"' in page
 
     def test_active_window_shows_banner(self, client):
+        """Active window shows banner."""
         now = int(time.time())
         client.post(
             "/vacation",
@@ -83,7 +93,10 @@ class TestVacationCreate:
 
 
 class TestVacationDelete:
+    """Tests for vacation delete."""
+
     def test_delete_redirects(self, client):
+        """Delete redirects."""
         now = int(time.time())
         client.post("/vacation", data={"starts_at": str(now + 100), "ends_at": str(now + 200)})
         resp = client.post("/vacation/1/delete", follow_redirects=False)
@@ -91,6 +104,7 @@ class TestVacationDelete:
         assert resp.headers["location"] == "/vacation"
 
     def test_delete_removes_window(self, client):
+        """Delete removes window."""
         now = int(time.time())
         client.post("/vacation", data={"starts_at": str(now + 100), "ends_at": str(now + 200)})
         client.post("/vacation/1/delete")
@@ -98,11 +112,14 @@ class TestVacationDelete:
         assert "No vacation windows" in resp.text
 
     def test_delete_not_found_returns_404(self, client):
+        """Delete not found returns 404."""
         resp = client.post("/vacation/9999/delete")
         assert resp.status_code == HTTPStatus.NOT_FOUND
 
 
 class TestVacationWaterBudget:
+    """Tests for vacation water budget."""
+
     def _make_cluster_with_capacity(self, client, reservoir_l, flow_rate_l_per_min):
         client.post("/api/v1/clusters", json={"name": "Budget Cluster"})
         client.post(
@@ -162,6 +179,8 @@ class TestVacationWaterBudget:
 
 
 class TestVacationBannerInBase:
+    """Tests for vacation banner in base."""
+
     def test_active_vacation_shows_banner_on_other_pages(self, client):
         """Active vacation window triggers the banner in _base.html on every page."""
         now = int(time.time())

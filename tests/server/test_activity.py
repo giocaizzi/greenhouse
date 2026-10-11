@@ -9,7 +9,10 @@ from greenhouse_core.repository import IrrigationRepository
 
 
 class TestActivityList:
+    """Tests for activity list."""
+
     def test_list_empty(self, client):
+        """List empty."""
         resp = client.get("/api/v1/activity")
         assert resp.status_code == HTTPStatus.OK
         data = resp.json()
@@ -39,6 +42,7 @@ class TestActivityList:
             session.close()
 
     def test_ordering_newest_first(self, app):
+        """Ordering newest first."""
         with TestClient(app, raise_server_exceptions=False) as client:
             count = 3
             self._seed_events(app, count=count)
@@ -50,6 +54,7 @@ class TestActivityList:
             assert timestamps == sorted(timestamps, reverse=True)
 
     def test_filter_by_entity_type(self, app):
+        """Filter by entity type."""
         with TestClient(app, raise_server_exceptions=False) as client:
             session = app.state.session_factory()
             try:
@@ -71,6 +76,7 @@ class TestActivityList:
             assert len(items) == 1
 
     def test_filter_by_source(self, app):
+        """Filter by source."""
         with TestClient(app, raise_server_exceptions=False) as client:
             session = app.state.session_factory()
             try:
@@ -86,6 +92,7 @@ class TestActivityList:
             assert all(i["source"] == "learning" for i in items)
 
     def test_filter_by_severity(self, app):
+        """Filter by severity."""
         with TestClient(app, raise_server_exceptions=False) as client:
             session = app.state.session_factory()
             try:
@@ -129,6 +136,7 @@ class TestActivityList:
             assert data2["next_cursor"] is None
 
     def test_no_cursor_when_fewer_items_than_limit(self, app):
+        """No cursor when fewer items than limit."""
         with TestClient(app, raise_server_exceptions=False) as client:
             self._seed_events(app, count=2)
             resp = client.get("/api/v1/activity?limit=10")

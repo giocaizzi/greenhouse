@@ -6,6 +6,8 @@ DEFAULT_REFRESH_INTERVAL_SECONDS = 30
 
 
 class TestGetPreferences:
+    """Tests for get preferences."""
+
     def test_defaults_exist(self, client):
         """GET preferences always returns a row with sensible defaults."""
         resp = client.get("/api/v1/preferences")
@@ -31,6 +33,8 @@ class TestGetPreferences:
 
 
 class TestUpdatePreferences:
+    """Tests for update preferences."""
+
     def test_put_full(self, client):
         """PUT with all fields updates every preference."""
         update = {

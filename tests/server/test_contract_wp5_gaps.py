@@ -95,6 +95,7 @@ def failing_species(app, monkeypatch):
 
 
 def test_api_sync_plant_id_found_in_a_later_cluster_syncs_only_that_plant(app, client):
+    """API sync plant ID found in a later cluster syncs only that plant."""
     ids = _seed(app, {"C1": ["Fern"], "C2": ["Monstera deliciosa"]})
     resp = client.post("/api/v1/plants/sync", json={"plant_id": ids["Monstera deliciosa"]})
     assert resp.status_code == HTTPStatus.OK
@@ -104,6 +105,7 @@ def test_api_sync_plant_id_found_in_a_later_cluster_syncs_only_that_plant(app, c
 
 
 def test_api_sync_unknown_plant_id_is_404(app, client):
+    """API sync unknown plant ID is 404."""
     _seed(app, {"C1": ["Fern"]})
     resp = client.post("/api/v1/plants/sync", json={"plant_id": 999})
     assert resp.status_code == HTTPStatus.NOT_FOUND
@@ -133,6 +135,7 @@ def test_api_sync_unknown_cluster_is_404(app, client):
 
 
 def test_api_sync_plant_id_zero_means_every_cluster(app, client):
+    """API sync plant ID zero means every cluster."""
     _seed(app, {"C1": ["Fern"], "C2": ["Monstera deliciosa"]})
     resp = client.post("/api/v1/plants/sync", json={"plant_id": 0})
     assert resp.status_code == HTTPStatus.OK
@@ -141,6 +144,7 @@ def test_api_sync_plant_id_zero_means_every_cluster(app, client):
 
 @pytest.mark.usefixtures("failing_species")
 def test_api_sync_collects_per_plant_errors_and_keeps_going(app, client):
+    """API sync collects per plant errors and keeps going."""
     ids = _seed(app, {"C1": ["Bad", "Fern"]})
     resp = client.post("/api/v1/plants/sync", json={"cluster_id": ids["C1"]})
     assert resp.status_code == HTTPStatus.OK
@@ -150,6 +154,7 @@ def test_api_sync_collects_per_plant_errors_and_keeps_going(app, client):
 
 @pytest.mark.usefixtures("failing_species")
 def test_api_sync_single_plant_error_is_not_caught(app, client):
+    """API sync single plant error is not caught."""
     ids = _seed(app, {"C1": ["Bad"]})
     resp = client.post("/api/v1/plants/sync", json={"plant_id": ids["Bad"]})
     assert resp.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
@@ -169,6 +174,7 @@ def test_web_sync_unknown_cluster_is_404(app, client):
 
 @pytest.mark.usefixtures("failing_species")
 def test_web_sync_collects_per_plant_errors_and_keeps_going(app, client):
+    """Web sync collects per plant errors and keeps going."""
     ids = _seed(app, {"C1": ["Bad", "Fern"]})
     resp = client.post("/plants/sync", data={"cluster_id": str(ids["C1"])})
     assert resp.status_code == HTTPStatus.OK
@@ -178,6 +184,7 @@ def test_web_sync_collects_per_plant_errors_and_keeps_going(app, client):
 
 
 def test_web_sync_plant_scan_does_not_find_orphan_plants(app, client):
+    """Web sync plant scan does not find orphan plants."""
     _seed(app, {"C1": ["Fern"]})
     repo, session = _repo_session(app)
     try:
@@ -194,6 +201,7 @@ def test_web_sync_plant_scan_does_not_find_orphan_plants(app, client):
 
 
 def test_api_stats_export_without_irrigator_is_header_only(app, client):
+    """API stats export without irrigator is header only."""
     ids = _seed(app, {"C1": ["Fern"]})
     resp = client.get(f"/api/v1/clusters/{ids['C1']}/stats/export")
     assert resp.status_code == HTTPStatus.OK
@@ -206,6 +214,7 @@ def test_api_stats_export_without_irrigator_is_header_only(app, client):
 
 
 def test_web_cluster_detail_with_undecodable_decision_payload_shows_no_rationale(app, client):
+    """Web cluster detail with undecodable decision payload shows no rationale."""
     ids = _seed(app, {"C1": ["Fern"]}, irrigator_for="C1", sensor_for="C1")
     repo, session = _repo_session(app)
     try:
@@ -238,6 +247,7 @@ def test_web_cluster_detail_with_undecodable_decision_payload_shows_no_rationale
 
 @pytest.mark.usefixtures("frozen_clock")
 def test_web_plant_dashboard_without_irrigator_renders_sensor_only(app, client):
+    """Web plant dashboard without irrigator renders sensor only."""
     ids = _seed(app, {"C1": ["Fern"]}, sensor_for="C1")
     resp = client.get(f"/clusters/{ids['C1']}/plants/{ids['Fern']}")
     assert resp.status_code == HTTPStatus.OK
@@ -259,6 +269,7 @@ def test_web_plant_dashboard_without_irrigator_renders_sensor_only(app, client):
     ],
 )
 def test_web_plant_dashboard_relative_time_of_newest_event(app, client, ages, expected):
+    """Web plant dashboard relative time of newest event."""
     ids = _seed(app, {"C1": ["Fern"]}, irrigator_for="C1")
     repo, session = _repo_session(app)
     try:
@@ -307,6 +318,7 @@ BASE_KEYS = [
 
 @pytest.mark.usefixtures("clean_env", "frozen_clock")
 def test_base_context_without_session_factory_uses_defaults():
+    """Base context without session factory uses defaults."""
     request = _request(settings=SimpleNamespace(auth_enabled=False))
     ctx = base_context(request, extra_key=1)
     assert list(ctx) == [*BASE_KEYS, "extra_key"]
@@ -325,6 +337,7 @@ def test_base_context_without_session_factory_uses_defaults():
 
 
 def test_base_context_swallows_preference_errors_and_closes_session():
+    """Base context swallows preference errors and closes session."""
     session = _ClosingSession()
     ctx = base_context(_request(session_factory=lambda: session, settings=SimpleNamespace(auth_enabled=True)))
     assert session.closed == 1
@@ -337,6 +350,7 @@ def test_base_context_swallows_preference_errors_and_closes_session():
 
 
 def test_base_context_keeps_preferences_read_before_a_vacation_error(monkeypatch):
+    """Base context keeps preferences read before a vacation error."""
     prefs = SimpleNamespace(dry_run_global=True, scheduler_paused=True, theme="dark")
     monkeypatch.setattr(IrrigationRepository, "get_preferences", lambda _self: prefs)
 
@@ -380,6 +394,7 @@ def test_base_context_hides_the_banners_from_an_anonymous_viewer(monkeypatch):
 
 
 def test_base_context_auth_enabled_defaults_true_without_settings():
+    """Base context auth enabled defaults true without settings."""
     assert base_context(_request())["auth_enabled"] is True
 
 
@@ -392,6 +407,7 @@ def _memory_engine():
 
 @pytest.mark.usefixtures("clean_env")
 def test_create_app_without_settings_reads_settings_from_env(monkeypatch, tmp_path):
+    """Create app without settings reads settings from env."""
     db_url = f"sqlite:///{tmp_path}/env.db"
     monkeypatch.setenv("IRRIGATION_DB_URL", db_url)
     monkeypatch.setenv("IRRIGATION_ENABLE_SCHEDULER", "false")
@@ -407,6 +423,7 @@ def test_create_app_without_settings_reads_settings_from_env(monkeypatch, tmp_pa
 
 @pytest.mark.usefixtures("clean_env")
 def test_create_app_without_engine_builds_one_from_settings_db_url(tmp_path):
+    """Create app without engine builds one from settings DB URL."""
     db_url = f"sqlite:///{tmp_path}/built.db"
     application = create_app(Settings(db_url=db_url, enable_scheduler=False))
     engine = application.state.session_factory.kw["bind"]

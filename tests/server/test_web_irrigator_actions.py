@@ -12,6 +12,7 @@ if TYPE_CHECKING:
 
 
 def test_irrigator_start_via_web(seeded_client):
+    """Irrigator start via web."""
     resp = seeded_client.post("/irrigators/1/start", data={"minutes": "3"})
     assert resp.status_code == HTTPStatus.OK
     # action result partial with success marker
@@ -19,12 +20,14 @@ def test_irrigator_start_via_web(seeded_client):
 
 
 def test_irrigator_stop_via_web(seeded_client):
+    """Irrigator stop via web."""
     resp = seeded_client.post("/irrigators/1/stop", data={})
     assert resp.status_code == HTTPStatus.OK
     assert "stop" in resp.text.lower()
 
 
 def test_log_manual_form_renders(seeded_client):
+    """Log manual form renders."""
     resp = seeded_client.get("/irrigators/1/log-manual")
     assert resp.status_code == HTTPStatus.OK
     assert "Log manual irrigation" in resp.text
@@ -32,6 +35,7 @@ def test_log_manual_form_renders(seeded_client):
 
 
 def test_log_manual_submit_redirects(seeded_client):
+    """Log manual submit redirects."""
     resp = seeded_client.post(
         "/irrigators/1/log-manual",
         data={"minutes": "5", "notes": "manual watering while away"},
@@ -43,6 +47,7 @@ def test_log_manual_submit_redirects(seeded_client):
 
 
 def test_irrigator_missing_404(client):
+    """Irrigator missing 404."""
     resp = client.post("/irrigators/9999/start", data={})
     assert resp.status_code == HTTPStatus.NOT_FOUND
 
@@ -101,6 +106,7 @@ def test_web_start_enforces_daily_caps(app, seeded_client):
 
 
 def test_web_start_notifies(app, seeded_client):
+    """Web start notifies."""
     rec = _RecordingNotifier()
     app.state.ntfy_notifier = rec
     seeded_client.post("/irrigators/1/start", data={"minutes": "3"})
@@ -108,6 +114,7 @@ def test_web_start_notifies(app, seeded_client):
 
 
 def test_web_start_records_same_event_as_api(app, seeded_client):
+    """Web start records same event as API."""
     seeded_client.post("/irrigators/1/start", data={"minutes": "3"})
     seeded_client.post("/api/v1/irrigators/1/start", json={"minutes": 3})
     web, api = _events(app)
@@ -117,6 +124,7 @@ def test_web_start_records_same_event_as_api(app, seeded_client):
 
 
 def test_web_start_device_failure_records_like_api(app, seeded_client):
+    """Web start device failure records like API."""
     app.state.fake_devices.irrigator.start_result = (False, "device timeout")
     resp = seeded_client.post("/irrigators/1/start", data={"minutes": "3"})
     assert "start failed" in resp.text
@@ -126,6 +134,7 @@ def test_web_start_device_failure_records_like_api(app, seeded_client):
 
 
 def test_web_stop_notifies_and_records_same_event_as_api(app, seeded_client):
+    """Web stop notifies and records same event as API."""
     rec = _RecordingNotifier()
     app.state.ntfy_notifier = rec
     seeded_client.post("/irrigators/1/stop", data={})
@@ -136,6 +145,7 @@ def test_web_stop_notifies_and_records_same_event_as_api(app, seeded_client):
 
 
 def test_api_start_caps_still_409(app, seeded_client):
+    """API start caps still 409."""
     _set_max_events(app, 1)
     assert seeded_client.post("/api/v1/irrigators/1/start", json={"minutes": 2}).status_code == HTTPStatus.OK
     resp = seeded_client.post("/api/v1/irrigators/1/start", json={"minutes": 2})
@@ -160,6 +170,7 @@ def test_web_log_manual_records_same_event_as_api(app, seeded_client):
 
 
 def test_web_log_manual_enforces_daily_caps(app, seeded_client):
+    """Web log manual enforces daily caps."""
     _set_max_events(app, 1)
     first = seeded_client.post("/irrigators/1/log-manual", data={"minutes": "2"}, follow_redirects=False)
     assert first.status_code == HTTPStatus.SEE_OTHER
@@ -171,6 +182,7 @@ def test_web_log_manual_enforces_daily_caps(app, seeded_client):
 
 
 def test_web_log_manual_notifies(app, seeded_client):
+    """Web log manual notifies."""
     rec = _RecordingNotifier()
     app.state.ntfy_notifier = rec
     seeded_client.post("/irrigators/1/log-manual", data={"minutes": "3"}, follow_redirects=False)
@@ -190,6 +202,7 @@ def test_web_start_rejects_non_positive_minutes(app, seeded_client, minutes):
 
 @pytest.mark.parametrize("minutes", [0, -3])
 def test_api_start_rejects_non_positive_minutes(app, seeded_client, minutes):
+    """API start rejects non positive minutes."""
     resp = seeded_client.post("/api/v1/irrigators/1/start", json={"minutes": minutes})
     assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
     assert resp.json()["detail"][0]["loc"] == ["body", "minutes"]

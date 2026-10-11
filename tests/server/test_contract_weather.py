@@ -108,7 +108,10 @@ def test_constructor_defaults(net):
 
 
 class TestCurrent:
+    """Tests for current."""
+
     def test_exact_url_timeout_and_mapping(self, net):
+        """Exact URL timeout and mapping."""
         net.queue(CURRENT_PAYLOAD)
         assert WeatherClient().get_current() == {
             "temperature": 18.4,
@@ -119,6 +122,7 @@ class TestCurrent:
         assert net.calls == [(CURRENT_URL, 8)]
 
     def test_custom_location_timezone_and_timeout_are_interpolated_verbatim(self, net):
+        """Custom location timezone and timeout are interpolated verbatim."""
         net.queue(CURRENT_PAYLOAD)
         WeatherClient(lat=-33.5, lon=151.25, timeout=3, tz="Australia/Sydney").get_current()
         assert net.calls == [
@@ -131,6 +135,7 @@ class TestCurrent:
         ]
 
     def test_missing_current_block_maps_to_all_none_and_is_cached(self, net):
+        """Missing current block maps to all none and is cached."""
         net.queue({"hourly": {}})
         client = WeatherClient()
         expected = {"temperature": None, "feels_like": None, "precipitation": None, "humidity": None}
@@ -140,6 +145,7 @@ class TestCurrent:
 
     @pytest.mark.parametrize("failure", [OSError("dns"), TimeoutError("slow"), b"not json", b"[1, 2]"])
     def test_failure_returns_none_and_is_not_cached(self, net, failure):
+        """Failure returns none and is not cached."""
         net.queue(failure, CURRENT_PAYLOAD)
         client = WeatherClient()
         assert client.get_current() is None
@@ -147,6 +153,7 @@ class TestCurrent:
         assert [url for url, _ in net.calls] == [CURRENT_URL, CURRENT_URL]
 
     def test_cache_ttl_boundary(self, net):
+        """Cache TTL boundary."""
         net.queue(CURRENT_PAYLOAD, {"current": {"temperature_2m": REFETCHED_TEMPERATURE}})
         client = WeatherClient()
         assert client.get_current()["temperature"] == CURRENT_TEMPERATURE  # fetched at t=1000
@@ -158,7 +165,10 @@ class TestCurrent:
 
 
 class TestForecast:
+    """Tests for forecast."""
+
     def test_exact_url_and_six_hour_aggregate(self, net):
+        """Exact URL and six hour aggregate."""
         net.queue(HOURLY_PAYLOAD)
         assert WeatherClient().get_forecast() == {
             "precipitation_mm": 2.0,
@@ -169,6 +179,7 @@ class TestForecast:
         assert net.calls == [(FORECAST_URL, 8)]
 
     def test_window_clamps_to_available_hours(self, net):
+        """Window clamps to available hours."""
         net.queue(HOURLY_PAYLOAD)
         assert WeatherClient().get_forecast(hours=48) == {
             "precipitation_mm": 8.0,
@@ -178,6 +189,7 @@ class TestForecast:
         }
 
     def test_window_is_sized_by_precipitation_length_only(self, net):
+        """Window is sized by precipitation length only."""
         net.queue({"hourly": {"precipitation": [1.0, 2.0, 3.0], "temperature_2m": [20.0], "relative_humidity_2m": []}})
         assert WeatherClient().get_forecast(hours=3) == {
             "precipitation_mm": 6.0,
@@ -191,6 +203,7 @@ class TestForecast:
         [({"hourly": {"precipitation": []}}, 6), ({}, 6)],
     )
     def test_empty_window_returns_none_and_is_not_cached(self, net, payload, hours):
+        """Empty window returns none and is not cached."""
         net.queue(payload, HOURLY_PAYLOAD)
         client = WeatherClient()
         assert client.get_forecast(hours=hours) is None
@@ -208,10 +221,12 @@ class TestForecast:
 
     @pytest.mark.parametrize("failure", [OSError("reset"), b"{", b'{"hourly": {"precipitation": ["x"]}}'])
     def test_failure_returns_none(self, net, failure):
+        """Failure returns none."""
         net.queue(failure)
         assert WeatherClient().get_forecast() is None
 
     def test_cache_ttl_boundary_and_independent_caches(self, net):
+        """Cache TTL boundary and independent caches."""
         net.queue(HOURLY_PAYLOAD, CURRENT_PAYLOAD, {"hourly": {"precipitation": [REFETCHED_PRECIPITATION_MM]}})
         client = WeatherClient()
         client.get_forecast()

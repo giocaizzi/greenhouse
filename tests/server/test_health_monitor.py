@@ -121,6 +121,7 @@ class TestTransitionMatrix:
     """clean → alarm → alarm → clean reproduces the documented behaviour."""
 
     def test_clean_to_alarm_raises_alert(self, monitor, repo, cluster_irrigator_sensor):
+        """Clean to alarm raises alert."""
         monitor_, irr_adapter, _, _ = monitor
         irrigator, _ = cluster_irrigator_sensor
 
@@ -136,6 +137,7 @@ class TestTransitionMatrix:
         assert alert.occurrence_count == 1
 
     def test_alarm_to_alarm_increments_occurrence(self, monitor, repo, cluster_irrigator_sensor):
+        """Alarm to alarm increments occurrence."""
         monitor_, irr_adapter, _, _ = monitor
         irrigator, _ = cluster_irrigator_sensor
 
@@ -151,6 +153,7 @@ class TestTransitionMatrix:
         assert alert.status == "open"
 
     def test_alarm_to_clean_resolves(self, monitor, repo, cluster_irrigator_sensor):
+        """Alarm to clean resolves."""
         monitor_, irr_adapter, _, _ = monitor
         irrigator, _ = cluster_irrigator_sensor
 
@@ -163,6 +166,7 @@ class TestTransitionMatrix:
         assert alert.status == "resolved"
 
     def test_battery_low_then_critical_open_two_distinct_alerts(self, monitor, repo, cluster_irrigator_sensor):
+        """Battery low then critical open two distinct alerts."""
         monitor_, _, sensor_adapter, _ = monitor
         _, sensor = cluster_irrigator_sensor
 
@@ -187,6 +191,7 @@ class TestTransitionMatrix:
         assert crit.severity == "critical"
 
     def test_offline_transition_via_stale_last_seen(self, monitor, repo, cluster_irrigator_sensor):
+        """Offline transition via stale last seen."""
         monitor_, _, sensor_adapter, clock = monitor
         _, sensor = cluster_irrigator_sensor
 
@@ -207,6 +212,7 @@ class TestTransitionMatrix:
         assert alert.status == "open"
 
     def test_explicit_offline_flag_opens_alert(self, monitor, repo, cluster_irrigator_sensor):
+        """Explicit offline flag opens alert."""
         monitor_, irr_adapter, _, _ = monitor
         irrigator, _ = cluster_irrigator_sensor
 
@@ -223,6 +229,7 @@ class TestActuationGate:
     """is_actuation_blocked answers from the cache, never re-polls."""
 
     def test_no_cached_state_falls_open(self, monitor, cluster_irrigator_sensor):
+        """No cached state falls open."""
         monitor_, _, _, _ = monitor
         irrigator, _ = cluster_irrigator_sensor
 
@@ -231,6 +238,7 @@ class TestActuationGate:
         assert alarms == []
 
     def test_no_water_blocks(self, monitor, cluster_irrigator_sensor):
+        """No water blocks."""
         monitor_, irr_adapter, _, _ = monitor
         irrigator, _ = cluster_irrigator_sensor
 
@@ -241,6 +249,7 @@ class TestActuationGate:
         assert HealthAlarm.NO_WATER in alarms
 
     def test_low_battery_does_not_block(self, monitor, cluster_irrigator_sensor):
+        """Low battery does not block."""
         monitor_, irr_adapter, _, _ = monitor
         irrigator, _ = cluster_irrigator_sensor
 
@@ -285,6 +294,7 @@ class TestBackfillFromHistory:
     """Persistent low-battery state survives a server restart via back-fill."""
 
     def test_n_consecutive_low_battery_readings_raise_alert(self, monitor, repo, cluster_irrigator_sensor):
+        """N consecutive low battery readings raise alert."""
         monitor_, _, _, _ = monitor
         _, sensor = cluster_irrigator_sensor
 
@@ -306,6 +316,7 @@ class TestBackfillFromHistory:
         assert alert.status == "open"
 
     def test_short_history_does_not_backfill(self, monitor, repo, cluster_irrigator_sensor):
+        """Short history does not backfill."""
         monitor_, _, _, _ = monitor
         _, sensor = cluster_irrigator_sensor
 
@@ -395,6 +406,7 @@ class TestEngineActuationBlock:
         ],
     )
     def test_pipeline_skips_with_typed_reason(self, repo, monitor, cluster_irrigator_sensor, soil, season):
+        """Pipeline skips with typed reason."""
         monitor_, irr_adapter, _, _ = monitor
         irrigator, sensor = cluster_irrigator_sensor
 
@@ -483,6 +495,7 @@ class TestSharedMonitorViews:
         return watcher, shared
 
     def test_pump_watcher_trip_writes_its_alert_through_its_own_view(self, tmp_path):
+        """Pump watcher trip writes its alert through its own view."""
         watcher_engine, watcher_repo = self._repo_on_file(tmp_path / "watcher.db")
         other_engine, other_repo = self._repo_on_file(tmp_path / "other_job.db")
         irrigator_id = self._seed_irrigator(watcher_repo)
@@ -523,6 +536,7 @@ class TestUnraisedAlarmRetry:
     def test_failed_alert_write_still_blocks_and_retries_on_next_observation(
         self, monitor, repo, cluster_irrigator_sensor, monkeypatch
     ):
+        """Failed alert write still blocks and retries on next observation."""
         monitor_, irr_adapter, _, _ = monitor
         irrigator, _ = cluster_irrigator_sensor
         key = f"health:irrigator:{irrigator.id}:no_water"
@@ -546,6 +560,7 @@ class TestUnraisedAlarmRetry:
         assert repo.get_open_alert_by_key(key).occurrence_count == 1
 
     def test_mark_unraised_requeues_an_alert_lost_to_a_rollback(self, monitor, repo, cluster_irrigator_sensor):
+        """Mark unraised requeues an alert lost to a rollback."""
         monitor_, irr_adapter, _, _ = monitor
         irrigator, _ = cluster_irrigator_sensor
         key = f"health:irrigator:{irrigator.id}:no_water"
@@ -570,6 +585,7 @@ class TestRestoreFromOpenAlerts:
     def test_open_alert_blocks_at_once_and_resolves_when_cleared(
         self, repo, registry_with_fakes, cluster_irrigator_sensor
     ):
+        """Open alert blocks at once and resolves when cleared."""
         registry, irr_adapter, _ = registry_with_fakes
         irrigator, _ = cluster_irrigator_sensor
         self._raise_no_water(repo, registry, irrigator, irr_adapter)
@@ -586,6 +602,7 @@ class TestRestoreFromOpenAlerts:
         assert restarted.is_actuation_blocked(irrigator) == (False, [])
 
     def test_persisting_alarm_is_not_raised_again(self, repo, registry_with_fakes, cluster_irrigator_sensor):
+        """Persisting alarm is not raised again."""
         registry, irr_adapter, _ = registry_with_fakes
         irrigator, _ = cluster_irrigator_sensor
         self._raise_no_water(repo, registry, irrigator, irr_adapter)
@@ -596,6 +613,7 @@ class TestRestoreFromOpenAlerts:
         assert (alert.status, alert.occurrence_count) == ("open", 1)
 
     def test_unknown_codes_and_resolved_alerts_are_ignored(self, repo, registry_with_fakes, cluster_irrigator_sensor):
+        """Unknown codes and resolved alerts are ignored."""
         registry, _, _ = registry_with_fakes
         irrigator, _ = cluster_irrigator_sensor
         repo.upsert_alert(
@@ -616,6 +634,7 @@ class TestTripOnTopOfACachedAlarm:
     def test_failed_insert_poisoning_the_session_still_caches_and_reraises_no_water(
         self, repo, registry_with_fakes, cluster_irrigator_sensor, monkeypatch
     ):
+        """Failed insert poisoning the session still caches and reraises no water."""
         registry, irr_adapter, _ = registry_with_fakes
         irrigator, _ = cluster_irrigator_sensor
         shared = DeviceHealthMonitor(repo=repo, registry=registry)
@@ -643,6 +662,7 @@ class TestTripOnTopOfACachedAlarm:
         assert repo.get_open_alert_by_key(f"health:irrigator:{irrigator.id}:no_water") is not None
 
     def test_mark_unraised_adds_an_alarm_the_cache_never_saw(self, repo, registry_with_fakes, cluster_irrigator_sensor):
+        """Mark unraised adds an alarm the cache never saw."""
         registry, _, _ = registry_with_fakes
         irrigator, _ = cluster_irrigator_sensor
         monitor_ = DeviceHealthMonitor(repo=repo, registry=registry)

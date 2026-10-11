@@ -16,19 +16,25 @@ from greenhouse_server.web.filters import (
 
 
 class TestStripEmoji:
+    """Tests for strip emoji."""
+
     def test_removes_weather_and_chart_emoji(self):
+        """Removes weather and chart emoji."""
         assert strip_emoji("☁️ low light (68 lux)") == "low light (68 lux)"
         assert strip_emoji("📊 recent under-watering") == "recent under-watering"
         assert strip_emoji("🌑 very low light") == "very low light"
 
     def test_collapses_internal_separators(self):
+        """Collapses internal separators."""
         text = "soil moisture adequate; ☁️ low light (68 lux); 📊 recent under-watering"
         assert strip_emoji(text) == "soil moisture adequate; low light (68 lux); recent under-watering"
 
     def test_passes_through_plain_strings(self):
+        """Passes through plain strings."""
         assert strip_emoji("plain prose") == "plain prose"
 
     def test_handles_none_and_empty(self):
+        """Handles none and empty."""
         assert strip_emoji(None) == ""
         assert strip_emoji("") == ""
 
@@ -38,12 +44,15 @@ class TestTimeAgo:
 
     def test_caps_absurd_age_as_stale(self):
         # Far in the past — old seed data must not render as "20567d ago"
+        """Caps absurd age as stale."""
         assert time_ago(0) == "stale"
 
     def test_handles_none(self):
+        """Handles none."""
         assert time_ago(None) == "—"
 
     def test_recent_units(self):
+        """Recent units."""
         now = time.time()
         assert time_ago(now - 30).endswith("s ago")
         assert time_ago(now - 300).endswith("m ago")
@@ -52,6 +61,7 @@ class TestTimeAgo:
 
     def test_seven_day_boundary(self):
         # Just under 7 days -> still d-ago; past it -> stale
+        """Seven day boundary."""
         now = time.time()
         assert time_ago(now - (6 * 86400)).endswith("d ago")
         assert time_ago(now - (8 * 86400)) == "stale"
@@ -61,39 +71,51 @@ class TestAgeSeconds:
     """``age_seconds`` takes an age in seconds (D18: it used to take a timestamp)."""
 
     def test_formats_the_age_itself(self):
+        """Formats the age itself."""
         assert age_seconds(30) == "30s ago"
         assert age_seconds(300) == "5m ago"
         assert age_seconds(7200) == "2h ago"
         assert age_seconds(2 * 86400) == "2d ago"
 
     def test_handles_none(self):
+        """Handles none."""
         assert age_seconds(None) == "—"
 
     def test_seven_day_boundary(self):
+        """Seven day boundary."""
         assert age_seconds(6 * 86400) == "6d ago"
         assert age_seconds(8 * 86400) == "stale"
 
     def test_negative_age_reads_zero(self):
+        """Negative age reads zero."""
         assert age_seconds(-5) == "0s ago"
 
 
 class TestStatPosition:
+    """Tests for stat position."""
+
     def test_centered_value(self):
+        """Centered value."""
         assert stat_position(50, 0, 100) == "50"
 
     def test_at_lower_bound(self):
+        """At lower bound."""
         assert stat_position(0, 0, 100) == "0"
 
     def test_at_upper_bound(self):
+        """At upper bound."""
         assert stat_position(100, 0, 100) == "100"
 
     def test_clamps_below_range(self):
+        """Clamps below range."""
         assert stat_position(-10, 0, 100) == "0"
 
     def test_clamps_above_range(self):
+        """Clamps above range."""
         assert stat_position(150, 0, 100) == "100"
 
     def test_falls_back_to_center_on_missing_inputs(self):
+        """Falls back to center on missing inputs."""
         assert stat_position(None, 0, 100) == "50"
         assert stat_position(50, None, 100) == "50"
         assert stat_position(50, 0, None) == "50"
@@ -101,6 +123,7 @@ class TestStatPosition:
         assert stat_position(50, 100, 100) == "50"
 
     def test_arbitrary_range(self):
+        """Arbitrary range."""
         assert stat_position(60, 40, 80) == "50"
         assert stat_position(40, 40, 80) == "0"
         assert stat_position(80, 40, 80) == "100"
@@ -110,11 +133,13 @@ class TestExistingFiltersStillWork:
     """Sanity check that adding new filters didn't break existing ones."""
 
     def test_decision_badge(self):
+        """Decision badge."""
         assert decision_badge("irrigate") == "primary"
         assert decision_badge("skip") == "muted"
         assert decision_badge(None) == "muted"
 
     def test_moisture_badge(self):
+        """Moisture badge."""
         assert moisture_badge(50, 30, 70) == "ok"
         assert moisture_badge(20, 30, 70) == "low"
         assert moisture_badge(80, 30, 70) == "high"
@@ -132,6 +157,7 @@ class TestClusterCaps:
         }
 
     def test_empty_cluster(self):
+        """Empty cluster."""
         caps = cluster_caps(self._status(plants=0, sensors=0, irrigator=False))
         assert caps["tier"] == "empty"
         assert not caps["can_monitor"]
@@ -140,6 +166,7 @@ class TestClusterCaps:
         assert caps["missing"] == ["irrigator", "sensors", "plants"]
 
     def test_sensor_only_is_full_monitoring_without_actuation(self):
+        """Sensor only is full monitoring without actuation."""
         caps = cluster_caps(self._status(plants=2, sensors=1, irrigator=False))
         assert caps["tier"] == "sensor_only"
         assert caps["can_monitor"]
@@ -148,12 +175,14 @@ class TestClusterCaps:
         assert caps["missing"] == ["irrigator"]
 
     def test_plants_only_cannot_monitor(self):
+        """Plants only cannot monitor."""
         caps = cluster_caps(self._status(plants=1, sensors=0, irrigator=False))
         assert caps["tier"] == "sensor_only"
         assert not caps["can_monitor"]
         assert not caps["can_decide"]
 
     def test_operational_full_stack(self):
+        """Operational full stack."""
         caps = cluster_caps(self._status(plants=1, sensors=1, irrigator=True))
         assert caps["tier"] == "operational"
         assert caps["can_decide"]
@@ -161,12 +190,15 @@ class TestClusterCaps:
         assert caps["missing"] == []
 
     def test_operational_but_degraded_without_sensors(self):
+        """Operational but degraded without sensors."""
         caps = cluster_caps(self._status(plants=1, sensors=0, irrigator=True))
         assert caps["tier"] == "operational"
         assert caps["can_actuate"]
         assert not caps["can_decide"]  # drives the "schedule/manual only" notice
 
     def test_accepts_orm_like_object(self):
+        """Accepts orm like object."""
+
         class _Cluster:
             plants: ClassVar[list] = [object()]
             sensors: ClassVar[list] = []
@@ -179,6 +211,7 @@ class TestClusterCaps:
         assert caps["has_irrigator"]
 
     def test_handles_none(self):
+        """Handles none."""
         caps = cluster_caps(None)
         assert caps["tier"] == "empty"
 

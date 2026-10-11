@@ -55,6 +55,7 @@ def _cluster_with_irrigator(client, irrigator_type: str) -> tuple[int, int]:
 
 @pytest.mark.parametrize("legacy", ["tuya_cloud", "tuya_local"])
 def test_manual_start_refuses_a_legacy_irrigator_with_503(client, app, caplog, legacy):
+    """Manual start refuses a legacy irrigator with 503."""
     _, iid = _cluster_with_irrigator(client, legacy)
     with caplog.at_level(logging.ERROR, logger="greenhouse_core.devices.registry"):
         resp = client.post(f"/api/v1/irrigators/{iid}/start", json={"minutes": 1})
@@ -65,6 +66,7 @@ def test_manual_start_refuses_a_legacy_irrigator_with_503(client, app, caplog, l
 
 
 def test_forced_cluster_irrigation_skips_actuation_for_a_legacy_irrigator(seeded_client, app):
+    """Forced cluster irrigation skips actuation for a legacy irrigator."""
     client = seeded_client
     irrigator_id = client.get("/api/v1/clusters/1/irrigator").json()["id"]
     _legacy_row(client, lambda repo: repo.update_irrigator(irrigator_id, type="tuya_cloud"))
@@ -75,6 +77,7 @@ def test_forced_cluster_irrigation_skips_actuation_for_a_legacy_irrigator(seeded
 
 
 def test_emergency_stop_reports_a_legacy_irrigator_as_an_error(client, app):
+    """Emergency stop reports a legacy irrigator as an error."""
     _, iid = _cluster_with_irrigator(client, "tuya_local")
     resp = client.post("/api/v1/bulk/stop-all", json={})
     assert resp.status_code == HTTPStatus.OK
@@ -88,6 +91,7 @@ def test_emergency_stop_reports_a_legacy_irrigator_as_an_error(client, app):
 
 @pytest.mark.parametrize("legacy", ["soil_moisture", "temp_humidity", "light"])
 def test_health_poll_skips_a_legacy_sensor_with_a_warning(client, app, caplog, legacy):
+    """Health poll skips a legacy sensor with a warning."""
     cid = client.post("/api/v1/clusters", json={"name": "Legacy", "environment": "indoor"}).json()["id"]
     sid = _legacy_row(
         client,

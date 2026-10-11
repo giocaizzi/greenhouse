@@ -14,6 +14,8 @@ def cid(client) -> int:
 
 @pytest.mark.parametrize("bad", ["NaN", "Infinity", "-Infinity"])
 def test_api_bodies_refuse_non_finite_numbers(client, cid, bad):
+    """API bodies refuse non finite numbers."""
+
     def put(method, url, body):
         return client.request(method, url, content=body, headers={"Content-Type": "application/json"})
 
@@ -46,6 +48,7 @@ def test_api_bodies_refuse_non_finite_numbers(client, cid, bad):
 
 @pytest.mark.parametrize("bad", ["nan", "inf", "-inf"])
 def test_web_forms_refuse_non_finite_numbers(client, cid, bad):
+    """Web forms refuse non finite numbers."""
     html = {"Accept": "text/html"}
     resp = client.post(f"/clusters/{cid}/plants", data={"species": "Fern", "ideal_temp_min": bad}, headers=html)
     assert resp.status_code == HTTPStatus.BAD_REQUEST

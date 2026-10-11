@@ -42,6 +42,7 @@ def test_overlay_dataset_structure(seeded_client):
 
 
 def test_overlay_404_unknown_cluster(client):
+    """Overlay 404 unknown cluster."""
     resp = client.get("/api/v1/clusters/9999/overlay")
     assert resp.status_code == HTTPStatus.NOT_FOUND
 

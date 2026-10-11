@@ -98,6 +98,7 @@ class TestPlantHealthEndpoints:
 
     @pytest.mark.usefixtures("app")
     def test_get_health_404_unknown_plant(self, client):
+        """Get health 404 unknown plant."""
         resp = client.get("/api/v1/plants/9999/health")
         assert resp.status_code == HTTPStatus.NOT_FOUND
 

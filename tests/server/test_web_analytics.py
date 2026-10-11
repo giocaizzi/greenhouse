@@ -6,6 +6,7 @@ import pytest
 
 
 def test_history_page_renders(seeded_client):
+    """History page renders."""
     resp = seeded_client.get("/clusters/1/history?hours=24&limit=10")
     assert resp.status_code == HTTPStatus.OK
     assert "History" in resp.text
@@ -14,17 +15,20 @@ def test_history_page_renders(seeded_client):
 
 
 def test_history_404(client):
+    """History 404."""
     resp = client.get("/clusters/9999/history")
     assert resp.status_code == HTTPStatus.NOT_FOUND
 
 
 def test_stats_page_renders(seeded_client):
+    """Stats page renders."""
     resp = seeded_client.get("/clusters/1/stats?days=7")
     assert resp.status_code == HTTPStatus.OK
     assert "Stats" in resp.text
 
 
 def test_stats_export_returns_csv(seeded_client):
+    """Stats export returns CSV."""
     resp = seeded_client.get("/clusters/1/stats/export?days=7")
     assert resp.status_code == HTTPStatus.OK
     assert "text/csv" in resp.headers["content-type"]
@@ -34,12 +38,14 @@ def test_stats_export_returns_csv(seeded_client):
 
 
 def test_learn_page_renders(seeded_client):
+    """Learn page renders."""
     resp = seeded_client.get("/clusters/1/learn")
     assert resp.status_code == HTTPStatus.OK
     assert "Insights" in resp.text
 
 
 def test_scheduler_page_renders(client):
+    """Scheduler page renders."""
     resp = client.get("/scheduler")
     assert resp.status_code == HTTPStatus.OK
     # scheduler disabled in tests → "not running" message
@@ -48,6 +54,7 @@ def test_scheduler_page_renders(client):
 
 def test_scheduler_delete_missing_job_returns_503(client):
     # scheduler is not running in tests → 503
+    """Scheduler delete missing job returns 503."""
     resp = client.post("/scheduler/jobs/missing/delete")
     assert resp.status_code == HTTPStatus.SERVICE_UNAVAILABLE
 
@@ -74,6 +81,7 @@ def test_scheduler_page_marks_paused_check_all(client):
 
 @pytest.mark.usefixtures("running_scheduler")
 def test_scheduler_page_resume_restores_active(client):
+    """Scheduler page resume restores active."""
     client.post("/scheduler/pause", follow_redirects=False)
     assert client.post("/scheduler/resume", follow_redirects=False).status_code == HTTPStatus.SEE_OTHER
     resp = client.get("/scheduler")
@@ -82,18 +90,21 @@ def test_scheduler_page_resume_restores_active(client):
 
 
 def test_scheduler_web_delete_refuses_core_job(client, running_scheduler):
+    """Scheduler web delete refuses core job."""
     resp = client.post("/scheduler/jobs/sensor_anomaly/delete")
     assert resp.status_code == HTTPStatus.CONFLICT
     assert running_scheduler.get_job("sensor_anomaly") is not None
 
 
 def test_scheduler_web_delete_adhoc_job(client, running_scheduler):
+    """Scheduler web delete adhoc job."""
     running_scheduler.add_job(lambda: None, "date", run_date="2099-01-01", id="leak-check-1-123")
     assert client.post("/scheduler/jobs/leak-check-1-123/delete").status_code == HTTPStatus.OK
     assert client.post("/scheduler/jobs/leak-check-1-123/delete").status_code == HTTPStatus.NOT_FOUND
 
 
 def test_scheduler_page_hides_delete_for_core_jobs(client, running_scheduler):
+    """Scheduler page hides delete for core jobs."""
     running_scheduler.add_job(lambda: None, "date", run_date="2099-01-01", id="leak-check-1-123", name="Leak")
     resp = client.get("/scheduler")
     assert 'hx-post="/scheduler/jobs/leak-check-1-123/delete"' in resp.text

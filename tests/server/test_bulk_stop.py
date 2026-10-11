@@ -24,6 +24,8 @@ def _seed_irrigators(client) -> int:
 
 
 class TestBulkStopAll:
+    """Tests for bulk stop all."""
+
     def test_stop_all_returns_correct_count(self, client):
         """Stop-all with two irrigators must report stopped=2."""
         seeded = _seed_irrigators(client)

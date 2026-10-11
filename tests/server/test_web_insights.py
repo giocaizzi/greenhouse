@@ -4,6 +4,7 @@ from http import HTTPStatus
 
 
 def test_learn_page_renders_insight_cards(seeded_client):
+    """Learn page renders insight cards."""
     resp = seeded_client.get("/clusters/1/learn")
     assert resp.status_code == HTTPStatus.OK
     # Structured card markup must be present
@@ -11,6 +12,7 @@ def test_learn_page_renders_insight_cards(seeded_client):
 
 
 def test_learn_page_no_pre_dump(seeded_client):
+    """Learn page no pre dump."""
     resp = seeded_client.get("/clusters/1/learn")
     assert resp.status_code == HTTPStatus.OK
     # The raw <pre class="report"> text-dump must be gone
@@ -18,6 +20,7 @@ def test_learn_page_no_pre_dump(seeded_client):
 
 
 def test_learn_page_shows_forecast_section(seeded_client):
+    """Learn page shows forecast section."""
     resp = seeded_client.get("/clusters/1/learn")
     assert resp.status_code == HTTPStatus.OK
     # Forecast section heading must be present
@@ -33,5 +36,6 @@ def test_learn_page_empty_state(seeded_client):
 
 
 def test_learn_page_404_for_missing_cluster(client):
+    """Learn page 404 for missing cluster."""
     resp = client.get("/clusters/9999/learn")
     assert resp.status_code == HTTPStatus.NOT_FOUND

@@ -38,6 +38,7 @@ def test_heatmap_structure(seeded_client):
 
 
 def test_heatmap_404_unknown_cluster(client):
+    """Heatmap 404 unknown cluster."""
     resp = client.get("/api/v1/clusters/9999/heatmap")
     assert resp.status_code == HTTPStatus.NOT_FOUND
 

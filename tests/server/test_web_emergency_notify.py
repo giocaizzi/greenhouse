@@ -17,6 +17,7 @@ from .test_notify import _RecordingNotifier
 
 
 def test_web_stop_all_sends_the_emergency_push(app, seeded_client):
+    """Web stop all sends the emergency push."""
     rec = _RecordingNotifier()
     app.state.ntfy_notifier = rec
     resp = seeded_client.post("/bulk/stop-all")
@@ -27,6 +28,7 @@ def test_web_stop_all_sends_the_emergency_push(app, seeded_client):
 
 
 def test_web_and_api_stop_all_push_the_same_payload(app, seeded_client):
+    """Web and API stop all push the same payload."""
     rec = _RecordingNotifier()
     app.state.ntfy_notifier = rec
     endpoints = ("/api/v1/bulk/stop-all", "/bulk/stop-all")
@@ -37,6 +39,7 @@ def test_web_and_api_stop_all_push_the_same_payload(app, seeded_client):
 
 
 def test_web_stop_all_respects_the_emergency_preference(app, seeded_client):
+    """Web stop all respects the emergency preference."""
     rec = _RecordingNotifier()
     app.state.ntfy_notifier = rec
     seeded_client.put("/api/v1/preferences", json={"notify_emergency": False})

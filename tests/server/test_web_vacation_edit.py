@@ -16,7 +16,10 @@ def _create_window(client, *, starts_offset=3600, ends_offset=7200):
 
 
 class TestVacationEditPage:
+    """Tests for vacation edit page."""
+
     def test_renders_form_with_existing_values(self, client):
+        """Renders form with existing values."""
         _create_window(client)
         resp = client.get("/vacation/1/edit")
         assert resp.status_code == HTTPStatus.OK
@@ -27,12 +30,14 @@ class TestVacationEditPage:
         assert 'name="notes"' in resp.text
 
     def test_edit_link_appears_on_list(self, client):
+        """Edit link appears on list."""
         _create_window(client)
         resp = client.get("/vacation")
         assert resp.status_code == HTTPStatus.OK
         assert "/vacation/1/edit" in resp.text
 
     def test_inputs_have_matching_labels_a11y(self, client):
+        """Inputs have matching labels a11y."""
         _create_window(client)
         resp = client.get("/vacation/1/edit")
         assert resp.status_code == HTTPStatus.OK
@@ -41,12 +46,16 @@ class TestVacationEditPage:
             assert f'id="{field}"' in resp.text
 
     def test_unknown_window_returns_404(self, client):
+        """Unknown window returns 404."""
         resp = client.get("/vacation/9999/edit")
         assert resp.status_code == HTTPStatus.NOT_FOUND
 
 
 class TestVacationUpdate:
+    """Tests for vacation update."""
+
     def test_update_persists_and_redirects(self, client):
+        """Update persists and redirects."""
         _create_window(client)
         resp = client.post(
             "/vacation/1/edit",
@@ -67,6 +76,7 @@ class TestVacationUpdate:
         assert "Watering by hand" in listed.text
 
     def test_update_iso_dates_round_trip(self, client):
+        """Update ISO dates round trip."""
         _create_window(client)
         resp = client.post(
             "/vacation/1/edit",
@@ -81,6 +91,7 @@ class TestVacationUpdate:
         assert "2030-06-10" in form.text
 
     def test_update_rejects_end_before_start(self, client):
+        """Update rejects end before start."""
         _create_window(client)
         resp = client.post(
             "/vacation/1/edit",
@@ -90,6 +101,7 @@ class TestVacationUpdate:
         assert resp.status_code == HTTPStatus.BAD_REQUEST
 
     def test_update_rejects_bad_date(self, client):
+        """Update rejects bad date."""
         _create_window(client)
         resp = client.post(
             "/vacation/1/edit",
@@ -99,6 +111,7 @@ class TestVacationUpdate:
         assert resp.status_code == HTTPStatus.BAD_REQUEST
 
     def test_update_unknown_window_returns_404(self, client):
+        """Update unknown window returns 404."""
         resp = client.post(
             "/vacation/9999/edit",
             data={"starts_at": "2030-06-01", "ends_at": "2030-06-10"},

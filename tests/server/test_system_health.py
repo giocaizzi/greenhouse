@@ -24,7 +24,10 @@ def _make_app():
 
 
 class TestSystemHealthPulse:
+    """Tests for system health pulse."""
+
     def test_empty_system_status_down(self, client):
+        """Empty system status down."""
         resp = client.get("/api/v1/health/system")
         assert resp.status_code == HTTPStatus.OK
         data = resp.json()
@@ -147,6 +150,7 @@ class TestSystemHealthPulse:
             engine.dispose()
 
     def test_response_schema(self, client):
+        """Response schema."""
         resp = client.get("/api/v1/health/system")
         data = resp.json()
         required = {

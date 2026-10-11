@@ -126,6 +126,7 @@ def _assert_cleaned_side_ignores_it(p, views: dict, decision_log: dict) -> None:
 
 
 def test_raw_views_keep_the_spike_and_cleaned_views_ignore_it(spiky):
+    """Raw views keep the spike and cleaned views ignore it."""
     p = spiky
     v = _views(p)
     _assert_raw_side_keeps_the_spike(p, v)

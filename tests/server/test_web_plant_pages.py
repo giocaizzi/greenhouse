@@ -4,17 +4,20 @@ from http import HTTPStatus
 
 
 def test_plants_list_renders(seeded_client):
+    """Plants list renders."""
     resp = seeded_client.get("/clusters/1/plants")
     assert resp.status_code == HTTPStatus.OK
     assert "Monstera deliciosa" in resp.text
 
 
 def test_plants_list_404_for_missing_cluster(client):
+    """Plants list 404 for missing cluster."""
     resp = client.get("/clusters/9999/plants")
     assert resp.status_code == HTTPStatus.NOT_FOUND
 
 
 def test_new_plant_form_renders(seeded_client):
+    """New plant form renders."""
     resp = seeded_client.get("/clusters/1/plants/new")
     assert resp.status_code == HTTPStatus.OK
     assert "Add plant" in resp.text
@@ -22,6 +25,7 @@ def test_new_plant_form_renders(seeded_client):
 
 
 def test_create_plant(seeded_client):
+    """Create plant."""
     resp = seeded_client.post(
         "/clusters/1/plants",
         data={"species": "Ficus lyrata", "category": "tropical", "water_needs": "medium"},
@@ -42,12 +46,14 @@ _JSON = {"Accept": "application/json"}
 
 
 def test_plant_form_missing_species_is_422_even_for_an_unknown_cluster(seeded_client):
+    """Plant form missing species is 422 even for an unknown cluster."""
     resp = seeded_client.post("/clusters/9999/plants", data={"ideal_temp_min": "abc"}, headers=_JSON)
     assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
     assert resp.json()["detail"][0]["loc"] == ["body", "species"]
 
 
 def test_plant_form_unknown_cluster_or_plant_wins_over_a_bad_bound(seeded_client):
+    """Plant form unknown cluster or plant wins over a bad bound."""
     assert seeded_client.post("/clusters/9999/plants", data=_BAD_BOUND, headers=_JSON).json() == {
         "detail": "Cluster not found"
     }
@@ -56,6 +62,7 @@ def test_plant_form_unknown_cluster_or_plant_wins_over_a_bad_bound(seeded_client
 
 
 def test_plant_form_bad_bound_is_400_naming_the_field(seeded_client):
+    """Plant form bad bound is 400 naming the field."""
     for url in ("/clusters/1/plants", "/clusters/1/plants/1/edit"):
         resp = seeded_client.post(url, data=_BAD_BOUND, headers=_JSON)
         assert (resp.status_code, resp.json()) == (400, {"detail": "Invalid ideal_temp_min: must be a number"})
@@ -69,6 +76,7 @@ def test_plant_form_422_lists_body_errors_before_path_errors(seeded_client):
 
 
 def test_plant_edit_form_maps_blanks_to_none(seeded_client):
+    """Plant edit form maps blanks to none."""
     resp = seeded_client.post(
         "/clusters/1/plants/1/edit",
         data={"species": "Monstera deliciosa", "category": "", "ideal_temp_min": "16.5"},

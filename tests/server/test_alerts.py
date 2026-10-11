@@ -8,7 +8,10 @@ from greenhouse_core.repository import IrrigationRepository
 
 
 class TestAlertList:
+    """Tests for alert list."""
+
     def test_list_empty(self, client):
+        """List empty."""
         resp = client.get("/api/v1/alerts")
         assert resp.status_code == HTTPStatus.OK
         data = resp.json()
@@ -16,22 +19,28 @@ class TestAlertList:
         assert data["items"] == []
 
     def test_list_with_status_filter(self, client):
+        """List with status filter."""
         resp = client.get("/api/v1/alerts?status=open")
         assert resp.status_code == HTTPStatus.OK
         assert resp.json()["items"] == []
 
     def test_list_with_cluster_filter(self, client):
+        """List with cluster filter."""
         resp = client.get("/api/v1/alerts?cluster_id=1")
         assert resp.status_code == HTTPStatus.OK
         assert resp.json()["items"] == []
 
 
 class TestAlertGetById:
+    """Tests for alert get by id."""
+
     def test_get_not_found(self, client):
+        """Get not found."""
         resp = client.get("/api/v1/alerts/999")
         assert resp.status_code == HTTPStatus.NOT_FOUND
 
     def test_get_existing(self, app):
+        """Get existing."""
         with TestClient(app, raise_server_exceptions=False) as client:
             session = app.state.session_factory()
             try:
@@ -60,11 +69,15 @@ class TestAlertGetById:
 
 
 class TestAlertAcknowledge:
+    """Tests for alert acknowledge."""
+
     def test_acknowledge_not_found(self, client):
+        """Acknowledge not found."""
         resp = client.post("/api/v1/alerts/999/acknowledge")
         assert resp.status_code == HTTPStatus.NOT_FOUND
 
     def test_acknowledge_flow(self, app):
+        """Acknowledge flow."""
         with TestClient(app, raise_server_exceptions=False) as client:
             session = app.state.session_factory()
             try:
@@ -97,11 +110,15 @@ class TestAlertAcknowledge:
 
 
 class TestAlertResolve:
+    """Tests for alert resolve."""
+
     def test_resolve_not_found(self, client):
+        """Resolve not found."""
         resp = client.post("/api/v1/alerts/999/resolve")
         assert resp.status_code == HTTPStatus.NOT_FOUND
 
     def test_resolve_flow(self, app):
+        """Resolve flow."""
         with TestClient(app, raise_server_exceptions=False) as client:
             session = app.state.session_factory()
             try:
@@ -138,11 +155,15 @@ class TestAlertResolve:
 
 
 class TestAlertSyncCluster:
+    """Tests for alert sync cluster."""
+
     def test_sync_not_found(self, client):
+        """Sync not found."""
         resp = client.post("/api/v1/clusters/999/alerts/sync")
         assert resp.status_code == HTTPStatus.NOT_FOUND
 
     def test_sync_returns_list_response(self, seeded_client):
+        """Sync returns list response."""
         resp = seeded_client.post("/api/v1/clusters/1/alerts/sync")
         assert resp.status_code == HTTPStatus.OK
         data = resp.json()
@@ -164,7 +185,10 @@ class TestAlertSyncCluster:
 
 
 class TestAlertSyncAll:
+    """Tests for alert sync all."""
+
     def test_sync_all(self, seeded_client):
+        """Sync all."""
         resp = seeded_client.post("/api/v1/alerts/sync")
         assert resp.status_code == HTTPStatus.OK
         data = resp.json()

@@ -66,11 +66,15 @@ def _seed_ten_point_rise(engine, event_ts: int, duration: int) -> None:
 
 
 class TestClusterEfficacy:
+    """Tests for cluster efficacy."""
+
     def test_not_found(self, client):
+        """Not found."""
         resp = client.get("/api/v1/clusters/999/efficacy")
         assert resp.status_code == HTTPStatus.NOT_FOUND
 
     def test_empty_cluster(self, seeded_client):
+        """Empty cluster."""
         resp = seeded_client.get("/api/v1/clusters/1/efficacy")
         assert resp.status_code == HTTPStatus.OK
         data = resp.json()
@@ -179,6 +183,7 @@ class TestClusterEfficacy:
             engine.dispose()
 
     def test_days_query_param(self, seeded_client):
+        """Days query param."""
         days = 30
         resp = seeded_client.get(f"/api/v1/clusters/1/efficacy?days={days}")
         assert resp.status_code == HTTPStatus.OK

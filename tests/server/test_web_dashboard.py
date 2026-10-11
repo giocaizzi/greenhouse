@@ -4,6 +4,7 @@ from http import HTTPStatus
 
 
 def test_dashboard_empty_state(client):
+    """Dashboard empty state."""
     resp = client.get("/")
     assert resp.status_code == HTTPStatus.OK
     assert "text/html" in resp.headers["content-type"]
@@ -12,6 +13,7 @@ def test_dashboard_empty_state(client):
 
 
 def test_dashboard_lists_seeded_cluster(seeded_client):
+    """Dashboard lists seeded cluster."""
     resp = seeded_client.get("/")
     assert resp.status_code == HTTPStatus.OK
     assert "Test Cluster" in resp.text
@@ -30,11 +32,13 @@ def test_card_fragment_renders_plant_sensor_link(seeded_client):
 
 
 def test_card_fragment_404_for_missing_cluster(client):
+    """Card fragment 404 for missing cluster."""
     resp = client.get("/clusters/9999/card-fragment")
     assert resp.status_code == HTTPStatus.NOT_FOUND
 
 
 def test_dashboard_includes_chart_assets(client):
+    """Dashboard includes chart assets."""
     resp = client.get("/")
     text_lc = resp.text.lower()
     assert "chart.js" in text_lc

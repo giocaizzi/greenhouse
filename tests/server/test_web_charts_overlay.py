@@ -37,6 +37,7 @@ def test_overlay_fragment_json_island_is_valid(seeded_client):
 
 
 def test_overlay_fragment_404_unknown_cluster(client):
+    """Overlay fragment 404 unknown cluster."""
     resp = client.get("/clusters/9999/overlay-fragment")
     assert resp.status_code == HTTPStatus.NOT_FOUND
 

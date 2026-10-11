@@ -150,6 +150,7 @@ def _poll_sensor(world) -> list[str]:
 
 
 def test_poll_sensor_hands_the_newest_persisted_row_and_never_touches_the_cloud(world):
+    """Poll sensor hands the newest persisted row and never touches the cloud."""
     for age, battery in ((3600, "high"), (60, "low"), (1800, "middle")):
         _persist(world, FROZEN_TS - age, soil_moisture=40.0, battery_state=battery)
     state = world["monitor"].poll_sensor(world["sensor"])
@@ -161,6 +162,7 @@ def test_poll_sensor_hands_the_newest_persisted_row_and_never_touches_the_cloud(
 
 @pytest.mark.usefixtures("frozen_clock")
 def test_poll_all_with_fake_adapters_issues_no_read_live(tmp_db):
+    """Poll all with fake adapters issues no read live."""
     cid = tmp_db.add_cluster("C")
     tmp_db.add_irrigator(cluster_id=cid, tuya_device_id="p", name="P", irrigator_type="rainpoint.ik10pw", config={})
     s1 = tmp_db.add_sensor(cluster_id=cid, tuya_device_id="s1", name="S1", sensor_type="tuya.tr301z", config={})
@@ -209,6 +211,7 @@ def test_sensor_transition_scenario_golden(world):
 
 
 def test_no_persisted_reading_is_offline(world):
+    """No persisted reading is offline."""
     assert _poll_sensor(world) == ["device_offline"]
     (alert,) = _alerts(world["repo"])
     assert alert["dedup_key"] == f"health:sensor:{world['sensor'].id}:device_offline"
@@ -338,6 +341,7 @@ def test_every_alarm_alert_row_golden(world):
     ],
 )
 def test_actuation_gate_blocking_set(world, alarms, blocking):
+    """Actuation gate blocking set."""
     world["irr_adapter"].set_health(DeviceHealthState(observed_at=FROZEN_TS, alarms=alarms))
     world["monitor"].poll_irrigator(world["irrigator"])
     blocked, found = world["monitor"].is_actuation_blocked(world["irrigator"])
@@ -346,11 +350,13 @@ def test_actuation_gate_blocking_set(world, alarms, blocking):
 
 
 def test_sensor_state_never_gates_the_irrigator(world):
+    """Sensor state never gates the irrigator."""
     world["monitor"].record(ENTITY_SENSOR, world["irrigator"].id, DeviceHealthState(observed_at=0, offline=True))
     assert world["monitor"].is_actuation_blocked(world["irrigator"]) == (False, [])
 
 
 def test_unknown_sensor_model_is_not_recorded(world):
+    """Unknown sensor model is not recorded."""
     repo = world["repo"]
     sid = repo.add_sensor(
         cluster_id=world["cluster_id"], tuya_device_id="x", name="Odd", sensor_type="acme.probe", config={}
@@ -363,6 +369,7 @@ def test_unknown_sensor_model_is_not_recorded(world):
 
 
 def test_record_infers_label_and_cluster_or_falls_back(world):
+    """Record infers label and cluster or falls back."""
     monitor = world["monitor"]
     offline = DeviceHealthState(observed_at=FROZEN_TS, offline=True)
     monitor.record(ENTITY_IRRIGATOR, world["irrigator"].id, offline)
@@ -377,6 +384,7 @@ def test_record_infers_label_and_cluster_or_falls_back(world):
 
 
 def test_explicit_label_and_cluster_win(world):
+    """Explicit label and cluster win."""
     world["monitor"].record(
         ENTITY_IRRIGATOR,
         world["irrigator"].id,
@@ -389,6 +397,8 @@ def test_explicit_label_and_cluster_win(world):
 
 
 def test_poll_all_logs_and_continues_past_failures(world, caplog):
+    """Poll all logs and continues past failures."""
+
     def _boom(_irrigator):
         msg = "no route"
         raise ConnectionError(msg)
@@ -434,6 +444,8 @@ def test_poll_all_requeues_an_alert_lost_to_a_failed_commit(world, monkeypatch, 
 
 
 def test_alert_write_failure_is_logged_and_cache_still_updates(world, monkeypatch, caplog):
+    """Alert write failure is logged and cache still updates."""
+
     def _fail(**_kwargs):
         msg = "db locked"
         raise RuntimeError(msg)
@@ -448,6 +460,7 @@ def test_alert_write_failure_is_logged_and_cache_still_updates(world, monkeypatc
 
 
 def test_sustained_alarm_does_not_touch_the_row_again(world):
+    """Sustained alarm does not touch the row again."""
     state = DeviceHealthState(observed_at=FROZEN_TS, offline=True)
     world["monitor"].record(ENTITY_IRRIGATOR, world["irrigator"].id, state)
     world["monitor"].record(ENTITY_IRRIGATOR, world["irrigator"].id, state)
@@ -457,6 +470,7 @@ def test_sustained_alarm_does_not_touch_the_row_again(world):
 
 
 def test_resolve_without_an_open_row_is_a_noop(world):
+    """Resolve without an open row is a noop."""
     monitor = world["monitor"]
     iid = world["irrigator"].id
     monitor.record(ENTITY_IRRIGATOR, iid, DeviceHealthState(observed_at=FROZEN_TS, offline=True))
@@ -483,6 +497,7 @@ def test_resolve_without_an_open_row_is_a_noop(world):
     ],
 )
 def test_backfill_from_history_windows(world, rows, expected_codes):
+    """Backfill from history windows."""
     for i, values in enumerate(rows):  # i=0 is the newest row
         _persist(world, FROZEN_TS - 600 * (i + 1), soil_moisture=40.0, **values)
     world["monitor"].backfill_from_history()
@@ -490,6 +505,7 @@ def test_backfill_from_history_windows(world, rows, expected_codes):
 
 
 def test_backfill_ignores_rows_older_than_a_week_and_never_duplicates(world):
+    """Backfill ignores rows older than a week and never duplicates."""
     for i in range(5):
         _persist(world, FROZEN_TS - 7 * 24 * 3600 - 60 * (i + 1), battery_state="low")
     world["monitor"].backfill_from_history()

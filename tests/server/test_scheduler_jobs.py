@@ -38,6 +38,7 @@ class TestRegistrationIsIdempotent:
     """Building the app more than once in a process must not duplicate jobs."""
 
     def test_rebuilding_app_does_not_duplicate_jobs(self):
+        """Rebuilding app does not duplicate jobs."""
         _app1, engine1 = _make_stubbed_app(bypass_auth=True)
         app2, engine2 = _make_stubbed_app(bypass_auth=True)
         try:
@@ -75,6 +76,7 @@ class TestPausedFlagIsTruthful:
     """`paused` means "explicitly paused", never "scheduler not started"."""
 
     def test_fresh_app_reports_no_job_paused(self, client):
+        """Fresh app reports no job paused."""
         jobs = client.get("/api/v1/scheduler/jobs").json()
         assert jobs, "default jobs should be registered"
         assert all(j["paused"] is False for j in jobs), jobs
@@ -83,6 +85,7 @@ class TestPausedFlagIsTruthful:
         assert client.get("/api/v1/preferences").json()["scheduler_paused"] is False
 
     def test_health_agrees_with_jobs_list(self, client):
+        """Health agrees with jobs list."""
         health = client.get("/api/v1/health").json()
         assert health["scheduler_running"] is False
         assert all(j["paused"] is False for j in health["jobs"])
@@ -97,12 +100,14 @@ class TestPausedFlagIsTruthful:
         assert _check_all(client)["paused"] is False
 
     def test_timezone_change_keeps_real_pause(self, client):
+        """Timezone change keeps real pause."""
         client.post("/api/v1/scheduler/pause")
         client.put("/api/v1/preferences", json={"timezone": "Europe/Rome"})
         assert _check_all(client)["paused"] is True
         assert client.get("/api/v1/preferences").json()["scheduler_paused"] is True
 
     def test_pause_resume_on_stopped_scheduler(self, client):
+        """Pause resume on stopped scheduler."""
         client.post("/api/v1/scheduler/pause")
         assert _check_all(client)["paused"] is True
         client.post("/api/v1/scheduler/resume")
@@ -116,12 +121,14 @@ class TestRunningScheduler:
 
     @pytest.mark.usefixtures("running_scheduler")
     def test_running_jobs_have_next_run_time_and_are_not_paused(self, client):
+        """Running jobs have next run time and are not paused."""
         jobs = client.get("/api/v1/scheduler/jobs").json()
         assert sorted(j["id"] for j in jobs) == DEFAULT_JOB_IDS
         assert all(j["paused"] is False and j["next_run_time"] for j in jobs), jobs
 
     @pytest.mark.usefixtures("running_scheduler")
     def test_resume_reschedules_check_all(self, client):
+        """Resume reschedules check all."""
         assert client.post("/api/v1/scheduler/pause").json() == {"paused": True}
         paused = _check_all(client)
         assert paused["paused"] is True
@@ -171,6 +178,7 @@ class TestDeleteJob:
     """DELETE /scheduler/jobs/{job_id}: core jobs are protected, ad-hoc jobs are not."""
 
     def test_every_startup_job_is_refused_with_409(self, client):
+        """Every startup job is refused with 409."""
         startup_ids = _job_ids(client)
         assert startup_ids == DEFAULT_JOB_IDS
         for job_id in startup_ids:
@@ -189,16 +197,19 @@ class TestDeleteJob:
         assert sorted(core_job_ids()) == _job_ids(client)
 
     def test_core_jobs_refused_on_running_scheduler(self, client, running_scheduler):
+        """Core jobs refused on running scheduler."""
         assert client.delete(f"/api/v1/scheduler/jobs/{CHECK_ALL_JOB_ID}").status_code == HTTPStatus.CONFLICT
         assert running_scheduler.get_job(CHECK_ALL_JOB_ID) is not None
 
     def test_adhoc_job_is_deletable(self, client):
+        """Adhoc job is deletable."""
         job_id = _add_adhoc_job()
         assert client.delete(f"/api/v1/scheduler/jobs/{job_id}").json() == {"success": True}
         assert job_id not in _job_ids(client)
         assert client.delete(f"/api/v1/scheduler/jobs/{job_id}").status_code == HTTPStatus.NOT_FOUND
 
     def test_adhoc_job_deletable_on_running_scheduler(self, client, running_scheduler):
+        """Adhoc job deletable on running scheduler."""
         job_id = _add_adhoc_job()
         assert client.delete(f"/api/v1/scheduler/jobs/{job_id}").status_code == HTTPStatus.OK
         assert running_scheduler.get_job(job_id) is None
@@ -206,6 +217,7 @@ class TestDeleteJob:
 
     def test_delete_after_rebuild_removes_job_from_listing(self):
         # Build twice: duplicated pending jobs used to survive a single delete.
+        """Delete after rebuild removes job from listing."""
         _app1, engine1 = _make_stubbed_app(bypass_auth=True)
         app2, engine2 = _make_stubbed_app(bypass_auth=True)
         try:
@@ -232,4 +244,5 @@ class TestDeleteJob:
         assert running_scheduler.get_job(job_id) is None
 
     def test_delete_unknown_job_404(self, client):
+        """Delete unknown job 404."""
         assert client.delete("/api/v1/scheduler/jobs/nope").status_code == HTTPStatus.NOT_FOUND

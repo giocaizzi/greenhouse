@@ -5,6 +5,8 @@ from http import HTTPStatus
 
 
 class TestListVacationWindows:
+    """Tests for list vacation windows."""
+
     def test_list_empty(self, client):
         """GET vacation with no windows returns empty list and null active."""
         resp = client.get("/api/v1/vacation")
@@ -15,6 +17,8 @@ class TestListVacationWindows:
 
 
 class TestCreateVacationWindow:
+    """Tests for create vacation window."""
+
     def test_create_basic(self, client):
         """POST creates a vacation window and returns it."""
         now = int(time.time())
@@ -48,6 +52,8 @@ class TestCreateVacationWindow:
 
 
 class TestActiveVacationFlag:
+    """Tests for active vacation flag."""
+
     def test_active_window_during_current_time(self, client):
         """A window spanning now should appear as active."""
         now = int(time.time())
@@ -86,6 +92,8 @@ class TestActiveVacationFlag:
 
 
 class TestUpdateVacationWindow:
+    """Tests for update vacation window."""
+
     def test_update_partial_changes(self, client):
         """PUT applies only the supplied fields and leaves the rest untouched."""
         now = int(time.time())
@@ -139,6 +147,8 @@ class TestUpdateVacationWindow:
 
 
 class TestDeleteVacationWindow:
+    """Tests for delete vacation window."""
+
     def test_delete_existing(self, client):
         """DELETE removes the window and returns success."""
         now = int(time.time())

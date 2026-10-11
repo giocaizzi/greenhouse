@@ -34,6 +34,7 @@ def _set_plant(client, sensor_id, plant_id):
 
 
 def test_creating_sensor_with_plant_opens_assignment(seeded):
+    """Creating sensor with plant opens assignment."""
     client = seeded["client"]
     resp = client.get(f"/api/v1/sensors/{seeded['sensor_id']}/assignments")
     assert resp.status_code == HTTPStatus.OK
@@ -46,6 +47,7 @@ def test_creating_sensor_with_plant_opens_assignment(seeded):
 
 
 def test_reassign_closes_old_and_opens_new(seeded):
+    """Reassign closes old and opens new."""
     client = seeded["client"]
     resp = _set_plant(client, seeded["sensor_id"], seeded["plant_b"])
     assert resp.status_code == HTTPStatus.OK
@@ -59,6 +61,7 @@ def test_reassign_closes_old_and_opens_new(seeded):
 
 
 def test_reassign_to_same_plant_is_noop(seeded):
+    """Reassign to same plant is noop."""
     client = seeded["client"]
     _set_plant(client, seeded["sensor_id"], seeded["plant_a"])
     rows = client.get(f"/api/v1/sensors/{seeded['sensor_id']}/assignments").json()["assignments"]
@@ -66,6 +69,7 @@ def test_reassign_to_same_plant_is_noop(seeded):
 
 
 def test_assignment_endpoint_404_for_missing_sensor(client):
+    """Assignment endpoint 404 for missing sensor."""
     assert client.get("/api/v1/sensors/9999/assignments").status_code == HTTPStatus.NOT_FOUND
 
 
@@ -111,6 +115,7 @@ def test_readings_for_plant_respects_assignment_window(client, app):
     # Timeline: sensor created on plant A at T0, reading_A at T0+1s, reassign to
     # plant B at "now", reading_B at "now" — readings_for_plant must split by
     # which plant owned the sensor at reading time.
+    """Readings for plant respects assignment window."""
     resp = _two_plants_and_a_probe(client, "Window Cluster", "fake_window_sensor", "Window Probe")
     assert resp.status_code == HTTPStatus.CREATED
 
@@ -166,6 +171,7 @@ def test_plant_chart_uses_assignment_window(client, app):
 
 @pytest.mark.usefixtures("app")
 def test_delete_plant_closes_open_assignment(client):
+    """Delete plant closes open assignment."""
     client.post("/api/v1/clusters", json={"name": "Delete Cluster"})
     client.post("/api/v1/clusters/1/plants", json={"species": "Monstera deliciosa"})
     client.post(

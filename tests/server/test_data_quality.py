@@ -21,7 +21,10 @@ def _make_client():
 
 
 class TestDataQualityReport:
+    """Tests for data quality report."""
+
     def test_empty_db_no_issues(self, client):
+        """Empty DB no issues."""
         resp = client.get("/api/v1/quality/report")
         assert resp.status_code == HTTPStatus.OK
         data = resp.json()
@@ -29,6 +32,7 @@ class TestDataQualityReport:
         assert data["counts"] == {}
 
     def test_sensor_without_plant_detected(self):
+        """Sensor without plant detected."""
         client, engine = _make_client()
         try:
             client.post("/api/v1/clusters", json={"name": "Quality Cluster"})
@@ -45,6 +49,7 @@ class TestDataQualityReport:
             engine.dispose()
 
     def test_plant_without_sensor_detected(self):
+        """Plant without sensor detected."""
         client, engine = _make_client()
         try:
             client.post("/api/v1/clusters", json={"name": "Quality Cluster"})
@@ -78,6 +83,7 @@ class TestDataQualityReport:
             engine.dispose()
 
     def test_counts_aggregation(self):
+        """Counts aggregation."""
         client, engine = _make_client()
         try:
             client.post("/api/v1/clusters", json={"name": "Count Cluster"})

@@ -4,12 +4,14 @@ from http import HTTPStatus
 
 
 def test_clusters_list_empty(client):
+    """Clusters list empty."""
     resp = client.get("/clusters")
     assert resp.status_code == HTTPStatus.OK
     assert "No clusters yet" in resp.text
 
 
 def test_clusters_list_seeded(seeded_client):
+    """Clusters list seeded."""
     resp = seeded_client.get("/clusters")
     assert resp.status_code == HTTPStatus.OK
     assert "Test Cluster" in resp.text
@@ -17,6 +19,7 @@ def test_clusters_list_seeded(seeded_client):
 
 
 def test_cluster_detail_renders(seeded_client):
+    """Cluster detail renders."""
     resp = seeded_client.get("/clusters/1")
     assert resp.status_code == HTTPStatus.OK
     assert "Test Cluster" in resp.text
@@ -29,11 +32,13 @@ def test_cluster_detail_renders(seeded_client):
 
 
 def test_cluster_detail_404(client):
+    """Cluster detail 404."""
     resp = client.get("/clusters/9999")
     assert resp.status_code == HTTPStatus.NOT_FOUND
 
 
 def test_cluster_status_fragment(seeded_client):
+    """Cluster status fragment."""
     resp = seeded_client.get("/clusters/1/status-fragment")
     assert resp.status_code == HTTPStatus.OK
     # No <html> wrapper — fragment-only response
@@ -43,5 +48,6 @@ def test_cluster_status_fragment(seeded_client):
 
 
 def test_cluster_status_fragment_404(client):
+    """Cluster status fragment 404."""
     resp = client.get("/clusters/9999/status-fragment")
     assert resp.status_code == HTTPStatus.NOT_FOUND

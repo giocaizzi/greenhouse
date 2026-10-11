@@ -85,6 +85,7 @@ def test_mcp_surface_matches_golden(mcp_app):
 
 
 def test_mcp_tools_match_phase0_baseline_fingerprint(mcp_app):
+    """MCP tools match phase0 baseline fingerprint."""
     tools = sorted(_tool_dumps(mcp_app.state.mcp.tools), key=lambda t: t["name"])
     blob = json.dumps(tools, sort_keys=True, indent=1)
     assert hashlib.sha256(blob.encode()).hexdigest() == PHASE0_MCP_TOOLS_SHA256
@@ -100,6 +101,7 @@ def test_tools_list_handler_returns_exactly_mcp_tools(mcp_app):
 
 
 def test_tool_names_are_operation_ids_one_to_one(mcp_app):
+    """Tool names are operation IDs one to one."""
     mcp = mcp_app.state.mcp
     op_ids = [op["operationId"] for item in mcp_app.openapi()["paths"].values() for op in item.values()]
     assert [t.name for t in mcp.tools] == op_ids
@@ -151,6 +153,7 @@ def test_mcp_401_carries_www_authenticate_header(gated_client, method, header_ca
 @pytest.mark.parametrize("method", ["GET", "POST", "DELETE"])
 @pytest.mark.parametrize("headers", [{}, {"Authorization": f"Bearer {_TOKEN}"}])
 def test_mcp_503_body_when_token_unset_on_every_method(unconfigured_client, method, headers):
+    """MCP 503 body when token unset on every method."""
     resp = unconfigured_client.request(method, "/mcp", headers=headers)
     assert resp.status_code == HTTPStatus.SERVICE_UNAVAILABLE
     assert resp.json() == {"detail": "MCP auth not configured"}

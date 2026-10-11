@@ -71,8 +71,11 @@ def check_calls(monkeypatch):
 
 
 class TestRearm:
+    """Tests for rearm."""
+
     @pytest.mark.usefixtures("running_scheduler")
     def test_pending_and_overdue_auto_starts_are_rearmed(self, app):
+        """Pending and overdue auto starts are rearmed."""
         cid, iid = _seed(app)
         now = int(time.time())
         pending = _start(app, iid, now - 600)  # due in 20 min
@@ -129,6 +132,7 @@ class TestRearm:
 
     @pytest.mark.usefixtures("running_scheduler")
     def test_completed_check_is_not_rearmed(self, app, check_calls):
+        """Completed check is not rearmed."""
         cid, iid = _seed(app)
         overdue = _start(app, iid, int(time.time()) - 2700)
         assert irrigation_jobs_mod.rearm_leak_checks() == 1
@@ -142,6 +146,7 @@ class TestRearm:
 
     @pytest.mark.usefixtures("running_scheduler")
     def test_job_runs_check_at_most_once(self, app, check_calls):
+        """Job runs check at most once."""
         cid, iid = _seed(app)
         ts = _start(app, iid, int(time.time()) - 2700)
         irrigation_jobs_mod.rearm_leak_checks()
@@ -152,6 +157,8 @@ class TestRearm:
 
     @pytest.mark.usefixtures("running_scheduler")
     def test_failed_check_leaves_no_marker(self, app, monkeypatch):
+        """Failed check leaves no marker."""
+
         def _boom(_self, _cluster_id, _started_at):
             msg = "db hiccup"
             raise RuntimeError(msg)
@@ -189,12 +196,15 @@ class TestRearm:
         assert irrigation_jobs_mod.rearm_leak_checks() == 0
 
     def test_noop_when_scheduler_stopped(self, app):
+        """Noop when scheduler stopped."""
         _, iid = _seed(app)
         _start(app, iid, int(time.time()) - 600)
         assert irrigation_jobs_mod.rearm_leak_checks() == 0
 
 
 class TestStartupWiring:
+    """Tests for startup wiring."""
+
     def test_startup_rearms_lost_leak_check(self):
         """Regression: a restart within the 30-min window silently lost the check."""
         application, engine = _make_stubbed_app(bypass_auth=True, enable_scheduler=True)
@@ -208,6 +218,8 @@ class TestStartupWiring:
 
 
 class TestAutoStartTimestampAlignment:
+    """Tests for auto start timestamp alignment."""
+
     @pytest.mark.usefixtures("running_scheduler")
     def test_leak_check_keyed_by_the_start_event_timestamp(self, app, seeded_client, monkeypatch):
         """The leak-check job id / started_at must equal the `start` row's timestamp,

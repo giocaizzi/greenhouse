@@ -253,6 +253,7 @@ def test_web_and_api_pause_share_one_function_on_a_stopped_scheduler(p, monkeypa
 
 
 def test_pause_without_check_all_job_is_404_and_persists_nothing(p):
+    """Pause without check all job is 404 and persists nothing."""
     bg_scheduler.remove_job("check_all")
     try:
         api = p.call("POST", "/api/v1/scheduler/pause")
@@ -335,6 +336,7 @@ def _seed_series(p: Pipeline, *, ages: range, soil: float = 45.0, cluster: str =
 
 
 def test_sync_job_is_a_noop_without_gateway(p, monkeypatch):
+    """Sync job is a noop without gateway."""
     opened = []
     monkeypatch.setattr(p.app.state, "session_factory", lambda: opened.append(1))
     run_core_job("sensor_sync")
@@ -342,6 +344,7 @@ def test_sync_job_is_a_noop_without_gateway(p, monkeypatch):
 
 
 def test_sync_job_with_gateway_syncs_every_sensor_and_commits(p):
+    """Sync job with gateway syncs every sensor and commits."""
     _seed_series(p, ages=range(2 * HOUR, 6 * HOUR, HOUR))
     p.seed_cluster("No sensor", sensor=False, soil=None)
     gw = RecordingGateway({"soil_moisture": 41.0, "temperature": 21.0})
@@ -358,6 +361,7 @@ def test_sync_job_with_gateway_syncs_every_sensor_and_commits(p):
 
 
 def test_sync_job_failure_is_rolled_back_and_logged(p, monkeypatch, caplog):
+    """Sync job failure is rolled back and logged."""
     p.app.state.device_gateway = RecordingGateway()
 
     def explode(_self, hours=24):
@@ -372,6 +376,7 @@ def test_sync_job_failure_is_rolled_back_and_logged(p, monkeypatch, caplog):
 
 
 def test_health_snapshot_job_writes_daily_rows(p):
+    """Health snapshot job writes daily rows."""
     _seed_series(p, ages=range(0, 12 * HOUR, HOUR))
     run_core_job("plant_health_snapshot")
     with p.app.state.session_factory() as session:
@@ -385,6 +390,7 @@ def test_health_snapshot_job_writes_daily_rows(p):
 
 @pytest.mark.usefixtures("p")
 def test_health_snapshot_job_failure_is_logged(monkeypatch, caplog):
+    """Health snapshot job failure is logged."""
     monkeypatch.setattr(PlantHealthService, "snapshot_daily", lambda _self: 1 / 0)
     with caplog.at_level(logging.ERROR, logger="greenhouse_server.scheduler"):
         run_core_job("plant_health_snapshot")
@@ -393,6 +399,7 @@ def test_health_snapshot_job_failure_is_logged(monkeypatch, caplog):
 
 def test_anomaly_job_raises_stale_alert_and_notifies(p):
     # 12 hourly readings ending 5 h ago → silent for > 2 x the median interval.
+    """Anomaly job raises stale alert and notifies."""
     _seed_series(p, ages=range(5 * HOUR, 17 * HOUR, HOUR))
     p.mark()
     run_core_job("sensor_anomaly")
@@ -403,6 +410,7 @@ def test_anomaly_job_raises_stale_alert_and_notifies(p):
 
 @pytest.mark.usefixtures("p")
 def test_anomaly_job_failure_is_logged(monkeypatch, caplog):
+    """Anomaly job failure is logged."""
     monkeypatch.setattr(SensorAnomalyService, "scan", lambda _self: 1 / 0)
     with caplog.at_level(logging.ERROR, logger="greenhouse_server.scheduler"):
         run_core_job("sensor_anomaly")
@@ -442,6 +450,7 @@ def test_init_health_monitor_then_job_polls_every_device(p):
 
 
 def test_health_monitor_job_failure_is_logged(p, monkeypatch, caplog):
+    """Health monitor job failure is logged."""
     p.app.state.device_registry = p.wiring.registry
     sched.init_health_monitor(p.app, p.app.state.settings)
     monkeypatch.setattr(p.app.state.health_monitor, "poll_all", lambda: 1 / 0)
@@ -451,6 +460,7 @@ def test_health_monitor_job_failure_is_logged(p, monkeypatch, caplog):
 
 
 def test_init_health_monitor_startup_hook_failure_still_wires_monitor(p, monkeypatch, caplog):
+    """Init health monitor startup hook failure still wires monitor."""
     p.app.state.device_registry = p.wiring.registry
     monkeypatch.setattr(DeviceHealthMonitor, "backfill_from_history", lambda _self: 1 / 0)
     with caplog.at_level(logging.ERROR, logger="greenhouse_server.scheduler"):
@@ -484,6 +494,7 @@ def test_init_health_monitor_leaves_old_pump_dry_run_alerts_alone(p):
 
 
 def test_get_cloud_reads_app_state(p, monkeypatch):
+    """Get cloud reads app state."""
     assert sched._get_cloud() is None  # noqa: SLF001 — unit test of the private gateway lookup
     gw = RecordingGateway()
     p.app.state.device_gateway = gw
@@ -511,6 +522,7 @@ def _seed_leak_shape(p: Pipeline, started_at: int) -> dict:
 
 
 def test_run_leak_check_raises_hold_once_and_marks_done(p):
+    """Run leak check raises hold once and marks done."""
     started_at = FROZEN_TS - 2 * HOUR
     _seed_leak_shape(p, started_at)
     p.mark()
@@ -527,6 +539,7 @@ def test_run_leak_check_raises_hold_once_and_marks_done(p):
 
 
 def test_run_leak_check_noops_and_failure(p, monkeypatch, caplog):
+    """Run leak check noops and failure."""
     started_at = FROZEN_TS - 2 * HOUR
     _seed_leak_shape(p, started_at)
     p.mark()

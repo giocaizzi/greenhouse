@@ -180,6 +180,7 @@ def _db_state(env) -> dict:
 
 @pytest.mark.parametrize("minutes", [0, -5])
 def test_non_positive_duration_is_not_scheduled(env, minutes):
+    """Non positive duration is not scheduled."""
     assert schedule_pump_watcher(env.irrigator_id, minutes, STARTED_AT) is False
     assert env.scheduler.jobs == []
 
@@ -195,12 +196,14 @@ def test_non_positive_duration_is_not_scheduled(env, minutes):
     ids=["scheduler-stopped", "no-app", "watcher-disabled", "no-registry"],
 )
 def test_unavailable_watcher_is_not_scheduled(env, monkeypatch, mutate):
+    """Unavailable watcher is not scheduled."""
     mutate(env, monkeypatch)
     assert schedule_pump_watcher(env.irrigator_id, 5, STARTED_AT) is False
     assert env.scheduler.jobs == []
 
 
 def test_add_job_failure_returns_false_and_logs_at_debug(env, caplog):
+    """Add job failure returns false and logs at debug."""
     env.scheduler.fail = True
     with caplog.at_level(logging.DEBUG, logger="greenhouse_server.services.irrigation"):
         assert schedule_pump_watcher(env.irrigator_id, 5, STARTED_AT) is False
@@ -208,6 +211,7 @@ def test_add_job_failure_returns_false_and_logs_at_debug(env, caplog):
 
 
 def test_scheduled_job_shape(env):
+    """Scheduled job shape."""
     assert schedule_pump_watcher(env.irrigator_id, 5, STARTED_AT, triggered_by="manual") is True
     (job,) = env.scheduler.jobs
     assert {k: v for k, v in job.items() if k != "func"} == {
@@ -221,6 +225,7 @@ def test_scheduled_job_shape(env):
 
 
 def test_missing_settings_still_schedules_and_uses_watcher_defaults(env):
+    """Missing settings still schedules and uses watcher defaults."""
     env.app.state.settings = None
     assert schedule_pump_watcher(env.irrigator_id, 2, STARTED_AT) is True
     env.scheduler.jobs[0]["func"]()
@@ -232,6 +237,7 @@ def test_missing_settings_still_schedules_and_uses_watcher_defaults(env):
 
 
 def test_job_builds_watcher_from_settings_with_shutdown_hooks(env):
+    """Job builds watcher from settings with shutdown hooks."""
     schedule_pump_watcher(env.irrigator_id, 3, STARTED_AT)
     env.scheduler.jobs[0]["func"]()
     (built,) = env.built
@@ -244,6 +250,7 @@ def test_job_builds_watcher_from_settings_with_shutdown_hooks(env):
 
 
 def test_shutdown_stops_auto_cycle_and_records_it(env, caplog):
+    """Shutdown stops auto cycle and records it."""
     schedule_pump_watcher(env.irrigator_id, 3, STARTED_AT, triggered_by="auto")
     with caplog.at_level(logging.INFO, logger="greenhouse_server.services.irrigation"):
         env.scheduler.jobs[0]["func"]()
@@ -277,6 +284,7 @@ def test_shutdown_stops_auto_cycle_and_records_it(env, caplog):
 
 
 def test_shutdown_leaves_manual_cycle_on_device_timer_and_records_it(env, caplog):
+    """Shutdown leaves manual cycle on device timer and records it."""
     schedule_pump_watcher(env.irrigator_id, 3, STARTED_AT, triggered_by="manual")
     with caplog.at_level(logging.INFO, logger="greenhouse_server.services.irrigation"):
         env.scheduler.jobs[0]["func"]()
@@ -330,6 +338,7 @@ def test_shutdown_stops_forced_run_like_an_auto_cycle(env, caplog):
     ids=["stop-returns-false", "stop-raises"],
 )
 def test_shutdown_failed_auto_stop_is_logged_and_recorded(env, caplog, stop, stop_msg):
+    """Shutdown failed auto stop is logged and recorded."""
     if isinstance(stop, BaseException):
 
         def _raise(_irrigator):
@@ -360,6 +369,7 @@ def test_shutdown_failed_auto_stop_is_logged_and_recorded(env, caplog, stop, sto
 
 
 def test_completed_watch_records_nothing(env, monkeypatch):
+    """Completed watch records nothing."""
     env.shutdown["requested"] = False
 
     def _completed(_self, _irr, _secs, started_at=None):
@@ -374,6 +384,7 @@ def test_completed_watch_records_nothing(env, monkeypatch):
 
 
 def test_deleted_irrigator_ends_the_job_quietly(env):
+    """Deleted irrigator ends the job quietly."""
     schedule_pump_watcher(env.irrigator_id + 100, 3, STARTED_AT)
     env.scheduler.jobs[0]["func"]()
     assert env.built == []
@@ -381,6 +392,8 @@ def test_deleted_irrigator_ends_the_job_quietly(env):
 
 
 def test_job_failure_is_rolled_back_and_logged(env, monkeypatch, caplog):
+    """Job failure is rolled back and logged."""
+
     def _boom(_self, _irr, _secs, started_at=None):
         del started_at  # the job passes it by keyword
         msg = "watch exploded"
@@ -419,6 +432,7 @@ def plain(frozen_clock):
 
 
 def test_interrupted_result_shape_after_one_poll(plain):
+    """Interrupted result shape after one poll."""
     ticks = iter([100.0, 100.0, 100.0, 101.5])  # deadline, warm-up, loop "now", interrupted elapsed
     flag = {"stop": False}
 
@@ -443,6 +457,7 @@ def test_interrupted_result_shape_after_one_poll(plain):
 
 
 def test_trip_side_effects_are_exact(plain):
+    """Trip side effects are exact."""
     plain.adapter.set_health(
         DeviceHealthState(
             observed_at=FROZEN_TS,
@@ -485,6 +500,7 @@ def test_trip_side_effects_are_exact(plain):
 
 
 def test_trip_payload_reprs_unserialisable_alarm_value(plain):
+    """Trip payload reprs unserialisable alarm value."""
     plain.adapter.set_health(
         DeviceHealthState(observed_at=FROZEN_TS, alarms=frozenset({HealthAlarm.NO_WATER}), raw={"alarm_raw": [1, 0]})
     )
@@ -496,6 +512,7 @@ def test_trip_payload_reprs_unserialisable_alarm_value(plain):
 
 
 def test_constructor_clamps_its_knobs(plain):
+    """Constructor clamps its knobs."""
     watcher = PumpWatcherService(plain.repo, plain.registry, poll_seconds=0, warmup_seconds=-3, max_read_failures=0)
     assert (watcher._poll, watcher._warmup, watcher._max_read_failures) == (0.1, 0.0, 1)  # noqa: SLF001 — constructor clamps have no public accessor
 

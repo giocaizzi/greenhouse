@@ -7,7 +7,10 @@ from greenhouse_core.repository import IrrigationRepository
 
 
 class TestPlantCRUD:
+    """Tests for plant CRUD."""
+
     def test_add_and_list(self, client):
+        """Add and list."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         resp = client.post(
             "/api/v1/clusters/1/plants",
@@ -21,16 +24,19 @@ class TestPlantCRUD:
         assert len(resp.json()) == 1
 
     def test_add_to_nonexistent_cluster(self, client):
+        """Add to nonexistent cluster."""
         resp = client.post("/api/v1/clusters/999/plants", json={"species": "Test"})
         assert resp.status_code == HTTPStatus.NOT_FOUND
 
     def test_list_empty_cluster(self, client):
+        """List empty cluster."""
         client.post("/api/v1/clusters", json={"name": "Empty"})
         resp = client.get("/api/v1/clusters/1/plants")
         assert resp.status_code == HTTPStatus.OK
         assert resp.json() == []
 
     def test_sync_plants(self, seeded_client):
+        """Sync plants."""
         resp = seeded_client.post("/api/v1/plants/sync", json={})
         assert resp.status_code == HTTPStatus.OK
         data = resp.json()
@@ -38,6 +44,7 @@ class TestPlantCRUD:
         assert isinstance(data["errors"], list)
 
     def test_update_species_and_water_needs(self, client):
+        """Update species and water needs."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         client.post(
             "/api/v1/clusters/1/plants",
@@ -53,6 +60,7 @@ class TestPlantCRUD:
         assert data["water_needs"] == "medium"
 
     def test_update_wrong_cluster_returns_404(self, client):
+        """Update wrong cluster returns 404."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         client.post("/api/v1/clusters", json={"name": "C2"})
         client.post("/api/v1/clusters/1/plants", json={"species": "Fern"})
@@ -60,11 +68,13 @@ class TestPlantCRUD:
         assert resp.status_code == HTTPStatus.NOT_FOUND
 
     def test_update_not_found(self, client):
+        """Update not found."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         resp = client.put("/api/v1/clusters/1/plants/999", json={"species": "X"})
         assert resp.status_code == HTTPStatus.NOT_FOUND
 
     def test_delete_detaches_sensor(self, client):
+        """Delete detaches sensor."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         client.post("/api/v1/clusters/1/plants", json={"species": "Fern"})
         client.post(
@@ -83,6 +93,7 @@ class TestPlantCRUD:
         assert resp.json()["plant_id"] is None
 
     def test_delete_wrong_cluster_returns_404(self, client):
+        """Delete wrong cluster returns 404."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         client.post("/api/v1/clusters", json={"name": "C2"})
         client.post("/api/v1/clusters/1/plants", json={"species": "Fern"})
@@ -90,6 +101,7 @@ class TestPlantCRUD:
         assert resp.status_code == HTTPStatus.NOT_FOUND
 
     def test_delete_not_found(self, client):
+        """Delete not found."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         resp = client.delete("/api/v1/clusters/1/plants/999")
         assert resp.status_code == HTTPStatus.NOT_FOUND
@@ -106,6 +118,7 @@ class TestPlantMove:
         return resp.json()["id"]
 
     def test_move_happy_path(self, client):
+        """Move happy path."""
         plant_id = self._seed_two_clusters_one_plant(client)
         target_cluster_id = 2
 
@@ -120,6 +133,7 @@ class TestPlantMove:
         assert client.get("/api/v1/clusters/1/plants").json() == []
 
     def test_move_missing_plant_returns_404(self, client):
+        """Move missing plant returns 404."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         client.post("/api/v1/clusters", json={"name": "C2"})
         resp = client.post("/api/v1/plants/999/move", json={"target_cluster_id": 2})
@@ -127,17 +141,20 @@ class TestPlantMove:
         assert "plant" in resp.json()["detail"].lower()
 
     def test_move_missing_target_cluster_returns_404(self, client):
+        """Move missing target cluster returns 404."""
         plant_id = self._seed_two_clusters_one_plant(client)
         resp = client.post(f"/api/v1/plants/{plant_id}/move", json={"target_cluster_id": 999})
         assert resp.status_code == HTTPStatus.NOT_FOUND
         assert "cluster" in resp.json()["detail"].lower()
 
     def test_move_same_cluster_returns_400(self, client):
+        """Move same cluster returns 400."""
         plant_id = self._seed_two_clusters_one_plant(client)
         resp = client.post(f"/api/v1/plants/{plant_id}/move", json={"target_cluster_id": 1})
         assert resp.status_code == HTTPStatus.BAD_REQUEST
 
     def test_move_writes_plant_moved_activity_event(self, app, client):
+        """Move writes plant moved activity event."""
         plant_id = self._seed_two_clusters_one_plant(client)
         client.post(f"/api/v1/plants/{plant_id}/move", json={"target_cluster_id": 2})
 
@@ -344,6 +361,8 @@ class TestPlantMove:
 
 
 class TestListAllPlantsTopLevel:
+    """Tests for list all plants top level."""
+
     def test_list_empty(self, client):
         """GET /plants with no plants returns empty list and null cursor."""
         resp = client.get("/api/v1/plants")

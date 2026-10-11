@@ -29,6 +29,7 @@ def _counting_factory(app):
 
 
 def test_protected_api_request_opens_one_session():
+    """Protected API request opens one session."""
     app, _ = _build_app()
     with TestClient(app) as client:
         token = client.post(
@@ -42,6 +43,7 @@ def test_protected_api_request_opens_one_session():
 
 
 def test_auth_dependency_and_handler_share_the_session():
+    """Auth dependency and handler share the session."""
     assert _session_from_app is get_session
 
 

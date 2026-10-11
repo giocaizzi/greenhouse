@@ -106,6 +106,7 @@ def _run_server_shutdown(tmp_path: Path, triggered_by: str) -> tuple[float, str]
 
 @pytest.mark.parametrize(("triggered_by", "stops"), [("auto", 1), ("manual", 0)])
 def test_shutdown_during_irrigation_is_prompt(tmp_path, triggered_by, stops):
+    """Shutdown during irrigation is prompt."""
     elapsed, out = _run_server_shutdown(tmp_path, triggered_by)
     assert "LIFESPAN_DONE" in out
     assert f"STOPS {stops}" in out, out
@@ -146,7 +147,10 @@ def _registry(adapter: FakeIrrigatorAdapter) -> DeviceRegistry:
 
 
 class TestWatcherInterruption:
+    """Tests for watcher interruption."""
+
     def test_stop_requested_ends_watch_immediately(self, repo, irrigator):
+        """Stop requested ends watch immediately."""
         adapter = FakeIrrigatorAdapter()
         flag = {"stop": False}
 
@@ -161,6 +165,7 @@ class TestWatcherInterruption:
         assert not [c for c in adapter.calls if c[0] == "stop"]
 
     def test_no_stop_requested_runs_to_completion(self, repo, irrigator):
+        """No stop requested runs to completion."""
         ticks = iter(range(10_000))
         watcher = PumpWatcherService(
             repo,
@@ -173,7 +178,10 @@ class TestWatcherInterruption:
 
 
 class TestShutdownPolicy:
+    """Tests for shutdown policy."""
+
     def test_auto_cycle_is_stopped_and_recorded(self, repo, irrigator):
+        """Auto cycle is stopped and recorded."""
         adapter = FakeIrrigatorAdapter()
         stopped = handle_watcher_interrupted(
             repo, _registry(adapter), irrigator, triggered_by="auto", started_at=int(time.time())
@@ -187,6 +195,7 @@ class TestShutdownPolicy:
         assert any(a.code == "pump_watcher_shutdown" for a in activity)
 
     def test_manual_cycle_is_left_running_with_warning(self, repo, irrigator, caplog):
+        """Manual cycle is left running with warning."""
         adapter = FakeIrrigatorAdapter()
         stopped = handle_watcher_interrupted(
             repo, _registry(adapter), irrigator, triggered_by="manual", started_at=int(time.time())
@@ -199,6 +208,7 @@ class TestShutdownPolicy:
         assert "unprotected" in caplog.text
 
     def test_auto_stop_failure_is_logged_not_raised(self, repo, irrigator, caplog):
+        """Auto stop failure is logged not raised."""
         adapter = FakeIrrigatorAdapter(stop_result=(False, "device unreachable"))
         stopped = handle_watcher_interrupted(
             repo, _registry(adapter), irrigator, triggered_by="auto", started_at=int(time.time())

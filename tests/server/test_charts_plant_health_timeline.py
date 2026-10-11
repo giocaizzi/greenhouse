@@ -28,6 +28,7 @@ def test_health_timeline_empty_no_readings(seeded_client):
 
 
 def test_health_timeline_404_unknown_plant(client):
+    """Health timeline 404 unknown plant."""
     resp = client.get("/api/v1/plants/9999/health-timeline")
     assert resp.status_code == HTTPStatus.NOT_FOUND
 

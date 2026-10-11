@@ -43,11 +43,13 @@ def _build_app(**override):
 
 
 def test_anonymous_api_returns_401(anonymous_client: TestClient):
+    """Anonymous API returns 401."""
     resp = anonymous_client.get("/api/v1/clusters")
     assert resp.status_code == HTTPStatus.UNAUTHORIZED
 
 
 def test_anonymous_web_redirects_to_login(anonymous_client: TestClient):
+    """Anonymous web redirects to login."""
     resp = anonymous_client.get("/clusters", follow_redirects=False)
     assert resp.status_code == HTTPStatus.SEE_OTHER
     assert resp.headers["location"].startswith("/login")
@@ -56,6 +58,7 @@ def test_anonymous_web_redirects_to_login(anonymous_client: TestClient):
 
 
 def test_anonymous_login_page_renders(anonymous_client: TestClient):
+    """Anonymous login page renders."""
     resp = anonymous_client.get("/login")
     assert resp.status_code == HTTPStatus.OK
     assert b"Sign in" in resp.content
@@ -64,6 +67,7 @@ def test_anonymous_login_page_renders(anonymous_client: TestClient):
 
 
 def test_login_with_valid_credentials_returns_token(anonymous_client: TestClient):
+    """Login with valid credentials returns token."""
     resp = anonymous_client.post(
         "/api/v1/auth/login",
         json={"username": TEST_ADMIN_USERNAME, "password": TEST_ADMIN_PASSWORD},
@@ -79,6 +83,7 @@ def test_login_with_valid_credentials_returns_token(anonymous_client: TestClient
 
 
 def test_login_with_wrong_password_returns_401(anonymous_client: TestClient):
+    """Login with wrong password returns 401."""
     resp = anonymous_client.post(
         "/api/v1/auth/login",
         json={"username": TEST_ADMIN_USERNAME, "password": "wrong-password"},
@@ -87,6 +92,7 @@ def test_login_with_wrong_password_returns_401(anonymous_client: TestClient):
 
 
 def test_login_with_unknown_user_returns_401(anonymous_client: TestClient):
+    """Login with unknown user returns 401."""
     resp = anonymous_client.post(
         "/api/v1/auth/login",
         json={"username": "no-such-user", "password": "whatever"},
@@ -104,6 +110,7 @@ def test_bearer_token_authenticates_api(authed_real_client: TestClient):
 
 
 def test_invalid_bearer_token_returns_401(anonymous_client: TestClient):
+    """Invalid bearer token returns 401."""
     resp = anonymous_client.get("/api/v1/clusters", headers={"Authorization": "Bearer not-a-real-token"})
     assert resp.status_code == HTTPStatus.UNAUTHORIZED
 
@@ -111,6 +118,7 @@ def test_invalid_bearer_token_returns_401(anonymous_client: TestClient):
 def test_cookie_session_authenticates_web_pages(anonymous_client: TestClient):
     # First log in via API (sets cookie), then hit a web page anonymously by
     # header — only the cookie should carry through.
+    """Cookie session authenticates web pages."""
     resp = anonymous_client.post(
         "/api/v1/auth/login",
         json={"username": TEST_ADMIN_USERNAME, "password": TEST_ADMIN_PASSWORD},
@@ -133,6 +141,7 @@ def test_logout_clears_session(authed_real_client: TestClient):
 
 
 def test_form_login_redirects_to_next(anonymous_client: TestClient):
+    """Form login redirects to next."""
     resp = anonymous_client.post(
         "/login",
         data={"username": TEST_ADMIN_USERNAME, "password": TEST_ADMIN_PASSWORD, "next": "/clusters"},
@@ -144,6 +153,7 @@ def test_form_login_redirects_to_next(anonymous_client: TestClient):
 
 
 def test_form_login_rejects_external_next(anonymous_client: TestClient):
+    """Form login rejects external next."""
     resp = anonymous_client.post(
         "/login",
         data={
@@ -191,6 +201,7 @@ def test_hx_request_unauthenticated_returns_hx_redirect(anonymous_client: TestCl
 
 
 def test_auth_disabled_grants_anonymous_access(auth_disabled_app):
+    """Auth disabled grants anonymous access."""
     tc = TestClient(auth_disabled_app, raise_server_exceptions=False)
     resp = tc.get("/api/v1/clusters")
     assert resp.status_code == HTTPStatus.OK
@@ -202,6 +213,7 @@ def test_auth_disabled_grants_anonymous_access(auth_disabled_app):
 
 def test_missing_secret_key_returns_503_on_login():
     # auth enabled but no secret — login itself can't sign; expect 503.
+    """Missing secret key returns 503 on login."""
     app, _ = _build_app(auth_secret_key=None)
     tc = TestClient(app, raise_server_exceptions=False)
     resp = tc.post(

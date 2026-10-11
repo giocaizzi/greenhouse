@@ -21,6 +21,7 @@ def _cluster(client) -> int:
 
 
 def test_api_refuses_an_unknown_irrigator_type_on_create_and_update(client):
+    """API refuses an unknown irrigator type on create and update."""
     cid = _cluster(client)
     body = {"tuya_device_id": "fake_tuya_device_aabbccdd", "name": "P", "type": "acme.pump"}
     resp = client.post(f"/api/v1/clusters/{cid}/irrigator", json=body)
@@ -36,6 +37,7 @@ def test_api_refuses_an_unknown_irrigator_type_on_create_and_update(client):
 
 
 def test_api_refuses_an_unknown_sensor_type_on_create_and_update(client):
+    """API refuses an unknown sensor type on create and update."""
     cid = _cluster(client)
     body = {"tuya_device_id": "fake_tuya_sensor_00000001", "name": "S", "type": "acme.probe"}
     resp = client.post(f"/api/v1/clusters/{cid}/sensors", json=body)
@@ -46,6 +48,7 @@ def test_api_refuses_an_unknown_sensor_type_on_create_and_update(client):
 
 
 def test_without_a_live_registry_the_canonical_keys_apply(client, app):
+    """Without a live registry the canonical keys apply."""
     app.dependency_overrides[get_device_registry] = lambda: None
     cid = _cluster(client)
     resp = client.post(
@@ -60,6 +63,7 @@ def test_without_a_live_registry_the_canonical_keys_apply(client, app):
 
 
 def test_web_forms_refuse_an_unknown_type(client):
+    """Web forms refuse an unknown type."""
     cid = _cluster(client)
     resp = client.post(
         f"/clusters/{cid}/irrigators",
@@ -81,6 +85,7 @@ def test_web_forms_refuse_an_unknown_type(client):
 
 
 def test_edit_form_selects_the_stored_type_and_flags_an_unknown_one(client):
+    """Edit form selects the stored type and flags an unknown one."""
     cid = _cluster(client)
     session = client.app.state.session_factory()
     repo = IrrigationRepository(session)

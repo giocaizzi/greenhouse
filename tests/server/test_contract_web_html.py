@@ -756,6 +756,7 @@ def _run_get(client: TestClient, case: GetCase):
 
 
 def test_get_cases_are_unique():
+    """Get cases are unique."""
     names = [c.name for c in GET_CASES]
     assert len(names) == len(set(names))
 

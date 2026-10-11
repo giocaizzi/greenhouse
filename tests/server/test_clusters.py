@@ -11,7 +11,10 @@ from greenhouse_core.repository import IrrigationRepository
 
 
 class TestClusterCRUD:
+    """Tests for cluster CRUD."""
+
     def test_create_and_list(self, client):
+        """Create and list."""
         resp = client.post("/api/v1/clusters", json={"name": "My Cluster"})
         assert resp.status_code == HTTPStatus.CREATED
         data = resp.json()
@@ -24,6 +27,7 @@ class TestClusterCRUD:
         assert len(resp.json()) == 1
 
     def test_create_with_all_fields(self, client):
+        """Create with all fields."""
         resp = client.post(
             "/api/v1/clusters",
             json={"name": "Outdoor", "location": "Balcony", "environment": "outdoor"},
@@ -34,21 +38,25 @@ class TestClusterCRUD:
         assert data["environment"] == "outdoor"
 
     def test_get_by_id(self, client):
+        """Get by ID."""
         client.post("/api/v1/clusters", json={"name": "Test"})
         resp = client.get("/api/v1/clusters/1")
         assert resp.status_code == HTTPStatus.OK
         assert resp.json()["name"] == "Test"
 
     def test_get_not_found(self, client):
+        """Get not found."""
         resp = client.get("/api/v1/clusters/999")
         assert resp.status_code == HTTPStatus.NOT_FOUND
 
     def test_list_empty(self, client):
+        """List empty."""
         resp = client.get("/api/v1/clusters")
         assert resp.status_code == HTTPStatus.OK
         assert resp.json() == []
 
     def test_create_two_clusters(self, client):
+        """Create two clusters."""
         names = ["A", "B"]
         for name in names:
             client.post("/api/v1/clusters", json={"name": name})
@@ -56,6 +64,7 @@ class TestClusterCRUD:
         assert len(resp.json()) == len(names)
 
     def test_update_name_and_location(self, client):
+        """Update name and location."""
         client.post("/api/v1/clusters", json={"name": "Original", "environment": "indoor"})
         resp = client.put("/api/v1/clusters/1", json={"name": "Renamed", "location": "Shelf"})
         assert resp.status_code == HTTPStatus.OK
@@ -65,16 +74,19 @@ class TestClusterCRUD:
         assert data["environment"] == "indoor"  # unchanged
 
     def test_update_reflects_on_get(self, client):
+        """Update reflects on get."""
         client.post("/api/v1/clusters", json={"name": "Before"})
         client.put("/api/v1/clusters/1", json={"name": "After"})
         resp = client.get("/api/v1/clusters/1")
         assert resp.json()["name"] == "After"
 
     def test_update_not_found(self, client):
+        """Update not found."""
         resp = client.put("/api/v1/clusters/999", json={"name": "X"})
         assert resp.status_code == HTTPStatus.NOT_FOUND
 
     def test_delete_cluster(self, client):
+        """Delete cluster."""
         client.post("/api/v1/clusters", json={"name": "ToDelete"})
         resp = client.delete("/api/v1/clusters/1")
         assert resp.status_code == HTTPStatus.OK
@@ -84,6 +96,7 @@ class TestClusterCRUD:
         assert resp.status_code == HTTPStatus.NOT_FOUND
 
     def test_delete_cascades_to_plants(self, client):
+        """Delete cascades to plants."""
         client.post("/api/v1/clusters", json={"name": "C"})
         client.post("/api/v1/clusters/1/plants", json={"species": "Fern"})
         client.delete("/api/v1/clusters/1")
@@ -132,10 +145,12 @@ class TestClusterCRUD:
         assert client.get(f"/api/v1/clusters/{kept}/windows").json()
 
     def test_delete_not_found(self, client):
+        """Delete not found."""
         resp = client.delete("/api/v1/clusters/999")
         assert resp.status_code == HTTPStatus.NOT_FOUND
 
     def test_double_delete_returns_404(self, client):
+        """Double delete returns 404."""
         client.post("/api/v1/clusters", json={"name": "Once"})
         client.delete("/api/v1/clusters/1")
         resp = client.delete("/api/v1/clusters/1")
@@ -143,7 +158,10 @@ class TestClusterCRUD:
 
 
 class TestClusterStatus:
+    """Tests for cluster status."""
+
     def test_status_seeded(self, seeded_client):
+        """Status seeded."""
         resp = seeded_client.get("/api/v1/clusters/1/status")
         assert resp.status_code == HTTPStatus.OK
         data = resp.json()
@@ -198,12 +216,16 @@ class TestClusterStatus:
         assert row["last_reading"]["soil_moisture"] == soil
 
     def test_status_not_found(self, client):
+        """Status not found."""
         resp = client.get("/api/v1/clusters/999/status")
         assert resp.status_code == HTTPStatus.NOT_FOUND
 
 
 class TestClusterHistory:
+    """Tests for cluster history."""
+
     def test_history_empty(self, seeded_client):
+        """History empty."""
         resp = seeded_client.get("/api/v1/clusters/1/history")
         assert resp.status_code == HTTPStatus.OK
         data = resp.json()
@@ -212,15 +234,19 @@ class TestClusterHistory:
         assert isinstance(data["irrigators"], list)
 
     def test_history_custom_hours(self, seeded_client):
+        """History custom hours."""
         resp = seeded_client.get("/api/v1/clusters/1/history?hours=48")
         assert resp.status_code == HTTPStatus.OK
 
     def test_history_not_found(self, client):
+        """History not found."""
         resp = client.get("/api/v1/clusters/999/history")
         assert resp.status_code == HTTPStatus.NOT_FOUND
 
 
 class TestClusterDetail:
+    """Tests for cluster detail."""
+
     def test_detail_inlines_children(self, seeded_client):
         """GET /clusters/{id}/detail returns plants/sensors/irrigators/config/windows."""
         resp = seeded_client.get("/api/v1/clusters/1/detail")
@@ -246,6 +272,7 @@ class TestClusterDetail:
         assert windows[0]["start_hour"] == window["start_hour"]
 
     def test_detail_not_found(self, client):
+        """Detail not found."""
         resp = client.get("/api/v1/clusters/999/detail")
         assert resp.status_code == HTTPStatus.NOT_FOUND
 

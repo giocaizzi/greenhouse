@@ -338,42 +338,49 @@ def _irrigate(p: Pipeline, cid: int = 1, **body) -> dict:
 
 
 def sc_dry_irrigates(p: Pipeline) -> None:
+    """Scenario: dry irrigates."""
     p.seed_cluster(soil=35.0)
     p.mark()
     _irrigate(p)
 
 
 def sc_very_dry_critical_stress(p: Pipeline) -> None:
+    """Scenario: very dry critical stress."""
     p.seed_cluster(soil=8.0)
     p.mark()
     _irrigate(p)
 
 
 def sc_wet_skips(p: Pipeline) -> None:
+    """Scenario: wet skips."""
     p.seed_cluster(soil=88.0)
     p.mark()
     _irrigate(p)
 
 
 def sc_adequate_skips(p: Pipeline) -> None:
+    """Scenario: adequate skips."""
     p.seed_cluster(soil=55.0)
     p.mark()
     _irrigate(p)
 
 
 def sc_no_readings_fallback(p: Pipeline) -> None:
+    """Scenario: no readings fallback."""
     p.seed_cluster(soil=None)
     p.mark()
     _irrigate(p)
 
 
 def sc_outdoor_dry_weather_offline(p: Pipeline) -> None:
+    """Scenario: outdoor dry weather offline."""
     p.seed_cluster(environment="outdoor", soil=35.0)
     p.mark()
     _irrigate(p)
 
 
 def sc_outdoor_rain_forecast(p: Pipeline) -> None:
+    """Scenario: outdoor rain forecast."""
     p.seed_cluster(environment="outdoor", soil=35.0)
     p.use_weather(RainyWeather())
     p.mark()
@@ -381,6 +388,7 @@ def sc_outdoor_rain_forecast(p: Pipeline) -> None:
 
 
 def sc_indoor_no_sync_weather_available(p: Pipeline) -> None:
+    """Scenario: indoor no sync weather available."""
     p.seed_cluster(soil=35.0)
     p.use_weather(RainyWeather())
     p.mark()
@@ -388,18 +396,21 @@ def sc_indoor_no_sync_weather_available(p: Pipeline) -> None:
 
 
 def sc_temp_override(p: Pipeline) -> None:
+    """Scenario: temp override."""
     p.seed_cluster(soil=35.0)
     p.mark()
     _irrigate(p, temp_override=31.5)
 
 
 def sc_no_sync_offline(p: Pipeline) -> None:
+    """Scenario: no sync offline."""
     p.seed_cluster(soil=35.0)
     p.mark()
     _irrigate(p, no_sync=True)
 
 
 def sc_cooldown_active(p: Pipeline) -> None:
+    """Scenario: cooldown active."""
     ids = p.seed_cluster(soil=35.0)
     p.add_event(ids["irrigator_id"], age=2 * HOUR)
     p.mark()
@@ -407,6 +418,7 @@ def sc_cooldown_active(p: Pipeline) -> None:
 
 
 def sc_cooldown_boundary_inside(p: Pipeline) -> None:
+    """Scenario: cooldown boundary inside."""
     ids = p.seed_cluster(soil=35.0)
     p.add_event(ids["irrigator_id"], age=6 * HOUR - 60)
     p.mark()
@@ -414,6 +426,7 @@ def sc_cooldown_boundary_inside(p: Pipeline) -> None:
 
 
 def sc_cooldown_boundary_outside(p: Pipeline) -> None:
+    """Scenario: cooldown boundary outside."""
     ids = p.seed_cluster(soil=35.0)
     p.add_event(ids["irrigator_id"], age=6 * HOUR + 60)
     p.mark()
@@ -421,6 +434,7 @@ def sc_cooldown_boundary_outside(p: Pipeline) -> None:
 
 
 def sc_cooldown_counts_manual_start(p: Pipeline) -> None:
+    """Scenario: cooldown counts manual start."""
     ids = p.seed_cluster(soil=35.0)
     p.add_event(ids["irrigator_id"], age=HOUR, triggered_by="manual")
     p.mark()
@@ -428,6 +442,7 @@ def sc_cooldown_counts_manual_start(p: Pipeline) -> None:
 
 
 def sc_cooldown_ignores_non_start(p: Pipeline) -> None:
+    """Scenario: cooldown ignores non start."""
     ids = p.seed_cluster(soil=35.0)
     p.add_event(ids["irrigator_id"], age=HOUR, action="schedule_updated")
     p.add_event(ids["irrigator_id"], age=HOUR - 60, action="off", triggered_by="manual")
@@ -436,6 +451,7 @@ def sc_cooldown_ignores_non_start(p: Pipeline) -> None:
 
 
 def sc_quiet_hours(p: Pipeline) -> None:
+    """Scenario: quiet hours."""
     p.seed_cluster(soil=35.0)
     p.api("PUT", "/api/v1/config/global", {"quiet_start_hour": 9, "quiet_end_hour": 11})
     p.mark()
@@ -443,6 +459,7 @@ def sc_quiet_hours(p: Pipeline) -> None:
 
 
 def sc_quiet_hours_force(p: Pipeline) -> None:
+    """Scenario: quiet hours force."""
     p.seed_cluster(soil=35.0)
     p.api("PUT", "/api/v1/config/global", {"quiet_start_hour": 9, "quiet_end_hour": 11})
     p.mark()
@@ -450,6 +467,7 @@ def sc_quiet_hours_force(p: Pipeline) -> None:
 
 
 def sc_quiet_hours_cluster_opt_out(p: Pipeline) -> None:
+    """Scenario: quiet hours cluster opt out."""
     p.seed_cluster(soil=35.0)
     p.api("PUT", "/api/v1/config/global", {"quiet_start_hour": 9, "quiet_end_hour": 11})
     p.api("PUT", "/api/v1/clusters/1/config", {"quiet_start_hour": 0, "quiet_end_hour": 0})
@@ -458,6 +476,7 @@ def sc_quiet_hours_cluster_opt_out(p: Pipeline) -> None:
 
 
 def sc_leak_hold_open(p: Pipeline) -> None:
+    """Scenario: leak hold open."""
     ids = p.seed_cluster(soil=35.0)
     p.raise_leak(ids["cluster_id"], ids["sensor_id"], age=HOUR)
     p.mark()
@@ -465,6 +484,7 @@ def sc_leak_hold_open(p: Pipeline) -> None:
 
 
 def sc_leak_hold_acknowledged(p: Pipeline) -> None:
+    """Scenario: leak hold acknowledged."""
     ids = p.seed_cluster(soil=35.0)
     alert_id = p.raise_leak(ids["cluster_id"], ids["sensor_id"], age=HOUR)
     p.api("POST", f"/api/v1/alerts/{alert_id}/acknowledge")
@@ -473,6 +493,7 @@ def sc_leak_hold_acknowledged(p: Pipeline) -> None:
 
 
 def sc_leak_hold_resolved(p: Pipeline) -> None:
+    """Scenario: leak hold resolved."""
     ids = p.seed_cluster(soil=35.0)
     alert_id = p.raise_leak(ids["cluster_id"], ids["sensor_id"], age=HOUR)
     p.api("POST", f"/api/v1/alerts/{alert_id}/resolve")
@@ -481,6 +502,7 @@ def sc_leak_hold_resolved(p: Pipeline) -> None:
 
 
 def sc_leak_hold_force(p: Pipeline) -> None:
+    """Scenario: leak hold force."""
     ids = p.seed_cluster(soil=35.0)
     p.raise_leak(ids["cluster_id"], ids["sensor_id"], age=HOUR)
     p.mark()
@@ -488,6 +510,7 @@ def sc_leak_hold_force(p: Pipeline) -> None:
 
 
 def sc_leak_hold_expired(p: Pipeline) -> None:
+    """Scenario: leak hold expired."""
     ids = p.seed_cluster(soil=35.0)
     p.raise_leak(ids["cluster_id"], ids["sensor_id"], age=25 * HOUR)
     p.mark()
@@ -495,6 +518,7 @@ def sc_leak_hold_expired(p: Pipeline) -> None:
 
 
 def sc_leak_hold_beats_cooldown(p: Pipeline) -> None:
+    """Scenario: leak hold beats cooldown."""
     ids = p.seed_cluster(soil=35.0)
     p.add_event(ids["irrigator_id"], age=HOUR)
     p.raise_leak(ids["cluster_id"], ids["sensor_id"], age=HOUR)
@@ -503,6 +527,7 @@ def sc_leak_hold_beats_cooldown(p: Pipeline) -> None:
 
 
 def sc_leak_escape_hatch_manual_start(p: Pipeline) -> None:
+    """Scenario: leak escape hatch manual start."""
     ids = p.seed_cluster(soil=35.0)
     p.raise_leak(ids["cluster_id"], ids["sensor_id"], age=HOUR)
     p.mark()
@@ -511,6 +536,7 @@ def sc_leak_escape_hatch_manual_start(p: Pipeline) -> None:
 
 
 def sc_vacation_without_capacity(p: Pipeline) -> None:
+    """Scenario: vacation without capacity."""
     p.seed_cluster(soil=35.0)
     p.api("POST", "/api/v1/vacation", {"starts_at": FROZEN_TS - 86400, "ends_at": FROZEN_TS + 3 * 86400})
     p.mark()
@@ -519,6 +545,7 @@ def sc_vacation_without_capacity(p: Pipeline) -> None:
 
 def sc_vacation_rationing(p: Pipeline) -> None:
     # 6 L * 0.95 usable over a 4-day window → 1.425 L/day → 1 min at 1 L/min (< the 2 min asked).
+    """Scenario: vacation rationing."""
     p.seed_cluster(soil=35.0, reservoir_l=6.0, flow_rate_l_per_min=1.0)
     p.api("POST", "/api/v1/vacation", {"starts_at": FROZEN_TS - 3600, "ends_at": FROZEN_TS + 4 * 86400 - 3600})
     p.mark()
@@ -526,6 +553,7 @@ def sc_vacation_rationing(p: Pipeline) -> None:
 
 
 def sc_vacation_budget_exhausted(p: Pipeline) -> None:
+    """Scenario: vacation budget exhausted."""
     p.seed_cluster(soil=35.0, reservoir_l=0.5, flow_rate_l_per_min=1.0)
     p.api("POST", "/api/v1/vacation", {"starts_at": FROZEN_TS - 3600, "ends_at": FROZEN_TS + 10 * 86400})
     p.mark()
@@ -533,6 +561,7 @@ def sc_vacation_budget_exhausted(p: Pipeline) -> None:
 
 
 def sc_window_outside(p: Pipeline) -> None:
+    """Scenario: window outside."""
     p.seed_cluster(soil=35.0)
     p.api("POST", "/api/v1/clusters/1/windows", {"start_hour": 18, "end_hour": 22})
     p.mark()
@@ -540,6 +569,7 @@ def sc_window_outside(p: Pipeline) -> None:
 
 
 def sc_window_inside(p: Pipeline) -> None:
+    """Scenario: window inside."""
     p.seed_cluster(soil=35.0)
     p.api("POST", "/api/v1/clusters/1/windows", {"start_hour": 8, "end_hour": 12})
     p.mark()
@@ -547,6 +577,7 @@ def sc_window_inside(p: Pipeline) -> None:
 
 
 def sc_window_outside_critical_stress_obeys_window(p: Pipeline) -> None:
+    """Scenario: window outside critical stress obeys window."""
     p.seed_cluster(soil=8.0)
     p.api("POST", "/api/v1/clusters/1/windows", {"start_hour": 18, "end_hour": 22})
     p.mark()
@@ -554,6 +585,7 @@ def sc_window_outside_critical_stress_obeys_window(p: Pipeline) -> None:
 
 
 def sc_caps_reached_automatic(p: Pipeline) -> None:
+    """Scenario: caps reached automatic."""
     ids = p.seed_cluster(
         soil=35.0,
         config={
@@ -571,6 +603,7 @@ def sc_caps_reached_automatic(p: Pipeline) -> None:
 
 
 def sc_caps_reached_manual_start(p: Pipeline) -> None:
+    """Scenario: caps reached manual start."""
     ids = p.seed_cluster(
         soil=35.0,
         config={"mode": "smart", "duration_minutes": 2, "auto_run": True, "max_events_per_day": 1},
@@ -582,6 +615,7 @@ def sc_caps_reached_manual_start(p: Pipeline) -> None:
 
 
 def sc_daily_minutes_cap_manual_start(p: Pipeline) -> None:
+    """Scenario: daily minutes cap manual start."""
     ids = p.seed_cluster(soil=35.0, config={"mode": "smart", "daily_cap_minutes": 4})
     p.add_event(ids["irrigator_id"], age=7 * HOUR)
     p.mark()
@@ -590,6 +624,7 @@ def sc_daily_minutes_cap_manual_start(p: Pipeline) -> None:
 
 
 def sc_manual_start_stop_log(p: Pipeline) -> None:
+    """Scenario: manual start stop log."""
     ids = p.seed_cluster(soil=35.0)
     p.mark()
     p.call("POST", f"/api/v1/irrigators/{ids['irrigator_id']}/start", {"minutes": 3})
@@ -601,6 +636,7 @@ def sc_manual_start_stop_log(p: Pipeline) -> None:
 
 
 def sc_manual_start_device_failure(p: Pipeline) -> None:
+    """Scenario: manual start device failure."""
     ids = p.seed_cluster(soil=35.0)
     p.wiring.irrigator.start_result = (False, "device timeout")
     p.wiring.irrigator.stop_result = (False, "device asleep")
@@ -610,6 +646,7 @@ def sc_manual_start_device_failure(p: Pipeline) -> None:
 
 
 def sc_manual_start_no_registry(p: Pipeline) -> None:
+    """Scenario: manual start no registry."""
     ids = p.seed_cluster(soil=35.0)
     p.app.dependency_overrides[get_device_registry] = lambda: None
     p.mark()
@@ -619,18 +656,21 @@ def sc_manual_start_no_registry(p: Pipeline) -> None:
 
 
 def sc_dry_run(p: Pipeline) -> None:
+    """Scenario: dry run."""
     p.seed_cluster(soil=35.0)
     p.mark()
     _irrigate(p, dry_run=True)
 
 
 def sc_dry_run_skip(p: Pipeline) -> None:
+    """Scenario: dry run skip."""
     p.seed_cluster(soil=88.0)
     p.mark()
     _irrigate(p, dry_run=True)
 
 
 def sc_dry_run_global_preference(p: Pipeline) -> None:
+    """Scenario: dry run global preference."""
     p.seed_cluster(soil=35.0)
     p.api("PUT", "/api/v1/preferences", {"dry_run_global": True})
     p.mark()
@@ -638,6 +678,7 @@ def sc_dry_run_global_preference(p: Pipeline) -> None:
 
 
 def sc_notify_auto_disabled(p: Pipeline) -> None:
+    """Scenario: notify auto disabled."""
     p.seed_cluster(soil=35.0)
     p.api("PUT", "/api/v1/preferences", {"notify_auto": False})
     p.mark()
@@ -645,6 +686,7 @@ def sc_notify_auto_disabled(p: Pipeline) -> None:
 
 
 def sc_fresh_reading_no_gateway_call(p: Pipeline) -> None:
+    """Scenario: fresh reading no gateway call."""
     p.seed_cluster(soil=35.0)
     p.use_gateway()
     p.mark()
@@ -652,6 +694,7 @@ def sc_fresh_reading_no_gateway_call(p: Pipeline) -> None:
 
 
 def sc_stale_reading_forces_one_sync(p: Pipeline) -> None:
+    """Scenario: stale reading forces one sync."""
     p.seed_cluster(soil=35.0, reading_ages=(5 * HOUR, 5 * HOUR + 600))
     p.use_gateway({"soil_moisture": 30.0, "temperature": 23.0})
     p.mark()
@@ -659,6 +702,7 @@ def sc_stale_reading_forces_one_sync(p: Pipeline) -> None:
 
 
 def sc_stale_reading_no_sync_flag(p: Pipeline) -> None:
+    """Scenario: stale reading no sync flag."""
     p.seed_cluster(soil=35.0, reading_ages=(5 * HOUR, 5 * HOUR + 600))
     p.use_gateway()
     p.mark()
@@ -666,18 +710,21 @@ def sc_stale_reading_no_sync_flag(p: Pipeline) -> None:
 
 
 def sc_no_plants(p: Pipeline) -> None:
+    """Scenario: no plants."""
     p.seed_cluster(plant=False, soil=35.0)
     p.mark()
     _irrigate(p)
 
 
 def sc_no_irrigator(p: Pipeline) -> None:
+    """Scenario: no irrigator."""
     p.seed_cluster(irrigator=False, soil=35.0)
     p.mark()
     _irrigate(p)
 
 
 def sc_no_registry(p: Pipeline) -> None:
+    """Scenario: no registry."""
     p.seed_cluster(soil=35.0)
     p.app.dependency_overrides[get_device_registry] = lambda: None
     p.mark()
@@ -685,6 +732,7 @@ def sc_no_registry(p: Pipeline) -> None:
 
 
 def sc_unknown_irrigator_model(p: Pipeline) -> None:
+    """Scenario: unknown irrigator model."""
     p.seed_cluster(soil=35.0, irrigator=False)
     # A row from an older database: the API refuses an unknown type on write.
     with p.repo() as repo:
@@ -696,6 +744,7 @@ def sc_unknown_irrigator_model(p: Pipeline) -> None:
 
 
 def sc_actuation_failed(p: Pipeline) -> None:
+    """Scenario: actuation failed."""
     p.seed_cluster(soil=35.0)
     p.wiring.irrigator.start_result = (False, "device timeout")
     p.mark()
@@ -703,12 +752,14 @@ def sc_actuation_failed(p: Pipeline) -> None:
 
 
 def sc_device_health_block(p: Pipeline) -> None:
+    """Scenario: device health block."""
     _install_health_block(p, p.seed_cluster(soil=35.0))
     p.mark()
     _irrigate(p)
 
 
 def sc_cluster_not_found(p: Pipeline) -> None:
+    """Scenario: cluster not found."""
     p.seed_cluster(soil=35.0)
     p.mark()
     _irrigate(p, cid=99)
@@ -717,24 +768,28 @@ def sc_cluster_not_found(p: Pipeline) -> None:
 
 
 def sc_check_single_dry(p: Pipeline) -> None:
+    """Scenario: check single dry."""
     p.seed_cluster(soil=35.0)
     p.mark()
     p.call("POST", "/api/v1/clusters/1/check")
 
 
 def sc_check_single_auto_run_off(p: Pipeline) -> None:
+    """Scenario: check single auto run off."""
     p.seed_cluster(soil=35.0, config={"mode": "smart", "duration_minutes": 2, "auto_run": False})
     p.mark()
     p.call("POST", "/api/v1/clusters/1/check")
 
 
 def sc_check_single_sensor_only(p: Pipeline) -> None:
+    """Scenario: check single sensor only."""
     p.seed_cluster(irrigator=False, soil=20.0)
     p.mark()
     p.call("POST", "/api/v1/clusters/1/check")
 
 
 def sc_check_all_mixed(p: Pipeline) -> None:
+    """Scenario: check all mixed."""
     p.seed_cluster("Alpha", soil=35.0)
     p.seed_cluster("Bravo", soil=88.0)
     p.seed_cluster("Charlie", irrigator=False, soil=20.0)
@@ -745,6 +800,7 @@ def sc_check_all_mixed(p: Pipeline) -> None:
 
 
 def sc_check_all_twice_cooldown(p: Pipeline) -> None:
+    """Scenario: check all twice cooldown."""
     p.seed_cluster(soil=35.0)
     p.mark()
     p.call("POST", "/api/v1/check")
@@ -756,6 +812,7 @@ def sc_check_all_twice_cooldown(p: Pipeline) -> None:
 
 
 def sc_check_all_empty(p: Pipeline) -> None:
+    """Scenario: check all empty."""
     p.mark()
     p.call("POST", "/api/v1/check")
 
@@ -1266,6 +1323,7 @@ def test_unrecorded_start_in_check_all_is_stopped_and_reported(pipeline):
 
 
 def test_unrecorded_manual_start_is_stopped_and_refused(pipeline, caplog):
+    """Unrecorded manual start is stopped and refused."""
     ids = pipeline.seed_cluster(soil=35.0)
     pipeline.mark()
     with _failing_commit(), caplog.at_level("ERROR", logger="greenhouse_server.services.irrigation"):

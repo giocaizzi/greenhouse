@@ -36,6 +36,8 @@ def cluster_and_sensor(repo):
 
 
 class TestSensorStale:
+    """Tests for sensor stale."""
+
     def _seed_regular(self, repo, sensor_id, *, count: int, interval_s: int, end_offset_s: int = 0):
         """Seed ``count`` readings spaced ``interval_s`` apart, ending ``end_offset_s`` seconds ago."""
         now = int(time.time())
@@ -80,6 +82,8 @@ class TestSensorStale:
 
 
 class TestSensorDrift:
+    """Tests for sensor drift."""
+
     def _seed_baseline(self, repo, sensor_id, *, count: int, moisture: float, interval_s: int = 300):
         """Seed ``count`` readings at a stable moisture level."""
         now = int(time.time())

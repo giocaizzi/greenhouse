@@ -4,6 +4,7 @@ from http import HTTPStatus
 
 
 def test_new_cluster_form_renders(client):
+    """New cluster form renders."""
     resp = client.get("/clusters/new")
     assert resp.status_code == HTTPStatus.OK
     assert "New cluster" in resp.text
@@ -11,6 +12,7 @@ def test_new_cluster_form_renders(client):
 
 
 def test_create_cluster_redirects_to_detail(client):
+    """Create cluster redirects to detail."""
     resp = client.post(
         "/clusters",
         data={"name": "Kitchen", "location": "sink side", "environment": "indoor"},
@@ -25,6 +27,7 @@ def test_create_cluster_redirects_to_detail(client):
 
 
 def test_create_cluster_missing_name_fails(client):
+    """Create cluster missing name fails."""
     resp = client.post("/clusters", data={"environment": "indoor"}, follow_redirects=False)
     # FastAPI's Form(...) treats missing required as 422
     assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY

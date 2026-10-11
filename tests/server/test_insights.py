@@ -13,11 +13,15 @@ from greenhouse_server.deps import get_device_gateway, get_device_registry
 
 
 class TestClusterInsights:
+    """Tests for cluster insights."""
+
     def test_insights_not_found(self, client):
+        """Insights not found."""
         resp = client.get("/api/v1/clusters/999/insights")
         assert resp.status_code == HTTPStatus.NOT_FOUND
 
     def test_insights_fresh_cluster_no_alerts(self, seeded_client):
+        """Insights fresh cluster no alerts."""
         resp = seeded_client.get("/api/v1/clusters/1/insights")
         assert resp.status_code == HTTPStatus.OK
         data = resp.json()

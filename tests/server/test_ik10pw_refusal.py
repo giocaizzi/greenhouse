@@ -45,6 +45,7 @@ def ik10pw_pipeline(clean_env, frozen_clock):
 
 
 def test_pipeline_records_attempted_and_sends_no_on(ik10pw_pipeline):
+    """Pipeline records attempted and sends no on."""
     p, cloud = ik10pw_pipeline
     p.seed_cluster(soil=35.0)
     p.mark()
@@ -58,6 +59,7 @@ def test_pipeline_records_attempted_and_sends_no_on(ik10pw_pipeline):
 
 
 def test_manual_start_returns_502_and_records_nothing(ik10pw_pipeline):
+    """Manual start returns 502 and records nothing."""
     p, cloud = ik10pw_pipeline
     ids = p.seed_cluster(soil=35.0)
     p.mark()

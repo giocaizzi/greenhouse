@@ -34,13 +34,17 @@ def _seed_alert(app, *, dedup_key="test::web::1", severity="warning", status="op
 
 
 class TestAlertListPage:
+    """Tests for alert list page."""
+
     def test_renders_empty_state(self, client):
+        """Renders empty state."""
         resp = client.get("/alerts")
         assert resp.status_code == HTTPStatus.OK
         assert "Alerts" in resp.text
         assert "No alerts" in resp.text
 
     def test_renders_alert_rows(self, app):
+        """Renders alert rows."""
         with TestClient(app, raise_server_exceptions=False) as client:
             _seed_alert(app, dedup_key="web::list::1")
             resp = client.get("/alerts")
@@ -49,6 +53,7 @@ class TestAlertListPage:
             assert "Something went wrong" in resp.text
 
     def test_filter_open(self, app):
+        """Filter open."""
         with TestClient(app, raise_server_exceptions=False) as client:
             _seed_alert(app, dedup_key="web::open::1", status="open")
             resp = client.get("/alerts?status=open")
@@ -56,6 +61,7 @@ class TestAlertListPage:
             assert "Test Alert Title" in resp.text
 
     def test_filter_resolved_excludes_open(self, app):
+        """Filter resolved excludes open."""
         with TestClient(app, raise_server_exceptions=False) as client:
             _seed_alert(app, dedup_key="web::res::1", status="resolved")
             resp = client.get("/alerts?status=open")
@@ -64,6 +70,7 @@ class TestAlertListPage:
             assert "No alerts" in resp.text
 
     def test_segmented_filter_chips_rendered(self, client):
+        """Segmented filter chips rendered."""
         resp = client.get("/alerts")
         assert resp.status_code == HTTPStatus.OK
         assert 'href="/alerts?status=open"' in resp.text
@@ -71,6 +78,7 @@ class TestAlertListPage:
         assert 'href="/alerts?status=resolved"' in resp.text
 
     def test_sync_button_present(self, client):
+        """Sync button present."""
         resp = client.get("/alerts")
         assert resp.status_code == HTTPStatus.OK
         assert "hx-post" in resp.text
@@ -78,12 +86,16 @@ class TestAlertListPage:
 
 
 class TestAlertBadge:
+    """Tests for alert badge."""
+
     def test_badge_empty_when_no_open_alerts(self, client):
+        """Badge empty when no open alerts."""
         resp = client.get("/alerts/badge")
         assert resp.status_code == HTTPStatus.OK
         assert resp.text == ""
 
     def test_badge_shows_count_when_open(self, app):
+        """Badge shows count when open."""
         with TestClient(app, raise_server_exceptions=False) as client:
             _seed_alert(app, dedup_key="web::badge::1", status="open")
             _seed_alert(app, dedup_key="web::badge::2", status="open")
@@ -93,6 +105,7 @@ class TestAlertBadge:
             assert "2" in resp.text
 
     def test_badge_omits_resolved_alerts(self, app):
+        """Badge omits resolved alerts."""
         with TestClient(app, raise_server_exceptions=False) as client:
             _seed_alert(app, dedup_key="web::badge::res", status="resolved")
             resp = client.get("/alerts/badge")
@@ -101,7 +114,10 @@ class TestAlertBadge:
 
 
 class TestAlertAckFlow:
+    """Tests for alert ack flow."""
+
     def test_ack_returns_row_fragment(self, app):
+        """Ack returns row fragment."""
         with TestClient(app, raise_server_exceptions=False) as client:
             alert_id = _seed_alert(app, dedup_key="web::ack::1", status="open")
             resp = client.post(
@@ -116,6 +132,7 @@ class TestAlertAckFlow:
             assert toast["severity"] == "success"
 
     def test_ack_changes_status_in_db(self, app):
+        """Ack changes status in DB."""
         with TestClient(app, raise_server_exceptions=False) as client:
             alert_id = _seed_alert(app, dedup_key="web::ack::db::1", status="open")
             client.post(f"/alerts/{alert_id}/ack")
@@ -125,7 +142,10 @@ class TestAlertAckFlow:
 
 
 class TestAlertResolveFlow:
+    """Tests for alert resolve flow."""
+
     def test_resolve_returns_row_fragment(self, app):
+        """Resolve returns row fragment."""
         with TestClient(app, raise_server_exceptions=False) as client:
             alert_id = _seed_alert(app, dedup_key="web::resolve::1", status="open")
             resp = client.post(
@@ -137,6 +157,7 @@ class TestAlertResolveFlow:
             assert "HX-Toast" in resp.headers
 
     def test_resolve_changes_status_in_db(self, app):
+        """Resolve changes status in DB."""
         with TestClient(app, raise_server_exceptions=False) as client:
             alert_id = _seed_alert(app, dedup_key="web::resolve::db::1")
             client.post(f"/alerts/{alert_id}/resolve")

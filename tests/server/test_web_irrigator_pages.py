@@ -4,6 +4,7 @@ from http import HTTPStatus
 
 
 def test_irrigator_renders_on_cluster_detail(seeded_client):
+    """Irrigator renders on cluster detail."""
     resp = seeded_client.get("/clusters/1")
     assert resp.status_code == HTTPStatus.OK
     assert "Test Irrigator" in resp.text
@@ -23,6 +24,7 @@ def test_new_irrigator_form_redirects_when_one_exists(seeded_client):
 
 
 def test_new_irrigator_form_renders_for_empty_cluster(seeded_client):
+    """New irrigator form renders for empty cluster."""
     seeded_client.post("/api/v1/clusters", json={"name": "Empty"})
     resp = seeded_client.get("/clusters/2/irrigators/new")
     assert resp.status_code == HTTPStatus.OK
@@ -31,6 +33,7 @@ def test_new_irrigator_form_renders_for_empty_cluster(seeded_client):
 
 
 def test_add_affordance_shown_for_empty_cluster(seeded_client):
+    """Add affordance shown for empty cluster."""
     seeded_client.post("/api/v1/clusters", json={"name": "Empty"})
     resp = seeded_client.get("/clusters/2")
     assert resp.status_code == HTTPStatus.OK
@@ -38,6 +41,7 @@ def test_add_affordance_shown_for_empty_cluster(seeded_client):
 
 
 def test_create_irrigator_on_empty_cluster(seeded_client):
+    """Create irrigator on empty cluster."""
     seeded_client.post("/api/v1/clusters", json={"name": "Empty"})
     resp = seeded_client.post(
         "/clusters/2/irrigators",

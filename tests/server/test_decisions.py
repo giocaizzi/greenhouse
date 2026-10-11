@@ -4,7 +4,10 @@ from http import HTTPStatus
 
 
 class TestDecisionLog:
+    """Tests for decision log."""
+
     def test_list_empty(self, seeded_client):
+        """List empty."""
         resp = seeded_client.get("/api/v1/clusters/1/decisions")
         assert resp.status_code == HTTPStatus.OK
         data = resp.json()
@@ -12,6 +15,7 @@ class TestDecisionLog:
         assert isinstance(data["items"], list)
 
     def test_not_found(self, client):
+        """Not found."""
         resp = client.get("/api/v1/clusters/999/decisions")
         assert resp.status_code == HTTPStatus.NOT_FOUND
 

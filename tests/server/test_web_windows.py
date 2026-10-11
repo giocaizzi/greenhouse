@@ -4,14 +4,18 @@ from http import HTTPStatus
 
 
 class TestConfigPageWindowsSection:
+    """Tests for config page windows section."""
+
     def test_renders_empty_state_when_no_windows(self, seeded_client):
         # /clusters/{id}/config is 301'd to the unified detail page.
+        """Renders empty state when no windows."""
         resp = seeded_client.get("/clusters/1/config")
         assert resp.status_code == HTTPStatus.OK
         assert "Watering windows" in resp.text
         assert "No windows configured" in resp.text
 
     def test_add_form_has_all_labelled_fields(self, seeded_client):
+        """Add form has all labelled fields."""
         resp = seeded_client.get("/clusters/1/config")
         assert resp.status_code == HTTPStatus.OK
         # a11y: every input has matching for/id
@@ -25,7 +29,10 @@ class TestConfigPageWindowsSection:
 
 
 class TestCreateWindow:
+    """Tests for create window."""
+
     def test_create_persists_and_redirects(self, seeded_client):
+        """Create persists and redirects."""
         resp = seeded_client.post(
             "/clusters/1/windows",
             data={
@@ -48,6 +55,7 @@ class TestCreateWindow:
         assert "Fri" in page.text
 
     def test_create_renders_every_day_when_full_mask(self, seeded_client):
+        """Create renders every day when full mask."""
         seeded_client.post(
             "/clusters/1/windows",
             data={
@@ -60,6 +68,7 @@ class TestCreateWindow:
         assert "Every day" in page.text
 
     def test_create_rejects_equal_hours(self, seeded_client):
+        """Create rejects equal hours."""
         resp = seeded_client.post(
             "/clusters/1/windows",
             data={"start_hour": "8", "end_hour": "8", "weekday_mask": ["1"]},
@@ -68,6 +77,7 @@ class TestCreateWindow:
         assert resp.status_code == HTTPStatus.BAD_REQUEST
 
     def test_create_rejects_no_weekdays(self, seeded_client):
+        """Create rejects no weekdays."""
         resp = seeded_client.post(
             "/clusters/1/windows",
             data={"start_hour": "6", "end_hour": "10", "weekday_mask": []},
@@ -76,6 +86,7 @@ class TestCreateWindow:
         assert resp.status_code == HTTPStatus.BAD_REQUEST
 
     def test_create_rejects_invalid_weekday_value(self, seeded_client):
+        """Create rejects invalid weekday value."""
         resp = seeded_client.post(
             "/clusters/1/windows",
             data={"start_hour": "6", "end_hour": "10", "weekday_mask": ["3"]},
@@ -84,6 +95,7 @@ class TestCreateWindow:
         assert resp.status_code == HTTPStatus.BAD_REQUEST
 
     def test_create_404_for_unknown_cluster(self, client):
+        """Create 404 for unknown cluster."""
         resp = client.post(
             "/clusters/999/windows",
             data={"start_hour": "6", "end_hour": "10", "weekday_mask": ["1"]},
@@ -93,6 +105,8 @@ class TestCreateWindow:
 
 
 class TestEditWindow:
+    """Tests for edit window."""
+
     def _seed_window(self, seeded_client):
         seeded_client.post(
             "/clusters/1/windows",
@@ -100,6 +114,7 @@ class TestEditWindow:
         )
 
     def test_edit_form_renders_with_values(self, seeded_client):
+        """Edit form renders with values."""
         self._seed_window(seeded_client)
         resp = seeded_client.get("/clusters/1/windows/1/edit")
         assert resp.status_code == HTTPStatus.OK
@@ -112,6 +127,7 @@ class TestEditWindow:
         assert "checked" in resp.text
 
     def test_edit_inputs_have_matching_labels_a11y(self, seeded_client):
+        """Edit inputs have matching labels a11y."""
         self._seed_window(seeded_client)
         resp = seeded_client.get("/clusters/1/windows/1/edit")
         assert resp.status_code == HTTPStatus.OK
@@ -120,6 +136,7 @@ class TestEditWindow:
             assert f'id="{field}"' in resp.text
 
     def test_update_persists(self, seeded_client):
+        """Update persists."""
         self._seed_window(seeded_client)
         resp = seeded_client.post(
             "/clusters/1/windows/1/edit",
@@ -139,6 +156,7 @@ class TestEditWindow:
         assert "18:00\N{EN DASH}20:00" in page.text
 
     def test_update_404_unknown_window(self, seeded_client):
+        """Update 404 unknown window."""
         resp = seeded_client.post(
             "/clusters/1/windows/9999/edit",
             data={"start_hour": "6", "end_hour": "10", "weekday_mask": ["1"]},
@@ -165,6 +183,7 @@ class TestEditWindow:
         assert resp.status_code == HTTPStatus.NOT_FOUND
 
     def test_edit_form_404_cross_cluster(self, seeded_client):
+        """Edit form 404 cross cluster."""
         self._seed_window(seeded_client)
         resp = seeded_client.post(
             "/api/v1/clusters",
@@ -176,7 +195,10 @@ class TestEditWindow:
 
 
 class TestDeleteWindow:
+    """Tests for delete window."""
+
     def test_delete_returns_empty_body(self, seeded_client):
+        """Delete returns empty body."""
         seeded_client.post(
             "/clusters/1/windows",
             data={"start_hour": "6", "end_hour": "10", "weekday_mask": ["1"]},
@@ -186,6 +208,7 @@ class TestDeleteWindow:
         assert resp.text == ""
 
     def test_delete_removes_row(self, seeded_client):
+        """Delete removes row."""
         seeded_client.post(
             "/clusters/1/windows",
             data={"start_hour": "6", "end_hour": "10", "weekday_mask": ["1"], "label": "Gone"},
@@ -196,10 +219,12 @@ class TestDeleteWindow:
         assert "No windows configured" in page.text
 
     def test_delete_404_unknown_window(self, seeded_client):
+        """Delete 404 unknown window."""
         resp = seeded_client.delete("/clusters/1/windows/9999")
         assert resp.status_code == HTTPStatus.NOT_FOUND
 
     def test_delete_404_cross_cluster(self, seeded_client):
+        """Delete 404 cross cluster."""
         seeded_client.post(
             "/clusters/1/windows",
             data={"start_hour": "6", "end_hour": "10", "weekday_mask": ["1"]},
