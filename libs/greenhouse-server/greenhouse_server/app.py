@@ -15,7 +15,7 @@ from greenhouse_core.devices import DeviceGateway, build_default_registry
 from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_core.utils import set_display_timezone
-from greenhouse_server.auth import bootstrap_admin, require_user
+from greenhouse_server.auth import bootstrap_admin, is_mcp_token, require_user
 from greenhouse_server.config import Settings
 from greenhouse_server.routes import (
     activity,
@@ -117,7 +117,7 @@ def require_mcp_token(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="MCP auth not configured",
         )
-    if creds is None or creds.credentials != settings.mcp_token:
+    if creds is None or not is_mcp_token(creds.credentials, settings):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid MCP token",

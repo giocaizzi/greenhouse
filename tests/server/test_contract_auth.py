@@ -588,3 +588,30 @@ def test_mcp_gate(clean_env, mcp_token, headers, status, detail):
             assert (resp.status_code, resp.json()) == (status, {"detail": detail})
     finally:
         engine.dispose()
+
+
+def test_mcp_gate_compares_the_token_in_constant_time(clean_env, monkeypatch):
+    """B-12: the `/mcp` gate compares the bearer with ``hmac.compare_digest``, not ``!=``.
+
+    A short-circuiting string comparison leaks how many leading characters of a guess
+    match the token through response timing; the gate must use the same constant-time
+    primitive as the API's MCP-principal check.
+    """
+    import hmac
+
+    from greenhouse_server import auth as server_auth
+
+    calls: list[tuple[bytes, bytes]] = []
+    real_compare = hmac.compare_digest
+
+    def spy(given, expected):
+        calls.append((given, expected))
+        return real_compare(given, expected)
+
+    monkeypatch.setattr(server_auth.hmac, "compare_digest", spy)
+    client, _, engine = _client(mcp_token=MCP_TOKEN)
+    try:
+        assert client.get("/mcp", headers={"Authorization": "Bearer wrong"}).status_code == 401
+        assert calls == [(b"wrong", MCP_TOKEN.encode())]
+    finally:
+        engine.dispose()

@@ -167,8 +167,13 @@ def _resolve_user(token: str, settings: Settings, repo: IrrigationRepository) ->
     return AuthenticatedUser(id=user.id, username=user.username)
 
 
-def _is_mcp_token(token: str, settings: Settings) -> bool:
+def is_mcp_token(token: str, settings: Settings) -> bool:
     """Constant-time check of `token` against `settings.mcp_token`.
+
+    Shared by the outer `/mcp` gate (`app.require_mcp_token`) and the inner
+    MCP principal in `require_user`, so neither leaks a timing side channel.
+    Both sides are compared as UTF-8 bytes: `hmac.compare_digest` refuses
+    non-ASCII `str`, and a header can carry any Latin-1 text.
 
     Returns False when the MCP token is unconfigured so a missing setting can
     never accidentally satisfy this gate.
@@ -176,7 +181,7 @@ def _is_mcp_token(token: str, settings: Settings) -> bool:
     expected = settings.mcp_token
     if not expected:
         return False
-    return hmac.compare_digest(token, expected)
+    return hmac.compare_digest(token.encode(), expected.encode())
 
 
 def require_user(
@@ -209,7 +214,7 @@ def require_user(
     token = _extract_token(request, creds, settings)
     if not token:
         raise AuthError
-    if _is_mcp_token(token, settings):
+    if is_mcp_token(token, settings):
         return AuthenticatedUser(id=MCP_USER_ID, username=MCP_USER_NAME, is_system=True)
     return _resolve_user(token, settings, IrrigationRepository(session))
 
