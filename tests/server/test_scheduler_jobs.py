@@ -91,7 +91,9 @@ class TestPausedFlagIsTruthful:
         assert all(j["paused"] is False for j in health["jobs"])
 
     def test_timezone_change_does_not_pause_check_all(self, client):
-        """Regression: `reschedule_for_timezone` read an unstarted job as paused
+        """A timezone change does not re-pause an unstarted check_all job.
+
+        Regression: `reschedule_for_timezone` read an unstarted job as paused
         and re-paused it, so check_all disagreed with `scheduler_paused=false`.
         """
         resp = client.put("/api/v1/preferences", json={"timezone": "Europe/Rome"})
@@ -149,7 +151,9 @@ class TestRunningScheduler:
 
     @pytest.mark.usefixtures("client")
     def test_pump_watcher_runs_when_scheduled_after_start_time(self, app, running_scheduler):
-        """Regression: the dry-run watcher's run_date is the (floored) start
+        """The dry-run watcher runs even when its run date is already in the past.
+
+        Regression: the dry-run watcher's run_date is the (floored) start
         timestamp, already >1s in the past after the Cloud start call, so the
         default 1s misfire grace skipped it and the watcher never ran.
         """

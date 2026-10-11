@@ -45,16 +45,19 @@ class CarePlantDB:
     """Plant-DB stand-in: every plant gets the same care dict."""
 
     def __init__(self, care: dict) -> None:
+        """Serve ``care`` for every lookup and record the arguments."""
         self.care = care
         self.calls: list[tuple] = []
 
     def get_care_data(self, species=None, category=None) -> dict:
+        """Record the lookup and return a copy of the canned care data."""
         self.calls.append((species, category))
         return dict(self.care)
 
 
 @pytest.fixture
 def repo(tmp_db, frozen_clock):
+    """The in-memory repository under a frozen clock."""
     del frozen_clock  # requested only for its side effect
     return tmp_db
 
@@ -144,26 +147,32 @@ class FakeLearner:
     drainage: float | None = None
 
     def __init__(self, repo, plant_db) -> None:
-        pass
+        """Accept the learner's constructor arguments; the drainage is a class attribute."""
 
     def get_plant_profile(self, _sensor):
+        """A profile carrying the configured drainage rate, or ``None`` when unset."""
         if self.drainage is None:
             return None
         return SimpleNamespace(avg_drainage_per_hour=self.drainage)
 
 
 class FakeForecastWeather:
+    """Weather stand-in serving a fixed forecast and recording the requested windows."""
+
     def __init__(self, forecast: dict | None) -> None:
+        """Serve ``forecast`` (``None`` = no forecast)."""
         self.forecast = forecast
         self.calls: list[int] = []
 
     def get_forecast(self, hours: int = 6):
+        """Record the window and return the canned forecast."""
         self.calls.append(hours)
         return self.forecast
 
 
 @pytest.fixture
 def learner(monkeypatch):
+    """Swap the forecast service's learner for :class:`FakeLearner` (no drainage by default)."""
     monkeypatch.setattr(forecast_module, "IrrigationLearner", FakeLearner)
     monkeypatch.setattr(FakeLearner, "drainage", None)
     return FakeLearner
@@ -409,10 +418,12 @@ class ScriptedAdapter(FakeIrrigatorAdapter):
     stop_error: Exception | None = None
 
     def read_health(self, irrigator):
+        """Record the read and return the next scripted health state."""
         self.calls.append(("read_health", irrigator.id))
         return self.script.pop(0)
 
     def stop(self, irrigator):
+        """Record the stop; raise the configured error or return the configured result."""
         self.calls.append(("stop", irrigator.id))
         if self.stop_error is not None:
             raise self.stop_error
@@ -427,6 +438,7 @@ DRY = DeviceHealthState(observed_at=FROZEN_TS, alarms=frozenset({HealthAlarm.NO_
 
 @pytest.fixture
 def pump(repo):
+    """One irrigator driven by a :class:`ScriptedAdapter` through a real registry."""
     cid = repo.add_cluster("Pump Gap Cluster")
     iid = repo.add_irrigator(
         cluster_id=cid, tuya_device_id="pg", name="Gap Pump", irrigator_type="rainpoint.ik10pw", config={}

@@ -179,7 +179,9 @@ class TestPlantMove:
             }
 
     def test_move_reassigns_plant_sensors_to_target_cluster(self, client):
-        """A sensor attached to the plant is a probe in its soil — it must
+        """Moving a plant moves its attached sensors with it.
+
+        A sensor attached to the plant is a probe in its soil — it must
         physically follow the plant to the new cluster, otherwise its
         historical readings vanish from the new cluster's charts and keep
         showing up under the old one.
@@ -218,7 +220,9 @@ class TestPlantMove:
         assert [s["tuya_device_id"] for s in source_sensors] == ["fake_tuya_device_eeff0011"]
 
     def test_move_sensor_readings_follow_via_sensor(self, app, client):
-        """SensorReading rows key off sensor_id, so once the sensor moves with
+        """After a move the plant's historical readings appear under the new cluster.
+
+        SensorReading rows key off sensor_id, so once the sensor moves with
         the plant the historical readings surface under the new cluster.
         """
         plant_id = self._seed_two_clusters_one_plant(client)
@@ -301,7 +305,9 @@ class TestPlantMove:
             assert repo.list_decision_logs(cluster_id=2) == []
 
     def test_move_preserves_irrigation_events_on_old_cluster(self, app, client):
-        """Irrigation events written BEFORE the move stay attached to irrigators
+        """Irrigation events written before a move stay with the original cluster.
+
+        Irrigation events written BEFORE the move stay attached to irrigators
         on the original cluster (audit integrity).
         """
         plant_id = self._seed_two_clusters_one_plant(client)
@@ -331,7 +337,9 @@ class TestPlantMove:
             assert events[0].irrigator.cluster_id == 1  # still on the source cluster
 
     def test_move_preserves_plant_health_history(self, app, client):
-        """plant_health_daily snapshots are keyed by plant_id and must still
+        """Plant health snapshots survive a move.
+
+        plant_health_daily snapshots are keyed by plant_id and must still
         query cleanly after a move.
         """
         plant_id = self._seed_two_clusters_one_plant(client)

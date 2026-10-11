@@ -61,6 +61,7 @@ def _hermetic(clean_env, frozen_clock):
 
 @pytest.fixture
 def db():
+    """A session on a fresh in-memory schema, for the core auth helpers."""
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(engine)
     session = Session(engine)
@@ -83,6 +84,7 @@ def _client(**settings_override):
 
 @pytest.fixture
 def real():
+    """A client and app with real auth (no bypass) and the contract MCP token configured."""
     client, app, engine = _client(mcp_token=MCP_TOKEN)
     yield client, app
     engine.dispose()
@@ -404,7 +406,9 @@ def test_inactive_user_is_rejected(real):
 
 
 def test_api_401_carries_www_authenticate_header(real):
-    """``AuthError``, the login 401 and the MCP gate all set ``WWW-Authenticate: Bearer``, and the
+    """Every API 401 carries ``WWW-Authenticate: Bearer``.
+
+    ``AuthError``, the login 401 and the MCP gate all set ``WWW-Authenticate: Bearer``, and the
     JSON error handler in ``web/exception_handlers.py`` passes ``exc.headers`` through.
     """
     client, _ = real
@@ -583,6 +587,7 @@ def test_web_gate_ignores_bearer_header(real):
 
 @pytest.fixture
 def engine():
+    """A fresh in-memory engine with the schema, for bootstrap tests."""
     eng = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(eng)
     yield eng

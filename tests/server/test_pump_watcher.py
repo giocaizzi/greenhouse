@@ -43,6 +43,7 @@ def _make_monitor(repo: IrrigationRepository) -> DeviceHealthMonitor:
 
 @pytest.fixture
 def repo():
+    """A repository on a fresh in-memory schema."""
     engine = create_engine("sqlite://", echo=False)
     Base.metadata.create_all(engine)
     session = Session(engine)
@@ -53,6 +54,7 @@ def repo():
 
 @pytest.fixture
 def irrigator(repo):
+    """One IK10PW irrigator in a fresh cluster."""
     cluster_id = repo.add_cluster("Test Cluster")
     irrigator_id = repo.add_irrigator(
         cluster_id=cluster_id,
@@ -69,14 +71,17 @@ class FakeClock:
     """Manually-advanced clock paired with a no-op sleep that records calls."""
 
     def __init__(self, *, step: float = 1.0):
+        """Start at 0 and advance by ``step`` on every sleep."""
         self.now = 0.0
         self.step = step
         self.sleeps: list[float] = []
 
     def __call__(self) -> float:
+        """The current fake time."""
         return self.now
 
     def sleep(self, seconds: float) -> None:
+        """Record the requested sleep and advance the clock by one step."""
         self.sleeps.append(seconds)
         self.now += self.step
 

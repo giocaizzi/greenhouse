@@ -26,21 +26,25 @@ class RecordingGateway:
     """Fake DeviceGateway recording every call ``sync_single_sensor`` makes."""
 
     def __init__(self, *, live: dict | None = None, logs_error: Exception | None = None) -> None:
+        """Serve per-device ``live`` readings, optionally fail log fetches, and record every call."""
         self.live = live or {}
         self.logs_error = logs_error
         self.calls: list[tuple] = []
 
     def get_device_logs(self, device_id, since_ms=None, _hours=24, _max_records=100):
+        """Record the call; raise the configured error or return no logs."""
         self.calls.append(("get_device_logs", device_id, since_ms))
         if self.logs_error is not None:
             raise self.logs_error
         return []
 
     def group_logs_by_timestamp(self, logs, _tolerance_ms=5000):
+        """Record how many logs were grouped; there are no groups."""
         self.calls.append(("group_logs_by_timestamp", len(logs)))
         return []
 
     def get_live_reading(self, device_id):
+        """Record the call and return a copy of the device's canned reading."""
         self.calls.append(("get_live_reading", device_id))
         return dict(self.live.get(device_id, {}))
 

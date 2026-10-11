@@ -14,6 +14,7 @@ from greenhouse_server.services.anomaly import SensorAnomalyService
 
 @pytest.fixture
 def db_session():
+    """A session on a fresh, Alembic-migrated in-memory database."""
     engine = create_engine("sqlite://", echo=False, connect_args={"check_same_thread": False}, poolclass=StaticPool)
     init_db(engine)
     with Session(engine) as session:
@@ -23,6 +24,7 @@ def db_session():
 
 @pytest.fixture
 def repo(db_session):
+    """A repository on the test's migrated session."""
     return IrrigationRepository(db_session)
 
 

@@ -38,6 +38,7 @@ class Boom(RuntimeError):  # noqa: N818 — the name is in the pinned golden (re
 
 @pytest.fixture
 def three_dry_clusters(clean_env, frozen_clock):
+    """A pipeline with three dry, fully wired clusters, marked so only the check's writes count."""
     del clean_env, frozen_clock  # requested only for their side effects
     p = Pipeline()
     for name in ("Alpha", "Bravo", "Charlie"):

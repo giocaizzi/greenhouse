@@ -34,6 +34,7 @@ IMPOSSIBLE = 150.0
 
 @pytest.fixture
 def spiky(clean_env, frozen_clock):
+    """A pipeline whose sensors carry a Hampel spike and an impossible reading."""
     del clean_env, frozen_clock  # requested only for their side effects
     p = Pipeline()
     # Devices are registered (and the sensor→plant assignment opened) two days

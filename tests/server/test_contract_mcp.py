@@ -46,6 +46,7 @@ MCP_TOOL_COUNT = 84  # one tool per /api/v1 operation
 
 @pytest.fixture
 def mcp_app(clean_env):
+    """An app with real auth and offline weather, for inspecting its MCP surface."""
     del clean_env  # requested only for its side effect
     application, engine = _make_stubbed_app(bypass_auth=False)
     install_offline_weather(application)
@@ -113,6 +114,7 @@ def test_tool_names_are_operation_ids_one_to_one(mcp_app):
 
 @pytest.fixture
 def gated_client(clean_env):
+    """A client on an app whose MCP endpoint requires the contract token."""
     del clean_env  # requested only for its side effect
     application, engine = _make_stubbed_app(bypass_auth=True, mcp_token=_TOKEN)
     install_offline_weather(application)
@@ -122,6 +124,7 @@ def gated_client(clean_env):
 
 @pytest.fixture
 def unconfigured_client(clean_env):
+    """A client on an app with no MCP token configured (the endpoint fails closed)."""
     del clean_env  # requested only for its side effect
     application, engine = _make_stubbed_app(bypass_auth=True, mcp_token=None)
     install_offline_weather(application)
@@ -140,7 +143,9 @@ _BAD_HEADERS = {
 @pytest.mark.parametrize("method", ["GET", "POST", "DELETE"])
 @pytest.mark.parametrize("header_case", sorted(_BAD_HEADERS))
 def test_mcp_401_carries_www_authenticate_header(gated_client, method, header_case):
-    """``require_mcp_token`` raises 401 with ``WWW-Authenticate: Bearer`` and the JSON branch
+    """An MCP 401 carries ``WWW-Authenticate: Bearer`` through to the client.
+
+    ``require_mcp_token`` raises 401 with ``WWW-Authenticate: Bearer`` and the JSON branch
     of the global HTTPException handler keeps ``exc.headers``, so the client receives it.
     """
     resp = gated_client.request(method, "/mcp", headers=_BAD_HEADERS[header_case])

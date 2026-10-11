@@ -543,6 +543,7 @@ class TemplateSpy:
     calls: list[list] = field(default_factory=list)
 
     def install(self, monkeypatch) -> None:
+        """Wrap ``TemplateResponse`` so every render records its template and context keys."""
         original = templates.TemplateResponse
 
         def spy(*args, **kwargs):

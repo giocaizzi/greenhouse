@@ -52,6 +52,7 @@ MCP_TOKEN = "gap-mcp-token-0123456789abcdef0123"  # noqa: S105 — fake; its val
 
 @pytest.fixture
 def db(tmp_db, frozen_clock, clean_env):
+    """The in-memory repository, with a clean environment and a frozen clock."""
     del frozen_clock, clean_env  # requested only for their side effects
     return tmp_db
 
@@ -172,7 +173,9 @@ def test_scheduled_pump_watcher_watches_for_the_duration_in_seconds(db, monkeypa
 
 
 def test_monitor_reads_the_cleaned_view(db):
-    """irrigation-33: monitor uses ``clean_readings_desc`` — an out-of-range latest value (150 %) is
+    """irrigation-33: the monitor reports the latest in-range reading.
+
+    irrigation-33: monitor uses ``clean_readings_desc`` — an out-of-range latest value (150 %) is
     dropped by the range gate and the previous sample (50 %) is reported.
     """
     cid, (sid,), _ = _cluster_with_sensors(db, 1)
@@ -198,7 +201,9 @@ class _Weather:
     [("indoor", 15.0, "sensor"), ("greenhouse", 15.0, "sensor"), ("outdoor", 25.0, "open-meteo")],
 )
 def test_temperature_source_only_outdoor_prefers_the_weather(db, environment, temp, source):
-    """irrigation-34: only ``environment == "outdoor"`` prefers the weather feels-like (the engine's
+    """irrigation-34: only outdoor clusters prefer the weather feels-like temperature.
+
+    irrigation-34: only ``environment == "outdoor"`` prefers the weather feels-like (the engine's
     ``environment_for`` rule); any other value (e.g. "greenhouse") is sheltered and reads the sensor first.
     """
     cid = db.add_cluster("Temp Gap", environment=environment)
@@ -218,6 +223,7 @@ def test_temperature_source_only_outdoor_prefers_the_weather(db, environment, te
 
 @pytest.fixture
 def api(clean_env, frozen_clock):
+    """A client and app with auth bypassed and offline weather."""
     del clean_env, frozen_clock  # requested only for their side effects
     app, engine = _make_stubbed_app(bypass_auth=True)
     install_offline_weather(app)
@@ -258,7 +264,9 @@ def test_check_all_has_alerts_counts_thirsty_plants(api):
     [({"ends_at": FROZEN_TS + 3600}, 400), ({"ends_at": 0}, 400), ({"ends_at": FROZEN_TS + 3601}, 200)],
 )
 def test_vacation_update_requires_start_strictly_before_end(api, patch, status):
-    """web-15 / web-16: the effective window must satisfy ``starts_at < ends_at``; an explicit
+    """web-15 / web-16: a vacation update must leave ``starts_at < ends_at``.
+
+    web-15 / web-16: the effective window must satisfy ``starts_at < ends_at``; an explicit
     ``ends_at = 0`` is applied (and rejected), not treated as absent.
     """
     client, _ = api
@@ -360,6 +368,7 @@ def test_sync_job_backfills_six_hours_and_commits(monkeypatch):
 
 @pytest.fixture
 def mcp_client(clean_env, frozen_clock):
+    """A client on an app with real auth and the gap MCP token configured."""
     del clean_env, frozen_clock  # requested only for their side effects
     app, engine = _make_stubbed_app(bypass_auth=False, mcp_token=MCP_TOKEN)
     install_offline_weather(app)
@@ -594,7 +603,9 @@ def _manual_world(db, **caps):
 
 
 def test_daily_cap_counts_only_start_minutes(db):
-    """manual-03 / manual-11: the per-irrigator minute cap sums ``start`` events only (an ``off`` row's
+    """manual-03 / manual-11: the daily minute cap counts ``start`` events only.
+
+    manual-03 / manual-11: the per-irrigator minute cap sums ``start`` events only (an ``off`` row's
     minutes don't count), and an open-ended start (``minutes=None``) requests 0 minutes.
     """
     cid, irr, _ = _manual_world(db, daily_cap_minutes=5)
@@ -618,7 +629,9 @@ def test_manual_start_checks_registry_before_caps(db):
 
 
 def test_manual_start_schedules_a_manual_watcher(db, monkeypatch):
-    """manual-06: a timed manual start schedules the dry-run watcher as ``triggered_by="manual"``
+    """manual-06: a timed manual start schedules a manual dry-run watcher.
+
+    manual-06: a timed manual start schedules the dry-run watcher as ``triggered_by="manual"``
     (so shutdown leaves it on the device timer) — and none without a duration.
     """
     calls: list[tuple] = []

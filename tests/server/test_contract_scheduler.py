@@ -51,6 +51,7 @@ CORE_JOB_ORDER = ["sensor_sync", "check_all", "plant_health_snapshot", "sensor_a
 
 @pytest.fixture
 def p(clean_env, frozen_clock):
+    """A fresh pipeline harness; the process-wide scheduler is stopped afterwards if a test started it."""
     del clean_env, frozen_clock  # requested only for their side effects
     pipeline = Pipeline()
     yield pipeline

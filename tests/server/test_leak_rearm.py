@@ -174,7 +174,9 @@ class TestRearm:
 
     @pytest.mark.usefixtures("running_scheduler")
     def test_already_held_start_is_not_rechecked(self, app):
-        """A start whose check raised a hold before markers existed is treated as checked
+        """A start whose check already raised a hold is treated as checked.
+
+        A start whose check raised a hold before markers existed is treated as checked
         (re-running it could re-raise an alert the operator already resolved).
         """
         cid, iid = _seed(app)
@@ -222,7 +224,9 @@ class TestAutoStartTimestampAlignment:
 
     @pytest.mark.usefixtures("running_scheduler")
     def test_leak_check_keyed_by_the_start_event_timestamp(self, app, seeded_client, monkeypatch):
-        """The leak-check job id / started_at must equal the `start` row's timestamp,
+        """The leak-check job is keyed by the ``start`` row's own timestamp.
+
+        The leak-check job id / started_at must equal the `start` row's timestamp,
         otherwise the restart re-arm (which reads the row) can't match it.
         """
         session = app.state.session_factory()

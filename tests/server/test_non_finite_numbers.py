@@ -9,6 +9,7 @@ import pytest
 
 @pytest.fixture
 def cid(client) -> int:
+    """The id of a freshly created cluster."""
     return client.post("/api/v1/clusters", json={"name": "C"}).json()["id"]
 
 

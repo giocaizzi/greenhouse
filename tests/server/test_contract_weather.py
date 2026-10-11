@@ -47,6 +47,7 @@ class FakeNet:
     """Recorder for ``urlopen(url, timeout=…)``; each call pops the next scripted response."""
 
     def __init__(self, monkeypatch) -> None:
+        """Patch ``urlopen`` and the module clock so every request is recorded and scripted."""
         self.calls: list[tuple[str, object]] = []
         self.responses: list[object] = []
         self.now = 1000.0
@@ -54,6 +55,7 @@ class FakeNet:
         monkeypatch.setattr(weather_module, "time", SimpleNamespace(monotonic=lambda: self.now))
 
     def queue(self, *responses: object) -> None:
+        """Script the next responses (payload dicts, raw bytes or exceptions to raise)."""
         self.responses.extend(responses)
 
     def _urlopen(self, url, timeout=None):
@@ -67,6 +69,7 @@ class FakeNet:
 
 @pytest.fixture
 def net(monkeypatch) -> FakeNet:
+    """A scripted network for the weather client."""
     return FakeNet(monkeypatch)
 
 

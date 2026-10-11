@@ -68,7 +68,9 @@ def _job_row(html: str, job_id: str) -> str:
 
 @pytest.mark.usefixtures("running_scheduler")
 def test_scheduler_page_marks_paused_check_all(client):
-    """Regression: the page built job dicts without `paused`, so the row badge
+    """The scheduler page shows a paused check_all as paused.
+
+    Regression: the page built job dicts without `paused`, so the row badge
     always read "active" even while check_all was paused.
     """
     assert client.post("/scheduler/pause", follow_redirects=False).status_code == HTTPStatus.SEE_OTHER

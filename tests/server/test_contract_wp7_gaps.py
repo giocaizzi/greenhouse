@@ -50,11 +50,15 @@ SCHEDULER_LOGGER = "greenhouse_server.scheduler"
 
 
 class FakeScheduler:
+    """A running scheduler stand-in that records ``add_job`` calls."""
+
     def __init__(self) -> None:
+        """Report running, with no jobs yet."""
         self.running = True
         self.jobs: list[dict] = []
 
     def add_job(self, func, trigger, **kwargs):
+        """Record the job."""
         self.jobs.append({"func": func, "trigger": trigger, **kwargs})
 
 
@@ -62,32 +66,43 @@ class StubSync:
     """``SyncService`` stand-in: records ``ensure_fresh_and_read`` calls, returns a canned snapshot."""
 
     def __init__(self, data: dict | None) -> None:
+        """Serve ``data`` as the cluster snapshot (``None`` = no data) and record each read."""
         self.data = data
         self.calls: list[int] = []
 
     def ensure_fresh_and_read(self, cluster_id: int):
+        """Record the cluster and return a copy of the canned snapshot."""
         self.calls.append(cluster_id)
         return None if self.data is None else dict(self.data)
 
 
 class StubWeather:
+    """Weather stand-in with a fixed current reading and no forecast."""
+
     def __init__(self, current: dict | None) -> None:
+        """Serve ``current`` (``None`` = weather unavailable) and count reads."""
         self.current = current
         self.calls = 0
 
     def get_current(self):
+        """Count the read and return a copy of the canned reading."""
         self.calls += 1
         return None if self.current is None else dict(self.current)
 
     def get_forecast(self, hours: int = 6):  # noqa: ARG002 — mirrors WeatherClient
-        return None
+        """No forecast is available."""
+        return
 
 
 class StubPlantDb:
+    """Plant-DB stand-in serving the same care data for every species."""
+
     def __init__(self, care: dict) -> None:
+        """Serve ``care`` for every lookup."""
         self.care = care
 
     def get_care_data(self, species=None):  # noqa: ARG002 — mirrors PlantDatabase
+        """Return a copy of the canned care data."""
         return dict(self.care)
 
 
@@ -107,6 +122,7 @@ def _decision(cluster_id: int, *, log_id: int | None = None) -> IrrigationDecisi
 
 @pytest.fixture
 def db(tmp_db, frozen_clock, clean_env):
+    """The in-memory repository, with a frozen clock and a clean environment."""
     del frozen_clock, clean_env  # requested only for their side effects
     return tmp_db
 
@@ -261,10 +277,14 @@ def test_temperature_source_matrix_and_soil_note(  # noqa: PLR0913, PLR0917 — 
 
 
 class NotBlockingMonitor:
+    """Health-monitor stand-in that never blocks actuation and records who asked."""
+
     def __init__(self) -> None:
+        """Start with no questions asked."""
         self.asked: list[int] = []
 
     def is_actuation_blocked(self, irrigator):
+        """Record the irrigator and answer: not blocked."""
         self.asked.append(irrigator.id)
         return False, []
 
@@ -482,6 +502,7 @@ def _watch_gap_app(factory):
 
 @pytest.fixture
 def watcher_env(monkeypatch, frozen_clock):
+    """A stand-in app and fake scheduler for scheduling pump watchers, with a spying watcher class."""
     del frozen_clock  # requested only for its side effect
     engine, factory, iid = _watch_gap_db()
     app, settings, registry = _watch_gap_app(factory)
@@ -651,6 +672,7 @@ def test_rearm_failure_mid_scan_keeps_partial_count_and_logs_both_lines(monkeypa
 
 @pytest.fixture
 def p(clean_env, frozen_clock):
+    """A fresh pipeline harness with a clean environment and a frozen clock."""
     del clean_env, frozen_clock  # requested only for their side effects
     pipeline = Pipeline()
     yield pipeline
@@ -661,22 +683,27 @@ class SpySession:
     """Wraps a real session and logs commit / rollback / close in call order."""
 
     def __init__(self, real: Session, log: list[str]) -> None:
+        """Wrap ``real``, logging transaction calls into ``log``."""
         self._real = real
         self._log = log
 
     def commit(self):
+        """Log and commit the real session."""
         self._log.append("commit")
         return self._real.commit()
 
     def rollback(self):
+        """Log and roll back the real session."""
         self._log.append("rollback")
         return self._real.rollback()
 
     def close(self):
+        """Log and close the real session."""
         self._log.append("close")
         return self._real.close()
 
     def __getattr__(self, name):
+        """Delegate everything else to the real session."""
         return getattr(self._real, name)
 
 
@@ -693,19 +720,25 @@ def _spy_sessions(monkeypatch, app) -> list[str]:
 
 
 class StubMonitor:
+    """Health-monitor stand-in that logs binds, polls and gate questions in call order."""
+
     def __init__(self, log: list[str]) -> None:
+        """Log into ``log`` and remember every repository a view binds to."""
         self.log = log
         self.repos: list = []
 
     def for_repo(self, repo):
+        """Log the bind, remember the repository and act as the view itself."""
         self.log.append("bind")
         self.repos.append(repo)
         return self
 
     def poll_all(self):
+        """Log the poll."""
         self.log.append("poll")
 
     def is_actuation_blocked(self, irrigator):
+        """Log the question and answer: not blocked."""
         self.log.append(f"blocked?{irrigator.id}")
         return False, []
 

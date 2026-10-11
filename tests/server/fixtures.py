@@ -93,6 +93,7 @@ class FakeDeviceWiring:
     """
 
     def __init__(self) -> None:
+        """Build the shared fakes and a registry that resolves every seeded model key to them."""
         self.irrigator = FakeIrrigatorAdapter()
         self.sensor = FakeSensorAdapter()
         self.registry = DeviceRegistry()

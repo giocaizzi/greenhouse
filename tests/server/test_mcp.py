@@ -68,7 +68,9 @@ def test_mcp_tool_names_fit_within_64_chars(app):
 
 
 def test_mcp_every_api_route_has_a_response_model(app):
-    """Every /api/v1 endpoint must declare a response_model so MCP tools advertise a
+    """Every /api/v1 endpoint declares a response_model.
+
+    Every /api/v1 endpoint must declare a response_model so MCP tools advertise a
     typed output. fastapi-mcp emits an "Example Response:" JSON block in the tool
     description only when a response_model is present; routes that return raw dicts
     (no response_model) do not get one. CSV export (binary download) is exempt.
@@ -126,7 +128,9 @@ def test_every_api_route_has_a_docstring():
 
 
 def test_mcp_request_bodies_carry_their_field_schemas(app):
-    """Endpoints with a Pydantic request body must surface those fields in the MCP
+    """Pydantic request-body fields appear in the MCP tool's inputSchema.
+
+    Endpoints with a Pydantic request body must surface those fields in the MCP
     tool's inputSchema, so an LLM client knows the call shape.
     """
     mcp = app.state.mcp
@@ -220,7 +224,9 @@ def test_mcp_rejects_request_with_wrong_token(mcp_client_with_token: TestClient)
 
 
 def test_mcp_accepts_request_with_correct_token(mcp_client_with_token: TestClient):
-    """With the correct bearer token, the auth gate is transparent — the request
+    """With the correct bearer token the MCP auth gate is transparent.
+
+    With the correct bearer token, the auth gate is transparent — the request
     reaches the MCP transport (whose handling of a bare GET isn't auth's concern).
     We assert only that the response is not 401/503, i.e. auth did not block it.
     """
@@ -231,7 +237,9 @@ def test_mcp_accepts_request_with_correct_token(mcp_client_with_token: TestClien
 
 
 def test_mcp_returns_503_when_token_setting_is_unset(mcp_client_unconfigured: TestClient):
-    """Fail-closed: with no MCP token configured, /mcp must NOT silently be open —
+    """With no MCP token configured, /mcp fails closed with 503.
+
+    Fail-closed: with no MCP token configured, /mcp must NOT silently be open —
     every request, with or without an Authorization header, gets 503.
     """
     resp = mcp_client_unconfigured.get("/mcp")
@@ -292,7 +300,9 @@ def _invoke_mcp_tool(
 
 
 def test_mcp_tool_invocation_reaches_inner_endpoint(mcp_client_with_token: TestClient):
-    """End-to-end: a forwarded MCP bearer must let the inner /api/v1 route serve
+    """A forwarded MCP bearer reaches the inner /api/v1 route.
+
+    End-to-end: a forwarded MCP bearer must let the inner /api/v1 route serve
     a real response, not 401.
 
     Picks the `list_clusters` tool because it's a pure GET with no path/body
@@ -312,7 +322,9 @@ def test_mcp_tool_invocation_reaches_inner_endpoint(mcp_client_with_token: TestC
 
 
 def test_mcp_tool_invocation_rejects_garbage_bearer(mcp_client_with_token: TestClient):
-    """A forwarded header that is neither a valid JWT nor the MCP token must
+    """A forwarded garbage bearer still gets 401 at the inner endpoint.
+
+    A forwarded header that is neither a valid JWT nor the MCP token must
     still 401 at the inner endpoint — the MCP-token short-circuit must not
     accidentally accept arbitrary bearers.
     """

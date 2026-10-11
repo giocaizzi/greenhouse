@@ -46,12 +46,16 @@ STARTED_AT = FROZEN_TS - 42
 
 
 class FakeScheduler:
+    """Scheduler stand-in that records ``add_job`` calls (or fails them)."""
+
     def __init__(self, *, running: bool = True, fail: bool = False) -> None:
+        """Configure whether the scheduler reports running and whether ``add_job`` fails."""
         self.running = running
         self.fail = fail
         self.jobs: list[dict] = []
 
     def add_job(self, func, trigger, **kwargs):
+        """Record the job, or raise like a broken job store."""
         if self.fail:
             msg = "jobstore down"
             raise RuntimeError(msg)
@@ -59,10 +63,14 @@ class FakeScheduler:
 
 
 class RecordingMonitor:
+    """Health-monitor stand-in that records which repository each view binds to."""
+
     def __init__(self) -> None:
+        """Start with no views bound."""
         self.bound: list = []
 
     def for_repo(self, repo) -> RecordingMonitor:
+        """Record the repository and act as the view itself."""
         self.bound.append(repo)
         return self
 
@@ -411,6 +419,7 @@ def test_job_failure_is_rolled_back_and_logged(env, monkeypatch, caplog):
 
 @pytest.fixture
 def plain(frozen_clock):
+    """A real watcher world on an in-memory DB: one irrigator and a fake adapter, no scheduler."""
     del frozen_clock  # requested only for its side effect
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(engine)

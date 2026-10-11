@@ -35,6 +35,7 @@ class _NoCloudExpected:
 
 @pytest.fixture
 def ik10pw_pipeline(clean_env, frozen_clock):
+    """A pipeline whose irrigator is the real IK10PW adapter on a Cloud that must not be called."""
     del clean_env, frozen_clock  # requested only for their side effects
     p = Pipeline()
     cloud = _NoCloudExpected()

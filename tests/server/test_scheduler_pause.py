@@ -101,7 +101,9 @@ class TestPauseGatesActuation:
 
 
 class TestPausePersistsAcrossRestart:
-    """A pause set on one app instance is re-applied when a new instance boots
+    """A scheduler pause survives an app restart.
+
+    A pause set on one app instance is re-applied when a new instance boots
     against the same database — simulates a container restart.
     """
 

@@ -46,9 +46,11 @@ class NoCloud:
     """A ``tinytuya.Cloud`` stand-in that fails the test on *any* attribute access."""
 
     def __init__(self) -> None:
+        """Start with no Cloud access recorded."""
         self.touched: list[str] = []
 
     def __getattr__(self, name):
+        """Record and refuse any Cloud attribute: the monitor must never touch the Cloud."""
         self.touched.append(name)
         msg = f"health monitor touched the Cloud: {name}"
         raise AssertionError(msg)
@@ -60,21 +62,27 @@ class SpyTR301Z(TR301ZAdapter):
     seen: ClassVar[list] = []
 
     def read_health(self, sensor, latest=None):
+        """Record which persisted row the monitor handed over, then derive health for real."""
         SpyTR301Z.seen.append(None if latest is None else latest.timestamp)
         return super().read_health(sensor, latest)
 
 
 class RecordingNotifier:
+    """Notifier stand-in that records every alert push."""
+
     def __init__(self) -> None:
+        """Start with no pushes recorded."""
         self.sent: list[dict] = []
 
     def notify_alert(self, *, severity, title, message):
+        """Record the push and report it delivered."""
         self.sent.append({"severity": severity, "title": title, "message": message})
         return True
 
 
 @pytest.fixture
 def world(tmp_db, frozen_clock):
+    """One cluster with a pump and a probe, a Cloud that must stay untouched, and a monitor on them."""
     cid = tmp_db.add_cluster("Health Cluster")
     irr_id = tmp_db.add_irrigator(
         cluster_id=cid, tuya_device_id="hm_pump", name="Pump One", irrigator_type="rainpoint.ik10pw", config={}

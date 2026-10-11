@@ -118,6 +118,7 @@ def test_shutdown_during_irrigation_is_prompt(tmp_path, triggered_by, stops):
 
 @pytest.fixture
 def repo():
+    """A repository on a fresh in-memory schema."""
     engine = create_engine("sqlite://", echo=False)
     Base.metadata.create_all(engine)
     session = Session(engine)
@@ -128,6 +129,7 @@ def repo():
 
 @pytest.fixture
 def irrigator(repo):
+    """One IK10PW irrigator in a fresh cluster."""
     cluster_id = repo.add_cluster("Test Cluster")
     irrigator_id = repo.add_irrigator(
         cluster_id=cluster_id,

@@ -74,13 +74,16 @@ class RecordingNotifier:
     """Stand-in for ``NtfyClient`` that records every attempted push."""
 
     def __init__(self) -> None:
+        """Start with no pushes recorded."""
         self.sent: list[dict] = []
 
     def notify_irrigation(self, **kwargs) -> bool:
+        """Record an irrigation push and report it delivered."""
         self.sent.append({"kind": "irrigation", **kwargs})
         return True
 
     def notify_alert(self, **kwargs) -> bool:
+        """Record an alert push and report it delivered."""
         self.sent.append({"kind": "alert", **kwargs})
         return True
 
@@ -89,18 +92,22 @@ class RecordingGateway:
     """Stand-in for ``DeviceGateway``: empty device logs, canned live reading, call log."""
 
     def __init__(self, live: dict | None = None) -> None:
+        """Serve ``live`` (or a dry default) as the live reading and record every call."""
         self.live = live if live is not None else {"soil_moisture": 30.0, "temperature": 23.0}
         self.calls: list[list] = []
 
     def get_device_logs(self, device_id: str, since_ms: int | None = None, **_kwargs) -> list[dict]:
+        """Record the call; there are no device logs."""
         self.calls.append(["get_device_logs", device_id, since_ms])
         return []
 
     def group_logs_by_timestamp(self, logs: list[dict], _tolerance_ms: int = 5000) -> list[dict]:
+        """Record how many logs were grouped; there are no groups."""
         self.calls.append(["group_logs_by_timestamp", len(logs)])
         return []
 
     def get_live_reading(self, device_id: str) -> dict:
+        """Record the call and return a copy of the canned reading."""
         self.calls.append(["get_live_reading", device_id])
         return dict(self.live)
 
@@ -109,9 +116,11 @@ class RainyWeather:
     """Canned Open-Meteo answer: mild now, significant rain forecast (no network)."""
 
     def get_current(self) -> dict:
+        """A cool, humid current reading."""
         return {"temperature": 17.0, "feels_like": 16.5, "humidity": 80.0}
 
     def get_forecast(self, hours: int = 6) -> dict:  # noqa: ARG002 — mirrors WeatherClient
+        """A forecast with enough rain to skip an outdoor irrigation."""
         return {"precipitation_mm": 6.5}
 
 
@@ -167,6 +176,7 @@ class Pipeline:
     """One freshly built, seeded app plus the recorders a scenario inspects."""
 
     def __init__(self) -> None:
+        """Build a stubbed app with offline weather, a recording notifier and fake devices."""
         self.app, self.engine = _make_stubbed_app(bypass_auth=True)
         install_offline_weather(self.app)
         self.notifier = RecordingNotifier()
@@ -178,6 +188,7 @@ class Pipeline:
         self._marks: dict[str, int] = {}
 
     def close(self) -> None:
+        """Close the client and dispose of the engine."""
         self.client.close()
         self.engine.dispose()
 
@@ -185,6 +196,7 @@ class Pipeline:
 
     @contextmanager
     def repo(self):
+        """A repository on a fresh session, committed on success and always closed."""
         session = self.app.state.session_factory()
         try:
             yield IrrigationRepository(session)
@@ -199,11 +211,13 @@ class Pipeline:
         return resp.json()
 
     def use_gateway(self, live: dict | None = None) -> RecordingGateway:
+        """Install a recording gateway (with ``live`` readings) and return it."""
         self.gateway = RecordingGateway(live)
         self.app.dependency_overrides[get_device_gateway] = lambda: self.gateway
         return self.gateway
 
     def use_weather(self, stub) -> None:
+        """Install ``stub`` as the app's weather client, for jobs and requests alike."""
         self.app.state.weather_client = stub
         self.app.dependency_overrides[get_weather_client] = lambda: stub
 
@@ -247,6 +261,7 @@ class Pipeline:
         return ids
 
     def add_event(self, irrigator_id: int, *, age: int, action: str = "start", triggered_by: str = "auto") -> None:
+        """Seed one irrigation event ``age`` seconds before the frozen instant."""
         with self.repo() as repo:
             repo.add_irrigation_event(
                 irrigator_id=irrigator_id,
@@ -258,6 +273,7 @@ class Pipeline:
             )
 
     def raise_leak(self, cluster_id: int, sensor_id: int, *, age: int = 0) -> int:
+        """Open a leak / stuck-valve alert for ``cluster_id`` ``age`` seconds ago; return its id."""
         with self.repo() as repo:
             alert = repo.upsert_alert(
                 dedup_key=f"leak::{LEAK_ALERT_CODE}::{cluster_id}::sensor{sensor_id}",
@@ -296,6 +312,7 @@ class Pipeline:
         return entry
 
     def db_rows(self) -> dict[str, list[dict]]:
+        """Rows of every tracked table (only those written after ``mark`` for marked tables)."""
         out: dict[str, list[dict]] = {}
         with self.app.state.session_factory() as session:
             for name in APPEND_ONLY_TABLES + MUTABLE_TABLES:
@@ -307,6 +324,7 @@ class Pipeline:
         return out
 
     def observed(self) -> dict:
+        """Everything a golden pins: calls, DB writes, device and gateway calls, notifications."""
         return {
             "calls": self.calls,
             "db_writes": self.db_rows(),
@@ -319,6 +337,7 @@ class Pipeline:
 
 @pytest.fixture
 def pipeline(clean_env, frozen_clock):
+    """A fresh pipeline harness with a clean environment and a frozen clock."""
     del clean_env, frozen_clock  # requested only for their side effects
     p = Pipeline()
     yield p
@@ -895,6 +914,7 @@ SCENARIOS: dict[str, Callable[[Pipeline], None]] = {
 
 
 def run_scenario(name: str) -> dict:
+    """Run golden scenario ``name`` on a fresh pipeline and return what it observed."""
     p = Pipeline()
     try:
         SCENARIOS[name](p)

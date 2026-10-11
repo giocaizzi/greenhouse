@@ -104,7 +104,9 @@ class TestClusterCRUD:
         assert resp.status_code == HTTPStatus.NOT_FOUND
 
     def test_delete_removes_rows_that_point_at_the_cluster(self, client):
-        """Windows, assignments, alerts (by cluster or entity) go; a default-cluster preference is cleared;
+        """Deleting a cluster removes its dependent rows and leaves other clusters alone.
+
+        Windows, assignments, alerts (by cluster or entity) go; a default-cluster preference is cleared;
         another cluster's rows stay.
         """
         doomed = client.post("/api/v1/clusters", json={"name": "Doomed"}).json()["id"]

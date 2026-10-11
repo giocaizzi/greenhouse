@@ -37,6 +37,7 @@ from greenhouse_server.services.pump_watcher import EVENT_ACTION_ABORTED, PumpWa
 
 @pytest.fixture
 def repo():
+    """A repository on a fresh in-memory schema."""
     engine = create_engine("sqlite://", echo=False)
     Base.metadata.create_all(engine)
     session = Session(engine)
@@ -47,6 +48,7 @@ def repo():
 
 @pytest.fixture
 def cluster_irrigator_sensor(repo) -> tuple[Irrigator, Sensor]:
+    """One cluster with an IK10PW irrigator and a TR301Z sensor: ``(irrigator, sensor)``."""
     cluster_id = repo.add_cluster("HM Cluster")
     irrigator_id = repo.add_irrigator(
         cluster_id=cluster_id,
@@ -81,6 +83,7 @@ class _FrozenClock:
 
 @pytest.fixture
 def registry_with_fakes() -> tuple[DeviceRegistry, FakeIrrigatorAdapter, FakeSensorAdapter]:
+    """A registry resolving the seeded model keys to fakes: ``(registry, irrigator fake, sensor fake)``."""
     irr_adapter = FakeIrrigatorAdapter()
     sensor_adapter = FakeSensorAdapter()
     registry = DeviceRegistry()
@@ -94,6 +97,7 @@ def registry_with_fakes() -> tuple[DeviceRegistry, FakeIrrigatorAdapter, FakeSen
 def monitor(
     repo, registry_with_fakes
 ) -> tuple[DeviceHealthMonitor, FakeIrrigatorAdapter, FakeSensorAdapter, _FrozenClock]:
+    """A monitor on the fake registry with a frozen clock: ``(monitor, irrigator fake, sensor fake, clock)``."""
     registry, irr_adapter, sensor_adapter = registry_with_fakes
     clock = _FrozenClock()
     monitor = DeviceHealthMonitor(repo=repo, registry=registry, clock=clock)
