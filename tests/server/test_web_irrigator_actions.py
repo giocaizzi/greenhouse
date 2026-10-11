@@ -1,5 +1,6 @@
 """Irrigator start/stop/log-manual web actions."""
 
+import pytest
 from sqlalchemy.orm import Session
 
 from greenhouse_core.models import IrrigationConfig, IrrigationEvent
@@ -167,3 +168,22 @@ def test_web_log_manual_notifies(app, seeded_client):
     app.state.ntfy_notifier = rec
     seeded_client.post("/irrigators/1/log-manual", data={"minutes": "3"}, follow_redirects=False)
     assert [(n["triggered_by"], n["detail"]) for n in rec.irrigations] == [("manual", "logged (watered by hand)")]
+
+
+@pytest.mark.parametrize("minutes", ["0", "-3"])
+def test_web_start_rejects_non_positive_minutes(app, seeded_client, minutes):
+    """A start of 0 or negative minutes is refused with the API's wording; nothing is actuated or recorded."""
+    resp = seeded_client.post("/irrigators/1/start", data={"minutes": minutes})
+    assert resp.status_code == 200
+    assert "minutes must be at least 1" in resp.text
+    assert "badge-ok" not in resp.text
+    assert _events(app) == []
+    assert app.state.fake_devices.irrigator.calls == []
+
+
+@pytest.mark.parametrize("minutes", [0, -3])
+def test_api_start_rejects_non_positive_minutes(app, seeded_client, minutes):
+    resp = seeded_client.post("/api/v1/irrigators/1/start", json={"minutes": minutes})
+    assert resp.status_code == 422
+    assert resp.json()["detail"][0]["loc"] == ["body", "minutes"]
+    assert app.state.fake_devices.irrigator.calls == []

@@ -154,7 +154,7 @@ class IrrigatorListResponse(BaseModel):
 class StartIrrigatorRequest(BaseModel):
     """Body for a manual start; omit ``minutes`` to run the configured default duration."""
 
-    minutes: int | None = None
+    minutes: int | None = Field(default=None, ge=1)
 
 
 class LogManualRequest(BaseModel):

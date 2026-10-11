@@ -40,14 +40,16 @@ if TYPE_CHECKING:
 
 
 DRY_RUN_REFUSED_DETAIL = "global dry run is on: irrigator not started"
+MINUTES_TOO_SMALL_DETAIL = "minutes must be at least 1"
 
 
 class ManualActionError(Exception):
     """A manual start/stop was refused or failed.
 
     Attributes:
-        status_code: HTTP status the JSON API responds with (409 caps or
-            global dry run, 503 no registry / unknown model, 502 device failure).
+        status_code: HTTP status the JSON API responds with (422 bad
+            minutes, 409 caps or global dry run, 503 no registry / unknown
+            model, 502 device failure).
         detail: Human-readable reason.
     """
 
@@ -175,8 +177,11 @@ def manual_start(
         The adapter's success message.
 
     Raises:
-        ManualActionError: 409 caps or global dry run, 503 no registry / unknown model, 502 device failure.
+        ManualActionError: 422 ``minutes`` below 1, 409 caps or global dry run, 503 no registry /
+            unknown model, 502 device failure.
     """
+    if minutes is not None and minutes < 1:  # the API schema refuses these first; the web form lands here
+        raise ManualActionError(422, MINUTES_TOO_SMALL_DETAIL)
     if registry is None:  # checked before the caps, as the API always has
         raise ManualActionError(503, "No device registry (missing Tuya credentials)")
     check_rate_limits(repo, irrigator.cluster_id, irrigator.id, minutes)

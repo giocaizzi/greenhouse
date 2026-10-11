@@ -1202,7 +1202,7 @@
      "irrigators"
     ],
     "summary": "Start Irrigator",
-    "description": "Manually start an irrigator through its device adapter.\n\nSide effects: actuates physical hardware, records a `start` irrigation\nevent with `triggered_by=\"manual\"` and arms the 30-min post-watering\nleak / stuck-valve check (as every real watering does). Bypasses the\nsmart-decision engine, including an open leak hold.\n\nArgs:\n    irrigator_id: Irrigator to actuate.\n    request: Optional `minutes` for run duration.\n\nReturns:\n    `success=True` and the adapter's start message.\n\nRaises:\n    HTTPException: 404 if the irrigator is unknown, 409 if the cluster\n        daily cap or max-events-per-day limit would be exceeded or the\n        global dry run (`dry_run_global` preference) is on — the refusal\n        is logged and no pump starts, 503 if Tuya credentials are missing\n        or the irrigator model has no adapter, 502 if the device fails to\n        start.",
+    "description": "Manually start an irrigator through its device adapter.\n\nSide effects: actuates physical hardware, records a `start` irrigation\nevent with `triggered_by=\"manual\"` and arms the 30-min post-watering\nleak / stuck-valve check (as every real watering does). Bypasses the\nsmart-decision engine, including an open leak hold.\n\nArgs:\n    irrigator_id: Irrigator to actuate.\n    request: Optional `minutes` for run duration.\n\nReturns:\n    `success=True` and the adapter's start message.\n\nRaises:\n    HTTPException: 404 if the irrigator is unknown, 422 if `minutes`\n        is below 1, 409 if the cluster daily cap or max-events-per-day\n        limit would be exceeded or the global dry run (`dry_run_global`\n        preference) is on — the refusal is logged and no pump starts, 503\n        if Tuya credentials are missing or the irrigator model has no\n        adapter, 502 if the device fails to start.",
     "operationId": "start_irrigator",
     "security": [
      {
@@ -7983,7 +7983,8 @@
      "minutes": {
       "anyOf": [
        {
-        "type": "integer"
+        "type": "integer",
+        "minimum": 1.0
        },
        {
         "type": "null"

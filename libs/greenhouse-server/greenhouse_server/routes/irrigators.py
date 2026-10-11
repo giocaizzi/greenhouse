@@ -203,12 +203,12 @@ def start_irrigator(
         `success=True` and the adapter's start message.
 
     Raises:
-        HTTPException: 404 if the irrigator is unknown, 409 if the cluster
-            daily cap or max-events-per-day limit would be exceeded or the
-            global dry run (`dry_run_global` preference) is on — the refusal
-            is logged and no pump starts, 503 if Tuya credentials are missing
-            or the irrigator model has no adapter, 502 if the device fails to
-            start.
+        HTTPException: 404 if the irrigator is unknown, 422 if `minutes`
+            is below 1, 409 if the cluster daily cap or max-events-per-day
+            limit would be exceeded or the global dry run (`dry_run_global`
+            preference) is on — the refusal is logged and no pump starts, 503
+            if Tuya credentials are missing or the irrigator model has no
+            adapter, 502 if the device fails to start.
     """
     irrigator = require_irrigator(repo, irrigator_id)
     try:
