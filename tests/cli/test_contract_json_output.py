@@ -1046,12 +1046,17 @@ def run_constructor_case(name: str, spec: dict[str, Any], base: Path, slot: dict
             client = IrrigationClient(**kwargs)
             client.health()
         finally:
-            for key, value in saved.items():
-                if value is None:
-                    os.environ.pop(key, None)
-                else:
-                    os.environ[key] = value
+            _restore_env(saved)
     return {"spec": spec, "clients": rec.clients, "requests": rec.requests}
+
+
+def _restore_env(saved: dict[str, str | None]) -> None:
+    """Put back the environment variables a constructor case overrode (``None`` = was unset)."""
+    for key, value in saved.items():
+        if value is None:
+            os.environ.pop(key, None)
+        else:
+            os.environ[key] = value
 
 
 def build_all(base: Path, slot: dict[str, Recorder]) -> dict[str, Any]:

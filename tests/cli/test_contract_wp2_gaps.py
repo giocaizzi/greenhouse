@@ -272,6 +272,27 @@ def _create_empty_cluster(http) -> int:
     return resp.json()["id"]
 
 
+async def _press_on_tab(pilot, tui, screen, tab_key: tuple[str, str], recorded: tuple[list, list]) -> dict:
+    """Press one key on the active tab and record its toasts, dialog and writes; a dialog is escaped."""
+    tab, key = tab_key
+    toasts, log = recorded
+    start_toasts, start_log = len(toasts), len(log)
+    await pilot.press(key)
+    await settle(pilot, tui)
+    dialog = type(tui.screen).__name__ if tui.screen is not screen else None
+    capture = {
+        "tab": tab,
+        "key": key,
+        "toasts": toasts[start_toasts:],
+        "dialog": dialog,
+        "writes": [list(w) for w in writes(log[start_log:])],
+    }
+    if dialog:
+        await pilot.press("escape")
+        await settle(pilot, tui)
+    return capture
+
+
 def test_edit_and_delete_with_nothing_selected(seeded):
     """``u`` / ``delete`` on every CRUD tab of an empty cluster: the toast, no dialog, no write."""
     http, _ = seeded
@@ -287,23 +308,9 @@ def test_edit_and_delete_with_nothing_selected(seeded):
             for tab in ("tab-plants", "tab-sensors", "tab-windows", "tab-overview", "tab-config"):
                 screen.query_one("TabbedContent").active = tab
                 await settle(pilot, tui)
-                for key in ("u", "delete"):
-                    start_toasts, start_log = len(toasts), len(log)
-                    await pilot.press(key)
-                    await settle(pilot, tui)
-                    dialog = type(tui.screen).__name__ if tui.screen is not screen else None
-                    captured.append(
-                        {
-                            "tab": tab,
-                            "key": key,
-                            "toasts": toasts[start_toasts:],
-                            "dialog": dialog,
-                            "writes": [list(w) for w in writes(log[start_log:])],
-                        }
-                    )
-                    if dialog:
-                        await pilot.press("escape")
-                        await settle(pilot, tui)
+                captured.extend(
+                    [await _press_on_tab(pilot, tui, screen, (tab, key), (toasts, log)) for key in ("u", "delete")]
+                )
 
     _run(scenario())
     assert_golden_json("cli/wp2_gaps/crud_nothing_selected.json", captured)
