@@ -14,13 +14,13 @@
   "activity_events": {
    "added": [
     {
-     "code": "leak_check_armed",
+     "code": "leak_check_skipped",
      "entity_id": 2,
      "entity_type": "cluster",
      "id": 5,
-     "message": "post-watering leak check armed (manual start)",
-     "payload_json": "{\"started_at\": 1776247200, \"irrigator_id\": 2, \"triggered_by\": \"manual\"}",
-     "severity": "info",
+     "message": "post-watering leak check skipped: manual start without a duration (the device timer decides how long it runs)",
+     "payload_json": "{\"started_at\": 1776247200, \"reason\": \"manual start without a duration (the device timer decides how long it runs)\"}",
+     "severity": "warning",
      "source": "leak",
      "timestamp": 1776247200
     }

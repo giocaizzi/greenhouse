@@ -27,7 +27,12 @@ from greenhouse_core.models import (
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.services.caps import daily_cap_violation
 from greenhouse_server.services.irrigation import schedule_pump_watcher
-from greenhouse_server.services.irrigation_jobs import _schedule_leak_check, record_leak_check_armed
+from greenhouse_server.services.irrigation_jobs import (
+    _schedule_leak_check,
+    leak_check_after_seconds,
+    record_leak_check_armed,
+    record_leak_check_skipped,
+)
 from greenhouse_server.services.notify import NtfyClient, maybe_notify
 
 if TYPE_CHECKING:
@@ -111,6 +116,34 @@ def _refuse_if_dry_run(repo: IrrigationRepository, irrigator: Irrigator, minutes
     raise ManualActionError(409, DRY_RUN_REFUSED_DETAIL)
 
 
+def _record_leak_check_plan(
+    repo: IrrigationRepository, irrigator: Irrigator, started_at: int, minutes: int | None
+) -> int | None:
+    """Arm (or say why not) the post-watering leak check of a manual start; the caller commits.
+
+    A manual start is a real watering, so it gets the check like any start — due when the run has
+    ended plus the settle time (:func:`leak_check_after_seconds`). The ``leak_check_armed`` marker,
+    committed with the event, is what the restart re-arm finds (a hand log has none). Without a
+    duration the device timer decides how long the pump runs, and no device exposes its maximum
+    run bound, so there is no safe time to judge the soil: the check is skipped and the activity
+    log says why.
+
+    Returns:
+        Seconds after the start when the check runs, or None when it is skipped.
+    """
+    if not minutes:
+        record_leak_check_skipped(
+            repo,
+            irrigator.cluster_id,
+            started_at,
+            reason="manual start without a duration (the device timer decides how long it runs)",
+        )
+        return None
+    after_seconds = leak_check_after_seconds(minutes)
+    record_leak_check_armed(repo, irrigator, started_at, triggered_by=TRIGGERED_BY_MANUAL, after_seconds=after_seconds)
+    return after_seconds
+
+
 def manual_start(
     repo: IrrigationRepository,
     registry: DeviceRegistry | None,
@@ -123,8 +156,9 @@ def manual_start(
     """Start ``irrigator`` by hand, with every manual-start safety rail.
 
     Order: registry → caps check → adapter → global dry-run refusal → device start → ``start`` event
-    and ``leak_check_armed`` marker (committed) → 30-min leak check → dry-run watcher (only with a
-    duration — it needs a deadline) → notification. A
+    and the leak-check marker (committed) → leak check (due after the run plus settle time; skipped
+    without a duration) → dry-run watcher (only with a duration — it needs a deadline) →
+    notification. A
     failed device start records nothing, matching the JSON API. Commits because
     the ``start`` event must be durable before the side effects that follow it
     (the watcher job, which runs in its own session, and the notification).
@@ -162,13 +196,10 @@ def manual_start(
         notes=f"Manual start via {via} ({minutes} min)" if minutes else f"Manual start via {via}",
         timestamp=started_at,
     )
-    # A real watering, so it gets the post-watering leak check like any start; the marker
-    # (committed with the event) is what the restart re-arm finds — a hand log has none.
-    record_leak_check_armed(
-        repo, irrigator.cluster_id, started_at, irrigator_id=irrigator.id, triggered_by=TRIGGERED_BY_MANUAL
-    )
+    leak_check_after = _record_leak_check_plan(repo, irrigator, started_at, minutes)
     repo.commit()
-    _schedule_leak_check(irrigator.cluster_id, started_at)
+    if leak_check_after is not None:
+        _schedule_leak_check(irrigator.cluster_id, started_at, after_seconds=leak_check_after)
     if minutes:
         schedule_pump_watcher(irrigator.id, minutes, started_at, triggered_by=TRIGGERED_BY_MANUAL)
     maybe_notify(

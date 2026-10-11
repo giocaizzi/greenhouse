@@ -615,9 +615,7 @@ class IrrigationService:
         if act.decision.decision_log_id is not None:
             self._repo.set_decision_actuated(act.decision.decision_log_id)
         if act.triggered_by != TRIGGERED_BY_AUTO:
-            record_leak_check_armed(
-                self._repo, act.cluster_id, started_at, irrigator_id=act.irrigator.id, triggered_by=act.triggered_by
-            )
+            record_leak_check_armed(self._repo, act.irrigator, started_at, triggered_by=act.triggered_by)
         self._repo.commit()
 
     @staticmethod

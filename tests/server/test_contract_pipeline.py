@@ -975,9 +975,10 @@ def test_forced_run_is_recorded_manual_and_keeps_leak_check_and_watcher(pipeline
 
 
 def test_manual_start_schedules_watcher_and_leak_check(pipeline):
-    """Every manual start is a real watering: it gets the 30-min leak check (owner decision).
+    """Every manual start with a duration is a real watering: it gets the leak check (owner decision).
 
-    The dry-run watcher still needs a duration (a deadline); the hand-watering log arms nothing.
+    A short run keeps the 30-min check; without a duration (the device timer decides) the check
+    is skipped and the activity log says why; the hand-watering log arms nothing.
     """
     from greenhouse_server.scheduler import scheduler as bg_scheduler
     from greenhouse_server.scheduler import start_scheduler, stop_scheduler
@@ -991,13 +992,46 @@ def test_manual_start_schedules_watcher_and_leak_check(pipeline):
         with time_machine.travel(FROZEN_INSTANT + timedelta(minutes=1), tick=False):
             pipeline.call("POST", f"/api/v1/irrigators/{ids['irrigator_id']}/start", {})
             pipeline.call("POST", f"/api/v1/irrigators/{ids['irrigator_id']}/log-manual", {"minutes": 2})
-        adhoc = sorted(j.id for j in bg_scheduler.get_jobs() if j.id.startswith(("leak-check-", "pump-watcher-")))
+        jobs = {
+            j.id: (str(j.trigger), list(j.args))
+            for j in bg_scheduler.get_jobs()
+            if j.id.startswith(("leak-check-", "pump-watcher-"))
+        }
     finally:
         stop_scheduler()
-    later = FROZEN_TS + 60
-    assert adhoc == [f"leak-check-1-{FROZEN_TS}", f"leak-check-1-{later}", f"pump-watcher-1-{FROZEN_TS}"]
-    markers = [a for a in pipeline.db_rows()["activity_events"] if a["code"] == "leak_check_armed"]
-    assert [m["payload_json"]["started_at"] for m in markers] == [FROZEN_TS, later]
+    assert jobs == {
+        f"leak-check-1-{FROZEN_TS}": ("date[2026-04-15 10:30:00 UTC]", [1, FROZEN_TS]),
+        f"pump-watcher-1-{FROZEN_TS}": ("date[2026-04-15 10:00:00 UTC]", []),
+    }
+    leak_rows = [a for a in pipeline.db_rows()["activity_events"] if a["source"] == "leak"]
+    assert [(a["code"], a["payload_json"]["started_at"]) for a in leak_rows] == [
+        ("leak_check_armed", FROZEN_TS),
+        ("leak_check_skipped", FROZEN_TS + 60),
+    ]
+    assert leak_rows[1]["message"] == (
+        "post-watering leak check skipped: manual start without a duration (the device timer decides how long it runs)"
+    )
+
+
+def test_long_manual_start_checks_for_a_leak_after_the_run_has_settled(pipeline):
+    """A long manual run's check is due at start + minutes + settle time, and observes that whole window."""
+    from greenhouse_core.constants import LEAK_CHECK_SETTLE_SECONDS
+    from greenhouse_server.scheduler import scheduler as bg_scheduler
+    from greenhouse_server.scheduler import start_scheduler, stop_scheduler
+
+    ids = pipeline.seed_cluster(soil=35.0)
+    pipeline.app.state.device_registry = pipeline.wiring.registry
+    pipeline.mark()
+    start_scheduler(paused=True)
+    try:
+        pipeline.call("POST", f"/api/v1/irrigators/{ids['irrigator_id']}/start", {"minutes": 60})
+        job = bg_scheduler.get_job(f"leak-check-1-{FROZEN_TS}")
+        after = 60 * 60 + LEAK_CHECK_SETTLE_SECONDS
+        assert (job.next_run_time.timestamp(), list(job.args)) == (FROZEN_TS + after, [1, FROZEN_TS, after])
+    finally:
+        stop_scheduler()
+    (marker,) = [a for a in pipeline.db_rows()["activity_events"] if a["code"] == "leak_check_armed"]
+    assert marker["payload_json"]["check_after_seconds"] == after
 
 
 # ── Observed bugs (pinned, NOT fixed) ──────────────────────────────────────

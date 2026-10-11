@@ -357,3 +357,25 @@ class TestPerSensorScoping:
 
         assert len(alerts) == 1
         assert alerts[0].entity_id == sensor_id
+
+
+class TestLongRunWindow:
+    """A long manual run is judged over its run plus the settle time, not over the first 30 min."""
+
+    def test_wider_window_sees_the_soil_settle_after_a_long_run(self, repo, plant_db, seeded):
+        cluster_id, sensor_id, _irrigator_id = seeded
+        started_at = int(time.time()) - 6000
+        for i, value in enumerate((35.0, 35.0, 36.0)):
+            repo.add_sensor_reading(sensor_id, timestamp=started_at - 600 - i * 1800, soil_moisture=value)
+        # Still climbing for the first 30 min of a 60-min run …
+        for i, value in enumerate((45.0, 55.0, 65.0, 70.0)):
+            repo.add_sensor_reading(sensor_id, timestamp=started_at + 300 + i * 400, soil_moisture=value)
+        # … then settling once the run has ended.
+        for i, value in enumerate((67.0, 65.0, 64.0)):
+            repo.add_sensor_reading(sensor_id, timestamp=started_at + 3900 + i * 400, soil_moisture=value)
+        repo.session.commit()
+
+        assert LeakDetectionService(repo, plant_db).check_after_irrigation(cluster_id, started_at) != []
+        repo.session.rollback()
+        wide = LeakDetectionService(repo, plant_db, after_window_seconds=3600 + 1500)
+        assert wide.check_after_irrigation(cluster_id, started_at) == []

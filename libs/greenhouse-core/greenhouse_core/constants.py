@@ -154,6 +154,10 @@ CLEANING_MAD_FLOOR = 1.0  # min sigma (%) so a flat run isn't hyper-sensitive to
 # on thin data rather than guess (issue #103).
 LEAK_ALERT_CODE = "leak_or_stuck_valve"
 LEAK_CHECK_DELAY_SECONDS = 1800  # run the check 30 min after the start event
+# A manual start can run far longer than an automatic one, so its check waits until the run has
+# ended plus this settle time (and never earlier than LEAK_CHECK_DELAY_SECONDS): 25 min, the
+# settling an automatic run of MAX_DURATION_MINUTES (5) gets before its 30-min check.
+LEAK_CHECK_SETTLE_SECONDS = 1500
 
 # Baseline window BEFORE the start event. Sized well above the sync cadence
 # (IRRIGATION_SYNC_INTERVAL_MINUTES, default 3h) because sensor rows land in
@@ -259,6 +263,7 @@ DEFAULT_SEASON_MULTIPLIER_OUTDOOR = {
 
 # ── Time units ───────────────────────────────────────────────────────────────
 
+SECONDS_PER_MINUTE = 60
 SECONDS_PER_HOUR = 3600
 SECONDS_PER_DAY = 86400
 

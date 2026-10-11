@@ -98,17 +98,16 @@
     "timestamp": 1776247200
    },
    {
-    "code": "leak_check_armed",
+    "code": "leak_check_skipped",
     "entity_id": 1,
     "entity_type": "cluster",
     "id": 2,
-    "message": "post-watering leak check armed (manual start)",
+    "message": "post-watering leak check skipped: manual start without a duration (the device timer decides how long it runs)",
     "payload_json": {
-     "irrigator_id": 1,
-     "started_at": 1776247200,
-     "triggered_by": "manual"
+     "reason": "manual start without a duration (the device timer decides how long it runs)",
+     "started_at": 1776247200
     },
-    "severity": "info",
+    "severity": "warning",
     "source": "leak",
     "timestamp": 1776247200
    },

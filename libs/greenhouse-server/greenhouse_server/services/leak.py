@@ -66,10 +66,23 @@ logger = logging.getLogger(__name__)
 class LeakDetectionService:
     """Post-irrigation leak and stuck-valve detector."""
 
-    def __init__(self, repo: IrrigationRepository, plant_db: PlantDatabase, notifier: NtfyClient | None = None):
+    def __init__(
+        self,
+        repo: IrrigationRepository,
+        plant_db: PlantDatabase,
+        notifier: NtfyClient | None = None,
+        *,
+        after_window_seconds: int = LEAK_AFTER_WINDOW_SECONDS,
+    ):
+        """Build a detector; ``after_window_seconds`` is how long after the start it observes.
+
+        A long manual run passes its run length plus the settle time, so the window ends after
+        the soil had time to settle instead of while water is still flowing.
+        """
         self._repo = repo
         self._plant_db = plant_db
         self._notifier = notifier
+        self._after_window_seconds = max(LEAK_AFTER_WINDOW_SECONDS, after_window_seconds)
 
     def check_after_irrigation(self, cluster_id: int, started_at: int) -> list[Alert]:
         """Raise critical alerts when a sensor shows signs of a leak or stuck valve.
@@ -186,7 +199,7 @@ class LeakDetectionService:
             sensor.id,
             started_at,
             before_seconds=LEAK_BEFORE_WINDOW_SECONDS,
-            after_seconds=LEAK_AFTER_WINDOW_SECONDS,
+            after_seconds=self._after_window_seconds,
         )
         before_readings, after_readings = clean_readings_around(before_rows, after_rows)
 

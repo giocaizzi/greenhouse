@@ -100,12 +100,31 @@ class TestRearm:
         _start(app, iid, now - 900, triggered_by="manual")  # hand log: no marker
         session = app.state.session_factory()
         try:
-            record_leak_check_armed(IrrigationRepository(session), cid, forced, irrigator_id=iid, triggered_by="manual")
+            repo = IrrigationRepository(session)
+            record_leak_check_armed(repo, repo.get_irrigator(iid), forced, triggered_by="manual")
             session.commit()
         finally:
             session.close()
         assert irrigation_mod.rearm_leak_checks() == 1
         assert set(_leak_jobs()) == {f"leak-check-{cid}-{forced}"}
+
+    def test_long_manual_start_is_rearmed_with_its_own_window(self, app, running_scheduler):
+        """The marker's ``check_after_seconds`` survives a restart: due time and job args keep the window."""
+        from greenhouse_server.services.irrigation_jobs import record_leak_check_armed
+
+        cid, iid = _seed(app)
+        started = _start(app, iid, int(time.time()) - 600, triggered_by="manual")
+        session = app.state.session_factory()
+        try:
+            repo = IrrigationRepository(session)
+            record_leak_check_armed(repo, repo.get_irrigator(iid), started, triggered_by="manual", after_seconds=5100)
+            session.commit()
+        finally:
+            session.close()
+        assert irrigation_mod.rearm_leak_checks() == 1
+        job = _leak_jobs()[f"leak-check-{cid}-{started}"]
+        assert list(job.args) == [cid, started, 5100]
+        assert job.next_run_time.timestamp() == pytest.approx(started + 5100, abs=1)
 
     def test_completed_check_is_not_rearmed(self, app, running_scheduler, check_calls):
         cid, iid = _seed(app)
