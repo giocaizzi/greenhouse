@@ -57,6 +57,7 @@ def _sync_lines(caplog) -> list[tuple[str, str]]:
     return [(r.levelname, r.getMessage()) for r in caplog.records if r.name == "greenhouse_core.sync"]
 
 
+@pytest.mark.usefixtures("frozen_clock")
 @pytest.mark.parametrize(
     ("n_logs", "live", "summary"),
     [
@@ -67,9 +68,8 @@ def _sync_lines(caplog) -> list[tuple[str, str]]:
         (0, {}, "up to date"),
     ],
 )
-def test_per_sensor_summary_line(tmp_db, frozen_clock, caplog, n_logs, live, summary):
+def test_per_sensor_summary_line(tmp_db, caplog, n_logs, live, summary):
     """Each sensor's sync summary line reports new log rows and the live read exactly."""
-    del frozen_clock  # side-effect fixture (the clock is frozen)
     cluster_id = tmp_db.add_cluster("Bench")
     tmp_db.add_sensor(
         cluster_id=cluster_id, tuya_device_id="dev_p", name="Probe", sensor_type="soil_moisture", config={}

@@ -83,6 +83,28 @@ def _thread_recording_factory(http, calls: list[tuple[str, int]]):
     return factory
 
 
+async def _tour_every_screen(pilot, tui) -> None:
+    """Visit every top-level screen, two cluster tabs, a confirmed plant-DB sync and a search."""
+    await settle(pilot, tui)
+    for key in ("a", "l", "s", "o", "d"):
+        await pilot.press(key)
+        await settle(pilot, tui)
+    await tui.push_screen(ClusterScreen(1))
+    await settle(pilot, tui)
+    for tab in ("tab-insights", "tab-plants"):
+        tui.screen.query_one("TabbedContent").active = tab
+        await settle(pilot, tui)
+    await pilot.press("P")
+    await settle(pilot, tui)
+    await pilot.press("y")  # the plant-DB sync asks for confirmation
+    await settle(pilot, tui)
+    await pilot.press("escape")
+    await pilot.press("slash")
+    await pilot.press(*"fern")
+    await pilot.pause(0.4)
+    await settle(pilot, tui)
+
+
 def test_client_calls_run_off_the_event_loop_thread(seeded):
     """G13: every IrrigationClient method call made while touring all screens ran in a worker thread."""
     http, _ = seeded
@@ -93,24 +115,7 @@ def test_client_calls_run_off_the_event_loop_thread(seeded):
         loop_thread.append(threading.get_ident())
         tui = make_tui(http, factory=_thread_recording_factory(http, calls))
         async with tui.run_test(size=SIZE) as pilot:
-            await settle(pilot, tui)
-            for key in ("a", "l", "s", "o", "d"):
-                await pilot.press(key)
-                await settle(pilot, tui)
-            await tui.push_screen(ClusterScreen(1))
-            await settle(pilot, tui)
-            for tab in ("tab-insights", "tab-plants"):
-                tui.screen.query_one("TabbedContent").active = tab
-                await settle(pilot, tui)
-            await pilot.press("P")
-            await settle(pilot, tui)
-            await pilot.press("y")  # the plant-DB sync asks for confirmation
-            await settle(pilot, tui)
-            await pilot.press("escape")
-            await pilot.press("slash")
-            await pilot.press(*"fern")
-            await pilot.pause(0.4)
-            await settle(pilot, tui)
+            await _tour_every_screen(pilot, tui)
 
     _run(scenario())
     methods = {name for name, _ in calls}
@@ -137,6 +142,23 @@ async def _open_auto_refreshing(pilot, tui, key: str, screen_type: type) -> None
     await wait_until(lambda: isinstance(tui.screen, screen_type), f"`{key}` to switch to {screen_type.__name__}")
 
 
+def _insert_offline_alert(http, engine) -> None:
+    """Open a new alert server-side, serialized with the app's requests like the TUI's own."""
+    with _app_locks[id(http)], Session(engine) as session:
+        IrrigationRepository(session).upsert_alert(
+            "health:sensor:4",
+            "health",
+            "sensor_offline",
+            "Echeveria probe offline",
+            "No reading for 6h.",
+            severity="critical",
+            entity_type="sensor",
+            entity_id=4,
+            cluster_id=3,
+        )
+        session.commit()
+
+
 def test_alerts_cursor_stays_on_record_across_auto_refresh(seeded):
     """G14: row k selected, a new alert appears server-side, the screen's timer reloads → same alert selected."""
     http, engine = seeded
@@ -152,19 +174,7 @@ def test_alerts_cursor_stays_on_record_across_auto_refresh(seeded):
             table.move_cursor(row=1)
             chosen = selected_key(table)
             keys_before = [table.coordinate_to_cell_key((i, 0))[0].value for i in range(table.row_count)]
-            with _app_locks[id(http)], Session(engine) as session:
-                IrrigationRepository(session).upsert_alert(
-                    "health:sensor:4",
-                    "health",
-                    "sensor_offline",
-                    "Echeveria probe offline",
-                    "No reading for 6h.",
-                    severity="critical",
-                    entity_type="sensor",
-                    entity_id=4,
-                    cluster_id=3,
-                )
-                session.commit()
+            _insert_offline_alert(http, engine)
             await wait_until(
                 lambda: table.row_count == SEEDED_OPEN_ALERTS + 1, "an auto-refresh showing the inserted alert"
             )
@@ -253,15 +263,9 @@ def test_activity_cursor_stays_on_the_selected_event_across_refresh(seeded):
 # ── 401 → in-app sign-in ────────────────────────────────────────────────────
 
 
-def test_401_opens_one_sign_in_dialog_then_logs_in(clean_env, frozen_clock):
-    """Concurrent 401s on startup open exactly one LoginScreen and raise no error toast.
-
-    Signing in posts the credentials verbatim, stores the token, toasts and reloads the dashboard.
-    """
-    del frozen_clock  # side-effect fixture (the clock is frozen)
-    application, engine = _make_stubbed_app(bypass_auth=False)
+def _authenticating_factory(application, log: list):
+    """Client factory on the real (auth-enforcing) app that sends the token and records every request."""
     lock = threading.Lock()
-    log: list = []
 
     def factory(token):
         client = IrrigationClient(base_url=SERVER_URL, token=token or "")
@@ -278,20 +282,42 @@ def test_401_opens_one_sign_in_dialog_then_logs_in(clean_env, frozen_clock):
         client.http.request = serialized
         return client
 
+    return factory
+
+
+async def _sign_in_as_admin(pilot, tui) -> None:
+    """Fill the sign-in dialog with the test admin and submit it."""
+    tui.screen.query_one("#username").value = TEST_ADMIN_USERNAME
+    tui.screen.query_one("#password").value = TEST_ADMIN_PASSWORD
+    await pilot.click("#login")
+    await settle(pilot, tui)
+
+
+def _assert_one_quiet_sign_in_prompt(tui, toasts: list, log: list) -> None:
+    """Exactly one LoginScreen is up, nothing was toasted, and only the two startup reads were sent."""
+    assert isinstance(tui.screen, LoginScreen)
+    assert sum(isinstance(s, LoginScreen) for s in tui.screen_stack) == 1
+    assert toasts == []
+    startup = sorted({p for m, p, _, _ in log})
+    assert startup == ["/api/v1/clusters", "/api/v1/health/system"]
+
+
+def test_401_opens_one_sign_in_dialog_then_logs_in(clean_env, frozen_clock):
+    """Concurrent 401s on startup open exactly one LoginScreen and raise no error toast.
+
+    Signing in posts the credentials verbatim, stores the token, toasts and reloads the dashboard.
+    """
+    del frozen_clock  # side-effect fixture (the clock is frozen)
+    application, engine = _make_stubbed_app(bypass_auth=False)
+    log: list = []
+
     async def scenario():
-        tui = make_tui(None, factory=factory)
+        tui = make_tui(None, factory=_authenticating_factory(application, log))
         toasts = _record_toasts(tui)
         async with tui.run_test(size=SIZE) as pilot:
             await settle(pilot, tui)
-            assert isinstance(tui.screen, LoginScreen)
-            assert sum(isinstance(s, LoginScreen) for s in tui.screen_stack) == 1
-            assert toasts == []
-            startup = sorted({p for m, p, _, _ in log})
-            assert startup == ["/api/v1/clusters", "/api/v1/health/system"]
-            tui.screen.query_one("#username").value = TEST_ADMIN_USERNAME
-            tui.screen.query_one("#password").value = TEST_ADMIN_PASSWORD
-            await pilot.click("#login")
-            await settle(pilot, tui)
+            _assert_one_quiet_sign_in_prompt(tui, toasts, log)
+            await _sign_in_as_admin(pilot, tui)
             assert writes(log) == [
                 ("POST", "/api/v1/auth/login", {"username": TEST_ADMIN_USERNAME, "password": TEST_ADMIN_PASSWORD})
             ]

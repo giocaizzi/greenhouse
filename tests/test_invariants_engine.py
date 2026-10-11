@@ -313,50 +313,87 @@ def _log_rows(db):
     return list(db.session.scalars(select(DecisionLog).order_by(DecisionLog.id)))
 
 
+def _scenario_no_plants(db):
+    return db.add_cluster("Empty"), _logic(db), {}
+
+
+def _scenario_leak_hold(db):
+    cid, _, _ = _cluster(db)
+    _raise_leak(db, cid)
+    return cid, _logic(db), {}
+
+
+def _scenario_cooldown(db):
+    cid, irr, _ = _cluster(db)
+    db.add_irrigation_event(irr, "start", "auto", duration_minutes=2, timestamp=FROZEN_TS - HOUR)
+    return cid, _logic(db), {}
+
+
+def _scenario_quiet_hours(db):
+    cid, _, _ = _cluster(db)
+    db.update_global_irrigation_config(quiet_start_hour=9, quiet_end_hour=11)
+    return cid, _logic(db), {}
+
+
+def _scenario_weather_skip(db):
+    cid, _, _ = _cluster(db, environment="outdoor")
+    return cid, _logic(db, weather_client=FakeForecastWeather({"precipitation_mm": 9.0})), {}
+
+
+def _scenario_temp_fallback(db):
+    cid = db.add_cluster("No sensors")
+    db.add_plant(cluster_id=cid, species="Monstera deliciosa", category="tropical")
+    return cid, _logic(db), {"current_temp": 30.0}
+
+
+def _scenario_water_warning(db):
+    cid, _, _ = _cluster(db, soils=())
+    sid = db.add_sensor(cluster_id=cid, tuya_device_id="fake_tuya_sensor_invww", name="WW", sensor_type="x", config={})
+    db.add_sensor_reading(sensor_id=sid, timestamp=FROZEN_TS - 600, soil_moisture=50.0, water_warning=True)
+    return cid, _logic(db), {}
+
+
+def _scenario_water_stress(db):
+    cid, _, _ = _cluster(db, soils=(20.0,))
+    return cid, _logic(db), {}
+
+
+def _scenario_outside_window(db):
+    cid, _, _ = _cluster(db)
+    db.add_irrigation_window(cid, start_hour=6, end_hour=8)
+    return cid, _logic(db), {}
+
+
+def _scenario_sensor_dry(db):
+    cid, _, _ = _cluster(db)
+    return cid, _logic(db), {}
+
+
+def _scenario_sensor_adequate(db):
+    cid, _, _ = _cluster(db, soils=(55.0,))
+    return cid, _logic(db), {}
+
+
+_SCENARIOS = {
+    "no_plants": _scenario_no_plants,
+    "leak_hold": _scenario_leak_hold,
+    "cooldown": _scenario_cooldown,
+    "quiet_hours": _scenario_quiet_hours,
+    "weather_skip": _scenario_weather_skip,
+    "temp_fallback": _scenario_temp_fallback,
+    "water_warning": _scenario_water_warning,
+    "water_stress": _scenario_water_stress,
+    "outside_window": _scenario_outside_window,
+    "sensor_dry": _scenario_sensor_dry,
+    "sensor_adequate": _scenario_sensor_adequate,
+}
+
+
 def _scenario(db, name):
     """Build one cluster per engine exit branch; returns ``(cluster_id, logic, kwargs)``."""
-    if name == "no_plants":
-        return db.add_cluster("Empty"), _logic(db), {}
-    if name == "leak_hold":
-        cid, _, _ = _cluster(db)
-        _raise_leak(db, cid)
-        return cid, _logic(db), {}
-    if name == "cooldown":
-        cid, irr, _ = _cluster(db)
-        db.add_irrigation_event(irr, "start", "auto", duration_minutes=2, timestamp=FROZEN_TS - HOUR)
-        return cid, _logic(db), {}
-    if name == "quiet_hours":
-        cid, _, _ = _cluster(db)
-        db.update_global_irrigation_config(quiet_start_hour=9, quiet_end_hour=11)
-        return cid, _logic(db), {}
-    if name == "weather_skip":
-        cid, _, _ = _cluster(db, environment="outdoor")
-        return cid, _logic(db, weather_client=FakeForecastWeather({"precipitation_mm": 9.0})), {}
-    if name == "temp_fallback":
-        cid = db.add_cluster("No sensors")
-        db.add_plant(cluster_id=cid, species="Monstera deliciosa", category="tropical")
-        return cid, _logic(db), {"current_temp": 30.0}
-    if name == "water_warning":
-        cid, _, _ = _cluster(db, soils=())
-        sid = db.add_sensor(
-            cluster_id=cid, tuya_device_id="fake_tuya_sensor_invww", name="WW", sensor_type="x", config={}
-        )
-        db.add_sensor_reading(sensor_id=sid, timestamp=FROZEN_TS - 600, soil_moisture=50.0, water_warning=True)
-        return cid, _logic(db), {}
-    if name == "water_stress":
-        cid, _, _ = _cluster(db, soils=(20.0,))
-        return cid, _logic(db), {}
-    if name == "outside_window":
-        cid, _, _ = _cluster(db)
-        db.add_irrigation_window(cid, start_hour=6, end_hour=8)
-        return cid, _logic(db), {}
-    if name == "sensor_dry":
-        cid, _, _ = _cluster(db)
-        return cid, _logic(db), {}
-    if name == "sensor_adequate":
-        cid, _, _ = _cluster(db, soils=(55.0,))
-        return cid, _logic(db), {}
-    raise ValueError(name)
+    if name not in _SCENARIOS:
+        raise ValueError(name)
+    return _SCENARIOS[name](db)
 
 
 EXIT_BRANCHES = [
@@ -478,7 +515,7 @@ def test_inv6_reasons_stay_a_list_of_reason_through_the_whole_pipeline(env):
         ("Plantus fictitius", None, "indoor", 1, "winter multiplier 0.5\u00d7"),
     ],
 )
-def test_inv9_seasonal_multiplier_precedence_species_category_constants(
+def test_inv9_seasonal_multiplier_precedence_species_category_constants(  # noqa: PLR0913 — one argument per parametrize column
     tmp_db, clean_env, species, category, environment, at_month, expected
 ):
     """Invariant #9: species > ``_category_defaults`` > constants; outdoor uses ``*_outdoor`` (no indoor fallback)."""

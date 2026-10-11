@@ -609,6 +609,19 @@ class TestOtherScreens:
         _run(scenario())
 
 
+def _token_client_factory(application):
+    """Client factory on the auth-enforcing app that sends the stored token, if any."""
+
+    def factory(token):
+        client = IrrigationClient(base_url="http://testserver", token=token or "")
+        client.http = TestClient(application, raise_server_exceptions=False)
+        if token:
+            client.http.headers["Authorization"] = f"Bearer {token}"
+        return client
+
+    return factory
+
+
 class TestLogin:
     """Login flow when the server requires authentication."""
 
@@ -617,15 +630,10 @@ class TestLogin:
         application, engine = _make_stubbed_app(bypass_auth=False)
         http = TestClient(application, raise_server_exceptions=False)
 
-        def factory(token):
-            client = IrrigationClient(base_url="http://testserver", token=token or "")
-            client.http = TestClient(application, raise_server_exceptions=False)
-            if token:
-                client.http.headers["Authorization"] = f"Bearer {token}"
-            return client
-
         async def scenario():
-            tui = GreenhouseApp("http://testserver", client_factory=factory, refresh_seconds=0)
+            tui = GreenhouseApp(
+                "http://testserver", client_factory=_token_client_factory(application), refresh_seconds=0
+            )
             async with tui.run_test(size=SIZE) as pilot:
                 await _settle(pilot, tui)
                 assert isinstance(tui.screen, LoginScreen)
@@ -700,6 +708,17 @@ def test_tui_reaches_every_client_capability():
     public = [n for n, _ in inspect.getmembers(IrrigationClient, inspect.isfunction) if not n.startswith("_")]
     missing = [n for n in public if n not in REDUNDANT_READS and not re.search(rf"\.{n}\b", src)]
     assert not missing, f"IrrigationClient methods with no TUI entry point: {missing}"
+
+
+async def _add_ficus(pilot, tui, http) -> dict:
+    """Add a Ficus through the plants tab's new-plant form; return it as the API lists it."""
+    await pilot.press("n")
+    await pilot.pause()
+    await _submit_form(pilot, tui, species="Ficus lyrata", category="tropical", water_needs="medium")
+    plants = http.get("/api/v1/clusters/1/plants").json()
+    ficus = next(p for p in plants if p["species"] == "Ficus lyrata")
+    assert ficus["category"] == "tropical"
+    return ficus
 
 
 def _fill(screen, **values) -> None:
@@ -828,13 +847,7 @@ class TestClusterCrud:
         http, _ = greenhouse
 
         async def body(pilot, tui, screen):
-            await pilot.press("n")
-            await pilot.pause()
-            await _submit_form(pilot, tui, species="Ficus lyrata", category="tropical", water_needs="medium")
-            plants = http.get("/api/v1/clusters/1/plants").json()
-            ficus = next(p for p in plants if p["species"] == "Ficus lyrata")
-            assert ficus["category"] == "tropical"
-
+            ficus = await _add_ficus(pilot, tui, http)
             table = screen.query_one("#plants-table", DataTable)
             table.move_cursor(row=table.get_row_index(str(ficus["id"])))
             await pilot.press("u")
@@ -1030,6 +1043,42 @@ class TestClusterCrud:
         self._open(http, 1, body, tab="tab-charts")
 
 
+async def _edit_preferences_and_global_config(pilot, tui, http) -> None:
+    """Edit the preferences (``p``) and the global config (``g``) from the settings screen."""
+    await pilot.press("p")
+    await pilot.pause()
+    await _submit_form(pilot, tui, timezone="Europe/Rome", dry_run_global=True)
+    prefs = http.get("/api/v1/preferences").json()
+    assert prefs["timezone"] == "Europe/Rome"
+    assert prefs["dry_run_global"] is True
+
+    await pilot.press("g")
+    await pilot.pause()
+    await _submit_form(pilot, tui, interval_hours="18")
+    assert http.get("/api/v1/config/global").json()["interval_hours"] == EDITED_GLOBAL_INTERVAL_HOURS
+
+
+async def _vacation_add_edit_delete(pilot, tui, http) -> None:
+    """Add, edit and delete a vacation window from the settings screen."""
+    await pilot.press("n")
+    await pilot.pause()
+    await _submit_form(pilot, tui, starts_at="2030-07-01 08:00", ends_at="2030-07-15 20:00", notes="sea")
+    items = http.get("/api/v1/vacation").json()["items"]
+    assert [v["notes"] for v in items] == ["sea"]
+    table = tui.screen.query_one("#vacation-table", DataTable)
+    assert table.row_count == 1
+
+    await pilot.press("u")
+    await pilot.pause()
+    await _submit_form(pilot, tui, contact_email="neighbour@example.com")
+    assert http.get("/api/v1/vacation").json()["items"][0]["contact_email"] == "neighbour@example.com"
+
+    await pilot.press("delete")
+    await pilot.pause()
+    await _confirm(pilot, tui)
+    assert http.get("/api/v1/vacation").json()["items"] == []
+
+
 class TestSettingsScreen:
     """Settings screen: preferences, global config, vacation and account."""
 
@@ -1044,36 +1093,8 @@ class TestSettingsScreen:
                 await _settle(pilot, tui)
                 assert isinstance(tui.screen, SettingsScreen)
                 assert "test-admin" in _text(tui.screen.query_one("#account"))
-
-                await pilot.press("p")
-                await pilot.pause()
-                await _submit_form(pilot, tui, timezone="Europe/Rome", dry_run_global=True)
-                prefs = http.get("/api/v1/preferences").json()
-                assert prefs["timezone"] == "Europe/Rome"
-                assert prefs["dry_run_global"] is True
-
-                await pilot.press("g")
-                await pilot.pause()
-                await _submit_form(pilot, tui, interval_hours="18")
-                assert http.get("/api/v1/config/global").json()["interval_hours"] == EDITED_GLOBAL_INTERVAL_HOURS
-
-                await pilot.press("n")
-                await pilot.pause()
-                await _submit_form(pilot, tui, starts_at="2030-07-01 08:00", ends_at="2030-07-15 20:00", notes="sea")
-                items = http.get("/api/v1/vacation").json()["items"]
-                assert [v["notes"] for v in items] == ["sea"]
-                table = tui.screen.query_one("#vacation-table", DataTable)
-                assert table.row_count == 1
-
-                await pilot.press("u")
-                await pilot.pause()
-                await _submit_form(pilot, tui, contact_email="neighbour@example.com")
-                assert http.get("/api/v1/vacation").json()["items"][0]["contact_email"] == "neighbour@example.com"
-
-                await pilot.press("delete")
-                await pilot.pause()
-                await _confirm(pilot, tui)
-                assert http.get("/api/v1/vacation").json()["items"] == []
+                await _edit_preferences_and_global_config(pilot, tui, http)
+                await _vacation_add_edit_delete(pilot, tui, http)
 
         _run(scenario())
 
@@ -1094,6 +1115,50 @@ class TestSettingsScreen:
 
         _run(scenario())
         assert not token_path.exists()
+
+
+async def _pause_then_resume_scheduler(pilot, tui, http) -> None:
+    """Pause the scheduler from the system screen, then resume it; both ask for confirmation."""
+    screen = tui.screen
+    await pilot.press("p")
+    await pilot.pause()
+    await _confirm(pilot, tui)
+    assert http.get("/api/v1/preferences").json()["scheduler_paused"] is True
+    assert screen.paused is True
+    await pilot.press("p")  # resume asks too: automatic irrigation restarts
+    await pilot.pause()
+    await _confirm(pilot, tui)
+    assert http.get("/api/v1/preferences").json()["scheduler_paused"] is False
+
+
+# The scheduler's job list as the mock server serves it: a built-in job listed twice, and one ad-hoc job.
+_SCHEDULER_JOBS = [
+    {
+        "id": "sensor_sync",
+        "name": "Sensor data sync",
+        "trigger": "interval",
+        "next_run_time": None,
+        "core": True,
+    },
+    {
+        "id": "sensor_sync",
+        "name": "Sensor data sync",
+        "trigger": "interval",
+        "next_run_time": None,
+        "core": True,
+    },
+    {"id": "pump_watch_3", "name": "Pump watcher", "trigger": "date", "next_run_time": None, "core": False},
+]
+
+
+async def _delete_builtin_job_is_refused(pilot, tui, table, seen: list) -> None:
+    """``delete`` on a built-in job is refused client-side: no dialog, no request, an explanatory toast."""
+    table.move_cursor(row=table.get_row_index("sensor_sync"))
+    await pilot.press("delete")
+    await pilot.pause()
+    assert not isinstance(tui.screen, ConfirmScreen)
+    assert not [r for r in seen if r[0] == "DELETE"]
+    assert any("built-in job" in n.message for n in tui._notifications)  # noqa: SLF001 — Textual keeps shown toasts only in App._notifications
 
 
 class TestSearchAndSystem:
@@ -1130,19 +1195,11 @@ class TestSearchAndSystem:
             "lo": [{"entity_type": "plant", "label": "L" * 60, "sublabel": "D" * 40, "href": "/clusters/1"}],
             "lon": [{"entity_type": "plant", "label": "Fern", "sublabel": "", "href": "/clusters/1"}],
         }
-        base = tui_client_factory(http)
-
-        def fake_search(query, limit=20):
-            del limit  # the screen passes ``limit=``; the canned hits ignore it
-            return {"hits": hits.get(query, [])}
-
-        def factory(token):
-            client = base(token)
-            client.search = fake_search
-            return client
 
         async def scenario():
-            tui = GreenhouseApp("http://testserver", client_factory=factory, refresh_seconds=0)
+            tui = GreenhouseApp(
+                "http://testserver", client_factory=_canned_search_factory(http, hits), refresh_seconds=0
+            )
             async with tui.run_test(size=SIZE) as pilot:
                 await _settle(pilot, tui)
                 await pilot.press("slash")
@@ -1172,16 +1229,7 @@ class TestSearchAndSystem:
                 await _settle(pilot, tui)
                 screen = tui.screen
                 assert "Data quality" in _text(screen.query_one("#quality-hint"))
-
-                await pilot.press("p")
-                await pilot.pause()
-                await _confirm(pilot, tui)
-                assert http.get("/api/v1/preferences").json()["scheduler_paused"] is True
-                assert screen.paused is True
-                await pilot.press("p")  # resume asks too: automatic irrigation restarts
-                await pilot.pause()
-                await _confirm(pilot, tui)
-                assert http.get("/api/v1/preferences").json()["scheduler_paused"] is False
+                await _pause_then_resume_scheduler(pilot, tui, http)
 
                 log.clear()
                 await pilot.press("H")
@@ -1202,23 +1250,7 @@ class TestSearchAndSystem:
 
     def test_remove_scheduler_job(self):
         """Mock server: the real APScheduler is a process-wide singleton shared by all tests."""
-        jobs = [
-            {
-                "id": "sensor_sync",
-                "name": "Sensor data sync",
-                "trigger": "interval",
-                "next_run_time": None,
-                "core": True,
-            },
-            {
-                "id": "sensor_sync",
-                "name": "Sensor data sync",
-                "trigger": "interval",
-                "next_run_time": None,
-                "core": True,
-            },
-            {"id": "pump_watch_3", "name": "Pump watcher", "trigger": "date", "next_run_time": None, "core": False},
-        ]
+        jobs = _SCHEDULER_JOBS
         seen: list = []
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -1242,12 +1274,7 @@ class TestSearchAndSystem:
                 assert "built-in" in str(table.get_row("sensor_sync")[0])
 
                 # Built-in job: refused client-side, no dialog, no request.
-                table.move_cursor(row=table.get_row_index("sensor_sync"))
-                await pilot.press("delete")
-                await pilot.pause()
-                assert not isinstance(tui.screen, ConfirmScreen)
-                assert not [r for r in seen if r[0] == "DELETE"]
-                assert any("built-in job" in n.message for n in tui._notifications)  # noqa: SLF001 — Textual keeps shown toasts only in App._notifications
+                await _delete_builtin_job_is_refused(pilot, tui, table, seen)
 
                 # Ad-hoc job: confirm → DELETE.
                 table.move_cursor(row=table.get_row_index("pump_watch_3"))
@@ -1551,6 +1578,39 @@ def _mock_app(handler, refresh_seconds: float = 0) -> GreenhouseApp:
     return GreenhouseApp("http://mock", client_factory=factory, refresh_seconds=refresh_seconds)
 
 
+def _paged_activity_handler(requests: list):
+    """Mock activity endpoint: a full first page with a cursor, then one older row; records each query."""
+
+    def handler(request):
+        if request.url.path != "/api/v1/activity":
+            return httpx.Response(200, json={})
+        params = dict(request.url.params)
+        requests.append(params)
+        item = {"timestamp": 1000, "source": "s", "entity_type": "cluster", "entity_id": 1, "severity": "info"}
+        if "before" not in params:
+            items = [{**item, "id": i, "code": f"c{i}", "message": "m"} for i in range(ACTIVITY_PAGE_SIZE)]
+            return httpx.Response(200, json={"items": items, "next_cursor": 999})
+        return httpx.Response(200, json={"items": [{**item, "id": 500, "code": "old", "message": "m"}]})
+
+    return handler
+
+
+def _canned_search_factory(http, hits: dict):
+    """Client factory whose ``search`` answers from ``hits`` (query → hit list)."""
+    base = tui_client_factory(http)
+
+    def fake_search(query, limit=20):
+        del limit  # the screen passes ``limit=``; the canned hits ignore it
+        return {"hits": hits.get(query, [])}
+
+    def factory(token):
+        client = base(token)
+        client.search = fake_search
+        return client
+
+    return factory
+
+
 class TestResilience:
     """Error handling, empty installs, auto-refresh and pagination."""
 
@@ -1683,19 +1743,8 @@ class TestResilience:
         """Loading more activity passes the previous page's cursor as ``before``."""
         requests = []
 
-        def handler(request):
-            if request.url.path != "/api/v1/activity":
-                return httpx.Response(200, json={})
-            params = dict(request.url.params)
-            requests.append(params)
-            item = {"timestamp": 1000, "source": "s", "entity_type": "cluster", "entity_id": 1, "severity": "info"}
-            if "before" not in params:
-                items = [{**item, "id": i, "code": f"c{i}", "message": "m"} for i in range(100)]
-                return httpx.Response(200, json={"items": items, "next_cursor": 999})
-            return httpx.Response(200, json={"items": [{**item, "id": 500, "code": "old", "message": "m"}]})
-
         async def scenario():
-            tui = _mock_app(handler)
+            tui = _mock_app(_paged_activity_handler(requests))
             async with tui.run_test(size=SIZE) as pilot:
                 await pilot.press("l")
                 await _settle(pilot, tui)

@@ -265,12 +265,17 @@ def test_insights_panel_nothing_to_flag(seeded):
 # ── CRUD keys with nothing selected / no irrigator ───────────────────────
 
 
+def _create_empty_cluster(http) -> int:
+    """Create a cluster with no plants, sensors, pump or windows; return its id."""
+    resp = http.post("/api/v1/clusters", json={"name": "Empty", "environment": "indoor", "location": None})
+    assert resp.status_code == HTTPStatus.CREATED, resp.text
+    return resp.json()["id"]
+
+
 def test_edit_and_delete_with_nothing_selected(seeded):
     """``u`` / ``delete`` on every CRUD tab of an empty cluster: the toast, no dialog, no write."""
     http, _ = seeded
-    resp = http.post("/api/v1/clusters", json={"name": "Empty", "environment": "indoor", "location": None})
-    assert resp.status_code == HTTPStatus.CREATED, resp.text
-    empty_id = resp.json()["id"]
+    empty_id = _create_empty_cluster(http)
     log: list = []
     captured: list[dict] = []
 

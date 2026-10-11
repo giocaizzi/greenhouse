@@ -137,6 +137,12 @@ def _pending_tui_work(tui: App) -> list[str]:
     pending += [f"animation of {attr!r}" for _, attr in [*animator._animations, *animator._scheduled]]  # noqa: SLF001 — Textual exposes no public view of pending work
     if tui._batch_count:  # noqa: SLF001 — Textual exposes no public view of pending work
         pending.append("update batch still open")
+    return pending + _visible_screen_debts(tui)
+
+
+def _visible_screen_debts(tui: App) -> list[str]:
+    """What the visible screens still owe: after-refresh callbacks, layout/repaint, unmeasured table columns."""
+    pending = []
     screen = tui.screen
     if screen._callbacks:  # noqa: SLF001 — Textual exposes no public view of pending work; call_after_refresh work; only the active screen refreshes
         pending.append(f"after-refresh callbacks on {screen!r}")
@@ -214,8 +220,11 @@ def _binding(raw: Binding | tuple) -> dict:
     return {"key": b.key, "action": b.action, "description": b.description, "show": b.show, "priority": b.priority}
 
 
-def _simple(value: Any) -> Any:
-    """JSON-able view of a class/module constant (``None`` when it is not a plain value)."""
+_NOT_SCALAR = object()
+
+
+def _simple_scalar(value: Any) -> Any:
+    """JSON-able view of a scalar constant, or ``_NOT_SCALAR``."""
     if isinstance(value, enum.Enum):
         return value.value
     if isinstance(value, str | int | float | bool) or value is None:
@@ -224,6 +233,14 @@ def _simple(value: Any) -> Any:
         return {"regex": value.pattern}
     if isinstance(value, type):
         return f"<class {value.__module__}.{value.__qualname__}>"
+    return _NOT_SCALAR
+
+
+def _simple(value: Any) -> Any:
+    """JSON-able view of a class/module constant (``None`` when it is not a plain value)."""
+    scalar = _simple_scalar(value)
+    if scalar is not _NOT_SCALAR:
+        return scalar
     if isinstance(value, list | tuple):
         return [_simple(v) for v in value]
     if isinstance(value, dict):
@@ -245,20 +262,24 @@ def _class_surface(cls: type) -> dict:
         if name.isupper() and name not in {"BINDINGS", "DEFAULT_CSS"}:
             entry[name] = _simple(own[name])
     entry["handlers"] = sorted(n for n in own if _HANDLER.match(n) and callable(own[n]))
-    decorated = []
-    for value in own.values():
-        for message_type, selectors in getattr(value, "_textual_on", []):
-            decorated.append(
-                {
-                    "message": message_type.__qualname__,
-                    "selectors": {k: [s.css for s in v] for k, v in selectors.items()},
-                }
-            )
+    decorated = _on_decorated(own)
     if decorated:
         entry["on_decorated"] = sorted(decorated, key=lambda d: (d["message"], str(d["selectors"])))
     if "can_focus" in own:
         entry["can_focus"] = own["can_focus"]
     return entry
+
+
+def _on_decorated(own: Any) -> list[dict]:
+    """``@on(...)`` handlers declared in a class body: message type and selectors, in declaration order."""
+    return [
+        {
+            "message": message_type.__qualname__,
+            "selectors": {k: [s.css for s in v] for k, v in selectors.items()},
+        }
+        for value in own.values()
+        for message_type, selectors in getattr(value, "_textual_on", [])
+    ]
 
 
 def _module_constants(module: Any) -> dict:

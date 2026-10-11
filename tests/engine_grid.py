@@ -211,51 +211,12 @@ def fresh_repository() -> Iterator[IrrigationRepository]:
 
 def _seed(repo: IrrigationRepository, case: Case) -> int:
     now = int(case.at.timestamp())
-    if case.tz is not None:
-        repo.update_preferences(timezone=case.tz)
-    if case.global_quiet is not None:
-        repo.update_global_irrigation_config(quiet_start_hour=case.global_quiet[0], quiet_end_hour=case.global_quiet[1])
-
+    _seed_preferences(repo, case)
     cluster_id = repo.add_cluster(f"Grid {case.family}", environment=case.environment)
     plant_ids = [repo.add_plant(cluster_id=cluster_id, species=s, category=c) for s, c in case.plants]
-
-    config = dict(case.cluster_config)
-    if case.cluster_quiet is not None:
-        config["quiet_start_hour"], config["quiet_end_hour"] = case.cluster_quiet
-    if config:
-        repo.set_irrigation_config(cluster_id, **config)
-
-    irrigator_id = None
-    if case.irrigator:
-        irrigator_id = repo.add_irrigator(
-            cluster_id=cluster_id,
-            tuya_device_id="fake_tuya_device_grid0001",
-            name="Grid Pump",
-            irrigator_type="rainpoint.ik10pw",
-            config={},
-        )
-        if case.reservoir_l is not None or case.flow_rate is not None:
-            irr = repo.get_irrigator(irrigator_id)
-            irr.reservoir_l = case.reservoir_l
-            irr.flow_rate_l_per_min = case.flow_rate
-            repo.session.flush()
-
-    sensor_ids = []
-    for i, spec in enumerate(case.sensors):
-        sid = repo.add_sensor(
-            cluster_id=cluster_id,
-            tuya_device_id=f"fake_tuya_sensor_grid{i:04d}",
-            name=spec.name,
-            sensor_type="tuya.tr301z",
-            config={},
-            plant_id=plant_ids[spec.plant] if spec.plant is not None else None,
-            assignment_started_at=0,
-        )
-        sensor_ids.append(sid)
-        rows = [(sid, now - r.age_s, r.temp, r.soil, r.light, r.hum, None, r.water_warning) for r in spec.readings]
-        rows.sort(key=lambda row: row[1], reverse=case.insert_desc)
-        repo.bulk_add_sensor_readings(rows)
-
+    _seed_cluster_config(repo, case, cluster_id)
+    irrigator_id = _seed_irrigator(repo, case, cluster_id)
+    sensor_ids = _seed_sensors(repo, case, cluster_id, plant_ids, now)
     for ev in case.events:
         repo.add_irrigation_event(
             irrigator_id=irrigator_id,
@@ -275,26 +236,82 @@ def _seed(repo: IrrigationRepository, case: Case) -> int:
         repo.add_vacation_window(starts_at=now + case.vacation[0], ends_at=now + case.vacation[1])
 
     if case.leak is not None:
-        leak_cluster = repo.add_cluster("Grid other") if case.leak.other_cluster else cluster_id
-        alert = repo.upsert_alert(
-            dedup_key=f"leak::{LEAK_ALERT_CODE}::{leak_cluster}::sensor1",
-            source="leak",
-            code=LEAK_ALERT_CODE,
-            title="Possible leak or stuck valve detected",
-            message="Grid Soil: soil moisture still rising after irrigation (latest=78.0%)",
-            severity="critical",
-            entity_type="sensor",
-            entity_id=sensor_ids[0] if sensor_ids else None,
-            cluster_id=leak_cluster,
-            seen_at=now - case.leak.age_s,
-        )
-        if case.leak.status == "acknowledged":
-            repo.acknowledge_alert(alert.id)
-        elif case.leak.status == "resolved":
-            repo.resolve_alert(alert.id)
+        _seed_leak(repo, case.leak, cluster_id, sensor_ids, now)
 
     repo.session.flush()
     return cluster_id
+
+
+def _seed_preferences(repo: IrrigationRepository, case: Case) -> None:
+    if case.tz is not None:
+        repo.update_preferences(timezone=case.tz)
+    if case.global_quiet is not None:
+        repo.update_global_irrigation_config(quiet_start_hour=case.global_quiet[0], quiet_end_hour=case.global_quiet[1])
+
+
+def _seed_cluster_config(repo: IrrigationRepository, case: Case, cluster_id: int) -> None:
+    config = dict(case.cluster_config)
+    if case.cluster_quiet is not None:
+        config["quiet_start_hour"], config["quiet_end_hour"] = case.cluster_quiet
+    if config:
+        repo.set_irrigation_config(cluster_id, **config)
+
+
+def _seed_irrigator(repo: IrrigationRepository, case: Case, cluster_id: int) -> int | None:
+    if not case.irrigator:
+        return None
+    irrigator_id = repo.add_irrigator(
+        cluster_id=cluster_id,
+        tuya_device_id="fake_tuya_device_grid0001",
+        name="Grid Pump",
+        irrigator_type="rainpoint.ik10pw",
+        config={},
+    )
+    if case.reservoir_l is not None or case.flow_rate is not None:
+        irr = repo.get_irrigator(irrigator_id)
+        irr.reservoir_l = case.reservoir_l
+        irr.flow_rate_l_per_min = case.flow_rate
+        repo.session.flush()
+    return irrigator_id
+
+
+def _seed_sensors(repo: IrrigationRepository, case: Case, cluster_id: int, plant_ids: list[int], now: int) -> list[int]:
+    sensor_ids = []
+    for i, spec in enumerate(case.sensors):
+        sid = repo.add_sensor(
+            cluster_id=cluster_id,
+            tuya_device_id=f"fake_tuya_sensor_grid{i:04d}",
+            name=spec.name,
+            sensor_type="tuya.tr301z",
+            config={},
+            plant_id=plant_ids[spec.plant] if spec.plant is not None else None,
+            assignment_started_at=0,
+        )
+        sensor_ids.append(sid)
+        rows = [(sid, now - r.age_s, r.temp, r.soil, r.light, r.hum, None, r.water_warning) for r in spec.readings]
+        rows.sort(key=lambda row: row[1], reverse=case.insert_desc)
+        repo.bulk_add_sensor_readings(rows)
+    return sensor_ids
+
+
+def _seed_leak(repo: IrrigationRepository, leak: Leak, cluster_id: int, sensor_ids: list[int], now: int) -> None:
+    leak_cluster = repo.add_cluster("Grid other") if leak.other_cluster else cluster_id
+    alert = repo.upsert_alert(
+        dedup_key=f"leak::{LEAK_ALERT_CODE}::{leak_cluster}::sensor1",
+        source="leak",
+        code=LEAK_ALERT_CODE,
+        title="Possible leak or stuck valve detected",
+        message="Grid Soil: soil moisture still rising after irrigation (latest=78.0%)",
+        severity="critical",
+        entity_type="sensor",
+        entity_id=sensor_ids[0] if sensor_ids else None,
+        cluster_id=leak_cluster,
+        seen_at=now - leak.age_s,
+    )
+    if leak.status == "acknowledged":
+        repo.acknowledge_alert(alert.id)
+    elif leak.status == "resolved":
+        repo.resolve_alert(alert.id)
 
 
 def _seed_learning(repo: IrrigationRepository, seed: str, irrigator_id: int, sensor_ids: list[int], now: int) -> None:

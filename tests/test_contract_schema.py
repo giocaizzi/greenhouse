@@ -185,17 +185,7 @@ def _drift(migrated: dict, created: dict) -> dict:
         per_table = {}
         for aspect in migrated[name]:
             if aspect == "columns":
-                mig_cols = {c["name"]: c for c in migrated[name]["columns"]}
-                orm_cols = {c["name"]: c for c in created[name]["columns"]}
-                cols = {}
-                for col in sorted(set(mig_cols) | set(orm_cols)):
-                    if mig_cols.get(col) != orm_cols.get(col):
-                        cols[col] = {"migrated": mig_cols.get(col), "create_all": orm_cols.get(col)}
-                if [c["name"] for c in migrated[name]["columns"]] != [c["name"] for c in created[name]["columns"]]:
-                    cols["<column order>"] = {
-                        "migrated": [c["name"] for c in migrated[name]["columns"]],
-                        "create_all": [c["name"] for c in created[name]["columns"]],
-                    }
+                cols = _column_drift(migrated[name]["columns"], created[name]["columns"])
                 if cols:
                     per_table["columns"] = cols
             elif migrated[name][aspect] != created[name][aspect]:
@@ -203,6 +193,21 @@ def _drift(migrated: dict, created: dict) -> dict:
         if per_table:
             drift["tables"][name] = per_table
     return drift
+
+
+def _column_drift(migrated_columns: list, created_columns: list) -> dict:
+    mig_cols = {c["name"]: c for c in migrated_columns}
+    orm_cols = {c["name"]: c for c in created_columns}
+    cols = {}
+    for col in sorted(set(mig_cols) | set(orm_cols)):
+        if mig_cols.get(col) != orm_cols.get(col):
+            cols[col] = {"migrated": mig_cols.get(col), "create_all": orm_cols.get(col)}
+    if [c["name"] for c in migrated_columns] != [c["name"] for c in created_columns]:
+        cols["<column order>"] = {
+            "migrated": [c["name"] for c in migrated_columns],
+            "create_all": [c["name"] for c in created_columns],
+        }
+    return cols
 
 
 def test_migrated_schema_matches_golden(migrated_and_created):
