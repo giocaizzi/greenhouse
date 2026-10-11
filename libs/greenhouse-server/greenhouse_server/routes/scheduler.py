@@ -45,7 +45,8 @@ def list_jobs() -> list[SchedulerJobResponse]:
     return [SchedulerJobResponse.model_validate(j) for j in get_jobs()]
 
 
-@router.delete("/scheduler/jobs/{job_id}", response_model=SuccessResponse)
+# ``:path`` so a job id containing "/" (the CLI percent-encodes it as one segment) still routes here.
+@router.delete("/scheduler/jobs/{job_id:path}", response_model=SuccessResponse)
 def delete_job(job_id: str) -> SuccessResponse:
     """Unregister an ad-hoc background job by ID.
 

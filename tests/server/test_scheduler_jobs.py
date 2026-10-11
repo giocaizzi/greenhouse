@@ -209,5 +209,13 @@ class TestDeleteJob:
             engine1.dispose()
             engine2.dispose()
 
+    def test_job_id_with_a_slash_is_deletable_through_the_encoded_path(self, client):
+        """The CLI sends ``quote(job_id, safe="")``; an id containing "/" must reach the route."""
+        from urllib.parse import quote
+
+        job_id = _add_adhoc_job("watch/pump 1")
+        assert client.delete(f"/api/v1/scheduler/jobs/{quote(job_id, safe='')}").json() == {"success": True}
+        assert job_id not in _job_ids(client)
+
     def test_delete_unknown_job_404(self, client):
         assert client.delete("/api/v1/scheduler/jobs/nope").status_code == 404

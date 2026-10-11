@@ -943,7 +943,7 @@
    "DELETE"
   ],
   "name": "delete_job",
-  "path": "/api/v1/scheduler/jobs/{job_id}",
+  "path": "/api/v1/scheduler/jobs/{job_id:path}",
   "response_class": "JSONResponse",
   "response_model": "SuccessResponse",
   "status_code": null,

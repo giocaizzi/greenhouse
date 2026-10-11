@@ -24,6 +24,7 @@ from __future__ import annotations
 import hashlib
 import importlib.metadata
 import json
+import re
 import typing
 
 import pytest
@@ -161,7 +162,8 @@ def test_operation_id_is_route_function_name(contract_app):
         for method, op in item.items()
     }
     names = {
-        (m, row["path"]): row["name"]
+        # OpenAPI paths drop Starlette converters ("{job_id:path}" → "{job_id}").
+        (m, re.sub(r"\{(\w+):\w+\}", r"{\1}", row["path"])): row["name"]
         for row in _route_rows(contract_app)
         if row["kind"] == "APIRoute" and row["include_in_schema"]
         for m in row["methods"]
