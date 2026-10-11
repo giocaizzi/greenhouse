@@ -2,7 +2,7 @@
 
 One headless tour of the real app (seeded in-memory server, fake devices, offline
 weather, clock frozen at ``FROZEN_INSTANT`` *before* seeding, ``TZ=UTC``, sprite
-animation off, fixed 120×40 terminal) captures:
+animation off, fixed 120x40 terminal) captures:
 
 - ``tests/golden/tui/screens/<name>.txt`` — a plain-text export of every screen,
   every cluster tab and every dialog;

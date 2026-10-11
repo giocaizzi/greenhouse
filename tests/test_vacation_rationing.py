@@ -8,7 +8,7 @@ above the very-dry/critical thresholds) so the engine reaches a normal IRRIGATE
 of ``DEFAULT_DURATION_MINUTES`` (2 min) — the critical-stress override would
 otherwise return early and bypass the window/seasonal/vacation steps entirely.
 
-Monstera inherits the tropical category window (07–10 local), so all decisions
+Monstera inherits the tropical category window (07-10 local), so all decisions
 are evaluated at 08:00 UTC to stay inside it. Vacation consumption events are
 seeded well outside the 6h global cooldown so the cooldown gate does not
 pre-empt the rationing path.
@@ -202,10 +202,10 @@ def test_spent_consumption_reduces_headroom(tmp_db, logic, monkeypatch):
     Same generous-looking tank as the trim case (daily 1.9 L) but a prior 2-min
     start event (2 L spent) on day 0 drives headroom negative → SKIP. The event
     is seeded >6h before ``now`` so the cooldown gate does not pre-empt, and
-    ``now`` (09:00) stays inside the tropical 07–10 window.
+    ``now`` (09:00) stays inside the tropical 07-10 window.
     """
     starts = _ts(2026, 5, 14, 0)
-    now = _ts(2026, 5, 14, 9)  # day_index 0, inside 07–10; 8h after the 01:00 event (> 6h cooldown)
+    now = _ts(2026, 5, 14, 9)  # day_index 0, inside 07-10; 8h after the 01:00 event (> 6h cooldown)
     _freeze(monkeypatch, now)
     ctx = _make_cluster(tmp_db)
     _set_capacity(tmp_db, ctx["irrigator_id"], reservoir_l=10.0, flow_rate_l_per_min=1.0)
@@ -314,7 +314,7 @@ def test_cluster_with_no_irrigators_does_not_crash(tmp_db, logic, monkeypatch):
 
 
 def test_irrigator_consumption_liters_sums_starts_times_flow(tmp_db):
-    """Sum of in-window ``start`` duration_minutes × flow_rate gives liters."""
+    """Sum of in-window ``start`` duration_minutes x flow_rate gives liters."""
     cluster_id = tmp_db.add_cluster("Consumption", environment="indoor")
     irr = tmp_db.add_irrigator(
         cluster_id=cluster_id,

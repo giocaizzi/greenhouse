@@ -431,7 +431,7 @@ def test_detect_stress_conditions_rules(plants, snapshot, trends):
     )
     assert (stress.over_watering is not None) == expect_over
     # Water stress: per sensor, its current reading against its own plant's band (unlinked or unknown plant →
-    # the cluster's widest band); critical = min(30, band min − 15), low = critical + 10. Over-watering or any
+    # the cluster's widest band); critical = min(30, band min - 15), low = critical + 10. Over-watering or any
     # sensor above its own band vetoes it.
     care = [plant_database().get_care_data(species=p.species, category=p.category) for p in plants]
     ranges = [moisture_target_range(c) for c in care]

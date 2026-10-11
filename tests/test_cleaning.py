@@ -92,7 +92,7 @@ def test_genuine_dry_down_to_zero_survives():
 
 def test_short_series_rejects_a_lone_spike():
     """Series too short for Hampel still reject an interior sample that jumped away and back."""
-    # Too short for Hampel (3–4 points): an interior sample that jumped away from both
+    # Too short for Hampel (3-4 points): an interior sample that jumped away from both
     # neighbours (and reverted) is a spike.
     assert _vals(clean_readings(_series([55.0, 55.0, 10.0, 55.0]))) == [55.0, 55.0, None, 55.0]
     assert _vals(clean_readings(_series([55.0, 10.0, 55.0]))) == [55.0, None, 55.0]

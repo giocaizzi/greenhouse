@@ -4,7 +4,7 @@ Golden tests pin *what the code does today* so a behavior-preserving refactor ca
 prove it changed nothing. They must be hermetic and reproducible:
 
 - the clock is frozen at :data:`FROZEN_INSTANT` (spring, mid-morning UTC — outside
-  the seeded 00:00–05:00 quiet hours and far from day/season boundaries);
+  the seeded 00:00-05:00 quiet hours and far from day/season boundaries);
 - weather is served by :class:`OfflineWeather` (the same ``None`` the real client
   returns when Open-Meteo is unreachable), so no test touches the network;
 - environment variables that ``Settings`` / the CLI read are cleared.
@@ -40,11 +40,9 @@ class OfflineWeather:
 
     def get_current(self) -> None:
         """Return no current weather, like an unreachable Open-Meteo."""
-        return None
 
     def get_forecast(self, hours: int = 6) -> None:  # noqa: ARG002 — signature mirrors WeatherClient
         """Return no forecast, like an unreachable Open-Meteo."""
-        return None
 
 
 def install_offline_weather(app: Any) -> OfflineWeather:

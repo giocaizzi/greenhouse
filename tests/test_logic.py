@@ -26,7 +26,7 @@ class TestIrrigationLogic:
         """Pin ``time.time`` so the engine's window gate is deterministic.
 
         Without this, tests that don't configure an IrrigationWindow row hit the
-        default 06–10 preferred-hours fallback and skip with OUTSIDE_WINDOW
+        default 06-10 preferred-hours fallback and skip with OUTSIDE_WINDOW
         whenever the wall clock is outside that range.
         """
         monkeypatch.setattr(time, "time", lambda: _FROZEN_TS)
@@ -249,7 +249,7 @@ class TestIrrigationLogic:
             sensor_type="tuya.tr301z",
             config={},
         )
-        # Monstera target is 45–60; with CONFLICT_WET_MARGIN=5 the wet band is
+        # Monstera target is 45-60; with CONFLICT_WET_MARGIN=5 the wet band is
         # >55, so 60 is a genuinely wet sensor against a dry 15 → true conflict.
         self.db.add_sensor_reading(sensor_id=s_b, soil_moisture=60.0)
 
@@ -262,10 +262,10 @@ class TestIrrigationLogic:
     def test_healthy_spread_is_not_flagged_as_conflict(self):
         """A normal spread within the band must NOT be a conflict (driest drives it).
 
-        Unknown species + no category → default 45–65 target. Driest 44 (just
-        below min) with wettest 56 used to trip the old wet band (target_max−10
+        Unknown species + no category → default 45-65 target. Driest 44 (just
+        below min) with wettest 56 used to trip the old wet band (target_max-10
         = 55 → 56>55), forcing a spurious short-burst. With the re-derived band
-        (target_max−5 = 60 → 56<60) it is treated as ordinarily dry instead.
+        (target_max-5 = 60 → 56<60) it is treated as ordinarily dry instead.
         """
         cluster_id = self.db.add_cluster("Healthy Spread Cluster")
         self.db.add_plant(
@@ -840,7 +840,7 @@ def test_light_thresholds_use_the_preferences_timezone_month(tmp_db):
     """Light thresholds and seasons share one clock: the month in the preferences timezone.
 
     2026-09-30 23:30 UTC is 2026-10-01 08:30 in Tokyo. 600 lux is below September's
-    bright threshold (800 × 0.83 = 664) but above October's (800 × 0.70 = 560), so the
+    bright threshold (800 x 0.83 = 664) but above October's (800 x 0.70 = 560), so the
     LIGHT_BRIGHT reason appears only when the local month drives the factor.
     """
     import time_machine

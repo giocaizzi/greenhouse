@@ -348,7 +348,7 @@ class TestIssueHeuristics:
 
     - LEARNING_RAPID_DRAINAGE_THRESHOLD = -5 %/hr
     - LEARNING_OVER_WATER_THRESHOLD     = 85 % moisture
-    - LIGHT_BRIGHT                      = 800 lux (× seasonal factor)
+    - LIGHT_BRIGHT                      = 800 lux (x seasonal factor)
     - low_light fires at avg_lux < effective_threshold * 0.5
     - low_env_humidity fires at avg < ideal_humidity_min - 15
     """

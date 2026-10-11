@@ -82,7 +82,7 @@ def test_seasonal_first_plant_override_kept_while_category_comes_from_a_later_pl
         },
         plants=_TWO_TROPICALS,
     )
-    assert _reason(decision, "seasonal_hold")["message"] == "spring multiplier 0.25× for indoor cluster"
+    assert _reason(decision, "seasonal_hold")["message"] == "spring multiplier 0.25\u00d7 for indoor cluster"
 
 
 def test_seasonal_first_category_override_kept_while_plant_comes_from_a_later_plant():
@@ -100,14 +100,14 @@ def test_seasonal_first_category_override_kept_while_plant_comes_from_a_later_pl
         },
         plants=_TWO_TROPICALS,
     )
-    assert _reason(decision, "seasonal_hold")["message"] == "spring multiplier 0.25× for indoor cluster"
+    assert _reason(decision, "seasonal_hold")["message"] == "spring multiplier 0.25\u00d7 for indoor cluster"
 
 
 def test_seasonal_plant_override_from_a_later_plant_still_wins_over_an_earlier_category():
     """Mutant ``plant_override is not None -> is None`` (break guard): the loop only stops once BOTH are found.
 
     Plant 1 contributes only a category value (0.25); plant 2 contributes a
-    species-level ``spring`` value (4.0), which outranks the category layer → 4×.
+    species-level ``spring`` value (4.0), which outranks the category layer → 4x.
     """
     decision = _decide(
         "season-plant-later",
@@ -117,7 +117,7 @@ def test_seasonal_plant_override_from_a_later_plant_still_wins_over_an_earlier_c
         },
         plants=_TWO_TROPICALS,
     )
-    assert _reason(decision, "seasonal_boost")["message"] == "spring multiplier 4× for indoor cluster"
+    assert _reason(decision, "seasonal_boost")["message"] == "spring multiplier 4\u00d7 for indoor cluster"
 
 
 # ── cooldown / leak-hold message arithmetic ─────────────────────────────────

@@ -452,19 +452,19 @@ def test_inv6_reasons_stay_a_list_of_reason_through_the_whole_pipeline(env):
     ("species", "category", "environment", "at_month", "expected"),
     [
         # species-level indoor multiplier (Alocasia winter 0.4) beats tropical category (0.5)
-        ("Alocasia amazonica", "tropical", "indoor", 1, "winter multiplier 0.4×"),
+        ("Alocasia amazonica", "tropical", "indoor", 1, "winter multiplier 0.4\u00d7"),
         # no species timing → tropical _category_defaults (summer 1.2 == built-in, autumn 0.8)
-        ("Monstera deliciosa", "tropical", "indoor", 10, "autumn multiplier 0.8×"),
+        ("Monstera deliciosa", "tropical", "indoor", 10, "autumn multiplier 0.8\u00d7"),
         # species _outdoor key (Loquat summer 1.5) beats category _outdoor (1.6)
-        ("Eriobotrya japonica", "fruit_tree", "outdoor", 7, "summer multiplier 1.5×"),
+        ("Eriobotrya japonica", "fruit_tree", "outdoor", 7, "summer multiplier 1.5\u00d7"),
         # Loquat has no indoor key → category fruit_tree indoor (summer 1.5)
-        ("Eriobotrya japonica", "fruit_tree", "indoor", 7, "summer multiplier 1.5×"),
+        ("Eriobotrya japonica", "fruit_tree", "indoor", 7, "summer multiplier 1.5\u00d7"),
         # unknown species → category fruit_tree _outdoor (summer 1.6)
-        ("Unknown fruit tree", "fruit_tree", "outdoor", 7, "summer multiplier 1.6×"),
+        ("Unknown fruit tree", "fruit_tree", "outdoor", 7, "summer multiplier 1.6\u00d7"),
         # fern has no _outdoor key → falls to built-in outdoor table (winter 0.3), NOT fern indoor (0.7)
-        ("Unknown fern", "fern", "outdoor", 1, "winter multiplier 0.3×"),
+        ("Unknown fern", "fern", "outdoor", 1, "winter multiplier 0.3\u00d7"),
         # no species, no category → built-in indoor table (winter 0.5)
-        ("Plantus fictitius", None, "indoor", 1, "winter multiplier 0.5×"),
+        ("Plantus fictitius", None, "indoor", 1, "winter multiplier 0.5\u00d7"),
     ],
 )
 def test_inv9_seasonal_multiplier_precedence_species_category_constants(

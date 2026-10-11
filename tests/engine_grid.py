@@ -152,7 +152,6 @@ class FakeForecastWeather:
 
     def get_current(self) -> None:
         """Return no current weather; the grid only drives the forecast."""
-        return None
 
 
 def make_weather(case: Case) -> FakeForecastWeather | None:
