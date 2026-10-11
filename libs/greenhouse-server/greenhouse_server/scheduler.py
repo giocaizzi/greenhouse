@@ -77,7 +77,7 @@ def stop_scheduler() -> None:
     """Signal running jobs to wind down, then stop the scheduler without waiting.
 
     Interrupted pump watchers apply the shutdown policy in
-    ``services.irrigation.handle_watcher_interrupted`` on their own thread;
+    ``services.pump_watcher_jobs.handle_watcher_interrupted`` on their own thread;
     the interpreter joins those threads at exit, which now takes about one
     device call rather than the remainder of the irrigation.
     """

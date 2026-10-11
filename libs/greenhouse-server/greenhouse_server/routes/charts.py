@@ -82,7 +82,6 @@ def plant_chart_data(
 def cluster_chart_data(
     cluster_id: int,
     repo: RepoDep,
-    plant_db: PlantDbDep,
     hours: int = Query(24, ge=1, le=MAX_LOOKBACK_HOURS),
     metric: str = Query("soil_moisture"),
 ) -> ChartPayload:
@@ -102,7 +101,7 @@ def cluster_chart_data(
             does not exist.
     """
     with not_found_as_404("Cluster not found"):
-        return build_cluster_chart_payload(repo, plant_db, cluster_id, hours, require_metric(metric))
+        return build_cluster_chart_payload(repo, cluster_id, hours, require_metric(metric))
 
 
 @router.get("/clusters/{cluster_id}/overlay", response_model=MultiMetricOverlayResponse)

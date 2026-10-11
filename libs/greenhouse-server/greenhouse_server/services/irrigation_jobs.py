@@ -1,7 +1,7 @@
 """Post-irrigation leak-check job plumbing: schedule, run once, and re-arm after a restart.
 
-Background-job code, kept apart from the pipeline in :mod:`.irrigation` (which re-exports these
-names). Every real watering arms a check — automatic, forced and manual starts; a logged
+Background-job code, kept apart from the pipeline in :mod:`.irrigation` (which imports only what
+it calls). Every real watering arms a check — automatic, forced and manual starts; a logged
 hand-watering (no pump) does not. The scheduler is imported lazily, inside
 each function, because it sits above the services layer and reads the app at call time.
 Records go to the ``greenhouse_server.services.irrigation`` logger, the pipeline's, so log

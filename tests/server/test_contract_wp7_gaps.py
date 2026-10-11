@@ -32,9 +32,12 @@ from greenhouse_core.models import ActivityEvent, Base, IrrigationEvent
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server import scheduler as sched
 from greenhouse_server.services import irrigation as irrigation_mod
+from greenhouse_server.services import irrigation_jobs as irrigation_jobs_mod
 from greenhouse_server.services import pump_watcher as pump_watcher_module
-from greenhouse_server.services.irrigation import IrrigationService, handle_watcher_interrupted, schedule_pump_watcher
+from greenhouse_server.services import pump_watcher_jobs as pump_watcher_jobs_mod
+from greenhouse_server.services.irrigation import IrrigationService
 from greenhouse_server.services.pump_watcher import PumpWatcherService
+from greenhouse_server.services.pump_watcher_jobs import handle_watcher_interrupted, schedule_pump_watcher
 from server.test_contract_pipeline import Pipeline
 
 IRRIGATION_LOGGER = "greenhouse_server.services.irrigation"
@@ -584,7 +587,7 @@ def test_rearm_failure_mid_scan_keeps_partial_count_and_logs_both_lines(monkeypa
 
     monkeypatch.setattr(IrrigationRepository, "get_recent_events", flaky)
     with caplog.at_level(logging.INFO, logger=IRRIGATION_LOGGER):
-        assert irrigation_mod.rearm_leak_checks() == 1
+        assert irrigation_jobs_mod.rearm_leak_checks() == 1
     assert [j["id"] for j in fake.jobs] == [f"leak-check-{ids[0]}-{FROZEN_TS - 60}"]
     assert [(r.levelname, r.getMessage(), r.exc_info is not None) for r in caplog.records] == [
         ("ERROR", "Re-arming leak checks after restart failed", True),
@@ -817,7 +820,7 @@ def test_watcher_job_session_commit_rollback_close_order(watcher_env, monkeypatc
         return {"outcome": outcome}
 
     monkeypatch.setattr(pump_watcher_module.PumpWatcherService, "watch", watch)  # the spy subclass
-    monkeypatch.setattr(irrigation_mod, "handle_watcher_interrupted", lambda *a, **kw: log.append("interrupted"))
+    monkeypatch.setattr(pump_watcher_jobs_mod, "handle_watcher_interrupted", lambda *a, **kw: log.append("interrupted"))
     schedule_pump_watcher(watcher_env.irrigator_id, 2, FROZEN_TS, triggered_by="manual")
     watcher_env.scheduler.jobs[0]["func"]()
     assert (
@@ -841,7 +844,7 @@ def test_leak_check_done_sees_a_marker_behind_many_newer_leak_rows(db):
         source="leak", entity_type="cluster", entity_id=cid, code="leak_check", message="m",
         payload={"started_at": FROZEN_TS}, timestamp=FROZEN_TS - 1,
     )  # fmt: skip
-    assert irrigation_mod._leak_check_done(db, cid, FROZEN_TS) is False
+    assert irrigation_jobs_mod._leak_check_done(db, cid, FROZEN_TS) is False
     db.add_activity_event(
         source="leak", entity_type="cluster", entity_id=cid, code="leak_check", message="m",
         payload={"started_at": FROZEN_TS}, timestamp=FROZEN_TS + 1800,
@@ -851,7 +854,7 @@ def test_leak_check_done_sees_a_marker_behind_many_newer_leak_rows(db):
             source="leak", entity_type="cluster", entity_id=cid, code="leak_check", message="m",
             payload={"started_at": FROZEN_TS + 3600 + i}, timestamp=FROZEN_TS + 5400 + i,
         )  # fmt: skip
-    assert irrigation_mod._leak_check_done(db, cid, FROZEN_TS) is True
+    assert irrigation_jobs_mod._leak_check_done(db, cid, FROZEN_TS) is True
 
 
 def test_leak_check_done_ignores_other_codes_and_empty_payloads(db):
@@ -861,7 +864,7 @@ def test_leak_check_done_ignores_other_codes_and_empty_payloads(db):
         db.add_activity_event(
             source="leak", entity_type="cluster", entity_id=cid, code=code, message="m", payload=payload
         )
-    assert irrigation_mod._leak_check_done(db, cid, FROZEN_TS) is False
+    assert irrigation_jobs_mod._leak_check_done(db, cid, FROZEN_TS) is False
     db.add_activity_event(
         source="leak",
         entity_type="cluster",
@@ -870,7 +873,7 @@ def test_leak_check_done_ignores_other_codes_and_empty_payloads(db):
         message="m",
         payload={"started_at": FROZEN_TS},
     )
-    assert irrigation_mod._leak_check_done(db, cid, FROZEN_TS) is True
+    assert irrigation_jobs_mod._leak_check_done(db, cid, FROZEN_TS) is True
 
 
 @pytest.mark.parametrize("fail", [False, True])
@@ -889,7 +892,7 @@ def test_rearm_always_closes_its_session(monkeypatch, frozen_clock, fail):
     monkeypatch.setattr(sched, "_app", SimpleNamespace(state=SimpleNamespace(session_factory=factory)))
     if fail:
         monkeypatch.setattr(IrrigationRepository, "list_all_irrigators", lambda self: 1 / 0)
-    assert irrigation_mod.rearm_leak_checks() == 0
+    assert irrigation_jobs_mod.rearm_leak_checks() == 0
     assert log == ["open", "close"]
     engine.dispose()
 

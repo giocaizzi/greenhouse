@@ -26,7 +26,7 @@ from greenhouse_core.models import (
 )
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.services.caps import daily_cap_violation
-from greenhouse_server.services.irrigation import schedule_pump_watcher, stop_unrecorded_start
+from greenhouse_server.services.irrigation import stop_unrecorded_start
 from greenhouse_server.services.irrigation_jobs import (
     _schedule_leak_check,
     leak_check_after_seconds,
@@ -34,6 +34,7 @@ from greenhouse_server.services.irrigation_jobs import (
     record_leak_check_skipped,
 )
 from greenhouse_server.services.notify import NtfyClient, maybe_notify
+from greenhouse_server.services.pump_watcher_jobs import schedule_pump_watcher
 
 if TYPE_CHECKING:
     from greenhouse_core.devices import AbstractIrrigatorAdapter

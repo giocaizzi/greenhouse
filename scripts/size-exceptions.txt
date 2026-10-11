@@ -13,7 +13,7 @@ libs/greenhouse-core/greenhouse_core/repository.py — one persistence facade of
 libs/greenhouse-core/greenhouse_core/schemas.py — cohesive Pydantic DTO module; splitting it risks the OpenAPI contract (class __module__, docstrings, field order) for navigation only
 libs/greenhouse-core/greenhouse_core/logic/engine.py — one cohesive rule pipeline; tests read the engine's constant imports from vars(engine) and patch engine.time / engine.season_for, so moving rules out breaks pinned tests
 libs/greenhouse-cli/greenhouse_cli/tui/screens/cluster.py — one Screen: a compose tree plus its action_* and on_* handlers, pinned per class by the TUI surface golden; per-tab controller objects would add indirection
-libs/greenhouse-server/greenhouse_server/services/irrigation.py — the logger name, the clock seam, the lazy scheduler imports and the names tests call by path pin the pipeline and job plumbing to this module
+libs/greenhouse-server/greenhouse_server/services/irrigation.py — the logger name, the clock seam and the names tests call by path pin the pipeline to this module (its job plumbing lives in irrigation_jobs.py / pump_watcher_jobs.py)
 libs/greenhouse-server/greenhouse_server/scheduler.py — the scheduler-job goldens pin the built-in jobs' function references here; job registry, timezone rebuild and pause policy are one concern and the public surface is pinned
 libs/greenhouse-cli/greenhouse_cli/client.py — one thin method per /api/v1 endpoint, 1:1 with the OpenAPI schema; per-resource mixins would add indirection
 libs/greenhouse-core/greenhouse_core/models.py — declarative ORM models; the DDL is pinned by the schema goldens

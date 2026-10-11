@@ -38,9 +38,9 @@ class IrrigatorProfile:
         protocol_version: tinytuya local protocol version (3.5 for IK10PW).
             ``None`` for cloud-only devices.
         dp_map: Logical name → DP id mapping (``{"switch": 1, "duration": 102}``).
-        capabilities: Free-form flags consulted by the engine / pump watcher
-            (``"has_local_duration_dp"``, ``"has_water_shortage_dp"``,
-            ``"needs_keepalive_fallback"``).
+        capabilities: Free-form flags describing the model
+            (``"has_local_duration_dp"``, ``"supports_local_status"``); the
+            adapters consult them through :meth:`has_capability`.
         duration_unit: Unit for the Duration DP if any.
         alarm_bitmask: Bit to AND against the alarm DP value when checking
             for a no-water condition (``0x01`` on IK10PW). ``None`` when the
