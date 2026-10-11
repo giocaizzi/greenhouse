@@ -2,16 +2,19 @@
 
 import time
 from http import HTTPStatus
+from typing import cast
 
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from greenhouse_core.models import ActivitySource, EntityType
 from greenhouse_core.repository import IrrigationRepository
 
 
 class TestActivityList:
     """Tests for activity list."""
 
-    def test_list_empty(self, client):
+    def test_list_empty(self, client: TestClient) -> None:
         """List empty."""
         resp = client.get("/api/v1/activity")
         assert resp.status_code == HTTPStatus.OK
@@ -19,7 +22,7 @@ class TestActivityList:
         assert data["items"] == []
         assert data["next_cursor"] is None
 
-    def _seed_events(self, app, count: int = 5) -> list[int]:
+    def _seed_events(self, app: FastAPI, count: int = 5) -> list[int]:
         session = app.state.session_factory()
         try:
             repo = IrrigationRepository(session)
@@ -27,8 +30,8 @@ class TestActivityList:
             ids = []
             for i in range(count):
                 eid = repo.add_activity_event(
-                    source="irrigation",
-                    entity_type="cluster",
+                    source=ActivitySource.IRRIGATION,
+                    entity_type=EntityType.CLUSTER,
                     entity_id=1,
                     code="irrigated",
                     message=f"event {i}",
@@ -41,7 +44,7 @@ class TestActivityList:
         finally:
             session.close()
 
-    def test_ordering_newest_first(self, app):
+    def test_ordering_newest_first(self, app: FastAPI) -> None:
         """Ordering newest first."""
         with TestClient(app, raise_server_exceptions=False) as client:
             count = 3
@@ -53,17 +56,25 @@ class TestActivityList:
             timestamps = [i["timestamp"] for i in items]
             assert timestamps == sorted(timestamps, reverse=True)
 
-    def test_filter_by_entity_type(self, app):
+    def test_filter_by_entity_type(self, app: FastAPI) -> None:
         """Filter by entity type."""
         with TestClient(app, raise_server_exceptions=False) as client:
             session = app.state.session_factory()
             try:
                 repo = IrrigationRepository(session)
                 repo.add_activity_event(
-                    source="system", entity_type="sensor", entity_id=99, code="stale", message="sensor stale"
+                    source=cast("ActivitySource", "system"),  # outside the vocabulary: the column stores any string
+                    entity_type=EntityType.SENSOR,
+                    entity_id=99,
+                    code="stale",
+                    message="sensor stale",
                 )
                 repo.add_activity_event(
-                    source="irrigation", entity_type="cluster", entity_id=1, code="irrigated", message="ok"
+                    source=ActivitySource.IRRIGATION,
+                    entity_type=EntityType.CLUSTER,
+                    entity_id=1,
+                    code="irrigated",
+                    message="ok",
                 )
                 session.commit()
             finally:
@@ -75,14 +86,18 @@ class TestActivityList:
             assert all(i["entity_type"] == "sensor" for i in items)
             assert len(items) == 1
 
-    def test_filter_by_source(self, app):
+    def test_filter_by_source(self, app: FastAPI) -> None:
         """Filter by source."""
         with TestClient(app, raise_server_exceptions=False) as client:
             session = app.state.session_factory()
             try:
                 repo = IrrigationRepository(session)
-                repo.add_activity_event(source="irrigation", entity_type="cluster", code="irrigated", message="a")
-                repo.add_activity_event(source="learning", entity_type="cluster", code="insight", message="b")
+                repo.add_activity_event(
+                    source=ActivitySource.IRRIGATION, entity_type=EntityType.CLUSTER, code="irrigated", message="a"
+                )
+                repo.add_activity_event(
+                    source=ActivitySource.LEARNING, entity_type=EntityType.CLUSTER, code="insight", message="b"
+                )
                 session.commit()
             finally:
                 session.close()
@@ -91,18 +106,22 @@ class TestActivityList:
             items = resp.json()["items"]
             assert all(i["source"] == "learning" for i in items)
 
-    def test_filter_by_severity(self, app):
+    def test_filter_by_severity(self, app: FastAPI) -> None:
         """Filter by severity."""
         with TestClient(app, raise_server_exceptions=False) as client:
             session = app.state.session_factory()
             try:
                 repo = IrrigationRepository(session)
                 repo.add_activity_event(
-                    source="irrigation", entity_type="cluster", code="ok", message="info msg", severity="info"
+                    source=ActivitySource.IRRIGATION,
+                    entity_type=EntityType.CLUSTER,
+                    code="ok",
+                    message="info msg",
+                    severity="info",
                 )
                 repo.add_activity_event(
-                    source="irrigation",
-                    entity_type="cluster",
+                    source=ActivitySource.IRRIGATION,
+                    entity_type=EntityType.CLUSTER,
                     code="fail",
                     message="warning msg",
                     severity="warning",
@@ -115,7 +134,7 @@ class TestActivityList:
             items = resp.json()["items"]
             assert all(i["severity"] == "warning" for i in items)
 
-    def test_cursor_pagination(self, app):
+    def test_cursor_pagination(self, app: FastAPI) -> None:
         """When limit is reached, next_cursor equals the oldest item's timestamp."""
         with TestClient(app, raise_server_exceptions=False) as client:
             total, page_size = 5, 3
@@ -135,7 +154,7 @@ class TestActivityList:
             assert len(data2["items"]) == total - page_size
             assert data2["next_cursor"] is None
 
-    def test_no_cursor_when_fewer_items_than_limit(self, app):
+    def test_no_cursor_when_fewer_items_than_limit(self, app: FastAPI) -> None:
         """No cursor when fewer items than limit."""
         with TestClient(app, raise_server_exceptions=False) as client:
             self._seed_events(app, count=2)

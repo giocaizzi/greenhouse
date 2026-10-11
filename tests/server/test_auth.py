@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from http import HTTPStatus
+from typing import TYPE_CHECKING
 
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -16,15 +17,19 @@ from greenhouse_server.deps import get_device_gateway, get_device_registry
 
 from .conftest import TEST_ADMIN_PASSWORD, TEST_ADMIN_USERNAME, TEST_AUTH_SECRET
 
+if TYPE_CHECKING:
+    from fastapi import FastAPI
+    from sqlalchemy import Engine
 
-def _build_app(**override):
+
+def _build_app(**override: object) -> tuple[FastAPI, Engine]:
     engine = create_engine(
         "sqlite://",
         echo=False,
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
-    base = {
+    base: dict[str, object] = {
         "db_url": "sqlite://",
         "enable_scheduler": False,
         "auth_enabled": True,
@@ -36,19 +41,19 @@ def _build_app(**override):
     app = create_app(Settings(**base), engine=engine)
     fake = FakeIrrigatorAdapter()
     registry = DeviceRegistry()
-    registry.register_irrigator("rainpoint.ik10pw", lambda adapter=fake: adapter)
+    registry.register_irrigator("rainpoint.ik10pw", lambda: fake)
     app.dependency_overrides[get_device_registry] = lambda: registry
     app.dependency_overrides[get_device_gateway] = lambda: None
     return app, engine
 
 
-def test_anonymous_api_returns_401(anonymous_client: TestClient):
+def test_anonymous_api_returns_401(anonymous_client: TestClient) -> None:
     """Anonymous API returns 401."""
     resp = anonymous_client.get("/api/v1/clusters")
     assert resp.status_code == HTTPStatus.UNAUTHORIZED
 
 
-def test_anonymous_web_redirects_to_login(anonymous_client: TestClient):
+def test_anonymous_web_redirects_to_login(anonymous_client: TestClient) -> None:
     """Anonymous web redirects to login."""
     resp = anonymous_client.get("/clusters", follow_redirects=False)
     assert resp.status_code == HTTPStatus.SEE_OTHER
@@ -57,7 +62,7 @@ def test_anonymous_web_redirects_to_login(anonymous_client: TestClient):
     assert "%2Fclusters" in resp.headers["location"] or "/clusters" in resp.headers["location"]
 
 
-def test_anonymous_login_page_renders(anonymous_client: TestClient):
+def test_anonymous_login_page_renders(anonymous_client: TestClient) -> None:
     """Anonymous login page renders."""
     resp = anonymous_client.get("/login")
     assert resp.status_code == HTTPStatus.OK
@@ -66,7 +71,7 @@ def test_anonymous_login_page_renders(anonymous_client: TestClient):
     assert b'name="password"' in resp.content
 
 
-def test_login_with_valid_credentials_returns_token(anonymous_client: TestClient):
+def test_login_with_valid_credentials_returns_token(anonymous_client: TestClient) -> None:
     """Login with valid credentials returns token."""
     resp = anonymous_client.post(
         "/api/v1/auth/login",
@@ -82,7 +87,7 @@ def test_login_with_valid_credentials_returns_token(anonymous_client: TestClient
     assert "greenhouse_session" in resp.cookies
 
 
-def test_login_with_wrong_password_returns_401(anonymous_client: TestClient):
+def test_login_with_wrong_password_returns_401(anonymous_client: TestClient) -> None:
     """Login with wrong password returns 401."""
     resp = anonymous_client.post(
         "/api/v1/auth/login",
@@ -91,7 +96,7 @@ def test_login_with_wrong_password_returns_401(anonymous_client: TestClient):
     assert resp.status_code == HTTPStatus.UNAUTHORIZED
 
 
-def test_login_with_unknown_user_returns_401(anonymous_client: TestClient):
+def test_login_with_unknown_user_returns_401(anonymous_client: TestClient) -> None:
     """Login with unknown user returns 401."""
     resp = anonymous_client.post(
         "/api/v1/auth/login",
@@ -100,7 +105,7 @@ def test_login_with_unknown_user_returns_401(anonymous_client: TestClient):
     assert resp.status_code == HTTPStatus.UNAUTHORIZED
 
 
-def test_bearer_token_authenticates_api(authed_real_client: TestClient):
+def test_bearer_token_authenticates_api(authed_real_client: TestClient) -> None:
     """Real-auth client (bearer header set from real login) reaches /me."""
     resp = authed_real_client.get("/api/v1/auth/me")
     assert resp.status_code == HTTPStatus.OK
@@ -109,13 +114,13 @@ def test_bearer_token_authenticates_api(authed_real_client: TestClient):
     assert body["id"] > 0
 
 
-def test_invalid_bearer_token_returns_401(anonymous_client: TestClient):
+def test_invalid_bearer_token_returns_401(anonymous_client: TestClient) -> None:
     """Invalid bearer token returns 401."""
     resp = anonymous_client.get("/api/v1/clusters", headers={"Authorization": "Bearer not-a-real-token"})
     assert resp.status_code == HTTPStatus.UNAUTHORIZED
 
 
-def test_cookie_session_authenticates_web_pages(anonymous_client: TestClient):
+def test_cookie_session_authenticates_web_pages(anonymous_client: TestClient) -> None:
     # First log in via API (sets cookie), then hit a web page anonymously by
     # header — only the cookie should carry through.
     """Cookie session authenticates web pages."""
@@ -129,7 +134,7 @@ def test_cookie_session_authenticates_web_pages(anonymous_client: TestClient):
     assert page.status_code == HTTPStatus.OK
 
 
-def test_logout_clears_session(authed_real_client: TestClient):
+def test_logout_clears_session(authed_real_client: TestClient) -> None:
     """Logout clears the cookie; a cookie-only follow-up must redirect to /login."""
     resp = authed_real_client.post("/api/v1/auth/logout")
     assert resp.status_code == HTTPStatus.OK
@@ -140,7 +145,7 @@ def test_logout_clears_session(authed_real_client: TestClient):
     assert page.headers["location"].startswith("/login")
 
 
-def test_form_login_redirects_to_next(anonymous_client: TestClient):
+def test_form_login_redirects_to_next(anonymous_client: TestClient) -> None:
     """Form login redirects to next."""
     resp = anonymous_client.post(
         "/login",
@@ -152,7 +157,7 @@ def test_form_login_redirects_to_next(anonymous_client: TestClient):
     assert "greenhouse_session" in resp.cookies
 
 
-def test_form_login_rejects_external_next(anonymous_client: TestClient):
+def test_form_login_rejects_external_next(anonymous_client: TestClient) -> None:
     """Form login rejects external next."""
     resp = anonymous_client.post(
         "/login",
@@ -167,7 +172,7 @@ def test_form_login_rejects_external_next(anonymous_client: TestClient):
     assert resp.headers["location"] == "/"
 
 
-def test_login_page_has_no_chrome_pollers(anonymous_client: TestClient):
+def test_login_page_has_no_chrome_pollers(anonymous_client: TestClient) -> None:
     """The login page must not carry the authenticated chrome's auto-pollers.
 
     `_base.html` fires `hx-get="/alerts/badge"` and `/health/badge` on
@@ -183,7 +188,7 @@ def test_login_page_has_no_chrome_pollers(anonymous_client: TestClient):
     assert b'class="topbar"' not in resp.content
 
 
-def test_hx_request_unauthenticated_returns_hx_redirect(anonymous_client: TestClient):
+def test_hx_request_unauthenticated_returns_hx_redirect(anonymous_client: TestClient) -> None:
     """A logged-out HTMX request to a protected page gets HX-Redirect, not a 303.
 
     An HTMX request to a protected web route while logged out must return
@@ -202,7 +207,7 @@ def test_hx_request_unauthenticated_returns_hx_redirect(anonymous_client: TestCl
     assert resp.content == b""
 
 
-def test_auth_disabled_grants_anonymous_access(auth_disabled_app):
+def test_auth_disabled_grants_anonymous_access(auth_disabled_app: FastAPI) -> None:
     """Auth disabled grants anonymous access."""
     tc = TestClient(auth_disabled_app, raise_server_exceptions=False)
     resp = tc.get("/api/v1/clusters")
@@ -213,7 +218,7 @@ def test_auth_disabled_grants_anonymous_access(auth_disabled_app):
     assert me.json()["username"] == "system"
 
 
-def test_missing_secret_key_returns_503_on_login():
+def test_missing_secret_key_returns_503_on_login() -> None:
     # auth enabled but no secret — login itself can't sign; expect 503.
     """Missing secret key returns 503 on login."""
     app, _ = _build_app(auth_secret_key=None)

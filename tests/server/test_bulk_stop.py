@@ -2,6 +2,8 @@
 
 from http import HTTPStatus
 
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 from sqlalchemy import select
 
 from greenhouse_core.models import IrrigationEvent
@@ -12,7 +14,7 @@ _SEEDED = (
 )
 
 
-def _seed_irrigators(client) -> int:
+def _seed_irrigators(client: TestClient) -> int:
     """Seed two clusters each with one irrigator; return how many irrigators were seeded."""
     for cluster_id, (cluster_name, device_id, name) in enumerate(_SEEDED, start=1):
         client.post("/api/v1/clusters", json={"name": cluster_name})
@@ -26,7 +28,7 @@ def _seed_irrigators(client) -> int:
 class TestBulkStopAll:
     """Tests for bulk stop all."""
 
-    def test_stop_all_returns_correct_count(self, client):
+    def test_stop_all_returns_correct_count(self, client: TestClient) -> None:
         """Stop-all with two irrigators must report stopped=2."""
         seeded = _seed_irrigators(client)
         resp = client.post("/api/v1/bulk/stop-all")
@@ -35,7 +37,7 @@ class TestBulkStopAll:
         assert data["stopped"] == seeded
         assert data["errors"] == []
 
-    def test_stop_all_no_irrigators(self, client):
+    def test_stop_all_no_irrigators(self, client: TestClient) -> None:
         """Stop-all with zero irrigators returns stopped=0 and no errors."""
         resp = client.post("/api/v1/bulk/stop-all")
         assert resp.status_code == HTTPStatus.OK
@@ -43,7 +45,7 @@ class TestBulkStopAll:
         assert data["stopped"] == 0
         assert data["errors"] == []
 
-    def test_stop_all_logs_irrigation_events(self, app, client):
+    def test_stop_all_logs_irrigation_events(self, app: FastAPI, client: TestClient) -> None:
         """Each irrigator must have an IrrigationEvent with triggered_by='emergency'."""
         seeded = _seed_irrigators(client)
         client.post("/api/v1/bulk/stop-all")
@@ -60,7 +62,7 @@ class TestBulkStopAll:
         finally:
             session.close()
 
-    def test_refused_stop_is_reported_and_not_recorded(self, app, client):
+    def test_refused_stop_is_reported_and_not_recorded(self, app: FastAPI, client: TestClient) -> None:
         """A device answering ``(False, msg)`` is an error: not counted, no ``stop`` event."""
         _seed_irrigators(client)
         app.state.fake_devices.irrigator.stop_result = (False, "device asleep")

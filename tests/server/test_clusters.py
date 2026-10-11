@@ -4,16 +4,20 @@ import warnings
 from http import HTTPStatus
 
 import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 from sqlalchemy import text
 
 from golden import FROZEN_TS
+from greenhouse_core.models import ActivitySource, EntityType
 from greenhouse_core.repository import IrrigationRepository
+from server.conftest import app_of
 
 
 class TestClusterCRUD:
     """Tests for cluster CRUD."""
 
-    def test_create_and_list(self, client):
+    def test_create_and_list(self, client: TestClient) -> None:
         """Create and list."""
         resp = client.post("/api/v1/clusters", json={"name": "My Cluster"})
         assert resp.status_code == HTTPStatus.CREATED
@@ -26,7 +30,7 @@ class TestClusterCRUD:
         assert resp.status_code == HTTPStatus.OK
         assert len(resp.json()) == 1
 
-    def test_create_with_all_fields(self, client):
+    def test_create_with_all_fields(self, client: TestClient) -> None:
         """Create with all fields."""
         resp = client.post(
             "/api/v1/clusters",
@@ -37,25 +41,25 @@ class TestClusterCRUD:
         assert data["location"] == "Balcony"
         assert data["environment"] == "outdoor"
 
-    def test_get_by_id(self, client):
+    def test_get_by_id(self, client: TestClient) -> None:
         """Get by ID."""
         client.post("/api/v1/clusters", json={"name": "Test"})
         resp = client.get("/api/v1/clusters/1")
         assert resp.status_code == HTTPStatus.OK
         assert resp.json()["name"] == "Test"
 
-    def test_get_not_found(self, client):
+    def test_get_not_found(self, client: TestClient) -> None:
         """Get not found."""
         resp = client.get("/api/v1/clusters/999")
         assert resp.status_code == HTTPStatus.NOT_FOUND
 
-    def test_list_empty(self, client):
+    def test_list_empty(self, client: TestClient) -> None:
         """List empty."""
         resp = client.get("/api/v1/clusters")
         assert resp.status_code == HTTPStatus.OK
         assert resp.json() == []
 
-    def test_create_two_clusters(self, client):
+    def test_create_two_clusters(self, client: TestClient) -> None:
         """Create two clusters."""
         names = ["A", "B"]
         for name in names:
@@ -63,7 +67,7 @@ class TestClusterCRUD:
         resp = client.get("/api/v1/clusters")
         assert len(resp.json()) == len(names)
 
-    def test_update_name_and_location(self, client):
+    def test_update_name_and_location(self, client: TestClient) -> None:
         """Update name and location."""
         client.post("/api/v1/clusters", json={"name": "Original", "environment": "indoor"})
         resp = client.put("/api/v1/clusters/1", json={"name": "Renamed", "location": "Shelf"})
@@ -73,19 +77,19 @@ class TestClusterCRUD:
         assert data["location"] == "Shelf"
         assert data["environment"] == "indoor"  # unchanged
 
-    def test_update_reflects_on_get(self, client):
+    def test_update_reflects_on_get(self, client: TestClient) -> None:
         """Update reflects on get."""
         client.post("/api/v1/clusters", json={"name": "Before"})
         client.put("/api/v1/clusters/1", json={"name": "After"})
         resp = client.get("/api/v1/clusters/1")
         assert resp.json()["name"] == "After"
 
-    def test_update_not_found(self, client):
+    def test_update_not_found(self, client: TestClient) -> None:
         """Update not found."""
         resp = client.put("/api/v1/clusters/999", json={"name": "X"})
         assert resp.status_code == HTTPStatus.NOT_FOUND
 
-    def test_delete_cluster(self, client):
+    def test_delete_cluster(self, client: TestClient) -> None:
         """Delete cluster."""
         client.post("/api/v1/clusters", json={"name": "ToDelete"})
         resp = client.delete("/api/v1/clusters/1")
@@ -95,7 +99,7 @@ class TestClusterCRUD:
         resp = client.get("/api/v1/clusters/1")
         assert resp.status_code == HTTPStatus.NOT_FOUND
 
-    def test_delete_cascades_to_plants(self, client):
+    def test_delete_cascades_to_plants(self, client: TestClient) -> None:
         """Delete cascades to plants."""
         client.post("/api/v1/clusters", json={"name": "C"})
         client.post("/api/v1/clusters/1/plants", json={"species": "Fern"})
@@ -103,7 +107,7 @@ class TestClusterCRUD:
         resp = client.get("/api/v1/clusters/1")
         assert resp.status_code == HTTPStatus.NOT_FOUND
 
-    def test_delete_removes_rows_that_point_at_the_cluster(self, client):
+    def test_delete_removes_rows_that_point_at_the_cluster(self, client: TestClient) -> None:
         """Deleting a cluster removes its dependent rows and leaves other clusters alone.
 
         Windows, assignments, alerts (by cluster or entity) go; a default-cluster preference is cleared;
@@ -124,19 +128,19 @@ class TestClusterCRUD:
             )
             client.post(f"/api/v1/clusters/{cid}/windows", json={"start_hour": 6, "end_hour": 9})
         client.put("/api/v1/preferences", json={"default_cluster_id": doomed})
-        session = client.app.state.session_factory()
+        session = app_of(client).state.session_factory()
         repo = IrrigationRepository(session)
         doomed_sensor = repo.get_sensors_in_cluster(doomed)[0].id
         repo.upsert_alert(
-            dedup_key="sensor-only", source="sensor", code="offline", severity="warning",
-            entity_type="sensor", entity_id=doomed_sensor, title="t", message="m",
+            dedup_key="sensor-only", source=ActivitySource.SENSOR, code="offline", severity="warning",
+            entity_type=EntityType.SENSOR, entity_id=doomed_sensor, title="t", message="m",
         )  # fmt: skip
         repo.commit()
         session.close()
 
         assert client.delete(f"/api/v1/clusters/{doomed}").status_code == HTTPStatus.OK
 
-        engine = client.app.state.session_factory.kw["bind"]
+        engine = app_of(client).state.session_factory.kw["bind"]
         with engine.connect() as conn:
             counts = {
                 table: conn.execute(text(f"SELECT COUNT(*) FROM {table}")).scalar_one()  # noqa: S608 — fixed names
@@ -146,12 +150,12 @@ class TestClusterCRUD:
         assert client.get("/api/v1/preferences").json()["default_cluster_id"] is None
         assert client.get(f"/api/v1/clusters/{kept}/windows").json()
 
-    def test_delete_not_found(self, client):
+    def test_delete_not_found(self, client: TestClient) -> None:
         """Delete not found."""
         resp = client.delete("/api/v1/clusters/999")
         assert resp.status_code == HTTPStatus.NOT_FOUND
 
-    def test_double_delete_returns_404(self, client):
+    def test_double_delete_returns_404(self, client: TestClient) -> None:
         """Double delete returns 404."""
         client.post("/api/v1/clusters", json={"name": "Once"})
         client.delete("/api/v1/clusters/1")
@@ -162,7 +166,7 @@ class TestClusterCRUD:
 class TestClusterStatus:
     """Tests for cluster status."""
 
-    def test_status_seeded(self, seeded_client):
+    def test_status_seeded(self, seeded_client: TestClient) -> None:
         """Status seeded."""
         resp = seeded_client.get("/api/v1/clusters/1/status")
         assert resp.status_code == HTTPStatus.OK
@@ -173,7 +177,9 @@ class TestClusterStatus:
         assert len(data["sensors"]) == 1
         assert data["irrigator"] is not None
 
-    def test_status_off_season_reasons_serialize_without_warning(self, app, seeded_client, monkeypatch):
+    def test_status_off_season_reasons_serialize_without_warning(
+        self, app: FastAPI, seeded_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Regression: an off-season SEASONAL_* reason must not trip the Pydantic serializer.
 
         The seasonal rule used to rebind ``decision.reasons`` to a tuple, so
@@ -198,7 +204,7 @@ class TestClusterStatus:
         assert "seasonal_hold" in codes
 
     @pytest.mark.usefixtures("frozen_clock")
-    def test_status_reports_the_real_age_of_a_reading_older_than_a_day(self, client):
+    def test_status_reports_the_real_age_of_a_reading_older_than_a_day(self, client: TestClient) -> None:
         """B-22: a sensor quiet for 3 days shows its last reading and its real age, not ``None``."""
         cid = client.post("/api/v1/clusters", json={"name": "Quiet"}).json()["id"]
         sid = client.post(
@@ -207,7 +213,7 @@ class TestClusterStatus:
         ).json()["id"]
         three_days = 3 * 24 * 3600
         soil = 41.0
-        session = client.app.state.session_factory()
+        session = app_of(client).state.session_factory()
         repo = IrrigationRepository(session)
         repo.add_sensor_reading(sid, timestamp=FROZEN_TS - three_days, soil_moisture=soil)
         repo.commit()
@@ -217,7 +223,7 @@ class TestClusterStatus:
         assert row["reading_age_seconds"] == three_days
         assert row["last_reading"]["soil_moisture"] == soil
 
-    def test_status_not_found(self, client):
+    def test_status_not_found(self, client: TestClient) -> None:
         """Status not found."""
         resp = client.get("/api/v1/clusters/999/status")
         assert resp.status_code == HTTPStatus.NOT_FOUND
@@ -226,7 +232,7 @@ class TestClusterStatus:
 class TestClusterHistory:
     """Tests for cluster history."""
 
-    def test_history_empty(self, seeded_client):
+    def test_history_empty(self, seeded_client: TestClient) -> None:
         """History empty."""
         resp = seeded_client.get("/api/v1/clusters/1/history")
         assert resp.status_code == HTTPStatus.OK
@@ -235,12 +241,12 @@ class TestClusterHistory:
         assert isinstance(data["sensors"], list)
         assert isinstance(data["irrigators"], list)
 
-    def test_history_custom_hours(self, seeded_client):
+    def test_history_custom_hours(self, seeded_client: TestClient) -> None:
         """History custom hours."""
         resp = seeded_client.get("/api/v1/clusters/1/history?hours=48")
         assert resp.status_code == HTTPStatus.OK
 
-    def test_history_not_found(self, client):
+    def test_history_not_found(self, client: TestClient) -> None:
         """History not found."""
         resp = client.get("/api/v1/clusters/999/history")
         assert resp.status_code == HTTPStatus.NOT_FOUND
@@ -249,7 +255,7 @@ class TestClusterHistory:
 class TestClusterDetail:
     """Tests for cluster detail."""
 
-    def test_detail_inlines_children(self, seeded_client):
+    def test_detail_inlines_children(self, seeded_client: TestClient) -> None:
         """GET /clusters/{id}/detail returns plants/sensors/irrigators/config/windows."""
         resp = seeded_client.get("/api/v1/clusters/1/detail")
         assert resp.status_code == HTTPStatus.OK
@@ -264,7 +270,7 @@ class TestClusterDetail:
         assert data["config"]["mode"] == "smart"
         assert data["windows"] == []
 
-    def test_detail_includes_windows(self, seeded_client):
+    def test_detail_includes_windows(self, seeded_client: TestClient) -> None:
         """Configured irrigation windows show up in the detail payload."""
         window = {"start_hour": 6, "end_hour": 9, "weekday_mask": 127, "label": "AM"}
         seeded_client.post("/api/v1/clusters/1/windows", json=window)
@@ -273,12 +279,12 @@ class TestClusterDetail:
         assert len(windows) == 1
         assert windows[0]["start_hour"] == window["start_hour"]
 
-    def test_detail_not_found(self, client):
+    def test_detail_not_found(self, client: TestClient) -> None:
         """Detail not found."""
         resp = client.get("/api/v1/clusters/999/detail")
         assert resp.status_code == HTTPStatus.NOT_FOUND
 
-    def test_plain_get_unchanged(self, seeded_client):
+    def test_plain_get_unchanged(self, seeded_client: TestClient) -> None:
         """GET /clusters/{id} still returns the flat ClusterResponse shape."""
         resp = seeded_client.get("/api/v1/clusters/1")
         assert resp.status_code == HTTPStatus.OK
@@ -288,7 +294,7 @@ class TestClusterDetail:
         assert data["id"] == 1
         assert data["name"] == "Test Cluster"
 
-    def test_detail_cross_cluster_isolation(self, seeded_client):
+    def test_detail_cross_cluster_isolation(self, seeded_client: TestClient) -> None:
         """Detail for cluster A must not leak rows from cluster B."""
         seeded_client.post("/api/v1/clusters", json={"name": "Other"})
         seeded_client.post("/api/v1/clusters/2/plants", json={"species": "Other Plant"})
