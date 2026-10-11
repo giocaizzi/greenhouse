@@ -164,7 +164,8 @@ class PumpWatcherService:
         Args:
             irrigator: Irrigator running the pump.
             duration_seconds: Requested irrigation duration; watch exits
-                ``duration_seconds`` after the deadline begins ticking.
+                ``duration_seconds`` after the deadline begins ticking. A
+                negative value is treated as 0.
             started_at: Unix timestamp of the start event, used for the
                 aborted-event row and alert payload. Defaults to ``now``.
 
@@ -175,9 +176,9 @@ class PumpWatcherService:
             ``interrupted`` means ``stop_requested`` fired (server shutdown)
             before the cycle ended; the pump was NOT touched.
         """
-        cluster_id = irrigator.cluster_id
         started_at = started_at if started_at is not None else int(time.time())
-        deadline = self._clock() + max(0.0, float(duration_seconds))
+        duration_seconds = max(0, duration_seconds)  # nothing to watch: complete at once, 0 s elapsed
+        deadline = self._clock() + float(duration_seconds)
         warmup_until = self._clock() + self._warmup
         polls = 0
         failures = 0  # consecutive failed reads
@@ -205,7 +206,7 @@ class PumpWatcherService:
                 if HealthAlarm.NO_WATER in state.alarms and now >= warmup_until:
                     self._handle_trip(
                         irrigator=irrigator,
-                        cluster_id=cluster_id,
+                        cluster_id=irrigator.cluster_id,
                         state=state,
                         started_at=started_at,
                         polls=polls,

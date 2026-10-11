@@ -457,15 +457,15 @@ def test_watch_completed_reports_zero_read_failures_even_after_a_failed_read(pum
     }
 
 
-def test_watch_negative_duration_current_behavior_reports_negative_elapsed(pump):
-    """Pins current behavior: a negative duration completes at once with elapsed = -duration offset."""
+def test_watch_negative_duration_completes_at_once_with_zero_elapsed(pump):
+    """A negative duration is clamped to 0: the watch completes at once and reports 0 s elapsed."""
     watcher = _watcher(pump, [100.0, 100.0, 100.0])
     assert watcher.watch(pump.irrigator, -5) == {
         "outcome": "completed",
         "polls": 0,
         "read_failures": 0,
         "alarm_raw": None,
-        "elapsed_seconds": -5.0,
+        "elapsed_seconds": 0.0,
     }
     assert pump.adapter.calls == []
 
