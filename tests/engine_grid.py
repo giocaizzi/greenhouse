@@ -546,6 +546,17 @@ def _second_review_cases() -> list[Case]:
             events=(Event(age_s=10 * HOUR, duration=2),),
         ),
         Case(id="series/stuck-low-probe-beside-wet-plant", family="series", at=BASE_AT, sensors=stuck_low),
+        # A cactus in the cluster must not switch off the Monstera's emergency (per-sensor bands).
+        Case(
+            id="series/cactus-beside-dry-monstera",
+            family="series",
+            at=BASE_AT,
+            plants=(("Monstera deliciosa", "tropical"), ("Unknown cactus", "cacti")),
+            sensors=(
+                SensorSpec("Monstera Probe", (Reading(600, soil=16.0),), 0),
+                SensorSpec("Cactus Probe", (Reading(600, soil=25.0),), 1),
+            ),
+        ),
         # Device soil-dry alarm while the probe reads 80 % (Monstera band tops at 60 %): over-watering vetoes it.
         Case(
             id="series/water-warning-on-over-watered-soil",

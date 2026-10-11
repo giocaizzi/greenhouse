@@ -2,8 +2,9 @@
 
 import math
 import statistics
-from collections.abc import Mapping
-from typing import Any
+from collections.abc import Iterable, Mapping
+from dataclasses import dataclass
+from typing import Any, Protocol
 
 from greenhouse_core.constants import (
     DEFAULT_SOIL_MOISTURE_MAX,
@@ -13,6 +14,7 @@ from greenhouse_core.constants import (
     WATER_NEEDS_HIGH_MEAN,
     WATER_NEEDS_LOW_MEAN,
 )
+from greenhouse_core.logic.decision import SensorSnapshot
 
 
 def _widest_range(plant_care_data: list[dict[str, Any]], min_key: str, max_key: str) -> tuple[float, float] | None:
@@ -83,3 +85,49 @@ def analyze_water_needs(plant_care_data: list[dict[str, Any]]) -> str:
     if avg > WATER_NEEDS_HIGH_MEAN:
         return "high"
     return "medium"
+
+
+class _HasId(Protocol):
+    id: int
+
+
+@dataclass(frozen=True, slots=True)
+class SoilNow:
+    """One sensor's current soil reading and the moisture band it is judged against.
+
+    ``band`` is the linked plant's own target; an unlinked sensor (or one whose
+    plant is unknown) is judged against the cluster's widest band.
+    """
+
+    name: str
+    value: float
+    band: tuple[float, float]
+
+
+def cluster_band(plant_care: Iterable[Mapping[str, Any]]) -> tuple[float, float]:
+    """The widest moisture band across the cluster's plants: (lowest minimum, highest maximum)."""
+    ranges = [moisture_target_range(c) for c in plant_care]
+    if not ranges:
+        return (DEFAULT_SOIL_MOISTURE_MIN, DEFAULT_SOIL_MOISTURE_MAX)
+    return min(r[0] for r in ranges), max(r[1] for r in ranges)
+
+
+def plant_bands(plants: Iterable[_HasId], plant_care: Iterable[Mapping[str, Any]]) -> dict[int, tuple[float, float]]:
+    """Each plant's own moisture band, keyed by plant id (``plant_care`` is aligned with ``plants``)."""
+    return {plant.id: moisture_target_range(care) for plant, care in zip(plants, plant_care, strict=True)}
+
+
+def current_soil(
+    snapshot: SensorSnapshot, bands: Mapping[int, tuple[float, float]], fallback: tuple[float, float]
+) -> list[SoilNow]:
+    """Every sensor with a current soil reading, paired with the band its plant needs.
+
+    The per-sensor band is what keeps one plant's needs from deciding for
+    another: a cactus in the cluster must not lower the dry threshold of the
+    Monstera next to it.
+    """
+    return [
+        SoilNow(s.name, s.latest_soil_moisture, bands.get(s.plant_id, fallback) if s.plant_id is not None else fallback)
+        for s in snapshot.per_sensor
+        if s.latest_soil_moisture is not None
+    ]

@@ -79,5 +79,4 @@ def get_recent_sensor_data(db: IrrigationRepository, cluster_id: int, hours: int
         avg_light=_mean_or_none(daytime_light),
         per_sensor=[_per_sensor_snapshot(sensor, readings) for sensor, readings in cleaned],
         water_warnings=sorted(water_warnings),
-        latest_soil_moisture=[v for _, readings in cleaned if (v := _latest_soil(readings)) is not None],
     )

@@ -140,9 +140,10 @@ class PerSensorSnapshot(BaseModel):
     avg_temperature: float | None = None
     avg_humidity: float | None = None
     avg_soil_moisture: float | None = None
-    # This sensor's newest cleaned soil reading — what the soil rule judges (current
-    # state, not the 24 h average); left out of the persisted payload like the
-    # snapshot-level ``latest_soil_moisture`` it feeds.
+    # This sensor's newest cleaned soil reading — the *current* state the soil rule and
+    # the critical-stress check judge (the 24 h aggregates include readings from before
+    # the last watering). Derived from the same readings, so it is left out of the
+    # persisted payload (exclude=True) and the decision-log schema is unchanged.
     latest_soil_moisture: float | None = Field(default=None, exclude=True)
 
 
@@ -159,11 +160,6 @@ class SensorSnapshot(BaseModel):
     avg_light: float | None = None
     per_sensor: list[PerSensorSnapshot] = Field(default_factory=list)
     water_warnings: list[str] = Field(default_factory=list)
-    # Each sensor's newest cleaned soil reading — the cluster's *current* state, which
-    # the critical-stress check keys on (the 24 h min/avg above include readings from
-    # before the last watering). Derived from the same readings, so it is left out of
-    # the persisted payload (exclude=True) and the decision-log schema is unchanged.
-    latest_soil_moisture: list[float] = Field(default_factory=list, exclude=True)
 
     @property
     def has_data(self) -> bool:

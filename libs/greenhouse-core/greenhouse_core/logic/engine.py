@@ -9,7 +9,7 @@ import logging
 import math
 import statistics
 import time
-from collections.abc import Callable, Mapping
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Protocol
 
@@ -83,10 +83,13 @@ from greenhouse_core.logic.decision import (
 )
 from greenhouse_core.logic.fallback import temperature_based_decision
 from greenhouse_core.logic.plant_needs import (
+    SoilNow,
     analyze_water_needs,
+    cluster_band,
+    current_soil,
     get_ideal_humidity_range,
     get_ideal_temp_range,
-    moisture_target_range,
+    plant_bands,
 )
 from greenhouse_core.logic.sensors import get_recent_sensor_data
 from greenhouse_core.logic.stress import detect_stress_conditions, wettest_above_band
@@ -128,6 +131,8 @@ class _EngineInputs:
     humidity_range: tuple[float, float] | None
     water_needs: str
     light_month: int  # month in the preferences timezone; picks the seasonal light factor
+    soil: list[SoilNow]  # each sensor's current reading with its plant's band (plant_needs.current_soil)
+    band: tuple[float, float]  # the cluster's widest moisture band
 
 
 class IrrigationLogic:
@@ -221,7 +226,7 @@ class IrrigationLogic:
             return self._fallback_decision(cluster_id, evaluated_at, current_temp, inputs), True
         decision = _base_decision(cluster_id, evaluated_at, inputs)
         terminal = (
-            _veto_water_warning(decision, inputs.plant_care)
+            _veto_water_warning(decision, inputs.soil)
             or _apply_water_warning_rule(decision)
             or _apply_critical_stress_rule(decision)
         )
@@ -236,7 +241,7 @@ class IrrigationLogic:
         evaluated_at: int,
     ) -> None:
         """Non-terminal rules, in their fixed order; vacation rationing always runs last."""
-        _apply_soil_moisture_rule(decision, inputs.plant_care)
+        _apply_soil_moisture_rule(decision, inputs.soil, inputs.band)
         _apply_temperature_adjustment(decision, inputs.temp_range)
         _apply_humidity_adjustment(decision, inputs.humidity_range)
         _apply_light_adjustment(decision, inputs.light_month)
@@ -268,6 +273,7 @@ class IrrigationLogic:
         self._attach_learning_alerts(cluster_id, stress)
 
         plant_care = [self.plant_db.get_care_data(species=p.species, category=p.category) for p in plants]
+        band = cluster_band(plant_care)
         return _EngineInputs(
             snapshot=snapshot,
             trends=trends,
@@ -277,6 +283,8 @@ class IrrigationLogic:
             humidity_range=get_ideal_humidity_range(plant_care),
             water_needs=analyze_water_needs(plant_care),
             light_month=light_month,
+            soil=current_soil(snapshot, plant_bands(plants, plant_care), band),
+            band=band,
         )
 
     def _fallback_decision(
@@ -780,7 +788,7 @@ def _ensure_reason(decision: IrrigationDecision) -> None:
     )
 
 
-def _veto_water_warning(decision: IrrigationDecision, plant_care: list[dict[str, Any]]) -> bool:
+def _veto_water_warning(decision: IrrigationDecision, soil: list[SoilNow]) -> bool:
     """Do not act on the device's soil-dry alarm while the soil reads over-watered.
 
     Over-watering (or any sensor currently above the plants' band — the same
@@ -793,11 +801,11 @@ def _veto_water_warning(decision: IrrigationDecision, plant_care: list[dict[str,
     snapshot = decision.sensor_snapshot
     if not stress.water_warning or snapshot is None:
         return False
-    wet = wettest_above_band(snapshot, plant_care)
+    wet = wettest_above_band(soil)
     if stress.over_watering is not None:
         evidence = stress.over_watering
     elif wet is not None:
-        evidence = f"soil above the plants' band (wettest={wet[0]:.0f}% > {wet[1]:.0f}%)"
+        evidence = f"soil above the plants' band (wettest={wet.value:.0f}% > {wet.band[1]:.0f}%)"
     else:
         return False
     decision.action = Action.SKIP
@@ -865,52 +873,34 @@ def _apply_critical_stress_rule(decision: IrrigationDecision) -> bool:
     return False
 
 
-def _apply_soil_moisture_rule(decision: IrrigationDecision, plant_care: list[dict[str, Any]]) -> None:
+def _apply_soil_moisture_rule(decision: IrrigationDecision, soil: list[SoilNow], band: tuple[float, float]) -> None:
     """Soil rule with conflict detection: the driest plant *now* drives it (invariant #2).
 
-    It judges each sensor's newest cleaned reading — the cluster's current
-    state — not the 24 h pool: a plant that was dry yesterday and has been
-    watered since is no longer "very dry", and an old dry reading does not make
-    a now-wet cluster look like a dry/wet conflict. The 24 h aggregates stay in
-    the snapshot for the audit log; trends keep their own 48 h window.
+    It judges each sensor's current cleaned reading — not the 24 h pool, so a
+    plant watered since yesterday is no longer "very dry" — and the dry steps
+    use the band of the plant each sensor is linked to (unlinked sensors use the
+    cluster's widest band), so one drought-tolerant plant cannot lower the dry
+    threshold of its neighbours. Wetness (the conflict's wet side, adequate vs
+    wet) is judged against the cluster's widest band. The 24 h aggregates stay
+    in the snapshot for the audit log; trends keep their own 48 h window.
     """
-    snapshot = decision.sensor_snapshot
-    if snapshot is None or not snapshot.latest_soil_moisture:
+    if not soil:
         return
-
-    current = snapshot.latest_soil_moisture
-    band = _cluster_target_band(plant_care)
-    soil = (min(current), max(current))
-    if _is_conflict(soil, band):
-        _apply_conflict(decision, snapshot, soil, band)
+    dry = [s for s in soil if s.value < s.band[0]]
+    wet = [s for s in soil if s.value > band[1] - CONFLICT_WET_MARGIN]
+    if dry and wet:
+        _apply_conflict(decision, soil, dry, wet)
         return
-    _apply_soil_level(decision, statistics.mean(current), soil, band)
+    _apply_soil_level(decision, soil, dry, band)
 
 
-def _cluster_target_band(plant_care: list[dict[str, Any]]) -> tuple[float, float]:
-    """The widest moisture band across the cluster's plants: (lowest minimum, highest maximum)."""
-    target_ranges = [moisture_target_range(d) for d in plant_care]
-    return min(r[0] for r in target_ranges), max(r[1] for r in target_ranges)
+def _names(sensors: list[SoilNow]) -> str:
+    """Comma-joined sensor names, in per-sensor order ("?" when there are none)."""
+    return ", ".join(s.name for s in sensors) or "?"
 
 
-def _is_conflict(soil: tuple[float, float], band: tuple[float, float]) -> bool:
-    """One plant below its band while another sits near or above the top of it."""
-    return (soil[0] < band[0]) and (soil[1] > band[1] - CONFLICT_WET_MARGIN)
-
-
-def _sensor_names(snapshot: SensorSnapshot, keep: Callable[[float], bool]) -> list[str]:
-    """Names of the sensors whose current soil reading passes ``keep``, in per-sensor order."""
-    return [s.name for s in snapshot.per_sensor if s.latest_soil_moisture is not None and keep(s.latest_soil_moisture)]
-
-
-def _apply_conflict(
-    decision: IrrigationDecision, snapshot: SensorSnapshot, soil: tuple[float, float], band: tuple[float, float]
-) -> None:
+def _apply_conflict(decision: IrrigationDecision, soil: list[SoilNow], dry: list[SoilNow], wet: list[SoilNow]) -> None:
     """Dry and wet plants share the cluster: a short burst, naming the sensors on each side."""
-    min_soil, max_soil = soil
-    target_min, target_max = band
-    dry_names = _sensor_names(snapshot, lambda v: v < target_min)
-    wet_names = _sensor_names(snapshot, lambda v: v > target_max - CONFLICT_WET_MARGIN)
     decision.action = Action.IRRIGATE
     decision.duration_minutes = CONFLICT_DURATION_MINUTES
     decision.interval_hours = CONFLICT_INTERVAL_HOURS
@@ -918,8 +908,8 @@ def _apply_conflict(
     decision.add_reason(
         code=TriggerCode.CONFLICT,
         message=(
-            f"conflict: dry={min_soil:.0f}% ({', '.join(dry_names) or '?'}), "
-            f"wet={max_soil:.0f}% ({', '.join(wet_names) or '?'}) — short burst"
+            f"conflict: dry={min(s.value for s in soil):.0f}% ({_names(dry)}), "
+            f"wet={max(s.value for s in soil):.0f}% ({_names(wet)}) — short burst"
         ),
         severity=Severity.WARNING,
         icon="scales",
@@ -927,46 +917,53 @@ def _apply_conflict(
 
 
 def _apply_soil_level(
-    decision: IrrigationDecision, avg_soil: float, soil: tuple[float, float], band: tuple[float, float]
+    decision: IrrigationDecision, soil: list[SoilNow], dry: list[SoilNow], band: tuple[float, float]
 ) -> None:
-    """VERY_DRY → DRY → ADEQUATE → WET: the driest current reading decides dryness, their mean decides adequacy."""
-    min_soil, max_soil = soil
-    target_min, target_max = band
-    if min_soil < target_min - VERY_DRY_MARGIN:
+    """VERY_DRY → DRY → ADEQUATE → WET: per-sensor dryness first, then the current mean decides adequacy."""
+    very_dry = [s for s in dry if s.value < s.band[0] - VERY_DRY_MARGIN]
+    if very_dry:
+        driest = min(very_dry, key=lambda s: s.value)
         decision.action = Action.IRRIGATE
         decision.duration_minutes = STRESS_DURATION_MINUTES
         decision.interval_hours = CONFLICT_INTERVAL_HOURS
         decision.confidence = CONFIDENCE_SENSOR_VERY_DRY
         decision.add_reason(
             code=TriggerCode.SENSOR_VERY_DRY,
-            message=f"soil very dry (driest={min_soil:.0f}% < {target_min}%)",
+            message=f"soil very dry (driest={driest.value:.0f}% < {driest.band[0]}%)",
             severity=Severity.WARNING,
             icon="drop",
         )
-    elif min_soil < target_min:
+        return
+    if dry:
         decision.action = Action.IRRIGATE
         decision.duration_minutes = DEFAULT_DURATION_MINUTES
         decision.interval_hours = DEFAULT_INTERVAL_HOURS
         decision.confidence = CONFIDENCE_SENSOR_DRY
         decision.add_reason(
             code=TriggerCode.SENSOR_DRY,
-            message=f"soil moderately dry (driest={min_soil:.0f}%)",
+            message=f"soil moderately dry (driest={min(s.value for s in dry):.0f}%)",
             icon="drop",
         )
-    elif avg_soil <= target_max:
-        decision.action = Action.SKIP
+        return
+    _apply_soil_wetness(decision, soil, band)
+
+
+def _apply_soil_wetness(decision: IrrigationDecision, soil: list[SoilNow], band: tuple[float, float]) -> None:
+    """No plant is dry: ADEQUATE while the current mean is within the cluster's band, else WET."""
+    values = [s.value for s in soil]
+    decision.action = Action.SKIP
+    if statistics.mean(values) <= band[1]:
         decision.confidence = CONFIDENCE_SENSOR_ADEQUATE
         decision.add_reason(
             code=TriggerCode.SENSOR_ADEQUATE,
-            message=f"soil moisture adequate (range={min_soil:.0f}-{max_soil:.0f}%)",
+            message=f"soil moisture adequate (range={min(values):.0f}-{max(values):.0f}%)",
             icon="check-circle",
         )
     else:
-        decision.action = Action.SKIP
         decision.confidence = CONFIDENCE_SENSOR_WET
         decision.add_reason(
             code=TriggerCode.SENSOR_WET,
-            message=f"soil too wet (wettest={max_soil:.0f}% > {target_max}%)",
+            message=f"soil too wet (wettest={max(values):.0f}% > {band[1]}%)",
             icon="drop-half",
         )
 

@@ -14,7 +14,7 @@ from fake_data import FAKE_CLUSTER_NAME, FAKE_DEVICE_ID, FAKE_IRRIGATOR_NAME
 from greenhouse_core.learning import issues
 from greenhouse_core.learning.issues import detect_conflicts, detect_issues
 from greenhouse_core.learning.models import PlantProfile
-from greenhouse_core.logic.decision import SensorSnapshot, Trends
+from greenhouse_core.logic.decision import PerSensorSnapshot, SensorSnapshot, Trends
 from greenhouse_core.logic.stress import detect_stress_conditions
 from greenhouse_core.logic.trends import analyze_historical_trends
 
@@ -79,7 +79,8 @@ def test_low_light_fires_strictly_below_forty_percent_of_seasonal_min(monkeypatc
 )
 def test_water_stress_low_and_steep_decline_boundaries(soil, delta, fires):
     trends = Trends(soil_moisture_trend="declining", soil_moisture_delta=delta)
-    stress = _stress({}, SensorSnapshot(avg_soil_moisture=soil, latest_soil_moisture=[soil]), trends)
+    current = [PerSensorSnapshot(sensor_id=1, name="Soil", latest_soil_moisture=soil)]
+    stress = _stress({}, SensorSnapshot(avg_soil_moisture=soil, per_sensor=current), trends)
     assert (stress.water_stress is not None) is fires
     if fires:
         assert stress.water_stress == f"low ({soil:.0f}%) + steep decline ({delta:.0f}%)"

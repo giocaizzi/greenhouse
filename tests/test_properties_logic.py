@@ -35,7 +35,7 @@ from greenhouse_core.constants import (
     TREND_MOISTURE_THRESHOLD,
 )
 from greenhouse_core.logic.cleaning import clean_readings, clean_readings_around, clean_readings_desc
-from greenhouse_core.logic.decision import Action, SensorSnapshot, Trends, TriggerCode
+from greenhouse_core.logic.decision import Action, PerSensorSnapshot, SensorSnapshot, Trends, TriggerCode
 from greenhouse_core.logic.fallback import temperature_based_decision
 from greenhouse_core.logic.plant_needs import (
     analyze_water_needs,
@@ -373,6 +373,16 @@ _plants = st.lists(
         category=st.sampled_from(["tropical", "fern", "cacti", None]),
     ),
     max_size=3,
+).map(lambda plants: [SimpleNamespace(id=i + 1, **vars(p)) for i, p in enumerate(plants)])
+_per_sensor = st.lists(
+    st.builds(
+        PerSensorSnapshot,
+        sensor_id=st.integers(1, 9),
+        name=st.sampled_from(["Soil A", "Soil B", "Soil C"]),
+        plant_id=st.one_of(st.none(), st.integers(1, 4)),
+        latest_soil_moisture=st.floats(0, 100, allow_nan=False),
+    ),
+    max_size=3,
 )
 _snapshots = st.builds(
     SensorSnapshot,
@@ -381,7 +391,7 @@ _snapshots = st.builds(
     avg_soil_moisture=_maybe(st.floats(0, 100, allow_nan=False)),
     avg_light=_maybe(st.floats(16, 200_000, allow_nan=False)),
     water_warnings=st.lists(st.sampled_from(["Soil A", "Soil B"]), max_size=2, unique=True),
-    latest_soil_moisture=st.lists(st.floats(0, 100, allow_nan=False), max_size=3),
+    per_sensor=_per_sensor,
 )
 _trends = st.builds(
     Trends,
@@ -406,18 +416,17 @@ def test_detect_stress_conditions_rules(plants, snapshot, trends):
         soil is not None and soil > 70 and (trends.irrigation_frequency_high or trends.soil_moisture_trend == "rising")
     )
     assert (stress.over_watering is not None) == expect_over
-    # Water stress keys on the driest *current* reading; over-watering or a plant above the band vetoes it.
-    current = snapshot.latest_soil_moisture
-    driest = min(current, default=None)
+    # Water stress: per sensor, its current reading against its own plant's band (unlinked or unknown plant →
+    # the cluster's widest band); critical = min(30, band min − 15), low = critical + 10. Over-watering or any
+    # sensor above its own band vetoes it.
     care = [plant_database().get_care_data(species=p.species, category=p.category) for p in plants]
-    # Plant-aware thresholds: 15 points below the lowest plant minimum, capped at 30 % (low = critical + 10).
-    critical = min(30.0, min((moisture_target_range(c)[0] for c in care), default=45.0) - 15)
-    dry = driest is not None and (
-        driest < critical
-        or (driest < critical + 10 and trends.soil_moisture_trend == "declining" and trends.soil_moisture_delta < -10)
-    )
-    band_top = max((moisture_target_range(c)[1] for c in care), default=65.0)
-    vetoed = expect_over or (bool(current) and max(current) > band_top)
+    ranges = [moisture_target_range(c) for c in care]
+    widest = (min(r[0] for r in ranges), max(r[1] for r in ranges)) if ranges else (45.0, 65.0)
+    own = dict(zip((p.id for p in plants), ranges, strict=True))
+    current = [(s.latest_soil_moisture, own.get(s.plant_id, widest)) for s in snapshot.per_sensor]
+    steep = trends.soil_moisture_trend == "declining" and trends.soil_moisture_delta < -10
+    dry = any(v < min(30.0, lo - 15) or (steep and v < min(30.0, lo - 15) + 10) for v, (lo, _) in current)
+    vetoed = expect_over or any(v > hi for v, (_, hi) in current)
     assert (stress.water_stress is not None) == (dry and not vetoed)
     if not plants:
         assert stress.heat_stress is None and stress.low_env_humidity is None and stress.low_light is None

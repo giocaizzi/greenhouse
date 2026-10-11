@@ -6,8 +6,6 @@ from typing import Any
 
 from greenhouse_core.constants import (
     CRITICAL_STRESS_BELOW_TARGET_MARGIN,
-    DEFAULT_SOIL_MOISTURE_MAX,
-    DEFAULT_SOIL_MOISTURE_MIN,
     SOIL_MOISTURE_CRITICAL,
     SOIL_MOISTURE_LOW,
     SOIL_MOISTURE_SATURATED,
@@ -17,7 +15,14 @@ from greenhouse_core.constants import (
     STRESS_STEEP_DECLINE_DELTA,
 )
 from greenhouse_core.logic.decision import SensorSnapshot, StressIndicators, Trends
-from greenhouse_core.logic.plant_needs import get_ideal_humidity_range, get_ideal_temp_range, moisture_target_range
+from greenhouse_core.logic.plant_needs import (
+    SoilNow,
+    cluster_band,
+    current_soil,
+    get_ideal_humidity_range,
+    get_ideal_temp_range,
+    plant_bands,
+)
 from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_core.utils import effective_light_threshold
@@ -54,56 +59,46 @@ def _low_light(snapshot: SensorSnapshot, care: list[dict[str, Any]], month: int 
     return None
 
 
-def _critical_thresholds(care: list[dict[str, Any]]) -> tuple[float, float]:
-    """(critical, low) soil thresholds for these plants, never above the global 30 % / 40 %.
+def _critical_thresholds(plant_min: float) -> tuple[float, float]:
+    """(critical, low) soil thresholds for a plant with this minimum target, never above 30 % / 40 %.
 
-    Keyed on the lowest minimum target across the cluster's plants (the same
-    parser as the soil rule): a band that tolerates dry soil lowers both, a
-    thirsty one keeps the global values.
+    A band that tolerates dry soil lowers both; a thirsty one keeps the global
+    values, so nothing triggers later than before for it.
     """
-    lowest_min = min((moisture_target_range(c)[0] for c in care), default=DEFAULT_SOIL_MOISTURE_MIN)
-    critical = min(float(SOIL_MOISTURE_CRITICAL), lowest_min - CRITICAL_STRESS_BELOW_TARGET_MARGIN)
+    critical = min(float(SOIL_MOISTURE_CRITICAL), plant_min - CRITICAL_STRESS_BELOW_TARGET_MARGIN)
     return critical, critical + (SOIL_MOISTURE_LOW - SOIL_MOISTURE_CRITICAL)
 
 
-def _water_stress(snapshot: SensorSnapshot, trends: Trends, care: list[dict[str, Any]]) -> str | None:
-    """Critically dry soil, or low soil still falling steeply — judged on the driest plant *now*.
+def _water_stress(soil: list[SoilNow], trends: Trends) -> str | None:
+    """Critically dry soil, or low soil still falling steeply — per sensor, against its own plant.
 
     Invariant #2 (the driest plant drives the call) holds here too: averaging a
     wilting plant at 10 % with a watered one at 60 % would hide the emergency.
-    But this override is terminal and waters at stress dosage, so it keys on each
-    sensor's newest cleaned reading, not on the 24 h minimum — a plant that was
-    dry yesterday and has been watered since is not in critical stress. The
-    thresholds follow the plants' own targets (:func:`_critical_thresholds`).
+    The override is terminal and waters at stress dosage, so it keys on each
+    sensor's current reading and on the band of the plant that sensor is linked
+    to (:func:`_critical_thresholds`); one cactus in the cluster must not switch
+    the emergency off for the Monstera beside it.
     """
-    driest = min(snapshot.latest_soil_moisture, default=None)
-    if driest is None:
-        return None
-    critical, low = _critical_thresholds(care)
-    if driest < critical:
+    steep = trends.soil_moisture_trend == "declining" and trends.soil_moisture_delta < STRESS_STEEP_DECLINE_DELTA
+    critical = [s.value for s in soil if s.value < _critical_thresholds(s.band[0])[0]]
+    if critical:
         declining = " + declining" if trends.soil_moisture_trend == "declining" else ""
-        return f"critical low ({driest:.0f}%){declining}"
-    if (
-        driest < low
-        and trends.soil_moisture_trend == "declining"
-        and trends.soil_moisture_delta < STRESS_STEEP_DECLINE_DELTA
-    ):
-        return f"low ({driest:.0f}%) + steep decline ({trends.soil_moisture_delta:.0f}%)"
+        return f"critical low ({min(critical):.0f}%){declining}"
+    low = [s.value for s in soil if steep and s.value < _critical_thresholds(s.band[0])[1]]
+    if low:
+        return f"low ({min(low):.0f}%) + steep decline ({trends.soil_moisture_delta:.0f}%)"
     return None
 
 
-def wettest_above_band(snapshot: SensorSnapshot, care: list[dict[str, Any]]) -> tuple[float, float] | None:
-    """``(wettest current reading, band top)`` when some sensor sits above the cluster's widest band.
+def wettest_above_band(soil: list[SoilNow]) -> SoilNow | None:
+    """The wettest sensor whose current reading is above its own plant's band, if any.
 
     A stress run (or acting on the device's soil-dry alarm) would drown that
     plant; the mixed case belongs to the soil rule's short conflict burst (and a
     stuck-low probe beside a wet plant is more likely a fault than an emergency).
     """
-    if not snapshot.latest_soil_moisture:
-        return None
-    band_top = max((moisture_target_range(c)[1] for c in care), default=DEFAULT_SOIL_MOISTURE_MAX)
-    wettest = max(snapshot.latest_soil_moisture)
-    return (wettest, band_top) if wettest > band_top else None
+    above = [s for s in soil if s.value > s.band[1]]
+    return max(above, key=lambda s: s.value) if above else None
 
 
 def _heat_stress(snapshot: SensorSnapshot, trends: Trends, care: list[dict[str, Any]]) -> str | None:
@@ -146,6 +141,7 @@ def detect_stress_conditions(  # noqa: PLR0913 — five pinned positionals (test
     stress = StressIndicators()
     plants = db.get_plants_in_cluster(cluster_id)
     plant_care = [plant_db.get_care_data(species=p.species, category=p.category) for p in plants]
+    soil = current_soil(snapshot, plant_bands(plants, plant_care), cluster_band(plant_care))
 
     # Assign only detected conditions, in field order, so `model_fields_set` is unchanged.
     if (water_warning := _water_warning(snapshot)) is not None:
@@ -156,8 +152,8 @@ def detect_stress_conditions(  # noqa: PLR0913 — five pinned positionals (test
         stress.low_light = low_light
     over_watering = _over_watering(snapshot, trends)
     # Over-watering, or any plant currently above its band, vetoes the water-stress override.
-    water_stress = _water_stress(snapshot, trends, plant_care)
-    if water_stress is not None and over_watering is None and wettest_above_band(snapshot, plant_care) is None:
+    water_stress = _water_stress(soil, trends)
+    if water_stress is not None and over_watering is None and wettest_above_band(soil) is None:
         stress.water_stress = water_stress
     if (heat_stress := _heat_stress(snapshot, trends, plant_care)) is not None:
         stress.heat_stress = heat_stress
