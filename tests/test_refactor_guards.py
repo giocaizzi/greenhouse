@@ -52,6 +52,9 @@ SHADOWING_ALLOWED: dict[str, frozenset[str]] = {
     "greenhouse_cli.tui.screens.search:SearchScreen": frozenset({"BINDINGS", "compose"}),
     "greenhouse_cli.tui.screens.settings:SettingsScreen": frozenset({"BINDINGS", "compose"}),
     "greenhouse_cli.tui.screens.system:SystemScreen": frozenset({"BINDINGS", "compose"}),
+    # fix(tui): overriding Textual's two idle-time column measurements IS the fix for the stale narrow
+    # render (they leave the render caches keyed on an unchanged _update_count); there is no public hook.
+    "greenhouse_cli.tui.table:DataTable": frozenset({"_update_column_widths", "_update_dimensions"}),
     "greenhouse_cli.tui.widgets:Banner": frozenset(),
     "greenhouse_cli.tui.widgets:ClusterCard": frozenset({"BINDINGS", "compose"}),
     "greenhouse_cli.tui.widgets:Heatmap": frozenset(),

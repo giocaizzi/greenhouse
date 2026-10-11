@@ -1164,6 +1164,59 @@ class TestRefill:
         self._table_app(body)
 
 
+class TestTableColumnWidths:
+    """A table painted before its idle-time measurement must not keep serving the label-only widths."""
+
+    TITLE = "Low battery: Monstera probe"
+
+    def test_paint_before_measurement_repaints_at_the_measured_width(self):
+        from textual.app import App
+        from textual.geometry import Region
+
+        from greenhouse_cli.tui.table import DataTable as TuiDataTable
+
+        class TableApp(App):
+            # A fixed height, like ``#alerts-table``: an auto-height table resizes when the row lands, and
+            # Textual's resize handler would invalidate the stale render by itself.
+            CSS = "#t { height: 1fr; }"
+
+            def compose(self):
+                yield TuiDataTable(id="t")
+
+        async def scenario():
+            app = TableApp()
+            async with app.run_test(size=(80, 10)) as pilot:
+                table = app.query_one(TuiDataTable)
+                table.add_columns("ID", "Title", "Cluster")
+                await pilot.pause()
+                refill(table, [("1", ["1", self.TITLE, "2"])])
+                assert table._new_rows, "the row must still be unmeasured for this paint to race the measurement"
+                # What the screen's update timer does when it fires before the table's idle (a busy CPU).
+                table.render_lines(Region(0, 0, table.size.width, table.size.height))
+                await _settle_until(pilot, app, lambda: not table._require_update_dimensions)
+                header, row = (table.render_line(y).text for y in range(2))
+                assert self.TITLE in row, row
+                assert header.index("Cluster") == row.index(self.TITLE) + len(self.TITLE) + 2, (header, row)
+
+        _run(scenario())
+
+    def test_every_tui_table_is_the_width_safe_one(self):
+        """Textual's own ``DataTable`` would bring the stale-width paint back; screens use ``tui.table``'s."""
+        import ast
+
+        from greenhouse_cli import tui as tui_pkg
+
+        offenders = []
+        for path in sorted(Path(tui_pkg.__file__).parent.rglob("*.py")):
+            if path.name == "table.py":
+                continue
+            for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+                if isinstance(node, ast.ImportFrom) and (node.module or "").startswith("textual"):
+                    if any(alias.name == "DataTable" for alias in node.names):
+                        offenders.append(path.name)
+        assert offenders == []
+
+
 class TestSpriteView:
     @pytest.mark.parametrize("animate", [True, False])
     def test_widget_animate_still_works_on_a_sprite(self, animate):

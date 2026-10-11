@@ -12,13 +12,14 @@ from textual.app import ComposeResult
 from textual.binding import BindingType
 from textual.containers import Horizontal, Vertical
 from textual.message import Message
-from textual.widgets import DataTable, Sparkline, Static
+from textual.widgets import Sparkline, Static
 from textual_plotext import PlotextPlot
 
 from greenhouse_cli.constants import HOURS_PER_DAY, SECONDS_PER_HOUR
 from greenhouse_cli.tui import formatting as fmt
 from greenhouse_cli.tui.model import ClusterSummary
 from greenhouse_cli.tui.sprites import MOOD_COLORS, MOOD_LABELS, Mood, logo_sprite, plant_sprite
+from greenhouse_cli.tui.table import DataTable
 
 ANIMATION_INTERVAL = 0.7
 

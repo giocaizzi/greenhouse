@@ -15,7 +15,7 @@ from typing import Any, ClassVar
 from textual.app import ComposeResult
 from textual.binding import Binding, BindingType
 from textual.containers import Horizontal, HorizontalScroll, Vertical, VerticalScroll
-from textual.widgets import DataTable, Footer, Header, Static, TabbedContent, TabPane
+from textual.widgets import Footer, Header, Static, TabbedContent, TabPane
 
 from greenhouse_cli.constants import ALL_WEEKDAYS
 from greenhouse_cli.tui import formatting as fmt
@@ -25,6 +25,7 @@ from greenhouse_cli.tui.screens.base import DataScreen
 from greenhouse_cli.tui.screens.forms import Field
 from greenhouse_cli.tui.screens.modals import ConfirmScreen, IrrigateScreen, WaterNowScreen
 from greenhouse_cli.tui.sprites import watering_can_sprite
+from greenhouse_cli.tui.table import DataTable
 from greenhouse_cli.tui.widgets import Heatmap, KeyValue, MetricChart, PlantTile, SpriteView, refill, selected_key
 
 METRIC_ORDER = ["soil_moisture", "temperature", "env_humidity", "light", "overlay"]
