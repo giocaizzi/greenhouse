@@ -557,6 +557,16 @@ def _second_review_cases() -> list[Case]:
                 SensorSpec("Cactus Probe", (Reading(600, soil=25.0),), 1),
             ),
         ),
+        # Stuck-high probe beside a dry plant whose own probe raises the alarm: not a veto — conflict burst.
+        Case(
+            id="series/stuck-high-probe-beside-alarming-dry-plant",
+            family="series",
+            at=BASE_AT,
+            sensors=(
+                SensorSpec("Stuck High", (Reading(600, soil=90.0),), None),
+                SensorSpec("Dry Probe", (Reading(600, soil=20.0, water_warning=True),), 0),
+            ),
+        ),
         # Device soil-dry alarm while the probe reads 80 % (Monstera band tops at 60 %): over-watering vetoes it.
         Case(
             id="series/water-warning-on-over-watered-soil",

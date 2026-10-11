@@ -225,12 +225,7 @@ class IrrigationLogic:
         if not sensors or not inputs.snapshot.has_data:
             return self._fallback_decision(cluster_id, evaluated_at, current_temp, inputs), True
         decision = _base_decision(cluster_id, evaluated_at, inputs)
-        terminal = (
-            _veto_water_warning(decision, inputs.soil)
-            or _apply_water_warning_rule(decision)
-            or _apply_critical_stress_rule(decision)
-        )
-        return decision, terminal
+        return decision, _apply_emergency_rules(decision, inputs.soil)
 
     def _apply_adjustments(
         self,
@@ -242,6 +237,7 @@ class IrrigationLogic:
     ) -> None:
         """Non-terminal rules, in their fixed order; vacation rationing always runs last."""
         _apply_soil_moisture_rule(decision, inputs.soil, inputs.band)
+        _note_deferred_alarm(decision, inputs.soil)
         _apply_temperature_adjustment(decision, inputs.temp_range)
         _apply_humidity_adjustment(decision, inputs.humidity_range)
         _apply_light_adjustment(decision, inputs.light_month)
@@ -788,26 +784,40 @@ def _ensure_reason(decision: IrrigationDecision) -> None:
     )
 
 
-def _veto_water_warning(decision: IrrigationDecision, soil: list[SoilNow]) -> bool:
-    """Do not act on the device's soil-dry alarm while the soil reads over-watered.
+def _apply_emergency_rules(decision: IrrigationDecision, soil: list[SoilNow]) -> bool:
+    """The device soil-dry alarm, then critical stress; True when one of them decides (terminal).
 
-    Over-watering (or any sensor currently above the plants' band — the same
-    veto as the water-stress override) wins: the decision is an OVER_WATERING
-    skip, and the conflicting alarm is recorded as a WATER_WARNING reason so
-    the audit log shows it was seen and why it was not acted on. Without a
-    veto this is a no-op and the alarm irrigates as before.
+    The alarm is vetoed (OVER_WATERING skip, alarm recorded) when over-watering
+    is detected or the alarming sensor itself reads above its plant's band. When
+    only some *other* sensor is above its band the alarm is not an emergency —
+    it is noted after the soil rule (:func:`_note_deferred_alarm`), whose
+    conflict burst still waters the dry plant. Otherwise the alarm irrigates.
     """
     stress = decision.stress_indicators
-    snapshot = decision.sensor_snapshot
-    if not stress.water_warning or snapshot is None:
-        return False
-    wet = wettest_above_band(soil)
+    if stress.water_warning:
+        evidence = _alarm_veto_evidence(decision, soil)
+        if evidence is not None:
+            _veto_water_warning(decision, evidence)
+            return True
+        if wettest_above_band(soil) is not None:
+            return _apply_critical_stress_rule(decision)
+    return _apply_water_warning_rule(decision) or _apply_critical_stress_rule(decision)
+
+
+def _alarm_veto_evidence(decision: IrrigationDecision, soil: list[SoilNow]) -> str | None:
+    """Why the soil-dry alarm must not act: over-watering, or the alarming sensor reads above its band."""
+    stress = decision.stress_indicators
     if stress.over_watering is not None:
-        evidence = stress.over_watering
-    elif wet is not None:
-        evidence = f"soil above the plants' band (wettest={wet.value:.0f}% > {wet.band[1]:.0f}%)"
-    else:
-        return False
+        return stress.over_watering
+    alarming = set(decision.sensor_snapshot.water_warnings) if decision.sensor_snapshot else set()
+    wet = wettest_above_band([s for s in soil if s.name in alarming])
+    if wet is None:
+        return None
+    return f"alarming sensor {wet.name} reads above its band ({wet.value:.0f}% > {wet.band[1]:.0f}%)"
+
+
+def _veto_water_warning(decision: IrrigationDecision, evidence: str) -> None:
+    """OVER_WATERING skip; the conflicting alarm is recorded so the audit log shows it was seen."""
     decision.action = Action.SKIP
     decision.interval_hours = MAX_INTERVAL_HOURS
     decision.confidence = CONFIDENCE_OVER_WATERING
@@ -819,11 +829,27 @@ def _veto_water_warning(decision: IrrigationDecision, soil: list[SoilNow]) -> bo
     )
     decision.add_reason(
         code=TriggerCode.WATER_WARNING,
-        message=f"device soil-dry alarm not acted on (soil reads over-watered): {stress.water_warning}",
+        message=f"device soil-dry alarm not acted on (soil reads over-watered): {decision.stress_indicators.water_warning}",
         severity=Severity.WARNING,
         icon="warning-circle",
     )
-    return True
+
+
+def _note_deferred_alarm(decision: IrrigationDecision, soil: list[SoilNow]) -> None:
+    """Record a soil-dry alarm that reached the adjustments (deferred because another sensor reads wet)."""
+    warning = decision.stress_indicators.water_warning
+    wet = wettest_above_band(soil)
+    if not warning or wet is None:
+        return
+    decision.add_reason(
+        code=TriggerCode.WATER_WARNING,
+        message=(
+            f"device soil-dry alarm not acted on as an emergency ({wet.name} reads above its band, "
+            f"{wet.value:.0f}% > {wet.band[1]:.0f}%): {warning}"
+        ),
+        severity=Severity.WARNING,
+        icon="warning-circle",
+    )
 
 
 def _apply_water_warning_rule(decision: IrrigationDecision) -> bool:

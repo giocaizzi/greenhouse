@@ -954,3 +954,20 @@ def test_over_watered_soil_vetoes_the_device_soil_dry_alarm(tmp_db, frozen_clock
     assert vetoed.action.value == "skip"
     assert [r.code for r in vetoed.reasons] == [TriggerCode.OVER_WATERING, TriggerCode.WATER_WARNING]
     assert "not acted on" in vetoed.reasons[1].message
+
+
+def test_stuck_high_probe_does_not_veto_another_plants_alarm(tmp_db, frozen_clock):
+    """Another sensor above its band only defers the alarm: the soil rule's conflict burst still waters."""
+    cid = tmp_db.add_cluster("Mixed alarm")
+    tmp_db.add_plant(cluster_id=cid, species="Monstera deliciosa", category="tropical")
+    now = int(time.time())
+    for i, (soil, alarm) in enumerate(((90.0, None), (20.0, True))):
+        sid = tmp_db.add_sensor(
+            cluster_id=cid, tuya_device_id=f"fake_mix_{i}", name=f"S{i}", sensor_type="x", config={}
+        )
+        tmp_db.add_sensor_reading(sensor_id=sid, timestamp=now - 600, soil_moisture=soil, water_warning=alarm)
+
+    decision = IrrigationLogic(tmp_db, get_plant_database()).decide_for_cluster(cid)
+
+    assert decision.action.value == "irrigate"
+    assert [r.code for r in decision.reasons] == [TriggerCode.CONFLICT, TriggerCode.WATER_WARNING]
