@@ -129,9 +129,9 @@ def _is_hampel_outlier(values: list[float], i: int, radius: int, n_sigma: float)
     point, so the first sample of a genuine step (40, 40, 40, 60, 60) is
     outvoted by the old level. A spike reverts one reading later; a step does
     not. So a point whose right context is truncated is kept when every later
-    sample agrees with it (within the same tolerance) — it is the new level.
-    A lone newest outlier has no follower and is still rejected; mid-series a
-    step has full right context and the window median follows it on its own.
+    sample confirms it as the new level (:func:`_confirms_level`). A lone
+    newest outlier has no follower and is still rejected; mid-series a step has
+    full right context and the window median follows it on its own.
     """
     n = len(values)
     window = values[max(0, i - radius) : min(n, i + radius + 1)]
@@ -143,8 +143,21 @@ def _is_hampel_outlier(values: list[float], i: int, radius: int, n_sigma: float)
     if abs(values[i] - median) <= tolerance:
         return False
     followers = values[i + 1 :]
-    confirmed = bool(followers) and all(abs(v - values[i]) <= tolerance for v in followers)
+    confirmed = bool(followers) and all(_confirms_level(f, values[i], median, tolerance) for f in followers)
     return not (i + radius >= n and confirmed)
+
+
+def _confirms_level(follower: float, value: float, median: float, tolerance: float) -> bool:
+    """A later sample backs ``value`` as a new level, not a glitch beside a real change.
+
+    It must sit on the same side of the window median, nearer to ``value`` than
+    to the median, and within ``tolerance`` of it. The nearness test matters:
+    a genuine level change inflates the window's MAD (hence ``tolerance``), so
+    in ``62, 61, 60, 60, 59, 58, 0, 40, 40`` the 40s are within tolerance of the
+    0 % glitch yet much closer to the median — they confirm the change, not 0 %.
+    """
+    same_side = (follower - median) * (value - median) > 0
+    return same_side and abs(follower - value) < abs(follower - median) and abs(follower - value) <= tolerance
 
 
 def clean_readings(readings: Iterable[SensorReading | CleanedReading]) -> list[CleanedReading]:

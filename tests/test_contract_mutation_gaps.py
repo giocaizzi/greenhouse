@@ -261,6 +261,10 @@ def test_hampel_keeps_a_step_change_confirmed_by_the_following_samples():
     assert _clean_soil([55.0] * 8 + [10.0]) == [55.0] * 8 + [None]
     assert _clean_soil([40.0, 40.0, 40.0, 60.0, 60.0, 40.0, 40.0]) == [40.0, 40.0, 40.0, None, None, 40.0, 40.0]
     assert _clean_soil([55.0] * 4 + [10.0] + [55.0] * 4) == [55.0] * 4 + [None] + [55.0] * 4
+    # A glitch right beside a genuine level change: the 40s confirm the change, not the 0 %.
+    assert _clean_soil([62.0, 61.0, 60.0, 60.0, 59.0, 58.0, 0.0, 40.0, 40.0]) == [
+        62.0, 61.0, 60.0, 60.0, 59.0, 58.0, None, 40.0, 40.0,
+    ]  # fmt: skip
 
 
 # ── logic/timing.py ─────────────────────────────────────────────────────────

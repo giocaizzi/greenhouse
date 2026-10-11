@@ -512,6 +512,22 @@ def _driest_family() -> list[Case]:
     return cases
 
 
+def _second_review_cases() -> list[Case]:
+    """Second-review probes: a spike glitch right beside a genuine level change."""
+    half_hour = HOUR // 2
+    glitch = _series([62.0, 61.0, 60.0, 60.0, 59.0, 58.0, 0.0, 40.0, 40.0], step_s=half_hour)
+    return [
+        Case(id="series/glitch-beside-level-change/monstera", family="series", at=BASE_AT, sensors=(glitch,)),
+        Case(
+            id="series/glitch-beside-level-change/dracaena",
+            family="series",
+            at=BASE_AT,
+            plants=PLANT_SETS["dracaena"],
+            sensors=(glitch,),
+        ),
+    ]
+
+
 def _series_family() -> list[Case]:
     flat_spike_mid = [55.0] * 4 + [10.0] + [55.0] * 4
     shapes: dict[str, tuple[SensorSpec, ...]] = {
@@ -551,6 +567,7 @@ def _series_family() -> list[Case]:
         cases.append(
             Case(id=f"series/{k}/inserted-desc", family="series", at=BASE_AT, sensors=shapes[k], insert_desc=True)
         )
+    cases += _second_review_cases()
     for label, age in (
         ("0s", 0),
         ("1h", HOUR),

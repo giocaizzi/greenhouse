@@ -579,3 +579,58 @@ def test_plant_needs_zero_is_a_real_bound():
 def test_analyze_water_needs_unknown_level_counts_as_medium():
     assert analyze_water_needs([{"water_needs": "extreme"}, {"water_needs": "high"}]) == "medium"
     assert analyze_water_needs([]) == "medium"
+
+
+def _plain_hampel_mask(values, radius=3, n_sigma=3.0):
+    """The textbook centered Hampel test, without the newest-end step confirmation."""
+    import statistics
+
+    from greenhouse_core.constants import CLEANING_MAD_FLOOR, CLEANING_MAD_SCALE
+
+    mask = []
+    for i, v in enumerate(values):
+        window = values[max(0, i - radius) : i + radius + 1]
+        median = statistics.median(window)
+        mad = statistics.median([abs(x - median) for x in window])
+        mask.append(abs(v - median) > n_sigma * max(CLEANING_MAD_SCALE * mad, CLEANING_MAD_FLOOR))
+    return mask
+
+
+@st.composite
+def _noisy_series_with_shift_and_glitches(draw):
+    """A sensor-like series: a level with small noise, maybe one level change, up to two glitches."""
+    base = draw(st.floats(10, 90))
+    noise = draw(st.lists(st.floats(-1.5, 1.5), min_size=5, max_size=12))
+    values = [round(base + x, 1) for x in noise]
+    shift_at = draw(st.integers(1, len(values)))
+    delta = draw(st.floats(-40, 40))
+    values = values[:shift_at] + [round(v + delta, 1) for v in values[shift_at:]]
+    # Glitches land anywhere, but often right at the level change (the hard case).
+    near = st.integers(max(0, shift_at - 2), len(values) - 1)
+    where = st.one_of(near, st.integers(0, len(values) - 1))
+    return values, draw(st.lists(st.tuples(where, st.sampled_from([0.0, 3.0, 15.0, 99.0])), max_size=2))
+
+
+@settings(PROFILE, max_examples=2000)
+@given(_noisy_series_with_shift_and_glitches())
+def test_step_confirmation_only_spares_points_their_followers_back(series_and_glitches):
+    """Every point kept beyond plain Hampel has followers nearer to it than to its window median.
+
+    So the cleaned minimum can only drop below plain Hampel's for a genuine,
+    confirmed level change — never for a glitch sitting beside one.
+    """
+    import statistics
+
+    from greenhouse_core.logic.cleaning import _hampel_outlier_mask
+
+    values, glitches = series_and_glitches
+    for index, value in glitches:
+        if index < len(values):
+            values[index] = value
+    plain = _plain_hampel_mask(values)
+    for i, (was_flagged, flagged) in enumerate(zip(plain, _hampel_outlier_mask(values, 3, 3.0), strict=True)):
+        if was_flagged and not flagged:
+            median = statistics.median(values[max(0, i - 3) : i + 4])
+            followers = values[i + 1 :]
+            assert followers
+            assert all(abs(f - values[i]) < abs(f - median) for f in followers)
