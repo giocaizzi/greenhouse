@@ -10,7 +10,7 @@ import math
 import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Protocol, cast
+from typing import TYPE_CHECKING, Any, Protocol
 
 from greenhouse_core.constants import (
     CONFIDENCE_BASELINE,
@@ -91,6 +91,7 @@ from greenhouse_core.logic.sensors import get_recent_sensor_data
 from greenhouse_core.logic.stress import detect_stress_conditions
 from greenhouse_core.logic.timing import (
     active_quiet_window,
+    environment_for,
     is_within_irrigation_window,
     local_now,
     season_for,
@@ -103,7 +104,6 @@ from greenhouse_core.repository import IrrigationRepository
 from greenhouse_core.utils import seasonal_light_factor
 
 if TYPE_CHECKING:
-    from greenhouse_core.logic.timing import Environment
     from greenhouse_core.models import Cluster, Plant, VacationWindow
 
 log = logging.getLogger(__name__)
@@ -362,7 +362,7 @@ class IrrigationLogic:
         reading the indoor key (avoids surprising mixed-env scaling).
         """
         tz_name = self._tz_name()
-        environment = cast("Environment", cluster.environment or "indoor")
+        environment = environment_for(cluster.environment)
         season = season_for(evaluated_at, tz_name=tz_name)
 
         season_key = (
@@ -563,9 +563,10 @@ class IrrigationLogic:
     ) -> IrrigationDecision | None:
         """Skip irrigation for outdoor clusters when significant rain is forecast.
 
-        No-ops when weather_client is not configured or the cluster is indoor.
+        No-ops when weather_client is not configured or the cluster is not
+        outdoor (see :func:`environment_for` — the same rule the seasonal table uses).
         """
-        if self._weather is None or cluster.environment == "indoor":
+        if self._weather is None or environment_for(cluster.environment) != "outdoor":
             return None
 
         forecast = self._weather.get_forecast(hours=WEATHER_FORECAST_HOURS)

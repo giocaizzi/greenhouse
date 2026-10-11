@@ -853,3 +853,24 @@ def test_light_thresholds_use_the_preferences_timezone_month(tmp_db):
         decision = IrrigationLogic(tmp_db, get_plant_database()).decide_for_cluster(cid)
 
     assert TriggerCode.LIGHT_BRIGHT in [r.code for r in decision.reasons]
+
+
+@pytest.mark.parametrize(("environment", "rain_skips"), [("outdoor", True), ("greenhouse", False), (None, False)])
+def test_outdoorness_is_one_rule_for_rain_and_seasons(tmp_db, frozen_clock, environment, rain_skips):
+    """Only ``environment == "outdoor"`` is outdoor: the rain skip and the seasonal table agree.
+
+    A "greenhouse" (or unset) cluster used to get the rain skip but the indoor seasonal
+    table; it is now sheltered for both.
+    """
+    from greenhouse_core.logic.timing import environment_for
+
+    cid = tmp_db.add_cluster("Env", environment=environment)
+    tmp_db.add_plant(cluster_id=cid, species=FAKE_PLANT_SPECIES)
+    sid = tmp_db.add_sensor(cluster_id=cid, tuya_device_id=FAKE_SENSOR_ID, name="S", sensor_type="x", config={})
+    tmp_db.add_sensor_reading(sensor_id=sid, timestamp=int(time.time()) - 600, soil_moisture=35.0)
+    logic = IrrigationLogic(tmp_db, get_plant_database(), weather_client=_StubWeatherClient(precipitation_mm=9.0))
+
+    decision = logic.decide_for_cluster(cid)
+
+    assert (decision.primary_code is TriggerCode.WEATHER_SKIP) is rain_skips
+    assert environment_for(environment) == ("outdoor" if rain_skips else "indoor")
