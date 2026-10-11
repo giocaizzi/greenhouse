@@ -32,14 +32,7 @@ from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.services.actuation_gates import first_gate_block
 from greenhouse_server.services.alerts import raise_alert, sync_cluster_alerts
 from greenhouse_server.services.health_monitor import DeviceHealthMonitor
-from greenhouse_server.services.irrigation_jobs import (  # noqa: F401 — re-exported: callers and tests use these paths
-    _add_leak_check_job,
-    _leak_check_done,
-    _run_leak_check,
-    _schedule_leak_check,
-    rearm_leak_checks,
-    record_leak_check_armed,
-)
+from greenhouse_server.services.irrigation_jobs import _schedule_leak_check, record_leak_check_armed
 from greenhouse_server.services.maintenance import AlertFinding, collect_learning_alerts, collect_maintenance_alerts
 from greenhouse_server.services.notify import NtfyClient, maybe_notify
 from greenhouse_server.services.pump_watcher_jobs import schedule_pump_watcher

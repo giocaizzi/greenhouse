@@ -16,6 +16,7 @@ from greenhouse_core.constants import LEAK_CHECK_DELAY_SECONDS, LEAK_HOLD_HOURS
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.scheduler import scheduler as bg_scheduler
 from greenhouse_server.services import irrigation as irrigation_mod
+from greenhouse_server.services import irrigation_jobs as irrigation_jobs_mod
 from server.conftest import _make_stubbed_app
 
 
@@ -78,7 +79,7 @@ class TestRearm:
         _start(app, iid, now - 900, triggered_by="manual")  # no armed marker: a hand log, no check
         _start(app, iid, now - LEAK_HOLD_HOURS * 3600 - 60)  # older than the hold horizon
 
-        assert irrigation_mod.rearm_leak_checks() == 2
+        assert irrigation_jobs_mod.rearm_leak_checks() == 2
         jobs = _leak_jobs()
         assert set(jobs) == {f"leak-check-{cid}-{pending}", f"leak-check-{cid}-{overdue}"}
         due = jobs[f"leak-check-{cid}-{pending}"].next_run_time.timestamp()
@@ -105,7 +106,7 @@ class TestRearm:
             session.commit()
         finally:
             session.close()
-        assert irrigation_mod.rearm_leak_checks() == 1
+        assert irrigation_jobs_mod.rearm_leak_checks() == 1
         assert set(_leak_jobs()) == {f"leak-check-{cid}-{forced}"}
 
     def test_long_manual_start_is_rearmed_with_its_own_window(self, app, running_scheduler):
@@ -121,7 +122,7 @@ class TestRearm:
             session.commit()
         finally:
             session.close()
-        assert irrigation_mod.rearm_leak_checks() == 1
+        assert irrigation_jobs_mod.rearm_leak_checks() == 1
         job = _leak_jobs()[f"leak-check-{cid}-{started}"]
         assert list(job.args) == [cid, started, 5100]
         assert job.next_run_time.timestamp() == pytest.approx(started + 5100, abs=1)
@@ -129,19 +130,19 @@ class TestRearm:
     def test_completed_check_is_not_rearmed(self, app, running_scheduler, check_calls):
         cid, iid = _seed(app)
         overdue = _start(app, iid, int(time.time()) - 2700)
-        assert irrigation_mod.rearm_leak_checks() == 1
+        assert irrigation_jobs_mod.rearm_leak_checks() == 1
         job = _leak_jobs()[f"leak-check-{cid}-{overdue}"]
         job.func(*job.args)
         assert check_calls == [(cid, overdue)]
 
         bg_scheduler.remove_job(job.id)
-        assert irrigation_mod.rearm_leak_checks() == 0  # marker found
+        assert irrigation_jobs_mod.rearm_leak_checks() == 0  # marker found
         assert _leak_jobs() == {}
 
     def test_job_runs_check_at_most_once(self, app, running_scheduler, check_calls):
         cid, iid = _seed(app)
         ts = _start(app, iid, int(time.time()) - 2700)
-        irrigation_mod.rearm_leak_checks()
+        irrigation_jobs_mod.rearm_leak_checks()
         job = _leak_jobs()[f"leak-check-{cid}-{ts}"]
         job.func(*job.args)
         job.func(*job.args)  # e.g. normal job + re-armed job both fired
@@ -156,11 +157,11 @@ class TestRearm:
         monkeypatch.setattr(leak_mod.LeakDetectionService, "check_after_irrigation", _boom)
         cid, iid = _seed(app)
         ts = _start(app, iid, int(time.time()) - 2700)
-        irrigation_mod.rearm_leak_checks()
+        irrigation_jobs_mod.rearm_leak_checks()
         job = _leak_jobs()[f"leak-check-{cid}-{ts}"]
         job.func(*job.args)
         bg_scheduler.remove_job(job.id)
-        assert irrigation_mod.rearm_leak_checks() == 1  # still owed
+        assert irrigation_jobs_mod.rearm_leak_checks() == 1  # still owed
 
     def test_already_held_start_is_not_rechecked(self, app, running_scheduler):
         """A start whose check raised a hold before markers existed is treated as checked
@@ -181,12 +182,12 @@ class TestRearm:
             session.commit()
         finally:
             session.close()
-        assert irrigation_mod.rearm_leak_checks() == 0
+        assert irrigation_jobs_mod.rearm_leak_checks() == 0
 
     def test_noop_when_scheduler_stopped(self, app):
         _, iid = _seed(app)
         _start(app, iid, int(time.time()) - 600)
-        assert irrigation_mod.rearm_leak_checks() == 0
+        assert irrigation_jobs_mod.rearm_leak_checks() == 0
 
 
 class TestStartupWiring:

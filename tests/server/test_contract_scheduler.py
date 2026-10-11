@@ -32,7 +32,7 @@ from greenhouse_core.constants import LEAK_ALERT_CODE
 from greenhouse_core.devices.health import DeviceHealthState, HealthAlarm
 from greenhouse_server import scheduler as sched
 from greenhouse_server.scheduler import scheduler as bg_scheduler
-from greenhouse_server.services import irrigation as irrigation_mod
+from greenhouse_server.services import irrigation_jobs as irrigation_jobs_mod
 from greenhouse_server.services import pump_watcher_jobs as pump_watcher_jobs_mod
 from server.test_contract_pipeline import Pipeline, RecordingGateway
 
@@ -125,7 +125,7 @@ def test_init_scheduler_rebinds_the_module_app(p, clean_env):
 def test_every_job_has_safe_defaults_stopped_and_running(p):
     """``max_instances=1``, ``coalesce=True``, ``misfire_grace_time=None`` on core *and* ad-hoc jobs."""
     p.app.state.device_registry = p.wiring.registry
-    irrigation_mod._add_leak_check_job(1, FROZEN_TS)  # ad-hoc job on a stopped scheduler
+    irrigation_jobs_mod._add_leak_check_job(1, FROZEN_TS)  # ad-hoc job on a stopped scheduler
     sched.start_scheduler(paused=True)
     try:
         assert pump_watcher_jobs_mod.schedule_pump_watcher(1, 2, FROZEN_TS) is True
@@ -276,7 +276,7 @@ def test_apply_persisted_pause_edge_cases(p, monkeypatch, caplog):
 
 def test_delete_core_vs_adhoc_jobs(p):
     """Built-in jobs → 409 (API) and nothing changes; an ad-hoc job is deleted; unknown → 404."""
-    irrigation_mod._add_leak_check_job(1, FROZEN_TS)
+    irrigation_jobs_mod._add_leak_check_job(1, FROZEN_TS)
     adhoc_id = f"leak-check-1-{FROZEN_TS}"
     out = {}
     for job_id in CORE_JOB_ORDER:
@@ -291,7 +291,7 @@ def test_delete_core_vs_adhoc_jobs(p):
 
 def test_web_delete_requires_running_scheduler(p):
     """The web delete form answers 503 on a stopped scheduler, then 409 / 200 / 404 like the API."""
-    irrigation_mod._add_leak_check_job(1, FROZEN_TS)
+    irrigation_jobs_mod._add_leak_check_job(1, FROZEN_TS)
     stopped = p.client.post("/scheduler/jobs/check_all/delete")
     sched.start_scheduler(paused=True)
     try:
@@ -503,9 +503,9 @@ def test_run_leak_check_raises_hold_once_and_marks_done(p):
     started_at = FROZEN_TS - 2 * HOUR
     _seed_leak_shape(p, started_at)
     p.mark()
-    irrigation_mod._run_leak_check(1, started_at)
+    irrigation_jobs_mod._run_leak_check(1, started_at)
     first = p.db_rows()
-    irrigation_mod._run_leak_check(1, started_at)  # idempotent: marker found → skipped
+    irrigation_jobs_mod._run_leak_check(1, started_at)  # idempotent: marker found → skipped
     second = p.db_rows()
     assert second == first
     assert [a["code"] for a in first["activity_events"]] == ["leak_hold", "leak_check"]
@@ -522,11 +522,11 @@ def test_run_leak_check_noops_and_failure(p, monkeypatch, caplog):
     _seed_leak_shape(p, started_at)
     p.mark()
     monkeypatch.setattr(sched, "_app", None)
-    irrigation_mod._run_leak_check(1, started_at)
+    irrigation_jobs_mod._run_leak_check(1, started_at)
     monkeypatch.setattr(sched, "_app", p.app)
     monkeypatch.setattr(LeakDetectionService, "check_after_irrigation", lambda self, c, s: 1 / 0)
     with caplog.at_level(logging.ERROR, logger="greenhouse_server.services.irrigation"):
-        irrigation_mod._run_leak_check(1, started_at)
+        irrigation_jobs_mod._run_leak_check(1, started_at)
     assert "Leak check job failed for cluster 1" in caplog.text
     # Neither call left a marker (so a restart would re-arm it).
     assert p.db_rows()["activity_events"] == []
@@ -539,10 +539,10 @@ def test_rearm_leak_checks(p):
     p.add_event(ids["irrigator_id"], age=2 * HOUR)  # overdue → now
     p.add_event(ids["irrigator_id"], age=3 * HOUR, triggered_by="manual")  # never re-armed
     p.add_event(ids["irrigator_id"], age=30 * HOUR)  # outside LEAK_HOLD_HOURS
-    assert irrigation_mod.rearm_leak_checks() == 0
+    assert irrigation_jobs_mod.rearm_leak_checks() == 0
     sched.start_scheduler(paused=True)
     try:
-        assert irrigation_mod.rearm_leak_checks() == 2
+        assert irrigation_jobs_mod.rearm_leak_checks() == 2
         jobs = sorted((j.id, str(j.trigger)) for j in bg_scheduler.get_jobs() if j.id.startswith("leak-check-"))
     finally:
         sched.stop_scheduler()
