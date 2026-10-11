@@ -119,13 +119,13 @@ def _add_core_job(
     func: "Callable[[], None]",
     trigger: str,
     *,
-    id: str,  # noqa: A002 — mirrors APScheduler add_job(id=...) at every call site
+    job_id: str,
     name: str,
     **trigger_args: object,
 ) -> None:
     """Register (or replace) a built-in job and mark its id as core."""
-    _CORE_JOB_IDS.add(id)
-    scheduler.add_job(func, trigger, id=id, name=name, replace_existing=True, **trigger_args)
+    _CORE_JOB_IDS.add(job_id)
+    scheduler.add_job(func, trigger, id=job_id, name=name, replace_existing=True, **trigger_args)
 
 
 def core_job_ids() -> frozenset[str]:
@@ -186,7 +186,7 @@ def init_scheduler(app: FastAPI, settings: Settings, tz_name: str | None = None)
         _sync_job,
         "interval",
         minutes=settings.sync_interval_minutes,
-        id="sensor_sync",
+        job_id="sensor_sync",
         name="Sensor data sync",
     )
     _add_tz_bound_cron_jobs(settings)
@@ -194,14 +194,14 @@ def init_scheduler(app: FastAPI, settings: Settings, tz_name: str | None = None)
         _anomaly_job,
         "interval",
         minutes=ANOMALY_SCAN_INTERVAL_MINUTES,
-        id="sensor_anomaly",
+        job_id="sensor_anomaly",
         name="Sensor anomaly scan",
     )
     _add_core_job(
         _health_monitor_job,
         "interval",
         minutes=HEALTH_POLL_IDLE_MINUTES,
-        id="device_health_monitor",
+        job_id="device_health_monitor",
         name="Device health monitor",
     )
 
@@ -219,7 +219,7 @@ def _add_tz_bound_cron_jobs(settings: Settings) -> None:
         "cron",
         hour=_resolve_check_cron_hours(settings),
         minute=0,
-        id=CHECK_ALL_JOB_ID,
+        job_id=CHECK_ALL_JOB_ID,
         name="Check all clusters",
     )
     _add_core_job(
@@ -227,7 +227,7 @@ def _add_tz_bound_cron_jobs(settings: Settings) -> None:
         "cron",
         hour=HEALTH_SNAPSHOT_HOUR,
         minute=HEALTH_SNAPSHOT_MINUTE,
-        id="plant_health_snapshot",
+        job_id="plant_health_snapshot",
         name="Daily plant health snapshot",
     )
 
