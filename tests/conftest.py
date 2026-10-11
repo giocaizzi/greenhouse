@@ -68,6 +68,20 @@ def _isolated_cli_token(monkeypatch, tmp_path_factory):
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path_factory.mktemp("xdg-config")))
 
 
+@pytest.fixture(autouse=True)
+def _no_developer_dotenv(request, monkeypatch):
+    """``Settings`` ignores a developer's ``.env`` in the working directory during tests.
+
+    Tests marked ``dotenv`` exercise the real ``.env`` loading (in their own temp
+    working directory) and keep the production ``env_file``.
+    """
+    if request.node.get_closest_marker("dotenv"):
+        return
+    from greenhouse_server.config import Settings
+
+    monkeypatch.setitem(Settings.model_config, "env_file", None)
+
+
 @pytest.fixture
 def tmp_db():
     """Create an in-memory IrrigationRepository for testing."""

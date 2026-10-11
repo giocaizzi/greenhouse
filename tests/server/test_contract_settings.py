@@ -63,6 +63,7 @@ def test_settings_schema_and_field_table_match_golden(clean_env):
     )
 
 
+@pytest.mark.dotenv
 def test_settings_model_config_explicit_keys():
     config = Settings.model_config
     assert config["env_prefix"] == "IRRIGATION_"
@@ -193,6 +194,7 @@ def test_aliased_fields_accept_both_kwarg_spellings(clean_env):
 # --- sources, precedence, extras -------------------------------------------
 
 
+@pytest.mark.dotenv
 def test_dotenv_in_cwd_is_loaded_and_env_beats_it(clean_env, monkeypatch):
     (clean_env / ".env").write_text(
         "IRRIGATION_PORT=9001\nGREENHOUSE_MCP_TOKEN=dotenv-token\nIRRIGATION_CHECK_CRON_HOURS=*\nIRRIGATION_NOT_A_FIELD=1\n"

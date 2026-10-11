@@ -264,3 +264,14 @@ def test_cli_token_resolution_is_isolated_from_the_developer(tmp_path_factory) -
     assert "GREENHOUSE_API_TOKEN" not in os.environ
     assert _default_token_path().is_relative_to(tmp_path_factory.getbasetemp())
     assert load_stored_token() is None
+
+
+def test_settings_ignore_a_developer_dotenv(tmp_path, monkeypatch) -> None:
+    """Outside tests marked ``dotenv``, a ``.env`` in the working directory is not read by ``Settings``."""
+    from greenhouse_server.config import Settings
+
+    (tmp_path / ".env").write_text("IRRIGATION_PORT=9001\n")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("IRRIGATION_PORT", raising=False)
+
+    assert Settings().port == 8000
