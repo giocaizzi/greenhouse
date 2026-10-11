@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import logging
 import time
 from importlib.metadata import PackageNotFoundError, version
 from typing import TYPE_CHECKING, Any
@@ -16,6 +17,8 @@ if TYPE_CHECKING:
     from sqlalchemy.orm import Session
 
     from greenhouse_core.models import VacationWindow
+
+logger = logging.getLogger(__name__)
 
 
 def _app_version() -> str:
@@ -43,7 +46,8 @@ def _repo_from_request(request: Request) -> tuple[IrrigationRepository, Session]
     try:
         session = state.session_factory(request.app)()
         return IrrigationRepository(session), session
-    except Exception:  # noqa: BLE001
+    except Exception:  # chrome flags are best effort; the page still renders
+        logger.debug("Could not open a session for the chrome preferences", exc_info=True)
         return None, None
 
 
@@ -68,8 +72,8 @@ def _preference_flags(request: Request) -> tuple[bool, VacationWindow | None, bo
             scheduler_paused = prefs.scheduler_paused
             theme = prefs.theme or "auto"
             active_vacation = repo.get_active_vacation()
-        except Exception:  # noqa: BLE001, S110
-            pass
+        except Exception:  # chrome flags are best effort; the page still renders
+            logger.debug("Could not read the chrome preference flags", exc_info=True)
         finally:
             # _repo_from_request sets repo and session together, so session is set whenever repo is.
             if session is not None:

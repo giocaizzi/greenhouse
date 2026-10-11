@@ -1,5 +1,6 @@
 """FastAPI application factory."""
 
+import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -65,6 +66,8 @@ if TYPE_CHECKING:
 
     from fastapi import APIRouter
 
+logger = logging.getLogger(__name__)
+
 
 def _init_tuya(app: FastAPI) -> None:
     """Build the one shared Tuya gateway and the registry that wraps it.
@@ -77,7 +80,8 @@ def _init_tuya(app: FastAPI) -> None:
     """
     try:
         gateway = DeviceGateway()
-    except Exception:  # noqa: BLE001
+    except Exception:  # degraded mode: serve without devices rather than refuse to start
+        logger.warning("Tuya gateway unavailable; starting without device control", exc_info=True)
         app.state.device_gateway = None
         app.state.device_registry = None
         return
@@ -321,7 +325,8 @@ def _startup_timezone(app: FastAPI) -> str:
             tz = IrrigationRepository(session).get_preferences().timezone
             session.commit()
             return tz or "UTC"
-    except Exception:  # noqa: BLE001
+    except Exception:  # fall back to the column default rather than refuse to start
+        logger.warning("Could not read the timezone preference at startup; using UTC", exc_info=True)
         return "UTC"
 
 
@@ -329,15 +334,17 @@ def _restore_persisted_scheduler_pause(app: FastAPI) -> None:
     """If `user_preferences.scheduler_paused` is True, re-pause check_all.
 
     Runs once on startup after `init_scheduler` so a pause survives a
-    container restart. Silently skipped if preferences cannot be read.
+    container restart. Skipped with a warning if preferences cannot be read:
+    the server still starts, but the operator must know check_all is running
+    although it was paused.
     """
     try:
         with read_session(app) as session:
             paused = IrrigationRepository(session).get_preferences().scheduler_paused
             session.commit()
         apply_persisted_pause(paused)
-    except Exception:  # noqa: BLE001, S110
-        pass
+    except Exception:  # startup must not fail on a preferences read
+        logger.warning("Could not restore the persisted scheduler pause", exc_info=True)
 
 
 def _init_plant_db(settings: Settings) -> PlantDatabase:
