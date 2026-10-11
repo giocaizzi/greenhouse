@@ -330,7 +330,8 @@ class TestWatcherTripSideEffectsAreRobust:
         adapter = _make_fake_adapter([_alarm(no_water=True, alarm_raw=1)] + _completed_alarms())
 
         def _raising_stop(_irrigator):
-            raise ConnectionError("device offline")
+            msg = "device offline"
+            raise ConnectionError(msg)
 
         adapter.stop = _raising_stop  # type: ignore[method-assign]
         watcher = PumpWatcherService(

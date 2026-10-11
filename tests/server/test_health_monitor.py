@@ -514,7 +514,8 @@ class TestUnraisedAlarmRetry:
         real_upsert = IrrigationRepository.upsert_alert
 
         def locked(_self, *_args, **_kwargs):
-            raise RuntimeError("database is locked")
+            msg = "database is locked"
+            raise RuntimeError(msg)
 
         monkeypatch.setattr(IrrigationRepository, "upsert_alert", locked)
         monitor_.poll_irrigator(irrigator)

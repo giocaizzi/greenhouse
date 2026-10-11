@@ -389,7 +389,8 @@ def test_check_all_failure_log_carries_the_exception(db, monkeypatch, caplog):
         pass
 
     def explode(_self, _cluster_id):
-        raise Boom("kaput")
+        msg = "kaput"
+        raise Boom(msg)
 
     monkeypatch.setattr(IrrigationService, "check_cluster", explode)
     svc = IrrigationService(db, None, StubSync(None), None, plant_database())
@@ -412,7 +413,8 @@ def test_check_all_failure_log_carries_the_exception(db, monkeypatch, caplog):
 @pytest.mark.parametrize(("triggered_by", "stopped"), [("auto", True), ("manual", False)])
 def test_watcher_shutdown_activity_failure_is_logged_not_raised(db, pump, monkeypatch, caplog, triggered_by, stopped):
     def broken(_self, **_kwargs):
-        raise RuntimeError("activity table locked")
+        msg = "activity table locked"
+        raise RuntimeError(msg)
 
     monkeypatch.setattr(IrrigationRepository, "add_activity_event", broken)
     irrigator = db.get_irrigator(pump.irrigator_id)
@@ -587,7 +589,8 @@ def test_rearm_failure_mid_scan_keeps_partial_count_and_logs_both_lines(monkeypa
     def flaky(self, irrigator_id, hours=24):
         seen.append(irrigator_id)
         if len(seen) == failing_call:
-            raise RuntimeError("db gone")
+            msg = "db gone"
+            raise RuntimeError(msg)
         return real(self, irrigator_id, hours=hours)
 
     monkeypatch.setattr(IrrigationRepository, "get_recent_events", flaky)
@@ -732,7 +735,8 @@ def test_session_factory_failure_escapes_the_job(p, monkeypatch, job):
     _wire_job(p, [])
 
     def broken_factory():
-        raise ConnectionError("db file locked")
+        msg = "db file locked"
+        raise ConnectionError(msg)
 
     monkeypatch.setattr(p.app.state, "session_factory", broken_factory)
     with pytest.raises(ConnectionError, match="db file locked"):
@@ -822,7 +826,8 @@ def test_watcher_job_session_commit_rollback_close_order(watcher_env, monkeypatc
     def watch(_self, _irrigator, _duration_seconds, *, started_at=None):
         del started_at  # the job passes it by keyword
         if outcome == "boom":
-            raise RuntimeError("watch exploded")
+            msg = "watch exploded"
+            raise RuntimeError(msg)
         return {"outcome": outcome}
 
     monkeypatch.setattr(pump_watcher_module.PumpWatcherService, "watch", watch)  # the spy subclass

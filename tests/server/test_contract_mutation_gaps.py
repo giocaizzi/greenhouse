@@ -329,7 +329,8 @@ def test_scheduler_toggle_unexpected_failure_is_500_naming_the_verb(api, monkeyp
     client, _ = api
 
     def boom(_repo, _paused):
-        raise RuntimeError("jobstore down")
+        msg = "jobstore down"
+        raise RuntimeError(msg)
 
     monkeypatch.setattr(scheduler_module, "set_check_all_paused", boom)
     resp = client.post(f"/api/v1/scheduler/{verb}")

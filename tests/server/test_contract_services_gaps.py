@@ -524,7 +524,8 @@ def test_trip_commit_failure_rolls_back(pump, monkeypatch):
 
     def _commit():
         calls.append("commit")
-        raise RuntimeError("db gone")
+        msg = "db gone"
+        raise RuntimeError(msg)
 
     monkeypatch.setattr(pump.repo.session, "commit", _commit)
     monkeypatch.setattr(pump.repo.session, "rollback", lambda: calls.append("rollback"))
@@ -538,7 +539,8 @@ def test_trip_rollback_failure_is_swallowed(pump, monkeypatch, caplog):
     pump.adapter.script = [DRY]
 
     def _fail():
-        raise RuntimeError("db gone")
+        msg = "db gone"
+        raise RuntimeError(msg)
 
     monkeypatch.setattr(pump.repo.session, "commit", _fail)
     monkeypatch.setattr(pump.repo.session, "rollback", _fail)

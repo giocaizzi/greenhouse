@@ -251,7 +251,8 @@ class TestCheckAllIsolation:
 
         def flaky(self, cluster_id):
             if cluster_id == failing_cluster:
-                raise RuntimeError("boom")
+                msg = "boom"
+                raise RuntimeError(msg)
             # Stand-in for an actuation side effect the cooldown relies on.
             self._repo.add_activity_event("irrigation", "cluster", "probe", "ran", entity_id=cluster_id)
             return original(self, cluster_id)
@@ -280,7 +281,8 @@ class TestCheckAllIsolation:
 
         def flaky(self, cluster_id):
             if cluster_id == failing_cluster and fail["on"]:
-                raise RuntimeError("boom")
+                msg = "boom"
+                raise RuntimeError(msg)
             return original(self, cluster_id)
 
         monkeypatch.setattr(IrrigationService, "check_cluster", flaky)

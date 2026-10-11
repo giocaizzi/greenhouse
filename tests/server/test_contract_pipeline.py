@@ -1216,7 +1216,8 @@ def _failing_commit():
     def commit(self):
         if state["armed"]:
             state["armed"] = False
-            raise RuntimeError("database is locked")
+            msg = "database is locked"
+            raise RuntimeError(msg)
         return real(self)
 
     Session.commit = commit  # type: ignore[method-assign]

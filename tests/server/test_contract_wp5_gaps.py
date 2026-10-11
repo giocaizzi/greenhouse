@@ -83,7 +83,8 @@ def failing_species(app, monkeypatch):
 
     def get_care_data(species=None, category=None):
         if species == "Bad":
-            raise ValueError("boom")
+            msg = "boom"
+            raise ValueError(msg)
         return original(species=species, category=category)
 
     monkeypatch.setattr(plant_db, "get_care_data", get_care_data)
@@ -339,7 +340,8 @@ def test_base_context_keeps_preferences_read_before_a_vacation_error(monkeypatch
     monkeypatch.setattr(IrrigationRepository, "get_preferences", lambda _self: prefs)
 
     def boom(_self):
-        raise RuntimeError("vacation read failed")
+        msg = "vacation read failed"
+        raise RuntimeError(msg)
 
     monkeypatch.setattr(IrrigationRepository, "get_active_vacation", boom)
     session = _ClosingSession()

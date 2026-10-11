@@ -120,7 +120,8 @@ class TestNtfyClient:
     def test_publish_fail_silent(self, monkeypatch):
         def boom(_req, timeout=None):
             del timeout  # NtfyClient passes it by keyword
-            raise OSError("network down")
+            msg = "network down"
+            raise OSError(msg)
 
         monkeypatch.setattr(urllib.request, "urlopen", boom)
         client = NtfyClient("https://n", "t")
@@ -149,7 +150,8 @@ class TestMaybeNotify:
 
     def test_swallows_callback_error(self):
         def boom(_client):
-            raise RuntimeError("nope")
+            msg = "nope"
+            raise RuntimeError(msg)
 
         # Should not propagate.
         maybe_notify(_RecordingNotifier(), _Prefs(), "manual", boom)

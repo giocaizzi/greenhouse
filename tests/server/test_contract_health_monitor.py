@@ -49,7 +49,8 @@ class NoCloud:
 
     def __getattr__(self, name):
         self.touched.append(name)
-        raise AssertionError(f"health monitor touched the Cloud: {name}")
+        msg = f"health monitor touched the Cloud: {name}"
+        raise AssertionError(msg)
 
 
 class SpyTR301Z(TR301ZAdapter):
@@ -388,7 +389,8 @@ def test_explicit_label_and_cluster_win(world):
 
 def test_poll_all_logs_and_continues_past_failures(world, caplog):
     def _boom(_irrigator):
-        raise ConnectionError("no route")
+        msg = "no route"
+        raise ConnectionError(msg)
 
     world["irr_adapter"].read_health = _boom  # type: ignore[method-assign]
     _persist(world, FROZEN_TS, soil_moisture=40.0, battery_state="low")
@@ -413,7 +415,8 @@ def test_poll_all_requeues_an_alert_lost_to_a_failed_commit(world, monkeypatch, 
     def _commit_fails_once():
         calls["n"] += 1
         if calls["n"] == 1:
-            raise RuntimeError("database is locked")
+            msg = "database is locked"
+            raise RuntimeError(msg)
         real_commit()
 
     monkeypatch.setattr(session, "commit", _commit_fails_once)
@@ -431,7 +434,8 @@ def test_poll_all_requeues_an_alert_lost_to_a_failed_commit(world, monkeypatch, 
 
 def test_alert_write_failure_is_logged_and_cache_still_updates(world, monkeypatch, caplog):
     def _fail(**_kwargs):
-        raise RuntimeError("db locked")
+        msg = "db locked"
+        raise RuntimeError(msg)
 
     monkeypatch.setattr(world["repo"], "upsert_alert", _fail)
     with caplog.at_level(logging.ERROR, logger="greenhouse_server.services.health_monitor"):

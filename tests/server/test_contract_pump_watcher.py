@@ -53,7 +53,8 @@ class FakeScheduler:
 
     def add_job(self, func, trigger, **kwargs):
         if self.fail:
-            raise RuntimeError("jobstore down")
+            msg = "jobstore down"
+            raise RuntimeError(msg)
         self.jobs.append({"func": func, "trigger": trigger, **kwargs})
 
 
@@ -367,7 +368,8 @@ def test_deleted_irrigator_ends_the_job_quietly(env):
 def test_job_failure_is_rolled_back_and_logged(env, monkeypatch, caplog):
     def _boom(_self, _irr, _secs, started_at=None):
         del started_at  # the job passes it by keyword
-        raise RuntimeError("watch exploded")
+        msg = "watch exploded"
+        raise RuntimeError(msg)
 
     monkeypatch.setattr(PumpWatcherService, "watch", _boom)
     schedule_pump_watcher(env.irrigator_id, 3, STARTED_AT)
@@ -494,13 +496,15 @@ def test_trip_side_effect_failures_are_logged_and_the_stop_still_happens(plain, 
     )
 
     def _fail(*_args, **_kwargs):
-        raise RuntimeError("db gone")
+        msg = "db gone"
+        raise RuntimeError(msg)
 
     requeued: list = []
 
     class _BadMonitor:
         def record(self, *_args, **_kwargs):
-            raise RuntimeError("monitor gone")
+            msg = "monitor gone"
+            raise RuntimeError(msg)
 
         def mark_unraised(self, *args):
             requeued.append(args)

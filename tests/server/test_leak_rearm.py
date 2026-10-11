@@ -153,7 +153,8 @@ class TestRearm:
     @pytest.mark.usefixtures("running_scheduler")
     def test_failed_check_leaves_no_marker(self, app, monkeypatch):
         def _boom(_self, _cluster_id, _started_at):
-            raise RuntimeError("db hiccup")
+            msg = "db hiccup"
+            raise RuntimeError(msg)
 
         monkeypatch.setattr(leak_mod.LeakDetectionService, "check_after_irrigation", _boom)
         cid, iid = _seed(app)

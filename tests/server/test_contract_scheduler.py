@@ -271,7 +271,8 @@ def test_apply_persisted_pause_edge_cases(p, monkeypatch, caplog):
     sched.init_scheduler(p.app, p.app.state.settings, tz_name="UTC")
 
     def broken(_job_id):
-        raise RuntimeError("cannot pause")
+        msg = "cannot pause"
+        raise RuntimeError(msg)
 
     monkeypatch.setattr(bg_scheduler, "pause_job", broken)
     with caplog.at_level(logging.ERROR, logger="greenhouse_server.scheduler"):
@@ -357,7 +358,8 @@ def test_sync_job_failure_is_rolled_back_and_logged(p, monkeypatch, caplog):
 
     def explode(_self, hours=24):
         del hours  # the sync job passes it by keyword
-        raise RuntimeError("cloud down")
+        msg = "cloud down"
+        raise RuntimeError(msg)
 
     monkeypatch.setattr(SyncService, "sync_all_sensors", explode)
     with caplog.at_level(logging.ERROR, logger="greenhouse_server.scheduler"):

@@ -75,7 +75,8 @@ def _crash_after_check(monkeypatch, tx_log: list[str], failing: set[int]) -> dic
         tx_log.append(f"check:{cluster_id}")
         result = original(self, cluster_id)
         if cluster_id in state["failing"]:
-            raise Boom(f"cluster {cluster_id} crashed after writing")
+            msg = f"cluster {cluster_id} crashed after writing"
+            raise Boom(msg)
         return result
 
     monkeypatch.setattr(IrrigationService, "check_cluster", flaky)
@@ -229,7 +230,8 @@ def test_scheduler_check_job_swallows_a_total_failure(three_dry_clusters, tx_log
     """If ``check_all_clusters`` itself raises, the job rolls back, logs and returns (never raises)."""
 
     def explode(_self):
-        raise Boom("whole check exploded")
+        msg = "whole check exploded"
+        raise Boom(msg)
 
     monkeypatch.setattr(IrrigationService, "check_all_clusters", explode)
     with caplog.at_level("ERROR", logger="greenhouse_server.scheduler"):
