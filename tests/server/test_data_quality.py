@@ -1,5 +1,7 @@
 """Tests for GET /api/v1/quality/report."""
 
+from http import HTTPStatus
+
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.pool import StaticPool
@@ -21,7 +23,7 @@ def _make_client():
 class TestDataQualityReport:
     def test_empty_db_no_issues(self, client):
         resp = client.get("/api/v1/quality/report")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         data = resp.json()
         assert data["issues"] == []
         assert data["counts"] == {}

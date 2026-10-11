@@ -1,11 +1,13 @@
 """Functional tests for the /api/v1/preferences endpoint."""
 
+from http import HTTPStatus
+
 
 class TestGetPreferences:
     def test_defaults_exist(self, client):
         """GET preferences always returns a row with sensible defaults."""
         resp = client.get("/api/v1/preferences")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         data = resp.json()
         assert data["units"] == "metric"
         assert data["timezone"] == "UTC"
@@ -39,7 +41,7 @@ class TestUpdatePreferences:
                 "dry_run_global": True,
             },
         )
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         data = resp.json()
         assert data["units"] == "imperial"
         assert data["timezone"] == "America/New_York"
@@ -53,7 +55,7 @@ class TestUpdatePreferences:
         client.put("/api/v1/preferences", json={"units": "imperial", "theme": "dark"})
         # Partial update — only timezone
         resp = client.put("/api/v1/preferences", json={"timezone": "Europe/Rome"})
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         data = resp.json()
         assert data["units"] == "imperial"  # preserved
         assert data["theme"] == "dark"  # preserved
@@ -68,7 +70,7 @@ class TestUpdatePreferences:
     def test_put_notify_flags(self, client):
         """PUT can toggle individual ntfy notification categories."""
         resp = client.put("/api/v1/preferences", json={"notify_auto": False, "notify_alerts": False})
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         data = resp.json()
         assert data["notify_auto"] is False
         assert data["notify_alerts"] is False

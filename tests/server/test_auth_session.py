@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from http import HTTPStatus
+
 from fastapi.testclient import TestClient
 
 from .conftest import TEST_ADMIN_PASSWORD, TEST_ADMIN_USERNAME
@@ -30,7 +32,7 @@ def test_protected_api_request_opens_one_session():
         ).json()["access_token"]
         opened = _counting_factory(app)
         resp = client.get("/api/v1/clusters", headers={"Authorization": f"Bearer {token}"})
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     # Web chrome reads open their own short-lived session; the API request opens exactly one.
     assert len(opened) == 1
 

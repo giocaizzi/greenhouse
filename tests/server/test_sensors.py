@@ -1,5 +1,7 @@
 """Functional tests for sensor CRUD via HTTP."""
 
+from http import HTTPStatus
+
 
 class TestSensorCRUD:
     def test_add_and_list(self, client):
@@ -8,7 +10,7 @@ class TestSensorCRUD:
             "/api/v1/clusters/1/sensors",
             json={"tuya_device_id": "sens001", "name": "Soil Sensor", "type": "tuya.tr301z"},
         )
-        assert resp.status_code == 201
+        assert resp.status_code == HTTPStatus.CREATED
         assert resp.json()["name"] == "Soil Sensor"
 
         resp = client.get("/api/v1/clusters/1/sensors")
@@ -21,7 +23,7 @@ class TestSensorCRUD:
             "/api/v1/clusters/1/sensors",
             json={"tuya_device_id": "sens001", "name": "S1", "type": "tuya.tr301z", "plant_id": 1},
         )
-        assert resp.status_code == 201
+        assert resp.status_code == HTTPStatus.CREATED
         assert resp.json()["plant_id"] == 1
 
     def test_add_duplicate_device(self, client):
@@ -34,7 +36,7 @@ class TestSensorCRUD:
             "/api/v1/clusters/1/sensors",
             json={"tuya_device_id": "sens001", "name": "B", "type": "tuya.tr301z"},
         )
-        assert resp.status_code == 409
+        assert resp.status_code == HTTPStatus.CONFLICT
 
     def test_list_empty(self, client):
         client.post("/api/v1/clusters", json={"name": "C1"})
@@ -48,7 +50,7 @@ class TestSensorCRUD:
             json={"tuya_device_id": "sens001", "name": "My Sensor", "type": "tuya.tr301z"},
         )
         resp = client.get("/api/v1/clusters/1/sensors/1")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         assert resp.json()["name"] == "My Sensor"
 
     def test_get_wrong_cluster_returns_404(self, client):
@@ -59,12 +61,12 @@ class TestSensorCRUD:
             json={"tuya_device_id": "sens001", "name": "S1", "type": "tuya.tr301z"},
         )
         resp = client.get("/api/v1/clusters/2/sensors/1")
-        assert resp.status_code == 404
+        assert resp.status_code == HTTPStatus.NOT_FOUND
 
     def test_get_not_found(self, client):
         client.post("/api/v1/clusters", json={"name": "C1"})
         resp = client.get("/api/v1/clusters/1/sensors/999")
-        assert resp.status_code == 404
+        assert resp.status_code == HTTPStatus.NOT_FOUND
 
     def test_update_name_and_plant_id(self, client):
         client.post("/api/v1/clusters", json={"name": "C1"})
@@ -77,7 +79,7 @@ class TestSensorCRUD:
             "/api/v1/clusters/1/sensors/1",
             json={"name": "New Name", "plant_id": 1},
         )
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         data = resp.json()
         assert data["name"] == "New Name"
         assert data["plant_id"] == 1
@@ -92,7 +94,7 @@ class TestSensorCRUD:
             json={"tuya_device_id": "sens001", "name": "S1", "type": "tuya.tr301z"},
         )
         resp = client.put("/api/v1/clusters/1/sensors/1", json={"plant_id": 1})
-        assert resp.status_code == 404
+        assert resp.status_code == HTTPStatus.NOT_FOUND
         assert resp.json() == {"detail": "Plant 1 not found in cluster"}
         assert client.get("/api/v1/clusters/1/sensors/1").json()["plant_id"] is None
 
@@ -104,12 +106,12 @@ class TestSensorCRUD:
             json={"tuya_device_id": "sens001", "name": "S", "type": "tuya.tr301z"},
         )
         resp = client.put("/api/v1/clusters/2/sensors/1", json={"name": "X"})
-        assert resp.status_code == 404
+        assert resp.status_code == HTTPStatus.NOT_FOUND
 
     def test_update_not_found(self, client):
         client.post("/api/v1/clusters", json={"name": "C1"})
         resp = client.put("/api/v1/clusters/1/sensors/999", json={"name": "X"})
-        assert resp.status_code == 404
+        assert resp.status_code == HTTPStatus.NOT_FOUND
 
     def test_delete_sensor(self, client):
         client.post("/api/v1/clusters", json={"name": "C1"})
@@ -118,11 +120,11 @@ class TestSensorCRUD:
             json={"tuya_device_id": "sens001", "name": "S1", "type": "tuya.tr301z"},
         )
         resp = client.delete("/api/v1/clusters/1/sensors/1")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         assert resp.json()["success"] is True
 
         resp = client.get("/api/v1/clusters/1/sensors/1")
-        assert resp.status_code == 404
+        assert resp.status_code == HTTPStatus.NOT_FOUND
 
     def test_delete_wrong_cluster_returns_404(self, client):
         client.post("/api/v1/clusters", json={"name": "C1"})
@@ -132,19 +134,19 @@ class TestSensorCRUD:
             json={"tuya_device_id": "sens001", "name": "S", "type": "tuya.tr301z"},
         )
         resp = client.delete("/api/v1/clusters/2/sensors/1")
-        assert resp.status_code == 404
+        assert resp.status_code == HTTPStatus.NOT_FOUND
 
     def test_delete_not_found(self, client):
         client.post("/api/v1/clusters", json={"name": "C1"})
         resp = client.delete("/api/v1/clusters/1/sensors/999")
-        assert resp.status_code == 404
+        assert resp.status_code == HTTPStatus.NOT_FOUND
 
 
 class TestListAllSensorsTopLevel:
     def test_list_empty(self, client):
         """GET /sensors with no rows returns empty list and null cursor."""
         resp = client.get("/api/v1/sensors")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         data = resp.json()
         assert data["sensors"] == []
         assert data["next_cursor"] is None
@@ -211,7 +213,7 @@ class TestSensorReassignmentActivity:
         )
 
         resp = client.put("/api/v1/clusters/1/sensors/1", json={"plant_id": 2})
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
 
         resp = client.get("/api/v1/activity?entity_type=sensor&entity_id=1")
         codes = [e["code"] for e in resp.json()["items"]]

@@ -1,14 +1,16 @@
 """Tests for GET /api/v1/clusters/{cluster_id}/insights."""
 
+from http import HTTPStatus
+
 
 class TestClusterInsights:
     def test_insights_not_found(self, client):
         resp = client.get("/api/v1/clusters/999/insights")
-        assert resp.status_code == 404
+        assert resp.status_code == HTTPStatus.NOT_FOUND
 
     def test_insights_fresh_cluster_no_alerts(self, seeded_client):
         resp = seeded_client.get("/api/v1/clusters/1/insights")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         data = resp.json()
         assert data["cluster_id"] == 1
         assert data["cluster_name"] == "Test Cluster"
@@ -46,7 +48,7 @@ class TestClusterInsights:
         )
 
         resp = client.get("/api/v1/clusters/1/insights")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         data = resp.json()
         codes = [i["code"] for i in data["insights"]]
         assert "stale_data" in codes

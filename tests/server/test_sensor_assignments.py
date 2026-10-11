@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from http import HTTPStatus
 
 import pytest
 
@@ -22,7 +23,7 @@ def seeded(client):
             "plant_id": 1,
         },
     )
-    assert resp.status_code == 201
+    assert resp.status_code == HTTPStatus.CREATED
     return {"client": client, "cluster_id": 1, "plant_a": 1, "plant_b": 2, "sensor_id": 1}
 
 
@@ -33,7 +34,7 @@ def _set_plant(client, sensor_id, plant_id):
 def test_creating_sensor_with_plant_opens_assignment(seeded):
     client = seeded["client"]
     resp = client.get(f"/api/v1/sensors/{seeded['sensor_id']}/assignments")
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     body = resp.json()
     assert body["sensor_id"] == seeded["sensor_id"]
     assert len(body["assignments"]) == 1
@@ -45,7 +46,7 @@ def test_creating_sensor_with_plant_opens_assignment(seeded):
 def test_reassign_closes_old_and_opens_new(seeded):
     client = seeded["client"]
     resp = _set_plant(client, seeded["sensor_id"], seeded["plant_b"])
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     rows = client.get(f"/api/v1/sensors/{seeded['sensor_id']}/assignments").json()["assignments"]
     assert len(rows) == 2
     rows.sort(key=lambda r: r["started_at"])
@@ -63,7 +64,7 @@ def test_reassign_to_same_plant_is_noop(seeded):
 
 
 def test_assignment_endpoint_404_for_missing_sensor(client):
-    assert client.get("/api/v1/sensors/9999/assignments").status_code == 404
+    assert client.get("/api/v1/sensors/9999/assignments").status_code == HTTPStatus.NOT_FOUND
 
 
 def test_readings_for_plant_respects_assignment_window(client, app):
@@ -82,7 +83,7 @@ def test_readings_for_plant_respects_assignment_window(client, app):
             "plant_id": 1,
         },
     )
-    assert resp.status_code == 201
+    assert resp.status_code == HTTPStatus.CREATED
 
     # First reading lands while sensor is still on plant A. Wait a moment so
     # the reading timestamp is strictly inside the open assignment window.
@@ -100,7 +101,7 @@ def test_readings_for_plant_respects_assignment_window(client, app):
     # Reassign sensor to plant B — closes plant A's assignment, opens plant B's.
     time.sleep(1.1)
     resp = client.put("/api/v1/clusters/1/sensors/1", json={"plant_id": 2})
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
 
     # Reading after reassignment.
     time.sleep(1.1)
@@ -188,7 +189,7 @@ def test_delete_plant_closes_open_assignment(client, app):
 
     # Delete plant — should close the open row and orphan the sensor.
     resp = client.delete("/api/v1/clusters/1/plants/1")
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
 
     rows_after = client.get("/api/v1/sensors/1/assignments").json()["assignments"]
     assert len(rows_after) == 1

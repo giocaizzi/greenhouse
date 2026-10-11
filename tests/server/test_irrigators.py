@@ -5,6 +5,8 @@ A cluster has at most one irrigator (strict 0:1). CRUD is keyed by cluster
 irrigator id (``/irrigators/{id}/start`` etc.).
 """
 
+from http import HTTPStatus
+
 
 class TestIrrigatorCRUD:
     def test_add_and_get(self, client):
@@ -13,11 +15,11 @@ class TestIrrigatorCRUD:
             "/api/v1/clusters/1/irrigator",
             json={"tuya_device_id": "dev001", "name": "Pump", "type": "rainpoint.ik10pw"},
         )
-        assert resp.status_code == 201
+        assert resp.status_code == HTTPStatus.CREATED
         assert resp.json()["name"] == "Pump"
 
         resp = client.get("/api/v1/clusters/1/irrigator")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         assert resp.json()["name"] == "Pump"
 
     def test_add_second_irrigator_conflicts(self, client):
@@ -27,12 +29,12 @@ class TestIrrigatorCRUD:
             "/api/v1/clusters/1/irrigator",
             json={"tuya_device_id": "dev001", "name": "A", "type": "rainpoint.ik10pw"},
         )
-        assert first.status_code == 201
+        assert first.status_code == HTTPStatus.CREATED
         resp = client.post(
             "/api/v1/clusters/1/irrigator",
             json={"tuya_device_id": "dev002", "name": "B", "type": "rainpoint.ik10pw"},
         )
-        assert resp.status_code == 409
+        assert resp.status_code == HTTPStatus.CONFLICT
 
     def test_add_duplicate_device(self, client):
         """Re-using a Tuya device id (here, on another cluster) returns 409."""
@@ -46,12 +48,12 @@ class TestIrrigatorCRUD:
             "/api/v1/clusters/2/irrigator",
             json={"tuya_device_id": "dev001", "name": "B", "type": "rainpoint.ik10pw"},
         )
-        assert resp.status_code == 409
+        assert resp.status_code == HTTPStatus.CONFLICT
 
     def test_get_no_irrigator_returns_404(self, client):
         client.post("/api/v1/clusters", json={"name": "C1"})
         resp = client.get("/api/v1/clusters/1/irrigator")
-        assert resp.status_code == 404
+        assert resp.status_code == HTTPStatus.NOT_FOUND
 
     def test_update_name_and_config(self, client):
         client.post("/api/v1/clusters", json={"name": "C1"})
@@ -63,7 +65,7 @@ class TestIrrigatorCRUD:
             "/api/v1/clusters/1/irrigator",
             json={"name": "New Pump", "config": {"key": "value"}},
         )
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         data = resp.json()
         assert data["name"] == "New Pump"
         assert data["config"] == {"key": "value"}
@@ -71,7 +73,7 @@ class TestIrrigatorCRUD:
     def test_update_no_irrigator_returns_404(self, client):
         client.post("/api/v1/clusters", json={"name": "C1"})
         resp = client.put("/api/v1/clusters/1/irrigator", json={"name": "X"})
-        assert resp.status_code == 404
+        assert resp.status_code == HTTPStatus.NOT_FOUND
 
     def test_create_with_capacity_round_trips(self, client):
         """POST with reservoir_l/flow_rate_l_per_min persists and is returned."""
@@ -86,7 +88,7 @@ class TestIrrigatorCRUD:
                 "flow_rate_l_per_min": 1.5,
             },
         )
-        assert resp.status_code == 201
+        assert resp.status_code == HTTPStatus.CREATED
         data = resp.json()
         assert data["reservoir_l"] == 12.5
         assert data["flow_rate_l_per_min"] == 1.5
@@ -118,7 +120,7 @@ class TestIrrigatorCRUD:
             "/api/v1/clusters/1/irrigator",
             json={"reservoir_l": 20.0, "flow_rate_l_per_min": 2.0},
         )
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         data = resp.json()
         assert data["reservoir_l"] == 20.0
         assert data["flow_rate_l_per_min"] == 2.0
@@ -135,7 +137,7 @@ class TestIrrigatorCRUD:
             json={"tuya_device_id": "dev001", "name": "Pump", "type": "rainpoint.ik10pw"},
         )
         resp = client.put("/api/v1/clusters/1/irrigator", json={"reservoir_l": -1.0})
-        assert resp.status_code == 422
+        assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
 
     def test_delete_irrigator(self, client):
         client.post("/api/v1/clusters", json={"name": "C1"})
@@ -144,16 +146,16 @@ class TestIrrigatorCRUD:
             json={"tuya_device_id": "dev001", "name": "Pump", "type": "rainpoint.ik10pw"},
         )
         resp = client.delete("/api/v1/clusters/1/irrigator")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         assert resp.json()["success"] is True
 
         resp = client.get("/api/v1/clusters/1/irrigator")
-        assert resp.status_code == 404
+        assert resp.status_code == HTTPStatus.NOT_FOUND
 
     def test_delete_no_irrigator_returns_404(self, client):
         client.post("/api/v1/clusters", json={"name": "C1"})
         resp = client.delete("/api/v1/clusters/1/irrigator")
-        assert resp.status_code == 404
+        assert resp.status_code == HTTPStatus.NOT_FOUND
 
     def test_double_delete_returns_404(self, client):
         client.post("/api/v1/clusters", json={"name": "C1"})
@@ -163,7 +165,7 @@ class TestIrrigatorCRUD:
         )
         client.delete("/api/v1/clusters/1/irrigator")
         resp = client.delete("/api/v1/clusters/1/irrigator")
-        assert resp.status_code == 404
+        assert resp.status_code == HTTPStatus.NOT_FOUND
 
     def test_can_recreate_after_delete(self, client):
         """Deleting frees the 0:1 slot so a new irrigator can be added."""
@@ -177,13 +179,13 @@ class TestIrrigatorCRUD:
             "/api/v1/clusters/1/irrigator",
             json={"tuya_device_id": "dev002", "name": "Pump2", "type": "rainpoint.ik10pw"},
         )
-        assert resp.status_code == 201
+        assert resp.status_code == HTTPStatus.CREATED
 
 
 class TestIrrigatorControl:
     def test_start(self, seeded_client):
         resp = seeded_client.post("/api/v1/irrigators/1/start", json={"minutes": 5})
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         assert resp.json()["success"] is True
 
         resp = seeded_client.get("/api/v1/clusters/1/history")
@@ -192,24 +194,24 @@ class TestIrrigatorControl:
 
     def test_stop(self, seeded_client):
         resp = seeded_client.post("/api/v1/irrigators/1/stop")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         assert resp.json()["success"] is True
 
     def test_log_manual(self, seeded_client):
         resp = seeded_client.post("/api/v1/irrigators/1/log-manual", json={"minutes": 3})
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         assert resp.json()["success"] is True
 
     def test_log_manual_requires_minutes(self, seeded_client):
         resp = seeded_client.post("/api/v1/irrigators/1/log-manual", json={})
-        assert resp.status_code == 422
+        assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
 
 
 class TestListAllIrrigatorsTopLevel:
     def test_list_empty(self, client):
         """GET /irrigators with no rows returns empty list and null cursor."""
         resp = client.get("/api/v1/irrigators")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         data = resp.json()
         assert data["irrigators"] == []
         assert data["next_cursor"] is None
@@ -266,7 +268,7 @@ class TestListAllIrrigatorsTopLevel:
     def test_get_not_found_on_unknown_cluster(self, client):
         """Filter by an unknown cluster returns an empty page, not a 404."""
         resp = client.get("/api/v1/irrigators?cluster_id=999")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         assert resp.json()["irrigators"] == []
 
 
@@ -316,7 +318,7 @@ class TestLocalKeyMasking:
         round_trip = client.get("/api/v1/clusters/1/irrigator").json()["config"]
         round_trip["device_ip"] = "192.0.2.11"
         resp = client.put("/api/v1/clusters/1/irrigator", json={"config": round_trip})
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         assert self._stored_config(client) == {"device_ip": "192.0.2.11", "local_key": self.SECRET}
 
     def test_a_new_local_key_replaces_the_stored_one(self, client):

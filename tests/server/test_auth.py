@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from http import HTTPStatus
+
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.pool import StaticPool
@@ -42,12 +44,12 @@ def _build_app(**override):
 
 def test_anonymous_api_returns_401(anonymous_client: TestClient):
     resp = anonymous_client.get("/api/v1/clusters")
-    assert resp.status_code == 401
+    assert resp.status_code == HTTPStatus.UNAUTHORIZED
 
 
 def test_anonymous_web_redirects_to_login(anonymous_client: TestClient):
     resp = anonymous_client.get("/clusters", follow_redirects=False)
-    assert resp.status_code == 303
+    assert resp.status_code == HTTPStatus.SEE_OTHER
     assert resp.headers["location"].startswith("/login")
     # ?next= preserves the original path so post-login lands you back where you were
     assert "%2Fclusters" in resp.headers["location"] or "/clusters" in resp.headers["location"]
@@ -55,7 +57,7 @@ def test_anonymous_web_redirects_to_login(anonymous_client: TestClient):
 
 def test_anonymous_login_page_renders(anonymous_client: TestClient):
     resp = anonymous_client.get("/login")
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     assert b"Sign in" in resp.content
     assert b'name="username"' in resp.content
     assert b'name="password"' in resp.content
@@ -66,7 +68,7 @@ def test_login_with_valid_credentials_returns_token(anonymous_client: TestClient
         "/api/v1/auth/login",
         json={"username": TEST_ADMIN_USERNAME, "password": TEST_ADMIN_PASSWORD},
     )
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     payload = resp.json()
     assert payload["token_type"] == "bearer"
     assert payload["access_token"]
@@ -81,7 +83,7 @@ def test_login_with_wrong_password_returns_401(anonymous_client: TestClient):
         "/api/v1/auth/login",
         json={"username": TEST_ADMIN_USERNAME, "password": "wrong-password"},
     )
-    assert resp.status_code == 401
+    assert resp.status_code == HTTPStatus.UNAUTHORIZED
 
 
 def test_login_with_unknown_user_returns_401(anonymous_client: TestClient):
@@ -89,13 +91,13 @@ def test_login_with_unknown_user_returns_401(anonymous_client: TestClient):
         "/api/v1/auth/login",
         json={"username": "no-such-user", "password": "whatever"},
     )
-    assert resp.status_code == 401
+    assert resp.status_code == HTTPStatus.UNAUTHORIZED
 
 
 def test_bearer_token_authenticates_api(authed_real_client: TestClient):
     """Real-auth client (bearer header set from real login) reaches /me."""
     resp = authed_real_client.get("/api/v1/auth/me")
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     body = resp.json()
     assert body["username"] == TEST_ADMIN_USERNAME
     assert body["id"] > 0
@@ -103,7 +105,7 @@ def test_bearer_token_authenticates_api(authed_real_client: TestClient):
 
 def test_invalid_bearer_token_returns_401(anonymous_client: TestClient):
     resp = anonymous_client.get("/api/v1/clusters", headers={"Authorization": "Bearer not-a-real-token"})
-    assert resp.status_code == 401
+    assert resp.status_code == HTTPStatus.UNAUTHORIZED
 
 
 def test_cookie_session_authenticates_web_pages(anonymous_client: TestClient):
@@ -113,20 +115,20 @@ def test_cookie_session_authenticates_web_pages(anonymous_client: TestClient):
         "/api/v1/auth/login",
         json={"username": TEST_ADMIN_USERNAME, "password": TEST_ADMIN_PASSWORD},
     )
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     # TestClient persists cookies across calls
     page = anonymous_client.get("/")
-    assert page.status_code == 200
+    assert page.status_code == HTTPStatus.OK
 
 
 def test_logout_clears_session(authed_real_client: TestClient):
     """Logout clears the cookie; a cookie-only follow-up must redirect to /login."""
     resp = authed_real_client.post("/api/v1/auth/logout")
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     authed_real_client.headers.pop("Authorization", None)
     authed_real_client.cookies.clear()
     page = authed_real_client.get("/clusters", follow_redirects=False)
-    assert page.status_code == 303
+    assert page.status_code == HTTPStatus.SEE_OTHER
     assert page.headers["location"].startswith("/login")
 
 
@@ -136,7 +138,7 @@ def test_form_login_redirects_to_next(anonymous_client: TestClient):
         data={"username": TEST_ADMIN_USERNAME, "password": TEST_ADMIN_PASSWORD, "next": "/clusters"},
         follow_redirects=False,
     )
-    assert resp.status_code == 303
+    assert resp.status_code == HTTPStatus.SEE_OTHER
     assert resp.headers["location"] == "/clusters"
     assert "greenhouse_session" in resp.cookies
 
@@ -151,7 +153,7 @@ def test_form_login_rejects_external_next(anonymous_client: TestClient):
         },
         follow_redirects=False,
     )
-    assert resp.status_code == 303
+    assert resp.status_code == HTTPStatus.SEE_OTHER
     assert resp.headers["location"] == "/"
 
 
@@ -164,7 +166,7 @@ def test_login_page_has_no_chrome_pollers(anonymous_client: TestClient):
     them. Regression test for the v3.0.0 login-page infinite-render bug.
     """
     resp = anonymous_client.get("/login")
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     assert b"/alerts/badge" not in resp.content
     assert b"/health/badge" not in resp.content
     # The top nav (which only makes sense once signed in) is gone too.
@@ -182,7 +184,7 @@ def test_hx_request_unauthenticated_returns_hx_redirect(anonymous_client: TestCl
         headers={"HX-Request": "true"},
         follow_redirects=False,
     )
-    assert resp.status_code == 204
+    assert resp.status_code == HTTPStatus.NO_CONTENT
     assert resp.headers["HX-Redirect"].startswith("/login")
     # No login HTML in the body — that is the whole point.
     assert resp.content == b""
@@ -191,10 +193,10 @@ def test_hx_request_unauthenticated_returns_hx_redirect(anonymous_client: TestCl
 def test_auth_disabled_grants_anonymous_access(auth_disabled_app):
     tc = TestClient(auth_disabled_app, raise_server_exceptions=False)
     resp = tc.get("/api/v1/clusters")
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     # /me returns the synthetic system user
     me = tc.get("/api/v1/auth/me")
-    assert me.status_code == 200
+    assert me.status_code == HTTPStatus.OK
     assert me.json()["username"] == "system"
 
 
@@ -209,4 +211,4 @@ def test_missing_secret_key_returns_503_on_login():
     # bootstrap_admin runs but issue_token requires the secret. With no
     # secret and a credential match, the login route reaches `_require_secret`
     # which raises 503.
-    assert resp.status_code in (401, 503)
+    assert resp.status_code in (HTTPStatus.UNAUTHORIZED, HTTPStatus.SERVICE_UNAVAILABLE)

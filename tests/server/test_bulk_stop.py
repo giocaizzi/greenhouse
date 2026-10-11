@@ -1,5 +1,7 @@
 """Functional tests for POST /api/v1/bulk/stop-all."""
 
+from http import HTTPStatus
+
 from sqlalchemy import select
 
 from greenhouse_core.models import IrrigationEvent
@@ -24,7 +26,7 @@ class TestBulkStopAll:
         """Stop-all with two irrigators must report stopped=2."""
         _seed_irrigators(client)
         resp = client.post("/api/v1/bulk/stop-all")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         data = resp.json()
         assert data["stopped"] == 2
         assert data["errors"] == []
@@ -32,7 +34,7 @@ class TestBulkStopAll:
     def test_stop_all_no_irrigators(self, client):
         """Stop-all with zero irrigators returns stopped=0 and no errors."""
         resp = client.post("/api/v1/bulk/stop-all")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         data = resp.json()
         assert data["stopped"] == 0
         assert data["errors"] == []

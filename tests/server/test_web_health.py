@@ -1,25 +1,26 @@
 """Web health page tests: full-page render, status badge, and stale sensor degraded state."""
 
 import time
+from http import HTTPStatus
 
 
 class TestHealthPage:
     def test_renders_ok(self, client):
         resp = client.get("/health")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         assert "text/html" in resp.headers["content-type"]
         assert "System Health" in resp.text
 
     def test_shows_status_badge(self, client):
         resp = client.get("/health")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         # Empty system → status "down"
         assert "down" in resp.text
 
     def test_health_badge_fragment_still_works(self, client):
         """The _health_badge partial endpoint must still respond independently."""
         resp = client.get("/health/badge")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         assert "scheduler" in resp.text.lower()
 
     def test_degraded_when_stale_sensor(self, app):
@@ -55,5 +56,5 @@ class TestHealthPage:
                 session.close()
 
             resp = client.get("/health")
-            assert resp.status_code == 200
+            assert resp.status_code == HTTPStatus.OK
             assert "degraded" in resp.text

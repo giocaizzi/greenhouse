@@ -1,6 +1,7 @@
 """Tests for GET /api/v1/health/system."""
 
 import time
+from http import HTTPStatus
 
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -23,7 +24,7 @@ def _make_app():
 class TestSystemHealthPulse:
     def test_empty_system_status_down(self, client):
         resp = client.get("/api/v1/health/system")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         data = resp.json()
         assert data["status"] == "down"
         assert data["sensors_total"] == 0

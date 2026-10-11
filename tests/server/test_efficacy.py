@@ -1,6 +1,7 @@
 """Tests for GET /api/v1/clusters/{cluster_id}/efficacy."""
 
 import time
+from http import HTTPStatus
 
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -25,11 +26,11 @@ def _make_client():
 class TestClusterEfficacy:
     def test_not_found(self, client):
         resp = client.get("/api/v1/clusters/999/efficacy")
-        assert resp.status_code == 404
+        assert resp.status_code == HTTPStatus.NOT_FOUND
 
     def test_empty_cluster(self, seeded_client):
         resp = seeded_client.get("/api/v1/clusters/1/efficacy")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         data = resp.json()
         assert data["cluster_id"] == 1
         assert data["days"] == 14
@@ -73,7 +74,7 @@ class TestClusterEfficacy:
                 session.commit()
 
             resp = client.get("/api/v1/clusters/1/efficacy?days=1")
-            assert resp.status_code == 200
+            assert resp.status_code == HTTPStatus.OK
             data = resp.json()
             assert len(data["items"]) == 1
             item = data["items"][0]
@@ -170,12 +171,12 @@ class TestClusterEfficacy:
 
     def test_days_query_param(self, seeded_client):
         resp = seeded_client.get("/api/v1/clusters/1/efficacy?days=30")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         assert resp.json()["days"] == 30
 
 
 def test_days_is_bounded_like_the_web_page(seeded_client):
     """D17: the API rejects ``days`` above 365 (422), as the web efficacy page always did."""
-    assert seeded_client.get("/api/v1/clusters/1/efficacy?days=365").status_code == 200
-    assert seeded_client.get("/api/v1/clusters/1/efficacy?days=366").status_code == 422
-    assert seeded_client.get("/clusters/1/efficacy?days=366").status_code == 422
+    assert seeded_client.get("/api/v1/clusters/1/efficacy?days=365").status_code == HTTPStatus.OK
+    assert seeded_client.get("/api/v1/clusters/1/efficacy?days=366").status_code == HTTPStatus.UNPROCESSABLE_ENTITY
+    assert seeded_client.get("/clusters/1/efficacy?days=366").status_code == HTTPStatus.UNPROCESSABLE_ENTITY

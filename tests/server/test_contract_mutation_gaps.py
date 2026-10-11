@@ -10,6 +10,7 @@ no network, fake device adapters written in this module.
 from __future__ import annotations
 
 import json
+from http import HTTPStatus
 from types import SimpleNamespace
 
 import pytest
@@ -268,7 +269,7 @@ def test_deleting_a_core_scheduler_job_is_409(api):
     """web-17: ``DELETE /scheduler/jobs/{core}`` answers 409 with the pause hint."""
     client, _ = api
     resp = client.delete("/api/v1/scheduler/jobs/check_all")
-    assert resp.status_code == 409
+    assert resp.status_code == HTTPStatus.CONFLICT
     assert resp.json()["detail"].startswith("Job check_all is a built-in scheduler job and cannot be deleted.")
 
 
@@ -301,7 +302,7 @@ def test_web_irrigate_force_flag_spellings(api, force, triggered_by, code):
     session.commit()
     session.close()
     resp = client.post(f"/clusters/{cid}/irrigate", data={"dry_run": "1", "no_sync": "1", "force": force})
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     session = app.state.session_factory()
     (log,) = IrrigationRepository(session).list_decision_logs(cid)
     assert (log.triggered_by, log.primary_code) == (triggered_by, code)
@@ -607,7 +608,7 @@ def test_manual_start_checks_registry_before_caps(db):
     db.add_irrigation_event(irrigator_id=irr.id, action="start", triggered_by="manual", duration_minutes=2)
     with pytest.raises(ManualActionError) as exc:
         manual_start(db, None, None, irr, 3, via="API")
-    assert exc.value.status_code == 503
+    assert exc.value.status_code == HTTPStatus.SERVICE_UNAVAILABLE
 
 
 def test_manual_start_schedules_a_manual_watcher(db, monkeypatch):
@@ -705,7 +706,7 @@ def test_scheduler_unknown_timezone_falls_back_to_utc(clean_env):
 def test_blank_theme_preference_renders_auto(api):
     """web-22: an empty stored theme falls back to ``auto`` in the server-rendered ``data-theme``."""
     client, _ = api
-    assert client.put("/api/v1/preferences", json={"theme": ""}).status_code == 200
+    assert client.put("/api/v1/preferences", json={"theme": ""}).status_code == HTTPStatus.OK
     assert '<html lang="en" data-theme="auto">' in client.get("/").text
 
 

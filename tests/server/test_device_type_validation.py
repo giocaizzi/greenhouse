@@ -6,6 +6,8 @@ and ``tuya.tr301z`` + ``fake.sensor``; without a live registry the canonical key
 
 from __future__ import annotations
 
+from http import HTTPStatus
+
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.deps import get_device_registry
 from greenhouse_server.services.inventory import known_device_types
@@ -23,9 +25,10 @@ def test_api_refuses_an_unknown_irrigator_type_on_create_and_update(client):
     body = {"tuya_device_id": "fake_tuya_device_aabbccdd", "name": "P", "type": "acme.pump"}
     resp = client.post(f"/api/v1/clusters/{cid}/irrigator", json=body)
     assert (resp.status_code, resp.json()) == (422, {"detail": IRRIGATOR_422})
-    assert client.get(f"/api/v1/clusters/{cid}/irrigator").status_code == 404  # nothing written
+    assert client.get(f"/api/v1/clusters/{cid}/irrigator").status_code == HTTPStatus.NOT_FOUND  # nothing written
     assert (
-        client.post(f"/api/v1/clusters/{cid}/irrigator", json={**body, "type": "rainpoint.ik10pw"}).status_code == 201
+        client.post(f"/api/v1/clusters/{cid}/irrigator", json={**body, "type": "rainpoint.ik10pw"}).status_code
+        == HTTPStatus.CREATED
     )
     resp = client.put(f"/api/v1/clusters/{cid}/irrigator", json={"type": "acme.pump"})
     assert (resp.status_code, resp.json()) == (422, {"detail": IRRIGATOR_422})
@@ -62,19 +65,19 @@ def test_web_forms_refuse_an_unknown_type(client):
         f"/clusters/{cid}/irrigators",
         data={"tuya_device_id": "fake_tuya_device_aabbccdd", "name": "P", "type": "acme.pump"},
     )
-    assert resp.status_code == 422
+    assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
     assert IRRIGATOR_422.replace("'", "&#39;") in resp.text  # the add form, re-rendered with the error
     assert '<option value="rainpoint.ik10pw" selected>' in resp.text
     resp = client.post(
         f"/clusters/{cid}/sensors",
         data={"tuya_device_id": "fake_tuya_sensor_00000001", "name": "S", "type": "acme.probe"},
     )
-    assert resp.status_code == 422
+    assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
     sid = client.post(
         f"/api/v1/clusters/{cid}/sensors", json={"tuya_device_id": "s2", "name": "S", "type": "tuya.tr301z"}
     ).json()["id"]
     resp = client.post(f"/clusters/{cid}/sensors/{sid}/edit", data={"name": "S", "type": "acme.probe"})
-    assert resp.status_code == 422
+    assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
 
 
 def test_edit_form_selects_the_stored_type_and_flags_an_unknown_one(client):
@@ -106,15 +109,21 @@ def test_a_legacy_row_stays_editable_while_its_type_is_unchanged(client):
 
     resp = client.put(f"/api/v1/clusters/{cid}/irrigator", json={"name": "Renamed", "type": "tuya_cloud"})
     assert (resp.status_code, resp.json()["name"]) == (200, "Renamed")
-    assert client.put(f"/api/v1/clusters/{cid}/irrigator", json={"type": "tuya_local"}).status_code == 422
+    assert (
+        client.put(f"/api/v1/clusters/{cid}/irrigator", json={"type": "tuya_local"}).status_code
+        == HTTPStatus.UNPROCESSABLE_ENTITY
+    )
     resp = client.put(f"/api/v1/clusters/{cid}/sensors/{sid}", json={"name": "S2", "type": "soil_moisture"})
     assert (resp.status_code, resp.json()["name"]) == (200, "S2")
-    assert client.put(f"/api/v1/clusters/{cid}/sensors/{sid}", json={"type": "light"}).status_code == 422
+    assert (
+        client.put(f"/api/v1/clusters/{cid}/sensors/{sid}", json={"type": "light"}).status_code
+        == HTTPStatus.UNPROCESSABLE_ENTITY
+    )
     web = client.post(
         f"/clusters/{cid}/irrigators/edit", data={"name": "W", "type": "tuya_cloud"}, follow_redirects=False
     )
-    assert web.status_code == 303
+    assert web.status_code == HTTPStatus.SEE_OTHER
     web = client.post(f"/clusters/{cid}/sensors/{sid}/edit", data={"name": "W", "type": "soil_moisture"})
-    assert web.status_code in (200, 303)
+    assert web.status_code in (HTTPStatus.OK, HTTPStatus.SEE_OTHER)
     web = client.post(f"/clusters/{cid}/sensors/{sid}/edit", data={"name": "W", "type": "light"})
-    assert web.status_code == 422
+    assert web.status_code == HTTPStatus.UNPROCESSABLE_ENTITY

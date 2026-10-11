@@ -2,6 +2,7 @@
 
 import logging
 import time
+from http import HTTPStatus
 
 from apscheduler.events import EVENT_JOB_EXECUTED, EVENT_JOB_MISSED
 from apscheduler.executors.base import run_job
@@ -19,7 +20,7 @@ DEFAULT_JOB_IDS = sorted(
 
 def _job_ids(client: TestClient) -> list[str]:
     resp = client.get("/api/v1/scheduler/jobs")
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     return sorted(j["id"] for j in resp.json())
 
 
@@ -51,7 +52,7 @@ class TestRegistrationIsIdempotent:
         """
         app1, engine1 = _make_stubbed_app(bypass_auth=True)
         try:
-            assert TestClient(app1).post("/api/v1/scheduler/pause").status_code == 200
+            assert TestClient(app1).post("/api/v1/scheduler/pause").status_code == HTTPStatus.OK
             # Same DB, fresh app — mirrors a restart within one process.
             from greenhouse_server.app import create_app
 
@@ -89,7 +90,7 @@ class TestPausedFlagIsTruthful:
         and re-paused it, so check_all disagreed with `scheduler_paused=false`.
         """
         resp = client.put("/api/v1/preferences", json={"timezone": "Europe/Rome"})
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         assert resp.json()["scheduler_paused"] is False
         assert _check_all(client)["paused"] is False
 
@@ -167,7 +168,7 @@ class TestDeleteJob:
         assert startup_ids == DEFAULT_JOB_IDS
         for job_id in startup_ids:
             resp = client.delete(f"/api/v1/scheduler/jobs/{job_id}")
-            assert resp.status_code == 409, job_id
+            assert resp.status_code == HTTPStatus.CONFLICT, job_id
             assert "/scheduler/pause" in resp.json()["detail"]
         assert _job_ids(client) == DEFAULT_JOB_IDS  # nothing removed
 
@@ -183,20 +184,20 @@ class TestDeleteJob:
         assert sorted(core_job_ids()) == _job_ids(client)
 
     def test_core_jobs_refused_on_running_scheduler(self, client, running_scheduler):
-        assert client.delete(f"/api/v1/scheduler/jobs/{CHECK_ALL_JOB_ID}").status_code == 409
+        assert client.delete(f"/api/v1/scheduler/jobs/{CHECK_ALL_JOB_ID}").status_code == HTTPStatus.CONFLICT
         assert running_scheduler.get_job(CHECK_ALL_JOB_ID) is not None
 
     def test_adhoc_job_is_deletable(self, client):
         job_id = _add_adhoc_job()
         assert client.delete(f"/api/v1/scheduler/jobs/{job_id}").json() == {"success": True}
         assert job_id not in _job_ids(client)
-        assert client.delete(f"/api/v1/scheduler/jobs/{job_id}").status_code == 404
+        assert client.delete(f"/api/v1/scheduler/jobs/{job_id}").status_code == HTTPStatus.NOT_FOUND
 
     def test_adhoc_job_deletable_on_running_scheduler(self, client, running_scheduler):
         job_id = _add_adhoc_job()
-        assert client.delete(f"/api/v1/scheduler/jobs/{job_id}").status_code == 200
+        assert client.delete(f"/api/v1/scheduler/jobs/{job_id}").status_code == HTTPStatus.OK
         assert running_scheduler.get_job(job_id) is None
-        assert client.delete(f"/api/v1/scheduler/jobs/{job_id}").status_code == 404
+        assert client.delete(f"/api/v1/scheduler/jobs/{job_id}").status_code == HTTPStatus.NOT_FOUND
 
     def test_delete_after_rebuild_removes_job_from_listing(self):
         # Build twice: duplicated pending jobs used to survive a single delete.
@@ -205,7 +206,7 @@ class TestDeleteJob:
         try:
             c = TestClient(app2)
             job_id = _add_adhoc_job()
-            assert c.delete(f"/api/v1/scheduler/jobs/{job_id}").status_code == 200
+            assert c.delete(f"/api/v1/scheduler/jobs/{job_id}").status_code == HTTPStatus.OK
             assert job_id not in _job_ids(c)
         finally:
             engine1.dispose()
@@ -226,8 +227,8 @@ class TestDeleteJob:
         job_id = _add_adhoc_job("watch/pump 1")
         page = client.get("/scheduler").text
         assert 'hx-post="/scheduler/jobs/watch/pump%201/delete"' in page
-        assert client.post(f"/scheduler/jobs/{quote(job_id, safe='')}/delete").status_code == 200
+        assert client.post(f"/scheduler/jobs/{quote(job_id, safe='')}/delete").status_code == HTTPStatus.OK
         assert running_scheduler.get_job(job_id) is None
 
     def test_delete_unknown_job_404(self, client):
-        assert client.delete("/api/v1/scheduler/jobs/nope").status_code == 404
+        assert client.delete("/api/v1/scheduler/jobs/nope").status_code == HTTPStatus.NOT_FOUND

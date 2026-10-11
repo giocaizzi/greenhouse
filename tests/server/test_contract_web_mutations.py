@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from http import HTTPStatus
 from typing import Any
 
 import pytest
@@ -690,7 +691,7 @@ def test_bulk_stop_all_reports_a_device_that_refuses_the_stop(make_client):
     device is now off." Every device is still asked to stop.
     """
     app, resp, effect = _run(make_client, "POST", "/bulk/stop-all", setup=_device_stop_fails)
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     assert "Stopped 0 irrigators; 2 did not confirm the stop and may still be running." in resp.text
     assert "Every device is now off." not in resp.text
     assert resp.text.count("stop failed: ") == 2
@@ -706,7 +707,7 @@ def test_alert_action_on_missing_alert_is_404(action, make_client):
     ``HX-Toast`` still announced success with a 200.
     """
     _, resp, effect = _run(make_client, "POST", f"/alerts/999/{action}")
-    assert resp.status_code == 404
+    assert resp.status_code == HTTPStatus.NOT_FOUND
     assert "Alert not found" in resp.text
     assert "HX-Toast" not in resp.headers
     assert effect == {}
@@ -732,7 +733,7 @@ def test_non_numeric_form_value_is_a_400_error_page(url, form, make_client):
     numeric field now goes through ``web.forms.parsed_or_400`` like its siblings.
     """
     _, resp, effect = _run(make_client, "POST", url, form)
-    assert resp.status_code == 400
+    assert resp.status_code == HTTPStatus.BAD_REQUEST
     assert resp.headers["content-type"].startswith("text/html")
     assert "Invalid" in resp.text
     assert effect == {}
@@ -745,7 +746,7 @@ def test_irrigate_missing_cluster_is_404(make_client):
     ``partials/_decision_panel.html``, which crashed on it (plain-text 500).
     """
     app, resp, effect = _run(make_client, "POST", "/clusters/999/irrigate", {})
-    assert resp.status_code == 404
+    assert resp.status_code == HTTPStatus.NOT_FOUND
     assert "Cluster not found" in resp.text
     assert effect == {}
     assert app.state.fake_devices.irrigator.calls == []
@@ -759,7 +760,7 @@ def test_delete_cluster_leaves_no_orphan_rows(make_client):
     sensor assignments, which used to stay behind (SQLite FK enforcement is off).
     """
     app, resp, effect = _run(make_client, "DELETE", f"/clusters/{OUTDOOR}")
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     assert set(effect) == {
         "alerts",
         "clusters",

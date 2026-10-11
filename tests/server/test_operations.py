@@ -1,10 +1,12 @@
 """Functional tests for operation endpoints (irrigate, monitor, check, stats, etc.)."""
 
+from http import HTTPStatus
+
 
 class TestIrrigate:
     def test_dry_run(self, seeded_client):
         resp = seeded_client.post("/api/v1/clusters/1/irrigate", json={"dry_run": True, "no_sync": True})
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         data = resp.json()
         assert data["action"] in ("irrigate", "skip")
         assert "reason" in data
@@ -12,11 +14,11 @@ class TestIrrigate:
 
     def test_irrigate_not_found(self, client):
         resp = client.post("/api/v1/clusters/999/irrigate", json={"dry_run": True})
-        assert resp.status_code == 404
+        assert resp.status_code == HTTPStatus.NOT_FOUND
 
     def test_irrigate_with_temp_override(self, seeded_client):
         resp = seeded_client.post("/api/v1/clusters/1/irrigate", json={"temp_override": 30.0, "dry_run": True})
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
 
     def test_irrigate_blocked_by_quiet_hours(self, seeded_client):
         """When quiet hours cover the current time, /irrigate returns SKIP with QUIET_HOURS."""
@@ -29,7 +31,7 @@ class TestIrrigate:
         seeded_client.put("/api/v1/config/global", json={"quiet_start_hour": hour, "quiet_end_hour": end})
 
         resp = seeded_client.post("/api/v1/clusters/1/irrigate", json={"dry_run": True, "no_sync": True})
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         data = resp.json()
         assert data["action"] == "skip"
         codes = [r["code"] for r in data.get("reasons", [])]
@@ -49,7 +51,7 @@ class TestIrrigate:
             "/api/v1/clusters/1/irrigate",
             json={"dry_run": True, "no_sync": True, "force": True},
         )
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         data = resp.json()
         codes = [r["code"] for r in data.get("reasons", [])]
         # SKIP-via-quiet-hours is bypassed, but the warning is recorded.
@@ -87,7 +89,7 @@ class TestLeakHold:
 
         resp = seeded_client.post("/api/v1/clusters/1/irrigate", json={"dry_run": True, "no_sync": True})
 
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         data = resp.json()
         assert data["action"] == "skip"
         assert "leak_hold" in [r["code"] for r in data["reasons"]]
@@ -113,75 +115,75 @@ class TestLeakHold:
 class TestMonitor:
     def test_monitor(self, seeded_client):
         resp = seeded_client.get("/api/v1/clusters/1/monitor")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         data = resp.json()
         assert data["cluster_name"] == "Test Cluster"
         assert isinstance(data["sensors"], list)
 
     def test_monitor_not_found(self, client):
         resp = client.get("/api/v1/clusters/999/monitor")
-        assert resp.status_code == 404
+        assert resp.status_code == HTTPStatus.NOT_FOUND
 
 
 class TestCheck:
     def test_check_single(self, seeded_client):
         resp = seeded_client.post("/api/v1/clusters/1/check")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         data = resp.json()
         assert data["cluster_id"] == 1
         assert "action" in data
 
     def test_check_all(self, seeded_client):
         resp = seeded_client.post("/api/v1/check")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         data = resp.json()
         assert isinstance(data["results"], list)
         assert "has_alerts" in data
 
     def test_check_not_found(self, client):
         resp = client.post("/api/v1/clusters/999/check")
-        assert resp.status_code == 404
+        assert resp.status_code == HTTPStatus.NOT_FOUND
 
 
 class TestLearn:
     def test_learn(self, seeded_client):
         resp = seeded_client.get("/api/v1/clusters/1/learn")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         data = resp.json()
         assert data["cluster_name"] == "Test Cluster"
         assert "report" in data
 
     def test_learn_not_found(self, client):
         resp = client.get("/api/v1/clusters/999/learn")
-        assert resp.status_code == 404
+        assert resp.status_code == HTTPStatus.NOT_FOUND
 
 
 class TestStats:
     def test_stats(self, seeded_client):
         resp = seeded_client.get("/api/v1/clusters/1/stats")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         data = resp.json()
         assert data["cluster_name"] == "Test Cluster"
         assert "total_events" in data
 
     def test_stats_custom_days(self, seeded_client):
         resp = seeded_client.get("/api/v1/clusters/1/stats?days=30")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
 
     def test_stats_export(self, seeded_client):
         resp = seeded_client.get("/api/v1/clusters/1/stats/export")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         assert resp.headers["content-type"] == "text/csv; charset=utf-8"
 
     def test_stats_not_found(self, client):
         resp = client.get("/api/v1/clusters/999/stats")
-        assert resp.status_code == 404
+        assert resp.status_code == HTTPStatus.NOT_FOUND
 
 
 class TestHealth:
     def test_health(self, client):
         resp = client.get("/api/v1/health")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         data = resp.json()
         assert data["status"] == "ok"
         assert isinstance(data["jobs"], list)
@@ -190,7 +192,7 @@ class TestHealth:
 class TestSchedulerRoutes:
     def test_list_jobs(self, client):
         resp = client.get("/api/v1/scheduler/jobs")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         jobs = resp.json()
         assert isinstance(jobs, list)
         # Default jobs should be registered
@@ -220,7 +222,7 @@ class TestFullLifecycle:
 
         # Verify status
         resp = client.get("/api/v1/clusters/1/status")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         status = resp.json()
         assert len(status["plants"]) == 1
         assert len(status["sensors"]) == 1
@@ -228,12 +230,12 @@ class TestFullLifecycle:
 
         # Dry-run irrigate
         resp = client.post("/api/v1/clusters/1/irrigate", json={"dry_run": True, "no_sync": True})
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         assert resp.json()["action"] in ("irrigate", "skip")
 
         # Check
         resp = client.post("/api/v1/clusters/1/check")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
 
 
 class TestCheckAllIsolation:
@@ -241,7 +243,7 @@ class TestCheckAllIsolation:
 
     def _two_clusters(self, client):
         for name in ("First", "Second"):
-            assert client.post("/api/v1/clusters", json={"name": name}).status_code == 201
+            assert client.post("/api/v1/clusters", json={"name": name}).status_code == HTTPStatus.CREATED
 
     def test_crash_in_one_cluster_keeps_earlier_clusters_committed(self, app, client, monkeypatch):
         from greenhouse_core.models import ActivityEvent
@@ -259,7 +261,7 @@ class TestCheckAllIsolation:
 
         monkeypatch.setattr(IrrigationService, "check_cluster", flaky)
         resp = client.post("/api/v1/check")
-        assert resp.status_code == 200, resp.text
+        assert resp.status_code == HTTPStatus.OK, resp.text
         by_id = {r["cluster_id"]: r for r in resp.json()["results"]}
         assert by_id[2]["action"] == "error"
         assert "boom" in by_id[2]["notes"]

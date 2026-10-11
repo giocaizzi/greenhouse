@@ -3,6 +3,8 @@
 Absent → unchanged; ``null`` → cleared for an optional field, ignored for a required one.
 """
 
+from http import HTTPStatus
+
 
 def _cluster(client, **extra):
     return client.post("/api/v1/clusters", json={"name": "C1", "location": "Shelf", **extra}).json()["id"]
@@ -74,7 +76,7 @@ def test_preferences_refuse_an_unknown_default_cluster(client):
     assert (resp.status_code, resp.json()) == (404, {"detail": "Cluster not found"})
     form = {"units": "metric", "timezone": "UTC", "theme": "dark", "refresh_interval_seconds": "30"}
     web = client.post("/preferences", data={**form, "default_cluster_id": "999"}, headers={"Accept": "text/html"})
-    assert web.status_code == 404
+    assert web.status_code == HTTPStatus.NOT_FOUND
     assert "Cluster not found" in web.text
     prefs = client.get("/api/v1/preferences").json()
     assert (prefs["default_cluster_id"], prefs["theme"]) == (None, "auto")

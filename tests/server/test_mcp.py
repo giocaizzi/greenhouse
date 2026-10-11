@@ -3,6 +3,7 @@
 import ast
 import asyncio
 import json
+from http import HTTPStatus
 from pathlib import Path
 
 import pytest
@@ -204,14 +205,14 @@ def mcp_client_unconfigured() -> TestClient:
 def test_mcp_rejects_request_without_authorization_header(mcp_client_with_token: TestClient):
     """Hitting /mcp without an Authorization header must 401, never pass through."""
     resp = mcp_client_with_token.get("/mcp")
-    assert resp.status_code == 401, resp.text
+    assert resp.status_code == HTTPStatus.UNAUTHORIZED, resp.text
     assert resp.json()["detail"] == "Invalid MCP token"
 
 
 def test_mcp_rejects_request_with_wrong_token(mcp_client_with_token: TestClient):
     """A bearer token that doesn't match the configured value must 401."""
     resp = mcp_client_with_token.get("/mcp", headers={"Authorization": "Bearer not-the-right-token"})
-    assert resp.status_code == 401, resp.text
+    assert resp.status_code == HTTPStatus.UNAUTHORIZED, resp.text
     assert resp.json()["detail"] == "Invalid MCP token"
 
 
@@ -221,7 +222,7 @@ def test_mcp_accepts_request_with_correct_token(mcp_client_with_token: TestClien
     We assert only that the response is not 401/503, i.e. auth did not block it.
     """
     resp = mcp_client_with_token.get("/mcp", headers={"Authorization": f"Bearer {_VALID_TOKEN}"})
-    assert resp.status_code not in (401, 503), (
+    assert resp.status_code not in (HTTPStatus.UNAUTHORIZED, HTTPStatus.SERVICE_UNAVAILABLE), (
         f"Valid token was rejected by the auth layer (status={resp.status_code}): {resp.text}"
     )
 
@@ -231,12 +232,12 @@ def test_mcp_returns_503_when_token_setting_is_unset(mcp_client_unconfigured: Te
     every request, with or without an Authorization header, gets 503.
     """
     resp = mcp_client_unconfigured.get("/mcp")
-    assert resp.status_code == 503, resp.text
+    assert resp.status_code == HTTPStatus.SERVICE_UNAVAILABLE, resp.text
     assert resp.json()["detail"] == "MCP auth not configured"
 
     # Even with what would have been a valid token, an unconfigured server must 503.
     resp = mcp_client_unconfigured.get("/mcp", headers={"Authorization": f"Bearer {_VALID_TOKEN}"})
-    assert resp.status_code == 503, resp.text
+    assert resp.status_code == HTTPStatus.SERVICE_UNAVAILABLE, resp.text
 
 
 # --- end-to-end tool invocation through the MCP bridge -----------------------

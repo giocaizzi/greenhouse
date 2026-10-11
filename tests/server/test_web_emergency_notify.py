@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from http import HTTPStatus
+
 from .test_notify import _RecordingNotifier
 
 
@@ -9,7 +11,7 @@ def test_web_stop_all_sends_the_emergency_push(app, seeded_client):
     rec = _RecordingNotifier()
     app.state.ntfy_notifier = rec
     resp = seeded_client.post("/bulk/stop-all")
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     assert rec.irrigations == [
         {"triggered_by": "emergency", "irrigator_name": "1 irrigator(s)", "detail": "kill switch"}
     ]
@@ -56,5 +58,5 @@ def test_web_stop_all_without_a_preferences_row_does_not_block_the_page(tmp_path
         started = time.monotonic()
         resp = client.post("/bulk/stop-all", headers={"HX-Request": "true"})
         elapsed = time.monotonic() - started
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     assert elapsed < 2  # SQLite busy timeout is 5 s; before the rollback this took ~5.1 s

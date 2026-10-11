@@ -1,5 +1,7 @@
 """Functional tests for plant CRUD via HTTP."""
 
+from http import HTTPStatus
+
 
 class TestPlantCRUD:
     def test_add_and_list(self, client):
@@ -8,26 +10,26 @@ class TestPlantCRUD:
             "/api/v1/clusters/1/plants",
             json={"species": "Monstera deliciosa", "category": "tropical", "water_needs": "medium"},
         )
-        assert resp.status_code == 201
+        assert resp.status_code == HTTPStatus.CREATED
         assert resp.json()["species"] == "Monstera deliciosa"
 
         resp = client.get("/api/v1/clusters/1/plants")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         assert len(resp.json()) == 1
 
     def test_add_to_nonexistent_cluster(self, client):
         resp = client.post("/api/v1/clusters/999/plants", json={"species": "Test"})
-        assert resp.status_code == 404
+        assert resp.status_code == HTTPStatus.NOT_FOUND
 
     def test_list_empty_cluster(self, client):
         client.post("/api/v1/clusters", json={"name": "Empty"})
         resp = client.get("/api/v1/clusters/1/plants")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         assert resp.json() == []
 
     def test_sync_plants(self, seeded_client):
         resp = seeded_client.post("/api/v1/plants/sync", json={})
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         data = resp.json()
         assert data["synced"] >= 1
         assert isinstance(data["errors"], list)
@@ -42,7 +44,7 @@ class TestPlantCRUD:
             "/api/v1/clusters/1/plants/1",
             json={"species": "Boston Fern", "water_needs": "medium"},
         )
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         data = resp.json()
         assert data["species"] == "Boston Fern"
         assert data["water_needs"] == "medium"
@@ -52,12 +54,12 @@ class TestPlantCRUD:
         client.post("/api/v1/clusters", json={"name": "C2"})
         client.post("/api/v1/clusters/1/plants", json={"species": "Fern"})
         resp = client.put("/api/v1/clusters/2/plants/1", json={"species": "X"})
-        assert resp.status_code == 404
+        assert resp.status_code == HTTPStatus.NOT_FOUND
 
     def test_update_not_found(self, client):
         client.post("/api/v1/clusters", json={"name": "C1"})
         resp = client.put("/api/v1/clusters/1/plants/999", json={"species": "X"})
-        assert resp.status_code == 404
+        assert resp.status_code == HTTPStatus.NOT_FOUND
 
     def test_delete_detaches_sensor(self, client):
         client.post("/api/v1/clusters", json={"name": "C1"})
@@ -70,11 +72,11 @@ class TestPlantCRUD:
         assert resp.json()["plant_id"] == 1
 
         resp = client.delete("/api/v1/clusters/1/plants/1")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         assert resp.json()["success"] is True
 
         resp = client.get("/api/v1/clusters/1/sensors/1")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         assert resp.json()["plant_id"] is None
 
     def test_delete_wrong_cluster_returns_404(self, client):
@@ -82,12 +84,12 @@ class TestPlantCRUD:
         client.post("/api/v1/clusters", json={"name": "C2"})
         client.post("/api/v1/clusters/1/plants", json={"species": "Fern"})
         resp = client.delete("/api/v1/clusters/2/plants/1")
-        assert resp.status_code == 404
+        assert resp.status_code == HTTPStatus.NOT_FOUND
 
     def test_delete_not_found(self, client):
         client.post("/api/v1/clusters", json={"name": "C1"})
         resp = client.delete("/api/v1/clusters/1/plants/999")
-        assert resp.status_code == 404
+        assert resp.status_code == HTTPStatus.NOT_FOUND
 
 
 class TestPlantMove:
@@ -97,14 +99,14 @@ class TestPlantMove:
         client.post("/api/v1/clusters", json={"name": "Source"})
         client.post("/api/v1/clusters", json={"name": "Target"})
         resp = client.post("/api/v1/clusters/1/plants", json={"species": "Fern"})
-        assert resp.status_code == 201
+        assert resp.status_code == HTTPStatus.CREATED
         return resp.json()["id"]
 
     def test_move_happy_path(self, client):
         plant_id = self._seed_two_clusters_one_plant(client)
 
         resp = client.post(f"/api/v1/plants/{plant_id}/move", json={"target_cluster_id": 2})
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         data = resp.json()
         assert data["id"] == plant_id
         assert data["cluster_id"] == 2
@@ -117,19 +119,19 @@ class TestPlantMove:
         client.post("/api/v1/clusters", json={"name": "C1"})
         client.post("/api/v1/clusters", json={"name": "C2"})
         resp = client.post("/api/v1/plants/999/move", json={"target_cluster_id": 2})
-        assert resp.status_code == 404
+        assert resp.status_code == HTTPStatus.NOT_FOUND
         assert "plant" in resp.json()["detail"].lower()
 
     def test_move_missing_target_cluster_returns_404(self, client):
         plant_id = self._seed_two_clusters_one_plant(client)
         resp = client.post(f"/api/v1/plants/{plant_id}/move", json={"target_cluster_id": 999})
-        assert resp.status_code == 404
+        assert resp.status_code == HTTPStatus.NOT_FOUND
         assert "cluster" in resp.json()["detail"].lower()
 
     def test_move_same_cluster_returns_400(self, client):
         plant_id = self._seed_two_clusters_one_plant(client)
         resp = client.post(f"/api/v1/plants/{plant_id}/move", json={"target_cluster_id": 1})
-        assert resp.status_code == 400
+        assert resp.status_code == HTTPStatus.BAD_REQUEST
 
     def test_move_writes_plant_moved_activity_event(self, app, client):
         plant_id = self._seed_two_clusters_one_plant(client)
@@ -187,7 +189,7 @@ class TestPlantMove:
         )
 
         resp = client.post(f"/api/v1/plants/{plant_id}/move", json={"target_cluster_id": 2})
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
 
         # The plant-linked sensor now belongs to cluster 2; the free sensor stays on 1.
         target_sensors = client.get("/api/v1/clusters/2/sensors").json()
@@ -220,7 +222,7 @@ class TestPlantMove:
             session.commit()
 
         resp = client.post(f"/api/v1/plants/{plant_id}/move", json={"target_cluster_id": 2})
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
 
         # Same sensor, same readings — now reachable via the new cluster.
         with app.state.session_factory() as session:
@@ -282,7 +284,7 @@ class TestPlantMove:
             session.commit()
 
         resp = client.post(f"/api/v1/plants/{plant_id}/move", json={"target_cluster_id": 2})
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
 
         # The decision log must still belong to cluster 1, not cluster 2.
         with app.state.session_factory() as session:
@@ -316,7 +318,7 @@ class TestPlantMove:
             session.commit()
 
         resp = client.post(f"/api/v1/plants/{plant_id}/move", json={"target_cluster_id": 2})
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
 
         with app.state.session_factory() as session:
             from greenhouse_core.repository import IrrigationRepository
@@ -348,7 +350,7 @@ class TestPlantMove:
             session.commit()
 
         resp = client.post(f"/api/v1/plants/{plant_id}/move", json={"target_cluster_id": 2})
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
 
         with app.state.session_factory() as session:
             from greenhouse_core.repository import IrrigationRepository
@@ -363,7 +365,7 @@ class TestListAllPlantsTopLevel:
     def test_list_empty(self, client):
         """GET /plants with no plants returns empty list and null cursor."""
         resp = client.get("/api/v1/plants")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         data = resp.json()
         assert data["plants"] == []
         assert data["next_cursor"] is None
@@ -375,7 +377,7 @@ class TestListAllPlantsTopLevel:
         client.post("/api/v1/clusters/1/plants", json={"species": "Fern"})
         client.post("/api/v1/clusters/2/plants", json={"species": "Monstera"})
         resp = client.get("/api/v1/plants")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         species = sorted(p["species"] for p in resp.json()["plants"])
         assert species == ["Fern", "Monstera"]
 
@@ -422,6 +424,6 @@ class TestListAllPlantsTopLevel:
     def test_limit_validation(self, client):
         """Limit must be 1..500."""
         resp = client.get("/api/v1/plants?limit=0")
-        assert resp.status_code == 422
+        assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
         resp = client.get("/api/v1/plants?limit=501")
-        assert resp.status_code == 422
+        assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY

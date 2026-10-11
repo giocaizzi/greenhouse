@@ -11,6 +11,8 @@ Goldens in ``golden/web/errors/<case>.html`` (request line, status, pinned heade
 
 from __future__ import annotations
 
+from http import HTTPStatus
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -93,12 +95,12 @@ def test_json_401_carries_www_authenticate(web_env, anon, make_client):
     (it used to drop them).
     """
     api = anon.get("/api/v1/clusters")
-    assert api.status_code == 401
+    assert api.status_code == HTTPStatus.UNAUTHORIZED
     assert api.json() == {"detail": "Not authenticated"}
     assert api.headers["www-authenticate"] == "Bearer"
 
     bad_bearer = anon.get("/api/v1/clusters", headers={"Authorization": "Bearer not-a-jwt"})
-    assert bad_bearer.status_code == 401
+    assert bad_bearer.status_code == HTTPStatus.UNAUTHORIZED
     assert bad_bearer.headers["www-authenticate"] == "Bearer"
 
     _, mcp_client = make_client(bypass_auth=False, mcp_token="contract-mcp-token")
@@ -107,7 +109,7 @@ def test_json_401_carries_www_authenticate(web_env, anon, make_client):
         headers={"Authorization": "Bearer wrong", "Accept": "application/json, text/event-stream"},
         json={"jsonrpc": "2.0", "id": 1, "method": "tools/list"},
     )
-    assert mcp.status_code == 401
+    assert mcp.status_code == HTTPStatus.UNAUTHORIZED
     assert mcp.json() == {"detail": "Invalid MCP token"}
     assert mcp.headers["www-authenticate"] == "Bearer"
 
@@ -120,10 +122,10 @@ def test_error_format_follows_accept_on_web_paths(seeded_get_client):
     ``Accept: application/json``.
     """
     unknown = seeded_get_client.get("/no/such/page", headers=HTML)
-    assert unknown.status_code == 404
+    assert unknown.status_code == HTTPStatus.NOT_FOUND
     assert unknown.headers["content-type"].startswith("text/html")
     wrong_method = seeded_get_client.put("/clusters", headers=HTML)
-    assert wrong_method.status_code == 405
+    assert wrong_method.status_code == HTTPStatus.METHOD_NOT_ALLOWED
     assert wrong_method.headers["content-type"].startswith("text/html")
     assert "GET" in wrong_method.headers["allow"]  # the HTML page keeps the 405's Allow header
     route_404 = seeded_get_client.get("/clusters/999", headers=JSON)

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import logging
 from datetime import timedelta
+from http import HTTPStatus
 
 import jwt
 import pytest
@@ -439,7 +440,7 @@ def test_auth_disabled_principal_is_system(clean_env):
 def test_login_success_body_cookie_and_last_login(real):
     client, app = real
     resp = client.post("/api/v1/auth/login", json={"username": TEST_ADMIN_USERNAME, "password": TEST_ADMIN_PASSWORD})
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     body = resp.json()
     token = body.pop("access_token")
     assert body == {"token_type": "bearer", "expires_in": TTL_SECONDS, "username": TEST_ADMIN_USERNAME}
@@ -484,7 +485,7 @@ def test_login_rejections(real, body, status):
     client, _ = real
     resp = client.post("/api/v1/auth/login", json=body)
     assert resp.status_code == status
-    if status == 401:
+    if status == HTTPStatus.UNAUTHORIZED:
         assert resp.json() == {"detail": "Invalid username or password"}
         assert "set-cookie" not in resp.headers
 
@@ -498,14 +499,14 @@ def test_login_rehashes_outdated_hash(real):
     session.commit()
     session.close()
     resp = client.post("/api/v1/auth/login", json={"username": TEST_ADMIN_USERNAME, "password": TEST_ADMIN_PASSWORD})
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     new = _admin(app).hashed_password
     assert new != old and new.startswith("$argon2id$v=19$m=65536,t=3,p=4$")
 
 
 def test_logout_requires_auth_and_deletes_cookie(real):
     client, app = real
-    assert client.post("/api/v1/auth/logout").status_code == 401
+    assert client.post("/api/v1/auth/logout").status_code == HTTPStatus.UNAUTHORIZED
     resp = client.post("/api/v1/auth/logout", headers={"Authorization": f"Bearer {_token(app)}"})
     assert (resp.status_code, resp.json()) == (200, {"detail": "Logged out"})
     assert resp.headers["set-cookie"] == (
@@ -525,7 +526,7 @@ def test_web_gate_redirects_with_quoted_next(real, cookie):
     elif cookie:
         client.cookies.set("greenhouse_session", cookie)
     resp = client.get("/clusters?a=1&b=x y", follow_redirects=False)
-    assert resp.status_code == 303
+    assert resp.status_code == HTTPStatus.SEE_OTHER
     assert resp.headers["location"] == "/login?next=/clusters%3Fa%3D1%26b%3Dx%2520y"
     hx = client.get("/clusters", headers={"HX-Request": "TRUE"}, follow_redirects=False)
     assert (hx.status_code, hx.headers["HX-Redirect"], hx.content) == (204, "/login?next=/clusters", b"")
@@ -535,7 +536,7 @@ def test_web_gate_ignores_bearer_header(real):
     client, app = real
     client.cookies.clear()
     resp = client.get("/clusters", headers={"Authorization": f"Bearer {_token(app)}"}, follow_redirects=False)
-    assert resp.status_code == 303
+    assert resp.status_code == HTTPStatus.SEE_OTHER
 
 
 # ── bootstrap_admin ───────────────────────────────────────────────────────────
@@ -607,7 +608,7 @@ def test_mcp_gate(clean_env, mcp_token, headers, status, detail):
     try:
         resp = client.get("/mcp", headers=headers)
         if status is None:
-            assert resp.status_code not in (401, 503)
+            assert resp.status_code not in (HTTPStatus.UNAUTHORIZED, HTTPStatus.SERVICE_UNAVAILABLE)
         else:
             assert (resp.status_code, resp.json()) == (status, {"detail": detail})
     finally:
@@ -635,7 +636,7 @@ def test_mcp_gate_compares_the_token_in_constant_time(clean_env, monkeypatch):
     monkeypatch.setattr(server_auth.hmac, "compare_digest", spy)
     client, _, engine = _client(mcp_token=MCP_TOKEN)
     try:
-        assert client.get("/mcp", headers={"Authorization": "Bearer wrong"}).status_code == 401
+        assert client.get("/mcp", headers={"Authorization": "Bearer wrong"}).status_code == HTTPStatus.UNAUTHORIZED
         assert calls == [(b"wrong", MCP_TOKEN.encode())]
     finally:
         engine.dispose()

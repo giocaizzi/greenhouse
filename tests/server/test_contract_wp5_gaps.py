@@ -8,6 +8,7 @@ detail rationale fallback, the plant dashboard's no-irrigator / relative-time br
 
 from __future__ import annotations
 
+from http import HTTPStatus
 from types import SimpleNamespace
 
 import pytest
@@ -92,7 +93,7 @@ def failing_species(app, monkeypatch):
 def test_api_sync_plant_id_found_in_a_later_cluster_syncs_only_that_plant(app, client):
     ids = _seed(app, {"C1": ["Fern"], "C2": ["Monstera deliciosa"]})
     resp = client.post("/api/v1/plants/sync", json={"plant_id": ids["Monstera deliciosa"]})
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     assert resp.json() == {"synced": 1, "errors": []}
     assert _plant_notes(app, ids["Monstera deliciosa"]).startswith("Sources: ")
     assert _plant_notes(app, ids["Fern"]) is None
@@ -101,7 +102,7 @@ def test_api_sync_plant_id_found_in_a_later_cluster_syncs_only_that_plant(app, c
 def test_api_sync_unknown_plant_id_is_404(app, client):
     _seed(app, {"C1": ["Fern"]})
     resp = client.post("/api/v1/plants/sync", json={"plant_id": 999})
-    assert resp.status_code == 404
+    assert resp.status_code == HTTPStatus.NOT_FOUND
     assert resp.json() == {"detail": "Plant 999 not found"}
 
 
@@ -115,7 +116,7 @@ def test_api_sync_plant_scan_does_not_find_orphan_plants(app, client):
     finally:
         session.close()
     resp = client.post("/api/v1/plants/sync", json={"plant_id": orphan})
-    assert resp.status_code == 404
+    assert resp.status_code == HTTPStatus.NOT_FOUND
     assert resp.json() == {"detail": f"Plant {orphan} not found"}
 
 
@@ -123,21 +124,21 @@ def test_api_sync_unknown_cluster_is_404(app, client):
     """D12 (was B-16): an unknown cluster_id is a 404, not a silent ``synced=0``."""
     _seed(app, {"C1": ["Fern"]})
     resp = client.post("/api/v1/plants/sync", json={"cluster_id": 999})
-    assert resp.status_code == 404
+    assert resp.status_code == HTTPStatus.NOT_FOUND
     assert resp.json() == {"detail": "Cluster not found"}
 
 
 def test_api_sync_plant_id_zero_means_every_cluster(app, client):
     _seed(app, {"C1": ["Fern"], "C2": ["Monstera deliciosa"]})
     resp = client.post("/api/v1/plants/sync", json={"plant_id": 0})
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     assert resp.json() == {"synced": 2, "errors": []}
 
 
 def test_api_sync_collects_per_plant_errors_and_keeps_going(app, client, failing_species):
     ids = _seed(app, {"C1": ["Bad", "Fern"]})
     resp = client.post("/api/v1/plants/sync", json={"cluster_id": ids["C1"]})
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     assert resp.json() == {"synced": 1, "errors": ["Bad: boom"]}
     assert _plant_notes(app, ids["Fern"]).startswith("Sources: ")
 
@@ -145,7 +146,7 @@ def test_api_sync_collects_per_plant_errors_and_keeps_going(app, client, failing
 def test_api_sync_single_plant_error_is_not_caught(app, client, failing_species):
     ids = _seed(app, {"C1": ["Bad"]})
     resp = client.post("/api/v1/plants/sync", json={"plant_id": ids["Bad"]})
-    assert resp.status_code == 500
+    assert resp.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
 
 
 # ── Web POST /plants/sync ────────────────────────────────────────────────────
@@ -155,7 +156,7 @@ def test_web_sync_unknown_cluster_is_404(app, client):
     """D12 (was B-16): an unknown cluster id is a 404 (same as the API), not "0 plants synced"."""
     _seed(app, {"C1": ["Fern"]})
     resp = client.post("/plants/sync", data={"cluster_id": "999"})
-    assert resp.status_code == 404
+    assert resp.status_code == HTTPStatus.NOT_FOUND
     assert "plants synced" not in resp.text
     assert "Cluster not found" in resp.text
 
@@ -163,7 +164,7 @@ def test_web_sync_unknown_cluster_is_404(app, client):
 def test_web_sync_collects_per_plant_errors_and_keeps_going(app, client, failing_species):
     ids = _seed(app, {"C1": ["Bad", "Fern"]})
     resp = client.post("/plants/sync", data={"cluster_id": str(ids["C1"])})
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     assert '<span class="mono">1</span> plant synced' in resp.text
     assert "<li>Bad: boom</li>" in resp.text
     assert _plant_notes(app, ids["Fern"]).startswith("Sources: ")
@@ -178,7 +179,7 @@ def test_web_sync_plant_scan_does_not_find_orphan_plants(app, client):
     finally:
         session.close()
     resp = client.post("/plants/sync", data={"plant_id": str(orphan)})
-    assert resp.status_code == 404
+    assert resp.status_code == HTTPStatus.NOT_FOUND
     assert f"Plant {orphan} not found" in resp.text
 
 
@@ -188,7 +189,7 @@ def test_web_sync_plant_scan_does_not_find_orphan_plants(app, client):
 def test_api_stats_export_without_irrigator_is_header_only(app, client):
     ids = _seed(app, {"C1": ["Fern"]})
     resp = client.get(f"/api/v1/clusters/{ids['C1']}/stats/export")
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     assert resp.headers["content-type"].startswith("text/csv")
     assert resp.headers["content-disposition"] == f"attachment; filename=cluster_{ids['C1']}_stats.csv"
     assert resp.text == CSV_HEADER
@@ -220,7 +221,7 @@ def test_web_cluster_detail_with_undecodable_decision_payload_shows_no_rationale
     finally:
         session.close()
     resp = client.get(f"/clusters/{ids['C1']}")
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     assert "rationale__row" not in resp.text
     assert "should not render" not in resp.text
     assert "No decisions yet." in resp.text
@@ -232,7 +233,7 @@ def test_web_cluster_detail_with_undecodable_decision_payload_shows_no_rationale
 def test_web_plant_dashboard_without_irrigator_renders_sensor_only(app, client, frozen_clock):
     ids = _seed(app, {"C1": ["Fern"]}, sensor_for="C1")
     resp = client.get(f"/clusters/{ids['C1']}/plants/{ids['Fern']}")
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     assert "sensor-only cluster" in resp.text
     assert "irrigated " not in resp.text
 
@@ -261,7 +262,7 @@ def test_web_plant_dashboard_relative_time_of_newest_event(app, client, frozen_c
     finally:
         session.close()
     resp = client.get(f"/clusters/{ids['C1']}/plants/{ids['Fern']}")
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     assert expected in resp.text
 
 
@@ -422,7 +423,7 @@ def test_monitor_runs_the_freshness_sync_and_commits_its_rows(app, client, monke
 
     monkeypatch.setattr(SyncService, "ensure_fresh_and_read", fake_ensure_fresh)
     resp = client.get(url.format(cid=ids["C1"]))
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     assert calls == [ids["C1"]]
     repo, session = _repo_session(app)
     try:

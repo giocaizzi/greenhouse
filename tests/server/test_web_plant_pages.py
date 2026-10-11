@@ -1,20 +1,22 @@
 """Web plant list and creation form."""
 
+from http import HTTPStatus
+
 
 def test_plants_list_renders(seeded_client):
     resp = seeded_client.get("/clusters/1/plants")
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     assert "Monstera deliciosa" in resp.text
 
 
 def test_plants_list_404_for_missing_cluster(client):
     resp = client.get("/clusters/9999/plants")
-    assert resp.status_code == 404
+    assert resp.status_code == HTTPStatus.NOT_FOUND
 
 
 def test_new_plant_form_renders(seeded_client):
     resp = seeded_client.get("/clusters/1/plants/new")
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     assert "Add plant" in resp.text
     assert 'name="species"' in resp.text
 
@@ -25,7 +27,7 @@ def test_create_plant(seeded_client):
         data={"species": "Ficus lyrata", "category": "tropical", "water_needs": "medium"},
         follow_redirects=False,
     )
-    assert resp.status_code == 303
+    assert resp.status_code == HTTPStatus.SEE_OTHER
     # Plants live inline on the unified detail page now — POST lands at #plants.
     assert resp.headers["location"] == "/clusters/1#plants"
 
@@ -41,7 +43,7 @@ _JSON = {"Accept": "application/json"}
 
 def test_plant_form_missing_species_is_422_even_for_an_unknown_cluster(seeded_client):
     resp = seeded_client.post("/clusters/9999/plants", data={"ideal_temp_min": "abc"}, headers=_JSON)
-    assert resp.status_code == 422
+    assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
     assert resp.json()["detail"][0]["loc"] == ["body", "species"]
 
 
@@ -62,7 +64,7 @@ def test_plant_form_bad_bound_is_400_naming_the_field(seeded_client):
 def test_plant_form_422_lists_body_errors_before_path_errors(seeded_client):
     """A doubly invalid post: the dependency's form errors are collected before the route's path error."""
     resp = seeded_client.post("/clusters/abc/plants", data={}, headers=_JSON)
-    assert resp.status_code == 422
+    assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
     assert [e["loc"] for e in resp.json()["detail"]] == [["body", "species"], ["path", "cluster_id"]]
 
 

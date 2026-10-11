@@ -1,18 +1,19 @@
 """Web UI tests for /vacation pages."""
 
 import time
+from http import HTTPStatus
 
 
 class TestVacationListPage:
     def test_renders_empty_state(self, client):
         resp = client.get("/vacation")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         assert "Vacation" in resp.text
         assert "No vacation windows" in resp.text
 
     def test_renders_form(self, client):
         resp = client.get("/vacation")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         assert 'name="starts_at"' in resp.text
         assert 'name="ends_at"' in resp.text
         assert 'name="contact_email"' in resp.text
@@ -30,7 +31,7 @@ class TestVacationCreate:
             },
             follow_redirects=False,
         )
-        assert resp.status_code == 303
+        assert resp.status_code == HTTPStatus.SEE_OTHER
         assert resp.headers["location"] == "/vacation"
 
     def test_created_window_shows_in_list(self, client):
@@ -40,7 +41,7 @@ class TestVacationCreate:
             data={"starts_at": str(now + 3600), "ends_at": str(now + 7200)},
         )
         resp = client.get("/vacation")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         assert "scheduled" in resp.text
 
     def test_create_with_iso_date_strings(self, client):
@@ -49,7 +50,7 @@ class TestVacationCreate:
             data={"starts_at": "2027-01-01", "ends_at": "2027-01-14"},
             follow_redirects=False,
         )
-        assert resp.status_code == 303
+        assert resp.status_code == HTTPStatus.SEE_OTHER
 
     def test_iso_dates_are_midnight_in_the_timezone_preference(self, client, monkeypatch):
         """D8: a date means midnight in the ``timezone`` preference (the zone the page displays), not UTC."""
@@ -59,7 +60,7 @@ class TestVacationCreate:
         resp = client.post(
             "/vacation", data={"starts_at": "2026-05-01", "ends_at": "2026-05-10"}, follow_redirects=False
         )
-        assert resp.status_code == 303
+        assert resp.status_code == HTTPStatus.SEE_OTHER
         (window,) = client.get("/api/v1/vacation").json()["items"]
         assert (window["starts_at"], window["ends_at"]) == (
             1777586400,
@@ -76,7 +77,7 @@ class TestVacationCreate:
             data={"starts_at": str(now - 3600), "ends_at": str(now + 7200)},
         )
         resp = client.get("/vacation")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         assert "Vacation in effect" in resp.text
         assert "active" in resp.text
 
@@ -86,7 +87,7 @@ class TestVacationDelete:
         now = int(time.time())
         client.post("/vacation", data={"starts_at": str(now + 100), "ends_at": str(now + 200)})
         resp = client.post("/vacation/1/delete", follow_redirects=False)
-        assert resp.status_code == 303
+        assert resp.status_code == HTTPStatus.SEE_OTHER
         assert resp.headers["location"] == "/vacation"
 
     def test_delete_removes_window(self, client):
@@ -98,7 +99,7 @@ class TestVacationDelete:
 
     def test_delete_not_found_returns_404(self, client):
         resp = client.post("/vacation/9999/delete")
-        assert resp.status_code == 404
+        assert resp.status_code == HTTPStatus.NOT_FOUND
 
 
 class TestVacationWaterBudget:
@@ -122,7 +123,7 @@ class TestVacationWaterBudget:
         # 10-day active window: usable = 20 * 0.95 = 19 L -> 1.9 L/day.
         client.post("/vacation", data={"starts_at": str(now - 3600), "ends_at": str(now + 10 * 86400)})
         resp = client.get("/vacation")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         assert "Water budget" in resp.text
         assert "Budget Cluster" in resp.text
         assert "Daily budget" in resp.text
@@ -140,14 +141,14 @@ class TestVacationWaterBudget:
         now = int(time.time())
         client.post("/vacation", data={"starts_at": str(now - 3600), "ends_at": str(now + 7 * 86400)})
         resp = client.get("/vacation")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         assert "Water budget" not in resp.text
 
     def test_no_budget_readout_without_any_window(self, client):
         """With capacity but no scheduled/active window, no budget readout (no crash)."""
         self._make_cluster_with_capacity(client, reservoir_l=20.0, flow_rate_l_per_min=1.0)
         resp = client.get("/vacation")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         assert "Water budget" not in resp.text
 
     def test_budget_readout_for_future_scheduled_window(self, client):
@@ -156,7 +157,7 @@ class TestVacationWaterBudget:
         now = int(time.time())
         client.post("/vacation", data={"starts_at": str(now + 86400), "ends_at": str(now + 5 * 86400)})
         resp = client.get("/vacation")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         assert "Water budget" in resp.text
 
 
@@ -170,5 +171,5 @@ class TestVacationBannerInBase:
         )
         # The dashboard uses _base.html — the banner should appear there too.
         resp = client.get("/")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         assert "Vacation mode is on" in resp.text

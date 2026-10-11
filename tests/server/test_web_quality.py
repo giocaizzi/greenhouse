@@ -1,17 +1,19 @@
 """Web data-quality page tests: renders report and shows issue codes."""
 
+from http import HTTPStatus
+
 
 class TestQualityPage:
     def test_renders_ok(self, client):
         resp = client.get("/quality")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         assert "text/html" in resp.headers["content-type"]
         assert "Data Quality" in resp.text
 
     def test_empty_state(self, client):
         """Empty DB → all-clear state."""
         resp = client.get("/quality")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         assert "No issues found" in resp.text
 
     def test_shows_issue_codes(self, app):
@@ -28,7 +30,7 @@ class TestQualityPage:
             )
 
             resp = client.get("/quality")
-            assert resp.status_code == 200
+            assert resp.status_code == HTTPStatus.OK
             assert "sensor_without_plant" in resp.text
             assert "cluster_without_config" in resp.text
 
@@ -44,5 +46,5 @@ class TestQualityPage:
             )
 
             resp = client.get("/quality")
-            assert resp.status_code == 200
+            assert resp.status_code == HTTPStatus.OK
             assert "warning" in resp.text

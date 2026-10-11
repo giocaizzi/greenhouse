@@ -1,5 +1,7 @@
 """Tests for the /scheduler/pause and /scheduler/resume endpoints."""
 
+from http import HTTPStatus
+
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.pool import StaticPool
@@ -40,19 +42,19 @@ class TestPauseResume:
 
     def test_pause_returns_paused_state(self, client):
         resp = client.post("/api/v1/scheduler/pause")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         assert resp.json() == {"paused": True}
 
     def test_resume_returns_running_state(self, client):
         client.post("/api/v1/scheduler/pause")
         resp = client.post("/api/v1/scheduler/resume")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         assert resp.json() == {"paused": False}
 
     def test_pause_persists_in_preferences(self, client):
         client.post("/api/v1/scheduler/pause")
         resp = client.get("/api/v1/preferences")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         assert resp.json()["scheduler_paused"] is True
 
     def test_resume_clears_persisted_flag(self, client):
@@ -67,7 +69,7 @@ class TestSchedulerJobsListIncludesPausedFlag:
 
     def test_paused_flag_false_initially(self, client):
         resp = client.get("/api/v1/scheduler/jobs")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         check_all = next((j for j in resp.json() if j["id"] == CHECK_ALL_JOB_ID), None)
         assert check_all is not None
         assert check_all["paused"] is False
@@ -104,7 +106,7 @@ class TestPausePersistsAcrossRestart:
             app1 = _new_app_with_engine(engine)
             with TestClient(app1, raise_server_exceptions=False) as c1:
                 resp = c1.post("/api/v1/scheduler/pause")
-                assert resp.status_code == 200
+                assert resp.status_code == HTTPStatus.OK
                 assert resp.json()["paused"] is True
 
             # Confirm jobs are gone from the module-level scheduler in between
@@ -131,12 +133,12 @@ class TestWebBanner:
 
     def test_banner_absent_when_running(self, client):
         resp = client.get("/")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         assert 'data-banner="scheduler-paused"' not in resp.text
 
     def test_banner_present_when_paused(self, client):
         client.post("/api/v1/scheduler/pause")
         resp = client.get("/")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         assert 'data-banner="scheduler-paused"' in resp.text
         assert "Auto-irrigation paused" in resp.text

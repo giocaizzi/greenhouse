@@ -1,6 +1,7 @@
 """Web activity page tests: full-page render and HTMX infinite-scroll pagination."""
 
 import time
+from http import HTTPStatus
 
 
 def _seed_events(app, count: int, *, base_ts: int | None = None) -> list[int]:
@@ -31,7 +32,7 @@ def _seed_events(app, count: int, *, base_ts: int | None = None) -> list[int]:
 class TestActivityListPage:
     def test_empty_state(self, client):
         resp = client.get("/activity")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         assert "Activity" in resp.text
         assert "No activity yet" in resp.text
 
@@ -41,7 +42,7 @@ class TestActivityListPage:
         with TestClient(app, raise_server_exceptions=False) as client:
             _seed_events(app, count=1)
             resp = client.get("/activity")
-            assert resp.status_code == 200
+            assert resp.status_code == HTTPStatus.OK
             assert "irrigated" in resp.text
             assert "irrigation" in resp.text
 
@@ -66,7 +67,7 @@ class TestActivityListPage:
                 session.close()
 
             resp = client.get("/activity?source=learning")
-            assert resp.status_code == 200
+            assert resp.status_code == HTTPStatus.OK
             assert "learn msg" in resp.text
             assert "sys msg" not in resp.text
 
@@ -79,7 +80,7 @@ class TestActivityPagination:
         with TestClient(app, raise_server_exceptions=False) as client:
             _seed_events(app, count=60)
             resp = client.get("/activity")
-            assert resp.status_code == 200
+            assert resp.status_code == HTTPStatus.OK
             # 50 <tr> rows (each event), plus 1 <tr> in thead = 51 total <tr>
             tr_count = resp.text.count("<tr")
             assert tr_count >= 51  # at least 50 data rows + 1 header
@@ -95,7 +96,7 @@ class TestActivityPagination:
 
             # Get the first page to find the cursor
             resp1 = client.get("/activity")
-            assert resp1.status_code == 200
+            assert resp1.status_code == HTTPStatus.OK
             assert 'hx-get="/activity/page' in resp1.text
 
             # Extract the before= cursor from the hx-get attr
@@ -107,7 +108,7 @@ class TestActivityPagination:
 
             # Fetch the second page fragment
             resp2 = client.get(f"/activity/page?before={cursor}")
-            assert resp2.status_code == 200
+            assert resp2.status_code == HTTPStatus.OK
             # Remaining 10 data rows + possible date-separator rows — no further sentinel
             tr_count = resp2.text.count("<tr")
             assert tr_count >= 10

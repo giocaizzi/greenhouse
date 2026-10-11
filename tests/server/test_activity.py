@@ -1,12 +1,13 @@
 """Tests for the activity timeline API."""
 
 import time
+from http import HTTPStatus
 
 
 class TestActivityList:
     def test_list_empty(self, client):
         resp = client.get("/api/v1/activity")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         data = resp.json()
         assert data["items"] == []
         assert data["next_cursor"] is None
@@ -41,7 +42,7 @@ class TestActivityList:
         with TestClient(app, raise_server_exceptions=False) as client:
             self._seed_events(app, count=3)
             resp = client.get("/api/v1/activity")
-            assert resp.status_code == 200
+            assert resp.status_code == HTTPStatus.OK
             items = resp.json()["items"]
             assert len(items) == 3
             timestamps = [i["timestamp"] for i in items]
@@ -67,7 +68,7 @@ class TestActivityList:
                 session.close()
 
             resp = client.get("/api/v1/activity?entity_type=sensor")
-            assert resp.status_code == 200
+            assert resp.status_code == HTTPStatus.OK
             items = resp.json()["items"]
             assert all(i["entity_type"] == "sensor" for i in items)
             assert len(items) == 1
@@ -126,7 +127,7 @@ class TestActivityList:
             self._seed_events(app, count=5)
 
             resp = client.get("/api/v1/activity?limit=3")
-            assert resp.status_code == 200
+            assert resp.status_code == HTTPStatus.OK
             data = resp.json()
             assert len(data["items"]) == 3
             assert data["next_cursor"] == data["items"][-1]["timestamp"]
@@ -134,7 +135,7 @@ class TestActivityList:
             # Fetch next page using cursor
             cursor = data["next_cursor"]
             resp2 = client.get(f"/api/v1/activity?limit=3&before={cursor}")
-            assert resp2.status_code == 200
+            assert resp2.status_code == HTTPStatus.OK
             data2 = resp2.json()
             assert len(data2["items"]) == 2
             assert data2["next_cursor"] is None

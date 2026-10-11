@@ -33,6 +33,7 @@ import json
 from collections.abc import Callable
 from contextlib import contextmanager
 from datetime import timedelta
+from http import HTTPStatus
 
 import pytest
 import time_machine
@@ -876,7 +877,7 @@ def test_each_evaluation_writes_exactly_one_decision_log(name, clean_env, frozen
 def test_decision_logs_only_come_from_engine_evaluations(name, clean_env, frozen_clock):
     """404s, manual actuation and ``auto_run`` off never reach the engine's persistence."""
     observed = run_scenario(name)
-    evaluated = [c for c in observed["calls"] if c["request"].endswith("/irrigate") and c["status"] == 200]
+    evaluated = [c for c in observed["calls"] if c["request"].endswith("/irrigate") and c["status"] == HTTPStatus.OK]
     assert len(observed["db_writes"]["decision_logs"]) == len(evaluated)
 
 
@@ -890,13 +891,13 @@ def test_leak_hold_blocks_forced_irrigate_but_not_direct_start(pipeline):
     pipeline.mark()
 
     held = _irrigate(pipeline, force=True)
-    assert held["status"] == 200
+    assert held["status"] == HTTPStatus.OK
     assert held["response"]["action"] == "skip"
     assert [r["code"] for r in held["response"]["reasons"]] == ["leak_hold"]
     assert pipeline.wiring.irrigator.calls == []
 
     started = pipeline.call("POST", f"/api/v1/irrigators/{ids['irrigator_id']}/start", {"minutes": 3})
-    assert started["status"] == 200
+    assert started["status"] == HTTPStatus.OK
     assert pipeline.wiring.irrigator.calls == [("start", ids["irrigator_id"], 3)]
     events = pipeline.db_rows()["irrigation_events"]
     assert [(e["action"], e["triggered_by"], e["duration_minutes"]) for e in events] == [("start", "manual", 3)]
@@ -1057,10 +1058,11 @@ def test_dry_run_global_never_actuates_but_stops_still_work(pipeline):
     assert (manual["status"], manual["response"]) == (409, {"detail": "global dry run is on: irrigator not started"})
     assert pipeline.wiring.irrigator.calls == []
 
-    assert pipeline.call("POST", f"/api/v1/irrigators/{ids['irrigator_id']}/stop")["status"] == 200
+    assert pipeline.call("POST", f"/api/v1/irrigators/{ids['irrigator_id']}/stop")["status"] == HTTPStatus.OK
     assert pipeline.call("POST", "/api/v1/bulk/stop-all")["response"] == {"stopped": 1, "errors": []}
     assert (
-        pipeline.call("POST", f"/api/v1/irrigators/{ids['irrigator_id']}/log-manual", {"minutes": 2})["status"] == 200
+        pipeline.call("POST", f"/api/v1/irrigators/{ids['irrigator_id']}/log-manual", {"minutes": 2})["status"]
+        == HTTPStatus.OK
     )
     assert [c[0] for c in pipeline.wiring.irrigator.calls] == ["stop", "stop"]
 
@@ -1168,13 +1170,13 @@ def test_vacation_create_rejects_reversed_window(pipeline):
     """
     for starts, ends in ((FROZEN_TS + 86400, FROZEN_TS), (FROZEN_TS, FROZEN_TS)):
         rejected = pipeline.call("POST", "/api/v1/vacation", {"starts_at": starts, "ends_at": ends})
-        assert rejected["status"] == 400
+        assert rejected["status"] == HTTPStatus.BAD_REQUEST
         assert rejected["response"] == {"detail": "starts_at must be < ends_at"}
     created = pipeline.call("POST", "/api/v1/vacation", {"starts_at": FROZEN_TS, "ends_at": FROZEN_TS + 86400})
-    assert created["status"] == 201
+    assert created["status"] == HTTPStatus.CREATED
     window_id = created["response"]["id"]
     rejected = pipeline.call("PUT", f"/api/v1/vacation/{window_id}", {"ends_at": FROZEN_TS - 1})
-    assert rejected["status"] == 400
+    assert rejected["status"] == HTTPStatus.BAD_REQUEST
     assert rejected["response"] == {"detail": "starts_at must be < ends_at"}
     assert [w["id"] for w in pipeline.call("GET", "/api/v1/vacation")["response"]["items"]] == [window_id]
 
@@ -1240,7 +1242,7 @@ def test_unrecorded_automatic_start_is_stopped_and_surfaced(pipeline, caplog):
     pipeline.mark()
     with _failing_commit(pipeline.app), caplog.at_level("ERROR", logger="greenhouse_server.services.irrigation"):
         resp = pipeline.client.post("/api/v1/clusters/1/irrigate", json={})
-    assert resp.status_code == 500  # the write error surfaces
+    assert resp.status_code == HTTPStatus.INTERNAL_SERVER_ERROR  # the write error surfaces
     assert pipeline.wiring.irrigator.calls == [("start", ids["irrigator_id"], 2), ("stop", ids["irrigator_id"])]
     assert any("compensating stop: stop_ok=True" in m for m in caplog.messages)
     assert pipeline.db_rows()["irrigation_events"] == []

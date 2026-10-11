@@ -10,6 +10,7 @@ registers only the canonical model keys, exactly like ``build_default_registry``
 from __future__ import annotations
 
 import logging
+from http import HTTPStatus
 
 import pytest
 
@@ -65,7 +66,7 @@ def test_forced_cluster_irrigation_skips_actuation_for_a_legacy_irrigator(seeded
     irrigator_id = client.get("/api/v1/clusters/1/irrigator").json()["id"]
     _legacy_row(client, lambda repo: repo.update_irrigator(irrigator_id, type="tuya_cloud"))
     resp = client.post("/api/v1/clusters/1/irrigate", json={"force": True})
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     assert "no adapter for irrigator: No adapter registered for irrigator type 'tuya_cloud'" in resp.text
     assert app.state.fake_devices.irrigator.calls == []
 
@@ -73,7 +74,7 @@ def test_forced_cluster_irrigation_skips_actuation_for_a_legacy_irrigator(seeded
 def test_emergency_stop_reports_a_legacy_irrigator_as_an_error(client, app):
     _, iid = _cluster_with_irrigator(client, "tuya_local")
     resp = client.post("/api/v1/bulk/stop-all", json={})
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     body = resp.json()
     assert body["stopped"] == 0
     assert body["errors"] == [

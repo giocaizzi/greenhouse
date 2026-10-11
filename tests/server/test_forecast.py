@@ -1,6 +1,7 @@
 """Tests for GET /api/v1/clusters/{cluster_id}/forecast."""
 
 import time
+from http import HTTPStatus
 
 import pytest
 
@@ -14,7 +15,7 @@ class TestForecastEndpoint:
     def outdoor_cluster_id(self, client):
         """Outdoor cluster suitable for weather-skip tests."""
         resp = client.post("/api/v1/clusters", json={"name": "Outdoor Cluster", "environment": "outdoor"})
-        assert resp.status_code == 201
+        assert resp.status_code == HTTPStatus.CREATED
         return resp.json()["id"]
 
     @pytest.fixture
@@ -22,7 +23,7 @@ class TestForecastEndpoint:
         """Cluster with sensor + readings + an irrigation event so a drainage profile exists."""
         # Create cluster
         resp = client.post("/api/v1/clusters", json={"name": "Profile Cluster", "environment": "indoor"})
-        assert resp.status_code == 201
+        assert resp.status_code == HTTPStatus.CREATED
         cluster_id = resp.json()["id"]
 
         # Add plant
@@ -34,7 +35,7 @@ class TestForecastEndpoint:
                 "water_needs": "medium",
             },
         )
-        assert resp.status_code == 201
+        assert resp.status_code == HTTPStatus.CREATED
         plant_id = resp.json()["id"]
 
         # Add sensor linked to plant
@@ -47,7 +48,7 @@ class TestForecastEndpoint:
                 "plant_id": plant_id,
             },
         )
-        assert resp.status_code == 201
+        assert resp.status_code == HTTPStatus.CREATED
         sensor_id = resp.json()["id"]
 
         # Add irrigator (needed so get_plant_profile can find irrigation events)
@@ -59,7 +60,7 @@ class TestForecastEndpoint:
                 "type": "rainpoint.ik10pw",
             },
         )
-        assert resp.status_code == 201
+        assert resp.status_code == HTTPStatus.CREATED
         irrigator_id = resp.json()["id"]
 
         return {
@@ -73,12 +74,12 @@ class TestForecastEndpoint:
     def test_forecast_no_sensor_data(self, client):
         """Cluster with no sensors returns null timestamps and fallback_constant method."""
         resp = client.post("/api/v1/clusters", json={"name": "Empty Cluster"})
-        assert resp.status_code == 201
+        assert resp.status_code == HTTPStatus.CREATED
         cluster_id = resp.json()["id"]
         client.post(f"/api/v1/clusters/{cluster_id}/plants", json={"species": FAKE_PLANT_SPECIES})
 
         resp = client.get(f"/api/v1/clusters/{cluster_id}/forecast")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         body = resp.json()
         assert body["cluster_id"] == cluster_id
         assert body["next_predicted_at"] is None
@@ -88,7 +89,7 @@ class TestForecastEndpoint:
     def test_forecast_404_missing_cluster(self, client):
         """Returns 404 for a non-existent cluster."""
         resp = client.get("/api/v1/clusters/99999/forecast")
-        assert resp.status_code == 404
+        assert resp.status_code == HTTPStatus.NOT_FOUND
 
     def test_forecast_fallback_when_no_history(self, seeded_with_profile):
         """Sensor data without irrigation history uses fallback_constant."""
@@ -107,7 +108,7 @@ class TestForecastEndpoint:
         # Since we can't easily POST readings via API (no route for it),
         # we call /forecast and expect fallback_constant with null hours (no readings).
         resp = c.get(f"/api/v1/clusters/{cluster_id}/forecast")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         body = resp.json()
         assert body["cluster_id"] == cluster_id
         # No readings yet → null
@@ -168,7 +169,7 @@ class TestForecastEndpoint:
             session.close()
 
         resp = ctx["client"].get(f"/api/v1/clusters/{cluster_id}/forecast")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         body = resp.json()
         assert body["cluster_id"] == cluster_id
         assert body["hours_until_next"] is not None
@@ -183,7 +184,7 @@ class TestForecastEndpoint:
         cluster_id = resp.json()["id"]
 
         resp = client.get(f"/api/v1/clusters/{cluster_id}/forecast")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         body = resp.json()
 
         required_fields = {

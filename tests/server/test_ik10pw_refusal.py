@@ -8,6 +8,8 @@ manual start answers 502 and writes nothing.
 
 from __future__ import annotations
 
+from http import HTTPStatus
+
 import pytest
 
 from fake_data import FAKE_CLIENT_ID, FAKE_CLIENT_SECRET
@@ -46,7 +48,7 @@ def test_pipeline_records_attempted_and_sends_no_on(ik10pw_pipeline):
     p.seed_cluster(soil=35.0)
     p.mark()
     result = _irrigate(p)
-    assert result["status"] == 200
+    assert result["status"] == HTTPStatus.OK
     assert result["response"]["action"] == "error"
     assert REFUSAL_PREFIX in result["response"]["reason"]
     events = p.db_rows()["irrigation_events"]
@@ -59,7 +61,7 @@ def test_manual_start_returns_502_and_records_nothing(ik10pw_pipeline):
     ids = p.seed_cluster(soil=35.0)
     p.mark()
     result = p.call("POST", f"/api/v1/irrigators/{ids['irrigator_id']}/start", {"minutes": 5})
-    assert result["status"] == 502
+    assert result["status"] == HTTPStatus.BAD_GATEWAY
     assert result["response"]["detail"].startswith(REFUSAL_PREFIX)
     assert "keep-alive is not supported in the server" in result["response"]["detail"]
     assert p.db_rows()["irrigation_events"] == []

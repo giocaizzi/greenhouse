@@ -1,6 +1,7 @@
 """Web UI tests for /vacation/{id}/edit (GET form + POST update)."""
 
 import time
+from http import HTTPStatus
 
 
 def _create_window(client, *, starts_offset=3600, ends_offset=7200):
@@ -10,7 +11,7 @@ def _create_window(client, *, starts_offset=3600, ends_offset=7200):
         data={"starts_at": str(now + starts_offset), "ends_at": str(now + ends_offset)},
         follow_redirects=False,
     )
-    assert resp.status_code == 303
+    assert resp.status_code == HTTPStatus.SEE_OTHER
     return now
 
 
@@ -18,7 +19,7 @@ class TestVacationEditPage:
     def test_renders_form_with_existing_values(self, client):
         _create_window(client)
         resp = client.get("/vacation/1/edit")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         assert "Edit vacation" in resp.text
         assert 'name="starts_at"' in resp.text
         assert 'name="ends_at"' in resp.text
@@ -28,20 +29,20 @@ class TestVacationEditPage:
     def test_edit_link_appears_on_list(self, client):
         _create_window(client)
         resp = client.get("/vacation")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         assert "/vacation/1/edit" in resp.text
 
     def test_inputs_have_matching_labels_a11y(self, client):
         _create_window(client)
         resp = client.get("/vacation/1/edit")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         for field in ("starts_at", "ends_at", "contact_email", "notes"):
             assert f'for="{field}"' in resp.text
             assert f'id="{field}"' in resp.text
 
     def test_unknown_window_returns_404(self, client):
         resp = client.get("/vacation/9999/edit")
-        assert resp.status_code == 404
+        assert resp.status_code == HTTPStatus.NOT_FOUND
 
 
 class TestVacationUpdate:
@@ -57,11 +58,11 @@ class TestVacationUpdate:
             },
             follow_redirects=False,
         )
-        assert resp.status_code == 303
+        assert resp.status_code == HTTPStatus.SEE_OTHER
         assert resp.headers["location"] == "/vacation"
 
         listed = client.get("/vacation")
-        assert listed.status_code == 200
+        assert listed.status_code == HTTPStatus.OK
         assert "neighbor@example.com" in listed.text
         assert "Watering by hand" in listed.text
 
@@ -72,7 +73,7 @@ class TestVacationUpdate:
             data={"starts_at": "2030-06-01", "ends_at": "2030-06-10"},
             follow_redirects=False,
         )
-        assert resp.status_code == 303
+        assert resp.status_code == HTTPStatus.SEE_OTHER
 
         # Edit page should re-populate the dates as YYYY-MM-DD via format_ts.
         form = client.get("/vacation/1/edit")
@@ -86,7 +87,7 @@ class TestVacationUpdate:
             data={"starts_at": "2030-06-10", "ends_at": "2030-06-01"},
             follow_redirects=False,
         )
-        assert resp.status_code == 400
+        assert resp.status_code == HTTPStatus.BAD_REQUEST
 
     def test_update_rejects_bad_date(self, client):
         _create_window(client)
@@ -95,7 +96,7 @@ class TestVacationUpdate:
             data={"starts_at": "not-a-date", "ends_at": "2030-06-10"},
             follow_redirects=False,
         )
-        assert resp.status_code == 400
+        assert resp.status_code == HTTPStatus.BAD_REQUEST
 
     def test_update_unknown_window_returns_404(self, client):
         resp = client.post(
@@ -103,4 +104,4 @@ class TestVacationUpdate:
             data={"starts_at": "2030-06-01", "ends_at": "2030-06-10"},
             follow_redirects=False,
         )
-        assert resp.status_code == 404
+        assert resp.status_code == HTTPStatus.NOT_FOUND

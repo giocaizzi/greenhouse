@@ -23,6 +23,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+from http import HTTPStatus
 
 import mcp.types as mcp_types
 import pytest
@@ -137,7 +138,7 @@ def test_mcp_401_carries_www_authenticate_header(gated_client, method, header_ca
     of the global HTTPException handler keeps ``exc.headers``, so the client receives it.
     """
     resp = gated_client.request(method, "/mcp", headers=_BAD_HEADERS[header_case])
-    assert resp.status_code == 401
+    assert resp.status_code == HTTPStatus.UNAUTHORIZED
     assert resp.json() == {"detail": "Invalid MCP token"}
     assert resp.headers["content-type"] == "application/json"
     assert resp.headers["www-authenticate"] == "Bearer"
@@ -147,6 +148,6 @@ def test_mcp_401_carries_www_authenticate_header(gated_client, method, header_ca
 @pytest.mark.parametrize("headers", [{}, {"Authorization": f"Bearer {_TOKEN}"}])
 def test_mcp_503_body_when_token_unset_on_every_method(unconfigured_client, method, headers):
     resp = unconfigured_client.request(method, "/mcp", headers=headers)
-    assert resp.status_code == 503
+    assert resp.status_code == HTTPStatus.SERVICE_UNAVAILABLE
     assert resp.json() == {"detail": "MCP auth not configured"}
     assert "www-authenticate" not in resp.headers

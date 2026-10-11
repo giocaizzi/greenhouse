@@ -1,5 +1,7 @@
 """Web UI tests for /alerts pages and fragments."""
 
+from http import HTTPStatus
+
 
 def _seed_alert(app, *, dedup_key="test::web::1", severity="warning", status="open"):
     """Helper: insert an alert directly via the repo and return its id."""
@@ -31,7 +33,7 @@ def _seed_alert(app, *, dedup_key="test::web::1", severity="warning", status="op
 class TestAlertListPage:
     def test_renders_empty_state(self, client):
         resp = client.get("/alerts")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         assert "Alerts" in resp.text
         assert "No alerts" in resp.text
 
@@ -41,7 +43,7 @@ class TestAlertListPage:
         with TestClient(app, raise_server_exceptions=False) as client:
             _seed_alert(app, dedup_key="web::list::1")
             resp = client.get("/alerts")
-            assert resp.status_code == 200
+            assert resp.status_code == HTTPStatus.OK
             assert "Test Alert Title" in resp.text
             assert "Something went wrong" in resp.text
 
@@ -51,7 +53,7 @@ class TestAlertListPage:
         with TestClient(app, raise_server_exceptions=False) as client:
             _seed_alert(app, dedup_key="web::open::1", status="open")
             resp = client.get("/alerts?status=open")
-            assert resp.status_code == 200
+            assert resp.status_code == HTTPStatus.OK
             assert "Test Alert Title" in resp.text
 
     def test_filter_resolved_excludes_open(self, app):
@@ -60,20 +62,20 @@ class TestAlertListPage:
         with TestClient(app, raise_server_exceptions=False) as client:
             _seed_alert(app, dedup_key="web::res::1", status="resolved")
             resp = client.get("/alerts?status=open")
-            assert resp.status_code == 200
+            assert resp.status_code == HTTPStatus.OK
             # The open-only view should NOT show resolved alerts
             assert "No alerts" in resp.text
 
     def test_segmented_filter_chips_rendered(self, client):
         resp = client.get("/alerts")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         assert 'href="/alerts?status=open"' in resp.text
         assert 'href="/alerts?status=acknowledged"' in resp.text
         assert 'href="/alerts?status=resolved"' in resp.text
 
     def test_sync_button_present(self, client):
         resp = client.get("/alerts")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         assert "hx-post" in resp.text
         assert "/alerts/sync" in resp.text
 
@@ -81,7 +83,7 @@ class TestAlertListPage:
 class TestAlertBadge:
     def test_badge_empty_when_no_open_alerts(self, client):
         resp = client.get("/alerts/badge")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         assert resp.text == ""
 
     def test_badge_shows_count_when_open(self, app):
@@ -91,7 +93,7 @@ class TestAlertBadge:
             _seed_alert(app, dedup_key="web::badge::1", status="open")
             _seed_alert(app, dedup_key="web::badge::2", status="open")
             resp = client.get("/alerts/badge")
-            assert resp.status_code == 200
+            assert resp.status_code == HTTPStatus.OK
             assert "bell__count" in resp.text
             assert "2" in resp.text
 
@@ -101,7 +103,7 @@ class TestAlertBadge:
         with TestClient(app, raise_server_exceptions=False) as client:
             _seed_alert(app, dedup_key="web::badge::res", status="resolved")
             resp = client.get("/alerts/badge")
-            assert resp.status_code == 200
+            assert resp.status_code == HTTPStatus.OK
             assert resp.text == ""
 
 
@@ -115,7 +117,7 @@ class TestAlertAckFlow:
                 f"/alerts/{alert_id}/ack",
                 headers={"HX-Request": "true"},
             )
-            assert resp.status_code == 200
+            assert resp.status_code == HTTPStatus.OK
             assert "acknowledged" in resp.text
             assert "HX-Toast" in resp.headers
             import json
@@ -144,7 +146,7 @@ class TestAlertResolveFlow:
                 f"/alerts/{alert_id}/resolve",
                 headers={"HX-Request": "true"},
             )
-            assert resp.status_code == 200
+            assert resp.status_code == HTTPStatus.OK
             assert "resolved" in resp.text
             assert "HX-Toast" in resp.headers
 

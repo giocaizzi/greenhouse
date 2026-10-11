@@ -1,5 +1,7 @@
 """Functional tests for the /api/v1/search endpoint."""
 
+from http import HTTPStatus
+
 
 def _seed(client):
     """Seed a cluster, plant, sensor, and irrigator for search tests."""
@@ -19,7 +21,7 @@ class TestSearch:
     def test_empty_query_returns_no_hits(self, client):
         _seed(client)
         resp = client.get("/api/v1/search?q=")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         data = resp.json()
         assert data["hits"] == []
         assert data["query"] == ""
@@ -27,7 +29,7 @@ class TestSearch:
     def test_cluster_match_by_name(self, client):
         _seed(client)
         resp = client.get("/api/v1/search?q=living")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         hits = resp.json()["hits"]
         cluster_hits = [h for h in hits if h["entity_type"] == "cluster"]
         assert len(cluster_hits) == 1
@@ -38,7 +40,7 @@ class TestSearch:
     def test_cluster_match_by_location(self, client):
         _seed(client)
         resp = client.get("/api/v1/search?q=window")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         hits = resp.json()["hits"]
         cluster_hits = [h for h in hits if h["entity_type"] == "cluster"]
         assert len(cluster_hits) == 1
@@ -47,7 +49,7 @@ class TestSearch:
     def test_plant_match_by_species(self, client):
         _seed(client)
         resp = client.get("/api/v1/search?q=monst")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         hits = resp.json()["hits"]
         plant_hits = [h for h in hits if h["entity_type"] == "plant"]
         assert len(plant_hits) == 1
@@ -58,7 +60,7 @@ class TestSearch:
     def test_sensor_match_by_name(self, client):
         _seed(client)
         resp = client.get("/api/v1/search?q=soil")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         hits = resp.json()["hits"]
         sensor_hits = [h for h in hits if h["entity_type"] == "sensor"]
         assert len(sensor_hits) == 1
@@ -69,7 +71,7 @@ class TestSearch:
     def test_irrigator_match_by_name(self, client):
         _seed(client)
         resp = client.get("/api/v1/search?q=drip")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         hits = resp.json()["hits"]
         irr_hits = [h for h in hits if h["entity_type"] == "irrigator"]
         assert len(irr_hits) == 1
@@ -87,7 +89,7 @@ class TestSearch:
     def test_no_match_returns_empty(self, client):
         _seed(client)
         resp = client.get("/api/v1/search?q=xyznonexistent")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         assert resp.json()["hits"] == []
 
     def test_limit_respected(self, client):
@@ -97,7 +99,7 @@ class TestSearch:
         for i in range(10):
             client.post("/api/v1/clusters", json={"name": f"Living Extra {i}"})
         resp = client.get("/api/v1/search?q=living&limit=3")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         assert len(resp.json()["hits"]) <= 3
 
     def test_query_echoed_back(self, client):

@@ -5,6 +5,8 @@ discovery before sending a configured bearer token. See the route module's
 docstring for the upstream context.
 """
 
+from http import HTTPStatus
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -16,7 +18,7 @@ def test_oauth_protected_resource_returns_rfc9728_metadata(client: TestClient):
     OAuth discovery and apply the bearer they were already configured with.
     """
     resp = client.get("/.well-known/oauth-protected-resource")
-    assert resp.status_code == 200, resp.text
+    assert resp.status_code == HTTPStatus.OK, resp.text
     assert resp.headers["content-type"].startswith("application/json")
     body = resp.json()
     assert body["resource"].endswith("/mcp"), body
@@ -31,7 +33,7 @@ def test_oauth_authorization_server_returns_json_404(client: TestClient):
     Zod validation.
     """
     resp = client.get("/.well-known/oauth-authorization-server")
-    assert resp.status_code == 404, resp.text
+    assert resp.status_code == HTTPStatus.NOT_FOUND, resp.text
     assert resp.headers["content-type"].startswith("application/json")
     body = resp.json()
     assert "error" in body, body
@@ -51,7 +53,7 @@ def test_well_known_routes_do_not_require_authentication(client: TestClient, pat
     authenticate. A 401 here would defeat the discovery probe entirely.
     """
     resp = client.get(path)
-    assert resp.status_code != 401, resp.text
+    assert resp.status_code != HTTPStatus.UNAUTHORIZED, resp.text
 
 
 def test_well_known_paths_stay_out_of_openapi(app):

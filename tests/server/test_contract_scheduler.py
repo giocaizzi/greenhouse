@@ -23,6 +23,7 @@ Goldens: ``tests/golden/orchestration/scheduler_*.json``.
 from __future__ import annotations
 
 import logging
+from http import HTTPStatus
 
 import pytest
 from fastapi.testclient import TestClient
@@ -244,7 +245,7 @@ def test_pause_without_check_all_job_is_404_and_persists_nothing(p):
         api = p.call("POST", "/api/v1/scheduler/pause")
         web = p.client.post("/scheduler/pause", follow_redirects=False)
         assert (api["status"], api["response"]) == (404, {"detail": "Job check_all not found"})
-        assert web.status_code == 404
+        assert web.status_code == HTTPStatus.NOT_FOUND
         assert _prefs_paused(p) is False
     finally:
         sched.init_scheduler(p.app, p.app.state.settings, tz_name="UTC")

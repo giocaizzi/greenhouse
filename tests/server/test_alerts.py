@@ -1,29 +1,31 @@
 """Tests for the alert inbox API."""
 
+from http import HTTPStatus
+
 
 class TestAlertList:
     def test_list_empty(self, client):
         resp = client.get("/api/v1/alerts")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         data = resp.json()
         assert data["open_count"] == 0
         assert data["items"] == []
 
     def test_list_with_status_filter(self, client):
         resp = client.get("/api/v1/alerts?status=open")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         assert resp.json()["items"] == []
 
     def test_list_with_cluster_filter(self, client):
         resp = client.get("/api/v1/alerts?cluster_id=1")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         assert resp.json()["items"] == []
 
 
 class TestAlertGetById:
     def test_get_not_found(self, client):
         resp = client.get("/api/v1/alerts/999")
-        assert resp.status_code == 404
+        assert resp.status_code == HTTPStatus.NOT_FOUND
 
     def test_get_existing(self, app):
         from fastapi.testclient import TestClient
@@ -50,7 +52,7 @@ class TestAlertGetById:
                 session.close()
 
             resp = client.get(f"/api/v1/alerts/{alert_id}")
-            assert resp.status_code == 200
+            assert resp.status_code == HTTPStatus.OK
             data = resp.json()
             assert data["id"] == alert_id
             assert data["status"] == "open"
@@ -60,7 +62,7 @@ class TestAlertGetById:
 class TestAlertAcknowledge:
     def test_acknowledge_not_found(self, client):
         resp = client.post("/api/v1/alerts/999/acknowledge")
-        assert resp.status_code == 404
+        assert resp.status_code == HTTPStatus.NOT_FOUND
 
     def test_acknowledge_flow(self, app):
         from fastapi.testclient import TestClient
@@ -87,21 +89,21 @@ class TestAlertAcknowledge:
                 session.close()
 
             resp = client.post(f"/api/v1/alerts/{alert_id}/acknowledge")
-            assert resp.status_code == 200
+            assert resp.status_code == HTTPStatus.OK
             data = resp.json()
             assert data["status"] == "acknowledged"
             assert data["acknowledged_at"] is not None
 
             # Idempotent second call stays acknowledged
             resp = client.post(f"/api/v1/alerts/{alert_id}/acknowledge")
-            assert resp.status_code == 200
+            assert resp.status_code == HTTPStatus.OK
             assert resp.json()["status"] == "acknowledged"
 
 
 class TestAlertResolve:
     def test_resolve_not_found(self, client):
         resp = client.post("/api/v1/alerts/999/resolve")
-        assert resp.status_code == 404
+        assert resp.status_code == HTTPStatus.NOT_FOUND
 
     def test_resolve_flow(self, app):
         from fastapi.testclient import TestClient
@@ -128,7 +130,7 @@ class TestAlertResolve:
                 session.close()
 
             resp = client.post(f"/api/v1/alerts/{alert_id}/resolve")
-            assert resp.status_code == 200
+            assert resp.status_code == HTTPStatus.OK
             data = resp.json()
             assert data["status"] == "resolved"
             assert data["resolved_at"] is not None
@@ -146,11 +148,11 @@ class TestAlertResolve:
 class TestAlertSyncCluster:
     def test_sync_not_found(self, client):
         resp = client.post("/api/v1/clusters/999/alerts/sync")
-        assert resp.status_code == 404
+        assert resp.status_code == HTTPStatus.NOT_FOUND
 
     def test_sync_returns_list_response(self, seeded_client):
         resp = seeded_client.post("/api/v1/clusters/1/alerts/sync")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         data = resp.json()
         assert "open_count" in data
         assert "items" in data
@@ -172,7 +174,7 @@ class TestAlertSyncCluster:
 class TestAlertSyncAll:
     def test_sync_all(self, seeded_client):
         resp = seeded_client.post("/api/v1/alerts/sync")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         data = resp.json()
         assert "open_count" in data
         assert "items" in data
@@ -264,7 +266,7 @@ class TestAlertListPagination:
         """The last (partial) page must return ``next_cursor=None``."""
         self._seed_alerts(app, 3)
         resp = client.get("/api/v1/alerts?limit=5")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         data = resp.json()
         assert len(data["items"]) == 3
         assert data["next_cursor"] is None

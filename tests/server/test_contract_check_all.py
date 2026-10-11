@@ -20,6 +20,8 @@ Golden: ``tests/golden/orchestration/check_all.json``.
 
 from __future__ import annotations
 
+from http import HTTPStatus
+
 import pytest
 from sqlalchemy.orm import Session
 
@@ -101,7 +103,7 @@ def test_crash_after_writes_rolls_back_only_the_failing_cluster(three_dry_cluste
     p = three_dry_clusters
     _crash_after_check(monkeypatch, tx_log, failing={2})
     resp = p.call("POST", "/api/v1/check")
-    assert resp["status"] == 200
+    assert resp["status"] == HTTPStatus.OK
     by_id = {r["cluster_id"]: r for r in resp["response"]["results"]}
     assert [by_id[i]["action"] for i in (1, 2, 3)] == ["irrigated", "error", "irrigated"]
     assert by_id[2]["notes"] == "check failed: Boom('cluster 2 crashed after writing')"

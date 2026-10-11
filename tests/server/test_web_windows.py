@@ -1,17 +1,19 @@
 """Web UI tests for the cluster watering-schedule section and window CRUD."""
 
+from http import HTTPStatus
+
 
 class TestConfigPageWindowsSection:
     def test_renders_empty_state_when_no_windows(self, seeded_client):
         # /clusters/{id}/config is 301'd to the unified detail page.
         resp = seeded_client.get("/clusters/1/config")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         assert "Watering windows" in resp.text
         assert "No windows configured" in resp.text
 
     def test_add_form_has_all_labelled_fields(self, seeded_client):
         resp = seeded_client.get("/clusters/1/config")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         # a11y: every input has matching for/id
         for field in ("new_start_hour", "new_end_hour", "new_label"):
             assert f'for="{field}"' in resp.text
@@ -34,11 +36,11 @@ class TestCreateWindow:
             },
             follow_redirects=False,
         )
-        assert resp.status_code == 303
+        assert resp.status_code == HTTPStatus.SEE_OTHER
         assert resp.headers["location"] == "/clusters/1/config"
 
         page = seeded_client.get("/clusters/1/config")
-        assert page.status_code == 200
+        assert page.status_code == HTTPStatus.OK
         assert "Workday AM" in page.text
         assert "06:00–10:00" in page.text
         # 31 = Mon..Fri mask → rendered as weekday labels
@@ -63,7 +65,7 @@ class TestCreateWindow:
             data={"start_hour": "8", "end_hour": "8", "weekday_mask": ["1"]},
             follow_redirects=False,
         )
-        assert resp.status_code == 400
+        assert resp.status_code == HTTPStatus.BAD_REQUEST
 
     def test_create_rejects_no_weekdays(self, seeded_client):
         resp = seeded_client.post(
@@ -71,7 +73,7 @@ class TestCreateWindow:
             data={"start_hour": "6", "end_hour": "10", "weekday_mask": []},
             follow_redirects=False,
         )
-        assert resp.status_code == 400
+        assert resp.status_code == HTTPStatus.BAD_REQUEST
 
     def test_create_rejects_invalid_weekday_value(self, seeded_client):
         resp = seeded_client.post(
@@ -79,7 +81,7 @@ class TestCreateWindow:
             data={"start_hour": "6", "end_hour": "10", "weekday_mask": ["3"]},
             follow_redirects=False,
         )
-        assert resp.status_code == 400
+        assert resp.status_code == HTTPStatus.BAD_REQUEST
 
     def test_create_404_for_unknown_cluster(self, client):
         resp = client.post(
@@ -87,7 +89,7 @@ class TestCreateWindow:
             data={"start_hour": "6", "end_hour": "10", "weekday_mask": ["1"]},
             follow_redirects=False,
         )
-        assert resp.status_code == 404
+        assert resp.status_code == HTTPStatus.NOT_FOUND
 
 
 class TestEditWindow:
@@ -100,7 +102,7 @@ class TestEditWindow:
     def test_edit_form_renders_with_values(self, seeded_client):
         self._seed_window(seeded_client)
         resp = seeded_client.get("/clusters/1/windows/1/edit")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         assert "Edit watering window" in resp.text
         assert 'value="6"' in resp.text
         assert 'value="10"' in resp.text
@@ -111,7 +113,7 @@ class TestEditWindow:
     def test_edit_inputs_have_matching_labels_a11y(self, seeded_client):
         self._seed_window(seeded_client)
         resp = seeded_client.get("/clusters/1/windows/1/edit")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         for field in ("start_hour", "end_hour", "label"):
             assert f'for="{field}"' in resp.text
             assert f'id="{field}"' in resp.text
@@ -128,7 +130,7 @@ class TestEditWindow:
             },
             follow_redirects=False,
         )
-        assert resp.status_code == 303
+        assert resp.status_code == HTTPStatus.SEE_OTHER
         assert resp.headers["location"] == "/clusters/1/config"
 
         page = seeded_client.get("/clusters/1/config")
@@ -141,7 +143,7 @@ class TestEditWindow:
             data={"start_hour": "6", "end_hour": "10", "weekday_mask": ["1"]},
             follow_redirects=False,
         )
-        assert resp.status_code == 404
+        assert resp.status_code == HTTPStatus.NOT_FOUND
 
     def test_update_404_cross_cluster(self, seeded_client):
         """Window from cluster 1 cannot be edited via cluster 2's URL."""
@@ -151,7 +153,7 @@ class TestEditWindow:
             "/api/v1/clusters",
             json={"name": "Second", "environment": "indoor"},
         )
-        assert resp.status_code == 201
+        assert resp.status_code == HTTPStatus.CREATED
         cid2 = resp.json()["id"]
         # Try to edit window 1 (belongs to cluster 1) via cluster 2 URL.
         resp = seeded_client.post(
@@ -159,7 +161,7 @@ class TestEditWindow:
             data={"start_hour": "5", "end_hour": "7", "weekday_mask": ["1"]},
             follow_redirects=False,
         )
-        assert resp.status_code == 404
+        assert resp.status_code == HTTPStatus.NOT_FOUND
 
     def test_edit_form_404_cross_cluster(self, seeded_client):
         self._seed_window(seeded_client)
@@ -169,7 +171,7 @@ class TestEditWindow:
         )
         cid2 = resp.json()["id"]
         resp = seeded_client.get(f"/clusters/{cid2}/windows/1/edit")
-        assert resp.status_code == 404
+        assert resp.status_code == HTTPStatus.NOT_FOUND
 
 
 class TestDeleteWindow:
@@ -179,7 +181,7 @@ class TestDeleteWindow:
             data={"start_hour": "6", "end_hour": "10", "weekday_mask": ["1"]},
         )
         resp = seeded_client.delete("/clusters/1/windows/1")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         assert resp.text == ""
 
     def test_delete_removes_row(self, seeded_client):
@@ -194,7 +196,7 @@ class TestDeleteWindow:
 
     def test_delete_404_unknown_window(self, seeded_client):
         resp = seeded_client.delete("/clusters/1/windows/9999")
-        assert resp.status_code == 404
+        assert resp.status_code == HTTPStatus.NOT_FOUND
 
     def test_delete_404_cross_cluster(self, seeded_client):
         seeded_client.post(
@@ -207,4 +209,4 @@ class TestDeleteWindow:
         )
         cid2 = resp.json()["id"]
         resp = seeded_client.delete(f"/clusters/{cid2}/windows/1")
-        assert resp.status_code == 404
+        assert resp.status_code == HTTPStatus.NOT_FOUND

@@ -1,6 +1,7 @@
 """Tests for per-plant health score endpoints."""
 
 import time
+from http import HTTPStatus
 
 import pytest
 
@@ -69,7 +70,7 @@ class TestPlantHealthEndpoints:
         repo.session.commit()
 
         resp = client.get(f"/api/v1/plants/{plant_id}/health")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         data = resp.json()
         assert data["plant_id"] == plant_id
         assert data["species"] == "Monstera deliciosa"
@@ -87,14 +88,14 @@ class TestPlantHealthEndpoints:
         """Plant with no sensor readings yields current_score=None and empty history."""
         plant_id, _ = _seed_plant_with_sensor(client)
         resp = client.get(f"/api/v1/plants/{plant_id}/health")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         data = resp.json()
         assert data["current_score"] is None
         assert data["history"] == []
 
     def test_get_health_404_unknown_plant(self, client, app):
         resp = client.get("/api/v1/plants/9999/health")
-        assert resp.status_code == 404
+        assert resp.status_code == HTTPStatus.NOT_FOUND
 
     def test_snapshot_creates_daily_row(self, client, app):
         """POST /plants/health/snapshot writes a row and GET history returns it."""
@@ -106,18 +107,18 @@ class TestPlantHealthEndpoints:
         repo.session.commit()
 
         snap_resp = client.post("/api/v1/plants/health/snapshot")
-        assert snap_resp.status_code == 200
+        assert snap_resp.status_code == HTTPStatus.OK
         assert snap_resp.json()["rows_written"] == 1
 
         hist_resp = client.get(f"/api/v1/plants/{plant_id}/health")
-        assert hist_resp.status_code == 200
+        assert hist_resp.status_code == HTTPStatus.OK
         assert len(hist_resp.json()["history"]) == 1
 
     def test_snapshot_no_data_skips_plant(self, client, app):
         """Snapshot skips plants with no readings; rows_written = 0."""
         _seed_plant_with_sensor(client)
         resp = client.post("/api/v1/plants/health/snapshot")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         assert resp.json()["rows_written"] == 0
 
     def test_snapshot_idempotent(self, client, app):

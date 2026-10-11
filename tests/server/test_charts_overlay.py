@@ -1,12 +1,13 @@
 """Tests for the multi-metric overlay chart API endpoint."""
 
 import time
+from http import HTTPStatus
 
 
 def test_overlay_returns_valid_shape(seeded_client):
     """Overlay endpoint returns 200 with the expected top-level keys."""
     resp = seeded_client.get("/api/v1/clusters/1/overlay?hours=72")
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     body = resp.json()
     assert body["cluster_id"] == 1
     assert body["hours"] == 72
@@ -19,7 +20,7 @@ def test_overlay_dataset_structure(seeded_client):
     """Each dataset must have metric + points fields with values in range."""
     # Seed readings first via the app fixture by seeding directly through the engine
     resp = seeded_client.get("/api/v1/clusters/1/overlay?hours=72")
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     for ds in resp.json()["datasets"]:
         assert "metric" in ds
         assert ds["metric"] in ("soil", "humidity", "light")
@@ -33,7 +34,7 @@ def test_overlay_dataset_structure(seeded_client):
 
 def test_overlay_404_unknown_cluster(client):
     resp = client.get("/api/v1/clusters/9999/overlay")
-    assert resp.status_code == 404
+    assert resp.status_code == HTTPStatus.NOT_FOUND
 
 
 def test_overlay_with_readings(app):
@@ -77,7 +78,7 @@ def test_overlay_with_readings(app):
     client = TestClient(app, raise_server_exceptions=False)
 
     resp = client.get(f"/api/v1/clusters/{cluster_id}/overlay?hours=72")
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     body = resp.json()
     metrics = {ds["metric"] for ds in body["datasets"]}
     assert "soil" in metrics

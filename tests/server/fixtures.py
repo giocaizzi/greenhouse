@@ -29,6 +29,8 @@ registry is stored on ``app.state.fake_devices`` so tests can fetch the
 per-irrigator fake and assert on its recorded ``calls``.
 """
 
+from http import HTTPStatus
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -141,7 +143,7 @@ def authed_real_client(app_real_auth):
         "/api/v1/auth/login",
         json={"username": TEST_ADMIN_USERNAME, "password": TEST_ADMIN_PASSWORD},
     )
-    assert resp.status_code == 200, f"Real-auth login failed: {resp.status_code} {resp.text}"
+    assert resp.status_code == HTTPStatus.OK, f"Real-auth login failed: {resp.status_code} {resp.text}"
     tc.headers["Authorization"] = f"Bearer {resp.json()['access_token']}"
     return tc
 
@@ -181,7 +183,7 @@ def seeded_client(client):
     """Client with a pre-populated cluster, plant, sensor, irrigator, and config."""
     # Create cluster
     resp = client.post("/api/v1/clusters", json={"name": "Test Cluster", "environment": "indoor"})
-    assert resp.status_code == 201
+    assert resp.status_code == HTTPStatus.CREATED
 
     # Add plant
     resp = client.post(
@@ -196,7 +198,7 @@ def seeded_client(client):
             "ideal_humidity_max": 80.0,
         },
     )
-    assert resp.status_code == 201
+    assert resp.status_code == HTTPStatus.CREATED
 
     # Add sensor
     resp = client.post(
@@ -208,7 +210,7 @@ def seeded_client(client):
             "plant_id": 1,
         },
     )
-    assert resp.status_code == 201
+    assert resp.status_code == HTTPStatus.CREATED
 
     # Add irrigator
     resp = client.post(
@@ -219,13 +221,13 @@ def seeded_client(client):
             "type": "rainpoint.ik10pw",
         },
     )
-    assert resp.status_code == 201
+    assert resp.status_code == HTTPStatus.CREATED
 
     # Set config
     resp = client.put(
         "/api/v1/clusters/1/config",
         json={"mode": "smart", "duration_minutes": 2, "interval_hours": 12, "auto_run": True},
     )
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
 
     return client

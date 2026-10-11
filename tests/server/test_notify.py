@@ -2,6 +2,7 @@
 
 import time
 import urllib.request
+from http import HTTPStatus
 from unittest.mock import MagicMock
 
 import pytest
@@ -235,7 +236,7 @@ class TestManualIrrigationNotifications:
         rec = _RecordingNotifier()
         app.state.ntfy_notifier = rec
         resp = seeded_client.post("/api/v1/irrigators/1/start", json={"minutes": 1})
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         assert len(rec.irrigations) == 1
         assert rec.irrigations[0]["triggered_by"] == "manual"
 
@@ -243,7 +244,7 @@ class TestManualIrrigationNotifications:
         rec = _RecordingNotifier()
         app.state.ntfy_notifier = rec
         resp = seeded_client.post("/api/v1/irrigators/1/stop")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         assert len(rec.irrigations) == 1
         assert rec.irrigations[0]["detail"] == "stopped"
 
@@ -251,7 +252,7 @@ class TestManualIrrigationNotifications:
         rec = _RecordingNotifier()
         app.state.ntfy_notifier = rec
         resp = seeded_client.post("/api/v1/irrigators/1/log-manual", json={"minutes": 3})
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         assert len(rec.irrigations) == 1
         assert rec.irrigations[0]["triggered_by"] == "manual"
 
@@ -259,7 +260,7 @@ class TestManualIrrigationNotifications:
         rec = _RecordingNotifier()
         app.state.ntfy_notifier = rec
         resp = seeded_client.post("/api/v1/bulk/stop-all")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         assert len(rec.irrigations) == 1
         assert rec.irrigations[0]["triggered_by"] == "emergency"
 
@@ -268,13 +269,13 @@ class TestManualIrrigationNotifications:
         app.state.ntfy_notifier = rec
         seeded_client.put("/api/v1/preferences", json={"notify_manual": False})
         resp = seeded_client.post("/api/v1/irrigators/1/start", json={"minutes": 1})
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         assert rec.irrigations == []
 
     def test_no_notifier_does_not_break_actuation(self, seeded_client):
         # Default app has no ntfy_notifier; manual start must still succeed.
         resp = seeded_client.post("/api/v1/irrigators/1/start", json={"minutes": 1})
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
 
 
 # ── Automated cycle: actuated flip + auto notification ──────────────────────

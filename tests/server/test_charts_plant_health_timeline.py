@@ -1,12 +1,13 @@
 """Tests for the plant health timeline API endpoint."""
 
 import time
+from http import HTTPStatus
 
 
 def test_health_timeline_empty_no_readings(seeded_client):
     """Plant with no moisture readings returns an empty points list."""
     resp = seeded_client.get("/api/v1/plants/1/health-timeline")
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     body = resp.json()
     assert body["plant_id"] == 1
     assert isinstance(body["points"], list)
@@ -17,13 +18,13 @@ def test_health_timeline_empty_no_readings(seeded_client):
 
 def test_health_timeline_404_unknown_plant(client):
     resp = client.get("/api/v1/plants/9999/health-timeline")
-    assert resp.status_code == 404
+    assert resp.status_code == HTTPStatus.NOT_FOUND
 
 
 def test_health_timeline_point_structure(seeded_client):
     """Each point is a (unix_timestamp, score) tuple with score in [0, 100]."""
     resp = seeded_client.get("/api/v1/plants/1/health-timeline")
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     for ts, score in resp.json()["points"]:
         assert isinstance(ts, int)
         assert 0.0 <= score <= 100.0
@@ -75,7 +76,7 @@ def test_health_timeline_points_match_seeded_readings(app):
     client = TestClient(app, raise_server_exceptions=False)
 
     resp = client.get(f"/api/v1/plants/{plant_id}/health-timeline")
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     body = resp.json()
     assert len(body["points"]) == distinct_days
 

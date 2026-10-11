@@ -1,9 +1,11 @@
 """Web preferences page."""
 
+from http import HTTPStatus
+
 
 def test_preferences_page_renders(client):
     resp = client.get("/preferences")
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     assert "Preferences" in resp.text
     assert 'name="units"' in resp.text
     assert 'name="timezone"' in resp.text
@@ -24,7 +26,7 @@ def test_preferences_post_updates(client):
         },
         follow_redirects=False,
     )
-    assert resp.status_code == 303
+    assert resp.status_code == HTTPStatus.SEE_OTHER
 
     resp2 = client.get("/api/v1/preferences")
     body = resp2.json()
@@ -41,7 +43,7 @@ def test_theme_endpoint_persists_value(client):
         data={"theme": "light"},
         follow_redirects=False,
     )
-    assert resp.status_code == 204
+    assert resp.status_code == HTTPStatus.NO_CONTENT
     assert client.get("/api/v1/preferences").json()["theme"] == "light"
 
 
@@ -58,7 +60,7 @@ def test_theme_endpoint_only_touches_theme(client):
         follow_redirects=False,
     )
     resp = client.post("/preferences/theme", data={"theme": "dark"})
-    assert resp.status_code == 204
+    assert resp.status_code == HTTPStatus.NO_CONTENT
     body = client.get("/api/v1/preferences").json()
     assert body["theme"] == "dark"
     # Other prefs are undisturbed.
@@ -69,7 +71,7 @@ def test_theme_endpoint_only_touches_theme(client):
 
 def test_theme_endpoint_rejects_invalid_value(client):
     resp = client.post("/preferences/theme", data={"theme": "neon"})
-    assert resp.status_code == 400
+    assert resp.status_code == HTTPStatus.BAD_REQUEST
     # Persisted theme is untouched by the rejected request.
     assert client.get("/api/v1/preferences").json()["theme"] != "neon"
 
@@ -85,13 +87,13 @@ def test_persisted_theme_renders_into_html_tag(client):
 
 def test_preferences_includes_default_cluster_options(seeded_client):
     resp = seeded_client.get("/preferences")
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     assert "Test Cluster" in resp.text
 
 
 def test_preferences_renders_global_config_form(client):
     resp = client.get("/preferences")
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     assert "Global irrigation defaults" in resp.text
     assert 'action="/config/global"' in resp.text
     assert 'name="quiet_start_hour"' in resp.text
@@ -113,7 +115,7 @@ def test_global_config_post_persists(client):
         },
         follow_redirects=False,
     )
-    assert resp.status_code == 303
+    assert resp.status_code == HTTPStatus.SEE_OTHER
 
     body = client.get("/api/v1/config/global").json()
     assert body["mode"] == "smart"
@@ -148,7 +150,7 @@ def test_global_config_caps_persist(client):
         data={"daily_cap_minutes": "45", "max_events_per_day": "3"},
         follow_redirects=False,
     )
-    assert resp.status_code == 303
+    assert resp.status_code == HTTPStatus.SEE_OTHER
 
     body = client.get("/api/v1/config/global").json()
     assert body["daily_cap_minutes"] == 45
@@ -183,12 +185,12 @@ def test_global_config_caps_reject_negative(client):
         data={"daily_cap_minutes": "-1"},
         follow_redirects=False,
     )
-    assert resp.status_code == 400
+    assert resp.status_code == HTTPStatus.BAD_REQUEST
 
 
 def test_preferences_renders_notification_toggles(client):
     resp = client.get("/preferences")
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     for name in ("notify_manual", "notify_emergency", "notify_alerts", "notify_auto"):
         assert f'name="{name}"' in resp.text
     # Default (no ntfy env configured) shows the not-configured hint.
@@ -208,7 +210,7 @@ def test_preferences_post_updates_notification_toggles(client):
         },
         follow_redirects=False,
     )
-    assert resp.status_code == 303
+    assert resp.status_code == HTTPStatus.SEE_OTHER
     body = client.get("/api/v1/preferences").json()
     assert body["notify_manual"] is True
     # Unchecked categories are absent from the POST and persist as False.

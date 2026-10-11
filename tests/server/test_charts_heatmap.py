@@ -1,12 +1,13 @@
 """Tests for the irrigation heatmap API endpoint."""
 
 from datetime import UTC, datetime
+from http import HTTPStatus
 
 
 def test_heatmap_empty_no_events(seeded_client):
     """Heatmap with no events returns an empty cells list."""
     resp = seeded_client.get("/api/v1/clusters/1/heatmap?days=30")
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     body = resp.json()
     assert body["cluster_id"] == 1
     assert body["days"] == 30
@@ -19,7 +20,7 @@ def test_heatmap_structure(seeded_client):
     """Each heatmap cell must have the expected shape (tested on a non-empty payload)."""
     # The seeded_client produces empty cells; structure is validated elsewhere.
     resp = seeded_client.get("/api/v1/clusters/1/heatmap?days=30")
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     for cell in resp.json()["cells"]:
         assert "weekday" in cell
         assert 0 <= cell["weekday"] <= 6
@@ -33,7 +34,7 @@ def test_heatmap_structure(seeded_client):
 
 def test_heatmap_404_unknown_cluster(client):
     resp = client.get("/api/v1/clusters/9999/heatmap")
-    assert resp.status_code == 404
+    assert resp.status_code == HTTPStatus.NOT_FOUND
 
 
 def test_heatmap_with_events(app):
@@ -78,7 +79,7 @@ def test_heatmap_with_events(app):
     client = TestClient(app, raise_server_exceptions=False)
 
     resp = client.get(f"/api/v1/clusters/{cluster_id}/heatmap?days=365")
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     cells = resp.json()["cells"]
     assert len(cells) >= 1
 

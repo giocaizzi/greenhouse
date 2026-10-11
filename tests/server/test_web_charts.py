@@ -1,9 +1,11 @@
 """Chart-data API endpoints + per-plant dashboard web page."""
 
+from http import HTTPStatus
+
 
 def test_single_plant_api(seeded_client):
     resp = seeded_client.get("/api/v1/plants/1")
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     body = resp.json()
     assert body["species"] == "Monstera deliciosa"
     assert body["cluster_id"] == 1
@@ -11,12 +13,12 @@ def test_single_plant_api(seeded_client):
 
 def test_single_plant_api_404(client):
     resp = client.get("/api/v1/plants/9999")
-    assert resp.status_code == 404
+    assert resp.status_code == HTTPStatus.NOT_FOUND
 
 
 def test_plant_chart_data_shape(seeded_client):
     resp = seeded_client.get("/api/v1/plants/1/chart-data?hours=24&metric=soil_moisture")
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     body = resp.json()
     assert body["metric"] == "soil_moisture"
     assert body["hours"] == 24
@@ -30,7 +32,7 @@ def test_plant_chart_data_shape(seeded_client):
 
 def test_plant_chart_data_temperature_band(seeded_client):
     resp = seeded_client.get("/api/v1/plants/1/chart-data?metric=temperature")
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     body = resp.json()
     # seeded plant has ideal_temp_min=18, ideal_temp_max=27
     assert body["threshold"]["min"] == 18.0
@@ -39,12 +41,12 @@ def test_plant_chart_data_temperature_band(seeded_client):
 
 def test_plant_chart_data_unsupported_metric(seeded_client):
     resp = seeded_client.get("/api/v1/plants/1/chart-data?metric=co2")
-    assert resp.status_code == 400
+    assert resp.status_code == HTTPStatus.BAD_REQUEST
 
 
 def test_cluster_chart_data(seeded_client):
     resp = seeded_client.get("/api/v1/clusters/1/chart-data?hours=24&metric=soil_moisture")
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     body = resp.json()
     # cluster scope with default soil moisture threshold
     assert body["threshold"]["source"] == "default"
@@ -53,7 +55,7 @@ def test_cluster_chart_data(seeded_client):
 
 def test_plant_dashboard_page_renders(seeded_client):
     resp = seeded_client.get("/clusters/1/plants/1")
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     assert "Monstera deliciosa" in resp.text
     assert "Plant care" in resp.text
     assert "Latest readings" in resp.text
@@ -67,24 +69,24 @@ def test_plant_dashboard_page_renders(seeded_client):
 def test_plant_dashboard_wrong_cluster_404(seeded_client):
     # plant 1 belongs to cluster 1; fetching it as if in cluster 99 should 404
     resp = seeded_client.get("/clusters/99/plants/1")
-    assert resp.status_code == 404
+    assert resp.status_code == HTTPStatus.NOT_FOUND
 
 
 def test_plant_chart_fragment(seeded_client):
     resp = seeded_client.get("/clusters/1/plants/1/chart-fragment?metric=temperature&hours=168")
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     assert "canvas" in resp.text.lower()
     assert 'id="chart-data-temperature"' in resp.text
 
 
 def test_plant_chart_fragment_invalid_metric(seeded_client):
     resp = seeded_client.get("/clusters/1/plants/1/chart-fragment?metric=bogus")
-    assert resp.status_code == 400
+    assert resp.status_code == HTTPStatus.BAD_REQUEST
 
 
 def test_cluster_detail_includes_chart_payloads(seeded_client):
     resp = seeded_client.get("/clusters/1")
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     # Inline chart JSON blocks for each metric
     for metric in ("soil_moisture", "temperature", "light", "env_humidity"):
         assert f'id="chart-data-{metric}"' in resp.text
@@ -92,19 +94,19 @@ def test_cluster_detail_includes_chart_payloads(seeded_client):
 
 def test_cluster_chart_fragment(seeded_client):
     resp = seeded_client.get("/clusters/1/chart-fragment?metric=temperature&hours=168")
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     assert "canvas" in resp.text.lower()
     assert 'id="chart-data-temperature"' in resp.text
 
 
 def test_cluster_chart_fragment_invalid_metric(seeded_client):
     resp = seeded_client.get("/clusters/1/chart-fragment?metric=bogus")
-    assert resp.status_code == 400
+    assert resp.status_code == HTTPStatus.BAD_REQUEST
 
 
 def test_cluster_chart_fragment_404(client):
     resp = client.get("/clusters/9999/chart-fragment")
-    assert resp.status_code == 404
+    assert resp.status_code == HTTPStatus.NOT_FOUND
 
 
 def test_plant_chart_soil_band_uses_the_shared_target_parser():

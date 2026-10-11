@@ -1,5 +1,7 @@
 """Tests for the per-cluster daily rate-limit guards on /start and /log-manual."""
 
+from http import HTTPStatus
+
 from sqlalchemy.orm import Session
 
 from greenhouse_core.models import IrrigationConfig
@@ -26,7 +28,7 @@ def _setup_cluster_irrigator_config(client, *, tuya_id: str = "fake_rl_001") -> 
         "/api/v1/clusters/1/irrigator",
         json={"tuya_device_id": tuya_id, "name": "Pump", "type": "rainpoint.ik10pw"},
     )
-    assert resp.status_code == 201
+    assert resp.status_code == HTTPStatus.CREATED
     client.put(
         "/api/v1/clusters/1/config",
         json={"mode": "smart", "duration_minutes": 5, "interval_hours": 12, "auto_run": True},
@@ -41,11 +43,11 @@ class TestMaxEventsPerDay:
         _set_cap(client, 1, max_events_per_day=2)
 
         r1 = client.post("/api/v1/irrigators/1/start", json={"minutes": 2})
-        assert r1.status_code == 200
+        assert r1.status_code == HTTPStatus.OK
         r2 = client.post("/api/v1/irrigators/1/start", json={"minutes": 2})
-        assert r2.status_code == 200
+        assert r2.status_code == HTTPStatus.OK
         r3 = client.post("/api/v1/irrigators/1/start", json={"minutes": 2})
-        assert r3.status_code == 409
+        assert r3.status_code == HTTPStatus.CONFLICT
         assert "max_events_per_day" in r3.json()["detail"]
 
     def test_log_manual_blocked_after_cap(self, client):
@@ -54,11 +56,11 @@ class TestMaxEventsPerDay:
         _set_cap(client, 1, max_events_per_day=2)
 
         r1 = client.post("/api/v1/irrigators/1/log-manual", json={"minutes": 2})
-        assert r1.status_code == 200
+        assert r1.status_code == HTTPStatus.OK
         r2 = client.post("/api/v1/irrigators/1/log-manual", json={"minutes": 2})
-        assert r2.status_code == 200
+        assert r2.status_code == HTTPStatus.OK
         r3 = client.post("/api/v1/irrigators/1/log-manual", json={"minutes": 2})
-        assert r3.status_code == 409
+        assert r3.status_code == HTTPStatus.CONFLICT
         assert "max_events_per_day" in r3.json()["detail"]
 
     def test_no_config_allows_unlimited(self, client):
@@ -71,7 +73,7 @@ class TestMaxEventsPerDay:
 
         for _ in range(5):
             r = client.post("/api/v1/irrigators/1/start", json={"minutes": 1})
-            assert r.status_code == 200
+            assert r.status_code == HTTPStatus.OK
 
 
 class TestDailyCapMinutes:
@@ -81,11 +83,11 @@ class TestDailyCapMinutes:
         _set_cap(client, 1, daily_cap_minutes=10)
 
         r1 = client.post("/api/v1/irrigators/1/start", json={"minutes": 6})
-        assert r1.status_code == 200
+        assert r1.status_code == HTTPStatus.OK
 
         # 6 + 6 = 12 > 10
         r2 = client.post("/api/v1/irrigators/1/start", json={"minutes": 6})
-        assert r2.status_code == 409
+        assert r2.status_code == HTTPStatus.CONFLICT
         assert "daily cap" in r2.json()["detail"]
 
     def test_start_allowed_within_duration_cap(self, client):
@@ -94,10 +96,10 @@ class TestDailyCapMinutes:
         _set_cap(client, 1, daily_cap_minutes=10)
 
         r1 = client.post("/api/v1/irrigators/1/start", json={"minutes": 4})
-        assert r1.status_code == 200
+        assert r1.status_code == HTTPStatus.OK
 
         r2 = client.post("/api/v1/irrigators/1/start", json={"minutes": 4})
-        assert r2.status_code == 200  # 4 + 4 = 8 <= 10
+        assert r2.status_code == HTTPStatus.OK  # 4 + 4 = 8 <= 10
 
     def test_log_manual_blocked_by_duration_cap(self, client):
         """10-minute cap applies to /log-manual as well."""
@@ -105,8 +107,8 @@ class TestDailyCapMinutes:
         _set_cap(client, 1, daily_cap_minutes=10)
 
         r1 = client.post("/api/v1/irrigators/1/log-manual", json={"minutes": 6})
-        assert r1.status_code == 200
+        assert r1.status_code == HTTPStatus.OK
 
         r2 = client.post("/api/v1/irrigators/1/log-manual", json={"minutes": 6})
-        assert r2.status_code == 409
+        assert r2.status_code == HTTPStatus.CONFLICT
         assert "daily cap" in r2.json()["detail"]
