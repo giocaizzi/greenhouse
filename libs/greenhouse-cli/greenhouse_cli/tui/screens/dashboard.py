@@ -14,6 +14,7 @@ from textual.widgets import Footer, Header, Static
 from greenhouse_cli.tui import resources
 from greenhouse_cli.tui.model import ClusterSummary, summarize
 from greenhouse_cli.tui.screens.base import DataScreen
+from greenhouse_cli.tui.screens.cluster import ClusterScreen
 from greenhouse_cli.tui.widgets import Banner, ClusterCard
 
 if TYPE_CHECKING:
@@ -121,8 +122,6 @@ class DashboardScreen(DataScreen):
 
     def on_cluster_card_selected(self, message: ClusterCard.Selected) -> None:
         """Open the selected cluster's detail screen."""
-        from greenhouse_cli.tui.screens.cluster import ClusterScreen
-
         self.app.push_screen(ClusterScreen(message.cluster_id))
 
     def action_new_cluster(self) -> None:

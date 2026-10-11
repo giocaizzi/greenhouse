@@ -19,6 +19,7 @@ from textual.binding import Binding, BindingType
 from greenhouse_cli.client import IrrigationClient, ServerError, store_token
 from greenhouse_cli.tui.screens.activity import ActivityScreen
 from greenhouse_cli.tui.screens.alerts import AlertsScreen
+from greenhouse_cli.tui.screens.cluster import ClusterScreen
 from greenhouse_cli.tui.screens.dashboard import DashboardScreen
 from greenhouse_cli.tui.screens.modals import LoginScreen
 from greenhouse_cli.tui.screens.search import SearchScreen
@@ -149,8 +150,6 @@ class GreenhouseApp(App[None]):
         """Search callback: open the picked cluster on top of the dashboard (cancel = no-op)."""
         if cluster_id is None:
             return
-        from greenhouse_cli.tui.screens.cluster import ClusterScreen
-
         self.switch_mode("dashboard")
         self.push_screen(ClusterScreen(cluster_id))
 

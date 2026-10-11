@@ -206,7 +206,7 @@ class IrrigationClient:
         if resp.status_code >= HTTPStatus.BAD_REQUEST:
             try:
                 detail = resp.json().get("detail", resp.text)
-            except Exception:  # noqa: BLE001
+            except (ValueError, AttributeError):  # not JSON, or JSON that is not an object
                 detail = resp.text
             raise ServerError(resp.status_code, _format_detail(detail))
         return resp

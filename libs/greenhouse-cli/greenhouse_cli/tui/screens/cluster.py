@@ -77,53 +77,73 @@ class ClusterScreen(DataScreen):
         """Build the tab tree; its order is the focus order and matches the ``app.tcss`` selectors."""
         yield Header(show_clock=True)
         with TabbedContent(id="cluster-tabs"):
-            with TabPane("Overview", id="tab-overview"), VerticalScroll():
-                yield HorizontalScroll(id="garden")
-                with Horizontal(id="overview-panels"):
-                    with Vertical(id="irrigator-panel", classes="panel"):
-                        yield SpriteView(lambda f: watering_can_sprite(pouring=False, frame=f), id="can")
-                        yield Static(id="irrigator-info")
-                    yield Static(id="decision-panel", classes="panel")
-                    yield KeyValue(id="forecast-panel", classes="panel")
-            with TabPane("Charts", id="tab-charts"), Vertical():
-                yield Static(id="chart-hint", classes="hint")
-                yield MetricChart(id="metric-chart")
-                yield Heatmap(id="heatmap")
-            with TabPane("Plants", id="tab-plants"), Vertical():
-                yield Static(
-                    "[dim]n add · u edit · del delete · M move to cluster · P refresh care data from plant DB · "
-                    "m health ↔ moisture chart[/dim]",
-                    classes="hint",
-                )
-                yield DataTable(id="plants-table", cursor_type="row", zebra_stripes=True)
-                yield MetricChart(id="plant-chart")
-            with TabPane("Sensors", id="tab-sensors"), Vertical():
-                yield Static("[dim]n add · u edit · del delete[/dim]", classes="hint")
-                yield DataTable(id="sensors-table", cursor_type="row", zebra_stripes=True)
-            with TabPane("Insights", id="tab-insights"), VerticalScroll():
-                yield Static("[dim]E export stats CSV · learning report runs on open[/dim]", classes="hint")
-                with Horizontal(id="insights-row"):
-                    yield Static(id="insights-panel", classes="panel")
-                    yield KeyValue(id="stats-panel", classes="panel")
-                yield Static("[b]Irrigation efficacy (14 days)[/b]", classes="hint")
-                yield DataTable(id="efficacy-table", cursor_type="row", zebra_stripes=True)
-                yield Static(id="learn-panel", classes="panel")
-            with TabPane("Decisions", id="tab-decisions"):
-                yield DataTable(id="decisions-table", cursor_type="row", zebra_stripes=True)
-            with TabPane("History", id="tab-history"), Vertical():
-                yield Static("[dim]L log a manual watering[/dim]", classes="hint")
-                yield DataTable(id="history-table", cursor_type="row", zebra_stripes=True)
-            with TabPane("Windows", id="tab-windows"), Vertical():
-                yield Static(
-                    "[dim]Irrigation windows gate automatic runs. None = all hours allowed (subject to quiet "
-                    "hours).  n add · u edit · del delete[/dim]",
-                    classes="hint",
-                )
-                yield DataTable(id="windows-table", cursor_type="row", zebra_stripes=True)
-            with TabPane("Config", id="tab-config"), VerticalScroll():
-                yield Static("[dim]u edit config · e edit cluster · D delete cluster[/dim]", classes="hint")
-                yield KeyValue(id="config-panel", classes="panel")
+            yield from self._overview_pane()
+            yield from self._charts_pane()
+            yield from self._inventory_panes()
+            yield from self._insights_pane()
+            yield from self._log_panes()
         yield Footer()
+
+    def _overview_pane(self) -> ComposeResult:
+        """The Overview tab: plant garden, irrigator / decision / forecast panels."""
+        with TabPane("Overview", id="tab-overview"), VerticalScroll():
+            yield HorizontalScroll(id="garden")
+            with Horizontal(id="overview-panels"):
+                with Vertical(id="irrigator-panel", classes="panel"):
+                    yield SpriteView(lambda f: watering_can_sprite(pouring=False, frame=f), id="can")
+                    yield Static(id="irrigator-info")
+                yield Static(id="decision-panel", classes="panel")
+                yield KeyValue(id="forecast-panel", classes="panel")
+
+    def _charts_pane(self) -> ComposeResult:
+        """The Charts tab: metric chart and heatmap."""
+        with TabPane("Charts", id="tab-charts"), Vertical():
+            yield Static(id="chart-hint", classes="hint")
+            yield MetricChart(id="metric-chart")
+            yield Heatmap(id="heatmap")
+
+    def _inventory_panes(self) -> ComposeResult:
+        """The Plants and Sensors tabs: their tables (plus the per-plant chart)."""
+        with TabPane("Plants", id="tab-plants"), Vertical():
+            yield Static(
+                "[dim]n add · u edit · del delete · M move to cluster · P refresh care data from plant DB · "
+                "m health ↔ moisture chart[/dim]",
+                classes="hint",
+            )
+            yield DataTable(id="plants-table", cursor_type="row", zebra_stripes=True)
+            yield MetricChart(id="plant-chart")
+        with TabPane("Sensors", id="tab-sensors"), Vertical():
+            yield Static("[dim]n add · u edit · del delete[/dim]", classes="hint")
+            yield DataTable(id="sensors-table", cursor_type="row", zebra_stripes=True)
+
+    def _insights_pane(self) -> ComposeResult:
+        """The Insights tab: learning insights, stats and irrigation efficacy."""
+        with TabPane("Insights", id="tab-insights"), VerticalScroll():
+            yield Static("[dim]E export stats CSV · learning report runs on open[/dim]", classes="hint")
+            with Horizontal(id="insights-row"):
+                yield Static(id="insights-panel", classes="panel")
+                yield KeyValue(id="stats-panel", classes="panel")
+            yield Static("[b]Irrigation efficacy (14 days)[/b]", classes="hint")
+            yield DataTable(id="efficacy-table", cursor_type="row", zebra_stripes=True)
+            yield Static(id="learn-panel", classes="panel")
+
+    def _log_panes(self) -> ComposeResult:
+        """The Decisions, History, Windows and Config tabs."""
+        with TabPane("Decisions", id="tab-decisions"):
+            yield DataTable(id="decisions-table", cursor_type="row", zebra_stripes=True)
+        with TabPane("History", id="tab-history"), Vertical():
+            yield Static("[dim]L log a manual watering[/dim]", classes="hint")
+            yield DataTable(id="history-table", cursor_type="row", zebra_stripes=True)
+        with TabPane("Windows", id="tab-windows"), Vertical():
+            yield Static(
+                "[dim]Irrigation windows gate automatic runs. None = all hours allowed (subject to quiet "
+                "hours).  n add · u edit · del delete[/dim]",
+                classes="hint",
+            )
+            yield DataTable(id="windows-table", cursor_type="row", zebra_stripes=True)
+        with TabPane("Config", id="tab-config"), VerticalScroll():
+            yield Static("[dim]u edit config · e edit cluster · D delete cluster[/dim]", classes="hint")
+            yield KeyValue(id="config-panel", classes="panel")
 
     def on_mount(self) -> None:
         """Declare every table's columns once; loads only refill rows."""

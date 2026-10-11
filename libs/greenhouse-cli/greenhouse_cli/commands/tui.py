@@ -28,7 +28,7 @@ def tui(
     and a one-key sensor sync. Talks to the server over HTTP, so it works
     against any reachable greenhouse server (``--server``).
     """
-    from greenhouse_cli.tui import run
+    from greenhouse_cli.tui import run  # noqa: PLC0415 — Textual loads only for `greenhouse tui`; tests patch tui.run
 
     run(server_url(ctx), refresh_seconds=refresh, animations=not no_animation)
 
