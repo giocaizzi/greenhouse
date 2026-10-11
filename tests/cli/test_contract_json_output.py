@@ -791,7 +791,7 @@ CLIENT_CASES: list[ClientCase] = [
     M("stats_export.json_response_raises", "stats_export", 3, days=2),
     M("health", "health"),
     M("scheduler_jobs", "scheduler_jobs"),
-    M("delete_scheduler_job.path_not_escaped", "delete_scheduler_job", "job/with space"),
+    M("delete_scheduler_job.path_segment_escaped", "delete_scheduler_job", "job/with space?x"),
     M("scheduler_pause", "scheduler_pause"),
     M("scheduler_resume", "scheduler_resume"),
     M("system_health", "system_health"),

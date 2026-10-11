@@ -7106,10 +7106,10 @@
     "ok": true
    }
   },
-  "delete_scheduler_job.path_not_escaped": {
+  "delete_scheduler_job.path_segment_escaped": {
    "call": {
     "args": [
-     "job/with space"
+     "job/with space?x"
     ],
     "kwargs": {},
     "method": "delete_scheduler_job"
@@ -7121,14 +7121,14 @@
      "content_type": null,
      "json": null,
      "method": "DELETE",
-     "path": "/api/v1/scheduler/jobs/job/with space",
+     "path": "/api/v1/scheduler/jobs/job/with space?x",
      "query": [],
-     "raw_path": "/api/v1/scheduler/jobs/job/with%20space",
-     "url": "http://client.example:8123/api/v1/scheduler/jobs/job/with%20space"
+     "raw_path": "/api/v1/scheduler/jobs/job%2Fwith%20space%3Fx",
+     "url": "http://client.example:8123/api/v1/scheduler/jobs/job%2Fwith%20space%3Fx"
     }
    ],
    "returned": {
-    "echo": "DELETE /api/v1/scheduler/jobs/job/with space",
+    "echo": "DELETE /api/v1/scheduler/jobs/job/with space?x",
     "ok": true
    }
   },

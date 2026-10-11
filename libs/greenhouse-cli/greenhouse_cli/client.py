@@ -6,6 +6,7 @@ from collections.abc import Mapping
 from http import HTTPStatus
 from pathlib import Path
 from typing import Any, Self, cast
+from urllib.parse import quote
 
 import httpx
 
@@ -414,8 +415,12 @@ class IrrigationClient:
         return self._array("GET", "/api/v1/scheduler/jobs")
 
     def delete_scheduler_job(self, job_id: str) -> JSONObject:
-        """Remove a scheduler job (``DELETE /scheduler/jobs/{job_id}``)."""
-        return self._object("DELETE", f"/api/v1/scheduler/jobs/{job_id}")
+        """Remove a scheduler job (``DELETE /scheduler/jobs/{job_id}``).
+
+        Job ids are free text, so the id is percent-encoded as one path segment —
+        a ``/``, ``?`` or space must not change which URL is called.
+        """
+        return self._object("DELETE", f"/api/v1/scheduler/jobs/{quote(job_id, safe='')}")
 
     def scheduler_pause(self) -> JSONObject:
         """Pause automatic irrigation (``POST /scheduler/pause``)."""
