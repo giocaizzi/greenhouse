@@ -19,14 +19,34 @@ from greenhouse_server.services.health_monitor import DeviceHealthMonitor
 KNOWN_IRRIGATORS = "fake.irrigator, rainpoint.ik10pw"
 
 
+def _legacy_row(client, write):
+    """Write a row the way an old database holds it: straight through the repository.
+
+    The API and web refuse an unknown ``type`` on write, so a legacy value can only come
+    from a pre-existing row.
+    """
+    session = client.app.state.session_factory()
+    try:
+        row_id = write(IrrigationRepository(session))
+        session.commit()
+        return row_id
+    finally:
+        session.close()
+
+
 def _cluster_with_irrigator(client, irrigator_type: str) -> tuple[int, int]:
     cid = client.post("/api/v1/clusters", json={"name": "Legacy", "environment": "indoor"}).json()["id"]
-    resp = client.post(
-        f"/api/v1/clusters/{cid}/irrigator",
-        json={"tuya_device_id": "fake_tuya_device_legacy01", "name": "Old Pump", "type": irrigator_type},
+    iid = _legacy_row(
+        client,
+        lambda repo: repo.add_irrigator(
+            cluster_id=cid,
+            tuya_device_id="fake_tuya_device_legacy01",
+            name="Old Pump",
+            irrigator_type=irrigator_type,
+            config={},
+        ),
     )
-    assert resp.status_code == 201  # the API stores any type string; resolution happens at use
-    return cid, resp.json()["id"]
+    return cid, iid
 
 
 @pytest.mark.parametrize("legacy", ["tuya_cloud", "tuya_local"])
@@ -42,7 +62,8 @@ def test_manual_start_refuses_a_legacy_irrigator_with_503(client, app, caplog, l
 
 def test_forced_cluster_irrigation_skips_actuation_for_a_legacy_irrigator(seeded_client, app):
     client = seeded_client
-    assert client.put("/api/v1/clusters/1/irrigator", json={"type": "tuya_cloud"}).status_code == 200
+    irrigator_id = client.get("/api/v1/clusters/1/irrigator").json()["id"]
+    _legacy_row(client, lambda repo: repo.update_irrigator(irrigator_id, type="tuya_cloud"))
     resp = client.post("/api/v1/clusters/1/irrigate", json={"force": True})
     assert resp.status_code == 200
     assert "no adapter for irrigator: No adapter registered for irrigator type 'tuya_cloud'" in resp.text
@@ -64,10 +85,12 @@ def test_emergency_stop_reports_a_legacy_irrigator_as_an_error(client, app):
 @pytest.mark.parametrize("legacy", ["soil_moisture", "temp_humidity", "light"])
 def test_health_poll_skips_a_legacy_sensor_with_a_warning(client, app, caplog, legacy):
     cid = client.post("/api/v1/clusters", json={"name": "Legacy", "environment": "indoor"}).json()["id"]
-    sid = client.post(
-        f"/api/v1/clusters/{cid}/sensors",
-        json={"tuya_device_id": "fake_tuya_sensor_legacy01", "name": "Old Probe", "type": legacy},
-    ).json()["id"]
+    sid = _legacy_row(
+        client,
+        lambda repo: repo.add_sensor(
+            cluster_id=cid, tuya_device_id="fake_tuya_sensor_legacy01", name="Old Probe", sensor_type=legacy, config={}
+        ),
+    )
     session = app.state.session_factory()
     try:
         repo = IrrigationRepository(session)

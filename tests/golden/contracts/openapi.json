@@ -996,7 +996,7 @@
      "irrigators"
     ],
     "summary": "Register the cluster's irrigator",
-    "description": "Register the Tuya irrigator for a cluster.\n\nA cluster has at most one irrigator (strict 0:1). Registering a second one\nis rejected.\n\nArgs:\n    cluster_id: Cluster the irrigator belongs to.\n    request: Tuya device ID, irrigator name, type (the device model key,\n        e.g. `rainpoint.ik10pw`),\n        optional config dict, and optional `reservoir_l` /\n        `flow_rate_l_per_min` capacity used for vacation rationing.\n\nReturns:\n    The newly created irrigator.\n\nRaises:\n    HTTPException: 404 if the cluster does not exist, 409 if the cluster\n        already has an irrigator or the Tuya device ID is already\n        registered.",
+    "description": "Register the Tuya irrigator for a cluster.\n\nA cluster has at most one irrigator (strict 0:1). Registering a second one\nis rejected.\n\nArgs:\n    cluster_id: Cluster the irrigator belongs to.\n    request: Tuya device ID, irrigator name, type (the device model key,\n        e.g. `rainpoint.ik10pw`),\n        optional config dict, and optional `reservoir_l` /\n        `flow_rate_l_per_min` capacity used for vacation rationing.\n\nReturns:\n    The newly created irrigator.\n\nRaises:\n    HTTPException: 404 if the cluster does not exist, 409 if the cluster\n        already has an irrigator or the Tuya device ID is already\n        registered, 422 if `type` is not a registered irrigator model key\n        (the detail lists the known keys).",
     "operationId": "add_irrigator",
     "security": [
      {
@@ -1098,7 +1098,7 @@
      "irrigators"
     ],
     "summary": "Update the cluster's irrigator",
-    "description": "Partially update the metadata of the cluster's irrigator.\n\nOnly fields present in the request body are modified; omitted fields are\nleft unchanged, and an explicit `null` clears an optional field. A `config` replaces the stored one; its `local_key` is\nmasked as `••••••••` in every response, and sending that mask back keeps\nthe stored key.\n\nArgs:\n    cluster_id: Cluster whose irrigator to update.\n    request: Fields to update — any subset of `name`, `type`, `config`,\n        `reservoir_l`, and `flow_rate_l_per_min`.\n\nReturns:\n    The updated irrigator (its `local_key` masked).\n\nRaises:\n    HTTPException: 404 if the cluster has no irrigator.",
+    "description": "Partially update the metadata of the cluster's irrigator.\n\nOnly fields present in the request body are modified; omitted fields are\nleft unchanged, and an explicit `null` clears an optional field. A `config` replaces the stored one; its `local_key` is\nmasked as `••••••••` in every response, and sending that mask back keeps\nthe stored key.\n\nArgs:\n    cluster_id: Cluster whose irrigator to update.\n    request: Fields to update — any subset of `name`, `type`, `config`,\n        `reservoir_l`, and `flow_rate_l_per_min`.\n\nReturns:\n    The updated irrigator (its `local_key` masked).\n\nRaises:\n    HTTPException: 404 if the cluster has no irrigator, 422 if `type` is\n        not a registered irrigator model key.",
     "operationId": "update_irrigator",
     "security": [
      {
@@ -1453,7 +1453,7 @@
      "sensors"
     ],
     "summary": "Add Sensor",
-    "description": "Register a Tuya sensor under a cluster.\n\nA sensor may optionally be linked to a specific plant; otherwise it is\ntreated as a cluster-level reading.\n\nArgs:\n    cluster_id: Cluster the sensor belongs to.\n    request: Tuya device ID, sensor name, type (the device model key,\n        e.g. `tuya.tr301z`),\n        optional config dict, and optional plant_id for per-plant linking.\n\nRaises:\n    HTTPException: 404 if the cluster (or referenced plant) is missing,\n        409 if the Tuya device ID is already registered.\n\nReturns:\n    The created sensor record.",
+    "description": "Register a Tuya sensor under a cluster.\n\nA sensor may optionally be linked to a specific plant; otherwise it is\ntreated as a cluster-level reading.\n\nArgs:\n    cluster_id: Cluster the sensor belongs to.\n    request: Tuya device ID, sensor name, type (the device model key,\n        e.g. `tuya.tr301z`),\n        optional config dict, and optional plant_id for per-plant linking.\n\nRaises:\n    HTTPException: 404 if the cluster (or referenced plant) is missing,\n        409 if the Tuya device ID is already registered, 422 if `type` is\n        not a registered sensor model key (the detail lists the known keys).\n\nReturns:\n    The created sensor record.",
     "operationId": "add_sensor",
     "security": [
      {
@@ -1616,7 +1616,7 @@
      "sensors"
     ],
     "summary": "Update a sensor",
-    "description": "Partially update a sensor's metadata.\n\nOnly fields present in the request body are modified; omitted fields are\nleft unchanged, and an explicit `null` clears an optional field. The sensor must belong to the specified cluster.\n\nArgs:\n    cluster_id: Cluster the sensor belongs to.\n    sensor_id: Numeric sensor identifier.\n    request: Fields to update — any subset of name, type, config,\n        and plant_id.\n\nReturns:\n    The updated sensor.\n\nRaises:\n    HTTPException: 404 if the sensor does not exist or belongs to a\n        different cluster, or if ``plant_id`` is not a plant of that cluster.",
+    "description": "Partially update a sensor's metadata.\n\nOnly fields present in the request body are modified; omitted fields are\nleft unchanged, and an explicit `null` clears an optional field. The sensor must belong to the specified cluster.\n\nArgs:\n    cluster_id: Cluster the sensor belongs to.\n    sensor_id: Numeric sensor identifier.\n    request: Fields to update — any subset of name, type, config,\n        and plant_id.\n\nReturns:\n    The updated sensor.\n\nRaises:\n    HTTPException: 404 if the sensor does not exist or belongs to a\n        different cluster, or if ``plant_id`` is not a plant of that cluster;\n        422 if `type` is not a registered sensor model key.",
     "operationId": "update_sensor",
     "security": [
      {

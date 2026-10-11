@@ -25,8 +25,10 @@ from greenhouse_server.deps import (
 from greenhouse_server.services.inventory import (
     DeviceIdExistsError,
     IrrigatorExistsError,
+    UnknownDeviceTypeError,
     create_irrigator,
     keep_masked_local_key,
+    require_known_device_type,
 )
 from greenhouse_server.services.manual_control import (
     ManualActionError,
@@ -71,7 +73,9 @@ def list_all_irrigators(
     status_code=status.HTTP_201_CREATED,
     summary="Register the cluster's irrigator",
 )
-def add_irrigator(cluster_id: int, request: CreateIrrigatorRequest, repo: RepoDep) -> Irrigator | None:
+def add_irrigator(
+    cluster_id: int, request: CreateIrrigatorRequest, repo: RepoDep, registry: DeviceRegistryDep
+) -> Irrigator | None:
     """Register the Tuya irrigator for a cluster.
 
     A cluster has at most one irrigator (strict 0:1). Registering a second one
@@ -90,7 +94,8 @@ def add_irrigator(cluster_id: int, request: CreateIrrigatorRequest, repo: RepoDe
     Raises:
         HTTPException: 404 if the cluster does not exist, 409 if the cluster
             already has an irrigator or the Tuya device ID is already
-            registered.
+            registered, 422 if `type` is not a registered irrigator model key
+            (the detail lists the known keys).
     """
     require_cluster(repo, cluster_id)
     try:
@@ -101,9 +106,12 @@ def add_irrigator(cluster_id: int, request: CreateIrrigatorRequest, repo: RepoDe
             name=request.name,
             irrigator_type=request.type,
             config=request.config or {},
+            registry=registry,
             reservoir_l=request.reservoir_l,
             flow_rate_l_per_min=request.flow_rate_l_per_min,
         )
+    except UnknownDeviceTypeError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
     except IrrigatorExistsError:
         raise HTTPException(status_code=409, detail="Cluster already has an irrigator") from None
     except DeviceIdExistsError:
@@ -137,7 +145,9 @@ def get_irrigator(cluster_id: int, repo: RepoDep) -> Irrigator:
     response_model=IrrigatorResponse,
     summary="Update the cluster's irrigator",
 )
-def update_irrigator(cluster_id: int, request: UpdateIrrigatorRequest, repo: RepoDep) -> Irrigator | None:
+def update_irrigator(
+    cluster_id: int, request: UpdateIrrigatorRequest, repo: RepoDep, registry: DeviceRegistryDep
+) -> Irrigator | None:
     """Partially update the metadata of the cluster's irrigator.
 
     Only fields present in the request body are modified; omitted fields are
@@ -154,9 +164,15 @@ def update_irrigator(cluster_id: int, request: UpdateIrrigatorRequest, repo: Rep
         The updated irrigator (its `local_key` masked).
 
     Raises:
-        HTTPException: 404 if the cluster has no irrigator.
+        HTTPException: 404 if the cluster has no irrigator, 422 if `type` is
+            not a registered irrigator model key.
     """
     irrigator = require_cluster_irrigator(repo, cluster_id)
+    if request.type is not None:
+        try:
+            require_known_device_type(registry, "irrigator", request.type)
+        except UnknownDeviceTypeError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from None
     fields = request.model_dump(exclude_unset=True)
     if fields.get("config"):
         fields["config"] = keep_masked_local_key(fields["config"], irrigator.config)

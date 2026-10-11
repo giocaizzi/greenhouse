@@ -166,7 +166,9 @@ async def _cluster(http, rows: list) -> None:
         await rec.key("m", note="toggles plant chart, read-only")
 
         await rec.tab("tab-sensors")
-        await rec.key("n", fill={"tuya_device_id": "fake_tuya_device_aabbccdd", "name": "Spare probe", "type": "x"})
+        await rec.key(
+            "n", fill={"tuya_device_id": "fake_tuya_device_aabbccdd", "name": "Spare probe", "type": "tuya.tr301z"}
+        )
         await rec.key("u")
         await rec.key("delete")
 
@@ -191,7 +193,9 @@ async def _cluster(http, rows: list) -> None:
         await rec.tab("tab-overview")
         await rec.key("delete")
         await rec.key("w", note="no irrigator after detach")
-        await rec.key("n", fill={"tuya_device_id": "fake_tuya_device_00112233", "name": "New pump", "type": "t"})
+        await rec.key(
+            "n", fill={"tuya_device_id": "fake_tuya_device_00112233", "name": "New pump", "type": "rainpoint.ik10pw"}
+        )
         await rec.key("D")
         assert isinstance(tui.screen, DashboardScreen)
         rows += rec.rows

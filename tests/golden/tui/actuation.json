@@ -569,7 +569,7 @@
   "filled": {
    "name": "Spare probe",
    "tuya_device_id": "fake_tuya_device_aabbccdd",
-   "type": "x"
+   "type": "tuya.tr301z"
   },
   "key": "n",
   "screen": "cluster",
@@ -588,7 +588,7 @@
      "name": "Spare probe",
      "plant_id": null,
      "tuya_device_id": "fake_tuya_device_aabbccdd",
-     "type": "x"
+     "type": "tuya.tr301z"
     }
    ]
   ]
@@ -1088,7 +1088,7 @@
   "filled": {
    "name": "New pump",
    "tuya_device_id": "fake_tuya_device_00112233",
-   "type": "t"
+   "type": "rainpoint.ik10pw"
   },
   "key": "n",
   "screen": "cluster",
@@ -1106,7 +1106,7 @@
     {
      "name": "New pump",
      "tuya_device_id": "fake_tuya_device_00112233",
-     "type": "t"
+     "type": "rainpoint.ik10pw"
     }
    ]
   ]

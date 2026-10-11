@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, TypeVar
 from fastapi import HTTPException
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Sequence
 
 _Number = TypeVar("_Number", int, float)
 
@@ -54,3 +54,23 @@ def tri_bool(raw: str) -> bool | None:
     if value in ("false", "off", "0"):
         return False
     raise HTTPException(400, f"Invalid tri-bool value: {raw!r}")
+
+
+# Human labels for the registered device model keys in the type <select>s. A key
+# missing here (a test or future adapter) is shown as the key itself.
+_DEVICE_TYPE_LABELS = {
+    "rainpoint.ik10pw": "Rainpoint IK10PW",
+    "tuya.tr301z": "Tuya TR301Z (soil, temperature, light)",
+}
+
+
+def device_type_options(known: Sequence[str], current: str | None = None) -> list[tuple[str, str]]:
+    """``(value, label)`` options for a device type ``<select>``: the registry's keys.
+
+    A ``current`` value the registry does not know (a legacy row) is appended, flagged, so the
+    edit form shows what is stored; saving it unchanged is refused like any unknown type.
+    """
+    options = [(key, _DEVICE_TYPE_LABELS.get(key, key)) for key in known]
+    if current and current not in known:
+        options.append((current, f"{current} (unknown model)"))
+    return options

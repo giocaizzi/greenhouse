@@ -663,11 +663,11 @@ def sc_no_registry(p: Pipeline) -> None:
 
 def sc_unknown_irrigator_model(p: Pipeline) -> None:
     p.seed_cluster(soil=35.0, irrigator=False)
-    p.api(
-        "POST",
-        "/api/v1/clusters/1/irrigator",
-        {"tuya_device_id": "fake_irrigator_x", "name": "Mystery", "type": "acme.unknown"},
-    )
+    # A row from an older database: the API refuses an unknown type on write.
+    with p.repo() as repo:
+        repo.add_irrigator(
+            cluster_id=1, tuya_device_id="fake_irrigator_x", name="Mystery", irrigator_type="acme.unknown", config={}
+        )
     p.mark()
     _irrigate(p)
 

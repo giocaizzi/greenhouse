@@ -36,7 +36,9 @@
     </label>
     <label for="type">Type
       <select id="type" name="type" required>
-        <option value="rainpoint.ik10pw" selected>Rainpoint IK10PW</option>
+        {%- for value, label in type_options %}
+        <option value="{{ value }}"{% if loop.first %} selected{% endif %}>{{ label }}</option>
+        {%- endfor %}
       </select>
       <small class="muted">Cycle bounding runs over the LAN: it needs the device IP below; a blank local key is looked up once via the Tuya Cloud.</small>
     </label>

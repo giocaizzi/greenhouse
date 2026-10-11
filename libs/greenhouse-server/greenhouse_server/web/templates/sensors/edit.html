@@ -31,7 +31,9 @@
     </label>
     <label for="type">Type
       <select id="type" name="type" required>
-        <option value="tuya.tr301z" selected>Tuya TR301Z (soil, temperature, light)</option>
+        {%- for value, label in type_options %}
+        <option value="{{ value }}"{% if value == sensor.type %} selected{% endif %}>{{ label }}</option>
+        {%- endfor %}
       </select>
     </label>
     <label for="plant_id">Plant <small class="muted">(optional)</small>

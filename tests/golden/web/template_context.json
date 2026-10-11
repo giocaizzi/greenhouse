@@ -1159,7 +1159,8 @@
     "request",
     "scheduler_paused",
     "show_chrome",
-    "theme"
+    "theme",
+    "type_options"
    ]
   ]
  ],
@@ -1198,7 +1199,8 @@
     "request",
     "scheduler_paused",
     "show_chrome",
-    "theme"
+    "theme",
+    "type_options"
    ]
   ]
  ],
@@ -1256,7 +1258,8 @@
     "scheduler_paused",
     "sensor",
     "show_chrome",
-    "theme"
+    "theme",
+    "type_options"
    ]
   ]
  ],
@@ -1295,7 +1298,8 @@
     "scheduler_paused",
     "sensor",
     "show_chrome",
-    "theme"
+    "theme",
+    "type_options"
    ]
   ]
  ],
@@ -1650,7 +1654,8 @@
     "request",
     "scheduler_paused",
     "show_chrome",
-    "theme"
+    "theme",
+    "type_options"
    ]
   ]
  ],
@@ -1688,7 +1693,8 @@
     "request",
     "scheduler_paused",
     "show_chrome",
-    "theme"
+    "theme",
+    "type_options"
    ]
   ]
  ],
@@ -1707,7 +1713,8 @@
     "request",
     "scheduler_paused",
     "show_chrome",
-    "theme"
+    "theme",
+    "type_options"
    ]
   ]
  ],
