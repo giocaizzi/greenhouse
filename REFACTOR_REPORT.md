@@ -95,6 +95,8 @@ Full table with locations, pinning tests and commits: `REFACTOR_NOTES.md` → "L
   - A host install binds `127.0.0.1`; set `IRRIGATION_HOST=0.0.0.0` for LAN access (Docker already does).
   - `dry_run_global` is enforced, global per-day caps bind every cluster and automatic runs, a forced irrigate is
     recorded as manual, and API/MCP responses mask `local_key`.
+  - The engine judges each sensor's newest reading against its own plant's band (stale sensors ignored), emergency
+    runs obey windows and vacation budgets, and time edges are exclusive.
 
 ## 6. Contract evidence
 Goldens pin OpenAPI, MCP tools, routes, DDL/migrated schema, settings, env reads, import surfaces, loggers, constants,
@@ -116,9 +118,12 @@ runs, 28,792 patch-seam runs and 3,960 device calls with zero differences.
 After the refactor the owner asked for **every recorded bug to be fixed in the same PR** (2026-10-11). The work ran as
 six packages, each on its own branch with a second, differential review before merge: **A** safety + actuation
 pipeline, **B** devices / ingress / sync / weather, **C** API / web / auth / security / schema, **D** engine / CLI /
-TUI / test infrastructure, **E** dependencies + CI, **F** cleanup. A, B, C, E and F are merged (`01692d4..190217f`:
-87 commits, 73 of them `fix(...)`, one bug per commit with the pinning test flipped to the fixed behavior).
-<!-- TODO(D): package D (30 commits) — add its merge commit, its rows below and the final commit counts. -->
+TUI / test infrastructure, **E** dependencies + CI, **F** cleanup. All six are merged, one bug per commit with the
+pinning test flipped to the fixed behavior. A, B, C, E and F: `01692d4..190217f`, 87 commits, 73 of them `fix(...)`.
+D: merged at `3b75817`, then its two review rounds and the TUI table fix through `f0c7662` (`9a20582..f0c7662`:
+53 commits, of which 50 `fix(...)`, 2 dead-code `refactor` and 1 `docs`). Up to `f0c7662` the fold-in has
+146 non-merge commits, 123 of them `fix(...)`.
+<!-- TODO(final-gate): final fold-in commit counts at the PR head (docs and the ruff ALL phase included). -->
 
 ### 8.1 Owner decisions
 
@@ -126,7 +131,8 @@ TUI / test infrastructure, **E** dependencies + CI, **F** cleanup. A, B, C, E an
   interface); everything is evaluated and logged; stops, stop-all and shutdown stops always work.
 - Engine quirks: fix all (critical stress on the driest plant, preference-timezone light month, short-series spike
   guard, validated soil targets, 0 °C / 0 % real, every decision has a reason); emergency runs obey windows and
-  vacation budgets; time edges are exclusive.
+  vacation budgets; time edges are exclusive. Second review: the soil rule and critical stress judge each sensor's
+  newest cleaned reading against its own plant's band, not the 24 h pool.
 - Secrets only as `GREENHOUSE_X`; `local_key` masked in irrigator and sensor responses (writes still accept it);
   default bind `127.0.0.1` (Docker opts in).
 - A forced run is a manual run (recorded manual, leak check, stopped at shutdown); every real start gets the leak
@@ -149,12 +155,19 @@ Full table (what changed, where, pinning test): `REFACTOR_NOTES.md` → "Labeled
 | Web | missing-alert ack/resolve 404; non-numeric form 400; unknown-cluster irrigate 404; error format by `Accept` (+ 405 `Allow`); footer clock timezone; no operational banners for anonymous viewers; plant form dependency | `3662b49`, `f0570bb`, `293ceaf`, `fdd0c3a`, `40a1df9`, `ba44321`, `9140079`, `aac74ba` |
 | Auth / security / settings | B-12 constant-time MCP token; empty/whitespace token = unset (503), bearer only; `WWW-Authenticate` on JSON 401; corrupt hash → False, unknown user costs a verify; `GREENHOUSE_X`-only secrets + startup warning; ntfy URL validated, credentials redacted; bind `127.0.0.1`; swallowed startup failures logged | `fb8617f`, `6910279`, `3216b6d`, `440bfeb`, `6d1a1a6`, `67e3520`, `2792a7a`, `e269c39`, `f3df4e8`, `db2b659`, `66dca03`, `b388380`, `87fcc6d`, `5d86105` |
 | Schema / DB | models declare the migrations' defaults and uniques (no schema drift); in-process Alembic leaves host logging alone | `6758219`, `0159ef9` |
-| Engine, CLI, TUI, test infra | <!-- TODO(D): package D rows (engine 13 fixes, CLI 7, TUI 7, test infra 3) with commit ids. --> pending package D | — |
+| Engine: quirks | critical stress on the driest plant; `no_action_needed` (no NULL `primary_code`); short-series spike guard; Hampel keeps a confirmed step (a glitch beside a level change is not one); validated soil targets; B-18 0 °C / 0 % real; B-14 applied deltas; B-24 global schedule fallback; light by preference-timezone month; `environment_for` (only `"outdoor"`); emergency runs obey windows and vacation budgets; exclusive edges (cooldown, leak hold, vacation end) | `7bffac8`, `f20ebff`, `2632a54`, `f294cb5`, `3cc9d9e`, `4a195d3`, `dd1395f`, `081e94e`, `9885cb9`, `7175723`, `d08edde`, `0c43ca8`, `e081eb0` |
+| Engine: current readings | soil rule and water stress on each sensor's newest cleaned reading; per-linked-plant bands (unlinked → widest band); plant-aware critical threshold (`CRITICAL_STRESS_BELOW_TARGET_MARGIN`, capped 30 %); over-watering or a plant above its band vetoes water stress; the soil-dry alarm is a terminal skip only when over-watering is detected, otherwise noted; conflict wet side per plant; stale sensors (> 4 h) drop out of current checks; water warning = newest current reading carrying the flag | `3801e38`, `7f45387`, `3f72506`, `3db76a6`, `7fc196e`, `ae2182c`, `aba2cfa`, `b97567f`, `b0157b7`, `61905d9`, `e16f4a6`, `f0c7662` |
+| Server / web (package D) | forecast and temperature source use `environment_for`; `no_action_needed` icon; scheduler job delete `{job_id:path}` (API and web); freshness sync dates a soil sensor by its newest soil reading | `94e34ed`, `69a3ba1`, `a8493d5`, `0c7bb22`, `8c74cc6` |
+| CLI | blank token falls back to the file; B-17 timeouts / empty / non-JSON bodies → `Error:` exit 1; 422 as `field: message` (empty detail → generic message); id `0` is an id; `stats --export` refuses a non-CSV body; job ids percent-encoded; bare groups print help, exit 0 | `fd2d431`, `2eabaa4`, `213fb69`, `7c70c58`, `5f0c659`, `264deca`, `9048809`, `5d4fbf2` |
+| TUI | S4 dashboard reload lock (no-op while closing, public Textual API); 401 says "sign in"; Activity cursor kept; add-plant note (B-19); search columns resized; HTTP clients closed on exit; resume and `P` confirm; stale narrow table render (`tui/table.py`) | `dbfb304`, `8da8421`, `f1478d3`, `580a73a`, `85c181a`, `1a642f3`, `363cce7`, `61d45a2`, `9767895` |
+| Test infrastructure | server fixtures as a global plugin (mixed paths work); CLI token isolated; `.env` off unless `dotenv` marker | `450eded`, `2a4d6bf`, `6b78e0b` |
 
 Cleanup (package F and leftovers): lazy package re-exports (`greenhouse_core/_lazy.py`; `import greenhouse_core.constants`
 ~650 ms → 15–25 ms) `0ff00ba`; pump-watcher jobs → `services/pump_watcher_jobs.py` `d3d0ec3`; DP parsers →
-`devices/datapoints.py` `ea0726a`; dead code `a00ee93`, `8011987`, `f88e0dc`, `5cafc94`, `dc7d932`. New modules:
-`services/{actuation_gates,caps,health_alarms,pump_watcher_jobs}.py`, `devices/datapoints.py`, `greenhouse_core/_lazy.py`.
+`devices/datapoints.py` `ea0726a`; dead code `a00ee93`, `8011987`, `f88e0dc`, `5cafc94`, `dc7d932`, `da9cc6a`
+(fallback `temp_range`), `81ec7e3` (duplicate quiet-hours guard). New modules:
+`services/{actuation_gates,caps,health_alarms,pump_watcher_jobs}.py`, `devices/datapoints.py`, `greenhouse_core/_lazy.py`,
+`greenhouse_cli/tui/table.py`, `tests/server/fixtures.py`.
 
 ### 8.3 Dependencies and CI
 
@@ -171,16 +184,22 @@ Cleanup (package F and leftovers): lazy package re-exports (`greenhouse_core/_la
 
 ### 8.4 Gate
 
-<!-- TODO(final-gate): full-suite count (packages A/B/C merged: ~3,190; D: +?), coverage, hash seeds, TZ run,
-lint-imports / typecheck / sizecheck results and the gitleaks range for the final fold-in HEAD. -->
+<!-- TODO(final-gate): full-suite count (package runs: 3,293 after D's last review round, +1 test in f0c7662),
+coverage, hash seeds, TZ run, lint-imports / typecheck / sizecheck results and the gitleaks range for the final
+fold-in HEAD. -->
+
+### 8.5 Ruff `ALL`
+
+<!-- TODO(final-gate): the ruff ALL phase — rule set, per-file ignores, commits, and the §1 "Ruff rule families" row
+as of the final HEAD. -->
 
 ## 9. Pending outside work (not done here)
 
 ### 9.1 Open bugs
 
-- **Package D scope** (S4 TUI dashboard reload race, the pinned engine quirks, CLI error handling, TUI copy/cursor,
-  test-infrastructure isolation) is fixed on its branch and not merged yet: `REFACTOR_NOTES.md` → "Observed bugs not
-  fixed". <!-- TODO(D): remove this bullet once D is merged. -->
+- Every bug the refactor recorded is fixed; what is left is in `REFACTOR_NOTES.md` → "Observed bugs not fixed".
+- The learning issue heuristics and the maintenance `low_light` check still take the light season from the UTC month
+  (advisory only; the engine uses the preference-timezone month).
 - A stale `local_key` in an irrigator's config after re-pairing is not recovered automatically (tinytuya error 914
   could drive a Cloud key refresh and retry) — `devices/gateway.py`.
 - Small leftovers: the `tr301z.py` docstring names `OFFLINE_AFTER_MINUTES` for sensors; the cleanup candidates in
