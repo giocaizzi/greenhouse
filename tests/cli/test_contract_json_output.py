@@ -275,7 +275,7 @@ CLI_CASES: list[Case] = [
     C("token.empty_file", "health", token_file="  \n"),
     C("token.env_wins_over_file", "health", env={"GREENHOUSE_API_TOKEN": "  env-token \n"}, token_file="file-token"),
     C(
-        "token.blank_env_current_behavior_ignores_file",
+        "token.blank_env_falls_back_to_file",
         "health",
         env={"GREENHOUSE_API_TOKEN": "   "},
         token_file="file-token",

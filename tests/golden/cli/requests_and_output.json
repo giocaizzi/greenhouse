@@ -5171,7 +5171,7 @@
    "token_file_after": null,
    "token_file_before": null
   },
-  "token.blank_env_current_behavior_ignores_file": {
+  "token.blank_env_falls_back_to_file": {
    "argv": [
     "greenhouse",
     "health"
@@ -5179,7 +5179,9 @@
    "clients": [
     {
      "base_url": "http://localhost:8000",
-     "headers": {},
+     "headers": {
+      "Authorization": "Bearer file-token"
+     },
      "timeout": 30.0
     }
    ],
@@ -5192,7 +5194,7 @@
    "input": null,
    "requests": [
     {
-     "authorization": null,
+     "authorization": "Bearer file-token",
      "content": null,
      "content_type": null,
      "json": null,

@@ -30,12 +30,14 @@ def _default_token_path() -> Path:
 def load_stored_token() -> str | None:
     """Return the session JWT cached on disk by ``greenhouse login``, if any.
 
-    ``$GREENHOUSE_API_TOKEN`` wins when set; otherwise the disk file is read.
-    Whitespace is stripped, empty files are treated as absent.
+    ``$GREENHOUSE_API_TOKEN`` wins when it holds a token; otherwise the disk
+    file is read. Whitespace is stripped, and a blank value (env or file) is
+    treated as absent — a stray ``GREENHOUSE_API_TOKEN=" "`` must not hide the
+    token ``greenhouse login`` stored.
     """
-    env_token = os.environ.get("GREENHOUSE_API_TOKEN")
+    env_token = (os.environ.get("GREENHOUSE_API_TOKEN") or "").strip()
     if env_token:
-        return env_token.strip() or None
+        return env_token
     path = _default_token_path()
     if not path.exists():
         return None
