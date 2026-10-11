@@ -93,3 +93,15 @@ def test_edit_page_does_not_leak_local_key(client):
     # Field is masked and carries no stored value.
     assert 'type="password"' in resp.text
     assert "Leave blank to keep the current key." in resp.text
+
+
+def test_submitting_the_mask_keeps_the_stored_key(client):
+    """Typing/pasting the ``••••••••`` placeholder back into the field keeps the key, like the API."""
+    cluster_id = _seed_local_irrigator(client)
+    resp = client.post(
+        f"/clusters/{cluster_id}/irrigators/edit",
+        data={"name": "Local Pump", "type": "rainpoint.ik10pw", "device_ip": "192.0.2.10", "local_key": "••••••••"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303
+    assert _stored_config(client, cluster_id)["local_key"] == SECRET_KEY

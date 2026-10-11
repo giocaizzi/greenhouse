@@ -172,6 +172,8 @@ def update_irrigator(
         config["device_ip"] = device_ip.strip()
     if local_key.strip():
         config["local_key"] = local_key.strip()
+    # The form shows the mask as its placeholder; a pasted mask means "keep", as on the API.
+    config = inventory.keep_masked_local_key(config, irrigator.config)
     repo.update_irrigator(
         irrigator.id,
         name=name,
