@@ -30,7 +30,7 @@ class ConfirmScreen(ModalScreen[bool]):
         ("n", "dismiss(False)", "No"),
     ]
 
-    def __init__(self, message: str, confirm_label: str = "Confirm", danger: bool = True) -> None:
+    def __init__(self, message: str, confirm_label: str = "Confirm", *, danger: bool = True) -> None:
         """Ask ``message``; ``danger`` styles the confirm button as destructive."""
         super().__init__()
         self.message = message

@@ -81,7 +81,7 @@ class ClusterScreen(DataScreen):
                 yield HorizontalScroll(id="garden")
                 with Horizontal(id="overview-panels"):
                     with Vertical(id="irrigator-panel", classes="panel"):
-                        yield SpriteView(lambda f: watering_can_sprite(False, f), id="can")
+                        yield SpriteView(lambda f: watering_can_sprite(pouring=False, frame=f), id="can")
                         yield Static(id="irrigator-info")
                     yield Static(id="decision-panel", classes="panel")
                     yield KeyValue(id="forecast-panel", classes="panel")
@@ -190,15 +190,7 @@ class ClusterScreen(DataScreen):
         await garden.remove_children()
         if s.plants:
             await garden.mount_all(
-                PlantTile(
-                    p.species,
-                    p.category,
-                    p.moisture,
-                    p.mood,
-                    s.watering,
-                    (s.band_min, s.band_max),
-                    id=f"plant-tile-{p.id}",
-                )
+                PlantTile(p, watering=s.watering, band=(s.band_min, s.band_max), id=f"plant-tile-{p.id}")
                 for p in s.plants
             )
         else:
@@ -206,7 +198,7 @@ class ClusterScreen(DataScreen):
                 Static("No plants in this cluster yet — open the Plants tab and press n.", classes="hint")
             )
 
-        self.query_one("#can", SpriteView).set_factory(lambda f: watering_can_sprite(s.watering, f))
+        self.query_one("#can", SpriteView).set_factory(lambda f: watering_can_sprite(pouring=s.watering, frame=f))
         self.query_one("#irrigator-info", Static).update(render.irrigator_info(s))
         self.query_one("#decision-panel", Static).update(render.decision_panel(status.get("decision") or {}))
 
@@ -407,7 +399,7 @@ class ClusterScreen(DataScreen):
             [Field("minutes", "Minutes", "int", required=True), Field("notes", "Notes")],
             lambda v: lambda c: c.log_manual(irrigator_id, v["minutes"], v["notes"]),
             "Manual watering logged",
-            "Log",
+            submit_label="Log",
             note="Records an event you did by hand (feeds cooldown + learning). Nothing is actuated.",
         )
 
@@ -434,7 +426,7 @@ class ClusterScreen(DataScreen):
             resources.plant_fields(),
             lambda v: lambda c: c.add_plant(cid, **v),
             lambda r: f"Added {r.get('species')}",
-            "Add",
+            submit_label="Add",
             note="Blank care fields stay blank — press P afterwards to fill them from the plant DB.",
         )
 
@@ -446,7 +438,7 @@ class ClusterScreen(DataScreen):
             resources.sensor_fields(None, self.status.get("plants", [])),
             lambda v: lambda c: c.add_sensor(cid, **v),
             lambda r: f"Added sensor {r.get('name')}",
-            "Add",
+            submit_label="Add",
         )
 
     def _new_window(self) -> None:
@@ -461,7 +453,7 @@ class ClusterScreen(DataScreen):
                 )
             ),
             "Window added",
-            "Add",
+            submit_label="Add",
         )
 
     def _attach_irrigator(self) -> None:
@@ -475,7 +467,7 @@ class ClusterScreen(DataScreen):
             resources.irrigator_fields(),
             lambda v: lambda c: c.add_irrigator(cid, **v),
             lambda r: f"Attached {r.get('name')}",
-            "Attach",
+            submit_label="Attach",
         )
 
     def action_edit(self) -> None:
@@ -641,7 +633,7 @@ class ClusterScreen(DataScreen):
             [Field("target_cluster_id", "Target cluster", "select", None, options, required=True)],
             lambda v: lambda c: c.move_plant(plant["id"], v["target_cluster_id"]),
             "Plant moved",
-            "Move",
+            submit_label="Move",
         )
 
     def action_plant_sync(self) -> None:
@@ -671,7 +663,7 @@ class ClusterScreen(DataScreen):
         """Delete the cluster with everything in it, then return to the dashboard."""
         name = self.summary.name if self.summary else f"#{self.cluster_id}"
 
-        def _after(ok: bool | None) -> None:
+        def _after(ok: bool | None) -> None:  # noqa: FBT001 — Textual passes the dismiss result positionally
             if ok:
                 self.run_worker(self._delete_cluster(), group="act")
 

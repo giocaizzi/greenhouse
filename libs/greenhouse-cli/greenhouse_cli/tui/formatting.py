@@ -88,7 +88,7 @@ def zone(name: str | None) -> tzinfo:
         return UTC
 
 
-def clock(ts: float | None, with_date: bool = False, *, tz: str | None = None) -> str:
+def clock(ts: float | None, *, with_date: bool = False, tz: str | None = None) -> str:
     """Wall-clock time for a Unix timestamp — local, or in the zone ``tz`` when given (vacations)."""
     if not ts:
         return "—"

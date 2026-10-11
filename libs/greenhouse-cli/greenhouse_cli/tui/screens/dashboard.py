@@ -132,7 +132,7 @@ class DashboardScreen(DataScreen):
             resources.cluster_fields(),
             lambda v: lambda c: c.create_cluster(v["name"], v["location"], v["environment"]),
             lambda r: f"Created {r.get('name')} — open it and add plants with n",
-            "Create",
+            submit_label="Create",
         )
 
     def action_sync(self) -> None:

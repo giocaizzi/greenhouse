@@ -37,7 +37,7 @@ class TuyaIrrigatorAdapter(AbstractIrrigatorAdapter):
 
     # ── Helpers ───────────────────────────────────────────────────────────
 
-    def _send_switch(self, irrigator: Irrigator, value: bool) -> tuple[bool, str]:
+    def _send_switch(self, irrigator: Irrigator, *, value: bool) -> tuple[bool, str]:
         commands = {"commands": [{"code": "switch", "value": value}]}
         success, _ = self._gateway.send_command(irrigator.tuya_device_id, commands)
         word = "ON" if value else "OFF"
@@ -47,11 +47,11 @@ class TuyaIrrigatorAdapter(AbstractIrrigatorAdapter):
 
     def on(self, irrigator: Irrigator) -> tuple[bool, str]:
         """Switch the irrigator on via Cloud API."""
-        return self._send_switch(irrigator, True)
+        return self._send_switch(irrigator, value=True)
 
     def off(self, irrigator: Irrigator) -> tuple[bool, str]:
         """Switch the irrigator off via Cloud API."""
-        return self._send_switch(irrigator, False)
+        return self._send_switch(irrigator, value=False)
 
     def start(self, irrigator: Irrigator, minutes: int | None = None) -> tuple[bool, str]:
         """Switch on. Subclasses override to handle a Duration DP recipe."""

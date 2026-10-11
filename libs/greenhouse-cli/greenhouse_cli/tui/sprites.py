@@ -349,7 +349,7 @@ def normalize_category(category: str | None) -> str:
     return key if key in _PLANTS else "generic"
 
 
-def plant_sprite(category: str | None, mood: Mood, frame: int = 0, watering: bool = False) -> PixelSprite:
+def plant_sprite(category: str | None, mood: Mood, frame: int = 0, *, watering: bool = False) -> PixelSprite:
     """Build the sprite for a potted plant.
 
     Args:
@@ -384,7 +384,7 @@ def logo_sprite() -> PixelSprite:
     return PixelSprite(tuple(rows), palette)
 
 
-def watering_can_sprite(pouring: bool = False, frame: int = 0) -> PixelSprite:
+def watering_can_sprite(*, pouring: bool = False, frame: int = 0) -> PixelSprite:
     """A watering can; when ``pouring`` the spout drips (animated by ``frame``)."""
     rows, palette = WATERING_CAN
     rows = [r.ljust(16, TRANSPARENT) for r in rows] + [TRANSPARENT * 16, TRANSPARENT * 16]

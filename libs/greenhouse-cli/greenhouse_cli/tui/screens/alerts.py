@@ -91,8 +91,8 @@ class AlertsScreen(DataScreen):
         text.append(f"{alert['source']} · {alert['code']} · {alert['entity_type']}", style="dim")
         if alert.get("entity_id") is not None:
             text.append(f" #{alert['entity_id']}", style="dim")
-        text.append(f"\nfirst seen {fmt.clock(alert['first_seen_at'], True)} · ")
-        text.append(f"last seen {fmt.clock(alert['last_seen_at'], True)}\n\n")
+        text.append(f"\nfirst seen {fmt.clock(alert['first_seen_at'], with_date=True)} · ")
+        text.append(f"last seen {fmt.clock(alert['last_seen_at'], with_date=True)}\n\n")
         text.append(alert["message"])
         self.query_one("#alert-detail", Static).update(text)
 

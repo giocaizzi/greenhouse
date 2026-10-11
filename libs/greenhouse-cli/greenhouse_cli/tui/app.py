@@ -61,6 +61,7 @@ class GreenhouseApp(App[None]):
         server_url: str,
         client_factory: ClientFactory | None = None,
         refresh_seconds: float = 30.0,
+        *,
         animations: bool = True,
     ) -> None:
         """Point the app at ``server_url``; tests inject ``client_factory`` to avoid the network."""

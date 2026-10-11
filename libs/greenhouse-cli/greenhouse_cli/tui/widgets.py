@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     from textual.app import ComposeResult
     from textual.binding import BindingType
 
-    from greenhouse_cli.tui.model import ClusterSummary
+    from greenhouse_cli.tui.model import ClusterSummary, PlantView
     from greenhouse_cli.tui.table import DataTable
 
 ANIMATION_INTERVAL = 0.7
@@ -36,7 +36,7 @@ class SpriteView(Static):
     SpriteView { width: auto; height: auto; }
     """
 
-    def __init__(self, factory: SpriteFactory, animate: bool = True, **kwargs: Any) -> None:
+    def __init__(self, factory: SpriteFactory, *, animate: bool = True, **kwargs: Any) -> None:
         """Render frame 0 of ``factory``; ``animate`` cycles the frames on a timer."""
         super().__init__(factory(0), **kwargs)
         self._factory = factory
@@ -60,9 +60,9 @@ class SpriteView(Static):
         self.update(factory(self._frame))
 
 
-def plant_factory(category: str | None, mood: Mood, watering: bool = False) -> SpriteFactory:
+def plant_factory(category: str | None, mood: Mood, *, watering: bool = False) -> SpriteFactory:
     """Sprite factory for one plant, bound to its category, mood and watering state."""
-    return lambda frame: plant_sprite(category, mood, frame, watering)
+    return lambda frame: plant_sprite(category, mood, frame, watering=watering)
 
 
 class Banner(Static):
@@ -125,7 +125,7 @@ class ClusterCard(Vertical, can_focus=True):
     def _sprite_factory(self) -> SpriteFactory:
         """The card sprite stands for the driest plant (it drives the call) in the cluster mood."""
         s = self.summary
-        return plant_factory(s.driest.category if s.driest else None, s.mood, s.watering)
+        return plant_factory(s.driest.category if s.driest else None, s.mood, watering=s.watering)
 
     def _info(self) -> RenderableType:
         """Card text, top to bottom: identity, mood, driest-plant gauge, air readings, watering state, next decision.
@@ -180,22 +180,20 @@ class PlantTile(Vertical):
 
     def __init__(
         self,
-        species: str,
-        category: str | None,
-        moisture: float | None,
-        mood: Mood,
+        plant: PlantView,
+        *,
         watering: bool,
         band: tuple[float | None, float | None] = (None, None),
         **kw: Any,
     ) -> None:
-        """Show one plant: species/category pick the sprite, ``moisture`` and ``band`` fill the gauge."""
+        """Show ``plant``: species/category pick the sprite, its moisture and ``band`` fill the gauge."""
         super().__init__(classes="plant-tile", **kw)
-        self._args = (species, category, moisture, mood, watering, band)
+        self._args = (plant.species, plant.category, plant.moisture, plant.mood, watering, band)
 
     def compose(self) -> ComposeResult:
         """Stack the plant sprite above its species, mood, moisture and band gauge."""
         species, category, moisture, mood, watering, (lo, hi) = self._args
-        yield SpriteView(plant_factory(category, mood, watering))
+        yield SpriteView(plant_factory(category, mood, watering=watering))
         caption = Text.assemble((species[:18] + "\n", "bold"))
         caption.append(MOOD_LABELS[mood], style=MOOD_COLORS[mood])
         caption.append(f" {fmt.num(moisture, '%')}\n")

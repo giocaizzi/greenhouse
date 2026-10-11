@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, TypedDict, Unpack, cast
 
 from textual.screen import Screen
 
@@ -14,6 +14,13 @@ if TYPE_CHECKING:
 
     from greenhouse_cli.client import IrrigationClient
     from greenhouse_cli.tui.app import GreenhouseApp
+
+
+class FormOptions(TypedDict, total=False):
+    """Optional :meth:`DataScreen.form_then` settings, passed through to :class:`FormScreen`."""
+
+    submit_label: str
+    note: str | None
 
 
 class DataScreen(Screen[Any]):
@@ -70,7 +77,7 @@ class DataScreen(Screen[Any]):
             confirm_label: Label for the confirm button.
         """
 
-        def _after(ok: bool | None) -> None:
+        def _after(ok: bool | None) -> None:  # noqa: FBT001 — Textual passes the dismiss result positionally
             if ok:
                 self.run_worker(self.act(fn, done), group="act")
 
@@ -82,8 +89,7 @@ class DataScreen(Screen[Any]):
         fields: list[Field],
         call: Callable[[dict[str, Any]], Callable[[IrrigationClient], Any]],
         done: str | Callable[[Any], str],
-        submit_label: str = "Save",
-        note: str | None = None,
+        **options: Unpack[FormOptions],
     ) -> None:
         """Show a form, then send its values through ``call(values)`` and refresh.
 
@@ -92,15 +98,17 @@ class DataScreen(Screen[Any]):
             fields: Inputs to render (pre-filled for edits).
             call: Builds the API call from the parsed form values.
             done: Toast text (or a callable building it from the response).
-            submit_label: Label for the submit button.
-            note: Optional help line under the title.
+            **options: ``submit_label`` (default ``"Save"``) for the submit button and
+                ``note``, an optional help line under the title.
         """
 
         def _after(values: dict[str, Any] | None) -> None:
             if values is not None:
                 self.run_worker(self.act(call(values), done), group="act")
 
-        self.app.push_screen(FormScreen(title, fields, submit_label, note), _after)
+        self.app.push_screen(
+            FormScreen(title, fields, options.get("submit_label", "Save"), options.get("note")), _after
+        )
 
     async def act(self, fn: Callable[[IrrigationClient], Any], done: str | Callable[[Any], str]) -> Any:
         """Run an action call, toast the outcome and reload."""

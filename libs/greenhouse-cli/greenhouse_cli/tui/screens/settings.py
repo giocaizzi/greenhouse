@@ -116,7 +116,7 @@ class SettingsScreen(DataScreen):
             resources.vacation_fields(tz=self.prefs.get("timezone")),
             lambda v: lambda c: c.add_vacation(**v),
             "Vacation window added",
-            "Add",
+            submit_label="Add",
         )
 
     def action_edit_vacation(self) -> None:

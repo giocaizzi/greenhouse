@@ -359,6 +359,7 @@ class IrrigationClient:
     def irrigate(
         self,
         cluster_id: int,
+        *,
         temp_override: float | None = None,
         dry_run: bool = False,
         no_sync: bool = False,
