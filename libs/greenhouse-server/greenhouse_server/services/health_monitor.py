@@ -41,7 +41,7 @@ from greenhouse_core.devices.health import DeviceHealthState, HealthAlarm
 from greenhouse_core.logic.decision import DEVICE_BLOCKING_CODES, TriggerCode
 from greenhouse_core.models import ENTITY_IRRIGATOR, ENTITY_SENSOR, SOURCE_HEALTH, EntityType, Irrigator, Sensor
 from greenhouse_core.repository import IrrigationRepository
-from greenhouse_server.services.alerts import notify_if_new_alert
+from greenhouse_server.services.alerts import is_alert_open, notify_if_new_alert
 from greenhouse_server.services.notify import NtfyClient
 
 logger = logging.getLogger(__name__)
@@ -305,6 +305,7 @@ class DeviceHealthMonitor:
             "offline": state.offline,
         }
         try:
+            was_open = is_alert_open(self._repo, key)
             alert = self._repo.upsert_alert(
                 dedup_key=key,
                 source=SOURCE_HEALTH,
@@ -317,7 +318,7 @@ class DeviceHealthMonitor:
                 cluster_id=cluster_id,
                 payload=payload,
             )
-            notify_if_new_alert(self._repo, self._notifier, alert)
+            notify_if_new_alert(self._repo, self._notifier, alert, was_open=was_open)
         except Exception:
             logger.exception("Failed to raise health alert %s for %s %d", alarm.value, entity_type, entity_id)
 

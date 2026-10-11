@@ -22,9 +22,9 @@ Contracts / invariants guarded here:
   :class:`IrrigationDecision`;
 - I11 — an open leak alert holds ``/irrigate`` even with ``force=true``, while
   ``POST /irrigators/{id}/start`` (the escape hatch) still actuates;
-- observed bug B-5 pinned as ``*_current_behavior_*`` (B-8 fixed by drift pair D5; B-6 fixed:
-  a device-health block rewrites the decision log; S1/B-1 fixed: ``dry_run_global`` never actuates;
-  B-4 fixed: effective per-day caps gate manual and automatic starts).
+- fixed bugs: B-8 (drift pair D5); B-6 (a device-health block rewrites the decision log);
+  S1/B-1 (``dry_run_global`` never actuates); B-4 (effective per-day caps gate manual and
+  automatic starts); B-5 (a re-opened alert notifies again).
 """
 
 from __future__ import annotations
@@ -1084,11 +1084,11 @@ def test_global_caps_enforced_by_manual_and_automatic_starts(pipeline):
     assert [c[0] for c in pipeline.wiring.irrigator.calls] == ["start"]
 
 
-def test_reraised_alert_current_behavior_is_not_renotified(pipeline):
-    """Pins current (buggy) behavior: a re-opened alert never notifies again (B-5) — see REFACTOR_NOTES.md.
+def test_reraised_alert_is_renotified(pipeline):
+    """B-5 fixed: a re-opened alert notifies again.
 
     The first ``actuation_failed`` alert pushes; once resolved, the next
-    failure re-opens the same row (``occurrence_count`` 2) and stays silent.
+    failure re-opens the same row (``occurrence_count`` 2) and pushes again.
     """
     pipeline.seed_cluster(soil=35.0)
     pipeline.wiring.irrigator.start_result = (False, "device timeout")
@@ -1101,7 +1101,7 @@ def test_reraised_alert_current_behavior_is_not_renotified(pipeline):
     _irrigate(pipeline)
     reopened = pipeline.db_rows()["alerts"][0]
     assert (reopened["id"], reopened["status"], reopened["occurrence_count"]) == (alert["id"], "open", 2)
-    assert [n["kind"] for n in pipeline.notifier.sent] == ["alert"]
+    assert [n["kind"] for n in pipeline.notifier.sent] == ["alert", "alert"]
 
 
 def test_device_health_block_is_written_to_decision_log(pipeline):

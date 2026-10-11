@@ -221,8 +221,8 @@ def test_sensor_offline_flap_current_behavior_flags_offline_31min_after_every_sy
     *persisted* reading, but the sync job persists readings only every 180 min.
     So a perfectly healthy sensor is flagged DEVICE_OFFLINE ~30 min after each
     sync, resolved by the next sync, and flagged again 30 min later — a re-opened
-    alert whose ``occurrence_count`` climbs (and, per ``notify_if_new_alert``,
-    notifies only the first time).
+    alert whose ``occurrence_count`` climbs and (since B-5 was fixed) notifies on
+    every re-open.
     """
     key = f"health:sensor:{world['sensor'].id}:device_offline"
     history = []
@@ -244,7 +244,8 @@ def test_sensor_offline_flap_current_behavior_flags_offline_31min_after_every_sy
     ]
     alert = next(a for a in _alerts(world["repo"]) if a["dedup_key"] == key)
     assert (alert["status"], alert["occurrence_count"]) == ("open", 2)
-    assert [n["title"] for n in world["notifier"].sent] == ["Device Offline · Probe One"]
+    # Each re-open notifies again (B-5 fixed), so the flap pushes once per cycle.
+    assert [n["title"] for n in world["notifier"].sent] == ["Device Offline · Probe One"] * 2
 
 
 # ── Alarm derivation thresholds ───────────────────────────────────────────────

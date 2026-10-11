@@ -50,19 +50,26 @@ def _title_for(code: str, message: str) -> str:
     return code.replace("_", " ").title()
 
 
-def notify_if_new_alert(repo: IrrigationRepository, notifier: NtfyClient | None, alert: Alert) -> None:
-    """Push a notification for a genuinely-new warning/critical alert.
+def notify_if_new_alert(
+    repo: IrrigationRepository, notifier: NtfyClient | None, alert: Alert, *, was_open: bool
+) -> None:
+    """Push a notification for a warning/critical alert that this upsert opened.
 
-    Gated to ``occurrence_count == 1`` so a re-raised (repeating) alert never
-    re-notifies, and to warning/critical severities so ``info`` advisories stay
-    silent. The ``notify_alerts`` preference toggle is honoured via
-    :func:`maybe_notify`.
+    "Opened" means the row is new *or* a resolved row was re-opened (B-5: the old
+    ``occurrence_count == 1`` gate kept a re-raised alert silent forever). A repeat
+    of an alert that is still open or acknowledged (``was_open``) never re-notifies,
+    and ``info`` advisories stay silent. The ``notify_alerts`` preference toggle is
+    honoured via :func:`maybe_notify`.
+
+    Args:
+        repo: Active repository session (reads the preferences row).
+        notifier: ntfy client, or None when notifications are unconfigured.
+        alert: The row the upsert returned.
+        was_open: Whether an unresolved alert with the same dedup key existed before the upsert.
     """
-    if notifier is None:
+    if notifier is None or was_open:
         return
     if alert.severity not in _NOTIFY_SEVERITIES:
-        return
-    if alert.occurrence_count != 1:
         return
     maybe_notify(
         notifier,
@@ -70,6 +77,11 @@ def notify_if_new_alert(repo: IrrigationRepository, notifier: NtfyClient | None,
         "alerts",
         lambda n: n.notify_alert(severity=alert.severity, title=alert.title, message=alert.message),
     )
+
+
+def is_alert_open(repo: IrrigationRepository, dedup_key: str) -> bool:
+    """Whether an unresolved alert holds ``dedup_key`` — read before an upsert to feed ``was_open``."""
+    return repo.get_open_alert_by_key(dedup_key) is not None
 
 
 def sync_cluster_alerts(
@@ -101,6 +113,7 @@ def sync_cluster_alerts(
         severity = raw.get("severity", "info")
         key = _dedup_key(source, code, cluster_id, message)
         seen_keys.add(key)
+        was_open = is_alert_open(repo, key)
         alert = repo.upsert_alert(
             dedup_key=key,
             source=source,
@@ -113,7 +126,7 @@ def sync_cluster_alerts(
             cluster_id=cluster_id,
             seen_at=now,
         )
-        notify_if_new_alert(repo, notifier, alert)
+        notify_if_new_alert(repo, notifier, alert, was_open=was_open)
 
     auto_resolve_cleared(repo, cluster_id, sources=(SOURCE_LEARNING, SOURCE_MAINTENANCE), seen_keys=seen_keys)
     return repo.list_alerts(cluster_id=cluster_id, limit=ALERT_SCAN_LIMIT)
@@ -159,10 +172,11 @@ def raise_alert(
     payload: dict[str, Any] | None = None,
     notifier: NtfyClient | None = None,
 ) -> Alert:
-    """Convenience wrapper: build a dedup_key and upsert an alert."""
+    """Convenience wrapper: build a dedup_key, upsert the alert, push when this call opened it."""
     entity_type = ENTITY_SENSOR if sensor_id else ENTITY_CLUSTER
     entity_id = sensor_id or cluster_id
     key = _dedup_key(source, code, cluster_id, f"{entity_type}{entity_id or 0}")
+    was_open = is_alert_open(repo, key)
     alert = repo.upsert_alert(
         dedup_key=key,
         source=source,
@@ -176,5 +190,5 @@ def raise_alert(
         plant_id=plant_id,
         payload=payload,
     )
-    notify_if_new_alert(repo, notifier, alert)
+    notify_if_new_alert(repo, notifier, alert, was_open=was_open)
     return alert
