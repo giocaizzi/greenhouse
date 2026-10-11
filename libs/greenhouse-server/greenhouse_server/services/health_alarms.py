@@ -5,6 +5,7 @@ transitions, the shared cache and the actuation gate.
 """
 
 import logging
+from dataclasses import dataclass
 
 from greenhouse_core.devices.health import DeviceHealthState, HealthAlarm
 from greenhouse_core.logic.decision import TriggerCode
@@ -119,3 +120,33 @@ def _known_alarm(code: str) -> HealthAlarm | None:
         return HealthAlarm(code)
     except ValueError:
         return None
+
+
+@dataclass(frozen=True, slots=True)
+class AlarmThresholds:
+    """The monitor-applied cut-offs (adapters report raw values; the monitor decides what is low)."""
+
+    battery_low_pct: int
+    battery_critical_pct: int
+    signal_loss_threshold: int
+
+
+def derive_alarms(
+    state: DeviceHealthState, thresholds: AlarmThresholds, *, stale_after_seconds: int, now: int
+) -> frozenset[HealthAlarm]:
+    """Combine adapter-reported alarms with the monitor's thresholds.
+
+    Battery percent → LOW_BATTERY / BATTERY_CRITICAL. ``offline`` flag OR ``last_seen_ts`` older
+    than ``stale_after_seconds`` → DEVICE_OFFLINE. ``signal_quality`` below threshold → SIGNAL_LOSS.
+    """
+    derived: set[HealthAlarm] = set(state.alarms)
+    if state.battery_pct is not None:
+        if state.battery_pct < thresholds.battery_critical_pct:
+            derived.add(HealthAlarm.BATTERY_CRITICAL)
+        elif state.battery_pct < thresholds.battery_low_pct:
+            derived.add(HealthAlarm.LOW_BATTERY)
+    if state.offline or (state.last_seen_ts is not None and now - state.last_seen_ts > stale_after_seconds):
+        derived.add(HealthAlarm.DEVICE_OFFLINE)
+    if state.signal_quality is not None and state.signal_quality < thresholds.signal_loss_threshold:
+        derived.add(HealthAlarm.SIGNAL_LOSS)
+    return frozenset(derived)

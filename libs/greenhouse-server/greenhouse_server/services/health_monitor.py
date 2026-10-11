@@ -1,16 +1,10 @@
 """Device health monitor — single source of truth for health alarms.
 
-Polls every registered irrigator + sensor on a slow cadence, diffs the
-returned :class:`DeviceHealthState` against the last known snapshot, and
-raises / resolves typed alerts on transitions. The PumpWatcherService
-remains the fast-path (sub-2s) watchdog during active irrigations; it
-records its observations into this monitor so the two state machines stay
-coherent and there is a single dedup_key scheme (``health:{entity}:{id}:{alarm}``).
-
-Engine code consults :meth:`is_actuation_blocked` before firing the pump.
-A blocked irrigator forces ``Action.SKIP`` with a typed
-:class:`~greenhouse_core.logic.decision.Reason` so the audit trail in
-``decision_logs`` explains why we held off.
+Polls every irrigator + sensor on a slow cadence, diffs the derived alarms against the last
+known snapshot, and raises / resolves typed alerts on transitions. The PumpWatcherService (the
+sub-2s watchdog during a run) records into this monitor, so both share one state machine and
+one dedup_key scheme (``health:{entity}:{id}:{alarm}``). The pipeline consults
+:meth:`is_actuation_blocked` before firing the pump; a block becomes a logged skip.
 
 The monitor holds two pieces of state:
 
@@ -52,9 +46,11 @@ from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.services.alerts import is_alert_open, notify_if_new_alert
 from greenhouse_server.services.health_alarms import (
     HEALTH_ALARM_TO_TRIGGER,
+    AlarmThresholds,
     alarm_message,
     alarm_severity,
     alarm_title,
+    derive_alarms,
     health_dedup_key,
     infer_cluster_id,
     infer_label,
@@ -105,11 +101,9 @@ class DeviceHealthMonitor:
         self._repo = repo
         self._registry = registry
         self._notifier = notifier
-        self._battery_low_pct = battery_low_pct
-        self._battery_critical_pct = battery_critical_pct
+        self._thresholds = AlarmThresholds(battery_low_pct, battery_critical_pct, signal_loss_threshold)
         self._offline_after_seconds = offline_after_minutes * 60
         self._sensor_offline_after_seconds = sensor_offline_after_minutes * 60
-        self._signal_loss_threshold = signal_loss_threshold
         self._clock = clock
         self._cache: dict[tuple[str, int], _Cached] = {}
         # Guards every read-modify-write of the shared cache: the health job, the check job,
@@ -152,17 +146,41 @@ class DeviceHealthMonitor:
         return state
 
     def poll_all(self) -> None:
-        """Poll every irrigator and sensor in the registry. Best-effort."""
+        """Poll every irrigator and sensor, committing each device's alerts on their own. Best-effort.
+
+        The health job owns its session, so each device's transitions are committed as soon as
+        they are recorded: a failure on one device (a poll error or a failed commit) is rolled
+        back alone, and an alert lost that way is requeued so the next poll raises it again
+        instead of the cache keeping it as raised with nothing in the inbox.
+        """
         for irrigator in self._repo.list_all_irrigators():
+            irrigator_id = irrigator.id  # read before a rollback can expire the row
             try:
                 self.poll_irrigator(irrigator)
+                self._repo.commit()
             except Exception:
-                logger.exception("Health poll failed for irrigator %d", irrigator.id)
+                logger.exception("Health poll failed for irrigator %d", irrigator_id)
+                self._recover_lost_alerts(ENTITY_IRRIGATOR, irrigator_id)
         for sensor in self._repo.list_all_sensors():
+            sensor_id = sensor.id
             try:
                 self.poll_sensor(sensor)
+                self._repo.commit()
             except Exception:
-                logger.exception("Health poll failed for sensor %d", sensor.id)
+                logger.exception("Health poll failed for sensor %d", sensor_id)
+                self._recover_lost_alerts(ENTITY_SENSOR, sensor_id)
+
+    def _recover_lost_alerts(self, entity_type: EntityType, entity_id: int) -> None:
+        """After a failed device poll: roll back, then requeue cached alarms whose alert did not land."""
+        try:
+            self._repo.rollback()
+            with self._lock:
+                cached = self._cache.get((entity_type, entity_id))
+            for alarm in cached.derived_alarms if cached else ():
+                if self._repo.get_open_alert_by_key(health_dedup_key(entity_type, entity_id, alarm)) is None:
+                    self.mark_unraised(entity_type, entity_id, alarm)
+        except Exception:
+            logger.warning("Could not recover the health alerts of %s %d", entity_type, entity_id, exc_info=True)
 
     # ── Recording (shared with PumpWatcherService) ────────────────────────
 
@@ -183,7 +201,7 @@ class DeviceHealthMonitor:
         offline_after = (
             self._sensor_offline_after_seconds if entity_type == ENTITY_SENSOR else self._offline_after_seconds
         )
-        derived = self._derive_alarms(state, offline_after_seconds=offline_after)
+        derived = derive_alarms(state, self._thresholds, stale_after_seconds=offline_after, now=self._clock())
         key = (entity_type, entity_id)
         with self._lock:
             previous = self._cache.get(key)
@@ -304,33 +322,6 @@ class DeviceHealthMonitor:
             )
 
     # ── Internals ─────────────────────────────────────────────────────────
-
-    def _derive_alarms(
-        self, state: DeviceHealthState, *, offline_after_seconds: int | None = None
-    ) -> frozenset[HealthAlarm]:
-        """Combine adapter-reported alarms with monitor-applied thresholds.
-
-        Battery percent → LOW_BATTERY / BATTERY_CRITICAL.
-        ``offline`` flag OR ``last_seen_ts`` older than ``offline_after_seconds`` (the
-        irrigator window when omitted) → DEVICE_OFFLINE.
-        ``signal_quality`` below threshold → SIGNAL_LOSS.
-        """
-        stale_after = self._offline_after_seconds if offline_after_seconds is None else offline_after_seconds
-        derived: set[HealthAlarm] = set(state.alarms)
-        if state.battery_pct is not None:
-            if state.battery_pct < self._battery_critical_pct:
-                derived.add(HealthAlarm.BATTERY_CRITICAL)
-            elif state.battery_pct < self._battery_low_pct:
-                derived.add(HealthAlarm.LOW_BATTERY)
-        if state.offline:
-            derived.add(HealthAlarm.DEVICE_OFFLINE)
-        elif state.last_seen_ts is not None:
-            now = self._clock()
-            if now - state.last_seen_ts > stale_after:
-                derived.add(HealthAlarm.DEVICE_OFFLINE)
-        if state.signal_quality is not None and state.signal_quality < self._signal_loss_threshold:
-            derived.add(HealthAlarm.SIGNAL_LOSS)
-        return frozenset(derived)
 
     def _raise_health_alert(
         self,

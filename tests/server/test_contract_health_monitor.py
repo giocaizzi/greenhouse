@@ -400,6 +400,37 @@ def test_poll_all_logs_and_continues_past_failures(world, caplog):
     assert [a["code"] for a in _alerts(world["repo"])] == ["low_battery"]
 
 
+def test_poll_all_requeues_an_alert_lost_to_a_failed_commit(world, monkeypatch, caplog):
+    """S6 follow-up: an alert ``record()`` raised but whose transaction rolled back is raised again.
+
+    Probe: the job's commit fails right after the NO_WATER alert was written. The cache already
+    holds NO_WATER (actuation stays blocked) but the inbox has nothing; the next poll must raise
+    it instead of treating it as known.
+    """
+    session = world["repo"].session
+    world["irr_adapter"].set_health(DeviceHealthState(observed_at=FROZEN_TS, alarms=frozenset({HealthAlarm.NO_WATER})))
+    real_commit = session.commit
+    calls = {"n": 0}
+
+    def _commit_fails_once():
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise RuntimeError("database is locked")
+        real_commit()
+
+    monkeypatch.setattr(session, "commit", _commit_fails_once)
+    key = f"health:irrigator:{world['irrigator'].id}:no_water"
+    with caplog.at_level(logging.ERROR, logger="greenhouse_server.services.health_monitor"):
+        world["monitor"].poll_all()
+    assert caplog.messages[0] == f"Health poll failed for irrigator {world['irrigator'].id}"
+    assert world["repo"].get_open_alert_by_key(key) is None  # rolled back
+    assert world["monitor"].is_actuation_blocked(world["irrigator"]) == (True, [HealthAlarm.NO_WATER])
+
+    world["monitor"].poll_all()  # same NO_WATER, no transition — but its alert is owed
+    session.rollback()  # read only what was committed
+    assert world["repo"].get_open_alert_by_key(key) is not None
+
+
 def test_alert_write_failure_is_logged_and_cache_still_updates(world, monkeypatch, caplog):
     def _fail(**_kwargs):
         raise RuntimeError("db locked")
