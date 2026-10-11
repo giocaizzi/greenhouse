@@ -114,7 +114,7 @@ def test_upgrade_rewrites_leftover_legacy_types_to_model_keys(tmp_path):
     """Alembic ``a1d3f5b7c902`` rewrites rows the old web forms left on legacy values."""
 
     engine = create_engine(f"sqlite:///{tmp_path}/legacy.db")
-    cfg = database._alembic_config(engine)
+    cfg = database._alembic_config(engine)  # noqa: SLF001 — reuses init_db's Alembic config builder
 
     def upgrade_to(revision: str) -> None:  # same connection hand-off as database.init_db
         with engine.connect() as conn:

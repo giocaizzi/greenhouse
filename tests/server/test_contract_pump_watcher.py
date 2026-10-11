@@ -480,7 +480,7 @@ def test_trip_payload_reprs_unserialisable_alarm_value(plain):
 
 def test_constructor_clamps_its_knobs(plain):
     watcher = PumpWatcherService(plain.repo, plain.registry, poll_seconds=0, warmup_seconds=-3, max_read_failures=0)
-    assert (watcher._poll, watcher._warmup, watcher._max_read_failures) == (0.1, 0.0, 1)
+    assert (watcher._poll, watcher._warmup, watcher._max_read_failures) == (0.1, 0.0, 1)  # noqa: SLF001 — constructor clamps have no public accessor
 
 
 def test_trip_side_effect_failures_are_logged_and_the_stop_still_happens(plain, monkeypatch, caplog):

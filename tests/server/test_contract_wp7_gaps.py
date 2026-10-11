@@ -39,6 +39,7 @@ from greenhouse_server.services import pump_watcher_jobs as pump_watcher_jobs_mo
 from greenhouse_server.services.irrigation import IrrigationService
 from greenhouse_server.services.pump_watcher import PumpWatcherService
 from greenhouse_server.services.pump_watcher_jobs import handle_watcher_interrupted, schedule_pump_watcher
+from server.conftest import run_core_job
 from server.test_contract_pipeline import Pipeline, RecordingGateway
 
 IRRIGATION_LOGGER = "greenhouse_server.services.irrigation"
@@ -768,7 +769,7 @@ def test_check_job_binds_the_monitor_to_its_repo_before_the_pipeline_asks_it(p, 
         real_init(self, *args, **kwargs)
 
     monkeypatch.setattr(IrrigationService, "__init__", spy_init)
-    sched._check_job()
+    run_core_job(sched.CHECK_ALL_JOB_ID)
     assert log == ["bind", "service", f"blocked?{ids['irrigator_id']}"]
     (kwargs,) = built
     assert list(kwargs) == [
@@ -786,7 +787,7 @@ def test_check_job_binds_the_monitor_to_its_repo_before_the_pipeline_asks_it(p, 
     assert kwargs["weather_client"] is p.app.state.weather_client
     assert kwargs["plant_db"] is p.app.state.plant_db
     assert kwargs["notifier"] is p.notifier
-    assert kwargs["sync_service"]._repo is kwargs["repo"]
+    assert kwargs["sync_service"]._repo is kwargs["repo"]  # noqa: SLF001 — SyncService exposes no repository accessor
     assert [c[0] for c in p.wiring.irrigator.calls] == ["start"]
 
 
@@ -798,8 +799,8 @@ def test_job_skip_guards_log_at_debug(p, caplog):
     assert getattr(p.app.state, "device_gateway", None) is None
     assert getattr(p.app.state, "health_monitor", None) is None
     with caplog.at_level(logging.DEBUG, logger=SCHEDULER_LOGGER):
-        sched._sync_job()
-        sched._health_monitor_job()
+        run_core_job("sensor_sync")
+        run_core_job("device_health_monitor")
     assert [(r.levelname, r.getMessage()) for r in caplog.records if r.name == SCHEDULER_LOGGER] == [
         ("DEBUG", "Sync job skipped: no Tuya credentials"),
         ("DEBUG", "Health monitor job skipped: no monitor wired"),
@@ -851,7 +852,7 @@ def test_leak_check_done_sees_a_marker_behind_many_newer_leak_rows(db):
         source="leak", entity_type="cluster", entity_id=cid, code="leak_check", message="m",
         payload={"started_at": FROZEN_TS}, timestamp=FROZEN_TS - 1,
     )  # fmt: skip
-    assert irrigation_jobs_mod._leak_check_done(db, cid, FROZEN_TS) is False
+    assert irrigation_jobs_mod._leak_check_done(db, cid, FROZEN_TS) is False  # noqa: SLF001 — leak-check jobs have no public entry point
     db.add_activity_event(
         source="leak", entity_type="cluster", entity_id=cid, code="leak_check", message="m",
         payload={"started_at": FROZEN_TS}, timestamp=FROZEN_TS + 1800,
@@ -861,7 +862,7 @@ def test_leak_check_done_sees_a_marker_behind_many_newer_leak_rows(db):
             source="leak", entity_type="cluster", entity_id=cid, code="leak_check", message="m",
             payload={"started_at": FROZEN_TS + 3600 + i}, timestamp=FROZEN_TS + 5400 + i,
         )  # fmt: skip
-    assert irrigation_jobs_mod._leak_check_done(db, cid, FROZEN_TS) is True
+    assert irrigation_jobs_mod._leak_check_done(db, cid, FROZEN_TS) is True  # noqa: SLF001 — leak-check jobs have no public entry point
 
 
 def test_leak_check_done_ignores_other_codes_and_empty_payloads(db):
@@ -871,7 +872,7 @@ def test_leak_check_done_ignores_other_codes_and_empty_payloads(db):
         db.add_activity_event(
             source="leak", entity_type="cluster", entity_id=cid, code=code, message="m", payload=payload
         )
-    assert irrigation_jobs_mod._leak_check_done(db, cid, FROZEN_TS) is False
+    assert irrigation_jobs_mod._leak_check_done(db, cid, FROZEN_TS) is False  # noqa: SLF001 — leak-check jobs have no public entry point
     db.add_activity_event(
         source="leak",
         entity_type="cluster",
@@ -880,7 +881,7 @@ def test_leak_check_done_ignores_other_codes_and_empty_payloads(db):
         message="m",
         payload={"started_at": FROZEN_TS},
     )
-    assert irrigation_jobs_mod._leak_check_done(db, cid, FROZEN_TS) is True
+    assert irrigation_jobs_mod._leak_check_done(db, cid, FROZEN_TS) is True  # noqa: SLF001 — leak-check jobs have no public entry point
 
 
 @pytest.mark.usefixtures("frozen_clock")

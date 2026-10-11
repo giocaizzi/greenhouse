@@ -24,7 +24,7 @@ import pytest
 import time_machine
 
 from golden import FROZEN_INSTANT, FROZEN_TS, assert_golden_json
-from greenhouse_server import scheduler
+from server.conftest import run_core_job
 from server.test_contract_pipeline import Pipeline
 
 STEADY = (45.0, 46.0, 45.0, 44.0, 45.0, 46.0, 45.0, 44.0, 45.0)
@@ -136,7 +136,7 @@ def test_anomaly_scan_sees_what_cleaning_masks(spiky):
 
     rows_before = spiky.db_rows()["alerts"]
     assert rows_before == []
-    scheduler._anomaly_job()
+    run_core_job("sensor_anomaly")
     alerts = spiky.db_rows()["alerts"]
     assert [(a["code"], a["entity_id"]) for a in alerts] == [("sensor_drift", spiky.ids["sensor_id"])]
 

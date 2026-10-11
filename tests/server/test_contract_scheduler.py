@@ -42,6 +42,7 @@ from greenhouse_server.services.health import PlantHealthService
 from greenhouse_server.services.health_monitor import DeviceHealthMonitor
 from greenhouse_server.services.leak import LeakDetectionService
 from greenhouse_server.services.sync import SyncService
+from server.conftest import run_core_job
 from server.test_contract_pipeline import Pipeline, RecordingGateway
 
 HOUR = 3600
@@ -120,7 +121,7 @@ def test_init_scheduler_is_idempotent(p):
     sched.init_scheduler(p.app, p.app.state.settings, tz_name="UTC")
     sched.init_scheduler(p.app, p.app.state.settings, tz_name="UTC")
     assert _registry_view() == before
-    assert sched._app is p.app
+    assert sched._app is p.app  # noqa: SLF001 — pins the module-global app binding (no public accessor)
 
 
 @pytest.mark.usefixtures("p", "clean_env")
@@ -128,7 +129,7 @@ def test_init_scheduler_rebinds_the_module_app():
     """A second ``create_app`` takes over ``scheduler._app`` (the trap behind the lazy imports)."""
     second = Pipeline()
     try:
-        assert sched._app is second.app
+        assert sched._app is second.app  # noqa: SLF001 — pins the module-global app binding (no public accessor)
         assert [j.id for j in bg_scheduler.get_jobs()] == CORE_JOB_ORDER
     finally:
         second.close()
@@ -137,7 +138,7 @@ def test_init_scheduler_rebinds_the_module_app():
 def test_every_job_has_safe_defaults_stopped_and_running(p):
     """``max_instances=1``, ``coalesce=True``, ``misfire_grace_time=None`` on core *and* ad-hoc jobs."""
     p.app.state.device_registry = p.wiring.registry
-    irrigation_jobs_mod._add_leak_check_job(1, FROZEN_TS)  # ad-hoc job on a stopped scheduler
+    irrigation_jobs_mod._add_leak_check_job(1, FROZEN_TS)  # noqa: SLF001 — ad-hoc job on a stopped scheduler
     sched.start_scheduler(paused=True)
     try:
         assert pump_watcher_jobs_mod.schedule_pump_watcher(1, 2, FROZEN_TS) is True
@@ -287,7 +288,7 @@ def test_apply_persisted_pause_edge_cases(p, monkeypatch, caplog):
 
 def test_delete_core_vs_adhoc_jobs(p):
     """Built-in jobs → 409 (API) and nothing changes; an ad-hoc job is deleted; unknown → 404."""
-    irrigation_jobs_mod._add_leak_check_job(1, FROZEN_TS)
+    irrigation_jobs_mod._add_leak_check_job(1, FROZEN_TS)  # noqa: SLF001 — leak-check jobs have no public entry point
     adhoc_id = f"leak-check-1-{FROZEN_TS}"
     out = {}
     for job_id in CORE_JOB_ORDER:
@@ -302,7 +303,7 @@ def test_delete_core_vs_adhoc_jobs(p):
 
 def test_web_delete_requires_running_scheduler(p):
     """The web delete form answers 503 on a stopped scheduler, then 409 / 200 / 404 like the API."""
-    irrigation_jobs_mod._add_leak_check_job(1, FROZEN_TS)
+    irrigation_jobs_mod._add_leak_check_job(1, FROZEN_TS)  # noqa: SLF001 — leak-check jobs have no public entry point
     stopped = p.client.post("/scheduler/jobs/check_all/delete")
     sched.start_scheduler(paused=True)
     try:
@@ -331,7 +332,7 @@ def _seed_series(p: Pipeline, *, ages: range, soil: float = 45.0, cluster: str =
 def test_sync_job_is_a_noop_without_gateway(p, monkeypatch):
     opened = []
     monkeypatch.setattr(p.app.state, "session_factory", lambda: opened.append(1))
-    sched._sync_job()
+    run_core_job("sensor_sync")
     assert opened == []
 
 
@@ -341,7 +342,7 @@ def test_sync_job_with_gateway_syncs_every_sensor_and_commits(p):
     gw = RecordingGateway({"soil_moisture": 41.0, "temperature": 21.0})
     p.app.state.device_gateway = gw
     p.mark()
-    sched._sync_job()
+    run_core_job("sensor_sync")
     new = p.db_rows()["sensor_readings"]
     assert gw.calls == [
         ["get_device_logs", "fake_sensor_001", (FROZEN_TS - 2 * HOUR - 60) * 1000],
@@ -360,13 +361,13 @@ def test_sync_job_failure_is_rolled_back_and_logged(p, monkeypatch, caplog):
 
     monkeypatch.setattr(SyncService, "sync_all_sensors", explode)
     with caplog.at_level(logging.ERROR, logger="greenhouse_server.scheduler"):
-        sched._sync_job()
+        run_core_job("sensor_sync")
     assert "Sync job failed" in caplog.text
 
 
 def test_health_snapshot_job_writes_daily_rows(p):
     _seed_series(p, ages=range(0, 12 * HOUR, HOUR))
-    sched._health_snapshot_job()
+    run_core_job("plant_health_snapshot")
     with p.app.state.session_factory() as session:
         rows = [
             {c: getattr(r, c) for c in ("plant_id", "date_key", "score", "sample_count", "timestamp")}
@@ -380,7 +381,7 @@ def test_health_snapshot_job_writes_daily_rows(p):
 def test_health_snapshot_job_failure_is_logged(monkeypatch, caplog):
     monkeypatch.setattr(PlantHealthService, "snapshot_daily", lambda _self: 1 / 0)
     with caplog.at_level(logging.ERROR, logger="greenhouse_server.scheduler"):
-        sched._health_snapshot_job()
+        run_core_job("plant_health_snapshot")
     assert "Plant health snapshot job failed" in caplog.text
 
 
@@ -388,7 +389,7 @@ def test_anomaly_job_raises_stale_alert_and_notifies(p):
     # 12 hourly readings ending 5 h ago → silent for > 2 × the median interval.
     _seed_series(p, ages=range(5 * HOUR, 17 * HOUR, HOUR))
     p.mark()
-    sched._anomaly_job()
+    run_core_job("sensor_anomaly")
     alerts = p.db_rows()["alerts"]
     assert [(a["source"], a["code"], a["status"]) for a in alerts] == [("anomaly", "sensor_stale", "open")]
     assert_golden_json("orchestration/scheduler_anomaly.json", {"alerts": alerts, "notifications": p.notifier.sent})
@@ -398,7 +399,7 @@ def test_anomaly_job_raises_stale_alert_and_notifies(p):
 def test_anomaly_job_failure_is_logged(monkeypatch, caplog):
     monkeypatch.setattr(SensorAnomalyService, "scan", lambda _self: 1 / 0)
     with caplog.at_level(logging.ERROR, logger="greenhouse_server.scheduler"):
-        sched._anomaly_job()
+        run_core_job("sensor_anomaly")
     assert "Anomaly scan job failed" in caplog.text
 
 
@@ -407,9 +408,9 @@ def test_health_monitor_job_noops(p, monkeypatch):
     opened = []
     monkeypatch.setattr(p.app.state, "session_factory", lambda: opened.append(1))
     assert getattr(p.app.state, "health_monitor", None) is None
-    sched._health_monitor_job()
+    run_core_job("device_health_monitor")
     monkeypatch.setattr(sched, "_app", None)
-    sched._health_monitor_job()
+    run_core_job("device_health_monitor")
     assert opened == []
 
 
@@ -423,7 +424,7 @@ def test_init_health_monitor_then_job_polls_every_device(p):
     monitor = p.app.state.health_monitor
     p.wiring.irrigator.set_health(DeviceHealthState(observed_at=FROZEN_TS, alarms=frozenset({HealthAlarm.NO_WATER})))
     p.mark()
-    sched._health_monitor_job()
+    run_core_job("device_health_monitor")
     assert p.app.state.health_monitor is monitor
     assert p.wiring.irrigator.calls == [("read_health", ids["irrigator_id"])]
     assert p.wiring.sensor.calls == [("read_health", ids["sensor_id"])]
@@ -439,7 +440,7 @@ def test_health_monitor_job_failure_is_logged(p, monkeypatch, caplog):
     sched.init_health_monitor(p.app, p.app.state.settings)
     monkeypatch.setattr(p.app.state.health_monitor, "poll_all", lambda: 1 / 0)
     with caplog.at_level(logging.ERROR, logger="greenhouse_server.scheduler"):
-        sched._health_monitor_job()
+        run_core_job("device_health_monitor")
     assert "Device health monitor job failed" in caplog.text
 
 
@@ -477,12 +478,12 @@ def test_init_health_monitor_leaves_old_pump_dry_run_alerts_alone(p):
 
 
 def test_get_cloud_reads_app_state(p, monkeypatch):
-    assert sched._get_cloud() is None
+    assert sched._get_cloud() is None  # noqa: SLF001 — unit test of the private gateway lookup
     gw = RecordingGateway()
     p.app.state.device_gateway = gw
-    assert sched._get_cloud() is gw
+    assert sched._get_cloud() is gw  # noqa: SLF001 — unit test of the private gateway lookup
     monkeypatch.setattr(sched, "_app", None)
-    assert sched._get_cloud() is None
+    assert sched._get_cloud() is None  # noqa: SLF001 — unit test of the private gateway lookup
 
 
 # ── Leak follow-up job bodies ───────────────────────────────────────────────
@@ -507,9 +508,9 @@ def test_run_leak_check_raises_hold_once_and_marks_done(p):
     started_at = FROZEN_TS - 2 * HOUR
     _seed_leak_shape(p, started_at)
     p.mark()
-    irrigation_jobs_mod._run_leak_check(1, started_at)
+    irrigation_jobs_mod._run_leak_check(1, started_at)  # noqa: SLF001 — leak-check jobs have no public entry point
     first = p.db_rows()
-    irrigation_jobs_mod._run_leak_check(1, started_at)  # idempotent: marker found → skipped
+    irrigation_jobs_mod._run_leak_check(1, started_at)  # noqa: SLF001 — idempotent: marker found → skipped
     second = p.db_rows()
     assert second == first
     assert [a["code"] for a in first["activity_events"]] == ["leak_hold", "leak_check"]
@@ -524,11 +525,11 @@ def test_run_leak_check_noops_and_failure(p, monkeypatch, caplog):
     _seed_leak_shape(p, started_at)
     p.mark()
     monkeypatch.setattr(sched, "_app", None)
-    irrigation_jobs_mod._run_leak_check(1, started_at)
+    irrigation_jobs_mod._run_leak_check(1, started_at)  # noqa: SLF001 — leak-check jobs have no public entry point
     monkeypatch.setattr(sched, "_app", p.app)
     monkeypatch.setattr(LeakDetectionService, "check_after_irrigation", lambda _self, _c, _s: 1 / 0)
     with caplog.at_level(logging.ERROR, logger="greenhouse_server.services.irrigation"):
-        irrigation_jobs_mod._run_leak_check(1, started_at)
+        irrigation_jobs_mod._run_leak_check(1, started_at)  # noqa: SLF001 — leak-check jobs have no public entry point
     assert "Leak check job failed for cluster 1" in caplog.text
     # Neither call left a marker (so a restart would re-arm it).
     assert p.db_rows()["activity_events"] == []
@@ -582,7 +583,7 @@ def test_check_job_with_app_runs_check_all_via_api_equivalent(p):
     p.seed_cluster(soil=35.0)
     p.app.state.device_registry = p.wiring.registry
     p.mark()
-    sched._check_job()
+    run_core_job(sched.CHECK_ALL_JOB_ID)
     db = p.db_rows()
     assert [(e["action"], e["triggered_by"]) for e in db["irrigation_events"]] == [("start", "auto")]
     assert [(r["action"], r["actuated"]) for r in db["decision_logs"]] == [("irrigate", True)]

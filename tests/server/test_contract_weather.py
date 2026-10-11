@@ -93,10 +93,18 @@ REFETCHED_TEMPERATURE = 25.0
 REFETCHED_PRECIPITATION_MM = 9.0
 
 
-def test_constructor_defaults():
+def test_constructor_defaults(net):
+    """Defaults show in the request: Milan's coordinates, UTC, an 8 s timeout, and a 600 s cache."""
+    net.queue(CURRENT_PAYLOAD, CURRENT_PAYLOAD)
     client = WeatherClient()
-    assert (client._lat, client._lon, client._timeout, client._tz) == (45.464, 9.189, 8, "UTC")
-    assert weather_module._FORECAST_CACHE_TTL == CACHE_TTL_SECONDS
+    client.get_current()
+    assert net.calls == [(CURRENT_URL, 8)]  # latitude=45.464, longitude=9.189, timezone=UTC
+    net.now += CACHE_TTL_SECONDS - 0.001
+    client.get_current()
+    assert len(net.calls) == 1  # still cached just inside the TTL
+    net.now += 0.001
+    client.get_current()
+    assert net.calls == [(CURRENT_URL, 8), (CURRENT_URL, 8)]  # refetched at the TTL
 
 
 class TestCurrent:
@@ -228,14 +236,22 @@ class TestForecast:
 
 
 @pytest.mark.usefixtures("clean_env")
-def test_app_wires_settings_location_and_preference_timezone():
+def test_app_wires_settings_location_and_preference_timezone(net):
     """``create_app`` builds the client from ``weather_lat``/``weather_lon`` and the startup timezone."""
 
     app, engine = _make_stubbed_app(bypass_auth=True, weather_lat=1.5, weather_lon=-2.25)
     try:
         client = app.state.weather_client
         assert isinstance(client, WeatherClient)
-        assert (client._lat, client._lon, client._timeout, client._tz) == (1.5, -2.25, 8, "UTC")
+        net.queue(CURRENT_PAYLOAD)
+        client.get_current()
+        assert net.calls == [
+            (
+                f"{BASE}?latitude=1.5&longitude=-2.25"
+                "&current=temperature_2m,apparent_temperature,precipitation,relative_humidity_2m&timezone=UTC",
+                8,
+            )
+        ]
         install_offline_weather(app)
     finally:
         engine.dispose()

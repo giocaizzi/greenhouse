@@ -28,6 +28,7 @@ from sqlalchemy.orm import Session
 from golden import FROZEN_TS, assert_golden_json
 from greenhouse_server import scheduler
 from greenhouse_server.services.irrigation import CHECK_FAILED_ALERT_CODE, IrrigationService
+from server.conftest import run_core_job
 from server.test_contract_pipeline import Pipeline
 
 
@@ -179,12 +180,12 @@ def test_scheduler_check_job_isolates_clusters_the_same_way(three_dry_clusters, 
     """I-ii (4): the scheduler's ``_check_job`` body gives the same per-cluster isolation."""
 
     p = three_dry_clusters
-    assert scheduler._app is p.app  # init_scheduler rebinds the module global per create_app
+    assert scheduler._app is p.app  # noqa: SLF001 — init_scheduler rebinds the module global per create_app
     # The job reads the registry from app.state, not from the request-level override.
     p.app.state.device_registry = p.wiring.registry
     _crash_after_check(monkeypatch, tx_log, failing={2})
 
-    scheduler._check_job()
+    run_core_job(scheduler.CHECK_ALL_JOB_ID)
 
     summary = _summary(p, tx_log)
     assert summary["start_events_by_irrigator"] == [(1, "start", "auto"), (2, "start", "auto"), (3, "start", "auto")]
@@ -214,7 +215,7 @@ def test_scheduler_check_job_without_registry_reports_errors_but_commits(three_d
 
     p = three_dry_clusters
     assert getattr(p.app.state, "device_registry", None) is None
-    scheduler._check_job()
+    run_core_job(scheduler.CHECK_ALL_JOB_ID)
     summary = _summary(p, tx_log)
     assert summary["start_events_by_irrigator"] == []
     assert summary["irrigator_adapter_calls"] == []
@@ -234,7 +235,7 @@ def test_scheduler_check_job_swallows_a_total_failure(three_dry_clusters, tx_log
 
     monkeypatch.setattr(IrrigationService, "check_all_clusters", explode)
     with caplog.at_level("ERROR", logger="greenhouse_server.scheduler"):
-        scheduler._check_job()
+        run_core_job(scheduler.CHECK_ALL_JOB_ID)
     assert tx_log == ["rollback"]
     assert [r.getMessage() for r in caplog.records if r.name == "greenhouse_server.scheduler"] == ["Check job failed"]
     assert three_dry_clusters.db_rows()["decision_logs"] == []

@@ -98,6 +98,7 @@ def world(tmp_db, frozen_clock):
         "sensor": tmp_db.get_sensor(sensor_id),
         "cloud": cloud,
         "irr_adapter": irr_adapter,
+        "registry": registry,
         "monitor": monitor,
         "notifier": notifier,
         "clock": frozen_clock,
@@ -138,7 +139,8 @@ def _persist(world, ts: int, **values) -> None:
 
 def _poll_sensor(world) -> list[str]:
     world["monitor"].poll_sensor(world["sensor"])
-    derived = world["monitor"]._cache[(ENTITY_SENSOR, world["sensor"].id)].derived_alarms
+    # The monitor's derived-alarm cache has no public reader; this contract pins what it holds.
+    derived = world["monitor"]._cache[(ENTITY_SENSOR, world["sensor"].id)].derived_alarms  # noqa: SLF001
     return sorted(a.value for a in derived)
 
 
@@ -253,12 +255,11 @@ def test_init_health_monitor_sizes_the_sensor_window_from_the_sync_interval(worl
     session_factory = lambda: world["repo"].session  # noqa: E731 — the fixture's own session
     monkeypatch.setattr(world["repo"].session, "close", lambda: None)
     app = SimpleNamespace(
-        state=SimpleNamespace(
-            session_factory=session_factory, device_registry=world["monitor"]._registry, ntfy_notifier=None
-        )
+        state=SimpleNamespace(session_factory=session_factory, device_registry=world["registry"], ntfy_notifier=None)
     )
     scheduler.init_health_monitor(app, SimpleNamespace(sync_interval_minutes=60))
-    assert app.state.health_monitor._sensor_offline_after_seconds == (60 + SENSOR_OFFLINE_GRACE_MINUTES) * 60
+    window = app.state.health_monitor._sensor_offline_after_seconds  # noqa: SLF001 — no public accessor
+    assert window == (60 + SENSOR_OFFLINE_GRACE_MINUTES) * 60
 
 
 def test_init_health_monitor_restores_blocks_from_open_alerts(world, monkeypatch):
@@ -272,7 +273,7 @@ def test_init_health_monitor_restores_blocks_from_open_alerts(world, monkeypatch
     app = SimpleNamespace(
         state=SimpleNamespace(
             session_factory=lambda: world["repo"].session,
-            device_registry=world["monitor"]._registry,
+            device_registry=world["registry"],
             ntfy_notifier=None,
         )
     )
@@ -357,7 +358,7 @@ def test_unknown_sensor_model_is_not_recorded(world):
     repo.session.commit()
     state = world["monitor"].poll_sensor(repo.get_sensor(sid))
     assert state == DeviceHealthState(observed_at=FROZEN_TS, offline=False)
-    assert (ENTITY_SENSOR, sid) not in world["monitor"]._cache
+    assert (ENTITY_SENSOR, sid) not in world["monitor"]._cache  # noqa: SLF001 — cache has no public reader
     assert _alerts(repo) == []
 
 
@@ -502,4 +503,4 @@ def test_backfill_ignores_rows_older_than_a_week_and_never_duplicates(world):
     )
     assert alert["payload"]["observed_at"] == FROZEN_TS
     # Back-fill writes the alert but not the cache: the next poll still sees a transition.
-    assert (ENTITY_SENSOR, world["sensor"].id) not in world["monitor"]._cache
+    assert (ENTITY_SENSOR, world["sensor"].id) not in world["monitor"]._cache  # noqa: SLF001 — no public reader

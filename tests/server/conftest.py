@@ -12,6 +12,14 @@ from server.fixtures import (
     TEST_AUTH_SECRET,
     FakeDeviceWiring,
     _make_stubbed_app,
+    run_core_job,
 )
 
-__all__ = ["TEST_ADMIN_PASSWORD", "TEST_ADMIN_USERNAME", "TEST_AUTH_SECRET", "FakeDeviceWiring", "_make_stubbed_app"]
+__all__ = [
+    "TEST_ADMIN_PASSWORD",
+    "TEST_ADMIN_USERNAME",
+    "TEST_AUTH_SECRET",
+    "FakeDeviceWiring",
+    "_make_stubbed_app",
+    "run_core_job",
+]

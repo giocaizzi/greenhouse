@@ -280,8 +280,8 @@ def _invoke_mcp_tool(
         body=None,
     )
     return asyncio.run(
-        mcp._execute_api_tool(
-            client=mcp._http_client,
+        mcp._execute_api_tool(  # noqa: SLF001 — drives fastapi-mcp's tools/call executor (no public seam)
+            client=mcp._http_client,  # noqa: SLF001 — drives fastapi-mcp's tools/call executor (no public seam)
             tool_name=tool_name,
             arguments=arguments or {},
             operation_map=mcp.operation_map,

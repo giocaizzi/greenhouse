@@ -64,12 +64,12 @@ def _surface(app) -> dict:
             "name": mcp.name,
             "description": mcp.description,
             "server_name": mcp.server.name,
-            "describe_all_responses": mcp._describe_all_responses,
-            "describe_full_response_schema": mcp._describe_full_response_schema,
-            "include_operations": mcp._include_operations,
-            "exclude_operations": mcp._exclude_operations,
-            "include_tags": mcp._include_tags,
-            "exclude_tags": mcp._exclude_tags,
+            "describe_all_responses": mcp._describe_all_responses,  # noqa: SLF001 — fastapi-mcp keeps its config private
+            "describe_full_response_schema": mcp._describe_full_response_schema,  # noqa: SLF001 — fastapi-mcp keeps its config private
+            "include_operations": mcp._include_operations,  # noqa: SLF001 — fastapi-mcp keeps its config private
+            "exclude_operations": mcp._exclude_operations,  # noqa: SLF001 — fastapi-mcp keeps its config private
+            "include_tags": mcp._include_tags,  # noqa: SLF001 — fastapi-mcp keeps its config private
+            "exclude_tags": mcp._exclude_tags,  # noqa: SLF001 — fastapi-mcp keeps its config private
         },
         "tools": _tool_dumps(mcp.tools),
         "operation_map": {

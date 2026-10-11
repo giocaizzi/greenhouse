@@ -351,7 +351,7 @@ def test_sync_job_backfills_six_hours_and_commits(monkeypatch):
         state=SimpleNamespace(device_gateway=object(), device_registry=None, session_factory=lambda: session)
     )
     monkeypatch.setattr(scheduler_module, "_app", app)
-    scheduler_module._sync_job()
+    scheduler_module._sync_job()  # noqa: SLF001 — job body on a stub app (no public handle)
     assert (calls, commits) == ([6], [1])
 
 
@@ -653,7 +653,7 @@ def test_health_monitor_job_binds_the_job_repo_before_polling(monkeypatch):
     )
     app = SimpleNamespace(state=SimpleNamespace(health_monitor=Monitor(), session_factory=lambda: session))
     monkeypatch.setattr(scheduler_module, "_app", app)
-    scheduler_module._health_monitor_job()
+    scheduler_module._health_monitor_job()  # noqa: SLF001 — job body on a stub app (no public handle)
     assert events == [("bind", session), ("poll",), ("commit",)]
 
 
@@ -681,7 +681,7 @@ def test_check_job_binds_the_health_monitor_then_checks_and_commits(monkeypatch)
         )
     )
     monkeypatch.setattr(scheduler_module, "_app", app)
-    scheduler_module._check_job()
+    scheduler_module._check_job()  # noqa: SLF001 — job body on a stub app (no public handle)
     assert events == [("bind", session), ("check",), ("commit",)]
 
 

@@ -126,7 +126,7 @@ def _snapshot() -> dict:
         "scheduler": {
             "class": type(scheduler).__name__,
             "timezone": str(scheduler.timezone),
-            "job_defaults": dict(scheduler._job_defaults),
+            "job_defaults": dict(scheduler._job_defaults),  # noqa: SLF001 — pins scheduler internals (no public accessor)
         },
         "pending_jobs": [_pending_job(j) for j in scheduler.get_jobs()],
         "pending_get_jobs": sched_mod.get_jobs(),
@@ -173,10 +173,10 @@ def test_registration_order_and_identity():
             ("sensor_anomaly", "Sensor anomaly scan", "greenhouse_server.scheduler:_anomaly_job"),
             ("device_health_monitor", "Device health monitor", "greenhouse_server.scheduler:_health_monitor_job"),
         ]
-        assert sched_mod._app is app
+        assert sched_mod._app is app  # noqa: SLF001 — pins the module-global app binding (no public accessor)
         assert sched_mod.CHECK_ALL_JOB_ID == "check_all"
-        assert sched_mod._TZ_BOUND_CRON_JOBS == ("check_all", "plant_health_snapshot")
-        assert sched_mod._JOB_DEFAULTS == {"misfire_grace_time": None, "coalesce": True, "max_instances": 1}
+        assert sched_mod._TZ_BOUND_CRON_JOBS == ("check_all", "plant_health_snapshot")  # noqa: SLF001 — pins scheduler internals (no public accessor)
+        assert sched_mod._JOB_DEFAULTS == {"misfire_grace_time": None, "coalesce": True, "max_instances": 1}  # noqa: SLF001 — pins scheduler internals (no public accessor)
     finally:
         engine.dispose()
 
@@ -190,7 +190,7 @@ def test_rebuilding_the_app_does_not_duplicate_jobs():
         jobs = sched_mod.scheduler.get_jobs()
         assert len(jobs) == BUILT_IN_JOB_COUNT
         assert jobs[0].trigger.interval.total_seconds() == sync_minutes * 60
-        assert sched_mod._app is app2
+        assert sched_mod._app is app2  # noqa: SLF001 — pins the module-global app binding (no public accessor)
     finally:
         engine1.dispose()
         engine2.dispose()

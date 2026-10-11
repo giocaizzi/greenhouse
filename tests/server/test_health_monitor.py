@@ -30,10 +30,7 @@ from greenhouse_core.models import (
     Sensor,
 )
 from greenhouse_core.repository import IrrigationRepository
-from greenhouse_server.services.health_monitor import (
-    DeviceHealthMonitor,
-    _Cached,
-)
+from greenhouse_server.services.health_monitor import DeviceHealthMonitor
 from greenhouse_server.services.irrigation import IrrigationService
 from greenhouse_server.services.pump_watcher import EVENT_ACTION_ABORTED, PumpWatcherService
 
@@ -123,7 +120,7 @@ def _state(
 class TestTransitionMatrix:
     """clean → alarm → alarm → clean reproduces the documented behaviour."""
 
-    def test_clean_to_alarm_raises_alert(self, monitor, cluster_irrigator_sensor):
+    def test_clean_to_alarm_raises_alert(self, monitor, repo, cluster_irrigator_sensor):
         monitor_, irr_adapter, _, _ = monitor
         irrigator, _ = cluster_irrigator_sensor
 
@@ -131,16 +128,14 @@ class TestTransitionMatrix:
         derived = monitor_.poll_irrigator(irrigator)
         assert HealthAlarm.NO_WATER in derived.alarms
 
-        alert = monitor_._repo.session.scalar(
-            select(Alert).where(Alert.dedup_key == f"health:irrigator:{irrigator.id}:no_water")
-        )
+        alert = repo.session.scalar(select(Alert).where(Alert.dedup_key == f"health:irrigator:{irrigator.id}:no_water"))
         assert alert is not None
         assert alert.status == "open"
         assert alert.source == SOURCE_HEALTH
         assert alert.severity == "critical"
         assert alert.occurrence_count == 1
 
-    def test_alarm_to_alarm_increments_occurrence(self, monitor, cluster_irrigator_sensor):
+    def test_alarm_to_alarm_increments_occurrence(self, monitor, repo, cluster_irrigator_sensor):
         monitor_, irr_adapter, _, _ = monitor
         irrigator, _ = cluster_irrigator_sensor
 
@@ -148,16 +143,14 @@ class TestTransitionMatrix:
         monitor_.poll_irrigator(irrigator)
         monitor_.poll_irrigator(irrigator)
 
-        alert = monitor_._repo.session.scalar(
-            select(Alert).where(Alert.dedup_key == f"health:irrigator:{irrigator.id}:no_water")
-        )
+        alert = repo.session.scalar(select(Alert).where(Alert.dedup_key == f"health:irrigator:{irrigator.id}:no_water"))
         # The diff machinery only re-raises on *appearance*; a sustained
         # alarm leaves the cached state unchanged so the alert row stays
         # at occurrence_count=1 from the original transition.
         assert alert.occurrence_count == 1
         assert alert.status == "open"
 
-    def test_alarm_to_clean_resolves(self, monitor, cluster_irrigator_sensor):
+    def test_alarm_to_clean_resolves(self, monitor, repo, cluster_irrigator_sensor):
         monitor_, irr_adapter, _, _ = monitor
         irrigator, _ = cluster_irrigator_sensor
 
@@ -166,12 +159,10 @@ class TestTransitionMatrix:
         irr_adapter.set_health(_state(alarms=frozenset()))
         monitor_.poll_irrigator(irrigator)
 
-        alert = monitor_._repo.session.scalar(
-            select(Alert).where(Alert.dedup_key == f"health:irrigator:{irrigator.id}:no_water")
-        )
+        alert = repo.session.scalar(select(Alert).where(Alert.dedup_key == f"health:irrigator:{irrigator.id}:no_water"))
         assert alert.status == "resolved"
 
-    def test_battery_low_then_critical_open_two_distinct_alerts(self, monitor, cluster_irrigator_sensor):
+    def test_battery_low_then_critical_open_two_distinct_alerts(self, monitor, repo, cluster_irrigator_sensor):
         monitor_, _, sensor_adapter, _ = monitor
         _, sensor = cluster_irrigator_sensor
 
@@ -182,18 +173,18 @@ class TestTransitionMatrix:
         sensor_adapter.set_health(_state(battery_pct=15))
         monitor_.poll_sensor(sensor)
         low_key = f"health:sensor:{sensor.id}:low_battery"
-        low = monitor_._repo.session.scalar(select(Alert).where(Alert.dedup_key == low_key))
+        low = repo.session.scalar(select(Alert).where(Alert.dedup_key == low_key))
         assert low is not None and low.status == "open"
 
         # 3% → BATTERY_CRITICAL (and LOW_BATTERY no longer derived → resolved)
         sensor_adapter.set_health(_state(battery_pct=3))
         monitor_.poll_sensor(sensor)
         crit_key = f"health:sensor:{sensor.id}:battery_critical"
-        crit = monitor_._repo.session.scalar(select(Alert).where(Alert.dedup_key == crit_key))
+        crit = repo.session.scalar(select(Alert).where(Alert.dedup_key == crit_key))
         assert crit is not None and crit.status == "open"
         assert crit.severity == "critical"
 
-    def test_offline_transition_via_stale_last_seen(self, monitor, cluster_irrigator_sensor):
+    def test_offline_transition_via_stale_last_seen(self, monitor, repo, cluster_irrigator_sensor):
         monitor_, _, sensor_adapter, clock = monitor
         _, sensor = cluster_irrigator_sensor
 
@@ -201,7 +192,7 @@ class TestTransitionMatrix:
         sensor_adapter.set_health(_state(last_seen_ts=clock()))
         monitor_.poll_sensor(sensor)
         offline_key = f"health:sensor:{sensor.id}:device_offline"
-        assert monitor_._repo.session.scalar(select(Alert).where(Alert.dedup_key == offline_key)) is None
+        assert repo.session.scalar(select(Alert).where(Alert.dedup_key == offline_key)) is None
 
         # Advance the clock beyond the sensor window (sync interval + grace, B-3)
         # and report the same last_seen.
@@ -209,16 +200,16 @@ class TestTransitionMatrix:
         clock.tick(stale)
         sensor_adapter.set_health(_state(last_seen_ts=clock() - stale))
         monitor_.poll_sensor(sensor)
-        alert = monitor_._repo.session.scalar(select(Alert).where(Alert.dedup_key == offline_key))
+        alert = repo.session.scalar(select(Alert).where(Alert.dedup_key == offline_key))
         assert alert is not None and alert.status == "open"
 
-    def test_explicit_offline_flag_opens_alert(self, monitor, cluster_irrigator_sensor):
+    def test_explicit_offline_flag_opens_alert(self, monitor, repo, cluster_irrigator_sensor):
         monitor_, irr_adapter, _, _ = monitor
         irrigator, _ = cluster_irrigator_sensor
 
         irr_adapter.set_health(_state(offline=True))
         monitor_.poll_irrigator(irrigator)
-        alert = monitor_._repo.session.scalar(
+        alert = repo.session.scalar(
             select(Alert).where(Alert.dedup_key == f"health:irrigator:{irrigator.id}:device_offline")
         )
         assert alert is not None and alert.status == "open"
@@ -256,10 +247,13 @@ class TestActuationGate:
         assert blocked is False
 
     @staticmethod
-    def _seed_cache(monitor_, irrigator, derived):
-        """Put ``derived`` straight into the actuation-gate cache for ``irrigator``."""
+    def _seed_cache(monitor_, irrigator, alarms):
+        """Record a health state for ``irrigator`` whose derived alarms are exactly ``alarms``; return them.
 
-        monitor_._cache[(ENTITY_IRRIGATOR, irrigator.id)] = _Cached(state=_state(), derived_alarms=derived)
+        A state with no battery, signal or staleness data derives nothing beyond the adapter's own
+        alarms, so the actuation-gate cache ends up holding precisely this set.
+        """
+        return monitor_.record(ENTITY_IRRIGATOR, irrigator.id, _state(alarms=alarms))
 
     @pytest.mark.parametrize("alarm", list(HealthAlarm), ids=lambda a: a.value)
     def test_blocking_set_for_every_alarm(self, monitor, cluster_irrigator_sensor, alarm):
@@ -276,8 +270,8 @@ class TestActuationGate:
         """With every alarm cached, the blocking ones come back in derived-set iteration order."""
         monitor_, _, _, _ = monitor
         irrigator, _ = cluster_irrigator_sensor
-        derived = frozenset(HealthAlarm)
-        self._seed_cache(monitor_, irrigator, derived)
+        derived = self._seed_cache(monitor_, irrigator, frozenset(HealthAlarm))
+        assert derived == frozenset(HealthAlarm)
 
         blocking = {HealthAlarm.NO_WATER, HealthAlarm.RAIN_DETECTED, HealthAlarm.DEVICE_OFFLINE}
         assert monitor_.is_actuation_blocked(irrigator) == (True, [a for a in derived if a in blocking])
@@ -286,10 +280,9 @@ class TestActuationGate:
 class TestBackfillFromHistory:
     """Persistent low-battery state survives a server restart via back-fill."""
 
-    def test_n_consecutive_low_battery_readings_raise_alert(self, monitor, cluster_irrigator_sensor):
+    def test_n_consecutive_low_battery_readings_raise_alert(self, monitor, repo, cluster_irrigator_sensor):
         monitor_, _, _, _ = monitor
         _, sensor = cluster_irrigator_sensor
-        repo = monitor_._repo
 
         now = int(_time.time())
         for offset in range(5):
@@ -308,10 +301,9 @@ class TestBackfillFromHistory:
         assert alert is not None
         assert alert.status == "open"
 
-    def test_short_history_does_not_backfill(self, monitor, cluster_irrigator_sensor):
+    def test_short_history_does_not_backfill(self, monitor, repo, cluster_irrigator_sensor):
         monitor_, _, _, _ = monitor
         _, sensor = cluster_irrigator_sensor
-        repo = monitor_._repo
 
         now = int(_time.time())
         # Only 2 readings — below the SENSOR_HEALTH_BACKFILL_WINDOW of 5.
@@ -512,7 +504,7 @@ class TestUnraisedAlarmRetry:
     """S6 fixed: a NO_WATER whose alert write failed keeps blocking and is raised again later."""
 
     def test_failed_alert_write_still_blocks_and_retries_on_next_observation(
-        self, monitor, cluster_irrigator_sensor, monkeypatch
+        self, monitor, repo, cluster_irrigator_sensor, monkeypatch
     ):
         monitor_, irr_adapter, _, _ = monitor
         irrigator, _ = cluster_irrigator_sensor
@@ -527,26 +519,26 @@ class TestUnraisedAlarmRetry:
         monkeypatch.setattr(IrrigationRepository, "upsert_alert", locked)
         monitor_.poll_irrigator(irrigator)
         assert monitor_.is_actuation_blocked(irrigator) == (True, [HealthAlarm.NO_WATER])
-        assert monitor_._repo.get_open_alert_by_key(key) is None
+        assert repo.get_open_alert_by_key(key) is None
 
         monkeypatch.setattr(IrrigationRepository, "upsert_alert", real_upsert)
         monitor_.poll_irrigator(irrigator)  # same alarm, no transition — but its alert is owed
-        assert monitor_._repo.get_open_alert_by_key(key) is not None
+        assert repo.get_open_alert_by_key(key) is not None
         monitor_.poll_irrigator(irrigator)  # landed now: not raised again
-        assert monitor_._repo.get_open_alert_by_key(key).occurrence_count == 1
+        assert repo.get_open_alert_by_key(key).occurrence_count == 1
 
-    def test_mark_unraised_requeues_an_alert_lost_to_a_rollback(self, monitor, cluster_irrigator_sensor):
+    def test_mark_unraised_requeues_an_alert_lost_to_a_rollback(self, monitor, repo, cluster_irrigator_sensor):
         monitor_, irr_adapter, _, _ = monitor
         irrigator, _ = cluster_irrigator_sensor
         key = f"health:irrigator:{irrigator.id}:no_water"
         irr_adapter.set_health(_state(alarms=frozenset({HealthAlarm.NO_WATER})))
         monitor_.poll_irrigator(irrigator)
-        monitor_._repo.rollback()  # the trip's transaction was lost after the write
-        assert monitor_._repo.get_open_alert_by_key(key) is None
+        repo.rollback()  # the trip's transaction was lost after the write
+        assert repo.get_open_alert_by_key(key) is None
         monitor_.mark_unraised("irrigator", irrigator.id, HealthAlarm.NO_WATER)
         assert monitor_.is_actuation_blocked(irrigator) == (True, [HealthAlarm.NO_WATER])
         monitor_.poll_irrigator(irrigator)
-        assert monitor_._repo.get_open_alert_by_key(key) is not None
+        assert repo.get_open_alert_by_key(key) is not None
 
 
 class TestRestoreFromOpenAlerts:

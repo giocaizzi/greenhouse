@@ -50,6 +50,17 @@ TEST_ADMIN_PASSWORD = "test-admin-pw-123"
 TEST_AUTH_SECRET = "unit-test-jwt-secret-do-not-use-in-prod-please"
 
 
+def run_core_job(job_id: str) -> None:
+    """Run a built-in scheduler job through the callable the scheduler registered for ``job_id``.
+
+    This is the path APScheduler takes when the job fires, so a test drives the job body
+    without reaching into the scheduler module's private functions.
+    """
+    job = bg_scheduler.get_job(job_id)
+    assert job is not None, f"built-in job {job_id!r} is not registered"
+    job.func()
+
+
 class FakeDeviceWiring:
     """Holds the shared fakes alongside the registry that resolves them.
 
