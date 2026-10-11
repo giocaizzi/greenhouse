@@ -938,8 +938,8 @@ def test_water_warning_reads_only_the_newest_reading_per_sensor(tmp_db, frozen_c
     assert logic.decide_for_cluster(cid).primary_code is TriggerCode.WATER_WARNING
 
 
-def test_over_watered_soil_vetoes_the_device_soil_dry_alarm(tmp_db, frozen_clock):
-    """The device alarm irrigates on normal soil, but not while the soil reads above the plants' band."""
+def test_device_soil_dry_alarm_on_wet_soil(tmp_db, frozen_clock):
+    """The alarm irrigates on normal soil; above the band it is only noted; detected over-watering vetoes it."""
     cid = tmp_db.add_cluster("Alarm")
     tmp_db.add_plant(cluster_id=cid, species="Monstera deliciosa", category="tropical")
     sid = tmp_db.add_sensor(cluster_id=cid, tuya_device_id=FAKE_SENSOR_ID, name="S", sensor_type="x", config={})
@@ -948,9 +948,17 @@ def test_over_watered_soil_vetoes_the_device_soil_dry_alarm(tmp_db, frozen_clock
     logic = IrrigationLogic(tmp_db, get_plant_database())
     assert logic.decide_for_cluster(cid).primary_code is TriggerCode.WATER_WARNING
 
+    # The alarming probe itself reads above the band: not an emergency, not a veto — noted, soil rule decides.
     tmp_db.add_sensor_reading(sensor_id=sid, timestamp=now - 60, soil_moisture=82.0, water_warning=True)
-    vetoed = logic.decide_for_cluster(cid)
+    deferred = logic.decide_for_cluster(cid)
+    assert deferred.action.value == "skip"
+    assert (deferred.reasons[0].code, deferred.reasons[-1].code) == (TriggerCode.SENSOR_WET, TriggerCode.WATER_WARNING)
+    assert "not acted on as an emergency" in deferred.reasons[-1].message
 
+    # Saturated and still rising (over-watering detected): the terminal skip, alarm recorded.
+    for i, soil in enumerate([72.0, 76.0, 80.0, 84.0, 88.0, 90.0]):
+        tmp_db.add_sensor_reading(sensor_id=sid, timestamp=now - (20 - i * 3) * 3600, soil_moisture=soil)
+    vetoed = logic.decide_for_cluster(cid)
     assert vetoed.action.value == "skip"
     assert [r.code for r in vetoed.reasons] == [TriggerCode.OVER_WATERING, TriggerCode.WATER_WARNING]
     assert "not acted on" in vetoed.reasons[1].message

@@ -567,7 +567,17 @@ def _second_review_cases() -> list[Case]:
                 SensorSpec("Dry Probe", (Reading(600, soil=20.0, water_warning=True),), 0),
             ),
         ),
-        # Device soil-dry alarm while the probe reads 80 % (Monstera band tops at 60 %): over-watering vetoes it.
+        # The alarming probe itself reads wet (faulty high probe, flag stuck on) beside a dry plant: conflict burst.
+        Case(
+            id="series/wet-alarming-probe-beside-dry-plant",
+            family="series",
+            at=BASE_AT,
+            sensors=(
+                SensorSpec("Wet Alarming", (Reading(600, soil=85.0, water_warning=True),), None),
+                SensorSpec("Dry Probe", (Reading(600, soil=10.0),), 0),
+            ),
+        ),
+        # Device soil-dry alarm while the probe reads 80 % (Monstera band tops at 60 %): noted, not an emergency.
         Case(
             id="series/water-warning-on-over-watered-soil",
             family="series",
