@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Annotated
 
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import Response
@@ -45,9 +45,9 @@ def _fetch_events(
 def activity_list(
     request: Request,
     repo: RepoDep,
-    entity_type: str | None = Query(default=None),
-    source: str | None = Query(default=None),
-    severity: str | None = Query(default=None),
+    entity_type: Annotated[str | None, Query()] = None,
+    source: Annotated[str | None, Query()] = None,
+    severity: Annotated[str | None, Query()] = None,
 ) -> Response:
     """Render the activity timeline page (first page, optional filters)."""
     items, next_cursor = _fetch_events(repo, entity_type=entity_type, source=source, severity=severity, before=None)
@@ -69,10 +69,10 @@ def activity_list(
 def activity_page(
     request: Request,
     repo: RepoDep,
-    before: int | None = Query(default=None),
-    entity_type: str | None = Query(default=None),
-    source: str | None = Query(default=None),
-    severity: str | None = Query(default=None),
+    before: Annotated[int | None, Query()] = None,
+    entity_type: Annotated[str | None, Query()] = None,
+    source: Annotated[str | None, Query()] = None,
+    severity: Annotated[str | None, Query()] = None,
 ) -> Response:
     """Render the next page of timeline rows for infinite scroll (HTMX fragment)."""
     items, next_cursor = _fetch_events(repo, entity_type=entity_type, source=source, severity=severity, before=before)

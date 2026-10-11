@@ -5,6 +5,8 @@ browsers to `/login`. The login page itself is registered first without the
 dependency — it must be reachable without a session.
 """
 
+from typing import Annotated
+
 from fastapi import APIRouter, Depends, Request
 
 from greenhouse_server.auth import AuthenticatedUser, require_web_user
@@ -39,7 +41,9 @@ web_router = APIRouter(include_in_schema=False)
 web_router.include_router(web_auth.router)
 
 
-def _signed_in_user(request: Request, user: AuthenticatedUser = Depends(require_web_user)) -> AuthenticatedUser:
+def _signed_in_user(
+    request: Request, user: Annotated[AuthenticatedUser, Depends(require_web_user)]
+) -> AuthenticatedUser:
     """``require_web_user``, plus a ``request.state.signed_in`` mark the chrome reads.
 
     ``base_context`` shows the dry-run / vacation / paused banners only to a signed-in

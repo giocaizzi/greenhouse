@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Annotated, Any
 
 from fastapi import APIRouter, Form, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse, Response
@@ -55,7 +55,7 @@ def plant_dashboard(
     repo: RepoDep,
     plant_db: PlantDbDep,
     health_svc: PlantHealthServiceDep,
-    hours: int = Query(24, ge=1, le=MAX_LOOKBACK_HOURS),
+    hours: Annotated[int, Query(ge=1, le=MAX_LOOKBACK_HOURS)] = 24,
 ) -> Response:
     """Render a plant's dashboard: care info, sensors, charts, health, events and alerts."""
     plant = require_plant_in_cluster(repo, cluster_id, plant_id)
@@ -152,8 +152,8 @@ def plant_chart_fragment(
     plant_id: int,
     repo: RepoDep,
     plant_db: PlantDbDep,
-    metric: str = Query("soil_moisture"),
-    hours: int = Query(24, ge=1, le=MAX_LOOKBACK_HOURS),
+    metric: Annotated[str, Query()] = "soil_moisture",
+    hours: Annotated[int, Query(ge=1, le=MAX_LOOKBACK_HOURS)] = 24,
 ) -> Response:
     """Render one metric's plant chart panel (HTMX fragment)."""
     chart_metric = require_metric(metric)
@@ -191,7 +191,7 @@ def move_plant_web(
     cluster_id: int,
     plant_id: int,
     repo: RepoDep,
-    target_cluster_id: int = Form(...),
+    target_cluster_id: Annotated[int, Form()],
 ) -> Response:
     """Move a plant to a different cluster (server-rendered form submit)."""
     require_plant_in_cluster(repo, cluster_id, plant_id)

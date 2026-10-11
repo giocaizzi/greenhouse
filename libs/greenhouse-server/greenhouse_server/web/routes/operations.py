@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Annotated
+
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import Response
 
@@ -27,10 +29,10 @@ def irrigate(
     cluster_id: int,
     svc: IrrigationServiceDep,
     repo: RepoDep,
-    dry_run: str = Form(""),
-    no_sync: str = Form(""),
-    temp_override: str = Form(""),
-    force: str = Form(""),
+    dry_run: Annotated[str, Form()] = "",
+    no_sync: Annotated[str, Form()] = "",
+    temp_override: Annotated[str, Form()] = "",
+    force: Annotated[str, Form()] = "",
 ) -> Response:
     """Run the irrigation pipeline from the cluster detail page's action bar (HTMX fragment).
 
@@ -99,7 +101,7 @@ def check_all(request: Request, svc: IrrigationServiceDep, repo: RepoDep) -> Res
 
 
 @router.post("/sync")
-def sync_all(request: Request, svc: SyncServiceDep, repo: RepoDep, hours: str = Form("24")) -> Response:
+def sync_all(request: Request, svc: SyncServiceDep, repo: RepoDep, hours: Annotated[str, Form()] = "24") -> Response:
     """Sync every sensor from the Tuya Cloud and render the sync summary (HTMX fragment)."""
     try:
         hrs = int(hours)
@@ -115,8 +117,8 @@ def sync_plants(
     request: Request,
     repo: RepoDep,
     svc: ClusterServiceDep,
-    plant_id: str = Form(""),
-    cluster_id: str = Form(""),
+    plant_id: Annotated[str, Form()] = "",
+    cluster_id: Annotated[str, Form()] = "",
 ) -> Response:
     """Refresh plant care data from the plant database and render the summary (HTMX fragment)."""
     pid = parsed_or_400(plant_id, int, error="Invalid plant_id")

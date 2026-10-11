@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from typing import Annotated
 
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import HTMLResponse, Response
@@ -21,9 +22,9 @@ _ALERT_LIST_LIMIT = 200  # rows the inbox page (and its post-sync refresh) rende
 def alert_list(
     request: Request,
     repo: RepoDep,
-    status: str | None = Query(None),
-    cluster_id: int | None = Query(None),
-    plant_id: int | None = Query(None),
+    status: Annotated[str | None, Query()] = None,
+    cluster_id: Annotated[int | None, Query()] = None,
+    plant_id: Annotated[int | None, Query()] = None,
 ) -> Response:
     """Render the alert inbox page with optional status / cluster / plant filters."""
     alerts = repo.list_alerts(status=status, cluster_id=cluster_id, plant_id=plant_id, limit=_ALERT_LIST_LIMIT)

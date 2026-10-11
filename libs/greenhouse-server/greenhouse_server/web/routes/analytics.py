@@ -7,7 +7,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Annotated
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response, StreamingResponse
@@ -51,8 +51,8 @@ def cluster_history(
     request: Request,
     cluster_id: int,
     svc: ClusterServiceDep,
-    hours: int = Query(default=24, ge=1),
-    limit: int = Query(default=50, ge=1),
+    hours: Annotated[int, Query(ge=1)] = 24,
+    limit: Annotated[int, Query(ge=1)] = 50,
 ) -> Response:
     """Render a cluster's recent readings and irrigation events."""
     with not_found_as_404("Cluster not found"):
@@ -69,7 +69,7 @@ def cluster_stats(
     request: Request,
     cluster_id: int,
     repo: RepoDep,
-    days: int = Query(default=7, ge=1),
+    days: Annotated[int, Query(ge=1)] = 7,
 ) -> Response:
     """Render a cluster's irrigation statistics for the last ``days`` days."""
     cluster = require_cluster(repo, cluster_id)
@@ -85,7 +85,7 @@ def cluster_stats(
 def cluster_stats_export(
     cluster_id: int,
     repo: RepoDep,
-    days: int = Query(default=7, ge=1),
+    days: Annotated[int, Query(ge=1)] = 7,
 ) -> Response:
     """Download a cluster's irrigation events of the last ``days`` days as CSV."""
     cluster = require_cluster(repo, cluster_id)

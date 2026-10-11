@@ -1,5 +1,7 @@
 """Irrigator CRUD + control routes."""
 
+from typing import Annotated
+
 from fastapi import APIRouter, HTTPException, Query, status
 
 from greenhouse_core.models import Irrigator
@@ -43,9 +45,9 @@ router = APIRouter(tags=["irrigators"])
 @router.get("/irrigators", response_model=IrrigatorListResponse, summary="List irrigators across all clusters")
 def list_all_irrigators(
     repo: RepoDep,
-    cluster_id: int | None = Query(default=None, description="Restrict results to a specific cluster"),
-    limit: int = Query(default=100, ge=1, le=500),
-    cursor: int | None = Query(default=None, description="Id cursor — return rows with id > cursor"),
+    cluster_id: Annotated[int | None, Query(description="Restrict results to a specific cluster")] = None,
+    limit: Annotated[int, Query(ge=1, le=500)] = 100,
+    cursor: Annotated[int | None, Query(description="Id cursor — return rows with id > cursor")] = None,
 ) -> IrrigatorListResponse:
     """List every irrigator across all clusters with optional cluster filter and cursor pagination.
 

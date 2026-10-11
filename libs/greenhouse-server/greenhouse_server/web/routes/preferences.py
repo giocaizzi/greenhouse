@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Annotated
+
 from fastapi import APIRouter, Form, HTTPException, Request, status
 from fastapi.responses import RedirectResponse, Response
 
@@ -44,16 +46,16 @@ def preferences_page(request: Request, repo: RepoDep) -> Response:
 def update_preferences(
     request: Request,
     repo: RepoDep,
-    units: str = Form(...),
-    timezone: str = Form(...),
-    theme: str = Form(...),
-    refresh_interval_seconds: int = Form(...),
-    default_cluster_id: str = Form(""),
-    dry_run_global: str = Form(""),
-    notify_manual: str = Form(""),
-    notify_emergency: str = Form(""),
-    notify_alerts: str = Form(""),
-    notify_auto: str = Form(""),
+    units: Annotated[str, Form()],
+    timezone: Annotated[str, Form()],
+    theme: Annotated[str, Form()],
+    refresh_interval_seconds: Annotated[int, Form()],
+    default_cluster_id: Annotated[str, Form()] = "",
+    dry_run_global: Annotated[str, Form()] = "",
+    notify_manual: Annotated[str, Form()] = "",
+    notify_emergency: Annotated[str, Form()] = "",
+    notify_alerts: Annotated[str, Form()] = "",
+    notify_auto: Annotated[str, Form()] = "",
 ) -> Response:
     """Save the preferences form, re-sync the clocks to its timezone and reload the page."""
     # Blank clears the default; a non-integer is a 400 page (it used to clear silently).
@@ -78,7 +80,7 @@ def update_preferences(
 
 
 @router.post("/preferences/theme")
-def update_theme(repo: RepoDep, theme: str = Form(...)) -> Response:
+def update_theme(repo: RepoDep, theme: Annotated[str, Form()]) -> Response:
     """Persist just the theme preference for the header light/dark toggle.
 
     The header toggle paints instantly from ``localStorage``; this fire-and-forget

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Annotated
+
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -56,7 +58,7 @@ def login(
     body: LoginRequest,
     response: Response,
     repo: RepoDep,
-    settings: Settings = Depends(get_settings),
+    settings: Annotated[Settings, Depends(get_settings)],
 ) -> LoginResponse:
     """Exchange a username and password for a session JWT.
 
@@ -104,8 +106,8 @@ def login(
 @router.post("/logout", response_model=LogoutResponse)
 def logout(
     response: Response,
-    settings: Settings = Depends(get_settings),
-    _user: AuthenticatedUser = Depends(require_user),
+    settings: Annotated[Settings, Depends(get_settings)],
+    _user: Annotated[AuthenticatedUser, Depends(require_user)],
 ) -> LogoutResponse:
     """Clear the session cookie.
 
@@ -122,7 +124,7 @@ def logout(
 
 
 @router.get("/me", response_model=WhoAmIResponse)
-def whoami(user: AuthenticatedUser = Depends(require_user)) -> WhoAmIResponse:
+def whoami(user: Annotated[AuthenticatedUser, Depends(require_user)]) -> WhoAmIResponse:
     """Return the currently authenticated user.
 
     Returns:

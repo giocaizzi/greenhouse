@@ -4,7 +4,7 @@ import logging
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Annotated
 
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -110,8 +110,8 @@ _mcp_bearer = HTTPBearer(auto_error=False)
 
 
 def require_mcp_token(
-    creds: HTTPAuthorizationCredentials | None = Depends(_mcp_bearer),
-    settings: Settings = Depends(get_settings),
+    creds: Annotated[HTTPAuthorizationCredentials | None, Depends(_mcp_bearer)],
+    settings: Annotated[Settings, Depends(get_settings)],
 ) -> None:
     """Gate `/mcp` behind a static bearer token.
 

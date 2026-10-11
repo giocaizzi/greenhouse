@@ -1,5 +1,7 @@
 """Irrigation efficacy endpoint: score soil-moisture rise per completed event."""
 
+from typing import Annotated
+
 from fastapi import APIRouter, Query
 
 from greenhouse_core.schemas import EfficacyListResponse
@@ -13,7 +15,7 @@ router = APIRouter(tags=["operations"])
 def cluster_efficacy(
     cluster_id: int,
     repo: RepoDep,
-    days: int = Query(default=EFFICACY_DEFAULT_DAYS, ge=1, le=EFFICACY_MAX_DAYS),
+    days: Annotated[int, Query(ge=1, le=EFFICACY_MAX_DAYS)] = EFFICACY_DEFAULT_DAYS,
 ) -> EfficacyListResponse:
     """Score completed irrigation events by post-irrigation soil-moisture rise.
 

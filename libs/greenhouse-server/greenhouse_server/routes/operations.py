@@ -1,6 +1,6 @@
 """Operation routes: status, irrigate, check, monitor, sync, learn, history, stats."""
 
-from typing import Any
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Query
 from fastapi.responses import StreamingResponse
@@ -310,8 +310,8 @@ def learn(cluster_id: int, repo: RepoDep, plant_db: PlantDbDep) -> LearnResponse
 def history(
     cluster_id: int,
     cluster_svc: ClusterServiceDep,
-    hours: int = Query(default=24, ge=1),
-    limit: int = Query(default=50, ge=1),
+    hours: Annotated[int, Query(ge=1)] = 24,
+    limit: Annotated[int, Query(ge=1)] = 50,
 ) -> HistoryResponse:
     """Return recent sensor readings and irrigation events for a cluster.
 
@@ -350,7 +350,7 @@ def history(
 
 
 @router.get("/clusters/{cluster_id}/stats", response_model=StatsResponse)
-def stats(cluster_id: int, repo: RepoDep, days: int = Query(default=7, ge=1)) -> StatsResponse:
+def stats(cluster_id: int, repo: RepoDep, days: Annotated[int, Query(ge=1)] = 7) -> StatsResponse:
     """Return aggregate irrigation statistics for a cluster.
 
     Args:
@@ -373,7 +373,7 @@ def stats(cluster_id: int, repo: RepoDep, days: int = Query(default=7, ge=1)) ->
 
 
 @router.get("/clusters/{cluster_id}/stats/export")
-def stats_export(cluster_id: int, repo: RepoDep, days: int = Query(default=7, ge=1)) -> StreamingResponse:
+def stats_export(cluster_id: int, repo: RepoDep, days: Annotated[int, Query(ge=1)] = 7) -> StreamingResponse:
     """Export raw irrigation events for a cluster as a CSV download.
 
     The CSV columns are: timestamp, date, time, irrigator, action,

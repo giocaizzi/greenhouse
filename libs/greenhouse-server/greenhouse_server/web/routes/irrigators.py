@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Annotated, Any
 
 from fastapi import APIRouter, Form, HTTPException, Request, status
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
@@ -82,13 +82,13 @@ def create_irrigator(
     cluster_id: int,
     repo: RepoDep,
     registry: DeviceRegistryDep,
-    tuya_device_id: str = Form(...),
-    name: str = Form(...),
-    type: str = Form(...),
-    device_ip: str = Form(""),
-    local_key: str = Form(""),
-    reservoir_l: str = Form(""),
-    flow_rate_l_per_min: str = Form(""),
+    tuya_device_id: Annotated[str, Form()],
+    name: Annotated[str, Form()],
+    type: Annotated[str, Form()],
+    device_ip: Annotated[str, Form()] = "",
+    local_key: Annotated[str, Form()] = "",
+    reservoir_l: Annotated[str, Form()] = "",
+    flow_rate_l_per_min: Annotated[str, Form()] = "",
 ) -> Response:
     """Register the cluster's irrigator from the form; a conflict re-renders the form with 409."""
     cluster = require_cluster(repo, cluster_id)
@@ -150,12 +150,12 @@ def update_irrigator(
     cluster_id: int,
     repo: RepoDep,
     registry: DeviceRegistryDep,
-    name: str = Form(...),
-    type: str = Form(...),
-    device_ip: str = Form(""),
-    local_key: str = Form(""),
-    reservoir_l: str = Form(""),
-    flow_rate_l_per_min: str = Form(""),
+    name: Annotated[str, Form()],
+    type: Annotated[str, Form()],
+    device_ip: Annotated[str, Form()] = "",
+    local_key: Annotated[str, Form()] = "",
+    reservoir_l: Annotated[str, Form()] = "",
+    flow_rate_l_per_min: Annotated[str, Form()] = "",
 ) -> Response:
     """Save the irrigator form (blank connection fields keep their stored values)."""
     irrigator = require_cluster_irrigator(repo, cluster_id)
@@ -222,7 +222,7 @@ def start_irrigator(
     repo: RepoDep,
     registry: DeviceRegistryDep,
     notifier: NtfyNotifierDep,
-    minutes: str = Form(""),
+    minutes: Annotated[str, Form()] = "",
 ) -> Response:
     """Manually start an irrigator and render the action result (HTMX fragment)."""
     # Same code path as POST /api/v1/irrigators/{id}/start: caps, dry-run
@@ -258,8 +258,8 @@ def log_manual_submit(
     irrigator_id: int,
     repo: RepoDep,
     notifier: NtfyNotifierDep,
-    minutes: int = Form(...),
-    notes: str = Form(""),
+    minutes: Annotated[int, Form()],
+    notes: Annotated[str, Form()] = "",
 ) -> Response:
     """Record a manual watering; a refusal re-renders the form with the error."""
     irr = require_irrigator(repo, irrigator_id)

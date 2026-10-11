@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse, Response
@@ -44,12 +44,12 @@ def save_config(
     request: Request,
     cluster_id: int,
     repo: RepoDep,
-    mode: str = Form(""),
-    duration_minutes: str = Form(""),
-    interval_hours: str = Form(""),
-    auto_run: str = Form(""),
-    quiet_start_hour: str = Form(""),
-    quiet_end_hour: str = Form(""),
+    mode: Annotated[str, Form()] = "",
+    duration_minutes: Annotated[str, Form()] = "",
+    interval_hours: Annotated[str, Form()] = "",
+    auto_run: Annotated[str, Form()] = "",
+    quiet_start_hour: Annotated[str, Form()] = "",
+    quiet_end_hour: Annotated[str, Form()] = "",
 ) -> Response:
     """Save the cluster's irrigation config and redirect back to detail#config.
 
@@ -75,14 +75,14 @@ def save_config(
 def save_global_config(
     request: Request,
     repo: RepoDep,
-    mode: str = Form(""),
-    duration_minutes: str = Form(""),
-    interval_hours: str = Form(""),
-    auto_run: str = Form(""),
-    daily_cap_minutes: str = Form(""),
-    max_events_per_day: str = Form(""),
-    quiet_start_hour: str = Form(""),
-    quiet_end_hour: str = Form(""),
+    mode: Annotated[str, Form()] = "",
+    duration_minutes: Annotated[str, Form()] = "",
+    interval_hours: Annotated[str, Form()] = "",
+    auto_run: Annotated[str, Form()] = "",
+    daily_cap_minutes: Annotated[str, Form()] = "",
+    max_events_per_day: Annotated[str, Form()] = "",
+    quiet_start_hour: Annotated[str, Form()] = "",
+    quiet_end_hour: Annotated[str, Form()] = "",
 ) -> Response:
     """Save the global irrigation defaults and redirect back to preferences.
 

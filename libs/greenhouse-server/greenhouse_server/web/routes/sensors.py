@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Annotated
 
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
@@ -66,10 +66,10 @@ def create_sensor(
     cluster_id: int,
     repo: RepoDep,
     registry: DeviceRegistryDep,
-    tuya_device_id: str = Form(...),
-    name: str = Form(...),
-    type: str = Form(...),
-    plant_id: str = Form(""),
+    tuya_device_id: Annotated[str, Form()],
+    name: Annotated[str, Form()],
+    type: Annotated[str, Form()],
+    plant_id: Annotated[str, Form()] = "",
 ) -> Response:
     """Register a sensor from the form and return to the cluster's sensors section."""
     require_cluster(repo, cluster_id)
@@ -119,9 +119,9 @@ def update_sensor(
     sensor_id: int,
     repo: RepoDep,
     registry: DeviceRegistryDep,
-    name: str = Form(...),
-    type: str = Form(...),
-    plant_id: str = Form(""),
+    name: Annotated[str, Form()],
+    type: Annotated[str, Form()],
+    plant_id: Annotated[str, Form()] = "",
 ) -> Response:
     """Save the sensor form and return to the cluster's sensors section."""
     sensor = require_sensor_in_cluster(repo, cluster_id, sensor_id)

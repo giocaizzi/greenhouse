@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Annotated
+
 from fastapi import APIRouter, Query
 
 from greenhouse_core.models import Plant
@@ -53,8 +55,8 @@ def plant_chart_data(
     plant_id: int,
     repo: RepoDep,
     plant_db: PlantDbDep,
-    hours: int = Query(24, ge=1, le=MAX_LOOKBACK_HOURS),
-    metric: str = Query("soil_moisture"),
+    hours: Annotated[int, Query(ge=1, le=MAX_LOOKBACK_HOURS)] = 24,
+    metric: Annotated[str, Query()] = "soil_moisture",
 ) -> ChartPayload:
     """Return the time-series chart payload for a single plant.
 
@@ -82,8 +84,8 @@ def plant_chart_data(
 def cluster_chart_data(
     cluster_id: int,
     repo: RepoDep,
-    hours: int = Query(24, ge=1, le=MAX_LOOKBACK_HOURS),
-    metric: str = Query("soil_moisture"),
+    hours: Annotated[int, Query(ge=1, le=MAX_LOOKBACK_HOURS)] = 24,
+    metric: Annotated[str, Query()] = "soil_moisture",
 ) -> ChartPayload:
     """Return the time-series chart payload aggregated across every sensor in a cluster.
 
@@ -108,7 +110,7 @@ def cluster_chart_data(
 def cluster_overlay(
     cluster_id: int,
     repo: RepoDep,
-    hours: int = Query(72, ge=1, le=MAX_LOOKBACK_HOURS),
+    hours: Annotated[int, Query(ge=1, le=MAX_LOOKBACK_HOURS)] = 72,
 ) -> MultiMetricOverlayResponse:
     """Return a multi-metric overlay payload with soil moisture, humidity, and light normalised to 0-100.
 
@@ -134,7 +136,7 @@ def cluster_overlay(
 def cluster_heatmap(
     cluster_id: int,
     repo: RepoDep,
-    days: int = Query(30, ge=1, le=365),
+    days: Annotated[int, Query(ge=1, le=365)] = 30,
 ) -> HeatmapResponse:
     """Return irrigation-frequency heatmap cells for a 7×24 weekday-by-hour grid.
 

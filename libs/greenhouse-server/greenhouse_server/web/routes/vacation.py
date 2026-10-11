@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import time
 from datetime import UTC, datetime, tzinfo
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Annotated
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, Form, HTTPException, Request
@@ -80,10 +80,10 @@ def _next_window(windows: list[VacationWindow]) -> VacationWindow | None:
 def create_vacation(
     request: Request,
     repo: RepoDep,
-    starts_at: str = Form(...),
-    ends_at: str = Form(...),
-    contact_email: str = Form(""),
-    notes: str = Form(""),
+    starts_at: Annotated[str, Form()],
+    ends_at: Annotated[str, Form()],
+    contact_email: Annotated[str, Form()] = "",
+    notes: Annotated[str, Form()] = "",
 ) -> Response:
     """Create a vacation window from the form and return to the vacation page."""
     try:
@@ -118,10 +118,10 @@ def update_vacation(
     request: Request,
     window_id: int,
     repo: RepoDep,
-    starts_at: str = Form(...),
-    ends_at: str = Form(...),
-    contact_email: str = Form(""),
-    notes: str = Form(""),
+    starts_at: Annotated[str, Form()],
+    ends_at: Annotated[str, Form()],
+    contact_email: Annotated[str, Form()] = "",
+    notes: Annotated[str, Form()] = "",
 ) -> Response:
     """Save the vacation form and return to the vacation page."""
     require_vacation_window(repo, window_id)

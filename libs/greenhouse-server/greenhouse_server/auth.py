@@ -31,7 +31,7 @@ import hmac
 import logging
 import time
 from dataclasses import dataclass
-from typing import Any
+from typing import Annotated, Any
 from urllib.parse import quote
 
 import jwt
@@ -187,9 +187,9 @@ def is_mcp_token(token: str, settings: Settings) -> bool:
 
 def require_user(
     request: Request,
-    creds: HTTPAuthorizationCredentials | None = Depends(_bearer),
-    settings: Settings = Depends(_get_settings),
-    session: Session = Depends(_session_from_app),
+    creds: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
+    settings: Annotated[Settings, Depends(_get_settings)],
+    session: Annotated[Session, Depends(_session_from_app)],
 ) -> AuthenticatedUser:
     """API dependency — returns the authenticated user or raises 401.
 
@@ -227,8 +227,8 @@ def require_user(
 
 def require_web_user(
     request: Request,
-    settings: Settings = Depends(_get_settings),
-    session: Session = Depends(_session_from_app),
+    settings: Annotated[Settings, Depends(_get_settings)],
+    session: Annotated[Session, Depends(_session_from_app)],
 ) -> AuthenticatedUser:
     """Web-page dependency — same as require_user but redirects to /login.
 

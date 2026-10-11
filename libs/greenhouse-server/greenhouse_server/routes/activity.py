@@ -1,5 +1,7 @@
 """Activity timeline routes."""
 
+from typing import Annotated
+
 from fastapi import APIRouter, Query
 
 from greenhouse_core.schemas import ActivityEventResponse, ActivityListResponse
@@ -11,12 +13,12 @@ router = APIRouter(tags=["activity"])
 @router.get("/activity", response_model=ActivityListResponse)
 def list_activity(
     repo: RepoDep,
-    entity_type: str | None = Query(default=None),
-    entity_id: int | None = Query(default=None),
-    source: str | None = Query(default=None),
-    severity: str | None = Query(default=None),
-    limit: int = Query(default=100, ge=1, le=500),
-    before: int | None = Query(default=None),
+    entity_type: Annotated[str | None, Query()] = None,
+    entity_id: Annotated[int | None, Query()] = None,
+    source: Annotated[str | None, Query()] = None,
+    severity: Annotated[str | None, Query()] = None,
+    limit: Annotated[int, Query(ge=1, le=500)] = 100,
+    before: Annotated[int | None, Query()] = None,
 ) -> ActivityListResponse:
     """List the cross-cutting activity timeline, newest events first.
 

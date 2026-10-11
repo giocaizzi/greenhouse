@@ -1,5 +1,7 @@
 """Sensor CRUD routes."""
 
+from typing import Annotated
+
 from fastapi import APIRouter, HTTPException, Query, status
 
 from greenhouse_core.models import Sensor
@@ -35,9 +37,9 @@ router = APIRouter(tags=["sensors"])
 @router.get("/sensors", response_model=SensorListResponse, summary="List sensors across all clusters")
 def list_all_sensors(
     repo: RepoDep,
-    cluster_id: int | None = Query(default=None, description="Restrict results to a specific cluster"),
-    limit: int = Query(default=100, ge=1, le=500),
-    cursor: int | None = Query(default=None, description="Id cursor — return rows with id > cursor"),
+    cluster_id: Annotated[int | None, Query(description="Restrict results to a specific cluster")] = None,
+    limit: Annotated[int, Query(ge=1, le=500)] = 100,
+    cursor: Annotated[int | None, Query(description="Id cursor — return rows with id > cursor")] = None,
 ) -> SensorListResponse:
     """List every sensor across all clusters with optional cluster filter and cursor pagination.
 

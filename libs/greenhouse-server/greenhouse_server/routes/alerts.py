@@ -1,5 +1,7 @@
 """Alert inbox routes."""
 
+from typing import Annotated
+
 from fastapi import APIRouter, Query
 
 from greenhouse_core.schemas import AlertListResponse, AlertSummary
@@ -14,11 +16,11 @@ _ALERT_LIST_MAX = 500  # page-size ceiling of GET /alerts; also the post-sync li
 @router.get("/alerts", response_model=AlertListResponse)
 def list_alerts(
     repo: RepoDep,
-    status: str | None = Query(default=None),
-    cluster_id: int | None = Query(default=None),
-    plant_id: int | None = Query(default=None),
-    limit: int = Query(default=100, ge=1, le=_ALERT_LIST_MAX),
-    cursor: int | None = Query(default=None, description="Id cursor — return alerts with id < cursor"),
+    status: Annotated[str | None, Query()] = None,
+    cluster_id: Annotated[int | None, Query()] = None,
+    plant_id: Annotated[int | None, Query()] = None,
+    limit: Annotated[int, Query(ge=1, le=_ALERT_LIST_MAX)] = 100,
+    cursor: Annotated[int | None, Query(description="Id cursor — return alerts with id < cursor")] = None,
 ) -> AlertListResponse:
     """List persisted alerts from the inbox with optional filters and cursor pagination.
 

@@ -9,6 +9,8 @@ repository in-process like every other web route.
 
 from __future__ import annotations
 
+from typing import Annotated
+
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
@@ -38,10 +40,10 @@ def create_window(
     request: Request,
     cluster_id: int,
     repo: RepoDep,
-    start_hour: int = Form(...),
-    end_hour: int = Form(...),
-    weekday_mask: list[str] = Form(default=[]),
-    label: str = Form(""),
+    start_hour: Annotated[int, Form()],
+    end_hour: Annotated[int, Form()],
+    weekday_mask: Annotated[list[str], Form(default_factory=list)],
+    label: Annotated[str, Form()] = "",
 ) -> Response:
     """Add an irrigation window from the form and return to the cluster config."""
     require_cluster(repo, cluster_id)
@@ -80,10 +82,10 @@ def update_window(
     cluster_id: int,
     window_id: int,
     repo: RepoDep,
-    start_hour: int = Form(...),
-    end_hour: int = Form(...),
-    weekday_mask: list[str] = Form(default=[]),
-    label: str = Form(""),
+    start_hour: Annotated[int, Form()],
+    end_hour: Annotated[int, Form()],
+    weekday_mask: Annotated[list[str], Form(default_factory=list)],
+    label: Annotated[str, Form()] = "",
 ) -> Response:
     """Save the window form and return to the cluster config."""
     require_window_in_cluster(repo, cluster_id, window_id)
