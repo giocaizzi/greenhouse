@@ -5,7 +5,7 @@ import io
 import time
 from typing import TYPE_CHECKING, Any, NamedTuple, TypedDict
 
-from greenhouse_core.constants import HOURS_PER_DAY, STATUS_EVENTS_LOOKBACK_HOURS, STATUS_READINGS_LOOKBACK_HOURS
+from greenhouse_core.constants import HOURS_PER_DAY, STATUS_EVENTS_LOOKBACK_HOURS
 from greenhouse_core.logic import IrrigationDecision, IrrigationLogic
 from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_core.repository import IrrigationRepository
@@ -164,13 +164,16 @@ class ClusterService:
         }
 
     def _sensor_status_rows(self, sensors: "list[Sensor]") -> list[SensorStatusRow]:
-        """One status row per sensor: its newest reading (24 h) and that reading's age."""
+        """One status row per sensor: its newest persisted reading, however old, and that reading's age.
+
+        No lookback window: a sensor that went quiet days ago must show its real
+        age (that is the signal), not look like one that never reported.
+        """
         now = int(time.time())
 
         sensor_data: list[SensorStatusRow] = []
         for sensor in sensors:
-            readings = self._repo.get_recent_readings(sensor.id, hours=STATUS_READINGS_LOOKBACK_HOURS)
-            last_reading = readings[0] if readings else None
+            last_reading = self._repo.get_latest_reading(sensor.id)
             age = (now - last_reading.timestamp) if last_reading else None
             sensor_data.append(
                 {

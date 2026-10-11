@@ -130,6 +130,27 @@ class TestClusterStatus:
         codes = [r["code"] for r in resp.json()["decision"]["reasons"]]
         assert "seasonal_hold" in codes
 
+    def test_status_reports_the_real_age_of_a_reading_older_than_a_day(self, client, frozen_clock):
+        """B-22: a sensor quiet for 3 days shows its last reading and its real age, not ``None``."""
+        from golden import FROZEN_TS
+        from greenhouse_core.repository import IrrigationRepository
+
+        cid = client.post("/api/v1/clusters", json={"name": "Quiet"}).json()["id"]
+        sid = client.post(
+            f"/api/v1/clusters/{cid}/sensors",
+            json={"tuya_device_id": "fake_tuya_sensor_00000001", "name": "S", "type": "tuya.tr301z"},
+        ).json()["id"]
+        three_days = 3 * 24 * 3600
+        session = client.app.state.session_factory()
+        repo = IrrigationRepository(session)
+        repo.add_sensor_reading(sid, timestamp=FROZEN_TS - three_days, soil_moisture=41.0)
+        repo.commit()
+        session.close()
+
+        [row] = client.get(f"/api/v1/clusters/{cid}/status").json()["sensors"]
+        assert row["reading_age_seconds"] == three_days
+        assert row["last_reading"]["soil_moisture"] == 41.0
+
     def test_status_not_found(self, client):
         resp = client.get("/api/v1/clusters/999/status")
         assert resp.status_code == 404
