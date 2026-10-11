@@ -69,35 +69,56 @@ def test_assignment_endpoint_404_for_missing_sensor(client):
     assert client.get("/api/v1/sensors/9999/assignments").status_code == HTTPStatus.NOT_FOUND
 
 
+def _two_plants_and_a_probe(client, cluster: str, device_id: str, probe: str):
+    """Cluster 1 with plants 1 (Monstera) and 2 (Dypsis) and sensor 1 on plant 1; return the sensor response."""
+    client.post("/api/v1/clusters", json={"name": cluster})
+    client.post("/api/v1/clusters/1/plants", json={"species": "Monstera deliciosa"})
+    client.post("/api/v1/clusters/1/plants", json={"species": "Dypsis lutescens"})
+    return client.post(
+        "/api/v1/clusters/1/sensors",
+        json={"tuya_device_id": device_id, "name": probe, "type": "tuya.tr301z", "plant_id": 1},
+    )
+
+
+def _add_reading_now(app, soil: float) -> None:
+    """Persist one soil reading on sensor 1, stamped with the current second."""
+    session = app.state.session_factory()
+    try:
+        IrrigationRepository(session).add_sensor_reading(sensor_id=1, timestamp=int(time.time()), soil_moisture=soil)
+        session.commit()
+    finally:
+        session.close()
+
+
+def _soil_by_plant(app, plant_id: int) -> list[float]:
+    """Soil values ``readings_for_plant`` attributes to ``plant_id``."""
+    session = app.state.session_factory()
+    try:
+        return [
+            r.soil_moisture for r in IrrigationRepository(session).readings_for_plant(plant_id=plant_id, since_ts=0)
+        ]
+    finally:
+        session.close()
+
+
+def _chart_soil(client, plant_id: int) -> list[float]:
+    """Soil values on ``plant_id``'s 24 h chart."""
+    chart = client.get(f"/api/v1/plants/{plant_id}/chart-data?hours=24&metric=soil_moisture").json()
+    return [p[1] for d in chart["datasets"] for p in d["points"]]
+
+
 def test_readings_for_plant_respects_assignment_window(client, app):
     # Timeline: sensor created on plant A at T0, reading_A at T0+1s, reassign to
     # plant B at "now", reading_B at "now" — readings_for_plant must split by
     # which plant owned the sensor at reading time.
-    client.post("/api/v1/clusters", json={"name": "Window Cluster"})
-    client.post("/api/v1/clusters/1/plants", json={"species": "Monstera deliciosa"})
-    client.post("/api/v1/clusters/1/plants", json={"species": "Dypsis lutescens"})
-    resp = client.post(
-        "/api/v1/clusters/1/sensors",
-        json={
-            "tuya_device_id": "fake_window_sensor",
-            "name": "Window Probe",
-            "type": "tuya.tr301z",
-            "plant_id": 1,
-        },
-    )
+    resp = _two_plants_and_a_probe(client, "Window Cluster", "fake_window_sensor", "Window Probe")
     assert resp.status_code == HTTPStatus.CREATED
 
     before_move, after_move = 42.0, 80.0
     # First reading lands while sensor is still on plant A. Wait a moment so
     # the reading timestamp is strictly inside the open assignment window.
     time.sleep(1.1)
-    session = app.state.session_factory()
-    try:
-        repo = IrrigationRepository(session)
-        repo.add_sensor_reading(sensor_id=1, timestamp=int(time.time()), soil_moisture=before_move)
-        session.commit()
-    finally:
-        session.close()
+    _add_reading_now(app, before_move)
 
     # Reassign sensor to plant B — closes plant A's assignment, opens plant B's.
     time.sleep(1.1)
@@ -106,46 +127,23 @@ def test_readings_for_plant_respects_assignment_window(client, app):
 
     # Reading after reassignment.
     time.sleep(1.1)
-    session = app.state.session_factory()
-    try:
-        repo = IrrigationRepository(session)
-        repo.add_sensor_reading(sensor_id=1, timestamp=int(time.time()), soil_moisture=after_move)
-        session.commit()
+    _add_reading_now(app, after_move)
 
-        plant_a_soil = [r.soil_moisture for r in repo.readings_for_plant(plant_id=1, since_ts=0)]
-        plant_b_soil = [r.soil_moisture for r in repo.readings_for_plant(plant_id=2, since_ts=0)]
-        assert before_move in plant_a_soil
-        assert after_move not in plant_a_soil
-        assert after_move in plant_b_soil
-        assert before_move not in plant_b_soil
-    finally:
-        session.close()
+    plant_a_soil = _soil_by_plant(app, 1)
+    plant_b_soil = _soil_by_plant(app, 2)
+    assert before_move in plant_a_soil
+    assert after_move not in plant_a_soil
+    assert after_move in plant_b_soil
+    assert before_move not in plant_b_soil
 
 
 def test_plant_chart_uses_assignment_window(client, app):
     """The plant chart must not retroactively re-attribute readings on sensor move."""
-    client.post("/api/v1/clusters", json={"name": "Chart Cluster"})
-    client.post("/api/v1/clusters/1/plants", json={"species": "Monstera deliciosa"})
-    client.post("/api/v1/clusters/1/plants", json={"species": "Dypsis lutescens"})
-    client.post(
-        "/api/v1/clusters/1/sensors",
-        json={
-            "tuya_device_id": "fake_chart_sensor",
-            "name": "Chart Probe",
-            "type": "tuya.tr301z",
-            "plant_id": 1,
-        },
-    )
+    _two_plants_and_a_probe(client, "Chart Cluster", "fake_chart_sensor", "Chart Probe")
 
     before_move, after_move = 33.0, 66.0
     time.sleep(1.1)
-    session = app.state.session_factory()
-    try:
-        repo = IrrigationRepository(session)
-        repo.add_sensor_reading(sensor_id=1, timestamp=int(time.time()), soil_moisture=before_move)
-        session.commit()
-    finally:
-        session.close()
+    _add_reading_now(app, before_move)
 
     # Move sensor to plant B.
     time.sleep(1.1)
@@ -153,25 +151,15 @@ def test_plant_chart_uses_assignment_window(client, app):
 
     # New reading after move belongs to plant B.
     time.sleep(1.1)
-    session = app.state.session_factory()
-    try:
-        repo = IrrigationRepository(session)
-        repo.add_sensor_reading(sensor_id=1, timestamp=int(time.time()), soil_moisture=after_move)
-        session.commit()
-    finally:
-        session.close()
+    _add_reading_now(app, after_move)
 
     # Plant A's chart shows 33.0 only.
-    a = client.get("/api/v1/plants/1/chart-data?hours=24&metric=soil_moisture").json()
-    a_points = [p for d in a["datasets"] for p in d["points"]]
-    a_vals = [p[1] for p in a_points]
+    a_vals = _chart_soil(client, 1)
     assert before_move in a_vals
     assert after_move not in a_vals
 
     # Plant B's chart shows 66.0 only.
-    b = client.get("/api/v1/plants/2/chart-data?hours=24&metric=soil_moisture").json()
-    b_points = [p for d in b["datasets"] for p in d["points"]]
-    b_vals = [p[1] for p in b_points]
+    b_vals = _chart_soil(client, 2)
     assert after_move in b_vals
     assert before_move not in b_vals
 

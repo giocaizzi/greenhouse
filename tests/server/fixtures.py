@@ -29,19 +29,24 @@ registry is stored on ``app.state.fake_devices`` so tests can fetch the
 per-irrigator fake and assert on its recorded ``calls``.
 """
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from http import HTTPStatus
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
 from fake_devices import FakeIrrigatorAdapter, FakeSensorAdapter
 from greenhouse_core.devices import DeviceRegistry
+from greenhouse_core.models import Base
+from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.app import create_app
 from greenhouse_server.auth import AuthenticatedUser, require_user, require_web_user
 from greenhouse_server.config import Settings
-from greenhouse_server.deps import get_device_gateway, get_device_registry
+from greenhouse_server.deps import get_device_gateway, get_device_registry, get_repository
 from greenhouse_server.scheduler import scheduler as bg_scheduler
 from greenhouse_server.scheduler import start_scheduler, stop_scheduler
 
@@ -51,6 +56,22 @@ TEST_ADMIN_PASSWORD = "test-admin-pw-123"  # noqa: S105 — fake test credential
 TEST_AUTH_SECRET = "unit-test-jwt-secret-do-not-use-in-prod-please"  # noqa: S105 — fake test credential
 TEST_MCP_TOKEN = "contract-mcp-token-0123456789abcdef"  # noqa: S105 — fake test credential
 TEST_NTFY_TOKEN = "test-ntfy-token"  # noqa: S105 — fake test credential
+
+
+@contextmanager
+def override_repository(app) -> Iterator[IrrigationRepository]:
+    """Serve ``app``'s repository dependency from a fresh in-memory database; undo it on exit."""
+    engine = create_engine("sqlite://", echo=False, connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    session = Session(engine)
+    repo = IrrigationRepository(session)
+    app.dependency_overrides[get_repository] = lambda: repo
+    try:
+        yield repo
+    finally:
+        app.dependency_overrides.pop(get_repository, None)
+        session.close()
+        engine.dispose()
 
 
 def run_core_job(job_id: str) -> None:

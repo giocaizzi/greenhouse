@@ -12,6 +12,53 @@ from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.services.forecast import ForecastService
 
 
+def _seed_drainage_history(app, sensor_id: int, irrigator_id: int) -> None:
+    """An automatic start 3 h ago with a wet-up and a slow drain since, written through the app's DB."""
+    # We need to inject readings + irrigation events directly into the in-memory DB.
+    # The app fixture uses a shared engine stored on app.state — reach for it.
+    session_factory = app.state.session_factory
+    session = session_factory()
+    try:
+        repo = IrrigationRepository(session)
+        now = int(time.time())
+        # Irrigation event 3h ago (within 30d window)
+        irrigation_ts = now - 3 * 3600
+
+        # Pre-irrigation reading: 30min before
+        repo.add_sensor_reading(
+            sensor_id=sensor_id,
+            soil_moisture=30.0,
+            timestamp=irrigation_ts - 1500,
+        )
+        # Post-irrigation readings: 15min and 60min after
+        repo.add_sensor_reading(
+            sensor_id=sensor_id,
+            soil_moisture=55.0,
+            timestamp=irrigation_ts + 900,
+        )
+        repo.add_sensor_reading(
+            sensor_id=sensor_id,
+            soil_moisture=52.0,
+            timestamp=irrigation_ts + 3600,
+        )
+        # Current reading (after irrigation, moisture declining)
+        repo.add_sensor_reading(
+            sensor_id=sensor_id,
+            soil_moisture=50.0,
+            timestamp=now,
+        )
+        repo.add_irrigation_event(
+            irrigator_id=irrigator_id,
+            action="start",
+            triggered_by="auto",
+            duration_minutes=2,
+            timestamp=irrigation_ts,
+        )
+        session.commit()
+    finally:
+        session.close()
+
+
 class TestForecastEndpoint:
     """Integration tests for the next-irrigation forecast route."""
 
@@ -121,54 +168,9 @@ class TestForecastEndpoint:
 
     def test_forecast_with_drainage_slope(self, app, seeded_with_profile):
         """Forecast returns drainage_slope method when a learned profile is available."""
-        # We need to inject readings + irrigation events directly into the in-memory DB.
-        # The app fixture uses a shared engine stored on app.state — reach for it.
-        session_factory = app.state.session_factory
-        session = session_factory()
-        try:
-            repo = IrrigationRepository(session)
-            ctx = seeded_with_profile
-            cluster_id = ctx["cluster_id"]
-            sensor_id = ctx["sensor_id"]
-            irrigator_id = ctx["irrigator_id"]
-
-            now = int(time.time())
-            # Irrigation event 3h ago (within 30d window)
-            irrigation_ts = now - 3 * 3600
-
-            # Pre-irrigation reading: 30min before
-            repo.add_sensor_reading(
-                sensor_id=sensor_id,
-                soil_moisture=30.0,
-                timestamp=irrigation_ts - 1500,
-            )
-            # Post-irrigation readings: 15min and 60min after
-            repo.add_sensor_reading(
-                sensor_id=sensor_id,
-                soil_moisture=55.0,
-                timestamp=irrigation_ts + 900,
-            )
-            repo.add_sensor_reading(
-                sensor_id=sensor_id,
-                soil_moisture=52.0,
-                timestamp=irrigation_ts + 3600,
-            )
-            # Current reading (after irrigation, moisture declining)
-            repo.add_sensor_reading(
-                sensor_id=sensor_id,
-                soil_moisture=50.0,
-                timestamp=now,
-            )
-            repo.add_irrigation_event(
-                irrigator_id=irrigator_id,
-                action="start",
-                triggered_by="auto",
-                duration_minutes=2,
-                timestamp=irrigation_ts,
-            )
-            session.commit()
-        finally:
-            session.close()
+        ctx = seeded_with_profile
+        cluster_id = ctx["cluster_id"]
+        _seed_drainage_history(app, ctx["sensor_id"], ctx["irrigator_id"])
 
         resp = ctx["client"].get(f"/api/v1/clusters/{cluster_id}/forecast")
         assert resp.status_code == HTTPStatus.OK

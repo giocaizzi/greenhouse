@@ -620,21 +620,23 @@ def test_mutation_cases_are_unique_and_cover_every_web_write_route():
             assert any(m.method == method and re.match(pattern, m.url) for m in MUTATIONS), (method, route.path)
 
 
-@pytest.mark.parametrize("case", MUTATIONS, ids=lambda m: m.name)
-def test_web_mutation_golden(case, make_client, monkeypatch):
-    """Status, headers, body, templates, DB effect and fake-device calls of one write on a fresh app."""
-    app, client = make_client(**case.app_kwargs)
-    spy = _web.TemplateSpy()
-    spy.install(monkeypatch)
-    engine = app.state.session_factory.kw["bind"]
-    if case.setup is not None:
-        session = app.state.session_factory()
-        try:
-            case.setup(app, IrrigationRepository(session))
-            session.commit()
-        finally:
-            session.close()
+def _apply_setup(app, setup: Callable | None) -> None:
+    """Run a per-case setup hook against the fresh app's database (committed)."""
+    if setup is None:
+        return
+    session = app.state.session_factory()
+    try:
+        setup(app, IrrigationRepository(session))
+        session.commit()
+    finally:
+        session.close()
 
+
+def _send(case: Mut, client, engine) -> tuple[dict, object, dict, list[str]]:
+    """Send ``case``'s request (inside a paused running scheduler when it asks for one).
+
+    Returns the DB snapshot before, the response, the snapshot after and the job ids after.
+    """
     if case.running_scheduler:
         start_scheduler(paused=True)
         scheduler.add_job(_nothing, "interval", hours=1, id=ADHOC_JOB, name="Ad-hoc contract job")
@@ -646,6 +648,18 @@ def test_web_mutation_golden(case, make_client, monkeypatch):
     finally:
         if case.running_scheduler:
             stop_scheduler()
+    return before, resp, after, jobs_after
+
+
+@pytest.mark.parametrize("case", MUTATIONS, ids=lambda m: m.name)
+def test_web_mutation_golden(case, make_client, monkeypatch):
+    """Status, headers, body, templates, DB effect and fake-device calls of one write on a fresh app."""
+    app, client = make_client(**case.app_kwargs)
+    spy = _web.TemplateSpy()
+    spy.install(monkeypatch)
+    engine = app.state.session_factory.kw["bind"]
+    _apply_setup(app, case.setup)
+    before, resp, after, jobs_after = _send(case, client, engine)
 
     wiring = app.state.fake_devices
     record = {
@@ -667,13 +681,7 @@ def test_web_mutation_golden(case, make_client, monkeypatch):
 
 def _run(make_client, method: str, url: str, form: dict | None = None, setup: Callable | None = None):
     app, client = make_client()
-    if setup is not None:
-        session = app.state.session_factory()
-        try:
-            setup(app, IrrigationRepository(session))
-            session.commit()
-        finally:
-            session.close()
+    _apply_setup(app, setup)
     engine = app.state.session_factory.kw["bind"]
     before = db_snapshot(engine)
     resp = client.request(method, url, data=form, headers=HX, follow_redirects=False)

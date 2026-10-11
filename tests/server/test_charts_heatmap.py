@@ -4,13 +4,8 @@ from datetime import UTC, datetime
 from http import HTTPStatus
 
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session
-from sqlalchemy.pool import StaticPool
 
-from greenhouse_core.models import Base
-from greenhouse_core.repository import IrrigationRepository
-from greenhouse_server.deps import get_repository
+from server.conftest import override_repository
 
 
 def test_heatmap_empty_no_events(seeded_client):
@@ -47,15 +42,8 @@ def test_heatmap_404_unknown_cluster(client):
     assert resp.status_code == HTTPStatus.NOT_FOUND
 
 
-def test_heatmap_with_events(app):
-    """Seed an irrigation event at a known (weekday, hour) and assert the cell appears."""
-    engine = create_engine("sqlite://", echo=False, connect_args={"check_same_thread": False}, poolclass=StaticPool)
-    Base.metadata.create_all(engine)
-
-    session = Session(engine)
-    repo = IrrigationRepository(session)
-
-    # Seed cluster + irrigator
+def _seed_event_at(repo, known: datetime, minutes: int) -> int:
+    """Seed a cluster + irrigator with one manual start at ``known``; return the cluster id."""
     cluster_id = repo.add_cluster("Heatmap Test")
     irrigator_id = repo.add_irrigator(
         cluster_id=cluster_id,
@@ -64,9 +52,6 @@ def test_heatmap_with_events(app):
         irrigator_type="rainpoint.ik10pw",
         config={},
     )
-    # Seed an event at a known UTC datetime: Wednesday (weekday=2) at 14:00 UTC
-    known = datetime(2026, 1, 7, 14, 30, 0, tzinfo=UTC)  # 2026-01-07 is a Wednesday
-    minutes = 10
     repo.add_irrigation_event(
         irrigator_id=irrigator_id,
         action="start",
@@ -74,12 +59,19 @@ def test_heatmap_with_events(app):
         duration_minutes=minutes,
         timestamp=int(known.timestamp()),
     )
-    session.commit()
+    repo.session.commit()
+    return cluster_id
 
-    app.dependency_overrides[get_repository] = lambda: repo
-    client = TestClient(app, raise_server_exceptions=False)
 
-    resp = client.get(f"/api/v1/clusters/{cluster_id}/heatmap?days=365")
+def test_heatmap_with_events(app):
+    """Seed an irrigation event at a known (weekday, hour) and assert the cell appears."""
+    # Seed an event at a known UTC datetime: Wednesday (weekday=2) at 14:00 UTC
+    known = datetime(2026, 1, 7, 14, 30, 0, tzinfo=UTC)  # 2026-01-07 is a Wednesday
+    minutes = 10
+    with override_repository(app) as repo:
+        cluster_id = _seed_event_at(repo, known, minutes)
+        client = TestClient(app, raise_server_exceptions=False)
+        resp = client.get(f"/api/v1/clusters/{cluster_id}/heatmap?days=365")
     assert resp.status_code == HTTPStatus.OK
     cells = resp.json()["cells"]
     assert len(cells) >= 1
@@ -89,7 +81,3 @@ def test_heatmap_with_events(app):
     assert matching, f"Expected cell at weekday=2 hour=14, got: {cells}"
     assert matching[0]["count"] >= 1
     assert matching[0]["total_minutes"] == minutes
-
-    app.dependency_overrides.pop(get_repository, None)
-    session.close()
-    engine.dispose()

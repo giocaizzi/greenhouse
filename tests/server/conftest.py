@@ -14,6 +14,7 @@ from server.fixtures import (
     TEST_NTFY_TOKEN,
     FakeDeviceWiring,
     _make_stubbed_app,
+    override_repository,
     run_core_job,
 )
 
@@ -25,5 +26,6 @@ __all__ = [
     "TEST_NTFY_TOKEN",
     "FakeDeviceWiring",
     "_make_stubbed_app",
+    "override_repository",
     "run_core_job",
 ]

@@ -29,6 +29,7 @@ import hashlib
 import re
 import sqlite3
 from dataclasses import dataclass, field
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -80,6 +81,17 @@ def seed_greenhouse(repo: IrrigationRepository) -> None:
 
     Must run inside the frozen clock: repository defaults (``created_at`` …) read ``time.time()``.
     """
+    ids = _seed_inventory(repo)
+    _seed_readings(repo, ids)
+    _seed_irrigation_history(repo, ids)
+    _seed_decisions(repo, ids)
+    _seed_alerts(repo, ids)
+    _seed_activity_and_health(repo, ids)
+    _seed_schedules_and_settings(repo, ids)
+
+
+def _seed_inventory(repo: IrrigationRepository) -> SimpleNamespace:
+    """Clusters, plants, irrigators and sensors, in id order; return their ids."""
     indoor = repo.add_cluster("Indoor Jungle", location="Living room", environment="indoor")
     outdoor = repo.add_cluster("Balcony Orchard", location="Balcony", environment="outdoor")
     repo.add_cluster("Empty Shelf", environment="indoor")
@@ -142,6 +154,24 @@ def seed_greenhouse(repo: IrrigationRepository) -> None:
     )
     s_ambient = repo.add_sensor(indoor, "fake_tuya_sensor_00000004", "Room Climate", "tuya.tr301z", {})
 
+    return SimpleNamespace(
+        indoor=indoor,
+        outdoor=outdoor,
+        monstera=monstera,
+        alocasia=alocasia,
+        loquat=loquat,
+        irr_indoor=irr_indoor,
+        irr_outdoor=irr_outdoor,
+        s_monstera=s_monstera,
+        s_alocasia=s_alocasia,
+        s_loquat=s_loquat,
+        s_ambient=s_ambient,
+    )
+
+
+def _seed_readings(repo: IrrigationRepository, ids: SimpleNamespace) -> None:
+    """Two-hourly readings for every probe over the last 48 h."""
+    s_monstera, s_alocasia, s_loquat, s_ambient = ids.s_monstera, ids.s_alocasia, ids.s_loquat, ids.s_ambient
     # Readings every 2 h over the last 48 h; newest 30 min ago (fresh: < SENSOR_READING_STALE_SECONDS).
     for k in range(25):
         ts = T - 1800 - k * 2 * H
@@ -178,6 +208,10 @@ def seed_greenhouse(repo: IrrigationRepository) -> None:
                 s_ambient, timestamp=ts, temperature=round(21.0 + k * 0.1, 1), env_humidity=float(50 + k % 5)
             )
 
+
+def _seed_irrigation_history(repo: IrrigationRepository, ids: SimpleNamespace) -> None:
+    """Starts, stops and a schedule update on both irrigators."""
+    irr_indoor, irr_outdoor = ids.irr_indoor, ids.irr_outdoor
     # Irrigation history.
     repo.add_irrigation_event(irr_indoor, "start", "auto", duration_minutes=3, notes="Scheduled", timestamp=T - 30 * H)
     repo.add_irrigation_event(irr_indoor, "off", "auto", timestamp=T - 30 * H + 180)
@@ -188,18 +222,24 @@ def seed_greenhouse(repo: IrrigationRepository) -> None:
     repo.add_irrigation_event(irr_outdoor, "start", "auto", duration_minutes=5, timestamp=T - 20 * H)
     repo.add_irrigation_event(irr_outdoor, "schedule_updated", "auto", notes="interval 24h", timestamp=T - 20 * H + 5)
 
-    # Decision log (newest first in the UI).
-    def _payload(cluster_id: int, evaluated_at: int, action: str, minutes: int, reasons: list[dict]) -> dict:
-        return {
-            "cluster_id": cluster_id,
-            "evaluated_at": evaluated_at,
-            "action": action,
-            "duration_minutes": minutes,
-            "interval_hours": 12,
-            "confidence": 0.8,
-            "reasons": reasons,
-        }
 
+def _decision_payload(cluster_id: int, evaluated_at: int, action: str, minutes: int, reasons: list[dict]) -> dict:
+    """The decision payload a seeded ``DecisionLog`` row carries."""
+    return {
+        "cluster_id": cluster_id,
+        "evaluated_at": evaluated_at,
+        "action": action,
+        "duration_minutes": minutes,
+        "interval_hours": 12,
+        "confidence": 0.8,
+        "reasons": reasons,
+    }
+
+
+def _seed_decisions(repo: IrrigationRepository, ids: SimpleNamespace) -> None:
+    """Four decision-log rows across both clusters."""
+    indoor, outdoor = ids.indoor, ids.outdoor
+    # Decision log (newest first in the UI).
     dry = {"code": "sensor_very_dry", "message": "Alocasia amazonica soil at 8%", "severity": "critical"}
     hot = {"code": "temp_high", "message": "Warm room", "severity": "warning", "duration_delta": 1}
     ok = {"code": "sensor_adequate", "message": "Soil moisture adequate", "severity": "info"}
@@ -219,11 +259,15 @@ def seed_greenhouse(repo: IrrigationRepository) -> None:
             confidence=0.8,
             primary_code=reasons[0]["code"],
             reason_text="; ".join(r["message"] for r in reasons),
-            payload=_payload(cluster_id, at, action, minutes, reasons),
+            payload=_decision_payload(cluster_id, at, action, minutes, reasons),
             triggered_by="auto",
             actuated=actuated,
         )
 
+
+def _seed_alerts(repo: IrrigationRepository, ids: SimpleNamespace) -> None:
+    """One open, one acknowledged and one resolved alert."""
+    indoor, outdoor, alocasia, s_alocasia = ids.indoor, ids.outdoor, ids.alocasia, ids.s_alocasia
     # Alerts: one open, one acknowledged, one resolved.
     repo.upsert_alert(
         f"soil_dry:plant:{alocasia}",
@@ -265,6 +309,16 @@ def seed_greenhouse(repo: IrrigationRepository) -> None:
     )
     resolved.status, resolved.resolved_at = "resolved", T - 25 * H
 
+
+def _seed_activity_and_health(repo: IrrigationRepository, ids: SimpleNamespace) -> None:
+    """Activity timeline rows and the Monstera's daily health snapshots."""
+    indoor, outdoor, alocasia, irr_indoor, monstera = (
+        ids.indoor,
+        ids.outdoor,
+        ids.alocasia,
+        ids.irr_indoor,
+        ids.monstera,
+    )
     # Activity timeline.
     for at, source, entity_type, entity_id, severity, code, message in (
         (T - 30 * H, "scheduler", "cluster", indoor, "info", "irrigation_started", "Auto irrigation 3 min"),
@@ -292,6 +346,10 @@ def seed_greenhouse(repo: IrrigationRepository) -> None:
             timestamp=ts,
         )
 
+
+def _seed_schedules_and_settings(repo: IrrigationRepository, ids: SimpleNamespace) -> None:
+    """Watering window, vacations, configs and preferences."""
+    indoor, outdoor = ids.indoor, ids.outdoor
     # Watering window on the outdoor cluster: 06-09, Mon/Wed/Fri.
     repo.add_irrigation_window(outdoor, start_hour=6, end_hour=9, weekday_mask=1 | 4 | 16, label="Morning")
 

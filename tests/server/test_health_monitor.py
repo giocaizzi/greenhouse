@@ -328,35 +328,9 @@ class TestBackfillFromHistory:
 class TestEngineActuationBlock:
     """run_irrigation_pipeline short-circuits to SKIP when monitor blocks."""
 
-    @pytest.mark.parametrize(
-        ("soil", "season"),
-        [
-            # Very dry → critical-stress early return (seasonal rule never runs).
-            (20.0, None),
-            # Moderately dry in winter → full pipeline incl. SEASONAL_HOLD. Regression:
-            # the seasonal rule rebound ``reasons`` to a tuple, so this gate's
-            # ``add_reason`` raised AttributeError instead of recording the block.
-            (38.0, "winter"),
-        ],
-    )
-    def test_pipeline_skips_with_typed_reason(
-        self,
-        repo,
-        monitor,
-        cluster_irrigator_sensor,
-        monkeypatch,
-        soil,
-        season,
-    ):
-        monitor_, irr_adapter, _, _ = monitor
-        irrigator, sensor = cluster_irrigator_sensor
-
-        # Drive the monitor into a blocked state for this irrigator.
-        irr_adapter.set_health(_state(alarms=frozenset({HealthAlarm.NO_WATER})))
-        monitor_.poll_irrigator(irrigator)
-        assert monitor_.is_actuation_blocked(irrigator)[0] is True
-
-        # Plant + sensor reading so the engine returns a decision at all.
+    @staticmethod
+    def _seed_dry_plant(repo, irrigator, sensor, soil: float) -> None:
+        """A plant with three recent ``soil`` readings on ``sensor``, so the engine returns a decision."""
         plant_id = repo.add_plant(
             cluster_id=irrigator.cluster_id,
             species="Monstera",
@@ -380,9 +354,10 @@ class TestEngineActuationBlock:
                 temperature=22.0,
             )
         repo.session.commit()
-        if season is not None:
-            monkeypatch.setattr("greenhouse_core.logic.engine.season_for", lambda *_a, **_k: season)
 
+    @staticmethod
+    def _service(repo, monitor_, soil: float) -> IrrigationService:
+        """An irrigation service on the monitor's own registry with stubbed sync, weather and plant DB."""
         # Reuse the fake adapter already registered on the monitor's registry
         # so the irrigation service resolves through the same fake.
         registry = monitor_._registry  # noqa: SLF001 — same registry as the monitor
@@ -399,8 +374,7 @@ class TestEngineActuationBlock:
             "ideal_temp": "18-27",
             "ideal_humidity": "60-80",
         }
-
-        service = IrrigationService(
+        return IrrigationService(
             repo=repo,
             registry=registry,
             sync_service=sync_service,
@@ -409,7 +383,31 @@ class TestEngineActuationBlock:
             health_monitor=monitor_,
         )
 
-        result = service.run_irrigation_pipeline(irrigator.cluster_id)
+    @pytest.mark.parametrize(
+        ("soil", "season"),
+        [
+            # Very dry → critical-stress early return (seasonal rule never runs).
+            (20.0, None),
+            # Moderately dry in winter → full pipeline incl. SEASONAL_HOLD. Regression:
+            # the seasonal rule rebound ``reasons`` to a tuple, so this gate's
+            # ``add_reason`` raised AttributeError instead of recording the block.
+            (38.0, "winter"),
+        ],
+    )
+    def test_pipeline_skips_with_typed_reason(self, repo, monitor, cluster_irrigator_sensor, soil, season):
+        monitor_, irr_adapter, _, _ = monitor
+        irrigator, sensor = cluster_irrigator_sensor
+
+        # Drive the monitor into a blocked state for this irrigator.
+        irr_adapter.set_health(_state(alarms=frozenset({HealthAlarm.NO_WATER})))
+        monitor_.poll_irrigator(irrigator)
+        assert monitor_.is_actuation_blocked(irrigator)[0] is True
+
+        self._seed_dry_plant(repo, irrigator, sensor, soil)
+        with pytest.MonkeyPatch.context() as mp:
+            if season is not None:
+                mp.setattr("greenhouse_core.logic.engine.season_for", lambda *_a, **_k: season)
+            result = self._service(repo, monitor_, soil).run_irrigation_pipeline(irrigator.cluster_id)
 
         assert result["action"] == "skip"
         assert any(r["code"] == TriggerCode.DEVICE_NO_WATER.value for r in result["reasons"]), result["reasons"]
@@ -433,35 +431,39 @@ class TestSharedMonitorViews:
     write can be attributed.
     """
 
-    def test_pump_watcher_trip_writes_its_alert_through_its_own_view(self, tmp_path):
-        def _engine(name: str):
-            engine = create_engine(f"sqlite:///{tmp_path / name}", echo=False)
-            Base.metadata.create_all(engine)
-            return engine
+    @staticmethod
+    def _repo_on_file(path):
+        """A migrated SQLite file and a repository on a session of it: ``(engine, repo)``."""
+        engine = create_engine(f"sqlite:///{path}", echo=False)
+        Base.metadata.create_all(engine)
+        return engine, IrrigationRepository(Session(engine))
 
-        watcher_engine, other_engine = _engine("watcher.db"), _engine("other_job.db")
-        watcher_repo = IrrigationRepository(Session(watcher_engine))
-        other_repo = IrrigationRepository(Session(other_engine))
-
-        cluster_id = watcher_repo.add_cluster("S6 Cluster")
-        irrigator_id = watcher_repo.add_irrigator(
+    @staticmethod
+    def _seed_irrigator(repo) -> int:
+        """One cluster with one IK10PW irrigator, committed; return the irrigator id."""
+        cluster_id = repo.add_cluster("S6 Cluster")
+        irrigator_id = repo.add_irrigator(
             cluster_id=cluster_id,
             tuya_device_id="fake_tuya_device_aabbccdd",
             name="S6 Irrigator",
             irrigator_type="rainpoint.ik10pw",
             config={},
         )
-        watcher_repo.commit()
-        irrigator = watcher_repo.get_irrigator(irrigator_id)
+        repo.commit()
+        return irrigator_id
 
+    @staticmethod
+    def _interleaving_watcher(watcher_repo, other_repo, other_views):
+        """A watcher on its own view of a shared monitor; its ``sleep`` lets another job take a view.
+
+        Returns ``(watcher, shared_monitor)``; after the first poll the pump reports a dry run.
+        """
         adapter = FakeIrrigatorAdapter()
         registry = DeviceRegistry()
         registry.register_irrigator("rainpoint.ik10pw", lambda: adapter)
         shared = DeviceHealthMonitor(repo=other_repo, registry=registry)
-
         no_water = _state(alarms=frozenset({HealthAlarm.NO_WATER}))
         now = [0.0]
-        other_views: list[DeviceHealthMonitor] = []
 
         def _sleep(_seconds: float) -> None:
             # Between two polls another scheduler job takes its own view; the pump then reports a dry run.
@@ -478,6 +480,16 @@ class TestSharedMonitorViews:
             sleep=_sleep,
             monitor=shared.for_repo(watcher_repo),
         )
+        return watcher, shared
+
+    def test_pump_watcher_trip_writes_its_alert_through_its_own_view(self, tmp_path):
+        watcher_engine, watcher_repo = self._repo_on_file(tmp_path / "watcher.db")
+        other_engine, other_repo = self._repo_on_file(tmp_path / "other_job.db")
+        irrigator_id = self._seed_irrigator(watcher_repo)
+        irrigator = watcher_repo.get_irrigator(irrigator_id)
+
+        other_views: list[DeviceHealthMonitor] = []
+        watcher, shared = self._interleaving_watcher(watcher_repo, other_repo, other_views)
 
         result = watcher.watch(irrigator, duration_seconds=30, started_at=100)
 

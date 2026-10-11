@@ -29,6 +29,42 @@ def _make_client():
     return TestClient(app, raise_server_exceptions=False), engine
 
 
+def _seed_cluster_with_devices(client) -> None:
+    """Cluster 1 with one TR301Z sensor and one IK10PW irrigator ("Eff Pump"), created through the API."""
+    client.post("/api/v1/clusters", json={"name": "Efficacy Cluster"})
+    client.post(
+        "/api/v1/clusters/1/sensors",
+        json={"tuya_device_id": "fake_eff_sensor", "name": "Eff Sensor", "type": "tuya.tr301z"},
+    )
+    client.post(
+        "/api/v1/clusters/1/irrigator",
+        json={"tuya_device_id": "fake_eff_irrigator", "name": "Eff Pump", "type": "rainpoint.ik10pw"},
+    )
+
+
+def _seed_ten_point_rise(engine, event_ts: int, duration: int) -> None:
+    """Soil at 30 % before an automatic start at ``event_ts``, 40-41 % after it."""
+    with Session(engine) as session:
+        sensor = session.get(Sensor, 1)
+        irrigator_id = 1
+
+        session.add(SensorReading(sensor_id=sensor.id, timestamp=event_ts - 900, soil_moisture=30.0))
+        session.add(SensorReading(sensor_id=sensor.id, timestamp=event_ts - 300, soil_moisture=30.0))
+        session.add(SensorReading(sensor_id=sensor.id, timestamp=event_ts + 1200, soil_moisture=40.0))
+        session.add(SensorReading(sensor_id=sensor.id, timestamp=event_ts + 2400, soil_moisture=41.0))
+
+        session.add(
+            IrrigationEvent(
+                irrigator_id=irrigator_id,
+                timestamp=event_ts,
+                action="start",
+                duration_minutes=duration,
+                triggered_by="auto",
+            )
+        )
+        session.commit()
+
+
 class TestClusterEfficacy:
     def test_not_found(self, client):
         resp = client.get("/api/v1/clusters/999/efficacy")
@@ -46,39 +82,13 @@ class TestClusterEfficacy:
         """10% moisture rise after an irrigation event → positive score."""
         client, engine = _make_client()
         try:
-            client.post("/api/v1/clusters", json={"name": "Efficacy Cluster"})
-            client.post(
-                "/api/v1/clusters/1/sensors",
-                json={"tuya_device_id": "fake_eff_sensor", "name": "Eff Sensor", "type": "tuya.tr301z"},
-            )
-            client.post(
-                "/api/v1/clusters/1/irrigator",
-                json={"tuya_device_id": "fake_eff_irrigator", "name": "Eff Pump", "type": "rainpoint.ik10pw"},
-            )
+            _seed_cluster_with_devices(client)
 
             now = int(time.time())
             event_ts = now - 3600
 
             duration = 3
-            with Session(engine) as session:
-                sensor = session.get(Sensor, 1)
-                irrigator_id = 1
-
-                session.add(SensorReading(sensor_id=sensor.id, timestamp=event_ts - 900, soil_moisture=30.0))
-                session.add(SensorReading(sensor_id=sensor.id, timestamp=event_ts - 300, soil_moisture=30.0))
-                session.add(SensorReading(sensor_id=sensor.id, timestamp=event_ts + 1200, soil_moisture=40.0))
-                session.add(SensorReading(sensor_id=sensor.id, timestamp=event_ts + 2400, soil_moisture=41.0))
-
-                session.add(
-                    IrrigationEvent(
-                        irrigator_id=irrigator_id,
-                        timestamp=event_ts,
-                        action="start",
-                        duration_minutes=duration,
-                        triggered_by="auto",
-                    )
-                )
-                session.commit()
+            _seed_ten_point_rise(engine, event_ts, duration)
 
             resp = client.get("/api/v1/clusters/1/efficacy?days=1")
             assert resp.status_code == HTTPStatus.OK
@@ -104,15 +114,7 @@ class TestClusterEfficacy:
         """
         client, engine = _make_client()
         try:
-            client.post("/api/v1/clusters", json={"name": "Efficacy Cluster"})
-            client.post(
-                "/api/v1/clusters/1/sensors",
-                json={"tuya_device_id": "fake_eff_sensor", "name": "Eff Sensor", "type": "tuya.tr301z"},
-            )
-            client.post(
-                "/api/v1/clusters/1/irrigator",
-                json={"tuya_device_id": "fake_eff_irrigator", "name": "Eff Pump", "type": "rainpoint.ik10pw"},
-            )
+            _seed_cluster_with_devices(client)
 
             now = int(time.time())
             event_ts = now - 3600

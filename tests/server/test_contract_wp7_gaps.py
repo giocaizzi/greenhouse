@@ -237,7 +237,7 @@ TEMP_MATRIX = [
     ("environment", "override", "no_sync", "snapshot", "now", "temp", "source", "sync_calls", "weather_calls"),
     TEMP_MATRIX,
 )
-def test_temperature_source_matrix_and_soil_note(
+def test_temperature_source_matrix_and_soil_note(  # noqa: PLR0913, PLR0917 — one parameter per parametrize argname
     db, pump, monkeypatch, environment, override, no_sync, snapshot, now, temp, source, sync_calls, weather_calls
 ):
     db.update_cluster(pump.cluster_id, environment=environment)
@@ -414,14 +414,14 @@ def test_check_all_failure_log_carries_the_exception(db, monkeypatch, caplog):
 
 
 @pytest.mark.parametrize(("triggered_by", "stopped"), [("auto", True), ("manual", False)])
-def test_watcher_shutdown_activity_failure_is_logged_not_raised(db, pump, monkeypatch, caplog, triggered_by, stopped):
+def test_watcher_shutdown_activity_failure_is_logged_not_raised(db, pump, caplog, triggered_by, stopped):
     def broken(_self, **_kwargs):
         msg = "activity table locked"
         raise RuntimeError(msg)
 
-    monkeypatch.setattr(IrrigationRepository, "add_activity_event", broken)
     irrigator = db.get_irrigator(pump.irrigator_id)
-    with caplog.at_level(logging.ERROR, logger=IRRIGATION_LOGGER):
+    with pytest.MonkeyPatch.context() as mp, caplog.at_level(logging.ERROR, logger=IRRIGATION_LOGGER):
+        mp.setattr(IrrigationRepository, "add_activity_event", broken)
         assert (
             handle_watcher_interrupted(
                 db, pump.registry, irrigator, triggered_by=triggered_by, started_at=FROZEN_TS - 30
@@ -436,9 +436,8 @@ def test_watcher_shutdown_activity_failure_is_logged_not_raised(db, pump, monkey
 # ── schedule_pump_watcher: schedule-time captures vs run-time reads ───────────
 
 
-@pytest.fixture
-def watcher_env(monkeypatch, frozen_clock):
-    del frozen_clock  # requested only for its side effect
+def _watch_gap_db():
+    """A shared in-memory DB with one cluster and one irrigator: ``(engine, factory, irrigator_id)``."""
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(engine)
     factory = sessionmaker(bind=engine)
@@ -450,6 +449,11 @@ def watcher_env(monkeypatch, frozen_clock):
     )
     session.commit()
     session.close()
+    return engine, factory, iid
+
+
+def _watch_gap_app(factory):
+    """A stand-in ``_app`` with watcher settings and a fake-adapter registry: ``(app, settings, registry)``."""
     registry = DeviceRegistry()
     registry.register_irrigator("rainpoint.ik10pw", FakeIrrigatorAdapter)
     settings = SimpleNamespace(
@@ -459,6 +463,14 @@ def watcher_env(monkeypatch, frozen_clock):
         pump_watcher_max_read_failures=4,
     )
     app = SimpleNamespace(state=SimpleNamespace(settings=settings, device_registry=registry, session_factory=factory))
+    return app, settings, registry
+
+
+@pytest.fixture
+def watcher_env(monkeypatch, frozen_clock):
+    del frozen_clock  # requested only for its side effect
+    engine, factory, iid = _watch_gap_db()
+    app, settings, registry = _watch_gap_app(factory)
     fake = FakeScheduler()
 
     def original_wait(_s):
@@ -564,8 +576,8 @@ def test_watcher_job_keeps_the_app_and_hooks_captured_at_schedule_time(watcher_e
 # ── rearm_leak_checks: a failure mid-scan keeps the partial count ─────────────
 
 
-@pytest.mark.usefixtures("frozen_clock")
-def test_rearm_failure_mid_scan_keeps_partial_count_and_logs_both_lines(monkeypatch, caplog):
+def _two_recent_auto_starts():
+    """Two clusters, each with an automatic start 60 s ago: ``(engine, factory, cluster_ids)``."""
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(engine)
     factory = sessionmaker(bind=engine)
@@ -583,6 +595,12 @@ def test_rearm_failure_mid_scan_keeps_partial_count_and_logs_both_lines(monkeypa
         ids.append(cid)
     session.commit()
     session.close()
+    return engine, factory, ids
+
+
+@pytest.mark.usefixtures("frozen_clock")
+def test_rearm_failure_mid_scan_keeps_partial_count_and_logs_both_lines(monkeypatch, caplog):
+    engine, factory, ids = _two_recent_auto_starts()
     fake = FakeScheduler()
     monkeypatch.setattr(sched, "scheduler", fake)
     monkeypatch.setattr(sched, "_app", SimpleNamespace(state=SimpleNamespace(session_factory=factory)))
@@ -762,12 +780,8 @@ def test_jobs_without_an_app(monkeypatch, job, escapes):
         assert getattr(sched, func_name)() is None
 
 
-def test_check_job_binds_the_monitor_to_its_repo_before_the_pipeline_asks_it(p, monkeypatch):
-    ids = p.seed_cluster(soil=35.0)
-    p.app.state.device_registry = p.wiring.registry
-    log: list[str] = []
-    monitor = StubMonitor(log)
-    p.app.state.health_monitor = monitor
+def _spy_service_init(monkeypatch, log: list[str]) -> list[dict]:
+    """Record every ``IrrigationService`` construction (logging "service"); return the kwargs list."""
     built: list = []
     real_init = IrrigationService.__init__
 
@@ -777,6 +791,16 @@ def test_check_job_binds_the_monitor_to_its_repo_before_the_pipeline_asks_it(p, 
         real_init(self, *args, **kwargs)
 
     monkeypatch.setattr(IrrigationService, "__init__", spy_init)
+    return built
+
+
+def test_check_job_binds_the_monitor_to_its_repo_before_the_pipeline_asks_it(p, monkeypatch):
+    ids = p.seed_cluster(soil=35.0)
+    p.app.state.device_registry = p.wiring.registry
+    log: list[str] = []
+    monitor = StubMonitor(log)
+    p.app.state.health_monitor = monitor
+    built = _spy_service_init(monkeypatch, log)
     run_core_job(sched.CHECK_ALL_JOB_ID)
     assert log == ["bind", "service", f"blocked?{ids['irrigator_id']}"]
     (kwargs,) = built

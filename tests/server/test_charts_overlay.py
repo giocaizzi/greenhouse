@@ -4,13 +4,8 @@ import time
 from http import HTTPStatus
 
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session
-from sqlalchemy.pool import StaticPool
 
-from greenhouse_core.models import Base
-from greenhouse_core.repository import IrrigationRepository
-from greenhouse_server.deps import get_repository
+from server.conftest import override_repository
 
 OVERLAY_HOURS = 72
 NORMALISED_MAX = 100.0  # overlay values are normalised to [0, 100]
@@ -51,14 +46,8 @@ def test_overlay_404_unknown_cluster(client):
     assert resp.status_code == HTTPStatus.NOT_FOUND
 
 
-def test_overlay_with_readings(app):
-    """Seed readings and assert all three metric datasets are returned."""
-    engine = create_engine("sqlite://", echo=False, connect_args={"check_same_thread": False}, poolclass=StaticPool)
-    Base.metadata.create_all(engine)
-
-    session = Session(engine)
-    repo = IrrigationRepository(session)
-
+def _seed_hourly_readings(repo) -> int:
+    """Seed a combined sensor with five hourly soil / humidity / light readings; return the cluster id."""
     cluster_id = repo.add_cluster("Overlay Test")
     sensor_id = repo.add_sensor(
         cluster_id=cluster_id,
@@ -76,12 +65,16 @@ def test_overlay_with_readings(app):
             env_humidity=55.0 + i,
             light=3000 + i * 100,
         )
-    session.commit()
+    repo.session.commit()
+    return cluster_id
 
-    app.dependency_overrides[get_repository] = lambda: repo
-    client = TestClient(app, raise_server_exceptions=False)
 
-    resp = client.get(f"/api/v1/clusters/{cluster_id}/overlay?hours={OVERLAY_HOURS}")
+def test_overlay_with_readings(app):
+    """Seed readings and assert all three metric datasets are returned."""
+    with override_repository(app) as repo:
+        cluster_id = _seed_hourly_readings(repo)
+        client = TestClient(app, raise_server_exceptions=False)
+        resp = client.get(f"/api/v1/clusters/{cluster_id}/overlay?hours={OVERLAY_HOURS}")
     assert resp.status_code == HTTPStatus.OK
     body = resp.json()
     metrics = {ds["metric"] for ds in body["datasets"]}
@@ -101,7 +94,3 @@ def test_overlay_with_readings(app):
     # Light dataset must carry original_max
     light_ds = next(ds for ds in body["datasets"] if ds["metric"] == "light")
     assert light_ds["original_max"] == LIGHT_ORIGINAL_MAX_LUX
-
-    app.dependency_overrides.pop(get_repository, None)
-    session.close()
-    engine.dispose()

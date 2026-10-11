@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import json
 from contextlib import contextmanager
+from dataclasses import dataclass
 from datetime import timedelta
 from http import HTTPStatus
 from typing import TYPE_CHECKING
@@ -117,6 +118,51 @@ class RainyWeather:
 # ── Harness ─────────────────────────────────────────────────────────────────
 
 
+def _decode_json_columns(row) -> dict:
+    """A DB row as a dict with its JSON text columns parsed (empty ones left as they are)."""
+    record = dict(row)
+    for col in JSON_COLUMNS:
+        if record.get(col):
+            record[col] = json.loads(record[col])
+    return record
+
+
+SEED_PLANT = {
+    "species": "Monstera deliciosa",
+    "category": "tropical",
+    "water_needs": "medium",
+    "ideal_temp_min": 18.0,
+    "ideal_temp_max": 27.0,
+    "ideal_humidity_min": 60.0,
+    "ideal_humidity_max": 80.0,
+}
+
+
+@dataclass(frozen=True, kw_only=True)
+class ClusterSpec:
+    """What :meth:`Pipeline.seed_cluster` creates besides the cluster itself."""
+
+    environment: str = "indoor"
+    plant: bool = True
+    sensor: bool = True
+    irrigator: bool = True
+    soil: float | None = 35.0
+    temp: float = 24.0
+    reading_ages: tuple[int, ...] = (0, 600, 1200)
+    reservoir_l: float | None = None
+    flow_rate_l_per_min: float | None = None
+    config: dict | None = None
+
+    def irrigator_body(self, cid: int) -> dict:
+        """The irrigator create body; capacity fields only when set."""
+        body = {"tuya_device_id": f"fake_irrigator_{cid:03d}", "name": f"Irrigator {cid}", "type": "rainpoint.ik10pw"}
+        if self.reservoir_l is not None:
+            body["reservoir_l"] = self.reservoir_l
+        if self.flow_rate_l_per_min is not None:
+            body["flow_rate_l_per_min"] = self.flow_rate_l_per_min
+        return body
+
+
 class Pipeline:
     """One freshly built, seeded app plus the recorders a scenario inspects."""
 
@@ -161,39 +207,17 @@ class Pipeline:
         self.app.state.weather_client = stub
         self.app.dependency_overrides[get_weather_client] = lambda: stub
 
-    def seed_cluster(
-        self,
-        name: str = "Golden Cluster",
-        *,
-        environment: str = "indoor",
-        plant: bool = True,
-        sensor: bool = True,
-        irrigator: bool = True,
-        soil: float | None = 35.0,
-        temp: float = 24.0,
-        reading_ages: tuple[int, ...] = (0, 600, 1200),
-        reservoir_l: float | None = None,
-        flow_rate_l_per_min: float | None = None,
-        config: dict | None = None,
-    ) -> dict:
-        """Create cluster (+plant, sensor, irrigator, config) via the API; readings via the repo."""
-        cid = self.api("POST", "/api/v1/clusters", {"name": name, "environment": environment})["id"]
+    def seed_cluster(self, name: str = "Golden Cluster", **options) -> dict:
+        """Create cluster (+plant, sensor, irrigator, config) via the API; readings via the repo.
+
+        ``options`` are the keyword-only fields of :class:`ClusterSpec` (an unknown one is a TypeError).
+        """
+        spec = ClusterSpec(**options)
+        cid = self.api("POST", "/api/v1/clusters", {"name": name, "environment": spec.environment})["id"]
         ids: dict = {"cluster_id": cid}
-        if plant:
-            ids["plant_id"] = self.api(
-                "POST",
-                f"/api/v1/clusters/{cid}/plants",
-                {
-                    "species": "Monstera deliciosa",
-                    "category": "tropical",
-                    "water_needs": "medium",
-                    "ideal_temp_min": 18.0,
-                    "ideal_temp_max": 27.0,
-                    "ideal_humidity_min": 60.0,
-                    "ideal_humidity_max": 80.0,
-                },
-            )["id"]
-        if sensor:
+        if spec.plant:
+            ids["plant_id"] = self.api("POST", f"/api/v1/clusters/{cid}/plants", SEED_PLANT)["id"]
+        if spec.sensor:
             ids["sensor_id"] = self.api(
                 "POST",
                 f"/api/v1/clusters/{cid}/sensors",
@@ -204,27 +228,21 @@ class Pipeline:
                     "plant_id": ids.get("plant_id"),
                 },
             )["id"]
-        if irrigator:
-            body = {
-                "tuya_device_id": f"fake_irrigator_{cid:03d}",
-                "name": f"Irrigator {cid}",
-                "type": "rainpoint.ik10pw",
-            }
-            if reservoir_l is not None:
-                body["reservoir_l"] = reservoir_l
-            if flow_rate_l_per_min is not None:
-                body["flow_rate_l_per_min"] = flow_rate_l_per_min
-            ids["irrigator_id"] = self.api("POST", f"/api/v1/clusters/{cid}/irrigator", body)["id"]
+        if spec.irrigator:
+            ids["irrigator_id"] = self.api("POST", f"/api/v1/clusters/{cid}/irrigator", spec.irrigator_body(cid))["id"]
         self.api(
             "PUT",
             f"/api/v1/clusters/{cid}/config",
-            config or {"mode": "smart", "duration_minutes": 2, "interval_hours": 12, "auto_run": True},
+            spec.config or {"mode": "smart", "duration_minutes": 2, "interval_hours": 12, "auto_run": True},
         )
-        if sensor and soil is not None:
+        if spec.sensor and spec.soil is not None:
             with self.repo() as repo:
-                for age in reading_ages:
+                for age in spec.reading_ages:
                     repo.add_sensor_reading(
-                        sensor_id=ids["sensor_id"], timestamp=FROZEN_TS - age, soil_moisture=soil, temperature=temp
+                        sensor_id=ids["sensor_id"],
+                        timestamp=FROZEN_TS - age,
+                        soil_moisture=spec.soil,
+                        temperature=spec.temp,
                     )
         return ids
 
@@ -285,14 +303,7 @@ class Pipeline:
                 stmt = select(table).order_by(table.c.id)
                 if name in self._marks:
                     stmt = stmt.where(table.c.id > self._marks[name])
-                rows = []
-                for row in session.execute(stmt).mappings():
-                    record = dict(row)
-                    for col in JSON_COLUMNS:
-                        if record.get(col):
-                            record[col] = json.loads(record[col])
-                    rows.append(record)
-                out[name] = rows
+                out[name] = [_decode_json_columns(row) for row in session.execute(stmt).mappings()]
         return out
 
     def observed(self) -> dict:

@@ -76,7 +76,7 @@ def anon(web_env, app_real_auth):
         ("unknown_path__anonymous", "GET", "/no/such/page", HTML, {}),
     ],
 )
-def test_auth_wall_golden(name, method, url, headers, cookies, anon):
+def test_auth_wall_golden(name, method, url, headers, cookies, anon):  # noqa: PLR0913, PLR0917 — parametrize argnames
     """Anonymous browser → 303 ``/login?next=…`` (HTMX: 204 + ``HX-Redirect``); API → JSON 401."""
     for key, value in cookies.items():
         anon.cookies.set(key, value)

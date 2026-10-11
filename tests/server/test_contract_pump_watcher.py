@@ -67,10 +67,8 @@ class RecordingMonitor:
         return self
 
 
-@pytest.fixture
-def env(monkeypatch, frozen_clock):
-    """A shared in-memory DB, one irrigator, a fake adapter/registry and a fake ``_app``."""
-    del frozen_clock  # requested only for its side effect
+def _watch_db():
+    """A shared in-memory DB holding one cluster with one irrigator: ``(engine, factory, cluster_id, irrigator_id)``."""
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(engine)
     factory = sessionmaker(bind=engine)
@@ -82,7 +80,14 @@ def env(monkeypatch, frozen_clock):
     )
     session.commit()
     session.close()
+    return engine, factory, cid, iid
 
+
+def _fake_app(factory):
+    """Wire a fake adapter, registry and monitor into a stand-in ``_app``.
+
+    Returns ``(adapter, registry, settings, monitor, app)``.
+    """
     adapter = FakeIrrigatorAdapter()
     registry = DeviceRegistry()
     registry.register_irrigator("rainpoint.ik10pw", lambda: adapter)
@@ -98,6 +103,15 @@ def env(monkeypatch, frozen_clock):
             settings=settings, device_registry=registry, session_factory=factory, health_monitor=monitor
         )
     )
+    return adapter, registry, settings, monitor, app
+
+
+@pytest.fixture
+def env(monkeypatch, frozen_clock):
+    """A shared in-memory DB, one irrigator, a fake adapter/registry and a fake ``_app``."""
+    del frozen_clock  # requested only for its side effect
+    engine, factory, cid, iid = _watch_db()
+    adapter, registry, settings, monitor, app = _fake_app(factory)
     fake_scheduler = FakeScheduler()
     shutdown = {"requested": True}
     waits: list[float] = []

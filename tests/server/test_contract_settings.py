@@ -348,26 +348,32 @@ def _is_os_environ(node: ast.AST) -> bool:
     )
 
 
+def _env_read(node: ast.AST, module: str) -> dict | None:
+    """The env read ``node`` performs (``os.environ.get`` / ``os.getenv`` / ``os.environ[...]``), or ``None``."""
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+        func = node.func
+        if func.attr == "get" and _is_os_environ(func.value):
+            call = "os.environ.get"
+        elif func.attr == "getenv" and isinstance(func.value, ast.Name) and func.value.id == "os":
+            call = "os.getenv"
+        else:
+            return None
+        default = node.args[1] if len(node.args) > 1 else None
+        return {"module": module, "call": call, "var": _literal(node.args[0]), "default": _literal(default)}
+    if isinstance(node, ast.Subscript) and _is_os_environ(node.value):
+        return {"module": module, "call": "os.environ[]", "var": _literal(node.slice), "default": None}
+    return None
+
+
 def _scan_env_reads() -> list[dict]:
     reads = []
     for path in sorted(LIBS.glob("*/greenhouse_*/**/*.py")):
         package_root = path.relative_to(LIBS).parts[0]
         module = ".".join(path.relative_to(LIBS / package_root).with_suffix("").parts)
         for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
-            if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
-                func = node.func
-                if func.attr == "get" and _is_os_environ(func.value):
-                    call = "os.environ.get"
-                elif func.attr == "getenv" and isinstance(func.value, ast.Name) and func.value.id == "os":
-                    call = "os.getenv"
-                else:
-                    continue
-                default = node.args[1] if len(node.args) > 1 else None
-                reads.append(
-                    {"module": module, "call": call, "var": _literal(node.args[0]), "default": _literal(default)}
-                )
-            elif isinstance(node, ast.Subscript) and _is_os_environ(node.value):
-                reads.append({"module": module, "call": "os.environ[]", "var": _literal(node.slice), "default": None})
+            read = _env_read(node, module)
+            if read is not None:
+                reads.append(read)
     return sorted(reads, key=lambda r: (r["module"], r["var"], r["call"], repr(r["default"])))
 
 
