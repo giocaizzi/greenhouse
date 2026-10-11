@@ -87,6 +87,13 @@ def _short_series_outlier_mask(values: list[float], n_sigma: float) -> list[bool
     sides a short series cannot tell a spike from a real change, and with the
     MAD floor a few-percent genuine drop in a fresh reading would read as a spike.
 
+    Known trade-off: a lone high glitch at the newest end (``10, 10, 99``) is
+    kept, so a dry plant can skip one cycle. Treating a newest-end rise as
+    unconfirmed is not safe either way: a genuine rise (rain on an outdoor
+    cluster, an unlogged manual watering) looks the same, and dropping it would
+    water wet soil. The next reading settles it — a revert makes the 99 an
+    interior spike that this test then drops.
+
     Args:
         values: The in-range values for a single metric, in time order.
         n_sigma: Deviation, in scaled spreads, beyond which a point is a spike.
