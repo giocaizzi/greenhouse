@@ -119,19 +119,32 @@ def _hampel_outlier_mask(values: list[float], radius: int, n_sigma: float) -> li
     n = len(values)
     if n < CLEANING_HAMPEL_MIN_READINGS:
         return _short_series_outlier_mask(values, n_sigma)
-    mask = [False] * n
-    for i in range(n):
-        lo = max(0, i - radius)
-        hi = min(n, i + radius + 1)
-        window = values[lo:hi]
-        median = statistics.median(window)
-        mad = statistics.median([abs(v - median) for v in window])
-        # Floor the scale so a flat window (MAD≈0) doesn't make any change look
-        # infinitely anomalous — that would shred a legitimate step change.
-        scale = max(CLEANING_MAD_SCALE * mad, CLEANING_MAD_FLOOR)
-        if abs(values[i] - median) > n_sigma * scale:
-            mask[i] = True
-    return mask
+    return [_is_hampel_outlier(values, i, radius, n_sigma) for i in range(n)]
+
+
+def _is_hampel_outlier(values: list[float], i: int, radius: int, n_sigma: float) -> bool:
+    """Judge ``values[i]`` against its window, sparing the start of a step at the series' end.
+
+    Near the newest end the window has fewer than ``radius`` samples after the
+    point, so the first sample of a genuine step (40, 40, 40, 60, 60) is
+    outvoted by the old level. A spike reverts one reading later; a step does
+    not. So a point whose right context is truncated is kept when every later
+    sample agrees with it (within the same tolerance) — it is the new level.
+    A lone newest outlier has no follower and is still rejected; mid-series a
+    step has full right context and the window median follows it on its own.
+    """
+    n = len(values)
+    window = values[max(0, i - radius) : min(n, i + radius + 1)]
+    median = statistics.median(window)
+    mad = statistics.median([abs(v - median) for v in window])
+    # Floor the scale so a flat window (MAD≈0) doesn't make any change look
+    # infinitely anomalous — that would shred a legitimate step change.
+    tolerance = n_sigma * max(CLEANING_MAD_SCALE * mad, CLEANING_MAD_FLOOR)
+    if abs(values[i] - median) <= tolerance:
+        return False
+    followers = values[i + 1 :]
+    confirmed = bool(followers) and all(abs(v - values[i]) <= tolerance for v in followers)
+    return not (i + radius >= n and confirmed)
 
 
 def clean_readings(readings: Iterable[SensorReading | CleanedReading]) -> list[CleanedReading]:

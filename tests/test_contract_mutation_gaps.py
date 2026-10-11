@@ -250,14 +250,19 @@ def test_hampel_spike_test_is_strictly_greater_than_threshold(spike, kept):
     assert cleaned[:3] + cleaned[4:] == [50.0] * 6
 
 
-def test_hampel_window_is_centered_with_full_left_context_current_behavior():
-    """cleaning-09: the window spans ``i-3 .. i+3`` (clamped).
+def test_hampel_keeps_a_step_change_confirmed_by_the_following_samples():
+    """cleaning-09: the window spans ``i-3 .. i+3`` (clamped); a step at the newest end is kept whole.
 
-    Pins current behavior on a step change: in ``40,40,40,60,60`` the FIRST 60
-    is judged against the window ``40,40,40,60,60`` (median 40, MAD 0) and
-    dropped, while the last 60 (window ``40,40,60,60``) is kept.
+    In ``40,40,40,60,60`` the first 60's window ``40,40,40,60,60`` (median 40, MAD 0)
+    used to drop it although the next sample confirms the new level. A point with a
+    truncated right window is now kept when every later sample agrees with it.
+    Spike rejection is unchanged: a lone newest spike, a mid-series one- or
+    two-sample spike (full right context) and a 3.5 % blip are still dropped.
     """
-    assert _clean_soil([40.0, 40.0, 40.0, 60.0, 60.0]) == [40.0, 40.0, 40.0, None, 60.0]
+    assert _clean_soil([40.0, 40.0, 40.0, 60.0, 60.0]) == [40.0, 40.0, 40.0, 60.0, 60.0]
+    assert _clean_soil([55.0] * 8 + [10.0]) == [55.0] * 8 + [None]
+    assert _clean_soil([40.0, 40.0, 40.0, 60.0, 60.0, 40.0, 40.0]) == [40.0, 40.0, 40.0, None, None, 40.0, 40.0]
+    assert _clean_soil([55.0] * 4 + [10.0] + [55.0] * 4) == [55.0] * 4 + [None] + [55.0] * 4
 
 
 # ── logic/timing.py ─────────────────────────────────────────────────────────
