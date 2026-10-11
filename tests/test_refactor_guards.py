@@ -227,3 +227,26 @@ def test_boundary_module_helpers_are_fully_annotated(path: Path) -> None:
         and not _is_fully_annotated(node)
     )
     assert sorted(set(missing) - UNANNOTATED_ALLOWED) == [], "boundary helpers must be fully annotated (§10.13)"
+
+
+# ── Guard: server fixtures survive mixed-directory command lines ─────────────
+
+
+def test_server_fixtures_resolve_when_directories_are_mixed_on_one_command_line() -> None:
+    """``tests/server/X tests/<core> tests/server/Y`` must not lose ``client`` for Y.
+
+    pytest binds a directory conftest's fixtures to the first ``Package`` node it
+    collects; a second ``server`` package (after a core file) could not see them.
+    The server fixtures are therefore a global plugin (``server.fixtures``).
+    """
+    args = ["tests/server/test_well_known.py", "tests/test_utils.py", "tests/server/test_web_health.py"]
+    result = subprocess.run(  # noqa: S603 — fixed argv, the running interpreter
+        [sys.executable, "-m", "pytest", "-q", "-p", "no:randomly", "-p", "no:cacheprovider", "-n", "0", *args],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        timeout=300,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout[-2000:] + result.stderr[-2000:]
+    assert "fixture 'client' not found" not in result.stdout

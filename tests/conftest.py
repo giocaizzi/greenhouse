@@ -26,6 +26,10 @@ from golden import ENV_PREFIXES, FROZEN_INSTANT
 from greenhouse_core.models import Base
 from greenhouse_core.repository import IrrigationRepository
 
+# Server fixtures (``app``, ``client``, …) as a global plugin rather than a ``tests/server``
+# conftest, so mixing directories on one command line cannot hide them (server/fixtures.py).
+pytest_plugins = ("server.fixtures",)
+
 _LOOPBACK_HOSTS = frozenset({"127.0.0.1", "::1", "localhost"})
 
 
