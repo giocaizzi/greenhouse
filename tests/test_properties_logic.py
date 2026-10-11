@@ -554,17 +554,20 @@ _care = st.lists(
 def test_plant_needs_aggregates(care):
     assert analyze_water_needs(care) in ("low", "medium", "high")
     temp_range = get_ideal_temp_range(care)
-    mins = [d["ideal_temp_min_c"] for d in care if d.get("ideal_temp_min_c")]
-    maxs = [d["ideal_temp_max_c"] for d in care if d.get("ideal_temp_max_c")]
+    mins = [d["ideal_temp_min_c"] for d in care if d.get("ideal_temp_min_c") is not None]
+    maxs = [d["ideal_temp_max_c"] for d in care if d.get("ideal_temp_max_c") is not None]
     assert temp_range == ((min(mins), max(maxs)) if mins and maxs else None)
     hum = get_ideal_humidity_range(care)
-    assert hum is None or hum[0] == min(d["ideal_humidity_min"] for d in care if d.get("ideal_humidity_min"))
+    assert hum is None or hum[0] == min(
+        d["ideal_humidity_min"] for d in care if d.get("ideal_humidity_min") is not None
+    )
 
 
-def test_plant_needs_zero_is_treated_as_missing_current_behavior():
-    """Pins current behavior: truthiness filter drops a 0 °C / 0 % bound."""
-    assert get_ideal_temp_range([{"ideal_temp_min_c": 0, "ideal_temp_max_c": 20}]) is None
-    assert get_ideal_humidity_range([{"ideal_humidity_min": 0, "ideal_humidity_max": 50}]) is None
+def test_plant_needs_zero_is_a_real_bound():
+    """B-18: a 0 °C / 0 % bound counts (``is not None``); only a missing or None bound is absent."""
+    assert get_ideal_temp_range([{"ideal_temp_min_c": 0, "ideal_temp_max_c": 20}]) == (0, 20)
+    assert get_ideal_humidity_range([{"ideal_humidity_min": 0, "ideal_humidity_max": 50}]) == (0, 50)
+    assert get_ideal_temp_range([{"ideal_temp_min_c": None, "ideal_temp_max_c": 20}]) is None
 
 
 def test_analyze_water_needs_unknown_level_counts_as_medium():

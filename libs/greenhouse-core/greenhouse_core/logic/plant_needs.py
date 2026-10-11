@@ -15,22 +15,27 @@ from greenhouse_core.constants import (
 )
 
 
-def get_ideal_temp_range(plant_care_data: list[dict[str, Any]]) -> tuple[float, float] | None:
-    """Get ideal temperature range for cluster from plant database."""
-    mins: list[Any] = [d.get("ideal_temp_min_c") for d in plant_care_data if d.get("ideal_temp_min_c")]
-    maxs: list[Any] = [d.get("ideal_temp_max_c") for d in plant_care_data if d.get("ideal_temp_max_c")]
+def _widest_range(plant_care_data: list[dict[str, Any]], min_key: str, max_key: str) -> tuple[float, float] | None:
+    """(lowest minimum, highest maximum) across the plants, or None when either side has no value.
+
+    ``is not None``, not truthiness: 0 °C or 0 % is a real bound (a frost-hardy
+    plant's minimum), not a missing one.
+    """
+    mins: list[Any] = [d[min_key] for d in plant_care_data if d.get(min_key) is not None]
+    maxs: list[Any] = [d[max_key] for d in plant_care_data if d.get(max_key) is not None]
     if not mins or not maxs:
         return None
     return (min(mins), max(maxs))
+
+
+def get_ideal_temp_range(plant_care_data: list[dict[str, Any]]) -> tuple[float, float] | None:
+    """Get ideal temperature range for cluster from plant database."""
+    return _widest_range(plant_care_data, "ideal_temp_min_c", "ideal_temp_max_c")
 
 
 def get_ideal_humidity_range(plant_care_data: list[dict[str, Any]]) -> tuple[float, float] | None:
     """Get ideal humidity range for cluster from plant database."""
-    mins: list[Any] = [d.get("ideal_humidity_min") for d in plant_care_data if d.get("ideal_humidity_min")]
-    maxs: list[Any] = [d.get("ideal_humidity_max") for d in plant_care_data if d.get("ideal_humidity_max")]
-    if not mins or not maxs:
-        return None
-    return (min(mins), max(maxs))
+    return _widest_range(plant_care_data, "ideal_humidity_min", "ideal_humidity_max")
 
 
 def parse_moisture_target(target: str) -> tuple[float, float]:

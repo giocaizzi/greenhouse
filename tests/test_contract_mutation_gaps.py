@@ -194,16 +194,14 @@ def test_temperature_trend_falling_needs_delta_strictly_below_minus_threshold(te
     assert decision["trends"]["temperature_trend"] == label
 
 
-def test_zero_celsius_readings_are_ignored_by_the_temperature_trend_current_behavior():
-    """trends-04: Pins current (buggy) behavior: ``if r.temperature`` drops 0.0 °C readings.
+def test_zero_celsius_readings_count_in_the_temperature_trend():
+    """trends-04 (B-18): a 0.0 °C reading is a value, not "missing".
 
-    With the first half all at 0.0 °C there is no "first half" mean, so no
-    temperature trend at all (``None``) although the second half is 10 °C
-    warmer — see REFACTOR_NOTES.md (decision engine, plant_needs/trends zero
-    truthiness).
+    With the first half at 0.0 °C and the second half 10 °C warmer the trend is
+    "rising" (it was ``None``: a truthiness filter dropped every 0.0 reading).
     """
     decision = _decide("temp-trend-zero", sensors=(_hourly("temp", (0.0, 0.0, 10.0, 10.0), soil=50.0),))
-    assert decision["trends"]["temperature_trend"] is None
+    assert decision["trends"]["temperature_trend"] == "rising"
 
 
 @pytest.mark.parametrize(("starts", "high"), [(21, False), (22, True)])

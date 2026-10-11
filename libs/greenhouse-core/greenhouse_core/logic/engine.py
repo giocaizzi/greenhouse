@@ -1056,7 +1056,7 @@ def _apply_trend_adjustment(decision: IrrigationDecision) -> None:
         )
 
     avg_temp = snapshot.avg_temperature if snapshot else None
-    if trends.temperature_trend == "rising" and avg_temp and avg_temp > TREND_TEMP_RISING_HOT_C:
+    if trends.temperature_trend == "rising" and avg_temp is not None and avg_temp > TREND_TEMP_RISING_HOT_C:
         decision.interval_hours = max(MIN_INTERVAL_HOURS, decision.interval_hours - TREND_TEMP_RISING_INTERVAL_STEP)
         decision.add_reason(
             code=TriggerCode.TREND_TEMP_RISING,
