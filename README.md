@@ -32,7 +32,7 @@ uv run greenhouse check --all   # check all clusters
 4. **Learns** — builds per-plant absorption/drainage profiles; raises advisory alerts (blocked drip, rapid drainage, chronic underwatering, unresolvable conflict). Learning never blocks decisions.
 5. **Persists** sensor readings, irrigation events, decision logs, alerts, activity events, and sensor-to-plant assignment history in a local SQLite archive. Tuya Cloud is the live source; SQLite is the permanent record.
 
-The `irrigation_windows` table holds optional per-cluster allowed watering hours (with a weekday bitmask): with windows configured the engine skips outside them (stress overrides still fire); with none, every hour is allowed. Night protection comes from quiet hours, which a fresh install seeds at 00:00–05:00 local. The `sensor_assignments` table records every time a probe is moved between plants, so historical readings remain attributed to the plant they were actually measuring — not whichever plant the sensor currently points at.
+The `irrigation_windows` table holds optional per-cluster allowed watering hours (with a weekday bitmask): with windows configured the engine skips outside them (emergency runs included); with none, every hour is allowed. Night protection comes from quiet hours, which a fresh install seeds at 00:00–05:00 local. The `sensor_assignments` table records every time a probe is moved between plants, so historical readings remain attributed to the plant they were actually measuring — not whichever plant the sensor currently points at.
 
 ## Interfaces — four ways in, one source of truth
 
@@ -124,7 +124,7 @@ uv run greenhouse tui                                   # local server
 greenhouse --server http://greenhouse.lan:8000 tui      # any reachable server
 ```
 
-A full-screen dashboard in the terminal that covers the whole system: animated pixel-art plants that wilt, sparkle and get rained on as moisture changes; live charts, overlay and heatmap; decision trails, forecast, insights, learning report and efficacy; alerts, activity, data quality and system health; and every action and edit — irrigate / water-now / stop / check / sync, clusters, plants, sensors, irrigators, windows, config, vacation and preferences — mostly behind forms and confirmation dialogs (sensor / plant-DB sync, health snapshot, alert acknowledge / resolve and scheduler resume run on the key press). Press `d` `a` `l` `s` `o` to switch screens, `/` to search, `enter` to open a cluster, `?` for keys, `q` to quit.
+A full-screen dashboard in the terminal that covers the whole system: animated pixel-art plants that wilt, sparkle and get rained on as moisture changes; live charts, overlay and heatmap; decision trails, forecast, insights, learning report and efficacy; alerts, activity, data quality and system health; and every action and edit — irrigate / water-now / stop / check / sync, clusters, plants, sensors, irrigators, windows, config, vacation and preferences — mostly behind forms and confirmation dialogs (sensor sync, health snapshot and alert acknowledge / resolve run on the key press). Press `d` `a` `l` `s` `o` to switch screens, `/` to search, `enter` to open a cluster, `?` for keys, `q` to quit.
 
 To use it from another machine, install just the client (it has no server dependencies and talks HTTP only):
 
@@ -170,6 +170,9 @@ See [AGENTS.md](AGENTS.md) for full developer guide, package structure, and test
   - API and MCP responses mask `local_key` as `••••••••` (sending the mask back keeps the stored key).
   - Open `sensor_fault` alerts left by the old water-warning mapping are resolved at startup. Old open `pump_dry_run` alerts must be resolved by hand.
   - `IRRIGATION_CHECK_INTERVAL_HOURS` is no longer read: use `IRRIGATION_CHECK_CRON_HOURS=*/N`.
+  - The engine judges each sensor's newest reading against its own plant's moisture band, and ignores a sensor whose newest reading is more than 4 h old. Critical water stress follows the plants' targets (a cactus is no longer dosed as an emergency at 28 %), and emergency runs (device water warning, critical stress, the no-sensor fallback) now obey irrigation windows and vacation budgets.
+  - Time edges are exclusive: a start exactly 6 h ago no longer blocks, a leak hold ends exactly 24 h after its alert was last seen, and a vacation is over at its end time.
+  - The CLI prints a clean `Error:` line (exit 1) for timeouts and malformed responses, and a bare command group (`greenhouse cluster`) prints its help and exits 0.
 
 ## Releases
 
