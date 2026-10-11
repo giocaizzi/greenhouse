@@ -166,13 +166,13 @@ def update_irrigator(
         The updated irrigator (its `local_key` masked).
 
     Raises:
-        HTTPException: 404 if the cluster has no irrigator, 422 if `type` is
-            not a registered irrigator model key.
+        HTTPException: 404 if the cluster has no irrigator, 422 if a changed
+            `type` is not a registered irrigator model key.
     """
     irrigator = require_cluster_irrigator(repo, cluster_id)
     if request.type is not None:
         try:
-            require_known_device_type(registry, "irrigator", request.type)
+            require_known_device_type(registry, "irrigator", request.type, stored=irrigator.type)
         except UnknownDeviceTypeError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from None
     fields = request.model_dump(exclude_unset=True)

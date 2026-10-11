@@ -29,10 +29,10 @@ def _type_options(registry: DeviceRegistry | None, current: str | None = None) -
     return device_type_options(inventory.known_device_types(registry, "sensor"), current)
 
 
-def _require_known_type(registry: DeviceRegistry | None, sensor_type: str) -> None:
-    """422 error page (the API's status and wording) for a type no adapter handles."""
+def _require_known_type(registry: DeviceRegistry | None, sensor_type: str, stored: str) -> None:
+    """422 error page (the API's status and wording) for a changed type no adapter handles."""
     try:
-        inventory.require_known_device_type(registry, "sensor", sensor_type)
+        inventory.require_known_device_type(registry, "sensor", sensor_type, stored=stored)
     except inventory.UnknownDeviceTypeError as exc:
         raise HTTPException(422, str(exc)) from None
 
@@ -124,9 +124,9 @@ def update_sensor(
     plant_id: str = Form(""),
 ) -> Response:
     """Save the sensor form and return to the cluster's sensors section."""
-    require_sensor_in_cluster(repo, cluster_id, sensor_id)
+    sensor = require_sensor_in_cluster(repo, cluster_id, sensor_id)
     pid = _parse_optional_plant_id(plant_id)
-    _require_known_type(registry, type)
+    _require_known_type(registry, type, sensor.type)
     try:
         inventory.ensure_plant_in_cluster(repo, cluster_id, pid)
     except PlantNotInClusterError as exc:

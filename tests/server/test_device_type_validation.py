@@ -92,3 +92,29 @@ def test_edit_form_selects_the_stored_type_and_flags_an_unknown_one(client):
     assert '<option value="rainpoint.ik10pw">Rainpoint IK10PW</option>' in page
     page = client.get(f"/clusters/{cid}/sensors/{sid}/edit").text
     assert '<option value="soil_moisture" selected>soil_moisture (unknown model)</option>' in page
+
+
+def test_a_legacy_row_stays_editable_while_its_type_is_unchanged(client):
+    """Only a new or changed type must be registered: renaming a legacy row is fine (API and web)."""
+    cid = _cluster(client)
+    session = client.app.state.session_factory()
+    repo = IrrigationRepository(session)
+    repo.add_irrigator(cluster_id=cid, tuya_device_id="d1", name="P", irrigator_type="tuya_cloud", config={})
+    sid = repo.add_sensor(cluster_id=cid, tuya_device_id="s1", name="S", sensor_type="soil_moisture", config={})
+    repo.commit()
+    session.close()
+
+    resp = client.put(f"/api/v1/clusters/{cid}/irrigator", json={"name": "Renamed", "type": "tuya_cloud"})
+    assert (resp.status_code, resp.json()["name"]) == (200, "Renamed")
+    assert client.put(f"/api/v1/clusters/{cid}/irrigator", json={"type": "tuya_local"}).status_code == 422
+    resp = client.put(f"/api/v1/clusters/{cid}/sensors/{sid}", json={"name": "S2", "type": "soil_moisture"})
+    assert (resp.status_code, resp.json()["name"]) == (200, "S2")
+    assert client.put(f"/api/v1/clusters/{cid}/sensors/{sid}", json={"type": "light"}).status_code == 422
+    web = client.post(
+        f"/clusters/{cid}/irrigators/edit", data={"name": "W", "type": "tuya_cloud"}, follow_redirects=False
+    )
+    assert web.status_code == 303
+    web = client.post(f"/clusters/{cid}/sensors/{sid}/edit", data={"name": "W", "type": "soil_moisture"})
+    assert web.status_code in (200, 303)
+    web = client.post(f"/clusters/{cid}/sensors/{sid}/edit", data={"name": "W", "type": "light"})
+    assert web.status_code == 422

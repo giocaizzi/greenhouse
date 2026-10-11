@@ -64,12 +64,20 @@ def known_device_types(registry: DeviceRegistry | None, kind: DeviceKind) -> tup
     return registry.registered_irrigator_keys() if kind == "irrigator" else registry.registered_sensor_keys()
 
 
-def require_known_device_type(registry: DeviceRegistry | None, kind: DeviceKind, value: str) -> None:
+def require_known_device_type(
+    registry: DeviceRegistry | None, kind: DeviceKind, value: str, *, stored: str | None = None
+) -> None:
     """Refuse a device ``type`` no adapter handles, so a typo never becomes a device that cannot be driven.
 
+    ``stored`` is the row's current type on an update: keeping it unchanged is always
+    allowed, so a legacy row's other fields stay editable; only a new or changed type
+    must be a registered model key.
+
     Raises:
-        UnknownDeviceTypeError: ``value`` is not one of :func:`known_device_types`.
+        UnknownDeviceTypeError: ``value`` is new / changed and not one of :func:`known_device_types`.
     """
+    if stored is not None and value == stored:
+        return
     known = known_device_types(registry, kind)
     if value not in known:
         raise UnknownDeviceTypeError(kind, value, known)

@@ -160,7 +160,7 @@ def update_irrigator(
     """Save the irrigator form (blank connection fields keep their stored values)."""
     irrigator = require_cluster_irrigator(repo, cluster_id)
     try:
-        inventory.require_known_device_type(registry, "irrigator", type)
+        inventory.require_known_device_type(registry, "irrigator", type, stored=irrigator.type)
     except inventory.UnknownDeviceTypeError as exc:
         raise HTTPException(422, str(exc)) from None
     # Merge into the stored config so a blank field PRESERVES the current value

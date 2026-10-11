@@ -159,12 +159,12 @@ def update_sensor(
     Raises:
         HTTPException: 404 if the sensor does not exist or belongs to a
             different cluster, or if ``plant_id`` is not a plant of that cluster;
-            422 if `type` is not a registered sensor model key.
+            422 if a changed `type` is not a registered sensor model key.
     """
     sensor = require_sensor_in_cluster(repo, cluster_id, sensor_id)
     try:
         if request.type is not None:
-            require_known_device_type(registry, "sensor", request.type)
+            require_known_device_type(registry, "sensor", request.type, stored=sensor.type)
         ensure_plant_in_cluster(repo, cluster_id, request.plant_id)
     except UnknownDeviceTypeError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from None
