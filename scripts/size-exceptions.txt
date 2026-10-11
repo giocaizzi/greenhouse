@@ -9,7 +9,6 @@ libs/greenhouse-cli/greenhouse_cli/tui/screens/forms.py::FormScreen.compose — 
 libs/greenhouse-core/greenhouse_core/devices/irrigators/tuya_generic.py::TuyaIrrigatorAdapter.status — flat DPS-decoding ladder in a device adapter; the nesting is the per-DP decode and splitting it adds indirection on a device path
 
 # ── Files > 400 lines ─────────────────────────────────────────────────────────
-libs/greenhouse-core/greenhouse_core/repository.py — one persistence facade of many shallow query/write methods; a mixin split adds indirection without removing duplication
 libs/greenhouse-core/greenhouse_core/schemas.py — cohesive Pydantic DTO module; splitting it risks the OpenAPI contract (class __module__, docstrings, field order) for navigation only
 libs/greenhouse-core/greenhouse_core/logic/engine.py — one cohesive rule pipeline; tests read the engine's constant imports from vars(engine) and patch engine.time / engine.season_for, so moving rules out breaks pinned tests
 libs/greenhouse-cli/greenhouse_cli/tui/screens/cluster.py — one Screen: a compose tree plus its action_* and on_* handlers, pinned per class by the TUI surface golden; per-tab controller objects would add indirection
