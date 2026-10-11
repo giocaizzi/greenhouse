@@ -159,11 +159,11 @@ def scheduler_delete_job(request: Request, job_id: str) -> Response:
     return HTMLResponse("")
 
 
-def _set_check_all_paused_web(repo: IrrigationRepository, paused: bool) -> RedirectResponse:
+def _set_check_all_paused_web(repo: IrrigationRepository, *, paused: bool) -> RedirectResponse:
     # Same code path as POST /api/v1/scheduler/{pause,resume}: works (and
     # persists the preference) whether or not the scheduler is running.
     try:
-        set_check_all_paused(repo, paused)
+        set_check_all_paused(repo, paused=paused)
     except JobNotRegisteredError as exc:
         raise HTTPException(404, str(exc)) from exc
     return RedirectResponse(url="/scheduler", status_code=303)
@@ -172,13 +172,13 @@ def _set_check_all_paused_web(repo: IrrigationRepository, paused: bool) -> Redir
 @router.post("/scheduler/pause")
 def scheduler_pause(request: Request, repo: RepoDep) -> Response:
     """Pause the ``check_all`` job (persisted) and return to the scheduler page."""
-    return _set_check_all_paused_web(repo, True)
+    return _set_check_all_paused_web(repo, paused=True)
 
 
 @router.post("/scheduler/resume")
 def scheduler_resume(request: Request, repo: RepoDep) -> Response:
     """Resume the ``check_all`` job (persisted) and return to the scheduler page."""
-    return _set_check_all_paused_web(repo, False)
+    return _set_check_all_paused_web(repo, paused=False)
 
 
 @router.post("/bulk/stop-all")

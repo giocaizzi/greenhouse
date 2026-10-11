@@ -359,7 +359,7 @@ def _restore_persisted_scheduler_pause(app: FastAPI) -> None:
         with read_session(app) as session:
             paused = IrrigationRepository(session).get_preferences().scheduler_paused
             session.commit()
-        apply_persisted_pause(paused)
+        apply_persisted_pause(persisted_paused=paused)
     except Exception:  # startup must not fail on a preferences read
         logger.warning("Could not restore the persisted scheduler pause", exc_info=True)
 

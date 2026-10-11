@@ -281,8 +281,9 @@ class IrrigationService:
     def _resolve_temperature(
         self,
         cluster_id: int,
-        is_indoor: bool,
         temp_override: float | None,
+        *,
+        is_indoor: bool,
         no_sync: bool,
     ) -> tuple[float, str, ClusterSnapshot | None]:
         """Resolve temperature from override, sensor, or weather. Returns (temp, source, sensor_data)."""
@@ -526,6 +527,7 @@ class IrrigationService:
         self,
         cluster_id: int,
         temp_override: float | None = None,
+        *,
         dry_run: bool = False,
         no_sync: bool = False,
         force: bool = False,
@@ -549,7 +551,9 @@ class IrrigationService:
 
         # The engine's outdoor rule: only "outdoor" prefers the weather temperature.
         is_indoor = environment_for(cluster.environment) == "indoor"
-        temp, source, sensor_data = self._resolve_temperature(cluster_id, is_indoor, temp_override, no_sync)
+        temp, source, sensor_data = self._resolve_temperature(
+            cluster_id, temp_override, is_indoor=is_indoor, no_sync=no_sync
+        )
 
         decision = self._decide(cluster_id, temp, force=force)
         if not decision:

@@ -258,7 +258,7 @@ def reschedule_for_timezone(tz_name: str | None, settings: Settings) -> None:
             scheduler.remove_job(job_id)
     _add_tz_bound_cron_jobs(settings)
     if paused:
-        apply_persisted_pause(True)
+        apply_persisted_pause(persisted_paused=True)
 
 
 def apply_timezone_preference(request: "Request", tz_name: str | None) -> None:
@@ -502,7 +502,7 @@ def delete_job(job_id: str) -> None:
         raise JobNotRegisteredError(msg) from None
 
 
-def set_check_all_paused(repo: IrrigationRepository, paused: bool) -> bool:
+def set_check_all_paused(repo: IrrigationRepository, *, paused: bool) -> bool:
     """Pause or resume `check_all` and persist the flag; shared by API and web UI.
 
     Works whether or not the scheduler is running: on a stopped scheduler the
@@ -537,7 +537,7 @@ def set_check_all_paused(repo: IrrigationRepository, paused: bool) -> bool:
     return is_check_all_paused()
 
 
-def apply_persisted_pause(persisted_paused: bool) -> None:
+def apply_persisted_pause(*, persisted_paused: bool) -> None:
     """Re-apply the persisted pause flag to the live scheduler.
 
     Called once on startup after `init_scheduler` has registered jobs so
