@@ -634,6 +634,13 @@
     "on_mount"
    ]
   },
+  "greenhouse_cli.tui.table:DataTable": {
+   "bases": [
+    "textual.widgets._data_table.DataTable"
+   ],
+   "can_focus": true,
+   "handlers": []
+  },
   "greenhouse_cli.tui.widgets:Banner": {
    "bases": [
     "textual.widgets._static.Static"

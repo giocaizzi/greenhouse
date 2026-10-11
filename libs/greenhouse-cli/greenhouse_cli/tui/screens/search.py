@@ -11,7 +11,9 @@ from textual.app import ComposeResult
 from textual.binding import BindingType
 from textual.containers import Vertical
 from textual.screen import ModalScreen
-from textual.widgets import DataTable, Input, Static
+from textual.widgets import Input, Static
+
+from greenhouse_cli.tui.table import DataTable
 
 if TYPE_CHECKING:
     from greenhouse_cli.tui.app import GreenhouseApp
