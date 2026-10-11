@@ -121,6 +121,13 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("GREENHOUSE_MCP_TOKEN"),
     )
 
+    @field_validator("mcp_token")
+    @classmethod
+    def _blank_mcp_token_is_unset(cls, value: str | None) -> str | None:
+        # A blank or whitespace-only token is a missing token: /mcp must fail closed (503),
+        # not answer 401 to a credential nobody can send (bearer values are stripped).
+        return value if value and value.strip() else None
+
     # ── ntfy.sh push notifications ──────────────────────────────────────────
     # Outbound push for manual/emergency/auto irrigations and new alerts.
     # Feature is enabled only when BOTH server_url and topic are set (mirrors

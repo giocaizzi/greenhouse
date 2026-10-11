@@ -258,6 +258,11 @@ def test_ntfy_server_url_accepts_http_https_and_unset(clean_env, url):
     assert _settings(ntfy_server_url=url).ntfy_server_url == url
 
 
+@pytest.mark.parametrize("raw", ["", " ", "\t\n"])
+def test_blank_mcp_token_is_unset(clean_env, raw):
+    assert _settings(mcp_token=raw).mcp_token is None
+
+
 def test_ntfy_client_refuses_a_non_http_scheme():
     from greenhouse_server.services.notify import NtfyClient
 

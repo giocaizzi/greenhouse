@@ -579,6 +579,7 @@ def test_bootstrap_is_skipped_when_auth_disabled(engine):
         (MCP_TOKEN, {"Authorization": f"Bearer {MCP_TOKEN}"}, None, None),
         ("", {"Authorization": "Bearer "}, 503, "MCP auth not configured"),  # empty token = unset
         ("", {"Authorization": "Bearer x"}, 503, "MCP auth not configured"),
+        ("   ", {"Authorization": "Bearer x"}, 503, "MCP auth not configured"),  # whitespace-only = unset
     ],
 )
 def test_mcp_gate(clean_env, mcp_token, headers, status, detail):
