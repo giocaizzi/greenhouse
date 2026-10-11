@@ -18,7 +18,7 @@ from greenhouse_core.constants import (
 from greenhouse_core.devices import DeviceRegistry, UnknownDeviceModel
 from greenhouse_core.logic import IrrigationLogic
 from greenhouse_core.logic.cleaning import clean_readings_desc
-from greenhouse_core.logic.decision import Action, Reason, Severity, TriggerCode
+from greenhouse_core.logic.decision import Action, Reason
 from greenhouse_core.logic.plant_needs import moisture_target_range
 from greenhouse_core.models import (
     ENTITY_CLUSTER,
@@ -34,9 +34,9 @@ from greenhouse_core.models import (
 )
 from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_core.repository import IrrigationRepository
+from greenhouse_server.services.actuation_gates import first_gate_block
 from greenhouse_server.services.alerts import raise_alert, sync_cluster_alerts
-from greenhouse_server.services.caps import daily_cap_violation
-from greenhouse_server.services.health_monitor import HEALTH_ALARM_TO_TRIGGER, DeviceHealthMonitor
+from greenhouse_server.services.health_monitor import DeviceHealthMonitor
 from greenhouse_server.services.irrigation_jobs import (  # noqa: F401 — re-exported: callers and tests use these paths
     _add_leak_check_job,
     _leak_check_done,
@@ -649,97 +649,20 @@ class IrrigationService:
             notifier=self._notifier,
         )
 
-    def _health_gate_skips(
-        self, cluster_id: int, irrigator: "Irrigator", decision: "IrrigationDecision", result: PipelineResult
-    ) -> bool:
-        """Device-health gate: turn the run into a skip when an alarm blocks this irrigator.
-
-        If a NO_WATER / RAIN / OFFLINE alarm is open for the irrigator, the run becomes a skip led
-        by the alarm's typed Reason (see :meth:`_skip_run`) and ``result`` also lists the blocking
-        alarms. Returns True when the run was blocked; False (nothing touched) when it may actuate
-        or no monitor is wired.
-        """
-        if self._health_monitor is None:
-            return False
-        blocked, blocking_alarms = self._health_monitor.is_actuation_blocked(irrigator)
-        if not blocked:
-            return False
-        primary = blocking_alarms[0]
-        self._skip_run(
-            cluster_id,
-            decision,
-            result,
-            Reason(
-                code=HEALTH_ALARM_TO_TRIGGER[primary],
-                message=f"Actuation blocked by device health: {primary.value} on '{irrigator.name}'",
-                severity=Severity.CRITICAL,
-            ),
-            payload={"blocking_alarms": [a.value for a in blocking_alarms], "irrigator_id": irrigator.id},
-        )
-        result["blocking_alarms"] = [a.value for a in blocking_alarms]
-        return True
-
     def _actuation_gates_skip(
         self, cluster_id: int, irrigator: "Irrigator", decision: "IrrigationDecision", result: PipelineResult
     ) -> bool:
-        """The server's gates between an IRRIGATE decision and ``adapter.start``; the first that fires wins.
+        """Run the server's actuation gates (:mod:`.actuation_gates`); the first block becomes a logged skip.
 
-        Order: device health (a real-world block outranks a policy), the per-day caps, then the
-        global dry run, the last word before the pump. Returns True when the run became a skip.
+        Order: device health, the per-day caps, then the global dry run. On a device-health
+        block ``result`` also lists the blocking alarms. Returns True when the run became a skip.
         """
-        gates = (self._health_gate_skips, self._caps_gate_skips, self._dry_run_gate_skips)
-        return any(gate(cluster_id, irrigator, decision, result) for gate in gates)
-
-    def _caps_gate_skips(
-        self, cluster_id: int, irrigator: "Irrigator", decision: "IrrigationDecision", result: PipelineResult
-    ) -> bool:
-        """Per-day caps gate: skip a run that would break ``max_events_per_day`` / ``daily_cap_minutes``.
-
-        The same effective caps (cluster row over global row) the manual start refuses on (B-4:
-        the automatic pipeline never checked them). ``force`` does not bypass them. Returns True
-        when the run was held.
-        """
-        duration = decision.duration_minutes
-        violation = daily_cap_violation(self._repo, cluster_id, irrigator.id, duration)
-        if violation is None:
+        block = first_gate_block(self._repo, self._health_monitor, cluster_id, irrigator, decision)
+        if block is None:
             return False
-        self._skip_run(
-            cluster_id,
-            decision,
-            result,
-            Reason(
-                code=TriggerCode.DAILY_CAP_HIT,
-                message=f"daily cap hit: {violation} ({duration}min run on '{irrigator.name}' not started)",
-                severity=Severity.WARNING,
-            ),
-            payload={"daily_cap": violation, "irrigator_id": irrigator.id, "duration_minutes": duration},
-        )
-        return True
-
-    def _dry_run_gate_skips(
-        self, cluster_id: int, irrigator: "Irrigator", decision: "IrrigationDecision", result: PipelineResult
-    ) -> bool:
-        """Global dry-run gate: with ``dry_run_global`` on, log the run as a skip instead of starting the pump.
-
-        The last gate before ``adapter.start`` (S1): automatic checks, ``/irrigate`` and its
-        ``force`` all reach it, so no pipeline run actuates while the preference is on. The run is
-        still evaluated and logged — the skip is led by ``TriggerCode.DRY_RUN_GLOBAL`` and says
-        what would have run. Returns True when the run was held.
-        """
-        if not self._repo.get_preferences().dry_run_global:
-            return False
-        duration = decision.duration_minutes
-        self._skip_run(
-            cluster_id,
-            decision,
-            result,
-            Reason(
-                code=TriggerCode.DRY_RUN_GLOBAL,
-                message=f"global dry run: would have irrigated {duration}min on '{irrigator.name}' (pump not started)",
-                severity=Severity.WARNING,
-            ),
-            payload={"dry_run_global": True, "irrigator_id": irrigator.id, "duration_minutes": duration},
-        )
+        self._skip_run(cluster_id, decision, result, block.lead, payload=block.payload)
+        if block.blocking_alarms is not None:
+            result["blocking_alarms"] = block.blocking_alarms
         return True
 
     def _skip_run(
