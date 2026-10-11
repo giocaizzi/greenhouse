@@ -26,7 +26,7 @@ from greenhouse_core.models import (
 )
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.services.caps import daily_cap_violation
-from greenhouse_server.services.irrigation import schedule_pump_watcher
+from greenhouse_server.services.irrigation import schedule_pump_watcher, stop_unrecorded_start
 from greenhouse_server.services.irrigation_jobs import (
     _schedule_leak_check,
     leak_check_after_seconds,
@@ -41,6 +41,7 @@ if TYPE_CHECKING:
 
 DRY_RUN_REFUSED_DETAIL = "global dry run is on: irrigator not started"
 MINUTES_TOO_SMALL_DETAIL = "minutes must be at least 1"
+START_NOT_RECORDED_DETAIL = "the start could not be recorded, so the irrigator was stopped again"
 
 
 class ManualActionError(Exception):
@@ -49,7 +50,7 @@ class ManualActionError(Exception):
     Attributes:
         status_code: HTTP status the JSON API responds with (422 bad
             minutes, 409 caps or global dry run, 503 no registry / unknown
-            model, 502 device failure).
+            model, 502 device failure, 500 start not recorded).
         detail: Human-readable reason.
     """
 
@@ -118,6 +119,23 @@ def _refuse_if_dry_run(repo: IrrigationRepository, irrigator: Irrigator, minutes
     raise ManualActionError(409, DRY_RUN_REFUSED_DETAIL)
 
 
+def _record_start(
+    repo: IrrigationRepository, irrigator: Irrigator, started_at: int, minutes: int | None, *, via: str
+) -> int | None:
+    """Write and commit the ``start`` event and the leak-check plan; returns the check's delay (or None)."""
+    repo.add_irrigation_event(
+        irrigator_id=irrigator.id,
+        action=EVENT_ACTION_START,
+        duration_minutes=minutes,
+        triggered_by=TRIGGERED_BY_MANUAL,
+        notes=f"Manual start via {via} ({minutes} min)" if minutes else f"Manual start via {via}",
+        timestamp=started_at,
+    )
+    leak_check_after = _record_leak_check_plan(repo, irrigator, started_at, minutes)
+    repo.commit()
+    return leak_check_after
+
+
 def _record_leak_check_plan(
     repo: IrrigationRepository, irrigator: Irrigator, started_at: int, minutes: int | None
 ) -> int | None:
@@ -178,7 +196,8 @@ def manual_start(
 
     Raises:
         ManualActionError: 422 ``minutes`` below 1, 409 caps or global dry run, 503 no registry /
-            unknown model, 502 device failure.
+            unknown model, 502 device failure, 500 the start could not be recorded (the pump was
+            stopped again).
     """
     if minutes is not None and minutes < 1:  # the API schema refuses these first; the web form lands here
         raise ManualActionError(422, MINUTES_TOO_SMALL_DETAIL)
@@ -188,21 +207,18 @@ def manual_start(
     adapter = _adapter(registry, irrigator)
     _refuse_if_dry_run(repo, irrigator, minutes, via=via)
 
+    irrigator_id = irrigator.id  # read before any write can fail
     success, output = adapter.start(irrigator, minutes)
     if not success:
         raise ManualActionError(502, output)
 
     started_at = int(time.time())
-    repo.add_irrigation_event(
-        irrigator_id=irrigator.id,
-        action=EVENT_ACTION_START,
-        duration_minutes=minutes,
-        triggered_by=TRIGGERED_BY_MANUAL,
-        notes=f"Manual start via {via} ({minutes} min)" if minutes else f"Manual start via {via}",
-        timestamp=started_at,
-    )
-    leak_check_after = _record_leak_check_plan(repo, irrigator, started_at, minutes)
-    repo.commit()
+    try:
+        leak_check_after = _record_start(repo, irrigator, started_at, minutes, via=via)
+    except Exception as exc:
+        # The pump runs but nothing records it: stop it rather than leave an unrecorded run.
+        stop_unrecorded_start(repo, adapter, irrigator, irrigator_id)
+        raise ManualActionError(500, START_NOT_RECORDED_DETAIL) from exc
     if leak_check_after is not None:
         _schedule_leak_check(irrigator.cluster_id, started_at, after_seconds=leak_check_after)
     if minutes:

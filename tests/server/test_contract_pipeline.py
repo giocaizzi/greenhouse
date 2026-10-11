@@ -1208,3 +1208,65 @@ def test_vacation_budget_projection(pipeline):
             "daily_budget_l": 1.42,  # round(5.7 / 4, 2): binary float rounds down
         },
     ]
+
+
+# ── Compensating stop: a start that cannot be recorded is stopped again ────
+
+
+@contextmanager
+def _failing_commit(app):
+    """Make the next ``Session.commit`` raise, as a locked database would."""
+    from sqlalchemy.orm import Session
+
+    real = Session.commit
+    state = {"armed": True}
+
+    def commit(self):
+        if state["armed"]:
+            state["armed"] = False
+            raise RuntimeError("database is locked")
+        return real(self)
+
+    Session.commit = commit  # type: ignore[method-assign]
+    try:
+        yield
+    finally:
+        Session.commit = real  # type: ignore[method-assign]
+
+
+def test_unrecorded_automatic_start_is_stopped_and_surfaced(pipeline, caplog):
+    """If the start event cannot be committed, the pump is stopped at once, logged at ERROR, and the error surfaces."""
+    ids = pipeline.seed_cluster(soil=35.0)
+    pipeline.mark()
+    with _failing_commit(pipeline.app), caplog.at_level("ERROR", logger="greenhouse_server.services.irrigation"):
+        resp = pipeline.client.post("/api/v1/clusters/1/irrigate", json={})
+    assert resp.status_code == 500  # the write error surfaces
+    assert pipeline.wiring.irrigator.calls == [("start", ids["irrigator_id"], 2), ("stop", ids["irrigator_id"])]
+    assert any("compensating stop: stop_ok=True" in m for m in caplog.messages)
+    assert pipeline.db_rows()["irrigation_events"] == []
+    assert pipeline.notifier.sent == []
+
+
+def test_unrecorded_start_in_check_all_is_stopped_and_reported(pipeline):
+    """In ``check_all`` the cluster is reported as failed (``check_failed``) and its pump stopped again."""
+    ids = pipeline.seed_cluster(soil=35.0)
+    pipeline.mark()
+    with _failing_commit(pipeline.app):
+        resp = pipeline.call("POST", "/api/v1/check")
+    assert [r["action"] for r in resp["response"]["results"]] == ["error"]
+    assert pipeline.wiring.irrigator.calls == [("start", ids["irrigator_id"], 2), ("stop", ids["irrigator_id"])]
+    assert [a["code"] for a in pipeline.db_rows()["alerts"]] == ["check_failed"]
+
+
+def test_unrecorded_manual_start_is_stopped_and_refused(pipeline, caplog):
+    ids = pipeline.seed_cluster(soil=35.0)
+    pipeline.mark()
+    with _failing_commit(pipeline.app), caplog.at_level("ERROR", logger="greenhouse_server.services.irrigation"):
+        resp = pipeline.call("POST", f"/api/v1/irrigators/{ids['irrigator_id']}/start", {"minutes": 3})
+    assert (resp["status"], resp["response"]) == (
+        500,
+        {"detail": "the start could not be recorded, so the irrigator was stopped again"},
+    )
+    assert pipeline.wiring.irrigator.calls == [("start", ids["irrigator_id"], 3), ("stop", ids["irrigator_id"])]
+    assert any("compensating stop: stop_ok=True" in m for m in caplog.messages)
+    assert pipeline.db_rows()["irrigation_events"] == []

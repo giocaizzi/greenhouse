@@ -60,7 +60,7 @@ if TYPE_CHECKING:
     from greenhouse_core.devices import AbstractIrrigatorAdapter
     from greenhouse_core.logic.cleaning import CleanedReading
     from greenhouse_core.logic.decision import IrrigationDecision
-    from greenhouse_core.models import Irrigator
+    from greenhouse_core.models import EventAction, Irrigator
     from greenhouse_server.config import Settings
 
 logger = logging.getLogger(__name__)
@@ -183,6 +183,33 @@ def handle_watcher_interrupted(
     except Exception:
         logger.exception("Failed to record watcher-shutdown activity for irrigator %d", irrigator.id)
     return stop_ok
+
+
+def stop_unrecorded_start(
+    repo: IrrigationRepository, adapter: "AbstractIrrigatorAdapter", irrigator: "Irrigator", irrigator_id: int
+) -> None:
+    """Compensating stop: the pump started but its ``start`` could not be recorded.
+
+    Called from inside the ``except`` of the failed write or commit, so the ERROR record
+    carries that error. Rolls the session back first (it may need it, and the reload of the
+    irrigator for the stop needs a usable session), then stops the pump so no run continues
+    that the cooldown, caps and history cannot see. Never raises: the caller re-raises the
+    write error to surface it.
+    """
+    try:
+        repo.rollback()
+    except Exception:
+        logger.warning("Rollback before the compensating stop failed", exc_info=True)
+    try:
+        stop_ok, stop_msg = adapter.stop(irrigator)
+    except Exception as exc:  # noqa: BLE001 — reported in the ERROR line below
+        stop_ok, stop_msg = False, f"adapter.stop raised: {exc}"
+    logger.exception(
+        "Could not record the start of irrigator %d; compensating stop: stop_ok=%s (%s)",
+        irrigator_id,
+        stop_ok,
+        stop_msg,
+    )
 
 
 def _watcher_tuning(settings: "Settings | None") -> tuple[float, float, int]:
@@ -567,29 +594,37 @@ class IrrigationService:
     def _actuate(self, act: _Actuation, result: PipelineResult) -> PipelineResult:
         """Start the pump, durably record the run, then apply the started / failed follow-ups to ``result``."""
         duration = act.decision.duration_minutes
+        irrigator_id = act.irrigator.id  # read before any write can fail
         success, output = act.adapter.start(act.irrigator, duration)
         # One timestamp for the event row, the leak check and the watcher, so
         # the restart re-arm (which reads the row) can match the leak check.
         started_at = int(_time.time())
+        if not success:
+            self._add_event(act, EVENT_ACTION_ATTEMPTED, started_at)
+            self._on_start_failed(act, output)
+            return _with_error(result, f"irrigator failed: {output}")
+        try:
+            self._add_event(act, EVENT_ACTION_START, started_at)
+            self._record_started(act, started_at)
+        except Exception:
+            # The pump runs but nothing records it: stop it rather than leave an unrecorded run.
+            stop_unrecorded_start(self._repo, act.adapter, act.irrigator, irrigator_id)
+            raise
+        self._arm_follow_ups(act, started_at)
+        result["action"] = "irrigated"
+        self._notify_auto_irrigation(act)
+        return result
+
+    def _add_event(self, act: _Actuation, action: "EventAction", started_at: int) -> None:
+        """The ``start`` / ``attempted`` irrigation event of this run."""
         self._repo.add_irrigation_event(
             irrigator_id=act.irrigator.id,
-            action=EVENT_ACTION_START if success else EVENT_ACTION_ATTEMPTED,
-            duration_minutes=duration,
+            action=action,
+            duration_minutes=act.decision.duration_minutes,
             triggered_by=act.triggered_by,
             timestamp=started_at,
             notes=_event_notes(act, _soil_note(act.sensor_data)),
         )
-
-        if success:
-            self._record_started(act, started_at)
-            self._arm_follow_ups(act, started_at)
-            result["action"] = "irrigated"
-            self._notify_auto_irrigation(act)
-        else:
-            self._on_start_failed(act, output)
-            _with_error(result, f"irrigator failed: {output}")
-
-        return result
 
     def _record_started(self, act: _Actuation, started_at: int) -> None:
         """Log the run, flag the decision as actuated, and commit before anything else can fail.

@@ -208,7 +208,8 @@ def start_irrigator(
             limit would be exceeded or the global dry run (`dry_run_global`
             preference) is on — the refusal is logged and no pump starts, 503
             if Tuya credentials are missing or the irrigator model has no
-            adapter, 502 if the device fails to start.
+            adapter, 502 if the device fails to start, 500 if the start could
+            not be recorded (the irrigator is stopped again).
     """
     irrigator = require_irrigator(repo, irrigator_id)
     try:
