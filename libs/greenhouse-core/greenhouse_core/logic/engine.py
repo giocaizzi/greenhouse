@@ -504,7 +504,7 @@ class IrrigationLogic:
                 triggered_by=triggered_by,
                 actuated=False,
             )
-        except Exception:  # noqa: BLE001 — the audit write is advisory: it never blocks a decision; logged with exc_info
+        except Exception:  # the audit write is advisory: it never blocks a decision; logged with exc_info
             log.warning("failed to persist decision log", exc_info=True)
 
     def _enforce_leak_hold(self, cluster_id: int, now: int) -> IrrigationDecision | None:
@@ -635,7 +635,7 @@ class IrrigationLogic:
                 stress.learning_alerts = [
                     {"type": a.alert_type, "severity": a.severity, "message": a.message} for a in alerts
                 ]
-        except Exception:  # noqa: BLE001 — learning is advisory (invariant 4); logged with exc_info
+        except Exception:  # learning is advisory (invariant 4); logged with exc_info
             log.warning("learning advisory unavailable", exc_info=True)
 
 

@@ -175,6 +175,6 @@ def _store_live_reading(db: IrrigationRepository, cloud: DeviceGateway, sensor: 
             )
             if result is not None:
                 saved = True
-    except Exception:  # noqa: BLE001 — the live read is best-effort by contract (invariant 8); logged with exc_info
+    except Exception:  # the live read is best-effort by contract (invariant 8); logged with exc_info
         logger.warning("  %s: live read failed", sensor.name, exc_info=True)
     return saved

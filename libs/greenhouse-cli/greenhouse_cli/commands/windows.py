@@ -28,6 +28,7 @@ def windows_list(
 @windows_app.command("add")
 def windows_add(  # noqa: PLR0913 — one parameter per CLI option/argument: Typer has no option groups
     ctx: typer.Context,
+    *,
     cluster: ClusterOpt,
     start_hour: Annotated[int, typer.Option("--start-hour", min=0, max=23, help="Local-time start hour")],
     end_hour: Annotated[int, typer.Option("--end-hour", min=0, max=23, help="Local-time end hour (exclusive)")],
@@ -61,6 +62,7 @@ def windows_add(  # noqa: PLR0913 — one parameter per CLI option/argument: Typ
 def windows_update(  # noqa: PLR0913 — one parameter per CLI option/argument: Typer has no option groups
     ctx: typer.Context,
     window_id: Annotated[int, typer.Argument(help="Window ID")],
+    *,
     cluster: Annotated[int, typer.Option(help="Cluster the window belongs to")],
     start_hour: Annotated[int | None, typer.Option("--start-hour", min=0, max=23)] = None,
     end_hour: Annotated[int | None, typer.Option("--end-hour", min=0, max=23)] = None,

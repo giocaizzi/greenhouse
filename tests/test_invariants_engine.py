@@ -516,7 +516,7 @@ def test_inv6_reasons_stay_a_list_of_reason_through_the_whole_pipeline(env):
     ],
 )
 def test_inv9_seasonal_multiplier_precedence_species_category_constants(  # noqa: PLR0913 — one argument per parametrize column
-    tmp_db, clean_env, species, category, environment, at_month, expected
+    tmp_db, clean_env, *, species, category, environment, at_month, expected
 ):
     """Invariant #9: species > ``_category_defaults`` > constants; outdoor uses ``*_outdoor`` (no indoor fallback)."""
     del clean_env  # side-effect fixture (a hermetic environment)

@@ -182,17 +182,22 @@ def _drift(migrated: dict, created: dict) -> dict:
         "tables": {},
     }
     for name in sorted(set(migrated) & set(created)):
-        per_table = {}
-        for aspect in migrated[name]:
-            if aspect == "columns":
-                cols = _column_drift(migrated[name]["columns"], created[name]["columns"])
-                if cols:
-                    per_table["columns"] = cols
-            elif migrated[name][aspect] != created[name][aspect]:
-                per_table[aspect] = {"migrated": migrated[name][aspect], "create_all": created[name][aspect]}
+        per_table = _table_drift(migrated[name], created[name])
         if per_table:
             drift["tables"][name] = per_table
     return drift
+
+
+def _table_drift(migrated_table: dict, created_table: dict) -> dict:
+    per_table = {}
+    for aspect, migrated_value in migrated_table.items():
+        if aspect == "columns":
+            cols = _column_drift(migrated_value, created_table["columns"])
+            if cols:
+                per_table["columns"] = cols
+        elif migrated_value != created_table[aspect]:
+            per_table[aspect] = {"migrated": migrated_value, "create_all": created_table[aspect]}
+    return per_table
 
 
 def _column_drift(migrated_columns: list, created_columns: list) -> dict:

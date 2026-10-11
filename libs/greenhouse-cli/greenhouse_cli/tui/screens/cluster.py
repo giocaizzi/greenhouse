@@ -36,7 +36,7 @@ _PRELOAD_HOURS = 24  # soil chart window fetched with the overview; reused while
 STATS_DAYS = 7
 
 
-class ClusterScreen(DataScreen):
+class ClusterScreen(DataScreen):  # noqa: PLR0904 — its 18 action_*/on_* handlers are pinned to this class (surface.json: bases + own handlers), plus compose/load/__init__
     """Everything about one cluster, in tabs."""
 
     AUTO_REFRESH = True

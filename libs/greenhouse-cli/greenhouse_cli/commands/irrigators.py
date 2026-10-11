@@ -39,6 +39,7 @@ def _device_config(device_ip: str | None, local_key: str | None) -> dict[str, st
 @irrigator_app.command("add")
 def irrigator_add(  # noqa: PLR0913 — one parameter per CLI option/argument: Typer has no option groups
     ctx: typer.Context,
+    *,
     cluster: ClusterOpt,
     device_id: Annotated[str, typer.Option(help="Tuya device ID")],
     name: Annotated[str, typer.Option(help="Irrigator name")],
@@ -111,6 +112,7 @@ def irrigator_log_manual(
 def irrigator_update(  # noqa: PLR0913 — one parameter per CLI option/argument: Typer has no option groups
     ctx: typer.Context,
     cluster: ClusterArg,
+    *,
     name: Annotated[str | None, typer.Option(help="New irrigator name")] = None,
     type: Annotated[str | None, typer.Option(help="Device model key (rainpoint.ik10pw)")] = None,  # noqa: A002 — the Python name is the click parameter name (tests/golden/cli/params.json)
     device_ip: DeviceIpOpt = None,

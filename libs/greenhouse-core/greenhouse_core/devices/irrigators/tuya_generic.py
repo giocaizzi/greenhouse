@@ -81,7 +81,7 @@ class TuyaIrrigatorAdapter(AbstractIrrigatorAdapter):
         try:
             live = self._gateway.open_local(irrigator, proto).status()
             local = self._local_fields(live["dps"]) if live and "dps" in live else None
-        except Exception:  # noqa: BLE001 — any local failure (LAN, protocol, parse) falls back to the Cloud read
+        except Exception:  # any local failure (LAN, protocol, parse) falls back to the Cloud read
             # Expected when the device is off the LAN: the Cloud read is the documented fallback.
             logger.debug("Local status read failed for %s; using Cloud", irrigator.tuya_device_id, exc_info=True)
             return None
