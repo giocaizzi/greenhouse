@@ -97,6 +97,8 @@ def test_client_calls_run_off_the_event_loop_thread(seeded):
                 await settle(pilot, tui)
             await pilot.press("P")
             await settle(pilot, tui)
+            await pilot.press("y")  # the plant-DB sync asks for confirmation
+            await settle(pilot, tui)
             await pilot.press("escape")
             await pilot.press("slash")
             await pilot.press(*"fern")

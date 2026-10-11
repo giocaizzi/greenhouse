@@ -265,8 +265,8 @@ def test_dialog_kind_per_actuating_key(seeded):
         ("dashboard", "X", None): "ConfirmScreen",
         ("system", "delete", "cursor on a built-in job"): None,
         ("system", "p", "pause (scheduler active)"): "ConfirmScreen",
-        ("system", "p", "resume (scheduler paused)"): None,
+        ("system", "p", "resume (scheduler paused)"): "ConfirmScreen",
         ("system", "S", None): None,
-        ("system", "P", None): None,
+        ("system", "P", None): "ConfirmScreen",
         ("system", "H", None): None,
     }

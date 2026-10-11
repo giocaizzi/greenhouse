@@ -304,8 +304,12 @@
   ]
  },
  {
-  "dialog": null,
-  "dialog_detail": null,
+  "dialog": "ConfirmScreen",
+  "dialog_detail": {
+   "confirm_label": "Sync",
+   "danger": true,
+   "message": "Sync this cluster's plants with the plant DB?\nTheir care data is updated from it."
+  },
   "key": "P",
   "screen": "cluster",
   "tab": "tab-overview",
@@ -1245,8 +1249,12 @@
   ]
  },
  {
-  "dialog": null,
-  "dialog_detail": null,
+  "dialog": "ConfirmScreen",
+  "dialog_detail": {
+   "confirm_label": "Resume",
+   "danger": true,
+   "message": "Resume automatic irrigation? Clusters with auto-run enabled may water at the next check."
+  },
   "key": "p",
   "note": "resume (scheduler paused)",
   "screen": "system",
@@ -1292,8 +1300,12 @@
   ]
  },
  {
-  "dialog": null,
-  "dialog_detail": null,
+  "dialog": "ConfirmScreen",
+  "dialog_detail": {
+   "confirm_label": "Sync",
+   "danger": true,
+   "message": "Sync [b]every[/b] plant with the plant DB?\nTheir care data is updated from it."
+  },
   "key": "P",
   "screen": "system",
   "tab": null,

@@ -641,13 +641,12 @@ class ClusterScreen(DataScreen):
         )
 
     def action_plant_sync(self) -> None:
-        """Refresh this cluster's plant care data from the curated plant DB."""
-        self.run_worker(
-            self.act(
-                lambda c: c.sync_plants(cluster_id=self.cluster_id),
-                lambda r: f"Plant DB sync: {r.get('synced', 0)} updated, {len(r.get('errors', []))} errors",
-            ),
-            group="act",
+        """Refresh this cluster's plant care data from the curated plant DB, after confirmation (it rewrites care data)."""
+        self.confirm_then(
+            "Sync this cluster's plants with the plant DB?\nTheir care data is updated from it.",
+            lambda c: c.sync_plants(cluster_id=self.cluster_id),
+            lambda r: f"Plant DB sync: {r.get('synced', 0)} updated, {len(r.get('errors', []))} errors",
+            "Sync",
         )
 
     def action_edit_cluster(self) -> None:

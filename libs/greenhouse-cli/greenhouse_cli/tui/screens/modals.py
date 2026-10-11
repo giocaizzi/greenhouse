@@ -14,11 +14,12 @@ from greenhouse_cli.tui.sprites import watering_can_sprite
 
 
 class ConfirmScreen(ModalScreen[bool]):
-    """Yes/no confirmation for check / check-all, stop / stop-all, every delete and scheduler pause.
+    """Yes/no confirmation for checks, stops, deletes, scheduler pause / resume and the plant-DB sync.
 
-    Not every actuating key comes here: irrigate and water-now open their own dialogs, and syncs,
-    the health snapshot, scheduler resume, alert ack / resolve / re-scan and logout run on the key press
-    (see ``tests/golden/tui/actuation.json``).
+    Confirmed: check / check-all, stop / stop-all, every delete, scheduler pause and resume, and
+    the plant-DB sync (P). Not every actuating key comes here: irrigate and water-now open their
+    own dialogs, and the sensor sync, the health snapshot, alert ack / resolve / re-scan and logout
+    run on the key press (see ``tests/golden/tui/actuation.json``).
     """
 
     BINDINGS: ClassVar[list[BindingType]] = [

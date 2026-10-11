@@ -1024,15 +1024,17 @@ class TestSearchAndSystem:
                 await _confirm(pilot, tui)
                 assert http.get("/api/v1/preferences").json()["scheduler_paused"] is True
                 assert screen.paused is True
-                await pilot.press("p")  # resume needs no confirmation
-                await _settle(pilot, tui)
+                await pilot.press("p")  # resume asks too: automatic irrigation restarts
+                await pilot.pause()
+                await _confirm(pilot, tui)
                 assert http.get("/api/v1/preferences").json()["scheduler_paused"] is False
 
                 log.clear()
                 await pilot.press("H")
                 await _settle(pilot, tui)
-                await pilot.press("P")
-                await _settle(pilot, tui)
+                await pilot.press("P")  # plant-DB sync asks first; sensor sync (S) runs on the key press
+                await pilot.pause()
+                await _confirm(pilot, tui)
                 await pilot.press("S")
                 await _settle(pilot, tui)
                 assert writes(log) == [
