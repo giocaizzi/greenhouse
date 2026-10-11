@@ -30,13 +30,13 @@ class RecordingGateway:
         self.logs_error = logs_error
         self.calls: list[tuple] = []
 
-    def get_device_logs(self, device_id, since_ms=None, hours=24, max_records=100):
+    def get_device_logs(self, device_id, since_ms=None, _hours=24, _max_records=100):
         self.calls.append(("get_device_logs", device_id, since_ms))
         if self.logs_error is not None:
             raise self.logs_error
         return []
 
-    def group_logs_by_timestamp(self, logs, tolerance_ms=5000):
+    def group_logs_by_timestamp(self, logs, _tolerance_ms=5000):
         self.calls.append(("group_logs_by_timestamp", len(logs)))
         return []
 
@@ -48,6 +48,7 @@ class RecordingGateway:
 @pytest.fixture
 def cluster(tmp_db, frozen_clock):
     """Two sensors in one cluster (names sort Alpha < Beta), plus an unrelated cluster's sensor."""
+    del frozen_clock  # requested only for its side effect
     cid = tmp_db.add_cluster("Fresh Cluster")
     other = tmp_db.add_cluster("Other Cluster")
     alpha = tmp_db.add_sensor(

@@ -88,11 +88,11 @@ class RecordingGateway:
         self.live = live if live is not None else {"soil_moisture": 30.0, "temperature": 23.0}
         self.calls: list[list] = []
 
-    def get_device_logs(self, device_id: str, since_ms: int | None = None, **kwargs) -> list[dict]:
+    def get_device_logs(self, device_id: str, since_ms: int | None = None, **_kwargs) -> list[dict]:
         self.calls.append(["get_device_logs", device_id, since_ms])
         return []
 
-    def group_logs_by_timestamp(self, logs: list[dict], tolerance_ms: int = 5000) -> list[dict]:
+    def group_logs_by_timestamp(self, logs: list[dict], _tolerance_ms: int = 5000) -> list[dict]:
         self.calls.append(["group_logs_by_timestamp", len(logs)])
         return []
 
@@ -305,6 +305,7 @@ class Pipeline:
 
 @pytest.fixture
 def pipeline(clean_env, frozen_clock):
+    del clean_env, frozen_clock  # requested only for their side effects
     p = Pipeline()
     yield p
     p.close()
@@ -832,8 +833,9 @@ def run_scenario(name: str) -> dict:
         p.close()
 
 
+@pytest.mark.usefixtures("clean_env", "frozen_clock")
 @pytest.mark.parametrize("name", list(SCENARIOS))
-def test_pipeline_golden(name, clean_env, frozen_clock):
+def test_pipeline_golden(name):
     """Full matrix: responses, DB writes, adapter/gateway calls, notifications — one golden per scenario."""
     assert_golden_json(f"orchestration/pipeline/{name}.json", run_scenario(name))
 
@@ -859,8 +861,9 @@ _ONE_LOG_CASES = {
 }
 
 
+@pytest.mark.usefixtures("clean_env", "frozen_clock")
 @pytest.mark.parametrize("name", sorted(_ONE_LOG_CASES))
-def test_each_evaluation_writes_exactly_one_decision_log(name, clean_env, frozen_clock):
+def test_each_evaluation_writes_exactly_one_decision_log(name):
     """I6: each early return / final decision persists exactly one row that round-trips."""
     code, action, actuated = _ONE_LOG_CASES[name]
     rows = run_scenario(name)["db_writes"]["decision_logs"]
@@ -877,8 +880,9 @@ def test_each_evaluation_writes_exactly_one_decision_log(name, clean_env, frozen
         assert primary == code
 
 
+@pytest.mark.usefixtures("clean_env", "frozen_clock")
 @pytest.mark.parametrize("name", ["cluster_not_found", "manual_start_stop_log", "check_single_auto_run_off"])
-def test_decision_logs_only_come_from_engine_evaluations(name, clean_env, frozen_clock):
+def test_decision_logs_only_come_from_engine_evaluations(name):
     """404s, manual actuation and ``auto_run`` off never reach the engine's persistence."""
     observed = run_scenario(name)
     evaluated = [c for c in observed["calls"] if c["request"].endswith("/irrigate") and c["status"] == HTTPStatus.OK]
@@ -1210,7 +1214,7 @@ def test_vacation_budget_projection(pipeline):
 
 
 @contextmanager
-def _failing_commit(app):
+def _failing_commit():
     """Make the next ``Session.commit`` raise, as a locked database would."""
 
     real = Session.commit
@@ -1233,7 +1237,7 @@ def test_unrecorded_automatic_start_is_stopped_and_surfaced(pipeline, caplog):
     """If the start event cannot be committed, the pump is stopped at once, logged at ERROR, and the error surfaces."""
     ids = pipeline.seed_cluster(soil=35.0)
     pipeline.mark()
-    with _failing_commit(pipeline.app), caplog.at_level("ERROR", logger="greenhouse_server.services.irrigation"):
+    with _failing_commit(), caplog.at_level("ERROR", logger="greenhouse_server.services.irrigation"):
         resp = pipeline.client.post("/api/v1/clusters/1/irrigate", json={})
     assert resp.status_code == HTTPStatus.INTERNAL_SERVER_ERROR  # the write error surfaces
     assert pipeline.wiring.irrigator.calls == [("start", ids["irrigator_id"], 2), ("stop", ids["irrigator_id"])]
@@ -1246,7 +1250,7 @@ def test_unrecorded_start_in_check_all_is_stopped_and_reported(pipeline):
     """In ``check_all`` the cluster is reported as failed (``check_failed``) and its pump stopped again."""
     ids = pipeline.seed_cluster(soil=35.0)
     pipeline.mark()
-    with _failing_commit(pipeline.app):
+    with _failing_commit():
         resp = pipeline.call("POST", "/api/v1/check")
     assert [r["action"] for r in resp["response"]["results"]] == ["error"]
     assert pipeline.wiring.irrigator.calls == [("start", ids["irrigator_id"], 2), ("stop", ids["irrigator_id"])]
@@ -1256,7 +1260,7 @@ def test_unrecorded_start_in_check_all_is_stopped_and_reported(pipeline):
 def test_unrecorded_manual_start_is_stopped_and_refused(pipeline, caplog):
     ids = pipeline.seed_cluster(soil=35.0)
     pipeline.mark()
-    with _failing_commit(pipeline.app), caplog.at_level("ERROR", logger="greenhouse_server.services.irrigation"):
+    with _failing_commit(), caplog.at_level("ERROR", logger="greenhouse_server.services.irrigation"):
         resp = pipeline.call("POST", f"/api/v1/irrigators/{ids['irrigator_id']}/start", {"minutes": 3})
     assert (resp["status"], resp["response"]) == (
         500,

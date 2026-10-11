@@ -86,7 +86,8 @@ class TestPlantHealthEndpoints:
         assert len(history) == 1
         assert history[0]["soil_in_band_pct"] == pytest.approx(75.0)
 
-    def test_get_health_zero_readings_returns_none_score(self, client, app):
+    @pytest.mark.usefixtures("app")
+    def test_get_health_zero_readings_returns_none_score(self, client):
         """Plant with no sensor readings yields current_score=None and empty history."""
         plant_id, _ = _seed_plant_with_sensor(client)
         resp = client.get(f"/api/v1/plants/{plant_id}/health")
@@ -95,7 +96,8 @@ class TestPlantHealthEndpoints:
         assert data["current_score"] is None
         assert data["history"] == []
 
-    def test_get_health_404_unknown_plant(self, client, app):
+    @pytest.mark.usefixtures("app")
+    def test_get_health_404_unknown_plant(self, client):
         resp = client.get("/api/v1/plants/9999/health")
         assert resp.status_code == HTTPStatus.NOT_FOUND
 
@@ -116,7 +118,8 @@ class TestPlantHealthEndpoints:
         assert hist_resp.status_code == HTTPStatus.OK
         assert len(hist_resp.json()["history"]) == 1
 
-    def test_snapshot_no_data_skips_plant(self, client, app):
+    @pytest.mark.usefixtures("app")
+    def test_snapshot_no_data_skips_plant(self, client):
         """Snapshot skips plants with no readings; rows_written = 0."""
         _seed_plant_with_sensor(client)
         resp = client.post("/api/v1/plants/health/snapshot")

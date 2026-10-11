@@ -125,7 +125,7 @@ def test_plant_chart_soil_band_uses_the_shared_target_parser():
     plant = SimpleNamespace(water_needs="medium")
 
     def db(target):
-        return SimpleNamespace(get_water_needs_info=lambda level: {"soil_moisture_target": target})
+        return SimpleNamespace(get_water_needs_info=lambda _level: {"soil_moisture_target": target})
 
     assert _threshold_for_plant(plant, db("40-60-80"), "soil_moisture") == {
         "min": 40.0,

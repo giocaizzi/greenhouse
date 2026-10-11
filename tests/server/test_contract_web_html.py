@@ -380,6 +380,7 @@ def build_app(*, bypass_auth: bool = True, seeded: bool = True, **settings_overr
 @pytest.fixture
 def web_env(clean_env, frozen_clock):
     """Hermetic + frozen environment; builds the shared seeded template inside it."""
+    del clean_env  # requested only for its side effect
     _seeded_template()
     return frozen_clock
 
@@ -387,6 +388,7 @@ def web_env(clean_env, frozen_clock):
 @pytest.fixture
 def make_client(web_env):
     """Factory: a *fresh* seeded app + TestClient per call (used by every mutating case)."""
+    del web_env  # requested only for its side effect
     engines = []
 
     def _make(**kwargs) -> tuple[Any, TestClient]:
@@ -431,6 +433,7 @@ def reset_shared_app() -> Any:
 @pytest.fixture
 def seeded_get_client(web_env) -> TestClient:
     """TestClient on the shared app, freshly reset to the seeded state."""
+    del web_env  # requested only for its side effect
     return TestClient(reset_shared_app(), raise_server_exceptions=False)
 
 
@@ -528,7 +531,8 @@ def _route_inventory(application) -> list[dict]:
     ]
 
 
-def test_web_route_inventory(web_env):
+@pytest.mark.usefixtures("web_env")
+def test_web_route_inventory():
     """Routes, methods, endpoint names, auth dependency and include_in_schema — in registration order.
 
     Order is behavior (first match wins, e.g. ``/clusters/new`` before ``/clusters/{cluster_id}``).
@@ -778,7 +782,8 @@ def test_get_variant_html_golden(name, url, setup, running, seeded_get_client):
 # ── template name + context keys per GET ─────────────────────────────────────────────────────
 
 
-def test_template_context_golden(web_env, monkeypatch):
+@pytest.mark.usefixtures("web_env")
+def test_template_context_golden(monkeypatch):
     """``{case: [[template, sorted context keys], …]}`` for the whole GET sweep (reset app per case)."""
     spy = TemplateSpy()
     spy.install(monkeypatch)

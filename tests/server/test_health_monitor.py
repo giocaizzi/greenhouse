@@ -521,7 +521,7 @@ class TestUnraisedAlarmRetry:
 
         real_upsert = IrrigationRepository.upsert_alert
 
-        def locked(self, *args, **kwargs):
+        def locked(_self, *_args, **_kwargs):
             raise RuntimeError("database is locked")
 
         monkeypatch.setattr(IrrigationRepository, "upsert_alert", locked)
@@ -615,14 +615,14 @@ class TestTripOnTopOfACachedAlarm:
 
         real_upsert = IrrigationRepository.upsert_alert
 
-        def _poisoning_insert(self, *args, **kwargs):
+        def _poisoning_insert(self, *_args, **_kwargs):
             self.session.add(Alert(dedup_key=None, source="health", code="x", title="t", message="m"))
             self.session.flush()  # IntegrityError: the session now needs a rollback
 
         monkeypatch.setattr(IrrigationRepository, "upsert_alert", _poisoning_insert)
         irr_adapter.set_health(_state(alarms=frozenset({HealthAlarm.NO_WATER})))
         watcher = PumpWatcherService(
-            repo, registry, warmup_seconds=0, clock=lambda: 0.0, sleep=lambda s: None, monitor=shared.for_repo(repo)
+            repo, registry, warmup_seconds=0, clock=lambda: 0.0, sleep=lambda _s: None, monitor=shared.for_repo(repo)
         )
         assert watcher.watch(irrigator, 60, started_at=1_700_000_000)["outcome"] == "tripped"
         assert shared.is_actuation_blocked(irrigator) == (True, [HealthAlarm.NO_WATER])

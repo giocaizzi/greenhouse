@@ -176,7 +176,8 @@ def test_plant_chart_uses_assignment_window(client, app):
     assert before_move not in b_vals
 
 
-def test_delete_plant_closes_open_assignment(client, app):
+@pytest.mark.usefixtures("app")
+def test_delete_plant_closes_open_assignment(client):
     client.post("/api/v1/clusters", json={"name": "Delete Cluster"})
     client.post("/api/v1/clusters/1/plants", json={"species": "Monstera deliciosa"})
     client.post(

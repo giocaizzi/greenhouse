@@ -137,7 +137,8 @@ def test_api_sync_plant_id_zero_means_every_cluster(app, client):
     assert resp.json() == {"synced": 2, "errors": []}
 
 
-def test_api_sync_collects_per_plant_errors_and_keeps_going(app, client, failing_species):
+@pytest.mark.usefixtures("failing_species")
+def test_api_sync_collects_per_plant_errors_and_keeps_going(app, client):
     ids = _seed(app, {"C1": ["Bad", "Fern"]})
     resp = client.post("/api/v1/plants/sync", json={"cluster_id": ids["C1"]})
     assert resp.status_code == HTTPStatus.OK
@@ -145,7 +146,8 @@ def test_api_sync_collects_per_plant_errors_and_keeps_going(app, client, failing
     assert _plant_notes(app, ids["Fern"]).startswith("Sources: ")
 
 
-def test_api_sync_single_plant_error_is_not_caught(app, client, failing_species):
+@pytest.mark.usefixtures("failing_species")
+def test_api_sync_single_plant_error_is_not_caught(app, client):
     ids = _seed(app, {"C1": ["Bad"]})
     resp = client.post("/api/v1/plants/sync", json={"plant_id": ids["Bad"]})
     assert resp.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
@@ -163,7 +165,8 @@ def test_web_sync_unknown_cluster_is_404(app, client):
     assert "Cluster not found" in resp.text
 
 
-def test_web_sync_collects_per_plant_errors_and_keeps_going(app, client, failing_species):
+@pytest.mark.usefixtures("failing_species")
+def test_web_sync_collects_per_plant_errors_and_keeps_going(app, client):
     ids = _seed(app, {"C1": ["Bad", "Fern"]})
     resp = client.post("/plants/sync", data={"cluster_id": str(ids["C1"])})
     assert resp.status_code == HTTPStatus.OK
@@ -231,7 +234,8 @@ def test_web_cluster_detail_with_undecodable_decision_payload_shows_no_rationale
 # ── Web GET /clusters/{cid}/plants/{pid} — plant dashboard ────────────────────
 
 
-def test_web_plant_dashboard_without_irrigator_renders_sensor_only(app, client, frozen_clock):
+@pytest.mark.usefixtures("frozen_clock")
+def test_web_plant_dashboard_without_irrigator_renders_sensor_only(app, client):
     ids = _seed(app, {"C1": ["Fern"]}, sensor_for="C1")
     resp = client.get(f"/clusters/{ids['C1']}/plants/{ids['Fern']}")
     assert resp.status_code == HTTPStatus.OK
@@ -239,6 +243,7 @@ def test_web_plant_dashboard_without_irrigator_renders_sensor_only(app, client, 
     assert "irrigated " not in resp.text
 
 
+@pytest.mark.usefixtures("frozen_clock")
 @pytest.mark.parametrize(
     ("ages", "expected"),
     [
@@ -251,7 +256,7 @@ def test_web_plant_dashboard_without_irrigator_renders_sensor_only(app, client, 
         ((), "irrigated never"),
     ],
 )
-def test_web_plant_dashboard_relative_time_of_newest_event(app, client, frozen_clock, ages, expected):
+def test_web_plant_dashboard_relative_time_of_newest_event(app, client, ages, expected):
     ids = _seed(app, {"C1": ["Fern"]}, irrigator_for="C1")
     repo, session = _repo_session(app)
     try:
@@ -298,7 +303,8 @@ BASE_KEYS = [
 ]
 
 
-def test_base_context_without_session_factory_uses_defaults(clean_env, frozen_clock):
+@pytest.mark.usefixtures("clean_env", "frozen_clock")
+def test_base_context_without_session_factory_uses_defaults():
     request = _request(settings=SimpleNamespace(auth_enabled=False))
     ctx = base_context(request, extra_key=1)
     assert list(ctx) == [*BASE_KEYS, "extra_key"]
@@ -330,9 +336,9 @@ def test_base_context_swallows_preference_errors_and_closes_session():
 
 def test_base_context_keeps_preferences_read_before_a_vacation_error(monkeypatch):
     prefs = SimpleNamespace(dry_run_global=True, scheduler_paused=True, theme="dark")
-    monkeypatch.setattr(IrrigationRepository, "get_preferences", lambda self: prefs)
+    monkeypatch.setattr(IrrigationRepository, "get_preferences", lambda _self: prefs)
 
-    def boom(self):
+    def boom(_self):
         raise RuntimeError("vacation read failed")
 
     monkeypatch.setattr(IrrigationRepository, "get_active_vacation", boom)
@@ -352,8 +358,8 @@ def test_base_context_keeps_preferences_read_before_a_vacation_error(monkeypatch
 def test_base_context_hides_the_banners_from_an_anonymous_viewer(monkeypatch):
     """Login and anonymous error pages get the theme but not the dry-run / vacation / paused banners."""
     prefs = SimpleNamespace(dry_run_global=True, scheduler_paused=True, theme="dark", timezone="UTC")
-    monkeypatch.setattr(IrrigationRepository, "get_preferences", lambda self: prefs)
-    monkeypatch.setattr(IrrigationRepository, "get_active_vacation", lambda self: object())
+    monkeypatch.setattr(IrrigationRepository, "get_preferences", lambda _self: prefs)
+    monkeypatch.setattr(IrrigationRepository, "get_active_vacation", lambda _self: object())
     request = _request(
         session_factory=_ClosingSession,
         settings=SimpleNamespace(auth_enabled=True, auth_cookie_name="greenhouse_session", auth_secret_key="k"),
@@ -379,7 +385,8 @@ def _memory_engine():
     return create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
 
 
-def test_create_app_without_settings_reads_settings_from_env(clean_env, monkeypatch, tmp_path):
+@pytest.mark.usefixtures("clean_env")
+def test_create_app_without_settings_reads_settings_from_env(monkeypatch, tmp_path):
     db_url = f"sqlite:///{tmp_path}/env.db"
     monkeypatch.setenv("IRRIGATION_DB_URL", db_url)
     monkeypatch.setenv("IRRIGATION_ENABLE_SCHEDULER", "false")
@@ -393,7 +400,8 @@ def test_create_app_without_settings_reads_settings_from_env(clean_env, monkeypa
         engine.dispose()
 
 
-def test_create_app_without_engine_builds_one_from_settings_db_url(clean_env, tmp_path):
+@pytest.mark.usefixtures("clean_env")
+def test_create_app_without_engine_builds_one_from_settings_db_url(tmp_path):
     db_url = f"sqlite:///{tmp_path}/built.db"
     application = create_app(Settings(db_url=db_url, enable_scheduler=False))
     engine = application.state.session_factory.kw["bind"]

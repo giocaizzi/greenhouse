@@ -170,6 +170,7 @@ def running_scheduler(app):
     loop processes nothing — and shuts it down afterwards. Depends on ``app``
     so the app's ``init_scheduler`` (which needs a stopped scheduler) runs first.
     """
+    del app  # requested only for its side effect
 
     start_scheduler(paused=True)
     try:

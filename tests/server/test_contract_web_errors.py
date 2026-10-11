@@ -56,6 +56,7 @@ def test_error_page_golden(name, method, url, headers, seeded_get_client):
 @pytest.fixture
 def anon(web_env, app_real_auth):
     """``anonymous_client`` on the real-auth app, under the frozen clock with offline weather."""
+    del web_env  # requested only for its side effect
     install_offline_weather(app_real_auth)
     return TestClient(app_real_auth, raise_server_exceptions=False)
 
@@ -87,7 +88,8 @@ def test_session_cookie_name_is_the_one_the_garbage_case_uses(app_real_auth):
     assert app_real_auth.state.settings.auth_cookie_name == "greenhouse_session"
 
 
-def test_json_401_carries_www_authenticate(web_env, anon, make_client):
+@pytest.mark.usefixtures("web_env")
+def test_json_401_carries_www_authenticate(anon, make_client):
     """The JSON 401 carries ``WWW-Authenticate: Bearer`` (RFC 9110 §11.6.1).
 
     ``AuthError`` (``greenhouse_server/auth.py``) and ``require_mcp_token`` (``app.py``) both set

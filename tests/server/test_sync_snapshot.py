@@ -124,9 +124,12 @@ def test_freshness_is_judged_on_the_newest_soil_reading(tmp_db, cluster_with_two
     tmp_db.add_sensor_reading(sensor_id=wet_id, timestamp=now - 60, soil_moisture=55.0)
     tmp_db.session.commit()
     synced: list[str] = []
-    monkeypatch.setattr(
-        sync_module, "sync_single_sensor", lambda repo, gateway, sensor, hours: synced.append(sensor.name)
-    )
+
+    def record_sync(_repo, _gateway, sensor, hours):
+        del hours  # SyncService passes it by keyword
+        synced.append(sensor.name)
+
+    monkeypatch.setattr(sync_module, "sync_single_sensor", record_sync)
 
     SyncService(tmp_db, registry=None, cloud=object()).ensure_fresh_and_read(cluster_id)
 

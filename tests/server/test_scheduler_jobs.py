@@ -5,6 +5,7 @@ import time
 from http import HTTPStatus
 from urllib.parse import quote
 
+import pytest
 from apscheduler.events import EVENT_JOB_EXECUTED, EVENT_JOB_MISSED
 from apscheduler.executors.base import run_job
 from fastapi.testclient import TestClient
@@ -113,12 +114,14 @@ class TestPausedFlagIsTruthful:
 class TestRunningScheduler:
     """Semantics once the scheduler is actually started."""
 
-    def test_running_jobs_have_next_run_time_and_are_not_paused(self, client, running_scheduler):
+    @pytest.mark.usefixtures("running_scheduler")
+    def test_running_jobs_have_next_run_time_and_are_not_paused(self, client):
         jobs = client.get("/api/v1/scheduler/jobs").json()
         assert sorted(j["id"] for j in jobs) == DEFAULT_JOB_IDS
         assert all(j["paused"] is False and j["next_run_time"] for j in jobs), jobs
 
-    def test_resume_reschedules_check_all(self, client, running_scheduler):
+    @pytest.mark.usefixtures("running_scheduler")
+    def test_resume_reschedules_check_all(self, client):
         assert client.post("/api/v1/scheduler/pause").json() == {"paused": True}
         paused = _check_all(client)
         assert paused["paused"] is True and paused["next_run_time"] is None
@@ -128,14 +131,16 @@ class TestRunningScheduler:
         assert resumed["paused"] is False
         assert resumed["next_run_time"] is not None
 
-    def test_periodic_jobs_tolerate_late_wakeups(self, client, running_scheduler):
+    @pytest.mark.usefixtures("client")
+    def test_periodic_jobs_tolerate_late_wakeups(self, running_scheduler):
         """APScheduler's default 1s misfire grace silently drops a late tick."""
         for job_id in DEFAULT_JOB_IDS:
             job = running_scheduler.get_job(job_id)
             assert job.misfire_grace_time is None, job_id
             assert job.coalesce is True, job_id
 
-    def test_pump_watcher_runs_when_scheduled_after_start_time(self, app, client, running_scheduler):
+    @pytest.mark.usefixtures("client")
+    def test_pump_watcher_runs_when_scheduled_after_start_time(self, app, running_scheduler):
         """Regression: the dry-run watcher's run_date is the (floored) start
         timestamp, already >1s in the past after the Cloud start call, so the
         default 1s misfire grace skipped it and the watcher never ran.

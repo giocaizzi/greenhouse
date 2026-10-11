@@ -50,6 +50,7 @@ CORE_JOB_ORDER = ["sensor_sync", "check_all", "plant_health_snapshot", "sensor_a
 
 @pytest.fixture
 def p(clean_env, frozen_clock):
+    del clean_env, frozen_clock  # requested only for their side effects
     pipeline = Pipeline()
     yield pipeline
     pipeline.close()
@@ -60,6 +61,7 @@ def p(clean_env, frozen_clock):
 @pytest.fixture
 def paused_running_scheduler(p):
     """Start the process-wide scheduler without letting it fire anything."""
+    del p  # requested only for its side effect
     sched.start_scheduler(paused=True)
     try:
         yield bg_scheduler
@@ -104,7 +106,8 @@ def _prefs_paused(p: Pipeline) -> bool:
 # ── Registry ────────────────────────────────────────────────────────────────
 
 
-def test_registered_jobs_golden(p):
+@pytest.mark.usefixtures("p")
+def test_registered_jobs_golden():
     """The five built-in jobs, in registration order, with their triggers and defaults."""
     view = _registry_view()
     assert [j["id"] for j in view["jobs"]] == CORE_JOB_ORDER
@@ -120,7 +123,8 @@ def test_init_scheduler_is_idempotent(p):
     assert sched._app is p.app
 
 
-def test_init_scheduler_rebinds_the_module_app(p, clean_env):
+@pytest.mark.usefixtures("p", "clean_env")
+def test_init_scheduler_rebinds_the_module_app():
     """A second ``create_app`` takes over ``scheduler._app`` (the trap behind the lazy imports)."""
     second = Pipeline()
     try:
@@ -146,7 +150,8 @@ def test_every_job_has_safe_defaults_stopped_and_running(p):
         sched.stop_scheduler()
 
 
-def test_running_scheduler_reports_next_run_times(p, paused_running_scheduler):
+@pytest.mark.usefixtures("p", "paused_running_scheduler")
+def test_running_scheduler_reports_next_run_times():
     """On a running scheduler every core job has a ``next_run_time`` (frozen clock → exact values)."""
     assert_golden_json(
         "orchestration/scheduler_registry_running.json",
@@ -264,7 +269,7 @@ def test_apply_persisted_pause_edge_cases(p, monkeypatch, caplog):
     assert sched.is_check_all_paused() is True
     sched.init_scheduler(p.app, p.app.state.settings, tz_name="UTC")
 
-    def broken(job_id):
+    def broken(_job_id):
         raise RuntimeError("cannot pause")
 
     monkeypatch.setattr(bg_scheduler, "pause_job", broken)
@@ -349,7 +354,8 @@ def test_sync_job_with_gateway_syncs_every_sensor_and_commits(p):
 def test_sync_job_failure_is_rolled_back_and_logged(p, monkeypatch, caplog):
     p.app.state.device_gateway = RecordingGateway()
 
-    def explode(self, hours=24):
+    def explode(_self, hours=24):
+        del hours  # the sync job passes it by keyword
         raise RuntimeError("cloud down")
 
     monkeypatch.setattr(SyncService, "sync_all_sensors", explode)
@@ -370,8 +376,9 @@ def test_health_snapshot_job_writes_daily_rows(p):
     assert_golden_json("orchestration/scheduler_health_snapshot.json", rows)
 
 
-def test_health_snapshot_job_failure_is_logged(p, monkeypatch, caplog):
-    monkeypatch.setattr(PlantHealthService, "snapshot_daily", lambda self: 1 / 0)
+@pytest.mark.usefixtures("p")
+def test_health_snapshot_job_failure_is_logged(monkeypatch, caplog):
+    monkeypatch.setattr(PlantHealthService, "snapshot_daily", lambda _self: 1 / 0)
     with caplog.at_level(logging.ERROR, logger="greenhouse_server.scheduler"):
         sched._health_snapshot_job()
     assert "Plant health snapshot job failed" in caplog.text
@@ -387,8 +394,9 @@ def test_anomaly_job_raises_stale_alert_and_notifies(p):
     assert_golden_json("orchestration/scheduler_anomaly.json", {"alerts": alerts, "notifications": p.notifier.sent})
 
 
-def test_anomaly_job_failure_is_logged(p, monkeypatch, caplog):
-    monkeypatch.setattr(SensorAnomalyService, "scan", lambda self: 1 / 0)
+@pytest.mark.usefixtures("p")
+def test_anomaly_job_failure_is_logged(monkeypatch, caplog):
+    monkeypatch.setattr(SensorAnomalyService, "scan", lambda _self: 1 / 0)
     with caplog.at_level(logging.ERROR, logger="greenhouse_server.scheduler"):
         sched._anomaly_job()
     assert "Anomaly scan job failed" in caplog.text
@@ -437,7 +445,7 @@ def test_health_monitor_job_failure_is_logged(p, monkeypatch, caplog):
 
 def test_init_health_monitor_startup_hook_failure_still_wires_monitor(p, monkeypatch, caplog):
     p.app.state.device_registry = p.wiring.registry
-    monkeypatch.setattr(DeviceHealthMonitor, "backfill_from_history", lambda self: 1 / 0)
+    monkeypatch.setattr(DeviceHealthMonitor, "backfill_from_history", lambda _self: 1 / 0)
     with caplog.at_level(logging.ERROR, logger="greenhouse_server.scheduler"):
         sched.init_health_monitor(p.app, p.app.state.settings)
     assert isinstance(p.app.state.health_monitor, DeviceHealthMonitor)
@@ -518,7 +526,7 @@ def test_run_leak_check_noops_and_failure(p, monkeypatch, caplog):
     monkeypatch.setattr(sched, "_app", None)
     irrigation_jobs_mod._run_leak_check(1, started_at)
     monkeypatch.setattr(sched, "_app", p.app)
-    monkeypatch.setattr(LeakDetectionService, "check_after_irrigation", lambda self, c, s: 1 / 0)
+    monkeypatch.setattr(LeakDetectionService, "check_after_irrigation", lambda _self, _c, _s: 1 / 0)
     with caplog.at_level(logging.ERROR, logger="greenhouse_server.services.irrigation"):
         irrigation_jobs_mod._run_leak_check(1, started_at)
     assert "Leak check job failed for cluster 1" in caplog.text

@@ -55,7 +55,7 @@ class _RecordingNotifier:
         self.irrigations.append(kwargs)
         return True
 
-    def notify_alert(self, **kwargs) -> bool:
+    def notify_alert(self, **_kwargs) -> bool:
         return True
 
 

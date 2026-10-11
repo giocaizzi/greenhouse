@@ -52,6 +52,7 @@ class CarePlantDB:
 
 @pytest.fixture
 def repo(tmp_db, frozen_clock):
+    del frozen_clock  # requested only for its side effect
     return tmp_db
 
 
@@ -139,7 +140,7 @@ class FakeLearner:
     def __init__(self, repo, plant_db) -> None:
         pass
 
-    def get_plant_profile(self, sensor):
+    def get_plant_profile(self, _sensor):
         if self.drainage is None:
             return None
         return SimpleNamespace(avg_drainage_per_hour=self.drainage)
@@ -195,6 +196,7 @@ def test_forecast_three_profiled_sensors_give_high_confidence(repo, learner):
     assert (result.confidence, result.method, result.hours_until_next) == (0.7, "drainage_slope", 5.0)
 
 
+@pytest.mark.usefixtures("learner")
 @pytest.mark.parametrize(
     ("forecast", "skip", "reason", "precip"),
     [
@@ -204,7 +206,7 @@ def test_forecast_three_profiled_sensors_give_high_confidence(repo, learner):
         ({}, False, None, 0.0),
     ],
 )
-def test_forecast_outdoor_rain_outlook(repo, learner, forecast, skip, reason, precip):
+def test_forecast_outdoor_rain_outlook(repo, forecast, skip, reason, precip):
     cid = _forecast_world(repo, environment="outdoor")
     weather = FakeForecastWeather(forecast)
     svc = ForecastService(repo, CarePlantDB({"soil_moisture_target": "40-60"}), weather_client=weather)
@@ -214,7 +216,8 @@ def test_forecast_outdoor_rain_outlook(repo, learner, forecast, skip, reason, pr
     assert (result.method, result.confidence, result.hours_until_next) == ("fallback_constant", 0.2, 10.0)
 
 
-def test_forecast_indoor_cluster_never_asks_the_weather(repo, learner):
+@pytest.mark.usefixtures("learner")
+def test_forecast_indoor_cluster_never_asks_the_weather(repo):
     cid = _forecast_world(repo)
     weather = FakeForecastWeather({"precipitation_mm": 9.0})
     result = ForecastService(repo, CarePlantDB({}), weather_client=weather).predict_next_irrigation(cid)
@@ -423,7 +426,7 @@ def _ticks(values: list[float]) -> Iterator[float]:
 
 def _watcher(pump, clock_values: list[float], **kwargs) -> PumpWatcherService:
     ticks = _ticks(clock_values)
-    return PumpWatcherService(pump.repo, pump.registry, clock=lambda: next(ticks), sleep=lambda s: None, **kwargs)
+    return PumpWatcherService(pump.repo, pump.registry, clock=lambda: next(ticks), sleep=lambda _s: None, **kwargs)
 
 
 def test_watch_read_error_counts_as_a_failure_and_is_logged(pump, caplog):
@@ -515,7 +518,7 @@ def test_trip_with_a_raising_stop_records_the_failure(pump, caplog):
     assert '"stop_message": "adapter.stop raised: boom"' in payload
 
 
-def test_trip_commit_failure_rolls_back(pump, monkeypatch, caplog):
+def test_trip_commit_failure_rolls_back(pump, monkeypatch):
     pump.adapter.script = [DRY]
     calls: list[str] = []
 

@@ -46,6 +46,7 @@ MCP_TOOL_COUNT = 84  # one tool per /api/v1 operation
 
 @pytest.fixture
 def mcp_app(clean_env):
+    del clean_env  # requested only for its side effect
     application, engine = _make_stubbed_app(bypass_auth=False)
     install_offline_weather(application)
     yield application
@@ -110,6 +111,7 @@ def test_tool_names_are_operation_ids_one_to_one(mcp_app):
 
 @pytest.fixture
 def gated_client(clean_env):
+    del clean_env  # requested only for its side effect
     application, engine = _make_stubbed_app(bypass_auth=True, mcp_token=_TOKEN)
     install_offline_weather(application)
     yield TestClient(application, raise_server_exceptions=False)
@@ -118,6 +120,7 @@ def gated_client(clean_env):
 
 @pytest.fixture
 def unconfigured_client(clean_env):
+    del clean_env  # requested only for its side effect
     application, engine = _make_stubbed_app(bypass_auth=True, mcp_token=None)
     install_offline_weather(application)
     yield TestClient(application, raise_server_exceptions=False)

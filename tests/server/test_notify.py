@@ -118,7 +118,8 @@ class TestNtfyClient:
         assert "plant" in title
 
     def test_publish_fail_silent(self, monkeypatch):
-        def boom(req, timeout=None):
+        def boom(_req, timeout=None):
+            del timeout  # NtfyClient passes it by keyword
             raise OSError("network down")
 
         monkeypatch.setattr(urllib.request, "urlopen", boom)

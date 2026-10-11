@@ -106,6 +106,7 @@ def _decision(cluster_id: int, *, log_id: int | None = None) -> IrrigationDecisi
 
 @pytest.fixture
 def db(tmp_db, frozen_clock, clean_env):
+    del frozen_clock, clean_env  # requested only for their side effects
     return tmp_db
 
 
@@ -130,7 +131,7 @@ def pump(db):
 def _patch_decide(monkeypatch, factory) -> list[dict]:
     calls: list[dict] = []
 
-    def fake(self, cluster_id, **kwargs):
+    def fake(_self, cluster_id, **kwargs):
         calls.append({"cluster_id": cluster_id, **kwargs})
         return factory(cluster_id)
 
@@ -146,7 +147,7 @@ def _rows(db, model) -> list:
 
 
 def test_pipeline_without_a_decision_returns_the_no_data_error(db, pump, monkeypatch):
-    _patch_decide(monkeypatch, lambda cid: None)
+    _patch_decide(monkeypatch, lambda _cid: None)
     svc = IrrigationService(db, pump.registry, StubSync(None), StubWeather(None), plant_database())
     result = svc.run_irrigation_pipeline(pump.cluster_id, no_sync=True)
     assert result == {"action": "error", "reason": "no data for decision", "confidence": 0}
@@ -278,7 +279,7 @@ def test_health_monitor_that_does_not_block_lets_the_pump_start(db, pump, monkey
 def test_successful_start_marks_the_decision_actuated_only_with_a_log_id(db, pump, monkeypatch, log_id):
     _patch_decide(monkeypatch, lambda cid: _decision(cid, log_id=log_id))
     marked: list = []
-    monkeypatch.setattr(IrrigationRepository, "set_decision_actuated", lambda self, i, *a: marked.append(i))
+    monkeypatch.setattr(IrrigationRepository, "set_decision_actuated", lambda _self, i, *_a: marked.append(i))
     svc = IrrigationService(db, pump.registry, StubSync(None), StubWeather(None), plant_database())
     assert svc.run_irrigation_pipeline(pump.cluster_id, no_sync=True)["action"] == "irrigated"
     assert marked == ([] if log_id is None else [log_id])
@@ -386,7 +387,7 @@ def test_check_all_failure_log_carries_the_exception(db, monkeypatch, caplog):
     class Boom(RuntimeError):
         pass
 
-    def explode(self, cluster_id):
+    def explode(_self, _cluster_id):
         raise Boom("kaput")
 
     monkeypatch.setattr(IrrigationService, "check_cluster", explode)
@@ -409,7 +410,7 @@ def test_check_all_failure_log_carries_the_exception(db, monkeypatch, caplog):
 
 @pytest.mark.parametrize(("triggered_by", "stopped"), [("auto", True), ("manual", False)])
 def test_watcher_shutdown_activity_failure_is_logged_not_raised(db, pump, monkeypatch, caplog, triggered_by, stopped):
-    def broken(self, **kwargs):
+    def broken(_self, **_kwargs):
         raise RuntimeError("activity table locked")
 
     monkeypatch.setattr(IrrigationRepository, "add_activity_event", broken)
@@ -431,6 +432,7 @@ def test_watcher_shutdown_activity_failure_is_logged_not_raised(db, pump, monkey
 
 @pytest.fixture
 def watcher_env(monkeypatch, frozen_clock):
+    del frozen_clock  # requested only for its side effect
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(engine)
     factory = sessionmaker(bind=engine)
@@ -541,7 +543,7 @@ def test_watcher_job_keeps_the_app_and_hooks_captured_at_schedule_time(watcher_e
         state=SimpleNamespace(settings=None, device_registry=other_registry, session_factory=lambda: opened.append(1))
     )
     monkeypatch.setattr(sched, "_app", other_app)
-    monkeypatch.setattr(sched, "wait_for_shutdown", lambda s: True)
+    monkeypatch.setattr(sched, "wait_for_shutdown", lambda _s: True)
     monkeypatch.setattr(sched, "shutdown_requested", lambda: True)
     watcher_env.app.state.device_registry = other_registry  # the registry object was captured too
     watcher_env.scheduler.jobs[0]["func"]()
@@ -555,7 +557,8 @@ def test_watcher_job_keeps_the_app_and_hooks_captured_at_schedule_time(watcher_e
 # ── rearm_leak_checks: a failure mid-scan keeps the partial count ─────────────
 
 
-def test_rearm_failure_mid_scan_keeps_partial_count_and_logs_both_lines(monkeypatch, frozen_clock, caplog):
+@pytest.mark.usefixtures("frozen_clock")
+def test_rearm_failure_mid_scan_keeps_partial_count_and_logs_both_lines(monkeypatch, caplog):
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(engine)
     factory = sessionmaker(bind=engine)
@@ -602,6 +605,7 @@ def test_rearm_failure_mid_scan_keeps_partial_count_and_logs_both_lines(monkeypa
 
 @pytest.fixture
 def p(clean_env, frozen_clock):
+    del clean_env, frozen_clock  # requested only for their side effects
     pipeline = Pipeline()
     yield pipeline
     pipeline.close()
@@ -681,7 +685,7 @@ JOBS = {
 }
 
 
-def _wire_job(p, monkeypatch, log: list[str]) -> StubMonitor:
+def _wire_job(p, log: list[str]) -> StubMonitor:
     p.app.state.device_gateway = RecordingGateway()
     monitor = StubMonitor(log)
     p.app.state.health_monitor = monitor
@@ -692,7 +696,7 @@ def _wire_job(p, monkeypatch, log: list[str]) -> StubMonitor:
 def test_job_success_commits_then_closes(p, monkeypatch, job):
     func_name, _, _ = JOBS[job]
     log = _spy_sessions(monkeypatch, p.app)
-    _wire_job(p, monkeypatch, log)
+    _wire_job(p, log)
     getattr(sched, func_name)()
     assert [e for e in log if e in ("open", "commit", "rollback", "close")] == ["open", "commit", "close"]
 
@@ -701,7 +705,7 @@ def test_job_success_commits_then_closes(p, monkeypatch, job):
 def test_job_failure_rolls_back_logs_with_traceback_and_closes(p, monkeypatch, caplog, job):
     func_name, target, message = JOBS[job]
     log = _spy_sessions(monkeypatch, p.app)
-    monitor = _wire_job(p, monkeypatch, log)
+    monitor = _wire_job(p, log)
 
     class JobBoom(RuntimeError):
         pass
@@ -724,7 +728,7 @@ def test_job_failure_rolls_back_logs_with_traceback_and_closes(p, monkeypatch, c
 @pytest.mark.parametrize("job", ["snapshot", "check", "anomaly", "monitor"])
 def test_session_factory_failure_escapes_the_job(p, monkeypatch, job):
     func_name, _, _ = JOBS[job]
-    _wire_job(p, monkeypatch, [])
+    _wire_job(p, [])
 
     def broken_factory():
         raise ConnectionError("db file locked")
@@ -734,11 +738,12 @@ def test_session_factory_failure_escapes_the_job(p, monkeypatch, job):
         getattr(sched, func_name)()
 
 
+@pytest.mark.usefixtures("p")
 @pytest.mark.parametrize(
     ("job", "escapes"),
     [("sync", False), ("snapshot", True), ("check", True), ("anomaly", True), ("monitor", False)],
 )
-def test_jobs_without_an_app(p, monkeypatch, job, escapes):
+def test_jobs_without_an_app(monkeypatch, job, escapes):
     func_name, _, _ = JOBS[job]
     monkeypatch.setattr(sched, "_app", None)
     if escapes:
@@ -813,13 +818,16 @@ def test_watcher_job_session_commit_rollback_close_order(watcher_env, monkeypatc
 
     watcher_env.app.state.session_factory = factory
 
-    def watch(self, irrigator, duration_seconds, *, started_at=None):
+    def watch(_self, _irrigator, _duration_seconds, *, started_at=None):
+        del started_at  # the job passes it by keyword
         if outcome == "boom":
             raise RuntimeError("watch exploded")
         return {"outcome": outcome}
 
     monkeypatch.setattr(pump_watcher_module.PumpWatcherService, "watch", watch)  # the spy subclass
-    monkeypatch.setattr(pump_watcher_jobs_mod, "handle_watcher_interrupted", lambda *a, **kw: log.append("interrupted"))
+    monkeypatch.setattr(
+        pump_watcher_jobs_mod, "handle_watcher_interrupted", lambda *_a, **_kw: log.append("interrupted")
+    )
     schedule_pump_watcher(watcher_env.irrigator_id, 2, FROZEN_TS, triggered_by="manual")
     watcher_env.scheduler.jobs[0]["func"]()
     assert (
@@ -875,8 +883,9 @@ def test_leak_check_done_ignores_other_codes_and_empty_payloads(db):
     assert irrigation_jobs_mod._leak_check_done(db, cid, FROZEN_TS) is True
 
 
+@pytest.mark.usefixtures("frozen_clock")
 @pytest.mark.parametrize("fail", [False, True])
-def test_rearm_always_closes_its_session(monkeypatch, frozen_clock, fail):
+def test_rearm_always_closes_its_session(monkeypatch, fail):
     """Mutation survivor: ``rearm_leak_checks`` closes its session on success and after a failure."""
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(engine)
@@ -890,7 +899,7 @@ def test_rearm_always_closes_its_session(monkeypatch, frozen_clock, fail):
     monkeypatch.setattr(sched, "scheduler", FakeScheduler())
     monkeypatch.setattr(sched, "_app", SimpleNamespace(state=SimpleNamespace(session_factory=factory)))
     if fail:
-        monkeypatch.setattr(IrrigationRepository, "list_all_irrigators", lambda self: 1 / 0)
+        monkeypatch.setattr(IrrigationRepository, "list_all_irrigators", lambda _self: 1 / 0)
     assert irrigation_jobs_mod.rearm_leak_checks() == 0
     assert log == ["open", "close"]
     engine.dispose()
@@ -900,7 +909,7 @@ def test_health_block_names_the_first_blocking_alarm(db, pump, monkeypatch):
     """Mutation survivor: the device-health gate reports ``blocking_alarms[0]`` as the primary alarm."""
 
     class Blocking:
-        def is_actuation_blocked(self, irrigator):
+        def is_actuation_blocked(self, _irrigator):
             return True, [HealthAlarm.NO_WATER, HealthAlarm.DEVICE_OFFLINE]
 
     _patch_decide(monkeypatch, _decision)
@@ -977,20 +986,20 @@ def test_check_cluster_call_order_and_result_shape(db, monkeypatch, branch):
         db.set_irrigation_config(cid, auto_run=False)
     db.session.commit()
     log: list[str] = []
-    monkeypatch.setattr(irrigation_mod, "collect_learning_alerts", lambda *a: log.append("learning") or [{"a": 1}])
+    monkeypatch.setattr(irrigation_mod, "collect_learning_alerts", lambda *_a: log.append("learning") or [{"a": 1}])
     monkeypatch.setattr(
-        irrigation_mod, "collect_maintenance_alerts", lambda *a: log.append("maintenance") or [{"m": 1}]
+        irrigation_mod, "collect_maintenance_alerts", lambda *_a: log.append("maintenance") or [{"m": 1}]
     )
     monkeypatch.setattr(
-        irrigation_mod, "sync_cluster_alerts", lambda repo, c, pdb, *, notifier: log.append(f"sync:{c}:{notifier}")
+        irrigation_mod, "sync_cluster_alerts", lambda _repo, c, _pdb, *, notifier: log.append(f"sync:{c}:{notifier}")
     )
     monkeypatch.setattr(
         IrrigationService,
         "run_irrigation_pipeline",
-        lambda self, c: log.append("pipeline") or {"action": "skip", "reason": "why", "confidence": 0.5},
+        lambda _self, _c: log.append("pipeline") or {"action": "skip", "reason": "why", "confidence": 0.5},
     )
     monkeypatch.setattr(
-        IrrigationService, "monitor_cluster", lambda self, c: log.append("monitor") or {"needs_water": ["x"]}
+        IrrigationService, "monitor_cluster", lambda _self, _c: log.append("monitor") or {"needs_water": ["x"]}
     )
     svc = IrrigationService(db, None, StubSync(None), None, StubPlantDb({}))
     result = svc.check_cluster(cid)

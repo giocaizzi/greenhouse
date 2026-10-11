@@ -58,6 +58,7 @@ def _normalize_version(text: str) -> str:
 @pytest.fixture
 def contract_app(clean_env):
     """A real-auth app (no dependency overrides on the auth gate) on in-memory SQLite."""
+    del clean_env  # requested only for its side effect
     application, engine = _make_stubbed_app(bypass_auth=False)
     install_offline_weather(application)
     yield application

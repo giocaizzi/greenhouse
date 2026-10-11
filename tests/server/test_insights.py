@@ -2,6 +2,7 @@
 
 from http import HTTPStatus
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.pool import StaticPool
@@ -25,7 +26,8 @@ class TestClusterInsights:
         assert isinstance(data["insights"], list)
         assert data["forecast"] is None
 
-    def test_stale_sensor_surfaces_insight(self, app):
+    @pytest.mark.usefixtures("app")
+    def test_stale_sensor_surfaces_insight(self):
         """A sensor with no recent data must produce a stale_data insight."""
 
         engine = create_engine("sqlite://", echo=False, connect_args={"check_same_thread": False}, poolclass=StaticPool)

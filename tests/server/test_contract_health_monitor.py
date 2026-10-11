@@ -155,7 +155,8 @@ def test_poll_sensor_hands_the_newest_persisted_row_and_never_touches_the_cloud(
     assert world["cloud"].touched == []
 
 
-def test_poll_all_with_fake_adapters_issues_no_read_live(tmp_db, frozen_clock):
+@pytest.mark.usefixtures("frozen_clock")
+def test_poll_all_with_fake_adapters_issues_no_read_live(tmp_db):
     cid = tmp_db.add_cluster("C")
     tmp_db.add_irrigator(cluster_id=cid, tuya_device_id="p", name="P", irrigator_type="rainpoint.ik10pw", config={})
     s1 = tmp_db.add_sensor(cluster_id=cid, tuya_device_id="s1", name="S1", sensor_type="tuya.tr301z", config={})

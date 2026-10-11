@@ -244,6 +244,7 @@ def test_forecast_rain_skip_follows_the_engine_outdoor_rule(tmp_db, environment,
 
     class _Rain:
         def get_forecast(self, hours=6):
+            del hours  # the forecast service passes it by keyword; the stub rains regardless
             return {"precipitation_mm": 9.0}
 
     cid = tmp_db.add_cluster("Rainy", environment=environment)

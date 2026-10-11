@@ -52,6 +52,7 @@ MCP_TOKEN = "gap-mcp-token-0123456789abcdef0123"
 
 @pytest.fixture
 def db(tmp_db, frozen_clock, clean_env):
+    del frozen_clock, clean_env  # requested only for their side effects
     return tmp_db
 
 
@@ -189,6 +190,7 @@ class _Weather:
         return {"feels_like": 25.0}
 
     def get_forecast(self, hours: int = 6):
+        del hours  # the engine passes it by keyword; this stub has no forecast
         return None
 
 
@@ -217,6 +219,7 @@ def test_temperature_source_only_outdoor_prefers_the_weather(db, environment, te
 
 @pytest.fixture
 def api(clean_env, frozen_clock):
+    del clean_env, frozen_clock  # requested only for their side effects
     app, engine = _make_stubbed_app(bypass_auth=True)
     install_offline_weather(app)
     yield TestClient(app, raise_server_exceptions=False), app
@@ -316,7 +319,7 @@ def test_web_check_all_badge_follows_cluster_alerts(api, monkeypatch, alerts, ba
     """web-20: the web ``POST /check`` partial shows the "alerts" badge iff some result carries alerts."""
     client, _ = api
     result = {"cluster_id": 1, "cluster_name": "Badge", "action": "monitored", "alerts": alerts, "maintenance": []}
-    monkeypatch.setattr(IrrigationService, "check_all_clusters", lambda self: [result])
+    monkeypatch.setattr(IrrigationService, "check_all_clusters", lambda _self: [result])
     html = client.post("/check").text
     assert ('<span class="badge-warning">alerts</span>' in html) is badge
 
@@ -326,7 +329,7 @@ def test_scheduler_toggle_unexpected_failure_is_500_naming_the_verb(api, monkeyp
     """web-18: an unexpected scheduler error maps to 500 ``Failed to <pause|resume> job: …``."""
     client, _ = api
 
-    def boom(repo, paused):
+    def boom(_repo, _paused):
         raise RuntimeError("jobstore down")
 
     monkeypatch.setattr(scheduler_module, "set_check_all_paused", boom)
@@ -337,10 +340,11 @@ def test_scheduler_toggle_unexpected_failure_is_500_naming_the_verb(api, monkeyp
 # ── scheduler.py ────────────────────────────────────────────────────────────
 
 
-def test_sync_job_backfills_six_hours_and_commits(db, monkeypatch):
+@pytest.mark.usefixtures("db")
+def test_sync_job_backfills_six_hours_and_commits(monkeypatch):
     """scheduler-10: the background sync job asks for a 6 h log window and commits."""
     calls: list[int] = []
-    monkeypatch.setattr(SyncService, "sync_all_sensors", lambda self, hours=24: calls.append(hours) or {})
+    monkeypatch.setattr(SyncService, "sync_all_sensors", lambda _self, hours=24: calls.append(hours) or {})
     commits: list[int] = []
     session = SimpleNamespace(commit=lambda: commits.append(1), rollback=lambda: None, close=lambda: None)
     app = SimpleNamespace(
@@ -356,6 +360,7 @@ def test_sync_job_backfills_six_hours_and_commits(db, monkeypatch):
 
 @pytest.fixture
 def mcp_client(clean_env, frozen_clock):
+    del clean_env, frozen_clock  # requested only for their side effects
     app, engine = _make_stubbed_app(bypass_auth=False, mcp_token=MCP_TOKEN)
     install_offline_weather(app)
     yield TestClient(app, raise_server_exceptions=False)
@@ -418,7 +423,7 @@ def test_leak_verdict_table(db, case, before, after, reason):
     ≥ median(before) + 30 %.
     """
     _, sid, alerts = _leak_check(db, before, after)
-    assert [json.loads(a.payload_json)["reason"] for a in alerts] == ([reason] if reason else [])
+    assert [json.loads(a.payload_json)["reason"] for a in alerts] == ([reason] if reason else []), case
     if reason:
         (alert,) = alerts
         assert (alert.severity, alert.entity_id, alert.code) == ("critical", sid, "leak_or_stuck_valve")
@@ -485,8 +490,9 @@ def test_leak_check_without_findings_writes_no_activity(db):
 # ── web/filters.py ──────────────────────────────────────────────────────────
 
 
+@pytest.mark.usefixtures("frozen_clock")
 @pytest.mark.parametrize(("age", "text"), [(59, "59s ago"), (60, "1m ago"), (3599, "59m ago"), (3600, "1h ago")])
-def test_age_seconds_unit_boundaries(frozen_clock, age, text):
+def test_age_seconds_unit_boundaries(age, text):
     """web-01: the age formatter switches unit at exactly 60 s / 3600 s (lower bound inclusive).
 
     D18: ``age_seconds`` takes the age itself; ``time_ago`` takes the timestamp.
@@ -527,7 +533,7 @@ class _ScriptedAdapter:
         self.flags = list(offline_flags)
         self.reads = 0
 
-    def read_health(self, irrigator):
+    def read_health(self, _irrigator):
         offline = self.flags[self.reads] if self.reads < len(self.flags) else False
         self.reads += 1
         return DeviceHealthState(observed_at=FROZEN_TS, offline=offline, alarms=frozenset(), raw={"source": "local"})
@@ -573,7 +579,7 @@ def test_pump_watcher_failure_budget_counts_consecutive_failures_only(db):
 
 
 class _StartingAdapter:
-    def start(self, irrigator, minutes=None):
+    def start(self, _irrigator, _minutes=None):
         return True, "started"
 
 
@@ -660,7 +666,7 @@ def test_check_job_binds_the_health_monitor_then_checks_and_commits(monkeypatch)
             events.append(("bind", repo.session))
             return self
 
-    monkeypatch.setattr(IrrigationService, "check_all_clusters", lambda self: events.append(("check",)) or [])
+    monkeypatch.setattr(IrrigationService, "check_all_clusters", lambda _self: events.append(("check",)) or [])
     session = SimpleNamespace(
         commit=lambda: events.append(("commit",)), rollback=lambda: events.append(("rollback",)), close=lambda: None
     )
@@ -679,7 +685,8 @@ def test_check_job_binds_the_health_monitor_then_checks_and_commits(monkeypatch)
     assert events == [("bind", session), ("check",), ("commit",)]
 
 
-def test_unchanged_timezone_preference_is_a_no_op(clean_env):
+@pytest.mark.usefixtures("clean_env")
+def test_unchanged_timezone_preference_is_a_no_op():
     """scheduler-22: re-saving the current display timezone does not rebuild jobs or the weather client."""
     set_display_timezone("UTC")
     sentinel = object()
@@ -689,7 +696,8 @@ def test_unchanged_timezone_preference_is_a_no_op(clean_env):
     assert request.app.state.weather_client is sentinel
 
 
-def test_scheduler_unknown_timezone_falls_back_to_utc(clean_env):
+@pytest.mark.usefixtures("clean_env")
+def test_scheduler_unknown_timezone_falls_back_to_utc():
     """scheduler-19: an unknown preference timezone binds the scheduler to UTC (not any other zone)."""
     app, engine = _make_stubbed_app(bypass_auth=True)
     try:

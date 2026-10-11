@@ -2,6 +2,8 @@
 
 from http import HTTPStatus
 
+import pytest
+
 
 def test_history_page_renders(seeded_client):
     resp = seeded_client.get("/clusters/1/history?hours=24&limit=10")
@@ -57,7 +59,8 @@ def _job_row(html: str, job_id: str) -> str:
     return html[html.rindex("<tr>", 0, idx) : html.index("</tr>", idx)]
 
 
-def test_scheduler_page_marks_paused_check_all(client, running_scheduler):
+@pytest.mark.usefixtures("running_scheduler")
+def test_scheduler_page_marks_paused_check_all(client):
     """Regression: the page built job dicts without `paused`, so the row badge
     always read "active" even while check_all was paused.
     """
@@ -69,7 +72,8 @@ def test_scheduler_page_marks_paused_check_all(client, running_scheduler):
     assert 'badge-ok">active' in _job_row(resp.text, "sensor_sync")
 
 
-def test_scheduler_page_resume_restores_active(client, running_scheduler):
+@pytest.mark.usefixtures("running_scheduler")
+def test_scheduler_page_resume_restores_active(client):
     client.post("/scheduler/pause", follow_redirects=False)
     assert client.post("/scheduler/resume", follow_redirects=False).status_code == HTTPStatus.SEE_OTHER
     resp = client.get("/scheduler")

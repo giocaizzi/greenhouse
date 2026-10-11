@@ -3,6 +3,7 @@
 import warnings
 from http import HTTPStatus
 
+import pytest
 from sqlalchemy import text
 
 from golden import FROZEN_TS
@@ -178,7 +179,8 @@ class TestClusterStatus:
         codes = [r["code"] for r in resp.json()["decision"]["reasons"]]
         assert "seasonal_hold" in codes
 
-    def test_status_reports_the_real_age_of_a_reading_older_than_a_day(self, client, frozen_clock):
+    @pytest.mark.usefixtures("frozen_clock")
+    def test_status_reports_the_real_age_of_a_reading_older_than_a_day(self, client):
         """B-22: a sensor quiet for 3 days shows its last reading and its real age, not ``None``."""
 
         cid = client.post("/api/v1/clusters", json={"name": "Quiet"}).json()["id"]

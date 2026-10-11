@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import logging
 
+import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.pool import StaticPool
 
@@ -118,7 +119,7 @@ def _stored_job(job) -> dict:
     }
 
 
-def _snapshot(app) -> dict:
+def _snapshot() -> dict:
     scheduler = sched_mod.scheduler
     assert not scheduler.running
     snap = {
@@ -142,19 +143,21 @@ def _snapshot(app) -> dict:
     return snap
 
 
-def test_scheduler_registry_matches_golden(clean_env, frozen_clock):
+@pytest.mark.usefixtures("clean_env", "frozen_clock")
+def test_scheduler_registry_matches_golden():
     """Every scenario's pending + started registry equals ``contracts/scheduler_jobs.json``."""
     observed = {}
     for scenario, spec in SCENARIOS.items():
         app, engine = _build(spec["settings"], spec["prefs"])
         try:
-            observed[scenario] = _snapshot(app)
+            observed[scenario] = _snapshot()
         finally:
             engine.dispose()
     assert_golden_json("contracts/scheduler_jobs.json", observed)
 
 
-def test_registration_order_and_identity(clean_env, frozen_clock):
+@pytest.mark.usefixtures("clean_env", "frozen_clock")
+def test_registration_order_and_identity():
     """The five core jobs, in ``init_scheduler`` registration order, bound to the app."""
     app, engine = _build({}, None)
     try:
@@ -178,7 +181,8 @@ def test_registration_order_and_identity(clean_env, frozen_clock):
         engine.dispose()
 
 
-def test_rebuilding_the_app_does_not_duplicate_jobs(clean_env, frozen_clock):
+@pytest.mark.usefixtures("clean_env", "frozen_clock")
+def test_rebuilding_the_app_does_not_duplicate_jobs():
     app1, engine1 = _build({}, None)
     sync_minutes = 45
     app2, engine2 = _build({"sync_interval_minutes": sync_minutes}, None)
@@ -201,7 +205,8 @@ class _ListHandler(logging.Handler):
         self.records.append(record)
 
 
-def test_registry_ignores_the_removed_check_interval_hours(clean_env, frozen_clock):
+@pytest.mark.usefixtures("clean_env", "frozen_clock")
+def test_registry_ignores_the_removed_check_interval_hours():
     """OD3: an old ``IRRIGATION_CHECK_INTERVAL_HOURS`` setting no longer becomes ``*/N`` and logs nothing."""
     # Attach directly to the module logger: ``init_db`` runs Alembic's ``fileConfig``,
     # which replaces the root handlers (and with them pytest's caplog handler).

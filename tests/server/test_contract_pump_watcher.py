@@ -69,6 +69,7 @@ class RecordingMonitor:
 @pytest.fixture
 def env(monkeypatch, frozen_clock):
     """A shared in-memory DB, one irrigator, a fake adapter/registry and a fake ``_app``."""
+    del frozen_clock  # requested only for its side effect
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(engine)
     factory = sessionmaker(bind=engine)
@@ -171,10 +172,10 @@ def test_non_positive_duration_is_not_scheduled(env, minutes):
 @pytest.mark.parametrize(
     "mutate",
     [
-        lambda env, mp: setattr(env.scheduler, "running", False),
-        lambda env, mp: mp.setattr(scheduler_module, "_app", None),
-        lambda env, mp: setattr(env.settings, "pump_watcher_enabled", False),
-        lambda env, mp: setattr(env.app.state, "device_registry", None),
+        lambda env, _mp: setattr(env.scheduler, "running", False),
+        lambda _env, mp: mp.setattr(scheduler_module, "_app", None),
+        lambda env, _mp: setattr(env.settings, "pump_watcher_enabled", False),
+        lambda env, _mp: setattr(env.app.state, "device_registry", None),
     ],
     ids=["scheduler-stopped", "no-app", "watcher-disabled", "no-registry"],
 )
@@ -345,7 +346,12 @@ def test_shutdown_failed_auto_stop_is_logged_and_recorded(env, caplog, stop, sto
 
 def test_completed_watch_records_nothing(env, monkeypatch):
     env.shutdown["requested"] = False
-    monkeypatch.setattr(PumpWatcherService, "watch", lambda self, irr, secs, started_at=None: {"outcome": "completed"})
+
+    def _completed(_self, _irr, _secs, started_at=None):
+        del started_at  # the job passes it by keyword
+        return {"outcome": "completed"}
+
+    monkeypatch.setattr(PumpWatcherService, "watch", _completed)
     schedule_pump_watcher(env.irrigator_id, 3, STARTED_AT)
     env.scheduler.jobs[0]["func"]()
     assert env.adapter.calls == []
@@ -359,7 +365,8 @@ def test_deleted_irrigator_ends_the_job_quietly(env):
 
 
 def test_job_failure_is_rolled_back_and_logged(env, monkeypatch, caplog):
-    def _boom(self, irr, secs, started_at=None):
+    def _boom(_self, _irr, _secs, started_at=None):
+        del started_at  # the job passes it by keyword
         raise RuntimeError("watch exploded")
 
     monkeypatch.setattr(PumpWatcherService, "watch", _boom)
@@ -374,6 +381,7 @@ def test_job_failure_is_rolled_back_and_logged(env, monkeypatch, caplog):
 
 @pytest.fixture
 def plain(frozen_clock):
+    del frozen_clock  # requested only for its side effect
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(engine)
     session = sessionmaker(bind=engine)()
@@ -425,7 +433,7 @@ def test_trip_side_effects_are_exact(plain):
             raw={"alarm_raw": 1, "source": "local"},
         )
     )
-    watcher = PumpWatcherService(plain.repo, plain.registry, warmup_seconds=0, clock=lambda: 0.0, sleep=lambda s: None)
+    watcher = PumpWatcherService(plain.repo, plain.registry, warmup_seconds=0, clock=lambda: 0.0, sleep=lambda _s: None)
     result = watcher.watch(plain.irrigator, 60, started_at=STARTED_AT)
     assert result == {"outcome": "tripped", "polls": 1, "read_failures": 0, "alarm_raw": 1, "elapsed_seconds": 0.0}
     assert plain.adapter.calls == [("read_health", plain.irrigator.id), ("stop", plain.irrigator.id)]
@@ -463,7 +471,7 @@ def test_trip_payload_reprs_unserialisable_alarm_value(plain):
     plain.adapter.set_health(
         DeviceHealthState(observed_at=FROZEN_TS, alarms=frozenset({HealthAlarm.NO_WATER}), raw={"alarm_raw": [1, 0]})
     )
-    PumpWatcherService(plain.repo, plain.registry, warmup_seconds=0, clock=lambda: 0.0, sleep=lambda s: None).watch(
+    PumpWatcherService(plain.repo, plain.registry, warmup_seconds=0, clock=lambda: 0.0, sleep=lambda _s: None).watch(
         plain.irrigator, 60, started_at=STARTED_AT
     )
     activity = plain.repo.session.query(ActivityEvent).one()
@@ -491,7 +499,7 @@ def test_trip_side_effect_failures_are_logged_and_the_stop_still_happens(plain, 
     requeued: list = []
 
     class _BadMonitor:
-        def record(self, *args, **kwargs):
+        def record(self, *_args, **_kwargs):
             raise RuntimeError("monitor gone")
 
         def mark_unraised(self, *args):
@@ -501,7 +509,7 @@ def test_trip_side_effect_failures_are_logged_and_the_stop_still_happens(plain, 
     monkeypatch.setattr(plain.repo, "add_activity_event", _fail)
     monkeypatch.setattr(plain.repo.session, "commit", _fail)
     watcher = PumpWatcherService(
-        plain.repo, plain.registry, warmup_seconds=0, clock=lambda: 0.0, sleep=lambda s: None, monitor=_BadMonitor()
+        plain.repo, plain.registry, warmup_seconds=0, clock=lambda: 0.0, sleep=lambda _s: None, monitor=_BadMonitor()
     )
     with caplog.at_level(logging.ERROR, logger="greenhouse_server.services.pump_watcher"):
         assert watcher.watch(plain.irrigator, 60, started_at=STARTED_AT)["outcome"] == "tripped"
@@ -540,7 +548,7 @@ def test_trip_after_a_failed_flush_rolls_back_and_still_records_the_rest(plain, 
         session.flush()
 
     monkeypatch.setattr(plain.repo, "add_irrigation_event", _bad_event)
-    watcher = PumpWatcherService(plain.repo, plain.registry, warmup_seconds=0, clock=lambda: 0.0, sleep=lambda s: None)
+    watcher = PumpWatcherService(plain.repo, plain.registry, warmup_seconds=0, clock=lambda: 0.0, sleep=lambda _s: None)
     with caplog.at_level(logging.ERROR, logger="greenhouse_server.services.pump_watcher"):
         assert watcher.watch(plain.irrigator, 60, started_at=STARTED_AT)["outcome"] == "tripped"
     iid = plain.irrigator.id

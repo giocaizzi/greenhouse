@@ -65,28 +65,28 @@ web_env = _web.web_env
 # ── Per-case setup hooks (run against the fresh app before the "before" snapshot) ──────────────
 
 
-def _cap_indoor_to_one_event(app, repo: IrrigationRepository) -> None:
+def _cap_indoor_to_one_event(_app, repo: IrrigationRepository) -> None:
     repo.set_irrigation_config(cluster_id=INDOOR, max_events_per_day=1)
 
 
-def _device_start_fails(app, repo) -> None:
+def _device_start_fails(app, _repo) -> None:
     app.state.fake_devices.irrigator.start_result = (False, "fake start failed")
 
 
-def _device_stop_fails(app, repo) -> None:
+def _device_stop_fails(app, _repo) -> None:
     app.state.fake_devices.irrigator.stop_result = (False, "fake stop failed")
 
 
-def _no_device_registry(app, repo) -> None:
+def _no_device_registry(app, _repo) -> None:
     app.dependency_overrides[get_device_registry] = lambda: None
 
 
-def _quiet_hours_now(app, repo) -> None:
+def _quiet_hours_now(_app, repo) -> None:
     # Frozen clock is 10:00 UTC; make 09–12 quiet for the indoor cluster.
     repo.set_irrigation_config(cluster_id=INDOOR, quiet_start_hour=9, quiet_end_hour=12)
 
 
-def _unregister_check_all(app, repo) -> None:
+def _unregister_check_all(_app, _repo) -> None:
     scheduler.remove_job(CHECK_ALL_JOB_ID)
 
 

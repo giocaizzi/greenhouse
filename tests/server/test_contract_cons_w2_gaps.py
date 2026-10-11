@@ -10,6 +10,7 @@ from __future__ import annotations
 from http import HTTPStatus
 from pathlib import Path
 
+import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.pool import StaticPool
 
@@ -70,7 +71,8 @@ def test_plant_chart_data_unknown_plant_is_404(client):
     assert resp.json() == {"detail": "Plant not found"}
 
 
-def test_create_app_loads_the_plant_db_from_settings_path(clean_env):
+@pytest.mark.usefixtures("clean_env")
+def test_create_app_loads_the_plant_db_from_settings_path():
     """``Settings.plant_db_path`` set → ``app.state.plant_db`` reads that file."""
     bundled = Path(greenhouse_core.__file__).parent / "data" / "plant_database.json"
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)

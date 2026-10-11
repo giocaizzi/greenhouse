@@ -35,6 +35,7 @@ class _NoCloudExpected:
 
 @pytest.fixture
 def ik10pw_pipeline(clean_env, frozen_clock):
+    del clean_env, frozen_clock  # requested only for their side effects
     p = Pipeline()
     cloud = _NoCloudExpected()
     adapter = IK10PWAdapter(DeviceGateway(FAKE_CLIENT_ID, FAKE_CLIENT_SECRET, raw=cloud))

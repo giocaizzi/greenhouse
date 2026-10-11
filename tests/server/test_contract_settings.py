@@ -52,7 +52,8 @@ def _settings(**kwargs) -> Settings:
 # --- schema ------------------------------------------------------------------
 
 
-def test_settings_schema_and_field_table_match_golden(clean_env):
+@pytest.mark.usefixtures("clean_env")
+def test_settings_schema_and_field_table_match_golden():
     fields = []
     for name, info in Settings.model_fields.items():
         alias = info.validation_alias
@@ -81,7 +82,8 @@ def test_settings_model_config_explicit_keys():
     assert config["populate_by_name"] is False
 
 
-def test_settings_defaults_with_empty_environment(clean_env):
+@pytest.mark.usefixtures("clean_env")
+def test_settings_defaults_with_empty_environment():
     s = _settings()
     assert s.model_dump() == {
         "db_url": "sqlite:///data/irrigation.db",
@@ -148,14 +150,16 @@ def test_env_table_covers_every_field():
     assert [row[2] for row in ENV_TABLE] == list(Settings.model_fields)
 
 
+@pytest.mark.usefixtures("clean_env")
 @pytest.mark.parametrize(("env", "raw", "field", "expected"), ENV_TABLE, ids=[r[0] for r in ENV_TABLE])
-def test_each_field_reads_its_env_var(clean_env, monkeypatch, env, raw, field, expected):
+def test_each_field_reads_its_env_var(monkeypatch, env, raw, field, expected):
     monkeypatch.setenv(env, raw)
     assert getattr(_settings(), field) == expected
 
 
+@pytest.mark.usefixtures("clean_env")
 @pytest.mark.parametrize(("env", "raw", "field", "expected"), ENV_TABLE, ids=[r[0] for r in ENV_TABLE])
-def test_env_names_are_case_insensitive(clean_env, monkeypatch, env, raw, field, expected):
+def test_env_names_are_case_insensitive(monkeypatch, env, raw, field, expected):
     monkeypatch.setenv(env.lower(), raw)
     assert getattr(_settings(), field) == expected
 
@@ -171,8 +175,9 @@ ALIASED_FIELDS = [
 ]
 
 
+@pytest.mark.usefixtures("clean_env")
 @pytest.mark.parametrize(("suffix", "field"), ALIASED_FIELDS, ids=[r[0] for r in ALIASED_FIELDS])
-def test_aliased_fields_read_only_the_greenhouse_env_name(clean_env, monkeypatch, suffix, field):
+def test_aliased_fields_read_only_the_greenhouse_env_name(monkeypatch, suffix, field):
     """An aliased secret (MCP token, ntfy, auth secret/admin) is read from ``GREENHOUSE_X`` only.
 
     The bare ``X`` and the prefixed ``IRRIGATION_X`` used to configure it too (owner decision:
@@ -185,8 +190,9 @@ def test_aliased_fields_read_only_the_greenhouse_env_name(clean_env, monkeypatch
     assert getattr(_settings(), field) == "https://greenhouse.invalid"
 
 
+@pytest.mark.usefixtures("clean_env")
 @pytest.mark.parametrize(("suffix", "field"), ALIASED_FIELDS, ids=[r[0] for r in ALIASED_FIELDS])
-def test_aliased_fields_ignore_old_names_in_dotenv(clean_env, monkeypatch, tmp_path, suffix, field):
+def test_aliased_fields_ignore_old_names_in_dotenv(tmp_path, suffix, field):
     env_file = tmp_path / ".env"
     env_file.write_text(f"IRRIGATION_{suffix}=https://a.invalid\n{suffix}=https://b.invalid\n")
     assert getattr(Settings(_env_file=env_file), field) is None
@@ -194,13 +200,15 @@ def test_aliased_fields_ignore_old_names_in_dotenv(clean_env, monkeypatch, tmp_p
     assert getattr(Settings(_env_file=env_file), field) == "https://c.invalid"
 
 
+@pytest.mark.usefixtures("clean_env")
 @pytest.mark.parametrize(("suffix", "field"), ALIASED_FIELDS, ids=[r[0] for r in ALIASED_FIELDS])
-def test_aliased_fields_ignore_double_prefixed_name(clean_env, monkeypatch, suffix, field):
+def test_aliased_fields_ignore_double_prefixed_name(monkeypatch, suffix, field):
     monkeypatch.setenv(f"IRRIGATION_GREENHOUSE_{suffix}", "ignored")
     assert getattr(_settings(), field) is None
 
 
-def test_aliased_fields_accept_both_kwarg_spellings(clean_env):
+@pytest.mark.usefixtures("clean_env")
+def test_aliased_fields_accept_both_kwarg_spellings():
     assert _settings(mcp_token="a").mcp_token == "a"
     assert _settings(GREENHOUSE_MCP_TOKEN="b").mcp_token == "b"
 
@@ -224,13 +232,15 @@ def test_dotenv_in_cwd_is_loaded_and_env_beats_it(clean_env, monkeypatch):
     assert Settings(port=explicit_port).port == explicit_port
 
 
-def test_extra_inputs_are_ignored(clean_env, monkeypatch):
+@pytest.mark.usefixtures("clean_env")
+def test_extra_inputs_are_ignored(monkeypatch):
     monkeypatch.setenv("IRRIGATION_NOT_A_FIELD", "1")
     s = _settings(not_a_field=1)
     assert not hasattr(s, "not_a_field")
 
 
-def test_removed_check_interval_hours_is_ignored(clean_env, monkeypatch, caplog):
+@pytest.mark.usefixtures("clean_env")
+def test_removed_check_interval_hours_is_ignored(monkeypatch, caplog):
     """OD3: ``IRRIGATION_CHECK_INTERVAL_HOURS`` is gone — ignored like any unknown var, never validated."""
 
     monkeypatch.setenv("IRRIGATION_CHECK_INTERVAL_HOURS", "5")  # used to fail startup (5 does not divide 24)
@@ -265,17 +275,20 @@ def _errors(exc: ValidationError) -> list[dict]:
     return [{"loc": list(e["loc"]), "type": e["type"], "msg": e["msg"]} for e in exc.errors()]
 
 
+@pytest.mark.usefixtures("clean_env")
 @pytest.mark.parametrize("url", ["https://ntfy.invalid", "http://192.0.2.10:8080/", "HTTPS://ntfy.invalid", "", None])
-def test_ntfy_server_url_accepts_http_https_and_unset(clean_env, url):
+def test_ntfy_server_url_accepts_http_https_and_unset(url):
     assert _settings(ntfy_server_url=url).ntfy_server_url == url
 
 
+@pytest.mark.usefixtures("clean_env")
 @pytest.mark.parametrize("raw", ["", " ", "\t\n"])
-def test_blank_mcp_token_is_unset(clean_env, raw):
+def test_blank_mcp_token_is_unset(raw):
     assert _settings(mcp_token=raw).mcp_token is None
 
 
-def test_ntfy_url_error_never_echoes_credentials(clean_env):
+@pytest.mark.usefixtures("clean_env")
+def test_ntfy_url_error_never_echoes_credentials():
     with pytest.raises(ValidationError) as exc:
         _settings(ntfy_server_url="file://admin:hunter2@ntfy.invalid/x")
     assert "hunter2" not in str(exc.value)
@@ -287,7 +300,8 @@ def test_ntfy_client_refuses_a_non_http_scheme():
         NtfyClient("file:///tmp", "topic")
 
 
-def test_startup_validation_messages_match_golden(clean_env):
+@pytest.mark.usefixtures("clean_env")
+def test_startup_validation_messages_match_golden():
     observed = {}
     for case, kwargs in VALIDATION_CASES.items():
         with pytest.raises(ValidationError) as exc:
@@ -296,6 +310,7 @@ def test_startup_validation_messages_match_golden(clean_env):
     assert_golden_json("contracts/settings_validation_errors.json", observed)
 
 
+@pytest.mark.usefixtures("clean_env")
 @pytest.mark.parametrize(
     ("env", "raw", "kwarg"),
     [
@@ -303,7 +318,7 @@ def test_startup_validation_messages_match_golden(clean_env):
         ("IRRIGATION_CHECK_CRON_HOURS", "bogus", {"check_cron_hours": "bogus"}),
     ],
 )
-def test_env_sourced_values_fail_with_the_same_message_as_kwargs(clean_env, monkeypatch, env, raw, kwarg):
+def test_env_sourced_values_fail_with_the_same_message_as_kwargs(monkeypatch, env, raw, kwarg):
     with pytest.raises(ValidationError) as from_kwarg:
         _settings(**kwarg)
     monkeypatch.setenv(env, raw)
@@ -361,7 +376,8 @@ def test_direct_env_reads_match_golden():
     assert_golden_json("contracts/env_reads.json", _scan_env_reads())
 
 
-def test_tuya_env_vars_feed_device_gateway(clean_env, monkeypatch):
+@pytest.mark.usefixtures("clean_env")
+def test_tuya_env_vars_feed_device_gateway(monkeypatch):
     calls = []
     monkeypatch.setattr(gateway_mod.tinytuya, "Cloud", lambda **kw: calls.append(kw) or object())
     with pytest.raises(ValueError, match=r"^Missing TUYA_CLIENT_ID or TUYA_CLIENT_SECRET$"):
@@ -378,8 +394,9 @@ def test_tuya_env_vars_feed_device_gateway(clean_env, monkeypatch):
     ]
 
 
+@pytest.mark.usefixtures("clean_env")
 @pytest.mark.parametrize(("value", "expect_default"), [(None, True), ("", True), ("/srv/custom.json", False)])
-def test_plant_db_path_env_is_read_at_import_time(clean_env, value, expect_default):
+def test_plant_db_path_env_is_read_at_import_time(value, expect_default):
     """``plant_db.PLANT_DB_PATH`` is computed when the module is first imported."""
     env = dict(os.environ)
     if value is not None:
@@ -397,7 +414,8 @@ def test_plant_db_path_env_is_read_at_import_time(clean_env, value, expect_defau
         assert out == "/srv/custom.json"
 
 
-def test_irrigation_tz_is_display_timezone_fallback(clean_env, monkeypatch):
+@pytest.mark.usefixtures("clean_env")
+def test_irrigation_tz_is_display_timezone_fallback(monkeypatch):
     monkeypatch.setattr(utils, "_display_timezone", None)
     monkeypatch.delenv("IRRIGATION_TZ", raising=False)
     assert utils.get_display_timezone() == "UTC"
@@ -407,7 +425,8 @@ def test_irrigation_tz_is_display_timezone_fallback(clean_env, monkeypatch):
     assert utils.get_display_timezone() == "Asia/Tokyo"
 
 
-def test_cli_server_url_env_and_default(clean_env, monkeypatch):
+@pytest.mark.usefixtures("clean_env")
+def test_cli_server_url_env_and_default(monkeypatch):
     ctx = SimpleNamespace(obj=None)
     assert str(get_client(ctx).http.base_url) == "http://localhost:8000"
     assert str(_login_client(ctx).http.base_url) == "http://localhost:8000"

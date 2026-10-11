@@ -37,6 +37,7 @@ class Boom(RuntimeError):
 
 @pytest.fixture
 def three_dry_clusters(clean_env, frozen_clock):
+    del clean_env, frozen_clock  # requested only for their side effects
     p = Pipeline()
     for name in ("Alpha", "Bravo", "Charlie"):
         p.seed_cluster(name, soil=35.0)
@@ -228,7 +229,7 @@ def test_scheduler_check_job_without_registry_reports_errors_but_commits(three_d
 def test_scheduler_check_job_swallows_a_total_failure(three_dry_clusters, tx_log, monkeypatch, caplog):
     """If ``check_all_clusters`` itself raises, the job rolls back, logs and returns (never raises)."""
 
-    def explode(self):
+    def explode(_self):
         raise Boom("whole check exploded")
 
     monkeypatch.setattr(IrrigationService, "check_all_clusters", explode)

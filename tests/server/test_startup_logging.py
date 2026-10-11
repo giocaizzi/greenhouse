@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 from types import SimpleNamespace
 
+import pytest
 from starlette.requests import Request
 
 from greenhouse_server import app as app_module
@@ -55,7 +56,7 @@ def test_preference_flags_log_a_failed_read_and_keep_defaults(caplog, monkeypatc
             msg = "no such table: user_preferences"
             raise RuntimeError(msg)
 
-    monkeypatch.setattr(context, "_repo_from_request", lambda request: (_Repo(), session))
+    monkeypatch.setattr(context, "_repo_from_request", lambda _request: (_Repo(), session))
     request = Request({"type": "http", "headers": [], "app": _fake_app()})
     with caplog.at_level(logging.DEBUG, logger="greenhouse_server.web.context"):
         assert context._preference_flags(request) == (False, None, False, "auto", "UTC")
@@ -73,7 +74,8 @@ def test_repo_from_request_logs_a_failed_session_open(caplog):
     assert record.exc_info is not None
 
 
-def test_now_text_uses_the_timezone_preference_not_the_process_zone(clean_env, frozen_clock, monkeypatch):
+@pytest.mark.usefixtures("clean_env", "frozen_clock")
+def test_now_text_uses_the_timezone_preference_not_the_process_zone(monkeypatch):
     """The footer clock follows ``UserPreferences.timezone`` (process ``TZ`` is UTC under ``clean_env``)."""
 
     class _Prefs:
@@ -89,17 +91,19 @@ def test_now_text_uses_the_timezone_preference_not_the_process_zone(clean_env, f
         def get_active_vacation(self):
             return None
 
-    monkeypatch.setattr(context, "_repo_from_request", lambda request: (_Repo(), _BrokenRepoSession()))
+    monkeypatch.setattr(context, "_repo_from_request", lambda _request: (_Repo(), _BrokenRepoSession()))
     request = Request({"type": "http", "headers": [], "app": _fake_app()})
     request.app.state.settings = SimpleNamespace(auth_enabled=True)
     assert context.base_context(request)["now_text"] == "2026-04-15 12:00"  # FROZEN_INSTANT 10:00 UTC, CEST
 
 
-def test_now_text_falls_back_to_utc_for_an_unknown_zone(frozen_clock):
+@pytest.mark.usefixtures("frozen_clock")
+def test_now_text_falls_back_to_utc_for_an_unknown_zone():
     assert context._now_text("Mars/Olympus_Mons") == "2026-04-15 10:00"
 
 
-def test_ignored_legacy_secret_env_names_are_warned_by_name_only(clean_env, caplog, monkeypatch):
+@pytest.mark.usefixtures("clean_env")
+def test_ignored_legacy_secret_env_names_are_warned_by_name_only(caplog, monkeypatch):
     """A legacy secret env name (bare / IRRIGATION_) that is set is named in a WARNING; its value never is."""
     monkeypatch.setenv("MCP_TOKEN", "s3cr3t-value")
     monkeypatch.setenv("irrigation_auth_secret_key", "other-s3cr3t")

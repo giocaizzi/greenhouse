@@ -55,6 +55,7 @@ TTL_SECONDS = 24 * 60 * 60
 @pytest.fixture(autouse=True)
 def _hermetic(clean_env, frozen_clock):
     """No env/.env leakage into Settings, UTC, and a frozen wall clock for every test."""
+    del clean_env  # requested only for its side effect
     return frozen_clock
 
 
@@ -281,9 +282,9 @@ def _token(app, **claims) -> str:
 @pytest.mark.parametrize(
     ("auth", "status", "body"),
     [
-        (lambda app: {}, 401, {"detail": "Not authenticated"}),
-        (lambda app: {"headers": {"Authorization": "Bearer junk"}}, 401, {"detail": "Invalid session"}),
-        (lambda app: {"headers": {"Authorization": "Basic Zm9vOmJhcg=="}}, 401, {"detail": "Not authenticated"}),
+        (lambda _app: {}, 401, {"detail": "Not authenticated"}),
+        (lambda _app: {"headers": {"Authorization": "Bearer junk"}}, 401, {"detail": "Invalid session"}),
+        (lambda _app: {"headers": {"Authorization": "Basic Zm9vOmJhcg=="}}, 401, {"detail": "Not authenticated"}),
         (
             lambda app: {"headers": {"Authorization": f"Bearer {_token(app, exp=FROZEN_TS)}"}},
             401,
@@ -307,12 +308,12 @@ def _token(app, **claims) -> str:
             {"detail": "Invalid session"},  # the header wins over a valid cookie
         ),
         (
-            lambda app: {"headers": {"Authorization": f"Bearer {MCP_TOKEN}"}},
+            lambda _app: {"headers": {"Authorization": f"Bearer {MCP_TOKEN}"}},
             200,
             {"id": MCP_USER_ID, "username": "mcp"},
         ),
         # The MCP token is bearer-only: in the cookie it is decoded as a JWT and refused.
-        (lambda app: {"cookies": {"greenhouse_session": MCP_TOKEN}}, 401, {"detail": "Invalid session"}),
+        (lambda _app: {"cookies": {"greenhouse_session": MCP_TOKEN}}, 401, {"detail": "Invalid session"}),
     ],
     ids=[
         "no-credentials",
@@ -395,7 +396,8 @@ def test_api_401_carries_www_authenticate_header(real):
     assert [r.headers.get("www-authenticate") for r in responses] == ["Bearer", "Bearer", "Bearer"]
 
 
-def test_secret_unset_bearer_is_503_but_no_credentials_is_401(clean_env):
+@pytest.mark.usefixtures("clean_env")
+def test_secret_unset_bearer_is_503_but_no_credentials_is_401():
     client, _, engine = _client(auth_secret_key=None)
     try:
         assert (client.get("/api/v1/auth/me").status_code, client.get("/api/v1/auth/me").json()) == (
@@ -412,7 +414,8 @@ def test_secret_unset_bearer_is_503_but_no_credentials_is_401(clean_env):
         engine.dispose()
 
 
-def test_mcp_token_not_accepted_on_api_when_mcp_is_unconfigured(clean_env):
+@pytest.mark.usefixtures("clean_env")
+def test_mcp_token_not_accepted_on_api_when_mcp_is_unconfigured():
     client, _, engine = _client(mcp_token=None)
     try:
         resp = client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {MCP_TOKEN}"})
@@ -421,7 +424,8 @@ def test_mcp_token_not_accepted_on_api_when_mcp_is_unconfigured(clean_env):
         engine.dispose()
 
 
-def test_auth_disabled_principal_is_system(clean_env):
+@pytest.mark.usefixtures("clean_env")
+def test_auth_disabled_principal_is_system():
     client, _, engine = _client(auth_enabled=False, auth_secret_key=None)
     try:
         assert client.get("/api/v1/auth/me").json() == {"id": SYSTEM_USER_ID, "username": "system"}
@@ -458,7 +462,8 @@ def test_login_success_body_cookie_and_last_login(real):
     assert _admin(app).last_login_at == FROZEN_TS
 
 
-def test_login_cookie_secure_flag_and_custom_name(clean_env):
+@pytest.mark.usefixtures("clean_env")
+def test_login_cookie_secure_flag_and_custom_name():
     ttl_minutes = 5
     client, _, engine = _client(auth_cookie_secure=True, auth_cookie_name="gh", auth_token_ttl_minutes=ttl_minutes)
     try:
@@ -589,6 +594,7 @@ def test_bootstrap_is_skipped_when_auth_disabled(engine):
 # ── MCP bearer gate ───────────────────────────────────────────────────────────
 
 
+@pytest.mark.usefixtures("clean_env")
 @pytest.mark.parametrize(
     ("mcp_token", "headers", "status", "detail"),
     [
@@ -605,7 +611,7 @@ def test_bootstrap_is_skipped_when_auth_disabled(engine):
         ("   ", {"Authorization": "Bearer x"}, 503, "MCP auth not configured"),  # whitespace-only = unset
     ],
 )
-def test_mcp_gate(clean_env, mcp_token, headers, status, detail):
+def test_mcp_gate(mcp_token, headers, status, detail):
     client, _, engine = _client(mcp_token=mcp_token)
     try:
         resp = client.get("/mcp", headers=headers)
@@ -617,7 +623,8 @@ def test_mcp_gate(clean_env, mcp_token, headers, status, detail):
         engine.dispose()
 
 
-def test_mcp_gate_compares_the_token_in_constant_time(clean_env, monkeypatch):
+@pytest.mark.usefixtures("clean_env")
+def test_mcp_gate_compares_the_token_in_constant_time(monkeypatch):
     """B-12: the `/mcp` gate compares the bearer with ``hmac.compare_digest``, not ``!=``.
 
     A short-circuiting string comparison leaks how many leading characters of a guess
