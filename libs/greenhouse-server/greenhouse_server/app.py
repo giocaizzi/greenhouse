@@ -6,6 +6,8 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated
 
+import dotenv
+import uvicorn
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.staticfiles import StaticFiles
@@ -371,10 +373,7 @@ def _init_plant_db(settings: Settings) -> PlantDatabase:
 
 def main() -> None:
     """Entry point for greenhouse-server command."""
-    import uvicorn
-    from dotenv import load_dotenv
-
-    load_dotenv()
+    dotenv.load_dotenv()
     settings = Settings()
     app = create_app(settings)
     uvicorn.run(app, host=settings.host, port=settings.port)

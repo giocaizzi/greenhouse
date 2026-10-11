@@ -31,6 +31,7 @@ from greenhouse_core.models import (
     TriggeredBy,
 )
 from greenhouse_core.repository import IrrigationRepository
+from greenhouse_server.services import pump_watcher
 from greenhouse_server.services.jobs import job_session
 
 if TYPE_CHECKING:
@@ -184,8 +185,6 @@ def _run_pump_watcher(
     forced: bool = False,
 ) -> None:
     """The watcher job body: its own session; tuning and the health monitor are read when it runs."""
-    from greenhouse_server.services.pump_watcher import PumpWatcherService
-
     with job_session(app, logger, "Pump watcher job failed for irrigator %d", irrigator_id, commit=False) as session:
         repo = IrrigationRepository(session)
         irrigator = repo.get_irrigator(irrigator_id)
@@ -195,7 +194,8 @@ def _run_pump_watcher(
         shared = getattr(app.state, "health_monitor", None)
         # The watcher's own view: its alerts go into this job's session, never another job's (S6).
         monitor = shared.for_repo(repo) if shared is not None else None
-        watcher = PumpWatcherService(
+        # Looked up on the module per run, so a replaced class (test spy) is the one built.
+        watcher = pump_watcher.PumpWatcherService(
             repo,
             registry,
             poll_seconds=poll,
@@ -247,7 +247,8 @@ def schedule_pump_watcher(
     if duration_minutes <= 0:
         return False
     try:
-        from greenhouse_server.scheduler import _app, scheduler, shutdown_requested, wait_for_shutdown
+        # Upward and circular (the scheduler imports the services at top level); ``_app`` is read per call.
+        from greenhouse_server.scheduler import _app, scheduler, shutdown_requested, wait_for_shutdown  # noqa: PLC0415
 
         if not scheduler.running or _app is None:
             return False

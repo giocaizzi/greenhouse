@@ -2,8 +2,10 @@
 
 Background-job code, kept apart from the pipeline in :mod:`.irrigation` (which imports only what
 it calls). Every real watering arms a check — automatic, forced and manual starts; a logged
-hand-watering (no pump) does not. The scheduler is imported lazily, inside
-each function, because it sits above the services layer and reads the app at call time.
+hand-watering (no pump) does not. The scheduler is imported lazily, inside each function: it
+sits above the services layer and imports them (this module included, through
+``services.irrigation``) at module level, so a top-level import back would be circular, and its
+``_app`` is rebound by ``init_scheduler`` (and patched by tests) after import.
 Records go to the ``greenhouse_server.services.irrigation`` logger, the pipeline's, so log
 routing and filters keyed on it keep matching.
 """
@@ -24,6 +26,7 @@ from greenhouse_core.constants import (
 from greenhouse_core.models import ENTITY_CLUSTER, EVENT_ACTION_START, SOURCE_LEAK, TRIGGERED_BY_AUTO, TriggeredBy
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.services.jobs import job_session, read_session
+from greenhouse_server.services.leak import LeakDetectionService
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -93,8 +96,7 @@ def _run_leak_check(cluster_id: int, started_at: int, after_seconds: int = LEAK_
     next startup. ``after_seconds`` is the observation window after the start
     (see :func:`leak_check_after_seconds`).
     """
-    from greenhouse_server.scheduler import _app
-    from greenhouse_server.services.leak import LeakDetectionService
+    from greenhouse_server.scheduler import _app  # noqa: PLC0415 — circular; see the module docstring
 
     if _app is None:
         return
@@ -129,7 +131,7 @@ def _run_leak_check(cluster_id: int, started_at: int, after_seconds: int = LEAK_
 def _add_leak_check_job(
     cluster_id: int, started_at: int, *, run_at: int | None = None, after_seconds: int = LEAK_CHECK_DELAY_SECONDS
 ) -> None:
-    from greenhouse_server.scheduler import scheduler
+    from greenhouse_server.scheduler import scheduler  # noqa: PLC0415 — circular; see the module docstring
 
     due = started_at + after_seconds
     # The default window keeps the job's original ``[cluster_id, started_at]`` args.
@@ -153,7 +155,7 @@ def _schedule_leak_check(cluster_id: int, started_at: int, *, after_seconds: int
     The job is in-memory; :func:`rearm_leak_checks` restores it after a restart.
     """
     try:
-        from greenhouse_server.scheduler import scheduler
+        from greenhouse_server.scheduler import scheduler  # noqa: PLC0415 — circular; see the module docstring
 
         if not scheduler.running:
             return
@@ -263,7 +265,7 @@ def rearm_leak_checks() -> int:
     Returns:
         Number of leak checks scheduled (0 when the scheduler isn't running).
     """
-    from greenhouse_server.scheduler import _app, scheduler
+    from greenhouse_server.scheduler import _app, scheduler  # noqa: PLC0415 — circular; see the module docstring
 
     if not scheduler.running or _app is None:
         return 0

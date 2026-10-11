@@ -19,10 +19,17 @@ from greenhouse_core.constants import (
 )
 from greenhouse_core.devices import DeviceGateway
 from greenhouse_core.repository import IrrigationRepository
+from greenhouse_core.utils import get_display_timezone, set_display_timezone
 from greenhouse_server import state
 from greenhouse_server.config import Settings
+from greenhouse_server.services.anomaly import SensorAnomalyService
+from greenhouse_server.services.health import PlantHealthService
+from greenhouse_server.services.health_monitor import DeviceHealthMonitor
+from greenhouse_server.services.irrigation import IrrigationService
 from greenhouse_server.services.jobs import job_session as _job_session  # private: keeps the frozen dir() surface
 from greenhouse_server.services.jobs import read_session as _read_session  # private, as above
+from greenhouse_server.services.sync import SyncService
+from greenhouse_server.services.weather import WeatherClient
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -31,8 +38,6 @@ if TYPE_CHECKING:
     from starlette.requests import Request
 
     from greenhouse_core.devices import DeviceRegistry
-    from greenhouse_server.services.irrigation import IrrigationService
-
 logger = logging.getLogger(__name__)
 
 # Defaults for every job, periodic and one-shot alike. APScheduler's stock
@@ -162,7 +167,7 @@ def init_scheduler(app: FastAPI, settings: Settings, tz_name: str | None = None)
             clock the engine gates windows against. Falls back to UTC when
             unset or unknown — never the host zone.
     """
-    global _app
+    global _app  # noqa: PLW0603 — tests patch scheduler._app (pinned: tests/test_contract_imports.py PATCHED_PATHS)
     _app = app
 
     # ``configure()`` requires a stopped scheduler (it raises otherwise, before
@@ -268,9 +273,6 @@ def apply_timezone_preference(request: "Request", tz_name: str | None) -> None:
             ``app.state.settings``).
         tz_name: The new ``UserPreferences.timezone`` value.
     """
-    from greenhouse_core.utils import get_display_timezone, set_display_timezone
-    from greenhouse_server.services.weather import WeatherClient
-
     if (tz_name or "UTC") == get_display_timezone():
         return
 
@@ -307,8 +309,6 @@ def _get_cloud() -> DeviceGateway | None:
 
 def _sync_job() -> None:
     """Background job: sync all sensor data."""
-    from greenhouse_server.services.sync import SyncService
-
     gateway = _get_cloud()
     if gateway is None:
         logger.debug("Sync job skipped: no Tuya credentials")
@@ -323,8 +323,6 @@ def _sync_job() -> None:
 
 def _health_snapshot_job() -> None:
     """Background job: compute and persist daily plant health snapshots."""
-    from greenhouse_server.services.health import PlantHealthService
-
     with _job_session(_app, logger, "Plant health snapshot job failed") as session:
         repo = IrrigationRepository(session)
         svc = PlantHealthService(repo, state.plant_db(_job_app()))
@@ -333,11 +331,8 @@ def _health_snapshot_job() -> None:
 
 def _build_irrigation_service(
     app: FastAPI, repo: IrrigationRepository, registry: "DeviceRegistry | None", gateway: DeviceGateway | None
-) -> "IrrigationService":
+) -> IrrigationService:
     """Wire the check job's service on the job's own repo, with its own view of the shared health monitor."""
-    from greenhouse_server.services.irrigation import IrrigationService
-    from greenhouse_server.services.sync import SyncService
-
     sync_svc = SyncService(repo, registry, gateway)
     shared = state.health_monitor(app)
     monitor = shared.for_repo(repo) if shared is not None else None
@@ -354,11 +349,6 @@ def _build_irrigation_service(
 
 def _check_job() -> None:
     """Background job: check all clusters."""
-    # Resolved here, before the session opens, so an import failure escapes the job
-    # instead of being logged as "Check job failed".
-    from greenhouse_server.services.irrigation import IrrigationService  # noqa: F401
-    from greenhouse_server.services.sync import SyncService  # noqa: F401
-
     gateway = _get_cloud()
     registry = state.device_registry(_job_app())
 
@@ -369,8 +359,6 @@ def _check_job() -> None:
 
 def _anomaly_job() -> None:
     """Background job: scan all sensors for staleness and drift anomalies."""
-    from greenhouse_server.services.anomaly import SensorAnomalyService
-
     with _job_session(_app, logger, "Anomaly scan job failed") as session:
         repo = IrrigationRepository(session)
         SensorAnomalyService(repo, notifier=state.ntfy_notifier(_job_app())).scan()
@@ -407,8 +395,6 @@ def init_health_monitor(app: FastAPI, settings: Settings) -> None:
     restart keeps blocked devices blocked. Falls open if there is no device
     registry wired (tests usually omit it).
     """
-    from greenhouse_server.services.health_monitor import DeviceHealthMonitor
-
     registry = state.device_registry(app)
     if registry is None:
         logger.debug("Health monitor init skipped: no device registry")

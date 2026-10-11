@@ -4,6 +4,7 @@ from collections.abc import Iterable
 from typing import Any, cast
 from urllib.parse import urlsplit
 
+from apscheduler.triggers.cron import CronTrigger
 from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -122,8 +123,6 @@ class Settings(BaseSettings):
     def _validate_check_cron_hours(cls, value: str) -> str:
         # Parse with APScheduler's own cron `hour` field so anything accepted
         # here is exactly what the scheduler will accept at registration.
-        from apscheduler.triggers.cron import CronTrigger
-
         try:
             CronTrigger(hour=value, minute=0)
         except (ValueError, TypeError) as exc:
