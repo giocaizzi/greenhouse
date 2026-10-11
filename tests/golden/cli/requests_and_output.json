@@ -5013,7 +5013,7 @@
    "token_file_after": null,
    "token_file_before": null
   },
-  "stats.export_json_response_writes_empty": {
+  "stats.export_json_response_is_an_error": {
    "argv": [
     "greenhouse",
     "stats",
@@ -5030,10 +5030,8 @@
    ],
    "env": {},
    "exception": null,
-   "exit_code": 0,
-   "files": {
-    "out.csv": ""
-   },
+   "exit_code": 1,
+   "files": {},
    "input": null,
    "requests": [
     {
@@ -5053,8 +5051,8 @@
      "url": "http://localhost:8000/api/v1/clusters/3/stats/export?days=7"
     }
    ],
-   "stderr": "",
-   "stdout": "Exported to out.csv\n",
+   "stderr": "Error: Expected a CSV export from the server, got application/json\n",
+   "stdout": "",
    "token_file_after": null,
    "token_file_before": null
   },
@@ -8947,7 +8945,7 @@
    ],
    "returned": "a,b\n1,2\n"
   },
-  "stats_export.json_response_returns_empty": {
+  "stats_export.json_response_raises": {
    "call": {
     "args": [
      3
@@ -8975,7 +8973,11 @@
      "url": "http://client.example:8123/api/v1/clusters/3/stats/export?days=2"
     }
    ],
-   "returned": ""
+   "server_error": {
+    "detail": "Expected a CSV export from the server, got application/json",
+    "status_code": 200,
+    "str": "Server error 200: Expected a CSV export from the server, got application/json"
+   }
   },
   "status": {
    "call": {

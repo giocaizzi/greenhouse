@@ -186,7 +186,7 @@ def tui_client_factory(http: TestClient, log: list | None = None):
     def factory(token: str | None) -> IrrigationClient:
         client = IrrigationClient(base_url="http://testserver", token=token or "")
         client.http = http
-        original = client._request
+        original = client._send  # every request (JSON and the CSV export) goes through _send
 
         def serialized(method, path, **kwargs):
             if log is not None:
@@ -194,7 +194,7 @@ def tui_client_factory(http: TestClient, log: list | None = None):
             with lock:
                 return original(method, path, **kwargs)
 
-        client._request = serialized
+        client._send = serialized
         return client
 
     return factory

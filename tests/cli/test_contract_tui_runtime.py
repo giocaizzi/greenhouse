@@ -243,14 +243,14 @@ def test_401_opens_one_sign_in_dialog_then_logs_in(clean_env, frozen_clock):
         client.http = TestClient(application, raise_server_exceptions=False)
         if token:
             client.http.headers["Authorization"] = f"Bearer {token}"
-        original = client._request
+        original = client._send  # every request (JSON and the CSV export) goes through _send
 
         def serialized(method, path, **kwargs):
             log.append((method, path, kwargs.get("json"), kwargs.get("params")))
             with lock:
                 return original(method, path, **kwargs)
 
-        client._request = serialized
+        client._send = serialized
         return client
 
     async def scenario():

@@ -105,6 +105,12 @@ def _format_validation_item(item: Mapping[str, Any]) -> str:
     return f"{field}: {item['msg']}" if field else str(item["msg"])
 
 
+def _is_csv(resp: httpx.Response) -> bool:
+    """Whether the server answered with a CSV document (the stats export)."""
+    content_type: str = resp.headers.get("content-type", "")
+    return content_type.startswith("text/csv")
+
+
 def _decode_json(resp: httpx.Response) -> JSONObject | list[Any]:
     """The JSON body of a successful response; an empty or non-JSON body is a :class:`ServerError`."""
     if not resp.content.strip():
@@ -144,12 +150,11 @@ class IrrigationClient:
     def __exit__(self, *exc_info: object) -> None:
         self.http.close()
 
-    def _request(self, method: str, path: str, **kwargs: Any) -> JSONObject | list[Any]:
-        """Send one request and decode it.
+    def _send(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
+        """Send one request; HTTP >= 400 and transport failures raise :class:`ServerError`.
 
-        Every failure becomes a :class:`ServerError` (the CLI prints it and exits 1, the
-        TUI toasts it): HTTP >= 400, a refused connection, a timeout or other transport
-        error (status 0), and a 2xx body that is empty or not JSON (B-17).
+        A refused connection, a timeout or any other transport error is status 0
+        (B-17); the CLI prints the error and exits 1, the TUI toasts it.
         """
         try:
             resp = self.http.request(method, path, **kwargs)
@@ -166,10 +171,17 @@ class IrrigationClient:
             except Exception:  # noqa: BLE001
                 detail = resp.text
             raise ServerError(resp.status_code, _format_detail(detail))
+        return resp
 
-        if resp.headers.get("content-type", "").startswith("text/csv"):
+    def _request(self, method: str, path: str, **kwargs: Any) -> JSONObject | list[Any]:
+        """Send one request and decode it; a CSV body comes back as ``{"csv": text}``.
+
+        Besides :meth:`_send`'s errors, a 2xx body that is empty or not JSON is a
+        :class:`ServerError` (B-17).
+        """
+        resp = self._send(method, path, **kwargs)
+        if _is_csv(resp):
             return {"csv": resp.text}
-
         return _decode_json(resp)
 
     def _object(self, method: str, path: str, **kwargs: Any) -> JSONObject:
@@ -381,10 +393,17 @@ class IrrigationClient:
         return self._object("GET", f"/api/v1/clusters/{cluster_id}/stats", params={"days": days})
 
     def stats_export(self, cluster_id: int, days: int = 7) -> str:
-        """Download the statistics CSV as text (``GET /clusters/{id}/stats/export``)."""
-        result = self._object("GET", f"/api/v1/clusters/{cluster_id}/stats/export", params={"days": days})
-        csv: str = result.get("csv", "")
-        return csv
+        """Download the statistics CSV as text (``GET /clusters/{id}/stats/export``).
+
+        A response that is not ``text/csv`` raises :class:`ServerError` instead of
+        yielding ``""`` — otherwise ``stats --export`` wrote an empty file and
+        reported success.
+        """
+        resp = self._send("GET", f"/api/v1/clusters/{cluster_id}/stats/export", params={"days": days})
+        if not _is_csv(resp):
+            content_type = resp.headers.get("content-type") or "no content type"
+            raise ServerError(resp.status_code, f"Expected a CSV export from the server, got {content_type}")
+        return resp.text
 
     def health(self) -> JSONObject:
         """Fetch the server health summary (``GET /health``)."""
