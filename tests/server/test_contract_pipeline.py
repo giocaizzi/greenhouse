@@ -22,7 +22,8 @@ Contracts / invariants guarded here:
   :class:`IrrigationDecision`;
 - I11 — an open leak alert holds ``/irrigate`` even with ``force=true``, while
   ``POST /irrigators/{id}/start`` (the escape hatch) still actuates;
-- observed bugs B-1, B-4, B-5, B-6 pinned as ``*_current_behavior_*`` (B-8 fixed by drift pair D5).
+- observed bugs B-1, B-4, B-5 pinned as ``*_current_behavior_*`` (B-8 fixed by drift pair D5; B-6 fixed:
+  a device-health block rewrites the decision log).
 """
 
 from __future__ import annotations
@@ -1030,22 +1031,25 @@ def test_reraised_alert_current_behavior_is_not_renotified(pipeline):
     assert [n["kind"] for n in pipeline.notifier.sent] == ["alert"]
 
 
-def test_device_health_block_current_behavior_not_written_to_decision_log(pipeline):
-    """Pins current (buggy) behavior: the device-health block is not re-persisted (B-6) — see REFACTOR_NOTES.md.
+def test_device_health_block_is_written_to_decision_log(pipeline):
+    """B-6 fixed: the device-health block is the decision the audit log records.
 
-    The response says ``skip`` with a ``device_no_water`` reason, but the
-    ``decision_logs`` row keeps the engine's ``irrigate`` action and reasons.
+    The response says ``skip`` led by a ``device_no_water`` reason, and the
+    ``decision_logs`` row is rewritten to match: ``skip``, ``primary_code``
+    ``device_no_water``, ``actuated = false``, the full trail in ``payload_json``.
     """
     _install_health_block(pipeline, pipeline.seed_cluster(soil=35.0))
     pipeline.mark()
     resp = _irrigate(pipeline)["response"]
     assert resp["action"] == "skip"
-    assert "device_no_water" in [r["code"] for r in resp["reasons"]]
+    assert [r["code"] for r in resp["reasons"]][0] == "device_no_water"
     rows = pipeline.db_rows()
     (log,) = rows["decision_logs"]
-    assert log["action"] == "irrigate"
-    assert log["actuated"] is False
-    assert "device_no_water" not in json.dumps(log["payload_json"])
+    assert (log["action"], log["primary_code"], log["actuated"]) == ("skip", "device_no_water", False)
+    assert log["reason_text"] == resp["reason"]
+    decision = IrrigationDecision.model_validate(log["payload_json"])
+    assert decision.action.value == "skip"
+    assert [r.code.value for r in decision.reasons] == [r["code"] for r in resp["reasons"]]
     assert pipeline.wiring.irrigator.calls == []
     assert [a["code"] for a in rows["activity_events"]] == ["decision_skip"]
 

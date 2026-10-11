@@ -18,7 +18,7 @@ from greenhouse_core.constants import (
 from greenhouse_core.devices import DeviceRegistry, UnknownDeviceModel
 from greenhouse_core.logic import IrrigationLogic
 from greenhouse_core.logic.cleaning import clean_readings_desc
-from greenhouse_core.logic.decision import Action, Severity
+from greenhouse_core.logic.decision import Action, Reason, Severity
 from greenhouse_core.logic.plant_needs import moisture_target_range
 from greenhouse_core.models import (
     ENTITY_CLUSTER,
@@ -636,11 +636,10 @@ class IrrigationService:
     ) -> bool:
         """Device-health gate: turn the run into a skip when an alarm blocks this irrigator.
 
-        If a NO_WATER / RAIN / OFFLINE alarm is open for the irrigator, append a typed Reason,
-        set the decision to ``Action.SKIP``, log the skip with the blocking alarms, and rewrite
-        ``result`` in place as a skip (same audit-trail path as the engine's own skip flow).
-        Returns True when the run was blocked; False (nothing touched) when it may actuate or no
-        monitor is wired.
+        If a NO_WATER / RAIN / OFFLINE alarm is open for the irrigator, the run becomes a skip led
+        by the alarm's typed Reason (see :meth:`_skip_run`) and ``result`` also lists the blocking
+        alarms. Returns True when the run was blocked; False (nothing touched) when it may actuate
+        or no monitor is wired.
         """
         if self._health_monitor is None:
             return False
@@ -648,13 +647,46 @@ class IrrigationService:
         if not blocked:
             return False
         primary = blocking_alarms[0]
-        trigger = HEALTH_ALARM_TO_TRIGGER[primary]
-        decision.add_reason(
-            code=trigger,
-            message=f"Actuation blocked by device health: {primary.value} on '{irrigator.name}'",
-            severity=Severity.CRITICAL,
+        self._skip_run(
+            cluster_id,
+            decision,
+            result,
+            Reason(
+                code=HEALTH_ALARM_TO_TRIGGER[primary],
+                message=f"Actuation blocked by device health: {primary.value} on '{irrigator.name}'",
+                severity=Severity.CRITICAL,
+            ),
+            payload={"blocking_alarms": [a.value for a in blocking_alarms], "irrigator_id": irrigator.id},
         )
+        result["blocking_alarms"] = [a.value for a in blocking_alarms]
+        return True
+
+    def _skip_run(
+        self,
+        cluster_id: int,
+        decision: "IrrigationDecision",
+        result: PipelineResult,
+        lead: Reason,
+        *,
+        payload: dict[str, Any],
+    ) -> None:
+        """Turn the engine's IRRIGATE into a server-side skip that every record agrees on.
+
+        ``lead`` goes first in the reason trail, so it becomes the decision's ``primary_code``;
+        the engine's ``decision_logs`` row is rewritten to the skip (B-6: it used to keep
+        ``irrigate``), a ``decision_skip`` activity row carries ``payload``, and ``result`` is
+        rewritten in place.
+        """
+        decision.reasons.insert(0, lead)
         decision.action = Action.SKIP
+        if decision.decision_log_id is not None:
+            self._repo.rewrite_decision_log(
+                decision.decision_log_id,
+                action=decision.action.value,
+                primary_code=lead.code.value,
+                reason_text=decision.reason_text,
+                payload=decision.model_dump(mode="json"),
+            )
         self._repo.add_activity_event(
             source=SOURCE_IRRIGATION,
             entity_type=ENTITY_CLUSTER,
@@ -662,16 +694,11 @@ class IrrigationService:
             code="decision_skip",
             message=decision.reason_text,
             severity="warning",
-            payload={
-                "blocking_alarms": [a.value for a in blocking_alarms],
-                "irrigator_id": irrigator.id,
-            },
+            payload=payload,
         )
         result["action"] = "skip"
         result["reason"] = decision.reason_text
         result["reasons"] = [r.model_dump() for r in decision.reasons]
-        result["blocking_alarms"] = [a.value for a in blocking_alarms]
-        return True
 
     def run_irrigation_pipeline(
         self,

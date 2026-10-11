@@ -861,6 +861,30 @@ class IrrigationRepository:
             row.actuated = actuated
             self.session.flush()
 
+    def rewrite_decision_log(
+        self,
+        log_id: int,
+        *,
+        action: str,
+        primary_code: str | None,
+        reason_text: str,
+        payload: dict[str, Any],
+    ) -> None:
+        """Overwrite a persisted decision with the verdict a server-side gate turned it into.
+
+        The engine logs its decision before the server's actuation gates (device health,
+        global dry run, daily caps) run; when one of them turns the run into a skip, the
+        row is rewritten so the audit trail shows the decision that was actually applied.
+        """
+        row = self.session.get(DecisionLog, log_id)
+        if row is None:
+            return
+        row.action = action
+        row.primary_code = primary_code
+        row.reason_text = reason_text
+        row.payload_json = json.dumps(payload, default=str)
+        self.session.flush()
+
     def list_decision_logs(self, cluster_id: int, limit: int = 50) -> list[DecisionLog]:
         """Recent decisions for a cluster, newest first."""
         return list(

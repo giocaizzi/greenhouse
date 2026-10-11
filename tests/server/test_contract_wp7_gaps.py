@@ -897,10 +897,11 @@ def test_health_block_names_the_first_blocking_alarm(db, pump, monkeypatch):
     assert pump.adapter.calls == []
     assert (result["action"], result["reason"], result["blocking_alarms"]) == (
         "skip",
-        "soil low; Actuation blocked by device health: no_water on 'Gap Pump'",
+        "Actuation blocked by device health: no_water on 'Gap Pump'; soil low",
         ["no_water", "device_offline"],
     )
-    assert [r["code"] for r in result["reasons"]] == ["sensor_dry", "device_no_water"]
+    # B-6: the block leads the trail, so it is the decision's primary code.
+    assert [r["code"] for r in result["reasons"]] == ["device_no_water", "sensor_dry"]
     (activity,) = _rows(db, ActivityEvent)
     assert (activity.code, activity.severity) == ("decision_skip", "warning")
 
