@@ -468,21 +468,39 @@
    "token_file_after": null,
    "token_file_before": null
   },
-  "check.cluster_zero_current_behavior": {
+  "check.cluster_zero_is_an_id": {
    "argv": [
     "greenhouse",
     "check",
     "0"
    ],
-   "clients": [],
+   "clients": [
+    {
+     "base_url": "http://localhost:8000",
+     "headers": {},
+     "timeout": 30.0
+    }
+   ],
    "env": {},
    "exception": null,
-   "exit_code": 1,
+   "exit_code": 0,
    "files": {},
    "input": null,
-   "requests": [],
-   "stderr": "Error: provide a cluster ID or --all\n",
-   "stdout": "",
+   "requests": [
+    {
+     "authorization": null,
+     "content": null,
+     "content_type": null,
+     "json": null,
+     "method": "POST",
+     "path": "/api/v1/clusters/0/check",
+     "query": [],
+     "raw_path": "/api/v1/clusters/0/check",
+     "url": "http://localhost:8000/api/v1/clusters/0/check"
+    }
+   ],
+   "stderr": "",
+   "stdout": "{\n  \"echo\": \"POST /api/v1/clusters/0/check\",\n  \"ok\": true\n}\n",
    "token_file_after": null,
    "token_file_before": null
   },
@@ -1382,7 +1400,7 @@
    "token_file_after": null,
    "token_file_before": null
   },
-  "error.422_detail_list_python_repr": {
+  "error.422_detail_list_field_messages": {
    "argv": [
     "greenhouse",
     "health"
@@ -1412,7 +1430,7 @@
      "url": "http://localhost:8000/api/v1/health"
     }
    ],
-   "stderr": "Error: [{'loc': ['body', 'x'], 'msg': 'bad'}]\n",
+   "stderr": "Error: x: bad; days.0: too big\n",
    "stdout": "",
    "token_file_after": null,
    "token_file_before": null
@@ -1487,7 +1505,7 @@
    "token_file_after": null,
    "token_file_before": null
   },
-  "error.empty_200_body_current_behavior_uncaught": {
+  "error.dict_detail_as_json": {
    "argv": [
     "greenhouse",
     "health"
@@ -1500,7 +1518,7 @@
     }
    ],
    "env": {},
-   "exception": "JSONDecodeError",
+   "exception": null,
    "exit_code": 1,
    "files": {},
    "input": null,
@@ -1517,7 +1535,42 @@
      "url": "http://localhost:8000/api/v1/health"
     }
    ],
-   "stderr": "",
+   "stderr": "Error: {\"code\": \"busy\"}\n",
+   "stdout": "",
+   "token_file_after": null,
+   "token_file_before": null
+  },
+  "error.empty_200_body_exits_1": {
+   "argv": [
+    "greenhouse",
+    "health"
+   ],
+   "clients": [
+    {
+     "base_url": "http://localhost:8000",
+     "headers": {},
+     "timeout": 30.0
+    }
+   ],
+   "env": {},
+   "exception": null,
+   "exit_code": 1,
+   "files": {},
+   "input": null,
+   "requests": [
+    {
+     "authorization": null,
+     "content": null,
+     "content_type": null,
+     "json": null,
+     "method": "GET",
+     "path": "/api/v1/health",
+     "query": [],
+     "raw_path": "/api/v1/health",
+     "url": "http://localhost:8000/api/v1/health"
+    }
+   ],
+   "stderr": "Error: Empty response from server\n",
    "stdout": "",
    "token_file_after": null,
    "token_file_before": null
@@ -1592,7 +1645,7 @@
    "token_file_after": null,
    "token_file_before": null
   },
-  "error.read_timeout_current_behavior_uncaught": {
+  "error.non_json_200_body_exits_1": {
    "argv": [
     "greenhouse",
     "health"
@@ -1605,7 +1658,7 @@
     }
    ],
    "env": {},
-   "exception": "ReadTimeout",
+   "exception": null,
    "exit_code": 1,
    "files": {},
    "input": null,
@@ -1622,7 +1675,77 @@
      "url": "http://localhost:8000/api/v1/health"
     }
    ],
-   "stderr": "",
+   "stderr": "Error: Invalid JSON response from server: '<html>proxy login</html>'\n",
+   "stdout": "",
+   "token_file_after": null,
+   "token_file_before": null
+  },
+  "error.read_timeout_exits_1": {
+   "argv": [
+    "greenhouse",
+    "health"
+   ],
+   "clients": [
+    {
+     "base_url": "http://localhost:8000",
+     "headers": {},
+     "timeout": 30.0
+    }
+   ],
+   "env": {},
+   "exception": null,
+   "exit_code": 1,
+   "files": {},
+   "input": null,
+   "requests": [
+    {
+     "authorization": null,
+     "content": null,
+     "content_type": null,
+     "json": null,
+     "method": "GET",
+     "path": "/api/v1/health",
+     "query": [],
+     "raw_path": "/api/v1/health",
+     "url": "http://localhost:8000/api/v1/health"
+    }
+   ],
+   "stderr": "Error: Server did not respond in time: timed out\n",
+   "stdout": "",
+   "token_file_after": null,
+   "token_file_before": null
+  },
+  "error.transport_error_exits_1": {
+   "argv": [
+    "greenhouse",
+    "health"
+   ],
+   "clients": [
+    {
+     "base_url": "http://localhost:8000",
+     "headers": {},
+     "timeout": 30.0
+    }
+   ],
+   "env": {},
+   "exception": null,
+   "exit_code": 1,
+   "files": {},
+   "input": null,
+   "requests": [
+    {
+     "authorization": null,
+     "content": null,
+     "content_type": null,
+     "json": null,
+     "method": "GET",
+     "path": "/api/v1/health",
+     "query": [],
+     "raw_path": "/api/v1/health",
+     "url": "http://localhost:8000/api/v1/health"
+    }
+   ],
+   "stderr": "Error: Request to server failed: Server disconnected\n",
    "stdout": "",
    "token_file_after": null,
    "token_file_before": null
@@ -3580,7 +3703,7 @@
    "token_file_after": null,
    "token_file_before": null
   },
-  "plant.list.cluster_zero_current_behavior_lists_all": {
+  "plant.list.cluster_zero_is_an_id": {
    "argv": [
     "greenhouse",
     "plant",
@@ -3597,7 +3720,7 @@
    ],
    "env": {},
    "exception": null,
-   "exit_code": 0,
+   "exit_code": 1,
    "files": {},
    "input": null,
    "requests": [
@@ -3607,13 +3730,13 @@
      "content_type": null,
      "json": null,
      "method": "GET",
-     "path": "/api/v1/clusters",
+     "path": "/api/v1/clusters/0/plants",
      "query": [],
-     "raw_path": "/api/v1/clusters",
-     "url": "http://localhost:8000/api/v1/clusters"
+     "raw_path": "/api/v1/clusters/0/plants",
+     "url": "http://localhost:8000/api/v1/clusters/0/plants"
     }
    ],
-   "stderr": "",
+   "stderr": "Error: Cluster 0 not found\n",
    "stdout": "",
    "token_file_after": null,
    "token_file_before": null
@@ -4409,7 +4532,7 @@
    "token_file_after": null,
    "token_file_before": null
   },
-  "sensor.list.cluster_zero_current_behavior_lists_all": {
+  "sensor.list.cluster_zero_is_an_id": {
    "argv": [
     "greenhouse",
     "sensor",
@@ -4426,7 +4549,7 @@
    ],
    "env": {},
    "exception": null,
-   "exit_code": 0,
+   "exit_code": 1,
    "files": {},
    "input": null,
    "requests": [
@@ -4436,13 +4559,13 @@
      "content_type": null,
      "json": null,
      "method": "GET",
-     "path": "/api/v1/clusters",
+     "path": "/api/v1/clusters/0/sensors",
      "query": [],
-     "raw_path": "/api/v1/clusters",
-     "url": "http://localhost:8000/api/v1/clusters"
+     "raw_path": "/api/v1/clusters/0/sensors",
+     "url": "http://localhost:8000/api/v1/clusters/0/sensors"
     }
    ],
-   "stderr": "",
+   "stderr": "Error: Cluster 0 not found\n",
    "stdout": "",
    "token_file_after": null,
    "token_file_before": null
@@ -4890,7 +5013,7 @@
    "token_file_after": null,
    "token_file_before": null
   },
-  "stats.export_json_response_writes_empty": {
+  "stats.export_json_response_is_an_error": {
    "argv": [
     "greenhouse",
     "stats",
@@ -4907,10 +5030,8 @@
    ],
    "env": {},
    "exception": null,
-   "exit_code": 0,
-   "files": {
-    "out.csv": ""
-   },
+   "exit_code": 1,
+   "files": {},
    "input": null,
    "requests": [
     {
@@ -4930,8 +5051,8 @@
      "url": "http://localhost:8000/api/v1/clusters/3/stats/export?days=7"
     }
    ],
-   "stderr": "",
-   "stdout": "Exported to out.csv\n",
+   "stderr": "Error: Expected a CSV export from the server, got application/json\n",
+   "stdout": "",
    "token_file_after": null,
    "token_file_before": null
   },
@@ -5171,7 +5292,7 @@
    "token_file_after": null,
    "token_file_before": null
   },
-  "token.blank_env_current_behavior_ignores_file": {
+  "token.blank_env_falls_back_to_file": {
    "argv": [
     "greenhouse",
     "health"
@@ -5179,7 +5300,9 @@
    "clients": [
     {
      "base_url": "http://localhost:8000",
-     "headers": {},
+     "headers": {
+      "Authorization": "Bearer file-token"
+     },
      "timeout": 30.0
     }
    ],
@@ -5192,7 +5315,7 @@
    "input": null,
    "requests": [
     {
-     "authorization": null,
+     "authorization": "Bearer file-token",
      "content": null,
      "content_type": null,
      "json": null,
@@ -6983,10 +7106,10 @@
     "ok": true
    }
   },
-  "delete_scheduler_job.path_not_escaped": {
+  "delete_scheduler_job.path_segment_escaped": {
    "call": {
     "args": [
-     "job/with space"
+     "job/with space?x"
     ],
     "kwargs": {},
     "method": "delete_scheduler_job"
@@ -6998,14 +7121,14 @@
      "content_type": null,
      "json": null,
      "method": "DELETE",
-     "path": "/api/v1/scheduler/jobs/job/with space",
+     "path": "/api/v1/scheduler/jobs/job/with space?x",
      "query": [],
-     "raw_path": "/api/v1/scheduler/jobs/job/with%20space",
-     "url": "http://client.example:8123/api/v1/scheduler/jobs/job/with%20space"
+     "raw_path": "/api/v1/scheduler/jobs/job%2Fwith%20space%3Fx",
+     "url": "http://client.example:8123/api/v1/scheduler/jobs/job%2Fwith%20space%3Fx"
     }
    ],
    "returned": {
-    "echo": "DELETE /api/v1/scheduler/jobs/job/with space",
+    "echo": "DELETE /api/v1/scheduler/jobs/job/with space?x",
     "ok": true
    }
   },
@@ -8822,7 +8945,7 @@
    ],
    "returned": "a,b\n1,2\n"
   },
-  "stats_export.json_response_returns_empty": {
+  "stats_export.json_response_raises": {
    "call": {
     "args": [
      3
@@ -8850,7 +8973,11 @@
      "url": "http://client.example:8123/api/v1/clusters/3/stats/export?days=2"
     }
    ],
-   "returned": ""
+   "server_error": {
+    "detail": "Expected a CSV export from the server, got application/json",
+    "status_code": 200,
+    "str": "Server error 200: Expected a CSV export from the server, got application/json"
+   }
   },
   "status": {
    "call": {

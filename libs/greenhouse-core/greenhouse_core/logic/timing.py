@@ -125,6 +125,16 @@ def active_quiet_window(
     return None
 
 
+def environment_for(environment: str | None) -> Environment:
+    """Outdoor-ness, decided in one place: only ``"outdoor"`` is outdoor.
+
+    The engine's rain skip and its seasonal table must agree on it. Any other
+    value (``None``, ``"indoor"``, a free-text label such as ``"greenhouse"``)
+    is sheltered, so it gets neither the rain skip nor the outdoor table.
+    """
+    return "outdoor" if environment == "outdoor" else "indoor"
+
+
 def season_for(unix_ts: int, *, tz_name: str | None, hemisphere: Hemisphere = "northern") -> Season:
     """Meteorological season from a unix timestamp.
 

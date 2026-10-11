@@ -1,10 +1,12 @@
 """HTTP client for the greenhouse server API."""
 
+import json
 import os
 from collections.abc import Mapping
 from http import HTTPStatus
 from pathlib import Path
 from typing import Any, Self, cast
+from urllib.parse import quote
 
 import httpx
 
@@ -30,12 +32,14 @@ def _default_token_path() -> Path:
 def load_stored_token() -> str | None:
     """Return the session JWT cached on disk by ``greenhouse login``, if any.
 
-    ``$GREENHOUSE_API_TOKEN`` wins when set; otherwise the disk file is read.
-    Whitespace is stripped, empty files are treated as absent.
+    ``$GREENHOUSE_API_TOKEN`` wins when it holds a token; otherwise the disk
+    file is read. Whitespace is stripped, and a blank value (env or file) is
+    treated as absent — a stray ``GREENHOUSE_API_TOKEN=" "`` must not hide the
+    token ``greenhouse login`` stored.
     """
-    env_token = os.environ.get("GREENHOUSE_API_TOKEN")
+    env_token = (os.environ.get("GREENHOUSE_API_TOKEN") or "").strip()
     if env_token:
-        return env_token.strip() or None
+        return env_token
     path = _default_token_path()
     if not path.exists():
         return None
@@ -75,6 +79,50 @@ def clear_stored_token() -> bool:
     return True
 
 
+# FastAPI prefixes each validation error's ``loc`` with where the value came from.
+_LOC_SOURCES = frozenset({"body", "query", "path", "header", "cookie"})
+
+
+def _format_detail(detail: Any) -> str:
+    """Render an error ``detail`` for humans; a 422 validation list becomes ``field: message; …``.
+
+    FastAPI answers a validation failure with a list of ``{"loc": [...], "msg": ...}``
+    objects; printing that list raw showed a Python repr. Other non-string details
+    are rendered as JSON.
+    """
+    if isinstance(detail, str):
+        return detail
+    if isinstance(detail, list) and all(isinstance(item, dict) and "msg" in item for item in detail):
+        return "; ".join(_format_validation_item(item) for item in detail)
+    return json.dumps(detail, ensure_ascii=False)
+
+
+def _format_validation_item(item: Mapping[str, Any]) -> str:
+    """One validation error as ``field.path: message`` (the request-part prefix dropped)."""
+    loc = [str(part) for part in item.get("loc") or []]
+    if loc and loc[0] in _LOC_SOURCES:
+        loc = loc[1:]
+    field = ".".join(loc)
+    return f"{field}: {item['msg']}" if field else str(item["msg"])
+
+
+def _is_csv(resp: httpx.Response) -> bool:
+    """Whether the server answered with a CSV document (the stats export)."""
+    content_type: str = resp.headers.get("content-type", "")
+    return content_type.startswith("text/csv")
+
+
+def _decode_json(resp: httpx.Response) -> JSONObject | list[Any]:
+    """The JSON body of a successful response; an empty or non-JSON body is a :class:`ServerError`."""
+    if not resp.content.strip():
+        raise ServerError(resp.status_code, "Empty response from server")
+    try:
+        data: JSONObject | list[Any] = resp.json()
+    except ValueError:
+        raise ServerError(resp.status_code, f"Invalid JSON response from server: {resp.text[:200]!r}") from None
+    return data
+
+
 class ServerError(Exception):
     """Raised when the server returns an error response."""
 
@@ -96,32 +144,46 @@ class IrrigationClient:
         self.http = httpx.Client(base_url=base_url, timeout=30.0, headers=headers, **kwargs)
 
     # Context manager only, no public close(): every public method maps to one /api/v1 endpoint (tests enforce it).
-    # CLI commands close the client per call; the TUI keeps one client for the whole session.
+    # CLI commands close the client per call; the TUI keeps one client per session and closes ``http`` on exit.
     def __enter__(self) -> Self:
         return self
 
     def __exit__(self, *exc_info: object) -> None:
         self.http.close()
 
-    def _request(self, method: str, path: str, **kwargs: Any) -> JSONObject | list[Any]:
-        """Send one request and decode it; HTTP >= 400 and connection errors raise :class:`ServerError`."""
+    def _send(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
+        """Send one request; HTTP >= 400 and transport failures raise :class:`ServerError`.
+
+        A refused connection, a timeout or any other transport error is status 0
+        (B-17); the CLI prints the error and exits 1, the TUI toasts it.
+        """
         try:
             resp = self.http.request(method, path, **kwargs)
         except httpx.ConnectError as e:
             raise ServerError(0, f"Cannot connect to server: {e}") from None
+        except httpx.TimeoutException as e:
+            raise ServerError(0, f"Server did not respond in time: {e}") from None
+        except httpx.TransportError as e:
+            raise ServerError(0, f"Request to server failed: {e}") from None
 
         if resp.status_code >= HTTPStatus.BAD_REQUEST:
             try:
                 detail = resp.json().get("detail", resp.text)
             except Exception:  # noqa: BLE001
                 detail = resp.text
-            raise ServerError(resp.status_code, detail)
+            raise ServerError(resp.status_code, _format_detail(detail))
+        return resp
 
-        if resp.headers.get("content-type", "").startswith("text/csv"):
+    def _request(self, method: str, path: str, **kwargs: Any) -> JSONObject | list[Any]:
+        """Send one request and decode it; a CSV body comes back as ``{"csv": text}``.
+
+        Besides :meth:`_send`'s errors, a 2xx body that is empty or not JSON is a
+        :class:`ServerError` (B-17).
+        """
+        resp = self._send(method, path, **kwargs)
+        if _is_csv(resp):
             return {"csv": resp.text}
-
-        data: JSONObject | list[Any] = resp.json()
-        return data
+        return _decode_json(resp)
 
     def _object(self, method: str, path: str, **kwargs: Any) -> JSONObject:
         """Send a request whose endpoint answers with a JSON object."""
@@ -332,10 +394,17 @@ class IrrigationClient:
         return self._object("GET", f"/api/v1/clusters/{cluster_id}/stats", params={"days": days})
 
     def stats_export(self, cluster_id: int, days: int = 7) -> str:
-        """Download the statistics CSV as text (``GET /clusters/{id}/stats/export``)."""
-        result = self._object("GET", f"/api/v1/clusters/{cluster_id}/stats/export", params={"days": days})
-        csv: str = result.get("csv", "")
-        return csv
+        """Download the statistics CSV as text (``GET /clusters/{id}/stats/export``).
+
+        A response that is not ``text/csv`` raises :class:`ServerError` instead of
+        yielding ``""`` — otherwise ``stats --export`` wrote an empty file and
+        reported success.
+        """
+        resp = self._send("GET", f"/api/v1/clusters/{cluster_id}/stats/export", params={"days": days})
+        if not _is_csv(resp):
+            content_type = resp.headers.get("content-type") or "no content type"
+            raise ServerError(resp.status_code, f"Expected a CSV export from the server, got {content_type}")
+        return resp.text
 
     def health(self) -> JSONObject:
         """Fetch the server health summary (``GET /health``)."""
@@ -346,8 +415,12 @@ class IrrigationClient:
         return self._array("GET", "/api/v1/scheduler/jobs")
 
     def delete_scheduler_job(self, job_id: str) -> JSONObject:
-        """Remove a scheduler job (``DELETE /scheduler/jobs/{job_id}``)."""
-        return self._object("DELETE", f"/api/v1/scheduler/jobs/{job_id}")
+        """Remove a scheduler job (``DELETE /scheduler/jobs/{job_id}``).
+
+        Job ids are free text, so the id is percent-encoded as one path segment —
+        a ``/``, ``?`` or space must not change which URL is called.
+        """
+        return self._object("DELETE", f"/api/v1/scheduler/jobs/{quote(job_id, safe='')}")
 
     def scheduler_pause(self) -> JSONObject:
         """Pause automatic irrigation (``POST /scheduler/pause``)."""

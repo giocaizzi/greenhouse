@@ -56,9 +56,9 @@ def _moisture_trend(first: Sequence[CleanedReading], second: Sequence[CleanedRea
 
 def _temperature_trend(first: Sequence[CleanedReading], second: Sequence[CleanedReading]) -> str | None:
     """Label of the temperature means between the two halves, or None without data."""
-    # Known quirk: a truthiness filter, so a genuine 0 °C reading is dropped as missing.
-    temp_first = [r.temperature for r in first if r.temperature]
-    temp_second = [r.temperature for r in second if r.temperature]
+    # `is not None`, not truthiness: a genuine 0 °C reading (frost) must count.
+    temp_first = [r.temperature for r in first if r.temperature is not None]
+    temp_second = [r.temperature for r in second if r.temperature is not None]
     if not temp_first or not temp_second:
         return None
     delta_temp = statistics.mean(temp_second) - statistics.mean(temp_first)

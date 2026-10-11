@@ -37,12 +37,12 @@ def _low_env_humidity(snapshot: SensorSnapshot, care: list[dict[str, Any]]) -> s
     return None
 
 
-def _low_light(snapshot: SensorSnapshot, care: list[dict[str, Any]]) -> str | None:
-    """Daylight well below the most demanding plant's seasonally adjusted minimum."""
+def _low_light(snapshot: SensorSnapshot, care: list[dict[str, Any]], month: int | None) -> str | None:
+    """Daylight well below the most demanding plant's seasonally adjusted minimum (``month`` picks the season)."""
     if snapshot.avg_light is None or not care:
         return None
     min_lux_needed = max((d.get("ideal_light_lux_min", 0) for d in care), default=0)
-    seasonal_min = effective_light_threshold(min_lux_needed)
+    seasonal_min = effective_light_threshold(min_lux_needed, month)
     if min_lux_needed > 0 and snapshot.avg_light < seasonal_min * STRESS_LOW_LIGHT_FRACTION:
         return (
             f"insufficient light ({snapshot.avg_light:.0f} lux vs seasonal min {seasonal_min:.0f}) — "
@@ -52,19 +52,25 @@ def _low_light(snapshot: SensorSnapshot, care: list[dict[str, Any]]) -> str | No
 
 
 def _water_stress(snapshot: SensorSnapshot, trends: Trends) -> str | None:
-    """Critically dry soil, or low soil that is still falling steeply (keys on the average)."""
-    avg_soil = snapshot.avg_soil_moisture
-    if avg_soil is None:
+    """Critically dry soil, or low soil that is still falling steeply — judged on the driest plant.
+
+    Invariant #2 (the driest plant drives the call) holds here too: averaging a
+    wilting plant at 10 % with a watered one at 60 % would hide the emergency.
+    The cluster minimum is the driest cleaned reading; the average stands in
+    only when no minimum was computed.
+    """
+    driest = snapshot.min_soil_moisture if snapshot.min_soil_moisture is not None else snapshot.avg_soil_moisture
+    if driest is None:
         return None
-    if avg_soil < SOIL_MOISTURE_CRITICAL:
+    if driest < SOIL_MOISTURE_CRITICAL:
         declining = " + declining" if trends.soil_moisture_trend == "declining" else ""
-        return f"critical low ({avg_soil:.0f}%){declining}"
+        return f"critical low ({driest:.0f}%){declining}"
     if (
-        avg_soil < SOIL_MOISTURE_LOW
+        driest < SOIL_MOISTURE_LOW
         and trends.soil_moisture_trend == "declining"
         and trends.soil_moisture_delta < STRESS_STEEP_DECLINE_DELTA
     ):
-        return f"low ({avg_soil:.0f}%) + steep decline ({trends.soil_moisture_delta:.0f}%)"
+        return f"low ({driest:.0f}%) + steep decline ({trends.soil_moisture_delta:.0f}%)"
     return None
 
 
@@ -90,14 +96,21 @@ def _over_watering(snapshot: SensorSnapshot, trends: Trends) -> str | None:
     return None
 
 
-def detect_stress_conditions(
+def detect_stress_conditions(  # noqa: PLR0913 — five pinned positionals (tests call them) + the keyword-only month
     db: IrrigationRepository,
     plant_db: PlantDatabase,
     cluster_id: int,
     snapshot: SensorSnapshot,
     trends: Trends,
+    *,
+    month: int | None = None,
 ) -> StressIndicators:
-    """Detect stress conditions from a sensor snapshot and trend signals."""
+    """Detect stress conditions from a sensor snapshot and trend signals.
+
+    ``month`` (1-12) selects the seasonal light factor for the low-light check;
+    the engine passes the month in the preferences timezone so light and the
+    seasonal multiplier agree on the season. ``None`` keeps the current UTC month.
+    """
     stress = StressIndicators()
     plants = db.get_plants_in_cluster(cluster_id)
     plant_care = [plant_db.get_care_data(species=p.species, category=p.category) for p in plants]
@@ -107,7 +120,7 @@ def detect_stress_conditions(
         stress.water_warning = water_warning
     if (low_env_humidity := _low_env_humidity(snapshot, plant_care)) is not None:
         stress.low_env_humidity = low_env_humidity
-    if (low_light := _low_light(snapshot, plant_care)) is not None:
+    if (low_light := _low_light(snapshot, plant_care, month)) is not None:
         stress.low_light = low_light
     if (water_stress := _water_stress(snapshot, trends)) is not None:
         stress.water_stress = water_stress

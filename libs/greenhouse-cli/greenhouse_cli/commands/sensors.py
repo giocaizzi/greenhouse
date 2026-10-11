@@ -5,9 +5,9 @@ from typing import Annotated
 
 import typer
 
-from greenhouse_cli.commands._helpers import ClusterFilterOpt, ClusterOpt, YesOpt, call, output
+from greenhouse_cli.commands._helpers import ClusterFilterOpt, ClusterOpt, HelpOnBareGroup, YesOpt, call, output
 
-sensor_app = typer.Typer(help="Manage sensors", no_args_is_help=True)
+sensor_app = typer.Typer(help="Manage sensors", no_args_is_help=True, cls=HelpOnBareGroup)
 
 
 @sensor_app.command("add")
@@ -31,7 +31,7 @@ def sensor_list(
     cluster: ClusterFilterOpt = None,
 ) -> None:
     """List sensors."""
-    if cluster:
+    if cluster is not None:
         output(call(ctx, lambda c: c.list_sensors(cluster)))
     else:
         clusters = call(ctx, lambda c: c.list_clusters())

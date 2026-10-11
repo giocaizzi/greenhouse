@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from greenhouse_cli.tui.app import GreenhouseApp
 
 CLUSTER_HREF = re.compile(r"/clusters/(\d+)")
+RESULT_COLUMNS = ("Type", "Name", "Detail")
 
 
 class SearchScreen(ModalScreen[int | None]):
@@ -37,8 +38,19 @@ class SearchScreen(ModalScreen[int | None]):
 
     def on_mount(self) -> None:
         """Declare the result columns and put the cursor in the search box."""
-        self.query_one(DataTable).add_columns("Type", "Name", "Detail")
+        self.query_one(DataTable).add_columns(*RESULT_COLUMNS)
         self.query_one(Input).focus()
+
+    @staticmethod
+    def _reset(table: DataTable[str]) -> None:
+        """Drop rows *and* columns, then re-declare the columns.
+
+        Auto-width columns only ever grow while rows are cleared, so one long
+        hit from an early partial query kept the table wide for every later
+        result; re-creating the columns sizes them to the current hits.
+        """
+        table.clear(columns=True)
+        table.add_columns(*RESULT_COLUMNS)
 
     @on(Input.Changed)
     def _changed(self, event: Input.Changed) -> None:
@@ -58,11 +70,11 @@ class SearchScreen(ModalScreen[int | None]):
         await asyncio.sleep(0.2)  # debounce keystrokes
         table = self.query_one(DataTable)
         if not query.strip():
-            table.clear()
+            self._reset(table)
             return
         app = cast("GreenhouseApp", self.app)
         data = await app.api(lambda c: c.search(query, limit=50), quiet=True)
-        table.clear()
+        self._reset(table)
         self._targets = {}
         for i, hit in enumerate((data or {}).get("hits", [])):
             match = CLUSTER_HREF.search(hit.get("href", ""))

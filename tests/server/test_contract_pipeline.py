@@ -525,7 +525,7 @@ def sc_window_inside(p: Pipeline) -> None:
     _irrigate(p)
 
 
-def sc_window_outside_critical_stress_overrides(p: Pipeline) -> None:
+def sc_window_outside_critical_stress_obeys_window(p: Pipeline) -> None:
     p.seed_cluster(soil=8.0)
     p.api("POST", "/api/v1/clusters/1/windows", {"start_hour": 18, "end_hour": 22})
     p.mark()
@@ -787,7 +787,7 @@ SCENARIOS: dict[str, Callable[[Pipeline], None]] = {
         sc_vacation_budget_exhausted,
         sc_window_outside,
         sc_window_inside,
-        sc_window_outside_critical_stress_overrides,
+        sc_window_outside_critical_stress_obeys_window,
         sc_caps_reached_automatic,
         sc_caps_reached_manual_start,
         sc_daily_minutes_cap_manual_start,

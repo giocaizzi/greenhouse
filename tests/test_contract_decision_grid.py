@@ -77,9 +77,10 @@ def _assert_audit_invariants(case_id: str, record: dict) -> None:
     assert row["actuated"] is False, case_id  # the engine never claims actuation
     assert row["payload_equals_decision"] is True, case_id
     reasons = record["decision"]["reasons"]
-    # A sensor-path decision can end with NO reasons (e.g. temperature-only data):
-    # primary_code is then NULL and reason_text "no specific conditions".
-    assert row["primary_code"] == (reasons[0]["code"] if reasons else None), case_id
+    # Every evaluation carries at least one reason (NO_ACTION_NEEDED when no rule fired),
+    # so the persisted primary_code is never NULL.
+    assert reasons, case_id
+    assert row["primary_code"] == reasons[0]["code"], case_id
     assert record["decision_log_id_matches"] is True, case_id
 
 

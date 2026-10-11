@@ -2,9 +2,9 @@
 
 import typer
 
-from greenhouse_cli.commands._helpers import call, output
+from greenhouse_cli.commands._helpers import HelpOnBareGroup, call, output
 
-scheduler_app = typer.Typer(help="Manage background scheduler jobs", no_args_is_help=True)
+scheduler_app = typer.Typer(help="Manage background scheduler jobs", no_args_is_help=True, cls=HelpOnBareGroup)
 
 
 @scheduler_app.command("pause")

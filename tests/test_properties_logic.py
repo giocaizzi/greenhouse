@@ -25,6 +25,7 @@ from hypothesis import strategies as st
 from engine_grid import plant_database
 from golden import FROZEN_INSTANT
 from greenhouse_core.constants import (
+    CLEANING_SHORT_SERIES_MIN_READINGS,
     DEFAULT_DURATION_MINUTES,
     DEFAULT_SEASON_MULTIPLIER_INDOOR,
     DEFAULT_SEASON_MULTIPLIER_OUTDOOR,
@@ -136,9 +137,9 @@ def test_clean_readings_desc_is_exact_reverse(rows):
 
 
 @PROFILE
-@given(series(max_size=4))
+@given(series(max_size=CLEANING_SHORT_SERIES_MIN_READINGS - 1))
 def test_clean_readings_short_series_only_range_gates(rows):
-    """Below CLEANING_HAMPEL_MIN_READINGS (5) per metric, only the range gate removes values."""
+    """Below CLEANING_SHORT_SERIES_MIN_READINGS (3) per metric, only the range gate removes values."""
     for c in clean_readings(rows):
         raw = next(r for r in rows if r.timestamp == c.timestamp)
         for f in NUMERIC:
@@ -489,8 +490,14 @@ def test_temperature_fallback_interval_is_monotone_in_temperature(temp):
         assert hotter.interval_hours <= cooler.interval_hours
 
 
-def test_temperature_fallback_without_temp_or_config_is_no_data():
-    decision = temperature_based_decision(None, 1, 0, temp=None, water_needs="medium", temp_range=None, config=None)
+def test_temperature_fallback_without_temp_or_config_is_no_data(tmp_db):
+    """No temperature, no cluster row and no global schedule (built-in defaults only) → NO_DATA.
+
+    The fallback consults the effective config since B-24 (a global schedule
+    counts), so it needs a repository rather than ``None``.
+    """
+    cid = tmp_db.add_cluster("No schedule")
+    decision = temperature_based_decision(tmp_db, cid, 0, temp=None, water_needs="medium", temp_range=None, config=None)
 
     assert (decision.action, decision.confidence, [r.code for r in decision.reasons]) == (
         Action.SKIP,
@@ -515,10 +522,22 @@ def test_parse_moisture_target_examples(text, expected):
     assert parse_moisture_target(text) == expected
 
 
-def test_parse_moisture_target_inverted_and_negative_current_behavior():
-    """Pins current behavior: no validation — '65-45' stays inverted, '-5-10' falls back."""
-    assert parse_moisture_target("65-45") == (65.0, 45.0)
+def test_parse_moisture_target_normalises_inverted_and_rejects_out_of_range():
+    """An inverted band is swapped; a bound outside 0-100 %, NaN or inf → the default band."""
+    assert parse_moisture_target("65-45") == (45.0, 65.0)
     assert parse_moisture_target("-5-10") == (45.0, 65.0)
+    assert parse_moisture_target("40-120") == (45.0, 65.0)
+    assert parse_moisture_target("nan-50") == (45.0, 65.0)
+    assert parse_moisture_target("0-100") == (0.0, 100.0)
+    assert parse_moisture_target("40-60-80") == (40.0, 60.0)
+
+
+@PROFILE
+@given(st.text(max_size=12))
+def test_parse_moisture_target_is_always_an_ordered_physical_band(text):
+    low, high = parse_moisture_target(text)
+
+    assert 0.0 <= low <= high <= 100.0
 
 
 _care = st.lists(
@@ -541,17 +560,20 @@ _care = st.lists(
 def test_plant_needs_aggregates(care):
     assert analyze_water_needs(care) in ("low", "medium", "high")
     temp_range = get_ideal_temp_range(care)
-    mins = [d["ideal_temp_min_c"] for d in care if d.get("ideal_temp_min_c")]
-    maxs = [d["ideal_temp_max_c"] for d in care if d.get("ideal_temp_max_c")]
+    mins = [d["ideal_temp_min_c"] for d in care if d.get("ideal_temp_min_c") is not None]
+    maxs = [d["ideal_temp_max_c"] for d in care if d.get("ideal_temp_max_c") is not None]
     assert temp_range == ((min(mins), max(maxs)) if mins and maxs else None)
     hum = get_ideal_humidity_range(care)
-    assert hum is None or hum[0] == min(d["ideal_humidity_min"] for d in care if d.get("ideal_humidity_min"))
+    assert hum is None or hum[0] == min(
+        d["ideal_humidity_min"] for d in care if d.get("ideal_humidity_min") is not None
+    )
 
 
-def test_plant_needs_zero_is_treated_as_missing_current_behavior():
-    """Pins current behavior: truthiness filter drops a 0 °C / 0 % bound."""
-    assert get_ideal_temp_range([{"ideal_temp_min_c": 0, "ideal_temp_max_c": 20}]) is None
-    assert get_ideal_humidity_range([{"ideal_humidity_min": 0, "ideal_humidity_max": 50}]) is None
+def test_plant_needs_zero_is_a_real_bound():
+    """B-18: a 0 °C / 0 % bound counts (``is not None``); only a missing or None bound is absent."""
+    assert get_ideal_temp_range([{"ideal_temp_min_c": 0, "ideal_temp_max_c": 20}]) == (0, 20)
+    assert get_ideal_humidity_range([{"ideal_humidity_min": 0, "ideal_humidity_max": 50}]) == (0, 50)
+    assert get_ideal_temp_range([{"ideal_temp_min_c": None, "ideal_temp_max_c": 20}]) is None
 
 
 def test_analyze_water_needs_unknown_level_counts_as_medium():

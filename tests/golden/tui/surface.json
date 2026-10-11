@@ -82,7 +82,8 @@
    "handlers": [
     "_on_login",
     "action_refresh",
-    "action_search"
+    "action_search",
+    "on_unmount"
    ]
   },
   "greenhouse_cli.tui.screens.activity:ActivityScreen": {
@@ -857,13 +858,21 @@
    ],
    "STATS_DAYS": 7
   },
+  "greenhouse_cli.tui.screens.dashboard": {
+   "SIGN_IN_NEEDED": "Sign in to see your clusters — the server needs a login."
+  },
   "greenhouse_cli.tui.screens.forms": {
    "DATETIME_FORMAT": "%Y-%m-%d %H:%M"
   },
   "greenhouse_cli.tui.screens.search": {
    "CLUSTER_HREF": {
     "regex": "/clusters/(\\d+)"
-   }
+   },
+   "RESULT_COLUMNS": [
+    "Type",
+    "Name",
+    "Detail"
+   ]
   },
   "greenhouse_cli.tui.sprites": {
    "CATEGORY_ALIASES": {

@@ -6,12 +6,13 @@ from typing import Annotated
 
 import typer
 
-from greenhouse_cli.commands._helpers import ClusterOpt, YesOpt, call, output
+from greenhouse_cli.commands._helpers import ClusterOpt, HelpOnBareGroup, YesOpt, call, output
 from greenhouse_cli.constants import ALL_WEEKDAYS
 
 windows_app = typer.Typer(
     help="Manage per-cluster preferred watering windows",
     no_args_is_help=True,
+    cls=HelpOnBareGroup,
 )
 
 

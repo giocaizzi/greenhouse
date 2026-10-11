@@ -192,13 +192,13 @@ def test_help_page_golden(stable_cli_env, path):
 
 
 @pytest.mark.parametrize("path", [p for p, c in COMMANDS if is_group(c)], ids=lambda p: ".".join((PROG, *p)) or PROG)
-def test_group_without_args_prints_help_and_exits_2(stable_cli_env, path):
-    """Pins current behavior: ``no_args_is_help`` groups print their help page (minus the final blank line), exit 2."""
+def test_group_without_args_prints_help_and_exits_0(stable_cli_env, path):
+    """A bare group behaves exactly like ``--help``: the same page on stdout, nothing on stderr, exit 0."""
     bare = runner.invoke(app, list(path), prog_name=PROG)
     helped = runner.invoke(app, [*path, "--help"], prog_name=PROG)
-    assert bare.exit_code == 2
+    assert bare.exit_code == 0
     assert bare.stderr == ""
-    assert bare.stdout + "\n" == helped.stdout
+    assert bare.stdout == helped.stdout
 
 
 def test_help_is_width_stable_against_hostile_terminal_env(stable_cli_env, monkeypatch):

@@ -227,3 +227,51 @@ def test_boundary_module_helpers_are_fully_annotated(path: Path) -> None:
         and not _is_fully_annotated(node)
     )
     assert sorted(set(missing) - UNANNOTATED_ALLOWED) == [], "boundary helpers must be fully annotated (§10.13)"
+
+
+# ── Guard: server fixtures survive mixed-directory command lines ─────────────
+
+
+def test_server_fixtures_resolve_when_directories_are_mixed_on_one_command_line() -> None:
+    """``tests/server/X tests/<core> tests/server/Y`` must not lose ``client`` for Y.
+
+    pytest binds a directory conftest's fixtures to the first ``Package`` node it
+    collects; a second ``server`` package (after a core file) could not see them.
+    The server fixtures are therefore a global plugin (``server.fixtures``).
+    """
+    args = ["tests/server/test_well_known.py", "tests/test_utils.py", "tests/server/test_web_health.py"]
+    result = subprocess.run(  # noqa: S603 — fixed argv, the running interpreter
+        [sys.executable, "-m", "pytest", "-q", "-p", "no:randomly", "-p", "no:cacheprovider", "-n", "0", *args],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        timeout=300,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout[-2000:] + result.stderr[-2000:]
+    assert "fixture 'client' not found" not in result.stdout
+
+
+# ── Guard: tests never touch the developer's CLI token or .env ───────────────
+
+
+def test_cli_token_resolution_is_isolated_from_the_developer(tmp_path_factory) -> None:
+    """The autouse fixture points the CLI token lookup at a per-test temp dir and drops the env token."""
+    import os
+
+    from greenhouse_cli.client import _default_token_path, load_stored_token
+
+    assert "GREENHOUSE_API_TOKEN" not in os.environ
+    assert _default_token_path().is_relative_to(tmp_path_factory.getbasetemp())
+    assert load_stored_token() is None
+
+
+def test_settings_ignore_a_developer_dotenv(tmp_path, monkeypatch) -> None:
+    """Outside tests marked ``dotenv``, a ``.env`` in the working directory is not read by ``Settings``."""
+    from greenhouse_server.config import Settings
+
+    (tmp_path / ".env").write_text("IRRIGATION_PORT=9001\n")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("IRRIGATION_PORT", raising=False)
+
+    assert Settings().port == 8000

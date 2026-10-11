@@ -6,9 +6,11 @@ from typing import Annotated
 
 import typer
 
-from greenhouse_cli.commands._helpers import YesOpt, call, output
+from greenhouse_cli.commands._helpers import HelpOnBareGroup, YesOpt, call, output
 
-vacation_app = typer.Typer(help="Manage vacation windows (engine holds during these)", no_args_is_help=True)
+vacation_app = typer.Typer(
+    help="Manage vacation windows (engine holds during these)", no_args_is_help=True, cls=HelpOnBareGroup
+)
 
 
 @vacation_app.command("list")

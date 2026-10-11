@@ -143,6 +143,11 @@ SENSOR_PHYSICAL_RANGES = {
 CLEANING_HAMPEL_WINDOW_RADIUS = 3  # window = 2*radius + 1 samples
 CLEANING_HAMPEL_N_SIGMA = 3.0  # deviation beyond this many scaled MADs is a spike
 CLEANING_HAMPEL_MIN_READINGS = 5  # fewer points than this: too short to judge spikes
+# Series too short for Hampel (3 or 4 points) get a neighbour test instead: an interior point is a spike
+# when it sits on the same side of both neighbours and further than N_SIGMA scaled spreads (MAD scale
+# and floor as above) from their mean. A genuine step has a following sample at its new level, so it
+# never sits apart from both neighbours; the end points have one neighbour and are not judged.
+CLEANING_SHORT_SERIES_MIN_READINGS = 3  # below this nothing can be judged
 CLEANING_MAD_SCALE = 1.4826  # MAD→sigma consistency factor for Gaussian noise
 CLEANING_MAD_FLOOR = 1.0  # min sigma (%) so a flat run isn't hyper-sensitive to change
 

@@ -990,6 +990,40 @@ class TestSearchAndSystem:
 
         _run(scenario())
 
+    def test_search_columns_fit_the_latest_results(self, greenhouse):
+        """Column widths follow each result set: a long early hit no longer keeps the table wide."""
+        http, _ = greenhouse
+        hits = {
+            "lo": [{"entity_type": "plant", "label": "L" * 60, "sublabel": "D" * 40, "href": "/clusters/1"}],
+            "lon": [{"entity_type": "plant", "label": "Fern", "sublabel": "", "href": "/clusters/1"}],
+        }
+        base = tui_client_factory(http)
+
+        def factory(token):
+            client = base(token)
+            client.search = lambda query, limit=20: {"hits": hits.get(query, [])}
+            return client
+
+        async def scenario():
+            tui = GreenhouseApp("http://testserver", client_factory=factory, refresh_seconds=0)
+            async with tui.run_test(size=SIZE) as pilot:
+                await _settle(pilot, tui)
+                await pilot.press("slash")
+                await pilot.pause()
+                table = tui.screen.query_one(DataTable)
+                await pilot.press(*"lo")
+                await pilot.pause(0.4)
+                await _settle(pilot, tui)
+                wide = sum(c.get_render_width(table) for c in table.columns.values())
+                await pilot.press("n")
+                await pilot.pause(0.4)
+                await _settle(pilot, tui)
+                assert table.get_row_at(0)[1] == "Fern"
+                narrow = sum(c.get_render_width(table) for c in table.columns.values())
+                assert narrow < wide - 50
+
+        _run(scenario())
+
     def test_system_maintenance_actions(self, greenhouse):
         http, _ = greenhouse
 
@@ -1006,15 +1040,17 @@ class TestSearchAndSystem:
                 await _confirm(pilot, tui)
                 assert http.get("/api/v1/preferences").json()["scheduler_paused"] is True
                 assert screen.paused is True
-                await pilot.press("p")  # resume needs no confirmation
-                await _settle(pilot, tui)
+                await pilot.press("p")  # resume asks too: automatic irrigation restarts
+                await pilot.pause()
+                await _confirm(pilot, tui)
                 assert http.get("/api/v1/preferences").json()["scheduler_paused"] is False
 
                 log.clear()
                 await pilot.press("H")
                 await _settle(pilot, tui)
-                await pilot.press("P")
-                await _settle(pilot, tui)
+                await pilot.press("P")  # plant-DB sync asks first; sensor sync (S) runs on the key press
+                await pilot.pause()
+                await _confirm(pilot, tui)
                 await pilot.press("S")
                 await _settle(pilot, tui)
                 assert writes(log) == [
@@ -1360,6 +1396,62 @@ class TestResilience:
                 assert len(hits) >= 3
 
         _run(scenario())
+
+    def test_overlapping_dashboard_reloads_do_not_crash(self):
+        """S4: reloads that outlast each other (slow status calls) neither crash nor duplicate cards."""
+        import time as time_mod
+
+        def handler(request):
+            path = request.url.path
+            if path == "/api/v1/clusters":
+                return httpx.Response(200, json=[{"id": 1, "name": "One"}, {"id": 2, "name": "Two"}])
+            if path.endswith("/status"):
+                time_mod.sleep(0.02)
+                cid = int(path.split("/")[-2])
+                return httpx.Response(200, json={"cluster": {"id": cid, "name": f"C{cid}"}, "sensors": []})
+            return httpx.Response(200, json={})
+
+        async def scenario():
+            tui = _mock_app(handler)
+            async with tui.run_test(size=SIZE) as pilot:
+                await _settle(pilot, tui)
+                screen = tui.screen
+                for _ in range(6):
+                    screen.run_worker(screen.load(), group="overlap")
+                    await pilot.pause(0.01)
+                await _settle(pilot, tui)
+                cards = [w.id for w in screen.query(ClusterCard)]
+                assert sorted(cards) == ["cluster-card-1", "cluster-card-2"]
+                screen.reload()
+                await pilot.pause(0.03)  # let the reloads start; the app then tears down mid-load
+
+        _run(scenario())
+
+    def test_app_closes_its_http_clients_on_exit(self):
+        """The TUI's shared client — and the one replaced by a sign-in — are closed when the app exits."""
+        made: list[IrrigationClient] = []
+
+        def handler(request):
+            if request.url.path == "/api/v1/auth/login":
+                return httpx.Response(200, json={"access_token": "", "username": "admin"})
+            return httpx.Response(200, json=[] if request.url.path == "/api/v1/clusters" else {})
+
+        def factory(token):
+            client = IrrigationClient(base_url="http://mock", token="", transport=httpx.MockTransport(handler))
+            made.append(client)
+            return client
+
+        async def scenario():
+            tui = GreenhouseApp("http://mock", client_factory=factory, refresh_seconds=0)
+            async with tui.run_test(size=SIZE) as pilot:
+                await _settle(pilot, tui)
+                await tui._login("admin", "pw")
+                await _settle(pilot, tui)
+                assert not any(c.http.is_closed for c in (made[0], tui.client))
+
+        _run(scenario())
+        assert len(made) == 3  # session client, anonymous login client, signed-in client
+        assert all(c.http.is_closed for c in made)
 
     def test_r_reloads_active_screen(self):
         hits = []

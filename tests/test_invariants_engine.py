@@ -103,20 +103,21 @@ def test_inv2_driest_plant_drives_the_call_not_the_average(env):
     assert "driest=33%" in decision.reasons[0].message
 
 
-def test_inv2_stress_rule_keys_on_average_current_behavior(env):
-    """Invariant #2 caveat: critical-stress detection keys on the **average** (stress.py).
+def test_inv2_stress_rule_keys_on_the_driest_plant(env):
+    """Invariant #2 holds for critical stress too: the **driest** plant, not the average, decides.
 
-    Pins current behavior: sensors 10/60 → average 35 (not < SOIL_MOISTURE_CRITICAL=30),
-    so no WATER_STRESS even though one plant is at 10%; the soil rule then sees
-    min 10 / max 60 → CONFLICT short burst (not a stress irrigation).
+    Sensors 10/60 → average 35 (not < SOIL_MOISTURE_CRITICAL=30), but the driest
+    plant sits at 10 %, so WATER_STRESS fires and the stress dosage wins over the
+    CONFLICT short burst the soil rule would otherwise pick.
     """
     cid, _, _ = _cluster(env, soils=(10.0, 60.0))
 
     decision = _logic(env).decide_for_cluster(cid)
 
-    assert decision.stress_indicators.water_stress is None
-    assert decision.primary_code is TriggerCode.CONFLICT
-    assert decision.duration_minutes == 1
+    assert decision.sensor_snapshot.avg_soil_moisture == pytest.approx(35.0)
+    assert decision.stress_indicators.water_stress == "critical low (10%)"
+    assert decision.primary_code is TriggerCode.WATER_STRESS
+    assert (decision.action, decision.duration_minutes) == (Action.IRRIGATE, constants_mod.STRESS_DURATION_MINUTES)
 
 
 # ── #3 6h cooldown; only action == "start" counts ────────────────────────────
@@ -127,13 +128,13 @@ def test_inv2_stress_rule_keys_on_average_current_behavior(env):
     [
         (MIN_COOLDOWN_HOURS * HOUR - 60, True),
         (MIN_COOLDOWN_HOURS * HOUR - 1, True),
-        (MIN_COOLDOWN_HOURS * HOUR, True),  # boundary is inclusive (`timestamp >= now - 6h`)
+        (MIN_COOLDOWN_HOURS * HOUR, False),  # boundary is exclusive: exactly 6 h later the cooldown is over
         (MIN_COOLDOWN_HOURS * HOUR + 1, False),
         (MIN_COOLDOWN_HOURS * HOUR + 60, False),
     ],
 )
-def test_inv3_cooldown_boundary_is_six_hours_inclusive(env, age_s, expect_cooldown):
-    """Invariant #3: a ``start`` within ``MIN_COOLDOWN_HOURS`` (6h, inclusive) skips with COOLDOWN."""
+def test_inv3_cooldown_boundary_is_six_hours_exclusive(env, age_s, expect_cooldown):
+    """Invariant #3: a ``start`` less than ``MIN_COOLDOWN_HOURS`` (6h) ago skips with COOLDOWN; at 6h it no longer does."""
     cid, irr, _ = _cluster(env)
     env.add_irrigation_event(irr, "start", "auto", duration_minutes=2, timestamp=FROZEN_TS - age_s)
 
@@ -263,10 +264,12 @@ def test_inv5_thresholds_are_bound_at_import_current_behavior(env, monkeypatch):
     assert TriggerCode.COOLDOWN not in _codes(decision)
 
 
-def test_inv5_inline_literals_current_behavior(env):
-    """Invariant #5 gaps: literals still inline in engine.py are pinned here.
+def test_inv5_inline_literals_and_explicit_no_action_reason(env):
+    """Invariant #5 / #6: forecast horizon, rain threshold and base confidence; no empty reason trail.
 
     Forecast horizon ``hours=6``, rain threshold ``> 2.0`` mm, base confidence ``0.5``.
+    A temperature-only reading inside the ideal range used to leave ``reasons``
+    empty (``primary_code`` NULL); it now carries ``NO_ACTION_NEEDED``.
     """
     cid, _, _ = _cluster(env, environment="outdoor")
     weather = FakeForecastWeather({"precipitation_mm": 2.0})
@@ -284,9 +287,11 @@ def test_inv5_inline_literals_current_behavior(env):
         cluster_id=temp_only_cid, tuya_device_id="fake_tuya_sensor_inv9999", name="T", sensor_type="x", config={}
     )
     env.add_sensor_reading(sensor_id=sid, timestamp=FROZEN_TS - 600, temperature=22.0)
-    no_reason = _logic(env).decide_for_cluster(temp_only_cid)
-    assert (no_reason.action, no_reason.confidence, no_reason.reasons) == (Action.SKIP, 0.5, [])
-    assert no_reason.reason_text == "no specific conditions"
+    no_rule = _logic(env).decide_for_cluster(temp_only_cid, persist=True)
+    assert (no_rule.action, no_rule.confidence) == (Action.SKIP, 0.5)
+    assert no_rule.primary_code is TriggerCode.NO_ACTION_NEEDED
+    assert no_rule.reason_text == "readings within range — no action needed"
+    assert _log_rows(env)[-1].primary_code == "no_action_needed"
 
 
 # ── #6 One DecisionLog per evaluation ────────────────────────────────────────
@@ -516,11 +521,12 @@ def test_inv10_spike_is_ignored_by_the_decision_and_raw_rows_are_untouched(env):
     assert 10.0 in [soil for _, _, soil in after]
 
 
-def test_inv10_short_series_spike_is_not_filtered_current_behavior(env):
-    """Invariant #10 edge: below ``CLEANING_HAMPEL_MIN_READINGS`` (5) the spike filter is off.
+def test_inv10_short_series_spike_is_filtered(env):
+    """Invariant #10 edge: a series shorter than the Hampel window is judged against its own median.
 
-    Pins current behavior: four readings 55/55/10/55 → the 10 survives and, being
-    the driest value, drives SENSOR_VERY_DRY (invariant #2 on raw-ish data).
+    Four readings 55/55/10/55 (≥ ``CLEANING_HAMPEL_MIN_READINGS`` = 3): the lone 10 is
+    a spike, so it no longer drives the driest-plant rule or the stress override;
+    the raw row stays in ``sensor_readings``.
     """
     cid = env.add_cluster("Short")
     env.add_plant(cluster_id=cid, species="Monstera deliciosa", category="tropical")
@@ -530,8 +536,10 @@ def test_inv10_short_series_spike_is_not_filtered_current_behavior(env):
 
     decision = _logic(env).decide_for_cluster(cid)
 
-    assert decision.sensor_snapshot.min_soil_moisture == 10.0
-    assert decision.primary_code is TriggerCode.SENSOR_VERY_DRY
+    assert decision.sensor_snapshot.min_soil_moisture == 55.0
+    assert decision.stress_indicators.water_stress is None
+    assert decision.primary_code is TriggerCode.SENSOR_ADEQUATE
+    assert 10.0 in [r.soil_moisture for r in env.session.scalars(select(SensorReading))]
 
 
 # ── #11 A leak alert IS the hold ─────────────────────────────────────────────
@@ -539,11 +547,11 @@ def test_inv10_short_series_spike_is_not_filtered_current_behavior(env):
 
 @pytest.mark.parametrize(
     ("age_s", "held"),
-    [(LEAK_HOLD_HOURS * HOUR, True), (LEAK_HOLD_HOURS * HOUR + 1, False)],
-    ids=["exactly-LEAK_HOLD_HOURS", "LEAK_HOLD_HOURS+1s"],
+    [(LEAK_HOLD_HOURS * HOUR - 1, True), (LEAK_HOLD_HOURS * HOUR, False)],
+    ids=["LEAK_HOLD_HOURS-1s", "exactly-LEAK_HOLD_HOURS"],
 )
-def test_inv11_hold_window_edge_is_inclusive(env, age_s, held):
-    """Invariant #11: the hold lasts ``LEAK_HOLD_HOURS`` from ``last_seen_at``, inclusive at the edge.
+def test_inv11_hold_window_edge_is_exclusive(env, age_s, held):
+    """Invariant #11: the hold lasts ``LEAK_HOLD_HOURS`` from ``last_seen_at``, exclusive at the edge.
 
     (±60 s / ±600 s, acknowledge-still-holds, resolve-releases, force-does-not-bypass
     are pinned in ``tests/test_leak_hold.py``.)

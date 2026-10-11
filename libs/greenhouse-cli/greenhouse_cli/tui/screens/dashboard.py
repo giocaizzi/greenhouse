@@ -3,17 +3,24 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from typing import ClassVar
 
 from textual.app import ComposeResult
 from textual.binding import Binding, BindingType
 from textual.containers import Grid, VerticalScroll
+from textual.css.query import NoMatches
 from textual.widgets import Footer, Header, Static
 
 from greenhouse_cli.tui import resources
 from greenhouse_cli.tui.model import ClusterSummary, summarize
 from greenhouse_cli.tui.screens.base import DataScreen
 from greenhouse_cli.tui.widgets import Banner, ClusterCard
+
+logger = logging.getLogger(__name__)
+
+# The server answered 401: it was reached, it wants a login (the sign-in dialog is on top).
+SIGN_IN_NEEDED = "Sign in to see your clusters — the server needs a login."
 
 
 class DashboardScreen(DataScreen):
@@ -38,19 +45,30 @@ class DashboardScreen(DataScreen):
             yield Grid(id="cluster-grid")
         yield Footer()
 
+    def __init__(self) -> None:
+        super().__init__()
+        # One card-grid rebuild at a time (S4): an auto-refresh that overtakes a slow
+        # load must not interleave remove/mount with it (DuplicateIds / NoMatches).
+        self._render_lock = asyncio.Lock()
+
     async def load(self) -> None:
         """Fetch system health and every cluster's status + 24h chart concurrently, then rebuild the cards."""
-        banner = self.query_one(Banner)
         health, clusters = await asyncio.gather(
             self.gh.api(lambda c: c.system_health(), quiet=True),
             self.gh.api(lambda c: c.list_clusters()),
         )
-        banner.update_health(health, self.gh.server_url)
+        if not self.showing:
+            return
+        self.query_one(Banner).update_health(health, self.gh.server_url)
         if clusters is None:
-            self.query_one("#dashboard-empty", Static).update("Cannot reach the server — press r to retry.")
+            self.query_one("#dashboard-empty", Static).update(
+                SIGN_IN_NEEDED if self.gh.needs_sign_in else "Cannot reach the server — press r to retry."
+            )
             return
         summaries = await asyncio.gather(*(self._summary(cluster["id"]) for cluster in clusters))
-        await self._render_cards([s for s in summaries if s is not None])
+        # Shielded: when an exclusive reload cancels this worker mid-rebuild, the rebuild still
+        # finishes (holding the lock) instead of leaving half-mounted cards for the next one.
+        await asyncio.shield(self._render_cards([s for s in summaries if s is not None]))
 
     async def _summary(self, cluster_id: int) -> ClusterSummary | None:
         """One cluster's card model from its status and 24h soil chart; ``None`` when the status call failed."""
@@ -61,17 +79,33 @@ class DashboardScreen(DataScreen):
         return summarize(status, chart) if status else None
 
     async def _render_cards(self, summaries: list[ClusterSummary]) -> None:
-        """Rebuild the card grid; focus stays on the same cluster when its card is still there, else the first card."""
+        """Rebuild the card grid under the render lock; a no-op once the screen is closing."""
+        async with self._render_lock:
+            try:
+                await self._rebuild_cards(summaries)
+            except NoMatches:
+                if self.showing:
+                    raise
+                logger.debug("dashboard rebuild dropped: the screen is closing", exc_info=True)
+
+    async def _rebuild_cards(self, summaries: list[ClusterSummary]) -> None:
+        """Replace the cards; focus stays on the same cluster when its card is still there, else the first card."""
+        if not self.showing:
+            return
         grid = self.query_one("#cluster-grid", Grid)
         focused = self.focused.id if isinstance(self.focused, ClusterCard) else None
         await grid.remove_children()
+        if not self.showing:
+            return
         self.query_one("#dashboard-empty", Static).display = not summaries
         if not summaries:
             self.query_one("#dashboard-empty", Static).update("No clusters yet — press n to create one.")
             return
         await grid.mount_all(ClusterCard(s) for s in summaries)
-        target = self.query(f"#{focused}").first() if focused else None
-        (target or grid.children[0]).focus()
+        matches = self.query(f"#{focused}") if focused else None
+        target = matches.first() if matches else None
+        if self.showing and grid.children:
+            (target or grid.children[0]).focus()
 
     def on_cluster_card_selected(self, message: ClusterCard.Selected) -> None:
         """Open the selected cluster's detail screen."""

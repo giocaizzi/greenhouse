@@ -204,7 +204,9 @@ class TestIrrigationLogic:
             sensor_type="tuya.tr301z",
             config={},
         )
-        self.db.add_sensor_reading(sensor_id=s_a, soil_moisture=20.0)
+        # 32 %: dry enough for SENSOR_VERY_DRY, above SOIL_MOISTURE_CRITICAL so the
+        # critical-stress rule (which also keys on the driest plant) stays out of it.
+        self.db.add_sensor_reading(sensor_id=s_a, soil_moisture=32.0)
 
         s_b = self.db.add_sensor(
             cluster_id=cluster_id,
@@ -235,7 +237,9 @@ class TestIrrigationLogic:
             sensor_type="tuya.tr301z",
             config={},
         )
-        self.db.add_sensor_reading(sensor_id=s_a, soil_moisture=15.0)
+        # 35 %: below the band but above SOIL_MOISTURE_CRITICAL — a critically dry
+        # driest plant would be a WATER_STRESS irrigation, not a conflict burst.
+        self.db.add_sensor_reading(sensor_id=s_a, soil_moisture=35.0)
 
         s_b = self.db.add_sensor(
             cluster_id=cluster_id,
@@ -543,9 +547,11 @@ class TestIrrigationLogic:
             config={},
         )
         now = int(time.time())
-        # First half: higher moisture, second half: lower moisture (decline > 5%)
+        # First half: higher moisture, second half: lower moisture (decline > 5%).
+        # The driest reading stays at the band minimum, above SOIL_MOISTURE_LOW, so
+        # the steep-decline stress override does not end the pipeline early.
         for i in range(8):
-            moisture = 60.0 - (i * 3)  # 60, 57, 54, 51, 48, 45, 42, 39
+            moisture = 66.0 - (i * 3)  # 66, 63, 60, 57, 54, 51, 48, 45
             self.db.add_sensor_reading(
                 sensor_id=sensor_id,
                 soil_moisture=moisture,
@@ -768,3 +774,160 @@ class TestWeatherSkipRule:
 
         assert decision.weather is not None
         assert decision.weather.precipitation_next_6h_mm == pytest.approx(5.0)
+
+
+# ── B-14: reasons report the delta actually applied ─────────────────────────
+
+
+def _bare_decision(*, interval: int, duration: int, **snapshot):
+    from greenhouse_core.logic.decision import Action, IrrigationDecision, SensorSnapshot, Trends
+
+    return IrrigationDecision(
+        cluster_id=1,
+        evaluated_at=0,
+        action=Action.IRRIGATE,
+        duration_minutes=duration,
+        interval_hours=interval,
+        confidence=0.5,
+        sensor_snapshot=SensorSnapshot(**snapshot),
+        trends=Trends(soil_moisture_trend="rising", irrigation_frequency_low=True),
+    )
+
+
+def test_clamped_adjustments_report_the_applied_delta_not_the_nominal_step():
+    """B-14: at the interval/duration bounds the reason's delta is what moved (0 or the remainder)."""
+    from greenhouse_core.constants import MAX_DURATION_MINUTES, MAX_INTERVAL_HOURS, MIN_INTERVAL_HOURS
+    from greenhouse_core.logic import engine
+
+    dry_air = _bare_decision(interval=MIN_INTERVAL_HOURS + 1, duration=2, avg_env_humidity=5.0)
+    engine._apply_humidity_adjustment(dry_air, (60.0, 80.0))
+    assert dry_air.interval_hours == MIN_INTERVAL_HOURS
+    assert [(r.code, r.interval_delta) for r in dry_air.reasons] == [(TriggerCode.HUMIDITY_VERY_LOW, -1)]
+
+    bright = _bare_decision(interval=MIN_INTERVAL_HOURS, duration=MAX_DURATION_MINUTES, avg_light=200_000.0)
+    engine._apply_light_adjustment(bright, 6)
+    assert [(r.interval_delta, r.duration_delta) for r in bright.reasons] == [(0, 0)]
+
+    rising = _bare_decision(interval=MAX_INTERVAL_HOURS - 1, duration=MAX_DURATION_MINUTES)
+    engine._apply_trend_adjustment(rising)
+    assert [(r.code, r.interval_delta, r.duration_delta) for r in rising.reasons] == [
+        (TriggerCode.TREND_MOISTURE_RISING, 1, 0),
+        (TriggerCode.UNDERWATERING_PATTERN, 0, 0),
+    ]
+
+
+def test_fallback_uses_a_global_schedule_without_a_cluster_config_row(tmp_db, frozen_clock):
+    """B-24: no sensor data, no ``irrigation_config`` row, but a global schedule → CONFIG_FALLBACK, not NO_DATA."""
+    from greenhouse_core.logic.decision import Action
+
+    cid = tmp_db.add_cluster("Global schedule only")
+    tmp_db.add_plant(cluster_id=cid, species=FAKE_PLANT_SPECIES)
+    logic = IrrigationLogic(tmp_db, get_plant_database())
+    assert tmp_db.get_irrigation_config(cid) is None
+    assert logic.decide_for_cluster(cid).primary_code is TriggerCode.NO_DATA  # built-in defaults alone
+
+    tmp_db.update_global_irrigation_config(mode="schedule", interval_hours=8, duration_minutes=3)
+    decision = logic.decide_for_cluster(cid)
+
+    assert decision.primary_code is TriggerCode.CONFIG_FALLBACK
+    assert (decision.action, decision.duration_minutes, decision.interval_hours) == (Action.IRRIGATE, 3, 8)
+
+
+def test_light_thresholds_use_the_preferences_timezone_month(tmp_db):
+    """Light thresholds and seasons share one clock: the month in the preferences timezone.
+
+    2026-09-30 23:30 UTC is 2026-10-01 08:30 in Tokyo. 600 lux is below September's
+    bright threshold (800 × 0.83 = 664) but above October's (800 × 0.70 = 560), so the
+    LIGHT_BRIGHT reason appears only when the local month drives the factor.
+    """
+    import time_machine
+
+    cid = tmp_db.add_cluster("Tokyo")
+    tmp_db.add_plant(cluster_id=cid, species=FAKE_PLANT_SPECIES)
+    tmp_db.update_preferences(timezone="Asia/Tokyo")
+    instant = datetime(2026, 9, 30, 23, 30, tzinfo=ZoneInfo("UTC"))
+    sid = tmp_db.add_sensor(cluster_id=cid, tuya_device_id=FAKE_SENSOR_ID, name="S", sensor_type="x", config={})
+    tmp_db.add_sensor_reading(sensor_id=sid, timestamp=int(instant.timestamp()) - 600, soil_moisture=50.0, light=600)
+
+    with time_machine.travel(instant, tick=False):
+        decision = IrrigationLogic(tmp_db, get_plant_database()).decide_for_cluster(cid)
+
+    assert TriggerCode.LIGHT_BRIGHT in [r.code for r in decision.reasons]
+
+
+@pytest.mark.parametrize(("environment", "rain_skips"), [("outdoor", True), ("greenhouse", False), (None, False)])
+def test_outdoorness_is_one_rule_for_rain_and_seasons(tmp_db, frozen_clock, environment, rain_skips):
+    """Only ``environment == "outdoor"`` is outdoor: the rain skip and the seasonal table agree.
+
+    A "greenhouse" (or unset) cluster used to get the rain skip but the indoor seasonal
+    table; it is now sheltered for both.
+    """
+    from greenhouse_core.logic.timing import environment_for
+
+    cid = tmp_db.add_cluster("Env", environment=environment)
+    tmp_db.add_plant(cluster_id=cid, species=FAKE_PLANT_SPECIES)
+    sid = tmp_db.add_sensor(cluster_id=cid, tuya_device_id=FAKE_SENSOR_ID, name="S", sensor_type="x", config={})
+    tmp_db.add_sensor_reading(sensor_id=sid, timestamp=int(time.time()) - 600, soil_moisture=35.0)
+    logic = IrrigationLogic(tmp_db, get_plant_database(), weather_client=_StubWeatherClient(precipitation_mm=9.0))
+
+    decision = logic.decide_for_cluster(cid)
+
+    assert (decision.primary_code is TriggerCode.WEATHER_SKIP) is rain_skips
+    assert environment_for(environment) == ("outdoor" if rain_skips else "indoor")
+
+
+def _critical_cluster(db):
+    """A Monstera cluster with an irrigator and one sensor at 10 % (critical water stress)."""
+    cid = db.add_cluster("Critical")
+    db.add_plant(cluster_id=cid, species="Monstera deliciosa", category="tropical")
+    irr = db.add_irrigator(
+        cluster_id=cid, tuya_device_id="fake_tuya_device_crit", name="P", irrigator_type="rainpoint.ik10pw", config={}
+    )
+    sid = db.add_sensor(cluster_id=cid, tuya_device_id=FAKE_SENSOR_ID, name="S", sensor_type="x", config={})
+    db.add_sensor_reading(sensor_id=sid, timestamp=int(time.time()) - 600, soil_moisture=10.0)
+    return cid, irr
+
+
+def test_emergency_triggers_obey_irrigation_windows(tmp_db, frozen_clock):
+    """Owner decision: critical stress no longer bypasses the cluster's windows (10:00 UTC, window 05-09)."""
+    cid, _ = _critical_cluster(tmp_db)
+    logic = IrrigationLogic(tmp_db, get_plant_database())
+    assert logic.decide_for_cluster(cid).primary_code is TriggerCode.WATER_STRESS
+
+    tmp_db.add_irrigation_window(cid, start_hour=5, end_hour=9)
+    decision = logic.decide_for_cluster(cid)
+
+    assert (decision.action.value, decision.primary_code) == ("skip", TriggerCode.OUTSIDE_WINDOW)
+
+
+def test_emergency_triggers_obey_the_vacation_budget(tmp_db, frozen_clock):
+    """Owner decision: a critical-stress run during a vacation is rationed like any other run."""
+    cid, irr = _critical_cluster(tmp_db)
+    tmp_db.update_irrigator(irr, reservoir_l=0.5, flow_rate_l_per_min=1.0)
+    now = int(time.time())
+    tmp_db.add_vacation_window(starts_at=now - 3600, ends_at=now + 10 * 86400)
+
+    decision = IrrigationLogic(tmp_db, get_plant_database()).decide_for_cluster(cid)
+
+    codes = {r.code for r in decision.reasons}
+    assert decision.action.value == "skip"
+    assert {TriggerCode.WATER_STRESS, TriggerCode.VACATION_ACTIVE, TriggerCode.VACATION_BUDGET_EXHAUSTED} <= codes
+
+
+def test_water_warning_reads_only_the_newest_reading_per_sensor(tmp_db, frozen_clock):
+    """An old ``water_warning=True`` followed by a newer ``False`` (or unflagged) reading does not trigger."""
+    cid = tmp_db.add_cluster("Warn")
+    tmp_db.add_plant(cluster_id=cid, species="Monstera deliciosa", category="tropical")
+    sid = tmp_db.add_sensor(cluster_id=cid, tuya_device_id=FAKE_SENSOR_ID, name="S", sensor_type="x", config={})
+    now = int(time.time())
+    tmp_db.add_sensor_reading(sensor_id=sid, timestamp=now - 20 * 3600, soil_moisture=50.0, water_warning=True)
+    tmp_db.add_sensor_reading(sensor_id=sid, timestamp=now - 600, soil_moisture=50.0, water_warning=False)
+    logic = IrrigationLogic(tmp_db, get_plant_database())
+
+    cleared = logic.decide_for_cluster(cid)
+    assert cleared.sensor_snapshot.water_warnings == []
+    assert TriggerCode.WATER_WARNING not in [r.code for r in cleared.reasons]
+
+    tmp_db.add_sensor_reading(sensor_id=sid, timestamp=now - 60, soil_moisture=50.0, water_warning=True)
+    raised = logic.decide_for_cluster(cid)
+    assert raised.primary_code is TriggerCode.WATER_WARNING

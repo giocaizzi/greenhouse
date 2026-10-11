@@ -10,7 +10,7 @@ import math
 import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Protocol, cast
+from typing import TYPE_CHECKING, Any, Protocol
 
 from greenhouse_core.constants import (
     CONFIDENCE_BASELINE,
@@ -91,7 +91,9 @@ from greenhouse_core.logic.sensors import get_recent_sensor_data
 from greenhouse_core.logic.stress import detect_stress_conditions
 from greenhouse_core.logic.timing import (
     active_quiet_window,
+    environment_for,
     is_within_irrigation_window,
+    local_now,
     season_for,
     seasonal_multiplier,
 )
@@ -102,7 +104,6 @@ from greenhouse_core.repository import IrrigationRepository
 from greenhouse_core.utils import seasonal_light_factor
 
 if TYPE_CHECKING:
-    from greenhouse_core.logic.timing import Environment
     from greenhouse_core.models import Cluster, Plant, VacationWindow
 
 log = logging.getLogger(__name__)
@@ -125,6 +126,7 @@ class _EngineInputs:
     temp_range: tuple[float, float] | None
     humidity_range: tuple[float, float] | None
     water_needs: str
+    light_month: int  # month in the preferences timezone; picks the seasonal light factor
 
 
 class IrrigationLogic:
@@ -183,30 +185,42 @@ class IrrigationLogic:
     def _evaluate_rules(
         self, cluster: "Cluster", cluster_id: int, plants: list["Plant"], evaluated_at: int, current_temp: float | None
     ) -> IrrigationDecision:
-        """Weather → fallback → terminal triggers → windows → adjustments; the first terminal step decides."""
+        """Weather → base decision → windows → adjustments or vacation budget; the first terminal step decides.
+
+        The base decision is the no-sensor fallback, or the sensor decision with
+        its emergency triggers (water warning, critical stress) applied. Every
+        run — emergencies and the fallback included — then obeys the cluster's
+        irrigation windows and, while a vacation is active, the reservoir
+        budget: an emergency changes the dosage, not the operator's limits.
+        """
         weather_skip = self._apply_weather_skip_rule(cluster, cluster_id, evaluated_at)
         if weather_skip is not None:
             return weather_skip
 
-        inputs = self._gather_inputs(cluster_id, plants)
-        sensors = self.db.get_sensors_in_cluster(cluster_id)
-        if not sensors or not inputs.snapshot.has_data:
-            return self._fallback_decision(cluster_id, evaluated_at, current_temp, inputs)
+        inputs = self._gather_inputs(cluster_id, plants, evaluated_at)
+        decision, terminal = self._base_or_emergency(cluster_id, evaluated_at, current_temp, inputs)
 
-        decision = _base_decision(cluster_id, evaluated_at, inputs)
-        if _apply_water_warning_rule(decision):
-            return decision
-        if _apply_critical_stress_rule(decision):
-            return decision
-
-        # Cluster-level timing gate — checked AFTER stress overrides on purpose:
-        # a wilting plant still gets water at 2am, a healthy one doesn't.
         window_skip = self._apply_window_rule(cluster_id, evaluated_at)
         if window_skip is not None:
             return window_skip
 
-        self._apply_adjustments(cluster, cluster_id, decision, inputs, evaluated_at)
+        if terminal:
+            self._apply_vacation_budget(decision, cluster_id, evaluated_at)
+        else:
+            self._apply_adjustments(cluster, cluster_id, decision, inputs, evaluated_at)
+            _ensure_reason(decision)
         return decision
+
+    def _base_or_emergency(
+        self, cluster_id: int, evaluated_at: int, current_temp: float | None, inputs: _EngineInputs
+    ) -> tuple[IrrigationDecision, bool]:
+        """The starting decision and whether it is terminal (fallback or emergency: no further adjustments)."""
+        sensors = self.db.get_sensors_in_cluster(cluster_id)
+        if not sensors or not inputs.snapshot.has_data:
+            return self._fallback_decision(cluster_id, evaluated_at, current_temp, inputs), True
+        decision = _base_decision(cluster_id, evaluated_at, inputs)
+        terminal = _apply_water_warning_rule(decision) or _apply_critical_stress_rule(decision)
+        return decision, terminal
 
     def _apply_adjustments(
         self,
@@ -220,7 +234,7 @@ class IrrigationLogic:
         _apply_soil_moisture_rule(decision, inputs.plant_care)
         _apply_temperature_adjustment(decision, inputs.temp_range)
         _apply_humidity_adjustment(decision, inputs.humidity_range)
-        _apply_light_adjustment(decision)
+        _apply_light_adjustment(decision, inputs.light_month)
         _apply_water_needs_adjustment(decision, inputs.water_needs)
         _apply_trend_adjustment(decision)
 
@@ -235,11 +249,17 @@ class IrrigationLogic:
         # VACATION_BUDGET_EXHAUSTED).
         self._apply_vacation_budget(decision, cluster_id, evaluated_at)
 
-    def _gather_inputs(self, cluster_id: int, plants: list["Plant"]) -> _EngineInputs:
-        """Read everything the rule pipeline consumes, in the engine's fixed query order."""
+    def _gather_inputs(self, cluster_id: int, plants: list["Plant"], evaluated_at: int) -> _EngineInputs:
+        """Read everything the rule pipeline consumes, in the engine's fixed query order.
+
+        The light season is the month in the preferences timezone — the same
+        clock :func:`season_for` uses for the seasonal multiplier — so both
+        rules agree on the season around a month boundary.
+        """
         snapshot = get_recent_sensor_data(self.db, cluster_id, hours=SNAPSHOT_LOOKBACK_HOURS)
         trends = analyze_historical_trends(self.db, cluster_id)
-        stress = detect_stress_conditions(self.db, self.plant_db, cluster_id, snapshot, trends)
+        light_month = local_now(evaluated_at, self._tz_name()).month
+        stress = detect_stress_conditions(self.db, self.plant_db, cluster_id, snapshot, trends, month=light_month)
         self._attach_learning_alerts(cluster_id, stress)
 
         plant_care = [self.plant_db.get_care_data(species=p.species, category=p.category) for p in plants]
@@ -251,6 +271,7 @@ class IrrigationLogic:
             temp_range=get_ideal_temp_range(plant_care),
             humidity_range=get_ideal_humidity_range(plant_care),
             water_needs=analyze_water_needs(plant_care),
+            light_month=light_month,
         )
 
     def _fallback_decision(
@@ -315,8 +336,8 @@ class IrrigationLogic:
         A cluster with NO configured ``IrrigationWindow`` rows allows watering at
         any hour — night protection is the job of quiet hours, not this rule (see
         issue #83). ``preferred_water_hours_local`` is still surfaced as advisory
-        plant data via ``plant_db`` but no longer gates actuation. Stress
-        overrides have already returned early before reaching this rule.
+        plant data via ``plant_db`` but no longer gates actuation. Emergency
+        triggers and the no-sensor fallback obey it like any other run.
         """
         windows = self.db.list_irrigation_windows(cluster_id)
         if not windows:
@@ -352,7 +373,7 @@ class IrrigationLogic:
         reading the indoor key (avoids surprising mixed-env scaling).
         """
         tz_name = self._tz_name()
-        environment = cast("Environment", cluster.environment or "indoor")
+        environment = environment_for(cluster.environment)
         season = season_for(evaluated_at, tz_name=tz_name)
 
         season_key = (
@@ -499,7 +520,9 @@ class IrrigationLogic:
             ``None`` when no hold is active.
         """
         hold_seconds = LEAK_HOLD_HOURS * SECONDS_PER_HOUR
-        alert = self.db.get_active_alert(LEAK_ALERT_CODE, cluster_id=cluster_id, since=now - hold_seconds)
+        # The hold window is exclusive at its edge: exactly LEAK_HOLD_HOURS after the
+        # alert was last seen it has expired (``since`` is inclusive, hence the +1 s).
+        alert = self.db.get_active_alert(LEAK_ALERT_CODE, cluster_id=cluster_id, since=now - hold_seconds + 1)
         if alert is None:
             return None
 
@@ -520,15 +543,21 @@ class IrrigationLogic:
         )
 
     def _enforce_cooldown(self, cluster_id: int, now: int) -> IrrigationDecision | None:
-        """Skip when the cluster's irrigator fired within the cooldown window."""
+        """Skip when the cluster's irrigator started less than ``MIN_COOLDOWN_HOURS`` ago.
+
+        The window is exclusive at its edge: exactly 6 h after a start the
+        cooldown is over (the repository query is inclusive, so the edge row is
+        filtered here).
+        """
         irr = self.db.get_irrigator_for_cluster(cluster_id)
         if irr is None:
             return None
 
+        cooldown_seconds = MIN_COOLDOWN_HOURS * SECONDS_PER_HOUR
         latest_event = None
         events = self.db.get_recent_events(irr.id, hours=MIN_COOLDOWN_HOURS)
         for event in events:
-            if event.action != "start":
+            if event.action != "start" or now - event.timestamp >= cooldown_seconds:
                 continue
             if latest_event is None or event.timestamp > latest_event.timestamp:
                 latest_event = event
@@ -553,9 +582,10 @@ class IrrigationLogic:
     ) -> IrrigationDecision | None:
         """Skip irrigation for outdoor clusters when significant rain is forecast.
 
-        No-ops when weather_client is not configured or the cluster is indoor.
+        No-ops when weather_client is not configured or the cluster is not
+        outdoor (see :func:`environment_for` — the same rule the seasonal table uses).
         """
-        if self._weather is None or cluster.environment == "indoor":
+        if self._weather is None or environment_for(cluster.environment) != "outdoor":
             return None
 
         forecast = self._weather.get_forecast(hours=WEATHER_FORECAST_HOURS)
@@ -729,6 +759,23 @@ def _apply_vacation_ration(decision: IrrigationDecision, binding_max_min: int) -
     decision.reasons.insert(0, decision.reasons.pop())
 
 
+def _ensure_reason(decision: IrrigationDecision) -> None:
+    """Give a decision that no rule touched an explicit "no action needed" reason.
+
+    With sensor data but nothing to judge — e.g. temperature-only readings
+    inside the plants' ideal range, no soil probe — every rule passes silently.
+    The audit log, the UI and MCP key on ``primary_code``; an empty trail would
+    persist a NULL code that reads like a lost reason rather than a deliberate skip.
+    """
+    if decision.reasons:
+        return
+    decision.add_reason(
+        code=TriggerCode.NO_ACTION_NEEDED,
+        message="readings within range — no action needed",
+        icon="check-circle",
+    )
+
+
 def _apply_water_warning_rule(decision: IrrigationDecision) -> bool:
     """Sensor's own water_warning is a high-confidence terminal trigger."""
     warning = decision.stress_indicators.water_warning
@@ -881,13 +928,34 @@ def _apply_soil_level(
         )
 
 
+def _shift_interval(decision: IrrigationDecision, step: int) -> int:
+    """Move the interval by ``step`` hours, clamped at the bound it moves towards; return the applied delta.
+
+    The reason's ``interval_delta`` must say what actually happened: when the
+    interval already sits at MIN/MAX_INTERVAL_HOURS the nominal step is not
+    applied (B-14), and the audit trail must not claim it was.
+    """
+    before = decision.interval_hours
+    if step < 0:
+        decision.interval_hours = max(MIN_INTERVAL_HOURS, before + step)
+    else:
+        decision.interval_hours = min(MAX_INTERVAL_HOURS, before + step)
+    return decision.interval_hours - before
+
+
+def _lengthen_duration(decision: IrrigationDecision, step: int) -> int:
+    """Add ``step`` minutes to the duration, capped at MAX_DURATION_MINUTES; return the applied delta."""
+    before = decision.duration_minutes
+    decision.duration_minutes = min(MAX_DURATION_MINUTES, before + step)
+    return decision.duration_minutes - before
+
+
 def _apply_temperature_adjustment(decision: IrrigationDecision, temp_range: tuple[float, float] | None) -> None:
     avg_temp = decision.sensor_snapshot.avg_temperature if decision.sensor_snapshot else None
     if avg_temp is None or not temp_range:
         return
     if avg_temp > temp_range[1] + TEMP_ADJUST_OFFSET:
-        delta = -(decision.interval_hours - max(MIN_INTERVAL_HOURS, decision.interval_hours - TEMP_HIGH_INTERVAL_STEP))
-        decision.interval_hours = max(MIN_INTERVAL_HOURS, decision.interval_hours - TEMP_HIGH_INTERVAL_STEP)
+        delta = _shift_interval(decision, -TEMP_HIGH_INTERVAL_STEP)
         decision.add_reason(
             code=TriggerCode.TEMP_HIGH,
             message=f"temp above ideal ({avg_temp:.0f}°C > {temp_range[1]:.0f}°C)",
@@ -895,8 +963,7 @@ def _apply_temperature_adjustment(decision: IrrigationDecision, temp_range: tupl
             interval_delta=delta,
         )
     elif avg_temp < temp_range[0] - TEMP_ADJUST_OFFSET:
-        delta = min(MAX_INTERVAL_HOURS, decision.interval_hours + TEMP_LOW_INTERVAL_STEP) - decision.interval_hours
-        decision.interval_hours = min(MAX_INTERVAL_HOURS, decision.interval_hours + TEMP_LOW_INTERVAL_STEP)
+        delta = _shift_interval(decision, TEMP_LOW_INTERVAL_STEP)
         decision.add_reason(
             code=TriggerCode.TEMP_LOW,
             message=f"temp below ideal ({avg_temp:.0f}°C < {temp_range[0]:.0f}°C)",
@@ -910,71 +977,70 @@ def _apply_humidity_adjustment(decision: IrrigationDecision, humidity_range: tup
     if avg_hum is None or not humidity_range:
         return
     if avg_hum < humidity_range[0] - HUMIDITY_VERY_LOW_OFFSET:
-        decision.interval_hours = max(MIN_INTERVAL_HOURS, decision.interval_hours - HUMIDITY_VERY_LOW_INTERVAL_STEP)
+        interval_delta = _shift_interval(decision, -HUMIDITY_VERY_LOW_INTERVAL_STEP)
         decision.add_reason(
             code=TriggerCode.HUMIDITY_VERY_LOW,
             message=f"very dry air ({avg_hum:.0f}% << ideal {humidity_range[0]:.0f}%)",
             icon="wind",
-            interval_delta=-HUMIDITY_VERY_LOW_INTERVAL_STEP,
+            interval_delta=interval_delta,
         )
     elif avg_hum < humidity_range[0] - HUMIDITY_LOW_OFFSET:
-        decision.interval_hours = max(MIN_INTERVAL_HOURS, decision.interval_hours - HUMIDITY_LOW_INTERVAL_STEP)
+        interval_delta = _shift_interval(decision, -HUMIDITY_LOW_INTERVAL_STEP)
         decision.add_reason(
             code=TriggerCode.HUMIDITY_LOW,
             message=f"dry air ({avg_hum:.0f}%)",
             icon="wind",
-            interval_delta=-HUMIDITY_LOW_INTERVAL_STEP,
+            interval_delta=interval_delta,
         )
     elif avg_hum > humidity_range[1] + HUMIDITY_HIGH_OFFSET:
-        decision.interval_hours = min(MAX_INTERVAL_HOURS, decision.interval_hours + HUMIDITY_HIGH_INTERVAL_STEP)
+        interval_delta = _shift_interval(decision, HUMIDITY_HIGH_INTERVAL_STEP)
         decision.add_reason(
             code=TriggerCode.HUMIDITY_HIGH,
             message=f"high ambient humidity ({avg_hum:.0f}%)",
             icon="cloud-rain",
-            interval_delta=HUMIDITY_HIGH_INTERVAL_STEP,
+            interval_delta=interval_delta,
         )
 
 
-def _apply_light_adjustment(decision: IrrigationDecision) -> None:
+def _apply_light_adjustment(decision: IrrigationDecision, month: int) -> None:
+    """Shorten the interval in bright light and lengthen it in the dark, thresholds scaled to ``month``'s daylight."""
     avg_light = decision.sensor_snapshot.avg_light if decision.sensor_snapshot else None
     if avg_light is None:
         return
-    sf = seasonal_light_factor()
+    sf = seasonal_light_factor(month)
     if avg_light > LIGHT_VERY_BRIGHT * sf:
-        decision.interval_hours = max(MIN_INTERVAL_HOURS, decision.interval_hours - LIGHT_VERY_BRIGHT_INTERVAL_STEP)
-        decision.duration_minutes = min(
-            MAX_DURATION_MINUTES, decision.duration_minutes + LIGHT_VERY_BRIGHT_DURATION_STEP
-        )
+        interval_delta = _shift_interval(decision, -LIGHT_VERY_BRIGHT_INTERVAL_STEP)
+        duration_delta = _lengthen_duration(decision, LIGHT_VERY_BRIGHT_DURATION_STEP)
         decision.add_reason(
             code=TriggerCode.LIGHT_VERY_BRIGHT,
             message=f"very bright ({avg_light:.0f} lux, seasonal)",
             icon="sun",
-            interval_delta=-LIGHT_VERY_BRIGHT_INTERVAL_STEP,
-            duration_delta=LIGHT_VERY_BRIGHT_DURATION_STEP,
+            interval_delta=interval_delta,
+            duration_delta=duration_delta,
         )
     elif avg_light > LIGHT_BRIGHT * sf:
-        decision.interval_hours = max(MIN_INTERVAL_HOURS, decision.interval_hours - LIGHT_BRIGHT_INTERVAL_STEP)
+        interval_delta = _shift_interval(decision, -LIGHT_BRIGHT_INTERVAL_STEP)
         decision.add_reason(
             code=TriggerCode.LIGHT_BRIGHT,
             message=f"bright ({avg_light:.0f} lux, seasonal)",
             icon="sun-dim",
-            interval_delta=-LIGHT_BRIGHT_INTERVAL_STEP,
+            interval_delta=interval_delta,
         )
     elif avg_light < LIGHT_VERY_DARK * sf:
-        decision.interval_hours = min(MAX_INTERVAL_HOURS, decision.interval_hours + LIGHT_VERY_DARK_INTERVAL_STEP)
+        interval_delta = _shift_interval(decision, LIGHT_VERY_DARK_INTERVAL_STEP)
         decision.add_reason(
             code=TriggerCode.LIGHT_VERY_DARK,
             message=f"very low light ({avg_light:.0f} lux, seasonal)",
             icon="moon",
-            interval_delta=LIGHT_VERY_DARK_INTERVAL_STEP,
+            interval_delta=interval_delta,
         )
     elif avg_light < LIGHT_DARK * sf:
-        decision.interval_hours = min(MAX_INTERVAL_HOURS, decision.interval_hours + LIGHT_DARK_INTERVAL_STEP)
+        interval_delta = _shift_interval(decision, LIGHT_DARK_INTERVAL_STEP)
         decision.add_reason(
             code=TriggerCode.LIGHT_DARK,
             message=f"low light ({avg_light:.0f} lux, seasonal)",
             icon="cloud",
-            interval_delta=LIGHT_DARK_INTERVAL_STEP,
+            interval_delta=interval_delta,
         )
 
 
@@ -1024,41 +1090,39 @@ def _apply_trend_adjustment(decision: IrrigationDecision) -> None:
     trends = decision.trends
     snapshot = decision.sensor_snapshot
     if trends.soil_moisture_trend == "declining":
-        decision.interval_hours = max(MIN_INTERVAL_HOURS, decision.interval_hours - TREND_MOISTURE_INTERVAL_STEP)
+        interval_delta = _shift_interval(decision, -TREND_MOISTURE_INTERVAL_STEP)
         decision.add_reason(
             code=TriggerCode.TREND_MOISTURE_DECLINING,
             message="soil moisture declining",
             icon="trend-down",
-            interval_delta=-TREND_MOISTURE_INTERVAL_STEP,
+            interval_delta=interval_delta,
         )
     elif trends.soil_moisture_trend == "rising":
-        decision.interval_hours = min(MAX_INTERVAL_HOURS, decision.interval_hours + TREND_MOISTURE_INTERVAL_STEP)
+        interval_delta = _shift_interval(decision, TREND_MOISTURE_INTERVAL_STEP)
         decision.add_reason(
             code=TriggerCode.TREND_MOISTURE_RISING,
             message="soil moisture rising",
             icon="trend-up",
-            interval_delta=TREND_MOISTURE_INTERVAL_STEP,
+            interval_delta=interval_delta,
         )
 
     avg_temp = snapshot.avg_temperature if snapshot else None
-    if trends.temperature_trend == "rising" and avg_temp and avg_temp > TREND_TEMP_RISING_HOT_C:
-        decision.interval_hours = max(MIN_INTERVAL_HOURS, decision.interval_hours - TREND_TEMP_RISING_INTERVAL_STEP)
+    if trends.temperature_trend == "rising" and avg_temp is not None and avg_temp > TREND_TEMP_RISING_HOT_C:
+        interval_delta = _shift_interval(decision, -TREND_TEMP_RISING_INTERVAL_STEP)
         decision.add_reason(
             code=TriggerCode.TREND_TEMP_RISING,
             message="temperature rising + hot",
             icon="thermometer-hot",
-            interval_delta=-TREND_TEMP_RISING_INTERVAL_STEP,
+            interval_delta=interval_delta,
         )
 
     if trends.irrigation_frequency_low:
-        decision.duration_minutes = min(
-            MAX_DURATION_MINUTES, decision.duration_minutes + TREND_UNDERWATERING_DURATION_STEP
-        )
+        duration_delta = _lengthen_duration(decision, TREND_UNDERWATERING_DURATION_STEP)
         decision.add_reason(
             code=TriggerCode.UNDERWATERING_PATTERN,
             message="recent under-watering pattern",
             icon="chart-line-down",
-            duration_delta=TREND_UNDERWATERING_DURATION_STEP,
+            duration_delta=duration_delta,
         )
 
 

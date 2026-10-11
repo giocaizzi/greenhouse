@@ -26,6 +26,10 @@ from golden import ENV_PREFIXES, FROZEN_INSTANT
 from greenhouse_core.models import Base
 from greenhouse_core.repository import IrrigationRepository
 
+# Server fixtures (``app``, ``client``, …) as a global plugin rather than a ``tests/server``
+# conftest, so mixing directories on one command line cannot hide them (server/fixtures.py).
+pytest_plugins = ("server.fixtures",)
+
 _LOOPBACK_HOSTS = frozenset({"127.0.0.1", "::1", "localhost"})
 
 
@@ -50,6 +54,32 @@ def _no_network(monkeypatch):
 
     monkeypatch.setattr(urllib.request, "urlopen", _blocked_urlopen)
     monkeypatch.setattr(socket.socket, "connect", _loopback_only_connect)
+
+
+@pytest.fixture(autouse=True)
+def _isolated_cli_token(monkeypatch, tmp_path_factory):
+    """No test reads (or writes) the developer's real CLI session token.
+
+    The CLI resolves ``$GREENHOUSE_API_TOKEN`` first, then
+    ``$XDG_CONFIG_HOME/greenhouse/token``; both are pointed away from the user's
+    environment for every test. Tests that need a token set them explicitly.
+    """
+    monkeypatch.delenv("GREENHOUSE_API_TOKEN", raising=False)
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path_factory.mktemp("xdg-config")))
+
+
+@pytest.fixture(autouse=True)
+def _no_developer_dotenv(request, monkeypatch):
+    """``Settings`` ignores a developer's ``.env`` in the working directory during tests.
+
+    Tests marked ``dotenv`` exercise the real ``.env`` loading (in their own temp
+    working directory) and keep the production ``env_file``.
+    """
+    if request.node.get_closest_marker("dotenv"):
+        return
+    from greenhouse_server.config import Settings
+
+    monkeypatch.setitem(Settings.model_config, "env_file", None)
 
 
 @pytest.fixture

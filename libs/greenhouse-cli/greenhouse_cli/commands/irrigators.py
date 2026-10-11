@@ -4,9 +4,9 @@ from typing import Annotated
 
 import typer
 
-from greenhouse_cli.commands._helpers import ClusterArg, ClusterOpt, YesOpt, call, output
+from greenhouse_cli.commands._helpers import ClusterArg, ClusterOpt, HelpOnBareGroup, YesOpt, call, output
 
-irrigator_app = typer.Typer(help="Manage and control irrigators", no_args_is_help=True)
+irrigator_app = typer.Typer(help="Manage and control irrigators", no_args_is_help=True, cls=HelpOnBareGroup)
 
 # Options shared by `irrigator add` and `irrigator update` (same flag, type and help in both).
 DeviceIpOpt = Annotated[str | None, typer.Option(help="Local IP")]

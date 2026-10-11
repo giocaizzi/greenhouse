@@ -97,6 +97,8 @@ def test_client_calls_run_off_the_event_loop_thread(seeded):
                 await settle(pilot, tui)
             await pilot.press("P")
             await settle(pilot, tui)
+            await pilot.press("y")  # the plant-DB sync asks for confirmation
+            await settle(pilot, tui)
             await pilot.press("escape")
             await pilot.press("slash")
             await pilot.press(*"fern")
@@ -200,10 +202,10 @@ def test_plants_cursor_stays_on_record_across_refresh(seeded):
     _run(scenario())
 
 
-def test_activity_cursor_current_behavior_resets_to_top_on_refresh(seeded):
-    """Pins current behavior: ActivityScreen.load clears and re-adds rows (no ``refill``), so an auto-refresh
-    moves the cursor back to row 0 — the newest event — instead of keeping the selected record. Harmless today
-    (activity rows have no row actions) but it is NOT the cursor-stability contract the other tables follow.
+def test_activity_cursor_stays_on_the_selected_event_across_refresh(seeded):
+    """ActivityScreen.load repopulates through ``refill`` (rows keyed by event id), so an auto-refresh keeps the
+    cursor on the selected event — the cursor-stability contract the other tables follow — even when a newer
+    event is inserted above it.
     """
     http, engine = seeded
 
@@ -216,14 +218,16 @@ def test_activity_cursor_current_behavior_resets_to_top_on_refresh(seeded):
             table = screen.query_one("#activity-table", DataTable)
             await wait_until(lambda: table.row_count == 3, "the first activity load (3 events)")
             table.move_cursor(row=2)
+            selected = table.get_row_at(2)
             with _app_locks[id(http)], Session(engine) as session:
                 IrrigationRepository(session).add_activity_event(
                     "sync", "system", "sync_completed", "fresh event", severity="info", timestamp=FROZEN_TS
                 )
                 session.commit()
             await wait_until(lambda: table.row_count == 4, "an auto-refresh showing the inserted event")
-            assert table.cursor_row == 0
             assert table.get_row_at(0)[-1] == "fresh event"
+            assert table.cursor_row == 3
+            assert table.get_row_at(3) == selected
 
     _run(scenario())
 
@@ -243,14 +247,14 @@ def test_401_opens_one_sign_in_dialog_then_logs_in(clean_env, frozen_clock):
         client.http = TestClient(application, raise_server_exceptions=False)
         if token:
             client.http.headers["Authorization"] = f"Bearer {token}"
-        original = client._request
+        original = client._send  # every request (JSON and the CSV export) goes through _send
 
         def serialized(method, path, **kwargs):
             log.append((method, path, kwargs.get("json"), kwargs.get("params")))
             with lock:
                 return original(method, path, **kwargs)
 
-        client._request = serialized
+        client._send = serialized
         return client
 
     async def scenario():
@@ -280,10 +284,9 @@ def test_401_opens_one_sign_in_dialog_then_logs_in(clean_env, frozen_clock):
         engine.dispose()
 
 
-def test_401_current_behavior_dashboard_says_cannot_reach_server(clean_env, frozen_clock):
-    """Pins current (buggy) behavior: when the server answers 401, ``GreenhouseApp.api`` returns ``None`` and the
-    dashboard renders "Cannot reach the server — press r to retry." behind the sign-in dialog, although the server
-    was reached — see REFACTOR_NOTES.md."""
+def test_401_dashboard_says_sign_in_needed(clean_env, frozen_clock):
+    """When the server answers 401 the dashboard behind the sign-in dialog says a login is needed — not
+    "Cannot reach the server", since the server was reached."""
     application, engine = _make_stubbed_app(bypass_auth=False)
 
     def factory(token):
@@ -298,7 +301,9 @@ def test_401_current_behavior_dashboard_says_cannot_reach_server(clean_env, froz
             assert isinstance(tui.screen, LoginScreen)
             dashboard = tui.screen_stack[-2]
             assert isinstance(dashboard, DashboardScreen)
-            assert "Cannot reach the server" in _text(dashboard.query_one("#dashboard-empty", Static))
+            text = _text(dashboard.query_one("#dashboard-empty", Static))
+            assert "Sign in to see your clusters" in text
+            assert "Cannot reach the server" not in text
 
     try:
         _run(scenario())

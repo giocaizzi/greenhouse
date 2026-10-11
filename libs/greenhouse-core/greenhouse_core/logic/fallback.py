@@ -26,9 +26,24 @@ from greenhouse_core.logic.decision import (
 from greenhouse_core.models import IrrigationConfig
 from greenhouse_core.repository import IrrigationRepository
 
+# Fields that make up a watering schedule; a global row that sets any of them is a configured schedule.
+_SCHEDULE_FIELDS = ("mode", "duration_minutes", "interval_hours")
+
+
+def _has_configured_schedule(db: IrrigationRepository, cluster_id: int, config: IrrigationConfig | None) -> bool:
+    """A cluster config row, or a global config that sets the schedule for every cluster.
+
+    The global row always exists (it carries quiet hours), so it counts only
+    when it sets a schedule field; built-in defaults alone are not a schedule.
+    """
+    if config is not None:
+        return True
+    effective = db.get_effective_config(cluster_id)
+    return any(effective[field]["source"] == "global" for field in _SCHEDULE_FIELDS)
+
 
 def _config_fallback(db: IrrigationRepository, cluster_id: int, base: IrrigationDecision) -> IrrigationDecision:
-    """Fill ``base`` from the configured schedule (no sensor data, config row present) and return it."""
+    """Fill ``base`` from the configured schedule (no sensor data; cluster or global schedule) and return it."""
     # Honor the *effective* mode/duration/interval so a global-only
     # override (cluster row leaves them null) still drives the
     # fallback. Local raw config keeps the row alive but defers to
@@ -91,8 +106,7 @@ def temperature_based_decision(
     )
 
     if temp is None:
-        if config:
-            # Known quirk: only a cluster config row enables this; a global-only schedule falls to NO_DATA.
+        if _has_configured_schedule(db, cluster_id, config):
             return _config_fallback(db, cluster_id, base)
         base.add_reason(
             code=TriggerCode.NO_DATA,

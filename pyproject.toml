@@ -55,6 +55,7 @@ dev = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["libs/greenhouse-core", "libs/greenhouse-server", "libs/greenhouse-cli", "tests"]
+markers = ["dotenv: keep Settings' real `.env` loading (tests/conftest.py disables it for every other test)"]
 
 [tool.mypy]
 # Every module under libs/ is mypy-strict clean (`make typecheck` = plain `uv run mypy`). The generated

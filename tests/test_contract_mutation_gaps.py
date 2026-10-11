@@ -152,7 +152,7 @@ def test_water_warning_names_are_deduplicated_per_sensor():
 def test_low_light_stress_fires_below_40_percent_of_the_seasonal_minimum(fraction, expected):
     """stress-02: ``low_light`` needs ``avg_light < 0.4 × effective_light_threshold(lux_min)``.
 
-    Monstera's summer baseline is 150 lux; April's seasonal factor applies (UTC month).
+    Monstera's summer baseline is 150 lux; April's seasonal factor applies (month in the preferences timezone).
     """
     lux = round(effective_light_threshold(150, month=BASE_AT.month) * fraction)
     decision = _decide(f"low-light-{fraction}", sensors=(_sensor(Reading(age_s=600, soil=50.0, light=lux)),))
@@ -194,16 +194,14 @@ def test_temperature_trend_falling_needs_delta_strictly_below_minus_threshold(te
     assert decision["trends"]["temperature_trend"] == label
 
 
-def test_zero_celsius_readings_are_ignored_by_the_temperature_trend_current_behavior():
-    """trends-04: Pins current (buggy) behavior: ``if r.temperature`` drops 0.0 °C readings.
+def test_zero_celsius_readings_count_in_the_temperature_trend():
+    """trends-04 (B-18): a 0.0 °C reading is a value, not "missing".
 
-    With the first half all at 0.0 °C there is no "first half" mean, so no
-    temperature trend at all (``None``) although the second half is 10 °C
-    warmer — see REFACTOR_NOTES.md (decision engine, plant_needs/trends zero
-    truthiness).
+    With the first half at 0.0 °C and the second half 10 °C warmer the trend is
+    "rising" (it was ``None``: a truthiness filter dropped every 0.0 reading).
     """
     decision = _decide("temp-trend-zero", sensors=(_hourly("temp", (0.0, 0.0, 10.0, 10.0), soil=50.0),))
-    assert decision["trends"]["temperature_trend"] is None
+    assert decision["trends"]["temperature_trend"] == "rising"
 
 
 @pytest.mark.parametrize(("starts", "high"), [(21, False), (22, True)])
@@ -250,14 +248,19 @@ def test_hampel_spike_test_is_strictly_greater_than_threshold(spike, kept):
     assert cleaned[:3] + cleaned[4:] == [50.0] * 6
 
 
-def test_hampel_window_is_centered_with_full_left_context_current_behavior():
-    """cleaning-09: the window spans ``i-3 .. i+3`` (clamped).
+def test_hampel_keeps_a_step_change_confirmed_by_the_following_samples():
+    """cleaning-09: the window spans ``i-3 .. i+3`` (clamped); a step at the newest end is kept whole.
 
-    Pins current behavior on a step change: in ``40,40,40,60,60`` the FIRST 60
-    is judged against the window ``40,40,40,60,60`` (median 40, MAD 0) and
-    dropped, while the last 60 (window ``40,40,60,60``) is kept.
+    In ``40,40,40,60,60`` the first 60's window ``40,40,40,60,60`` (median 40, MAD 0)
+    used to drop it although the next sample confirms the new level. A point with a
+    truncated right window is now kept when every later sample agrees with it.
+    Spike rejection is unchanged: a lone newest spike, a mid-series one- or
+    two-sample spike (full right context) and a 3.5 % blip are still dropped.
     """
-    assert _clean_soil([40.0, 40.0, 40.0, 60.0, 60.0]) == [40.0, 40.0, 40.0, None, 60.0]
+    assert _clean_soil([40.0, 40.0, 40.0, 60.0, 60.0]) == [40.0, 40.0, 40.0, 60.0, 60.0]
+    assert _clean_soil([55.0] * 8 + [10.0]) == [55.0] * 8 + [None]
+    assert _clean_soil([40.0, 40.0, 40.0, 60.0, 60.0, 40.0, 40.0]) == [40.0, 40.0, 40.0, None, None, 40.0, 40.0]
+    assert _clean_soil([55.0] * 4 + [10.0] + [55.0] * 4) == [55.0] * 4 + [None] + [55.0] * 4
 
 
 # ── logic/timing.py ─────────────────────────────────────────────────────────

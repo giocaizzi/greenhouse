@@ -82,9 +82,14 @@ class SystemScreen(DataScreen):
         refill(self.query_one("#quality-table", DataTable), render.quality_rows(issues))
 
     def action_toggle_scheduler(self) -> None:
-        """Resume a paused scheduler at once; pausing asks first because it stops automatic irrigation."""
+        """Pause or resume the scheduler after confirmation: either way automatic irrigation changes."""
         if self.paused:
-            self.run_worker(self.act(lambda c: c.scheduler_resume(), "Scheduler resumed"))
+            self.confirm_then(
+                "Resume automatic irrigation? Clusters with auto-run enabled may water at the next check.",
+                lambda c: c.scheduler_resume(),
+                "Scheduler resumed",
+                "Resume",
+            )
         else:
             self.confirm_then(
                 "Pause automatic irrigation? Sensor sync and monitoring keep running.",
@@ -99,12 +104,12 @@ class SystemScreen(DataScreen):
         self.run_worker(self.act(lambda c: c.sync(), lambda r: f"Sync done: {r.get('total_new', 0)} new readings"))
 
     def action_plant_sync(self) -> None:
-        """Refresh every plant's care data from the curated plant DB."""
-        self.run_worker(
-            self.act(
-                lambda c: c.sync_plants(),
-                lambda r: f"Plant DB sync: {r.get('synced', 0)} plants updated, {len(r.get('errors', []))} errors",
-            )
+        """Refresh every plant's care data from the curated plant DB, after confirmation (it rewrites care data)."""
+        self.confirm_then(
+            "Sync [b]every[/b] plant with the plant DB?\nTheir care data is updated from it.",
+            lambda c: c.sync_plants(),
+            lambda r: f"Plant DB sync: {r.get('synced', 0)} plants updated, {len(r.get('errors', []))} errors",
+            "Sync",
         )
 
     def action_health_snapshot(self) -> None:

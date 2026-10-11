@@ -6,9 +6,9 @@ from typing import Annotated
 
 import typer
 
-from greenhouse_cli.commands._helpers import call, output
+from greenhouse_cli.commands._helpers import HelpOnBareGroup, call, output
 
-alerts_app = typer.Typer(help="Inspect and manage the alert inbox", no_args_is_help=True)
+alerts_app = typer.Typer(help="Inspect and manage the alert inbox", no_args_is_help=True, cls=HelpOnBareGroup)
 
 
 @alerts_app.command("list")

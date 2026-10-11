@@ -67,9 +67,13 @@ class GreenhouseApp(App[None]):
             lambda token: IrrigationClient(base_url=server_url, token=token)
         )
         self.client = self.client_factory(None)
+        self._retired_clients: list[IrrigationClient] = []
         self.refresh_seconds = refresh_seconds
         self.animations = animations
         self._login_open = False
+        # True from a 401 until a sign-in succeeds: screens can then say "sign in"
+        # instead of "cannot reach the server" when a call returned nothing.
+        self.needs_sign_in = False
         self.sub_title = server_url
 
     async def api(self, fn: Callable[[IrrigationClient], Any], *, quiet: bool = False) -> Any:
@@ -86,6 +90,7 @@ class GreenhouseApp(App[None]):
             return await asyncio.to_thread(fn, self.client)
         except ServerError as e:
             if e.status_code == HTTPStatus.UNAUTHORIZED:
+                self.needs_sign_in = True
                 self.prompt_login()
             elif not quiet:
                 self.notify(str(e.detail), title=f"Server error {e.status_code or ''}".strip(), severity="error")
@@ -109,18 +114,27 @@ class GreenhouseApp(App[None]):
 
         A failed login reopens the dialog with the server's message; on success the active screen reloads.
         """
-        anonymous = self.client_factory("")
-        try:
-            data = await asyncio.to_thread(anonymous.login, username, password)
-        except ServerError as e:
-            self.prompt_login(f"Login failed: {e.detail}")
-            return
+        with self.client_factory("") as anonymous:
+            try:
+                data = await asyncio.to_thread(anonymous.login, username, password)
+            except ServerError as e:
+                self.prompt_login(f"Login failed: {e.detail}")
+                return
         token = data.get("access_token", "")
         if token:
             store_token(token)
+        # The signed-out client may still serve an in-flight call on a worker thread,
+        # so it is retired here and closed with the others when the app exits.
+        self._retired_clients.append(self.client)
         self.client = self.client_factory(token or None)
+        self.needs_sign_in = False
         self.notify(f"Signed in as {data.get('username', username)}")
         self.action_refresh()
+
+    def on_unmount(self) -> None:
+        """Close every HTTP client the session opened (their connection pools) when the app exits."""
+        for client in (*self._retired_clients, self.client):
+            client.http.close()
 
     def action_search(self) -> None:
         """Open global search; picking a hit opens its cluster."""
