@@ -16,8 +16,8 @@ Invariants pinned here: #1 (IK10PW speaks local protocol 3.5) and the device hal
 of #8 (``open_local`` resolves ``local_key`` from config/cache with zero Cloud
 calls; ``get_live_reading`` is single-call — v1.0 ``getstatus`` only when the
 v2.0 shadow *fails*; the on/off switch pulse goes through the Cloud API and the
-keep-alive fallback re-pulses it via the Cloud). Bug B-2 / S2 (keep-alive SIGTERM
-handler off the main thread left the pump on) is fixed and covered here.
+bounded IK10PW start refuses before any ON when the local Duration DP cannot be
+written — S2 / B-2: the keep-alive fallback is gone).
 """
 
 from __future__ import annotations
@@ -26,7 +26,6 @@ import dataclasses
 import logging
 import signal
 import threading
-import time
 from types import SimpleNamespace
 
 import pytest
@@ -263,7 +262,6 @@ def test_profiles_parsers_and_registry_golden():
                 "TuyaSensorAdapter": sorted(a.value for a in TuyaSensorAdapter.health_capabilities),
             },
             "constants": {
-                "KEEP_ALIVE_INTERVAL": ik10pw_module.KEEP_ALIVE_INTERVAL,
                 "LOCAL_TIMEOUT": gateway_module.LOCAL_TIMEOUT,
             },
         },
@@ -1002,114 +1000,14 @@ def test_tr301z_read_health_raw_payloads(harness):
     assert harness.log == []
 
 
-# ── Keep-alive fallback (IK10PW) incl. the B-2 / S2 fix ───────────────────────
+# ── Duration DP unavailable → bounded start is refused (IK10PW, S2 / B-2) ─────
 
 
-@pytest.fixture
-def fake_sleep(monkeypatch):
-    """Replace the ``time`` module seen by ik10pw with an instant, recording sleep."""
-    sleeps: list[float] = []
-    monkeypatch.setattr(ik10pw_module, "time", SimpleNamespace(sleep=sleeps.append, time=time.time))
-    return sleeps
-
-
-def _keepalive_ok_harness(harness):
-    harness.cloud.set("sendcommand", {"success": True})
-    return IK10PWAdapter(harness.gateway)
-
-
-class TestKeepAliveMainThread:
-    def test_main_thread_cycle_pulses_on_and_always_switches_off(self, harness, fake_sleep):
-        assert threading.current_thread() is threading.main_thread()
-        before = signal.getsignal(signal.SIGTERM)
-        result = _keepalive_ok_harness(harness)._start_keepalive(_irrigator(), 1)
-        assert result == (True, "Irrigation completed for 1 min [keep-alive mode]")
-        assert fake_sleep == [20, 20, 20]
-        assert harness.log == [
-            ("cloud.sendcommand", FAKE_DEVICE_ID, SWITCH_ON),
-            ("cloud.sendcommand", FAKE_DEVICE_ID, SWITCH_ON),
-            ("cloud.sendcommand", FAKE_DEVICE_ID, SWITCH_ON),
-            ("cloud.sendcommand", FAKE_DEVICE_ID, SWITCH_OFF),
-        ]
-        assert signal.getsignal(signal.SIGTERM) is before
-
-    def test_interval_patched_last_sleep_is_the_remainder(self, harness, fake_sleep, monkeypatch):
-        monkeypatch.setattr(ik10pw_module, "KEEP_ALIVE_INTERVAL", 25)
-        result = _keepalive_ok_harness(harness)._start_keepalive(_irrigator(), 1)
-        assert result == (True, "Irrigation completed for 1 min [keep-alive mode]")
-        assert fake_sleep == [25, 25, 10]
-        assert [c[2] for c in harness.log] == [SWITCH_ON, SWITCH_ON, SWITCH_ON, SWITCH_OFF]
-
-    def test_start_falls_back_to_keepalive_when_local_dp_fails(self, harness, fake_sleep, caplog):
-        adapter = _keepalive_ok_harness(harness)
-        with caplog.at_level(logging.WARNING, logger="greenhouse_core.devices.irrigators.ik10pw"):
-            result = adapter.start(_irrigator({}), 1)  # no device_ip → local fails without any I/O
-        assert result == (True, "Irrigation completed for 1 min [keep-alive mode]")
-        assert caplog.messages == [
-            "Local Duration set failed (Local connection failed: No device_ip in config for irrigator "
-            f"{FAKE_DEVICE_ID}.), using keep-alive fallback"
-        ]
-        assert [c[0] for c in harness.log] == ["cloud.sendcommand"] * 4
-        assert harness.log[-1][2] == SWITCH_OFF
-
-    def test_sigterm_during_cycle_switches_off_once_and_reports_interrupted(self, harness, monkeypatch):
-        before = signal.getsignal(signal.SIGTERM)
-        sleeps: list[float] = []
-
-        def _sleep(seconds):
-            sleeps.append(seconds)
-            if len(sleeps) == 2:
-                signal.getsignal(signal.SIGTERM)(signal.SIGTERM, None)  # deliver "SIGTERM" synchronously
-
-        monkeypatch.setattr(ik10pw_module, "time", SimpleNamespace(sleep=_sleep, time=time.time))
-        result = _keepalive_ok_harness(harness)._start_keepalive(_irrigator(), 1)
-        assert result == (
-            True,
-            "Irrigation interrupted after ~20s — device turned off (requested 1 min) [keep-alive mode]",
-        )
-        # on, keep-alive on, then exactly one off (from ``finally``; the handler only unwinds).
-        assert [c[2] for c in harness.log] == [SWITCH_ON, SWITCH_ON, SWITCH_OFF]
-        assert signal.getsignal(signal.SIGTERM) is before
-
-    def test_keyboard_interrupt_is_swallowed_and_switches_off_once(self, harness, monkeypatch):
-        def _sleep(_seconds):
-            raise KeyboardInterrupt
-
-        monkeypatch.setattr(ik10pw_module, "time", SimpleNamespace(sleep=_sleep, time=time.time))
-        result = _keepalive_ok_harness(harness)._start_keepalive(_irrigator(), 1)
-        assert result == (
-            True,
-            "Irrigation interrupted after ~0s — device turned off (requested 1 min) [keep-alive mode]",
-        )
-        assert [c[2] for c in harness.log] == [SWITCH_ON, SWITCH_OFF]
-
-    def test_initial_on_failure_returns_before_signal_or_sleep(self, harness, fake_sleep):
-        before = signal.getsignal(signal.SIGTERM)
-        harness.cloud.set("sendcommand", {"success": False})
-        result = IK10PWAdapter(harness.gateway)._start_keepalive(_irrigator(), 1)
-        assert result == (False, "Failed to start irrigation: Failed to turn ON device")
-        assert fake_sleep == []
-        assert harness.log == [("cloud.sendcommand", FAKE_DEVICE_ID, SWITCH_ON)]
-        assert signal.getsignal(signal.SIGTERM) is before
-
-    def test_keepalive_and_final_off_errors_are_logged_not_raised(self, harness, fake_sleep, caplog):
-        harness.cloud.set(
-            "sendcommand", Seq({"success": True}, ConnectionError("blip"), {"success": True}, ConnectionError("down"))
-        )
-        with caplog.at_level(logging.DEBUG, logger="greenhouse_core.devices.irrigators.ik10pw"):
-            result = IK10PWAdapter(harness.gateway)._start_keepalive(_irrigator(), 1)
-        assert result == (True, "Irrigation completed for 1 min [keep-alive mode]")
-        assert [c[2] for c in harness.log] == [SWITCH_ON, SWITCH_ON, SWITCH_ON, SWITCH_OFF]
-        assert [(r.levelname, r.getMessage(), r.exc_info is not None) for r in caplog.records] == [
-            ("WARNING", f"Keep-alive ON pulse failed for {FAKE_DEVICE_ID}", True),
-            ("ERROR", f"Keep-alive final OFF failed for {FAKE_DEVICE_ID}; the firmware auto-off bounds the run", True),
-        ]
-
-    def test_zero_minutes_still_switches_on_then_off(self, harness, fake_sleep):
-        result = _keepalive_ok_harness(harness)._start_keepalive(_irrigator(), 0)
-        assert result == (True, "Irrigation completed for 0 min [keep-alive mode]")
-        assert fake_sleep == []
-        assert [c[2] for c in harness.log] == [SWITCH_ON, SWITCH_OFF]
+REFUSAL = (
+    False,
+    "Local Duration DP unavailable (Local connection failed: No device_ip in config for irrigator "
+    f"{FAKE_DEVICE_ID}.); keep-alive is not supported in the server — irrigation not started",
+)
 
 
 def _run_in_thread(fn) -> dict:
@@ -1118,7 +1016,7 @@ def _run_in_thread(fn) -> dict:
     def _target():
         try:
             outcome["result"] = fn()
-        except BaseException as exc:  # noqa: BLE001 — the exception is what we pin
+        except BaseException as exc:  # noqa: BLE001 — the exception is what we assert on
             outcome["exc"] = exc
 
     worker = threading.Thread(target=_target, name="fastapi-threadpool-stand-in")
@@ -1128,72 +1026,36 @@ def _run_in_thread(fn) -> dict:
     return outcome
 
 
-def test_keepalive_off_main_thread_runs_the_cycle_and_switches_off(harness, fake_sleep):
-    """B-2 / S2 fixed: off the main thread no SIGTERM handler is installed, and the cycle completes.
-
-    ``signal.signal`` only works on the main thread; on a FastAPI threadpool or
-    APScheduler worker it used to raise ``ValueError`` after the Cloud ON, outside
-    the ``try`` that sends OFF, leaving the pump on. Now the handler is skipped
-    off the main thread and the cycle pulses and ends with exactly one OFF.
-    """
-    before = signal.getsignal(signal.SIGTERM)
-    adapter = _keepalive_ok_harness(harness)
-    outcome = _run_in_thread(lambda: adapter._start_keepalive(_irrigator(), 1))
-    assert outcome == {"result": (True, "Irrigation completed for 1 min [keep-alive mode]")}
-    assert harness.log == [
-        ("cloud.sendcommand", FAKE_DEVICE_ID, SWITCH_ON),
-        ("cloud.sendcommand", FAKE_DEVICE_ID, SWITCH_ON),
-        ("cloud.sendcommand", FAKE_DEVICE_ID, SWITCH_ON),
-        ("cloud.sendcommand", FAKE_DEVICE_ID, SWITCH_OFF),
-    ]
-    assert fake_sleep == [20, 20, 20]
-    assert signal.getsignal(signal.SIGTERM) is before
-
-
-def test_start_off_main_thread_falls_back_to_keepalive_and_switches_off(harness, fake_sleep):
-    """B-2 / S2 fixed via the public ``start``: a failed local Duration write falls back to keep-alive.
-
-    On a worker thread the 3-minute cycle runs to completion: ON, eight
-    keep-alive ONs (every 20 s), then one OFF.
-    """
-    adapter = _keepalive_ok_harness(harness)
-    outcome = _run_in_thread(lambda: adapter.start(_irrigator({}), 3))
-    assert outcome == {"result": (True, "Irrigation completed for 3 min [keep-alive mode]")}
-    assert [c[2] for c in harness.log] == [SWITCH_ON] * 9 + [SWITCH_OFF]
-    assert fake_sleep == [20] * 9
-
-
 @pytest.mark.parametrize("on_main_thread", [True, False], ids=["main-thread", "worker-thread"])
-def test_unexpected_error_after_on_still_switches_off(harness, monkeypatch, on_main_thread):
-    """Anything raised after the first ON propagates only after the single OFF has been sent."""
+def test_bounded_start_without_local_duration_is_refused_before_any_on(harness, caplog, on_main_thread):
+    """S2 / B-2: no Duration DP → ``(False, …)`` and zero Cloud calls; no keep-alive loop, on any thread."""
+    harness.cloud.set("sendcommand", {"success": True})
+    adapter = IK10PWAdapter(harness.gateway)
     before = signal.getsignal(signal.SIGTERM)
-
-    def _sleep(_seconds):
-        raise RuntimeError("clock broke")
-
-    monkeypatch.setattr(ik10pw_module, "time", SimpleNamespace(sleep=_sleep, time=time.time))
-    adapter = _keepalive_ok_harness(harness)
-    if on_main_thread:
-        with pytest.raises(RuntimeError, match="clock broke"):
-            adapter._start_keepalive(_irrigator(), 1)
-    else:
-        outcome = _run_in_thread(lambda: adapter._start_keepalive(_irrigator(), 1))
-        assert isinstance(outcome["exc"], RuntimeError)
-    assert [c[2] for c in harness.log] == [SWITCH_ON, SWITCH_OFF]
+    with caplog.at_level(logging.WARNING, logger="greenhouse_core.devices.irrigators.ik10pw"):
+        if on_main_thread:
+            result = adapter.start(_irrigator({}), 3)
+        else:
+            result = _run_in_thread(lambda: adapter.start(_irrigator({}), 3))["result"]
+    assert result == REFUSAL
+    assert harness.log == []  # no ON, no OFF: the pump was never switched
     assert signal.getsignal(signal.SIGTERM) is before
+    assert [r.levelname for r in caplog.records] == ["WARNING"]
 
 
-def test_main_thread_handler_install_failure_still_switches_off(harness, fake_sleep, monkeypatch):
-    """Even if wiring the SIGTERM handler fails after the ON, the OFF is sent before the error surfaces."""
+def test_local_duration_error_payload_refuses_after_the_local_write_only(harness):
+    """A local error payload is a failed Duration write too: only the local calls happen, no Cloud ON."""
+    harness.cloud.set("sendcommand", {"success": True})
+    harness.local_set_value = {"Error": "Network Error: Device Unreachable", "Err": "905"}
+    ok, msg = IK10PWAdapter(harness.gateway).start(_irrigator(), 2)
+    assert ok is False
+    assert msg.startswith("Local Duration DP unavailable (Local API error: ")
+    assert harness.log == [*_local_open_calls(), ("local.set_value", 102, 120)]
 
-    def _broken_signal(*_args):
-        raise ValueError("signal only works in main thread of the main interpreter")
 
-    monkeypatch.setattr(ik10pw_module.signal, "signal", _broken_signal)
-    with pytest.raises(ValueError, match="main thread"):
-        _keepalive_ok_harness(harness)._start_keepalive(_irrigator(), 1)
-    assert [c[2] for c in harness.log] == [SWITCH_ON, SWITCH_OFF]
-    assert fake_sleep == []
+def test_keepalive_loop_is_gone():
+    assert not hasattr(IK10PWAdapter, "_start_keepalive")
+    assert not hasattr(ik10pw_module, "KEEP_ALIVE_INTERVAL")
 
 
 # ── alarm DP parsing ──────────────────────────────────────────────────────────

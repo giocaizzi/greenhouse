@@ -109,19 +109,15 @@ class TestIK10PWAdapterActuation:
         assert "5 min" in msg
         fake_cloud.sendcommand.assert_called_once()
 
-    def test_start_falls_back_to_keepalive_when_local_fails(self, fake_cloud, adapter):
-        """Local DP write fails → keep-alive fallback handles the cycle."""
+    def test_start_refuses_when_local_duration_fails(self, fake_cloud, adapter):
+        """Local DP write fails → the bounded start is refused before any Cloud ON."""
         fake_cloud.sendcommand.return_value = {"success": True}
         with patch.object(adapter, "_set_duration_local", return_value=(False, "Connection refused")):
-            with patch.object(
-                adapter,
-                "_start_keepalive",
-                return_value=(True, "Keep-alive completed for 3 min"),
-            ):
-                success, msg = adapter.start(_make_irrigator(), minutes=3)
+            success, msg = adapter.start(_make_irrigator(), minutes=3)
 
-        assert success
-        assert "3 min" in msg
+        assert not success
+        assert "keep-alive is not supported in the server" in msg
+        fake_cloud.sendcommand.assert_not_called()
 
     def test_actuation_failure_propagates(self, fake_cloud, adapter):
         fake_cloud.sendcommand.return_value = {"success": False, "msg": "Device offline"}

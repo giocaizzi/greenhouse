@@ -23,8 +23,8 @@ logger = logging.getLogger(__name__)
 class TuyaIrrigatorAdapter(AbstractIrrigatorAdapter):
     """Default Tuya driver. Switch on/off via Cloud API.
 
-    Models that need anything beyond plain on/off (e.g. a local Duration DP,
-    a keep-alive fallback, or an alarm read) subclass this adapter and
+    Models that need anything beyond plain on/off (e.g. a local Duration DP
+    or an alarm read) subclass this adapter and
     override the relevant method while reusing the cloud helpers.
     """
 

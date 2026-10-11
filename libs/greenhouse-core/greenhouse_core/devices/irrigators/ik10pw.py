@@ -8,23 +8,16 @@ which the Cloud API refuses to write (error 2008). The cycle recipe is:
 3. the device runs its own countdown and auto-stops.
 
 Both pieces are needed — cloud-only cannot bound the cycle, local-only
-struggles to keep a Zigbee-gateway device awake. When local fails (IP
-changed, network blip) the keep-alive fallback flips the cloud switch every
-20 s to reset the device's internal 30 s auto-off, with a SIGTERM handler
-that unwinds into the cycle's ``finally`` — which sends the single OFF — so an
-interrupted process never leaves the pump running.
+struggles to keep a Zigbee-gateway device awake. When the local Duration write
+fails (IP changed, network blip) a bounded start is refused before any ON is
+sent: an unbounded run that only a 20 s keep-alive loop could stop is not
+something the server (scheduler / threadpool workers) can run safely.
 """
 
 from __future__ import annotations
 
 import logging
-import signal
-import threading
 import time
-from collections.abc import Iterator
-from contextlib import contextmanager
-from dataclasses import dataclass
-from types import FrameType
 
 from greenhouse_core.devices.gateway import DeviceGateway
 from greenhouse_core.devices.health import DeviceHealthState, HealthAlarm
@@ -33,8 +26,6 @@ from greenhouse_core.devices.profile import IrrigatorProfile, load_profile_json
 from greenhouse_core.models import Irrigator
 
 logger = logging.getLogger(__name__)
-
-KEEP_ALIVE_INTERVAL = 20  # seconds, must be < device Duration (30s)
 
 
 def alarm_indicates_no_water(value: object, bitmask: int = 0x01) -> bool:
@@ -91,39 +82,6 @@ IK10PW_PROFILE = _load_profile()
 IK10PW_ALARM_DP = IK10PW_PROFILE.dp("alarm")
 
 
-@dataclass
-class _KeepAliveCycle:
-    """Mutable progress of one keep-alive cycle, shared with the SIGTERM handler."""
-
-    total_seconds: int
-    elapsed: int = 0
-    interrupted: bool = False
-
-
-@contextmanager
-def _sigterm_unwinds(cycle: _KeepAliveCycle) -> Iterator[None]:
-    """Make SIGTERM unwind the keep-alive cycle, on the main thread only.
-
-    ``signal.signal`` raises ``ValueError`` off the main thread, so there the
-    handler is simply not installed. On the main thread the handler marks the
-    cycle interrupted and raises ``SystemExit``; the caller's ``finally`` sends
-    the OFF. The previous handler is always restored.
-    """
-    if threading.current_thread() is not threading.main_thread():
-        yield
-        return
-
-    def _handler(signum: int, frame: FrameType | None) -> None:  # noqa: ARG001
-        cycle.interrupted = True
-        raise SystemExit(128 + signum)
-
-    previous = signal.signal(signal.SIGTERM, _handler)
-    try:
-        yield
-    finally:
-        signal.signal(signal.SIGTERM, previous)
-
-
 class IK10PWAdapter(TuyaIrrigatorAdapter):
     """Rainpoint IK10PW driver.
 
@@ -164,8 +122,11 @@ class IK10PWAdapter(TuyaIrrigatorAdapter):
         3. Device handles its own timer — no sleep/polling needed.
         4. Device auto-stops after Duration seconds.
 
-        If local connection fails (e.g. device IP changed), falls back to
-        a keep-alive loop (sending switch ON every 20 s).
+        If the local Duration write fails (e.g. device IP changed), the start
+        is refused with ``(False, …)`` before any ON is sent: without the
+        on-device countdown only a keep-alive loop could bound the run, and
+        that is not supported in the server. Callers record the refusal
+        (pipeline: ``attempted``; manual start: 502).
         """
         if minutes is None:
             return self.on(irrigator)
@@ -174,82 +135,21 @@ class IK10PWAdapter(TuyaIrrigatorAdapter):
 
         # Step 1: local Duration DP
         dur_ok, dur_msg = self._set_duration_local(irrigator, duration_seconds)
-
-        if dur_ok:
-            # Step 2: cloud switch — device auto-stops after Duration seconds
-            success, msg = self.on(irrigator)
-            if not success:
-                return False, f"Failed to start irrigation: {msg}"
-            return (
-                True,
-                f"Irrigation started for {minutes} min (Duration DP set to {duration_seconds}s, device auto-stops)",
+        if not dur_ok:
+            logger.warning("Local Duration set failed (%s); refusing the bounded start", dur_msg)
+            return False, (
+                f"Local Duration DP unavailable ({dur_msg}); keep-alive is not supported in the server — "
+                "irrigation not started"
             )
 
-        logger.warning("Local Duration set failed (%s), using keep-alive fallback", dur_msg)
-        return self._start_keepalive(irrigator, minutes)
-
-    def _start_keepalive(self, irrigator: Irrigator, minutes: int) -> tuple[bool, str]:
-        """Sustain irrigation via keep-alive ON commands.
-
-        Used when local protocol is unavailable (IP changed, network issue).
-        Sends switch ON every 20 s to reset the device's internal auto-off
-        timer. Everything after the first successful ON runs inside one
-        ``try``/``finally`` that sends exactly one OFF, so no error — not even
-        one raised while wiring the SIGTERM handler — can leave the pump on.
-
-        The SIGTERM handler is installed only on the main thread (the only
-        thread ``signal.signal`` accepts); there it unwinds the cycle into the
-        ``finally``. Off the main thread (FastAPI threadpool, APScheduler
-        worker) no handler is installed: the process's own SIGTERM handling
-        applies, and if the process dies the pulses stop and the firmware's
-        ~30 s auto-off bounds the run.
-        """
-        cycle = _KeepAliveCycle(total_seconds=minutes * 60)
+        # Step 2: cloud switch — device auto-stops after Duration seconds
         success, msg = self.on(irrigator)
         if not success:
             return False, f"Failed to start irrigation: {msg}"
-        try:
-            with _sigterm_unwinds(cycle):
-                self._pulse_until_done(irrigator, cycle)
-        except (SystemExit, KeyboardInterrupt):
-            cycle.interrupted = True
-        finally:
-            self._final_off(irrigator)
-
-        if cycle.interrupted:
-            return (
-                True,
-                f"Irrigation interrupted after ~{cycle.elapsed}s — device turned off (requested {minutes} min) "
-                "[keep-alive mode]",
-            )
-        return True, f"Irrigation completed for {minutes} min [keep-alive mode]"
-
-    def _pulse_until_done(self, irrigator: Irrigator, cycle: _KeepAliveCycle) -> None:
-        """Sleep in ``KEEP_ALIVE_INTERVAL`` steps, re-sending ON between steps until the cycle is over."""
-        while cycle.elapsed < cycle.total_seconds and not cycle.interrupted:
-            sleep_for = min(KEEP_ALIVE_INTERVAL, cycle.total_seconds - cycle.elapsed)
-            time.sleep(sleep_for)
-            cycle.elapsed += sleep_for
-            if cycle.elapsed < cycle.total_seconds and not cycle.interrupted:
-                self._pulse_on(irrigator)
-
-    def _pulse_on(self, irrigator: Irrigator) -> None:
-        """Send one keep-alive ON; best-effort, the next pulse retries."""
-        try:
-            self.on(irrigator)
-        except Exception:
-            # A missed pulse only risks an early firmware auto-off, never a pump left on.
-            logger.warning("Keep-alive ON pulse failed for %s", irrigator.tuya_device_id, exc_info=True)
-
-    def _final_off(self, irrigator: Irrigator) -> None:
-        """Send the cycle's single OFF; a failure is logged, never raised (the cleanup must not mask an error)."""
-        try:
-            self.off(irrigator)
-        except Exception:
-            logger.exception(
-                "Keep-alive final OFF failed for %s; the firmware auto-off bounds the run",
-                irrigator.tuya_device_id,
-            )
+        return (
+            True,
+            f"Irrigation started for {minutes} min (Duration DP set to {duration_seconds}s, device auto-stops)",
+        )
 
     # ── Health read ───────────────────────────────────────────────────────
 

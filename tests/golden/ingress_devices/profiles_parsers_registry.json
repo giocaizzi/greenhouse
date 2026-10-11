@@ -1,6 +1,5 @@
 {
  "constants": {
-  "KEEP_ALIVE_INTERVAL": 20,
   "LOCAL_TIMEOUT": 5
  },
  "datapoint_parser_codes_in_order": [
