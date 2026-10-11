@@ -1,5 +1,7 @@
 """Server configuration via Pydantic BaseSettings."""
 
+from typing import Any
+
 from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -18,8 +20,26 @@ class Settings(BaseSettings):
         env_file=".env",
         case_sensitive=False,
         extra="ignore",
-        populate_by_name=True,
+        # Off on purpose: with it on, pydantic-settings also reads every aliased
+        # secret from ``IRRIGATION_<FIELD>``. Constructor kwargs still accept the
+        # field name — see ``__init__``.
+        populate_by_name=False,
     )
+
+    def __init__(self, **values: Any) -> None:
+        """Accept the field name as a kwarg for the aliased secrets too.
+
+        The secrets below are read from the environment as ``GREENHOUSE_<NAME>``
+        only (their single validation alias). ``populate_by_name`` stays off so
+        neither the bare ``<NAME>`` nor ``IRRIGATION_<NAME>`` env var configures
+        them, so a kwarg spelled with the field name (``Settings(mcp_token=…)``)
+        is mapped onto the alias here instead.
+        """
+        for name, info in type(self).model_fields.items():
+            alias = info.validation_alias
+            if isinstance(alias, AliasChoices) and name in values:
+                values[str(alias.choices[0])] = values.pop(name)
+        super().__init__(**values)
 
     db_url: str = "sqlite:///data/irrigation.db"
     host: str = "0.0.0.0"  # noqa: S104 — container default (Docker publishes the port); IRRIGATION_HOST overrides
@@ -72,10 +92,11 @@ class Settings(BaseSettings):
         return value
 
     # MCP bearer token (fail-closed: unset -> /mcp returns 503).
-    # Lives outside the IRRIGATION_ prefix to match the public deployment contract.
+    # Lives outside the IRRIGATION_ prefix to match the public deployment contract:
+    # GREENHOUSE_MCP_TOKEN is the only env name read (as for every aliased secret).
     mcp_token: str | None = Field(
         default=None,
-        validation_alias=AliasChoices("GREENHOUSE_MCP_TOKEN", "mcp_token"),
+        validation_alias=AliasChoices("GREENHOUSE_MCP_TOKEN"),
     )
 
     # ── ntfy.sh push notifications ──────────────────────────────────────────
@@ -86,15 +107,15 @@ class Settings(BaseSettings):
     # deployment-secret convention.
     ntfy_server_url: str | None = Field(
         default=None,
-        validation_alias=AliasChoices("GREENHOUSE_NTFY_SERVER_URL", "ntfy_server_url"),
+        validation_alias=AliasChoices("GREENHOUSE_NTFY_SERVER_URL"),
     )
     ntfy_topic: str | None = Field(
         default=None,
-        validation_alias=AliasChoices("GREENHOUSE_NTFY_TOPIC", "ntfy_topic"),
+        validation_alias=AliasChoices("GREENHOUSE_NTFY_TOPIC"),
     )
     ntfy_token: str | None = Field(
         default=None,
-        validation_alias=AliasChoices("GREENHOUSE_NTFY_TOKEN", "ntfy_token"),
+        validation_alias=AliasChoices("GREENHOUSE_NTFY_TOKEN"),
     )
 
     # ── Authentication ──────────────────────────────────────────────────────
@@ -108,7 +129,7 @@ class Settings(BaseSettings):
     # IRRIGATION_ prefix to mirror the deployment-secret convention.
     auth_secret_key: str | None = Field(
         default=None,
-        validation_alias=AliasChoices("GREENHOUSE_AUTH_SECRET_KEY", "auth_secret_key"),
+        validation_alias=AliasChoices("GREENHOUSE_AUTH_SECRET_KEY"),
     )
     auth_token_ttl_minutes: int = 60 * 24  # 24h
     auth_cookie_name: str = "greenhouse_session"
@@ -118,11 +139,11 @@ class Settings(BaseSettings):
     # deployment-secret convention.
     auth_admin_username: str | None = Field(
         default=None,
-        validation_alias=AliasChoices("GREENHOUSE_AUTH_ADMIN_USERNAME", "auth_admin_username"),
+        validation_alias=AliasChoices("GREENHOUSE_AUTH_ADMIN_USERNAME"),
     )
     auth_admin_password: str | None = Field(
         default=None,
-        validation_alias=AliasChoices("GREENHOUSE_AUTH_ADMIN_PASSWORD", "auth_admin_password"),
+        validation_alias=AliasChoices("GREENHOUSE_AUTH_ADMIN_PASSWORD"),
     )
 
     # Pump dry-run watcher. During every active irrigation a background job

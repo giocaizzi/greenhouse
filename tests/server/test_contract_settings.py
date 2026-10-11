@@ -69,7 +69,7 @@ def test_settings_model_config_explicit_keys():
     assert config["env_file"] == ".env"
     assert config["case_sensitive"] is False
     assert config["extra"] == "ignore"
-    assert config["populate_by_name"] is True
+    assert config["populate_by_name"] is False
 
 
 def test_settings_defaults_with_empty_environment(clean_env):
@@ -163,20 +163,26 @@ ALIASED_FIELDS = [
 
 
 @pytest.mark.parametrize(("suffix", "field"), ALIASED_FIELDS, ids=[r[0] for r in ALIASED_FIELDS])
-def test_aliased_fields_current_behavior_read_three_env_names(clean_env, monkeypatch, suffix, field):
-    """Pins current (surprising) behavior: an ``AliasChoices("GREENHOUSE_X", "x")`` field
-    is read from **three** env names — ``GREENHOUSE_X`` (documented), the bare ``X``
-    and the prefixed ``IRRIGATION_X`` (pydantic-settings applies ``env_prefix`` to the
-    bare-name choice and also matches it unprefixed). So e.g. ``MCP_TOKEN`` or
-    ``IRRIGATION_AUTH_SECRET_KEY`` in the environment configure the server — see
-    REFACTOR_NOTES.md. Precedence: ``GREENHOUSE_X`` > ``X`` > ``IRRIGATION_X``.
+def test_aliased_fields_read_only_the_greenhouse_env_name(clean_env, monkeypatch, suffix, field):
+    """An aliased secret (MCP token, ntfy, auth secret/admin) is read from ``GREENHOUSE_X`` only.
+
+    The bare ``X`` and the prefixed ``IRRIGATION_X`` used to configure it too (owner decision:
+    one documented name per secret, so a stray ``MCP_TOKEN`` in the environment cannot open MCP).
     """
     monkeypatch.setenv(f"IRRIGATION_{suffix}", "from-irrigation-name")
-    assert getattr(_settings(), field) == "from-irrigation-name"
     monkeypatch.setenv(suffix, "from-bare-name")
-    assert getattr(_settings(), field) == "from-bare-name"
+    assert getattr(_settings(), field) is None
     monkeypatch.setenv(f"GREENHOUSE_{suffix}", "from-greenhouse-name")
     assert getattr(_settings(), field) == "from-greenhouse-name"
+
+
+@pytest.mark.parametrize(("suffix", "field"), ALIASED_FIELDS, ids=[r[0] for r in ALIASED_FIELDS])
+def test_aliased_fields_ignore_old_names_in_dotenv(clean_env, monkeypatch, tmp_path, suffix, field):
+    env_file = tmp_path / ".env"
+    env_file.write_text(f"IRRIGATION_{suffix}=a\n{suffix}=b\n")
+    assert getattr(Settings(_env_file=env_file), field) is None
+    env_file.write_text(f"GREENHOUSE_{suffix}=c\n")
+    assert getattr(Settings(_env_file=env_file), field) == "c"
 
 
 @pytest.mark.parametrize(("suffix", "field"), ALIASED_FIELDS, ids=[r[0] for r in ALIASED_FIELDS])
