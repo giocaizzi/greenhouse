@@ -844,7 +844,7 @@ _ONE_LOG_CASES = {
     "quiet_hours": ("quiet_hours", "skip", False),
     "outdoor_rain_forecast": ("weather_skip", "skip", False),
     "window_outside": ("outside_window", "skip", False),
-    "vacation_budget_exhausted": (None, "skip", False),
+    "vacation_budget_exhausted": ("vacation_budget_exhausted", "skip", False),
     "wet_skips": (None, "skip", False),
     "dry_irrigates": (None, "irrigate", True),
     "dry_run": (None, "irrigate", False),

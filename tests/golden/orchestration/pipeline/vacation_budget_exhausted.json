@@ -9,8 +9,16 @@
     "duration_minutes": 0,
     "interval_hours": 12,
     "learning_alerts": [],
-    "reason": "soil moderately dry (driest=35%); vacation active (returns in 10d); vacation water budget exhausted this cycle — skipping to conserve reservoir",
+    "reason": "vacation water budget exhausted this cycle — skipping to conserve reservoir; soil moderately dry (driest=35%); vacation active (returns in 10d)",
     "reasons": [
+     {
+      "code": "vacation_budget_exhausted",
+      "duration_delta": 0,
+      "icon": "drop-slash",
+      "interval_delta": 0,
+      "message": "vacation water budget exhausted this cycle — skipping to conserve reservoir",
+      "severity": "warning"
+     },
      {
       "code": "sensor_dry",
       "duration_delta": 0,
@@ -26,14 +34,6 @@
       "interval_delta": 0,
       "message": "vacation active (returns in 10d)",
       "severity": "info"
-     },
-     {
-      "code": "vacation_budget_exhausted",
-      "duration_delta": 0,
-      "icon": "drop-slash",
-      "interval_delta": 0,
-      "message": "vacation water budget exhausted this cycle — skipping to conserve reservoir",
-      "severity": "warning"
      }
     ],
     "stress_indicators": {
@@ -52,7 +52,7 @@
     "entity_id": 1,
     "entity_type": "cluster",
     "id": 1,
-    "message": "soil moderately dry (driest=35%); vacation active (returns in 10d); vacation water budget exhausted this cycle — skipping to conserve reservoir",
+    "message": "vacation water budget exhausted this cycle — skipping to conserve reservoir; soil moderately dry (driest=35%); vacation active (returns in 10d)",
     "payload_json": null,
     "severity": "info",
     "source": "irrigation",
@@ -79,6 +79,14 @@
      "interval_hours": 12,
      "reasons": [
       {
+       "code": "vacation_budget_exhausted",
+       "duration_delta": 0,
+       "icon": "drop-slash",
+       "interval_delta": 0,
+       "message": "vacation water budget exhausted this cycle — skipping to conserve reservoir",
+       "severity": "warning"
+      },
+      {
        "code": "sensor_dry",
        "duration_delta": 0,
        "icon": "drop",
@@ -93,14 +101,6 @@
        "interval_delta": 0,
        "message": "vacation active (returns in 10d)",
        "severity": "info"
-      },
-      {
-       "code": "vacation_budget_exhausted",
-       "duration_delta": 0,
-       "icon": "drop-slash",
-       "interval_delta": 0,
-       "message": "vacation water budget exhausted this cycle — skipping to conserve reservoir",
-       "severity": "warning"
       }
      ],
      "sensor_snapshot": {
@@ -140,8 +140,8 @@
      },
      "weather": null
     },
-    "primary_code": "sensor_dry",
-    "reason_text": "soil moderately dry (driest=35%); vacation active (returns in 10d); vacation water budget exhausted this cycle — skipping to conserve reservoir",
+    "primary_code": "vacation_budget_exhausted",
+    "reason_text": "vacation water budget exhausted this cycle — skipping to conserve reservoir; soil moderately dry (driest=35%); vacation active (returns in 10d)",
     "triggered_by": "auto"
    }
   ],
