@@ -23,6 +23,10 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Canonical measurement keys (the gateway's parsed names): a live read carrying at
+# least one of them is a reading worth a row. Battery / water-warning alone are not.
+_LIVE_MEASUREMENT_KEYS = ("temperature", "soil_moisture", "env_humidity", "light")
+
 
 class SyncStats(TypedDict):
     """Totals of one sync run; the key order is the order API and web callers see."""
@@ -156,7 +160,7 @@ def _store_live_reading(db: IrrigationRepository, cloud: DeviceGateway, sensor: 
     saved = False
     try:
         live = cloud.get_live_reading(sensor.tuya_device_id)
-        if live and any(k in live for k in ("temperature", "soil_moisture", "humidity", "light")):
+        if live and any(k in live for k in _LIVE_MEASUREMENT_KEYS):
             now = int(time.time())
             result = db.add_sensor_reading(
                 sensor_id=sensor.id,

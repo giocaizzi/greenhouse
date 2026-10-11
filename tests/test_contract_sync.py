@@ -250,7 +250,8 @@ class TestLiveRead:
             ({"temperature": 20.0}, 1),
             ({"soil_moisture": 33.0}, 1),
             ({"light": 10}, 1),
-            ({"humidity": 70.0}, 1),  # legacy key passes the guard; stored row has no metric values
+            ({"env_humidity": 64.0}, 1),
+            ({"humidity": 70.0}, 0),  # not a canonical key (the gateway maps DP "humidity" to soil_moisture)
             ({}, 0),
             ({"battery_state": "low", "water_warning": True}, 0),
             ({"error": "device offline"}, 0),
@@ -261,27 +262,17 @@ class TestLiveRead:
         assert sync_single_sensor(db, FakeGateway(live={"dev_a": live}), sensor, 24) == (0, 0, saved)
         assert len(_rows(db, sensor.id)) == saved
 
-    def test_env_humidity_only_live_reading_current_behavior_is_dropped(self, one_sensor):
-        """Pins current (buggy) behavior: B-21 — see REFACTOR_NOTES.md.
-
-        The live-read guard checks the legacy ``"humidity"`` key instead of a
-        canonical one, so a live reading carrying only ``env_humidity`` is never
-        persisted.
-        """
+    def test_env_humidity_only_live_reading_is_persisted(self, one_sensor):
+        """B-21 fixed: the guard checks the canonical keys, so an ``env_humidity``-only live read is stored."""
         db, sensor = one_sensor
-        assert sync_single_sensor(db, FakeGateway(live={"dev_a": {"env_humidity": 64.0}}), sensor, 24) == (0, 0, 0)
-        assert _rows(db, sensor.id) == []
-
-    def test_humidity_key_row_stores_no_metric(self, one_sensor):
-        db, sensor = one_sensor
-        sync_single_sensor(db, FakeGateway(live={"dev_a": {"humidity": 70.0}}), sensor, 24)
+        assert sync_single_sensor(db, FakeGateway(live={"dev_a": {"env_humidity": 64.0}}), sensor, 24) == (0, 0, 1)
         assert _rows(db, sensor.id) == [
             {
                 "timestamp": FROZEN_TS,
                 "temperature": None,
                 "soil_moisture": None,
                 "light": None,
-                "env_humidity": None,
+                "env_humidity": 64.0,
                 "battery_state": None,
                 "water_warning": None,
             }
