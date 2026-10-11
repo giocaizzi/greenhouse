@@ -1052,7 +1052,7 @@
      "irrigators"
     ],
     "summary": "Get the cluster's irrigator",
-    "description": "Fetch the cluster's single irrigator.\n\nArgs:\n    cluster_id: Cluster whose irrigator to fetch.\n\nReturns:\n    The cluster's irrigator record.\n\nRaises:\n    HTTPException: 404 if the cluster has no irrigator.",
+    "description": "Fetch the cluster's single irrigator.\n\nArgs:\n    cluster_id: Cluster whose irrigator to fetch.\n\nReturns:\n    The cluster's irrigator record (a stored `local_key` reads as `••••••••`).\n\nRaises:\n    HTTPException: 404 if the cluster has no irrigator.",
     "operationId": "get_irrigator",
     "security": [
      {
@@ -1098,7 +1098,7 @@
      "irrigators"
     ],
     "summary": "Update the cluster's irrigator",
-    "description": "Partially update the metadata of the cluster's irrigator.\n\nOnly fields present in the request body are modified; omitted fields are\nleft unchanged.\n\nArgs:\n    cluster_id: Cluster whose irrigator to update.\n    request: Fields to update — any subset of `name`, `type`, `config`,\n        `reservoir_l`, and `flow_rate_l_per_min`.\n\nReturns:\n    The updated irrigator.\n\nRaises:\n    HTTPException: 404 if the cluster has no irrigator.",
+    "description": "Partially update the metadata of the cluster's irrigator.\n\nOnly fields present in the request body are modified; omitted fields are\nleft unchanged. A `config` replaces the stored one; its `local_key` is\nmasked as `••••••••` in every response, and sending that mask back keeps\nthe stored key.\n\nArgs:\n    cluster_id: Cluster whose irrigator to update.\n    request: Fields to update — any subset of `name`, `type`, `config`,\n        `reservoir_l`, and `flow_rate_l_per_min`.\n\nReturns:\n    The updated irrigator (its `local_key` masked).\n\nRaises:\n    HTTPException: 404 if the cluster has no irrigator.",
     "operationId": "update_irrigator",
     "security": [
      {
@@ -6577,7 +6577,7 @@
      "cluster_id"
     ],
     "title": "IrrigatorResponse",
-    "description": "An irrigator as stored, with the cluster it waters."
+    "description": "An irrigator as stored, with the cluster it waters.\n\nA stored ``config.local_key`` is masked as ``••••••••``; send the mask back\nunchanged in an update to keep the stored key."
    },
    "LearnResponse": {
     "properties": {

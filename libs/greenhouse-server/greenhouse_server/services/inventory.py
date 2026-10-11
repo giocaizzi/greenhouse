@@ -10,7 +10,9 @@ from __future__ import annotations
 
 from typing import Any
 
+from greenhouse_core.models import parse_device_config
 from greenhouse_core.repository import DeviceIdExistsError, IrrigationRepository, IrrigatorExistsError
+from greenhouse_core.schemas import LOCAL_KEY_MASK
 
 __all__ = [
     "DeviceIdExistsError",
@@ -19,6 +21,7 @@ __all__ = [
     "create_irrigator",
     "create_sensor",
     "ensure_plant_in_cluster",
+    "keep_masked_local_key",
 ]
 
 
@@ -28,6 +31,25 @@ class PlantNotInClusterError(LookupError):
     def __init__(self, plant_id: int) -> None:
         super().__init__(plant_id)
         self.plant_id = plant_id
+
+
+def keep_masked_local_key(config: dict[str, Any], stored_config: object) -> dict[str, Any]:
+    """Resolve a ``local_key`` that arrives as the response mask back to the stored key.
+
+    Responses show the key as ``LOCAL_KEY_MASK``, so a client that edits the
+    config it read (TUI JSON form, MCP agent, script) sends the mask back.
+    That means "unchanged": the stored key is kept (dropped when none is
+    stored). Any other value — a new key, or ``""`` — is taken as given.
+    """
+    if config.get("local_key") != LOCAL_KEY_MASK:
+        return config
+    resolved = dict(config)
+    stored_key = parse_device_config(stored_config).get("local_key") if stored_config else None
+    if stored_key:
+        resolved["local_key"] = stored_key
+    else:
+        resolved.pop("local_key")
+    return resolved
 
 
 def create_irrigator(
@@ -57,7 +79,7 @@ def create_irrigator(
                 tuya_device_id=tuya_device_id,
                 name=name,
                 irrigator_type=irrigator_type,
-                config=config,
+                config=keep_masked_local_key(config, None),
             )
     except IrrigatorExistsError:
         repo.rollback()

@@ -8,6 +8,8 @@ These guard two properties of the edit flow:
 
 import json
 
+from greenhouse_core.repository import IrrigationRepository
+
 SECRET_KEY = "fake_local_key_deadbeef"
 
 
@@ -34,9 +36,12 @@ def _seed_local_irrigator(client, cluster_name="Local Cluster"):
 
 
 def _stored_config(client, cluster_id):
-    resp = client.get(f"/api/v1/clusters/{cluster_id}/irrigator")
-    assert resp.status_code == 200
-    config = resp.json()["config"]
+    """Read the stored config from the DB: the API masks ``local_key`` (B-11)."""
+    session = client.app.state.session_factory()
+    try:
+        config = IrrigationRepository(session).get_irrigator_for_cluster(cluster_id).config
+    finally:
+        session.close()
     return json.loads(config) if isinstance(config, str) else (config or {})
 
 

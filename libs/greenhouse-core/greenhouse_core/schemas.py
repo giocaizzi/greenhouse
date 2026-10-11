@@ -13,6 +13,20 @@ def _parse_json_config(v: object) -> object:
     return None if v is None else parse_device_config(v)
 
 
+# What a stored irrigator ``local_key`` reads as in every response — the same
+# dots the web edit form shows. The key is a root-level local-protocol
+# credential: it is accepted on writes but never echoed back. Sending this
+# value back in an update keeps the stored key (see services.inventory).
+LOCAL_KEY_MASK = "••••••••"
+
+
+def mask_local_key(config: object) -> object:
+    """Return ``config`` with a non-empty ``local_key`` replaced by ``LOCAL_KEY_MASK`` (copy, never in place)."""
+    if isinstance(config, dict) and config.get("local_key"):
+        return {**config, "local_key": LOCAL_KEY_MASK}
+    return config
+
+
 # --- Cluster ---
 
 
@@ -130,7 +144,11 @@ class CreateIrrigatorRequest(IrrigatorBase):
 
 
 class IrrigatorResponse(IrrigatorBase):
-    """An irrigator as stored, with the cluster it waters."""
+    """An irrigator as stored, with the cluster it waters.
+
+    A stored ``config.local_key`` is masked as ``••••••••``; send the mask back
+    unchanged in an update to keep the stored key.
+    """
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -140,8 +158,8 @@ class IrrigatorResponse(IrrigatorBase):
     @field_validator("config", mode="before")
     @classmethod
     def parse_config(cls, v: Any) -> Any:
-        """Decode the stored device config (JSON text or dict) leniently."""
-        return _parse_json_config(v)
+        """Decode the stored device config (JSON text or dict) leniently and mask its local key."""
+        return mask_local_key(_parse_json_config(v))
 
 
 class IrrigatorListResponse(BaseModel):

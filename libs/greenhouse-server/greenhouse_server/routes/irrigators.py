@@ -22,7 +22,12 @@ from greenhouse_server.deps import (
     require_cluster_irrigator,
     require_irrigator,
 )
-from greenhouse_server.services.inventory import DeviceIdExistsError, IrrigatorExistsError, create_irrigator
+from greenhouse_server.services.inventory import (
+    DeviceIdExistsError,
+    IrrigatorExistsError,
+    create_irrigator,
+    keep_masked_local_key,
+)
 from greenhouse_server.services.manual_control import (
     ManualActionError,
     manual_log,
@@ -119,7 +124,7 @@ def get_irrigator(cluster_id: int, repo: RepoDep) -> Irrigator:
         cluster_id: Cluster whose irrigator to fetch.
 
     Returns:
-        The cluster's irrigator record.
+        The cluster's irrigator record (a stored `local_key` reads as `••••••••`).
 
     Raises:
         HTTPException: 404 if the cluster has no irrigator.
@@ -136,7 +141,9 @@ def update_irrigator(cluster_id: int, request: UpdateIrrigatorRequest, repo: Rep
     """Partially update the metadata of the cluster's irrigator.
 
     Only fields present in the request body are modified; omitted fields are
-    left unchanged.
+    left unchanged. A `config` replaces the stored one; its `local_key` is
+    masked as `••••••••` in every response, and sending that mask back keeps
+    the stored key.
 
     Args:
         cluster_id: Cluster whose irrigator to update.
@@ -144,13 +151,16 @@ def update_irrigator(cluster_id: int, request: UpdateIrrigatorRequest, repo: Rep
             `reservoir_l`, and `flow_rate_l_per_min`.
 
     Returns:
-        The updated irrigator.
+        The updated irrigator (its `local_key` masked).
 
     Raises:
         HTTPException: 404 if the cluster has no irrigator.
     """
     irrigator = require_cluster_irrigator(repo, cluster_id)
-    updated = repo.update_irrigator(irrigator.id, **request.model_dump(exclude_none=True))
+    fields = request.model_dump(exclude_none=True)
+    if "config" in fields:
+        fields["config"] = keep_masked_local_key(fields["config"], irrigator.config)
+    updated = repo.update_irrigator(irrigator.id, **fields)
     repo.commit()
     return updated
 

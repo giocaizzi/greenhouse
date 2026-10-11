@@ -749,7 +749,7 @@
   },
   {
    "name": "get_irrigator",
-   "description": "Get the cluster's irrigator\n\nFetch the cluster's single irrigator.\n\nArgs:\n    cluster_id: Cluster whose irrigator to fetch.\n\nReturns:\n    The cluster's irrigator record.\n\nRaises:\n    HTTPException: 404 if the cluster has no irrigator.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"tuya_device_id\": \"Tuya Device Id\",\n  \"name\": \"Name\",\n  \"type\": \"Type\",\n  \"id\": 1,\n  \"cluster_id\": 1\n}\n```",
+   "description": "Get the cluster's irrigator\n\nFetch the cluster's single irrigator.\n\nArgs:\n    cluster_id: Cluster whose irrigator to fetch.\n\nReturns:\n    The cluster's irrigator record (a stored `local_key` reads as `••••••••`).\n\nRaises:\n    HTTPException: 404 if the cluster has no irrigator.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"tuya_device_id\": \"Tuya Device Id\",\n  \"name\": \"Name\",\n  \"type\": \"Type\",\n  \"id\": 1,\n  \"cluster_id\": 1\n}\n```",
    "inputSchema": {
     "type": "object",
     "properties": {
@@ -766,7 +766,7 @@
   },
   {
    "name": "update_irrigator",
-   "description": "Update the cluster's irrigator\n\nPartially update the metadata of the cluster's irrigator.\n\nOnly fields present in the request body are modified; omitted fields are\nleft unchanged.\n\nArgs:\n    cluster_id: Cluster whose irrigator to update.\n    request: Fields to update — any subset of `name`, `type`, `config`,\n        `reservoir_l`, and `flow_rate_l_per_min`.\n\nReturns:\n    The updated irrigator.\n\nRaises:\n    HTTPException: 404 if the cluster has no irrigator.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"tuya_device_id\": \"Tuya Device Id\",\n  \"name\": \"Name\",\n  \"type\": \"Type\",\n  \"id\": 1,\n  \"cluster_id\": 1\n}\n```",
+   "description": "Update the cluster's irrigator\n\nPartially update the metadata of the cluster's irrigator.\n\nOnly fields present in the request body are modified; omitted fields are\nleft unchanged. A `config` replaces the stored one; its `local_key` is\nmasked as `••••••••` in every response, and sending that mask back keeps\nthe stored key.\n\nArgs:\n    cluster_id: Cluster whose irrigator to update.\n    request: Fields to update — any subset of `name`, `type`, `config`,\n        `reservoir_l`, and `flow_rate_l_per_min`.\n\nReturns:\n    The updated irrigator (its `local_key` masked).\n\nRaises:\n    HTTPException: 404 if the cluster has no irrigator.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"tuya_device_id\": \"Tuya Device Id\",\n  \"name\": \"Name\",\n  \"type\": \"Type\",\n  \"id\": 1,\n  \"cluster_id\": 1\n}\n```",
    "inputSchema": {
     "type": "object",
     "properties": {
