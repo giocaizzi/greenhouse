@@ -222,7 +222,9 @@ class IrrigationLogic:
     ) -> tuple[IrrigationDecision, bool]:
         """The starting decision and whether it is terminal (fallback or emergency: no further adjustments)."""
         sensors = self.db.get_sensors_in_cluster(cluster_id)
-        if not sensors or not inputs.snapshot.has_data:
+        # Soil readings that are all stale are no usable soil data: the no-data fallback decides.
+        only_stale_soil = inputs.snapshot.avg_soil_moisture is not None and not inputs.soil
+        if not sensors or not inputs.snapshot.has_data or only_stale_soil:
             return self._fallback_decision(cluster_id, evaluated_at, current_temp, inputs), True
         decision = _base_decision(cluster_id, evaluated_at, inputs)
         return decision, _apply_emergency_rules(decision, inputs.soil)
@@ -262,7 +264,7 @@ class IrrigationLogic:
         clock :func:`season_for` uses for the seasonal multiplier — so both
         rules agree on the season around a month boundary.
         """
-        snapshot = get_recent_sensor_data(self.db, cluster_id, hours=SNAPSHOT_LOOKBACK_HOURS)
+        snapshot = get_recent_sensor_data(self.db, cluster_id, hours=SNAPSHOT_LOOKBACK_HOURS, now=evaluated_at)
         trends = analyze_historical_trends(self.db, cluster_id)
         light_month = local_now(evaluated_at, self._tz_name()).month
         stress = detect_stress_conditions(self.db, self.plant_db, cluster_id, snapshot, trends, month=light_month)

@@ -971,3 +971,35 @@ def test_stuck_high_probe_does_not_veto_another_plants_alarm(tmp_db, frozen_cloc
 
     assert decision.action.value == "irrigate"
     assert [r.code for r in decision.reasons] == [TriggerCode.CONFLICT, TriggerCode.WATER_WARNING]
+
+
+def _two_probe_cluster(db, readings):
+    """Monstera cluster with one probe per ``(soil, age_s)``."""
+    cid = db.add_cluster("Stale")
+    db.add_plant(cluster_id=cid, species="Monstera deliciosa", category="tropical")
+    now = int(time.time())
+    for i, (soil, age) in enumerate(readings):
+        device = f"fake_stale_{cid}_{i}"
+        sid = db.add_sensor(cluster_id=cid, tuya_device_id=device, name=f"P{i}", sensor_type="x", config={})
+        db.add_sensor_reading(sensor_id=sid, timestamp=now - age, soil_moisture=soil)
+    return cid
+
+
+def test_stale_readings_neither_veto_nor_trigger(tmp_db, frozen_clock):
+    """A sensor whose newest reading is older than SENSOR_READING_STALE_SECONDS is left out of "current"."""
+    logic = IrrigationLogic(tmp_db, get_plant_database())
+    hour = 3600
+
+    # A 20 h-old 90 % reading does not veto the dry plant's critical stress.
+    cid = _two_probe_cluster(tmp_db, [(90.0, 20 * hour), (10.0, 600)])
+    assert logic.decide_for_cluster(cid).primary_code is TriggerCode.WATER_STRESS
+
+    # A 20 h-old 5 % reading beside a fresh 50 % one is not an emergency (nor dry).
+    cid = _two_probe_cluster(tmp_db, [(5.0, 20 * hour), (50.0, 600)])
+    decision = logic.decide_for_cluster(cid)
+    assert decision.stress_indicators.water_stress is None
+    assert decision.primary_code is TriggerCode.SENSOR_ADEQUATE
+
+    # Only stale soil readings left → the no-data fallback decides.
+    cid = _two_probe_cluster(tmp_db, [(30.0, 20 * hour)])
+    assert logic.decide_for_cluster(cid).primary_code is TriggerCode.NO_DATA

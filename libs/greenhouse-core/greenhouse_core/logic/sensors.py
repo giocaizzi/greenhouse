@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import statistics
+import time
 from typing import TYPE_CHECKING
 
-from greenhouse_core.constants import NIGHT_LUX_THRESHOLD
+from greenhouse_core.constants import NIGHT_LUX_THRESHOLD, SENSOR_READING_STALE_SECONDS
 from greenhouse_core.logic.cleaning import clean_readings
 from greenhouse_core.logic.decision import PerSensorSnapshot, SensorSnapshot
 from greenhouse_core.repository import IrrigationRepository
@@ -22,7 +23,7 @@ def _mean_or_none(values: Sequence[float]) -> float | None:
     return statistics.mean(values) if values else None
 
 
-def _per_sensor_snapshot(sensor: Sensor, readings: Sequence[CleanedReading]) -> PerSensorSnapshot:
+def _per_sensor_snapshot(sensor: Sensor, readings: Sequence[CleanedReading], fresh_since: int) -> PerSensorSnapshot:
     """One sensor's own averages, so the audit log can show which plant drove the call."""
     return PerSensorSnapshot(
         sensor_id=sensor.id,
@@ -31,13 +32,21 @@ def _per_sensor_snapshot(sensor: Sensor, readings: Sequence[CleanedReading]) -> 
         avg_temperature=_mean_or_none([r.temperature for r in readings if r.temperature is not None]),
         avg_humidity=_mean_or_none([r.env_humidity for r in readings if r.env_humidity is not None]),
         avg_soil_moisture=_mean_or_none([r.soil_moisture for r in readings if r.soil_moisture is not None]),
-        latest_soil_moisture=_latest_soil(readings),
+        latest_soil_moisture=_latest_soil(readings, fresh_since),
     )
 
 
-def _latest_soil(readings: Sequence[CleanedReading]) -> float | None:
-    """A sensor's newest cleaned soil value (readings are oldest → newest), or None."""
-    return next((r.soil_moisture for r in reversed(readings) if r.soil_moisture is not None), None)
+def _latest_soil(readings: Sequence[CleanedReading], fresh_since: int) -> float | None:
+    """A sensor's newest cleaned soil value (readings oldest → newest), or None when it is stale.
+
+    "Current" must mean current: a reading older than SENSOR_READING_STALE_SECONDS
+    (the pipeline force-syncs before deciding, so this is a silent sensor) neither
+    drives the soil rule nor vetoes anything; the other sensors decide.
+    """
+    newest = next((r for r in reversed(readings) if r.soil_moisture is not None), None)
+    if newest is None or newest.timestamp < fresh_since:
+        return None
+    return newest.soil_moisture
 
 
 def _latest_water_warning(readings: Sequence[CleanedReading]) -> bool:
@@ -51,12 +60,17 @@ def _latest_water_warning(readings: Sequence[CleanedReading]) -> bool:
     return bool(next((r.water_warning for r in reversed(readings) if r.water_warning is not None), False))
 
 
-def get_recent_sensor_data(db: IrrigationRepository, cluster_id: int, hours: int = 24) -> SensorSnapshot:
+def get_recent_sensor_data(
+    db: IrrigationRepository, cluster_id: int, hours: int = 24, *, now: int | None = None
+) -> SensorSnapshot:
     """Build a typed snapshot of cluster sensors over the lookback window.
 
     The snapshot drives every downstream rule (stress, conflict, adjustments)
     and is persisted with the decision so the audit log can replay the inputs.
+    ``now`` (default: the wall clock) dates each sensor's current reading; one
+    older than SENSOR_READING_STALE_SECONDS is not current.
     """
+    fresh_since = (now if now is not None else int(time.time())) - SENSOR_READING_STALE_SECONDS
     sensors = db.get_sensors_in_cluster(cluster_id)
     if not sensors:
         return SensorSnapshot()
@@ -77,6 +91,6 @@ def get_recent_sensor_data(db: IrrigationRepository, cluster_id: int, hours: int
         min_soil_moisture=min(all_soil) if all_soil else None,
         max_soil_moisture=max(all_soil) if all_soil else None,
         avg_light=_mean_or_none(daytime_light),
-        per_sensor=[_per_sensor_snapshot(sensor, readings) for sensor, readings in cleaned],
+        per_sensor=[_per_sensor_snapshot(sensor, readings, fresh_since) for sensor, readings in cleaned],
         water_warnings=sorted(water_warnings),
     )
