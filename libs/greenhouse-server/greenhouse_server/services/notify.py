@@ -17,6 +17,7 @@ from collections.abc import Callable
 from typing import Literal
 
 from greenhouse_core.models import TRIGGERED_BY_EMERGENCY, TriggeredBy
+from greenhouse_server.config import check_ntfy_server_url
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +47,8 @@ class NtfyClient:
     """Publishes messages to a single ntfy topic."""
 
     def __init__(self, server_url: str, topic: str, token: str | None = None, timeout: int = 3):
-        self._url = server_url.rstrip("/") + "/" + topic
+        """Bind the topic URL; raise ``ValueError`` unless ``server_url`` is http(s)."""
+        self._url = check_ntfy_server_url(server_url).rstrip("/") + "/" + topic
         self._token = token
         self._timeout = timeout
 
@@ -60,7 +62,7 @@ class NtfyClient:
         if self._token:
             headers["Authorization"] = f"Bearer {self._token}"
         try:
-            # The scheme is not validated (S310): the URL comes from operator config (the ntfy server URL).
+            # S310 is satisfied by construction: __init__ (and Settings) accept only http(s) URLs.
             req = urllib.request.Request(self._url, data=message.encode("utf-8"), headers=headers)  # noqa: S310
             with urllib.request.urlopen(req, timeout=self._timeout):  # noqa: S310
                 return True

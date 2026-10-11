@@ -169,20 +169,20 @@ def test_aliased_fields_read_only_the_greenhouse_env_name(clean_env, monkeypatch
     The bare ``X`` and the prefixed ``IRRIGATION_X`` used to configure it too (owner decision:
     one documented name per secret, so a stray ``MCP_TOKEN`` in the environment cannot open MCP).
     """
-    monkeypatch.setenv(f"IRRIGATION_{suffix}", "from-irrigation-name")
-    monkeypatch.setenv(suffix, "from-bare-name")
+    monkeypatch.setenv(f"IRRIGATION_{suffix}", "https://irrigation.invalid")
+    monkeypatch.setenv(suffix, "https://bare.invalid")
     assert getattr(_settings(), field) is None
-    monkeypatch.setenv(f"GREENHOUSE_{suffix}", "from-greenhouse-name")
-    assert getattr(_settings(), field) == "from-greenhouse-name"
+    monkeypatch.setenv(f"GREENHOUSE_{suffix}", "https://greenhouse.invalid")
+    assert getattr(_settings(), field) == "https://greenhouse.invalid"
 
 
 @pytest.mark.parametrize(("suffix", "field"), ALIASED_FIELDS, ids=[r[0] for r in ALIASED_FIELDS])
 def test_aliased_fields_ignore_old_names_in_dotenv(clean_env, monkeypatch, tmp_path, suffix, field):
     env_file = tmp_path / ".env"
-    env_file.write_text(f"IRRIGATION_{suffix}=a\n{suffix}=b\n")
+    env_file.write_text(f"IRRIGATION_{suffix}=https://a.invalid\n{suffix}=https://b.invalid\n")
     assert getattr(Settings(_env_file=env_file), field) is None
-    env_file.write_text(f"GREENHOUSE_{suffix}=c\n")
-    assert getattr(Settings(_env_file=env_file), field) == "c"
+    env_file.write_text(f"GREENHOUSE_{suffix}=https://c.invalid\n")
+    assert getattr(Settings(_env_file=env_file), field) == "https://c.invalid"
 
 
 @pytest.mark.parametrize(("suffix", "field"), ALIASED_FIELDS, ids=[r[0] for r in ALIASED_FIELDS])
@@ -242,11 +242,27 @@ VALIDATION_CASES = {
     "cron=*/0": {"check_cron_hours": "*/0"},
     "cron=empty": {"check_cron_hours": ""},
     "cron=0,6,": {"check_cron_hours": "0,6,"},
+    "ntfy=file-scheme": {"ntfy_server_url": "file:///etc/passwd"},
+    "ntfy=ftp-scheme": {"ntfy_server_url": "ftp://ntfy.invalid"},
+    "ntfy=no-host": {"ntfy_server_url": "https://"},
+    "ntfy=no-scheme": {"ntfy_server_url": "ntfy.invalid"},
 }
 
 
 def _errors(exc: ValidationError) -> list[dict]:
     return [{"loc": list(e["loc"]), "type": e["type"], "msg": e["msg"]} for e in exc.errors()]
+
+
+@pytest.mark.parametrize("url", ["https://ntfy.invalid", "http://192.0.2.10:8080/", "HTTPS://ntfy.invalid", "", None])
+def test_ntfy_server_url_accepts_http_https_and_unset(clean_env, url):
+    assert _settings(ntfy_server_url=url).ntfy_server_url == url
+
+
+def test_ntfy_client_refuses_a_non_http_scheme():
+    from greenhouse_server.services.notify import NtfyClient
+
+    with pytest.raises(ValueError, match="http:// or https://"):
+        NtfyClient("file:///tmp", "topic")
 
 
 def test_startup_validation_messages_match_golden(clean_env):

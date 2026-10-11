@@ -1,6 +1,7 @@
 """Server configuration via Pydantic BaseSettings."""
 
 from typing import Any
+from urllib.parse import urlsplit
 
 from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -12,6 +13,24 @@ from greenhouse_core.constants import (
     PUMP_WATCHER_POLL_SECONDS,
     PUMP_WATCHER_WARMUP_SECONDS,
 )
+
+# The only URL schemes the ntfy client may publish to. urllib would happily
+# open ``file:`` / ``ftp:`` / custom-handler URLs (ruff S310), so anything else
+# is refused when the setting is loaded.
+NTFY_URL_SCHEMES = ("http", "https")
+
+
+def check_ntfy_server_url(value: str) -> str:
+    """Return ``value`` if it is an absolute http(s) URL with a host, else raise ``ValueError``.
+
+    Shared by the settings validator (fail fast at startup, naming the env var)
+    and ``NtfyClient`` (never build a publisher for another scheme).
+    """
+    parts = urlsplit(value)
+    if parts.scheme.lower() not in NTFY_URL_SCHEMES or not parts.netloc:
+        msg = f"GREENHOUSE_NTFY_SERVER_URL must be an http:// or https:// URL with a host, got {value!r}"
+        raise ValueError(msg)
+    return value
 
 
 class Settings(BaseSettings):
@@ -109,6 +128,13 @@ class Settings(BaseSettings):
         default=None,
         validation_alias=AliasChoices("GREENHOUSE_NTFY_SERVER_URL"),
     )
+
+    @field_validator("ntfy_server_url")
+    @classmethod
+    def _validate_ntfy_server_url(cls, value: str | None) -> str | None:
+        # Empty means "not configured" (the notifier stays off), like unset.
+        return check_ntfy_server_url(value) if value else value
+
     ntfy_topic: str | None = Field(
         default=None,
         validation_alias=AliasChoices("GREENHOUSE_NTFY_TOPIC"),
