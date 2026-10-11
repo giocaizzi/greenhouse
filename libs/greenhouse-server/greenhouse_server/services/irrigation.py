@@ -1,5 +1,6 @@
 """Irrigation and monitoring orchestration."""
 
+import functools
 import logging
 import time as _time
 from dataclasses import dataclass
@@ -70,8 +71,14 @@ CHECK_FAILED_ALERT_CODE = "check_failed"
 WATCHER_SHUTDOWN_ACTIVITY_CODE = "pump_watcher_shutdown"
 
 
-def _stop_auto_cycle(repo: IrrigationRepository, registry: DeviceRegistry, irrigator: "Irrigator") -> tuple[bool, str]:
-    """Best-effort stop of an auto cycle at shutdown; returns ``(stop_ok, activity message)``."""
+def _stop_auto_cycle(
+    repo: IrrigationRepository, registry: DeviceRegistry, irrigator: "Irrigator", *, kind: str = "auto"
+) -> tuple[bool, str]:
+    """Best-effort stop of a server-timed cycle at shutdown; returns ``(stop_ok, activity message)``.
+
+    ``kind`` names the cycle in the logs and the activity text: ``auto``, or ``forced`` for a
+    forced ``/irrigate`` run (recorded as ``manual``, but timed by the engine).
+    """
     stop_ok = False
     stop_msg = ""
     try:
@@ -80,26 +87,28 @@ def _stop_auto_cycle(repo: IrrigationRepository, registry: DeviceRegistry, irrig
         stop_msg = f"adapter.stop raised: {exc}"
     if stop_ok:
         logger.warning(
-            "Server shutting down mid-irrigation: stopped auto cycle on irrigator %d "
+            "Server shutting down mid-irrigation: stopped %s cycle on irrigator %d "
             "(dry-run watcher can no longer protect it)",
+            kind,
             irrigator.id,
         )
         repo.add_irrigation_event(
             irrigator_id=irrigator.id,
             action=EVENT_ACTION_STOP,
             triggered_by=TRIGGERED_BY_SHUTDOWN,
-            notes="server shutdown: dry-run watcher interrupted, auto cycle stopped",
+            notes=f"server shutdown: dry-run watcher interrupted, {kind} cycle stopped",
             timestamp=int(_time.time()),
         )
-        return stop_ok, f"Server shutdown stopped the auto irrigation on '{irrigator.name}' (watcher interrupted)"
+        return stop_ok, f"Server shutdown stopped the {kind} irrigation on '{irrigator.name}' (watcher interrupted)"
     logger.error(
-        "Server shutting down mid-irrigation: FAILED to stop auto cycle on irrigator %d (%s) — "
+        "Server shutting down mid-irrigation: FAILED to stop %s cycle on irrigator %d (%s) — "
         "it continues unprotected until the device timer ends it",
+        kind,
         irrigator.id,
         stop_msg,
     )
     return stop_ok, (
-        f"Server shutdown could not stop the auto irrigation on '{irrigator.name}' ({stop_msg}); "
+        f"Server shutdown could not stop the {kind} irrigation on '{irrigator.name}' ({stop_msg}); "
         "it continues without dry-run protection"
     )
 
@@ -125,6 +134,7 @@ def handle_watcher_interrupted(
     *,
     triggered_by: TriggeredBy,
     started_at: int,
+    forced: bool = False,
 ) -> bool:
     """Shutdown policy for a pump whose dry-run watcher was cut short.
 
@@ -135,7 +145,9 @@ def handle_watcher_interrupted(
     * ``auto`` cycles are **stopped** — the server started them, and leaving
       a pump running unwatched trades a short watering (safe; the engine
       re-evaluates after restart) for possible dry-run damage.
-    * ``manual`` cycles are **left running**: the user explicitly asked for
+    * ``forced`` runs (``/irrigate`` with ``force``, recorded as ``manual``) are
+      **stopped** too: the engine chose the duration and nobody is watching.
+    * ``manual`` starts are **left running**: the user explicitly asked for
       that duration, and the watcher's own precedent for losing its signal
       ("abandoned" after read failures) is to warn, not stop. Logged loudly.
 
@@ -147,13 +159,14 @@ def handle_watcher_interrupted(
         irrigator: The irrigator whose watcher was interrupted.
         triggered_by: ``"auto"`` or ``"manual"`` — who started the cycle.
         started_at: Unix timestamp of the start event.
+        forced: The cycle is a forced pipeline run (stopped like an auto one).
 
     Returns:
         True if the pump was stopped successfully, False otherwise.
     """
     stop_ok = False
-    if triggered_by == TRIGGERED_BY_AUTO:
-        stop_ok, message = _stop_auto_cycle(repo, registry, irrigator)
+    if triggered_by == TRIGGERED_BY_AUTO or forced:
+        stop_ok, message = _stop_auto_cycle(repo, registry, irrigator, kind="forced" if forced else "auto")
     else:
         message = _left_running_message(irrigator, triggered_by)
     try:
@@ -164,7 +177,8 @@ def handle_watcher_interrupted(
             code=WATCHER_SHUTDOWN_ACTIVITY_CODE,
             message=message,
             severity="warning",
-            payload={"triggered_by": triggered_by, "started_at": started_at, "stopped": stop_ok},
+            payload={"triggered_by": triggered_by, "started_at": started_at, "stopped": stop_ok}
+            | ({"forced": True} if forced else {}),
         )
     except Exception:
         logger.exception("Failed to record watcher-shutdown activity for irrigator %d", irrigator.id)
@@ -192,6 +206,7 @@ def _run_pump_watcher(
     triggered_by: TriggeredBy,
     sleep: "Callable[[float], bool]",
     stop_requested: "Callable[[], bool]",
+    forced: bool = False,
 ) -> None:
     """The watcher job body: its own session; tuning and the health monitor are read when it runs."""
     from greenhouse_server.services.pump_watcher import PumpWatcherService
@@ -217,12 +232,19 @@ def _run_pump_watcher(
         )
         result = watcher.watch(irrigator, duration_seconds, started_at=started_at)
         if result["outcome"] == "interrupted":
-            handle_watcher_interrupted(repo, registry, irrigator, triggered_by=triggered_by, started_at=started_at)
+            handle_watcher_interrupted(
+                repo, registry, irrigator, triggered_by=triggered_by, started_at=started_at, forced=forced
+            )
             session.commit()
 
 
 def schedule_pump_watcher(
-    irrigator_id: int, duration_minutes: int, started_at: int, *, triggered_by: TriggeredBy = TRIGGERED_BY_AUTO
+    irrigator_id: int,
+    duration_minutes: int,
+    started_at: int,
+    *,
+    triggered_by: TriggeredBy = TRIGGERED_BY_AUTO,
+    forced: bool = False,
 ) -> bool:
     """Schedule a dry-run watcher to run for the duration of an irrigation.
 
@@ -240,6 +262,7 @@ def schedule_pump_watcher(
         triggered_by: Who started the cycle (``"auto"`` / ``"manual"``);
             decides what server shutdown does to the still-running pump —
             see :func:`handle_watcher_interrupted`.
+        forced: A forced pipeline run: stopped at shutdown like an auto cycle.
 
     Returns:
         True if a job was scheduled, False if the scheduler is unavailable,
@@ -260,22 +283,21 @@ def schedule_pump_watcher(
         if registry is None:
             return False
         run_date = datetime.fromtimestamp(started_at, tz=UTC)
-        duration_seconds = int(duration_minutes * 60)
 
-        def _run() -> None:
-            _run_pump_watcher(
-                _app,
-                registry,
-                irrigator_id=irrigator_id,
-                duration_seconds=duration_seconds,
-                started_at=started_at,
-                triggered_by=triggered_by,
-                sleep=wait_for_shutdown,
-                stop_requested=shutdown_requested,
-            )
-
+        run = functools.partial(
+            _run_pump_watcher,
+            _app,
+            registry,
+            irrigator_id=irrigator_id,
+            duration_seconds=int(duration_minutes * 60),
+            started_at=started_at,
+            triggered_by=triggered_by,
+            sleep=wait_for_shutdown,
+            stop_requested=shutdown_requested,
+            forced=forced,
+        )
         scheduler.add_job(
-            _run,
+            run,
             "date",
             run_date=run_date,
             id=f"pump-watcher-{irrigator_id}-{started_at}",
@@ -607,7 +629,11 @@ class IrrigationService:
         """
         _schedule_leak_check(act.cluster_id, started_at)
         schedule_pump_watcher(
-            act.irrigator.id, act.decision.duration_minutes, started_at, triggered_by=act.triggered_by
+            act.irrigator.id,
+            act.decision.duration_minutes,
+            started_at,
+            triggered_by=act.triggered_by,
+            forced=act.triggered_by != TRIGGERED_BY_AUTO,
         )
 
     def _notify_auto_irrigation(self, act: _Actuation) -> None:

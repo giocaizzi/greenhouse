@@ -286,6 +286,25 @@ def test_shutdown_leaves_manual_cycle_on_device_timer_and_records_it(env, caplog
     }
 
 
+def test_shutdown_stops_forced_run_like_an_auto_cycle(env, caplog):
+    """A forced ``/irrigate`` run is recorded ``manual`` but timed by the engine and unwatched: stopped."""
+    schedule_pump_watcher(env.irrigator_id, 3, STARTED_AT, triggered_by="manual", forced=True)
+    with caplog.at_level(logging.INFO, logger="greenhouse_server.services.irrigation"):
+        env.scheduler.jobs[0]["func"]()
+    assert [c[0] for c in env.adapter.calls] == ["stop"]
+    assert caplog.messages == [
+        f"Server shutting down mid-irrigation: stopped forced cycle on irrigator {env.irrigator_id} "
+        "(dry-run watcher can no longer protect it)"
+    ]
+    state = _db_state(env)
+    assert [(e["action"], e["triggered_by"], e["notes"]) for e in state["events"]] == [
+        ("stop", "shutdown", "server shutdown: dry-run watcher interrupted, forced cycle stopped")
+    ]
+    (activity,) = state["activity"]
+    assert activity["message"] == "Server shutdown stopped the forced irrigation on 'Watch Pump' (watcher interrupted)"
+    assert activity["payload"] == {"triggered_by": "manual", "started_at": STARTED_AT, "stopped": True, "forced": True}
+
+
 @pytest.mark.parametrize(
     ("stop", "stop_msg"),
     [
