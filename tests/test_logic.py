@@ -774,3 +774,43 @@ class TestWeatherSkipRule:
 
         assert decision.weather is not None
         assert decision.weather.precipitation_next_6h_mm == pytest.approx(5.0)
+
+
+# ── B-14: reasons report the delta actually applied ─────────────────────────
+
+
+def _bare_decision(*, interval: int, duration: int, **snapshot):
+    from greenhouse_core.logic.decision import Action, IrrigationDecision, SensorSnapshot, Trends
+
+    return IrrigationDecision(
+        cluster_id=1,
+        evaluated_at=0,
+        action=Action.IRRIGATE,
+        duration_minutes=duration,
+        interval_hours=interval,
+        confidence=0.5,
+        sensor_snapshot=SensorSnapshot(**snapshot),
+        trends=Trends(soil_moisture_trend="rising", irrigation_frequency_low=True),
+    )
+
+
+def test_clamped_adjustments_report_the_applied_delta_not_the_nominal_step():
+    """B-14: at the interval/duration bounds the reason's delta is what moved (0 or the remainder)."""
+    from greenhouse_core.constants import MAX_DURATION_MINUTES, MAX_INTERVAL_HOURS, MIN_INTERVAL_HOURS
+    from greenhouse_core.logic import engine
+
+    dry_air = _bare_decision(interval=MIN_INTERVAL_HOURS + 1, duration=2, avg_env_humidity=5.0)
+    engine._apply_humidity_adjustment(dry_air, (60.0, 80.0))
+    assert dry_air.interval_hours == MIN_INTERVAL_HOURS
+    assert [(r.code, r.interval_delta) for r in dry_air.reasons] == [(TriggerCode.HUMIDITY_VERY_LOW, -1)]
+
+    bright = _bare_decision(interval=MIN_INTERVAL_HOURS, duration=MAX_DURATION_MINUTES, avg_light=200_000.0)
+    engine._apply_light_adjustment(bright)
+    assert [(r.interval_delta, r.duration_delta) for r in bright.reasons] == [(0, 0)]
+
+    rising = _bare_decision(interval=MAX_INTERVAL_HOURS - 1, duration=MAX_DURATION_MINUTES)
+    engine._apply_trend_adjustment(rising)
+    assert [(r.code, r.interval_delta, r.duration_delta) for r in rising.reasons] == [
+        (TriggerCode.TREND_MOISTURE_RISING, 1, 0),
+        (TriggerCode.UNDERWATERING_PATTERN, 0, 0),
+    ]
