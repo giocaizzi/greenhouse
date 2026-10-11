@@ -936,3 +936,21 @@ def test_water_warning_reads_only_the_newest_reading_per_sensor(tmp_db, frozen_c
     # A newer row without the flag (e.g. after a failed live read) neither clears nor raises it.
     tmp_db.add_sensor_reading(sensor_id=sid, timestamp=now - 30, soil_moisture=50.0, water_warning=None)
     assert logic.decide_for_cluster(cid).primary_code is TriggerCode.WATER_WARNING
+
+
+def test_over_watered_soil_vetoes_the_device_soil_dry_alarm(tmp_db, frozen_clock):
+    """The device alarm irrigates on normal soil, but not while the soil reads above the plants' band."""
+    cid = tmp_db.add_cluster("Alarm")
+    tmp_db.add_plant(cluster_id=cid, species="Monstera deliciosa", category="tropical")
+    sid = tmp_db.add_sensor(cluster_id=cid, tuya_device_id=FAKE_SENSOR_ID, name="S", sensor_type="x", config={})
+    now = int(time.time())
+    tmp_db.add_sensor_reading(sensor_id=sid, timestamp=now - 600, soil_moisture=50.0, water_warning=True)
+    logic = IrrigationLogic(tmp_db, get_plant_database())
+    assert logic.decide_for_cluster(cid).primary_code is TriggerCode.WATER_WARNING
+
+    tmp_db.add_sensor_reading(sensor_id=sid, timestamp=now - 60, soil_moisture=82.0, water_warning=True)
+    vetoed = logic.decide_for_cluster(cid)
+
+    assert vetoed.action.value == "skip"
+    assert [r.code for r in vetoed.reasons] == [TriggerCode.OVER_WATERING, TriggerCode.WATER_WARNING]
+    assert "not acted on" in vetoed.reasons[1].message

@@ -92,17 +92,18 @@ def _water_stress(snapshot: SensorSnapshot, trends: Trends, care: list[dict[str,
     return None
 
 
-def _wet_plant_present(snapshot: SensorSnapshot, care: list[dict[str, Any]]) -> bool:
-    """Some sensor's current reading sits above the cluster's widest moisture band.
+def wettest_above_band(snapshot: SensorSnapshot, care: list[dict[str, Any]]) -> tuple[float, float] | None:
+    """``(wettest current reading, band top)`` when some sensor sits above the cluster's widest band.
 
-    A stress run would drown that plant; the mixed case belongs to the soil
-    rule's short conflict burst (and a stuck-low probe beside a wet plant is
-    more likely a fault than an emergency).
+    A stress run (or acting on the device's soil-dry alarm) would drown that
+    plant; the mixed case belongs to the soil rule's short conflict burst (and a
+    stuck-low probe beside a wet plant is more likely a fault than an emergency).
     """
     if not snapshot.latest_soil_moisture:
-        return False
+        return None
     band_top = max((moisture_target_range(c)[1] for c in care), default=DEFAULT_SOIL_MOISTURE_MAX)
-    return max(snapshot.latest_soil_moisture) > band_top
+    wettest = max(snapshot.latest_soil_moisture)
+    return (wettest, band_top) if wettest > band_top else None
 
 
 def _heat_stress(snapshot: SensorSnapshot, trends: Trends, care: list[dict[str, Any]]) -> str | None:
@@ -156,7 +157,7 @@ def detect_stress_conditions(  # noqa: PLR0913 — five pinned positionals (test
     over_watering = _over_watering(snapshot, trends)
     # Over-watering, or any plant currently above its band, vetoes the water-stress override.
     water_stress = _water_stress(snapshot, trends, plant_care)
-    if water_stress is not None and over_watering is None and not _wet_plant_present(snapshot, plant_care):
+    if water_stress is not None and over_watering is None and wettest_above_band(snapshot, plant_care) is None:
         stress.water_stress = water_stress
     if (heat_stress := _heat_stress(snapshot, trends, plant_care)) is not None:
         stress.heat_stress = heat_stress

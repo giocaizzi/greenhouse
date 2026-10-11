@@ -89,7 +89,7 @@ from greenhouse_core.logic.plant_needs import (
     moisture_target_range,
 )
 from greenhouse_core.logic.sensors import get_recent_sensor_data
-from greenhouse_core.logic.stress import detect_stress_conditions
+from greenhouse_core.logic.stress import detect_stress_conditions, wettest_above_band
 from greenhouse_core.logic.timing import (
     active_quiet_window,
     environment_for,
@@ -220,7 +220,11 @@ class IrrigationLogic:
         if not sensors or not inputs.snapshot.has_data:
             return self._fallback_decision(cluster_id, evaluated_at, current_temp, inputs), True
         decision = _base_decision(cluster_id, evaluated_at, inputs)
-        terminal = _apply_water_warning_rule(decision) or _apply_critical_stress_rule(decision)
+        terminal = (
+            _veto_water_warning(decision, inputs.plant_care)
+            or _apply_water_warning_rule(decision)
+            or _apply_critical_stress_rule(decision)
+        )
         return decision, terminal
 
     def _apply_adjustments(
@@ -774,6 +778,44 @@ def _ensure_reason(decision: IrrigationDecision) -> None:
         message="readings within range — no action needed",
         icon="check-circle",
     )
+
+
+def _veto_water_warning(decision: IrrigationDecision, plant_care: list[dict[str, Any]]) -> bool:
+    """Do not act on the device's soil-dry alarm while the soil reads over-watered.
+
+    Over-watering (or any sensor currently above the plants' band — the same
+    veto as the water-stress override) wins: the decision is an OVER_WATERING
+    skip, and the conflicting alarm is recorded as a WATER_WARNING reason so
+    the audit log shows it was seen and why it was not acted on. Without a
+    veto this is a no-op and the alarm irrigates as before.
+    """
+    stress = decision.stress_indicators
+    snapshot = decision.sensor_snapshot
+    if not stress.water_warning or snapshot is None:
+        return False
+    wet = wettest_above_band(snapshot, plant_care)
+    if stress.over_watering is not None:
+        evidence = stress.over_watering
+    elif wet is not None:
+        evidence = f"soil above the plants' band (wettest={wet[0]:.0f}% > {wet[1]:.0f}%)"
+    else:
+        return False
+    decision.action = Action.SKIP
+    decision.interval_hours = MAX_INTERVAL_HOURS
+    decision.confidence = CONFIDENCE_OVER_WATERING
+    decision.add_reason(
+        code=TriggerCode.OVER_WATERING,
+        message=f"over-watering detected ({evidence})",
+        severity=Severity.WARNING,
+        icon="drop-half",
+    )
+    decision.add_reason(
+        code=TriggerCode.WATER_WARNING,
+        message=f"device soil-dry alarm not acted on (soil reads over-watered): {stress.water_warning}",
+        severity=Severity.WARNING,
+        icon="warning-circle",
+    )
+    return True
 
 
 def _apply_water_warning_rule(decision: IrrigationDecision) -> bool:

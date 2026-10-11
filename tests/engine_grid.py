@@ -546,6 +546,13 @@ def _second_review_cases() -> list[Case]:
             events=(Event(age_s=10 * HOUR, duration=2),),
         ),
         Case(id="series/stuck-low-probe-beside-wet-plant", family="series", at=BASE_AT, sensors=stuck_low),
+        # Device soil-dry alarm while the probe reads 80 % (Monstera band tops at 60 %): over-watering vetoes it.
+        Case(
+            id="series/water-warning-on-over-watered-soil",
+            family="series",
+            at=BASE_AT,
+            sensors=(SensorSpec("Grid Soil", (Reading(600, soil=80.0, water_warning=True),), 0),),
+        ),
     ]
 
 
