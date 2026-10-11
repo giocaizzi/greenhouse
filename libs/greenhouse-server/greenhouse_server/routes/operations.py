@@ -138,7 +138,10 @@ def irrigate(
     Sequence: sync sensors → resolve temperature (sensor / weather / fallback)
     → run the decision engine → if not skipped and not a dry run, actuate the
     cluster's irrigator and record an `auto`-triggered event. Honors the
-    cluster's irrigation config and the global 6h cooldown.
+    cluster's irrigation config, the global 6h cooldown and the effective
+    per-day caps (`max_events_per_day` / `daily_cap_minutes`, cluster over
+    global): a run that would exceed them is logged as `skip` with a
+    `daily_cap_hit` reason.
 
     Side effects: actuates physical hardware unless `dry_run=True`; writes a
     sensor sync and an irrigation event. While the `dry_run_global`

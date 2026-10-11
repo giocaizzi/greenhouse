@@ -15,7 +15,6 @@ JSON API returns; each route maps it to its own response shape.
 import time
 from typing import TYPE_CHECKING
 
-from greenhouse_core.constants import DAILY_CAP_WINDOW_HOURS
 from greenhouse_core.devices import DeviceRegistry, UnknownDeviceModel
 from greenhouse_core.models import (
     ENTITY_IRRIGATOR,
@@ -26,6 +25,7 @@ from greenhouse_core.models import (
     Irrigator,
 )
 from greenhouse_core.repository import IrrigationRepository
+from greenhouse_server.services.caps import daily_cap_violation
 from greenhouse_server.services.irrigation import schedule_pump_watcher
 from greenhouse_server.services.notify import NtfyClient, maybe_notify
 
@@ -52,11 +52,14 @@ class ManualActionError(Exception):
 
 
 def check_rate_limits(repo: IrrigationRepository, cluster_id: int, irrigator_id: int, minutes: int | None) -> None:
-    """Refuse a start that would exceed the cluster's per-day caps.
+    """Refuse a start that would exceed the cluster's effective per-day caps.
+
+    The caps resolve cluster row over global row (B-4: the global caps used to be ignored); the
+    automatic pipeline applies the same rule (:func:`.caps.daily_cap_violation`) as a skip.
 
     Args:
         repo: Active repository session.
-        cluster_id: Cluster whose config holds the caps.
+        cluster_id: Cluster whose effective config holds the caps.
         irrigator_id: Irrigator being started (duration cap is per-irrigator).
         minutes: Requested duration; ``None`` counts as 0 for the duration cap.
 
@@ -64,32 +67,9 @@ def check_rate_limits(repo: IrrigationRepository, cluster_id: int, irrigator_id:
         ManualActionError: 409 if ``max_events_per_day`` or
             ``daily_cap_minutes`` would be exceeded.
     """
-    config = repo.get_irrigation_config(cluster_id)
-    if not config:
-        return
-
-    requested = minutes or 0
-
-    if config.max_events_per_day is not None:
-        # Count "start" events in the last 24 h for the cluster's single irrigator.
-        irrigator = repo.get_irrigator_for_cluster(cluster_id)
-        total_starts = (
-            sum(
-                1
-                for e in repo.get_recent_events(irrigator.id, hours=DAILY_CAP_WINDOW_HOURS)
-                if e.action == EVENT_ACTION_START
-            )
-            if irrigator is not None
-            else 0
-        )
-        if total_starts >= config.max_events_per_day:
-            raise ManualActionError(409, "cluster max_events_per_day reached")
-
-    if config.daily_cap_minutes is not None:
-        recent = repo.get_recent_events(irrigator_id, hours=DAILY_CAP_WINDOW_HOURS)
-        minutes_used = sum(e.duration_minutes or 0 for e in recent if e.action == EVENT_ACTION_START)
-        if minutes_used + requested > config.daily_cap_minutes:
-            raise ManualActionError(409, "irrigator daily cap reached")
+    violation = daily_cap_violation(repo, cluster_id, irrigator_id, minutes)
+    if violation is not None:
+        raise ManualActionError(409, violation)
 
 
 def _adapter(registry: DeviceRegistry | None, irrigator: Irrigator) -> "AbstractIrrigatorAdapter":

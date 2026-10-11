@@ -22,8 +22,9 @@ Contracts / invariants guarded here:
   :class:`IrrigationDecision`;
 - I11 — an open leak alert holds ``/irrigate`` even with ``force=true``, while
   ``POST /irrigators/{id}/start`` (the escape hatch) still actuates;
-- observed bugs B-4, B-5 pinned as ``*_current_behavior_*`` (B-8 fixed by drift pair D5; B-6 fixed:
-  a device-health block rewrites the decision log; S1/B-1 fixed: ``dry_run_global`` never actuates).
+- observed bug B-5 pinned as ``*_current_behavior_*`` (B-8 fixed by drift pair D5; B-6 fixed:
+  a device-health block rewrites the decision log; S1/B-1 fixed: ``dry_run_global`` never actuates;
+  B-4 fixed: effective per-day caps gate manual and automatic starts).
 """
 
 from __future__ import annotations
@@ -1005,13 +1006,12 @@ def test_dry_run_global_never_actuates_but_stops_still_work(pipeline):
     ]
 
 
-def test_caps_current_behavior_not_checked_by_automatic_pipeline(pipeline):
-    """Pins current (buggy) behavior: caps are not checked by the automatic pipeline (B-4) — see REFACTOR_NOTES.md.
+def test_caps_checked_by_automatic_pipeline(pipeline):
+    """B-4 fixed: exhausted per-day caps skip ``/irrigate`` and ``/check`` with ``daily_cap_hit``.
 
-    With ``max_events_per_day=1`` / ``daily_cap_minutes=1`` already exhausted,
-    the manual start is refused with 409 but ``/irrigate`` and ``/check`` still
-    actuate; ``TriggerCode.DAILY_CAP_HIT`` never appears. Global caps are not
-    enforced by the manual path either (it reads the raw cluster row only).
+    With ``max_events_per_day=1`` / ``daily_cap_minutes=1`` already exhausted, the
+    manual start is refused with 409 and the automatic runs (``force`` included) are
+    logged as ``skip`` led by ``daily_cap_hit`` — no start reaches the adapter.
     """
     ids = pipeline.seed_cluster(
         soil=35.0,
@@ -1020,20 +1020,32 @@ def test_caps_current_behavior_not_checked_by_automatic_pipeline(pipeline):
     pipeline.add_event(ids["irrigator_id"], age=7 * HOUR)
     pipeline.mark()
     manual = pipeline.call("POST", f"/api/v1/irrigators/{ids['irrigator_id']}/start", {"minutes": 1})
-    assert manual["status"] == 409
-    auto = _irrigate(pipeline)
-    assert auto["response"]["action"] == "irrigated"
-    assert "daily_cap_hit" not in json.dumps(pipeline.db_rows()["decision_logs"])
-    assert [c[0] for c in pipeline.wiring.irrigator.calls] == ["start"]
+    assert (manual["status"], manual["response"]) == (409, {"detail": "cluster max_events_per_day reached"})
+    auto = _irrigate(pipeline)["response"]
+    assert (auto["action"], auto["reasons"][0]["code"]) == ("skip", "daily_cap_hit")
+    assert _irrigate(pipeline, force=True)["response"]["action"] == "skip"
+    assert pipeline.call("POST", "/api/v1/clusters/1/check")["response"]["action"] == "skip"
+    logs = pipeline.db_rows()["decision_logs"]
+    assert [(r["action"], r["primary_code"], r["actuated"]) for r in logs] == [("skip", "daily_cap_hit", False)] * 3
+    assert pipeline.wiring.irrigator.calls == []
 
 
-def test_global_caps_current_behavior_ignored_by_manual_start(pipeline):
-    """Pins current (buggy) behavior: global ``max_events_per_day`` is ignored by manual start (B-4) — see REFACTOR_NOTES.md."""
+def test_global_caps_enforced_by_manual_and_automatic_starts(pipeline):
+    """B-4 fixed: caps set only on the global config bind a cluster that sets none of its own."""
     ids = pipeline.seed_cluster(soil=35.0)
-    pipeline.api("PUT", "/api/v1/config/global", {"max_events_per_day": 1, "daily_cap_minutes": 1})
-    pipeline.add_event(ids["irrigator_id"], age=7 * HOUR)
+    pipeline.api("PUT", "/api/v1/config/global", {"daily_cap_minutes": 4})
+    pipeline.add_event(ids["irrigator_id"], age=7 * HOUR)  # 2 min used of 4
     pipeline.mark()
-    assert pipeline.call("POST", f"/api/v1/irrigators/{ids['irrigator_id']}/start", {"minutes": 5})["status"] == 200
+    refused = pipeline.call("POST", f"/api/v1/irrigators/{ids['irrigator_id']}/start", {"minutes": 3})
+    assert (refused["status"], refused["response"]) == (409, {"detail": "irrigator daily cap reached"})
+    pipeline.api("PUT", "/api/v1/config/global", {"max_events_per_day": 1})
+    held = _irrigate(pipeline)["response"]
+    assert (held["action"], held["reasons"][0]["code"]) == ("skip", "daily_cap_hit")
+    assert "cluster max_events_per_day reached" in held["reason"]
+    # A cluster value wins over the global one.
+    pipeline.api("PUT", "/api/v1/clusters/1/config", {"max_events_per_day": 2})
+    assert _irrigate(pipeline)["response"]["action"] == "irrigated"  # 2 + 2 == 4 minutes fits
+    assert [c[0] for c in pipeline.wiring.irrigator.calls] == ["start"]
 
 
 def test_reraised_alert_current_behavior_is_not_renotified(pipeline):

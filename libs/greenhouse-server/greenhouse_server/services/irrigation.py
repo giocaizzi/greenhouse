@@ -35,6 +35,7 @@ from greenhouse_core.models import (
 from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.services.alerts import raise_alert, sync_cluster_alerts
+from greenhouse_server.services.caps import daily_cap_violation
 from greenhouse_server.services.health_monitor import HEALTH_ALARM_TO_TRIGGER, DeviceHealthMonitor
 from greenhouse_server.services.irrigation_jobs import (  # noqa: F401 — re-exported: callers and tests use these paths
     _add_leak_check_job,
@@ -666,11 +667,37 @@ class IrrigationService:
     ) -> bool:
         """The server's gates between an IRRIGATE decision and ``adapter.start``; the first that fires wins.
 
-        Order: device health (a real-world block outranks a mode), then the global dry run, the
-        last word before the pump. Returns True when the run became a skip.
+        Order: device health (a real-world block outranks a policy), the per-day caps, then the
+        global dry run, the last word before the pump. Returns True when the run became a skip.
         """
-        gates = (self._health_gate_skips, self._dry_run_gate_skips)
+        gates = (self._health_gate_skips, self._caps_gate_skips, self._dry_run_gate_skips)
         return any(gate(cluster_id, irrigator, decision, result) for gate in gates)
+
+    def _caps_gate_skips(
+        self, cluster_id: int, irrigator: "Irrigator", decision: "IrrigationDecision", result: PipelineResult
+    ) -> bool:
+        """Per-day caps gate: skip a run that would break ``max_events_per_day`` / ``daily_cap_minutes``.
+
+        The same effective caps (cluster row over global row) the manual start refuses on (B-4:
+        the automatic pipeline never checked them). ``force`` does not bypass them. Returns True
+        when the run was held.
+        """
+        duration = decision.duration_minutes
+        violation = daily_cap_violation(self._repo, cluster_id, irrigator.id, duration)
+        if violation is None:
+            return False
+        self._skip_run(
+            cluster_id,
+            decision,
+            result,
+            Reason(
+                code=TriggerCode.DAILY_CAP_HIT,
+                message=f"daily cap hit: {violation} ({duration}min run on '{irrigator.name}' not started)",
+                severity=Severity.WARNING,
+            ),
+            payload={"daily_cap": violation, "irrigator_id": irrigator.id, "duration_minutes": duration},
+        )
+        return True
 
     def _dry_run_gate_skips(
         self, cluster_id: int, irrigator: "Irrigator", decision: "IrrigationDecision", result: PipelineResult
@@ -753,8 +780,8 @@ class IrrigationService:
         the user pushed past the deny window.
 
         An IRRIGATE decision then passes the server's actuation gates, in order: the
-        device-health gate, then the global dry run (``dry_run_global``). Either turns the
-        run into a logged skip; nothing bypasses them, ``force`` included.
+        device-health gate, the per-day caps, then the global dry run (``dry_run_global``).
+        Each turns the run into a logged skip; nothing bypasses them, ``force`` included.
         """
         cluster = self._repo.get_cluster(cluster_id)
         if not cluster:

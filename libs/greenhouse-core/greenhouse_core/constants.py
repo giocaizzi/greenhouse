@@ -415,7 +415,7 @@ PLANT_CARE_FALLBACK = {
 
 HOURS_PER_DAY = 24
 FRESHNESS_SYNC_BACKFILL_HOURS = 6  # history pulled by the pipeline's one-sensor freshness sync
-DAILY_CAP_WINDOW_HOURS = 24  # the "day" of max_events_per_day / daily_cap_minutes for manual starts
+DAILY_CAP_WINDOW_HOURS = 24  # the "day" of max_events_per_day / daily_cap_minutes (manual and automatic starts)
 ANOMALY_LOOKBACK_HOURS = 72  # readings the anomaly scan loads per sensor
 FORECAST_READINGS_LOOKBACK_HOURS = 24  # history the moisture forecast takes "current moisture" from
 FORECAST_FALLBACK_DRAINAGE_PER_HOUR = -2.0  # %/h, used when no learned profile is available
