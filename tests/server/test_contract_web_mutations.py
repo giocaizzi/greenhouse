@@ -737,16 +737,15 @@ def test_non_numeric_form_value_is_a_400_error_page(url, form, make_client):
     assert effect == {}
 
 
-def test_irrigate_missing_cluster_current_behavior_500_from_template(make_client):
-    """Pins current (buggy) behavior: irrigating an unknown cluster crashes the decision panel — see REFACTOR_NOTES.md.
+def test_irrigate_missing_cluster_is_404(make_client):
+    """Irrigating an unknown cluster is a 404 "Cluster not found" page, like the JSON API.
 
-    ``run_irrigation_pipeline`` returns ``{"action": "error", "reason": "cluster not found", …}``;
-    ``partials/_decision_panel.html`` formats ``result.temperature`` (undefined → ``is not none``
-    is true) and raises ``UndefinedError`` → plain 500 instead of a 404 page.
+    The route used to hand the pipeline's ``{"action": "error", …}`` dict to
+    ``partials/_decision_panel.html``, which crashed on it (plain-text 500).
     """
     app, resp, effect = _run(make_client, "POST", "/clusters/999/irrigate", {})
-    assert resp.status_code == 500
-    assert resp.text == "Internal Server Error"
+    assert resp.status_code == 404
+    assert "Cluster not found" in resp.text
     assert effect == {}
     assert app.state.fake_devices.irrigator.calls == []
 

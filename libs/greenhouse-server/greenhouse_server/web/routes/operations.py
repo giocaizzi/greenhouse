@@ -39,6 +39,9 @@ def irrigate(
     engine as ``bypass_quiet_hours``; the decision still logs a warning
     Reason so the override is in the audit trail.
     """
+    # Same as POST /api/v1/clusters/{id}/irrigate: an unknown cluster is a 404 page, not the
+    # pipeline's error dict rendered into the decision panel.
+    require_cluster(repo, cluster_id)
     temp = parsed_or_400(temp_override, float, error="Invalid temp_override: must be a number")
     forced = force.strip().lower() in ("true", "on", "1")
     result = svc.run_irrigation_pipeline(
