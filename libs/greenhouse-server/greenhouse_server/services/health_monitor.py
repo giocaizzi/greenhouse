@@ -208,15 +208,16 @@ class DeviceHealthMonitor:
             prev_alarms = previous.derived_alarms if previous else frozenset()
             # New transitions, plus alarms whose earlier alert write failed (retried until it lands).
             to_raise = (derived - prev_alarms) | (derived & (previous.unraised if previous else frozenset()))
-            disappeared = prev_alarms - derived
+            # Cache first: whatever the DB does below, the gate already sees the new state, and
+            # every pending alert stays owed until its write succeeds (S5).
+            self._cache[key] = _Cached(state=state, derived_alarms=derived, unraised=to_raise)
 
             cluster_id = cluster_id or infer_cluster_id(self._repo, entity_type, entity_id)
             label = label or infer_label(self._repo, entity_type, entity_id) or f"{entity_type}#{entity_id}"
-
-            unraised = frozenset(
+            raised = frozenset(
                 alarm
                 for alarm in to_raise
-                if not self._raise_health_alert(
+                if self._raise_health_alert(
                     entity_type=entity_type,
                     entity_id=entity_id,
                     alarm=alarm,
@@ -225,23 +226,25 @@ class DeviceHealthMonitor:
                     cluster_id=cluster_id,
                 )
             )
-            for alarm in disappeared:
+            for alarm in prev_alarms - derived:
                 self._resolve_health_alert(entity_type=entity_type, entity_id=entity_id, alarm=alarm)
-
-            self._cache[key] = _Cached(state=state, derived_alarms=derived, unraised=unraised)
+            self._cache[key] = _Cached(state=state, derived_alarms=derived, unraised=to_raise - raised)
         return derived
 
     def mark_unraised(self, entity_type: EntityType, entity_id: int, alarm: HealthAlarm) -> None:
-        """Flag a cached alarm whose alert was lost after the write (its transaction rolled back).
+        """Flag an alarm whose alert was lost after the write (its transaction rolled back).
 
-        The alarm keeps gating actuation; its alert is raised again on the next observation.
-        No-op when the entity's cache does not hold the alarm.
+        The alarm gates actuation from now on — it is added to the cache if the failed
+        transition never got there — and its alert is raised again on the next observation.
         """
         key = (entity_type, entity_id)
         with self._lock:
-            cached = self._cache.get(key)
-            if cached is not None and alarm in cached.derived_alarms:
-                self._cache[key] = replace(cached, unraised=cached.unraised | {alarm})
+            cached = self._cache.get(key) or _Cached(
+                state=DeviceHealthState(observed_at=self._clock()), derived_alarms=frozenset()
+            )
+            self._cache[key] = replace(
+                cached, derived_alarms=cached.derived_alarms | {alarm}, unraised=cached.unraised | {alarm}
+            )
 
     # ── Engine gate ───────────────────────────────────────────────────────
 
@@ -372,11 +375,11 @@ class DeviceHealthMonitor:
         return True
 
     def _resolve_health_alert(self, *, entity_type: EntityType, entity_id: int, alarm: HealthAlarm) -> None:
-        existing = self._repo.get_open_alert_by_key(health_dedup_key(entity_type, entity_id, alarm))
-        if existing is None:
-            return
+        """Resolve the alarm's open alert, if any; a failure (lookup included) is logged, never raised."""
         try:
-            self._repo.resolve_alert(existing.id)
+            existing = self._repo.get_open_alert_by_key(health_dedup_key(entity_type, entity_id, alarm))
+            if existing is not None:
+                self._repo.resolve_alert(existing.id)
         except Exception:
             logger.exception("Failed to resolve health alert %s for %s %d", alarm.value, entity_type, entity_id)
 

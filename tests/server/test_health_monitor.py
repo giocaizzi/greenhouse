@@ -605,3 +605,45 @@ class TestRestoreFromOpenAlerts:
         monitor_ = DeviceHealthMonitor(repo=repo, registry=registry)
         assert monitor_.restore_from_open_alerts() == 0
         assert monitor_.is_actuation_blocked(irrigator) == (False, [])
+
+
+class TestTripOnTopOfACachedAlarm:
+    """S5 follow-up: a failed alert insert during a trip cannot leave NO_WATER out of the cache."""
+
+    def test_failed_insert_poisoning_the_session_still_caches_and_reraises_no_water(
+        self, repo, registry_with_fakes, cluster_irrigator_sensor, monkeypatch
+    ):
+        from greenhouse_server.services.pump_watcher import PumpWatcherService
+
+        registry, irr_adapter, _ = registry_with_fakes
+        irrigator, _ = cluster_irrigator_sensor
+        shared = DeviceHealthMonitor(repo=repo, registry=registry)
+        irr_adapter.set_health(_state(offline=True))
+        shared.poll_irrigator(irrigator)  # DEVICE_OFFLINE cached, alert open
+        repo.commit()
+
+        real_upsert = IrrigationRepository.upsert_alert
+
+        def _poisoning_insert(self, *args, **kwargs):
+            self.session.add(Alert(dedup_key=None, source="health", code="x", title="t", message="m"))
+            self.session.flush()  # IntegrityError: the session now needs a rollback
+
+        monkeypatch.setattr(IrrigationRepository, "upsert_alert", _poisoning_insert)
+        irr_adapter.set_health(_state(alarms=frozenset({HealthAlarm.NO_WATER})))
+        watcher = PumpWatcherService(
+            repo, registry, warmup_seconds=0, clock=lambda: 0.0, sleep=lambda s: None, monitor=shared.for_repo(repo)
+        )
+        assert watcher.watch(irrigator, 60, started_at=1_700_000_000)["outcome"] == "tripped"
+        assert shared.is_actuation_blocked(irrigator) == (True, [HealthAlarm.NO_WATER])
+
+        monkeypatch.setattr(IrrigationRepository, "upsert_alert", real_upsert)
+        shared.poll_irrigator(irrigator)  # still dry: the owed alert is raised now
+        repo.commit()
+        assert repo.get_open_alert_by_key(f"health:irrigator:{irrigator.id}:no_water") is not None
+
+    def test_mark_unraised_adds_an_alarm_the_cache_never_saw(self, repo, registry_with_fakes, cluster_irrigator_sensor):
+        registry, _, _ = registry_with_fakes
+        irrigator, _ = cluster_irrigator_sensor
+        monitor_ = DeviceHealthMonitor(repo=repo, registry=registry)
+        monitor_.mark_unraised("irrigator", irrigator.id, HealthAlarm.NO_WATER)
+        assert monitor_.is_actuation_blocked(irrigator) == (True, [HealthAlarm.NO_WATER])
