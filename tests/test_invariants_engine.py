@@ -264,10 +264,12 @@ def test_inv5_thresholds_are_bound_at_import_current_behavior(env, monkeypatch):
     assert TriggerCode.COOLDOWN not in _codes(decision)
 
 
-def test_inv5_inline_literals_current_behavior(env):
-    """Invariant #5 gaps: literals still inline in engine.py are pinned here.
+def test_inv5_inline_literals_and_explicit_no_action_reason(env):
+    """Invariant #5 / #6: forecast horizon, rain threshold and base confidence; no empty reason trail.
 
     Forecast horizon ``hours=6``, rain threshold ``> 2.0`` mm, base confidence ``0.5``.
+    A temperature-only reading inside the ideal range used to leave ``reasons``
+    empty (``primary_code`` NULL); it now carries ``NO_ACTION_NEEDED``.
     """
     cid, _, _ = _cluster(env, environment="outdoor")
     weather = FakeForecastWeather({"precipitation_mm": 2.0})
@@ -285,9 +287,11 @@ def test_inv5_inline_literals_current_behavior(env):
         cluster_id=temp_only_cid, tuya_device_id="fake_tuya_sensor_inv9999", name="T", sensor_type="x", config={}
     )
     env.add_sensor_reading(sensor_id=sid, timestamp=FROZEN_TS - 600, temperature=22.0)
-    no_reason = _logic(env).decide_for_cluster(temp_only_cid)
-    assert (no_reason.action, no_reason.confidence, no_reason.reasons) == (Action.SKIP, 0.5, [])
-    assert no_reason.reason_text == "no specific conditions"
+    no_rule = _logic(env).decide_for_cluster(temp_only_cid, persist=True)
+    assert (no_rule.action, no_rule.confidence) == (Action.SKIP, 0.5)
+    assert no_rule.primary_code is TriggerCode.NO_ACTION_NEEDED
+    assert no_rule.reason_text == "readings within range — no action needed"
+    assert _log_rows(env)[-1].primary_code == "no_action_needed"
 
 
 # ── #6 One DecisionLog per evaluation ────────────────────────────────────────

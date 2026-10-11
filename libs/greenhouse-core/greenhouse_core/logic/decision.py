@@ -44,6 +44,9 @@ class TriggerCode(StrEnum):
     CONFIG_FALLBACK = "config_fallback"
     NO_DATA = "no_data"
     DAILY_CAP_HIT = "daily_cap_hit"
+    # Sensor data present but no rule fired (e.g. temperature-only readings in
+    # range): the explicit "nothing to do" reason, so ``primary_code`` is never NULL.
+    NO_ACTION_NEEDED = "no_action_needed"
     # Adjustments
     TEMP_HIGH = "temp_high"
     TEMP_LOW = "temp_low"

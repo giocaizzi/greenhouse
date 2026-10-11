@@ -220,6 +220,10 @@
     "daily_cap_hit"
    ],
    [
+    "NO_ACTION_NEEDED",
+    "no_action_needed"
+   ],
+   [
     "TEMP_HIGH",
     "temp_high"
    ],

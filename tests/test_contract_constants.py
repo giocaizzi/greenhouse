@@ -108,9 +108,9 @@ def test_enums_are_str_enums_whose_members_equal_their_values(enum):
 
 def test_trigger_code_count_and_extremes():
     members = list(TriggerCode)
-    assert len(members) == 46
+    assert len(members) == 47
     assert (members[0].value, members[-1].value) == ("no_plants", "leak_hold")
-    assert len({m.value for m in members}) == 46  # no aliases
+    assert len({m.value for m in members}) == 47  # no aliases
 
 
 def test_notable_thresholds_named_in_claude_md():

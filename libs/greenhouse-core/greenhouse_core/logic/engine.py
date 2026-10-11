@@ -206,6 +206,7 @@ class IrrigationLogic:
             return window_skip
 
         self._apply_adjustments(cluster, cluster_id, decision, inputs, evaluated_at)
+        _ensure_reason(decision)
         return decision
 
     def _apply_adjustments(
@@ -723,6 +724,23 @@ def _apply_vacation_ration(decision: IrrigationDecision, binding_max_min: int) -
         message="vacation water budget exhausted this cycle — skipping to conserve reservoir",
         severity=Severity.WARNING,
         icon="drop-slash",
+    )
+
+
+def _ensure_reason(decision: IrrigationDecision) -> None:
+    """Give a decision that no rule touched an explicit "no action needed" reason.
+
+    With sensor data but nothing to judge — e.g. temperature-only readings
+    inside the plants' ideal range, no soil probe — every rule passes silently.
+    The audit log, the UI and MCP key on ``primary_code``; an empty trail would
+    persist a NULL code that reads like a lost reason rather than a deliberate skip.
+    """
+    if decision.reasons:
+        return
+    decision.add_reason(
+        code=TriggerCode.NO_ACTION_NEEDED,
+        message="readings within range — no action needed",
+        icon="check-circle",
     )
 
 
