@@ -38,7 +38,7 @@ from server.conftest import _make_stubbed_app
 # reviewed behavior-change commits (`fix(drift|consistency): …`) or description-only doc-contract
 # commits (`docs(api): …`) that also regenerate the golden.
 PHASE0_OPENAPI_SHA256 = (
-    "ef6a873892e3190c4586d73b9bb2b1ec31906d2e86fa82123b6eb187377c3378"  # gitleaks:allow — content hash, not a secret
+    "0612b2e972a7e3ef8155d96dacf560ecb024a1c481047f4148d1e2dcc9bdcb14"  # gitleaks:allow — content hash, not a secret
 )
 
 

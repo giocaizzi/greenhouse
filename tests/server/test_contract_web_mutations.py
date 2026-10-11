@@ -683,19 +683,20 @@ def _run(make_client, method: str, url: str, form: dict | None = None, setup: Ca
     return app, resp, db_effect(before, db_snapshot(engine))
 
 
-def test_bulk_stop_all_current_behavior_reports_success_when_device_stop_fails(make_client):
-    """Pins current (buggy) behavior: emergency stop ignores ``adapter.stop()``'s ``(False, msg)`` — see REFACTOR_NOTES.md.
+def test_bulk_stop_all_reports_a_device_that_refuses_the_stop(make_client):
+    """Emergency stop reports ``adapter.stop()``'s ``(False, msg)`` as a failure.
 
-    ``services/bulk.py::stop_all_irrigators`` only counts *exceptions* as errors, so a device that
-    reports a failed stop is still counted as stopped, gets a ``stop``/``emergency`` event, and
-    the web fragment says "Every device is now off."
+    A device that refuses the stop may still be running: it is not counted as stopped, gets
+    no ``stop``/``emergency`` event, and the web fragment lists it instead of saying "Every
+    device is now off." Every device is still asked to stop.
     """
     app, resp, effect = _run(make_client, "POST", "/bulk/stop-all", setup=_device_stop_fails)
     assert resp.status_code == 200
-    assert "Stopped 2 irrigators." in resp.text
-    assert "Every device is now off." in resp.text
+    assert "Stopped 0 irrigators; 2 did not confirm the stop and may still be running." in resp.text
+    assert "Every device is now off." not in resp.text
+    assert resp.text.count("stop failed: ") == 2
     assert app.state.fake_devices.irrigator.calls == [("stop", IRR_INDOOR), ("stop", IRR_OUTDOOR)]
-    assert [row["triggered_by"] for row in effect["irrigation_events"]["added"]] == ["emergency", "emergency"]
+    assert "irrigation_events" not in effect
 
 
 @pytest.mark.parametrize("action", ["ack", "resolve"])

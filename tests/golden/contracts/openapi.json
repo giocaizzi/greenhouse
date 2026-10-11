@@ -3924,7 +3924,7 @@
      "bulk"
     ],
     "summary": "Emergency stop all irrigators",
-    "description": "Send an emergency stop command to every irrigator in the system.\n\nIterates all irrigators regardless of cluster, calls the per-adapter\nstop command for each, and logs an IrrigationEvent with\n``triggered_by=\"emergency\"`` and ``notes=\"kill switch\"``. When the device\nregistry is unavailable the event is still logged and the irrigator is\ncounted as stopped. Per-irrigator errors are collected rather than aborting\nthe whole batch.\n\nReturns:\n    Count of irrigators successfully stopped and a list of per-device\n    error strings for any that raised an exception.",
+    "description": "Send an emergency stop command to every irrigator in the system.\n\nIterates all irrigators regardless of cluster, calls the per-adapter\nstop command for each, and logs an IrrigationEvent with\n``triggered_by=\"emergency\"`` and ``notes=\"kill switch\"`` for every device\nthat confirmed the stop. When the device registry is unavailable the event\nis still logged and the irrigator is counted as stopped. Per-irrigator\nerrors are collected rather than aborting the whole batch.\n\nReturns:\n    Count of irrigators confirmed stopped and a list of per-device error\n    strings for any whose stop raised or was refused by the device (those\n    may still be running and get no event).",
     "operationId": "bulk_stop_all",
     "responses": {
      "200": {

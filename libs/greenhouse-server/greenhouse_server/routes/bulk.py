@@ -15,14 +15,15 @@ def bulk_stop_all(repo: RepoDep, registry: DeviceRegistryDep, notifier: NtfyNoti
 
     Iterates all irrigators regardless of cluster, calls the per-adapter
     stop command for each, and logs an IrrigationEvent with
-    ``triggered_by="emergency"`` and ``notes="kill switch"``. When the device
-    registry is unavailable the event is still logged and the irrigator is
-    counted as stopped. Per-irrigator errors are collected rather than aborting
-    the whole batch.
+    ``triggered_by="emergency"`` and ``notes="kill switch"`` for every device
+    that confirmed the stop. When the device registry is unavailable the event
+    is still logged and the irrigator is counted as stopped. Per-irrigator
+    errors are collected rather than aborting the whole batch.
 
     Returns:
-        Count of irrigators successfully stopped and a list of per-device
-        error strings for any that raised an exception.
+        Count of irrigators confirmed stopped and a list of per-device error
+        strings for any whose stop raised or was refused by the device (those
+        may still be running and get no event).
     """
     stopped, errors = stop_all_irrigators(repo, registry, notifier)
     return StopAllResponse(stopped=stopped, errors=errors)

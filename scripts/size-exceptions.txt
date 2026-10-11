@@ -9,7 +9,6 @@ libs/greenhouse-cli/greenhouse_cli/tui/screens/forms.py::FormScreen.compose — 
 libs/greenhouse-core/greenhouse_core/devices/gateway.py::DeviceGateway.get_device_logs — Cloud v1 and v2 log parsing differ in how they handle ValueError; a merged helper would fork device behaviour
 libs/greenhouse-core/greenhouse_core/devices/irrigators/ik10pw.py::IK10PWAdapter._start_keepalive — actuation safety path that holds a recorded bug (REFACTOR_NOTES.md "Observed bugs": IK10PW keep-alive fallback, signal.signal called off the main thread); restructuring it belongs to the fix for that bug
 libs/greenhouse-core/greenhouse_core/devices/irrigators/tuya_generic.py::TuyaIrrigatorAdapter.status — flat DPS-decoding ladder in a device adapter; the nesting is the per-DP decode and splitting it adds indirection on a device path
-libs/greenhouse-server/greenhouse_server/services/bulk.py::stop_all_irrigators — emergency stop-all path; each irrigator is isolated in its own try (for → try → if → try) so one failure cannot stop the others
 
 # ── Files > 400 lines ─────────────────────────────────────────────────────────
 libs/greenhouse-core/greenhouse_core/repository.py — one persistence facade of many shallow query/write methods; a mixin split adds indirection without removing duplication
