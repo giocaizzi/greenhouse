@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from rich.text import Text
-from textual.app import ComposeResult
 from textual.binding import Binding, BindingType
 from textual.containers import Vertical
 from textual.widgets import Footer, Header, Static
@@ -14,6 +13,9 @@ from greenhouse_cli.tui import formatting as fmt
 from greenhouse_cli.tui.screens.base import DataScreen
 from greenhouse_cli.tui.table import DataTable
 from greenhouse_cli.tui.widgets import refill, selected_key
+
+if TYPE_CHECKING:
+    from textual.app import ComposeResult
 
 STATUS_FILTERS: list[str | None] = ["open", "acknowledged", "resolved", None]
 
@@ -30,6 +32,7 @@ class AlertsScreen(DataScreen):
     ]
 
     def __init__(self) -> None:
+        """Start on the open alerts, with no rows loaded yet."""
         super().__init__()
         self.status_filter: str | None = "open"
         self._alerts: dict[int, dict[str, Any]] = {}
@@ -88,8 +91,8 @@ class AlertsScreen(DataScreen):
         text.append(f"{alert['source']} · {alert['code']} · {alert['entity_type']}", style="dim")
         if alert.get("entity_id") is not None:
             text.append(f" #{alert['entity_id']}", style="dim")
-        text.append(f"\nfirst seen {fmt.clock(alert['first_seen_at'], True)} · ")
-        text.append(f"last seen {fmt.clock(alert['last_seen_at'], True)}\n\n")
+        text.append(f"\nfirst seen {fmt.clock(alert['first_seen_at'], with_date=True)} · ")
+        text.append(f"last seen {fmt.clock(alert['last_seen_at'], with_date=True)}\n\n")
         text.append(alert["message"])
         self.query_one("#alert-detail", Static).update(text)
 

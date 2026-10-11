@@ -3,7 +3,7 @@
 import json
 import os
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Annotated, Any, TypeVar
+from typing import TYPE_CHECKING, Annotated, TypeVar
 
 import typer
 from rich import print_json
@@ -62,6 +62,6 @@ def call(ctx: typer.Context, fn: Callable[[IrrigationClient], T]) -> T:
         raise typer.Exit(1) from None
 
 
-def output(data: Any) -> None:
+def output(data: object) -> None:
     """Print ``data`` as pretty JSON on stdout (the CLI output contract); non-JSON values go through ``str``."""
     print_json(json.dumps(data, default=str))

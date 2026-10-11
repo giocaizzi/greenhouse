@@ -61,9 +61,10 @@ class IrrigatorProfile:
         return name in self.capabilities
 
     def dp(self, name: str) -> int:
-        """Resolve a logical DP name to its numeric id. Raises ``KeyError``
-        when the DP is not declared for this model — callers must guard with
-        :meth:`has_capability` first.
+        """Resolve a logical DP name to its numeric id.
+
+        Raises ``KeyError`` when the DP is not declared for this model — callers
+        must guard with :meth:`has_capability` first.
         """
         return self.dp_map[name]
 

@@ -3,7 +3,7 @@
 import json
 import time
 from contextlib import contextmanager
-from typing import TYPE_CHECKING, Any, Literal, TypedDict, Unpack, cast
+from typing import TYPE_CHECKING, Any, Literal, Required, TypedDict, Unpack, cast
 
 from sqlalchemy import and_, delete, func, inspect, or_, select
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
@@ -183,6 +183,109 @@ class IrrigationConfigPatch(TypedDict, total=False):
     quiet_end_hour: int | None
 
 
+# ── Optional keyword groups of the add_* / upsert_* writers ─────────────────
+# Spelled once as ``**fields: Unpack[...]`` so a write method's signature stays short while
+# every call site keeps its keywords; a key left out takes the default documented per field.
+
+
+class PlantCareFields(TypedDict, total=False):
+    """Optional care data ``add_plant`` stores (each defaults to ``None``)."""
+
+    category: str | None
+    water_needs: str | None
+    light_needs: str | None
+    ideal_temp_min: float | None
+    ideal_temp_max: float | None
+    ideal_humidity_min: float | None
+    ideal_humidity_max: float | None
+    notes: str | None
+
+
+class SensorPlantLink(TypedDict, total=False):
+    """``add_sensor``'s optional plant link: ``plant_id`` and when its assignment starts (default: now)."""
+
+    plant_id: int | None
+    assignment_started_at: int | None
+
+
+class ReadingValues(TypedDict, total=False):
+    """One reading's values for ``add_sensor_reading`` (each defaults to ``None``; ``timestamp`` to now)."""
+
+    timestamp: int | None
+    temperature: float | None
+    soil_moisture: float | None
+    light: int | None
+    env_humidity: float | None
+    battery_state: str | None
+    water_warning: bool | None
+
+
+class EventDetails(TypedDict, total=False):
+    """``add_irrigation_event``'s optional details (``None`` each; ``timestamp`` defaults to now)."""
+
+    duration_minutes: int | None
+    notes: str | None
+    timestamp: int | None
+
+
+class DecisionLogEntry(TypedDict, total=False):
+    """The columns of one ``decision_logs`` row (``triggered_by`` defaults to auto, ``actuated`` to False)."""
+
+    evaluated_at: Required[int]
+    action: Required[str]
+    duration_minutes: Required[int]
+    interval_hours: Required[int]
+    confidence: Required[float]
+    primary_code: Required[str | None]
+    reason_text: Required[str]
+    payload: Required[dict[str, Any]]
+    triggered_by: TriggeredBy
+    actuated: bool
+
+
+class ActivityEventOptions(TypedDict, total=False):
+    """``add_activity_event``'s optional fields (``severity`` defaults to ``"info"``, ``timestamp`` to now)."""
+
+    entity_id: int | None
+    severity: str
+    payload: dict[str, Any] | None
+    timestamp: int | None
+
+
+class ActivityFilters(TypedDict, total=False):
+    """``list_activity_events`` filters (``None`` = no filter) and paging (``limit`` 100, ``before`` cursor)."""
+
+    entity_type: str | None
+    entity_id: int | None
+    source: str | None
+    severity: str | None
+    limit: int
+    before: int | None
+
+
+class AlertOptions(TypedDict, total=False):
+    """``upsert_alert``'s optional fields (``severity`` "info", ``entity_type`` cluster, ``seen_at`` now)."""
+
+    severity: str
+    entity_type: EntityType
+    entity_id: int | None
+    cluster_id: int | None
+    plant_id: int | None
+    payload: dict[str, Any] | None
+    seen_at: int | None
+
+
+class PlantHealthScores(TypedDict, total=False):
+    """``upsert_plant_health``'s sub-scores (``None`` each), ``sample_count`` (0) and ``timestamp`` (now)."""
+
+    soil_in_band_pct: float | None
+    temp_in_band_pct: float | None
+    humidity_in_band_pct: float | None
+    efficiency: float | None
+    sample_count: int
+    timestamp: int | None
+
+
 class SameClusterMoveError(ValueError):
     """Raised when a plant move targets its current cluster (no-op move)."""
 
@@ -202,7 +305,8 @@ class IrrigatorExistsError(ValueError):
 class IrrigationRepository:
     """Repository for irrigation system data access."""
 
-    def __init__(self, session: Session):
+    def __init__(self, session: Session) -> None:
+        """Wrap ``session``; the caller owns its lifetime."""
         self.session = session
 
     # ── Unit of work ──────────────────────────────────────────────────────────
@@ -286,27 +390,20 @@ class IrrigationRepository:
         self,
         cluster_id: int,
         species: str,
-        category: str | None = None,
-        water_needs: str | None = None,
-        light_needs: str | None = None,
-        ideal_temp_min: float | None = None,
-        ideal_temp_max: float | None = None,
-        ideal_humidity_min: float | None = None,
-        ideal_humidity_max: float | None = None,
-        notes: str | None = None,
+        **care: Unpack[PlantCareFields],
     ) -> int:
         """Add a plant to a cluster and return its ID."""
         plant = Plant(
             cluster_id=cluster_id,
             species=species,
-            category=category,
-            water_needs=water_needs,
-            light_needs=light_needs,
-            ideal_temp_min=ideal_temp_min,
-            ideal_temp_max=ideal_temp_max,
-            ideal_humidity_min=ideal_humidity_min,
-            ideal_humidity_max=ideal_humidity_max,
-            notes=notes,
+            category=care.get("category"),
+            water_needs=care.get("water_needs"),
+            light_needs=care.get("light_needs"),
+            ideal_temp_min=care.get("ideal_temp_min"),
+            ideal_temp_max=care.get("ideal_temp_max"),
+            ideal_humidity_min=care.get("ideal_humidity_min"),
+            ideal_humidity_max=care.get("ideal_humidity_max"),
+            notes=care.get("notes"),
         )
         self.session.add(plant)
         self.session.flush()
@@ -362,8 +459,7 @@ class IrrigationRepository:
         name: str,
         sensor_type: str,
         config: dict[str, Any],
-        plant_id: int | None = None,
-        assignment_started_at: int | None = None,
+        **link: Unpack[SensorPlantLink],
     ) -> int:
         """Add a sensor device and return its ID.
 
@@ -373,6 +469,8 @@ class IrrigationRepository:
         importing a sensor whose existing readings predate this row — the
         migration backfill uses the same convention.
         """
+        plant_id = link.get("plant_id")
+        assignment_started_at = link.get("assignment_started_at")
         sensor = Sensor(
             cluster_id=cluster_id,
             tuya_device_id=tuya_device_id,
@@ -488,30 +586,24 @@ class IrrigationRepository:
     def add_sensor_reading(
         self,
         sensor_id: int,
-        timestamp: int | None = None,
-        temperature: float | None = None,
-        soil_moisture: float | None = None,
-        light: int | None = None,
-        env_humidity: float | None = None,
-        battery_state: str | None = None,
-        water_warning: bool | None = None,
+        **values: Unpack[ReadingValues],
     ) -> int | None:
         """Add a sensor reading. Deduplicates by (sensor_id, timestamp).
 
         Returns row ID if inserted, None if duplicate skipped.
         """
-        ts = timestamp or int(time.time())
+        ts = values.get("timestamp") or int(time.time())
         stmt = (
             sqlite_insert(SensorReading)
             .values(
                 sensor_id=sensor_id,
                 timestamp=ts,
-                temperature=temperature,
-                soil_moisture=soil_moisture,
-                light=light,
-                env_humidity=env_humidity,
-                battery_state=battery_state,
-                water_warning=water_warning,
+                temperature=values.get("temperature"),
+                soil_moisture=values.get("soil_moisture"),
+                light=values.get("light"),
+                env_humidity=values.get("env_humidity"),
+                battery_state=values.get("battery_state"),
+                water_warning=values.get("water_warning"),
             )
             .on_conflict_do_nothing(index_elements=["sensor_id", "timestamp"])
         )
@@ -640,19 +732,17 @@ class IrrigationRepository:
         irrigator_id: int,
         action: EventAction,
         triggered_by: TriggeredBy,
-        duration_minutes: int | None = None,
-        notes: str | None = None,
-        timestamp: int | None = None,
+        **details: Unpack[EventDetails],
     ) -> int:
         """Log an irrigation event and return its ID."""
-        ts = timestamp or int(time.time())
+        ts = details.get("timestamp") or int(time.time())
         event = IrrigationEvent(
             irrigator_id=irrigator_id,
             timestamp=ts,
             action=action,
-            duration_minutes=duration_minutes,
+            duration_minutes=details.get("duration_minutes"),
             triggered_by=triggered_by,
-            notes=notes,
+            notes=details.get("notes"),
         )
         self.session.add(event)
         self.session.flush()
@@ -825,36 +915,27 @@ class IrrigationRepository:
     def add_decision_log(
         self,
         cluster_id: int,
-        evaluated_at: int,
-        action: str,
-        duration_minutes: int,
-        interval_hours: int,
-        confidence: float,
-        primary_code: str | None,
-        reason_text: str,
-        payload: dict[str, Any],
-        triggered_by: TriggeredBy = TRIGGERED_BY_AUTO,
-        actuated: bool = False,
+        **entry: Unpack[DecisionLogEntry],
     ) -> int:
         """Persist a single decision evaluation; returns the new row id."""
         row = DecisionLog(
             cluster_id=cluster_id,
-            evaluated_at=evaluated_at,
-            action=action,
-            duration_minutes=duration_minutes,
-            interval_hours=interval_hours,
-            confidence=confidence,
-            primary_code=primary_code,
-            reason_text=reason_text,
-            payload_json=json.dumps(payload, default=str),
-            triggered_by=triggered_by,
-            actuated=actuated,
+            evaluated_at=entry["evaluated_at"],
+            action=entry["action"],
+            duration_minutes=entry["duration_minutes"],
+            interval_hours=entry["interval_hours"],
+            confidence=entry["confidence"],
+            primary_code=entry["primary_code"],
+            reason_text=entry["reason_text"],
+            payload_json=json.dumps(entry["payload"], default=str),
+            triggered_by=entry.get("triggered_by", TRIGGERED_BY_AUTO),
+            actuated=entry.get("actuated", False),
         )
         self.session.add(row)
         self.session.flush()
         return row.id
 
-    def set_decision_actuated(self, log_id: int, actuated: bool = True) -> None:
+    def set_decision_actuated(self, log_id: int, *, actuated: bool = True) -> None:
         """Mark a persisted decision log as having driven (or not) real actuation."""
         row = self.session.get(DecisionLog, log_id)
         if row is not None:
@@ -904,19 +985,16 @@ class IrrigationRepository:
         entity_type: EntityType,
         code: str,
         message: str,
-        *,
-        entity_id: int | None = None,
-        severity: str = "info",
-        payload: dict[str, Any] | None = None,
-        timestamp: int | None = None,
+        **options: Unpack[ActivityEventOptions],
     ) -> int:
         """Append a polymorphic activity event; returns the new row id."""
+        payload = options.get("payload")
         row = ActivityEvent(
-            timestamp=timestamp or int(time.time()),
+            timestamp=options.get("timestamp") or int(time.time()),
             source=source,
             entity_type=entity_type,
-            entity_id=entity_id,
-            severity=severity,
+            entity_id=options.get("entity_id"),
+            severity=options.get("severity", "info"),
             code=code,
             message=message,
             payload_json=json.dumps(payload, default=str) if payload else None,
@@ -925,18 +1003,11 @@ class IrrigationRepository:
         self.session.flush()
         return row.id
 
-    def list_activity_events(
-        self,
-        *,
-        entity_type: str | None = None,
-        entity_id: int | None = None,
-        source: str | None = None,
-        severity: str | None = None,
-        limit: int = 100,
-        before: int | None = None,
-    ) -> list[ActivityEvent]:
+    def list_activity_events(self, **filters: Unpack[ActivityFilters]) -> list[ActivityEvent]:
         """List events newest-first with optional filters and pagination cursor."""
-        stmt = select(ActivityEvent).order_by(ActivityEvent.timestamp.desc()).limit(limit)
+        entity_type, entity_id = filters.get("entity_type"), filters.get("entity_id")
+        source, severity, before = filters.get("source"), filters.get("severity"), filters.get("before")
+        stmt = select(ActivityEvent).order_by(ActivityEvent.timestamp.desc()).limit(filters.get("limit", 100))
         if entity_type:
             stmt = stmt.where(ActivityEvent.entity_type == entity_type)
         if entity_id is not None:
@@ -988,14 +1059,7 @@ class IrrigationRepository:
         code: str,
         title: str,
         message: str,
-        *,
-        severity: str = "info",
-        entity_type: EntityType = ENTITY_CLUSTER,
-        entity_id: int | None = None,
-        cluster_id: int | None = None,
-        plant_id: int | None = None,
-        payload: dict[str, Any] | None = None,
-        seen_at: int | None = None,
+        **options: Unpack[AlertOptions],
     ) -> Alert:
         """Insert or refresh an alert keyed by ``dedup_key``.
 
@@ -1003,7 +1067,8 @@ class IrrigationRepository:
         acknowledged alert with the same key already exists. A resolved alert
         with the same key is reopened.
         """
-        now = seen_at or int(time.time())
+        now = options.get("seen_at") or int(time.time())
+        severity = options.get("severity", "info")
         existing = self.session.scalar(select(Alert).where(Alert.dedup_key == dedup_key))
         if existing:
             existing.last_seen_at = now
@@ -1021,13 +1086,13 @@ class IrrigationRepository:
             source=source,
             code=code,
             severity=severity,
-            entity_type=entity_type,
-            entity_id=entity_id,
-            cluster_id=cluster_id,
-            plant_id=plant_id,
+            entity_type=options.get("entity_type", ENTITY_CLUSTER),
+            entity_id=options.get("entity_id"),
+            cluster_id=options.get("cluster_id"),
+            plant_id=options.get("plant_id"),
             title=title,
             message=message,
-            payload_json=json.dumps(payload, default=str) if payload else None,
+            payload_json=json.dumps(payload, default=str) if (payload := options.get("payload")) else None,
             status="open",
             first_seen_at=now,
             last_seen_at=now,
@@ -1156,15 +1221,12 @@ class IrrigationRepository:
         plant_id: int,
         date_key: str,
         score: float,
-        *,
-        soil_in_band_pct: float | None = None,
-        temp_in_band_pct: float | None = None,
-        humidity_in_band_pct: float | None = None,
-        efficiency: float | None = None,
-        sample_count: int = 0,
-        timestamp: int | None = None,
+        **scores: Unpack[PlantHealthScores],
     ) -> PlantHealthDaily:
         """Idempotent upsert for the per-plant daily health snapshot."""
+        soil_in_band_pct, temp_in_band_pct = scores.get("soil_in_band_pct"), scores.get("temp_in_band_pct")
+        humidity_in_band_pct, efficiency = scores.get("humidity_in_band_pct"), scores.get("efficiency")
+        sample_count, timestamp = scores.get("sample_count", 0), scores.get("timestamp")
         existing = self.session.scalar(
             select(PlantHealthDaily).where(PlantHealthDaily.plant_id == plant_id, PlantHealthDaily.date_key == date_key)
         )

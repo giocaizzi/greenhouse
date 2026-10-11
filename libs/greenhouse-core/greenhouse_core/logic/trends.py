@@ -18,13 +18,13 @@ from greenhouse_core.constants import (
 from greenhouse_core.logic.cleaning import clean_readings
 from greenhouse_core.logic.decision import Trends
 from greenhouse_core.models import EVENT_ACTION_START
-from greenhouse_core.repository import IrrigationRepository
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from greenhouse_core.logic.cleaning import CleanedReading
     from greenhouse_core.models import IrrigationEvent, Sensor
+    from greenhouse_core.repository import IrrigationRepository
 
 
 def _pooled_clean_readings(db: IrrigationRepository, sensors: Sequence[Sensor], *, hours: int) -> list[CleanedReading]:
@@ -90,7 +90,7 @@ def _apply_cadence_flags(trends: Trends, events: Sequence[IrrigationEvent]) -> N
     total_events = len(irrigation_events)
     if total_events <= 0:
         return
-    total_duration = sum(cast(int, e.duration_minutes) for e in irrigation_events)
+    total_duration = sum(cast("int", e.duration_minutes) for e in irrigation_events)
     avg_per_day = total_events / CADENCE_WINDOW_DAYS
     avg_duration = total_duration / total_events
     if avg_per_day < CADENCE_LOW_EVENTS_PER_DAY and avg_duration < CADENCE_LOW_AVG_MINUTES:

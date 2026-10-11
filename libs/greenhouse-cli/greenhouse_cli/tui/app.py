@@ -11,22 +11,26 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Callable
 from http import HTTPStatus
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, TypeVar
 
 from textual.app import App
 from textual.binding import Binding, BindingType
-from textual.screen import Screen
 
 from greenhouse_cli.client import IrrigationClient, ServerError, store_token
 from greenhouse_cli.tui.screens.activity import ActivityScreen
 from greenhouse_cli.tui.screens.alerts import AlertsScreen
+from greenhouse_cli.tui.screens.cluster import ClusterScreen
 from greenhouse_cli.tui.screens.dashboard import DashboardScreen
 from greenhouse_cli.tui.screens.modals import LoginScreen
 from greenhouse_cli.tui.screens.search import SearchScreen
 from greenhouse_cli.tui.screens.settings import SettingsScreen
 from greenhouse_cli.tui.screens.system import SystemScreen
 
+if TYPE_CHECKING:
+    from textual.screen import Screen
+
 ClientFactory = Callable[[str | None], IrrigationClient]
+_T = TypeVar("_T")
 
 
 class GreenhouseApp(App[None]):
@@ -59,8 +63,10 @@ class GreenhouseApp(App[None]):
         server_url: str,
         client_factory: ClientFactory | None = None,
         refresh_seconds: float = 30.0,
+        *,
         animations: bool = True,
     ) -> None:
+        """Point the app at ``server_url``; tests inject ``client_factory`` to avoid the network."""
         super().__init__()
         self.server_url = server_url
         self.client_factory: ClientFactory = client_factory or (
@@ -76,7 +82,7 @@ class GreenhouseApp(App[None]):
         self.needs_sign_in = False
         self.sub_title = server_url
 
-    async def api(self, fn: Callable[[IrrigationClient], Any], *, quiet: bool = False) -> Any:
+    async def api(self, fn: Callable[[IrrigationClient], _T], *, quiet: bool = False) -> _T | None:
         """Run ``fn(client)`` in a thread; surface errors as notifications.
 
         Args:
@@ -144,8 +150,6 @@ class GreenhouseApp(App[None]):
         """Search callback: open the picked cluster on top of the dashboard (cancel = no-op)."""
         if cluster_id is None:
             return
-        from greenhouse_cli.tui.screens.cluster import ClusterScreen
-
         self.switch_mode("dashboard")
         self.push_screen(ClusterScreen(cluster_id))
 

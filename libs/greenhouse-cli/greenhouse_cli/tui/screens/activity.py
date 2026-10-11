@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
-from rich.console import RenderableType
-from textual.app import ComposeResult
 from textual.binding import Binding, BindingType
 from textual.widgets import Footer, Header, Static
 
@@ -13,6 +11,10 @@ from greenhouse_cli.tui import formatting as fmt
 from greenhouse_cli.tui.screens.base import DataScreen
 from greenhouse_cli.tui.table import DataTable
 from greenhouse_cli.tui.widgets import refill
+
+if TYPE_CHECKING:
+    from rich.console import RenderableType
+    from textual.app import ComposeResult
 
 SEVERITY_FILTERS: list[str | None] = [None, "warning", "error", "info"]
 PAGE = 100
@@ -28,6 +30,7 @@ class ActivityScreen(DataScreen):
     ]
 
     def __init__(self) -> None:
+        """Start unfiltered, with no paging cursor."""
         super().__init__()
         self.severity: str | None = None
         self.cursor: int | None = None

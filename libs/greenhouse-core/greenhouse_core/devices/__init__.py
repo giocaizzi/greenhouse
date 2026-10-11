@@ -36,7 +36,7 @@ if TYPE_CHECKING:
     from greenhouse_core.devices.irrigators.ik10pw import IK10PW_PROFILE, IK10PWAdapter, alarm_indicates_no_water
     from greenhouse_core.devices.irrigators.tuya_generic import TuyaIrrigatorAdapter
     from greenhouse_core.devices.profile import IrrigatorProfile, SensorProfile
-    from greenhouse_core.devices.registry import DeviceRegistry, UnknownDeviceModel
+    from greenhouse_core.devices.registry import DeviceRegistry, UnknownDeviceModel, UnknownDeviceModelError
     from greenhouse_core.devices.sensors.base import AbstractSensorAdapter
     from greenhouse_core.devices.sensors.tr301z import TR301Z_PROFILE, TR301ZAdapter
     from greenhouse_core.devices.sensors.tuya_generic import TuyaSensorAdapter
@@ -66,6 +66,7 @@ _EXPORTS: dict[str, str] = {
     "TuyaIrrigatorAdapter": "greenhouse_core.devices.irrigators.tuya_generic",
     "TuyaSensorAdapter": "greenhouse_core.devices.sensors.tuya_generic",
     "UnknownDeviceModel": _REGISTRY,
+    "UnknownDeviceModelError": _REGISTRY,
     "alarm_indicates_no_water": _IK10PW,
 }
 
@@ -86,9 +87,12 @@ def build_default_registry(gateway: DeviceGateway) -> DeviceRegistry:
     The adapters are imported here, not at package import, for the same
     reason the re-exports are lazy.
     """
-    from greenhouse_core.devices.irrigators.ik10pw import IK10PW_PROFILE, IK10PWAdapter
-    from greenhouse_core.devices.registry import DeviceRegistry
-    from greenhouse_core.devices.sensors.tr301z import TR301Z_PROFILE, TR301ZAdapter
+    from greenhouse_core.devices.irrigators.ik10pw import (  # noqa: PLC0415 — lazy by design
+        IK10PW_PROFILE,
+        IK10PWAdapter,
+    )
+    from greenhouse_core.devices.registry import DeviceRegistry  # noqa: PLC0415 — lazy by design (see above)
+    from greenhouse_core.devices.sensors.tr301z import TR301Z_PROFILE, TR301ZAdapter  # noqa: PLC0415 — lazy by design
 
     registry = DeviceRegistry()
     registry.register_irrigator(
@@ -104,6 +108,8 @@ def build_default_registry(gateway: DeviceGateway) -> DeviceRegistry:
 
 __all__ = [
     "DATAPOINT_PARSERS",
+    "IK10PW_PROFILE",
+    "TR301Z_PROFILE",
     "AbstractIrrigatorAdapter",
     "AbstractSensorAdapter",
     "DeviceGateway",
@@ -111,14 +117,13 @@ __all__ = [
     "DeviceRegistry",
     "HealthAlarm",
     "IK10PWAdapter",
-    "IK10PW_PROFILE",
     "IrrigatorProfile",
     "SensorProfile",
     "TR301ZAdapter",
-    "TR301Z_PROFILE",
     "TuyaIrrigatorAdapter",
     "TuyaSensorAdapter",
     "UnknownDeviceModel",
+    "UnknownDeviceModelError",
     "alarm_indicates_no_water",
     "build_default_registry",
     "tinytuya",

@@ -37,8 +37,8 @@ def _response_from(
 ) -> IrrigationResponse:
     """Response metrics between the last pre-event reading and the post-event peak."""
     duration = event.duration_minutes or DEFAULT_DURATION_MINUTES
-    pre_moisture = cast(float, pre.soil_moisture)
-    post_moisture = cast(float, post.soil_moisture)
+    pre_moisture = cast("float", pre.soil_moisture)
+    post_moisture = cast("float", post.soil_moisture)
     delta = post_moisture - pre_moisture
 
     return IrrigationResponse(
@@ -81,7 +81,7 @@ def compute_sensor_response(
     pre = pre_moisture_readings[-1]
 
     # Post: use the reading with highest moisture (peak absorption)
-    post = max(post_moisture_readings, key=lambda r: cast(float, r.soil_moisture))
+    post = max(post_moisture_readings, key=lambda r: cast("float", r.soil_moisture))
 
     return _response_from(sensor, event, pre, post)
 

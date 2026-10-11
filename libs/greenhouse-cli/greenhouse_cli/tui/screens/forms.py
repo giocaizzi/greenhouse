@@ -5,15 +5,17 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, ClassVar, cast
+from typing import TYPE_CHECKING, Any, ClassVar, cast
 
-from textual.app import ComposeResult
-from textual.binding import BindingType
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import Button, Checkbox, Input, Label, Select, Static
 
 from greenhouse_cli.tui.formatting import zone
+
+if TYPE_CHECKING:
+    from textual.app import ComposeResult
+    from textual.binding import BindingType
 
 DATETIME_FORMAT = "%Y-%m-%d %H:%M"
 
@@ -40,36 +42,57 @@ class Field:
     tz: str | None = None
 
 
-def parse_value(f: Field, raw: Any) -> Any:
+# What a parsed form field holds: the value lands in a JSON request body.
+FormValue = bool | int | float | str | dict[str, Any] | None
+
+# The input format named in the error when a typed field does not parse.
+_PARSE_HINTS = {"datetime": "YYYY-MM-DD HH:MM", "json": "a JSON object", "int": "a whole number"}
+
+
+def _parse_datetime(f: Field, text: str) -> int:
+    """``YYYY-MM-DD HH:MM`` wall time in the field's zone → Unix seconds."""
+    return int(datetime.strptime(text, DATETIME_FORMAT).replace(tzinfo=zone(f.tz)).timestamp())
+
+
+def _parse_json_object(text: str) -> dict[str, Any]:
+    """A JSON object literal; any other JSON value is a ``ValueError`` like malformed JSON."""
+    parsed = json.loads(text)
+    if isinstance(parsed, dict):
+        return parsed
+    raise ValueError
+
+
+def _parse_text(f: Field, text: str) -> FormValue:
+    """Convert non-blank text input by the field's kind (unknown kinds stay text)."""
+    if f.kind == "int":
+        return int(text)
+    if f.kind == "float":
+        return float(text)
+    if f.kind == "datetime":
+        return _parse_datetime(f, text)
+    if f.kind == "json":
+        return _parse_json_object(text)
+    return text
+
+
+def parse_value(f: Field, raw: object) -> FormValue:
     """Convert a widget value to the field's type; raise ``ValueError`` on bad input."""
     if f.kind == "bool":
         return bool(raw)
     if f.kind == "select":
-        return None if raw is Select.NULL else raw
-    text = (raw or "").strip()
+        return None if raw is Select.NULL else cast("FormValue", raw)
+    text = cast("str", raw or "").strip()
     if not text:
         if f.required:
             msg = f"{f.label} is required"
             raise ValueError(msg)
         return None
     try:
-        if f.kind == "int":
-            return int(text)
-        if f.kind == "float":
-            return float(text)
-        if f.kind == "datetime":
-            return int(datetime.strptime(text, DATETIME_FORMAT).replace(tzinfo=zone(f.tz)).timestamp())
-        if f.kind == "json":
-            parsed = json.loads(text)
-            if not isinstance(parsed, dict):
-                raise ValueError
-            return parsed
+        return _parse_text(f, text)
     except ValueError:
-        hints = {"datetime": "YYYY-MM-DD HH:MM", "json": "a JSON object", "int": "a whole number"}
-        hint = hints.get(f.kind, f"a {f.kind}")
+        hint = _PARSE_HINTS.get(f.kind, f"a {f.kind}")
         msg = f"{f.label}: expected {hint}"
         raise ValueError(msg) from None
-    return text
 
 
 def _display(f: Field) -> str:
@@ -89,6 +112,7 @@ class FormScreen(ModalScreen[dict[str, Any] | None]):
     BINDINGS: ClassVar[list[BindingType]] = [("escape", "dismiss(None)", "Cancel"), ("ctrl+s", "submit", "Save")]
 
     def __init__(self, title: str, fields: list[Field], submit_label: str = "Save", note: str | None = None) -> None:
+        """Lay out ``fields`` under ``title``, with an optional explanatory ``note``."""
         super().__init__()
         self.form_title = title
         self.fields = fields

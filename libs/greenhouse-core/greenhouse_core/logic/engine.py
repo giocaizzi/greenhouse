@@ -11,7 +11,7 @@ import statistics
 import time
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol, Required, TypedDict, Unpack
 
 from greenhouse_core.constants import (
     CONFIDENCE_BASELINE,
@@ -141,6 +141,7 @@ class IrrigationLogic:
     def __init__(
         self, db: IrrigationRepository, plant_db: PlantDatabase, *, weather_client: RainForecast | None = None
     ) -> None:
+        """Wire the repository, plant DB and optional rain forecast the engine reads."""
         self.db = db
         self.plant_db = plant_db
         self._weather = weather_client
@@ -322,8 +323,7 @@ class IrrigationLogic:
         return self._enforce_cooldown(cluster_id, evaluated_at)
 
     def _resolve_quiet_window(self, cluster_id: int, evaluated_at: int) -> tuple[int, int] | None:
-        """Return the effective quiet-hours window for a cluster if it is
-        currently inside one, else ``None``.
+        """Return the cluster's effective quiet-hours window while inside it, else ``None``.
 
         Resolves quiet-hour bounds via the hierarchical config (cluster →
         global → built-in default in :mod:`constants`) and tests the current
@@ -340,8 +340,7 @@ class IrrigationLogic:
         return prefs.timezone if prefs else None
 
     def _apply_window_rule(self, cluster_id: int, evaluated_at: int) -> IrrigationDecision | None:
-        """Return a SKIP decision when the current local time is outside the
-        cluster's irrigation windows.
+        """Return a SKIP decision when the current local time is outside the cluster's irrigation windows.
 
         A cluster with NO configured ``IrrigationWindow`` rows allows watering at
         any hour — night protection is the job of quiet hours, not this rule (see
@@ -370,9 +369,10 @@ class IrrigationLogic:
     def _apply_seasonal_multiplier(
         self, cluster: "Cluster", decision: IrrigationDecision, plant_care: list[dict[str, Any]], evaluated_at: int
     ) -> None:
-        """Scale ``decision.interval_hours`` by a seasonal multiplier and append
-        a ``SEASONAL_HOLD`` / ``SEASONAL_BOOST`` reason when the multiplier is
-        not 1.0. Clamps to [MIN_INTERVAL_HOURS, MAX_INTERVAL_HOURS].
+        """Scale ``decision.interval_hours`` by the seasonal multiplier, with a reason when it is not 1.0.
+
+        The reason is ``SEASONAL_HOLD`` / ``SEASONAL_BOOST``; the result is clamped to
+        [MIN_INTERVAL_HOURS, MAX_INTERVAL_HOURS].
 
         Layers (most → least specific): species-level
         ``season_frequency_multiplier{,_outdoor}`` from the plant DB, then the
@@ -504,7 +504,7 @@ class IrrigationLogic:
                 triggered_by=triggered_by,
                 actuated=False,
             )
-        except Exception:
+        except Exception:  # noqa: BLE001 — the audit write is advisory: it never blocks a decision; logged with exc_info
             log.warning("failed to persist decision log", exc_info=True)
 
     def _enforce_leak_hold(self, cluster_id: int, now: int) -> IrrigationDecision | None:
@@ -626,7 +626,8 @@ class IrrigationLogic:
     def _attach_learning_alerts(self, cluster_id: int, stress: StressIndicators) -> None:
         """Best-effort learning alert collection — never blocks the decision."""
         try:
-            from greenhouse_core.learning import IrrigationLearner
+            # The one upward import (import-linter layers): lazy, so loading logic never loads learning.
+            from greenhouse_core.learning import IrrigationLearner  # noqa: PLC0415 — see above
 
             learner = IrrigationLearner(self.db, self.plant_db)
             alerts = learner.detect_issues(cluster_id)
@@ -634,11 +635,20 @@ class IrrigationLogic:
                 stress.learning_alerts = [
                     {"type": a.alert_type, "severity": a.severity, "message": a.message} for a in alerts
                 ]
-        except Exception:
+        except Exception:  # noqa: BLE001 — learning is advisory (invariant 4); logged with exc_info
             log.warning("learning advisory unavailable", exc_info=True)
 
 
 # ── Rule functions ──────────────────────────────────────────────────────────
+
+
+class _TerminalReason(TypedDict, total=False):
+    """The confidence and single reason of a terminal decision (``severity`` defaults to INFO)."""
+
+    confidence: Required[float]
+    code: Required[TriggerCode]
+    message: Required[str]
+    severity: Severity
 
 
 def _decision_with_reason(
@@ -647,11 +657,7 @@ def _decision_with_reason(
     action: Action,
     duration_minutes: int,
     interval_hours: int,
-    *,
-    confidence: float,
-    code: TriggerCode,
-    message: str,
-    severity: Severity = Severity.INFO,
+    **reason: Unpack[_TerminalReason],
 ) -> IrrigationDecision:
     """Build a one-reason decision (used by terminal rules)."""
     decision = IrrigationDecision(
@@ -660,12 +666,12 @@ def _decision_with_reason(
         action=action,
         duration_minutes=duration_minutes,
         interval_hours=interval_hours,
-        confidence=confidence,
+        confidence=reason["confidence"],
         sensor_snapshot=None,
         stress_indicators=StressIndicators(),
         trends=Trends(),
     )
-    decision.add_reason(code=code, message=message, severity=severity)
+    decision.add_reason(code=reason["code"], message=reason["message"], severity=reason.get("severity", Severity.INFO))
     return decision
 
 
@@ -719,7 +725,7 @@ def _scaled_interval(interval_hours: int, multiplier: float) -> int:
     """Divide the interval by a frequency multiplier (water N× as often), clamped to the interval bounds."""
     # Multiplier is a frequency factor (water N× as often), not an interval
     # factor — so divide the baseline interval by it to get the new cadence.
-    new_interval = int(round(interval_hours / multiplier))
+    new_interval = round(interval_hours / multiplier)
     return max(MIN_INTERVAL_HOURS, min(MAX_INTERVAL_HOURS, new_interval))
 
 
@@ -820,7 +826,9 @@ def _veto_water_warning(decision: IrrigationDecision, evidence: str) -> None:
     )
     decision.add_reason(
         code=TriggerCode.WATER_WARNING,
-        message=f"device soil-dry alarm not acted on (soil reads over-watered): {decision.stress_indicators.water_warning}",
+        message=(
+            f"device soil-dry alarm not acted on (soil reads over-watered): {decision.stress_indicators.water_warning}"
+        ),
         severity=Severity.WARNING,
         icon="warning-circle",
     )

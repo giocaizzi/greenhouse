@@ -15,8 +15,8 @@ import logging
 import time
 from typing import TYPE_CHECKING, Any, TypedDict
 
-from greenhouse_core.devices.gateway import DeviceGateway
-from greenhouse_core.repository import IrrigationRepository
+from greenhouse_core.devices.gateway import DeviceGateway  # noqa: TC001 — pinned in golden imports.json
+from greenhouse_core.repository import IrrigationRepository  # noqa: TC001 — pinned in golden imports.json
 
 if TYPE_CHECKING:
     from greenhouse_core.models import Sensor
@@ -74,7 +74,8 @@ def _sync_logged(db: IrrigationRepository, cloud: DeviceGateway, sensor: Sensor,
 
     except Exception as e:  # noqa: BLE001 — per-sensor isolation: record, log, keep looping
         stats["errors"].append(f"{sensor.name}: {e}")
-        logger.error("  %s: %s", sensor.name, e)
+        # The log line is pinned (tests/test_contract_wp8_sync_gaps.py): `.exception` would need `e` dropped (TRY401).
+        logger.error("  %s: %s", sensor.name, e)  # noqa: TRY400 — see above
 
 
 def _sync_summary(new: int, live: int) -> str:
@@ -174,6 +175,6 @@ def _store_live_reading(db: IrrigationRepository, cloud: DeviceGateway, sensor: 
             )
             if result is not None:
                 saved = True
-    except Exception:  # the live read is best-effort by contract (invariant 8)
+    except Exception:  # noqa: BLE001 — the live read is best-effort by contract (invariant 8); logged with exc_info
         logger.warning("  %s: live read failed", sensor.name, exc_info=True)
     return saved

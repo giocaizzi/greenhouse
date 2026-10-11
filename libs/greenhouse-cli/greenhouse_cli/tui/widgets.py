@@ -3,23 +3,28 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Sequence
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, Unpack
 
 from rich.console import Group, RenderableType
 from rich.table import Table
 from rich.text import Text
-from textual.app import ComposeResult
-from textual.binding import BindingType
 from textual.containers import Horizontal, Vertical
 from textual.message import Message
 from textual.widgets import Sparkline, Static
+from textual.widgets.data_table import RowDoesNotExist
 from textual_plotext import PlotextPlot
 
 from greenhouse_cli.constants import HOURS_PER_DAY, SECONDS_PER_HOUR
 from greenhouse_cli.tui import formatting as fmt
-from greenhouse_cli.tui.model import ClusterSummary
 from greenhouse_cli.tui.sprites import MOOD_COLORS, MOOD_LABELS, Mood, logo_sprite, plant_sprite
-from greenhouse_cli.tui.table import DataTable
+
+if TYPE_CHECKING:
+    from textual.app import ComposeResult
+    from textual.binding import BindingType
+
+    from greenhouse_cli.tui.model import ClusterSummary, PlantView
+    from greenhouse_cli.tui.table import DataTable
+    from greenhouse_cli.tui.widget_options import CardOptions, TileOptions, WidgetOptions
 
 ANIMATION_INTERVAL = 0.7
 
@@ -33,7 +38,8 @@ class SpriteView(Static):
     SpriteView { width: auto; height: auto; }
     """
 
-    def __init__(self, factory: SpriteFactory, animate: bool = True, **kwargs: Any) -> None:
+    def __init__(self, factory: SpriteFactory, *, animate: bool = True, **kwargs: Unpack[WidgetOptions]) -> None:
+        """Render frame 0 of ``factory``; ``animate`` cycles the frames on a timer."""
         super().__init__(factory(0), **kwargs)
         self._factory = factory
         self._frame = 0
@@ -56,9 +62,9 @@ class SpriteView(Static):
         self.update(factory(self._frame))
 
 
-def plant_factory(category: str | None, mood: Mood, watering: bool = False) -> SpriteFactory:
+def plant_factory(category: str | None, mood: Mood, *, watering: bool = False) -> SpriteFactory:
     """Sprite factory for one plant, bound to its category, mood and watering state."""
-    return lambda frame: plant_sprite(category, mood, frame, watering)
+    return lambda frame: plant_sprite(category, mood, frame, watering=watering)
 
 
 class Banner(Static):
@@ -100,12 +106,14 @@ class ClusterCard(Vertical, can_focus=True):
         """Posted when the card is opened, so the dashboard can push the cluster screen."""
 
         def __init__(self, cluster_id: int) -> None:
+            """Carry the id of the cluster to open."""
             super().__init__()
             self.cluster_id = cluster_id
 
     BINDINGS: ClassVar[list[BindingType]] = [("enter", "select", "Open")]
 
-    def __init__(self, summary: ClusterSummary, **kwargs: Any) -> None:
+    def __init__(self, summary: ClusterSummary, **kwargs: Unpack[CardOptions]) -> None:
+        """Build the card for ``summary``; its DOM id derives from the cluster id."""
         super().__init__(id=f"cluster-card-{summary.id}", classes="cluster-card", **kwargs)
         self.summary = summary
 
@@ -119,7 +127,7 @@ class ClusterCard(Vertical, can_focus=True):
     def _sprite_factory(self) -> SpriteFactory:
         """The card sprite stands for the driest plant (it drives the call) in the cluster mood."""
         s = self.summary
-        return plant_factory(s.driest.category if s.driest else None, s.mood, s.watering)
+        return plant_factory(s.driest.category if s.driest else None, s.mood, watering=s.watering)
 
     def _info(self) -> RenderableType:
         """Card text, top to bottom: identity, mood, driest-plant gauge, air readings, watering state, next decision.
@@ -143,6 +151,14 @@ class ClusterCard(Vertical, can_focus=True):
         lines.append(
             f"🌡 {fmt.num(s.temperature, '°C')}  💧 {fmt.num(s.humidity, '%', 0)}  ☀ {fmt.num(s.light, 'lx', 0)}\n"
         )
+        self._append_watering(lines)
+        self._append_decision(lines)
+        lines.append(f"\nread {fmt.ago(s.newest_reading_at)}", style="dim")
+        return lines
+
+    def _append_watering(self, lines: Text) -> None:
+        """The watering-state line: running now, the last event, sensor-only, or never irrigated."""
+        s = self.summary
         if s.watering:
             lines.append("● watering now\n", style="bold #4fb3ff")
         elif s.last_event:
@@ -151,14 +167,15 @@ class ClusterCard(Vertical, can_focus=True):
             lines.append("sensor-only\n", style="dim")
         else:
             lines.append("never irrigated\n", style="dim")
-        decision = s.decision or {}
+
+    def _append_decision(self, lines: Text) -> None:
+        """The next decision's action (with its duration when it irrigates), when one is known."""
+        decision = self.summary.decision or {}
         if decision:
             lines.append("next: ")
             lines.append_text(fmt.styled(decision.get("action"), fmt.ACTION_STYLES))
             if decision.get("action") == "irrigate" and decision.get("duration_minutes"):
                 lines.append(f" {decision['duration_minutes']}m")
-        lines.append(f"\nread {fmt.ago(s.newest_reading_at)}", style="dim")
-        return lines
 
     def action_select(self) -> None:
         """Announce that this cluster was opened."""
@@ -174,21 +191,20 @@ class PlantTile(Vertical):
 
     def __init__(
         self,
-        species: str,
-        category: str | None,
-        moisture: float | None,
-        mood: Mood,
+        plant: PlantView,
+        *,
         watering: bool,
         band: tuple[float | None, float | None] = (None, None),
-        **kw: Any,
+        **kw: Unpack[TileOptions],
     ) -> None:
+        """Show ``plant``: species/category pick the sprite, its moisture and ``band`` fill the gauge."""
         super().__init__(classes="plant-tile", **kw)
-        self._args = (species, category, moisture, mood, watering, band)
+        self._args = (plant.species, plant.category, plant.moisture, plant.mood, watering, band)
 
     def compose(self) -> ComposeResult:
         """Stack the plant sprite above its species, mood, moisture and band gauge."""
         species, category, moisture, mood, watering, (lo, hi) = self._args
-        yield SpriteView(plant_factory(category, mood, watering))
+        yield SpriteView(plant_factory(category, mood, watering=watering))
         caption = Text.assemble((species[:18] + "\n", "bold"))
         caption.append(MOOD_LABELS[mood], style=MOOD_COLORS[mood])
         caption.append(f" {fmt.num(moisture, '%')}\n")
@@ -215,15 +231,7 @@ class MetricChart(PlotextPlot):
         label, unit = fmt.METRICS.get(metric, (metric, ""))
         plt.title(title or f"{label} ({unit}) — last {hours}h")
         reference = fmt.now()
-        plotted = False
-        for i, dataset in enumerate((payload or {}).get("datasets", [])):
-            points = dataset.get("points") or []
-            if not points:
-                continue
-            xs = [(ts - reference) / 3600 for ts, _ in points]
-            ys = [v for _, v in points]
-            plt.plot(xs, ys, label=dataset.get("sensor_name", "?"), marker="braille", color=SERIES_COLORS[i % 7])
-            plotted = True
+        plotted = self._plot_series((payload or {}).get("datasets", []), reference)
         threshold = (payload or {}).get("threshold") or {}
         for edge in ("min", "max"):
             if threshold.get(edge) is not None:
@@ -236,6 +244,19 @@ class MetricChart(PlotextPlot):
         if not plotted:
             plt.title(f"{label} — no readings in the last {hours}h")
         self.refresh()
+
+    def _plot_series(self, datasets: list[dict[str, Any]], reference: int) -> bool:
+        """Plot each sensor series against hours before ``reference``; whether any had points."""
+        plotted = False
+        for i, dataset in enumerate(datasets):
+            points = dataset.get("points") or []
+            if not points:
+                continue
+            xs = [(ts - reference) / 3600 for ts, _ in points]
+            ys = [v for _, v in points]
+            self.plt.plot(xs, ys, label=dataset.get("sensor_name", "?"), marker="braille", color=SERIES_COLORS[i % 7])
+            plotted = True
+        return plotted
 
     def show_overlay(self, payload: dict[str, Any] | None, hours: int) -> None:
         """Plot the normalised soil / humidity / light overlay (shared 0–100 axis)."""
@@ -367,6 +388,6 @@ def refill(table: DataTable[Any], rows: Iterable[tuple[str | None, Sequence[Rend
         return
     try:
         target = table.get_row_index(previous_key) if previous_key is not None else previous_row
-    except Exception:  # noqa: BLE001 — the record went away — stay at the same position
+    except RowDoesNotExist:  # the record went away — stay at the same position
         target = previous_row
     table.move_cursor(row=min(max(target, 0), table.row_count - 1))

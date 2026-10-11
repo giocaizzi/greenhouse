@@ -1,5 +1,7 @@
 """Temperature-based fallback when the cluster has no live sensor data."""
 
+from typing import Required, TypedDict, Unpack
+
 from greenhouse_core.constants import (
     CONFIDENCE_CONFIG_FALLBACK,
     CONFIDENCE_NO_DATA,
@@ -81,18 +83,24 @@ def _temperature_interval(temp: float, water_needs: str) -> int:
     return interval
 
 
+class FallbackContext(TypedDict, total=False):
+    """What the no-data fallback decides from (``trends`` / ``stress`` default to empty indicators)."""
+
+    temp: Required[float | None]
+    water_needs: Required[str]
+    config: Required[IrrigationConfig | None]
+    trends: Trends | None
+    stress: StressIndicators | None
+
+
 def temperature_based_decision(
     db: IrrigationRepository,
     cluster_id: int,
     evaluated_at: int,
-    *,
-    temp: float | None,
-    water_needs: str,
-    config: IrrigationConfig | None,
-    trends: Trends | None = None,
-    stress: StressIndicators | None = None,
+    **context: Unpack[FallbackContext],
 ) -> IrrigationDecision:
     """Build a typed decision when there is no usable sensor data."""
+    temp, water_needs, config = context["temp"], context["water_needs"], context["config"]
     base = IrrigationDecision(
         cluster_id=cluster_id,
         evaluated_at=evaluated_at,
@@ -100,8 +108,8 @@ def temperature_based_decision(
         duration_minutes=DEFAULT_DURATION_MINUTES,
         interval_hours=DEFAULT_INTERVAL_HOURS,
         confidence=CONFIDENCE_NO_DATA,
-        stress_indicators=stress or StressIndicators(),
-        trends=trends or Trends(),
+        stress_indicators=context.get("stress") or StressIndicators(),
+        trends=context.get("trends") or Trends(),
     )
 
     if temp is None:

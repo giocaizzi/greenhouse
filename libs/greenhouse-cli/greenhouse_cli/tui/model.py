@@ -122,7 +122,7 @@ def _driest(plants: list[PlantView]) -> PlantView | None:
     """The plant with the lowest moisture ("driest plant drives the call"); the first plant when none has data."""
     with_data = [p for p in plants if p.moisture is not None]
     if with_data:
-        return min(with_data, key=lambda p: cast(float, p.moisture))
+        return min(with_data, key=lambda p: cast("float", p.moisture))
     return plants[0] if plants else None
 
 

@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
-from textual.app import ComposeResult
 from textual.binding import Binding, BindingType
 from textual.containers import Horizontal, VerticalScroll
 from textual.widgets import Footer, Header, Static
@@ -15,6 +14,9 @@ from greenhouse_cli.tui import render, resources
 from greenhouse_cli.tui.screens.base import DataScreen
 from greenhouse_cli.tui.table import DataTable
 from greenhouse_cli.tui.widgets import KeyValue, refill, selected_key
+
+if TYPE_CHECKING:
+    from textual.app import ComposeResult
 
 
 class SettingsScreen(DataScreen):
@@ -30,6 +32,7 @@ class SettingsScreen(DataScreen):
     ]
 
     def __init__(self) -> None:
+        """Start empty; the preferences, global config and vacations arrive on load."""
         super().__init__()
         self.prefs: dict[str, Any] = {}
         self.global_config: dict[str, Any] = {}
@@ -113,7 +116,7 @@ class SettingsScreen(DataScreen):
             resources.vacation_fields(tz=self.prefs.get("timezone")),
             lambda v: lambda c: c.add_vacation(**v),
             "Vacation window added",
-            "Add",
+            submit_label="Add",
         )
 
     def action_edit_vacation(self) -> None:

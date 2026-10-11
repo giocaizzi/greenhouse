@@ -7,10 +7,10 @@ from typing import TYPE_CHECKING, Any
 from rich.text import Text
 
 from greenhouse_cli.tui import formatting as fmt
-from greenhouse_cli.tui.render._rows import Row
 
 if TYPE_CHECKING:
     from greenhouse_cli.tui.model import ClusterSummary
+    from greenhouse_cli.tui.render._rows import Row
 
 _GOOD_EFFICACY_SCORE = 0.5  # efficacy scores from here up render green
 

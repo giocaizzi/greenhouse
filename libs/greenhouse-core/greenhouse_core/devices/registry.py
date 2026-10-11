@@ -20,10 +20,13 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable, Mapping
+from typing import TYPE_CHECKING
 
 from greenhouse_core.devices.irrigators.base import AbstractIrrigatorAdapter
 from greenhouse_core.devices.sensors.base import AbstractSensorAdapter
-from greenhouse_core.models import Irrigator, Sensor
+
+if TYPE_CHECKING:
+    from greenhouse_core.models import Irrigator, Sensor
 
 logger = logging.getLogger(__name__)
 
@@ -31,8 +34,12 @@ IrrigatorFactory = Callable[[], AbstractIrrigatorAdapter]
 SensorFactory = Callable[[], AbstractSensorAdapter]
 
 
-class UnknownDeviceModel(Exception):
+class UnknownDeviceModelError(Exception):
     """Raised when an irrigator references a model not in the registry."""
+
+
+# The established public name (pinned in the import surface); both names are the same class.
+UnknownDeviceModel = UnknownDeviceModelError
 
 
 class DeviceRegistry:
@@ -45,6 +52,7 @@ class DeviceRegistry:
     """
 
     def __init__(self) -> None:
+        """Start with no model keys registered."""
         self._irrigators: dict[str, IrrigatorFactory] = {}
         self._sensors: dict[str, SensorFactory] = {}
 
@@ -66,7 +74,7 @@ class DeviceRegistry:
         if factory is None:
             msg = f"No adapter registered for irrigator type {irrigator.type!r} (known: {_known(self._irrigators)})"
             logger.error("%s; irrigator %s will not be actuated", msg, irrigator.id)
-            raise UnknownDeviceModel(msg)
+            raise UnknownDeviceModelError(msg)
         return factory()
 
     def get_sensor(self, sensor: Sensor) -> AbstractSensorAdapter | None:

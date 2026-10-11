@@ -22,8 +22,7 @@ from __future__ import annotations
 import logging
 import os
 import time
-from collections.abc import Callable
-from typing import Any, Protocol, TypedDict
+from typing import TYPE_CHECKING, Any, Protocol, TypedDict
 
 import tinytuya
 
@@ -31,9 +30,44 @@ from greenhouse_core.constants import SENSOR_LOG_MAX_PAGES, SENSOR_LOG_PAGE_SIZE
 from greenhouse_core.devices.datapoints import DATAPOINT_PARSERS, group_logs_by_timestamp
 from greenhouse_core.models import Irrigator, parse_device_config
 
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
 logger = logging.getLogger(__name__)
 
 LOCAL_TIMEOUT = 5
+
+
+class MissingCloudCredentialsError(ValueError):
+    """The Tuya Cloud client id or secret is configured nowhere (arguments or ``TUYA_*`` env vars)."""
+
+    def __init__(self) -> None:
+        """Name the two settings that must be provided."""
+        super().__init__("Missing TUYA_CLIENT_ID or TUYA_CLIENT_SECRET")
+
+
+class CloudApiError(RuntimeError):
+    """The Tuya Cloud answered a status read with ``success`` false."""
+
+    def __init__(self, result: object) -> None:
+        """Carry the Cloud's full answer in the message."""
+        super().__init__(f"Cloud API error: {result}")
+
+
+class MissingDeviceIpError(ConnectionError):
+    """An irrigator's ``config`` has no ``device_ip``, so it cannot be reached over the LAN."""
+
+    def __init__(self, device_id: str) -> None:
+        """Name the device whose config lacks the IP."""
+        super().__init__(f"No device_ip in config for irrigator {device_id}.")
+
+
+class MissingLocalKeyError(ConnectionError):
+    """No ``local_key`` could be resolved for a device (config, cache or Cloud lookup)."""
+
+    def __init__(self, device_id: str) -> None:
+        """Name the device whose key is unknown."""
+        super().__init__(f"Could not find local key for device {device_id}")
 
 
 class _CloudDevice(TypedDict, total=False):
@@ -153,12 +187,13 @@ class DeviceGateway:
         raw: _TuyaCloudClient | None = None,
         on_key_discovered: Callable[[str, str], None] | None = None,
     ) -> None:
+        """Resolve the Cloud credentials (arguments, else ``TUYA_*`` env vars); ``raw`` injects a client."""
         self.client_id = client_id or os.environ.get("TUYA_CLIENT_ID", "")
         self.client_secret = client_secret or os.environ.get("TUYA_CLIENT_SECRET", "")
         self.region = region or os.environ.get("TUYA_REGION", "eu")
 
         if not self.client_id or not self.client_secret:
-            raise ValueError("Missing TUYA_CLIENT_ID or TUYA_CLIENT_SECRET")
+            raise MissingCloudCredentialsError
 
         # ``raw`` lets callers inject an already-constructed client so the whole
         # app shares one token; omitted, we build the single owned instance.
@@ -198,7 +233,7 @@ class DeviceGateway:
         result: dict[str, Any] | None = None
         try:
             result = self._cloud.cloudrequest(f"/v2.0/cloud/thing/{device_id}/shadow/properties")
-        except Exception:
+        except Exception:  # noqa: BLE001 — any v2.0 shadow failure takes the v1.0 fallback below (invariant 8)
             result = None
 
         if result is not None and result.get("success"):
@@ -208,7 +243,7 @@ class DeviceGateway:
         # this device. Pay the second call only here, not on empty-but-ok reads.
         result = self._cloud.getstatus(device_id)
         if not result.get("success"):
-            raise RuntimeError(f"Cloud API error: {result}")
+            raise CloudApiError(result)
         return _parse_datapoints(result.get("result", []), device_id)
 
     def get_device_logs(
@@ -335,11 +370,11 @@ class DeviceGateway:
         config = parse_device_config(irrigator.config)
         local_ip = config.get("device_ip")
         if not local_ip:
-            raise ConnectionError(f"No device_ip in config for irrigator {irrigator.tuya_device_id}.")
+            raise MissingDeviceIpError(irrigator.tuya_device_id)
 
         local_key = self.resolve_local_key(irrigator.tuya_device_id, config)
         if not local_key:
-            raise ConnectionError(f"Could not find local key for device {irrigator.tuya_device_id}")
+            raise MissingLocalKeyError(irrigator.tuya_device_id)
 
         device = tinytuya.OutletDevice(irrigator.tuya_device_id, local_ip, local_key)
         device.set_version(protocol_version)

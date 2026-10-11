@@ -165,7 +165,7 @@ class IrrigatorResponse(IrrigatorBase):
 
     @field_validator("config", mode="before")
     @classmethod
-    def parse_config(cls, v: Any) -> Any:
+    def parse_config(cls, v: object) -> object:
         """Decode the stored device config (JSON text or dict) leniently and mask its local key."""
         return mask_local_key(_parse_json_config(v))
 
@@ -241,7 +241,7 @@ class SensorResponse(SensorBase):
 
     @field_validator("config", mode="before")
     @classmethod
-    def parse_config(cls, v: Any) -> Any:
+    def parse_config(cls, v: object) -> object:
         """Decode the stored device config (JSON text or dict) leniently and mask its local key."""
         return mask_local_key(_parse_json_config(v))
 

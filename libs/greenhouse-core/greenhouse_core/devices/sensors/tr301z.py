@@ -9,12 +9,15 @@ reading rather than a live Cloud read, so the slow health poll costs no quota.
 from __future__ import annotations
 
 import time
+from typing import TYPE_CHECKING
 
 from greenhouse_core.devices.gateway import DATAPOINT_PARSERS, DeviceGateway
 from greenhouse_core.devices.health import DeviceHealthState, HealthAlarm
 from greenhouse_core.devices.profile import SensorProfile, load_profile_json
 from greenhouse_core.devices.sensors.tuya_generic import TuyaSensorAdapter
-from greenhouse_core.models import Sensor, SensorReading
+
+if TYPE_CHECKING:
+    from greenhouse_core.models import Sensor, SensorReading
 
 # Battery-state enum buckets reported by the TR-301Z firmware. Adapters
 # never read project-wide thresholds — they convert the device's coarse
@@ -56,7 +59,8 @@ class TR301ZAdapter(TuyaSensorAdapter):
         }
     )
 
-    def __init__(self, gateway: DeviceGateway, profile: SensorProfile | None = None):
+    def __init__(self, gateway: DeviceGateway, profile: SensorProfile | None = None) -> None:
+        """Bind to ``gateway``, with the bundled TR301Z profile unless one is given."""
         super().__init__(profile or TR301Z_PROFILE, gateway)
 
     def read_health(self, sensor: Sensor, latest: SensorReading | None = None) -> DeviceHealthState:
@@ -74,6 +78,7 @@ class TR301ZAdapter(TuyaSensorAdapter):
         :attr:`HealthAlarm.DEVICE_OFFLINE` from staleness (``OFFLINE_AFTER_MINUTES``)
         without any device round-trip. A missing row reads as offline.
         """
+        del sensor  # everything needed is on the persisted row
         now = int(time.time())
         if latest is None:
             return DeviceHealthState(
@@ -103,4 +108,4 @@ class TR301ZAdapter(TuyaSensorAdapter):
         )
 
 
-__all__ = ["TR301ZAdapter", "TR301Z_PROFILE"]
+__all__ = ["TR301Z_PROFILE", "TR301ZAdapter"]

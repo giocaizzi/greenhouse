@@ -10,9 +10,8 @@ from __future__ import annotations
 import asyncio
 import re
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
-from textual.app import ComposeResult
 from textual.binding import Binding, BindingType
 from textual.containers import Horizontal, HorizontalScroll, Vertical, VerticalScroll
 from textual.widgets import Footer, Header, Static, TabbedContent, TabPane
@@ -27,6 +26,9 @@ from greenhouse_cli.tui.screens.modals import ConfirmScreen, IrrigateScreen, Wat
 from greenhouse_cli.tui.sprites import watering_can_sprite
 from greenhouse_cli.tui.table import DataTable
 from greenhouse_cli.tui.widgets import Heatmap, KeyValue, MetricChart, PlantTile, SpriteView, refill, selected_key
+
+if TYPE_CHECKING:
+    from textual.app import ComposeResult
 
 METRIC_ORDER = ["soil_moisture", "temperature", "env_humidity", "light", "overlay"]
 RANGES = [6, 24, 72, 168, 720]
@@ -59,6 +61,7 @@ class ClusterScreen(DataScreen):
     ]
 
     def __init__(self, cluster_id: int) -> None:
+        """Show cluster ``cluster_id``; the payloads arrive on the first load."""
         super().__init__()
         self.cluster_id = cluster_id
         self.summary: ClusterSummary | None = None
@@ -74,53 +77,73 @@ class ClusterScreen(DataScreen):
         """Build the tab tree; its order is the focus order and matches the ``app.tcss`` selectors."""
         yield Header(show_clock=True)
         with TabbedContent(id="cluster-tabs"):
-            with TabPane("Overview", id="tab-overview"), VerticalScroll():
-                yield HorizontalScroll(id="garden")
-                with Horizontal(id="overview-panels"):
-                    with Vertical(id="irrigator-panel", classes="panel"):
-                        yield SpriteView(lambda f: watering_can_sprite(False, f), id="can")
-                        yield Static(id="irrigator-info")
-                    yield Static(id="decision-panel", classes="panel")
-                    yield KeyValue(id="forecast-panel", classes="panel")
-            with TabPane("Charts", id="tab-charts"), Vertical():
-                yield Static(id="chart-hint", classes="hint")
-                yield MetricChart(id="metric-chart")
-                yield Heatmap(id="heatmap")
-            with TabPane("Plants", id="tab-plants"), Vertical():
-                yield Static(
-                    "[dim]n add · u edit · del delete · M move to cluster · P refresh care data from plant DB · "
-                    "m health ↔ moisture chart[/dim]",
-                    classes="hint",
-                )
-                yield DataTable(id="plants-table", cursor_type="row", zebra_stripes=True)
-                yield MetricChart(id="plant-chart")
-            with TabPane("Sensors", id="tab-sensors"), Vertical():
-                yield Static("[dim]n add · u edit · del delete[/dim]", classes="hint")
-                yield DataTable(id="sensors-table", cursor_type="row", zebra_stripes=True)
-            with TabPane("Insights", id="tab-insights"), VerticalScroll():
-                yield Static("[dim]E export stats CSV · learning report runs on open[/dim]", classes="hint")
-                with Horizontal(id="insights-row"):
-                    yield Static(id="insights-panel", classes="panel")
-                    yield KeyValue(id="stats-panel", classes="panel")
-                yield Static("[b]Irrigation efficacy (14 days)[/b]", classes="hint")
-                yield DataTable(id="efficacy-table", cursor_type="row", zebra_stripes=True)
-                yield Static(id="learn-panel", classes="panel")
-            with TabPane("Decisions", id="tab-decisions"):
-                yield DataTable(id="decisions-table", cursor_type="row", zebra_stripes=True)
-            with TabPane("History", id="tab-history"), Vertical():
-                yield Static("[dim]L log a manual watering[/dim]", classes="hint")
-                yield DataTable(id="history-table", cursor_type="row", zebra_stripes=True)
-            with TabPane("Windows", id="tab-windows"), Vertical():
-                yield Static(
-                    "[dim]Irrigation windows gate automatic runs. None = all hours allowed (subject to quiet "
-                    "hours).  n add · u edit · del delete[/dim]",
-                    classes="hint",
-                )
-                yield DataTable(id="windows-table", cursor_type="row", zebra_stripes=True)
-            with TabPane("Config", id="tab-config"), VerticalScroll():
-                yield Static("[dim]u edit config · e edit cluster · D delete cluster[/dim]", classes="hint")
-                yield KeyValue(id="config-panel", classes="panel")
+            yield from self._overview_pane()
+            yield from self._charts_pane()
+            yield from self._inventory_panes()
+            yield from self._insights_pane()
+            yield from self._log_panes()
         yield Footer()
+
+    def _overview_pane(self) -> ComposeResult:
+        """The Overview tab: plant garden, irrigator / decision / forecast panels."""
+        with TabPane("Overview", id="tab-overview"), VerticalScroll():
+            yield HorizontalScroll(id="garden")
+            with Horizontal(id="overview-panels"):
+                with Vertical(id="irrigator-panel", classes="panel"):
+                    yield SpriteView(lambda f: watering_can_sprite(pouring=False, frame=f), id="can")
+                    yield Static(id="irrigator-info")
+                yield Static(id="decision-panel", classes="panel")
+                yield KeyValue(id="forecast-panel", classes="panel")
+
+    def _charts_pane(self) -> ComposeResult:
+        """The Charts tab: metric chart and heatmap."""
+        with TabPane("Charts", id="tab-charts"), Vertical():
+            yield Static(id="chart-hint", classes="hint")
+            yield MetricChart(id="metric-chart")
+            yield Heatmap(id="heatmap")
+
+    def _inventory_panes(self) -> ComposeResult:
+        """The Plants and Sensors tabs: their tables (plus the per-plant chart)."""
+        with TabPane("Plants", id="tab-plants"), Vertical():
+            yield Static(
+                "[dim]n add · u edit · del delete · M move to cluster · P refresh care data from plant DB · "
+                "m health ↔ moisture chart[/dim]",
+                classes="hint",
+            )
+            yield DataTable(id="plants-table", cursor_type="row", zebra_stripes=True)
+            yield MetricChart(id="plant-chart")
+        with TabPane("Sensors", id="tab-sensors"), Vertical():
+            yield Static("[dim]n add · u edit · del delete[/dim]", classes="hint")
+            yield DataTable(id="sensors-table", cursor_type="row", zebra_stripes=True)
+
+    def _insights_pane(self) -> ComposeResult:
+        """The Insights tab: learning insights, stats and irrigation efficacy."""
+        with TabPane("Insights", id="tab-insights"), VerticalScroll():
+            yield Static("[dim]E export stats CSV · learning report runs on open[/dim]", classes="hint")
+            with Horizontal(id="insights-row"):
+                yield Static(id="insights-panel", classes="panel")
+                yield KeyValue(id="stats-panel", classes="panel")
+            yield Static("[b]Irrigation efficacy (14 days)[/b]", classes="hint")
+            yield DataTable(id="efficacy-table", cursor_type="row", zebra_stripes=True)
+            yield Static(id="learn-panel", classes="panel")
+
+    def _log_panes(self) -> ComposeResult:
+        """The Decisions, History, Windows and Config tabs."""
+        with TabPane("Decisions", id="tab-decisions"):
+            yield DataTable(id="decisions-table", cursor_type="row", zebra_stripes=True)
+        with TabPane("History", id="tab-history"), Vertical():
+            yield Static("[dim]L log a manual watering[/dim]", classes="hint")
+            yield DataTable(id="history-table", cursor_type="row", zebra_stripes=True)
+        with TabPane("Windows", id="tab-windows"), Vertical():
+            yield Static(
+                "[dim]Irrigation windows gate automatic runs. None = all hours allowed (subject to quiet "
+                "hours).  n add · u edit · del delete[/dim]",
+                classes="hint",
+            )
+            yield DataTable(id="windows-table", cursor_type="row", zebra_stripes=True)
+        with TabPane("Config", id="tab-config"), VerticalScroll():
+            yield Static("[dim]u edit config · e edit cluster · D delete cluster[/dim]", classes="hint")
+            yield KeyValue(id="config-panel", classes="panel")
 
     def on_mount(self) -> None:
         """Declare every table's columns once; loads only refill rows."""
@@ -187,15 +210,7 @@ class ClusterScreen(DataScreen):
         await garden.remove_children()
         if s.plants:
             await garden.mount_all(
-                PlantTile(
-                    p.species,
-                    p.category,
-                    p.moisture,
-                    p.mood,
-                    s.watering,
-                    (s.band_min, s.band_max),
-                    id=f"plant-tile-{p.id}",
-                )
+                PlantTile(p, watering=s.watering, band=(s.band_min, s.band_max), id=f"plant-tile-{p.id}")
                 for p in s.plants
             )
         else:
@@ -203,7 +218,7 @@ class ClusterScreen(DataScreen):
                 Static("No plants in this cluster yet — open the Plants tab and press n.", classes="hint")
             )
 
-        self.query_one("#can", SpriteView).set_factory(lambda f: watering_can_sprite(s.watering, f))
+        self.query_one("#can", SpriteView).set_factory(lambda f: watering_can_sprite(pouring=s.watering, frame=f))
         self.query_one("#irrigator-info", Static).update(render.irrigator_info(s))
         self.query_one("#decision-panel", Static).update(render.decision_panel(status.get("decision") or {}))
 
@@ -404,7 +419,7 @@ class ClusterScreen(DataScreen):
             [Field("minutes", "Minutes", "int", required=True), Field("notes", "Notes")],
             lambda v: lambda c: c.log_manual(irrigator_id, v["minutes"], v["notes"]),
             "Manual watering logged",
-            "Log",
+            submit_label="Log",
             note="Records an event you did by hand (feeds cooldown + learning). Nothing is actuated.",
         )
 
@@ -431,7 +446,7 @@ class ClusterScreen(DataScreen):
             resources.plant_fields(),
             lambda v: lambda c: c.add_plant(cid, **v),
             lambda r: f"Added {r.get('species')}",
-            "Add",
+            submit_label="Add",
             note="Blank care fields stay blank — press P afterwards to fill them from the plant DB.",
         )
 
@@ -443,7 +458,7 @@ class ClusterScreen(DataScreen):
             resources.sensor_fields(None, self.status.get("plants", [])),
             lambda v: lambda c: c.add_sensor(cid, **v),
             lambda r: f"Added sensor {r.get('name')}",
-            "Add",
+            submit_label="Add",
         )
 
     def _new_window(self) -> None:
@@ -458,7 +473,7 @@ class ClusterScreen(DataScreen):
                 )
             ),
             "Window added",
-            "Add",
+            submit_label="Add",
         )
 
     def _attach_irrigator(self) -> None:
@@ -472,7 +487,7 @@ class ClusterScreen(DataScreen):
             resources.irrigator_fields(),
             lambda v: lambda c: c.add_irrigator(cid, **v),
             lambda r: f"Attached {r.get('name')}",
-            "Attach",
+            submit_label="Attach",
         )
 
     def action_edit(self) -> None:
@@ -638,11 +653,14 @@ class ClusterScreen(DataScreen):
             [Field("target_cluster_id", "Target cluster", "select", None, options, required=True)],
             lambda v: lambda c: c.move_plant(plant["id"], v["target_cluster_id"]),
             "Plant moved",
-            "Move",
+            submit_label="Move",
         )
 
     def action_plant_sync(self) -> None:
-        """Refresh this cluster's plant care data from the curated plant DB, after confirmation (it rewrites care data)."""
+        """Refresh this cluster's plant care data from the curated plant DB, after confirmation.
+
+        Confirmation is asked because the sync rewrites the plants' care data.
+        """
         self.confirm_then(
             "Sync this cluster's plants with the plant DB?\nTheir care data is updated from it.",
             lambda c: c.sync_plants(cluster_id=self.cluster_id),
@@ -665,7 +683,7 @@ class ClusterScreen(DataScreen):
         """Delete the cluster with everything in it, then return to the dashboard."""
         name = self.summary.name if self.summary else f"#{self.cluster_id}"
 
-        def _after(ok: bool | None) -> None:
+        def _after(ok: bool | None) -> None:  # noqa: FBT001 — Textual passes the dismiss result positionally
             if ok:
                 self.run_worker(self._delete_cluster(), group="act")
 

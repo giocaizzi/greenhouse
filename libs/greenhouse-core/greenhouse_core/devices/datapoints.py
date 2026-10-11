@@ -9,8 +9,10 @@ historical import path.
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 _BOOL_DP_TEXT = {"true": True, "1": True, "false": False, "0": False}
 

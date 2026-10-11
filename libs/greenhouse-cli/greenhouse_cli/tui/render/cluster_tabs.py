@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from rich.text import Text
 
 from greenhouse_cli.tui import formatting as fmt
-from greenhouse_cli.tui.render._rows import Row
+
+if TYPE_CHECKING:
+    from greenhouse_cli.tui.render._rows import Row
 
 
 def plant_rows(plants: list[dict[str, Any]]) -> list[Row]:

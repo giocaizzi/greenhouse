@@ -55,6 +55,7 @@ def cluster_update(
 @cluster_app.command("delete")
 def cluster_delete(
     ctx: typer.Context,
+    *,
     cluster_id: ClusterArg,
     yes: YesOpt = False,
 ) -> None:

@@ -9,13 +9,13 @@ from typing import TYPE_CHECKING
 from greenhouse_core.constants import NIGHT_LUX_THRESHOLD, SENSOR_READING_STALE_SECONDS
 from greenhouse_core.logic.cleaning import clean_readings
 from greenhouse_core.logic.decision import PerSensorSnapshot, SensorSnapshot
-from greenhouse_core.repository import IrrigationRepository
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from greenhouse_core.logic.cleaning import CleanedReading
     from greenhouse_core.models import Sensor
+    from greenhouse_core.repository import IrrigationRepository
 
 
 def _mean_or_none(values: Sequence[float]) -> float | None:

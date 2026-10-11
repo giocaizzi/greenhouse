@@ -1,6 +1,7 @@
 """Plant database lookup - Evidence-based plant care data."""
 
 import copy
+import functools
 import json
 import os
 from importlib.resources import files
@@ -26,7 +27,8 @@ PLANT_DB_PATH = (
 class PlantDatabase:
     """Lookup plant care requirements from scientific literature."""
 
-    def __init__(self, db_path: Path | None = None):
+    def __init__(self, db_path: Path | None = None) -> None:
+        """Load the curated database from ``db_path`` (default: the bundled JSON)."""
         self.db_path = db_path or PLANT_DB_PATH
         self._data = self._load_database()
 
@@ -155,19 +157,13 @@ class PlantDatabase:
         return metadata
 
 
-# Convenience singleton
-_db_instance: PlantDatabase | None = None
-
-
+# Convenience singleton: built on first use, dropped by ``reset_plant_database``.
+@functools.cache
 def get_plant_database() -> PlantDatabase:
     """Get singleton plant database instance."""
-    global _db_instance
-    if _db_instance is None:
-        _db_instance = PlantDatabase()
-    return _db_instance
+    return PlantDatabase()
 
 
 def reset_plant_database() -> None:
     """Reset the singleton instance (for testing)."""
-    global _db_instance
-    _db_instance = None
+    get_plant_database.cache_clear()

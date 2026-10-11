@@ -63,7 +63,7 @@ def _span(seconds: int) -> str:
     return f"{seconds // SECONDS_PER_DAY}d{(seconds % SECONDS_PER_DAY) // SECONDS_PER_HOUR}h"
 
 
-def ago(ts: int | float | None, reference: int | None = None) -> str:
+def ago(ts: float | None, reference: int | None = None) -> str:
     """Render a Unix timestamp as a compact relative age (``5m ago`` / ``in 2h00m``)."""
     if not ts:
         return "never"
@@ -71,7 +71,7 @@ def ago(ts: int | float | None, reference: int | None = None) -> str:
     return f"in {_span(-delta)}" if delta < 0 else f"{_span(delta)} ago"
 
 
-def age(seconds: int | float | None) -> str:
+def age(seconds: float | None) -> str:
     """Render an age already expressed in seconds (``None`` → ``—``)."""
     if seconds is None:
         return "—"
@@ -88,7 +88,7 @@ def zone(name: str | None) -> tzinfo:
         return UTC
 
 
-def clock(ts: int | float | None, with_date: bool = False, *, tz: str | None = None) -> str:
+def clock(ts: float | None, *, with_date: bool = False, tz: str | None = None) -> str:
     """Wall-clock time for a Unix timestamp — local, or in the zone ``tz`` when given (vacations)."""
     if not ts:
         return "—"
@@ -96,7 +96,7 @@ def clock(ts: int | float | None, with_date: bool = False, *, tz: str | None = N
     return datetime.fromtimestamp(ts, zone(tz) if tz is not None else None).strftime(fmt)
 
 
-def num(value: float | int | None, unit: str = "", digits: int = 1) -> str:
+def num(value: float | None, unit: str = "", digits: int = 1) -> str:
     """Number plus unit, ``—`` for ``None``; ints and ``digits=0`` are rounded to whole numbers."""
     if value is None:
         return "—"

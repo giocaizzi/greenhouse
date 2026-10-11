@@ -2,15 +2,17 @@
 
 from __future__ import annotations
 
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
-from textual.app import ComposeResult
-from textual.binding import BindingType
 from textual.containers import Grid, Horizontal, Vertical
 from textual.screen import ModalScreen
 from textual.widgets import Button, Checkbox, Input, Label, Static
 
 from greenhouse_cli.tui.sprites import watering_can_sprite
+
+if TYPE_CHECKING:
+    from textual.app import ComposeResult
+    from textual.binding import BindingType
 
 
 class ConfirmScreen(ModalScreen[bool]):
@@ -28,7 +30,8 @@ class ConfirmScreen(ModalScreen[bool]):
         ("n", "dismiss(False)", "No"),
     ]
 
-    def __init__(self, message: str, confirm_label: str = "Confirm", danger: bool = True) -> None:
+    def __init__(self, message: str, confirm_label: str = "Confirm", *, danger: bool = True) -> None:
+        """Ask ``message``; ``danger`` styles the confirm button as destructive."""
         super().__init__()
         self.message = message
         self.confirm_label = confirm_label
@@ -57,6 +60,7 @@ class IrrigateScreen(ModalScreen[dict[str, Any] | None]):
     BINDINGS: ClassVar[list[BindingType]] = [("escape", "dismiss(None)", "Cancel")]
 
     def __init__(self, cluster_name: str) -> None:
+        """Collect the irrigation options for cluster ``cluster_name``."""
         super().__init__()
         self.cluster_name = cluster_name
 
@@ -98,6 +102,7 @@ class WaterNowScreen(ModalScreen[int | None]):
     BINDINGS: ClassVar[list[BindingType]] = [("escape", "dismiss(None)", "Cancel")]
 
     def __init__(self, irrigator_name: str) -> None:
+        """Ask for the run time of irrigator ``irrigator_name``."""
         super().__init__()
         self.irrigator_name = irrigator_name
 
@@ -140,6 +145,7 @@ class LoginScreen(ModalScreen[tuple[str, str] | None]):
     BINDINGS: ClassVar[list[BindingType]] = [("escape", "dismiss(None)", "Cancel")]
 
     def __init__(self, server: str, error: str | None = None) -> None:
+        """Prompt for credentials on ``server``, showing the previous ``error`` if any."""
         super().__init__()
         self.server = server
         self.error = error

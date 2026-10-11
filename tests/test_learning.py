@@ -1,8 +1,10 @@
 """Test suite for irrigation learning engine."""
 
 import time
+from datetime import UTC, datetime
 
 import pytest
+import time_machine
 
 from fake_data import (
     FAKE_CLUSTER_NAME,
@@ -14,6 +16,7 @@ from fake_data import (
     FAKE_SENSOR_NAME,
 )
 from greenhouse_core.learning import IrrigationLearner
+from greenhouse_core.learning.clock import light_month
 from greenhouse_core.plant_db import get_plant_database
 
 
@@ -627,6 +630,53 @@ class TestIssueHeuristics:
 
         alerts = detect_conflicts(self.db, self.learner.plant_db, self.cluster_id, profiles, self._care_map())
         assert "unresolvable_conflict" not in [a.alert_type for a in alerts]
+
+    # ── light season clock (preferences timezone, like the engine) ─────────
+
+    # 23:30 UTC on 31 January is already 1 February in Rome (UTC+1).
+    MONTH_BOUNDARY = datetime(2026, 1, 31, 23, 30, tzinfo=UTC)
+    JANUARY, FEBRUARY = 1, 2
+
+    def test_light_month_follows_the_preferences_timezone(self):
+        """The learning light season reads the month in the preferences timezone (default UTC)."""
+        with time_machine.travel(self.MONTH_BOUNDARY, tick=False):
+            self.db.update_preferences(timezone="Europe/Rome")
+            assert light_month(self.db) == self.FEBRUARY
+            self.db.update_preferences(timezone="UTC")
+            assert light_month(self.db) == self.JANUARY
+
+    def test_drainage_and_low_light_use_the_local_month(self, monkeypatch):
+        """Both light heuristics scale their thresholds with the local month, not the UTC one."""
+        factor_months: list[int | None] = []
+        threshold_months: list[int | None] = []
+
+        def factor(month=None):
+            factor_months.append(month)
+            return 1.0
+
+        def threshold(base, month=None):
+            threshold_months.append(month)
+            return float(base)
+
+        monkeypatch.setattr("greenhouse_core.learning.issues.seasonal_light_factor", factor)
+        monkeypatch.setattr("greenhouse_core.learning.issues.effective_light_threshold", threshold)
+        with time_machine.travel(self.MONTH_BOUNDARY, tick=False):
+            self.db.update_preferences(timezone="Europe/Rome")
+            now = int(time.time())
+            _plant2, sensor2 = self._add_second_sensor()  # two profiles reach detect_conflicts (low_light)
+            self._build_profile(self.sensor_id, self.irrigator_id, now - 7 * 86400)
+            self._build_profile(sensor2, self.irrigator_id, now - 7 * 86400)
+            for h in range(10):  # rapid drainage (~-7 %/hr) in dim daytime light
+                self.db.add_sensor_reading(
+                    sensor_id=self.sensor_id, timestamp=now - h * 3600 - 60, soil_moisture=50.0 + h * 7, light=40
+                )
+            self._seed_recent_moisture(both=(self.sensor_id, sensor2), moisture=50.0, now=now)
+            self.learner.detect_issues(self.cluster_id)
+
+        assert factor_months
+        assert set(factor_months) == {self.FEBRUARY}
+        assert threshold_months
+        assert set(threshold_months) == {self.FEBRUARY}
 
     # ── low_light ───────────────────────────────────────────────────────────
 

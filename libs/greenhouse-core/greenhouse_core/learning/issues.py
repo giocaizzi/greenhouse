@@ -26,18 +26,19 @@ from greenhouse_core.constants import (
     LIGHT_BRIGHT,
     LOW_LIGHT_ALERT_FRACTION,
 )
+from greenhouse_core.learning.clock import light_month
 from greenhouse_core.learning.models import Alert, PlantProfile
 from greenhouse_core.learning.profiling import get_plant_profile
 from greenhouse_core.logic.cleaning import clean_readings, clean_readings_desc
 from greenhouse_core.logic.plant_needs import moisture_target_range
-from greenhouse_core.plant_db import PlantDatabase
-from greenhouse_core.repository import IrrigationRepository
 from greenhouse_core.utils import daytime_lux_readings, effective_light_threshold, seasonal_light_factor
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from greenhouse_core.models import Plant, Sensor
+    from greenhouse_core.plant_db import PlantDatabase
+    from greenhouse_core.repository import IrrigationRepository
 
     _SensorReading = tuple[Sensor, float, float]  # sensor, current moisture, band edge
 
@@ -76,7 +77,7 @@ def _drainage_alert(db: IrrigationRepository, sensor: Sensor, profile: PlantProf
     lux_readings = daytime_lux_readings(recent_readings)
     avg_lux = statistics.mean(lux_readings) if lux_readings else None
 
-    bright_threshold = LIGHT_BRIGHT * seasonal_light_factor()
+    bright_threshold = LIGHT_BRIGHT * seasonal_light_factor(light_month(db))
     if avg_lux is not None and avg_lux > bright_threshold:
         return Alert(
             severity="warning",
@@ -317,7 +318,7 @@ def _low_light_alerts(
         if len(lux_vals) < LEARNING_MIN_ENV_SAMPLES:
             continue
         avg_lux_7d = statistics.mean(lux_vals)
-        seasonal_min_lux = effective_light_threshold(min_lux)  # adjusted for current month
+        seasonal_min_lux = effective_light_threshold(min_lux, light_month(db))  # adjusted for the local month
         if avg_lux_7d < seasonal_min_lux * LOW_LIGHT_ALERT_FRACTION:
             alerts.append(
                 Alert(

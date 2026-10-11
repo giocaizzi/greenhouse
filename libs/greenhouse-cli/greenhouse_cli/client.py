@@ -5,7 +5,7 @@ import os
 from collections.abc import Mapping
 from http import HTTPStatus
 from pathlib import Path
-from typing import Any, Self, cast
+from typing import Any, Self, TypedDict, Unpack, cast
 from urllib.parse import quote
 
 import httpx
@@ -83,7 +83,7 @@ def clear_stored_token() -> bool:
 _LOC_SOURCES = frozenset({"body", "query", "path", "header", "cookie"})
 
 
-def _format_detail(detail: Any) -> str:
+def _format_detail(detail: object) -> str:
     """Render an error ``detail`` for humans; a 422 validation list becomes ``field: message; …``.
 
     FastAPI answers a validation failure with a list of ``{"loc": [...], "msg": ...}``
@@ -125,10 +125,39 @@ def _decode_json(resp: httpx.Response) -> JSONObject | list[Any]:
     return data
 
 
+class WindowPatch(TypedDict, total=False):
+    """Fields ``update_window`` may change (``None`` or absent = keep the current value)."""
+
+    start_hour: int | None
+    end_hour: int | None
+    weekday_mask: int | None
+    label: str | None
+
+
+class _TransportOption(TypedDict, total=False):
+    """The httpx ``transport`` an ``IrrigationClient`` passes through when one is given (tests mock it)."""
+
+    transport: httpx.BaseTransport | None
+
+
+class ClientOptions(_TransportOption, total=False):
+    """Extra ``IrrigationClient`` settings: request ``headers`` and an httpx ``transport``."""
+
+    headers: Mapping[str, str] | None
+
+
+class RequestOptions(TypedDict, total=False):
+    """The httpx request settings the endpoint helpers use: query ``params`` and a JSON body."""
+
+    params: Mapping[str, Any]
+    json: object
+
+
 class ServerError(Exception):
     """Raised when the server returns an error response."""
 
     def __init__(self, status_code: int, detail: str) -> None:
+        """Keep the HTTP status (0 for transport failures) and the server's detail text."""
         self.status_code = status_code
         self.detail = detail
         super().__init__(f"Server error {status_code}: {detail}")
@@ -137,23 +166,29 @@ class ServerError(Exception):
 class IrrigationClient:
     """Thin HTTP client wrapping the greenhouse REST API."""
 
-    def __init__(self, base_url: str = DEFAULT_SERVER_URL, token: str | None = None, **kwargs: Any) -> None:
+    def __init__(
+        self, base_url: str = DEFAULT_SERVER_URL, token: str | None = None, **kwargs: Unpack[ClientOptions]
+    ) -> None:
         """Build the HTTP session; ``token=None`` falls back to the stored token, ``""`` sends no bearer header."""
-        headers = dict(kwargs.pop("headers", {}) or {})
+        headers = dict(kwargs.get("headers") or {})
         resolved = token if token is not None else load_stored_token()
         if resolved:
             headers["Authorization"] = f"Bearer {resolved}"
-        self.http = httpx.Client(base_url=base_url, timeout=30.0, headers=headers, **kwargs)
+        # Forward ``transport`` only when given: an explicit None would differ from httpx's own default.
+        extras: _TransportOption = {"transport": kwargs["transport"]} if "transport" in kwargs else {}
+        self.http = httpx.Client(base_url=base_url, timeout=30.0, headers=headers, **extras)
 
     # Context manager only, no public close(): every public method maps to one /api/v1 endpoint (tests enforce it).
     # CLI commands close the client per call; the TUI keeps one client per session and closes ``http`` on exit.
     def __enter__(self) -> Self:
+        """Use the client as a context manager that closes its connection pool."""
         return self
 
     def __exit__(self, *exc_info: object) -> None:
+        """Close the underlying httpx connection pool."""
         self.http.close()
 
-    def _send(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
+    def _send(self, method: str, path: str, **kwargs: Unpack[RequestOptions]) -> httpx.Response:
         """Send one request; HTTP >= 400 and transport failures raise :class:`ServerError`.
 
         A refused connection, a timeout or any other transport error is status 0
@@ -171,12 +206,12 @@ class IrrigationClient:
         if resp.status_code >= HTTPStatus.BAD_REQUEST:
             try:
                 detail = resp.json().get("detail", resp.text)
-            except Exception:  # noqa: BLE001
+            except (ValueError, AttributeError):  # not JSON, or JSON that is not an object
                 detail = resp.text
             raise ServerError(resp.status_code, _format_detail(detail))
         return resp
 
-    def _request(self, method: str, path: str, **kwargs: Any) -> JSONObject | list[Any]:
+    def _request(self, method: str, path: str, **kwargs: Unpack[RequestOptions]) -> JSONObject | list[Any]:
         """Send one request and decode it; a CSV body comes back as ``{"csv": text}``.
 
         Besides :meth:`_send`'s errors, a 2xx body that is empty or not JSON is a
@@ -187,13 +222,13 @@ class IrrigationClient:
             return {"csv": resp.text}
         return _decode_json(resp)
 
-    def _object(self, method: str, path: str, **kwargs: Any) -> JSONObject:
+    def _object(self, method: str, path: str, **kwargs: Unpack[RequestOptions]) -> JSONObject:
         """Send a request whose endpoint answers with a JSON object."""
-        return cast(JSONObject, self._request(method, path, **kwargs))
+        return cast("JSONObject", self._request(method, path, **kwargs))
 
-    def _array(self, method: str, path: str, **kwargs: Any) -> list[JSONObject]:
+    def _array(self, method: str, path: str, **kwargs: Unpack[RequestOptions]) -> list[JSONObject]:
         """Send a request whose endpoint answers with a JSON array of objects."""
-        return cast(list[JSONObject], self._request(method, path, **kwargs))
+        return cast("list[JSONObject]", self._request(method, path, **kwargs))
 
     # ── Auth ──
 
@@ -228,7 +263,7 @@ class IrrigationClient:
         """Fetch a cluster with its child resources inlined (``GET /clusters/{id}/detail``)."""
         return self._object("GET", f"/api/v1/clusters/{cluster_id}/detail")
 
-    def update_cluster(self, cluster_id: int, **kwargs: Any) -> JSONObject:
+    def update_cluster(self, cluster_id: int, **kwargs: object) -> JSONObject:
         """Patch a cluster; ``None`` fields are left unchanged (``PUT /clusters/{id}``)."""
         body = _drop_none(kwargs)
         return self._object("PUT", f"/api/v1/clusters/{cluster_id}", json=body)
@@ -239,7 +274,7 @@ class IrrigationClient:
 
     # ── Plants ──
 
-    def add_plant(self, cluster_id: int, **kwargs: Any) -> JSONObject:
+    def add_plant(self, cluster_id: int, **kwargs: object) -> JSONObject:
         """Add a plant to a cluster; fields are sent as given (``POST /clusters/{id}/plants``)."""
         return self._object("POST", f"/api/v1/clusters/{cluster_id}/plants", json=kwargs)
 
@@ -247,7 +282,7 @@ class IrrigationClient:
         """List a cluster's plants (``GET /clusters/{id}/plants``)."""
         return self._array("GET", f"/api/v1/clusters/{cluster_id}/plants")
 
-    def update_plant(self, cluster_id: int, plant_id: int, **kwargs: Any) -> JSONObject:
+    def update_plant(self, cluster_id: int, plant_id: int, **kwargs: object) -> JSONObject:
         """Patch a plant; ``None`` fields are left unchanged (``PUT /clusters/{id}/plants/{plant_id}``)."""
         body = _drop_none(kwargs)
         return self._object("PUT", f"/api/v1/clusters/{cluster_id}/plants/{plant_id}", json=body)
@@ -272,7 +307,7 @@ class IrrigationClient:
         """List every irrigator (``GET /irrigators``)."""
         return self._array("GET", "/api/v1/irrigators")
 
-    def add_irrigator(self, cluster_id: int, **kwargs: Any) -> JSONObject:
+    def add_irrigator(self, cluster_id: int, **kwargs: object) -> JSONObject:
         """Attach an irrigator to a cluster; ``None`` fields are omitted (``POST /clusters/{id}/irrigator``)."""
         body = _drop_none(kwargs)
         return self._object("POST", f"/api/v1/clusters/{cluster_id}/irrigator", json=body)
@@ -281,7 +316,7 @@ class IrrigationClient:
         """Fetch a cluster's irrigator (``GET /clusters/{id}/irrigator``)."""
         return self._object("GET", f"/api/v1/clusters/{cluster_id}/irrigator")
 
-    def update_irrigator(self, cluster_id: int, **kwargs: Any) -> JSONObject:
+    def update_irrigator(self, cluster_id: int, **kwargs: object) -> JSONObject:
         """Patch a cluster's irrigator; ``None`` fields are left unchanged (``PUT /clusters/{id}/irrigator``)."""
         body = _drop_none(kwargs)
         return self._object("PUT", f"/api/v1/clusters/{cluster_id}/irrigator", json=body)
@@ -306,7 +341,7 @@ class IrrigationClient:
 
     # ── Sensors ──
 
-    def add_sensor(self, cluster_id: int, **kwargs: Any) -> JSONObject:
+    def add_sensor(self, cluster_id: int, **kwargs: object) -> JSONObject:
         """Add a sensor to a cluster; fields are sent as given (``POST /clusters/{id}/sensors``)."""
         return self._object("POST", f"/api/v1/clusters/{cluster_id}/sensors", json=kwargs)
 
@@ -314,7 +349,7 @@ class IrrigationClient:
         """List a cluster's sensors (``GET /clusters/{id}/sensors``)."""
         return self._array("GET", f"/api/v1/clusters/{cluster_id}/sensors")
 
-    def update_sensor(self, cluster_id: int, sensor_id: int, **kwargs: Any) -> JSONObject:
+    def update_sensor(self, cluster_id: int, sensor_id: int, **kwargs: object) -> JSONObject:
         """Patch a sensor; ``None`` fields are left unchanged (``PUT /clusters/{id}/sensors/{sensor_id}``)."""
         body = _drop_none(kwargs)
         return self._object("PUT", f"/api/v1/clusters/{cluster_id}/sensors/{sensor_id}", json=body)
@@ -325,7 +360,7 @@ class IrrigationClient:
 
     # ── Config ──
 
-    def set_config(self, cluster_id: int, **kwargs: Any) -> JSONObject:
+    def set_config(self, cluster_id: int, **kwargs: object) -> JSONObject:
         """Patch a cluster's irrigation config; ``None`` fields are left unchanged (``PUT /clusters/{id}/config``)."""
         body = _drop_none(kwargs)
         return self._object("PUT", f"/api/v1/clusters/{cluster_id}/config", json=body)
@@ -342,7 +377,7 @@ class IrrigationClient:
         """Fetch the global irrigation defaults (``GET /config/global``)."""
         return self._object("GET", "/api/v1/config/global")
 
-    def update_global_config(self, **kwargs: Any) -> JSONObject:
+    def update_global_config(self, **kwargs: object) -> JSONObject:
         """Patch the global defaults; ``None`` fields are left unchanged (``PUT /config/global``)."""
         body = _drop_none(kwargs)
         return self._object("PUT", "/api/v1/config/global", json=body)
@@ -356,6 +391,7 @@ class IrrigationClient:
     def irrigate(
         self,
         cluster_id: int,
+        *,
         temp_override: float | None = None,
         dry_run: bool = False,
         no_sync: bool = False,
@@ -440,7 +476,7 @@ class IrrigationClient:
         """Fetch a cluster's next-watering forecast (``GET /clusters/{id}/forecast``)."""
         return self._object("GET", f"/api/v1/clusters/{cluster_id}/forecast")
 
-    def list_activity(self, limit: int = 100, before: int | None = None, **filters: Any) -> JSONObject:
+    def list_activity(self, limit: int = 100, before: int | None = None, **filters: str | int | None) -> JSONObject:
         """Page through the activity log; ``None`` filters are omitted (``GET /activity``)."""
         params: dict[str, int | str] = {"limit": limit}
         if before is not None:
@@ -540,7 +576,7 @@ class IrrigationClient:
         """Fetch the user preferences (``GET /preferences``)."""
         return self._object("GET", "/api/v1/preferences")
 
-    def update_preferences(self, **kwargs: Any) -> JSONObject:
+    def update_preferences(self, **kwargs: object) -> JSONObject:
         """Patch the preferences; ``None`` fields are left unchanged (``PUT /preferences``)."""
         body = _drop_none(kwargs)
         return self._object("PUT", "/api/v1/preferences", json=body)
@@ -610,15 +646,10 @@ class IrrigationClient:
         self,
         cluster_id: int,
         window_id: int,
-        start_hour: int | None = None,
-        end_hour: int | None = None,
-        weekday_mask: int | None = None,
-        label: str | None = None,
+        **patch: Unpack[WindowPatch],
     ) -> JSONObject:
         """Patch an irrigation window; ``None`` fields are left unchanged (``PUT .../windows/{window_id}``)."""
-        body = _drop_none(
-            {"start_hour": start_hour, "end_hour": end_hour, "weekday_mask": weekday_mask, "label": label}
-        )
+        body = _drop_none({key: patch.get(key) for key in ("start_hour", "end_hour", "weekday_mask", "label")})
         return self._object("PUT", f"/api/v1/clusters/{cluster_id}/windows/{window_id}", json=body)
 
     def delete_window(self, cluster_id: int, window_id: int) -> JSONObject:

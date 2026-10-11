@@ -18,12 +18,15 @@ from __future__ import annotations
 
 import logging
 import time
+from typing import TYPE_CHECKING
 
-from greenhouse_core.devices.gateway import DeviceGateway
 from greenhouse_core.devices.health import DeviceHealthState, HealthAlarm
 from greenhouse_core.devices.irrigators.tuya_generic import TuyaIrrigatorAdapter
 from greenhouse_core.devices.profile import IrrigatorProfile, load_profile_json
-from greenhouse_core.models import Irrigator
+
+if TYPE_CHECKING:
+    from greenhouse_core.devices.gateway import DeviceGateway
+    from greenhouse_core.models import Irrigator
 
 logger = logging.getLogger(__name__)
 
@@ -46,21 +49,24 @@ def alarm_indicates_no_water(value: object, bitmask: int = 0x01) -> bool:
     negatives, which appear to be rare in practice but argue for adding a
     hardware float switch as a belt-and-suspenders independent safeguard.
     """
-    if value is None:
-        return False
     if isinstance(value, bool):
         return value
     if isinstance(value, int):
         return bool(value & bitmask)
     if isinstance(value, str):
-        text = value.strip()
-        if not text:
-            return False
-        try:
-            return bool(int(text) & bitmask)
-        except ValueError:
-            return False
-    return False
+        return _numeric_text_alarm(value, bitmask)
+    return False  # None and unrecognised types: "unknown" is never "dry"
+
+
+def _numeric_text_alarm(value: str, bitmask: int) -> bool:
+    """A DP value sent as text: decoded as an int bitmap; blank or non-numeric text is no fault."""
+    text = value.strip()
+    if not text:
+        return False
+    try:
+        return bool(int(text) & bitmask)
+    except ValueError:
+        return False
 
 
 def _load_profile() -> IrrigatorProfile:
@@ -92,7 +98,8 @@ class IK10PWAdapter(TuyaIrrigatorAdapter):
 
     health_capabilities = frozenset({HealthAlarm.NO_WATER, HealthAlarm.DEVICE_OFFLINE})
 
-    def __init__(self, gateway: DeviceGateway, profile: IrrigatorProfile | None = None):
+    def __init__(self, gateway: DeviceGateway, profile: IrrigatorProfile | None = None) -> None:
+        """Bind to ``gateway``, with the bundled IK10PW profile unless one is given."""
         super().__init__(profile or IK10PW_PROFILE, gateway)
 
     # ── Cycle start ───────────────────────────────────────────────────────
@@ -106,11 +113,12 @@ class IK10PWAdapter(TuyaIrrigatorAdapter):
         try:
             device = self._gateway.open_local(irrigator, self.profile.protocol_version)
             result = device.set_value(self.profile.dp("duration"), seconds)
-            if result and result.get("Error"):
-                return False, f"Local API error: {result}"
-            return True, f"Duration set to {seconds}s"
-        except Exception as e:
+            refused = bool(result and result.get("Error"))
+        except Exception as e:  # noqa: BLE001 — any local failure becomes the (False, reason) device result
             return False, f"Local connection failed: {e}"
+        if refused:
+            return False, f"Local API error: {result}"
+        return True, f"Duration set to {seconds}s"
 
     def start(self, irrigator: Irrigator, minutes: int | None = None) -> tuple[bool, str]:
         """Start irrigation with optional duration.
@@ -172,7 +180,7 @@ class IK10PWAdapter(TuyaIrrigatorAdapter):
         try:
             device = self._gateway.open_local(irrigator, self.profile.protocol_version)
             status = device.status()
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 — any local failure reads as offline, never raises to the monitor
             return DeviceHealthState(
                 observed_at=now,
                 offline=True,
@@ -200,4 +208,4 @@ class IK10PWAdapter(TuyaIrrigatorAdapter):
         )
 
 
-__all__ = ["IK10PW_ALARM_DP", "IK10PWAdapter", "IK10PW_PROFILE", "alarm_indicates_no_water"]
+__all__ = ["IK10PW_ALARM_DP", "IK10PW_PROFILE", "IK10PWAdapter", "alarm_indicates_no_water"]

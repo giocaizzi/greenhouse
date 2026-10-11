@@ -12,12 +12,15 @@ Per-model adapters describe their DP codes in the profile JSON and override
 from __future__ import annotations
 
 import time
+from typing import TYPE_CHECKING
 
-from greenhouse_core.devices.gateway import DeviceGateway
 from greenhouse_core.devices.health import DeviceHealthState
-from greenhouse_core.devices.profile import SensorProfile
 from greenhouse_core.devices.sensors.base import AbstractSensorAdapter
-from greenhouse_core.models import Sensor, SensorReading
+
+if TYPE_CHECKING:
+    from greenhouse_core.devices.gateway import DeviceGateway
+    from greenhouse_core.devices.profile import SensorProfile
+    from greenhouse_core.models import Sensor, SensorReading
 
 
 class TuyaSensorAdapter(AbstractSensorAdapter):
@@ -27,7 +30,8 @@ class TuyaSensorAdapter(AbstractSensorAdapter):
     only records which DP codes the model reports.
     """
 
-    def __init__(self, profile: SensorProfile, gateway: DeviceGateway):
+    def __init__(self, profile: SensorProfile, gateway: DeviceGateway) -> None:
+        """Bind the model ``profile`` to the shared device ``gateway``."""
         self.profile = profile
         self._gateway = gateway
 
@@ -37,6 +41,7 @@ class TuyaSensorAdapter(AbstractSensorAdapter):
         Subclasses with battery / water-warning DPs override this to derive
         health from the latest persisted reading.
         """
+        del sensor, latest  # no health DPs on the generic model: the snapshot is always clean
         return DeviceHealthState(
             observed_at=int(time.time()),
             alarms=frozenset(),

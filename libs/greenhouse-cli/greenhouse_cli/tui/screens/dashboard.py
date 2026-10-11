@@ -4,9 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import ClassVar
+from typing import TYPE_CHECKING, ClassVar
 
-from textual.app import ComposeResult
 from textual.binding import Binding, BindingType
 from textual.containers import Grid, VerticalScroll
 from textual.css.query import NoMatches
@@ -15,7 +14,11 @@ from textual.widgets import Footer, Header, Static
 from greenhouse_cli.tui import resources
 from greenhouse_cli.tui.model import ClusterSummary, summarize
 from greenhouse_cli.tui.screens.base import DataScreen
+from greenhouse_cli.tui.screens.cluster import ClusterScreen
 from greenhouse_cli.tui.widgets import Banner, ClusterCard
+
+if TYPE_CHECKING:
+    from textual.app import ComposeResult
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +55,7 @@ class DashboardScreen(DataScreen):
         yield Footer()
 
     def __init__(self) -> None:
+        """Create the lock that serialises card-grid rebuilds."""
         super().__init__()
         # One card-grid rebuild at a time (S4): an auto-refresh that overtakes a slow
         # load must not interleave remove/mount with it (DuplicateIds / NoMatches).
@@ -118,8 +122,6 @@ class DashboardScreen(DataScreen):
 
     def on_cluster_card_selected(self, message: ClusterCard.Selected) -> None:
         """Open the selected cluster's detail screen."""
-        from greenhouse_cli.tui.screens.cluster import ClusterScreen
-
         self.app.push_screen(ClusterScreen(message.cluster_id))
 
     def action_new_cluster(self) -> None:
@@ -129,7 +131,7 @@ class DashboardScreen(DataScreen):
             resources.cluster_fields(),
             lambda v: lambda c: c.create_cluster(v["name"], v["location"], v["environment"]),
             lambda r: f"Created {r.get('name')} — open it and add plants with n",
-            "Create",
+            submit_label="Create",
         )
 
     def action_sync(self) -> None:

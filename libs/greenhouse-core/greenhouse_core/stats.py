@@ -7,7 +7,7 @@ from collections import defaultdict
 from typing import TYPE_CHECKING, TypedDict
 
 from greenhouse_core.constants import SECONDS_PER_DAY
-from greenhouse_core.repository import IrrigationRepository
+from greenhouse_core.repository import IrrigationRepository  # noqa: TC001 — pinned in golden imports.json
 
 if TYPE_CHECKING:
     from greenhouse_core.models import IrrigationEvent

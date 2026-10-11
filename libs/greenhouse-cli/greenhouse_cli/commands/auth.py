@@ -28,6 +28,7 @@ def _login_client(ctx: typer.Context) -> IrrigationClient:
 
 def login(
     ctx: typer.Context,
+    *,
     username: Annotated[str, typer.Option(prompt=True, help="Username")],
     password: Annotated[
         str,
