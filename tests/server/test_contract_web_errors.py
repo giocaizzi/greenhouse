@@ -85,22 +85,21 @@ def test_session_cookie_name_is_the_one_the_garbage_case_uses(app_real_auth):
     assert app_real_auth.state.settings.auth_cookie_name == "greenhouse_session"
 
 
-def test_json_401_current_behavior_drops_www_authenticate(web_env, anon, make_client):
-    """Pins current (buggy) behavior: the JSON 401 lacks ``WWW-Authenticate`` — see REFACTOR_NOTES.md.
+def test_json_401_carries_www_authenticate(web_env, anon, make_client):
+    """The JSON 401 carries ``WWW-Authenticate: Bearer`` (RFC 9110 §11.6.1).
 
     ``AuthError`` (``greenhouse_server/auth.py``) and ``require_mcp_token`` (``app.py``) both set
-    ``WWW-Authenticate: Bearer``, but the global ``HTTPException`` handler's JSON branch
-    (``web/exception_handlers.py:41-44``) rebuilds the response from ``detail`` + status only and
-    drops ``exc.headers``. RFC 9110 §11.6.1 requires the header on a 401.
+    the header; the global ``HTTPException`` handler's JSON branch keeps ``exc.headers``
+    (it used to drop them).
     """
     api = anon.get("/api/v1/clusters")
     assert api.status_code == 401
     assert api.json() == {"detail": "Not authenticated"}
-    assert "www-authenticate" not in api.headers
+    assert api.headers["www-authenticate"] == "Bearer"
 
     bad_bearer = anon.get("/api/v1/clusters", headers={"Authorization": "Bearer not-a-jwt"})
     assert bad_bearer.status_code == 401
-    assert "www-authenticate" not in bad_bearer.headers
+    assert bad_bearer.headers["www-authenticate"] == "Bearer"
 
     _, mcp_client = make_client(bypass_auth=False, mcp_token="contract-mcp-token")
     mcp = mcp_client.post(
@@ -110,7 +109,7 @@ def test_json_401_current_behavior_drops_www_authenticate(web_env, anon, make_cl
     )
     assert mcp.status_code == 401
     assert mcp.json() == {"detail": "Invalid MCP token"}
-    assert "www-authenticate" not in mcp.headers
+    assert mcp.headers["www-authenticate"] == "Bearer"
 
 
 def test_unknown_path_current_behavior_returns_json_404_to_browsers(seeded_get_client):

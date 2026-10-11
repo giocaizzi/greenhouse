@@ -44,7 +44,9 @@ def register_web_exception_handlers(app: FastAPI) -> None:
         if isinstance(exc, _RedirectAuthError):
             return render_login_redirect(exc, request)
         if not _is_html_request(request):
-            return JSONResponse({"detail": exc.detail}, status_code=exc.status_code)
+            # Keep exc.headers: a 401 must carry ``WWW-Authenticate`` (RFC 9110 §11.6.1),
+            # which AuthError and the MCP gate set and bearer clients rely on.
+            return JSONResponse({"detail": exc.detail}, status_code=exc.status_code, headers=exc.headers)
         return templates.TemplateResponse(
             request,
             _error_template(request),

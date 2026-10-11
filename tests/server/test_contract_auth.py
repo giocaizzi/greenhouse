@@ -7,9 +7,8 @@ attributes, bootstrap) plus the MCP bearer gate (503 unset, 401 missing/wrong).
 
 Argon2 hashes used for exact comparisons are generated with a fixed salt so the
 tests are deterministic; JWTs are compared by decoded claims, never verbatim.
-Two observed quirks are pinned as current behavior (see the report):
-``verify_password`` raises on a truncated hash, and the JSON error handler drops
-the ``WWW-Authenticate`` header that ``AuthError`` / the MCP gate set.
+One observed quirk is pinned as current behavior (see the report):
+``verify_password`` raises on a truncated hash.
 """
 
 from __future__ import annotations
@@ -354,12 +353,9 @@ def test_inactive_user_is_rejected(real):
     assert (login.status_code, login.json()) == (401, {"detail": "Invalid username or password"})
 
 
-def test_api_401_current_behavior_drops_www_authenticate_header(real):
-    """Pins current (buggy) behavior: the JSON error handler drops ``exc.headers`` — see REFACTOR_NOTES.md.
-
-    ``AuthError``, the login 401 and the MCP gate all set ``WWW-Authenticate: Bearer``
-    but ``web/exception_handlers.py`` rebuilds a bare ``JSONResponse``, so the
-    client never receives it.
+def test_api_401_carries_www_authenticate_header(real):
+    """``AuthError``, the login 401 and the MCP gate all set ``WWW-Authenticate: Bearer``, and the
+    JSON error handler in ``web/exception_handlers.py`` passes ``exc.headers`` through.
     """
     client, _ = real
     responses = [
@@ -368,7 +364,7 @@ def test_api_401_current_behavior_drops_www_authenticate_header(real):
         client.get("/mcp"),
     ]
     assert [r.status_code for r in responses] == [401, 401, 401]
-    assert [r.headers.get("www-authenticate") for r in responses] == [None, None, None]
+    assert [r.headers.get("www-authenticate") for r in responses] == ["Bearer", "Bearer", "Bearer"]
 
 
 def test_secret_unset_bearer_is_503_but_no_credentials_is_401(clean_env):
