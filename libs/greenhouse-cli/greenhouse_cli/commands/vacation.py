@@ -47,6 +47,7 @@ def vacation_add(  # noqa: D417 — `ctx` is Typer plumbing; documenting it woul
 def vacation_update(  # noqa: PLR0913 — one parameter per CLI option/argument: Typer has no option groups
     ctx: typer.Context,
     window_id: Annotated[int, typer.Argument(help="Vacation window ID")],
+    *,
     starts_at: Annotated[int | None, typer.Option("--starts-at", help="New start (Unix seconds)")] = None,
     ends_at: Annotated[int | None, typer.Option("--ends-at", help="New end (Unix seconds)")] = None,
     email: Annotated[str | None, typer.Option(help="New contact email")] = None,

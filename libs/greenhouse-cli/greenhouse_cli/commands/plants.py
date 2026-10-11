@@ -19,6 +19,7 @@ NumberOpt = Annotated[float | None, typer.Option()]
 def plant_add(  # noqa: PLR0913 — one parameter per CLI option/argument: Typer has no option groups
     ctx: typer.Context,
     species: Annotated[str, typer.Argument(help="Species name")],
+    *,
     cluster: ClusterOpt,
     category: TextOpt = None,
     water_needs: LevelOpt = None,
@@ -92,6 +93,7 @@ def plant_move(
 def plant_update(  # noqa: PLR0913 — one parameter per CLI option/argument: Typer has no option groups
     ctx: typer.Context,
     plant_id: Annotated[int, typer.Argument(help="Plant ID")],
+    *,
     cluster: Annotated[int, typer.Option(help="Cluster the plant belongs to")],
     species: TextOpt = None,
     category: TextOpt = None,

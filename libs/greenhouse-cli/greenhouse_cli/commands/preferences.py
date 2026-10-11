@@ -20,6 +20,7 @@ def prefs_get(ctx: typer.Context) -> None:
 @prefs_app.command("set")
 def prefs_set(  # noqa: PLR0913 — one parameter per CLI option/argument: Typer has no option groups
     ctx: typer.Context,
+    *,
     units: Annotated[str | None, typer.Option(help="metric or imperial")] = None,
     timezone: Annotated[str | None, typer.Option(help="IANA timezone name")] = None,
     theme: Annotated[str | None, typer.Option(help="light / dark / auto")] = None,

@@ -13,6 +13,7 @@ sensor_app = typer.Typer(help="Manage sensors", no_args_is_help=True, cls=HelpOn
 @sensor_app.command("add")
 def sensor_add(  # noqa: PLR0913 — one parameter per CLI option/argument: Typer has no option groups
     ctx: typer.Context,
+    *,
     cluster: ClusterOpt,
     device_id: Annotated[str, typer.Option(help="Tuya device ID")],
     name: Annotated[str, typer.Option(help="Sensor name")],
@@ -45,6 +46,7 @@ def sensor_list(
 def sensor_update(  # noqa: PLR0913 — one parameter per CLI option/argument: Typer has no option groups
     ctx: typer.Context,
     id: Annotated[int, typer.Argument(help="Sensor ID")],  # noqa: A002 — the Python name is the click parameter name (tests/golden/cli/params.json)
+    *,
     cluster: Annotated[int, typer.Option(help="Cluster the sensor belongs to")],
     name: Annotated[str | None, typer.Option(help="New sensor name")] = None,
     type: Annotated[str | None, typer.Option(help="Device model key (tuya.tr301z)")] = None,  # noqa: A002 — the Python name is the click parameter name (tests/golden/cli/params.json)
