@@ -7,6 +7,7 @@ or ``read_health`` for firmware-specific recipes.
 
 from __future__ import annotations
 
+import logging
 import time
 from typing import Any
 
@@ -15,6 +16,8 @@ from greenhouse_core.devices.health import DeviceHealthState
 from greenhouse_core.devices.irrigators.base import AbstractIrrigatorAdapter
 from greenhouse_core.devices.profile import IrrigatorProfile
 from greenhouse_core.models import Irrigator
+
+logger = logging.getLogger(__name__)
 
 
 class TuyaIrrigatorAdapter(AbstractIrrigatorAdapter):
@@ -75,7 +78,8 @@ class TuyaIrrigatorAdapter(AbstractIrrigatorAdapter):
                             out[self._status_key(key)] = dps.get(str(self.profile.dp(key)))
                     return out
             except Exception:
-                pass  # fall back to cloud
+                # Expected when the device is off the LAN: the Cloud read below is the documented fallback.
+                logger.debug("Local status read failed for %s; using Cloud", irrigator.tuya_device_id, exc_info=True)
 
         result = self._gateway.get_status(irrigator.tuya_device_id)
         if not result.get("success"):

@@ -142,8 +142,9 @@ def _store_history(db: IrrigationRepository, sensor: Sensor, grouped: list[dict[
 def _store_live_reading(db: IrrigationRepository, cloud: DeviceGateway, sensor: Sensor) -> bool:
     """Persist the sensor's current state at now; ``True`` when a new row was stored.
 
-    The single live read is best-effort: any error is swallowed and counts as
-    "not saved", so a flaky live endpoint never fails the backfill above.
+    The single live read is best-effort: any error is logged (WARNING, with the
+    traceback) and counts as "not saved", so a flaky live endpoint never fails
+    the backfill above.
     """
     saved = False
     try:
@@ -162,6 +163,6 @@ def _store_live_reading(db: IrrigationRepository, cloud: DeviceGateway, sensor: 
             )
             if result is not None:
                 saved = True
-    except Exception:  # noqa: BLE001, S110 — the live read is best-effort by contract (invariant 8)
-        pass  # Live reading is best-effort
+    except Exception:  # the live read is best-effort by contract (invariant 8)
+        logger.warning("  %s: live read failed", sensor.name, exc_info=True)
     return saved

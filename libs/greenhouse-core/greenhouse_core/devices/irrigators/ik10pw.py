@@ -173,7 +173,7 @@ class IK10PWAdapter(TuyaIrrigatorAdapter):
             try:
                 self.off(irrigator)
             except Exception:
-                pass
+                logger.warning("SIGTERM OFF failed for %s", irrigator.tuya_device_id, exc_info=True)
             raise SystemExit(128 + signum)
 
         prev_handler = signal.signal(signal.SIGTERM, _sigterm_cleanup)
@@ -186,7 +186,8 @@ class IK10PWAdapter(TuyaIrrigatorAdapter):
                     try:
                         self.on(irrigator)
                     except Exception:
-                        pass
+                        # Best-effort: the next pulse retries; a missed pulse only risks an early firmware auto-off.
+                        logger.warning("Keep-alive ON pulse failed for %s", irrigator.tuya_device_id, exc_info=True)
         except (SystemExit, KeyboardInterrupt):
             interrupted = True
         finally:
@@ -194,7 +195,10 @@ class IK10PWAdapter(TuyaIrrigatorAdapter):
             try:
                 self.off(irrigator)
             except Exception:
-                pass
+                logger.exception(
+                    "Keep-alive final OFF failed for %s; the firmware auto-off bounds the run",
+                    irrigator.tuya_device_id,
+                )
 
         if interrupted:
             return (

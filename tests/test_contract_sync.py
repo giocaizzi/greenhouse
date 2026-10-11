@@ -278,13 +278,17 @@ class TestLiveRead:
             }
         ]
 
-    def test_live_error_is_swallowed(self, one_sensor):
+    def test_live_error_is_logged_and_not_raised(self, one_sensor, caplog):
         db, sensor = one_sensor
         gw = FakeGateway(
             logs={"dev_a": [_log(FROZEN_TS - 60, "soil_moisture", 31.0)]},
             live={"dev_a": RuntimeError("Cloud API error")},
         )
-        assert sync_single_sensor(db, gw, sensor, 24) == (1, 1, 0)
+        with caplog.at_level(logging.WARNING, logger="greenhouse_core.sync"):
+            assert sync_single_sensor(db, gw, sensor, 24) == (1, 1, 0)
+        assert [(r.levelname, r.getMessage(), r.exc_info is not None) for r in caplog.records] == [
+            ("WARNING", "  Probe A: live read failed", True)
+        ]
 
     def test_live_row_colliding_with_a_log_row_at_now_is_not_counted(self, one_sensor):
         db, sensor = one_sensor

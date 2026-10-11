@@ -768,6 +768,17 @@ def _scenarios():
     }
 
 
+def test_local_status_failure_is_logged_before_cloud_fallback(harness, caplog):
+    """The local-read failure behind the Cloud fallback leaves a DEBUG trace (no silent swallow)."""
+    harness.local_status_error = OSError("reset by peer")
+    harness.cloud.set("getstatus", {"success": True, "result": []})
+    with caplog.at_level(logging.DEBUG, logger="greenhouse_core.devices.irrigators.tuya_generic"):
+        assert IK10PWAdapter(harness.gateway).status(_irrigator()) == {"source": "cloud"}
+    assert [(r.levelname, r.getMessage(), r.exc_info is not None) for r in caplog.records] == [
+        ("DEBUG", f"Local status read failed for {FAKE_DEVICE_ID}; using Cloud", True)
+    ]
+
+
 def test_adapter_call_sequences_golden(monkeypatch, frozen_clock):
     """Every non-keep-alive adapter path: return value and the exact local/Cloud call log."""
     out = {}
@@ -964,13 +975,18 @@ class TestKeepAliveMainThread:
         assert harness.log == [("cloud.sendcommand", FAKE_DEVICE_ID, SWITCH_ON)]
         assert signal.getsignal(signal.SIGTERM) is before
 
-    def test_keepalive_and_final_off_errors_are_swallowed(self, harness, fake_sleep):
+    def test_keepalive_and_final_off_errors_are_logged_not_raised(self, harness, fake_sleep, caplog):
         harness.cloud.set(
             "sendcommand", Seq({"success": True}, ConnectionError("blip"), {"success": True}, ConnectionError("down"))
         )
-        result = IK10PWAdapter(harness.gateway)._start_keepalive(_irrigator(), 1)
+        with caplog.at_level(logging.DEBUG, logger="greenhouse_core.devices.irrigators.ik10pw"):
+            result = IK10PWAdapter(harness.gateway)._start_keepalive(_irrigator(), 1)
         assert result == (True, "Irrigation completed for 1 min [keep-alive mode]")
         assert [c[2] for c in harness.log] == [SWITCH_ON, SWITCH_ON, SWITCH_ON, SWITCH_OFF]
+        assert [(r.levelname, r.getMessage(), r.exc_info is not None) for r in caplog.records] == [
+            ("WARNING", f"Keep-alive ON pulse failed for {FAKE_DEVICE_ID}", True),
+            ("ERROR", f"Keep-alive final OFF failed for {FAKE_DEVICE_ID}; the firmware auto-off bounds the run", True),
+        ]
 
     def test_zero_minutes_still_switches_on_then_off(self, harness, fake_sleep):
         result = _keepalive_ok_harness(harness)._start_keepalive(_irrigator(), 0)
