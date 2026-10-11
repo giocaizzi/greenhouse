@@ -915,7 +915,8 @@ def test_emergency_triggers_obey_the_vacation_budget(tmp_db, frozen_clock):
 
 
 def test_water_warning_reads_only_the_newest_reading_per_sensor(tmp_db, frozen_clock):
-    """An old ``water_warning=True`` followed by a newer ``False`` (or unflagged) reading does not trigger."""
+    """The newest reading that carries ``water_warning`` decides: an old True followed by a newer False does not
+    trigger, and a newer row without the flag changes nothing."""
     cid = tmp_db.add_cluster("Warn")
     tmp_db.add_plant(cluster_id=cid, species="Monstera deliciosa", category="tropical")
     sid = tmp_db.add_sensor(cluster_id=cid, tuya_device_id=FAKE_SENSOR_ID, name="S", sensor_type="x", config={})
@@ -931,3 +932,7 @@ def test_water_warning_reads_only_the_newest_reading_per_sensor(tmp_db, frozen_c
     tmp_db.add_sensor_reading(sensor_id=sid, timestamp=now - 60, soil_moisture=50.0, water_warning=True)
     raised = logic.decide_for_cluster(cid)
     assert raised.primary_code is TriggerCode.WATER_WARNING
+
+    # A newer row without the flag (e.g. after a failed live read) neither clears nor raises it.
+    tmp_db.add_sensor_reading(sensor_id=sid, timestamp=now - 30, soil_moisture=50.0, water_warning=None)
+    assert logic.decide_for_cluster(cid).primary_code is TriggerCode.WATER_WARNING
