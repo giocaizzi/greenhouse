@@ -11,6 +11,9 @@ The handler is registered for Starlette's ``HTTPException`` so router-level 404 
 
 from __future__ import annotations
 
+import math
+from typing import Any
+
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
@@ -33,6 +36,21 @@ def _is_html_request(request: Request) -> bool:
         return True
     accept = request.headers.get("accept", "").lower()
     return "text/html" in accept or "application/json" not in accept
+
+
+def _json_safe(value: Any) -> Any:
+    """``value`` with every non-finite float replaced by its text (``"nan"``, ``"inf"``).
+
+    A refused ``NaN`` / ``Infinity`` body value comes back in the 422 ``input``, and strict
+    JSON cannot carry it: rendering the error must not itself fail with a 500.
+    """
+    if isinstance(value, float) and not math.isfinite(value):
+        return str(value)
+    if isinstance(value, dict):
+        return {key: _json_safe(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(item) for item in value]
+    return value
 
 
 def _error_template(request: Request) -> str:
@@ -69,7 +87,7 @@ def register_web_exception_handlers(app: FastAPI) -> None:
     async def handle_validation(request: Request, exc: RequestValidationError) -> Response:
         """Render a request-validation error: JSON 422 for machine paths / JSON clients, else the HTML error page."""
         if not _is_html_request(request):
-            return JSONResponse({"detail": exc.errors()}, status_code=422)
+            return JSONResponse({"detail": _json_safe(exc.errors())}, status_code=422)
         return templates.TemplateResponse(
             request,
             _error_template(request),

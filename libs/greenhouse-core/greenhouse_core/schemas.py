@@ -7,6 +7,10 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from greenhouse_core.constants import FULL_WEEKDAY_MASK
 from greenhouse_core.models import parse_device_config
 
+# Request bodies that carry measurements / thresholds refuse ``NaN`` / ``Infinity`` (which
+# Python's JSON parser accepts): a non-finite bound or capacity would poison every comparison.
+_FINITE_NUMBERS = ConfigDict(allow_inf_nan=False)
+
 
 def _parse_json_config(v: object) -> object:
     """Decode a stored ``config`` with the shared lenient parser; ``None`` stays ``None``."""
@@ -88,6 +92,8 @@ class PlantBase(BaseModel):
 class CreatePlantRequest(PlantBase):
     """Body for adding a plant to a cluster."""
 
+    model_config = _FINITE_NUMBERS
+
 
 class PlantResponse(PlantBase):
     """A plant as stored, with the cluster it belongs to."""
@@ -141,6 +147,8 @@ class IrrigatorBase(BaseModel):
 
 class CreateIrrigatorRequest(IrrigatorBase):
     """Body for attaching an irrigator to a cluster (one per cluster)."""
+
+    model_config = _FINITE_NUMBERS
 
 
 class IrrigatorResponse(IrrigatorBase):
@@ -476,6 +484,8 @@ class IrrigateRequest(BaseModel):
     final decision is tagged with a ``manual_override_quiet_hours`` warning
     Reason so the audit log records the override.
     """
+
+    model_config = _FINITE_NUMBERS
 
     temp_override: float | None = None
     dry_run: bool = False
@@ -1002,6 +1012,8 @@ class UpdatePlantRequest(BaseModel):
     ``null`` clears an optional field and is ignored for a required one.
     """
 
+    model_config = _FINITE_NUMBERS
+
     species: str | None = None
     category: str | None = None
     water_needs: str | None = None
@@ -1032,6 +1044,8 @@ class UpdateIrrigatorRequest(BaseModel):
     ``null`` clears an optional field and is ignored for a required one;
     ``config: null`` clears the whole config, ``local_key`` included.
     """
+
+    model_config = _FINITE_NUMBERS
 
     name: str | None = None
     type: str | None = None

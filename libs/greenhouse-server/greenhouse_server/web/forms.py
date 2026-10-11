@@ -7,6 +7,7 @@ pages render exactly the errors they always did.
 
 from __future__ import annotations
 
+import math
 from typing import TYPE_CHECKING, TypeVar
 
 from fastapi import HTTPException
@@ -33,12 +34,16 @@ def parsed_or_400(
 ) -> _Number | None:
     """Like :func:`blank_or`, but a malformed value is HTTP 400 ``error``.
 
-    With ``negative_error`` set, a value below zero is HTTP 400 ``negative_error``.
+    A non-finite float (``nan``, ``inf`` — ``float()`` accepts them) is malformed too:
+    no measurement or threshold can be one. With ``negative_error`` set, a value below
+    zero is HTTP 400 ``negative_error``.
     """
     try:
         value = blank_or(raw, parse)
     except ValueError as exc:
         raise HTTPException(400, error) from exc
+    if isinstance(value, float) and not math.isfinite(value):
+        raise HTTPException(400, error)
     if negative_error is not None and value is not None and value < 0:
         raise HTTPException(400, negative_error)
     return value
