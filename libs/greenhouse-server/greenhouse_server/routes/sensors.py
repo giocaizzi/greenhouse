@@ -23,6 +23,7 @@ from greenhouse_server.deps import (
 )
 from greenhouse_server.services.inventory import (
     DeviceIdExistsError,
+    DeviceSpec,
     PlantNotInClusterError,
     UnknownDeviceTypeError,
     create_sensor,
@@ -87,10 +88,7 @@ def add_sensor(cluster_id: int, request: CreateSensorRequest, repo: RepoDep, reg
         sensor_id = create_sensor(
             repo,
             cluster_id,
-            tuya_device_id=request.tuya_device_id,
-            name=request.name,
-            sensor_type=request.type,
-            config=request.config or {},
+            DeviceSpec(request.tuya_device_id, request.name, request.type, request.config or {}),
             registry=registry,
             plant_id=request.plant_id,
         )

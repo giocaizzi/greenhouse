@@ -145,7 +145,7 @@ def scheduler_page(request: Request) -> Response:
 
 # ``:path`` like the API route, so a job id containing "/" still routes here.
 @router.post("/scheduler/jobs/{job_id:path}/delete", response_class=HTMLResponse)
-def scheduler_delete_job(request: Request, job_id: str) -> Response:
+def scheduler_delete_job(job_id: str) -> Response:
     """Delete an ad-hoc scheduler job; the empty body removes its table row."""
     if not bg_scheduler.running:
         raise HTTPException(503, "Scheduler not running")
@@ -170,13 +170,13 @@ def _set_check_all_paused_web(repo: IrrigationRepository, *, paused: bool) -> Re
 
 
 @router.post("/scheduler/pause")
-def scheduler_pause(request: Request, repo: RepoDep) -> Response:
+def scheduler_pause(repo: RepoDep) -> Response:
     """Pause the ``check_all`` job (persisted) and return to the scheduler page."""
     return _set_check_all_paused_web(repo, paused=True)
 
 
 @router.post("/scheduler/resume")
-def scheduler_resume(request: Request, repo: RepoDep) -> Response:
+def scheduler_resume(repo: RepoDep) -> Response:
     """Resume the ``check_all`` job (persisted) and return to the scheduler page."""
     return _set_check_all_paused_web(repo, paused=False)
 

@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Annotated
 
-from fastapi import APIRouter, Form, HTTPException, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Path, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from greenhouse_server.deps import DeviceRegistryDep, RepoDep, require_cluster, require_sensor_in_cluster
@@ -18,6 +19,32 @@ if TYPE_CHECKING:
     from greenhouse_core.devices import DeviceRegistry
 
 router = APIRouter(include_in_schema=False)
+
+
+# Each form class bundles one route's path parameters and form fields, in the route's order
+# (FastAPI builds it as a dependency from the same declarations: parsing and errors unchanged).
+
+
+@dataclass(frozen=True, slots=True)
+class _NewSensorForm:
+    """``POST /clusters/{cluster_id}/sensors``: the add form."""
+
+    cluster_id: Annotated[int, Path()]
+    tuya_device_id: Annotated[str, Form()]
+    name: Annotated[str, Form()]
+    type: Annotated[str, Form()]
+    plant_id: Annotated[str, Form()] = ""
+
+
+@dataclass(frozen=True, slots=True)
+class _EditSensorForm:
+    """``POST /clusters/{cluster_id}/sensors/{sensor_id}/edit``: the edit form (blank plant: unassign)."""
+
+    cluster_id: Annotated[int, Path()]
+    sensor_id: Annotated[int, Path()]
+    name: Annotated[str, Form()]
+    type: Annotated[str, Form()]
+    plant_id: Annotated[str, Form()] = ""
 
 
 def _parse_optional_plant_id(plant_id: str) -> int | None:
@@ -61,27 +88,16 @@ def new_sensor_form(request: Request, cluster_id: int, repo: RepoDep, registry: 
 
 
 @router.post("/clusters/{cluster_id}/sensors")
-def create_sensor(
-    request: Request,
-    cluster_id: int,
-    repo: RepoDep,
-    registry: DeviceRegistryDep,
-    tuya_device_id: Annotated[str, Form()],
-    name: Annotated[str, Form()],
-    type: Annotated[str, Form()],
-    plant_id: Annotated[str, Form()] = "",
-) -> Response:
+def create_sensor(repo: RepoDep, registry: DeviceRegistryDep, form: Annotated[_NewSensorForm, Depends()]) -> Response:
     """Register a sensor from the form and return to the cluster's sensors section."""
+    cluster_id = form.cluster_id
     require_cluster(repo, cluster_id)
-    pid = _parse_optional_plant_id(plant_id)
+    pid = _parse_optional_plant_id(form.plant_id)
     try:
         inventory.create_sensor(
             repo,
             cluster_id,
-            tuya_device_id=tuya_device_id,
-            name=name,
-            sensor_type=type,
-            config={},
+            inventory.DeviceSpec(form.tuya_device_id, form.name, form.type, {}),
             registry=registry,
             plant_id=pid,
         )
@@ -113,27 +129,19 @@ def edit_sensor_form(
 
 
 @router.post("/clusters/{cluster_id}/sensors/{sensor_id}/edit")
-def update_sensor(
-    request: Request,
-    cluster_id: int,
-    sensor_id: int,
-    repo: RepoDep,
-    registry: DeviceRegistryDep,
-    name: Annotated[str, Form()],
-    type: Annotated[str, Form()],
-    plant_id: Annotated[str, Form()] = "",
-) -> Response:
+def update_sensor(repo: RepoDep, registry: DeviceRegistryDep, form: Annotated[_EditSensorForm, Depends()]) -> Response:
     """Save the sensor form and return to the cluster's sensors section."""
+    cluster_id, sensor_id = form.cluster_id, form.sensor_id
     sensor = require_sensor_in_cluster(repo, cluster_id, sensor_id)
-    pid = _parse_optional_plant_id(plant_id)
-    _require_known_type(registry, type, sensor.type)
+    pid = _parse_optional_plant_id(form.plant_id)
+    _require_known_type(registry, form.type, sensor.type)
     try:
         inventory.ensure_plant_in_cluster(repo, cluster_id, pid)
     except PlantNotInClusterError as exc:
         raise HTTPException(404, f"Plant {exc.plant_id} not found in cluster") from None
     # update_sensor routes plant_id changes through the assignment-history-aware
     # path. Pass plant_id explicitly even when None so an empty form unassigns.
-    repo.update_sensor(sensor_id, name=name, type=type, plant_id=pid)
+    repo.update_sensor(sensor_id, name=form.name, type=form.type, plant_id=pid)
     repo.commit()
     return RedirectResponse(url=f"/clusters/{cluster_id}#sensors", status_code=303)
 

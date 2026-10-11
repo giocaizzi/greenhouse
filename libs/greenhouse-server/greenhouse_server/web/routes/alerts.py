@@ -89,7 +89,7 @@ def sync_alerts(request: Request, repo: RepoDep, plant_db: PlantDbDep) -> Respon
 
 
 @router.get("/alerts/badge")
-def alert_badge(request: Request, repo: RepoDep) -> Response:
+def alert_badge(repo: RepoDep) -> Response:
     """Return the top-bar bell count (empty body when no alert is open)."""
     count = repo.count_open_alerts()
     if count == 0:

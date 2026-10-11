@@ -32,7 +32,7 @@ import logging
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, TypedDict
+from typing import TYPE_CHECKING, Any, TypedDict, Unpack
 
 from greenhouse_core.constants import (
     PUMP_WATCHER_MAX_READ_FAILURES,
@@ -81,34 +81,6 @@ def _outcome(kind: str, *, polls: int, failures: int, alarm_raw: object, elapsed
     }
 
 
-def _trip_payload(
-    irrigator: Irrigator,
-    *,
-    cluster_id: int,
-    alarm_raw: object,
-    polls: int,
-    started_at: int,
-    duration_seconds: int,
-    elapsed_estimate: int,
-    stop_ok: bool,
-    stop_msg: str,
-) -> dict[str, Any]:
-    """Payload of the ``pump_dry_run`` activity row; a non-JSON alarm value is stored as its repr."""
-    return {
-        "irrigator_id": irrigator.id,
-        "irrigator_name": irrigator.name,
-        "cluster_id": cluster_id,
-        "alarm_dp": IK10PW_ALARM_DP,
-        "alarm_raw": alarm_raw if isinstance(alarm_raw, int | str | bool) else repr(alarm_raw),
-        "polls": polls,
-        "started_at": started_at,
-        "duration_seconds_requested": duration_seconds,
-        "elapsed_seconds": elapsed_estimate,
-        "stop_ok": stop_ok,
-        "stop_message": stop_msg,
-    }
-
-
 @dataclass(frozen=True, slots=True)
 class _Trip:
     """The tripped irrigator's identity, read once after the stop (survives a rollback's expiry)."""
@@ -118,21 +90,61 @@ class _Trip:
     cluster_id: int
 
 
+@dataclass(frozen=True, slots=True)
+class _TripReading:
+    """What the watcher saw when it tripped: the alarm DP value and how far into the cycle it was."""
+
+    alarm_raw: object
+    polls: int
+    started_at: int
+    duration_seconds: int
+    elapsed_estimate: int
+
+
+def _trip_payload(trip: _Trip, reading: _TripReading, *, stop_ok: bool, stop_msg: str) -> dict[str, Any]:
+    """Payload of the ``pump_dry_run`` activity row; a non-JSON alarm value is stored as its repr."""
+    alarm_raw = reading.alarm_raw
+    return {
+        "irrigator_id": trip.irrigator_id,
+        "irrigator_name": trip.irrigator_name,
+        "cluster_id": trip.cluster_id,
+        "alarm_dp": IK10PW_ALARM_DP,
+        "alarm_raw": alarm_raw if isinstance(alarm_raw, int | str | bool) else repr(alarm_raw),
+        "polls": reading.polls,
+        "started_at": reading.started_at,
+        "duration_seconds_requested": reading.duration_seconds,
+        "elapsed_seconds": reading.elapsed_estimate,
+        "stop_ok": stop_ok,
+        "stop_message": stop_msg,
+    }
+
+
+# The defaults of the watcher's clock and sleep, bound once at import (as signature defaults were).
+_MONOTONIC_CLOCK = time.monotonic
+_BLOCKING_SLEEP = time.sleep
+
+
+class PumpWatcherOptions(TypedDict, total=False):
+    """:class:`PumpWatcherService` tuning and collaborators, as keywords (all optional).
+
+    Defaults: the ``PUMP_WATCHER_*`` constants, ``time.monotonic`` / ``time.sleep``, no health
+    monitor, never asked to stop.
+    """
+
+    poll_seconds: float
+    warmup_seconds: float
+    max_read_failures: int
+    clock: Callable[[], float]
+    sleep: Callable[[float], object]
+    monitor: DeviceHealthMonitor | None
+    stop_requested: Callable[[], bool] | None
+
+
 class PumpWatcherService:
     """Polls an irrigator's dry-run alarm and stops the pump on trip."""
 
     def __init__(
-        self,
-        repo: IrrigationRepository,
-        registry: DeviceRegistry,
-        *,
-        poll_seconds: float = PUMP_WATCHER_POLL_SECONDS,
-        warmup_seconds: float = PUMP_WATCHER_WARMUP_SECONDS,
-        max_read_failures: int = PUMP_WATCHER_MAX_READ_FAILURES,
-        clock: Callable[[], float] = time.monotonic,
-        sleep: Callable[[float], object] = time.sleep,
-        monitor: DeviceHealthMonitor | None = None,
-        stop_requested: Callable[[], bool] | None = None,
+        self, repo: IrrigationRepository, registry: DeviceRegistry, **options: Unpack[PumpWatcherOptions]
     ) -> None:
         """Build a watcher.
 
@@ -144,13 +156,13 @@ class PumpWatcherService:
         """
         self._repo = repo
         self._registry = registry
-        self._poll = max(0.1, float(poll_seconds))
-        self._warmup = max(0.0, float(warmup_seconds))
-        self._max_read_failures = max(1, int(max_read_failures))
-        self._clock = clock
-        self._sleep = sleep
-        self._monitor = monitor
-        self._stop_requested = stop_requested or (lambda: False)
+        self._poll = max(0.1, float(options.get("poll_seconds", PUMP_WATCHER_POLL_SECONDS)))
+        self._warmup = max(0.0, float(options.get("warmup_seconds", PUMP_WATCHER_WARMUP_SECONDS)))
+        self._max_read_failures = max(1, int(options.get("max_read_failures", PUMP_WATCHER_MAX_READ_FAILURES)))
+        self._clock = options.get("clock", _MONOTONIC_CLOCK)
+        self._sleep = options.get("sleep", _BLOCKING_SLEEP)
+        self._monitor = options.get("monitor")
+        self._stop_requested = options.get("stop_requested") or (lambda: False)
 
     def watch(
         self,
@@ -184,7 +196,7 @@ class PumpWatcherService:
         failures = 0  # consecutive failed reads
         while True:
             if self._stop_requested():
-                elapsed = self._clock() - (deadline - duration_seconds)
+                elapsed = self._elapsed(deadline, duration_seconds)
                 return _outcome("interrupted", polls=polls, failures=failures, alarm_raw=None, elapsed=elapsed)
             now = self._clock()
             if now >= deadline:
@@ -193,31 +205,26 @@ class PumpWatcherService:
 
             polls += 1
             state, failure_msg = self._poll_step(irrigator)
-            if failure_msg is not None:
-                failures += 1
-                if failures >= self._max_read_failures:
-                    self._log_abandoned(irrigator, failures, failure_msg)
-                    elapsed = self._clock() - (deadline - duration_seconds)
-                    return _outcome("abandoned", polls=polls, failures=failures, alarm_raw=None, elapsed=elapsed)
-            else:
-                failures = 0
-                # Only trip after the warm-up window has elapsed. A pump that's still priming naturally
-                # draws lower current and can briefly set the bit before water reaches the impeller.
-                if HealthAlarm.NO_WATER in state.alarms and now >= warmup_until:
-                    self._handle_trip(
-                        irrigator=irrigator,
-                        cluster_id=irrigator.cluster_id,
-                        state=state,
-                        started_at=started_at,
-                        polls=polls,
-                        duration_seconds=duration_seconds,
-                    )
-                    alarm_raw = state.raw.get("alarm_raw") if isinstance(state.raw, dict) else None
-                    elapsed = self._clock() - (deadline - duration_seconds)
-                    return _outcome("tripped", polls=polls, failures=0, alarm_raw=alarm_raw, elapsed=elapsed)
+            failures = failures + 1 if failure_msg is not None else 0
+            if failure_msg is not None and failures >= self._max_read_failures:
+                self._log_abandoned(irrigator, failures, failure_msg)
+                elapsed = self._elapsed(deadline, duration_seconds)
+                return _outcome("abandoned", polls=polls, failures=failures, alarm_raw=None, elapsed=elapsed)
+            # Only trip after the warm-up window has elapsed. A pump that's still priming naturally
+            # draws lower current and can briefly set the bit before water reaches the impeller.
+            if failure_msg is None and HealthAlarm.NO_WATER in state.alarms and now >= warmup_until:
+                alarm_raw = self._handle_trip(
+                    irrigator, state, started_at=started_at, polls=polls, duration_seconds=duration_seconds
+                )
+                elapsed = self._elapsed(deadline, duration_seconds)
+                return _outcome("tripped", polls=polls, failures=0, alarm_raw=alarm_raw, elapsed=elapsed)
             self._sleep(self._poll)
 
     # ── Internals ─────────────────────────────────────────────────────────
+
+    def _elapsed(self, deadline: float, duration_seconds: int) -> float:
+        """Seconds since the watch began, read off the clock now (``deadline`` minus the duration)."""
+        return self._clock() - (deadline - duration_seconds)
 
     def _poll_step(self, irrigator: Irrigator) -> tuple["DeviceHealthState", str | None]:
         """One poll: the health state, plus the failure message when the read failed or the device is offline."""
@@ -248,14 +255,13 @@ class PumpWatcherService:
 
     def _handle_trip(
         self,
-        *,
         irrigator: Irrigator,
-        cluster_id: int,
         state: "DeviceHealthState",
+        *,
         started_at: int,
         polls: int,
         duration_seconds: int,
-    ) -> None:
+    ) -> object:
         """Stop the pump, then record the event, the activity and the alert — each durable on its own.
 
         Stopping the pump is the top priority and always comes first. Each record is then its own
@@ -263,8 +269,9 @@ class PumpWatcherService:
         logged and rolled back before the next step, so one failure neither poisons the session
         for the others (``PendingRollbackError``) nor undoes what already committed. Nothing in
         the record path raises. The alert itself is raised by :meth:`DeviceHealthMonitor.record`,
-        which uses the unified ``health:irrigator:{id}:no_water`` dedup_key.
+        which uses the unified ``health:irrigator:{id}:no_water`` dedup_key. Returns the alarm DP value.
         """
+        cluster_id = irrigator.cluster_id
         stop_ok, stop_msg = self._stop_pump(irrigator)
         # Read once, right after the stop: a rollback below expires the instance, and the
         # failure logs must not need the session that just failed.
@@ -282,17 +289,8 @@ class PumpWatcherService:
         )
 
         elapsed_estimate = int(time.time()) - started_at
-        payload = _trip_payload(
-            irrigator,
-            cluster_id=cluster_id,
-            alarm_raw=alarm_raw,
-            polls=polls,
-            started_at=started_at,
-            duration_seconds=duration_seconds,
-            elapsed_estimate=elapsed_estimate,
-            stop_ok=stop_ok,
-            stop_msg=stop_msg,
-        )
+        reading = _TripReading(alarm_raw, polls, started_at, duration_seconds, elapsed_estimate)
+        payload = _trip_payload(trip, reading, stop_ok=stop_ok, stop_msg=stop_msg)
         notes = f"pump dry-run detected after ~{elapsed_estimate}s (DP 105={alarm_raw!r}); stop_ok={stop_ok}"
         self._durably("log aborted irrigation event", trip, lambda: self._log_aborted_event(trip, notes))
         self._durably(
@@ -304,6 +302,7 @@ class PumpWatcherService:
             "record dry-run state into health monitor", trip, lambda: self._record_trip_state(trip, state)
         ):
             self._requeue_alert(trip)
+        return alarm_raw
 
     def _stop_pump(self, irrigator: Irrigator) -> tuple[bool, str]:
         """Stop the pump — the top-priority trip step; a failure is logged and reported, never raised."""

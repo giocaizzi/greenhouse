@@ -1,8 +1,9 @@
 """Activity timeline routes."""
 
+from dataclasses import dataclass
 from typing import Annotated
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 
 from greenhouse_core.schemas import ActivityEventResponse, ActivityListResponse
 from greenhouse_server.deps import RepoDep
@@ -10,16 +11,20 @@ from greenhouse_server.deps import RepoDep
 router = APIRouter(tags=["activity"])
 
 
+@dataclass(frozen=True, slots=True)
+class _ActivityQuery:
+    """``GET /activity`` query parameters (one OpenAPI parameter each, in this order)."""
+
+    entity_type: Annotated[str | None, Query()] = None
+    entity_id: Annotated[int | None, Query()] = None
+    source: Annotated[str | None, Query()] = None
+    severity: Annotated[str | None, Query()] = None
+    limit: Annotated[int, Query(ge=1, le=500)] = 100
+    before: Annotated[int | None, Query()] = None
+
+
 @router.get("/activity", response_model=ActivityListResponse)
-def list_activity(
-    repo: RepoDep,
-    entity_type: Annotated[str | None, Query()] = None,
-    entity_id: Annotated[int | None, Query()] = None,
-    source: Annotated[str | None, Query()] = None,
-    severity: Annotated[str | None, Query()] = None,
-    limit: Annotated[int, Query(ge=1, le=500)] = 100,
-    before: Annotated[int | None, Query()] = None,
-) -> ActivityListResponse:
+def list_activity(repo: RepoDep, query: Annotated[_ActivityQuery, Depends()]) -> ActivityListResponse:
     """List the cross-cutting activity timeline, newest events first.
 
     Supports cursor-based pagination: pass `before` as the Unix timestamp of
@@ -38,14 +43,14 @@ def list_activity(
         Ordered activity items and a `next_cursor` timestamp when more pages exist.
     """
     items = repo.list_activity_events(
-        entity_type=entity_type,
-        entity_id=entity_id,
-        source=source,
-        severity=severity,
-        limit=limit,
-        before=before,
+        entity_type=query.entity_type,
+        entity_id=query.entity_id,
+        source=query.source,
+        severity=query.severity,
+        limit=query.limit,
+        before=query.before,
     )
-    next_cursor = items[-1].timestamp if len(items) == limit else None
+    next_cursor = items[-1].timestamp if len(items) == query.limit else None
     return ActivityListResponse(
         items=[ActivityEventResponse.model_validate(e) for e in items],
         next_cursor=next_cursor,

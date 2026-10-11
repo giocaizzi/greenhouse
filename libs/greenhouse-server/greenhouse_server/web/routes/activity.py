@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Annotated
 
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import Response
 
 from greenhouse_core.schemas import ActivityEventResponse
@@ -65,17 +66,23 @@ def activity_list(
     )
 
 
+@dataclass(frozen=True, slots=True)
+class _PageQuery:
+    """``GET /activity/page``: the cursor (older than ``before``) and the list's filters."""
+
+    before: Annotated[int | None, Query()] = None
+    entity_type: Annotated[str | None, Query()] = None
+    source: Annotated[str | None, Query()] = None
+    severity: Annotated[str | None, Query()] = None
+
+
 @router.get("/activity/page")
-def activity_page(
-    request: Request,
-    repo: RepoDep,
-    before: Annotated[int | None, Query()] = None,
-    entity_type: Annotated[str | None, Query()] = None,
-    source: Annotated[str | None, Query()] = None,
-    severity: Annotated[str | None, Query()] = None,
-) -> Response:
+def activity_page(request: Request, repo: RepoDep, query: Annotated[_PageQuery, Depends()]) -> Response:
     """Render the next page of timeline rows for infinite scroll (HTMX fragment)."""
-    items, next_cursor = _fetch_events(repo, entity_type=entity_type, source=source, severity=severity, before=before)
+    entity_type, source, severity = query.entity_type, query.source, query.severity
+    items, next_cursor = _fetch_events(
+        repo, entity_type=entity_type, source=source, severity=severity, before=query.before
+    )
     return templates.TemplateResponse(
         request,
         "partials/_activity_rows.html",

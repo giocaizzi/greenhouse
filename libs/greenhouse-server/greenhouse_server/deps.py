@@ -2,6 +2,7 @@
 
 from collections.abc import Iterator
 from contextlib import contextmanager
+from dataclasses import dataclass
 from typing import Annotated, cast, get_args
 
 from fastapi import Depends, HTTPException, Request
@@ -267,24 +268,31 @@ def get_forecast_service(repo: RepoDep, plant_db: PlantDbDep, weather: WeatherCl
 ForecastServiceDep = Annotated[ForecastService, Depends(get_forecast_service)]
 
 
+@dataclass(frozen=True, slots=True)
+class _PipelineInputs:
+    """The app-scoped collaborators of the irrigation pipeline, injected together."""
+
+    weather: WeatherClientDep
+    plant_db: PlantDbDep
+    health_monitor: _HealthMonitorDep
+    notifier: NtfyNotifierDep
+
+
 def get_irrigation_service(
     repo: RepoDep,
     registry: DeviceRegistryDep,
     sync_service: SyncServiceDep,
-    weather: WeatherClientDep,
-    plant_db: PlantDbDep,
-    health_monitor: _HealthMonitorDep,
-    notifier: NtfyNotifierDep,
+    inputs: Annotated[_PipelineInputs, Depends()],
 ) -> IrrigationService:
     """Build the irrigation pipeline service with every collaborator it needs."""
     return IrrigationService(
         repo,
         registry,
         sync_service,
-        weather,
-        plant_db,
-        health_monitor=health_monitor,
-        notifier=notifier,
+        inputs.weather,
+        inputs.plant_db,
+        health_monitor=inputs.health_monitor,
+        notifier=inputs.notifier,
     )
 
 

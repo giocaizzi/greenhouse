@@ -6,6 +6,7 @@ required a login would be a circular trap.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Annotated
 from urllib.parse import urlparse
 
@@ -48,20 +49,27 @@ def login_form(
     return templates.TemplateResponse(request, "auth/login.html", ctx)
 
 
+@dataclass(frozen=True, slots=True)
+class _LoginForm:
+    """``POST /login``: the credentials and the path to return to (field ``next``)."""
+
+    username: Annotated[str, Form()]
+    password: Annotated[str, Form()]
+    next_url: Annotated[str, Form(alias="next")] = "/"
+
+
 @router.post("/login")
 def login_submit(
     request: Request,
     repo: RepoDep,
-    username: Annotated[str, Form()],
-    password: Annotated[str, Form()],
     settings: Annotated[Settings, Depends(get_settings)],
-    next_url: Annotated[str, Form(alias="next")] = "/",
+    form: Annotated[_LoginForm, Depends()],
 ) -> Response:
     """Handle the login form. Sets a session cookie and redirects to ?next."""
-    target = _safe_next(next_url)
+    target = _safe_next(form.next_url)
     if not settings.auth_enabled:
         return RedirectResponse(url=target, status_code=303)
-    user = authenticate(repo.session, username, password)
+    user = authenticate(repo.session, form.username, form.password)
     if user is None:
         ctx = base_context(
             request,

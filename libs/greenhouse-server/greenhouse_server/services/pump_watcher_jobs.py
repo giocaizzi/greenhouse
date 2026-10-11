@@ -13,8 +13,9 @@ logger, the pipeline's, so log routing and filters keyed on it keep matching.
 import functools
 import logging
 import time as _time
+from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NotRequired, TypedDict, Unpack
 
 from greenhouse_core.constants import (
     PUMP_WATCHER_MAX_READ_FAILURES,
@@ -45,6 +46,25 @@ if TYPE_CHECKING:
 logger = logging.getLogger("greenhouse_server.services.irrigation")
 
 WATCHER_SHUTDOWN_ACTIVITY_CODE = "pump_watcher_shutdown"
+
+
+class InterruptedCycle(TypedDict):
+    """The cycle whose watcher a shutdown cut short, as :func:`handle_watcher_interrupted` keywords."""
+
+    triggered_by: TriggeredBy  # who started it: "auto" or "manual"
+    started_at: int  # Unix timestamp of the start event
+    forced: NotRequired[bool]  # a forced pipeline run (default False)
+
+
+@dataclass(frozen=True, slots=True)
+class _WatchJob:
+    """What a scheduled watcher job watches; captured when it is scheduled."""
+
+    irrigator_id: int
+    duration_seconds: int
+    started_at: int
+    triggered_by: TriggeredBy
+    forced: bool
 
 
 def _stop_auto_cycle(
@@ -104,13 +124,7 @@ def _left_running_message(irrigator: "Irrigator", triggered_by: TriggeredBy) -> 
 
 
 def handle_watcher_interrupted(
-    repo: IrrigationRepository,
-    registry: DeviceRegistry,
-    irrigator: "Irrigator",
-    *,
-    triggered_by: TriggeredBy,
-    started_at: int,
-    forced: bool = False,
+    repo: IrrigationRepository, registry: DeviceRegistry, irrigator: "Irrigator", **cycle: Unpack[InterruptedCycle]
 ) -> bool:
     """Shutdown policy for a pump whose dry-run watcher was cut short.
 
@@ -133,13 +147,14 @@ def handle_watcher_interrupted(
         repo: Repository bound to the watcher job's session (caller commits).
         registry: Device registry resolving the irrigator's adapter.
         irrigator: The irrigator whose watcher was interrupted.
-        triggered_by: ``"auto"`` or ``"manual"`` — who started the cycle.
-        started_at: Unix timestamp of the start event.
-        forced: The cycle is a forced pipeline run (stopped like an auto one).
+        **cycle: ``triggered_by`` (``"auto"`` or ``"manual"`` — who started the cycle),
+            ``started_at`` (Unix timestamp of the start event) and ``forced`` (a forced
+            pipeline run, stopped like an auto one; default False).
 
     Returns:
         True if the pump was stopped successfully, False otherwise.
     """
+    triggered_by, started_at, forced = cycle["triggered_by"], cycle["started_at"], cycle.get("forced", False)
     stop_ok = False
     if triggered_by == TRIGGERED_BY_AUTO or forced:
         stop_ok, message = _stop_auto_cycle(repo, registry, irrigator, kind="forced" if forced else "auto")
@@ -175,19 +190,17 @@ def _watcher_tuning(settings: "Settings | None") -> tuple[float, float, int]:
 def _run_pump_watcher(
     app: "FastAPI",
     registry: DeviceRegistry,
+    job: _WatchJob,
     *,
-    irrigator_id: int,
-    duration_seconds: int,
-    started_at: int,
-    triggered_by: TriggeredBy,
     sleep: "Callable[[float], bool]",
     stop_requested: "Callable[[], bool]",
-    forced: bool = False,
 ) -> None:
     """The watcher job body: its own session; tuning and the health monitor are read when it runs."""
-    with job_session(app, logger, "Pump watcher job failed for irrigator %d", irrigator_id, commit=False) as session:
+    with job_session(
+        app, logger, "Pump watcher job failed for irrigator %d", job.irrigator_id, commit=False
+    ) as session:
         repo = IrrigationRepository(session)
-        irrigator = repo.get_irrigator(irrigator_id)
+        irrigator = repo.get_irrigator(job.irrigator_id)
         if irrigator is None:
             return
         poll, warmup, max_failures = _watcher_tuning(getattr(app.state, "settings", None))
@@ -205,10 +218,10 @@ def _run_pump_watcher(
             sleep=sleep,
             stop_requested=stop_requested,
         )
-        result = watcher.watch(irrigator, duration_seconds, started_at=started_at)
+        result = watcher.watch(irrigator, job.duration_seconds, started_at=job.started_at)
         if result["outcome"] == "interrupted":
             handle_watcher_interrupted(
-                repo, registry, irrigator, triggered_by=triggered_by, started_at=started_at, forced=forced
+                repo, registry, irrigator, triggered_by=job.triggered_by, started_at=job.started_at, forced=job.forced
             )
             session.commit()
 
@@ -247,7 +260,7 @@ def schedule_pump_watcher(
     if duration_minutes <= 0:
         return False
     try:
-        # Upward and circular (the scheduler imports the services at top level); ``_app`` is read per call.
+        # Lazy: circular (the scheduler imports the services at top level), and ``_app`` is read per call.
         from greenhouse_server.scheduler import _app, scheduler, shutdown_requested, wait_for_shutdown  # noqa: PLC0415
 
         if not scheduler.running or _app is None:
@@ -258,24 +271,18 @@ def schedule_pump_watcher(
         registry: DeviceRegistry | None = getattr(_app.state, "device_registry", None)
         if registry is None:
             return False
-        run_date = datetime.fromtimestamp(started_at, tz=UTC)
-
         run = functools.partial(
             _run_pump_watcher,
             _app,
             registry,
-            irrigator_id=irrigator_id,
-            duration_seconds=int(duration_minutes * 60),
-            started_at=started_at,
-            triggered_by=triggered_by,
+            _WatchJob(irrigator_id, int(duration_minutes * 60), started_at, triggered_by, forced),
             sleep=wait_for_shutdown,
             stop_requested=shutdown_requested,
-            forced=forced,
         )
         scheduler.add_job(
             run,
             "date",
-            run_date=run_date,
+            run_date=datetime.fromtimestamp(started_at, tz=UTC),
             id=f"pump-watcher-{irrigator_id}-{started_at}",
             name=f"Pump watcher irrigator {irrigator_id}",
             replace_existing=True,

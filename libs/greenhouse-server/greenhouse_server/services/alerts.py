@@ -8,7 +8,7 @@ becomes the single source of truth for the bell badge and /alerts page.
 """
 
 import time
-from typing import Any
+from typing import Any, NotRequired, TypedDict, Unpack
 
 from greenhouse_core.constants import ALERT_SCAN_LIMIT
 from greenhouse_core.models import (
@@ -157,37 +157,43 @@ def sync_all_alerts(
     return repo.count_open_alerts()
 
 
-def raise_alert(
-    repo: IrrigationRepository,
-    *,
-    source: ActivitySource,
-    code: str,
-    title: str,
-    message: str,
-    severity: str = "info",
-    cluster_id: int | None = None,
-    plant_id: int | None = None,
-    sensor_id: int | None = None,
-    payload: dict[str, Any] | None = None,
-    notifier: NtfyClient | None = None,
-) -> Alert:
+class NewAlert(TypedDict):
+    """The alert :func:`raise_alert` opens or refreshes, passed as keywords.
+
+    ``severity`` defaults to ``"info"``; a ``sensor_id`` makes the sensor the alert's entity
+    (otherwise the cluster).
+    """
+
+    source: ActivitySource
+    code: str
+    title: str
+    message: str
+    severity: NotRequired[str]
+    cluster_id: NotRequired[int | None]
+    plant_id: NotRequired[int | None]
+    sensor_id: NotRequired[int | None]
+    payload: NotRequired[dict[str, Any] | None]
+
+
+def raise_alert(repo: IrrigationRepository, *, notifier: NtfyClient | None = None, **new: Unpack[NewAlert]) -> Alert:
     """Convenience wrapper: build a dedup_key, upsert the alert, push when this call opened it."""
+    sensor_id, cluster_id = new.get("sensor_id"), new.get("cluster_id")
     entity_type = ENTITY_SENSOR if sensor_id else ENTITY_CLUSTER
     entity_id = sensor_id or cluster_id
-    key = _dedup_key(source, code, cluster_id, f"{entity_type}{entity_id or 0}")
+    key = _dedup_key(new["source"], new["code"], cluster_id, f"{entity_type}{entity_id or 0}")
     was_open = is_alert_open(repo, key)
     alert = repo.upsert_alert(
         dedup_key=key,
-        source=source,
-        code=code,
-        title=title,
-        message=message,
-        severity=severity,
+        source=new["source"],
+        code=new["code"],
+        title=new["title"],
+        message=new["message"],
+        severity=new.get("severity", "info"),
         entity_type=entity_type,
         entity_id=entity_id,
         cluster_id=cluster_id,
-        plant_id=plant_id,
-        payload=payload,
+        plant_id=new.get("plant_id"),
+        payload=new.get("payload"),
     )
     notify_if_new_alert(repo, notifier, alert, was_open=was_open)
     return alert

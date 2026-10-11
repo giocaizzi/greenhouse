@@ -26,6 +26,8 @@ from greenhouse_server.deps import (
 )
 from greenhouse_server.services.inventory import (
     DeviceIdExistsError,
+    DeviceSpec,
+    IrrigatorCapacity,
     IrrigatorExistsError,
     UnknownDeviceTypeError,
     create_irrigator,
@@ -34,6 +36,7 @@ from greenhouse_server.services.inventory import (
 )
 from greenhouse_server.services.manual_control import (
     ManualActionError,
+    ManualStart,
     manual_log,
     manual_start,
     manual_stop,
@@ -104,13 +107,9 @@ def add_irrigator(
         irrigator_id = create_irrigator(
             repo,
             cluster_id,
-            tuya_device_id=request.tuya_device_id,
-            name=request.name,
-            irrigator_type=request.type,
-            config=request.config or {},
+            DeviceSpec(request.tuya_device_id, request.name, request.type, request.config or {}),
             registry=registry,
-            reservoir_l=request.reservoir_l,
-            flow_rate_l_per_min=request.flow_rate_l_per_min,
+            capacity=IrrigatorCapacity(request.reservoir_l, request.flow_rate_l_per_min),
         )
     except UnknownDeviceTypeError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from None
@@ -243,7 +242,7 @@ def start_irrigator(
     """
     irrigator = require_irrigator(repo, irrigator_id)
     try:
-        output = manual_start(repo, registry, notifier, irrigator, request.minutes, via="API")
+        output = manual_start(repo, registry, notifier, irrigator, ManualStart(request.minutes, via="API"))
     except ManualActionError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from None
     return IrrigatorActionResponse(success=True, message=output)

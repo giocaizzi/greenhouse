@@ -26,7 +26,7 @@ import logging
 import threading
 import time
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypedDict, Unpack
 
 from greenhouse_core.constants import (
     BATTERY_CRITICAL_PCT,
@@ -79,21 +79,37 @@ class _Cached:
     unraised: frozenset[HealthAlarm] = frozenset()
 
 
+@dataclass(frozen=True, slots=True)
+class _AlertSubject:
+    """The device a health alert is about, as its title, message and dedup key name it."""
+
+    entity_type: EntityType
+    entity_id: int
+    label: str
+    cluster_id: int | None
+
+
+class HealthMonitorOptions(TypedDict, total=False):
+    """:class:`DeviceHealthMonitor` tuning and collaborators, as keywords (all optional).
+
+    Defaults: the ``constants`` thresholds (sensors: the default sync interval plus
+    ``SENSOR_OFFLINE_GRACE_MINUTES``), the wall clock, no notifier.
+    """
+
+    battery_low_pct: int
+    battery_critical_pct: int
+    offline_after_minutes: int
+    sensor_offline_after_minutes: int
+    signal_loss_threshold: int
+    clock: Callable[[], int]
+    notifier: NtfyClient | None
+
+
 class DeviceHealthMonitor:
     """Polls device health, diffs state, raises typed alerts on transitions."""
 
     def __init__(
-        self,
-        repo: IrrigationRepository,
-        registry: DeviceRegistry,
-        *,
-        battery_low_pct: int = BATTERY_LOW_PCT,
-        battery_critical_pct: int = BATTERY_CRITICAL_PCT,
-        offline_after_minutes: int = OFFLINE_AFTER_MINUTES,
-        sensor_offline_after_minutes: int = DEFAULT_SYNC_INTERVAL_MINUTES + SENSOR_OFFLINE_GRACE_MINUTES,
-        signal_loss_threshold: int = SIGNAL_LOSS_THRESHOLD,
-        clock: Callable[[], int] = lambda: int(time.time()),
-        notifier: NtfyClient | None = None,
+        self, repo: IrrigationRepository, registry: DeviceRegistry, **options: Unpack[HealthMonitorOptions]
     ) -> None:
         """Build a monitor.
 
@@ -104,11 +120,18 @@ class DeviceHealthMonitor:
         """
         self._repo = repo
         self._registry = registry
-        self._notifier = notifier
-        self._thresholds = AlarmThresholds(battery_low_pct, battery_critical_pct, signal_loss_threshold)
-        self._offline_after_seconds = offline_after_minutes * 60
-        self._sensor_offline_after_seconds = sensor_offline_after_minutes * 60
-        self._clock = clock
+        self._notifier = options.get("notifier")
+        self._thresholds = AlarmThresholds(
+            options.get("battery_low_pct", BATTERY_LOW_PCT),
+            options.get("battery_critical_pct", BATTERY_CRITICAL_PCT),
+            options.get("signal_loss_threshold", SIGNAL_LOSS_THRESHOLD),
+        )
+        self._offline_after_seconds = options.get("offline_after_minutes", OFFLINE_AFTER_MINUTES) * 60
+        sensor_offline = options.get(
+            "sensor_offline_after_minutes", DEFAULT_SYNC_INTERVAL_MINUTES + SENSOR_OFFLINE_GRACE_MINUTES
+        )
+        self._sensor_offline_after_seconds = sensor_offline * 60
+        self._clock = options.get("clock", lambda: int(time.time()))
         self._cache: dict[tuple[str, int], _Cached] = {}
         # Guards every read-modify-write of the shared cache: the health job, the check job,
         # pump watchers and request threads all reach it concurrently.
@@ -218,18 +241,8 @@ class DeviceHealthMonitor:
 
             cluster_id = cluster_id or infer_cluster_id(self._repo, entity_type, entity_id)
             label = label or infer_label(self._repo, entity_type, entity_id) or f"{entity_type}#{entity_id}"
-            raised = frozenset(
-                alarm
-                for alarm in to_raise
-                if self._raise_health_alert(
-                    entity_type=entity_type,
-                    entity_id=entity_id,
-                    alarm=alarm,
-                    state=state,
-                    label=label,
-                    cluster_id=cluster_id,
-                )
-            )
+            subject = _AlertSubject(entity_type, entity_id, label, cluster_id)
+            raised = frozenset(alarm for alarm in to_raise if self._raise_health_alert(subject, alarm, state))
             for alarm in prev_alarms - derived:
                 self._resolve_health_alert(entity_type=entity_type, entity_id=entity_id, alarm=alarm)
             self._cache[key] = _Cached(state=state, derived_alarms=derived, unraised=to_raise - raised)
@@ -324,27 +337,16 @@ class DeviceHealthMonitor:
         key = health_dedup_key(ENTITY_SENSOR, sensor.id, alarm)
         if not self._repo.get_open_alert_by_key(key):
             self._raise_health_alert(
-                entity_type=ENTITY_SENSOR,
-                entity_id=sensor.id,
-                alarm=alarm,
-                state=DeviceHealthState(observed_at=self._clock()),
-                label=sensor.name,
-                cluster_id=cluster_id,
+                _AlertSubject(ENTITY_SENSOR, sensor.id, sensor.name, cluster_id),
+                alarm,
+                DeviceHealthState(observed_at=self._clock()),
             )
 
     # ── Internals ─────────────────────────────────────────────────────────
 
-    def _raise_health_alert(
-        self,
-        *,
-        entity_type: EntityType,
-        entity_id: int,
-        alarm: HealthAlarm,
-        state: DeviceHealthState,
-        label: str,
-        cluster_id: int | None,
-    ) -> bool:
+    def _raise_health_alert(self, subject: _AlertSubject, alarm: HealthAlarm, state: DeviceHealthState) -> bool:
         """Upsert the alarm's alert and push it when this call opened it; False when the write failed."""
+        entity_type, entity_id, label = subject.entity_type, subject.entity_id, subject.label
         key = health_dedup_key(entity_type, entity_id, alarm)
         severity = alarm_severity(alarm)
         payload = {
@@ -368,7 +370,7 @@ class DeviceHealthMonitor:
                 severity=severity,
                 entity_type=entity_type,
                 entity_id=entity_id,
-                cluster_id=cluster_id,
+                cluster_id=subject.cluster_id,
                 payload=payload,
             )
         except Exception:

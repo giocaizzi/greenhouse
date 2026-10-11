@@ -55,7 +55,6 @@ def new_cluster_form(request: Request) -> Response:
 
 @router.post("/clusters")
 def create_cluster(
-    request: Request,
     repo: RepoDep,
     name: Annotated[str, Form()],
     location: Annotated[str, Form()] = "",
@@ -76,7 +75,6 @@ def edit_cluster_form(request: Request, cluster_id: int, repo: RepoDep) -> Respo
 
 @router.post("/clusters/{cluster_id}/edit")
 def update_cluster(
-    request: Request,
     cluster_id: int,
     repo: RepoDep,
     name: Annotated[str, Form()],
