@@ -100,6 +100,22 @@ def _run(coro) -> None:
     asyncio.run(coro)
 
 
+async def _settle_until(pilot, tui: GreenhouseApp, done, timeout: float = 30.0) -> None:
+    """Settle repeatedly until ``done()`` holds: a dismissed dialog hands its result to a
+    callback that starts the next worker one message later, which a single settle can miss
+    on a slow runner."""
+    deadline = asyncio.get_running_loop().time() + timeout
+    while True:
+        await _settle(pilot, tui)
+        if done() or asyncio.get_running_loop().time() > deadline:
+            return
+
+
+def _screen_text(tui: GreenhouseApp) -> str:
+    """Every Static on the active screen, joined — the failure message shows what the user saw."""
+    return " | ".join(_text(w) for w in tui.screen.query(Static))
+
+
 def _text(widget: Static) -> str:
     """Plain text of whatever a Static widget is currently showing."""
     return _render(widget.content, width=200)
@@ -508,8 +524,8 @@ class TestLogin:
                 tui.screen.query_one("#username", Input).value = TEST_ADMIN_USERNAME
                 tui.screen.query_one("#password", Input).value = TEST_ADMIN_PASSWORD
                 await pilot.click("#login")
-                await _settle(pilot, tui)
-                assert isinstance(tui.screen, DashboardScreen)
+                await _settle_until(pilot, tui, lambda: not isinstance(tui.screen, LoginScreen))
+                assert isinstance(tui.screen, DashboardScreen), _screen_text(tui)
                 assert "Cannot reach" not in _text(tui.screen.query_one("#dashboard-empty", Static))
 
         try:
