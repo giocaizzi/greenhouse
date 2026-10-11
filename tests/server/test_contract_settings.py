@@ -246,6 +246,8 @@ VALIDATION_CASES = {
     "ntfy=ftp-scheme": {"ntfy_server_url": "ftp://ntfy.invalid"},
     "ntfy=no-host": {"ntfy_server_url": "https://"},
     "ntfy=no-scheme": {"ntfy_server_url": "ntfy.invalid"},
+    "ntfy=port-only": {"ntfy_server_url": "http://:80"},
+    "ntfy=credentials-redacted": {"ntfy_server_url": "ftp://user:pw@ntfy.invalid/topic"},
 }
 
 
@@ -261,6 +263,13 @@ def test_ntfy_server_url_accepts_http_https_and_unset(clean_env, url):
 @pytest.mark.parametrize("raw", ["", " ", "\t\n"])
 def test_blank_mcp_token_is_unset(clean_env, raw):
     assert _settings(mcp_token=raw).mcp_token is None
+
+
+def test_ntfy_url_error_never_echoes_credentials(clean_env):
+    with pytest.raises(ValidationError) as exc:
+        _settings(ntfy_server_url="file://admin:hunter2@ntfy.invalid/x")
+    assert "hunter2" not in str(exc.value)
+    assert "admin" not in str(exc.value)
 
 
 def test_ntfy_client_refuses_a_non_http_scheme():

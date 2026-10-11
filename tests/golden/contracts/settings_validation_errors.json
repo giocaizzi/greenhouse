@@ -44,6 +44,15 @@
    "type": "value_error"
   }
  ],
+ "ntfy=credentials-redacted": [
+  {
+   "loc": [
+    "GREENHOUSE_NTFY_SERVER_URL"
+   ],
+   "msg": "Value error, GREENHOUSE_NTFY_SERVER_URL must be an http:// or https:// URL with a host, got 'ftp://***@ntfy.invalid/topic'",
+   "type": "value_error"
+  }
+ ],
  "ntfy=file-scheme": [
   {
    "loc": [
@@ -77,6 +86,15 @@
     "GREENHOUSE_NTFY_SERVER_URL"
    ],
    "msg": "Value error, GREENHOUSE_NTFY_SERVER_URL must be an http:// or https:// URL with a host, got 'ntfy.invalid'",
+   "type": "value_error"
+  }
+ ],
+ "ntfy=port-only": [
+  {
+   "loc": [
+    "GREENHOUSE_NTFY_SERVER_URL"
+   ],
+   "msg": "Value error, GREENHOUSE_NTFY_SERVER_URL must be an http:// or https:// URL with a host, got 'http://:80'",
    "type": "value_error"
   }
  ],

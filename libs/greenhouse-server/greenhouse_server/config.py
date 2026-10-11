@@ -27,11 +27,26 @@ def check_ntfy_server_url(value: str) -> str:
     Shared by the settings validator (fail fast at startup, naming the env var)
     and ``NtfyClient`` (never build a publisher for another scheme).
     """
-    parts = urlsplit(value)
-    if parts.scheme.lower() not in NTFY_URL_SCHEMES or not parts.netloc:
-        msg = f"GREENHOUSE_NTFY_SERVER_URL must be an http:// or https:// URL with a host, got {value!r}"
+    try:
+        parts = urlsplit(value)
+        hostname = parts.hostname
+    except ValueError:  # e.g. an unbalanced IPv6 bracket
+        parts, hostname = None, None
+    if parts is None or parts.scheme.lower() not in NTFY_URL_SCHEMES or not hostname:
+        msg = f"GREENHOUSE_NTFY_SERVER_URL must be an http:// or https:// URL with a host, got {_redact(value)!r}"
         raise ValueError(msg)
     return value
+
+
+def _redact(url: str) -> str:
+    """``url`` with any ``user:password@`` replaced by ``***@`` — error messages never echo credentials."""
+    scheme, sep, rest = url.partition("://")
+    if not sep:
+        scheme, rest = "", url
+    authority, slash, tail = rest.partition("/")
+    if "@" in authority:
+        authority = "***@" + authority.rsplit("@", 1)[1]
+    return f"{scheme}{sep}{authority}{slash}{tail}"
 
 
 class Settings(BaseSettings):
@@ -40,6 +55,8 @@ class Settings(BaseSettings):
         env_file=".env",
         case_sensitive=False,
         extra="ignore",
+        # Validation errors must not echo raw input: these settings carry secrets.
+        hide_input_in_errors=True,
         # Off on purpose: with it on, pydantic-settings also reads every aliased
         # secret from ``IRRIGATION_<FIELD>``. Constructor kwargs still accept the
         # field name — see ``__init__``.
