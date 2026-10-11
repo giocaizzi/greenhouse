@@ -6,7 +6,7 @@ from fastapi import APIRouter, Form, HTTPException, Request, status
 from fastapi.responses import RedirectResponse, Response
 
 from greenhouse_server import state
-from greenhouse_server.deps import RepoDep
+from greenhouse_server.deps import RepoDep, require_cluster
 from greenhouse_server.scheduler import apply_timezone_preference
 from greenhouse_server.web.context import base_context
 from greenhouse_server.web.forms import parsed_or_400
@@ -58,6 +58,8 @@ def update_preferences(
     """Save the preferences form, re-sync the clocks to its timezone and reload the page."""
     # Blank clears the default; a non-integer is a 400 page (it used to clear silently).
     default_cluster = parsed_or_400(default_cluster_id, int, error="Invalid default_cluster_id")
+    if default_cluster is not None:
+        require_cluster(repo, default_cluster)  # 404 page, as the API, before anything is written
     prefs = repo.update_preferences(
         units=units,
         timezone=timezone,

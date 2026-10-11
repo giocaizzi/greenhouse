@@ -66,3 +66,15 @@ def test_irrigator_capacity_null_clears(client):
     )
     body = client.put(f"/api/v1/clusters/{cid}/irrigator", json={"reservoir_l": None}).json()
     assert (body["reservoir_l"], body["name"]) == (None, "P")
+
+
+def test_preferences_refuse_an_unknown_default_cluster(client):
+    """A default cluster that does not exist is 404 (API) / a 404 page (web); nothing is written."""
+    resp = client.put("/api/v1/preferences", json={"default_cluster_id": 999, "theme": "dark"})
+    assert (resp.status_code, resp.json()) == (404, {"detail": "Cluster not found"})
+    form = {"units": "metric", "timezone": "UTC", "theme": "dark", "refresh_interval_seconds": "30"}
+    web = client.post("/preferences", data={**form, "default_cluster_id": "999"}, headers={"Accept": "text/html"})
+    assert web.status_code == 404
+    assert "Cluster not found" in web.text
+    prefs = client.get("/api/v1/preferences").json()
+    assert (prefs["default_cluster_id"], prefs["theme"]) == (None, "auto")

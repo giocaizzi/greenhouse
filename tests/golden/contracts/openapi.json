@@ -3636,7 +3636,7 @@
      "preferences"
     ],
     "summary": "Update user preferences",
-    "description": "Patch user preferences; omitted fields are left unchanged.\n\nChanging the timezone re-syncs the scheduler, weather, and display clocks to\nthe new zone so they keep agreeing with the decision engine.\n\nArgs:\n    request: Partial update — any combination of units, timezone, theme,\n        default_cluster_id, refresh_interval_seconds, or dry_run_global.\n        An explicit null clears default_cluster_id; null for a required\n        field is ignored.\n\nReturns:\n    The updated preferences row.",
+    "description": "Patch user preferences; omitted fields are left unchanged.\n\nChanging the timezone re-syncs the scheduler, weather, and display clocks to\nthe new zone so they keep agreeing with the decision engine.\n\nArgs:\n    request: Partial update — any combination of units, timezone, theme,\n        default_cluster_id, refresh_interval_seconds, or dry_run_global.\n        An explicit null clears default_cluster_id; null for a required\n        field is ignored.\n\nReturns:\n    The updated preferences row.\n\nRaises:\n    HTTPException: 404 if `default_cluster_id` names a cluster that does\n        not exist.",
     "operationId": "update_preferences",
     "requestBody": {
      "content": {
