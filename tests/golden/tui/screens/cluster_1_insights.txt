@@ -12,7 +12,7 @@
 │ +-0.1%/min, efficiency 0%). Check drip connection.                 ││ by trigger  auto 3                           │
 │   → Inspect and clear the drip emitter or nozzle.                  │╰──────────────────────────────────────────────╯
 │                                                                    │
-│ Needs water: Nephrolepis probe (Nephrolepis exaltata): 38%         │
+│ Needs water: Nephrolepis probe (Nephrolepis exaltata): 33%         │
 ╰────────────────────────────────────────────────────────────────────╯
  Irrigation efficacy (14 days)
  When              Irrigator         Min  Before  After  Score

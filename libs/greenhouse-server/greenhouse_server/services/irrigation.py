@@ -14,6 +14,8 @@ from greenhouse_core.constants import (
     PUMP_WATCHER_MAX_READ_FAILURES,
     PUMP_WATCHER_POLL_SECONDS,
     PUMP_WATCHER_WARMUP_SECONDS,
+    SECONDS_PER_HOUR,
+    SNAPSHOT_LOOKBACK_HOURS,
 )
 from greenhouse_core.devices import DeviceRegistry, UnknownDeviceModel
 from greenhouse_core.logic import IrrigationLogic
@@ -401,6 +403,21 @@ def _event_notes(act: _Actuation, soil_note: str) -> str:
     )
 
 
+def _monitor_readings(repo: IrrigationRepository, sensor_id: int) -> "list[CleanedReading]":
+    """The cleaned readings of the monitor's recent window, newest first.
+
+    Cleaned view: monitor classifies each sensor as dry/ok/wet, and a sensor-only
+    cluster has no engine to sanity-check that call. Cleaning runs over the decision
+    snapshot's window (``SNAPSHOT_LOOKBACK_HOURS``) so the Hampel filter has enough
+    context to judge the newest sample — the monitor's own 2 h slice is too short
+    at a 30-min cadence and let a single spike read as very dry. Only then is the
+    series cut to ``MONITOR_LOOKBACK_HOURS``.
+    """
+    cutoff = int(_time.time()) - MONITOR_LOOKBACK_HOURS * SECONDS_PER_HOUR
+    history = clean_readings_desc(repo.get_recent_readings(sensor_id, hours=SNAPSHOT_LOOKBACK_HOURS))
+    return [r for r in history if r.timestamp >= cutoff]
+
+
 def _latest_soil(readings: "Sequence[CleanedReading]") -> float | None:
     """Newest non-null soil value of a newest-first (cleaned) series, or None."""
     return next((r.soil_moisture for r in readings if r.soil_moisture is not None), None) if readings else None
@@ -721,10 +738,7 @@ class IrrigationService:
         needs_water: list[str] = []
 
         for sensor in sensors:
-            # Cleaned view: monitor classifies each sensor as dry/ok/wet, and a
-            # sensor-only cluster has no engine to sanity-check that call.
-            readings = clean_readings_desc(self._repo.get_recent_readings(sensor.id, hours=MONITOR_LOOKBACK_HOURS))
-            latest_soil = _latest_soil(readings)
+            latest_soil = _latest_soil(_monitor_readings(self._repo, sensor.id))
 
             plant = plants_by_id.get(sensor.plant_id) if sensor.plant_id else None
             care = self._plant_db.get_care_data(species=plant.species if plant else None)
