@@ -1,6 +1,7 @@
 """Unit tests for Jinja2 template filters used by the web UI."""
 
 import time
+from typing import ClassVar
 
 from greenhouse_server.web.filters import (
     age_seconds,
@@ -167,8 +168,8 @@ class TestClusterCaps:
 
     def test_accepts_orm_like_object(self):
         class _Cluster:
-            plants = [object()]
-            sensors = []
+            plants: ClassVar[list] = [object()]
+            sensors: ClassVar[list] = []
             irrigator = object()
 
         caps = cluster_caps(_Cluster())

@@ -319,7 +319,7 @@ def test_backfill_does_not_re_raise_an_open_low_battery(repo):
 
 @pytest.mark.parametrize("soil_values", [0, 5])
 def test_anomaly_skips_drift_with_too_few_soil_values_but_still_checks_staleness(repo, soil_values):
-    cid, _, (sid,) = _cluster_with_sensor(repo)
+    _cid, _, (sid,) = _cluster_with_sensor(repo)
     latest = FROZEN_TS - 3600
     for k in range(12):  # every 10 min; the newest is an hour old → stale
         soil = 50.0 if k < soil_values else None

@@ -38,7 +38,7 @@ class TestRegistrationIsIdempotent:
     """Building the app more than once in a process must not duplicate jobs."""
 
     def test_rebuilding_app_does_not_duplicate_jobs(self):
-        app1, engine1 = _make_stubbed_app(bypass_auth=True)
+        _app1, engine1 = _make_stubbed_app(bypass_auth=True)
         app2, engine2 = _make_stubbed_app(bypass_auth=True)
         try:
             assert _job_ids(TestClient(app2)) == DEFAULT_JOB_IDS
@@ -206,7 +206,7 @@ class TestDeleteJob:
 
     def test_delete_after_rebuild_removes_job_from_listing(self):
         # Build twice: duplicated pending jobs used to survive a single delete.
-        app1, engine1 = _make_stubbed_app(bypass_auth=True)
+        _app1, engine1 = _make_stubbed_app(bypass_auth=True)
         app2, engine2 = _make_stubbed_app(bypass_auth=True)
         try:
             c = TestClient(app2)

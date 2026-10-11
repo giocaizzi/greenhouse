@@ -96,7 +96,7 @@ class TestClusterEfficacy:
             engine.dispose()
 
     def test_spike_reading_does_not_inflate_the_score(self):
-        """Efficacy is rise × 5, so one glitch sample is worth 100 phantom points.
+        """Efficacy is rise x 5, so one glitch sample is worth 100 phantom points.
 
         The event below is a dud — moisture sat at 30% before and after — with a
         single spurious 95% sample in the after-window. Read through the cleaned

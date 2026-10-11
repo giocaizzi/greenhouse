@@ -82,7 +82,7 @@ def _no_device_registry(app, _repo) -> None:
 
 
 def _quiet_hours_now(_app, repo) -> None:
-    # Frozen clock is 10:00 UTC; make 09–12 quiet for the indoor cluster.
+    # Frozen clock is 10:00 UTC; make 09-12 quiet for the indoor cluster.
     repo.set_irrigation_config(cluster_id=INDOOR, quiet_start_hour=9, quiet_end_hour=12)
 
 

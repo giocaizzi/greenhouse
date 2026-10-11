@@ -22,6 +22,7 @@ import json
 import logging
 from datetime import timedelta
 from types import SimpleNamespace
+from typing import ClassVar
 
 import pytest
 from sqlalchemy import select
@@ -56,7 +57,7 @@ class NoCloud:
 class SpyTR301Z(TR301ZAdapter):
     """Real TR-301Z health derivation, recording which persisted row it was handed."""
 
-    seen: list = []
+    seen: ClassVar[list] = []
 
     def read_health(self, sensor, latest=None):
         SpyTR301Z.seen.append(None if latest is None else latest.timestamp)

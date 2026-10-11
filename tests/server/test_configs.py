@@ -4,7 +4,7 @@ from http import HTTPStatus
 
 from greenhouse_core.constants import DEFAULT_INTERVAL_HOURS
 
-SEEDED_QUIET_END_HOUR = 5  # the Alembic migration seeds quiet hours 0–5
+SEEDED_QUIET_END_HOUR = 5  # the Alembic migration seeds quiet hours 0-5
 
 
 class TestConfigCRUD:
@@ -48,7 +48,7 @@ class TestGlobalConfig:
     """Singleton global irrigation defaults: read + partial PUT semantics."""
 
     def test_get_returns_migration_seeded_quiet_hours(self, client):
-        """The Alembic migration seeds the singleton row with quiet hours 0–5."""
+        """The Alembic migration seeds the singleton row with quiet hours 0-5."""
         resp = client.get("/api/v1/config/global")
         assert resp.status_code == HTTPStatus.OK
         data = resp.json()

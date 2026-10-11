@@ -112,7 +112,7 @@ def test_cluster_snapshot_soil_is_min_light_is_max(db):
 def test_monitor_status_bands_around_the_plant_target(db, soil, status):
     """irrigation-15 / irrigation-16: monitor bands for a 45-60 % plant.
 
-    ``very_dry`` < target_min − 15, ``dry`` < target_min, ``wet`` > target_max + 10, else ``ok``.
+    ``very_dry`` < target_min - 15, ``dry`` < target_min, ``wet`` > target_max + 10, else ``ok``.
     """
     cid = db.add_cluster("Monitor Gap")
     pid = db.add_plant(cluster_id=cid, species="Monstera deliciosa", category="tropical")
@@ -383,7 +383,7 @@ LEAK_START = FROZEN_TS - 3600  # the check runs 30 min later; every sample is in
 
 
 def _leak_check(db, before: list[float], after: list[float]):
-    """Seed one sensor with ``before`` (−50 min…) and ``after`` (+5 min, every 5 min) and run the check."""
+    """Seed one sensor with ``before`` (-50 min…) and ``after`` (+5 min, every 5 min) and run the check."""
     cid, (sid,), _ = _cluster_with_sensors(db, 1, irrigator=True)
     for i, soil in enumerate(before):
         db.add_sensor_reading(sensor_id=sid, timestamp=LEAK_START - 600 * (len(before) - i), soil_moisture=soil)
@@ -610,7 +610,7 @@ def test_daily_cap_counts_only_start_minutes(db):
 
 def test_manual_start_checks_registry_before_caps(db):
     """manual-04: with no device registry a start is 503 even when the caps would also refuse it."""
-    cid, irr, _ = _manual_world(db, max_events_per_day=1)
+    _cid, irr, _ = _manual_world(db, max_events_per_day=1)
     db.add_irrigation_event(irrigator_id=irr.id, action="start", triggered_by="manual", duration_minutes=2)
     with pytest.raises(ManualActionError) as exc:
         manual_start(db, None, None, irr, 3, via="API")

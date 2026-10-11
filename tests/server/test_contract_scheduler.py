@@ -138,7 +138,7 @@ def test_init_scheduler_rebinds_the_module_app():
 def test_every_job_has_safe_defaults_stopped_and_running(p):
     """``max_instances=1``, ``coalesce=True``, ``misfire_grace_time=None`` on core *and* ad-hoc jobs."""
     p.app.state.device_registry = p.wiring.registry
-    irrigation_jobs_mod._add_leak_check_job(1, FROZEN_TS)  # noqa: SLF001 — ad-hoc job on a stopped scheduler
+    irrigation_jobs_mod._add_leak_check_job(1, FROZEN_TS)  # noqa: SLF001 — no public entry point; ad-hoc job, stopped scheduler
     sched.start_scheduler(paused=True)
     try:
         assert pump_watcher_jobs_mod.schedule_pump_watcher(1, 2, FROZEN_TS) is True
@@ -390,7 +390,7 @@ def test_health_snapshot_job_failure_is_logged(monkeypatch, caplog):
 
 
 def test_anomaly_job_raises_stale_alert_and_notifies(p):
-    # 12 hourly readings ending 5 h ago → silent for > 2 × the median interval.
+    # 12 hourly readings ending 5 h ago → silent for > 2 x the median interval.
     _seed_series(p, ages=range(5 * HOUR, 17 * HOUR, HOUR))
     p.mark()
     run_core_job("sensor_anomaly")
@@ -514,7 +514,7 @@ def test_run_leak_check_raises_hold_once_and_marks_done(p):
     p.mark()
     irrigation_jobs_mod._run_leak_check(1, started_at)  # noqa: SLF001 — leak-check jobs have no public entry point
     first = p.db_rows()
-    irrigation_jobs_mod._run_leak_check(1, started_at)  # noqa: SLF001 — idempotent: marker found → skipped
+    irrigation_jobs_mod._run_leak_check(1, started_at)  # noqa: SLF001 — no public entry point; idempotent re-run
     second = p.db_rows()
     assert second == first
     assert [a["code"] for a in first["activity_events"]] == ["leak_hold", "leak_check"]

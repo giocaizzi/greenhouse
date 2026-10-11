@@ -218,7 +218,7 @@ class TestCleaningIsApplied:
     """The detector reads the same cleaned view as the decision engine."""
 
     def test_outlier_spike_does_not_raise_an_alert(self, repo, plant_db, seeded, started_at):
-        """The exact #103 signature: one +4σ sample the anomaly scan flags as drift.
+        """The exact #103 signature: one +4 sigma sample the anomaly scan flags as drift.
 
         Raw, the after-window averages ~45% against an empty-ish baseline and
         the old rule cried leak. Through the Hampel filter the spike drops out

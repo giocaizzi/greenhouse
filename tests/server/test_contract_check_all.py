@@ -180,7 +180,7 @@ def test_check_failed_alert_lifecycle(three_dry_clusters, tx_log, monkeypatch):
 def test_scheduler_check_job_isolates_clusters_the_same_way(three_dry_clusters, tx_log, monkeypatch):
     """I-ii (4): the scheduler's ``_check_job`` body gives the same per-cluster isolation."""
     p = three_dry_clusters
-    assert scheduler._app is p.app  # noqa: SLF001 — init_scheduler rebinds the module global per create_app
+    assert scheduler._app is p.app  # noqa: SLF001 — pins the module global init_scheduler rebinds per create_app
     # The job reads the registry from app.state, not from the request-level override.
     p.app.state.device_registry = p.wiring.registry
     _crash_after_check(monkeypatch, tx_log, failing={2})

@@ -48,7 +48,7 @@ class TestSensorStale:
         """A 90-minute silence after 5-minute intervals triggers sensor_stale."""
         cluster_id, sensor_id = cluster_and_sensor
         # 12 readings every 5 min; last reading 90 min ago
-        # median interval = 300s; gap = 5400s > 2×300 = 600s
+        # median interval = 300s; gap = 5400s > 2x300 = 600s
         self._seed_regular(repo, sensor_id, count=12, interval_s=300, end_offset_s=5400)
 
         alerts = SensorAnomalyService(repo).scan()
@@ -61,7 +61,7 @@ class TestSensorStale:
 
     def test_fresh_sensor_no_stale_alert(self, repo, cluster_and_sensor):
         """A sensor that just reported is not stale."""
-        cluster_id, sensor_id = cluster_and_sensor
+        _cluster_id, sensor_id = cluster_and_sensor
         self._seed_regular(repo, sensor_id, count=12, interval_s=300, end_offset_s=0)
 
         alerts = SensorAnomalyService(repo).scan()
@@ -70,7 +70,7 @@ class TestSensorStale:
 
     def test_too_few_readings_skipped(self, repo, cluster_and_sensor):
         """Sensors with fewer than 10 readings are skipped."""
-        cluster_id, sensor_id = cluster_and_sensor
+        _cluster_id, sensor_id = cluster_and_sensor
         now = int(time.time())
         for i in range(5):
             repo.add_sensor_reading(sensor_id, timestamp=now - 5000 + i * 300, soil_moisture=50.0)
@@ -88,7 +88,7 @@ class TestSensorDrift:
 
     def test_spike_detected(self, repo, cluster_and_sensor):
         """A 95% reading against a ~50% baseline triggers sensor_drift (z >> 4)."""
-        cluster_id, sensor_id = cluster_and_sensor
+        _cluster_id, sensor_id = cluster_and_sensor
         self._seed_baseline(repo, sensor_id, count=49, moisture=50.0)
         repo.add_sensor_reading(sensor_id, timestamp=int(time.time()), soil_moisture=95.0)
         repo.session.commit()
@@ -102,7 +102,7 @@ class TestSensorDrift:
 
     def test_normal_reading_no_drift_alert(self, repo, cluster_and_sensor):
         """A reading within normal range of the baseline does not trigger drift."""
-        cluster_id, sensor_id = cluster_and_sensor
+        _cluster_id, sensor_id = cluster_and_sensor
         self._seed_baseline(repo, sensor_id, count=49, moisture=50.0)
         repo.add_sensor_reading(sensor_id, timestamp=int(time.time()), soil_moisture=52.0)
         repo.session.commit()
@@ -112,7 +112,7 @@ class TestSensorDrift:
 
     def test_constant_series_no_drift_alert(self, repo, cluster_and_sensor):
         """A perfectly constant series (std=0) does not trigger a drift alert."""
-        cluster_id, sensor_id = cluster_and_sensor
+        _cluster_id, sensor_id = cluster_and_sensor
         self._seed_baseline(repo, sensor_id, count=50, moisture=50.0)
         repo.session.commit()
 

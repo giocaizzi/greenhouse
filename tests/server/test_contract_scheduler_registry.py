@@ -148,7 +148,7 @@ def test_scheduler_registry_matches_golden():
     """Every scenario's pending + started registry equals ``contracts/scheduler_jobs.json``."""
     observed = {}
     for scenario, spec in SCENARIOS.items():
-        app, engine = _build(spec["settings"], spec["prefs"])
+        _app, engine = _build(spec["settings"], spec["prefs"])
         try:
             observed[scenario] = _snapshot()
         finally:
@@ -183,7 +183,7 @@ def test_registration_order_and_identity():
 
 @pytest.mark.usefixtures("clean_env", "frozen_clock")
 def test_rebuilding_the_app_does_not_duplicate_jobs():
-    app1, engine1 = _build({}, None)
+    _app1, engine1 = _build({}, None)
     sync_minutes = 45
     app2, engine2 = _build({"sync_interval_minutes": sync_minutes}, None)
     try:
@@ -214,7 +214,7 @@ def test_registry_ignores_the_removed_check_interval_hours():
     sched_logger = logging.getLogger("greenhouse_server.scheduler")
     sched_logger.addHandler(handler)
     try:
-        app, engine = _build({"check_interval_hours": 6}, None)
+        _app, engine = _build({"check_interval_hours": 6}, None)
         hour = next(str(f) for f in sched_mod.scheduler.get_job("check_all").trigger.fields if f.name == "hour")
         engine.dispose()
     finally:

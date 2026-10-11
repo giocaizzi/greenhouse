@@ -189,7 +189,8 @@ class TestWatcherTrips:
             _alarm(no_water=False, alarm_raw=0),
             _alarm(no_water=False, alarm_raw=0),
             _alarm(no_water=True, alarm_raw=1),
-        ] + _completed_alarms()
+            *_completed_alarms(),
+        ]
         adapter = _make_fake_adapter(reads)
         monitor = _make_monitor(repo)
         watcher = PumpWatcherService(
@@ -249,7 +250,7 @@ class TestWatcherTrips:
     def test_trip_records_payload_with_alarm_value(self, repo, irrigator):
         """The activity event records the raw DP 105 value for forensics."""
         clock = FakeClock(step=1.0)
-        adapter = _make_fake_adapter([_alarm(no_water=True, alarm_raw=1)] + _completed_alarms())
+        adapter = _make_fake_adapter([_alarm(no_water=True, alarm_raw=1), *_completed_alarms()])
         watcher = PumpWatcherService(
             repo,
             _make_registry(adapter),
@@ -281,7 +282,8 @@ class TestWatcherDegradedSignals:
             _alarm(no_water=False, alarm_raw=0, error="local read failed: timeout"),
             _alarm(no_water=False, alarm_raw=0),
             _alarm(no_water=False, alarm_raw=0),
-        ] + _completed_alarms()
+            *_completed_alarms(),
+        ]
         adapter = _make_fake_adapter(reads)
         watcher = PumpWatcherService(
             repo,
@@ -327,7 +329,7 @@ class TestWatcherTripSideEffectsAreRobust:
     def test_trip_proceeds_even_if_irrigator_off_raises(self, repo, irrigator):
         """If the stop call raises, the alert and event are still recorded."""
         clock = FakeClock(step=1.0)
-        adapter = _make_fake_adapter([_alarm(no_water=True, alarm_raw=1)] + _completed_alarms())
+        adapter = _make_fake_adapter([_alarm(no_water=True, alarm_raw=1), *_completed_alarms()])
 
         def _raising_stop(_irrigator):
             msg = "device offline"
@@ -363,7 +365,7 @@ class TestWatcherRoutesThroughMonitor:
     def test_trip_records_into_monitor_cache(self, repo, irrigator):
         """After a trip, the monitor's cache reflects NO_WATER for the irrigator."""
         clock = FakeClock(step=1.0)
-        adapter = _make_fake_adapter([_alarm(no_water=True, alarm_raw=1)] + _completed_alarms())
+        adapter = _make_fake_adapter([_alarm(no_water=True, alarm_raw=1), *_completed_alarms()])
         monitor = _make_monitor(repo)
         watcher = PumpWatcherService(
             repo,
@@ -411,7 +413,7 @@ class TestWatcherIrrigatorModel:
         irrigator_b: Irrigator = repo.get_irrigator(irrigator_b_id)
 
         clock = FakeClock(step=1.0)
-        adapter = _make_fake_adapter([_alarm(no_water=True, alarm_raw=1)] + _completed_alarms())
+        adapter = _make_fake_adapter([_alarm(no_water=True, alarm_raw=1), *_completed_alarms()])
         watcher = PumpWatcherService(
             repo,
             _make_registry(adapter),

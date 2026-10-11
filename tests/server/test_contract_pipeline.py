@@ -7,7 +7,7 @@ call it makes on the fake irrigator/sensor adapters and the recording Tuya
 gateway, and every push notification it attempts.
 
 Hermetic: clock frozen at ``FROZEN_INSTANT`` (10:00 UTC — outside the
-migration-seeded 00–05 quiet hours), weather offline unless a scenario installs
+migration-seeded 00-05 quiet hours), weather offline unless a scenario installs
 its own canned stub, no env leakage (``clean_env``), notifier replaced by a
 recorder, scheduler stopped (so leak checks / pump watchers are *not*
 scheduled — :func:`test_successful_auto_start_schedules_leak_check_and_watcher`
@@ -1145,7 +1145,7 @@ def test_device_health_block_is_written_to_decision_log(pipeline):
     pipeline.mark()
     resp = _irrigate(pipeline)["response"]
     assert resp["action"] == "skip"
-    assert [r["code"] for r in resp["reasons"]][0] == "device_no_water"
+    assert resp["reasons"][0]["code"] == "device_no_water"
     rows = pipeline.db_rows()
     (log,) = rows["decision_logs"]
     assert (log["action"], log["primary_code"], log["actuated"]) == ("skip", "device_no_water", False)

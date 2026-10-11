@@ -42,7 +42,7 @@ class TestCreateWindow:
         page = seeded_client.get("/clusters/1/config")
         assert page.status_code == HTTPStatus.OK
         assert "Workday AM" in page.text
-        assert "06:00–10:00" in page.text
+        assert "06:00\N{EN DASH}10:00" in page.text
         # 31 = Mon..Fri mask → rendered as weekday labels
         assert "Mon" in page.text
         assert "Fri" in page.text
@@ -136,7 +136,7 @@ class TestEditWindow:
 
         page = seeded_client.get("/clusters/1/config")
         assert "Weekend PM" in page.text
-        assert "18:00–20:00" in page.text
+        assert "18:00\N{EN DASH}20:00" in page.text
 
     def test_update_404_unknown_window(self, seeded_client):
         resp = seeded_client.post(

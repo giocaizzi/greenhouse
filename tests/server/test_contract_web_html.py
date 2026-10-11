@@ -291,7 +291,7 @@ def seed_greenhouse(repo: IrrigationRepository) -> None:
             timestamp=ts,
         )
 
-    # Watering window on the outdoor cluster: 06–09, Mon/Wed/Fri.
+    # Watering window on the outdoor cluster: 06-09, Mon/Wed/Fri.
     repo.add_irrigation_window(outdoor, start_hour=6, end_hour=9, weekday_mask=1 | 4 | 16, label="Morning")
 
     # Vacations: one upcoming (drives the budget readout), one past.
