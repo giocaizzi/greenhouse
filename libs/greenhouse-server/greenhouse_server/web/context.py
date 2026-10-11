@@ -5,8 +5,10 @@ from __future__ import annotations
 import contextlib
 import logging
 import time
+from datetime import UTC, datetime, tzinfo
 from importlib.metadata import PackageNotFoundError, version
 from typing import TYPE_CHECKING, Any
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import Request
 
@@ -51,8 +53,8 @@ def _repo_from_request(request: Request) -> tuple[IrrigationRepository, Session]
         return None, None
 
 
-def _preference_flags(request: Request) -> tuple[bool, VacationWindow | None, bool, str]:
-    """Read the chrome's preference flags: ``(dry_run_global, active_vacation, scheduler_paused, theme)``.
+def _preference_flags(request: Request) -> tuple[bool, VacationWindow | None, bool, str, str]:
+    """Read the chrome's preference flags: ``(dry_run_global, active_vacation, scheduler_paused, theme, timezone)``.
 
     Best effort: a failed read keeps whatever was read before it (defaults otherwise), and the
     short-lived session is always closed.
@@ -65,12 +67,14 @@ def _preference_flags(request: Request) -> tuple[bool, VacationWindow | None, bo
     # device with empty localStorage — paints the persisted preference. The
     # early-apply script still prefers localStorage for instant client paint.
     theme = "auto"
+    timezone = "UTC"  # the column default
     if repo is not None:
         try:
             prefs = repo.get_preferences()
             dry_run_global = prefs.dry_run_global
             scheduler_paused = prefs.scheduler_paused
             theme = prefs.theme or "auto"
+            timezone = prefs.timezone or "UTC"
             active_vacation = repo.get_active_vacation()
         except Exception:  # chrome flags are best effort; the page still renders
             logger.debug("Could not read the chrome preference flags", exc_info=True)
@@ -78,7 +82,20 @@ def _preference_flags(request: Request) -> tuple[bool, VacationWindow | None, bo
             # _repo_from_request sets repo and session together, so session is set whenever repo is.
             if session is not None:
                 session.close()
-    return dry_run_global, active_vacation, scheduler_paused, theme
+    return dry_run_global, active_vacation, scheduler_paused, theme, timezone
+
+
+def _now_text(tz_name: str) -> str:
+    """The footer's "page rendered" time in the preferences timezone (UTC if the name is unknown).
+
+    Not the process-local zone: the container's ``TZ`` is unrelated to the user's clock.
+    """
+    try:
+        zone: tzinfo = ZoneInfo(tz_name)
+    except (ZoneInfoNotFoundError, ValueError):
+        logger.debug("Unknown timezone preference %r; footer clock uses UTC", tz_name, exc_info=True)
+        zone = UTC
+    return datetime.fromtimestamp(time.time(), tz=zone).strftime("%Y-%m-%d %H:%M")
 
 
 def _auth_enabled(request: Request) -> bool:
@@ -91,13 +108,13 @@ def _auth_enabled(request: Request) -> bool:
 
 def base_context(request: Request, **extra: Any) -> dict[str, Any]:
     """Build the template context every page shares (chrome flags, theme, version) merged with ``extra``."""
-    dry_run_global, active_vacation, scheduler_paused, theme = _preference_flags(request)
+    dry_run_global, active_vacation, scheduler_paused, theme, timezone = _preference_flags(request)
     auth_enabled = _auth_enabled(request)
 
     return {
         "request": request,
         "is_hx": is_hx(request),
-        "now_text": time.strftime("%Y-%m-%d %H:%M"),
+        "now_text": _now_text(timezone),
         "dry_run_global": dry_run_global,
         "active_vacation": active_vacation,
         "scheduler_paused": scheduler_paused,
