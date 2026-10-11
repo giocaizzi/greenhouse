@@ -32,6 +32,7 @@ class SettingsScreen(DataScreen):
     ]
 
     def __init__(self) -> None:
+        """Start empty; the preferences, global config and vacations arrive on load."""
         super().__init__()
         self.prefs: dict[str, Any] = {}
         self.global_config: dict[str, Any] = {}

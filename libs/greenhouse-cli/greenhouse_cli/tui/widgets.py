@@ -37,6 +37,7 @@ class SpriteView(Static):
     """
 
     def __init__(self, factory: SpriteFactory, animate: bool = True, **kwargs: Any) -> None:
+        """Render frame 0 of ``factory``; ``animate`` cycles the frames on a timer."""
         super().__init__(factory(0), **kwargs)
         self._factory = factory
         self._frame = 0
@@ -103,12 +104,14 @@ class ClusterCard(Vertical, can_focus=True):
         """Posted when the card is opened, so the dashboard can push the cluster screen."""
 
         def __init__(self, cluster_id: int) -> None:
+            """Carry the id of the cluster to open."""
             super().__init__()
             self.cluster_id = cluster_id
 
     BINDINGS: ClassVar[list[BindingType]] = [("enter", "select", "Open")]
 
     def __init__(self, summary: ClusterSummary, **kwargs: Any) -> None:
+        """Build the card for ``summary``; its DOM id derives from the cluster id."""
         super().__init__(id=f"cluster-card-{summary.id}", classes="cluster-card", **kwargs)
         self.summary = summary
 
@@ -185,6 +188,7 @@ class PlantTile(Vertical):
         band: tuple[float | None, float | None] = (None, None),
         **kw: Any,
     ) -> None:
+        """Show one plant: species/category pick the sprite, ``moisture`` and ``band`` fill the gauge."""
         super().__init__(classes="plant-tile", **kw)
         self._args = (species, category, moisture, mood, watering, band)
 

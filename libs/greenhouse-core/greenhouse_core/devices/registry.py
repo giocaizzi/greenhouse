@@ -48,6 +48,7 @@ class DeviceRegistry:
     """
 
     def __init__(self) -> None:
+        """Start with no model keys registered."""
         self._irrigators: dict[str, IrrigatorFactory] = {}
         self._sensors: dict[str, SensorFactory] = {}
 

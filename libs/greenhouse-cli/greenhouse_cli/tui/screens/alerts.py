@@ -32,6 +32,7 @@ class AlertsScreen(DataScreen):
     ]
 
     def __init__(self) -> None:
+        """Start on the open alerts, with no rows loaded yet."""
         super().__init__()
         self.status_filter: str | None = "open"
         self._alerts: dict[int, dict[str, Any]] = {}

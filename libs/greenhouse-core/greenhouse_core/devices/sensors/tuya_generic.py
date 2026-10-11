@@ -30,7 +30,8 @@ class TuyaSensorAdapter(AbstractSensorAdapter):
     only records which DP codes the model reports.
     """
 
-    def __init__(self, profile: SensorProfile, gateway: DeviceGateway):
+    def __init__(self, profile: SensorProfile, gateway: DeviceGateway) -> None:
+        """Bind the model ``profile`` to the shared device ``gateway``."""
         self.profile = profile
         self._gateway = gateway
 

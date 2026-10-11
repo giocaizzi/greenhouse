@@ -31,6 +31,7 @@ class SystemScreen(DataScreen):
     ]
 
     def __init__(self) -> None:
+        """Start with the scheduler state unknown until the first load."""
         super().__init__()
         self.paused: bool | None = None
         self.core_jobs: set[str] = set()

@@ -91,6 +91,7 @@ class FormScreen(ModalScreen[dict[str, Any] | None]):
     BINDINGS: ClassVar[list[BindingType]] = [("escape", "dismiss(None)", "Cancel"), ("ctrl+s", "submit", "Save")]
 
     def __init__(self, title: str, fields: list[Field], submit_label: str = "Save", note: str | None = None) -> None:
+        """Lay out ``fields`` under ``title``, with an optional explanatory ``note``."""
         super().__init__()
         self.form_title = title
         self.fields = fields

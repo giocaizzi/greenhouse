@@ -63,6 +63,7 @@ class GreenhouseApp(App[None]):
         refresh_seconds: float = 30.0,
         animations: bool = True,
     ) -> None:
+        """Point the app at ``server_url``; tests inject ``client_factory`` to avoid the network."""
         super().__init__()
         self.server_url = server_url
         self.client_factory: ClientFactory = client_factory or (

@@ -155,6 +155,7 @@ class DeviceGateway:
         raw: _TuyaCloudClient | None = None,
         on_key_discovered: Callable[[str, str], None] | None = None,
     ) -> None:
+        """Resolve the Cloud credentials (arguments, else ``TUYA_*`` env vars); ``raw`` injects a client."""
         self.client_id = client_id or os.environ.get("TUYA_CLIENT_ID", "")
         self.client_secret = client_secret or os.environ.get("TUYA_CLIENT_SECRET", "")
         self.region = region or os.environ.get("TUYA_REGION", "eu")

@@ -30,6 +30,7 @@ class ActivityScreen(DataScreen):
     ]
 
     def __init__(self) -> None:
+        """Start unfiltered, with no paging cursor."""
         super().__init__()
         self.severity: str | None = None
         self.cursor: int | None = None

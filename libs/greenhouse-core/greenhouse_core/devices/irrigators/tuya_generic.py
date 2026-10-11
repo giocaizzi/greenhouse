@@ -30,7 +30,8 @@ class TuyaIrrigatorAdapter(AbstractIrrigatorAdapter):
     override the relevant method while reusing the cloud helpers.
     """
 
-    def __init__(self, profile: IrrigatorProfile, gateway: DeviceGateway):
+    def __init__(self, profile: IrrigatorProfile, gateway: DeviceGateway) -> None:
+        """Bind the model ``profile`` to the shared device ``gateway``."""
         self.profile = profile
         self._gateway = gateway
 

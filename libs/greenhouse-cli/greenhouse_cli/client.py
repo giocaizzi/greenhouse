@@ -129,6 +129,7 @@ class ServerError(Exception):
     """Raised when the server returns an error response."""
 
     def __init__(self, status_code: int, detail: str) -> None:
+        """Keep the HTTP status (0 for transport failures) and the server's detail text."""
         self.status_code = status_code
         self.detail = detail
         super().__init__(f"Server error {status_code}: {detail}")
@@ -148,9 +149,11 @@ class IrrigationClient:
     # Context manager only, no public close(): every public method maps to one /api/v1 endpoint (tests enforce it).
     # CLI commands close the client per call; the TUI keeps one client per session and closes ``http`` on exit.
     def __enter__(self) -> Self:
+        """Use the client as a context manager that closes its connection pool."""
         return self
 
     def __exit__(self, *exc_info: object) -> None:
+        """Close the underlying httpx connection pool."""
         self.http.close()
 
     def _send(self, method: str, path: str, **kwargs: Any) -> httpx.Response:

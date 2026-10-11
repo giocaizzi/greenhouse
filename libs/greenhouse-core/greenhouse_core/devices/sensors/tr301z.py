@@ -59,7 +59,8 @@ class TR301ZAdapter(TuyaSensorAdapter):
         }
     )
 
-    def __init__(self, gateway: DeviceGateway, profile: SensorProfile | None = None):
+    def __init__(self, gateway: DeviceGateway, profile: SensorProfile | None = None) -> None:
+        """Bind to ``gateway``, with the bundled TR301Z profile unless one is given."""
         super().__init__(profile or TR301Z_PROFILE, gateway)
 
     def read_health(self, sensor: Sensor, latest: SensorReading | None = None) -> DeviceHealthState:

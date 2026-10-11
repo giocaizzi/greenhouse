@@ -36,6 +36,7 @@ class SearchScreen(ModalScreen[int | None]):
             yield DataTable(id="search-results", cursor_type="row")
 
     def __init__(self) -> None:
+        """Start with no result rows to open."""
         super().__init__()
         self._targets: dict[str, int] = {}
 

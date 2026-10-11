@@ -141,6 +141,7 @@ class IrrigationLogic:
     def __init__(
         self, db: IrrigationRepository, plant_db: PlantDatabase, *, weather_client: RainForecast | None = None
     ) -> None:
+        """Wire the repository, plant DB and optional rain forecast the engine reads."""
         self.db = db
         self.plant_db = plant_db
         self._weather = weather_client
@@ -322,8 +323,7 @@ class IrrigationLogic:
         return self._enforce_cooldown(cluster_id, evaluated_at)
 
     def _resolve_quiet_window(self, cluster_id: int, evaluated_at: int) -> tuple[int, int] | None:
-        """Return the effective quiet-hours window for a cluster if it is
-        currently inside one, else ``None``.
+        """Return the cluster's effective quiet-hours window while inside it, else ``None``.
 
         Resolves quiet-hour bounds via the hierarchical config (cluster →
         global → built-in default in :mod:`constants`) and tests the current
@@ -340,8 +340,7 @@ class IrrigationLogic:
         return prefs.timezone if prefs else None
 
     def _apply_window_rule(self, cluster_id: int, evaluated_at: int) -> IrrigationDecision | None:
-        """Return a SKIP decision when the current local time is outside the
-        cluster's irrigation windows.
+        """Return a SKIP decision when the current local time is outside the cluster's irrigation windows.
 
         A cluster with NO configured ``IrrigationWindow`` rows allows watering at
         any hour — night protection is the job of quiet hours, not this rule (see
@@ -370,9 +369,10 @@ class IrrigationLogic:
     def _apply_seasonal_multiplier(
         self, cluster: "Cluster", decision: IrrigationDecision, plant_care: list[dict[str, Any]], evaluated_at: int
     ) -> None:
-        """Scale ``decision.interval_hours`` by a seasonal multiplier and append
-        a ``SEASONAL_HOLD`` / ``SEASONAL_BOOST`` reason when the multiplier is
-        not 1.0. Clamps to [MIN_INTERVAL_HOURS, MAX_INTERVAL_HOURS].
+        """Scale ``decision.interval_hours`` by the seasonal multiplier, with a reason when it is not 1.0.
+
+        The reason is ``SEASONAL_HOLD`` / ``SEASONAL_BOOST``; the result is clamped to
+        [MIN_INTERVAL_HOURS, MAX_INTERVAL_HOURS].
 
         Layers (most → least specific): species-level
         ``season_frequency_multiplier{,_outdoor}`` from the plant DB, then the
@@ -820,7 +820,9 @@ def _veto_water_warning(decision: IrrigationDecision, evidence: str) -> None:
     )
     decision.add_reason(
         code=TriggerCode.WATER_WARNING,
-        message=f"device soil-dry alarm not acted on (soil reads over-watered): {decision.stress_indicators.water_warning}",
+        message=(
+            f"device soil-dry alarm not acted on (soil reads over-watered): {decision.stress_indicators.water_warning}"
+        ),
         severity=Severity.WARNING,
         icon="warning-circle",
     )

@@ -202,7 +202,8 @@ class IrrigatorExistsError(ValueError):
 class IrrigationRepository:
     """Repository for irrigation system data access."""
 
-    def __init__(self, session: Session):
+    def __init__(self, session: Session) -> None:
+        """Wrap ``session``; the caller owns its lifetime."""
         self.session = session
 
     # ── Unit of work ──────────────────────────────────────────────────────────

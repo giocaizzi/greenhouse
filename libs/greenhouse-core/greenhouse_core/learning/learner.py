@@ -12,7 +12,8 @@ from greenhouse_core.repository import IrrigationRepository
 class IrrigationLearner:
     """Learns from historical irrigation data."""
 
-    def __init__(self, db: IrrigationRepository, plant_db: PlantDatabase):
+    def __init__(self, db: IrrigationRepository, plant_db: PlantDatabase) -> None:
+        """Read history through ``db`` and species care data through ``plant_db``."""
         self.db = db
         self.plant_db = plant_db
 

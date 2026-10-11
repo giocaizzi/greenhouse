@@ -95,7 +95,8 @@ class IK10PWAdapter(TuyaIrrigatorAdapter):
 
     health_capabilities = frozenset({HealthAlarm.NO_WATER, HealthAlarm.DEVICE_OFFLINE})
 
-    def __init__(self, gateway: DeviceGateway, profile: IrrigatorProfile | None = None):
+    def __init__(self, gateway: DeviceGateway, profile: IrrigatorProfile | None = None) -> None:
+        """Bind to ``gateway``, with the bundled IK10PW profile unless one is given."""
         super().__init__(profile or IK10PW_PROFILE, gateway)
 
     # ── Cycle start ───────────────────────────────────────────────────────

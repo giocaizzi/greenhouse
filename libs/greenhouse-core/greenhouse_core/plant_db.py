@@ -26,7 +26,8 @@ PLANT_DB_PATH = (
 class PlantDatabase:
     """Lookup plant care requirements from scientific literature."""
 
-    def __init__(self, db_path: Path | None = None):
+    def __init__(self, db_path: Path | None = None) -> None:
+        """Load the curated database from ``db_path`` (default: the bundled JSON)."""
         self.db_path = db_path or PLANT_DB_PATH
         self._data = self._load_database()
 

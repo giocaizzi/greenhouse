@@ -54,6 +54,7 @@ class DashboardScreen(DataScreen):
         yield Footer()
 
     def __init__(self) -> None:
+        """Create the lock that serialises card-grid rebuilds."""
         super().__init__()
         # One card-grid rebuild at a time (S4): an auto-refresh that overtakes a slow
         # load must not interleave remove/mount with it (DuplicateIds / NoMatches).

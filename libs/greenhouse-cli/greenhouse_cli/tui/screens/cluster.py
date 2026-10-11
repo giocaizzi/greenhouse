@@ -61,6 +61,7 @@ class ClusterScreen(DataScreen):
     ]
 
     def __init__(self, cluster_id: int) -> None:
+        """Show cluster ``cluster_id``; the payloads arrive on the first load."""
         super().__init__()
         self.cluster_id = cluster_id
         self.summary: ClusterSummary | None = None
@@ -644,7 +645,10 @@ class ClusterScreen(DataScreen):
         )
 
     def action_plant_sync(self) -> None:
-        """Refresh this cluster's plant care data from the curated plant DB, after confirmation (it rewrites care data)."""
+        """Refresh this cluster's plant care data from the curated plant DB, after confirmation.
+
+        Confirmation is asked because the sync rewrites the plants' care data.
+        """
         self.confirm_then(
             "Sync this cluster's plants with the plant DB?\nTheir care data is updated from it.",
             lambda c: c.sync_plants(cluster_id=self.cluster_id),
