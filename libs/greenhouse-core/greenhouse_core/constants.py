@@ -334,7 +334,6 @@ MONITOR_LOOKBACK_HOURS = 2
 MONITOR_VERY_DRY_MARGIN = 15  # % below target minimum
 MONITOR_WET_MARGIN = 10  # % above target maximum
 FALLBACK_TEMPERATURE_C = 20.0  # used when no temperature source is available
-LEAK_CHECK_ACTIVITY_SCAN_LIMIT = 500
 
 # ── Pump watcher defaults ────────────────────────────────────────────────────
 

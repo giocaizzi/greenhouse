@@ -828,17 +828,28 @@ def test_watcher_job_session_commit_rollback_close_order(watcher_env, monkeypatc
     )
 
 
-def test_leak_check_done_scans_at_most_500_leak_rows(db, monkeypatch):
-    """Mutation guard for the ``limit=500`` literal (bug B-23 neighbourhood: older markers are not seen)."""
-    seen: list[dict] = []
+def test_leak_check_done_sees_a_marker_behind_many_newer_leak_rows(db):
+    """B-23 fixed: the completion scan is bounded by time, not by the newest 500 leak rows.
 
-    def spy(self, **kwargs):
-        seen.append(kwargs)
-        return []
-
-    monkeypatch.setattr(IrrigationRepository, "list_activity_events", spy)
-    assert irrigation_mod._leak_check_done(db, 7, FROZEN_TS) is False
-    assert seen == [{"entity_type": "cluster", "entity_id": 7, "source": "leak", "limit": 500}]
+    A completed check followed by 600 newer leak-source rows (other starts' checks) still
+    counts as done; markers written before the start never do.
+    """
+    cid = db.add_cluster("Scan Gap")
+    db.add_activity_event(
+        source="leak", entity_type="cluster", entity_id=cid, code="leak_check", message="m",
+        payload={"started_at": FROZEN_TS}, timestamp=FROZEN_TS - 1,
+    )  # fmt: skip
+    assert irrigation_mod._leak_check_done(db, cid, FROZEN_TS) is False
+    db.add_activity_event(
+        source="leak", entity_type="cluster", entity_id=cid, code="leak_check", message="m",
+        payload={"started_at": FROZEN_TS}, timestamp=FROZEN_TS + 1800,
+    )  # fmt: skip
+    for i in range(600):
+        db.add_activity_event(
+            source="leak", entity_type="cluster", entity_id=cid, code="leak_check", message="m",
+            payload={"started_at": FROZEN_TS + 3600 + i}, timestamp=FROZEN_TS + 5400 + i,
+        )  # fmt: skip
+    assert irrigation_mod._leak_check_done(db, cid, FROZEN_TS) is True
 
 
 def test_leak_check_done_ignores_other_codes_and_empty_payloads(db):

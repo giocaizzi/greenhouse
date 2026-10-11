@@ -13,7 +13,7 @@ import time as _time
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from greenhouse_core.constants import LEAK_CHECK_ACTIVITY_SCAN_LIMIT, LEAK_CHECK_DELAY_SECONDS, LEAK_HOLD_HOURS
+from greenhouse_core.constants import LEAK_CHECK_DELAY_SECONDS, LEAK_HOLD_HOURS
 from greenhouse_core.models import ENTITY_CLUSTER, EVENT_ACTION_START, SOURCE_LEAK, TRIGGERED_BY_AUTO
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.services.jobs import job_session, read_session
@@ -36,12 +36,16 @@ def _leak_check_done(repo: IrrigationRepository, cluster_id: int, started_at: in
     There is no dedicated table for leak-check runs; the activity log is the
     durable record. Every completed check writes a ``leak_check`` row (see
     :func:`_run_leak_check`), and a check that raised a hold also wrote a
-    ``leak_hold`` row — both carry ``started_at`` in their payload.
+    ``leak_hold`` row — both carry ``started_at`` in their payload. A check runs
+    after its start, so its marker is at or after ``started_at``: the scan is
+    bounded by that time, not by a row count (B-23: the newest 500 rows could
+    hide an older completed check, which was then re-armed).
     """
-    for event in repo.list_activity_events(
-        entity_type=ENTITY_CLUSTER, entity_id=cluster_id, source=SOURCE_LEAK, limit=LEAK_CHECK_ACTIVITY_SCAN_LIMIT
-    ):
-        if event.code not in _LEAK_CHECK_DONE_CODES or not event.payload_json:
+    markers = repo.list_activity_events_since(
+        started_at, source=SOURCE_LEAK, codes=_LEAK_CHECK_DONE_CODES, entity_type=ENTITY_CLUSTER, entity_id=cluster_id
+    )
+    for event in markers:
+        if not event.payload_json:
             continue
         try:
             if json.loads(event.payload_json).get("started_at") == started_at:
