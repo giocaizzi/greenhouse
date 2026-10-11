@@ -35,6 +35,10 @@ greenhouse-cli = { workspace = true }
 
 [tool.uv]
 default-groups = ["dev"]
+# Transitive pins, not imported by greenhouse code. mcp: >=1.28.1 clears PYSEC-2026-3481/3482/3483;
+# <2 because fastapi-mcp 0.4.0 (latest) constructs `mcp.server.lowlevel.Server(name, version)`, which
+# mcp 2.x rejects (TypeError at mount). Lift the ceiling when fastapi-mcp supports mcp 2.
+constraint-dependencies = ["mcp>=1.28.1,<2"]
 
 [dependency-groups]
 dev = [

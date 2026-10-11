@@ -60,6 +60,31 @@ jobs:
         run: uv run ruff format --check libs/ tests/
 
   # ────────────────────────────────────────────────────────────────────────────
+  # static — the structural gates `make check` runs locally: import-linter
+  # layering contracts, mypy --strict over libs/, and the size limits
+  # (scripts/sizecheck.py + scripts/size-exceptions.txt).
+  # ────────────────────────────────────────────────────────────────────────────
+  static:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - run: uv sync
+      - name: import-linter contracts
+        run: make lint-imports
+      - name: mypy --strict
+        run: make typecheck
+      - name: size limits
+        run: make sizecheck
+
+  # ────────────────────────────────────────────────────────────────────────────
   # hygiene — pre-commit's file-hygiene hooks (trailing whitespace, EOF, yaml,
   # toml, merge conflicts, large files, private keys, mixed line endings).
   # Skips ruff/hadolint/gitleaks since they have their own jobs.
@@ -143,7 +168,7 @@ jobs:
   # even when upstream jobs were *skipped* on a mechanical-only PR.
   # ────────────────────────────────────────────────────────────────────────────
   check:
-    needs: [detect-changes, lint, hygiene, dockerfile, secrets, test]
+    needs: [detect-changes, lint, static, hygiene, dockerfile, secrets, test]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -151,6 +176,7 @@ jobs:
         env:
           R_DETECT: ${{ needs.detect-changes.result }}
           R_LINT: ${{ needs.lint.result }}
+          R_STATIC: ${{ needs.static.result }}
           R_HYGIENE: ${{ needs.hygiene.result }}
           R_DOCKERFILE: ${{ needs.dockerfile.result }}
           R_SECRETS: ${{ needs.secrets.result }}
@@ -159,12 +185,13 @@ jobs:
           echo "Job results:"
           printf '  detect-changes: %s\n' "$R_DETECT"
           printf '  lint:           %s\n' "$R_LINT"
+          printf '  static:         %s\n' "$R_STATIC"
           printf '  hygiene:        %s\n' "$R_HYGIENE"
           printf '  dockerfile:     %s\n' "$R_DOCKERFILE"
           printf '  secrets:        %s\n' "$R_SECRETS"
           printf '  test:           %s\n' "$R_TEST"
           fail=0
-          for r in "$R_DETECT" "$R_LINT" "$R_HYGIENE" "$R_DOCKERFILE" "$R_SECRETS" "$R_TEST"; do
+          for r in "$R_DETECT" "$R_LINT" "$R_STATIC" "$R_HYGIENE" "$R_DOCKERFILE" "$R_SECRETS" "$R_TEST"; do
             case "$r" in
               success|skipped) ;;
               *) fail=1 ;;
