@@ -3,8 +3,8 @@
 import time
 from typing import NamedTuple
 
-from greenhouse_core.devices import DeviceRegistry, UnknownDeviceModel
-from greenhouse_core.models import EVENT_ACTION_STOP, TRIGGERED_BY_EMERGENCY
+from greenhouse_core.devices import DeviceRegistry
+from greenhouse_core.models import EVENT_ACTION_STOP, TRIGGERED_BY_EMERGENCY, Irrigator
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.services.notify import NtfyClient, maybe_notify
 
@@ -16,6 +16,30 @@ class StopAllResult(NamedTuple):
     errors: list[str]
 
 
+def _stop_one(repo: IrrigationRepository, registry: DeviceRegistry | None, irrigator: Irrigator) -> str | None:
+    """Stop one irrigator and log its ``stop``/``emergency`` event; returns the error, or None when it stopped.
+
+    A refused stop (``adapter.stop()`` → ``(False, msg)``) is an error like a raised one: the
+    device may still be running, so it is neither counted nor recorded as stopped.
+    """
+    label = f"irrigator {irrigator.id} ({irrigator.name})"
+    if registry is not None:
+        try:
+            stop_ok, stop_msg = registry.get_irrigator(irrigator).stop(irrigator)
+        except Exception as exc:  # noqa: BLE001 — one device's failure must not stop the others
+            return f"{label}: {exc}"
+        if not stop_ok:
+            return f"{label}: stop failed: {stop_msg}"
+    repo.add_irrigation_event(
+        irrigator_id=irrigator.id,
+        action=EVENT_ACTION_STOP,
+        triggered_by=TRIGGERED_BY_EMERGENCY,
+        notes="kill switch",
+        timestamp=int(time.time()),
+    )
+    return None
+
+
 def stop_all_irrigators(
     repo: IrrigationRepository,
     registry: DeviceRegistry | None,
@@ -25,12 +49,14 @@ def stop_all_irrigators(
 
     When ``registry`` is None (test environment or missing credentials) the
     stop command is skipped but the event is still logged and the irrigator
-    is counted as stopped. Irrigators whose model is not in the registry
-    surface as a per-device error rather than aborting the batch. Commits
-    because the stop commands have already reached the hardware: their events
-    must be durable whatever the caller does next — and before the push, so it
-    never announces unsaved events. The one emergency-stop path for the JSON
-    API and the web kill switch, so both notify alike.
+    is counted as stopped. An irrigator whose model is not in the registry,
+    whose stop raises, or whose device refuses the stop (``(False, msg)``)
+    surfaces as a per-device error — not counted, no ``stop`` event — rather
+    than aborting the batch. Commits because the stop commands have already
+    reached the hardware: their events must be durable whatever the caller
+    does next — and before the push, so it never announces unsaved events.
+    The one emergency-stop path for the JSON API and the web kill switch, so
+    both notify alike.
 
     Args:
         repo: Active repository for listing irrigators and logging events.
@@ -39,32 +65,16 @@ def stop_all_irrigators(
 
     Returns:
         A ``(stopped, errors)`` StopAllResult where errors contains one entry per
-        irrigator that raised an exception during device communication.
+        irrigator that could not be confirmed stopped.
     """
-    irrigators = repo.list_all_irrigators()
     stopped = 0
     errors: list[str] = []
-
-    for irrigator in irrigators:
-        try:
-            if registry is not None:
-                try:
-                    adapter = registry.get_irrigator(irrigator)
-                except UnknownDeviceModel as exc:
-                    errors.append(f"irrigator {irrigator.id} ({irrigator.name}): {exc}")
-                    continue
-                adapter.stop(irrigator)
-
-            repo.add_irrigation_event(
-                irrigator_id=irrigator.id,
-                action=EVENT_ACTION_STOP,
-                triggered_by=TRIGGERED_BY_EMERGENCY,
-                notes="kill switch",
-                timestamp=int(time.time()),
-            )
+    for irrigator in repo.list_all_irrigators():
+        error = _stop_one(repo, registry, irrigator)
+        if error is None:
             stopped += 1
-        except Exception as exc:  # noqa: BLE001
-            errors.append(f"irrigator {irrigator.id} ({irrigator.name}): {exc}")
+        else:
+            errors.append(error)
 
     repo.commit()
     maybe_notify(

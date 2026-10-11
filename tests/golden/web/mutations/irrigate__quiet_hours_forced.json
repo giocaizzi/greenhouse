@@ -40,6 +40,17 @@
      "severity": "info",
      "source": "irrigation",
      "timestamp": 1776247200
+    },
+    {
+     "code": "leak_check_armed",
+     "entity_id": 1,
+     "entity_type": "cluster",
+     "id": 6,
+     "message": "post-watering leak check armed (manual start)",
+     "payload_json": "{\"started_at\": 1776247200, \"irrigator_id\": 1, \"triggered_by\": \"manual\"}",
+     "severity": "info",
+     "source": "leak",
+     "timestamp": 1776247200
     }
    ]
   },
@@ -70,7 +81,7 @@
      "irrigator_id": 1,
      "notes": "temp=22.0C (sensor), soil=8% (driest), confidence=90%, reason=soil very dry (driest=8% < 45.0%); bright (1041 lux, seasonal); soil moisture declining; spring multiplier 1.1× for indoor cluster; manual override of quiet hours (09:00–12:00 local)",
      "timestamp": 1776247200,
-     "triggered_by": "auto"
+     "triggered_by": "manual"
     }
    ]
   }

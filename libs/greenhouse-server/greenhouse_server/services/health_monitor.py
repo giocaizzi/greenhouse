@@ -1,92 +1,78 @@
 """Device health monitor — single source of truth for health alarms.
 
-Polls every registered irrigator + sensor on a slow cadence, diffs the
-returned :class:`DeviceHealthState` against the last known snapshot, and
-raises / resolves typed alerts on transitions. The PumpWatcherService
-remains the fast-path (sub-2s) watchdog during active irrigations; it
-records its observations into this monitor so the two state machines stay
-coherent and there is a single dedup_key scheme (``health:{entity}:{id}:{alarm}``).
-
-Engine code consults :meth:`is_actuation_blocked` before firing the pump.
-A blocked irrigator forces ``Action.SKIP`` with a typed
-:class:`~greenhouse_core.logic.decision.Reason` so the audit trail in
-``decision_logs`` explains why we held off.
+Polls every irrigator + sensor on a slow cadence, diffs the derived alarms against the last
+known snapshot, and raises / resolves typed alerts on transitions. The PumpWatcherService (the
+sub-2s watchdog during a run) records into this monitor, so both share one state machine and
+one dedup_key scheme (``health:{entity}:{id}:{alarm}``). The pipeline consults
+:meth:`is_actuation_blocked` before firing the pump; a block becomes a logged skip.
 
 The monitor holds two pieces of state:
 
 * a per-entity cache of the last derived alarm set, used by
-  :meth:`is_actuation_blocked` so the engine doesn't re-poll the hardware;
-* a current ``repo`` reference, swapped per scheduler job tick via
-  :meth:`bind_repo` so background jobs that open their own sessions can
-  reuse a long-lived monitor instance without leaking the cache.
+  :meth:`is_actuation_blocked` so the engine doesn't re-poll the hardware.
+  One cache (and one lock guarding it) is shared by the app-wide instance and
+  every per-session view of it;
+* the ``repo`` it writes alerts through. Each job or watcher takes its own view
+  with :meth:`for_repo`, so a minutes-long pump watch and the other scheduler
+  jobs never write into each other's sessions (S6: a shared, re-bound ``repo``
+  sent a dry-run alert into another job's transaction, which could roll it
+  back while the cache already marked it raised).
 """
 
 from __future__ import annotations
 
+import copy
 import logging
+import threading
 import time
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from greenhouse_core.constants import (
     BATTERY_CRITICAL_PCT,
     BATTERY_LOW_PCT,
+    DEFAULT_SYNC_INTERVAL_MINUTES,
     OFFLINE_AFTER_MINUTES,
     SENSOR_HEALTH_BACKFILL_HOURS,
     SENSOR_HEALTH_BACKFILL_WINDOW,
+    SENSOR_OFFLINE_GRACE_MINUTES,
     SIGNAL_LOSS_THRESHOLD,
 )
 from greenhouse_core.devices import DeviceRegistry
 from greenhouse_core.devices.health import DeviceHealthState, HealthAlarm
-from greenhouse_core.logic.decision import DEVICE_BLOCKING_CODES, TriggerCode
+from greenhouse_core.logic.decision import DEVICE_BLOCKING_CODES
 from greenhouse_core.models import ENTITY_IRRIGATOR, ENTITY_SENSOR, SOURCE_HEALTH, EntityType, Irrigator, Sensor
 from greenhouse_core.repository import IrrigationRepository
-from greenhouse_server.services.alerts import notify_if_new_alert
+from greenhouse_server.services.alerts import is_alert_open, notify_if_new_alert
+from greenhouse_server.services.health_alarms import (
+    HEALTH_ALARM_TO_TRIGGER,
+    AlarmThresholds,
+    alarm_message,
+    alarm_severity,
+    alarm_title,
+    derive_alarms,
+    health_dedup_key,
+    infer_cluster_id,
+    infer_label,
+    is_low_battery_state,
+    unresolved_alarms_by_entity,
+)
 from greenhouse_server.services.notify import NtfyClient
 
 logger = logging.getLogger(__name__)
 
 
-HEALTH_ALARM_TO_TRIGGER: dict[HealthAlarm, TriggerCode] = {
-    HealthAlarm.NO_WATER: TriggerCode.DEVICE_NO_WATER,
-    HealthAlarm.RAIN_DETECTED: TriggerCode.DEVICE_RAIN_DETECTED,
-    HealthAlarm.LOW_BATTERY: TriggerCode.DEVICE_BATTERY_LOW,
-    HealthAlarm.BATTERY_CRITICAL: TriggerCode.DEVICE_BATTERY_CRITICAL,
-    HealthAlarm.SIGNAL_LOSS: TriggerCode.DEVICE_SIGNAL_LOSS,
-    HealthAlarm.DEVICE_OFFLINE: TriggerCode.DEVICE_OFFLINE,
-    # SENSOR_FAULT is sensor-only and advisory; the engine does not gate
-    # on it and so it has no TriggerCode counterpart.
-}
-
-
-# Severity per alarm — drives the inbox styling and ack/resolve UX.
-_ALARM_SEVERITY: dict[HealthAlarm, str] = {
-    HealthAlarm.NO_WATER: "critical",
-    HealthAlarm.RAIN_DETECTED: "info",
-    HealthAlarm.LOW_BATTERY: "warning",
-    HealthAlarm.BATTERY_CRITICAL: "critical",
-    HealthAlarm.SIGNAL_LOSS: "warning",
-    HealthAlarm.DEVICE_OFFLINE: "warning",
-    HealthAlarm.SENSOR_FAULT: "warning",
-}
-
-
-def _alarm_title(entity_label: str, alarm: HealthAlarm) -> str:
-    pretty = alarm.value.replace("_", " ").title()
-    return f"{pretty} · {entity_label}"
-
-
-def _dedup_key(entity_type: EntityType, entity_id: int, alarm: HealthAlarm) -> str:
-    """Single source of truth for health-alert dedup keys."""
-    return f"health:{entity_type}:{entity_id}:{alarm.value}"
-
-
 @dataclass(frozen=True)
 class _Cached:
-    """Per-entity cached state used for transition diffing + actuation gating."""
+    """Per-entity cached state used for transition diffing + actuation gating.
+
+    ``unraised`` holds derived alarms whose alert write failed: they still gate actuation (a
+    dry pump stays blocked) and their alert is retried on the next observation.
+    """
 
     state: DeviceHealthState
     derived_alarms: frozenset[HealthAlarm]
+    unraised: frozenset[HealthAlarm] = frozenset()
 
 
 class DeviceHealthMonitor:
@@ -100,28 +86,40 @@ class DeviceHealthMonitor:
         battery_low_pct: int = BATTERY_LOW_PCT,
         battery_critical_pct: int = BATTERY_CRITICAL_PCT,
         offline_after_minutes: int = OFFLINE_AFTER_MINUTES,
+        sensor_offline_after_minutes: int = DEFAULT_SYNC_INTERVAL_MINUTES + SENSOR_OFFLINE_GRACE_MINUTES,
         signal_loss_threshold: int = SIGNAL_LOSS_THRESHOLD,
         clock: Callable[[], int] = lambda: int(time.time()),
         notifier: NtfyClient | None = None,
     ) -> None:
+        """Build a monitor.
+
+        ``offline_after_minutes`` judges irrigators, whose ``last_seen_ts`` comes from a live
+        read; ``sensor_offline_after_minutes`` judges sensors, whose ``last_seen_ts`` is the
+        latest persisted reading — pass the sync interval plus ``SENSOR_OFFLINE_GRACE_MINUTES``
+        (B-3: the 30-min irrigator window flagged every sensor offline between syncs).
+        """
         self._repo = repo
         self._registry = registry
         self._notifier = notifier
-        self._battery_low_pct = battery_low_pct
-        self._battery_critical_pct = battery_critical_pct
+        self._thresholds = AlarmThresholds(battery_low_pct, battery_critical_pct, signal_loss_threshold)
         self._offline_after_seconds = offline_after_minutes * 60
-        self._signal_loss_threshold = signal_loss_threshold
+        self._sensor_offline_after_seconds = sensor_offline_after_minutes * 60
         self._clock = clock
         self._cache: dict[tuple[str, int], _Cached] = {}
+        # Guards every read-modify-write of the shared cache: the health job, the check job,
+        # pump watchers and request threads all reach it concurrently.
+        self._lock = threading.RLock()
 
-    def bind_repo(self, repo: IrrigationRepository) -> None:
-        """Swap the repository this monitor writes through.
+    def for_repo(self, repo: IrrigationRepository) -> DeviceHealthMonitor:
+        """A view of this monitor that writes through ``repo``, sharing its cache and lock.
 
-        Scheduler jobs open their own DB sessions per tick; the cache
-        lives on the singleton monitor so this is the only piece of state
-        that needs to change between ticks.
+        Every scheduler job and pump watcher takes its own view on its own session, so the
+        alerts it raises land in — and commit or roll back with — its own transaction, while
+        transitions and the actuation gate stay one state machine.
         """
-        self._repo = repo
+        view = copy.copy(self)
+        view._repo = repo  # noqa: SLF001 — sets the field on a copy of this very class
+        return view
 
     # ── Public poll API ───────────────────────────────────────────────────
 
@@ -148,17 +146,41 @@ class DeviceHealthMonitor:
         return state
 
     def poll_all(self) -> None:
-        """Poll every irrigator and sensor in the registry. Best-effort."""
+        """Poll every irrigator and sensor, committing each device's alerts on their own. Best-effort.
+
+        The health job owns its session, so each device's transitions are committed as soon as
+        they are recorded: a failure on one device (a poll error or a failed commit) is rolled
+        back alone, and an alert lost that way is requeued so the next poll raises it again
+        instead of the cache keeping it as raised with nothing in the inbox.
+        """
         for irrigator in self._repo.list_all_irrigators():
+            irrigator_id = irrigator.id  # read before a rollback can expire the row
             try:
                 self.poll_irrigator(irrigator)
+                self._repo.commit()
             except Exception:
-                logger.exception("Health poll failed for irrigator %d", irrigator.id)
+                logger.exception("Health poll failed for irrigator %d", irrigator_id)
+                self._recover_lost_alerts(ENTITY_IRRIGATOR, irrigator_id)
         for sensor in self._repo.list_all_sensors():
+            sensor_id = sensor.id
             try:
                 self.poll_sensor(sensor)
+                self._repo.commit()
             except Exception:
-                logger.exception("Health poll failed for sensor %d", sensor.id)
+                logger.exception("Health poll failed for sensor %d", sensor_id)
+                self._recover_lost_alerts(ENTITY_SENSOR, sensor_id)
+
+    def _recover_lost_alerts(self, entity_type: EntityType, entity_id: int) -> None:
+        """After a failed device poll: roll back, then requeue cached alarms whose alert did not land."""
+        try:
+            self._repo.rollback()
+            with self._lock:
+                cached = self._cache.get((entity_type, entity_id))
+            for alarm in cached.derived_alarms if cached else ():
+                if self._repo.get_open_alert_by_key(health_dedup_key(entity_type, entity_id, alarm)) is None:
+                    self.mark_unraised(entity_type, entity_id, alarm)
+        except Exception:
+            logger.warning("Could not recover the health alerts of %s %d", entity_type, entity_id, exc_info=True)
 
     # ── Recording (shared with PumpWatcherService) ────────────────────────
 
@@ -176,31 +198,53 @@ class DeviceHealthMonitor:
         Returns the full set of derived alarms so the caller can
         short-circuit on a fresh transition.
         """
-        derived = self._derive_alarms(state)
+        offline_after = (
+            self._sensor_offline_after_seconds if entity_type == ENTITY_SENSOR else self._offline_after_seconds
+        )
+        derived = derive_alarms(state, self._thresholds, stale_after_seconds=offline_after, now=self._clock())
         key = (entity_type, entity_id)
-        previous = self._cache.get(key)
-        prev_alarms = previous.derived_alarms if previous else frozenset()
+        with self._lock:
+            previous = self._cache.get(key)
+            prev_alarms = previous.derived_alarms if previous else frozenset()
+            # New transitions, plus alarms whose earlier alert write failed (retried until it lands).
+            to_raise = (derived - prev_alarms) | (derived & (previous.unraised if previous else frozenset()))
+            # Cache first: whatever the DB does below, the gate already sees the new state, and
+            # every pending alert stays owed until its write succeeds (S5).
+            self._cache[key] = _Cached(state=state, derived_alarms=derived, unraised=to_raise)
 
-        appeared = derived - prev_alarms
-        disappeared = prev_alarms - derived
-
-        cluster_id = cluster_id or self._infer_cluster_id(entity_type, entity_id)
-        label = label or self._infer_label(entity_type, entity_id) or f"{entity_type}#{entity_id}"
-
-        for alarm in appeared:
-            self._raise_health_alert(
-                entity_type=entity_type,
-                entity_id=entity_id,
-                alarm=alarm,
-                state=state,
-                label=label,
-                cluster_id=cluster_id,
+            cluster_id = cluster_id or infer_cluster_id(self._repo, entity_type, entity_id)
+            label = label or infer_label(self._repo, entity_type, entity_id) or f"{entity_type}#{entity_id}"
+            raised = frozenset(
+                alarm
+                for alarm in to_raise
+                if self._raise_health_alert(
+                    entity_type=entity_type,
+                    entity_id=entity_id,
+                    alarm=alarm,
+                    state=state,
+                    label=label,
+                    cluster_id=cluster_id,
+                )
             )
-        for alarm in disappeared:
-            self._resolve_health_alert(entity_type=entity_type, entity_id=entity_id, alarm=alarm)
-
-        self._cache[key] = _Cached(state=state, derived_alarms=derived)
+            for alarm in prev_alarms - derived:
+                self._resolve_health_alert(entity_type=entity_type, entity_id=entity_id, alarm=alarm)
+            self._cache[key] = _Cached(state=state, derived_alarms=derived, unraised=to_raise - raised)
         return derived
+
+    def mark_unraised(self, entity_type: EntityType, entity_id: int, alarm: HealthAlarm) -> None:
+        """Flag an alarm whose alert was lost after the write (its transaction rolled back).
+
+        The alarm gates actuation from now on — it is added to the cache if the failed
+        transition never got there — and its alert is raised again on the next observation.
+        """
+        key = (entity_type, entity_id)
+        with self._lock:
+            cached = self._cache.get(key) or _Cached(
+                state=DeviceHealthState(observed_at=self._clock()), derived_alarms=frozenset()
+            )
+            self._cache[key] = replace(
+                cached, derived_alarms=cached.derived_alarms | {alarm}, unraised=cached.unraised | {alarm}
+            )
 
     # ── Engine gate ───────────────────────────────────────────────────────
 
@@ -211,7 +255,8 @@ class DeviceHealthMonitor:
         Returns the list of blocking alarms so the caller can build a
         :class:`Reason` for the decision audit trail.
         """
-        cached = self._cache.get((ENTITY_IRRIGATOR, irrigator.id))
+        with self._lock:
+            cached = self._cache.get((ENTITY_IRRIGATOR, irrigator.id))
         if cached is None:
             return False, []
         # An alarm blocks when its trigger code is a device-blocking one; SENSOR_FAULT has no code.
@@ -219,6 +264,28 @@ class DeviceHealthMonitor:
             alarm for alarm in cached.derived_alarms if HEALTH_ALARM_TO_TRIGGER.get(alarm) in DEVICE_BLOCKING_CODES
         ]
         return bool(blocking), blocking
+
+    # ── Restore from the inbox (startup hook) ─────────────────────────────
+
+    def restore_from_open_alerts(self) -> int:
+        """Rebuild the cache from the unresolved health alerts; call once at startup, after the backfill.
+
+        The cache is memory-only, so after a restart an open NO_WATER / OFFLINE alert did not
+        block actuation until the next poll, and an alarm that cleared while the server was down
+        was never auto-resolved (B-9). Seeding the cache with the alarms the inbox still holds
+        restores the gate at once; the next poll then diffs against them as usual, resolving
+        what cleared and leaving what persists alone (no duplicate raise or push).
+
+        Returns:
+            How many entities were restored.
+        """
+        restored = unresolved_alarms_by_entity(self._repo)
+        now = self._clock()
+        with self._lock:
+            for key, alarms in restored.items():
+                if key not in self._cache:  # a live observation already made wins
+                    self._cache[key] = _Cached(state=DeviceHealthState(observed_at=now), derived_alarms=alarms)
+        return len(restored)
 
     # ── Backfill from SensorReading history (startup hook) ────────────────
 
@@ -245,12 +312,12 @@ class DeviceHealthMonitor:
                 continue
             cluster_id = sensor.cluster_id
 
-            if all(_is_low_battery_state(r.battery_state) for r in recent):
+            if all(is_low_battery_state(r.battery_state) for r in recent):
                 self._raise_if_not_open(HealthAlarm.LOW_BATTERY, sensor, cluster_id=cluster_id)
 
     def _raise_if_not_open(self, alarm: HealthAlarm, sensor: Sensor, *, cluster_id: int | None) -> None:
         """Raise a back-filled sensor alarm unless its alert is already open (no duplicate on restart)."""
-        key = _dedup_key(ENTITY_SENSOR, sensor.id, alarm)
+        key = health_dedup_key(ENTITY_SENSOR, sensor.id, alarm)
         if not self._repo.get_open_alert_by_key(key):
             self._raise_health_alert(
                 entity_type=ENTITY_SENSOR,
@@ -263,29 +330,6 @@ class DeviceHealthMonitor:
 
     # ── Internals ─────────────────────────────────────────────────────────
 
-    def _derive_alarms(self, state: DeviceHealthState) -> frozenset[HealthAlarm]:
-        """Combine adapter-reported alarms with monitor-applied thresholds.
-
-        Battery percent → LOW_BATTERY / BATTERY_CRITICAL.
-        ``offline`` flag OR stale ``last_seen_ts`` → DEVICE_OFFLINE.
-        ``signal_quality`` below threshold → SIGNAL_LOSS.
-        """
-        derived: set[HealthAlarm] = set(state.alarms)
-        if state.battery_pct is not None:
-            if state.battery_pct < self._battery_critical_pct:
-                derived.add(HealthAlarm.BATTERY_CRITICAL)
-            elif state.battery_pct < self._battery_low_pct:
-                derived.add(HealthAlarm.LOW_BATTERY)
-        if state.offline:
-            derived.add(HealthAlarm.DEVICE_OFFLINE)
-        elif state.last_seen_ts is not None:
-            now = self._clock()
-            if now - state.last_seen_ts > self._offline_after_seconds:
-                derived.add(HealthAlarm.DEVICE_OFFLINE)
-        if state.signal_quality is not None and state.signal_quality < self._signal_loss_threshold:
-            derived.add(HealthAlarm.SIGNAL_LOSS)
-        return frozenset(derived)
-
     def _raise_health_alert(
         self,
         *,
@@ -295,9 +339,10 @@ class DeviceHealthMonitor:
         state: DeviceHealthState,
         label: str,
         cluster_id: int | None,
-    ) -> None:
-        key = _dedup_key(entity_type, entity_id, alarm)
-        severity = _ALARM_SEVERITY.get(alarm, "warning")
+    ) -> bool:
+        """Upsert the alarm's alert and push it when this call opened it; False when the write failed."""
+        key = health_dedup_key(entity_type, entity_id, alarm)
+        severity = alarm_severity(alarm)
         payload = {
             "entity_type": entity_type,
             "entity_id": entity_id,
@@ -309,75 +354,38 @@ class DeviceHealthMonitor:
             "offline": state.offline,
         }
         try:
+            was_open = is_alert_open(self._repo, key)
             alert = self._repo.upsert_alert(
                 dedup_key=key,
                 source=SOURCE_HEALTH,
                 code=alarm.value,
-                title=_alarm_title(label, alarm),
-                message=self._alarm_message(alarm, label, state),
+                title=alarm_title(label, alarm),
+                message=alarm_message(alarm, label, state),
                 severity=severity,
                 entity_type=entity_type,
                 entity_id=entity_id,
                 cluster_id=cluster_id,
                 payload=payload,
             )
-            notify_if_new_alert(self._repo, self._notifier, alert)
         except Exception:
             logger.exception("Failed to raise health alert %s for %s %d", alarm.value, entity_type, entity_id)
+            return False
+        try:
+            notify_if_new_alert(self._repo, self._notifier, alert, was_open=was_open)
+        except Exception:  # the alert is written; a failed push must not undo that
+            logger.warning(
+                "Failed to notify health alert %s for %s %d", alarm.value, entity_type, entity_id, exc_info=True
+            )
+        return True
 
     def _resolve_health_alert(self, *, entity_type: EntityType, entity_id: int, alarm: HealthAlarm) -> None:
-        existing = self._repo.get_open_alert_by_key(_dedup_key(entity_type, entity_id, alarm))
-        if existing is None:
-            return
+        """Resolve the alarm's open alert, if any; a failure (lookup included) is logged, never raised."""
         try:
-            self._repo.resolve_alert(existing.id)
+            existing = self._repo.get_open_alert_by_key(health_dedup_key(entity_type, entity_id, alarm))
+            if existing is not None:
+                self._repo.resolve_alert(existing.id)
         except Exception:
             logger.exception("Failed to resolve health alert %s for %s %d", alarm.value, entity_type, entity_id)
-
-    @staticmethod
-    def _alarm_message(alarm: HealthAlarm, label: str, state: DeviceHealthState) -> str:
-        if alarm is HealthAlarm.NO_WATER:
-            return f"'{label}' reported water shortage. Pump actuation will be blocked until refilled."
-        if alarm is HealthAlarm.RAIN_DETECTED:
-            return f"'{label}' reports rain. Skipping scheduled irrigation."
-        if alarm is HealthAlarm.LOW_BATTERY:
-            pct = state.battery_pct
-            return f"'{label}' battery is low ({pct}%). Replace soon to keep readings flowing."
-        if alarm is HealthAlarm.BATTERY_CRITICAL:
-            pct = state.battery_pct
-            return f"'{label}' battery is critical ({pct}%). Replace immediately."
-        if alarm is HealthAlarm.SIGNAL_LOSS:
-            return f"'{label}' signal quality is degraded — readings may be intermittent."
-        if alarm is HealthAlarm.DEVICE_OFFLINE:
-            return f"'{label}' is unreachable. Actuation is blocked until the device comes back online."
-        if alarm is HealthAlarm.SENSOR_FAULT:
-            return f"'{label}' is reporting a sensor fault. Cross-check the probe placement."
-        return f"'{label}' raised {alarm.value}."
-
-    def _infer_cluster_id(self, entity_type: EntityType, entity_id: int) -> int | None:
-        if entity_type == ENTITY_IRRIGATOR:
-            irr = self._repo.get_irrigator(entity_id)
-            return irr.cluster_id if irr else None
-        if entity_type == ENTITY_SENSOR:
-            sensor = self._repo.get_sensor(entity_id)
-            return sensor.cluster_id if sensor else None
-        return None
-
-    def _infer_label(self, entity_type: EntityType, entity_id: int) -> str | None:
-        if entity_type == ENTITY_IRRIGATOR:
-            irr = self._repo.get_irrigator(entity_id)
-            return irr.name if irr else None
-        if entity_type == ENTITY_SENSOR:
-            sensor = self._repo.get_sensor(entity_id)
-            return sensor.name if sensor else None
-        return None
-
-
-def _is_low_battery_state(raw: object) -> bool:
-    """True when a persisted ``battery_state`` string indicates low charge."""
-    if not isinstance(raw, str):
-        return False
-    return raw.strip().lower() == "low"
 
 
 __all__ = [

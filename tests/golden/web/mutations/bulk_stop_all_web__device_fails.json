@@ -1,39 +1,18 @@
 {
  "body_lines": [
   "",
-  "<article class=\"alert alert--ok\" role=\"status\">",
-  "  <span class=\"alert__icon\" aria-hidden=\"true\"><svg class=\"icon\"><use href=\"/static/icons/sprite.svg#i-check\"></use></svg></span>",
+  "<article class=\"alert alert--danger\" role=\"alert\">",
+  "  <span class=\"alert__icon\" aria-hidden=\"true\"><svg class=\"icon\"><use href=\"/static/icons/sprite.svg#i-warning\"></use></svg></span>",
   "  <div>",
-  "    <strong>Stopped 2 irrigators.</strong>",
-  "    <small class=\"muted\"> Every device is now off.</small>",
+  "    <strong>Stopped 0 irrigators; 2 did not confirm the stop and may still be running.</strong>",
+  "    <ul style=\"margin: var(--sp-2) 0 0; padding-left: var(--sp-4);\">",
+  "      <li><small class=\"mono\">irrigator 1 (Jungle Pump): stop failed: fake stop failed</small></li><li><small class=\"mono\">irrigator 2 (Balcony Valve): stop failed: fake stop failed</small></li>",
+  "    </ul>",
   "  </div>",
   "</article>",
   ""
  ],
- "db_effect": {
-  "irrigation_events": {
-   "added": [
-    {
-     "action": "stop",
-     "duration_minutes": null,
-     "id": 7,
-     "irrigator_id": 1,
-     "notes": "kill switch",
-     "timestamp": 1776247200,
-     "triggered_by": "emergency"
-    },
-    {
-     "action": "stop",
-     "duration_minutes": null,
-     "id": 8,
-     "irrigator_id": 2,
-     "notes": "kill switch",
-     "timestamp": 1776247200,
-     "triggered_by": "emergency"
-    }
-   ]
-  }
- },
+ "db_effect": {},
  "device_calls": {
   "irrigator": [
    [

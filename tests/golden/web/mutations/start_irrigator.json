@@ -11,6 +11,21 @@
   "</div>"
  ],
  "db_effect": {
+  "activity_events": {
+   "added": [
+    {
+     "code": "leak_check_armed",
+     "entity_id": 1,
+     "entity_type": "cluster",
+     "id": 5,
+     "message": "post-watering leak check armed (manual start)",
+     "payload_json": "{\"started_at\": 1776247200, \"irrigator_id\": 1, \"triggered_by\": \"manual\"}",
+     "severity": "info",
+     "source": "leak",
+     "timestamp": 1776247200
+    }
+   ]
+  },
   "irrigation_events": {
    "added": [
     {

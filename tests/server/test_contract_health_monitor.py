@@ -9,8 +9,8 @@ fails the test on any call, plus spy/fake adapters, and pin:
   raised and resolved (dedup keys, titles, messages, severities, payloads);
 - notifications for genuinely new alerts;
 - the actuation gate and the history back-fill;
-- suspected bug B-3 (sensors flap DEVICE_OFFLINE ~30 min after every 180-min sync),
-  reproduced here and pinned as current behavior.
+- B-3 fixed: a sensor's offline window is the sync interval plus a grace, so it no
+  longer flaps DEVICE_OFFLINE ~30 min after every 180-min sync.
 
 Frozen sets are sorted before comparison — their iteration order depends on the
 per-process hash seed, so alert *ids* are never asserted, only dedup keys.
@@ -27,14 +27,15 @@ from sqlalchemy import select
 
 from fake_devices import FakeIrrigatorAdapter, FakeSensorAdapter
 from golden import FROZEN_INSTANT, FROZEN_TS, assert_golden_json
-from greenhouse_core.constants import OFFLINE_AFTER_MINUTES
+from greenhouse_core.constants import DEFAULT_SYNC_INTERVAL_MINUTES, SENSOR_OFFLINE_GRACE_MINUTES
 from greenhouse_core.devices import DeviceGateway, DeviceRegistry, TR301ZAdapter
 from greenhouse_core.devices.health import DeviceHealthState, HealthAlarm
 from greenhouse_core.models import ENTITY_IRRIGATOR, ENTITY_SENSOR, Alert
 from greenhouse_server.services.health_monitor import DeviceHealthMonitor
 
 GOLDEN = "ingress_devices"
-SYNC_INTERVAL_SECONDS = 180 * 60  # Settings.sync_interval_minutes default
+SYNC_INTERVAL_SECONDS = DEFAULT_SYNC_INTERVAL_MINUTES * 60  # Settings.sync_interval_minutes default
+SENSOR_OFFLINE_AFTER_SECONDS = SYNC_INTERVAL_SECONDS + SENSOR_OFFLINE_GRACE_MINUTES * 60
 
 
 class NoCloud:
@@ -133,8 +134,8 @@ def _persist(world, ts: int, **values) -> None:
 
 
 def _poll_sensor(world) -> list[str]:
-    state = world["monitor"].poll_sensor(world["sensor"])
-    derived = world["monitor"]._derive_alarms(state)
+    world["monitor"].poll_sensor(world["sensor"])
+    derived = world["monitor"]._cache[(ENTITY_SENSOR, world["sensor"].id)].derived_alarms
     return sorted(a.value for a in derived)
 
 
@@ -191,8 +192,8 @@ def test_sensor_transition_scenario_golden(world):
     step("battery_low", 600, battery_state="low", water_warning=False)
     step("water_warning_on_top", 1200, battery_state="low", water_warning=True)
     step("all_recovered", 1800, battery_state="high", water_warning=False)
-    step("stale_exactly_30min", 1800 + OFFLINE_AFTER_MINUTES * 60)
-    step("stale_30min_plus_1s", 1800 + OFFLINE_AFTER_MINUTES * 60 + 1)
+    step("stale_exactly_sync_plus_grace", 1800 + SENSOR_OFFLINE_AFTER_SECONDS)
+    step("stale_sync_plus_grace_plus_1s", 1800 + SENSOR_OFFLINE_AFTER_SECONDS + 1)
     step("back_online", 3700, battery_state="high", water_warning=False)
     assert world["cloud"].touched == []
     assert_golden_json(f"{GOLDEN}/health_monitor_sensor_transitions.json", steps)
@@ -214,15 +215,13 @@ def test_no_persisted_reading_is_offline(world):
     }
 
 
-def test_sensor_offline_flap_current_behavior_flags_offline_31min_after_every_sync(world):
-    """Pins current (buggy) behavior: B-3 — see REFACTOR_NOTES.md.
+def test_sensor_stays_online_between_syncs_and_goes_offline_after_a_missed_sync(world):
+    """B-3 fixed: a sensor's offline window is one sync interval plus a grace.
 
-    The offline window (``OFFLINE_AFTER_MINUTES`` = 30) is applied to the latest
-    *persisted* reading, but the sync job persists readings only every 180 min.
-    So a perfectly healthy sensor is flagged DEVICE_OFFLINE ~30 min after each
-    sync, resolved by the next sync, and flagged again 30 min later — a re-opened
-    alert whose ``occurrence_count`` climbs (and, per ``notify_if_new_alert``,
-    notifies only the first time).
+    Readings are persisted only by the 180-min sync, so the 30-min irrigator window
+    flagged every healthy sensor DEVICE_OFFLINE ~31 min after each sync. The sensor
+    window is now ``sync interval + SENSOR_OFFLINE_GRACE_MINUTES``: online for the whole
+    interval, offline once a sync is late by more than the grace.
     """
     key = f"health:sensor:{world['sensor'].id}:device_offline"
     history = []
@@ -232,19 +231,54 @@ def test_sensor_offline_flap_current_behavior_flags_offline_31min_after_every_sy
         for minutes in (0, 30, 31, 179):
             _move(world, sync_at + minutes * 60)
             history.append((cycle, minutes, "device_offline" in _poll_sensor(world)))
-    assert history == [
-        (0, 0, False),
-        (0, 30, False),
-        (0, 31, True),
-        (0, 179, True),
-        (1, 0, False),
-        (1, 30, False),
-        (1, 31, True),
-        (1, 179, True),
-    ]
-    alert = next(a for a in _alerts(world["repo"]) if a["dedup_key"] == key)
-    assert (alert["status"], alert["occurrence_count"]) == ("open", 2)
+    assert all(not offline for _, _, offline in history), history
+    assert key not in {a["dedup_key"] for a in _alerts(world["repo"])}
+
+    last_sync = SYNC_INTERVAL_SECONDS
+    _move(world, last_sync + SENSOR_OFFLINE_AFTER_SECONDS)
+    assert "device_offline" not in _poll_sensor(world)
+    _move(world, last_sync + SENSOR_OFFLINE_AFTER_SECONDS + 1)  # the next sync is over the grace
+    assert "device_offline" in _poll_sensor(world)
     assert [n["title"] for n in world["notifier"].sent] == ["Device Offline · Probe One"]
+
+
+def test_init_health_monitor_sizes_the_sensor_window_from_the_sync_interval(world, monkeypatch):
+    """The startup monitor uses ``IRRIGATION_SYNC_INTERVAL_MINUTES`` + grace, not the default interval."""
+    from types import SimpleNamespace
+
+    from greenhouse_server import scheduler
+
+    session_factory = lambda: world["repo"].session  # noqa: E731 — the fixture's own session
+    monkeypatch.setattr(world["repo"].session, "close", lambda: None)
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            session_factory=session_factory, device_registry=world["monitor"]._registry, ntfy_notifier=None
+        )
+    )
+    scheduler.init_health_monitor(app, SimpleNamespace(sync_interval_minutes=60))
+    assert app.state.health_monitor._sensor_offline_after_seconds == (60 + SENSOR_OFFLINE_GRACE_MINUTES) * 60
+
+
+def test_init_health_monitor_restores_blocks_from_open_alerts(world, monkeypatch):
+    """B-9: the startup monitor rebuilds its cache from the open health alerts, so actuation stays blocked."""
+    from types import SimpleNamespace
+
+    from greenhouse_server import scheduler
+
+    world["irr_adapter"].set_health(DeviceHealthState(observed_at=FROZEN_TS, alarms=frozenset({HealthAlarm.NO_WATER})))
+    world["monitor"].poll_irrigator(world["irrigator"])
+    world["repo"].session.commit()
+
+    monkeypatch.setattr(world["repo"].session, "close", lambda: None)
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            session_factory=lambda: world["repo"].session,
+            device_registry=world["monitor"]._registry,
+            ntfy_notifier=None,
+        )
+    )
+    scheduler.init_health_monitor(app, SimpleNamespace(sync_interval_minutes=180))
+    assert app.state.health_monitor.is_actuation_blocked(world["irrigator"]) == (True, [HealthAlarm.NO_WATER])
 
 
 # ── Alarm derivation thresholds ───────────────────────────────────────────────
@@ -268,8 +302,9 @@ def test_sensor_offline_flap_current_behavior_flags_offline_31min_after_every_sy
     ],
 )
 def test_derived_alarm_thresholds(world, state_kwargs, expected):
+    """The monitor's thresholds, on an irrigator (whose offline window is ``OFFLINE_AFTER_MINUTES``)."""
     state = DeviceHealthState(observed_at=FROZEN_TS, **state_kwargs)
-    derived = world["monitor"].record(ENTITY_SENSOR, world["sensor"].id, state)
+    derived = world["monitor"].record(ENTITY_IRRIGATOR, world["irrigator"].id, state)
     assert sorted(a.value for a in derived) == expected
 
 
@@ -363,6 +398,37 @@ def test_poll_all_logs_and_continues_past_failures(world, caplog):
         world["monitor"].poll_all()
     assert caplog.messages == [f"Health poll failed for irrigator {world['irrigator'].id}"]
     assert [a["code"] for a in _alerts(world["repo"])] == ["low_battery"]
+
+
+def test_poll_all_requeues_an_alert_lost_to_a_failed_commit(world, monkeypatch, caplog):
+    """S6 follow-up: an alert ``record()`` raised but whose transaction rolled back is raised again.
+
+    Probe: the job's commit fails right after the NO_WATER alert was written. The cache already
+    holds NO_WATER (actuation stays blocked) but the inbox has nothing; the next poll must raise
+    it instead of treating it as known.
+    """
+    session = world["repo"].session
+    world["irr_adapter"].set_health(DeviceHealthState(observed_at=FROZEN_TS, alarms=frozenset({HealthAlarm.NO_WATER})))
+    real_commit = session.commit
+    calls = {"n": 0}
+
+    def _commit_fails_once():
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise RuntimeError("database is locked")
+        real_commit()
+
+    monkeypatch.setattr(session, "commit", _commit_fails_once)
+    key = f"health:irrigator:{world['irrigator'].id}:no_water"
+    with caplog.at_level(logging.ERROR, logger="greenhouse_server.services.health_monitor"):
+        world["monitor"].poll_all()
+    assert caplog.messages[0] == f"Health poll failed for irrigator {world['irrigator'].id}"
+    assert world["repo"].get_open_alert_by_key(key) is None  # rolled back
+    assert world["monitor"].is_actuation_blocked(world["irrigator"]) == (True, [HealthAlarm.NO_WATER])
+
+    world["monitor"].poll_all()  # same NO_WATER, no transition — but its alert is owed
+    session.rollback()  # read only what was committed
+    assert world["repo"].get_open_alert_by_key(key) is not None
 
 
 def test_alert_write_failure_is_logged_and_cache_still_updates(world, monkeypatch, caplog):

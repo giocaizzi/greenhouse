@@ -55,6 +55,21 @@
     "severity": "info",
     "source": "irrigation",
     "timestamp": 1776247200
+   },
+   {
+    "code": "leak_check_armed",
+    "entity_id": 1,
+    "entity_type": "cluster",
+    "id": 2,
+    "message": "post-watering leak check armed (manual start)",
+    "payload_json": {
+     "irrigator_id": 1,
+     "started_at": 1776247200,
+     "triggered_by": "manual"
+    },
+    "severity": "info",
+    "source": "leak",
+    "timestamp": 1776247200
    }
   ],
   "alerts": [],
@@ -143,7 +158,7 @@
     "irrigator_id": 1,
     "notes": "temp=24.0C (sensor), soil=35% (driest), confidence=80%, reason=soil moderately dry (driest=35%); manual override of quiet hours (09:00–11:00 local)",
     "timestamp": 1776247200,
-    "triggered_by": "auto"
+    "triggered_by": "manual"
    }
   ],
   "sensor_readings": []
@@ -162,7 +177,7 @@
    "duration_minutes": 2,
    "irrigator_name": "Irrigator 1",
    "kind": "irrigation",
-   "triggered_by": "auto"
+   "triggered_by": "manual"
   }
  ],
  "sensor_adapter_calls": []

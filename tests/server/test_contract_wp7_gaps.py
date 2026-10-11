@@ -522,10 +522,11 @@ def test_watcher_settings_removed_after_scheduling_fall_back_to_defaults(watcher
 def test_watcher_monitor_is_read_when_the_job_runs(watcher_env):
     schedule_pump_watcher(watcher_env.irrigator_id, 2, FROZEN_TS)
     bound: list = []
-    watcher_env.app.state.health_monitor = SimpleNamespace(bind_repo=bound.append)
+    view = SimpleNamespace()
+    watcher_env.app.state.health_monitor = SimpleNamespace(for_repo=lambda repo: bound.append(repo) or view)
     watcher_env.scheduler.jobs[0]["func"]()
     (built,) = watcher_env.built
-    assert built["monitor"] is watcher_env.app.state.health_monitor
+    assert built["monitor"] is view  # the watcher's own view of the shared monitor (S6)
     assert bound == [built["repo"]]
 
 
@@ -642,9 +643,10 @@ class StubMonitor:
         self.log = log
         self.repos: list = []
 
-    def bind_repo(self, repo):
+    def for_repo(self, repo):
         self.log.append("bind")
         self.repos.append(repo)
+        return self
 
     def poll_all(self):
         self.log.append("poll")
@@ -828,17 +830,28 @@ def test_watcher_job_session_commit_rollback_close_order(watcher_env, monkeypatc
     )
 
 
-def test_leak_check_done_scans_at_most_500_leak_rows(db, monkeypatch):
-    """Mutation guard for the ``limit=500`` literal (bug B-23 neighbourhood: older markers are not seen)."""
-    seen: list[dict] = []
+def test_leak_check_done_sees_a_marker_behind_many_newer_leak_rows(db):
+    """B-23 fixed: the completion scan is bounded by time, not by the newest 500 leak rows.
 
-    def spy(self, **kwargs):
-        seen.append(kwargs)
-        return []
-
-    monkeypatch.setattr(IrrigationRepository, "list_activity_events", spy)
-    assert irrigation_mod._leak_check_done(db, 7, FROZEN_TS) is False
-    assert seen == [{"entity_type": "cluster", "entity_id": 7, "source": "leak", "limit": 500}]
+    A completed check followed by 600 newer leak-source rows (other starts' checks) still
+    counts as done; markers written before the start never do.
+    """
+    cid = db.add_cluster("Scan Gap")
+    db.add_activity_event(
+        source="leak", entity_type="cluster", entity_id=cid, code="leak_check", message="m",
+        payload={"started_at": FROZEN_TS}, timestamp=FROZEN_TS - 1,
+    )  # fmt: skip
+    assert irrigation_mod._leak_check_done(db, cid, FROZEN_TS) is False
+    db.add_activity_event(
+        source="leak", entity_type="cluster", entity_id=cid, code="leak_check", message="m",
+        payload={"started_at": FROZEN_TS}, timestamp=FROZEN_TS + 1800,
+    )  # fmt: skip
+    for i in range(600):
+        db.add_activity_event(
+            source="leak", entity_type="cluster", entity_id=cid, code="leak_check", message="m",
+            payload={"started_at": FROZEN_TS + 3600 + i}, timestamp=FROZEN_TS + 5400 + i,
+        )  # fmt: skip
+    assert irrigation_mod._leak_check_done(db, cid, FROZEN_TS) is True
 
 
 def test_leak_check_done_ignores_other_codes_and_empty_payloads(db):
@@ -897,10 +910,11 @@ def test_health_block_names_the_first_blocking_alarm(db, pump, monkeypatch):
     assert pump.adapter.calls == []
     assert (result["action"], result["reason"], result["blocking_alarms"]) == (
         "skip",
-        "soil low; Actuation blocked by device health: no_water on 'Gap Pump'",
+        "Actuation blocked by device health: no_water on 'Gap Pump'; soil low",
         ["no_water", "device_offline"],
     )
-    assert [r["code"] for r in result["reasons"]] == ["sensor_dry", "device_no_water"]
+    # B-6: the block leads the trail, so it is the decision's primary code.
+    assert [r["code"] for r in result["reasons"]] == ["device_no_water", "sensor_dry"]
     (activity,) = _rows(db, ActivityEvent)
     assert (activity.code, activity.severity) == ("decision_skip", "warning")
 

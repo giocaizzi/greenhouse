@@ -172,6 +172,8 @@ def test_vacation_budget_exhausted_flips_to_skip(tmp_db, logic, monkeypatch):
     assert decision.confidence == 0.9  # CONFIDENCE_COOLDOWN
     assert TriggerCode.VACATION_BUDGET_EXHAUSTED in _codes(decision)
     assert TriggerCode.VACATION_ACTIVE in _codes(decision)
+    # The exhausted budget decided the skip, so it is the primary code (not the soil reason).
+    assert decision.primary_code is TriggerCode.VACATION_BUDGET_EXHAUSTED
 
 
 def test_vacation_in_off_season_does_not_crash(tmp_db, logic, monkeypatch):

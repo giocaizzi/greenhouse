@@ -31,6 +31,7 @@ recommended belt-and-suspenders safeguard.
 import logging
 import time
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, TypedDict
 
 from greenhouse_core.constants import (
@@ -46,7 +47,6 @@ from greenhouse_core.models import (
     EVENT_ACTION_ABORTED,
     SOURCE_PUMP,
     TRIGGERED_BY_PUMP_WATCHER,
-    ActivitySource,
     Irrigator,
 )
 from greenhouse_core.repository import IrrigationRepository
@@ -109,6 +109,15 @@ def _trip_payload(
     }
 
 
+@dataclass(frozen=True, slots=True)
+class _Trip:
+    """The tripped irrigator's identity, read once after the stop (survives a rollback's expiry)."""
+
+    irrigator_id: int
+    irrigator_name: str
+    cluster_id: int
+
+
 class PumpWatcherService:
     """Polls an irrigator's dry-run alarm and stops the pump on trip."""
 
@@ -155,7 +164,8 @@ class PumpWatcherService:
         Args:
             irrigator: Irrigator running the pump.
             duration_seconds: Requested irrigation duration; watch exits
-                ``duration_seconds`` after the deadline begins ticking.
+                ``duration_seconds`` after the deadline begins ticking. A
+                negative value is treated as 0.
             started_at: Unix timestamp of the start event, used for the
                 aborted-event row and alert payload. Defaults to ``now``.
 
@@ -166,9 +176,9 @@ class PumpWatcherService:
             ``interrupted`` means ``stop_requested`` fired (server shutdown)
             before the cycle ended; the pump was NOT touched.
         """
-        cluster_id = irrigator.cluster_id
         started_at = started_at if started_at is not None else int(time.time())
-        deadline = self._clock() + max(0.0, float(duration_seconds))
+        duration_seconds = max(0, duration_seconds)  # nothing to watch: complete at once, 0 s elapsed
+        deadline = self._clock() + float(duration_seconds)
         warmup_until = self._clock() + self._warmup
         polls = 0
         failures = 0  # consecutive failed reads
@@ -196,7 +206,7 @@ class PumpWatcherService:
                 if HealthAlarm.NO_WATER in state.alarms and now >= warmup_until:
                     self._handle_trip(
                         irrigator=irrigator,
-                        cluster_id=cluster_id,
+                        cluster_id=irrigator.cluster_id,
                         state=state,
                         started_at=started_at,
                         polls=polls,
@@ -246,20 +256,24 @@ class PumpWatcherService:
         polls: int,
         duration_seconds: int,
     ) -> None:
-        """Stop the pump, record activity / event, and route the alert through the monitor.
+        """Stop the pump, then record the event, the activity and the alert — each durable on its own.
 
-        Best-effort by design: each side effect is wrapped so a failure in
-        one does not block the others. Stopping the pump is the top priority
-        — if the activity log or monitor record fails, the pump is still off.
-        The alert itself is raised by :meth:`DeviceHealthMonitor.record`,
+        Stopping the pump is the top priority and always comes first. Each record is then its own
+        failure domain (S5): it is written and committed alone, and a failed write or commit is
+        logged and rolled back before the next step, so one failure neither poisons the session
+        for the others (``PendingRollbackError``) nor undoes what already committed. Nothing in
+        the record path raises. The alert itself is raised by :meth:`DeviceHealthMonitor.record`,
         which uses the unified ``health:irrigator:{id}:no_water`` dedup_key.
         """
         stop_ok, stop_msg = self._stop_pump(irrigator)
+        # Read once, right after the stop: a rollback below expires the instance, and the
+        # failure logs must not need the session that just failed.
+        trip = _Trip(irrigator.id, irrigator.name, cluster_id)
 
         alarm_raw = state.raw.get("alarm_raw") if isinstance(state.raw, dict) else None
         logger.critical(
             "Pump dry-run detected on irrigator %d (cluster %d) after %d polls: alarm_raw=%r, stop_ok=%s, stop_msg=%s",
-            irrigator.id,
+            trip.irrigator_id,
             cluster_id,
             polls,
             alarm_raw,
@@ -279,12 +293,17 @@ class PumpWatcherService:
             stop_ok=stop_ok,
             stop_msg=stop_msg,
         )
-
-        # Each step below is its own failure domain: one failing never skips the next.
-        self._log_aborted_event(irrigator, elapsed_estimate=elapsed_estimate, alarm_raw=alarm_raw, stop_ok=stop_ok)
-        self._log_trip_activity(irrigator, source=SOURCE_PUMP, elapsed_estimate=elapsed_estimate, payload=payload)
-        self._record_trip_state(irrigator, cluster_id=cluster_id, state=state)
-        self._commit_trip(irrigator)
+        notes = f"pump dry-run detected after ~{elapsed_estimate}s (DP 105={alarm_raw!r}); stop_ok={stop_ok}"
+        self._durably("log aborted irrigation event", trip, lambda: self._log_aborted_event(trip, notes))
+        self._durably(
+            "log the pump dry-run activity",
+            trip,
+            lambda: self._log_trip_activity(trip, elapsed_estimate=elapsed_estimate, payload=payload),
+        )
+        if not self._durably(
+            "record dry-run state into health monitor", trip, lambda: self._record_trip_state(trip, state)
+        ):
+            self._requeue_alert(trip)
 
     def _stop_pump(self, irrigator: Irrigator) -> tuple[bool, str]:
         """Stop the pump — the top-priority trip step; a failure is logged and reported, never raised."""
@@ -298,72 +317,72 @@ class PumpWatcherService:
             logger.exception("Pump watcher could not stop irrigator %d", irrigator.id)
         return stop_ok, stop_msg
 
-    def _log_aborted_event(self, irrigator: Irrigator, *, elapsed_estimate: int, alarm_raw: Any, stop_ok: bool) -> None:
-        """Record the ``aborted`` irrigation event; best-effort."""
-        try:
-            self._repo.add_irrigation_event(
-                irrigator_id=irrigator.id,
-                action=EVENT_ACTION_ABORTED,
-                duration_minutes=0,
-                triggered_by=TRIGGERED_BY_PUMP_WATCHER,
-                notes=(f"pump dry-run detected after ~{elapsed_estimate}s (DP 105={alarm_raw!r}); stop_ok={stop_ok}"),
-            )
-        except Exception:
-            logger.exception("Failed to log aborted irrigation event for irrigator %d", irrigator.id)
+    def _durably(self, what: str, trip: "_Trip", write: Callable[[], object]) -> bool:
+        """Run one trip record and commit it; on failure log, roll back and report False — never raise.
 
-    def _log_trip_activity(
-        self, irrigator: Irrigator, *, source: ActivitySource, elapsed_estimate: int, payload: dict[str, Any]
-    ) -> None:
-        """Record the critical ``pump_dry_run`` activity row; best-effort."""
+        The watcher owns its job session, so each record commits as soon as it is written: the
+        pump is already stopped and the trip must be on file even if a later record fails.
+        """
         try:
-            self._repo.add_activity_event(
-                source=source,
-                entity_type=ENTITY_IRRIGATOR,
-                entity_id=irrigator.id,
-                code=ACTIVITY_CODE,
-                message=(
-                    f"Pump dry-run detected on '{irrigator.name}' after ~{elapsed_estimate}s — irrigation aborted"
-                ),
-                severity="critical",
-                payload=payload,
-            )
+            write()
+            self._repo.commit()
         except Exception:
-            logger.exception("Failed to log activity event for pump dry-run on irrigator %d", irrigator.id)
+            logger.exception("Failed to %s for irrigator %d", what, trip.irrigator_id)
+            self._rollback_quietly()
+            return False
+        return True
 
-    def _record_trip_state(self, irrigator: Irrigator, *, cluster_id: int, state: "DeviceHealthState") -> None:
-        """Hand the NO_WATER state to the health monitor, which raises the alert; best-effort."""
+    def _rollback_quietly(self) -> None:
+        """Roll back after a failed record so the next one starts clean; a failing rollback is only logged."""
+        try:
+            self._repo.rollback()
+        except Exception:
+            logger.warning("Rollback after a failed pump dry-run record failed too", exc_info=True)
+
+    def _log_aborted_event(self, trip: "_Trip", notes: str) -> None:
+        """Record the ``aborted`` irrigation event."""
+        self._repo.add_irrigation_event(
+            irrigator_id=trip.irrigator_id,
+            action=EVENT_ACTION_ABORTED,
+            duration_minutes=0,
+            triggered_by=TRIGGERED_BY_PUMP_WATCHER,
+            notes=notes,
+        )
+
+    def _log_trip_activity(self, trip: "_Trip", *, elapsed_estimate: int, payload: dict[str, Any]) -> None:
+        """Record the critical ``pump_dry_run`` activity row."""
+        self._repo.add_activity_event(
+            source=SOURCE_PUMP,
+            entity_type=ENTITY_IRRIGATOR,
+            entity_id=trip.irrigator_id,
+            code=ACTIVITY_CODE,
+            message=f"Pump dry-run detected on '{trip.irrigator_name}' after ~{elapsed_estimate}s — irrigation aborted",
+            severity="critical",
+            payload=payload,
+        )
+
+    def _record_trip_state(self, trip: "_Trip", state: "DeviceHealthState") -> None:
+        """Hand the NO_WATER state to the health monitor, which raises the alert."""
         # Route through the monitor so the inbox + cache + slow-path
         # observer all see the same NO_WATER transition. The monitor owns
         # the unified ``health:irrigator:{id}:no_water`` dedup_key.
+        (self._monitor or self._lazy_monitor()).record(
+            ENTITY_IRRIGATOR,
+            trip.irrigator_id,
+            state,
+            label=trip.irrigator_name,
+            cluster_id=trip.cluster_id,
+        )
+
+    def _requeue_alert(self, trip: "_Trip") -> None:
+        """The alert's transaction was lost: keep NO_WATER blocking and have the monitor raise it again."""
+        monitor = self._monitor
+        if monitor is None:
+            return
         try:
-            monitor = self._monitor or self._lazy_monitor()
-            monitor.record(
-                ENTITY_IRRIGATOR,
-                irrigator.id,
-                state,
-                label=irrigator.name,
-                cluster_id=cluster_id,
-            )
+            monitor.mark_unraised(ENTITY_IRRIGATOR, trip.irrigator_id, HealthAlarm.NO_WATER)
         except Exception:
-            logger.exception("Failed to record dry-run state into health monitor for irrigator %d", irrigator.id)
-
-    def _commit_trip(self, irrigator: Irrigator) -> None:
-        """Commit the trip's side effects; on failure log and roll back.
-
-        Commits because the watcher owns its job session: the trip (aborted event,
-        alert) must be durable as soon as the pump is stopped.
-
-        ``irrigator.id`` is read only inside the handler: after a failed flush the session has
-        expired it, so that read raises out of the watcher (recorded in REFACTOR_NOTES.md, "Pump watcher").
-        """
-        try:
-            self._repo.commit()
-        except Exception:
-            logger.exception("Failed to commit pump dry-run side effects for irrigator %d", irrigator.id)
-            try:
-                self._repo.rollback()
-            except Exception:
-                logger.debug("Rollback after the failed trip commit failed too", exc_info=True)
+            logger.exception("Could not requeue the dry-run alert for irrigator %d", trip.irrigator_id)
 
     def _lazy_monitor(self) -> DeviceHealthMonitor:
         """Build a transient monitor when one wasn't injected.

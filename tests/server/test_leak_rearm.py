@@ -75,7 +75,7 @@ class TestRearm:
         now = int(time.time())
         pending = _start(app, iid, now - 600)  # due in 20 min
         overdue = _start(app, iid, now - 2700)  # due 15 min ago, never ran
-        _start(app, iid, now - 900, triggered_by="manual")  # manual starts never get a leak check
+        _start(app, iid, now - 900, triggered_by="manual")  # no armed marker: a hand log, no check
         _start(app, iid, now - LEAK_HOLD_HOURS * 3600 - 60)  # older than the hold horizon
 
         assert irrigation_mod.rearm_leak_checks() == 2
@@ -85,6 +85,46 @@ class TestRearm:
         assert due == pytest.approx(pending + LEAK_CHECK_DELAY_SECONDS, abs=1)
         # Overdue checks run right away rather than at their (past) due time.
         assert jobs[f"leak-check-{cid}-{overdue}"].next_run_time.timestamp() == pytest.approx(time.time(), abs=5)
+
+    def test_marked_manual_start_is_rearmed_but_a_hand_log_is_not(self, app, running_scheduler):
+        """A non-automatic start that armed a check (forced run) leaves a ``leak_check_armed`` marker.
+
+        The re-arm finds it through that marker; a ``start``/``manual`` row without one (a
+        logged hand-watering, no pump) gets no check.
+        """
+        from greenhouse_server.services.irrigation_jobs import record_leak_check_armed
+
+        cid, iid = _seed(app)
+        now = int(time.time())
+        forced = _start(app, iid, now - 600, triggered_by="manual")
+        _start(app, iid, now - 900, triggered_by="manual")  # hand log: no marker
+        session = app.state.session_factory()
+        try:
+            repo = IrrigationRepository(session)
+            record_leak_check_armed(repo, repo.get_irrigator(iid), forced, triggered_by="manual")
+            session.commit()
+        finally:
+            session.close()
+        assert irrigation_mod.rearm_leak_checks() == 1
+        assert set(_leak_jobs()) == {f"leak-check-{cid}-{forced}"}
+
+    def test_long_manual_start_is_rearmed_with_its_own_window(self, app, running_scheduler):
+        """The marker's ``check_after_seconds`` survives a restart: due time and job args keep the window."""
+        from greenhouse_server.services.irrigation_jobs import record_leak_check_armed
+
+        cid, iid = _seed(app)
+        started = _start(app, iid, int(time.time()) - 600, triggered_by="manual")
+        session = app.state.session_factory()
+        try:
+            repo = IrrigationRepository(session)
+            record_leak_check_armed(repo, repo.get_irrigator(iid), started, triggered_by="manual", after_seconds=5100)
+            session.commit()
+        finally:
+            session.close()
+        assert irrigation_mod.rearm_leak_checks() == 1
+        job = _leak_jobs()[f"leak-check-{cid}-{started}"]
+        assert list(job.args) == [cid, started, 5100]
+        assert job.next_run_time.timestamp() == pytest.approx(started + 5100, abs=1)
 
     def test_completed_check_is_not_rearmed(self, app, running_scheduler, check_calls):
         cid, iid = _seed(app)

@@ -724,6 +724,9 @@ def _apply_vacation_ration(decision: IrrigationDecision, binding_max_min: int) -
         severity=Severity.WARNING,
         icon="drop-slash",
     )
+    # The exhausted budget is what decided the skip, so it leads the trail and becomes the
+    # decision's primary code (appended last, it left e.g. ``sensor_dry`` as primary).
+    decision.reasons.insert(0, decision.reasons.pop())
 
 
 def _apply_water_warning_rule(decision: IrrigationDecision) -> bool:

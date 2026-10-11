@@ -137,11 +137,14 @@ def irrigate(
 
     Sequence: sync sensors → resolve temperature (sensor / weather / fallback)
     → run the decision engine → if not skipped and not a dry run, actuate the
-    cluster's irrigator and record an `auto`-triggered event. Honors the
-    cluster's irrigation config and the global 6h cooldown.
+    cluster's irrigator and record an `auto`-triggered event (`manual` when
+    forced). Honors the cluster's irrigation config, the global 6h cooldown
+    and the per-day caps (cluster over global; exceeded → `skip`,
+    `daily_cap_hit`).
 
-    Side effects: actuates physical hardware unless `dry_run=True`; writes a
-    sensor sync and an irrigation event.
+    Side effects: actuates physical hardware unless `dry_run=True` or the
+    `dry_run_global` preference is on (then even `force` is logged as `skip`,
+    `dry_run_global`); writes a sensor sync and an irrigation event.
 
     Args:
         cluster_id: Cluster to irrigate.
@@ -149,7 +152,8 @@ def irrigate(
             `dry_run=True` to compute the decision without actuating,
             `no_sync=True` to skip the sensor refresh, `force=True` to
             bypass the quiet-hours deny window (the decision still records
-            a `manual_override_quiet_hours` warning Reason).
+            a `manual_override_quiet_hours` warning Reason; the run is
+            recorded as `manual` and still gets the post-watering leak check).
 
     Returns:
         Decision details (`action`, `reason`, `confidence`, optional

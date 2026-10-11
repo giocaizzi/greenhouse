@@ -22,7 +22,9 @@ Contracts / invariants guarded here:
   :class:`IrrigationDecision`;
 - I11 — an open leak alert holds ``/irrigate`` even with ``force=true``, while
   ``POST /irrigators/{id}/start`` (the escape hatch) still actuates;
-- observed bugs B-1, B-4, B-5, B-6 pinned as ``*_current_behavior_*`` (B-8 fixed by drift pair D5).
+- fixed bugs: B-8 (drift pair D5); B-6 (a device-health block rewrites the decision log);
+  S1/B-1 (``dry_run_global`` never actuates); B-4 (effective per-day caps gate manual and
+  automatic starts); B-5 (a re-opened alert notifies again).
 """
 
 from __future__ import annotations
@@ -842,7 +844,7 @@ _ONE_LOG_CASES = {
     "quiet_hours": ("quiet_hours", "skip", False),
     "outdoor_rain_forecast": ("weather_skip", "skip", False),
     "window_outside": ("outside_window", "skip", False),
-    "vacation_budget_exhausted": (None, "skip", False),
+    "vacation_budget_exhausted": ("vacation_budget_exhausted", "skip", False),
     "wet_skips": (None, "skip", False),
     "dry_irrigates": (None, "irrigate", True),
     "dry_run": (None, "irrigate", False),
@@ -945,47 +947,141 @@ def test_successful_auto_start_schedules_leak_check_and_watcher(pipeline):
     ]
 
 
-def test_manual_start_schedules_watcher_but_no_leak_check(pipeline):
-    """Manual starts get a dry-run watcher (when a duration is given) but never a leak check."""
+def test_forced_run_is_recorded_manual_and_keeps_leak_check_and_watcher(pipeline):
+    """``force=true`` is the user's run: event, push and decision log say ``manual``; follow-ups stay.
+
+    It runs the engine's computed duration unattended, so it gets the 30-min leak check and
+    the dry-run watcher like an automatic run, plus a ``leak_check_armed`` marker so the
+    restart re-arm finds it.
+    """
+    from greenhouse_server.scheduler import scheduler as bg_scheduler
+    from greenhouse_server.scheduler import start_scheduler, stop_scheduler
+
+    pipeline.seed_cluster(soil=35.0)
+    pipeline.app.state.device_registry = pipeline.wiring.registry
+    pipeline.mark()
+    start_scheduler(paused=True)
+    try:
+        assert _irrigate(pipeline, force=True)["response"]["action"] == "irrigated"
+        adhoc = sorted(j.id for j in bg_scheduler.get_jobs() if j.id.startswith(("leak-check-", "pump-watcher-")))
+    finally:
+        stop_scheduler()
+    assert adhoc == [f"leak-check-1-{FROZEN_TS}", f"pump-watcher-1-{FROZEN_TS}"]
+    rows = pipeline.db_rows()
+    assert [(e["action"], e["triggered_by"]) for e in rows["irrigation_events"]] == [("start", "manual")]
+    assert [r["triggered_by"] for r in rows["decision_logs"]] == ["manual"]
+    assert [n["triggered_by"] for n in pipeline.notifier.sent] == ["manual"]
+    assert [a["code"] for a in rows["activity_events"]] == ["irrigated", "leak_check_armed"]
+
+
+def test_manual_start_schedules_watcher_and_leak_check(pipeline):
+    """Every manual start with a duration is a real watering: it gets the leak check (owner decision).
+
+    A short run keeps the 30-min check; without a duration (the device timer decides) the check
+    is skipped and the activity log says why; the hand-watering log arms nothing.
+    """
     from greenhouse_server.scheduler import scheduler as bg_scheduler
     from greenhouse_server.scheduler import start_scheduler, stop_scheduler
 
     ids = pipeline.seed_cluster(soil=35.0)
     pipeline.app.state.device_registry = pipeline.wiring.registry
+    pipeline.mark()
     start_scheduler(paused=True)
     try:
         pipeline.call("POST", f"/api/v1/irrigators/{ids['irrigator_id']}/start", {"minutes": 3})
-        pipeline.call("POST", f"/api/v1/irrigators/{ids['irrigator_id']}/start", {})
-        adhoc = sorted(j.id for j in bg_scheduler.get_jobs() if j.id.startswith(("leak-check-", "pump-watcher-")))
+        with time_machine.travel(FROZEN_INSTANT + timedelta(minutes=1), tick=False):
+            pipeline.call("POST", f"/api/v1/irrigators/{ids['irrigator_id']}/start", {})
+            pipeline.call("POST", f"/api/v1/irrigators/{ids['irrigator_id']}/log-manual", {"minutes": 2})
+        jobs = {
+            j.id: (str(j.trigger), list(j.args))
+            for j in bg_scheduler.get_jobs()
+            if j.id.startswith(("leak-check-", "pump-watcher-"))
+        }
     finally:
         stop_scheduler()
-    assert adhoc == [f"pump-watcher-1-{FROZEN_TS}"]
+    assert jobs == {
+        f"leak-check-1-{FROZEN_TS}": ("date[2026-04-15 10:30:00 UTC]", [1, FROZEN_TS]),
+        f"pump-watcher-1-{FROZEN_TS}": ("date[2026-04-15 10:00:00 UTC]", []),
+    }
+    leak_rows = [a for a in pipeline.db_rows()["activity_events"] if a["source"] == "leak"]
+    assert [(a["code"], a["payload_json"]["started_at"]) for a in leak_rows] == [
+        ("leak_check_armed", FROZEN_TS),
+        ("leak_check_skipped", FROZEN_TS + 60),
+    ]
+    assert leak_rows[1]["message"] == (
+        "post-watering leak check skipped: manual start without a duration (the device timer decides how long it runs)"
+    )
+
+
+def test_long_manual_start_checks_for_a_leak_after_the_run_has_settled(pipeline):
+    """A long manual run's check is due at start + minutes + settle time, and observes that whole window."""
+    from greenhouse_core.constants import LEAK_CHECK_SETTLE_SECONDS
+    from greenhouse_server.scheduler import scheduler as bg_scheduler
+    from greenhouse_server.scheduler import start_scheduler, stop_scheduler
+
+    ids = pipeline.seed_cluster(soil=35.0)
+    pipeline.app.state.device_registry = pipeline.wiring.registry
+    pipeline.mark()
+    start_scheduler(paused=True)
+    try:
+        pipeline.call("POST", f"/api/v1/irrigators/{ids['irrigator_id']}/start", {"minutes": 60})
+        job = bg_scheduler.get_job(f"leak-check-1-{FROZEN_TS}")
+        after = 60 * 60 + LEAK_CHECK_SETTLE_SECONDS
+        assert (job.next_run_time.timestamp(), list(job.args)) == (FROZEN_TS + after, [1, FROZEN_TS, after])
+    finally:
+        stop_scheduler()
+    (marker,) = [a for a in pipeline.db_rows()["activity_events"] if a["code"] == "leak_check_armed"]
+    assert marker["payload_json"]["check_after_seconds"] == after
 
 
 # ── Observed bugs (pinned, NOT fixed) ──────────────────────────────────────
 
 
-def test_dry_run_global_current_behavior_still_actuates(pipeline):
-    """Pins current (buggy) behavior: ``dry_run_global`` is ignored by actuation (B-1) — see REFACTOR_NOTES.md.
+def test_dry_run_global_never_actuates_but_stops_still_work(pipeline):
+    """S1 / B-1 fixed: with ``dry_run_global`` on no start reaches the pump; stops always do.
 
-    The preference promises "no irrigator ever actuates", yet the pipeline,
-    the manual start and ``/check`` all drive the adapter.
+    ``/irrigate`` (with and without ``force``) and ``/check`` evaluate, log a decision
+    rewritten to ``skip`` / ``dry_run_global`` and a ``decision_skip`` activity row; the
+    manual start is refused with 409 and leaves a ``dry_run_global`` activity row. Manual
+    stop, stop-all and the hand-watering log (no hardware) are unaffected.
     """
     ids = pipeline.seed_cluster(soil=35.0)
     pipeline.api("PUT", "/api/v1/preferences", {"dry_run_global": True})
     pipeline.mark()
-    assert _irrigate(pipeline)["response"]["action"] == "irrigated"
-    assert pipeline.call("POST", f"/api/v1/irrigators/{ids['irrigator_id']}/start", {"minutes": 1})["status"] == 200
-    assert [c[0] for c in pipeline.wiring.irrigator.calls] == ["start", "start"]
+    auto = _irrigate(pipeline)["response"]
+    assert (auto["action"], auto["reasons"][0]["code"]) == ("skip", "dry_run_global")
+    assert "would have irrigated 2min on 'Irrigator 1'" in auto["reason"]
+    assert _irrigate(pipeline, force=True)["response"]["action"] == "skip"
+    assert pipeline.call("POST", "/api/v1/clusters/1/check")["response"]["action"] == "skip"
+    manual = pipeline.call("POST", f"/api/v1/irrigators/{ids['irrigator_id']}/start", {"minutes": 1})
+    assert (manual["status"], manual["response"]) == (409, {"detail": "global dry run is on: irrigator not started"})
+    assert pipeline.wiring.irrigator.calls == []
+
+    assert pipeline.call("POST", f"/api/v1/irrigators/{ids['irrigator_id']}/stop")["status"] == 200
+    assert pipeline.call("POST", "/api/v1/bulk/stop-all")["response"] == {"stopped": 1, "errors": []}
+    assert (
+        pipeline.call("POST", f"/api/v1/irrigators/{ids['irrigator_id']}/log-manual", {"minutes": 2})["status"] == 200
+    )
+    assert [c[0] for c in pipeline.wiring.irrigator.calls] == ["stop", "stop"]
+
+    rows = pipeline.db_rows()
+    assert [(r["action"], r["primary_code"], r["actuated"]) for r in rows["decision_logs"]] == [
+        ("skip", "dry_run_global", False)
+    ] * 3
+    assert [a["code"] for a in rows["activity_events"]] == ["decision_skip"] * 3 + ["dry_run_global"]
+    assert [(e["action"], e["triggered_by"]) for e in rows["irrigation_events"]] == [
+        ("stop", "manual"),
+        ("stop", "emergency"),
+        ("start", "manual"),
+    ]
 
 
-def test_caps_current_behavior_not_checked_by_automatic_pipeline(pipeline):
-    """Pins current (buggy) behavior: caps are not checked by the automatic pipeline (B-4) — see REFACTOR_NOTES.md.
+def test_caps_checked_by_automatic_pipeline(pipeline):
+    """B-4 fixed: exhausted per-day caps skip ``/irrigate`` and ``/check`` with ``daily_cap_hit``.
 
-    With ``max_events_per_day=1`` / ``daily_cap_minutes=1`` already exhausted,
-    the manual start is refused with 409 but ``/irrigate`` and ``/check`` still
-    actuate; ``TriggerCode.DAILY_CAP_HIT`` never appears. Global caps are not
-    enforced by the manual path either (it reads the raw cluster row only).
+    With ``max_events_per_day=1`` / ``daily_cap_minutes=1`` already exhausted, the
+    manual start is refused with 409 and the automatic runs (``force`` included) are
+    logged as ``skip`` led by ``daily_cap_hit`` — no start reaches the adapter.
     """
     ids = pipeline.seed_cluster(
         soil=35.0,
@@ -994,27 +1090,39 @@ def test_caps_current_behavior_not_checked_by_automatic_pipeline(pipeline):
     pipeline.add_event(ids["irrigator_id"], age=7 * HOUR)
     pipeline.mark()
     manual = pipeline.call("POST", f"/api/v1/irrigators/{ids['irrigator_id']}/start", {"minutes": 1})
-    assert manual["status"] == 409
-    auto = _irrigate(pipeline)
-    assert auto["response"]["action"] == "irrigated"
-    assert "daily_cap_hit" not in json.dumps(pipeline.db_rows()["decision_logs"])
+    assert (manual["status"], manual["response"]) == (409, {"detail": "cluster max_events_per_day reached"})
+    auto = _irrigate(pipeline)["response"]
+    assert (auto["action"], auto["reasons"][0]["code"]) == ("skip", "daily_cap_hit")
+    assert _irrigate(pipeline, force=True)["response"]["action"] == "skip"
+    assert pipeline.call("POST", "/api/v1/clusters/1/check")["response"]["action"] == "skip"
+    logs = pipeline.db_rows()["decision_logs"]
+    assert [(r["action"], r["primary_code"], r["actuated"]) for r in logs] == [("skip", "daily_cap_hit", False)] * 3
+    assert pipeline.wiring.irrigator.calls == []
+
+
+def test_global_caps_enforced_by_manual_and_automatic_starts(pipeline):
+    """B-4 fixed: caps set only on the global config bind a cluster that sets none of its own."""
+    ids = pipeline.seed_cluster(soil=35.0)
+    pipeline.api("PUT", "/api/v1/config/global", {"daily_cap_minutes": 4})
+    pipeline.add_event(ids["irrigator_id"], age=7 * HOUR)  # 2 min used of 4
+    pipeline.mark()
+    refused = pipeline.call("POST", f"/api/v1/irrigators/{ids['irrigator_id']}/start", {"minutes": 3})
+    assert (refused["status"], refused["response"]) == (409, {"detail": "irrigator daily cap reached"})
+    pipeline.api("PUT", "/api/v1/config/global", {"max_events_per_day": 1})
+    held = _irrigate(pipeline)["response"]
+    assert (held["action"], held["reasons"][0]["code"]) == ("skip", "daily_cap_hit")
+    assert "cluster max_events_per_day reached" in held["reason"]
+    # A cluster value wins over the global one.
+    pipeline.api("PUT", "/api/v1/clusters/1/config", {"max_events_per_day": 2})
+    assert _irrigate(pipeline)["response"]["action"] == "irrigated"  # 2 + 2 == 4 minutes fits
     assert [c[0] for c in pipeline.wiring.irrigator.calls] == ["start"]
 
 
-def test_global_caps_current_behavior_ignored_by_manual_start(pipeline):
-    """Pins current (buggy) behavior: global ``max_events_per_day`` is ignored by manual start (B-4) — see REFACTOR_NOTES.md."""
-    ids = pipeline.seed_cluster(soil=35.0)
-    pipeline.api("PUT", "/api/v1/config/global", {"max_events_per_day": 1, "daily_cap_minutes": 1})
-    pipeline.add_event(ids["irrigator_id"], age=7 * HOUR)
-    pipeline.mark()
-    assert pipeline.call("POST", f"/api/v1/irrigators/{ids['irrigator_id']}/start", {"minutes": 5})["status"] == 200
-
-
-def test_reraised_alert_current_behavior_is_not_renotified(pipeline):
-    """Pins current (buggy) behavior: a re-opened alert never notifies again (B-5) — see REFACTOR_NOTES.md.
+def test_reraised_alert_is_renotified(pipeline):
+    """B-5 fixed: a re-opened alert notifies again.
 
     The first ``actuation_failed`` alert pushes; once resolved, the next
-    failure re-opens the same row (``occurrence_count`` 2) and stays silent.
+    failure re-opens the same row (``occurrence_count`` 2) and pushes again.
     """
     pipeline.seed_cluster(soil=35.0)
     pipeline.wiring.irrigator.start_result = (False, "device timeout")
@@ -1027,25 +1135,28 @@ def test_reraised_alert_current_behavior_is_not_renotified(pipeline):
     _irrigate(pipeline)
     reopened = pipeline.db_rows()["alerts"][0]
     assert (reopened["id"], reopened["status"], reopened["occurrence_count"]) == (alert["id"], "open", 2)
-    assert [n["kind"] for n in pipeline.notifier.sent] == ["alert"]
+    assert [n["kind"] for n in pipeline.notifier.sent] == ["alert", "alert"]
 
 
-def test_device_health_block_current_behavior_not_written_to_decision_log(pipeline):
-    """Pins current (buggy) behavior: the device-health block is not re-persisted (B-6) — see REFACTOR_NOTES.md.
+def test_device_health_block_is_written_to_decision_log(pipeline):
+    """B-6 fixed: the device-health block is the decision the audit log records.
 
-    The response says ``skip`` with a ``device_no_water`` reason, but the
-    ``decision_logs`` row keeps the engine's ``irrigate`` action and reasons.
+    The response says ``skip`` led by a ``device_no_water`` reason, and the
+    ``decision_logs`` row is rewritten to match: ``skip``, ``primary_code``
+    ``device_no_water``, ``actuated = false``, the full trail in ``payload_json``.
     """
     _install_health_block(pipeline, pipeline.seed_cluster(soil=35.0))
     pipeline.mark()
     resp = _irrigate(pipeline)["response"]
     assert resp["action"] == "skip"
-    assert "device_no_water" in [r["code"] for r in resp["reasons"]]
+    assert [r["code"] for r in resp["reasons"]][0] == "device_no_water"
     rows = pipeline.db_rows()
     (log,) = rows["decision_logs"]
-    assert log["action"] == "irrigate"
-    assert log["actuated"] is False
-    assert "device_no_water" not in json.dumps(log["payload_json"])
+    assert (log["action"], log["primary_code"], log["actuated"]) == ("skip", "device_no_water", False)
+    assert log["reason_text"] == resp["reason"]
+    decision = IrrigationDecision.model_validate(log["payload_json"])
+    assert decision.action.value == "skip"
+    assert [r.code.value for r in decision.reasons] == [r["code"] for r in resp["reasons"]]
     assert pipeline.wiring.irrigator.calls == []
     assert [a["code"] for a in rows["activity_events"]] == ["decision_skip"]
 
@@ -1097,3 +1208,65 @@ def test_vacation_budget_projection(pipeline):
             "daily_budget_l": 1.42,  # round(5.7 / 4, 2): binary float rounds down
         },
     ]
+
+
+# ── Compensating stop: a start that cannot be recorded is stopped again ────
+
+
+@contextmanager
+def _failing_commit(app):
+    """Make the next ``Session.commit`` raise, as a locked database would."""
+    from sqlalchemy.orm import Session
+
+    real = Session.commit
+    state = {"armed": True}
+
+    def commit(self):
+        if state["armed"]:
+            state["armed"] = False
+            raise RuntimeError("database is locked")
+        return real(self)
+
+    Session.commit = commit  # type: ignore[method-assign]
+    try:
+        yield
+    finally:
+        Session.commit = real  # type: ignore[method-assign]
+
+
+def test_unrecorded_automatic_start_is_stopped_and_surfaced(pipeline, caplog):
+    """If the start event cannot be committed, the pump is stopped at once, logged at ERROR, and the error surfaces."""
+    ids = pipeline.seed_cluster(soil=35.0)
+    pipeline.mark()
+    with _failing_commit(pipeline.app), caplog.at_level("ERROR", logger="greenhouse_server.services.irrigation"):
+        resp = pipeline.client.post("/api/v1/clusters/1/irrigate", json={})
+    assert resp.status_code == 500  # the write error surfaces
+    assert pipeline.wiring.irrigator.calls == [("start", ids["irrigator_id"], 2), ("stop", ids["irrigator_id"])]
+    assert any("compensating stop: stop_ok=True" in m for m in caplog.messages)
+    assert pipeline.db_rows()["irrigation_events"] == []
+    assert pipeline.notifier.sent == []
+
+
+def test_unrecorded_start_in_check_all_is_stopped_and_reported(pipeline):
+    """In ``check_all`` the cluster is reported as failed (``check_failed``) and its pump stopped again."""
+    ids = pipeline.seed_cluster(soil=35.0)
+    pipeline.mark()
+    with _failing_commit(pipeline.app):
+        resp = pipeline.call("POST", "/api/v1/check")
+    assert [r["action"] for r in resp["response"]["results"]] == ["error"]
+    assert pipeline.wiring.irrigator.calls == [("start", ids["irrigator_id"], 2), ("stop", ids["irrigator_id"])]
+    assert [a["code"] for a in pipeline.db_rows()["alerts"]] == ["check_failed"]
+
+
+def test_unrecorded_manual_start_is_stopped_and_refused(pipeline, caplog):
+    ids = pipeline.seed_cluster(soil=35.0)
+    pipeline.mark()
+    with _failing_commit(pipeline.app), caplog.at_level("ERROR", logger="greenhouse_server.services.irrigation"):
+        resp = pipeline.call("POST", f"/api/v1/irrigators/{ids['irrigator_id']}/start", {"minutes": 3})
+    assert (resp["status"], resp["response"]) == (
+        500,
+        {"detail": "the start could not be recorded, so the irrigator was stopped again"},
+    )
+    assert pipeline.wiring.irrigator.calls == [("start", ids["irrigator_id"], 3), ("stop", ids["irrigator_id"])]
+    assert any("compensating stop: stop_ok=True" in m for m in caplog.messages)
+    assert pipeline.db_rows()["irrigation_events"] == []

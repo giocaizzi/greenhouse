@@ -53,3 +53,21 @@ class TestBulkStopAll:
                 assert event.notes == "kill switch"
         finally:
             session.close()
+
+    def test_refused_stop_is_reported_and_not_recorded(self, app, client):
+        """A device answering ``(False, msg)`` is an error: not counted, no ``stop`` event."""
+        _seed_irrigators(client)
+        app.state.fake_devices.irrigator.stop_result = (False, "device asleep")
+        data = client.post("/api/v1/bulk/stop-all").json()
+        assert data == {
+            "stopped": 0,
+            "errors": [
+                "irrigator 1 (Irrigator A1): stop failed: device asleep",
+                "irrigator 2 (Irrigator B1): stop failed: device asleep",
+            ],
+        }
+        session = app.state.session_factory()
+        try:
+            assert list(session.scalars(select(IrrigationEvent))) == []
+        finally:
+            session.close()

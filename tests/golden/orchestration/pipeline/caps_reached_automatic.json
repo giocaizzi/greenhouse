@@ -4,13 +4,21 @@
    "body": {},
    "request": "POST /api/v1/clusters/1/irrigate",
    "response": {
-    "action": "irrigated",
+    "action": "skip",
     "confidence": 0.8,
     "duration_minutes": 2,
     "interval_hours": 12,
     "learning_alerts": [],
-    "reason": "soil moderately dry (driest=35%)",
+    "reason": "daily cap hit: cluster max_events_per_day reached (2min run on 'Irrigator 1' not started); soil moderately dry (driest=35%)",
     "reasons": [
+     {
+      "code": "daily_cap_hit",
+      "duration_delta": 0,
+      "icon": null,
+      "interval_delta": 0,
+      "message": "daily cap hit: cluster max_events_per_day reached (2min run on 'Irrigator 1' not started)",
+      "severity": "warning"
+     },
      {
       "code": "sensor_dry",
       "duration_delta": 0,
@@ -32,17 +40,17 @@
  "db_writes": {
   "activity_events": [
    {
-    "code": "irrigated",
+    "code": "decision_skip",
     "entity_id": 1,
     "entity_type": "cluster",
     "id": 1,
-    "message": "irrigated for 2min (confidence=80%)",
+    "message": "daily cap hit: cluster max_events_per_day reached (2min run on 'Irrigator 1' not started); soil moderately dry (driest=35%)",
     "payload_json": {
-     "confidence": 0.8,
+     "daily_cap": "cluster max_events_per_day reached",
      "duration_minutes": 2,
      "irrigator_id": 1
     },
-    "severity": "info",
+    "severity": "warning",
     "source": "irrigation",
     "timestamp": 1776247200
    }
@@ -50,8 +58,8 @@
   "alerts": [],
   "decision_logs": [
    {
-    "action": "irrigate",
-    "actuated": true,
+    "action": "skip",
+    "actuated": false,
     "cluster_id": 1,
     "confidence": 0.8,
     "duration_minutes": 2,
@@ -59,13 +67,21 @@
     "id": 1,
     "interval_hours": 12,
     "payload_json": {
-     "action": "irrigate",
+     "action": "skip",
      "cluster_id": 1,
      "confidence": 0.8,
      "duration_minutes": 2,
      "evaluated_at": 1776247200,
      "interval_hours": 12,
      "reasons": [
+      {
+       "code": "daily_cap_hit",
+       "duration_delta": 0,
+       "icon": null,
+       "interval_delta": 0,
+       "message": "daily cap hit: cluster max_events_per_day reached (2min run on 'Irrigator 1' not started)",
+       "severity": "warning"
+      },
       {
        "code": "sensor_dry",
        "duration_delta": 0,
@@ -112,40 +128,16 @@
      },
      "weather": null
     },
-    "primary_code": "sensor_dry",
-    "reason_text": "soil moderately dry (driest=35%)",
+    "primary_code": "daily_cap_hit",
+    "reason_text": "daily cap hit: cluster max_events_per_day reached (2min run on 'Irrigator 1' not started); soil moderately dry (driest=35%)",
     "triggered_by": "auto"
    }
   ],
-  "irrigation_events": [
-   {
-    "action": "start",
-    "duration_minutes": 2,
-    "id": 2,
-    "irrigator_id": 1,
-    "notes": "temp=24.0C (sensor), soil=35% (driest), confidence=80%, reason=soil moderately dry (driest=35%)",
-    "timestamp": 1776247200,
-    "triggered_by": "auto"
-   }
-  ],
+  "irrigation_events": [],
   "sensor_readings": []
  },
  "gateway_calls": null,
- "irrigator_adapter_calls": [
-  [
-   "start",
-   1,
-   2
-  ]
- ],
- "notifications": [
-  {
-   "detail": "confidence=80%",
-   "duration_minutes": 2,
-   "irrigator_name": "Irrigator 1",
-   "kind": "irrigation",
-   "triggered_by": "auto"
-  }
- ],
+ "irrigator_adapter_calls": [],
+ "notifications": [],
  "sensor_adapter_calls": []
 }

@@ -861,6 +861,30 @@ class IrrigationRepository:
             row.actuated = actuated
             self.session.flush()
 
+    def rewrite_decision_log(
+        self,
+        log_id: int,
+        *,
+        action: str,
+        primary_code: str | None,
+        reason_text: str,
+        payload: dict[str, Any],
+    ) -> None:
+        """Overwrite a persisted decision with the verdict a server-side gate turned it into.
+
+        The engine logs its decision before the server's actuation gates (device health,
+        global dry run, daily caps) run; when one of them turns the run into a skip, the
+        row is rewritten so the audit trail shows the decision that was actually applied.
+        """
+        row = self.session.get(DecisionLog, log_id)
+        if row is None:
+            return
+        row.action = action
+        row.primary_code = primary_code
+        row.reason_text = reason_text
+        row.payload_json = json.dumps(payload, default=str)
+        self.session.flush()
+
     def list_decision_logs(self, cluster_id: int, limit: int = 50) -> list[DecisionLog]:
         """Recent decisions for a cluster, newest first."""
         return list(
@@ -923,6 +947,36 @@ class IrrigationRepository:
             stmt = stmt.where(ActivityEvent.severity == severity)
         if before is not None:
             stmt = stmt.where(ActivityEvent.timestamp < before)
+        return list(self.session.scalars(stmt))
+
+    def list_activity_events_since(
+        self,
+        since: int,
+        *,
+        source: str,
+        codes: "Iterable[str]",
+        entity_type: str | None = None,
+        entity_id: int | None = None,
+    ) -> list[ActivityEvent]:
+        """Every event with one of ``codes`` at or after ``since``, newest first — no row cap.
+
+        For lookups that must not miss an old row inside a time window (the leak-check
+        markers): a time bound, never a row limit, keeps the scan complete. ``entity_type`` /
+        ``entity_id`` narrow it to one entity when given.
+        """
+        stmt = (
+            select(ActivityEvent)
+            .where(
+                ActivityEvent.timestamp >= since,
+                ActivityEvent.source == source,
+                ActivityEvent.code.in_(list(codes)),
+            )
+            .order_by(ActivityEvent.timestamp.desc(), ActivityEvent.id.desc())
+        )
+        if entity_type is not None:
+            stmt = stmt.where(ActivityEvent.entity_type == entity_type)
+        if entity_id is not None:
+            stmt = stmt.where(ActivityEvent.entity_id == entity_id)
         return list(self.session.scalars(stmt))
 
     # ── Alerts ────────────────────────────────────────────────────────────────
@@ -1053,6 +1107,18 @@ class IrrigationRepository:
         if since is not None:
             stmt = stmt.where(Alert.last_seen_at >= since)
         return self.session.scalar(stmt)
+
+    def list_unresolved_alerts(self, source: str) -> list[Alert]:
+        """Every open or acknowledged alert from ``source``, oldest first — no row cap.
+
+        For state that must be rebuilt from the inbox (the health monitor's actuation cache
+        after a restart): a missed row would silently drop a block.
+        """
+        return list(
+            self.session.scalars(
+                select(Alert).where(Alert.source == source, Alert.status != "resolved").order_by(Alert.id)
+            )
+        )
 
     def get_open_alert_by_key(self, dedup_key: str) -> Alert | None:
         """The unresolved (open or acknowledged) alert with ``dedup_key``, if any."""

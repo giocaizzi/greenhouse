@@ -154,6 +154,10 @@ CLEANING_MAD_FLOOR = 1.0  # min sigma (%) so a flat run isn't hyper-sensitive to
 # on thin data rather than guess (issue #103).
 LEAK_ALERT_CODE = "leak_or_stuck_valve"
 LEAK_CHECK_DELAY_SECONDS = 1800  # run the check 30 min after the start event
+# A manual start can run far longer than an automatic one, so its check waits until the run has
+# ended plus this settle time (and never earlier than LEAK_CHECK_DELAY_SECONDS): 25 min, the
+# settling an automatic run of MAX_DURATION_MINUTES (5) gets before its 30-min check.
+LEAK_CHECK_SETTLE_SECONDS = 1500
 
 # Baseline window BEFORE the start event. Sized well above the sync cadence
 # (IRRIGATION_SYNC_INTERVAL_MINUTES, default 3h) because sensor rows land in
@@ -195,7 +199,13 @@ TREND_MIN_READINGS = 4  # Minimum readings for trend analysis
 # counts as "low" so thresholds stay tunable without touching device code).
 BATTERY_LOW_PCT = 20
 BATTERY_CRITICAL_PCT = 5
-OFFLINE_AFTER_MINUTES = 30
+OFFLINE_AFTER_MINUTES = 30  # irrigators: last_seen comes from a live local read
+# Sensors are judged on their latest *persisted* reading, which only the sync job writes
+# (every IRRIGATION_SYNC_INTERVAL_MINUTES): their offline window is one sync interval plus
+# this grace, so a healthy sensor never flaps offline between syncs (B-3). The default
+# interval mirrors Settings.sync_interval_minutes for monitors built without settings.
+DEFAULT_SYNC_INTERVAL_MINUTES = 180
+SENSOR_OFFLINE_GRACE_MINUTES = 30
 SIGNAL_LOSS_THRESHOLD = 30  # 0-100 link quality
 HEALTH_POLL_IDLE_MINUTES = 5
 SENSOR_HEALTH_BACKFILL_WINDOW = 5  # consecutive readings
@@ -253,6 +263,7 @@ DEFAULT_SEASON_MULTIPLIER_OUTDOOR = {
 
 # ── Time units ───────────────────────────────────────────────────────────────
 
+SECONDS_PER_MINUTE = 60
 SECONDS_PER_HOUR = 3600
 SECONDS_PER_DAY = 86400
 
@@ -334,7 +345,6 @@ MONITOR_LOOKBACK_HOURS = 2
 MONITOR_VERY_DRY_MARGIN = 15  # % below target minimum
 MONITOR_WET_MARGIN = 10  # % above target maximum
 FALLBACK_TEMPERATURE_C = 20.0  # used when no temperature source is available
-LEAK_CHECK_ACTIVITY_SCAN_LIMIT = 500
 
 # ── Pump watcher defaults ────────────────────────────────────────────────────
 
@@ -415,7 +425,7 @@ PLANT_CARE_FALLBACK = {
 
 HOURS_PER_DAY = 24
 FRESHNESS_SYNC_BACKFILL_HOURS = 6  # history pulled by the pipeline's one-sensor freshness sync
-DAILY_CAP_WINDOW_HOURS = 24  # the "day" of max_events_per_day / daily_cap_minutes for manual starts
+DAILY_CAP_WINDOW_HOURS = 24  # the "day" of max_events_per_day / daily_cap_minutes (manual and automatic starts)
 ANOMALY_LOOKBACK_HOURS = 72  # readings the anomaly scan loads per sensor
 FORECAST_READINGS_LOOKBACK_HOURS = 24  # history the moisture forecast takes "current moisture" from
 FORECAST_FALLBACK_DRAINAGE_PER_HOUR = -2.0  # %/h, used when no learned profile is available

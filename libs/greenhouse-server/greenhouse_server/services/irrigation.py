@@ -1,5 +1,6 @@
 """Irrigation and monitoring orchestration."""
 
+import functools
 import logging
 import time as _time
 from dataclasses import dataclass
@@ -18,7 +19,7 @@ from greenhouse_core.constants import (
 from greenhouse_core.devices import DeviceRegistry, UnknownDeviceModel
 from greenhouse_core.logic import IrrigationLogic
 from greenhouse_core.logic.cleaning import clean_readings_desc
-from greenhouse_core.logic.decision import Action, Severity
+from greenhouse_core.logic.decision import Action, Reason
 from greenhouse_core.logic.plant_needs import moisture_target_range
 from greenhouse_core.models import (
     ENTITY_CLUSTER,
@@ -34,14 +35,16 @@ from greenhouse_core.models import (
 )
 from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_core.repository import IrrigationRepository
+from greenhouse_server.services.actuation_gates import first_gate_block
 from greenhouse_server.services.alerts import raise_alert, sync_cluster_alerts
-from greenhouse_server.services.health_monitor import HEALTH_ALARM_TO_TRIGGER, DeviceHealthMonitor
+from greenhouse_server.services.health_monitor import DeviceHealthMonitor
 from greenhouse_server.services.irrigation_jobs import (  # noqa: F401 — re-exported: callers and tests use these paths
     _add_leak_check_job,
     _leak_check_done,
     _run_leak_check,
     _schedule_leak_check,
     rearm_leak_checks,
+    record_leak_check_armed,
 )
 from greenhouse_server.services.jobs import job_session
 from greenhouse_server.services.maintenance import AlertFinding, collect_learning_alerts, collect_maintenance_alerts
@@ -57,7 +60,7 @@ if TYPE_CHECKING:
     from greenhouse_core.devices import AbstractIrrigatorAdapter
     from greenhouse_core.logic.cleaning import CleanedReading
     from greenhouse_core.logic.decision import IrrigationDecision
-    from greenhouse_core.models import Irrigator
+    from greenhouse_core.models import EventAction, Irrigator
     from greenhouse_server.config import Settings
 
 logger = logging.getLogger(__name__)
@@ -68,8 +71,14 @@ CHECK_FAILED_ALERT_CODE = "check_failed"
 WATCHER_SHUTDOWN_ACTIVITY_CODE = "pump_watcher_shutdown"
 
 
-def _stop_auto_cycle(repo: IrrigationRepository, registry: DeviceRegistry, irrigator: "Irrigator") -> tuple[bool, str]:
-    """Best-effort stop of an auto cycle at shutdown; returns ``(stop_ok, activity message)``."""
+def _stop_auto_cycle(
+    repo: IrrigationRepository, registry: DeviceRegistry, irrigator: "Irrigator", *, kind: str = "auto"
+) -> tuple[bool, str]:
+    """Best-effort stop of a server-timed cycle at shutdown; returns ``(stop_ok, activity message)``.
+
+    ``kind`` names the cycle in the logs and the activity text: ``auto``, or ``forced`` for a
+    forced ``/irrigate`` run (recorded as ``manual``, but timed by the engine).
+    """
     stop_ok = False
     stop_msg = ""
     try:
@@ -78,26 +87,28 @@ def _stop_auto_cycle(repo: IrrigationRepository, registry: DeviceRegistry, irrig
         stop_msg = f"adapter.stop raised: {exc}"
     if stop_ok:
         logger.warning(
-            "Server shutting down mid-irrigation: stopped auto cycle on irrigator %d "
+            "Server shutting down mid-irrigation: stopped %s cycle on irrigator %d "
             "(dry-run watcher can no longer protect it)",
+            kind,
             irrigator.id,
         )
         repo.add_irrigation_event(
             irrigator_id=irrigator.id,
             action=EVENT_ACTION_STOP,
             triggered_by=TRIGGERED_BY_SHUTDOWN,
-            notes="server shutdown: dry-run watcher interrupted, auto cycle stopped",
+            notes=f"server shutdown: dry-run watcher interrupted, {kind} cycle stopped",
             timestamp=int(_time.time()),
         )
-        return stop_ok, f"Server shutdown stopped the auto irrigation on '{irrigator.name}' (watcher interrupted)"
+        return stop_ok, f"Server shutdown stopped the {kind} irrigation on '{irrigator.name}' (watcher interrupted)"
     logger.error(
-        "Server shutting down mid-irrigation: FAILED to stop auto cycle on irrigator %d (%s) — "
+        "Server shutting down mid-irrigation: FAILED to stop %s cycle on irrigator %d (%s) — "
         "it continues unprotected until the device timer ends it",
+        kind,
         irrigator.id,
         stop_msg,
     )
     return stop_ok, (
-        f"Server shutdown could not stop the auto irrigation on '{irrigator.name}' ({stop_msg}); "
+        f"Server shutdown could not stop the {kind} irrigation on '{irrigator.name}' ({stop_msg}); "
         "it continues without dry-run protection"
     )
 
@@ -123,6 +134,7 @@ def handle_watcher_interrupted(
     *,
     triggered_by: TriggeredBy,
     started_at: int,
+    forced: bool = False,
 ) -> bool:
     """Shutdown policy for a pump whose dry-run watcher was cut short.
 
@@ -133,7 +145,9 @@ def handle_watcher_interrupted(
     * ``auto`` cycles are **stopped** — the server started them, and leaving
       a pump running unwatched trades a short watering (safe; the engine
       re-evaluates after restart) for possible dry-run damage.
-    * ``manual`` cycles are **left running**: the user explicitly asked for
+    * ``forced`` runs (``/irrigate`` with ``force``, recorded as ``manual``) are
+      **stopped** too: the engine chose the duration and nobody is watching.
+    * ``manual`` starts are **left running**: the user explicitly asked for
       that duration, and the watcher's own precedent for losing its signal
       ("abandoned" after read failures) is to warn, not stop. Logged loudly.
 
@@ -145,13 +159,14 @@ def handle_watcher_interrupted(
         irrigator: The irrigator whose watcher was interrupted.
         triggered_by: ``"auto"`` or ``"manual"`` — who started the cycle.
         started_at: Unix timestamp of the start event.
+        forced: The cycle is a forced pipeline run (stopped like an auto one).
 
     Returns:
         True if the pump was stopped successfully, False otherwise.
     """
     stop_ok = False
-    if triggered_by == TRIGGERED_BY_AUTO:
-        stop_ok, message = _stop_auto_cycle(repo, registry, irrigator)
+    if triggered_by == TRIGGERED_BY_AUTO or forced:
+        stop_ok, message = _stop_auto_cycle(repo, registry, irrigator, kind="forced" if forced else "auto")
     else:
         message = _left_running_message(irrigator, triggered_by)
     try:
@@ -162,11 +177,39 @@ def handle_watcher_interrupted(
             code=WATCHER_SHUTDOWN_ACTIVITY_CODE,
             message=message,
             severity="warning",
-            payload={"triggered_by": triggered_by, "started_at": started_at, "stopped": stop_ok},
+            payload={"triggered_by": triggered_by, "started_at": started_at, "stopped": stop_ok}
+            | ({"forced": True} if forced else {}),
         )
     except Exception:
         logger.exception("Failed to record watcher-shutdown activity for irrigator %d", irrigator.id)
     return stop_ok
+
+
+def stop_unrecorded_start(
+    repo: IrrigationRepository, adapter: "AbstractIrrigatorAdapter", irrigator: "Irrigator", irrigator_id: int
+) -> None:
+    """Compensating stop: the pump started but its ``start`` could not be recorded.
+
+    Called from inside the ``except`` of the failed write or commit, so the ERROR record
+    carries that error. Rolls the session back first (it may need it, and the reload of the
+    irrigator for the stop needs a usable session), then stops the pump so no run continues
+    that the cooldown, caps and history cannot see. Never raises: the caller re-raises the
+    write error to surface it.
+    """
+    try:
+        repo.rollback()
+    except Exception:
+        logger.warning("Rollback before the compensating stop failed", exc_info=True)
+    try:
+        stop_ok, stop_msg = adapter.stop(irrigator)
+    except Exception as exc:  # noqa: BLE001 — reported in the ERROR line below
+        stop_ok, stop_msg = False, f"adapter.stop raised: {exc}"
+    logger.exception(
+        "Could not record the start of irrigator %d; compensating stop: stop_ok=%s (%s)",
+        irrigator_id,
+        stop_ok,
+        stop_msg,
+    )
 
 
 def _watcher_tuning(settings: "Settings | None") -> tuple[float, float, int]:
@@ -190,6 +233,7 @@ def _run_pump_watcher(
     triggered_by: TriggeredBy,
     sleep: "Callable[[float], bool]",
     stop_requested: "Callable[[], bool]",
+    forced: bool = False,
 ) -> None:
     """The watcher job body: its own session; tuning and the health monitor are read when it runs."""
     from greenhouse_server.services.pump_watcher import PumpWatcherService
@@ -200,9 +244,9 @@ def _run_pump_watcher(
         if irrigator is None:
             return
         poll, warmup, max_failures = _watcher_tuning(getattr(app.state, "settings", None))
-        monitor = getattr(app.state, "health_monitor", None)
-        if monitor is not None:
-            monitor.bind_repo(repo)
+        shared = getattr(app.state, "health_monitor", None)
+        # The watcher's own view: its alerts go into this job's session, never another job's (S6).
+        monitor = shared.for_repo(repo) if shared is not None else None
         watcher = PumpWatcherService(
             repo,
             registry,
@@ -215,12 +259,19 @@ def _run_pump_watcher(
         )
         result = watcher.watch(irrigator, duration_seconds, started_at=started_at)
         if result["outcome"] == "interrupted":
-            handle_watcher_interrupted(repo, registry, irrigator, triggered_by=triggered_by, started_at=started_at)
+            handle_watcher_interrupted(
+                repo, registry, irrigator, triggered_by=triggered_by, started_at=started_at, forced=forced
+            )
             session.commit()
 
 
 def schedule_pump_watcher(
-    irrigator_id: int, duration_minutes: int, started_at: int, *, triggered_by: TriggeredBy = TRIGGERED_BY_AUTO
+    irrigator_id: int,
+    duration_minutes: int,
+    started_at: int,
+    *,
+    triggered_by: TriggeredBy = TRIGGERED_BY_AUTO,
+    forced: bool = False,
 ) -> bool:
     """Schedule a dry-run watcher to run for the duration of an irrigation.
 
@@ -238,6 +289,7 @@ def schedule_pump_watcher(
         triggered_by: Who started the cycle (``"auto"`` / ``"manual"``);
             decides what server shutdown does to the still-running pump —
             see :func:`handle_watcher_interrupted`.
+        forced: A forced pipeline run: stopped at shutdown like an auto cycle.
 
     Returns:
         True if a job was scheduled, False if the scheduler is unavailable,
@@ -258,22 +310,21 @@ def schedule_pump_watcher(
         if registry is None:
             return False
         run_date = datetime.fromtimestamp(started_at, tz=UTC)
-        duration_seconds = int(duration_minutes * 60)
 
-        def _run() -> None:
-            _run_pump_watcher(
-                _app,
-                registry,
-                irrigator_id=irrigator_id,
-                duration_seconds=duration_seconds,
-                started_at=started_at,
-                triggered_by=triggered_by,
-                sleep=wait_for_shutdown,
-                stop_requested=shutdown_requested,
-            )
-
+        run = functools.partial(
+            _run_pump_watcher,
+            _app,
+            registry,
+            irrigator_id=irrigator_id,
+            duration_seconds=int(duration_minutes * 60),
+            started_at=started_at,
+            triggered_by=triggered_by,
+            sleep=wait_for_shutdown,
+            stop_requested=shutdown_requested,
+            forced=forced,
+        )
         scheduler.add_job(
-            _run,
+            run,
             "date",
             run_date=run_date,
             id=f"pump-watcher-{irrigator_id}-{started_at}",
@@ -380,6 +431,9 @@ class _Actuation:
     temp: float
     source: str
     sensor_data: ClusterSnapshot | None
+    # ``manual`` for a forced run (``force=true``): the user pushed it, so the event, the push
+    # and the decision log all say so. ``auto`` otherwise.
+    triggered_by: TriggeredBy = TRIGGERED_BY_AUTO
 
 
 def _soil_note(sensor_data: ClusterSnapshot | None) -> str:
@@ -538,34 +592,47 @@ class IrrigationService:
         return irrigator, adapter
 
     def _actuate(self, act: _Actuation, result: PipelineResult) -> PipelineResult:
-        """Start the pump, record the event, then apply the started / failed follow-ups to ``result``."""
+        """Start the pump, durably record the run, then apply the started / failed follow-ups to ``result``."""
         duration = act.decision.duration_minutes
+        irrigator_id = act.irrigator.id  # read before any write can fail
         success, output = act.adapter.start(act.irrigator, duration)
-        soil_note = _soil_note(act.sensor_data)
         # One timestamp for the event row, the leak check and the watcher, so
         # the restart re-arm (which reads the row) can match the leak check.
         started_at = int(_time.time())
-        self._repo.add_irrigation_event(
-            irrigator_id=act.irrigator.id,
-            action=EVENT_ACTION_START if success else EVENT_ACTION_ATTEMPTED,
-            duration_minutes=duration,
-            triggered_by=TRIGGERED_BY_AUTO,
-            timestamp=started_at,
-            notes=_event_notes(act, soil_note),
-        )
-
-        if success:
-            self._on_started(act, started_at)
-            result["action"] = "irrigated"
-            self._notify_auto_irrigation(act)
-        else:
+        if not success:
+            self._add_event(act, EVENT_ACTION_ATTEMPTED, started_at)
             self._on_start_failed(act, output)
-            _with_error(result, f"irrigator failed: {output}")
-
+            return _with_error(result, f"irrigator failed: {output}")
+        try:
+            self._add_event(act, EVENT_ACTION_START, started_at)
+            self._record_started(act, started_at)
+        except Exception:
+            # The pump runs but nothing records it: stop it rather than leave an unrecorded run.
+            stop_unrecorded_start(self._repo, act.adapter, act.irrigator, irrigator_id)
+            raise
+        self._arm_follow_ups(act, started_at)
+        result["action"] = "irrigated"
+        self._notify_auto_irrigation(act)
         return result
 
-    def _on_started(self, act: _Actuation, started_at: int) -> None:
-        """Log the run, flag the decision as actuated, and arm the leak check and dry-run watcher."""
+    def _add_event(self, act: _Actuation, action: "EventAction", started_at: int) -> None:
+        """The ``start`` / ``attempted`` irrigation event of this run."""
+        self._repo.add_irrigation_event(
+            irrigator_id=act.irrigator.id,
+            action=action,
+            duration_minutes=act.decision.duration_minutes,
+            triggered_by=act.triggered_by,
+            timestamp=started_at,
+            notes=_event_notes(act, _soil_note(act.sensor_data)),
+        )
+
+    def _record_started(self, act: _Actuation, started_at: int) -> None:
+        """Log the run, flag the decision as actuated, and commit before anything else can fail.
+
+        The pump is already running, so its ``start`` event must be durable now: a later failure
+        (the follow-up scheduling, the push, or the rest of a ``check_all`` cluster) rolls back
+        only what comes after, and the 6 h cooldown still sees this run (S3).
+        """
         duration = act.decision.duration_minutes
         self._repo.add_activity_event(
             source=SOURCE_IRRIGATION,
@@ -582,18 +649,38 @@ class IrrigationService:
         )
         if act.decision.decision_log_id is not None:
             self._repo.set_decision_actuated(act.decision.decision_log_id)
+        if act.triggered_by != TRIGGERED_BY_AUTO:
+            record_leak_check_armed(self._repo, act.irrigator, started_at, triggered_by=act.triggered_by)
+        self._repo.commit()
+
+    @staticmethod
+    def _arm_follow_ups(act: _Actuation, started_at: int) -> None:
+        """Arm the post-irrigation leak check and the dry-run watcher for a started run.
+
+        A forced run gets the leak check too: it runs the engine's computed duration unattended,
+        exactly like an automatic one, so a stuck valve after it must raise the hold.
+        """
         _schedule_leak_check(act.cluster_id, started_at)
-        schedule_pump_watcher(act.irrigator.id, duration, started_at)
+        schedule_pump_watcher(
+            act.irrigator.id,
+            act.decision.duration_minutes,
+            started_at,
+            triggered_by=act.triggered_by,
+            forced=act.triggered_by != TRIGGERED_BY_AUTO,
+        )
 
     def _notify_auto_irrigation(self, act: _Actuation) -> None:
-        """Push the auto-irrigation notice (``get_preferences`` still runs as an argument: it may insert)."""
+        """Push the irrigation notice under the run's own trigger (``auto``, or ``manual`` when forced).
+
+        ``get_preferences`` still runs as an argument: it may insert.
+        """
         duration = act.decision.duration_minutes
         maybe_notify(
             self._notifier,
             self._repo.get_preferences(),
-            "auto",
+            "auto" if act.triggered_by == TRIGGERED_BY_AUTO else "manual",
             lambda n: n.notify_irrigation(
-                triggered_by=TRIGGERED_BY_AUTO,
+                triggered_by=act.triggered_by,
                 irrigator_name=act.irrigator.name,
                 duration_minutes=duration,
                 detail=f"confidence={act.decision.confidence:.0%}",
@@ -621,30 +708,48 @@ class IrrigationService:
             notifier=self._notifier,
         )
 
-    def _health_gate_skips(
+    def _actuation_gates_skip(
         self, cluster_id: int, irrigator: "Irrigator", decision: "IrrigationDecision", result: PipelineResult
     ) -> bool:
-        """Device-health gate: turn the run into a skip when an alarm blocks this irrigator.
+        """Run the server's actuation gates (:mod:`.actuation_gates`); the first block becomes a logged skip.
 
-        If a NO_WATER / RAIN / OFFLINE alarm is open for the irrigator, append a typed Reason,
-        set the decision to ``Action.SKIP``, log the skip with the blocking alarms, and rewrite
-        ``result`` in place as a skip (same audit-trail path as the engine's own skip flow).
-        Returns True when the run was blocked; False (nothing touched) when it may actuate or no
-        monitor is wired.
+        Order: device health, the per-day caps, then the global dry run. On a device-health
+        block ``result`` also lists the blocking alarms. Returns True when the run became a skip.
         """
-        if self._health_monitor is None:
+        block = first_gate_block(self._repo, self._health_monitor, cluster_id, irrigator, decision)
+        if block is None:
             return False
-        blocked, blocking_alarms = self._health_monitor.is_actuation_blocked(irrigator)
-        if not blocked:
-            return False
-        primary = blocking_alarms[0]
-        trigger = HEALTH_ALARM_TO_TRIGGER[primary]
-        decision.add_reason(
-            code=trigger,
-            message=f"Actuation blocked by device health: {primary.value} on '{irrigator.name}'",
-            severity=Severity.CRITICAL,
-        )
+        self._skip_run(cluster_id, decision, result, block.lead, payload=block.payload)
+        if block.blocking_alarms is not None:
+            result["blocking_alarms"] = block.blocking_alarms
+        return True
+
+    def _skip_run(
+        self,
+        cluster_id: int,
+        decision: "IrrigationDecision",
+        result: PipelineResult,
+        lead: Reason,
+        *,
+        payload: dict[str, Any],
+    ) -> None:
+        """Turn the engine's IRRIGATE into a server-side skip that every record agrees on.
+
+        ``lead`` goes first in the reason trail, so it becomes the decision's ``primary_code``;
+        the engine's ``decision_logs`` row is rewritten to the skip (B-6: it used to keep
+        ``irrigate``), a ``decision_skip`` activity row carries ``payload``, and ``result`` is
+        rewritten in place.
+        """
+        decision.reasons.insert(0, lead)
         decision.action = Action.SKIP
+        if decision.decision_log_id is not None:
+            self._repo.rewrite_decision_log(
+                decision.decision_log_id,
+                action=decision.action.value,
+                primary_code=lead.code.value,
+                reason_text=decision.reason_text,
+                payload=decision.model_dump(mode="json"),
+            )
         self._repo.add_activity_event(
             source=SOURCE_IRRIGATION,
             entity_type=ENTITY_CLUSTER,
@@ -652,16 +757,11 @@ class IrrigationService:
             code="decision_skip",
             message=decision.reason_text,
             severity="warning",
-            payload={
-                "blocking_alarms": [a.value for a in blocking_alarms],
-                "irrigator_id": irrigator.id,
-            },
+            payload=payload,
         )
         result["action"] = "skip"
         result["reason"] = decision.reason_text
         result["reasons"] = [r.model_dump() for r in decision.reasons]
-        result["blocking_alarms"] = [a.value for a in blocking_alarms]
-        return True
 
     def run_irrigation_pipeline(
         self,
@@ -676,7 +776,13 @@ class IrrigationService:
         ``force=True`` bypasses the quiet-hours gate inside the decision
         engine; a ``MANUAL_OVERRIDE_QUIET_HOURS`` warning Reason is still
         attached to the resulting decision so the audit log records that
-        the user pushed past the deny window.
+        the user pushed past the deny window. A forced run is the user's: its
+        decision log, irrigation event and push say ``manual``; it still gets
+        the post-watering leak check and the dry-run watcher.
+
+        An IRRIGATE decision then passes the server's actuation gates, in order: the
+        device-health gate, the per-day caps, then the global dry run (``dry_run_global``).
+        Each turns the run into a logged skip; nothing bypasses them, ``force`` included.
         """
         cluster = self._repo.get_cluster(cluster_id)
         if not cluster:
@@ -702,8 +808,11 @@ class IrrigationService:
             return _with_error(result, target)
         irrigator, adapter = target
 
-        if not self._health_gate_skips(cluster_id, irrigator, decision, result):
-            self._actuate(_Actuation(cluster_id, irrigator, adapter, decision, temp, source, sensor_data), result)
+        if not self._actuation_gates_skip(cluster_id, irrigator, decision, result):
+            trigger = TRIGGERED_BY_MANUAL if force else TRIGGERED_BY_AUTO
+            self._actuate(
+                _Actuation(cluster_id, irrigator, adapter, decision, temp, source, sensor_data, trigger), result
+            )
         return result
 
     def monitor_cluster(self, cluster_id: int) -> MonitorResult:
@@ -787,7 +896,10 @@ class IrrigationService:
         already ran for earlier clusters (the cooldown would not see them and
         they could water again on the next tick). A failing cluster is rolled
         back on its own, reported as ``action="error"`` and raises a
-        ``check_failed`` alert, which the next successful check resolves.
+        ``check_failed`` alert, which the next successful check resolves. The
+        rollback cannot erase the failing cluster's own pump run either: the
+        pipeline commits a successful start (event, ``irrigated`` activity,
+        actuated decision log) the moment the device accepts it.
         """
         clusters = [(c.id, c.name) for c in self._repo.list_clusters()]
         results: list[CheckResult] = []

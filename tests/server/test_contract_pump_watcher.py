@@ -61,8 +61,9 @@ class RecordingMonitor:
     def __init__(self) -> None:
         self.bound: list = []
 
-    def bind_repo(self, repo) -> None:
+    def for_repo(self, repo) -> RecordingMonitor:
         self.bound.append(repo)
+        return self
 
 
 @pytest.fixture
@@ -221,7 +222,7 @@ def test_job_builds_watcher_from_settings_with_shutdown_hooks(env):
     assert built["registry"] is env.registry
     assert (built["poll_seconds"], built["warmup_seconds"], built["max_read_failures"]) == (0.7, 3.0, 4)
     assert built["monitor"] is env.monitor
-    assert env.monitor.bound == [built["repo"]]  # monitor re-bound to the job's own session
+    assert env.monitor.bound == [built["repo"]]  # a monitor view on the job's own session (S6)
     assert built["stop_requested"] is scheduler_module.shutdown_requested
     assert built["sleep"] is scheduler_module.wait_for_shutdown
 
@@ -283,6 +284,25 @@ def test_shutdown_leaves_manual_cycle_on_device_timer_and_records_it(env, caplog
             }
         ],
     }
+
+
+def test_shutdown_stops_forced_run_like_an_auto_cycle(env, caplog):
+    """A forced ``/irrigate`` run is recorded ``manual`` but timed by the engine and unwatched: stopped."""
+    schedule_pump_watcher(env.irrigator_id, 3, STARTED_AT, triggered_by="manual", forced=True)
+    with caplog.at_level(logging.INFO, logger="greenhouse_server.services.irrigation"):
+        env.scheduler.jobs[0]["func"]()
+    assert [c[0] for c in env.adapter.calls] == ["stop"]
+    assert caplog.messages == [
+        f"Server shutting down mid-irrigation: stopped forced cycle on irrigator {env.irrigator_id} "
+        "(dry-run watcher can no longer protect it)"
+    ]
+    state = _db_state(env)
+    assert [(e["action"], e["triggered_by"], e["notes"]) for e in state["events"]] == [
+        ("stop", "shutdown", "server shutdown: dry-run watcher interrupted, forced cycle stopped")
+    ]
+    (activity,) = state["activity"]
+    assert activity["message"] == "Server shutdown stopped the forced irrigation on 'Watch Pump' (watcher interrupted)"
+    assert activity["payload"] == {"triggered_by": "manual", "started_at": STARTED_AT, "stopped": True, "forced": True}
 
 
 @pytest.mark.parametrize(
@@ -456,7 +476,11 @@ def test_constructor_clamps_its_knobs(plain):
 
 
 def test_trip_side_effect_failures_are_logged_and_the_stop_still_happens(plain, monkeypatch, caplog):
-    """Each trip side effect is isolated: event, activity, monitor and commit failures are all swallowed."""
+    """Each trip side effect is isolated (S5): event, activity and monitor failures are logged, never raised.
+
+    Each record is written and committed on its own; a failed one is rolled back and the
+    lost alert is requeued on the monitor so it keeps blocking and is raised again.
+    """
     plain.adapter.set_health(
         DeviceHealthState(observed_at=FROZEN_TS, alarms=frozenset({HealthAlarm.NO_WATER}), raw={"alarm_raw": 1})
     )
@@ -464,9 +488,14 @@ def test_trip_side_effect_failures_are_logged_and_the_stop_still_happens(plain, 
     def _fail(*_args, **_kwargs):
         raise RuntimeError("db gone")
 
+    requeued: list = []
+
     class _BadMonitor:
         def record(self, *args, **kwargs):
             raise RuntimeError("monitor gone")
+
+        def mark_unraised(self, *args):
+            requeued.append(args)
 
     monkeypatch.setattr(plain.repo, "add_irrigation_event", _fail)
     monkeypatch.setattr(plain.repo, "add_activity_event", _fail)
@@ -485,7 +514,43 @@ def test_trip_side_effect_failures_are_logged_and_the_stop_still_happens(plain, 
             "alarm_raw=1, stop_ok=True, stop_msg=fake stop ok",
         ),
         ("ERROR", f"Failed to log aborted irrigation event for irrigator {iid}"),
-        ("ERROR", f"Failed to log activity event for pump dry-run on irrigator {iid}"),
+        ("ERROR", f"Failed to log the pump dry-run activity for irrigator {iid}"),
         ("ERROR", f"Failed to record dry-run state into health monitor for irrigator {iid}"),
-        ("ERROR", f"Failed to commit pump dry-run side effects for irrigator {iid}"),
     ]
+    assert requeued == [("irrigator", iid, HealthAlarm.NO_WATER)]
+
+
+def test_trip_after_a_failed_flush_rolls_back_and_still_records_the_rest(plain, monkeypatch, caplog):
+    """S5 fixed: a real failed flush no longer poisons the session for the later trip records.
+
+    The aborted-event write fails inside the flush (NOT NULL violation), which used to leave the
+    session needing a rollback: every later write and the final commit raised
+    ``PendingRollbackError`` from inside their own except handlers. Now the failed record is
+    rolled back alone; the activity row and the NO_WATER alert are written and committed, and
+    nothing escapes the watcher.
+    """
+    from greenhouse_core.models import Alert
+
+    plain.adapter.set_health(
+        DeviceHealthState(observed_at=FROZEN_TS, alarms=frozenset({HealthAlarm.NO_WATER}), raw={"alarm_raw": 1})
+    )
+    session = plain.repo.session
+
+    def _bad_event(**_kwargs):
+        session.add(IrrigationEvent(irrigator_id=plain.irrigator.id, timestamp=None, action="aborted"))
+        session.flush()
+
+    monkeypatch.setattr(plain.repo, "add_irrigation_event", _bad_event)
+    watcher = PumpWatcherService(plain.repo, plain.registry, warmup_seconds=0, clock=lambda: 0.0, sleep=lambda s: None)
+    with caplog.at_level(logging.ERROR, logger="greenhouse_server.services.pump_watcher"):
+        assert watcher.watch(plain.irrigator, 60, started_at=STARTED_AT)["outcome"] == "tripped"
+    iid = plain.irrigator.id
+    assert plain.adapter.calls == [("read_health", iid), ("stop", iid)]
+    assert [r.getMessage() for r in caplog.records if r.levelname == "ERROR"] == [
+        f"Failed to log aborted irrigation event for irrigator {iid}"
+    ]
+    session.rollback()  # read what was committed, not what is pending
+    assert session.query(IrrigationEvent).all() == []
+    assert [a.code for a in session.query(ActivityEvent).all()] == ["pump_dry_run"]
+    alert = session.query(Alert).one()
+    assert (alert.dedup_key, alert.status) == (f"health:irrigator:{iid}:no_water", "open")

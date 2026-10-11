@@ -189,8 +189,21 @@ class TestAlertNotification:
                 cluster_id=1,
                 notifier=rec,
             )
-        # Only the first occurrence (occurrence_count == 1) pushes.
+        # Only the call that opened the alert pushes; repeats while it is open stay silent.
         assert len(rec.alerts) == 1
+
+    def test_reopened_alert_renotifies(self, tmp_db):
+        """B-5: a resolved alert that is raised again re-opens and pushes again."""
+        rec = _RecordingNotifier()
+        kwargs = {"source": "leak", "code": "c", "title": "t", "message": "m", "severity": "warning", "cluster_id": 1}
+        alert = raise_alert(tmp_db, notifier=rec, **kwargs)
+        raise_alert(tmp_db, notifier=rec, **kwargs)  # still open: silent
+        tmp_db.acknowledge_alert(alert.id)
+        raise_alert(tmp_db, notifier=rec, **kwargs)  # acknowledged is still unresolved: silent
+        tmp_db.resolve_alert(alert.id)
+        reopened = raise_alert(tmp_db, notifier=rec, **kwargs)
+        assert (reopened.id, reopened.status, reopened.occurrence_count) == (alert.id, "open", 4)
+        assert len(rec.alerts) == 2
 
     def test_pref_toggle_off_suppresses(self, tmp_db):
         tmp_db.update_preferences(notify_alerts=False)
@@ -211,7 +224,7 @@ class TestAlertNotification:
     def test_notify_if_new_alert_none_notifier_is_noop(self, tmp_db):
         # Should not raise when notifier is None.
         alert = raise_alert(tmp_db, source="leak", code="c", title="t", message="m", severity="critical", cluster_id=1)
-        notify_if_new_alert(tmp_db, None, alert)
+        notify_if_new_alert(tmp_db, None, alert, was_open=False)
 
 
 # ── Manual / emergency seams via the API ─────────────────────────────────────

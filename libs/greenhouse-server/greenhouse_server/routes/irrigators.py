@@ -190,8 +190,10 @@ def start_irrigator(
 ) -> IrrigatorActionResponse:
     """Manually start an irrigator through its device adapter.
 
-    Side effects: actuates physical hardware and records a `start` irrigation
-    event with `triggered_by="manual"`. Bypasses the smart-decision engine.
+    Side effects: actuates physical hardware, records a `start` irrigation
+    event with `triggered_by="manual"` and arms the 30-min post-watering
+    leak / stuck-valve check (as every real watering does). Bypasses the
+    smart-decision engine, including an open leak hold.
 
     Args:
         irrigator_id: Irrigator to actuate.
@@ -201,10 +203,13 @@ def start_irrigator(
         `success=True` and the adapter's start message.
 
     Raises:
-        HTTPException: 404 if the irrigator is unknown, 409 if the cluster
-            daily cap or max-events-per-day limit would be exceeded, 503 if
-            Tuya credentials are missing or the irrigator model has no
-            adapter, 502 if the device fails to start.
+        HTTPException: 404 if the irrigator is unknown, 422 if `minutes`
+            is below 1, 409 if the cluster daily cap or max-events-per-day
+            limit would be exceeded or the global dry run (`dry_run_global`
+            preference) is on — the refusal is logged and no pump starts, 503
+            if Tuya credentials are missing or the irrigator model has no
+            adapter, 502 if the device fails to start, 500 if the start could
+            not be recorded (the irrigator is stopped again).
     """
     irrigator = require_irrigator(repo, irrigator_id)
     try:

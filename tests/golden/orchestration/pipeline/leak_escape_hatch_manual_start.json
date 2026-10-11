@@ -54,6 +54,21 @@
     "severity": "info",
     "source": "irrigation",
     "timestamp": 1776247200
+   },
+   {
+    "code": "leak_check_armed",
+    "entity_id": 1,
+    "entity_type": "cluster",
+    "id": 2,
+    "message": "post-watering leak check armed (manual start)",
+    "payload_json": {
+     "irrigator_id": 1,
+     "started_at": 1776247200,
+     "triggered_by": "manual"
+    },
+    "severity": "info",
+    "source": "leak",
+    "timestamp": 1776247200
    }
   ],
   "alerts": [

@@ -14,6 +14,7 @@ from greenhouse_core.constants import (
     HEALTH_POLL_IDLE_MINUTES,
     HEALTH_SNAPSHOT_HOUR,
     HEALTH_SNAPSHOT_MINUTE,
+    SENSOR_OFFLINE_GRACE_MINUTES,
     SYNC_JOB_BACKFILL_HOURS,
 )
 from greenhouse_core.devices import DeviceGateway
@@ -333,14 +334,13 @@ def _health_snapshot_job() -> None:
 def _build_irrigation_service(
     app: FastAPI, repo: IrrigationRepository, registry: "DeviceRegistry | None", gateway: DeviceGateway | None
 ) -> "IrrigationService":
-    """Wire the check job's service on the job's own repo; the shared health monitor is re-bound to it first."""
+    """Wire the check job's service on the job's own repo, with its own view of the shared health monitor."""
     from greenhouse_server.services.irrigation import IrrigationService
     from greenhouse_server.services.sync import SyncService
 
     sync_svc = SyncService(repo, registry, gateway)
-    monitor = state.health_monitor(app)
-    if monitor is not None:
-        monitor.bind_repo(repo)
+    shared = state.health_monitor(app)
+    monitor = shared.for_repo(repo) if shared is not None else None
     return IrrigationService(
         repo=repo,
         registry=registry,
@@ -379,10 +379,11 @@ def _anomaly_job() -> None:
 def _health_monitor_job() -> None:
     """Background job: poll every device's health surface, diff, alert.
 
-    Reuses the singleton :class:`DeviceHealthMonitor` stored on
-    ``app.state.health_monitor`` (built at startup by
-    :func:`init_health_monitor`) so the in-memory transition cache
-    survives across ticks. Falls open silently when no registry is wired.
+    Polls through a view of the singleton :class:`DeviceHealthMonitor` stored on
+    ``app.state.health_monitor`` (built at startup by :func:`init_health_monitor`):
+    the in-memory transition cache survives across ticks, while the alerts this
+    tick raises go into this job's own session (S6). Falls open silently when no
+    registry is wired.
     """
     if _app is None:
         return
@@ -393,19 +394,18 @@ def _health_monitor_job() -> None:
         return
 
     with _job_session(_app, logger, "Device health monitor job failed") as session:
-        repo = IrrigationRepository(session)
-        monitor.bind_repo(repo)
-        monitor.poll_all()
+        monitor.for_repo(IrrigationRepository(session)).poll_all()
 
 
-def init_health_monitor(app: FastAPI, settings: Settings) -> None:  # noqa: ARG001 — public signature
+def init_health_monitor(app: FastAPI, settings: Settings) -> None:
     """Build the long-lived :class:`DeviceHealthMonitor` for this app.
 
     Stored on ``app.state.health_monitor`` so dependency-injection wiring
     (:func:`greenhouse_server.deps.get_health_monitor`) and the scheduler
     job share one instance — its cache is the engine's source of truth
-    for actuation gating. Falls open if there is no device registry wired
-    (tests usually omit it).
+    for actuation gating, rebuilt here from the open health alerts so a
+    restart keeps blocked devices blocked. Falls open if there is no device
+    registry wired (tests usually omit it).
     """
     from greenhouse_server.services.health_monitor import DeviceHealthMonitor
 
@@ -416,13 +416,24 @@ def init_health_monitor(app: FastAPI, settings: Settings) -> None:  # noqa: ARG0
 
     with _read_session(app) as session:
         repo = IrrigationRepository(session)
-        monitor = DeviceHealthMonitor(repo=repo, registry=registry, notifier=state.ntfy_notifier(app))
+        monitor = DeviceHealthMonitor(
+            repo=repo,
+            registry=registry,
+            # Sensors are judged on persisted readings, which land once per sync (B-3).
+            sensor_offline_after_minutes=settings.sync_interval_minutes + SENSOR_OFFLINE_GRACE_MINUTES,
+            notifier=state.ntfy_notifier(app),
+        )
         try:
             monitor.backfill_from_history()
             session.commit()
         except Exception:
             session.rollback()
             logger.exception("Health monitor startup hooks failed")
+        try:
+            # After the backfill, so back-filled alarms are cached too and resolve when they clear (B-9).
+            monitor.restore_from_open_alerts()
+        except Exception:
+            logger.exception("Health monitor could not restore its cache from open alerts")
         app.state.health_monitor = monitor
 
 

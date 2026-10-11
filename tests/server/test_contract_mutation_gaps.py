@@ -624,12 +624,13 @@ def test_manual_start_schedules_a_manual_watcher(db, monkeypatch):
 
 
 def test_health_monitor_job_binds_the_job_repo_before_polling(monkeypatch):
-    """scheduler-20: the health job re-binds the monitor to its own session's repo, polls, commits."""
+    """scheduler-20: the health job polls through a monitor view on its own session's repo, then commits (S6)."""
     events: list = []
 
     class Monitor:
-        def bind_repo(self, repo):
+        def for_repo(self, repo):
             events.append(("bind", repo.session))
+            return self
 
         def poll_all(self):
             events.append(("poll",))
@@ -644,12 +645,13 @@ def test_health_monitor_job_binds_the_job_repo_before_polling(monkeypatch):
 
 
 def test_check_job_binds_the_health_monitor_then_checks_and_commits(monkeypatch):
-    """scheduler-23: the check job re-binds the health monitor to its session's repo before checking."""
+    """scheduler-23: the check job takes a health-monitor view on its session's repo before checking (S6)."""
     events: list = []
 
     class Monitor:
-        def bind_repo(self, repo):
+        def for_repo(self, repo):
             events.append(("bind", repo.session))
+            return self
 
     monkeypatch.setattr(IrrigationService, "check_all_clusters", lambda self: events.append(("check",)) or [])
     session = SimpleNamespace(
