@@ -4,7 +4,9 @@ Behavior-preserving refactor of greenhouse on branch `claude/focused-hawking-7to
 `fa89e94`. The safety net (characterization + golden tests, mutation-hardened) was frozen at the local tag
 `refactor-gate1` before any production code moved. 566 commits before this report: 246 `refactor`, 169 `docs`, 37 `fix` (labeled behavior
 changes), 35 `test`, 35 `build`, 24 merges, 10 `chore`, plus `types`/`style`/`ci` and one revert. Details of every bug,
-quirk and labeled change: `REFACTOR_NOTES.md`.
+quirk and labeled change: `REFACTOR_NOTES.md`. Sections 1–7 describe the refactor as of `fa89e94`; section 8 covers the
+**bug-fix fold-in** that followed in the same PR (#108) and fixed the bugs the refactor had recorded; section 9 lists
+what is still open.
 
 ## 1. Before / after
 
@@ -81,12 +83,18 @@ Full table with locations, pinning tests and commits: `REFACTOR_NOTES.md` → "L
   → zeros instead of 500; DEBUG logging on silent exception swallows; TUI irrigator config hint; one DB session per
   authenticated request; `SpriteView` no longer shadows `Widget._animate`; legacy device-type aliases removed, with
   the web forms now offering the model keys (fixes the edit form writing legacy values back).
-- **Operator upgrade notes:**
+- **Operator upgrade notes** (refactor and fold-in together; also in `README.md` → "Upgrading an existing deployment"):
   - Alembic revision `a1d3f5b7c902` (data only) rewrites leftover legacy device types on upgrade.
   - A database created before Alembic now fails at startup; compare it with head and `alembic stamp head`.
   - Replace `IRRIGATION_CHECK_INTERVAL_HOURS=N` with `IRRIGATION_CHECK_CRON_HOURS=*/N`.
-  - Old open `pump_dry_run` alerts must be resolved by hand.
+  - Old open `pump_dry_run` alerts must be resolved by hand; open `sensor_fault` alerts from the old water-warning
+    mapping are resolved at startup.
   - History shows both `off` (old) and `stop` (new) manual stops.
+  - Rename legacy secret variables: only `GREENHOUSE_MCP_TOKEN`, `GREENHOUSE_NTFY_*` and `GREENHOUSE_AUTH_*` are read
+    (bare and `IRRIGATION_` spellings are ignored, with a startup warning per name).
+  - A host install binds `127.0.0.1`; set `IRRIGATION_HOST=0.0.0.0` for LAN access (Docker already does).
+  - `dry_run_global` is enforced, global per-day caps bind every cluster and automatic runs, a forced irrigate is
+    recorded as manual, and API/MCP responses mask `local_key`.
 
 ## 6. Contract evidence
 Goldens pin OpenAPI, MCP tools, routes, DDL/migrated schema, settings, env reads, import surfaces, loggers, constants,
@@ -103,37 +111,92 @@ the scheduler `_job_session` monkeypatch seam, a leak-check rollback path, and t
 (vacation-ration read order, D20 busy-timeout, a docstring). Engine/devices: 12,000 randomized states, 22,377 fault
 runs, 28,792 patch-seam runs and 3,960 device calls with zero differences.
 
-## 8. Pending outside work (not done here)
-### 8.1 Safety bugs — each pinned by a `*_current_behavior*` test; fix as labeled PRs
-| # | Bug | Where |
+## 8. Bug-fix fold-in
+
+After the refactor the owner asked for **every recorded bug to be fixed in the same PR** (2026-10-11). The work ran as
+six packages, each on its own branch with a second, differential review before merge: **A** safety + actuation
+pipeline, **B** devices / ingress / sync / weather, **C** API / web / auth / security / schema, **D** engine / CLI /
+TUI / test infrastructure, **E** dependencies + CI, **F** cleanup. A, B, C, E and F are merged (`01692d4..190217f`:
+87 commits, 73 of them `fix(...)`, one bug per commit with the pinning test flipped to the fixed behavior).
+<!-- TODO(D): package D (30 commits) — add its merge commit, its rows below and the final commit counts. -->
+
+### 8.1 Owner decisions
+
+- `dry_run_global` on → no start actuates anywhere (automatic, `/irrigate` incl. `force`, manual from every
+  interface); everything is evaluated and logged; stops, stop-all and shutdown stops always work.
+- Engine quirks: fix all (critical stress on the driest plant, preference-timezone light month, short-series spike
+  guard, validated soil targets, 0 °C / 0 % real, every decision has a reason); emergency runs obey windows and
+  vacation budgets; time edges are exclusive.
+- Secrets only as `GREENHOUSE_X`; `local_key` masked in irrigator and sensor responses (writes still accept it);
+  default bind `127.0.0.1` (Docker opts in).
+- A forced run is a manual run (recorded manual, leak check, stopped at shutdown); every real start gets the leak
+  check; the IK10PW keep-alive fallback is removed (a start without the local Duration DP is refused).
+- TUI confirms scheduler resume and the plant-DB sync; package re-exports resolve lazily.
+
+### 8.2 Fixed, by area
+
+Full table (what changed, where, pinning test): `REFACTOR_NOTES.md` → "Labeled behavior changes landed" →
+"Bug-fix fold-in".
+
+| Area | Fixed | Commits |
 |---|---|---|
-| S1 | `dry_run_global` ("never actuate") is ignored by every actuation path | preferences: stored/displayed only |
-| S2 | IK10PW keep-alive fallback can leave the pump ON until the firmware auto-off (`signal.signal` off the main thread raises after `on()`, so `finally: off()` never runs) | `devices/irrigators/ik10pw.py` `_start_keepalive` |
-| S3 | Cooldown blind spot: a cluster that crashes after actuating in `check_all_clusters` is rolled back including its `start` event | `services/irrigation.py` |
-| S4 | TUI crash when a dashboard load outlasts `refresh_seconds` (overlapping reloads, also seen once at teardown → `NoMatches`); fix: reload no-ops once the screen is unmounting | `tui/screens/dashboard.py` |
-| S5 | Pump watcher: a failed write during a trip makes its own except handlers raise `PendingRollbackError` (pump already stopped) | `services/pump_watcher.py` |
-| S6 | Shared `DeviceHealthMonitor`: `bind_repo` swaps the repo under the long-running pump watcher; a NO_WATER alert can land in another job's session or be lost while the cache marks it raised (reproduced) | `services/health_monitor.py`, `scheduler.py`, `pump_watcher.py` |
-| — | ≈60 further observed bugs (offline flap every sync, caps never checked in the automatic pipeline, re-raised alerts not re-notified, web 500s on bad input, `WWW-Authenticate` dropped on JSON 401, `local_key` returned in plain text, …) | `REFACTOR_NOTES.md` → "Observed bugs not fixed" |
+| Safety | S1 / B-1 `dry_run_global` enforced; S2 / B-2 keep-alive can no longer leave the pump ON, then removed (start refused without the local Duration DP); S3 automatic start committed when the device accepts; S5 pump-watcher trip writes; S6 per-job health-monitor view + locked shared cache; compensating stop for an unrecorded start | `e04ce9e`, `c56bd8f`, `cc58fa1`, `a980635`, `fe57ad8`, `4a33bb0`, `a3128d7` |
+| Actuation pipeline | B-4 effective caps on every start (gate order health → caps → dry run → start); B-6 gate blocks written to `decision_logs`; forced run = manual + leak check + stopped at shutdown; manual minutes ≥ 1; stop-all reports refusals; vacation-exhausted primary code | `5a31855`, `f86ae95`, `89ea6de`, `6088984`, `a982946`, `60e5926`, `ccf2c4b`, `d2399c7`, `f4188bc` |
+| Leak check / pump watcher | every manual start checked (after run + settle; skipped without minutes); B-23 time-bounded "done" scan; negative watch duration | `3d7f906`, `31cb427`, `e145090`, `b14be8d` |
+| Device health / alerts | B-3 sensor offline after sync interval + 30 min; B-5 re-opened alerts notify; B-9 cache rebuilt from open alerts at startup; B-10 `water_warning` = soil dry (no SENSOR_FAULT; old alerts resolved); per-device commits and lost-alert recovery | `c13b1a0`, `a2fb694`, `28dfcaf`, `6920994`, `8a57601`, `df518dd`, `00eccfc` |
+| Devices / ingress / sync / weather | silent swallows logged; SIGTERM OFF once; per-DP parse errors skipped; DP 111 `"false"` parsed as True (new bug); log rows store `water_warning`; B-21 humidity-only readings stored; B-20 paginated `getdevicelog` (+ cursor/failure guards); forecast hours ≤ 0 and cache key; `/monitor` spike filter | `8b02de9`, `951e657`, `b61fd0e`, `1634816`, `73ee467`, `08a66d7`, `b79190e`, `aff73a1`, `6d20838`, `3770bb8`, `0bb8944` |
+| API | B-11 masked `local_key` (irrigators, sensors, web form); B-15 PATCH null semantics; nonexistent default cluster 404; B-22 real status age; cluster / plant delete cascades; unknown device type 422 (validated only on change); NaN / Infinity refused | `578929e`, `a859ecd`, `ac8bcc1`, `7836e76`, `78abbc5`, `5eb5a90`, `4c4e833`, `4bc7823`, `c8e91f7`, `fdef0bc`, `a27d209`, `51994c7` |
+| Web | missing-alert ack/resolve 404; non-numeric form 400; unknown-cluster irrigate 404; error format by `Accept` (+ 405 `Allow`); footer clock timezone; no operational banners for anonymous viewers; plant form dependency | `3662b49`, `f0570bb`, `293ceaf`, `fdd0c3a`, `40a1df9`, `ba44321`, `9140079`, `aac74ba` |
+| Auth / security / settings | B-12 constant-time MCP token; empty/whitespace token = unset (503), bearer only; `WWW-Authenticate` on JSON 401; corrupt hash → False, unknown user costs a verify; `GREENHOUSE_X`-only secrets + startup warning; ntfy URL validated, credentials redacted; bind `127.0.0.1`; swallowed startup failures logged | `fb8617f`, `6910279`, `3216b6d`, `440bfeb`, `6d1a1a6`, `67e3520`, `2792a7a`, `e269c39`, `f3df4e8`, `db2b659`, `66dca03`, `b388380`, `87fcc6d`, `5d86105` |
+| Schema / DB | models declare the migrations' defaults and uniques (no schema drift); in-process Alembic leaves host logging alone | `6758219`, `0159ef9` |
+| Engine, CLI, TUI, test infra | <!-- TODO(D): package D rows (engine 13 fixes, CLI 7, TUI 7, test infra 3) with commit ids. --> pending package D | — |
 
-### 8.2 Security
-- MCP bearer token compared with `!=`, not `hmac.compare_digest` (timing side channel on the actuation credential).
-- `services/notify.py` opens the configured ntfy URL without a scheme check (ruff S310); default bind host `0.0.0.0`.
-- API/CLI/MCP accept any irrigator/sensor `type` on write; an unknown value is refused at actuation (safe) but logged
-  with a traceback on every health tick — validate against the registry keys on write (422). When a second device
-  model exists, render the web form options from the registry.
+Cleanup (package F and leftovers): lazy package re-exports (`greenhouse_core/_lazy.py`; `import greenhouse_core.constants`
+~650 ms → 15–25 ms) `0ff00ba`; pump-watcher jobs → `services/pump_watcher_jobs.py` `d3d0ec3`; DP parsers →
+`devices/datapoints.py` `ea0726a`; dead code `a00ee93`, `8011987`, `f88e0dc`, `5cafc94`, `dc7d932`. New modules:
+`services/{actuation_gates,caps,health_alarms,pump_watcher_jobs}.py`, `devices/datapoints.py`, `greenhouse_core/_lazy.py`.
 
-### 8.3 Dependencies
-- `pip-audit`: 53 advisory rows across 10 locked packages (pyjwt, starlette, urllib3, cryptography, …) — needs a
-  dependency-bump PR (runtime dependencies were frozen during this refactor).
-- `deptry`: `greenhouse-server` imports `sqlalchemy`/`pydantic` only transitively; `greenhouse-cli` imports `rich`
-  transitively — declare them.
+### 8.3 Dependencies and CI
 
-### 8.4 CI
-- CI runs ruff, `pre-commit run --all-files`, hadolint, gitleaks and `make coverage`, but not `make lint-imports`,
-  `make typecheck` or `make sizecheck`; add them so the new gates run on every PR (`.github/workflows/*` was out of scope).
+- `fix(deps)` `8f79282`: `pip-audit` on the lock went from 39 advisories in 9 packages to **none**: anyio 4.13.0 → 4.14.2,
+  cryptography 46.0.6 → 50.0.2, idna 3.11 → 3.20, mako 1.3.10 → 1.4.3, mcp 1.27.0 → 1.30.0, pydantic-settings
+  2.14.1 → 2.15.0, pyjwt 2.13.0 → 2.15.1, starlette 1.0.0 → 1.7.0, urllib3 2.6.3 → 2.8.0. Floors: server
+  `pydantic-settings>=2.14.2`, `pyjwt>=2.15.0`. Root `[tool.uv] constraint-dependencies = ["mcp>=1.28.1,<2"]`: the floor
+  clears the mcp advisories; the ceiling is needed because `fastapi-mcp` 0.4.0 breaks on mcp 2 (TypeError at mount).
+- `build(deps)` `364e284`: every workspace package declares what it imports (`deptry` clean): server adds
+  `sqlalchemy>=2.0.52`, `pydantic>=2.13.4` and drops `httpx`; `jinja2` / `python-multipart` stay as runtime needs
+  (`[tool.deptry.per_rule_ignores]`); CLI adds `rich>=14.3.3`.
+- `ci` `677986c`: new `static` job (`make lint-imports`, `make typecheck`, `make sizecheck`); the `check` umbrella job
+  depends on it.
+
+### 8.4 Gate
+
+<!-- TODO(final-gate): full-suite count (packages A/B/C merged: ~3,190; D: +?), coverage, hash seeds, TZ run,
+lint-imports / typecheck / sizecheck results and the gitleaks range for the final fold-in HEAD. -->
+
+## 9. Pending outside work (not done here)
+
+### 9.1 Open bugs
+
+- **Package D scope** (S4 TUI dashboard reload race, the pinned engine quirks, CLI error handling, TUI copy/cursor,
+  test-infrastructure isolation) is fixed on its branch and not merged yet: `REFACTOR_NOTES.md` → "Observed bugs not
+  fixed". <!-- TODO(D): remove this bullet once D is merged. -->
+- A stale `local_key` in an irrigator's config after re-pairing is not recovered automatically (tinytuya error 914
+  could drive a Cloud key refresh and retry) — `devices/gateway.py`.
+- Small leftovers: the `tr301z.py` docstring names `OFFLINE_AFTER_MINUTES` for sensors; the cleanup candidates in
+  `REFACTOR_NOTES.md` → "Dead-code and cleanup candidates".
+
+### 9.2 Dependencies
+
+- Lift the `mcp<2` ceiling once `fastapi-mcp` supports mcp 2.
+- `pip-audit` and `deptry` run by hand; add them to CI if advisories should block PRs.
+
+### 9.3 CI
+
 - hadolint could not run in this container (no Docker daemon); CI covers it.
 
-### 8.5 Owner actions
+### 9.4 Owner actions
+
 - Push the local tag `refactor-gate1` if you want the frozen safety-net point on GitHub (pushing tags was not authorized).
-- Open the PR for `claude/focused-hawking-7to7o3` when you want it reviewed (not opened without your request).
+- Review and merge PR #108 (`claude/focused-hawking-7to7o3`).
 - MCP connectors `firefly`, `greenhouse`, `n8n` need sign-in (claude.ai connector settings); unrelated to this work.

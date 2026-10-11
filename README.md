@@ -28,7 +28,7 @@ uv run greenhouse check --all   # check all clusters
 
 1. **Reads** sensor data from Tuya Cloud, synced to a local SQLite archive.
 2. **Decides** using a typed `IrrigationDecision` pipeline: leak hold, cooldown, quiet hours, weather skip, stress detection, per-cluster irrigation windows, multi-sensor conflict resolution (the driest plant drives the call), trend and seasonal adjustments, vacation rationing, evidence-based moisture targets. Every evaluation produces a structured `Reason` trail and is persisted whether or not it was acted on.
-3. **Acts** on Tuya irrigators local-first over protocol v3.5 (run length and the dry-run safety read are local; the on/off switch pulse goes through the Tuya Cloud API, with a local keep-alive fallback). A pump watcher stops a run that goes dry, and a post-irrigation leak check holds the cluster on a suspected stuck valve.
+3. **Acts** on Tuya irrigators local-first over protocol v3.5 (run length and the dry-run safety read are local; the on/off switch pulse goes through the Tuya Cloud API). A timed start whose local run length cannot be set is refused before the pump switches on. Before any start the server checks device health, the per-day caps and the global dry-run switch. A pump watcher stops a run that goes dry, and a leak check after every real start holds the cluster on a suspected stuck valve.
 4. **Learns** — builds per-plant absorption/drainage profiles; raises advisory alerts (blocked drip, rapid drainage, chronic underwatering, unresolvable conflict). Learning never blocks decisions.
 5. **Persists** sensor readings, irrigation events, decision logs, alerts, activity events, and sensor-to-plant assignment history in a local SQLite archive. Tuya Cloud is the live source; SQLite is the permanent record.
 
@@ -41,7 +41,7 @@ The `irrigation_windows` table holds optional per-cluster allowed watering hours
 | **JSON REST API** | `/api/v1` | Authoritative entry point. JWT-bearer auth (`POST /api/v1/auth/login`). OpenAPI docs at `/docs`. |
 | **Web UI** | `/` | HTMX + Jinja2 server-rendered. Session cookie auth via `/login`. Pages cover dashboard, per-plant charts, irrigators, history, decisions, scheduler, alerts, **vacation**, **irrigation windows**, and health. |
 | **CLI** | `greenhouse` | Thin `httpx` client against `/api/v1`. No DB access. `greenhouse tui` opens an interactive terminal dashboard. |
-| **MCP server** | `/mcp` | Every `/api/v1` endpoint as an MCP tool via `fastapi-mcp`. Bearer-token auth (`GREENHOUSE_MCP_TOKEN`). Fails closed: unset token → 503. |
+| **MCP server** | `/mcp` | Every `/api/v1` endpoint as an MCP tool via `fastapi-mcp`. Bearer-token auth (`GREENHOUSE_MCP_TOKEN`). Fails closed: unset or empty token → 503. |
 
 Stop the server and all four go dark. Anything new the CLI or an MCP tool should be able to do must first exist as an API endpoint.
 
@@ -84,8 +84,9 @@ cp .env.example .env
 | `GREENHOUSE_AUTH_SECRET_KEY` | Yes (prod) | JWT signing key for API/Web auth. Generate with `openssl rand -hex 32`. |
 | `GREENHOUSE_AUTH_ADMIN_USERNAME` | Yes (prod) | Admin username bootstrapped on first boot. |
 | `GREENHOUSE_AUTH_ADMIN_PASSWORD` | Yes (prod) | Admin password (hashed at rest). |
-| `GREENHOUSE_MCP_TOKEN` | Yes (for MCP) | Static bearer token for `/mcp`. Unset → MCP fails closed with 503. |
+| `GREENHOUSE_MCP_TOKEN` | Yes (for MCP) | Static bearer token for `/mcp` (`Authorization: Bearer …` only). Unset, empty or whitespace-only → MCP fails closed with 503. |
 | `IRRIGATION_AUTH_ENABLED` | No | Set to `false` to disable API/Web auth in local dev. Default: `true`. |
+| `IRRIGATION_HOST` / `IRRIGATION_PORT` | No | Bind address and port (default `127.0.0.1:8000`, loopback only — the API and `/mcp` can switch pumps on). Set `IRRIGATION_HOST=0.0.0.0` to listen on every interface; the Docker image and `docker-compose.yml` already do. |
 | `IRRIGATION_DB_URL` | No | SQLite URL (default: `sqlite:///data/irrigation.db`) |
 | `IRRIGATION_SERVER_URL` | No | CLI server URL (default: `http://localhost:8000`) |
 | `IRRIGATION_CHECK_CRON_HOURS` | No | Cron `hour` field for the `check_all` job, e.g. `*`, `0,6,12,18`, `*/3`, `6-20/2` (default: `*` = hourly at :00). Validated at startup; an invalid expression stops the server with an error naming the variable. (The old `IRRIGATION_CHECK_INTERVAL_HOURS` is no longer read — an `.env` that still sets it silently gets hourly checks; write `*/N` here instead.) |
@@ -93,7 +94,9 @@ cp .env.example .env
 | `IRRIGATION_ENABLE_SCHEDULER` | No | Set to `false` to run without background jobs (no automatic checks, syncs or health polls). Default: `true`. |
 | `IRRIGATION_PLANT_DB_PATH` | No | Alternative `plant_database.json` (default: the copy shipped in `greenhouse-core`). |
 | `IRRIGATION_WEATHER_LAT` / `IRRIGATION_WEATHER_LON` | No | Location for Open-Meteo forecasts (default: Milan). |
-| `GREENHOUSE_NTFY_SERVER_URL` / `GREENHOUSE_NTFY_TOPIC` / `GREENHOUSE_NTFY_TOKEN` | No | Push notifications via [ntfy](https://ntfy.sh); unset → no pushes. Which categories fire is a per-user preference. |
+| `GREENHOUSE_NTFY_SERVER_URL` / `GREENHOUSE_NTFY_TOPIC` / `GREENHOUSE_NTFY_TOKEN` | No | Push notifications via [ntfy](https://ntfy.sh); unset → no pushes. The server URL must be `http://` or `https://` with a host (otherwise the server refuses to start). Which categories fire is a per-user preference. |
+
+Secrets (`GREENHOUSE_MCP_TOKEN`, `GREENHOUSE_NTFY_*`, `GREENHOUSE_AUTH_*`) are read **only** under their `GREENHOUSE_` names; the bare (`MCP_TOKEN`) and `IRRIGATION_`-prefixed (`IRRIGATION_MCP_TOKEN`) spellings are ignored, and the server logs a startup warning naming each one it finds.
 
 ### Usage
 
@@ -151,9 +154,22 @@ make coverage      # pytest with coverage (60% threshold)
 make help          # every target
 ```
 
-The suite includes golden (characterization) tests under `tests/golden/`; regenerating them (`GOLDEN_UPDATE=1`) is reserved for commits that intentionally change the pinned behavior — see AGENTS.md.
+CI runs ruff, the import-linter / mypy / size gates (`static` job), pre-commit hygiene, hadolint, gitleaks and the test suite with coverage. The suite includes golden (characterization) tests under `tests/golden/`; regenerating them (`GOLDEN_UPDATE=1`) is reserved for commits that intentionally change the pinned behavior — see AGENTS.md.
 
 See [AGENTS.md](AGENTS.md) for full developer guide, package structure, and testing conventions.
+
+## Upgrading an existing deployment
+
+- **Rename legacy secret variables.** Only `GREENHOUSE_MCP_TOKEN`, `GREENHOUSE_NTFY_SERVER_URL` / `_TOPIC` / `_TOKEN` and `GREENHOUSE_AUTH_SECRET_KEY` / `_ADMIN_USERNAME` / `_ADMIN_PASSWORD` are read. An `.env` that still uses `MCP_TOKEN`, `IRRIGATION_MCP_TOKEN`, `NTFY_TOPIC`, `IRRIGATION_AUTH_SECRET_KEY`, … loses that setting (for the MCP token: `/mcp` answers 503). The startup log warns about each ignored name.
+- **Bind address.** A host install now listens on `127.0.0.1` only; set `IRRIGATION_HOST=0.0.0.0` to keep LAN access. Docker deployments are unaffected (the image and `docker-compose.yml` set it).
+- **Database upgrade.** `alembic upgrade head` runs at startup. The data-only revision `a1d3f5b7c902` rewrites leftover legacy device types (`tuya_cloud`, `tuya_local`, `soil_moisture`, `temp_humidity`, `light`, empty) to the model keys `rainpoint.ik10pw` / `tuya.tr301z`. A database created before Alembic (tables but no `alembic_version`) no longer starts: compare it with head and run `alembic stamp head` by hand.
+- **Behavior changes to expect:**
+  - `dry_run_global` is now enforced: if it is on, no pump starts (automatic runs log a `dry_run_global` skip, manual starts answer 409).
+  - Per-day caps set only in the global config now bind every cluster, and automatic runs as well (`daily_cap_hit`).
+  - A forced irrigate is recorded as manual, and every real start gets a post-watering leak check.
+  - API and MCP responses mask `local_key` as `••••••••` (sending the mask back keeps the stored key).
+  - Open `sensor_fault` alerts left by the old water-warning mapping are resolved at startup. Old open `pump_dry_run` alerts must be resolved by hand.
+  - `IRRIGATION_CHECK_INTERVAL_HOURS` is no longer read: use `IRRIGATION_CHECK_CRON_HOURS=*/N`.
 
 ## Releases
 
