@@ -10,10 +10,11 @@ from importlib.metadata import PackageNotFoundError, version
 from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from fastapi import Request
+from fastapi import HTTPException, Request
 
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server import state
+from greenhouse_server.auth import decode_token
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
@@ -106,10 +107,33 @@ def _auth_enabled(request: Request) -> bool:
     return auth_enabled
 
 
+def _signed_in(request: Request, *, auth_enabled: bool) -> bool:
+    """Whether the viewer is signed in (always, with auth off).
+
+    Protected routes mark ``request.state.signed_in``; elsewhere (login page, router-level
+    error pages) a valid session cookie counts. The JWT is checked without a DB lookup:
+    this only decides whether to show the operational banners.
+    """
+    if not auth_enabled or getattr(getattr(request, "state", None), "signed_in", False):
+        return True
+    try:
+        settings = state.settings(request.app)
+        token = request.cookies.get(settings.auth_cookie_name)
+        return token is not None and bool(decode_token(settings, token))
+    except (HTTPException, AttributeError):
+        return False
+
+
 def base_context(request: Request, **extra: Any) -> dict[str, Any]:
-    """Build the template context every page shares (chrome flags, theme, version) merged with ``extra``."""
+    """Build the template context every page shares (chrome flags, theme, version) merged with ``extra``.
+
+    The dry-run / vacation / scheduler-paused banners describe the system's state; an
+    anonymous viewer (login page, error pages) does not get them.
+    """
     dry_run_global, active_vacation, scheduler_paused, theme, timezone = _preference_flags(request)
     auth_enabled = _auth_enabled(request)
+    if not _signed_in(request, auth_enabled=auth_enabled):
+        dry_run_global, active_vacation, scheduler_paused = False, None, False
 
     return {
         "request": request,
