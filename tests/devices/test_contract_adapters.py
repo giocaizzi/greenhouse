@@ -16,8 +16,8 @@ Invariants pinned here: #1 (IK10PW speaks local protocol 3.5) and the device hal
 of #8 (``open_local`` resolves ``local_key`` from config/cache with zero Cloud
 calls; ``get_live_reading`` is single-call — v1.0 ``getstatus`` only when the
 v2.0 shadow *fails*; the on/off switch pulse goes through the Cloud API and the
-keep-alive fallback re-pulses it via the Cloud). Bug B-2 (keep-alive SIGTERM
-handler off the main thread) is pinned as current behavior, not fixed.
+keep-alive fallback re-pulses it via the Cloud). Bug B-2 / S2 (keep-alive SIGTERM
+handler off the main thread left the pump on) is fixed and covered here.
 """
 
 from __future__ import annotations
@@ -885,7 +885,7 @@ def test_tr301z_read_health_raw_payloads(harness):
     assert harness.log == []
 
 
-# ── Keep-alive fallback (IK10PW) incl. pinned bug B-2 ─────────────────────────
+# ── Keep-alive fallback (IK10PW) incl. the B-2 / S2 fix ───────────────────────
 
 
 @pytest.fixture
@@ -1011,36 +1011,72 @@ def _run_in_thread(fn) -> dict:
     return outcome
 
 
-def test_keepalive_off_main_thread_current_behavior_leaves_pump_on(harness, fake_sleep):
-    """Pins current (buggy) behavior: B-2 — see REFACTOR_NOTES.md.
+def test_keepalive_off_main_thread_runs_the_cycle_and_switches_off(harness, fake_sleep):
+    """B-2 / S2 fixed: off the main thread no SIGTERM handler is installed, and the cycle completes.
 
-    ``_start_keepalive`` switches the pump ON via the Cloud, then calls
-    ``signal.signal(SIGTERM, …)`` *outside* its ``try``. Off the main thread
-    (FastAPI threadpool, APScheduler worker) that raises ``ValueError``, so the
-    ``finally`` that sends OFF never runs: the pump is left on, bounded only by
-    the device's own ~30 s auto-off, and the error propagates to the caller.
+    ``signal.signal`` only works on the main thread; on a FastAPI threadpool or
+    APScheduler worker it used to raise ``ValueError`` after the Cloud ON, outside
+    the ``try`` that sends OFF, leaving the pump on. Now the handler is skipped
+    off the main thread and the cycle pulses and ends with exactly one OFF.
     """
     before = signal.getsignal(signal.SIGTERM)
     adapter = _keepalive_ok_harness(harness)
     outcome = _run_in_thread(lambda: adapter._start_keepalive(_irrigator(), 1))
-    assert "result" not in outcome
-    assert isinstance(outcome["exc"], ValueError)
-    assert "main thread" in str(outcome["exc"])
-    assert harness.log == [("cloud.sendcommand", FAKE_DEVICE_ID, SWITCH_ON)]  # ON sent, OFF never sent
-    assert fake_sleep == []
+    assert outcome == {"result": (True, "Irrigation completed for 1 min [keep-alive mode]")}
+    assert harness.log == [
+        ("cloud.sendcommand", FAKE_DEVICE_ID, SWITCH_ON),
+        ("cloud.sendcommand", FAKE_DEVICE_ID, SWITCH_ON),
+        ("cloud.sendcommand", FAKE_DEVICE_ID, SWITCH_ON),
+        ("cloud.sendcommand", FAKE_DEVICE_ID, SWITCH_OFF),
+    ]
+    assert fake_sleep == [20, 20, 20]
     assert signal.getsignal(signal.SIGTERM) is before
 
 
-def test_start_off_main_thread_current_behavior_raises_after_switching_on(harness, fake_sleep):
-    """Pins current (buggy) behavior: B-2 via the public ``start`` — see REFACTOR_NOTES.md.
+def test_start_off_main_thread_falls_back_to_keepalive_and_switches_off(harness, fake_sleep):
+    """B-2 / S2 fixed via the public ``start``: a failed local Duration write falls back to keep-alive.
 
-    A bounded ``start`` whose local Duration write fails falls back to keep-alive;
-    on a worker thread that ends in ``ValueError`` after the Cloud ON pulse.
+    On a worker thread the 3-minute cycle runs to completion: ON, eight
+    keep-alive ONs (every 20 s), then one OFF.
     """
     adapter = _keepalive_ok_harness(harness)
     outcome = _run_in_thread(lambda: adapter.start(_irrigator({}), 3))
-    assert isinstance(outcome.get("exc"), ValueError)
-    assert harness.log == [("cloud.sendcommand", FAKE_DEVICE_ID, SWITCH_ON)]
+    assert outcome == {"result": (True, "Irrigation completed for 3 min [keep-alive mode]")}
+    assert [c[2] for c in harness.log] == [SWITCH_ON] * 9 + [SWITCH_OFF]
+    assert fake_sleep == [20] * 9
+
+
+@pytest.mark.parametrize("on_main_thread", [True, False], ids=["main-thread", "worker-thread"])
+def test_unexpected_error_after_on_still_switches_off(harness, monkeypatch, on_main_thread):
+    """Anything raised after the first ON propagates only after the single OFF has been sent."""
+    before = signal.getsignal(signal.SIGTERM)
+
+    def _sleep(_seconds):
+        raise RuntimeError("clock broke")
+
+    monkeypatch.setattr(ik10pw_module, "time", SimpleNamespace(sleep=_sleep, time=time.time))
+    adapter = _keepalive_ok_harness(harness)
+    if on_main_thread:
+        with pytest.raises(RuntimeError, match="clock broke"):
+            adapter._start_keepalive(_irrigator(), 1)
+    else:
+        outcome = _run_in_thread(lambda: adapter._start_keepalive(_irrigator(), 1))
+        assert isinstance(outcome["exc"], RuntimeError)
+    assert [c[2] for c in harness.log] == [SWITCH_ON, SWITCH_OFF]
+    assert signal.getsignal(signal.SIGTERM) is before
+
+
+def test_main_thread_handler_install_failure_still_switches_off(harness, fake_sleep, monkeypatch):
+    """Even if wiring the SIGTERM handler fails after the ON, the OFF is sent before the error surfaces."""
+
+    def _broken_signal(*_args):
+        raise ValueError("signal only works in main thread of the main interpreter")
+
+    monkeypatch.setattr(ik10pw_module.signal, "signal", _broken_signal)
+    with pytest.raises(ValueError, match="main thread"):
+        _keepalive_ok_harness(harness)._start_keepalive(_irrigator(), 1)
+    assert [c[2] for c in harness.log] == [SWITCH_ON, SWITCH_OFF]
+    assert fake_sleep == []
 
 
 # ── alarm DP parsing ──────────────────────────────────────────────────────────

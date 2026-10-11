@@ -19,8 +19,12 @@ from __future__ import annotations
 
 import logging
 import signal
+import threading
 import time
-from typing import Any
+from collections.abc import Iterator
+from contextlib import contextmanager
+from dataclasses import dataclass
+from types import FrameType
 
 from greenhouse_core.devices.gateway import DeviceGateway
 from greenhouse_core.devices.health import DeviceHealthState, HealthAlarm
@@ -85,6 +89,39 @@ def _load_profile() -> IrrigatorProfile:
 IK10PW_PROFILE = _load_profile()
 # The dry-run / water-shortage alarm DP (105): the pump watcher polls it and records it on a trip.
 IK10PW_ALARM_DP = IK10PW_PROFILE.dp("alarm")
+
+
+@dataclass
+class _KeepAliveCycle:
+    """Mutable progress of one keep-alive cycle, shared with the SIGTERM handler."""
+
+    total_seconds: int
+    elapsed: int = 0
+    interrupted: bool = False
+
+
+@contextmanager
+def _sigterm_unwinds(cycle: _KeepAliveCycle) -> Iterator[None]:
+    """Make SIGTERM unwind the keep-alive cycle, on the main thread only.
+
+    ``signal.signal`` raises ``ValueError`` off the main thread, so there the
+    handler is simply not installed. On the main thread the handler marks the
+    cycle interrupted and raises ``SystemExit``; the caller's ``finally`` sends
+    the OFF. The previous handler is always restored.
+    """
+    if threading.current_thread() is not threading.main_thread():
+        yield
+        return
+
+    def _handler(signum: int, frame: FrameType | None) -> None:  # noqa: ARG001
+        cycle.interrupted = True
+        raise SystemExit(128 + signum)
+
+    previous = signal.signal(signal.SIGTERM, _handler)
+    try:
+        yield
+    finally:
+        signal.signal(signal.SIGTERM, previous)
 
 
 class IK10PWAdapter(TuyaIrrigatorAdapter):
@@ -156,54 +193,63 @@ class IK10PWAdapter(TuyaIrrigatorAdapter):
 
         Used when local protocol is unavailable (IP changed, network issue).
         Sends switch ON every 20 s to reset the device's internal auto-off
-        timer. A SIGTERM handler raises ``SystemExit`` so the ``finally``
-        sends exactly one OFF and an interrupted process never leaves the
-        pump running.
+        timer. Everything after the first successful ON runs inside one
+        ``try``/``finally`` that sends exactly one OFF, so no error — not even
+        one raised while wiring the SIGTERM handler — can leave the pump on.
+
+        The SIGTERM handler is installed only on the main thread (the only
+        thread ``signal.signal`` accepts); there it unwinds the cycle into the
+        ``finally``. Off the main thread (FastAPI threadpool, APScheduler
+        worker) no handler is installed: the process's own SIGTERM handling
+        applies, and if the process dies the pulses stop and the firmware's
+        ~30 s auto-off bounds the run.
         """
+        cycle = _KeepAliveCycle(total_seconds=minutes * 60)
         success, msg = self.on(irrigator)
         if not success:
             return False, f"Failed to start irrigation: {msg}"
-
-        total_seconds = minutes * 60
-        elapsed = 0
-        interrupted = False
-
-        def _sigterm_cleanup(signum: int, frame: Any) -> None:  # noqa: ARG001
-            # No OFF here: the SystemExit unwinds into the ``finally`` below, which sends the one OFF.
-            nonlocal interrupted
-            interrupted = True
-            raise SystemExit(128 + signum)
-
-        prev_handler = signal.signal(signal.SIGTERM, _sigterm_cleanup)
         try:
-            while elapsed < total_seconds and not interrupted:
-                sleep_for = min(KEEP_ALIVE_INTERVAL, total_seconds - elapsed)
-                time.sleep(sleep_for)
-                elapsed += sleep_for
-                if elapsed < total_seconds and not interrupted:
-                    try:
-                        self.on(irrigator)
-                    except Exception:
-                        # Best-effort: the next pulse retries; a missed pulse only risks an early firmware auto-off.
-                        logger.warning("Keep-alive ON pulse failed for %s", irrigator.tuya_device_id, exc_info=True)
+            with _sigterm_unwinds(cycle):
+                self._pulse_until_done(irrigator, cycle)
         except (SystemExit, KeyboardInterrupt):
-            interrupted = True
+            cycle.interrupted = True
         finally:
-            signal.signal(signal.SIGTERM, prev_handler)
-            try:
-                self.off(irrigator)
-            except Exception:
-                logger.exception(
-                    "Keep-alive final OFF failed for %s; the firmware auto-off bounds the run",
-                    irrigator.tuya_device_id,
-                )
+            self._final_off(irrigator)
 
-        if interrupted:
+        if cycle.interrupted:
             return (
                 True,
-                f"Irrigation interrupted after ~{elapsed}s — device turned off (requested {minutes} min) [keep-alive mode]",
+                f"Irrigation interrupted after ~{cycle.elapsed}s — device turned off (requested {minutes} min) "
+                "[keep-alive mode]",
             )
         return True, f"Irrigation completed for {minutes} min [keep-alive mode]"
+
+    def _pulse_until_done(self, irrigator: Irrigator, cycle: _KeepAliveCycle) -> None:
+        """Sleep in ``KEEP_ALIVE_INTERVAL`` steps, re-sending ON between steps until the cycle is over."""
+        while cycle.elapsed < cycle.total_seconds and not cycle.interrupted:
+            sleep_for = min(KEEP_ALIVE_INTERVAL, cycle.total_seconds - cycle.elapsed)
+            time.sleep(sleep_for)
+            cycle.elapsed += sleep_for
+            if cycle.elapsed < cycle.total_seconds and not cycle.interrupted:
+                self._pulse_on(irrigator)
+
+    def _pulse_on(self, irrigator: Irrigator) -> None:
+        """Send one keep-alive ON; best-effort, the next pulse retries."""
+        try:
+            self.on(irrigator)
+        except Exception:
+            # A missed pulse only risks an early firmware auto-off, never a pump left on.
+            logger.warning("Keep-alive ON pulse failed for %s", irrigator.tuya_device_id, exc_info=True)
+
+    def _final_off(self, irrigator: Irrigator) -> None:
+        """Send the cycle's single OFF; a failure is logged, never raised (the cleanup must not mask an error)."""
+        try:
+            self.off(irrigator)
+        except Exception:
+            logger.exception(
+                "Keep-alive final OFF failed for %s; the firmware auto-off bounds the run",
+                irrigator.tuya_device_id,
+            )
 
     # ── Health read ───────────────────────────────────────────────────────
 
