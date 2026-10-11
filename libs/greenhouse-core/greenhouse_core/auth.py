@@ -12,7 +12,9 @@ from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerificationError
 
 # Kept importable from here: the pinned public import surface lists it.
-from argon2.exceptions import VerifyMismatchError as VerifyMismatchError
+from argon2.exceptions import (
+    VerifyMismatchError as VerifyMismatchError,  # noqa: PLC0414 — explicit re-export; unaliased, F401 fires
+)
 from sqlalchemy import select
 from sqlalchemy.orm import Session  # noqa: TC002 — pinned in golden imports.json
 

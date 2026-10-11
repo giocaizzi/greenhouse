@@ -4,7 +4,7 @@ Resolves the database URL from ``$IRRIGATION_DB_URL`` (matching the server
 default) or falls back to ``sqlite:///data/irrigation.db``. The target
 metadata is the project's :class:`Base.metadata`, so ``alembic
 revision --autogenerate`` can detect ORM drift on every release.
-"""
+"""  # noqa: INP001 — Alembic loads this script by path; the package_data golden pins the files here
 
 from __future__ import annotations
 

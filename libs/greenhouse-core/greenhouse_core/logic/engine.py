@@ -504,7 +504,7 @@ class IrrigationLogic:
                 triggered_by=triggered_by,
                 actuated=False,
             )
-        except Exception:
+        except Exception:  # noqa: BLE001 — the audit write is advisory: it never blocks a decision; logged with exc_info
             log.warning("failed to persist decision log", exc_info=True)
 
     def _enforce_leak_hold(self, cluster_id: int, now: int) -> IrrigationDecision | None:
@@ -626,7 +626,8 @@ class IrrigationLogic:
     def _attach_learning_alerts(self, cluster_id: int, stress: StressIndicators) -> None:
         """Best-effort learning alert collection — never blocks the decision."""
         try:
-            from greenhouse_core.learning import IrrigationLearner
+            # The one upward import (import-linter layers): lazy, so loading logic never loads learning.
+            from greenhouse_core.learning import IrrigationLearner  # noqa: PLC0415 — see above
 
             learner = IrrigationLearner(self.db, self.plant_db)
             alerts = learner.detect_issues(cluster_id)
@@ -634,7 +635,7 @@ class IrrigationLogic:
                 stress.learning_alerts = [
                     {"type": a.alert_type, "severity": a.severity, "message": a.message} for a in alerts
                 ]
-        except Exception:
+        except Exception:  # noqa: BLE001 — learning is advisory (invariant 4); logged with exc_info
             log.warning("learning advisory unavailable", exc_info=True)
 
 
@@ -724,7 +725,7 @@ def _scaled_interval(interval_hours: int, multiplier: float) -> int:
     """Divide the interval by a frequency multiplier (water N× as often), clamped to the interval bounds."""
     # Multiplier is a frequency factor (water N× as often), not an interval
     # factor — so divide the baseline interval by it to get the new cadence.
-    new_interval = int(round(interval_hours / multiplier))
+    new_interval = round(interval_hours / multiplier)
     return max(MIN_INTERVAL_HOURS, min(MAX_INTERVAL_HOURS, new_interval))
 
 

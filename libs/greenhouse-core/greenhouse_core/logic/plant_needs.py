@@ -60,7 +60,7 @@ def parse_moisture_target(target: str) -> tuple[float, float]:
     try:
         parts = target.split("-")
         low, high = float(parts[0]), float(parts[1])
-    except Exception:  # noqa: BLE001
+    except (AttributeError, IndexError, TypeError, ValueError):  # not a string, no "-", or non-numeric bounds
         return (DEFAULT_SOIL_MOISTURE_MIN, DEFAULT_SOIL_MOISTURE_MAX)
     floor, ceiling = SENSOR_PHYSICAL_RANGES["soil_moisture"]
     if not all(math.isfinite(v) and floor <= v <= ceiling for v in (low, high)):

@@ -165,11 +165,9 @@ def seasonal_multiplier(
     Precedence: plant-level override > category-level override > built-in default
     keyed on environment. Missing keys fall through to the next layer.
     """
-    if plant_override:
-        if (val := plant_override.get(season)) is not None:
-            return float(val)
-    if category_override:
-        if (val := category_override.get(season)) is not None:
-            return float(val)
+    if plant_override and (val := plant_override.get(season)) is not None:
+        return float(val)
+    if category_override and (val := category_override.get(season)) is not None:
+        return float(val)
     table = DEFAULT_SEASON_MULTIPLIER_OUTDOOR if environment == "outdoor" else DEFAULT_SEASON_MULTIPLIER_INDOOR
     return float(table.get(season, 1.0))

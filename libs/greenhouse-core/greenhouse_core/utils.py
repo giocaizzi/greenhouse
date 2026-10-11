@@ -63,7 +63,8 @@ def set_display_timezone(tz_name: str | None) -> None:
     Idempotent. A falsy value clears the override, so ``get_display_timezone``
     falls back to ``IRRIGATION_TZ`` then UTC.
     """
-    global _display_timezone
+    # A plain module global on purpose: tests patch ``utils._display_timezone`` directly.
+    global _display_timezone  # noqa: PLW0603 — see above
     _display_timezone = tz_name or None
 
 
@@ -93,7 +94,7 @@ def format_timestamp(timestamp: float, fmt: str = "%Y-%m-%d %H:%M") -> str:
         dt_utc = datetime.fromtimestamp(timestamp, tz=ZoneInfo("UTC"))
         dt_local = dt_utc.astimezone(ZoneInfo(tz))
         return dt_local.strftime(fmt)
-    except Exception:  # noqa: BLE001
+    except (KeyError, OSError, OverflowError, TypeError, ValueError):  # unknown / malformed zone name
         # Fallback to UTC if timezone conversion fails
         dt_utc = datetime.fromtimestamp(timestamp, tz=UTC)
         return dt_utc.strftime(fmt) + " UTC"
