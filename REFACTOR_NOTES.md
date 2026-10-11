@@ -181,7 +181,7 @@ Test files are under `tests/` (`server/` = `tests/server/`).
 | Change | Where | Pinned by | Commit |
 |---|---|---|---|
 | Silent swallows logged: IK10PW pulse / SIGTERM OFF (WARNING), final OFF (exception), `tuya_generic` local read (DEBUG, new logger), core sync live read (WARNING). | `devices/irrigators/{ik10pw,tuya_generic}.py`, `sync.py` | `devices/test_contract_adapters.py`, `tests/test_contract_sync.py` | `8b02de9` |
-| The SIGTERM path sent OFF twice; it sent OFF once (the keep-alive path was later removed, `cc58fa1`). | `ik10pw.py` | `devices/test_contract_adapters.py::test_sigterm_during_cycle_switches_off_once_and_reports_interrupted` | `951e657` |
+| The SIGTERM path of the keep-alive cycle sent OFF twice; it sent OFF once until the whole keep-alive path was removed (`cc58fa1`). | `ik10pw.py` | `devices/test_contract_adapters.py::test_sigterm_during_cycle_switches_off_once_and_reports_interrupted` | `951e657` |
 | A DP the parser rejects is logged and skipped, not fatal to the whole reading (v1 and v2 reads). | `devices/gateway.py` | `devices/test_contract_adapters.py::test_v2_parser_error_skips_only_that_dp` | `b61fd0e` |
 | **New bug:** the DP 111 parser read `"false"` (as `getdevicelog` reports it) as True; it is now strict (bool, 0/1, `true`/`false`). | `devices/datapoints._parse_bool_dp` | `devices/test_contract_adapters.py` | `1634816` |
 | Rows backfilled from `getdevicelog` store `water_warning`. | `devices/gateway.py`, `sync.py` | `tests/test_contract_sync.py::test_log_water_warning_is_stored_only_as_a_parsed_bool` | `73ee467` |
