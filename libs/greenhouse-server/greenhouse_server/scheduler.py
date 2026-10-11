@@ -334,14 +334,13 @@ def _health_snapshot_job() -> None:
 def _build_irrigation_service(
     app: FastAPI, repo: IrrigationRepository, registry: "DeviceRegistry | None", gateway: DeviceGateway | None
 ) -> "IrrigationService":
-    """Wire the check job's service on the job's own repo; the shared health monitor is re-bound to it first."""
+    """Wire the check job's service on the job's own repo, with its own view of the shared health monitor."""
     from greenhouse_server.services.irrigation import IrrigationService
     from greenhouse_server.services.sync import SyncService
 
     sync_svc = SyncService(repo, registry, gateway)
-    monitor = state.health_monitor(app)
-    if monitor is not None:
-        monitor.bind_repo(repo)
+    shared = state.health_monitor(app)
+    monitor = shared.for_repo(repo) if shared is not None else None
     return IrrigationService(
         repo=repo,
         registry=registry,
@@ -380,10 +379,11 @@ def _anomaly_job() -> None:
 def _health_monitor_job() -> None:
     """Background job: poll every device's health surface, diff, alert.
 
-    Reuses the singleton :class:`DeviceHealthMonitor` stored on
-    ``app.state.health_monitor`` (built at startup by
-    :func:`init_health_monitor`) so the in-memory transition cache
-    survives across ticks. Falls open silently when no registry is wired.
+    Polls through a view of the singleton :class:`DeviceHealthMonitor` stored on
+    ``app.state.health_monitor`` (built at startup by :func:`init_health_monitor`):
+    the in-memory transition cache survives across ticks, while the alerts this
+    tick raises go into this job's own session (S6). Falls open silently when no
+    registry is wired.
     """
     if _app is None:
         return
@@ -394,9 +394,7 @@ def _health_monitor_job() -> None:
         return
 
     with _job_session(_app, logger, "Device health monitor job failed") as session:
-        repo = IrrigationRepository(session)
-        monitor.bind_repo(repo)
-        monitor.poll_all()
+        monitor.for_repo(IrrigationRepository(session)).poll_all()
 
 
 def init_health_monitor(app: FastAPI, settings: Settings) -> None:

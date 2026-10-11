@@ -522,10 +522,11 @@ def test_watcher_settings_removed_after_scheduling_fall_back_to_defaults(watcher
 def test_watcher_monitor_is_read_when_the_job_runs(watcher_env):
     schedule_pump_watcher(watcher_env.irrigator_id, 2, FROZEN_TS)
     bound: list = []
-    watcher_env.app.state.health_monitor = SimpleNamespace(bind_repo=bound.append)
+    view = SimpleNamespace()
+    watcher_env.app.state.health_monitor = SimpleNamespace(for_repo=lambda repo: bound.append(repo) or view)
     watcher_env.scheduler.jobs[0]["func"]()
     (built,) = watcher_env.built
-    assert built["monitor"] is watcher_env.app.state.health_monitor
+    assert built["monitor"] is view  # the watcher's own view of the shared monitor (S6)
     assert bound == [built["repo"]]
 
 
@@ -642,9 +643,10 @@ class StubMonitor:
         self.log = log
         self.repos: list = []
 
-    def bind_repo(self, repo):
+    def for_repo(self, repo):
         self.log.append("bind")
         self.repos.append(repo)
+        return self
 
     def poll_all(self):
         self.log.append("poll")

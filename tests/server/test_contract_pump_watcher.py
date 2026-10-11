@@ -61,8 +61,9 @@ class RecordingMonitor:
     def __init__(self) -> None:
         self.bound: list = []
 
-    def bind_repo(self, repo) -> None:
+    def for_repo(self, repo) -> RecordingMonitor:
         self.bound.append(repo)
+        return self
 
 
 @pytest.fixture
@@ -221,7 +222,7 @@ def test_job_builds_watcher_from_settings_with_shutdown_hooks(env):
     assert built["registry"] is env.registry
     assert (built["poll_seconds"], built["warmup_seconds"], built["max_read_failures"]) == (0.7, 3.0, 4)
     assert built["monitor"] is env.monitor
-    assert env.monitor.bound == [built["repo"]]  # monitor re-bound to the job's own session
+    assert env.monitor.bound == [built["repo"]]  # a monitor view on the job's own session (S6)
     assert built["stop_requested"] is scheduler_module.shutdown_requested
     assert built["sleep"] is scheduler_module.wait_for_shutdown
 

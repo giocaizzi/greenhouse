@@ -202,9 +202,9 @@ def _run_pump_watcher(
         if irrigator is None:
             return
         poll, warmup, max_failures = _watcher_tuning(getattr(app.state, "settings", None))
-        monitor = getattr(app.state, "health_monitor", None)
-        if monitor is not None:
-            monitor.bind_repo(repo)
+        shared = getattr(app.state, "health_monitor", None)
+        # The watcher's own view: its alerts go into this job's session, never another job's (S6).
+        monitor = shared.for_repo(repo) if shared is not None else None
         watcher = PumpWatcherService(
             repo,
             registry,
