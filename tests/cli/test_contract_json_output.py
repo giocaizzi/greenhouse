@@ -298,6 +298,7 @@ CLI_CASES: list[Case] = [
             )
         },
     ),
+    C("error.422_empty_detail_list", "health", routes={("GET", f"{P}/health"): (422, {"detail": []})}),
     C("error.dict_detail_as_json", "health", routes={("GET", f"{P}/health"): (409, {"detail": {"code": "busy"}})}),
     C("error.json_without_detail", "health", routes={("GET", f"{P}/health"): (503, {"error": "down"})}),
     C("error.json_list_body", "health", routes={("GET", f"{P}/health"): (400, ["a", "b"])}),

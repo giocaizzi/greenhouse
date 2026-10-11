@@ -92,6 +92,8 @@ def _format_detail(detail: Any) -> str:
     """
     if isinstance(detail, str):
         return detail
+    if detail in ([], {}, None):
+        return "The server rejected the request without details"
     if isinstance(detail, list) and all(isinstance(item, dict) and "msg" in item for item in detail):
         return "; ".join(_format_validation_item(item) for item in detail)
     return json.dumps(detail, ensure_ascii=False)

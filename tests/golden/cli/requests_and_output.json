@@ -1435,6 +1435,41 @@
    "token_file_after": null,
    "token_file_before": null
   },
+  "error.422_empty_detail_list": {
+   "argv": [
+    "greenhouse",
+    "health"
+   ],
+   "clients": [
+    {
+     "base_url": "http://localhost:8000",
+     "headers": {},
+     "timeout": 30.0
+    }
+   ],
+   "env": {},
+   "exception": null,
+   "exit_code": 1,
+   "files": {},
+   "input": null,
+   "requests": [
+    {
+     "authorization": null,
+     "content": null,
+     "content_type": null,
+     "json": null,
+     "method": "GET",
+     "path": "/api/v1/health",
+     "query": [],
+     "raw_path": "/api/v1/health",
+     "url": "http://localhost:8000/api/v1/health"
+    }
+   ],
+   "stderr": "Error: The server rejected the request without details\n",
+   "stdout": "",
+   "token_file_after": null,
+   "token_file_before": null
+  },
   "error.500_plain_text": {
    "argv": [
     "greenhouse",
