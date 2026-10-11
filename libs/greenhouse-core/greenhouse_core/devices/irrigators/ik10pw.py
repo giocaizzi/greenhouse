@@ -11,8 +11,8 @@ Both pieces are needed — cloud-only cannot bound the cycle, local-only
 struggles to keep a Zigbee-gateway device awake. When local fails (IP
 changed, network blip) the keep-alive fallback flips the cloud switch every
 20 s to reset the device's internal 30 s auto-off, with a SIGTERM handler
-that explicitly switches off so an interrupted process never leaves the
-pump running.
+that unwinds into the cycle's ``finally`` — which sends the single OFF — so an
+interrupted process never leaves the pump running.
 """
 
 from __future__ import annotations
@@ -156,8 +156,9 @@ class IK10PWAdapter(TuyaIrrigatorAdapter):
 
         Used when local protocol is unavailable (IP changed, network issue).
         Sends switch ON every 20 s to reset the device's internal auto-off
-        timer. A SIGTERM handler explicitly switches off so an interrupted
-        process never leaves the pump running.
+        timer. A SIGTERM handler raises ``SystemExit`` so the ``finally``
+        sends exactly one OFF and an interrupted process never leaves the
+        pump running.
         """
         success, msg = self.on(irrigator)
         if not success:
@@ -168,12 +169,9 @@ class IK10PWAdapter(TuyaIrrigatorAdapter):
         interrupted = False
 
         def _sigterm_cleanup(signum: int, frame: Any) -> None:  # noqa: ARG001
+            # No OFF here: the SystemExit unwinds into the ``finally`` below, which sends the one OFF.
             nonlocal interrupted
             interrupted = True
-            try:
-                self.off(irrigator)
-            except Exception:
-                logger.warning("SIGTERM OFF failed for %s", irrigator.tuya_device_id, exc_info=True)
             raise SystemExit(128 + signum)
 
         prev_handler = signal.signal(signal.SIGTERM, _sigterm_cleanup)

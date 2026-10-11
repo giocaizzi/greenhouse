@@ -935,7 +935,7 @@ class TestKeepAliveMainThread:
         assert [c[0] for c in harness.log] == ["cloud.sendcommand"] * 4
         assert harness.log[-1][2] == SWITCH_OFF
 
-    def test_sigterm_during_cycle_switches_off_twice_and_reports_interrupted(self, harness, monkeypatch):
+    def test_sigterm_during_cycle_switches_off_once_and_reports_interrupted(self, harness, monkeypatch):
         before = signal.getsignal(signal.SIGTERM)
         sleeps: list[float] = []
 
@@ -950,8 +950,8 @@ class TestKeepAliveMainThread:
             True,
             "Irrigation interrupted after ~20s — device turned off (requested 1 min) [keep-alive mode]",
         )
-        # on, keep-alive on, off from the handler, off again from ``finally``.
-        assert [c[2] for c in harness.log] == [SWITCH_ON, SWITCH_ON, SWITCH_OFF, SWITCH_OFF]
+        # on, keep-alive on, then exactly one off (from ``finally``; the handler only unwinds).
+        assert [c[2] for c in harness.log] == [SWITCH_ON, SWITCH_ON, SWITCH_OFF]
         assert signal.getsignal(signal.SIGTERM) is before
 
     def test_keyboard_interrupt_is_swallowed_and_switches_off_once(self, harness, monkeypatch):
