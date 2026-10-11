@@ -521,11 +521,12 @@ def test_inv10_spike_is_ignored_by_the_decision_and_raw_rows_are_untouched(env):
     assert 10.0 in [soil for _, _, soil in after]
 
 
-def test_inv10_short_series_spike_is_not_filtered_current_behavior(env):
-    """Invariant #10 edge: below ``CLEANING_HAMPEL_MIN_READINGS`` (5) the spike filter is off.
+def test_inv10_short_series_spike_is_filtered(env):
+    """Invariant #10 edge: a series shorter than the Hampel window is judged against its own median.
 
-    Pins current behavior: four readings 55/55/10/55 → the 10 survives and, being
-    the driest value, drives the critical-stress override (invariant #2 on raw-ish data).
+    Four readings 55/55/10/55 (≥ ``CLEANING_HAMPEL_MIN_READINGS`` = 3): the lone 10 is
+    a spike, so it no longer drives the driest-plant rule or the stress override;
+    the raw row stays in ``sensor_readings``.
     """
     cid = env.add_cluster("Short")
     env.add_plant(cluster_id=cid, species="Monstera deliciosa", category="tropical")
@@ -535,8 +536,10 @@ def test_inv10_short_series_spike_is_not_filtered_current_behavior(env):
 
     decision = _logic(env).decide_for_cluster(cid)
 
-    assert decision.sensor_snapshot.min_soil_moisture == 10.0
-    assert decision.primary_code is TriggerCode.WATER_STRESS
+    assert decision.sensor_snapshot.min_soil_moisture == 55.0
+    assert decision.stress_indicators.water_stress is None
+    assert decision.primary_code is TriggerCode.SENSOR_ADEQUATE
+    assert 10.0 in [r.soil_moisture for r in env.session.scalars(select(SensorReading))]
 
 
 # ── #11 A leak alert IS the hold ─────────────────────────────────────────────

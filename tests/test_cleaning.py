@@ -6,7 +6,7 @@ from dataclasses import dataclass
 import pytest
 
 from fake_data import FAKE_CLUSTER_NAME, FAKE_PLANT_SPECIES, FAKE_SENSOR_ID, FAKE_SENSOR_NAME
-from greenhouse_core.constants import CLEANING_HAMPEL_MIN_READINGS
+from greenhouse_core.constants import CLEANING_SHORT_SERIES_MIN_READINGS
 from greenhouse_core.logic.cleaning import (
     CleanedReading,
     clean_readings,
@@ -84,9 +84,23 @@ def test_genuine_dry_down_to_zero_survives():
     assert _vals(cleaned) == values
 
 
+def test_short_series_rejects_a_lone_spike():
+    # Too short for Hampel (3–4 points): an interior sample that jumped away from both
+    # neighbours (and reverted) is a spike.
+    assert _vals(clean_readings(_series([55.0, 55.0, 10.0, 55.0]))) == [55.0, 55.0, None, 55.0]
+    assert _vals(clean_readings(_series([55.0, 10.0, 55.0]))) == [55.0, None, 55.0]
+
+
+def test_short_series_keeps_steps_trends_and_unconfirmed_end_points():
+    # A step keeps its new level, so its first sample has a same-side neighbour; a trend
+    # sits between its neighbours; the end points have one neighbour and are not judged.
+    for values in ([40.0, 40.0, 60.0, 60.0], [30.0, 40.0, 50.0], [55.0, 55.0, 55.0, 10.0], [10.0, 55.0, 55.0]):
+        assert _vals(clean_readings(_series(values))) == values
+
+
 def test_too_few_readings_skip_spike_filter():
     # Below the minimum, there's not enough context to call anything a spike.
-    values = [50.0, 10.0, 50.0][: CLEANING_HAMPEL_MIN_READINGS - 2]
+    values = [50.0, 10.0, 50.0][: CLEANING_SHORT_SERIES_MIN_READINGS - 1]
     cleaned = clean_readings(_series(values))
     assert _vals(cleaned) == values
 
@@ -184,18 +198,18 @@ def test_clean_readings_around_preserves_the_partition():
 def test_clean_readings_around_judges_a_boundary_spike_with_both_sides():
     """Cleaning the halves separately is blind; folded, the spike is obvious.
 
-    Each window here holds three samples — below CLEANING_HAMPEL_MIN_READINGS,
-    so neither half can judge a spike on its own. Together they are six.
+    Each window here holds two samples — below CLEANING_HAMPEL_MIN_READINGS,
+    so neither half can judge a spike on its own. Together they are four.
     """
-    before = _series([40.0, 41.0, 40.0], step=600)
+    before = _series([40.0, 41.0], step=600)
     start = before[-1].timestamp + 600
-    after = [_Raw(timestamp=start + i * 300, soil_moisture=v) for i, v in enumerate([99.0, 41.0, 40.0])]
+    after = [_Raw(timestamp=start + i * 300, soil_moisture=v) for i, v in enumerate([99.0, 41.0])]
 
-    assert _vals(clean_readings(after)) == [99.0, 41.0, 40.0]  # too short alone
+    assert _vals(clean_readings(after)) == [99.0, 41.0]  # too short alone
 
     _cleaned_before, cleaned_after = clean_readings_around(before, after)
 
-    assert _vals(cleaned_after) == [None, 41.0, 40.0]
+    assert _vals(cleaned_after) == [None, 41.0]
 
 
 def test_clean_readings_around_handles_empty_windows():

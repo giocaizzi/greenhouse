@@ -25,6 +25,7 @@ from hypothesis import strategies as st
 from engine_grid import plant_database
 from golden import FROZEN_INSTANT
 from greenhouse_core.constants import (
+    CLEANING_SHORT_SERIES_MIN_READINGS,
     DEFAULT_DURATION_MINUTES,
     DEFAULT_SEASON_MULTIPLIER_INDOOR,
     DEFAULT_SEASON_MULTIPLIER_OUTDOOR,
@@ -136,9 +137,9 @@ def test_clean_readings_desc_is_exact_reverse(rows):
 
 
 @PROFILE
-@given(series(max_size=4))
+@given(series(max_size=CLEANING_SHORT_SERIES_MIN_READINGS - 1))
 def test_clean_readings_short_series_only_range_gates(rows):
-    """Below CLEANING_HAMPEL_MIN_READINGS (5) per metric, only the range gate removes values."""
+    """Below CLEANING_SHORT_SERIES_MIN_READINGS (3) per metric, only the range gate removes values."""
     for c in clean_readings(rows):
         raw = next(r for r in rows if r.timestamp == c.timestamp)
         for f in NUMERIC:

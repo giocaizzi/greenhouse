@@ -18,6 +18,8 @@ decision snapshot (``logic/sensors.py``) and trend analysis (``logic/trends.py``
   is rejected when it deviates from its rolling-window median by more than
   ``n`` scaled MADs. The MAD scale carries a floor (``CLEANING_MAD_FLOOR``) so a
   flat run (MAD ≈ 0) does not make every later genuine change look anomalous.
+  A series too short for the window (3–4 points) gets a neighbour test instead,
+  so one spike in a sparse window cannot pose as the driest plant.
 
 Cleaning is **field-independent and advisory**: an outlier in ``soil_moisture``
 does not discard that reading's ``temperature``. Rejected values become ``None``
@@ -36,6 +38,7 @@ from greenhouse_core.constants import (
     CLEANING_HAMPEL_WINDOW_RADIUS,
     CLEANING_MAD_FLOOR,
     CLEANING_MAD_SCALE,
+    CLEANING_SHORT_SERIES_MIN_READINGS,
     SENSOR_PHYSICAL_RANGES,
 )
 
@@ -66,6 +69,40 @@ class CleanedReading:
     water_warning: bool | None = None
 
 
+def _deviates_from_both(value: float, a: float, b: float, n_sigma: float) -> bool:
+    """``value`` lies on one side of both references and far from their mean, scaled by their spread."""
+    if (value - a) * (value - b) <= 0:
+        return False
+    scale = max(CLEANING_MAD_SCALE * abs(a - b), CLEANING_MAD_FLOOR)
+    return abs(value - (a + b) / 2) > n_sigma * scale
+
+
+def _short_series_outlier_mask(values: list[float], n_sigma: float) -> list[bool]:
+    """Flag spikes in a series too short for the Hampel window (neighbour test).
+
+    An interior point is a spike when it jumped away from both neighbours — it
+    reverted one reading later, the signature of a comms glitch. A genuine step
+    keeps its new level, so its first sample has a neighbour on the same side
+    and survives. The two end points are not judged: without a reading on both
+    sides a short series cannot tell a spike from a real change, and with the
+    MAD floor a few-percent genuine drop in a fresh reading would read as a spike.
+
+    Args:
+        values: The in-range values for a single metric, in time order.
+        n_sigma: Deviation, in scaled spreads, beyond which a point is a spike.
+
+    Returns:
+        A per-index mask; ``True`` marks the value as an outlier to drop.
+    """
+    n = len(values)
+    mask = [False] * n
+    if n < CLEANING_SHORT_SERIES_MIN_READINGS:
+        return mask
+    for i in range(1, n - 1):
+        mask[i] = _deviates_from_both(values[i], values[i - 1], values[i + 1], n_sigma)
+    return mask
+
+
 def _hampel_outlier_mask(values: list[float], radius: int, n_sigma: float) -> list[bool]:
     """Flag spikes in a contiguous numeric series via a centered Hampel filter.
 
@@ -76,13 +113,13 @@ def _hampel_outlier_mask(values: list[float], radius: int, n_sigma: float) -> li
 
     Returns:
         A per-index mask; ``True`` marks the value as an outlier to drop. With
-        fewer than ``CLEANING_HAMPEL_MIN_READINGS`` points the series is too
-        short to judge spikes, so nothing is flagged.
+        fewer than ``CLEANING_HAMPEL_MIN_READINGS`` points a rolling median is
+        meaningless, so :func:`_short_series_outlier_mask` judges the series.
     """
     n = len(values)
-    mask = [False] * n
     if n < CLEANING_HAMPEL_MIN_READINGS:
-        return mask
+        return _short_series_outlier_mask(values, n_sigma)
+    mask = [False] * n
     for i in range(n):
         lo = max(0, i - radius)
         hi = min(n, i + radius + 1)
