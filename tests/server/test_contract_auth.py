@@ -351,6 +351,21 @@ def test_login_with_a_corrupt_stored_hash_is_401(real, corrupt):
     assert (login.status_code, login.json()) == (401, {"detail": "Invalid username or password"})
 
 
+@pytest.mark.parametrize("username", ["nobody", TEST_ADMIN_USERNAME])
+def test_login_runs_one_argon2_verify_whether_or_not_the_user_exists(real, monkeypatch, username):
+    """An unknown username costs the same argon2 verify as a wrong password (no timing oracle)."""
+    from greenhouse_server import auth as server_auth
+
+    calls = []
+    real_verify = server_auth.verify_password
+    monkeypatch.setattr(server_auth, "verify_password", lambda p, h: calls.append(h) or real_verify(p, h))
+    client, _ = real
+    login = client.post("/api/v1/auth/login", json={"username": username, "password": "wrong"})
+    assert (login.status_code, login.json()) == (401, {"detail": "Invalid username or password"})
+    assert len(calls) == 1
+    assert calls[0].startswith("$argon2id$")
+
+
 def test_inactive_user_is_rejected(real):
     client, app = real
     session = app.state.session_factory()

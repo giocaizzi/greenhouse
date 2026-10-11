@@ -26,6 +26,7 @@ re-enable) — not as a permanent state.
 
 from __future__ import annotations
 
+import functools
 import hmac
 import logging
 import time
@@ -40,7 +41,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
 
-from greenhouse_core.auth import needs_rehash, verify_password
+from greenhouse_core.auth import hash_password, needs_rehash, verify_password
 from greenhouse_core.models import User
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.config import Settings
@@ -303,14 +304,23 @@ def clear_session_cookie(response: Response, settings: Settings) -> None:
 # ── Login + bootstrap helpers ───────────────────────────────────────────────
 
 
+@functools.cache
+def _dummy_password_hash() -> str:
+    """An argon2 hash (current parameters) to verify against when the username is unknown."""
+    return hash_password("greenhouse-timing-equalizer")
+
+
 def authenticate(session: Session, username: str, password: str) -> User | None:
     """Verify credentials and return the User, or None when they do not match.
 
-    On success the password is re-hashed if the stored argon2 parameters are outdated.
+    An unknown or inactive username still runs one argon2 verify (against a dummy
+    hash), so the response time does not reveal which usernames exist. On success
+    the password is re-hashed if the stored argon2 parameters are outdated.
     """
     repo = IrrigationRepository(session)
     user = repo.get_user_by_username(username)
     if user is None or not user.is_active:
+        verify_password(password, _dummy_password_hash())
         return None
     if not verify_password(password, user.hashed_password):
         return None
