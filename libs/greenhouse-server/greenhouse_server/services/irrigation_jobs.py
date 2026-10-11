@@ -13,8 +13,8 @@ import time as _time
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from greenhouse_core.constants import LEAK_CHECK_DELAY_SECONDS, LEAK_HOLD_HOURS
-from greenhouse_core.models import ENTITY_CLUSTER, EVENT_ACTION_START, SOURCE_LEAK, TRIGGERED_BY_AUTO
+from greenhouse_core.constants import LEAK_CHECK_DELAY_SECONDS, LEAK_HOLD_HOURS, SECONDS_PER_HOUR
+from greenhouse_core.models import ENTITY_CLUSTER, EVENT_ACTION_START, SOURCE_LEAK, TRIGGERED_BY_AUTO, TriggeredBy
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.services.jobs import job_session, read_session
 
@@ -24,6 +24,11 @@ if TYPE_CHECKING:
 logger = logging.getLogger("greenhouse_server.services.irrigation")
 
 LEAK_CHECK_ACTIVITY_CODE = "leak_check"
+# Written when a non-automatic start (a forced ``/irrigate``) arms a leak check. An automatic
+# start needs no marker — its ``start``/``auto`` event already proves a check was armed — but a
+# ``start``/``manual`` event may also be a logged hand-watering (no pump, no check), so those
+# starts leave this explicit record for :func:`rearm_leak_checks`.
+LEAK_CHECK_ARMED_ACTIVITY_CODE = "leak_check_armed"
 # Activity codes that prove a start's leak check already completed:
 # ``leak_check`` is written by every completed check; ``leak_hold`` is
 # written when a check raised a hold (and predates the ``leak_check`` marker).
@@ -127,33 +132,75 @@ def _schedule_leak_check(cluster_id: int, started_at: int) -> None:
         logger.debug("Could not schedule leak check for cluster %d", cluster_id, exc_info=True)
 
 
+def record_leak_check_armed(
+    repo: IrrigationRepository, cluster_id: int, started_at: int, *, irrigator_id: int, triggered_by: TriggeredBy
+) -> None:
+    """Write the durable ``leak_check_armed`` marker for a non-automatic start (the caller commits).
+
+    Commit it with the start's own event, before the in-memory job is scheduled, so a restart
+    in between still re-arms the check.
+    """
+    repo.add_activity_event(
+        source=SOURCE_LEAK,
+        entity_type=ENTITY_CLUSTER,
+        entity_id=cluster_id,
+        code=LEAK_CHECK_ARMED_ACTIVITY_CODE,
+        message=f"post-watering leak check armed ({triggered_by} start)",
+        severity="info",
+        payload={"started_at": started_at, "irrigator_id": irrigator_id, "triggered_by": triggered_by},
+    )
+
+
+def _armed_starts(repo: IrrigationRepository, now: int) -> "Iterator[tuple[int, int]]":
+    """``(cluster_id, started_at)`` of every start inside the hold horizon that armed a leak check.
+
+    Automatic ``start`` events, plus the ``leak_check_armed`` markers non-automatic starts write.
+    """
+    for irrigator in repo.list_all_irrigators():
+        for event in repo.get_recent_events(irrigator.id, hours=LEAK_HOLD_HOURS):
+            if event.action == EVENT_ACTION_START and event.triggered_by == TRIGGERED_BY_AUTO:
+                yield irrigator.cluster_id, event.timestamp
+    since = now - LEAK_HOLD_HOURS * SECONDS_PER_HOUR
+    for marker in repo.list_activity_events_since(since, source=SOURCE_LEAK, codes=(LEAK_CHECK_ARMED_ACTIVITY_CODE,)):
+        started_at = _payload_started_at(marker.payload_json)
+        if marker.entity_id is not None and started_at is not None:
+            yield marker.entity_id, started_at
+
+
+def _payload_started_at(payload_json: str | None) -> int | None:
+    """``started_at`` of a marker payload, or None when the payload is missing or malformed."""
+    try:
+        value = json.loads(payload_json or "{}").get("started_at")
+    except (ValueError, AttributeError):
+        logger.debug("Ignoring a malformed leak-check marker payload: %r", payload_json)
+        return None
+    return value if isinstance(value, int) else None
+
+
 def _rearm_from_events(repo: IrrigationRepository, now: int) -> "Iterator[None]":
-    """Schedule a leak check for every recent auto start whose check never completed; yield once per job.
+    """Schedule a leak check for every recent armed start whose check never completed; yield once per job.
 
     A generator rather than a returned count, so the caller's tally keeps the jobs already added
     when the scan fails midway.
     """
-    for irrigator in repo.list_all_irrigators():
-        for event in repo.get_recent_events(irrigator.id, hours=LEAK_HOLD_HOURS):
-            if event.action != EVENT_ACTION_START or event.triggered_by != TRIGGERED_BY_AUTO:
-                continue
-            if _leak_check_done(repo, irrigator.cluster_id, event.timestamp):
-                continue
-            due = event.timestamp + LEAK_CHECK_DELAY_SECONDS
-            _add_leak_check_job(irrigator.cluster_id, event.timestamp, run_at=max(due, now))
-            yield
+    for cluster_id, started_at in _armed_starts(repo, now):
+        if _leak_check_done(repo, cluster_id, started_at):
+            continue
+        due = started_at + LEAK_CHECK_DELAY_SECONDS
+        _add_leak_check_job(cluster_id, started_at, run_at=max(due, now))
+        yield
 
 
 def rearm_leak_checks() -> int:
     """Re-schedule leak checks lost to a restart; call once after the scheduler starts.
 
     Leak-check jobs live only in memory, so a restart inside the 30-min window
-    after an auto start used to drop the check — and with it the leak hold.
-    Scans auto ``start`` events from the last ``LEAK_HOLD_HOURS`` (older
-    findings would be outside the hold horizon) and schedules every one whose
-    check has not completed (see :func:`_leak_check_done`): at its normal due
-    time if that is still ahead, otherwise immediately. Manual starts never
-    get a leak check, so they are not re-armed. Idempotent across restarts.
+    after a start used to drop the check — and with it the leak hold.
+    Scans the starts that armed a check in the last ``LEAK_HOLD_HOURS`` (older
+    findings would be outside the hold horizon; see :func:`_armed_starts`) and
+    schedules every one whose check has not completed (see
+    :func:`_leak_check_done`): at its normal due time if that is still ahead,
+    otherwise immediately. Idempotent across restarts.
 
     Returns:
         Number of leak checks scheduled (0 when the scheduler isn't running).

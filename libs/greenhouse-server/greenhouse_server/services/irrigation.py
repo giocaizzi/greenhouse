@@ -43,6 +43,7 @@ from greenhouse_server.services.irrigation_jobs import (  # noqa: F401 — re-ex
     _run_leak_check,
     _schedule_leak_check,
     rearm_leak_checks,
+    record_leak_check_armed,
 )
 from greenhouse_server.services.jobs import job_session
 from greenhouse_server.services.maintenance import AlertFinding, collect_learning_alerts, collect_maintenance_alerts
@@ -381,6 +382,9 @@ class _Actuation:
     temp: float
     source: str
     sensor_data: ClusterSnapshot | None
+    # ``manual`` for a forced run (``force=true``): the user pushed it, so the event, the push
+    # and the decision log all say so. ``auto`` otherwise.
+    triggered_by: TriggeredBy = TRIGGERED_BY_AUTO
 
 
 def _soil_note(sensor_data: ClusterSnapshot | None) -> str:
@@ -549,13 +553,13 @@ class IrrigationService:
             irrigator_id=act.irrigator.id,
             action=EVENT_ACTION_START if success else EVENT_ACTION_ATTEMPTED,
             duration_minutes=duration,
-            triggered_by=TRIGGERED_BY_AUTO,
+            triggered_by=act.triggered_by,
             timestamp=started_at,
             notes=_event_notes(act, _soil_note(act.sensor_data)),
         )
 
         if success:
-            self._record_started(act)
+            self._record_started(act, started_at)
             self._arm_follow_ups(act, started_at)
             result["action"] = "irrigated"
             self._notify_auto_irrigation(act)
@@ -565,7 +569,7 @@ class IrrigationService:
 
         return result
 
-    def _record_started(self, act: _Actuation) -> None:
+    def _record_started(self, act: _Actuation, started_at: int) -> None:
         """Log the run, flag the decision as actuated, and commit before anything else can fail.
 
         The pump is already running, so its ``start`` event must be durable now: a later failure
@@ -588,23 +592,34 @@ class IrrigationService:
         )
         if act.decision.decision_log_id is not None:
             self._repo.set_decision_actuated(act.decision.decision_log_id)
+        if act.triggered_by != TRIGGERED_BY_AUTO:
+            record_leak_check_armed(
+                self._repo, act.cluster_id, started_at, irrigator_id=act.irrigator.id, triggered_by=act.triggered_by
+            )
         self._repo.commit()
 
     @staticmethod
     def _arm_follow_ups(act: _Actuation, started_at: int) -> None:
-        """Arm the post-irrigation leak check and the dry-run watcher for a started run."""
+        """Arm the post-irrigation leak check and the dry-run watcher for a started run.
+
+        A forced run gets the leak check too: it runs the engine's computed duration unattended,
+        exactly like an automatic one, so a stuck valve after it must raise the hold.
+        """
         _schedule_leak_check(act.cluster_id, started_at)
-        schedule_pump_watcher(act.irrigator.id, act.decision.duration_minutes, started_at)
+        schedule_pump_watcher(act.irrigator.id, act.decision.duration_minutes, started_at, triggered_by=act.triggered_by)
 
     def _notify_auto_irrigation(self, act: _Actuation) -> None:
-        """Push the auto-irrigation notice (``get_preferences`` still runs as an argument: it may insert)."""
+        """Push the irrigation notice under the run's own trigger (``auto``, or ``manual`` when forced).
+
+        ``get_preferences`` still runs as an argument: it may insert.
+        """
         duration = act.decision.duration_minutes
         maybe_notify(
             self._notifier,
             self._repo.get_preferences(),
-            "auto",
+            "auto" if act.triggered_by == TRIGGERED_BY_AUTO else "manual",
             lambda n: n.notify_irrigation(
-                triggered_by=TRIGGERED_BY_AUTO,
+                triggered_by=act.triggered_by,
                 irrigator_name=act.irrigator.name,
                 duration_minutes=duration,
                 detail=f"confidence={act.decision.confidence:.0%}",
@@ -777,7 +792,9 @@ class IrrigationService:
         ``force=True`` bypasses the quiet-hours gate inside the decision
         engine; a ``MANUAL_OVERRIDE_QUIET_HOURS`` warning Reason is still
         attached to the resulting decision so the audit log records that
-        the user pushed past the deny window.
+        the user pushed past the deny window. A forced run is the user's: its
+        decision log, irrigation event and push say ``manual``; it still gets
+        the post-watering leak check and the dry-run watcher.
 
         An IRRIGATE decision then passes the server's actuation gates, in order: the
         device-health gate, the per-day caps, then the global dry run (``dry_run_global``).
@@ -808,7 +825,8 @@ class IrrigationService:
         irrigator, adapter = target
 
         if not self._actuation_gates_skip(cluster_id, irrigator, decision, result):
-            self._actuate(_Actuation(cluster_id, irrigator, adapter, decision, temp, source, sensor_data), result)
+            trigger = TRIGGERED_BY_MANUAL if force else TRIGGERED_BY_AUTO
+            self._actuate(_Actuation(cluster_id, irrigator, adapter, decision, temp, source, sensor_data, trigger), result)
         return result
 
     def monitor_cluster(self, cluster_id: int) -> MonitorResult:

@@ -947,6 +947,33 @@ def test_successful_auto_start_schedules_leak_check_and_watcher(pipeline):
     ]
 
 
+def test_forced_run_is_recorded_manual_and_keeps_leak_check_and_watcher(pipeline):
+    """``force=true`` is the user's run: event, push and decision log say ``manual``; follow-ups stay.
+
+    It runs the engine's computed duration unattended, so it gets the 30-min leak check and
+    the dry-run watcher like an automatic run, plus a ``leak_check_armed`` marker so the
+    restart re-arm finds it.
+    """
+    from greenhouse_server.scheduler import scheduler as bg_scheduler
+    from greenhouse_server.scheduler import start_scheduler, stop_scheduler
+
+    pipeline.seed_cluster(soil=35.0)
+    pipeline.app.state.device_registry = pipeline.wiring.registry
+    pipeline.mark()
+    start_scheduler(paused=True)
+    try:
+        assert _irrigate(pipeline, force=True)["response"]["action"] == "irrigated"
+        adhoc = sorted(j.id for j in bg_scheduler.get_jobs() if j.id.startswith(("leak-check-", "pump-watcher-")))
+    finally:
+        stop_scheduler()
+    assert adhoc == [f"leak-check-1-{FROZEN_TS}", f"pump-watcher-1-{FROZEN_TS}"]
+    rows = pipeline.db_rows()
+    assert [(e["action"], e["triggered_by"]) for e in rows["irrigation_events"]] == [("start", "manual")]
+    assert [r["triggered_by"] for r in rows["decision_logs"]] == ["manual"]
+    assert [n["triggered_by"] for n in pipeline.notifier.sent] == ["manual"]
+    assert [a["code"] for a in rows["activity_events"]] == ["irrigated", "leak_check_armed"]
+
+
 def test_manual_start_schedules_watcher_but_no_leak_check(pipeline):
     """Manual starts get a dry-run watcher (when a duration is given) but never a leak check."""
     from greenhouse_server.scheduler import scheduler as bg_scheduler

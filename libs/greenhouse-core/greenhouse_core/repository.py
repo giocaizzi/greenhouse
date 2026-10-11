@@ -955,27 +955,29 @@ class IrrigationRepository:
         *,
         source: str,
         codes: "Iterable[str]",
-        entity_type: str,
-        entity_id: int,
+        entity_type: str | None = None,
+        entity_id: int | None = None,
     ) -> list[ActivityEvent]:
-        """Every event of one entity with one of ``codes`` at or after ``since``, newest first — no row cap.
+        """Every event with one of ``codes`` at or after ``since``, newest first — no row cap.
 
         For lookups that must not miss an old row inside a time window (the leak-check
-        completion markers): a time bound, never a row limit, keeps the scan complete.
+        markers): a time bound, never a row limit, keeps the scan complete. ``entity_type`` /
+        ``entity_id`` narrow it to one entity when given.
         """
-        return list(
-            self.session.scalars(
-                select(ActivityEvent)
-                .where(
-                    ActivityEvent.timestamp >= since,
-                    ActivityEvent.source == source,
-                    ActivityEvent.code.in_(list(codes)),
-                    ActivityEvent.entity_type == entity_type,
-                    ActivityEvent.entity_id == entity_id,
-                )
-                .order_by(ActivityEvent.timestamp.desc(), ActivityEvent.id.desc())
+        stmt = (
+            select(ActivityEvent)
+            .where(
+                ActivityEvent.timestamp >= since,
+                ActivityEvent.source == source,
+                ActivityEvent.code.in_(list(codes)),
             )
+            .order_by(ActivityEvent.timestamp.desc(), ActivityEvent.id.desc())
         )
+        if entity_type is not None:
+            stmt = stmt.where(ActivityEvent.entity_type == entity_type)
+        if entity_id is not None:
+            stmt = stmt.where(ActivityEvent.entity_id == entity_id)
+        return list(self.session.scalars(stmt))
 
     # ── Alerts ────────────────────────────────────────────────────────────────
 

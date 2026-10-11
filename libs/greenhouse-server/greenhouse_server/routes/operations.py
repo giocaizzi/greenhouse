@@ -154,7 +154,9 @@ def irrigate(
             `dry_run=True` to compute the decision without actuating,
             `no_sync=True` to skip the sensor refresh, `force=True` to
             bypass the quiet-hours deny window (the decision still records
-            a `manual_override_quiet_hours` warning Reason).
+            a `manual_override_quiet_hours` warning Reason; a forced run is
+            recorded as `manual` in the decision log, the irrigation event
+            and the push, and still gets the post-watering leak check).
 
     Returns:
         Decision details (`action`, `reason`, `confidence`, optional
