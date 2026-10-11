@@ -1487,7 +1487,7 @@
    "token_file_after": null,
    "token_file_before": null
   },
-  "error.empty_200_body_current_behavior_uncaught": {
+  "error.empty_200_body_exits_1": {
    "argv": [
     "greenhouse",
     "health"
@@ -1500,7 +1500,7 @@
     }
    ],
    "env": {},
-   "exception": "JSONDecodeError",
+   "exception": null,
    "exit_code": 1,
    "files": {},
    "input": null,
@@ -1517,7 +1517,7 @@
      "url": "http://localhost:8000/api/v1/health"
     }
    ],
-   "stderr": "",
+   "stderr": "Error: Empty response from server\n",
    "stdout": "",
    "token_file_after": null,
    "token_file_before": null
@@ -1592,7 +1592,7 @@
    "token_file_after": null,
    "token_file_before": null
   },
-  "error.read_timeout_current_behavior_uncaught": {
+  "error.non_json_200_body_exits_1": {
    "argv": [
     "greenhouse",
     "health"
@@ -1605,7 +1605,7 @@
     }
    ],
    "env": {},
-   "exception": "ReadTimeout",
+   "exception": null,
    "exit_code": 1,
    "files": {},
    "input": null,
@@ -1622,7 +1622,77 @@
      "url": "http://localhost:8000/api/v1/health"
     }
    ],
-   "stderr": "",
+   "stderr": "Error: Invalid JSON response from server: '<html>proxy login</html>'\n",
+   "stdout": "",
+   "token_file_after": null,
+   "token_file_before": null
+  },
+  "error.read_timeout_exits_1": {
+   "argv": [
+    "greenhouse",
+    "health"
+   ],
+   "clients": [
+    {
+     "base_url": "http://localhost:8000",
+     "headers": {},
+     "timeout": 30.0
+    }
+   ],
+   "env": {},
+   "exception": null,
+   "exit_code": 1,
+   "files": {},
+   "input": null,
+   "requests": [
+    {
+     "authorization": null,
+     "content": null,
+     "content_type": null,
+     "json": null,
+     "method": "GET",
+     "path": "/api/v1/health",
+     "query": [],
+     "raw_path": "/api/v1/health",
+     "url": "http://localhost:8000/api/v1/health"
+    }
+   ],
+   "stderr": "Error: Server did not respond in time: timed out\n",
+   "stdout": "",
+   "token_file_after": null,
+   "token_file_before": null
+  },
+  "error.transport_error_exits_1": {
+   "argv": [
+    "greenhouse",
+    "health"
+   ],
+   "clients": [
+    {
+     "base_url": "http://localhost:8000",
+     "headers": {},
+     "timeout": 30.0
+    }
+   ],
+   "env": {},
+   "exception": null,
+   "exit_code": 1,
+   "files": {},
+   "input": null,
+   "requests": [
+    {
+     "authorization": null,
+     "content": null,
+     "content_type": null,
+     "json": null,
+     "method": "GET",
+     "path": "/api/v1/health",
+     "query": [],
+     "raw_path": "/api/v1/health",
+     "url": "http://localhost:8000/api/v1/health"
+    }
+   ],
+   "stderr": "Error: Request to server failed: Server disconnected\n",
    "stdout": "",
    "token_file_after": null,
    "token_file_before": null

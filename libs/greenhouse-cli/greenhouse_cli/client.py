@@ -77,6 +77,17 @@ def clear_stored_token() -> bool:
     return True
 
 
+def _decode_json(resp: httpx.Response) -> JSONObject | list[Any]:
+    """The JSON body of a successful response; an empty or non-JSON body is a :class:`ServerError`."""
+    if not resp.content.strip():
+        raise ServerError(resp.status_code, "Empty response from server")
+    try:
+        data: JSONObject | list[Any] = resp.json()
+    except ValueError:
+        raise ServerError(resp.status_code, f"Invalid JSON response from server: {resp.text[:200]!r}") from None
+    return data
+
+
 class ServerError(Exception):
     """Raised when the server returns an error response."""
 
@@ -106,11 +117,20 @@ class IrrigationClient:
         self.http.close()
 
     def _request(self, method: str, path: str, **kwargs: Any) -> JSONObject | list[Any]:
-        """Send one request and decode it; HTTP >= 400 and connection errors raise :class:`ServerError`."""
+        """Send one request and decode it.
+
+        Every failure becomes a :class:`ServerError` (the CLI prints it and exits 1, the
+        TUI toasts it): HTTP >= 400, a refused connection, a timeout or other transport
+        error (status 0), and a 2xx body that is empty or not JSON (B-17).
+        """
         try:
             resp = self.http.request(method, path, **kwargs)
         except httpx.ConnectError as e:
             raise ServerError(0, f"Cannot connect to server: {e}") from None
+        except httpx.TimeoutException as e:
+            raise ServerError(0, f"Server did not respond in time: {e}") from None
+        except httpx.TransportError as e:
+            raise ServerError(0, f"Request to server failed: {e}") from None
 
         if resp.status_code >= HTTPStatus.BAD_REQUEST:
             try:
@@ -122,8 +142,7 @@ class IrrigationClient:
         if resp.headers.get("content-type", "").startswith("text/csv"):
             return {"csv": resp.text}
 
-        data: JSONObject | list[Any] = resp.json()
-        return data
+        return _decode_json(resp)
 
     def _object(self, method: str, path: str, **kwargs: Any) -> JSONObject:
         """Send a request whose endpoint answers with a JSON object."""

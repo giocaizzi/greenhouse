@@ -301,14 +301,24 @@ CLI_CASES: list[Case] = [
         routes={("GET", f"{P}/health"): Raise("ConnectError", "[Errno 111] Connection refused")},
     ),
     C(
-        "error.read_timeout_current_behavior_uncaught",
+        "error.read_timeout_exits_1",
         "health",
         routes={("GET", f"{P}/health"): Raise("ReadTimeout", "timed out")},
     ),
     C(
-        "error.empty_200_body_current_behavior_uncaught",
+        "error.empty_200_body_exits_1",
         "health",
         routes={("GET", f"{P}/health"): Raw(200, "", "application/json")},
+    ),
+    C(
+        "error.non_json_200_body_exits_1",
+        "health",
+        routes={("GET", f"{P}/health"): Raw(200, "<html>proxy login</html>", "text/html")},
+    ),
+    C(
+        "error.transport_error_exits_1",
+        "health",
+        routes={("GET", f"{P}/health"): Raise("RemoteProtocolError", "Server disconnected")},
     ),
     C("output.rich_json_formatting", "health", routes={("GET", f"{P}/health"): (200, DEFAULT_BODY)}),
     C("output.csv_content_type_on_json_command", "health", routes={("GET", f"{P}/health"): (200, "a,b\n1,2\n")}),
