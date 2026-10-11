@@ -105,14 +105,15 @@ def require_mcp_token(
 ) -> None:
     """Gate `/mcp` behind a static bearer token.
 
-    Fail-closed: when `settings.mcp_token` is unset the endpoint returns 503,
-    so a misconfigured deployment never silently leaves MCP open. With the
+    Fail-closed: when `settings.mcp_token` is unset or empty the endpoint
+    returns 503, so a misconfigured deployment never silently leaves MCP open
+    (an empty `GREENHOUSE_MCP_TOKEN=` is a missing token, not a token). With the
     token configured, missing or wrong `Authorization: Bearer <token>` yields
     401. The token has full reach over every `/api/v1` route exposed as an MCP
     tool — including irrigation actuation — so it MUST be a high-entropy
     secret (generate with `openssl rand -hex 32`).
     """
-    if settings.mcp_token is None:
+    if not settings.mcp_token:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="MCP auth not configured",

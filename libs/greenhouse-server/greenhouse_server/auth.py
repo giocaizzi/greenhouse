@@ -196,7 +196,8 @@ def require_user(
 
     1. The session JWT issued by `/api/v1/auth/login` (bearer header or
        session cookie). This is the human/API client path.
-    2. The static MCP bearer token. `fastapi-mcp` reuses the `/api/v1` routes
+    2. The static MCP bearer token, from the Authorization header only
+       (never the cookie). `fastapi-mcp` reuses the `/api/v1` routes
        internally to fulfil `tools/call`, forwarding the inbound MCP
        `Authorization` header onto each inner request. The outer `/mcp` mount
        is already gated by `require_mcp_token`, so a request that reaches
@@ -214,7 +215,11 @@ def require_user(
     token = _extract_token(request, creds, settings)
     if not token:
         raise AuthError
-    if is_mcp_token(token, settings):
+    # The MCP token is a bearer credential only: fastapi-mcp forwards it in the
+    # Authorization header. A cookie carrying it is decoded as a session JWT
+    # (and rejected), so the root credential can't ride along in a browser jar.
+    from_header = bool(creds and creds.credentials)
+    if from_header and is_mcp_token(token, settings):
         return AuthenticatedUser(id=MCP_USER_ID, username=MCP_USER_NAME, is_system=True)
     return _resolve_user(token, settings, IrrigationRepository(session))
 

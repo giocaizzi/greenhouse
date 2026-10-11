@@ -311,7 +311,8 @@ def _token(app, **claims) -> str:
             200,
             {"id": MCP_USER_ID, "username": "mcp"},
         ),
-        (lambda app: {"cookies": {"greenhouse_session": MCP_TOKEN}}, 200, {"id": MCP_USER_ID, "username": "mcp"}),
+        # The MCP token is bearer-only: in the cookie it is decoded as a JWT and refused.
+        (lambda app: {"cookies": {"greenhouse_session": MCP_TOKEN}}, 401, {"detail": "Invalid session"}),
     ],
     ids=[
         "no-credentials",
@@ -574,8 +575,8 @@ def test_bootstrap_is_skipped_when_auth_disabled(engine):
         (MCP_TOKEN, {"Authorization": f"Bearer {MCP_TOKEN} "}, None, None),  # header value is stripped
         (MCP_TOKEN, {"Authorization": f"bearer {MCP_TOKEN}"}, None, None),  # scheme is case-insensitive
         (MCP_TOKEN, {"Authorization": f"Bearer {MCP_TOKEN}"}, None, None),
-        ("", {"Authorization": "Bearer "}, 401, "Invalid MCP token"),  # empty token: closed, but 401 not 503
-        ("", {"Authorization": "Bearer x"}, 401, "Invalid MCP token"),
+        ("", {"Authorization": "Bearer "}, 503, "MCP auth not configured"),  # empty token = unset
+        ("", {"Authorization": "Bearer x"}, 503, "MCP auth not configured"),
     ],
 )
 def test_mcp_gate(clean_env, mcp_token, headers, status, detail):
