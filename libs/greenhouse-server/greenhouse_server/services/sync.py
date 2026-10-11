@@ -47,7 +47,8 @@ class SyncService:
         repo: IrrigationRepository,
         registry: DeviceRegistry | None,
         cloud: DeviceGateway | None,
-    ):
+    ) -> None:
+        """Bind the sync to the repository and the app's one gateway (``None``: no Cloud reads, persisted rows only)."""
         self._repo = repo
         self._registry = registry
         self._gateway = cloud

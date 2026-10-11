@@ -20,7 +20,6 @@ from greenhouse_core.models import (
     Alert,
     Cluster,
 )
-from greenhouse_core.models import SOURCE_PUMP as SOURCE_PUMP  # re-export: tests import it from here
 from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.services.maintenance import AlertFinding, collect_learning_alerts, collect_maintenance_alerts

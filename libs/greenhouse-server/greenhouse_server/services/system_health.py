@@ -23,7 +23,8 @@ if TYPE_CHECKING:
 class SystemHealthService:
     """Derive a real-time health pulse from stored sensor data and scheduler state."""
 
-    def __init__(self, repo: IrrigationRepository, sync_service: SyncService):
+    def __init__(self, repo: IrrigationRepository, sync_service: SyncService) -> None:
+        """Bind the pulse to the repository and the sync service whose freshness view it reports."""
         self._repo = repo
         self._sync = sync_service
 

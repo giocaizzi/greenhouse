@@ -46,7 +46,7 @@ def _ascii(text: str) -> str:
 class NtfyClient:
     """Publishes messages to a single ntfy topic."""
 
-    def __init__(self, server_url: str, topic: str, token: str | None = None, timeout: int = 3):
+    def __init__(self, server_url: str, topic: str, token: str | None = None, timeout: int = 3) -> None:
         """Bind the topic URL; raise ``ValueError`` unless ``server_url`` is http(s)."""
         self._url = check_ntfy_server_url(server_url).rstrip("/") + "/" + topic
         self._token = token

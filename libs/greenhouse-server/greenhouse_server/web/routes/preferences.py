@@ -88,6 +88,7 @@ def update_theme(repo: RepoDep, theme: Annotated[str, Form()]) -> Response:
     theme instead of falling back to the stale stored preference.
 
     Args:
+        repo: The request's repository (the preferences row is written through it).
         theme: One of ``auto``, ``light``, or ``dark`` (the Preferences select's values).
 
     Returns:

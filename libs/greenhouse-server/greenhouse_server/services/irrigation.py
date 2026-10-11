@@ -244,7 +244,7 @@ def _check_result(
     """One ``check_cluster`` entry, keys in the response order; ``detail_key`` names the branch's detail."""
     # A TypedDict literal cannot carry a computed key; the runtime object is the same plain dict.
     return cast(
-        CheckResult,
+        "CheckResult",
         {
             "cluster_id": cluster_id,
             "cluster_name": cluster_name,
@@ -268,7 +268,8 @@ class IrrigationService:
         plant_db: PlantDatabase,
         health_monitor: DeviceHealthMonitor | None = None,
         notifier: NtfyClient | None = None,
-    ):
+    ) -> None:
+        """Wire the pipeline's collaborators; a missing health monitor or notifier falls open (no gate, no push)."""
         self._repo = repo
         self._registry = registry
         self._sync = sync_service

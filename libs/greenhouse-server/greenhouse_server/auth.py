@@ -62,7 +62,8 @@ MCP_USER_NAME = "mcp"
 class AuthError(HTTPException):
     """401 with a WWW-Authenticate hint."""
 
-    def __init__(self, detail: str = "Not authenticated"):
+    def __init__(self, detail: str = "Not authenticated") -> None:
+        """Build the 401; the ``WWW-Authenticate: Bearer`` header tells clients which scheme to retry with."""
         super().__init__(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=detail,
@@ -73,7 +74,8 @@ class AuthError(HTTPException):
 class AuthConfigError(HTTPException):
     """503 — auth is on but misconfigured (e.g. no secret key)."""
 
-    def __init__(self, detail: str = "Auth not configured"):
+    def __init__(self, detail: str = "Auth not configured") -> None:
+        """Build the 503: a server-side misconfiguration, so no client credential can fix it."""
         super().__init__(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=detail)
 
 
@@ -257,7 +259,7 @@ def _redirect_to_login(request: Request) -> HTTPException:
 class _RedirectAuthError(HTTPException):
     """Sentinel — the web exception handler catches this and serves a real redirect."""
 
-    def __init__(self, next_url: str):
+    def __init__(self, next_url: str) -> None:
         super().__init__(status_code=status.HTTP_303_SEE_OTHER, detail="Redirect to login")
         self.next_url = next_url
 

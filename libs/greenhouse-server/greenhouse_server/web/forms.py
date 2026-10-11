@@ -50,7 +50,11 @@ def parsed_or_400(
 
 
 def tri_bool(raw: str) -> bool | None:
-    """Form tri-state: ``""`` = inherit, ``"true"`` / ``"on"`` / ``"1"`` = on, ``"false"`` / ``"off"`` / ``"0"`` = off."""
+    """Parse a tri-state form value: blank inherits, otherwise an explicit on / off.
+
+    ``""`` = inherit, ``"true"`` / ``"on"`` / ``"1"`` = on, ``"false"`` / ``"off"`` / ``"0"`` = off;
+    anything else is a 400.
+    """
     value = raw.strip().lower()
     if value == "":
         return None

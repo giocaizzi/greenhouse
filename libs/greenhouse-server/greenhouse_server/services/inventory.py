@@ -45,6 +45,7 @@ class PlantNotInClusterError(LookupError):
     """A sensor was linked to a plant that does not belong to the sensor's cluster."""
 
     def __init__(self, plant_id: int) -> None:
+        """Keep the offending ``plant_id`` so each surface words its own error."""
         super().__init__(plant_id)
         self.plant_id = plant_id
 
@@ -53,6 +54,7 @@ class UnknownDeviceTypeError(ValueError):
     """A device ``type`` that no registered adapter handles; the message lists the known keys."""
 
     def __init__(self, kind: DeviceKind, value: str, known: tuple[str, ...]) -> None:
+        """Build the shared message (API wording) and keep its parts for callers that render their own."""
         super().__init__(f"Unknown {kind} type '{value}' (known: {', '.join(known) or 'none'})")
         self.kind, self.value, self.known = kind, value, known
 

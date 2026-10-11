@@ -96,7 +96,8 @@ def _composite_score(components: Sequence[float]) -> float | None:
 class PlantHealthService:
     """Computes and persists a 0-100 composite health score for each plant."""
 
-    def __init__(self, repo: IrrigationRepository, plant_db: PlantDatabase):
+    def __init__(self, repo: IrrigationRepository, plant_db: PlantDatabase) -> None:
+        """Bind scoring to the repository (readings, snapshots) and the plant database (care bands)."""
         self._repo = repo
         self._plant_db = plant_db
 

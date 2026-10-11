@@ -20,16 +20,14 @@ _SECONDS_PER_MINUTE = 60
 _MINUTES_PER_HOUR = 60
 
 
-def format_ts(ts: int | float | None, fmt: str = "%Y-%m-%d %H:%M") -> str:
+def format_ts(ts: float | None, fmt: str = "%Y-%m-%d %H:%M") -> str:
     """Template filter: a Unix timestamp in the display timezone (``—`` when missing)."""
     if ts is None:
         return "—"
     return format_timestamp(float(ts), fmt)
 
 
-def format_age(
-    age: int | float | None, *, missing: str = "—", stale_after: int | None = AGE_BADGE_STALE_SECONDS
-) -> str:
+def format_age(age: float | None, *, missing: str = "—", stale_after: int | None = AGE_BADGE_STALE_SECONDS) -> str:
     """The one "how long ago" formatter: ``Ns`` / ``Nm`` / ``Nh`` / ``Nd ago`` for an age in seconds.
 
     ``missing`` is shown for ``None``; from ``stale_after`` seconds on the age reads
@@ -51,16 +49,14 @@ def format_age(
     return "stale"
 
 
-def relative_age(
-    ts: int | float | None, *, missing: str = "—", stale_after: int | None = AGE_BADGE_STALE_SECONDS
-) -> str:
+def relative_age(ts: float | None, *, missing: str = "—", stale_after: int | None = AGE_BADGE_STALE_SECONDS) -> str:
     """:func:`format_age` of a Unix timestamp: how long ago ``ts`` was, from the wall clock."""
     if ts is None:
         return missing
     return format_age(time.time() - float(ts), missing=missing, stale_after=stale_after)
 
 
-def age_seconds(age: int | float | None) -> str:
+def age_seconds(age: float | None) -> str:
     """Template filter for an **age in seconds**: :func:`format_age` with the freshness defaults.
 
     "—" when missing, "stale" from 7 days. For a Unix timestamp use :func:`time_ago`.
@@ -68,7 +64,7 @@ def age_seconds(age: int | float | None) -> str:
     return format_age(age)
 
 
-def time_ago(ts: int | float | None) -> str:
+def time_ago(ts: float | None) -> str:
     """Template filter for a **Unix timestamp**: :func:`relative_age` with the freshness defaults."""
     return relative_age(ts)
 

@@ -133,7 +133,7 @@ class PumpWatcherService:
         sleep: Callable[[float], object] = time.sleep,
         monitor: DeviceHealthMonitor | None = None,
         stop_requested: Callable[[], bool] | None = None,
-    ):
+    ) -> None:
         """Build a watcher.
 
         ``stop_requested`` lets the server's shutdown cut the watch short: it

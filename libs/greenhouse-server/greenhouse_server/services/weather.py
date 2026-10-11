@@ -57,7 +57,8 @@ class WeatherClient:
 
     def __init__(
         self, lat: float = DEFAULT_LATITUDE, lon: float = DEFAULT_LONGITUDE, timeout: int = 8, tz: str = "UTC"
-    ):
+    ) -> None:
+        """Point the client at one location; ``tz`` must be the preferences timezone (see below)."""
         self._lat = lat
         self._lon = lon
         self._timeout = timeout

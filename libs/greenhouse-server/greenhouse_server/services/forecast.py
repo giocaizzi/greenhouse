@@ -62,7 +62,8 @@ def _confidence_for(profiled_count: int) -> float:
 class ForecastService:
     """Predicts when a cluster will next need irrigation."""
 
-    def __init__(self, repo: IrrigationRepository, plant_db: PlantDatabase, weather_client: Any = None):
+    def __init__(self, repo: IrrigationRepository, plant_db: PlantDatabase, weather_client: Any = None) -> None:
+        """Bind the forecast to the repository, plant database and (optional) weather client it projects with."""
         self._repo = repo
         self._plant_db = plant_db
         self._weather = weather_client

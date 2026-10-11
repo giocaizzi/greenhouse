@@ -73,7 +73,7 @@ class LeakDetectionService:
         notifier: NtfyClient | None = None,
         *,
         after_window_seconds: int = LEAK_AFTER_WINDOW_SECONDS,
-    ):
+    ) -> None:
         """Build a detector; ``after_window_seconds`` is how long after the start it observes.
 
         A long manual run passes its run length plus the settle time, so the window ends after

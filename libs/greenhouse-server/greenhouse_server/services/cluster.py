@@ -129,7 +129,8 @@ def cluster_events_csv(repo: IrrigationRepository, cluster_id: int, *, days: int
 class ClusterService:
     """Cluster status, history, and plant DB sync operations."""
 
-    def __init__(self, repo: IrrigationRepository, plant_db: PlantDatabase):
+    def __init__(self, repo: IrrigationRepository, plant_db: PlantDatabase) -> None:
+        """Bind the read service to the request's repository and the app's plant care database."""
         self._repo = repo
         self._plant_db = plant_db
 

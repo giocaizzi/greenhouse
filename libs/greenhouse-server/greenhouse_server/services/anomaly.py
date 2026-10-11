@@ -66,7 +66,8 @@ def _latest_soil_zscore(window: "list[SensorReading]") -> tuple[float, float, fl
 class SensorAnomalyService:
     """Rolling z-score and max-gap anomaly detector for all sensors."""
 
-    def __init__(self, repo: IrrigationRepository, notifier: NtfyClient | None = None):
+    def __init__(self, repo: IrrigationRepository, notifier: NtfyClient | None = None) -> None:
+        """Bind the scan to the caller's repository; ``notifier`` pushes newly opened alerts (``None``: no push)."""
         self._repo = repo
         self._notifier = notifier
 
