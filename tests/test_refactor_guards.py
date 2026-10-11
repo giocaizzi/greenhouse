@@ -132,18 +132,23 @@ def test_no_from_time_import_time_in_production_code() -> None:
 # ── Guard 3 ──────────────────────────────────────────────────────────────────
 
 
+def _assignment_targets(node: ast.stmt) -> list[ast.expr]:
+    if isinstance(node, ast.Assign):
+        return list(node.targets)
+    if isinstance(node, ast.AnnAssign):
+        return [node.target]
+    return []
+
+
 def _module_level_public_upper_names(path: Path) -> set[str]:
     names: set[str] = set()
     for node in ast.parse(path.read_text(encoding="utf-8")).body:
-        targets: list[ast.expr] = []
-        if isinstance(node, ast.Assign):
-            targets = list(node.targets)
-        elif isinstance(node, ast.AnnAssign):
-            targets = [node.target]
-        for target in targets:
-            for sub in ast.walk(target):
-                if isinstance(sub, ast.Name) and sub.id.isupper() and not sub.id.startswith("_"):
-                    names.add(sub.id)
+        for target in _assignment_targets(node):
+            names |= {
+                sub.id
+                for sub in ast.walk(target)
+                if isinstance(sub, ast.Name) and sub.id.isupper() and not sub.id.startswith("_")
+            }
     return names
 
 

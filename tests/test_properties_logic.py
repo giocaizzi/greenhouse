@@ -12,6 +12,7 @@ deterministic and fast; no assert depends on shrinking.
 from __future__ import annotations
 
 import copy
+import itertools
 import statistics
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -302,22 +303,18 @@ def test_seasonal_multiplier_range_over_bundled_plant_data():
     pdb = plant_database()
     seen = set()
     species = [*pdb.list_species(), "Plantus fictitius"]
-    for name in species:
-        for category in [*pdb.list_categories(), None]:
-            care = pdb.get_care_data(species=name, category=category)
-            for env, key in (
-                ("indoor", "season_frequency_multiplier"),
-                ("outdoor", "season_frequency_multiplier_outdoor"),
-            ):
-                for season in SEASONS:
-                    seen.add(
-                        seasonal_multiplier(
-                            season,
-                            environment=env,
-                            plant_override=care.get(key),
-                            category_override=care["_category_defaults"].get(key),
-                        )
-                    )
+    env_keys = (("indoor", "season_frequency_multiplier"), ("outdoor", "season_frequency_multiplier_outdoor"))
+    for name, category in itertools.product(species, [*pdb.list_categories(), None]):
+        care = pdb.get_care_data(species=name, category=category)
+        for (env, key), season in itertools.product(env_keys, SEASONS):
+            seen.add(
+                seasonal_multiplier(
+                    season,
+                    environment=env,
+                    plant_override=care.get(key),
+                    category_override=care["_category_defaults"].get(key),
+                )
+            )
 
     assert min(seen) == BUNDLED_MULTIPLIER_RANGE[0]
     assert max(seen) == BUNDLED_MULTIPLIER_RANGE[1]
