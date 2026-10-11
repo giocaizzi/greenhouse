@@ -93,13 +93,12 @@ def is_within_quiet_hours(
     """True if the current local hour falls inside the quiet-hours window.
 
     ``start_hour == end_hour`` (including the common 0/0 case from disabled
-    overrides) means quiet hours are switched off — returns False. None for
-    either bound also means "no window" and returns False. Wrap-around
-    (start > end) is supported, so 22..6 spans 22, 23, 0, 1, …, 5.
+    overrides) means quiet hours are switched off — :func:`_hour_in_range`
+    returns False for an empty range. None for either bound also means "no
+    window" and returns False. Wrap-around (start > end) is supported, so
+    22..6 spans 22, 23, 0, 1, …, 5.
     """
     if start_hour is None or end_hour is None:
-        return False
-    if start_hour == end_hour:
         return False
     dt = local_now(now_unix, tz_name)
     return _hour_in_range(dt.hour, start_hour, end_hour)
