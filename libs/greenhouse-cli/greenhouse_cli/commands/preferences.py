@@ -6,9 +6,9 @@ from typing import Annotated
 
 import typer
 
-from greenhouse_cli.commands._helpers import call, output
+from greenhouse_cli.commands._helpers import HelpOnBareGroup, call, output
 
-prefs_app = typer.Typer(help="Read and update user preferences", no_args_is_help=True)
+prefs_app = typer.Typer(help="Read and update user preferences", no_args_is_help=True, cls=HelpOnBareGroup)
 
 
 @prefs_app.command("get")

@@ -4,9 +4,9 @@ from typing import Annotated
 
 import typer
 
-from greenhouse_cli.commands._helpers import ClusterArg, YesOpt, call, output
+from greenhouse_cli.commands._helpers import ClusterArg, HelpOnBareGroup, YesOpt, call, output
 
-cluster_app = typer.Typer(help="Manage plant clusters", no_args_is_help=True)
+cluster_app = typer.Typer(help="Manage plant clusters", no_args_is_help=True, cls=HelpOnBareGroup)
 
 
 @cluster_app.command("add")

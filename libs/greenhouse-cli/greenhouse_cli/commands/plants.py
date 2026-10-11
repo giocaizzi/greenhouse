@@ -5,9 +5,9 @@ from typing import Annotated
 
 import typer
 
-from greenhouse_cli.commands._helpers import ClusterFilterOpt, ClusterOpt, YesOpt, call, output
+from greenhouse_cli.commands._helpers import ClusterFilterOpt, ClusterOpt, HelpOnBareGroup, YesOpt, call, output
 
-plant_app = typer.Typer(help="Manage plants", no_args_is_help=True)
+plant_app = typer.Typer(help="Manage plants", no_args_is_help=True, cls=HelpOnBareGroup)
 
 # Option types of the add/update pair; each flag comes from its parameter name (--temp-min, --notes, …).
 LevelOpt = Annotated[str | None, typer.Option(help="low/medium/high")]

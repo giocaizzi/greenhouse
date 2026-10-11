@@ -6,9 +6,9 @@ from typing import Annotated
 
 import typer
 
-from greenhouse_cli.commands._helpers import ClusterOpt, call, output
+from greenhouse_cli.commands._helpers import ClusterOpt, HelpOnBareGroup, call, output
 
-decisions_app = typer.Typer(help="Inspect the irrigation decision log", no_args_is_help=True)
+decisions_app = typer.Typer(help="Inspect the irrigation decision log", no_args_is_help=True, cls=HelpOnBareGroup)
 
 
 @decisions_app.command("list")

@@ -12,10 +12,12 @@ from typing import Annotated
 
 import typer
 
-from greenhouse_cli.commands._helpers import ClusterOpt, call, output
+from greenhouse_cli.commands._helpers import ClusterOpt, HelpOnBareGroup, call, output
 
-config_app = typer.Typer(help="Irrigation configuration", no_args_is_help=True)
-global_app = typer.Typer(help="Global irrigation defaults (inherited by every cluster)", no_args_is_help=True)
+config_app = typer.Typer(help="Irrigation configuration", no_args_is_help=True, cls=HelpOnBareGroup)
+global_app = typer.Typer(
+    help="Global irrigation defaults (inherited by every cluster)", no_args_is_help=True, cls=HelpOnBareGroup
+)
 config_app.add_typer(global_app, name="global")
 
 # Options shared by `config set` and `config global set` (same flag, type and help in both).
