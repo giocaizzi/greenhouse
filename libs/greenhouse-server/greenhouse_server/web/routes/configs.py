@@ -8,7 +8,7 @@ from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse, Response
 
 from greenhouse_server.deps import RepoDep, require_cluster
-from greenhouse_server.web.forms import blank_or, parsed_or_400, tri_bool
+from greenhouse_server.web.forms import parsed_or_400, tri_bool
 
 router = APIRouter(include_in_schema=False)
 
@@ -27,6 +27,11 @@ def config_form(cluster_id: int, repo: RepoDep) -> Response:
 def _parse_optional_hour(raw: str) -> int | None:
     """Form helper: empty string → None (inherit), otherwise int (validated 0..23 by caller)."""
     return parsed_or_400(raw, int, error="Invalid hour value")
+
+
+def _parse_optional_int(raw: str) -> int | None:
+    """Blank → None (inherit); a non-integer is a 400 page, never an unhandled 500."""
+    return parsed_or_400(raw, int, error="Invalid numeric value")
 
 
 def _parse_non_negative_int(raw: str) -> int | None:
@@ -55,8 +60,8 @@ def save_config(
     require_cluster(repo, cluster_id)
     fields: dict[str, Any] = {
         "mode": mode or None,
-        "duration_minutes": blank_or(duration_minutes, int),
-        "interval_hours": blank_or(interval_hours, int),
+        "duration_minutes": _parse_optional_int(duration_minutes),
+        "interval_hours": _parse_optional_int(interval_hours),
         "auto_run": tri_bool(auto_run),
         "quiet_start_hour": _parse_optional_hour(quiet_start_hour),
         "quiet_end_hour": _parse_optional_hour(quiet_end_hour),
@@ -89,8 +94,8 @@ def save_global_config(
     """
     repo.update_global_irrigation_config(
         mode=mode or None,
-        duration_minutes=blank_or(duration_minutes, int),
-        interval_hours=blank_or(interval_hours, int),
+        duration_minutes=_parse_optional_int(duration_minutes),
+        interval_hours=_parse_optional_int(interval_hours),
         auto_run=tri_bool(auto_run),
         daily_cap_minutes=_parse_non_negative_int(daily_cap_minutes),
         max_events_per_day=_parse_non_negative_int(max_events_per_day),

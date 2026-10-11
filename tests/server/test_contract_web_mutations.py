@@ -721,18 +721,19 @@ def test_alert_action_on_missing_alert_is_404(action, make_client):
         (f"/clusters/{INDOOR}/plants/{MONSTERA}/edit", {"species": "X", "ideal_humidity_max": "wet"}),
         (f"/clusters/{INDOOR}/irrigate", {"temp_override": "hot"}),
         ("/plants/sync", {"plant_id": "one"}),
+        ("/plants/sync", {"cluster_id": "first"}),
     ],
 )
-def test_non_numeric_form_value_current_behavior_is_unhandled_500(url, form, make_client):
-    """Pins current (buggy) behavior: bare ``int()``/``float()`` on form text escapes as a plain 500 — see REFACTOR_NOTES.md.
+def test_non_numeric_form_value_is_a_400_error_page(url, form, make_client):
+    """A non-numeric form value is a 400 HTML error page naming the problem, and nothing is written.
 
-    Sibling fields go through helpers that raise ``HTTPException(400)``; these do not, so the
-    ``ValueError`` bypasses the HTML error page and nothing is written.
+    Bare ``int()``/``float()`` used to let the ``ValueError`` escape as a plain-text 500; every
+    numeric field now goes through ``web.forms.parsed_or_400`` like its siblings.
     """
     _, resp, effect = _run(make_client, "POST", url, form)
-    assert resp.status_code == 500
-    assert resp.text == "Internal Server Error"
-    assert resp.headers["content-type"].startswith("text/plain")
+    assert resp.status_code == 400
+    assert resp.headers["content-type"].startswith("text/html")
+    assert "Invalid" in resp.text
     assert effect == {}
 
 

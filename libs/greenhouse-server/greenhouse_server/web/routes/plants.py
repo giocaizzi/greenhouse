@@ -9,7 +9,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from greenhouse_server.deps import RepoDep, require_cluster, require_plant_in_cluster
 from greenhouse_server.web.context import base_context
-from greenhouse_server.web.forms import blank_or
+from greenhouse_server.web.forms import parsed_or_400
 from greenhouse_server.web.templating import templates
 
 router = APIRouter(include_in_schema=False)
@@ -27,6 +27,11 @@ class PlantFormFields(TypedDict):
     ideal_humidity_min: float | None
     ideal_humidity_max: float | None
     notes: str | None
+
+
+def _parse_bound(raw: str, field: str) -> float | None:
+    """Blank → None; a non-number is a 400 page naming the field, never an unhandled 500."""
+    return parsed_or_400(raw, float, error=f"Invalid {field}: must be a number")
 
 
 def _plant_form_fields(
@@ -47,10 +52,10 @@ def _plant_form_fields(
         "category": category or None,
         "water_needs": water_needs or None,
         "light_needs": light_needs or None,
-        "ideal_temp_min": blank_or(ideal_temp_min, float),
-        "ideal_temp_max": blank_or(ideal_temp_max, float),
-        "ideal_humidity_min": blank_or(ideal_humidity_min, float),
-        "ideal_humidity_max": blank_or(ideal_humidity_max, float),
+        "ideal_temp_min": _parse_bound(ideal_temp_min, "ideal_temp_min"),
+        "ideal_temp_max": _parse_bound(ideal_temp_max, "ideal_temp_max"),
+        "ideal_humidity_min": _parse_bound(ideal_humidity_min, "ideal_humidity_min"),
+        "ideal_humidity_max": _parse_bound(ideal_humidity_max, "ideal_humidity_max"),
         "notes": notes or None,
     }
 

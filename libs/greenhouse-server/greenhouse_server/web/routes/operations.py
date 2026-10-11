@@ -15,7 +15,7 @@ from greenhouse_server.deps import (
 from greenhouse_server.services.errors import ClusterNotFoundError, PlantNotFoundError
 from greenhouse_server.services.irrigation import check_has_alerts
 from greenhouse_server.web.context import base_context
-from greenhouse_server.web.forms import blank_or
+from greenhouse_server.web.forms import parsed_or_400
 from greenhouse_server.web.templating import templates
 
 router = APIRouter(include_in_schema=False)
@@ -39,7 +39,7 @@ def irrigate(
     engine as ``bypass_quiet_hours``; the decision still logs a warning
     Reason so the override is in the audit trail.
     """
-    temp = blank_or(temp_override, float)
+    temp = parsed_or_400(temp_override, float, error="Invalid temp_override: must be a number")
     forced = force.strip().lower() in ("true", "on", "1")
     result = svc.run_irrigation_pipeline(
         cluster_id=cluster_id,
@@ -116,8 +116,8 @@ def sync_plants(
     cluster_id: str = Form(""),
 ) -> Response:
     """Refresh plant care data from the plant database and render the summary (HTMX fragment)."""
-    pid = blank_or(plant_id, int)
-    cid = blank_or(cluster_id, int)
+    pid = parsed_or_400(plant_id, int, error="Invalid plant_id")
+    cid = parsed_or_400(cluster_id, int, error="Invalid cluster_id")
     try:
         synced, errors = svc.sync_plants(plant_id=pid, cluster_id=cid)
     except PlantNotFoundError:
