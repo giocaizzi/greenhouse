@@ -1379,6 +1379,36 @@ class TestResilience:
 
         _run(scenario())
 
+    def test_overlapping_dashboard_reloads_do_not_crash(self):
+        """S4: reloads that outlast each other (slow status calls) neither crash nor duplicate cards."""
+        import time as time_mod
+
+        def handler(request):
+            path = request.url.path
+            if path == "/api/v1/clusters":
+                return httpx.Response(200, json=[{"id": 1, "name": "One"}, {"id": 2, "name": "Two"}])
+            if path.endswith("/status"):
+                time_mod.sleep(0.02)
+                cid = int(path.split("/")[-2])
+                return httpx.Response(200, json={"cluster": {"id": cid, "name": f"C{cid}"}, "sensors": []})
+            return httpx.Response(200, json={})
+
+        async def scenario():
+            tui = _mock_app(handler)
+            async with tui.run_test(size=SIZE) as pilot:
+                await _settle(pilot, tui)
+                screen = tui.screen
+                for _ in range(6):
+                    screen.run_worker(screen.load(), group="overlap")
+                    await pilot.pause(0.01)
+                await _settle(pilot, tui)
+                cards = [w.id for w in screen.query(ClusterCard)]
+                assert sorted(cards) == ["cluster-card-1", "cluster-card-2"]
+                screen.reload()
+                await pilot.pause(0.03)  # let the reloads start; the app then tears down mid-load
+
+        _run(scenario())
+
     def test_r_reloads_active_screen(self):
         hits = []
 

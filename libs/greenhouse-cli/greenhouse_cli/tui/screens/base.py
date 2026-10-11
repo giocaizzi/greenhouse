@@ -33,6 +33,15 @@ class DataScreen(Screen[Any]):
         if self.AUTO_REFRESH and self.gh.refresh_seconds > 0:
             self.set_interval(self.gh.refresh_seconds, self.reload)
 
+    @property
+    def showing(self) -> bool:
+        """Whether the screen is still attached and not being torn down.
+
+        A load that finishes after the screen (or the app) started closing must
+        not touch the DOM: its widgets are going away (S4, ``NoMatches`` at teardown).
+        """
+        return self.is_attached and not (self._closing or self._pruning)
+
     def reload(self) -> None:
         """Re-run :meth:`load` in an exclusive worker so a slow reload is replaced, never stacked."""
         self.run_worker(self.load(), exclusive=True, group="load")
