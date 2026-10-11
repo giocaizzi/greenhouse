@@ -25,6 +25,7 @@ from greenhouse_server.services.inventory import (
     UnknownDeviceTypeError,
     create_sensor,
     ensure_plant_in_cluster,
+    keep_masked_local_key,
     require_known_device_type,
 )
 
@@ -140,7 +141,10 @@ def update_sensor(
     """Partially update a sensor's metadata.
 
     Only fields present in the request body are modified; omitted fields are
-    left unchanged, and an explicit `null` clears an optional field. The sensor must belong to the specified cluster.
+    left unchanged, and an explicit `null` clears an optional field. The
+    sensor must belong to the specified cluster. A `config.local_key` is
+    masked as `••••••••` in every response; sending that mask back keeps the
+    stored key.
 
     Args:
         cluster_id: Cluster the sensor belongs to.
@@ -156,7 +160,7 @@ def update_sensor(
             different cluster, or if ``plant_id`` is not a plant of that cluster;
             422 if `type` is not a registered sensor model key.
     """
-    require_sensor_in_cluster(repo, cluster_id, sensor_id)
+    sensor = require_sensor_in_cluster(repo, cluster_id, sensor_id)
     try:
         if request.type is not None:
             require_known_device_type(registry, "sensor", request.type)
@@ -165,7 +169,10 @@ def update_sensor(
         raise HTTPException(status_code=422, detail=str(exc)) from None
     except PlantNotInClusterError as exc:
         raise HTTPException(status_code=404, detail=f"Plant {exc.plant_id} not found in cluster") from None
-    updated = repo.update_sensor(sensor_id, **request.model_dump(exclude_unset=True))
+    fields = request.model_dump(exclude_unset=True)
+    if fields.get("config"):
+        fields["config"] = keep_masked_local_key(fields["config"], sensor.config)
+    updated = repo.update_sensor(sensor_id, **fields)
     repo.commit()
     return updated
 

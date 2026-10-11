@@ -13,7 +13,7 @@ def _parse_json_config(v: object) -> object:
     return None if v is None else parse_device_config(v)
 
 
-# What a stored irrigator ``local_key`` reads as in every response — the same
+# What a stored device (irrigator or sensor) ``local_key`` reads as in every response — the same
 # dots the web edit form shows. The key is a root-level local-protocol
 # credential: it is accepted on writes but never echoed back. Sending this
 # value back in an update keeps the stored key (see services.inventory).
@@ -220,7 +220,11 @@ class CreateSensorRequest(SensorBase):
 
 
 class SensorResponse(SensorBase):
-    """A sensor as stored, with its cluster and current plant assignment."""
+    """A sensor as stored, with its cluster and current plant assignment.
+
+    A stored ``config.local_key`` is masked as ``••••••••``; send the mask back
+    unchanged in an update to keep the stored key.
+    """
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -230,8 +234,8 @@ class SensorResponse(SensorBase):
     @field_validator("config", mode="before")
     @classmethod
     def parse_config(cls, v: Any) -> Any:
-        """Decode the stored device config (JSON text or dict) leniently."""
-        return _parse_json_config(v)
+        """Decode the stored device config (JSON text or dict) leniently and mask its local key."""
+        return mask_local_key(_parse_json_config(v))
 
 
 class SensorListResponse(BaseModel):

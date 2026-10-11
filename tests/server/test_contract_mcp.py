@@ -36,7 +36,7 @@ from server.conftest import _make_stubbed_app
 # reviewed behavior-change commits (`fix(drift|consistency): …`) or description-only doc-contract
 # commits (`docs(api): …`) that also regenerate the golden.
 PHASE0_MCP_TOOLS_SHA256 = (
-    "ab3e3575ba11bd113989dba2f368cc2fa4428a34b4cd8908c23d45a1ed3651bc"  # gitleaks:allow — content hash, not a secret
+    "97a9ed5362baa758de790174664ca266a34eb976788194e5a7432ccc28908c06"  # gitleaks:allow — content hash, not a secret
 )
 
 _TOKEN = "contract-mcp-token"

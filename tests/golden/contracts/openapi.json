@@ -1616,7 +1616,7 @@
      "sensors"
     ],
     "summary": "Update a sensor",
-    "description": "Partially update a sensor's metadata.\n\nOnly fields present in the request body are modified; omitted fields are\nleft unchanged, and an explicit `null` clears an optional field. The sensor must belong to the specified cluster.\n\nArgs:\n    cluster_id: Cluster the sensor belongs to.\n    sensor_id: Numeric sensor identifier.\n    request: Fields to update — any subset of name, type, config,\n        and plant_id.\n\nReturns:\n    The updated sensor.\n\nRaises:\n    HTTPException: 404 if the sensor does not exist or belongs to a\n        different cluster, or if ``plant_id`` is not a plant of that cluster;\n        422 if `type` is not a registered sensor model key.",
+    "description": "Partially update a sensor's metadata.\n\nOnly fields present in the request body are modified; omitted fields are\nleft unchanged, and an explicit `null` clears an optional field. The\nsensor must belong to the specified cluster. A `config.local_key` is\nmasked as `••••••••` in every response; sending that mask back keeps the\nstored key.\n\nArgs:\n    cluster_id: Cluster the sensor belongs to.\n    sensor_id: Numeric sensor identifier.\n    request: Fields to update — any subset of name, type, config,\n        and plant_id.\n\nReturns:\n    The updated sensor.\n\nRaises:\n    HTTPException: 404 if the sensor does not exist or belongs to a\n        different cluster, or if ``plant_id`` is not a plant of that cluster;\n        422 if `type` is not a registered sensor model key.",
     "operationId": "update_sensor",
     "security": [
      {
@@ -7795,7 +7795,7 @@
      "cluster_id"
     ],
     "title": "SensorResponse",
-    "description": "A sensor as stored, with its cluster and current plant assignment."
+    "description": "A sensor as stored, with its cluster and current plant assignment.\n\nA stored ``config.local_key`` is masked as ``••••••••``; send the mask back\nunchanged in an update to keep the stored key."
    },
    "SensorStatusResponse": {
     "properties": {

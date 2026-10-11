@@ -254,3 +254,43 @@ class TestSensorReassignmentActivity:
         resp = client.get("/api/v1/activity?entity_type=sensor&entity_id=1")
         codes = [e["code"] for e in resp.json()["items"]]
         assert "sensor_reassigned" in codes
+
+
+class TestSensorLocalKeyMasking:
+    """Sensor responses mask ``config.local_key`` like irrigator responses; echoing the mask keeps it."""
+
+    SECRET = "fake_local_key_sensor01"
+    MASK = "••••••••"
+
+    def _stored_config(self, client, sid):
+        from greenhouse_core.models import parse_device_config
+        from greenhouse_core.repository import IrrigationRepository
+
+        session = client.app.state.session_factory()
+        try:
+            return parse_device_config(IrrigationRepository(session).get_sensor(sid).config)
+        finally:
+            session.close()
+
+    def test_responses_mask_and_the_mask_round_trips(self, client):
+        cid = client.post("/api/v1/clusters", json={"name": "C"}).json()["id"]
+        created = client.post(
+            f"/api/v1/clusters/{cid}/sensors",
+            json={
+                "tuya_device_id": "fake_tuya_sensor_00000001",
+                "name": "S",
+                "type": "tuya.tr301z",
+                "config": {"device_ip": "192.0.2.20", "local_key": self.SECRET},
+            },
+        ).json()
+        masked = {"device_ip": "192.0.2.20", "local_key": self.MASK}
+        sid = created["id"]
+        assert created["config"] == masked
+        assert client.get(f"/api/v1/clusters/{cid}/sensors").json()[0]["config"] == masked
+        assert client.get("/api/v1/sensors").json()["sensors"][0]["config"] == masked
+        assert client.get(f"/api/v1/clusters/{cid}/detail").json()["sensors"][0]["config"] == masked
+        resp = client.put(
+            f"/api/v1/clusters/{cid}/sensors/{sid}", json={"config": {**masked, "device_ip": "192.0.2.21"}}
+        )
+        assert resp.json()["config"]["local_key"] == self.MASK
+        assert self._stored_config(client, sid) == {"device_ip": "192.0.2.21", "local_key": self.SECRET}

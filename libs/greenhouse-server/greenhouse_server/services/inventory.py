@@ -174,6 +174,6 @@ def create_sensor(
             tuya_device_id=tuya_device_id,
             name=name,
             sensor_type=sensor_type,
-            config=config,
+            config=keep_masked_local_key(config, None),
             plant_id=plant_id,
         )
