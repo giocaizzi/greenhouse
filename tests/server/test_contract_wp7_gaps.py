@@ -33,8 +33,10 @@ from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server import scheduler as sched
 from greenhouse_server.services import irrigation as irrigation_mod
 from greenhouse_server.services import pump_watcher as pump_watcher_module
-from greenhouse_server.services.irrigation import IrrigationService, handle_watcher_interrupted, schedule_pump_watcher
+from greenhouse_server.services import pump_watcher_jobs as pump_watcher_jobs_mod
+from greenhouse_server.services.irrigation import IrrigationService
 from greenhouse_server.services.pump_watcher import PumpWatcherService
+from greenhouse_server.services.pump_watcher_jobs import handle_watcher_interrupted, schedule_pump_watcher
 from server.test_contract_pipeline import Pipeline
 
 IRRIGATION_LOGGER = "greenhouse_server.services.irrigation"
@@ -817,7 +819,7 @@ def test_watcher_job_session_commit_rollback_close_order(watcher_env, monkeypatc
         return {"outcome": outcome}
 
     monkeypatch.setattr(pump_watcher_module.PumpWatcherService, "watch", watch)  # the spy subclass
-    monkeypatch.setattr(irrigation_mod, "handle_watcher_interrupted", lambda *a, **kw: log.append("interrupted"))
+    monkeypatch.setattr(pump_watcher_jobs_mod, "handle_watcher_interrupted", lambda *a, **kw: log.append("interrupted"))
     schedule_pump_watcher(watcher_env.irrigator_id, 2, FROZEN_TS, triggered_by="manual")
     watcher_env.scheduler.jobs[0]["func"]()
     assert (

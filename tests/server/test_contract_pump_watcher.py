@@ -39,8 +39,8 @@ from greenhouse_core.models import ActivityEvent, Base, IrrigationEvent
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server import scheduler as scheduler_module
 from greenhouse_server.services import pump_watcher as pump_watcher_module
-from greenhouse_server.services.irrigation import WATCHER_SHUTDOWN_ACTIVITY_CODE, schedule_pump_watcher
 from greenhouse_server.services.pump_watcher import PumpWatcherService
+from greenhouse_server.services.pump_watcher_jobs import WATCHER_SHUTDOWN_ACTIVITY_CODE, schedule_pump_watcher
 
 STARTED_AT = FROZEN_TS - 42
 

@@ -28,10 +28,11 @@ from greenhouse_server import scheduler as scheduler_module
 from greenhouse_server.services import manual_control as manual_control_module
 from greenhouse_server.services import pump_watcher as pump_watcher_module
 from greenhouse_server.services.health_monitor import DeviceHealthMonitor
-from greenhouse_server.services.irrigation import IrrigationService, schedule_pump_watcher
+from greenhouse_server.services.irrigation import IrrigationService
 from greenhouse_server.services.leak import LeakDetectionService
 from greenhouse_server.services.manual_control import ManualActionError, check_rate_limits, manual_start
 from greenhouse_server.services.pump_watcher import PumpWatcherService
+from greenhouse_server.services.pump_watcher_jobs import schedule_pump_watcher
 from greenhouse_server.services.sync import SyncService
 from greenhouse_server.web.context import is_hx
 from greenhouse_server.web.filters import (

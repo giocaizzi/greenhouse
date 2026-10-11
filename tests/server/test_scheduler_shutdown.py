@@ -23,8 +23,8 @@ from fake_devices import FakeIrrigatorAdapter
 from greenhouse_core.devices import DeviceRegistry
 from greenhouse_core.models import Base
 from greenhouse_core.repository import IrrigationRepository
-from greenhouse_server.services.irrigation import handle_watcher_interrupted
 from greenhouse_server.services.pump_watcher import PumpWatcherService
+from greenhouse_server.services.pump_watcher_jobs import handle_watcher_interrupted
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -40,7 +40,7 @@ _SCRIPT = textwrap.dedent(
     from greenhouse_server.app import create_app
     from greenhouse_server.config import Settings
     from greenhouse_server.scheduler import scheduler
-    from greenhouse_server.services.irrigation import schedule_pump_watcher
+    from greenhouse_server.services.pump_watcher_jobs import schedule_pump_watcher
 
     triggered_by = sys.argv[1]
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)

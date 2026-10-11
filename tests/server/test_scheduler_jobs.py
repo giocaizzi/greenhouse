@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 
 from greenhouse_server.scheduler import CHECK_ALL_JOB_ID, get_jobs
 from greenhouse_server.scheduler import scheduler as bg_scheduler
-from greenhouse_server.services.irrigation import schedule_pump_watcher
+from greenhouse_server.services.pump_watcher_jobs import schedule_pump_watcher
 from server.conftest import _make_stubbed_app
 
 DEFAULT_JOB_IDS = sorted(

@@ -33,6 +33,7 @@ from greenhouse_core.devices.health import DeviceHealthState, HealthAlarm
 from greenhouse_server import scheduler as sched
 from greenhouse_server.scheduler import scheduler as bg_scheduler
 from greenhouse_server.services import irrigation as irrigation_mod
+from greenhouse_server.services import pump_watcher_jobs as pump_watcher_jobs_mod
 from server.test_contract_pipeline import Pipeline, RecordingGateway
 
 HOUR = 3600
@@ -127,7 +128,7 @@ def test_every_job_has_safe_defaults_stopped_and_running(p):
     irrigation_mod._add_leak_check_job(1, FROZEN_TS)  # ad-hoc job on a stopped scheduler
     sched.start_scheduler(paused=True)
     try:
-        assert irrigation_mod.schedule_pump_watcher(1, 2, FROZEN_TS) is True
+        assert pump_watcher_jobs_mod.schedule_pump_watcher(1, 2, FROZEN_TS) is True
         bg_scheduler.add_job(lambda: None, "date", run_date="2026-04-15 11:00:00", id="custom-adhoc")
         jobs = bg_scheduler.get_jobs()
         assert len(jobs) == len(CORE_JOB_ORDER) + 3
@@ -553,16 +554,16 @@ def test_rearm_leak_checks(p):
 
 def test_schedule_pump_watcher_guards(p):
     """Watcher scheduling refuses: non-positive duration, stopped scheduler, no registry, feature off."""
-    assert irrigation_mod.schedule_pump_watcher(1, 0, FROZEN_TS) is False
-    assert irrigation_mod.schedule_pump_watcher(1, 5, FROZEN_TS) is False  # scheduler stopped
+    assert pump_watcher_jobs_mod.schedule_pump_watcher(1, 0, FROZEN_TS) is False
+    assert pump_watcher_jobs_mod.schedule_pump_watcher(1, 5, FROZEN_TS) is False  # scheduler stopped
     sched.start_scheduler(paused=True)
     try:
-        assert irrigation_mod.schedule_pump_watcher(1, 5, FROZEN_TS) is False  # no registry on app.state
+        assert pump_watcher_jobs_mod.schedule_pump_watcher(1, 5, FROZEN_TS) is False  # no registry on app.state
         p.app.state.device_registry = p.wiring.registry
         p.app.state.settings = p.app.state.settings.model_copy(update={"pump_watcher_enabled": False})
-        assert irrigation_mod.schedule_pump_watcher(1, 5, FROZEN_TS) is False
+        assert pump_watcher_jobs_mod.schedule_pump_watcher(1, 5, FROZEN_TS) is False
         p.app.state.settings = p.app.state.settings.model_copy(update={"pump_watcher_enabled": True})
-        assert irrigation_mod.schedule_pump_watcher(1, 5, FROZEN_TS, triggered_by="manual") is True
+        assert pump_watcher_jobs_mod.schedule_pump_watcher(1, 5, FROZEN_TS, triggered_by="manual") is True
         (job,) = [j for j in bg_scheduler.get_jobs() if j.id.startswith("pump-watcher-")]
         assert (job.id, job.name, str(job.trigger)) == (
             f"pump-watcher-1-{FROZEN_TS}",
