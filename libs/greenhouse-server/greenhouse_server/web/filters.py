@@ -83,7 +83,7 @@ def strip_emoji(text: str | None) -> str:
 
 
 def stat_position(value: float | None, lo: float | None, hi: float | None) -> str:
-    """Return the position of value as a 0–100 percent within [lo, hi].
+    """Return the position of value as a 0-100 percent within [lo, hi].
 
     Used by the stat tile range indicator. Falls back to 50 when bounds are
     missing or value is out of range, so the marker stays visible.

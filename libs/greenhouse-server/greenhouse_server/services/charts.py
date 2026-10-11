@@ -325,7 +325,7 @@ def build_heatmap_payload(
     cluster_id: int,
     days: int,
 ) -> HeatmapResponse:
-    """Build the 7×24 irrigation heatmap payload for a cluster.
+    """Build the 7x24 irrigation heatmap payload for a cluster.
 
     Counts irrigation events per (weekday, hour) cell over the given look-back
     window. Raises ClusterNotFoundError if the cluster does not exist.
