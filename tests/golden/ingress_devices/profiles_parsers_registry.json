@@ -886,7 +886,6 @@
    "capabilities": [
     "has_local_duration_dp",
     "has_water_shortage_dp",
-    "needs_keepalive_fallback",
     "supports_local_status",
     "supports_cloud_switch"
    ],
@@ -949,7 +948,6 @@
    "capabilities": [
     "has_local_duration_dp",
     "has_water_shortage_dp",
-    "needs_keepalive_fallback",
     "supports_cloud_switch",
     "supports_local_status"
    ],

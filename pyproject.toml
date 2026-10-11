@@ -226,6 +226,7 @@ indent-style = "space"
 "libs/greenhouse-server/greenhouse_server/services/irrigation.py" = ["FBT001", "FBT002", "PLR0913", "PLR0917"]
 "libs/greenhouse-server/greenhouse_server/services/manual_control.py" = ["PLR0913"]
 "libs/greenhouse-server/greenhouse_server/services/pump_watcher.py" = ["PLR0913", "PLR0915"]
+"libs/greenhouse-server/greenhouse_server/services/pump_watcher_jobs.py" = ["PLR0913"]  # moved from irrigation.py with the watcher jobs
 "libs/greenhouse-server/greenhouse_server/services/system_health.py" = ["FBT001"]
 "libs/greenhouse-server/greenhouse_server/web/filters.py" = ["PLR0912"]
 "libs/greenhouse-server/greenhouse_server/web/routes/analytics.py" = ["FBT001", "FBT003"]
@@ -259,7 +260,7 @@ layers = [
   "greenhouse_server.config",
 ]
 ignore_imports = [
-  "greenhouse_server.services.irrigation -> greenhouse_server.scheduler",       # lazy: pump-watcher scheduling reads _app at call time
+  "greenhouse_server.services.pump_watcher_jobs -> greenhouse_server.scheduler",  # lazy: pump-watcher scheduling reads _app at call time
   "greenhouse_server.services.irrigation_jobs -> greenhouse_server.scheduler",  # lazy: leak-check jobs read _app at call time
   "greenhouse_server.services.system_health -> greenhouse_server.scheduler",
 ]
@@ -359,7 +360,7 @@ forbidden_modules = ["fastapi", "starlette", "greenhouse_server.deps", "greenhou
 allow_indirect_imports = true
 ignore_imports = [
   "greenhouse_server.services.jobs -> fastapi",        # TYPE_CHECKING annotation only
-  "greenhouse_server.services.irrigation -> fastapi",  # TYPE_CHECKING annotation only (_run_pump_watcher's app)
+  "greenhouse_server.services.pump_watcher_jobs -> fastapi",  # TYPE_CHECKING annotation only (_run_pump_watcher's app)
 ]
 
 [[tool.importlinter.contracts]]

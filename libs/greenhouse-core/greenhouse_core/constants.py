@@ -434,7 +434,6 @@ DAILY_CAP_WINDOW_HOURS = 24  # the "day" of max_events_per_day / daily_cap_minut
 ANOMALY_LOOKBACK_HOURS = 72  # readings the anomaly scan loads per sensor
 FORECAST_READINGS_LOOKBACK_HOURS = 24  # history the moisture forecast takes "current moisture" from
 FORECAST_FALLBACK_DRAINAGE_PER_HOUR = -2.0  # %/h, used when no learned profile is available
-STATUS_READINGS_LOOKBACK_HOURS = 24  # cluster status: newest reading per sensor
 STATUS_EVENTS_LOOKBACK_HOURS = 48  # cluster status: the irrigator's recent events
 ALERT_SCAN_LIMIT = 200  # newest alerts scanned per cluster (inbox sync, auto-resolve, leak release)
 PLANT_PAGE_READINGS_LOOKBACK_HOURS = 24  # plant page: latest reading per linked sensor

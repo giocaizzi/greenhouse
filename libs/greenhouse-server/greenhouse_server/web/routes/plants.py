@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from typing import TypedDict
+from dataclasses import dataclass
+from typing import Annotated, TypedDict
 
-from fastapi import APIRouter, Form, Request
+from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from greenhouse_server.deps import RepoDep, require_cluster, require_plant_in_cluster
@@ -34,30 +35,68 @@ def _parse_bound(raw: str, field: str) -> float | None:
     return parsed_or_400(raw, float, error=f"Invalid {field}: must be a number")
 
 
-def _plant_form_fields(
-    *,
-    species: str,
-    category: str,
-    water_needs: str,
-    light_needs: str,
-    ideal_temp_min: str,
-    ideal_temp_max: str,
-    ideal_humidity_min: str,
-    ideal_humidity_max: str,
-    notes: str,
-) -> PlantFormFields:
-    """Map the plant form (create and edit share it) to repository fields: blank → None, bounds → float."""
-    return {
-        "species": species,
-        "category": category or None,
-        "water_needs": water_needs or None,
-        "light_needs": light_needs or None,
-        "ideal_temp_min": _parse_bound(ideal_temp_min, "ideal_temp_min"),
-        "ideal_temp_max": _parse_bound(ideal_temp_max, "ideal_temp_max"),
-        "ideal_humidity_min": _parse_bound(ideal_humidity_min, "ideal_humidity_min"),
-        "ideal_humidity_max": _parse_bound(ideal_humidity_max, "ideal_humidity_max"),
-        "notes": notes or None,
-    }
+@dataclass(frozen=True)
+class PlantForm:
+    """The plant form as posted — create and edit share it; every field is the raw string."""
+
+    species: str
+    category: str
+    water_needs: str
+    light_needs: str
+    ideal_temp_min: str
+    ideal_temp_max: str
+    ideal_humidity_min: str
+    ideal_humidity_max: str
+    notes: str
+
+    def fields(self) -> PlantFormFields:
+        """Map the form to repository fields: blank → None, bounds → float (a non-number is a 400).
+
+        Called by the handler after its 404 lookup, not inside :func:`plant_form`, so an
+        unknown cluster or plant stays a 404 even when the bounds are malformed.
+        """
+        return {
+            "species": self.species,
+            "category": self.category or None,
+            "water_needs": self.water_needs or None,
+            "light_needs": self.light_needs or None,
+            "ideal_temp_min": _parse_bound(self.ideal_temp_min, "ideal_temp_min"),
+            "ideal_temp_max": _parse_bound(self.ideal_temp_max, "ideal_temp_max"),
+            "ideal_humidity_min": _parse_bound(self.ideal_humidity_min, "ideal_humidity_min"),
+            "ideal_humidity_max": _parse_bound(self.ideal_humidity_max, "ideal_humidity_max"),
+            "notes": self.notes or None,
+        }
+
+
+def plant_form(
+    species: str = Form(...),
+    category: str = Form(""),
+    water_needs: str = Form(""),
+    light_needs: str = Form(""),
+    ideal_temp_min: str = Form(""),
+    ideal_temp_max: str = Form(""),
+    ideal_humidity_min: str = Form(""),
+    ideal_humidity_max: str = Form(""),
+    notes: str = Form(""),
+) -> PlantForm:
+    """FastAPI dependency: read the plant form's fields once for the create and edit routes.
+
+    A missing ``species`` is a 422 from FastAPI's own form validation, as before.
+    """
+    return PlantForm(
+        species=species,
+        category=category,
+        water_needs=water_needs,
+        light_needs=light_needs,
+        ideal_temp_min=ideal_temp_min,
+        ideal_temp_max=ideal_temp_max,
+        ideal_humidity_min=ideal_humidity_min,
+        ideal_humidity_max=ideal_humidity_max,
+        notes=notes,
+    )
+
+
+PlantFormDep = Annotated[PlantForm, Depends(plant_form)]
 
 
 @router.get("/clusters/{cluster_id}/plants")
@@ -83,31 +122,13 @@ def create_plant(
     request: Request,
     cluster_id: int,
     repo: RepoDep,
-    species: str = Form(...),
-    category: str = Form(""),
-    water_needs: str = Form(""),
-    light_needs: str = Form(""),
-    ideal_temp_min: str = Form(""),
-    ideal_temp_max: str = Form(""),
-    ideal_humidity_min: str = Form(""),
-    ideal_humidity_max: str = Form(""),
-    notes: str = Form(""),
+    form: PlantFormDep,
 ) -> Response:
     """Add a plant from the form and return to the cluster's plants section."""
     require_cluster(repo, cluster_id)
     repo.add_plant(
         cluster_id=cluster_id,
-        **_plant_form_fields(
-            species=species,
-            category=category,
-            water_needs=water_needs,
-            light_needs=light_needs,
-            ideal_temp_min=ideal_temp_min,
-            ideal_temp_max=ideal_temp_max,
-            ideal_humidity_min=ideal_humidity_min,
-            ideal_humidity_max=ideal_humidity_max,
-            notes=notes,
-        ),
+        **form.fields(),
     )
     repo.commit()
     return RedirectResponse(url=f"/clusters/{cluster_id}#plants", status_code=303)
@@ -127,31 +148,13 @@ def update_plant(
     cluster_id: int,
     plant_id: int,
     repo: RepoDep,
-    species: str = Form(...),
-    category: str = Form(""),
-    water_needs: str = Form(""),
-    light_needs: str = Form(""),
-    ideal_temp_min: str = Form(""),
-    ideal_temp_max: str = Form(""),
-    ideal_humidity_min: str = Form(""),
-    ideal_humidity_max: str = Form(""),
-    notes: str = Form(""),
+    form: PlantFormDep,
 ) -> Response:
     """Save the plant form and return to the cluster's plants section."""
     require_plant_in_cluster(repo, cluster_id, plant_id)
     repo.update_plant(
         plant_id,
-        **_plant_form_fields(
-            species=species,
-            category=category,
-            water_needs=water_needs,
-            light_needs=light_needs,
-            ideal_temp_min=ideal_temp_min,
-            ideal_temp_max=ideal_temp_max,
-            ideal_humidity_min=ideal_humidity_min,
-            ideal_humidity_max=ideal_humidity_max,
-            notes=notes,
-        ),
+        **form.fields(),
     )
     repo.commit()
     return RedirectResponse(url=f"/clusters/{cluster_id}#plants", status_code=303)

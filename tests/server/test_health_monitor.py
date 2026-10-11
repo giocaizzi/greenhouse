@@ -431,7 +431,7 @@ class TestSharedMonitorViews:
     """S6 fixed: each job and pump watcher writes through its own view of the shared monitor.
 
     Production wires ONE ``DeviceHealthMonitor`` (``app.state.health_monitor``). The pump-watcher
-    job takes a view on its own session (``services/irrigation.py`` ``_run_pump_watcher``) and then
+    job takes a view on its own session (``services/pump_watcher_jobs.py`` ``_run_pump_watcher``) and then
     watches for minutes; meanwhile ``_health_monitor_job`` / ``_build_irrigation_service``
     (``scheduler.py``) take views on *their* job sessions. The interleaving is reproduced
     deterministically from the watcher's ``sleep`` hook. It used to re-bind one shared ``_repo``,
