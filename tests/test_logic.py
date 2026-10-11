@@ -938,6 +938,26 @@ def test_water_warning_reads_only_the_newest_reading_per_sensor(tmp_db, frozen_c
     assert logic.decide_for_cluster(cid).primary_code is TriggerCode.WATER_WARNING
 
 
+def test_stale_water_warning_does_not_trigger(tmp_db, frozen_clock):
+    """A flag last reported longer ago than SENSOR_READING_STALE_SECONDS comes from a silent sensor: it does not
+    irrigate, while fresh sensors keep deciding (one-line staleness rule shared with the soil value)."""
+    cid = tmp_db.add_cluster("Stale alarm")
+    tmp_db.add_plant(cluster_id=cid, species="Monstera deliciosa", category="tropical")
+    silent = tmp_db.add_sensor(cluster_id=cid, tuya_device_id=FAKE_SENSOR_ID, name="Silent", sensor_type="x", config={})
+    fresh = tmp_db.add_sensor(
+        cluster_id=cid, tuya_device_id=FAKE_SENSOR_ID + "2", name="Fresh", sensor_type="x", config={}
+    )
+    now = int(time.time())
+    tmp_db.add_sensor_reading(sensor_id=silent, timestamp=now - 20 * 3600, soil_moisture=50.0, water_warning=True)
+    tmp_db.add_sensor_reading(sensor_id=fresh, timestamp=now - 600, soil_moisture=50.0, water_warning=False)
+
+    decision = IrrigationLogic(tmp_db, get_plant_database()).decide_for_cluster(cid)
+
+    assert decision.sensor_snapshot.water_warnings == []
+    assert TriggerCode.WATER_WARNING not in [r.code for r in decision.reasons]
+    assert decision.action.value == "skip"
+
+
 def test_device_soil_dry_alarm_on_wet_soil(tmp_db, frozen_clock):
     """The alarm irrigates on normal soil; above the band it is only noted; detected over-watering vetoes it."""
     cid = tmp_db.add_cluster("Alarm")

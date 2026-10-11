@@ -49,15 +49,18 @@ def _latest_soil(readings: Sequence[CleanedReading], fresh_since: int) -> float 
     return newest.soil_moisture
 
 
-def _latest_water_warning(readings: Sequence[CleanedReading]) -> bool:
-    """The device's water flag as of its newest reading that carries one.
+def _latest_water_warning(readings: Sequence[CleanedReading], fresh_since: int) -> bool:
+    """The device's water flag as of its newest reading that carries one, if that reading is current.
 
     The flag is a *state*: the latest report says whether it is raised now (any
     True in the window let one stale backfilled row trigger irrigation hours
     after it cleared). A row without the flag (``None`` — e.g. a reading stored
     after a failed live read) says nothing, so it neither raises nor clears it.
+    A flag last reported before ``fresh_since`` (SENSOR_READING_STALE_SECONDS ago)
+    comes from a silent sensor and is not current, exactly like its soil value.
     """
-    return bool(next((r.water_warning for r in reversed(readings) if r.water_warning is not None), False))
+    newest = next((r for r in reversed(readings) if r.water_warning is not None), None)
+    return newest is not None and newest.timestamp >= fresh_since and bool(newest.water_warning)
 
 
 def get_recent_sensor_data(
@@ -82,7 +85,7 @@ def get_recent_sensor_data(
     pooled = [r for _, readings in cleaned for r in readings]
     all_soil = [r.soil_moisture for r in pooled if r.soil_moisture is not None]
     daytime_light = [r.light for r in pooled if r.light is not None and r.light > NIGHT_LUX_THRESHOLD]
-    water_warnings = {sensor.name for sensor, readings in cleaned if _latest_water_warning(readings)}
+    water_warnings = {sensor.name for sensor, readings in cleaned if _latest_water_warning(readings, fresh_since)}
 
     return SensorSnapshot(
         avg_temperature=_mean_or_none([r.temperature for r in pooled if r.temperature is not None]),
