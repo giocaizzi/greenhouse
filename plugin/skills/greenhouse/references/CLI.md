@@ -29,7 +29,7 @@ Every command pretty-prints JSON to stdout via `rich.print_json`. Errors go to s
 | Exit code | Meaning |
 |---|---|
 | 0 | Success (action completed, no alerts) |
-| 1 | Error — server returned non-2xx (`Error: <detail>` on stderr), the server is unreachable, a required argument is missing, or `irrigate` / `check` came back with `action: "error"` |
+| 1 | Error — server returned non-2xx (`Error: <detail>` on stderr), the server is unreachable or timed out, its reply was empty or not JSON, a required argument is missing, or `irrigate` / `check` came back with `action: "error"` |
 | 2 | Soft signal — `check --all` found something that needs attention, or `monitor` found a plant that needs water |
 
 Exit code `2` is the interesting one: `greenhouse check --all` exits 2 when the server reports `has_alerts` — any cluster has learning alerts, maintenance items (stale data, low battery, …) **or** plants that need water. A single-cluster `greenhouse check <id>` returns that cluster's result without a `has_alerts` flag, so it exits 0 or 1 only — read its `alerts` / `maintenance` / `needs_water` lists. `greenhouse monitor <cluster>` exits 2 when its `needs_water` list is non-empty. This is what makes both usable in cron — alerting frameworks key on non-zero exits.
@@ -66,7 +66,7 @@ greenhouse whoami                                       Print the authenticated 
 greenhouse tui      [--refresh 30] [--no-animation]     Interactive full-screen dashboard (humans only)
 ```
 
-The root app also takes `--server <url>` (before the subcommand) plus Typer's `--install-completion` / `--show-completion`.
+The root app also takes `--server <url>` (before the subcommand) plus Typer's `--install-completion` / `--show-completion`. A bare `greenhouse` or a sub-app without a command (`greenhouse cluster`) prints its help and exits 0.
 
 Notable flags:
 
@@ -74,15 +74,15 @@ Notable flags:
 - `irrigate --no-sync` skips the freshness read of the cluster's sensors (no targeted Cloud sync of stale sensors before deciding). Faster, but only safe when sync ran recently.
 - `irrigate --temp <°C>` overrides the temperature input (no sensor read, no weather call for temperature) — useful for what-if analysis.
 - `irrigate --force` bypasses the quiet-hours gate (the decision is tagged `manual_override_quiet_hours`). It does **not** bypass the leak hold, cooldown, the device-health gate, the per-day caps, the global dry run or any other rule. A forced run is recorded as **manual** (decision log, `start` event, push), gets the post-watering leak check and the dry-run watcher, and is stopped if the server shuts down mid-run.
-- `check` accepts either a cluster ID or `--all`; supplying neither errors with exit 1 (a cluster ID of `0` counts as "not given").
+- `check` accepts either a cluster ID or `--all`; supplying neither errors with exit 1. A cluster ID of `0` is a real id here and in `plant list --cluster 0` / `sensor list --cluster 0` (the server answers for it, e.g. 404).
 - `monitor` refreshes stale sensors from the Tuya Cloud and **stores** the readings it fetched (so a repeat call does not re-hit the Cloud); it never actuates. Unknown cluster → 404, exit 1.
-- `stats --export <path>` writes CSV to disk and echoes the path; no JSON to stdout in that mode. `stats` on a cluster without an irrigator returns zero totals (it used to fail with HTTP 500).
+- `stats --export <path>` writes CSV to disk and echoes the path; no JSON to stdout in that mode. A reply that is not `text/csv` is an error (exit 1) and no file is written. `stats` on a cluster without an irrigator returns zero totals (it used to fail with HTTP 500).
 - `tui --refresh <seconds>` (float, ≥ 0, default 30; `0` disables auto-refresh), `--no-animation` renders sprites as still frames.
 - `stop-all` fires `POST /bulk/stop-all` — it stops *every* irrigator in the system. Interactive by default; pass `--yes`/`-y` to skip the confirmation prompt (required in scripts). Reach for this on a visible leak or any "stop everything now" request. It prints `{"stopped": N, "errors": [...]}`: a device that refused or failed the stop is listed in `errors` (it may still be running), is not counted and records no event — the exit code stays 0, so scripts must check `errors`.
 
 ### Auth
 
-`login` takes `--username` / `--password` (prompted for when omitted, password hidden), POSTs `/auth/login`, and stores the returned JWT at `~/.config/greenhouse/token` (mode 600; honours `$XDG_CONFIG_HOME`). Subsequent commands send it as a bearer token automatically. `--print-token` skips persistence and emits the JWT to stdout for piping into `$GREENHOUSE_API_TOKEN`. `$GREENHOUSE_API_TOKEN` overrides the on-disk token when set. `logout` deletes the cached token (best-effort server logout). Auth is only needed when the server enforces it; against an open server these are no-ops.
+`login` takes `--username` / `--password` (prompted for when omitted, password hidden), POSTs `/auth/login`, and stores the returned JWT at `~/.config/greenhouse/token` (mode 600; honours `$XDG_CONFIG_HOME`). Subsequent commands send it as a bearer token automatically. `--print-token` skips persistence and emits the JWT to stdout for piping into `$GREENHOUSE_API_TOKEN`. `$GREENHOUSE_API_TOKEN` overrides the on-disk token when it holds a token (a blank or whitespace-only value is ignored, so the stored token is used). `logout` deletes the cached token (best-effort server logout). Auth is only needed when the server enforces it; against an open server these are no-ops.
 
 ## Resource sub-apps
 
@@ -182,9 +182,9 @@ A full-screen Textual dashboard for **humans at a terminal** — never invoke it
 
 It covers the whole API surface (a test asserts every `IrrigationClient` capability has a TUI entry point). Most writes go through a form or a dialog (`esc` cancels without sending anything), but **not all of them** — the real behavior, pinned by the TUI actuation golden:
 
-- **Yes/no confirmation:** check all (`c`, dashboard), stop all (`X`), cluster stop (`x`) and check (`c`), delete cluster (`D`), every row delete (`del`: plant, sensor, window, irrigator, vacation, ad-hoc scheduler job), scheduler **pause** (`p`).
+- **Yes/no confirmation:** check all (`c`, dashboard), stop all (`X`), cluster stop (`x`) and check (`c`), delete cluster (`D`), every row delete (`del`: plant, sensor, window, irrigator, vacation, ad-hoc scheduler job), scheduler **pause** and **resume** (`p`), plant-DB sync (`P`, cluster and system screens).
 - **Own dialog:** smart irrigate (`i`, dry-run preselected) and water now (`w`, optional minutes); create/edit/move/log-manual/config/preferences/global-defaults/vacation open a form.
-- **No dialog — runs on the key press:** sensor sync (`S`), plant-DB sync (`P`), plant health snapshot (`H`), scheduler **resume** (`p` while paused), alert acknowledge / resolve / re-scan (`k` / `v` / `y`), log out (`O`), and the stats CSV export (`E`, writes a local file). <!-- TODO(D): resume and `P` gain a yes/no confirmation (5720fad); move them to the confirmation list and update the key table. -->
+- **No dialog — runs on the key press:** sensor sync (`S`), plant health snapshot (`H`), alert acknowledge / resolve / re-scan (`k` / `v` / `y`), log out (`O`), and the stats CSV export (`E`, writes a local file; a non-CSV reply is an error toast).
 
 Press `?` in the TUI for the live key list.
 
@@ -200,13 +200,13 @@ Press `?` in the TUI for the live key list.
 | `n` / `u` / `del` | cluster → Plants, Sensors, Windows | Add / edit / delete the selected row |
 | `n` / `u` / `del` | cluster → Overview | Attach / edit / detach the irrigator |
 | `u` | cluster → Config | Edit the cluster's irrigation config (mode, duration, interval, auto-run, caps, quiet hours) |
-| `M`, `P` | cluster → Plants | Move plant to another cluster (form), refresh care data from the plant DB (no dialog) |
+| `M`, `P` | cluster → Plants | Move plant to another cluster (form), refresh care data from the plant DB (confirm) |
 | `m`, `[` / `]` | cluster → Charts | Cycle soil / temp / humidity / light / overlay, shorter / longer range (6h → 30d) |
 | `m` | cluster → Plants | Toggle the plant chart: 90-day health score ↔ 72h soil moisture |
 | `e`, `D`, `E` | cluster | Edit cluster, delete cluster (confirm), export 30-day stats CSV to the current dir |
 | `k`, `v`, `f`, `y` | alerts | Acknowledge, resolve, filter by status, re-scan (no dialogs) |
 | `f`, `n` | activity | Filter severity, load older |
-| `p`, `S`, `P`, `H`, `del` | system | Pause (confirm) / resume (no dialog) scheduler, sync, plant-DB sync (all), plant health snapshot (no dialogs), remove an ad-hoc scheduler job (confirm; built-in jobs are refused) |
+| `p`, `S`, `P`, `H`, `del` | system | Pause / resume the scheduler (confirm), sync (no dialog), plant-DB sync of every plant (confirm), plant health snapshot (no dialog), remove an ad-hoc scheduler job (confirm; built-in jobs are refused; ids containing `/` work) |
 | `p`, `g` | settings | Edit preferences, edit global irrigation defaults |
 | `n` / `u` / `del`, `O` | settings | Add / edit / delete vacation windows, log out |
 
@@ -234,6 +234,7 @@ This gap is intentional — the CLI prioritizes the high-frequency operational c
 
 - **`Error: Cannot connect to server: …`** (exit 1) — server isn't running or the URL is wrong. Check `IRRIGATION_SERVER_URL` and `curl $url/api/v1/health`.
 - **`Error: <detail>` on stderr, exit 1** — server returned 4xx/5xx; `<detail>` is the FastAPI error message verbatim. Read it; it's usually accurate (missing field, invalid cluster ID, etc.).
-- **Hangs** — almost always a network issue, not the CLI. The client has no built-in retry and a 30 s request timeout; one slow request = one slow command. Only connection errors are turned into a clean `Error:` line — a timeout (or an empty 2xx body) currently ends in a Python traceback with exit 1, and a 422 validation error is printed as a Python repr of the server's error list. <!-- TODO(D): B-17 / 422 wording / blank token / id 0 / stats --export / job-id encoding / bare groups exit 0 change here and in the flags above (62147b6, 8c2aa6f, 726b6a5, 75f71df, 88ba3da, e47e2ea, 069d318). -->
+- **Hangs** — almost always a network issue, not the CLI. The client has no built-in retry and a 30 s request timeout; one slow request = one slow command. A timeout ends as `Error: Server did not respond in time: …`, any other transport failure as `Error: Request to server failed: …`, and an empty or non-JSON 2xx reply as `Error: Empty response from server` / `Error: Invalid JSON response from server: …` — all exit 1, no traceback.
+- **`Error: field: message; …`** (exit 1) — a 422 validation error, one `field: message` per invalid input (e.g. `minutes: Input should be greater than or equal to 1`); an empty detail prints `The server rejected the request without details`.
 - **`Error: <detail>` mentioning `dry run`, `cap`, `Local Duration DP` or `could not be recorded`** on `irrigator start` — a deliberate refusal, see `irrigator start` above; do not retry in a loop.
 - **JSON looks empty / `[]`** — the resource list is genuinely empty. Confirm with the equivalent GET on `/api/v1/...`.
