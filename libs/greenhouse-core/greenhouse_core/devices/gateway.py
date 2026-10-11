@@ -33,6 +33,27 @@ logger = logging.getLogger(__name__)
 
 LOCAL_TIMEOUT = 5
 
+_BOOL_DP_TEXT = {"true": True, "1": True, "false": False, "0": False}
+
+
+def _parse_bool_dp(value: object) -> bool:
+    """Parse a Tuya boolean DP strictly.
+
+    The v2 shadow reports booleans as ``true``/``false`` (or ``0``/``1``), but
+    ``getdevicelog`` reports every value as a string, so a plain ``bool(v)``
+    would read the logged ``"false"`` as ``True``. Anything that is not a clear
+    boolean raises ``ValueError`` so the caller skips the DP instead of
+    guessing.
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int) and value in (0, 1):
+        return bool(value)
+    if isinstance(value, str) and value.strip().lower() in _BOOL_DP_TEXT:
+        return _BOOL_DP_TEXT[value.strip().lower()]
+    raise ValueError(f"not a boolean DP value: {value!r}")
+
+
 # Datapoint parsers — the single home for Tuya DP code → (canonical_key, value).
 # TR-301Z (zwjcy — 土壤温湿度) soil temp/humidity sensor and friends.
 DATAPOINT_PARSERS: dict[str, Callable[[Any], tuple[str, object]]] = {
@@ -49,7 +70,7 @@ DATAPOINT_PARSERS: dict[str, Callable[[Any], tuple[str, object]]] = {
     # Extended DPs (v2 shadow properties — DP 101+)
     "env_humidity": lambda v: ("env_humidity", float(v)),  # DP 101: ambient humidity %
     "illumiance": lambda v: ("light", int(v)),  # DP 102: lux (typo in Tuya API)
-    "water_warning": lambda v: ("water_warning", bool(v)),  # DP 111: device soil-dry alert
+    "water_warning": lambda v: ("water_warning", _parse_bool_dp(v)),  # DP 111: device soil-dry alert
     "soil_warning": lambda v: ("soil_warning", int(v)),  # DP 110: soil warning code
 }
 

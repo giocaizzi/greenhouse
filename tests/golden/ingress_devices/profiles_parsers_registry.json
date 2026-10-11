@@ -823,58 +823,42 @@
     "value": true
    },
    {
-    "key": "water_warning",
-    "raw": 251,
-    "type": "bool",
-    "value": true
+    "raises": "ValueError",
+    "raw": 251
    },
    {
-    "key": "water_warning",
-    "raw": -15,
-    "type": "bool",
-    "value": true
+    "raises": "ValueError",
+    "raw": -15
    },
    {
-    "key": "water_warning",
-    "raw": 12.7,
-    "type": "bool",
-    "value": true
+    "raises": "ValueError",
+    "raw": 12.7
    },
    {
-    "key": "water_warning",
-    "raw": "220",
-    "type": "bool",
-    "value": true
+    "raises": "ValueError",
+    "raw": "220"
    },
    {
-    "key": "water_warning",
-    "raw": "12.7",
-    "type": "bool",
-    "value": true
+    "raises": "ValueError",
+    "raw": "12.7"
    },
    {
-    "key": "water_warning",
-    "raw": "abc",
-    "type": "bool",
-    "value": true
+    "raises": "ValueError",
+    "raw": "abc"
    },
    {
     "key": "water_warning",
     "raw": "false",
     "type": "bool",
-    "value": true
-   },
-   {
-    "key": "water_warning",
-    "raw": "",
-    "type": "bool",
     "value": false
    },
    {
-    "key": "water_warning",
-    "raw": null,
-    "type": "bool",
-    "value": false
+    "raises": "ValueError",
+    "raw": ""
+   },
+   {
+    "raises": "ValueError",
+    "raw": null
    },
    {
     "key": "water_warning",
