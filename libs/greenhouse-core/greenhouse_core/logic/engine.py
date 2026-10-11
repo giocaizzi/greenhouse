@@ -284,7 +284,6 @@ class IrrigationLogic:
             evaluated_at,
             temp=current_temp,
             water_needs=inputs.water_needs,
-            temp_range=inputs.temp_range,
             config=self.db.get_irrigation_config(cluster_id),
             trends=inputs.trends,
             stress=inputs.stress,

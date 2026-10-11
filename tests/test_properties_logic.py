@@ -477,7 +477,7 @@ def test_analyze_historical_trends_labels_are_consistent(sensor_series, events, 
 @PROFILE
 @given(st.floats(-40, 60, allow_nan=False), st.sampled_from(["low", "medium", "high", "unknown"]))
 def test_temperature_fallback_always_irrigates_within_interval_bounds(temp, needs):
-    decision = temperature_based_decision(None, 1, 0, temp=temp, water_needs=needs, temp_range=None, config=None)
+    decision = temperature_based_decision(None, 1, 0, temp=temp, water_needs=needs, config=None)
 
     assert decision.action is Action.IRRIGATE
     assert decision.duration_minutes == DEFAULT_DURATION_MINUTES
@@ -491,10 +491,8 @@ def test_temperature_fallback_always_irrigates_within_interval_bounds(temp, need
 def test_temperature_fallback_interval_is_monotone_in_temperature(temp):
     """Hotter never means a longer interval (for each water-needs level)."""
     for needs in ("low", "medium", "high"):
-        cooler = temperature_based_decision(None, 1, 0, temp=temp, water_needs=needs, temp_range=None, config=None)
-        hotter = temperature_based_decision(
-            None, 1, 0, temp=temp + 1.0, water_needs=needs, temp_range=None, config=None
-        )
+        cooler = temperature_based_decision(None, 1, 0, temp=temp, water_needs=needs, config=None)
+        hotter = temperature_based_decision(None, 1, 0, temp=temp + 1.0, water_needs=needs, config=None)
         assert hotter.interval_hours <= cooler.interval_hours
 
 
@@ -505,7 +503,7 @@ def test_temperature_fallback_without_temp_or_config_is_no_data(tmp_db):
     counts), so it needs a repository rather than ``None``.
     """
     cid = tmp_db.add_cluster("No schedule")
-    decision = temperature_based_decision(tmp_db, cid, 0, temp=None, water_needs="medium", temp_range=None, config=None)
+    decision = temperature_based_decision(tmp_db, cid, 0, temp=None, water_needs="medium", config=None)
 
     assert (decision.action, decision.confidence, [r.code for r in decision.reasons]) == (
         Action.SKIP,
