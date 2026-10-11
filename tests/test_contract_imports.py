@@ -34,6 +34,7 @@ import subprocess
 import sys
 import time
 import types
+from typing import Any
 
 import pytest
 import tinytuya
@@ -41,7 +42,6 @@ import tinytuya
 from golden import GOLDEN_DIR, UPDATE_ENV_VAR, assert_golden_json
 from greenhouse_core import constants, utils
 from greenhouse_core.logic import timing
-from greenhouse_server import scheduler
 
 CORE_MODULES = [
     f"greenhouse_core.{name}"
@@ -115,27 +115,29 @@ print(json.dumps({"modules": sorted(modules), "loggers": out}))
 """
 
 
-def _run(script: str, *args: str) -> dict:
+def _run(script: str, *args: str) -> dict[str, Any]:
     proc = subprocess.run(  # noqa: S603 — the running interpreter on this module's own probe scripts
         [sys.executable, "-c", script, *args], capture_output=True, text=True, timeout=300, check=False
     )
     assert proc.returncode == 0, proc.stderr[-4000:]
-    return json.loads(proc.stdout.strip().splitlines()[-1])
+    observed: dict[str, Any] = json.loads(proc.stdout.strip().splitlines()[-1])
+    return observed
 
 
-def _load_golden_or_update(name: str, observed) -> object | None:
+def _load_golden_or_update(name: str, observed: object) -> dict[str, Any] | None:
     """Return the stored golden, or write ``observed`` and return None under GOLDEN_UPDATE=1."""
     if os.environ.get(UPDATE_ENV_VAR) == "1":
         assert_golden_json(name, observed)
         return None
     path = GOLDEN_DIR / name
     assert path.exists(), f"golden file missing: {path} (create it with {UPDATE_ENV_VAR}=1)"
-    return json.loads(path.read_text(encoding="utf-8"))
+    golden: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
+    return golden
 
 
 @pytest.mark.usefixtures("clean_env")
 @pytest.mark.skipif(not hasattr(os, "fork"), reason="surface capture forks one child per module")
-def test_public_import_surfaces_are_a_superset_of_golden():
+def test_public_import_surfaces_are_a_superset_of_golden() -> None:
     """Every name in the import-surface golden still resolves (additions are allowed)."""
     observed = _run(_SURFACE_SCRIPT, *FROZEN_MODULES)
     golden = _load_golden_or_update("contracts/imports.json", observed)
@@ -158,7 +160,7 @@ def test_public_import_surfaces_are_a_superset_of_golden():
 
 
 @pytest.mark.usefixtures("clean_env")
-def test_module_level_logger_names_are_kept():
+def test_module_level_logger_names_are_kept() -> None:
     """Module-level logger names stay as pinned, since operators filter logs by them."""
     observed = _run(_LOGGER_SCRIPT)
     loggers = observed["loggers"]
@@ -180,7 +182,7 @@ def test_module_level_logger_names_are_kept():
 # --- dotted paths the existing tests patch / import privately -----------------
 
 
-def _resolve(dotted: str):
+def _resolve(dotted: str) -> object:
     parts = dotted.split(".")
     for cut in range(len(parts), 0, -1):
         try:
@@ -220,7 +222,7 @@ PATCHED_PATHS = {
 }
 
 
-def _kind(obj) -> str:
+def _kind(obj: object) -> str:
     if isinstance(obj, types.ModuleType):
         return "module"
     if isinstance(obj, type):
@@ -235,12 +237,12 @@ def _kind(obj) -> str:
 
 
 @pytest.mark.parametrize("dotted", list(PATCHED_PATHS))
-def test_patched_attribute_path_resolves(dotted):
+def test_patched_attribute_path_resolves(dotted: str) -> None:
     """Every dotted path the tests patch still resolves to the same kind of object."""
     assert _kind(_resolve(dotted)) == PATCHED_PATHS[dotted]
 
 
-def test_patched_modules_are_the_real_modules():
+def test_patched_modules_are_the_real_modules() -> None:
     """The patch targets alias the real modules, so patching them reaches production code."""
     assert _resolve("greenhouse_core.devices.tinytuya") is tinytuya
     assert _resolve("greenhouse_core.devices.gateway.tinytuya") is tinytuya
@@ -249,9 +251,9 @@ def test_patched_modules_are_the_real_modules():
     assert _resolve("greenhouse_core.logic.engine.time") is time
 
 
-def test_reexports_point_at_their_definitions():
+def test_reexports_point_at_their_definitions() -> None:
     """Re-exported names are the very objects defined in their home module."""
-    assert scheduler.HEALTH_POLL_IDLE_MINUTES == constants.HEALTH_POLL_IDLE_MINUTES
+    assert _resolve("greenhouse_server.scheduler.HEALTH_POLL_IDLE_MINUTES") == constants.HEALTH_POLL_IDLE_MINUTES
     assert _resolve("greenhouse_core.logic.engine.season_for") is timing.season_for
     assert _resolve("greenhouse_core.logic.engine.seasonal_light_factor") is utils.seasonal_light_factor
     assert _resolve("greenhouse_core.learning.issues.seasonal_light_factor") is utils.seasonal_light_factor
