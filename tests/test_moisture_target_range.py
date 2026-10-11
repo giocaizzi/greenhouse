@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import math
 from types import MappingProxyType
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from hypothesis import given, settings
 from hypothesis import strategies as st
@@ -17,6 +17,9 @@ from hypothesis import strategies as st
 from greenhouse_core.constants import DEFAULT_SOIL_MOISTURE_TARGET
 from greenhouse_core.learning.issues import _conflict_band
 from greenhouse_core.logic.plant_needs import moisture_target_range, parse_moisture_target
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 TARGETS = st.one_of(
     st.none(),
@@ -34,7 +37,7 @@ OTHER_KEYS = st.dictionaries(
 )
 
 
-def _inline(care: Any) -> tuple[float, float]:
+def _inline(care: Mapping[str, Any]) -> tuple[float, float]:
     return parse_moisture_target(care.get("soil_moisture_target", "45-65"))
 
 
@@ -51,7 +54,7 @@ def test_default_target_constant_is_the_inline_literal() -> None:
 @settings(derandomize=True, max_examples=300)
 @given(other=OTHER_KEYS, has_target=st.booleans(), target=TARGETS)
 def test_moisture_target_range_equals_inline_expression(
-    *, other: dict[str, Any], has_target: bool, target: Any
+    *, other: dict[str, object], has_target: bool, target: object
 ) -> None:
     """``moisture_target_range`` equals the inline expression it replaced, for any care dict."""
     care = dict(other)
@@ -71,7 +74,7 @@ def test_missing_target_falls_back_to_default_band() -> None:
 
 @settings(derandomize=True, max_examples=300)
 @given(target=TARGETS)
-def test_every_band_parser_agrees_with_moisture_target_range(target: Any) -> None:
+def test_every_band_parser_agrees_with_moisture_target_range(target: object) -> None:
     """D10: monitor, chronic-underwatering and conflict detection all read a target through one parser."""
     care = {"soil_moisture_target": target}
     assert _same(_conflict_band({7: care}, 7), moisture_target_range(care))

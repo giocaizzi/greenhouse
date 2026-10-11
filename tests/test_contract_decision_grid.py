@@ -20,28 +20,29 @@ from __future__ import annotations
 import json
 import os
 from collections import defaultdict
+from typing import Any
 
 import pytest
 
-from engine_grid import build_cases, golden_name, run_case
+from engine_grid import Case, build_cases, golden_name, run_case
 from golden import GOLDEN_DIR, UPDATE_ENV_VAR, assert_golden
 
 _MAX_PROBLEMS_SHOWN = 40
 GRID_SIZE_RANGE = (1000, 2000)  # sanity bounds on the number of grid cases
 
-_SHARDS: dict[str, list] = defaultdict(list)
+_SHARDS: dict[str, list[Case]] = defaultdict(list)
 for _case in build_cases():
     _SHARDS[golden_name(_case)].append(_case)
 
 
-def _render(records: dict[str, dict]) -> str:
+def _render(records: dict[str, dict[str, object]]) -> str:
     return "".join(
         json.dumps({"case": case_id, **record}, sort_keys=True, ensure_ascii=False, separators=(",", ":")) + "\n"
         for case_id, record in records.items()
     )
 
 
-def _explain_mismatch(name: str, records: dict[str, dict]) -> None:
+def _explain_mismatch(name: str, records: dict[str, dict[str, Any]]) -> None:
     """Fail with a per-case, per-field summary before the raw line diff."""
     path = GOLDEN_DIR / name
     if os.environ.get(UPDATE_ENV_VAR) == "1" or not path.exists():
@@ -68,7 +69,7 @@ def _explain_mismatch(name: str, records: dict[str, dict]) -> None:
         pytest.fail(f"{len(problems)} case(s) differ from golden/{name}:\n{shown}{more}", pytrace=False)
 
 
-def _assert_audit_invariants(case_id: str, record: dict) -> None:
+def _assert_audit_invariants(case_id: str, record: dict[str, Any]) -> None:
     """Invariant #6/#10/#11 cross-checks that must hold for every grid case."""
     assert record["irrigation_events_written"] == 0, case_id  # the engine never writes events (#11)
     assert record["sensor_readings_unchanged"] is True, case_id  # raw rows never mutated (#10)
@@ -89,7 +90,7 @@ def _assert_audit_invariants(case_id: str, record: dict) -> None:
 
 @pytest.mark.usefixtures("clean_env")
 @pytest.mark.parametrize("name", sorted(_SHARDS))
-def test_decision_grid_matches_golden(name):
+def test_decision_grid_matches_golden(name: str) -> None:
     """Every engine-grid case in this shard decides exactly as pinned in its golden."""
     records = {case.id: run_case(case) for case in _SHARDS[name]}
 
@@ -99,7 +100,7 @@ def test_decision_grid_matches_golden(name):
     assert_golden(name, _render(records))
 
 
-def test_grid_case_ids_are_unique_and_stable():
+def test_grid_case_ids_are_unique_and_stable() -> None:
     """Grid case ids are unique and their order is stable across builds."""
     cases = build_cases()
 
@@ -108,7 +109,7 @@ def test_grid_case_ids_are_unique_and_stable():
     assert [c.id for c in build_cases()] == [c.id for c in cases]
 
 
-def test_golden_files_cover_exactly_the_grid():
+def test_golden_files_cover_exactly_the_grid() -> None:
     """No orphaned golden files (a removed case must not leave a stale golden behind)."""
     on_disk = {p.relative_to(GOLDEN_DIR).as_posix() for p in (GOLDEN_DIR / "engine").rglob("*.jsonl")}
 
@@ -116,7 +117,7 @@ def test_golden_files_cover_exactly_the_grid():
 
 
 @pytest.mark.usefixtures("clean_env")
-def test_run_case_is_deterministic():
+def test_run_case_is_deterministic() -> None:
     """Same case twice → identical record (no hidden clock / ordering leaks)."""
     sample = build_cases("misc") + build_cases("learning")
 

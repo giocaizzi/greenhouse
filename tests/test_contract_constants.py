@@ -23,7 +23,8 @@ from __future__ import annotations
 
 import json
 import os
-from enum import Enum
+from enum import Enum, StrEnum
+from typing import Any
 
 import pytest
 
@@ -51,7 +52,7 @@ def _decision_enums() -> dict[str, type[Enum]]:
     }
 
 
-def _observed() -> dict:
+def _observed() -> dict[str, Any]:
     enums = {name: [[m.name, m.value] for m in enum] for name, enum in _decision_enums().items()}
     enums["HealthAlarm"] = [[m.name, m.value] for m in HealthAlarm]
     return {
@@ -61,17 +62,18 @@ def _observed() -> dict:
     }
 
 
-def _golden() -> dict | None:
+def _golden() -> dict[str, Any] | None:
     name = "contracts/constants.json"
     if os.environ.get(UPDATE_ENV_VAR) == "1":
         assert_golden_json(name, _observed())
         return None
     path = GOLDEN_DIR / name
     assert path.exists(), f"golden file missing: {path} (create it with {UPDATE_ENV_VAR}=1)"
-    return json.loads(path.read_text(encoding="utf-8"))
+    golden: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
+    return golden
 
 
-def test_golden_constants_still_exist_with_equal_values():
+def test_golden_constants_still_exist_with_equal_values() -> None:
     """Every golden constant still exists with an equal value (additions allowed)."""
     golden = _golden()
     if golden is None:
@@ -83,7 +85,7 @@ def test_golden_constants_still_exist_with_equal_values():
     assert not changed, f"constants changed (golden, now): {changed}"
 
 
-def test_enums_and_blocking_codes_match_golden_exactly():
+def test_enums_and_blocking_codes_match_golden_exactly() -> None:
     """Enum members and the device-blocking codes match the golden exactly."""
     golden = _golden()
     if golden is None:
@@ -94,20 +96,20 @@ def test_enums_and_blocking_codes_match_golden_exactly():
     assert observed["DEVICE_BLOCKING_CODES"] == golden["DEVICE_BLOCKING_CODES"]
 
 
-def test_constant_types():
+def test_constant_types() -> None:
     """``constants.py`` holds only plain values (invariant 5)."""
     values = {name: value for name, value in vars(constants).items() if name.isupper()}
     assert len(values) >= MIN_CONSTANTS
     assert all(isinstance(v, int | float | str | bool | tuple | dict) for v in values.values())
 
 
-def test_decision_module_defines_the_three_enums():
+def test_decision_module_defines_the_three_enums() -> None:
     """The decision module defines Action, Severity and TriggerCode first."""
     assert list(_decision_enums())[:3] == ["Action", "Severity", "TriggerCode"]
 
 
 @pytest.mark.parametrize("enum", [Action, Severity, TriggerCode, HealthAlarm])
-def test_enums_are_str_enums_whose_members_equal_their_values(enum):
+def test_enums_are_str_enums_whose_members_equal_their_values(enum: type[StrEnum]) -> None:
     """``StrEnum`` members compare/serialize as their value (persisted in DB / JSON)."""
     for member in enum:
         assert isinstance(member, str)
@@ -116,7 +118,7 @@ def test_enums_are_str_enums_whose_members_equal_their_values(enum):
         assert enum(member.value) is member
 
 
-def test_trigger_code_count_and_extremes():
+def test_trigger_code_count_and_extremes() -> None:
     """The trigger-code count and first / last members are pinned."""
     members = list(TriggerCode)
     assert len(members) == TRIGGER_CODE_COUNT  # + DRY_RUN_GLOBAL (S1), NO_ACTION_NEEDED
@@ -124,7 +126,7 @@ def test_trigger_code_count_and_extremes():
     assert len({m.value for m in members}) == TRIGGER_CODE_COUNT  # no aliases
 
 
-def test_notable_thresholds_named_in_claude_md():
+def test_notable_thresholds_named_in_claude_md() -> None:
     """Values CLAUDE.md's key invariants refer to by name."""
     assert constants.MIN_COOLDOWN_HOURS == PINNED_MIN_COOLDOWN_HOURS
     assert constants.SENSOR_READING_STALE_SECONDS == 4 * 3600
