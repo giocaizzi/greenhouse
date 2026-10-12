@@ -70,32 +70,18 @@ class TestNoWindowsAllowAllHours:
     gates actuation (issue #83). Night protection is delegated to quiet hours.
     """
 
-    def test_alocasia_no_windows_does_not_skip_at_14h(
-        self, tmp_db: IrrigationRepository, logic: IrrigationLogic, monkeypatch: pytest.MonkeyPatch
+    @pytest.mark.parametrize("hour", [8, 14])
+    def test_alocasia_no_windows_does_not_skip(
+        self, tmp_db: IrrigationRepository, logic: IrrigationLogic, monkeypatch: pytest.MonkeyPatch, hour: int
     ) -> None:
-        """Alocasia at 14:00 with no windows must NOT skip with OUTSIDE_WINDOW.
+        """Alocasia with no windows must NOT skip with OUTSIDE_WINDOW, at 08:00 or 14:00.
 
         Soil is held *moderately* dry (35%) — below the adequate band but above
         ``SOIL_MOISTURE_CRITICAL`` so the critical-stress override does not
         short-circuit; the decision still flows through the (now no-op) window
         rule rather than being forced by stress.
         """
-        _freeze(monkeypatch, _ts(2026, 5, 14, 14))
-        cluster_id = tmp_db.add_cluster("Indoor Tropical")
-        tmp_db.add_plant(cluster_id=cluster_id, species="Alocasia amazonica", category="tropical")
-        _add_soil(tmp_db, cluster_id, moisture=35.0)
-
-        decision = logic.decide_for_cluster(cluster_id)
-
-        assert decision is not None
-        codes = [r.code for r in decision.reasons]
-        assert TriggerCode.OUTSIDE_WINDOW not in codes
-
-    def test_alocasia_no_windows_no_window_skip_at_08h(
-        self, tmp_db: IrrigationRepository, logic: IrrigationLogic, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """At 08:00 with no windows, OUTSIDE_WINDOW must not appear either."""
-        _freeze(monkeypatch, _ts(2026, 5, 14, 8))
+        _freeze(monkeypatch, _ts(2026, 5, 14, hour))
         cluster_id = tmp_db.add_cluster("Indoor Tropical")
         tmp_db.add_plant(cluster_id=cluster_id, species="Alocasia amazonica", category="tropical")
         _add_soil(tmp_db, cluster_id, moisture=35.0)
@@ -152,23 +138,6 @@ class TestNoWindowsAllowAllHours:
 
 class TestSeasonalMultiplier:
     """``season_frequency_multiplier{,_outdoor}`` is consumed by the engine."""
-
-    def test_indoor_tropical_winter_emits_seasonal_hold(
-        self, tmp_db: IrrigationRepository, logic: IrrigationLogic, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """Indoor Monstera in January → tropical winter multiplier 0.5x → SEASONAL_HOLD emitted."""
-        # 08:00 is inside tropical preferred window (07-10) so the window rule
-        # does not pre-empt the seasonal multiplier path.
-        _freeze(monkeypatch, _ts(2026, 1, 15, 8))
-        cluster_id = tmp_db.add_cluster("Indoor Monstera Room", environment="indoor")
-        tmp_db.add_plant(cluster_id=cluster_id, species="Monstera deliciosa", category="tropical")
-        _add_soil(tmp_db, cluster_id, moisture=55.0)  # adequate → no stress path
-
-        decision = logic.decide_for_cluster(cluster_id)
-
-        assert decision is not None
-        codes = [r.code for r in decision.reasons]
-        assert TriggerCode.SEASONAL_HOLD in codes
 
     def test_outdoor_fruit_tree_summer_emits_seasonal_boost(
         self, tmp_db: IrrigationRepository, logic: IrrigationLogic, monkeypatch: pytest.MonkeyPatch
@@ -251,7 +220,9 @@ class TestSeasonalMultiplier:
     def test_seasonal_reason_keeps_reasons_a_list(
         self, tmp_db: IrrigationRepository, logic: IrrigationLogic, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """Regression: the seasonal rule must append to ``reasons``, not rebind it to a tuple.
+        """Indoor Monstera in January → tropical winter 0.5x → SEASONAL_HOLD, appended to a list.
+
+        Regression: the seasonal rule must append to ``reasons``, not rebind it to a tuple.
 
         A tuple in the ``list[Reason]`` field made every ``model_dump`` emit
         ``PydanticSerializationUnexpectedValue`` (status endpoint, decision_logs

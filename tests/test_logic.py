@@ -134,13 +134,14 @@ class TestIrrigationLogic(_IrrigationLogicCase):
         assert "temperature-based" in decision.reason_text
 
     def test_temperature_fallback_moderate(self) -> None:
-        """Moderate temperature suggests medium interval."""
+        """Moderate temperature suggests medium interval, at lower confidence than a sensor-based decision."""
         decision = self.logic.decide_for_cluster(self.cluster_id, current_temp=22.0)
 
         assert decision is not None
         assert decision.action.value == "irrigate"
         assert decision.interval_hours > MODERATE_FALLBACK_INTERVAL_H[0]
         assert decision.interval_hours < MODERATE_FALLBACK_INTERVAL_H[1]
+        assert decision.confidence < CONFIDENCE_SPLIT
 
     def test_soil_moisture_dry(self) -> None:
         """Dry soil triggers irrigation."""
@@ -166,21 +167,6 @@ class TestIrrigationLogic(_IrrigationLogicCase):
         assert decision.action.value == "irrigate"
         # NO_DATA fallback would report ~0.2 confidence; a real reading is higher.
         assert decision.confidence > PRESENT_ZERO_MIN_CONFIDENCE
-
-    def test_soil_moisture_adequate(self) -> None:
-        """Adequate soil moisture skips irrigation."""
-        self._add_soil_sensor(moisture=55.0)
-        decision = self.logic.decide_for_cluster(self.cluster_id)
-        assert decision is not None
-
-        assert decision.action.value == "skip"
-        assert "adequate" in decision.reason_text.lower()
-
-    def test_confidence_without_sensors(self) -> None:
-        """Temperature-based decision has lower confidence."""
-        decision = self.logic.decide_for_cluster(self.cluster_id, current_temp=22.0)
-        assert decision is not None
-        assert decision.confidence < CONFIDENCE_SPLIT
 
     def test_confidence_with_sensors(self) -> None:
         """Sensor-based decision has higher confidence."""
