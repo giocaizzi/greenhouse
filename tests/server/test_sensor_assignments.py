@@ -12,6 +12,7 @@ from greenhouse_core.repository import IrrigationRepository
 
 if TYPE_CHECKING:
     import httpx
+    import time_machine
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
 
@@ -129,7 +130,9 @@ def _chart_soil(client: TestClient, plant_id: int) -> list[float]:
     return [p[1] for d in chart["datasets"] for p in d["points"]]
 
 
-def test_readings_for_plant_respects_assignment_window(client: TestClient, app: FastAPI) -> None:
+def test_readings_for_plant_respects_assignment_window(
+    frozen_clock: time_machine.Traveller, client: TestClient, app: FastAPI
+) -> None:
     # Timeline: sensor created on plant A at T0, reading_A at T0+1s, reassign to
     # plant B at "now", reading_B at "now" — readings_for_plant must split by
     # which plant owned the sensor at reading time.
@@ -138,18 +141,18 @@ def test_readings_for_plant_respects_assignment_window(client: TestClient, app: 
     assert resp.status_code == HTTPStatus.CREATED
 
     before_move, after_move = 42.0, 80.0
-    # First reading lands while sensor is still on plant A. Wait a moment so
+    # First reading lands while sensor is still on plant A. Move the clock on so
     # the reading timestamp is strictly inside the open assignment window.
-    time.sleep(1.1)
+    frozen_clock.shift(2)
     _add_reading_now(app, before_move)
 
     # Reassign sensor to plant B — closes plant A's assignment, opens plant B's.
-    time.sleep(1.1)
+    frozen_clock.shift(2)
     resp = client.put("/api/v1/clusters/1/sensors/1", json={"plant_id": 2})
     assert resp.status_code == HTTPStatus.OK
 
     # Reading after reassignment.
-    time.sleep(1.1)
+    frozen_clock.shift(2)
     _add_reading_now(app, after_move)
 
     plant_a_soil = _soil_by_plant(app, 1)
@@ -160,20 +163,22 @@ def test_readings_for_plant_respects_assignment_window(client: TestClient, app: 
     assert before_move not in plant_b_soil
 
 
-def test_plant_chart_uses_assignment_window(client: TestClient, app: FastAPI) -> None:
+def test_plant_chart_uses_assignment_window(
+    frozen_clock: time_machine.Traveller, client: TestClient, app: FastAPI
+) -> None:
     """The plant chart must not retroactively re-attribute readings on sensor move."""
     _two_plants_and_a_probe(client, "Chart Cluster", "fake_chart_sensor", "Chart Probe")
 
     before_move, after_move = 33.0, 66.0
-    time.sleep(1.1)
+    frozen_clock.shift(2)
     _add_reading_now(app, before_move)
 
     # Move sensor to plant B.
-    time.sleep(1.1)
+    frozen_clock.shift(2)
     client.put("/api/v1/clusters/1/sensors/1", json={"plant_id": 2})
 
     # New reading after move belongs to plant B.
-    time.sleep(1.1)
+    frozen_clock.shift(2)
     _add_reading_now(app, after_move)
 
     # Plant A's chart shows 33.0 only.
