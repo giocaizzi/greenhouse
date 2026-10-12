@@ -6,10 +6,12 @@ from fastapi.testclient import TestClient
 
 
 def test_plants_list_renders(seeded_client: TestClient) -> None:
-    """Plants list renders."""
+    """Plants list renders, with edit and delete actions per row."""
     resp = seeded_client.get("/clusters/1/plants")
     assert resp.status_code == HTTPStatus.OK
     assert "Monstera deliciosa" in resp.text
+    assert 'href="/clusters/1/plants/1/edit"' in resp.text
+    assert 'hx-delete="/clusters/1/plants/1"' in resp.text
 
 
 def test_plants_list_404_for_missing_cluster(client: TestClient) -> None:

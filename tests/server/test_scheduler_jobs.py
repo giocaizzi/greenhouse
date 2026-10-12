@@ -85,6 +85,8 @@ class TestPausedFlagIsTruthful:
         assert all(j["paused"] is False for j in jobs), jobs
         # Scheduler is not running → nothing is scheduled to fire.
         assert all(j["next_run_time"] is None for j in jobs), jobs
+        # `core` lets clients (TUI, MCP) know which jobs DELETE will refuse.
+        assert sorted(j["id"] for j in jobs if j["core"]) == sorted(DEFAULT_JOB_IDS)
         assert client.get("/api/v1/preferences").json()["scheduler_paused"] is False
 
     def test_health_agrees_with_jobs_list(self, client: TestClient) -> None:
@@ -195,11 +197,6 @@ class TestDeleteJob:
             assert resp.status_code == HTTPStatus.CONFLICT, job_id
             assert "/scheduler/pause" in resp.json()["detail"]
         assert _job_ids(client) == DEFAULT_JOB_IDS  # nothing removed
-
-    def test_listing_flags_core_jobs(self, client: TestClient) -> None:
-        """`core` lets clients (TUI, MCP) know which jobs DELETE will refuse."""
-        jobs = client.get("/api/v1/scheduler/jobs").json()
-        assert sorted(j["id"] for j in jobs if j["core"]) == sorted(DEFAULT_JOB_IDS)
 
     def test_core_job_set_matches_registration(self, client: TestClient) -> None:
         """The protected set is derived from registration, not a hand-kept list."""

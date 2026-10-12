@@ -5,13 +5,6 @@ from http import HTTPStatus
 from fastapi.testclient import TestClient
 
 
-def test_irrigator_renders_on_cluster_detail(seeded_client: TestClient) -> None:
-    """Irrigator renders on cluster detail."""
-    resp = seeded_client.get("/clusters/1")
-    assert resp.status_code == HTTPStatus.OK
-    assert "Test Irrigator" in resp.text
-
-
 def test_add_affordance_hidden_when_irrigator_exists(seeded_client: TestClient) -> None:
     """Cluster 1 already has an irrigator, so the 'Add irrigator' link must be gone."""
     resp = seeded_client.get("/clusters/1")
