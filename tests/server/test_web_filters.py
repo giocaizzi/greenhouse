@@ -3,6 +3,8 @@
 import time
 from typing import ClassVar
 
+import pytest
+
 from greenhouse_server.web.filters import (
     age_seconds,
     cluster_caps,
@@ -94,25 +96,19 @@ class TestAgeSeconds:
 class TestStatPosition:
     """Tests for stat position."""
 
-    def test_centered_value(self) -> None:
-        """Centered value."""
-        assert stat_position(50, 0, 100) == "50"
-
-    def test_at_lower_bound(self) -> None:
-        """At lower bound."""
-        assert stat_position(0, 0, 100) == "0"
-
-    def test_at_upper_bound(self) -> None:
-        """At upper bound."""
-        assert stat_position(100, 0, 100) == "100"
-
-    def test_clamps_below_range(self) -> None:
-        """Clamps below range."""
-        assert stat_position(-10, 0, 100) == "0"
-
-    def test_clamps_above_range(self) -> None:
-        """Clamps above range."""
-        assert stat_position(150, 0, 100) == "100"
+    @pytest.mark.parametrize(
+        ("value", "expected"),
+        [
+            pytest.param(50, "50", id="centered"),
+            pytest.param(0, "0", id="lower-bound"),
+            pytest.param(100, "100", id="upper-bound"),
+            pytest.param(-10, "0", id="clamps-below"),
+            pytest.param(150, "100", id="clamps-above"),
+        ],
+    )
+    def test_position_in_0_100_range(self, value: int, expected: str) -> None:
+        """Values map onto 0-100 and clamp outside the range."""
+        assert stat_position(value, 0, 100) == expected
 
     def test_falls_back_to_center_on_missing_inputs(self) -> None:
         """Falls back to center on missing inputs."""
