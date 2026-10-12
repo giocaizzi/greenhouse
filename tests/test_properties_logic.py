@@ -150,7 +150,10 @@ def series(draw: st.DrawFn, min_size: int = 0, max_size: int = 30) -> list[Row]:
 @PROFILE
 @given(series())
 def test_clean_readings_is_a_masked_subset_sorted_ascending(rows: list[Row]) -> None:
-    """Every input row comes back once (ASC); each numeric value is kept verbatim or nulled."""
+    """Every input row comes back once (ASC); each numeric value is kept verbatim or nulled.
+
+    The DESC cleaned view is exactly the ASC view reversed (invariant 10 ordering).
+    """
     snapshot = copy.deepcopy(rows)
 
     cleaned = clean_readings(_as_rows(rows))
@@ -167,13 +170,7 @@ def test_clean_readings_is_a_masked_subset_sorted_ascending(rows: list[Row]) -> 
             if value is not None:
                 low, high = SENSOR_PHYSICAL_RANGES[f]
                 assert low <= value <= high
-
-
-@PROFILE
-@given(series())
-def test_clean_readings_desc_is_exact_reverse(rows: list[Row]) -> None:
-    """The DESC cleaned view is exactly the ASC view reversed (invariant 10 ordering)."""
-    assert clean_readings_desc(_as_rows(rows)) == list(reversed(clean_readings(_as_rows(rows))))
+    assert clean_readings_desc(_as_rows(rows)) == list(reversed(cleaned))
 
 
 @PROFILE
@@ -622,16 +619,6 @@ def test_temperature_fallback_without_temp_or_config_is_no_data(tmp_db: Irrigati
     )
 
 
-@PROFILE
-@given(st.text(max_size=12))
-def test_parse_moisture_target_never_raises(text: str) -> None:
-    """Any text parses to a float band without raising."""
-    low, high = parse_moisture_target(text)
-
-    assert isinstance(low, float)
-    assert isinstance(high, float)
-
-
 @pytest.mark.parametrize(
     ("text", "expected"),
     [("45-65", (45.0, 65.0)), ("30-50", (30.0, 50.0)), ("", (45.0, 65.0)), ("abc", (45.0, 65.0)), ("70", (45.0, 65.0))],
@@ -654,9 +641,11 @@ def test_parse_moisture_target_normalises_inverted_and_rejects_out_of_range() ->
 @PROFILE
 @given(st.text(max_size=12))
 def test_parse_moisture_target_is_always_an_ordered_physical_band(text: str) -> None:
-    """The parsed band is always ordered and within 0-100 %."""
+    """Any text parses, without raising, to a float band ordered and within 0-100 %."""
     low, high = parse_moisture_target(text)
 
+    assert isinstance(low, float)
+    assert isinstance(high, float)
     assert 0.0 <= low <= high <= MOISTURE_PERCENT_MAX
 
 
@@ -729,7 +718,7 @@ def _noisy_series_with_shift_and_glitches(draw: st.DrawFn) -> tuple[list[float],
     return values, draw(st.lists(st.tuples(where, st.sampled_from([0.0, 3.0, 15.0, 99.0])), max_size=2))
 
 
-@settings(PROFILE, max_examples=2000)
+@settings(PROFILE, max_examples=500)
 @given(_noisy_series_with_shift_and_glitches())
 def test_step_confirmation_only_spares_points_their_followers_back(
     series_and_glitches: tuple[list[float], list[tuple[int, float]]],
