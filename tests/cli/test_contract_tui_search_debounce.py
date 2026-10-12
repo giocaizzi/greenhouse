@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from cli.test_contract_tui import make_seeded_app, make_tui, settle, wait_until
+from cli.test_contract_tui import make_seeded_app, make_tui, settle_fast, wait_until
 from cli.tui_fixtures import tui_client_factory
 
 if TYPE_CHECKING:
@@ -71,14 +71,14 @@ def test_search_is_debounced_and_sends_the_full_query_last(
     async def scenario() -> None:
         tui = make_tui(http, factory=_timestamping_factory(http, calls, monkeypatch))
         async with tui.run_test(size=SIZE) as pilot:
-            await settle(pilot, tui)
+            await settle_fast(pilot, tui)
             await pilot.press("slash")
-            await settle(pilot, tui)
+            await settle_fast(pilot, tui)
             first_key.append(time.monotonic())
             for key in "citrus":
                 await pilot.press(key)
             await wait_until(lambda: any(q == "citrus" for _, q in calls), "a search for 'citrus' to be sent")
-            await settle(pilot, tui)
+            await settle_fast(pilot, tui)
 
     asyncio.run(scenario())
     assert calls, "no search was sent"

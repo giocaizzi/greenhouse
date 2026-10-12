@@ -26,7 +26,7 @@ from sqlalchemy.orm import Session
 from textual.coordinate import Coordinate
 from textual.widgets import DataTable, Input, Static, TabbedContent
 
-from cli.test_contract_tui import SERVER_URL, make_seeded_app, make_tui, settle, wait_until
+from cli.test_contract_tui import SERVER_URL, make_seeded_app, make_tui, settle_fast, wait_until
 from cli.test_contract_tui_actuation import _record_toasts
 from cli.test_tui import _text
 from cli.tui_fixtures import _app_locks, tui_client_factory, writes
@@ -107,24 +107,24 @@ def _thread_recording_factory(http: TestClient, calls: list[tuple[str, int]]) ->
 
 async def _tour_every_screen(pilot: Pilot[None], tui: GreenhouseApp) -> None:
     """Visit every top-level screen, two cluster tabs, a confirmed plant-DB sync and a search."""
-    await settle(pilot, tui)
+    await settle_fast(pilot, tui)
     for key in ("a", "l", "s", "o", "d"):
         await pilot.press(key)
-        await settle(pilot, tui)
+        await settle_fast(pilot, tui)
     await tui.push_screen(ClusterScreen(1))
-    await settle(pilot, tui)
+    await settle_fast(pilot, tui)
     for tab in ("tab-insights", "tab-plants"):
         tui.screen.query_one("TabbedContent", TabbedContent).active = tab
-        await settle(pilot, tui)
+        await settle_fast(pilot, tui)
     await pilot.press("P")
-    await settle(pilot, tui)
+    await settle_fast(pilot, tui)
     await pilot.press("y")  # the plant-DB sync asks for confirmation
-    await settle(pilot, tui)
+    await settle_fast(pilot, tui)
     await pilot.press("escape")
     await pilot.press("slash")
     await pilot.press(*"fern")
     await pilot.pause(0.4)
-    await settle(pilot, tui)
+    await settle_fast(pilot, tui)
 
 
 def test_client_calls_run_off_the_event_loop_thread(seeded: tuple[TestClient, Engine]) -> None:
@@ -158,7 +158,7 @@ async def _open_auto_refreshing(pilot: Pilot[None], tui: GreenhouseApp, key: str
     ``_render_cards`` (``NoMatches('#cluster-card-2')`` → ``WorkerFailed``). ``refresh_seconds`` is set before
     the key, so the target screen — mounted on its first ``switch_mode`` — installs the real ``set_interval``.
     """
-    await settle(pilot, tui)
+    await settle_fast(pilot, tui)
     tui.refresh_seconds = REFRESH
     await pilot.press(key)
     await wait_until(lambda: isinstance(tui.screen, screen_type), f"`{key}` to switch to {screen_type.__name__}")
@@ -224,22 +224,22 @@ def test_plants_cursor_stays_on_record_across_refresh(seeded: tuple[TestClient, 
     async def scenario() -> None:
         tui = make_tui(http)
         async with tui.run_test(size=SIZE) as pilot:
-            await settle(pilot, tui)
+            await settle_fast(pilot, tui)
             await tui.push_screen(ClusterScreen(1))
-            await settle(pilot, tui)
+            await settle_fast(pilot, tui)
             screen = tui.screen
             screen.query_one("TabbedContent", TabbedContent).active = "tab-plants"
-            await settle(pilot, tui)
+            await settle_fast(pilot, tui)
             table = screen.query_one("#plants-table", TuiDataTable)
             table.move_cursor(row=1)
-            await settle(pilot, tui)
+            await settle_fast(pilot, tui)
             assert selected_key(table) == "2"
             assert (
                 http.post("/api/v1/clusters/1/plants", json={"species": "Ficus lyrata"}).status_code
                 == HTTPStatus.CREATED
             )
             await pilot.press("r")
-            await settle(pilot, tui)
+            await settle_fast(pilot, tui)
             # Pin today's row order (plants come back sorted by species, so "Ficus" lands on top): the selected
             # record moved from row 1 to row 2 and the cursor followed it.
             assert [table.coordinate_to_cell_key(Coordinate(i, 0))[0].value for i in range(table.row_count)] == [
@@ -323,7 +323,7 @@ async def _sign_in_as_admin(pilot: Pilot[None], tui: GreenhouseApp) -> None:
     tui.screen.query_one("#username", Input).value = TEST_ADMIN_USERNAME
     tui.screen.query_one("#password", Input).value = TEST_ADMIN_PASSWORD
     await pilot.click("#login")
-    await settle(pilot, tui)
+    await settle_fast(pilot, tui)
 
 
 def _assert_one_quiet_sign_in_prompt(tui: GreenhouseApp, toasts: list[tuple[str, str]], log: list[RequestLog]) -> None:
@@ -351,7 +351,7 @@ def test_401_opens_one_sign_in_dialog_then_logs_in(
         tui = make_tui(cast("TestClient", None), factory=_authenticating_factory(application, log, monkeypatch))
         toasts = _record_toasts(tui, monkeypatch)
         async with tui.run_test(size=SIZE) as pilot:
-            await settle(pilot, tui)
+            await settle_fast(pilot, tui)
             _assert_one_quiet_sign_in_prompt(tui, toasts, log)
             await _sign_in_as_admin(pilot, tui)
             assert writes(log) == [
@@ -384,7 +384,7 @@ def test_401_dashboard_says_sign_in_needed() -> None:
         # ``http`` is unused when a factory is given; None stands in for it on purpose.
         tui = make_tui(cast("TestClient", None), factory=factory)
         async with tui.run_test(size=SIZE) as pilot:
-            await settle(pilot, tui)
+            await settle_fast(pilot, tui)
             assert isinstance(tui.screen, LoginScreen)
             dashboard = tui.screen_stack[-2]
             assert isinstance(dashboard, DashboardScreen)

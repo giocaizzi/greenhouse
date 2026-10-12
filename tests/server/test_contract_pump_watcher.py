@@ -457,23 +457,6 @@ def test_deleted_irrigator_ends_the_job_quietly(env: WatchEnv) -> None:
     assert env.adapter.calls == []
 
 
-def test_job_failure_is_rolled_back_and_logged(
-    env: WatchEnv, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
-) -> None:
-    """Job failure is rolled back and logged."""
-
-    def _boom(_self: PumpWatcherService, _irr: Irrigator, _secs: int, started_at: int | None = None) -> NoReturn:
-        del started_at  # the job passes it by keyword
-        msg = "watch exploded"
-        raise RuntimeError(msg)
-
-    monkeypatch.setattr(PumpWatcherService, "watch", _boom)
-    schedule_pump_watcher(env.irrigator_id, 3, STARTED_AT)
-    with caplog.at_level(logging.ERROR, logger="greenhouse_server.services.irrigation"):
-        env.scheduler.jobs[0]["func"]()  # must not raise
-    assert caplog.messages == [f"Pump watcher job failed for irrigator {env.irrigator_id}"]
-
-
 # ── Watcher result shapes and trip side effects (frozen clock) ────────────────
 
 

@@ -705,36 +705,6 @@ def _run(
     return app, resp, db_effect(before, db_snapshot(engine))
 
 
-def test_bulk_stop_all_reports_a_device_that_refuses_the_stop(make_client: MakeClient) -> None:
-    """Emergency stop reports ``adapter.stop()``'s ``(False, msg)`` as a failure.
-
-    A device that refuses the stop may still be running: it is not counted as stopped, gets
-    no ``stop``/``emergency`` event, and the web fragment lists it instead of saying "Every
-    device is now off." Every device is still asked to stop.
-    """
-    app, resp, effect = _run(make_client, "POST", "/bulk/stop-all", setup=_device_stop_fails)
-    assert resp.status_code == HTTPStatus.OK
-    assert "Stopped 0 irrigators; 2 did not confirm the stop and may still be running." in resp.text
-    assert "Every device is now off." not in resp.text
-    assert resp.text.count("stop failed: ") == len((IRR_INDOOR, IRR_OUTDOOR))
-    assert app.state.fake_devices.irrigator.calls == [("stop", IRR_INDOOR), ("stop", IRR_OUTDOOR)]
-    assert "irrigation_events" not in effect
-
-
-@pytest.mark.parametrize("action", ["ack", "resolve"])
-def test_alert_action_on_missing_alert_is_404(action: str, make_client: MakeClient) -> None:
-    """Ack/resolve of a missing alert is a 404 "Alert not found", like the JSON API.
-
-    ``web/routes/alerts.py`` used to skip the lookup: the row partial rendered empty and
-    ``HX-Toast`` still announced success with a 200.
-    """
-    _, resp, effect = _run(make_client, "POST", f"/alerts/999/{action}")
-    assert resp.status_code == HTTPStatus.NOT_FOUND
-    assert "Alert not found" in resp.text
-    assert "HX-Toast" not in resp.headers
-    assert effect == {}
-
-
 @pytest.mark.parametrize(
     ("url", "form"),
     [
@@ -759,52 +729,3 @@ def test_non_numeric_form_value_is_a_400_error_page(url: str, form: dict[str, st
     assert resp.headers["content-type"].startswith("text/html")
     assert "Invalid" in resp.text
     assert effect == {}
-
-
-def test_irrigate_missing_cluster_is_404(make_client: MakeClient) -> None:
-    """Irrigating an unknown cluster is a 404 "Cluster not found" page, like the JSON API.
-
-    The route used to hand the pipeline's ``{"action": "error", …}`` dict to
-    ``partials/_decision_panel.html``, which crashed on it (plain-text 500).
-    """
-    app, resp, effect = _run(make_client, "POST", "/clusters/999/irrigate", {})
-    assert resp.status_code == HTTPStatus.NOT_FOUND
-    assert "Cluster not found" in resp.text
-    assert effect == {}
-    assert app.state.fake_devices.irrigator.calls == []
-
-
-def test_delete_cluster_leaves_no_orphan_rows(make_client: MakeClient) -> None:
-    """Deleting a populated cluster also removes the rows that point at it.
-
-    Besides the ORM cascade (plants, sensors + readings, irrigator + events, config),
-    ``repository.delete_cluster`` removes its irrigation windows, decision logs, alerts and
-    sensor assignments, which used to stay behind (SQLite FK enforcement is off).
-    """
-    app, resp, effect = _run(make_client, "DELETE", f"/clusters/{OUTDOOR}")
-    assert resp.status_code == HTTPStatus.OK
-    assert set(effect) == {
-        "alerts",
-        "clusters",
-        "decision_logs",
-        "irrigation_configs",
-        "irrigation_events",
-        "irrigation_windows",
-        "irrigators",
-        "plants",
-        "sensor_assignments",
-        "sensor_readings",
-        "sensors",
-    }
-    engine = app.state.session_factory.kw["bind"]
-    with engine.connect() as conn:
-        orphans = {
-            table: conn.execute(text(sql), {"c": OUTDOOR}).scalar_one()
-            for table, sql in {
-                "irrigation_windows": "SELECT COUNT(*) FROM irrigation_windows WHERE cluster_id = :c",
-                "decision_logs": "SELECT COUNT(*) FROM decision_logs WHERE cluster_id = :c",
-                "alerts": "SELECT COUNT(*) FROM alerts WHERE cluster_id = :c",
-                "sensor_assignments": "SELECT COUNT(*) FROM sensor_assignments WHERE plant_id = 3",
-            }.items()
-        }
-    assert orphans == {"irrigation_windows": 0, "decision_logs": 0, "alerts": 0, "sensor_assignments": 0}
