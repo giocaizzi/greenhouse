@@ -59,6 +59,8 @@ Distribution / import / entry-point: `greenhouse-{core,server,cli}` / `greenhous
 
 ## Development
 
+Repo conventions (PRs, CI `check` job, releases) follow the [giocaizzi GitHub standard](https://github.com/giocaizzi/.github/blob/main/docs/standard.md); this repo is its reference implementation.
+
 ```bash
 make install    # uv sync
 make serve      # uv run greenhouse-server (API + web UI on :8000)
