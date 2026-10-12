@@ -21,6 +21,8 @@ def test_dashboard_lists_seeded_cluster(seeded_client: TestClient) -> None:
     assert "Test Cluster" in resp.text
     # Dashboard polls the richer card-fragment for plant↔sensor↔irrigator rollups.
     assert 'hx-get="/clusters/1/card-fragment"' in resp.text
+    # Emergency stop shows once a cluster exists.
+    assert 'hx-post="/bulk/stop-all"' in resp.text
 
 
 def test_card_fragment_renders_plant_sensor_link(seeded_client: TestClient) -> None:

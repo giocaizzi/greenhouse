@@ -14,6 +14,13 @@ def test_preferences_page_renders(client: TestClient) -> None:
     assert 'name="timezone"' in resp.text
     assert 'name="theme"' in resp.text
     assert 'name="refresh_interval_seconds"' in resp.text
+    # Global irrigation defaults form
+    assert "Global irrigation defaults" in resp.text
+    assert 'action="/config/global"' in resp.text
+    assert 'name="quiet_start_hour"' in resp.text
+    assert 'name="quiet_end_hour"' in resp.text
+    assert 'name="daily_cap_minutes"' in resp.text
+    assert 'name="max_events_per_day"' in resp.text
 
 
 def test_preferences_post_updates(client: TestClient) -> None:
@@ -87,18 +94,6 @@ def test_preferences_includes_default_cluster_options(seeded_client: TestClient)
     resp = seeded_client.get("/preferences")
     assert resp.status_code == HTTPStatus.OK
     assert "Test Cluster" in resp.text
-
-
-def test_preferences_renders_global_config_form(client: TestClient) -> None:
-    """Preferences renders global config form."""
-    resp = client.get("/preferences")
-    assert resp.status_code == HTTPStatus.OK
-    assert "Global irrigation defaults" in resp.text
-    assert 'action="/config/global"' in resp.text
-    assert 'name="quiet_start_hour"' in resp.text
-    assert 'name="quiet_end_hour"' in resp.text
-    assert 'name="daily_cap_minutes"' in resp.text
-    assert 'name="max_events_per_day"' in resp.text
 
 
 def test_global_config_post_persists(client: TestClient) -> None:

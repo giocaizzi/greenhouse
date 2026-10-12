@@ -12,16 +12,10 @@ from greenhouse_core.repository import IrrigationRepository
 
 
 def test_plant_hero_renders(seeded_client: TestClient) -> None:
-    """Plant hero renders."""
+    """Plant hero renders; with no sensor readings the health ring shows the '—' placeholder."""
     resp = seeded_client.get("/clusters/1/plants/1")
     assert resp.status_code == HTTPStatus.OK
     assert 'class="plant-hero"' in resp.text
-
-
-def test_plant_hero_ring_hidden_without_readings(seeded_client: TestClient) -> None:
-    """With no sensor readings the health ring shows the '—' placeholder."""
-    resp = seeded_client.get("/clusters/1/plants/1")
-    assert resp.status_code == HTTPStatus.OK
     # Score is None → health-ring--empty variant is shown
     assert "health-ring" in resp.text
     assert "health-ring--empty" in resp.text

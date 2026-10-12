@@ -42,10 +42,13 @@ class TestPauseResume:
     """Endpoint contract for /scheduler/pause and /scheduler/resume."""
 
     def test_pause_returns_paused_state(self, client: TestClient) -> None:
-        """Pause returns paused state."""
+        """Pause returns paused state and persists it in preferences."""
         resp = client.post("/api/v1/scheduler/pause")
         assert resp.status_code == HTTPStatus.OK
         assert resp.json() == {"paused": True}
+        resp = client.get("/api/v1/preferences")
+        assert resp.status_code == HTTPStatus.OK
+        assert resp.json()["scheduler_paused"] is True
 
     def test_resume_returns_running_state(self, client: TestClient) -> None:
         """Resume returns running state."""
@@ -53,13 +56,6 @@ class TestPauseResume:
         resp = client.post("/api/v1/scheduler/resume")
         assert resp.status_code == HTTPStatus.OK
         assert resp.json() == {"paused": False}
-
-    def test_pause_persists_in_preferences(self, client: TestClient) -> None:
-        """Pause persists in preferences."""
-        client.post("/api/v1/scheduler/pause")
-        resp = client.get("/api/v1/preferences")
-        assert resp.status_code == HTTPStatus.OK
-        assert resp.json()["scheduler_paused"] is True
 
     def test_resume_clears_persisted_flag(self, client: TestClient) -> None:
         """Resume clears persisted flag."""

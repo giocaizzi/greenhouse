@@ -63,12 +63,22 @@ def test_anonymous_web_redirects_to_login(anonymous_client: TestClient) -> None:
 
 
 def test_anonymous_login_page_renders(anonymous_client: TestClient) -> None:
-    """Anonymous login page renders."""
+    """Anonymous login page renders, without the authenticated chrome's auto-pollers.
+
+    `_base.html` fires `hx-get="/alerts/badge"` and `/health/badge` on
+    `hx-trigger="load"`. Rendered on /login (unauthenticated) they redirect
+    back to /login and recurse, cascading the page. show_chrome=False strips
+    them. Regression test for the v3.0.0 login-page infinite-render bug.
+    """
     resp = anonymous_client.get("/login")
     assert resp.status_code == HTTPStatus.OK
     assert b"Sign in" in resp.content
     assert b'name="username"' in resp.content
     assert b'name="password"' in resp.content
+    assert b"/alerts/badge" not in resp.content
+    assert b"/health/badge" not in resp.content
+    # The top nav (which only makes sense once signed in) is gone too.
+    assert b'class="topbar"' not in resp.content
 
 
 def test_login_with_valid_credentials_returns_token(anonymous_client: TestClient) -> None:
@@ -170,22 +180,6 @@ def test_form_login_rejects_external_next(anonymous_client: TestClient) -> None:
     )
     assert resp.status_code == HTTPStatus.SEE_OTHER
     assert resp.headers["location"] == "/"
-
-
-def test_login_page_has_no_chrome_pollers(anonymous_client: TestClient) -> None:
-    """The login page must not carry the authenticated chrome's auto-pollers.
-
-    `_base.html` fires `hx-get="/alerts/badge"` and `/health/badge` on
-    `hx-trigger="load"`. Rendered on /login (unauthenticated) they redirect
-    back to /login and recurse, cascading the page. show_chrome=False strips
-    them. Regression test for the v3.0.0 login-page infinite-render bug.
-    """
-    resp = anonymous_client.get("/login")
-    assert resp.status_code == HTTPStatus.OK
-    assert b"/alerts/badge" not in resp.content
-    assert b"/health/badge" not in resp.content
-    # The top nav (which only makes sense once signed in) is gone too.
-    assert b'class="topbar"' not in resp.content
 
 
 def test_hx_request_unauthenticated_returns_hx_redirect(anonymous_client: TestClient) -> None:

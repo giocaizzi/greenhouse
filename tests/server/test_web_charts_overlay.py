@@ -6,17 +6,11 @@ from http import HTTPStatus
 from fastapi.testclient import TestClient
 
 
-def test_overlay_fragment_contains_canvas(seeded_client: TestClient) -> None:
-    """The overlay web fragment must render a <canvas> element."""
+def test_overlay_fragment_contains_canvas_and_json_island(seeded_client: TestClient) -> None:
+    """The overlay fragment renders a <canvas> and embeds its JSON data island."""
     resp = seeded_client.get("/clusters/1/overlay-fragment?hours=72")
     assert resp.status_code == HTTPStatus.OK
     assert "<canvas" in resp.text.lower()
-
-
-def test_overlay_fragment_contains_json_island(seeded_client: TestClient) -> None:
-    """The overlay partial must embed a JSON data island with metric information."""
-    resp = seeded_client.get("/clusters/1/overlay-fragment?hours=72")
-    assert resp.status_code == HTTPStatus.OK
     assert 'id="chart-data-overlay"' in resp.text
 
 
@@ -51,15 +45,11 @@ def test_heatmap_fragment_renders(seeded_client: TestClient) -> None:
     assert "heatmap" in resp.text.lower()
 
 
-def test_plant_health_fragment_contains_canvas(seeded_client: TestClient) -> None:
-    """The plant health chart fragment must contain a <canvas> element."""
+def test_plant_health_fragment_contains_canvas_and_json_island(
+    seeded_client: TestClient,
+) -> None:
+    """The plant health fragment renders a <canvas> and embeds its JSON data island."""
     resp = seeded_client.get("/clusters/1/plants/1/health-fragment")
     assert resp.status_code == HTTPStatus.OK
     assert "<canvas" in resp.text.lower()
-
-
-def test_plant_health_fragment_contains_json_island(seeded_client: TestClient) -> None:
-    """The plant health fragment must embed a JSON data island."""
-    resp = seeded_client.get("/clusters/1/plants/1/health-fragment")
-    assert resp.status_code == HTTPStatus.OK
     assert "chart-data-health-" in resp.text
