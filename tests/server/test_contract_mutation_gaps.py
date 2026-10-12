@@ -336,7 +336,8 @@ def test_scheduler_toggle_unexpected_failure_is_500_naming_the_verb(api, monkeyp
     """web-18: an unexpected scheduler error maps to 500 ``Failed to <pause|resume> job: …``."""
     client, _ = api
 
-    def boom(_repo, _paused):
+    def boom(_repo, *, paused):
+        del paused  # the stub fails whatever the requested state
         msg = "jobstore down"
         raise RuntimeError(msg)
 
