@@ -686,12 +686,8 @@ def test_bootstrap_is_skipped_when_auth_disabled(engine: Engine) -> None:
 @pytest.mark.usefixtures("clean_env")
 @pytest.mark.parametrize(
     ("mcp_token", "headers", "status", "detail"),
+    # Unset-token 503s and missing / wrong / Basic 401s are pinned in test_contract_mcp.py.
     [
-        (None, {}, 503, "MCP auth not configured"),
-        (None, {"Authorization": f"Bearer {MCP_TOKEN}"}, 503, "MCP auth not configured"),
-        (MCP_TOKEN, {}, 401, "Invalid MCP token"),
-        (MCP_TOKEN, {"Authorization": "Bearer wrong"}, 401, "Invalid MCP token"),
-        (MCP_TOKEN, {"Authorization": f"Basic {MCP_TOKEN}"}, 401, "Invalid MCP token"),
         (MCP_TOKEN, {"Authorization": f"Bearer {MCP_TOKEN} "}, None, None),  # header value is stripped
         (MCP_TOKEN, {"Authorization": f"bearer {MCP_TOKEN}"}, None, None),  # scheme is case-insensitive
         (MCP_TOKEN, {"Authorization": f"Bearer {MCP_TOKEN}"}, None, None),
