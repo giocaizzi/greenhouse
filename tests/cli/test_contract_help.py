@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import re
 from importlib.metadata import version
-from typing import Any
+from typing import TYPE_CHECKING, Any, TypeGuard, cast
 
 import pytest
 import rich
@@ -29,6 +29,13 @@ from typer.testing import CliRunner
 
 from golden import assert_golden, assert_golden_json
 from greenhouse_cli.main import app
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from typer._click import Command, Context, Parameter
+    from typer.core import TyperGroup
+
 
 COMMAND_GROUPS = 13
 LEAF_COMMANDS = 61
@@ -77,7 +84,7 @@ def help_golden_text(text: str) -> str:
 
 
 @pytest.fixture
-def stable_cli_env(clean_env, monkeypatch):
+def stable_cli_env(clean_env: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """``clean_env`` plus a render-stable rich/typer setup (width 100, no colour, no terminal)."""
     for name in RENDER_ENV_VARS:
         monkeypatch.delenv(name, raising=False)
@@ -87,22 +94,28 @@ def stable_cli_env(clean_env, monkeypatch):
     return clean_env
 
 
-def walk_commands() -> list[tuple[tuple[str, ...], Any]]:
+# The walk lists and resolves sub-commands without a click context (click's groups ignore it).
+_NO_CONTEXT = cast("Context", None)
+
+
+def walk_commands() -> list[tuple[tuple[str, ...], Command]]:
     """Return ``(path, command)`` for every group and command, depth-first in registration order."""
     root = typer.main.get_command(app)
-    found: list[tuple[tuple[str, ...], Any]] = []
+    found: list[tuple[tuple[str, ...], Command]] = []
 
-    def visit(path: tuple[str, ...], cmd: Any) -> None:
+    def visit(path: tuple[str, ...], cmd: Command) -> None:
         found.append((path, cmd))
         if is_group(cmd):
-            for name in cmd.list_commands(None):
-                visit((*path, name), cmd.get_command(None, name))
+            for name in cmd.list_commands(_NO_CONTEXT):
+                sub = cmd.get_command(_NO_CONTEXT, name)
+                assert sub is not None, name
+                visit((*path, name), sub)
 
     visit((), root)
     return found
 
 
-def is_group(cmd: Any) -> bool:
+def is_group(cmd: Command) -> TypeGuard[TyperGroup]:
     """Return whether a click command is a group (has sub-commands)."""
     return hasattr(cmd, "commands")
 
@@ -117,7 +130,7 @@ def golden_name(path: tuple[str, ...]) -> str:
     return ".".join((PROG, *path)) + ".txt"
 
 
-def _jsonable(value: Any) -> Any:
+def _jsonable(value: object) -> object:
     if value is None or isinstance(value, bool | int | float | str):
         return value
     if isinstance(value, list | tuple):
@@ -125,7 +138,7 @@ def _jsonable(value: Any) -> Any:
     return f"<{type(value).__name__}:{value!r}>"
 
 
-def describe_param(param: Any) -> dict[str, Any]:
+def describe_param(param: Parameter) -> dict[str, Any]:
     """Describe one click parameter (name, kind, type, default, flags) as JSON."""
     ptype = param.type
     return {
@@ -152,7 +165,7 @@ def describe_param(param: Any) -> dict[str, Any]:
     }
 
 
-def describe_command(path: tuple[str, ...], cmd: Any) -> dict[str, Any]:
+def describe_command(path: tuple[str, ...], cmd: Command) -> dict[str, Any]:
     """Describe one command and its parameters as JSON for the tree golden."""
     entry: dict[str, Any] = {
         "path": " ".join((PROG, *path)),
@@ -166,7 +179,7 @@ def describe_command(path: tuple[str, ...], cmd: Any) -> dict[str, Any]:
     }
     if is_group(cmd):
         entry["invoke_without_command"] = cmd.invoke_without_command
-        entry["subcommands"] = cmd.list_commands(None)  # registration order == --help listing order
+        entry["subcommands"] = cmd.list_commands(_NO_CONTEXT)  # registration order == --help listing order
     return entry
 
 
@@ -174,7 +187,7 @@ COMMANDS = walk_commands()
 runner = CliRunner()
 
 
-def test_command_tree_has_every_help_page():
+def test_command_tree_has_every_help_page() -> None:
     """The command tree has the pinned number of help pages and groups."""
     assert len(COMMANDS) == EXPECTED_HELP_PAGES
     groups = [p for p, c in COMMANDS if is_group(c)]
@@ -183,7 +196,7 @@ def test_command_tree_has_every_help_page():
 
 
 @pytest.mark.usefixtures("stable_cli_env")
-def test_params_golden():
+def test_params_golden() -> None:
     """Every group/command with its params (name, opts, default, required, type, …) == golden."""
     # Re-walk under the fixture: the completion options depend on env read at get_command() time.
     tree = [describe_command(path, cmd) for path, cmd in walk_commands()]
@@ -192,7 +205,7 @@ def test_params_golden():
 
 @pytest.mark.usefixtures("stable_cli_env")
 @pytest.mark.parametrize("path", [p for p, _ in COMMANDS], ids=lambda p: ".".join((PROG, *p)))
-def test_help_page_golden(path):
+def test_help_page_golden(path: tuple[str, ...]) -> None:
     """``greenhouse <path> --help`` → exit 0, nothing on stderr, stdout == golden."""
     result = runner.invoke(app, [*path, "--help"], prog_name=PROG)
     assert result.exception is None or isinstance(result.exception, SystemExit), result.exception
@@ -204,7 +217,7 @@ def test_help_page_golden(path):
 
 @pytest.mark.usefixtures("stable_cli_env")
 @pytest.mark.parametrize("path", [p for p, c in COMMANDS if is_group(c)], ids=lambda p: ".".join((PROG, *p)) or PROG)
-def test_group_without_args_prints_help_and_exits_0(path):
+def test_group_without_args_prints_help_and_exits_0(path: tuple[str, ...]) -> None:
     """A bare group behaves exactly like ``--help``: the same page on stdout, nothing on stderr, exit 0."""
     bare = runner.invoke(app, list(path), prog_name=PROG)
     helped = runner.invoke(app, [*path, "--help"], prog_name=PROG)
@@ -214,7 +227,7 @@ def test_group_without_args_prints_help_and_exits_0(path):
 
 
 @pytest.mark.usefixtures("stable_cli_env")
-def test_help_is_width_stable_against_hostile_terminal_env(monkeypatch):
+def test_help_is_width_stable_against_hostile_terminal_env(monkeypatch: pytest.MonkeyPatch) -> None:
     """A developer's ``TERMINAL_WIDTH``/``FORCE_COLOR`` must not leak into goldens once the fixture is applied.
 
     The fixture already deleted the variables; this sets hostile values *after* it and shows that only the
