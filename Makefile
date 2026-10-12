@@ -4,14 +4,19 @@
 
 .DEFAULT_GOAL := help
 
+# Tests run in parallel (pytest-xdist); the serial suite takes about 20 minutes, parallel about 6 on 4 workers.
+# Override on a shared host: make check PYTEST_XDIST="-n 2"; serial: PYTEST_XDIST=
+# (Tests share no state; a single test, `uv run pytest path::name`, stays serial.)
+PYTEST_XDIST ?= -n auto
+
 help: ## Show this help
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
 install: ## Install workspace dependencies with uv
 	uv sync
 
-test: ## Run the test suite
-	uv run pytest
+test: ## Run the test suite in parallel (PYTEST_XDIST="-n 2" on a shared host, PYTEST_XDIST= for serial)
+	uv run pytest $(PYTEST_XDIST)
 
 lint: ## Run ruff lint
 	uv run ruff check libs/ tests/
@@ -31,8 +36,8 @@ FILES ?= libs/
 sizecheck: ## Size limits (body lines / nesting / file length); FILES=... to narrow, register in scripts/size-exceptions.txt
 	uv run python scripts/sizecheck.py $(FILES)
 
-coverage: ## Run tests with coverage report (fails under 60%)
-	uv run pytest --cov=greenhouse_core --cov=greenhouse_server --cov=greenhouse_cli --cov-report=term-missing --cov-report=xml --cov-fail-under=60
+coverage: ## Run tests in parallel with coverage report (fails under 60%)
+	uv run pytest $(PYTEST_XDIST) --cov=greenhouse_core --cov=greenhouse_server --cov=greenhouse_cli --cov-report=term-missing --cov-report=xml --cov-fail-under=60
 
 serve: ## Start the FastAPI server (API + web UI)
 	uv run greenhouse-server

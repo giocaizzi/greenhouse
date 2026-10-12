@@ -156,13 +156,13 @@ Repo conventions (PRs, CI `check` job, releases) follow the [giocaizzi GitHub st
 make install       # uv sync
 make serve         # uv run greenhouse-server (API + web UI on :8000)
 make check         # full local gate: pre-commit-run + lint-imports + typecheck + sizecheck + coverage
-make test          # uv run pytest
+make test          # uv run pytest -n auto (PYTEST_XDIST="-n 2" on a shared host, PYTEST_XDIST= for serial)
 make lint          # ruff check libs/ tests/
 make format        # ruff format libs/ tests/
 make lint-imports  # import-linter layering contracts
 make typecheck     # mypy --strict over libs/ and tests/ ([tool.mypy] files in pyproject.toml)
 make sizecheck     # size limits via scripts/sizecheck.py (FILES=... to narrow)
-make coverage      # pytest with coverage (fails under 60%)
+make coverage      # pytest -n auto with coverage (fails under 60%); full suite ~6 min on 4 workers, ~20 min serial
 make pre-commit-install / make pre-commit-run   # hooks: ruff, ruff-format, hygiene, hadolint, gitleaks
 make docker-build / docker-up / docker-down / docker-logs / docker-shell
 make help          # list every target
