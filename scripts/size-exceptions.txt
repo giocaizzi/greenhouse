@@ -3,10 +3,6 @@
 # Each entry names a function or file that is over the size limits on purpose and says why splitting it
 # would be worse. The register only shrinks: add an entry only with a reason a reviewer accepts.
 
-# ── Functions (> 40 body lines or nesting > 3) ───────────────────────────────
-libs/greenhouse-cli/greenhouse_cli/tui/screens/cluster.py::ClusterScreen.compose — one declarative widget tree with no branching; its order is the focus order and is pinned by the app.tcss selectors and the screen goldens, so splitting it would scatter the DOM picture
-libs/greenhouse-core/greenhouse_core/devices/irrigators/tuya_generic.py::TuyaIrrigatorAdapter.status — flat DPS-decoding ladder in a device adapter; the nesting is the per-DP decode and splitting it adds indirection on a device path
-
 # ── Files > 400 lines ─────────────────────────────────────────────────────────
 libs/greenhouse-core/greenhouse_core/schemas.py — cohesive Pydantic DTO module; splitting it risks the OpenAPI contract (class __module__, docstrings, field order) for navigation only
 libs/greenhouse-core/greenhouse_core/logic/engine.py — one cohesive rule pipeline; tests read the engine's constant imports from vars(engine) and patch engine.time / engine.season_for, so moving rules out breaks pinned tests
