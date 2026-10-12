@@ -6,7 +6,7 @@ Behavior-preserving refactor of greenhouse on branch `claude/focused-hawking-7to
 changes), 35 `test`, 35 `build`, 24 merges, 10 `chore`, plus `types`/`style`/`ci` and one revert. Details of every bug,
 quirk and labeled change: `REFACTOR_NOTES.md`. Sections 1–7 describe the refactor as of `fa89e94`; section 8 covers the
 **bug-fix fold-in** that followed in the same PR (#108) and fixed the bugs the refactor had recorded, then the switch to
-every ruff rule and to type-checked tests (§8.5); section 9 lists what is still open. At the PR head the branch has 836
+every ruff rule and to type-checked tests (§8.5); section 9 lists what is still open. At the PR head the branch has 840
 commits (47 merges).
 
 ## 1. Before / after
@@ -124,7 +124,7 @@ pinning test flipped to the fixed behavior. A, B, C, E and F: `01692d4..190217f`
 D: merged at `3b75817`, then its two review rounds and the TUI table fix through `f0c7662` (`9a20582..f0c7662`:
 53 commits, of which 50 `fix(...)`, 2 dead-code `refactor` and 1 `docs`). Up to `f0c7662` the fold-in has
 146 non-merge commits, 123 of them `fix(...)`. At the PR head, with the docs and the ruff `ALL` / typed-tests phase
-(§8.5), the fold-in (`01692d4..HEAD`) has 245 non-merge commits: 126 `fix`, 56 `refactor`, 28 `types`, 22 `docs`,
+(§8.5), the fold-in (`01692d4..HEAD`) has 249 non-merge commits: 127 `fix`, 56 `refactor`, 28 `types`, 25 `docs`,
 5 `style`, 5 `build`, 2 `test`, 1 `ci`.
 
 ### 8.1 Owner decisions
@@ -186,23 +186,23 @@ Cleanup (package F and leftovers): lazy package re-exports (`greenhouse_core/_la
 
 ### 8.4 Gate
 
-Final gate on the PR head (`71bd646`, docs-only commit after it):
+Final gate on the PR head (`01a4151`, docs-only commit after it):
 
-- Full suite **3,299 passed** with `PYTHONHASHSEED=0` (+ coverage), `PYTHONHASHSEED=12345` and
+- Full suite **3,315 passed** with `PYTHONHASHSEED=0` (+ coverage), `PYTHONHASHSEED=12345` and
   `TZ=America/New_York`; `tests/golden` and the tree unchanged by the runs. Coverage (line + branch) **98%**
-  (11,840 statements, 2,090 branches).
+  (11,933 statements, 2,104 branches).
 - `pre-commit run --all-files` green (ruff, ruff-format, hygiene, gitleaks; hadolint skipped — no Docker daemon in the
   container, CI runs it). `ruff check libs tests scripts` with `select = ["ALL"]`: 0 findings.
-- `make lint-imports` 20 kept / 0 broken; `make typecheck` (mypy `--strict`, `libs/` **and `tests/`**) 362 files, 0
+- `make lint-imports` 20 kept / 0 broken; `make typecheck` (mypy `--strict`, `libs/` **and `tests/`**) 366 files, 0
   errors; `make sizecheck` green.
-- `gitleaks detect` over `a1b2622..HEAD` (787 commits): no leaks.
+- `gitleaks detect` over `a1b2622..HEAD` (792 commits): no leaks.
 - CI on the pushed heads: all jobs green (`lint`, `static`, `hygiene`, `dockerfile`, `secrets`, `test`, `check`).
 
 | Metric at the PR head | Value (§1 "after" column: `fa89e94`) |
 |---|---|
-| Tests | 3,299 (3,146) |
+| Tests | 3,315 (3,146) |
 | Coverage | 98% (99%: the fold-in added defensive paths, e.g. compensating stops and gate write-backs) |
-| mypy `--strict` | 362 files: all of `libs/` and `tests/` (174, `libs/` only) |
+| mypy `--strict` | 366 files: all of `libs/` and `tests/` (174, `libs/` only) |
 | `type: ignore` | `libs/` 2, `tests/` 7 (2 in `libs/`) |
 | Functions > 40 body lines / longest | 0 / 40 (3 / 49) |
 | Size register | 7 files, 0 functions (15 entries) |
