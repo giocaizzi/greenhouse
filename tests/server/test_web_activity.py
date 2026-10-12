@@ -3,16 +3,19 @@
 import re
 import time
 from http import HTTPStatus
+from typing import cast
 
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from greenhouse_core.models import ENTITY_CLUSTER, SOURCE_IRRIGATION, SOURCE_LEARNING, ActivitySource
 from greenhouse_core.repository import IrrigationRepository
 
 PAGE_SIZE = 50  # activity rows per page
 SEEDED_EVENTS = 60
 
 
-def _seed_events(app, count: int, *, base_ts: int | None = None) -> list[int]:
+def _seed_events(app: FastAPI, count: int, *, base_ts: int | None = None) -> list[int]:
     session = app.state.session_factory()
     try:
         repo = IrrigationRepository(session)
@@ -20,8 +23,8 @@ def _seed_events(app, count: int, *, base_ts: int | None = None) -> list[int]:
         ids = []
         for i in range(count):
             eid = repo.add_activity_event(
-                source="irrigation",
-                entity_type="cluster",
+                source=SOURCE_IRRIGATION,
+                entity_type=ENTITY_CLUSTER,
                 entity_id=1,
                 code="irrigated",
                 message=f"event {i}",
@@ -38,14 +41,14 @@ def _seed_events(app, count: int, *, base_ts: int | None = None) -> list[int]:
 class TestActivityListPage:
     """Tests for activity list page."""
 
-    def test_empty_state(self, client):
+    def test_empty_state(self, client: TestClient) -> None:
         """Empty state."""
         resp = client.get("/activity")
         assert resp.status_code == HTTPStatus.OK
         assert "Activity" in resp.text
         assert "No activity yet" in resp.text
 
-    def test_renders_seeded_event(self, app):
+    def test_renders_seeded_event(self, app: FastAPI) -> None:
         """Renders seeded event."""
         with TestClient(app, raise_server_exceptions=False) as client:
             _seed_events(app, count=1)
@@ -54,20 +57,24 @@ class TestActivityListPage:
             assert "irrigated" in resp.text
             assert "irrigation" in resp.text
 
-    def test_filter_chips_present(self, client):
+    def test_filter_chips_present(self, client: TestClient) -> None:
         """Filter chips present."""
         resp = client.get("/activity")
         assert "?source=irrigation" in resp.text
         assert "?source=learning" in resp.text
 
-    def test_source_filter(self, app):
+    def test_source_filter(self, app: FastAPI) -> None:
         """Source filter."""
         with TestClient(app, raise_server_exceptions=False) as client:
             session = app.state.session_factory()
             try:
                 repo = IrrigationRepository(session)
-                repo.add_activity_event(source="learning", entity_type="cluster", code="insight", message="learn msg")
-                repo.add_activity_event(source="system", entity_type="cluster", code="sync", message="sys msg")
+                repo.add_activity_event(
+                    source=SOURCE_LEARNING, entity_type=ENTITY_CLUSTER, code="insight", message="learn msg"
+                )
+                # "system" is outside the ActivitySource vocabulary on purpose: a second, distinct source to filter out.
+                other_source = cast("ActivitySource", "system")
+                repo.add_activity_event(source=other_source, entity_type=ENTITY_CLUSTER, code="sync", message="sys msg")
                 session.commit()
             finally:
                 session.close()
@@ -81,7 +88,7 @@ class TestActivityListPage:
 class TestActivityPagination:
     """Tests for activity pagination."""
 
-    def test_first_page_50_events_with_sentinel(self, app):
+    def test_first_page_50_events_with_sentinel(self, app: FastAPI) -> None:
         """Writing 60 events: first page returns 50 rows + a sentinel hx-get attribute."""
         with TestClient(app, raise_server_exceptions=False) as client:
             _seed_events(app, count=SEEDED_EVENTS)
@@ -92,7 +99,7 @@ class TestActivityPagination:
             assert tr_count >= PAGE_SIZE + 1  # at least 50 data rows + 1 header
             assert 'hx-get="/activity/page' in resp.text
 
-    def test_second_page_returns_remaining_events(self, app):
+    def test_second_page_returns_remaining_events(self, app: FastAPI) -> None:
         """Second page fetches the remaining 10 events and has no further sentinel."""
         with TestClient(app, raise_server_exceptions=False) as client:
             now = int(time.time())

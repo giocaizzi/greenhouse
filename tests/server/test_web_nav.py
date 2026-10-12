@@ -2,8 +2,10 @@
 
 from http import HTTPStatus
 
+from fastapi.testclient import TestClient
 
-def test_more_menu_links_present(client):
+
+def test_more_menu_links_present(client: TestClient) -> None:
     """More menu links present."""
     resp = client.get("/")
     assert resp.status_code == HTTPStatus.OK
@@ -14,7 +16,7 @@ def test_more_menu_links_present(client):
     assert 'href="/preferences"' in resp.text
 
 
-def test_bell_is_anchor_not_button(client):
+def test_bell_is_anchor_not_button(client: TestClient) -> None:
     """Bell is anchor not button."""
     resp = client.get("/")
     assert resp.status_code == HTTPStatus.OK
@@ -23,7 +25,7 @@ def test_bell_is_anchor_not_button(client):
     assert 'href="/alerts"' in resp.text
 
 
-def test_footer_health_badge_links_to_health_page(client):
+def test_footer_health_badge_links_to_health_page(client: TestClient) -> None:
     """Footer health badge links to health page."""
     resp = client.get("/")
     assert resp.status_code == HTTPStatus.OK

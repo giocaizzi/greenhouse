@@ -2,8 +2,10 @@
 
 from http import HTTPStatus
 
+from fastapi.testclient import TestClient
 
-def test_sensors_list_renders(seeded_client):
+
+def test_sensors_list_renders(seeded_client: TestClient) -> None:
     """Sensors list renders."""
     resp = seeded_client.get("/clusters/1/sensors")
     assert resp.status_code == HTTPStatus.OK
@@ -11,14 +13,14 @@ def test_sensors_list_renders(seeded_client):
     assert "Monstera deliciosa" in resp.text  # plant link
 
 
-def test_new_sensor_form_includes_plant_options(seeded_client):
+def test_new_sensor_form_includes_plant_options(seeded_client: TestClient) -> None:
     """New sensor form includes plant options."""
     resp = seeded_client.get("/clusters/1/sensors/new")
     assert resp.status_code == HTTPStatus.OK
     assert "Monstera deliciosa" in resp.text  # plant_id <option>
 
 
-def test_create_sensor(seeded_client):
+def test_create_sensor(seeded_client: TestClient) -> None:
     """Create sensor."""
     resp = seeded_client.post(
         "/clusters/1/sensors",

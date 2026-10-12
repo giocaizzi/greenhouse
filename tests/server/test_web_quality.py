@@ -2,26 +2,27 @@
 
 from http import HTTPStatus
 
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 
 class TestQualityPage:
     """Tests for quality page."""
 
-    def test_renders_ok(self, client):
+    def test_renders_ok(self, client: TestClient) -> None:
         """Renders OK."""
         resp = client.get("/quality")
         assert resp.status_code == HTTPStatus.OK
         assert "text/html" in resp.headers["content-type"]
         assert "Data Quality" in resp.text
 
-    def test_empty_state(self, client):
+    def test_empty_state(self, client: TestClient) -> None:
         """Empty DB → all-clear state."""
         resp = client.get("/quality")
         assert resp.status_code == HTTPStatus.OK
         assert "No issues found" in resp.text
 
-    def test_shows_issue_codes(self, app):
+    def test_shows_issue_codes(self, app: FastAPI) -> None:
         """Seeding a sensor without a plant and a cluster without config → codes appear."""
         with TestClient(app, raise_server_exceptions=False) as client:
             # Cluster with no irrigation config
@@ -37,7 +38,7 @@ class TestQualityPage:
             assert "sensor_without_plant" in resp.text
             assert "cluster_without_config" in resp.text
 
-    def test_severity_badges_present(self, app):
+    def test_severity_badges_present(self, app: FastAPI) -> None:
         """Issue rows include a severity badge."""
         with TestClient(app, raise_server_exceptions=False) as client:
             client.post("/api/v1/clusters", json={"name": "Badge Cluster"})

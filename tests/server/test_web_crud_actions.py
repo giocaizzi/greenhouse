@@ -2,10 +2,12 @@
 
 from http import HTTPStatus
 
+from fastapi.testclient import TestClient
+
 # --- Cluster edit/delete --------------------------------------------------
 
 
-def test_cluster_list_shows_edit_and_delete(seeded_client):
+def test_cluster_list_shows_edit_and_delete(seeded_client: TestClient) -> None:
     """Cluster list shows edit and delete."""
     resp = seeded_client.get("/clusters")
     assert resp.status_code == HTTPStatus.OK
@@ -13,7 +15,7 @@ def test_cluster_list_shows_edit_and_delete(seeded_client):
     assert 'hx-delete="/clusters/1"' in resp.text
 
 
-def test_cluster_edit_form_renders(seeded_client):
+def test_cluster_edit_form_renders(seeded_client: TestClient) -> None:
     """Cluster edit form renders."""
     resp = seeded_client.get("/clusters/1/edit")
     assert resp.status_code == HTTPStatus.OK
@@ -21,7 +23,7 @@ def test_cluster_edit_form_renders(seeded_client):
     assert 'name="environment"' in resp.text
 
 
-def test_cluster_edit_post_updates(seeded_client):
+def test_cluster_edit_post_updates(seeded_client: TestClient) -> None:
     """Cluster edit post updates."""
     resp = seeded_client.post(
         "/clusters/1/edit",
@@ -34,7 +36,7 @@ def test_cluster_edit_post_updates(seeded_client):
     assert "Loft" in resp2.text
 
 
-def test_cluster_delete_removes_row(seeded_client):
+def test_cluster_delete_removes_row(seeded_client: TestClient) -> None:
     """Cluster delete removes row."""
     resp = seeded_client.delete("/clusters/1")
     assert resp.status_code == HTTPStatus.OK
@@ -43,7 +45,7 @@ def test_cluster_delete_removes_row(seeded_client):
     assert "Test Cluster" not in resp2.text
 
 
-def test_cluster_delete_404(client):
+def test_cluster_delete_404(client: TestClient) -> None:
     """Cluster delete 404."""
     resp = client.delete("/clusters/9999")
     assert resp.status_code == HTTPStatus.NOT_FOUND
@@ -52,7 +54,7 @@ def test_cluster_delete_404(client):
 # --- Plant edit/delete ----------------------------------------------------
 
 
-def test_plant_list_shows_edit_and_delete(seeded_client):
+def test_plant_list_shows_edit_and_delete(seeded_client: TestClient) -> None:
     """Plant list shows edit and delete."""
     resp = seeded_client.get("/clusters/1/plants")
     assert resp.status_code == HTTPStatus.OK
@@ -60,14 +62,14 @@ def test_plant_list_shows_edit_and_delete(seeded_client):
     assert 'hx-delete="/clusters/1/plants/1"' in resp.text
 
 
-def test_plant_edit_form_renders(seeded_client):
+def test_plant_edit_form_renders(seeded_client: TestClient) -> None:
     """Plant edit form renders."""
     resp = seeded_client.get("/clusters/1/plants/1/edit")
     assert resp.status_code == HTTPStatus.OK
     assert 'value="Monstera deliciosa"' in resp.text
 
 
-def test_plant_edit_updates(seeded_client):
+def test_plant_edit_updates(seeded_client: TestClient) -> None:
     """Plant edit updates."""
     resp = seeded_client.post(
         "/clusters/1/plants/1/edit",
@@ -79,7 +81,7 @@ def test_plant_edit_updates(seeded_client):
     assert "Monstera adansonii" in resp2.text
 
 
-def test_plant_delete_removes_row(seeded_client):
+def test_plant_delete_removes_row(seeded_client: TestClient) -> None:
     """Plant delete removes row."""
     resp = seeded_client.delete("/clusters/1/plants/1")
     assert resp.status_code == HTTPStatus.OK
@@ -87,7 +89,7 @@ def test_plant_delete_removes_row(seeded_client):
     assert "Monstera deliciosa" not in resp2.text
 
 
-def test_plant_edit_404_wrong_cluster(seeded_client):
+def test_plant_edit_404_wrong_cluster(seeded_client: TestClient) -> None:
     """Plant edit 404 wrong cluster."""
     seeded_client.post("/api/v1/clusters", json={"name": "Other"})
     resp = seeded_client.get("/clusters/2/plants/1/edit")
@@ -97,7 +99,7 @@ def test_plant_edit_404_wrong_cluster(seeded_client):
 # --- Sensor edit/delete ---------------------------------------------------
 
 
-def test_sensor_list_shows_edit_and_delete(seeded_client):
+def test_sensor_list_shows_edit_and_delete(seeded_client: TestClient) -> None:
     """Sensor list shows edit and delete."""
     resp = seeded_client.get("/clusters/1/sensors")
     assert resp.status_code == HTTPStatus.OK
@@ -105,7 +107,7 @@ def test_sensor_list_shows_edit_and_delete(seeded_client):
     assert 'hx-delete="/clusters/1/sensors/1"' in resp.text
 
 
-def test_sensor_edit_form_renders(seeded_client):
+def test_sensor_edit_form_renders(seeded_client: TestClient) -> None:
     """Sensor edit form renders."""
     resp = seeded_client.get("/clusters/1/sensors/1/edit")
     assert resp.status_code == HTTPStatus.OK
@@ -114,7 +116,7 @@ def test_sensor_edit_form_renders(seeded_client):
     assert "Monstera deliciosa" in resp.text
 
 
-def test_sensor_edit_updates(seeded_client):
+def test_sensor_edit_updates(seeded_client: TestClient) -> None:
     """Sensor edit updates."""
     resp = seeded_client.post(
         "/clusters/1/sensors/1/edit",
@@ -126,7 +128,7 @@ def test_sensor_edit_updates(seeded_client):
     assert "Renamed Sensor" in resp2.text
 
 
-def test_sensor_delete_removes_row(seeded_client):
+def test_sensor_delete_removes_row(seeded_client: TestClient) -> None:
     """Sensor delete removes row."""
     resp = seeded_client.delete("/clusters/1/sensors/1")
     assert resp.status_code == HTTPStatus.OK
@@ -137,7 +139,7 @@ def test_sensor_delete_removes_row(seeded_client):
 # --- Irrigator edit/delete ------------------------------------------------
 
 
-def test_irrigator_list_now_shows_controls_and_edit_delete(seeded_client):
+def test_irrigator_list_now_shows_controls_and_edit_delete(seeded_client: TestClient) -> None:
     """Irrigator list now shows controls and edit delete."""
     resp = seeded_client.get("/clusters/1")
     assert resp.status_code == HTTPStatus.OK
@@ -149,14 +151,14 @@ def test_irrigator_list_now_shows_controls_and_edit_delete(seeded_client):
     assert 'hx-delete="/clusters/1/irrigators"' in resp.text
 
 
-def test_irrigator_edit_form_renders(seeded_client):
+def test_irrigator_edit_form_renders(seeded_client: TestClient) -> None:
     """Irrigator edit form renders."""
     resp = seeded_client.get("/clusters/1/irrigators/edit")
     assert resp.status_code == HTTPStatus.OK
     assert 'value="Test Irrigator"' in resp.text
 
 
-def test_irrigator_edit_updates(seeded_client):
+def test_irrigator_edit_updates(seeded_client: TestClient) -> None:
     """Irrigator edit updates."""
     resp = seeded_client.post(
         "/clusters/1/irrigators/edit",
@@ -168,7 +170,7 @@ def test_irrigator_edit_updates(seeded_client):
     assert "Pump X" in resp2.text
 
 
-def test_irrigator_delete_removes_row(seeded_client):
+def test_irrigator_delete_removes_row(seeded_client: TestClient) -> None:
     """Irrigator delete removes row."""
     resp = seeded_client.delete("/clusters/1/irrigators")
     assert resp.status_code == HTTPStatus.OK

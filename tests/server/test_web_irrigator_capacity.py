@@ -2,8 +2,10 @@
 
 from http import HTTPStatus
 
+from fastapi.testclient import TestClient
 
-def test_new_form_renders_capacity_inputs(seeded_client):
+
+def test_new_form_renders_capacity_inputs(seeded_client: TestClient) -> None:
     """The create form exposes the two optional capacity inputs."""
     seeded_client.post("/api/v1/clusters", json={"name": "Empty"})
     resp = seeded_client.get("/clusters/2/irrigators/new")
@@ -14,7 +16,7 @@ def test_new_form_renders_capacity_inputs(seeded_client):
     assert "Pump flow (L/min)" in resp.text
 
 
-def test_create_persists_capacity(seeded_client):
+def test_create_persists_capacity(seeded_client: TestClient) -> None:
     """Submitting the create form persists the capacity fields."""
     seeded_client.post("/api/v1/clusters", json={"name": "Empty"})
     capacity = {"reservoir_l": "15.5", "flow_rate_l_per_min": "2.5"}
@@ -31,7 +33,7 @@ def test_create_persists_capacity(seeded_client):
     assert {key: created[key] for key in capacity} == {key: float(value) for key, value in capacity.items()}
 
 
-def test_create_without_capacity_leaves_none(seeded_client):
+def test_create_without_capacity_leaves_none(seeded_client: TestClient) -> None:
     """Blank capacity inputs persist as None, not 0."""
     seeded_client.post("/api/v1/clusters", json={"name": "Empty"})
     resp = seeded_client.post(
@@ -52,7 +54,7 @@ def test_create_without_capacity_leaves_none(seeded_client):
     assert created["flow_rate_l_per_min"] is None
 
 
-def test_edit_form_prefills_capacity(seeded_client):
+def test_edit_form_prefills_capacity(seeded_client: TestClient) -> None:
     """The edit form pre-fills existing capacity values."""
     seeded_client.put(
         "/api/v1/clusters/1/irrigator",
@@ -66,7 +68,7 @@ def test_edit_form_prefills_capacity(seeded_client):
     assert 'value="1.2"' in resp.text
 
 
-def test_edit_persists_capacity(seeded_client):
+def test_edit_persists_capacity(seeded_client: TestClient) -> None:
     """Submitting the edit form persists updated capacity values."""
     capacity = {"reservoir_l": "30.0", "flow_rate_l_per_min": "3.0"}
     resp = seeded_client.post(

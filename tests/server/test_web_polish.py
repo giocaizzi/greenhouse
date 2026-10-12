@@ -2,10 +2,12 @@
 
 from http import HTTPStatus
 
+from fastapi.testclient import TestClient
+
 from greenhouse_server.web.context import APP_VERSION
 
 
-def test_html_404_returns_full_error_page(client):
+def test_html_404_returns_full_error_page(client: TestClient) -> None:
     """HTML 404 returns full error page."""
     resp = client.get("/clusters/9999")
     assert resp.status_code == HTTPStatus.NOT_FOUND
@@ -18,7 +20,7 @@ def test_html_404_returns_full_error_page(client):
     assert '<a href="/scheduler">Scheduler</a>' in resp.text  # nav present
 
 
-def test_hx_404_returns_bare_partial(client):
+def test_hx_404_returns_bare_partial(client: TestClient) -> None:
     """HX 404 returns bare partial."""
     resp = client.get("/clusters/9999", headers={"HX-Request": "true"})
     assert resp.status_code == HTTPStatus.NOT_FOUND
@@ -29,7 +31,7 @@ def test_hx_404_returns_bare_partial(client):
     assert "<html" not in resp.text.lower()
 
 
-def test_api_404_still_returns_json(client):
+def test_api_404_still_returns_json(client: TestClient) -> None:
     """API 404 still returns JSON."""
     resp = client.get("/api/v1/clusters/9999")
     assert resp.status_code == HTTPStatus.NOT_FOUND
@@ -38,7 +40,7 @@ def test_api_404_still_returns_json(client):
     assert body["detail"] == "Cluster not found"
 
 
-def test_dark_mode_toggle_present(client):
+def test_dark_mode_toggle_present(client: TestClient) -> None:
     """Dark mode toggle present."""
     resp = client.get("/")
     assert resp.status_code == HTTPStatus.OK
@@ -47,7 +49,7 @@ def test_dark_mode_toggle_present(client):
     assert "localStorage.getItem('theme')" in resp.text
 
 
-def test_api_422_still_returns_json(client):
+def test_api_422_still_returns_json(client: TestClient) -> None:
     # POST /api/v1/clusters without a body → 422 JSON
     """API 422 still returns JSON."""
     resp = client.post("/api/v1/clusters", json={})
@@ -55,7 +57,7 @@ def test_api_422_still_returns_json(client):
     assert "application/json" in resp.headers["content-type"]
 
 
-def test_html_422_returns_error_partial(client):
+def test_html_422_returns_error_partial(client: TestClient) -> None:
     # Missing required name field on the web form → error partial
     """HTML 422 returns error partial."""
     resp = client.post("/clusters", data={})
@@ -64,7 +66,7 @@ def test_html_422_returns_error_partial(client):
     assert "Error 422" in resp.text
 
 
-def test_footer_shows_app_version(client):
+def test_footer_shows_app_version(client: TestClient) -> None:
     """Footer shows app version."""
     resp = client.get("/")
     assert resp.status_code == HTTPStatus.OK
@@ -72,7 +74,7 @@ def test_footer_shows_app_version(client):
     assert 'title="App version"' in resp.text
 
 
-def test_closed_command_palette_is_hidden(client):
+def test_closed_command_palette_is_hidden(client: TestClient) -> None:
     # Regression: `.cmdk` sets display:flex (to center the panel when open),
     # which—being an author rule—overrides the UA `dialog:not([open])` reset and
     # leaves the CLOSED palette as a full-viewport z-index:300 layer that renders

@@ -3,6 +3,7 @@
 import time
 from http import HTTPStatus
 
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from greenhouse_core.models import Sensor, SensorReading
@@ -11,27 +12,27 @@ from greenhouse_core.models import Sensor, SensorReading
 class TestHealthPage:
     """Tests for health page."""
 
-    def test_renders_ok(self, client):
+    def test_renders_ok(self, client: TestClient) -> None:
         """Renders OK."""
         resp = client.get("/health")
         assert resp.status_code == HTTPStatus.OK
         assert "text/html" in resp.headers["content-type"]
         assert "System Health" in resp.text
 
-    def test_shows_status_badge(self, client):
+    def test_shows_status_badge(self, client: TestClient) -> None:
         """Shows status badge."""
         resp = client.get("/health")
         assert resp.status_code == HTTPStatus.OK
         # Empty system → status "down"
         assert "down" in resp.text
 
-    def test_health_badge_fragment_still_works(self, client):
+    def test_health_badge_fragment_still_works(self, client: TestClient) -> None:
         """The _health_badge partial endpoint must still respond independently."""
         resp = client.get("/health/badge")
         assert resp.status_code == HTTPStatus.OK
         assert "scheduler" in resp.text.lower()
 
-    def test_degraded_when_stale_sensor(self, app):
+    def test_degraded_when_stale_sensor(self, app: FastAPI) -> None:
         """A sensor with no fresh reading + a fresh reading elsewhere → degraded."""
         with TestClient(app, raise_server_exceptions=False) as client:
             # Create cluster + sensor
