@@ -1,0 +1,40 @@
+ ⭘                                          greenhouse — http://testserver                                     10:00:00
+       ▄▄▀▀▄▄          greenhouse  http://testserver
+   ▄▄▀▀▀▀▀▀▀▀▀▀▄▄      status ok   scheduler stopped   cloud reachable
+ ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀    sensors 4 fresh / 0 stale   irrigators 2   alerts 2   last sync 5m ago
+  ▀▄▀▀▄▀▄▀▀▄▀▄▀▀▄▀
+  ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▄
+▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+╭──────────────────────────────────────────────────╮ Job                                     Trigger            Next run
+│ Scheduler                                        │ Sensor data sync · built-in             interval[3:00:00]  —
+│ automatic runs  active                           │ Check all clusters · built-in           cron               —
+│ scheduler       stopped                          │ Daily plant health snapshot · built-in  cron               —
+│ last sync       5m ago                           │ Sensor anomaly scan · built-in          interval[0:15:00]  —
+│                 p pause/resume · S sync · P      │ Device health monitor · built-in        interval[0:05:00]  —
+│                 plant DB · H health snapshot ·   │                                                            ▏
+│                 del remove job                   │
+╰──────────────────────────────────────────────────╯
+ Devices
+
+ ID  Device             Status  Age     Note
+ 1   Monstera probe     ok      5m ago
+ 2   Nephrolepis probe  ok      5m ago
+ 3   Citrus probe       ok      5m ago
+ 4   Echeveria probe    ok      5m ago
+ 1   Living Room pump   ok      —
+ 2   Balcony pump       ok      —
+ Data quality  1 plant_without_sensor, 4 unknown_species
+ Severity  Code                  Entity    Label                 Message
+ warning   unknown_species       plant #2  Nephrolepis exaltata  Species 'Nephrolepis exaltata' is not in the plant data
+ warning   unknown_species       plant #3  Citrus limon          Species 'Citrus limon' is not in the plant database.
+ warning   unknown_species       plant #4  Echeveria elegans     Species 'Echeveria elegans' is not in the plant databas
+ warning   plant_without_sensor  plant #5  Opuntia microdasys    Plant 'Opuntia microdasys' has no sensor assigned.
+ warning   unknown_species       plant #5  Opuntia microdasys    Species 'Opuntia microdasys' is not in the plant databa
+                                                                                                                  ▍
+
+
+
+
+
+
+ p Pause/resume  S Sync sensors  P Plant-DB sync  H Health snapshot  del Remove job  d Dashboard  a Alerts  ▏^p palette

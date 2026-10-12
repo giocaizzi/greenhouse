@@ -35,36 +35,112 @@ greenhouse-cli = { workspace = true }
 
 [tool.uv]
 default-groups = ["dev"]
+# Transitive pins, not imported by greenhouse code. mcp: >=1.28.1 clears PYSEC-2026-3481/3482/3483;
+# <2 because fastapi-mcp 0.4.0 (latest) constructs `mcp.server.lowlevel.Server(name, version)`, which
+# mcp 2.x rejects (TypeError at mount). Lift the ceiling when fastapi-mcp supports mcp 2.
+constraint-dependencies = ["mcp>=1.28.1,<2"]
 
 [dependency-groups]
 dev = [
+    "hypothesis>=6.100",
+    "import-linter>=2.15",
+    "mypy>=2.3.1",
     "pytest>=9.1.1",
     "pytest-cov>=5.0",
+    "pytest-xdist>=3.6",
     "ruff>=0.16.3",
+    "time-machine>=2.15",
 ]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["libs/greenhouse-core", "libs/greenhouse-server", "libs/greenhouse-cli", "tests"]
+markers = ["dotenv: keep Settings' real `.env` loading (tests/conftest.py disables it for every other test)"]
+
+[tool.mypy]
+# Every module under libs/ and tests/ is mypy-strict clean (`make typecheck` = plain `uv run mypy`). The
+# generated Alembic revisions are frozen history and stay out of scope.
+files = ["libs/greenhouse-core", "libs/greenhouse-server", "libs/greenhouse-cli", "tests"]
+exclude = ["/migrations/versions/"]
+python_version = "3.11"
+strict = true
+follow_imports = "silent"
+# The workspace packages ship no py.typed, so without this their imports resolve through the
+# editable .pth files as "missing" and silently become Any. Source paths make them typed.
+# tests/ is on the path because the tests import their helpers from the rootdir (`from fake_data import …`,
+# `from server.conftest import …`); explicit_package_bases names each test module by that root.
+mypy_path = ["libs/greenhouse-core", "libs/greenhouse-server", "libs/greenhouse-cli", "tests"]
+explicit_package_bases = true
+
+[[tool.mypy.overrides]]
+# Third-party packages with neither stubs nor py.typed — the only untyped imports. Targeted,
+# so a new untyped dependency fails loudly instead of silently becoming Any.
+module = ["tinytuya", "tinytuya.*", "apscheduler.*", "fastapi_mcp", "fastapi_mcp.*"]
+ignore_missing_imports = true
 
 [tool.ruff]
 line-length = 120
 target-version = "py311"
 src = ["libs/greenhouse-core", "libs/greenhouse-server", "libs/greenhouse-cli", "tests"]
+# tests/ is a rootdir-import tree (`from fake_data import …`, `from server.conftest import …`); an
+# __init__.py would make pytest import those modules a second time under a `tests.` name.
+namespace-packages = ["tests"]
+# Frozen Alembic history: generated DDL that is never edited (AGENTS.md, Key facts).
+extend-exclude = ["libs/greenhouse-core/greenhouse_core/migrations/versions"]
 
 [tool.ruff.lint]
-select = [
-    "E",   # pycodestyle errors
-    "W",   # pycodestyle warnings
-    "F",   # pyflakes
-    "I",   # isort
-    "B",   # flake8-bugbear
-    "C4",  # flake8-comprehensions
-    "UP",  # pyupgrade
+# Every stable rule. The only ignores are rules that cannot hold together with something we keep;
+# each one names what it conflicts with.
+select = ["ALL"]
+extend-select = [
+    # Preview rules opted in by full name (explicit-preview-rules): size limits that agree with
+    # scripts/sizecheck.py, enforced since before the ALL switch.
+    "PLR0904",  # too-many-public-methods
+    "PLR0914",  # too-many-locals
+    "PLR0917",  # too-many-positional-arguments
+    "PLR1702",  # too-many-nested-blocks
 ]
 ignore = [
-    "E501",  # line too long (handled by formatter)
-    "B008",  # function call in argument defaults
+    "COM812",  # conflicts with ruff format (trailing commas are the formatter's call)
+    "ISC001",  # conflicts with ruff format (implicit string concatenation on one line)
+    "CPY001",  # a per-file copyright header; the licence lives once in LICENSE
+]
+# Preview refines two stable rules: BLE001 accepts a handler that logs the exception or re-raises, S310
+# accepts literal http(s) URLs. With explicit-preview-rules, no other preview rule turns on by itself.
+# Preview behaviour may change between ruff releases; the version is pinned in uv.lock and
+# .pre-commit-config.yaml.
+preview = true
+explicit-preview-rules = true
+# Frozen user-facing text (MCP tool descriptions, CLI help, TUI renders) uses the en dash and ×.
+allowed-confusables = ["–", "×"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.mccabe]
+max-complexity = 8
+
+[tool.ruff.lint.pylint]
+max-branches = 8
+# 23 statements best approximates the 40-body-line rule of scripts/sizecheck.py on libs/ code.
+max-statements = 23
+max-nested-blocks = 3
+
+[tool.ruff.lint.flake8-type-checking]
+# FastAPI, Pydantic, pydantic-settings and SQLAlchemy read these annotations at runtime: their imports
+# must stay real imports, never move under TYPE_CHECKING.
+runtime-evaluated-decorators = [
+    "fastapi.APIRouter.get",
+    "fastapi.APIRouter.post",
+    "fastapi.APIRouter.put",
+    "fastapi.APIRouter.patch",
+    "fastapi.APIRouter.delete",
+    "fastapi.APIRouter.api_route",
+]
+runtime-evaluated-base-classes = [
+    "pydantic.BaseModel",
+    "pydantic_settings.BaseSettings",
+    "sqlalchemy.orm.DeclarativeBase",
 ]
 
 [tool.ruff.format]
@@ -72,6 +148,182 @@ quote-style = "double"
 indent-style = "space"
 
 [tool.ruff.lint.per-file-ignores]
-"__init__.py" = ["F401"]  # unused imports in __init__
-"tests/*" = ["B011"]  # assert False check
-"scripts/*" = ["E402"]  # intentional sys.path before import
+# S101: pytest asserts are the test language.
+"tests/**" = ["S101"]
+# Invariant 7 (AGENTS.md): every /api/v1 route declares `response_model=` (FAST001 calls it redundant)
+# and its docstring — the MCP tool description — documents request parameters only, never framework
+# dependencies such as `repo` (D417 wants every parameter).
+"libs/greenhouse-server/greenhouse_server/routes/*" = ["D417", "FAST001"]
+
+[tool.importlinter]
+root_packages = ["greenhouse_core", "greenhouse_server", "greenhouse_cli"]
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "CLI is HTTP-only"
+type = "forbidden"
+source_modules = ["greenhouse_cli"]
+forbidden_modules = ["greenhouse_core", "greenhouse_server", "sqlalchemy", "fastapi"]
+
+[[tool.importlinter.contracts]]
+name = "Core never imports server or CLI"
+type = "forbidden"
+source_modules = ["greenhouse_core"]
+forbidden_modules = ["greenhouse_server", "greenhouse_cli"]
+
+[[tool.importlinter.contracts]]
+name = "Server layers: app > routes|web > deps|auth > scheduler > state > services > config"
+type = "layers"
+layers = [
+  "greenhouse_server.app",
+  "greenhouse_server.routes | greenhouse_server.web",
+  "greenhouse_server.deps | greenhouse_server.auth",
+  "greenhouse_server.scheduler",
+  "greenhouse_server.state",
+  "greenhouse_server.services",
+  "greenhouse_server.config",
+]
+ignore_imports = [
+  "greenhouse_server.services.pump_watcher_jobs -> greenhouse_server.scheduler",  # lazy: pump-watcher scheduling reads _app at call time
+  "greenhouse_server.services.irrigation_jobs -> greenhouse_server.scheduler",  # lazy: leak-check jobs read _app at call time
+  "greenhouse_server.services.system_health -> greenhouse_server.scheduler",
+]
+
+[[tool.importlinter.contracts]]
+name = "API routes and web routes are independent"
+type = "independence"
+modules = ["greenhouse_server.routes", "greenhouse_server.web"]
+
+[[tool.importlinter.contracts]]
+name = "Devices do not depend on decision logic, learning or persistence"
+type = "forbidden"
+source_modules = ["greenhouse_core.devices"]
+forbidden_modules = ["greenhouse_core.logic", "greenhouse_core.learning", "greenhouse_core.repository",
+                     "greenhouse_core.schemas", "greenhouse_core.sync"]
+
+[[tool.importlinter.contracts]]
+name = "Data definitions stay below behaviour"
+type = "forbidden"
+source_modules = ["greenhouse_core.models", "greenhouse_core.schemas", "greenhouse_core.constants"]
+forbidden_modules = ["greenhouse_core.logic", "greenhouse_core.learning", "greenhouse_core.repository",
+                     "greenhouse_core.devices", "greenhouse_core.sync"]
+
+[[tool.importlinter.contracts]]
+name = "Learning builds on logic; engine's advisory hook is the only way back"
+type = "layers"
+layers = ["greenhouse_core.learning", "greenhouse_core.logic"]
+ignore_imports = ["greenhouse_core.logic.engine -> greenhouse_core.learning"]
+
+[[tool.importlinter.contracts]]
+name = "Inside logic: engine orchestrates; helpers/values never import it"
+type = "layers"
+layers = [
+  "greenhouse_core.logic.engine",
+  "greenhouse_core.logic.fallback | greenhouse_core.logic.sensors | greenhouse_core.logic.stress | greenhouse_core.logic.trends",
+  "greenhouse_core.logic.timing | greenhouse_core.logic.cleaning | greenhouse_core.logic.plant_needs",
+  "greenhouse_core.logic.decision",
+]
+
+[[tool.importlinter.contracts]]
+name = "Logic never drives devices"
+type = "forbidden"
+source_modules = ["greenhouse_core.logic"]
+forbidden_modules = ["greenhouse_core.devices", "greenhouse_core.sync"]
+
+[[tool.importlinter.contracts]]
+name = "TUI view-model modules stay widget-free and I/O-free"
+type = "forbidden"
+source_modules = ["greenhouse_cli.tui.model", "greenhouse_cli.tui.formatting", "greenhouse_cli.tui.render"]
+forbidden_modules = ["textual", "greenhouse_cli.tui.screens", "greenhouse_cli.tui.widgets", "greenhouse_cli.client",
+                     "greenhouse_cli._client", "httpx"]
+
+[[tool.importlinter.contracts]]
+name = "CLI layers: main > commands > tui > client > _client > constants"
+type = "layers"
+layers = [
+  "greenhouse_cli.main", "greenhouse_cli.commands", "greenhouse_cli.tui", "greenhouse_cli.client", "greenhouse_cli._client",
+  "greenhouse_cli.constants",
+]
+
+[[tool.importlinter.contracts]]
+name = "TUI layers: app > screens > widgets|render > model > formatting|sprites"
+type = "layers"
+layers = [
+  "greenhouse_cli.tui.app",
+  "greenhouse_cli.tui.screens",
+  "greenhouse_cli.tui.widgets | greenhouse_cli.tui.render",
+  "greenhouse_cli.tui.model",
+  "greenhouse_cli.tui.formatting | greenhouse_cli.tui.sprites",
+]
+ignore_imports = [
+  "greenhouse_cli.tui.screens.base -> greenhouse_cli.tui.app",    # TYPE_CHECKING only
+  "greenhouse_cli.tui.screens.search -> greenhouse_cli.tui.app",  # TYPE_CHECKING only
+]
+
+[[tool.importlinter.contracts]]
+name = "Web layers: router > routes|exception_handlers > context|templating > filters|weekdays|forms"
+type = "layers"
+layers = [
+  "greenhouse_server.web.router",
+  "greenhouse_server.web.routes | greenhouse_server.web.exception_handlers",
+  "greenhouse_server.web.context | greenhouse_server.web.templating",
+  "greenhouse_server.web.filters | greenhouse_server.web.weekdays | greenhouse_server.web.forms",
+]
+
+[[tool.importlinter.contracts]]
+name = "API route modules are independent of each other"
+type = "independence"
+modules = ["greenhouse_server.routes.*"]
+
+[[tool.importlinter.contracts]]
+name = "Web route modules are independent of each other"
+type = "independence"
+modules = ["greenhouse_server.web.routes.*"]
+
+[[tool.importlinter.contracts]]
+name = "Services are HTTP-free (no FastAPI/Starlette, no request plumbing)"
+type = "forbidden"
+source_modules = ["greenhouse_server.services"]
+forbidden_modules = ["fastapi", "starlette", "greenhouse_server.deps", "greenhouse_server.auth"]
+allow_indirect_imports = true
+ignore_imports = [
+  "greenhouse_server.services.jobs -> fastapi",        # TYPE_CHECKING annotation only
+  "greenhouse_server.services.pump_watcher_jobs -> fastapi",  # TYPE_CHECKING annotation only (_run_pump_watcher's app)
+  "greenhouse_server.services.device_keys -> fastapi",  # TYPE_CHECKING annotation only (persist_local_key's app)
+]
+
+[[tool.importlinter.contracts]]
+name = "SQLAlchemy stays behind the repository"
+type = "forbidden"
+source_modules = [
+  "greenhouse_server.routes", "greenhouse_server.web", "greenhouse_server.services", "greenhouse_server.scheduler",
+  "greenhouse_core.logic", "greenhouse_core.learning", "greenhouse_core.stats", "greenhouse_core.plant_db",
+  "greenhouse_core.utils", "greenhouse_core.schemas", "greenhouse_core.constants",
+]
+forbidden_modules = ["sqlalchemy", "alembic", "greenhouse_core.database"]
+allow_indirect_imports = true
+ignore_imports = [
+  "greenhouse_server.web.context -> sqlalchemy",        # TYPE_CHECKING annotation only
+  "greenhouse_server.services.jobs -> sqlalchemy",  # TYPE_CHECKING annotation only
+]
+
+[[tool.importlinter.contracts]]
+name = "Persistence sits below domain behaviour"
+type = "forbidden"
+source_modules = ["greenhouse_core.repository", "greenhouse_core.database", "greenhouse_core.models", "greenhouse_core.auth"]
+forbidden_modules = ["greenhouse_core.logic", "greenhouse_core.learning", "greenhouse_core.devices", "greenhouse_core.sync",
+                     "greenhouse_core.plant_db", "greenhouse_core.stats", "greenhouse_core.utils", "greenhouse_core.schemas"]
+
+[[tool.importlinter.contracts]]
+name = "Only sync and server wiring touch devices"
+type = "forbidden"
+source_modules = ["greenhouse_core.learning", "greenhouse_core.stats", "greenhouse_core.plant_db", "greenhouse_core.utils",
+                  "greenhouse_core.repository", "greenhouse_core.auth", "greenhouse_core.database"]
+forbidden_modules = ["greenhouse_core.devices", "greenhouse_core.sync", "tinytuya"]
+
+[[tool.importlinter.contracts]]
+name = "Server config is a leaf"
+type = "forbidden"
+source_modules = ["greenhouse_server.config"]
+forbidden_modules = ["greenhouse_core.repository", "greenhouse_core.models", "greenhouse_core.devices", "greenhouse_core.logic",
+                     "greenhouse_core.learning", "greenhouse_core.sync", "sqlalchemy", "fastapi"]

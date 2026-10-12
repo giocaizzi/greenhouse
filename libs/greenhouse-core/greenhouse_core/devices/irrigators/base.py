@@ -8,10 +8,12 @@ irrigator model. The ABC pins the contract every adapter must honour;
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from typing import TYPE_CHECKING, Any
 
-from greenhouse_core.devices.health import DeviceHealthState, HealthAlarm
-from greenhouse_core.devices.profile import IrrigatorProfile
-from greenhouse_core.models import Irrigator
+if TYPE_CHECKING:
+    from greenhouse_core.devices.health import DeviceHealthState, HealthAlarm
+    from greenhouse_core.devices.profile import IrrigatorProfile
+    from greenhouse_core.models import Irrigator
 
 
 class AbstractIrrigatorAdapter(ABC):
@@ -36,7 +38,7 @@ class AbstractIrrigatorAdapter(ABC):
         """Stop the irrigator. Idempotent — calling on an already-stopped device is OK."""
 
     @abstractmethod
-    def status(self, irrigator: Irrigator) -> dict:
+    def status(self, irrigator: Irrigator) -> dict[str, Any]:
         """Return a status dict; shape is per-model but always JSON-serialisable."""
 
     @abstractmethod

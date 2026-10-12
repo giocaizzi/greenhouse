@@ -1,13 +1,18 @@
 """Tests for per-plant health score endpoints."""
 
 import time
+from http import HTTPStatus
 
 import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 from greenhouse_core.repository import IrrigationRepository
 
+MAX_HEALTH_SCORE = 100
 
-def _seed_plant_with_sensor(client) -> tuple[int, int]:
+
+def _seed_plant_with_sensor(client: TestClient) -> tuple[int, int]:
     """Create cluster→plant→sensor; return (plant_id, sensor_id)."""
     client.post("/api/v1/clusters", json={"name": "HC"})
     client.post(
@@ -23,12 +28,12 @@ def _seed_plant_with_sensor(client) -> tuple[int, int]:
     )
     client.post(
         "/api/v1/clusters/1/sensors",
-        json={"tuya_device_id": "fake_health_sensor", "name": "HS", "type": "soil_moisture", "plant_id": 1},
+        json={"tuya_device_id": "fake_health_sensor", "name": "HS", "type": "tuya.tr301z", "plant_id": 1},
     )
     return 1, 1
 
 
-def _repo(app) -> IrrigationRepository:
+def _repo(app: FastAPI) -> IrrigationRepository:
     session = app.state.session_factory()
     return IrrigationRepository(session)
 
@@ -36,7 +41,7 @@ def _repo(app) -> IrrigationRepository:
 class TestPlantHealthEndpoints:
     """GET /plants/{id}/health and POST /plants/health/snapshot."""
 
-    def test_spike_readings_do_not_move_the_in_band_ratio(self, client, app):
+    def test_spike_readings_do_not_move_the_in_band_ratio(self, client: TestClient, app: FastAPI) -> None:
         """Health is a judgement, so it reads the cleaned view like the engine.
 
         Eight in-band samples plus one 2% glitch: counted raw the plant loses
@@ -56,7 +61,7 @@ class TestPlantHealthEndpoints:
 
         assert history[0]["soil_in_band_pct"] == pytest.approx(100.0)
 
-    def test_get_health_score_in_band(self, client, app):
+    def test_get_health_score_in_band(self, client: TestClient, app: FastAPI) -> None:
         """Score is between 0 and 100; snapshot soil_in_band_pct reflects in-band ratio."""
         plant_id, sensor_id = _seed_plant_with_sensor(client)
         now = int(time.time())
@@ -69,12 +74,12 @@ class TestPlantHealthEndpoints:
         repo.session.commit()
 
         resp = client.get(f"/api/v1/plants/{plant_id}/health")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         data = resp.json()
         assert data["plant_id"] == plant_id
         assert data["species"] == "Monstera deliciosa"
         assert data["current_score"] is not None
-        assert 0 <= data["current_score"] <= 100
+        assert 0 <= data["current_score"] <= MAX_HEALTH_SCORE
 
         # Persist snapshot and verify soil_in_band_pct stored correctly
         client.post("/api/v1/plants/health/snapshot")
@@ -83,20 +88,23 @@ class TestPlantHealthEndpoints:
         assert len(history) == 1
         assert history[0]["soil_in_band_pct"] == pytest.approx(75.0)
 
-    def test_get_health_zero_readings_returns_none_score(self, client, app):
+    @pytest.mark.usefixtures("app")
+    def test_get_health_zero_readings_returns_none_score(self, client: TestClient) -> None:
         """Plant with no sensor readings yields current_score=None and empty history."""
         plant_id, _ = _seed_plant_with_sensor(client)
         resp = client.get(f"/api/v1/plants/{plant_id}/health")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         data = resp.json()
         assert data["current_score"] is None
         assert data["history"] == []
 
-    def test_get_health_404_unknown_plant(self, client, app):
+    @pytest.mark.usefixtures("app")
+    def test_get_health_404_unknown_plant(self, client: TestClient) -> None:
+        """Get health 404 unknown plant."""
         resp = client.get("/api/v1/plants/9999/health")
-        assert resp.status_code == 404
+        assert resp.status_code == HTTPStatus.NOT_FOUND
 
-    def test_snapshot_creates_daily_row(self, client, app):
+    def test_snapshot_creates_daily_row(self, client: TestClient, app: FastAPI) -> None:
         """POST /plants/health/snapshot writes a row and GET history returns it."""
         plant_id, sensor_id = _seed_plant_with_sensor(client)
         now = int(time.time())
@@ -106,21 +114,22 @@ class TestPlantHealthEndpoints:
         repo.session.commit()
 
         snap_resp = client.post("/api/v1/plants/health/snapshot")
-        assert snap_resp.status_code == 200
+        assert snap_resp.status_code == HTTPStatus.OK
         assert snap_resp.json()["rows_written"] == 1
 
         hist_resp = client.get(f"/api/v1/plants/{plant_id}/health")
-        assert hist_resp.status_code == 200
+        assert hist_resp.status_code == HTTPStatus.OK
         assert len(hist_resp.json()["history"]) == 1
 
-    def test_snapshot_no_data_skips_plant(self, client, app):
+    @pytest.mark.usefixtures("app")
+    def test_snapshot_no_data_skips_plant(self, client: TestClient) -> None:
         """Snapshot skips plants with no readings; rows_written = 0."""
         _seed_plant_with_sensor(client)
         resp = client.post("/api/v1/plants/health/snapshot")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         assert resp.json()["rows_written"] == 0
 
-    def test_snapshot_idempotent(self, client, app):
+    def test_snapshot_idempotent(self, client: TestClient, app: FastAPI) -> None:
         """Calling snapshot twice on the same day keeps history at 1 entry."""
         plant_id, sensor_id = _seed_plant_with_sensor(client)
         now = int(time.time())

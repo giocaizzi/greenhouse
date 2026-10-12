@@ -1,0 +1,10 @@
+
+ Usage: greenhouse plant sync [OPTIONS]
+
+ Sync plants with evidence-based care data.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ --plant-id        <int>  Sync specific plant                                                     │
+│ --cluster         <int>  Sync plants in cluster                                                  │
+│ --help                   Show this message and exit.                                             │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

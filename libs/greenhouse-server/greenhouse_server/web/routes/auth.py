@@ -6,22 +6,17 @@ required a login would be a circular trap.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from typing import Annotated
 from urllib.parse import urlparse
 
-from fastapi import APIRouter, Depends, Form, Request, status
-from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, Form, Query, Request, status
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
-from greenhouse_core.auth import record_login
-from greenhouse_server.auth import (
-    _get_settings,
-    _session_from_app,
-    authenticate,
-    clear_session_cookie,
-    issue_token,
-    set_session_cookie,
-)
+from greenhouse_server.auth import authenticate, clear_session_cookie, issue_token, set_session_cookie
 from greenhouse_server.config import Settings
+from greenhouse_server.deps import RepoDep
+from greenhouse_server.state import get_settings
 from greenhouse_server.web.context import base_context
 from greenhouse_server.web.templating import templates
 
@@ -41,33 +36,40 @@ def _safe_next(next_url: str | None) -> str:
 @router.get("/login", response_class=HTMLResponse)
 def login_form(
     request: Request,
-    next: str | None = None,
-    settings: Settings = Depends(_get_settings),
+    settings: Annotated[Settings, Depends(get_settings)],
+    next_url: Annotated[str | None, Query(alias="next")] = None,
 ) -> HTMLResponse:
     """Render the login form. ?next=… preserves the originally requested path."""
     ctx = base_context(
         request,
-        next_url=_safe_next(next),
+        next_url=_safe_next(next_url),
         auth_enabled=settings.auth_enabled,
         show_chrome=False,
     )
     return templates.TemplateResponse(request, "auth/login.html", ctx)
 
 
+@dataclass(frozen=True, slots=True)
+class _LoginForm:
+    """``POST /login``: the credentials and the path to return to (field ``next``)."""
+
+    username: Annotated[str, Form()]
+    password: Annotated[str, Form()]
+    next_url: Annotated[str, Form(alias="next")] = "/"
+
+
 @router.post("/login")
 def login_submit(
     request: Request,
-    username: str = Form(),
-    password: str = Form(),
-    next: str = Form(default="/"),
-    settings: Settings = Depends(_get_settings),
-    session: Session = Depends(_session_from_app),
-):
+    repo: RepoDep,
+    settings: Annotated[Settings, Depends(get_settings)],
+    form: Annotated[_LoginForm, Depends()],
+) -> Response:
     """Handle the login form. Sets a session cookie and redirects to ?next."""
-    target = _safe_next(next)
+    target = _safe_next(form.next_url)
     if not settings.auth_enabled:
         return RedirectResponse(url=target, status_code=303)
-    user = authenticate(session, username, password)
+    user = authenticate(repo.session, form.username, form.password)
     if user is None:
         ctx = base_context(
             request,
@@ -83,8 +85,8 @@ def login_submit(
             status_code=status.HTTP_401_UNAUTHORIZED,
         )
     token = issue_token(settings, user)
-    record_login(session, user)
-    session.commit()
+    repo.record_login(user)
+    repo.commit()
     response = RedirectResponse(url=target, status_code=303)
     set_session_cookie(response, settings, token)
     return response
@@ -92,8 +94,8 @@ def login_submit(
 
 @router.post("/logout")
 def logout_submit(
-    settings: Settings = Depends(_get_settings),
-):
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> Response:
     """Clear the session cookie and bounce to /login."""
     response = RedirectResponse(url="/login", status_code=303)
     clear_session_cookie(response, settings)

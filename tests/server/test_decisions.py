@@ -1,25 +1,33 @@
 """Tests for the decision log API."""
 
+from http import HTTPStatus
+
+from fastapi.testclient import TestClient
+
 
 class TestDecisionLog:
-    def test_list_empty(self, seeded_client):
+    """Tests for decision log."""
+
+    def test_list_empty(self, seeded_client: TestClient) -> None:
+        """List empty."""
         resp = seeded_client.get("/api/v1/clusters/1/decisions")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         data = resp.json()
         assert data["cluster_id"] == 1
         assert isinstance(data["items"], list)
 
-    def test_not_found(self, client):
+    def test_not_found(self, client: TestClient) -> None:
+        """Not found."""
         resp = client.get("/api/v1/clusters/999/decisions")
-        assert resp.status_code == 404
+        assert resp.status_code == HTTPStatus.NOT_FOUND
 
-    def test_irrigate_writes_decision_log(self, seeded_client):
+    def test_irrigate_writes_decision_log(self, seeded_client: TestClient) -> None:
         """POST /clusters/{id}/irrigate with persist=True writes a decision_log row."""
         resp = seeded_client.post("/api/v1/clusters/1/irrigate", json={"dry_run": True, "no_sync": True})
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
 
         resp = seeded_client.get("/api/v1/clusters/1/decisions")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         data = resp.json()
         assert len(data["items"]) >= 1
 
@@ -31,7 +39,7 @@ class TestDecisionLog:
         assert isinstance(entry["reason_text"], str)
         assert len(entry["reason_text"]) > 0
 
-    def test_decision_log_fields(self, seeded_client):
+    def test_decision_log_fields(self, seeded_client: TestClient) -> None:
         """Verify all expected DecisionLogResponse fields are present."""
         seeded_client.post("/api/v1/clusters/1/irrigate", json={"dry_run": True, "no_sync": True})
         resp = seeded_client.get("/api/v1/clusters/1/decisions")
@@ -51,30 +59,32 @@ class TestDecisionLog:
         }
         assert expected_fields <= set(item.keys())
 
-    def test_multiple_decisions_ordered_newest_first(self, seeded_client):
+    def test_multiple_decisions_ordered_newest_first(self, seeded_client: TestClient) -> None:
         """Multiple pipeline calls produce ordered log entries."""
-        seeded_client.post("/api/v1/clusters/1/irrigate", json={"dry_run": True, "no_sync": True})
-        seeded_client.post("/api/v1/clusters/1/irrigate", json={"dry_run": True, "no_sync": True})
+        runs = 2
+        for _ in range(runs):
+            seeded_client.post("/api/v1/clusters/1/irrigate", json={"dry_run": True, "no_sync": True})
 
         resp = seeded_client.get("/api/v1/clusters/1/decisions")
         items = resp.json()["items"]
-        assert len(items) >= 2
+        assert len(items) >= runs
         timestamps = [i["evaluated_at"] for i in items]
         assert timestamps == sorted(timestamps, reverse=True)
 
-    def test_limit_param(self, seeded_client):
+    def test_limit_param(self, seeded_client: TestClient) -> None:
         """Limit query parameter is respected."""
         for _ in range(3):
             seeded_client.post("/api/v1/clusters/1/irrigate", json={"dry_run": True, "no_sync": True})
 
-        resp = seeded_client.get("/api/v1/clusters/1/decisions?limit=2")
-        assert resp.status_code == 200
-        assert len(resp.json()["items"]) <= 2
+        limit = 2
+        resp = seeded_client.get(f"/api/v1/clusters/1/decisions?limit={limit}")
+        assert resp.status_code == HTTPStatus.OK
+        assert len(resp.json()["items"]) <= limit
 
-    def test_full_irrigate_also_writes_activity(self, seeded_client):
+    def test_full_irrigate_also_writes_activity(self, seeded_client: TestClient) -> None:
         """Non-dry-run irrigate writes both a decision log entry and activity event."""
         resp = seeded_client.post("/api/v1/clusters/1/irrigate", json={"dry_run": False, "no_sync": True})
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         action = resp.json()["action"]
         assert action in ("irrigated", "skip", "error")
 
@@ -84,7 +94,7 @@ class TestDecisionLog:
 
         # Activity timeline must have an entry for this cluster
         resp = seeded_client.get("/api/v1/activity?entity_type=cluster&entity_id=1&source=irrigation")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         items = resp.json()["items"]
         codes = {i["code"] for i in items}
         assert codes & {"irrigated", "decision_skip"}

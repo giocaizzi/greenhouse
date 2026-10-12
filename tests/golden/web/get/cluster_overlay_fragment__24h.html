@@ -1,0 +1,23 @@
+<!-- GET /clusters/2/overlay-fragment?hours=24 -->
+<!-- status: 200 -->
+<!-- content-type: text/html; charset=utf-8 -->
+
+<div id="chart-container-overlay" class="chart-container">
+  <canvas id="chart-overlay"></canvas>
+  <script type="application/json" id="chart-data-overlay">{"cluster_id":2,"hours":24,"datasets":[{"metric":"soil","points":[[1776166200,38.3],[1776173400,38.0],[1776180600,37.7],[1776187800,37.4],[1776195000,37.1],[1776202200,36.8],[1776209400,36.5],[1776216600,36.2],[1776223800,35.9],[1776231000,35.6],[1776238200,35.3],[1776245400,35.0]],"original_max":null},{"metric":"humidity","points":[[1776166200,65.0],[1776173400,66.0],[1776180600,67.0],[1776187800,68.0],[1776195000,69.0],[1776202200,70.0],[1776209400,65.0],[1776216600,66.0],[1776223800,67.0],[1776231000,68.0],[1776238200,69.0],[1776245400,70.0]],"original_max":null},{"metric":"light","points":[[1776166200,100.0],[1776173400,100.0],[1776180600,100.0],[1776187800,100.0],[1776195000,100.0],[1776202200,100.0],[1776209400,100.0],[1776216600,100.0],[1776223800,100.0],[1776231000,100.0],[1776238200,100.0],[1776245400,100.0]],"original_max":10000.0}],"events":[{"timestamp":1776175200,"action":"start","duration_minutes":5},{"timestamp":1776175205,"action":"schedule_updated","duration_minutes":null}],"normalised":true}</script>
+  <script>
+    (function () {
+      var el = document.getElementById('chart-overlay');
+      var raw = document.getElementById('chart-data-overlay');
+      if (!el || !raw) return;
+      var data = JSON.parse(raw.textContent);
+      function draw() {
+        if (typeof window.renderMultiMetricChart === 'function') {
+          window.renderMultiMetricChart(el, data);
+        }
+      }
+      if (window.Chart) { draw(); }
+      else { window.addEventListener('load', draw); }
+    })();
+  </script>
+</div>

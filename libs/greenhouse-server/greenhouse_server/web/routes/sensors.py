@@ -2,107 +2,154 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Annotated
 
-from greenhouse_server.deps import RepoDep, require_cluster
+from fastapi import APIRouter, Depends, Form, HTTPException, Path, Request
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
+
+from greenhouse_server.deps import DeviceRegistryDep, RepoDep, require_cluster, require_sensor_in_cluster
+from greenhouse_server.services import inventory
+from greenhouse_server.services.inventory import DeviceIdExistsError, PlantNotInClusterError
 from greenhouse_server.web.context import base_context
+from greenhouse_server.web.forms import device_type_options, parsed_or_400
 from greenhouse_server.web.templating import templates
+
+if TYPE_CHECKING:
+    from greenhouse_core.devices import DeviceRegistry
 
 router = APIRouter(include_in_schema=False)
 
 
-def _get_sensor_in_cluster(repo, cluster_id: int, sensor_id: int):
-    sensor = repo.get_sensor(sensor_id)
-    if not sensor or sensor.cluster_id != cluster_id:
-        raise HTTPException(404, "Sensor not found in cluster")
-    return sensor
+# Each form class bundles one route's path parameters and form fields, in the route's order
+# (FastAPI builds it as a dependency from the same declarations: parsing and errors unchanged).
+
+
+@dataclass(frozen=True, slots=True)
+class _NewSensorForm:
+    """``POST /clusters/{cluster_id}/sensors``: the add form."""
+
+    cluster_id: Annotated[int, Path()]
+    tuya_device_id: Annotated[str, Form()]
+    name: Annotated[str, Form()]
+    type: Annotated[str, Form()]
+    plant_id: Annotated[str, Form()] = ""
+
+
+@dataclass(frozen=True, slots=True)
+class _EditSensorForm:
+    """``POST /clusters/{cluster_id}/sensors/{sensor_id}/edit``: the edit form (blank plant: unassign)."""
+
+    cluster_id: Annotated[int, Path()]
+    sensor_id: Annotated[int, Path()]
+    name: Annotated[str, Form()]
+    type: Annotated[str, Form()]
+    plant_id: Annotated[str, Form()] = ""
 
 
 def _parse_optional_plant_id(plant_id: str) -> int | None:
-    plant_id = plant_id.strip()
-    if not plant_id:
-        return None
+    return parsed_or_400(plant_id, int, error="Invalid plant_id")
+
+
+def _type_options(registry: DeviceRegistry | None, current: str | None = None) -> list[tuple[str, str]]:
+    """The sensor type ``<select>`` options: the registry's model keys (plus a stored unknown one)."""
+    return device_type_options(inventory.known_device_types(registry, "sensor"), current)
+
+
+def _require_known_type(registry: DeviceRegistry | None, sensor_type: str, stored: str) -> None:
+    """422 error page (the API's status and wording) for a changed type no adapter handles."""
     try:
-        return int(plant_id)
-    except ValueError as exc:
-        raise HTTPException(400, "Invalid plant_id") from exc
+        inventory.require_known_device_type(registry, "sensor", sensor_type, stored=stored)
+    except inventory.UnknownDeviceTypeError as exc:
+        raise HTTPException(422, str(exc)) from None
 
 
 @router.get("/clusters/{cluster_id}/sensors")
-def list_sensors(cluster_id: int, repo: RepoDep):
-    """Legacy URL — sensors are rendered inline on the unified cluster detail
-    page. The 301 keeps old bookmarks working."""
+def list_sensors(cluster_id: int, repo: RepoDep) -> Response:
+    """Redirect the legacy sensors URL to the detail page's sensors section (301).
+
+    Sensors are rendered inline on the unified cluster detail page; the
+    redirect keeps old bookmarks working.
+    """
     require_cluster(repo, cluster_id)
     return RedirectResponse(url=f"/clusters/{cluster_id}#sensors", status_code=301)
 
 
 @router.get("/clusters/{cluster_id}/sensors/new")
-def new_sensor_form(request: Request, cluster_id: int, repo: RepoDep):
+def new_sensor_form(request: Request, cluster_id: int, repo: RepoDep, registry: DeviceRegistryDep) -> Response:
+    """Render the add-sensor form."""
     cluster = require_cluster(repo, cluster_id)
     plants = repo.get_plants_in_cluster(cluster_id)
     return templates.TemplateResponse(
-        request, "sensors/new.html", base_context(request, cluster=cluster, plants=plants)
+        request,
+        "sensors/new.html",
+        base_context(request, cluster=cluster, plants=plants, type_options=_type_options(registry)),
     )
 
 
 @router.post("/clusters/{cluster_id}/sensors")
-def create_sensor(
-    request: Request,
-    cluster_id: int,
-    repo: RepoDep,
-    tuya_device_id: str = Form(...),
-    name: str = Form(...),
-    type: str = Form(...),
-    plant_id: str = Form(""),
-):
+def create_sensor(repo: RepoDep, registry: DeviceRegistryDep, form: Annotated[_NewSensorForm, Depends()]) -> Response:
+    """Register a sensor from the form and return to the cluster's sensors section."""
+    cluster_id = form.cluster_id
     require_cluster(repo, cluster_id)
-    pid = _parse_optional_plant_id(plant_id)
-    repo.add_sensor(
-        cluster_id=cluster_id,
-        tuya_device_id=tuya_device_id,
-        name=name,
-        sensor_type=type,
-        config={},
-        plant_id=pid,
-    )
-    repo.session.commit()
+    pid = _parse_optional_plant_id(form.plant_id)
+    try:
+        inventory.create_sensor(
+            repo,
+            cluster_id,
+            inventory.DeviceSpec(form.tuya_device_id, form.name, form.type, {}),
+            registry=registry,
+            plant_id=pid,
+        )
+    except inventory.UnknownDeviceTypeError as exc:
+        raise HTTPException(422, str(exc)) from None
+    except PlantNotInClusterError as exc:
+        raise HTTPException(404, f"Plant {exc.plant_id} not found in cluster") from None
+    except DeviceIdExistsError:
+        raise HTTPException(409, "Device ID already exists") from None
+    repo.commit()
     return RedirectResponse(url=f"/clusters/{cluster_id}#sensors", status_code=303)
 
 
 @router.get("/clusters/{cluster_id}/sensors/{sensor_id}/edit")
-def edit_sensor_form(request: Request, cluster_id: int, sensor_id: int, repo: RepoDep):
+def edit_sensor_form(
+    request: Request, cluster_id: int, sensor_id: int, repo: RepoDep, registry: DeviceRegistryDep
+) -> Response:
+    """Render the edit form of one of the cluster's sensors."""
     cluster = require_cluster(repo, cluster_id)
-    sensor = _get_sensor_in_cluster(repo, cluster_id, sensor_id)
+    sensor = require_sensor_in_cluster(repo, cluster_id, sensor_id)
     plants = repo.get_plants_in_cluster(cluster_id)
     return templates.TemplateResponse(
-        request, "sensors/edit.html", base_context(request, cluster=cluster, sensor=sensor, plants=plants)
+        request,
+        "sensors/edit.html",
+        base_context(
+            request, cluster=cluster, sensor=sensor, plants=plants, type_options=_type_options(registry, sensor.type)
+        ),
     )
 
 
 @router.post("/clusters/{cluster_id}/sensors/{sensor_id}/edit")
-def update_sensor(
-    request: Request,
-    cluster_id: int,
-    sensor_id: int,
-    repo: RepoDep,
-    name: str = Form(...),
-    type: str = Form(...),
-    plant_id: str = Form(""),
-):
-    _get_sensor_in_cluster(repo, cluster_id, sensor_id)
-    pid = _parse_optional_plant_id(plant_id)
+def update_sensor(repo: RepoDep, registry: DeviceRegistryDep, form: Annotated[_EditSensorForm, Depends()]) -> Response:
+    """Save the sensor form and return to the cluster's sensors section."""
+    cluster_id, sensor_id = form.cluster_id, form.sensor_id
+    sensor = require_sensor_in_cluster(repo, cluster_id, sensor_id)
+    pid = _parse_optional_plant_id(form.plant_id)
+    _require_known_type(registry, form.type, sensor.type)
+    try:
+        inventory.ensure_plant_in_cluster(repo, cluster_id, pid)
+    except PlantNotInClusterError as exc:
+        raise HTTPException(404, f"Plant {exc.plant_id} not found in cluster") from None
     # update_sensor routes plant_id changes through the assignment-history-aware
     # path. Pass plant_id explicitly even when None so an empty form unassigns.
-    repo.update_sensor(sensor_id, name=name, type=type, plant_id=pid)
-    repo.session.commit()
+    repo.update_sensor(sensor_id, name=form.name, type=form.type, plant_id=pid)
+    repo.commit()
     return RedirectResponse(url=f"/clusters/{cluster_id}#sensors", status_code=303)
 
 
 @router.delete("/clusters/{cluster_id}/sensors/{sensor_id}", response_class=HTMLResponse)
-def delete_sensor(cluster_id: int, sensor_id: int, repo: RepoDep):
+def delete_sensor(cluster_id: int, sensor_id: int, repo: RepoDep) -> Response:
     """HTMX-targeted delete; returns an empty HTML body so the row is removed."""
-    _get_sensor_in_cluster(repo, cluster_id, sensor_id)
+    require_sensor_in_cluster(repo, cluster_id, sensor_id)
     repo.delete_sensor(sensor_id)
-    repo.session.commit()
+    repo.commit()
     return HTMLResponse("")

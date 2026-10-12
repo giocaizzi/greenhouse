@@ -1,71 +1,99 @@
 """Sensor data aggregation for irrigation decisions."""
 
-import statistics
+from __future__ import annotations
 
+import statistics
+import time
+from typing import TYPE_CHECKING
+
+from greenhouse_core.constants import NIGHT_LUX_THRESHOLD, SENSOR_READING_STALE_SECONDS
 from greenhouse_core.logic.cleaning import clean_readings
 from greenhouse_core.logic.decision import PerSensorSnapshot, SensorSnapshot
-from greenhouse_core.repository import IrrigationRepository
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+    from greenhouse_core.logic.cleaning import CleanedReading
+    from greenhouse_core.models import Sensor
+    from greenhouse_core.repository import IrrigationRepository
 
 
-def get_recent_sensor_data(db: IrrigationRepository, cluster_id: int, hours: int = 24) -> SensorSnapshot:
+def _mean_or_none(values: Sequence[float]) -> float | None:
+    """Mean of the values, or None when there are none — "no data" is not zero."""
+    return statistics.mean(values) if values else None
+
+
+def _per_sensor_snapshot(sensor: Sensor, readings: Sequence[CleanedReading], fresh_since: int) -> PerSensorSnapshot:
+    """One sensor's own averages, so the audit log can show which plant drove the call."""
+    return PerSensorSnapshot(
+        sensor_id=sensor.id,
+        plant_id=sensor.plant_id,
+        name=sensor.name,
+        avg_temperature=_mean_or_none([r.temperature for r in readings if r.temperature is not None]),
+        avg_humidity=_mean_or_none([r.env_humidity for r in readings if r.env_humidity is not None]),
+        avg_soil_moisture=_mean_or_none([r.soil_moisture for r in readings if r.soil_moisture is not None]),
+        latest_soil_moisture=_latest_soil(readings, fresh_since),
+    )
+
+
+def _latest_soil(readings: Sequence[CleanedReading], fresh_since: int) -> float | None:
+    """A sensor's newest cleaned soil value (readings oldest → newest), or None when it is stale.
+
+    "Current" must mean current: a reading older than SENSOR_READING_STALE_SECONDS
+    (the pipeline force-syncs before deciding, so this is a silent sensor) neither
+    drives the soil rule nor vetoes anything; the other sensors decide.
+    """
+    newest = next((r for r in reversed(readings) if r.soil_moisture is not None), None)
+    if newest is None or newest.timestamp < fresh_since:
+        return None
+    return newest.soil_moisture
+
+
+def _latest_water_warning(readings: Sequence[CleanedReading], fresh_since: int) -> bool:
+    """The device's water flag as of its newest reading that carries one, if that reading is current.
+
+    The flag is a *state*: the latest report says whether it is raised now (any
+    True in the window let one stale backfilled row trigger irrigation hours
+    after it cleared). A row without the flag (``None`` — e.g. a reading stored
+    after a failed live read) says nothing, so it neither raises nor clears it.
+    A flag last reported before ``fresh_since`` (SENSOR_READING_STALE_SECONDS ago)
+    comes from a silent sensor and is not current, exactly like its soil value.
+    """
+    newest = next((r for r in reversed(readings) if r.water_warning is not None), None)
+    return newest is not None and newest.timestamp >= fresh_since and bool(newest.water_warning)
+
+
+def get_recent_sensor_data(
+    db: IrrigationRepository, cluster_id: int, hours: int = 24, *, now: int | None = None
+) -> SensorSnapshot:
     """Build a typed snapshot of cluster sensors over the lookback window.
 
     The snapshot drives every downstream rule (stress, conflict, adjustments)
     and is persisted with the decision so the audit log can replay the inputs.
+    ``now`` (default: the wall clock) dates each sensor's current reading; one
+    older than SENSOR_READING_STALE_SECONDS is not current.
     """
+    fresh_since = (now if now is not None else int(time.time())) - SENSOR_READING_STALE_SECONDS
     sensors = db.get_sensors_in_cluster(cluster_id)
     if not sensors:
         return SensorSnapshot()
 
-    all_temps: list[float] = []
-    all_env_humidity: list[float] = []
-    all_soil: list[float] = []
-    all_light: list[int] = []
-    water_warnings: list[str] = []
-    per_sensor: list[PerSensorSnapshot] = []
-
-    for sensor in sensors:
-        # Clean per sensor (range-gate + spike-reject) so spurious samples don't
-        # drag the cluster aggregates — especially min_soil_moisture, which the
-        # engine uses as "the driest plant drives the call".
-        readings = clean_readings(db.get_recent_readings(sensor.id, hours=hours))
-        s_temps: list[float] = []
-        s_humidity: list[float] = []
-        s_soil: list[float] = []
-
-        for r in readings:
-            if r.temperature is not None:
-                all_temps.append(r.temperature)
-                s_temps.append(r.temperature)
-            if r.env_humidity is not None:
-                all_env_humidity.append(r.env_humidity)
-                s_humidity.append(r.env_humidity)
-            if r.soil_moisture is not None:
-                all_soil.append(r.soil_moisture)
-                s_soil.append(r.soil_moisture)
-            if r.light is not None and r.light > 15:
-                all_light.append(r.light)
-            if r.water_warning:
-                water_warnings.append(sensor.name)
-
-        per_sensor.append(
-            PerSensorSnapshot(
-                sensor_id=sensor.id,
-                plant_id=sensor.plant_id,
-                name=sensor.name,
-                avg_temperature=statistics.mean(s_temps) if s_temps else None,
-                avg_humidity=statistics.mean(s_humidity) if s_humidity else None,
-                avg_soil_moisture=statistics.mean(s_soil) if s_soil else None,
-            )
-        )
+    # Clean per sensor (range-gate + spike-reject) so spurious samples don't
+    # drag the cluster aggregates — especially min_soil_moisture, which the
+    # engine uses as "the driest plant drives the call".
+    cleaned = [(sensor, clean_readings(db.get_recent_readings(sensor.id, hours=hours))) for sensor in sensors]
+    pooled = [r for _, readings in cleaned for r in readings]
+    all_soil = [r.soil_moisture for r in pooled if r.soil_moisture is not None]
+    daytime_light = [r.light for r in pooled if r.light is not None and r.light > NIGHT_LUX_THRESHOLD]
+    water_warnings = {sensor.name for sensor, readings in cleaned if _latest_water_warning(readings, fresh_since)}
 
     return SensorSnapshot(
-        avg_temperature=statistics.mean(all_temps) if all_temps else None,
-        avg_env_humidity=statistics.mean(all_env_humidity) if all_env_humidity else None,
-        avg_soil_moisture=statistics.mean(all_soil) if all_soil else None,
+        avg_temperature=_mean_or_none([r.temperature for r in pooled if r.temperature is not None]),
+        avg_env_humidity=_mean_or_none([r.env_humidity for r in pooled if r.env_humidity is not None]),
+        avg_soil_moisture=_mean_or_none(all_soil),
         min_soil_moisture=min(all_soil) if all_soil else None,
         max_soil_moisture=max(all_soil) if all_soil else None,
-        avg_light=statistics.mean(all_light) if all_light else None,
-        per_sensor=per_sensor,
-        water_warnings=sorted(set(water_warnings)),
+        avg_light=_mean_or_none(daytime_light),
+        per_sensor=[_per_sensor_snapshot(sensor, readings, fresh_since) for sensor, readings in cleaned],
+        water_warnings=sorted(water_warnings),
     )

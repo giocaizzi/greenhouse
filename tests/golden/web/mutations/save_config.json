@@ -1,0 +1,59 @@
+{
+ "body_lines": [
+  ""
+ ],
+ "db_effect": {
+  "irrigation_configs": {
+   "changed": {
+    "1": {
+     "auto_run": [
+      1,
+      0
+     ],
+     "duration_minutes": [
+      3,
+      4
+     ],
+     "interval_hours": [
+      12,
+      24
+     ],
+     "mode": [
+      "smart",
+      "fixed"
+     ],
+     "quiet_end_hour": [
+      null,
+      6
+     ],
+     "quiet_start_hour": [
+      null,
+      22
+     ]
+    }
+   }
+  }
+ },
+ "device_calls": {
+  "irrigator": [],
+  "sensor": []
+ },
+ "headers": {
+  "location": "/clusters/1#config"
+ },
+ "request": {
+  "form": {
+   "auto_run": "false",
+   "duration_minutes": "4",
+   "interval_hours": "24",
+   "mode": "fixed",
+   "quiet_end_hour": "6",
+   "quiet_start_hour": "22"
+  },
+  "headers": {},
+  "method": "POST",
+  "url": "/clusters/1/config"
+ },
+ "status": 303,
+ "templates": []
+}

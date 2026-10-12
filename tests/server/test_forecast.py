@@ -1,28 +1,98 @@
 """Tests for GET /api/v1/clusters/{cluster_id}/forecast."""
 
 import time
+from http import HTTPStatus
+from typing import TYPE_CHECKING, TypedDict, cast
 
 import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 from fake_data import FAKE_DEVICE_ID, FAKE_PLANT_SPECIES, FAKE_SENSOR_ID
+from greenhouse_core.constants import FORECAST_CONFIDENCE_MEDIUM
+from greenhouse_core.models import EventAction, TriggeredBy
+from greenhouse_core.plant_db import get_plant_database
+from greenhouse_core.repository import IrrigationRepository
+from greenhouse_server.services.forecast import ForecastService
+
+if TYPE_CHECKING:
+    from greenhouse_server.services.weather import WeatherClient
+
+
+def _seed_drainage_history(app: FastAPI, sensor_id: int, irrigator_id: int) -> None:
+    """An automatic start 3 h ago with a wet-up and a slow drain since, written through the app's DB."""
+    # We need to inject readings + irrigation events directly into the in-memory DB.
+    # The app fixture uses a shared engine stored on app.state — reach for it.
+    session_factory = app.state.session_factory
+    session = session_factory()
+    try:
+        repo = IrrigationRepository(session)
+        now = int(time.time())
+        # Irrigation event 3h ago (within 30d window)
+        irrigation_ts = now - 3 * 3600
+
+        # Pre-irrigation reading: 30min before
+        repo.add_sensor_reading(
+            sensor_id=sensor_id,
+            soil_moisture=30.0,
+            timestamp=irrigation_ts - 1500,
+        )
+        # Post-irrigation readings: 15min and 60min after
+        repo.add_sensor_reading(
+            sensor_id=sensor_id,
+            soil_moisture=55.0,
+            timestamp=irrigation_ts + 900,
+        )
+        repo.add_sensor_reading(
+            sensor_id=sensor_id,
+            soil_moisture=52.0,
+            timestamp=irrigation_ts + 3600,
+        )
+        # Current reading (after irrigation, moisture declining)
+        repo.add_sensor_reading(
+            sensor_id=sensor_id,
+            soil_moisture=50.0,
+            timestamp=now,
+        )
+        repo.add_irrigation_event(
+            irrigator_id=irrigator_id,
+            action=EventAction.START,
+            triggered_by=TriggeredBy.AUTO,
+            duration_minutes=2,
+            timestamp=irrigation_ts,
+        )
+        session.commit()
+    finally:
+        session.close()
+
+
+class ProfileSeed(TypedDict):
+    """What the ``seeded_with_profile`` fixture seeded, with the client that seeded it."""
+
+    client: TestClient
+    cluster_id: int
+    plant_id: int
+    sensor_id: int
+    irrigator_id: int
 
 
 class TestForecastEndpoint:
     """Integration tests for the next-irrigation forecast route."""
 
     @pytest.fixture
-    def outdoor_cluster_id(self, client):
+    def outdoor_cluster_id(self, client: TestClient) -> int:
         """Outdoor cluster suitable for weather-skip tests."""
         resp = client.post("/api/v1/clusters", json={"name": "Outdoor Cluster", "environment": "outdoor"})
-        assert resp.status_code == 201
-        return resp.json()["id"]
+        assert resp.status_code == HTTPStatus.CREATED
+        cluster_id: int = resp.json()["id"]
+        return cluster_id
 
     @pytest.fixture
-    def seeded_with_profile(self, client):
+    def seeded_with_profile(self, client: TestClient) -> ProfileSeed:
         """Cluster with sensor + readings + an irrigation event so a drainage profile exists."""
         # Create cluster
         resp = client.post("/api/v1/clusters", json={"name": "Profile Cluster", "environment": "indoor"})
-        assert resp.status_code == 201
+        assert resp.status_code == HTTPStatus.CREATED
         cluster_id = resp.json()["id"]
 
         # Add plant
@@ -34,7 +104,7 @@ class TestForecastEndpoint:
                 "water_needs": "medium",
             },
         )
-        assert resp.status_code == 201
+        assert resp.status_code == HTTPStatus.CREATED
         plant_id = resp.json()["id"]
 
         # Add sensor linked to plant
@@ -43,11 +113,11 @@ class TestForecastEndpoint:
             json={
                 "tuya_device_id": FAKE_SENSOR_ID,
                 "name": "Test Sensor",
-                "type": "soil_moisture",
+                "type": "tuya.tr301z",
                 "plant_id": plant_id,
             },
         )
-        assert resp.status_code == 201
+        assert resp.status_code == HTTPStatus.CREATED
         sensor_id = resp.json()["id"]
 
         # Add irrigator (needed so get_plant_profile can find irrigation events)
@@ -56,10 +126,10 @@ class TestForecastEndpoint:
             json={
                 "tuya_device_id": FAKE_DEVICE_ID,
                 "name": "Test Irrigator",
-                "type": "tuya_cloud",
+                "type": "rainpoint.ik10pw",
             },
         )
-        assert resp.status_code == 201
+        assert resp.status_code == HTTPStatus.CREATED
         irrigator_id = resp.json()["id"]
 
         return {
@@ -70,27 +140,27 @@ class TestForecastEndpoint:
             "irrigator_id": irrigator_id,
         }
 
-    def test_forecast_no_sensor_data(self, client):
+    def test_forecast_no_sensor_data(self, client: TestClient) -> None:
         """Cluster with no sensors returns null timestamps and fallback_constant method."""
         resp = client.post("/api/v1/clusters", json={"name": "Empty Cluster"})
-        assert resp.status_code == 201
+        assert resp.status_code == HTTPStatus.CREATED
         cluster_id = resp.json()["id"]
         client.post(f"/api/v1/clusters/{cluster_id}/plants", json={"species": FAKE_PLANT_SPECIES})
 
         resp = client.get(f"/api/v1/clusters/{cluster_id}/forecast")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         body = resp.json()
         assert body["cluster_id"] == cluster_id
         assert body["next_predicted_at"] is None
         assert body["hours_until_next"] is None
         assert body["method"] == "fallback_constant"
 
-    def test_forecast_404_missing_cluster(self, client):
+    def test_forecast_404_missing_cluster(self, client: TestClient) -> None:
         """Returns 404 for a non-existent cluster."""
         resp = client.get("/api/v1/clusters/99999/forecast")
-        assert resp.status_code == 404
+        assert resp.status_code == HTTPStatus.NOT_FOUND
 
-    def test_forecast_fallback_when_no_history(self, seeded_with_profile):
+    def test_forecast_fallback_when_no_history(self, seeded_with_profile: ProfileSeed) -> None:
         """Sensor data without irrigation history uses fallback_constant."""
         ctx = seeded_with_profile
         c = ctx["client"]
@@ -107,84 +177,36 @@ class TestForecastEndpoint:
         # Since we can't easily POST readings via API (no route for it),
         # we call /forecast and expect fallback_constant with null hours (no readings).
         resp = c.get(f"/api/v1/clusters/{cluster_id}/forecast")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         body = resp.json()
         assert body["cluster_id"] == cluster_id
         # No readings yet → null
         assert body["next_predicted_at"] is None
         assert body["hours_until_next"] is None
 
-    def test_forecast_with_drainage_slope(self, app, seeded_with_profile):
+    def test_forecast_with_drainage_slope(self, app: FastAPI, seeded_with_profile: ProfileSeed) -> None:
         """Forecast returns drainage_slope method when a learned profile is available."""
-
-        from greenhouse_core.repository import IrrigationRepository
-
-        # We need to inject readings + irrigation events directly into the in-memory DB.
-        # The app fixture uses a shared engine stored on app.state — reach for it.
-        session_factory = app.state.session_factory
-        session = session_factory()
-        try:
-            repo = IrrigationRepository(session)
-            ctx = seeded_with_profile
-            cluster_id = ctx["cluster_id"]
-            sensor_id = ctx["sensor_id"]
-            irrigator_id = ctx["irrigator_id"]
-
-            now = int(time.time())
-            # Irrigation event 3h ago (within 30d window)
-            irrigation_ts = now - 3 * 3600
-
-            # Pre-irrigation reading: 30min before
-            repo.add_sensor_reading(
-                sensor_id=sensor_id,
-                soil_moisture=30.0,
-                timestamp=irrigation_ts - 1500,
-            )
-            # Post-irrigation readings: 15min and 60min after
-            repo.add_sensor_reading(
-                sensor_id=sensor_id,
-                soil_moisture=55.0,
-                timestamp=irrigation_ts + 900,
-            )
-            repo.add_sensor_reading(
-                sensor_id=sensor_id,
-                soil_moisture=52.0,
-                timestamp=irrigation_ts + 3600,
-            )
-            # Current reading (after irrigation, moisture declining)
-            repo.add_sensor_reading(
-                sensor_id=sensor_id,
-                soil_moisture=50.0,
-                timestamp=now,
-            )
-            repo.add_irrigation_event(
-                irrigator_id=irrigator_id,
-                action="start",
-                triggered_by="auto",
-                duration_minutes=2,
-                timestamp=irrigation_ts,
-            )
-            session.commit()
-        finally:
-            session.close()
+        ctx = seeded_with_profile
+        cluster_id = ctx["cluster_id"]
+        _seed_drainage_history(app, ctx["sensor_id"], ctx["irrigator_id"])
 
         resp = ctx["client"].get(f"/api/v1/clusters/{cluster_id}/forecast")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         body = resp.json()
         assert body["cluster_id"] == cluster_id
         assert body["hours_until_next"] is not None
         assert body["hours_until_next"] > 0
         assert body["method"] == "drainage_slope"
         assert body["next_predicted_at"] is not None
-        assert body["confidence"] >= 0.4
+        assert body["confidence"] >= FORECAST_CONFIDENCE_MEDIUM
 
-    def test_forecast_response_shape(self, client):
+    def test_forecast_response_shape(self, client: TestClient) -> None:
         """Forecast always returns all required fields."""
         resp = client.post("/api/v1/clusters", json={"name": "Shape Cluster"})
         cluster_id = resp.json()["id"]
 
         resp = client.get(f"/api/v1/clusters/{cluster_id}/forecast")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         body = resp.json()
 
         required_fields = {
@@ -206,22 +228,19 @@ class TestForecastEndpoint:
 class TestForecastCleaning:
     """The forecast extrapolates from "current moisture" — a judgement call."""
 
-    def test_latest_spike_does_not_drive_the_eta(self, tmp_db):
+    def test_latest_spike_does_not_drive_the_eta(self, tmp_db: IrrigationRepository) -> None:
         """A 2% glitch as the newest sample must not report an instant drought.
 
         Read raw, ``current_moisture`` would be the spike and the ETA would
         collapse to 0h; through the cleaned view the real ~55% level stands.
         """
-        from greenhouse_core.plant_db import get_plant_database
-        from greenhouse_server.services.forecast import ForecastService
-
         cluster_id = tmp_db.add_cluster("Forecast Cleaning Cluster")
         plant_id = tmp_db.add_plant(cluster_id=cluster_id, species=FAKE_PLANT_SPECIES, water_needs="medium")
         sensor_id = tmp_db.add_sensor(
             cluster_id=cluster_id,
             tuya_device_id=FAKE_SENSOR_ID,
             name="Forecast Sensor",
-            sensor_type="soil_moisture",
+            sensor_type="tuya.tr301z",
             config={},
             plant_id=plant_id,
         )
@@ -235,3 +254,28 @@ class TestForecastCleaning:
 
         assert forecast.hours_until_next is not None
         assert forecast.hours_until_next > 0
+
+
+@pytest.mark.parametrize(("environment", "skips"), [("outdoor", True), ("greenhouse", False), ("indoor", False)])
+def test_forecast_rain_skip_follows_the_engine_outdoor_rule(
+    tmp_db: IrrigationRepository, environment: str, *, skips: bool
+) -> None:
+    """Only ``environment == "outdoor"`` gets the predicted rain skip — the engine applies no other."""
+
+    class _Rain:
+        def get_forecast(self, hours: int = 6) -> dict[str, float]:
+            del hours  # the forecast service passes it by keyword; the stub rains regardless
+            return {"precipitation_mm": 9.0}
+
+    cid = tmp_db.add_cluster("Rainy", environment=environment)
+    plant_id = tmp_db.add_plant(cluster_id=cid, species=FAKE_PLANT_SPECIES, water_needs="medium")
+    sensor_id = tmp_db.add_sensor(
+        cluster_id=cid, tuya_device_id=FAKE_SENSOR_ID, name="S", sensor_type="tuya.tr301z", config={}, plant_id=plant_id
+    )
+    now = int(time.time())
+    for i, moisture in enumerate([50.0, 52.0, 54.0]):
+        tmp_db.add_sensor_reading(sensor_id=sensor_id, timestamp=now - i * 3600, soil_moisture=moisture)
+    rain = cast("WeatherClient", _Rain())  # duck-typed stand-in: the service only calls get_forecast
+    forecast = ForecastService(tmp_db, get_plant_database(), rain).predict_next_irrigation(cid)
+
+    assert forecast.weather_skip is skips

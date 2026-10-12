@@ -8,31 +8,28 @@ becomes the single source of truth for the bell badge and /alerts page.
 """
 
 import time
+from typing import Any, NotRequired, TypedDict, Unpack
 
+from greenhouse_core.constants import ALERT_SCAN_LIMIT
 from greenhouse_core.models import (
     ENTITY_CLUSTER,
     ENTITY_SENSOR,
+    SOURCE_LEARNING,
+    SOURCE_MAINTENANCE,
+    ActivitySource,
     Alert,
     Cluster,
 )
 from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_core.repository import IrrigationRepository
-from greenhouse_server.services.maintenance import collect_learning_alerts, collect_maintenance_alerts
+from greenhouse_server.services.maintenance import AlertFinding, collect_learning_alerts, collect_maintenance_alerts
 from greenhouse_server.services.notify import NtfyClient, maybe_notify
 
 # Alert severities that warrant a push (info is suppressed).
 _NOTIFY_SEVERITIES = ("warning", "critical")
 
-SOURCE_LEARNING = "learning"
-SOURCE_MAINTENANCE = "maintenance"
-SOURCE_DECISION = "decision"
-SOURCE_LEAK = "leak"
-SOURCE_ANOMALY = "anomaly"
-SOURCE_SYSTEM = "system"
-SOURCE_PUMP = "pump"
 
-
-def _dedup_key(source: str, code: str, cluster_id: int | None, message: str) -> str:
+def _dedup_key(source: ActivitySource, code: str, cluster_id: int | None, message: str) -> str:
     """Deterministic key so repeats collapse onto the same row.
 
     ``message`` is included to distinguish per-sensor variants of the same
@@ -52,26 +49,38 @@ def _title_for(code: str, message: str) -> str:
     return code.replace("_", " ").title()
 
 
-def notify_if_new_alert(repo: IrrigationRepository, notifier: NtfyClient | None, alert: Alert) -> None:
-    """Push a notification for a genuinely-new warning/critical alert.
+def notify_if_new_alert(
+    repo: IrrigationRepository, notifier: NtfyClient | None, alert: Alert, *, was_open: bool
+) -> None:
+    """Push a notification for a warning/critical alert that this upsert opened.
 
-    Gated to ``occurrence_count == 1`` so a re-raised (repeating) alert never
-    re-notifies, and to warning/critical severities so ``info`` advisories stay
-    silent. The ``notify_alerts`` preference toggle is honoured via
-    :func:`maybe_notify`.
+    "Opened" means the row is new *or* a resolved row was re-opened (B-5: the old
+    ``occurrence_count == 1`` gate kept a re-raised alert silent forever). A repeat
+    of an alert that is still open or acknowledged (``was_open``) never re-notifies,
+    and ``info`` advisories stay silent. The ``notify_alerts`` preference toggle is
+    honoured via :func:`maybe_notify`.
+
+    Args:
+        repo: Active repository session (reads the preferences row).
+        notifier: ntfy client, or None when notifications are unconfigured.
+        alert: The row the upsert returned.
+        was_open: Whether an unresolved alert with the same dedup key existed before the upsert.
     """
-    if notifier is None:
+    if notifier is None or was_open:
         return
     if alert.severity not in _NOTIFY_SEVERITIES:
-        return
-    if alert.occurrence_count != 1:
         return
     maybe_notify(
         notifier,
         repo.get_preferences(),
         "alerts",
-        lambda: notifier.notify_alert(severity=alert.severity, title=alert.title, message=alert.message),
+        lambda n: n.notify_alert(severity=alert.severity, title=alert.title, message=alert.message),
     )
+
+
+def is_alert_open(repo: IrrigationRepository, dedup_key: str) -> bool:
+    """Whether an unresolved alert holds ``dedup_key`` — read before an upsert to feed ``was_open``."""
+    return repo.get_open_alert_by_key(dedup_key) is not None
 
 
 def sync_cluster_alerts(
@@ -91,11 +100,10 @@ def sync_cluster_alerts(
         return []
     now = int(time.time())
 
-    findings: list[tuple[str, dict]] = []
-    for raw in collect_learning_alerts(repo, cluster_id, plant_db):
-        findings.append((SOURCE_LEARNING, raw))
-    for raw in collect_maintenance_alerts(repo, cluster_id, plant_db):
-        findings.append((SOURCE_MAINTENANCE, raw))
+    findings: list[tuple[ActivitySource, AlertFinding]] = [
+        (SOURCE_LEARNING, raw) for raw in collect_learning_alerts(repo, cluster_id, plant_db)
+    ]
+    findings.extend((SOURCE_MAINTENANCE, raw) for raw in collect_maintenance_alerts(repo, cluster_id, plant_db))
 
     seen_keys: set[str] = set()
     for source, raw in findings:
@@ -104,6 +112,7 @@ def sync_cluster_alerts(
         severity = raw.get("severity", "info")
         key = _dedup_key(source, code, cluster_id, message)
         seen_keys.add(key)
+        was_open = is_alert_open(repo, key)
         alert = repo.upsert_alert(
             dedup_key=key,
             source=source,
@@ -116,20 +125,20 @@ def sync_cluster_alerts(
             cluster_id=cluster_id,
             seen_at=now,
         )
-        notify_if_new_alert(repo, notifier, alert)
+        notify_if_new_alert(repo, notifier, alert, was_open=was_open)
 
     auto_resolve_cleared(repo, cluster_id, sources=(SOURCE_LEARNING, SOURCE_MAINTENANCE), seen_keys=seen_keys)
-    return repo.list_alerts(cluster_id=cluster_id, limit=200)
+    return repo.list_alerts(cluster_id=cluster_id, limit=ALERT_SCAN_LIMIT)
 
 
 def auto_resolve_cleared(
     repo: IrrigationRepository,
     cluster_id: int,
-    sources: tuple[str, ...],
+    sources: tuple[ActivitySource, ...],
     seen_keys: set[str],
 ) -> None:
     """Close any open/ack alerts from these sources whose condition has cleared."""
-    for alert in repo.list_alerts(cluster_id=cluster_id, limit=200):
+    for alert in repo.list_alerts(cluster_id=cluster_id, limit=ALERT_SCAN_LIMIT):
         if alert.status == "resolved" or alert.source not in sources:
             continue
         if alert.dedup_key not in seen_keys:
@@ -148,36 +157,43 @@ def sync_all_alerts(
     return repo.count_open_alerts()
 
 
-def raise_alert(
-    repo: IrrigationRepository,
-    *,
-    source: str,
-    code: str,
-    title: str,
-    message: str,
-    severity: str = "info",
-    cluster_id: int | None = None,
-    plant_id: int | None = None,
-    sensor_id: int | None = None,
-    payload: dict | None = None,
-    notifier: NtfyClient | None = None,
-) -> Alert:
-    """Convenience wrapper: build a dedup_key and upsert an alert."""
+class NewAlert(TypedDict):
+    """The alert :func:`raise_alert` opens or refreshes, passed as keywords.
+
+    ``severity`` defaults to ``"info"``; a ``sensor_id`` makes the sensor the alert's entity
+    (otherwise the cluster).
+    """
+
+    source: ActivitySource
+    code: str
+    title: str
+    message: str
+    severity: NotRequired[str]
+    cluster_id: NotRequired[int | None]
+    plant_id: NotRequired[int | None]
+    sensor_id: NotRequired[int | None]
+    payload: NotRequired[dict[str, Any] | None]
+
+
+def raise_alert(repo: IrrigationRepository, *, notifier: NtfyClient | None = None, **new: Unpack[NewAlert]) -> Alert:
+    """Convenience wrapper: build a dedup_key, upsert the alert, push when this call opened it."""
+    sensor_id, cluster_id = new.get("sensor_id"), new.get("cluster_id")
     entity_type = ENTITY_SENSOR if sensor_id else ENTITY_CLUSTER
     entity_id = sensor_id or cluster_id
-    key = _dedup_key(source, code, cluster_id, f"{entity_type}{entity_id or 0}")
+    key = _dedup_key(new["source"], new["code"], cluster_id, f"{entity_type}{entity_id or 0}")
+    was_open = is_alert_open(repo, key)
     alert = repo.upsert_alert(
         dedup_key=key,
-        source=source,
-        code=code,
-        title=title,
-        message=message,
-        severity=severity,
+        source=new["source"],
+        code=new["code"],
+        title=new["title"],
+        message=new["message"],
+        severity=new.get("severity", "info"),
         entity_type=entity_type,
         entity_id=entity_id,
         cluster_id=cluster_id,
-        plant_id=plant_id,
-        payload=payload,
+        plant_id=new.get("plant_id"),
+        payload=new.get("payload"),
     )
-    notify_if_new_alert(repo, notifier, alert)
+    notify_if_new_alert(repo, notifier, alert, was_open=was_open)
     return alert

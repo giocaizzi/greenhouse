@@ -1,0 +1,16 @@
+
+ Usage: greenhouse windows update [OPTIONS] {window_id}
+
+ Patch a window. Only supplied fields are sent.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────╮
+│ *    window_id      <int>  Window ID [required]                                                  │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  --cluster             <int>                    Cluster the window belongs to [required]       │
+│    --start-hour          <int range> [0<=x<=23]                                                  │
+│    --end-hour            <int range> [0<=x<=23]                                                  │
+│    --weekday-mask        <int range> [1<=x<=127]                                                 │
+│    --label               <str>                                                                   │
+│    --help                                         Show this message and exit.                    │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

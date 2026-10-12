@@ -1,0 +1,45 @@
+{
+ "band_max": 60,
+ "band_min": 30,
+ "decision": null,
+ "driest": {
+  "category": null,
+  "id": 2,
+  "moisture": 33.0,
+  "mood": "ok",
+  "species": "Ficus lyrata"
+ },
+ "environment": "outdoor",
+ "humidity": 50.0,
+ "id": 5,
+ "irrigator_id": null,
+ "irrigator_name": null,
+ "last_event": null,
+ "light": 900.0,
+ "location": "roof",
+ "min_moisture": 33.0,
+ "name": "Partial",
+ "newest_reading_at": 300,
+ "plants": [
+  {
+   "category": "succulent",
+   "id": 1,
+   "moisture": null,
+   "mood": "unknown",
+   "species": "Aloe vera"
+  },
+  {
+   "category": null,
+   "id": 2,
+   "moisture": 33.0,
+   "mood": "ok",
+   "species": "Ficus lyrata"
+  }
+ ],
+ "sparkline": [
+  40.0,
+  35.0
+ ],
+ "temperature": 22.0,
+ "watering": false
+}

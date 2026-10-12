@@ -1,0 +1,34 @@
+{
+ "check_all": [
+  409,
+  "Job check_all is a built-in scheduler job and cannot be deleted. To stop automatic irrigation checks use POST /api/v1/scheduler/pause (resume with POST /api/v1/scheduler/resume)."
+ ],
+ "device_health_monitor": [
+  409,
+  "Job device_health_monitor is a built-in scheduler job and cannot be deleted. To stop automatic irrigation checks use POST /api/v1/scheduler/pause (resume with POST /api/v1/scheduler/resume)."
+ ],
+ "leak-check-1-1776247200": [
+  200,
+  {
+   "success": true
+  }
+ ],
+ "nope": [
+  404,
+  {
+   "detail": "Job nope not found"
+  }
+ ],
+ "plant_health_snapshot": [
+  409,
+  "Job plant_health_snapshot is a built-in scheduler job and cannot be deleted. To stop automatic irrigation checks use POST /api/v1/scheduler/pause (resume with POST /api/v1/scheduler/resume)."
+ ],
+ "sensor_anomaly": [
+  409,
+  "Job sensor_anomaly is a built-in scheduler job and cannot be deleted. To stop automatic irrigation checks use POST /api/v1/scheduler/pause (resume with POST /api/v1/scheduler/resume)."
+ ],
+ "sensor_sync": [
+  409,
+  "Job sensor_sync is a built-in scheduler job and cannot be deleted. To stop automatic irrigation checks use POST /api/v1/scheduler/pause (resume with POST /api/v1/scheduler/resume)."
+ ]
+}

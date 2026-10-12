@@ -1,0 +1,62 @@
+{
+ "calls": [
+  {
+   "body": {
+    "minutes": 3
+   },
+   "request": "POST /api/v1/irrigators/1/start",
+   "response": {
+    "detail": "No device registry (missing Tuya credentials)"
+   },
+   "status": 503
+  },
+  {
+   "body": null,
+   "request": "POST /api/v1/irrigators/1/stop",
+   "response": {
+    "detail": "No device registry (missing Tuya credentials)"
+   },
+   "status": 503
+  },
+  {
+   "body": {
+    "minutes": 2
+   },
+   "request": "POST /api/v1/irrigators/1/log-manual",
+   "response": {
+    "event_id": 1,
+    "success": true
+   },
+   "status": 200
+  }
+ ],
+ "db_writes": {
+  "activity_events": [],
+  "alerts": [],
+  "decision_logs": [],
+  "irrigation_events": [
+   {
+    "action": "start",
+    "duration_minutes": 2,
+    "id": 1,
+    "irrigator_id": 1,
+    "notes": "Manual (2 min)",
+    "timestamp": 1776247200,
+    "triggered_by": "manual"
+   }
+  ],
+  "sensor_readings": []
+ },
+ "gateway_calls": null,
+ "irrigator_adapter_calls": [],
+ "notifications": [
+  {
+   "detail": "logged (watered by hand)",
+   "duration_minutes": 2,
+   "irrigator_name": "Irrigator 1",
+   "kind": "irrigation",
+   "triggered_by": "manual"
+  }
+ ],
+ "sensor_adapter_calls": []
+}

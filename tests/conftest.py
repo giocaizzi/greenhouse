@@ -1,8 +1,16 @@
 """Shared pytest fixtures for greenhouse test suite."""
 
+import os
+import socket
 import time
+import urllib.error
+import urllib.request
+from collections.abc import Iterator
+from pathlib import Path
+from typing import NoReturn, TypedDict
 
 import pytest
+import time_machine
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
@@ -17,12 +25,70 @@ from fake_data import (
     FAKE_SENSOR_ID,
     FAKE_SENSOR_NAME,
 )
+from golden import ENV_PREFIXES, FROZEN_INSTANT
 from greenhouse_core.models import Base
 from greenhouse_core.repository import IrrigationRepository
+from greenhouse_server.config import Settings
+
+# Server fixtures (``app``, ``client``, …) as a global plugin rather than a ``tests/server``
+# conftest, so mixing directories on one command line cannot hide them (server/fixtures.py).
+pytest_plugins = ("server.fixtures",)
+
+_LOOPBACK_HOSTS = frozenset({"127.0.0.1", "::1", "localhost"})
+
+
+@pytest.fixture(autouse=True)
+def _no_network(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep every test hermetic: real outbound HTTP fails fast instead of reaching the internet.
+
+    The app's weather client calls Open-Meteo through ``urllib.request.urlopen`` unless a test installs
+    ``golden.OfflineWeather``; a blocked call degrades to ``None`` exactly like an offline host, so results
+    no longer depend on live weather or network access. Tests that stub ``urlopen`` themselves override this.
+    """
+
+    def _blocked_urlopen(url: object, *_args: object, **_kwargs: object) -> NoReturn:
+        msg = f"network disabled in tests: {getattr(url, 'full_url', url)}"
+        raise urllib.error.URLError(msg)
+
+    real_connect = socket.socket.connect
+
+    def _loopback_only_connect(self: socket.socket, address: tuple[object, ...] | str) -> None:
+        if self.family in (socket.AF_INET, socket.AF_INET6) and address[0] not in _LOOPBACK_HOSTS:
+            msg = f"network disabled in tests: {address!r}"
+            raise OSError(msg)
+        return real_connect(self, address)
+
+    monkeypatch.setattr(urllib.request, "urlopen", _blocked_urlopen)
+    monkeypatch.setattr(socket.socket, "connect", _loopback_only_connect)
+
+
+@pytest.fixture(autouse=True)
+def _isolated_cli_token(monkeypatch: pytest.MonkeyPatch, tmp_path_factory: pytest.TempPathFactory) -> None:
+    """No test reads (or writes) the developer's real CLI session token.
+
+    The CLI resolves ``$GREENHOUSE_API_TOKEN`` first, then
+    ``$XDG_CONFIG_HOME/greenhouse/token``; both are pointed away from the user's
+    environment for every test. Tests that need a token set them explicitly.
+    """
+    monkeypatch.delenv("GREENHOUSE_API_TOKEN", raising=False)
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path_factory.mktemp("xdg-config")))
+
+
+@pytest.fixture(autouse=True)
+def _no_developer_dotenv(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> None:
+    """``Settings`` ignores a developer's ``.env`` in the working directory during tests.
+
+    Tests marked ``dotenv`` exercise the real ``.env`` loading (in their own temp
+    working directory) and keep the production ``env_file``.
+    """
+    if request.node.get_closest_marker("dotenv"):
+        return
+
+    monkeypatch.setitem(Settings.model_config, "env_file", None)
 
 
 @pytest.fixture
-def tmp_db():
+def tmp_db() -> Iterator[IrrigationRepository]:
     """Create an in-memory IrrigationRepository for testing."""
     engine = create_engine("sqlite://", echo=False)
     Base.metadata.create_all(engine)
@@ -34,15 +100,25 @@ def tmp_db():
 
 
 @pytest.fixture
-def fake_tuya_env(monkeypatch):
+def fake_tuya_env(monkeypatch: pytest.MonkeyPatch) -> None:
     """Patch environment with fake Tuya credentials."""
     monkeypatch.setenv("TUYA_CLIENT_ID", FAKE_CLIENT_ID)
     monkeypatch.setenv("TUYA_CLIENT_SECRET", FAKE_CLIENT_SECRET)
     monkeypatch.setenv("TUYA_REGION", FAKE_REGION)
 
 
+class SampleCluster(TypedDict):
+    """What the ``sample_cluster`` fixture returns: the repository and the seeded row ids."""
+
+    db: IrrigationRepository
+    cluster_id: int
+    plant_id: int
+    irrigator_id: int
+    sensor_id: int
+
+
 @pytest.fixture
-def sample_cluster(tmp_db):
+def sample_cluster(tmp_db: IrrigationRepository) -> SampleCluster:
     """Pre-populated cluster with a plant, irrigator, and sensor with readings."""
     cluster_id = tmp_db.add_cluster(FAKE_CLUSTER_NAME)
     plant_id = tmp_db.add_plant(
@@ -59,14 +135,14 @@ def sample_cluster(tmp_db):
         cluster_id=cluster_id,
         tuya_device_id=FAKE_DEVICE_ID,
         name=FAKE_IRRIGATOR_NAME,
-        irrigator_type="tuya_cloud",
+        irrigator_type="rainpoint.ik10pw",
         config={},
     )
     sensor_id = tmp_db.add_sensor(
         cluster_id=cluster_id,
         tuya_device_id=FAKE_SENSOR_ID,
         name=FAKE_SENSOR_NAME,
-        sensor_type="soil_moisture",
+        sensor_type="tuya.tr301z",
         config={},
         plant_id=plant_id,
     )
@@ -82,3 +158,35 @@ def sample_cluster(tmp_db):
         "irrigator_id": irrigator_id,
         "sensor_id": sensor_id,
     }
+
+
+# ── Determinism kit for the characterization / golden suite (see tests/golden.py) ──
+
+
+@pytest.fixture
+def frozen_clock() -> Iterator[time_machine.Traveller]:
+    """Freeze wall-clock time (``time.time``, ``datetime.now``) at ``FROZEN_INSTANT``.
+
+    Monotonic clocks keep running, so asyncio / Textual timers still work.
+    """
+    with time_machine.travel(FROZEN_INSTANT, tick=False) as traveller:
+        yield traveller
+
+
+@pytest.fixture
+def clean_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Iterator[Path]:
+    """Hermetic environment: no app env vars, no ``.env`` file in cwd, UTC local time, plain terminal."""
+    for name in list(os.environ):
+        if name.startswith(ENV_PREFIXES):
+            monkeypatch.delenv(name, raising=False)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
+    monkeypatch.setenv("TZ", "UTC")
+    monkeypatch.setenv("COLUMNS", "100")
+    monkeypatch.setenv("TERM", "dumb")
+    monkeypatch.setenv("NO_COLOR", "1")
+    time.tzset()
+    yield tmp_path
+    monkeypatch.undo()
+    time.tzset()

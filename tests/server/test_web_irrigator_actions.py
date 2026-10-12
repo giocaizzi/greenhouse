@@ -1,44 +1,58 @@
 """Irrigator start/stop/log-manual web actions."""
 
-from sqlalchemy.orm import Session
+from http import HTTPStatus
+from typing import TYPE_CHECKING
+
+import pytest
+from apscheduler.schedulers.background import BackgroundScheduler
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 from greenhouse_core.models import IrrigationConfig, IrrigationEvent
 
+if TYPE_CHECKING:
+    from sqlalchemy.orm import Session
 
-def test_irrigator_start_via_web(seeded_client):
+
+def test_irrigator_start_via_web(seeded_client: TestClient) -> None:
+    """Irrigator start via web."""
     resp = seeded_client.post("/irrigators/1/start", data={"minutes": "3"})
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     # action result partial with success marker
     assert "start" in resp.text.lower()
 
 
-def test_irrigator_stop_via_web(seeded_client):
+def test_irrigator_stop_via_web(seeded_client: TestClient) -> None:
+    """Irrigator stop via web."""
     resp = seeded_client.post("/irrigators/1/stop", data={})
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     assert "stop" in resp.text.lower()
 
 
-def test_log_manual_form_renders(seeded_client):
+def test_log_manual_form_renders(seeded_client: TestClient) -> None:
+    """Log manual form renders."""
     resp = seeded_client.get("/irrigators/1/log-manual")
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     assert "Log manual irrigation" in resp.text
     assert 'name="minutes"' in resp.text
 
 
-def test_log_manual_submit_redirects(seeded_client):
+def test_log_manual_submit_redirects(seeded_client: TestClient) -> None:
+    """Log manual submit redirects."""
     resp = seeded_client.post(
         "/irrigators/1/log-manual",
         data={"minutes": "5", "notes": "manual watering while away"},
         follow_redirects=False,
     )
-    assert resp.status_code == 303
+    assert resp.status_code == HTTPStatus.SEE_OTHER
     # Irrigators are inline on the unified detail page now — land at #irrigators.
     assert resp.headers["location"] == "/clusters/1#irrigators"
 
 
-def test_irrigator_missing_404(client):
+def test_irrigator_missing_404(client: TestClient) -> None:
+    """Irrigator missing 404."""
     resp = client.post("/irrigators/9999/start", data={})
-    assert resp.status_code == 404
+    assert resp.status_code == HTTPStatus.NOT_FOUND
 
 
 # ── Web start/stop share the API's code path (watcher, caps, notify, events) ──
@@ -46,17 +60,17 @@ def test_irrigator_missing_404(client):
 
 class _RecordingNotifier:
     def __init__(self) -> None:
-        self.irrigations: list[dict] = []
+        self.irrigations: list[dict[str, object]] = []
 
-    def notify_irrigation(self, **kwargs) -> bool:
+    def notify_irrigation(self, **kwargs: object) -> bool:
         self.irrigations.append(kwargs)
         return True
 
-    def notify_alert(self, **kwargs) -> bool:
+    def notify_alert(self, **_kwargs: object) -> bool:
         return True
 
 
-def _events(app) -> list[IrrigationEvent]:
+def _events(app: FastAPI) -> list[IrrigationEvent]:
     session: Session = app.state.session_factory()
     try:
         return list(session.query(IrrigationEvent).order_by(IrrigationEvent.id))
@@ -64,7 +78,7 @@ def _events(app) -> list[IrrigationEvent]:
         session.close()
 
 
-def _set_max_events(app, n: int) -> None:
+def _set_max_events(app: FastAPI, n: int) -> None:
     session: Session = app.state.session_factory()
     try:
         session.query(IrrigationConfig).filter_by(cluster_id=1).one().max_events_per_day = n
@@ -73,35 +87,39 @@ def _set_max_events(app, n: int) -> None:
         session.close()
 
 
-def test_web_start_schedules_pump_watcher(app, seeded_client, running_scheduler):
+def test_web_start_schedules_pump_watcher(
+    app: FastAPI, seeded_client: TestClient, running_scheduler: BackgroundScheduler
+) -> None:
     """Regression: the web start never scheduled the dry-run watcher."""
     app.state.device_registry = app.state.fake_devices.registry
     resp = seeded_client.post("/irrigators/1/start", data={"minutes": "3"})
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     assert "badge-ok" in resp.text
     assert [j.id for j in running_scheduler.get_jobs() if j.id.startswith("pump-watcher-1-")]
 
 
-def test_web_start_enforces_daily_caps(app, seeded_client):
+def test_web_start_enforces_daily_caps(app: FastAPI, seeded_client: TestClient) -> None:
     """Regression: the web start skipped max_events_per_day / daily_cap_minutes."""
     _set_max_events(app, 1)
     assert "badge-ok" in seeded_client.post("/irrigators/1/start", data={"minutes": "2"}).text
     resp = seeded_client.post("/irrigators/1/start", data={"minutes": "2"})
-    assert resp.status_code == 200  # rendered into the HX result slot, like a device failure
+    assert resp.status_code == HTTPStatus.OK  # rendered into the HX result slot, like a device failure
     assert "start failed" in resp.text
     assert "max_events_per_day" in resp.text
     starts = [c for c in app.state.fake_devices.irrigator.calls if c[0] == "start"]
     assert len(starts) == 1, "the capped start must not reach the device"
 
 
-def test_web_start_notifies(app, seeded_client):
+def test_web_start_notifies(app: FastAPI, seeded_client: TestClient) -> None:
+    """Web start notifies."""
     rec = _RecordingNotifier()
     app.state.ntfy_notifier = rec
     seeded_client.post("/irrigators/1/start", data={"minutes": "3"})
     assert [(n["triggered_by"], n["detail"]) for n in rec.irrigations] == [("manual", "started")]
 
 
-def test_web_start_records_same_event_as_api(app, seeded_client):
+def test_web_start_records_same_event_as_api(app: FastAPI, seeded_client: TestClient) -> None:
+    """Web start records same event as API."""
     seeded_client.post("/irrigators/1/start", data={"minutes": "3"})
     seeded_client.post("/api/v1/irrigators/1/start", json={"minutes": 3})
     web, api = _events(app)
@@ -110,15 +128,18 @@ def test_web_start_records_same_event_as_api(app, seeded_client):
     assert (web.action, web.triggered_by, web.duration_minutes) == ("start", "manual", 3)
 
 
-def test_web_start_device_failure_records_like_api(app, seeded_client):
+def test_web_start_device_failure_records_like_api(app: FastAPI, seeded_client: TestClient) -> None:
+    """Web start device failure records like API."""
     app.state.fake_devices.irrigator.start_result = (False, "device timeout")
     resp = seeded_client.post("/irrigators/1/start", data={"minutes": "3"})
-    assert "start failed" in resp.text and "device timeout" in resp.text
-    assert seeded_client.post("/api/v1/irrigators/1/start", json={"minutes": 3}).status_code == 502
+    assert "start failed" in resp.text
+    assert "device timeout" in resp.text
+    assert seeded_client.post("/api/v1/irrigators/1/start", json={"minutes": 3}).status_code == HTTPStatus.BAD_GATEWAY
     assert _events(app) == []  # neither path records a failed manual start
 
 
-def test_web_stop_notifies_and_records_same_event_as_api(app, seeded_client):
+def test_web_stop_notifies_and_records_same_event_as_api(app: FastAPI, seeded_client: TestClient) -> None:
+    """Web stop notifies and records same event as API."""
     rec = _RecordingNotifier()
     app.state.ntfy_notifier = rec
     seeded_client.post("/irrigators/1/stop", data={})
@@ -128,20 +149,24 @@ def test_web_stop_notifies_and_records_same_event_as_api(app, seeded_client):
     assert [n["detail"] for n in rec.irrigations] == ["stopped", "stopped"]
 
 
-def test_api_start_caps_still_409(app, seeded_client):
+def test_api_start_caps_still_409(app: FastAPI, seeded_client: TestClient) -> None:
+    """API start caps still 409."""
     _set_max_events(app, 1)
-    assert seeded_client.post("/api/v1/irrigators/1/start", json={"minutes": 2}).status_code == 200
+    assert seeded_client.post("/api/v1/irrigators/1/start", json={"minutes": 2}).status_code == HTTPStatus.OK
     resp = seeded_client.post("/api/v1/irrigators/1/start", json={"minutes": 2})
-    assert resp.status_code == 409
+    assert resp.status_code == HTTPStatus.CONFLICT
     assert resp.json()["detail"] == "cluster max_events_per_day reached"
 
 
 # ── Web "log manual watering" shares the API's path too ──────────────────────
 
 
-def test_web_log_manual_records_same_event_as_api(app, seeded_client):
-    """Regression: the web form recorded action="manual", which cooldown, caps,
-    learning and efficacy (all keyed on action == "start") never saw."""
+def test_web_log_manual_records_same_event_as_api(app: FastAPI, seeded_client: TestClient) -> None:
+    """A manual watering logged on the web records a ``start`` event.
+
+    Regression: the web form recorded action="manual", which cooldown, caps,
+    learning and efficacy (all keyed on action == "start") never saw.
+    """
     seeded_client.post("/irrigators/1/log-manual", data={"minutes": "4"}, follow_redirects=False)
     seeded_client.post("/api/v1/irrigators/1/log-manual", json={"minutes": 4})
     web, api = _events(app)
@@ -151,19 +176,41 @@ def test_web_log_manual_records_same_event_as_api(app, seeded_client):
     assert not app.state.fake_devices.irrigator.calls, "logging never actuates"
 
 
-def test_web_log_manual_enforces_daily_caps(app, seeded_client):
+def test_web_log_manual_enforces_daily_caps(app: FastAPI, seeded_client: TestClient) -> None:
+    """Web log manual enforces daily caps."""
     _set_max_events(app, 1)
     first = seeded_client.post("/irrigators/1/log-manual", data={"minutes": "2"}, follow_redirects=False)
-    assert first.status_code == 303
+    assert first.status_code == HTTPStatus.SEE_OTHER
     resp = seeded_client.post("/irrigators/1/log-manual", data={"minutes": "2"}, follow_redirects=False)
-    assert resp.status_code == 409
+    assert resp.status_code == HTTPStatus.CONFLICT
     assert "max_events_per_day" in resp.text
     assert 'name="minutes"' in resp.text  # the form is re-rendered with the error
     assert len(_events(app)) == 1
 
 
-def test_web_log_manual_notifies(app, seeded_client):
+def test_web_log_manual_notifies(app: FastAPI, seeded_client: TestClient) -> None:
+    """Web log manual notifies."""
     rec = _RecordingNotifier()
     app.state.ntfy_notifier = rec
     seeded_client.post("/irrigators/1/log-manual", data={"minutes": "3"}, follow_redirects=False)
     assert [(n["triggered_by"], n["detail"]) for n in rec.irrigations] == [("manual", "logged (watered by hand)")]
+
+
+@pytest.mark.parametrize("minutes", ["0", "-3"])
+def test_web_start_rejects_non_positive_minutes(app: FastAPI, seeded_client: TestClient, minutes: str) -> None:
+    """A start of 0 or negative minutes is refused with the API's wording; nothing is actuated or recorded."""
+    resp = seeded_client.post("/irrigators/1/start", data={"minutes": minutes})
+    assert resp.status_code == HTTPStatus.OK
+    assert "minutes must be at least 1" in resp.text
+    assert "badge-ok" not in resp.text
+    assert _events(app) == []
+    assert app.state.fake_devices.irrigator.calls == []
+
+
+@pytest.mark.parametrize("minutes", [0, -3])
+def test_api_start_rejects_non_positive_minutes(app: FastAPI, seeded_client: TestClient, minutes: int) -> None:
+    """API start rejects non positive minutes."""
+    resp = seeded_client.post("/api/v1/irrigators/1/start", json={"minutes": minutes})
+    assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
+    assert resp.json()["detail"][0]["loc"] == ["body", "minutes"]
+    assert app.state.fake_devices.irrigator.calls == []

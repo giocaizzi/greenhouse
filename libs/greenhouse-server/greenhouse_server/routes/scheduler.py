@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter, HTTPException
 
+from greenhouse_core.repository import IrrigationRepository
 from greenhouse_core.schemas import (
     HealthResponse,
     SchedulerJobResponse,
@@ -17,7 +18,7 @@ router = APIRouter(tags=["scheduler"])
 
 @router.get("/health", response_model=HealthResponse)
 def health() -> HealthResponse:
-    """Liveness probe: server status, scheduler state, and registered jobs.
+    """Report liveness: server status, scheduler state, and registered jobs.
 
     Returns:
         `status="ok"` and a snapshot of the APScheduler jobs the server
@@ -26,7 +27,7 @@ def health() -> HealthResponse:
     return HealthResponse(
         status="ok",
         scheduler_running=scheduler.running,
-        jobs=[SchedulerJobResponse(**j) for j in get_jobs()],
+        jobs=[SchedulerJobResponse.model_validate(j) for j in get_jobs()],
     )
 
 
@@ -41,10 +42,11 @@ def list_jobs() -> list[SchedulerJobResponse]:
         flag that is true only for an explicitly paused job (`check_all`
         after POST /scheduler/pause, mirroring the persisted preference).
     """
-    return [SchedulerJobResponse(**j) for j in get_jobs()]
+    return [SchedulerJobResponse.model_validate(j) for j in get_jobs()]
 
 
-@router.delete("/scheduler/jobs/{job_id}", response_model=SuccessResponse)
+# ``:path`` so a job id containing "/" (the CLI percent-encodes it as one segment) still routes here.
+@router.delete("/scheduler/jobs/{job_id:path}", response_model=SuccessResponse)
 def delete_job(job_id: str) -> SuccessResponse:
     """Unregister an ad-hoc background job by ID.
 
@@ -77,9 +79,9 @@ def delete_job(job_id: str) -> SuccessResponse:
     return SuccessResponse(success=True)
 
 
-def _set_paused(repo, paused: bool) -> SchedulerStateResponse:
+def _set_paused(repo: IrrigationRepository, *, paused: bool) -> SchedulerStateResponse:
     try:
-        return SchedulerStateResponse(paused=sched.set_check_all_paused(repo, paused))
+        return SchedulerStateResponse(paused=sched.set_check_all_paused(repo, paused=paused))
     except sched.JobNotRegisteredError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from None
     except Exception as exc:
@@ -103,7 +105,7 @@ def pause_scheduler(repo: RepoDep) -> SchedulerStateResponse:
     Raises:
         HTTPException: 404 if the `check_all` job is not registered.
     """
-    return _set_paused(repo, True)
+    return _set_paused(repo, paused=True)
 
 
 @router.post("/scheduler/resume", response_model=SchedulerStateResponse)
@@ -120,4 +122,4 @@ def resume_scheduler(repo: RepoDep) -> SchedulerStateResponse:
     Raises:
         HTTPException: 404 if the `check_all` job is not registered.
     """
-    return _set_paused(repo, False)
+    return _set_paused(repo, paused=False)

@@ -2,116 +2,95 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Form, HTTPException, Request
-from fastapi.responses import RedirectResponse
+from dataclasses import dataclass
+from typing import Annotated, Any
+
+from fastapi import APIRouter, Depends, Form, Path
+from fastapi.responses import RedirectResponse, Response
 
 from greenhouse_server.deps import RepoDep, require_cluster
+from greenhouse_server.web.forms import parsed_or_400, tri_bool
 
 router = APIRouter(include_in_schema=False)
 
 
-_WEEKDAY_BITS: tuple[int, ...] = (1, 2, 4, 8, 16, 32, 64)
-_WEEKDAY_LABELS: tuple[str, ...] = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
-_FULL_MASK = 127
-
-
-def _format_weekday_mask(mask: int) -> str:
-    """Render a weekday bitmask as a human label (e.g. 'Mon, Wed, Fri')."""
-    if mask & _FULL_MASK == _FULL_MASK:
-        return "Every day"
-    return ", ".join(label for bit, label in zip(_WEEKDAY_BITS, _WEEKDAY_LABELS, strict=True) if mask & bit)
-
-
 @router.get("/clusters/{cluster_id}/config")
-def config_form(cluster_id: int, repo: RepoDep):
-    """Legacy URL — config is now rendered inline on the unified cluster
-    detail page. A 301 drops old bookmarks at the right section anchor."""
+def config_form(cluster_id: int, repo: RepoDep) -> Response:
+    """Redirect the legacy config URL to the detail page's config section (301).
+
+    Config is rendered inline on the unified cluster detail page; the redirect
+    drops old bookmarks at the right section anchor.
+    """
     require_cluster(repo, cluster_id)
     return RedirectResponse(url=f"/clusters/{cluster_id}#config", status_code=301)
 
 
 def _parse_optional_hour(raw: str) -> int | None:
     """Form helper: empty string → None (inherit), otherwise int (validated 0..23 by caller)."""
-    raw = raw.strip()
-    if not raw:
-        return None
-    try:
-        return int(raw)
-    except ValueError as exc:
-        raise HTTPException(400, "Invalid hour value") from exc
+    return parsed_or_400(raw, int, error="Invalid hour value")
+
+
+def _parse_optional_int(raw: str) -> int | None:
+    """Blank → None (inherit); a non-integer is a 400 page, never an unhandled 500."""
+    return parsed_or_400(raw, int, error="Invalid numeric value")
 
 
 def _parse_non_negative_int(raw: str) -> int | None:
     """Form helper: empty string → None (no cap), otherwise a non-negative int."""
-    raw = raw.strip()
-    if not raw:
-        return None
-    try:
-        value = int(raw)
-    except ValueError as exc:
-        raise HTTPException(400, "Invalid numeric value") from exc
-    if value < 0:
-        raise HTTPException(400, "Value must be non-negative")
-    return value
+    return parsed_or_400(raw, int, error="Invalid numeric value", negative_error="Value must be non-negative")
 
 
-def _parse_tri_bool(raw: str) -> bool | None:
-    """Form tri-state: ``""`` = inherit, ``"true"`` = on, ``"false"`` = off."""
-    value = raw.strip().lower()
-    if value == "":
-        return None
-    if value in ("true", "on", "1"):
-        return True
-    if value in ("false", "off", "0"):
-        return False
-    raise HTTPException(400, f"Invalid tri-bool value: {raw!r}")
+@dataclass(frozen=True, slots=True)
+class _ClusterConfigForm:
+    """``POST /clusters/{cluster_id}/config``: every field raw; blank inherits from the global defaults."""
+
+    cluster_id: Annotated[int, Path()]
+    mode: Annotated[str, Form()] = ""
+    duration_minutes: Annotated[str, Form()] = ""
+    interval_hours: Annotated[str, Form()] = ""
+    auto_run: Annotated[str, Form()] = ""
+    quiet_start_hour: Annotated[str, Form()] = ""
+    quiet_end_hour: Annotated[str, Form()] = ""
+
+
+@dataclass(frozen=True, slots=True)
+class _GlobalConfigForm:
+    """``POST /config/global``: every field raw; blank falls through to the project-wide constants."""
+
+    mode: Annotated[str, Form()] = ""
+    duration_minutes: Annotated[str, Form()] = ""
+    interval_hours: Annotated[str, Form()] = ""
+    auto_run: Annotated[str, Form()] = ""
+    daily_cap_minutes: Annotated[str, Form()] = ""
+    max_events_per_day: Annotated[str, Form()] = ""
+    quiet_start_hour: Annotated[str, Form()] = ""
+    quiet_end_hour: Annotated[str, Form()] = ""
 
 
 @router.post("/clusters/{cluster_id}/config")
-def save_config(
-    request: Request,
-    cluster_id: int,
-    repo: RepoDep,
-    mode: str = Form(""),
-    duration_minutes: str = Form(""),
-    interval_hours: str = Form(""),
-    auto_run: str = Form(""),
-    quiet_start_hour: str = Form(""),
-    quiet_end_hour: str = Form(""),
-):
+def save_config(repo: RepoDep, form: Annotated[_ClusterConfigForm, Depends()]) -> Response:
     """Save the cluster's irrigation config and redirect back to detail#config.
 
     Empty form fields write null (inherit from global default). Quiet hours
     follow the same rule; submitting equal start/end values switches quiet
     hours off at the cluster level.
     """
-    require_cluster(repo, cluster_id)
-    fields: dict = {
-        "mode": mode or None,
-        "duration_minutes": int(duration_minutes) if duration_minutes.strip() else None,
-        "interval_hours": int(interval_hours) if interval_hours.strip() else None,
-        "auto_run": _parse_tri_bool(auto_run),
-        "quiet_start_hour": _parse_optional_hour(quiet_start_hour),
-        "quiet_end_hour": _parse_optional_hour(quiet_end_hour),
+    require_cluster(repo, form.cluster_id)
+    fields: dict[str, Any] = {
+        "mode": form.mode or None,
+        "duration_minutes": _parse_optional_int(form.duration_minutes),
+        "interval_hours": _parse_optional_int(form.interval_hours),
+        "auto_run": tri_bool(form.auto_run),
+        "quiet_start_hour": _parse_optional_hour(form.quiet_start_hour),
+        "quiet_end_hour": _parse_optional_hour(form.quiet_end_hour),
     }
-    repo.set_irrigation_config(cluster_id=cluster_id, **fields)
-    repo.session.commit()
-    return RedirectResponse(url=f"/clusters/{cluster_id}#config", status_code=303)
+    repo.set_irrigation_config(cluster_id=form.cluster_id, **fields)
+    repo.commit()
+    return RedirectResponse(url=f"/clusters/{form.cluster_id}#config", status_code=303)
 
 
 @router.post("/config/global")
-def save_global_config(
-    request: Request,
-    repo: RepoDep,
-    mode: str = Form(""),
-    duration_minutes: str = Form(""),
-    interval_hours: str = Form(""),
-    auto_run: str = Form(""),
-    daily_cap_minutes: str = Form(""),
-    max_events_per_day: str = Form(""),
-    quiet_start_hour: str = Form(""),
-    quiet_end_hour: str = Form(""),
-):
+def save_global_config(repo: RepoDep, form: Annotated[_GlobalConfigForm, Depends()]) -> Response:
     """Save the global irrigation defaults and redirect back to preferences.
 
     Empty fields write null — the effective resolver then falls through to the
@@ -121,14 +100,14 @@ def save_global_config(
     unenforced (no daily ceiling).
     """
     repo.update_global_irrigation_config(
-        mode=mode or None,
-        duration_minutes=int(duration_minutes) if duration_minutes.strip() else None,
-        interval_hours=int(interval_hours) if interval_hours.strip() else None,
-        auto_run=_parse_tri_bool(auto_run),
-        daily_cap_minutes=_parse_non_negative_int(daily_cap_minutes),
-        max_events_per_day=_parse_non_negative_int(max_events_per_day),
-        quiet_start_hour=_parse_optional_hour(quiet_start_hour),
-        quiet_end_hour=_parse_optional_hour(quiet_end_hour),
+        mode=form.mode or None,
+        duration_minutes=_parse_optional_int(form.duration_minutes),
+        interval_hours=_parse_optional_int(form.interval_hours),
+        auto_run=tri_bool(form.auto_run),
+        daily_cap_minutes=_parse_non_negative_int(form.daily_cap_minutes),
+        max_events_per_day=_parse_non_negative_int(form.max_events_per_day),
+        quiet_start_hour=_parse_optional_hour(form.quiet_start_hour),
+        quiet_end_hour=_parse_optional_hour(form.quiet_end_hour),
     )
-    repo.session.commit()
+    repo.commit()
     return RedirectResponse(url="/preferences?saved=global#global-config", status_code=303)

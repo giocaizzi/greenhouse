@@ -9,12 +9,15 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Any
 
 from greenhouse_core.devices.health import DeviceHealthState, HealthAlarm
 from greenhouse_core.devices.irrigators.base import AbstractIrrigatorAdapter
 from greenhouse_core.devices.profile import IrrigatorProfile, SensorProfile
 from greenhouse_core.devices.sensors.base import AbstractSensorAdapter
-from greenhouse_core.models import Irrigator, Sensor
+
+if TYPE_CHECKING:
+    from greenhouse_core.models import Irrigator, Sensor, SensorReading
 
 FAKE_IRRIGATOR_PROFILE = IrrigatorProfile(
     model_key="fake.irrigator",
@@ -55,23 +58,27 @@ class FakeIrrigatorAdapter(AbstractIrrigatorAdapter):
     )
     start_result: tuple[bool, str] = (True, "fake start ok")
     stop_result: tuple[bool, str] = (True, "fake stop ok")
-    status_result: dict = field(default_factory=lambda: {"running": False, "source": "fake"})
+    status_result: dict[str, Any] = field(default_factory=lambda: {"running": False, "source": "fake"})
     health_state: DeviceHealthState = field(default_factory=_clean_health)
-    calls: list[tuple] = field(default_factory=list)
+    calls: list[tuple[object, ...]] = field(default_factory=list)
 
     def start(self, irrigator: Irrigator, minutes: int | None = None) -> tuple[bool, str]:
+        """Record the start and return the scripted result."""
         self.calls.append(("start", irrigator.id, minutes))
         return self.start_result
 
     def stop(self, irrigator: Irrigator) -> tuple[bool, str]:
+        """Record the stop and return the scripted result."""
         self.calls.append(("stop", irrigator.id))
         return self.stop_result
 
-    def status(self, irrigator: Irrigator) -> dict:
+    def status(self, irrigator: Irrigator) -> dict[str, Any]:
+        """Record the status read and return a copy of the scripted status."""
         self.calls.append(("status", irrigator.id))
         return dict(self.status_result)
 
     def read_health(self, irrigator: Irrigator) -> DeviceHealthState:
+        """Record the health read and return the scripted state."""
         self.calls.append(("read_health", irrigator.id))
         return self.health_state
 
@@ -95,15 +102,12 @@ class FakeSensorAdapter(AbstractSensorAdapter):
             }
         )
     )
-    reading: dict = field(default_factory=lambda: {"temperature": 22.0, "soil_moisture": 50.0})
     health_state: DeviceHealthState = field(default_factory=_clean_health)
-    calls: list[tuple] = field(default_factory=list)
+    calls: list[tuple[object, ...]] = field(default_factory=list)
 
-    def read_live(self, sensor: Sensor) -> dict:
-        self.calls.append(("read_live", sensor.id))
-        return dict(self.reading)
-
-    def read_health(self, sensor: Sensor, latest=None) -> DeviceHealthState:
+    def read_health(self, sensor: Sensor, latest: SensorReading | None = None) -> DeviceHealthState:
+        """Record the health read and return the scripted state."""
+        del latest  # signature mirrors the real one; unused by this fake
         self.calls.append(("read_health", sensor.id))
         return self.health_state
 

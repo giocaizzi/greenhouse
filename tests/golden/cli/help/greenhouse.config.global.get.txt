@@ -1,0 +1,8 @@
+
+ Usage: greenhouse config global get [OPTIONS]
+
+ Show the global irrigation defaults (nulls = fall through to constants).
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                                      │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

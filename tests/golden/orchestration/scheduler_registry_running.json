@@ -1,0 +1,45 @@
+{
+ "get_jobs": [
+  {
+   "core": true,
+   "id": "check_all",
+   "name": "Check all clusters",
+   "next_run_time": "2026-04-15 10:00:00+00:00",
+   "paused": false,
+   "trigger": "cron[hour='*', minute='0']"
+  },
+  {
+   "core": true,
+   "id": "device_health_monitor",
+   "name": "Device health monitor",
+   "next_run_time": "2026-04-15 10:05:00+00:00",
+   "paused": false,
+   "trigger": "interval[0:05:00]"
+  },
+  {
+   "core": true,
+   "id": "sensor_anomaly",
+   "name": "Sensor anomaly scan",
+   "next_run_time": "2026-04-15 10:15:00+00:00",
+   "paused": false,
+   "trigger": "interval[0:15:00]"
+  },
+  {
+   "core": true,
+   "id": "sensor_sync",
+   "name": "Sensor data sync",
+   "next_run_time": "2026-04-15 13:00:00+00:00",
+   "paused": false,
+   "trigger": "interval[3:00:00]"
+  },
+  {
+   "core": true,
+   "id": "plant_health_snapshot",
+   "name": "Daily plant health snapshot",
+   "next_run_time": "2026-04-16 00:30:00+00:00",
+   "paused": false,
+   "trigger": "cron[hour='0', minute='30']"
+  }
+ ],
+ "paused": false
+}

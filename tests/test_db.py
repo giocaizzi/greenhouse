@@ -1,8 +1,10 @@
 """Test suite for irrigation system - Database operations."""
 
 import time
+from typing import TYPE_CHECKING
 
 import pytest
+from sqlalchemy.exc import IntegrityError
 
 from fake_data import (
     FAKE_CLUSTER_LOCATION,
@@ -13,12 +15,28 @@ from fake_data import (
     FAKE_SENSOR_ID,
     FAKE_SENSOR_NAME,
 )
+from greenhouse_core.models import EventAction, TriggeredBy
+from greenhouse_core.repository import IrrigationRepository, IrrigatorExistsError
+
+if TYPE_CHECKING:
+    from engine_grid import ReadingRow
+
+# Values written by the tests below and read back.
+CLUSTERS_ADDED = 3
+FIRST_TEMP_C, SECOND_TEMP_C = 22.5, 23.0
+CONFIG_DURATION_MIN, CONFIG_INTERVAL_H = 3, 8
+UPDATED_DURATION_MIN = 5
+READINGS_BEFORE_PIVOT, READINGS_AFTER_PIVOT = 3, 2
+BULK_NEW_ROWS = 2
+READINGS_WRITTEN = 2
+EVENTS_LOGGED = 2
+LAST_READING_TS = 2000
 
 
 class TestDatabase:
     """Test database operations and constraints."""
 
-    def test_cluster_creation(self, tmp_db):
+    def test_cluster_creation(self, tmp_db: IrrigationRepository) -> None:
         """Cluster can be created and retrieved."""
         cluster_id = tmp_db.add_cluster(FAKE_CLUSTER_NAME, FAKE_CLUSTER_LOCATION)
         cluster = tmp_db.get_cluster(cluster_id)
@@ -28,20 +46,20 @@ class TestDatabase:
         assert cluster.location == FAKE_CLUSTER_LOCATION
         assert cluster.id == cluster_id
 
-    def test_cluster_list(self, tmp_db):
+    def test_cluster_list(self, tmp_db: IrrigationRepository) -> None:
         """Multiple clusters can be listed."""
         tmp_db.add_cluster("Cluster A")
         tmp_db.add_cluster("Cluster B")
         tmp_db.add_cluster("Cluster C")
 
         clusters = tmp_db.list_clusters()
-        assert len(clusters) == 3
+        assert len(clusters) == CLUSTERS_ADDED
         names = [c.name for c in clusters]
         assert "Cluster A" in names
         assert "Cluster B" in names
         assert "Cluster C" in names
 
-    def test_plant_creation(self, tmp_db):
+    def test_plant_creation(self, tmp_db: IrrigationRepository) -> None:
         """Plants can be added to a cluster."""
         cluster_id = tmp_db.add_cluster(FAKE_CLUSTER_NAME)
         tmp_db.add_plant(
@@ -58,14 +76,14 @@ class TestDatabase:
         assert plants[0].species == FAKE_PLANT_SPECIES
         assert plants[0].water_needs == "medium"
 
-    def test_irrigator_creation(self, tmp_db):
+    def test_irrigator_creation(self, tmp_db: IrrigationRepository) -> None:
         """Irrigators can be added to a cluster."""
         cluster_id = tmp_db.add_cluster(FAKE_CLUSTER_NAME)
         irrigator_id = tmp_db.add_irrigator(
             cluster_id=cluster_id,
             tuya_device_id=FAKE_DEVICE_ID,
             name=FAKE_IRRIGATOR_NAME,
-            irrigator_type="tuya_cloud",
+            irrigator_type="rainpoint.ik10pw",
             config={"interval": 12},
         )
 
@@ -74,7 +92,7 @@ class TestDatabase:
         assert irrigator.name == FAKE_IRRIGATOR_NAME
         assert irrigator.tuya_device_id == FAKE_DEVICE_ID
 
-    def test_unique_device_constraint(self, tmp_db):
+    def test_unique_device_constraint(self, tmp_db: IrrigationRepository) -> None:
         """Same Tuya device ID cannot be added twice (across clusters)."""
         cluster_a = tmp_db.add_cluster(FAKE_CLUSTER_NAME)
         cluster_b = tmp_db.add_cluster("Second cluster")
@@ -82,11 +100,9 @@ class TestDatabase:
             cluster_id=cluster_a,
             tuya_device_id=FAKE_DEVICE_ID,
             name="First",
-            irrigator_type="tuya_cloud",
+            irrigator_type="rainpoint.ik10pw",
             config={},
         )
-
-        from sqlalchemy.exc import IntegrityError
 
         # Distinct cluster avoids the one-irrigator-per-cluster guard; the
         # duplicate device id must still trip the DB unique constraint.
@@ -95,20 +111,18 @@ class TestDatabase:
                 cluster_id=cluster_b,
                 tuya_device_id=FAKE_DEVICE_ID,
                 name="Second",
-                irrigator_type="tuya_cloud",
+                irrigator_type="rainpoint.ik10pw",
                 config={},
             )
 
-    def test_one_irrigator_per_cluster(self, tmp_db):
+    def test_one_irrigator_per_cluster(self, tmp_db: IrrigationRepository) -> None:
         """A cluster holds at most one irrigator — a second add raises IrrigatorExistsError."""
-        from greenhouse_core.repository import IrrigatorExistsError
-
         cluster_id = tmp_db.add_cluster(FAKE_CLUSTER_NAME)
         tmp_db.add_irrigator(
             cluster_id=cluster_id,
             tuya_device_id=FAKE_DEVICE_ID,
             name="First",
-            irrigator_type="tuya_cloud",
+            irrigator_type="rainpoint.ik10pw",
             config={},
         )
 
@@ -117,18 +131,18 @@ class TestDatabase:
                 cluster_id=cluster_id,
                 tuya_device_id="fake_other_device",
                 name="Second",
-                irrigator_type="tuya_cloud",
+                irrigator_type="rainpoint.ik10pw",
                 config={},
             )
 
-    def test_sensor_readings(self, tmp_db):
+    def test_sensor_readings(self, tmp_db: IrrigationRepository) -> None:
         """Sensor readings can be logged and retrieved."""
         cluster_id = tmp_db.add_cluster(FAKE_CLUSTER_NAME)
         sensor_id = tmp_db.add_sensor(
             cluster_id=cluster_id,
             tuya_device_id=FAKE_SENSOR_ID,
             name=FAKE_SENSOR_NAME,
-            sensor_type="temp_humidity",
+            sensor_type="tuya.tr301z",
             config={},
         )
 
@@ -137,34 +151,34 @@ class TestDatabase:
         tmp_db.add_sensor_reading(sensor_id=sensor_id, timestamp=now + 60, temperature=23.0, env_humidity=64.0)
 
         readings = tmp_db.get_recent_readings(sensor_id, hours=24)
-        assert len(readings) == 2
+        assert len(readings) == READINGS_WRITTEN
         temps = [r.temperature for r in readings]
-        assert 22.5 in temps
-        assert 23.0 in temps
+        assert FIRST_TEMP_C in temps
+        assert SECOND_TEMP_C in temps
 
-    def test_irrigation_events(self, tmp_db):
+    def test_irrigation_events(self, tmp_db: IrrigationRepository) -> None:
         """Irrigation events can be logged and retrieved."""
         cluster_id = tmp_db.add_cluster(FAKE_CLUSTER_NAME)
         irrigator_id = tmp_db.add_irrigator(
             cluster_id=cluster_id,
             tuya_device_id=FAKE_DEVICE_ID,
             name=FAKE_IRRIGATOR_NAME,
-            irrigator_type="tuya_cloud",
+            irrigator_type="rainpoint.ik10pw",
             config={},
         )
 
         tmp_db.add_irrigation_event(
-            irrigator_id=irrigator_id, action="start", triggered_by="manual", duration_minutes=5
+            irrigator_id=irrigator_id, action=EventAction.START, triggered_by=TriggeredBy.MANUAL, duration_minutes=5
         )
-        tmp_db.add_irrigation_event(irrigator_id=irrigator_id, action="stop", triggered_by="manual")
+        tmp_db.add_irrigation_event(irrigator_id=irrigator_id, action=EventAction.STOP, triggered_by=TriggeredBy.MANUAL)
 
         events = tmp_db.get_recent_events(irrigator_id, hours=24)
-        assert len(events) == 2
+        assert len(events) == EVENTS_LOGGED
         actions = [e.action for e in events]
         assert "start" in actions
         assert "stop" in actions
 
-    def test_irrigation_config(self, tmp_db):
+    def test_irrigation_config(self, tmp_db: IrrigationRepository) -> None:
         """Irrigation config can be set and retrieved."""
         cluster_id = tmp_db.add_cluster(FAKE_CLUSTER_NAME)
         tmp_db.set_irrigation_config(
@@ -178,11 +192,11 @@ class TestDatabase:
         config = tmp_db.get_irrigation_config(cluster_id)
         assert config is not None
         assert config.mode == "smart"
-        assert config.duration_minutes == 3
-        assert config.interval_hours == 8
+        assert config.duration_minutes == CONFIG_DURATION_MIN
+        assert config.interval_hours == CONFIG_INTERVAL_H
         assert config.auto_run is True
 
-    def test_config_update(self, tmp_db):
+    def test_config_update(self, tmp_db: IrrigationRepository) -> None:
         """Irrigation config can be updated in-place."""
         cluster_id = tmp_db.add_cluster(FAKE_CLUSTER_NAME)
         tmp_db.set_irrigation_config(
@@ -193,17 +207,18 @@ class TestDatabase:
         )
 
         config = tmp_db.get_irrigation_config(cluster_id)
+        assert config is not None
         assert config.mode == "smart"
-        assert config.duration_minutes == 5
+        assert config.duration_minutes == UPDATED_DURATION_MIN
 
-    def test_get_readings_around(self, tmp_db):
+    def test_get_readings_around(self, tmp_db: IrrigationRepository) -> None:
         """Readings before and after a timestamp are correctly split."""
         cluster_id = tmp_db.add_cluster(FAKE_CLUSTER_NAME)
         sensor_id = tmp_db.add_sensor(
             cluster_id=cluster_id,
             tuya_device_id=FAKE_SENSOR_ID,
             name=FAKE_SENSOR_NAME,
-            sensor_type="soil_moisture",
+            sensor_type="tuya.tr301z",
             config={},
         )
 
@@ -220,20 +235,20 @@ class TestDatabase:
 
         before, after = tmp_db.get_readings_around(sensor_id, pivot, before_seconds=1800, after_seconds=7200)
 
-        assert len(before) == 3
-        assert len(after) == 2
+        assert len(before) == READINGS_BEFORE_PIVOT
+        assert len(after) == READINGS_AFTER_PIVOT
         assert before[0].soil_moisture == pytest.approx(30.0)
         assert before[-1].soil_moisture == pytest.approx(33.0)
         assert after[0].soil_moisture == pytest.approx(40.0)
 
-    def test_bulk_add_deduplicates(self, tmp_db):
+    def test_bulk_add_deduplicates(self, tmp_db: IrrigationRepository) -> None:
         """Bulk insert skips duplicates and returns correct count."""
         cluster_id = tmp_db.add_cluster(FAKE_CLUSTER_NAME)
         sensor_id = tmp_db.add_sensor(
             cluster_id=cluster_id,
             tuya_device_id=FAKE_SENSOR_ID,
             name=FAKE_SENSOR_NAME,
-            sensor_type="soil_moisture",
+            sensor_type="tuya.tr301z",
             config={},
         )
 
@@ -241,44 +256,44 @@ class TestDatabase:
         tmp_db.add_sensor_reading(sensor_id=sensor_id, timestamp=1000, soil_moisture=30.0)
 
         # Bulk insert: 1 duplicate + 2 new (8-field tuples)
-        readings = [
+        readings: list[ReadingRow] = [
             (sensor_id, 1000, None, 30.0, None, None, None, None),  # Duplicate
             (sensor_id, 2000, None, 35.0, None, None, None, None),  # New
             (sensor_id, 3000, None, 40.0, None, None, None, None),  # New
         ]
         inserted = tmp_db.bulk_add_sensor_readings(readings)
 
-        assert inserted == 2
+        assert inserted == BULK_NEW_ROWS
         all_readings = tmp_db.get_recent_readings(sensor_id, hours=999999)
-        assert len(all_readings) == 3
+        assert len(all_readings) == BULK_NEW_ROWS + 1
 
-    def test_bulk_add_with_extended_columns(self, tmp_db):
+    def test_bulk_add_with_extended_columns(self, tmp_db: IrrigationRepository) -> None:
         """Bulk insert correctly stores env_humidity, battery_state, water_warning."""
         cluster_id = tmp_db.add_cluster(FAKE_CLUSTER_NAME)
         sensor_id = tmp_db.add_sensor(
             cluster_id=cluster_id,
             tuya_device_id=FAKE_SENSOR_ID,
             name=FAKE_SENSOR_NAME,
-            sensor_type="soil_moisture",
+            sensor_type="tuya.tr301z",
             config={},
         )
 
-        readings = [
+        readings: list[ReadingRow] = [
             (sensor_id, 1000, 22.5, 45.0, 800, 65.0, "high", 0),
             (sensor_id, 2000, 23.0, 50.0, 900, 60.0, "middle", 1),
         ]
         inserted = tmp_db.bulk_add_sensor_readings(readings)
-        assert inserted == 2
+        assert inserted == BULK_NEW_ROWS
 
         all_readings = tmp_db.get_recent_readings(sensor_id, hours=999999)
-        assert len(all_readings) == 2
+        assert len(all_readings) == BULK_NEW_ROWS
         # Check extended columns are persisted
         r = sorted(all_readings, key=lambda x: x.timestamp)
         assert r[0].env_humidity == pytest.approx(65.0)
         assert r[0].battery_state == "high"
         assert r[1].water_warning is True
 
-    def test_cluster_environment(self, tmp_db):
+    def test_cluster_environment(self, tmp_db: IrrigationRepository) -> None:
         """Cluster environment field works correctly."""
         indoor_id = tmp_db.add_cluster("Indoor", environment="indoor")
         outdoor_id = tmp_db.add_cluster("Outdoor", environment="outdoor")
@@ -286,22 +301,25 @@ class TestDatabase:
         indoor = tmp_db.get_cluster(indoor_id)
         outdoor = tmp_db.get_cluster(outdoor_id)
 
+        assert indoor is not None
+        assert outdoor is not None
         assert indoor.environment == "indoor"
         assert outdoor.environment == "outdoor"
 
         # Default is indoor
         default_id = tmp_db.add_cluster("Default")
         default = tmp_db.get_cluster(default_id)
+        assert default is not None
         assert default.environment == "indoor"
 
-    def test_get_last_reading_timestamp(self, tmp_db):
+    def test_get_last_reading_timestamp(self, tmp_db: IrrigationRepository) -> None:
         """Last reading timestamp returns most recent reading time."""
         cluster_id = tmp_db.add_cluster(FAKE_CLUSTER_NAME)
         sensor_id = tmp_db.add_sensor(
             cluster_id=cluster_id,
             tuya_device_id=FAKE_SENSOR_ID,
             name=FAKE_SENSOR_NAME,
-            sensor_type="soil_moisture",
+            sensor_type="tuya.tr301z",
             config={},
         )
 
@@ -311,16 +329,16 @@ class TestDatabase:
         tmp_db.add_sensor_reading(sensor_id=sensor_id, timestamp=1000, soil_moisture=30.0)
         tmp_db.add_sensor_reading(sensor_id=sensor_id, timestamp=2000, soil_moisture=35.0)
 
-        assert tmp_db.get_last_reading_timestamp(sensor_id) == 2000
+        assert tmp_db.get_last_reading_timestamp(sensor_id) == LAST_READING_TS
 
-    def test_sensor_reading_dedup(self, tmp_db):
+    def test_sensor_reading_dedup(self, tmp_db: IrrigationRepository) -> None:
         """Duplicate (sensor_id, timestamp) is silently skipped."""
         cluster_id = tmp_db.add_cluster(FAKE_CLUSTER_NAME)
         sensor_id = tmp_db.add_sensor(
             cluster_id=cluster_id,
             tuya_device_id=FAKE_SENSOR_ID,
             name=FAKE_SENSOR_NAME,
-            sensor_type="soil_moisture",
+            sensor_type="tuya.tr301z",
             config={},
         )
 
@@ -334,6 +352,6 @@ class TestDatabase:
         assert len(readings) == 1
         assert readings[0].soil_moisture == pytest.approx(30.0)  # Original value kept
 
-    def test_nonexistent_cluster_returns_none(self, tmp_db):
+    def test_nonexistent_cluster_returns_none(self, tmp_db: IrrigationRepository) -> None:
         """Getting a nonexistent cluster returns None."""
         assert tmp_db.get_cluster(99999) is None

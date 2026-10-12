@@ -1,0 +1,15 @@
+
+ Usage: greenhouse windows add [OPTIONS]
+
+ Add a watering window. Wrap-around (start > end) crosses midnight.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  --cluster             <int>                    Cluster ID [required]                          │
+│ *  --start-hour          <int range> [0<=x<=23]   Local-time start hour [required]               │
+│ *  --end-hour            <int range> [0<=x<=23]   Local-time end hour (exclusive) [required]     │
+│    --weekday-mask        <int range> [1<=x<=127]  Weekday bitmask (Mon=1, Tue=2, ..., Sun=64;    │
+│                                                   127 = every day)                               │
+│                                                   [default: 127]                                 │
+│    --label               <str>                    Optional label, e.g. 'morning'                 │
+│    --help                                         Show this message and exit.                    │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

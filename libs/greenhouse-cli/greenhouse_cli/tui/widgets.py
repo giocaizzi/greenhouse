@@ -3,19 +3,28 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Sequence
+from typing import TYPE_CHECKING, Any, ClassVar, Unpack
 
 from rich.console import Group, RenderableType
 from rich.table import Table
 from rich.text import Text
-from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.message import Message
-from textual.widgets import DataTable, Sparkline, Static
+from textual.widgets import Sparkline, Static
+from textual.widgets.data_table import RowDoesNotExist
 from textual_plotext import PlotextPlot
 
+from greenhouse_cli.constants import HOURS_PER_DAY, SECONDS_PER_HOUR
 from greenhouse_cli.tui import formatting as fmt
-from greenhouse_cli.tui.model import ClusterSummary
 from greenhouse_cli.tui.sprites import MOOD_COLORS, MOOD_LABELS, Mood, logo_sprite, plant_sprite
+
+if TYPE_CHECKING:
+    from textual.app import ComposeResult
+    from textual.binding import BindingType
+
+    from greenhouse_cli.tui.model import ClusterSummary, PlantView
+    from greenhouse_cli.tui.table import DataTable
+    from greenhouse_cli.tui.widget_options import CardOptions, TileOptions, WidgetOptions
 
 ANIMATION_INTERVAL = 0.7
 
@@ -29,33 +38,40 @@ class SpriteView(Static):
     SpriteView { width: auto; height: auto; }
     """
 
-    def __init__(self, factory: SpriteFactory, animate: bool = True, **kwargs) -> None:
+    def __init__(self, factory: SpriteFactory, *, animate: bool = True, **kwargs: Unpack[WidgetOptions]) -> None:
+        """Render frame 0 of ``factory``; ``animate`` cycles the frames on a timer."""
         super().__init__(factory(0), **kwargs)
         self._factory = factory
         self._frame = 0
-        self._animate = animate
+        # Not `_animate`: Widget keeps its cached animator under that name (Widget.animate calls it).
+        self._animated = animate
 
     def on_mount(self) -> None:
-        if self._animate and getattr(self.app, "animations", True):
+        """Start the frame timer unless animation is off for this widget or the app."""
+        if self._animated and getattr(self.app, "animations", True):
             self.set_interval(ANIMATION_INTERVAL, self._tick)
 
     def _tick(self) -> None:
+        """Advance one animation frame and re-render with the current factory."""
         self._frame += 1
         self.update(self._factory(self._frame))
 
     def set_factory(self, factory: SpriteFactory) -> None:
+        """Swap the sprite (e.g. watering on/off) without restarting the animation."""
         self._factory = factory
         self.update(factory(self._frame))
 
 
-def plant_factory(category: str | None, mood: Mood, watering: bool = False) -> SpriteFactory:
-    return lambda frame: plant_sprite(category, mood, frame, watering)
+def plant_factory(category: str | None, mood: Mood, *, watering: bool = False) -> SpriteFactory:
+    """Sprite factory for one plant, bound to its category, mood and watering state."""
+    return lambda frame: plant_sprite(category, mood, frame, watering=watering)
 
 
 class Banner(Static):
     """Greenhouse logo + system health pulse."""
 
-    def update_health(self, health: dict | None, server: str) -> None:
+    def update_health(self, health: dict[str, Any] | None, server: str) -> None:
+        """Render the logo beside the server's health summary (or *connecting…*)."""
         table = Table.grid(padding=(0, 2))
         table.add_column()
         table.add_column()
@@ -87,27 +103,37 @@ class ClusterCard(Vertical, can_focus=True):
     """Dashboard tile for one cluster: sprite, readings, decision, sparkline."""
 
     class Selected(Message):
+        """Posted when the card is opened, so the dashboard can push the cluster screen."""
+
         def __init__(self, cluster_id: int) -> None:
+            """Carry the id of the cluster to open."""
             super().__init__()
             self.cluster_id = cluster_id
 
-    BINDINGS = [("enter", "select", "Open")]
+    BINDINGS: ClassVar[list[BindingType]] = [("enter", "select", "Open")]
 
-    def __init__(self, summary: ClusterSummary, **kwargs) -> None:
+    def __init__(self, summary: ClusterSummary, **kwargs: Unpack[CardOptions]) -> None:
+        """Build the card for ``summary``; its DOM id derives from the cluster id."""
         super().__init__(id=f"cluster-card-{summary.id}", classes="cluster-card", **kwargs)
         self.summary = summary
 
     def compose(self) -> ComposeResult:
+        """Lay out the sprite beside the readings, with the moisture sparkline below."""
         with Horizontal(classes="card-body"):
             yield SpriteView(self._sprite_factory(), classes="card-sprite")
             yield Static(self._info(), classes="card-info")
         yield Sparkline(self.summary.sparkline or [0], classes="card-spark")
 
     def _sprite_factory(self) -> SpriteFactory:
+        """The card sprite stands for the driest plant (it drives the call) in the cluster mood."""
         s = self.summary
-        return plant_factory(s.driest.category if s.driest else None, s.mood, s.watering)
+        return plant_factory(s.driest.category if s.driest else None, s.mood, watering=s.watering)
 
     def _info(self) -> RenderableType:
+        """Card text, top to bottom: identity, mood, driest-plant gauge, air readings, watering state, next decision.
+
+        The last line is the age of the newest reading, so a stale card is visible at a glance.
+        """
         s = self.summary
         mood = s.mood
         lines = Text()
@@ -125,6 +151,14 @@ class ClusterCard(Vertical, can_focus=True):
         lines.append(
             f"🌡 {fmt.num(s.temperature, '°C')}  💧 {fmt.num(s.humidity, '%', 0)}  ☀ {fmt.num(s.light, 'lx', 0)}\n"
         )
+        self._append_watering(lines)
+        self._append_decision(lines)
+        lines.append(f"\nread {fmt.ago(s.newest_reading_at)}", style="dim")
+        return lines
+
+    def _append_watering(self, lines: Text) -> None:
+        """The watering-state line: running now, the last event, sensor-only, or never irrigated."""
+        s = self.summary
         if s.watering:
             lines.append("● watering now\n", style="bold #4fb3ff")
         elif s.last_event:
@@ -133,19 +167,22 @@ class ClusterCard(Vertical, can_focus=True):
             lines.append("sensor-only\n", style="dim")
         else:
             lines.append("never irrigated\n", style="dim")
-        decision = s.decision or {}
+
+    def _append_decision(self, lines: Text) -> None:
+        """The next decision's action (with its duration when it irrigates), when one is known."""
+        decision = self.summary.decision or {}
         if decision:
             lines.append("next: ")
             lines.append_text(fmt.styled(decision.get("action"), fmt.ACTION_STYLES))
             if decision.get("action") == "irrigate" and decision.get("duration_minutes"):
                 lines.append(f" {decision['duration_minutes']}m")
-        lines.append(f"\nread {fmt.ago(s.newest_reading_at)}", style="dim")
-        return lines
 
     def action_select(self) -> None:
+        """Announce that this cluster was opened."""
         self.post_message(self.Selected(self.summary.id))
 
     def on_click(self) -> None:
+        """A click opens the card, like Enter."""
         self.action_select()
 
 
@@ -154,20 +191,20 @@ class PlantTile(Vertical):
 
     def __init__(
         self,
-        species: str,
-        category: str | None,
-        moisture: float | None,
-        mood: Mood,
+        plant: PlantView,
+        *,
         watering: bool,
         band: tuple[float | None, float | None] = (None, None),
-        **kw,
-    ):
+        **kw: Unpack[TileOptions],
+    ) -> None:
+        """Show ``plant``: species/category pick the sprite, its moisture and ``band`` fill the gauge."""
         super().__init__(classes="plant-tile", **kw)
-        self._args = (species, category, moisture, mood, watering, band)
+        self._args = (plant.species, plant.category, plant.moisture, plant.mood, watering, band)
 
     def compose(self) -> ComposeResult:
+        """Stack the plant sprite above its species, mood, moisture and band gauge."""
         species, category, moisture, mood, watering, (lo, hi) = self._args
-        yield SpriteView(plant_factory(category, mood, watering))
+        yield SpriteView(plant_factory(category, mood, watering=watering))
         caption = Text.assemble((species[:18] + "\n", "bold"))
         caption.append(MOOD_LABELS[mood], style=MOOD_COLORS[mood])
         caption.append(f" {fmt.num(moisture, '%')}\n")
@@ -182,7 +219,7 @@ class MetricChart(PlotextPlot):
     """A plotext line chart fed by a ``chart-data`` / ``health-timeline`` payload."""
 
     def show_payload(
-        self, payload: dict | None, metric: str = "soil_moisture", hours: int = 24, title: str | None = None
+        self, payload: dict[str, Any] | None, metric: str = "soil_moisture", hours: int = 24, title: str | None = None
     ) -> None:
         """Plot every sensor series, the ideal band and irrigation events.
 
@@ -194,32 +231,34 @@ class MetricChart(PlotextPlot):
         label, unit = fmt.METRICS.get(metric, (metric, ""))
         plt.title(title or f"{label} ({unit}) — last {hours}h")
         reference = fmt.now()
+        plotted = self._plot_series((payload or {}).get("datasets", []), reference)
+        threshold = (payload or {}).get("threshold") or {}
+        for edge in ("min", "max"):
+            if threshold.get(edge) is not None:
+                plt.hline(threshold[edge], "green")
+        self._draw_event_lines((payload or {}).get("events", []), reference)
+        plt.xlim(-hours, 0)
+        if metric in ("soil_moisture", "env_humidity"):
+            plt.ylim(0, 100)
+        self._set_x_ticks(hours, reference)
+        if not plotted:
+            plt.title(f"{label} — no readings in the last {hours}h")
+        self.refresh()
+
+    def _plot_series(self, datasets: list[dict[str, Any]], reference: int) -> bool:
+        """Plot each sensor series against hours before ``reference``; whether any had points."""
         plotted = False
-        for i, dataset in enumerate((payload or {}).get("datasets", [])):
+        for i, dataset in enumerate(datasets):
             points = dataset.get("points") or []
             if not points:
                 continue
             xs = [(ts - reference) / 3600 for ts, _ in points]
             ys = [v for _, v in points]
-            plt.plot(xs, ys, label=dataset.get("sensor_name", "?"), marker="braille", color=SERIES_COLORS[i % 7])
+            self.plt.plot(xs, ys, label=dataset.get("sensor_name", "?"), marker="braille", color=SERIES_COLORS[i % 7])
             plotted = True
-        threshold = (payload or {}).get("threshold") or {}
-        for edge in ("min", "max"):
-            if threshold.get(edge) is not None:
-                plt.hline(threshold[edge], "green")
-        for event in (payload or {}).get("events", []):
-            if event.get("action") == "start":
-                plt.vline((event["timestamp"] - reference) / 3600, "blue")
-        plt.xlim(-hours, 0)
-        if metric in ("soil_moisture", "env_humidity"):
-            plt.ylim(0, 100)
-        ticks = [-hours + hours * i / 4 for i in range(5)]
-        plt.xticks(ticks, [fmt.clock(reference + t * 3600, with_date=hours > 24) for t in ticks])
-        if not plotted:
-            plt.title(f"{label} — no readings in the last {hours}h")
-        self.refresh()
+        return plotted
 
-    def show_overlay(self, payload: dict | None, hours: int) -> None:
+    def show_overlay(self, payload: dict[str, Any] | None, hours: int) -> None:
         """Plot the normalised soil / humidity / light overlay (shared 0–100 axis)."""
         plt = self.plt
         plt.clear_figure()
@@ -239,19 +278,29 @@ class MetricChart(PlotextPlot):
                 color=colors.get(dataset["metric"], "white"),
             )
             plotted = True
-        for event in (payload or {}).get("events", []):
-            if event.get("action") == "start":
-                plt.vline((event["timestamp"] - reference) / 3600, "blue")
+        self._draw_event_lines((payload or {}).get("events", []), reference)
         plt.title(
             f"Soil · humidity · light, normalised — last {hours}h" if plotted else f"No data in the last {hours}h"
         )
         plt.xlim(-hours, 0)
         plt.ylim(0, 100)
-        ticks = [-hours + hours * i / 4 for i in range(5)]
-        plt.xticks(ticks, [fmt.clock(reference + t * 3600, with_date=hours > 24) for t in ticks])
+        self._set_x_ticks(hours, reference)
         self.refresh()
 
-    def show_timeline(self, payload: dict | None, title: str) -> None:
+    def _draw_event_lines(self, events: list[dict[str, Any]], reference: int) -> None:
+        """Mark every irrigation ``start`` as a vertical line at its hour offset from ``reference``."""
+        for event in events:
+            if event.get("action") == "start":
+                self.plt.vline((event["timestamp"] - reference) / SECONDS_PER_HOUR, "blue")
+
+    def _set_x_ticks(self, hours: int, reference: int) -> None:
+        """Five evenly spaced wall-clock labels across the ``-hours … 0`` axis (with dates beyond one day)."""
+        ticks = [-hours + hours * i / 4 for i in range(5)]
+        self.plt.xticks(
+            ticks, [fmt.clock(reference + t * SECONDS_PER_HOUR, with_date=hours > HOURS_PER_DAY) for t in ticks]
+        )
+
+    def show_timeline(self, payload: dict[str, Any] | None, title: str) -> None:
         """Plot a ``(timestamp, score)`` timeline such as plant health."""
         plt = self.plt
         plt.clear_figure()
@@ -271,10 +320,11 @@ class MetricChart(PlotextPlot):
 class Heatmap(Static):
     """7×24 weekday-by-hour irrigation heatmap from ``GET /clusters/{id}/heatmap``."""
 
-    RAMP = ["#1f2a1f", "#1d4d6b", "#2271a8", "#2f95d6", "#4fb3ff", "#9ad7ff"]
-    DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    RAMP: ClassVar[list[str]] = ["#1f2a1f", "#1d4d6b", "#2271a8", "#2f95d6", "#4fb3ff", "#9ad7ff"]
+    DAYS: ClassVar[list[str]] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
-    def show(self, payload: dict | None) -> None:
+    def show(self, payload: dict[str, Any] | None) -> None:
+        """Render the 7×24 grid, shading each slot relative to the busiest one."""
         cells = {(c["weekday"], c["hour"]): c for c in (payload or {}).get("cells", [])}
         peak = max((c["count"] for c in cells.values()), default=0)
         text = Text()
@@ -298,7 +348,8 @@ class Heatmap(Static):
 class KeyValue(Static):
     """A two-column key/value panel."""
 
-    def show(self, rows: list[tuple[str, RenderableType | str]], title: str | None = None) -> None:
+    def show(self, rows: Sequence[tuple[str, RenderableType | str]], title: str | None = None) -> None:
+        """Render ``rows`` as a dim-key grid, under ``title`` when given."""
         table = Table.grid(padding=(0, 2))
         table.add_column(style="dim", no_wrap=True)
         table.add_column()
@@ -310,7 +361,7 @@ class KeyValue(Static):
             self.update(table)
 
 
-def selected_key(table: DataTable) -> str | None:
+def selected_key(table: DataTable[Any]) -> str | None:
     """Row key under the cursor, or ``None`` for an empty table."""
     if not table.row_count:
         return None
@@ -318,7 +369,7 @@ def selected_key(table: DataTable) -> str | None:
     return row_key.value
 
 
-def refill(table: DataTable, rows: Iterable[tuple[str | None, Sequence[RenderableType | str]]]) -> None:
+def refill(table: DataTable[Any], rows: Iterable[tuple[str | None, Sequence[RenderableType | str]]]) -> None:
     """Replace a table's rows while keeping the cursor on the same record.
 
     Auto-refresh reloads every table; without this the cursor would snap back
@@ -337,6 +388,6 @@ def refill(table: DataTable, rows: Iterable[tuple[str | None, Sequence[Renderabl
         return
     try:
         target = table.get_row_index(previous_key) if previous_key is not None else previous_row
-    except Exception:  # the record went away — stay at the same position
+    except RowDoesNotExist:  # the record went away — stay at the same position
         target = previous_row
     table.move_cursor(row=min(max(target, 0), table.row_count - 1))

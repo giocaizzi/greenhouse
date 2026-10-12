@@ -1,0 +1,40 @@
+ ⭘                                          greenhouse — http://testserver                                     10:00:00
+ 2 open · showing open   f: filter  k: acknowledge  v: resolve  y: re-scan
+ ID  Severity  Status  Title                        Cluster  Last seen  ×
+ 2   warning   open    Low battery: Monstera probe  1        0s ago     1
+ 1   critical  open    Possible leak on Balcony     2        0s ago     1
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ Low battery: Monstera probe                                                                                          │
+│ health · battery_low · sensor #1                                                                                     │
+│ first seen 2026-04-15 10:00 · last seen 2026-04-15 10:00                                                             │
+│                                                                                                                      │
+│ Replace the batteries soon.                                                                                          │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+ f Filter  k Acknowledge  v Resolve  y Re-scan  d Dashboard  a Alerts  l Activity  s System  o Settings  / S▏^p palette

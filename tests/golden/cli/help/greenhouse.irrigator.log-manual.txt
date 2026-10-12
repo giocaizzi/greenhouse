@@ -1,0 +1,13 @@
+
+ Usage: greenhouse irrigator log-manual [OPTIONS] {id}
+
+ Log a manual irrigation event (no device command).
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────╮
+│ *    id      <int>  Irrigator ID [required]                                                      │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  --minutes        <int>  Duration in minutes [required]                                        │
+│    --notes          <str>                                                                        │
+│    --help                  Show this message and exit.                                           │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

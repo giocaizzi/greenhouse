@@ -8,18 +8,34 @@ row so re-arming (and a duplicate job run) is idempotent.
 """
 
 import time
+from typing import Never
 
 import pytest
+from apscheduler.job import Job
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from greenhouse_core.constants import LEAK_CHECK_DELAY_SECONDS, LEAK_HOLD_HOURS
+from greenhouse_core.models import (
+    ENTITY_CLUSTER,
+    EVENT_ACTION_START,
+    SOURCE_LEAK,
+    TRIGGERED_BY_AUTO,
+    TRIGGERED_BY_MANUAL,
+    Alert,
+    Irrigator,
+    TriggeredBy,
+)
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.scheduler import scheduler as bg_scheduler
 from greenhouse_server.services import irrigation as irrigation_mod
+from greenhouse_server.services import irrigation_jobs as irrigation_jobs_mod
+from greenhouse_server.services import leak as leak_mod
+from greenhouse_server.services.irrigation_jobs import record_leak_check_armed
 from server.conftest import _make_stubbed_app
 
 
-def _seed(app) -> tuple[int, int]:
+def _seed(app: FastAPI) -> tuple[int, int]:
     """One cluster with one irrigator; returns (cluster_id, irrigator_id)."""
     session = app.state.session_factory()
     try:
@@ -29,7 +45,7 @@ def _seed(app) -> tuple[int, int]:
             cluster_id=cid,
             tuya_device_id="fake_tuya_device_aabbccdd",
             name="Pump",
-            irrigator_type="tuya_cloud",
+            irrigator_type="rainpoint.ik10pw",
             config={},
         )
         session.commit()
@@ -38,11 +54,11 @@ def _seed(app) -> tuple[int, int]:
         session.close()
 
 
-def _start(app, iid: int, ts: int, triggered_by: str = "auto") -> int:
+def _start(app: FastAPI, iid: int, ts: int, triggered_by: TriggeredBy = TRIGGERED_BY_AUTO) -> int:
     session = app.state.session_factory()
     try:
         IrrigationRepository(session).add_irrigation_event(
-            irrigator_id=iid, action="start", triggered_by=triggered_by, duration_minutes=3, timestamp=ts
+            irrigator_id=iid, action=EVENT_ACTION_START, triggered_by=triggered_by, duration_minutes=3, timestamp=ts
         )
         session.commit()
         return ts
@@ -50,18 +66,22 @@ def _start(app, iid: int, ts: int, triggered_by: str = "auto") -> int:
         session.close()
 
 
-def _leak_jobs() -> dict[str, object]:
+def _irrigator(repo: IrrigationRepository, iid: int) -> Irrigator:
+    irrigator = repo.get_irrigator(iid)
+    assert irrigator is not None
+    return irrigator
+
+
+def _leak_jobs() -> dict[str, Job]:
     return {j.id: j for j in bg_scheduler.get_jobs() if j.id.startswith("leak-check-")}
 
 
 @pytest.fixture
-def check_calls(monkeypatch):
+def check_calls(monkeypatch: pytest.MonkeyPatch) -> list[tuple[int, int]]:
     """Record LeakDetectionService runs instead of evaluating readings."""
-    from greenhouse_server.services import leak as leak_mod
-
     calls: list[tuple[int, int]] = []
 
-    def _fake(self, cluster_id, started_at):
+    def _fake(_self: leak_mod.LeakDetectionService, cluster_id: int, started_at: int) -> list[Alert]:
         calls.append((cluster_id, started_at))
         return []
 
@@ -70,68 +90,123 @@ def check_calls(monkeypatch):
 
 
 class TestRearm:
-    def test_pending_and_overdue_auto_starts_are_rearmed(self, app, running_scheduler):
+    """Tests for rearm."""
+
+    @pytest.mark.usefixtures("running_scheduler")
+    def test_pending_and_overdue_auto_starts_are_rearmed(self, app: FastAPI) -> None:
+        """Pending and overdue auto starts are rearmed."""
         cid, iid = _seed(app)
         now = int(time.time())
         pending = _start(app, iid, now - 600)  # due in 20 min
         overdue = _start(app, iid, now - 2700)  # due 15 min ago, never ran
-        _start(app, iid, now - 900, triggered_by="manual")  # manual starts never get a leak check
+        _start(app, iid, now - 900, triggered_by=TRIGGERED_BY_MANUAL)  # no armed marker: a hand log, no check
         _start(app, iid, now - LEAK_HOLD_HOURS * 3600 - 60)  # older than the hold horizon
 
-        assert irrigation_mod.rearm_leak_checks() == 2
+        rearmed = irrigation_jobs_mod.rearm_leak_checks()
         jobs = _leak_jobs()
         assert set(jobs) == {f"leak-check-{cid}-{pending}", f"leak-check-{cid}-{overdue}"}
+        assert rearmed == len(jobs)
         due = jobs[f"leak-check-{cid}-{pending}"].next_run_time.timestamp()
         assert due == pytest.approx(pending + LEAK_CHECK_DELAY_SECONDS, abs=1)
         # Overdue checks run right away rather than at their (past) due time.
         assert jobs[f"leak-check-{cid}-{overdue}"].next_run_time.timestamp() == pytest.approx(time.time(), abs=5)
 
-    def test_completed_check_is_not_rearmed(self, app, running_scheduler, check_calls):
+    @pytest.mark.usefixtures("running_scheduler")
+    def test_marked_manual_start_is_rearmed_but_a_hand_log_is_not(self, app: FastAPI) -> None:
+        """A non-automatic start that armed a check (forced run) leaves a ``leak_check_armed`` marker.
+
+        The re-arm finds it through that marker; a ``start``/``manual`` row without one (a
+        logged hand-watering, no pump) gets no check.
+        """
+        cid, iid = _seed(app)
+        now = int(time.time())
+        forced = _start(app, iid, now - 600, triggered_by=TRIGGERED_BY_MANUAL)
+        _start(app, iid, now - 900, triggered_by=TRIGGERED_BY_MANUAL)  # hand log: no marker
+        session = app.state.session_factory()
+        try:
+            repo = IrrigationRepository(session)
+            record_leak_check_armed(repo, _irrigator(repo, iid), forced, triggered_by=TRIGGERED_BY_MANUAL)
+            session.commit()
+        finally:
+            session.close()
+        assert irrigation_jobs_mod.rearm_leak_checks() == 1
+        assert set(_leak_jobs()) == {f"leak-check-{cid}-{forced}"}
+
+    @pytest.mark.usefixtures("running_scheduler")
+    def test_long_manual_start_is_rearmed_with_its_own_window(self, app: FastAPI) -> None:
+        """The marker's ``check_after_seconds`` survives a restart: due time and job args keep the window."""
+        cid, iid = _seed(app)
+        started = _start(app, iid, int(time.time()) - 600, triggered_by=TRIGGERED_BY_MANUAL)
+        session = app.state.session_factory()
+        try:
+            repo = IrrigationRepository(session)
+            record_leak_check_armed(
+                repo, _irrigator(repo, iid), started, triggered_by=TRIGGERED_BY_MANUAL, after_seconds=5100
+            )
+            session.commit()
+        finally:
+            session.close()
+        assert irrigation_jobs_mod.rearm_leak_checks() == 1
+        job = _leak_jobs()[f"leak-check-{cid}-{started}"]
+        assert list(job.args) == [cid, started, 5100]
+        assert job.next_run_time.timestamp() == pytest.approx(started + 5100, abs=1)
+
+    @pytest.mark.usefixtures("running_scheduler")
+    def test_completed_check_is_not_rearmed(self, app: FastAPI, check_calls: list[tuple[int, int]]) -> None:
+        """Completed check is not rearmed."""
         cid, iid = _seed(app)
         overdue = _start(app, iid, int(time.time()) - 2700)
-        assert irrigation_mod.rearm_leak_checks() == 1
+        assert irrigation_jobs_mod.rearm_leak_checks() == 1
         job = _leak_jobs()[f"leak-check-{cid}-{overdue}"]
         job.func(*job.args)
         assert check_calls == [(cid, overdue)]
 
         bg_scheduler.remove_job(job.id)
-        assert irrigation_mod.rearm_leak_checks() == 0  # marker found
+        assert irrigation_jobs_mod.rearm_leak_checks() == 0  # marker found
         assert _leak_jobs() == {}
 
-    def test_job_runs_check_at_most_once(self, app, running_scheduler, check_calls):
+    @pytest.mark.usefixtures("running_scheduler")
+    def test_job_runs_check_at_most_once(self, app: FastAPI, check_calls: list[tuple[int, int]]) -> None:
+        """Job runs check at most once."""
         cid, iid = _seed(app)
         ts = _start(app, iid, int(time.time()) - 2700)
-        irrigation_mod.rearm_leak_checks()
+        irrigation_jobs_mod.rearm_leak_checks()
         job = _leak_jobs()[f"leak-check-{cid}-{ts}"]
         job.func(*job.args)
         job.func(*job.args)  # e.g. normal job + re-armed job both fired
         assert check_calls == [(cid, ts)]
 
-    def test_failed_check_leaves_no_marker(self, app, running_scheduler, monkeypatch):
-        from greenhouse_server.services import leak as leak_mod
+    @pytest.mark.usefixtures("running_scheduler")
+    def test_failed_check_leaves_no_marker(self, app: FastAPI, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Failed check leaves no marker."""
 
-        def _boom(self, cluster_id, started_at):
-            raise RuntimeError("db hiccup")
+        def _boom(_self: leak_mod.LeakDetectionService, _cluster_id: int, _started_at: int) -> Never:
+            msg = "db hiccup"
+            raise RuntimeError(msg)
 
         monkeypatch.setattr(leak_mod.LeakDetectionService, "check_after_irrigation", _boom)
         cid, iid = _seed(app)
         ts = _start(app, iid, int(time.time()) - 2700)
-        irrigation_mod.rearm_leak_checks()
+        irrigation_jobs_mod.rearm_leak_checks()
         job = _leak_jobs()[f"leak-check-{cid}-{ts}"]
         job.func(*job.args)
         bg_scheduler.remove_job(job.id)
-        assert irrigation_mod.rearm_leak_checks() == 1  # still owed
+        assert irrigation_jobs_mod.rearm_leak_checks() == 1  # still owed
 
-    def test_already_held_start_is_not_rechecked(self, app, running_scheduler):
-        """A start whose check raised a hold before markers existed is treated as checked
-        (re-running it could re-raise an alert the operator already resolved)."""
+    @pytest.mark.usefixtures("running_scheduler")
+    def test_already_held_start_is_not_rechecked(self, app: FastAPI) -> None:
+        """A start whose check already raised a hold is treated as checked.
+
+        A start whose check raised a hold before markers existed is treated as checked
+        (re-running it could re-raise an alert the operator already resolved).
+        """
         cid, iid = _seed(app)
         ts = _start(app, iid, int(time.time()) - 2700)
         session = app.state.session_factory()
         try:
             IrrigationRepository(session).add_activity_event(
-                source="leak",
-                entity_type="cluster",
+                source=SOURCE_LEAK,
+                entity_type=ENTITY_CLUSTER,
                 entity_id=cid,
                 code="leak_hold",
                 message="held",
@@ -141,16 +216,19 @@ class TestRearm:
             session.commit()
         finally:
             session.close()
-        assert irrigation_mod.rearm_leak_checks() == 0
+        assert irrigation_jobs_mod.rearm_leak_checks() == 0
 
-    def test_noop_when_scheduler_stopped(self, app):
+    def test_noop_when_scheduler_stopped(self, app: FastAPI) -> None:
+        """Noop when scheduler stopped."""
         _, iid = _seed(app)
         _start(app, iid, int(time.time()) - 600)
-        assert irrigation_mod.rearm_leak_checks() == 0
+        assert irrigation_jobs_mod.rearm_leak_checks() == 0
 
 
 class TestStartupWiring:
-    def test_startup_rearms_lost_leak_check(self):
+    """Tests for startup wiring."""
+
+    def test_startup_rearms_lost_leak_check(self) -> None:
         """Regression: a restart within the 30-min window silently lost the check."""
         application, engine = _make_stubbed_app(bypass_auth=True, enable_scheduler=True)
         try:
@@ -163,9 +241,17 @@ class TestStartupWiring:
 
 
 class TestAutoStartTimestampAlignment:
-    def test_leak_check_keyed_by_the_start_event_timestamp(self, app, seeded_client, running_scheduler, monkeypatch):
-        """The leak-check job id / started_at must equal the `start` row's timestamp,
-        otherwise the restart re-arm (which reads the row) can't match it."""
+    """Tests for auto start timestamp alignment."""
+
+    @pytest.mark.usefixtures("running_scheduler")
+    def test_leak_check_keyed_by_the_start_event_timestamp(
+        self, app: FastAPI, seeded_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The leak-check job is keyed by the ``start`` row's own timestamp.
+
+        The leak-check job id / started_at must equal the `start` row's timestamp,
+        otherwise the restart re-arm (which reads the row) can't match it.
+        """
         session = app.state.session_factory()
         repo = IrrigationRepository(session)
         now = int(time.time())

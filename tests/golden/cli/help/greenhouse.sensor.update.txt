@@ -1,0 +1,15 @@
+
+ Usage: greenhouse sensor update [OPTIONS] {id}
+
+ Patch sensor metadata. Only the supplied fields are sent.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────╮
+│ *    id      <int>  Sensor ID [required]                                                         │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  --cluster         <int>  Cluster the sensor belongs to [required]                             │
+│    --name            <str>  New sensor name                                                      │
+│    --type            <str>  Device model key (tuya.tr301z)                                       │
+│    --plant-id        <int>  Reassign to a different plant                                        │
+│    --help                   Show this message and exit.                                          │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

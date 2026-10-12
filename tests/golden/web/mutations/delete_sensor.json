@@ -1,0 +1,40 @@
+{
+ "body_lines": [
+  ""
+ ],
+ "db_effect": {
+  "sensor_readings": {
+   "removed": [
+    "4",
+    "17",
+    "30",
+    "43",
+    "56",
+    "69",
+    "82"
+   ]
+  },
+  "sensors": {
+   "removed": [
+    "4"
+   ]
+  }
+ },
+ "device_calls": {
+  "irrigator": [],
+  "sensor": []
+ },
+ "headers": {
+  "content-type": "text/html; charset=utf-8"
+ },
+ "request": {
+  "form": null,
+  "headers": {
+   "HX-Request": "true"
+  },
+  "method": "DELETE",
+  "url": "/clusters/1/sensors/4"
+ },
+ "status": 200,
+ "templates": []
+}

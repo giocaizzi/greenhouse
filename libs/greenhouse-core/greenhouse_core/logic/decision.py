@@ -1,6 +1,7 @@
 """Typed value objects for irrigation decisions and their explanation trail."""
 
 from enum import StrEnum
+from typing import Any, TypedDict, Unpack
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -43,6 +44,9 @@ class TriggerCode(StrEnum):
     CONFIG_FALLBACK = "config_fallback"
     NO_DATA = "no_data"
     DAILY_CAP_HIT = "daily_cap_hit"
+    # Sensor data present but no rule fired (e.g. temperature-only readings in
+    # range): the explicit "nothing to do" reason, so ``primary_code`` is never NULL.
+    NO_ACTION_NEEDED = "no_action_needed"
     # Adjustments
     TEMP_HIGH = "temp_high"
     TEMP_LOW = "temp_low"
@@ -93,6 +97,10 @@ class TriggerCode(StrEnum):
     # resolved or the hold ages out; `force` does NOT bypass it, the same way
     # the device-health gate is not bypassable.
     LEAK_HOLD = "leak_hold"
+    # Global dry run (``UserPreferences.dry_run_global``) — the server's last gate
+    # before the pump: the run is evaluated and logged, then turned into a SKIP
+    # led by this reason instead of actuating.
+    DRY_RUN_GLOBAL = "dry_run_global"
 
 
 DEVICE_BLOCKING_CODES: frozenset[TriggerCode] = frozenset(
@@ -121,6 +129,15 @@ class Reason(BaseModel):
     interval_delta: int = 0
 
 
+class ReasonDetails(TypedDict, total=False):
+    """Optional :class:`Reason` fields for ``IrrigationDecision.add_reason`` (the model's defaults apply)."""
+
+    severity: Severity
+    icon: str | None
+    duration_delta: int
+    interval_delta: int
+
+
 class PerSensorSnapshot(BaseModel):
     """Per-sensor aggregate over the lookback window."""
 
@@ -132,6 +149,11 @@ class PerSensorSnapshot(BaseModel):
     avg_temperature: float | None = None
     avg_humidity: float | None = None
     avg_soil_moisture: float | None = None
+    # This sensor's newest cleaned soil reading — the *current* state the soil rule and
+    # the critical-stress check judge (the 24 h aggregates include readings from before
+    # the last watering). Derived from the same readings, so it is left out of the
+    # persisted payload (exclude=True) and the decision-log schema is unchanged.
+    latest_soil_moisture: float | None = Field(default=None, exclude=True)
 
 
 class SensorSnapshot(BaseModel):
@@ -168,13 +190,7 @@ class StressIndicators(BaseModel):
     over_watering: str | None = None
     low_env_humidity: str | None = None
     low_light: str | None = None
-    learning_alerts: list[dict] = Field(default_factory=list)
-
-    def any_critical(self) -> bool:
-        """True when at least one critical-class stress is set."""
-        return any(
-            value is not None for value in (self.water_warning, self.water_stress, self.over_watering, self.heat_stress)
-        )
+    learning_alerts: list[dict[Any, Any]] = Field(default_factory=list)
 
 
 class Trends(BaseModel):
@@ -241,24 +257,19 @@ class IrrigationDecision(BaseModel):
         """The first (most decisive) reason code, if any."""
         return self.reasons[0].code if self.reasons else None
 
-    def add_reason(
-        self,
-        code: TriggerCode,
-        message: str,
-        *,
-        severity: Severity = Severity.INFO,
-        icon: str | None = None,
-        duration_delta: int = 0,
-        interval_delta: int = 0,
-    ) -> None:
-        """Append a Reason; mutates the model in place."""
+    def add_reason(self, code: TriggerCode, message: str, **details: Unpack[ReasonDetails]) -> None:
+        """Append a Reason; mutates the model in place.
+
+        Every field is passed explicitly (defaults included), so the Reason's
+        ``model_fields_set`` is the same whichever details the caller gave.
+        """
         self.reasons.append(
             Reason(
                 code=code,
                 message=message,
-                severity=severity,
-                icon=icon,
-                duration_delta=duration_delta,
-                interval_delta=interval_delta,
+                severity=details.get("severity", Severity.INFO),
+                icon=details.get("icon"),
+                duration_delta=details.get("duration_delta", 0),
+                interval_delta=details.get("interval_delta", 0),
             )
         )

@@ -1,0 +1,13 @@
+
+ Usage: greenhouse cluster add [OPTIONS] {name}
+
+ Add a new cluster.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────╮
+│ *    name      <str>  Cluster name [required]                                                    │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ --location           <str>  Location description                                                 │
+│ --environment        <str>  indoor or outdoor [default: indoor]                                  │
+│ --help                      Show this message and exit.                                          │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

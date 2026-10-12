@@ -1,0 +1,16 @@
+
+ Usage: greenhouse plant [OPTIONS] COMMAND [ARGS]...
+
+ Manage plants
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                                      │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────────────────────────╮
+│ add     Add a plant to a cluster.                                                                │
+│ list    List plants.                                                                             │
+│ sync    Sync plants with evidence-based care data.                                               │
+│ move    Move a plant to a different cluster.                                                     │
+│ update  Patch plant metadata. Only the supplied fields are sent.                                 │
+│ delete  Delete a plant and its health / learning history.                                        │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

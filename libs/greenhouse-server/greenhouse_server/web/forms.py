@@ -1,0 +1,85 @@
+"""HTML form-field parsing shared by the web routes.
+
+HTML forms post every field as a string, and a blank field means "not set" (inherit, no cap,
+no plant). These helpers spell that rule once. Each caller keeps its own 400 message, so the
+pages render exactly the errors they always did.
+"""
+
+from __future__ import annotations
+
+import math
+from typing import TYPE_CHECKING, TypeVar
+
+from fastapi import HTTPException
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Sequence
+
+_Number = TypeVar("_Number", int, float)
+
+
+def blank_or(raw: str | None, parse: Callable[[str], _Number]) -> _Number | None:
+    """``None`` for a missing or blank field, else ``parse(raw)``.
+
+    A ``ValueError`` from ``parse`` propagates unchanged; use :func:`parsed_or_400` to turn it
+    into a 400.
+    """
+    if raw is None or not raw.strip():
+        return None
+    return parse(raw)
+
+
+def parsed_or_400(
+    raw: str, parse: Callable[[str], _Number], *, error: str, negative_error: str | None = None
+) -> _Number | None:
+    """Like :func:`blank_or`, but a malformed value is HTTP 400 ``error``.
+
+    A non-finite float (``nan``, ``inf`` — ``float()`` accepts them) is malformed too:
+    no measurement or threshold can be one. With ``negative_error`` set, a value below
+    zero is HTTP 400 ``negative_error``.
+    """
+    try:
+        value = blank_or(raw, parse)
+    except ValueError as exc:
+        raise HTTPException(400, error) from exc
+    if isinstance(value, float) and not math.isfinite(value):
+        raise HTTPException(400, error)
+    if negative_error is not None and value is not None and value < 0:
+        raise HTTPException(400, negative_error)
+    return value
+
+
+def tri_bool(raw: str) -> bool | None:
+    """Parse a tri-state form value: blank inherits, otherwise an explicit on / off.
+
+    ``""`` = inherit, ``"true"`` / ``"on"`` / ``"1"`` = on, ``"false"`` / ``"off"`` / ``"0"`` = off;
+    anything else is a 400.
+    """
+    value = raw.strip().lower()
+    if value == "":
+        return None
+    if value in ("true", "on", "1"):
+        return True
+    if value in ("false", "off", "0"):
+        return False
+    raise HTTPException(400, f"Invalid tri-bool value: {raw!r}")
+
+
+# Human labels for the registered device model keys in the type <select>s. A key
+# missing here (a test or future adapter) is shown as the key itself.
+_DEVICE_TYPE_LABELS = {
+    "rainpoint.ik10pw": "Rainpoint IK10PW",
+    "tuya.tr301z": "Tuya TR301Z (soil, temperature, light)",
+}
+
+
+def device_type_options(known: Sequence[str], current: str | None = None) -> list[tuple[str, str]]:
+    """``(value, label)`` options for a device type ``<select>``: the registry's keys.
+
+    A ``current`` value the registry does not know (a legacy row) is appended, flagged, so the
+    edit form shows what is stored; saving it unchanged is refused like any unknown type.
+    """
+    options = [(key, _DEVICE_TYPE_LABELS.get(key, key)) for key in known]
+    if current and current not in known:
+        options.append((current, f"{current} (unknown model)"))
+    return options

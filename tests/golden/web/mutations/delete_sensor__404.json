@@ -1,0 +1,51 @@
+{
+ "body_lines": [
+  "<article class=\"card error-panel\">",
+  "  <div class=\"card__head\">",
+  "    <h3 class=\"card__title\">",
+  "      <span class=\"badge-danger\">Error 404</span>",
+  "    </h3>",
+  "  </div>",
+  "  <div class=\"card__body\">",
+  "    <p>Sensor not found in cluster</p>",
+  "    ",
+  "  </div>",
+  "</article>"
+ ],
+ "db_effect": {},
+ "device_calls": {
+  "irrigator": [],
+  "sensor": []
+ },
+ "headers": {
+  "content-type": "text/html; charset=utf-8"
+ },
+ "request": {
+  "form": null,
+  "headers": {
+   "HX-Request": "true"
+  },
+  "method": "DELETE",
+  "url": "/clusters/2/sensors/4"
+ },
+ "status": 404,
+ "templates": [
+  [
+   "_error.html",
+   [
+    "active_vacation",
+    "app_version",
+    "auth_enabled",
+    "detail",
+    "dry_run_global",
+    "is_hx",
+    "now_text",
+    "request",
+    "scheduler_paused",
+    "show_chrome",
+    "status_code",
+    "theme"
+   ]
+  ]
+ ]
+}

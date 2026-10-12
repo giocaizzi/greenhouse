@@ -1,25 +1,11 @@
 """Forecast route: next-irrigation prediction per cluster."""
 
-from typing import Annotated
-
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter
 
 from greenhouse_core.schemas import ForecastResponse
-from greenhouse_server.deps import PlantDbDep, RepoDep, WeatherClientDep, require_cluster
-from greenhouse_server.services.forecast import ForecastService
+from greenhouse_server.deps import ForecastServiceDep, RepoDep, require_cluster
 
 router = APIRouter(tags=["operations"])
-
-
-def get_forecast_service(
-    repo: RepoDep,
-    plant_db: PlantDbDep,
-    weather: WeatherClientDep,
-) -> ForecastService:
-    return ForecastService(repo, plant_db, weather_client=weather)
-
-
-ForecastServiceDep = Annotated[ForecastService, Depends(get_forecast_service)]
 
 
 @router.get("/clusters/{cluster_id}/forecast", response_model=ForecastResponse)
@@ -37,7 +23,7 @@ def get_cluster_forecast(cluster_id: int, repo: RepoDep, forecast_svc: ForecastS
 
     Returns:
         Forecast including `next_predicted_at` (Unix timestamp), `hours_until_next`,
-        `method` (`drainage_slope` or `fallback_constant`), `confidence` (0–1),
+        `method` (`drainage_slope` or `fallback_constant`), `confidence` (0-1),
         a human-readable `explanation`, and optional weather context
         (`precipitation_next_6h_mm`, `weather_skip`, `weather_reason`).
         `next_predicted_at` and `hours_until_next` are `null` when no sensor

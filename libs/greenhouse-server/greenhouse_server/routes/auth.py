@@ -2,15 +2,13 @@
 
 from __future__ import annotations
 
+from typing import Annotated
+
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy.orm import Session
 
-from greenhouse_core.auth import record_login
 from greenhouse_server.auth import (
     AuthenticatedUser,
-    _get_settings,
-    _session_from_app,
     authenticate,
     clear_session_cookie,
     issue_token,
@@ -18,30 +16,44 @@ from greenhouse_server.auth import (
     set_session_cookie,
 )
 from greenhouse_server.config import Settings
+from greenhouse_server.deps import RepoDep
+from greenhouse_server.state import get_settings
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 class LoginRequest(BaseModel):
+    """Credentials for POST /auth/login."""
+
     username: str = Field(min_length=1, max_length=128)
     password: str = Field(min_length=1, max_length=512)
 
 
+# The OAuth2 token type of the session JWT (RFC 6750 "Bearer" scheme) - a protocol word, not a secret.
+_OAUTH2_BEARER = "bearer"
+
+
 class LoginResponse(BaseModel):
+    """A session JWT, also set as the HTTPOnly session cookie."""
+
     model_config = ConfigDict(from_attributes=True)
 
     access_token: str
-    token_type: str = "bearer"
+    token_type: str = _OAUTH2_BEARER
     expires_in: int
     username: str
 
 
 class WhoAmIResponse(BaseModel):
+    """The authenticated principal."""
+
     id: int
     username: str
 
 
 class LogoutResponse(BaseModel):
+    """Confirmation that the session cookie was cleared."""
+
     detail: str = "Logged out"
 
 
@@ -49,8 +61,8 @@ class LogoutResponse(BaseModel):
 def login(
     body: LoginRequest,
     response: Response,
-    settings: Settings = Depends(_get_settings),
-    session: Session = Depends(_session_from_app),
+    repo: RepoDep,
+    settings: Annotated[Settings, Depends(get_settings)],
 ) -> LoginResponse:
     """Exchange a username and password for a session JWT.
 
@@ -64,19 +76,19 @@ def login(
         JSON with access_token, token_type, expires_in (seconds), username.
 
     Raises:
-        HTTPException 401 if credentials are invalid or the user is inactive.
-        HTTPException 503 if auth is enabled but no secret key is configured.
+        HTTPException: 401 if credentials are invalid or the user is inactive,
+            503 if auth is enabled but no secret key is configured.
     """
     if not settings.auth_enabled:
         # When auth is disabled, every request is already a system user. Return
         # a benign success so a CLI that always logs in keeps working.
         return LoginResponse(
             access_token="",
-            token_type="bearer",
+            token_type=_OAUTH2_BEARER,
             expires_in=0,
             username=body.username,
         )
-    user = authenticate(session, body.username, body.password)
+    user = authenticate(repo.session, body.username, body.password)
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -84,12 +96,12 @@ def login(
             headers={"WWW-Authenticate": "Bearer"},
         )
     token = issue_token(settings, user)
-    record_login(session, user)
-    session.commit()
+    repo.record_login(user)
+    repo.commit()
     set_session_cookie(response, settings, token)
     return LoginResponse(
         access_token=token,
-        token_type="bearer",
+        token_type=_OAUTH2_BEARER,
         expires_in=settings.auth_token_ttl_minutes * 60,
         username=user.username,
     )
@@ -98,29 +110,31 @@ def login(
 @router.post("/logout", response_model=LogoutResponse)
 def logout(
     response: Response,
-    settings: Settings = Depends(_get_settings),
-    _user: AuthenticatedUser = Depends(require_user),
+    settings: Annotated[Settings, Depends(get_settings)],
+    _user: Annotated[AuthenticatedUser, Depends(require_user)],
 ) -> LogoutResponse:
-    """Clear the session cookie. JWT bearer tokens remain valid until expiry.
+    """Clear the session cookie.
+
+    JWT bearer tokens remain valid until they expire.
 
     Returns:
         Confirmation payload.
 
     Raises:
-        HTTPException 401 when called without an active session.
+        HTTPException: 401 when called without an active session.
     """
     clear_session_cookie(response, settings)
     return LogoutResponse()
 
 
 @router.get("/me", response_model=WhoAmIResponse)
-def whoami(user: AuthenticatedUser = Depends(require_user)) -> WhoAmIResponse:
+def whoami(user: Annotated[AuthenticatedUser, Depends(require_user)]) -> WhoAmIResponse:
     """Return the currently authenticated user.
 
     Returns:
         Authenticated user's id and username.
 
     Raises:
-        HTTPException 401 if no valid session is present.
+        HTTPException: 401 if no valid session is present.
     """
     return WhoAmIResponse(id=user.id, username=user.username)

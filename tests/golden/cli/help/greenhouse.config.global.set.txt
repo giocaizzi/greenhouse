@@ -1,0 +1,16 @@
+
+ Usage: greenhouse config global set [OPTIONS]
+
+ Patch the global irrigation defaults. Omitted options are left unchanged.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ --mode                            <str>  manual, schedule, or smart                              │
+│ --minutes                         <int>  Duration in minutes                                     │
+│ --interval                        <int>  Interval in hours                                       │
+│ --auto-run       --no-auto-run           Enable auto-run                                         │
+│ --daily-cap                       <int>  Daily cap in minutes                                    │
+│ --max-events                      <int>  Max irrigation events per day                           │
+│ --quiet-start                     <int>  Quiet-hours start (0-23); equal to end = disabled       │
+│ --quiet-end                       <int>  Quiet-hours end (0-23, exclusive)                       │
+│ --help                                   Show this message and exit.                             │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

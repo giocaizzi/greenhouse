@@ -1,39 +1,40 @@
 """Scheduler registration tests — confirm cron trigger and cooldown gating."""
 
 import time
+from collections.abc import Iterator
 
 import pytest
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
-from sqlalchemy import create_engine
+from sqlalchemy import Engine, create_engine
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
 from fake_data import FAKE_DEVICE_ID, FAKE_PLANT_SPECIES, FAKE_SENSOR_ID
+from greenhouse_core import repository as repo_mod
 from greenhouse_core.constants import MIN_COOLDOWN_HOURS
 from greenhouse_core.logic import IrrigationLogic
-from greenhouse_core.models import Base
+from greenhouse_core.models import EVENT_ACTION_START, TRIGGERED_BY_AUTO, Base
 from greenhouse_core.plant_db import get_plant_database
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.app import create_app
 from greenhouse_server.config import Settings
 from greenhouse_server.scheduler import scheduler as bg_scheduler
 
+EXPECTED_MAX_DAILY_ACTUATIONS = 4  # 24 h under the 6 h global cooldown
 
-def _build_app(cron_hours: str | None = None, interval_hours: int | None = None):
+
+def _build_app(cron_hours: str | None = None) -> Engine:
     engine = create_engine(
         "sqlite://",
         echo=False,
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
-    # Only pass check_cron_hours when given: an explicitly set value (even the
-    # default "*") always wins over the legacy interval.
     overrides = {"check_cron_hours": cron_hours} if cron_hours is not None else {}
     settings = Settings(
         db_url="sqlite://",
         enable_scheduler=False,
-        check_interval_hours=interval_hours,
         **overrides,
     )
     create_app(settings, engine=engine)
@@ -43,7 +44,7 @@ def _build_app(cron_hours: str | None = None, interval_hours: int | None = None)
 class TestCheckAllCronRegistration:
     """`check_all` registers as a CronTrigger driven by check_cron_hours."""
 
-    def test_check_all_uses_cron_trigger(self):
+    def test_check_all_uses_cron_trigger(self) -> None:
         """check_all is registered with a CronTrigger (not an IntervalTrigger)."""
         engine = _build_app()
         try:
@@ -54,7 +55,7 @@ class TestCheckAllCronRegistration:
         finally:
             engine.dispose()
 
-    def test_cron_trigger_runs_hourly_by_default(self):
+    def test_cron_trigger_runs_hourly_by_default(self) -> None:
         """Default cron hour='*' and minute='0' — fires every hour at :00."""
         engine = _build_app(cron_hours="*")
         try:
@@ -65,7 +66,7 @@ class TestCheckAllCronRegistration:
         finally:
             engine.dispose()
 
-    def test_cron_trigger_honors_custom_hours(self):
+    def test_cron_trigger_honors_custom_hours(self) -> None:
         """A custom IRRIGATION_CHECK_CRON_HOURS list is wired into the trigger."""
         engine = _build_app(cron_hours="0,6,12,18")
         try:
@@ -77,45 +78,69 @@ class TestCheckAllCronRegistration:
             engine.dispose()
 
 
-class TestLegacyIntervalShim:
-    """`IRRIGATION_CHECK_INTERVAL_HOURS` is honored and translated to `*/N` cron."""
+def _seed_dry_cluster(repo: IrrigationRepository) -> tuple[int, int, int]:
+    """A cluster with a plant, an irrigator and a sensor (committed): ``(cluster_id, irrigator_id, sensor_id)``."""
+    cluster_id = repo.add_cluster("Cooldown Cluster")
+    repo.add_plant(
+        cluster_id=cluster_id,
+        species=FAKE_PLANT_SPECIES,
+        water_needs="medium",
+    )
+    irrigator_id = repo.add_irrigator(
+        cluster_id=cluster_id,
+        tuya_device_id=FAKE_DEVICE_ID,
+        name="Irrigator",
+        irrigator_type="rainpoint.ik10pw",
+        config={},
+    )
+    sensor_id = repo.add_sensor(
+        cluster_id=cluster_id,
+        tuya_device_id=FAKE_SENSOR_ID,
+        name="Dry Sensor",
+        sensor_type="tuya.tr301z",
+        config={},
+    )
+    repo.session.commit()
+    return cluster_id, irrigator_id, sensor_id
 
-    def test_interval_translates_to_step_cron(self, monkeypatch):
-        """When only the legacy var is set, the trigger becomes `*/N` and a warning fires."""
-        from greenhouse_server import scheduler as sched_mod
 
-        warnings_seen: list[str] = []
-        monkeypatch.setattr(sched_mod.logger, "warning", lambda msg, *a, **kw: warnings_seen.append(msg % a))
-        engine = _build_app(interval_hours=2)
-        try:
-            job = bg_scheduler.get_job("check_all")
-            fields = {f.name: str(f) for f in job.trigger.fields}
-            assert fields["hour"] == "*/2"
-            assert fields["minute"] == "0"
-            assert any("IRRIGATION_CHECK_INTERVAL_HOURS is deprecated" in msg for msg in warnings_seen)
-        finally:
-            engine.dispose()
+def _hourly_actuations(repo: IrrigationRepository, ids: tuple[int, int, int], monkeypatch: pytest.MonkeyPatch) -> int:
+    """Run 24 simulated hourly checks on a very dry sensor, logging each irrigate; return how many fired."""
+    cluster_id, irrigator_id, sensor_id = ids
+    logic = IrrigationLogic(repo, get_plant_database())
+    start = int(time.time()) - 24 * 3600
 
-    def test_explicit_cron_hours_wins_over_legacy_interval(self, monkeypatch):
-        """If both are set, the new cron var wins and no shim warning is emitted."""
-        from greenhouse_server import scheduler as sched_mod
+    actuations = 0
+    # Patch the engine's and repository's clocks for each
+    # simulated hourly check — both consult `time.time()` when
+    # deciding the cooldown cutoff.
 
-        warnings_seen: list[str] = []
-        monkeypatch.setattr(sched_mod.logger, "warning", lambda msg, *a, **kw: warnings_seen.append(msg % a))
-        engine = _build_app(cron_hours="0,12", interval_hours=6)
-        try:
-            job = bg_scheduler.get_job("check_all")
-            fields = {f.name: str(f) for f in job.trigger.fields}
-            assert fields["hour"] == "0,12"
-            assert not any("IRRIGATION_CHECK_INTERVAL_HOURS is deprecated" in msg for msg in warnings_seen)
-        finally:
-            engine.dispose()
+    for step in range(24):
+        now = start + step * 3600
+        monkeypatch.setattr("greenhouse_core.logic.engine.time.time", lambda now=now: now)
+        monkeypatch.setattr(repo_mod.time, "time", lambda now=now: now)
+        # Reading at "now" — always very dry, so absent the cooldown
+        # gate the engine would irrigate every hour.
+        repo.add_sensor_reading(sensor_id=sensor_id, timestamp=now, soil_moisture=20.0)
+        decision = logic.decide_for_cluster(cluster_id)
+        assert decision is not None
+        if decision.action.value == "irrigate":
+            repo.add_irrigation_event(
+                irrigator_id=irrigator_id,
+                action=EVENT_ACTION_START,
+                triggered_by=TRIGGERED_BY_AUTO,
+                duration_minutes=decision.duration_minutes,
+                timestamp=now,
+            )
+            actuations += 1
+        repo.session.commit()
+    return actuations
 
 
 class TestCooldownGatesActuation:
     """Hourly checks must NOT actuate more often than the engine cooldown allows."""
 
-    def test_24_hourly_checks_yield_at_most_4_actuations(self, monkeypatch):
+    def test_24_hourly_checks_yield_at_most_4_actuations(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """With a 6h cooldown and 24 simulated hourly checks, at most 4 actuations.
 
         The scheduler can be tuned to fire frequently (default hourly), but the
@@ -126,60 +151,11 @@ class TestCooldownGatesActuation:
         try:
             with Session(engine) as session:
                 repo = IrrigationRepository(session)
-                cluster_id = repo.add_cluster("Cooldown Cluster")
-                repo.add_plant(
-                    cluster_id=cluster_id,
-                    species=FAKE_PLANT_SPECIES,
-                    water_needs="medium",
-                )
-                irrigator_id = repo.add_irrigator(
-                    cluster_id=cluster_id,
-                    tuya_device_id=FAKE_DEVICE_ID,
-                    name="Irrigator",
-                    irrigator_type="tuya_cloud",
-                    config={},
-                )
-                sensor_id = repo.add_sensor(
-                    cluster_id=cluster_id,
-                    tuya_device_id=FAKE_SENSOR_ID,
-                    name="Dry Sensor",
-                    sensor_type="soil_moisture",
-                    config={},
-                )
-                session.commit()
-
-                logic = IrrigationLogic(repo, get_plant_database())
-                start = int(time.time()) - 24 * 3600
-
-                actuations = 0
-                # Patch the engine's and repository's clocks for each
-                # simulated hourly check — both consult `time.time()` when
-                # deciding the cooldown cutoff.
-                from greenhouse_core import repository as repo_mod
-                from greenhouse_core.logic import engine as engine_mod
-
-                for step in range(24):
-                    now = start + step * 3600
-                    monkeypatch.setattr(engine_mod.time, "time", lambda now=now: now)
-                    monkeypatch.setattr(repo_mod.time, "time", lambda now=now: now)
-                    # Reading at "now" — always very dry, so absent the cooldown
-                    # gate the engine would irrigate every hour.
-                    repo.add_sensor_reading(sensor_id=sensor_id, timestamp=now, soil_moisture=20.0)
-                    decision = logic.decide_for_cluster(cluster_id)
-                    if decision.action.value == "irrigate":
-                        repo.add_irrigation_event(
-                            irrigator_id=irrigator_id,
-                            action="start",
-                            triggered_by="auto",
-                            duration_minutes=decision.duration_minutes,
-                            timestamp=now,
-                        )
-                        actuations += 1
-                    session.commit()
+                actuations = _hourly_actuations(repo, _seed_dry_cluster(repo), monkeypatch)
 
                 # 24h / 6h cooldown = at most 4 actuations.
                 max_allowed = 24 // MIN_COOLDOWN_HOURS
-                assert max_allowed == 4
+                assert max_allowed == EXPECTED_MAX_DAILY_ACTUATIONS
                 assert actuations <= max_allowed, (
                     f"engine fired {actuations} times in 24h; cooldown should cap at {max_allowed}"
                 )
@@ -191,7 +167,7 @@ class TestCooldownGatesActuation:
 
 
 @pytest.fixture(autouse=True)
-def _clear_scheduler_jobs():
+def _clear_scheduler_jobs() -> Iterator[None]:
     """Reset the module-level scheduler between tests to avoid bleed-through."""
     yield
     for job in list(bg_scheduler.get_jobs()):

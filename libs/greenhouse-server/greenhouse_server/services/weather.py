@@ -1,16 +1,64 @@
 """Weather data infrastructure client."""
 
 import json
+import logging
 import time
 import urllib.request
+from typing import TypedDict
 
-_FORECAST_CACHE_TTL = 600  # 10 minutes
+from greenhouse_core.constants import DEFAULT_LATITUDE, DEFAULT_LONGITUDE, WEATHER_FORECAST_CACHE_TTL_SECONDS
+
+logger = logging.getLogger(__name__)
+
+_FORECAST_CACHE_TTL = WEATHER_FORECAST_CACHE_TTL_SECONDS  # module-level so tests can patch the TTL
+
+
+class CurrentWeather(TypedDict):
+    """``WeatherClient.get_current`` result: Open-Meteo's current values (each ``None`` when absent)."""
+
+    temperature: float | None
+    feels_like: float | None
+    precipitation: float | None
+    humidity: float | None
+
+
+class WeatherForecast(TypedDict):
+    """``WeatherClient.get_forecast`` result: the next-N-hours window aggregated."""
+
+    precipitation_mm: float
+    max_temp: float | None
+    min_temp: float | None
+    avg_humidity: float | None
+
+
+def _aggregate_window(hourly: dict[str, list[float]], hours: int) -> WeatherForecast | None:
+    """Aggregate the first ``hours`` entries of Open-Meteo's hourly series.
+
+    The window is sized by the precipitation series (clamped to what it holds);
+    an empty window has no forecast (``None``).
+    """
+    precip_list = hourly.get("precipitation", [])
+    n = min(hours, len(precip_list))
+    if n == 0:
+        return None
+
+    window_temp = hourly.get("temperature_2m", [])[:n]
+    window_humidity = hourly.get("relative_humidity_2m", [])[:n]
+    return {
+        "precipitation_mm": sum(precip_list[:n]),
+        "max_temp": max(window_temp) if window_temp else None,
+        "min_temp": min(window_temp) if window_temp else None,
+        "avg_humidity": sum(window_humidity) / len(window_humidity) if window_humidity else None,
+    }
 
 
 class WeatherClient:
     """Fetches current weather from Open-Meteo API."""
 
-    def __init__(self, lat: float = 45.464, lon: float = 9.189, timeout: int = 8, tz: str = "UTC"):
+    def __init__(
+        self, lat: float = DEFAULT_LATITUDE, lon: float = DEFAULT_LONGITUDE, timeout: int = 8, tz: str = "UTC"
+    ) -> None:
+        """Point the client at one location; ``tz`` must be the preferences timezone (see below)."""
         self._lat = lat
         self._lon = lon
         self._timeout = timeout
@@ -19,10 +67,11 @@ class WeatherClient:
         # hours" aligns with the clock the engine reasons in, not a hardcoded
         # Europe/Rome.
         self._tz = tz
-        self._get_current_cache: tuple[float, dict] | None = None
-        self._get_forecast_cache: tuple[float, dict] | None = None
+        self._get_current_cache: tuple[float, CurrentWeather] | None = None
+        # Keyed by ``hours``: each window is a different aggregate of the same series.
+        self._get_forecast_cache: dict[int, tuple[float, WeatherForecast]] = {}
 
-    def get_current(self) -> dict | None:
+    def get_current(self) -> CurrentWeather | None:
         """Fetch current weather. Returns None on failure."""
         if self._get_current_cache is not None:
             cached_at, cached_value = self._get_current_cache
@@ -39,7 +88,7 @@ class WeatherClient:
             with urllib.request.urlopen(url, timeout=self._timeout) as resp:
                 data = json.loads(resp.read())
                 current = data.get("current", {})
-                result = {
+                result: CurrentWeather = {
                     "temperature": current.get("temperature_2m"),
                     "feels_like": current.get("apparent_temperature"),
                     "precipitation": current.get("precipitation"),
@@ -48,16 +97,23 @@ class WeatherClient:
                 self._get_current_cache = (time.monotonic(), result)
                 return result
         except Exception:
+            logger.debug("Open-Meteo current-weather request failed", exc_info=True)
             return None
 
-    def get_forecast(self, hours: int = 6) -> dict | None:
+    def get_forecast(self, hours: int = 6) -> WeatherForecast | None:
         """Fetch aggregated weather forecast for the next N hours.
 
         Returns precipitation sum, max/min temperature, and average humidity
-        across the requested window, or None on network error.
+        across the requested window, or None on network error. A window of
+        fewer than one hour has no forecast: it returns None without a request
+        (a negative ``hours`` used to slice the hourly series from the end).
         """
-        if self._get_forecast_cache is not None:
-            cached_at, cached_value = self._get_forecast_cache
+        if hours < 1:
+            logger.debug("Forecast window of %d hours requested; returning no forecast", hours)
+            return None
+        cached = self._get_forecast_cache.get(hours)
+        if cached is not None:
+            cached_at, cached_value = cached
             if time.monotonic() - cached_at < _FORECAST_CACHE_TTL:
                 return cached_value
 
@@ -72,26 +128,11 @@ class WeatherClient:
             with urllib.request.urlopen(url, timeout=self._timeout) as resp:
                 data = json.loads(resp.read())
 
-            hourly = data.get("hourly", {})
-            precip_list: list[float] = hourly.get("precipitation", [])
-            temp_list: list[float] = hourly.get("temperature_2m", [])
-            humidity_list: list[float] = hourly.get("relative_humidity_2m", [])
-
-            n = min(hours, len(precip_list))
-            if n == 0:
-                return None
-
-            window_precip = precip_list[:n]
-            window_temp = temp_list[:n]
-            window_humidity = humidity_list[:n]
-
-            result = {
-                "precipitation_mm": sum(window_precip),
-                "max_temp": max(window_temp) if window_temp else None,
-                "min_temp": min(window_temp) if window_temp else None,
-                "avg_humidity": sum(window_humidity) / len(window_humidity) if window_humidity else None,
-            }
-            self._get_forecast_cache = (time.monotonic(), result)
-            return result
+            result = _aggregate_window(data.get("hourly", {}), hours)
+            if result is not None:
+                self._get_forecast_cache[hours] = (time.monotonic(), result)
         except Exception:
+            logger.debug("Open-Meteo forecast request failed", exc_info=True)
             return None
+        else:
+            return result

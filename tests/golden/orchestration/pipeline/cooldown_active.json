@@ -1,0 +1,105 @@
+{
+ "calls": [
+  {
+   "body": {},
+   "request": "POST /api/v1/clusters/1/irrigate",
+   "response": {
+    "action": "skip",
+    "confidence": 0.9,
+    "duration_minutes": 2,
+    "interval_hours": 6,
+    "learning_alerts": [],
+    "reason": "cooldown active (last irrigation 2.0h ago, trigger: auto)",
+    "reasons": [
+     {
+      "code": "cooldown",
+      "duration_delta": 0,
+      "icon": null,
+      "interval_delta": 0,
+      "message": "cooldown active (last irrigation 2.0h ago, trigger: auto)",
+      "severity": "info"
+     }
+    ],
+    "stress_indicators": {
+     "learning_alerts": []
+    },
+    "temperature": 24.0,
+    "temperature_source": "sensor"
+   },
+   "status": 200
+  }
+ ],
+ "db_writes": {
+  "activity_events": [
+   {
+    "code": "decision_skip",
+    "entity_id": 1,
+    "entity_type": "cluster",
+    "id": 1,
+    "message": "cooldown active (last irrigation 2.0h ago, trigger: auto)",
+    "payload_json": null,
+    "severity": "info",
+    "source": "irrigation",
+    "timestamp": 1776247200
+   }
+  ],
+  "alerts": [],
+  "decision_logs": [
+   {
+    "action": "skip",
+    "actuated": false,
+    "cluster_id": 1,
+    "confidence": 0.9,
+    "duration_minutes": 2,
+    "evaluated_at": 1776247200,
+    "id": 1,
+    "interval_hours": 6,
+    "payload_json": {
+     "action": "skip",
+     "cluster_id": 1,
+     "confidence": 0.9,
+     "duration_minutes": 2,
+     "evaluated_at": 1776247200,
+     "interval_hours": 6,
+     "reasons": [
+      {
+       "code": "cooldown",
+       "duration_delta": 0,
+       "icon": null,
+       "interval_delta": 0,
+       "message": "cooldown active (last irrigation 2.0h ago, trigger: auto)",
+       "severity": "info"
+      }
+     ],
+     "sensor_snapshot": null,
+     "stress_indicators": {
+      "heat_stress": null,
+      "learning_alerts": [],
+      "low_env_humidity": null,
+      "low_light": null,
+      "over_watering": null,
+      "water_stress": null,
+      "water_warning": null
+     },
+     "trends": {
+      "irrigation_frequency_high": false,
+      "irrigation_frequency_low": false,
+      "soil_moisture_delta": 0.0,
+      "soil_moisture_trend": null,
+      "temperature_trend": null
+     },
+     "weather": null
+    },
+    "primary_code": "cooldown",
+    "reason_text": "cooldown active (last irrigation 2.0h ago, trigger: auto)",
+    "triggered_by": "auto"
+   }
+  ],
+  "irrigation_events": [],
+  "sensor_readings": []
+ },
+ "gateway_calls": null,
+ "irrigator_adapter_calls": [],
+ "notifications": [],
+ "sensor_adapter_calls": []
+}

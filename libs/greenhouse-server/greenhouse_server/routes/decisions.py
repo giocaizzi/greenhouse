@@ -1,5 +1,7 @@
 """Decision log routes."""
 
+from typing import Annotated
+
 from fastapi import APIRouter, Query
 
 from greenhouse_core.schemas import DecisionLogListResponse, DecisionLogResponse
@@ -12,7 +14,7 @@ router = APIRouter(tags=["decisions"])
 def list_decisions(
     cluster_id: int,
     repo: RepoDep,
-    limit: int = Query(default=50, ge=1, le=200),
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
 ) -> DecisionLogListResponse:
     """Return the persisted irrigation decision log for a cluster, newest first.
 

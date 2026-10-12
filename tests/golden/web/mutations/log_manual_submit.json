@@ -1,0 +1,38 @@
+{
+ "body_lines": [
+  ""
+ ],
+ "db_effect": {
+  "irrigation_events": {
+   "added": [
+    {
+     "action": "start",
+     "duration_minutes": 3,
+     "id": 7,
+     "irrigator_id": 1,
+     "notes": "Watering can",
+     "timestamp": 1776247200,
+     "triggered_by": "manual"
+    }
+   ]
+  }
+ },
+ "device_calls": {
+  "irrigator": [],
+  "sensor": []
+ },
+ "headers": {
+  "location": "/clusters/1#irrigators"
+ },
+ "request": {
+  "form": {
+   "minutes": "3",
+   "notes": "Watering can"
+  },
+  "headers": {},
+  "method": "POST",
+  "url": "/irrigators/1/log-manual"
+ },
+ "status": 303,
+ "templates": []
+}

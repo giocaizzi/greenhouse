@@ -1,0 +1,23 @@
+<!-- GET /clusters/2/chart-fragment?metric=light -->
+<!-- status: 200 -->
+<!-- content-type: text/html; charset=utf-8 -->
+
+<div id="chart-container-light" class="chart-container">
+  <canvas id="chart-light"></canvas>
+  <script type="application/json" id="chart-data-light">{"metric": "light", "hours": 24, "datasets": [{"sensor_id": 3, "sensor_name": "Loquat Probe", "points": [[1776166200, 18900.0], [1776173400, 19000.0], [1776180600, 19100.0], [1776187800, 19200.0], [1776195000, 19300.0], [1776202200, 19400.0], [1776209400, 19500.0], [1776216600, 19600.0], [1776223800, 19700.0], [1776231000, 19800.0], [1776238200, 19900.0], [1776245400, 20000.0]]}], "events": [{"timestamp": 1776175200, "action": "start", "duration_minutes": 5}, {"timestamp": 1776175205, "action": "schedule_updated", "duration_minutes": null}], "threshold": {"min": null, "max": null, "source": "none"}}</script>
+  <script>
+    (function () {
+      var el = document.getElementById('chart-light');
+      var raw = document.getElementById('chart-data-light');
+      if (!el || !raw) return;
+      var data = JSON.parse(raw.textContent);
+      function draw() {
+        if (typeof window.renderIrrigationChart === 'function') {
+          window.renderIrrigationChart(el, data);
+        }
+      }
+      if (window.Chart) { draw(); }
+      else { window.addEventListener('load', draw); }
+    })();
+  </script>
+</div>

@@ -1,0 +1,14 @@
+
+ Usage: greenhouse cluster update [OPTIONS] {cluster_id}
+
+ Update cluster metadata. Only the supplied fields are sent.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────╮
+│ *    cluster_id      <int>  Cluster ID [required]                                                │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ --name               <str>  New cluster name                                                     │
+│ --location           <str>  New location description                                             │
+│ --environment        <str>  indoor or outdoor                                                    │
+│ --help                      Show this message and exit.                                          │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

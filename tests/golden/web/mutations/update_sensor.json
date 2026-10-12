@@ -1,0 +1,66 @@
+{
+ "body_lines": [
+  ""
+ ],
+ "db_effect": {
+  "activity_events": {
+   "added": [
+    {
+     "code": "sensor_reassigned",
+     "entity_id": 4,
+     "entity_type": "sensor",
+     "id": 5,
+     "message": "reassigned sensor 4 from plant None to plant 1",
+     "payload_json": "{\"from_plant_id\": null, \"to_plant_id\": 1}",
+     "severity": "info",
+     "source": "sensor",
+     "timestamp": 1776247200
+    }
+   ]
+  },
+  "sensor_assignments": {
+   "added": [
+    {
+     "ended_at": null,
+     "id": 4,
+     "plant_id": 1,
+     "sensor_id": 4,
+     "started_at": 1776247200
+    }
+   ]
+  },
+  "sensors": {
+   "changed": {
+    "4": {
+     "name": [
+      "Room Climate",
+      "Room Climate+"
+     ],
+     "plant_id": [
+      null,
+      1
+     ]
+    }
+   }
+  }
+ },
+ "device_calls": {
+  "irrigator": [],
+  "sensor": []
+ },
+ "headers": {
+  "location": "/clusters/1#sensors"
+ },
+ "request": {
+  "form": {
+   "name": "Room Climate+",
+   "plant_id": "1",
+   "type": "tuya.tr301z"
+  },
+  "headers": {},
+  "method": "POST",
+  "url": "/clusters/1/sensors/4/edit"
+ },
+ "status": 303,
+ "templates": []
+}

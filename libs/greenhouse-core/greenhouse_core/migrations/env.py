@@ -4,7 +4,7 @@ Resolves the database URL from ``$IRRIGATION_DB_URL`` (matching the server
 default) or falls back to ``sqlite:///data/irrigation.db``. The target
 metadata is the project's :class:`Base.metadata`, so ``alembic
 revision --autogenerate`` can detect ORM drift on every release.
-"""
+"""  # noqa: INP001 — Alembic loads this script by path; the package_data golden pins the files here
 
 from __future__ import annotations
 
@@ -17,7 +17,10 @@ from greenhouse_core.models import Base
 
 config = context.config
 
-if config.config_file_name is not None:
+# Only the ``alembic`` command line configures logging from alembic.ini. Run in-process
+# (``database.init_db`` on every ``create_app``, tests), ``fileConfig`` would replace the
+# host process's root handlers and levels — so the programmatic Config opts out.
+if config.config_file_name is not None and config.attributes.get("configure_logging", True):
     from logging.config import fileConfig
 
     # Keep loggers created before migrations run (every app module imported

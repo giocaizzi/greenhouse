@@ -1,0 +1,85 @@
+{
+ "db_writes": {
+  "activity_events": [
+   {
+    "code": "leak_hold",
+    "entity_id": 1,
+    "entity_type": "cluster",
+    "id": 1,
+    "message": "automatic irrigation held for 24h: possible leak or stuck valve on 1 sensor(s)",
+    "payload_json": {
+     "hold_until": 1776333600,
+     "sensor_ids": [
+      1
+     ],
+     "started_at": 1776240000
+    },
+    "severity": "critical",
+    "source": "leak",
+    "timestamp": 1776247200
+   },
+   {
+    "code": "leak_check",
+    "entity_id": 1,
+    "entity_type": "cluster",
+    "id": 2,
+    "message": "post-irrigation leak check: 1 sensor(s) flagged",
+    "payload_json": {
+     "flagged_sensor_ids": [
+      1
+     ],
+     "started_at": 1776240000
+    },
+    "severity": "info",
+    "source": "leak",
+    "timestamp": 1776247200
+   }
+  ],
+  "alerts": [
+   {
+    "acknowledged_at": null,
+    "cluster_id": 1,
+    "code": "leak_or_stuck_valve",
+    "dedup_key": "leak::leak_or_stuck_valve::1::sensor1",
+    "entity_id": 1,
+    "entity_type": "sensor",
+    "first_seen_at": 1776247200,
+    "id": 1,
+    "last_seen_at": 1776247200,
+    "message": "Sensor 1: soil moisture still rising after irrigation (latest=80.0%)",
+    "occurrence_count": 1,
+    "payload_json": {
+     "after_samples": 6,
+     "baseline": 40.0,
+     "before_samples": 4,
+     "hold_hours": 24,
+     "latest_moisture": 80.0,
+     "peak_after": 80.0,
+     "reason": "still rising after irrigation",
+     "rise_in_window": 30.0,
+     "rise_over_baseline": 40.0,
+     "sensor_id": 1,
+     "sensor_name": "Sensor 1",
+     "started_at": 1776240000
+    },
+    "plant_id": null,
+    "resolved_at": null,
+    "severity": "critical",
+    "source": "leak",
+    "status": "open",
+    "title": "Possible leak or stuck valve detected"
+   }
+  ],
+  "decision_logs": [],
+  "irrigation_events": [],
+  "sensor_readings": []
+ },
+ "notifications": [
+  {
+   "kind": "alert",
+   "message": "Sensor 1: soil moisture still rising after irrigation (latest=80.0%)",
+   "severity": "critical",
+   "title": "Possible leak or stuck valve detected"
+  }
+ ]
+}

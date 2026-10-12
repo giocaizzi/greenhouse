@@ -1,0 +1,20 @@
+
+ Usage: greenhouse plant add [OPTIONS] {species}
+
+ Add a plant to a cluster.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────╮
+│ *    species      <str>  Species name [required]                                                 │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  --cluster             <int>    Cluster ID [required]                                          │
+│    --category            <str>                                                                   │
+│    --water-needs         <str>    low/medium/high                                                │
+│    --light-needs         <str>    low/medium/high                                                │
+│    --temp-min            <float>                                                                 │
+│    --temp-max            <float>                                                                 │
+│    --humidity-min        <float>                                                                 │
+│    --humidity-max        <float>                                                                 │
+│    --notes               <str>                                                                   │
+│    --help                         Show this message and exit.                                    │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

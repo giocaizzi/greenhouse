@@ -1,0 +1,18 @@
+
+ Usage: greenhouse irrigator [OPTIONS] COMMAND [ARGS]...
+
+ Manage and control irrigators
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                                      │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────────────────────────╮
+│ add         Add an irrigator to a cluster.                                                       │
+│ list        List every irrigator across all clusters.                                            │
+│ show        Show the cluster's irrigator. Exits non-zero if the cluster has none.                │
+│ start       Start an irrigator.                                                                  │
+│ stop        Stop an irrigator.                                                                   │
+│ log-manual  Log a manual irrigation event (no device command).                                   │
+│ update      Patch the cluster's irrigator. Only the supplied fields are sent.                    │
+│ delete      Delete the cluster's irrigator. Historic events stay attached to the cluster.        │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

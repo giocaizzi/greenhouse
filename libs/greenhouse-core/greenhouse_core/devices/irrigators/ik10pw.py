@@ -8,29 +8,27 @@ which the Cloud API refuses to write (error 2008). The cycle recipe is:
 3. the device runs its own countdown and auto-stops.
 
 Both pieces are needed — cloud-only cannot bound the cycle, local-only
-struggles to keep a Zigbee-gateway device awake. When local fails (IP
-changed, network blip) the keep-alive fallback flips the cloud switch every
-20 s to reset the device's internal 30 s auto-off, with a SIGTERM handler
-that explicitly switches off so an interrupted process never leaves the
-pump running.
+struggles to keep a Zigbee-gateway device awake. When the local Duration write
+fails (IP changed, network blip) a bounded start is refused before any ON is
+sent: an unbounded run that only a 20 s keep-alive loop could stop is not
+something the server (scheduler / threadpool workers) can run safely.
 """
 
 from __future__ import annotations
 
 import logging
-import signal
 import time
-from typing import Any
+from typing import TYPE_CHECKING
 
-from greenhouse_core.devices.gateway import DeviceGateway
 from greenhouse_core.devices.health import DeviceHealthState, HealthAlarm
 from greenhouse_core.devices.irrigators.tuya_generic import TuyaIrrigatorAdapter
 from greenhouse_core.devices.profile import IrrigatorProfile, load_profile_json
-from greenhouse_core.models import Irrigator
+
+if TYPE_CHECKING:
+    from greenhouse_core.devices.gateway import DeviceGateway
+    from greenhouse_core.models import Irrigator
 
 logger = logging.getLogger(__name__)
-
-KEEP_ALIVE_INTERVAL = 20  # seconds, must be < device Duration (30s)
 
 
 def alarm_indicates_no_water(value: object, bitmask: int = 0x01) -> bool:
@@ -51,21 +49,24 @@ def alarm_indicates_no_water(value: object, bitmask: int = 0x01) -> bool:
     negatives, which appear to be rare in practice but argue for adding a
     hardware float switch as a belt-and-suspenders independent safeguard.
     """
-    if value is None:
-        return False
     if isinstance(value, bool):
         return value
     if isinstance(value, int):
         return bool(value & bitmask)
     if isinstance(value, str):
-        text = value.strip()
-        if not text:
-            return False
-        try:
-            return bool(int(text) & bitmask)
-        except ValueError:
-            return False
-    return False
+        return _numeric_text_alarm(value, bitmask)
+    return False  # None and unrecognised types: "unknown" is never "dry"
+
+
+def _numeric_text_alarm(value: str, bitmask: int) -> bool:
+    """A DP value sent as text: decoded as an int bitmap; blank or non-numeric text is no fault."""
+    text = value.strip()
+    if not text:
+        return False
+    try:
+        return bool(int(text) & bitmask)
+    except ValueError:
+        return False
 
 
 def _load_profile() -> IrrigatorProfile:
@@ -83,6 +84,8 @@ def _load_profile() -> IrrigatorProfile:
 
 
 IK10PW_PROFILE = _load_profile()
+# The dry-run / water-shortage alarm DP (105): the pump watcher polls it and records it on a trip.
+IK10PW_ALARM_DP = IK10PW_PROFILE.dp("alarm")
 
 
 class IK10PWAdapter(TuyaIrrigatorAdapter):
@@ -95,7 +98,8 @@ class IK10PWAdapter(TuyaIrrigatorAdapter):
 
     health_capabilities = frozenset({HealthAlarm.NO_WATER, HealthAlarm.DEVICE_OFFLINE})
 
-    def __init__(self, gateway: DeviceGateway, profile: IrrigatorProfile | None = None):
+    def __init__(self, gateway: DeviceGateway, profile: IrrigatorProfile | None = None) -> None:
+        """Bind to ``gateway``, with the bundled IK10PW profile unless one is given."""
         super().__init__(profile or IK10PW_PROFILE, gateway)
 
     # ── Cycle start ───────────────────────────────────────────────────────
@@ -104,16 +108,23 @@ class IK10PWAdapter(TuyaIrrigatorAdapter):
         """Write DP 102 (Duration) over local v3.5.
 
         The Cloud API returns error 2008 for this custom DP, so the local
-        path is the only way to control the on-device countdown.
+        path is the only way to control the on-device countdown. The write goes
+        through ``DeviceGateway.run_local``, so a stale stored ``local_key``
+        (error 914) is refreshed and the write retried once — the write is
+        idempotent, and the Cloud ON in :meth:`start` still follows only a
+        successful write.
         """
+        duration_dp = self.profile.dp("duration")
         try:
-            device = self._gateway.open_local(irrigator, self.profile.protocol_version)
-            result = device.set_value(self.profile.dp("duration"), seconds)
-            if result and result.get("Error"):
-                return False, f"Local API error: {result}"
-            return True, f"Duration set to {seconds}s"
-        except Exception as e:
+            result = self._gateway.run_local(
+                irrigator, self.profile.protocol_version, lambda device: device.set_value(duration_dp, seconds)
+            )
+            refused = bool(result and result.get("Error"))
+        except Exception as e:  # noqa: BLE001 — any local failure becomes the (False, reason) device result
             return False, f"Local connection failed: {e}"
+        if refused:
+            return False, f"Local API error: {result}"
+        return True, f"Duration set to {seconds}s"
 
     def start(self, irrigator: Irrigator, minutes: int | None = None) -> tuple[bool, str]:
         """Start irrigation with optional duration.
@@ -125,8 +136,11 @@ class IK10PWAdapter(TuyaIrrigatorAdapter):
         3. Device handles its own timer — no sleep/polling needed.
         4. Device auto-stops after Duration seconds.
 
-        If local connection fails (e.g. device IP changed), falls back to
-        a keep-alive loop (sending switch ON every 20 s).
+        If the local Duration write fails (e.g. device IP changed), the start
+        is refused with ``(False, …)`` before any ON is sent: without the
+        on-device countdown only a keep-alive loop could bound the run, and
+        that is not supported in the server. Callers record the refusal
+        (pipeline: ``attempted``; manual start: 502).
         """
         if minutes is None:
             return self.on(irrigator)
@@ -135,71 +149,21 @@ class IK10PWAdapter(TuyaIrrigatorAdapter):
 
         # Step 1: local Duration DP
         dur_ok, dur_msg = self._set_duration_local(irrigator, duration_seconds)
-
-        if dur_ok:
-            # Step 2: cloud switch — device auto-stops after Duration seconds
-            success, msg = self.on(irrigator)
-            if not success:
-                return False, f"Failed to start irrigation: {msg}"
-            return (
-                True,
-                f"Irrigation started for {minutes} min (Duration DP set to {duration_seconds}s, device auto-stops)",
+        if not dur_ok:
+            logger.warning("Local Duration set failed (%s); refusing the bounded start", dur_msg)
+            return False, (
+                f"Local Duration DP unavailable ({dur_msg}); keep-alive is not supported in the server — "
+                "irrigation not started"
             )
 
-        logger.warning("Local Duration set failed (%s), using keep-alive fallback", dur_msg)
-        return self._start_keepalive(irrigator, minutes)
-
-    def _start_keepalive(self, irrigator: Irrigator, minutes: int) -> tuple[bool, str]:
-        """Sustain irrigation via keep-alive ON commands.
-
-        Used when local protocol is unavailable (IP changed, network issue).
-        Sends switch ON every 20 s to reset the device's internal auto-off
-        timer. A SIGTERM handler explicitly switches off so an interrupted
-        process never leaves the pump running.
-        """
+        # Step 2: cloud switch — device auto-stops after Duration seconds
         success, msg = self.on(irrigator)
         if not success:
             return False, f"Failed to start irrigation: {msg}"
-
-        total_seconds = minutes * 60
-        elapsed = 0
-        interrupted = False
-
-        def _sigterm_cleanup(signum: int, frame: Any) -> None:  # noqa: ARG001
-            nonlocal interrupted
-            interrupted = True
-            try:
-                self.off(irrigator)
-            except Exception:
-                pass
-            raise SystemExit(128 + signum)
-
-        prev_handler = signal.signal(signal.SIGTERM, _sigterm_cleanup)
-        try:
-            while elapsed < total_seconds and not interrupted:
-                sleep_for = min(KEEP_ALIVE_INTERVAL, total_seconds - elapsed)
-                time.sleep(sleep_for)
-                elapsed += sleep_for
-                if elapsed < total_seconds and not interrupted:
-                    try:
-                        self.on(irrigator)
-                    except Exception:
-                        pass
-        except (SystemExit, KeyboardInterrupt):
-            interrupted = True
-        finally:
-            signal.signal(signal.SIGTERM, prev_handler)
-            try:
-                self.off(irrigator)
-            except Exception:
-                pass
-
-        if interrupted:
-            return (
-                True,
-                f"Irrigation interrupted after ~{elapsed}s — device turned off (requested {minutes} min) [keep-alive mode]",
-            )
-        return True, f"Irrigation completed for {minutes} min [keep-alive mode]"
+        return (
+            True,
+            f"Irrigation started for {minutes} min (Duration DP set to {duration_seconds}s, device auto-stops)",
+        )
 
     # ── Health read ───────────────────────────────────────────────────────
 
@@ -216,13 +180,13 @@ class IK10PWAdapter(TuyaIrrigatorAdapter):
         pump-safety check. On a failed read returns ``offline=True`` with
         an empty alarm set so callers distinguish "no fault" from "no
         signal" — the monitor maps ``offline`` to
-        :attr:`HealthAlarm.DEVICE_OFFLINE`.
+        :attr:`HealthAlarm.DEVICE_OFFLINE`. A stale stored ``local_key``
+        (error 914) is refreshed and the read retried once by the gateway.
         """
         now = int(time.time())
         try:
-            device = self._gateway.open_local(irrigator, self.profile.protocol_version)
-            status = device.status()
-        except Exception as exc:
+            status = self._gateway.run_local(irrigator, self.profile.protocol_version, lambda device: device.status())
+        except Exception as exc:  # noqa: BLE001 — any local failure reads as offline, never raises to the monitor
             return DeviceHealthState(
                 observed_at=now,
                 offline=True,
@@ -250,4 +214,4 @@ class IK10PWAdapter(TuyaIrrigatorAdapter):
         )
 
 
-__all__ = ["IK10PWAdapter", "IK10PW_PROFILE", "alarm_indicates_no_water"]
+__all__ = ["IK10PW_ALARM_DP", "IK10PW_PROFILE", "IK10PWAdapter", "alarm_indicates_no_water"]

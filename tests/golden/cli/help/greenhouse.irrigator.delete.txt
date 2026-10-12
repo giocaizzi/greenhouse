@@ -1,0 +1,12 @@
+
+ Usage: greenhouse irrigator delete [OPTIONS] {cluster}
+
+ Delete the cluster's irrigator. Historic events stay attached to the cluster.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────╮
+│ *    cluster      <int>  Cluster ID [required]                                                   │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ --yes   -y        Skip confirmation prompt                                                       │
+│ --help            Show this message and exit.                                                    │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

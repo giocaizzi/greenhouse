@@ -1,0 +1,84 @@
+{
+ "no_duration_with_reasons": [
+  [
+   "Decision engine",
+   "bold"
+  ],
+  [
+   "\n",
+   ""
+  ],
+  [
+   "skip",
+   "#9a9a9a"
+  ],
+  [
+   "  confidence 90%",
+   "dim"
+  ],
+  [
+   "\n",
+   ""
+  ],
+  [
+   "• ",
+   "#e0c341"
+  ],
+  [
+   "too wet ",
+   ""
+  ],
+  [
+   "[soil_saturated]",
+   "dim"
+  ],
+  [
+   "\n\n",
+   ""
+  ]
+ ],
+ "no_interval_no_reasons": [
+  [
+   "Decision engine",
+   "bold"
+  ],
+  [
+   "\n",
+   ""
+  ],
+  [
+   "irrigate",
+   "bold #4fb3ff"
+  ],
+  [
+   "  4 min",
+   ""
+  ],
+  [
+   "  confidence 50%",
+   "dim"
+  ],
+  [
+   "\nlegacy free-text reason\n",
+   ""
+  ]
+ ],
+ "none": [
+  [
+   "Decision engine",
+   "bold"
+  ],
+  [
+   "\n",
+   ""
+  ],
+  [
+   "no decision available",
+   "dim"
+  ],
+  [
+   "\n",
+   ""
+  ]
+ ]
+}

@@ -1,0 +1,100 @@
+{
+ "body_lines": [
+  "<article class=\"card card--flush result-panel\">",
+  "  <div class=\"card__head\">",
+  "    <div class=\"row\" style=\"gap: var(--sp-3);\">",
+  "      <span class=\"badge-muted\">SKIP · 0%</span>",
+  "      <h3 class=\"card__title\">Irrigation decision</h3>",
+  "    </div>",
+  "  </div>",
+  "  <div class=\"card__body\">",
+  "    ",
+  "      <p>no plants in cluster</p>",
+  "    ",
+  "    ",
+  "      <dl>",
+  "        <dt>Duration</dt><dd>2 min</dd>",
+  "        <dt>Interval</dt><dd>every 12h</dd>",
+  "        <dt>Temperature</dt><dd>20.0°C <small class=\"muted\">(fallback (20C))</small></dd>",
+  "      </dl>",
+  "    ",
+  "    ",
+  "      <details>",
+  "        <summary>Stress indicators</summary>",
+  "        <pre>{&#39;learning_alerts&#39;: []}</pre>",
+  "      </details>",
+  "    ",
+  "  </div>",
+  "</article>"
+ ],
+ "db_effect": {
+  "activity_events": {
+   "added": [
+    {
+     "code": "decision_skip",
+     "entity_id": 3,
+     "entity_type": "cluster",
+     "id": 5,
+     "message": "no plants in cluster",
+     "payload_json": null,
+     "severity": "info",
+     "source": "irrigation",
+     "timestamp": 1776247200
+    }
+   ]
+  },
+  "decision_logs": {
+   "added": [
+    {
+     "action": "skip",
+     "actuated": 0,
+     "cluster_id": 3,
+     "confidence": 0.0,
+     "duration_minutes": 2,
+     "evaluated_at": 1776247200,
+     "id": 5,
+     "interval_hours": 12,
+     "payload_json": "{\"cluster_id\": 3, \"evaluated_at\": 1776247200, \"action\": \"skip\", \"duration_minutes\": 2, \"interval_hours\": 12, \"confidence\": 0.0, \"reasons\": [{\"code\": \"no_plants\", \"message\": \"no plants in cluster\", \"severity\": \"info\", \"icon\": null, \"duration_delta\": 0, \"interval_delta\": 0}], \"sensor_snapshot\": null, \"stress_indicators\": {\"water_warning\": null, \"water_stress\": null, \"heat_stress\": null, \"over_watering\": null, \"low_env_humidity\": null, \"low_light\": null, \"learning_alerts\": []}, \"trends\": {\"soil_moisture_trend\": null, \"soil_moisture_delta\": 0.0, \"temperature_trend\": null, \"irrigation_frequency_low\": false, \"irrigation_frequency_high\": false}, \"weather\": null}",
+     "primary_code": "no_plants",
+     "reason_text": "no plants in cluster",
+     "triggered_by": "auto"
+    }
+   ]
+  }
+ },
+ "device_calls": {
+  "irrigator": [],
+  "sensor": []
+ },
+ "headers": {
+  "content-type": "text/html; charset=utf-8"
+ },
+ "request": {
+  "form": {},
+  "headers": {
+   "HX-Request": "true"
+  },
+  "method": "POST",
+  "url": "/clusters/3/irrigate"
+ },
+ "status": 200,
+ "templates": [
+  [
+   "partials/_decision_panel.html",
+   [
+    "active_vacation",
+    "app_version",
+    "auth_enabled",
+    "cluster_id",
+    "dry_run_global",
+    "is_hx",
+    "now_text",
+    "request",
+    "result",
+    "scheduler_paused",
+    "show_chrome",
+    "theme"
+   ]
+  ]
+ ]
+}

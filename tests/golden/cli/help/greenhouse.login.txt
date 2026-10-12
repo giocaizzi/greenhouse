@@ -1,0 +1,16 @@
+
+ Usage: greenhouse login [OPTIONS]
+
+ Exchange username/password for a session JWT.
+
+ On success the JWT is written to ``~/.config/greenhouse/token`` with
+ mode 600 (or ``$XDG_CONFIG_HOME/greenhouse/token``) and used for
+ subsequent CLI calls. Use ``--print-token`` to skip persistence and
+ emit the token to stdout — handy for piping into ``$GREENHOUSE_API_TOKEN``.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  --username           <str>  Username [required]                                               │
+│ *  --password           <str>  Password [required]                                               │
+│    --print-token               Print the JWT to stdout instead of storing it                     │
+│    --help                      Show this message and exit.                                       │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

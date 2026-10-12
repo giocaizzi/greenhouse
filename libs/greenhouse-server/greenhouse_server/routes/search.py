@@ -1,5 +1,7 @@
 """Global search route."""
 
+from typing import Annotated
+
 from fastapi import APIRouter, Query
 
 from greenhouse_core.schemas import SearchResponse
@@ -12,9 +14,9 @@ router = APIRouter(prefix="/search", tags=["search"])
 @router.get("", response_model=SearchResponse, summary="Global search across all resources")
 def global_search(
     repo: RepoDep,
-    q: str = Query("", description="Search query"),
-    limit: int = Query(20, ge=1, le=100, description="Maximum number of hits to return"),
-):
+    q: Annotated[str, Query(description="Search query")] = "",
+    limit: Annotated[int, Query(ge=1, le=100, description="Maximum number of hits to return")] = 20,
+) -> SearchResponse:
     """Search clusters, plants, sensors, and irrigators by name or device ID prefix.
 
     Case-insensitive LIKE match on cluster name/location, plant species/notes,

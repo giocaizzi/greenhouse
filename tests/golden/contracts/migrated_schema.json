@@ -1,0 +1,1645 @@
+{
+ "activity_events": {
+  "columns": [
+   {
+    "default": null,
+    "name": "id",
+    "nullable": false,
+    "primary_key": 1,
+    "type": "INTEGER"
+   },
+   {
+    "default": null,
+    "name": "timestamp",
+    "nullable": false,
+    "primary_key": 0,
+    "type": "INTEGER"
+   },
+   {
+    "default": null,
+    "name": "source",
+    "nullable": false,
+    "primary_key": 0,
+    "type": "VARCHAR"
+   },
+   {
+    "default": null,
+    "name": "entity_type",
+    "nullable": false,
+    "primary_key": 0,
+    "type": "VARCHAR"
+   },
+   {
+    "default": null,
+    "name": "entity_id",
+    "nullable": true,
+    "primary_key": 0,
+    "type": "INTEGER"
+   },
+   {
+    "default": null,
+    "name": "severity",
+    "nullable": false,
+    "primary_key": 0,
+    "type": "VARCHAR"
+   },
+   {
+    "default": null,
+    "name": "code",
+    "nullable": false,
+    "primary_key": 0,
+    "type": "VARCHAR"
+   },
+   {
+    "default": null,
+    "name": "message",
+    "nullable": false,
+    "primary_key": 0,
+    "type": "VARCHAR"
+   },
+   {
+    "default": null,
+    "name": "payload_json",
+    "nullable": true,
+    "primary_key": 0,
+    "type": "VARCHAR"
+   }
+  ],
+  "foreign_keys": [],
+  "indexes": [
+   {
+    "column_names": [
+     "entity_type",
+     "entity_id"
+    ],
+    "dialect_options": {},
+    "name": "idx_activity_events_entity",
+    "unique": 0
+   },
+   {
+    "column_names": [
+     "source"
+    ],
+    "dialect_options": {},
+    "name": "idx_activity_events_source",
+    "unique": 0
+   },
+   {
+    "column_names": [
+     "timestamp"
+    ],
+    "dialect_options": {},
+    "name": "idx_activity_events_timestamp",
+    "unique": 0
+   }
+  ],
+  "primary_key": {
+   "constrained_columns": [
+    "id"
+   ],
+   "name": null
+  },
+  "unique_constraints": []
+ },
+ "alembic_version": {
+  "columns": [
+   {
+    "default": null,
+    "name": "version_num",
+    "nullable": false,
+    "primary_key": 1,
+    "type": "VARCHAR(32)"
+   }
+  ],
+  "foreign_keys": [],
+  "indexes": [],
+  "primary_key": {
+   "constrained_columns": [
+    "version_num"
+   ],
+   "name": "alembic_version_pkc"
+  },
+  "unique_constraints": []
+ },
+ "alerts": {
+  "columns": [
+   {
+    "default": null,
+    "name": "id",
+    "nullable": false,
+    "primary_key": 1,
+    "type": "INTEGER"
+   },
+   {
+    "default": null,
+    "name": "dedup_key",
+    "nullable": false,
+    "primary_key": 0,
+    "type": "VARCHAR"
+   },
+   {
+    "default": null,
+    "name": "source",
+    "nullable": false,
+    "primary_key": 0,
+    "type": "VARCHAR"
+   },
+   {
+    "default": null,
+    "name": "code",
+    "nullable": false,
+    "primary_key": 0,
+    "type": "VARCHAR"
+   },
+   {
+    "default": null,
+    "name": "severity",
+    "nullable": false,
+    "primary_key": 0,
+    "type": "VARCHAR"
+   },
+   {
+    "default": null,
+    "name": "entity_type",
+    "nullable": false,
+    "primary_key": 0,
+    "type": "VARCHAR"
+   },
+   {
+    "default": null,
+    "name": "entity_id",
+    "nullable": true,
+    "primary_key": 0,
+    "type": "INTEGER"
+   },
+   {
+    "default": null,
+    "name": "cluster_id",
+    "nullable": true,
+    "primary_key": 0,
+    "type": "INTEGER"
+   },
+   {
+    "default": null,
+    "name": "plant_id",
+    "nullable": true,
+    "primary_key": 0,
+    "type": "INTEGER"
+   },
+   {
+    "default": null,
+    "name": "title",
+    "nullable": false,
+    "primary_key": 0,
+    "type": "VARCHAR"
+   },
+   {
+    "default": null,
+    "name": "message",
+    "nullable": false,
+    "primary_key": 0,
+    "type": "VARCHAR"
+   },
+   {
+    "default": null,
+    "name": "payload_json",
+    "nullable": true,
+    "primary_key": 0,
+    "type": "VARCHAR"
+   },
+   {
+    "default": null,
+    "name": "status",
+    "nullable": false,
+    "primary_key": 0,
+    "type": "VARCHAR"
+   },
+   {
+    "default": null,
+    "name": "first_seen_at",
+    "nullable": false,
+    "primary_key": 0,
+    "type": "INTEGER"
+   },
+   {
+    "default": null,
+    "name": "last_seen_at",
+    "nullable": false,
+    "primary_key": 0,
+    "type": "INTEGER"
+   },
+   {
+    "default": null,
+    "name": "occurrence_count",
+    "nullable": false,
+    "primary_key": 0,
+    "type": "INTEGER"
+   },
+   {
+    "default": null,
+    "name": "acknowledged_at",
+    "nullable": true,
+    "primary_key": 0,
+    "type": "INTEGER"
+   },
+   {
+    "default": null,
+    "name": "resolved_at",
+    "nullable": true,
+    "primary_key": 0,
+    "type": "INTEGER"
+   }
+  ],
+  "foreign_keys": [],
+  "indexes": [
+   {
+    "column_names": [
+     "dedup_key"
+    ],
+    "dialect_options": {},
+    "name": "idx_alerts_dedup_key",
+    "unique": 0
+   },
+   {
+    "column_names": [
+     "entity_type",
+     "entity_id"
+    ],
+    "dialect_options": {},
+    "name": "idx_alerts_entity",
+    "unique": 0
+   },
+   {
+    "column_names": [
+     "status"
+    ],
+    "dialect_options": {},
+    "name": "idx_alerts_status",
+    "unique": 0
+   }
+  ],
+  "primary_key": {
+   "constrained_columns": [
+    "id"
+   ],
+   "name": null
+  },
+  "unique_constraints": [
+   {
+    "column_names": [
+     "dedup_key"
+    ],
+    "name": null
+   }
+  ]
+ },
+ "clusters": {
+  "columns": [
+   {
+    "default": null,
+    "name": "id",
+    "nullable": false,
+    "primary_key": 1,
+    "type": "INTEGER"
+   },
+   {
+    "default": null,
+    "name": "name",
+    "nullable": false,
+    "primary_key": 0,
+    "type": "VARCHAR"
+   },
+   {
+    "default": null,
+    "name": "location",
+    "nullable": true,
+    "primary_key": 0,
+    "type": "VARCHAR"
+   },
+   {
+    "default": null,
+    "name": "created_at",
+    "nullable": false,
+    "primary_key": 0,
+    "type": "INTEGER"
+   },
+   {
+    "default": null,
+    "name": "environment",
+    "nullable": false,
+    "primary_key": 0,
+    "type": "VARCHAR"
+   }
+  ],
+  "foreign_keys": [],
+  "indexes": [],
+  "primary_key": {
+   "constrained_columns": [
+    "id"
+   ],
+   "name": null
+  },
+  "unique_constraints": []
+ },
+ "decision_logs": {
+  "columns": [
+   {
+    "default": null,
+    "name": "id",
+    "nullable": false,
+    "primary_key": 1,
+    "type": "INTEGER"
+   },
+   {
+    "default": null,
+    "name": "cluster_id",
+    "nullable": false,
+    "primary_key": 0,
+    "type": "INTEGER"
+   },
+   {
+    "default": null,
+    "name": "evaluated_at",
+    "nullable": false,
+    "primary_key": 0,
+    "type": "INTEGER"
+   },
+   {
+    "default": null,
+    "name": "action",
+    "nullable": false,
+    "primary_key": 0,
+    "type": "VARCHAR"
+   },
+   {
+    "default": null,
+    "name": "duration_minutes",
+    "nullable": false,
+    "primary_key": 0,
+    "type": "INTEGER"
+   },
+   {
+    "default": null,
+    "name": "interval_hours",
+    "nullable": false,
+    "primary_key": 0,
+    "type": "INTEGER"
+   },
+   {
+    "default": null,
+    "name": "confidence",
+    "nullable": false,
+    "primary_key": 0,
+    "type": "FLOAT"
+   },
+   {
+    "default": null,
+    "name": "primary_code",
+    "nullable": true,
+    "primary_key": 0,
+    "type": "VARCHAR"
+   },
+   {
+    "default": null,
+    "name": "reason_text",
+    "nullable": false,
+    "primary_key": 0,
+    "type": "VARCHAR"
+   },
+   {
+    "default": null,
+    "name": "payload_json",
+    "nullable": false,
+    "primary_key": 0,
+    "type": "VARCHAR"
+   },
+   {
+    "default": null,
+    "name": "triggered_by",
+    "nullable": false,
+    "primary_key": 0,
+    "type": "VARCHAR"
+   },
+   {
+    "default": null,
+    "name": "actuated",
+    "nullable": false,
+    "primary_key": 0,
+    "type": "BOOLEAN"
+   }
+  ],
+  "foreign_keys": [],
+  "indexes": [
+   {
+    "column_names": [
+     "cluster_id"
+    ],
+    "dialect_options": {},
+    "name": "idx_decision_logs_cluster_id",
+    "unique": 0
+   },
+   {
+    "column_names": [
+     "evaluated_at"
+    ],
+    "dialect_options": {},
+    "name": "idx_decision_logs_evaluated_at",
+    "unique": 0
+   }
+  ],
+  "primary_key": {
+   "constrained_columns": [
+    "id"
+   ],
+   "name": null
+  },
+  "unique_constraints": []
+ },
+ "global_irrigation_config": {
+  "columns": [
+   {
+    "default": null,
+    "name": "id",
+    "nullable": false,
+    "primary_key": 1,
+    "type": "INTEGER"
+   },
+   {
+    "default": null,
+    "name": "mode",
+    "nullable": true,
+    "primary_key": 0,
+    "type": "VARCHAR"
+   },
+   {
+    "default": null,
+    "name": "duration_minutes",
+    "nullable": true,
+    "primary_key": 0,
+    "type": "INTEGER"
+   },
+   {
+    "default": null,
+    "name": "interval_hours",
+    "nullable": true,
+    "primary_key": 0,
+    "type": "INTEGER"
+   },
+   {
+    "default": null,
+    "name": "auto_run",
+    "nullable": true,
+    "primary_key": 0,
+    "type": "BOOLEAN"
+   },
+   {
+    "default": null,
+    "name": "daily_cap_minutes",
+    "nullable": true,
+    "primary_key": 0,
+    "type": "INTEGER"
+   },
+   {
+    "default": null,
+    "name": "max_events_per_day",
+    "nullable": true,
+    "primary_key": 0,
+    "type": "INTEGER"
+   },
+   {
+    "default": null,
+    "name": "quiet_start_hour",
+    "nullable": true,
+    "primary_key": 0,
+    "type": "INTEGER"
+   },
+   {
+    "default": null,
+    "name": "quiet_end_hour",
+    "nullable": true,
+    "primary_key": 0,
+    "type": "INTEGER"
+   },
+   {
+    "default": null,
+    "name": "last_updated",
+    "nullable": false,
+    "primary_key": 0,
+    "type": "INTEGER"
+   }
+  ],
+  "foreign_keys": [],
+  "indexes": [],
+  "primary_key": {
+   "constrained_columns": [
+    "id"
+   ],
+   "name": null
+  },
+  "unique_constraints": []
+ },
+ "irrigation_configs": {
+  "columns": [
+   {
+    "default": null,
+    "name": "id",
+    "nullable": false,
+    "primary_key": 1,
+    "type": "INTEGER"
+   },
+   {
+    "default": null,
+    "name": "cluster_id",
+    "nullable": false,
+    "primary_key": 0,
+    "type": "INTEGER"
+   },
+   {
+    "default": null,
+    "name": "mode",
+    "nullable": true,
+    "primary_key": 0,
+    "type": "VARCHAR"
+   },
+   {
+    "default": null,
+    "name": "duration_minutes",
+    "nullable": true,
+    "primary_key": 0,
+    "type": "INTEGER"
+   },
+   {
+    "default": null,
+    "name": "interval_hours",
+    "nullable": true,
+    "primary_key": 0,
+    "type": "INTEGER"
+   },
+   {
+    "default": null,
+    "name": "auto_run",
+    "nullable": true,
+    "primary_key": 0,
+    "type": "BOOLEAN"
+   },
+   {
+    "default": null,
+    "name": "last_updated",
+    "nullable": false,
+    "primary_key": 0,
+    "type": "INTEGER"
+   },
+   {
+    "default": null,
+    "name": "daily_cap_minutes",
+    "nullable": true,
+    "primary_key": 0,
+    "type": "INTEGER"
+   },
+   {
+    "default": null,
+    "name": "max_events_per_day",
+    "nullable": true,
+    "primary_key": 0,
+    "type": "INTEGER"
+   },
+   {
+    "default": null,
+    "name": "quiet_start_hour",
+    "nullable": true,
+    "primary_key": 0,
+    "type": "INTEGER"
+   },
+   {
+    "default": null,
+    "name": "quiet_end_hour",
+    "nullable": true,
+    "primary_key": 0,
+    "type": "INTEGER"
+   }
+  ],
+  "foreign_keys": [
+   {
+    "constrained_columns": [
+     "cluster_id"
+    ],
+    "name": null,
+    "options": {},
+    "referred_columns": [
+     "id"
+    ],
+    "referred_schema": null,
+    "referred_table": "clusters"
+   }
+  ],
+  "indexes": [],
+  "primary_key": {
+   "constrained_columns": [
+    "id"
+   ],
+   "name": null
+  },
+  "unique_constraints": [
+   {
+    "column_names": [
+     "cluster_id"
+    ],
+    "name": null
+   }
+  ]
+ },
+ "irrigation_events": {
+  "columns": [
+   {
+    "default": null,
+    "name": "id",
+    "nullable": false,
+    "primary_key": 1,
+    "type": "INTEGER"
+   },
+   {
+    "default": null,
+    "name": "irrigator_id",
+    "nullable": false,
+    "primary_key": 0,
+    "type": "INTEGER"
+   },
+   {
+    "default": null,
+    "name": "timestamp",
+    "nullable": false,
+    "primary_key": 0,
+    "type": "INTEGER"
+   },
+   {
+    "default": null,
+    "name": "action",
+    "nullable": false,
+    "primary_key": 0,
+    "type": "VARCHAR"
+   },
+   {
+    "default": null,
+    "name": "duration_minutes",
+    "nullable": true,
+    "primary_key": 0,
+    "type": "INTEGER"
+   },
+   {
+    "default": null,
+    "name": "triggered_by",
+    "nullable": false,
+    "primary_key": 0,
+    "type": "VARCHAR"
+   },
+   {
+    "default": null,
+    "name": "notes",
+    "nullable": true,
+    "primary_key": 0,
+    "type": "VARCHAR"
+   }
+  ],
+  "foreign_keys": [
+   {
+    "constrained_columns": [
+     "irrigator_id"
+    ],
+    "name": null,
+    "options": {},
+    "referred_columns": [
+     "id"
+    ],
+    "referred_schema": null,
+    "referred_table": "irrigators"
+   }
+  ],
+  "indexes": [
+   {
+    "column_names": [
+     "irrigator_id"
+    ],
+    "dialect_options": {},
+    "name": "idx_irrigation_events_irrigator_id",
+    "unique": 0
+   },
+   {
+    "column_names": [
+     "timestamp"
+    ],
+    "dialect_options": {},
+    "name": "idx_irrigation_events_timestamp",
+    "unique": 0
+   }
+  ],
+  "primary_key": {
+   "constrained_columns": [
+    "id"
+   ],
+   "name": null
+  },
+  "unique_constraints": []
+ },
+ "irrigation_windows": {
+  "columns": [
+   {
+    "default": null,
+    "name": "id",
+    "nullable": false,
+    "primary_key": 1,
+    "type": "INTEGER"
+   },
+   {
+    "default": null,
+    "name": "cluster_id",
+    "nullable": false,
+    "primary_key": 0,
+    "type": "INTEGER"
+   },
+   {
+    "default": "'127'",
+    "name": "weekday_mask",
+    "nullable": false,
+    "primary_key": 0,
+    "type": "INTEGER"
+   },
+   {
+    "default": null,
+    "name": "start_hour",
+    "nullable": false,
+    "primary_key": 0,
+    "type": "INTEGER"
+   },
+   {
+    "default": null,
+    "name": "end_hour",
+    "nullable": false,
+    "primary_key": 0,
+    "type": "INTEGER"
+   },
+   {
+    "default": null,
+    "name": "label",
+    "nullable": true,
+    "primary_key": 0,
+    "type": "VARCHAR"
+   }
+  ],
+  "foreign_keys": [
+   {
+    "constrained_columns": [
+     "cluster_id"
+    ],
+    "name": null,
+    "options": {
+     "ondelete": "CASCADE"
+    },
+    "referred_columns": [
+     "id"
+    ],
+    "referred_schema": null,
+    "referred_table": "clusters"
+   }
+  ],
+  "indexes": [
+   {
+    "column_names": [
+     "cluster_id"
+    ],
+    "dialect_options": {},
+    "name": "idx_irrigation_windows_cluster",
+    "unique": 0
+   }
+  ],
+  "primary_key": {
+   "constrained_columns": [
+    "id"
+   ],
+   "name": null
+  },
+  "unique_constraints": []
+ },
+ "irrigators": {
+  "columns": [
+   {
+    "default": null,
+    "name": "id",
+    "nullable": false,
+    "primary_key": 1,
+    "type": "INTEGER"
+   },
+   {
+    "default": null,
+    "name": "cluster_id",
+    "nullable": false,
+    "primary_key": 0,
+    "type": "INTEGER"
+   },
+   {
+    "default": null,
+    "name": "tuya_device_id",
+    "nullable": false,
+    "primary_key": 0,
+    "type": "VARCHAR"
+   },
+   {
+    "default": null,
+    "name": "name",
+    "nullable": false,
+    "primary_key": 0,
+    "type": "VARCHAR"
+   },
+   {
+    "default": null,
+    "name": "type",
+    "nullable": false,
+    "primary_key": 0,
+    "type": "VARCHAR"
+   },
+   {
+    "default": null,
+    "name": "config",
+    "nullable": true,
+    "primary_key": 0,
+    "type": "VARCHAR"
+   },
+   {
+    "default": null,
+    "name": "reservoir_l",
+    "nullable": true,
+    "primary_key": 0,
+    "type": "FLOAT"
+   },
+   {
+    "default": null,
+    "name": "flow_rate_l_per_min",
+    "nullable": true,
+    "primary_key": 0,
+    "type": "FLOAT"
+   }
+  ],
+  "foreign_keys": [
+   {
+    "constrained_columns": [
+     "cluster_id"
+    ],
+    "name": null,
+    "options": {},
+    "referred_columns": [
+     "id"
+    ],
+    "referred_schema": null,
+    "referred_table": "clusters"
+   }
+  ],
+  "indexes": [],
+  "primary_key": {
+   "constrained_columns": [
+    "id"
+   ],
+   "name": null
+  },
+  "unique_constraints": [
+   {
+    "column_names": [
+     "tuya_device_id"
+    ],
+    "name": null
+   },
+   {
+    "column_names": [
+     "cluster_id"
+    ],
+    "name": "uq_irrigators_cluster_id"
+   }
+  ]
+ },
+ "plant_health_daily": {
+  "columns": [
+   {
+    "default": null,
+    "name": "id",
+    "nullable": false,
+    "primary_key": 1,
+    "type": "INTEGER"
+   },
+   {
+    "default": null,
+    "name": "plant_id",
+    "nullable": false,
+    "primary_key": 0,
+    "type": "INTEGER"
+   },
+   {
+    "default": null,
+    "name": "date_key",
+    "nullable": false,
+    "primary_key": 0,
+    "type": "VARCHAR"
+   },
+   {
+    "default": null,
+    "name": "timestamp",
+    "nullable": false,
+    "primary_key": 0,
+    "type": "INTEGER"
+   },
+   {
+    "default": null,
+    "name": "score",
+    "nullable": false,
+    "primary_key": 0,
+    "type": "FLOAT"
+   },
+   {
+    "default": null,
+    "name": "soil_in_band_pct",
+    "nullable": true,
+    "primary_key": 0,
+    "type": "FLOAT"
+   },
+   {
+    "default": null,
+    "name": "temp_in_band_pct",
+    "nullable": true,
+    "primary_key": 0,
+    "type": "FLOAT"
+   },
+   {
+    "default": null,
+    "name": "humidity_in_band_pct",
+    "nullable": true,
+    "primary_key": 0,
+    "type": "FLOAT"
+   },
+   {
+    "default": null,
+    "name": "efficiency",
+    "nullable": true,
+    "primary_key": 0,
+    "type": "FLOAT"
+   },
+   {
+    "default": null,
+    "name": "sample_count",
+    "nullable": false,
+    "primary_key": 0,
+    "type": "INTEGER"
+   }
+  ],
+  "foreign_keys": [],
+  "indexes": [
+   {
+    "column_names": [
+     "plant_id"
+    ],
+    "dialect_options": {},
+    "name": "idx_plant_health_daily_plant",
+    "unique": 0
+   }
+  ],
+  "primary_key": {
+   "constrained_columns": [
+    "id"
+   ],
+   "name": null
+  },
+  "unique_constraints": [
+   {
+    "column_names": [
+     "plant_id",
+     "date_key"
+    ],
+    "name": null
+   }
+  ]
+ },
+ "plants": {
+  "columns": [
+   {
+    "default": null,
+    "name": "id",
+    "nullable": false,
+    "primary_key": 1,
+    "type": "INTEGER"
+   },
+   {
+    "default": null,
+    "name": "cluster_id",
+    "nullable": false,
+    "primary_key": 0,
+    "type": "INTEGER"
+   },
+   {
+    "default": null,
+    "name": "species",
+    "nullable": false,
+    "primary_key": 0,
+    "type": "VARCHAR"
+   },
+   {
+    "default": null,
+    "name": "category",
+    "nullable": true,
+    "primary_key": 0,
+    "type": "VARCHAR"
+   },
+   {
+    "default": null,
+    "name": "water_needs",
+    "nullable": true,
+    "primary_key": 0,
+    "type": "VARCHAR"
+   },
+   {
+    "default": null,
+    "name": "light_needs",
+    "nullable": true,
+    "primary_key": 0,
+    "type": "VARCHAR"
+   },
+   {
+    "default": null,
+    "name": "ideal_temp_min",
+    "nullable": true,
+    "primary_key": 0,
+    "type": "FLOAT"
+   },
+   {
+    "default": null,
+    "name": "ideal_temp_max",
+    "nullable": true,
+    "primary_key": 0,
+    "type": "FLOAT"
+   },
+   {
+    "default": null,
+    "name": "ideal_humidity_min",
+    "nullable": true,
+    "primary_key": 0,
+    "type": "FLOAT"
+   },
+   {
+    "default": null,
+    "name": "ideal_humidity_max",
+    "nullable": true,
+    "primary_key": 0,
+    "type": "FLOAT"
+   },
+   {
+    "default": null,
+    "name": "notes",
+    "nullable": true,
+    "primary_key": 0,
+    "type": "VARCHAR"
+   }
+  ],
+  "foreign_keys": [
+   {
+    "constrained_columns": [
+     "cluster_id"
+    ],
+    "name": null,
+    "options": {},
+    "referred_columns": [
+     "id"
+    ],
+    "referred_schema": null,
+    "referred_table": "clusters"
+   }
+  ],
+  "indexes": [],
+  "primary_key": {
+   "constrained_columns": [
+    "id"
+   ],
+   "name": null
+  },
+  "unique_constraints": []
+ },
+ "sensor_assignments": {
+  "columns": [
+   {
+    "default": null,
+    "name": "id",
+    "nullable": false,
+    "primary_key": 1,
+    "type": "INTEGER"
+   },
+   {
+    "default": null,
+    "name": "sensor_id",
+    "nullable": false,
+    "primary_key": 0,
+    "type": "INTEGER"
+   },
+   {
+    "default": null,
+    "name": "plant_id",
+    "nullable": false,
+    "primary_key": 0,
+    "type": "INTEGER"
+   },
+   {
+    "default": null,
+    "name": "started_at",
+    "nullable": false,
+    "primary_key": 0,
+    "type": "INTEGER"
+   },
+   {
+    "default": null,
+    "name": "ended_at",
+    "nullable": true,
+    "primary_key": 0,
+    "type": "INTEGER"
+   }
+  ],
+  "foreign_keys": [
+   {
+    "constrained_columns": [
+     "sensor_id"
+    ],
+    "name": null,
+    "options": {
+     "ondelete": "CASCADE"
+    },
+    "referred_columns": [
+     "id"
+    ],
+    "referred_schema": null,
+    "referred_table": "sensors"
+   },
+   {
+    "constrained_columns": [
+     "plant_id"
+    ],
+    "name": null,
+    "options": {
+     "ondelete": "CASCADE"
+    },
+    "referred_columns": [
+     "id"
+    ],
+    "referred_schema": null,
+    "referred_table": "plants"
+   }
+  ],
+  "indexes": [
+   {
+    "column_names": [
+     "plant_id"
+    ],
+    "dialect_options": {},
+    "name": "idx_sensor_assignments_plant",
+    "unique": 0
+   },
+   {
+    "column_names": [
+     "sensor_id"
+    ],
+    "dialect_options": {},
+    "name": "idx_sensor_assignments_sensor",
+    "unique": 0
+   },
+   {
+    "column_names": [
+     "started_at",
+     "ended_at"
+    ],
+    "dialect_options": {},
+    "name": "idx_sensor_assignments_time",
+    "unique": 0
+   }
+  ],
+  "primary_key": {
+   "constrained_columns": [
+    "id"
+   ],
+   "name": null
+  },
+  "unique_constraints": []
+ },
+ "sensor_readings": {
+  "columns": [
+   {
+    "default": null,
+    "name": "id",
+    "nullable": false,
+    "primary_key": 1,
+    "type": "INTEGER"
+   },
+   {
+    "default": null,
+    "name": "sensor_id",
+    "nullable": false,
+    "primary_key": 0,
+    "type": "INTEGER"
+   },
+   {
+    "default": null,
+    "name": "timestamp",
+    "nullable": false,
+    "primary_key": 0,
+    "type": "INTEGER"
+   },
+   {
+    "default": null,
+    "name": "temperature",
+    "nullable": true,
+    "primary_key": 0,
+    "type": "FLOAT"
+   },
+   {
+    "default": null,
+    "name": "soil_moisture",
+    "nullable": true,
+    "primary_key": 0,
+    "type": "FLOAT"
+   },
+   {
+    "default": null,
+    "name": "light",
+    "nullable": true,
+    "primary_key": 0,
+    "type": "INTEGER"
+   },
+   {
+    "default": null,
+    "name": "env_humidity",
+    "nullable": true,
+    "primary_key": 0,
+    "type": "FLOAT"
+   },
+   {
+    "default": null,
+    "name": "battery_state",
+    "nullable": true,
+    "primary_key": 0,
+    "type": "VARCHAR"
+   },
+   {
+    "default": null,
+    "name": "water_warning",
+    "nullable": true,
+    "primary_key": 0,
+    "type": "BOOLEAN"
+   }
+  ],
+  "foreign_keys": [
+   {
+    "constrained_columns": [
+     "sensor_id"
+    ],
+    "name": null,
+    "options": {},
+    "referred_columns": [
+     "id"
+    ],
+    "referred_schema": null,
+    "referred_table": "sensors"
+   }
+  ],
+  "indexes": [
+   {
+    "column_names": [
+     "sensor_id"
+    ],
+    "dialect_options": {},
+    "name": "idx_sensor_readings_sensor_id",
+    "unique": 0
+   },
+   {
+    "column_names": [
+     "timestamp"
+    ],
+    "dialect_options": {},
+    "name": "idx_sensor_readings_timestamp",
+    "unique": 0
+   }
+  ],
+  "primary_key": {
+   "constrained_columns": [
+    "id"
+   ],
+   "name": null
+  },
+  "unique_constraints": [
+   {
+    "column_names": [
+     "sensor_id",
+     "timestamp"
+    ],
+    "name": null
+   }
+  ]
+ },
+ "sensors": {
+  "columns": [
+   {
+    "default": null,
+    "name": "id",
+    "nullable": false,
+    "primary_key": 1,
+    "type": "INTEGER"
+   },
+   {
+    "default": null,
+    "name": "cluster_id",
+    "nullable": false,
+    "primary_key": 0,
+    "type": "INTEGER"
+   },
+   {
+    "default": null,
+    "name": "tuya_device_id",
+    "nullable": false,
+    "primary_key": 0,
+    "type": "VARCHAR"
+   },
+   {
+    "default": null,
+    "name": "name",
+    "nullable": false,
+    "primary_key": 0,
+    "type": "VARCHAR"
+   },
+   {
+    "default": null,
+    "name": "type",
+    "nullable": false,
+    "primary_key": 0,
+    "type": "VARCHAR"
+   },
+   {
+    "default": null,
+    "name": "config",
+    "nullable": true,
+    "primary_key": 0,
+    "type": "VARCHAR"
+   },
+   {
+    "default": null,
+    "name": "plant_id",
+    "nullable": true,
+    "primary_key": 0,
+    "type": "INTEGER"
+   }
+  ],
+  "foreign_keys": [
+   {
+    "constrained_columns": [
+     "cluster_id"
+    ],
+    "name": null,
+    "options": {},
+    "referred_columns": [
+     "id"
+    ],
+    "referred_schema": null,
+    "referred_table": "clusters"
+   },
+   {
+    "constrained_columns": [
+     "plant_id"
+    ],
+    "name": null,
+    "options": {},
+    "referred_columns": [
+     "id"
+    ],
+    "referred_schema": null,
+    "referred_table": "plants"
+   }
+  ],
+  "indexes": [],
+  "primary_key": {
+   "constrained_columns": [
+    "id"
+   ],
+   "name": null
+  },
+  "unique_constraints": [
+   {
+    "column_names": [
+     "tuya_device_id"
+    ],
+    "name": null
+   }
+  ]
+ },
+ "user_preferences": {
+  "columns": [
+   {
+    "default": null,
+    "name": "id",
+    "nullable": false,
+    "primary_key": 1,
+    "type": "INTEGER"
+   },
+   {
+    "default": null,
+    "name": "units",
+    "nullable": false,
+    "primary_key": 0,
+    "type": "VARCHAR"
+   },
+   {
+    "default": null,
+    "name": "timezone",
+    "nullable": false,
+    "primary_key": 0,
+    "type": "VARCHAR"
+   },
+   {
+    "default": null,
+    "name": "theme",
+    "nullable": false,
+    "primary_key": 0,
+    "type": "VARCHAR"
+   },
+   {
+    "default": null,
+    "name": "default_cluster_id",
+    "nullable": true,
+    "primary_key": 0,
+    "type": "INTEGER"
+   },
+   {
+    "default": null,
+    "name": "refresh_interval_seconds",
+    "nullable": false,
+    "primary_key": 0,
+    "type": "INTEGER"
+   },
+   {
+    "default": null,
+    "name": "dry_run_global",
+    "nullable": false,
+    "primary_key": 0,
+    "type": "BOOLEAN"
+   },
+   {
+    "default": "0",
+    "name": "scheduler_paused",
+    "nullable": false,
+    "primary_key": 0,
+    "type": "BOOLEAN"
+   },
+   {
+    "default": "1",
+    "name": "notify_manual",
+    "nullable": false,
+    "primary_key": 0,
+    "type": "BOOLEAN"
+   },
+   {
+    "default": "1",
+    "name": "notify_emergency",
+    "nullable": false,
+    "primary_key": 0,
+    "type": "BOOLEAN"
+   },
+   {
+    "default": "1",
+    "name": "notify_alerts",
+    "nullable": false,
+    "primary_key": 0,
+    "type": "BOOLEAN"
+   },
+   {
+    "default": "1",
+    "name": "notify_auto",
+    "nullable": false,
+    "primary_key": 0,
+    "type": "BOOLEAN"
+   }
+  ],
+  "foreign_keys": [],
+  "indexes": [],
+  "primary_key": {
+   "constrained_columns": [
+    "id"
+   ],
+   "name": null
+  },
+  "unique_constraints": []
+ },
+ "users": {
+  "columns": [
+   {
+    "default": null,
+    "name": "id",
+    "nullable": false,
+    "primary_key": 1,
+    "type": "INTEGER"
+   },
+   {
+    "default": null,
+    "name": "username",
+    "nullable": false,
+    "primary_key": 0,
+    "type": "VARCHAR"
+   },
+   {
+    "default": null,
+    "name": "hashed_password",
+    "nullable": false,
+    "primary_key": 0,
+    "type": "VARCHAR"
+   },
+   {
+    "default": "1",
+    "name": "is_active",
+    "nullable": false,
+    "primary_key": 0,
+    "type": "BOOLEAN"
+   },
+   {
+    "default": null,
+    "name": "created_at",
+    "nullable": false,
+    "primary_key": 0,
+    "type": "INTEGER"
+   },
+   {
+    "default": null,
+    "name": "last_login_at",
+    "nullable": true,
+    "primary_key": 0,
+    "type": "INTEGER"
+   }
+  ],
+  "foreign_keys": [],
+  "indexes": [],
+  "primary_key": {
+   "constrained_columns": [
+    "id"
+   ],
+   "name": null
+  },
+  "unique_constraints": [
+   {
+    "column_names": [
+     "username"
+    ],
+    "name": "uq_users_username"
+   }
+  ]
+ },
+ "vacation_windows": {
+  "columns": [
+   {
+    "default": null,
+    "name": "id",
+    "nullable": false,
+    "primary_key": 1,
+    "type": "INTEGER"
+   },
+   {
+    "default": null,
+    "name": "starts_at",
+    "nullable": false,
+    "primary_key": 0,
+    "type": "INTEGER"
+   },
+   {
+    "default": null,
+    "name": "ends_at",
+    "nullable": false,
+    "primary_key": 0,
+    "type": "INTEGER"
+   },
+   {
+    "default": null,
+    "name": "contact_email",
+    "nullable": true,
+    "primary_key": 0,
+    "type": "VARCHAR"
+   },
+   {
+    "default": null,
+    "name": "notes",
+    "nullable": true,
+    "primary_key": 0,
+    "type": "VARCHAR"
+   },
+   {
+    "default": null,
+    "name": "created_at",
+    "nullable": false,
+    "primary_key": 0,
+    "type": "INTEGER"
+   }
+  ],
+  "foreign_keys": [],
+  "indexes": [],
+  "primary_key": {
+   "constrained_columns": [
+    "id"
+   ],
+   "name": null
+  },
+  "unique_constraints": []
+ }
+}

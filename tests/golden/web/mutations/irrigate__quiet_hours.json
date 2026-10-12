@@ -1,0 +1,100 @@
+{
+ "body_lines": [
+  "<article class=\"card card--flush result-panel\">",
+  "  <div class=\"card__head\">",
+  "    <div class=\"row\" style=\"gap: var(--sp-3);\">",
+  "      <span class=\"badge-muted\">SKIP · 90%</span>",
+  "      <h3 class=\"card__title\">Irrigation decision</h3>",
+  "    </div>",
+  "  </div>",
+  "  <div class=\"card__body\">",
+  "    ",
+  "      <p>quiet hours active (09:00–12:00 local)</p>",
+  "    ",
+  "    ",
+  "      <dl>",
+  "        <dt>Duration</dt><dd>2 min</dd>",
+  "        <dt>Interval</dt><dd>every 12h</dd>",
+  "        <dt>Temperature</dt><dd>22.0°C <small class=\"muted\">(sensor)</small></dd>",
+  "      </dl>",
+  "    ",
+  "    ",
+  "      <details>",
+  "        <summary>Stress indicators</summary>",
+  "        <pre>{&#39;learning_alerts&#39;: []}</pre>",
+  "      </details>",
+  "    ",
+  "  </div>",
+  "</article>"
+ ],
+ "db_effect": {
+  "activity_events": {
+   "added": [
+    {
+     "code": "decision_skip",
+     "entity_id": 1,
+     "entity_type": "cluster",
+     "id": 5,
+     "message": "quiet hours active (09:00–12:00 local)",
+     "payload_json": null,
+     "severity": "info",
+     "source": "irrigation",
+     "timestamp": 1776247200
+    }
+   ]
+  },
+  "decision_logs": {
+   "added": [
+    {
+     "action": "skip",
+     "actuated": 0,
+     "cluster_id": 1,
+     "confidence": 0.9,
+     "duration_minutes": 2,
+     "evaluated_at": 1776247200,
+     "id": 5,
+     "interval_hours": 12,
+     "payload_json": "{\"cluster_id\": 1, \"evaluated_at\": 1776247200, \"action\": \"skip\", \"duration_minutes\": 2, \"interval_hours\": 12, \"confidence\": 0.9, \"reasons\": [{\"code\": \"quiet_hours\", \"message\": \"quiet hours active (09:00\\u201312:00 local)\", \"severity\": \"info\", \"icon\": null, \"duration_delta\": 0, \"interval_delta\": 0}], \"sensor_snapshot\": null, \"stress_indicators\": {\"water_warning\": null, \"water_stress\": null, \"heat_stress\": null, \"over_watering\": null, \"low_env_humidity\": null, \"low_light\": null, \"learning_alerts\": []}, \"trends\": {\"soil_moisture_trend\": null, \"soil_moisture_delta\": 0.0, \"temperature_trend\": null, \"irrigation_frequency_low\": false, \"irrigation_frequency_high\": false}, \"weather\": null}",
+     "primary_code": "quiet_hours",
+     "reason_text": "quiet hours active (09:00–12:00 local)",
+     "triggered_by": "auto"
+    }
+   ]
+  }
+ },
+ "device_calls": {
+  "irrigator": [],
+  "sensor": []
+ },
+ "headers": {
+  "content-type": "text/html; charset=utf-8"
+ },
+ "request": {
+  "form": {},
+  "headers": {
+   "HX-Request": "true"
+  },
+  "method": "POST",
+  "url": "/clusters/1/irrigate"
+ },
+ "status": 200,
+ "templates": [
+  [
+   "partials/_decision_panel.html",
+   [
+    "active_vacation",
+    "app_version",
+    "auth_enabled",
+    "cluster_id",
+    "dry_run_global",
+    "is_hx",
+    "now_text",
+    "request",
+    "result",
+    "scheduler_paused",
+    "show_chrome",
+    "theme"
+   ]
+  ]
+ ]
+}

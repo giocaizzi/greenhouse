@@ -1,0 +1,22 @@
+
+ Usage: greenhouse irrigator update [OPTIONS] {cluster}
+
+ Patch the cluster's irrigator. Only the supplied fields are sent.
+
+ ``--device-ip`` or ``--local-key`` overwrite the ``config`` blob; pass both
+ when switching a device to local control.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────╮
+│ *    cluster      <int>  Cluster ID [required]                                                   │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ --name                       <str>    New irrigator name                                         │
+│ --type                       <str>    Device model key (rainpoint.ik10pw)                        │
+│ --device-ip                  <str>    Local IP                                                   │
+│ --local-key                  <str>    Local key                                                  │
+│ --reservoir-l                <float>  Usable reservoir/tank volume in liters (for vacation       │
+│                                       rationing)                                                 │
+│ --flow-rate-l-per-min        <float>  Measured pump throughput in liters per minute (for         │
+│                                       vacation rationing)                                        │
+│ --help                                Show this message and exit.                                │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

@@ -1,0 +1,84 @@
+{
+ "body_lines": [
+  "",
+  "",
+  "",
+  "<div class=\"alert alert--warn alert--settled\" id=\"alert-2\">",
+  "  <div class=\"alert__icon\" aria-hidden=\"true\">",
+  "    ",
+  "      <svg class=\"icon\"><use href=\"/static/icons/sprite.svg#i-warning\"></use></svg>",
+  "    ",
+  "  </div>",
+  "  <div>",
+  "    <p class=\"alert__title\">",
+  "      Alocasia Probe battery low",
+  "      <span class=\"badge-ok\" style=\"margin-left:6px;\">resolved</span>",
+  "      ",
+  "    </p>",
+  "    <p class=\"alert__body\">Replace the batteries soon.</p>",
+  "    <p class=\"alert__body\" style=\"margin-top:4px;\">",
+  "      <small class=\"mono muted\">health · battery_low</small>",
+  "      <span class=\"dot\" style=\"margin:0 6px;\" aria-hidden=\"true\"></span>",
+  "      <small class=\"mono muted\">2026-04-15 05:00 → 2026-04-15 05:00</small>",
+  "    </p>",
+  "    <div class=\"row row--g2 mt-2\">",
+  "      ",
+  "      ",
+  "    </div>",
+  "  </div>",
+  "  <span class=\"alert__time\">5h ago</span>",
+  "</div>",
+  ""
+ ],
+ "db_effect": {
+  "alerts": {
+   "changed": {
+    "2": {
+     "resolved_at": [
+      null,
+      1776247200
+     ],
+     "status": [
+      "acknowledged",
+      "resolved"
+     ]
+    }
+   }
+  }
+ },
+ "device_calls": {
+  "irrigator": [],
+  "sensor": []
+ },
+ "headers": {
+  "content-type": "text/html; charset=utf-8",
+  "hx-toast": "{\"severity\": \"success\", \"title\": \"Resolved\", \"message\": \"Alert marked as resolved.\"}"
+ },
+ "request": {
+  "form": null,
+  "headers": {
+   "HX-Request": "true"
+  },
+  "method": "POST",
+  "url": "/alerts/2/resolve"
+ },
+ "status": 200,
+ "templates": [
+  [
+   "partials/_alert_row.html",
+   [
+    "active_vacation",
+    "alert",
+    "app_version",
+    "auth_enabled",
+    "dry_run_global",
+    "is_hx",
+    "now_text",
+    "request",
+    "scheduler_paused",
+    "show_chrome",
+    "theme"
+   ]
+  ]
+ ]
+}

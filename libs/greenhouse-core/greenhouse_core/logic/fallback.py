@@ -1,5 +1,7 @@
 """Temperature-based fallback when the cluster has no live sensor data."""
 
+from typing import Required, TypedDict, Unpack
+
 from greenhouse_core.constants import (
     CONFIDENCE_CONFIG_FALLBACK,
     CONFIDENCE_NO_DATA,
@@ -7,6 +9,8 @@ from greenhouse_core.constants import (
     CONFLICT_INTERVAL_HOURS,
     DEFAULT_DURATION_MINUTES,
     DEFAULT_INTERVAL_HOURS,
+    FALLBACK_HIGH_NEEDS_INTERVAL_STEP,
+    FALLBACK_LOW_NEEDS_INTERVAL_STEP,
     MAX_INTERVAL_HOURS,
     MIN_INTERVAL_HOURS,
     TEMP_COLD,
@@ -24,58 +28,45 @@ from greenhouse_core.logic.decision import (
 from greenhouse_core.models import IrrigationConfig
 from greenhouse_core.repository import IrrigationRepository
 
+# Fields that make up a watering schedule; a global row that sets any of them is a configured schedule.
+_SCHEDULE_FIELDS = ("mode", "duration_minutes", "interval_hours")
 
-def temperature_based_decision(
-    db: IrrigationRepository,
-    cluster_id: int,
-    evaluated_at: int,
-    *,
-    temp: float | None,
-    water_needs: str,
-    temp_range: tuple[float, float] | None,
-    config: IrrigationConfig | None,
-    trends: Trends | None = None,
-    stress: StressIndicators | None = None,
-) -> IrrigationDecision:
-    """Build a typed decision when there is no usable sensor data."""
-    base = IrrigationDecision(
-        cluster_id=cluster_id,
-        evaluated_at=evaluated_at,
-        action=Action.SKIP,
-        duration_minutes=DEFAULT_DURATION_MINUTES,
-        interval_hours=DEFAULT_INTERVAL_HOURS,
-        confidence=CONFIDENCE_NO_DATA,
-        stress_indicators=stress or StressIndicators(),
-        trends=trends or Trends(),
+
+def _has_configured_schedule(db: IrrigationRepository, cluster_id: int, config: IrrigationConfig | None) -> bool:
+    """A cluster config row, or a global config that sets the schedule for every cluster.
+
+    The global row always exists (it carries quiet hours), so it counts only
+    when it sets a schedule field; built-in defaults alone are not a schedule.
+    """
+    if config is not None:
+        return True
+    effective = db.get_effective_config(cluster_id)
+    return any(effective[field]["source"] == "global" for field in _SCHEDULE_FIELDS)
+
+
+def _config_fallback(db: IrrigationRepository, cluster_id: int, base: IrrigationDecision) -> IrrigationDecision:
+    """Fill ``base`` from the configured schedule (no sensor data; cluster or global schedule) and return it."""
+    # Honor the *effective* mode/duration/interval so a global-only
+    # override (cluster row leaves them null) still drives the
+    # fallback. Local raw config keeps the row alive but defers to
+    # global defaults via the resolver.
+    effective = db.get_effective_config(cluster_id)
+    effective_mode = effective["mode"]["value"]
+    base.action = Action.SKIP if effective_mode == "manual" else Action.IRRIGATE
+    base.duration_minutes = int(effective["duration_minutes"]["value"] or DEFAULT_DURATION_MINUTES)
+    base.interval_hours = int(effective["interval_hours"]["value"] or DEFAULT_INTERVAL_HOURS)
+    base.confidence = CONFIDENCE_CONFIG_FALLBACK
+    base.add_reason(
+        code=TriggerCode.CONFIG_FALLBACK,
+        message="using configured schedule (no sensor data)",
+        severity=Severity.WARNING,
+        icon="gear",
     )
+    return base
 
-    if temp is None:
-        if config:
-            # Honor the *effective* mode/duration/interval so a global-only
-            # override (cluster row leaves them null) still drives the
-            # fallback. Local raw config keeps the row alive but defers to
-            # global defaults via the resolver.
-            effective = db.get_effective_config(cluster_id)
-            effective_mode = effective["mode"]["value"]
-            base.action = Action.SKIP if effective_mode == "manual" else Action.IRRIGATE
-            base.duration_minutes = int(effective["duration_minutes"]["value"] or DEFAULT_DURATION_MINUTES)
-            base.interval_hours = int(effective["interval_hours"]["value"] or DEFAULT_INTERVAL_HOURS)
-            base.confidence = CONFIDENCE_CONFIG_FALLBACK
-            base.add_reason(
-                code=TriggerCode.CONFIG_FALLBACK,
-                message="using configured schedule (no sensor data)",
-                severity=Severity.WARNING,
-                icon="gear",
-            )
-            return base
-        base.add_reason(
-            code=TriggerCode.NO_DATA,
-            message="insufficient data",
-            severity=Severity.WARNING,
-            icon="question",
-        )
-        return base
 
+def _temperature_interval(temp: float, water_needs: str) -> int:
+    """Hours between irrigations: temperature band first, then the water-needs step."""
     if temp <= TEMP_COLD:
         interval = MAX_INTERVAL_HOURS
     elif temp <= TEMP_WARM:
@@ -86,9 +77,53 @@ def temperature_based_decision(
         interval = MIN_INTERVAL_HOURS
 
     if water_needs == "high":
-        interval = max(MIN_INTERVAL_HOURS, interval - 4)
+        interval = max(MIN_INTERVAL_HOURS, interval - FALLBACK_HIGH_NEEDS_INTERVAL_STEP)
     elif water_needs == "low":
-        interval = min(MAX_INTERVAL_HOURS, interval + 6)
+        interval = min(MAX_INTERVAL_HOURS, interval + FALLBACK_LOW_NEEDS_INTERVAL_STEP)
+    return interval
+
+
+class FallbackContext(TypedDict, total=False):
+    """What the no-data fallback decides from (``trends`` / ``stress`` default to empty indicators)."""
+
+    temp: Required[float | None]
+    water_needs: Required[str]
+    config: Required[IrrigationConfig | None]
+    trends: Trends | None
+    stress: StressIndicators | None
+
+
+def temperature_based_decision(
+    db: IrrigationRepository,
+    cluster_id: int,
+    evaluated_at: int,
+    **context: Unpack[FallbackContext],
+) -> IrrigationDecision:
+    """Build a typed decision when there is no usable sensor data."""
+    temp, water_needs, config = context["temp"], context["water_needs"], context["config"]
+    base = IrrigationDecision(
+        cluster_id=cluster_id,
+        evaluated_at=evaluated_at,
+        action=Action.SKIP,
+        duration_minutes=DEFAULT_DURATION_MINUTES,
+        interval_hours=DEFAULT_INTERVAL_HOURS,
+        confidence=CONFIDENCE_NO_DATA,
+        stress_indicators=context.get("stress") or StressIndicators(),
+        trends=context.get("trends") or Trends(),
+    )
+
+    if temp is None:
+        if _has_configured_schedule(db, cluster_id, config):
+            return _config_fallback(db, cluster_id, base)
+        base.add_reason(
+            code=TriggerCode.NO_DATA,
+            message="insufficient data",
+            severity=Severity.WARNING,
+            icon="question",
+        )
+        return base
+
+    interval = _temperature_interval(temp, water_needs)
 
     # Cooldown is NOT re-checked here: the engine runs `_enforce_cooldown`
     # (single source of truth — `start` events over a fixed 6h window) before

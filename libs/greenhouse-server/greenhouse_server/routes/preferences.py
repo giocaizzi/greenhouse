@@ -2,15 +2,16 @@
 
 from fastapi import APIRouter, Request
 
+from greenhouse_core.models import UserPreferences
 from greenhouse_core.schemas import PreferencesResponse, PreferencesUpdateRequest
-from greenhouse_server.deps import RepoDep
+from greenhouse_server.deps import RepoDep, require_cluster
 from greenhouse_server.scheduler import apply_timezone_preference
 
 router = APIRouter(prefix="/preferences", tags=["preferences"])
 
 
 @router.get("", response_model=PreferencesResponse, summary="Get user preferences")
-def get_preferences(repo: RepoDep):
+def get_preferences(repo: RepoDep) -> UserPreferences:
     """Return the current user preferences, creating defaults on first access.
 
     Returns:
@@ -18,12 +19,12 @@ def get_preferences(repo: RepoDep):
         refresh interval, and dry-run flag.
     """
     prefs = repo.get_preferences()
-    repo.session.commit()
+    repo.commit()
     return prefs
 
 
 @router.put("", response_model=PreferencesResponse, summary="Update user preferences")
-def update_preferences(request: PreferencesUpdateRequest, http_request: Request, repo: RepoDep):
+def update_preferences(request: PreferencesUpdateRequest, http_request: Request, repo: RepoDep) -> UserPreferences:
     """Patch user preferences; omitted fields are left unchanged.
 
     Changing the timezone re-syncs the scheduler, weather, and display clocks to
@@ -32,12 +33,19 @@ def update_preferences(request: PreferencesUpdateRequest, http_request: Request,
     Args:
         request: Partial update — any combination of units, timezone, theme,
             default_cluster_id, refresh_interval_seconds, or dry_run_global.
-            Fields set to null are ignored.
+            An explicit null clears default_cluster_id; null for a required
+            field is ignored.
 
     Returns:
         The updated preferences row.
+
+    Raises:
+        HTTPException: 404 if `default_cluster_id` names a cluster that does
+            not exist.
     """
-    prefs = repo.update_preferences(**request.model_dump(exclude_none=True))
-    repo.session.commit()
+    if request.default_cluster_id is not None:
+        require_cluster(repo, request.default_cluster_id)
+    prefs = repo.update_preferences(**request.model_dump(exclude_unset=True))
+    repo.commit()
     apply_timezone_preference(http_request, prefs.timezone)
     return prefs

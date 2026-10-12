@@ -1,215 +1,258 @@
 """Functional tests for sensor CRUD via HTTP."""
 
+from http import HTTPStatus
+
+from fastapi.testclient import TestClient
+
+from fake_data import FAKE_LOCAL_KEY
+from greenhouse_core.models import parse_device_config
+from greenhouse_core.repository import IrrigationRepository
+from server.conftest import app_of
+
 
 class TestSensorCRUD:
-    def test_add_and_list(self, client):
+    """Tests for sensor CRUD."""
+
+    def test_add_and_list(self, client: TestClient) -> None:
+        """Add and list."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         resp = client.post(
             "/api/v1/clusters/1/sensors",
-            json={"tuya_device_id": "sens001", "name": "Soil Sensor", "type": "soil_moisture"},
+            json={"tuya_device_id": "sens001", "name": "Soil Sensor", "type": "tuya.tr301z"},
         )
-        assert resp.status_code == 201
+        assert resp.status_code == HTTPStatus.CREATED
         assert resp.json()["name"] == "Soil Sensor"
 
         resp = client.get("/api/v1/clusters/1/sensors")
         assert len(resp.json()) == 1
 
-    def test_add_with_plant(self, client):
+    def test_add_with_plant(self, client: TestClient) -> None:
+        """Add with plant."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         client.post("/api/v1/clusters/1/plants", json={"species": "Fern"})
         resp = client.post(
             "/api/v1/clusters/1/sensors",
-            json={"tuya_device_id": "sens001", "name": "S1", "type": "soil_moisture", "plant_id": 1},
+            json={"tuya_device_id": "sens001", "name": "S1", "type": "tuya.tr301z", "plant_id": 1},
         )
-        assert resp.status_code == 201
+        assert resp.status_code == HTTPStatus.CREATED
         assert resp.json()["plant_id"] == 1
 
-    def test_add_duplicate_device(self, client):
+    def test_add_duplicate_device(self, client: TestClient) -> None:
+        """Add duplicate device."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         client.post(
             "/api/v1/clusters/1/sensors",
-            json={"tuya_device_id": "sens001", "name": "A", "type": "soil_moisture"},
+            json={"tuya_device_id": "sens001", "name": "A", "type": "tuya.tr301z"},
         )
         resp = client.post(
             "/api/v1/clusters/1/sensors",
-            json={"tuya_device_id": "sens001", "name": "B", "type": "soil_moisture"},
+            json={"tuya_device_id": "sens001", "name": "B", "type": "tuya.tr301z"},
         )
-        assert resp.status_code == 409
+        assert resp.status_code == HTTPStatus.CONFLICT
 
-    def test_list_empty(self, client):
+    def test_list_empty(self, client: TestClient) -> None:
+        """List empty."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         resp = client.get("/api/v1/clusters/1/sensors")
         assert resp.json() == []
 
-    def test_get_by_id(self, client):
+    def test_get_by_id(self, client: TestClient) -> None:
+        """Get by ID."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         client.post(
             "/api/v1/clusters/1/sensors",
-            json={"tuya_device_id": "sens001", "name": "My Sensor", "type": "soil_moisture"},
+            json={"tuya_device_id": "sens001", "name": "My Sensor", "type": "tuya.tr301z"},
         )
         resp = client.get("/api/v1/clusters/1/sensors/1")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         assert resp.json()["name"] == "My Sensor"
 
-    def test_get_wrong_cluster_returns_404(self, client):
+    def test_get_wrong_cluster_returns_404(self, client: TestClient) -> None:
+        """Get wrong cluster returns 404."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         client.post("/api/v1/clusters", json={"name": "C2"})
         client.post(
             "/api/v1/clusters/1/sensors",
-            json={"tuya_device_id": "sens001", "name": "S1", "type": "soil_moisture"},
+            json={"tuya_device_id": "sens001", "name": "S1", "type": "tuya.tr301z"},
         )
         resp = client.get("/api/v1/clusters/2/sensors/1")
-        assert resp.status_code == 404
+        assert resp.status_code == HTTPStatus.NOT_FOUND
 
-    def test_get_not_found(self, client):
+    def test_get_not_found(self, client: TestClient) -> None:
+        """Get not found."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         resp = client.get("/api/v1/clusters/1/sensors/999")
-        assert resp.status_code == 404
+        assert resp.status_code == HTTPStatus.NOT_FOUND
 
-    def test_update_name_and_plant_id(self, client):
+    def test_update_name_and_plant_id(self, client: TestClient) -> None:
+        """Update name and plant ID."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         client.post("/api/v1/clusters/1/plants", json={"species": "Fern"})
         client.post(
             "/api/v1/clusters/1/sensors",
-            json={"tuya_device_id": "sens001", "name": "Old Name", "type": "soil_moisture"},
+            json={"tuya_device_id": "sens001", "name": "Old Name", "type": "tuya.tr301z"},
         )
         resp = client.put(
             "/api/v1/clusters/1/sensors/1",
             json={"name": "New Name", "plant_id": 1},
         )
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         data = resp.json()
         assert data["name"] == "New Name"
         assert data["plant_id"] == 1
 
-    def test_update_wrong_cluster_returns_404(self, client):
+    def test_update_rejects_plant_from_another_cluster(self, client: TestClient) -> None:
+        """D2: the plant-in-cluster rule applies on update too (API and web share it)."""
+        client.post("/api/v1/clusters", json={"name": "C1"})
+        client.post("/api/v1/clusters", json={"name": "C2"})
+        client.post("/api/v1/clusters/2/plants", json={"species": "Fern"})
+        client.post(
+            "/api/v1/clusters/1/sensors",
+            json={"tuya_device_id": "sens001", "name": "S1", "type": "tuya.tr301z"},
+        )
+        resp = client.put("/api/v1/clusters/1/sensors/1", json={"plant_id": 1})
+        assert resp.status_code == HTTPStatus.NOT_FOUND
+        assert resp.json() == {"detail": "Plant 1 not found in cluster"}
+        assert client.get("/api/v1/clusters/1/sensors/1").json()["plant_id"] is None
+
+    def test_update_wrong_cluster_returns_404(self, client: TestClient) -> None:
+        """Update wrong cluster returns 404."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         client.post("/api/v1/clusters", json={"name": "C2"})
         client.post(
             "/api/v1/clusters/1/sensors",
-            json={"tuya_device_id": "sens001", "name": "S", "type": "soil_moisture"},
+            json={"tuya_device_id": "sens001", "name": "S", "type": "tuya.tr301z"},
         )
         resp = client.put("/api/v1/clusters/2/sensors/1", json={"name": "X"})
-        assert resp.status_code == 404
+        assert resp.status_code == HTTPStatus.NOT_FOUND
 
-    def test_update_not_found(self, client):
+    def test_update_not_found(self, client: TestClient) -> None:
+        """Update not found."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         resp = client.put("/api/v1/clusters/1/sensors/999", json={"name": "X"})
-        assert resp.status_code == 404
+        assert resp.status_code == HTTPStatus.NOT_FOUND
 
-    def test_delete_sensor(self, client):
+    def test_delete_sensor(self, client: TestClient) -> None:
+        """Delete sensor."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         client.post(
             "/api/v1/clusters/1/sensors",
-            json={"tuya_device_id": "sens001", "name": "S1", "type": "soil_moisture"},
+            json={"tuya_device_id": "sens001", "name": "S1", "type": "tuya.tr301z"},
         )
         resp = client.delete("/api/v1/clusters/1/sensors/1")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         assert resp.json()["success"] is True
 
         resp = client.get("/api/v1/clusters/1/sensors/1")
-        assert resp.status_code == 404
+        assert resp.status_code == HTTPStatus.NOT_FOUND
 
-    def test_delete_wrong_cluster_returns_404(self, client):
+    def test_delete_wrong_cluster_returns_404(self, client: TestClient) -> None:
+        """Delete wrong cluster returns 404."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         client.post("/api/v1/clusters", json={"name": "C2"})
         client.post(
             "/api/v1/clusters/1/sensors",
-            json={"tuya_device_id": "sens001", "name": "S", "type": "soil_moisture"},
+            json={"tuya_device_id": "sens001", "name": "S", "type": "tuya.tr301z"},
         )
         resp = client.delete("/api/v1/clusters/2/sensors/1")
-        assert resp.status_code == 404
+        assert resp.status_code == HTTPStatus.NOT_FOUND
 
-    def test_delete_not_found(self, client):
+    def test_delete_not_found(self, client: TestClient) -> None:
+        """Delete not found."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         resp = client.delete("/api/v1/clusters/1/sensors/999")
-        assert resp.status_code == 404
+        assert resp.status_code == HTTPStatus.NOT_FOUND
 
 
 class TestListAllSensorsTopLevel:
-    def test_list_empty(self, client):
+    """Tests for list all sensors top level."""
+
+    def test_list_empty(self, client: TestClient) -> None:
         """GET /sensors with no rows returns empty list and null cursor."""
         resp = client.get("/api/v1/sensors")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         data = resp.json()
         assert data["sensors"] == []
         assert data["next_cursor"] is None
 
-    def test_list_across_clusters(self, client):
+    def test_list_across_clusters(self, client: TestClient) -> None:
         """GET /sensors returns every sensor regardless of cluster."""
         client.post("/api/v1/clusters", json={"name": "A"})
         client.post("/api/v1/clusters", json={"name": "B"})
         client.post(
             "/api/v1/clusters/1/sensors",
-            json={"tuya_device_id": "dev_a", "name": "A1", "type": "soil_moisture"},
+            json={"tuya_device_id": "dev_a", "name": "A1", "type": "tuya.tr301z"},
         )
         client.post(
             "/api/v1/clusters/2/sensors",
-            json={"tuya_device_id": "dev_b", "name": "B1", "type": "soil_moisture"},
+            json={"tuya_device_id": "dev_b", "name": "B1", "type": "tuya.tr301z"},
         )
         resp = client.get("/api/v1/sensors")
         names = sorted(s["name"] for s in resp.json()["sensors"])
         assert names == ["A1", "B1"]
 
-    def test_filter_by_cluster_id(self, client):
+    def test_filter_by_cluster_id(self, client: TestClient) -> None:
         """cluster_id filter restricts to one cluster."""
         client.post("/api/v1/clusters", json={"name": "A"})
         client.post("/api/v1/clusters", json={"name": "B"})
         client.post(
             "/api/v1/clusters/1/sensors",
-            json={"tuya_device_id": "dev_a", "name": "A1", "type": "soil_moisture"},
+            json={"tuya_device_id": "dev_a", "name": "A1", "type": "tuya.tr301z"},
         )
         client.post(
             "/api/v1/clusters/2/sensors",
-            json={"tuya_device_id": "dev_b", "name": "B1", "type": "soil_moisture"},
+            json={"tuya_device_id": "dev_b", "name": "B1", "type": "tuya.tr301z"},
         )
         resp = client.get("/api/v1/sensors?cluster_id=2")
         names = [s["name"] for s in resp.json()["sensors"]]
         assert names == ["B1"]
 
-    def test_pagination(self, client):
-        """limit + cursor walks the rows id-ascending."""
+    def test_pagination(self, client: TestClient) -> None:
+        """Limit + cursor walks the rows id-ascending."""
         client.post("/api/v1/clusters", json={"name": "A"})
         for n in range(3):
             client.post(
                 "/api/v1/clusters/1/sensors",
-                json={"tuya_device_id": f"dev_{n}", "name": f"S{n}", "type": "soil_moisture"},
+                json={"tuya_device_id": f"dev_{n}", "name": f"S{n}", "type": "tuya.tr301z"},
             )
-        resp = client.get("/api/v1/sensors?limit=2")
+        page_size = 2
+        resp = client.get(f"/api/v1/sensors?limit={page_size}")
         data = resp.json()
-        assert len(data["sensors"]) == 2
+        assert len(data["sensors"]) == page_size
         assert data["next_cursor"] is not None
-        resp = client.get(f"/api/v1/sensors?limit=2&cursor={data['next_cursor']}")
+        resp = client.get(f"/api/v1/sensors?limit={page_size}&cursor={data['next_cursor']}")
         data2 = resp.json()
         assert len(data2["sensors"]) == 1
         assert data2["next_cursor"] is None
 
 
 class TestSensorReassignmentActivity:
-    def test_put_plant_id_change_emits_sensor_reassigned_event(self, client):
+    """Tests for sensor reassignment activity."""
+
+    def test_put_plant_id_change_emits_sensor_reassigned_event(self, client: TestClient) -> None:
         """Changing a sensor's plant_id via PUT must publish a sensor_reassigned activity event."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         client.post("/api/v1/clusters/1/plants", json={"species": "Fern"})
         client.post("/api/v1/clusters/1/plants", json={"species": "Monstera"})
         client.post(
             "/api/v1/clusters/1/sensors",
-            json={"tuya_device_id": "s001", "name": "S1", "type": "soil_moisture", "plant_id": 1},
+            json={"tuya_device_id": "s001", "name": "S1", "type": "tuya.tr301z", "plant_id": 1},
         )
 
         resp = client.put("/api/v1/clusters/1/sensors/1", json={"plant_id": 2})
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
 
         resp = client.get("/api/v1/activity?entity_type=sensor&entity_id=1")
         codes = [e["code"] for e in resp.json()["items"]]
         assert "sensor_reassigned" in codes
 
-    def test_no_op_plant_id_change_does_not_emit_event(self, client):
+    def test_no_op_plant_id_change_does_not_emit_event(self, client: TestClient) -> None:
         """Setting plant_id to its current value must NOT publish an event."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         client.post("/api/v1/clusters/1/plants", json={"species": "Fern"})
         client.post(
             "/api/v1/clusters/1/sensors",
-            json={"tuya_device_id": "s001", "name": "S1", "type": "soil_moisture", "plant_id": 1},
+            json={"tuya_device_id": "s001", "name": "S1", "type": "tuya.tr301z", "plant_id": 1},
         )
         # No-op PUT (same plant_id).
         client.put("/api/v1/clusters/1/sensors/1", json={"plant_id": 1})
@@ -218,20 +261,19 @@ class TestSensorReassignmentActivity:
         codes = [e["code"] for e in resp.json()["items"]]
         assert "sensor_reassigned" not in codes
 
-    def test_clearing_plant_id_emits_event(self, client):
+    def test_clearing_plant_id_emits_event(self, client: TestClient) -> None:
         """Detaching a sensor (setting plant_id to None) also publishes the event."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         client.post("/api/v1/clusters/1/plants", json={"species": "Fern"})
         client.post(
             "/api/v1/clusters/1/sensors",
-            json={"tuya_device_id": "s001", "name": "S1", "type": "soil_moisture", "plant_id": 1},
+            json={"tuya_device_id": "s001", "name": "S1", "type": "tuya.tr301z", "plant_id": 1},
         )
         # We can't send null via the existing PUT (exclude_none drops it), so
         # exercise it directly through the repository for coverage of the path.
-        from greenhouse_core.repository import IrrigationRepository
 
         # Resolve the underlying session factory via TestClient app state.
-        app = client.app
+        app = app_of(client)
         with app.state.session_factory() as session:
             repo = IrrigationRepository(session)
             repo.reassign_sensor_to_plant(1, None)
@@ -240,3 +282,44 @@ class TestSensorReassignmentActivity:
         resp = client.get("/api/v1/activity?entity_type=sensor&entity_id=1")
         codes = [e["code"] for e in resp.json()["items"]]
         assert "sensor_reassigned" in codes
+
+
+class TestSensorLocalKeyMasking:
+    """Sensor responses mask ``config.local_key`` like irrigator responses; echoing the mask keeps it."""
+
+    SECRET = FAKE_LOCAL_KEY
+    MASK = "••••••••"
+
+    def _stored_config(self, client: TestClient, sid: int) -> dict[str, object]:
+        app = app_of(client)
+        session = app.state.session_factory()
+        try:
+            sensor = IrrigationRepository(session).get_sensor(sid)
+            assert sensor is not None
+            return parse_device_config(sensor.config)
+        finally:
+            session.close()
+
+    def test_responses_mask_and_the_mask_round_trips(self, client: TestClient) -> None:
+        """Responses mask and the mask round trips."""
+        cid = client.post("/api/v1/clusters", json={"name": "C"}).json()["id"]
+        created = client.post(
+            f"/api/v1/clusters/{cid}/sensors",
+            json={
+                "tuya_device_id": "fake_tuya_sensor_00000001",
+                "name": "S",
+                "type": "tuya.tr301z",
+                "config": {"device_ip": "192.0.2.20", "local_key": self.SECRET},
+            },
+        ).json()
+        masked = {"device_ip": "192.0.2.20", "local_key": self.MASK}
+        sid = created["id"]
+        assert created["config"] == masked
+        assert client.get(f"/api/v1/clusters/{cid}/sensors").json()[0]["config"] == masked
+        assert client.get("/api/v1/sensors").json()["sensors"][0]["config"] == masked
+        assert client.get(f"/api/v1/clusters/{cid}/detail").json()["sensors"][0]["config"] == masked
+        resp = client.put(
+            f"/api/v1/clusters/{cid}/sensors/{sid}", json={"config": {**masked, "device_ip": "192.0.2.21"}}
+        )
+        assert resp.json()["config"]["local_key"] == self.MASK
+        assert self._stored_config(client, sid) == {"device_ip": "192.0.2.21", "local_key": self.SECRET}

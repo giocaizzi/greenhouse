@@ -1,0 +1,49 @@
+{
+ "body_lines": [
+  ""
+ ],
+ "db_effect": {
+  "plants": {
+   "added": [
+    {
+     "category": "tropical",
+     "cluster_id": 3,
+     "id": 4,
+     "ideal_humidity_max": 60.0,
+     "ideal_humidity_min": 40.0,
+     "ideal_temp_max": 28.0,
+     "ideal_temp_min": 16.0,
+     "light_needs": "medium",
+     "notes": "Corner",
+     "species": "Dracaena marginata",
+     "water_needs": "low"
+    }
+   ]
+  }
+ },
+ "device_calls": {
+  "irrigator": [],
+  "sensor": []
+ },
+ "headers": {
+  "location": "/clusters/3#plants"
+ },
+ "request": {
+  "form": {
+   "category": "tropical",
+   "ideal_humidity_max": "60",
+   "ideal_humidity_min": "40",
+   "ideal_temp_max": "28",
+   "ideal_temp_min": "16",
+   "light_needs": "medium",
+   "notes": "Corner",
+   "species": "Dracaena marginata",
+   "water_needs": "low"
+  },
+  "headers": {},
+  "method": "POST",
+  "url": "/clusters/3/plants"
+ },
+ "status": 303,
+ "templates": []
+}

@@ -1,0 +1,40 @@
+ ⭘                                   greenhouse · Living Room — http://testserver                              10:00:00
+ Overview  Charts  Plants  Sensors  Insights  Decisions  History  Windows  Config
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╸━━━━━━╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ u edit config · e edit cluster · D delete cluster
+╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ Effective config                                                                                                     │
+│ mode                smart  ↳ cluster                                                                                 │
+│ duration_minutes    3  ↳ cluster                                                                                     │
+│ interval_hours      12  ↳ cluster                                                                                    │
+│ auto_run            True  ↳ default                                                                                  │
+│ daily_cap_minutes   None  ↳ default                                                                                  │
+│ max_events_per_day  None  ↳ default                                                                                  │
+│ quiet_start_hour    0  ↳ global                                                                                      │
+│ quiet_end_hour      5  ↳ global                                                                                      │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ esc Back  i Irrigate  w Water now  x Stop  c Check  n New  u Edit  del Delete  d Dashboard  a Alerts  l Act▏^p palette

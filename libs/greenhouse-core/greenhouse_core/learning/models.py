@@ -1,6 +1,7 @@
 """Data models for the learning engine."""
 
 from dataclasses import dataclass
+from typing import Any
 
 
 @dataclass
@@ -43,4 +44,4 @@ class Alert:
     alert_type: str  # "blocked_drip", "unresolvable_conflict", "rapid_drainage", "chronic_underwatering"
     message: str
     sensor_name: str | None = None
-    data: dict | None = None
+    data: dict[str, Any] | None = None

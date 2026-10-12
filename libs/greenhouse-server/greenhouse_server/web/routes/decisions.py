@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from typing import Annotated
+
 from fastapi import APIRouter, Query, Request
+from fastapi.responses import Response
 
 from greenhouse_server.deps import RepoDep, require_cluster
 from greenhouse_server.web.context import base_context
@@ -16,8 +19,9 @@ def cluster_decisions(
     request: Request,
     cluster_id: int,
     repo: RepoDep,
-    limit: int = Query(default=50, ge=1, le=200),
-):
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+) -> Response:
+    """Render a cluster's persisted decision log, newest first."""
     cluster = require_cluster(repo, cluster_id)
     logs = repo.list_decision_logs(cluster_id, limit=limit)
     return templates.TemplateResponse(

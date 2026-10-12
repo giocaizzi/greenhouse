@@ -1,0 +1,69 @@
+{
+ "body_lines": [
+  ""
+ ],
+ "db_effect": {
+  "global_irrigation_config": {
+   "changed": {
+    "1": {
+     "auto_run": [
+      null,
+      1
+     ],
+     "daily_cap_minutes": [
+      30,
+      20
+     ],
+     "duration_minutes": [
+      null,
+      2
+     ],
+     "interval_hours": [
+      null,
+      8
+     ],
+     "max_events_per_day": [
+      6,
+      null
+     ],
+     "mode": [
+      null,
+      "smart"
+     ],
+     "quiet_end_hour": [
+      5,
+      7
+     ],
+     "quiet_start_hour": [
+      0,
+      23
+     ]
+    }
+   }
+  }
+ },
+ "device_calls": {
+  "irrigator": [],
+  "sensor": []
+ },
+ "headers": {
+  "location": "/preferences?saved=global#global-config"
+ },
+ "request": {
+  "form": {
+   "auto_run": "on",
+   "daily_cap_minutes": "20",
+   "duration_minutes": "2",
+   "interval_hours": "8",
+   "max_events_per_day": "",
+   "mode": "smart",
+   "quiet_end_hour": "7",
+   "quiet_start_hour": "23"
+  },
+  "headers": {},
+  "method": "POST",
+  "url": "/config/global"
+ },
+ "status": 303,
+ "templates": []
+}

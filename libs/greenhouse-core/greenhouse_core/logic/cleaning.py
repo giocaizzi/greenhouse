@@ -18,6 +18,8 @@ decision snapshot (``logic/sensors.py``) and trend analysis (``logic/trends.py``
   is rejected when it deviates from its rolling-window median by more than
   ``n`` scaled MADs. The MAD scale carries a floor (``CLEANING_MAD_FLOOR``) so a
   flat run (MAD ≈ 0) does not make every later genuine change look anomalous.
+  A series too short for the window (3–4 points) gets a neighbour test instead,
+  so one spike in a sparse window cannot pose as the driest plant.
 
 Cleaning is **field-independent and advisory**: an outlier in ``soil_moisture``
 does not discard that reading's ``temperature``. Rejected values become ``None``
@@ -28,6 +30,7 @@ from __future__ import annotations
 
 import statistics
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from greenhouse_core.constants import (
     CLEANING_HAMPEL_MIN_READINGS,
@@ -35,8 +38,14 @@ from greenhouse_core.constants import (
     CLEANING_HAMPEL_WINDOW_RADIUS,
     CLEANING_MAD_FLOOR,
     CLEANING_MAD_SCALE,
+    CLEANING_SHORT_SERIES_MIN_READINGS,
     SENSOR_PHYSICAL_RANGES,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+
+    from greenhouse_core.models import SensorReading
 
 # Numeric metrics cleaned independently. ``battery_state`` / ``water_warning``
 # are categorical/boolean device flags and pass through untouched.
@@ -60,6 +69,47 @@ class CleanedReading:
     water_warning: bool | None = None
 
 
+def _deviates_from_both(value: float, a: float, b: float, n_sigma: float) -> bool:
+    """``value`` lies on one side of both references and far from their mean, scaled by their spread."""
+    if (value - a) * (value - b) <= 0:
+        return False
+    scale = max(CLEANING_MAD_SCALE * abs(a - b), CLEANING_MAD_FLOOR)
+    return abs(value - (a + b) / 2) > n_sigma * scale
+
+
+def _short_series_outlier_mask(values: list[float], n_sigma: float) -> list[bool]:
+    """Flag spikes in a series too short for the Hampel window (neighbour test).
+
+    An interior point is a spike when it jumped away from both neighbours — it
+    reverted one reading later, the signature of a comms glitch. A genuine step
+    keeps its new level, so its first sample has a neighbour on the same side
+    and survives. The two end points are not judged: without a reading on both
+    sides a short series cannot tell a spike from a real change, and with the
+    MAD floor a few-percent genuine drop in a fresh reading would read as a spike.
+
+    Known trade-off: a lone high glitch at the newest end (``10, 10, 99``) is
+    kept, so a dry plant can skip one cycle. Treating a newest-end rise as
+    unconfirmed is not safe either way: a genuine rise (rain on an outdoor
+    cluster, an unlogged manual watering) looks the same, and dropping it would
+    water wet soil. The next reading settles it — a revert makes the 99 an
+    interior spike that this test then drops.
+
+    Args:
+        values: The in-range values for a single metric, in time order.
+        n_sigma: Deviation, in scaled spreads, beyond which a point is a spike.
+
+    Returns:
+        A per-index mask; ``True`` marks the value as an outlier to drop.
+    """
+    n = len(values)
+    mask = [False] * n
+    if n < CLEANING_SHORT_SERIES_MIN_READINGS:
+        return mask
+    for i in range(1, n - 1):
+        mask[i] = _deviates_from_both(values[i], values[i - 1], values[i + 1], n_sigma)
+    return mask
+
+
 def _hampel_outlier_mask(values: list[float], radius: int, n_sigma: float) -> list[bool]:
     """Flag spikes in a contiguous numeric series via a centered Hampel filter.
 
@@ -70,28 +120,54 @@ def _hampel_outlier_mask(values: list[float], radius: int, n_sigma: float) -> li
 
     Returns:
         A per-index mask; ``True`` marks the value as an outlier to drop. With
-        fewer than ``CLEANING_HAMPEL_MIN_READINGS`` points the series is too
-        short to judge spikes, so nothing is flagged.
+        fewer than ``CLEANING_HAMPEL_MIN_READINGS`` points a rolling median is
+        meaningless, so :func:`_short_series_outlier_mask` judges the series.
     """
     n = len(values)
-    mask = [False] * n
     if n < CLEANING_HAMPEL_MIN_READINGS:
-        return mask
-    for i in range(n):
-        lo = max(0, i - radius)
-        hi = min(n, i + radius + 1)
-        window = values[lo:hi]
-        median = statistics.median(window)
-        mad = statistics.median([abs(v - median) for v in window])
-        # Floor the scale so a flat window (MAD≈0) doesn't make any change look
-        # infinitely anomalous — that would shred a legitimate step change.
-        scale = max(CLEANING_MAD_SCALE * mad, CLEANING_MAD_FLOOR)
-        if abs(values[i] - median) > n_sigma * scale:
-            mask[i] = True
-    return mask
+        return _short_series_outlier_mask(values, n_sigma)
+    return [_is_hampel_outlier(values, i, radius, n_sigma) for i in range(n)]
 
 
-def clean_readings(readings) -> list[CleanedReading]:
+def _is_hampel_outlier(values: list[float], i: int, radius: int, n_sigma: float) -> bool:
+    """Judge ``values[i]`` against its window, sparing the start of a step at the series' end.
+
+    Near the newest end the window has fewer than ``radius`` samples after the
+    point, so the first sample of a genuine step (40, 40, 40, 60, 60) is
+    outvoted by the old level. A spike reverts one reading later; a step does
+    not. So a point whose right context is truncated is kept when every later
+    sample confirms it as the new level (:func:`_confirms_level`). A lone
+    newest outlier has no follower and is still rejected; mid-series a step has
+    full right context and the window median follows it on its own.
+    """
+    n = len(values)
+    window = values[max(0, i - radius) : min(n, i + radius + 1)]
+    median = statistics.median(window)
+    mad = statistics.median([abs(v - median) for v in window])
+    # Floor the scale so a flat window (MAD≈0) doesn't make any change look
+    # infinitely anomalous — that would shred a legitimate step change.
+    tolerance = n_sigma * max(CLEANING_MAD_SCALE * mad, CLEANING_MAD_FLOOR)
+    if abs(values[i] - median) <= tolerance:
+        return False
+    followers = values[i + 1 :]
+    confirmed = bool(followers) and all(_confirms_level(f, values[i], median, tolerance) for f in followers)
+    return not (i + radius >= n and confirmed)
+
+
+def _confirms_level(follower: float, value: float, median: float, tolerance: float) -> bool:
+    """A later sample backs ``value`` as a new level, not a glitch beside a real change.
+
+    It must sit on the same side of the window median, nearer to ``value`` than
+    to the median, and within ``tolerance`` of it. The nearness test matters:
+    a genuine level change inflates the window's MAD (hence ``tolerance``), so
+    in ``62, 61, 60, 60, 59, 58, 0, 40, 40`` the 40s are within tolerance of the
+    0 % glitch yet much closer to the median — they confirm the change, not 0 %.
+    """
+    same_side = (follower - median) * (value - median) > 0
+    return same_side and abs(follower - value) < abs(follower - median) and abs(follower - value) <= tolerance
+
+
+def clean_readings(readings: Iterable[SensorReading | CleanedReading]) -> list[CleanedReading]:
     """Return a cleaned, chronologically-sorted view of one sensor's readings.
 
     Apply per metric to a single sensor's series (never a mix of sensors): each
@@ -139,7 +215,7 @@ def clean_readings(readings) -> list[CleanedReading]:
     return cleaned
 
 
-def clean_readings_desc(readings) -> list[CleanedReading]:
+def clean_readings_desc(readings: Iterable[SensorReading | CleanedReading]) -> list[CleanedReading]:
     """Cleaned view of one sensor's series, newest-first.
 
     Mirrors :func:`IrrigationRepository.get_recent_readings`'s ordering so
@@ -155,7 +231,9 @@ def clean_readings_desc(readings) -> list[CleanedReading]:
     return list(reversed(clean_readings(readings)))
 
 
-def clean_readings_around(before, after) -> tuple[list[CleanedReading], list[CleanedReading]]:
+def clean_readings_around(
+    before: Iterable[SensorReading | CleanedReading], after: Iterable[SensorReading | CleanedReading]
+) -> tuple[list[CleanedReading], list[CleanedReading]]:
     """Clean a before/after pair as ONE series, then split it back.
 
     Post-irrigation analysis (leak detection, efficacy scoring, learning

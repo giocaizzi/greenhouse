@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Request
+from fastapi.responses import Response
 
 from greenhouse_server.deps import RepoDep
 from greenhouse_server.web.context import base_context
@@ -12,6 +13,7 @@ router = APIRouter()
 
 
 @router.get("/", include_in_schema=False)
-def dashboard(request: Request, repo: RepoDep):
+def dashboard(request: Request, repo: RepoDep) -> Response:
+    """Render the dashboard (home page) with one card per cluster."""
     clusters = repo.list_clusters()
     return templates.TemplateResponse(request, "dashboard.html", base_context(request, clusters=clusters))

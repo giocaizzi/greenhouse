@@ -1,0 +1,12 @@
+
+ Usage: greenhouse alerts sync [OPTIONS]
+
+ Recompute alerts and reconcile the inbox.
+
+ Without ``--cluster`` this syncs every cluster. With ``--cluster`` it
+ syncs only that cluster.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ --cluster        <int>  Sync just this cluster (default: all)                                    │
+│ --help                  Show this message and exit.                                              │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

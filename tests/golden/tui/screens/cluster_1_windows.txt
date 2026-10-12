@@ -1,0 +1,40 @@
+ ⭘                                   greenhouse · Living Room — http://testserver                              10:00:00
+ Overview  Charts  Plants  Sensors  Insights  Decisions  History  Windows  Config
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╸━━━━━━━╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ Irrigation windows gate automatic runs. None = all hours allowed (subject to quiet hours).  n add · u edit · del
+ delete
+ ID  Label  Hours  Days
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ esc Back  i Irrigate  w Water now  x Stop  c Check  n New  u Edit  del Delete  d Dashboard  a Alerts  l Act▏^p palette

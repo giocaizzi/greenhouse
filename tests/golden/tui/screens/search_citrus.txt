@@ -1,0 +1,40 @@
+ ⭘                                          greenhouse — http://testserver                                     10:00:00
+       ▄▄▀▀▄▄          greenhouse  http://testserver
+   ▄▄▀▀▀▀▀▀▀▀▀▀▄▄      status ok   scheduler stopped   cloud reachable
+ ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀    sensors 4 fresh / 0 stale   irrigators 2   alerts 2   last sync 5m ago
+  ▀▄▀▀▄▀▄▀▀▄▀▄▀▀▄▀
+  ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▄
+▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀█▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+               █                                                                                        █
+ ╭─────────────█  Search  clusters, plants, sensors, irrigators, device IDs                             █─────────────╮
+ │    ▄▄▀▀▀▀▀▄▄█  ▊▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▎  █ng Room      │
+ │  ▄▀▀▀▀▀▀▀▀▀▀█  ▊  citrus                                                                          ▎  █or · north   │
+ │  ▀▀▀▀▀▀▀▀▀▀▀█  ▊▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▎  █ow           │
+ │    ▀▀▀▀▀▀▀▀▀█   Type    Name          Detail                                                         █sty          │
+ │        ▀    █   plant   Citrus limon  Balcony                                                        █rolepis      │
+ │  ▄▄▄▄▄▀▀▀▄▄▄█   sensor  Citrus probe  Balcony                                                        █tata         │
+ │   ▀▀▀▀▀▀▀▀▀▀█                                                                                        ███░┊░░┊░░░░░ │
+ │    ▀▀▀▀▀▀▀▀▀█                                                                                        █%            │
+ │             █                                                                                        █.1°C  💧 45% │
+ │             █                                                                                        █95lx         │
+ │             █                                                                                        █ start 8h00m │
+ │             █                                                                                        █             │
+ │             █                                                                                        █: irrigate   │
+ │             █                                                                                        █             │
+ │ ▇▆▅▄▃▃▃▃▄▃▃▂█                                                                                        █ 5m ago      │
+ ╰─────────────█                                                                                        █             │
+               █                                                                                        █▁▁           │
+               █                                                                                        ████▇▆▄▃▂▁▁▁▇ │
+               █                                                                                        █─────────────╯
+               █                                                                                        █
+               █                                                                                        █
+               █                                                                                        █
+               █                                                                                        █
+               █                                                                                        █
+               █▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄█
+
+
+
+
+
+ ⏎ Open  n New cluster  S Sync sensors  c Check all  X STOP ALL  d Dashboard  a Alerts  l Activity  s System▏^p palette

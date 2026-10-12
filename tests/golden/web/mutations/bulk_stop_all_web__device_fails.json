@@ -1,0 +1,60 @@
+{
+ "body_lines": [
+  "",
+  "<article class=\"alert alert--danger\" role=\"alert\">",
+  "  <span class=\"alert__icon\" aria-hidden=\"true\"><svg class=\"icon\"><use href=\"/static/icons/sprite.svg#i-warning\"></use></svg></span>",
+  "  <div>",
+  "    <strong>Stopped 0 irrigators; 2 did not confirm the stop and may still be running.</strong>",
+  "    <ul style=\"margin: var(--sp-2) 0 0; padding-left: var(--sp-4);\">",
+  "      <li><small class=\"mono\">irrigator 1 (Jungle Pump): stop failed: fake stop failed</small></li><li><small class=\"mono\">irrigator 2 (Balcony Valve): stop failed: fake stop failed</small></li>",
+  "    </ul>",
+  "  </div>",
+  "</article>",
+  ""
+ ],
+ "db_effect": {},
+ "device_calls": {
+  "irrigator": [
+   [
+    "stop",
+    1
+   ],
+   [
+    "stop",
+    2
+   ]
+  ],
+  "sensor": []
+ },
+ "headers": {
+  "content-type": "text/html; charset=utf-8"
+ },
+ "request": {
+  "form": null,
+  "headers": {
+   "HX-Request": "true"
+  },
+  "method": "POST",
+  "url": "/bulk/stop-all"
+ },
+ "status": 200,
+ "templates": [
+  [
+   "partials/_stop_all_result.html",
+   [
+    "active_vacation",
+    "app_version",
+    "auth_enabled",
+    "dry_run_global",
+    "errors",
+    "is_hx",
+    "now_text",
+    "request",
+    "scheduler_paused",
+    "show_chrome",
+    "stopped",
+    "theme"
+   ]
+  ]
+ ]
+}

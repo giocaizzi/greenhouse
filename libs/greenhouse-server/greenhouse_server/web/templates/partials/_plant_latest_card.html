@@ -13,7 +13,7 @@
           <section>
             <header style="display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-3); margin-bottom: var(--sp-3);">
               <strong>{{ sensor.name }}</strong>
-              <small class="muted">{{ sensor.type }}{% if r %} · updated {{ r.timestamp | age_seconds }}{% endif %}</small>
+              <small class="muted">{{ sensor.type }}{% if r %} · updated {{ r.timestamp | time_ago }}{% endif %}</small>
             </header>
             {% if r %}
               <dl>

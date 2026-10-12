@@ -130,10 +130,6 @@ Banner {
     height: auto;
 }
 
-#global-config {
-    width: 40;
-}
-
 #jobs-table {
     height: auto;
     width: 1fr;

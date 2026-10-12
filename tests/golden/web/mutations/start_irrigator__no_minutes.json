@@ -1,0 +1,85 @@
+{
+ "body_lines": [
+  "<div class=\"irr-result \" role=\"status\">",
+  "  ",
+  "    <span class=\"badge-ok\">",
+  "      <svg class=\"icon\" style=\"width:11px;height:11px;\" aria-hidden=\"true\"><use href=\"/static/icons/sprite.svg#i-check\"></use></svg>",
+  "      start",
+  "    </span>",
+  "  ",
+  "  <small class=\"muted\">fake start ok</small>",
+  "</div>"
+ ],
+ "db_effect": {
+  "activity_events": {
+   "added": [
+    {
+     "code": "leak_check_skipped",
+     "entity_id": 2,
+     "entity_type": "cluster",
+     "id": 5,
+     "message": "post-watering leak check skipped: manual start without a duration (the device timer decides how long it runs)",
+     "payload_json": "{\"started_at\": 1776247200, \"reason\": \"manual start without a duration (the device timer decides how long it runs)\"}",
+     "severity": "warning",
+     "source": "leak",
+     "timestamp": 1776247200
+    }
+   ]
+  },
+  "irrigation_events": {
+   "added": [
+    {
+     "action": "start",
+     "duration_minutes": null,
+     "id": 7,
+     "irrigator_id": 2,
+     "notes": "Manual start via web UI",
+     "timestamp": 1776247200,
+     "triggered_by": "manual"
+    }
+   ]
+  }
+ },
+ "device_calls": {
+  "irrigator": [
+   [
+    "start",
+    2,
+    null
+   ]
+  ],
+  "sensor": []
+ },
+ "headers": {
+  "content-type": "text/html; charset=utf-8"
+ },
+ "request": {
+  "form": {},
+  "headers": {
+   "HX-Request": "true"
+  },
+  "method": "POST",
+  "url": "/irrigators/2/start"
+ },
+ "status": 200,
+ "templates": [
+  [
+   "partials/_irrigator_action_result.html",
+   [
+    "action",
+    "active_vacation",
+    "app_version",
+    "auth_enabled",
+    "dry_run_global",
+    "is_hx",
+    "message",
+    "now_text",
+    "request",
+    "scheduler_paused",
+    "show_chrome",
+    "success",
+    "theme"
+   ]
+  ]
+ ]
+}

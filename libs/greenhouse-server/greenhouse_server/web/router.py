@@ -5,9 +5,11 @@ browsers to `/login`. The login page itself is registered first without the
 dependency — it must be reachable without a session.
 """
 
-from fastapi import APIRouter, Depends
+from typing import Annotated
 
-from greenhouse_server.auth import require_web_user
+from fastapi import APIRouter, Depends, Request
+
+from greenhouse_server.auth import AuthenticatedUser, require_web_user
 from greenhouse_server.web.routes import (
     activity,
     alerts,
@@ -38,8 +40,21 @@ web_router = APIRouter(include_in_schema=False)
 # Login form + POST: must be reachable without a session.
 web_router.include_router(web_auth.router)
 
+
+def _signed_in_user(
+    request: Request, user: Annotated[AuthenticatedUser, Depends(require_web_user)]
+) -> AuthenticatedUser:
+    """``require_web_user``, plus a ``request.state.signed_in`` mark the chrome reads.
+
+    ``base_context`` shows the dry-run / vacation / paused banners only to a signed-in
+    viewer; the mark also reaches error pages raised inside a protected route.
+    """
+    request.state.signed_in = True
+    return user
+
+
 # Authenticated pages — `require_web_user` 303-redirects to /login on miss.
-protected = [Depends(require_web_user)]
+protected = [Depends(_signed_in_user)]
 web_router.include_router(activity.router, dependencies=protected)
 web_router.include_router(alerts.router, dependencies=protected)
 web_router.include_router(analytics.router, dependencies=protected)

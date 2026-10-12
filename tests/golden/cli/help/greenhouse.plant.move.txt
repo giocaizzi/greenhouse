@@ -1,0 +1,15 @@
+
+ Usage: greenhouse plant move [OPTIONS] {plant_id}
+
+ Move a plant to a different cluster.
+
+ Plant identity, health history, and learning profile follow the plant.
+ Decision logs, irrigation events, and alerts stay with the original cluster.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────╮
+│ *    plant_id      <int>  Plant ID to move [required]                                            │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  --to-cluster        <int>  Target cluster ID [required]                                       │
+│    --help                     Show this message and exit.                                        │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

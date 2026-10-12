@@ -1,0 +1,31 @@
+{
+ "calls": [
+  {
+   "body": null,
+   "request": "POST /api/v1/clusters/1/check",
+   "response": {
+    "action": "monitored",
+    "alerts": [],
+    "cluster_id": 1,
+    "cluster_name": "Golden Cluster",
+    "maintenance": [],
+    "needs_water": [
+     "Sensor 1 (Monstera deliciosa): 20%"
+    ],
+    "notes": null
+   },
+   "status": 200
+  }
+ ],
+ "db_writes": {
+  "activity_events": [],
+  "alerts": [],
+  "decision_logs": [],
+  "irrigation_events": [],
+  "sensor_readings": []
+ },
+ "gateway_calls": null,
+ "irrigator_adapter_calls": [],
+ "notifications": [],
+ "sensor_adapter_calls": []
+}

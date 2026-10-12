@@ -13,6 +13,7 @@ import subprocess
 import sys
 import textwrap
 import time
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -21,12 +22,13 @@ from sqlalchemy.orm import Session
 
 from fake_devices import FakeIrrigatorAdapter
 from greenhouse_core.devices import DeviceRegistry
-from greenhouse_core.models import Base
+from greenhouse_core.models import TRIGGERED_BY_AUTO, TRIGGERED_BY_MANUAL, Base, Irrigator
 from greenhouse_core.repository import IrrigationRepository
-from greenhouse_server.services.irrigation import handle_watcher_interrupted
 from greenhouse_server.services.pump_watcher import PumpWatcherService
+from greenhouse_server.services.pump_watcher_jobs import handle_watcher_interrupted
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+SHUTDOWN_BUDGET_SECONDS = 30  # the pre-fix process blocked for the whole 60 s irrigation
 
 _SCRIPT = textwrap.dedent(
     """
@@ -40,7 +42,7 @@ _SCRIPT = textwrap.dedent(
     from greenhouse_server.app import create_app
     from greenhouse_server.config import Settings
     from greenhouse_server.scheduler import scheduler
-    from greenhouse_server.services.irrigation import schedule_pump_watcher
+    from greenhouse_server.services.pump_watcher_jobs import schedule_pump_watcher
 
     triggered_by = sys.argv[1]
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
@@ -53,15 +55,14 @@ _SCRIPT = textwrap.dedent(
 
     fake = FakeIrrigatorAdapter()
     registry = DeviceRegistry()
-    for key in ("rainpoint.ik10pw", "tuya_cloud", "tuya_local", ""):
-        registry.register_irrigator(key, lambda a=fake: a)
+    registry.register_irrigator("rainpoint.ik10pw", lambda a=fake: a)
     app.state.device_registry = registry
 
     session = app.state.session_factory()
     repo = IrrigationRepository(session)
     cid = repo.add_cluster("C")
     iid = repo.add_irrigator(cluster_id=cid, tuya_device_id="fake_tuya_device_aabbccdd",
-                             name="Pump", irrigator_type="tuya_cloud", config={})
+                             name="Pump", irrigator_type="rainpoint.ik10pw", config={})
     session.commit()
     session.close()
 
@@ -89,8 +90,10 @@ def _run_server_shutdown(tmp_path: Path, triggered_by: str) -> tuple[float, str]
     )
     t0 = time.monotonic()
     # A 1-minute irrigation: the pre-fix process exits only after ~60s.
-    proc = subprocess.run(
+    # A real child process is the point: the test times the server's process-level shutdown.
+    proc = subprocess.run(  # noqa: S603 — runs this repo's own script under the current interpreter
         [sys.executable, str(script), triggered_by],
+        check=False,  # the exit status is not the contract; the output and the elapsed time are
         capture_output=True,
         text=True,
         timeout=45,
@@ -103,18 +106,20 @@ def _run_server_shutdown(tmp_path: Path, triggered_by: str) -> tuple[float, str]
 
 
 @pytest.mark.parametrize(("triggered_by", "stops"), [("auto", 1), ("manual", 0)])
-def test_shutdown_during_irrigation_is_prompt(tmp_path, triggered_by, stops):
+def test_shutdown_during_irrigation_is_prompt(tmp_path: Path, triggered_by: str, stops: int) -> None:
+    """Shutdown during irrigation is prompt."""
     elapsed, out = _run_server_shutdown(tmp_path, triggered_by)
     assert "LIFESPAN_DONE" in out
     assert f"STOPS {stops}" in out, out
-    assert elapsed < 30, f"shutdown blocked for {elapsed:.1f}s"
+    assert elapsed < SHUTDOWN_BUDGET_SECONDS, f"shutdown blocked for {elapsed:.1f}s"
 
 
 # ── In-process units ────────────────────────────────────────────────────────
 
 
 @pytest.fixture
-def repo():
+def repo() -> Iterator[IrrigationRepository]:
+    """A repository on a fresh in-memory schema."""
     engine = create_engine("sqlite://", echo=False)
     Base.metadata.create_all(engine)
     session = Session(engine)
@@ -124,28 +129,33 @@ def repo():
 
 
 @pytest.fixture
-def irrigator(repo):
+def irrigator(repo: IrrigationRepository) -> Irrigator:
+    """One IK10PW irrigator in a fresh cluster."""
     cluster_id = repo.add_cluster("Test Cluster")
     irrigator_id = repo.add_irrigator(
         cluster_id=cluster_id,
         tuya_device_id="fake_irrigator_pump",
         name="Pump Irrigator",
-        irrigator_type="tuya_cloud",
+        irrigator_type="rainpoint.ik10pw",
         config={},
     )
     repo.session.commit()
-    return repo.get_irrigator(irrigator_id)
+    irrigator = repo.get_irrigator(irrigator_id)
+    assert irrigator is not None
+    return irrigator
 
 
 def _registry(adapter: FakeIrrigatorAdapter) -> DeviceRegistry:
     registry = DeviceRegistry()
-    for key in ("rainpoint.ik10pw", "tuya_cloud", "tuya_local", ""):
-        registry.register_irrigator(key, lambda a=adapter: a)
+    registry.register_irrigator("rainpoint.ik10pw", lambda: adapter)
     return registry
 
 
 class TestWatcherInterruption:
-    def test_stop_requested_ends_watch_immediately(self, repo, irrigator):
+    """Tests for watcher interruption."""
+
+    def test_stop_requested_ends_watch_immediately(self, repo: IrrigationRepository, irrigator: Irrigator) -> None:
+        """Stop requested ends watch immediately."""
         adapter = FakeIrrigatorAdapter()
         flag = {"stop": False}
 
@@ -159,7 +169,8 @@ class TestWatcherInterruption:
         # The watcher itself never actuates on interruption — that's the policy's job.
         assert not [c for c in adapter.calls if c[0] == "stop"]
 
-    def test_no_stop_requested_runs_to_completion(self, repo, irrigator):
+    def test_no_stop_requested_runs_to_completion(self, repo: IrrigationRepository, irrigator: Irrigator) -> None:
+        """No stop requested runs to completion."""
         ticks = iter(range(10_000))
         watcher = PumpWatcherService(
             repo,
@@ -172,10 +183,13 @@ class TestWatcherInterruption:
 
 
 class TestShutdownPolicy:
-    def test_auto_cycle_is_stopped_and_recorded(self, repo, irrigator):
+    """Tests for shutdown policy."""
+
+    def test_auto_cycle_is_stopped_and_recorded(self, repo: IrrigationRepository, irrigator: Irrigator) -> None:
+        """Auto cycle is stopped and recorded."""
         adapter = FakeIrrigatorAdapter()
         stopped = handle_watcher_interrupted(
-            repo, _registry(adapter), irrigator, triggered_by="auto", started_at=int(time.time())
+            repo, _registry(adapter), irrigator, triggered_by=TRIGGERED_BY_AUTO, started_at=int(time.time())
         )
         repo.session.commit()
         assert stopped is True
@@ -185,10 +199,13 @@ class TestShutdownPolicy:
         activity = repo.list_activity_events()
         assert any(a.code == "pump_watcher_shutdown" for a in activity)
 
-    def test_manual_cycle_is_left_running_with_warning(self, repo, irrigator, caplog):
+    def test_manual_cycle_is_left_running_with_warning(
+        self, repo: IrrigationRepository, irrigator: Irrigator, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Manual cycle is left running with warning."""
         adapter = FakeIrrigatorAdapter()
         stopped = handle_watcher_interrupted(
-            repo, _registry(adapter), irrigator, triggered_by="manual", started_at=int(time.time())
+            repo, _registry(adapter), irrigator, triggered_by=TRIGGERED_BY_MANUAL, started_at=int(time.time())
         )
         repo.session.commit()
         assert stopped is False
@@ -197,10 +214,13 @@ class TestShutdownPolicy:
         assert any(a.code == "pump_watcher_shutdown" for a in repo.list_activity_events())
         assert "unprotected" in caplog.text
 
-    def test_auto_stop_failure_is_logged_not_raised(self, repo, irrigator, caplog):
+    def test_auto_stop_failure_is_logged_not_raised(
+        self, repo: IrrigationRepository, irrigator: Irrigator, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Auto stop failure is logged not raised."""
         adapter = FakeIrrigatorAdapter(stop_result=(False, "device unreachable"))
         stopped = handle_watcher_interrupted(
-            repo, _registry(adapter), irrigator, triggered_by="auto", started_at=int(time.time())
+            repo, _registry(adapter), irrigator, triggered_by=TRIGGERED_BY_AUTO, started_at=int(time.time())
         )
         assert stopped is False
         assert "device unreachable" in caplog.text

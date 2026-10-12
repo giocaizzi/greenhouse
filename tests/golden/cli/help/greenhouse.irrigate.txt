@@ -1,0 +1,15 @@
+
+ Usage: greenhouse irrigate [OPTIONS] {cluster}
+
+ Smart irrigation: sync sensors → fetch weather → decide → execute.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────╮
+│ *    cluster      <int>  Cluster ID [required]                                                   │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ --temp           <float>  Override temperature (skips sync + weather)                            │
+│ --dry-run                 Analyze only, don't execute                                            │
+│ --no-sync                 Skip sensor sync                                                       │
+│ --force                   Bypass the quiet-hours gate (logs an override)                         │
+│ --help                    Show this message and exit.                                            │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

@@ -6,20 +6,21 @@ from typing import Annotated
 
 import typer
 
-from greenhouse_cli.commands._helpers import call, output
+from greenhouse_cli.commands._helpers import HelpOnBareGroup, call, output
 
-prefs_app = typer.Typer(help="Read and update user preferences", no_args_is_help=True)
+prefs_app = typer.Typer(help="Read and update user preferences", no_args_is_help=True, cls=HelpOnBareGroup)
 
 
 @prefs_app.command("get")
-def prefs_get(ctx: typer.Context):
+def prefs_get(ctx: typer.Context) -> None:
     """Show the current preferences."""
     output(call(ctx, lambda c: c.get_preferences()))
 
 
 @prefs_app.command("set")
-def prefs_set(
+def prefs_set(  # noqa: PLR0913 — one parameter per CLI option/argument: Typer has no option groups
     ctx: typer.Context,
+    *,
     units: Annotated[str | None, typer.Option(help="metric or imperial")] = None,
     timezone: Annotated[str | None, typer.Option(help="IANA timezone name")] = None,
     theme: Annotated[str | None, typer.Option(help="light / dark / auto")] = None,
@@ -35,7 +36,7 @@ def prefs_set(
         int | None,
         typer.Option("--default-cluster", help="Default cluster ID for one-click commands"),
     ] = None,
-):
+) -> None:
     """Patch preferences. Omitted fields are left unchanged."""
     output(
         call(

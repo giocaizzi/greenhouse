@@ -1,0 +1,12 @@
+
+ Usage: greenhouse config global [OPTIONS] COMMAND [ARGS]...
+
+ Global irrigation defaults (inherited by every cluster)
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                                      │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────────────────────────╮
+│ get  Show the global irrigation defaults (nulls = fall through to constants).                    │
+│ set  Patch the global irrigation defaults. Omitted options are left unchanged.                   │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

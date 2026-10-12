@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypedDict, TypeVar, Unpack, cast
 
 from textual.screen import Screen
 
@@ -11,30 +10,57 @@ from greenhouse_cli.tui.screens.forms import Field, FormScreen
 from greenhouse_cli.tui.screens.modals import ConfirmScreen
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from greenhouse_cli.client import IrrigationClient
     from greenhouse_cli.tui.app import GreenhouseApp
 
+_T = TypeVar("_T")
 
-class DataScreen(Screen):
+
+class FormOptions(TypedDict, total=False):
+    """Optional :meth:`DataScreen.form_then` settings, passed through to :class:`FormScreen`."""
+
+    submit_label: str
+    note: str | None
+
+
+class DataScreen(Screen[Any]):
     """A screen that loads its content from the API and can auto-refresh."""
 
     AUTO_REFRESH = False
 
     @property
     def gh(self) -> GreenhouseApp:
-        return self.app  # type: ignore[return-value]
+        """The app with its typed API helpers (``Screen.app`` is typed as a plain ``App``)."""
+        return cast("GreenhouseApp", self.app)
 
     def on_mount(self) -> None:
+        """Load once on mount and, for auto-refresh screens, poll at the app's refresh interval."""
         # Textual dispatches on_mount to every class in the MRO, so subclasses
         # define their own on_mount (table columns etc.) without calling super.
         self.reload()
         if self.AUTO_REFRESH and self.gh.refresh_seconds > 0:
             self.set_interval(self.gh.refresh_seconds, self.reload)
 
+    @property
+    def showing(self) -> bool:
+        """Whether the screen is still attached and running, i.e. not being torn down.
+
+        A load that finishes after the screen (or the app) started closing must
+        not touch the DOM: its widgets are going away (S4, ``NoMatches`` at teardown).
+        Public Textual API only: ``is_attached`` turns False once the app exits or
+        the node leaves the DOM, ``is_running`` once its message pump stops. The
+        brief window in between is covered by the dashboard's ``NoMatches`` guard.
+        """
+        return self.is_attached and self.is_running
+
     def reload(self) -> None:
+        """Re-run :meth:`load` in an exclusive worker so a slow reload is replaced, never stacked."""
         self.run_worker(self.load(), exclusive=True, group="load")
 
     async def load(self) -> None:  # pragma: no cover - overridden
+        """Fetch and render the screen's data; every concrete screen overrides it."""
         raise NotImplementedError
 
     def confirm_then(
@@ -53,7 +79,7 @@ class DataScreen(Screen):
             confirm_label: Label for the confirm button.
         """
 
-        def _after(ok: bool | None) -> None:
+        def _after(ok: bool | None) -> None:  # noqa: FBT001 — Textual passes the dismiss result positionally
             if ok:
                 self.run_worker(self.act(fn, done), group="act")
 
@@ -63,10 +89,9 @@ class DataScreen(Screen):
         self,
         title: str,
         fields: list[Field],
-        call: Callable[[dict], Callable[[IrrigationClient], Any]],
+        call: Callable[[dict[str, Any]], Callable[[IrrigationClient], Any]],
         done: str | Callable[[Any], str],
-        submit_label: str = "Save",
-        note: str | None = None,
+        **options: Unpack[FormOptions],
     ) -> None:
         """Show a form, then send its values through ``call(values)`` and refresh.
 
@@ -75,17 +100,19 @@ class DataScreen(Screen):
             fields: Inputs to render (pre-filled for edits).
             call: Builds the API call from the parsed form values.
             done: Toast text (or a callable building it from the response).
-            submit_label: Label for the submit button.
-            note: Optional help line under the title.
+            **options: ``submit_label`` (default ``"Save"``) for the submit button and
+                ``note``, an optional help line under the title.
         """
 
-        def _after(values: dict | None) -> None:
+        def _after(values: dict[str, Any] | None) -> None:
             if values is not None:
                 self.run_worker(self.act(call(values), done), group="act")
 
-        self.app.push_screen(FormScreen(title, fields, submit_label, note), _after)
+        self.app.push_screen(
+            FormScreen(title, fields, options.get("submit_label", "Save"), options.get("note")), _after
+        )
 
-    async def act(self, fn: Callable[[IrrigationClient], Any], done: str | Callable[[Any], str]) -> Any:
+    async def act(self, fn: Callable[[IrrigationClient], _T], done: str | Callable[[Any], str]) -> _T | None:
         """Run an action call, toast the outcome and reload."""
         result = await self.gh.api(fn)
         if result is not None:

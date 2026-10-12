@@ -9,9 +9,14 @@ from __future__ import annotations
 import time
 
 from argon2 import PasswordHasher
-from argon2.exceptions import InvalidHashError, VerifyMismatchError
+from argon2.exceptions import InvalidHashError, VerificationError
+
+# Kept importable from here: the pinned public import surface lists it.
+from argon2.exceptions import (
+    VerifyMismatchError as VerifyMismatchError,  # noqa: PLC0414 — explicit re-export; unaliased, F401 fires
+)
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session  # noqa: TC002 — pinned in golden imports.json
 
 from greenhouse_core.models import User
 
@@ -21,15 +26,23 @@ _hasher = PasswordHasher()
 def hash_password(plain: str) -> str:
     """Hash a plaintext password with argon2id."""
     if not plain:
-        raise ValueError("password must be non-empty")
+        msg = "password must be non-empty"
+        raise ValueError(msg)
     return _hasher.hash(plain)
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    """Constant-time verify. Returns False on mismatch or malformed hash."""
+    """Constant-time verify. Returns False on mismatch or malformed hash.
+
+    ``VerificationError`` is argon2's base for a mismatch *and* for a hash it
+    cannot decode (e.g. a truncated row); a non-ASCII corrupt row raises
+    ``UnicodeEncodeError`` (a ``ValueError``) before argon2 even parses it. All
+    mean "these credentials do not verify", so a corrupted row answers a login
+    with 401, never a 500.
+    """
     try:
         return _hasher.verify(hashed, plain)
-    except (VerifyMismatchError, InvalidHashError):
+    except (VerificationError, InvalidHashError, ValueError):
         return False
 
 

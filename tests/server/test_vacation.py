@@ -1,34 +1,41 @@
 """Functional tests for the /api/v1/vacation endpoint."""
 
 import time
+from http import HTTPStatus
+
+from fastapi.testclient import TestClient
 
 
 class TestListVacationWindows:
-    def test_list_empty(self, client):
+    """Tests for list vacation windows."""
+
+    def test_list_empty(self, client: TestClient) -> None:
         """GET vacation with no windows returns empty list and null active."""
         resp = client.get("/api/v1/vacation")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         data = resp.json()
         assert data["active"] is None
         assert data["items"] == []
 
 
 class TestCreateVacationWindow:
-    def test_create_basic(self, client):
+    """Tests for create vacation window."""
+
+    def test_create_basic(self, client: TestClient) -> None:
         """POST creates a vacation window and returns it."""
         now = int(time.time())
         resp = client.post(
             "/api/v1/vacation",
             json={"starts_at": now - 100, "ends_at": now + 3600},
         )
-        assert resp.status_code == 201
+        assert resp.status_code == HTTPStatus.CREATED
         data = resp.json()
         assert data["id"] == 1
         assert data["starts_at"] == now - 100
         assert data["ends_at"] == now + 3600
         assert data["contact_email"] is None
 
-    def test_create_with_all_fields(self, client):
+    def test_create_with_all_fields(self, client: TestClient) -> None:
         """POST with optional fields stores them correctly."""
         now = int(time.time())
         resp = client.post(
@@ -40,48 +47,56 @@ class TestCreateVacationWindow:
                 "notes": "Two-week trip",
             },
         )
-        assert resp.status_code == 201
+        assert resp.status_code == HTTPStatus.CREATED
         data = resp.json()
         assert data["contact_email"] == "test@example.com"
         assert data["notes"] == "Two-week trip"
 
 
 class TestActiveVacationFlag:
-    def test_active_window_during_current_time(self, client):
+    """Tests for active vacation flag."""
+
+    def test_active_window_during_current_time(self, client: TestClient) -> None:
         """A window spanning now should appear as active."""
         now = int(time.time())
         client.post("/api/v1/vacation", json={"starts_at": now - 3600, "ends_at": now + 3600})
         resp = client.get("/api/v1/vacation")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         data = resp.json()
         assert data["active"] is not None
         assert data["active"]["id"] == 1
 
-    def test_future_window_not_active(self, client):
+    def test_future_window_not_active(self, client: TestClient) -> None:
         """A window in the future must not appear as active."""
         now = int(time.time())
         client.post("/api/v1/vacation", json={"starts_at": now + 7200, "ends_at": now + 86400})
         resp = client.get("/api/v1/vacation")
         assert resp.json()["active"] is None
 
-    def test_past_window_not_active(self, client):
+    def test_past_window_not_active(self, client: TestClient) -> None:
         """A window that already ended must not appear as active."""
         now = int(time.time())
         client.post("/api/v1/vacation", json={"starts_at": now - 7200, "ends_at": now - 3600})
         resp = client.get("/api/v1/vacation")
         assert resp.json()["active"] is None
 
-    def test_list_includes_all_windows(self, client):
-        """items list contains both active and future windows."""
+    def test_list_includes_all_windows(self, client: TestClient) -> None:
+        """Items list contains both active and future windows."""
         now = int(time.time())
-        client.post("/api/v1/vacation", json={"starts_at": now - 3600, "ends_at": now + 3600})
-        client.post("/api/v1/vacation", json={"starts_at": now + 7200, "ends_at": now + 86400})
+        windows = [
+            {"starts_at": now - 3600, "ends_at": now + 3600},
+            {"starts_at": now + 7200, "ends_at": now + 86400},
+        ]
+        for window in windows:
+            client.post("/api/v1/vacation", json=window)
         resp = client.get("/api/v1/vacation")
-        assert len(resp.json()["items"]) == 2
+        assert len(resp.json()["items"]) == len(windows)
 
 
 class TestUpdateVacationWindow:
-    def test_update_partial_changes(self, client):
+    """Tests for update vacation window."""
+
+    def test_update_partial_changes(self, client: TestClient) -> None:
         """PUT applies only the supplied fields and leaves the rest untouched."""
         now = int(time.time())
         client.post(
@@ -92,7 +107,7 @@ class TestUpdateVacationWindow:
             "/api/v1/vacation/1",
             json={"contact_email": "new@example.com", "notes": "Updated trip"},
         )
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         data = resp.json()
         assert data["contact_email"] == "new@example.com"
         assert data["notes"] == "Updated trip"
@@ -100,7 +115,7 @@ class TestUpdateVacationWindow:
         assert data["starts_at"] == now + 100
         assert data["ends_at"] == now + 200
 
-    def test_update_dates(self, client):
+    def test_update_dates(self, client: TestClient) -> None:
         """PUT can move the window in time as long as start < end."""
         now = int(time.time())
         client.post("/api/v1/vacation", json={"starts_at": now + 100, "ends_at": now + 200})
@@ -108,12 +123,12 @@ class TestUpdateVacationWindow:
             "/api/v1/vacation/1",
             json={"starts_at": now + 500, "ends_at": now + 1000},
         )
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         data = resp.json()
         assert data["starts_at"] == now + 500
         assert data["ends_at"] == now + 1000
 
-    def test_update_rejects_inverted_dates(self, client):
+    def test_update_rejects_inverted_dates(self, client: TestClient) -> None:
         """starts_at >= ends_at after the patch must return 400."""
         now = int(time.time())
         client.post("/api/v1/vacation", json={"starts_at": now + 100, "ends_at": now + 200})
@@ -121,31 +136,33 @@ class TestUpdateVacationWindow:
             "/api/v1/vacation/1",
             json={"starts_at": now + 300},  # would push start past existing end
         )
-        assert resp.status_code == 400
+        assert resp.status_code == HTTPStatus.BAD_REQUEST
 
-    def test_update_not_found(self, client):
+    def test_update_not_found(self, client: TestClient) -> None:
         """PUT on a missing ID returns 404."""
         now = int(time.time())
         resp = client.put(
             "/api/v1/vacation/999",
             json={"starts_at": now, "ends_at": now + 10},
         )
-        assert resp.status_code == 404
+        assert resp.status_code == HTTPStatus.NOT_FOUND
 
 
 class TestDeleteVacationWindow:
-    def test_delete_existing(self, client):
+    """Tests for delete vacation window."""
+
+    def test_delete_existing(self, client: TestClient) -> None:
         """DELETE removes the window and returns success."""
         now = int(time.time())
         client.post("/api/v1/vacation", json={"starts_at": now + 100, "ends_at": now + 200})
         resp = client.delete("/api/v1/vacation/1")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         assert resp.json()["success"] is True
 
         resp = client.get("/api/v1/vacation")
         assert resp.json()["items"] == []
 
-    def test_delete_not_found(self, client):
+    def test_delete_not_found(self, client: TestClient) -> None:
         """DELETE on a non-existent ID returns 404."""
         resp = client.delete("/api/v1/vacation/999")
-        assert resp.status_code == 404
+        assert resp.status_code == HTTPStatus.NOT_FOUND

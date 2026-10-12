@@ -1,7 +1,11 @@
 """Tests for ntfy push notifications and the DecisionLog.actuated fix."""
 
+from __future__ import annotations
+
 import time
 import urllib.request
+from http import HTTPStatus
+from typing import TYPE_CHECKING, Literal, Never, Self, TypedDict, cast
 from unittest.mock import MagicMock
 
 import pytest
@@ -9,24 +13,37 @@ import pytest
 from fake_devices import FakeIrrigatorAdapter, FakeSensorAdapter
 from greenhouse_core.devices import DeviceRegistry
 from greenhouse_core.logic import IrrigationLogic
+from greenhouse_core.models import SOURCE_LEAK, TRIGGERED_BY_EMERGENCY, ActivitySource
 from greenhouse_core.plant_db import get_plant_database
-from greenhouse_server.services.alerts import notify_if_new_alert, raise_alert
+from greenhouse_server.services.alerts import NewAlert, notify_if_new_alert, raise_alert
 from greenhouse_server.services.irrigation import IrrigationService
 from greenhouse_server.services.notify import NtfyClient, maybe_notify
+from server.conftest import TEST_NTFY_TOKEN
+
+if TYPE_CHECKING:
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from conftest import SampleCluster
+    from greenhouse_core.repository import IrrigationRepository
 
 
-class _RecordingNotifier:
-    """Stand-in NtfyClient that records calls instead of doing HTTP."""
+class _RecordingNotifier(NtfyClient):
+    """Stand-in NtfyClient that records calls instead of doing HTTP.
+
+    A subclass so it can be passed wherever an ``NtfyClient`` is typed; it never calls
+    ``NtfyClient.__init__`` because it binds no topic and publishes nothing.
+    """
 
     def __init__(self) -> None:
-        self.irrigations: list[dict] = []
-        self.alerts: list[dict] = []
+        self.irrigations: list[dict[str, object]] = []
+        self.alerts: list[dict[str, object]] = []
 
-    def notify_irrigation(self, **kwargs) -> bool:
+    def notify_irrigation(self, **kwargs: object) -> bool:
         self.irrigations.append(kwargs)
         return True
 
-    def notify_alert(self, **kwargs) -> bool:
+    def notify_alert(self, **kwargs: object) -> bool:
         self.alerts.append(kwargs)
         return True
 
@@ -34,7 +51,7 @@ class _RecordingNotifier:
 class _Prefs:
     """Minimal preferences stand-in for maybe_notify gating tests."""
 
-    def __init__(self, **flags) -> None:
+    def __init__(self, **flags: bool) -> None:
         self.notify_manual = flags.get("notify_manual", True)
         self.notify_emergency = flags.get("notify_emergency", True)
         self.notify_alerts = flags.get("notify_alerts", True)
@@ -45,18 +62,25 @@ class _Prefs:
 
 
 class _FakeResponse:
-    def __enter__(self):
+    def __enter__(self) -> Self:
         return self
 
-    def __exit__(self, *exc):
+    def __exit__(self, *exc: object) -> Literal[False]:
         return False
 
 
-def _capture_urlopen(monkeypatch) -> dict:
-    """Patch urllib.request.urlopen to capture the Request; returns a dict."""
-    captured: dict = {}
+class _Captured(TypedDict, total=False):
+    """What the patched ``urlopen`` saw."""
 
-    def fake_urlopen(req, timeout=None):
+    request: urllib.request.Request
+    timeout: float | None
+
+
+def _capture_urlopen(monkeypatch: pytest.MonkeyPatch) -> _Captured:
+    """Patch urllib.request.urlopen to capture the Request; returns a dict."""
+    captured: _Captured = {}
+
+    def fake_urlopen(req: urllib.request.Request, timeout: float | None = None) -> _FakeResponse:
         captured["request"] = req
         captured["timeout"] = timeout
         return _FakeResponse()
@@ -66,9 +90,13 @@ def _capture_urlopen(monkeypatch) -> dict:
 
 
 class TestNtfyClient:
-    def test_publish_builds_request(self, monkeypatch):
+    """Tests for ntfy client."""
+
+    def test_publish_builds_request(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Publish builds request."""
         captured = _capture_urlopen(monkeypatch)
-        client = NtfyClient("https://ntfy.example/", "my-topic", token="s3cret", timeout=3)
+        timeout = 3
+        client = NtfyClient("https://ntfy.example/", "my-topic", token=TEST_NTFY_TOKEN, timeout=timeout)
 
         ok = client.notify_alert(severity="critical", title="Leak detected", message="cluster 1")
 
@@ -76,38 +104,42 @@ class TestNtfyClient:
         req = captured["request"]
         assert req.full_url == "https://ntfy.example/my-topic"
         assert req.data == b"cluster 1"
-        assert captured["timeout"] == 3
+        assert captured["timeout"] == timeout
         # urllib capitalizes header keys: "X-Title" -> "X-title".
         assert req.headers["X-title"] == "Leak detected"
         assert req.headers["X-tags"] == "rotating_light"
         assert req.headers["X-priority"] == "5"
-        assert req.headers["Authorization"] == "Bearer s3cret"
+        assert req.headers["Authorization"] == f"Bearer {TEST_NTFY_TOKEN}"
 
-    def test_no_token_omits_auth_header(self, monkeypatch):
+    def test_no_token_omits_auth_header(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """No token omits auth header."""
         captured = _capture_urlopen(monkeypatch)
         NtfyClient("https://ntfy.example", "t").notify_alert(severity="warning", title="x", message="y")
         assert "Authorization" not in captured["request"].headers
 
     @pytest.mark.parametrize(
-        "severity,priority,tag",
+        ("severity", "priority", "tag"),
         [
             ("critical", "5", "rotating_light"),
             ("warning", "4", "warning"),
             ("info", "3", "information_source"),
         ],
     )
-    def test_severity_mapping(self, monkeypatch, severity, priority, tag):
+    def test_severity_mapping(self, monkeypatch: pytest.MonkeyPatch, severity: str, priority: str, tag: str) -> None:
+        """Severity mapping."""
         captured = _capture_urlopen(monkeypatch)
         NtfyClient("https://n", "t").notify_alert(severity=severity, title="t", message="m")
         assert captured["request"].headers["X-priority"] == priority
         assert captured["request"].headers["X-tags"] == tag
 
-    def test_emergency_irrigation_high_priority(self, monkeypatch):
+    def test_emergency_irrigation_high_priority(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Emergency irrigation high priority."""
         captured = _capture_urlopen(monkeypatch)
-        NtfyClient("https://n", "t").notify_irrigation(triggered_by="emergency", irrigator_name="all")
+        NtfyClient("https://n", "t").notify_irrigation(triggered_by=TRIGGERED_BY_EMERGENCY, irrigator_name="all")
         assert captured["request"].headers["X-priority"] == "5"
 
-    def test_unicode_title_stripped_to_latin1(self, monkeypatch):
+    def test_unicode_title_stripped_to_latin1(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Unicode title stripped to latin1."""
         captured = _capture_urlopen(monkeypatch)
         # Emoji/CJK in the title would break urllib's latin-1 header encoding.
         NtfyClient("https://n", "t").notify_alert(severity="warning", title="水 plant 🌱", message="m")
@@ -115,9 +147,13 @@ class TestNtfyClient:
         assert title.encode("latin-1")  # does not raise
         assert "plant" in title
 
-    def test_publish_fail_silent(self, monkeypatch):
-        def boom(req, timeout=None):
-            raise OSError("network down")
+    def test_publish_fail_silent(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Publish fail silent."""
+
+        def boom(_req: urllib.request.Request, timeout: float | None = None) -> Never:
+            del timeout  # NtfyClient passes it by keyword
+            msg = "network down"
+            raise OSError(msg)
 
         monkeypatch.setattr(urllib.request, "urlopen", boom)
         client = NtfyClient("https://n", "t")
@@ -129,24 +165,32 @@ class TestNtfyClient:
 
 
 class TestMaybeNotify:
-    def test_skips_when_notifier_none(self):
+    """Tests for maybe notify."""
+
+    def test_skips_when_notifier_none(self) -> None:
+        """Skips when notifier none."""
         hits = []
-        maybe_notify(None, _Prefs(), "manual", lambda: hits.append(1))
+        maybe_notify(None, _Prefs(), "manual", lambda _client: hits.append(1))
         assert hits == []
 
-    def test_skips_when_category_disabled(self):
+    def test_skips_when_category_disabled(self) -> None:
+        """Skips when category disabled."""
         hits = []
-        maybe_notify(_RecordingNotifier(), _Prefs(notify_alerts=False), "alerts", lambda: hits.append(1))
+        maybe_notify(_RecordingNotifier(), _Prefs(notify_alerts=False), "alerts", lambda _client: hits.append(1))
         assert hits == []
 
-    def test_fires_when_enabled(self):
+    def test_fires_when_enabled(self) -> None:
+        """Fires when enabled."""
         hits = []
-        maybe_notify(_RecordingNotifier(), _Prefs(), "manual", lambda: hits.append(1))
+        maybe_notify(_RecordingNotifier(), _Prefs(), "manual", lambda _client: hits.append(1))
         assert hits == [1]
 
-    def test_swallows_callback_error(self):
-        def boom():
-            raise RuntimeError("nope")
+    def test_swallows_callback_error(self) -> None:
+        """Swallows callback error."""
+
+        def boom(_client: NtfyClient) -> Never:
+            msg = "nope"
+            raise RuntimeError(msg)
 
         # Should not propagate.
         maybe_notify(_RecordingNotifier(), _Prefs(), "manual", boom)
@@ -156,11 +200,14 @@ class TestMaybeNotify:
 
 
 class TestAlertNotification:
-    def test_new_warning_notifies(self, tmp_db):
+    """Tests for alert notification."""
+
+    def test_new_warning_notifies(self, tmp_db: IrrigationRepository) -> None:
+        """New warning notifies."""
         rec = _RecordingNotifier()
         raise_alert(
             tmp_db,
-            source="leak",
+            source=SOURCE_LEAK,
             code="leak_or_stuck_valve",
             title="Leak",
             message="bad",
@@ -171,17 +218,30 @@ class TestAlertNotification:
         assert len(rec.alerts) == 1
         assert rec.alerts[0]["severity"] == "critical"
 
-    def test_info_suppressed(self, tmp_db):
+    def test_info_suppressed(self, tmp_db: IrrigationRepository) -> None:
+        """Info suppressed."""
         rec = _RecordingNotifier()
-        raise_alert(tmp_db, source="x", code="c", title="t", message="m", severity="info", cluster_id=1, notifier=rec)
+        # "x" is a placeholder outside the ActivitySource vocabulary (stored as-is); the test is about severity.
+        placeholder_source = cast("ActivitySource", "x")
+        raise_alert(
+            tmp_db,
+            source=placeholder_source,
+            code="c",
+            title="t",
+            message="m",
+            severity="info",
+            cluster_id=1,
+            notifier=rec,
+        )
         assert rec.alerts == []
 
-    def test_repeat_does_not_renotify(self, tmp_db):
+    def test_repeat_does_not_renotify(self, tmp_db: IrrigationRepository) -> None:
+        """Repeat does not renotify."""
         rec = _RecordingNotifier()
         for _ in range(3):
             raise_alert(
                 tmp_db,
-                source="leak",
+                source=SOURCE_LEAK,
                 code="leak_or_stuck_valve",
                 title="Leak",
                 message="bad",
@@ -189,16 +249,38 @@ class TestAlertNotification:
                 cluster_id=1,
                 notifier=rec,
             )
-        # Only the first occurrence (occurrence_count == 1) pushes.
+        # Only the call that opened the alert pushes; repeats while it is open stay silent.
         assert len(rec.alerts) == 1
 
-    def test_pref_toggle_off_suppresses(self, tmp_db):
+    def test_reopened_alert_renotifies(self, tmp_db: IrrigationRepository) -> None:
+        """B-5: a resolved alert that is raised again re-opens and pushes again."""
+        rec = _RecordingNotifier()
+        kwargs: NewAlert = {
+            "source": SOURCE_LEAK,
+            "code": "c",
+            "title": "t",
+            "message": "m",
+            "severity": "warning",
+            "cluster_id": 1,
+        }
+        alert = raise_alert(tmp_db, notifier=rec, **kwargs)
+        raise_alert(tmp_db, notifier=rec, **kwargs)  # still open: silent
+        tmp_db.acknowledge_alert(alert.id)
+        raise_alert(tmp_db, notifier=rec, **kwargs)  # acknowledged is still unresolved: silent
+        tmp_db.resolve_alert(alert.id)
+        reopened = raise_alert(tmp_db, notifier=rec, **kwargs)
+        assert (reopened.id, reopened.status, reopened.occurrence_count) == (alert.id, "open", 4)
+        pushes = 2  # the raise that opened the alert and the one that re-opened it
+        assert len(rec.alerts) == pushes
+
+    def test_pref_toggle_off_suppresses(self, tmp_db: IrrigationRepository) -> None:
+        """Pref toggle off suppresses."""
         tmp_db.update_preferences(notify_alerts=False)
         tmp_db.session.commit()
         rec = _RecordingNotifier()
         raise_alert(
             tmp_db,
-            source="leak",
+            source=SOURCE_LEAK,
             code="leak_or_stuck_valve",
             title="Leak",
             message="bad",
@@ -208,66 +290,77 @@ class TestAlertNotification:
         )
         assert rec.alerts == []
 
-    def test_notify_if_new_alert_none_notifier_is_noop(self, tmp_db):
+    def test_notify_if_new_alert_none_notifier_is_noop(self, tmp_db: IrrigationRepository) -> None:
         # Should not raise when notifier is None.
-        alert = raise_alert(tmp_db, source="leak", code="c", title="t", message="m", severity="critical", cluster_id=1)
-        notify_if_new_alert(tmp_db, None, alert)
+        """Notify if new alert none notifier is noop."""
+        alert = raise_alert(
+            tmp_db, source=SOURCE_LEAK, code="c", title="t", message="m", severity="critical", cluster_id=1
+        )
+        notify_if_new_alert(tmp_db, None, alert, was_open=False)
 
 
 # ── Manual / emergency seams via the API ─────────────────────────────────────
 
 
 class TestManualIrrigationNotifications:
-    def test_manual_start_notifies(self, app, seeded_client):
+    """Tests for manual irrigation notifications."""
+
+    def test_manual_start_notifies(self, app: FastAPI, seeded_client: TestClient) -> None:
+        """Manual start notifies."""
         rec = _RecordingNotifier()
         app.state.ntfy_notifier = rec
         resp = seeded_client.post("/api/v1/irrigators/1/start", json={"minutes": 1})
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         assert len(rec.irrigations) == 1
         assert rec.irrigations[0]["triggered_by"] == "manual"
 
-    def test_manual_stop_notifies(self, app, seeded_client):
+    def test_manual_stop_notifies(self, app: FastAPI, seeded_client: TestClient) -> None:
+        """Manual stop notifies."""
         rec = _RecordingNotifier()
         app.state.ntfy_notifier = rec
         resp = seeded_client.post("/api/v1/irrigators/1/stop")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         assert len(rec.irrigations) == 1
         assert rec.irrigations[0]["detail"] == "stopped"
 
-    def test_log_manual_notifies(self, app, seeded_client):
+    def test_log_manual_notifies(self, app: FastAPI, seeded_client: TestClient) -> None:
+        """Log manual notifies."""
         rec = _RecordingNotifier()
         app.state.ntfy_notifier = rec
         resp = seeded_client.post("/api/v1/irrigators/1/log-manual", json={"minutes": 3})
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         assert len(rec.irrigations) == 1
         assert rec.irrigations[0]["triggered_by"] == "manual"
 
-    def test_emergency_stop_all_notifies(self, app, seeded_client):
+    def test_emergency_stop_all_notifies(self, app: FastAPI, seeded_client: TestClient) -> None:
+        """Emergency stop all notifies."""
         rec = _RecordingNotifier()
         app.state.ntfy_notifier = rec
         resp = seeded_client.post("/api/v1/bulk/stop-all")
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         assert len(rec.irrigations) == 1
         assert rec.irrigations[0]["triggered_by"] == "emergency"
 
-    def test_manual_start_suppressed_when_pref_off(self, app, seeded_client):
+    def test_manual_start_suppressed_when_pref_off(self, app: FastAPI, seeded_client: TestClient) -> None:
+        """Manual start suppressed when pref off."""
         rec = _RecordingNotifier()
         app.state.ntfy_notifier = rec
         seeded_client.put("/api/v1/preferences", json={"notify_manual": False})
         resp = seeded_client.post("/api/v1/irrigators/1/start", json={"minutes": 1})
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
         assert rec.irrigations == []
 
-    def test_no_notifier_does_not_break_actuation(self, seeded_client):
+    def test_no_notifier_does_not_break_actuation(self, seeded_client: TestClient) -> None:
         # Default app has no ntfy_notifier; manual start must still succeed.
+        """No notifier does not break actuation."""
         resp = seeded_client.post("/api/v1/irrigators/1/start", json={"minutes": 1})
-        assert resp.status_code == 200
+        assert resp.status_code == HTTPStatus.OK
 
 
 # ── Automated cycle: actuated flip + auto notification ──────────────────────
 
 
-def _build_dry_cluster(repo):
+def _build_dry_cluster(repo: IrrigationRepository) -> tuple[int, int]:
     """Cluster with a thirsty plant + dry sensor readings so the engine irrigates."""
     cluster_id = repo.add_cluster("Dry Cluster")
     plant_id = repo.add_plant(
@@ -284,14 +377,14 @@ def _build_dry_cluster(repo):
         cluster_id=cluster_id,
         tuya_device_id="fake_dev",
         name="Dry Irrigator",
-        irrigator_type="tuya_cloud",
+        irrigator_type="rainpoint.ik10pw",
         config={},
     )
     sensor_id = repo.add_sensor(
         cluster_id=cluster_id,
         tuya_device_id="fake_sensor",
         name="Dry Sensor",
-        sensor_type="soil_moisture",
+        sensor_type="tuya.tr301z",
         config={},
         plant_id=plant_id,
     )
@@ -307,16 +400,15 @@ def _build_dry_cluster(repo):
     return cluster_id, irrigator_id
 
 
-def _build_service(repo, notifier):
+def _build_service(
+    repo: IrrigationRepository, notifier: NtfyClient | None
+) -> tuple[IrrigationService, FakeIrrigatorAdapter]:
     registry = DeviceRegistry()
     irr = FakeIrrigatorAdapter()
     sensor = FakeSensorAdapter()
-    # Register under both the seeded type strings and their resolved canonical
-    # keys so registry alias resolution finds the fakes (mirrors conftest).
-    for key in ("tuya_cloud", "rainpoint.ik10pw"):
-        registry.register_irrigator(key, lambda a=irr: a)
-    for key in ("soil_moisture", "tuya.tr301z"):
-        registry.register_sensor(key, lambda a=sensor: a)
+    # Registered under the canonical model keys the seeded rows carry (mirrors conftest).
+    registry.register_irrigator("rainpoint.ik10pw", lambda: irr)
+    registry.register_sensor("tuya.tr301z", lambda: sensor)
     sync_service = MagicMock()
     sync_service.ensure_fresh_and_read.return_value = {"temperature": 24.0, "soil_moisture": 35.0}
     weather = MagicMock()
@@ -335,17 +427,20 @@ def _build_service(repo, notifier):
 class TestDecisionActuated:
     """Unit coverage for the actuated-flag mechanism (Part B)."""
 
-    def test_persist_records_decision_log_id(self, sample_cluster):
+    def test_persist_records_decision_log_id(self, sample_cluster: SampleCluster) -> None:
+        """Persist records decision log ID."""
         db = sample_cluster["db"]
         logic = IrrigationLogic(db, get_plant_database())
         decision = logic.decide_for_cluster(sample_cluster["cluster_id"], current_temp=22.0, persist=True)
+        assert decision is not None
         assert decision.decision_log_id is not None
         logs = db.list_decision_logs(sample_cluster["cluster_id"])
         assert logs[0].id == decision.decision_log_id
         # Persisted before actuation, so it starts False.
         assert logs[0].actuated is False
 
-    def test_set_decision_actuated_flips_flag(self, sample_cluster):
+    def test_set_decision_actuated_flips_flag(self, sample_cluster: SampleCluster) -> None:
+        """Set decision actuated flips flag."""
         db = sample_cluster["db"]
         log_id = db.add_decision_log(
             cluster_id=sample_cluster["cluster_id"],
@@ -364,7 +459,10 @@ class TestDecisionActuated:
 
 
 class TestAutomatedCycleActuated:
-    def test_successful_pipeline_flips_actuated_and_notifies(self, tmp_db):
+    """Tests for automated cycle actuated."""
+
+    def test_successful_pipeline_flips_actuated_and_notifies(self, tmp_db: IrrigationRepository) -> None:
+        """Successful pipeline flips actuated and notifies."""
         cluster_id, _ = _build_dry_cluster(tmp_db)
         rec = _RecordingNotifier()
         service, irr = _build_service(tmp_db, rec)
@@ -381,7 +479,8 @@ class TestAutomatedCycleActuated:
         assert len(rec.irrigations) == 1
         assert rec.irrigations[0]["triggered_by"] == "auto"
 
-    def test_dry_run_does_not_flip_actuated(self, tmp_db):
+    def test_dry_run_does_not_flip_actuated(self, tmp_db: IrrigationRepository) -> None:
+        """Dry run does not flip actuated."""
         cluster_id, _ = _build_dry_cluster(tmp_db)
         rec = _RecordingNotifier()
         service, _ = _build_service(tmp_db, rec)

@@ -1,0 +1,8 @@
+
+ Usage: greenhouse vacation list [OPTIONS]
+
+ List vacation windows together with the active one (if any).
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                                      │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

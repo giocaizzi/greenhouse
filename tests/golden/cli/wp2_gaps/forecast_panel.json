@@ -1,0 +1,140 @@
+{
+ "empty": [
+  [
+   "Forecast",
+   "bold"
+  ],
+  [
+   "\n",
+   ""
+  ],
+  [
+   "forecast  ",
+   "dim"
+  ],
+  [
+   "unavailable\n",
+   ""
+  ]
+ ],
+ "rain_and_skip_without_reason": [
+  [
+   "Forecast",
+   "bold"
+  ],
+  [
+   "\n",
+   ""
+  ],
+  [
+   "next water     ",
+   "dim"
+  ],
+  [
+   "in 5h00m (15:00)    \n",
+   ""
+  ],
+  [
+   "projected min  ",
+   "dim"
+  ],
+  [
+   "31.5%               \n",
+   ""
+  ],
+  [
+   "method         ",
+   "dim"
+  ],
+  [
+   "trend (70%)         \n",
+   ""
+  ],
+  [
+   "rain 6h        ",
+   "dim"
+  ],
+  [
+   "2.4 mm              \n",
+   ""
+  ],
+  [
+   "weather        ",
+   "dim"
+  ],
+  [
+   "skip — rain expected",
+   "#4fb3ff"
+  ],
+  [
+   "\n",
+   ""
+  ],
+  [
+   "               rain expected       ",
+   "dim"
+  ],
+  [
+   "\n",
+   ""
+  ]
+ ],
+ "skip_with_reason_due_now": [
+  [
+   "Forecast",
+   "bold"
+  ],
+  [
+   "\n",
+   ""
+  ],
+  [
+   "next water     ",
+   "dim"
+  ],
+  [
+   "due now    ",
+   "bold #e0c341"
+  ],
+  [
+   "\n",
+   ""
+  ],
+  [
+   "projected min  ",
+   "dim"
+  ],
+  [
+   "—          \n",
+   ""
+  ],
+  [
+   "method         ",
+   "dim"
+  ],
+  [
+   "trend (40%)\n",
+   ""
+  ],
+  [
+   "weather        ",
+   "dim"
+  ],
+  [
+   "storm front",
+   "#4fb3ff"
+  ],
+  [
+   "\n",
+   ""
+  ],
+  [
+   "                          ",
+   "dim"
+  ],
+  [
+   "\n",
+   ""
+  ]
+ ]
+}

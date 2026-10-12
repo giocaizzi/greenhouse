@@ -1,0 +1,35 @@
+{
+ "calls": [
+  {
+   "body": {
+    "minutes": 3
+   },
+   "request": "POST /api/v1/irrigators/1/start",
+   "response": {
+    "detail": "cluster max_events_per_day reached"
+   },
+   "status": 409
+  },
+  {
+   "body": {
+    "minutes": 3
+   },
+   "request": "POST /api/v1/irrigators/1/log-manual",
+   "response": {
+    "detail": "cluster max_events_per_day reached"
+   },
+   "status": 409
+  }
+ ],
+ "db_writes": {
+  "activity_events": [],
+  "alerts": [],
+  "decision_logs": [],
+  "irrigation_events": [],
+  "sensor_readings": []
+ },
+ "gateway_calls": null,
+ "irrigator_adapter_calls": [],
+ "notifications": [],
+ "sensor_adapter_calls": []
+}

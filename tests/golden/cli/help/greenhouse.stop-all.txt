@@ -1,0 +1,9 @@
+
+ Usage: greenhouse stop-all [OPTIONS]
+
+ Emergency kill switch: stop every irrigator in the system.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ --yes   -y        Skip confirmation prompt                                                       │
+│ --help            Show this message and exit.                                                    │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

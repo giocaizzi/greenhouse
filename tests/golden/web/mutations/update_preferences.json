@@ -1,0 +1,61 @@
+{
+ "body_lines": [
+  ""
+ ],
+ "db_effect": {
+  "user_preferences": {
+   "changed": {
+    "1": {
+     "default_cluster_id": [
+      1,
+      2
+     ],
+     "dry_run_global": [
+      0,
+      1
+     ],
+     "notify_emergency": [
+      1,
+      0
+     ],
+     "refresh_interval_seconds": [
+      60,
+      15
+     ],
+     "theme": [
+      "dark",
+      "light"
+     ],
+     "units": [
+      "metric",
+      "imperial"
+     ]
+    }
+   }
+  }
+ },
+ "device_calls": {
+  "irrigator": [],
+  "sensor": []
+ },
+ "headers": {
+  "location": "/preferences?saved=1"
+ },
+ "request": {
+  "form": {
+   "default_cluster_id": "2",
+   "dry_run_global": "on",
+   "notify_alerts": "on",
+   "notify_manual": "on",
+   "refresh_interval_seconds": "15",
+   "theme": "light",
+   "timezone": "UTC",
+   "units": "imperial"
+  },
+  "headers": {},
+  "method": "POST",
+  "url": "/preferences"
+ },
+ "status": 303,
+ "templates": []
+}

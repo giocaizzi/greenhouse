@@ -1,0 +1,329 @@
+"""Characterization tests for repository / schema branches that no other test reaches.
+
+Written before the repository was restructured so the shared helpers
+(`_parse_json_config`, `_delete_by_id`, `_patch_fields`, `_patch_fields_hasattr_first`)
+provably keep today's behavior. Everything here pins CURRENT behavior, odd or not.
+"""
+
+import json
+from typing import Any, cast
+
+import pytest
+import time_machine
+from sqlalchemy import func, select
+
+from fake_data import FAKE_DEVICE_ID, FAKE_SENSOR_ID
+from golden import FROZEN_TS
+from greenhouse_core.models import (
+    Base,
+    IrrigationWindow,
+    Irrigator,
+    Plant,
+    PlantHealthDaily,
+    Sensor,
+    VacationWindow,
+    parse_device_config,
+)
+from greenhouse_core.repository import IrrigationRepository
+from greenhouse_core.schemas import IrrigatorResponse, SensorResponse
+
+UNKNOWN_ID = 9999
+
+
+def _count(repo: IrrigationRepository, model: type[Base]) -> int:
+    return repo.session.execute(select(func.count()).select_from(model)).scalar_one()
+
+
+def _seed(repo: IrrigationRepository) -> dict[str, int]:
+    """One cluster with a plant, a sensor (no plant), an irrigator and an irrigation window."""
+    cluster_id = repo.add_cluster("Gap Cluster", "Gap Location")
+    plant_id = repo.add_plant(cluster_id, "Monstera deliciosa")
+    sensor_id = repo.add_sensor(cluster_id, FAKE_SENSOR_ID, "Gap Sensor", "soil", {"k": 1})
+    irrigator_id = repo.add_irrigator(cluster_id, FAKE_DEVICE_ID, "Gap Irrigator", "valve", {"pump": True})
+    window = repo.add_irrigation_window(cluster_id, start_hour=6, end_hour=8, label="morning")
+    return {
+        "cluster": cluster_id,
+        "plant": plant_id,
+        "sensor": sensor_id,
+        "irrigator": irrigator_id,
+        "window": window.id,
+    }
+
+
+# ── parse_config validators (schemas.py IrrigatorResponse / SensorResponse) ──
+
+_RESPONSE_BASE = {"id": 1, "cluster_id": 2, "tuya_device_id": FAKE_DEVICE_ID, "name": "n", "type": "t"}
+_ResponseModel = type[IrrigatorResponse | SensorResponse]
+_RESPONSE_MODELS: list[_ResponseModel] = [IrrigatorResponse, SensorResponse]
+
+
+@pytest.mark.parametrize("model", _RESPONSE_MODELS, ids=lambda m: m.__name__)
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ('{"a": 1, "b": [1, 2]}', {"a": 1, "b": [1, 2]}),
+        ("{}", {}),
+        ("null", {}),  # D16: non-object JSON reads as {} (shared lenient parser)
+        ({"k": 1}, {"k": 1}),
+        (None, None),
+    ],
+    ids=["json-object", "json-empty-object", "json-null", "dict-passthrough", "none-passthrough"],
+)
+def test_parse_config_decodes_json_strings_and_passes_other_values(
+    model: _ResponseModel, raw: object, expected: dict[str, object] | None
+) -> None:
+    """Response models decode JSON-string configs and pass other values through unchanged."""
+    assert model.model_validate({**_RESPONSE_BASE, "config": raw}).config == expected
+
+
+@pytest.mark.parametrize("model", _RESPONSE_MODELS, ids=lambda m: m.__name__)
+@pytest.mark.parametrize("raw", ["not json", ""], ids=["garbage", "empty-string"])
+def test_parse_config_invalid_json_reads_as_empty(model: _ResponseModel, raw: str) -> None:
+    """D16: malformed stored JSON reads as ``{}`` (was a ValidationError → 500), as in the web and gateway."""
+    assert model.model_validate({**_RESPONSE_BASE, "config": raw}).config == {}
+
+
+@pytest.mark.parametrize("model", _RESPONSE_MODELS, ids=lambda m: m.__name__)
+@pytest.mark.parametrize("raw", ["[1, 2]", '"x"', "3", 3], ids=["json-list", "json-string", "json-number", "int"])
+def test_parse_config_non_object_reads_as_empty(model: _ResponseModel, raw: object) -> None:
+    """D16: a config that is not a JSON object reads as ``{}`` (was a dict_type ValidationError)."""
+    assert model.model_validate({**_RESPONSE_BASE, "config": raw}).config == {}
+
+
+def test_parse_device_config_is_the_one_lenient_parser() -> None:
+    """D16: ``models.parse_device_config`` — dict as is, JSON object decoded, everything else ``{}``."""
+    assert parse_device_config({"k": 1}) == {"k": 1}
+    assert parse_device_config('{"device_ip": "192.0.2.1"}') == {"device_ip": "192.0.2.1"}
+    assert [parse_device_config(raw) for raw in ("", "nope", "[1]", "null", None, 7)] == [{}] * 6
+
+
+def test_parse_config_decodes_the_stored_orm_json_string(tmp_db: IrrigationRepository) -> None:
+    """The config stored as a JSON string on the ORM row decodes in the response model."""
+    ids = _seed(tmp_db)
+    irrigator = tmp_db.get_irrigator(ids["irrigator"])
+    assert irrigator is not None
+    sensor = tmp_db.get_sensor(ids["sensor"])
+    assert sensor is not None
+    assert irrigator.config == '{"pump": true}'
+    assert sensor.config == '{"k": 1}'
+    assert IrrigatorResponse.model_validate(irrigator).config == {"pump": True}
+    assert SensorResponse.model_validate(sensor).config == {"k": 1}
+
+
+# ── deleting an unknown id ──
+
+
+@pytest.mark.parametrize(
+    ("method", "model"),
+    [
+        ("delete_irrigation_window", IrrigationWindow),
+        ("delete_sensor", Sensor),
+        ("delete_irrigator", Irrigator),
+        ("delete_vacation_window", VacationWindow),
+    ],
+)
+def test_delete_unknown_id_returns_false_and_touches_nothing(
+    tmp_db: IrrigationRepository, frozen_clock: time_machine.Traveller, method: str, model: type[Base]
+) -> None:
+    """Deleting an unknown id returns False and leaves the table untouched."""
+    del frozen_clock  # side-effect fixture (the clock is frozen)
+    _seed(tmp_db)
+    tmp_db.add_vacation_window(FROZEN_TS, FROZEN_TS + 3600)
+    before = _count(tmp_db, model)
+    assert before == 1
+    result = getattr(tmp_db, method)(UNKNOWN_ID)
+    assert result is False
+    assert _count(tmp_db, model) == before
+
+
+@pytest.mark.parametrize(
+    ("method", "key", "model"),
+    [
+        ("delete_irrigation_window", "window", IrrigationWindow),
+        ("delete_sensor", "sensor", Sensor),
+        ("delete_irrigator", "irrigator", Irrigator),
+    ],
+)
+def test_delete_known_id_returns_true_and_removes_the_row(
+    tmp_db: IrrigationRepository, method: str, key: str, model: type[Base]
+) -> None:
+    """Deleting a known id returns True and removes the row."""
+    ids = _seed(tmp_db)
+    assert getattr(tmp_db, method)(ids[key]) is True
+    assert _count(tmp_db, model) == 0
+
+
+# ── vacation / irrigation window PATCH ──
+
+
+def test_update_vacation_window_ignores_unknown_keys_and_none_clears_notes(
+    tmp_db: IrrigationRepository, frozen_clock: time_machine.Traveller
+) -> None:
+    """Vacation updates ignore unknown keys, and None clears the notes."""
+    del frozen_clock  # side-effect fixture (the clock is frozen)
+    window = tmp_db.add_vacation_window(FROZEN_TS, FROZEN_TS + 3600, contact_email="a@example.com", notes="keep")
+    unknown: dict[str, Any] = {"bogus_field": "x"}  # not a patch key; routes pass model_dump()'s dict[str, Any]
+    updated = tmp_db.update_vacation_window(window.id, notes=None, ends_at=FROZEN_TS + 7200, **unknown)
+    assert updated is window
+    assert not hasattr(updated, "bogus_field")
+    assert (updated.starts_at, updated.ends_at, updated.contact_email, updated.notes) == (
+        FROZEN_TS,
+        FROZEN_TS + 7200,
+        "a@example.com",
+        None,  # B-15: an explicit None clears a nullable field
+    )
+
+
+def test_update_vacation_window_unknown_id_returns_none(tmp_db: IrrigationRepository) -> None:
+    """Updating an unknown vacation window returns None."""
+    assert tmp_db.update_vacation_window(UNKNOWN_ID, notes="x") is None
+
+
+def test_update_irrigation_window_ignores_unknown_keys_and_none_clears_label(tmp_db: IrrigationRepository) -> None:
+    """Window updates ignore unknown keys, and None clears the label."""
+    ids = _seed(tmp_db)
+    unknown: dict[str, Any] = {"bogus_field": 1}  # not a patch key; routes pass model_dump()'s dict[str, Any]
+    updated = tmp_db.update_irrigation_window(ids["window"], label=None, end_hour=9, **unknown)
+    assert updated is not None
+    assert updated.id == ids["window"]
+    assert not hasattr(updated, "bogus_field")
+    assert (updated.start_hour, updated.end_hour, updated.weekday_mask, updated.label) == (6, 9, 127, None)
+
+
+def test_update_irrigation_window_unknown_id_returns_none(tmp_db: IrrigationRepository) -> None:
+    """Updating an unknown irrigation window returns None."""
+    _seed(tmp_db)
+    assert tmp_db.update_irrigation_window(UNKNOWN_ID, end_hour=9) is None
+
+
+# ── sensor / irrigator PATCH ──
+
+
+def test_update_sensor_unknown_id_returns_none(tmp_db: IrrigationRepository) -> None:
+    """Updating an unknown sensor returns None."""
+    _seed(tmp_db)
+    assert tmp_db.update_sensor(UNKNOWN_ID, name="x") is None
+
+
+def test_update_sensor_none_skips_required_and_clears_config(tmp_db: IrrigationRepository) -> None:
+    """B-15: ``None`` is skipped for NOT NULL ``name`` / ``type`` and clears the nullable ``config``."""
+    ids = _seed(tmp_db)
+    updated = tmp_db.update_sensor(ids["sensor"], name=None, type=None, config=None)
+    assert updated is not None
+    assert (updated.name, updated.type, updated.config) == ("Gap Sensor", "soil", None)
+
+
+def test_update_sensor_json_encodes_dict_config(tmp_db: IrrigationRepository) -> None:
+    """A dict sensor config is stored JSON-encoded with key order kept."""
+    ids = _seed(tmp_db)
+    updated = tmp_db.update_sensor(ids["sensor"], config={"b": 1, "a": [1, 2], "c": None})
+    assert updated is not None
+    assert updated.config == '{"b": 1, "a": [1, 2], "c": null}'
+    assert updated.config == json.dumps({"b": 1, "a": [1, 2], "c": None})
+
+
+def test_update_sensor_stores_non_dict_config_verbatim_current_behavior(tmp_db: IrrigationRepository) -> None:
+    """Pins current behavior: a non-dict ``config`` skips JSON encoding and is set as-is."""
+    ids = _seed(tmp_db)
+    raw_config = cast("dict[str, Any]", '{"raw": 1}')  # a str on purpose: the pinned non-dict path
+    updated = tmp_db.update_sensor(ids["sensor"], config=raw_config)
+    assert updated is not None
+    assert updated.config == '{"raw": 1}'
+
+
+def test_update_sensor_ignores_unknown_keys(tmp_db: IrrigationRepository) -> None:
+    """Sensor updates ignore unknown keys and leave other fields as they were."""
+    ids = _seed(tmp_db)
+    unknown: dict[str, Any] = {"bogus_field": "x"}  # not a patch key; routes pass model_dump()'s dict[str, Any]
+    updated = tmp_db.update_sensor(ids["sensor"], name="Renamed", **unknown)
+    assert updated is not None
+    assert not hasattr(updated, "bogus_field")
+    assert (updated.name, updated.type, updated.config, updated.plant_id) == ("Renamed", "soil", '{"k": 1}', None)
+
+
+def test_update_irrigator_unknown_id_returns_none(tmp_db: IrrigationRepository) -> None:
+    """Updating an unknown irrigator returns None."""
+    _seed(tmp_db)
+    assert tmp_db.update_irrigator(UNKNOWN_ID, name="x") is None
+
+
+def test_update_irrigator_ignores_unknown_keys_and_none(tmp_db: IrrigationRepository) -> None:
+    """Irrigator updates ignore unknown keys and None values."""
+    ids = _seed(tmp_db)
+    unknown: dict[str, Any] = {"bogus_field": "x"}  # not a patch key; routes pass model_dump()'s dict[str, Any]
+    updated = tmp_db.update_irrigator(ids["irrigator"], type=None, name="Renamed", **unknown)
+    assert updated is not None
+    assert not hasattr(updated, "bogus_field")
+    assert (updated.name, updated.type, updated.config) == ("Renamed", "valve", '{"pump": true}')
+
+
+def test_update_irrigator_json_encodes_dict_config(tmp_db: IrrigationRepository) -> None:
+    """A dict irrigator config is stored JSON-encoded with key order kept."""
+    ids = _seed(tmp_db)
+    updated = tmp_db.update_irrigator(ids["irrigator"], config={"z": 1, "a": "b"})
+    assert updated is not None
+    assert updated.config == '{"z": 1, "a": "b"}'
+
+
+# ── plant PATCH ──
+
+
+def test_update_plant_unknown_id_returns_none(tmp_db: IrrigationRepository) -> None:
+    """Updating an unknown plant returns None and adds no row."""
+    _seed(tmp_db)
+    assert tmp_db.update_plant(UNKNOWN_ID, notes="x") is None
+    assert _count(tmp_db, Plant) == 1
+
+
+def test_update_plant_ignores_unknown_keys_and_none_clears_a_nullable_field(tmp_db: IrrigationRepository) -> None:
+    """B-15: an explicit ``None`` clears a nullable field and is skipped for a NOT NULL one.
+
+    ``notes`` is cleared, ``species`` is kept; unknown keys are still ignored.
+    """
+    ids = _seed(tmp_db)
+    tmp_db.update_plant(ids["plant"], notes="first")
+    unknown: dict[str, Any] = {"bogus_field": "x"}  # not a patch key; routes pass model_dump()'s dict[str, Any]
+    updated = tmp_db.update_plant(ids["plant"], notes=None, species=None, category="tropical", **unknown)
+    assert updated is not None
+    assert not hasattr(updated, "bogus_field")
+    assert (updated.species, updated.notes, updated.category) == ("Monstera deliciosa", None, "tropical")
+
+
+# ── get_vacation_window ──
+
+
+def test_get_vacation_window_found_and_not_found(
+    tmp_db: IrrigationRepository, frozen_clock: time_machine.Traveller
+) -> None:
+    """A vacation window is returned by id, or None when unknown."""
+    del frozen_clock  # side-effect fixture (the clock is frozen)
+    window = tmp_db.add_vacation_window(FROZEN_TS, FROZEN_TS + 3600, notes="trip")
+    assert tmp_db.get_vacation_window(window.id) is window
+    assert tmp_db.get_vacation_window(UNKNOWN_ID) is None
+
+
+# ── plant health snapshots follow their plant ──
+
+
+def _health_rows(repo: IrrigationRepository) -> list[int]:
+    return sorted(r.plant_id for r in repo.session.query(PlantHealthDaily).all())
+
+
+def test_delete_plant_removes_its_health_snapshots(tmp_db: IrrigationRepository) -> None:
+    """SQLite reuses plant ids: a deleted plant's daily health rows must not haunt the next one."""
+    cid = tmp_db.add_cluster("Health")
+    doomed, kept = tmp_db.add_plant(cid, "Fern"), tmp_db.add_plant(cid, "Cactus")
+    for pid in (doomed, kept):
+        tmp_db.upsert_plant_health(pid, "2026-04-15", 80.0)
+    assert tmp_db.delete_plant(doomed)
+    assert _health_rows(tmp_db) == [kept]
+
+
+def test_delete_cluster_removes_its_plants_health_snapshots(tmp_db: IrrigationRepository) -> None:
+    """Deleting a cluster removes its plants' health snapshots, not other clusters'."""
+    doomed, kept = tmp_db.add_cluster("Doomed"), tmp_db.add_cluster("Kept")
+    doomed_plant, kept_plant = tmp_db.add_plant(doomed, "Fern"), tmp_db.add_plant(kept, "Cactus")
+    for pid in (doomed_plant, kept_plant):
+        tmp_db.upsert_plant_health(pid, "2026-04-15", 80.0)
+    assert tmp_db.delete_cluster(doomed)
+    assert _health_rows(tmp_db) == [kept_plant]

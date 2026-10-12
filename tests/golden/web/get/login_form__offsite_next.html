@@ -1,0 +1,109 @@
+<!-- GET /login?next=https://evil.example/steal -->
+<!-- status: 200 -->
+<!-- content-type: text/html; charset=utf-8 -->
+
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <title>Sign in · Greenhouse</title>
+
+  <link rel="preload" href="/static/fonts/Geist[wght].woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/static/fonts/GeistMono[wght].woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/static/app.css">
+
+  <script>
+    // Early theme application — runs before body paint to avoid flash.
+    // The <html> tag is already server-rendered with the persisted preference;
+    // localStorage (if present) takes precedence for instant client paint.
+    (function () {
+      try {
+        var t = localStorage.getItem('theme');
+        if (t) document.documentElement.setAttribute('data-theme', t);
+      } catch (e) {}
+    })();
+  </script>
+
+  <script src="https://unpkg.com/htmx.org@2.0.3" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js" defer></script>
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+
+<a class="skip-link" href="#main">Skip to content</a>
+
+<div id="page-progress" class="page-progress" aria-hidden="true"></div>
+
+
+
+
+
+
+
+<main class="container" id="main">
+  
+<div style="min-height: 80svh; display: grid; place-items: center; padding: var(--sp-6) 0;">
+<section style="width: 100%; max-width: 26rem;">
+
+  <div style="display: flex; flex-direction: column; align-items: center; gap: var(--sp-3); margin-bottom: var(--sp-7); text-align: center;">
+    <span class="brand__mark" style="width: 48px; height: 48px; border-radius: 14px;">
+      <svg class="icon" style="width: 26px; height: 26px;" aria-hidden="true"><use href="/static/icons/sprite.svg#i-leaf"></use></svg>
+    </span>
+    <div>
+      <h1 style="font-size: var(--fs-lg); font-weight: 600; letter-spacing: -0.02em; margin: 0;">Greenhouse</h1>
+      <div style="font-size: var(--fs-sm); color: var(--text-muted); margin-top: 2px;">Sign in to continue</div>
+    </div>
+  </div>
+
+  
+
+  <form method="post" action="/login" autocomplete="on" novalidate>
+    <input type="hidden" name="next" value="/">
+
+    <label for="login-username">Username
+      <input id="login-username" name="username" type="text"
+             autocomplete="username" required autofocus>
+    </label>
+
+    <label for="login-password">Password
+      <input id="login-password" name="password" type="password"
+             autocomplete="current-password" required>
+    </label>
+
+    <button type="submit" style="width: 100%;">Sign in</button>
+  </form>
+
+  
+
+</section>
+</div>
+
+</main>
+
+
+
+<div id="toasts" class="toasts" aria-live="polite" aria-atomic="false"></div>
+
+<footer class="container">
+  <div class="footer__row">
+    
+    <span class="footer__meta">
+      <span>greenhouse</span>
+      
+      <span class="sep" aria-hidden="true"></span>
+      <span title="App version">v<VERSION></span>
+      
+      <span class="sep" aria-hidden="true"></span>
+      <span title="Page rendered">2026-04-15 10:00</span>
+    </span>
+  </div>
+</footer>
+
+
+
+</body>
+</html>

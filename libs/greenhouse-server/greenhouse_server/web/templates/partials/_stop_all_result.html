@@ -2,7 +2,7 @@
 <article class="alert alert--danger" role="alert">
   <span class="alert__icon" aria-hidden="true"><svg class="icon"><use href="/static/icons/sprite.svg#i-warning"></use></svg></span>
   <div>
-    <strong>Stopped {{ stopped }} irrigator{{ "" if stopped == 1 else "s" }}; some did not respond.</strong>
+    <strong>Stopped {{ stopped }} irrigator{{ "" if stopped == 1 else "s" }}; {{ errors|length }} did not confirm the stop and may still be running.</strong>
     <ul style="margin: var(--sp-2) 0 0; padding-left: var(--sp-4);">
       {% for err in errors %}<li><small class="mono">{{ err }}</small></li>{% endfor %}
     </ul>

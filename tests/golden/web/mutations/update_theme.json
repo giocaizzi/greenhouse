@@ -1,0 +1,32 @@
+{
+ "body_lines": [
+  ""
+ ],
+ "db_effect": {
+  "user_preferences": {
+   "changed": {
+    "1": {
+     "theme": [
+      "dark",
+      "light"
+     ]
+    }
+   }
+  }
+ },
+ "device_calls": {
+  "irrigator": [],
+  "sensor": []
+ },
+ "headers": {},
+ "request": {
+  "form": {
+   "theme": "light"
+  },
+  "headers": {},
+  "method": "POST",
+  "url": "/preferences/theme"
+ },
+ "status": 204,
+ "templates": []
+}

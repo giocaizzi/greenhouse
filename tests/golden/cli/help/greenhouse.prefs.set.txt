@@ -1,0 +1,14 @@
+
+ Usage: greenhouse prefs set [OPTIONS]
+
+ Patch preferences. Omitted fields are left unchanged.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ --units                                      <str>  metric or imperial                           │
+│ --timezone                                   <str>  IANA timezone name                           │
+│ --theme                                      <str>  light / dark / auto                          │
+│ --refresh-interval                           <int>  Web UI auto-refresh in seconds               │
+│ --dry-run-global      --no-dry-run-global           Run engine in dry-run for every cluster      │
+│ --default-cluster                            <int>  Default cluster ID for one-click commands    │
+│ --help                                              Show this message and exit.                  │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

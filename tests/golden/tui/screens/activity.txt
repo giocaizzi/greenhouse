@@ -1,0 +1,40 @@
+ ⭘                                          greenhouse — http://testserver                                     10:00:00
+ 3 events · severity all   f: filter  end of feed
+ When              Severity  Source      Entity      Code                Message
+ 2026-04-15 10:00  info      irrigation  cluster #1  irrigation_started  Living Room pump ran for 3 min
+ 2026-04-15 09:50  warning   irrigation  cluster #1  sensor_stale        Opuntia probe has not reported in 5h
+ 2026-04-15 09:40  info      irrigation  cluster #1  sync_completed      Synced 4 sensors, 12 new readings
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ f Severity  n Older  d Dashboard  a Alerts  l Activity  s System  o Settings  / Search  r Refresh  q Quit  ▏^p palette

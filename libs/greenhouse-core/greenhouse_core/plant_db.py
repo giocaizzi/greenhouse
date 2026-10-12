@@ -1,10 +1,21 @@
 """Plant database lookup - Evidence-based plant care data."""
 
+import copy
+import functools
 import json
 import os
 from importlib.resources import files
 from pathlib import Path
+from typing import Any
 
+from greenhouse_core.constants import PLANT_CARE_FALLBACK
+
+# One plant-database entry (species, category or mapping row) as decoded from JSON.
+CareData = dict[str, Any]
+
+# IRRIGATION_PLANT_DB_PATH is read once at import: the fallback for direct core users
+# (tests, scripts, PlantDatabase() without a path). The server resolves the same
+# variable through Settings.plant_db_path and builds its PlantDatabase from that.
 _DEFAULT_PLANT_DB_PATH = Path(str(files("greenhouse_core") / "data" / "plant_database.json"))
 PLANT_DB_PATH = (
     Path(os.environ["IRRIGATION_PLANT_DB_PATH"])
@@ -16,21 +27,23 @@ PLANT_DB_PATH = (
 class PlantDatabase:
     """Lookup plant care requirements from scientific literature."""
 
-    def __init__(self, db_path: Path | None = None):
+    def __init__(self, db_path: Path | None = None) -> None:
+        """Load the curated database from ``db_path`` (default: the bundled JSON)."""
         self.db_path = db_path or PLANT_DB_PATH
         self._data = self._load_database()
 
-    def _load_database(self) -> dict:
+    def _load_database(self) -> dict[str, Any]:
         """Load plant database from JSON."""
         if not self.db_path.exists():
-            raise FileNotFoundError(f"Plant database not found: {self.db_path}")
+            msg = f"Plant database not found: {self.db_path}"
+            raise FileNotFoundError(msg)
 
-        with open(self.db_path, encoding="utf-8") as f:
-            return json.load(f)
+        with self.db_path.open(encoding="utf-8") as f:
+            data: dict[str, Any] = json.load(f)
+        return data
 
-    def lookup_species(self, species: str) -> dict | None:
-        """
-        Look up care requirements for a specific species.
+    def lookup_species(self, species: str) -> CareData | None:
+        """Look up care requirements for a specific species.
 
         Args:
             species: Scientific name or common name (e.g., "Monstera deliciosa", "Areca palm")
@@ -38,19 +51,20 @@ class PlantDatabase:
         Returns:
             dict with care requirements or None if not found
         """
+        table: dict[str, CareData] = self._data["species"]
         # Exact match
-        if species in self._data["species"]:
-            return self._data["species"][species]
+        if species in table:
+            return table[species]
 
         # Check aliases (case-insensitive)
-        for _spec_name, spec_data in self._data["species"].items():
+        for _spec_name, spec_data in table.items():
             aliases = spec_data.get("aliases", [])
             if species in aliases or species.lower() in [a.lower() for a in aliases]:
                 return spec_data
 
         # Fuzzy match: check if species name contains any database key or alias
         species_lower = species.lower()
-        for _spec_name, spec_data in self._data["species"].items():
+        for _spec_name, spec_data in table.items():
             # Check if database name is in species string
             if _spec_name.lower() in species_lower:
                 return spec_data
@@ -62,9 +76,8 @@ class PlantDatabase:
 
         return None
 
-    def lookup_category(self, category: str) -> dict | None:
-        """
-        Look up general care requirements for a plant category.
+    def lookup_category(self, category: str) -> CareData | None:
+        """Look up general care requirements for a plant category.
 
         Args:
             category: Category name (e.g., "tropical", "succulent")
@@ -72,11 +85,11 @@ class PlantDatabase:
         Returns:
             dict with care requirements or None if not found
         """
-        return self._data["categories"].get(category)
+        categories: dict[str, CareData] = self._data["categories"]
+        return categories.get(category)
 
-    def get_care_data(self, species: str | None = None, category: str | None = None) -> dict:
-        """
-        Resolve plant care data with three-layer precedence.
+    def get_care_data(self, species: str | None = None, category: str | None = None) -> CareData:
+        """Resolve plant care data with three-layer precedence.
 
         Layered merge (least → most specific): ultimate defaults < ``categories[c]``
         biology basics < ``_category_defaults[c]`` timing fields < ``species[s]``
@@ -102,17 +115,8 @@ class PlantDatabase:
         species_data = self.lookup_species(species) if species else None
         resolved_category = (species_data or {}).get("category") or category
 
-        merged: dict = {
-            "water_needs": "medium",
-            "water_frequency_days": 7,
-            "ideal_temp_min_c": 18,
-            "ideal_temp_max_c": 27,
-            "ideal_humidity_min": 50,
-            "ideal_humidity_max": 70,
-            "light_needs": "medium",
-            "soil_moisture_target": "45-65",
-            "sources": ["fallback default"],
-        }
+        # Deep copy: callers own the returned dict, including its ``sources`` list.
+        merged: CareData = copy.deepcopy(PLANT_CARE_FALLBACK)
 
         if resolved_category:
             cat_basics = self.lookup_category(resolved_category)
@@ -134,13 +138,10 @@ class PlantDatabase:
 
         return merged
 
-    def get_water_needs_info(self, water_needs: str) -> dict:
+    def get_water_needs_info(self, water_needs: str) -> CareData:
         """Get detailed info for a water_needs level."""
-        return self._data["water_needs_mapping"].get(water_needs, self._data["water_needs_mapping"]["medium"])
-
-    def get_light_needs_info(self, light_needs: str) -> dict:
-        """Get detailed info for a light_needs level."""
-        return self._data["light_needs_mapping"].get(light_needs, self._data["light_needs_mapping"]["medium"])
+        mapping: dict[str, CareData] = self._data["water_needs_mapping"]
+        return mapping.get(water_needs, mapping["medium"])
 
     def list_species(self) -> list[str]:
         """List all species in database."""
@@ -150,30 +151,19 @@ class PlantDatabase:
         """List all categories in database."""
         return list(self._data["categories"].keys())
 
-    def get_metadata(self) -> dict:
+    def get_metadata(self) -> CareData:
         """Get database metadata (version, sources, etc.)."""
-        return self._data["_metadata"]
+        metadata: CareData = self._data["_metadata"]
+        return metadata
 
 
-# Convenience singleton
-_db_instance = None
-
-
+# Convenience singleton: built on first use, dropped by ``reset_plant_database``.
+@functools.cache
 def get_plant_database() -> PlantDatabase:
     """Get singleton plant database instance."""
-    global _db_instance
-    if _db_instance is None:
-        _db_instance = PlantDatabase()
-    return _db_instance
-
-
-def set_plant_database(instance: PlantDatabase) -> None:
-    """Set the singleton instance (for custom path configuration)."""
-    global _db_instance
-    _db_instance = instance
+    return PlantDatabase()
 
 
 def reset_plant_database() -> None:
     """Reset the singleton instance (for testing)."""
-    global _db_instance
-    _db_instance = None
+    get_plant_database.cache_clear()

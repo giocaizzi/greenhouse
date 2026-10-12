@@ -1,0 +1,9 @@
+
+ Usage: greenhouse plant list [OPTIONS]
+
+ List plants.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ --cluster        <int>  Filter by cluster ID                                                     │
+│ --help                  Show this message and exit.                                              │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

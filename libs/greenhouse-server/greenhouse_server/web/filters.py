@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import re
 import time
+from collections.abc import Sized
+from typing import TypedDict
 
+from greenhouse_core.constants import AGE_BADGE_STALE_SECONDS, SECONDS_PER_DAY, SECONDS_PER_HOUR
 from greenhouse_core.utils import format_timestamp
 
 # Matches common Unicode emoji ranges. Used to scrub decorative glyphs out of
@@ -14,30 +17,57 @@ _EMOJI_RE = re.compile(
     flags=re.UNICODE,
 )
 
-# Past this age we treat readings as "stale" — avoids absurd values like
-# "20567d ago" leaking into the UI from seed data or long-offline sensors.
-_AGE_STALE_SECONDS = 7 * 86400
+_SECONDS_PER_MINUTE = 60
+_MINUTES_PER_HOUR = 60
 
 
-def format_ts(ts: int | float | None, fmt: str = "%Y-%m-%d %H:%M") -> str:
+def format_ts(ts: float | None, fmt: str = "%Y-%m-%d %H:%M") -> str:
+    """Template filter: a Unix timestamp in the display timezone (``—`` when missing)."""
     if ts is None:
         return "—"
     return format_timestamp(float(ts), fmt)
 
 
-def age_seconds(ts: int | float | None) -> str:
-    if ts is None:
-        return "—"
-    delta = max(0, int(time.time() - float(ts)))
-    if delta < 60:
+def format_age(age: float | None, *, missing: str = "—", stale_after: int | None = AGE_BADGE_STALE_SECONDS) -> str:
+    """The one "how long ago" formatter: ``Ns`` / ``Nm`` / ``Nh`` / ``Nd ago`` for an age in seconds.
+
+    ``missing`` is shown for ``None``; from ``stale_after`` seconds on the age reads
+    "stale" (sensor freshness), or keeps counting days when ``stale_after`` is ``None``
+    (elapsed time, e.g. the plant dashboard's last watering). A negative age (clock
+    skew) reads as ``0s ago``.
+    """
+    if age is None:
+        return missing
+    delta = max(0, int(age))
+    if delta < _SECONDS_PER_MINUTE:
         return f"{delta}s ago"
-    if delta < 3600:
-        return f"{delta // 60}m ago"
-    if delta < 86400:
-        return f"{delta // 3600}h ago"
-    if delta < _AGE_STALE_SECONDS:
-        return f"{delta // 86400}d ago"
+    if delta < SECONDS_PER_HOUR:
+        return f"{delta // _SECONDS_PER_MINUTE}m ago"
+    if delta < SECONDS_PER_DAY:
+        return f"{delta // SECONDS_PER_HOUR}h ago"
+    if stale_after is None or delta < stale_after:
+        return f"{delta // SECONDS_PER_DAY}d ago"
     return "stale"
+
+
+def relative_age(ts: float | None, *, missing: str = "—", stale_after: int | None = AGE_BADGE_STALE_SECONDS) -> str:
+    """:func:`format_age` of a Unix timestamp: how long ago ``ts`` was, from the wall clock."""
+    if ts is None:
+        return missing
+    return format_age(time.time() - float(ts), missing=missing, stale_after=stale_after)
+
+
+def age_seconds(age: float | None) -> str:
+    """Template filter for an **age in seconds**: :func:`format_age` with the freshness defaults.
+
+    "—" when missing, "stale" from 7 days. For a Unix timestamp use :func:`time_ago`.
+    """
+    return format_age(age)
+
+
+def time_ago(ts: float | None) -> str:
+    """Template filter for a **Unix timestamp**: :func:`relative_age` with the freshness defaults."""
+    return relative_age(ts)
 
 
 def strip_emoji(text: str | None) -> str:
@@ -46,12 +76,11 @@ def strip_emoji(text: str | None) -> str:
         return ""
     cleaned = _EMOJI_RE.sub("", text)
     cleaned = re.sub(r"\s+", " ", cleaned).strip()
-    cleaned = re.sub(r"\s*;\s*", "; ", cleaned)
-    return cleaned
+    return re.sub(r"\s*;\s*", "; ", cleaned)
 
 
 def stat_position(value: float | None, lo: float | None, hi: float | None) -> str:
-    """Return the position of value as a 0–100 percent within [lo, hi].
+    """Return the position of value as a 0-100 percent within [lo, hi].
 
     Used by the stat tile range indicator. Falls back to 50 when bounds are
     missing or value is out of range, so the marker stays visible.
@@ -63,6 +92,7 @@ def stat_position(value: float | None, lo: float | None, hi: float | None) -> st
 
 
 def moisture_badge(value: float | None, target_min: float | None, target_max: float | None) -> str:
+    """Template filter: badge class for a soil-moisture value against its target band."""
     if value is None:
         return "muted"
     if target_min is not None and value < target_min:
@@ -73,25 +103,29 @@ def moisture_badge(value: float | None, target_min: float | None, target_max: fl
 
 
 def severity_class(severity: str | None) -> str:
+    """Template filter: CSS class for an alert/insight severity (``muted`` when unknown)."""
     return {"critical": "danger", "warning": "warning", "info": "info"}.get((severity or "").lower(), "muted")
 
 
 def decision_badge(action: str | None) -> str:
+    """Template filter: badge class for a decision action (``muted`` when unknown)."""
     return {"irrigate": "primary", "hold": "muted", "skip": "muted", "error": "danger"}.get(
         (action or "").lower(), "muted"
     )
 
 
 def format_minutes(n: int | None) -> str:
+    """Template filter: a duration in minutes as ``N min`` / ``Nh`` / ``Nh Mm`` (``—`` when missing)."""
     if n is None:
         return "—"
-    if n < 60:
+    if n < _MINUTES_PER_HOUR:
         return f"{n} min"
-    h, m = divmod(n, 60)
+    h, m = divmod(n, _MINUTES_PER_HOUR)
     return f"{h}h {m}m" if m else f"{h}h"
 
 
-def yesno(value, yes: str = "Yes", no: str = "No") -> str:
+def yesno(value: object, yes: str = "Yes", no: str = "No") -> str:
+    """Template filter: ``yes`` / ``no`` label for a truthy / falsy value."""
     return yes if value else no
 
 
@@ -113,6 +147,7 @@ _TRIGGER_CODE_ICONS: dict[str, str] = {
     "config_fallback": "gear-six",
     "no_data": "x-circle",
     "daily_cap_hit": "x-circle",
+    "no_action_needed": "check",
     # Adjustments
     "temp_high": "thermometer-hot",
     "temp_low": "thermometer-simple",
@@ -145,7 +180,7 @@ def icon_for_code(code: str) -> str:
     return _TRIGGER_CODE_ICONS.get(code, _SEVERITY_ICONS.get(code, "info"))
 
 
-def _present(value) -> bool:
+def _present(value: object) -> bool:
     """True when a child collection/relationship holds at least one item.
 
     Accepts the shapes the web layer passes around: ``status`` lists, a single
@@ -154,13 +189,36 @@ def _present(value) -> bool:
     """
     if value is None:
         return False
-    try:
+    if isinstance(value, Sized):
         return len(value) > 0
-    except TypeError:
-        return bool(value)
+    return bool(value)
 
 
-def cluster_caps(obj) -> dict:
+class ClusterCaps(TypedDict):
+    """``cluster_caps`` result: what a cluster contains and the features that unlocks."""
+
+    has_plants: bool
+    has_sensors: bool
+    has_irrigator: bool
+    can_monitor: bool
+    can_target: bool
+    can_decide: bool
+    can_actuate: bool
+    tier: str
+    missing: list[str]
+
+
+def _cluster_parts(obj: object) -> tuple[object, object, object]:
+    """``(plants, sensors, irrigator)`` of a cluster-status dict, a ``Cluster`` ORM object or ``None``."""
+    if isinstance(obj, dict):
+        return obj.get("plants"), obj.get("sensors"), obj.get("irrigator")
+    if obj is None:
+        return None, None, None
+    # Cluster ORM object: the same-named relationships.
+    return getattr(obj, "plants", None), getattr(obj, "sensors", None), getattr(obj, "irrigator", None)
+
+
+def cluster_caps(obj: object) -> ClusterCaps:
     """Derive a cluster's capability tier from what it contains.
 
     The single source of truth for feature gating across the web UI. Accepts
@@ -186,15 +244,7 @@ def cluster_caps(obj) -> dict:
         ``"operational"``), and ``missing`` — prerequisites ordered by impact
         for the next-step notice.
     """
-    if isinstance(obj, dict):
-        plants, sensors, irrigator = obj.get("plants"), obj.get("sensors"), obj.get("irrigator")
-    elif obj is None:
-        plants = sensors = irrigator = None
-    else:  # Cluster ORM object
-        plants = getattr(obj, "plants", None)
-        sensors = getattr(obj, "sensors", None)
-        irrigator = getattr(obj, "irrigator", None)
-
+    plants, sensors, irrigator = _cluster_parts(obj)
     has_plants, has_sensors, has_irrigator = _present(plants), _present(sensors), _present(irrigator)
 
     if has_irrigator:
@@ -230,6 +280,7 @@ def cluster_caps(obj) -> dict:
 ALL_FILTERS = {
     "format_ts": format_ts,
     "age_seconds": age_seconds,
+    "time_ago": time_ago,
     "moisture_badge": moisture_badge,
     "severity_class": severity_class,
     "decision_badge": decision_badge,

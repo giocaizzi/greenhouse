@@ -1,0 +1,40 @@
+ ⭘                                   greenhouse · Living Room — http://testserver                              10:00:00
+ Overview  Charts  Plants  Sensors  Insights  Decisions  History  Windows  Config
+╸━━━━━━━━╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+╭────────────────────╮ ╭────────────────────╮
+│  ▄▄▀▀▄    ▄▀▀▄     │ │    ▄  ▄▀▄  ▄       │
+│  ▀▀▀▀▀▀  ▀▀▀▀▀▀    │ │  ▄▀▀▀ ▀▀▀ ▀▀▀▄     │
+│   ▀▀▀▀▀▄ ▀▀▀▀▀     │ │ ▀▀▀▄▀▄▀▀▀▄▀▄▀▀▀    │
+│ ▄▀▀▀▄ ▀▀▄▀ ▄▀▀▀▄   │ │ ▀ ▄█▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀█
+│  ▀▀▀▀▀▄▀▀▄▀▀▀▀▀    │ │  ▀▀█                                                              █
+│  ▄▄▄▄▄▀▀▀▀▄▄▄▄▄    │ │  ▄▄█     ▄▀▀▀▀▀▄        Smart irrigation — Living Room            █
+│   ▀▀▀▀▀▀▀▀▀▀▀▀     │ │   ▀█    ▀▀▀▀▀▀▀▀▀   ▄▀                                            █
+│    ▀▀▀▀▀▀▀▀▀▀      │ │    █  ▀▀▀▀▀▀▀▀▀▀▀▀▀▀    Runs the full pipeline: sync → decide →   █
+│ Monstera deliciosa │ │ Nep█    ▀▀▀▀▀▀▀▀▀       actuate.                                  █
+│ thriving 58.0%     │ │ thi█                    Cooldown, caps and leak holds still       █
+│ █████████░┊░░░░░   │ │ ████                    apply.                                    █
+╰────────────────────╯ ╰────█                                                              █
+                            █  ▊▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▎                    █
+╭───────────────────────────█  ▊ ▐X▌ Dry run (decide only, no water)  ▎                    █───────────────────────────╮
+│    ▄▀▀▀▀▀▄                █  ▊▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▎                    █                           │
+│   ▀▀▀▀▀▀▀▀▀   ▄▀          █  ▊▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▎                                   █ due now                   │
+│ ▀▀▀▀▀▀▀▀▀▀▀▀▀▀            █  ▊ ▐X▌ Skip sensor sync  ▎                                   █ 32.6%                     │
+│   ▀▀▀▀▀▀▀▀▀               █  ▊▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▎                                   █ drainage_slope (40%)      │
+│                           █  ▊▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▎                         █ Nephrolepis exaltata will │
+│ Living Room pump          █  ▊ ▐X▌ Force (bypass quiet hours)  ▎                         █ hit its 60% min in ~0.0h  │
+│ idle                      █  ▊▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▎                         █ based on -1.1%/h          │
+│ last start 8h00m ago · 3m █                                                              █ drainage.                 │
+│ by auto                   █                           ▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔ ▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔  █───────────────────────────╯
+│ u edit · del detach       █                                 Run             Cancel       █
+╰───────────────────────────█                           ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁ ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁  █
+                            █                                                              █
+                            █▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄█
+
+
+
+
+
+
+
+ esc Back  i Irrigate  w Water now  x Stop  c Check  n New  u Edit  del Delete  d Dashboard  a Alerts  l Act▏^p palette

@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import time
-from datetime import datetime
+from datetime import UTC, datetime, tzinfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from rich.text import Text
+
+from greenhouse_cli.constants import ALL_WEEKDAYS, SECONDS_PER_DAY, SECONDS_PER_HOUR, SECONDS_PER_MINUTE
 
 SEVERITY_STYLES = {
     "critical": "bold #ff5f5f",
@@ -45,20 +48,22 @@ METRICS: dict[str, tuple[str, str]] = {
 
 
 def now() -> int:
+    """Current Unix time in whole seconds (one seam for the relative-time helpers)."""
     return int(time.time())
 
 
 def _span(seconds: int) -> str:
-    if seconds < 60:
+    """Compact duration: ``45s``, ``12m``, ``3h05m`` under a day, then ``2d4h`` (truncated, never rounded up)."""
+    if seconds < SECONDS_PER_MINUTE:
         return f"{seconds}s"
-    if seconds < 3600:
-        return f"{seconds // 60}m"
-    if seconds < 86400:
-        return f"{seconds // 3600}h{(seconds % 3600) // 60:02d}m"
-    return f"{seconds // 86400}d{(seconds % 86400) // 3600}h"
+    if seconds < SECONDS_PER_HOUR:
+        return f"{seconds // SECONDS_PER_MINUTE}m"
+    if seconds < SECONDS_PER_DAY:
+        return f"{seconds // SECONDS_PER_HOUR}h{(seconds % SECONDS_PER_HOUR) // SECONDS_PER_MINUTE:02d}m"
+    return f"{seconds // SECONDS_PER_DAY}d{(seconds % SECONDS_PER_DAY) // SECONDS_PER_HOUR}h"
 
 
-def ago(ts: int | float | None, reference: int | None = None) -> str:
+def ago(ts: float | None, reference: int | None = None) -> str:
     """Render a Unix timestamp as a compact relative age (``5m ago`` / ``in 2h00m``)."""
     if not ts:
         return "never"
@@ -66,23 +71,33 @@ def ago(ts: int | float | None, reference: int | None = None) -> str:
     return f"in {_span(-delta)}" if delta < 0 else f"{_span(delta)} ago"
 
 
-def age(seconds: int | float | None) -> str:
+def age(seconds: float | None) -> str:
     """Render an age already expressed in seconds (``None`` → ``—``)."""
     if seconds is None:
         return "—"
     return f"{_span(max(0, int(seconds)))} ago"
 
 
-def clock(ts: int | float | None, with_date: bool = False) -> str:
-    """Local wall-clock time for a Unix timestamp."""
+def zone(name: str | None) -> tzinfo:
+    """The IANA zone ``name`` (the server's ``timezone`` preference); UTC when unset or unknown."""
+    if not name:
+        return UTC
+    try:
+        return ZoneInfo(name)
+    except (ZoneInfoNotFoundError, ValueError):
+        return UTC
+
+
+def clock(ts: float | None, *, with_date: bool = False, tz: str | None = None) -> str:
+    """Wall-clock time for a Unix timestamp — local, or in the zone ``tz`` when given (vacations)."""
     if not ts:
         return "—"
     fmt = "%Y-%m-%d %H:%M" if with_date else "%H:%M"
-    return datetime.fromtimestamp(ts).strftime(fmt)
+    return datetime.fromtimestamp(ts, zone(tz) if tz is not None else None).strftime(fmt)
 
 
-def num(value: float | int | None, unit: str = "", digits: int = 1) -> str:
-    """Format a nullable number with a unit."""
+def num(value: float | None, unit: str = "", digits: int = 1) -> str:
+    """Number plus unit, ``—`` for ``None``; ints and ``digits=0`` are rounded to whole numbers."""
     if value is None:
         return "—"
     if isinstance(value, int) or digits == 0:
@@ -91,7 +106,7 @@ def num(value: float | int | None, unit: str = "", digits: int = 1) -> str:
 
 
 def styled(value: str | None, styles: dict[str, str], default: str = "") -> Text:
-    """Return ``value`` as Text styled by a lookup table."""
+    """``value`` as Text styled by ``styles[value.lower()]`` (else ``default``); ``None`` shows ``—``."""
     text = value or "—"
     return Text(text, style=styles.get((value or "").lower(), default))
 
@@ -130,7 +145,7 @@ def bar(value: float | None, width: int = 20, lo: float | None = None, hi: float
 
 def weekday_mask(mask: int) -> str:
     """Render a Mon-bit-1 weekday bitmask as ``MTWTF··``."""
-    if mask == 127:
+    if mask == ALL_WEEKDAYS:
         return "every day"
     letters = "MTWTFSS"
     return "".join(letters[i] if mask & (1 << i) else "·" for i in range(7))

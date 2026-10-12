@@ -4,6 +4,7 @@ from typing import Annotated
 
 import typer
 
+from greenhouse_cli.commands._helpers import HelpOnBareGroup
 from greenhouse_cli.commands.alerts import alerts_app
 from greenhouse_cli.commands.auth import register as register_auth
 from greenhouse_cli.commands.clusters import cluster_app
@@ -22,6 +23,7 @@ from greenhouse_cli.commands.windows import windows_app
 app = typer.Typer(
     help="Smart irrigation system CLI",
     no_args_is_help=True,
+    cls=HelpOnBareGroup,
     rich_markup_mode="rich",
 )
 
@@ -33,9 +35,8 @@ def main(
         str | None,
         typer.Option(help="Server URL (default: $IRRIGATION_SERVER_URL or http://localhost:8000)"),
     ] = None,
-):
+) -> None:
     """Smart irrigation system — evidence-based plant care with Tuya IoT sensors."""
-    ctx.ensure_object(dict)
     ctx.obj = server
 
 

@@ -1,23 +1,54 @@
 """Pydantic v2 request/response schemas for the irrigation API."""
 
-import json
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from greenhouse_core.constants import FULL_WEEKDAY_MASK
+from greenhouse_core.models import parse_device_config
+
+# Request bodies that carry measurements / thresholds refuse ``NaN`` / ``Infinity`` (which
+# Python's JSON parser accepts): a non-finite bound or capacity would poison every comparison.
+_FINITE_NUMBERS = ConfigDict(allow_inf_nan=False)
+
+
+def _parse_json_config(v: object) -> object:
+    """Decode a stored ``config`` with the shared lenient parser; ``None`` stays ``None``."""
+    return None if v is None else parse_device_config(v)
+
+
+# What a stored device (irrigator or sensor) ``local_key`` reads as in every response — the same
+# dots the web edit form shows. The key is a root-level local-protocol
+# credential: it is accepted on writes but never echoed back. Sending this
+# value back in an update keeps the stored key (see services.inventory).
+LOCAL_KEY_MASK = "••••••••"
+
+
+def mask_local_key(config: object) -> object:
+    """Return ``config`` with a non-empty ``local_key`` replaced by ``LOCAL_KEY_MASK`` (copy, never in place)."""
+    if isinstance(config, dict) and config.get("local_key"):
+        return {**config, "local_key": LOCAL_KEY_MASK}
+    return config
+
 
 # --- Cluster ---
 
 
 class ClusterBase(BaseModel):
+    """Fields a cluster is created with; ``environment`` (indoor / outdoor) selects the seasonal table."""
+
     name: str
     location: str | None = None
     environment: str = "indoor"
 
 
 class CreateClusterRequest(ClusterBase):
-    pass
+    """Body for creating a cluster."""
 
 
 class ClusterResponse(ClusterBase):
+    """A cluster as stored."""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -45,6 +76,8 @@ class ClusterDetailResponse(BaseModel):
 
 
 class PlantBase(BaseModel):
+    """Plant care fields; blank care values are filled from the plant database when the species is known."""
+
     species: str
     category: str | None = None
     water_needs: str | None = None
@@ -57,10 +90,14 @@ class PlantBase(BaseModel):
 
 
 class CreatePlantRequest(PlantBase):
-    pass
+    """Body for adding a plant to a cluster."""
+
+    model_config = _FINITE_NUMBERS
 
 
 class PlantResponse(PlantBase):
+    """A plant as stored, with the cluster it belongs to."""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -75,6 +112,8 @@ class PlantListResponse(BaseModel):
 
 
 class SyncPlantsRequest(BaseModel):
+    """Scope of a plant-database sync: one plant, one cluster, or every plant when both are omitted."""
+
     plant_id: int | None = None
     cluster_id: int | None = None
 
@@ -86,6 +125,8 @@ class MovePlantRequest(BaseModel):
 
 
 class SyncPlantsResponse(BaseModel):
+    """Number of plants refreshed from the plant database, plus per-plant errors."""
+
     synced: int
     errors: list[str]
 
@@ -94,19 +135,29 @@ class SyncPlantsResponse(BaseModel):
 
 
 class IrrigatorBase(BaseModel):
+    """Fields an irrigator is attached with; ``config`` carries device settings such as the local protocol keys."""
+
     tuya_device_id: str
     name: str
     type: str
-    config: dict | None = None
+    config: dict[Any, Any] | None = None
     reservoir_l: float | None = Field(default=None, ge=0)
     flow_rate_l_per_min: float | None = Field(default=None, ge=0)
 
 
 class CreateIrrigatorRequest(IrrigatorBase):
-    pass
+    """Body for attaching an irrigator to a cluster (one per cluster)."""
+
+    model_config = _FINITE_NUMBERS
 
 
 class IrrigatorResponse(IrrigatorBase):
+    """An irrigator as stored, with the cluster it waters.
+
+    A stored ``config.local_key`` is masked as ``••••••••``; send the mask back
+    unchanged in an update to keep the stored key.
+    """
+
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -114,10 +165,9 @@ class IrrigatorResponse(IrrigatorBase):
 
     @field_validator("config", mode="before")
     @classmethod
-    def parse_config(cls, v):
-        if isinstance(v, str):
-            return json.loads(v)
-        return v
+    def parse_config(cls, v: object) -> object:
+        """Decode the stored device config (JSON text or dict) leniently and mask its local key."""
+        return mask_local_key(_parse_json_config(v))
 
 
 class IrrigatorListResponse(BaseModel):
@@ -128,10 +178,14 @@ class IrrigatorListResponse(BaseModel):
 
 
 class StartIrrigatorRequest(BaseModel):
-    minutes: int | None = None
+    """Body for a manual start; omit ``minutes`` to run the configured default duration."""
+
+    minutes: int | None = Field(default=None, ge=1)
 
 
 class LogManualRequest(BaseModel):
+    """Body for recording a watering done by hand; it feeds cooldown and learning, nothing is actuated."""
+
     minutes: int
     notes: str | None = None
 
@@ -160,18 +214,26 @@ class SuccessResponse(BaseModel):
 
 
 class SensorBase(BaseModel):
+    """Fields a sensor is registered with; ``plant_id`` assigns it to the plant it measures."""
+
     tuya_device_id: str
     name: str
     type: str
-    config: dict | None = None
+    config: dict[Any, Any] | None = None
     plant_id: int | None = None
 
 
 class CreateSensorRequest(SensorBase):
-    pass
+    """Body for registering a sensor in a cluster."""
 
 
 class SensorResponse(SensorBase):
+    """A sensor as stored, with its cluster and current plant assignment.
+
+    A stored ``config.local_key`` is masked as ``••••••••``; send the mask back
+    unchanged in an update to keep the stored key.
+    """
+
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -179,10 +241,9 @@ class SensorResponse(SensorBase):
 
     @field_validator("config", mode="before")
     @classmethod
-    def parse_config(cls, v):
-        if isinstance(v, str):
-            return json.loads(v)
-        return v
+    def parse_config(cls, v: object) -> object:
+        """Decode the stored device config (JSON text or dict) leniently and mask its local key."""
+        return mask_local_key(_parse_json_config(v))
 
 
 class SensorListResponse(BaseModel):
@@ -196,8 +257,10 @@ class SensorListResponse(BaseModel):
 
 
 class SensorAssignmentResponse(BaseModel):
-    """One row from a sensor's plant-assignment history. ``ended_at=None``
-    means the row is currently active."""
+    """One row from a sensor's plant-assignment history.
+
+    ``ended_at=None`` means the row is currently active.
+    """
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -227,15 +290,20 @@ class IrrigationWindowBase(BaseModel):
 
     start_hour: int
     end_hour: int
-    weekday_mask: int = 127
+    weekday_mask: int = FULL_WEEKDAY_MASK
     label: str | None = None
 
 
 class CreateIrrigationWindowRequest(IrrigationWindowBase):
-    pass
+    """Body for adding a watering window to a cluster."""
 
 
 class UpdateIrrigationWindowRequest(BaseModel):
+    """Partial update of a watering window; omitted fields keep their value.
+
+    ``null`` clears an optional field and is ignored for a required one.
+    """
+
     start_hour: int | None = None
     end_hour: int | None = None
     weekday_mask: int | None = None
@@ -243,6 +311,8 @@ class UpdateIrrigationWindowRequest(BaseModel):
 
 
 class IrrigationWindowResponse(IrrigationWindowBase):
+    """A watering window as stored."""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -250,6 +320,8 @@ class IrrigationWindowResponse(IrrigationWindowBase):
 
 
 class IrrigationWindowListResponse(BaseModel):
+    """A cluster's watering windows; an empty list allows every hour (quiet hours still apply)."""
+
     cluster_id: int
     windows: list[IrrigationWindowResponse]
 
@@ -258,6 +330,8 @@ class IrrigationWindowListResponse(BaseModel):
 
 
 class SensorReadingResponse(BaseModel):
+    """One raw sensor reading as persisted (unset metrics are null)."""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -275,6 +349,8 @@ class SensorReadingResponse(BaseModel):
 
 
 class IrrigationEventResponse(BaseModel):
+    """One irrigation event (start, stop, manual log, …) with what triggered it."""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -409,6 +485,8 @@ class IrrigateRequest(BaseModel):
     Reason so the audit log records the override.
     """
 
+    model_config = _FINITE_NUMBERS
+
     temp_override: float | None = None
     dry_run: bool = False
     no_sync: bool = False
@@ -416,10 +494,12 @@ class IrrigateRequest(BaseModel):
 
 
 class AlertResponse(BaseModel):
+    """An advisory alert raised alongside a decision, check or learning report."""
+
     type: str
     severity: str
     message: str
-    data: dict | None = None
+    data: dict[Any, Any] | None = None
 
 
 class ReasonResponse(BaseModel):
@@ -434,12 +514,14 @@ class ReasonResponse(BaseModel):
 
 
 class IrrigateResponse(BaseModel):
+    """The decision for a cluster: action, duration, interval, confidence and the reason trail behind it."""
+
     action: str
     reason: str
     confidence: float
     duration_minutes: int | None = None
     interval_hours: int | None = None
-    stress_indicators: dict | None = None
+    stress_indicators: dict[Any, Any] | None = None
     reasons: list[ReasonResponse] = []
     learning_alerts: list[AlertResponse] = []
     temperature: float | None = None
@@ -447,6 +529,8 @@ class IrrigateResponse(BaseModel):
 
 
 class SensorStatusResponse(BaseModel):
+    """One sensor's latest soil moisture judged against its plant's target band."""
+
     sensor_id: int
     sensor_name: str
     plant_species: str | None
@@ -457,12 +541,16 @@ class SensorStatusResponse(BaseModel):
 
 
 class MonitorResponse(BaseModel):
+    """Moisture status of every sensor in a cluster and the plants that need water."""
+
     cluster_name: str
     sensors: list[SensorStatusResponse]
     needs_water: list[str]
 
 
 class CheckClusterResponse(BaseModel):
+    """Outcome of the scheduled check for one cluster, with any alerts it raised."""
+
     cluster_id: int
     cluster_name: str
     action: str
@@ -473,15 +561,21 @@ class CheckClusterResponse(BaseModel):
 
 
 class CheckAllResponse(BaseModel):
+    """Outcome of the scheduled check across all clusters."""
+
     results: list[CheckClusterResponse]
     has_alerts: bool
 
 
 class SyncRequest(BaseModel):
+    """Body for a sensor sync: how many hours of device history to backfill."""
+
     hours: int = 24
 
 
 class SyncResponse(BaseModel):
+    """Totals of a sensor sync (history rows synced, new rows stored, live reads) and any errors."""
+
     total_synced: int
     total_new: int
     total_live: int
@@ -489,30 +583,40 @@ class SyncResponse(BaseModel):
 
 
 class LearnResponse(BaseModel):
+    """The learning report for a cluster as text, plus the alerts it detected."""
+
     cluster_name: str
     report: str
     alerts: list[AlertResponse] = []
 
 
 class SensorHistoryResponse(BaseModel):
+    """One sensor's readings over the requested window."""
+
     sensor_id: int
     sensor_name: str
     readings: list[SensorReadingResponse]
 
 
 class IrrigatorHistoryResponse(BaseModel):
+    """One irrigator's events over the requested window."""
+
     irrigator_id: int
     irrigator_name: str
     events: list[IrrigationEventResponse]
 
 
 class HistoryResponse(BaseModel):
+    """A cluster's sensor readings and irrigation events over the requested window."""
+
     cluster_name: str
     sensors: list[SensorHistoryResponse]
     irrigators: list[IrrigatorHistoryResponse]
 
 
 class StatsResponse(BaseModel):
+    """Irrigation statistics for a cluster over the requested number of days."""
+
     cluster_name: str
     period_days: int
     total_events: int
@@ -524,6 +628,8 @@ class StatsResponse(BaseModel):
 
 
 class ClusterStatusSensorResponse(BaseModel):
+    """A sensor in the status view, with its latest reading and how old it is."""
+
     id: int
     name: str
     type: str
@@ -533,6 +639,8 @@ class ClusterStatusSensorResponse(BaseModel):
 
 
 class ClusterStatusIrrigatorResponse(BaseModel):
+    """The irrigator in the status view, with its recent activity."""
+
     id: int
     name: str
     type: str
@@ -541,6 +649,8 @@ class ClusterStatusIrrigatorResponse(BaseModel):
 
 
 class ClusterStatusResponse(BaseModel):
+    """Everything the dashboard shows for a cluster: config, plants, sensors, irrigator and current decision."""
+
     cluster: ClusterResponse
     config: ConfigResponse | None
     plants: list[PlantResponse]
@@ -553,6 +663,8 @@ class ClusterStatusResponse(BaseModel):
 
 
 class SchedulerJobResponse(BaseModel):
+    """A scheduler job; ``core`` jobs are built in and cannot be deleted."""
+
     id: str
     name: str
     trigger: str
@@ -560,13 +672,6 @@ class SchedulerJobResponse(BaseModel):
     paused: bool = False
     # Built-in job registered at startup: cannot be deleted (409) — pause instead.
     core: bool = False
-
-
-class CreateSchedulerJobRequest(BaseModel):
-    name: str
-    job_type: str
-    cron_expression: str | None = None
-    interval_minutes: int | None = None
 
 
 class SchedulerStateResponse(BaseModel):
@@ -579,6 +684,8 @@ class SchedulerStateResponse(BaseModel):
 
 
 class HealthResponse(BaseModel):
+    """Liveness of the server and its scheduler, with the registered jobs."""
+
     status: str
     scheduler_running: bool
     jobs: list[SchedulerJobResponse]
@@ -588,24 +695,32 @@ class HealthResponse(BaseModel):
 
 
 class ChartDatasetResponse(BaseModel):
+    """One sensor's ``(timestamp, value)`` series for a chart."""
+
     sensor_id: int
     sensor_name: str
     points: list[tuple[int, float]]
 
 
 class ChartEventResponse(BaseModel):
+    """An irrigation event marked on a chart."""
+
     timestamp: int
     action: str
     duration_minutes: int | None = None
 
 
 class ChartThresholdResponse(BaseModel):
+    """The ideal band drawn on a chart and where it came from (``none`` when unknown)."""
+
     min: float | None = None
     max: float | None = None
     source: str = "none"
 
 
 class ChartPayloadResponse(BaseModel):
+    """Everything a metric chart needs: sensor series, irrigation events and the ideal band."""
+
     metric: str
     hours: int
     datasets: list[ChartDatasetResponse]
@@ -640,6 +755,8 @@ class AlertSummary(BaseModel):
 
 
 class AlertListResponse(BaseModel):
+    """A page of the alert inbox, with the total number of open alerts."""
+
     open_count: int
     items: list[AlertSummary]
     next_cursor: int | None = None
@@ -664,6 +781,8 @@ class ActivityEventResponse(BaseModel):
 
 
 class ActivityListResponse(BaseModel):
+    """A page of the activity stream, newest first; pass ``next_cursor`` for older events."""
+
     items: list[ActivityEventResponse]
     next_cursor: int | None = None
 
@@ -690,6 +809,8 @@ class DecisionLogResponse(BaseModel):
 
 
 class DecisionLogListResponse(BaseModel):
+    """Logged decision evaluations for a cluster, newest first."""
+
     cluster_id: int
     items: list[DecisionLogResponse]
 
@@ -716,6 +837,8 @@ class ForecastResponse(BaseModel):
 
 
 class PlantHealthDailyResponse(BaseModel):
+    """One day's health score for a plant and the in-band percentages behind it."""
+
     model_config = ConfigDict(from_attributes=True)
 
     date_key: str
@@ -729,6 +852,8 @@ class PlantHealthDailyResponse(BaseModel):
 
 
 class PlantHealthResponse(BaseModel):
+    """A plant's current health score and its daily history."""
+
     plant_id: int
     species: str
     current_score: float | None
@@ -739,6 +864,8 @@ class PlantHealthResponse(BaseModel):
 
 
 class SystemHealthDevice(BaseModel):
+    """One device's freshness on the system health page."""
+
     id: int
     name: str
     status: str
@@ -747,6 +874,8 @@ class SystemHealthDevice(BaseModel):
 
 
 class SystemHealthResponse(BaseModel):
+    """Server-wide health: scheduler, cloud reachability, sensor freshness and open alerts."""
+
     status: str
     scheduler_running: bool
     cloud_reachable: bool
@@ -763,6 +892,8 @@ class SystemHealthResponse(BaseModel):
 
 
 class DataQualityIssue(BaseModel):
+    """One data-quality finding about a sensor, plant or cluster."""
+
     code: str
     severity: str
     entity_type: str
@@ -772,6 +903,8 @@ class DataQualityIssue(BaseModel):
 
 
 class DataQualityReport(BaseModel):
+    """Every data-quality finding plus how many there are per issue code."""
+
     issues: list[DataQualityIssue]
     counts: dict[str, int]
 
@@ -780,6 +913,8 @@ class DataQualityReport(BaseModel):
 
 
 class VacationCreateRequest(BaseModel):
+    """Body for scheduling a vacation window (Unix seconds); watering is rationed inside it."""
+
     starts_at: int
     ends_at: int
     contact_email: str | None = None
@@ -787,7 +922,10 @@ class VacationCreateRequest(BaseModel):
 
 
 class UpdateVacationWindowRequest(BaseModel):
-    """Partial-update body for a vacation window. All fields optional."""
+    """Partial-update body for a vacation window; omitted fields keep their value, null clears notes / email.
+
+    ``null`` for ``starts_at`` / ``ends_at`` is ignored (they are required).
+    """
 
     starts_at: int | None = None
     ends_at: int | None = None
@@ -796,6 +934,8 @@ class UpdateVacationWindowRequest(BaseModel):
 
 
 class VacationResponse(BaseModel):
+    """A vacation window as stored."""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -807,6 +947,8 @@ class VacationResponse(BaseModel):
 
 
 class VacationListResponse(BaseModel):
+    """All vacation windows and the one active now, if any."""
+
     active: VacationResponse | None
     items: list[VacationResponse]
 
@@ -815,6 +957,8 @@ class VacationListResponse(BaseModel):
 
 
 class PreferencesResponse(BaseModel):
+    """Server-wide preferences (display, refresh, global dry-run, scheduler pause, notifications)."""
+
     model_config = ConfigDict(from_attributes=True)
 
     units: str
@@ -831,6 +975,11 @@ class PreferencesResponse(BaseModel):
 
 
 class PreferencesUpdateRequest(BaseModel):
+    """Partial update of the preferences; omitted fields keep their value.
+
+    ``null`` clears an optional field and is ignored for a required one.
+    """
+
     units: str | None = None
     timezone: str | None = None
     theme: str | None = None
@@ -847,12 +996,24 @@ class PreferencesUpdateRequest(BaseModel):
 
 
 class UpdateClusterRequest(BaseModel):
+    """Partial update of a cluster; omitted fields keep their value.
+
+    ``null`` clears an optional field and is ignored for a required one.
+    """
+
     name: str | None = None
     location: str | None = None
     environment: str | None = None
 
 
 class UpdatePlantRequest(BaseModel):
+    """Partial update of a plant; omitted fields keep their value.
+
+    ``null`` clears an optional field and is ignored for a required one.
+    """
+
+    model_config = _FINITE_NUMBERS
+
     species: str | None = None
     category: str | None = None
     water_needs: str | None = None
@@ -865,16 +1026,30 @@ class UpdatePlantRequest(BaseModel):
 
 
 class UpdateSensorRequest(BaseModel):
+    """Partial update of a sensor; omitted fields keep their value.
+
+    ``null`` clears an optional field and is ignored for a required one;
+    ``config: null`` clears the whole config, ``local_key`` included.
+    """
+
     name: str | None = None
     type: str | None = None
-    config: dict | None = None
+    config: dict[Any, Any] | None = None
     plant_id: int | None = None
 
 
 class UpdateIrrigatorRequest(BaseModel):
+    """Partial update of an irrigator; omitted fields keep their value.
+
+    ``null`` clears an optional field and is ignored for a required one;
+    ``config: null`` clears the whole config, ``local_key`` included.
+    """
+
+    model_config = _FINITE_NUMBERS
+
     name: str | None = None
     type: str | None = None
-    config: dict | None = None
+    config: dict[Any, Any] | None = None
     reservoir_l: float | None = Field(default=None, ge=0)
     flow_rate_l_per_min: float | None = Field(default=None, ge=0)
 
@@ -883,6 +1058,8 @@ class UpdateIrrigatorRequest(BaseModel):
 
 
 class SearchHit(BaseModel):
+    """One search match with a link to the page that shows it."""
+
     entity_type: str
     entity_id: int
     label: str
@@ -891,6 +1068,8 @@ class SearchHit(BaseModel):
 
 
 class SearchResponse(BaseModel):
+    """Search matches across clusters, plants, sensors and irrigators."""
+
     query: str
     hits: list[SearchHit]
 
@@ -909,6 +1088,8 @@ class CareInsight(BaseModel):
 
 
 class ClusterInsightsResponse(BaseModel):
+    """Care insights for a cluster, with the next-irrigation forecast."""
+
     cluster_id: int
     cluster_name: str
     insights: list[CareInsight]
@@ -941,6 +1122,8 @@ class EfficacyItemResponse(BaseModel):
 
 
 class EfficacyListResponse(BaseModel):
+    """Scored irrigation outcomes for a cluster over the requested number of days."""
+
     cluster_id: int
     days: int
     items: list[EfficacyItemResponse]

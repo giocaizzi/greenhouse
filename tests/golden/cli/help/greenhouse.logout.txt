@@ -1,0 +1,12 @@
+
+ Usage: greenhouse logout [OPTIONS]
+
+ Clear the cached session token and notify the server.
+
+ Deletes ``~/.config/greenhouse/token`` (or the ``$XDG_CONFIG_HOME``
+ equivalent). Best-effort server logout — a missing/expired token
+ does not block the local cleanup.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                                      │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

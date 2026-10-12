@@ -1,9 +1,16 @@
 """Polish: HX-aware error partial, dark-mode toggle, API still returns JSON."""
 
+from http import HTTPStatus
 
-def test_html_404_returns_full_error_page(client):
+from fastapi.testclient import TestClient
+
+from greenhouse_server.web.context import APP_VERSION
+
+
+def test_html_404_returns_full_error_page(client: TestClient) -> None:
+    """HTML 404 returns full error page."""
     resp = client.get("/clusters/9999")
-    assert resp.status_code == 404
+    assert resp.status_code == HTTPStatus.NOT_FOUND
     assert "text/html" in resp.headers["content-type"]
     assert "Error 404" in resp.text
     assert "Cluster not found" in resp.text
@@ -13,9 +20,10 @@ def test_html_404_returns_full_error_page(client):
     assert '<a href="/scheduler">Scheduler</a>' in resp.text  # nav present
 
 
-def test_hx_404_returns_bare_partial(client):
+def test_hx_404_returns_bare_partial(client: TestClient) -> None:
+    """HX 404 returns bare partial."""
     resp = client.get("/clusters/9999", headers={"HX-Request": "true"})
-    assert resp.status_code == 404
+    assert resp.status_code == HTTPStatus.NOT_FOUND
     assert "text/html" in resp.headers["content-type"]
     assert "Error 404" in resp.text
     # HX swaps into an existing target — no layout wrapper.
@@ -23,52 +31,56 @@ def test_hx_404_returns_bare_partial(client):
     assert "<html" not in resp.text.lower()
 
 
-def test_api_404_still_returns_json(client):
+def test_api_404_still_returns_json(client: TestClient) -> None:
+    """API 404 still returns JSON."""
     resp = client.get("/api/v1/clusters/9999")
-    assert resp.status_code == 404
+    assert resp.status_code == HTTPStatus.NOT_FOUND
     assert "application/json" in resp.headers["content-type"]
     body = resp.json()
     assert body["detail"] == "Cluster not found"
 
 
-def test_dark_mode_toggle_present(client):
+def test_dark_mode_toggle_present(client: TestClient) -> None:
+    """Dark mode toggle present."""
     resp = client.get("/")
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     assert 'id="theme-toggle"' in resp.text
     # persistence snippet
     assert "localStorage.getItem('theme')" in resp.text
 
 
-def test_api_422_still_returns_json(client):
+def test_api_422_still_returns_json(client: TestClient) -> None:
     # POST /api/v1/clusters without a body → 422 JSON
+    """API 422 still returns JSON."""
     resp = client.post("/api/v1/clusters", json={})
-    assert resp.status_code == 422
+    assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
     assert "application/json" in resp.headers["content-type"]
 
 
-def test_html_422_returns_error_partial(client):
+def test_html_422_returns_error_partial(client: TestClient) -> None:
     # Missing required name field on the web form → error partial
+    """HTML 422 returns error partial."""
     resp = client.post("/clusters", data={})
-    assert resp.status_code == 422
+    assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
     assert "text/html" in resp.headers["content-type"]
     assert "Error 422" in resp.text
 
 
-def test_footer_shows_app_version(client):
-    from greenhouse_server.web.context import APP_VERSION
-
+def test_footer_shows_app_version(client: TestClient) -> None:
+    """Footer shows app version."""
     resp = client.get("/")
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     assert f"v{APP_VERSION}" in resp.text
     assert 'title="App version"' in resp.text
 
 
-def test_closed_command_palette_is_hidden(client):
+def test_closed_command_palette_is_hidden(client: TestClient) -> None:
     # Regression: `.cmdk` sets display:flex (to center the panel when open),
     # which—being an author rule—overrides the UA `dialog:not([open])` reset and
     # leaves the CLOSED palette as a full-viewport z-index:300 layer that renders
     # over the page and swallows taps meant for the mobile bottom nav (issue #74).
     # The guard re-asserts the hidden state when the dialog has no `open` attr.
+    """Closed command palette is hidden."""
     resp = client.get("/static/app.css")
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     assert ".cmdk:not([open]) { display: none; }" in resp.text

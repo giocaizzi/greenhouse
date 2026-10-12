@@ -1,0 +1,40 @@
+
+ Usage: greenhouse [OPTIONS] COMMAND [ARGS]...
+
+ Smart irrigation system CLI
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ --server                    <str>  Server URL (default: $IRRIGATION_SERVER_URL or                │
+│                                    http://localhost:8000)                                        │
+│ --install-completion               Install completion for the current shell.                     │
+│ --show-completion                  Show completion for the current shell, to copy it or          │
+│                                    customize the installation.                                   │
+│ --help                             Show this message and exit.                                   │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────────────────────────╮
+│ status     Full cluster overview: sensors, config, decision, alerts.                             │
+│ irrigate   Smart irrigation: sync sensors → fetch weather → decide → execute.                    │
+│ check      Unified check: irrigate or monitor + collect all alerts.                              │
+│ monitor    Raw moisture check for sensor-only clusters.                                          │
+│ sync       Sync sensor data from Tuya Cloud.                                                     │
+│ learn      Learning report: efficiency analysis and pattern detection.                           │
+│ history    Sensor readings + irrigation events timeline.                                         │
+│ stats      Irrigation statistics and CSV export.                                                 │
+│ health     Server health and scheduler status.                                                   │
+│ stop-all   Emergency kill switch: stop every irrigator in the system.                            │
+│ login      Exchange username/password for a session JWT.                                         │
+│ logout     Clear the cached session token and notify the server.                                 │
+│ whoami     Print the currently-authenticated user.                                               │
+│ tui        Open the interactive terminal dashboard.                                              │
+│ cluster    Manage plant clusters                                                                 │
+│ plant      Manage plants                                                                         │
+│ irrigator  Manage and control irrigators                                                         │
+│ sensor     Manage sensors                                                                        │
+│ config     Irrigation configuration                                                              │
+│ scheduler  Manage background scheduler jobs                                                      │
+│ alerts     Inspect and manage the alert inbox                                                    │
+│ decisions  Inspect the irrigation decision log                                                   │
+│ prefs      Read and update user preferences                                                      │
+│ vacation   Manage vacation windows (engine holds during these)                                   │
+│ windows    Manage per-cluster preferred watering windows                                         │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

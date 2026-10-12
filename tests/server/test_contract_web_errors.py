@@ -1,0 +1,159 @@
+"""Characterization: error pages and the auth wall in front of the web UI.
+
+Goldens in ``golden/web/errors/<case>.html`` (request line, status, pinned headers, body):
+
+* unknown paths / wrong methods — HTML vs JSON per ``Accept`` / ``HX-Request`` / ``/api`` prefix;
+* the anonymous-browser redirect to ``/login?next=…`` (303, or 204 + ``HX-Redirect`` for HTMX)
+  on the real-auth app (``app_real_auth`` / ``anonymous_client`` fixtures from the server conftest);
+* the JSON 401 from ``/api/v1`` and ``/mcp`` — which today *drops* the ``WWW-Authenticate``
+  header set by ``AuthError`` / ``require_mcp_token`` (observed bug, pinned below).
+"""
+
+from __future__ import annotations
+
+from http import HTTPStatus
+from typing import TYPE_CHECKING
+
+import pytest
+from fastapi.testclient import TestClient
+
+from golden import assert_golden, install_offline_weather
+from server import test_contract_web_html as _web
+from server.conftest import TEST_MCP_TOKEN
+from server.test_contract_web_html import (
+    INDOOR,
+    MakeClient,
+    render_response,
+)
+
+if TYPE_CHECKING:
+    from fastapi import FastAPI
+    from time_machine import Traveller
+
+HTML = {"Accept": "text/html,application/xhtml+xml"}
+JSON = {"Accept": "application/json"}
+HX = {"HX-Request": "true"}
+
+# Shared fixtures (pytest collects fixtures bound to module attributes).
+make_client = _web.make_client
+seeded_get_client = _web.seeded_get_client
+web_env = _web.web_env
+
+
+@pytest.mark.parametrize(
+    ("name", "method", "url", "headers"),
+    [
+        ("unknown_path__html", "GET", "/no/such/page", HTML),
+        ("unknown_path__json", "GET", "/no/such/page", JSON),
+        ("unknown_path__hx", "GET", "/no/such/page", HX),
+        ("unknown_api_path__html", "GET", "/api/v1/no-such-thing", HTML),
+        ("method_not_allowed__html", "PUT", "/clusters", HTML),
+        ("method_not_allowed__json", "PUT", "/clusters", JSON),
+        ("route_404__json_accept", "GET", "/clusters/999", JSON),
+        ("route_422__json_accept", "GET", "/clusters/not-a-number", JSON),
+        ("form_422__hx", "POST", "/clusters", HX),
+    ],
+)
+def test_error_page_golden(
+    name: str, method: str, url: str, headers: dict[str, str], seeded_get_client: TestClient
+) -> None:
+    """Which handler answers (HTML error page / HX partial / JSON) — by path, not by ``Accept``."""
+    resp = seeded_get_client.request(method, url, headers=headers, follow_redirects=False)
+    assert_golden(f"web/errors/{name}.html", render_response(method, url, headers, resp))
+
+
+@pytest.fixture
+def anon(web_env: Traveller, app_real_auth: FastAPI) -> TestClient:
+    """``anonymous_client`` on the real-auth app, under the frozen clock with offline weather."""
+    del web_env  # requested only for its side effect
+    install_offline_weather(app_real_auth)
+    return TestClient(app_real_auth, raise_server_exceptions=False)
+
+
+@pytest.mark.parametrize(
+    ("name", "method", "url", "headers", "cookies"),
+    [
+        ("anonymous_page__redirects_to_login", "GET", f"/clusters/{INDOOR}", HTML, {}),
+        ("anonymous_page_with_query__redirects", "GET", "/alerts?status=open&cluster_id=1", HTML, {}),
+        ("anonymous_page__hx_redirect", "GET", "/health/badge", HX, {}),
+        ("anonymous_post__redirects_to_login", "POST", "/check", HTML, {}),
+        ("anonymous_root__redirects_to_login", "GET", "/", HTML, {}),
+        ("garbage_session_cookie__redirects", "GET", "/vacation", HTML, {"greenhouse_session": "not-a-jwt"}),
+        ("anonymous_login_page", "GET", "/login?next=/vacation", HTML, {}),
+        ("anonymous_api__json_401", "GET", "/api/v1/clusters", HTML, {}),
+        ("unknown_path__anonymous", "GET", "/no/such/page", HTML, {}),
+    ],
+)
+def test_auth_wall_golden(  # noqa: PLR0913, PLR0917 — parametrize argnames
+    name: str, method: str, url: str, headers: dict[str, str], cookies: dict[str, str], anon: TestClient
+) -> None:
+    """Anonymous browser → 303 ``/login?next=…`` (HTMX: 204 + ``HX-Redirect``); API → JSON 401."""
+    for key, value in cookies.items():
+        anon.cookies.set(key, value)
+    resp = anon.request(method, url, headers=headers, follow_redirects=False)
+    assert_golden(f"web/errors/{name}.html", render_response(method, url, headers, resp))
+
+
+def test_session_cookie_name_is_the_one_the_garbage_case_uses(app_real_auth: FastAPI) -> None:
+    """Guards the case above: it must exercise the real cookie, not an ignored one."""
+    assert app_real_auth.state.settings.auth_cookie_name == "greenhouse_session"
+
+
+@pytest.mark.usefixtures("web_env")
+def test_json_401_carries_www_authenticate(anon: TestClient, make_client: MakeClient) -> None:
+    """The JSON 401 carries ``WWW-Authenticate: Bearer`` (RFC 9110 §11.6.1).
+
+    ``AuthError`` (``greenhouse_server/auth.py``) and ``require_mcp_token`` (``app.py``) both set
+    the header; the global ``HTTPException`` handler's JSON branch keeps ``exc.headers``
+    (it used to drop them).
+    """
+    api = anon.get("/api/v1/clusters")
+    assert api.status_code == HTTPStatus.UNAUTHORIZED
+    assert api.json() == {"detail": "Not authenticated"}
+    assert api.headers["www-authenticate"] == "Bearer"
+
+    bad_bearer = anon.get("/api/v1/clusters", headers={"Authorization": "Bearer not-a-jwt"})
+    assert bad_bearer.status_code == HTTPStatus.UNAUTHORIZED
+    assert bad_bearer.headers["www-authenticate"] == "Bearer"
+
+    _, mcp_client = make_client(bypass_auth=False, mcp_token=TEST_MCP_TOKEN)
+    mcp = mcp_client.post(
+        "/mcp",
+        headers={"Authorization": "Bearer wrong", "Accept": "application/json, text/event-stream"},
+        json={"jsonrpc": "2.0", "id": 1, "method": "tools/list"},
+    )
+    assert mcp.status_code == HTTPStatus.UNAUTHORIZED
+    assert mcp.json() == {"detail": "Invalid MCP token"}
+    assert mcp.headers["www-authenticate"] == "Bearer"
+
+
+def test_error_format_follows_accept_on_web_paths(seeded_get_client: TestClient) -> None:
+    """Web-path errors follow ``Accept``; machine paths stay JSON.
+
+    Router-level 404/405 (Starlette ``HTTPException``) used to bypass the handler and answer
+    JSON even to browsers, while a route-raised 404 rendered HTML even for
+    ``Accept: application/json``.
+    """
+    unknown = seeded_get_client.get("/no/such/page", headers=HTML)
+    assert unknown.status_code == HTTPStatus.NOT_FOUND
+    assert unknown.headers["content-type"].startswith("text/html")
+    wrong_method = seeded_get_client.put("/clusters", headers=HTML)
+    assert wrong_method.status_code == HTTPStatus.METHOD_NOT_ALLOWED
+    assert wrong_method.headers["content-type"].startswith("text/html")
+    assert "GET" in wrong_method.headers["allow"]  # the HTML page keeps the 405's Allow header
+    route_404 = seeded_get_client.get("/clusters/999", headers=JSON)
+    assert (route_404.status_code, route_404.json()) == (404, {"detail": "Cluster not found"})
+    unknown_json = seeded_get_client.get("/no/such/page", headers=JSON)
+    assert (unknown_json.status_code, unknown_json.json()) == (404, {"detail": "Not Found"})
+    api_html = seeded_get_client.get("/api/v1/no-such-thing", headers=HTML)
+    assert (api_html.status_code, api_html.json()) == (404, {"detail": "Not Found"})
+    well_known = seeded_get_client.get("/.well-known/no-such-thing", headers=HTML)
+    assert (well_known.status_code, well_known.json()) == (404, {"detail": "Not Found"})
+
+
+@pytest.mark.parametrize(("name", "url"), [("auth_disabled__dashboard", "/"), ("auth_disabled__login_form", "/login")])
+def test_auth_disabled_mode_golden(name: str, url: str, make_client: MakeClient) -> None:
+    """``auth_enabled=False`` dev mode: no auth wall, and the chrome hides the Sign-out button."""
+    _, client = make_client(bypass_auth=False, auth_enabled=False)
+    resp = client.get(url, follow_redirects=False)
+    assert_golden(f"web/errors/{name}.html", render_response("GET", url, {}, resp))

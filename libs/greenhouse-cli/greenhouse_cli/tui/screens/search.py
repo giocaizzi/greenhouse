@@ -4,59 +4,81 @@ from __future__ import annotations
 
 import asyncio
 import re
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar, cast
 
 from textual import on, work
-from textual.app import ComposeResult
 from textual.containers import Vertical
 from textual.screen import ModalScreen
-from textual.widgets import DataTable, Input, Static
+from textual.widgets import Input, Static
+
+from greenhouse_cli.tui.table import DataTable
 
 if TYPE_CHECKING:
+    from textual.app import ComposeResult
+    from textual.binding import BindingType
+
     from greenhouse_cli.tui.app import GreenhouseApp
 
 CLUSTER_HREF = re.compile(r"/clusters/(\d+)")
+RESULT_COLUMNS = ("Type", "Name", "Detail")
 
 
 class SearchScreen(ModalScreen[int | None]):
     """Type to search; ``enter`` on a hit dismisses with the hit's cluster ID."""
 
-    BINDINGS = [("escape", "dismiss(None)", "Close")]
+    BINDINGS: ClassVar[list[BindingType]] = [("escape", "dismiss(None)", "Close")]
 
     def compose(self) -> ComposeResult:
+        """Render the search box above the results table."""
         with Vertical(classes="dialog search-dialog"):
             yield Static("[b]Search[/b]  [dim]clusters, plants, sensors, irrigators, device IDs[/dim]")
             yield Input(placeholder="type to search…", id="search-input")
             yield DataTable(id="search-results", cursor_type="row")
 
     def __init__(self) -> None:
+        """Start with no result rows to open."""
         super().__init__()
         self._targets: dict[str, int] = {}
 
     def on_mount(self) -> None:
-        self.query_one(DataTable).add_columns("Type", "Name", "Detail")
+        """Declare the result columns and put the cursor in the search box."""
+        self.query_one(DataTable).add_columns(*RESULT_COLUMNS)
         self.query_one(Input).focus()
+
+    @staticmethod
+    def _reset(table: DataTable[str]) -> None:
+        """Drop rows *and* columns, then re-declare the columns.
+
+        Auto-width columns only ever grow while rows are cleared, so one long
+        hit from an early partial query kept the table wide for every later
+        result; re-creating the columns sizes them to the current hits.
+        """
+        table.clear(columns=True)
+        table.add_columns(*RESULT_COLUMNS)
 
     @on(Input.Changed)
     def _changed(self, event: Input.Changed) -> None:
+        """Every keystroke restarts the debounced search worker."""
         self.search(event.value)
 
     @on(Input.Submitted)
     def _submitted(self) -> None:
+        """Enter moves focus to the results, when there are any, so arrows pick a hit."""
         table = self.query_one(DataTable)
         if table.row_count:
             table.focus()
 
     @work(exclusive=True, group="search")
     async def search(self, query: str) -> None:
+        """Debounce keystrokes, then query the server and remember which hits link to a cluster."""
         await asyncio.sleep(0.2)  # debounce keystrokes
         table = self.query_one(DataTable)
         if not query.strip():
-            table.clear()
+            self._reset(table)
             return
-        app: GreenhouseApp = self.app  # type: ignore[assignment]
+        app = cast("GreenhouseApp", self.app)
         data = await app.api(lambda c: c.search(query, limit=50), quiet=True)
-        table.clear()
+        self._reset(table)
         self._targets = {}
         for i, hit in enumerate((data or {}).get("hits", [])):
             match = CLUSTER_HREF.search(hit.get("href", ""))
@@ -66,6 +88,7 @@ class SearchScreen(ModalScreen[int | None]):
 
     @on(DataTable.RowSelected)
     def _selected(self, event: DataTable.RowSelected) -> None:
+        """Dismiss with the hit's cluster id; hits that link to no cluster are ignored."""
         target = self._targets.get(event.row_key.value or "")
         if target is not None:
             self.dismiss(target)

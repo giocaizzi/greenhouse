@@ -1,17 +1,29 @@
 """Test suite for the Tuya DeviceGateway cloud-read surface."""
 
+from collections.abc import Iterator
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from fake_data import FAKE_CLIENT_ID, FAKE_CLIENT_SECRET, FAKE_REGION, FAKE_SENSOR_ID
+from greenhouse_core.devices.gateway import DeviceGateway
+
+# Canned Cloud payload values and what the gateway must parse them into.
+V1_HUMIDITY_PCT = 45.0  # v1 ``humidity`` DP 45 → soil moisture
+V2_HUMIDITY_PCT = 55.0  # v2 shadow ``humidity`` 55
+FALLBACK_HUMIDITY_PCT = 50.0  # v1 answer after a failed v2 read
+LOG_HUMIDITY_PCT = 50.0  # ``"50"`` in the device log
+OLDER_LOG_MS, NEWER_LOG_MS = 1_000_000, 2_000_000
+LOG_ENTRIES = 2
+GROUPS_WITHIN_TOLERANCE = 2
 
 
 class TestDeviceGateway:
     """Test the gateway's cloud reads with a mocked tinytuya client."""
 
     @pytest.fixture(autouse=True)
-    def setup(self):
+    def setup(self) -> Iterator[None]:
+        """Build a gateway on a mocked tinytuya Cloud whose v2.0 shadow read fails by default."""
         with patch("greenhouse_core.devices.gateway.tinytuya") as mock_tinytuya:
             self.mock_cloud_instance = MagicMock()
             mock_tinytuya.Cloud.return_value = self.mock_cloud_instance
@@ -20,21 +32,17 @@ class TestDeviceGateway:
             # override cloudrequest with a real payload.
             self.mock_cloud_instance.cloudrequest.return_value = {"success": False}
 
-            from greenhouse_core.devices.gateway import DeviceGateway
-
             self.cloud = DeviceGateway(FAKE_CLIENT_ID, FAKE_CLIENT_SECRET, FAKE_REGION)
             yield
 
-    @patch("greenhouse_core.devices.gateway.tinytuya")
+    @patch("greenhouse_core.devices.gateway.tinytuya", new=MagicMock())
     @patch.dict("os.environ", {"TUYA_CLIENT_ID": "", "TUYA_CLIENT_SECRET": ""}, clear=False)
-    def test_init_requires_credentials(self, _mock_tinytuya):
+    def test_init_requires_credentials(self) -> None:
         """Gateway raises without credentials."""
-        from greenhouse_core.devices.gateway import DeviceGateway
-
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="Missing TUYA_CLIENT_ID or TUYA_CLIENT_SECRET"):
             DeviceGateway("", "", "eu")
 
-    def test_get_live_reading_parses_soil_sensor(self):
+    def test_get_live_reading_parses_soil_sensor(self) -> None:
         """Live reading correctly parses TR-301Z soil sensor DPs (v1 path)."""
         self.mock_cloud_instance.getstatus.return_value = {
             "success": True,
@@ -47,10 +55,10 @@ class TestDeviceGateway:
         data = self.cloud.get_live_reading(FAKE_SENSOR_ID)
 
         assert data["temperature"] == pytest.approx(25.1)
-        assert data["soil_moisture"] == 45.0
+        assert data["soil_moisture"] == V1_HUMIDITY_PCT
         assert data["battery_state"] == "middle"
 
-    def test_get_live_reading_handles_error(self):
+    def test_get_live_reading_handles_error(self) -> None:
         """Live reading raises on API error when both v2 and v1 fail."""
         self.mock_cloud_instance.getstatus.return_value = {
             "success": False,
@@ -59,7 +67,7 @@ class TestDeviceGateway:
         with pytest.raises(RuntimeError):
             self.cloud.get_live_reading(FAKE_SENSOR_ID)
 
-    def test_get_device_logs_parses_and_sorts(self):
+    def test_get_device_logs_parses_and_sorts(self) -> None:
         """Device logs are parsed and sorted chronologically."""
         self.mock_cloud_instance.getdevicelog.return_value = {
             "result": {
@@ -71,15 +79,15 @@ class TestDeviceGateway:
         }
         logs = self.cloud.get_device_logs(FAKE_SENSOR_ID, hours=1)
 
-        assert len(logs) == 2
-        assert logs[0]["timestamp_ms"] == 1000000
-        assert logs[1]["timestamp_ms"] == 2000000
+        assert len(logs) == LOG_ENTRIES
+        assert logs[0]["timestamp_ms"] == OLDER_LOG_MS
+        assert logs[1]["timestamp_ms"] == NEWER_LOG_MS
         assert logs[0]["key"] == "temperature"
         assert logs[0]["value"] == pytest.approx(22.0)
         assert logs[1]["key"] == "soil_moisture"
-        assert logs[1]["value"] == 50.0
+        assert logs[1]["value"] == LOG_HUMIDITY_PCT
 
-    def test_group_logs_by_timestamp(self):
+    def test_group_logs_by_timestamp(self) -> None:
         """Logs reported within tolerance are grouped into single readings."""
         logs = [
             {"timestamp_ms": 1000, "timestamp": 1, "key": "temperature", "value": 22.0},
@@ -88,17 +96,17 @@ class TestDeviceGateway:
         ]
         grouped = self.cloud.group_logs_by_timestamp(logs, tolerance_ms=5000)
 
-        assert len(grouped) == 2
+        assert len(grouped) == GROUPS_WITHIN_TOLERANCE
         assert grouped[0]["temperature"] == pytest.approx(22.0)
         assert grouped[0]["soil_moisture"] == pytest.approx(45.0)
         assert grouped[1]["temperature"] == pytest.approx(23.0)
         assert "soil_moisture" not in grouped[1]
 
-    def test_group_logs_empty(self):
+    def test_group_logs_empty(self) -> None:
         """Grouping empty logs returns empty list."""
         assert self.cloud.group_logs_by_timestamp([]) == []
 
-    def test_get_live_reading_v2_shadow(self):
+    def test_get_live_reading_v2_shadow(self) -> None:
         """Live reading uses v2.0 shadow properties when available."""
         self.mock_cloud_instance.cloudrequest.return_value = {
             "success": True,
@@ -114,13 +122,13 @@ class TestDeviceGateway:
         data = self.cloud.get_live_reading(FAKE_SENSOR_ID)
 
         assert data["temperature"] == pytest.approx(23.0)
-        assert data["soil_moisture"] == 55.0
+        assert data["soil_moisture"] == V2_HUMIDITY_PCT
         assert data["env_humidity"] == pytest.approx(72.0)
         assert data["water_warning"] is True
         # Should NOT have called getstatus (v2 succeeded)
         self.mock_cloud_instance.getstatus.assert_not_called()
 
-    def test_get_live_reading_v2_fallback_to_v1(self):
+    def test_get_live_reading_v2_fallback_to_v1(self) -> None:
         """Falls back to v1 getstatus when the v2 shadow endpoint fails."""
         self.mock_cloud_instance.cloudrequest.side_effect = Exception("v2 not available")
         self.mock_cloud_instance.getstatus.return_value = {
@@ -133,11 +141,11 @@ class TestDeviceGateway:
         data = self.cloud.get_live_reading(FAKE_SENSOR_ID)
 
         assert data["temperature"] == pytest.approx(22.0)
-        assert data["soil_moisture"] == 50.0
+        assert data["soil_moisture"] == FALLBACK_HUMIDITY_PCT
 
     # ── Edge case tests ─────────────────────────────────────────────────────
 
-    def test_get_live_reading_partial_data(self):
+    def test_get_live_reading_partial_data(self) -> None:
         """Live reading with only temperature (no moisture) parses correctly."""
         self.mock_cloud_instance.getstatus.return_value = {
             "success": True,
@@ -150,7 +158,7 @@ class TestDeviceGateway:
         assert data["temperature"] == pytest.approx(19.5)
         assert "soil_moisture" not in data
 
-    def test_get_device_logs_empty_result(self):
+    def test_get_device_logs_empty_result(self) -> None:
         """Empty logs list returns empty."""
         self.mock_cloud_instance.getdevicelog.return_value = {
             "result": {"logs": []},
@@ -158,7 +166,7 @@ class TestDeviceGateway:
         logs = self.cloud.get_device_logs(FAKE_SENSOR_ID, hours=1)
         assert logs == []
 
-    def test_get_device_logs_unknown_code_preserved_raw(self):
+    def test_get_device_logs_unknown_code_preserved_raw(self) -> None:
         """Unknown DP codes are preserved with raw key/value."""
         self.mock_cloud_instance.getdevicelog.return_value = {
             "result": {
@@ -170,7 +178,7 @@ class TestDeviceGateway:
         }
         logs = self.cloud.get_device_logs(FAKE_SENSOR_ID, hours=1)
 
-        assert len(logs) == 2
+        assert len(logs) == LOG_ENTRIES
         # Unknown code preserved as-is
         assert logs[0]["key"] == "unknown_dp_code"
         assert logs[0]["value"] == "42"
@@ -178,7 +186,7 @@ class TestDeviceGateway:
         assert logs[1]["key"] == "temperature"
         assert logs[1]["value"] == pytest.approx(22.0)
 
-    def test_v2_shadow_partial_properties(self):
+    def test_v2_shadow_partial_properties(self) -> None:
         """V2 shadow with only some properties returns partial data."""
         self.mock_cloud_instance.cloudrequest.return_value = {
             "success": True,
@@ -194,7 +202,7 @@ class TestDeviceGateway:
         assert "soil_moisture" not in data
         assert "env_humidity" not in data
 
-    def test_group_logs_single_entry(self):
+    def test_group_logs_single_entry(self) -> None:
         """Single log entry groups correctly."""
         logs = [
             {"timestamp_ms": 1000, "timestamp": 1, "key": "temperature", "value": 22.0},
@@ -204,7 +212,7 @@ class TestDeviceGateway:
         assert len(grouped) == 1
         assert grouped[0]["temperature"] == pytest.approx(22.0)
 
-    def test_v2_shadow_empty_is_authoritative_no_fallback(self):
+    def test_v2_shadow_empty_is_authoritative_no_fallback(self) -> None:
         """A successful-but-empty v2 shadow read is authoritative.
 
         The deliberate-fallback contract: v1 getstatus fires ONLY when v2 fails,
@@ -221,7 +229,7 @@ class TestDeviceGateway:
         assert data == {}
         self.mock_cloud_instance.getstatus.assert_not_called()
 
-    def test_open_local_uses_cached_config_key_no_getdevices(self):
+    def test_open_local_uses_cached_config_key_no_getdevices(self) -> None:
         """open_local resolves local_key from config without a Cloud getdevices."""
         irr = MagicMock()
         irr.tuya_device_id = FAKE_SENSOR_ID
@@ -231,7 +239,7 @@ class TestDeviceGateway:
         outlet.assert_called_once_with(FAKE_SENSOR_ID, "192.0.2.10", "cfgkey123")
         self.mock_cloud_instance.getdevices.assert_not_called()
 
-    def test_open_local_cold_lookup_then_cached(self):
+    def test_open_local_cold_lookup_then_cached(self) -> None:
         """A missing config key triggers exactly one getdevices, then caches."""
         irr = MagicMock()
         irr.tuya_device_id = FAKE_SENSOR_ID

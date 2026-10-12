@@ -38,9 +38,9 @@ class IrrigatorProfile:
         protocol_version: tinytuya local protocol version (3.5 for IK10PW).
             ``None`` for cloud-only devices.
         dp_map: Logical name → DP id mapping (``{"switch": 1, "duration": 102}``).
-        capabilities: Free-form flags consulted by the engine / pump watcher
-            (``"has_local_duration_dp"``, ``"has_water_shortage_dp"``,
-            ``"needs_keepalive_fallback"``).
+        capabilities: Free-form flags describing the model
+            (``"has_local_duration_dp"``, ``"supports_local_status"``); the
+            adapters consult them through :meth:`has_capability`.
         duration_unit: Unit for the Duration DP if any.
         alarm_bitmask: Bit to AND against the alarm DP value when checking
             for a no-water condition (``0x01`` on IK10PW). ``None`` when the
@@ -61,9 +61,10 @@ class IrrigatorProfile:
         return name in self.capabilities
 
     def dp(self, name: str) -> int:
-        """Resolve a logical DP name to its numeric id. Raises ``KeyError``
-        when the DP is not declared for this model — callers must guard with
-        :meth:`has_capability` first.
+        """Resolve a logical DP name to its numeric id.
+
+        Raises ``KeyError`` when the DP is not declared for this model — callers
+        must guard with :meth:`has_capability` first.
         """
         return self.dp_map[name]
 
@@ -78,9 +79,12 @@ class SensorProfile:
         transport: Tuya transport in use (typically ``tuya_cloud``).
         capabilities: Free-form flags such as ``"reports_soil_moisture"``,
             ``"reports_temperature"``, ``"reports_lux"``, ``"reports_battery"``.
-        dp_parsers: Tuya DP code (e.g. ``"humidity"``) → parser callable.
-            The parser returns a ``(canonical_key, value)`` tuple consumed by
-            ``TuyaSensorAdapter.read_live``.
+        dp_parsers: Tuya DP code (e.g. ``"humidity"``) → parser callable,
+            each returning a ``(canonical_key, value)`` tuple. Descriptive:
+            the entries are picked from the gateway's single
+            ``DATAPOINT_PARSERS`` table, and reads parse through that table
+            inside :class:`~greenhouse_core.devices.gateway.DeviceGateway`,
+            which does not consult this mapping.
     """
 
     model_key: str
@@ -94,7 +98,7 @@ class SensorProfile:
         return name in self.capabilities
 
 
-def load_profile_json(filename: str) -> dict:
+def load_profile_json(filename: str) -> dict[str, Any]:
     """Load the raw JSON body of a profile sidecar bundled with the package.
 
     Adapter modules are responsible for mapping the dict into a typed
@@ -102,4 +106,5 @@ def load_profile_json(filename: str) -> dict:
     expressed declaratively).
     """
     path = _PROFILES_DIR / filename
-    return json.loads(path.read_text(encoding="utf-8"))
+    raw: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
+    return raw

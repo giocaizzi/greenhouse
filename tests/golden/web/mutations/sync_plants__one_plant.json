@@ -1,0 +1,87 @@
+{
+ "body_lines": [
+  "<article class=\"card card--flush result-panel\">",
+  "  <div class=\"card__head\">",
+  "    <div class=\"row\" style=\"gap: var(--sp-3);\">",
+  "      <span class=\"badge-ok\">",
+  "        <svg class=\"icon icon--xs\" aria-hidden=\"true\"><use href=\"/static/icons/sprite.svg#i-check\"></use></svg>",
+  "        Synced",
+  "      </span>",
+  "      <h3 class=\"card__title\">Sync result · plants</h3>",
+  "    </div>",
+  "  </div>",
+  "  <div class=\"card__body\">",
+  "    ",
+  "      <p>",
+  "        <span class=\"mono\">1</span> plant synced",
+  "      </p>",
+  "    ",
+  "    ",
+  "  </div>",
+  "</article>"
+ ],
+ "db_effect": {
+  "plants": {
+   "changed": {
+    "2": {
+     "ideal_humidity_max": [
+      85.0,
+      80.0
+     ],
+     "ideal_temp_max": [
+      29.0,
+      27.0
+     ],
+     "light_needs": [
+      null,
+      "medium"
+     ],
+     "notes": [
+      null,
+      "Sources: The Spruce: 65-85°F (18-29°C), 60%+ humidity, Bloomscape: consistently moist soil, never soggy"
+     ],
+     "water_needs": [
+      "high",
+      "medium"
+     ]
+    }
+   }
+  }
+ },
+ "device_calls": {
+  "irrigator": [],
+  "sensor": []
+ },
+ "headers": {
+  "content-type": "text/html; charset=utf-8"
+ },
+ "request": {
+  "form": {
+   "plant_id": "2"
+  },
+  "headers": {
+   "HX-Request": "true"
+  },
+  "method": "POST",
+  "url": "/plants/sync"
+ },
+ "status": 200,
+ "templates": [
+  [
+   "partials/_sync_result.html",
+   [
+    "active_vacation",
+    "app_version",
+    "auth_enabled",
+    "dry_run_global",
+    "is_hx",
+    "now_text",
+    "request",
+    "result",
+    "scheduler_paused",
+    "show_chrome",
+    "theme"
+   ]
+  ]
+ ]
+}

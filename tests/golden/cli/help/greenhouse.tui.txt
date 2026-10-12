@@ -1,0 +1,17 @@
+
+ Usage: greenhouse tui [OPTIONS]
+
+ Open the interactive terminal dashboard.
+
+ Animated plant sprites, live charts, decision trails, alerts, activity
+ and system health — plus irrigate / water-now dialogs; stop, check,
+ scheduler pause / resume and plant-DB sync behind a yes/no confirmation;
+ and a one-key sensor sync. Talks to the server over HTTP, so it works
+ against any reachable greenhouse server (``--server``).
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ --refresh             <float range> [x>=0]  Auto-refresh interval in seconds (0 disables)        │
+│                                             [default: 30.0]                                      │
+│ --no-animation                              Render sprites as still frames                       │
+│ --help                                      Show this message and exit.                          │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

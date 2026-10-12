@@ -1,0 +1,25 @@
+{
+ "body_lines": [
+  ""
+ ],
+ "db_effect": {},
+ "device_calls": {
+  "irrigator": [],
+  "sensor": []
+ },
+ "headers": {
+  "location": "/quality"
+ },
+ "request": {
+  "form": {
+   "next": "/quality",
+   "password": "x",
+   "username": "anyone"
+  },
+  "headers": {},
+  "method": "POST",
+  "url": "/login"
+ },
+ "status": 303,
+ "templates": []
+}

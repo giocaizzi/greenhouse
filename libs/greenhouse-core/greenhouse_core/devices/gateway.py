@@ -10,7 +10,9 @@ Steady-state Cloud budget is just the sync job's per-sensor reads. Local
 actuation resolves each irrigator's ``local_key`` from its persisted ``config``
 blob (or a process cache), so :meth:`DeviceGateway.open_local` never calls the
 Cloud once a key is known — this is what removes the per-poll ``getdevices``
-storm the pump watcher used to cause.
+storm the pump watcher used to cause. A stored key that went stale (the device
+was re-paired) is the one exception: :meth:`DeviceGateway.run_local` refreshes it
+with one rate-limited Cloud lookup when tinytuya answers error 914.
 
 ``tinytuya`` is imported here (and re-exported from ``greenhouse_core.devices``)
 so tests patch ``greenhouse_core.devices.tinytuya.Cloud`` — which mutates the
@@ -19,81 +21,158 @@ shared ``tinytuya`` module object — and intercept construction here too.
 
 from __future__ import annotations
 
-import json as _json
 import logging
 import os
 import time
-from collections.abc import Callable
+from typing import TYPE_CHECKING, Any, Protocol, TypedDict, TypeVar
 
 import tinytuya
 
-from greenhouse_core.models import Irrigator
+from greenhouse_core.constants import SENSOR_LOG_MAX_PAGES, SENSOR_LOG_PAGE_SIZE
+from greenhouse_core.devices.datapoints import DATAPOINT_PARSERS, group_logs_by_timestamp
+from greenhouse_core.devices.local_keys import LocalKeyResolver, is_key_or_version_error
+from greenhouse_core.models import Irrigator, parse_device_config
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
 LOCAL_TIMEOUT = 5
 
-# Datapoint parsers — the single home for Tuya DP code → (canonical_key, value).
-# TR-301Z (zwjcy — 土壤温湿度) soil temp/humidity sensor and friends.
-DATAPOINT_PARSERS: dict[str, Callable[[object], tuple[str, object]]] = {
-    # Standard DPs (v1 getstatus / getdevicelog)
-    "temp_current": lambda v: ("temperature", float(v) / 10.0),
-    "va_temperature": lambda v: ("temperature", float(v) / 10.0),
-    "humidity": lambda v: ("soil_moisture", float(v)),
-    "humidity_value": lambda v: ("soil_moisture", float(v)),
-    "va_humidity": lambda v: ("env_humidity", float(v)),
-    "battery_state": lambda v: ("battery_state", v),
-    "battery_percentage": lambda v: ("battery_percentage", int(v)),
-    "bright_value": lambda v: ("light", int(v)),
-    "light": lambda v: ("light", int(v)),
-    # Extended DPs (v2 shadow properties — DP 101+)
-    "env_humidity": lambda v: ("env_humidity", float(v)),  # DP 101: ambient humidity %
-    "illumiance": lambda v: ("light", int(v)),  # DP 102: lux (typo in Tuya API)
-    "water_warning": lambda v: ("water_warning", bool(v)),  # DP 111: device soil-dry alert
-    "soil_warning": lambda v: ("soil_warning", int(v)),  # DP 110: soil warning code
-}
+_LocalResult = TypeVar("_LocalResult")
 
 
-def _coerce_config(config: object) -> dict:
-    """Return the irrigator ``config`` blob as a dict (JSON string or dict)."""
-    if isinstance(config, dict):
-        return config
-    if isinstance(config, str):
-        try:
-            parsed = _json.loads(config)
-            return parsed if isinstance(parsed, dict) else {}
-        except (ValueError, TypeError):
-            return {}
-    return {}
+class MissingCloudCredentialsError(ValueError):
+    """The Tuya Cloud client id or secret is configured nowhere (arguments or ``TUYA_*`` env vars)."""
+
+    def __init__(self) -> None:
+        """Name the two settings that must be provided."""
+        super().__init__("Missing TUYA_CLIENT_ID or TUYA_CLIENT_SECRET")
 
 
-def group_logs_by_timestamp(logs: list[dict], tolerance_ms: int = 5000) -> list[dict]:
-    """Group log entries reported at ~the same time into single readings.
+class CloudApiError(RuntimeError):
+    """The Tuya Cloud answered a status read with ``success`` false."""
 
-    Sensors often report multiple DPs within a few seconds; this collapses
-    them into one reading dict keyed by the parsed canonical field names.
+    def __init__(self, result: object) -> None:
+        """Carry the Cloud's full answer in the message."""
+        super().__init__(f"Cloud API error: {result}")
+
+
+class MissingDeviceIpError(ConnectionError):
+    """An irrigator's ``config`` has no ``device_ip``, so it cannot be reached over the LAN."""
+
+    def __init__(self, device_id: str) -> None:
+        """Name the device whose config lacks the IP."""
+        super().__init__(f"No device_ip in config for irrigator {device_id}.")
+
+
+class MissingLocalKeyError(ConnectionError):
+    """No ``local_key`` could be resolved for a device (config, cache or Cloud lookup)."""
+
+    def __init__(self, device_id: str) -> None:
+        """Name the device whose key is unknown."""
+        super().__init__(f"Could not find local key for device {device_id}")
+
+
+class _CloudDevice(TypedDict, total=False):
+    """The fields of a Cloud ``getdevices`` entry the key lookup reads (the payload carries more)."""
+
+    id: str
+    key: str
+
+
+class _TuyaCloudClient(Protocol):
+    """The slice of ``tinytuya.Cloud`` the gateway calls (an injected ``raw`` client must match it).
+
+    Responses are raw Cloud JSON, hence ``dict[str, Any]``.
     """
-    if not logs:
-        return []
 
-    readings = []
-    current_group = {"timestamp": logs[0]["timestamp"]}
-    current_ts = logs[0]["timestamp_ms"]
+    def cloudrequest(self, url: str, /) -> dict[str, Any]: ...
 
-    for log in logs:
-        if abs(log["timestamp_ms"] - current_ts) > tolerance_ms:
-            readings.append(current_group)
-            current_group = {"timestamp": log["timestamp"]}
-            current_ts = log["timestamp_ms"]
+    def getstatus(self, deviceid: str, /) -> dict[str, Any]: ...
 
-        if "key" in log:
-            current_group[log["key"]] = log["value"]
-            current_group["timestamp"] = log["timestamp"]
+    def getdevicelog(  # noqa: PLR0913 — mirrors tinytuya.Cloud.getdevicelog's keyword API
+        self,
+        deviceid: str,
+        /,
+        *,
+        start: int,
+        end: int,
+        evtype: int,
+        size: int,
+        max_fetches: int,
+        start_row_key: str | None,
+    ) -> dict[str, Any]: ...
 
-    if len(current_group) > 1:  # Has at least timestamp + one value
-        readings.append(current_group)
+    def sendcommand(self, deviceid: str, commands: dict[str, Any], /) -> dict[str, Any]: ...
 
-    return readings
+    def getdevices(self) -> list[_CloudDevice] | dict[str, Any]: ...
+
+
+def _parse_datapoints(items: list[dict[str, Any]], device_id: str) -> dict[str, Any]:
+    """Parse live DP items (``{"code", "value"}``) into canonical keys, one DP at a time.
+
+    Unknown codes are ignored. A value its parser rejects (``ValueError`` /
+    ``TypeError`` — e.g. a ``None`` humidity) is logged and skipped so one bad
+    datapoint cannot discard the rest of the reading. When two codes map to the
+    same canonical key, the later one wins.
+    """
+    data: dict[str, Any] = {}
+    for item in items:
+        code = item.get("code", "")
+        parser = DATAPOINT_PARSERS.get(code)
+        if parser is None:
+            continue
+        try:
+            key, value = parser(item.get("value"))
+        except (ValueError, TypeError):
+            logger.warning("Skipping unparseable DP %s=%r from %s", code, item.get("value"), device_id, exc_info=True)
+            continue
+        data[key] = value
+    return data
+
+
+def _parse_log_entry(log: dict[str, Any]) -> dict[str, Any]:
+    """Shape one raw ``getdevicelog`` entry; a value its parser rejects keeps the raw code/value."""
+    code = log.get("code", "")
+    raw_value = log.get("value", "")
+    event_time_ms = log.get("event_time", 0)
+    entry: dict[str, Any] = {
+        "timestamp_ms": event_time_ms,
+        "timestamp": event_time_ms // 1000,
+        "code": code,
+        "raw_value": raw_value,
+        "key": code,
+        "value": raw_value,
+    }
+    parser = DATAPOINT_PARSERS.get(code)
+    if parser is not None:
+        try:
+            entry["key"], entry["value"] = parser(raw_value)
+        except (ValueError, TypeError):
+            logger.debug("Keeping raw log value for DP %s=%r", code, raw_value, exc_info=True)
+    return entry
+
+
+def _next_row_key(device_id: str, result: dict[str, Any], previous: str | None) -> str | None:
+    """Return the cursor for the next ``getdevicelog`` page, or ``None`` to stop paging.
+
+    Stops when the page failed (``success: false``, logged), when the server
+    reports no more rows or no cursor, and when the cursor repeats (logged) —
+    a repeated cursor would re-read the same page until the page cap.
+    """
+    if result.get("success") is False:
+        logger.warning("getdevicelog page for %s failed: %s", device_id, result)
+        return None
+    page = result.get("result") or {}
+    key: str | None = page.get("next_row_key")
+    if not page.get("has_next") or not key:
+        return None
+    if key == previous:
+        logger.warning("getdevicelog for %s repeated cursor %r; stopping", device_id, key)
+        return None
+    return key
 
 
 class DeviceGateway:
@@ -110,19 +189,20 @@ class DeviceGateway:
         client_secret: str | None = None,
         region: str | None = None,
         *,
-        raw: object | None = None,
+        raw: _TuyaCloudClient | None = None,
         on_key_discovered: Callable[[str, str], None] | None = None,
-    ):
+    ) -> None:
+        """Resolve the Cloud credentials (arguments, else ``TUYA_*`` env vars); ``raw`` injects a client."""
         self.client_id = client_id or os.environ.get("TUYA_CLIENT_ID", "")
         self.client_secret = client_secret or os.environ.get("TUYA_CLIENT_SECRET", "")
         self.region = region or os.environ.get("TUYA_REGION", "eu")
 
         if not self.client_id or not self.client_secret:
-            raise ValueError("Missing TUYA_CLIENT_ID or TUYA_CLIENT_SECRET")
+            raise MissingCloudCredentialsError
 
         # ``raw`` lets callers inject an already-constructed client so the whole
         # app shares one token; omitted, we build the single owned instance.
-        self._cloud = (
+        self._cloud: _TuyaCloudClient = (
             raw
             if raw is not None
             else tinytuya.Cloud(
@@ -131,14 +211,14 @@ class DeviceGateway:
                 apiSecret=self.client_secret,
             )
         )
-        # device_id → local_key, warmed lazily on the first cold lookup and
-        # reused for the lifetime of this (app-scoped) instance.
-        self._key_cache: dict[str, str] = {}
-        self._on_key_discovered = on_key_discovered
+        # local_key resolution: config → process cache (device_id → key, warmed lazily and
+        # reused for the lifetime of this app-scoped instance) → one Cloud lookup.
+        self._keys = LocalKeyResolver(self._lookup_key_via_cloud, on_key_discovered)
+        self._key_cache = self._keys.cache
 
     # ── Sensor cloud reads ────────────────────────────────────────────────
 
-    def get_live_reading(self, device_id: str) -> dict:
+    def get_live_reading(self, device_id: str) -> dict[str, Any]:
         """Get current sensor values via the v2.0 shadow properties endpoint.
 
         Uses ``/v2.0/cloud/thing/{id}/shadow/properties`` which exposes the
@@ -151,45 +231,40 @@ class DeviceGateway:
         Returns a dict of parsed canonical values (``temperature``,
         ``soil_moisture``, ``env_humidity``, ``light``, ``battery_state``,
         ``water_warning``…). An empty dict means the live DP set held nothing we
-        recognise — that is authoritative, not a reason to re-read.
+        recognise — that is authoritative, not a reason to re-read. A DP whose
+        value its parser rejects is logged and skipped; the other DPs of the
+        reading are kept.
         """
-        result = None
+        result: dict[str, Any] | None = None
         try:
             result = self._cloud.cloudrequest(f"/v2.0/cloud/thing/{device_id}/shadow/properties")
-        except Exception:
+        except Exception:  # noqa: BLE001 — any v2.0 shadow failure takes the v1.0 fallback below (invariant 8)
             result = None
 
         if result is not None and result.get("success"):
-            data: dict = {}
-            for prop in result.get("result", {}).get("properties", []):
-                parser = DATAPOINT_PARSERS.get(prop.get("code", ""))
-                if parser:
-                    key, value = parser(prop.get("value"))
-                    data[key] = value
-            return data
+            return _parse_datapoints(result.get("result", {}).get("properties", []), device_id)
 
         # Deliberate fallback: the v2.0 endpoint is unreachable/unsupported for
         # this device. Pay the second call only here, not on empty-but-ok reads.
         result = self._cloud.getstatus(device_id)
         if not result.get("success"):
-            raise RuntimeError(f"Cloud API error: {result}")
-
-        data = {}
-        for dp in result.get("result", []):
-            parser = DATAPOINT_PARSERS.get(dp.get("code", ""))
-            if parser:
-                key, value = parser(dp.get("value"))
-                data[key] = value
-        return data
+            raise CloudApiError(result)
+        return _parse_datapoints(result.get("result", []), device_id)
 
     def get_device_logs(
         self,
         device_id: str,
         since_ms: int | None = None,
         hours: int = 24,
-        max_records: int = 100,
-    ) -> list[dict]:
+        page_size: int = SENSOR_LOG_PAGE_SIZE,
+        max_pages: int = SENSOR_LOG_MAX_PAGES,
+    ) -> list[dict[str, Any]]:
         """Get historical sensor reports (``getdevicelog``), parsed + sorted.
+
+        Pages through the window with Tuya's ``next_row_key`` cursor until the
+        server reports no more rows, so a long gap is no longer cut at one
+        page of ``page_size`` entries. ``max_pages`` bounds the Cloud cost of
+        one sensor's sync; hitting it is logged as a WARNING.
 
         Each dict carries ``timestamp_ms``/``timestamp``/``code``/``raw_value``
         and, for recognised DP codes, a parsed ``key``/``value``. Results are
@@ -198,98 +273,73 @@ class DeviceGateway:
         if since_ms is None:
             since_ms = int((time.time() - hours * 3600) * 1000)
 
-        result = self._cloud.getdevicelog(
-            device_id,
-            start=since_ms,
-            end=0,
-            evtype=7,  # Status report events
-            size=max_records,
-        )
-
-        logs = result.get("result", {}).get("logs", [])
-        parsed = []
-
-        for log in logs:
-            code = log.get("code", "")
-            raw_value = log.get("value", "")
-            event_time_ms = log.get("event_time", 0)
-
-            entry = {
-                "timestamp_ms": event_time_ms,
-                "timestamp": event_time_ms // 1000,
-                "code": code,
-                "raw_value": raw_value,
-            }
-
-            parser = DATAPOINT_PARSERS.get(code)
-            if parser:
-                try:
-                    key, value = parser(raw_value)
-                    entry["key"] = key
-                    entry["value"] = value
-                except (ValueError, TypeError):
-                    entry["key"] = code
-                    entry["value"] = raw_value
-            else:
-                entry["key"] = code
-                entry["value"] = raw_value
-
-            parsed.append(entry)
-
+        logs = self._fetch_log_pages(device_id, since_ms, page_size, max_pages)
+        parsed = [_parse_log_entry(log) for log in logs]
         parsed.sort(key=lambda x: x["timestamp_ms"])
         return parsed
 
+    def _fetch_log_pages(self, device_id: str, since_ms: int, page_size: int, max_pages: int) -> list[dict[str, Any]]:
+        """Collect raw ``getdevicelog`` entries page by page (one request per page).
+
+        ``max_fetches=1`` keeps tinytuya from paginating on its own, so every
+        Cloud request is issued (and countable) here. The window end is fixed
+        once, so every page of one cursor queries the same window.
+        """
+        end_ms = int(time.time() * 1000)
+        logs: list[dict[str, Any]] = []
+        row_key: str | None = None
+        for _ in range(max_pages):
+            result = self._cloud.getdevicelog(
+                device_id,
+                start=since_ms,
+                end=end_ms,
+                evtype=7,  # Status report events
+                size=page_size,
+                max_fetches=1,
+                start_row_key=row_key,
+            )
+            page = result.get("result") or {}
+            logs.extend(page.get("logs", []))
+            next_key = _next_row_key(device_id, result, row_key)
+            if next_key is None:
+                return logs
+            row_key = next_key
+        logger.warning(
+            "getdevicelog for %s still had rows after %d pages (%d entries); the window is not fully covered",
+            device_id,
+            max_pages,
+            len(logs),
+        )
+        return logs
+
     @staticmethod
-    def group_logs_by_timestamp(logs: list[dict], tolerance_ms: int = 5000) -> list[dict]:
+    def group_logs_by_timestamp(logs: list[dict[str, Any]], tolerance_ms: int = 5000) -> list[dict[str, Any]]:
         """Fold parsed log entries into readings (see module function)."""
         return group_logs_by_timestamp(logs, tolerance_ms)
 
     # ── Irrigator cloud commands ──────────────────────────────────────────
 
-    def send_command(self, device_id: str, commands: dict) -> tuple[bool, str]:
+    def send_command(self, device_id: str, commands: dict[str, Any]) -> tuple[bool, str]:
         """Send a Cloud-API command payload (shaped as ``{"commands": [...]}``)."""
         result = self._cloud.sendcommand(device_id, commands)
         if result.get("success"):
             return True, "Command succeeded"
         return False, f"Cloud API error: {result}"
 
-    def get_status(self, device_id: str) -> dict:
+    def get_status(self, device_id: str) -> dict[str, Any]:
         """Return the raw Cloud-API ``getstatus`` response."""
         return self._cloud.getstatus(device_id)
 
     # ── Local factory (cached key, Cloud only on a cold miss) ─────────────
 
-    def resolve_local_key(
-        self,
-        device_id: str,
-        config: object | None = None,
-        *,
-        refresh: bool = False,
-    ) -> str | None:
+    def resolve_local_key(self, device_id: str, config: object | None = None) -> str | None:
         """Resolve a device's ``local_key`` cheaply.
 
-        Order: persisted ``config['local_key']`` → process cache → (cold path)
-        one Cloud ``getdevices`` lookup, whose result is cached and handed to
-        the ``on_key_discovered`` persistence hook. ``refresh=True`` skips the
-        cheap sources and forces the Cloud lookup (stale-key recovery).
+        Order: persisted ``config['local_key']`` (unless a 914 refresh superseded it) →
+        process cache → (cold path) one Cloud ``getdevices`` lookup, whose result is cached
+        and handed to the ``on_key_discovered`` persistence hook.
         """
-        if not refresh:
-            cfg_key = _coerce_config(config).get("local_key") if config is not None else None
-            if cfg_key:
-                return cfg_key
-            cached = self._key_cache.get(device_id)
-            if cached:
-                return cached
-
-        key = self._lookup_key_via_cloud(device_id)
-        if key:
-            self._key_cache[device_id] = key
-            if self._on_key_discovered is not None:
-                try:
-                    self._on_key_discovered(device_id, key)
-                except Exception:
-                    logger.exception("local_key persistence hook failed for %s", device_id)
-        return key
+        return self._keys.resolve(device_id, config)
 
     def _lookup_key_via_cloud(self, device_id: str) -> str | None:
         """The one place that calls Cloud ``getdevices`` to find a local key."""
@@ -300,37 +350,48 @@ class DeviceGateway:
                     return d.get("key")
         return None
 
-    def invalidate_key(self, device_id: str) -> None:
-        """Drop a cached local_key (call on key rotation / local-auth failure)."""
-        self._key_cache.pop(device_id, None)
-
-    def open_local(
-        self,
-        irrigator: Irrigator,
-        protocol_version: float,
-        *,
-        refresh: bool = False,
-    ) -> tinytuya.OutletDevice:
+    def open_local(self, irrigator: Irrigator, protocol_version: float | None) -> tinytuya.OutletDevice:
         """Build a connected ``OutletDevice`` for ``irrigator``.
 
         Resolves ``local_key`` via :meth:`resolve_local_key` (Cloud-free in
         steady state) and ``device_ip`` from the irrigator's ``config`` blob.
-        Raises ``ConnectionError`` when either is missing. ``refresh=True``
-        forces a fresh Cloud key lookup for stale-key recovery.
+        Raises ``ConnectionError`` when either is missing.
         """
-        config = _coerce_config(irrigator.config)
+        config = parse_device_config(irrigator.config)
         local_ip = config.get("device_ip")
         if not local_ip:
-            raise ConnectionError(f"No device_ip in config for irrigator {irrigator.tuya_device_id}.")
+            raise MissingDeviceIpError(irrigator.tuya_device_id)
 
-        local_key = self.resolve_local_key(irrigator.tuya_device_id, config, refresh=refresh)
+        local_key = self.resolve_local_key(irrigator.tuya_device_id, config)
         if not local_key:
-            raise ConnectionError(f"Could not find local key for device {irrigator.tuya_device_id}")
+            raise MissingLocalKeyError(irrigator.tuya_device_id)
 
         device = tinytuya.OutletDevice(irrigator.tuya_device_id, local_ip, local_key)
         device.set_version(protocol_version)
         device.set_socketTimeout(LOCAL_TIMEOUT)
         return device
+
+    def run_local(
+        self,
+        irrigator: Irrigator,
+        protocol_version: float | None,
+        operation: Callable[[tinytuya.OutletDevice], _LocalResult],
+    ) -> _LocalResult:
+        """Run one local call; when tinytuya answers error 914, refresh a stale key and retry once.
+
+        The adapters' local reads and writes (IK10PW Duration DP 102, the DP 105 health read,
+        the generic status read) go through here, so a re-paired device whose stored key went
+        stale recovers instead of failing forever. On 914 the gateway makes one Cloud
+        ``getdevices`` lookup (rate-limited per device); only when the Cloud holds a different
+        key is ``operation`` run again, on a device opened with that key. Otherwise — same or no
+        Cloud key, a failed lookup, an exhausted budget — the original result is returned.
+        Only this local ``operation`` is ever retried: Cloud commands (the switch ON) are not
+        sent from here. Errors raised by ``open_local`` or ``operation`` propagate unchanged.
+        """
+        result = operation(self.open_local(irrigator, protocol_version))
+        if not is_key_or_version_error(result) or not self._keys.refresh(irrigator.tuya_device_id, irrigator.config):
+            return result
+        return operation(self.open_local(irrigator, protocol_version))
 
 
 __all__ = ["DATAPOINT_PARSERS", "DeviceGateway", "group_logs_by_timestamp"]

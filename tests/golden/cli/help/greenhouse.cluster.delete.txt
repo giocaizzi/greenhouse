@@ -1,0 +1,12 @@
+
+ Usage: greenhouse cluster delete [OPTIONS] {cluster_id}
+
+ Delete a cluster and all of its children (plants, sensors, irrigators, history).
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────╮
+│ *    cluster_id      <int>  Cluster ID [required]                                                │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ --yes   -y        Skip confirmation prompt                                                       │
+│ --help            Show this message and exit.                                                    │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

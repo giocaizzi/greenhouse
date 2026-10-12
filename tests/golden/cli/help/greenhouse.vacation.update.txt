@@ -1,0 +1,18 @@
+
+ Usage: greenhouse vacation update [OPTIONS] {window_id}
+
+ Patch a vacation window. Only supplied fields are sent.
+
+ NOTE: ``PUT /api/v1/vacation/{id}`` is being added in a parallel branch;
+ until that ships this command will report 404/405 against the server.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────╮
+│ *    window_id      <int>  Vacation window ID [required]                                         │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ --starts-at        <int>  New start (Unix seconds)                                               │
+│ --ends-at          <int>  New end (Unix seconds)                                                 │
+│ --email            <str>  New contact email                                                      │
+│ --notes            <str>  New notes                                                              │
+│ --help                    Show this message and exit.                                            │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

@@ -1,0 +1,40 @@
+ ⭘                                   greenhouse · Living Room — http://testserver                              10:00:00
+ Overview  Charts  Plants  Sensors  Insights  Decisions  History  Windows  Config
+━━━━━━━━━━━━━━━━━━╸━━━━━━╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ n add · u edit · del delete · M move to cluster · P refresh care data from plant DB · m health ↔ moisture chart
+ ID  Species               Category  Water   Light  Temp
+ 1   Monstera deliciosa    tropical  medium  —      —
+ 2   Nephrolepis exaltata  fern      medium  —      —
+                           Health — Monstera deliciosa · today 50/100 (90 days) — no data yet
+┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+ esc Back  i Irrigate  w Water now  x Stop  c Check  n New  u Edit  del Delete  d Dashboard  a Alerts  l Act▏^p palette

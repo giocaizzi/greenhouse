@@ -1,34 +1,40 @@
 """Schema-migration integration tests.
 
-These tests guard the three init_db branches:
+These tests guard init_db, which is plain ``alembic upgrade head``:
 
-- Empty DB → alembic upgrade head creates the full schema.
+- Empty DB → the chain from baseline creates the full schema.
 - Already-managed DB → upgrade head is a no-op.
-- Pre-Alembic legacy DB → missing tables/columns are repaired and the DB
-  is stamped at head.
+- Pre-Alembic DB (tables but no ``alembic_version``) → no longer repaired
+  (OD3): the baseline revision fails on the existing tables.
 """
 
+import logging
 import os
 import tempfile
+from collections.abc import Iterator
+from logging import config as logging_config
+from pathlib import Path
 
 import pytest
+from alembic import command
 from sqlalchemy import create_engine, inspect, text
+from sqlalchemy.exc import OperationalError
 
-from greenhouse_core.database import head_revision, init_db
+from greenhouse_core.database import _alembic_config, head_revision, init_db
 
 
 @pytest.fixture
-def file_db():
+def file_db() -> Iterator[str]:
     """Tempfile-backed SQLite — alembic-friendly (in-memory loses tables across connections)."""
     fd, path = tempfile.mkstemp(suffix=".db")
     os.close(fd)
-    os.remove(path)
+    Path(path).unlink()
     yield f"sqlite:///{path}"
-    if os.path.exists(path):
-        os.remove(path)
+    if Path(path).exists():
+        Path(path).unlink()
 
 
-def test_empty_db_runs_baseline_to_head(file_db):
+def test_empty_db_runs_baseline_to_head(file_db: str) -> None:
     """A brand-new database gets every table created from baseline."""
     engine = create_engine(file_db)
     init_db(engine)
@@ -41,7 +47,7 @@ def test_empty_db_runs_baseline_to_head(file_db):
     assert {"clusters", "plants", "sensors", "irrigators", "irrigation_configs", "decision_logs", "alerts"} <= tables
 
 
-def test_idempotent_upgrade(file_db):
+def test_idempotent_upgrade(file_db: str) -> None:
     """Running init_db twice on the same DB is a no-op."""
     engine = create_engine(file_db)
     init_db(engine)
@@ -51,7 +57,7 @@ def test_idempotent_upgrade(file_db):
     assert version == head_revision()
 
 
-def test_device_type_backfill_rewrites_legacy_values(file_db):
+def test_device_type_backfill_rewrites_legacy_values(file_db: str) -> None:
     """Legacy ``type`` values in irrigators/sensors are rewritten to model_key form.
 
     The :mod:`6c9d4e2f3a12` migration backfills ``tuya_cloud`` / ``tuya_local``
@@ -103,11 +109,15 @@ def test_device_type_backfill_rewrites_legacy_values(file_db):
     assert sens == ["tuya.tr301z"] * 4
 
 
-def test_legacy_partial_db_gets_repaired(file_db):
-    """A partial pre-baseline DB (missing newer columns) is repaired and stamped."""
+def test_pre_alembic_db_is_not_repaired(file_db: str) -> None:
+    """A pre-baseline DB (tables, no ``alembic_version``) is no longer patched up and stamped.
+
+    OD3 removed the legacy repair branch: init_db always runs ``upgrade head``,
+    whose baseline revision fails on the table that already exists. SQLite DDL is
+    non-transactional, so the tables created before the failure stay, but no
+    revision is recorded: the database needs a manual ``alembic stamp head``.
+    """
     engine = create_engine(file_db)
-    # Simulate a partial DB: irrigation_configs without daily_cap_minutes / max_events_per_day,
-    # no alembic_version, missing baseline tables.
     with engine.begin() as conn:
         conn.execute(
             text(
@@ -115,37 +125,23 @@ def test_legacy_partial_db_gets_repaired(file_db):
                 "environment TEXT, created_at INTEGER)"
             )
         )
-        conn.execute(
-            text(
-                "CREATE TABLE irrigation_configs (id INTEGER PRIMARY KEY, cluster_id INTEGER UNIQUE, "
-                "mode TEXT, duration_minutes INTEGER, interval_hours INTEGER, auto_run INTEGER, "
-                "last_updated INTEGER)"
-            )
-        )
 
-    init_db(engine)
-
-    inspector = inspect(engine)
-    cols = {c["name"] for c in inspector.get_columns("irrigation_configs")}
-    assert "daily_cap_minutes" in cols
-    assert "max_events_per_day" in cols
-
-    tables = set(inspector.get_table_names())
-    assert {"decision_logs", "alerts", "activity_events", "plant_health_daily"} <= tables
+    with pytest.raises(OperationalError, match="already exists"):
+        init_db(engine)
 
     with engine.connect() as conn:
-        version = conn.execute(text("SELECT version_num FROM alembic_version")).scalar()
-    assert version == head_revision()
+        assert conn.execute(text("SELECT version_num FROM alembic_version")).all() == []
+    engine.dispose()
 
 
-def test_init_db_does_not_disable_application_loggers():
-    """Regression: alembic's env.py ran ``fileConfig`` with the default
-    ``disable_existing_loggers=True``, so every logger created before
-    ``init_db`` (i.e. every server module imported before ``create_app``)
-    was silently muted for the life of the process — scheduler job failures,
-    pump-watcher warnings and deprecation notices never reached the log."""
-    import logging
+def test_init_db_does_not_disable_application_loggers() -> None:
+    """Regression: running the migrations no longer mutes loggers created before ``init_db``.
 
+    Alembic's env.py ran ``fileConfig`` with the default ``disable_existing_loggers=True``,
+    so every server module imported before ``create_app`` was silently muted for the life
+    of the process — scheduler job failures, pump-watcher warnings and deprecation notices
+    never reached the log.
+    """
     app_logger = logging.getLogger("greenhouse_server.services.irrigation")
     engine = create_engine("sqlite://")
     try:
@@ -153,3 +149,36 @@ def test_init_db_does_not_disable_application_loggers():
     finally:
         engine.dispose()
     assert app_logger.disabled is False
+
+
+def test_init_db_leaves_the_host_logging_configuration_alone(tmp_path: Path) -> None:
+    """In-process migrations do not run alembic.ini's ``fileConfig``.
+
+    It used to replace the root handlers and level on every ``create_app``, so ``caplog`` (and
+    any handler the host installed) saw nothing afterwards.
+    """
+    root = logging.getLogger()
+    sentinel = logging.NullHandler()
+    root.addHandler(sentinel)
+    handlers, level = list(root.handlers), root.level
+    engine = create_engine(f"sqlite:///{tmp_path / 'logging.db'}")
+    try:
+        init_db(engine)
+        assert (root.handlers, root.level) == (handlers, level)
+    finally:
+        root.removeHandler(sentinel)
+        engine.dispose()
+
+
+def test_the_alembic_command_line_still_configures_logging(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """A Config without the opt-out (what ``alembic`` builds from the ini) still runs ``fileConfig``."""
+    calls = []
+    monkeypatch.setattr(logging_config, "fileConfig", lambda *a, **k: calls.append((a, k)))
+    engine = create_engine(f"sqlite:///{tmp_path / 'cli.db'}")
+    cfg = _alembic_config(engine)
+    del cfg.attributes["configure_logging"]
+    with engine.connect() as conn:
+        cfg.attributes["connection"] = conn
+        command.upgrade(cfg, "head")
+    engine.dispose()
+    assert len(calls) == 1

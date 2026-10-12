@@ -7,30 +7,37 @@ or ``read_health`` for firmware-specific recipes.
 
 from __future__ import annotations
 
+import logging
 import time
+from typing import TYPE_CHECKING, Any
 
-from greenhouse_core.devices.gateway import DeviceGateway
 from greenhouse_core.devices.health import DeviceHealthState
 from greenhouse_core.devices.irrigators.base import AbstractIrrigatorAdapter
-from greenhouse_core.devices.profile import IrrigatorProfile
-from greenhouse_core.models import Irrigator
+
+if TYPE_CHECKING:
+    from greenhouse_core.devices.gateway import DeviceGateway
+    from greenhouse_core.devices.profile import IrrigatorProfile
+    from greenhouse_core.models import Irrigator
+
+logger = logging.getLogger(__name__)
 
 
 class TuyaIrrigatorAdapter(AbstractIrrigatorAdapter):
     """Default Tuya driver. Switch on/off via Cloud API.
 
-    Models that need anything beyond plain on/off (e.g. a local Duration DP,
-    a keep-alive fallback, or an alarm read) subclass this adapter and
+    Models that need anything beyond plain on/off (e.g. a local Duration DP
+    or an alarm read) subclass this adapter and
     override the relevant method while reusing the cloud helpers.
     """
 
-    def __init__(self, profile: IrrigatorProfile, gateway: DeviceGateway):
+    def __init__(self, profile: IrrigatorProfile, gateway: DeviceGateway) -> None:
+        """Bind the model ``profile`` to the shared device ``gateway``."""
         self.profile = profile
         self._gateway = gateway
 
     # ── Helpers ───────────────────────────────────────────────────────────
 
-    def _send_switch(self, irrigator: Irrigator, value: bool) -> tuple[bool, str]:
+    def _send_switch(self, irrigator: Irrigator, *, value: bool) -> tuple[bool, str]:
         commands = {"commands": [{"code": "switch", "value": value}]}
         success, _ = self._gateway.send_command(irrigator.tuya_device_id, commands)
         word = "ON" if value else "OFF"
@@ -40,21 +47,22 @@ class TuyaIrrigatorAdapter(AbstractIrrigatorAdapter):
 
     def on(self, irrigator: Irrigator) -> tuple[bool, str]:
         """Switch the irrigator on via Cloud API."""
-        return self._send_switch(irrigator, True)
+        return self._send_switch(irrigator, value=True)
 
     def off(self, irrigator: Irrigator) -> tuple[bool, str]:
         """Switch the irrigator off via Cloud API."""
-        return self._send_switch(irrigator, False)
+        return self._send_switch(irrigator, value=False)
 
     def start(self, irrigator: Irrigator, minutes: int | None = None) -> tuple[bool, str]:
         """Switch on. Subclasses override to handle a Duration DP recipe."""
+        del minutes  # a generic switch has no Duration DP: the cycle runs until stopped
         return self.on(irrigator)
 
     def stop(self, irrigator: Irrigator) -> tuple[bool, str]:
         """Switch off."""
         return self.off(irrigator)
 
-    def status(self, irrigator: Irrigator) -> dict:
+    def status(self, irrigator: Irrigator) -> dict[str, Any]:
         """Return current status. Tries local first, falls back to cloud.
 
         Local read fields (``running``, ``duration``, ``left_time``,
@@ -63,24 +71,38 @@ class TuyaIrrigatorAdapter(AbstractIrrigatorAdapter):
         """
         proto = self.profile.protocol_version
         if proto is not None and self.profile.has_capability("supports_local_status"):
-            try:
-                device = self._gateway.open_local(irrigator, proto)
-                live = device.status()
-                if live and "dps" in live:
-                    dps = live["dps"]
-                    out: dict = {"source": "local"}
-                    for key in ("switch", "duration", "left_time", "work_status", "auto_run"):
-                        if key in self.profile.dp_map:
-                            out[self._status_key(key)] = dps.get(str(self.profile.dp(key)))
-                    return out
-            except Exception:
-                pass  # fall back to cloud
+            local = self._local_status(irrigator, proto)
+            if local is not None:
+                return local
+        return self._cloud_status(irrigator)
 
+    def _local_status(self, irrigator: Irrigator, proto: float) -> dict[str, Any] | None:
+        """The status from a local read, or ``None`` when the device gave no DPs or could not be reached."""
+        try:
+            # run_local refreshes a stale stored local_key (error 914) and retries the read once.
+            live = self._gateway.run_local(irrigator, proto, lambda device: device.status())
+            local = self._local_fields(live["dps"]) if live and "dps" in live else None
+        except Exception:  # any local failure (LAN, protocol, parse) falls back to the Cloud read
+            # Expected when the device is off the LAN: the Cloud read is the documented fallback.
+            logger.debug("Local status read failed for %s; using Cloud", irrigator.tuya_device_id, exc_info=True)
+            return None
+        return local
+
+    def _local_fields(self, dps: dict[str, Any]) -> dict[str, Any]:
+        """Map the profile's status DPs of a local read onto the public status keys."""
+        out: dict[str, Any] = {"source": "local"}
+        for key in ("switch", "duration", "left_time", "work_status", "auto_run"):
+            if key in self.profile.dp_map:
+                out[self._status_key(key)] = dps.get(str(self.profile.dp(key)))
+        return out
+
+    def _cloud_status(self, irrigator: Irrigator) -> dict[str, Any]:
+        """The status from the Cloud shadow (``running`` / ``work_state``), or an ``error`` entry."""
         result = self._gateway.get_status(irrigator.tuya_device_id)
         if not result.get("success"):
             return {"error": f"Cloud API error: {result}"}
 
-        status: dict = {"source": "cloud"}
+        status: dict[str, Any] = {"source": "cloud"}
         for item in result.get("result", []):
             code = item.get("code")
             value = item.get("value")
@@ -104,6 +126,7 @@ class TuyaIrrigatorAdapter(AbstractIrrigatorAdapter):
         have no health surface beyond reachability, which the monitor
         derives from the broader sync cycle.
         """
+        del irrigator  # nothing to read: the snapshot is the same for every device of the model
         return DeviceHealthState(
             observed_at=int(time.time()),
             alarms=frozenset(),

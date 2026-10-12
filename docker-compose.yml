@@ -10,6 +10,9 @@ services:
       - .env
     environment:
       IRRIGATION_DB_URL: sqlite:////app/data/irrigation.db
+      # The server defaults to loopback; inside the container it must listen on
+      # every interface for the published port (overrides any .env value).
+      IRRIGATION_HOST: 0.0.0.0
     ports:
       - "8000:8000"
     volumes:

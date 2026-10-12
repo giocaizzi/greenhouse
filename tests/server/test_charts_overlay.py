@@ -1,59 +1,56 @@
 """Tests for the multi-metric overlay chart API endpoint."""
 
 import time
+from http import HTTPStatus
+
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+
+from greenhouse_core.repository import IrrigationRepository
+from server.conftest import override_repository
+
+OVERLAY_HOURS = 72
+NORMALISED_MAX = 100.0  # overlay values are normalised to [0, 100]
+POINT_ARITY = 2  # each point is [timestamp, value]
+LIGHT_ORIGINAL_MAX_LUX = 10_000.0
 
 
-def test_overlay_returns_valid_shape(seeded_client):
+def test_overlay_returns_valid_shape(seeded_client: TestClient) -> None:
     """Overlay endpoint returns 200 with the expected top-level keys."""
-    resp = seeded_client.get("/api/v1/clusters/1/overlay?hours=72")
-    assert resp.status_code == 200
+    resp = seeded_client.get(f"/api/v1/clusters/1/overlay?hours={OVERLAY_HOURS}")
+    assert resp.status_code == HTTPStatus.OK
     body = resp.json()
     assert body["cluster_id"] == 1
-    assert body["hours"] == 72
+    assert body["hours"] == OVERLAY_HOURS
     assert body["normalised"] is True
     assert isinstance(body["datasets"], list)
     assert isinstance(body["events"], list)
 
 
-def test_overlay_dataset_structure(seeded_client):
+def test_overlay_dataset_structure(seeded_client: TestClient) -> None:
     """Each dataset must have metric + points fields with values in range."""
     # Seed readings first via the app fixture by seeding directly through the engine
-    resp = seeded_client.get("/api/v1/clusters/1/overlay?hours=72")
-    assert resp.status_code == 200
+    resp = seeded_client.get(f"/api/v1/clusters/1/overlay?hours={OVERLAY_HOURS}")
+    assert resp.status_code == HTTPStatus.OK
     for ds in resp.json()["datasets"]:
         assert "metric" in ds
         assert ds["metric"] in ("soil", "humidity", "light")
         assert isinstance(ds["points"], list)
         for pt in ds["points"]:
-            assert len(pt) == 2
+            assert len(pt) == POINT_ARITY
             ts, val = pt
             assert isinstance(ts, int)
-            assert 0.0 <= val <= 100.0
+            assert 0.0 <= val <= NORMALISED_MAX
 
 
-def test_overlay_404_unknown_cluster(client):
+def test_overlay_404_unknown_cluster(client: TestClient) -> None:
+    """Overlay 404 unknown cluster."""
     resp = client.get("/api/v1/clusters/9999/overlay")
-    assert resp.status_code == 404
+    assert resp.status_code == HTTPStatus.NOT_FOUND
 
 
-def test_overlay_with_readings(app):
-    """Seed readings and assert all three metric datasets are returned."""
-    from fastapi.testclient import TestClient
-    from sqlalchemy import create_engine
-    from sqlalchemy.pool import StaticPool
-
-    from greenhouse_core.models import Base
-    from greenhouse_core.repository import IrrigationRepository
-    from greenhouse_server.deps import get_repository
-
-    engine = create_engine("sqlite://", echo=False, connect_args={"check_same_thread": False}, poolclass=StaticPool)
-    Base.metadata.create_all(engine)
-
-    from sqlalchemy.orm import Session
-
-    session = Session(engine)
-    repo = IrrigationRepository(session)
-
+def _seed_hourly_readings(repo: IrrigationRepository) -> int:
+    """Seed a combined sensor with five hourly soil / humidity / light readings; return the cluster id."""
     cluster_id = repo.add_cluster("Overlay Test")
     sensor_id = repo.add_sensor(
         cluster_id=cluster_id,
@@ -71,13 +68,17 @@ def test_overlay_with_readings(app):
             env_humidity=55.0 + i,
             light=3000 + i * 100,
         )
-    session.commit()
+    repo.session.commit()
+    return cluster_id
 
-    app.dependency_overrides[get_repository] = lambda: repo
-    client = TestClient(app, raise_server_exceptions=False)
 
-    resp = client.get(f"/api/v1/clusters/{cluster_id}/overlay?hours=72")
-    assert resp.status_code == 200
+def test_overlay_with_readings(app: FastAPI) -> None:
+    """Seed readings and assert all three metric datasets are returned."""
+    with override_repository(app) as repo:
+        cluster_id = _seed_hourly_readings(repo)
+        client = TestClient(app, raise_server_exceptions=False)
+        resp = client.get(f"/api/v1/clusters/{cluster_id}/overlay?hours={OVERLAY_HOURS}")
+    assert resp.status_code == HTTPStatus.OK
     body = resp.json()
     metrics = {ds["metric"] for ds in body["datasets"]}
     assert "soil" in metrics
@@ -91,12 +92,8 @@ def test_overlay_with_readings(app):
     # All values must be in [0, 100]
     for ds in body["datasets"]:
         for _, val in ds["points"]:
-            assert 0.0 <= val <= 100.0
+            assert 0.0 <= val <= NORMALISED_MAX
 
     # Light dataset must carry original_max
     light_ds = next(ds for ds in body["datasets"] if ds["metric"] == "light")
-    assert light_ds["original_max"] == 10_000.0
-
-    app.dependency_overrides.pop(get_repository, None)
-    session.close()
-    engine.dispose()
+    assert light_ds["original_max"] == LIGHT_ORIGINAL_MAX_LUX

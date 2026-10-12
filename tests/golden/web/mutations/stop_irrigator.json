@@ -1,0 +1,69 @@
+{
+ "body_lines": [
+  "<div class=\"irr-result \" role=\"status\">",
+  "  ",
+  "    <span class=\"badge-ok\">",
+  "      <svg class=\"icon\" style=\"width:11px;height:11px;\" aria-hidden=\"true\"><use href=\"/static/icons/sprite.svg#i-check\"></use></svg>",
+  "      stop",
+  "    </span>",
+  "  ",
+  "  <small class=\"muted\">fake stop ok</small>",
+  "</div>"
+ ],
+ "db_effect": {
+  "irrigation_events": {
+   "added": [
+    {
+     "action": "stop",
+     "duration_minutes": null,
+     "id": 7,
+     "irrigator_id": 1,
+     "notes": "Manual stop via web UI",
+     "timestamp": 1776247200,
+     "triggered_by": "manual"
+    }
+   ]
+  }
+ },
+ "device_calls": {
+  "irrigator": [
+   [
+    "stop",
+    1
+   ]
+  ],
+  "sensor": []
+ },
+ "headers": {
+  "content-type": "text/html; charset=utf-8"
+ },
+ "request": {
+  "form": null,
+  "headers": {
+   "HX-Request": "true"
+  },
+  "method": "POST",
+  "url": "/irrigators/1/stop"
+ },
+ "status": 200,
+ "templates": [
+  [
+   "partials/_irrigator_action_result.html",
+   [
+    "action",
+    "active_vacation",
+    "app_version",
+    "auth_enabled",
+    "dry_run_global",
+    "is_hx",
+    "message",
+    "now_text",
+    "request",
+    "scheduler_paused",
+    "show_chrome",
+    "success",
+    "theme"
+   ]
+  ]
+ ]
+}

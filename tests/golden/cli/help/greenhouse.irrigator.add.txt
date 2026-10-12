@@ -1,0 +1,18 @@
+
+ Usage: greenhouse irrigator add [OPTIONS]
+
+ Add an irrigator to a cluster.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  --cluster                    <int>    Cluster ID [required]                                   │
+│ *  --device-id                  <str>    Tuya device ID [required]                               │
+│ *  --name                       <str>    Irrigator name [required]                               │
+│ *  --type                       <str>    Device model key (rainpoint.ik10pw) [required]          │
+│    --device-ip                  <str>    Local IP                                                │
+│    --local-key                  <str>    Local key                                               │
+│    --reservoir-l                <float>  Usable reservoir/tank volume in liters (for vacation    │
+│                                          rationing)                                              │
+│    --flow-rate-l-per-min        <float>  Measured pump throughput in liters per minute (for      │
+│                                          vacation rationing)                                     │
+│    --help                                Show this message and exit.                             │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

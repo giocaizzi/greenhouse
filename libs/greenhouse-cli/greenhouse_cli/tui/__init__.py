@@ -7,6 +7,6 @@ server-URL resolution as the rest of the CLI.
 from greenhouse_cli.tui.app import GreenhouseApp
 
 
-def run(server_url: str, refresh_seconds: float = 30.0, animations: bool = True) -> None:
+def run(server_url: str, *, refresh_seconds: float = 30.0, animations: bool = True) -> None:
     """Launch the TUI against ``server_url`` and block until the user quits."""
     GreenhouseApp(server_url, refresh_seconds=refresh_seconds, animations=animations).run()

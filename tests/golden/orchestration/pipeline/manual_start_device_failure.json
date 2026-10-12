@@ -1,0 +1,43 @@
+{
+ "calls": [
+  {
+   "body": {
+    "minutes": 3
+   },
+   "request": "POST /api/v1/irrigators/1/start",
+   "response": {
+    "detail": "device timeout"
+   },
+   "status": 502
+  },
+  {
+   "body": null,
+   "request": "POST /api/v1/irrigators/1/stop",
+   "response": {
+    "detail": "device asleep"
+   },
+   "status": 502
+  }
+ ],
+ "db_writes": {
+  "activity_events": [],
+  "alerts": [],
+  "decision_logs": [],
+  "irrigation_events": [],
+  "sensor_readings": []
+ },
+ "gateway_calls": null,
+ "irrigator_adapter_calls": [
+  [
+   "start",
+   1,
+   3
+  ],
+  [
+   "stop",
+   1
+  ]
+ ],
+ "notifications": [],
+ "sensor_adapter_calls": []
+}
