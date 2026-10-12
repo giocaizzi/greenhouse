@@ -30,7 +30,7 @@ from rich.text import Text
 from textual.app import App, ComposeResult
 from textual.widgets import DataTable, Static, TabbedContent
 
-from cli.test_contract_tui import make_seeded_app, make_tui, screen_text, settle
+from cli.test_contract_tui import make_seeded_app, make_tui, screen_text, settle_fast
 from cli.tui_fixtures import tui_client_factory, writes
 from golden import FROZEN_INSTANT, assert_golden, assert_golden_json
 from greenhouse_cli.tui.model import summarize
@@ -137,10 +137,10 @@ def _run(coro: Coroutine[object, object, None]) -> None:
 
 
 async def _open_cluster(pilot: Pilot[None], tui: GreenhouseApp, cluster_id: int) -> ClusterScreen:
-    await settle(pilot, tui)
+    await settle_fast(pilot, tui)
     screen = ClusterScreen(cluster_id)
     await tui.push_screen(screen)
-    await settle(pilot, tui)
+    await settle_fast(pilot, tui)
     return screen
 
 
@@ -186,7 +186,7 @@ def test_decision_panel_variants(seeded: tuple[TestClient, Engine]) -> None:
             for name, decision in DECISION_VARIANTS.items():
                 variant["decision"] = decision
                 screen.reload()
-                await settle(pilot, tui)
+                await settle_fast(pilot, tui)
                 captured[name] = _segments(screen.query_one("#decision-panel", Static).content)
 
     _run(scenario())
@@ -233,7 +233,7 @@ def test_forecast_panel_variants(seeded: tuple[TestClient, Engine]) -> None:
             for name, forecast in FORECAST_VARIANTS.items():
                 variant["f"] = copy.deepcopy(forecast)
                 screen.reload()
-                await settle(pilot, tui)
+                await settle_fast(pilot, tui)
                 captured[name] = _segments(screen.query_one("#forecast-panel", Static).content)
 
     _run(scenario())
@@ -283,7 +283,7 @@ def test_insights_panel_nothing_to_flag(seeded: tuple[TestClient, Engine]) -> No
         async with tui.run_test(size=SIZE) as pilot:
             screen = await _open_cluster(pilot, tui, 1)
             screen.query_one("TabbedContent", TabbedContent).active = "tab-insights"
-            await settle(pilot, tui)
+            await settle_fast(pilot, tui)
             captured["insights"] = _segments(screen.query_one("#insights-panel", Static).content)
 
     _run(scenario())
@@ -313,7 +313,7 @@ async def _press_on_tab(
     toasts, log = recorded
     start_toasts, start_log = len(toasts), len(log)
     await pilot.press(key)
-    await settle(pilot, tui)
+    await settle_fast(pilot, tui)
     dialog = type(tui.screen).__name__ if tui.screen is not screen else None
     capture: dict[str, object] = {
         "tab": tab,
@@ -324,7 +324,7 @@ async def _press_on_tab(
     }
     if dialog:
         await pilot.press("escape")
-        await settle(pilot, tui)
+        await settle_fast(pilot, tui)
     return capture
 
 
@@ -344,7 +344,7 @@ def test_edit_and_delete_with_nothing_selected(
             screen = await _open_cluster(pilot, tui, empty_id)
             for tab in ("tab-plants", "tab-sensors", "tab-windows", "tab-overview", "tab-config"):
                 screen.query_one("TabbedContent", TabbedContent).active = tab
-                await settle(pilot, tui)
+                await settle_fast(pilot, tui)
                 captured.extend(
                     [await _press_on_tab(pilot, tui, screen, (tab, key), (toasts, log)) for key in ("u", "delete")]
                 )
@@ -379,9 +379,9 @@ def test_vacation_rows_states(seeded: tuple[TestClient, Engine]) -> None:
         factory = _overriding_factory(http, {"list_vacation": lambda _real: copy.deepcopy(vacation)})
         tui = make_tui(http, factory=factory)
         async with tui.run_test(size=SIZE) as pilot:
-            await settle(pilot, tui)
+            await settle_fast(pilot, tui)
             await pilot.press("o")
-            await settle(pilot, tui)
+            await settle_fast(pilot, tui)
             captured["rows"] = _rows(tui.screen.query_one("#vacation-table", DataTable))
 
     _run(scenario())

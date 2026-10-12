@@ -180,7 +180,7 @@ def _visible_screen_debts(tui: App[None]) -> list[str]:
     return pending
 
 
-async def settle(pilot: Pilot[None], tui: App[None], limit_s: float = 60.0) -> None:
+async def settle(pilot: Pilot[None], tui: App[None], limit_s: float = 60.0, *, delay: float | None = None) -> None:
     """Wait until the TUI has finished reacting, failing with what is still pending after ``limit_s`` seconds.
 
     Finished means no worker unfinished and no message or callback queued anywhere, on two
@@ -190,12 +190,15 @@ async def settle(pilot: Pilot[None], tui: App[None], limit_s: float = 60.0) -> N
     bindings through several message queues, and a busy CPU can leave part of that trip (or the worker it
     starts, the tab-underline animation, or a table's column measurement) still pending after Textual's
     ``pilot.pause()`` idle heuristic returns.
+
+    ``delay=0`` skips that CPU-idle wait (``pilot.pause(0)``): use ``settle_fast`` where nothing snapshots the
+    animation, as the screen-render goldens do.
     """
     loop = asyncio.get_running_loop()
     deadline = loop.time() + limit_s
     quiet_passes = 0
     while quiet_passes < _QUIET_PASSES_REQUIRED:
-        await pilot.pause()
+        await pilot.pause(delay)
         with contextlib.suppress(WorkerCancelled):  # an exclusive worker legitimately cancels the run it supersedes
             await tui.workers.wait_for_complete()
         await tui.animator.wait_until_complete()
@@ -204,7 +207,12 @@ async def settle(pilot: Pilot[None], tui: App[None], limit_s: float = 60.0) -> N
         if pending and loop.time() > deadline:
             msg = f"TUI did not settle within {limit_s}s; still pending: {pending}"
             raise AssertionError(msg)
-    await pilot.pause()
+    await pilot.pause(delay)
+
+
+async def settle_fast(pilot: Pilot[None], tui: App[None], limit_s: float = 60.0) -> None:
+    """``settle`` without Textual's CPU-idle wait, for tests that assert on state, not on a rendered snapshot."""
+    await settle(pilot, tui, limit_s, delay=0)
 
 
 async def wait_until(predicate: Callable[[], object], what: str, limit_s: float = 60.0) -> None:
