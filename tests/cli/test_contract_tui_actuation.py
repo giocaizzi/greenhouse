@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING, Protocol, Unpack, cast
 import pytest
 from textual.widgets import TabbedContent
 
-from cli.test_contract_tui import make_seeded_app, make_tui, settle
+from cli.test_contract_tui import make_seeded_app, make_tui, settle_fast
 from cli.tui_fixtures import writes
 from golden import assert_golden_json
 from greenhouse_cli.tui.screens.cluster import ClusterScreen
@@ -115,7 +115,7 @@ class _Recorder:
 
     async def tab(self, tab: str) -> None:
         self.tui.screen.query_one("TabbedContent", TabbedContent).active = tab
-        await settle(self.pilot, self.tui)
+        await settle_fast(self.pilot, self.tui)
 
     async def key(self, key: str, fill: FormFill | None = None, note: str | None = None) -> Row:
         pilot, tui = self.pilot, self.tui
@@ -123,7 +123,7 @@ class _Recorder:
         tab = base.active_tab if isinstance(base, ClusterScreen) else None
         start_log, start_toasts = len(self.log), len(self.toasts)
         await pilot.press(key)
-        await settle(pilot, tui)
+        await settle_fast(pilot, tui)
         dialog_screen = tui.screen if tui.screen is not base else None
         row: Row = {
             "screen": self.label,
@@ -137,7 +137,7 @@ class _Recorder:
         if note:
             row["note"] = note
         await self._accept(dialog_screen, fill)
-        await settle(pilot, tui)
+        await settle_fast(pilot, tui)
         assert tui.screen is not dialog_screen or dialog_screen is None, f"{self.label}/{key}: dialog still open"
         row["writes"] = [list(w) for w in writes(self.log[start_log:])]
         # The only normalization: ``E`` toasts the export path, which lives in pytest's random tmp cwd.
@@ -165,7 +165,7 @@ async def _dashboard(http: TestClient, rows: list[Row], mp: pytest.MonkeyPatch) 
     log: list[RequestLog] = []
     tui = make_tui(http, log)
     async with tui.run_test(size=SIZE) as pilot:
-        await settle(pilot, tui)
+        await settle_fast(pilot, tui)
         rec = _Recorder(pilot, tui, log, "dashboard", mp)
         await rec.key("c")
         await rec.key("S")
@@ -178,9 +178,9 @@ async def _cluster(http: TestClient, rows: list[Row], mp: pytest.MonkeyPatch) ->
     log: list[RequestLog] = []
     tui = make_tui(http, log)
     async with tui.run_test(size=SIZE) as pilot:
-        await settle(pilot, tui)
+        await settle_fast(pilot, tui)
         await tui.push_screen(ClusterScreen(1))
-        await settle(pilot, tui)
+        await settle_fast(pilot, tui)
         rec = _Recorder(pilot, tui, log, "cluster", mp)
         await _cluster_overview_keys(rec)
         await _cluster_plant_keys(rec)
@@ -257,7 +257,7 @@ async def _alerts(http: TestClient, rows: list[Row], mp: pytest.MonkeyPatch) -> 
     tui = make_tui(http, log)
     async with tui.run_test(size=SIZE) as pilot:
         await pilot.press("a")
-        await settle(pilot, tui)
+        await settle_fast(pilot, tui)
         rec = _Recorder(pilot, tui, log, "alerts", mp)
         for key in ("k", "v", "y", "f"):
             await rec.key(key)
@@ -269,7 +269,7 @@ async def _system(http: TestClient, rows: list[Row], mp: pytest.MonkeyPatch) -> 
     tui = make_tui(http, log)
     async with tui.run_test(size=SIZE) as pilot:
         await pilot.press("s")
-        await settle(pilot, tui)
+        await settle_fast(pilot, tui)
         rec = _Recorder(pilot, tui, log, "system", mp)
         await rec.key("delete", note="cursor on a built-in job")
         await rec.key("p", note="pause (scheduler active)")
@@ -284,7 +284,7 @@ async def _settings(http: TestClient, rows: list[Row], mp: pytest.MonkeyPatch) -
     tui = make_tui(http, log)
     async with tui.run_test(size=SIZE) as pilot:
         await pilot.press("o")
-        await settle(pilot, tui)
+        await settle_fast(pilot, tui)
         rec = _Recorder(pilot, tui, log, "settings", mp)
         await rec.key("u", note="no vacation windows yet")
         await rec.key("delete", note="no vacation windows yet")
