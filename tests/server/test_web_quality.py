@@ -15,11 +15,7 @@ class TestQualityPage:
         assert resp.status_code == HTTPStatus.OK
         assert "text/html" in resp.headers["content-type"]
         assert "Data Quality" in resp.text
-
-    def test_empty_state(self, client: TestClient) -> None:
-        """Empty DB → all-clear state."""
-        resp = client.get("/quality")
-        assert resp.status_code == HTTPStatus.OK
+        # Empty DB → all-clear state
         assert "No issues found" in resp.text
 
     def test_shows_issue_codes(self, app: FastAPI) -> None:

@@ -48,6 +48,13 @@ class TestAlertListPage:
         assert resp.status_code == HTTPStatus.OK
         assert "Alerts" in resp.text
         assert "No alerts" in resp.text
+        # Segmented filter chips
+        assert 'href="/alerts?status=open"' in resp.text
+        assert 'href="/alerts?status=acknowledged"' in resp.text
+        assert 'href="/alerts?status=resolved"' in resp.text
+        # Sync button
+        assert "hx-post" in resp.text
+        assert "/alerts/sync" in resp.text
 
     def test_renders_alert_rows(self, app: FastAPI) -> None:
         """Renders alert rows."""
@@ -74,21 +81,6 @@ class TestAlertListPage:
             assert resp.status_code == HTTPStatus.OK
             # The open-only view should NOT show resolved alerts
             assert "No alerts" in resp.text
-
-    def test_segmented_filter_chips_rendered(self, client: TestClient) -> None:
-        """Segmented filter chips rendered."""
-        resp = client.get("/alerts")
-        assert resp.status_code == HTTPStatus.OK
-        assert 'href="/alerts?status=open"' in resp.text
-        assert 'href="/alerts?status=acknowledged"' in resp.text
-        assert 'href="/alerts?status=resolved"' in resp.text
-
-    def test_sync_button_present(self, client: TestClient) -> None:
-        """Sync button present."""
-        resp = client.get("/alerts")
-        assert resp.status_code == HTTPStatus.OK
-        assert "hx-post" in resp.text
-        assert "/alerts/sync" in resp.text
 
 
 class TestAlertBadge:

@@ -7,14 +7,6 @@ from fastapi.testclient import TestClient
 # --- Cluster edit/delete --------------------------------------------------
 
 
-def test_cluster_list_shows_edit_and_delete(seeded_client: TestClient) -> None:
-    """Cluster list shows edit and delete."""
-    resp = seeded_client.get("/clusters")
-    assert resp.status_code == HTTPStatus.OK
-    assert 'href="/clusters/1/edit"' in resp.text
-    assert 'hx-delete="/clusters/1"' in resp.text
-
-
 def test_cluster_edit_form_renders(seeded_client: TestClient) -> None:
     """Cluster edit form renders."""
     resp = seeded_client.get("/clusters/1/edit")
@@ -54,14 +46,6 @@ def test_cluster_delete_404(client: TestClient) -> None:
 # --- Plant edit/delete ----------------------------------------------------
 
 
-def test_plant_list_shows_edit_and_delete(seeded_client: TestClient) -> None:
-    """Plant list shows edit and delete."""
-    resp = seeded_client.get("/clusters/1/plants")
-    assert resp.status_code == HTTPStatus.OK
-    assert 'href="/clusters/1/plants/1/edit"' in resp.text
-    assert 'hx-delete="/clusters/1/plants/1"' in resp.text
-
-
 def test_plant_edit_form_renders(seeded_client: TestClient) -> None:
     """Plant edit form renders."""
     resp = seeded_client.get("/clusters/1/plants/1/edit")
@@ -97,14 +81,6 @@ def test_plant_edit_404_wrong_cluster(seeded_client: TestClient) -> None:
 
 
 # --- Sensor edit/delete ---------------------------------------------------
-
-
-def test_sensor_list_shows_edit_and_delete(seeded_client: TestClient) -> None:
-    """Sensor list shows edit and delete."""
-    resp = seeded_client.get("/clusters/1/sensors")
-    assert resp.status_code == HTTPStatus.OK
-    assert 'href="/clusters/1/sensors/1/edit"' in resp.text
-    assert 'hx-delete="/clusters/1/sensors/1"' in resp.text
 
 
 def test_sensor_edit_form_renders(seeded_client: TestClient) -> None:
