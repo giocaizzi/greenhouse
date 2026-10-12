@@ -10,7 +10,9 @@ Steady-state Cloud budget is just the sync job's per-sensor reads. Local
 actuation resolves each irrigator's ``local_key`` from its persisted ``config``
 blob (or a process cache), so :meth:`DeviceGateway.open_local` never calls the
 Cloud once a key is known — this is what removes the per-poll ``getdevices``
-storm the pump watcher used to cause.
+storm the pump watcher used to cause. A stored key that went stale (the device
+was re-paired) is the one exception: :meth:`DeviceGateway.run_local` refreshes it
+with one rate-limited Cloud lookup when tinytuya answers error 914.
 
 ``tinytuya`` is imported here (and re-exported from ``greenhouse_core.devices``)
 so tests patch ``greenhouse_core.devices.tinytuya.Cloud`` — which mutates the
@@ -22,12 +24,13 @@ from __future__ import annotations
 import logging
 import os
 import time
-from typing import TYPE_CHECKING, Any, Protocol, TypedDict
+from typing import TYPE_CHECKING, Any, Protocol, TypedDict, TypeVar
 
 import tinytuya
 
 from greenhouse_core.constants import SENSOR_LOG_MAX_PAGES, SENSOR_LOG_PAGE_SIZE
 from greenhouse_core.devices.datapoints import DATAPOINT_PARSERS, group_logs_by_timestamp
+from greenhouse_core.devices.local_keys import LocalKeyResolver, is_key_or_version_error
 from greenhouse_core.models import Irrigator, parse_device_config
 
 if TYPE_CHECKING:
@@ -36,6 +39,8 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 LOCAL_TIMEOUT = 5
+
+_LocalResult = TypeVar("_LocalResult")
 
 
 class MissingCloudCredentialsError(ValueError):
@@ -206,10 +211,10 @@ class DeviceGateway:
                 apiSecret=self.client_secret,
             )
         )
-        # device_id → local_key, warmed lazily on the first cold lookup and
-        # reused for the lifetime of this (app-scoped) instance.
-        self._key_cache: dict[str, str] = {}
-        self._on_key_discovered = on_key_discovered
+        # local_key resolution: config → process cache (device_id → key, warmed lazily and
+        # reused for the lifetime of this app-scoped instance) → one Cloud lookup.
+        self._keys = LocalKeyResolver(self._lookup_key_via_cloud, on_key_discovered)
+        self._key_cache = self._keys.cache
 
     # ── Sensor cloud reads ────────────────────────────────────────────────
 
@@ -330,26 +335,11 @@ class DeviceGateway:
     def resolve_local_key(self, device_id: str, config: object | None = None) -> str | None:
         """Resolve a device's ``local_key`` cheaply.
 
-        Order: persisted ``config['local_key']`` → process cache → (cold path)
-        one Cloud ``getdevices`` lookup, whose result is cached and handed to
-        the ``on_key_discovered`` persistence hook.
+        Order: persisted ``config['local_key']`` (unless a 914 refresh superseded it) →
+        process cache → (cold path) one Cloud ``getdevices`` lookup, whose result is cached
+        and handed to the ``on_key_discovered`` persistence hook.
         """
-        cfg_key: str | None = parse_device_config(config).get("local_key") if config is not None else None
-        if cfg_key:
-            return cfg_key
-        cached = self._key_cache.get(device_id)
-        if cached:
-            return cached
-
-        key = self._lookup_key_via_cloud(device_id)
-        if key:
-            self._key_cache[device_id] = key
-            if self._on_key_discovered is not None:
-                try:
-                    self._on_key_discovered(device_id, key)
-                except Exception:
-                    logger.exception("local_key persistence hook failed for %s", device_id)
-        return key
+        return self._keys.resolve(device_id, config)
 
     def _lookup_key_via_cloud(self, device_id: str) -> str | None:
         """The one place that calls Cloud ``getdevices`` to find a local key."""
@@ -380,6 +370,28 @@ class DeviceGateway:
         device.set_version(protocol_version)
         device.set_socketTimeout(LOCAL_TIMEOUT)
         return device
+
+    def run_local(
+        self,
+        irrigator: Irrigator,
+        protocol_version: float | None,
+        operation: Callable[[tinytuya.OutletDevice], _LocalResult],
+    ) -> _LocalResult:
+        """Run one local call; when tinytuya answers error 914, refresh a stale key and retry once.
+
+        The adapters' local reads and writes (IK10PW Duration DP 102, the DP 105 health read,
+        the generic status read) go through here, so a re-paired device whose stored key went
+        stale recovers instead of failing forever. On 914 the gateway makes one Cloud
+        ``getdevices`` lookup (rate-limited per device); only when the Cloud holds a different
+        key is ``operation`` run again, on a device opened with that key. Otherwise — same or no
+        Cloud key, a failed lookup, an exhausted budget — the original result is returned.
+        Only this local ``operation`` is ever retried: Cloud commands (the switch ON) are not
+        sent from here. Errors raised by ``open_local`` or ``operation`` propagate unchanged.
+        """
+        result = operation(self.open_local(irrigator, protocol_version))
+        if not is_key_or_version_error(result) or not self._keys.refresh(irrigator.tuya_device_id, irrigator.config):
+            return result
+        return operation(self.open_local(irrigator, protocol_version))
 
 
 __all__ = ["DATAPOINT_PARSERS", "DeviceGateway", "group_logs_by_timestamp"]

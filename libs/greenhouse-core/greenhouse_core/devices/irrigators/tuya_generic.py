@@ -79,7 +79,8 @@ class TuyaIrrigatorAdapter(AbstractIrrigatorAdapter):
     def _local_status(self, irrigator: Irrigator, proto: float) -> dict[str, Any] | None:
         """The status from a local read, or ``None`` when the device gave no DPs or could not be reached."""
         try:
-            live = self._gateway.open_local(irrigator, proto).status()
+            # run_local refreshes a stale stored local_key (error 914) and retries the read once.
+            live = self._gateway.run_local(irrigator, proto, lambda device: device.status())
             local = self._local_fields(live["dps"]) if live and "dps" in live else None
         except Exception:  # any local failure (LAN, protocol, parse) falls back to the Cloud read
             # Expected when the device is off the LAN: the Cloud read is the documented fallback.

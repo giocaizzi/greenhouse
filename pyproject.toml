@@ -288,6 +288,7 @@ allow_indirect_imports = true
 ignore_imports = [
   "greenhouse_server.services.jobs -> fastapi",        # TYPE_CHECKING annotation only
   "greenhouse_server.services.pump_watcher_jobs -> fastapi",  # TYPE_CHECKING annotation only (_run_pump_watcher's app)
+  "greenhouse_server.services.device_keys -> fastapi",  # TYPE_CHECKING annotation only (persist_local_key's app)
 ]
 
 [[tool.importlinter.contracts]]

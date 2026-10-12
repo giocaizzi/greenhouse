@@ -454,3 +454,11 @@ EFFICACY_SCORE_PER_PCT_RISE = 5.0  # efficacy score points per percentage point 
 
 SENSOR_LOG_PAGE_SIZE = 100  # entries per getdevicelog request (Tuya's hard per-query limit)
 SENSOR_LOG_MAX_PAGES = 50  # request cap per sensor sync (= 5,000 entries; tinytuya's own default)
+
+# ── Tuya local_key refresh (tinytuya error 914) ──────────────────────────────
+# A local call answered "Check device key or version" (error 914) — the stored local_key went
+# stale when the device was re-paired — refreshes the key with ONE Cloud getdevices lookup.
+# tinytuya also answers 914 for a mis-versioned device or one that stops replying mid-session,
+# so a device gets at most one lookup per this interval: a broken device cannot turn every
+# health poll into a Cloud call, and steady state stays Cloud-free (invariant 8).
+LOCAL_KEY_REFRESH_INTERVAL_SECONDS = 3600  # 1 h

@@ -108,11 +108,17 @@ class IK10PWAdapter(TuyaIrrigatorAdapter):
         """Write DP 102 (Duration) over local v3.5.
 
         The Cloud API returns error 2008 for this custom DP, so the local
-        path is the only way to control the on-device countdown.
+        path is the only way to control the on-device countdown. The write goes
+        through ``DeviceGateway.run_local``, so a stale stored ``local_key``
+        (error 914) is refreshed and the write retried once — the write is
+        idempotent, and the Cloud ON in :meth:`start` still follows only a
+        successful write.
         """
+        duration_dp = self.profile.dp("duration")
         try:
-            device = self._gateway.open_local(irrigator, self.profile.protocol_version)
-            result = device.set_value(self.profile.dp("duration"), seconds)
+            result = self._gateway.run_local(
+                irrigator, self.profile.protocol_version, lambda device: device.set_value(duration_dp, seconds)
+            )
             refused = bool(result and result.get("Error"))
         except Exception as e:  # noqa: BLE001 — any local failure becomes the (False, reason) device result
             return False, f"Local connection failed: {e}"
@@ -174,12 +180,12 @@ class IK10PWAdapter(TuyaIrrigatorAdapter):
         pump-safety check. On a failed read returns ``offline=True`` with
         an empty alarm set so callers distinguish "no fault" from "no
         signal" — the monitor maps ``offline`` to
-        :attr:`HealthAlarm.DEVICE_OFFLINE`.
+        :attr:`HealthAlarm.DEVICE_OFFLINE`. A stale stored ``local_key``
+        (error 914) is refreshed and the read retried once by the gateway.
         """
         now = int(time.time())
         try:
-            device = self._gateway.open_local(irrigator, self.profile.protocol_version)
-            status = device.status()
+            status = self._gateway.run_local(irrigator, self.profile.protocol_version, lambda device: device.status())
         except Exception as exc:  # noqa: BLE001 — any local failure reads as offline, never raises to the monitor
             return DeviceHealthState(
                 observed_at=now,

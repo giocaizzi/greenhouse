@@ -60,6 +60,10 @@ class IrrigatorMixin(RepositoryBase):
         """Get an irrigator by ID."""
         return self.session.get(Irrigator, irrigator_id)
 
+    def get_irrigator_by_device_id(self, tuya_device_id: str) -> Irrigator | None:
+        """Get the irrigator registered under a Tuya device id (unique per table), or None."""
+        return self.session.scalars(select(Irrigator).where(Irrigator.tuya_device_id == tuya_device_id)).first()
+
     def get_irrigator_for_cluster(self, cluster_id: int) -> Irrigator | None:
         """Get the cluster's single irrigator, or None if it has none."""
         return self.session.scalars(select(Irrigator).where(Irrigator.cluster_id == cluster_id)).first()

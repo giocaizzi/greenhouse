@@ -17,6 +17,7 @@ FAKE_DEVICE_ID_2 = "fake_tuya_device_eeff0011"
 # --- Fake network config (RFC 5737: 192.0.2.x reserved for docs/tests) ---
 FAKE_DEVICE_IP = "192.0.2.1"
 FAKE_LOCAL_KEY = "fakelocalkeyxxxx"
+FAKE_LOCAL_KEY_REPAIRED = "fakerepairedkeyx"  # the key a re-paired device answers to
 
 # --- Fake cluster/plant data ---
 FAKE_CLUSTER_NAME = "Test Cluster"

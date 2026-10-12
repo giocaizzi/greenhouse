@@ -55,6 +55,7 @@ from greenhouse_server.scheduler import (
     start_scheduler,
     stop_scheduler,
 )
+from greenhouse_server.services.device_keys import local_key_persister
 from greenhouse_server.services.irrigation_jobs import rearm_leak_checks
 from greenhouse_server.services.jobs import read_session
 from greenhouse_server.services.notify import NtfyClient
@@ -79,10 +80,12 @@ def _init_tuya(app: FastAPI) -> None:
     client, one token) and ``app.state.device_registry`` (adapters bound to it).
     Both are set to ``None`` when credentials are missing or construction fails,
     so the server still starts in degraded mode for tests and credential-less
-    environments.
+    environments. Every ``local_key`` the gateway fetches from the Cloud (a cold
+    lookup, or the refresh of a stale key after error 914) is persisted to the
+    irrigator's config, so a restart does not regress.
     """
     try:
-        gateway = DeviceGateway()
+        gateway = DeviceGateway(on_key_discovered=local_key_persister(app))
     except ValueError as exc:  # missing TUYA_CLIENT_ID / TUYA_CLIENT_SECRET: an expected setup, no traceback
         logger.warning("Tuya gateway not configured (%s); starting without device control", exc)
         app.state.device_gateway = None

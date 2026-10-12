@@ -147,7 +147,7 @@ def test_missing_tuya_credentials_log_one_line_without_traceback(
 ) -> None:
     """Missing tuya credentials log one line without traceback."""
 
-    def missing() -> Never:
+    def missing(**_kwargs: object) -> Never:
         msg = "Missing TUYA_CLIENT_ID or TUYA_CLIENT_SECRET"
         raise ValueError(msg)
 
@@ -168,7 +168,7 @@ def test_an_unexpected_tuya_init_error_keeps_the_traceback(
 ) -> None:
     """An unexpected tuya init error keeps the traceback."""
 
-    def broken() -> Never:
+    def broken(**_kwargs: object) -> Never:
         msg = "socket exploded"
         raise RuntimeError(msg)
 
