@@ -41,6 +41,26 @@
           "type": "toml",
           "path": "libs/greenhouse-cli/pyproject.toml",
           "jsonpath": "$.project.version"
+        },
+        {
+          "type": "toml",
+          "path": "uv.lock",
+          "jsonpath": "$.package[?(@.name.value=='greenhouse')].version"
+        },
+        {
+          "type": "toml",
+          "path": "uv.lock",
+          "jsonpath": "$.package[?(@.name.value=='greenhouse-core')].version"
+        },
+        {
+          "type": "toml",
+          "path": "uv.lock",
+          "jsonpath": "$.package[?(@.name.value=='greenhouse-server')].version"
+        },
+        {
+          "type": "toml",
+          "path": "uv.lock",
+          "jsonpath": "$.package[?(@.name.value=='greenhouse-cli')].version"
         }
       ]
     }
