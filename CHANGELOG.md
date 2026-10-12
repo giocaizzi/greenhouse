@@ -4,6 +4,27 @@ All notable changes to this project are tracked here. Managed automatically by
 [release-please](https://github.com/googleapis/release-please) from
 [Conventional Commits](https://www.conventionalcommits.org/) — do not hand-edit.
 
+## [6.0.0](https://github.com/giocaizzi/greenhouse/compare/v5.0.1...v6.0.0) (2026-10-12)
+
+
+### ⚠ BREAKING CHANGES
+
+* secrets are read only as `GREENHOUSE_*` (bare and `IRRIGATION_`-prefixed names are ignored); the server binds `127.0.0.1` unless `IRRIGATION_HOST` is set; `local_key` is masked in API and MCP responses; `IRRIGATION_CHECK_INTERVAL_HOURS` is gone (use `IRRIGATION_CHECK_CRON_HOURS=*/N`); `dry_run_global` refuses manual starts with 409; pre-Alembic databases fail at startup and need `alembic stamp head`.
+
+### Added
+
+* **cli:** add full-screen TUI (greenhouse tui) + scheduler, engine and manual-control fixes ([#106](https://github.com/giocaizzi/greenhouse/issues/106)) ([a1b2622](https://github.com/giocaizzi/greenhouse/commit/a1b26221ad157454ce8aa35619afeb047b06dd21))
+
+
+### Fixed
+
+* **project:** set package author to the owner ([#116](https://github.com/giocaizzi/greenhouse/issues/116)) ([d7efe7c](https://github.com/giocaizzi/greenhouse/commit/d7efe7c1dec0e2bf1623c63cf81be25c069822ed))
+
+
+### Changed
+
+* restructure the codebase, fix every recorded bug, enable all ruff rules and type-check tests ([#108](https://github.com/giocaizzi/greenhouse/issues/108)) ([0a83268](https://github.com/giocaizzi/greenhouse/commit/0a83268afeb9a8dac07adba605811f684f7d8562))
+
 ## [5.0.1](https://github.com/giocaizzi/greenhouse/compare/v5.0.0...v5.0.1) (2026-08-18)
 
 

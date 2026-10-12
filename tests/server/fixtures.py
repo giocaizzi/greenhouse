@@ -29,17 +29,23 @@ registry is stored on ``app.state.fake_devices`` so tests can fetch the
 per-irrigator fake and assert on its recorded ``calls``.
 """
 
-from collections.abc import Iterator
+import copy
+from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from http import HTTPStatus
+from typing import Any
 
+import fastapi_mcp.server
 import pytest
 from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi import FastAPI
+from fastapi.openapi.utils import get_openapi
+from fastapi.routing import APIRoute, iter_route_contexts
 from fastapi.testclient import TestClient
 from sqlalchemy import Engine, create_engine
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
+from starlette.routing import BaseRoute
 
 from fake_devices import FakeIrrigatorAdapter, FakeSensorAdapter
 from greenhouse_core.devices import DeviceRegistry
@@ -114,6 +120,46 @@ class FakeDeviceWiring:
             self.registry.register_irrigator(key, lambda: irrigator)
         for key in ("tuya.tr301z", "fake.sensor"):
             self.registry.register_sensor(key, lambda: sensor)
+
+
+def _schema_signature(routes: Sequence[BaseRoute]) -> tuple[tuple[object, ...], ...]:
+    """What ``routes`` contribute to the OpenAPI schema: each API route's path, methods, endpoint and dependencies.
+
+    Other routes (docs pages, static mounts, the MCP endpoint) never reach the schema, and some are
+    per-app closures, so they are left out of the key.
+    """
+    return tuple(
+        (
+            context.path,
+            frozenset(context.methods or ()),
+            context.endpoint,
+            tuple(depends.dependency for depends in context.dependencies),
+        )
+        for context in iter_route_contexts(routes)
+        if isinstance(context.original_route, APIRoute) and context.include_in_schema
+    )
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _cached_mcp_openapi() -> Iterator[None]:
+    """Generate the MCP mount's OpenAPI schema once per route table, not once per app build.
+
+    ``FastApiMCP.setup_server`` calls ``get_openapi`` on every ``create_app``, and that is most
+    of an app build. Every build includes the same module-level endpoints, so the schema is
+    cached on the route signature; each caller gets a deep copy. The MCP and OpenAPI goldens
+    catch a cache that serves the wrong schema.
+    """
+    cache: dict[tuple[object, ...], dict[str, Any]] = {}
+
+    def cached_get_openapi(*, routes: Sequence[BaseRoute], **header: Any) -> dict[str, Any]:  # noqa: ANN401 — mirrors get_openapi's keyword header
+        key = (tuple(sorted(header.items())), _schema_signature(routes))
+        if key not in cache:
+            cache[key] = get_openapi(routes=routes, **header)
+        return copy.deepcopy(cache[key])
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(fastapi_mcp.server, "get_openapi", cached_get_openapi)
+        yield
 
 
 def _make_stubbed_app(*, bypass_auth: bool, **settings_override: object) -> tuple[FastAPI, Engine]:
