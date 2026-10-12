@@ -30,7 +30,7 @@ from rich.text import Text
 from textual.app import App, ComposeResult
 from textual.widgets import DataTable, Static, TabbedContent
 
-from cli.test_contract_tui import make_seeded_app, make_tui, screen_text, settle_fast
+from cli.test_contract_tui import make_seeded_app, make_tui, screen_text, settle, settle_fast
 from cli.tui_fixtures import tui_client_factory, writes
 from golden import FROZEN_INSTANT, assert_golden, assert_golden_json
 from greenhouse_cli.tui.model import summarize
