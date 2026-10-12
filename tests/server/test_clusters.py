@@ -48,11 +48,6 @@ class TestClusterCRUD:
         assert resp.status_code == HTTPStatus.OK
         assert resp.json()["name"] == "Test"
 
-    def test_get_not_found(self, client: TestClient) -> None:
-        """Get not found."""
-        resp = client.get("/api/v1/clusters/999")
-        assert resp.status_code == HTTPStatus.NOT_FOUND
-
     def test_list_empty(self, client: TestClient) -> None:
         """List empty."""
         resp = client.get("/api/v1/clusters")

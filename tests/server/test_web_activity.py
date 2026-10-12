@@ -47,6 +47,9 @@ class TestActivityListPage:
         assert resp.status_code == HTTPStatus.OK
         assert "Activity" in resp.text
         assert "No activity yet" in resp.text
+        # Filter chips
+        assert "?source=irrigation" in resp.text
+        assert "?source=learning" in resp.text
 
     def test_renders_seeded_event(self, app: FastAPI) -> None:
         """Renders seeded event."""
@@ -56,12 +59,6 @@ class TestActivityListPage:
             assert resp.status_code == HTTPStatus.OK
             assert "irrigated" in resp.text
             assert "irrigation" in resp.text
-
-    def test_filter_chips_present(self, client: TestClient) -> None:
-        """Filter chips present."""
-        resp = client.get("/activity")
-        assert "?source=irrigation" in resp.text
-        assert "?source=learning" in resp.text
 
     def test_source_filter(self, app: FastAPI) -> None:
         """Source filter."""

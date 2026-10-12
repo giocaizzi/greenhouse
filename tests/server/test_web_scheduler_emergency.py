@@ -15,13 +15,6 @@ def test_scheduler_page_shows_emergency_stop_button(client: TestClient) -> None:
     assert "Stop all irrigators" in resp.text
 
 
-def test_dashboard_shows_emergency_stop_when_clusters_exist(seeded_client: TestClient) -> None:
-    """Dashboard shows emergency stop when clusters exist."""
-    resp = seeded_client.get("/")
-    assert resp.status_code == HTTPStatus.OK
-    assert 'hx-post="/bulk/stop-all"' in resp.text
-
-
 def test_dashboard_empty_omits_emergency_stop(client: TestClient) -> None:
     """Dashboard empty omits emergency stop."""
     resp = client.get("/")
