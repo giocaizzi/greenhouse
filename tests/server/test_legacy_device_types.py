@@ -129,8 +129,10 @@ def test_health_poll_skips_a_legacy_sensor_with_a_warning(
         session.close()
     assert (state.observed_at, state.offline, state.alarms) == (1_700_000_000, False, frozenset())
     assert caplog.messages == [
-        f"No adapter registered for sensor type '{legacy}' (known: fake.sensor, tuya.tr301z); "
-        f"sensor {sid} will be skipped"
+        (
+            f"No adapter registered for sensor type '{legacy}' (known: fake.sensor, tuya.tr301z); "
+            f"sensor {sid} will be skipped"
+        )
     ]
 
 

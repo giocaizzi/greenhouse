@@ -527,8 +527,10 @@ def test_watch_read_error_counts_as_a_failure_and_is_logged(pump: PumpWorld, cap
     assert [(r.levelname, r.getMessage()) for r in caplog.records] == [
         (
             "WARNING",
-            f"Pump watcher abandoning irrigator {pump.irrigator.id} after 1 read failures (last: timeout) "
-            "— irrigation continues unprotected",
+            (
+                f"Pump watcher abandoning irrigator {pump.irrigator.id} after 1 read failures (last: timeout) "
+                "— irrigation continues unprotected"
+            ),
         )
     ]
 
@@ -541,8 +543,10 @@ def test_watch_offline_failure_message_is_device_offline(pump: PumpWorld, caplog
         result = watcher.watch(pump.irrigator, 60)
     assert result == {"outcome": "abandoned", "polls": 2, "read_failures": 2, "alarm_raw": None, "elapsed_seconds": 1.5}
     assert [r.getMessage() for r in caplog.records] == [
-        f"Pump watcher abandoning irrigator {pump.irrigator.id} after 2 read failures (last: device offline) "
-        "— irrigation continues unprotected"
+        (
+            f"Pump watcher abandoning irrigator {pump.irrigator.id} after 2 read failures (last: device offline) "
+            "— irrigation continues unprotected"
+        )
     ]
 
 
@@ -599,8 +603,10 @@ def test_trip_with_a_raising_stop_records_the_failure(pump: PumpWorld, caplog: p
         ("ERROR", f"Pump watcher could not stop irrigator {iid}"),
         (
             "CRITICAL",
-            f"Pump dry-run detected on irrigator {iid} (cluster {pump.irrigator.cluster_id}) after 1 polls: "
-            "alarm_raw=1, stop_ok=False, stop_msg=adapter.stop raised: boom",
+            (
+                f"Pump dry-run detected on irrigator {iid} (cluster {pump.irrigator.cluster_id}) after 1 polls: "
+                "alarm_raw=1, stop_ok=False, stop_msg=adapter.stop raised: boom"
+            ),
         ),
     ]
     event = pump.repo.session.query(IrrigationEvent).one()

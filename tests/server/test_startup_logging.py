@@ -131,8 +131,10 @@ def test_ignored_legacy_secret_env_names_are_warned_by_name_only(
     messages = [r.getMessage() for r in caplog.records]
     assert messages == [
         "Environment variable MCP_TOKEN is set but ignored: secrets are read from GREENHOUSE_* names only",
-        "Environment variable irrigation_auth_secret_key is set but ignored: "
-        "secrets are read from GREENHOUSE_* names only",
+        (
+            "Environment variable irrigation_auth_secret_key is set but ignored: "
+            "secrets are read from GREENHOUSE_* names only"
+        ),
     ]
     assert not any("s3cr3t" in m for m in messages)
 

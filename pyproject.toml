@@ -103,6 +103,7 @@ extend-select = [
 ignore = [
     "COM812",  # conflicts with ruff format (trailing commas are the formatter's call)
     "ISC001",  # conflicts with ruff format (implicit string concatenation on one line)
+    "CPY001",  # a per-file copyright header; the licence lives once in LICENSE
 ]
 # Preview refines two stable rules: BLE001 accepts a handler that logs the exception or re-raises, S310
 # accepts literal http(s) URLs. With explicit-preview-rules, no other preview rule turns on by itself.

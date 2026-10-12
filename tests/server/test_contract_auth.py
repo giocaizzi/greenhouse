@@ -665,8 +665,10 @@ def test_bootstrap_without_credentials_warns(
         bootstrap_admin(engine, _settings(auth_admin_username=username, auth_admin_password=password))
     assert _users(engine) == []
     assert caplog.messages == [
-        "Auth is enabled but no users exist and GREENHOUSE_AUTH_ADMIN_USERNAME / GREENHOUSE_AUTH_ADMIN_PASSWORD "
-        "are not set. The API will reject every request with 401 until a user is created."
+        (
+            "Auth is enabled but no users exist and GREENHOUSE_AUTH_ADMIN_USERNAME / GREENHOUSE_AUTH_ADMIN_PASSWORD "
+            "are not set. The API will reject every request with 401 until a user is created."
+        )
     ]
 
 

@@ -725,8 +725,10 @@ class TestDeviceLogs:
         assert len(harness.log) == PAGE_CAP
         assert len(logs) == PAGE_CAP
         assert caplog.messages == [
-            f"getdevicelog for {FAKE_SENSOR_ID} still had rows after 3 pages (3 entries); "
-            "the window is not fully covered"
+            (
+                f"getdevicelog for {FAKE_SENSOR_ID} still had rows after 3 pages (3 entries); "
+                "the window is not fully covered"
+            )
         ]
 
     def test_one_sensor_sync_pages_the_backfill_then_reads_live_once(
@@ -1184,8 +1186,10 @@ def test_tr301z_read_health_raw_payloads(harness: Harness) -> None:
 
 REFUSAL = (
     False,
-    "Local Duration DP unavailable (Local connection failed: No device_ip in config for irrigator "
-    f"{FAKE_DEVICE_ID}.); keep-alive is not supported in the server — irrigation not started",
+    (
+        "Local Duration DP unavailable (Local connection failed: No device_ip in config for irrigator "
+        f"{FAKE_DEVICE_ID}.); keep-alive is not supported in the server — irrigation not started"
+    ),
 )
 
 

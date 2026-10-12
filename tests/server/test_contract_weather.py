@@ -146,9 +146,11 @@ class TestCurrent:
         WeatherClient(lat=-33.5, lon=151.25, timeout=3, tz="Australia/Sydney").get_current()
         assert net.calls == [
             (
-                f"{BASE}?latitude=-33.5&longitude=151.25"
-                "&current=temperature_2m,apparent_temperature,precipitation,relative_humidity_2m"
-                "&timezone=Australia/Sydney",
+                (
+                    f"{BASE}?latitude=-33.5&longitude=151.25"
+                    "&current=temperature_2m,apparent_temperature,precipitation,relative_humidity_2m"
+                    "&timezone=Australia/Sydney"
+                ),
                 3,
             )
         ]
@@ -282,8 +284,10 @@ def test_app_wires_settings_location_and_preference_timezone(net: FakeNet) -> No
         client.get_current()
         assert net.calls == [
             (
-                f"{BASE}?latitude=1.5&longitude=-2.25"
-                "&current=temperature_2m,apparent_temperature,precipitation,relative_humidity_2m&timezone=UTC",
+                (
+                    f"{BASE}?latitude=1.5&longitude=-2.25"
+                    "&current=temperature_2m,apparent_temperature,precipitation,relative_humidity_2m&timezone=UTC"
+                ),
                 8,
             )
         ]

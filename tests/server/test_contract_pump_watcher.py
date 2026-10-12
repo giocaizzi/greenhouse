@@ -305,8 +305,10 @@ def test_shutdown_stops_auto_cycle_and_records_it(env: WatchEnv, caplog: pytest.
         env.scheduler.jobs[0]["func"]()
     assert [c[0] for c in env.adapter.calls] == ["stop"]  # no read_health: interrupted before the first poll
     assert caplog.messages == [
-        f"Server shutting down mid-irrigation: stopped auto cycle on irrigator {env.irrigator_id} "
-        "(dry-run watcher can no longer protect it)"
+        (
+            f"Server shutting down mid-irrigation: stopped auto cycle on irrigator {env.irrigator_id} "
+            "(dry-run watcher can no longer protect it)"
+        )
     ]
     assert _db_state(env) == {
         "events": [
@@ -341,8 +343,10 @@ def test_shutdown_leaves_manual_cycle_on_device_timer_and_records_it(
         env.scheduler.jobs[0]["func"]()
     assert env.adapter.calls == []
     assert caplog.messages == [
-        f"Server shutting down mid-irrigation: manual cycle on irrigator {env.irrigator_id} left running "
-        "unprotected (no dry-run watcher) until the device timer ends it"
+        (
+            f"Server shutting down mid-irrigation: manual cycle on irrigator {env.irrigator_id} left running "
+            "unprotected (no dry-run watcher) until the device timer ends it"
+        )
     ]
     assert _db_state(env) == {
         "events": [],
@@ -368,8 +372,10 @@ def test_shutdown_stops_forced_run_like_an_auto_cycle(env: WatchEnv, caplog: pyt
         env.scheduler.jobs[0]["func"]()
     assert [c[0] for c in env.adapter.calls] == ["stop"]
     assert caplog.messages == [
-        f"Server shutting down mid-irrigation: stopped forced cycle on irrigator {env.irrigator_id} "
-        "(dry-run watcher can no longer protect it)"
+        (
+            f"Server shutting down mid-irrigation: stopped forced cycle on irrigator {env.irrigator_id} "
+            "(dry-run watcher can no longer protect it)"
+        )
     ]
     state = _db_state(env)
     assert [(e["action"], e["triggered_by"], e["notes"]) for e in state["events"]] == [
@@ -407,16 +413,20 @@ def test_shutdown_failed_auto_stop_is_logged_and_recorded(
     assert [(r.levelname, r.getMessage()) for r in caplog.records] == [
         (
             "ERROR",
-            f"Server shutting down mid-irrigation: FAILED to stop auto cycle on irrigator {env.irrigator_id} "
-            f"({stop_msg}) — it continues unprotected until the device timer ends it",
+            (
+                f"Server shutting down mid-irrigation: FAILED to stop auto cycle on irrigator {env.irrigator_id} "
+                f"({stop_msg}) — it continues unprotected until the device timer ends it"
+            ),
         )
     ]
     state = _db_state(env)
     assert state["events"] == []
     assert [(a["message"], a["payload"]) for a in state["activity"]] == [
         (
-            f"Server shutdown could not stop the auto irrigation on 'Watch Pump' ({stop_msg}); "
-            "it continues without dry-run protection",
+            (
+                f"Server shutdown could not stop the auto irrigation on 'Watch Pump' ({stop_msg}); "
+                "it continues without dry-run protection"
+            ),
             {"triggered_by": "auto", "started_at": STARTED_AT, "stopped": False},
         )
     ]
@@ -633,8 +643,10 @@ def test_trip_side_effect_failures_are_logged_and_the_stop_still_happens(
     assert [(r.levelname, r.getMessage()) for r in caplog.records] == [
         (
             "CRITICAL",
-            f"Pump dry-run detected on irrigator {iid} (cluster {plain.cluster_id}) after 1 polls: "
-            "alarm_raw=1, stop_ok=True, stop_msg=fake stop ok",
+            (
+                f"Pump dry-run detected on irrigator {iid} (cluster {plain.cluster_id}) after 1 polls: "
+                "alarm_raw=1, stop_ok=True, stop_msg=fake stop ok"
+            ),
         ),
         ("ERROR", f"Failed to log aborted irrigation event for irrigator {iid}"),
         ("ERROR", f"Failed to log the pump dry-run activity for irrigator {iid}"),
