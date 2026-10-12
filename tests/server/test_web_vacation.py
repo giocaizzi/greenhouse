@@ -18,11 +18,7 @@ class TestVacationListPage:
         assert resp.status_code == HTTPStatus.OK
         assert "Vacation" in resp.text
         assert "No vacation windows" in resp.text
-
-    def test_renders_form(self, client: TestClient) -> None:
-        """Renders form."""
-        resp = client.get("/vacation")
-        assert resp.status_code == HTTPStatus.OK
+        # Form
         assert 'name="starts_at"' in resp.text
         assert 'name="ends_at"' in resp.text
         assert 'name="contact_email"' in resp.text
