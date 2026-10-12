@@ -445,11 +445,11 @@ def test_metric_chart_skips_empty_series_and_non_start_events() -> None:
         async with app.run_test(size=(100, 30)) as pilot:
             chart = app.query_one(MetricChart)
             chart.show_payload(payload, "soil_moisture", 6)
-            await pilot.pause()
+            await pilot.pause(0)
             await settle(pilot, app)
             captured["payload"] = screen_text(app)
             chart.show_overlay(overlay, 6)
-            await pilot.pause()
+            await pilot.pause(0)
             await settle(pilot, app)
             captured["overlay"] = screen_text(app)
 
