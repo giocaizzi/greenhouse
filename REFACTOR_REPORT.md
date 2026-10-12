@@ -5,8 +5,9 @@ Behavior-preserving refactor of greenhouse on branch `claude/focused-hawking-7to
 `refactor-gate1` before any production code moved. 566 commits before this report: 246 `refactor`, 169 `docs`, 37 `fix` (labeled behavior
 changes), 35 `test`, 35 `build`, 24 merges, 10 `chore`, plus `types`/`style`/`ci` and one revert. Details of every bug,
 quirk and labeled change: `REFACTOR_NOTES.md`. Sections 1–7 describe the refactor as of `fa89e94`; section 8 covers the
-**bug-fix fold-in** that followed in the same PR (#108) and fixed the bugs the refactor had recorded; section 9 lists
-what is still open.
+**bug-fix fold-in** that followed in the same PR (#108) and fixed the bugs the refactor had recorded, then the switch to
+every ruff rule and to type-checked tests (§8.5); section 9 lists what is still open. At the PR head the branch has 836
+commits (47 merges).
 
 ## 1. Before / after
 
@@ -15,7 +16,7 @@ what is still open.
 | Tests | 1182 | 3146 (hash seeds 0 and 12345, and `TZ=America/New_York`: all green) |
 | Coverage (line + branch) | 90% | 99% (10,617 statements, 1,948 branches; `--cov-branch`) |
 | Network in tests | 21 tests reached the real Open-Meteo API | none: autouse guard blocks outbound HTTP and non-loopback sockets |
-| Ruff rule families | 7 (`E W F I B C4 UP`) | 33: + `C90` (max-complexity 8), `PLR0904/0911–0917/1702/2004`, `SIM RET PTH PERF PIE RSE FURB N EXE RUF EM TRY003 FBT ARG A002 D S BLE T201 PLW ERA PGH SLF PLE`; per-file ignores only shrink |
+| Ruff rule families | 7 (`E W F I B C4 UP`) | 33: + `C90` (max-complexity 8), `PLR0904/0911–0917/1702/2004`, `SIM RET PTH PERF PIE RSE FURB N EXE RUF EM TRY003 FBT ARG A002 D S BLE T201 PLW ERA PGH SLF PLE`; per-file ignores only shrink. **At the PR head: `select = ["ALL"]`**, see §8.5 |
 | mypy | not configured (`--strict`: 769 errors in 107/158 files) | `--strict` over all of `libs/` via `[tool.mypy] files` (174 files, 0 errors) |
 | import-linter contracts | 0 | 20 kept, 0 broken |
 | Size DoD violations (body > 40, nesting > 3, file > 400) | 69 | 15, all in the reviewed register `scripts/size-exceptions.txt`; `make sizecheck` green |
@@ -122,8 +123,9 @@ TUI / test infrastructure, **E** dependencies + CI, **F** cleanup. All six are m
 pinning test flipped to the fixed behavior. A, B, C, E and F: `01692d4..190217f`, 87 commits, 73 of them `fix(...)`.
 D: merged at `3b75817`, then its two review rounds and the TUI table fix through `f0c7662` (`9a20582..f0c7662`:
 53 commits, of which 50 `fix(...)`, 2 dead-code `refactor` and 1 `docs`). Up to `f0c7662` the fold-in has
-146 non-merge commits, 123 of them `fix(...)`.
-<!-- TODO(final-gate): final fold-in commit counts at the PR head (docs and the ruff ALL phase included). -->
+146 non-merge commits, 123 of them `fix(...)`. At the PR head, with the docs and the ruff `ALL` / typed-tests phase
+(§8.5), the fold-in (`01692d4..HEAD`) has 245 non-merge commits: 126 `fix`, 56 `refactor`, 28 `types`, 22 `docs`,
+5 `style`, 5 `build`, 2 `test`, 1 `ci`.
 
 ### 8.1 Owner decisions
 
@@ -184,14 +186,63 @@ Cleanup (package F and leftovers): lazy package re-exports (`greenhouse_core/_la
 
 ### 8.4 Gate
 
-<!-- TODO(final-gate): full-suite count (package runs: 3,293 after D's last review round, +1 test in f0c7662),
-coverage, hash seeds, TZ run, lint-imports / typecheck / sizecheck results and the gitleaks range for the final
-fold-in HEAD. -->
+Final gate on the PR head (`71bd646`, docs-only commit after it):
+
+- Full suite **3,299 passed** with `PYTHONHASHSEED=0` (+ coverage), `PYTHONHASHSEED=12345` and
+  `TZ=America/New_York`; `tests/golden` and the tree unchanged by the runs. Coverage (line + branch) **98%**
+  (11,840 statements, 2,090 branches).
+- `pre-commit run --all-files` green (ruff, ruff-format, hygiene, gitleaks; hadolint skipped — no Docker daemon in the
+  container, CI runs it). `ruff check libs tests scripts` with `select = ["ALL"]`: 0 findings.
+- `make lint-imports` 20 kept / 0 broken; `make typecheck` (mypy `--strict`, `libs/` **and `tests/`**) 362 files, 0
+  errors; `make sizecheck` green.
+- `gitleaks detect` over `a1b2622..HEAD` (787 commits): no leaks.
+- CI on the pushed heads: all jobs green (`lint`, `static`, `hygiene`, `dockerfile`, `secrets`, `test`, `check`).
+
+| Metric at the PR head | Value (§1 "after" column: `fa89e94`) |
+|---|---|
+| Tests | 3,299 (3,146) |
+| Coverage | 98% (99%: the fold-in added defensive paths, e.g. compensating stops and gate write-backs) |
+| mypy `--strict` | 362 files: all of `libs/` and `tests/` (174, `libs/` only) |
+| `type: ignore` | `libs/` 2, `tests/` 7 (2 in `libs/`) |
+| Functions > 40 body lines / longest | 0 / 40 (3 / 49) |
+| Size register | 7 files, 0 functions (15 entries) |
+| Max cyclomatic complexity / average (radon) | 20 / 2.38 over 1,683 blocks (20 / 2.39) |
+| Radon blocks C-or-worse / D–F | 13 / 0 (16 / 0) |
+| `TypedDict` / `StrEnum` classes | 59 / 9 (26 / 9) |
 
 ### 8.5 Ruff `ALL`
 
-<!-- TODO(final-gate): the ruff ALL phase — rule set, per-file ignores, commits, and the §1 "Ruff rule families" row
-as of the final HEAD. -->
+Owner decision: ruff selects **every rule**; the only ignores are rules that cannot hold together with something
+kept. A dedicated team fixed every finding (five lint packages R1–R5, then four annotation packages T1–T4), each on
+its own branch, merged into a staging branch, gated, and pushed only when the whole tree was green.
+
+- **Config** (`[tool.ruff]`, `build(lint)` `8259c5f`): `select = ["ALL"]` plus the four preview size rules already
+  enforced (`PLR0904`, `PLR0914`, `PLR0917`, `PLR1702`; `explicit-preview-rules`). Ignores: `COM812` / `ISC001`
+  (ruff format), `tests/**` `S101` (pytest asserts), `routes/*` `FAST001` / `D417` (invariant 7: explicit
+  `response_model=`, docstrings = MCP descriptions document request parameters only). Every per-file ratchet entry is
+  gone. `extend-exclude` the frozen Alembic revisions; `namespace-packages = ["tests"]` (an `__init__.py` would import
+  rootdir-imported test modules twice); `allowed-confusables = ["–", "×"]` (frozen user-facing text);
+  `flake8-type-checking` runtime-evaluated decorators / base classes keep FastAPI, Pydantic and SQLAlchemy imports real.
+- **Findings fixed:** ≈ 4,900 in `libs/` + `scripts/` + `tests/` (R1 server + scripts, R2 core + CLI, R3
+  `tests/server` ≈ 2,600, R4 other tests ≈ 1,370, R5 preview size rules), then ≈ 5,560 `ANN` + 4,215 mypy errors when
+  the temporary test exemption went away (T1–T4). Behavior-preserving: goldens unchanged except description-only
+  `docs(api)` edits (en dash / × in 8 route docstrings, fingerprints re-recorded) and the settings-schema docstring.
+- **Structural changes the rules forced:** `IrrigationRepository` composed from per-entity mixins
+  (`greenhouse_core/repository/` package, same import path and methods); `IrrigationClient` from per-area endpoint
+  mixins (`greenhouse_cli/_client/`, covered by the import contracts); Typer options keyword-only (CLI contract
+  byte-identical); FastAPI form/query parameters as dataclass dependencies (`FAST002`, same 422 error lists);
+  `ManualStart` / `DeviceSpec` parameter objects. One test class split (14 node ids moved to
+  `tests/test_logic.py::TestIrrigationLogicAdjustments`); one duplicate parametrize case removed (`0x01` == `1`).
+- **Two labeled fixes found on the way:** the light season outside the engine — learning heuristics (`53645c4`) and the
+  maintenance `low_light` check (`1b6efc3`) — now uses the preferences-timezone month like the engine.
+- **`# noqa` left:** 165 lines, each one rule with its reason (62 in `libs/` + `scripts/`, 103 in `tests/`). In
+  `libs/`: Typer commands whose parameters are the CLI contract (`PLR0913`, `A002`), device-I/O isolation and advisory
+  hooks (`BLE001`), deliberate lazy imports (`PLC0415`), pinned public re-exports (`TC001`/`TC002`), the scheduler
+  `_app` global (`PLW0603`), `ClusterScreen`'s pinned handler surface (`PLR0904`). In tests: private Textual / rich /
+  gateway state with no public accessor (`SLF001`), fake credentials (`S105`), parametrize columns (`PLR0913`).
+- **Tests are typed:** `ANN` applies to `tests/**`, and mypy `--strict` covers `tests/` (`explicit_package_bases`,
+  `tests` on `mypy_path`). No new `type: ignore`; `cast` only where a test deliberately passes a stand-in or a wrong
+  type, each with its reason.
 
 ## 9. Pending outside work (not done here)
 
