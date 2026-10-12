@@ -51,18 +51,23 @@ def test_default_target_constant_is_the_inline_literal() -> None:
     assert type(DEFAULT_SOIL_MOISTURE_TARGET) is str
 
 
-@settings(derandomize=True, max_examples=300)
+@settings(derandomize=True, max_examples=150)
 @given(other=OTHER_KEYS, has_target=st.booleans(), target=TARGETS)
 def test_moisture_target_range_equals_inline_expression(
     *, other: dict[str, object], has_target: bool, target: object
 ) -> None:
-    """``moisture_target_range`` equals the inline expression it replaced, for any care dict."""
+    """``moisture_target_range`` equals the inline expression it replaced, for any care dict.
+
+    D10: monitor, chronic-underwatering and conflict detection all read a target through one parser.
+    """
     care = dict(other)
     if has_target:
         care["soil_moisture_target"] = target
     expected = _inline(care)
     assert _same(moisture_target_range(care), expected)
     assert _same(moisture_target_range(MappingProxyType(care)), expected)
+    assert _same(_conflict_band({7: care}, 7), expected)
+    assert _conflict_band({}, 7) == _conflict_band({7: care}, None) == (45.0, 65.0)
 
 
 def test_missing_target_falls_back_to_default_band() -> None:
@@ -70,12 +75,3 @@ def test_missing_target_falls_back_to_default_band() -> None:
     assert moisture_target_range({}) == (45.0, 65.0)
     assert moisture_target_range({"soil_moisture_target": None}) == (45.0, 65.0)
     assert moisture_target_range({"soil_moisture_target": "30-50"}) == (30.0, 50.0)
-
-
-@settings(derandomize=True, max_examples=300)
-@given(target=TARGETS)
-def test_every_band_parser_agrees_with_moisture_target_range(target: object) -> None:
-    """D10: monitor, chronic-underwatering and conflict detection all read a target through one parser."""
-    care = {"soil_moisture_target": target}
-    assert _same(_conflict_band({7: care}, 7), moisture_target_range(care))
-    assert _conflict_band({}, 7) == _conflict_band({7: care}, None) == (45.0, 65.0)

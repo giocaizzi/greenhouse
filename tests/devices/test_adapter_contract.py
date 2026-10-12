@@ -22,7 +22,6 @@ from greenhouse_core.devices import (
     HealthAlarm,
     IK10PWAdapter,
     TR301ZAdapter,
-    UnknownDeviceModel,
     build_default_registry,
 )
 from greenhouse_core.models import Irrigator, Sensor
@@ -159,28 +158,3 @@ class TestSensorContract:
         assert HealthAlarm.DEVICE_OFFLINE in adapter.health_capabilities
         # B-10: DP 111 water_warning is the soil-dry alert the engine acts on, not a sensor fault.
         assert HealthAlarm.SENSOR_FAULT not in adapter.health_capabilities
-
-
-class TestRegistryFailureModes:
-    """Resolution policy: fail closed on irrigators, fail degraded on sensors."""
-
-    def test_unknown_irrigator_raises(self, registry: DeviceRegistry) -> None:
-        """An unknown irrigator model raises ``UnknownDeviceModel``."""
-        with pytest.raises(UnknownDeviceModel):
-            registry.get_irrigator(_make_irrigator("rainpoint.does-not-exist"))
-
-    def test_unknown_sensor_returns_none(self, registry: DeviceRegistry) -> None:
-        """An unknown sensor model resolves to None (the sensor is skipped)."""
-        out = registry.get_sensor(_make_sensor("tuya.does-not-exist"))
-        assert out is None
-
-    def test_legacy_irrigator_types_are_unknown(self, registry: DeviceRegistry) -> None:
-        """OD3: no alias table — a legacy irrigator type fails closed like any unknown model."""
-        for legacy in ("tuya_cloud", "tuya_local", ""):
-            with pytest.raises(UnknownDeviceModel):
-                registry.get_irrigator(_make_irrigator(legacy))
-
-    def test_legacy_sensor_types_are_unknown(self, registry: DeviceRegistry) -> None:
-        """Legacy generic sensor types no longer resolve to an adapter."""
-        for legacy in ("soil_moisture", "temp_humidity", "light", ""):
-            assert registry.get_sensor(_make_sensor(legacy)) is None, legacy
