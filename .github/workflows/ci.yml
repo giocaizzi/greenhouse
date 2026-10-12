@@ -124,11 +124,10 @@ jobs:
 
   # ────────────────────────────────────────────────────────────────────────────
   # secrets — gitleaks scan. Failing here means a credential probably leaked
-  # into the diff; isolating the signal makes that obvious in PR review.
+  # into the diff; isolating the signal makes that obvious in PR review. Runs on
+  # every PR (no change-detection gate) and must report success, never skipped.
   # ────────────────────────────────────────────────────────────────────────────
   secrets:
-    needs: detect-changes
-    if: needs.detect-changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -196,7 +195,8 @@ jobs:
           printf '  secrets:        %s\n' "$R_SECRETS"
           printf '  test:           %s\n' "$R_TEST"
           fail=0
-          for r in "$R_DETECT" "$R_LINT" "$R_STATIC" "$R_HYGIENE" "$R_DOCKERFILE" "$R_SECRETS" "$R_TEST"; do
+          [ "$R_SECRETS" = success ] || fail=1
+          for r in "$R_DETECT" "$R_LINT" "$R_STATIC" "$R_HYGIENE" "$R_DOCKERFILE" "$R_TEST"; do
             case "$r" in
               success|skipped) ;;
               *) fail=1 ;;
