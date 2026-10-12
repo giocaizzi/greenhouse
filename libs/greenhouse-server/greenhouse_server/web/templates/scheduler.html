@@ -20,7 +20,6 @@
       {% if check_all_paused %}<span class="dot"></span><span class="badge-warning">check_all paused</span>{% endif %}
     </div>
   </div>
-  {% if scheduler_running %}
   <div class="page-head__actions">
     {% if check_all_paused %}
       <form method="post" action="/scheduler/resume">
@@ -38,7 +37,6 @@
       </form>
     {% endif %}
   </div>
-  {% endif %}
 </section>
 
 <article class="action-bar action-bar--danger" aria-labelledby="emergency-actions">
@@ -105,6 +103,7 @@
         <td data-th="Trigger"><small class="mono">{{ job.trigger }}</small></td>
         <td data-th="Next run"><small class="mono">{{ job.next_run_time or "—" }}</small></td>
         <td>
+          {% if not job.core %}
           <div class="row-actions">
             <button hx-post="/scheduler/jobs/{{ job.id }}/delete"
                     hx-target="closest tr"
@@ -116,6 +115,7 @@
               Delete
             </button>
           </div>
+          {% endif %}
         </td>
       </tr>
       {% endfor %}

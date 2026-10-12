@@ -1,8 +1,10 @@
 """APScheduler integration for background tasks."""
 
 import logging
+import threading
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from apscheduler.jobstores.base import JobLookupError
 from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi import FastAPI
 
@@ -13,14 +15,88 @@ from greenhouse_server.config import Settings
 
 logger = logging.getLogger(__name__)
 
-scheduler = BackgroundScheduler()
+# Defaults for every job, periodic and one-shot alike. APScheduler's stock
+# ``misfire_grace_time`` is 1 second: a run whose dispatch is even slightly late
+# is *dropped* with only a warning. That silently skipped every pump watcher
+# (its ``date`` run is the already-elapsed start timestamp) and can skip a
+# check_all tick under load or after a host suspend. ``None`` = run however
+# late; ``coalesce`` collapses a backlog to one run; ``max_instances=1`` keeps
+# the stock no-overlap guarantee. Passed to both the constructor and every
+# ``configure()`` call, because ``configure()`` resets unspecified defaults.
+_JOB_DEFAULTS = {"misfire_grace_time": None, "coalesce": True, "max_instances": 1}
+
+scheduler = BackgroundScheduler(job_defaults=_JOB_DEFAULTS)
 
 _app: FastAPI | None = None
+
+# Set when the app shuts down. Long-running jobs (the pump watcher runs for
+# the whole irrigation) poll it and sleep on it, so shutdown can interrupt
+# them: APScheduler's worker threads are non-daemon and the interpreter joins
+# them at exit, so an uninterrupted watcher held the process open for the
+# rest of the irrigation.
+_shutdown_event = threading.Event()
+
+
+def shutdown_requested() -> bool:
+    """True once the server has begun shutting down the scheduler."""
+    return _shutdown_event.is_set()
+
+
+def wait_for_shutdown(seconds: float) -> bool:
+    """Sleep up to ``seconds``, waking early on shutdown; True if shutting down."""
+    return _shutdown_event.wait(seconds)
+
+
+def start_scheduler(*, paused: bool = False) -> None:
+    """Start the background scheduler (clearing any earlier shutdown signal)."""
+    _shutdown_event.clear()
+    scheduler.start(paused=paused)
+
+
+def stop_scheduler() -> None:
+    """Signal running jobs to wind down, then stop the scheduler without waiting.
+
+    Interrupted pump watchers apply the shutdown policy in
+    ``services.irrigation.handle_watcher_interrupted`` on their own thread;
+    the interpreter joins those threads at exit, which now takes about one
+    device call rather than the remainder of the irrigation.
+    """
+    _shutdown_event.set()
+    if scheduler.running:
+        scheduler.shutdown(wait=False)
+
 
 # Cron jobs that gate wall-clock-sensitive work and therefore MUST fire on the
 # same clock the engine reasons in (UserPreferences.timezone). These are
 # re-added by `reschedule_for_timezone` whenever the preference changes.
 _TZ_BOUND_CRON_JOBS = ("check_all", "plant_health_snapshot")
+
+# IDs of the built-in jobs registered at startup, recorded by `_add_core_job`
+# as they are registered — so the protected set can never drift from what
+# `init_scheduler` actually adds. Core jobs cannot be deleted at runtime
+# (that silently disabled e.g. auto-irrigation until restart); `check_all`
+# is paused instead. Ad-hoc one-shot jobs (pump watchers, leak checks) stay
+# deletable.
+_CORE_JOB_IDS: set[str] = set()
+
+
+class CoreJobError(Exception):
+    """Raised when a caller tries to delete a built-in (core) scheduler job."""
+
+
+class JobNotRegisteredError(LookupError):
+    """Raised when the job an operation targets is not registered."""
+
+
+def _add_core_job(func, trigger: str, *, id: str, name: str, **trigger_args) -> None:
+    """Register (or replace) a built-in job and mark its id as core."""
+    _CORE_JOB_IDS.add(id)
+    scheduler.add_job(func, trigger, id=id, name=name, replace_existing=True, **trigger_args)
+
+
+def core_job_ids() -> frozenset[str]:
+    """IDs of the built-in jobs registered at startup (protected from deletion)."""
+    return frozenset(_CORE_JOB_IDS)
 
 
 def _resolve_zoneinfo(tz_name: str | None) -> ZoneInfo:
@@ -44,18 +120,27 @@ def _resolve_check_cron_hours(settings: Settings) -> str:
     trigger to `cron` for predictable wall-clock fires. Operators with
     `IRRIGATION_CHECK_INTERVAL_HOURS=N` already set in their .env shouldn't
     silently lose their cadence — translate `N` to `*/N` cron syntax and
-    warn once. An explicit `IRRIGATION_CHECK_CRON_HOURS` always wins.
+    warn once. An explicitly set `IRRIGATION_CHECK_CRON_HOURS` always wins,
+    even when it is the default `*`. ``Settings`` has already rejected an `N`
+    that `*/N` can't express (see ``Settings._validate_legacy_check_interval``).
     """
-    if settings.check_interval_hours is not None and settings.check_cron_hours == "*":
-        n = settings.check_interval_hours
+    if settings.check_interval_hours is None:
+        return settings.check_cron_hours
+    if settings.check_cron_hours_explicit:
         logger.warning(
-            "IRRIGATION_CHECK_INTERVAL_HOURS is deprecated; set "
-            "IRRIGATION_CHECK_CRON_HOURS instead. Translating value %d to '*/%d'.",
-            n,
-            n,
+            "Both IRRIGATION_CHECK_CRON_HOURS and the deprecated IRRIGATION_CHECK_INTERVAL_HOURS "
+            "are set; using IRRIGATION_CHECK_CRON_HOURS=%r and ignoring the interval.",
+            settings.check_cron_hours,
         )
-        return f"*/{n}"
-    return settings.check_cron_hours
+        return settings.check_cron_hours
+    n = settings.check_interval_hours
+    logger.warning(
+        "IRRIGATION_CHECK_INTERVAL_HOURS is deprecated; set "
+        "IRRIGATION_CHECK_CRON_HOURS instead. Translating value %d to '*/%d'.",
+        n,
+        n,
+    )
+    return f"*/{n}"
 
 
 def init_scheduler(app: FastAPI, settings: Settings, tz_name: str | None = None) -> None:
@@ -73,32 +158,39 @@ def init_scheduler(app: FastAPI, settings: Settings, tz_name: str | None = None)
     global _app
     _app = app
 
-    scheduler.configure(timezone=_resolve_zoneinfo(tz_name))
+    # ``configure()`` requires a stopped scheduler (it raises otherwise, before
+    # touching anything) and wipes the job stores.
+    scheduler.configure(timezone=_resolve_zoneinfo(tz_name), job_defaults=_JOB_DEFAULTS)
+    # The scheduler is process-wide, so a second ``create_app`` in the same
+    # process (tests, embedding) re-runs this. Jobs added before ``start()``
+    # sit in APScheduler's pending list, which ``replace_existing`` does NOT
+    # dedupe — every rebuild appended another copy of each job, and a
+    # persisted pause re-applied to the first (stale) copy was undone at
+    # start by the newest one. Clear it so registration is idempotent and the
+    # jobs belong to this app only.
+    scheduler.remove_all_jobs()
 
-    scheduler.add_job(
+    _add_core_job(
         _sync_job,
         "interval",
         minutes=settings.sync_interval_minutes,
         id="sensor_sync",
         name="Sensor data sync",
-        replace_existing=True,
     )
     _add_tz_bound_cron_jobs(settings)
-    scheduler.add_job(
+    _add_core_job(
         _anomaly_job,
         "interval",
         minutes=15,
         id="sensor_anomaly",
         name="Sensor anomaly scan",
-        replace_existing=True,
     )
-    scheduler.add_job(
+    _add_core_job(
         _health_monitor_job,
         "interval",
         minutes=HEALTH_POLL_IDLE_MINUTES,
         id="device_health_monitor",
         name="Device health monitor",
-        replace_existing=True,
     )
 
 
@@ -110,23 +202,21 @@ def _add_tz_bound_cron_jobs(settings: Settings) -> None:
     Both registration (`init_scheduler`) and the on-preference-change reschedule
     (`reschedule_for_timezone`) route through here so the two stay identical.
     """
-    scheduler.add_job(
+    _add_core_job(
         _check_job,
         "cron",
         hour=_resolve_check_cron_hours(settings),
         minute=0,
         id="check_all",
         name="Check all clusters",
-        replace_existing=True,
     )
-    scheduler.add_job(
+    _add_core_job(
         _health_snapshot_job,
         "cron",
         hour=0,
         minute=30,
         id="plant_health_snapshot",
         name="Daily plant health snapshot",
-        replace_existing=True,
     )
 
 
@@ -151,7 +241,8 @@ def reschedule_for_timezone(tz_name: str | None, settings: Settings) -> None:
     # rebuilt from the new zone — APScheduler's replace path leaves a stopped
     # scheduler's pending trigger bound to the old tz.
     for job_id in _TZ_BOUND_CRON_JOBS:
-        if scheduler.get_job(job_id) is not None:
+        # Loop: on a stopped scheduler pending jobs are not deduped by id.
+        while scheduler.get_job(job_id) is not None:
             scheduler.remove_job(job_id)
     _add_tz_bound_cron_jobs(settings)
     if paused:
@@ -355,31 +446,99 @@ def init_health_monitor(app: FastAPI, settings: Settings) -> None:
 CHECK_ALL_JOB_ID = "check_all"
 
 
-def get_jobs() -> list[dict]:
-    """List all scheduled jobs.
+def _is_paused(job) -> bool:
+    """True only when ``job`` was explicitly paused.
 
-    APScheduler marks a paused job by clearing its ``next_run_time``; we
-    surface that as a ``paused`` flag so the UI/CLI/MCP do not have to
-    introspect the trigger.
+    APScheduler pauses a job by setting ``next_run_time`` to ``None``. A job
+    added before the scheduler starts has *no* ``next_run_time`` attribute at
+    all — it is computed on ``start()`` — so "not scheduled yet" must not be
+    read as "paused". (Reading it that way reported every job paused on a
+    stopped scheduler, and made ``reschedule_for_timezone`` re-pause an
+    un-paused ``check_all`` behind the persisted preference's back.)
     """
-    return [
-        {
-            "id": job.id,
-            "name": job.name,
-            "trigger": str(job.trigger),
-            "next_run_time": str(next_run) if (next_run := getattr(job, "next_run_time", None)) else None,
-            "paused": getattr(job, "next_run_time", None) is None,
-        }
-        for job in scheduler.get_jobs()
-    ]
+    return hasattr(job, "next_run_time") and job.next_run_time is None
+
+
+def get_jobs() -> list[dict]:
+    """List all registered jobs.
+
+    ``paused`` is True only for an explicitly paused job (only ``check_all``
+    can be paused, and that state mirrors ``user_preferences.scheduler_paused``).
+    ``next_run_time`` is the next fire time, or None when the job is paused
+    or the scheduler is not running (nothing will fire). Pair with the
+    ``scheduler_running`` flag on ``/health`` to tell the two apart.
+    """
+    running = scheduler.running
+    jobs = []
+    for job in scheduler.get_jobs():
+        next_run = getattr(job, "next_run_time", None) if running else None
+        jobs.append(
+            {
+                "id": job.id,
+                "name": job.name,
+                "trigger": str(job.trigger),
+                "next_run_time": str(next_run) if next_run else None,
+                "paused": _is_paused(job),
+                "core": job.id in _CORE_JOB_IDS,
+            }
+        )
+    return jobs
 
 
 def is_check_all_paused() -> bool:
-    """True when the `check_all` job is currently paused."""
+    """True when the `check_all` job is currently (explicitly) paused."""
     job = scheduler.get_job(CHECK_ALL_JOB_ID)
     if job is None:
         return False
-    return getattr(job, "next_run_time", None) is None
+    return _is_paused(job)
+
+
+def delete_job(job_id: str) -> None:
+    """Unregister an ad-hoc job; the single code path for the API and web UI.
+
+    Raises:
+        CoreJobError: ``job_id`` is a built-in job (pause ``check_all`` instead).
+        JobNotRegisteredError: no job with that id is registered.
+    """
+    if job_id in _CORE_JOB_IDS:
+        raise CoreJobError(
+            f"Job {job_id} is a built-in scheduler job and cannot be deleted. "
+            "To stop automatic irrigation checks use POST /api/v1/scheduler/pause "
+            "(resume with POST /api/v1/scheduler/resume)."
+        )
+    try:
+        scheduler.remove_job(job_id)
+    except JobLookupError:
+        raise JobNotRegisteredError(f"Job {job_id} not found") from None
+
+
+def set_check_all_paused(repo: IrrigationRepository, paused: bool) -> bool:
+    """Pause or resume `check_all` and persist the flag; shared by API and web UI.
+
+    Works whether or not the scheduler is running: on a stopped scheduler the
+    registered (pending) job is paused/resumed and the preference persisted,
+    so it takes effect when the scheduler starts and survives restarts.
+
+    Args:
+        repo: Repository whose session receives the preference write (committed here).
+        paused: True to pause, False to resume.
+
+    Returns:
+        The resulting paused state of `check_all`.
+
+    Raises:
+        JobNotRegisteredError: the `check_all` job is not registered (nothing
+            is persisted in that case).
+    """
+    if scheduler.get_job(CHECK_ALL_JOB_ID) is None:
+        raise JobNotRegisteredError(f"Job {CHECK_ALL_JOB_ID} not found")
+    if paused:
+        scheduler.pause_job(CHECK_ALL_JOB_ID)
+    else:
+        scheduler.resume_job(CHECK_ALL_JOB_ID)
+    repo.update_preferences(scheduler_paused=paused)
+    repo.session.commit()
+    return is_check_all_paused()
 
 
 def apply_persisted_pause(persisted_paused: bool) -> None:

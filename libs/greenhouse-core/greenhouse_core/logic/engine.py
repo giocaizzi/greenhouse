@@ -370,13 +370,10 @@ class IrrigationLogic:
         new_interval = int(round(decision.interval_hours / multiplier))
         new_interval = max(MIN_INTERVAL_HOURS, min(MAX_INTERVAL_HOURS, new_interval))
         decision.interval_hours = new_interval
-        decision.reasons = (
-            *decision.reasons,
-            Reason(
-                code=TriggerCode.SEASONAL_HOLD if multiplier < 1.0 else TriggerCode.SEASONAL_BOOST,
-                message=f"{season} multiplier {multiplier:g}× for {environment} cluster",
-                severity=Severity.INFO,
-            ),
+        decision.add_reason(
+            code=TriggerCode.SEASONAL_HOLD if multiplier < 1.0 else TriggerCode.SEASONAL_BOOST,
+            message=f"{season} multiplier {multiplier:g}× for {environment} cluster",
+            severity=Severity.INFO,
         )
 
     def _apply_vacation_budget(self, decision: IrrigationDecision, cluster_id: int, now: int) -> None:

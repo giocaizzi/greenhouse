@@ -328,12 +328,25 @@ class TestBackfillFromHistory:
 class TestEngineActuationBlock:
     """run_irrigation_pipeline short-circuits to SKIP when monitor blocks."""
 
+    @pytest.mark.parametrize(
+        ("soil", "season"),
+        [
+            # Very dry → critical-stress early return (seasonal rule never runs).
+            (20.0, None),
+            # Moderately dry in winter → full pipeline incl. SEASONAL_HOLD. Regression:
+            # the seasonal rule rebound ``reasons`` to a tuple, so this gate's
+            # ``add_reason`` raised AttributeError instead of recording the block.
+            (38.0, "winter"),
+        ],
+    )
     def test_pipeline_skips_with_typed_reason(
         self,
         repo,
         monitor,
         cluster_irrigator_sensor,
         monkeypatch,
+        soil,
+        season,
     ):
         from unittest.mock import MagicMock
 
@@ -370,10 +383,12 @@ class TestEngineActuationBlock:
             repo.add_sensor_reading(
                 sensor_id=sensor.id,
                 timestamp=now - offset * 600,
-                soil_moisture=20.0,  # very dry, would normally trigger irrigation
+                soil_moisture=soil,  # dry, would normally trigger irrigation
                 temperature=22.0,
             )
         repo.session.commit()
+        if season is not None:
+            monkeypatch.setattr("greenhouse_core.logic.engine.season_for", lambda *_a, **_k: season)
 
         # Reuse the fake adapter already registered on the monitor's registry
         # so the irrigation service resolves through the same fake.
@@ -381,7 +396,7 @@ class TestEngineActuationBlock:
         sync_service = MagicMock()
         sync_service.ensure_fresh_and_read.return_value = {
             "temperature": 22.0,
-            "soil_moisture": 20.0,
+            "soil_moisture": soil,
         }
         weather = MagicMock()
         weather.get_current.return_value = {"feels_like": 22.0}
@@ -405,5 +420,7 @@ class TestEngineActuationBlock:
 
         assert result["action"] == "skip"
         assert any(r["code"] == TriggerCode.DEVICE_NO_WATER.value for r in result["reasons"]), result["reasons"]
+        if season is not None:
+            assert any(r["code"] == TriggerCode.SEASONAL_HOLD.value for r in result["reasons"]), result["reasons"]
         # The blocked device must not have been actuated.
         assert not any(c[0] == "start" for c in irr_adapter.calls)

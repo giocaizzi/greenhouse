@@ -10,8 +10,7 @@ updates:
       timezone: Europe/Rome
     open-pull-requests-limit: 10
     commit-message:
-      prefix: chore
-      include: scope
+      prefix: "chore(deps)"
     groups:
       # All runtime/production deps batch into one PR. Catch-all so newly
       # added deps (e.g. typer, pyjwt) are grouped automatically instead of
@@ -37,8 +36,7 @@ updates:
       timezone: Europe/Rome
     open-pull-requests-limit: 5
     commit-message:
-      prefix: ci
-      include: scope
+      prefix: "ci(deps)"
     groups:
       actions:
         patterns:
@@ -54,5 +52,8 @@ updates:
       timezone: Europe/Rome
     open-pull-requests-limit: 5
     commit-message:
-      prefix: chore
-      include: scope
+      prefix: "chore(deps)"
+    groups:
+      docker:
+        patterns:
+          - "*"

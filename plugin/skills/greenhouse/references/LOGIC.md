@@ -163,7 +163,7 @@ Separate from the engine: when the irrigation **service** is about to actuate, i
 
 ### Pump dry-run abort (DP 105)
 
-While an irrigation is running, `PumpWatcherService` polls the IK10PW's DP 105 water-shortage alarm (~2s cadence, local protocol v3.5) after a short warmup. On the first `NO_WATER` reading it immediately stops the pump, raises a `no_water` health alert through `DeviceHealthMonitor` (dedup key `health:irrigator:{id}:no_water`), and records an `aborted` irrigation event. False positives are safe (stop early); the alarm is motor-current-based, so a hardware float switch is still recommended for unattended use.
+While an irrigation is running, `PumpWatcherService` polls the IK10PW's DP 105 water-shortage alarm (~2s cadence, local protocol v3.5) after a short warmup. On the first `NO_WATER` reading it immediately stops the pump, raises a `no_water` health alert through `DeviceHealthMonitor` (dedup key `health:irrigator:{id}:no_water`), and records an `aborted` irrigation event. False positives are safe (stop early); the alarm is motor-current-based, so a hardware float switch is still recommended for unattended use. If the server shuts down mid-irrigation the watcher is interrupted (shutdown no longer waits out the cycle): an **auto** cycle is stopped (`stop` event, `triggered_by="shutdown"`); a **manual** cycle is left running on the device's own DP 102 timer without dry-run protection. Both log a `pump_watcher_shutdown` activity event.
 
 ## Check Command Pipeline
 
@@ -241,6 +241,8 @@ Runs before the decision engine on every evaluation:
 
 Not part of the pre-decision scan: it is scheduled per irrigation, running `LEAK_CHECK_DELAY_SECONDS` (30 min) **after** a start event, and asks one question per sensor — *did the soil settle, or is water still arriving?* Readings come from the **cleaned view**, same as the engine.
 
+It is scheduled only for **auto** starts (manual starts get the dry-run watcher, not a leak check). Every completed check writes a `leak_check` activity row (source `leak`, payload `started_at`) — the durable "already checked" marker, committed with the check's own effects. Scheduler jobs are in-memory, so on startup `rearm_leak_checks` re-schedules every auto start from the last `LEAK_HOLD_HOURS` (24h) whose check has no `leak_check` (or `leak_hold`) row: at its normal due time if still ahead, otherwise immediately. The job itself skips a start that is already marked, so a restart never produces a duplicate check or alert; a check that fails leaves no marker and is re-armed on the next start.
+
 Three verdicts per sensor:
 
 | Verdict | Condition | Effect |
@@ -288,6 +290,7 @@ After ≥3 irrigation cycles with sensor data, the system learns:
 | `sensor_drift` | Sensor readings anomalously constant |
 | `low_env_humidity` | Ambient humidity below plant ideal - 10% |
 | `low_light` | Daytime avg lux below seasonal plant minimum * 0.5 |
+| `check_failed` | The scheduled/`POST /check` run crashed for this cluster (error). Each cluster is checked and committed on its own, so one failure never rolls back another cluster's recorded pump runs; the next successful check resolves it |
 
 ### Alert inbox lifecycle
 

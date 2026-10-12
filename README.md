@@ -40,7 +40,7 @@ The `irrigation_windows` table holds per-cluster preferred watering hours (with 
 |-----------|-----|-------|
 | **JSON REST API** | `/api/v1` | Authoritative entry point. JWT-bearer auth (`POST /api/v1/auth/login`). OpenAPI docs at `/docs`. |
 | **Web UI** | `/` | HTMX + Jinja2 server-rendered. Session cookie auth via `/login`. Pages cover dashboard, per-plant charts, irrigators, history, decisions, scheduler, alerts, **vacation**, **irrigation windows**, and health. |
-| **CLI** | `greenhouse` | Thin `httpx` client against `/api/v1`. No DB access. |
+| **CLI** | `greenhouse` | Thin `httpx` client against `/api/v1`. No DB access. `greenhouse tui` opens an interactive terminal dashboard. |
 | **MCP server** | `/mcp` | Every `/api/v1` endpoint as an MCP tool via `fastapi-mcp`. Bearer-token auth (`GREENHOUSE_MCP_TOKEN`). Fails closed: unset token → 503. |
 
 Stop the server and all four go dark. Anything new the CLI or an MCP tool should be able to do must first exist as an API endpoint.
@@ -88,6 +88,9 @@ cp .env.example .env
 | `IRRIGATION_AUTH_ENABLED` | No | Set to `false` to disable API/Web auth in local dev. Default: `true`. |
 | `IRRIGATION_DB_URL` | No | SQLite URL (default: `sqlite:///data/irrigation.db`) |
 | `IRRIGATION_SERVER_URL` | No | CLI server URL (default: `http://localhost:8000`) |
+| `IRRIGATION_CHECK_CRON_HOURS` | No | Cron `hour` field for the `check_all` job, e.g. `*`, `0,6,12,18`, `*/3`, `6-20/2` (default: `*` = hourly at :00). Validated at startup; an invalid expression stops the server with an error naming the variable. When set (even to `*`) it always overrides `IRRIGATION_CHECK_INTERVAL_HOURS`. |
+| `IRRIGATION_CHECK_INTERVAL_HOURS` | No | **Deprecated.** Used only when `IRRIGATION_CHECK_CRON_HOURS` is unset; translated to `*/N`, so N must be 1–23 and divide 24 (1, 2, 3, 4, 6, 8, 12) — anything else stops the server with a suggested `IRRIGATION_CHECK_CRON_HOURS` value. |
+| `IRRIGATION_SYNC_INTERVAL_MINUTES` | No | Minutes between Tuya Cloud sensor syncs (default: `180`). Must be > 0. |
 
 ### Usage
 
@@ -106,6 +109,23 @@ uv run greenhouse irrigate 1        # smart irrigation pipeline
 uv run greenhouse check --all       # check all clusters + alerts
 uv run greenhouse learn 1           # learning report
 uv run greenhouse stats 1 --days 7  # irrigation statistics
+```
+
+### Terminal UI
+
+```bash
+uv run greenhouse tui                                   # local server
+greenhouse --server http://greenhouse.lan:8000 tui      # any reachable server
+```
+
+A full-screen dashboard in the terminal that covers the whole system: animated pixel-art plants that wilt, sparkle and get rained on as moisture changes; live charts, overlay and heatmap; decision trails, forecast, insights, learning report and efficacy; alerts, activity, data quality and system health; and every action and edit — irrigate / water-now / stop / check / sync, clusters, plants, sensors, irrigators, windows, config, vacation and preferences — behind forms and confirmation dialogs. Press `d` `a` `l` `s` `o` to switch screens, `/` to search, `enter` to open a cluster, `?` for keys, `q` to quit.
+
+To use it from another machine, install just the client (it has no server dependencies and talks HTTP only):
+
+```bash
+uv tool install "greenhouse-cli @ git+https://github.com/giocaizzi/greenhouse#subdirectory=libs/greenhouse-cli"
+export IRRIGATION_SERVER_URL=http://greenhouse.lan:8000
+greenhouse login && greenhouse tui
 ```
 
 Same data is also available via:

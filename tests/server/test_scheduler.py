@@ -20,18 +20,21 @@ from greenhouse_server.config import Settings
 from greenhouse_server.scheduler import scheduler as bg_scheduler
 
 
-def _build_app(cron_hours: str = "*", interval_hours: int | None = None):
+def _build_app(cron_hours: str | None = None, interval_hours: int | None = None):
     engine = create_engine(
         "sqlite://",
         echo=False,
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
+    # Only pass check_cron_hours when given: an explicitly set value (even the
+    # default "*") always wins over the legacy interval.
+    overrides = {"check_cron_hours": cron_hours} if cron_hours is not None else {}
     settings = Settings(
         db_url="sqlite://",
         enable_scheduler=False,
-        check_cron_hours=cron_hours,
         check_interval_hours=interval_hours,
+        **overrides,
     )
     create_app(settings, engine=engine)
     return engine
@@ -83,7 +86,7 @@ class TestLegacyIntervalShim:
 
         warnings_seen: list[str] = []
         monkeypatch.setattr(sched_mod.logger, "warning", lambda msg, *a, **kw: warnings_seen.append(msg % a))
-        engine = _build_app(cron_hours="*", interval_hours=2)
+        engine = _build_app(interval_hours=2)
         try:
             job = bg_scheduler.get_job("check_all")
             fields = {f.name: str(f) for f in job.trigger.fields}
