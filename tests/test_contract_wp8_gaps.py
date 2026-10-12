@@ -10,13 +10,20 @@ harness: a fresh in-memory schema per case, a frozen instant, no network.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any, Unpack, cast
 
 import pytest
 
-from engine_grid import BASE_AT, DAY, HOUR, Case, Event, Leak, Reading, SensorSpec, run_case
+from engine_grid import BASE_AT, DAY, HOUR, Case, CaseOverrides, Event, Leak, Reading, SensorSpec, run_case
 from greenhouse_core.logic import IrrigationLogic
 from greenhouse_core.logic.engine import _allowed_cumulative_liters
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from greenhouse_core.logic.engine import RainForecast
+    from greenhouse_core.plant_db import PlantDatabase
+    from greenhouse_core.repository import IrrigationRepository
 
 UNTRIMMED_DURATION_MIN = 2
 
@@ -25,18 +32,18 @@ _KEY = "season_frequency_multiplier"
 
 
 @pytest.fixture(autouse=True)
-def _hermetic(clean_env):
+def _hermetic(clean_env: Path) -> None:
     """Isolate env vars / TZ like the other characterization suites."""
 
 
 class _OverlayPlantDB:
     """The bundled plant DB with per-species care-key overlays (``_DROP`` removes a key)."""
 
-    def __init__(self, base: Any, overlays: dict[str, dict[str, Any]]):
+    def __init__(self, base: PlantDatabase, overlays: dict[str, dict[str, object]]) -> None:
         self._base = base
         self._overlays = overlays
 
-    def get_care_data(self, species: str | None = None, category: str | None = None) -> dict:
+    def get_care_data(self, species: str | None = None, category: str | None = None) -> dict[str, Any]:
         care = dict(self._base.get_care_data(species=species, category=category))
         for key, value in self._overlays.get(species or "", {}).items():
             if value is _DROP:
@@ -45,23 +52,31 @@ class _OverlayPlantDB:
                 care[key] = value
         return care
 
-    def __getattr__(self, name: str) -> Any:
+    def __getattr__(self, name: str) -> object:
         return getattr(self._base, name)
 
 
-def _decide(case_id: str, overlays: dict[str, dict[str, Any]] | None = None, **kw: Any) -> dict:
-    def factory(repo, plant_db, **fkw):
-        return IrrigationLogic(repo, _OverlayPlantDB(plant_db, overlays or {}), **fkw)
+def _decide(
+    case_id: str, overlays: dict[str, dict[str, object]] | None = None, **kw: Unpack[CaseOverrides]
+) -> dict[str, Any]:
+    def factory(
+        repo: IrrigationRepository, plant_db: PlantDatabase, *, weather_client: RainForecast | None = None
+    ) -> IrrigationLogic:
+        # The overlay stands in for the plant DB: get_care_data overlaid, everything else delegated.
+        overlay = cast("PlantDatabase", _OverlayPlantDB(plant_db, overlays or {}))
+        return IrrigationLogic(repo, overlay, weather_client=weather_client)
 
     kw.setdefault("sensors", (SensorSpec(name="WP8 Soil", readings=(Reading(age_s=600, soil=38.0),), plant=0),))
     record = run_case(Case(id=f"wp8/{case_id}", family="wp8", at=BASE_AT, **kw), engine_factory=factory)
     assert len(record["decision_logs"]) == 1
-    return record["decision"]
+    decision: dict[str, Any] = record["decision"]
+    return decision
 
 
-def _reason(decision: dict, code: str) -> dict:
+def _reason(decision: dict[str, Any], code: str) -> dict[str, Any]:
     (match,) = [r for r in decision["reasons"] if r["code"] == code]
-    return match
+    found: dict[str, Any] = match
+    return found
 
 
 # ``get_plants_in_cluster`` orders by species, so the engine sees Dypsis before Monstera.
@@ -69,7 +84,7 @@ _FIRST, _SECOND = "Dypsis lutescens", "Monstera deliciosa"
 _TWO_TROPICALS = ((_SECOND, "tropical"), (_FIRST, "tropical"))
 
 
-def test_seasonal_first_plant_override_kept_while_category_comes_from_a_later_plant():
+def test_seasonal_first_plant_override_kept_while_category_comes_from_a_later_plant() -> None:
     """Coverage 352->354: once a plant-level override is found it is never replaced.
 
     Plant 1 has a species-level table without a ``spring`` entry and no category
@@ -88,7 +103,7 @@ def test_seasonal_first_plant_override_kept_while_category_comes_from_a_later_pl
     assert _reason(decision, "seasonal_hold")["message"] == "spring multiplier 0.25\u00d7 for indoor cluster"
 
 
-def test_seasonal_first_category_override_kept_while_plant_comes_from_a_later_plant():
+def test_seasonal_first_category_override_kept_while_plant_comes_from_a_later_plant() -> None:
     """Coverage 354->357: once a category-level override is found it is never replaced.
 
     Plant 1 has no species-level key but a category ``spring`` value (0.25);
@@ -106,7 +121,7 @@ def test_seasonal_first_category_override_kept_while_plant_comes_from_a_later_pl
     assert _reason(decision, "seasonal_hold")["message"] == "spring multiplier 0.25\u00d7 for indoor cluster"
 
 
-def test_seasonal_plant_override_from_a_later_plant_still_wins_over_an_earlier_category():
+def test_seasonal_plant_override_from_a_later_plant_still_wins_over_an_earlier_category() -> None:
     """Mutant ``plant_override is not None -> is None`` (break guard): the loop only stops once BOTH are found.
 
     Plant 1 contributes only a category value (0.25); plant 2 contributes a
@@ -127,7 +142,7 @@ def test_seasonal_plant_override_from_a_later_plant_still_wins_over_an_earlier_c
 
 
 @pytest.mark.parametrize(("age_s", "shown"), [(18177, "5.0"), (18184, "5.1")])
-def test_cooldown_hours_ago_divides_by_3600(age_s, shown):
+def test_cooldown_hours_ago_divides_by_3600(age_s: int, shown: str) -> None:
     """Mutant ``/ 3600 -> / 3599`` and ``-> / 3601``: the hours-ago figure is ``seconds / 3600`` at ``.1f``.
 
     18177 s = 5.0492 h ("5.0"; /3599 would show 5.1) and 18184 s = 5.0511 h
@@ -137,7 +152,7 @@ def test_cooldown_hours_ago_divides_by_3600(age_s, shown):
     assert decision["reasons"][0]["message"] == f"cooldown active (last irrigation {shown}h ago, trigger: auto)"
 
 
-def test_cooldown_tie_on_timestamp_keeps_the_first_event_returned():
+def test_cooldown_tie_on_timestamp_keeps_the_first_event_returned() -> None:
     """Mutant ``event.timestamp > latest.timestamp -> >=``: equal timestamps keep the first event scanned.
 
     Two ``start`` events share a timestamp; the repository returns them newest
@@ -152,7 +167,7 @@ def test_cooldown_tie_on_timestamp_keeps_the_first_event_returned():
 
 
 @pytest.mark.parametrize(("age_s", "shown"), [(3413, "23.1"), (3427, "23.0")])
-def test_leak_hold_hours_left_divides_by_3600(age_s, shown):
+def test_leak_hold_hours_left_divides_by_3600(age_s: int, shown: str) -> None:
     """Mutant ``/ 3600 -> / 3599`` and ``-> / 3601`` in ``hours_left`` (24 h hold, ``.1f``).
 
     Seen 3413 s ago → 82987 s left = 23.0519 h ("23.1"; /3601 shows 23.0);
@@ -166,7 +181,7 @@ def test_leak_hold_hours_left_divides_by_3600(age_s, shown):
 # ── vacation rationing arithmetic ───────────────────────────────────────────
 
 
-def _vacation(case_id: str, vacation: tuple[int, int], reservoir_l: float | None = None) -> dict:
+def _vacation(case_id: str, vacation: tuple[int, int], reservoir_l: float | None = None) -> dict[str, Any]:
     """SENSOR_DRY (2 min IRRIGATE) under a vacation; 1 L/min when a reservoir is given."""
     return _decide(
         case_id,
@@ -176,13 +191,13 @@ def _vacation(case_id: str, vacation: tuple[int, int], reservoir_l: float | None
     )
 
 
-def test_vacation_days_left_rounds_up_whole_days():
+def test_vacation_days_left_rounds_up_whole_days() -> None:
     """Mutant ``(ends_at - now) / 86400 -> / 86401``: 2 days + 1 s left reads "returns in 3d"."""
     decision = _vacation("vac-days-left", (-HOUR, 2 * DAY + 1))
     assert _reason(decision, "vacation_active")["message"] == "vacation active (returns in 3d)"
 
 
-def test_zero_length_vacation_counts_as_one_day():
+def test_zero_length_vacation_counts_as_one_day() -> None:
     """Mutant ``max(1, ...) -> max(0, ...)``: a zero-length window still has a 1-day budget.
 
     95 L usable over 1 day (a 0-day budget would divide by zero). Since the vacation
@@ -194,14 +209,14 @@ def test_zero_length_vacation_counts_as_one_day():
     assert [r["code"] for r in decision["reasons"]] == ["sensor_dry"]
 
 
-def test_sub_day_vacation_budget_is_one_full_day():
+def test_sub_day_vacation_budget_is_one_full_day() -> None:
     """Mutant ``max(1, ...) -> max(2, ...)``: a 12 h vacation is one day → 3.8 L usable → 3 min ≥ 2, untouched."""
     decision = _vacation("vac-12h", (-HOUR, 11 * HOUR), reservoir_l=4.0)
     assert [r["code"] for r in decision["reasons"]] == ["sensor_dry", "vacation_active"]
     assert decision["duration_minutes"] == UNTRIMMED_DURATION_MIN
 
 
-def test_vacation_length_rounds_up_to_whole_days():
+def test_vacation_length_rounds_up_to_whole_days() -> None:
     """Mutant ``(ends_at - starts_at) / 86400 -> / 86401``: 2 days + 1 s is a 3-day vacation.
 
     4.75 L usable / 3 days → 1.58 L today → trimmed to 1 min (2 days would allow 2 min).
@@ -215,7 +230,7 @@ def test_vacation_length_rounds_up_to_whole_days():
     ("started_s_ago", "trimmed"),
     [(DAY - 1, True), (DAY, False)],
 )
-def test_vacation_day_index_is_floor_of_whole_days_elapsed(started_s_ago, trimmed):
+def test_vacation_day_index_is_floor_of_whole_days_elapsed(started_s_ago: int, *, trimmed: bool) -> None:
     """Mutant ``(now - starts_at) / 86400 -> / 86399`` and ``-> / 86401`` (3-day vacation, 4.75 L usable).
 
     One second short of a day → still day 0 → 1.58 L allowed → trimmed to 1 min;
@@ -233,7 +248,7 @@ def _soil_sensor(name: str, soil: float) -> SensorSpec:
     return SensorSpec(name=name, readings=(Reading(age_s=600, soil=soil),), plant=0)
 
 
-def test_driest_exactly_at_target_min_is_not_a_conflict():
+def test_driest_exactly_at_target_min_is_not_a_conflict() -> None:
     """Mutant ``min_soil < target_min -> <=`` (conflict test): 45 % on a 45-60 plant is not "dry".
 
     Driest 45 %, wettest 58 % (> 60 - 5) → no conflict; average 51.5 % → adequate.
@@ -242,7 +257,7 @@ def test_driest_exactly_at_target_min_is_not_a_conflict():
     assert decision["reasons"][0]["code"] == "sensor_adequate"
 
 
-def test_conflict_dry_names_exclude_a_sensor_exactly_at_target_min():
+def test_conflict_dry_names_exclude_a_sensor_exactly_at_target_min() -> None:
     """Mutant ``s.avg_soil_moisture < target_min -> <=``: the dry list is strictly below the target minimum."""
     decision = _decide(
         "conflict-names",
