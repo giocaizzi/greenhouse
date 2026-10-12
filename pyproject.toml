@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = {text = "MIT"}
 authors = [
-    {name = "Kezclaw", email = "kezclaw@gmail.com"}
+    {name = "Giorgio Caizzi", email = "giocaizzi@gmail.com"}
 ]
 keywords = ["irrigation", "smart-home", "tuya", "plant-care", "iot"]
 classifiers = [
@@ -48,7 +48,7 @@ dev = [
     "pytest>=9.1.1",
     "pytest-cov>=5.0",
     "pytest-xdist>=3.6",
-    "ruff>=0.15.19",
+    "ruff>=0.16.3",
     "time-machine>=2.15",
 ]
 

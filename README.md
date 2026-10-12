@@ -2,17 +2,18 @@
 
 # greenhouse
 
-
 **Smart plant irrigation system with Tuya IoT sensors, evidence-based plant care, and self-learning efficiency analysis.**
 
-[![CI](https://img.shields.io/github/actions/workflow/status/giocaizzi/greenhouse/ci.yml?branch=main&label=CI)](https://github.com/giocaizzi/greenhouse/actions)
-[![codecov](https://codecov.io/gh/giocaizzi/greenhouse/graph/badge.svg)](https://codecov.io/gh/giocaizzi/greenhouse)
+[![Release](https://img.shields.io/github/v/release/giocaizzi/greenhouse)](https://github.com/giocaizzi/greenhouse/releases)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue)](https://www.python.org)
-[![License](https://img.shields.io/github/license/giocaizzi/greenhouse)](LICENSE)
+[![CI](https://github.com/giocaizzi/greenhouse/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/giocaizzi/greenhouse/actions/workflows/ci.yml)
+[![Coverage](https://codecov.io/gh/giocaizzi/greenhouse/graph/badge.svg)](https://codecov.io/gh/giocaizzi/greenhouse)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
-[![uv](https://img.shields.io/badge/uv-DE5FE9?logo=uv&logoColor=white)](https://github.com/astral-sh/uv)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 </div>
+
+---
 
 ## Overview
 
@@ -182,9 +183,6 @@ the bot will keep a Release PR open; merging it bumps `pyproject.toml` (root +
 all three workspace packages), regenerates `CHANGELOG.md`, tags `vX.Y.Z`, and
 publishes the GitHub Release. The new tag then triggers
 `.github/workflows/cd.yml` to build and push the signed Docker image to GHCR.
-
-Do not hand-edit `CHANGELOG.md` or `version` fields — release-please owns them.
-See [AGENTS.md → Releases — project-specific facts only](AGENTS.md#releases--project-specific-facts-only) for details.
 
 ## License
 
