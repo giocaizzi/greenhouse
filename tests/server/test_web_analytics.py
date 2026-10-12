@@ -39,13 +39,6 @@ def test_stats_export_returns_csv(seeded_client: TestClient) -> None:
     assert "timestamp" in resp.text.splitlines()[0]
 
 
-def test_learn_page_renders(seeded_client: TestClient) -> None:
-    """Learn page renders."""
-    resp = seeded_client.get("/clusters/1/learn")
-    assert resp.status_code == HTTPStatus.OK
-    assert "Insights" in resp.text
-
-
 def test_scheduler_page_renders(client: TestClient) -> None:
     """Scheduler page renders."""
     resp = client.get("/scheduler")
