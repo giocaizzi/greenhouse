@@ -3,12 +3,15 @@
 from datetime import UTC, datetime
 from http import HTTPStatus
 
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from greenhouse_core.models import EventAction, TriggeredBy
+from greenhouse_core.repository import IrrigationRepository
 from server.conftest import override_repository
 
 
-def test_heatmap_empty_no_events(seeded_client):
+def test_heatmap_empty_no_events(seeded_client: TestClient) -> None:
     """Heatmap with no events returns an empty cells list."""
     days = 30
     resp = seeded_client.get(f"/api/v1/clusters/1/heatmap?days={days}")
@@ -21,7 +24,7 @@ def test_heatmap_empty_no_events(seeded_client):
     assert body["cells"] == []
 
 
-def test_heatmap_structure(seeded_client):
+def test_heatmap_structure(seeded_client: TestClient) -> None:
     """Each heatmap cell must have the expected shape (tested on a non-empty payload)."""
     # The seeded_client produces empty cells; structure is validated elsewhere.
     resp = seeded_client.get("/api/v1/clusters/1/heatmap?days=30")
@@ -37,13 +40,13 @@ def test_heatmap_structure(seeded_client):
         assert cell["total_minutes"] >= 0
 
 
-def test_heatmap_404_unknown_cluster(client):
+def test_heatmap_404_unknown_cluster(client: TestClient) -> None:
     """Heatmap 404 unknown cluster."""
     resp = client.get("/api/v1/clusters/9999/heatmap")
     assert resp.status_code == HTTPStatus.NOT_FOUND
 
 
-def _seed_event_at(repo, known: datetime, minutes: int) -> int:
+def _seed_event_at(repo: IrrigationRepository, known: datetime, minutes: int) -> int:
     """Seed a cluster + irrigator with one manual start at ``known``; return the cluster id."""
     cluster_id = repo.add_cluster("Heatmap Test")
     irrigator_id = repo.add_irrigator(
@@ -55,8 +58,8 @@ def _seed_event_at(repo, known: datetime, minutes: int) -> int:
     )
     repo.add_irrigation_event(
         irrigator_id=irrigator_id,
-        action="start",
-        triggered_by="manual",
+        action=EventAction.START,
+        triggered_by=TriggeredBy.MANUAL,
         duration_minutes=minutes,
         timestamp=int(known.timestamp()),
     )
@@ -64,7 +67,7 @@ def _seed_event_at(repo, known: datetime, minutes: int) -> int:
     return cluster_id
 
 
-def test_heatmap_with_events(app):
+def test_heatmap_with_events(app: FastAPI) -> None:
     """Seed an irrigation event at a known (weekday, hour) and assert the cell appears."""
     # Seed an event at a known UTC datetime: Wednesday (weekday=2) at 14:00 UTC
     known = datetime(2026, 1, 7, 14, 30, 0, tzinfo=UTC)  # 2026-01-07 is a Wednesday

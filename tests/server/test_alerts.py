@@ -1,16 +1,22 @@
 """Tests for the alert inbox API."""
 
 from http import HTTPStatus
+from typing import cast
 
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from greenhouse_core.models import ActivitySource, EntityType
 from greenhouse_core.repository import IrrigationRepository
+
+# A placeholder source outside the ActivitySource vocabulary: the column stores any string.
+TEST_SOURCE = cast("ActivitySource", "test")
 
 
 class TestAlertList:
     """Tests for alert list."""
 
-    def test_list_empty(self, client):
+    def test_list_empty(self, client: TestClient) -> None:
         """List empty."""
         resp = client.get("/api/v1/alerts")
         assert resp.status_code == HTTPStatus.OK
@@ -18,13 +24,13 @@ class TestAlertList:
         assert data["open_count"] == 0
         assert data["items"] == []
 
-    def test_list_with_status_filter(self, client):
+    def test_list_with_status_filter(self, client: TestClient) -> None:
         """List with status filter."""
         resp = client.get("/api/v1/alerts?status=open")
         assert resp.status_code == HTTPStatus.OK
         assert resp.json()["items"] == []
 
-    def test_list_with_cluster_filter(self, client):
+    def test_list_with_cluster_filter(self, client: TestClient) -> None:
         """List with cluster filter."""
         resp = client.get("/api/v1/alerts?cluster_id=1")
         assert resp.status_code == HTTPStatus.OK
@@ -34,12 +40,12 @@ class TestAlertList:
 class TestAlertGetById:
     """Tests for alert get by id."""
 
-    def test_get_not_found(self, client):
+    def test_get_not_found(self, client: TestClient) -> None:
         """Get not found."""
         resp = client.get("/api/v1/alerts/999")
         assert resp.status_code == HTTPStatus.NOT_FOUND
 
-    def test_get_existing(self, app):
+    def test_get_existing(self, app: FastAPI) -> None:
         """Get existing."""
         with TestClient(app, raise_server_exceptions=False) as client:
             session = app.state.session_factory()
@@ -47,12 +53,12 @@ class TestAlertGetById:
                 repo = IrrigationRepository(session)
                 alert = repo.upsert_alert(
                     dedup_key="test::get::1",
-                    source="test",
+                    source=TEST_SOURCE,
                     code="test_alert",
                     title="Test Alert",
                     message="test message",
                     severity="warning",
-                    entity_type="cluster",
+                    entity_type=EntityType.CLUSTER,
                     cluster_id=1,
                 )
                 session.commit()
@@ -71,12 +77,12 @@ class TestAlertGetById:
 class TestAlertAcknowledge:
     """Tests for alert acknowledge."""
 
-    def test_acknowledge_not_found(self, client):
+    def test_acknowledge_not_found(self, client: TestClient) -> None:
         """Acknowledge not found."""
         resp = client.post("/api/v1/alerts/999/acknowledge")
         assert resp.status_code == HTTPStatus.NOT_FOUND
 
-    def test_acknowledge_flow(self, app):
+    def test_acknowledge_flow(self, app: FastAPI) -> None:
         """Acknowledge flow."""
         with TestClient(app, raise_server_exceptions=False) as client:
             session = app.state.session_factory()
@@ -84,12 +90,12 @@ class TestAlertAcknowledge:
                 repo = IrrigationRepository(session)
                 alert = repo.upsert_alert(
                     dedup_key="test::ack::1",
-                    source="test",
+                    source=TEST_SOURCE,
                     code="test_alert",
                     title="Test Alert",
                     message="test message",
                     severity="warning",
-                    entity_type="cluster",
+                    entity_type=EntityType.CLUSTER,
                     cluster_id=1,
                 )
                 session.commit()
@@ -112,12 +118,12 @@ class TestAlertAcknowledge:
 class TestAlertResolve:
     """Tests for alert resolve."""
 
-    def test_resolve_not_found(self, client):
+    def test_resolve_not_found(self, client: TestClient) -> None:
         """Resolve not found."""
         resp = client.post("/api/v1/alerts/999/resolve")
         assert resp.status_code == HTTPStatus.NOT_FOUND
 
-    def test_resolve_flow(self, app):
+    def test_resolve_flow(self, app: FastAPI) -> None:
         """Resolve flow."""
         with TestClient(app, raise_server_exceptions=False) as client:
             session = app.state.session_factory()
@@ -125,12 +131,12 @@ class TestAlertResolve:
                 repo = IrrigationRepository(session)
                 alert = repo.upsert_alert(
                     dedup_key="test::resolve::1",
-                    source="test",
+                    source=TEST_SOURCE,
                     code="test_alert",
                     title="Test Alert",
                     message="test message",
                     severity="info",
-                    entity_type="cluster",
+                    entity_type=EntityType.CLUSTER,
                     cluster_id=1,
                 )
                 session.commit()
@@ -157,12 +163,12 @@ class TestAlertResolve:
 class TestAlertSyncCluster:
     """Tests for alert sync cluster."""
 
-    def test_sync_not_found(self, client):
+    def test_sync_not_found(self, client: TestClient) -> None:
         """Sync not found."""
         resp = client.post("/api/v1/clusters/999/alerts/sync")
         assert resp.status_code == HTTPStatus.NOT_FOUND
 
-    def test_sync_returns_list_response(self, seeded_client):
+    def test_sync_returns_list_response(self, seeded_client: TestClient) -> None:
         """Sync returns list response."""
         resp = seeded_client.post("/api/v1/clusters/1/alerts/sync")
         assert resp.status_code == HTTPStatus.OK
@@ -171,7 +177,7 @@ class TestAlertSyncCluster:
         assert "items" in data
         assert isinstance(data["items"], list)
 
-    def test_sync_dedup_on_repeat(self, seeded_client):
+    def test_sync_dedup_on_repeat(self, seeded_client: TestClient) -> None:
         """Calling sync twice must not duplicate alerts."""
         seeded_client.post("/api/v1/clusters/1/alerts/sync")
         resp1 = seeded_client.get("/api/v1/alerts?cluster_id=1")
@@ -187,7 +193,7 @@ class TestAlertSyncCluster:
 class TestAlertSyncAll:
     """Tests for alert sync all."""
 
-    def test_sync_all(self, seeded_client):
+    def test_sync_all(self, seeded_client: TestClient) -> None:
         """Sync all."""
         resp = seeded_client.post("/api/v1/alerts/sync")
         assert resp.status_code == HTTPStatus.OK
@@ -195,7 +201,7 @@ class TestAlertSyncAll:
         assert "open_count" in data
         assert "items" in data
 
-    def test_sync_all_open_count_badge(self, app):
+    def test_sync_all_open_count_badge(self, app: FastAPI) -> None:
         """Badge count must equal the number of open alerts."""
         with TestClient(app, raise_server_exceptions=False) as client:
             session = app.state.session_factory()
@@ -203,20 +209,20 @@ class TestAlertSyncAll:
                 repo = IrrigationRepository(session)
                 repo.upsert_alert(
                     dedup_key="test::badge::1",
-                    source="test",
+                    source=TEST_SOURCE,
                     code="badge_test",
                     title="Badge Test",
                     message="msg",
-                    entity_type="cluster",
+                    entity_type=EntityType.CLUSTER,
                     cluster_id=1,
                 )
                 repo.upsert_alert(
                     dedup_key="test::badge::2",
-                    source="test",
+                    source=TEST_SOURCE,
                     code="badge_test",
                     title="Badge Test 2",
                     message="msg2",
-                    entity_type="cluster",
+                    entity_type=EntityType.CLUSTER,
                     cluster_id=1,
                 )
                 session.commit()
@@ -231,19 +237,19 @@ class TestAlertSyncAll:
 class TestAlertListPagination:
     """Cursor pagination on GET /alerts."""
 
-    def _seed_alerts(self, app, count: int):
-        ids = []
+    def _seed_alerts(self, app: FastAPI, count: int) -> list[int]:
+        ids: list[int] = []
         with app.state.session_factory() as session:
             repo = IrrigationRepository(session)
             for n in range(count):
                 row = repo.upsert_alert(
                     dedup_key=f"test::pag::{n}",
-                    source="test",
+                    source=TEST_SOURCE,
                     code="test_alert",
                     title=f"Alert {n}",
                     message=f"msg {n}",
                     severity="info",
-                    entity_type="cluster",
+                    entity_type=EntityType.CLUSTER,
                     cluster_id=1,
                     seen_at=1_700_000_000 + n,
                 )
@@ -251,7 +257,7 @@ class TestAlertListPagination:
                 ids.append(row.id)
         return ids
 
-    def test_pagination_walks_inbox_newest_first(self, app, client):
+    def test_pagination_walks_inbox_newest_first(self, app: FastAPI, client: TestClient) -> None:
         """Iterating with cursor visits each alert exactly once, newest first."""
         ids = self._seed_alerts(app, 5)
         seen: list[int] = []
@@ -272,7 +278,7 @@ class TestAlertListPagination:
         # Newest first within pages.
         assert seen == sorted(seen, reverse=True)
 
-    def test_next_cursor_is_null_when_page_is_partial(self, app, client):
+    def test_next_cursor_is_null_when_page_is_partial(self, app: FastAPI, client: TestClient) -> None:
         """The last (partial) page must return ``next_cursor=None``."""
         seeded = 3
         self._seed_alerts(app, seeded)

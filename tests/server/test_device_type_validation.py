@@ -7,20 +7,27 @@ and ``tuya.tr301z`` + ``fake.sensor``; without a live registry the canonical key
 from __future__ import annotations
 
 from http import HTTPStatus
+from typing import TYPE_CHECKING
 
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.deps import get_device_registry
 from greenhouse_server.services.inventory import known_device_types
+from server.conftest import app_of
+
+if TYPE_CHECKING:
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
 
 IRRIGATOR_422 = "Unknown irrigator type 'acme.pump' (known: rainpoint.ik10pw, fake.irrigator)"
 SENSOR_422 = "Unknown sensor type 'acme.probe' (known: tuya.tr301z, fake.sensor)"
 
 
-def _cluster(client) -> int:
-    return client.post("/api/v1/clusters", json={"name": "C"}).json()["id"]
+def _cluster(client: TestClient) -> int:
+    cluster_id: int = client.post("/api/v1/clusters", json={"name": "C"}).json()["id"]
+    return cluster_id
 
 
-def test_api_refuses_an_unknown_irrigator_type_on_create_and_update(client):
+def test_api_refuses_an_unknown_irrigator_type_on_create_and_update(client: TestClient) -> None:
     """API refuses an unknown irrigator type on create and update."""
     cid = _cluster(client)
     body = {"tuya_device_id": "fake_tuya_device_aabbccdd", "name": "P", "type": "acme.pump"}
@@ -36,7 +43,7 @@ def test_api_refuses_an_unknown_irrigator_type_on_create_and_update(client):
     assert client.get(f"/api/v1/clusters/{cid}/irrigator").json()["type"] == "rainpoint.ik10pw"
 
 
-def test_api_refuses_an_unknown_sensor_type_on_create_and_update(client):
+def test_api_refuses_an_unknown_sensor_type_on_create_and_update(client: TestClient) -> None:
     """API refuses an unknown sensor type on create and update."""
     cid = _cluster(client)
     body = {"tuya_device_id": "fake_tuya_sensor_00000001", "name": "S", "type": "acme.probe"}
@@ -47,7 +54,7 @@ def test_api_refuses_an_unknown_sensor_type_on_create_and_update(client):
     assert (resp.status_code, resp.json()) == (422, {"detail": SENSOR_422})
 
 
-def test_without_a_live_registry_the_canonical_keys_apply(client, app):
+def test_without_a_live_registry_the_canonical_keys_apply(client: TestClient, app: FastAPI) -> None:
     """Without a live registry the canonical keys apply."""
     app.dependency_overrides[get_device_registry] = lambda: None
     cid = _cluster(client)
@@ -62,7 +69,7 @@ def test_without_a_live_registry_the_canonical_keys_apply(client, app):
     assert known_device_types(None, "sensor") == ("tuya.tr301z",)
 
 
-def test_web_forms_refuse_an_unknown_type(client):
+def test_web_forms_refuse_an_unknown_type(client: TestClient) -> None:
     """Web forms refuse an unknown type."""
     cid = _cluster(client)
     resp = client.post(
@@ -84,10 +91,10 @@ def test_web_forms_refuse_an_unknown_type(client):
     assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
 
 
-def test_edit_form_selects_the_stored_type_and_flags_an_unknown_one(client):
+def test_edit_form_selects_the_stored_type_and_flags_an_unknown_one(client: TestClient) -> None:
     """Edit form selects the stored type and flags an unknown one."""
     cid = _cluster(client)
-    session = client.app.state.session_factory()
+    session = app_of(client).state.session_factory()
     repo = IrrigationRepository(session)
     repo.add_irrigator(cluster_id=cid, tuya_device_id="d1", name="P", irrigator_type="fake.irrigator", config={})
     repo.add_sensor(cluster_id=cid, tuya_device_id="s1", name="S", sensor_type="soil_moisture", config={})
@@ -102,10 +109,10 @@ def test_edit_form_selects_the_stored_type_and_flags_an_unknown_one(client):
     assert '<option value="soil_moisture" selected>soil_moisture (unknown model)</option>' in page
 
 
-def test_a_legacy_row_stays_editable_while_its_type_is_unchanged(client):
+def test_a_legacy_row_stays_editable_while_its_type_is_unchanged(client: TestClient) -> None:
     """Only a new or changed type must be registered: renaming a legacy row is fine (API and web)."""
     cid = _cluster(client)
-    session = client.app.state.session_factory()
+    session = app_of(client).state.session_factory()
     repo = IrrigationRepository(session)
     repo.add_irrigator(cluster_id=cid, tuya_device_id="d1", name="P", irrigator_type="tuya_cloud", config={})
     sid = repo.add_sensor(cluster_id=cid, tuya_device_id="s1", name="S", sensor_type="soil_moisture", config={})
