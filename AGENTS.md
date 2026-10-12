@@ -144,7 +144,7 @@ Commands: top-level `status`, `irrigate`, `check`, `monitor`, `sync`, `learn`, `
 - **Logging.** Module-level `logger = logging.getLogger(__name__)`, %-style lazy arguments. Job / actuation failures → `logger.exception`; advisory or best-effort failures → `warning` / `debug` with `exc_info`. Never swallow an exception silently — at least a DEBUG line. Logger names are pinned (`tests/golden/contracts/loggers.json`).
 - **Naming.** Core functions keep their public `db` repository parameter; new and server-side code uses `repo`.
 - **Size and complexity.** Functions ≤ 40 body lines, nesting ≤ 3, files ≤ 400 lines (`make sizecheck`, exceptions in `scripts/size-exceptions.txt`); ruff `C90` max-complexity 8 plus `PLR0911/0912/0915` and the preview size rules `PLR0904/0914/0917/1702`. Existing exceptions are registered and only shrink.
-- **Lint.** ruff runs every rule (`select = ["ALL"]`, `[tool.ruff]` in `pyproject.toml`). The only ignores are rules that conflict with something kept — `COM812`/`ISC001` (formatter), `S101` in tests, `FAST001`/`D417` in `routes/` (invariant 7) — plus `ANN` in tests until they are annotated. A line that genuinely cannot satisfy a rule carries a one-rule `# noqa: CODE — reason`; never a blanket noqa, never a new per-file ignore.
+- **Lint.** ruff runs every rule (`select = ["ALL"]`, `[tool.ruff]` in `pyproject.toml`). The only ignores are rules that conflict with something kept — `COM812`/`ISC001` (formatter), `S101` in tests, `FAST001`/`D417` in `routes/` (invariant 7). A line that genuinely cannot satisfy a rule carries a one-rule `# noqa: CODE — reason`; never a blanket noqa, never a new per-file ignore.
 - **Docstrings** are Google style and say *why*. Route docstrings are MCP tool descriptions, Typer docstrings are `--help` text, schema docstrings are OpenAPI descriptions: changing them regenerates the matching goldens in a dedicated `docs(api)` / `docs(cli)` commit.
 - **Dead code** is removed in its own commit with the grep evidence in the body; route / web / Typer / Textual handlers, scheduler jobs and anything a golden renders are never "dead".
 
@@ -158,7 +158,7 @@ make test          # uv run pytest
 make lint          # ruff check libs/ tests/
 make format        # ruff format libs/ tests/
 make lint-imports  # import-linter layering contracts
-make typecheck     # mypy --strict over libs/ ([tool.mypy] files in pyproject.toml)
+make typecheck     # mypy --strict over libs/ and tests/ ([tool.mypy] files in pyproject.toml)
 make sizecheck     # size limits via scripts/sizecheck.py (FILES=... to narrow)
 make coverage      # pytest with coverage (fails under 60%)
 make pre-commit-install / make pre-commit-run   # hooks: ruff, ruff-format, hygiene, hadolint, gitleaks
@@ -166,7 +166,7 @@ make docker-build / docker-up / docker-down / docker-logs / docker-shell
 make help          # list every target
 ```
 
-CI (`.github/workflows/ci.yml`) runs `lint` (ruff check + format), `static` (`make lint-imports`, `make typecheck`, `make sizecheck`), `hygiene` (pre-commit file hooks), hadolint, gitleaks and `make coverage`; `make check` is the local equivalent (pre-commit-run, then lint-imports, typecheck, sizecheck and coverage, stopping at the first failure) — run it before pushing. `make typecheck` is plain `uv run mypy`: strict mode over every module listed by `files` in `[tool.mypy]` (`pyproject.toml`; all of `libs/`, the frozen Alembic revisions excluded). `make sizecheck` runs `scripts/sizecheck.py` over `libs/`; deliberate exceptions live in `scripts/size-exceptions.txt`, one `<path>[::<qualname>] — <reason>` line each, and the register only shrinks.
+CI (`.github/workflows/ci.yml`) runs `lint` (ruff check + format), `static` (`make lint-imports`, `make typecheck`, `make sizecheck`), `hygiene` (pre-commit file hooks), hadolint, gitleaks and `make coverage`; `make check` is the local equivalent (pre-commit-run, then lint-imports, typecheck, sizecheck and coverage, stopping at the first failure) — run it before pushing. `make typecheck` is plain `uv run mypy`: strict mode over every module listed by `files` in `[tool.mypy]` (`pyproject.toml`; all of `libs/` and `tests/`, the frozen Alembic revisions excluded; tests are annotated like library code). `make sizecheck` runs `scripts/sizecheck.py` over `libs/`; deliberate exceptions live in `scripts/size-exceptions.txt`, one `<path>[::<qualname>] — <reason>` line each, and the register only shrinks.
 
 **Dependency pins.** `uv.lock` is kept free of published advisories (checked with `pip-audit` by hand; not a CI job). The root `[tool.uv] constraint-dependencies = ["mcp>=1.28.1,<2"]` pins a transitive package: the floor clears the mcp advisories, the ceiling exists because `fastapi-mcp` 0.4.0 constructs `mcp.server.lowlevel.Server(name, version)`, which mcp 2.x rejects (TypeError at mount) — lift it when `fastapi-mcp` supports mcp 2. Each workspace package declares every third-party package it imports (`uvx deptry .` from each `libs/greenhouse-*`; the server's `[tool.deptry.per_rule_ignores]` keeps `jinja2` and `python-multipart`, runtime needs that are never imported by name).
 

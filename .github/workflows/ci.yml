@@ -61,7 +61,7 @@ jobs:
 
   # ────────────────────────────────────────────────────────────────────────────
   # static — the structural gates `make check` runs locally: import-linter
-  # layering contracts, mypy --strict over libs/, and the size limits
+  # layering contracts, mypy --strict over libs/ and tests/, and the size limits
   # (scripts/sizecheck.py + scripts/size-exceptions.txt).
   # ────────────────────────────────────────────────────────────────────────────
   static:

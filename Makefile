@@ -24,7 +24,7 @@ check: pre-commit-run lint-imports typecheck sizecheck coverage ## CI parity: pr
 lint-imports: ## Check the import-linter layering contracts
 	uv run lint-imports
 
-typecheck: ## mypy strict over libs/ (files and exclusions in [tool.mypy], pyproject.toml)
+typecheck: ## mypy strict over libs/ and tests/ (files and exclusions in [tool.mypy], pyproject.toml)
 	uv run mypy
 
 FILES ?= libs/

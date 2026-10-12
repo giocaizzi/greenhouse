@@ -58,16 +58,19 @@ pythonpath = ["libs/greenhouse-core", "libs/greenhouse-server", "libs/greenhouse
 markers = ["dotenv: keep Settings' real `.env` loading (tests/conftest.py disables it for every other test)"]
 
 [tool.mypy]
-# Every module under libs/ is mypy-strict clean (`make typecheck` = plain `uv run mypy`). The generated
-# Alembic revisions are frozen history and stay out of scope.
-files = ["libs/greenhouse-core", "libs/greenhouse-server", "libs/greenhouse-cli"]
+# Every module under libs/ and tests/ is mypy-strict clean (`make typecheck` = plain `uv run mypy`). The
+# generated Alembic revisions are frozen history and stay out of scope.
+files = ["libs/greenhouse-core", "libs/greenhouse-server", "libs/greenhouse-cli", "tests"]
 exclude = ["/migrations/versions/"]
 python_version = "3.11"
 strict = true
 follow_imports = "silent"
 # The workspace packages ship no py.typed, so without this their imports resolve through the
 # editable .pth files as "missing" and silently become Any. Source paths make them typed.
-mypy_path = ["libs/greenhouse-core", "libs/greenhouse-server", "libs/greenhouse-cli"]
+# tests/ is on the path because the tests import their helpers from the rootdir (`from fake_data import …`,
+# `from server.conftest import …`); explicit_package_bases names each test module by that root.
+mypy_path = ["libs/greenhouse-core", "libs/greenhouse-server", "libs/greenhouse-cli", "tests"]
+explicit_package_bases = true
 
 [[tool.mypy.overrides]]
 # Third-party packages with neither stubs nor py.typed — the only untyped imports. Targeted,
@@ -144,9 +147,8 @@ quote-style = "double"
 indent-style = "space"
 
 [tool.ruff.lint.per-file-ignores]
-# S101: pytest asserts are the test language. ANN: TEMPORARY — tests get annotated and mypy-checked next,
-# then this exemption is deleted.
-"tests/**" = ["S101", "ANN"]
+# S101: pytest asserts are the test language.
+"tests/**" = ["S101"]
 # Invariant 7 (AGENTS.md): every /api/v1 route declares `response_model=` (FAST001 calls it redundant)
 # and its docstring — the MCP tool description — documents request parameters only, never framework
 # dependencies such as `repo` (D417 wants every parameter).
