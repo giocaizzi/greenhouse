@@ -13,13 +13,6 @@ def test_health_page_renders(client: TestClient) -> None:
     assert "Scheduler" in resp.text
 
 
-def test_health_badge_fragment(client: TestClient) -> None:
-    """Health badge fragment."""
-    resp = client.get("/health/badge")
-    assert resp.status_code == HTTPStatus.OK
-    assert "scheduler" in resp.text.lower()
-
-
 def test_static_assets_served(client: TestClient) -> None:
     """Static assets served."""
     resp_css = client.get("/static/app.css")

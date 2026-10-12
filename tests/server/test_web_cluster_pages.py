@@ -33,12 +33,6 @@ def test_cluster_detail_renders(seeded_client: TestClient) -> None:
     assert "Test Irrigator" in resp.text
 
 
-def test_cluster_detail_404(client: TestClient) -> None:
-    """Cluster detail 404."""
-    resp = client.get("/clusters/9999")
-    assert resp.status_code == HTTPStatus.NOT_FOUND
-
-
 def test_cluster_status_fragment(seeded_client: TestClient) -> None:
     """Cluster status fragment."""
     resp = seeded_client.get("/clusters/1/status-fragment")

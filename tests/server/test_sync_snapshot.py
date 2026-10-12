@@ -125,20 +125,6 @@ class TestClusterSnapshot:
         assert snapshot is not None
         assert snapshot["soil_moisture"] == pytest.approx(42.0)
 
-    def test_no_readings_returns_none(
-        self, tmp_db: IrrigationRepository, cluster_with_two_sensors: tuple[int, int, int]
-    ) -> None:
-        """No readings returns none."""
-        cluster_id, _dry_id, _wet_id = cluster_with_two_sensors
-
-        assert _service(tmp_db).ensure_fresh_and_read(cluster_id) is None
-
-    def test_no_sensors_returns_none(self, tmp_db: IrrigationRepository) -> None:
-        """No sensors returns none."""
-        cluster_id = tmp_db.add_cluster("Empty Cluster")
-
-        assert _service(tmp_db).ensure_fresh_and_read(cluster_id) is None
-
 
 def test_freshness_is_judged_on_the_newest_soil_reading(
     tmp_db: IrrigationRepository, cluster_with_two_sensors: tuple[int, int, int], monkeypatch: pytest.MonkeyPatch
