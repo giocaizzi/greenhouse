@@ -13,18 +13,39 @@ import threading
 import time
 from dataclasses import dataclass
 from http import HTTPStatus
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypedDict, Unpack, cast
 
 from sqlalchemy.orm import Session
 
 from greenhouse_cli.client import IrrigationClient
-from greenhouse_core.models import IrrigationEvent, SensorReading
+from greenhouse_core.models import ActivitySource, EntityType, IrrigationEvent, SensorReading
 from greenhouse_core.repository import IrrigationRepository
 
 if TYPE_CHECKING:
-    from fastapi.testclient import TestClient
+    from collections.abc import Callable
 
-CLUSTERS = [
+    import httpx
+    from fastapi.testclient import TestClient
+    from sqlalchemy.engine import Engine
+
+    from greenhouse_cli._client.transport import RequestOptions
+
+# One recorded TUI request: (method, path, json body, query params).
+RequestLog = tuple[str, str, object, object]
+PlantSeed = tuple[str, str, float | None]  # (species, category, latest soil moisture or no probe)
+
+
+class ClusterSeed(TypedDict):
+    """One seeded cluster: its API fields, its plants and whether it has a pump."""
+
+    name: str
+    environment: str
+    location: str | None
+    plants: list[PlantSeed]
+    irrigator: bool
+
+
+CLUSTERS: list[ClusterSeed] = [
     {
         "name": "Living Room",
         "environment": "indoor",
@@ -54,7 +75,7 @@ CLUSTERS = [
 
 def _reading_series(sensor_id: int, target: float, now: int, hours: int = 48) -> list[SensorReading]:
     """A sawtooth drying curve ending at ``target`` with a watering bump every ~16h."""
-    rows = []
+    rows: list[SensorReading] = []
     for i in range(hours * 2):
         ts = now - (hours * 2 - i) * 1800
         phase = (i % 32) / 32
@@ -77,7 +98,7 @@ def _reading_series(sensor_id: int, target: float, now: int, hours: int = 48) ->
     return rows
 
 
-def seed_greenhouse(http: TestClient, engine) -> None:
+def seed_greenhouse(http: TestClient, engine: Engine) -> None:
     """Create clusters, plants, sensors, irrigators, readings, events, alerts, activity."""
     now = int(time.time())
     with Session(engine) as session:
@@ -113,7 +134,7 @@ class _Seeder:
     now: int
     sensor_no: int = 0
 
-    def add_plants(self, cid: int, plants: list) -> None:
+    def add_plants(self, cid: int, plants: list[PlantSeed]) -> None:
         """Add the cluster's plants, each with a probe and a reading series when it has a moisture level."""
         for species, category, moisture in plants:
             resp = self.http.post(
@@ -137,7 +158,7 @@ class _Seeder:
             assert resp.status_code == HTTPStatus.CREATED, resp.text
             self.session.add_all(_reading_series(resp.json()["id"], moisture, self.now))
 
-    def add_irrigator(self, cid: int, pump: dict) -> None:
+    def add_irrigator(self, cid: int, pump: dict[str, str]) -> None:
         """Add the cluster's pump with three past automatic runs."""
         resp = self.http.post(f"/api/v1/clusters/{cid}/irrigator", json=pump)
         assert resp.status_code == HTTPStatus.CREATED, resp.text
@@ -159,23 +180,23 @@ def _seed_inbox(repo: IrrigationRepository, now: int) -> None:
     """Add the two open alerts and the three activity rows."""
     repo.upsert_alert(
         "leak:sensor:3",
-        "leak",
+        ActivitySource.LEAK,
         "leak_or_stuck_valve",
         "Possible leak on Balcony",
         "Moisture kept rising 30 min after the pump stopped.",
         severity="critical",
-        entity_type="sensor",
+        entity_type=EntityType.SENSOR,
         entity_id=3,
         cluster_id=2,
     )
     repo.upsert_alert(
         "battery:sensor:1",
-        "health",
+        ActivitySource.HEALTH,
         "battery_low",
         "Low battery: Monstera probe",
         "Replace the batteries soon.",
         severity="warning",
-        entity_type="sensor",
+        entity_type=EntityType.SENSOR,
         entity_id=1,
         cluster_id=1,
     )
@@ -187,7 +208,13 @@ def _seed_inbox(repo: IrrigationRepository, now: int) -> None:
         ]
     ):
         repo.add_activity_event(
-            "irrigation", "cluster", code, message, entity_id=1, severity=severity, timestamp=now - i * 600
+            ActivitySource.IRRIGATION,
+            EntityType.CLUSTER,
+            code,
+            message,
+            entity_id=1,
+            severity=severity,
+            timestamp=now - i * 600,
         )
 
 
@@ -198,17 +225,21 @@ class _SharedHttp:
     transport would break the next app a test starts on it, so ``close`` is a no-op.
     """
 
+    request: Callable[..., httpx.Response]  # set by ``tui_client_factory``; otherwise forwarded
+
     def __init__(self, http: TestClient) -> None:
         self._http = http
 
-    def __getattr__(self, name: str):
+    def __getattr__(self, name: str) -> object:
         return getattr(self._http, name)
 
     def close(self) -> None:
         """Leave the shared transport open (the fixture owns it)."""
 
 
-def tui_client_factory(http: TestClient, log: list | None = None):
+def tui_client_factory(
+    http: TestClient, log: list[RequestLog] | None = None
+) -> Callable[[str | None], IrrigationClient]:
     """Build ``IrrigationClient`` instances whose transport is the in-process app.
 
     The TUI legitimately issues requests concurrently from worker threads. The
@@ -226,16 +257,18 @@ def tui_client_factory(http: TestClient, log: list | None = None):
     def factory(token: str | None) -> IrrigationClient:
         client = IrrigationClient(base_url="http://testserver", token=token or "")
         client.http.close()  # replaced by the shared in-process transport
-        client.http = _SharedHttp(http)
-        original = client.http.request  # every request (JSON and the CSV export) goes through http.request
+        shared = _SharedHttp(http)
+        original = http.request  # every request (JSON and the CSV export) goes through http.request
 
-        def serialized(method, path, **kwargs):
+        def serialized(method: str, path: str, **kwargs: Unpack[RequestOptions]) -> httpx.Response:
             if log is not None:
                 log.append((method, path, kwargs.get("json"), kwargs.get("params")))
             with lock:
-                return original(method, path, **kwargs)
+                response: httpx.Response = original(method, path, **kwargs)
+                return response
 
-        client.http.request = serialized
+        shared.request = serialized
+        client.http = cast("httpx.Client", shared)  # the proxy stands in for the client's own httpx.Client
         return client
 
     return factory
@@ -244,6 +277,6 @@ def tui_client_factory(http: TestClient, log: list | None = None):
 _app_locks: dict[int, threading.Lock] = {}
 
 
-def writes(log: list) -> list[tuple]:
+def writes(log: list[RequestLog]) -> list[tuple[str, str, object]]:
     """Only the mutating requests from a recorded log (drops GETs)."""
     return [(m, p, body) for m, p, body, _ in log if m != "GET"]

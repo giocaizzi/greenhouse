@@ -22,13 +22,13 @@ import asyncio
 import copy
 from dataclasses import asdict
 from http import HTTPStatus
-from typing import Any
+from typing import TYPE_CHECKING, Any, Unpack, cast
 
 import pytest
 from rich.console import Console
 from rich.text import Text
 from textual.app import App, ComposeResult
-from textual.widgets import DataTable
+from textual.widgets import DataTable, Static, TabbedContent
 
 from cli.test_contract_tui import make_seeded_app, make_tui, screen_text, settle
 from cli.tui_fixtures import tui_client_factory, writes
@@ -37,12 +37,29 @@ from greenhouse_cli.tui.model import summarize
 from greenhouse_cli.tui.screens.cluster import ClusterScreen
 from greenhouse_cli.tui.widgets import MetricChart
 
+if TYPE_CHECKING:
+    from collections.abc import Callable, Coroutine, Iterator, Mapping
+    from pathlib import Path
+
+    import time_machine
+    from fastapi.testclient import TestClient
+    from rich.console import RenderableType
+    from sqlalchemy.engine import Engine
+    from textual.pilot import Pilot
+    from textual.visual import VisualType
+
+    from cli.test_contract_tui import NotifyOptions
+    from cli.tui_fixtures import RequestLog
+    from greenhouse_cli._client.transport import JSONObject
+    from greenhouse_cli.client import IrrigationClient
+    from greenhouse_cli.tui.app import GreenhouseApp
+
 SIZE = (160, 50)
 NOW = int(FROZEN_INSTANT.timestamp())
 
 
 @pytest.fixture
-def seeded(clean_env, frozen_clock):
+def seeded(clean_env: Path, frozen_clock: time_machine.Traveller) -> Iterator[tuple[TestClient, Engine]]:
     """(http, engine) for a seeded app — clock frozen before ``seed_greenhouse`` runs."""
     del clean_env, frozen_clock  # side-effect fixtures (a hermetic environment; the clock is frozen)
     http, _, engine = make_seeded_app()
@@ -50,16 +67,23 @@ def seeded(clean_env, frozen_clock):
     engine.dispose()
 
 
-def _overriding_factory(http, overrides: dict[str, Any], log: list | None = None):
+def _overriding_factory(
+    http: TestClient, overrides: Mapping[str, Callable[..., object]], log: list[RequestLog] | None = None
+) -> Callable[[str | None], IrrigationClient]:
     """Client factory whose named methods are replaced by ``fake(real_method, *args, **kwargs)``."""
     base = tui_client_factory(http, log)
 
-    def factory(token):
+    def factory(token: str | None) -> IrrigationClient:
         client = base(token)
         for name, fake in overrides.items():
             real = getattr(client, name)
 
-            def wrapper(*args, _fake=fake, _real=real, **kwargs):
+            def wrapper(
+                *args: object,
+                _fake: Callable[..., object] = fake,
+                _real: Callable[..., object] = real,
+                **kwargs: object,
+            ) -> object:
                 return _fake(_real, *args, **kwargs)
 
             setattr(client, name, wrapper)
@@ -68,11 +92,12 @@ def _overriding_factory(http, overrides: dict[str, Any], log: list | None = None
     return factory
 
 
-def _segments(renderable, width: int = 100) -> list[list[str]]:
+def _segments(renderable: VisualType, width: int = 100) -> list[list[str]]:
     """Rich segments of ``renderable`` as ``[text, style]`` pairs, adjacent equal styles merged."""
     console = Console(width=width, force_terminal=True, color_system="truecolor", no_color=False, legacy_windows=False)
     merged: list[list[str]] = []
-    for segment in console.render(renderable):
+    # The panels are only ever updated with rich renderables (never a Textual ``Visual``).
+    for segment in console.render(cast("RenderableType", renderable)):
         style = str(segment.style) if segment.style else ""
         if merged and merged[-1][1] == style:
             merged[-1][0] += segment.text
@@ -81,7 +106,7 @@ def _segments(renderable, width: int = 100) -> list[list[str]]:
     return merged
 
 
-def _cell(value) -> Any:
+def _cell(value: object) -> object:
     if isinstance(value, Text):
         return {
             "plain": value.plain,
@@ -91,27 +116,27 @@ def _cell(value) -> Any:
     return value
 
 
-def _rows(table: DataTable) -> list[dict]:
+def _rows(table: DataTable[object]) -> list[dict[str, object]]:
     return [{"key": row.key.value, "cells": [_cell(c) for c in table.get_row(row.key)]} for row in table.ordered_rows]
 
 
-def _record_toasts(tui) -> list[list[str]]:
+def _record_toasts(tui: GreenhouseApp) -> list[list[str]]:
     toasts: list[list[str]] = []
-    original = tui.notify
+    original: Callable[..., None] = tui.notify
 
-    def notify(message, *args, **kwargs):
+    def notify(message: str, *args: object, **kwargs: Unpack[NotifyOptions]) -> None:
         toasts.append([kwargs.get("severity", "information"), str(message)])
         return original(message, *args, **kwargs)
 
-    tui.notify = notify
+    tui.notify = notify  # type: ignore[method-assign]  # record toasts on this app instance only
     return toasts
 
 
-def _run(coro) -> None:
+def _run(coro: Coroutine[object, object, None]) -> None:
     asyncio.run(coro)
 
 
-async def _open_cluster(pilot, tui, cluster_id: int) -> ClusterScreen:
+async def _open_cluster(pilot: Pilot[None], tui: GreenhouseApp, cluster_id: int) -> ClusterScreen:
     await settle(pilot, tui)
     screen = ClusterScreen(cluster_id)
     await tui.push_screen(screen)
@@ -121,7 +146,7 @@ async def _open_cluster(pilot, tui, cluster_id: int) -> ClusterScreen:
 
 # ── Overview: decision panel ─────────────────────────────────────────────
 
-DECISION_VARIANTS = {
+DECISION_VARIANTS: dict[str, dict[str, object] | None] = {
     "none": None,
     "no_interval_no_reasons": {
         "action": "irrigate",
@@ -141,19 +166,19 @@ DECISION_VARIANTS = {
 }
 
 
-def test_decision_panel_variants(seeded):
+def test_decision_panel_variants(seeded: tuple[TestClient, Engine]) -> None:
     """``#decision-panel`` for a missing decision, one without interval/reasons, one with reasons but no duration."""
     http, _ = seeded
     variant: dict[str, Any] = {}
 
-    def status(real, cid):
+    def status(real: Callable[[int], JSONObject], cid: int) -> JSONObject:
         payload = real(cid)
         payload["decision"] = copy.deepcopy(variant["decision"])
         return payload
 
     captured: dict[str, Any] = {}
 
-    async def scenario():
+    async def scenario() -> None:
         tui = make_tui(http, factory=_overriding_factory(http, {"status": status}))
         async with tui.run_test(size=SIZE) as pilot:
             variant["decision"] = DECISION_VARIANTS["none"]
@@ -162,7 +187,7 @@ def test_decision_panel_variants(seeded):
                 variant["decision"] = decision
                 screen.reload()
                 await settle(pilot, tui)
-                captured[name] = _segments(screen.query_one("#decision-panel").content)
+                captured[name] = _segments(screen.query_one("#decision-panel", Static).content)
 
     _run(scenario())
     assert_golden_json("cli/wp2_gaps/decision_panel.json", captured)
@@ -194,13 +219,13 @@ FORECAST_VARIANTS = {
 }
 
 
-def test_forecast_panel_variants(seeded):
+def test_forecast_panel_variants(seeded: tuple[TestClient, Engine]) -> None:
     """``#forecast-panel`` for an empty forecast, rain + skip without a reason, and skip with a reason."""
     http, _ = seeded
     variant: dict[str, Any] = {}
     captured: dict[str, Any] = {}
 
-    async def scenario():
+    async def scenario() -> None:
         tui = make_tui(http, factory=_overriding_factory(http, {"forecast": lambda _real, _cid: variant["f"]}))
         async with tui.run_test(size=SIZE) as pilot:
             variant["f"] = FORECAST_VARIANTS["empty"]
@@ -209,7 +234,7 @@ def test_forecast_panel_variants(seeded):
                 variant["f"] = copy.deepcopy(forecast)
                 screen.reload()
                 await settle(pilot, tui)
-                captured[name] = _segments(screen.query_one("#forecast-panel").content)
+                captured[name] = _segments(screen.query_one("#forecast-panel", Static).content)
 
     _run(scenario())
     assert_golden_json("cli/wp2_gaps/forecast_panel.json", captured)
@@ -218,11 +243,11 @@ def test_forecast_panel_variants(seeded):
 # ── Sensors tab: water warning ───────────────────────────────────────────
 
 
-def test_sensor_rows_water_warning(seeded):
+def test_sensor_rows_water_warning(seeded: tuple[TestClient, Engine]) -> None:
     """Sensor rows when a reading carries ``water_warning`` (with and without a battery state)."""
     http, _ = seeded
 
-    def status(real, cid):
+    def status(real: Callable[[int], JSONObject], cid: int) -> JSONObject:
         payload = real(cid)
         readings = [s["last_reading"] for s in payload["sensors"] if s.get("last_reading")]
         for reading, battery in zip(readings, ("low", None), strict=False):  # cluster 1 has two; dashboard asks all
@@ -231,7 +256,7 @@ def test_sensor_rows_water_warning(seeded):
 
     captured: dict[str, Any] = {}
 
-    async def scenario():
+    async def scenario() -> None:
         tui = make_tui(http, factory=_overriding_factory(http, {"status": status}))
         async with tui.run_test(size=SIZE) as pilot:
             screen = await _open_cluster(pilot, tui, 1)
@@ -244,19 +269,22 @@ def test_sensor_rows_water_warning(seeded):
 # ── Insights tab: nothing to flag ────────────────────────────────────────
 
 
-def test_insights_panel_nothing_to_flag(seeded):
+def test_insights_panel_nothing_to_flag(seeded: tuple[TestClient, Engine]) -> None:
     """``#insights-panel`` with no insights and nobody needing water."""
     http, _ = seeded
-    overrides = {"insights": lambda _real, _cid: {"insights": []}, "monitor": lambda _real, _cid: {"needs_water": []}}
+    overrides: dict[str, Callable[..., object]] = {
+        "insights": lambda _real, _cid: {"insights": []},
+        "monitor": lambda _real, _cid: {"needs_water": []},
+    }
     captured: dict[str, Any] = {}
 
-    async def scenario():
+    async def scenario() -> None:
         tui = make_tui(http, factory=_overriding_factory(http, overrides))
         async with tui.run_test(size=SIZE) as pilot:
             screen = await _open_cluster(pilot, tui, 1)
-            screen.query_one("TabbedContent").active = "tab-insights"
+            screen.query_one("TabbedContent", TabbedContent).active = "tab-insights"
             await settle(pilot, tui)
-            captured["insights"] = _segments(screen.query_one("#insights-panel").content)
+            captured["insights"] = _segments(screen.query_one("#insights-panel", Static).content)
 
     _run(scenario())
     assert_golden_json("cli/wp2_gaps/insights_nothing_to_flag.json", captured)
@@ -265,14 +293,21 @@ def test_insights_panel_nothing_to_flag(seeded):
 # ── CRUD keys with nothing selected / no irrigator ───────────────────────
 
 
-def _create_empty_cluster(http) -> int:
+def _create_empty_cluster(http: TestClient) -> int:
     """Create a cluster with no plants, sensors, pump or windows; return its id."""
     resp = http.post("/api/v1/clusters", json={"name": "Empty", "environment": "indoor", "location": None})
     assert resp.status_code == HTTPStatus.CREATED, resp.text
-    return resp.json()["id"]
+    cluster_id: int = resp.json()["id"]
+    return cluster_id
 
 
-async def _press_on_tab(pilot, tui, screen, tab_key: tuple[str, str], recorded: tuple[list, list]) -> dict:
+async def _press_on_tab(
+    pilot: Pilot[None],
+    tui: GreenhouseApp,
+    screen: ClusterScreen,
+    tab_key: tuple[str, str],
+    recorded: tuple[list[list[str]], list[RequestLog]],
+) -> dict[str, object]:
     """Press one key on the active tab and record its toasts, dialog and writes; a dialog is escaped."""
     tab, key = tab_key
     toasts, log = recorded
@@ -280,7 +315,7 @@ async def _press_on_tab(pilot, tui, screen, tab_key: tuple[str, str], recorded: 
     await pilot.press(key)
     await settle(pilot, tui)
     dialog = type(tui.screen).__name__ if tui.screen is not screen else None
-    capture = {
+    capture: dict[str, object] = {
         "tab": tab,
         "key": key,
         "toasts": toasts[start_toasts:],
@@ -293,20 +328,20 @@ async def _press_on_tab(pilot, tui, screen, tab_key: tuple[str, str], recorded: 
     return capture
 
 
-def test_edit_and_delete_with_nothing_selected(seeded):
+def test_edit_and_delete_with_nothing_selected(seeded: tuple[TestClient, Engine]) -> None:
     """``u`` / ``delete`` on every CRUD tab of an empty cluster: the toast, no dialog, no write."""
     http, _ = seeded
     empty_id = _create_empty_cluster(http)
-    log: list = []
-    captured: list[dict] = []
+    log: list[RequestLog] = []
+    captured: list[dict[str, object]] = []
 
-    async def scenario():
+    async def scenario() -> None:
         tui = make_tui(http, log, factory=None)
         toasts = _record_toasts(tui)
         async with tui.run_test(size=SIZE) as pilot:
             screen = await _open_cluster(pilot, tui, empty_id)
             for tab in ("tab-plants", "tab-sensors", "tab-windows", "tab-overview", "tab-config"):
-                screen.query_one("TabbedContent").active = tab
+                screen.query_one("TabbedContent", TabbedContent).active = tab
                 await settle(pilot, tui)
                 captured.extend(
                     [await _press_on_tab(pilot, tui, screen, (tab, key), (toasts, log)) for key in ("u", "delete")]
@@ -319,7 +354,7 @@ def test_edit_and_delete_with_nothing_selected(seeded):
 # ── Settings: vacation states ────────────────────────────────────────────
 
 
-def test_vacation_rows_states(seeded):
+def test_vacation_rows_states(seeded: tuple[TestClient, Engine]) -> None:
     """Vacation rows in the active, past and upcoming states."""
     http, _ = seeded
     vacation = {
@@ -338,7 +373,7 @@ def test_vacation_rows_states(seeded):
     }
     captured: dict[str, Any] = {}
 
-    async def scenario():
+    async def scenario() -> None:
         factory = _overriding_factory(http, {"list_vacation": lambda _real: copy.deepcopy(vacation)})
         tui = make_tui(http, factory=factory)
         async with tui.run_test(size=SIZE) as pilot:
@@ -354,7 +389,7 @@ def test_vacation_rows_states(seeded):
 # ── model.summarize: partial readings ────────────────────────────────────
 
 
-def test_summarize_with_partial_readings():
+def test_summarize_with_partial_readings() -> None:
     """Readings lacking soil moisture or temperature still count toward the means/newest stamp they carry."""
     status = {
         "cluster": {"id": 5, "name": "Partial", "environment": "outdoor", "location": "roof"},
@@ -378,13 +413,13 @@ def test_summarize_with_partial_readings():
 # ── MetricChart: empty series, non-start overlay event ───────────────────
 
 
-class _ChartApp(App):
+class _ChartApp(App[None]):
     def compose(self) -> ComposeResult:
         yield MetricChart(id="chart")
 
 
 @pytest.mark.usefixtures("clean_env", "frozen_clock")
-def test_metric_chart_skips_empty_series_and_non_start_events():
+def test_metric_chart_skips_empty_series_and_non_start_events() -> None:
     """``show_payload`` with an empty dataset next to a real one; ``show_overlay`` with a ``stop`` event."""
     payload = {
         "datasets": [
@@ -403,7 +438,7 @@ def test_metric_chart_skips_empty_series_and_non_start_events():
     }
     captured: dict[str, str] = {}
 
-    async def scenario():
+    async def scenario() -> None:
         app = _ChartApp()
         async with app.run_test(size=(100, 30)) as pilot:
             chart = app.query_one(MetricChart)

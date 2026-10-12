@@ -33,7 +33,7 @@ import pkgutil
 import re
 from dataclasses import asdict
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypedDict
 
 from fastapi.testclient import TestClient
 from rich.console import Console
@@ -52,14 +52,33 @@ from server.conftest import _make_stubbed_app
 _QUIET_PASSES_REQUIRED = 2  # consecutive passes with nothing pending before ``settle`` returns
 
 if TYPE_CHECKING:
+    from collections.abc import Callable, Mapping
+    from types import ModuleType
+
+    from fastapi import FastAPI
+    from sqlalchemy.engine import Engine
     from textual.app import App
+    from textual.notifications import SeverityLevel
+    from textual.pilot import Pilot
+
+    from cli.tui_fixtures import RequestLog
+    from greenhouse_cli.client import IrrigationClient
 
 # ── Shared kit (imported by test_contract_tui_screens / _actuation / _runtime) ─
 
 SERVER_URL = "http://testserver"
 
 
-def make_seeded_app(*, bypass_auth: bool = True):
+class NotifyOptions(TypedDict, total=False):
+    """``App.notify``'s keyword arguments, as the toast-recording wrappers forward them."""
+
+    title: str
+    severity: SeverityLevel
+    timeout: float | None
+    markup: bool
+
+
+def make_seeded_app(*, bypass_auth: bool = True) -> tuple[TestClient, FastAPI, Engine]:
     """Seeded stubbed server app with offline weather.
 
     Call it with the clock already frozen: ``seed_greenhouse`` stamps every
@@ -76,7 +95,12 @@ def make_seeded_app(*, bypass_auth: bool = True):
     return http, application, engine
 
 
-def make_tui(http: TestClient, log: list | None = None, refresh_seconds: float = 0, factory=None) -> GreenhouseApp:
+def make_tui(
+    http: TestClient,
+    log: list[RequestLog] | None = None,
+    refresh_seconds: float = 0,
+    factory: Callable[[str | None], IrrigationClient] | None = None,
+) -> GreenhouseApp:
     """A GreenhouseApp with sprite animation off (what ``greenhouse tui --no-animation`` passes)."""
     return GreenhouseApp(
         SERVER_URL,
@@ -86,7 +110,7 @@ def make_tui(http: TestClient, log: list | None = None, refresh_seconds: float =
     )
 
 
-def screen_text(app: App) -> str:
+def screen_text(app: App[None]) -> str:
     """Plain-text rendering of the current screen (incl. background screens under a modal).
 
     Mirrors ``App.export_screenshot`` but records text instead of SVG; trailing
@@ -112,7 +136,7 @@ def screen_text(app: App) -> str:
 # ── Synchronization (shared by test_contract_tui_*) ─────────────────────────
 
 
-def _pending_tui_work(tui: App) -> list[str]:
+def _pending_tui_work(tui: App[None]) -> list[str]:
     """Return everything the app still has to process, one human-readable line per item.
 
     Unfinished workers, queued messages, deferred callbacks, running or scheduled animations (e.g. the
@@ -140,9 +164,9 @@ def _pending_tui_work(tui: App) -> list[str]:
     return pending + _visible_screen_debts(tui)
 
 
-def _visible_screen_debts(tui: App) -> list[str]:
+def _visible_screen_debts(tui: App[None]) -> list[str]:
     """What the visible screens still owe: after-refresh callbacks, layout/repaint, unmeasured table columns."""
-    pending = []
+    pending: list[str] = []
     screen = tui.screen
     if screen._callbacks:  # noqa: SLF001 — Textual exposes no public view of pending work; call_after_refresh work; only the active screen refreshes
         pending.append(f"after-refresh callbacks on {screen!r}")
@@ -156,7 +180,7 @@ def _visible_screen_debts(tui: App) -> list[str]:
     return pending
 
 
-async def settle(pilot, tui: App, limit_s: float = 60.0) -> None:
+async def settle(pilot: Pilot[None], tui: App[None], limit_s: float = 60.0) -> None:
     """Wait until the TUI has finished reacting, failing with what is still pending after ``limit_s`` seconds.
 
     Finished means no worker unfinished and no message or callback queued anywhere, on two
@@ -183,7 +207,7 @@ async def settle(pilot, tui: App, limit_s: float = 60.0) -> None:
     await pilot.pause()
 
 
-async def wait_until(predicate, what: str, limit_s: float = 60.0) -> None:
+async def wait_until(predicate: Callable[[], object], what: str, limit_s: float = 60.0) -> None:
     """Poll ``predicate`` with plain ``asyncio.sleep`` until it holds; fail naming ``what`` after ``limit_s`` seconds.
 
     For screens with a ticking auto-refresh timer, where ``settle`` / ``pilot.pause()`` may never see an idle app.
@@ -200,14 +224,14 @@ async def wait_until(predicate, what: str, limit_s: float = 60.0) -> None:
 # ── Static surface ──────────────────────────────────────────────────────────
 
 
-def _tui_modules() -> list[Any]:
+def _tui_modules() -> list[ModuleType]:
     names = [tui_pkg.__name__]
     names += [m.name for m in pkgutil.walk_packages(tui_pkg.__path__, prefix=f"{tui_pkg.__name__}.")]
     return [importlib.import_module(n) for n in sorted(names)]
 
 
-def _tui_classes() -> list[type]:
-    found = []
+def _tui_classes() -> list[type[DOMNode]]:
+    found: list[type[DOMNode]] = []
     for module in _tui_modules():
         for _, obj in inspect.getmembers(module, inspect.isclass):
             if obj.__module__ == module.__name__ and issubclass(obj, DOMNode):
@@ -215,7 +239,7 @@ def _tui_classes() -> list[type]:
     return sorted(found, key=lambda c: f"{c.__module__}:{c.__qualname__}")
 
 
-def _binding(raw: Binding | tuple) -> dict:
+def _binding(raw: Binding | tuple[str, str, str]) -> dict[str, object]:
     b = raw if isinstance(raw, Binding) else Binding(*raw)
     return {"key": b.key, "action": b.action, "description": b.description, "show": b.show, "priority": b.priority}
 
@@ -223,7 +247,7 @@ def _binding(raw: Binding | tuple) -> dict:
 _NOT_SCALAR = object()
 
 
-def _simple_scalar(value: Any) -> Any:
+def _simple_scalar(value: object) -> object:
     """JSON-able view of a scalar constant, or ``_NOT_SCALAR``."""
     if isinstance(value, enum.Enum):
         return value.value
@@ -236,7 +260,7 @@ def _simple_scalar(value: Any) -> Any:
     return _NOT_SCALAR
 
 
-def _simple(value: Any) -> Any:
+def _simple(value: object) -> object:
     """JSON-able view of a class/module constant (``None`` when it is not a plain value)."""
     scalar = _simple_scalar(value)
     if scalar is not _NOT_SCALAR:
@@ -251,7 +275,7 @@ def _simple(value: Any) -> Any:
 _HANDLER = re.compile(r"^(action_|on_|_on_|watch_)")
 
 
-def _class_surface(cls: type) -> dict:
+def _class_surface(cls: type) -> dict[str, object]:
     own = cls.__dict__
     entry: dict[str, Any] = {"bases": [f"{b.__module__}.{b.__qualname__}" for b in cls.__bases__]}
     if "BINDINGS" in own:
@@ -270,7 +294,7 @@ def _class_surface(cls: type) -> dict:
     return entry
 
 
-def _on_decorated(own: Any) -> list[dict]:
+def _on_decorated(own: Mapping[str, object]) -> list[dict[str, object]]:
     """``@on(...)`` handlers declared in a class body: message type and selectors, in declaration order."""
     return [
         {
@@ -282,10 +306,12 @@ def _on_decorated(own: Any) -> list[dict]:
     ]
 
 
-def _module_constants(module: Any) -> dict:
+def _module_constants(module: ModuleType) -> dict[str, object]:
     """Public upper-case names *assigned* at the module's top level (re-imports are not pinned)."""
-    tree = ast.parse(Path(module.__file__).read_text(encoding="utf-8"))
-    names = set()
+    source = module.__file__
+    assert source is not None, module
+    tree = ast.parse(Path(source).read_text(encoding="utf-8"))
+    names: set[str] = set()
     for node in tree.body:
         targets = (
             node.targets if isinstance(node, ast.Assign) else [node.target] if isinstance(node, ast.AnnAssign) else []
@@ -294,7 +320,7 @@ def _module_constants(module: Any) -> dict:
     return {n: _simple(getattr(module, n)) for n in sorted(names) if n.isupper() and not n.startswith("_")}
 
 
-def _resource_fields() -> dict:
+def _resource_fields() -> dict[str, list[dict[str, object]]]:
     sample_plants = [{"id": 1, "species": "Monstera deliciosa"}, {"id": 2, "species": "Citrus limon"}]
     calls = {
         "cluster_fields()": resources.cluster_fields(),
@@ -312,7 +338,7 @@ def _resource_fields() -> dict:
     return {name: [asdict(f) for f in fields] for name, fields in calls.items()}
 
 
-def test_tui_static_surface_golden():
+def test_tui_static_surface_golden() -> None:
     """BINDINGS / modes / CSS_PATH / handler names / constants / form specs == golden."""
     surface = {
         "classes": {f"{c.__module__}:{c.__qualname__}": _class_surface(c) for c in _tui_classes()},
@@ -322,7 +348,7 @@ def test_tui_static_surface_golden():
     assert_golden_json("tui/surface.json", surface)
 
 
-def test_every_screen_and_widget_class_is_in_the_surface():
+def test_every_screen_and_widget_class_is_in_the_surface() -> None:
     """The discovery walk sees the app, all screens/modals and all widgets — guards against a silent empty golden."""
     names = {c.__qualname__ for c in _tui_classes()}
     expected = {
@@ -351,11 +377,11 @@ def test_every_screen_and_widget_class_is_in_the_surface():
     assert expected <= names, expected - names
 
 
-def test_app_css_path_and_modes():
+def test_app_css_path_and_modes() -> None:
     """CSS_PATH resolves next to app.py; the five top-level modes map to their screens; dashboard is default."""
     assert GreenhouseApp.CSS_PATH == "app.tcss"
     assert GreenhouseApp.DEFAULT_MODE == "dashboard"
-    assert {k: v.__name__ for k, v in GreenhouseApp.MODES.items()} == {
+    assert {k: v.__name__ if isinstance(v, type) else v for k, v in GreenhouseApp.MODES.items()} == {
         "dashboard": "DashboardScreen",
         "alerts": "AlertsScreen",
         "activity": "ActivityScreen",
@@ -373,11 +399,11 @@ SPRITE_FRAMES = range(6)
 WATERING_FRAMES = range(3)
 
 
-def _sprite(sprite: sprites.PixelSprite) -> dict:
+def _sprite(sprite: sprites.PixelSprite) -> dict[str, object]:
     return {"rows": list(sprite.rows), "palette": dict(sorted(sprite.palette.items()))}
 
 
-def test_sprite_mood_frame_mapping_golden():
+def test_sprite_mood_frame_mapping_golden() -> None:
     """Every (category, mood, frame) sprite, watering overlays, logo, watering can and mood thresholds == golden."""
     moods = list(sprites.Mood)
     plants: dict[str, Any] = {}
