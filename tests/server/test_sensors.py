@@ -2,12 +2,12 @@
 
 from http import HTTPStatus
 
-from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from fake_data import FAKE_LOCAL_KEY
 from greenhouse_core.models import parse_device_config
 from greenhouse_core.repository import IrrigationRepository
+from server.conftest import app_of
 
 
 class TestSensorCRUD:
@@ -273,8 +273,7 @@ class TestSensorReassignmentActivity:
         # exercise it directly through the repository for coverage of the path.
 
         # Resolve the underlying session factory via TestClient app state.
-        app = client.app
-        assert isinstance(app, FastAPI)
+        app = app_of(client)
         with app.state.session_factory() as session:
             repo = IrrigationRepository(session)
             repo.reassign_sensor_to_plant(1, None)
@@ -292,8 +291,7 @@ class TestSensorLocalKeyMasking:
     MASK = "••••••••"
 
     def _stored_config(self, client: TestClient, sid: int) -> dict[str, object]:
-        app = client.app
-        assert isinstance(app, FastAPI)
+        app = app_of(client)
         session = app.state.session_factory()
         try:
             sensor = IrrigationRepository(session).get_sensor(sid)

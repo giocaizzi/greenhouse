@@ -8,12 +8,12 @@ irrigator id (``/irrigators/{id}/start`` etc.).
 from http import HTTPStatus
 
 import httpx
-from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from fake_data import FAKE_LOCAL_KEY
 from greenhouse_core.models import parse_device_config
 from greenhouse_core.repository import IrrigationRepository
+from server.conftest import app_of
 
 
 class TestIrrigatorCRUD:
@@ -308,8 +308,7 @@ class TestLocalKeyMasking:
 
     @staticmethod
     def _stored_config(client: TestClient) -> dict[str, object]:
-        app = client.app
-        assert isinstance(app, FastAPI)
+        app = app_of(client)
         session = app.state.session_factory()
         try:
             irrigator = IrrigationRepository(session).get_irrigator_for_cluster(1)

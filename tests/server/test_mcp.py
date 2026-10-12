@@ -20,7 +20,7 @@ from greenhouse_core.devices import DeviceRegistry
 from greenhouse_server.app import create_app
 from greenhouse_server.config import Settings
 from greenhouse_server.deps import get_device_gateway, get_device_registry
-from server.conftest import TEST_ADMIN_PASSWORD, TEST_AUTH_SECRET, TEST_MCP_TOKEN
+from server.conftest import TEST_ADMIN_PASSWORD, TEST_AUTH_SECRET, TEST_MCP_TOKEN, app_of
 
 MAX_TOOL_NAME_LENGTH = 64  # Claude.ai connectors reject longer tool names
 
@@ -280,8 +280,7 @@ def _invoke_mcp_tool(
     `_execute_api_tool` converts to a generic Exception containing the status
     code and body for the MCP error envelope).
     """
-    app = mcp_client.app
-    assert isinstance(app, FastAPI)
+    app = app_of(mcp_client)
     mcp = app.state.mcp
     http_request_info = HTTPRequestInfo(
         method="POST",

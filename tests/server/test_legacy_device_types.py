@@ -15,17 +15,18 @@ from typing import TYPE_CHECKING, TypeVar
 
 import pytest
 from alembic import command
-from fastapi import FastAPI
 from sqlalchemy import create_engine, text
 
 from greenhouse_core import database
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.services.health_monitor import DeviceHealthMonitor
+from server.conftest import app_of
 
 if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
 
+    from fastapi import FastAPI
     from fastapi.testclient import TestClient
 
 KNOWN_IRRIGATORS = "fake.irrigator, rainpoint.ik10pw"
@@ -39,8 +40,7 @@ def _legacy_row(client: TestClient, write: Callable[[IrrigationRepository], _Row
     The API and web refuse an unknown ``type`` on write, so a legacy value can only come
     from a pre-existing row.
     """
-    app = client.app
-    assert isinstance(app, FastAPI)
+    app = app_of(client)
     session = app.state.session_factory()
     try:
         row_id = write(IrrigationRepository(session))

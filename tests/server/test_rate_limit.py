@@ -3,10 +3,10 @@
 from http import HTTPStatus
 from typing import TYPE_CHECKING
 
-from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from greenhouse_core.models import IrrigationConfig
+from server.conftest import app_of
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
@@ -16,8 +16,7 @@ def _set_cap(
     client: TestClient, cluster_id: int, *, max_events_per_day: int | None = None, daily_cap_minutes: int | None = None
 ) -> None:
     """Patch rate-limit fields on the IrrigationConfig directly in the DB."""
-    app = client.app
-    assert isinstance(app, FastAPI)
+    app = app_of(client)
     session: Session = app.state.session_factory()
     try:
         config = session.query(IrrigationConfig).filter_by(cluster_id=cluster_id).one()

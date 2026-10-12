@@ -9,11 +9,11 @@ These guard two properties of the edit flow:
 import json
 from http import HTTPStatus
 
-from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from fake_data import FAKE_LOCAL_KEY
 from greenhouse_core.repository import IrrigationRepository
+from server.conftest import app_of
 
 SECRET_KEY = FAKE_LOCAL_KEY
 
@@ -42,8 +42,7 @@ def _seed_local_irrigator(client: TestClient, cluster_name: str = "Local Cluster
 
 def _stored_config(client: TestClient, cluster_id: int) -> dict[str, object]:
     """Read the stored config from the DB: the API masks ``local_key`` (B-11)."""
-    app = client.app
-    assert isinstance(app, FastAPI)
+    app = app_of(client)
     session = app.state.session_factory()
     try:
         irrigator = IrrigationRepository(session).get_irrigator_for_cluster(cluster_id)
