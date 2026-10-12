@@ -5,6 +5,9 @@ import socket
 import time
 import urllib.error
 import urllib.request
+from collections.abc import Iterator
+from pathlib import Path
+from typing import NoReturn, TypedDict
 
 import pytest
 import time_machine
@@ -35,7 +38,7 @@ _LOOPBACK_HOSTS = frozenset({"127.0.0.1", "::1", "localhost"})
 
 
 @pytest.fixture(autouse=True)
-def _no_network(monkeypatch):
+def _no_network(monkeypatch: pytest.MonkeyPatch) -> None:
     """Keep every test hermetic: real outbound HTTP fails fast instead of reaching the internet.
 
     The app's weather client calls Open-Meteo through ``urllib.request.urlopen`` unless a test installs
@@ -43,13 +46,13 @@ def _no_network(monkeypatch):
     no longer depend on live weather or network access. Tests that stub ``urlopen`` themselves override this.
     """
 
-    def _blocked_urlopen(url, *_args, **_kwargs):
+    def _blocked_urlopen(url: object, *_args: object, **_kwargs: object) -> NoReturn:
         msg = f"network disabled in tests: {getattr(url, 'full_url', url)}"
         raise urllib.error.URLError(msg)
 
     real_connect = socket.socket.connect
 
-    def _loopback_only_connect(self, address):
+    def _loopback_only_connect(self: socket.socket, address: tuple[object, ...] | str) -> None:
         if self.family in (socket.AF_INET, socket.AF_INET6) and address[0] not in _LOOPBACK_HOSTS:
             msg = f"network disabled in tests: {address!r}"
             raise OSError(msg)
@@ -60,7 +63,7 @@ def _no_network(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
-def _isolated_cli_token(monkeypatch, tmp_path_factory):
+def _isolated_cli_token(monkeypatch: pytest.MonkeyPatch, tmp_path_factory: pytest.TempPathFactory) -> None:
     """No test reads (or writes) the developer's real CLI session token.
 
     The CLI resolves ``$GREENHOUSE_API_TOKEN`` first, then
@@ -72,7 +75,7 @@ def _isolated_cli_token(monkeypatch, tmp_path_factory):
 
 
 @pytest.fixture(autouse=True)
-def _no_developer_dotenv(request, monkeypatch):
+def _no_developer_dotenv(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> None:
     """``Settings`` ignores a developer's ``.env`` in the working directory during tests.
 
     Tests marked ``dotenv`` exercise the real ``.env`` loading (in their own temp
@@ -85,7 +88,7 @@ def _no_developer_dotenv(request, monkeypatch):
 
 
 @pytest.fixture
-def tmp_db():
+def tmp_db() -> Iterator[IrrigationRepository]:
     """Create an in-memory IrrigationRepository for testing."""
     engine = create_engine("sqlite://", echo=False)
     Base.metadata.create_all(engine)
@@ -97,15 +100,25 @@ def tmp_db():
 
 
 @pytest.fixture
-def fake_tuya_env(monkeypatch):
+def fake_tuya_env(monkeypatch: pytest.MonkeyPatch) -> None:
     """Patch environment with fake Tuya credentials."""
     monkeypatch.setenv("TUYA_CLIENT_ID", FAKE_CLIENT_ID)
     monkeypatch.setenv("TUYA_CLIENT_SECRET", FAKE_CLIENT_SECRET)
     monkeypatch.setenv("TUYA_REGION", FAKE_REGION)
 
 
+class SampleCluster(TypedDict):
+    """What the ``sample_cluster`` fixture returns: the repository and the seeded row ids."""
+
+    db: IrrigationRepository
+    cluster_id: int
+    plant_id: int
+    irrigator_id: int
+    sensor_id: int
+
+
 @pytest.fixture
-def sample_cluster(tmp_db):
+def sample_cluster(tmp_db: IrrigationRepository) -> SampleCluster:
     """Pre-populated cluster with a plant, irrigator, and sensor with readings."""
     cluster_id = tmp_db.add_cluster(FAKE_CLUSTER_NAME)
     plant_id = tmp_db.add_plant(
@@ -151,7 +164,7 @@ def sample_cluster(tmp_db):
 
 
 @pytest.fixture
-def frozen_clock():
+def frozen_clock() -> Iterator[time_machine.Traveller]:
     """Freeze wall-clock time (``time.time``, ``datetime.now``) at ``FROZEN_INSTANT``.
 
     Monotonic clocks keep running, so asyncio / Textual timers still work.
@@ -161,7 +174,7 @@ def frozen_clock():
 
 
 @pytest.fixture
-def clean_env(monkeypatch, tmp_path):
+def clean_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Iterator[Path]:
     """Hermetic environment: no app env vars, no ``.env`` file in cwd, UTC local time, plain terminal."""
     for name in list(os.environ):
         if name.startswith(ENV_PREFIXES):

@@ -31,7 +31,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from importlib.resources import files
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal, TypedDict, Unpack, cast
 from zoneinfo import ZoneInfo
 
 import time_machine
@@ -41,7 +41,16 @@ from sqlalchemy.pool import StaticPool
 
 from greenhouse_core.constants import LEAK_ALERT_CODE
 from greenhouse_core.logic import IrrigationLogic
-from greenhouse_core.models import Base, DecisionLog, IrrigationEvent, SensorReading
+from greenhouse_core.models import (
+    EVENT_ACTION_START,
+    TRIGGERED_BY_AUTO,
+    ActivitySource,
+    Base,
+    DecisionLog,
+    EntityType,
+    IrrigationEvent,
+    SensorReading,
+)
 from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_core.repository import IrrigationRepository
 
@@ -49,6 +58,8 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
 
     from sqlalchemy import Engine
+
+    from greenhouse_core.models import EventAction, TriggeredBy
 
 MINUTE = 60
 HOUR = 3600
@@ -139,18 +150,113 @@ class Case:
     cluster_exists: bool = True
 
 
+class CaseOverrides(TypedDict, total=False):
+    """The optional :class:`Case` fields, for the ``**kw`` dicts a family spreads into ``Case(...)``."""
+
+    tz: str | None
+    environment: str
+    plants: tuple[tuple[str, str | None], ...]
+    sensors: tuple[SensorSpec, ...]
+    irrigator: bool
+    reservoir_l: float | None
+    flow_rate: float | None
+    events: tuple[Event, ...]
+    global_quiet: tuple[int, int] | None
+    cluster_quiet: tuple[int, int] | None
+    cluster_config: tuple[tuple[str, Any], ...]
+    windows: tuple[Window, ...]
+    vacation: tuple[int, int] | None
+    leak: Leak | None
+    weather: str
+    forecast: tuple[tuple[str, Any], ...]
+    current_temp: float | None
+    bypass_quiet_hours: bool
+    triggered_by: str
+    learning: str | None
+    insert_desc: bool
+    cluster_exists: bool
+
+
+class ScheduleSetup(TypedDict, total=False):
+    """Quiet-hour / window overrides the quiet and DST families spread into ``Case(...)``."""
+
+    global_quiet: tuple[int, int]
+    cluster_quiet: tuple[int, int]
+    windows: tuple[Window, ...]
+
+
+class SensorScene(TypedDict, total=False):
+    """The probes (or none, plus the fallback temperature) a scene is judged on."""
+
+    sensors: tuple[SensorSpec, ...]
+    current_temp: float | None
+
+
+class SceneSetup(SensorScene, total=False):
+    """Scene overrides (plants, history, environment) spread into ``Case(...)`` beside explicit fields."""
+
+    plants: tuple[tuple[str, str | None], ...]
+    events: tuple[Event, ...]
+    environment: str
+    bypass_quiet_hours: bool
+
+
+class VacationSetup(TypedDict, total=False):
+    """Vacation-family overrides: the window, the reservoir budget and the spend so far."""
+
+    vacation: tuple[int, int]
+    reservoir_l: float
+    flow_rate: float
+    events: tuple[Event, ...]
+    irrigator: bool
+
+
+class WeatherSetup(TypedDict, total=False):
+    """Weather-family overrides: which client is wired and what it forecasts."""
+
+    weather: str
+    forecast: tuple[tuple[str, Any], ...]
+
+
+class QuietExtraSetup(SceneSetup, WeatherSetup, total=False):
+    """Quiet-family extras: any scene plus a weather client."""
+
+
+class ClimateFields(TypedDict, total=False):
+    """The non-soil :class:`Reading` fields a sensor helper passes through."""
+
+    temp: float | None
+    hum: float | None
+    light: int | None
+    water_warning: bool | None
+
+
+class ReadingFields(ClimateFields, total=False):
+    """Every optional :class:`Reading` field."""
+
+    soil: float | None
+
+
+# One ``bulk_add_sensor_readings`` row: (sensor_id, timestamp, temperature, soil_moisture, light,
+# env_humidity, battery_state, water_warning).
+# (year, month, day, hour, minute, second) for the case-instant helpers.
+_YMDHMS = tuple[int, int, int, int, int, int]
+
+ReadingRow = tuple[int, int, float | None, float | None, int | None, float | None, str | None, int | None]
+
+
 # ── Weather stubs (deterministic, no network) ────────────────────────────────
 
 
 class FakeForecastWeather:
     """``WeatherClient`` stand-in returning a fixed forecast dict (or ``None``)."""
 
-    def __init__(self, forecast: dict | None):
+    def __init__(self, forecast: dict[str, Any] | None) -> None:
         """Serve ``forecast`` (None for no forecast) and record each request."""
         self._forecast = forecast
         self.forecast_calls: list[int] = []
 
-    def get_forecast(self, hours: int = 6) -> dict | None:
+    def get_forecast(self, hours: int = 6) -> dict[str, Any] | None:
         """Record the requested horizon and return a copy of the canned forecast."""
         self.forecast_calls.append(hours)
         return None if self._forecast is None else dict(self._forecast)
@@ -218,15 +324,18 @@ def _seed(repo: IrrigationRepository, case: Case) -> int:
     irrigator_id = _seed_irrigator(repo, case, cluster_id)
     sensor_ids = _seed_sensors(repo, case, cluster_id, plant_ids, now)
     for ev in case.events:
+        assert irrigator_id is not None, "a case with events needs an irrigator"
         repo.add_irrigation_event(
             irrigator_id=irrigator_id,
-            action=ev.action,
-            triggered_by=ev.triggered_by,
+            # The grid seeds actions outside the enum on purpose (``schedule_updated``, issue #103).
+            action=cast("EventAction", ev.action),
+            triggered_by=cast("TriggeredBy", ev.triggered_by),
             duration_minutes=ev.duration,
             timestamp=now - ev.age_s,
         )
 
     if case.learning is not None:
+        assert irrigator_id is not None, "a learning seed needs an irrigator"
         _seed_learning(repo, case.learning, irrigator_id, sensor_ids, now)
 
     for w in case.windows:
@@ -269,6 +378,7 @@ def _seed_irrigator(repo: IrrigationRepository, case: Case, cluster_id: int) -> 
     )
     if case.reservoir_l is not None or case.flow_rate is not None:
         irr = repo.get_irrigator(irrigator_id)
+        assert irr is not None
         irr.reservoir_l = case.reservoir_l
         irr.flow_rate_l_per_min = case.flow_rate
         repo.session.flush()
@@ -276,7 +386,7 @@ def _seed_irrigator(repo: IrrigationRepository, case: Case, cluster_id: int) -> 
 
 
 def _seed_sensors(repo: IrrigationRepository, case: Case, cluster_id: int, plant_ids: list[int], now: int) -> list[int]:
-    sensor_ids = []
+    sensor_ids: list[int] = []
     for i, spec in enumerate(case.sensors):
         sid = repo.add_sensor(
             cluster_id=cluster_id,
@@ -288,7 +398,9 @@ def _seed_sensors(repo: IrrigationRepository, case: Case, cluster_id: int, plant
             assignment_started_at=0,
         )
         sensor_ids.append(sid)
-        rows = [(sid, now - r.age_s, r.temp, r.soil, r.light, r.hum, None, r.water_warning) for r in spec.readings]
+        rows: list[ReadingRow] = [
+            (sid, now - r.age_s, r.temp, r.soil, r.light, r.hum, None, r.water_warning) for r in spec.readings
+        ]
         rows.sort(key=lambda row: row[1], reverse=case.insert_desc)
         repo.bulk_add_sensor_readings(rows)
     return sensor_ids
@@ -298,12 +410,12 @@ def _seed_leak(repo: IrrigationRepository, leak: Leak, cluster_id: int, sensor_i
     leak_cluster = repo.add_cluster("Grid other") if leak.other_cluster else cluster_id
     alert = repo.upsert_alert(
         dedup_key=f"leak::{LEAK_ALERT_CODE}::{leak_cluster}::sensor1",
-        source="leak",
+        source=ActivitySource.LEAK,
         code=LEAK_ALERT_CODE,
         title="Possible leak or stuck valve detected",
         message="Grid Soil: soil moisture still rising after irrigation (latest=78.0%)",
         severity="critical",
-        entity_type="sensor",
+        entity_type=EntityType.SENSOR,
         entity_id=sensor_ids[0] if sensor_ids else None,
         cluster_id=leak_cluster,
         seen_at=now - leak.age_s,
@@ -316,17 +428,22 @@ def _seed_leak(repo: IrrigationRepository, leak: Leak, cluster_id: int, sensor_i
 
 def _seed_learning(repo: IrrigationRepository, seed: str, irrigator_id: int, sensor_ids: list[int], now: int) -> None:
     """Seed three past irrigation cycles that make the learner raise alerts."""
-    patterns = {
+    pattern_sets: dict[str, list[tuple[tuple[int, float], ...]]] = {
         "blocked_drip": [((-600, 40.0), (1200, 40.5), (3600, 40.4))],
         "rapid_drainage": [((-600, 40.0), (1200, 70.0), (2 * HOUR, 62.0), (3 * HOUR, 54.0), (4 * HOUR, 46.0))],
         # sensor 0 dry + absorbs fast, sensor 1 wet → unresolvable conflict
         "conflict": [((-600, 20.0), (1200, 30.0)), ((-600, 78.0), (1200, 84.0))],
-    }[seed]
-    rows = []
+    }
+    patterns = pattern_sets[seed]
+    rows: list[ReadingRow] = []
     for k in (1, 2, 3):
         ev = now - k * DAY - 6 * HOUR
         repo.add_irrigation_event(
-            irrigator_id=irrigator_id, action="start", triggered_by="auto", duration_minutes=2, timestamp=ev
+            irrigator_id=irrigator_id,
+            action=EVENT_ACTION_START,
+            triggered_by=TRIGGERED_BY_AUTO,
+            duration_minutes=2,
+            timestamp=ev,
         )
         for index, sensor_id in enumerate(sensor_ids[: len(patterns)]):
             rows += [(sensor_id, ev + offset, None, soil, None, None, None, None) for offset, soil in patterns[index]]
@@ -336,7 +453,7 @@ def _seed_learning(repo: IrrigationRepository, seed: str, irrigator_id: int, sen
 # ── Running a case ───────────────────────────────────────────────────────────
 
 
-def _readings_fingerprint(repo: IrrigationRepository) -> list[tuple]:
+def _readings_fingerprint(repo: IrrigationRepository) -> list[tuple[object, ...]]:
     rows = repo.session.execute(
         select(
             SensorReading.id,
@@ -352,7 +469,7 @@ def _readings_fingerprint(repo: IrrigationRepository) -> list[tuple]:
     return [tuple(r) for r in rows]
 
 
-def _log_record(row: DecisionLog, decision_dump: dict | None) -> dict:
+def _log_record(row: DecisionLog, decision_dump: dict[str, Any] | None) -> dict[str, object]:
     payload = json.loads(row.payload_json)
     return {
         "id": row.id,
@@ -373,12 +490,12 @@ def _log_record(row: DecisionLog, decision_dump: dict | None) -> dict:
     }
 
 
-def run_case(case: Case, *, engine_factory: Callable[..., Any] = IrrigationLogic) -> dict:
+def run_case(case: Case, *, engine_factory: Callable[..., Any] = IrrigationLogic) -> dict[str, Any]:
     """Evaluate ``case`` and return its JSON-able golden record."""
     with time_machine.travel(case.at, tick=False), fresh_repository() as repo:
         cluster_id = _seed(repo, case)
         readings_before = _readings_fingerprint(repo)
-        events_before = repo.session.scalar(select(func.count()).select_from(IrrigationEvent))
+        events_before = repo.session.execute(select(func.count()).select_from(IrrigationEvent)).scalar_one()
         logic = engine_factory(repo, plant_database(), weather_client=make_weather(case))
         target = cluster_id if case.cluster_exists else cluster_id + 1000
         decision = logic.decide_for_cluster(
@@ -390,7 +507,7 @@ def run_case(case: Case, *, engine_factory: Callable[..., Any] = IrrigationLogic
         )
         dump = decision.model_dump(mode="json") if decision is not None else None
         logs = list(repo.session.scalars(select(DecisionLog).order_by(DecisionLog.id)))
-        events_after = repo.session.scalar(select(func.count()).select_from(IrrigationEvent))
+        events_after = repo.session.execute(select(func.count()).select_from(IrrigationEvent)).scalar_one()
         return {
             "decision": dump,
             "decision_log_id_matches": (
@@ -405,11 +522,11 @@ def run_case(case: Case, *, engine_factory: Callable[..., Any] = IrrigationLogic
 # ── Grid ─────────────────────────────────────────────────────────────────────
 
 
-def _utc(*args: int) -> datetime:
+def _utc(*args: *_YMDHMS) -> datetime:
     return datetime(*args, tzinfo=ZoneInfo("UTC"))
 
 
-def _local(tz: str, *args: int) -> datetime:
+def _local(tz: str, *args: *_YMDHMS) -> datetime:
     return datetime(*args, tzinfo=ZoneInfo(tz))
 
 
@@ -449,7 +566,7 @@ SEASON_EXTRA_SETS: dict[str, tuple[tuple[str, str | None], ...]] = {
     "loquat+unknown": (("Eriobotrya japonica", "fruit_tree"), ("Zamia incognita", None)),
 }
 
-CLIMATES: dict[str, dict[str, Any]] = {
+CLIMATES: dict[str, ClimateFields] = {
     "soil_only": {},
     "hot_dry_bright": {"temp": 34.0, "hum": 25.0, "light": 2000},
     "cold_humid_dark": {"temp": 10.0, "hum": 90.0, "light": 30},
@@ -457,20 +574,39 @@ CLIMATES: dict[str, dict[str, Any]] = {
 
 
 def _sensor(
-    soil: float | None, *, name: str = "Grid Soil", age_s: int = 600, plant: int | None = 0, **kw
+    soil: float | None,
+    *,
+    name: str = "Grid Soil",
+    age_s: int = 600,
+    plant: int | None = 0,
+    **kw: Unpack[ClimateFields],
 ) -> SensorSpec:
     return SensorSpec(name=name, readings=(Reading(age_s=age_s, soil=soil, **kw),), plant=plant)
 
 
-def _series(values, *, step_s: int = HOUR, name: str = "Grid Soil", field: str = "soil", **const) -> SensorSpec:
+def _series(
+    values: list[float],
+    *,
+    step_s: int = HOUR,
+    name: str = "Grid Soil",
+    field: Literal["soil", "temp"] = "soil",
+    **const: Unpack[ReadingFields],
+) -> SensorSpec:
     """Hourly series ending at age 0; ``values`` are oldest → newest."""
     n = len(values)
-    readings = tuple(Reading(age_s=(n - 1 - i) * step_s, **{field: v}, **const) for i, v in enumerate(values))
+    readings = tuple(_series_reading((n - 1 - i) * step_s, field, v, const) for i, v in enumerate(values))
     return SensorSpec(name=name, readings=readings, plant=0)
 
 
+def _series_reading(age_s: int, field: Literal["soil", "temp"], value: float, const: ReadingFields) -> Reading:
+    """One series point: ``value`` lands in ``field``, the constant fields ride along."""
+    fields: ReadingFields = {**const}
+    fields[field] = value
+    return Reading(age_s=age_s, **fields)
+
+
 def _soil_family() -> list[Case]:
-    cases = []
+    cases: list[Case] = []
     levels = [0.0, 12.0, 25.0, 29.9, 30.0, 34.0, 38.0, 44.9, 45.0, 58.0, 66.0, 71.0]
     for plant_key, plants in PLANT_SETS.items():
         cases.extend(
@@ -499,7 +635,7 @@ def _soil_family() -> list[Case]:
 
 
 def _driest_family() -> list[Case]:
-    cases = []
+    cases: list[Case] = []
     spreads = [
         (20, 55, 58),
         (44, 56),
@@ -702,7 +838,7 @@ def _series_family() -> list[Case]:
 
 
 def _cooldown_family() -> list[Case]:
-    cases = []
+    cases: list[Case] = []
     six = 6 * HOUR
     ages = [
         ("1h", HOUR),
@@ -769,8 +905,8 @@ def _cooldown_family() -> list[Case]:
 
 
 def _quiet_family() -> list[Case]:
-    cases = []
-    configs = {
+    cases: list[Case] = []
+    configs: dict[str, ScheduleSetup] = {
         "global-0-5": {"global_quiet": (0, 5)},
         "global-22-6-wrap": {"global_quiet": (22, 6)},
         "global-0-5+cluster-0-0-disabled": {"global_quiet": (0, 5), "cluster_quiet": (0, 0)},
@@ -810,7 +946,7 @@ def _quiet_family() -> list[Case]:
                 for bypass in (False, True)
             )
     night = _utc(2026, 4, 15, 2, 0, 0)
-    extras = {
+    extras: dict[str, QuietExtraSetup] = {
         "cooldown-beats-quiet": {"events": (Event(HOUR),)},
         "quiet-beats-weather": {
             "environment": "outdoor",
@@ -829,14 +965,14 @@ def _quiet_family() -> list[Case]:
         "no-plants-beats-quiet": {"plants": (), "sensors": (_sensor(38.0, plant=None),)},
     }
     for tag, kw in extras.items():
-        base = {"sensors": (_sensor(38.0),)}
+        base: QuietExtraSetup = {"sensors": (_sensor(38.0),)}
         base.update(kw)
         cases.append(Case(id=f"quiet/extra/{tag}", family="quiet", at=night, global_quiet=(0, 5), **base))
     return cases
 
 
 def _windows_family() -> list[Case]:
-    cases = []
+    cases: list[Case] = []
     window_sets = {
         "none": (),
         "6-10": (Window(6, 10),),
@@ -846,7 +982,7 @@ def _windows_family() -> list[Case]:
         "9-9-empty": (Window(9, 9),),
     }
     times = [(5, 59, 59), (6, 0, 0), (9, 59, 59), (10, 0, 0), (12, 0, 0), (18, 0, 0), (23, 0, 0), (3, 0, 0)]
-    conditions = {
+    conditions: dict[str, tuple[SensorSpec, ...]] = {
         "dry": (_sensor(38.0),),
         "critical": (_sensor(20.0),),
         "wet": (_sensor(66.0),),
@@ -904,7 +1040,7 @@ def _windows_family() -> list[Case]:
 
 
 def _season_family() -> list[Case]:
-    cases = []
+    cases: list[Case] = []
     instants = {
         "winter-mid": (ROME, _local(ROME, 2026, 1, 15, 12, 0, 0)),
         "spring-mid": (ROME, _local(ROME, 2026, 4, 15, 12, 0, 0)),
@@ -940,8 +1076,8 @@ def _season_family() -> list[Case]:
 
 
 def _dst_family() -> list[Case]:
-    cases = []
-    configs = {
+    cases: list[Case] = []
+    configs: dict[str, ScheduleSetup] = {
         "quiet-0-5": {"global_quiet": (0, 5)},
         "quiet-2-3": {"global_quiet": (2, 3)},
         "window-3-4": {"windows": (Window(3, 4),)},
@@ -967,8 +1103,8 @@ def _dst_family() -> list[Case]:
 
 
 def _vacation_family() -> list[Case]:
-    cases = []
-    vacs: dict[str, dict[str, Any]] = {
+    cases: list[Case] = []
+    vacs: dict[str, VacationSetup] = {
         "none": {},
         "active-no-capacity": {"vacation": (-DAY, 6 * DAY)},
         "active-plenty": {"vacation": (-DAY, 6 * DAY), "reservoir_l": 100.0, "flow_rate": 1.0},
@@ -1028,7 +1164,7 @@ def _vacation_family() -> list[Case]:
 
 
 def _leak_family() -> list[Case]:
-    cases = []
+    cases: list[Case] = []
     leaks = {
         "none": None,
         "open-1h": Leak("open", HOUR),
@@ -1088,8 +1224,8 @@ def _leak_family() -> list[Case]:
 
 
 def _weather_family() -> list[Case]:
-    cases = []
-    clients: dict[str, dict[str, Any]] = {
+    cases: list[Case] = []
+    clients: dict[str, WeatherSetup] = {
         "no-client": {"weather": "none"},
         "offline": {"weather": "offline"},
         "precip-0": {"weather": "forecast", "forecast": (("precipitation_mm", 0.0),)},
@@ -1099,7 +1235,7 @@ def _weather_family() -> list[Case]:
         "precip-None": {"weather": "forecast", "forecast": (("precipitation_mm", None),)},
         "precip-missing": {"weather": "forecast", "forecast": (("max_temp", 20.0),)},
     }
-    scenes = {
+    scenes: dict[str, SensorScene] = {
         "dry": {"sensors": (_sensor(38.0),)},
         "critical": {"sensors": (_sensor(20.0),)},
         "fallback-30C": {"sensors": (), "current_temp": 30.0},
@@ -1143,7 +1279,7 @@ def _weather_family() -> list[Case]:
 
 
 def _fallback_family() -> list[Case]:
-    cases = []
+    cases: list[Case] = []
     temps = [None, -5.0, 18.0, 18.1, 24.0, 24.1, 28.0, 28.1, 35.0]
     configs = {
         "no-config": (),
@@ -1194,7 +1330,7 @@ def _fallback_family() -> list[Case]:
 
 
 def _learning_family() -> list[Case]:
-    cases = []
+    cases: list[Case] = []
     cases.extend(
         Case(
             id=f"learning/{seed or 'none'}/m{soil:g}",

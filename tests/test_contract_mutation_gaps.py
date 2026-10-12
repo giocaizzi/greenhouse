@@ -11,19 +11,41 @@ frozen instant on a fresh in-memory schema, no network, no wall clock.
 from __future__ import annotations
 
 from types import SimpleNamespace
+from typing import TYPE_CHECKING, Any, Unpack, cast
 
 import pytest
 
 import greenhouse_core.learning.issues as issues_mod
 import greenhouse_core.learning.report as report_mod
-from engine_grid import BASE_AT, DAY, HOUR, Case, Event, Reading, SensorSpec, plant_database, run_case
+from engine_grid import (
+    BASE_AT,
+    DAY,
+    HOUR,
+    Case,
+    CaseOverrides,
+    Event,
+    Reading,
+    ReadingFields,
+    SensorSpec,
+    plant_database,
+    run_case,
+)
 from golden import FROZEN_TS
 from greenhouse_core.learning import IrrigationLearner
 from greenhouse_core.learning.models import Alert, PlantProfile
 from greenhouse_core.learning.profiling import compute_sensor_response, get_plant_profile
 from greenhouse_core.logic.cleaning import clean_readings
 from greenhouse_core.logic.timing import is_within_quiet_hours, local_now
+from greenhouse_core.models import ActivitySource, EventAction, TriggeredBy
 from greenhouse_core.utils import effective_light_threshold
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    import time_machine
+
+    from greenhouse_core.models import IrrigationEvent, Sensor, SensorReading
+    from greenhouse_core.repository import IrrigationRepository
 
 # Literal pins (mutation-gap tests pin the numbers, not the constants that hold them).
 WATER_WARNING_CONFIDENCE = 0.92
@@ -33,7 +55,7 @@ POST_READING_DELAY_S = 600  # ten minutes after the start, the inclusive boundar
 
 
 @pytest.fixture(autouse=True)
-def _hermetic(clean_env):
+def _hermetic(clean_env: Path) -> None:
     """Isolate env vars / TZ like the other characterization suites."""
 
 
@@ -41,21 +63,22 @@ def _sensor(*readings: Reading, name: str = "Gap Soil") -> SensorSpec:
     return SensorSpec(name=name, readings=readings, plant=0)
 
 
-def _decide(case_id: str, **kw) -> dict:
+def _decide(case_id: str, **kw: Unpack[CaseOverrides]) -> dict[str, Any]:
     """Run one Monstera (target 45-60 %, temp 18-29 °C) case and return the decision dump."""
     record = run_case(Case(id=f"gaps/{case_id}", family="gaps", at=BASE_AT, **kw))
     assert len(record["decision_logs"]) == 1
-    return record["decision"]
+    decision: dict[str, Any] = record["decision"]
+    return decision
 
 
-def _codes(decision: dict) -> list[str]:
+def _codes(decision: dict[str, Any]) -> list[str]:
     return [r["code"] for r in decision["reasons"]]
 
 
 # ── logic/engine.py ─────────────────────────────────────────────────────────
 
 
-def test_water_warning_outranks_critical_stress_when_both_fire():
+def test_water_warning_outranks_critical_stress_when_both_fire() -> None:
     """engine-13: the sensor's own water_warning rule runs BEFORE the critical-stress rule.
 
     A 20 % reading (critical low → water_stress) that also carries the device
@@ -73,7 +96,7 @@ def test_water_warning_outranks_critical_stress_when_both_fire():
     ("soil", "code"),
     [(60.0, "sensor_adequate"), (60.5, "sensor_wet")],
 )
-def test_soil_exactly_at_target_max_is_adequate(soil, code):
+def test_soil_exactly_at_target_max_is_adequate(soil: float, code: str) -> None:
     """engine-49: ``avg_soil <= target_max`` is inclusive — 60 % on a 45-60 plant is adequate."""
     decision = _decide(f"soil-max-{soil}", sensors=(_sensor(Reading(age_s=600, soil=soil)),))
     assert _codes(decision)[0] == code
@@ -84,7 +107,7 @@ def test_soil_exactly_at_target_max_is_adequate(soil, code):
     ("temp", "expected"),
     [(32.0, False), (32.5, True)],
 )
-def test_temp_high_adjustment_is_strictly_above_ideal_plus_offset(temp, expected):
+def test_temp_high_adjustment_is_strictly_above_ideal_plus_offset(temp: float, *, expected: bool) -> None:
     """engine-51: TEMP_HIGH fires only for ``avg_temp > ideal_max + 3`` (29 + 3 = 32 °C exclusive)."""
     decision = _decide(f"temp-high-{temp}", sensors=(_sensor(Reading(age_s=600, soil=50.0, temp=temp)),))
     assert ("temp_high" in _codes(decision)) is expected
@@ -94,7 +117,7 @@ def test_temp_high_adjustment_is_strictly_above_ideal_plus_offset(temp, expected
     ("temps", "expected"),
     [((23.0, 23.0, 27.0, 27.0), False), ((23.5, 23.5, 27.5, 27.5), True)],
 )
-def test_rising_temperature_trend_needs_strictly_above_25c(temps, expected):
+def test_rising_temperature_trend_needs_strictly_above_25c(temps: tuple[float, ...], *, expected: bool) -> None:
     """engine-57: TREND_TEMP_RISING needs a rising trend AND ``avg_temp > 25`` (exclusive).
 
     Four hourly readings (soil 50 %): the first pair averages exactly 25 °C,
@@ -106,7 +129,7 @@ def test_rising_temperature_trend_needs_strictly_above_25c(temps, expected):
     assert ("trend_temp_rising" in _codes(decision)) is expected
 
 
-def test_vacation_budget_equal_to_duration_is_not_trimmed():
+def test_vacation_budget_equal_to_duration_is_not_trimmed() -> None:
     """engine-28: headroom that exactly covers the run (``binding == duration``) leaves it untouched.
 
     100 L tank, 1 L/min, a 10-day vacation that began 12 h ago → 9.5 L allowed
@@ -128,7 +151,7 @@ def test_vacation_budget_equal_to_duration_is_not_trimmed():
 # ── logic/decision.py ───────────────────────────────────────────────────────
 
 
-def test_light_only_sensor_data_counts_as_data():
+def test_light_only_sensor_data_counts_as_data() -> None:
     """decision-04: ``SensorSnapshot.has_data`` includes ``avg_light``.
 
     A sensor that reports only lux keeps the sensor path (base SKIP + light
@@ -143,7 +166,7 @@ def test_light_only_sensor_data_counts_as_data():
 # ── logic/sensors.py ────────────────────────────────────────────────────────
 
 
-def test_water_warning_names_are_deduplicated_per_sensor():
+def test_water_warning_names_are_deduplicated_per_sensor() -> None:
     """sensors-03: two flagged readings from one sensor name it once in the snapshot and the reason."""
     readings = (Reading(age_s=1200, soil=50.0, water_warning=True), Reading(age_s=600, soil=50.0, water_warning=True))
     decision = _decide("ww-dedup", sensors=(_sensor(*readings),))
@@ -155,7 +178,7 @@ def test_water_warning_names_are_deduplicated_per_sensor():
 
 
 @pytest.mark.parametrize(("fraction", "expected"), [(0.35, True), (0.45, False)])
-def test_low_light_stress_fires_below_40_percent_of_the_seasonal_minimum(fraction, expected):
+def test_low_light_stress_fires_below_40_percent_of_the_seasonal_minimum(fraction: float, *, expected: bool) -> None:
     """stress-02: ``low_light`` needs ``avg_light < 0.4 x effective_light_threshold(lux_min)``.
 
     Monstera's summer baseline is 150 lux; April's seasonal factor applies (month in the preferences timezone).
@@ -165,14 +188,18 @@ def test_low_light_stress_fires_below_40_percent_of_the_seasonal_minimum(fractio
     assert (decision["stress_indicators"]["low_light"] is not None) is expected
 
 
-def _hourly(field: str, values, **const) -> SensorSpec:
+def _field(name: str, value: float) -> dict[str, Any]:
+    return {name: value}
+
+
+def _hourly(field: str, values: tuple[float, ...], **const: Unpack[ReadingFields]) -> SensorSpec:
     """Hourly readings ending 0 s ago (oldest → newest); < 5 points, so no spike filtering."""
     n = len(values)
-    return _sensor(*(Reading(age_s=(n - 1 - i) * HOUR, **{field: v}, **const) for i, v in enumerate(values)))
+    return _sensor(*(Reading(age_s=(n - 1 - i) * HOUR, **_field(field, v), **const) for i, v in enumerate(values)))
 
 
 @pytest.mark.parametrize(("soils", "saturated"), [((65.0, 65.0, 75.0, 75.0), False), ((65.5, 65.5, 75.5, 75.5), True)])
-def test_over_watering_needs_average_strictly_above_saturation(soils, saturated):
+def test_over_watering_needs_average_strictly_above_saturation(soils: tuple[float, ...], *, saturated: bool) -> None:
     """stress-10: ``avg_soil > 70`` (exclusive) + rising trend → over_watering."""
     decision = _decide(f"saturated-{soils[0]}", sensors=(_hourly("soil", soils),))
     assert decision["trends"]["soil_moisture_trend"] == "rising"
@@ -185,7 +212,7 @@ def test_over_watering_needs_average_strictly_above_saturation(soils, saturated)
 @pytest.mark.parametrize(
     ("soils", "label"), [((55.0, 55.0, 50.0, 50.0), "stable"), ((55.0, 55.0, 49.5, 49.5), "declining")]
 )
-def test_soil_trend_declining_needs_delta_strictly_below_minus_threshold(soils, label):
+def test_soil_trend_declining_needs_delta_strictly_below_minus_threshold(soils: tuple[float, ...], label: str) -> None:
     """trends-03: a -5 % half-over-half delta is still "stable"; -5.5 % is "declining"."""
     decision = _decide(f"soil-trend-{soils[-1]}", sensors=(_hourly("soil", soils),))
     assert decision["trends"]["soil_moisture_trend"] == label
@@ -194,13 +221,15 @@ def test_soil_trend_declining_needs_delta_strictly_below_minus_threshold(soils, 
 @pytest.mark.parametrize(
     ("temps", "label"), [((22.0, 22.0, 20.0, 20.0), "stable"), ((22.0, 22.0, 19.5, 19.5), "falling")]
 )
-def test_temperature_trend_falling_needs_delta_strictly_below_minus_threshold(temps, label):
+def test_temperature_trend_falling_needs_delta_strictly_below_minus_threshold(
+    temps: tuple[float, ...], label: str
+) -> None:
     """trends-10: a -2 °C delta is still "stable"; -2.5 °C is "falling"."""
     decision = _decide(f"temp-trend-{temps[-1]}", sensors=(_hourly("temp", temps, soil=50.0),))
     assert decision["trends"]["temperature_trend"] == label
 
 
-def test_zero_celsius_readings_count_in_the_temperature_trend():
+def test_zero_celsius_readings_count_in_the_temperature_trend() -> None:
     """trends-04 (B-18): a 0.0 °C reading is a value, not "missing".
 
     With the first half at 0.0 °C and the second half 10 °C warmer the trend is
@@ -211,7 +240,7 @@ def test_zero_celsius_readings_count_in_the_temperature_trend():
 
 
 @pytest.mark.parametrize(("starts", "high"), [(21, False), (22, True)])
-def test_irrigation_frequency_high_needs_more_than_three_starts_per_day(starts, high):
+def test_irrigation_frequency_high_needs_more_than_three_starts_per_day(starts: int, *, high: bool) -> None:
     """trends-07: ``starts / 7 > 3`` (exclusive): 21 starts in a week is not "high", 22 is."""
     events = tuple(Event(7 * HOUR + i * 6 * HOUR, duration=2) for i in range(starts))
     decision = _decide(f"freq-{starts}", sensors=(_sensor(Reading(age_s=600, soil=50.0)),), events=events)
@@ -221,22 +250,26 @@ def test_irrigation_frequency_high_needs_more_than_three_starts_per_day(starts, 
 # ── logic/cleaning.py ───────────────────────────────────────────────────────
 
 
-def _rows(soils):
-    return [
-        SimpleNamespace(
-            timestamp=1_000 + 600 * i,
-            temperature=None,
-            soil_moisture=s,
-            env_humidity=None,
-            light=None,
-            battery_state=None,
-            water_warning=None,
-        )
-        for i, s in enumerate(soils)
-    ]
+def _rows(soils: list[float]) -> list[SensorReading]:
+    # Duck-typed rows: clean_readings reads only these attributes.
+    return cast(
+        "list[SensorReading]",
+        [
+            SimpleNamespace(
+                timestamp=1_000 + 600 * i,
+                temperature=None,
+                soil_moisture=s,
+                env_humidity=None,
+                light=None,
+                battery_state=None,
+                water_warning=None,
+            )
+            for i, s in enumerate(soils)
+        ],
+    )
 
 
-def _clean_soil(soils):
+def _clean_soil(soils: list[float]) -> list[float | None]:
     return [r.soil_moisture for r in clean_readings(_rows(soils))]
 
 
@@ -244,7 +277,7 @@ def _clean_soil(soils):
     ("spike", "kept"),
     [(53.0, True), (53.5, False)],
 )
-def test_hampel_spike_test_is_strictly_greater_than_threshold(spike, kept):
+def test_hampel_spike_test_is_strictly_greater_than_threshold(spike: float, *, kept: bool) -> None:
     """cleaning-04: a flat run has MAD 0 → scale = floor 1.0 → threshold 3.0, exclusive.
 
     A deviation of exactly 3.0 % survives; 3.5 % is dropped.
@@ -254,7 +287,7 @@ def test_hampel_spike_test_is_strictly_greater_than_threshold(spike, kept):
     assert cleaned[:3] + cleaned[4:] == [50.0] * 6
 
 
-def test_hampel_keeps_a_step_change_confirmed_by_the_following_samples():
+def test_hampel_keeps_a_step_change_confirmed_by_the_following_samples() -> None:
     """cleaning-09: the window spans ``i-3 .. i+3`` (clamped); a step at the newest end is kept whole.
 
     In ``40,40,40,60,60`` the first 60's window ``40,40,40,60,60`` (median 40, MAD 0)
@@ -277,10 +310,12 @@ def test_hampel_keeps_a_step_change_confirmed_by_the_following_samples():
 
 
 @pytest.mark.parametrize("tz_name", ["Not/AZone", "", None])
-def test_unknown_timezone_falls_back_to_utc(tz_name):
+def test_unknown_timezone_falls_back_to_utc(tz_name: str | None) -> None:
     """timing-09: a missing or unknown tz name resolves to UTC (not any other zone)."""
     ts = int(BASE_AT.timestamp())  # 10:00 UTC
-    assert local_now(ts, tz_name).utcoffset().total_seconds() == 0
+    offset = local_now(ts, tz_name).utcoffset()
+    assert offset is not None
+    assert offset.total_seconds() == 0
     assert is_within_quiet_hours(start_hour=10, end_hour=11, now_unix=ts, tz_name=tz_name) is True
 
 
@@ -288,21 +323,33 @@ def test_unknown_timezone_falls_back_to_utc(tz_name):
 
 
 @pytest.fixture
-def repo(tmp_db, frozen_clock):
+def repo(tmp_db: IrrigationRepository, frozen_clock: time_machine.Traveller) -> IrrigationRepository:
     """Provide the test repository with the clock frozen."""
     del frozen_clock  # side-effect fixture (the clock is frozen)
     return tmp_db
 
 
-def test_acknowledge_leaves_a_resolved_alert_resolved(repo):
+def test_acknowledge_leaves_a_resolved_alert_resolved(repo: IrrigationRepository) -> None:
     """repository-11: only an ``open`` alert moves to ``acknowledged``; a resolved one is untouched."""
-    alert = repo.upsert_alert("gap:alert", "irrigation", "gap_code", "Gap", "msg", severity="warning")
+    alert = repo.upsert_alert("gap:alert", ActivitySource.IRRIGATION, "gap_code", "Gap", "msg", severity="warning")
     repo.resolve_alert(alert.id)
     row = repo.acknowledge_alert(alert.id)
+    assert row is not None
     assert (row.status, row.acknowledged_at, row.resolved_at) == ("resolved", None, FROZEN_TS)
 
 
-def _probe(repo) -> int:
+def _sensor_row(repo: IrrigationRepository, sensor_id: int) -> Sensor:
+    sensor = repo.get_sensor(sensor_id)
+    assert sensor is not None
+    return sensor
+
+
+def _event(start: int, duration_minutes: int) -> IrrigationEvent:
+    # Duck-typed event: compute_sensor_response reads only id / timestamp / duration_minutes.
+    return cast("IrrigationEvent", SimpleNamespace(id=1, timestamp=start, duration_minutes=duration_minutes))
+
+
+def _probe(repo: IrrigationRepository) -> int:
     cid = repo.add_cluster("Repo Gap")
     return repo.add_sensor(
         cluster_id=cid,
@@ -313,23 +360,24 @@ def _probe(repo) -> int:
     )
 
 
-def test_get_latest_reading_is_the_newest_row(repo):
+def test_get_latest_reading_is_the_newest_row(repo: IrrigationRepository) -> None:
     """repository-17: ``get_latest_reading`` orders by timestamp DESC (the health/freshness read model)."""
     sid = _probe(repo)
     for age, soil in ((7200, 10.0), (600, 30.0), (3600, 20.0)):
         repo.add_sensor_reading(sensor_id=sid, timestamp=FROZEN_TS - age, soil_moisture=soil)
     latest = repo.get_latest_reading(sid)
+    assert latest is not None
     assert (latest.timestamp, latest.soil_moisture) == (FROZEN_TS - 600, 30.0)
 
 
-def test_upsert_alert_refreshes_severity(repo):
+def test_upsert_alert_refreshes_severity(repo: IrrigationRepository) -> None:
     """repository-21: re-raising an alert overwrites its severity (and message/title) with the new values."""
-    repo.upsert_alert("gap:sev", "health", "gap_code", "Old", "old msg", severity="warning")
-    row = repo.upsert_alert("gap:sev", "health", "gap_code", "New", "new msg", severity="critical")
+    repo.upsert_alert("gap:sev", ActivitySource.HEALTH, "gap_code", "Old", "old msg", severity="warning")
+    row = repo.upsert_alert("gap:sev", ActivitySource.HEALTH, "gap_code", "New", "new msg", severity="critical")
     assert (row.severity, row.title, row.message, row.occurrence_count) == ("critical", "New", "new msg", 2)
 
 
-def test_readings_around_puts_the_event_instant_in_both_windows(repo):
+def test_readings_around_puts_the_event_instant_in_both_windows(repo: IrrigationRepository) -> None:
     """repository-18: both windows are inclusive at the event timestamp (the row appears twice)."""
     sid = _probe(repo)
     for offset in (-1800, -1, 0, 1, 1800):
@@ -360,10 +408,12 @@ def _profile(sensor_id: int, *, efficiency: float, absorption: float, drainage: 
     ("efficiency", "absorption", "blocked"),
     [(0.2, 1.0, False), (0.5, 0.1, False), (0.2, 0.1, True)],
 )
-def test_blocked_drip_needs_low_efficiency_and_low_absorption(repo, monkeypatch, efficiency, absorption, blocked):
+def test_blocked_drip_needs_low_efficiency_and_low_absorption(
+    repo: IrrigationRepository, monkeypatch: pytest.MonkeyPatch, efficiency: float, absorption: float, *, blocked: bool
+) -> None:
     """learning-02: ``blocked_drip`` needs BOTH efficiency < 0.3 AND absorption < 0.5 %/min."""
     sid = _probe(repo)
-    cid = repo.get_sensor(sid).cluster_id
+    cid = _sensor_row(repo, sid).cluster_id
     monkeypatch.setattr(
         issues_mod,
         "get_plant_profile",
@@ -374,10 +424,12 @@ def test_blocked_drip_needs_low_efficiency_and_low_absorption(repo, monkeypatch,
 
 
 @pytest.mark.parametrize(("drainage", "rapid"), [(-5.0, False), (-5.5, True)])
-def test_rapid_drainage_needs_drainage_strictly_below_threshold(repo, monkeypatch, drainage, rapid):
+def test_rapid_drainage_needs_drainage_strictly_below_threshold(
+    repo: IrrigationRepository, monkeypatch: pytest.MonkeyPatch, drainage: float, *, rapid: bool
+) -> None:
     """learning-12: ``rapid_drainage`` fires for ``avg_drainage_per_hour < -5`` (exclusive)."""
     sid = _probe(repo)
-    cid = repo.get_sensor(sid).cluster_id
+    cid = _sensor_row(repo, sid).cluster_id
     monkeypatch.setattr(
         issues_mod,
         "get_plant_profile",
@@ -387,7 +439,7 @@ def test_rapid_drainage_needs_drainage_strictly_below_threshold(repo, monkeypatc
     assert [a.alert_type for a in alerts] == (["rapid_drainage"] if rapid else [])
 
 
-def _two_probe_cluster(repo, *, link_plant: bool = True):
+def _two_probe_cluster(repo: IrrigationRepository, *, link_plant: bool = True) -> tuple[int, int, int]:
     """Two probes (A linked to a Monstera, B unlinked) so ``detect_conflicts`` passes its 2-sensor gate."""
     cid = repo.add_cluster("Conflict Gap")
     pid = repo.add_plant(cluster_id=cid, species="Monstera deliciosa", category="tropical") if link_plant else None
@@ -418,7 +470,9 @@ def _two_probe_cluster(repo, *, link_plant: bool = True):
         ("env_humidity", 30.0, 5, "low_env_humidity"),
     ],
 )
-def test_conflict_light_and_humidity_checks_need_five_samples(repo, metric, value, samples, flagged):
+def test_conflict_light_and_humidity_checks_need_five_samples(
+    repo: IrrigationRepository, metric: str, value: float, samples: int, flagged: str | None
+) -> None:
     """learning-09 / learning-14: the low-light and low-humidity checks skip sensors with fewer than 5 samples.
 
     Low light looks at 7 d of daytime lux, low humidity at 48 h.
@@ -428,14 +482,18 @@ def test_conflict_light_and_humidity_checks_need_five_samples(repo, metric, valu
     """
     cid, a, b = _two_probe_cluster(repo)
     for i in range(samples):
-        repo.add_sensor_reading(sensor_id=a, timestamp=FROZEN_TS - 600 * (i + 1), soil_moisture=50.0, **{metric: value})
+        repo.add_sensor_reading(
+            sensor_id=a, timestamp=FROZEN_TS - 600 * (i + 1), soil_moisture=50.0, **_field(metric, value)
+        )
     repo.add_sensor_reading(sensor_id=b, timestamp=FROZEN_TS - 600, soil_moisture=50.0)
     alerts = issues_mod.detect_conflicts(repo, plant_database(), cid, {}, {})
     assert [a.alert_type for a in alerts] == ([flagged] if flagged else [])
 
 
 @pytest.mark.parametrize(("delay", "counted"), [(600, True), (599, False)])
-def test_post_irrigation_reading_counts_from_exactly_ten_minutes(repo, delay, counted):
+def test_post_irrigation_reading_counts_from_exactly_ten_minutes(
+    repo: IrrigationRepository, delay: int, *, counted: bool
+) -> None:
     """learning-16 / learning-17: the "post" boundary is inclusive and "pre" is the last reading before the start.
 
     A reading ``>= 600 s`` after the start is a valid "post" sample, and "pre" is the LAST
@@ -446,16 +504,17 @@ def test_post_irrigation_reading_counts_from_exactly_ten_minutes(repo, delay, co
     repo.add_sensor_reading(sensor_id=sid, timestamp=start - 1500, soil_moisture=20.0)
     repo.add_sensor_reading(sensor_id=sid, timestamp=start - 60, soil_moisture=30.0)
     repo.add_sensor_reading(sensor_id=sid, timestamp=start + delay, soil_moisture=50.0)
-    event = SimpleNamespace(id=1, timestamp=start, duration_minutes=4)
-    response = compute_sensor_response(repo, repo.get_sensor(sid), event)
+    event = _event(start, 4)
+    response = compute_sensor_response(repo, _sensor_row(repo, sid), event)
     if counted:
+        assert response is not None
         assert (response.pre_moisture, response.post_moisture, response.delta_per_minute) == (30.0, 50.0, 5.0)
         assert response.reading_delay_seconds == POST_READING_DELAY_S
     else:
         assert response is None
 
 
-def test_plant_profile_end_to_end(repo):
+def test_plant_profile_end_to_end(repo: IrrigationRepository) -> None:
     """learning-18…25, learning-29: ``get_plant_profile`` on a hand-built 10-day history.
 
     Two ``start`` events (one with no duration → defaults to 2 min) and one ``stop``
@@ -478,10 +537,12 @@ def test_plant_profile_end_to_end(repo):
     )
     t1, t2, t3 = FROZEN_TS - 10 * DAY, FROZEN_TS - 5 * DAY, FROZEN_TS - 3 * DAY
     repo.add_irrigation_event(
-        irrigator_id=irr, action="start", triggered_by="auto", duration_minutes=None, timestamp=t1
+        irrigator_id=irr, action=EventAction.START, triggered_by=TriggeredBy.AUTO, duration_minutes=None, timestamp=t1
     )
-    repo.add_irrigation_event(irrigator_id=irr, action="start", triggered_by="auto", duration_minutes=4, timestamp=t2)
-    repo.add_irrigation_event(irrigator_id=irr, action="stop", triggered_by="manual", timestamp=t3)
+    repo.add_irrigation_event(
+        irrigator_id=irr, action=EventAction.START, triggered_by=TriggeredBy.AUTO, duration_minutes=4, timestamp=t2
+    )
+    repo.add_irrigation_event(irrigator_id=irr, action=EventAction.STOP, triggered_by=TriggeredBy.MANUAL, timestamp=t3)
     for ts, soil in [
         (t1 - 60, 40.0),
         (t1 + 900, 41.5),
@@ -494,9 +555,9 @@ def test_plant_profile_end_to_end(repo):
         (t3 + 1200 + 15 * HOUR + 1800, 38.0),
     ]:
         repo.add_sensor_reading(sensor_id=sid, timestamp=ts, soil_moisture=soil)
-    profile = get_plant_profile(repo, repo.get_sensor(sid))
+    profile = get_plant_profile(repo, _sensor_row(repo, sid))
     # learning-29: the learner facade uses the same 30-day default window.
-    assert IrrigationLearner(repo, plant_database()).get_plant_profile(repo.get_sensor(sid)) == profile
+    assert IrrigationLearner(repo, plant_database()).get_plant_profile(_sensor_row(repo, sid)) == profile
     assert profile == PlantProfile(
         sensor_id=sid,
         plant_id=None,
@@ -511,23 +572,23 @@ def test_plant_profile_end_to_end(repo):
 
 
 @pytest.mark.parametrize(("lead", "found"), [(1800, True), (2400, False)])
-def test_pre_irrigation_window_is_thirty_minutes(repo, lead, found):
+def test_pre_irrigation_window_is_thirty_minutes(repo: IrrigationRepository, lead: int, *, found: bool) -> None:
     """learning-24: the "pre" sample must lie within 30 min before the start."""
     sid = _probe(repo)
     start = FROZEN_TS - 3 * HOUR
     repo.add_sensor_reading(sensor_id=sid, timestamp=start - lead, soil_moisture=30.0)
     repo.add_sensor_reading(sensor_id=sid, timestamp=start + 1200, soil_moisture=50.0)
-    response = compute_sensor_response(
-        repo, repo.get_sensor(sid), SimpleNamespace(id=1, timestamp=start, duration_minutes=2)
-    )
+    response = compute_sensor_response(repo, _sensor_row(repo, sid), _event(start, 2))
     assert (response is not None) is found
 
 
 @pytest.mark.parametrize(("efficiency", "warned"), [(0.5, False), (0.55, False), (0.49, True)])
-def test_learning_report_text(repo, monkeypatch, efficiency, warned):
+def test_learning_report_text(
+    repo: IrrigationRepository, monkeypatch: pytest.MonkeyPatch, efficiency: float, *, warned: bool
+) -> None:
     """learning-26 / learning-27: the report flags efficiency < 0.5 and upper-cases alert severities."""
     sid = _probe(repo)
-    cid = repo.get_sensor(sid).cluster_id
+    cid = _sensor_row(repo, sid).cluster_id
     monkeypatch.setattr(
         report_mod, "get_plant_profile", lambda _db, sensor: _profile(sensor.id, efficiency=efficiency, absorption=1.0)
     )
@@ -543,7 +604,7 @@ def test_learning_report_text(repo, monkeypatch, efficiency, warned):
     assert ("   ⚠️ Low efficiency — check drip positioning" in lines) is warned
 
 
-def test_conflict_projection_skips_a_dry_plant_with_zero_absorption(repo):
+def test_conflict_projection_skips_a_dry_plant_with_zero_absorption(repo: IrrigationRepository) -> None:
     """learning-15: a dry sensor whose learned absorption is ≤ 0 is skipped (no division by zero)."""
     cid, a, b = _two_probe_cluster(repo, link_plant=False)
     repo.add_sensor_reading(sensor_id=a, timestamp=FROZEN_TS - 600, soil_moisture=30.0)  # dry vs default 45

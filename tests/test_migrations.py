@@ -11,6 +11,7 @@ These tests guard init_db, which is plain ``alembic upgrade head``:
 import logging
 import os
 import tempfile
+from collections.abc import Iterator
 from logging import config as logging_config
 from pathlib import Path
 
@@ -23,7 +24,7 @@ from greenhouse_core.database import _alembic_config, head_revision, init_db
 
 
 @pytest.fixture
-def file_db():
+def file_db() -> Iterator[str]:
     """Tempfile-backed SQLite — alembic-friendly (in-memory loses tables across connections)."""
     fd, path = tempfile.mkstemp(suffix=".db")
     os.close(fd)
@@ -33,7 +34,7 @@ def file_db():
         Path(path).unlink()
 
 
-def test_empty_db_runs_baseline_to_head(file_db):
+def test_empty_db_runs_baseline_to_head(file_db: str) -> None:
     """A brand-new database gets every table created from baseline."""
     engine = create_engine(file_db)
     init_db(engine)
@@ -46,7 +47,7 @@ def test_empty_db_runs_baseline_to_head(file_db):
     assert {"clusters", "plants", "sensors", "irrigators", "irrigation_configs", "decision_logs", "alerts"} <= tables
 
 
-def test_idempotent_upgrade(file_db):
+def test_idempotent_upgrade(file_db: str) -> None:
     """Running init_db twice on the same DB is a no-op."""
     engine = create_engine(file_db)
     init_db(engine)
@@ -56,7 +57,7 @@ def test_idempotent_upgrade(file_db):
     assert version == head_revision()
 
 
-def test_device_type_backfill_rewrites_legacy_values(file_db):
+def test_device_type_backfill_rewrites_legacy_values(file_db: str) -> None:
     """Legacy ``type`` values in irrigators/sensors are rewritten to model_key form.
 
     The :mod:`6c9d4e2f3a12` migration backfills ``tuya_cloud`` / ``tuya_local``
@@ -108,7 +109,7 @@ def test_device_type_backfill_rewrites_legacy_values(file_db):
     assert sens == ["tuya.tr301z"] * 4
 
 
-def test_pre_alembic_db_is_not_repaired(file_db):
+def test_pre_alembic_db_is_not_repaired(file_db: str) -> None:
     """A pre-baseline DB (tables, no ``alembic_version``) is no longer patched up and stamped.
 
     OD3 removed the legacy repair branch: init_db always runs ``upgrade head``,
@@ -133,7 +134,7 @@ def test_pre_alembic_db_is_not_repaired(file_db):
     engine.dispose()
 
 
-def test_init_db_does_not_disable_application_loggers():
+def test_init_db_does_not_disable_application_loggers() -> None:
     """Regression: running the migrations no longer mutes loggers created before ``init_db``.
 
     Alembic's env.py ran ``fileConfig`` with the default ``disable_existing_loggers=True``,
@@ -150,7 +151,7 @@ def test_init_db_does_not_disable_application_loggers():
     assert app_logger.disabled is False
 
 
-def test_init_db_leaves_the_host_logging_configuration_alone(tmp_path):
+def test_init_db_leaves_the_host_logging_configuration_alone(tmp_path: Path) -> None:
     """In-process migrations do not run alembic.ini's ``fileConfig``.
 
     It used to replace the root handlers and level on every ``create_app``, so ``caplog`` (and
@@ -169,7 +170,7 @@ def test_init_db_leaves_the_host_logging_configuration_alone(tmp_path):
         engine.dispose()
 
 
-def test_the_alembic_command_line_still_configures_logging(monkeypatch, tmp_path):
+def test_the_alembic_command_line_still_configures_logging(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """A Config without the opt-out (what ``alembic`` builds from the ini) still runs ``fileConfig``."""
     calls = []
     monkeypatch.setattr(logging_config, "fileConfig", lambda *a, **k: calls.append((a, k)))

@@ -276,14 +276,14 @@ def test_server_fixtures_resolve_when_directories_are_mixed_on_one_command_line(
 # ── Guard: tests never touch the developer's CLI token or .env ───────────────
 
 
-def test_cli_token_resolution_is_isolated_from_the_developer(tmp_path_factory) -> None:
+def test_cli_token_resolution_is_isolated_from_the_developer(tmp_path_factory: pytest.TempPathFactory) -> None:
     """The autouse fixture points the CLI token lookup at a per-test temp dir and drops the env token."""
     assert "GREENHOUSE_API_TOKEN" not in os.environ
     assert _default_token_path().is_relative_to(tmp_path_factory.getbasetemp())
     assert load_stored_token() is None
 
 
-def test_settings_ignore_a_developer_dotenv(tmp_path, monkeypatch) -> None:
+def test_settings_ignore_a_developer_dotenv(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Outside tests marked ``dotenv``, a ``.env`` in the working directory is not read by ``Settings``."""
     (tmp_path / ".env").write_text("IRRIGATION_PORT=9001\n")
     monkeypatch.chdir(tmp_path)

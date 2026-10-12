@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any, Never, TypedDict, cast
 
 import pytest
 import time_machine
@@ -24,7 +25,23 @@ from greenhouse_core.constants import LEAK_ALERT_CODE, LEAK_HOLD_HOURS, MIN_COOL
 from greenhouse_core.learning import Alert, IrrigationLearner
 from greenhouse_core.logic import IrrigationDecision, IrrigationLogic
 from greenhouse_core.logic.decision import Action, Reason, TriggerCode
-from greenhouse_core.models import DecisionLog, IrrigationEvent, SensorReading
+from greenhouse_core.models import (
+    ActivitySource,
+    DecisionLog,
+    EntityType,
+    EventAction,
+    IrrigationEvent,
+    SensorReading,
+    TriggeredBy,
+)
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+    from pathlib import Path
+
+    from greenhouse_core.logic.engine import RainForecast
+    from greenhouse_core.models import Alert as AlertRow
+    from greenhouse_core.repository import IrrigationRepository
 
 DRIEST_SOIL = 33.0  # invariant 2 scenario: the driest of five sensors
 HEALTHY_SOIL = 55.0  # invariant 10 scenarios: the steady level around the spike
@@ -35,13 +52,20 @@ HOUR = 3600
 
 
 @pytest.fixture
-def env(tmp_db, frozen_clock, clean_env):
+def env(tmp_db: IrrigationRepository, frozen_clock: time_machine.Traveller, clean_env: Path) -> IrrigationRepository:
     """Provide the test database with the clock frozen and the environment cleared."""
     del frozen_clock, clean_env  # side-effect fixtures (the clock is frozen; a hermetic environment)
     return tmp_db
 
 
-def _cluster(db, *, soils=(38.0,), species="Monstera deliciosa", category="tropical", environment="indoor"):
+def _cluster(
+    db: IrrigationRepository,
+    *,
+    soils: tuple[float, ...] = (38.0,),
+    species: str = "Monstera deliciosa",
+    category: str | None = "tropical",
+    environment: str = "indoor",
+) -> tuple[int, int, list[int]]:
     """One plant, one irrigator, one sensor per soil value (one reading each, 10 min old)."""
     cid = db.add_cluster("Invariant Cluster", environment=environment)
     db.add_plant(cluster_id=cid, species=species, category=category)
@@ -52,7 +76,7 @@ def _cluster(db, *, soils=(38.0,), species="Monstera deliciosa", category="tropi
         irrigator_type="rainpoint.ik10pw",
         config={},
     )
-    sensors = []
+    sensors: list[int] = []
     for i, soil in enumerate(soils):
         sid = db.add_sensor(
             cluster_id=cid,
@@ -66,23 +90,29 @@ def _cluster(db, *, soils=(38.0,), species="Monstera deliciosa", category="tropi
     return cid, irr, sensors
 
 
-def _logic(db, **kw):
-    return IrrigationLogic(db, plant_database(), **kw)
+def _logic(db: IrrigationRepository, *, weather_client: RainForecast | None = None) -> IrrigationLogic:
+    return IrrigationLogic(db, plant_database(), weather_client=weather_client)
 
 
-def _codes(decision):
+def _decided(decision: IrrigationDecision | None) -> IrrigationDecision:
+    """The decision for a cluster that exists (``decide_for_cluster`` returns None only for an unknown one)."""
+    assert decision is not None
+    return decision
+
+
+def _codes(decision: IrrigationDecision) -> list[TriggerCode]:
     return [r.code for r in decision.reasons]
 
 
-def _raise_leak(db, cluster_id, *, age_s=HOUR):
+def _raise_leak(db: IrrigationRepository, cluster_id: int, *, age_s: int = HOUR) -> AlertRow:
     return db.upsert_alert(
         dedup_key=f"leak::{LEAK_ALERT_CODE}::{cluster_id}::sensor1",
-        source="leak",
+        source=ActivitySource.LEAK,
         code=LEAK_ALERT_CODE,
         title="Possible leak or stuck valve detected",
         message="Soil A: soil moisture still rising after irrigation",
         severity="critical",
-        entity_type="sensor",
+        entity_type=EntityType.SENSOR,
         entity_id=1,
         cluster_id=cluster_id,
         seen_at=FROZEN_TS - age_s,
@@ -92,7 +122,7 @@ def _raise_leak(db, cluster_id, *, age_s=HOUR):
 # ── #2 Driest plant drives the call ──────────────────────────────────────────
 
 
-def test_inv2_driest_plant_drives_the_call_not_the_average(env):
+def test_inv2_driest_plant_drives_the_call_not_the_average(env: IrrigationRepository) -> None:
     """Invariant #2: ``min_soil_moisture`` decides, even when the average is adequate.
 
     Monstera target 45-60. Sensors 50/51/52/53/33 → average 47.8 (adequate), wettest
@@ -102,7 +132,9 @@ def test_inv2_driest_plant_drives_the_call_not_the_average(env):
     cid, _, _ = _cluster(env, soils=(50.0, 51.0, 52.0, 53.0, 33.0))
 
     decision = _logic(env).decide_for_cluster(cid)
+    assert decision is not None
 
+    assert decision.sensor_snapshot is not None
     assert decision.sensor_snapshot.avg_soil_moisture == pytest.approx(47.8)
     assert decision.sensor_snapshot.min_soil_moisture == DRIEST_SOIL
     assert decision.action is Action.IRRIGATE
@@ -110,7 +142,7 @@ def test_inv2_driest_plant_drives_the_call_not_the_average(env):
     assert "driest=33%" in decision.reasons[0].message
 
 
-def test_inv2_stress_rule_keys_on_the_driest_plant(env):
+def test_inv2_stress_rule_keys_on_the_driest_plant(env: IrrigationRepository) -> None:
     """Invariant #2 holds for critical stress too: the **driest** plant, not the average, decides.
 
     Sensors 10/60 → average 35 (not < SOIL_MOISTURE_CRITICAL=30), but the driest
@@ -120,7 +152,9 @@ def test_inv2_stress_rule_keys_on_the_driest_plant(env):
     cid, _, _ = _cluster(env, soils=(10.0, 60.0))
 
     decision = _logic(env).decide_for_cluster(cid)
+    assert decision is not None
 
+    assert decision.sensor_snapshot is not None
     assert decision.sensor_snapshot.avg_soil_moisture == pytest.approx(35.0)
     assert decision.stress_indicators.water_stress == "critical low (10%)"
     assert decision.primary_code is TriggerCode.WATER_STRESS
@@ -140,15 +174,18 @@ def test_inv2_stress_rule_keys_on_the_driest_plant(env):
         (MIN_COOLDOWN_HOURS * HOUR + 60, False),
     ],
 )
-def test_inv3_cooldown_boundary_is_six_hours_exclusive(env, age_s, expect_cooldown):
+def test_inv3_cooldown_boundary_is_six_hours_exclusive(
+    env: IrrigationRepository, age_s: int, *, expect_cooldown: bool
+) -> None:
     """Invariant #3: a ``start`` less than ``MIN_COOLDOWN_HOURS`` (6h) ago skips with COOLDOWN.
 
     At 6h it no longer does: the boundary is exclusive.
     """
     cid, irr, _ = _cluster(env)
-    env.add_irrigation_event(irr, "start", "auto", duration_minutes=2, timestamp=FROZEN_TS - age_s)
+    env.add_irrigation_event(irr, EventAction.START, TriggeredBy.AUTO, duration_minutes=2, timestamp=FROZEN_TS - age_s)
 
     decision = _logic(env).decide_for_cluster(cid)
+    assert decision is not None
 
     if expect_cooldown:
         assert decision.action is Action.SKIP
@@ -159,35 +196,43 @@ def test_inv3_cooldown_boundary_is_six_hours_exclusive(env, age_s, expect_cooldo
         assert TriggerCode.COOLDOWN not in _codes(decision)
 
 
-def test_inv3_manual_start_counts_towards_cooldown(env):
+def test_inv3_manual_start_counts_towards_cooldown(env: IrrigationRepository) -> None:
     """Invariant #3: the cooldown is global across ``triggered_by`` — a manual start also blocks."""
     cid, irr, _ = _cluster(env)
-    env.add_irrigation_event(irr, "start", "manual", duration_minutes=2, timestamp=FROZEN_TS - 2 * HOUR)
+    env.add_irrigation_event(
+        irr, EventAction.START, TriggeredBy.MANUAL, duration_minutes=2, timestamp=FROZEN_TS - 2 * HOUR
+    )
 
     decision = _logic(env).decide_for_cluster(cid)
+    assert decision is not None
 
     assert decision.primary_code is TriggerCode.COOLDOWN
     assert "trigger: manual" in decision.reasons[0].message
 
 
 @pytest.mark.parametrize("action", ["schedule_updated", "stop", "dry_run"])
-def test_inv3_only_start_events_count_towards_cooldown(env, action):
+def test_inv3_only_start_events_count_towards_cooldown(env: IrrigationRepository, action: str) -> None:
     """Invariant #3 (+ #11 / issue #103): non-``start`` events never block irrigation."""
     cid, irr, _ = _cluster(env)
-    env.add_irrigation_event(irr, action, "auto", duration_minutes=2, timestamp=FROZEN_TS - HOUR)
+    # Actions outside EventAction on purpose (schedule_updated, dry_run): only "start" may count.
+    env.add_irrigation_event(
+        irr, cast("EventAction", action), TriggeredBy.AUTO, duration_minutes=2, timestamp=FROZEN_TS - HOUR
+    )
 
     decision = _logic(env).decide_for_cluster(cid)
+    assert decision is not None
 
     assert decision.action is Action.IRRIGATE
     assert TriggerCode.COOLDOWN not in _codes(decision)
 
 
-def test_inv3_cooldown_is_not_bypassed_by_manual_override(env):
+def test_inv3_cooldown_is_not_bypassed_by_manual_override(env: IrrigationRepository) -> None:
     """Invariant #3: ``bypass_quiet_hours`` (force) does not bypass the cooldown gate."""
     cid, irr, _ = _cluster(env)
-    env.add_irrigation_event(irr, "start", "auto", duration_minutes=2, timestamp=FROZEN_TS - HOUR)
+    env.add_irrigation_event(irr, EventAction.START, TriggeredBy.AUTO, duration_minutes=2, timestamp=FROZEN_TS - HOUR)
 
-    decision = _logic(env).decide_for_cluster(cid, bypass_quiet_hours=True, triggered_by="manual")
+    decision = _logic(env).decide_for_cluster(cid, bypass_quiet_hours=True, triggered_by=TriggeredBy.MANUAL)
+    assert decision is not None
 
     assert decision.primary_code is TriggerCode.COOLDOWN
 
@@ -195,14 +240,16 @@ def test_inv3_cooldown_is_not_bypassed_by_manual_override(env):
 # ── #4 Learning is advisory ──────────────────────────────────────────────────
 
 
-def _decision_core(decision: IrrigationDecision) -> dict:
+def _decision_core(decision: IrrigationDecision) -> dict[str, Any]:
     dump = decision.model_dump(mode="json")
     dump["stress_indicators"].pop("learning_alerts")
     return dump
 
 
 @pytest.mark.parametrize("soils", [(38.0,), (55.0,), (20.0,), (10.0, 60.0), (75.0,)])
-def test_inv4_learning_failure_or_alerts_never_change_the_decision(env, monkeypatch, soils):
+def test_inv4_learning_failure_or_alerts_never_change_the_decision(
+    env: IrrigationRepository, monkeypatch: pytest.MonkeyPatch, soils: tuple[float, ...]
+) -> None:
     """Invariant #4: a learner that raises, returns ``[]`` or returns alerts yields the same decision.
 
     Only ``stress_indicators.learning_alerts`` differs; action, dosage, confidence and
@@ -210,17 +257,17 @@ def test_inv4_learning_failure_or_alerts_never_change_the_decision(env, monkeypa
     """
     cid, _, _ = _cluster(env, soils=soils)
     alert = Alert(severity="critical", alert_type="blocked_drip", message="drip blocked")
-    results = {}
+    results: dict[str, IrrigationDecision] = {}
     for mode in ("empty", "raises", "alerts"):
 
-        def fake_detect(_self, _cluster_id, _mode=mode):
+        def fake_detect(_self: IrrigationLearner, _cluster_id: int, _mode: str = mode) -> list[Alert]:
             if _mode == "raises":
                 msg = "learner exploded"
                 raise RuntimeError(msg)
             return [alert] if _mode == "alerts" else []
 
         monkeypatch.setattr(IrrigationLearner, "detect_issues", fake_detect)
-        results[mode] = _logic(env).decide_for_cluster(cid)
+        results[mode] = _decided(_logic(env).decide_for_cluster(cid))
 
     assert _decision_core(results["raises"]) == _decision_core(results["empty"])
     assert _decision_core(results["alerts"]) == _decision_core(results["empty"])
@@ -231,11 +278,18 @@ def test_inv4_learning_failure_or_alerts_never_change_the_decision(env, monkeypa
     assert TriggerCode.LEARNING_ALERT not in _codes(results["alerts"])
 
 
-def test_inv4_learner_is_consulted_once_per_sensor_path_evaluation(env, monkeypatch):
+def test_inv4_learner_is_consulted_once_per_sensor_path_evaluation(
+    env: IrrigationRepository, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Invariant #4: the engine calls the learner exactly once per (non-terminal) evaluation."""
     cid, _, _ = _cluster(env)
-    calls = []
-    monkeypatch.setattr(IrrigationLearner, "detect_issues", lambda _self, cluster_id: calls.append(cluster_id) or [])
+    calls: list[int] = []
+
+    def record(_self: IrrigationLearner, cluster_id: int) -> list[Alert]:
+        calls.append(cluster_id)
+        return []
+
+    monkeypatch.setattr(IrrigationLearner, "detect_issues", record)
 
     _logic(env).decide_for_cluster(cid)
 
@@ -246,7 +300,7 @@ def test_inv4_learner_is_consulted_once_per_sensor_path_evaluation(env, monkeypa
 
 
 @pytest.mark.usefixtures("env")
-def test_inv5_engine_constants_mirror_constants_module():
+def test_inv5_engine_constants_mirror_constants_module() -> None:
     """Invariant #5: every UPPER_CASE name the engine imports is the constants.py value."""
     imported = {n for n in vars(engine_mod) if n.isupper() and hasattr(constants_mod, n)}
 
@@ -255,7 +309,9 @@ def test_inv5_engine_constants_mirror_constants_module():
         assert getattr(engine_mod, name) == getattr(constants_mod, name), name
 
 
-def test_inv5_thresholds_are_bound_at_import_current_behavior(env, monkeypatch):
+def test_inv5_thresholds_are_bound_at_import_current_behavior(
+    env: IrrigationRepository, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Invariant #5: the engine reads thresholds via its *own* module globals.
 
     Pins current behavior: ``from constants import MIN_COOLDOWN_HOURS`` binds the
@@ -265,18 +321,21 @@ def test_inv5_thresholds_are_bound_at_import_current_behavior(env, monkeypatch):
     access would flip the first assertion — that is a behavior change for tests.
     """
     cid, irr, _ = _cluster(env)
-    env.add_irrigation_event(irr, "start", "auto", duration_minutes=2, timestamp=FROZEN_TS - 3 * HOUR)
+    env.add_irrigation_event(
+        irr, EventAction.START, TriggeredBy.AUTO, duration_minutes=2, timestamp=FROZEN_TS - 3 * HOUR
+    )
 
     monkeypatch.setattr(constants_mod, "MIN_COOLDOWN_HOURS", 2)
-    assert _logic(env).decide_for_cluster(cid).primary_code is TriggerCode.COOLDOWN
+    assert _decided(_logic(env).decide_for_cluster(cid)).primary_code is TriggerCode.COOLDOWN
 
     monkeypatch.setattr(engine_mod, "MIN_COOLDOWN_HOURS", 2)
     decision = _logic(env).decide_for_cluster(cid)
+    assert decision is not None
     assert decision.action is Action.IRRIGATE
     assert TriggerCode.COOLDOWN not in _codes(decision)
 
 
-def test_inv5_inline_literals_and_explicit_no_action_reason(env):
+def test_inv5_inline_literals_and_explicit_no_action_reason(env: IrrigationRepository) -> None:
     """Invariant #5 / #6: forecast horizon, rain threshold and base confidence; no empty reason trail.
 
     Forecast horizon ``hours=6``, rain threshold ``> 2.0`` mm, base confidence ``0.5``.
@@ -287,11 +346,15 @@ def test_inv5_inline_literals_and_explicit_no_action_reason(env):
     weather = FakeForecastWeather({"precipitation_mm": 2.0})
 
     decision = _logic(env, weather_client=weather).decide_for_cluster(cid)
+    assert decision is not None
 
     assert weather.forecast_calls == [6]
     assert decision.primary_code is TriggerCode.SENSOR_DRY  # 2.0 mm is not "> 2.0"
     weather_rain = FakeForecastWeather({"precipitation_mm": 2.0001})
-    assert _logic(env, weather_client=weather_rain).decide_for_cluster(cid).primary_code is TriggerCode.WEATHER_SKIP
+    assert (
+        _decided(_logic(env, weather_client=weather_rain).decide_for_cluster(cid)).primary_code
+        is TriggerCode.WEATHER_SKIP
+    )
 
     temp_only_cid = env.add_cluster("Temp only")
     env.add_plant(cluster_id=temp_only_cid, species="Monstera deliciosa", category="tropical")
@@ -300,6 +363,7 @@ def test_inv5_inline_literals_and_explicit_no_action_reason(env):
     )
     env.add_sensor_reading(sensor_id=sid, timestamp=FROZEN_TS - 600, temperature=22.0)
     no_rule = _logic(env).decide_for_cluster(temp_only_cid, persist=True)
+    assert no_rule is not None
     assert (no_rule.action, no_rule.confidence) == (Action.SKIP, 0.5)
     assert no_rule.primary_code is TriggerCode.NO_ACTION_NEEDED
     assert no_rule.reason_text == "readings within range — no action needed"
@@ -309,72 +373,81 @@ def test_inv5_inline_literals_and_explicit_no_action_reason(env):
 # ── #6 One DecisionLog per evaluation ────────────────────────────────────────
 
 
-def _log_rows(db):
+class _DecideKwargs(TypedDict, total=False):
+    """Extra ``decide_for_cluster`` arguments a scenario needs."""
+
+    current_temp: float
+
+
+_Scenario = tuple[int, IrrigationLogic, _DecideKwargs]
+
+
+def _log_rows(db: IrrigationRepository) -> list[DecisionLog]:
     return list(db.session.scalars(select(DecisionLog).order_by(DecisionLog.id)))
 
 
-def _scenario_no_plants(db):
+def _scenario_no_plants(db: IrrigationRepository) -> _Scenario:
     return db.add_cluster("Empty"), _logic(db), {}
 
 
-def _scenario_leak_hold(db):
+def _scenario_leak_hold(db: IrrigationRepository) -> _Scenario:
     cid, _, _ = _cluster(db)
     _raise_leak(db, cid)
     return cid, _logic(db), {}
 
 
-def _scenario_cooldown(db):
+def _scenario_cooldown(db: IrrigationRepository) -> _Scenario:
     cid, irr, _ = _cluster(db)
-    db.add_irrigation_event(irr, "start", "auto", duration_minutes=2, timestamp=FROZEN_TS - HOUR)
+    db.add_irrigation_event(irr, EventAction.START, TriggeredBy.AUTO, duration_minutes=2, timestamp=FROZEN_TS - HOUR)
     return cid, _logic(db), {}
 
 
-def _scenario_quiet_hours(db):
+def _scenario_quiet_hours(db: IrrigationRepository) -> _Scenario:
     cid, _, _ = _cluster(db)
     db.update_global_irrigation_config(quiet_start_hour=9, quiet_end_hour=11)
     return cid, _logic(db), {}
 
 
-def _scenario_weather_skip(db):
+def _scenario_weather_skip(db: IrrigationRepository) -> _Scenario:
     cid, _, _ = _cluster(db, environment="outdoor")
     return cid, _logic(db, weather_client=FakeForecastWeather({"precipitation_mm": 9.0})), {}
 
 
-def _scenario_temp_fallback(db):
+def _scenario_temp_fallback(db: IrrigationRepository) -> _Scenario:
     cid = db.add_cluster("No sensors")
     db.add_plant(cluster_id=cid, species="Monstera deliciosa", category="tropical")
     return cid, _logic(db), {"current_temp": 30.0}
 
 
-def _scenario_water_warning(db):
+def _scenario_water_warning(db: IrrigationRepository) -> _Scenario:
     cid, _, _ = _cluster(db, soils=())
     sid = db.add_sensor(cluster_id=cid, tuya_device_id="fake_tuya_sensor_invww", name="WW", sensor_type="x", config={})
     db.add_sensor_reading(sensor_id=sid, timestamp=FROZEN_TS - 600, soil_moisture=50.0, water_warning=True)
     return cid, _logic(db), {}
 
 
-def _scenario_water_stress(db):
+def _scenario_water_stress(db: IrrigationRepository) -> _Scenario:
     cid, _, _ = _cluster(db, soils=(20.0,))
     return cid, _logic(db), {}
 
 
-def _scenario_outside_window(db):
+def _scenario_outside_window(db: IrrigationRepository) -> _Scenario:
     cid, _, _ = _cluster(db)
     db.add_irrigation_window(cid, start_hour=6, end_hour=8)
     return cid, _logic(db), {}
 
 
-def _scenario_sensor_dry(db):
+def _scenario_sensor_dry(db: IrrigationRepository) -> _Scenario:
     cid, _, _ = _cluster(db)
     return cid, _logic(db), {}
 
 
-def _scenario_sensor_adequate(db):
+def _scenario_sensor_adequate(db: IrrigationRepository) -> _Scenario:
     cid, _, _ = _cluster(db, soils=(55.0,))
     return cid, _logic(db), {}
 
 
-_SCENARIOS = {
+_SCENARIOS: dict[str, Callable[[IrrigationRepository], _Scenario]] = {
     "no_plants": _scenario_no_plants,
     "leak_hold": _scenario_leak_hold,
     "cooldown": _scenario_cooldown,
@@ -389,7 +462,7 @@ _SCENARIOS = {
 }
 
 
-def _scenario(db, name):
+def _scenario(db: IrrigationRepository, name: str) -> _Scenario:
     """Build one cluster per engine exit branch; returns ``(cluster_id, logic, kwargs)``."""
     if name not in _SCENARIOS:
         raise ValueError(name)
@@ -412,7 +485,9 @@ EXIT_BRANCHES = [
 
 
 @pytest.mark.parametrize(("name", "code", "action"), EXIT_BRANCHES, ids=[b[0] for b in EXIT_BRANCHES])
-def test_inv6_every_exit_branch_persists_exactly_one_decision_log(env, name, code, action):
+def test_inv6_every_exit_branch_persists_exactly_one_decision_log(
+    env: IrrigationRepository, name: str, code: TriggerCode, action: Action
+) -> None:
     """Invariant #6: every evaluation (acted-on or not) writes one ``decision_logs`` row with persist=True.
 
     The row mirrors the decision (primary_code, reason_text, action, dosage), is
@@ -421,7 +496,9 @@ def test_inv6_every_exit_branch_persists_exactly_one_decision_log(env, name, cod
     """
     cid, logic, kwargs = _scenario(env, name)
 
-    decision = logic.decide_for_cluster(cid, persist=True, triggered_by="scheduler", **kwargs)
+    # A trigger outside TriggeredBy on purpose: the log row stores whatever the caller passed.
+    decision = logic.decide_for_cluster(cid, persist=True, triggered_by=cast("TriggeredBy", "scheduler"), **kwargs)
+    assert decision is not None
 
     rows = _log_rows(env)
     assert len(rows) == 1
@@ -443,40 +520,46 @@ def test_inv6_every_exit_branch_persists_exactly_one_decision_log(env, name, cod
 
 
 @pytest.mark.parametrize(("name", "code", "action"), EXIT_BRANCHES, ids=[b[0] for b in EXIT_BRANCHES])
-def test_inv6_persist_false_writes_nothing(env, name, code, action):
+def test_inv6_persist_false_writes_nothing(
+    env: IrrigationRepository, name: str, code: TriggerCode, action: Action
+) -> None:
     """Invariant #6 scope: persistence is opt-in (``persist=True``); the default writes no row."""
     del action  # parametrize column kept for the test id; unused here
     cid, logic, kwargs = _scenario(env, name)
 
     decision = logic.decide_for_cluster(cid, **kwargs)
+    assert decision is not None
 
     assert decision.primary_code is code
     assert decision.decision_log_id is None
     assert _log_rows(env) == []
 
 
-def test_inv6_unknown_cluster_returns_none_and_writes_nothing(env):
+def test_inv6_unknown_cluster_returns_none_and_writes_nothing(env: IrrigationRepository) -> None:
     """Invariant #6 scope: an unknown cluster is not an evaluation — ``None``, no row."""
     assert _logic(env).decide_for_cluster(424242, persist=True) is None
     assert _log_rows(env) == []
 
 
-def test_inv6_persistence_failure_never_blocks_the_decision(env, monkeypatch):
+def test_inv6_persistence_failure_never_blocks_the_decision(
+    env: IrrigationRepository, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Invariant #6: ``_persist`` is best-effort — a failing write still returns the decision."""
     cid, _, _ = _cluster(env)
 
-    def boom(*_args, **_kwargs):
+    def boom(*_args: object, **_kwargs: object) -> Never:
         msg = "db down"
         raise RuntimeError(msg)
 
     monkeypatch.setattr(env, "add_decision_log", boom)
     decision = _logic(env).decide_for_cluster(cid, persist=True)
+    assert decision is not None
 
     assert decision.action is Action.IRRIGATE
     assert decision.decision_log_id is None
 
 
-def test_inv6_reasons_stay_a_list_of_reason_through_the_whole_pipeline(env):
+def test_inv6_reasons_stay_a_list_of_reason_through_the_whole_pipeline(env: IrrigationRepository) -> None:
     """Invariant #6: ``reasons`` is ``list[Reason]`` on a decision that ran every mutating rule.
 
     (Assignment coercion itself is pinned by
@@ -486,6 +569,7 @@ def test_inv6_reasons_stay_a_list_of_reason_through_the_whole_pipeline(env):
     env.add_vacation_window(starts_at=FROZEN_TS - HOUR, ends_at=FROZEN_TS + 3 * 86400)
 
     decision = _logic(env).decide_for_cluster(cid)
+    assert decision is not None
 
     assert IrrigationDecision.model_config["validate_assignment"] is True
     assert type(decision.reasons) is list
@@ -516,8 +600,15 @@ def test_inv6_reasons_stay_a_list_of_reason_through_the_whole_pipeline(env):
     ],
 )
 def test_inv9_seasonal_multiplier_precedence_species_category_constants(  # noqa: PLR0913 — one argument per parametrize column
-    tmp_db, clean_env, *, species, category, environment, at_month, expected
-):
+    tmp_db: IrrigationRepository,
+    clean_env: Path,
+    *,
+    species: str,
+    category: str | None,
+    environment: str,
+    at_month: int,
+    expected: str,
+) -> None:
     """Invariant #9: species > ``_category_defaults`` > constants; outdoor uses ``*_outdoor`` (no indoor fallback)."""
     del clean_env  # side-effect fixture (a hermetic environment)
     at = datetime(2026, at_month, 15, 12, 0, 0, tzinfo=UTC)
@@ -531,6 +622,7 @@ def test_inv9_seasonal_multiplier_precedence_species_category_constants(  # noqa
         tmp_db.add_sensor_reading(sensor_id=sid, timestamp=ts - 600, soil_moisture=50.0)
 
         decision = _logic(tmp_db).decide_for_cluster(cid)
+        assert decision is not None
 
     seasonal = [r for r in decision.reasons if r.code in (TriggerCode.SEASONAL_HOLD, TriggerCode.SEASONAL_BOOST)]
     assert len(seasonal) == 1
@@ -538,7 +630,7 @@ def test_inv9_seasonal_multiplier_precedence_species_category_constants(  # noqa
     assert seasonal[0].message.endswith(f"for {environment} cluster")
 
 
-def test_inv9_preferred_water_hours_never_gate_without_window_rows(env):
+def test_inv9_preferred_water_hours_never_gate_without_window_rows(env: IrrigationRepository) -> None:
     """Invariant #9: no ``IrrigationWindow`` rows → all hours allowed (issue #83).
 
     Loquat prefers 05-09 local; at 10:00 UTC with no windows it still irrigates,
@@ -546,16 +638,16 @@ def test_inv9_preferred_water_hours_never_gate_without_window_rows(env):
     """
     cid, _, _ = _cluster(env, species="Eriobotrya japonica", category="fruit_tree")
 
-    assert _logic(env).decide_for_cluster(cid).action is Action.IRRIGATE
+    assert _decided(_logic(env).decide_for_cluster(cid)).action is Action.IRRIGATE
 
     env.add_irrigation_window(cid, start_hour=5, end_hour=9)
-    assert _logic(env).decide_for_cluster(cid).primary_code is TriggerCode.OUTSIDE_WINDOW
+    assert _decided(_logic(env).decide_for_cluster(cid)).primary_code is TriggerCode.OUTSIDE_WINDOW
 
 
 # ── #10 Cleaned view for judgements, raw rows for the archive ────────────────
 
 
-def test_inv10_spike_is_ignored_by_the_decision_and_raw_rows_are_untouched(env):
+def test_inv10_spike_is_ignored_by_the_decision_and_raw_rows_are_untouched(env: IrrigationRepository) -> None:
     """Invariant #10: a Hampel-rejected spike does not drive the call; ``sensor_readings`` is never mutated."""
     cid = env.add_cluster("Spike")
     env.add_plant(cluster_id=cid, species="Monstera deliciosa", category="tropical")
@@ -566,7 +658,9 @@ def test_inv10_spike_is_ignored_by_the_decision_and_raw_rows_are_untouched(env):
     before = [(r.id, r.timestamp, r.soil_moisture) for r in env.session.scalars(select(SensorReading))]
 
     decision = _logic(env).decide_for_cluster(cid, persist=True)
+    assert decision is not None
 
+    assert decision.sensor_snapshot is not None
     assert decision.sensor_snapshot.min_soil_moisture == HEALTHY_SOIL
     assert decision.primary_code is TriggerCode.SENSOR_ADEQUATE
     after = [(r.id, r.timestamp, r.soil_moisture) for r in env.session.scalars(select(SensorReading))]
@@ -574,7 +668,7 @@ def test_inv10_spike_is_ignored_by_the_decision_and_raw_rows_are_untouched(env):
     assert SPIKE_SOIL in [soil for _, _, soil in after]
 
 
-def test_inv10_short_series_spike_is_filtered(env):
+def test_inv10_short_series_spike_is_filtered(env: IrrigationRepository) -> None:
     """Invariant #10 edge: a series shorter than the Hampel window is judged against its own median.
 
     Four readings 55/55/10/55 (≥ ``CLEANING_HAMPEL_MIN_READINGS`` = 3): the lone 10 is
@@ -588,7 +682,9 @@ def test_inv10_short_series_spike_is_filtered(env):
         env.add_sensor_reading(sensor_id=sid, timestamp=FROZEN_TS - (3 - i) * HOUR, soil_moisture=soil)
 
     decision = _logic(env).decide_for_cluster(cid)
+    assert decision is not None
 
+    assert decision.sensor_snapshot is not None
     assert decision.sensor_snapshot.min_soil_moisture == HEALTHY_SOIL
     assert decision.stress_indicators.water_stress is None
     assert decision.primary_code is TriggerCode.SENSOR_ADEQUATE
@@ -603,7 +699,7 @@ def test_inv10_short_series_spike_is_filtered(env):
     [(LEAK_HOLD_HOURS * HOUR - 1, True), (LEAK_HOLD_HOURS * HOUR, False)],
     ids=["LEAK_HOLD_HOURS-1s", "exactly-LEAK_HOLD_HOURS"],
 )
-def test_inv11_hold_window_edge_is_exclusive(env, age_s, held):
+def test_inv11_hold_window_edge_is_exclusive(env: IrrigationRepository, age_s: int, *, held: bool) -> None:
     """Invariant #11: the hold lasts ``LEAK_HOLD_HOURS`` from ``last_seen_at``, exclusive at the edge.
 
     (±60 s / ±600 s, acknowledge-still-holds, resolve-releases, force-does-not-bypass
@@ -613,6 +709,7 @@ def test_inv11_hold_window_edge_is_exclusive(env, age_s, held):
     _raise_leak(env, cid, age_s=age_s)
 
     decision = _logic(env).decide_for_cluster(cid)
+    assert decision is not None
 
     if held:
         assert decision.primary_code is TriggerCode.LEAK_HOLD
@@ -622,7 +719,7 @@ def test_inv11_hold_window_edge_is_exclusive(env, age_s, held):
         assert decision.action is Action.IRRIGATE
 
 
-def test_inv11_hold_is_never_written_as_an_irrigation_event(env):
+def test_inv11_hold_is_never_written_as_an_irrigation_event(env: IrrigationRepository) -> None:
     """Invariant #11: the hold lives in the alert inbox only — no ``IrrigationEvent`` is written.
 
     Also: acknowledging keeps the hold, ``bypass_quiet_hours`` does not bypass it,
@@ -632,13 +729,14 @@ def test_inv11_hold_is_never_written_as_an_irrigation_event(env):
     alert = _raise_leak(env, cid)
     logic = _logic(env)
 
-    assert logic.decide_for_cluster(cid, persist=True).primary_code is TriggerCode.LEAK_HOLD
+    assert _decided(logic.decide_for_cluster(cid, persist=True)).primary_code is TriggerCode.LEAK_HOLD
     env.acknowledge_alert(alert.id)
-    assert logic.decide_for_cluster(cid, persist=True).primary_code is TriggerCode.LEAK_HOLD
-    forced = logic.decide_for_cluster(cid, persist=True, bypass_quiet_hours=True, triggered_by="manual")
+    assert _decided(logic.decide_for_cluster(cid, persist=True)).primary_code is TriggerCode.LEAK_HOLD
+    forced = logic.decide_for_cluster(cid, persist=True, bypass_quiet_hours=True, triggered_by=TriggeredBy.MANUAL)
+    assert forced is not None
     assert forced.primary_code is TriggerCode.LEAK_HOLD
     env.resolve_alert(alert.id)
-    assert logic.decide_for_cluster(cid, persist=True).action is Action.IRRIGATE
+    assert _decided(logic.decide_for_cluster(cid, persist=True)).action is Action.IRRIGATE
 
     assert env.session.scalar(select(func.count()).select_from(IrrigationEvent)) == 0
     assert [r.primary_code for r in _log_rows(env)] == ["leak_hold", "leak_hold", "leak_hold", "sensor_dry"]

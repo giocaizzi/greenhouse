@@ -21,9 +21,14 @@ import json
 import os
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING
 
 from greenhouse_server.deps import get_weather_client
+
+if TYPE_CHECKING:
+    from fastapi import FastAPI
+
+    from greenhouse_server.services.weather import CurrentWeather, WeatherForecast
 
 GOLDEN_DIR = Path(__file__).parent / "golden"
 UPDATE_ENV_VAR = "GOLDEN_UPDATE"
@@ -40,14 +45,17 @@ _MAX_DIFF_LINES = 120
 class OfflineWeather:
     """Stand-in for ``WeatherClient`` that behaves like Open-Meteo being unreachable."""
 
-    def get_current(self) -> None:
+    def get_current(self) -> CurrentWeather | None:
         """Return no current weather, like an unreachable Open-Meteo."""
+        return None
 
-    def get_forecast(self, hours: int = 6) -> None:
+    def get_forecast(self, hours: int = 6) -> WeatherForecast | None:
         """Return no forecast, like an unreachable Open-Meteo."""
+        del hours  # signature mirrors WeatherClient.get_forecast
+        return None
 
 
-def install_offline_weather(app: Any) -> OfflineWeather:
+def install_offline_weather(app: FastAPI) -> OfflineWeather:
     """Replace the app's weather client (state + dependency) with :class:`OfflineWeather`."""
     stub = OfflineWeather()
     app.state.weather_client = stub
@@ -55,7 +63,7 @@ def install_offline_weather(app: Any) -> OfflineWeather:
     return stub
 
 
-def to_canonical_json(value: Any) -> str:
+def to_canonical_json(value: object) -> str:
     """Serialize ``value`` deterministically (sorted keys, stable indentation, trailing newline)."""
     return json.dumps(value, sort_keys=True, indent=1, ensure_ascii=False, default=str) + "\n"
 
@@ -91,6 +99,6 @@ def assert_golden(name: str, actual: str) -> None:
     raise AssertionError(msg)
 
 
-def assert_golden_json(name: str, value: Any) -> None:
+def assert_golden_json(name: str, value: object) -> None:
     """Assert the canonical JSON form of ``value`` equals ``tests/golden/<name>``."""
     assert_golden(name, to_canonical_json(value))

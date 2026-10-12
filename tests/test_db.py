@@ -1,6 +1,7 @@
 """Test suite for irrigation system - Database operations."""
 
 import time
+from typing import TYPE_CHECKING
 
 import pytest
 from sqlalchemy.exc import IntegrityError
@@ -14,7 +15,11 @@ from fake_data import (
     FAKE_SENSOR_ID,
     FAKE_SENSOR_NAME,
 )
-from greenhouse_core.repository import IrrigatorExistsError
+from greenhouse_core.models import EventAction, TriggeredBy
+from greenhouse_core.repository import IrrigationRepository, IrrigatorExistsError
+
+if TYPE_CHECKING:
+    from engine_grid import ReadingRow
 
 # Values written by the tests below and read back.
 CLUSTERS_ADDED = 3
@@ -31,7 +36,7 @@ LAST_READING_TS = 2000
 class TestDatabase:
     """Test database operations and constraints."""
 
-    def test_cluster_creation(self, tmp_db):
+    def test_cluster_creation(self, tmp_db: IrrigationRepository) -> None:
         """Cluster can be created and retrieved."""
         cluster_id = tmp_db.add_cluster(FAKE_CLUSTER_NAME, FAKE_CLUSTER_LOCATION)
         cluster = tmp_db.get_cluster(cluster_id)
@@ -41,7 +46,7 @@ class TestDatabase:
         assert cluster.location == FAKE_CLUSTER_LOCATION
         assert cluster.id == cluster_id
 
-    def test_cluster_list(self, tmp_db):
+    def test_cluster_list(self, tmp_db: IrrigationRepository) -> None:
         """Multiple clusters can be listed."""
         tmp_db.add_cluster("Cluster A")
         tmp_db.add_cluster("Cluster B")
@@ -54,7 +59,7 @@ class TestDatabase:
         assert "Cluster B" in names
         assert "Cluster C" in names
 
-    def test_plant_creation(self, tmp_db):
+    def test_plant_creation(self, tmp_db: IrrigationRepository) -> None:
         """Plants can be added to a cluster."""
         cluster_id = tmp_db.add_cluster(FAKE_CLUSTER_NAME)
         tmp_db.add_plant(
@@ -71,7 +76,7 @@ class TestDatabase:
         assert plants[0].species == FAKE_PLANT_SPECIES
         assert plants[0].water_needs == "medium"
 
-    def test_irrigator_creation(self, tmp_db):
+    def test_irrigator_creation(self, tmp_db: IrrigationRepository) -> None:
         """Irrigators can be added to a cluster."""
         cluster_id = tmp_db.add_cluster(FAKE_CLUSTER_NAME)
         irrigator_id = tmp_db.add_irrigator(
@@ -87,7 +92,7 @@ class TestDatabase:
         assert irrigator.name == FAKE_IRRIGATOR_NAME
         assert irrigator.tuya_device_id == FAKE_DEVICE_ID
 
-    def test_unique_device_constraint(self, tmp_db):
+    def test_unique_device_constraint(self, tmp_db: IrrigationRepository) -> None:
         """Same Tuya device ID cannot be added twice (across clusters)."""
         cluster_a = tmp_db.add_cluster(FAKE_CLUSTER_NAME)
         cluster_b = tmp_db.add_cluster("Second cluster")
@@ -110,7 +115,7 @@ class TestDatabase:
                 config={},
             )
 
-    def test_one_irrigator_per_cluster(self, tmp_db):
+    def test_one_irrigator_per_cluster(self, tmp_db: IrrigationRepository) -> None:
         """A cluster holds at most one irrigator — a second add raises IrrigatorExistsError."""
         cluster_id = tmp_db.add_cluster(FAKE_CLUSTER_NAME)
         tmp_db.add_irrigator(
@@ -130,7 +135,7 @@ class TestDatabase:
                 config={},
             )
 
-    def test_sensor_readings(self, tmp_db):
+    def test_sensor_readings(self, tmp_db: IrrigationRepository) -> None:
         """Sensor readings can be logged and retrieved."""
         cluster_id = tmp_db.add_cluster(FAKE_CLUSTER_NAME)
         sensor_id = tmp_db.add_sensor(
@@ -151,7 +156,7 @@ class TestDatabase:
         assert FIRST_TEMP_C in temps
         assert SECOND_TEMP_C in temps
 
-    def test_irrigation_events(self, tmp_db):
+    def test_irrigation_events(self, tmp_db: IrrigationRepository) -> None:
         """Irrigation events can be logged and retrieved."""
         cluster_id = tmp_db.add_cluster(FAKE_CLUSTER_NAME)
         irrigator_id = tmp_db.add_irrigator(
@@ -163,9 +168,9 @@ class TestDatabase:
         )
 
         tmp_db.add_irrigation_event(
-            irrigator_id=irrigator_id, action="start", triggered_by="manual", duration_minutes=5
+            irrigator_id=irrigator_id, action=EventAction.START, triggered_by=TriggeredBy.MANUAL, duration_minutes=5
         )
-        tmp_db.add_irrigation_event(irrigator_id=irrigator_id, action="stop", triggered_by="manual")
+        tmp_db.add_irrigation_event(irrigator_id=irrigator_id, action=EventAction.STOP, triggered_by=TriggeredBy.MANUAL)
 
         events = tmp_db.get_recent_events(irrigator_id, hours=24)
         assert len(events) == EVENTS_LOGGED
@@ -173,7 +178,7 @@ class TestDatabase:
         assert "start" in actions
         assert "stop" in actions
 
-    def test_irrigation_config(self, tmp_db):
+    def test_irrigation_config(self, tmp_db: IrrigationRepository) -> None:
         """Irrigation config can be set and retrieved."""
         cluster_id = tmp_db.add_cluster(FAKE_CLUSTER_NAME)
         tmp_db.set_irrigation_config(
@@ -191,7 +196,7 @@ class TestDatabase:
         assert config.interval_hours == CONFIG_INTERVAL_H
         assert config.auto_run is True
 
-    def test_config_update(self, tmp_db):
+    def test_config_update(self, tmp_db: IrrigationRepository) -> None:
         """Irrigation config can be updated in-place."""
         cluster_id = tmp_db.add_cluster(FAKE_CLUSTER_NAME)
         tmp_db.set_irrigation_config(
@@ -202,10 +207,11 @@ class TestDatabase:
         )
 
         config = tmp_db.get_irrigation_config(cluster_id)
+        assert config is not None
         assert config.mode == "smart"
         assert config.duration_minutes == UPDATED_DURATION_MIN
 
-    def test_get_readings_around(self, tmp_db):
+    def test_get_readings_around(self, tmp_db: IrrigationRepository) -> None:
         """Readings before and after a timestamp are correctly split."""
         cluster_id = tmp_db.add_cluster(FAKE_CLUSTER_NAME)
         sensor_id = tmp_db.add_sensor(
@@ -235,7 +241,7 @@ class TestDatabase:
         assert before[-1].soil_moisture == pytest.approx(33.0)
         assert after[0].soil_moisture == pytest.approx(40.0)
 
-    def test_bulk_add_deduplicates(self, tmp_db):
+    def test_bulk_add_deduplicates(self, tmp_db: IrrigationRepository) -> None:
         """Bulk insert skips duplicates and returns correct count."""
         cluster_id = tmp_db.add_cluster(FAKE_CLUSTER_NAME)
         sensor_id = tmp_db.add_sensor(
@@ -250,7 +256,7 @@ class TestDatabase:
         tmp_db.add_sensor_reading(sensor_id=sensor_id, timestamp=1000, soil_moisture=30.0)
 
         # Bulk insert: 1 duplicate + 2 new (8-field tuples)
-        readings = [
+        readings: list[ReadingRow] = [
             (sensor_id, 1000, None, 30.0, None, None, None, None),  # Duplicate
             (sensor_id, 2000, None, 35.0, None, None, None, None),  # New
             (sensor_id, 3000, None, 40.0, None, None, None, None),  # New
@@ -261,7 +267,7 @@ class TestDatabase:
         all_readings = tmp_db.get_recent_readings(sensor_id, hours=999999)
         assert len(all_readings) == BULK_NEW_ROWS + 1
 
-    def test_bulk_add_with_extended_columns(self, tmp_db):
+    def test_bulk_add_with_extended_columns(self, tmp_db: IrrigationRepository) -> None:
         """Bulk insert correctly stores env_humidity, battery_state, water_warning."""
         cluster_id = tmp_db.add_cluster(FAKE_CLUSTER_NAME)
         sensor_id = tmp_db.add_sensor(
@@ -272,7 +278,7 @@ class TestDatabase:
             config={},
         )
 
-        readings = [
+        readings: list[ReadingRow] = [
             (sensor_id, 1000, 22.5, 45.0, 800, 65.0, "high", 0),
             (sensor_id, 2000, 23.0, 50.0, 900, 60.0, "middle", 1),
         ]
@@ -287,7 +293,7 @@ class TestDatabase:
         assert r[0].battery_state == "high"
         assert r[1].water_warning is True
 
-    def test_cluster_environment(self, tmp_db):
+    def test_cluster_environment(self, tmp_db: IrrigationRepository) -> None:
         """Cluster environment field works correctly."""
         indoor_id = tmp_db.add_cluster("Indoor", environment="indoor")
         outdoor_id = tmp_db.add_cluster("Outdoor", environment="outdoor")
@@ -295,15 +301,18 @@ class TestDatabase:
         indoor = tmp_db.get_cluster(indoor_id)
         outdoor = tmp_db.get_cluster(outdoor_id)
 
+        assert indoor is not None
+        assert outdoor is not None
         assert indoor.environment == "indoor"
         assert outdoor.environment == "outdoor"
 
         # Default is indoor
         default_id = tmp_db.add_cluster("Default")
         default = tmp_db.get_cluster(default_id)
+        assert default is not None
         assert default.environment == "indoor"
 
-    def test_get_last_reading_timestamp(self, tmp_db):
+    def test_get_last_reading_timestamp(self, tmp_db: IrrigationRepository) -> None:
         """Last reading timestamp returns most recent reading time."""
         cluster_id = tmp_db.add_cluster(FAKE_CLUSTER_NAME)
         sensor_id = tmp_db.add_sensor(
@@ -322,7 +331,7 @@ class TestDatabase:
 
         assert tmp_db.get_last_reading_timestamp(sensor_id) == LAST_READING_TS
 
-    def test_sensor_reading_dedup(self, tmp_db):
+    def test_sensor_reading_dedup(self, tmp_db: IrrigationRepository) -> None:
         """Duplicate (sensor_id, timestamp) is silently skipped."""
         cluster_id = tmp_db.add_cluster(FAKE_CLUSTER_NAME)
         sensor_id = tmp_db.add_sensor(
@@ -343,6 +352,6 @@ class TestDatabase:
         assert len(readings) == 1
         assert readings[0].soil_moisture == pytest.approx(30.0)  # Original value kept
 
-    def test_nonexistent_cluster_returns_none(self, tmp_db):
+    def test_nonexistent_cluster_returns_none(self, tmp_db: IrrigationRepository) -> None:
         """Getting a nonexistent cluster returns None."""
         assert tmp_db.get_cluster(99999) is None
